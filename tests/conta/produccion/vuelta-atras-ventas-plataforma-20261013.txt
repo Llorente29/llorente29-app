@@ -1,0 +1,14 @@
+# Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
+# inverso. C04b · Respuesta 5 — la regla de ventas por plataforma.
+# Cada .down.sql PARA si lo que deshace ya tiene detrás algo que no se puede
+# deshacer solo (unidades validadas, apuntes en las 708 nuevas). La de la
+# 0130 devuelve los asientos del día entero desde su copia.
+# En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
+# esperado: se deshace la tanda) y no para.
+cuenta: scripts/conta/produccion/cuentas/ventas-del-dia.sql
+supabase/vuelta-atras/20261020T0140_libro_lectura_registro.down.sql
+supabase/vuelta-atras/20261020T0130_ventas_por_plataforma_rehacer.down.sql
+supabase/vuelta-atras/20261020T0120_ventas_por_plataforma_foodint.down.sql
+supabase/vuelta-atras/20261020T0110_ventas_por_plataforma_indice.down.sql
+supabase/vuelta-atras/20261020T0105_ventas_por_plataforma_permiso.down.sql
+supabase/vuelta-atras/20261020T0100_ventas_por_plataforma.down.sql

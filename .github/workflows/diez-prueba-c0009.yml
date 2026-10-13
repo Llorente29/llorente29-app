@@ -1,0 +1,124 @@
+name: Diez · factura de prueba en C0009 (C04b)
+
+# QUÉ HACE (C04b, tarea 3, 12/10)
+# Envía UNA factura recibida de prueba (1,00 € de base) a la C0009 —la copia de
+# pruebas de Diez, nunca la C0008 ni la C0001— con la analítica de Diez
+# (Grupo, Subgrupo y Nivel3: Local, Marca y Plataforma en su pantalla), y la
+# lee de vuelta para ver si Diez la guarda igual.
+#   · La base C0009 la fija el script, no el secreto.
+#   · Si ya está (serie + número FOLVY-PRUEBA-0001 + NIF), no envía otra.
+#   · Salida sin NIF, sin nombres de terceros y sin IBAN (publicable.mjs).
+#
+# Cuándo corre: a mano, o al empujar a conta/c04b-diez un commit cuyo mensaje
+# EMPIEZA por «[prueba-c0009]». Nada más la dispara.
+#
+# C04b R5 (13/10): con «[prueba-c0009:subcuentas]», en vez de la factura crea
+# en la C0009 las subcuentas que Diez no tiene (47700010 y las tres 708 nuevas),
+# con el mismo código y nombre que en Folvy, y las lee de vuelta
+# (scripts/conta/diez/prueba-c0009-subcuentas.ts).
+#
+# C04b R13: con «[prueba-c0009:emitida-molde]», SOLO LEE: cómo guarda Diez en la
+# C0009 una factura emitida de Uber de la serie 1, el molde de lo que enviará
+# Folvy (scripts/conta/diez/prueba-c0009-emitida-molde.ts). Una etiqueta
+# «[prueba-c0009:…]» desconocida para sin hacer nada.
+#
+# C04b R13: con «[prueba-c0009:emitida]», ENVÍA a la C0009 la primera venta de
+# Folvy (Uber · Alcalá del 01/10, visto bueno de Julio): lee el asiento en
+# producción con conta_lectura (solo lectura), lo busca antes en Diez (si ya
+# está, no envía otra) y lo lee de vuelta (scripts/conta/diez/prueba-c0009-emitida.ts).
+
+on:
+  push:
+    branches: ['conta/c04b-diez']
+  workflow_dispatch:
+
+concurrency:
+  group: diez-lectura
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prueba:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[prueba-c0009]') || startsWith(github.event.head_commit.message, '[prueba-c0009:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enmascarar el secreto
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+      - name: R13 · el asiento de Folvy, leído en producción con conta_lectura (solo lectura)
+        if: startsWith(github.event.head_commit.message, '[prueba-c0009:emitida]') || startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]')
+        env:
+          RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${RO_DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["RO_DB_URL"])
+          for parte in (os.environ["RO_DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          if (u.username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura.")
+              raise SystemExit(1)
+          if "xzmpnchlguibclvxyynt" not in os.environ["RO_DB_URL"]:
+              print("::error::PROD_CONTA_RO_DB_URL no es la de producción.")
+              raise SystemExit(1)
+          PY
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
+          # El asiento, anclado por su id, su empresa y su cuenta (regla 9).
+          PGOPTIONS='-c default_transaction_read_only=on' psql "$RO_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select json_build_object('id', e.id, 'estado', e.status, 'fecha', d.sales_day::text, 'location_id', d.location_id, 'channel_id', d.channel_id,
+              -- R14: la empresa y los pedidos del resumen, para el PDF del día.
+              'empresa', (select json_build_object('nombre', c.legal_name, 'nif', c.tax_id) from public.company c where c.id = e.company_id and c.account_id = e.account_id),
+              'pedidos', (select json_agg(json_build_object('hora', to_char(s.sold_at at time zone 'Europe/Madrid', 'HH24:MI'), 'codigo', coalesce(s.platform_order_code, left(s.id::text, 8)),
+                                                            'marca', b2.name, 'total', s.total, 'base', s.taxable_base, 'cuota', s.tax) order by s.sold_at)
+                            from public.sale s left join public.brand b2 on b2.id = s.brand_id and b2.account_id = s.account_id
+                           where s.id = any(d.sale_ids) and s.account_id = e.account_id),
+              'lineas', (select json_agg(json_build_object('cuenta', a.code, 'debe', l.debit, 'haber', l.credit, 'marca', b.name, 'tipoIva', t.rate) order by l.position)
+                           from public.journal_line l join public.company_account a on a.id = l.company_account_id and a.company_id = e.company_id
+                           left join public.brand b on b.id = l.brand_id and b.account_id = e.account_id
+                           left join public.tax_rate t on t.id = l.tax_rate_id
+                          where l.entry_id = e.id))
+              from public.journal_entry e join public.sales_day_summary d on d.entry_id = e.id
+             where e.id = 'ae586513-1792-4563-ae73-8ef4870363c2' and e.company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9'
+               and e.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'" > /tmp/asiento.json
+          [ -s /tmp/asiento.json ] || { echo "::error::No se ha leído el asiento."; exit 1; }
+          echo "Asiento leído ($(wc -c < /tmp/asiento.json) bytes; no se publica)."
+
+      - name: R14 · jspdf para el PDF del día (la versión del package-lock)
+        if: startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]')
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund jspdf@4.2.1
+
+      - name: Factura (o subcuentas) de prueba en C0009
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          MENSAJE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          case "$MENSAJE" in
+            '[prueba-c0009:subcuentas]'*) S=scripts/conta/diez/prueba-c0009-subcuentas.ts ;;
+            # R13: la factura emitida de molde, solo lectura (escribir: false).
+            '[prueba-c0009:emitida-molde]'*) S=scripts/conta/diez/prueba-c0009-emitida-molde.ts ;;
+            # R13: la primera venta de Folvy en Diez (C0009), del volcado del paso anterior.
+            '[prueba-c0009:emitida]'*) S=scripts/conta/diez/prueba-c0009-emitida.ts ;;
+            # R14: qué dice el Swagger PÚBLICO de los adjuntos (sin credenciales).
+            '[prueba-c0009:adjunto-swagger]'*) S=scripts/conta/diez/adjuntos-swagger.mjs ;;
+            # R14: el PDF del día adjunto a la UBR-FLO-20261001 de la C0009 (facturas/upload) y leído de vuelta.
+            '[prueba-c0009:adjunto]'*) S=scripts/conta/diez/prueba-c0009-adjunto.ts ;;
+            '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
+            *) S=scripts/conta/diez/prueba-c0009.ts ;;
+          esac
+          npx --yes tsx@4.19.2 "$S" | tee prueba.md
+          cat prueba.md >> "$GITHUB_STEP_SUMMARY"

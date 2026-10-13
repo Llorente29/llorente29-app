@@ -33,7 +33,7 @@ const CAMPOS_ASIENTO = [
   'id, series, number, entry_date, concept, source_type, source_id, status, confidence, reason, reasons, party_id, document_ref',
   'external_program, external_series, external_number, validated_at, validated_by_name, chain_seq, prev_hash, hash',
   'reverses_entry_id, voided_by_entry_id, voided_at, voided_by_name, void_reason, created_at, created_by_name',
-  'journal_line(position, company_account_id, debit, credit, concept, location_id, is_common, brand_id, document_ref, tax_rate_id, tax_base, vat_book, withholding_base, withholding_model, company_account(code, name, kind, plain_name, template_code, plan), locations(name), brand(name, ownership_type), tax_rate(rate))',
+  'journal_line(position, company_account_id, debit, credit, concept, location_id, is_common, brand_id, document_ref, tax_rate_id, tax_base, vat_book, withholding_base, withholding_model, external_negative_side, company_account(code, name, kind, plain_name, template_code, plan), locations(name), brand(name, ownership_type), tax_rate(rate))',
 ].join(', ')
 
 function aApunte(l: Fila): ApunteDiario {
@@ -50,6 +50,7 @@ function aApunte(l: Fila): ApunteDiario {
     documento: s(l.document_ref),
     iva: l.tax_rate_id ? { tipoId: String(l.tax_rate_id), base: n(l.tax_base), libro: String(l.vat_book ?? ''), tipo: tr ? n(tr.rate) : null } : null,
     retencion: l.withholding_model ? { base: n(l.withholding_base), modelo: String(l.withholding_model) } : null,
+    negativoEnDiez: l.external_negative_side === 'debe' || l.external_negative_side === 'haber' ? l.external_negative_side : null,
   }
 }
 

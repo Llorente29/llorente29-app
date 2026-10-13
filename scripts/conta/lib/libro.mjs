@@ -33,6 +33,15 @@ export const NORMAS = {
   dia_sin_asiento: 'Encargo del 11/10 (cierre del día 2): un día cerrado tiene su resumen y su asiento propuesto antes de 24 h',
 }
 
+// C04b R5: lo que apuntó el cierre del día la última vez (sales_day_proposal_log),
+// si el agente lo puede leer. Sin registro, dónde mirarlo.
+const RESULTADO = { sin_propuesta: 'sin propuesta', fallo: 'falló', descartado: 'descartado', propuesto: 'propuesto', ya_estaba: 'ya estaba' }
+function porqueDelCierre(x) {
+  if (x.resultado === undefined) return ' (el porqué, en el Libro diario)'
+  if (x.resultado === null) return ': no hay registro del cierre para ese día (no lo ha mirado)'
+  return `: la última vez, ${RESULTADO[x.resultado] ?? x.resultado}${x.porque ? ` — «${x.porque}»` : ''}`
+}
+
 /** @returns {{ nivel: 'rojo'|'ambar', tipo: string, donde: string, detalle: string, norma: string }[]} */
 export function revisarLibro(bd) {
   const out = []
@@ -47,7 +56,7 @@ export function revisarLibro(bd) {
   for (const x of bd.resultado ?? []) h(x.numero == null ? 'ambar' : 'rojo', 'resultado', x, x.numero == null ? x.motivo : `${asiento(x)}, cuenta ${x.cuenta}: ${x.motivo}`)
   for (const x of bd.mes_cerrado ?? []) h('rojo', 'mes_cerrado', x, `${asiento(x)} del ${x.fecha}, validado después de cerrar su mes`)
   for (const x of bd.cierre_dia ?? []) h('rojo', 'cierre_dia', x, `${x.pedidos} ${x.pedidos === 1 ? 'pedido' : 'pedidos'} de tus marcas (${x.importe} €) ${x.pedidos === 1 ? 'sigue abierto' : 'siguen abiertos'} en días ya cerrados; el más antiguo, del ${x.dia}, lleva ${x.horas} h desde que acabó: el cierre del día no ha pasado o ha fallado`)
-  for (const x of bd.dia_sin_asiento ?? []) h('rojo', 'dia_sin_asiento', x, `${x.dia} local ${corto(x.local)}: ${x.pedidos} ${x.pedidos === 1 ? 'pedido' : 'pedidos'} de tus marcas, ${x.resumen ? 'con resumen pero sin asiento' : 'sin resumen ni asiento'}, ${x.horas} h después de su cierre: el cierre del día no lo ha propuesto (el porqué, en el Libro diario)`)
+  for (const x of bd.dia_sin_asiento ?? []) h('rojo', 'dia_sin_asiento', x, `${x.dia} local ${corto(x.local)}: ${x.pedidos} ${x.pedidos === 1 ? 'pedido' : 'pedidos'} de tus marcas, ${x.resumen ? 'con resumen pero sin asiento' : 'sin resumen ni asiento'}, ${x.horas} h después de su cierre: el cierre del día no lo ha propuesto${porqueDelCierre(x)}`)
   for (const x of bd.propuestas ?? []) h('ambar', 'propuestas', x, `${SERIE[x.serie] ?? x.serie} del ${x.fecha} (${x.origen}) lleva ${x.dias} días sin validar ni descartar`)
   return out
 }

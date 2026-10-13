@@ -1,0 +1,12 @@
+# VUELTA ATRÁS en producción. Solo si Julio lo decide: el workflow la hace en
+# modo «vuelta_atras», con las mismas guardas.
+#
+# Cierre del día · 2: los tres .down.sql en orden inverso al de aplicar.txt.
+#   · la 0120 no quita nada (conta_lectura ya lo leía);
+#   · la 0110 quita lo que propuso la puesta al día (solo lo que sigue
+#     «propuesto») y devuelve el resumen a medias del 09/10 desde su copia;
+#   · la 0100 deja el cierre del día solo cerrando y journal_entry_proponer con
+#     su cuerpo dentro. Lo que propuso el cron se queda: son propuestas.
+supabase/vuelta-atras/20261018T0120_cierre_proponer_lectura.down.sql
+supabase/vuelta-atras/20261018T0110_cierre_proponer_dias_datos.down.sql
+supabase/vuelta-atras/20261018T0100_cierre_proponer_solo.down.sql

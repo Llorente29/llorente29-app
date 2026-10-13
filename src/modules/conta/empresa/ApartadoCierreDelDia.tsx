@@ -2,7 +2,7 @@
 //
 // Cierre del día · «Hora de cierre del día» en Ajustes › Ejercicio. A esa
 // hora (de Madrid) se dan por terminadas las ventas del día anterior; un
-// pedido que siga abierto se cierra como no confirmado. 6:00 de serie.
+// pedido que siga abierto se cierra como no confirmado. 2:00 de serie.
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { horaParaLeer, HORA_DE_CIERRE_DE_SERIE } from '@/modules/conta/lib/cierreDelDia'

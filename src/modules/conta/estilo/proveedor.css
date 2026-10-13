@@ -217,7 +217,10 @@
   .cxp-tabla-mas { top: 8px; bottom: auto; }
   .cxp-tabla-mas .cxp-menu { top: 50px; }
   .cx .cxp-buscar { max-width: none; flex: 1 1 100%; }
-  .cxp-dialogo { align-self: flex-end; border-radius: var(--cx-radio-tarjeta) var(--cx-radio-tarjeta) 0 0; }
+  /* R15 (e2e 183): la barra inferior (fija, 68 px a 12 px del borde) tapaba
+     los botones del pie del diálogo en el móvil. Se le deja su sitio debajo. */
+  .cxp-dialogo { align-self: flex-end; border-radius: var(--cx-radio-tarjeta) var(--cx-radio-tarjeta) 0 0;
+    padding-bottom: calc(22px + 80px + env(safe-area-inset-bottom, 0px)); }
   .cxp-velo { padding: 0; align-items: flex-end; }
 }
 

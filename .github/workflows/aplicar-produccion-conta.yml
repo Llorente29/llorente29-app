@@ -165,18 +165,11 @@ jobs:
       - name: Leer y validar el manifiesto
         run: |
           set -euo pipefail
-          if [ "$MODO" = "vuelta_atras" ]; then M=supabase/produccion/vuelta-atras.txt; PAT='^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.down\.sql$'
-          else M=supabase/produccion/aplicar.txt; PAT='^supabase/migrations/[A-Za-z0-9_./-]+\.sql$'; fi
-          grep -vE '^\s*(#|$)' "$M" | sed -E 's/\s+$//' > /tmp/tanda.txt || true
-          n=$(wc -l < /tmp/tanda.txt)
-          [ "$n" -gt 0 ] || { echo "::error::El manifiesto $M no lista ningún fichero."; exit 1; }
-          mal=0
-          while IFS= read -r f; do
-            if ! printf '%s' "$f" | grep -qE "$PAT" || printf '%s' "$f" | grep -q '\.\.'; then echo "::error::Ruta no permitida: $f"; mal=1; continue; fi
-            [ -f "$f" ] || { echo "::error::No existe: $f"; mal=1; }
-          done < /tmp/tanda.txt
-          [ "$mal" -eq 0 ] || exit 1
-          echo "Tanda ($M), $n ficheros:"; nl -ba /tmp/tanda.txt
+          # R9: el manifiesto declara también qué se cuenta antes y después
+          # («cuenta: …»), obligatorio en la tanda de aplicar (manifiesto.sh).
+          if [ "$MODO" = "vuelta_atras" ]; then M=supabase/produccion/vuelta-atras.txt; PAT='^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.down\.sql$'; OBLIG=no
+          else M=supabase/produccion/aplicar.txt; PAT='^supabase/migrations/[A-Za-z0-9_./-]+\.sql$'; OBLIG=si; fi
+          bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG"
 
       - name: Instalar psql 17
         run: |
@@ -290,6 +283,14 @@ jobs:
           set -euo pipefail
           "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/d1.sql > /tmp/d1-antes.csv
           { echo "## Antes"; echo; echo "D1: $(wc -l < /tmp/d1-antes.csv) pares categoría × día leídos de \`vat_rate_for\`."; } >> "$INFORME"
+          # R9: el recuento de serie y lo que la tanda declara que cuenta, ANTES:
+          # con esto se compara lo que quede si la tanda se deshace.
+          "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/recuento-serie.sql > /tmp/recuento-antes.csv
+          bash scripts/conta/produccion/cuentas.sh /tmp/cuentas.txt /tmp/cuentas-antes.csv
+          if [ -s /tmp/cuentas.txt ]; then
+            { echo; echo "Lo que la tanda declara que cuenta ($(paste -sd' ' /tmp/cuentas.txt | sed 's#scripts/conta/produccion/cuentas/##g')), antes:"; echo
+              node scripts/conta/produccion/cuentas-comparar.mjs /tmp/cuentas-antes.csv; echo; } >> "$INFORME"
+          fi
           if [ "$MODO" = "real" ]; then
             t0=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select now()")
             echo "T0=$t0" >> "$GITHUB_ENV"
@@ -352,6 +353,8 @@ jobs:
             echo '\i scripts/conta/produccion/d1.sql'
             echo '\o /tmp/recuento-despues.csv'
             echo '\i scripts/conta/produccion/recuento-serie.sql'
+            # R9: lo que la tanda declara que cuenta, con la tanda puesta.
+            j=0; while IFS= read -r c; do j=$((j+1)); echo "\\o /tmp/cuentas-ensayo-$j.csv"; echo "\\i $c"; done < /tmp/cuentas.txt
             echo '\o'
             echo 'rollback;'
             echo "\\echo '>>> ROLLBACK: no queda nada.'"
@@ -372,10 +375,20 @@ jobs:
           node scripts/conta/produccion/d1-comparar.mjs /tmp/d1-antes.csv /tmp/d1-despues.csv > /tmp/d1.txt
           d1=$?
           set -e
+          : > /tmp/cuentas-con-tanda.csv; j=0
+          while IFS= read -r c; do j=$((j+1)); sed "s#^#$(basename "$c" .sql),#" "/tmp/cuentas-ensayo-$j.csv" >> /tmp/cuentas-con-tanda.csv; done < /tmp/cuentas.txt
           { echo "## Ensayo: todo entra"; echo; echo "Los $(wc -l < /tmp/tanda.txt) ficheros, con su registro en el historial, en una transacción, y **ROLLBACK**: en producción no ha quedado nada."; echo
             echo "**D1 (antes ↔ con la tanda):** $(head -1 /tmp/d1.txt)"; tail -n +2 /tmp/d1.txt; echo
             echo "**Filas de serie con la tanda:**"; echo; echo '| Tabla | Filas |'; echo '|---|---|'
-            sed -E 's/^([^,]*),(.*)$/| \1 | \2 |/' /tmp/recuento-despues.csv; echo; } >> "$INFORME"
+            sed -E 's/^([^,]*),(.*)$/| \1 | \2 |/' /tmp/recuento-despues.csv; echo
+            echo "**Lo que la tanda declara que cuenta (antes ↔ con la tanda; aquí cambiar es lo esperado, se enseña para que se vea qué hace):**"; echo
+            node scripts/conta/produccion/cuentas-comparar.mjs /tmp/cuentas-antes.csv /tmp/cuentas-con-tanda.csv "Antes" "Con la tanda" | sed '$d' || true; echo
+            # R9 · Lo que el ensayo NO ve y el real sí (lista de antes de subir).
+            echo "**Lo que este ensayo NO mira y el real sí** (un ensayo en verde no garantiza el real si la comprobación de después mira algo que el ensayo no ve):"; echo
+            echo "- **Los agentes de después** (\`conta_lectura\`, otra conexión): no ven una transacción sin commit, así que en el ensayo no corren. El 13/10 el real se deshizo por el agente del libro, que vio 22 días×local sin asiento que el ensayo no podía ver."
+            echo "- **La salud del pedido** de los $SALUD_MINUTOS minutos de después: en el ensayo no pasa el tiempo."
+            echo "- **Lo que hacen otros procesos después** (el cierre del día a los :07, los disparadores de los pedidos que entren): el ensayo acaba antes. Por eso una tanda no deja huecos para que los tape otro proceso más tarde: se rehace en la misma transacción."
+            echo; } >> "$INFORME"
           if [ "$d1" -ne 0 ]; then echo "::error::D1 da diferencias no decididas."; cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
 
       - name: ENSAYO · la vuelta atrás automática funcionaría (tanda y .down.sql al revés, y ROLLBACK)
@@ -393,6 +406,11 @@ jobs:
               d="supabase/vuelta-atras/$(basename "$f" .sql).down.sql"
               if [ -f "$d" ]; then echo "\\echo '>>> deshace $f'"; echo "\\i $d"; else echo "\\echo '>>> SIN VUELTA ATRÁS: $f'"; fi
             done
+            # R9: deshecha la tanda, ¿está como antes? Lo mismo que contará deshacer.sh.
+            echo '\pset format csv'
+            echo '\pset tuples_only on'
+            j=0; while IFS= read -r c; do j=$((j+1)); echo "\\o /tmp/cuentas-atras-$j.csv"; echo "\\i $c"; done < /tmp/cuentas.txt
+            echo '\o'
             echo 'rollback;'
           } > /tmp/ensayo-atras.sql
           while IFS= read -r f; do [ -f "supabase/vuelta-atras/$(basename "$f" .sql).down.sql" ] || sin="$sin \`$f\`"; done < /tmp/tanda.txt
@@ -400,8 +418,23 @@ jobs:
           "$PSQL" "$DB_URL" -X -f /tmp/ensayo-atras.sql > /tmp/ensayo-atras.log 2>&1
           rc=$?
           set -e
-          if [ "$rc" -eq 0 ] && [ -z "$sin" ]; then
-            { echo "## Ensayo de la vuelta atrás: **funcionaría**"; echo; echo "La tanda y sus .down.sql en orden inverso, en una transacción, y ROLLBACK."; echo; } >> "$INFORME"
+          igual=1
+          if [ "$rc" -eq 0 ]; then
+            : > /tmp/cuentas-ensayo-atras.csv; j=0
+            while IFS= read -r c; do j=$((j+1)); sed "s#^#$(basename "$c" .sql),#" "/tmp/cuentas-atras-$j.csv" >> /tmp/cuentas-ensayo-atras.csv; done < /tmp/cuentas.txt
+            node scripts/conta/produccion/cuentas-comparar.mjs /tmp/cuentas-antes.csv /tmp/cuentas-ensayo-atras.csv "Antes de la tanda" "Tanda y vuelta atrás" > /tmp/cuentas-atras.md || igual=0
+          fi
+          if [ "$rc" -eq 0 ] && [ -z "$sin" ] && [ "$igual" -eq 1 ]; then
+            { echo "## Ensayo de la vuelta atrás: **funcionaría, y deja todo como estaba**"; echo; echo "La tanda y sus .down.sql en orden inverso, en una transacción, y ROLLBACK. Lo que la tanda declara que cuenta sale igual que antes:"; echo
+              cat /tmp/cuentas-atras.md; echo; } >> "$INFORME"
+          elif [ "$rc" -eq 0 ] && [ "$igual" -eq 0 ]; then
+            # R9: una vuelta atrás que no deja los datos como estaban NO es una vuelta atrás. Para.
+            { echo "## Ensayo de la vuelta atrás: **NO deja los datos como estaban**"; echo
+              echo "Los .down.sql entran sin error, pero lo que la tanda declara que cuenta no sale igual que antes. Si el real se deshiciera solo, quedaría así:"; echo
+              cat /tmp/cuentas-atras.md; echo; } >> "$INFORME"
+            echo "::error::La vuelta atrás de esta tanda no deja los datos como estaban (ver el informe). El ensayo para: así no se lanza el real."
+            cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           else
             { echo "## Ensayo de la vuelta atrás: **NO estaría completa**"; echo
               [ -n "$sin" ] && echo "- Sin \`.down.sql\`:$sin. Si la comprobación de después falla, eso y lo anterior quedarían aplicados."
@@ -453,11 +486,15 @@ jobs:
           exit "$fallo"
 
       - name: Después · comprobación (D1, serie, agentes y salud del pedido); si falla, vuelta atrás automática
+        id: despues
         # Solo si el REAL llegó a correr (aunque fallara a medias): no tras un análisis que para.
         if: always() && inputs.modo == 'real' && steps.real.outcome != 'skipped' && steps.real.outcome != ''
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
           RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+          # R9: deshacer.sh vuelve a contar lo que la tanda declara y lo compara con el «antes».
+          CUENTAS: /tmp/cuentas.txt
+          CUENTAS_ANTES: /tmp/cuentas-antes.csv
         run: |
           set -uo pipefail
           [ -s /tmp/aplicados.txt ] || { echo "No se aplicó nada: no hay nada que comprobar."; exit 1; }
@@ -495,23 +532,44 @@ jobs:
           # 4. Falla algo: vuelta atrás de lo que ha aplicado ESTE run, en orden inverso.
           { echo "**Comprobación en ROJO:**$mal. Se deshace lo aplicado."; echo; } >> "$INFORME"
           echo "::error::La comprobación de después falla:$mal. Vuelta atrás automática."
-          if bash scripts/conta/produccion/deshacer.sh /tmp/aplicados.txt; then
-            echo "::error::Vuelta atrás hecha: producción está como antes de la tanda. Ver el informe."
-          else
-            echo "::error::LA VUELTA ATRÁS NO SE HA COMPLETADO: hay cosas aplicadas a medias. Ver la tabla «Vuelta atrás automática» del informe."
-          fi
+          bash scripts/conta/produccion/deshacer.sh /tmp/aplicados.txt; rc=$?
+          # R9: «está como antes» solo si deshacer.sh lo ha CONTADO (sale con 0).
+          case "$rc" in
+            0) echo "::error::Vuelta atrás hecha y contada: producción está como antes de la tanda ($(grep -c . /tmp/cuentas-antes.csv) medidas iguales). Ver el informe." ;;
+            3) echo "::error::Vuelta atrás aplicada, pero producción NO está como antes: $(node scripts/conta/produccion/cuentas-comparar.mjs /tmp/cuentas-antes.csv /tmp/cuentas-tras-deshacer.csv | tail -1). Ver «¿Está como antes de la tanda?» en el informe." ;;
+            *) echo "::error::LA VUELTA ATRÁS NO SE HA COMPLETADO: hay cosas aplicadas a medias. Ver la tabla «Vuelta atrás automática» del informe." ;;
+          esac
           exit 1
 
       - name: Después de la vuelta atrás · D1 y recuento
-        if: always() && inputs.modo == 'vuelta_atras' && steps.real.outcome != 'skipped' && steps.real.outcome != ''
+        # En modo vuelta_atras, y también cuando un REAL se deshace solo (R9):
+        # la comprobación de después falló y deshacer.sh ha corrido.
+        if: >-
+          always() && steps.real.outcome != 'skipped' && steps.real.outcome != '' &&
+          (inputs.modo == 'vuelta_atras' || (inputs.modo == 'real' && steps.despues.outcome == 'failure'))
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -uo pipefail
           "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/d1.sql > /tmp/d1-despues.csv
           node scripts/conta/produccion/d1-comparar.mjs /tmp/d1-antes.csv /tmp/d1-despues.csv > /tmp/d1.txt; d1=$?
-          { echo "## Después"; echo; echo "**D1 (antes ↔ después):** $(head -1 /tmp/d1.txt)"; tail -n +2 /tmp/d1.txt; echo; } >> "$INFORME"
-          exit "$d1"
+          "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 --csv -t -f scripts/conta/produccion/recuento-serie.sql > /tmp/recuento-tras.csv; rr=$?
+          igual=1; cmp -s /tmp/recuento-antes.csv /tmp/recuento-tras.csv || igual=0
+          { echo "## Después de la vuelta atrás"; echo; echo "**D1 (antes ↔ después):** $(head -1 /tmp/d1.txt)"; tail -n +2 /tmp/d1.txt; echo
+            echo "**Filas de serie (antes ↔ después):** $([ "$igual" -eq 1 ] && echo "iguales" || echo "**distintas**")"; echo
+            echo '| Tabla | Antes | Después |'; echo '|---|---|---|'
+            join -t, -a1 -a2 -e '—' -o 0,1.2,2.2 <(sort /tmp/recuento-antes.csv) <(sort /tmp/recuento-tras.csv) | sed -E 's/^([^,]*),([^,]*),(.*)$/| \1 | \2 | \3 |/'; echo
+            if [ "$MODO" = "vuelta_atras" ] && [ -s /tmp/cuentas.txt ]; then
+              # En el modo vuelta_atras cambiar es lo esperado: se enseña, no para.
+              bash scripts/conta/produccion/cuentas.sh /tmp/cuentas.txt /tmp/cuentas-tras.csv && {
+                echo "**Lo que el manifiesto declara que cuenta (antes ↔ después de la vuelta atrás; cambiar es lo esperado):**"; echo
+                node scripts/conta/produccion/cuentas-comparar.mjs /tmp/cuentas-antes.csv /tmp/cuentas-tras.csv "Antes" "Después" | sed '$d'; echo; }
+            fi; } >> "$INFORME"
+          [ "$d1" -eq 0 ] || exit "$d1"
+          [ "$rr" -eq 0 ] || exit 1
+          # Un real deshecho solo tiene que dejar las filas de serie como estaban.
+          if [ "$MODO" = "real" ] && [ "$igual" -eq 0 ]; then echo "::error::Tras la vuelta atrás automática, las filas de serie no son las de antes."; exit 1; fi
+          exit 0
 
       - name: Informe
         if: always()

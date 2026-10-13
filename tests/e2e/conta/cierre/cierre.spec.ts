@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 // tests/e2e/conta/cierre/cierre.spec.ts
 //
-// «El día se cierra a las 6:00» contra staging-conta, en ordenador (1440) y
+// «El día se cierra a las 2:00» (antes, 6:00; Julio, 12/10) contra staging-conta, en ordenador (1440) y
 // móvil (390). Capturas en docs/conta/capturas/cierre/ (COMPARACION.md).
 //
 // Datos: el asiento de ventas VALIDADO del 04/10 en Norte Centro (cuenta A,
@@ -48,7 +48,7 @@ test('A · el asiento de ventas del día dice sus no confirmados, y «Ver» los 
 test('A · el libro dice cuándo se cierra hoy, como información', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')
-  const nota = page.getByRole('note').filter({ hasText: 'Hoy se cierra mañana a las 6:00. Sus ventas se proponen entonces.' })
+  const nota = page.getByRole('note').filter({ hasText: 'Hoy se cierra mañana a las 2:00. Sus ventas se proponen entonces.' })
   await expect(nota).toBeVisible()
   // Información, no aviso: no es ámbar ni una alerta.
   await expect(nota).not.toHaveClass(/ambar|franja/)
@@ -60,8 +60,8 @@ test('A · Ajustes › Ejercicio: «Hora de cierre del día», y cambiarla confi
   await page.goto('/conta/ajustes/ejercicio')
   // En el ordenador la tarjeta lleva su título; en el móvil, su nombre y la etiqueta delante del valor.
   await expect(page.getByRole('region', { name: 'Hora de cierre del día' })).toBeVisible()
-  if (lado(page) === 'movil') await expect(page.getByText('Hora de cierre del día: 6:00 (la de serie)')).toBeVisible()
-  await expect(page.getByTestId('hora-cierre')).toHaveText('6:00 (la de serie)')
+  if (lado(page) === 'movil') await expect(page.getByText('Hora de cierre del día: 2:00 (la de serie)')).toBeVisible()
+  await expect(page.getByTestId('hora-cierre')).toHaveText('2:00 (la de serie)')
   await expect(page.getByText('A esa hora se dan por terminadas las ventas del día anterior. Un pedido que siga abierto se cierra como no confirmado.')).toBeVisible()
   await capturar(page, 'ajustes-hora-cierre')
   if (lado(page) !== 'ordenador') return
@@ -74,9 +74,9 @@ test('A · Ajustes › Ejercicio: «Hora de cierre del día», y cambiarla confi
   await expect(page.getByTestId('hora-cierre')).toHaveText('5:30')
   // Y se deja como estaba.
   await apartado.getByRole('button', { name: 'Cambiar' }).click()
-  await tarjeta.getByLabel('Hora de cierre del día').fill('06:00')
+  await tarjeta.getByLabel('Hora de cierre del día').fill('02:00')
   await tarjeta.getByRole('button', { name: 'Guardar' }).click()
-  await expect(page.getByTestId('hora-cierre')).toHaveText('6:00 (la de serie)')
+  await expect(page.getByTestId('hora-cierre')).toHaveText('2:00 (la de serie)')
 })
 
 test('RLS · B no ve los no confirmados de A, ni su asiento, ni su rastro', async ({ page }) => {

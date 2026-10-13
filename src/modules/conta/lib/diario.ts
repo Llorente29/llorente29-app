@@ -37,6 +37,14 @@ export interface ApunteDiario {
   documento: string | null
   iva: { tipoId: string; base: number; libro: string; tipo: number | null } | null
   retencion: { base: number; modelo: string } | null
+  /** Traída de Diez con importe NEGATIVO: en qué lado iba allí. Folvy la lleva
+   *  en positivo al otro lado; Libros lo dice para contrastar línea a línea. */
+  negativoEnDiez: 'debe' | 'haber' | null
+}
+
+/** La marca de una línea que en Diez iba en negativo, o null. */
+export function marcaNegativoDiez(l: Pick<ApunteDiario, 'negativoEnDiez'>): string | null {
+  return l.negativoEnDiez ? `En Diez iba en negativo (en el ${l.negativoEnDiez})` : null
 }
 
 export interface AsientoDiario {
@@ -203,6 +211,19 @@ export function pastillas(a: Pick<AsientoDiario, 'apuntes'>): { texto: string; t
   }
   if (propias) r.push({ texto: 'Marcas propias', tono: 'neutro' })
   for (const m of cedidas.values()) r.push({ texto: `${m} · cedida`, tono: 'ambar' })
+  return r
+}
+
+/**
+ * C04b R5 · Las pastillas de UNA línea del asiento: su local (o «Común») y su
+ * marca con su NOMBRE, propia o cedida, para que la marca se lea junto a la
+ * subcuenta (7000000x, 7080000x) sin tener que traducir códigos.
+ */
+export function pastillasDeLinea(l: Pick<ApunteDiario, 'comun' | 'localId' | 'local' | 'marcaId' | 'marca' | 'cedida'>): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
+  const r: { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] = []
+  if (l.comun) r.push({ texto: 'Común', tono: 'azul' })
+  else if (l.localId) r.push({ texto: l.local ?? 'local', tono: 'azul' })
+  if (l.marcaId) r.push(l.cedida ? { texto: `${l.marca ?? 'marca'} · cedida`, tono: 'ambar' } : { texto: l.marca ?? 'marca propia', tono: 'neutro' })
   return r
 }
 

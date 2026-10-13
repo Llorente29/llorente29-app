@@ -74,6 +74,34 @@ export interface CuentasVentas {
   devoluciones: string
   /** La 477 del tipo de ventas. */
   ivaRepercutido: string
+  /** C04b R5: la subcuenta de ventas (7000000x) de cada marca. La que falte va a `ventas` y se avisa. */
+  ventasPorMarca?: Record<string, string>
+  /** C04b R5: la de reembolsos (7080000x) de cada marca. La que falte va a `devoluciones` y se avisa. */
+  devolucionesPorMarca?: Record<string, string>
+}
+
+/**
+ * C04b R5 · La regla de ventas definitiva (Julio, 13/10): un asiento por
+ * plataforma, local y día (Uber Eats, Just Eat), y por marca, plataforma,
+ * local y día en los canales que van por marca (Glovo). `clave` es lo que
+ * distingue la unidad dentro del día y el local: el canal, o canal:marca.
+ */
+export interface UnidadVentas { canalId: string | null; marcaId: string | null; clave: string }
+
+export const claveDeUnidad = (canalId: string | null, marcaId: string | null): string =>
+  `${canalId ?? 'sin-canal'}${marcaId ? `:${marcaId}` : ''}`
+
+/** Las unidades de un día y un local, en el orden en que aparecen sus pedidos (y después sus reembolsos). */
+export function unidadesDelDia(pedidos: readonly PedidoDia[], devoluciones: readonly DevolucionDia[], porMarca: (canalId: string | null) => boolean): UnidadVentas[] {
+  const vistas = new Map<string, UnidadVentas>()
+  const poner = (canalId: string | null, marcaId: string | null) => {
+    const m = porMarca(canalId) ? marcaId : null
+    const clave = claveDeUnidad(canalId, m)
+    if (!vistas.has(clave)) vistas.set(clave, { canalId, marcaId: m, clave })
+  }
+  for (const p of pedidos) if (p.marcaPropia && p.estado === 'closed') poner(p.canalId, p.marcaId)
+  for (const d of devoluciones) if (d.marcaPropia) poner(d.canalId, d.marcaId)
+  return [...vistas.values()]
 }
 
 export interface EntradaVentasDia {
@@ -88,6 +116,10 @@ export interface EntradaVentasDia {
   /** Nombres para el porqué. */
   nombreCanal: (id: string | null) => string
   nombreLocal: string
+  /** C04b R5: la unidad del asiento (plataforma, o plataforma y marca). Sin ella, el día y el local enteros (la regla de antes). */
+  unidad?: UnidadVentas
+  /** Para escribir la marca junto a su subcuenta. */
+  nombreMarca?: (id: string | null) => string
 }
 
 export interface ResultadoVentasDia {
@@ -113,7 +145,15 @@ export interface ResultadoVentasDia {
   }
 }
 
-export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
+export function ventasDelDia(entrada: EntradaVentasDia): ResultadoVentasDia {
+  const u = entrada.unidad
+  const enUnidad = (canalId: string | null, marcaId: string | null) => !u || (canalId === u.canalId && (u.marcaId === null || marcaId === u.marcaId))
+  const e: EntradaVentasDia = u
+    ? { ...entrada, pedidos: entrada.pedidos.filter((p) => enUnidad(p.canalId, p.marcaId)), devoluciones: entrada.devoluciones.filter((d) => enUnidad(d.canalId, d.marcaId)) }
+    : entrada
+  const nombreMarca = (id: string | null) => (id ? e.nombreMarca?.(id) ?? 'una marca' : 'sin marca')
+  const cuentaVentas = (marcaId: string | null) => (u && marcaId ? e.cuentas.ventasPorMarca?.[marcaId] : undefined) ?? e.cuentas.ventas
+  const cuentaDevoluciones = (marcaId: string | null) => (u && marcaId ? e.cuentas.devolucionesPorMarca?.[marcaId] : undefined) ?? e.cuentas.devoluciones
   const tipo = e.tipo.porcentaje
   const cedidas = e.pedidos.filter((p) => !p.marcaPropia && p.estado === 'closed')
   const cancelados = e.pedidos.filter((p) => p.estado === 'cancelled')
@@ -174,7 +214,7 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
     lineas.push({ cuenta: e.cuentas.cobroPorCanal[canalId!], debe: deCent(c), haber: 0, localId: e.localId, concepto: `Cobra ${e.nombreCanal(canalId)}` })
   }
   if (e.porMarca) {
-    for (const [marcaId, c] of porMarcaMap) lineas.push({ cuenta: e.cuentas.ventas, debe: 0, haber: deCent(c), localId: e.localId, marcaId, concepto: 'Ventas de tus marcas' })
+    for (const [marcaId, c] of porMarcaMap) lineas.push({ cuenta: cuentaVentas(marcaId), debe: 0, haber: deCent(c), localId: e.localId, marcaId, concepto: u ? `Ventas ${nombreMarca(marcaId)}` : 'Ventas de tus marcas' })
   } else if (filas.length) {
     lineas.push({ cuenta: e.cuentas.ventas, debe: 0, haber: base, localId: e.localId, concepto: 'Ventas de tus marcas' })
   }
@@ -185,8 +225,9 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
   // Devoluciones: su línea propia y el pedido (art. 80.Dos).
   for (const d of devs) {
     const ref = d.d.codigo ?? d.d.pedidoId
-    lineas.push({ cuenta: e.cuentas.devoluciones, debe: d.base, haber: 0, localId: e.localId, marcaId: d.d.marcaId, documento: ref, concepto: `Devolución del pedido ${ref ?? 'sin código'}` })
-    lineas.push({ cuenta: e.cuentas.ivaRepercutido, debe: d.cuota, haber: 0, localId: e.localId, documento: ref, concepto: `IVA de la devolución ${ref ?? ''}`.trim(),
+    lineas.push({ cuenta: cuentaDevoluciones(d.d.marcaId), debe: d.base, haber: 0, localId: e.localId, marcaId: d.d.marcaId, documento: ref,
+      concepto: u ? `Reembolso al cliente · ${nombreMarca(d.d.marcaId)} · pedido ${ref ?? 'sin código'}` : `Devolución del pedido ${ref ?? 'sin código'}` })
+    lineas.push({ cuenta: e.cuentas.ivaRepercutido, debe: d.cuota, haber: 0, localId: e.localId, documento: ref, concepto: u ? `IVA del reembolso ${ref ?? ''}`.trim() : `IVA de la devolución ${ref ?? ''}`.trim(),
       iva: { tipoId: e.tipo.id, tipo, base: d.base, libro: 'issued', facturas: 1 } })
     lineas.push({ cuenta: e.cuentas.cobroPorCanal[d.d.canalId!], debe: 0, haber: d.d.importe, localId: e.localId, documento: ref, concepto: `Devuelve ${e.nombreCanal(d.d.canalId)}` })
   }
@@ -225,6 +266,15 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
     avisos.push(`${otroTipo} pedido${otroTipo === 1 ? ' trae' : 's traen'} en sus líneas un tipo distinto del ${tipo} %: mira cuáles antes de validar.`)
     confs.push('duda')
   }
+  // C04b R5: la marca que no tiene su subcuenta va a la general, y se dice (no se esconde).
+  if (u && e.porMarca) {
+    const sinSubcuenta = [...new Set([...porMarcaMap.keys()].filter((m) => !m || !e.cuentas.ventasPorMarca?.[m])
+      .concat(devs.map((d) => d.d.marcaId).filter((m) => !m || !e.cuentas.devolucionesPorMarca?.[m])))]
+    if (sinSubcuenta.length) {
+      avisos.push(`${sinSubcuenta.map(nombreMarca).join(', ')} no ${sinSubcuenta.length === 1 ? 'tiene' : 'tienen'} su subcuenta de ventas o de reembolsos: va a la general (${e.cuentas.ventas} / ${e.cuentas.devoluciones}). Enlázala antes de validar.`)
+      confs.push('duda')
+    }
+  }
   if (cedidas.length) {
     razones.push({ decision: `Fuera: ${cedidas.length} pedidos de marcas cedidas (${eurosExactos(resumen.cedidasFuera.total)})`, porque: 'son ventas del socio y su IVA es del socio: entran solo en su liquidación mensual, que comparas con estos tickets', cita: cita('ivaMediacionNombreAjeno') })
   }
@@ -232,9 +282,13 @@ export function ventasDelDia(e: EntradaVentasDia): ResultadoVentasDia {
 
   return {
     propuesta: {
-      serie: 1, fecha: e.fecha, concepto: `Ventas del día · ${e.nombreLocal}`, origen: { tipo: 'sales_day', id: null }, lineas,
+      serie: 1, fecha: e.fecha,
+      concepto: u ? `Ventas ${e.nombreCanal(u.canalId)}${u.marcaId ? ` · ${nombreMarca(u.marcaId)}` : ''} · ${e.nombreLocal}` : `Ventas del día · ${e.nombreLocal}`,
+      origen: { tipo: 'sales_day', id: null }, lineas,
       confianza: peor('seguro', ...confs),
-      porque: `${filas.length} tickets de tus marcas cuadran con lo que cobran las plataformas, al céntimo${calculada ? '; base calculada al ' + tipo + ' %' : ''}.`,
+      porque: u
+        ? `${filas.length} tickets de tus marcas en ${e.nombreCanal(u.canalId)} cuadran con lo que cobra, al céntimo${calculada ? '; base calculada al ' + tipo + ' %' : ''}.`
+        : `${filas.length} tickets de tus marcas cuadran con lo que cobran las plataformas, al céntimo${calculada ? '; base calculada al ' + tipo + ' %' : ''}.`,
       razones, avisos,
     },
     sinPropuesta: null,

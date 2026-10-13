@@ -1,0 +1,33 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C04b · Diez — el modelo y el escritor del histórico (rama conta/c04b-diez).
+# Se lanza DESDE LA RAMA, sin fusionar (Julio, 12/10). La tanda anterior
+# (cierre del día, 20261018T01xx) ya está en el historial de producción.
+#
+#   1. 0100 — la conexión con Diez por empresa (credenciales en Vault).
+#   2. 0110 — el libro: lecturas, envíos, fotos para comparar, documentos,
+#      testigo; clave de Diez en journal_entry y journal_line.
+#   3. 0120 — conta_lectura lee lo nuevo.
+#   4. 0130 — un documento puede respaldar varios asientos (Glovo).
+#   5. 0140 — journal_line.external_negative_side («En Diez iba en negativo»).
+#   6. 0150 — el escritor del histórico (cuatro funciones, solo service_role).
+#   7. 0160 — en un ejercicio mixto, Folvy numera detrás de lo traído; hasta
+#      traer el histórico, no se valida nada en 2026. Cambia en caliente
+#      journal_entry_validar (declarado, con su prueba de staging).
+#
+# Análisis contra producción, medido el 12/10 con la consulta de solo lectura
+# del workflow: los siete «sigue». NO necesita «autorizo».
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261019T0100_diez_conexion.sql
+supabase/migrations/20261019T0110_diez_libro.sql
+supabase/migrations/20261019T0120_diez_lectura.sql
+supabase/migrations/20261019T0130_diez_documento_compartido.sql
+supabase/migrations/20261019T0140_diez_linea_negativa.sql
+supabase/migrations/20261019T0150_diez_importar.sql
+supabase/migrations/20261019T0160_diez_numeracion.sql
