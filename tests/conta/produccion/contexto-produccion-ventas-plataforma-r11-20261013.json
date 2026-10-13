@@ -1,0 +1,43 @@
+{
+ "_que": "Contexto de PRODUCCIÓN de la tanda viva (supabase/produccion/aplicar.txt): la respuesta de la consulta de contexto del workflow (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow), lanzada en solo lectura. Vale solo para los ficheros con estos md5: si uno cambia, se vuelve a medir (paso 8 de antes-de-subir, R11).",
+ "medido": "2026-10-13T09:43Z",
+ "tanda": {
+  "supabase/migrations/20261020T0100_ventas_por_plataforma.sql": "bc62afe350878ce3c0c491ab0432d1c6",
+  "supabase/migrations/20261020T0105_ventas_por_plataforma_permiso.sql": "460ce1acba316d676193f8d8788fbf20",
+  "supabase/migrations/20261020T0110_ventas_por_plataforma_indice.sql": "dc463a6b754906a820cdedda2786507c",
+  "supabase/migrations/20261020T0120_ventas_por_plataforma_foodint.sql": "64884c685ca3ed60ef309905778ea95a",
+  "supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql": "a9d6f8472a61b1f37c50db80d6dbc438",
+  "supabase/migrations/20261020T0140_libro_lectura_registro.sql": "4063c2d602c360c006bc6f18f4c0a2ee"
+ },
+ "contexto": {
+  "tablas": [
+   "public._backup_ventas_por_plataforma",
+   "public.company_account",
+   "public.journal_entry",
+   "public.sales_day_summary",
+   "public.ux_sales_day_summary"
+  ],
+  "funciones": [
+   "public._journal_entry_proponer(uuid,jsonb,jsonb,jsonb,text,uuid)",
+   "public.conta_dias_por_asentar(uuid,date,date)",
+   "public.conta_proponer_dias(uuid,timestamptz,text)",
+   "public.journal_entry_descartar(uuid,text,text)"
+  ],
+  "filas": {
+   "public._backup_ventas_por_plataforma": 0,
+   "public.company_account": 751,
+   "public.journal_entry": 14955,
+   "public.sales_day_summary": 144,
+   "public.ux_sales_day_summary": 144
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [
+    "public.sales_day_summary"
+   ],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

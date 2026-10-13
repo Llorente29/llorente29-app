@@ -8,9 +8,21 @@
 # todavía puesto puede romper más de lo que arregla. Lo que queda a medias va
 # al informe, fila a fila.
 #
-# Entorno: PSQL, DB_URL, INFORME y, si los .down.sql no están en
-# supabase/vuelta-atras, VUELTA_ATRAS_DIR (el ensayo de staging, C04 R4).
-# Sale con 0 si lo ha deshecho todo.
+# R9 (Julio, 13/10) · Y DESPUÉS CUENTA. Deshacer sin error no es estar como
+# antes: el 13/10 los seis .down.sql salieron bien y los 24 asientos de ventas
+# retirados no volvieron (lo hizo el cierre de las 08:07, una hora después).
+# Con CUENTAS (lo que la tanda declara en su manifiesto, manifiesto.sh) y
+# CUENTAS_ANTES (tomado antes de la tanda, cuentas.sh), vuelve a tomarlo con la
+# misma vara y lo compara (cuentas-comparar.mjs). Sin CUENTAS_ANTES, no puede
+# decir que está como antes, y no lo dice.
+#
+# Entorno: PSQL, DB_URL, INFORME, CUENTAS y CUENTAS_ANTES y, si los .down.sql
+# no están en supabase/vuelta-atras, VUELTA_ATRAS_DIR (el ensayo de staging,
+# C04 R4). Sale con:
+#   0  deshecho todo Y las cuentas iguales que antes de la tanda;
+#   1  algún .down.sql falta o falla: queda aplicado a medias;
+#   3  deshecho todo, pero las cuentas NO salen iguales (o no se han podido
+#      tomar): no está como antes, y el informe dice cuánto falta.
 set -uo pipefail
 lista="${1:?falta la lista de aplicados}"
 mapfile -t ap < <(grep -v '^\s*$' "$lista")
@@ -36,4 +48,23 @@ for ((i=${#ap[@]}-1; i>=0; i--)); do
   fi
 done
 echo >> "$INFORME"
-exit "$fallo"
+[ "$fallo" -eq 0 ] || exit 1
+
+# Después de deshacer, contar con la misma vara que antes de la tanda.
+{ echo "### ¿Está como antes de la tanda?"; echo; } >> "$INFORME"
+if [ -z "${CUENTAS:-}" ] || [ ! -s "${CUENTAS:-/nonexistent}" ] || [ ! -s "${CUENTAS_ANTES:-/nonexistent}" ]; then
+  echo "**No se puede decir**: la tanda no declara qué cuenta, o no se tomó antes de aplicarla." >> "$INFORME"; echo >> "$INFORME"
+  exit 3
+fi
+despues="$(mktemp)"
+if ! bash scripts/conta/produccion/cuentas.sh "$CUENTAS" "$despues" 2>"$tmp"; then
+  echo "**No se han podido tomar las cuentas después de deshacer** ($(head -1 "$tmp")): no se puede decir que está como antes." >> "$INFORME"; echo >> "$INFORME"
+  exit 3
+fi
+cp "$despues" "${CUENTAS_DESPUES:-/tmp/cuentas-tras-deshacer.csv}" 2>/dev/null || true
+if node scripts/conta/produccion/cuentas-comparar.mjs "$CUENTAS_ANTES" "$despues" "Antes de la tanda" "Tras deshacer" >> "$INFORME"; then
+  echo >> "$INFORME"; echo "**Sí: las cuentas salen iguales que antes de la tanda.**" >> "$INFORME"; echo >> "$INFORME"
+  exit 0
+fi
+echo >> "$INFORME"; echo "**NO: deshecho sin error, pero las cuentas no salen iguales** (arriba, cuánto falta)." >> "$INFORME"; echo >> "$INFORME"
+exit 3

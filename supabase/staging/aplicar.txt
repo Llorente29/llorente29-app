@@ -1,23 +1,10 @@
-# Cierre del día · 2 — el cierre también propone (conta/cierre-proponer,
-# encargo de Julio del 11/10).
-#   0100: conta_propuesta_ventas_dia (la regla del botón, en SQL),
-#         _journal_entry_proponer (proponer sin usuario), journal_entry_proponer
-#         llamándolo, sales_day_proposal_log, conta_proponer_dias y el
-#         procedimiento horario cerrando y después proponiendo.
-#   0110: la primera pasada (en staging: la empresa A no tiene días
-#         pendientes; la segunda, uno, sin 700: queda «sin propuesta» con su
-#         porqué). El resumen a medias del 09/10 es de producción: aquí no está.
-#   La prueba: las ramas a mano (traída, calculada, cedida, cancelado, sin
-#   430, abierto, a medias, descartado), otra pasada, el botón, las puertas y
-#   el procedimiento. Todo en una transacción con ROLLBACK.
-#   Run 134 (da265da): la 0100 APLICADA; la 0110 paró y se revirtió entera:
-#   en la empresa de B (sin IVA de ventas) la propuesta salía NULL —el
-#   resumen se cruzaba con un tipo vacío— y la pasada fallaba con «No hay
-#   ejercicio para el <NULL>». Ahora dice «Falta el IVA…», una propuesta vacía
-#   es un fallo con su mensaje, y la prueba lo mira (paso 7).
-#   Después de aplicar: a los :07 el cron de staging pasa por el procedimiento
-#   nuevo; se mira cron.job_run_details y sales_day_proposal_log.
-supabase/migrations/20261018T0100_cierre_proponer_solo.sql
-supabase/migrations/20261018T0110_cierre_proponer_dias_datos.sql
-supabase/migrations/20261018T0120_cierre_proponer_lectura.sql
-supabase/staging/sql/20261018_cierre_proponer_prueba.sql
+# C04b · Respuesta 15 — el documento de cada asiento de ventas, en Folvy.
+# (2.ª vuelta, 13/10: conta_resumen_ventas devuelve también account_id y company_id; las políticas de storage.objects se crean si no están, sin quitar nada: el paso 8 lo pidió.)
+#   ensayo: la 20261021T0100 y su prueba en una transacción con ROLLBACK. Si
+#           falla, no se aplica lo de abajo.
+#   0100:   bucket conta-documentos (privado, solo PDF), journal_entry_document,
+#           conta_resumen_ventas, conta_documento_guardar y external_send.document_*.
+#   La prueba, otra vez, ya con la 0100 puesta (y su ROLLBACK).
+supabase/staging/sql/20261021_conta_documentos_ensayo.sql
+supabase/migrations/20261021T0100_conta_documentos.sql
+supabase/staging/sql/20261021_conta_documentos_prueba.sql

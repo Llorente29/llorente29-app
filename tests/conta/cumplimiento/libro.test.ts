@@ -59,6 +59,12 @@ describe('agente «Libro diario»', () => {
     // El atraso de producción del 09/10, tal cual lo vería el agente antes de la primera pasada.
     // El hueco de producción del 11/10 (el 07/10 de Alcalá, 25 pedidos), medido en producción el 11/10 a las 17:3x UTC.
     expect(h.find((x) => x.tipo === 'dia_sin_asiento')!.detalle).toBe('2026-10-07 local c01a0000: 25 pedidos de tus marcas, sin resumen ni asiento, 86 h después de su cierre: el cierre del día no lo ha propuesto (el porqué, en el Libro diario)')
+    // C04b R5: con el registro del cierre del día, el porqué va en el aviso.
+    const conPorque = revisarLibro({ dia_sin_asiento: [{ ...A, local: 'c01b0000-0000-4000-8000-0000000000b2', dia: '2026-10-04', pedidos: 1, horas: 186, resumen: false,
+      resultado: 'sin_propuesta', porque: 'Falta el IVA de tus ventas (Tu empresa) o su 477, o la 700 en el plan.' }] })
+    expect(conPorque[0].detalle).toBe('2026-10-04 local c01b0000: 1 pedido de tus marcas, sin resumen ni asiento, 186 h después de su cierre: el cierre del día no lo ha propuesto: la última vez, sin propuesta — «Falta el IVA de tus ventas (Tu empresa) o su 477, o la 700 en el plan.»')
+    expect(revisarLibro({ dia_sin_asiento: [{ ...A, local: 'x', dia: 'd', pedidos: 2, horas: 30, resumen: false, resultado: null, porque: null }] })[0].detalle)
+      .toContain('no hay registro del cierre para ese día')
     expect(h.find((x) => x.tipo === 'cierre_dia')!.detalle).toBe('20 pedidos de tus marcas (500.79 €) siguen abiertos en días ya cerrados; el más antiguo, del 2026-08-23, lleva 1122 h desde que acabó: el cierre del día no ha pasado o ha fallado')
   })
 })

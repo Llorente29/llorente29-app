@@ -1,0 +1,23 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C04b · Respuesta 4 — el día se cierra a las 2:00 (Julio, 12/10). Desde la
+# rama conta/c04b-diez, sin fusionar. La tanda anterior (Diez, 0100–0160) ya
+# está en el historial de producción con su huella (comprobado el 12/10).
+#
+#   1. 0170 — la hora de serie pasa a 2:00 (solo el DEFAULT); el cierre y
+#      «propuesto antes del cierre» preguntan lo mismo, también la noche del
+#      25/10 en que las 2:00 pasan dos veces. Cambia en caliente tres
+#      funciones, declaradas con su prueba de staging.
+#   2. 0175 — Foodint, de las 6:00 a las 2:00 (su hora está guardada en su
+#      ficha fiscal; la de serie no la mueve). Cambia una fila: AUTORIZO,
+#      con el nombre entero:
+#        20261019T0175_cierre_a_las_dos_foodint.sql
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+supabase/migrations/20261019T0170_cierre_a_las_dos.sql
+supabase/migrations/20261019T0175_cierre_a_las_dos_foodint.sql
