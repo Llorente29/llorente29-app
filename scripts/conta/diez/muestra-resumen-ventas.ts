@@ -30,3 +30,14 @@ const pdf = resumenVentasPdf(jsPDF, {
 })
 writeFileSync(process.argv[2] ?? 'resumen-de-ventas-muestra.pdf', pdf)
 console.log(`PDF de muestra: ${pdf.length} bytes`)
+// R15 · la misma muestra de una plataforma SIN factura medida en Diez (Glovo):
+// el PDF lleva el número del asiento en vez del de la factura.
+if (process.argv[3]) {
+  const sinFactura = resumenVentasPdf(jsPDF, {
+    empresa: { nombre: 'Cocinas de Ejemplo, S.L.', nif: 'B00000000' }, local: 'Local Centro', plataforma: 'Glovo', fecha: '2026-10-01',
+    numeroFactura: null, asiento: 'Ventas nº 1287', generado: new Date('2026-10-13T09:42:00Z'), tipoIva: 10,
+    pedidos, reembolsos, lineasFactura: lineas, factura: { base: suma('base'), cuota: suma('cuota'), total: suma('total') }, cobro: suma('total'),
+  })
+  writeFileSync(process.argv[3], sinFactura)
+  console.log(`PDF de muestra sin factura (Glovo): ${sinFactura.length} bytes`)
+}

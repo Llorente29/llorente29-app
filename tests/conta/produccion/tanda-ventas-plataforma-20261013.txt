@@ -1,0 +1,54 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C04b · Respuesta 5 — la regla de ventas definitiva (Julio, 13/10). La tanda
+# anterior (0170 y 0175, el cierre a las 2:00) ya está en el historial de
+# producción con su huella (run real 38352237907, comprobado el 13/10).
+#
+#   1. 0100 — la regla por empresa (conta_ventas_canal, conta_ventas_marca),
+#      la unidad en el resumen y la propuesta por unidad: Uber y Just Eat, una
+#      por plataforma, local y día, también Glovo (R10). Cambia en caliente
+#      cuatro funciones del proponedor, declaradas con su prueba de staging.
+#   1b. 0105 — conta_unidad_ventas de quien llama y con permiso para
+#      authenticated: sin ella el Libro diario no abre (e2e 180 de staging).
+#   2. 0110 — el índice único del resumen, por unidad (quita el de un resumen
+#      por día). AUTORIZO, con el nombre entero:
+#        20261020T0110_ventas_por_plataforma_indice.sql
+#   3. 0120 — Foodint: todas las plataformas por local (R10: también Glovo);
+#      cada marca a su 7000000x y su
+#      7080000x; las tres 708 que faltaban (70800003, 70800007, 70800008).
+#      Solo inserta.
+#   4. 0130 — se retiran los propuestos del día entero de octubre (24 el
+#      13/10) y, EN LA MISMA TRANSACCIÓN, se proponen por unidad y se
+#      comprueba cada día: sus unidades y el mismo cobro (430), al céntimo.
+#      Si un día no, no se aplica nada (R9: sin hueco que tape el cierre de
+#      los :07). Borra: AUTORIZO, con el nombre entero:
+#        20261020T0130_ventas_por_plataforma_rehacer.sql
+#   5. 0140 — conta_lectura lee el registro del cierre del día, para que el
+#      agente «Libro diario» diga el porqué de un día sin asiento (el rojo
+#      de la empresa B de staging). Solo un permiso.
+#
+# Análisis contra producción, medido el 13/10 con la consulta de solo lectura
+# del workflow: 0100, 0105, 0120 y 0140 «sigue»; 0110 y 0130 «autorizo».
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (modo «vuelta_atras»).
+# La bajada de la 0130 devuelve los asientos del día entero desde su copia.
+#
+# R9 (13/10): el primer real (2922c95f, 07:52 UTC) se deshizo solo porque la
+# 0130 dejaba un hueco hasta el cierre de los :07; deshacer no devolvió los
+# asientos y el informe dijo «como antes» sin contarlo. Desde aquí cada tanda
+# DECLARA qué se cuenta antes y después («cuenta:»). Si el real se deshace
+# solo, deshacer.sh lo vuelve a contar y solo dice «como antes» si coincide;
+# el ensayo de la vuelta atrás lo compara también, y si no coincide, el
+# ensayo para.
+cuenta: scripts/conta/produccion/cuentas/ventas-del-dia.sql
+supabase/migrations/20261020T0100_ventas_por_plataforma.sql
+supabase/migrations/20261020T0105_ventas_por_plataforma_permiso.sql
+supabase/migrations/20261020T0110_ventas_por_plataforma_indice.sql
+supabase/migrations/20261020T0120_ventas_por_plataforma_foodint.sql
+supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql
+supabase/migrations/20261020T0140_libro_lectura_registro.sql

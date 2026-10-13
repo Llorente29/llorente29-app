@@ -3,7 +3,8 @@
 # después, el real normal. Lo corre scripts/conta/produccion/real-en-staging.sh
 # desde aplicar-staging-conta.yml (modos «real-con-fallo» y «real»).
 #
-# Es supabase/produccion/aplicar.txt, los mismos ficheros en el mismo orden,
+# Es la tanda de ventas por plataforma (hoy en tests/conta/produccion/
+# tanda-ventas-plataforma-20261013.txt, ya aplicada), los mismos ficheros en el mismo orden,
 # con UNA línea más: la 0125 de staging (la regla de la empresa A), que hace
 # aquí lo que la 0120 hace con Foodint. La prueba
 # tests/conta/produccion/w01.test.ts comprueba que no se separan.

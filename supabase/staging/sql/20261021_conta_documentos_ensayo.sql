@@ -53,16 +53,23 @@ on conflict (id) do nothing;
 
 -- La cuenta se compara como TEXTO con la carpeta: sin «::uuid» sobre el nombre,
 -- un fichero de otro bucket con otra forma de ruta no hace fallar la política.
-drop policy if exists conta_documentos_select on storage.objects;
-create policy conta_documentos_select on storage.objects for select to authenticated
-  using (bucket_id = 'conta-documentos'
-         and (storage.foldername(name))[1] = any (select a::text from unnest(public.current_user_account_ids()) a));
-
-drop policy if exists conta_documentos_insert on storage.objects;
-create policy conta_documentos_insert on storage.objects for insert to authenticated
-  with check (bucket_id = 'conta-documentos'
-              and exists (select 1 from unnest(public.current_user_account_ids()) a
-                           where a::text = (storage.foldername(name))[1] and public.current_user_is_admin_or_manager_of(a)));
+-- Las dos políticas son NUEVAS: se crean si no están, y no se quita ninguna
+-- (storage.objects existe y tiene ficheros de otros buckets: quitar y poner
+-- una política suya sería cambiarla en caliente; el analizador lo para).
+do $$
+begin
+  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'conta_documentos_select') then
+    create policy conta_documentos_select on storage.objects for select to authenticated
+      using (bucket_id = 'conta-documentos'
+             and (storage.foldername(name))[1] = any (select a::text from unnest(public.current_user_account_ids()) a));
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'conta_documentos_insert') then
+    create policy conta_documentos_insert on storage.objects for insert to authenticated
+      with check (bucket_id = 'conta-documentos'
+                  and exists (select 1 from unnest(public.current_user_account_ids()) a
+                               where a::text = (storage.foldername(name))[1] and public.current_user_is_admin_or_manager_of(a)));
+  end if;
+end $$;
 
 -- 2. El documento de un asiento -------------------------------------------------
 create table if not exists public.journal_entry_document (

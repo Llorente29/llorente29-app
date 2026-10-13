@@ -1,5 +1,5 @@
 # C04b · Respuesta 15 — el documento de cada asiento de ventas, en Folvy.
-# (2.ª vuelta, 13/10: conta_resumen_ventas devuelve también account_id y company_id, que usa el envío.)
+# (2.ª vuelta, 13/10: conta_resumen_ventas devuelve también account_id y company_id; las políticas de storage.objects se crean si no están, sin quitar nada: el paso 8 lo pidió.)
 #   ensayo: la 20261021T0100 y su prueba en una transacción con ROLLBACK. Si
 #           falla, no se aplica lo de abajo.
 #   0100:   bucket conta-documentos (privado, solo PDF), journal_entry_document,

@@ -368,8 +368,9 @@ describe('R9 · el manifiesto declara qué cuenta (manifiesto.sh)', () => {
 
 describe('R9 · la tanda de producción en staging (real-con-fallo y real)', () => {
   const lineas = (f: string) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
-  it('es la de producción, en el mismo orden, con la 0125 de staging antes de la 0130 y las mismas cuentas', () => {
-    const prod = lineas('supabase/produccion/aplicar.txt')
+  // La tanda del R9 (ventas por plataforma): su copia, ya aplicada en producción.
+  it('es la de producción (la de ventas por plataforma), en el mismo orden, con la 0125 de staging antes de la 0130 y las mismas cuentas', () => {
+    const prod = lineas('tests/conta/produccion/tanda-ventas-plataforma-20261013.txt')
     const stg = lineas('supabase/staging/tanda-de-produccion.txt')
     expect(stg.filter((l) => !l.includes('/staging/'))).toEqual([...prod.filter((l) => !l.startsWith('cuenta:')), ...prod.filter((l) => l.startsWith('cuenta:'))])
     const i = stg.indexOf('supabase/staging/sql/20261020T0125_ventas_por_plataforma_regla_a.sql')
@@ -392,14 +393,15 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('autorizo: 20261020T0110_ventas_por_plataforma_indice.sql 20261020T0130_ventas_por_plataforma_rehacer.sql')
+    expect(r.out).toContain('20261021T0100_conta_documentos.sql: sigue')
+    expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261020T0130_ventas_por_plataforma_rehacer.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261021T0100_conta_documentos.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261020T0130_ventas_por_plataforma_rehacer.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261021T0100_conta_documentos.sql ha cambiado desde la medida')
   })
 })
