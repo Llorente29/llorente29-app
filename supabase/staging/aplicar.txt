@@ -8,6 +8,8 @@
 #   0120: los ajustes de Foodint: aquí no está, no hace nada y lo dice.
 #   Run 157 (24d011f): las tres APLICADAS; la prueba falló en su siembra
 #   («code» ambiguo, error de la prueba, no de la base) y se revirtió.
+#   Run 159: la prueba paró en su paso 2 por una suma mal hecha EN LA PRUEBA
+#   (6.434,80 en vez de 6.437,90): el cuadre del servidor la cazó. Corregida.
 #   Ahora solo la prueba.
 #   La prueba: 13 pasos como el administrador de A (y la RLS como B), todo en
 #   una transacción con ROLLBACK.

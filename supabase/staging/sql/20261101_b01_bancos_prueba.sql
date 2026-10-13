@@ -103,23 +103,23 @@ begin
   if not v_ok or exists (select 1 from public.bank_statement where treasury_account_id = norte) then
     raise exception 'PRUEBA B01 · 2: entró un extracto que no cuadra.';
   end if;
-  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'norte.n43', repeat('b', 64), '2026-10-01', '2026-10-13', 10000, 16434.80, null,
+  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'norte.n43', repeat('b', 64), '2026-10-01', '2026-10-13', 10000, 16437.90, null,
                               'ES9900000000000000000000', movs);
   if (v_r->>'nuevos')::int <> 6 or (v_r->>'repetidos')::int <> 0 or v_r->>'continuidad' <> 'primero' then
     raise exception 'PRUEBA B01 · 2: importación: %', v_r;
   end if;
   -- El mismo fichero: no cambia nada y lo dice.
-  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'norte.n43', repeat('b', 64), '2026-10-01', '2026-10-13', 10000, 16434.80, null, null, movs);
+  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'norte.n43', repeat('b', 64), '2026-10-01', '2026-10-13', 10000, 16437.90, null, null, movs);
   if not (v_r->>'repetido')::boolean or v_r->>'mensaje' not like 'Este fichero ya se subió el %' then raise exception 'PRUEBA B01 · 2: el mismo fichero dos veces: %', v_r; end if;
   -- Otro fichero que se solapa (los mismos movimientos): todos repetidos.
-  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'otra-vez.n43', repeat('c', 64), '2026-10-01', '2026-10-13', 10000, 16434.80, null, null, movs);
+  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'otra-vez.n43', repeat('c', 64), '2026-10-01', '2026-10-13', 10000, 16437.90, null, null, movs);
   if (v_r->>'nuevos')::int <> 0 or (v_r->>'repetidos')::int <> 6 then raise exception 'PRUEBA B01 · 2: solapado: %', v_r; end if;
   if (select count(*) from public.bank_movement where treasury_account_id = norte) <> 6 then raise exception 'PRUEBA B01 · 2: hay movimientos dos veces.'; end if;
   -- Continuidad: el siguiente empieza donde acabó (sigue) o no (hueco, con cuánto).
-  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'n-sigue.n43', repeat('d', 64), '2026-10-14', '2026-10-14', 16434.80, 16434.80, null, null, '[]');
+  v_r := public.bank_importar(norte, 'fichero', 'norma43', 'n-sigue.n43', repeat('d', 64), '2026-10-14', '2026-10-14', 16437.90, 16437.90, null, null, '[]');
   if v_r->>'continuidad' <> 'sigue' then raise exception 'PRUEBA B01 · 2: continuidad «sigue»: %', v_r; end if;
   v_r := public.bank_importar(norte, 'fichero', 'norma43', 'n-hueco.n43', repeat('e', 64), '2026-10-16', '2026-10-16', 16400.00, 16400.00, null, null, '[]');
-  if v_r->>'continuidad' <> 'hueco' or (v_r->>'hueco')::numeric <> -34.80 then raise exception 'PRUEBA B01 · 2: continuidad «hueco»: %', v_r; end if;
+  if v_r->>'continuidad' <> 'hueco' or (v_r->>'hueco')::numeric <> -37.90 then raise exception 'PRUEBA B01 · 2: continuidad «hueco»: %', v_r; end if;
   -- P1: el IBAN del fichero no era el de la cuenta → revisión propuesta, IBAN sin tocar.
   if (select iban from public.treasury_account where id = norte) <> 'ES7601829001020000000017'
      or (select iban_review->>'iban_propuesto' from public.treasury_account where id = norte) <> 'ES9900000000000000000000' then
@@ -136,7 +136,7 @@ begin
   v_r := public.bank_importar(sur, 'fichero', 'csv:bbva', 'sur.xlsx', repeat('f', 64), '2026-10-11', '2026-10-11', null, null,
     'El fichero no trae saldos.', null, '[{"fecha":"2026-10-11","importe":2000.00,"concepto_banco":"TRASPASO DE CUENTA NORTE","huella":"s1","huella_suave":"t1"}]');
   if v_r->>'continuidad' <> 'sin_saldo' then raise exception 'PRUEBA B01 · 2: Excel sin saldos: %', v_r; end if;
-  raise notice '2 · cuadre, mismo fichero, solapado, continuidad (sigue y hueco de −34,80), IBAN a revisar sin tocar, Excel sin saldos dicho';
+  raise notice '2 · cuadre, mismo fichero, solapado, continuidad (sigue y hueco de −37,90), IBAN a revisar sin tocar, Excel sin saldos dicho';
 end $$;
 
 -- ── 3 · Casar a una cuenta: propuesto en la serie de tesorería; seguro validado ──
