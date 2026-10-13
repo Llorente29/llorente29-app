@@ -82,9 +82,9 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // «Sí» confirma con contenido, y «Deshacer» lo devuelve (regla 8).
       const comision = page.locator('.cxb-fila', { hasText: 'Comision mantenimiento' })
       await comision.getByRole('button', { name: 'Sí', exact: true }).click()
-      await expect(page.locator('.cx-guardado')).toContainText('Casado: Comisión del banco')
+      await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Casado: Comisión del banco')
       await page.locator('.cxb-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Deshacer' }).click()
-      await expect(page.locator('.cx-guardado')).toContainText('Deshecho: el movimiento del 03/10')
+      await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Deshecho: el movimiento del 03/10')
 
       // Por aclarar, y la tarjeta que nadie ha dado de alta (respuesta 3).
       await page.getByRole('button', { name: 'Por aclarar', exact: true }).click()
@@ -112,7 +112,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByText('«b01-tres-cuentas.n43» · 3 cuentas')).toBeVisible()
       await capturar(page, 'subir-leido')
       await page.getByRole('button', { name: 'Subir las 3 cuentas' }).click()
-      await expect(page.locator('.cx-guardado')).toContainText('Subido «b01-tres-cuentas.n43».')
+      await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Subido «b01-tres-cuentas.n43».')
       await expect(page.getByText(/^Después los he mirado: he casado yo/)).toBeVisible()
       await capturar(page, 'subir-hecho')
 

@@ -25,7 +25,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { useLeer } from '@/modules/conta/libros/contexto'
+import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { estadoBanco, mesesElegibles, nombreMes, ultimosIban } from '@/modules/conta/lib/bancosVista'
 import { leerDatosBancos, leerHechos } from '@/modules/conta/services/bancosPantallas'
 import { BancosCtx, type ContextoBancos } from '@/modules/conta/bancos/contexto'
@@ -67,12 +67,13 @@ export default function BancosPage() {
   const enPortadaMovil = movil && !params.pestana
   const hoy = hoyEnMadrid()
 
-  const datos = useLeer(accountId && activa ? () => leerDatosBancos(accountId, activa.id) : null, `${accountId}:${activa?.id}:${vuelta}`)
+  const ambito = `${accountId}:${activa?.id}`
+  const datos = useLeerConservando(accountId && activa ? () => leerDatosBancos(accountId, activa.id) : null, ambito, String(vuelta))
   const meses = useMemo(() => mesesElegibles(datos.datos?.primerMovimiento ?? null, hoy), [datos.datos, hoy])
   const mes = meses.includes(query.get('mes') ?? '') ? query.get('mes')! : meses[0] ?? hoy.slice(0, 7)
   const bancos = datos.datos?.bancos ?? []
   const banco = bancos.find((b) => b.id === query.get('banco')) ?? bancos[0] ?? null
-  const hechos = useLeer(accountId && activa ? () => leerHechos(accountId, activa.id, mes) : null, `${accountId}:${activa?.id}:${mes}:${vuelta}`)
+  const hechos = useLeerConservando(accountId && activa ? () => leerHechos(accountId, activa.id, mes) : null, ambito, `${mes}:${vuelta}`)
   const casadosSolos = (hechos.datos ?? []).filter((h) => h.porQuien === 'folvy' && h.accion === 'casado').length
 
   const usuario = userName ?? 'yo'
