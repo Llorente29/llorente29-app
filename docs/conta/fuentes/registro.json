@@ -1,5 +1,5 @@
 {
-  "descargado": "2026-10-08T20:43:24.868Z",
+  "descargado": "2026-10-13T19:28:56.818Z",
   "fuentes": {
     "ley-37-1992": {
       "nombre": "Ley 37/1992, del Impuesto sobre el Valor Añadido",
@@ -787,6 +787,23 @@
       "fichero": "textos/rdl-1-2010-lsc.txt",
       "error": null,
       "idBoe": "BOE-A-2010-10544",
+      "nota": null
+    },
+    "orden-eha-962-2007": {
+      "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01)",
+      "url": "\"EHA/962/2007\"",
+      "urlDatos": null,
+      "http": 404,
+      "titulo": "",
+      "actualizadoEnFuente": null,
+      "fecha": "2026-10-13T19:28:56.818Z",
+      "comprobado": "2026-10-13T19:28:56.818Z",
+      "sha256": null,
+      "bytes": 0,
+      "contieneLoEsperado": false,
+      "fichero": null,
+      "error": "No encontrada. Probado: búsqueda «\"EHA/962/2007\"» sin resultados (HTTP 200): {\n    \"status\": {\n        \"code\": \"200\",\n        \"text\": \"ok\"\n    },\n    \"data\": \"\"\n}",
+      "idBoe": null,
       "nota": null
     }
   }
