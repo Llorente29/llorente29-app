@@ -187,6 +187,26 @@ Run 63 (`[prueba-c0009:recibida]`): ver la sección «Resultado» al final.
 - **Producción:** nada aplicado. La tanda de la 0200 a la 0240 la preparo
   cuando digas, con el contexto de producción medido y el paso 8.
 
-## Resultado del run 63
+## Resultado del run 63 (la factura a C0009, leída de vuelta)
 
-(se rellena con la lectura de vuelta)
+Pegado del resumen del run, que no lleva nombres:
+
+- Propuesta de Folvy: `600D 1.00 · 629D 1.00 · 472D 0.10 · 472D 0.21 · 400H 2.31`, confianza seguro.
+- A Diez: serie 2 · TipoAsiento 2 · TipoFactura 1 · tipos 21+10 · bases 2.00 · cuotas 0.31 · total 2.31 · Apuntes 2.
+- `facturas/add` → **200**; Documento 3175 (el mayor de la serie 2 en septiembre y octubre, antes: 3174).
+- Campos que vuelven igual que se mandaron: **18 de 18**.
+- Apuntes: 2; cuentas iguales y en el mismo orden: sí; importes iguales: sí.
+- El asiento que hace Diez: `600D · 629D · 472D · 472D · 400H`. Cuadra: sí. Haber = TotalFactura: sí.
+- **Su 472: la genérica (47200000), una por tipo de línea.** Diez junta en ella las 47200010 y 47200021 que propone Folvy, como en las 1.432 medidas.
+- Su proveedor: la cuenta del Haber es la mandada.
+- **Numeración de la serie 2: sigue sin hueco** (3175 tras 3174).
+- Sale en el listado de facturas de octubre (libro de IVA).
+
+**Lo que falta, y es tuyo: mirarlo en la pantalla de Diez.** Que salga en el
+libro de recibidas de la C0009 con sus dos tipos, y en el 303 del 4T. La
+factura es `FOLVY-D01-0001`, con fecha 13/10/2026.
+
+**Una decisión que sale de aquí:** en Folvy el IVA soportado va a una 472 por
+tipo, y en Diez a una sola. Al comparar el libro con Diez, la 472 se tiene que
+casar sumando los tipos, no cuenta a cuenta. `cuentaDeBoe` ya hace esa
+correspondencia para lo traído de Diez.
