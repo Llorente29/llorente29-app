@@ -216,8 +216,36 @@ la prueba de `main` aún no conoce. No son restos de runs cortados.
 
 ## 5 · Pruebas
 
-(Se completa con las cifras finales.)
+- **Unitarias:** 3.146 en verde (196 ficheros). Nuevas: `vistaPreviaC06` (8),
+  `correoC06` (+5: contraseña cambiada), `baseRegistrada` (5), `enviar` (+1),
+  `tests/unit/e2e/frentes` (3) y `cerrojo` (7).
+- **Build exacto** (`npm run build`, sin `*.tsbuildinfo`): en verde.
+- **Lint del repositorio entero, medido a los dos lados:** 1.379 problemas
+  (1.077 errores) en `origin/main` y 1.379 (1.077) en la rama. El único de los
+  ficheros que toco (`diezCliente.ts:232`, `no-useless-assignment`) es de una
+  línea que no he cambiado.
+- **Analizador de producción** sobre la 0200: **sigue**.
+- **Staging:** prueba de la base de Diez, 7 pasos, también como cliente: verde.
 
-## 6 · Estado de las e2e
+## 6 · Estado de las e2e y capturas
 
-(Se completa al terminar.)
+- **C06** (run 38472131190, ya como frente C y con el script del cerrojo):
+  **12 de 12**, en 3 min 26 s. El cerrojo se cogió al primer intento y quedó
+  libre al acabar: el script funciona también en Actions.
+- **Capturas nuevas** (`docs/conta/capturas/c06/`):
+  - `n18-entrar-*` y `n18-contrasena-*`: N18 con las cuatro frases ciertas;
+  - `mas-movil.png`: la hoja del «Más» con el menú entero;
+  - el correo de «contraseña cambiada»: `docs/conta/maquetas/c06/N20ContrasenaCambiada.png`
+    y `-movil.png` (no sale de staging: la marca de pruebas no tiene remitente);
+  - la vista previa de un enlace: `public/marcas/contabilidad/vista-previa.png`.
+- **Las dos enteras de los frentes A y B** (PR #179): punto 1.
+
+## Para antes de la tarea 6
+
+- Fusionar el [PR #179](https://github.com/Llorente29/llorente29-app/pull/179); luego A y B traen `main`. Hasta
+  entonces, nadie lanza su e2e con otra en marcha.
+- La tanda de producción del C06 (la 0100 y la 0200) va en la tarea 6, con su
+  analizador. Para Foodint cambia cómo se lanza el histórico de Diez: ahora la
+  empresa y las fechas se escriben (punto 4).
+- `c01b/flujos` «marcar pagada» falla en `main` contra staging por la regla de
+  repetidas de A: lo tiene que ajustar A en su prueba.
