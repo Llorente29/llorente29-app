@@ -1,12 +1,9 @@
-# C04b · Respuesta 6 — El Libro diario, como usuario, pregunta la unidad.
-# (La 0100–0140 ya está aplicada en staging: run 144, 13/10. El e2e 180 cazó
-# que el Libro diario no abría: conta_unidad_ventas sin permiso para
-# authenticated.)
-#   ensayo: la 0105 y la prueba (con la parte 6, como usuario) en una
-#           transacción con ROLLBACK. Si falla, no se aplica lo de abajo.
-#   0105:   conta_unidad_ventas de quien llama (security invoker) y con
-#           permiso para authenticated.
-#   La prueba, otra vez entera: sus seis partes.
-supabase/staging/sql/20261020_ventas_por_plataforma_permiso_ensayo.sql
-supabase/migrations/20261020T0105_ventas_por_plataforma_permiso.sql
-supabase/staging/sql/20261020_ventas_por_plataforma_prueba.sql
+# C04b · Respuesta 15 — el documento de cada asiento de ventas, en Folvy.
+#   ensayo: la 20261021T0100 y su prueba en una transacción con ROLLBACK. Si
+#           falla, no se aplica lo de abajo.
+#   0100:   bucket conta-documentos (privado, solo PDF), journal_entry_document,
+#           conta_resumen_ventas, conta_documento_guardar y external_send.document_*.
+#   La prueba, otra vez, ya con la 0100 puesta (y su ROLLBACK).
+supabase/staging/sql/20261021_conta_documentos_ensayo.sql
+supabase/migrations/20261021T0100_conta_documentos.sql
+supabase/staging/sql/20261021_conta_documentos_prueba.sql
