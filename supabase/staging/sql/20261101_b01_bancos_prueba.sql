@@ -181,13 +181,28 @@ declare
 begin
   select id into m2 from public.bank_movement where treasury_account_id = norte and fingerprint = 'n2';
   select id into m3 from public.bank_movement where treasury_account_id = norte and fingerprint = 'n3';
+  -- La puerta de lectura del frente A: L-0431 está pendiente, con su proveedor y su cuenta.
+  if not exists (select 1 from public.bank_facturas_recibidas_pendientes(emp) where id = f513 and total = 152.30 and pagado = 0 and cuenta_tercero is not null) then
+    raise exception 'PRUEBA B01 · 4: bank_facturas_recibidas_pendientes no da L-0431 pendiente con su cuenta.';
+  end if;
+  -- El pago apuntado a mano de L-0412 aparece como asiento sin movimiento en la 57200902 (P2).
+  if not exists (select 1 from public.bank_asientos_sin_movimiento(emp, '2026-10-01', '2026-10-31') where entry_id = (select id from _b where que = 'pago511') and origen = 'pago_factura' and importe = -87.40) then
+    raise exception 'PRUEBA B01 · 4: el pago apuntado no sale como asiento sin movimiento.';
+  end if;
   v_r := public.bank_casar(m2, jsonb_build_object('tipo', 'factura_recibida', 'facturas', jsonb_build_array(jsonb_build_object('id', f513, 'importe', 152.30)),
-                           'cuenta_tercero', '40000004', 'metodo', 'domiciliacion'), 'probable', 'Mismo importe y proveedor que la factura L-0431', '[]', 'persona', null);
+                           'cuenta_tercero', '40000004', 'metodo', 'direct_debit'), 'probable', 'Mismo importe y proveedor que la factura L-0431', '[]', 'persona', null);
   select * into v_inv from public.supplier_invoice where id = f513;
-  if v_inv.paid_at <> '2026-10-07' or v_inv.payment_entry_id <> (v_r->>'asiento')::uuid or v_inv.paid_by_name <> 'Folvy · banco' then
+  if v_inv.status <> 'pagada' or v_inv.paid_at <> '2026-10-07' or v_inv.paid_method <> 'direct_debit' or v_inv.payment_entry_id <> (v_r->>'asiento')::uuid
+     or not exists (select 1 from public.supplier_invoice_payment_log where invoice_id = f513 and action = 'paid' and paid_at = '2026-10-07') then
     raise exception 'PRUEBA B01 · 4: la factura no quedó pagada por el banco: % %', v_inv.paid_at, v_inv.payment_entry_id;
   end if;
   insert into _b values ('m2', m2), ('e2', (v_r->>'asiento')::uuid);
+  if exists (select 1 from public.bank_facturas_recibidas_pendientes(emp) where id = f513) then
+    raise exception 'PRUEBA B01 · 4: L-0431 sigue pendiente después de pagada.';
+  end if;
+  if not exists (select 1 from public.bank_historial(emp, '2026-01-01') where cuenta = '40000004' and origen = 'banco') then
+    raise exception 'PRUEBA B01 · 4: lo casado no entra en el historial del que aprende el motor.';
+  end if;
   -- P2: el pago de L-0412 ya estaba apuntado (propuesto, paso 0). El banco lo enlaza, no crea otro.
   v_prev := jsonb_build_object('id', (select id from _b where que = 'pago511'));
   select count(*) into n_antes from public.journal_entry where company_id = emp;
@@ -197,7 +212,7 @@ begin
      or (select count(*) from public.journal_entry where company_id = emp) <> n_antes then
     raise exception 'PRUEBA B01 · 5: el pago ya apuntado no se enlazó (o se creó otro asiento): %', v_r;
   end if;
-  raise notice '4 · L-0431 pagada por el banco el 07/10 con su asiento · 5 · L-0412: el pago ya apuntado se enlaza; asientos antes % = después %', n_antes, n_antes;
+  raise notice '4 · L-0431 pagada por el banco el 07/10 por mark_supplier_invoice_paid (domiciliación, con su registro) y con su asiento · 5 · L-0412: el pago ya apuntado se enlaza; asientos antes % = después %', n_antes, n_antes;
 end $$;
 
 -- ── 6 · Liquidación cobrada; 7 · traspaso; 8 · nada dos veces ───────────────
@@ -247,7 +262,7 @@ begin
     raise exception 'PRUEBA B01 · 9: lo validado no se anuló con su contraasiento.';
   end if;
   v_r := public.bank_deshacer((select id from public.bank_match where movement_id = m2 and status = 'vivo'), 'Era otra factura');
-  if (select paid_at from public.supplier_invoice where id = 'c1b0a000-0000-4000-8000-000000000513') is not null then
+  if (select status || coalesce(paid_at::text, '') || coalesce(payment_entry_id::text, '') from public.supplier_invoice where id = 'c1b0a000-0000-4000-8000-000000000513') <> 'aprobada' then
     raise exception 'PRUEBA B01 · 9: la factura sigue pagada tras deshacer.';
   end if;
   if (select count(*) from public.bank_match where status = 'deshecho' and undo_reason is not null and movement_id in (m1, m2)) <> 2 then

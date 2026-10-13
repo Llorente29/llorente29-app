@@ -10,7 +10,15 @@
 #   («code» ambiguo, error de la prueba, no de la base) y se revirtió.
 #   Run 159: la prueba paró en su paso 2 por una suma mal hecha EN LA PRUEBA
 #   (6.434,80 en vez de 6.437,90): el cuadre del servidor la cazó. Corregida.
-#   Ahora solo la prueba.
+#   Run 161: pasos 1–3 en verde (lo seguro validado y numerado en la 4); el 4
+#   chocó con supplier_invoice_pagada_con_fecha: el banco marcaba la factura a
+#   mano. Ahora usa mark_supplier_invoice_paid / channel_settlement_collect (los
+#   caminos de siempre, con el freno del IBAN) y deshacer, sus contrarios.
+#   Vuelven 0100 (columna marked_by_bank; se puede repetir: todo «if not
+#   exists») y 0110 (mismas firmas), y entra 0130 (lecturas del motor).
 #   La prueba: 13 pasos como el administrador de A (y la RLS como B), todo en
 #   una transacción con ROLLBACK.
+supabase/migrations/20261101T0100_b01_bancos.sql
+supabase/migrations/20261101T0110_b01_funciones.sql
+supabase/migrations/20261101T0130_b01_lectura.sql
 supabase/staging/sql/20261101_b01_bancos_prueba.sql

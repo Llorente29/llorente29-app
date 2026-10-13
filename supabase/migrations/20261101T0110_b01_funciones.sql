@@ -293,7 +293,7 @@ grant execute on function public.bank_proponer(uuid, text, text, text, jsonb) to
 -- ── Casar ──────────────────────────────────────────────────────────────────
 -- p_destino: {tipo, concepto?, tercero_id?, …} según el tipo:
 --   asiento          {entry_id}                       enlaza uno que ya existe (lo único posible antes del corte)
---   factura_recibida {facturas:[{id, importe}], cuenta_tercero, metodo?}
+--   factura_recibida {facturas:[{id, importe}], cuenta_tercero, metodo? (transfer | direct_debit)}
 --   liquidacion      {liquidacion_id, cuenta_cliente}
 --   traspaso         {otro_movimiento_id}
 --   cuenta | anticipo | contrato | factura_emitida   {lineas:[{cuenta, importe, tercero_id?, concepto?}], contrato_id?}
@@ -306,7 +306,7 @@ declare
   v_572 text; v_entry uuid; v_creado boolean := false; v_match uuid; v_lineas jsonb := '[]'::jsonb; v_l jsonb; v_suma numeric := 0;
   v_abs numeric; v_entra boolean; v_local uuid; v_comun boolean; v_concepto text; v_res jsonb; v_validado boolean := false;
   v_f jsonb; v_inv public.supplier_invoice; v_pagado numeric; v_cs public.channel_settlement; v_o public.bank_movement; v_o572 text;
-  v_ot public.treasury_account; v_aviso text; v_tercero uuid := nullif(p_destino->>'tercero_id', '')::uuid;
+  v_ot public.treasury_account; v_aviso text; v_tercero uuid := nullif(p_destino->>'tercero_id', '')::uuid; v_marcada boolean;
 begin
   select * into v_m from public.bank_movement where id = p_movement for update;
   if v_m.id is null then raise exception 'Ese movimiento no existe.' using errcode = 'P0002'; end if;
@@ -434,24 +434,25 @@ begin
   -- A qué y por cuánto, y lo que cambia fuera del banco.
   if v_tipo = 'factura_recibida' then
     for v_f in select * from jsonb_array_elements(p_destino->'facturas') loop
-      insert into public.bank_match_item (account_id, match_id, supplier_invoice_id, amount) values (v_cuenta, v_match, (v_f->>'id')::uuid, (v_f->>'importe')::numeric);
       select * into v_inv from public.supplier_invoice where id = (v_f->>'id')::uuid;
-      select coalesce(sum(i.amount), 0) into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
+      select coalesce(sum(i.amount), 0) + (v_f->>'importe')::numeric into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
        where i.supplier_invoice_id = v_inv.id and b.status = 'vivo';
-      if v_pagado >= coalesce(v_inv.grand_total, 0) - 0.005 and v_inv.paid_at is null then
-        update public.supplier_invoice set paid_at = v_m.op_date, paid_method = coalesce(p_destino->>'metodo', 'transferencia'),
-               paid_by = auth.uid(), paid_by_name = 'Folvy · banco', payment_entry_id = coalesce(payment_entry_id, v_entry)
-         where id = v_inv.id;
-        insert into public.supplier_invoice_payment_log (account_id, invoice_id, action, paid_at, paid_method, actor_id, actor_name)
-        values (v_cuenta, v_inv.id, 'paid', v_m.op_date, coalesce(p_destino->>'metodo', 'transferencia'), auth.uid(), 'Folvy · banco');
+      -- Pagada entera: por el camino de siempre (mark_supplier_invoice_paid), con su freno del IBAN y su registro.
+      v_marcada := v_pagado >= coalesce(v_inv.grand_total, 0) - 0.005 and v_inv.paid_at is null;
+      insert into public.bank_match_item (account_id, match_id, supplier_invoice_id, amount, marked_by_bank)
+      values (v_cuenta, v_match, v_inv.id, (v_f->>'importe')::numeric, v_marcada);
+      if v_marcada then
+        perform public.mark_supplier_invoice_paid(v_inv.id, v_m.op_date, coalesce(p_destino->>'metodo', 'transfer'));
       end if;
+      update public.supplier_invoice set payment_entry_id = coalesce(payment_entry_id, v_entry) where id = v_inv.id;
     end loop;
   elsif v_tipo = 'liquidacion' then
-    insert into public.bank_match_item (account_id, match_id, channel_settlement_id, amount) values (v_cuenta, v_match, v_cs.id, v_m.amount);
+    -- Cobrada por el camino de siempre (channel_settlement_collect), si no lo estaba.
+    insert into public.bank_match_item (account_id, match_id, channel_settlement_id, amount, marked_by_bank)
+    values (v_cuenta, v_match, v_cs.id, v_m.amount, v_cs.collected_on is null);
     if v_cs.collected_on is null then
-      update public.channel_settlement set collected_on = v_m.op_date, collected_amount = v_m.amount, collected_by = auth.uid(),
-             collected_by_name = 'Folvy · banco', collection_note = 'Casado con el movimiento del banco del ' || to_char(v_m.op_date, 'DD/MM/YYYY')
-       where id = v_cs.id;
+      perform public.channel_settlement_collect(v_cs.id, v_m.op_date, v_m.amount,
+        'Casado con el movimiento del banco del ' || to_char(v_m.op_date, 'DD/MM/YYYY'), 'Folvy · banco');
     end if;
   elsif v_tipo = 'traspaso' then
     insert into public.bank_match_item (account_id, match_id, other_movement_id, amount) values (v_cuenta, v_match, v_o.id, v_m.amount);
@@ -520,16 +521,12 @@ begin
   -- Lo que se puso fuera del banco por este casado, se quita.
   for i in select it.* from public.bank_match_item it where it.match_id = any(v_otros) loop
     if i.supplier_invoice_id is not null then
-      update public.supplier_invoice set paid_at = null, paid_method = null, paid_by = null, paid_by_name = null,
-             payment_entry_id = case when payment_entry_id = v_b.journal_entry_id then null else payment_entry_id end
-       where id = i.supplier_invoice_id and paid_by_name = 'Folvy · banco';
-      if found then
-        insert into public.supplier_invoice_payment_log (account_id, invoice_id, action, actor_id, actor_name)
-        values (v_b.account_id, i.supplier_invoice_id, 'unpaid', auth.uid(), public.conta_nombre_actor());
+      if i.marked_by_bank and exists (select 1 from public.supplier_invoice where id = i.supplier_invoice_id and status = 'pagada') then
+        perform public.unmark_supplier_invoice_paid(i.supplier_invoice_id);
       end if;
-    elsif i.channel_settlement_id is not null then
-      update public.channel_settlement set collected_on = null, collected_amount = null, collected_by = null, collected_by_name = null, collection_note = null
-       where id = i.channel_settlement_id and collected_by_name = 'Folvy · banco';
+      update public.supplier_invoice set payment_entry_id = null where id = i.supplier_invoice_id and payment_entry_id = v_b.journal_entry_id;
+    elsif i.channel_settlement_id is not null and i.marked_by_bank then
+      perform public.channel_settlement_uncollect(i.channel_settlement_id);
     end if;
   end loop;
   perform public._bank_log(v_b.account_id, v_b.company_id, v_b.movement_id, v_b.id, null, 'deshecho', 'persona',

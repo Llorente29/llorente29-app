@@ -170,8 +170,12 @@ create table if not exists public.bank_match_item (
   other_movement_id   uuid references public.bank_movement(id) on delete restrict,
   party_id            uuid references public.party(id) on delete set null,
   amount              numeric(14,2) not null,
+  -- La factura (o la liquidación) la marcó pagada (o cobrada) ESTE casado, por su función de siempre: deshacerlo la desmarca.
+  marked_by_bank boolean not null default false,
   constraint bank_match_item_uno check (num_nonnulls(supplier_invoice_id, channel_settlement_id, other_movement_id, party_id) >= 1)
 );
+-- Staging tenía ya la tabla de la primera tanda (run 157): la columna se añade si falta.
+alter table public.bank_match_item add column if not exists marked_by_bank boolean not null default false;
 create index if not exists bank_match_item_factura on public.bank_match_item (supplier_invoice_id) where supplier_invoice_id is not null;
 create index if not exists bank_match_item_liquidacion on public.bank_match_item (channel_settlement_id) where channel_settlement_id is not null;
 create index if not exists bank_match_item_otro on public.bank_match_item (other_movement_id) where other_movement_id is not null;
