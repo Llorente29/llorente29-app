@@ -36,6 +36,11 @@
 --                      hay resumen. El porqué de cada uno está en
 --                      sales_day_proposal_log y en el Libro diario.
 
+-- El registro del cierre del día se lee solo si este rol puede (conta_lectura
+-- lo recibe en 20261020T0140): así el agente sigue corriendo antes de esa tanda.
+select to_regclass('public.sales_day_proposal_log') is not null
+   and has_table_privilege('public.sales_day_proposal_log', 'select') as lee_registro \gset
+
 with libro as (
   select e.* from public.journal_entry e where e.status in ('validado', 'anulado')
 ),
@@ -48,10 +53,6 @@ cadena as (
          public.journal_huella(e.prev_hash, public.journal_entry_canonico(e.id)) as esperada
     from libro e where e.chain_seq is not null
 )
--- El registro del cierre del día se lee solo si este rol puede (conta_lectura
--- lo recibe en 20261020T0140): así el agente sigue corriendo antes de esa tanda.
-select to_regclass('public.sales_day_proposal_log') is not null
-   and has_table_privilege('public.sales_day_proposal_log', 'select') as lee_registro \gset
 
 select json_build_object(
   'contado', (select json_build_object(
