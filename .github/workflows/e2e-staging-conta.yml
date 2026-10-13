@@ -37,6 +37,17 @@ on:
       - 'playwright.config.ts'
       - '.github/workflows/e2e-staging-conta.yml'
   workflow_dispatch:
+    inputs:
+      # C06 (13/10): las tres sesiones (A, B y C) lanzan e2e a la vez y cada
+      # ejecución pone su contraseña al azar a los MISMOS usuarios: se pisan a
+      # mitad (400 y 429 al entrar). Con `pruebas` se corre solo una carpeta; si
+      # es la del C06, solo se tocan sus dos usuarios y no se pisa a nadie.
+      # Vacío: todo, como siempre.
+      pruebas:
+        description: 'Carpeta de pruebas (vacío = todas). tests/e2e/conta/c06 solo toca los usuarios del C06.'
+        type: string
+        required: false
+        default: ''
 
 # Un push nuevo ESPERA en cola: no cancela el e2e que está corriendo (C05,
 # respuesta 3). GitHub deja como mucho uno en espera por rama: si llegan dos,
@@ -58,6 +69,8 @@ jobs:
       STAGING_REF: oseymswjlzplqoxrfjzi
       PROD_REF: xzmpnchlguibclvxyynt
       VITE_SUPABASE_URL: https://oseymswjlzplqoxrfjzi.supabase.co
+      # C06: la carpeta a correr (solo a mano); en un push, vacía = todas.
+      PRUEBAS: ${{ inputs.pruebas }}
       VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zZXltc3dqbHpwbHFveHJmanppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4ODYzNzUsImV4cCI6MjEwNjQ2MjM3NX0.xszvWohb2R7MWidy1ZsIL0IZg2E55aQSFRc1WX8A4js
     steps:
       - uses: actions/checkout@v4
@@ -96,7 +109,13 @@ jobs:
           if [ "$r" != "0" ]; then echo "::error::Al otro lado hay cuentas de producción. Abortado."; exit 1; fi
           CLAVE=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
           echo "::add-mask::$CLAVE"
-          n=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v clave="$CLAVE" <<'SQL'
+          # Solo la carpeta del C06: solo sus dos usuarios (no se pisa a A ni a B).
+          SOLO_C06=no
+          if [ -n "${PRUEBAS:-}" ] && { ! [[ "$PRUEBAS" =~ ^tests/e2e/[A-Za-z0-9_./-]*$ ]] || [[ "$PRUEBAS" == *..* ]]; }; then
+            echo "::error::«pruebas» tiene que ser una carpeta de tests/e2e (o nada)."; exit 1
+          fi
+          case "${PRUEBAS:-}" in tests/e2e/conta/c06*) SOLO_C06=si ;; esac
+          n=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v clave="$CLAVE" -v solo_c06="$SOLO_C06" <<'SQL'
           with c as (
             update auth.users set encrypted_password = extensions.crypt(:'clave', extensions.gen_salt('bf'))
              where id in ('c01a0000-0000-4000-8000-0000000000a1', 'c01b0000-0000-4000-8000-0000000000b1',
@@ -104,6 +123,7 @@ jobs:
                           'c0600000-0000-4000-8000-0000000000a1', 'c0600000-0000-4000-8000-0000000000b1')
                and email in ('a.admin@prueba.folvy.test', 'b.admin@prueba.folvy.test', 'a.encargado@prueba.folvy.test',
                              'c.admin@prueba.folvy.test', 'sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test')
+               and (:'solo_c06' = 'no' or email like '%@c06-prueba.test')
             returning 1)
           select count(*) from c;
           SQL
@@ -113,12 +133,14 @@ jobs:
           # y los dos del frente C06 (contabilidad sola: el recorrido y el alta con la marca). Los del
           # C06 solo existen cuando su semilla está aplicada: hasta entonces se tocan 4.
           n=$(echo "$n" | tr -d '[:space:]')
-          if [ "$n" != "4" ] && [ "$n" != "6" ]; then echo "::error::Esperaba 4 (o 6, con la semilla del C06) usuarios de prueba y he tocado $n."; exit 1; fi
+          if [ "$SOLO_C06" = "si" ]; then
+            if [ "$n" != "2" ]; then echo "::error::Esperaba los 2 usuarios del C06 y he tocado $n."; exit 1; fi
+          elif [ "$n" != "4" ] && [ "$n" != "6" ]; then echo "::error::Esperaba 4 (o 6, con la semilla del C06) usuarios de prueba y he tocado $n."; exit 1; fi
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
           echo "Contraseña de un solo uso puesta a los $n usuarios de prueba."
           # R02: el escenario de reparto, igual en cada ejecución (pedidos vivos de
           # hoy, celdas como las dejó la migración, sin respuestas a Folvy).
-          if [ -f supabase/seeds/reparto/seed_r02_e2e.sql ]; then
+          if [ "$SOLO_C06" = "no" ] && [ -f supabase/seeds/reparto/seed_r02_e2e.sql ]; then
             "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -q -f supabase/seeds/reparto/seed_r02_e2e.sql
             echo "Escenario del R02 preparado."
           fi
@@ -138,7 +160,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Pruebas (ordenador y móvil)
-        run: npx playwright test
+        run: npx playwright test ${PRUEBAS:-}
 
       - name: Informe de Playwright
         if: always()
