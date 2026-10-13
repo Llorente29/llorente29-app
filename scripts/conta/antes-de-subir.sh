@@ -21,30 +21,33 @@ cd "$(git rev-parse --show-toplevel)"
 
 paso() { printf '\n── %s ──\n' "$1"; }
 
-paso '1/6 · lint del módulo (cero problemas)'
+paso '1/7 · lint del módulo (cero problemas)'
 npx eslint --max-warnings 0 src/modules/conta tests/unit/modules/conta tests/conta tests/e2e/conta scripts/conta
 
-paso '2/6 · valores de serie idénticos a sus fuentes'
+paso '2/7 · valores de serie idénticos a sus fuentes'
 node scripts/conta/serie.mjs comprobar
 node scripts/conta/codigos-postales.mjs comprobar
 node scripts/conta/plan.mjs comprobar
 node scripts/conta/cuentas-anuales.mjs comprobar
 
-paso '3/6 · unitarias y de cumplimiento'
+paso '3/7 · unitarias y de cumplimiento'
 npx vitest run
 
-paso '4/6 · front compatible con lo que borra la tanda de producción (W01)'
+paso '4/7 · front compatible con lo que borra la tanda de producción (W01)'
 # Lo que supabase/produccion/aplicar.txt borra o renombra no puede leerlo ni el
 # front publicado (origin/main) ni el de este commit: primero se deja de leer,
 # después se borra.
 git rev-parse --verify -q origin/main > /dev/null || { echo 'Falta origin/main: git fetch origin main'; exit 1; }
 node scripts/conta/produccion/analizar.mjs front-compatible
 
-paso '5/6 · las e2e cargan (se ejecutan en Actions)'
+paso '5/7 · las e2e cargan (se ejecutan en Actions)'
 npx playwright test --list > /dev/null
 
-paso '6/6 · npm run build exacto y en limpio'
+paso '6/7 · npm run build exacto y en limpio'
 find . -name '*.tsbuildinfo' -not -path './node_modules/*' -delete
 npm run build
+
+paso '7/7 · SQL: el fichero entero y como usuario (C04b R7)'
+node scripts/conta/antes-de-subir-sql.mjs
 
 printf '\nTodo en verde: se puede subir.\n'
