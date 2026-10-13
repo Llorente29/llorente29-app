@@ -30,6 +30,9 @@ name: Diez · factura de prueba en C0009 (C04b)
 # D01 (13/10): también corre en conta/d01-recibidas. Con
 # «[prueba-c0009:recibida-molde]», SOLO LEE cómo guarda Diez en la C0009 las
 # facturas recibidas de la serie 2 (scripts/conta/diez/prueba-c0009-recibida-molde.ts).
+# Con «[prueba-c0009:recibida]», ENVÍA a la C0009 UNA factura recibida inventada
+# hecha por la cadena de Folvy (facturaProveedor → facturaRecibida) y la lee de
+# vuelta, para medir la serie 2 (scripts/conta/diez/prueba-c0009-recibida.ts).
 
 on:
   push:
@@ -117,6 +120,8 @@ jobs:
             '[prueba-c0009:emitida-molde]'*) S=scripts/conta/diez/prueba-c0009-emitida-molde.ts ;;
             # D01: la recibida de molde (serie 2), solo lectura (escribir: false).
             '[prueba-c0009:recibida-molde]'*) S=scripts/conta/diez/prueba-c0009-recibida-molde.ts ;;
+            # D01: una recibida de Folvy a la C0009 y leída de vuelta (si ya está, no se envía otra).
+            '[prueba-c0009:recibida]'*) S=scripts/conta/diez/prueba-c0009-recibida.ts ;;
             # R13: la primera venta de Folvy en Diez (C0009), del volcado del paso anterior.
             '[prueba-c0009:emitida]'*) S=scripts/conta/diez/prueba-c0009-emitida.ts ;;
             # R14: qué dice el Swagger PÚBLICO de los adjuntos (sin credenciales).
