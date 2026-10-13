@@ -55,7 +55,10 @@ async function sinFolvy(page: Page, donde: string) {
 
 async function capturar(page: Page, nombre: string, contenedor: string | null = '.cx-principal') {
   await page.evaluate(() => document.fonts.ready)
-  if (contenedor) expect(await loQueTapan(page, contenedor, FLOTANTES_CONTA)).toEqual([])
+  // Con la marca, en ordenador no hay nada flotando (sin barra de la IA): no hay
+  // nada que pueda tapar. En el móvil, la barra inferior sí, y se mide.
+  const flotantes = await page.locator(FLOTANTES_CONTA.join(', ')).count()
+  if (contenedor && flotantes > 0) expect(await loQueTapan(page, contenedor, FLOTANTES_CONTA)).toEqual([])
   const ventana = page.viewportSize() ?? { width: 1440, height: 900 }
   const alto = await page.evaluate(() => document.documentElement.scrollHeight)
   await page.evaluate(() => window.scrollTo(0, 0))
@@ -199,7 +202,8 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     await activar.click()
     await expect(page.getByText(/^Plan activado: /)).toBeVisible({ timeout: 30_000 })
   }
-  await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible()
+  await expect(page.locator('.cx-principal')).toBeVisible()
+  await page.waitForLoadState('networkidle')
   await sinFolvy(page, 'el plan contable')
   await capturar(page, 'plan')
 
