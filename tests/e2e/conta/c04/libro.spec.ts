@@ -146,11 +146,17 @@ test('A · «Lo que he hecho yo»: lo que valida Folvy sale con su Deshacer, y d
   vigilar(page)
   const EMPRESA_A = '3b34403a-a7d6-4a48-a8d7-737e8cababdc'
   const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
-  const concepto = `Ventas del día · Prueba e2e ${Date.now().toString(36)}`
+  const PREFIJO = 'Ventas del día · Prueba e2e'
+  // Lo que dejó un run cortado: lo validado se anula y lo propuesto se descarta.
+  const quedan = await rest<{ id: string; status: string }[]>(s, 'GET',
+    `journal_entry?select=id,status&company_id=eq.${EMPRESA_A}&concept=like.${encodeURIComponent(`${PREFIJO}*`)}&status=in.(propuesto,validado)`)
+  for (const x of quedan.datos ?? []) await limpiar(s, x.id, x.status)
+  const concepto = `${PREFIJO} ${Date.now().toString(36)}`
   const p = await rest<{ id: string }>(s, 'POST', 'rpc/journal_entry_proponer', {
     p_company: EMPRESA_A,
     p_entry: { series: 4, fecha: hoy, concepto, source_type: 'manual', confianza: 'seguro', porque: 'Asiento de la prueba e2e del libro (se deshace al acabar).' },
-    p_lines: [{ cuenta: '57000000', debe: 1, haber: 0 }, { cuenta: '70000000', debe: 0, haber: 1 }],
+    // Común a los locales: un apunte sin local ni «común» no se valida.
+    p_lines: [{ cuenta: '57000000', debe: 1, haber: 0, comun: true }, { cuenta: '70000000', debe: 0, haber: 1, comun: true }],
     p_quien_nombre: 'Prueba e2e',
   })
   expect(p.status, JSON.stringify(p.datos)).toBe(200)
@@ -167,10 +173,16 @@ test('A · «Lo que he hecho yo»: lo que valida Folvy sale con su Deshacer, y d
     await expect(page.getByText(new RegExp(`Deshecho: «${concepto}» queda anulado con el contraasiento`))).toBeVisible()
     await expect(ia.locator('.cxd-ia-fila', { hasText: concepto })).toHaveCount(0)
   } finally {
-    // Si se cortó antes de «Deshacer», se anula aquí (si ya está anulado, la base lo dice y no pasa nada).
-    await rest(s, 'POST', 'rpc/journal_entry_anular', { p_entry: id, p_motivo: 'Limpieza de la prueba e2e del libro', p_fecha: null, p_quien_nombre: 'Prueba e2e' })
+    // Si se cortó antes de «Deshacer»: validado se anula, propuesto se descarta; anulado, nada.
+    const [x] = (await rest<{ status: string }[]>(s, 'GET', `journal_entry?select=status&id=eq.${id}`)).datos ?? []
+    if (x) await limpiar(s, id, x.status)
   }
 })
+
+async function limpiar(s: Awaited<ReturnType<typeof entrarComo>>, id: string, estado: string) {
+  if (estado === 'validado') await rest(s, 'POST', 'rpc/journal_entry_anular', { p_entry: id, p_motivo: 'Limpieza de la prueba e2e del libro', p_fecha: null, p_quien_nombre: 'Prueba e2e' })
+  else if (estado === 'propuesto') await rest(s, 'POST', 'rpc/journal_entry_descartar', { p_entry: id, p_motivo: 'Limpieza de la prueba e2e del libro', p_quien_nombre: 'Prueba e2e' })
+}
 
 test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
