@@ -1,5 +1,6 @@
-# C06 · Tarea 5 — la semilla de la empresa del frente C, otra vez: ahora con su
-# cuenta de banco (57200001), como la deja el alta. El simulado 38455581640
-# la rechazaba: el Diez de mentira la trae sin nombre y no se inventan nombres.
-# Se puede volver a aplicar.
-supabase/seeds/conta/seed_c06_diez_staging.sql
+# C06 · Tarea 5 — la 0200 otra vez, ahora con conta_diez_preparar_corte (el
+# ejercicio del corte «mixto de Diez» de una empresa nueva y limpia). Se puede
+# volver a aplicar: crea si no está y reemplaza las funciones con su misma firma.
+# Y su prueba, ya con el paso 7 (el corte), en una transacción con ROLLBACK.
+supabase/migrations/20261111T0200_c06_diez_base.sql
+supabase/staging/sql/20261111_c06_diez_base_prueba.sql

@@ -25,7 +25,9 @@
 --      antes y después. Lo escribe un disparador; nadie más.
 --   3. conta_diez_base_poner(empresa, nombre_bd, motivo, quién): la única
 --      puerta (solo service_role).
---   4. Foodint: su base, la C0008, la de siempre. Solo si la empresa existe
+--   4. conta_diez_preparar_corte(empresa, corte, quién): el ejercicio del corte
+--      «mixto de Diez» de una empresa nueva y limpia (solo service_role).
+--   5. Foodint: su base, la C0008, la de siempre. Solo si la empresa existe
 --      (en staging no está: no hace nada).
 -- ============================================================================
 
@@ -155,6 +157,59 @@ $$;
 revoke all on function public.conta_diez_base_poner(uuid, text, text, text) from public, anon, authenticated;
 grant execute on function public.conta_diez_base_poner(uuid, text, text, text) to service_role;
 revoke all on function public.conta_diez_base_apuntar() from public, anon, authenticated;
+
+-- El ejercicio del corte de una empresa NUEVA que viene de Diez: «mixto de
+-- Diez» hasta el corte (lo de antes se trae; lo de después lo hace Folvy).
+-- Para Foodint esto se hizo a mano (20261012T0110, C04 R4) porque ya trabajaba
+-- en Folvy ese año. Aquí, solo en una empresa LIMPIA: si el ejercicio ya tiene
+-- algún asiento, para y lo dice (ese corte se hace a mano, como el de Foodint).
+create or replace function public.conta_diez_preparar_corte(p_company uuid, p_corte date, p_por text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_cuenta uuid;
+  v_y public.fiscal_year;
+  v_code text := to_char(p_corte, 'YYYY');
+  v_desde date := date_trunc('year', p_corte)::date;
+  v_hasta date := (date_trunc('year', p_corte) + interval '1 year - 1 day')::date;
+  v_prev uuid;
+  v_id uuid;
+begin
+  if p_corte is null or btrim(coalesce(p_por, '')) = '' then raise exception 'Hace falta la fecha de corte y quién lo prepara.'; end if;
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa % no existe.', p_company; end if;
+  if not exists (select 1 from public.conta_diez_base where company_id = p_company) then
+    raise exception 'La empresa no tiene base de Diez registrada (conta_diez_base_poner, primero).';
+  end if;
+  select * into v_y from public.fiscal_year where company_id = p_company and code = v_code;
+  if v_y.id is not null then
+    if v_y.origin = 'mixed' and v_y.origin_program = 'diez' and v_y.imported_until = p_corte then
+      return jsonb_build_object('ejercicio', v_code, 'corte', p_corte, 'cambia', false);
+    end if;
+    if exists (select 1 from public.journal_entry e where e.company_id = p_company and e.fiscal_year_id = v_y.id) then
+      raise exception 'El ejercicio % ya tiene asientos: el corte de una empresa que ya trabaja en Folvy se hace a mano (como el de Foodint, C04 R4).', v_code;
+    end if;
+    if v_y.status <> 'open' then raise exception 'El ejercicio % está cerrado.', v_code; end if;
+    if p_corte < v_y.starts_on or p_corte >= v_y.ends_on then
+      raise exception 'El corte % tiene que caer dentro del ejercicio % y antes de su último día (% – %).', p_corte, v_code, v_y.starts_on, v_y.ends_on;
+    end if;
+    update public.fiscal_year set origin = 'mixed', origin_program = 'diez', imported_until = p_corte where id = v_y.id;
+    return jsonb_build_object('ejercicio', v_code, 'corte', p_corte, 'cambia', true, 'era', v_y.origin);
+  end if;
+  if p_corte >= v_hasta then raise exception 'El corte % es el último día del año: entonces el ejercicio entero es de Diez, no mixto.', p_corte; end if;
+  select id into v_prev from public.fiscal_year where company_id = p_company and ends_on = v_desde - 1;
+  insert into public.fiscal_year (account_id, company_id, code, starts_on, ends_on, previous_year_id, status, origin, origin_program, imported_until)
+  values (v_cuenta, p_company, v_code, v_desde, v_hasta, v_prev, 'open', 'mixed', 'diez', p_corte)
+  returning id into v_id;
+  return jsonb_build_object('ejercicio', v_code, 'corte', p_corte, 'cambia', true, 'era', null);
+end;
+$$;
+
+revoke all on function public.conta_diez_preparar_corte(uuid, date, text) from public, anon, authenticated;
+grant execute on function public.conta_diez_preparar_corte(uuid, date, text) to service_role;
 
 -- Foodint (Llorente29): su base de siempre. En staging no existe: no hace nada.
 insert into public.conta_diez_base (company_id, account_id, nombre_bd, motivo, puesto_por)

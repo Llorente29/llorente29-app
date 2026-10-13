@@ -14,6 +14,10 @@
 --      su registro, NO ve las de otra cuenta, y NO puede escribir ni llamar a
 --      la función.
 --   6. La empresa tiene que ser de la cuenta (no se cuela otra a mano).
+--   7. conta_diez_preparar_corte: sin base registrada, no; crea el ejercicio del
+--      corte «mixto de Diez»; repetirlo no cambia nada; un ejercicio de Folvy
+--      limpio pasa a mixto; un corte el último día del año, no; y el cliente
+--      no la puede llamar.
 
 begin;
 do $$ begin
@@ -39,7 +43,8 @@ begin
   values (u, 'c0600000-0000-4000-8000-0000000000e0', 'admin', true, 'Prueba Diez', now(), now());
   insert into public.company (id, account_id, legal_name, setup_step) values
     ('c0600000-0000-4000-8000-0000000000e2', 'c0600000-0000-4000-8000-0000000000e0', 'Prueba Diez Uno, S.L.', 'hecho'),
-    ('c0600000-0000-4000-8000-0000000000e6', 'c0600000-0000-4000-8000-0000000000e5', 'Prueba Diez Dos, S.L.', 'hecho');
+    ('c0600000-0000-4000-8000-0000000000e6', 'c0600000-0000-4000-8000-0000000000e5', 'Prueba Diez Dos, S.L.', 'hecho'),
+    ('c0600000-0000-4000-8000-0000000000e9', 'c0600000-0000-4000-8000-0000000000e5', 'Prueba Diez Tres, S.L.', 'hecho');
 end $$;
 
 -- 1 · Folvy registra la base de la empresa uno.
@@ -118,6 +123,39 @@ begin
   perform public.conta_diez_base_poner('c0600000-0000-4000-8000-0000000000e6', 'C0050', 'La segunda empresa', 'Folvy (prueba)');
   raise notice '6 OK: la empresa va con su cuenta; la otra registra la suya.';
 end $$;
+
+-- 7 · El ejercicio del corte de una empresa nueva.
+do $$
+declare r jsonb; y public.fiscal_year;
+begin
+  begin
+    perform public.conta_diez_preparar_corte('c0600000-0000-4000-8000-0000000000e9', date '2025-06-30', 'Folvy (prueba)');
+    raise exception '7: preparó el corte de una empresa sin base registrada';
+  exception when raise_exception then
+    if sqlerrm not like '%no tiene base de Diez registrada%' then raise; end if;
+  end;
+  r := public.conta_diez_preparar_corte('c0600000-0000-4000-8000-0000000000e2', date '2025-06-30', 'Folvy (prueba)');
+  select * into y from public.fiscal_year where company_id = 'c0600000-0000-4000-8000-0000000000e2' and code = '2025';
+  if y.origin <> 'mixed' or y.origin_program <> 'diez' or y.imported_until <> date '2025-06-30' or y.starts_on <> date '2025-01-01' or y.ends_on <> date '2025-12-31' then
+    raise exception '7: el 2025 no ha quedado mixto de Diez hasta el 30/06 (%).', row_to_json(y);
+  end if;
+  r := public.conta_diez_preparar_corte('c0600000-0000-4000-8000-0000000000e2', date '2025-06-30', 'Folvy (prueba)');
+  if (r ->> 'cambia')::boolean then raise exception '7: repetirlo cambió algo (%).', r; end if;
+  insert into public.fiscal_year (account_id, company_id, code, starts_on, ends_on, status, origin)
+  values ('c0600000-0000-4000-8000-0000000000e5', 'c0600000-0000-4000-8000-0000000000e6', '2026', date '2026-01-01', date '2026-12-31', 'open', 'folvy');
+  r := public.conta_diez_preparar_corte('c0600000-0000-4000-8000-0000000000e6', date '2026-03-31', 'Folvy (prueba)');
+  if (r ->> 'era') <> 'folvy' or not exists (select 1 from public.fiscal_year where company_id = 'c0600000-0000-4000-8000-0000000000e6'
+       and code = '2026' and origin = 'mixed' and imported_until = date '2026-03-31') then
+    raise exception '7: el 2026 de Folvy, limpio, no pasó a mixto (%).', r;
+  end if;
+  begin
+    perform public.conta_diez_preparar_corte('c0600000-0000-4000-8000-0000000000e2', date '2024-12-31', 'Folvy (prueba)');
+    raise exception '7: aceptó un corte el último día del año';
+  exception when raise_exception then
+    if sqlerrm not like '%último día del año%' then raise; end if;
+  end;
+  raise notice '7 OK: el corte se prepara solo con base registrada, mixto hasta la fecha, sin repetir, y nunca el último día del año.';
+end $$;
 reset role;
 
 -- 5 · Como el cliente: ve lo suyo, no lo de otra cuenta, y no escribe.
@@ -151,6 +189,11 @@ begin
   begin
     perform public.conta_diez_base_poner('c0600000-0000-4000-8000-0000000000e2', 'C0097', 'x', 'y');
     raise exception '5: el cliente ha podido llamar a la función';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.conta_diez_preparar_corte('c0600000-0000-4000-8000-0000000000e2', date '2025-03-31', 'y');
+    raise exception '5: el cliente ha podido preparar un corte';
   exception when insufficient_privilege then null;
   end;
   raise notice '5 OK: el cliente ve su base y su registro, no los de otra cuenta, y no escribe nada.';

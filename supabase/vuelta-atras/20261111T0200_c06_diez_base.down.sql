@@ -14,6 +14,7 @@ begin
   end if;
 end $$;
 
+drop function if exists public.conta_diez_preparar_corte(uuid, date, text);
 drop function if exists public.conta_diez_base_poner(uuid, text, text, text);
 drop table if exists public.conta_diez_base_registro;
 drop table if exists public.conta_diez_base;

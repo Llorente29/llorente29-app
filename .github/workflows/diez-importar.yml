@@ -31,6 +31,11 @@
 #     empresa.
 #   · el testigo es el de la base (testigo-huellas.json para la C0008). Sin
 #     testigo, la tanda no sale en verde.
+#   · «preparar» (producción, con «produccion» y «preparar-diez-<base>»):
+#     registra la base de la empresa (conta_diez_base_poner, con su motivo y
+#     quién lanzó el run) y deja su ejercicio del corte «mixto de Diez»
+#     (conta_diez_preparar_corte: solo en una empresa limpia). Las dos cosas en
+#     UNA transacción. Sin ningún id de cliente en el repositorio.
 #   · En staging, a mano: «simulado-staging» (el Diez de mentira contra la
 #     empresa que se diga, pasos 1 y 2 en ensayo) y «lectura-staging» (lee la
 #     C0009 de verdad, SOLO GET y solo el paso 1: nada se escribe en staging;
@@ -51,22 +56,22 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'ensayo / real (producción) · simulado-staging / lectura-staging (staging)'
+        description: 'preparar / ensayo / real (producción) · simulado-staging / lectura-staging (staging)'
         required: true
         default: ensayo
         type: choice
-        options: [ensayo, real, simulado-staging, lectura-staging]
+        options: [preparar, ensayo, real, simulado-staging, lectura-staging]
       empresa:
         description: 'Id de la empresa (company.id). Su base de Diez sale de conta_diez_base.'
         required: true
         type: string
       desde:
-        description: 'Primer mes a leer (AAAAMM)'
-        required: true
+        description: 'Primer mes a leer (AAAAMM). No en «preparar».'
+        required: false
         type: string
       hasta:
-        description: 'Último mes a leer (AAAAMM)'
-        required: true
+        description: 'Último mes a leer (AAAAMM). No en «preparar».'
+        required: false
         type: string
       corte:
         description: 'Fecha de corte (AAAA-MM-DD): el imported_until de su ejercicio mixto de Diez'
@@ -81,7 +86,15 @@ on:
         required: false
         type: string
       autorizo:
-        description: 'Solo para el real: «historico-diez» (base C0008) o «historico-diez-<base>» (otra)'
+        description: 'Real: «historico-diez» (C0008) o «historico-diez-<base>». Preparar: «preparar-diez-<base>»'
+        required: false
+        type: string
+      base:
+        description: 'Solo en «preparar»: la base de Diez de la empresa (C y cuatro cifras; C0001 nunca)'
+        required: false
+        type: string
+      motivo:
+        description: 'Solo en «preparar»: por qué se registra esa base (queda en el registro)'
         required: false
         type: string
 
@@ -379,3 +392,62 @@ jobs:
       - name: Informe
         if: always()
         run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'
+
+  # C06 · Registrar la base de una empresa y preparar su corte, en producción.
+  preparar:
+    if: github.event_name == 'workflow_dispatch' && inputs.modo == 'preparar'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EMPRESA: ${{ inputs.empresa }}
+      BASE: ${{ inputs.base }}
+      MOTIVO: ${{ inputs.motivo }}
+      DIEZ_CORTE: ${{ inputs.corte }}
+    steps:
+      - name: Confirmación, entradas y autorización
+        env:
+          CONFIRMO: ${{ inputs.confirmo }}
+          AUTORIZO: ${{ inputs.autorizo }}
+        run: |
+          set -euo pipefail
+          [ "$CONFIRMO" = "produccion" ] || { echo "::error::Hay que escribir «produccion» en «confirmo». No se hace nada."; exit 1; }
+          [[ "$EMPRESA" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "::error::«empresa» tiene que ser un id (uuid)."; exit 1; }
+          BASE=$(echo "$BASE" | tr 'a-z' 'A-Z' | tr -d '[:space:]')
+          [[ "$BASE" =~ ^C[0-9]{4}$ ]] || { echo "::error::«base» es C y cuatro cifras."; exit 1; }
+          [ "$BASE" != "C0001" ] || { echo "::error::La base C0001 no se toca nunca."; exit 1; }
+          [[ "$DIEZ_CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::«corte» es AAAA-MM-DD."; exit 1; }
+          [ -n "$(echo "$MOTIVO" | tr -d '[:space:]')" ] || { echo "::error::Hace falta el motivo."; exit 1; }
+          esperado="preparar-diez-$(echo "$BASE" | tr 'A-Z' 'a-z')"
+          [ "$AUTORIZO" = "$esperado" ] || { echo "::error::Preparar esta empresa (base $BASE) lleva «$esperado» en «autorizo». No se hace nada."; exit 1; }
+          echo "BASE=$BASE" >> "$GITHUB_ENV"
+      - name: Guardas · el secreto apunta a PRODUCCIÓN y no a staging
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta PROD_CONTA_DB_URL."; exit 1; }
+          python3 -c 'import os,urllib.parse as u; p=u.urlsplit(os.environ["DB_URL"]); [print(f"::add-mask::{x}") for x in (os.environ["DB_URL"], p.password, p.username, p.hostname) if x]'
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "Producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Registrar la base y preparar el corte (una transacción)
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          POR="Folvy · ${GITHUB_ACTOR} · run ${GITHUB_RUN_ID}"
+          if ! "$PSQL" "$DB_URL" -X -A -t -1 -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v base="$BASE" -v motivo="$MOTIVO" -v corte="$DIEZ_CORTE" -v por="$POR" > /tmp/salida.txt 2>&1 <<'SQL'
+          select 'base: ' || public.conta_diez_base_poner(:'empresa'::uuid, :'base', :'motivo', :'por')::text;
+          select 'corte: ' || public.conta_diez_preparar_corte(:'empresa'::uuid, :'corte'::date, :'por')::text;
+          SQL
+          then
+            grep -E 'ERROR' /tmp/salida.txt | head -3 | sed 's/^/::error::/'
+            echo "No se ha escrito nada (todo iba en una transacción)."; exit 1
+          fi
+          { echo "# Diez · preparar la empresa \`$EMPRESA\`"; echo; sed 's/^/- /' /tmp/salida.txt; echo; echo "Por: $POR"; } | tee -a "$GITHUB_STEP_SUMMARY"
