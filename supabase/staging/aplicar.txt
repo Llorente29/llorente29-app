@@ -1,16 +1,9 @@
-# D01 · Tarea 3 — la base de Facturas recibidas (sesión A; solo añade).
-# (2.ª vuelta: la regla de repetidas va como disparador; el índice único no se podía crear sin borrar las repetidas del C01b de staging.)
-# (3.ª vuelta: en un disparador BEFORE la columna generada aún no está calculada; la clave se calcula dentro.)
-#   ensayo: la 0200 y la 0210 y su prueba en una transacción con ROLLBACK. Si
-#           falla, no se aplica lo de abajo.
-#   0200:   bandeja de llegadas, dirección por empresa, ajuste «Recibe la
-#           mercancía con Folvy», repetidas en la base, bases por tipo,
-#           esperadas, peticiones, actividad y la función para B.
-#   0210:   tres CHECK ampliados (contacto de facturación, aprendido de Diez,
-#           documento de factura recibida).
-#   La prueba del D01 otra vez, y la del R15: 'resumen_ventas' sigue igual.
-supabase/staging/sql/20261021_d01_base_ensayo.sql
-supabase/migrations/20261021T0200_d01_recibidas.sql
-supabase/migrations/20261021T0210_d01_amplia.sql
-supabase/staging/sql/20261021_d01_base_prueba.sql
-supabase/staging/sql/20261021_conta_documentos_prueba.sql
+# D01 · Tarea 4 — las entradas: correo, subida y la factura que sale de lo leído
+# (sesión A; solo añade). La 0200 y la 0210 ya están en staging (run 38428274587).
+#   ensayo: la 0220 y su prueba en una transacción con ROLLBACK.
+#   0220:   registro de correos, destino, llegada, subida, factura desde la
+#           lectura y alta del proveedor leído.
+#   La prueba otra vez, ya con la 0220 puesta.
+supabase/staging/sql/20261021_d01_entrada_ensayo.sql
+supabase/migrations/20261021T0220_d01_entrada.sql
+supabase/staging/sql/20261021_d01_entrada_prueba.sql
