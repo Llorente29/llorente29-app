@@ -385,21 +385,6 @@
       "tipo": "pdf",
       "url": "https://www.caixabank.es/deployedfiles/empresas/Estaticos/pdf/Transferenciasyficheros/q43Junio2012.pdf",
       "debeContener": "normalizada"
-    },
-    {
-      "clave": "aeb-cuaderno-43-bankinter",
-      "nombre": "AEB · Cuaderno 43, Información normalizada de cuenta corriente (publicado por Bankinter)",
-      "tipo": "pdf",
-      "url": "https://docs.bankinter.com/stf/plataformas/empresas/gestion/ficheros/formatos_fichero/norma_43_castellano.pdf",
-      "debeContener": "normalizada"
-    },
-    {
-      "clave": "psd2-directiva-2015-2366",
-      "nombre": "Directiva (UE) 2015/2366 sobre servicios de pago en el mercado interior (PSD2), EUR-Lex",
-      "tipo": "url",
-      "formato": "html",
-      "url": "https://eur-lex.europa.eu/legal-content/ES/TXT/HTML/?uri=CELEX:32015L2366",
-      "debeContener": "información sobre cuentas"
     }
   ]
 }
