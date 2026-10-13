@@ -1,12 +1,10 @@
-# D01 · Tarea 4 — la regla única de repetidas, con el total (sesión A).
-# La 0200, la 0210 y la 0220 ya están en staging (runs 38428274587 y 38429935867).
-#   ensayo: la 0230 y su prueba en una transacción con ROLLBACK.
-#   0230:   repetida = mismo proveedor, mismo número Y mismo total (como el C01b);
-#           el mismo número con otro total es «posible» y no bloquea.
-#   Su prueba, la de la base (la parte 3 ya con el total) y la de las entradas,
-#   otra vez con la 0230 puesta.
-supabase/staging/sql/20261021_d01_repetidas_ensayo.sql
-supabase/migrations/20261021T0230_d01_repetidas_con_total.sql
-supabase/staging/sql/20261021_d01_repetidas_prueba.sql
-supabase/staging/sql/20261021_d01_base_prueba.sql
-supabase/staging/sql/20261021_d01_entrada_prueba.sql
+# D01 · Tarea 5 — el asiento de la factura recibida (sesión A; solo añade).
+# La 0200 a la 0230 ya están en staging (la 0230, run 38432287604).
+#   ensayo: la 0240 y su prueba en una transacción con ROLLBACK.
+#   0240:   conta_gasto_aprendido (lo aprendido de Diez, con su porqué) y
+#           conta_documento_factura_guardar (el PDF de la recibida en conta-documentos).
+#   Su prueba, y la del R15 (el resumen de ventas sigue igual).
+supabase/staging/sql/20261021_d01_asiento_ensayo.sql
+supabase/migrations/20261021T0240_d01_asiento_recibida.sql
+supabase/staging/sql/20261021_d01_asiento_prueba.sql
+supabase/staging/sql/20261021_conta_documentos_prueba.sql
