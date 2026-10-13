@@ -7,3 +7,7 @@ supabase/staging/sql/20261021_d01_recibida_envio_ensayo.sql
 supabase/migrations/20261021T0270_d01_recibida_envio.sql
 supabase/staging/sql/20261021_d01_recibida_envio_prueba.sql
 supabase/staging/sql/20261021_conta_documentos_prueba.sql
+#   0280:   conta_documentos_recibidos, lo que enseña N22 (con su ensayo y su prueba).
+supabase/staging/sql/20261021_d01_documentos_ensayo.sql
+supabase/migrations/20261021T0280_d01_documentos.sql
+supabase/staging/sql/20261021_d01_documentos_prueba.sql
