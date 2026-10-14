@@ -4,7 +4,32 @@ Rama `conta/c06-sola`. **Nada lanzado en producción.** Los retoques están en
 verde en staging; la tanda, medida y analizada contra producción, con los
 valores del ensayo listos para copiar (§3).
 
-<!-- RESULTADOS -->
+**En staging, en verde:**
+- `tests/e2e/conta/c06` entero: **16 de 16**, ordenador y móvil, en el último
+  código (run [38526522958](https://github.com/Llorente29/llorente29-app/actions/runs/38526522958); antes también en
+  [38524380998](https://github.com/Llorente29/llorente29-app/actions/runs/38524380998)): el recorrido con «Cegid
+  Diez» y el plan activado por el alta, y la bienvenida sin marca rellenada al
+  instante.
+- `tests/e2e/conta/c00/alta.spec.ts` (el alta de siempre, que A también usa): en
+  verde (run [38525456894](https://github.com/Llorente29/llorente29-app/actions/runs/38525456894)).
+- La 0400 y su prueba, aplicadas (run 38518883219).
+- `send-email` desplegada otra vez y comprobada contra la rama (run 38521193395).
+- La e2e entera del frente C (run 38521193372): 171 bien y 4 mal — **2 eran
+  míos**, dos pruebas del alta del C00 que daban por hecho que tras el plan
+  venía el IBAN; arreglados (abajo). Los otros 2 son el `c01b/flujos` «marcar
+  pagada» de siempre (la regla de repetidas de A; lo arregla A en su prueba).
+
+**Dos cosas que salieron por el camino, arregladas:**
+- **Al volver a un alta a medias, se repreguntaba el plan.** El plan y la de
+  programa comparten paso (el `CHECK` de `company.setup_step` no admite un paso
+  nuevo sin tocar la base), y quien cerraba entre las dos volvía a ver «¿pymes
+  o general?». Ahora no: el ejercicio abierto dice que ya lo eligió (solo lo
+  abre esa respuesta) y se sigue en la de programa con el plan guardado. Lo
+  cubre la e2e del C00 «cerrar la pestaña».
+- **En la pregunta salía marcada «Cegid Diez»**, como si se la sugiriéramos: el
+  alta marcaba siempre la primera. Ahora se marca la respuesta normal (la que
+  deja «No lo sé»), que en todas las demás preguntas es la primera (prueba
+  unitaria) y aquí es «Empiezo de cero».
 
 ## 1 · Retoques
 
@@ -87,7 +112,13 @@ Token propio, el compartido no se toca:
 - Contraste: 3,31:1 sobre blanco y 3,08:1 sobre el fondo de página (mínimo
   3:1).
 
-<!-- CAPTURAS -->
+**Capturas** (`docs/conta/capturas/c06/`):
+- N18 con el borde nuevo: `n18-entrar-*`, `recorrido-n18-entrar-*`.
+- El alta con el borde nuevo y la pregunta nueva: `alta-*`,
+  `recorrido-alta-plan-*`, `recorrido-alta-programa-*`, `recorrido-alta-hecha-*`.
+- La bienvenida con la marca: `recorrido-bienvenida-*`; y sin marca, hecha:
+  `recorrido-bienvenida-sin-marca-hecha-*`.
+- El Inicio con la tarjeta solo en el paso 4: `recorrido-inicio-pasos-alta-*`.
 
 ### 1.5 · La carrera de «Activar cuenta», también sin marca
 
@@ -138,7 +169,9 @@ hay respuestas.
 
 ### 3.2 · Para Julio: el ensayo
 
-<!-- COMMIT -->
+**El commit:** el último de `conta/c06-sola` cuando lo lances, que es el que
+te doy en el chat al cerrar este informe. Yo no empujo nada más a la rama hasta
+que me digas que el real está hecho.
 
 1. GitHub → **Actions** → **«Aplicar SQL en PRODUCCIÓN (contabilidad)»** →
    **Run workflow**.
