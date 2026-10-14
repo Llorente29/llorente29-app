@@ -14,9 +14,15 @@
 --   · Una liquidación del canal de A (en staging se llama «Glovo») del 01 al 07/10,
 --     neto 3.412,18, sin cobrar.
 --   · Respuesta 4: el nombre corto de cada banco («B01 Norte»…) y su ASIENTO DE
---     APERTURA a 30/09 (propuesto, origen «opening»): el saldo inicial del
---     extracto inventado (45.000,00 · 8.000,00 · 2.500,00). Sin él, contabilidad
+--     APERTURA a 30/09 (origen «opening»): el saldo inicial del extracto
+--     inventado (45.000,00 · 8.000,00 · 2.500,00). Sin él, contabilidad
 --     empezaba en cero y la pantalla decía «difiere» sin que nada difiriera.
+--   · Respuesta 5: las aperturas son asientos reales, así que van VALIDADAS
+--     (como el administrador de A, con el nombre «Semilla B01», que no es
+--     «Folvy…»: no entran en «Lo que he hecho yo» del C04). En A no queda
+--     ninguna propuesta suelta del B01: las propuestas de A se cuentan en el
+--     contador de Libros y en los pendientes del cierre del mes, que miran
+--     otros frentes.
 
 do $$
 declare
@@ -110,6 +116,19 @@ begin
    where company_id = a_empresa and source_type = 'opening' and status = 'propuesto'
      and source_id in ('b0100000-0000-4000-8000-0000000000b1', 'b0100000-0000-4000-8000-0000000000b2', 'b0100000-0000-4000-8000-0000000000b3')
      and created_at > timestamptz '2026-09-30 08:00:00+02';
+  -- Respuesta 5: validadas. journal_entry_validar pide un administrador de la
+  -- cuenta: el de A, solo dentro de esta transacción (como la semilla del C04).
+  perform set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+  for r in select e.id from public.journal_entry e
+            where e.company_id = a_empresa and e.source_type = 'opening' and e.status = 'propuesto'
+              and e.source_id in ('b0100000-0000-4000-8000-0000000000b1', 'b0100000-0000-4000-8000-0000000000b2', 'b0100000-0000-4000-8000-0000000000b3')
+            order by e.source_id loop
+    perform public.journal_entry_validar(r.id, 'Semilla B01');
+  end loop;
+  if exists (select 1 from public.journal_entry e where e.company_id = a_empresa and e.source_type = 'opening' and e.status <> 'validado'
+              and e.source_id in ('b0100000-0000-4000-8000-0000000000b1', 'b0100000-0000-4000-8000-0000000000b2', 'b0100000-0000-4000-8000-0000000000b3')) then
+    raise exception 'Semilla B01: alguna apertura no ha quedado validada.';
+  end if;
 
-  raise notice 'Semilla B01: tres bancos (57200911–13), Suministros B01 del Norte con B01-0477 y B01-0478, y la liquidación B01-LIQ-0107 (3.412,18); nombre corto y apertura a 30/09.';
+  raise notice 'Semilla B01: tres bancos (57200911–13), Suministros B01 del Norte con B01-0477 y B01-0478, y la liquidación B01-LIQ-0107 (3.412,18); nombre corto y apertura a 30/09, validada.';
 end $$;

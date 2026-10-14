@@ -26,8 +26,13 @@
 --                             los que dejan un hueco con el anterior, en ámbar.
 --   6. consentimiento       · ningún permiso del agregador caducado y activo;
 --                             los que caducan en 7 días, en ámbar.
---   7. sin_pasada           · ninguna empresa con movimientos sin mirar y sin
---                             una pasada del agente en 48 h (ámbar).
+--   7. sin_pasada           · ninguna empresa con movimientos SIN PASAR: entrados
+--                             después de la última pasada del agente (o sin
+--                             ninguna), y ni casados ni ignorados (ámbar).
+--                             Un día sin pasada y sin movimientos nuevos no es
+--                             nada (respuesta 5 del B01: mientras los movimientos
+--                             solo entran subiendo un extracto, el agente pasa en
+--                             cada subida).
 
 with vivos as (
   select m.* from public.bank_match m where m.status = 'vivo'
@@ -97,10 +102,10 @@ select json_build_object(
        where l.status = 'activo' and l.consent_valid_until < now() + interval '7 days') x), '[]'),
   'sin_pasada', coalesce((
     select json_agg(x) from (
-      select m.account_id, m.company_id, count(*) as sin_mirar,
-             (select max(r.ran_at) from public.bank_agent_run r where r.company_id = m.company_id) as ultima
+      select m.account_id, m.company_id, count(*) as sin_pasar, u.ultima
         from public.bank_movement m
-       where m.status = 'pendiente'
-       group by m.account_id, m.company_id
-      having not exists (select 1 from public.bank_agent_run r where r.company_id = m.company_id and r.ran_at > now() - interval '48 hours')) x), '[]')
+        left join lateral (select max(r.ran_at) as ultima from public.bank_agent_run r where r.company_id = m.company_id) u on true
+       where m.status not in ('casado', 'ignorado')
+         and (u.ultima is null or m.created_at > u.ultima)
+       group by m.account_id, m.company_id, u.ultima) x), '[]')
 );
