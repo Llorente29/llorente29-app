@@ -544,8 +544,11 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
         )}
         {pregunta && !ocupado && (pregunta.opciones.length > 0 || pregunta.noLoSe) && (
           <div className="cx-alta-respuestas">
-            {pregunta.opciones.map((o, i) => (
-              <button key={o.valor} type="button" className={i === 0 ? 'cx-boton' : 'cx-boton-sec'}
+            {pregunta.opciones.map((o) => (
+              // Marcada, la respuesta normal (la que deja «No lo sé»). En todas es
+              // la primera salvo en «¿De qué programa vienes?», que va en el orden
+              // de la lista y no sugiere ningún programa (C06, respuesta 4).
+              <button key={o.valor} type="button" className={o.valor === pregunta.normal ? 'cx-boton' : 'cx-boton-sec'}
                 onClick={() => void responder(pregunta, o.valor, o.texto)}>{o.texto}</button>
             ))}
             {/* En el móvil, «No lo sé» a secas (M1), para que quepa; la frase entera, para quien lee con lector. */}

@@ -80,3 +80,19 @@ describe('la tarjeta de Diez del Inicio: solo para lo que falte', () => {
     for (const p of ['holded', 'sage', 'a3', 'contasol', 'quipu', 'otro', 'ninguno', null]) expect(verTarjetaDiez(listo('diez', null), p)).toBe(false)
   })
 })
+
+describe('la respuesta marcada es la normal (la que deja «No lo sé»)', () => {
+  it('en todas las preguntas de siempre, la normal es la primera: marcar la normal no cambia nada en ellas', () => {
+    for (const paso of ['nif', 'nombre', 'actividad', 'impuestos', 'cuentas', 'banco'] as const) {
+      for (const q of todasLasPreguntas(paso, ctx)) {
+        if (q.clave === 'programa' || q.opciones.length === 0) continue
+        expect(q.opciones[0].valor, q.clave).toBe(q.normal)
+      }
+    }
+  })
+  it('en «¿De qué programa vienes?» la marcada es «Empiezo de cero», no Cegid Diez: no se sugiere ningún programa', () => {
+    const p = todasLasPreguntas('cuentas', ctx).find((q) => q.clave === 'programa')!
+    expect(p.normal).toBe('ninguno')
+    expect(p.opciones[0].valor).toBe('diez')
+  })
+})
