@@ -78,6 +78,7 @@
 .cxb-cuentas a.cxb-elegida { background: var(--cx-azul-suave); color: var(--cx-azul); font-weight: 600; }
 .cxb-igual { color: var(--cx-verde-oscuro); font-weight: 700; }
 .cxb-cierre { display: flex; flex-direction: column; gap: 10px; }
+.cxb-cierre .cx-cifra { white-space: nowrap; }
 .cxb-frase-verde { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); border-radius: var(--cx-radio-caja); padding: 12px 14px; margin: 0; font-size: 14px; font-weight: 500; }
 
 /* Subir extracto: la zona, y el velo de soltar en cualquier pantalla de Bancos */
@@ -128,6 +129,8 @@
 
 @media (max-width: 767px) {
   .cxb-cifras, .cxb-cifras-tres { grid-template-columns: 1fr 1fr; }
+  /* El cierre (respuesta 4): banco, contabilidad y diferencia, una debajo de otra; en dos columnas el importe no cabía y salía cortado. */
+  .cxb-cierre .cxb-cifras-tres { grid-template-columns: 1fr; }
   .cxb-banda { flex-direction: column; align-items: flex-start; }
   .cxb-tabla { padding: 4px 12px 12px; }
   .cxb-cabeza { display: none; }

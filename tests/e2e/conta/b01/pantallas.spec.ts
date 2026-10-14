@@ -40,6 +40,11 @@ async function capturar(page: Page, nombre: string) {
   else expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 }
 
+/** Un importe cortado con «…» esconde lo que la pantalla existe para enseñar (respuesta 4: el cierre en el móvil decía «44.237,8…»). */
+async function importesCortados(page: Page): Promise<string[]> {
+  return page.locator('.cxb-cifra-valor').evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth).map((e) => e.textContent ?? ''))
+}
+
 function vigilar(page: Page) {
   page.on('pageerror', (e) => console.log(`[error de la página] ${e.message}`))
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[consola] ${m.text().slice(0, 300)}`) })
@@ -103,6 +108,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
       // Con la apertura de la semilla, la diferencia es exactamente lo que queda sin casar.
       await expect(page.locator('.cxb-cifra', { hasText: 'Saldo en contabilidad' })).toContainText('difiere 2.175,50 €')
+      expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'movimientos')
       await capturarPieza(page, '.cxb-banda', 'banda-agente')
 
@@ -160,6 +166,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByRole('heading', { name: 'Cierre de octubre', level: 2 })).toBeVisible()
       await expect(page.getByText('Octubre aún no ha terminado: se cierra a partir del día 1 del mes siguiente.')).toBeVisible()
       await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
+      expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'cierre')
       await page.goto(`/conta/bancos/hecho?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { name: 'Lo que ha hecho Folvy', level: 2 })).toBeVisible()
@@ -199,6 +206,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.getByRole('button', { name: 'Todo', exact: true }).click()
       await expect(page.getByTestId('pasada-agente')).toBeVisible()
       await expect(page.locator('.cx-barra-ia')).toHaveCount(0)
+      expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'movimientos')
       await capturarPieza(page, '.cxb-banda', 'banda-agente')
 
@@ -206,6 +214,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.goto(`/conta/bancos/cierre?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { name: 'Cierre de octubre', level: 2 })).toBeVisible()
       await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
+      expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'cierre')
     } finally {
       await base.deshacerTodo('Limpieza después de las pantallas B01 (móvil)')

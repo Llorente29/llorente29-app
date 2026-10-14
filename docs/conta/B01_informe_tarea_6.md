@@ -213,6 +213,14 @@ Las tres diferencias salen exactas y explicadas por lo que queda sin casar:
 | Sur | 9.451,60 € | 9.500,00 € | −48,40 € | 2 movimientos, −48,40 € |
 | Mercado | 4.185,25 € | 2.500,00 € | 1.685,25 € | 4 movimientos, 1.685,25 € |
 
+**Lo que vi en la primera captura del móvil y he corregido:** los importes salían
+cortados («44.237,8…», «46.413,3…», «−2.175,5…»). En el móvil las tres cifras
+iban en dos columnas de unos 150 px, y la cifra corta con «…» cuando no cabe.
+Ahora, en el móvil, van una debajo de otra, y el «€» de la lista ya no salta de
+línea. Para que no dependa de mirar la captura, la e2e comprueba que **ningún
+importe esté cortado**, en el cierre y en Movimientos, en ordenador y en móvil
+(`importesCortados`).
+
 En la Cuenta principal (sin extracto de B01) la diferencia sale «—, sin saldo
 de fin de mes», con lo que está en contabilidad y no en el banco.
 
