@@ -356,6 +356,8 @@ El agente «Plan contable» en staging, que antes daba 7 rojos de esta empresa,
 
 ## Lo que queda apuntado
 
+- e2e de staging del commit de los puntos 1 y 3 (run 38535087773): **173 en verde**, incluidas las cuatro que pasan por Libros, y **2 en rojo** ajenas: `c01b/flujos` «marcar pagada…», en ordenador y móvil. La cuenta A compartida ya tiene la factura `E2E-001` y la regla de repetidas devuelve 409. Esta rama no toca proveedores ni facturas.
+
 - Staging, agente «Libro diario»: un rojo `dia_sin_asiento` de la cuenta
   `c01b0000` (los datos del cierre del día del frente B). No es de este
   encargo.
