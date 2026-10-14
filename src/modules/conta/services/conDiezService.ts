@@ -29,6 +29,7 @@
 import { jsPDF } from 'jspdf'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje, hayBase } from '@/modules/conta/services/bd'
+import { anular } from '@/modules/conta/services/diarioService'
 import { correspondenciaDeEmpresa } from '../../../../supabase/functions/_shared/diezAnalitica.ts'
 import { resumenDeAsiento, type ResumenBD } from '../../../../supabase/functions/_shared/resumenDeAsiento.ts'
 import { resumenVentasPdf } from '../../../../supabase/functions/_shared/resumenVentasPdf.ts'
@@ -43,6 +44,11 @@ const s = (v: unknown): string | null => (v === null || v === undefined || v ===
 const BUCKET = 'conta-documentos'
 const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
+
+const aEnvio = (f: Fila): EnvioDiez => ({
+  status: String(f.status) as EnvioDiez['status'], serie: s(f.ext_series), numero: f.ext_number == null ? null : Number(f.ext_number), factura: s(f.ext_invoice_number),
+  intentos: Number(f.attempts ?? 0), error: s(f.last_error), documento: (s(f.document_status) as EnvioDiez['documento']) ?? null, errorDocumento: s(f.document_error),
+})
 
 /** Los asientos de ventas de una plataforma de la empresa entre dos fechas, con su documento y su envío. */
 export async function leerConDiez(accountId: string, companyId: string, entryIds: readonly string[]): Promise<Map<string, ConDiez>> {
@@ -83,11 +89,17 @@ export async function leerConDiez(accountId: string, companyId: string, entryIds
     }
     for (const f of (envios.data ?? []) as Fila[]) {
       const x = out.get(String(f.entry_id))
-      if (x) x.envio = {
-        status: String(f.status) as EnvioDiez['status'], serie: s(f.ext_series), numero: f.ext_number == null ? null : Number(f.ext_number), factura: s(f.ext_invoice_number),
-        intentos: Number(f.attempts ?? 0), error: s(f.last_error), documento: (s(f.document_status) as EnvioDiez['documento']) ?? null, errorDocumento: s(f.document_error),
-      }
+      if (x) x.envio = aEnvio(f)
     }
+  }
+  // Respuesta 8: lo anulado, con el envío a Diez de su contraasiento.
+  const anulados = await tabla('journal_entry').select('id, voided_by_entry_id').eq('account_id', accountId).eq('status', 'anulado').in('id', conCanal).not('voided_by_entry_id', 'is', null)
+  if (anulados.error) throw new Error(mensaje('No se han podido leer los anulados', anulados.error))
+  const contraDe = new Map(((anulados.data ?? []) as Fila[]).map((f) => [String(f.voided_by_entry_id), String(f.id)]))
+  if (contraDe.size) {
+    const c = await tabla('external_send').select('entry_id, status, ext_series, ext_number, ext_invoice_number, attempts, last_error, document_status, document_error').eq('account_id', accountId).neq('status', 'rechazado').in('entry_id', [...contraDe.keys()])
+    if (c.error) throw new Error(mensaje('No se han podido leer los envíos de los contraasientos', c.error))
+    for (const f of (c.data ?? []) as Fila[]) { const x = out.get(contraDe.get(String(f.entry_id)) ?? ''); if (x) x.contraasiento = aEnvio(f) }
   }
   return out
 }
@@ -205,7 +217,11 @@ export async function validarYEnviar(xs: readonly { id: string; concepto: string
 // file_name), y la función conta_diez_adjunto_a_mano.
 
 /** Un asiento anulado en Folvy cuya factura sigue en Diez (le falta su contraasiento allí). */
-export interface AnuladoEnDiez { entryId: string; concepto: string; fecha: string; ejercicio: string; serie: string; documento: number; factura: string | null }
+export interface AnuladoEnDiez {
+  entryId: string; concepto: string; fecha: string; ejercicio: string; serie: string; documento: number; factura: string | null
+  /** Respuesta 8: su contraasiento en Folvy, que es lo que se manda a Diez; y por qué no ha llegado aún, si se intentó. */
+  contraasiento: string | null; motivo: string | null
+}
 
 /** Las facturas de la empresa que están en Diez sin su PDF, y lo anulado en Folvy que sigue en Diez. */
 export async function leerPendientesDiez(accountId: string, companyId: string): Promise<{ pendientes: PendienteDiez[]; anulados: AnuladoEnDiez[] }> {
@@ -221,13 +237,22 @@ export async function leerPendientesDiez(accountId: string, companyId: string): 
   for (let i = 0; i < ids.length; i += 200) {
     const t = ids.slice(i, i + 200)
     const [a, d] = await Promise.all([
-      tabla('journal_entry').select('id, concept, entry_date, series, number, status').eq('account_id', accountId).eq('company_id', companyId).in('id', t),
+      tabla('journal_entry').select('id, concept, entry_date, series, number, status, voided_by_entry_id').eq('account_id', accountId).eq('company_id', companyId).in('id', t),
       tabla('journal_entry_document').select('entry_id, storage_path, file_name').eq('account_id', accountId).eq('kind', 'resumen_ventas').in('entry_id', t),
     ])
     if (a.error) throw new Error(mensaje('No se han podido leer los asientos', a.error))
     if (d.error) throw new Error(mensaje('No se han podido leer los documentos', d.error))
     for (const x of (a.data ?? []) as Fila[]) asientos.set(String(x.id), x)
     for (const x of (d.data ?? []) as Fila[]) docs.set(String(x.entry_id), x)
+  }
+  // Respuesta 8: lo anulado cuyo contraasiento ya está en Diez no falta; el que se intentó y no llegó, con su motivo.
+  const enDiez = new Set(ids)
+  const contras = [...asientos.values()].filter((a) => a.status === 'anulado' && a.voided_by_entry_id).map((a) => String(a.voided_by_entry_id)).filter((c) => !enDiez.has(c))
+  const motivoDe = new Map<string, string | null>()
+  if (contras.length) {
+    const { data: m, error: em } = await tabla('external_send').select('entry_id, last_error').eq('account_id', accountId).eq('status', 'pendiente').in('entry_id', contras)
+    if (em) throw new Error(mensaje('No se han podido leer los envíos de los contraasientos', em))
+    for (const x of (m ?? []) as Fila[]) motivoDe.set(String(x.entry_id), s(x.last_error))
   }
   const pendientes: PendienteDiez[] = []
   const anulados: AnuladoEnDiez[] = []
@@ -236,7 +261,11 @@ export async function leerPendientesDiez(accountId: string, companyId: string): 
     const a = asientos.get(id)
     if (!a) continue
     const base = { entryId: id, concepto: String(a.concept ?? ''), fecha: String(a.entry_date), ejercicio: String(f.ext_year ?? String(a.entry_date).slice(0, 4)), serie: String(f.ext_series), documento: Number(f.ext_number), factura: s(f.ext_invoice_number) }
-    if (a.status === 'anulado') { anulados.push(base); continue }
+    if (a.status === 'anulado') {
+      const contra = s(a.voided_by_entry_id)
+      if (contra && enDiez.has(contra)) continue
+      anulados.push({ ...base, contraasiento: contra, motivo: contra ? motivoDe.get(contra) ?? null : null }); continue
+    }
     if (f.document_status !== 'pendiente_diez') continue
     const d = docs.get(id)
     pendientes.push({ ...base, serieFolvy: Number(a.series), numeroFolvy: a.number == null ? null : Number(a.number), enviadoEn: s(f.sent_at),
@@ -264,4 +293,20 @@ export async function zipPendientesDiez(xs: readonly PendienteDiez[]): Promise<{
     ficheros.push({ nombre: nombreEnZip(x), datos: new Uint8Array(await data.arrayBuffer()) })
   }
   return { zip: crearZip(ficheros), n: ficheros.length, sinPdf }
+}
+
+// ── C06b · Respuesta 8, pregunta 2: anular lo que ya está en Diez ──────────────
+
+/**
+ * Anula el asiento y, si su factura ya está en Diez, manda SOLO el
+ * contraasiento a Diez (conta-diez-enviar con el id del contraasiento: nunca
+ * dos veces, como la factura). Si el envío no llega, el anulado sale en
+ * «Pendientes de adjuntar en Diez», con «Enviar el contraasiento».
+ */
+export async function anularConDiez(entryId: string, motivo: string, fecha: string | null, quien: string | null): Promise<{ serie: number; numero: number; fecha: string; contraasiento: string; diez: ResultadoEnvio | null }> {
+  const { data, error } = await tabla('external_send').select('status').eq('entry_id', entryId).in('status', ['enviado', 'enlazado']).limit(1)
+  if (error) throw new Error(mensaje('No se ha podido mirar si está en Diez', error))
+  const enDiez = (data ?? []).length > 0
+  const x = await anular(entryId, motivo, fecha, quien)
+  return { ...x, diez: enDiez ? await enviarADiez(x.contraasiento) : null }
 }

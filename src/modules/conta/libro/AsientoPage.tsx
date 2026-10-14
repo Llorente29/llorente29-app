@@ -23,13 +23,13 @@ import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/forma
 import { deDondeSale, estadoDe, estadoMes, marcaNegativoDiez, mesDe, nombreMes, pastillasDeLinea, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
 import {
-  anular, cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
+  cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
 } from '@/modules/conta/services/diarioService'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { MARCA } from '../cuenta/marca'
 import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
 import { estadoDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
-import { leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
+import { anularConDiez, leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 import { noSeValida } from '@/modules/conta/lib/validarConPdf'
 
 interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
@@ -241,9 +241,12 @@ export default function AsientoPage() {
           ayuda="No se borra: hago un contraasiento que le da la vuelta, apunte por apunte, enlazado con este (CCom 29). Si su mes está cerrado, va al primer día abierto."
           alCerrar={() => setDialogo(null)}
           hacer={async (motivo, fecha) => {
-            const x = await anular(a.id, motivo, fecha, userName)
+            // Respuesta 8: si su factura ya está en Diez, el contraasiento va solo a Diez.
+            const x = await anularConDiez(a.id, motivo, fecha, userName)
             setDialogo(null)
-            setHecho(`Anulado. Contraasiento ${NOMBRE_SERIE[x.serie as 1]} nº ${x.numero.toLocaleString('es-ES')} del ${diaMesCorto(x.fecha)}, enlazado con este.`)
+            const dicho = `Anulado. Contraasiento ${NOMBRE_SERIE[x.serie as 1]} nº ${x.numero.toLocaleString('es-ES')} del ${diaMesCorto(x.fecha)}, enlazado con este.`
+            if (x.diez?.estado === 'no_llega') { setHecho(dicho); setFallo(`${x.diez.texto} Queda en Libros › Pendientes de adjuntar en Diez, con «Enviar el contraasiento».`) }
+            else setHecho(x.diez ? `${dicho} ${x.diez.texto}` : dicho)
             recargar()
           }} />
       )}

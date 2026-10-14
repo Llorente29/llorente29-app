@@ -241,10 +241,10 @@ export async function validar(entryId: string, quien: string | null): Promise<{ 
   } catch (e) { throw sinPrefijo(e) }
 }
 
-export async function anular(entryId: string, motivo: string, fecha: string | null, quien: string | null): Promise<{ serie: number; numero: number; fecha: string }> {
+export async function anular(entryId: string, motivo: string, fecha: string | null, quien: string | null): Promise<{ serie: number; numero: number; fecha: string; contraasiento: string }> {
   try {
     const r = (await rpc('journal_entry_anular', { p_entry: entryId, p_motivo: motivo, p_fecha: fecha, p_quien_nombre: quien })) as Fila
-    return { serie: n(r.serie), numero: n(r.numero), fecha: String(r.fecha) }
+    return { serie: n(r.serie), numero: n(r.numero), fecha: String(r.fecha), contraasiento: String(r.contraasiento) }
   } catch (e) { throw sinPrefijo(e) }
 }
 

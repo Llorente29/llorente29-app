@@ -100,3 +100,48 @@ export function facturaDeVentas(a: AsientoVentas, o: { correspondencia: Correspo
   }
   return { factura, sinPoner, esperado: { cobro: e(cobro), base: e(base), cuota: e(cuota) } }
 }
+
+// ── C06b · Respuesta 8: la factura que ANULA una emitida (el contraasiento) ─────
+//
+// Es la misma factura con todos los importes en negativo (base, cuota, total,
+// cada línea y su analítica al otro lado), con la fecha del contraasiento y su
+// propio número: el de la original con FORMA_ANULACION.sufijo. Y con los
+// campos de rectificativa de Diez tal como los guarda la gestoría
+// (FORMA_ANULACION.campos), medidos en la C0009 con
+// scripts/conta/diez/prueba-c0009-rectificativas-molde.ts.
+
+/** Cómo se anula en Diez una factura emitida (lo medido; ver arriba). */
+export const FORMA_ANULACION = {
+  sufijo: '-A',
+  prefijoDescripcion: 'ANULA ',
+  campos: (o: { numero: string; fecha: number; base: number; cuota: number }): Record<string, unknown> => ({
+    TipoRectificativa: 2, NumeroFacturaRectificativa: o.numero, FechaFacturaRectificativa: o.fecha,
+    TotalBasesRectificativa: o.base, TotalCuotasRectificativa: o.cuota,
+  }),
+}
+
+/**
+ * La factura emitida que anula `original` en Diez. `fecha`: la del
+ * contraasiento (AAAA-MM-DD); `hoy`: el día en que se mete. Lanza si la
+ * original no trae lo que hace falta: nada a medias.
+ */
+export function facturaQueAnula(original: FacturaData, o: { fecha: string; hoy: string; documentoOriginal: { ejercicio: string; serie: string; numero: number } }): FacturaData {
+  const numero = String(original.NumeroFactura ?? '')
+  if (!numero) throw new Error('la factura que se anula no tiene número: no se puede decir cuál anula')
+  const neg = (x: unknown) => (Number(x ?? 0) === 0 ? 0 : e(-c(Number(x))))
+  const fecha = aaaammdd(o.fecha)
+  const descripcion = `${FORMA_ANULACION.prefijoDescripcion}${String(original.Descripcion ?? '')}`.slice(0, 40)
+  const apuntes = ((original.Apuntes as { Linea: number; Cuenta: string; Concepto: string; Fecha: number; Importe: number }[] | undefined) ?? [])
+    .map((a) => ({ ...a, Concepto: descripcion, Fecha: fecha, Importe: neg(a.Importe) }))
+  const analitica = ((original.Analitica as Record<string, unknown>[] | undefined) ?? [])
+    .map((a) => ({ ...a, Descripcion: descripcion, Fecha: fecha, ImporteDebe: Number(a.ImporteHaber ?? 0), ImporteHaber: Number(a.ImporteDebe ?? 0) }))
+  return {
+    ...original,
+    Ejercicio: o.fecha.slice(0, 4), Documento: undefined,
+    Fecha: fecha, FechaFactura: fecha, FechaIntroduccionFactura: aaaammdd(o.hoy),
+    NumeroFactura: `${numero}${FORMA_ANULACION.sufijo}`, Descripcion: descripcion,
+    BaseImponible1: neg(original.BaseImponible1), CuotaIVA1: neg(original.CuotaIVA1), TotalFactura: neg(original.TotalFactura), TotalGastosIngresos: neg(original.TotalGastosIngresos),
+    Apuntes: apuntes, Analitica: analitica,
+    ...FORMA_ANULACION.campos({ numero, fecha: Number(original.FechaFactura), base: Number(original.BaseImponible1 ?? 0), cuota: Number(original.CuotaIVA1 ?? 0) }),
+  }
+}
