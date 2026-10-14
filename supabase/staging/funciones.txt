@@ -1,4 +1,3 @@
-# C06b · Respuesta 5, punto 5: conta-contrasena manda el enlace en segundo
-# plano (EdgeRuntime.waitUntil): el que existe y el que no contestan igual de
-# rápido. Lo demás, igual.
+# C06b · Respuesta 6, tarea 3: conta-contrasena con tope (conta_contrasena_pedir,
+# de la 0610: va DESPUÉS de aplicar la 0610 en staging).
 conta-contrasena
