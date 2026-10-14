@@ -360,3 +360,43 @@ Lo abro yo cuando me digas que el real está en verde: el PR de `conta/b01-banco
 - La rama **no toca ninguna edge function**.
 - Está hecho cuando **Vercel diga READY** en producción.
 - Después, en producción, solo leyendo: las tres fichas de Foodint con su IBAN, `bancos.sql` después del real, y la huella de los 50.
+
+### 5.4 Ensayo #64 (52f376c0): la vuelta atrás no estaba completa — arreglado
+
+**Qué pasó.** El ensayo aplicó bien los ocho ficheros (todos «sigue», y
+`bancos.sql` salió como se esperaba). Pero la vuelta atrás de la 0140 hacía
+`delete from storage.buckets`, y Supabase no lo deja: «Direct deletion from
+storage tables is not allowed. Use the Storage API instead.»
+
+**El arreglo.** La vuelta atrás de la 0140 ya no escribe en storage con SQL.
+- El bucket «banco-tickets» y sus dos políticas **se quedan**: el bucket, vacío. Su cabecera explica por qué y cómo quitarlo con la Storage API o desde el panel.
+- Las dos políticas solo usan funciones de antes del B01, así que siguen siendo válidas sin él.
+- Volver a aplicar la 0140 no choca: crea el bucket con «on conflict do nothing» y las políticas solo si no existen.
+- **No he usado `storage.allow_delete_query`**, que es aflojar un freno de Supabase y pide tu autorización.
+- La guarda (PARA si hay tickets enlazados) va aparte, en `20261101T0140_b01_tarjetas.down.guarda.sql`, como las del C00, para probarla sola.
+
+**Las demás vueltas atrás de la tanda:** ninguna toca storage. Lo comprueba una
+prueba nueva de la tanda viva (`analizar.test.ts`): con la vuelta atrás de
+antes falla y con la de ahora pasa.
+
+**La prueba de la vuelta atrás completa, en staging**
+(`supabase/staging/sql/20261101_b01_vuelta_atras_prueba.sql`, run
+38548059867, **verde**). En una transacción que acaba en `rollback`:
+1. Toma dos fotos: lo que no es del B01, y todo.
+2. Comprueba que la guarda de la 0140 para con un ticket enlazado.
+3. Deja las tablas del B01 vacías, como justo después de un real.
+4. Ejecuta los ocho `.down.sql`, en el orden de `vuelta-atras.txt`.
+5. Comprueba que no queda ni una tabla, función ni columna del B01, que el bucket y sus dos políticas siguen, y que lo de fuera del B01 es idéntico a la foto.
+6. Vuelve a aplicar las ocho migraciones, y la foto entera sale igual que al principio.
+
+Después, consultado en staging: está igual que antes (14 tablas, 15
+movimientos, 37 funciones, las dos columnas y el bucket).
+
+La primera vuelta de la prueba (run 38547515791) falló por la prueba, no por
+la vuelta atrás. Con `ON_ERROR_STOP` apagado, psql seguía con el resto del
+fichero, y el último error ya no era el de la guarda. Por eso la guarda va ahora
+aparte.
+
+**Las migraciones no cambian:** su md5 es el mismo, así que el contexto
+medido a las 08:01 y el paso 8 siguen valiendo (los ocho «sigue», ningún
+«autorizo»).
