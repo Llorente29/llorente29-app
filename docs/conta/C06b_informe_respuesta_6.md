@@ -206,7 +206,42 @@ No se ha cambiado nada para «cuadrar con Diez».
 
 ## 6 · Staging
 
-**Por rellenar con los resultados de las ejecuciones.**
+Dos empujes, en este orden, después de fusionar la #182 (14/10, 11:09 UTC):
+
+| Qué | Ejecución | Resultado |
+|---|---|---|
+| Aplicar 0600 + su prueba + 0610 + su prueba (ad41b0b) | [38554747644](https://github.com/Llorente29/llorente29-app/actions/runs/38554747644) | verde |
+| `conta-contrasena` a staging (cb1cd8f), DESPUÉS de la 0610 | [38554955318](https://github.com/Llorente29/llorente29-app/actions/runs/38554955318) | verde |
+| e2e del frente C (push, ad41b0b): c06 + marco + rls | [38554747699](https://github.com/Llorente29/llorente29-app/actions/runs/38554747699) | verde |
+| e2e forzada como frente B, a mano, a la vez | [38555004493](https://github.com/Llorente29/llorente29-app/actions/runs/38555004493) | verde |
+| Cumplimiento (agentes) | [38554747632](https://github.com/Llorente29/llorente29-app/actions/runs/38554747632) | rojo, no es de este frente (abajo) |
+
+Lo que dijeron las pruebas de staging, del registro:
+
+```
+0600: DO · INSERT 0 42
+NOTICE: 1 y 2 OK: los 14 prefijos de terceros, en los tres modelos, con su deudora en el activo y su acreedora en el pasivo.
+NOTICE: 3 OK: la vuelta atrás deja las 42 filas de la C05, sin signo.
+0610: CREATE TABLE · … · CREATE FUNCTION · REVOKE · GRANT
+NOTICE: 1 OK: por correo, 5 se mandan y la 6.ª no; las 6 devuelven lo mismo.
+NOTICE: 2 OK: por conexión, la 21.ª ya no se manda.
+NOTICE: 3 OK: otra conexión, se manda.
+NOTICE: 4 OK: un correo que no existe no devuelve nada.
+NOTICE: 5 OK: solo huellas sha256.
+NOTICE: 6 OK: como usuario, la función y la tabla paran con 42501.
+```
+
+**Dos frentes a la vez (tarea 5):** la del frente C (push) corrió de 11:10:46 a
+11:22:32; la forzada como B (`frente=b`, el marco), de 11:12:59 a 11:23:16.
+**Se solaparon diez minutos y ninguna esperó a la otra**; las dos en verde,
+cada una con sus usuarios.
+
+**El rojo del cumplimiento** es el de la respuesta 5: «Libro diario», cuenta
+`c01b0000` (frente B), un día del 04/10 sin asiento. No es de este frente y no
+lo toco. **Lo que sí es de esta tanda sale en verde**, con la 0600 ya aplicada:
+«el balance cuadra a cada fin de mes, toda cuenta con saldo tiene su línea, el
+libro registro es el diario, la regularización deja 6 y 7 a cero y ningún
+ejercicio cerrado tiene asientos nuevos».
 
 ---
 
@@ -248,7 +283,35 @@ sin signo, o para).
 
 ## 8 · Diseño
 
-**Por rellenar con las capturas de las e2e.**
+Capturas de las e2e en staging (datos inventados), en `docs/conta/capturas/c06b/`.
+
+### 8.1 · La nota bajo «Clientes» (tarea 1)
+
+| Ordenador | Móvil |
+|---|---|
+| ![](capturas/c06b/balance-nota-clientes-ordenador.png) | ![](capturas/c06b/balance-nota-clientes-movil.png) |
+
+- La nota va justo bajo «1. Clientes por ventas y prestaciones de servicios»,
+  a lo ancho de la tabla, en letra de apoyo (13 px, gris #5B6678, AA): se lee
+  como una aclaración, no como un aviso. Sin icono y sin ámbar ni rojo (lo
+  comprueba la e2e, no la vista).
+- Cuadra: «Activo = PN + Pasivo · ✓ 0,00 €».
+- La cuenta A no tiene clientes acreedores, así que la banda de la IA no dice
+  nada de ellos (lo que dice —dos cuentas en ámbar, la 572 y la 520— es de
+  antes y no cambia). La frase de la banda con clientes en el pasivo la mira
+  la unitaria contra la forma de Foodint.
+
+### 8.2 · Sin la barra (tarea 2)
+
+| | Ordenador | Móvil |
+|---|---|---|
+| Antes | ![](capturas/c06b/sin-barra-antes-ordenador.png) | ![](capturas/c06b/sin-barra-antes-movil.png) |
+| Después | ![](capturas/c06b/sin-barra-despues-ordenador.png) | ![](capturas/c06b/sin-barra-despues-movil.png) |
+
+La misma pantalla (Ajustes, cuenta B) y el mismo instante (el panel de «Tu
+empresa» todavía cargando en las dos): lo único que cambia es la barra
+«¿Qué IVA lleva el pan?» con su «Muy pronto», y en el móvil el botón central
+de la IA.
 
 ---
 
