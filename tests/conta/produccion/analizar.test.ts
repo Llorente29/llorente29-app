@@ -726,36 +726,38 @@ describe('la tanda de la regla de ventas por plataforma (C04b R5; ya aplicada, r
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el balance según la norma y el tope de la contraseña (C06b, respuesta 6)', () => {
+describe('la tanda de AHORA (manifiesto vivo): a Diez sin el PDF y el primer asiento autorizado en C0008 (C06b, respuesta 7)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 14/10 a las 10:33 UTC para ESTOS ficheros (con su md5).
+  // lectura en producción el 14/10 a las 15:20 UTC para ESTOS ficheros (con su md5).
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
-  it('dos ficheros: la 0600 cambia filas de serie y pide «autorizo»; la 0610 solo añade y sigue', () => {
-    expect(viva).toEqual(['supabase/migrations/20261111T0600_c06b_terceros_por_saldo.sql', 'supabase/migrations/20261111T0610_c06b_contrasena_tope.sql'])
-    expect(r.ficheros).toEqual({ [viva[0]]: 'autorizo', [viva[1]]: 'sigue' })
+  it('dos ficheros: la 0700 amplía y añade (declarada, con prueba); la 0710 escribe en la tabla nueva; los dos siguen', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0700_c06b_diez_pdf_pendiente.sql', 'supabase/migrations/20261111T0710_c06b_diez_autorizo_primero.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue', [viva[1]]: 'sigue' })
   })
-  it('la 0600 toca 42 o para, solo filas de serie sin signo, y las nuevas no pisan nada', () => {
-    const sql = readFileSync(viva[0], 'utf8')
-    expect(sql).toMatch(/if n <> 42 then raise exception/)
-    expect(sql).toMatch(/by_balance is null/)
-    expect(sql).toMatch(/on conflict \(model, statement, line_code, account_prefix\) where company_id is null do nothing/)
-    expect(sql).not.toMatch(/delete from/i)
+  it('la 0710 autoriza UN asiento, anclado por cuenta y empresa, o para; y no envía nada', () => {
+    const sql = readFileSync(viva[1], 'utf8')
+    expect(sql).toMatch(/coalesce\(array_length\(v_ids, 1\), 0\) <> 1 then/)
+    expect(sql).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+    // Un asiento, no la empresa entera (eso, en otra tanda, después de mirarlo en Diez).
+    expect(sql).toMatch(/values \(v_cuenta, v_empresa, 'asiento', v_ids\[1\], 'C0008'/)
+    expect(sql).not.toMatch(/external_send|delete from|update /i)
   })
   it('declara qué cuenta antes y después, y el fichero existe', () => {
     const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/terceros-y-contrasena.sql'])
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/diez-pdf-pendiente.sql'])
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
-  it('su vuelta atrás, al revés: la 0610 y la 0600, que quita 42 y devuelve 42 o para', () => {
+  it('su vuelta atrás, al revés: la 0710 (para si ya está en Diez) y la 0700 (para si hay algo pendiente, marcado o autorizado)', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
-    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0610_c06b_contrasena_tope.down.sql', 'supabase/vuelta-atras/20261111T0600_c06b_terceros_por_saldo.down.sql'])
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0710_c06b_diez_autorizo_primero.down.sql', 'supabase/vuelta-atras/20261111T0700_c06b_diez_pdf_pendiente.down.sql'])
     for (const f of atras) expect(existsSync(f), f).toBe(true)
-    expect(readFileSync(atras[1], 'utf8').match(/if n <> 42 then/g)).toHaveLength(2)
+    expect(readFileSync(atras[0], 'utf8')).toMatch(/status in \('enviado', 'enlazado'\)/)
+    expect(readFileSync(atras[1], 'utf8')).toMatch(/n_pend \+ n_mano \+ n_aut > 0/)
   })
 })
 
