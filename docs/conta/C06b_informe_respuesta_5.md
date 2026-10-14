@@ -7,7 +7,7 @@ las cifras de Foodint van en el chat, no en el repositorio, que es público.
 
 | Punto | Estado | Producción |
 |---|---|---|
-| 1 · Balance contra Diez y la banda de la IA | front hecho y probado; al 30/09 Diez y Folvy coinciden en las 150 subcuentas; octubre explica PN y otros deudores (§1.5) | solo front (va en el PR) |
+| 1 · Balance contra Diez y la banda de la IA | front hecho y probado; al 30/09 Diez y Folvy coinciden en las 150 subcuentas; octubre explica PN y otros deudores; Clientes es de cómo agrupa el informe de Diez (§1.6) | solo front (va en el PR) |
 | 2 · Aviso #178 | 0500 y 0510 escritas; 0500 en staging con su prueba en verde; agente nuevo en verde en staging | **tanda preparada, sin lanzar** (§2.4) |
 | 3 · La barra de la IA en Libros | hecho; e2e de lo que tapa extendida a Libros | solo front |
 | 4 · Semilla de Diez en staging | aplicada: plan completo, agente del plan en verde | — |
@@ -162,9 +162,31 @@ Lo que eso dice de las tres diferencias:
 | Patrimonio neto y «Otros deudores» | **Sí, por octubre de Diez**, que Folvy no tiene en el libro: sus 55 asientos de octubre están propuestos, sin validar. Las cifras van cifradas en el run (`testigo-clave-publica.pem`), para que Julio las compare con las que dio. |
 | «Clientes» | **No, con lo leído.** Falta el 01/10, el único día sin leer. Lo vuelvo a leer solo (§1.6). |
 
-### 1.6 · El 01/10, otra vez
+### 1.6 · El 01/10, otra vez, y la conclusión
 
-*(Run con `[lectura:balance:202610]`, solo octubre.)*
+**Run 38544562516** (`[lectura:balance:202610]`, solo octubre): esta vez
+contestaron **todos** los días de octubre. Son los mismos 4 asientos, y el
+01/10 no tenía ninguno. Ninguno de los 4 toca una 430.
+
+Conclusión del punto 1:
+
+1. **El mapeo no falla.** Coloca cada subcuenta donde Diez, y al 30/09 los dos
+   coinciden en las 150 subcuentas.
+2. **Patrimonio neto y «Otros deudores»**: la diferencia son los 4 asientos de
+   octubre de Diez. Folvy tiene octubre propuesto, sin validar. Cuando se
+   validen, se cerrará. Las cifras de esos 4 asientos por línea van
+   **cifradas** en los runs 38536114868 y 38544562516, para que Julio las
+   compare con las que dio.
+3. **«Clientes»: la diferencia no está en los datos.** El saldo de las siete
+   430 es el mismo en Diez y en Folvy, al 30/09 y hoy, y la línea de Folvy es
+   su suma. La cifra del balance de Diez lleva **algo más** en «1. Clientes»,
+   y por la forma de las diferencias —el total de III difiere en lo mismo que
+   suman las dos líneas— ese algo viene de **fuera de III** en Folvy: una
+   subcuenta que Folvy pone en otra línea y el informe de Diez mete en
+   clientes. Desde la API no se ve cómo agrupa el informe de balance de Diez.
+   **Falta el detalle de la línea en Diez**: qué subcuentas suma su «1.
+   Clientes». Es lo único que queda para explicarla.
+4. **La banda de la IA**, arreglada: da la cifra de la línea oficial (§1.2).
 
 ---
 
@@ -354,7 +376,7 @@ El agente «Plan contable» en staging, que antes daba 7 rojos de esta empresa,
 
 | Lo que pide Julio | ¿Se cumple? |
 |---|---|
-| Nunca dice si un correo existe | **Por el cuerpo, sí**: el mismo 200 y el mismo texto en todos los caminos después de validar el formato. **Por el tiempo, no lo cumplía**: si el correo existe, esperaba a crear el enlace y a mandar el correo antes de contestar, y eso se nota en el reloj. **Arreglado**: el enlace y el correo salen en segundo plano (`EdgeRuntime.waitUntil`). Ahora los dos casos contestan después de la misma consulta. Desplegada en staging (run 38535360214). La e2e `tests/e2e/conta/c06b/contrasena.spec.ts` lo mide con la misma vara a los dos lados: dos correos que existen y dos que no, en tres vueltas. |
+| Nunca dice si un correo existe | **Por el cuerpo, sí**: el mismo 200 y el mismo texto en todos los caminos después de validar el formato. **Por el tiempo, no lo cumplía**: si el correo existe, esperaba a crear el enlace y a mandar el correo antes de contestar, y eso se nota en el reloj. **Arreglado**: el enlace y el correo salen en segundo plano (`EdgeRuntime.waitUntil`). Ahora los dos casos contestan después de la misma consulta. Desplegada en staging (run 38535360214). La e2e `tests/e2e/conta/c06b/contrasena.spec.ts` lo mide con la misma vara a los dos lados (dos correos que existen y dos que no, en tres vueltas): **en verde** en el run 38535718470, en ordenador y en móvil. Exige el mismo cuerpo en los dos casos y menos de 400 ms entre las medianas. |
 | Tiene límite de intentos | **Sí, por correo**: uno por minuto (`recovery_sent_at`, en `conta_contrasena_de_marca`). **No hay límite por quien llama** (por IP) ni un tope por hora: con un minuto entre envíos son hasta 60 correos por hora a una misma persona de una marca. No lo he cambiado. Si se quiere un tope por hora, es una tabla nueva y una condición más en la función; es decisión de Julio. |
 | No cambia nada sin el enlace | **Sí.** `generateLink('recovery')` no cambia la contraseña: solo deja un token de recuperación (y `recovery_sent_at`). La contraseña solo cambia en `/reset-password/confirm` con ese token. Efecto lateral: un enlace nuevo invalida el anterior todavía sin usar, como mucho uno por minuto. «Contraseña cambiada» exige la sesión de la persona y solo manda un correo. |
 
@@ -381,6 +403,7 @@ El agente «Plan contable» en staging, que antes daba 7 rojos de esta empresa,
 
 ## Lo que queda apuntado
 
+- e2e de staging del punto 5 (run 38535718470): **175 en verde** y los mismos 2 rojos ajenos de `c01b/flujos`.
 - e2e de staging del commit de los puntos 1 y 3 (run 38535087773): **173 en verde**, incluidas las cuatro que pasan por Libros, y **2 en rojo** ajenas: `c01b/flujos` «marcar pagada…», en ordenador y móvil. La cuenta A compartida ya tiene la factura `E2E-001` y la regla de repetidas devuelve 409. Esta rama no toca proveedores ni facturas.
 
 - Staging, agente «Libro diario»: un rojo `dia_sin_asiento` de la cuenta
