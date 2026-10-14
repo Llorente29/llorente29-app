@@ -23,7 +23,7 @@
 import { constants, createCipheriv, publicEncrypt, randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
-import { ClienteDiez, type AlmacenToken, type Apunte } from '../../../supabase/functions/_shared/diezCliente.ts'
+import { ClienteDiez, limitesMes, type AlmacenToken, type Apunte } from '../../../supabase/functions/_shared/diezCliente.ts'
 import { cent } from '../../../supabase/functions/_shared/diezMapeo.ts'
 // @ts-expect-error módulo .mjs sin tipos
 import { limpiar } from './publicable.mjs'
@@ -88,18 +88,27 @@ const c = new ClienteDiez({
   almacen, pausaMs: 120,
 })
 
-// Diez a veces contesta 400 «OutOfMemoryException» a un mes (14/10, run
-// 38533537089): es suyo y pasajero. Se reintenta ese mes, con pausa, y se dice.
+// Diez a veces contesta 400 «OutOfMemoryException» o tarda más de 90 s en un
+// mes entero (14/10, runs 38533537089 y 38533879424; enero lleva la apertura).
+// Se lee por tramos de siete días —un asiento tiene una sola fecha: ninguno
+// cae en dos tramos— y el tramo que falla así se reintenta con pausa, y se dice.
 const reintentos: Record<string, number> = {}
-const leerMes = async (mes: string): Promise<Apunte[]> => {
+const tramo = async (desde: number, hasta: number): Promise<Apunte[]> => {
+  const ruta = `/api/apuntes?$filter=${encodeURIComponent(`Fecha ge ${desde} and Fecha le ${hasta}`)}`
   for (let i = 0; ; i++) {
-    try { return await c.apuntesDelMes(mes) } catch (e) {
-      const sinMemoria = JSON.stringify((e as { cuerpo?: unknown }).cuerpo ?? '').includes('OutOfMemory')
-      if (!sinMemoria || i >= 4) throw e
-      reintentos[mes] = i + 1
+    try { return await c.todas<Apunte>(ruta) } catch (e) {
+      const pasajero = JSON.stringify((e as { cuerpo?: unknown }).cuerpo ?? '').includes('OutOfMemory') || (e as Error)?.name === 'TimeoutError'
+      if (!pasajero || i >= 4) throw e
+      reintentos[`${desde}`] = i + 1
       await new Promise((r) => setTimeout(r, 30_000 * (i + 1)))
     }
   }
+}
+const leerMes = async (mes: string): Promise<Apunte[]> => {
+  const [primero, ultimo] = limitesMes(mes)
+  const out: Apunte[] = []
+  for (let d = primero; d <= ultimo; d += 7) out.push(...(await tramo(d, Math.min(d + 6, ultimo))))
+  return out
 }
 
 // Diez, por subcuenta: a la fecha de corte y con todo lo que hay.
@@ -145,7 +154,7 @@ const lDiezCorte = porLinea(alCorte), lDiezTodo = porLinea(todo), lFolvy = porLi
 
 md(`## Diez · balance abreviado contra Folvy, línea a línea (C0008, ejercicio ${EJERCICIO}, corte ${CORTE.slice(0, 4)}-${CORTE.slice(4, 6)}-${CORTE.slice(6)})`, '', 'Solo GET en Diez; Folvy con conta_lectura. En claro, solo recuentos y sí/no.', '')
 md('### Asientos leídos por mes', '', ...Object.entries(asientosMes).map(([m, k]) => `- ${m}: ${k}`), '')
-md(`Meses reintentados por «OutOfMemoryException» de Diez: ${Object.keys(reintentos).length ? Object.entries(reintentos).map(([m, k]) => `${m} (${k})`).join(', ') : 'ninguno'}`, '')
+md(`Tramos reintentados (Diez sin memoria o más de 90 s): ${Object.keys(reintentos).length ? Object.entries(reintentos).map(([m, k]) => `${m} (${k})`).join(', ') : 'ninguno'}`, '')
 md(`Asientos repetidos en el listado: ${repetidos} · de otro ejercicio: ${otroEjercicio} · con fecha posterior al corte: ${tras}`, '')
 md('### Por subcuenta, a la fecha de corte', '', `- subcuentas con saldo en algún lado: ${codigos.size}`, `- que NO coinciden al céntimo: ${distintas.length}`,
   ...Object.entries(distintasPorGrupo).sort().map(([g, k]) => `  - grupo ${g}: ${k}`), '')
