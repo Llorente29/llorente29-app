@@ -1,3 +1,4 @@
-# C06b · Respuesta 7: conta-diez-enviar busca el cliente por su subcuenta en
-# Diez (GET /api/subcuentas/subcuenta/{código}), no por las facturas del mes.
+# C06b · Respuesta 8, pregunta 2: conta-diez-enviar acepta el id de un
+# contraasiento y manda a Diez la factura que anula la de lo anulado (-ANUL,
+# importes en negativo, sin campos de rectificativa: lo medido en la C0009).
 conta-diez-enviar

@@ -329,7 +329,7 @@ export async function enviarContraasientoADiez(c: ContraasientoBD, p: PuertoEnvi
     if (String(original.NumeroFactura) !== String(orig!.ext_invoice_number)) {
       return apuntar(`la factura rehecha (${original.NumeroFactura}) no es la que está en Diez (${orig!.ext_invoice_number}): no se anula a ciegas`, { account_connector_id: con.id }, false)
     }
-    fd = facturaQueAnula(original, { fecha: c.fecha, hoy, documentoOriginal: { ejercicio: String(orig!.ext_year), serie: String(orig!.ext_series), numero: Number(orig!.ext_number) } })
+    fd = facturaQueAnula(original, { fecha: c.fecha, hoy })
   } catch (x) { return apuntar(x instanceof Error ? x.message : String(x), {}, false) }
   if (!sc || !nombreCliente) return apuntar(`la subcuenta ${fd.CuentaCliente} del cliente no está en Diez o no tiene nombre: no se inventa`, { account_connector_id: con.id }, false)
 

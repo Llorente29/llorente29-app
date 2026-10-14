@@ -46,7 +46,7 @@ describe('el estado con Diez, en palabras', () => {
     expect(estadoDiez({ estado: 'anulado' }, con(null))).toMatchObject({ texto: 'Anulado', tono: 'neutro' })
   })
   it('R8: con su contraasiento ya en Diez, «Anulado en … y en Diez», sin ámbar; si el contraasiento no ha llegado, sigue en ámbar', () => {
-    const anulado = { ...con(envio()), contraasiento: envio({ numero: 1802, factura: 'UBR-ALC-20261001-A', documento: null }) }
+    const anulado = { ...con(envio()), contraasiento: envio({ numero: 1802, factura: 'UBR-ALC-20261001-ANUL', documento: null }) }
     expect(estadoDiez({ estado: 'anulado' }, anulado)).toMatchObject({ texto: expect.stringMatching(/^Anulado en .* y en Diez · 1\/1801 anulada con 1\/1802$/), tono: 'neutro', enDiez: true })
     const sinLlegar = { ...con(envio()), contraasiento: envio({ status: 'pendiente', serie: null, numero: null, documento: null, error: 'Diez no ha aceptado el contraasiento' }) }
     expect(estadoDiez({ estado: 'anulado' }, sinLlegar)).toMatchObject({ texto: expect.stringMatching(/falta su contraasiento en Diez$/), tono: 'ambar' })

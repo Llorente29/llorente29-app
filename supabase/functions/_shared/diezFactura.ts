@@ -105,27 +105,26 @@ export function facturaDeVentas(a: AsientoVentas, o: { correspondencia: Correspo
 //
 // Es la misma factura con todos los importes en negativo (base, cuota, total,
 // cada línea y su analítica al otro lado), con la fecha del contraasiento y su
-// propio número: el de la original con FORMA_ANULACION.sufijo. Y con los
-// campos de rectificativa de Diez tal como los guarda la gestoría
-// (FORMA_ANULACION.campos), medidos en la C0009 con
-// scripts/conta/diez/prueba-c0009-rectificativas-molde.ts.
+// propio número. La forma es la de la gestoría, MEDIDA en la C0009 el 14/10
+// (scripts/conta/diez/prueba-c0009-rectificativas-molde.ts, run 38615160577:
+// 6820 facturas de 2023-01 a 2026-10):
+//   · la anulación que hay (un duplicado) va con el número de la original y
+//     «-ANUL», la descripción empieza por «ANUL», los importes en negativo,
+//     TipoFactura 1 y SIN campos de rectificativa;
+//   · en la serie 1 (ventas, la 430) ninguna factura lleva campos de
+//     rectificativa (TipoRectificativa 0 en las 143 negativas; solo 3 abonos
+//     de compras, serie 2, llevan NumeroFacturaRectificativa).
+// Así que no se rellena ninguno: lo que no se ha visto no se inventa.
 
 /** Cómo se anula en Diez una factura emitida (lo medido; ver arriba). */
-export const FORMA_ANULACION = {
-  sufijo: '-A',
-  prefijoDescripcion: 'ANULA ',
-  campos: (o: { numero: string; fecha: number; base: number; cuota: number }): Record<string, unknown> => ({
-    TipoRectificativa: 2, NumeroFacturaRectificativa: o.numero, FechaFacturaRectificativa: o.fecha,
-    TotalBasesRectificativa: o.base, TotalCuotasRectificativa: o.cuota,
-  }),
-}
+export const FORMA_ANULACION = { sufijo: '-ANUL', prefijoDescripcion: 'ANUL ' } as const
 
 /**
  * La factura emitida que anula `original` en Diez. `fecha`: la del
  * contraasiento (AAAA-MM-DD); `hoy`: el día en que se mete. Lanza si la
  * original no trae lo que hace falta: nada a medias.
  */
-export function facturaQueAnula(original: FacturaData, o: { fecha: string; hoy: string; documentoOriginal: { ejercicio: string; serie: string; numero: number } }): FacturaData {
+export function facturaQueAnula(original: FacturaData, o: { fecha: string; hoy: string }): FacturaData {
   const numero = String(original.NumeroFactura ?? '')
   if (!numero) throw new Error('la factura que se anula no tiene número: no se puede decir cuál anula')
   const neg = (x: unknown) => (Number(x ?? 0) === 0 ? 0 : e(-c(Number(x))))
@@ -142,6 +141,5 @@ export function facturaQueAnula(original: FacturaData, o: { fecha: string; hoy: 
     NumeroFactura: `${numero}${FORMA_ANULACION.sufijo}`, Descripcion: descripcion,
     BaseImponible1: neg(original.BaseImponible1), CuotaIVA1: neg(original.CuotaIVA1), TotalFactura: neg(original.TotalFactura), TotalGastosIngresos: neg(original.TotalGastosIngresos),
     Apuntes: apuntes, Analitica: analitica,
-    ...FORMA_ANULACION.campos({ numero, fecha: Number(original.FechaFactura), base: Number(original.BaseImponible1 ?? 0), cuota: Number(original.CuotaIVA1 ?? 0) }),
   }
 }

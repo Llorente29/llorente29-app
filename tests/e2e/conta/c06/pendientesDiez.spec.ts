@@ -37,7 +37,7 @@ async function porLaRed(page: Page) {
   const json = (r: Route, cuerpo: unknown, cab: Record<string, string> = {}) => r.fulfill({ status: 200, contentType: 'application/json', headers: cab, body: JSON.stringify(cuerpo) })
   const envios = () => [...ASIENTOS.map((a) => ({ entry_id: a.id, ext_year: '2026', ext_series: '1', ext_number: a.doc, ext_invoice_number: a.factura, sent_at: `${a.entry_date}T22:00:00Z`,
     document_status: adjuntos.has(a.id) ? 'adjunto' : 'pendiente_diez' })),
-    ...(contraEnDiez ? [{ entry_id: ID(5), ext_year: '2026', ext_series: '1', ext_number: 9904, ext_invoice_number: 'UBR-PRU-20260930-A', sent_at: '2026-10-14T10:00:00Z', document_status: null }] : [])]
+    ...(contraEnDiez ? [{ entry_id: ID(5), ext_year: '2026', ext_series: '1', ext_number: 9904, ext_invoice_number: 'UBR-PRU-20260930-ANUL', sent_at: '2026-10-14T10:00:00Z', document_status: null }] : [])]
   await page.route(/\/rest\/v1\/external_send\?/, async (r) => {
     const pendientes = envios().filter((e, i) => e.document_status === 'pendiente_diez' && ASIENTOS[i].status !== 'anulado').length
     // Como PostgREST: el recuento va en content-range, y el navegador solo lo deja leer si se expone por CORS.
@@ -51,7 +51,7 @@ async function porLaRed(page: Page) {
     const { entry_id } = r.request().postDataJSON() as { entry_id: string }
     if (entry_id !== ID(5)) return r.fulfill({ status: 400, body: '{}' })
     contraEnDiez = true
-    return json(r, { estado: 'en_diez', serie: '1', documento: 9904, enlazada: false, pdfPendiente: false, texto: 'Anulada también en Diez: 1/9890 (UBR-PRU-20260930) con 1/9904 (UBR-PRU-20260930-A).' })
+    return json(r, { estado: 'en_diez', serie: '1', documento: 9904, enlazada: false, pdfPendiente: false, texto: 'Anulada también en Diez: 1/9890 (UBR-PRU-20260930) con 1/9904 (UBR-PRU-20260930-ANUL).' })
   })
   await page.route(/\/rest\/v1\/journal_entry_document\?.*c06b7000/, (r) => json(r, ASIENTOS.map((a) => ({ entry_id: a.id, storage_path: `${CUENTA_A.id}/${a.id}/0123456789abcdef.pdf`, file_name: `ResumenDeVentas_${a.factura}.pdf` }))))
   await page.route(/\/storage\/v1\/object\/conta-documentos\//, (r) => r.fulfill({ status: 200, contentType: 'application/pdf', body: PDF }))
@@ -106,6 +106,6 @@ test('Pendientes de adjuntar en Diez: cuántos, el más antiguo, la referencia, 
 
   // R8: «Enviar el contraasiento»: lo dice con su contenido y el anulado sale de la lista (ya está anulado también en Diez).
   await anulados.getByRole('button', { name: 'Enviar el contraasiento' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Anulada también en Diez' })).toContainText('1/9890 (UBR-PRU-20260930) con 1/9904 (UBR-PRU-20260930-A)')
+  await expect(page.getByRole('status').filter({ hasText: 'Anulada también en Diez' })).toContainText('1/9890 (UBR-PRU-20260930) con 1/9904 (UBR-PRU-20260930-ANUL)')
   await expect(page.getByRole('list', { name: 'Anulados que siguen en Diez' })).toHaveCount(0)
 })

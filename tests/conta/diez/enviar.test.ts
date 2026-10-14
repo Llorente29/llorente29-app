@@ -364,16 +364,17 @@ describe('C06b R8 · el contraasiento de lo anulado, a Diez (nunca dos veces)', 
     const t = conAnulado()
     const r = await enviarContraasientoADiez(CONTRA, t.p)
     expect(r).toMatchObject({ estado: 'en_diez', serie: '1', documento: 1801, enlazada: false })
-    expect(r.texto).toBe('Anulada también en Diez: 1/1801 (UBR-FLO-20261001) con 1/1801 (UBR-FLO-20261001-A).')
+    expect(r.texto).toBe('Anulada también en Diez: 1/1801 (UBR-FLO-20261001) con 1/1801 (UBR-FLO-20261001-ANUL).')
     expect(t.d.altas).toHaveLength(1)
     const fd = t.d.altas[0]
-    expect(fd).toMatchObject({ Ejercicio: '2026', Serie: '1', CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001-A',
-      Fecha: 20261014, FechaFactura: 20261014, BaseImponible1: -30, CuotaIVA1: -3, TotalFactura: -33, TotalGastosIngresos: -30,
-      NumeroFacturaRectificativa: 'UBR-FLO-20261001', FechaFacturaRectificativa: 20261001 })
+    expect(fd).toMatchObject({ Ejercicio: '2026', Serie: '1', CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001-ANUL',
+      Fecha: 20261014, FechaFactura: 20261014, BaseImponible1: -30, CuotaIVA1: -3, TotalFactura: -33, TotalGastosIngresos: -30, TipoFactura: 1, Descripcion: 'ANUL UBER EATS FLO 01/10' })
+    // Como la anulación de la gestoría en la C0009: sin campos de rectificativa.
+    for (const k of ['TipoRectificativa', 'NumeroFacturaRectificativa', 'FechaFacturaRectificativa', 'TotalBasesRectificativa', 'TotalCuotasRectificativa', 'ClaveTipoFactura']) expect(fd, k).not.toHaveProperty(k)
     expect((fd.Apuntes as { Importe: number }[]).map((a) => a.Importe)).toEqual([-10, -20])
     expect(String(fd.Descripcion).length).toBeLessThanOrEqual(40)
     // Su envío es el del contraasiento; el de lo anulado no se toca.
-    expect(t.envios.get('c1')).toMatchObject({ status: 'enviado', ext_number: 1801, ext_invoice_number: 'UBR-FLO-20261001-A', document_status: null, attempts: 1 })
+    expect(t.envios.get('c1')).toMatchObject({ status: 'enviado', ext_number: 1801, ext_invoice_number: 'UBR-FLO-20261001-ANUL', document_status: null, attempts: 1 })
     expect(t.envios.get('e1')).toEqual(enDiez())
   })
   it('lo que no llegó a Diez no se anula allí: no se habla con Diez ni se apunta nada', async () => {
@@ -382,21 +383,21 @@ describe('C06b R8 · el contraasiento de lo anulado, a Diez (nunca dos veces)', 
     expect(t.llamadas.cliente).toBe(0); expect(t.guardadas).toEqual([])
   })
   it('nunca dos veces: ya enviado, no habla con Diez', async () => {
-    const t = conAnulado({ contra: { ...enDiez({ entry_id: 'c1', id: 's-c1', ext_number: 1802, ext_invoice_number: 'UBR-FLO-20261001-A', document_status: null }) } })
+    const t = conAnulado({ contra: { ...enDiez({ entry_id: 'c1', id: 's-c1', ext_number: 1802, ext_invoice_number: 'UBR-FLO-20261001-ANUL', document_status: null }) } })
     const r = await enviarContraasientoADiez(CONTRA, t.p)
     expect(r).toMatchObject({ estado: 'en_diez', documento: 1802 })
     expect(r.texto).toBe('Ya estaba anulada en Diez: 1/1801, con 1/1802.')
     expect(t.llamadas.cliente).toBe(0); expect(t.d.altas).toEqual([])
   })
   it('nunca dos veces: si la que anula ya está en Diez (metida a mano o un envío cortado), se enlaza', async () => {
-    const d = diez({ facturas: [{ Ejercicio: '2026', Serie: '1', Documento: 1950, TipoAsiento: 1, Fecha: 20261014, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001-A' }] })
+    const d = diez({ facturas: [{ Ejercicio: '2026', Serie: '1', Documento: 1950, TipoAsiento: 1, Fecha: 20261014, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001-ANUL' }] })
     const t = conAnulado({ d })
     expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'en_diez', documento: 1950, enlazada: true })
     expect(d.altas).toEqual([])
     expect(t.envios.get('c1')).toMatchObject({ status: 'enlazado', ext_number: 1950 })
   })
   it('dos con ese número en Diez: no se toca nada', async () => {
-    const f = { Ejercicio: '2026', Serie: '1', TipoAsiento: 1, Fecha: 20261014, CuentaCliente: '43000002', NumeroFactura: 'UBR-FLO-20261001-A' }
+    const f = { Ejercicio: '2026', Serie: '1', TipoAsiento: 1, Fecha: 20261014, CuentaCliente: '43000002', NumeroFactura: 'UBR-FLO-20261001-ANUL' }
     const d = diez({ facturas: [{ ...f, Documento: 1950 }, { ...f, Documento: 1951 }] })
     const t = conAnulado({ d })
     expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
