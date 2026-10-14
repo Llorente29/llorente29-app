@@ -238,7 +238,7 @@ compartido, cambio pequeño; sin ella hace lo de siempre).
 | Lista de antes de subir y `npm run build` en limpio | local, antes de cada push | En verde |
 | Semilla con las aperturas validadas | staging, run 38519391784 | Aplicada; las tres `validado` 3/1–3/3 |
 | La 0170 en staging (Foodint no existe: no hace nada y lo dice) | staging, run 38520703883 | Aplicada y en el historial |
-| E2e solo del B01 con las aperturas validadas | run 38520772178 | ver el mensaje |
+| E2e solo del B01 con las aperturas validadas | run 38520772178 | **Verde**, ordenador y móvil (sigue «difiere 2.175,50 €»: el saldo en contabilidad es el mismo validadas que propuestas); capturas subidas en 57a0070 |
 
 ## 4. Agente nocturno: los dos rojos que no son míos
 
