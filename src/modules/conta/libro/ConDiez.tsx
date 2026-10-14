@@ -8,6 +8,8 @@
 
 import { MARCA } from '../cuenta/marca'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaLibros } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
@@ -55,7 +57,11 @@ export function TarjetaDiez({ a, d, e, quien, alHacer, alFallar }: {
   return (
     <section className="cx-tarjeta" aria-label="Con Diez">
       <h2 className="cx-tarjeta-titulo">Con Diez</h2>
-      <p className={e.enDiez ? 'cxt-verde' : e.tono === 'ambar' ? 'cxt-ambar' : undefined} role="status">{e.texto}</p>
+      <p className={e.tono === 'verde' ? 'cxt-verde' : e.tono === 'ambar' ? 'cxt-ambar' : undefined} role="status">{e.texto}</p>
+      {d.envio?.documento === 'pendiente_diez' && (
+        <p className="cx-ayuda">Diez aún no guarda documentos, así que la factura ha ido sin su PDF. Adjúntalo en Diez y márcalo en{' '}
+          <Link className="cx-enlace" to={rutaLibros('diario', 'pendientes-diez')}>Pendientes de adjuntar en Diez</Link>.</p>
+      )}
       {d.envio?.errorDocumento && !e.enDiez && <p className="cx-ayuda">El documento: {d.envio.errorDocumento}</p>}
       <p className="cx-ayuda">
         {d.documento
@@ -97,7 +103,7 @@ export function EnviarADiezDialogo({ candidatos, quien, alCerrar, alTerminar }: 
         <p role="status"><strong>{textoResultado(pasos)}</strong></p>
         <ul className="cxd-diez-lista">
           {pasos.map((p, i) => (
-            <li key={i} className={p.enDiez ? 'cxt-verde' : 'cxt-ambar'}><strong>{p.concepto}</strong> · {p.texto}</li>
+            <li key={i} className={p.enDiez && !p.pdfPendiente ? 'cxt-verde' : p.enDiez ? undefined : 'cxt-ambar'}><strong>{p.concepto}</strong> · {p.texto}</li>
           ))}
         </ul>
         <div className="cxd-dialogo-acciones"><button type="button" className="cx-boton" onClick={alCerrar}>Cerrar</button></div>

@@ -369,7 +369,8 @@ export const rutaNuevoAsiento = (): string => rutaConta(CONTA.rutas.nuevoAsiento
  */
 export const rutaLibros = (area?: string, accion?: string): string => {
   if (!area) return rutaConta(CONTA.rutas.libros)
-  if (area === 'diario') return accion === 'diario-resumido' ? rutaConta(CONTA.rutas.diarioResumido) : rutaConta(CONTA.rutas.libroDiario)
+  if (area === 'diario' && accion === 'diario-resumido') return rutaConta(CONTA.rutas.diarioResumido)
+  if (area === 'diario' && (!accion || accion === 'libro-diario')) return rutaConta(CONTA.rutas.libroDiario)
   return accion ? rutaConta(CONTA.rutas.librosAccion, { area, accion }) : rutaConta(CONTA.rutas.librosArea, { area })
 }
 export const rutaCompras = (): string => rutaConta(CONTA.rutas.compras)

@@ -32,6 +32,9 @@ export const AREAS_LIBROS: Area[] = [
       { id: 'libro-diario', nombre: 'Libro diario', sinonimos: ['asientos', 'diario detallado'] },
       { id: 'diario-resumido', nombre: 'Diario resumido', sinonimos: ['resumen mensual'] },
     ] },
+    { etiqueta: 'Con Diez', acciones: [
+      { id: 'pendientes-diez', nombre: 'Pendientes de adjuntar en Diez', sinonimos: ['pdf pendiente', 'adjuntar en diez', 'documentos diez', 'cegid'] },
+    ] },
   ] },
   { id: 'mayor', nombre: 'Mayor y saldos', grupos: [
     { etiqueta: 'Cuentas', acciones: [
