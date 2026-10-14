@@ -44,6 +44,9 @@
 //   · El 3 se abre SOLO con lo que Julio autoriza en la base
 //     (conta_diez_autorizo: un asiento, o la empresa en esa base). Sin
 //     autorización, Diez real sigue cerrado; C0001, nunca.
+//   · R8 (tarea 1): la de la empresa puede llevar «desde»: solo vale para los
+//     asientos con fecha desde ese día (autorizacionCubre). El contraasiento,
+//     con la fecha de lo que anula.
 
 import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
@@ -96,8 +99,12 @@ export interface PuertoEnvio {
   guardar(f: EnvioFila): Promise<EnvioFila>
   /** La conexión con Diez de la empresa (conectada), o null. */
   conexion(companyId: string): Promise<ConexionDiez | null>
-  /** ¿Ha autorizado Julio escribir este asiento en esta base real? (conta_diez_autorizo) */
-  autorizado(entryId: string, companyId: string, nombreBd: string): Promise<boolean>
+  /**
+   * ¿Ha autorizado Julio escribir este asiento en esta base real?
+   * (conta_diez_autorizo; `fecha`, AAAA-MM-DD, la del asiento: una
+   * autorización de empresa con «desde» solo vale desde ese día.)
+   */
+  autorizado(entryId: string, companyId: string, nombreBd: string, fecha: string): Promise<boolean>
   /** El cliente de Diez de esa conexión (escribir: sí; escribirEnReal: solo con autorización). */
   cliente(c: ConexionDiez, o: { real: boolean }): Promise<ClienteDiezEnvio>
   /** Los bytes del PDF guardado en el bucket. */
@@ -125,6 +132,19 @@ export const sinContenedor = (r: { status: number; json: unknown }) => r.status 
 
 export const TEXTO_CONTENEDOR = 'Diez todavía no guarda documentos (falta que Cegid active su almacén): no se envía la factura sin su PDF'
 export const PDF_PENDIENTE = 'PDF pendiente en Diez'
+/** Una fila de public.conta_diez_autorizo (lo que se mira de ella). */
+export type Autorizacion = { alcance: string; entry_id: string | null; desde: string | null }
+
+/**
+ * C06b R8 · tarea 1: ¿cubre alguna de estas autorizaciones (de la empresa, en
+ * esa base) a este asiento? La de un asiento, por su id; la de la empresa,
+ * desde su «desde» (inclusive) o, sin él, siempre. `fecha`: AAAA-MM-DD.
+ */
+export function autorizacionCubre(xs: readonly Autorizacion[], entryId: string, fecha: string): boolean {
+  return xs.some((a) => (a.alcance === 'asiento' && a.entry_id === entryId)
+    || (a.alcance === 'empresa' && (a.desde == null || fecha.slice(0, 10) >= String(a.desde).slice(0, 10))))
+}
+
 const yaEnviado = (e: EnvioFila | null) => !!e && (e.status === 'enviado' || e.status === 'enlazado')
 
 function noLlega(motivo: string, reintentar = true): ResultadoEnvio {
@@ -168,7 +188,7 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
   const bd = con.nombreBd.trim().toUpperCase()
   if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
   const real = bd !== BASE_PRUEBAS
-  if (real && !(await p.autorizado(r.id, r.company_id, bd))) return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  if (real && !(await p.autorizado(r.id, r.company_id, bd, r.fecha))) return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
   const adjuntar = con.adjuntar === true
   // Ya en Diez sin su PDF, y Diez sigue sin guardar documentos: nada que hacer (nunca dos veces).
   if (yaEnviado(previo) && previo!.document_status === 'pendiente_diez' && !adjuntar) {
@@ -313,7 +333,8 @@ export async function enviarContraasientoADiez(c: ContraasientoBD, p: PuertoEnvi
   const bd = con.nombreBd.trim().toUpperCase()
   if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
   const real = bd !== BASE_PRUEBAS
-  if (real && !(await p.autorizado(c.id, c.company_id, bd)) && !(await p.autorizado(c.anula, c.company_id, bd))) {
+  // La fecha que cuenta es la de lo que anula (r.fecha), no la del contraasiento.
+  if (real && !(await p.autorizado(c.id, c.company_id, bd, r.fecha)) && !(await p.autorizado(c.anula, c.company_id, bd, r.fecha))) {
     return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
   }
   if (previo && previo.attempts >= MAX_INTENTOS) return noLlega(`ya van ${previo.attempts} intentos: lo tiene que mirar una persona`, false)

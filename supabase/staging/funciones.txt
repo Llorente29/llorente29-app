@@ -1,4 +1,4 @@
-# C06b · Respuesta 8, pregunta 2: conta-diez-enviar acepta el id de un
-# contraasiento y manda a Diez la factura que anula la de lo anulado (-ANUL,
-# importes en negativo, sin campos de rectificativa: lo medido en la C0009).
+# C06b · Respuesta 8, tarea 1 (paso 2): conta-diez-enviar mira «desde» en
+# conta_diez_autorizo (0730): la autorización de empresa solo vale para los
+# asientos con fecha desde ese día; el contraasiento, con la fecha de lo que anula.
 conta-diez-enviar
