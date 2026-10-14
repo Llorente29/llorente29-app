@@ -261,10 +261,11 @@ test.describe('cuenta C: salir, atrás y cerrar no pierden nada', () => {
       // paso; al volver, el plan ya elegido no se repregunta: sigue en la de programa.
       await expect(log(otra).getByText('¿De qué programa vienes?').last()).toBeVisible()
       await expect(log(otra).getByText(PREGUNTA_CUENTAS)).toHaveCount(0)
-      await expect(otra.getByRole('complementary', { name: 'Lo que llevamos' }).getByText(/^Plan general · 8 dígitos/)).toBeVisible()
       await otra.getByRole('button', { name: 'Holded', exact: true }).click()
       await expect(log(otra).getByText('De momento no traigo solo los datos de Holded; empezamos con el plan general contable y te ayudamos a pasar los saldos.')).toBeVisible()
       await expect(log(otra).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
+      // Contestada la de programa, «Tus cuentas» queda hecha con el plan que eligió antes de cerrar.
+      await expect(otra.getByRole('complementary', { name: 'Lo que llevamos' }).getByText(/^Plan general · 8 dígitos/)).toBeVisible()
     } finally {
       await borrarEmpresas(s, CUENTA_C.id, true)
     }
