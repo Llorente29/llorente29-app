@@ -726,12 +726,42 @@ describe('la tanda de la regla de ventas por plataforma (C04b R5; ya aplicada, r
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): validar y guardar el PDF van juntos (C06b, respuesta 8)', () => {
+describe('la tanda de AHORA (manifiesto vivo): deshacer un extracto (B01, 0180)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 14/10 a las 18:41 UTC para ESTE fichero (con su md5).
+  // lectura en producción el 14/10 a las 22:35 UTC para ESTE fichero (con su md5).
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero, una función nueva: sigue (sin «autorizo»)', () => {
+    expect(viva).toEqual(['supabase/migrations/20261101T0180_b01_extracto_deshacer.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue' })
+  })
+  it('al aplicarse no escribe datos: los borrados van dentro de la función', () => {
+    const fuera = readFileSync(viva[0], 'utf8').replace(/\$\$[\s\S]*?\$\$/g, '')
+    expect(fuera).not.toMatch(/^\s*(update|delete|insert)\b/im)
+  })
+  it('declara qué cuenta antes y después, y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/extracto-deshacer.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('su vuelta atrás quita solo la función', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261101T0180_b01_extracto_deshacer.down.sql'])
+    const sql = readFileSync(atras[0], 'utf8').replace(/--.*$/gm, '')
+    expect(sql.trim()).toBe('drop function if exists public.bank_extracto_deshacer(uuid, text);')
+  })
+})
+
+describe('la tanda de la C06b (0720, aplicada; su copia): validar y guardar el PDF van juntos (respuesta 8)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-validar-pdf-20261014.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 14/10 a las 18:41 UTC para ESTE fichero (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-validar-pdf-20261014.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -752,7 +782,7 @@ describe('la tanda de AHORA (manifiesto vivo): validar y guardar el PDF van junt
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
   it('su vuelta atrás: fuera el disparador y las tres funciones, sin tocar asientos ni documentos', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c06b-validar-pdf-20261014.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261111T0720_c06b_validar_con_pdf.down.sql'])
     const sql = readFileSync(atras[0], 'utf8')
     expect(sql).toMatch(/drop trigger if exists trg_journal_entry_valida_con_pdf on public\.journal_entry/)

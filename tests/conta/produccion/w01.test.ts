@@ -394,6 +394,14 @@ describe('R11 · paso 8 sobre la tanda del B01 (su copia, aplicada el 14/10), co
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de la C06b (0720, su copia, aplicada), con su contexto medido', () => {
+  it('la 0720 sigue', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-validar-pdf-20261014.json',
+      '--manifiesto=tests/conta/produccion/tanda-c06b-validar-pdf-20261014.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261111T0720_c06b_validar_con_pdf.sql: sigue')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
@@ -402,14 +410,14 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261111T0720_c06b_validar_con_pdf.sql: sigue')
+    expect(r.out).toContain('20261101T0180_b01_extracto_deshacer.sql: sigue')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261111T0720_c06b_validar_con_pdf.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261101T0180_b01_extracto_deshacer.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261111T0720_c06b_validar_con_pdf.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261101T0180_b01_extracto_deshacer.sql ha cambiado desde la medida')
   })
 })

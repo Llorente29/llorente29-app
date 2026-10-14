@@ -1,8 +1,4 @@
-# C06b · Respuesta 8, pregunta 1 — validar y guardar el PDF van juntos.
-#   0720: conta_numero_previsto (el número que le tocaría),
-#   journal_entry_validar_con_documento (valida y guarda el PDF en una sola
-#   transacción) y un disparador diferido en journal_entry: un asiento de
-#   ventas de una plataforma no queda validado sin su PDF, por ningún camino.
-#   Su prueba, por sus caminos y como usuario, en transacción con ROLLBACK.
-supabase/migrations/20261111T0720_c06b_validar_con_pdf.sql
-supabase/staging/sql/20261111_c06b_validar_con_pdf_prueba.sql
+# B01 · deshacer un extracto entero (15/10): la función nueva (0180) y su
+# prueba, fichero entero y como usuario, en una transacción con rollback.
+supabase/migrations/20261101T0180_b01_extracto_deshacer.sql
+supabase/staging/sql/20261101_b01_extracto_deshacer_prueba.sql

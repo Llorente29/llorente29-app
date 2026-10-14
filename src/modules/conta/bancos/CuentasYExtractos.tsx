@@ -15,13 +15,14 @@ import { useSearchParams } from 'react-router-dom'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { useLeer } from '@/modules/conta/libros/contexto'
-import { ibanLegible, nombreConCodigo } from '@/modules/conta/lib/bancosVista'
+import { ibanLegible, nombreConCodigo, textoExtractoDeshecho } from '@/modules/conta/lib/bancosVista'
+import { DialogoMotivo } from '@/modules/conta/bancos/CierreDelMes'
 import {
-  altaCuenta, bajaTarjeta, corregirIban, guardarAlias, cuentasPorDarDeAlta, guardarTarjeta, localDeCuenta, type BancoVista, type Extracto,
+  altaCuenta, bajaTarjeta, corregirIban, deshacerExtracto, guardarAlias, cuentasPorDarDeAlta, guardarTarjeta, localDeCuenta, type BancoVista, type Extracto,
 } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
-import { NOMBRE } from '@/modules/conta/bancos/marca'
+import { LO_HECHO, NOMBRE } from '@/modules/conta/bancos/marca'
 
 type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
 const COMUN = 'comun'
@@ -72,6 +73,7 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
   const nombreLocal = (id: string | null) => (id ? datos.locales.find((l) => l.id === id)?.nombre ?? 'un local' : 'Común')
   const [local, setLocal] = useState(b.localId ?? COMUN)
   const [alias, setAlias] = useState(b.alias ?? '')
+  const [deshacer, setDeshacer] = useState<Extracto | null>(null)
   const [nueva, setNueva] = useState({ ultimos4: prellenar ?? '', titular: '', local: '' })
   useEffect(() => { if (prellenar) document.getElementById(`tarjeta-${b.id}`)?.scrollIntoView({ block: 'center' }) }, [prellenar, b.id])
 
@@ -154,7 +156,7 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
         {extractos.length === 0 && <p className="cx-ayuda">Aún no se ha subido ninguno. Suelta su Norma 43 o su Excel en cualquier pantalla de Bancos.</p>}
         {extractos.length > 0 && (
           <table className="cxl-tabla">
-            <thead><tr><th>Periodo</th><th>Fichero</th><th className="cxl-der">Movimientos</th><th>Cuadre</th><th>Con el anterior</th><th className="cxl-movil-oculta">Subido</th></tr></thead>
+            <thead><tr><th>Periodo</th><th>Fichero</th><th className="cxl-der">Movimientos</th><th>Cuadre</th><th>Con el anterior</th><th className="cxl-movil-oculta">Subido</th><th><span className="cx-oculto">Deshacer</span></th></tr></thead>
             <tbody>
               {extractos.map((e) => (
                 <tr key={e.id}>
@@ -165,12 +167,20 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
                   <td>{e.continuidad === 'sigue' ? 'Sigue al anterior' : e.continuidad === 'primero' ? 'El primero' : e.continuidad === 'hueco'
                     ? <span className="cxl-ambar-celda">Falta un trozo: {eurosExactos(e.huecoCent! / 100)}</span> : 'Sin saldos'}</td>
                   <td className="cxl-movil-oculta">{fechaLarga(e.subido)}<span className="cxl-apoyo">{e.quien ?? ''}</span></td>
+                  <td><button type="button" className="cx-boton-sec" aria-label={`Deshacer el extracto ${e.fichero ?? ''} del ${fechaLarga(e.desde)} al ${fechaLarga(e.hasta)}`}
+                    onClick={() => setDeshacer(e)}>Deshacer…</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+      {deshacer && (
+        <DialogoMotivo titulo={`Deshacer el extracto ${deshacer.fichero ?? ''}`.trim()}
+          explicacion={`Se quitan sus ${deshacer.nuevos} movimientos de ${b.nombre}, del ${fechaLarga(deshacer.desde)} al ${fechaLarga(deshacer.hasta)}, también los que estén como «¿es el mismo?», para que puedas subir el fichero bueno. Solo se puede si ninguno está casado; queda en «${LO_HECHO}».`}
+          boton="Deshacer el extracto" alCerrar={() => setDeshacer(null)}
+          alAceptar={async (motivo) => { const e = deshacer; setDeshacer(null); await hacer(async () => textoExtractoDeshecho(await deshacerExtracto(e.id, motivo))) }} />
+      )}
     </article>
   )
 }
