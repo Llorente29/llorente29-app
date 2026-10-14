@@ -67,7 +67,16 @@ const AZUL = '#2F5BFF';
 const BORDE = '#E6EAF0';
 const FUENTE = "Geist, 'Helvetica Neue', Arial, sans-serif";
 
+/** Los colores y la letra del correo: los de la marca si tiene tema (Sumied, C06b); si no, los de siempre. */
+interface Colores { tinta: string; apoyo: string; azul: string; fuente: string }
+function coloresDe(m: Marca): Colores {
+  return m.tema
+    ? { tinta: m.tema.tinta, apoyo: m.tema.apoyo, azul: m.tema.accion, fuente: m.tema.letra.replace(/'Inter Variable', /, '') }
+    : { tinta: TINTA, apoyo: APOYO, azul: AZUL, fuente: FUENTE };
+}
+
 function pie(m: Marca): string {
+  const APOYO = coloresDe(m).apoyo;
   const partes = [esc(m.nombre), m.direccionVisible ? esc(m.direccionVisible) : null].filter(Boolean);
   const legal = (texto: string, url: string | null) =>
     url ? `<a href="${urlSegura(url)}" style="color:${APOYO};">${texto}</a>` : texto;
@@ -75,6 +84,11 @@ function pie(m: Marca): string {
 }
 
 function marco(m: Marca, titulo: string, cuerpo: string, porQue: string): string {
+  const { tinta: TINTA, apoyo: APOYO, fuente: FUENTE } = coloresDe(m);
+  // El isotipo dibujado (Sumied) si la marca lo tiene; si no, el cuadrado con la inicial.
+  const logo = m.logo && m.logoCorreo
+    ? `<td style="width:40px;height:40px;"><img src="${urlSegura(m.logoCorreo)}" width="40" height="40" alt="" style="display:block;width:40px;height:40px;border:0;" /></td>`
+    : `<td style="width:40px;height:40px;border-radius:13px;background:${esc(m.colorLogo)};color:#FFFFFF;font-size:18px;font-weight:700;text-align:center;vertical-align:middle;">${esc(m.inicial)}</td>`;
   return `<!DOCTYPE html>
 <html lang="es">
 <head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${esc(titulo)}</title></head>
@@ -84,7 +98,7 @@ function marco(m: Marca, titulo: string, cuerpo: string, porQue: string): string
       <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#FFFFFF;border:1px solid ${BORDE};border-radius:24px;">
         <tr><td style="padding:28px 32px 8px;">
           <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-            <td style="width:40px;height:40px;border-radius:13px;background:${esc(m.colorLogo)};color:#FFFFFF;font-size:18px;font-weight:700;text-align:center;vertical-align:middle;">${esc(m.inicial)}</td>
+            ${logo}
             <td style="padding-left:12px;font-size:20px;font-weight:700;letter-spacing:-0.5px;color:${TINTA};">${esc(m.nombre)}</td>
           </tr></table>
         </td></tr>
@@ -99,22 +113,23 @@ function marco(m: Marca, titulo: string, cuerpo: string, porQue: string): string
 </html>`;
 }
 
-function boton(url: string, texto: string): string {
+function boton(url: string, texto: string, c: Colores): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 8px;"><tr>
-    <td style="border-radius:12px;background:${AZUL};">
+    <td style="border-radius:12px;background:${c.azul};">
       <a href="${url}" target="_blank" rel="noopener" style="display:inline-block;padding:14px 24px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:12px;">${esc(texto)}</a>
     </td></tr></table>`;
 }
 
-const h1 = (t: string) => `<h1 style="margin:0 0 8px;font-size:28px;font-weight:600;letter-spacing:-1px;line-height:1.2;color:${TINTA};">${esc(t)}</h1>`;
-const p = (html: string) => `<p style="margin:0 0 12px;font-size:16px;line-height:1.55;color:${TINTA};">${html}</p>`;
-const nota = (html: string) => `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${APOYO};">${html}</p>`;
+const h1 = (t: string, c: Colores) => `<h1 style="margin:0 0 8px;font-size:28px;font-weight:600;letter-spacing:-1px;line-height:1.2;color:${c.tinta};">${esc(t)}</h1>`;
+const p = (html: string, c: Colores) => `<p style="margin:0 0 12px;font-size:16px;line-height:1.55;color:${c.tinta};">${html}</p>`;
+const nota = (html: string, c: Colores) => `<p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:${c.apoyo};">${html}</p>`;
 
 /**
  * La invitación (maqueta del C06, una sola acción: «Entrar en tu contabilidad»).
  * data: { nombre?, empresa, enlace, diasCaducidad? }
  */
 export function invitacion(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
   // C06, respuesta 4: se saluda con el nombre de pila, como la maqueta («Hola, Ana.»).
   const nombre = String(data.nombre ?? '').trim().split(/\s+/)[0] ?? '';
   const empresa = String(data.empresa ?? '').trim();
@@ -125,9 +140,9 @@ export function invitacion(m: Marca, data: Record<string, unknown>): CorreoMarca
   const frase = empresa
     ? `La contabilidad de <strong>${esc(empresa)}</strong> ya está en ${esc(m.nombre)}. Entra, pon tu contraseña y te pregunto lo poco que necesito para dejarla en marcha.`
     : `Tu contabilidad ya está en ${esc(m.nombre)}. Entra, pon tu contraseña y te pregunto lo poco que necesito para dejarla en marcha.`;
-  const cuerpo = `${h1('Entra en tu contabilidad')}${p(saludo)}${p(frase)}
-    ${url ? boton(url, 'Entrar en tu contabilidad') : p('<em>El enlace no está disponible. Responde a este correo y te mandamos otro.</em>')}
-    ${nota(`El enlace caduca a los ${dias} días. Si el botón no funciona, copia esta dirección en tu navegador:<br /><span style="color:${TINTA};word-break:break-all;">${url}</span>`)}`;
+  const cuerpo = `${h1('Entra en tu contabilidad', c)}${p(saludo, c)}${p(frase, c)}
+    ${url ? boton(url, 'Entrar en tu contabilidad', c) : p('<em>El enlace no está disponible. Responde a este correo y te mandamos otro.</em>', c)}
+    ${nota(`El enlace caduca a los ${dias} días. Si el botón no funciona, copia esta dirección en tu navegador:<br /><span style="color:${c.tinta};word-break:break-all;">${url}</span>`, c)}`;
   const texto = `${nombre ? `Hola, ${nombre}.` : 'Hola.'}\n\n` +
     `${empresa ? `La contabilidad de ${empresa}` : 'Tu contabilidad'} ya está en ${m.nombre}. Entra, pon tu contraseña y te pregunto lo poco que necesito para dejarla en marcha.\n\n` +
     `Entrar en tu contabilidad: ${url || '(enlace no disponible; responde a este correo)'}\n\n` +
@@ -141,10 +156,11 @@ export function invitacion(m: Marca, data: Record<string, unknown>): CorreoMarca
 
 /** Contraseña olvidada, con la marca. data: { enlace } */
 export function contrasena(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
   const url = urlSegura(data.enlace);
-  const cuerpo = `${h1('Pon una contraseña nueva')}${p('Alguien ha pedido cambiar la contraseña de esta cuenta. Si has sido tú, pulsa el botón y elige una nueva.')}
-    ${url ? boton(url, 'Poner una contraseña nueva') : p('<em>El enlace no está disponible. Vuelve a pedirlo desde la pantalla de entrada.</em>')}
-    ${nota(`Si no lo has pedido tú, no hagas nada: tu contraseña sigue igual. Si el botón no funciona, copia esta dirección:<br /><span style="color:${TINTA};word-break:break-all;">${url}</span>`)}`;
+  const cuerpo = `${h1('Pon una contraseña nueva', c)}${p('Alguien ha pedido cambiar la contraseña de esta cuenta. Si has sido tú, pulsa el botón y elige una nueva.', c)}
+    ${url ? boton(url, 'Poner una contraseña nueva', c) : p('<em>El enlace no está disponible. Vuelve a pedirlo desde la pantalla de entrada.</em>', c)}
+    ${nota(`Si no lo has pedido tú, no hagas nada: tu contraseña sigue igual. Si el botón no funciona, copia esta dirección:<br /><span style="color:${c.tinta};word-break:break-all;">${url}</span>`, c)}`;
   return {
     subject: `${m.nombre} · Contraseña nueva`,
     html: marco(m, 'Pon una contraseña nueva', cuerpo, `Te llega porque se ha pedido desde la entrada de ${m.nombre}.`),
@@ -159,15 +175,16 @@ export function contrasena(m: Marca, data: Record<string, unknown>): CorreoMarca
  * data: { cuando (texto ya en hora de Madrid), entrar? (la entrada de la marca) }
  */
 export function contrasenaCambiada(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
   const cuando = String(data.cuando ?? '').trim();
   const url = urlSegura(data.entrar);
   const cuandoHtml = cuando ? ` el <strong>${esc(cuando)}</strong>` : '';
   const siNo = url
-    ? `Si no has sido tú, entra en <a href="${url}" style="color:${AZUL};">${esc(m.nombre)}</a>, pulsa «He olvidado la contraseña» y pon otra cuanto antes.`
+    ? `Si no has sido tú, entra en <a href="${url}" style="color:${c.azul};">${esc(m.nombre)}</a>, pulsa «He olvidado la contraseña» y pon otra cuanto antes.`
     : `Si no has sido tú, pide una contraseña nueva desde la entrada de ${esc(m.nombre)} («He olvidado la contraseña») cuanto antes.`;
-  const cuerpo = `${h1('Tu contraseña ha cambiado')}${p(`La contraseña de tu cuenta de ${esc(m.nombre)} se ha cambiado${cuandoHtml}.`)}
-    ${p('Si has sido tú, no tienes que hacer nada.')}
-    ${nota(siNo)}`;
+  const cuerpo = `${h1('Tu contraseña ha cambiado', c)}${p(`La contraseña de tu cuenta de ${esc(m.nombre)} se ha cambiado${cuandoHtml}.`, c)}
+    ${p('Si has sido tú, no tienes que hacer nada.', c)}
+    ${nota(siNo, c)}`;
   return {
     subject: `${m.nombre} · Tu contraseña ha cambiado`,
     html: marco(m, 'Tu contraseña ha cambiado', cuerpo, `Te llega porque se ha cambiado la contraseña de tu cuenta de ${m.nombre}. Lo avisamos siempre.`),

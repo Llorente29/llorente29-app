@@ -15,6 +15,7 @@
 // en pantalla lo que ha hecho, sin decir si el correo existe (regla 8).
 
 import '@fontsource-variable/geist'
+import './tema.css' // Inter, para las marcas con tema (Sumied)
 import './entrar.css'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'

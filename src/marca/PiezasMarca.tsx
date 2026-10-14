@@ -12,6 +12,8 @@ import type { CSSProperties } from 'react'
 import { MARCA, type Marca } from '@/marca/marca'
 
 export function CuadradoMarca({ marca = MARCA, lado = 44 }: { marca?: Marca; lado?: number }) {
+  // C06b: la marca con isotipo dibujado (Sumied) lo enseña en vez del cuadrado.
+  if (marca.logo) return <img src={marca.logo} alt="" aria-hidden="true" width={Math.round(lado * 120 / 140)} height={lado} style={{ flexShrink: 0, display: 'block' }} />
   const estilo: CSSProperties = {
     width: lado, height: lado, borderRadius: Math.round(lado * 0.32), background: marca.colorLogo, color: '#FFFFFF',
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -25,7 +27,10 @@ export function LogoMarca({ marca = MARCA, lado = 44, className = '' }: { marca?
   return (
     <span className={`inline-flex items-center ${className}`} style={{ gap: 12 }} role="img" aria-label={marca.nombre}>
       <CuadradoMarca marca={marca} lado={lado} />
-      <span aria-hidden="true" style={{ fontSize: Math.round(lado * 0.5), fontWeight: 700, letterSpacing: '-0.6px', color: '#0E1A2B' }}>
+      <span aria-hidden="true" style={marca.tema
+        // Sumied: «SUMIED» en mayúsculas muy gruesas, como el lienzo de la identidad.
+        ? { fontSize: Math.round(lado * 0.5), fontWeight: 900, letterSpacing: '-0.03em', color: marca.tema.tinta, textTransform: 'uppercase', fontFamily: marca.tema.letra }
+        : { fontSize: Math.round(lado * 0.5), fontWeight: 700, letterSpacing: '-0.6px', color: '#0E1A2B' }}>
         {marca.nombre}
       </span>
     </span>
