@@ -31,7 +31,8 @@ const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movi
  * se sube a su ruta fija y se enlaza a la factura. Si ya estaba, sigue.
  */
 async function ponerPapelDeLaSemilla(s: Sesion) {
-  const ruta = `${CUENTA_A.id}/d01-semilla/semilla-f-2026-1022.pdf`
+  // «-nif»: el papel con el NIF inventado que pasa el carácter de control (R12/R6, 14/10). Una ruta nueva para que no se quede el viejo.
+  const ruta = `${CUENTA_A.id}/d01-semilla/semilla-f-2026-1022-nif.pdf`
   const r = await fetch(`${STAGING_URL}/storage/v1/object/receipt-uploads/${ruta}`, {
     method: 'POST',
     headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/pdf' },

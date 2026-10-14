@@ -58,8 +58,8 @@ begin
   end if;
 
   insert into public.supplier (id, account_id, name, legal_name, tax_id, is_active, created_by_name) values
-    (alfa, a, 'Mayorista Prueba Alfa', 'Mayorista Prueba Alfa, S.A.', 'A00000001', true, 'semilla D01'),
-    (luz,  a, 'Suministros Eléctricos Prueba Norte', 'Suministros Eléctricos Prueba Norte, S.L.', 'B00000002', true, 'semilla D01');
+    (alfa, a, 'Mayorista Prueba Alfa', 'Mayorista Prueba Alfa, S.A.', 'A00000018', true, 'semilla D01'),
+    (luz,  a, 'Suministros Eléctricos Prueba Norte', 'Suministros Eléctricos Prueba Norte, S.L.', 'B00000026', true, 'semilla D01');
   perform pg_temp.subcuenta(ea, alfa, 'Mayorista Prueba Alfa');
   perform pg_temp.subcuenta(ea, luz, 'Suministros Eléctricos Prueba Norte');
   select id into v_g from public.company_account where company_id = ea and code = '60000000';
@@ -90,4 +90,18 @@ begin
   update public.supplier set payment_terms_days = 30
    where id = 'd0100000-0000-4000-8000-000000000001' and account_id = 'c01a0000-0000-4000-8000-00000000000a' and payment_terms_days is null;
   raise notice 'Semilla D01 R5: el vencimiento de la F-2026-1022 y el plazo de su ficha, puestos si faltaban.';
+end $$;
+
+-- 14/10 · Los NIF inventados de Alfa y Suministros no pasaban el carácter de
+-- control (A00000001, B00000002): el agente nocturno «Datos maestros» de
+-- staging lo marcó en rojo (run 38523520670). Inventados igual, y ahora
+-- válidos: A00000018 y B00000026 (scripts/conta/lib/terceros.mjs nifValido).
+-- Solo cambia los que siguen con el viejo.
+do $$
+begin
+  update public.supplier set tax_id = 'A00000018'
+   where id = 'd0100000-0000-4000-8000-000000000001' and account_id = 'c01a0000-0000-4000-8000-00000000000a' and tax_id = 'A00000001';
+  update public.supplier set tax_id = 'B00000026'
+   where id = 'd0100000-0000-4000-8000-000000000002' and account_id = 'c01a0000-0000-4000-8000-00000000000a' and tax_id = 'B00000002';
+  raise notice 'Semilla D01 · NIF de Alfa y Suministros, con su carácter de control.';
 end $$;

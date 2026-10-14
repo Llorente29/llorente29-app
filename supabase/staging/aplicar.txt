@@ -1,13 +1,6 @@
-# D01 · R6 (14/10) — las facturas que ya entran por la recepción (sesión A).
-# La 0310 reemplaza en caliente, con la misma firma, las dos lecturas de N22
-# (0300) y N23 (0290): solo leen. La 0300 ya está (run 38525387878).
-#   1. el ensayo: la 0310 y su prueba, en una transacción con ROLLBACK;
-#   2. la 0310 de verdad, con su registro;
-#   3. su prueba como usuario (A y B), con ROLLBACK: recepciones, lecturas y
-#      un asiento de Diez inventados, todo deshecho al acabar.
-# Segundo intento: el run 38527676667 paró en el ensayo (revertido entero, nada
-# aplicado) porque la prueba ponía la subcuenta en la ficha como dueño, y
-# company_account_link_set exige un usuario de la cuenta. Ahora va como usuario.
-supabase/staging/sql/20261021_d01_recepcion_ensayo.sql
-supabase/migrations/20261021T0310_d01_recepcion.sql
-supabase/staging/sql/20261021_d01_recepcion_prueba.sql
+# D01 · 14/10 — la semilla de N22/N23 con NIF inventados que pasan el carácter
+# de control (sesión A; solo cambia el tax_id de los dos proveedores de la
+# semilla, ids d0100000-…, si siguen con el viejo). El agente nocturno «Datos
+# maestros» los marcó en rojo (run 38523520670).
+# La 0310 ya está (run 38528709753).
+supabase/seeds/conta/seed_d01_staging.sql

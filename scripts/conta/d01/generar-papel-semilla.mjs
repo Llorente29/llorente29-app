@@ -18,7 +18,7 @@ const x = 56
 doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('MAYORISTA PRUEBA ALFA, S.A.', x, 80)
 doc.setFont('helvetica', 'normal'); doc.setFontSize(10)
 doc.text('FACTURA F-2026-1022', 540, 80, { align: 'right' })
-doc.text('NIF A00000001 · Calle Inventada 1, Madrid', x, 100)
+doc.text('NIF A00000018 · Calle Inventada 1, Madrid', x, 100)
 doc.text('Cliente: Taberna de Prueba Norte, S.L. · Fecha 11/10/2026', x, 116)
 doc.line(x, 130, 540, 130)
 const lineas = [['Aceite de oliva 5 L', '4', '98,00'], ['Harina 25 kg', '6', '132,60'], ['Género variado', '', '1.052,55']]
