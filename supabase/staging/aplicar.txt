@@ -1,6 +1,5 @@
-# D01 · 14/10 — la semilla de N22/N23 con NIF inventados que pasan el carácter
-# de control (sesión A; solo cambia el tax_id de los dos proveedores de la
-# semilla, ids d0100000-…, si siguen con el viejo). El agente nocturno «Datos
-# maestros» los marcó en rojo (run 38523520670).
-# La 0310 ya está (run 38528709753).
-supabase/seeds/conta/seed_d01_staging.sql
+# D01 · 14/10 — la prueba de la 0310 otra vez, con el NIF inventado de su
+# proveedor de prueba con carácter de control válido (B00000810, antes
+# B00000081, que no lo pasaba), como los de la semilla. Solo la prueba: acaba
+# en ROLLBACK y no cambia staging. La 0310 ya está (run 38528709753).
+supabase/staging/sql/20261021_d01_recepcion_prueba.sql

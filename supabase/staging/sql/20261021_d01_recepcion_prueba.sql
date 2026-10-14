@@ -46,7 +46,7 @@ begin
     raise exception 'PRUEBA D01 R6 recepción · 0: la empresa A ya tiene un 2024: la prueba necesita traerlo ella.';
   end if;
   insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name)
-  values (v_acc, 'Recepción Prueba R6', 'Recepción Prueba R6, S.L.', 'B00000081', true, 'Prueba D01 R6') returning id into v_s;
+  values (v_acc, 'Recepción Prueba R6', 'Recepción Prueba R6, S.L.', 'B00000810', true, 'Prueba D01 R6') returning id into v_s;
   perform set_config('prueba.s', v_s::text, true);
 
   -- El 2024, traído de Diez (antes del corte), con un asiento de factura recibida.
@@ -103,7 +103,7 @@ begin
 
   -- R5 · Desde el corte, «factura» que Compras sí hizo factura con su papel (0140), enlazada.
   insert into public.goods_receipt_ai_session (account_id, kind, parsed_result, ai_model, status)
-  values (v_acc, 'photo', '{"document":{"doc_type":"factura","doc_number":"RCP-26/80","doc_date":"2026-12-11","grand_total":40,"supplier_name":"Recepción Prueba R6","supplier_tax_id":"B00000081"},"lines":[{"raw_text":"Género","line_amount":36.36,"vat_pct":10}],"confidence":0.95}', 'prueba', 'pending_review')
+  values (v_acc, 'photo', '{"document":{"doc_type":"factura","doc_number":"RCP-26/80","doc_date":"2026-12-11","grand_total":40,"supplier_name":"Recepción Prueba R6","supplier_tax_id":"B00000810"},"lines":[{"raw_text":"Género","line_amount":36.36,"vat_pct":10}],"confidence":0.95}', 'prueba', 'pending_review')
   returning id into v_i;
   insert into public.goods_receipt (account_id, location_id, supplier_id, receipt_date, status, raw_document_url, ai_session_id, created_by_name)
   values (v_acc, v_loc, v_s, '2026-12-11', 'confirmado', v_acc::text || '/prueba-r6/r5.jpg', v_i, 'Prueba D01 R6') returning id into v_r;
@@ -166,7 +166,7 @@ begin
   raise notice 'PRUEBA D01 R6 recepción · 4: la hecha factura sale una vez, «de su recepción», y N23 trae lo que leyó la recepción.';
 
   -- 5 · Repetidas: la misma, llegando luego por correo o subida.
-  select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_s, 'B00000081', 'RCP 26-80', '2026-12-14', 40) x where x.nivel = 'repetida';
+  select count(*) into v_n from public.supplier_invoice_repetida(v_acc, v_s, 'B00000810', 'RCP 26-80', '2026-12-14', 40) x where x.nivel = 'repetida';
   if v_n <> 1 then raise exception 'PRUEBA D01 R6 recepción · 5: la regla no reconoce como repetida la que ya entró por la recepción.'; end if;
   begin
     insert into public.supplier_invoice (account_id, supplier_id, company_id, invoice_number, invoice_date, status, source, grand_total, created_by_name, arrival_channel)
