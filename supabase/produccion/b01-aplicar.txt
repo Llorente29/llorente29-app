@@ -5,6 +5,9 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
+# Turno (respuesta 6): DESPUÉS de la tanda de la C06. Cuando la C06 esté en
+# main: traer main, volver a medir el contexto y repasar el paso 8.
+#
 # Orden: BASE y luego FRONT. Esta es la base; el front (la rama
 # conta/b01-bancos fusionada a main, Vercel READY) va DESPUÉS de un real en
 # verde: el front lee tablas y funciones que solo existen con esta tanda.
@@ -22,9 +25,9 @@
 #      bank_activity_log.action, que es de la 0100 (nueva en esta tanda).
 #   7. 0160 — conta_lectura lee las tablas que mira el agente nocturno.
 #   8. 0170 — Foodint: las dos fichas de banco que faltan (57200002 y
-#      57200003), con el IBAN que dice el nombre de su cuenta. PENDIENTE DE
-#      QUE JULIO LO CONFIRME (informe de la tarea 7, §2.2): si dice que no,
-#      se quita esta línea y la de su vuelta atrás.
+#      57200003), con el IBAN que dice el nombre de su cuenta. CONFIRMADO por
+#      Julio (respuesta 6, 14/10): los dos IBAN son los buenos y Bancos lleva
+#      las tres cuentas. Sin local: lo pone Julio en «Cuentas y extractos».
 #
 # Análisis contra producción, medido el 14/10 en solo lectura: ver el informe
 # de la tarea 7 (docs/conta/B01_informe_tarea_7.md, §2.3), con la salida
