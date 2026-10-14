@@ -119,7 +119,43 @@ decides tú. **¿Lo quieres para la tarea 7?**
 
 ## 4. Pruebas
 
-(Se completa con los runs.)
+| Qué | Dónde | Resultado |
+|---|---|---|
+| Unitarias del módulo y de los agentes (`tests/unit/modules/conta`, `tests/conta`) | local, 14/10 | **1.457 de 1.457**, 74 ficheros. Nuevas: `agregadorB01.test.ts` (10) y `conciliacion.test.ts` (3, sobre el volcado real de staging) |
+| Prueba de staging de la 0150, fichero entero y como usuario (alias, reglas, cierre, agente, agregador, consentimiento, RLS) | run 38476832698 | **7/7** |
+| Las de antes (bancos, tarjetas) | mismo aplicador | 13/13 y 7/7, siguen |
+| Semilla B01 con las aperturas fechadas a 30/09 | run 38482604756 | aplicada |
+| E2e completa de la rama (e5f6a96) | run 38482604754 | **todas las del B01 en verde**. Fallan 4 ajenas, que no toco (abajo) |
+| Agente nocturno con el paso nuevo | run 38482604778 | «Conciliación (solo lectura)» e «Informe» en **verde**; «Aviso» y «Resultado» se saltan porque no hubo rojo, como deben. El job sale rojo por «Plan contable» y «Datos maestros» (semillas de otros frentes) |
+
+Lo que diría hoy el agente, consultado a mano en staging (solo lectura):
+`movimientos 15 · casados 0 · sin mirar 15 · extractos 6 · reglas 0 · meses
+cerrados 0 · pasadas en 48 h 5 · enlaces del agregador 0 · asientos de Bancos
+sin movimiento 0 · empresas sin pasada: ninguna`. El ámbar «sin pasada» de la
+fixture (13/10) ya no sale porque ahora la e2e deja su pasada registrada.
+
+### Dos fallos que cacé yo, y uno que no es mío
+
+1. **Mis aperturas rompieron la e2e del libro del C04**, en mi rama y en la de
+   D01 (run 38476695805). Lo digo para que D01 no lo busque: **ese fallo fue
+   mío.** La semilla creaba los tres asientos de apertura con fecha de hoy y
+   echaban «Asenté «Ventas del día · Norte Centro»» de los cinco últimos de
+   «Lo que he hecho yo». Arreglo: la semilla les pone `created_at` a 30/09.
+2. **El paso del agente nocturno no corría**: lo había puesto detrás de
+   «Resultado del libro», que sale con `exit 1`. Ahora va delante.
+3. **libro.spec del C04 sigue en rojo, pero ya no por mí.** Consulta a staging,
+   los asientos de la cuenta A por `coalesce(validated_at, created_at)`:
+
+   | Puesto | Concepto | Estado | Cuándo (UTC) | Quién |
+   |---|---|---|---|---|
+   | 1 | Ventas del día · Prueba e2e mv7b73ws | propuesto | 13/10 23:25 | Prueba e2e |
+   | 2–3 | Ventas Glovo · Norte Centro | propuesto | 13/10 09:52 | Folvy (cierre del día) |
+   | 4–7 | Abono y Factura Hermanos Ruiz, Nóminas, Cuota del préstamo | validado | 07–08/10 | Ana Prueba |
+   | 11 | **Ventas del día · Norte Centro** (el que busca la prueba) | validado | 07/10 17:13 | Folvy |
+   | 13–15 | Saldo inicial del banco · Banco B01 Norte / Sur / Mercado | propuesto | 30/09 06:00 | Semilla B01 |
+
+   Lo desplazan un manual que dejó una e2e sin deshacer y dos «Ventas Glovo»
+   del cierre del día. No lo arreglo porque es de C04/C04b; lo aviso.
 
 ## 5. Capturas
 
