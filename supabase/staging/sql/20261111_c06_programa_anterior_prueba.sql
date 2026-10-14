@@ -95,6 +95,9 @@ begin
 end $$;
 
 reset role;
+-- Ya no es el cliente: sin sus claims, conta_diez_listo ve todas (como al medir antes).
+select set_config('request.jwt.claims', '', true);
+select set_config('request.jwt.claim.sub', '', true);
 
 -- 1 (después) · conta_diez_listo da lo mismo en todas las de antes.
 do $$
