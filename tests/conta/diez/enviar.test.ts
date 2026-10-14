@@ -24,10 +24,13 @@ const resumen = (o: Partial<ResumenBD> = {}): ResumenBD => ({
 })
 
 type Diez = ClienteDiezEnvio & { altas: FacturaData[]; subidas: number; guardado: Uint8Array | null }
-function diez(o: { facturas?: Factura[]; contenedor?: boolean; subida?: number; devuelve?: (g: Uint8Array | null) => Uint8Array | null } = {}): Diez {
+// subcuentas: lo que Diez tiene en su plan (por defecto, la 430 de Uber con su nombre, sin NIF ni nombre comercial, como la captura de Julio de C0008).
+function diez(o: { facturas?: Factura[]; contenedor?: boolean; subida?: number; devuelve?: (g: Uint8Array | null) => Uint8Array | null; subcuentas?: Record<string, Record<string, unknown>> } = {}): Diez {
   const facturas = [...(o.facturas ?? [{ Ejercicio: '2026', Serie: '1', Documento: 1700, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-CAM-20261001' }])]
+  const subcuentas = o.subcuentas ?? { '43000002': { Codigo: '43000002', Descripcion: 'UBER EATS', NIF: '', NombreComercial: '' } }
   const d: Diez = {
     altas: [], subidas: 0, guardado: null,
+    async subcuenta(codigo) { return subcuentas[codigo] ?? null },
     async facturasDelMes() { return [...facturas, ...facturas] }, // el listado de Diez repite filas
     async enviarFactura(fd) { d.altas.push(fd); const f = { ...fd, Documento: 1801, Fecha: Number(fd.FechaFactura) } as Factura; facturas.push(f); return f },
     async adjuntarDocumentoFactura(x) {
@@ -292,5 +295,49 @@ describe('C06b R7 · Diez real, solo con lo que autoriza Julio', () => {
     const t = puerto({ adjuntar: false })
     await enviarAsientoADiez('e1', t.p)
     expect(t.llamadas.real).toEqual([false])
+  })
+})
+
+// ── C06b R7 · El cliente se busca por su cuenta (Julio, captura de C0008) ───────
+describe('C06b R7 · el cliente, por su subcuenta en Diez (no por NIF ni por nombre comercial)', () => {
+  it('C0008 sin ninguna factura de Uber en el mes: el nombre sale de la subcuenta 43000002 («UBER EATS») y la factura va sin NIF', async () => {
+    const d = diez({ facturas: [] })
+    const t = puerto({ d, bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'asiento', entry: 'e1', bd: 'C0008' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 1801, pdfPendiente: true })
+    expect(d.altas).toHaveLength(1)
+    expect(d.altas[0]).toMatchObject({ CuentaCliente: '43000002', NombreCliente: 'UBER EATS' })
+    expect(JSON.stringify(d.altas[0])).not.toMatch(/"(CifCliente|NifCliente|NIF)":"[^"]/)
+  })
+  it('el nombre comercial y el NIF no cuentan: manda la Descripcion de la subcuenta', async () => {
+    const d = diez({ facturas: [], subcuentas: { '43000002': { Codigo: '43000002', Descripcion: 'UBER EATS', NIF: 'B00000000', NombreComercial: 'Otro nombre' } } })
+    const t = puerto({ d, adjuntar: false })
+    await enviarAsientoADiez('e1', t.p)
+    expect(d.altas[0]).toMatchObject({ NombreCliente: 'UBER EATS' })
+  })
+  it('la subcuenta del cliente no está en Diez: no se da de alta nada y no se reintenta solo', async () => {
+    const d = diez({ facturas: [], subcuentas: {} })
+    const t = puerto({ d, adjuntar: false })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(x.estado === 'no_llega' && x.motivo).toBe('la subcuenta 43000002 del cliente no está en Diez: no se inventa')
+    expect(d.altas).toEqual([]); expect(t.actual).toMatchObject({ attempts: 0 })
+  })
+  it('la subcuenta sin nombre: no se inventa', async () => {
+    const d = diez({ facturas: [], subcuentas: { '43000002': { Codigo: '43000002', Descripcion: '  ' } } })
+    const t = puerto({ d, adjuntar: false })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', motivo: 'la subcuenta 43000002 de Diez no tiene nombre: no se inventa' })
+    expect(d.altas).toEqual([])
+  })
+  it('si Diez devuelve OTRA subcuenta que la pedida, para', async () => {
+    const d = diez({ facturas: [], subcuentas: { '43000002': { Codigo: '43000001', Descripcion: 'GLOVO' } } })
+    const t = puerto({ d, adjuntar: false })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(d.altas).toEqual([])
+  })
+  it('si la factura ya está en Diez, se enlaza sin mirar la subcuenta (nunca dos veces)', async () => {
+    const d = diez({ facturas: [{ Ejercicio: '2026', Serie: '1', Documento: 1801, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001' }], subcuentas: {} })
+    const t = puerto({ d, adjuntar: false })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', enlazada: true })
+    expect(d.altas).toEqual([])
   })
 })
