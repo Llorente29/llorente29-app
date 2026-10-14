@@ -1,8 +1,7 @@
-# C06 · Respuesta 4 — de qué programa viene cada empresa (el alta pregunta y
-# guarda la respuesta con su registro).
-#   0400: conta_programa_anterior, su registro y conta_programa_anterior_poner.
-#   Su prueba (2.ª vuelta: la empresa de otra cuenta, tomada antes de ser el
-#   cliente; 3.ª: sin los claims del cliente al medir después), en una transacción con ROLLBACK (incluida la misma vara antes y
-#   después sobre conta_diez_listo de todas las empresas).
-supabase/migrations/20261111T0400_c06_programa_anterior.sql
-supabase/staging/sql/20261111_c06_programa_anterior_prueba.sql
+# C06b · Respuesta 5, punto 2 — aviso #178: de qué lectura del histórico viene
+# cada subcuenta.
+#   0500: company_account.import_run_id (admite nulos) y conta_diez_subcuentas
+#   (misma firma) que la rellena. Su prueba, en una transacción con ROLLBACK.
+#   La 0510 (las 27 de Foodint, con «autorizo») no va a staging: allí no están.
+supabase/migrations/20261111T0500_c06b_cuenta_lectura.sql
+supabase/staging/sql/20261111_c06b_cuenta_lectura_prueba.sql

@@ -21,8 +21,23 @@ select json_build_object(
   'company_account', (select coalesce(json_agg(json_build_object(
       'id', a.id, 'account_id', a.account_id, 'company_id', a.company_id, 'plan', a.plan, 'code', a.code,
       'template_code', a.template_code, 'kind', a.kind, 'status', a.status,
-      'source', a.source, 'import_id', a.import_id, 'name_source', a.name_source)), '[]')
+      'source', a.source, 'import_id', a.import_id, 'name_source', a.name_source,
+      -- C06b (#178): de qué lectura del histórico viene, y si espera nombre (C06).
+      -- Por to_jsonb: el agente corre también ANTES de la tanda que añade la columna.
+      'import_run_id', to_jsonb(a) -> 'import_run_id', 'name_pending', coalesce((to_jsonb(a) ->> 'name_pending')::boolean, false))), '[]')
     from public.company_account a),
+  -- C06b (#178): las lecturas de otro programa, y cuántos apuntes trajo cada
+  -- una a cada cuenta que dice venir de ella. Cada fila con su account_id (regla 9).
+  'lecturas', (select coalesce(json_agg(json_build_object(
+      'id', r.id, 'account_id', r.account_id, 'company_id', r.company_id, 'program', r.program, 'kind', r.kind, 'status', r.status)), '[]')
+    from public.import_run r),
+  'apuntes_de_lectura', (select coalesce(json_agg(json_build_object('company_account_id', x.id, 'apuntes', x.n)), '[]') from (
+      select a.id, count(*) n
+        from public.company_account a
+        join public.journal_line l on l.company_account_id = a.id and l.account_id = a.account_id
+        join public.journal_entry e on e.id = l.entry_id and e.account_id = a.account_id
+       where a.source = 'migrated' and a.import_id is null and e.import_run_id::text = to_jsonb(a) ->> 'import_run_id'
+       group by a.id) x),
   -- C02c: los planes traídos de otro programa, con los códigos que traía el fichero (los leídos).
   'importaciones', (select coalesce(json_agg(json_build_object(
       'id', i.id, 'account_id', i.account_id, 'company_id', i.company_id, 'status', i.status,
