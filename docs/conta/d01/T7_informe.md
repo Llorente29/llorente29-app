@@ -101,6 +101,25 @@ Las de la e2e 233 (T6) quedan en el historial.
   asiento ya propuesto, no de la ficha. Ahora dice «Va a la cuenta de su
   asiento, ya propuesto…», con su prueba.
 
+**Tres retoques de Julio sobre las capturas de la e2e 250** (aprobadas salvo
+esto):
+1. **«Volver a Folvy» y «‹ Folvy» en la cuenta solo de contabilidad.**
+   - **No son de Documentos:** salen del marco común,
+     `src/modules/conta/marco/MenuConta.tsx`, que está en `main` (C00):
+     - «Volver a Folvy», el enlace del menú del ordenador, en `MenuConta()`;
+     - «‹ Folvy», la entrada de la izquierda de `BarraInferiorConta()` en el
+       móvil, cuando no hay entradas a la izquierda.
+   - **No lo toco.** La C06 ya lo quita en `conta/c06-sola`: con
+     `useProductoSolo()`, ninguna de las dos sale en el producto vendido solo.
+     Cuando la C06 esté en `main` y yo la traiga, desaparece también aquí.
+   - Lo que cambié de ese fichero en esta rama es solo el `sinIA` de B01.
+2. **Fechas e importes** de la lista de N22 y de «Cómo se apunta» de N23, en
+   la letra de la app con cifras tabulares (`font-variant-numeric:
+   tabular-nums`), no en la monoespaciada. Lo mide la e2e.
+3. **En el móvil, el nombre de la cuenta no se corta: pasa a dos líneas.** El
+   «· código» va siempre entero, pegado al nombre. Lo mide la e2e: sin «…» ni
+   desborde, y con su código.
+
 **Lo que sigue sin ser igual que la maqueta,** y por qué (de T6, sin cambios):
 - **N22:** sin «Por correo», porque el correo está apagado; sin «Por
   recepción», sin «Tuyos» y sin las pestañas que no existen.

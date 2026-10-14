@@ -28,8 +28,13 @@
 .cxr-tabla { width: 100%; border-collapse: collapse; font-size: 15px; }
 .cxr-tabla th { text-align: left; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; padding: 8px; }
 .cxr-tabla td { padding: 12px 8px; border-top: 1px solid var(--cx-linea); vertical-align: middle; }
-.cxr-tabla .cxr-der { text-align: right; font-family: var(--cx-letra-cifras); white-space: nowrap; }
-.cxr-tabla .cxr-mono { font-family: var(--cx-letra-cifras); white-space: nowrap; color: var(--cx-apoyo); }
+.cxr-tabla .cxr-der { text-align: right; white-space: nowrap; }
+.cxr-tabla .cxr-mono { white-space: nowrap; color: var(--cx-apoyo); }
+/* R5b (Julio, capturas de la e2e 250): fechas e importes de la lista y de «Cómo
+   se apunta» en la letra de la app con cifras tabulares, no en monoespaciada. */
+.cxr-tabla .cxr-der, .cxr-tabla .cxr-mono, .cxr-tarjeta .cx-cifra, .cxr-apunte .cxr-der, .cxr-apunte-linea .cxr-der {
+  font-family: inherit; font-variant-numeric: tabular-nums;
+}
 .cxr-fila-mirar td { background: var(--cx-ambar-suave); }
 .cxr-fila-mirar td:first-child { border-radius: var(--cx-radio-caja) 0 0 var(--cx-radio-caja); }
 .cxr-fila-mirar td:last-child { border-radius: 0 var(--cx-radio-caja) var(--cx-radio-caja) 0; }
@@ -68,19 +73,20 @@
 .cxr-leido-valor .cxr-apoyo { display: block; font-weight: 400; }
 .cxr-aviso { color: var(--cx-ambar); }
 .cxr-apunte { display: grid; grid-template-columns: minmax(0, 1fr) 120px 120px; gap: 4px 10px; font-size: 15px; }
-.cxr-apunte .cxr-der { text-align: right; font-family: var(--cx-letra-cifras); white-space: nowrap; }
+.cxr-apunte .cxr-der { text-align: right; white-space: nowrap; }
 /* R5 · 3: el título pequeño de cada columna («Gasto e IVA», «A pagar»). */
 .cxr-apunte-titulo { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; }
 .cxr-apunte .cxr-apunte-titulo.cxr-der { font-family: inherit; }
 /* R5 · 3 (móvil): cada cuenta en una línea y su cifra a la derecha, por grupos. */
 .cxr-apunte-movil { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
 .cxr-apunte-grupo { display: flex; flex-direction: column; gap: 4px; }
-.cxr-apunte-linea { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.cxr-apunte-cuenta { display: flex; min-width: 0; white-space: nowrap; }
-.cxr-apunte-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.cxr-apunte-codigo { flex: none; }
+.cxr-apunte-linea { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+/* R5b: el nombre de la cuenta no se corta: pasa a dos líneas. «· código» va
+   siempre entero, pegado al nombre. */
+.cxr-apunte-cuenta { min-width: 0; overflow-wrap: anywhere; }
+.cxr-apunte-codigo { white-space: nowrap; }
 .cxr-apunte-celda { min-width: 0; }
-.cxr-apunte-linea .cxr-der { font-family: var(--cx-letra-cifras); white-space: nowrap; flex: none; }
+.cxr-apunte-linea .cxr-der { white-space: nowrap; flex: none; }
 /* R5 · 5: la banda en ámbar mientras haya algo por mirar; el verde, para lo apuntado. */
 .cx-ia-bloque.cxr-ia-ambar { background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
 .cx-ia-bloque.cxr-ia-ambar .cx-ia-punto { background: var(--cx-ambar); }

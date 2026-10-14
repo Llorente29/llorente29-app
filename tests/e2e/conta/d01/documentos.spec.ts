@@ -103,6 +103,10 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await expect(alfa).toContainText(lado(page) === 'movil' ? 'F-2026-1022 · 11/10 · llegó por correo' : 'F-2026-1022 · llegó por correo')
   await expect(page.locator('.cxr-tabla, .cxr-tarjetas')).not.toContainText(/llegó por a mano|llegó por Subida|llegó por Correo/)
   // R5 · 6: cada fila de «Para mirar» con su porqué (ninguna se queda en «Sin cuenta de gasto todavía» a secas).
+  // R5b: el total de la fila, en la letra de la app con cifras tabulares (no en la monoespaciada).
+  const totalFila = alfa.locator(lado(page) === 'movil' ? '.cx-cifra' : '.cxr-der').first()
+  await expect(totalFila).toHaveCSS('font-variant-numeric', 'tabular-nums')
+  expect(await totalFila.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i)
   const filasN22 = page.locator('.cxr-tabla tbody tr:not(:has(.cxr-vacio)), .cxr-tarjetas article')
   const nFilas = await filasN22.count()
   expect(nFilas).toBeGreaterThan(0)
@@ -151,6 +155,14 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   // R5 · 2 y 3: no promete «a Diez con su PDF», y las cifras van en dos columnas con su título.
   await expect(comoN23).not.toContainText('con su PDF')
   if (await comoN23.getByText('· 60000000').count()) {
+    // R5b: las cifras tabulares en la letra de la app; y el nombre de la cuenta no se corta (ni «…» ni desborde).
+    const cifra = comoN23.locator('.cxr-der').filter({ hasText: '€' }).first()
+    await expect(cifra).toHaveCSS('font-variant-numeric', 'tabular-nums')
+    expect(await cifra.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i)
+    for (const c of await comoN23.locator('.cxr-apunte-cuenta').all()) {
+      expect(await c.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && getComputedStyle(el).textOverflow !== 'ellipsis')).toBe(true)
+      await expect(c).toContainText(/· \d{8}/)
+    }
     await expect(comoN23).toContainText('a Diez irá cuando Cegid active los documentos')
     await expect(comoN23).toContainText('Gasto e IVA')
     await expect(comoN23).toContainText('A pagar')
