@@ -10,6 +10,10 @@
 --   2. No queda ninguna fila de serie de esos prefijos sin signo.
 --   3. La vuelta atrás, dentro de la transacción, deja la serie como la C05
 --      (cero filas por signo en esos prefijos) y se puede volver a aplicar.
+--
+-- sin usuario: son filas de serie (company_id null), las mismas para todas las
+-- cuentas, y lo que hace con ellas un usuario —ver su balance— lo mira la e2e
+-- del balance (c06/balanceNorma), con la nota bajo «Clientes».
 
 begin;
 do $$ begin

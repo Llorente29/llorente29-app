@@ -11,6 +11,8 @@
 --   3. Otra conexión y otro correo, sin tope gastado: se manda.
 --   4. Un correo que no existe no devuelve nada (como antes), y se apunta.
 --   5. Lo apuntado son huellas: ni el correo ni la IP en claro.
+--   6. Como usuario: ni se puede pedir por la función ni leer los intentos
+--      (solo la usa la edge function, con service_role).
 
 begin;
 do $$ begin
@@ -81,5 +83,24 @@ begin
   end if;
   raise notice '5 OK: solo huellas sha256.';
 end $$;
+
+-- 6 · como usuario, nada
+set local role authenticated;
+do $$
+declare i int;
+begin
+  begin
+    perform * from public.conta_contrasena_pedir('tope.uno@c06b-prueba.test', 'contabilidad', '192.0.2.11');
+    raise exception '6: un usuario puede llamar a conta_contrasena_pedir.';
+  exception when sqlstate '42501' then null;
+  end;
+  begin
+    select count(*) into i from public.conta_contrasena_intento;
+    raise exception '6: un usuario puede leer conta_contrasena_intento (% filas).', i;
+  exception when sqlstate '42501' then null;
+  end;
+  raise notice '6 OK: como usuario, la función y la tabla paran con 42501.';
+end $$;
+reset role;
 
 rollback;
