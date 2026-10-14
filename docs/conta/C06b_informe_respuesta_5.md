@@ -7,7 +7,7 @@ las cifras de Foodint van en el chat, no en el repositorio, que es público.
 
 | Punto | Estado | Producción |
 |---|---|---|
-| 1 · Balance contra Diez y la banda de la IA | front hecho y probado; la lectura de octubre en C0008, §1.3 | solo front (va en el PR) |
+| 1 · Balance contra Diez y la banda de la IA | front hecho y probado; al 30/09 Diez y Folvy coinciden en las 150 subcuentas; octubre explica PN y otros deudores (§1.5) | solo front (va en el PR) |
 | 2 · Aviso #178 | 0500 y 0510 escritas; 0500 en staging con su prueba en verde; agente nuevo en verde en staging | **tanda preparada, sin lanzar** (§2.4) |
 | 3 · La barra de la IA en Libros | hecho; e2e de lo que tapa extendida a Libros | solo front |
 | 4 · Semilla de Diez en staging | aplicada: plan completo, agente del plan en verde | — |
@@ -137,9 +137,34 @@ el mapeo que ya existe, sin tocar código:
 
 Es decisión de Julio, y no la he tomado.
 
-### 1.5 · Lo que dijo la lectura de octubre
+### 1.5 · Lo que dijo la lectura de C0008
 
-*(Se rellena con el resultado del run: ver §1.3.)*
+**Run 38536114868** (14/10, de 08:35 a 09:43 UTC, en verde), en claro:
+
+- **Enero a septiembre, completo.** Diez contestó todos los días, unos tras
+  reintentar. Leídos: 525, 818, 835, 683, 653, 512, 955, 824 y 1.418
+  asientos; 0 repetidos y 0 de otro ejercicio.
+- **Al 30/09, Diez y Folvy coinciden al céntimo en las 150 subcuentas con
+  saldo** (0 distintas), y por eso también en las cuatro líneas: Clientes,
+  Otros deudores, el total de III y el patrimonio neto. La importación del
+  12/10 está entera; no hay ningún asiento de antes del corte cambiado
+  después en Diez.
+- **Después del 30/09, Diez tiene 4 asientos** (leídos del 02 al 14/10;
+  **el 01/10 no contestó** ni reintentando dos veces).
+  - Mueven «Otros deudores» y el patrimonio neto.
+  - **No mueven «Clientes»**: Diez con todo lo leído da en Clientes lo mismo
+    que Folvy.
+
+Lo que eso dice de las tres diferencias:
+
+| Diferencia | Explicada |
+|---|---|
+| Patrimonio neto y «Otros deudores» | **Sí, por octubre de Diez**, que Folvy no tiene en el libro: sus 55 asientos de octubre están propuestos, sin validar. Las cifras van cifradas en el run (`testigo-clave-publica.pem`), para que Julio las compare con las que dio. |
+| «Clientes» | **No, con lo leído.** Falta el 01/10, el único día sin leer. Lo vuelvo a leer solo (§1.6). |
+
+### 1.6 · El 01/10, otra vez
+
+*(Run con `[lectura:balance:202610]`, solo octubre.)*
 
 ---
 
