@@ -1,3 +1,8 @@
-# C06b · Respuesta 6, tarea 3: conta-contrasena con tope (conta_contrasena_pedir,
-# de la 0610: va DESPUÉS de aplicar la 0610 en staging).
+# C06b · PR a main de la respuesta 6: las tres funciones que el PR lleva a
+# «Funciones a desplegar a mano». conta-contrasena por el tope (0610, ya en
+# producción); conta-crear-cuenta y send-email porque importan
+# _shared/marcas.ts, que cambia con Sumied. Aquí, para que la e2e entera las
+# pruebe con el código del PR antes de fusionar.
 conta-contrasena
+conta-crear-cuenta
+send-email
