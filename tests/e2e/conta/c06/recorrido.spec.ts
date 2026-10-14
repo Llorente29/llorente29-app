@@ -12,8 +12,10 @@
 //      MISMOS datos que mandó la función;
 //   2. la entrada: el enlace de la invitación → «Activa tu cuenta» (pone su
 //      contraseña) → la entrada N18 con su correo y su contraseña;
-//   3. el alta con su plan y su banco: la conversación entera, hasta el IBAN, y
-//      lo que diga la tarjeta «Traer tu contabilidad de Diez» del Inicio;
+//   3. el alta con su plan y su banco: la conversación entera —«¿De qué
+//      programa vienes?» incluida (Cegid Diez)— hasta el IBAN; el alta termina
+//      con el plan activado, y la tarjeta «Traer tu contabilidad de Diez» del
+//      Inicio solo tiene pendiente lo de Diez;
 //   4. traer de Diez desde la C0009: la registra Folvy (aquí, la función de
 //      staging e2e_c06_recorrido_base) y la tarjeta lo dice. La lectura de la
 //      C0009 —solo GET— la hace después el workflow diez-importar en modo
@@ -142,7 +144,11 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
 
   // ── 2 · La entrada: el enlace, su contraseña y la entrada N18 ─────────────
   await page.goto(alta.enlace!.replace(baseURL!, ''))
-  await expect(page.getByText('Activa tu cuenta')).toBeVisible({ timeout: 20_000 })
+  // Con la marca, con su estilo (el de N18): sin la cabecera de Folvy y con «Email».
+  await expect(page.getByRole('heading', { level: 1, name: 'Activa tu cuenta' })).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.mx-entrar')).toBeVisible()
+  await expect(page.getByLabel('Email')).toHaveValue(correo)
+  await expect(page.getByText('App del equipo')).toHaveCount(0)
   await sinFolvy(page, 'la bienvenida')
   await capturar(page, 'bienvenida', null)
   const claves = page.locator('input[type="password"]')
@@ -222,44 +228,37 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
   await capturar(page, 'alta-plan', null)
   await decir(page, 'el de pymes')
   await expect(log(page).getByText(/^Entendido: plan de pymes\./)).toBeVisible()
+  // C06, respuesta 4: de qué programa viene. Con la lista entera a la vista.
+  await expect(log(page).getByText('¿De qué programa vienes?').last()).toBeVisible()
+  for (const x of ['Cegid Diez', 'Holded', 'Sage', 'a3', 'ContaSol', 'Quipu', 'Otro', 'Empiezo de cero']) {
+    await expect(page.getByRole('button', { name: x, exact: true })).toBeVisible()
+  }
+  await sinFolvy(page, 'el alta, de qué programa vienes')
+  await capturar(page, 'alta-programa', null)
+  await page.getByRole('button', { name: 'Cegid Diez', exact: true }).click()
+  await expect(log(page).getByText(/^Vienes de Cegid Diez: al terminar el alta activo el plan general contable de pymes/)).toBeVisible()
   await expect(log(page).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
   await decir(page, ibanInventado())
-  await expect(log(page).getByText(/^Listo: .* está montada\./)).toBeVisible({ timeout: 30_000 })
+  // El alta no termina sin el plan activado: lo activa al terminar y lo dice.
+  await expect(log(page).getByText(/^Listo: .* está montada\. Plan activado: \d+ cuentas de serie, \d+ subcuentas/)).toBeVisible({ timeout: 45_000 })
   await sinFolvy(page, 'el alta terminada')
   await capturar(page, 'alta-hecha', null)
 
   const empresas = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${alta.account_id}&setup_completed_at=not.is.null`)
   expect(empresas.datos?.length, 'el alta deja UNA empresa terminada').toBe(1)
   const empresa = empresas.datos[0].id
+  const programa = await rest<{ programa: string }[]>(s, 'GET', `conta_programa_anterior?select=programa&account_id=eq.${alta.account_id}&company_id=eq.${empresa}`)
+  expect(programa.datos, 'la respuesta queda guardada').toEqual([{ programa: 'diez' }])
 
-  // La tarjeta «Traer tu contabilidad de Diez», en su orden: lo que falte, con su botón.
+  // La tarjeta «Traer tu contabilidad de Diez», solo para lo que falte: con
+  // datos, plan y banco hechos en el alta, solo el paso 4.
   const tarjeta = page.getByRole('region', { name: 'Traer tu contabilidad de Diez' })
   const paso = (n: number) => tarjeta.locator('.cxi-diez-paso').nth(n - 1)
   await page.goto('/conta/inicio')
   await expect(tarjeta).toBeVisible({ timeout: 20_000 })
-  await expect(paso(1)).toHaveClass(/cxi-diez-paso-hecho/)
+  for (const n of [1, 2, 3]) await expect(paso(n)).toHaveClass(/cxi-diez-paso-hecho/)
   await sinFolvy(page, 'el Inicio recién dado de alta')
   await capturar(page, 'inicio-pasos-alta')
-  if (await paso(2).getByRole('link', { name: 'Activar el plan' }).count()) {
-    apuntar('Tras el alta, el plan aún no estaba activado: se activa desde el botón de la tarjeta.')
-    await paso(2).getByRole('link', { name: 'Activar el plan' }).click()
-    // Llega directo a activar (no a «¿Vienes de otro programa?»: lo de Diez llega en el paso 4).
-    await expect(page.getByRole('heading', { name: '¿Vienes de otro programa?' })).toHaveCount(0)
-    await page.getByRole('button', { name: 'Activar el plan' }).click()
-    await expect(page.getByText(/^Plan activado: /).first()).toBeVisible({ timeout: 30_000 })
-    await sinFolvy(page, 'el plan activado')
-    await page.goto('/conta/inicio')
-  }
-  await expect(paso(2)).toHaveClass(/cxi-diez-paso-hecho/, { timeout: 20_000 })
-  // El banco del alta: si su 572 no está en el plan, la tarjeta lo dice y la crea.
-  const crear = paso(3).getByRole('button', { name: 'Crear su cuenta en el plan' })
-  if (await crear.count()) {
-    await capturar(page, 'inicio-pasos-banco')
-    await crear.click()
-    await expect(tarjeta.getByRole('status')).toHaveText(/^Hecho: la cuenta 572\d{5} de tu banco, en el plan\.$/)
-  }
-  await expect(paso(3).getByRole('link', { name: 'Poner tu banco' }), 'el IBAN del alta da de alta el banco').toHaveCount(0)
-  await expect(paso(3)).toHaveClass(/cxi-diez-paso-hecho/, { timeout: 20_000 })
 
   // ── 4 · Traer de Diez desde la C0009 ──────────────────────────────────────
   await expect(paso(4)).toHaveClass(/cxi-diez-paso-falta/)
@@ -309,3 +308,43 @@ async function pedirSesionDe(email: string, clave: string): Promise<Sesion> {
   expect(r.status).toBe(200)
   return await r.json() as Sesion
 }
+
+// C06, respuesta 4 (retoque 5): la carrera de «Activar cuenta» también SIN
+// marca, que es la bienvenida de Folvy (la de Foodint). Misma invitación, el
+// enlace abierto con ?marca=folvy, y rellenado al instante: si la carrera
+// volviera, «Activar cuenta» no abriría la cuenta.
+test('la bienvenida sin marca (la de Folvy): «Activar cuenta» abre la cuenta aunque se rellene al instante', async ({ page, baseURL }) => {
+  test.setTimeout(120_000)
+  const errores = vigilar(page)
+  const sello = Date.now()
+  const correo = `recorrido.sinmarca.${lado(page)}.${sello}@c06-prueba.test`
+  const clave = `Rc06${sello}Ok`
+  const plataforma = await pedirSesion(PLATAFORMA)
+  const r = await fetch(`${STAGING_URL}/functions/v1/conta-crear-cuenta`, {
+    method: 'POST',
+    headers: { apikey: anonKey(), Authorization: `Bearer ${plataforma.access_token}`, 'Content-Type': 'application/json', Origin: baseURL! },
+    body: JSON.stringify({ empresa: `Recorrido de Prueba C06 sinmarca ${lado(page)} ${sello}`, correo, nombre: 'Pablo Inventado', marca: MARCA.id, motivo: 'Recorrido e2e del C06: la bienvenida sin marca.' }),
+  })
+  const alta = await r.json() as { enlace?: string | null }
+  expect(r.status, JSON.stringify(alta)).toBe(200)
+  await page.goto(alta.enlace!.replace(baseURL!, '').replace('marca=contabilidad', 'marca=folvy'))
+  // La de siempre: la tarjeta de Folvy, «App del equipo».
+  await expect(page.getByText('App del equipo')).toBeVisible({ timeout: 20_000 })
+  await expect(page.locator('.mx-entrar')).toHaveCount(0)
+  const claves = page.locator('input[type="password"]')
+  await claves.nth(0).fill(clave)
+  await claves.nth(1).fill(clave)
+  await page.locator('input[type="checkbox"]').check()
+  await page.getByRole('button', { name: 'Activar cuenta' }).click()
+  const tras = await Promise.race([
+    page.waitForURL(/\/conta\//, { timeout: 30_000 }).then(() => 'dentro' as const),
+    page.getByText(/^Activación (completada|guardada)|no se pudo abrir tu cuenta/).first().waitFor({ timeout: 30_000 }).then(() => 'aviso' as const),
+  ]).catch(() => 'nada' as const)
+  if (tras !== 'dentro') {
+    const visto = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 500)
+    throw new Error(`Sin marca, tras «Activar cuenta», no abre su contabilidad. URL ${page.url()} · «${visto}»`)
+  }
+  await page.waitForLoadState('networkidle')
+  await page.screenshot({ path: `${DIR}/recorrido-bienvenida-sin-marca-hecha-${lado(page)}.png` })
+  expect(errores).toEqual([])
+})

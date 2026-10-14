@@ -22,7 +22,7 @@ import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import { checkAccountStatus } from '../services/accountStatusService'
 import { supabase } from '../lib/supabase'
 import { MARCA } from './marca'
-import { LogoMarca, PieLegal } from './PiezasMarca'
+import { LadoMarca, LogoMarca, PieLegal } from './PiezasMarca'
 
 type Modo = 'entrar' | 'olvido'
 
@@ -35,11 +35,7 @@ export default function EntrarMarca({ modoInicial = 'entrar' }: { modoInicial?: 
         {modo === 'entrar' ? <Entrar alOlvidar={() => setModo('olvido')} /> : <Olvido alVolver={() => setModo('entrar')} />}
         <PieLegal className="mx-pie" />
       </div>
-      <aside className="mx-derecha" aria-label={MARCA.entrar.antetitulo.toLowerCase() || 'Lo que hay dentro'}>
-        <span className="mx-antetitulo">{MARCA.entrar.antetitulo}</span>
-        <span className="mx-lema">{MARCA.entrar.lema}</span>
-        <ul className="mx-frases">{MARCA.entrar.frases.map((f) => <li key={f}>{f}</li>)}</ul>
-      </aside>
+      <LadoMarca />
     </div>
   )
 }

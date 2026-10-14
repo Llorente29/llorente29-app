@@ -54,6 +54,7 @@ import {
 } from '../lib/passwordPolicy'
 import { CON_MARCA, MARCA } from '../marca/marca'
 import { PieEntrada } from '../marca/PiezasMarca'
+import BienvenidaMarca from '../marca/BienvenidaMarca'
 
 type FormState = 'idle' | 'submitting' | 'error'
 
@@ -295,14 +296,30 @@ export default function WelcomePage() {
   const passwordsDiffer = passwordRepeat.length > 0 && password !== passwordRepeat
   const submitting = formState === 'submitting'
 
+  // C06, respuesta 4: con una marca propia, con su estilo (el de N18). Mismo
+  // estado y mismo envío: solo cambia cómo se ve.
+  if (CON_MARCA) {
+    return (
+      <BienvenidaMarca
+        email={user?.email ?? null}
+        clave={password} ponerClave={setPassword}
+        repetida={passwordRepeat} ponerRepetida={setPasswordRepeat}
+        acepto={acceptedTerms} ponerAcepto={setAcceptedTerms}
+        corta={passwordTooShort} debil={passwordWeak} distintas={passwordsDiffer}
+        fallo={errorMsg}
+        enviando={submitting} preparando={preparandoCuenta}
+        enviar={handleSubmit}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-page flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Cabecera */}
         <div className="text-center mb-8">
           <Logo size="xl" variant="light" className="mb-2" />
-          {/* C06: «App del equipo» es la de cocina; con una marca propia, su producto. */}
-          <p className="text-sm text-text-secondary mt-1">{CON_MARCA ? 'Tu contabilidad' : 'App del equipo'}</p>
+          <p className="text-sm text-text-secondary mt-1">App del equipo</p>
         </div>
 
         {/* Tarjeta */}

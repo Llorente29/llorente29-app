@@ -30,7 +30,7 @@ export const PUNTOS: DefPunto[] = [
   { clave: 'donde', etiqueta: 'Dónde', paso: 'nombre', preguntas: ['direccion'], falta: 'Enseguida' },
   { clave: 'actividad', etiqueta: 'A qué te dedicas', paso: 'actividad', preguntas: ['actividad'], falta: 'Enseguida' },
   { clave: 'impuestos', etiqueta: 'Tus impuestos', paso: 'impuestos', preguntas: ['periodo', 'retiene', 'alquiler', 'retenido70'], falta: 'Enseguida' },
-  { clave: 'cuentas', etiqueta: 'Tus cuentas', paso: 'cuentas', preguntas: ['cuentas'], falta: 'Enseguida' },
+  { clave: 'cuentas', etiqueta: 'Tus cuentas', paso: 'cuentas', preguntas: ['cuentas', 'programa'], falta: 'Enseguida' },
   { clave: 'banco', etiqueta: 'Tu banco', paso: 'banco', preguntas: ['banco'], falta: 'Al final, si quieres' },
 ]
 

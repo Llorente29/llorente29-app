@@ -54,3 +54,14 @@ export function PieEntrada({ className = 'text-center text-xs text-text-secondar
   if (MARCA.id === 'folvy') return <p className={className}>Folvy · Restauración Profesional</p>
   return <p className={className}><PieLegal /></p>
 }
+
+/** El lado menta de la entrada (N18): antetítulo, lema y las frases de la marca. Lo comparten la entrada y la bienvenida. */
+export function LadoMarca({ marca = MARCA }: { marca?: Marca }) {
+  return (
+    <aside className="mx-derecha" aria-label={marca.entrar.antetitulo.toLowerCase() || 'Lo que hay dentro'}>
+      <span className="mx-antetitulo">{marca.entrar.antetitulo}</span>
+      <span className="mx-lema">{marca.entrar.lema}</span>
+      <ul className="mx-frases">{marca.entrar.frases.map((f) => <li key={f}>{f}</li>)}</ul>
+    </aside>
+  )
+}

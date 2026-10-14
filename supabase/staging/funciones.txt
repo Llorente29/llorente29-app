@@ -7,5 +7,6 @@
 # marca, envía lo mismo que antes (correoC06.test.ts).
 # 2.ª a 6.ª vuelta: la comprobación (rutas de lo bajado, una carpeta por función,
 # y el CLI devuelve el código transpilado: se comparan los dos lados por esbuild).
+# Respuesta 4: send-email otra vez (la invitación saluda con el nombre de pila).
 conta-crear-cuenta
 send-email

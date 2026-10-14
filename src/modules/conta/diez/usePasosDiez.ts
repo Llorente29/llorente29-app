@@ -6,8 +6,11 @@
 import { useEffect, useState } from 'react'
 import type { ListoDiez } from '@/modules/conta/lib/pasosDiez'
 import { bancosSinSubcuenta, leerPasosDiez } from '@/modules/conta/services/pasosDiezService'
+import { leerProgramaAnterior } from '@/modules/conta/services/programaService'
+import type { ProgramaAnterior } from '@/modules/conta/alta/programa'
 
-export interface EstadoPasosDiez { listo: ListoDiez; sinSubcuenta: number }
+/** programa: lo que contestó en el alta («¿De qué programa vienes?»); null si su alta es de antes. */
+export interface EstadoPasosDiez { listo: ListoDiez; sinSubcuenta: number; programa: ProgramaAnterior | null }
 
 export function usePasosDiez(accountId: string, companyId: string): [EstadoPasosDiez | null | 'fallo', () => void] {
   const [e, setE] = useState<{ clave: string; v: EstadoPasosDiez | 'fallo' } | null>(null)
@@ -15,8 +18,8 @@ export function usePasosDiez(accountId: string, companyId: string): [EstadoPasos
   const clave = `${companyId}#${vuelta}`
   useEffect(() => {
     let vivo = true
-    Promise.all([leerPasosDiez(companyId), bancosSinSubcuenta(accountId, companyId)])
-      .then(([listo, b]) => { if (vivo) setE({ clave, v: { listo, sinSubcuenta: b.length } }) },
+    Promise.all([leerPasosDiez(companyId), bancosSinSubcuenta(accountId, companyId), leerProgramaAnterior(accountId, companyId)])
+      .then(([listo, b, programa]) => { if (vivo) setE({ clave, v: { listo, sinSubcuenta: b.length, programa } }) },
         () => { if (vivo) setE({ clave, v: 'fallo' }) })
     return () => { vivo = false }
   }, [accountId, companyId, clave])

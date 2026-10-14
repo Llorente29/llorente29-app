@@ -11,7 +11,7 @@
 .cxi-subtitulo { font-size: 16px; color: var(--cx-apoyo); }
 .cxi-acciones { display: flex; align-items: center; gap: 12px; position: relative; }
 .cxi-mes {
-  height: 44px; padding: 0 14px; border-radius: var(--cx-radio-boton); border: 1px solid var(--cx-borde-campo);
+  height: 44px; padding: 0 14px; border-radius: var(--cx-radio-boton); border: 1px solid var(--cx-borde-control);
   background: var(--cx-blanco); color: var(--cx-texto); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
 }
 .cxi-anadir-menu {

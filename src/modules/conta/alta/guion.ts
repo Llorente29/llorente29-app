@@ -21,9 +21,10 @@ import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
 import { anadirAnuales, modelosQuePresenta, type ClaseActividad, type ReglaModelo, type Territorio, type TipoEmpresa } from '@/modules/conta/lib/modelos'
 import { provinciaPorCp } from '@/modules/conta/lib/direccion'
 import { MARCA } from '../cuenta/marca'
+import { PROGRAMAS } from '@/modules/conta/alta/programa'
 
 export type PasoAlta = 'nif' | 'nombre' | 'actividad' | 'impuestos' | 'cuentas' | 'banco' | 'hecho'
-export type ClavePregunta = 'nif' | 'nombre' | 'direccion' | 'actividad' | 'periodo' | 'retiene' | 'alquiler' | 'retenido70' | 'cuentas' | 'banco'
+export type ClavePregunta = 'nif' | 'nombre' | 'direccion' | 'actividad' | 'periodo' | 'retiene' | 'alquiler' | 'retenido70' | 'cuentas' | 'programa' | 'banco'
 
 export interface OpcionAlta { valor: string; texto: string }
 
@@ -190,6 +191,15 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
         ayuda: 'El plan contable es la lista de cuentas donde se apunta todo. El de pymes es más corto y vale si facturas menos de 8 M€ y sois menos de 50. Si no lo sabes, dejo ese: se puede cambiar después sin perder nada.',
         opciones: [{ valor: 'pymes', texto: 'El de pymes, el normal' }, { valor: 'normal', texto: 'El general' }],
         entrada: null, normal: 'pymes', noLoSe: 'Que lo decida mi asesor',
+      }, {
+        // C06, respuesta 4: no se pregunta solo por Cegid. «Otro» pide su
+        // nombre; también vale escribirlo.
+        clave: 'programa',
+        texto: '¿De qué programa vienes?',
+        porque: 'Sin programa anterior, se empieza con el plan contable de serie (el del BOE).',
+        ayuda: 'Lo apunto para saber de dónde traer tus datos. Hoy traigo los de Cegid Diez; con cualquier otro empezamos con el plan contable y te ayudamos a pasar los saldos. Si es otro, escribe su nombre. Si no lo sabes, empezamos de cero y se lo apunto a tu asesor.',
+        opciones: PROGRAMAS.map((x) => ({ valor: x.valor, texto: x.texto })),
+        entrada: 'texto', normal: 'ninguno', noLoSe: 'No lo sé',
       }]
     }
     case 'banco':

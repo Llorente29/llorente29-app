@@ -123,3 +123,18 @@ describe('conta-crear-cuenta: la base del enlace fuera de producción', () => {
     expect(basePruebas(undefined, undefined)).toBeNull()
   })
 })
+
+describe('N19 · el saludo con el nombre de pila (respuesta 4)', () => {
+  const m = MARCAS.contabilidad
+  const datos = (nombre: string) => ({ nombre, empresa: 'Ferretería Ejemplo, S.L.', enlace: 'https://contabilidad.ejemplo/welcome?x=1', diasCaducidad: 7 })
+  it('«Lucía Inventada» → «Hola, Lucía.», en el HTML y en el texto', () => {
+    const c = invitacion(m, datos('Lucía Inventada'))
+    expect(c.html).toContain('Hola, Lucía.')
+    expect(c.html).not.toContain('Inventada')
+    expect(c.text.startsWith('Hola, Lucía.\n')).toBe(true)
+  })
+  it('un solo nombre, igual; sin nombre, «Hola.»', () => {
+    expect(invitacion(m, datos('Ana')).text.startsWith('Hola, Ana.\n')).toBe(true)
+    expect(invitacion(m, datos('  ')).text.startsWith('Hola.\n')).toBe(true)
+  })
+})

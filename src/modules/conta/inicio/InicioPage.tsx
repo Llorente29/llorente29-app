@@ -39,7 +39,7 @@ import { mesAnterior, nombreMes, type CierreMes, type PasoCierre } from '@/modul
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { PasosDiez } from '@/modules/conta/diez/PasosDiez'
 import { usePasosDiez } from '@/modules/conta/diez/usePasosDiez'
-import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
+import { verTarjetaDiez } from '@/modules/conta/lib/pasosDiez'
 import { leerCierres } from '@/modules/conta/services/diarioService'
 
 type Carga<T> = { estado: 'cargando' } | { estado: 'listo'; v: T } | { estado: 'fallo'; texto: string }
@@ -99,16 +99,14 @@ export default function InicioPage() {
 // ── Traer de Diez (C06, respuesta 3) ─────────────────────────────────────────
 
 /**
- * Los cuatro pasos antes de traer de Diez, mientras falte alguno. En el
- * producto vendido solo, siempre (el cliente viene de Diez); con Folvy, solo si
- * la empresa ya tiene su base de Diez registrada. Hecho todo, no se enseña.
+ * Los cuatro pasos antes de traer de Diez, mientras falte alguno, para quien
+ * viene de Diez (lo dijo en el alta) o ya tiene su base registrada
+ * (verTarjetaDiez, C06 respuesta 4). Hecho todo, no se enseña.
  */
 function Diez({ accountId, companyId, quien }: { accountId: string; companyId: string; quien: string | null }) {
-  const solo = useProductoSolo()
   const [e, recargar] = usePasosDiez(accountId, companyId)
   if (e === null || e === 'fallo') return null
-  const base = e.listo.pasos.find((p) => p.paso === 'diez')?.base ?? null
-  if (e.listo.falta === null || (!solo && !base)) return null
+  if (!verTarjetaDiez(e.listo, e.programa)) return null
   return <PasosDiez accountId={accountId} companyId={companyId} quien={quien} estado={e} recargar={recargar} />
 }
 

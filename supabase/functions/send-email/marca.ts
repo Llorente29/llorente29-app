@@ -115,7 +115,8 @@ const nota = (html: string) => `<p style="margin:12px 0 0;font-size:13px;line-he
  * data: { nombre?, empresa, enlace, diasCaducidad? }
  */
 export function invitacion(m: Marca, data: Record<string, unknown>): CorreoMarca {
-  const nombre = String(data.nombre ?? '').trim();
+  // C06, respuesta 4: se saluda con el nombre de pila, como la maqueta («Hola, Ana.»).
+  const nombre = String(data.nombre ?? '').trim().split(/\s+/)[0] ?? '';
   const empresa = String(data.empresa ?? '').trim();
   const url = urlSegura(data.enlace);
   const diasN = Number(data.diasCaducidad);

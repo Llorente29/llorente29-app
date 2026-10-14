@@ -78,3 +78,15 @@ export function pasosDiez(l: ListoDiez, marca: string, bancosSinSubcuenta: numbe
 
 /** «3 de 4 hechos». */
 export const resumenPasos = (p: PasoVisto[]): string => `${p.filter((x) => x.estado === 'hecho').length} de ${p.length} hechos`
+
+/**
+ * ¿Se enseña la tarjeta «Traer tu contabilidad de Diez»? (C06, respuesta 4.)
+ * El plan ya se activa en el alta: la tarjeta queda solo para lo que falte, y
+ * solo para quien viene de Diez (lo contestó en el alta) o ya tiene su base
+ * registrada (Foodint). Hecho todo, no se enseña.
+ */
+export function verTarjetaDiez(l: ListoDiez, programa: string | null): boolean {
+  if (l.falta === null) return false
+  const base = l.pasos.find((p) => p.paso === 'diez')?.base ?? null
+  return programa === 'diez' || base !== null
+}

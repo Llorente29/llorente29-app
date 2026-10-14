@@ -10,6 +10,7 @@
   --mx-apoyo: #5B6678;
   --mx-azul: #2F5BFF;
   --mx-borde: #C9D0DC;
+  --mx-borde-control: #848E9E; /* C06 R4 · borde de los campos (3,31:1 sobre blanco) */
   --mx-menta: #E3FBF2;
   --mx-menta-borde: #B9EFD8;
   --mx-verde: #0B7A55;
@@ -36,7 +37,7 @@
 .mx-subtitulo { font-size: 16px; color: var(--mx-apoyo); }
 .mx-campo { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
 .mx-input {
-  height: 48px; border: 1px solid var(--mx-borde); border-radius: 12px; padding: 0 14px;
+  height: 48px; border: 1px solid var(--mx-borde-control); border-radius: 12px; padding: 0 14px;
   font-family: inherit; font-size: 16px; color: var(--mx-tinta); background: #FFFFFF; font-weight: 400;
 }
 .mx-boton {
@@ -72,3 +73,10 @@
   .mx-derecha { width: auto; border-left: none; border-top: 1px solid var(--mx-menta-borde); padding: 28px 20px 36px; }
   .mx-lema { font-size: 22px; }
 }
+
+/* C06, respuesta 4 · la bienvenida con la marca (BienvenidaMarca). */
+.mx-nota-campo { font-size: 13px; font-weight: 400; }
+.mx-aviso-campo { font-size: 13px; font-weight: 500; color: var(--mx-ambar); }
+.mx-casilla { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--mx-tinta); cursor: pointer; }
+.mx-casilla input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--mx-azul); flex-shrink: 0; }
+.mx-input[readonly] { background: #F5F7FA; color: var(--mx-apoyo); }

@@ -69,6 +69,9 @@ import { ivaDeVentas, type ActividadParaIva } from '@/modules/conta/lib/ivaVenta
 import { codigoIae, ejercicioActual, type DatosEmpresa } from '@/modules/conta/empresa/datosEmpresa'
 import { Buscador } from '@/modules/conta/empresa/ApartadosActividad'
 import { MARCA, CON_MARCA } from '../cuenta/marca'
+import { entenderPrograma, fraseDePrograma } from '@/modules/conta/alta/programa'
+import { planActivado, ponerProgramaAnterior } from '@/modules/conta/services/programaService'
+import { activarPlan } from '@/modules/conta/services/planService'
 
 export type MarcoAlta = 'pantalla' | 'ventana'
 
@@ -308,13 +311,30 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           apuntado(noLoSe ? fraseDuda(textoDuda(p)) : fraseCuentas(plan, prop.digitos.valor, prop.ejercicio.valor))
           break
         }
+        case 'programa': {
+          const r = noLoSe ? { programa: 'ninguno' as const, otro: null } : entenderPrograma(valor)
+          // «Otro» sin nombre: se pide, y la pregunta sigue abierta.
+          if (!r) { decir('folvy', 'Dime cuál: escribe su nombre abajo.'); return }
+          await ponerProgramaAnterior(id!, r)
+          if (noLoSe) await apuntarDuda(accountId, id!, userId, 'programa', p.texto, 'Empiezo de cero')
+          apuntado([{ t: fraseDePrograma(r, respuestas.cuentas === 'normal' ? 'normal' : 'pymes') }])
+          break
+        }
         case 'banco': {
           if (!noLoSe) await anadirBanco(accountId, id!, userId, valor)
+          // C06, respuesta 4: el alta no termina sin el plan activado. Después
+          // del banco, para que su subcuenta (572) salga ya con el plan. Si no
+          // se puede activar, el alta no se da por terminada y se dice por qué.
+          let planHecho: string | null = null
+          if (!(await planActivado(id!))) {
+            const a = await activarPlan(id!, false, null)
+            planHecho = `Plan activado: ${a.cuentas} cuentas de serie, ${a.subcuentas} subcuentas y ${a.enlaces} enlaces.`
+          }
           await terminarAlta(id!)
           setPasoLocal('hecho')
           elegir(id!)
           recargarEmpresas()
-          decir('folvy', <>Listo: <b>{d?.empresa.legalName ?? 'tu empresa'}</b> está montada. {noLoSe ? 'El banco lo pones cuando quieras en «Tablas generales». ' : 'Apuntado el banco como cuenta principal. '}Todo lo que he puesto lleva la marca «IA» y su porqué, y lo puedes cambiar o deshacer en <Link to={rutaTuEmpresa()}>Tu empresa</Link>.</>)
+          decir('folvy', <>Listo: <b>{d?.empresa.legalName ?? 'tu empresa'}</b> está montada. {planHecho ? `${planHecho} ` : ''}{noLoSe ? 'El banco lo pones cuando quieras en «Tablas generales». ' : 'Apuntado el banco como cuenta principal. '}Todo lo que he puesto lleva la marca «IA» y su porqué, y lo puedes cambiar o deshacer en <Link to={rutaTuEmpresa()}>Tu empresa</Link>.</>)
           datos.recargar()
           return
         }
