@@ -30,7 +30,26 @@ por plataforma, da 0 del 01 al 12/10. Es para un arreglo aparte.
 
 ## 1 · El cierre de las 02:07 del 13/10 (00:07 UTC del 14/10)
 
-_Pendiente: se mira a las 00:20 UTC._
+Medido a las 00:21 UTC del 14/10, solo leyendo, en Foodint (cuenta 51ad1792…,
+empresa 658728c0…).
+
+| Medida | Resultado |
+|---|---|
+| Cierre (job 71) de las 00:07 UTC | `succeeded` (runid 971018, 00:07:00) |
+| Resúmenes de ventas del 13/10 | **5**, todos con su asiento, creados a las 00:07:00 UTC |
+| Por plataforma | Glovo 2, Uber 2, Just Eat 1 (2 locales) |
+| Del día entero / con marca en la unidad (`unit_key` con «:») | 0 / 0 |
+| Repetidos (local, día, unidad) / descuadrados | 0 / 0 |
+| Estado de los 5 asientos | todos «propuesto» |
+| Cobro 430 de cada local contra la suma de sus pedidos propios cerrados del 13/10 (`conta_pedidos_del_dia`) | local 1: diferencia 0,00 · local 2: diferencia 0,00 |
+| `conta_dias_por_asentar(13/10, 13/10)` | 0 |
+| `sales_day_proposal_log` del 13/10 | 2 filas (una por local), «propuesto», 00:07:00 |
+| Asientos de ventas de octubre (vivos) | **55** = los 50 del 01 al 12/10 + 5 del 13/10 |
+| Los 50 de antes | los 50 siguen siendo los creados por la 0130 (10:00:00–10:00:30 UTC del 13/10), los 50 «propuesto», 0 tocados después de las 10:05; huella de sus ids `c1d5944e863e40679702ada582cb4e43` (para compararla en §2) |
+
+Lo que no se puede decir con esta vara: §0 no guardó la huella de los ids, así
+que «mismos ids» se prueba por su ventana de creación y por no haberse tocado
+después. La huella de arriba es la de partida para §2.
 
 ## 2 · Los agentes al amanecer
 
