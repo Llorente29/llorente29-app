@@ -1,0 +1,36 @@
+{
+ "_que": "COPIA (la tanda del B01 ya está aplicada, real de ce4690dc, 14/10). B01 · contexto de producción de la tanda viva (supabase/produccion/aplicar.txt: 20261101T0100–0170), medido en SOLO LECTURA el 14/10 a las 08:01 UTC, DESPUÉS de la C06 (sus cuatro ficheros en el historial con su huella), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna tabla ni función del B01 existe aún; nada del B01 en el historial; nada en el camino del pedido. El 14/10 se añadió a la 0110 una línea de comentario «-- sin hueco: …» (R9 del C04b): su md5 aquí es el nuevo; el contexto no cambia (mismos objetos).",
+ "medido": "2026-10-14T08:01Z",
+ "tanda": {
+  "supabase/migrations/20261101T0100_b01_bancos.sql": "ec61b986eb8d948855a9d902a5a137ad",
+  "supabase/migrations/20261101T0110_b01_funciones.sql": "6d4c2ccda167bd40ddd6fb7b2e7f85d0",
+  "supabase/migrations/20261101T0120_b01_foodint.sql": "5daca0c28c1e17991f92885d374ad4c0",
+  "supabase/migrations/20261101T0130_b01_lectura.sql": "95257ed24ef4a6d2446f74d62cd40079",
+  "supabase/migrations/20261101T0140_b01_tarjetas.sql": "3d762d82abbfb45e80e3ba7132dcecff",
+  "supabase/migrations/20261101T0150_b01_cierre_agente.sql": "f10a41abae6af42a8fb0321fc76a447d",
+  "supabase/migrations/20261101T0160_b01_lectura_agente.sql": "f5ca82b702c3633f04bd1a729dca88a6",
+  "supabase/migrations/20261101T0170_b01_foodint_cuentas.sql": "94aa63f1aab9f0e465846b0785d4b61c"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account_link",
+   "public.treasury_account",
+   "storage.buckets",
+   "storage.objects"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.company_account_link": 82,
+   "public.treasury_account": 0,
+   "storage.buckets": 0,
+   "storage.objects": 1307
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

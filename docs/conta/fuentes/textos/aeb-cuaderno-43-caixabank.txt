@@ -1,0 +1,1415 @@
+      Información normalizada de
+                 cuenta corriente
+
+
+
+
+Serie normas y procedimientos bancarios
+
+
+                              Nº
+                                   43
+                             Junio 2012
+                            HISTÓRICO DE CAMBIOS
+
+
+                Fecha de
+    Versión                       Circular                     Modificaciones
+              actualización
+
+Junio 2012     12-06-2011      ST COAS 66/330   Se añade anexo 4 con normalización de datos de
+                                                operaciones para la modalidad tercera:
+                                                1. Transferencias SEPA.
+                                                2. Adeudos SEPA
+                                                                  INDICE
+
+
+
+
+INTRODUCCIÓN........................................................................................................................... 3
+
+I.         MODALIDADES DEL SERVICIO E INFORMACIÓN ....................................................... 4
+
+II.        PROCEDIMIENTOS Y PERIODICIDAD DE COMUNICACIÓN ...................................... 4
+
+III.       FICHERO. ESPECIFICACIONES .................................................................................... 4
+
+IV.        ANEXOS ........................................................................................................................... 7
+
+           ANEXO 1 Ficheros para las modalidades primera, segunda y tercera............................ 8
+
+           ANEXO 2 Conceptos comunes y códigos de divisas ..................................................... 16
+
+           ANEXO 3 Normalizacion de los datos de “Referencia” en la modalidad tercera ........... 18
+
+                                1.     CÁLCULO DEL DÍGITO DE CONTROL .......................................... 18
+
+           ANEXO 4 Normalización de datos de operaciones para la modalidad tercera ............. 20
+
+                                1.     TRANSFERENCIAS SEPA .............................................................. 20
+
+                                2.     ADEUDOS SEPA ............................................................................. 24
+
+
+
+
+                                                                         2
+                                     INTRODUCCIÓN
+
+
+El procedimiento recogido en este cuaderno ha sido desarrollado por las entidades de crédito
+españolas a través de sus respectivas asociaciones, Asociación Española de Banca (AEB),
+Confederación Española de Cajas de Ahorros (CECA) y Unión Nacional de Cooperativas de Crédito
+(UNACC).
+
+Es, por tanto, un procedimiento normalizado y común a todas aquellas entidades de crédito que
+presten el servicio a que este cuaderno se refiere.
+
+Para su aplicación práctica, será preciso el acuerdo previo entre el cliente que demanda el servicio
+que regula este cuaderno y la entidad de crédito que lo presta.
+
+
+
+
+                                                 3
+I. MODALIDADES DEL SERVICIO E INFORMACIÓN
+
+Se han normalizado las siguientes modalidades:
+
+Primera
+
+Está referida a la cuenta cuyo funcionamiento es el general u ordinario, en la que los movimientos
+se formalizan en la oficina de la entidad de crédito que mantiene la cuenta.
+
+La entidad de crédito facilita el extracto de la cuenta, incorporando además de las claves de
+conceptos específicas de la propia entidad, las claves de concepto de operación señaladas en el
+Anexo nº 2 para uso común por las entidades de crédito.
+
+Segunda
+
+Está referida a la cuenta, que, sujeta al contrato y condiciones especiales convenidas entre ambas
+partes, pueda ser receptora de movimientos formalizados desde distintas oficinas de la propia
+entidad de crédito.
+
+La entidad de crédito facilita el extracto de la cuenta especificándose en el extracto además de
+todos los datos comprendidos en la modalidad primera, el dato de la oficina en la que se formaliza el
+apunte de movimiento.
+
+Tercera
+
+Está orientada para cuando, en relación con una cuenta, se establece un servicio de captura e
+información de datos o referencias complementarias sobre los movimientos individuales.
+
+La entidad de crédito facilita el extracto de la cuenta especificándose en el mismo, además de los
+datos comprendidos en la modalidad primera anterior, el dato de oficina en la que se formaliza el
+apunte de movimiento y las referencias e información complementaria convenida y normalizada con
+el titular de la cuenta.
+
+
+II. PROCEDIMIENTOS Y PERIODICIDAD DE COMUNICACIÓN
+
+Para facilitar las informaciones contenidas en cualquiera de las modalidades anteriores, se
+contempla el diseño normalizado del fichero.
+
+Como criterio general se considera la periodicidad mensual, pudiendo pactarse la entrega de esta
+información normalizada con mayor frecuencia, e incluso, diariamente.
+
+
+III. FICHERO. ESPECIFICACIONES
+
+1.    Características del fichero
+
+1.1   Soporte en formato EBCDIC
+
+      a)    Cinta magnética (Banda magnética de 1.600 ó 6.250 bpi, 9 pistas)
+      b)    Streamer IBM
+      c)    Cartuchos unidades 3480
+
+           - Código EBCDIC. (tabla recomendada T1V10284 country extended: Spain, Latin America)
+           - Registros de longitud fija (80 bytes).
+           - Bloque: 100 registros (8.000 bytes).
+           - Sin etiqueta ni marca de cinta al principio.
+
+
+
+                                                 4
+           - Con marca de cinta al final.
+           - Etiquetado.- Etiqueta externa adhesiva conteniendo (datos mínimos):
+
+                    Entidad de Crédito remesadora
+                    Clave
+                    Cliente destinatario
+                    Fecha creación
+                    Movimiento de cuentas
+
+1.2   Soporte en formato ASCII
+
+      a)    Disquete
+      b)    CD – ROM
+      c)    Unidades ZIP
+
+           - Disquete 3,5 pulgadas. En CD válida cualquier capacidad.
+           - Código ASCII (en mayúsculas) (carácter 165=Ñ) (tabla recomendada T1000850)
+             (Personal computer: multilingual)
+           - Registros de longitud fija (80 bytes).
+           - Formato MS/DOS secuencial tipo texto.
+           - Etiquetado. Etiqueta externa adhesiva conteniendo (datos mínimos):
+
+                    Entidad de Crédito remesadora
+                    Clave
+                    Cliente destinatario
+                    Fecha creación
+                    Movimiento de cuentas
+
+Si la longitud del archivo impide la inclusión en un único disquete, se deberá consensuar con el
+cliente receptor el sistema de back-up / comprensión a utilizar.
+
+
+2.    Contenido de registros
+
+Existirán 5 tipos de registro:
+
+      -    Cabecera de cuenta
+      -    Principal de movimientos (obligatorio)
+      -    Complementarios de conceptos, hasta un máximo de 5 registros opcionales y uno
+           complementario de información de equivalencia del importe del apunte (opcional)
+      -    Final de cuenta
+      -    Final de fichero
+
+
+Dentro de un mismo fichero puede venir contenida información de más de una cuenta, por lo que la
+secuencia de registros "Cabecera de Cuenta", "Principal de movimientos", con sus posibles
+"Complementarios de concepto" (cuando así se acuerde) y "Final de Cuenta", se repetirá tantas
+veces como cuentas existan en el fichero.
+
+Los registros opcionales "Complementarios de concepto", hasta un máximo de 5, contienen dos
+campos con una longitud de 38 posiciones cada uno de ellos. En caso de no ser necesarios los dos
+campos, el no utilizado irá en blancos.
+
+Estos registros opcionales contendrán la información previamente acordada con el cliente.
+
+En el caso de que la moneda del importe de la operación objeto del movimiento sea diferente a la
+moneda de la cuenta, se recogerá un registro complementario sexto de concepto (información de
+equivalencia de importe del apunte), con la clave de divisa del movimiento y el importe. El resto de
+las posiciones quedarán libres.
+
+
+
+                                                 5
+3.    Intercambio de ficheros
+
+El lugar y forma de intercambio de los ficheros entre las Entidades de Crédito y los clientes se
+pactará bilateralmente.
+
+En el caso de intercambio de ficheros mediante interconexión, se hará de acuerdo con las
+especificaciones recogidas en la norma correspondiente.
+
+
+
+
+                                               6
+IV.   ANEXOS
+
+
+
+
+      7
+ANEXO 1
+
+
+FICHEROS PARA LAS MODALIDADES PRIMERA, SEGUNDA Y TERCERA
+
+1. DESCRIPCIÓN DE REGISTROS
+
+                     1.1.   REGISTRO DE CABECERA DE CUENTA
+
+                                           Posiciones
+                                                           Nº de
+         NOMBRE DEL CAMPO                   ocupadas                  Formato
+                                                         caracteres
+                                         De         A
+Código Registro                           1          2       2          N
+Clave de la Entidad                       3          6       4          N
+Clave de Oficina                          7         10       4          N
+Nº de cuenta                             11         20      10          N
+Fecha inicial                            21         26       6          N
+Fecha final                              27         32       6          N
+Clave Debe o Haber                       33         33       1          N
+Importe saldo inicial                    34         47      14          N
+Clave de divisa                          48         50       3          N
+Modalidad de información                 51         51       1          N
+Nombre abreviado                         52         77      26          A
+Libre                                    78         80       3          _
+
+
+
+                     1.2.   REGISTRO PRINCIPAL DE MOVIMIENTOS (obligatorio)
+
+                                           Posiciones
+                                                           Nº de
+         NOMBRE DEL CAMPO                   ocupadas                  Formato
+                                                         caracteres
+                                         De         A
+Código Registro                           1          2       2          N
+Libre                                     3          6       4          _
+Clave de Oficina Origen                   7         10       4          N
+Fecha operación                          11         16       6          N
+Fecha valor                              17         22       6          N
+Concepto común                           23         24       2          N
+Concepto propio                          25         27       3          N
+Clave Debe o Haber                       28         28       1          N
+Importe                                  29         42      14          N
+Nº de documento                          43         52      10          N
+Referencia 1                             53         64      12          N
+Referencia 2                             65         80      16          A
+
+
+
+                     1.3.   REGISTROS COMPLEMENTARIOS DE CONCEPTO
+                                (Hasta un máximo de 5)
+
+                                           Posiciones
+                                                           Nº de
+         NOMBRE DEL CAMPO                   ocupadas                  Formato
+                                                         caracteres
+                                         De         A
+Código Registro                           1          2       2          N
+Código Dato                               3          4       2          N
+Concepto                                  5         42      38          A
+Concepto                                 43         80      38          A
+
+
+
+                                         8
+                       1.4.    REGISTRO COMPLEMENTARIO DE INFORMACIÓN DE
+                               EQUIVALENCIA DE IMPORTE DEL APUNTE (OPCIONAL)
+
+                                             Posiciones
+                                                              Nº de
+         NOMBRE DEL CAMPO                     ocupadas                   Formato
+                                                            caracteres
+                                           De         A
+Código Registro                             1          2        2          N
+Código Dato                                 3          4        2          N
+Clave divisa origen del movimiento          5          7        3          N
+Importe                                     8         21       14          N
+Libre                                      22         80       59          _
+
+
+
+                       1.5.    REGISTRO FINAL DE CUENTA
+
+                                             Posiciones
+                                                              Nº de
+         NOMBRE DEL CAMPO                     ocupadas                   Formato
+                                                            caracteres
+                                           De         A
+Código Registro                             1          2        2          N
+Clave de Entidad                            3          6        4          N
+Clave de Oficina                            7         10        4          N
+Nº de cuenta                               11         20       10          N
+Nº apuntes Debe                            21         25        5          N
+Total importes Debe                        26         39       14          N
+Nº apuntes Haber                           40         44        5          N
+Total importes Haber                       45         58       14          N
+Código Saldo final                         59         59        1          N
+Saldo final                                60         73       14          N
+Clave de Divisa                            74         76        3          N
+Libre                                      77         80        4          _
+
+
+
+                       1.6.    REGISTRO DE FIN DE FICHERO
+
+                                             Posiciones
+                                                              Nº de
+         NOMBRE DEL CAMPO                     ocupadas                   Formato
+                                                            caracteres
+                                           De         A
+Código de Registro                          1          2        2          N
+Nueves                                      3         20       18          N
+Nº de registros                            21         26        6          N
+Libre                                      27         80       54          _
+
+
+
+
+                                            9
+1.1.        REGISTRO DE CABECERA DE CUENTA
+LONGITUD      2                               4                                 4                    10                               6                        6                   1                     14           3            1                              26                  3
+                                          Clave de Entidad
+
+
+                                                                             Clave de Oficina
+              Código Registro
+
+
+
+
+                                                                                                                                                                                                                    Clave de Divisa
+                                                                                                                                                                               Clave: D ó H
+
+
+
+
+                                                                                                                                                                                                                      Modalidad
+
+
+
+
+                                                                                                                                                                                                                                                                                      Libre
+                                                                                                  Nº de                Fecha                                Fecha                                    Importe
+CONTENIDO                                                                                                                                                                                                                                              Nombre Abreviado
+                                                                                                 Cuenta                Inicial                              Final                                  Saldo Inicial
+
+
+
+POSICIÓN    1                   3                                   7                           11                     21                              27                                     34                    48                 52                                             78
+
+
+
+
+1.2.        REGISTRO PRINCIPAL DE MOVIMIENTOS (obligatorio)
+LONGITUD      2                               4                                4                     6                   6                   2               3         1                            14              10                            12                        16
+                                                                                                                                           Concepto Común
+                                                                                                                                                             Concepto Propio
+                                                                         Clave de Oficina
+            Código Registro
+
+
+
+
+                                                                                                                                                                                                                    Nº Documento
+                                                                                                                        Fecha Valor
+
+
+
+
+                                                                                                                                                               Clave D ó H
+                                                                                                 Operación
+                                                                             Origen
+
+                                                                                                  Fecha
+
+
+
+
+CONTENIDO                        Libre                                                                                                                                                        Importe                                        Referencia 1              Referencia 2
+
+
+
+POSICIÓN    1                   3                                   7                           11                17                       23                25                29                              43                       53                       65
+
+
+
+
+1.3.        REGISTROS COMPLEMENTARIOS DE CONCEPTO (opcionales)
+            (hasta un máximo de 5)
+LONGITUD      2                  2                                                                                                    38                                                                                                                    38
+            Código Registro
+                                Código Dato
+
+
+
+
+CONTENIDO                                                                                                              Concepto                                                                                                                         Concepto
+
+
+
+POSICIÓN    1                   3                      5                                                                                                                                                       43
+
+
+
+
+1.4.        REGISTRO COMPLEMENTARIO DE INFORMACIÓN DE EQUIVALENCIA DEL IMPORTE DEL
+            APUNTE (OPCIONAL)
+LONGITUD      2                  2                           3                                               14                                                                                                                                  59
+            Código Registro
+
+
+
+                                                      origen del mvto.
+                                Código Dato
+                                                        Clave Divisa
+
+
+
+
+CONTENIDO                                                                                            Importe                                                                                                                                   Libre
+
+
+
+
+POSICIÓN    1                   3                      5                     8                                                                               22
+
+
+
+
+                                                                                                                                                                                                         10
+1.5.        REGISTRO FINAL DE CUENTA
+LONGITUD      2                     4                      4                            10            5                       14               5                  14                 1                     14                      3    4
+
+
+
+
+                                                                                                    Nº Apuntes Debe
+                                  Clave de Entidad
+
+
+                                                         Clave de Oficina
+            Código Registro
+
+
+
+
+                                                                                                                                                                                                                     Clave de Divisa
+                                                                                                                                                                                Código S. Final
+                                                                                                                                            Nº Apuntes
+                                                                                                                                              Haber
+
+
+
+
+                                                                                                                                                                                                                                        Libre
+                                                                                       Nº de
+CONTENIDO                                                                                                             Total Importes Debe                Total Importes Haber                          Saldo Final
+                                                                                      Cuenta
+
+
+
+POSICIÓN    1                 3                      7                           11            21                     26                    40           45                                       60                 74                77
+
+
+
+
+1.6.        REGISTRO DE FIN DE FICHERO
+LONGITUD      2                                                             18                        6                                                                 54
+            Código Registro
+
+
+
+
+                                                                                               Registros
+                                                                                               Número
+                                                                                                  de
+
+
+
+
+CONTENIDO                                                Nueves                                                                                                        Libre
+
+
+
+POSICIÓN    1                 3                                                                21                     27
+
+
+
+
+                                                                                                                                      11
+2. DESCRIPCIÓN DE CAMPOS
+2.1      Registro de cabecera de cuenta
+
+-     Código de registro: dos posiciones
+        11
+
+-     Clave de Entidad: cuatro posiciones.
+        Número de clave de la Entidad de Crédito que confecciona el fichero. Si este no tiene cuatro
+          cifras, se completará con ceros a la izquierda.
+
+-     Clave de Oficina: cuatro posiciones
+        Número de clave de la Oficina a que corresponde la cuenta. Si no tiene cuatro cifras se
+          completará con ceros a la izquierda
+
+-     Número de cuenta: diez posiciones
+        Número de cuenta dentro de la Oficina. En estos diez dígitos se incluyen todos los controles
+         internos que utilice cada Entidad poseedora de la cuenta. Si no tiene diez dígitos, se rellena
+         de ceros a la izquierda.
+
+-     Fecha inicial: seis posiciones
+        Fecha primera del período al que corresponde la información.
+          Formato: AAMMDD.
+
+-     Fecha Final: seis posiciones
+        Fecha del Final del período al que corresponde la información.
+          Formato: AAMMDD.
+
+-     Clave Debe o Haber: una posición.
+        Signo del campo de importe de saldo inicial.
+          1.- Deudor
+          2.- Acreedor
+
+-     Importe de Saldo inicial: catorce posiciones.
+        Saldo inicial de la cuenta.
+          El saldo de fin del día inmediatamente anterior a la menor fecha del período, que deberá
+          coincidir con el Saldo final de la anterior información. Importe con 2 decimales, sin reflejar la
+          coma.
+          Se rellena con ceros a la izquierda.
+
+-     Clave de divisa: tres posiciones
+        Clave numérica de la divisa en que opera la cuenta, según tabla de divisas y claves código
+          ISO (ver anexo 2).
+
+-     Modalidad de información: una posición
+        Código de la modalidad de información: tomará valor 1, 2 ó 3.
+
+-     Nombre abreviado: 26 posiciones
+        Nombre abreviado del cliente propietario de la cuenta.
+
+-     Libre: tres posiciones
+        Rellenas a espacios
+
+
+2.2      Registro principal de movimientos (obligatorio)
+
+-     Código de Registro: dos posiciones.
+        22
+
+-     Libre: cuatro posiciones
+
+
+                                                     12
+        Relleno a espacios
+
+-     Clave de Oficina Origen: cuatro posiciones
+        Número de clave de la Oficina en la que se formaliza el apunte de movimiento. Si no tiene
+          cuatro cifras se completará con ceros a la izquierda.
+        Libre en la modalidad primera.
+
+-     Fecha de operación: seis posiciones
+        Fecha de asentamiento en la cuenta.
+          Formato: AAMMDD.
+
+-     Fecha de Valor: seis posiciones
+        Fecha de valor contable a efectos de cálculo de intereses.
+          Formato: AAMMDD.
+
+-     Concepto común: dos posiciones
+        Clave de concepto de la Operación ajustada al baremo común interbancario señalado en el
+         anexo nº 2.
+
+-     Concepto propio: tres posiciones
+        Clave de operación utilizada por cada Entidad con sus clientes. ,
+        En los casos que se acuerde expresa y bilateralmente podrá ser desarrollado, en los
+         campos destinados al efecto dentro de los registros "Complementarios de concepto"
+         (opcionales), al objeto de sustituir la información impresa remitida actualmente.
+
+-     Clave Debe o Haber: una posición.
+        Signo del campo del importe
+       1.- Apuntes Debe
+       2.- Apuntes Haber
+
+-     Importe: catorce posiciones
+        Importe del apunte con dos decimales, sin reflejar la coma. Rellenar con ceros a la
+          izquierda, si es necesario.
+
+-     Nº de documento: diez posiciones
+        Siempre en caracteres numéricos, debiéndose completar con ceros a la izquierda.
+
+-     Referencia 1: doce posiciones
+        En caracteres numéricos, exclusivamente, debiéndose completar con ceros a la izquierda.
+        Once posiciones para la referencia propiamente dicha y una posición para el "Dígito de
+          control", calculado en la forma normalizada en el anexo n.º 3.
+        Libre en la modalidad primera y segunda.
+
+-     Referencia 2: dieciséis posiciones
+        Podrá contener caracteres numéricos o alfanuméricos, sin verificación de estos datos en la
+          captura (ver anexo nº 3).
+        Libre en la modalidad primera y segunda.
+
+
+2.3      Registros complementarios de concepto. Primero a quinto opcionales
+
+-     Código de Registro: dos posiciones
+        23
+
+-     Código Dato: dos posiciones
+        Número de secuencia: 01, 02, 03, 04, 05
+
+-     Concepto: treinta y ocho posiciones
+        Dos campos complementarios de concepto
+
+
+
+                                                   13
+        Por cada código de dato se recogen dos campos complementarios de concepto, de 38
+         posiciones cada uno de ellos.
+
+
+2.4      Registro complementario de información de equivalencia de importe del apunte
+         (Opcional)
+
+-     Código de registro: dos posiciones.
+        24
+
+-     Código de dato: dos posiciones.
+        01
+
+-     Clave de divisa origen del movimiento: tres posiciones.
+        Según tabla de divisas y claves código ISO (ver anexo 2).
+
+-     Importe: catorce posiciones
+        Importe del apunte en la clave de divisa de origen, relleno con ceros a la izquierda, si es
+          necesario.
+         12 posiciones para enteros y 2 para decimales, sin reflejar la coma.
+
+-     Libre: cincuenta y nueve posiciones
+        Relleno a espacios
+
+Este registro, sin valor contable, únicamente figurará cuando la moneda origen de la operación no
+sea coincidente con el tipo de moneda de la cuenta.
+
+
+2.5      Registro final de la cuenta
+
+-     Código de registro: dos posiciones
+        33
+
+-     Clave de Entidad: cuatro posiciones
+        Número de clave de la Entidad de Crédito que confecciona el fichero. Si este no tiene cuatro
+          cifras, se completará con ceros a la izquierda.
+
+-     Clave de Oficina: cuatro posiciones
+        Número de clave de la Oficina a que corresponde la cuenta. Si no tiene cuatro cifras se
+          completará con ceros a la izquierda.
+
+-     Número de Cuenta: diez posiciones
+        Número de Cuenta dentro de la Oficina. En estos diez dígitos se incluyen todos los controles
+         internos que utilice cada Entidad poseedora de la cuenta. Si no tiene diez dígitos, se rellena
+         de ceros a la izquierda.
+
+-     Nº de Apuntes Debe: cinco posiciones
+        Número de apuntes del Debe, completando con ceros a la izquierda.
+
+-     Total Importes Debe: catorce posiciones
+        Sumas de los importes de los movimientos del Debe, completados a ceros a la izquierda.
+          Doce posiciones para enteros y dos para decimales, sin reflejar la coma.
+
+-     Número de Apuntes Haber: cinco posiciones
+        Número de apuntes del Haber, completado con ceros a la izquierda
+
+-     Total Importes Haber: catorce posiciones
+        Sumas de los importes de los movimientos del Haber, completados a ceros a la izquierda.
+          Doce posiciones para enteros y dos para decimales, sin reflejar la coma.
+
+
+
+                                                   14
+-     Código de Saldo Final: una posición
+        Signo de Saldo Final de la cuenta
+          1.- Deudor
+          2.- Acreedor
+
+-     Importe del Saldo Final: catorce posiciones
+         Saldo final de la cuenta una vez aplicados todos los movimientos. Relleno de ceros a la
+          izquierda. Doce posiciones para enteros y dos para decimales, sin reflejar la coma.
+
+-     Clave de divisa: tres posiciones
+        Clave numérica de la divisa en que opera la cuenta, según tabla de divisas y claves código
+          ISO (ver anexo 2).
+
+-     Libre: cuatro posiciones
+        Rellenas a espacios.
+
+
+2.6      Registro de fin de fichero
+
+-     Código de registro: dos posiciones
+        88
+
+-     Nueves: dieciocho posiciones.
+        Relleno a nueves
+
+-     Nº de Registros: seis posiciones
+        Número total de registros que contiene el fichero, excluyéndose a sí mismo.
+
+-     Libre: cincuenta y cuatro posiciones
+        Relleno de espacios.
+
+
+
+
+                                                  15
+ANEXO 2
+
+1.    CONCEPTOS COMUNES
+
+
+01   TALONES - REINTEGROS
+
+02   ABONARÉS - ENTREGAS - INGRESOS
+
+03   DOMICILIADOS - RECIBOS - LETRAS - PAGOS POR SU CTA.
+
+04   GIROS - TRANSFERENCIAS - TRASPASOS - CHEQUES
+
+05   AMORTIZACIONES PRÉSTAMOS, CRÉDITOS, ETC.
+
+06   REMESAS EFECTOS
+
+07   SUSCRIPCIONES - DIV. PASIVOS - CANJES.
+
+08   DIV. CUPONES - PRIMA JUNTA - AMORTIZACIONES
+
+09   OPERACIONES DE BOLSA Y/O COMPRA /VENTA VALORES
+
+10   CHEQUES GASOLINA
+
+11   CAJERO AUTOMÁTICO
+
+12   TARJETAS DE CRÉDITO - TARJETAS DÉBITO
+
+13   OPERACIONES EXTRANJERO
+
+14   DEVOLUCIONES E IMPAGADOS
+
+15   NÓMINAS - SEGUROS SOCIALES
+
+16   TIMBRES - CORRETAJE - PÓLIZA
+
+17   INTERESES - COMISIONES – CUSTODIA - GASTOS E IMPUESTOS
+
+98   ANULACIONES - CORRECCIONES ASIENTO
+
+99   VARIOS
+
+
+
+
+                                 16
+2.    TABLAS DE DIVISAS Y CLAVES CÓDIGOS ISO
+
+
+
+                    Nombre divisa                Nº Cód.
+       Dólar australiano                           036
+       Dólar canadiense                            124
+       Corona Danesa                               208
+       Yen japonés                                 392
+       Dólar neozelandés                           554
+       Corona noruega                              578
+       Corona sueca                                752
+       Franco suizo                                756
+       Libra esterlina                             826
+       Dólar USA                                   840
+       Euro                                        978
+
+
+Y cualquier otra divisa, de acuerdo con el código numérico que tenga establecido
+en la tabla del estándar ISO 4217.
+
+
+
+
+                                        17
+ANEXO 3
+
+
+NORMALIZACIÓN DE LOS DATOS DE "REFERENCIA" EN LA MODALIDAD
+TERCERA
+
+Los datos o referencias complementarias estarán incluidos dentro del Registro Principal de
+movimientos, en los campos Referencia 1 y Referencia 2.
+
+El contenido de dichos campos será definido por la empresa titular de la cuenta a la que se presta el
+servicio, ajustándose a los siguientes condicionamientos de normalización:
+
+       1) La primera referencia, estará formada por una secuencia numérica de 12 dígitos, el
+          último de los cuales será el "Dígito de control", cuyo cálculo se efectuará de acuerdo con lo
+          definido en el apartado 1 de este anexo.
+
+       2) La segunda referencia, se compondrá de un máximo de 16 caracteres alfanuméricos,
+          pudiendo desglosarse en distintos subcampos, pero sin validación de la captura de datos.
+
+1.     CÁLCULO DEL DÍGITO DE CONTROL
+El cálculo del "Dígito de control" de la expresión numérica que compone el primer campo de
+"Referencia", se efectuará de la siguiente forma:
+
+a)   Multiplicar cada uno de los dígitos del número (empezando por el dígito de la derecha) por los
+     siguientes pesos:
+              Unidades ....................................................................................... 2
+
+              Decenas ........................................................................................   3
+
+              Centenas .......................................................................................   4
+
+              Unidades de millar ........................................................................        5
+
+              Decenas de millar .........................................................................        6
+
+              Centenas de millar ........................................................................        7
+
+              Unidades de millón .......................................................................         8
+
+              Decenas de millón ........................................................................         9
+
+              Centenas de millón .......................................................................         2
+
+              Unidades de millar de millón .........................................................             3
+              Decenas de millar de millón ..........................................................             4
+b)   La suma de los productos así obtenidos se divide por 11, y el resto de la división será el "Dígito
+     de control",
+
+Si el resto fuera 10, el dígito será "0".
+
+
+
+
+                                                                    18
+EJEMPLO
+
+Para el primer campo de "Referencia" están previstos hasta un máximo de 12 caracteres, quedando
+reservado el último para el "Dígito de control".
+
+Por tanto, el número de referencia (propiamente dicho) no podrá exceder de 11 caracteres.
+
+Sea el número siguiente: 82546789013
+
+                          3x2=6                6 x 8 = 48
+                          1x3=3                4 x 9 = 36
+                          0x4=0                5 x 2 = 10
+                          9 x 5 = 45           2x3=6
+                          8 x 6 = 48           8 x 4 = 32
+                          7 x 7 = 49
+
+                          Suma de los productos:        283
+
+                                                        283 : 11 = 25
+
+                       Resto 8, que será el Dígito de Control.
+
+                       El número completo sería 825467890138
+
+
+
+
+                                               19
+ANEXO 4
+
+NORMALIZACIÓN DE DATOS DE OPERACIONES PARA LA MODALIDAD
+TERCERA
+
+1. TRANSFERENCIAS SEPA
+    DESCRIPCIÓN DE REGISTROS COMPLEMENTARIOS DE CONCEPTO
+
+                                                 Posiciones
+                                                                 Nº de
+            NOMBRE DEL CAMPO                      ocupadas                  Formato
+                                                               caracteres
+                                               De         A
+Código Registro                                 1          2     2 (23)       N
+Código Dato                                     3          4     2 (01)       N
+Nombre del Ordenante (AT-02)                    5         70       66         A
+Código del Ordenante (AT-10)                   71         80       10         A
+
+                                                 Posiciones
+                                                                 Nº de
+            NOMBRE DEL CAMPO                      ocupadas                  Formato
+                                                               caracteres
+                                               De         A
+Código Registro                                 1          2     2 (23)       N
+Código Dato                                     3          4     2 (02)       N
+Referencia del Ordenante (AT-41)                5         39       35         A
+Nombre de “Por cuenta de” (AT-08)              40         80       41         A
+
+
+                                                 Posiciones
+                                                                 Nº de
+            NOMBRE DEL CAMPO                      ocupadas                  Formato
+                                                               caracteres
+                                               De         A
+Código Registro                                 1          2     2 (23)       N
+Código Dato                                     3          4     2 (03)       N
+Propósito de la transferencia (AT-44)           5          8        4         A
+Categoría del propósito (AT-45)                 9         12        4         A
+Concepto (AT-05)                               13         80       68         A
+
+                                                 Posiciones
+                                                                 Nº de
+            NOMBRE DEL CAMPO                      ocupadas                  Formato
+                                                               caracteres
+                                               De         A
+Código Registro                                 1          2     2 (23)       N
+Código Dato                                     3          4     2 (04)       N
+Continuación del Concepto (AT-05)               5         76       72         A
+Libre                                          77         80        4         -
+
+
+                                                 Posiciones
+                                                                 Nº de
+            NOMBRE DEL CAMPO                      ocupadas                  Formato
+                                                               caracteres
+                                               De         A
+Código Registro                                 1          2     2 (23)       N
+Código Dato                                     3          4     2 (05)       N
+Campo de libre uso para información del         5         80       76         A
+beneficiario
+
+
+
+
+                                          20
+                                    1.1. Transferencias SEPA. Registros de complementarios de concepto (opcionales)
+LONGITUD            2
+                  Código Registro          2                                                                                        66                                                              10
+
+                                         Código Dato
+
+
+
+
+                                                                                                                                                                                                  Código del
+                                                                                                                                                                                                  Ordenante
+CONTENIDO                                                                                                               Nombre del Ordenante
+
+
+
+POSICIÓN        1                       3                  5                                                                                                                                 71
+
+
+
+
+LONGITUD      2                      2                                                                      35                                                              41
+            Código Registro
+                                    Código Dato
+
+
+
+
+CONTENIDO                                                                                        Referencia del Ordenante                                        Nombre de “por cuenta de”
+
+
+
+POSICIÓN    1                       3                  5                                                                                    40
+
+
+
+
+LONGITUD           2                      2                     4                    4                                                                   68
+                Código Registro
+
+
+
+                                                           Propósito de la
+                                                           Transferencia
+
+                                                                                 Categoría del
+                                        Código Dato
+
+
+
+
+                                                                                  Propósito
+
+
+
+
+CONTENIDO                                                                                                                                             Concepto
+
+
+
+POSICIÓN      1                        3               5                     9                     13
+LONGITUD       2                        2                                                                                                 72                                                                        4
+                Código Registro
+                                        Código Dato
+
+
+
+
+                                                                                                                                                                                                                    Libre
+CONTENIDO                                                                                                                     Continuación del concepto
+
+
+
+POSICIÓN      1                        3               5                                                                                                                                                       77
+
+
+
+
+LONGITUD      2                      2                                                                                                           76
+            Código Registro
+                                    Código Dato
+
+
+
+
+CONTENIDO                                                                                                                   Libre para información del beneficiario
+
+
+
+POSICIÓN    1                       3                  5
+
+
+
+
+                                                                                                                                    21
+1.2.    Transferencias SEPA. Descripción de campos de los registros complementarios de
+       concepto
+
+Primero Opcional
+
+   - Código de Registro: dos posiciones
+    Valor = “23“
+
+   - Código Dato: dos posiciones
+    Número de secuencia: 01
+
+   - Nombre del Ordenante: sesenta y seis posiciones
+    Nombre del Ordenante de la Transferencia (AT-02).
+    Por limitaciones de la longitud del campo está información podría haber sido truncada
+
+   - Código del Ordenante: diez posiciones
+    Código de identificación del Ordenante (AT-10).
+    Por limitaciones de la longitud del campo está información podría haber sido truncada
+
+Segundo Opcional
+
+   - Código de Registro: dos posiciones
+    Valor = “23“
+
+   - Código Dato: dos posiciones
+    Número de secuencia: 02
+
+   - Referencia del Ordenante: treinta y cinco posiciones
+    Código identificativo para el Ordenante de cada transferencia (AT-41). Si el Ordenante no lo
+     proporciona tendrá por defecto el valor “No proporcionado”.
+
+   - Nombre de “Por cuenta de”: cuarenta y una posiciones
+    Nombre último ordenante (AT-08): nombre de la persona o empresa por cuenta de la que se
+     hace la transferencia. Cuando la operación se realice por cuenta de otra persona o empresa,
+     se consignará en este campo el nombre de la misma.
+    Por limitaciones de la longitud del campo está información podría haber sido truncada
+
+Tercero Opcional
+
+   - Código de Registro: dos posiciones
+    Valor = “23“
+
+   - Código Dato: dos posiciones
+    Número de secuencia: 03
+
+   - Propósito de la Transferencia: cuatro posiciones
+    Propósito de la transferencia (AT-44): código de cuatro letras que informa sobre la razón o
+     motivo de la transferencia de acuerdo con una lista de códigos externos que recoge la norma
+     ISO 20022 UNIFI.
+
+   - Categoría del Propósito: cuatro posiciones
+    Tipo de transferencia (AT-45): código de cuatro letras que indica, de forma general, el objeto
+     de la transferencia de acuerdo con una lista de códigos recogidos en la norma ISO 20022
+     UNIFI.
+
+   - Concepto: sesenta y ocho posiciones
+    Parte inicial del concepto enviado por el ordenante al beneficiario (AT-05): información
+     adicional de la transferencia que completa datos para el beneficiario.
+
+
+
+
+                                                22
+Cuarto Opcional
+
+  - Código de Registro: dos posiciones
+   Valor = “23“
+
+  - Código Dato: dos posiciones
+   Número de secuencia: 04
+
+  - Continuación del Concepto: setenta y dos posiciones
+   Parte final del concepto enviado por el ordenante al beneficiario (AT-05): información
+    adicional de la transferencia que completa datos para el beneficiario.
+
+  - Libre: cuatro posiciones
+   Rellenar a espacios en blanco.
+
+Quinto Opcional
+
+  - Código de Registro: dos posiciones
+   Valor = “23“
+
+  - Código Dato: dos posiciones
+   Número de secuencia: 05
+
+  -   Libre uso para información del beneficiario: setenta y seis posiciones
+      Posibilidad de incorporar datos del beneficiario tales como Nombre del beneficiario (AT-21), o
+      Código de identificación del beneficiario (AT-24), o Nombre del último beneficiario (AT-28), o
+      Código de identificación del último beneficiario (AT-29) a convenir con la entidad.
+
+
+
+
+                                                23
+2. ADEUDOS SEPA
+    DESCRIPCIÓN DE REGISTROS COMPLEMENTARIOS DE CONCEPTO
+
+                                                     Posiciones
+                                                                     Nº de
+            NOMBRE DEL CAMPO                          ocupadas                  Formato
+                                                                   caracteres
+                                                   De         A
+Código Registro                                     1          2     2 (23)       N
+Código Dato                                         3          4     2 (01)       N
+Código del Esquema (Core/B2B) (AT-20)               5          8        4         A
+Nombre del Acreedor (AT-03)                         9         78       70         A
+Libre                                              79         80        2         -
+
+                                                     Posiciones
+                                                                     Nº de
+            NOMBRE DEL CAMPO                          ocupadas                  Formato
+                                                                   caracteres
+                                                   De         A
+Código Registro                                     1          2     2 (23)       N
+Código Dato                                         3          4     2 (02)       N
+Identificador del Acreedor (AT-02)                  5         39       35         A
+Referencia única del mandato (AT-01)               40         74       35         A
+Libre                                              75         80        6         -
+
+                                                     Posiciones
+                                                                     Nº de
+            NOMBRE DEL CAMPO                          ocupadas                  Formato
+                                                                   caracteres
+                                                   De         A
+Código Registro                                     1          2     2 (23)       N
+Código Dato                                         3          4     2 (03)       N
+Propósito del cobro (AT-58)                         5          8        4         A
+Categoría del propósito del cobro (AT-59)           9         12        4         A
+Concepto (AT-22)                                   13         80       68         A
+
+                                                     Posiciones
+                                                                     Nº de
+            NOMBRE DEL CAMPO                          ocupadas                  Formato
+                                                                   caracteres
+                                                   De         A
+Código Registro                                     1          2     2 (23)       N
+Código Dato                                         3          4     2 (04)       N
+Continuación del Concepto (AT-22)                   5         76       72         A
+Libre                                              77         80        4         -
+
+
+                                                     Posiciones
+                                                                     Nº de
+            NOMBRE DEL CAMPO                          ocupadas                  Formato
+                                                                   caracteres
+                                                   De         A
+Código Registro                                     1          2     2 (23)       N
+Código Dato                                         3          4     2 (05)       N
+Referencia del Acreedor (AT-10)                     5         39       35         A
+Nombre Deudor (AT-14)/Ultimo Deudor (AT-15)        40         80       41         A
+
+
+
+
+                                              24
+                                  2.1. Adeudos SEPA. Registros de complementarios de concepto (opcionales)
+LONGITUD           2                    2                     4                                                                        70                                                            2
+                Código Registro
+                                      Código Dato
+
+
+
+                                                        (Core/B2B)
+                                                        Código del
+                                                         Esquema
+
+
+
+
+                                                                                                                                                                                                 Libre
+CONTENIDO                                                                                                                   Nombre del Acreedor
+
+
+
+POSICIÓN      1                      3              5                       9                                                                                                                    79
+
+
+
+
+LONGITUD         2                    2                                                         35                                                       35                              6
+              Código Registro
+                                    Código Dato
+
+
+
+
+CONTENIDO                                                                           Identificador del Acreedor                              Referencia Única del Mandato               Libre
+
+
+
+POSICIÓN     1                     3                5                                                                        40                                                   75
+
+
+
+
+LONGITUD      2                    2                     4                  4                                                                68
+            Código Registro
+
+
+
+
+                                                                        Categoría del
+                                                    Propósito del
+                                  Código Dato
+
+
+
+
+                                                                         Propósito
+                                                       Cobro
+
+
+
+
+CONTENIDO                                                                                                                               Concepto
+
+
+
+POSICIÓN    1                     3                 5               9                   13
+
+
+
+
+LONGITUD           2                    2                                                                                         72                                                         4
+                Código Registro
+                                      Código Dato
+
+
+
+
+                                                                                                                                                                                             Libre
+CONTENIDO                                                                                                        Continuación del concepto
+
+
+
+POSICIÓN      1                      3              5                                                                                                                                   77
+
+
+
+
+LONGITUD      2                    2                                                          35                                                              41
+            Código Registro
+                                  Código Dato
+
+
+
+
+CONTENIDO                                                                         Referencia del Acreedor                                     Nombre del Deudor / Último Deudor
+
+
+
+POSICIÓN    1                     3                 5                                                                   40
+
+
+
+
+                                                                                                                       25
+      2.2. Adeudos SEPA. Descripción de campos de los registros complementarios de
+            concepto
+
+Primero Opcional
+
+  - Código de Registro: dos posiciones
+   Valor = “23“
+
+  - Código Dato: dos posiciones
+   Número de secuencia: 01
+
+  - Código del Esquema (Core/B2B): cuatro posiciones
+   Código del esquema utilizado (AT-20).
+   Sólo se admiten estos dos códigos
+
+        Código   Nombre                 Definición
+
+        CORE     CORE Direct Debit      Este código permite identificar a los débitos directos del
+                                        esquema SEPA Básico
+
+         B2B     B2B Direct Debit       Este código permite identificar a los débitos directos del
+                                        esquema SEPA Business-to-Business
+
+  - Nombre del Acreedor: setenta posiciones
+   Nombre del Acreedor (AT-03).
+
+  - Libre: dos posiciones
+   Rellenar a espacios en blanco.
+
+Segundo Opcional
+
+  - Código de Registro: dos posiciones
+   Valor = “23“
+
+  - Código Dato: dos posiciones
+   Número de secuencia: 02
+
+  - Identificador del Acreedor: treinta y cinco posiciones
+   Identificador del Acreedor (AT-02), Referencia que identifica sin ambigüedad al acreedor.
+
+  - Referencia Única del Mandato: treinta y cinco posiciones
+   Referencia única del mandato (AT-01). Esta referencia la establece el acreedor y permite
+    identificar cada orden de domiciliación o mandato firmado por el deudor. Esta referencia debe
+    ser única para cada mandato.
+
+  - Libre: seis posiciones
+   Rellenar a espacios en blanco
+
+Tercero Opcional
+
+  - Código de Registro: dos posiciones
+   Valor = “23“
+
+  - Código Dato: dos posiciones
+   Número de secuencia: 03
+
+  -    Propósito del Cobro: cuatro posiciones
+
+
+
+                                                26
+   Propósito del adeudo (AT-58): código de cuatro letras que informa sobre la razón o motivo del
+    Adeudo Directo, de acuerdo con una lista de códigos externos que recoge la norma ISO
+    20022 UNIFI
+
+  - Categoría del Propósito: cuatro posiciones
+   Categoría de propósito (AT-59): Código de cuatro letras que indica, de forma general, el
+    objeto del adeudo de acuerdo con una lista de códigos recogidos en la norma ISO 20022
+    UNIFI.
+
+  - Concepto: sesenta y ocho posiciones
+   Parte inicial del concepto (AT-22): contiene información definida por el acreedor y que la
+    entidad del deudor debe comunicar al deudor.
+
+Cuarto Opcional
+
+  - Código de Registro: dos posiciones
+   Valor = “23“
+
+  - Código Dato: dos posiciones
+   Número de secuencia: 04
+
+  - Continuación del Concepto: setenta y dos posiciones
+   Parte final del concepto (AT-22): contiene información definida por el acreedor y que la
+    entidad del deudor debe comunicar al deudor.
+
+  - Libre: cuatro posiciones
+   Rellenar a espacios en blanco.
+
+Quinto Opcional
+
+  - Código de Registro: dos posiciones
+   Valor = “23“
+
+  - Código Dato: dos posiciones
+   Número de secuencia: 05
+
+  - Referencia del Acreedor: treinta y cinco posiciones
+   Referencia asignada por el acreedor para identificar inequívocamente cada adeudo que
+    presenta(AT-10).
+
+  - Nombre del Deudor / Último Deudor: cuarenta y una posiciones
+   Nombre del Deudor (AT-14). Se incluirá este dato cuando no se reciba información del
+     Nombre del Ultimo Deudor.
+   Nombre del Ultimo Deudor (AT-15). Cuando el titular de la domiciliación sea distinto del
+     deudor deberá informarse el nombre del Ultimo Deudor en lugar del nombre del Deudor.
+   Por limitaciones de la longitud del campo está información podría haber sido truncada
+
+
+
+
+                                              27
+

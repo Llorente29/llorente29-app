@@ -30,6 +30,7 @@ import ComprasPage from '@/modules/conta/compras/ComprasPage'
 import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
+import BancosPage from '@/modules/conta/bancos/BancosPage'
 import InicioPage from '@/modules/conta/inicio/InicioPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
 import { Portada } from '@/modules/conta/marco/Portada'
@@ -86,6 +87,10 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.pendientesDiez, element: enMarco(<LibrosPage area="diario" accion="pendientes-diez" />, '¿Cuánto gasté en septiembre?', true) },
     { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
     { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
+    // B01 · Bancos en tres niveles (N17): Movimientos, Reglas, Cuentas y extractos, Cierre del mes.
+    // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
+    { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
+    { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     // Compras (encargo de compras, N18 y N19).
     { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },

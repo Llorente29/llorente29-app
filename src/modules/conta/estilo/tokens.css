@@ -44,6 +44,8 @@
   --cx-azul-borde: #C9D7FF;     /* Borde de lo seleccionado */
   --cx-rojo: #A3201A;           /* Error (texto) — 6,6:1 sobre su fondo */
   --cx-rojo-suave: #FDECEA;     /* Error (fondo) */
+  --cx-ambar-fila: #FFFBF3;     /* Fila «para confirmar» de Bancos (N17) */
+  --cx-ambar-punto: #F2B544;    /* Punto ámbar de confianza (N17); solo fondo */
 
   /* Iniciales de color (la «fila con inicial»). Siempre con texto oscuro. */
   --cx-inicial-1: #C5D3FF;      /* azul */

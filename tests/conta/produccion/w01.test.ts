@@ -385,6 +385,15 @@ describe('R9 · la tanda de producción en staging (real-con-fallo y real)', () 
   })
 })
 
+describe('R11 · paso 8 sobre la tanda del B01 (su copia, aplicada el 14/10), con su contexto medido', () => {
+  it('los ocho «sigue» y ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-b01-20261014.json',
+      '--manifiesto=tests/conta/produccion/tanda-b01-20261014.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out.match(/_b01_[a-z_]+\.sql: sigue/g)).toHaveLength(8)
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
