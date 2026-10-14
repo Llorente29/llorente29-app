@@ -6,9 +6,6 @@ Actions (BOE, datos abiertos de legislación consolidada) con su sha256 en
 `registro.json`. De cada artículo, **la versión vigente** y el apartado que
 usa Folvy. Nada de memoria: si el texto no está, el guion falla.
 
-**Falta una:** la Orden EHA/962/2007 (digitalización certificada), que no
-estaba en `fuentes.json`. La añado allí; hasta que su texto llegue, la
-pantalla no dice que se pueda tirar el papel, que es lo prudente.
 
 ## RD 1619/2012, art. 6.1
 
@@ -163,3 +160,27 @@ pantalla no dice que se pueda tirar el papel, que es lo prudente.
 > Los proveedores deberán hacer llegar la factura o solicitud de pago equivalente a sus clientes antes de que se cumplan quince días naturales a contar desde la fecha de recepción efectiva de las mercancías o de la prestación de los servicios.
 > Cuando en el contrato se hubiera fijado un plazo de pago, la recepción de la factura por medios electrónicos producirá los efectos de inicio del cómputo de plazo de pago, siempre que se encuentre garantizada la identidad y autenticidad del firmante, la integridad de la factura, y la recepción por el interesado.
 > 3. Los plazos de pago indicados en los apartados anteriores podrán ser ampliados mediante pacto de las partes sin que, en ningún caso, se pueda acordar un plazo superior a 60 días naturales.
+
+## Orden EHA/962/2007, art. 7.1 y 7.2
+
+*Para qué:* Prescindir del papel solo con digitalización certificada: software homologado por la AEAT, cada imagen firmada y la base de datos firmada al cierre de cada periodo. Folvy no lo es: la pantalla nunca dice que se pueda tirar el papel, y el PDF se guarda como copia.
+
+*Fuente:* Orden EHA/962/2007, digitalización certificada de facturas (D01; ELI https://www.boe.es/eli/es/o/2007/04/10/eha962) · texto publicado (no está consolidada) · [https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-7866](https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-7866) · sha256 del texto `002a95e7af9a3a4f…`
+
+*Ojo:* la Orden se dictó bajo el Real Decreto 1496/2003 (Reglamento de facturación), hoy sustituido por el Real Decreto 1619/2012. Sus remisiones a aquel se leen hoy hechas a este.
+
+> Artículo 7. Digitalización certificada de facturas recibidas y documentos sustitutivos recibidos y de otros documentos o justificantes.
+> 1. Los obligados tributarios podrán proceder a la digitalización certificada de las facturas, documentos sustitutivos y de cualesquiera otros documentos que conserven en papel que tengan el carácter de originales.
+> Las facturas, documentos sustitutivos y otros documentos así digitalizados permitirán que el obligado tributario pueda prescindir de los originales en papel que les sirvieron de base. 2. Se entiende por digitalización certificada el proceso tecnológico que permite, mediante la aplicación de técnicas fotoelectrónicas o de escáner, convertir la imagen contenida en un documento en papel en una imagen digital codificada conforme a alguno de los formatos estándares de uso común y con un nivel de resolución que sean admitidos por la Agencia Estatal de Administración Tributaria. Este proceso de digitalización deberá cumplir los siguientes requisitos:
+> a) Que el proceso de digitalización sea realizado por el propio obligado tributario o bien por un tercero prestador de servicios de digitalización, en nombre y por cuenta de aquél, utilizando en ambos casos un software de digitalización certificado en los términos del apartado 3 de este mismo artículo.
+> b) Que el proceso de digitalización utilizado garantice la obtención de una imagen fiel e íntegra de cada documento digitalizado y que esta imagen digital sea firmada con firma electrónica en los términos de los artículos anteriores de esta Orden en base a un certificado electrónico instalado en el sistema de digitalización e invocado por el software de digitalización certificada. Este certificado debe corresponder al obligado tributario cuando la digitalización certificada se realice por el mismo o al prestador de servicios de digitalización en otro caso. Uno u otro, según corresponda, deberá disponer de los procedimientos y controles necesarios para garantizar la fidelidad del proceso de digitalización certificada. c) Que el resultado de la digitalización certificada se organice en torno a una base de datos documental y que por cada documento digitalizado se conserve un registro de datos con todos los campos exigibles en la llevanza de los libros de registros incluidos en los artículos 62 y siguientes del Real Decreto 1624/1992, de 29 de diciembre, además de un campo en el que se contenga la imagen binaria del documento digitalizado o que enlace al fichero que la contenga, en ambos casos con la firma electrónica de la imagen del documento conforme a como se indica en la letra b). d) Que el obligado a la conservación disponga del software de digitalización certificado con las siguientes funcionalidades:
+> 1.ª Firma de la base de datos que garantice la integridad de datos e imágenes al cierre de cada período de liquidación al que esté sometido el obligado tributario.
+> 2.ª Acceso completo y sin demora injustificada a la base de datos. A estos efectos, se entiende por acceso completo aquél que posibilite una consulta en línea a los datos que permita la visualización de los documentos con todo el detalle de su contenido, la búsqueda selectiva por cualquiera de los datos que deban reflejarse en los libros registro regulados en el artículo 62 y siguientes del Real Decreto 1624/1992, de 29 de diciembre, la copia o descarga en línea en los formatos originales y la impresión a papel de aquellos documentos que sean necesarios a los efectos de la verificación o documentación de las actuaciones de control fiscal.
+
+## Resolución de la AEAT de 24/10/2007 (homologación)
+
+*Para qué:* Cómo se homologa ese software (y qué garantiza: imagen fiel e íntegra firmada y base de datos documental). Mientras Folvy no esté homologado, no hay digitalización certificada.
+
+*Fuente:* Resolución de 24/10/2007 de la AEAT, homologación del software de digitalización certificada (D01) · texto publicado (no está consolidada) · [https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-18911](https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-18911) · sha256 del texto `4c37b22d5c267403…`
+
+> Para ello es necesario, además de un software de digitalización certificado, que el proceso de digitalización garantice una imagen fiel e íntegra de cada documento firmada con firma electrónica, así como la organización de la digitalización en torno a una base de datos documental con determinadas garantías, tanto para ésta como para su conservación.

@@ -39,9 +39,6 @@ function escribir() {
     '`registro.json`. De cada artículo, **la versión vigente** y el apartado que',
     'usa Folvy. Nada de memoria: si el texto no está, el guion falla.',
     '',
-    '**Falta una:** la Orden EHA/962/2007 (digitalización certificada), que no',
-    'estaba en `fuentes.json`. La añado allí; hasta que su texto llegue, la',
-    'pantalla no dice que se pueda tirar el papel, que es lo prudente.',
     '',
   ]
   for (const c of CITAS) {
@@ -53,7 +50,50 @@ function escribir() {
       `*Fuente:* ${f.nombre} · versión vigente desde ${art.desde} (${art.boe}) · [${f.url}](${f.url}) · sha256 del texto \`${String(f.sha256 ?? '').slice(0, 16)}…\``, '',
       ...texto.map((x) => `> ${x}`), '')
   }
+  // D01 R4 · Las dos que no están consolidadas: su texto publicado en el BOE del día.
+  for (const c of PUBLICADAS) {
+    const f = registro[c.fuente]
+    if (!f) throw new Error(`${c.fuente} no está en registro.json`)
+    const texto = trozo(readFileSync(`${FUENTES}/textos/${c.fuente}.txt`, 'utf8'), c)
+    l.push(`## ${c.corto}`, '', `*Para qué:* ${c.usa}`, '',
+      `*Fuente:* ${f.nombre} · texto publicado (no está consolidada) · [${f.url}](${f.url}) · sha256 del texto \`${String(f.sha256 ?? '').slice(0, 16)}…\``, '',
+      ...(c.nota ? [`*Ojo:* ${c.nota}`, ''] : []),
+      ...texto.map((x) => `> ${x}`), '')
+  }
   return l.join('\n')
+}
+
+/**
+ * Lo que dice la pantalla de la digitalización (Julio, R4): sin software
+ * homologado por la AEAT, el papel se conserva; nunca decimos que se pueda
+ * tirar.
+ */
+const PUBLICADAS = [
+  {
+    fuente: 'orden-eha-962-2007', corto: 'Orden EHA/962/2007, art. 7.1 y 7.2', desde: /^Artículo 7\./, hasta: /^3\. Las entidades desarrolladoras/,
+    usa: 'Prescindir del papel solo con digitalización certificada: software homologado por la AEAT, cada imagen firmada y la base de datos firmada al cierre de cada periodo. Folvy no lo es: la pantalla nunca dice que se pueda tirar el papel, y el PDF se guarda como copia.',
+    nota: 'la Orden se dictó bajo el Real Decreto 1496/2003 (Reglamento de facturación), hoy sustituido por el Real Decreto 1619/2012. Sus remisiones a aquel se leen hoy hechas a este.',
+  },
+  {
+    fuente: 'resolucion-aeat-2007-10-24', corto: 'Resolución de la AEAT de 24/10/2007 (homologación)', frase: /software de digitalización certificado/,
+    usa: 'Cómo se homologa ese software (y qué garantiza: imagen fiel e íntegra firmada y base de datos documental). Mientras Folvy no esté homologado, no hay digitalización certificada.',
+  },
+]
+
+/** Las líneas de un artículo (de «desde» a «hasta», sin él), o la frase que casa. */
+function trozo(texto, c) {
+  const lineas = String(texto).split('\n')
+  if (c.frase) {
+    const frases = lineas.join(' ').split(/(?<=\.)\s+(?=[A-ZÁÉÍÓÚ])/)
+    const f = frases.find((x) => c.frase.test(x))
+    if (!f) throw new Error(`${c.fuente}: no está la frase ${c.frase}`)
+    return [f.trim()]
+  }
+  const ini = lineas.findIndex((x) => c.desde.test(x.trim()))
+  if (ini < 0) throw new Error(`${c.fuente}: no está ${c.desde}`)
+  const fin = lineas.findIndex((x, i) => i > ini && c.hasta.test(x.trim()))
+  if (fin < 0) throw new Error(`${c.fuente}: no está ${c.hasta}`)
+  return lineas.slice(ini, fin).map((x) => x.trim()).filter(Boolean)
 }
 
 const md = escribir()
@@ -62,5 +102,5 @@ if (process.argv[2] === 'comprobar') {
   console.log('norma.md: igual a los textos oficiales.')
 } else {
   writeFileSync('docs/conta/d01/norma.md', md)
-  console.log(`norma.md: ${CITAS.length} citas.`)
+  console.log(`norma.md: ${CITAS.length + PUBLICADAS.length} citas.`)
 }
