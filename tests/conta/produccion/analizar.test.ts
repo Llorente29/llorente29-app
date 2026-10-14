@@ -353,8 +353,11 @@ describe('la tanda del C04 R4 (ya aplicada: las cuatro en el historial de produc
     // Y el registro del cierre del día (C04b R5, el porqué del día sin asiento).
     const registro = readFileSync('supabase/migrations/20261020T0140_libro_lectura_registro.sql', 'utf8')
     for (const m of `${cierre2}\n${registro}`.matchAll(/grant select on table public\.([a-z_]+) to conta_lectura/g)) tablas.add(m[1])
+    // C06b (#178): el agente del plan lee import_run, que la lectura de Diez (C04b) ya da a conta_lectura.
+    const diez = readFileSync('supabase/migrations/20261019T0120_diez_lectura.sql', 'utf8')
+    if (/grant select on table public\.import_run\b/.test(diez)) tablas.add('import_run')
     const funciones = new Set([...`${lectura}\n${cierre}`.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
-    expect(nombrados.size).toBe(42)
+    expect(nombrados.size).toBe(43) // 42 + import_run (C06b, #178)
     expect([...nombrados].filter((n) => !tablas.has(n) && !funciones.has(n))).toEqual([])
     expect([...tablas, ...funciones].filter((n) => !nombrados.has(n))).toEqual([])
   })

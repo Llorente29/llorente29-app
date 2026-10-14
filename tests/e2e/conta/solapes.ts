@@ -88,3 +88,19 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
 
 /** Las piezas que flotan en el marco del módulo de contabilidad. */
 export const FLOTANTES_CONTA = ['.cx-pregunta', '.cx-barra-inferior']
+
+/**
+ * C06b (respuesta 5, punto 3) · Como loQueTapan, sabiendo que Libros
+ * (/conta/libros…) no enseña la barra «Pregunta o pide algo»: solo diría «Muy
+ * pronto» y tapaba filas. Allí, en el ordenador no flota nada —no hay nada que
+ * pueda tapar— y se exige que la barra no esté. En el móvil (la barra inferior)
+ * y en el resto de pantallas, se mide como siempre.
+ */
+export async function loQueTapanSinPregunta(page: Page, raiz: string, flotantes = FLOTANTES_CONTA): Promise<string[]> {
+  const movil = (page.viewportSize()?.width ?? 1440) < 768
+  const enLibros = new URL(page.url()).pathname.startsWith('/conta/libros')
+  if (!movil && enLibros) {
+    return (await page.locator('.cx-pregunta').count()) > 0 ? ['la barra «Pregunta o pide algo» está en Libros, y solo diría «Muy pronto»'] : []
+  }
+  return loQueTapan(page, raiz, flotantes)
+}

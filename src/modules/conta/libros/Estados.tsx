@@ -17,6 +17,7 @@ import { rutaLibros, rutaMayor } from '@/config/navegacion'
 import { Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
+import { notaClientes } from '@/modules/conta/lib/notaClientes'
 import {
   calcularEstado, columnaAnterior, cuadreBalance, mapeoEfectivo, modeloPropuesto, resultadoTresCifras, vistasDeResultado,
   type LineaCalculada, type Modelo, type ResultadoEstado, type SaldoCuenta,
@@ -233,10 +234,10 @@ function BarraIa({ calc, estado, modelo, plantilla }: {
 }) {
   const notas: { titulo: string; texto: string; enlace?: { a: string; texto: string } }[] = []
   const cuentas = calc.actual.lineas.flatMap((l) => l.cuentas)
-  const clientesNeg = cuentas.filter((c) => c.anomalo && (c.templateCode ?? c.code).startsWith('43'))
-  if (clientesNeg.length) {
-    const t = clientesNeg.reduce((a, c) => a + c.importe, 0)
-    notas.push({ titulo: `Clientes en negativo (${eurosExactos(t)}).`, texto: `Un saldo acreedor en clientes no es normal: suele ser una liquidación asentada dos veces o un cobro sin su venta. Mira la ${clientesNeg[0].code}.`, enlace: { a: rutaMayor(clientesNeg[0].code), texto: 'Ver' } })
+  // C06b: la cifra es la de la línea oficial, no la suma suelta de las 430 en negativo.
+  const clientes = notaClientes(calc.actual, eurosExactos)
+  if (clientes) {
+    notas.push({ titulo: clientes.titulo, texto: clientes.texto, enlace: { a: rutaMayor(clientes.cuenta), texto: 'Ver' } })
   } else {
     const otros = cuentas.filter((c) => c.anomalo)
     if (otros.length) notas.push({ titulo: `${otros.length} ${otros.length === 1 ? 'cuenta con saldo' : 'cuentas con saldo'} del lado contrario.`, texto: `En ámbar en la tabla: ${otros.slice(0, 3).map((c) => c.code).join(', ')}. Puede ser normal (un anticipo) o un apunte en la cuenta equivocada.` })

@@ -13,7 +13,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, CUENTA_B, entrarComo, pedirSesion } from '../sesion'
 import { rest } from '../api'
-import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
+import { loQueTapanSinPregunta } from '../solapes'
 
 const DIR = 'docs/conta/capturas/cierre'
 const ASIENTO_04 = 'fc7df35a-c53c-460e-907a-ebea3d7fef8b'
@@ -23,7 +23,7 @@ const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movi
 async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
-  expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+  expect(await loQueTapanSinPregunta(page, '.cx-principal')).toEqual([])
 }
 
 test('A · el asiento de ventas del día dice sus no confirmados, y «Ver» los enseña con cómo acabaron', async ({ page }) => {
