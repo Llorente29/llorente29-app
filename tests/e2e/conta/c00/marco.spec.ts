@@ -2,7 +2,7 @@
 // tests/e2e/conta/c00/marco.spec.ts
 //
 // Tarea 2 del C00: el marco del módulo de contabilidad (menú flotante o barra
-// inferior, barra «Pregunta o pide algo», letras y colores) en la cuenta B:
+// inferior, sin la barra «Pregunta o pide algo» (C06b), letras y colores) en la cuenta B:
 // SIN interruptor `conta` y SIN módulos de Cocina (respuesta 1 de Julio,
 // «Fuera de Folvy»). Si algo falla aquí, está mal.
 
@@ -40,17 +40,10 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
   expect(letra).toContain('Geist Variable')
   expect(await page.evaluate(() => document.fonts.check('16px "Geist Variable"'))).toBe(true)
 
-  // La IA aún no contesta: lo dice, no simula.
-  if (movil) {
-    await page.getByRole('button', { name: 'Preguntar a Folvy' }).click()
-  } else {
-    await page.keyboard.press('Control+k')
-    const barra = page.getByRole('textbox', { name: 'Pregunta a Folvy' })
-    await expect(barra).toBeFocused()
-    await barra.fill('¿Qué IVA lleva el pan?')
-    await page.keyboard.press('Enter')
-  }
-  await expect(page.getByRole('status').getByText(/Muy pronto/)).toBeVisible()
+  // La IA aún no contesta: lo que no funciona no se enseña (C06b, respuesta 6):
+  // ni la barra «Pregunta o pide algo» ni el botón de la IA del móvil.
+  await expect(page.locator('.cx-pregunta')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /^Preguntar a / })).toHaveCount(0)
 
   // Los solapes se miden con la pantalla CARGADA: con el esqueleto delante no
   // hay nada que tapar y la medida pasa sin medir (así pasó hasta el 03/10, y

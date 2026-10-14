@@ -27,7 +27,6 @@ import {
   Dialogo, EsqueletoFicha, IconoCamara, IconoTelefono, Migas, PildoraNif, TextoNif,
 } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
-import { BarraPregunta } from '@/modules/conta/marco/BarraPregunta'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
 import type { ExtensionesProveedor, SeccionDeFicha } from '@/modules/conta/extensiones'
 import {
@@ -48,8 +47,6 @@ import { deshacerUnion } from '@/modules/conta/services/comprasService'
 import Contabilidad from '@/modules/conta/proveedor/Contabilidad'
 import Documentos from '@/modules/conta/proveedor/Documentos'
 import Historial from '@/modules/conta/proveedor/Historial'
-
-const EJEMPLO_IA = '¿Cuánto le compré en verano?'
 
 export default function FichaProveedorPage({ extensiones = {} }: { extensiones?: ExtensionesProveedor }) {
   const { supplierId = '' } = useParams()
@@ -116,7 +113,7 @@ function Ficha({ supplierId, extensiones }: { supplierId: string; extensiones: E
   return (
     <div className="cx cx-incrustado">
       {cuerpo}
-      {!movil && <BarraPregunta ejemplo={EJEMPLO_IA} />}
+      {/* C06b: sin la barra «Pregunta o pide algo» (solo diría «Muy pronto»); vuelve cuando conteste. */}
     </div>
   )
 }
