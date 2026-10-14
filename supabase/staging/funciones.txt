@@ -1,4 +1,3 @@
-# C06b · Respuesta 8, tarea 1 (paso 2): conta-diez-enviar mira «desde» en
-# conta_diez_autorizo (0730): la autorización de empresa solo vale para los
-# asientos con fecha desde ese día; el contraasiento, con la fecha de lo que anula.
+# C06b · Respuesta 8, tarea 1: conta-diez-enviar mira «desde» (0730) e
+# «incluye_recibidas» (0740) en conta_diez_autorizo; con main al día (D01).
 conta-diez-enviar
