@@ -52,24 +52,43 @@ Deno.serve(async (req) => {
     const fila = (filas as { user_id: string; se_puede: boolean }[] | null)?.[0];
     if (!fila || !fila.se_puede) return json(200, SIEMPRE);
 
-    const base = supabaseUrl.includes(PRODUCCION) ? null : (Deno.env.get('APP_BASE_URL_PRUEBAS') ?? null);
-    const { data: link, error: linkErr } = await admin.auth.admin.generateLink({ type: 'recovery', email: correo });
-    if (linkErr || !link?.properties?.hashed_token) { console.error('[conta-contrasena] link', linkErr?.message); return json(200, SIEMPRE); }
-    const enlace = enlaceDeMarca(m, '/reset-password/confirm', { token_hash: link.properties.hashed_token, type: 'recovery' }, base);
-    if (!enlace) { console.error('[conta-contrasena] la marca no tiene dirección'); return json(200, SIEMPRE); }
-
-    const r = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_ANON_KEY') ?? ''}`, 'x-internal-key': serviceKey },
-      body: JSON.stringify({ to: correo, template: 'contrasena_conta', marca: m.id, data: { enlace } }),
-    });
-    if (!r.ok) console.error('[conta-contrasena] send-email', r.status, (await r.text().catch(() => '')).slice(0, 300));
+    // C06b (respuesta 5, punto 5): el enlace y el correo, en segundo plano.
+    // Esperándolos, la respuesta tardaba más cuando el correo existe, y eso
+    // decía por el reloj lo que el cuerpo calla. Ahora el que existe y el que
+    // no contestan tras la misma consulta.
+    await enSegundoPlano(enviarEnlace(admin, supabaseUrl, serviceKey, correo, m));
     return json(200, SIEMPRE);
   } catch (e) {
     console.error('[conta-contrasena]', e);
     return json(200, SIEMPRE);
   }
 });
+
+/** El enlace de recuperación con la marca. Los fallos van al registro: quien llama ya tiene su respuesta. */
+async function enviarEnlace(admin: ReturnType<typeof createClient>, supabaseUrl: string, serviceKey: string, correo: string, m: (typeof MARCAS)[keyof typeof MARCAS]): Promise<void> {
+  try {
+    const base = supabaseUrl.includes(PRODUCCION) ? null : (Deno.env.get('APP_BASE_URL_PRUEBAS') ?? null);
+    const { data: link, error: linkErr } = await admin.auth.admin.generateLink({ type: 'recovery', email: correo });
+    if (linkErr || !link?.properties?.hashed_token) { console.error('[conta-contrasena] link', linkErr?.message); return; }
+    const enlace = enlaceDeMarca(m, '/reset-password/confirm', { token_hash: link.properties.hashed_token, type: 'recovery' }, base);
+    if (!enlace) { console.error('[conta-contrasena] la marca no tiene dirección'); return; }
+    const r = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_ANON_KEY') ?? ''}`, 'x-internal-key': serviceKey },
+      body: JSON.stringify({ to: correo, template: 'contrasena_conta', marca: m.id, data: { enlace } }),
+    });
+    if (!r.ok) console.error('[conta-contrasena] send-email', r.status, (await r.text().catch(() => '')).slice(0, 300));
+  } catch (e) {
+    console.error('[conta-contrasena] envío', e);
+  }
+}
+
+/** Lo que sigue después de contestar (EdgeRuntime.waitUntil). Sin él (fuera de Supabase), se espera: mejor tarde que nunca. */
+function enSegundoPlano(p: Promise<void>): Promise<void> | void {
+  const rt = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  if (rt?.waitUntil) { rt.waitUntil(p); return; }
+  return p;
+}
 
 /** El aviso de «contraseña cambiada», a la propia persona y con la marca de su cuenta. */
 async function avisarCambiada(req: Request): Promise<Response> {

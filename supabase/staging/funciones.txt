@@ -1,12 +1,4 @@
-# Funciones a desplegar en STAGING-CONTA (oseymswjlzplqoxrfjzi), nunca en
-# producción. Una por línea. Lo aplica .github/workflows/desplegar-funciones-staging-conta.yml
-# al empujar un cambio de este fichero a una rama conta/**.
-#
-# C06 · tarea 6 (el recorrido entero de la cuenta del frente C): la invitación
-# de verdad. conta-crear-cuenta es nueva; send-email ya estaba (v63) y, sin
-# marca, envía lo mismo que antes (correoC06.test.ts).
-# 2.ª a 6.ª vuelta: la comprobación (rutas de lo bajado, una carpeta por función,
-# y el CLI devuelve el código transpilado: se comparan los dos lados por esbuild).
-# Respuesta 4: send-email otra vez (la invitación saluda con el nombre de pila).
-conta-crear-cuenta
-send-email
+# C06b · Respuesta 5, punto 5: conta-contrasena manda el enlace en segundo
+# plano (EdgeRuntime.waitUntil): el que existe y el que no contestan igual de
+# rápido. Lo demás, igual.
+conta-contrasena
