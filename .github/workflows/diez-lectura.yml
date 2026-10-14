@@ -66,7 +66,7 @@ jobs:
   lectura:
     # A mano (cuando el workflow esté en main) o al empujar a la rama del
     # encargo un commit cuyo mensaje EMPIECE por «[lectura]» (no basta con nombrarlo).
-    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura') && !startsWith(github.event.head_commit.message, '[lectura:balance]'))
+    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura') && !startsWith(github.event.head_commit.message, '[lectura:balance'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -123,7 +123,7 @@ jobs:
     # conta_lectura (PROD_CONTA_RO_DB_URL), en una sesión de solo lectura, y
     # solo las subcuentas de Foodint (regla 9). En claro, recuentos y sí/no;
     # las cifras, cifradas con testigo-clave-publica.pem.
-    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura:balance]')
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura:balance')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -191,9 +191,12 @@ jobs:
       - name: Diez · comparar (solo GET)
         env:
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          MENSAJE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          BALANCE_EJERCICIO=2026 BALANCE_CORTE="${CORTE//-/}" FOLVY_SALDOS=folvy.txt FOLVY_MAPEO=mapeo.txt \
+          # «[lectura:balance:202610]» lee solo esos meses (separados por comas).
+          MESES=$(printf '%s' "$MENSAJE" | sed -n '1s/^\[lectura:balance:\([0-9,]*\)\].*/\1/p')
+          BALANCE_MESES="$MESES" BALANCE_EJERCICIO=2026 BALANCE_CORTE="${CORTE//-/}" FOLVY_SALDOS=folvy.txt FOLVY_MAPEO=mapeo.txt \
             npx --yes tsx@4.19.2 scripts/conta/diez/balance-lineas.ts > balance.txt
           sed '/-----TESTIGO CIFRADO-----/,$d' balance.txt | tee balance.md
           sed -n '/-----TESTIGO CIFRADO-----/,$p' balance.txt

@@ -31,6 +31,9 @@ import { limpiar } from './publicable.mjs'
 const EJERCICIO = process.env.BALANCE_EJERCICIO || '2026'
 const CORTE = process.env.BALANCE_CORTE || '20260930'
 const HASTA_MES = process.env.BALANCE_HASTA_MES || `${EJERCICIO}12`
+// Solo estos meses (p. ej. «202610»): para volver a leer lo de después del corte.
+// Sin ellos, el ejercicio entero. Con ellos, la comparación al corte no vale y se dice.
+const SOLO_MESES = (process.env.BALANCE_MESES || '').split(',').filter(Boolean)
 
 const l: string[] = []
 const md = (...x: string[]) => l.push(...x)
@@ -125,6 +128,7 @@ let repetidos = 0
 // Primero lo de después del corte (lo que explica la diferencia); luego el resto.
 const mesCorte = Number(CORTE.slice(4, 6))
 const ordenMeses = [...Array(12).keys()].map((i) => i + 1).filter((m) => Number(`${EJERCICIO}${String(m).padStart(2, '0')}`) <= Number(HASTA_MES))
+  .filter((m) => !SOLO_MESES.length || SOLO_MESES.includes(`${EJERCICIO}${String(m).padStart(2, '0')}`))
   .sort((a, b) => Number(a <= mesCorte) - Number(b <= mesCorte) || a - b)
 for (const m of ordenMeses) {
   const mes = `${EJERCICIO}${String(m).padStart(2, '0')}`
@@ -164,7 +168,8 @@ md(`## Diez · balance abreviado contra Folvy, línea a línea (C0008, ejercicio
 md('### Asientos leídos por mes', '', ...Object.entries(asientosMes).map(([m, k]) => `- ${m}: ${k}`), '')
 md(`Tramos reintentados (Diez sin memoria o más de 90 s): ${Object.keys(reintentos).length ? Object.entries(reintentos).map(([m, k]) => `${m} (${k})`).join(', ') : 'ninguno'}`, '')
 md(`Asientos repetidos en el listado: ${repetidos} · de otro ejercicio: ${otroEjercicio} · con fecha posterior al corte: ${tras}`, '')
-const completo = sinLeer.length === 0
+const completo = sinLeer.length === 0 && !SOLO_MESES.length
+if (SOLO_MESES.length) md(`Solo los meses ${SOLO_MESES.join(', ')}: lo de «al corte» de abajo no compara nada (no se ha leído el ejercicio).`, '')
 md(`Días que Diez no ha contestado (tras reintentar): ${sinLeer.length ? `${sinLeer.length} — ${sinLeer.slice(0, 40).join(', ')}${sinLeer.length > 40 ? ' …' : ''}` : 'ninguno'}`, '')
 if (!completo) md('**Lectura INCOMPLETA**: las comparaciones de abajo no valen como prueba (falta lo de esos días).', '')
 md('### Por subcuenta, a la fecha de corte', '', `- subcuentas con saldo en algún lado: ${codigos.size}`, `- que NO coinciden al céntimo: ${distintas.length}`,
