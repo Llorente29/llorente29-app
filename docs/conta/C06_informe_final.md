@@ -4,7 +4,12 @@ Rama `conta/c06-sola`, con `main` dentro (el [PR #179](https://github.com/Lloren
 producción.** La tanda está preparada y analizada contra producción (§5); el
 orden entre las tres sesiones lo decides tú.
 
-<!-- RESULTADOS_E2E -->
+**En una línea:** el recorrido entero pasa en ordenador y en móvil, sin
+atajos: **14 de 14** en el run [38490969936](https://github.com/Llorente29/llorente29-app/actions/runs/38490969936)
+(el recorrido y las 6 pruebas de `sola.spec.ts`, en los dos tamaños). La
+lectura de la C0009 contra la empresa del recorrido, solo GET, sale en verde
+(run [38490488687](https://github.com/Llorente29/llorente29-app/actions/runs/38490488687)). Por el camino el recorrido cazó **cinco
+fallos de verdad**, los cinco arreglados (§1).
 
 ## 1 · El recorrido entero, en el orden del cliente
 
@@ -16,35 +21,75 @@ preparado de antemano salvo el administrador de plataforma de prueba.
 | Paso | Qué hace la prueba | Qué es de verdad y qué no |
 |---|---|---|
 | 1 · Invitación | El administrador de plataforma de prueba (`c06.plataforma@c06-prueba.test`) llama a `conta-crear-cuenta`. | **La función de verdad**, desplegada en staging desde la rama (§4). La marca de pruebas no tiene remitente: la respuesta dice `invitacion_enviada: false` y por qué (regla 8), y fuera de producción trae el enlace. La N19 se pinta con **los mismos datos** que mandó la función. |
-| 2 · Entrada | Abre el enlace → «Activa tu cuenta» (su contraseña y las condiciones) → la entrada N18 con su correo y su contraseña. | La contraseña se comprueba en la base. **Staging no tiene el `custom_access_token_hook`**: `check-account-status` no contesta y la app se queda en su aviso en vez de abrir el Inicio. La prueba lo **mide** y lo anota (no lo esconde); exige que el aviso no sea de contraseña o correo, y sigue con la sesión de esa misma contraseña. |
+| 2 · Entrada | Abre el enlace → «Activa tu cuenta» (su contraseña y las condiciones) → la entrada N18 con su correo y su contraseña. | **Sin atajos:** la prueba no inyecta la sesión en ningún punto. «Activar cuenta» abre `/conta/inicio` y «Entrar» abre su contabilidad; si cualquiera de las dos se queda en un aviso, falla y dice qué se ve. `check-account-status` **sí contesta en staging** (lo daba por roto por el hook: era otra cosa, ver abajo). |
 | 3 · Alta con plan y banco | La conversación entera: NIF, nombre, dirección, actividad, IVA, retenciones, plan de pymes y **el IBAN**. Luego la tarjeta «Traer tu contabilidad de Diez» del Inicio: lo que falte, con su botón. | Todo por la pantalla. El IBAN es inventado (entidad 9999, dígitos de control bien). |
-| 4 · Diez desde la C0009 | Folvy registra la C0009 para esa empresa; la tarjeta dice «Tu base de Diez (C0009) está registrada…». La lectura, **solo GET**, la hace `diez-importar` en `lectura-staging` contra la empresa que deja escrita la prueba. | Registrar una base es de Folvy (`conta_diez_base_poner`, solo `service_role`). En staging lo hace una función **que solo existe allí** (`seed_c06_recorrido_staging.sql`, no es migración), solo para el administrador de plataforma de prueba y solo para empresas del recorrido. |
+| 4 · Diez desde la C0009 | Folvy registra la C0009 para esa empresa; la tarjeta dice «Tu base de Diez (C0009) está registrada…». Después, `diez-importar` en `lectura-staging` contra esa empresa. | Registrar una base es de Folvy (`conta_diez_base_poner`, solo `service_role`). En staging lo hace una función **que solo existe allí** (`seed_c06_recorrido_staging.sql`, no es migración), solo para el administrador de plataforma de prueba y solo para empresas del recorrido. **La lectura** (empresa `a0235103…`, 2024, corte 2024-12-30, solo GET): 12 meses, **2.563 asientos leídos, 2.534 preparados**, 29 posteriores al corte, **0 rechazados**, 76 subcuentas. Testigo: ninguno → una tanda real no podría salir en verde (a propósito). Nada escrito. |
 | 5 · Inicio, libros y balance | El saludo con su nombre, las cuatro cifras, «Libros», el diario y el balance. | — |
 
 **En todas las pantallas:** ni una «Folvy» (texto, título de la pestaña,
 `aria-label`, `alt`, `title`, `placeholder`) y ni un error de la página.
 
-### Lo que encontró el recorrido antes de correr
+### Lo que encontró el recorrido (cinco fallos, los cinco arreglados)
 
-- **La tarjeta de Diez y «Cerrar el mes» se pisaban.** Las dos usaban
-  `.cxi-paso`, `.cxi-paso-hecho` y `.cxi-paso-texto`: mis reglas, que van
-  después, ponían bordes y relleno a las filas de «Cerrar el mes», y las suyas
-  tachaban los pasos hechos de la mía. La tarjeta de Diez tiene ahora sus
-  clases (`cxi-diez-*`). Las capturas del Inicio de la respuesta 3 estaban
-  tomadas con el choque.
+1. **«Activar cuenta» fallaba con todo guardado.** La pantalla decía
+   «Activación guardada, pero no se pudo actualizar la sesión. Recarga la
+   página» aunque la contraseña y las condiciones estaban en la base. Causa: el
+   enlace inicia la sesión, pero la cuenta activa la resuelve AppContext un
+   momento después; quien pulsa antes (rellenando rápido, o con el gestor de
+   contraseñas) llega a `refreshUserProfile` sin cuenta. Le pasaba a veces (en
+   un run el ordenador pasó y el móvil no): **una carrera**. Arreglo en
+   `WelcomePage.tsx`, no en AppContext: el botón espera a la cuenta
+   («Preparando tu cuenta…»); si a los 10 s no llega, deja pulsar y el camino
+   de siempre dice qué pasa. **Puede pasar también en producción**, con o sin
+   marca: es la misma bienvenida para todas las cuentas. No lo he medido allí
+   (sería invitar a alguien); lo digo por el código, que es el mismo.
+2. **«Activar el plan» de la tarjeta de Diez llevaba a otra pregunta.** El plan
+   de una empresa nueva abre «¿Vienes de otro programa?» (del C04b), y para un
+   cliente de Diez la respuesta buena —«No, empiezo de cero», porque lo de
+   Diez llega en el paso 4— no es evidente. Ahora el botón abre directo la
+   activación (`?empezar=de-cero`, sin el parámetro todo igual) y el paso lo
+   dice: «Tus subcuentas de Diez llegan después, con el paso 4».
+3. **«Plan activado: …» desaparecía (regla 8).** Al activarse, la página pasa a
+   la del plan activo y se llevaba la tarjeta con su resultado: el plan quedaba
+   activado (622 subcuentas, medido) y la pantalla no decía nada. Ahora el
+   resultado se queda arriba, en la página del plan activo.
+4. **La tarjeta de Diez y «Cerrar el mes» se pisaban.** Las dos usaban
+   `.cxi-paso`, `.cxi-paso-hecho` y `.cxi-paso-texto`: mis reglas ponían bordes
+   y relleno a las filas de «Cerrar el mes», y las suyas tachaban mis pasos
+   hechos. La de Diez tiene ahora sus clases (`cxi-diez-*`). Las capturas del
+   Inicio de la respuesta 3 estaban tomadas con el choque.
+5. **En el móvil, el texto del paso con botón se apretaba** en una columna
+   estrecha al lado del botón. Ahora el botón baja debajo del texto.
+
+Y dos de menos calado:
 - **«App del equipo»** salía bajo el logo de la marca en «Activa tu cuenta»
-  (es la frase de la app de cocina). Con marca, ahora dice «Tu contabilidad».
-- **El 0300 no pasaba el analizador:** el disparador nuevo de
-  `company_account` no estaba declarado en la cabecera. Declarado, con la
-  prueba de staging que ya lo ejercita (renombrar quita la marca).
-- **La cuenta de antes y después fallaba en producción:** contaba
-  `accounts.product_brand`, que hoy no existe (la añade el 0100). Ahora se
-  cuenta solo si existe, como `name_pending` y `conta_diez_base`. Se vio al
-  ejecutarla en producción, no al leerla.
+  (es la frase de la app de cocina). Con marca dice «Tu contabilidad».
+- **El alta no activa el plan**: termina diciendo «Te dejo cuentas de 8
+  dígitos y el ejercicio abierto», pero el plan queda por activar (0
+  subcuentas, medido). La tarjeta lo pide con su botón, así que el cliente no
+  se pierde; lo dejo dicho por si lo quieres en el propio alta.
 
+Y del analizador y de producción (§5): el 0300 no declaraba el disparador de
+`company_account` (lo bloqueaba) y la cuenta de antes y después fallaba en
+producción por `accounts.product_brand`, que hoy no existe. Los dos, arreglados.
 ## 2 · Capturas contra las maquetas
 
-<!-- CAPTURAS -->
+Capturas del run 38490969936 en `docs/conta/capturas/c06/recorrido-*-{ordenador,movil}.png`.
+Las maquetas, en `docs/conta/maquetas/c06/`. En el runner no está la letra
+Geist en los correos (salen con Helvetica/Arial, que es su reserva declarada);
+la app sí la carga.
+
+| Pantalla | Maqueta | Captura | Igual | Distinto |
+|---|---|---|---|---|
+| **N18 · Entrar** | `N18Entrar.png` | `recorrido-n18-entrar-*` | logo, título, subtítulo, campos, botón azul, «¿Primera vez?… He olvidado la contraseña», panel menta con antetítulo y lema | las **cuatro frases ciertas** que decidiste (respuesta 2) en vez de las de la maqueta; el pie sin dominio (no lo hay aún); el título en una línea (la columna es más ancha). |
+| **N19 · Invitación** | `N19Invitacion.png` | `recorrido-n19-invitacion-*` | estructura, textos, botón, caducidad de 7 días, pie | el **saludo con el nombre entero** («Hola, Lucía Inventada.») donde la maqueta pone el nombre de pila («Hola, Ana.»); el enlace de pruebas con `?marca=` (con dominio, sin él). |
+| **N20 · Contraseña cambiada** | `N20ContrasenaCambiada*.png` | `recorrido-n20-contrasena-cambiada-*` | estructura, textos, enlace a la entrada, pie | la hora: la prueba la pinta «14 de octubre de 2026 **a las** 2:25» y la maqueta «13 de octubre de 2026**,** 21:05». La hora es la de Madrid (00:25 UTC → 02:25, regla 4). |
+| **Inicio** | `Estilo.png` (Estilo nuevo · Inicio) | `recorrido-inicio-*`, `recorrido-inicio-pasos-*` | saludo con su nombre, las cuatro cifras, «Solo necesito que me digas esto», «Lo que he hecho yo desde ayer», «Cerrar el mes», menú de lo que funciona | **la tarjeta «Traer tu contabilidad de Diez»** arriba, que no está en la maqueta (es de la respuesta 3); desaparece cuando se ha traído. |
+| Activa tu cuenta | **sin maqueta** | `recorrido-bienvenida-*` | logo y nombre de la marca, sus enlaces legales | conserva la tarjeta de Folvy (cabecera negra, «EMAIL» en mayúsculas). Si la quieres con el estilo de N18, hace falta su maqueta. |
+
+Libros y balance (`recorrido-libros-*`, `recorrido-libro-*`,
+`recorrido-balance-*`): la empresa recién dada de alta, sin asientos (la
+lectura de Diez no escribe), con el balance a cero y «Cuadra ✓».
 
 ## 3 · El contraste
 
@@ -206,18 +251,17 @@ En este orden; cada uno dice dónde se hace y cómo se comprueba.
    URL Configuration*: añadir `https://<dominio>/**` a *Redirect URLs*. La
    invitación construye su enlace sola, pero «He olvidado la contraseña» y los
    correos de Supabase lo necesitan.
-6. **Supabase · el hook en staging (para probar la entrada de verdad)** — en
-   staging-conta, *Authentication → Hooks → Customize Access Token*:
-   `public.custom_access_token_hook`, como en producción. Sin él, en staging
-   ni «Activar cuenta» ni «Entrar» pueden abrir la cuenta (§1). Es un ajuste
-   del panel, no SQL. Con él, el recorrido entraría sin la sesión por la API.
-7. **La vista previa en WhatsApp, con el dominio de verdad** — pegar
+6. **La vista previa en WhatsApp, con el dominio de verdad** — pegar
    `https://<dominio>/login` en un chat: tiene que salir el título, la frase y
    la imagen de la marca, sin «Folvy». WhatsApp guarda la vista previa en
    caché: si la primera prueba salió mal, se prueba con `?v=2`.
-8. **El recorrido contra el dominio** — con todo lo anterior, el recorrido
+7. **El recorrido contra el dominio** — con todo lo anterior, el recorrido
    (`recorrido.spec.ts`) se puede lanzar contra el despliegue del dominio; y en
    producción, una invitación real a un correo tuyo.
+
+(Quité el paso del hook en staging que tenía apuntado: el recorrido demostró
+que `check-account-status` contesta allí; el fallo era la carrera del punto 1
+de §1.)
 
 ## 8 · Lo compartido
 
@@ -234,6 +278,12 @@ En este orden; cada uno dice dónde se hace y cómo se comprueba.
 - **`supabase/seeds/conta/e2e_limpieza.sql`:** quita también la empresa de las
   cuentas del recorrido con más de 30 minutos (con ella, su registro de la
   C0009). Las cuentas se quedan: llevan su apunte en el registro de plataforma.
+- **Ficheros de otros que he tocado en esta tarea, poco y aditivo:**
+  `src/pages/WelcomePage.tsx` (la espera a la cuenta y «Tu contabilidad»),
+  `src/modules/conta/pages/PlanContablePage.tsx` (C02/C04b: `?empezar=de-cero`
+  y el resultado de activar que se queda). AppContext, sin tocar.
 - **Lint:** sin problemas nuevos en lo que toco. Medido igual a los dos lados:
-  `WelcomePage.tsx` tenía 2 (1 error, 1 aviso) y sigue con 2; el recorrido, 0.
+  `WelcomePage.tsx` tenía 2 (1 error, 1 aviso) y sigue con 2;
+  `PlanContablePage.tsx` 0 y 0; el recorrido, `PasosDiez.tsx` y `pasosDiez.ts`, 0.
+- **Unitarias de contabilidad:** 46 ficheros, 812 pruebas, en verde.
 - **Build:** `npm run build` exacto y en limpio, en verde.
