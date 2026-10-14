@@ -38,7 +38,7 @@ declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v_loc constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
   c     constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
-  v_s uuid; v_run uuid; v_ca uuid; r jsonb; v_i uuid;
+  v_s uuid; v_run uuid; r jsonb; v_i uuid;
   -- Una recepción con su lectura y su camino (el que deja Compras), como en producción.
   v_r uuid;
 begin
@@ -54,8 +54,8 @@ begin
   values (v_acc, c, 'diez', 'historico', '2024-01-01', '2024-12-31') returning id into v_run;
   perform public.conta_diez_ejercicio(c, '2024', '2024-01-01', '2024-12-31');
   perform public.conta_diez_subcuentas(c, v_run, '[{"code":"40000977","nombre":"RECEPCION PRUEBA R6"}]');
-  select id into v_ca from public.company_account where company_id = c and code = '40000977';
-  perform public.company_account_link_set(c, 'supplier', v_s::text, 'principal', v_ca, 'Prueba D01 R6', 'manual');
+  -- La subcuenta 40000977 se le pone a su ficha como lo hace la pantalla: con
+  -- company_account_link_set, como usuario (abajo, primero del bloque de usuario).
   r := public.conta_diez_importar(c, v_run, jsonb_build_array(jsonb_build_object(
     'ejercicio', '2024', 'serie', 2, 'numero', 9001, 'fecha', '2024-12-12', 'concepto', 'Fra. RCP-24/77 Recepción Prueba R6',
     'tipoAsiento', 2, 'huella', 'h-r6', 'lineas', jsonb_build_array(
@@ -122,8 +122,12 @@ declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   c     constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
   v_s   uuid := current_setting('prueba.s')::uuid;
-  r jsonb; f jsonb; v_n int;
+  r jsonb; f jsonb; v_n int; v_ca uuid;
 begin
+  -- La subcuenta traída de Diez, en la ficha del proveedor (como la pantalla, con sus permisos).
+  select id into v_ca from public.company_account where company_id = c and code = '40000977';
+  perform public.company_account_link_set(c, 'supplier', v_s::text, 'principal', v_ca, 'Prueba D01 R6', 'manual');
+
   -- 1 y 2 · Antes del corte.
   r := public.conta_documentos_recibidos(c, '2024-12-01', '2024-12-31');
   select x into f from jsonb_array_elements(r->'filas') x where x->>'id' = current_setting('prueba.r1');

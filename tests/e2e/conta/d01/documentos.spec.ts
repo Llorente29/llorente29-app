@@ -45,7 +45,10 @@ async function ponerPapelDeLaSemilla(s: Sesion) {
 
 async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
-  expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+  // R5 · 10: sin la barra de la IA, en el ordenador no queda nada flotante que mida
+  // (como en B01). En el móvil sigue la barra de abajo, y se mide.
+  if (await page.locator(FLOTANTES_CONTA.join(', ')).count() === 0) expect(lado(page)).toBe('ordenador')
+  else expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
   const ventana = page.viewportSize() ?? { width: 1440, height: 900 }
   const alto = await page.evaluate(() => document.documentElement.scrollHeight)
   await page.evaluate(() => window.scrollTo(0, 0))

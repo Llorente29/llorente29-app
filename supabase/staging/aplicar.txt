@@ -5,6 +5,9 @@
 #   2. la 0310 de verdad, con su registro;
 #   3. su prueba como usuario (A y B), con ROLLBACK: recepciones, lecturas y
 #      un asiento de Diez inventados, todo deshecho al acabar.
+# Segundo intento: el run 38527676667 paró en el ensayo (revertido entero, nada
+# aplicado) porque la prueba ponía la subcuenta en la ficha como dueño, y
+# company_account_link_set exige un usuario de la cuenta. Ahora va como usuario.
 supabase/staging/sql/20261021_d01_recepcion_ensayo.sql
 supabase/migrations/20261021T0310_d01_recepcion.sql
 supabase/staging/sql/20261021_d01_recepcion_prueba.sql
