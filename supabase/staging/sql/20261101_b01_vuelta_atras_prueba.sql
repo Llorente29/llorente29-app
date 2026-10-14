@@ -75,7 +75,7 @@ savepoint guarda_0140;
 update public.bank_movement set receipt_path = 'prueba/vuelta-atras/ticket.jpg'
  where id = (select id from public.bank_movement order by id limit 1);
 \set ON_ERROR_STOP 0
-\ir ../../vuelta-atras/20261101T0140_b01_tarjetas.down.sql
+\ir ../../vuelta-atras/20261101T0140_b01_tarjetas.down.guarda.sql
 \set ON_ERROR_STOP 1
 rollback to savepoint guarda_0140;
 select (:'LAST_ERROR_MESSAGE' = 'Hay tickets enlazados a movimientos: guárdalos antes de quitar las tarjetas.') as guarda_0140_ok \gset

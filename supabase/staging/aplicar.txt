@@ -5,4 +5,6 @@
 # supabase/produccion/vuelta-atras.txt), comprueba que no queda nada del B01 y
 # que lo de fuera no cambia, vuelve a aplicar las ocho migraciones y acaba en
 # rollback: staging queda igual.
+# 2.ª vuelta: la guarda de la 0140, aparte (.down.guarda.sql), como las del
+# C00: con ON_ERROR_STOP apagado, psql seguía y el último error ya no era el suyo.
 supabase/staging/sql/20261101_b01_vuelta_atras_prueba.sql

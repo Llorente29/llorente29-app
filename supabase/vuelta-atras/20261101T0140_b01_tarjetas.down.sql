@@ -20,12 +20,8 @@
 --   · Quitarlo del todo, si se quiere: desde el panel de Supabase o la Storage
 --     API (vaciar y borrar «banco-tickets»), y luego las dos políticas.
 -- ============================================================================
-do $$
-begin
-  if exists (select 1 from public.bank_movement where receipt_path is not null) then
-    raise exception 'Hay tickets enlazados a movimientos: guárdalos antes de quitar las tarjetas.';
-  end if;
-end $$;
+\ir 20261101T0140_b01_tarjetas.down.guarda.sql
+
 drop function if exists public.bank_tarjeta_del_movimiento(uuid, uuid);
 drop function if exists public.bank_ticket_guardar(uuid, text);
 drop function if exists public.bank_iban_recordar(uuid, text);
