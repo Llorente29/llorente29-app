@@ -1,5 +1,5 @@
 {
-  "descargado": "2026-10-14T05:38:51.225Z",
+  "descargado": "2026-10-14T05:44:29.386Z",
   "fuentes": {
     "ley-37-1992": {
       "nombre": "Ley 37/1992, del Impuesto sobre el Valor Añadido",
@@ -791,19 +791,19 @@
     },
     "orden-eha-962-2007": {
       "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01; ELI https://www.boe.es/eli/es/o/2007/04/10/eha962)",
-      "url": "BOE-A-2007-7866",
-      "urlDatos": null,
-      "http": 404,
-      "titulo": "",
+      "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-7866",
+      "urlDatos": "https://www.boe.es/diario_boe/xml.php?id=BOE-A-2007-7866",
+      "http": 200,
+      "titulo": "Orden EHA/962/2007, de 10 de abril, por la que se desarrollan determinadas disposiciones sobre facturación telemática y conservación electrónica de facturas, contenidas en el Real Decreto 1496/2003, de 28 de noviembre, por el que se aprueba el reglamento por el que se regulan las obligaciones de facturación.",
       "actualizadoEnFuente": null,
-      "fecha": "2026-10-14T05:38:51.225Z",
-      "comprobado": "2026-10-14T05:38:51.225Z",
-      "sha256": null,
-      "bytes": 0,
-      "contieneLoEsperado": false,
-      "fichero": null,
-      "error": "No encontrada. Probado: BOE-A-2007-7866: «Orden EHA/962/2007, de 10 de abril, por la que se desarrolla»",
-      "idBoe": null,
+      "fecha": "2026-10-14T05:44:29.386Z",
+      "comprobado": "2026-10-14T05:44:29.386Z",
+      "sha256": "002a95e7af9a3a4fdb035704584550ffd82ba2816e9bd4109ba0a5a9657d3711",
+      "bytes": 52290,
+      "contieneLoEsperado": true,
+      "fichero": "textos/orden-eha-962-2007.txt",
+      "error": null,
+      "idBoe": "BOE-A-2007-7866",
       "nota": null
     },
     "resolucion-aeat-2007-10-24": {
