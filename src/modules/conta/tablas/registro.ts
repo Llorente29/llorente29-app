@@ -14,6 +14,7 @@ import type { ContextoUso } from '@/modules/conta/tablas/usadas'
 import { formatearIban, normalizarIban, validarIban } from '@/modules/conta/lib/iban'
 import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 import { porcentaje } from '@/modules/conta/lib/formato'
+import { MARCA } from '../cuenta/marca'
 
 // ── Las filas, ya leídas ────────────────────────────────────────────────────
 
@@ -301,7 +302,7 @@ const IMPUESTOS: DefinicionTabla = {
     valid_from: txt(d(f, 'valid_from')), pgc_input_hint: txt(d(f, 'pgc_input_hint')), pgc_output_hint: txt(d(f, 'pgc_output_hint')),
   }),
   buscable: (f) => `${txt(d(f, 'name'))} ${txt(d(f, 'example'))} ${txt(d(f, 'rate'))} ${SISTEMA_IMPUESTO[txt(d(f, 'tax_system'))] ?? ''}`,
-  notaSerie: 'Si cambia la ley, Folvy lo actualiza y te avisa. Puedes cambiar sus cuentas, no su porcentaje.',
+  notaSerie: `Si cambia la ley, ${MARCA.nombre} lo actualiza y te avisa. Puedes cambiar sus cuentas, no su porcentaje.`,
   vacia: 'Todavía no hay impuestos cargados.',
 }
 
@@ -352,7 +353,7 @@ const RETENCIONES: DefinicionTabla = {
     pgc_hint: txt(d(f, 'pgc_hint')),
   }),
   buscable: (f) => `${txt(d(f, 'name'))} ${txt(d(f, 'example'))} ${txt(d(f, 'rate'))} ${txt(d(f, 'filed_in'))}`,
-  notaSerie: 'Si cambia la ley, Folvy lo actualiza y te avisa. Puedes cambiar su cuenta, no su porcentaje.',
+  notaSerie: `Si cambia la ley, ${MARCA.nombre} lo actualiza y te avisa. Puedes cambiar su cuenta, no su porcentaje.`,
   vacia: 'Todavía no hay retenciones cargadas.',
 }
 
@@ -471,7 +472,7 @@ const NUMERACION: DefinicionTabla = {
     starts_at: txt(d(f, 'starts_at')), reset_yearly: d(f, 'reset_yearly') ? 'si' : 'no', is_default: d(f, 'is_default') ? 'si' : 'no',
   }),
   buscable: (f) => `${txt(d(f, 'code'))} ${txt(d(f, 'name'))} ${DOCUMENTO[txt(d(f, 'doc_type'))] ?? ''}`,
-  vacia: 'Aún no tienes series. La numeración se usará cuando emitas facturas desde Folvy.',
+  vacia: `Aún no tienes series. La numeración se usará cuando emitas facturas desde ${MARCA.nombre}.`,
 }
 
 const BANCOS: DefinicionTabla = {

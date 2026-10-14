@@ -1,4 +1,8 @@
-# e2e por frente (C06, respuesta 2): los dobles de los cuatro usuarios de prueba
-# para A, B y C, y la cuenta C sin empresa de cada frente. Se puede volver a
-# aplicar: lo que ya está se deja. Al final, su comprobación (4 por frente).
-supabase/seeds/conta/seed_e2e_frentes_staging.sql
+# C06 · Respuesta 4 — de qué programa viene cada empresa (el alta pregunta y
+# guarda la respuesta con su registro).
+#   0400: conta_programa_anterior, su registro y conta_programa_anterior_poner.
+#   Su prueba (2.ª vuelta: la empresa de otra cuenta, tomada antes de ser el
+#   cliente; 3.ª: sin los claims del cliente al medir después), en una transacción con ROLLBACK (incluida la misma vara antes y
+#   después sobre conta_diez_listo de todas las empresas).
+supabase/migrations/20261111T0400_c06_programa_anterior.sql
+supabase/staging/sql/20261111_c06_programa_anterior_prueba.sql

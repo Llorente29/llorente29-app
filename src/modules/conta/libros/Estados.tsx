@@ -24,6 +24,7 @@ import {
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import { aSaldoCuenta, leerLineas, leerMapeo, planDeEmpresa, resultadoRepartido, saldosCuentas, type SaldoConLocal } from '@/modules/conta/services/librosService'
+import { MARCA } from '../cuenta/marca'
 
 type Vista = 'oficial' | 'detallado' | 'local' | 'marca'
 const NOMBRE = { balance: 'Balance de situación', pyg: 'Pérdidas y ganancias', ecpn: 'Cambios en el patrimonio neto' } as const
@@ -128,7 +129,7 @@ export function Estados({ estado, salida }: { estado: 'balance' | 'pyg' | 'ecpn'
         </div>
       </div>
       {hecho && <div className="cx-guardado" role="status">{hecho}</div>}
-      {L.ejercicio.origen === 'migrated' && <div className="cx-tarjeta cxd-franja" role="status">Ejercicio <strong>traído</strong> de {L.ejercicio.cierre ? 'Folvy' : 'otro programa'}: se enseña tal cual, sin recalcular su cierre.</div>}
+      {L.ejercicio.origen === 'migrated' && <div className="cx-tarjeta cxd-franja" role="status">Ejercicio <strong>traído</strong> de {L.ejercicio.cierre ? `${MARCA.nombre}` : 'otro programa'}: se enseña tal cual, sin recalcular su cierre.</div>}
 
       {!calc && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={36} />)}</div>}
       {calc && d.datos && <BarraIa calc={calc} estado={estado} modelo={d.datos.modelo} plantilla={L.ejercicio.plantillaMedia} anterior={null} />}

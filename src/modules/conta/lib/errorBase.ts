@@ -10,6 +10,8 @@
 // asentar: canceling statement due to statement timeout». Para quien lo lee no
 // dice nada, y no le dice qué hacer.
 
+import { MARCA } from '../cuenta/marca'
+
 export interface ErrorDeBase {
   message: string
   code?: string | null
@@ -43,7 +45,17 @@ export function fraseDeErrorTecnico(e: ErrorDeBase): string | null {
  */
 export function textoParaPantalla(donde: string, e: ErrorDeBase, deSiempre: string): string {
   const frase = fraseDeErrorTecnico(e)
-  if (frase === null) return deSiempre
+  if (frase === null) return conLaMarca(deSiempre)
   console.error(`[conta] ${donde}: ${e.code ? `${e.code} ` : ''}${e.message}`)
   return frase
+}
+
+/**
+ * C06 · Las funciones de la base escriben «Folvy» en algunas frases («…no se
+ * reabre en Folvy.»). Con una marca propia, la pantalla dice la marca: se
+ * cambia aquí, por donde pasan todos los errores del módulo, y no en cada
+ * función (que son de otros encargos y ya están en producción).
+ */
+export function conLaMarca(texto: string, nombre: string = MARCA.nombre): string {
+  return nombre === 'Folvy' ? texto : texto.replace(/\bFolvy\b/g, nombre)
 }

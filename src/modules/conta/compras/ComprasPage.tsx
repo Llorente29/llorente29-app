@@ -10,8 +10,9 @@
 // Regla 8: cada botón dice lo que ha hecho, con contenido.
 
 import { useEffect, useState, type DragEvent } from 'react'
-import { Link } from 'react-router-dom'
-import { rutaLiquidacion, rutaLiquidacionNueva } from '@/config/navegacion'
+import { Link, useSearchParams } from 'react-router-dom'
+import { rutaLibroDiario, rutaLiquidacion, rutaLiquidacionNueva } from '@/config/navegacion'
+import { MARCA } from '@/modules/conta/cuenta/marca'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Cabecera, ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
@@ -41,7 +42,11 @@ export default function ComprasPage() {
   const [error, setError] = useState<string | null>(null)
   const [vuelta, setVuelta] = useState(0)
   const [aviso, setAviso] = useState<string | null>(null)
-  const [subir, setSubir] = useState<{ ficheros?: File[] } | null>(null)
+  // C06: «Subir factura» desde la ficha del proveedor llega aquí con ?subir=<proveedor>
+  // (sin Cocina no hay /supply/facturas). Se abre el diálogo de subir.
+  const [params, setParams] = useSearchParams()
+  const [subir, setSubir] = useState<{ ficheros?: File[] } | null>(() => (params.get('subir') !== null ? {} : null))
+  useEffect(() => { if (params.get('subir') !== null) setParams((p) => { p.delete('subir'); return p }, { replace: true }) }, [params, setParams])
 
   useEffect(() => {
     if (!accountId) return
@@ -100,7 +105,7 @@ export default function ComprasPage() {
           {datos.contabilizadas === 0
             ? `Todavía no hay facturas de ${nombreMes(mes)} contabilizadas.`
             : `${datos.contabilizadas} ${datos.contabilizadas === 1 ? 'factura' : 'facturas'} de ${nombreMes(mes)} ya ${datos.contabilizadas === 1 ? 'está contabilizada' : 'están contabilizadas'}.`}{' '}
-          <Link to="/supply/facturas">Verlas</Link>
+          <Link to={MARCA.soloContabilidad ? rutaLibroDiario('compras') : '/supply/facturas'}>Verlas</Link>
         </p>
       )}
 

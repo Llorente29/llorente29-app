@@ -34,6 +34,7 @@ import { excelAeat, excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta
 import {
   completarAnotacion, cuentasPorAsiento, datosFiscales, documentosDeFacturas, leerBienes, leerLibroRegistro, movimientoIva,
 } from '@/modules/conta/services/librosService'
+import { MARCA } from '../cuenta/marca'
 
 type Vista = 'issued' | 'received' | 'intracomunitarias'
 const TITULO: Record<Vista, string> = { issued: 'Facturas expedidas', received: 'Facturas recibidas', intracomunitarias: 'Operaciones intracomunitarias' }
@@ -278,7 +279,7 @@ export function FormatoAeat() {
       const indice = [
         `Documentos de las facturas recibidas del ${ddmm(L.ejercicio.inicio)} al ${ddmm(p.hasta)}.`,
         `Facturas en el libro: ${ids.length}. Con documento guardado: ${docs.length}. Dentro del zip: ${ficheros.length}.`,
-        ...(sinDoc ? [`${sinDoc} facturas no tienen documento guardado en Folvy.`] : []),
+        ...(sinDoc ? [`${sinDoc} facturas no tienen documento guardado en ${MARCA.nombre}.`] : []),
         ...(fallidos.length ? ['', 'No se han podido bajar (nombre y dirección):', ...fallidos] : []),
       ].join('\r\n')
       const zip = crearZip([{ nombre: 'indice.txt', datos: new TextEncoder().encode(indice) }, ...ficheros])
@@ -315,7 +316,7 @@ export function FormatoAeat() {
           </div>
           <div className="cx-tarjeta">
             <h3 className="cxl-subtitulo">Documentos (zip)</h3>
-            <p>Las facturas recibidas del periodo que tienen su documento guardado en Folvy, con un índice de las que no.</p>
+            <p>Las facturas recibidas del periodo que tienen su documento guardado en {MARCA.nombre}, con un índice de las que no.</p>
             <button type="button" className="cx-boton-sec" onClick={() => void bajarZip()} disabled={!!ocupado}>Bajar el zip</button>
           </div>
         </>

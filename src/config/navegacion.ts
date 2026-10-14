@@ -14,6 +14,8 @@
 // Nace solo con lo de este encargo, a propósito. Lo demás de Folvy se irá
 // trayendo cuando se reorganice; no se mueve hoy lo que nadie ha pedido.
 
+import { MARCA } from '../marca/marca'
+
 /** Una miga: la etiqueta y, si lleva a algún sitio, su dirección. */
 export interface Miga {
   etiqueta: string
@@ -42,16 +44,27 @@ export const PROVEEDORES = {
 /** Lo que va delante de «Proveedores» en las migas. Hoy: «Cocina». */
 const MIGA_SECCION: Miga = { etiqueta: 'Cocina', ruta: `/${PROVEEDORES.modulo}` }
 
+/**
+ * C06 · En el producto vendido solo (marca de solo contabilidad) no hay Cocina:
+ * la ficha del proveedor se abre dentro de contabilidad, bajo «Clientes y
+ * proveedores», y la lista es la de terceros filtrada a proveedores. Con
+ * Folvy, todo como siempre (Cocina › Proveedores).
+ */
+const PROVEEDOR_EN_CONTA = MARCA.soloContabilidad
+
 function absoluta(relativa: string): string {
   return `/${PROVEEDORES.modulo}/${relativa}`.replace(/\/+$/, '')
 }
 
 export function rutaListaProveedores(): string {
+  if (PROVEEDOR_EN_CONTA) return `/conta/clientes-y-proveedores?ver=proveedores`
   return absoluta(PROVEEDORES.lista)
 }
 
 export function rutaFichaProveedor(supplierId: string, apartado?: string): string {
-  const base = absoluta(PROVEEDORES.ficha.replace(':supplierId', encodeURIComponent(supplierId)))
+  const base = PROVEEDOR_EN_CONTA
+    ? `/conta/clientes-y-proveedores/proveedor/${encodeURIComponent(supplierId)}`
+    : absoluta(PROVEEDORES.ficha.replace(':supplierId', encodeURIComponent(supplierId)))
   return apartado ? `${base}/${encodeURIComponent(apartado)}` : base
 }
 
@@ -61,19 +74,22 @@ export function rutaFichaProveedor(supplierId: string, apartado?: string): strin
  * `camara` = desde el móvil, con la cámara.
  */
 export function rutaSubirFacturaProveedor(supplierId: string, camara = false): string {
+  // C06: sin Cocina, la factura se sube en Compras de contabilidad (SubirFactura).
+  if (PROVEEDOR_EN_CONTA) return `/conta/compras?${new URLSearchParams({ subir: supplierId }).toString()}`
   const q = new URLSearchParams({ escanear: camara ? 'camara' : '1', proveedor: supplierId })
   return `/supply/facturas?${q.toString()}`
 }
 
-/** Migas de la lista: Cocina › Proveedores. */
+/** Migas de la lista: Cocina › Proveedores (C06: sin Cocina, Clientes y proveedores › Proveedores). */
 export function migasProveedores(): Miga[] {
+  if (PROVEEDOR_EN_CONTA) return [{ etiqueta: 'Clientes y proveedores', ruta: '/conta/clientes-y-proveedores' }, { etiqueta: PROVEEDORES.etiquetaMenu }]
   return [MIGA_SECCION, { etiqueta: PROVEEDORES.etiquetaMenu }]
 }
 
 /** Migas de la ficha: Cocina › Proveedores › nombre. */
 export function migasFichaProveedor(nombre: string): Miga[] {
   return [
-    MIGA_SECCION,
+    ...(PROVEEDOR_EN_CONTA ? [{ etiqueta: 'Clientes y proveedores', ruta: '/conta/clientes-y-proveedores' }] : [MIGA_SECCION]),
     { etiqueta: PROVEEDORES.etiquetaMenu, ruta: rutaListaProveedores() },
     { etiqueta: nombre },
   ]
@@ -127,7 +143,7 @@ export function resolverRedireccion(hasta: string, params: Record<string, string
 /** Nombre de los iconos de línea fina de la maqueta (src/modules/conta/ui/Icono.tsx). */
 export type IconoConta =
   | 'inicio' | 'porHacer' | 'documentos' | 'bancos' | 'personas' | 'pagos'
-  | 'facturas' | 'impuestos' | 'negocio' | 'libros' | 'ajustes' | 'folvy'
+  | 'facturas' | 'impuestos' | 'negocio' | 'libros' | 'ajustes' | 'folvy' | 'mas'
 
 export const CONTA = {
   /** basePath del módulo en el Shell. */
@@ -136,7 +152,9 @@ export const CONTA = {
   /** Interruptor de `feature_flags` que enseña el módulo en la barra de Folvy. */
   interruptor: 'conta',
   rutas: {
-    /** Tu empresa (Ajustes). Es la portada del módulo mientras no haya Inicio. */
+    /** Inicio (C06, «Estilo nuevo · Inicio»): la portada del módulo vendido solo. */
+    inicio: 'inicio',
+    /** Tu empresa (Ajustes). Es la portada del módulo con Folvy (sin Inicio). */
     empresa: 'ajustes',
     /** Un apartado de Tu empresa (en el móvil, una pantalla por apartado). */
     empresaApartado: 'ajustes/empresa/:apartado',
@@ -167,6 +185,9 @@ export const CONTA = {
     terceroApartado: 'clientes-y-proveedores/:partyId/:apartado',
     /** «Cómo te factura» de un proveedor, en su pantalla (maqueta N20; respuesta 1 del repaso de compras). */
     comoTeFactura: 'clientes-y-proveedores/proveedor/:supplierId/como-te-factura',
+    /** C06 · La ficha del proveedor dentro de contabilidad (sin Cocina, producto vendido solo). */
+    fichaProveedor: 'clientes-y-proveedores/proveedor/:supplierId',
+    fichaProveedorApartado: 'clientes-y-proveedores/proveedor/:supplierId/:apartado',
     /** Libros › Libro diario (C04, maqueta N11Diario). */
     libroDiario: 'libros/diario',
     /** Un asiento a mano, nuevo (C04). */
@@ -198,19 +219,25 @@ export interface EntradaMenuConta {
   icono: IconoConta
   /** Ruta relativa al módulo. `null` = la pantalla aún no existe: no se pinta. */
   ruta: string | null
+  /** Solo en el producto vendido solo (C06): con Folvy no se pinta (Inicio). */
+  soloProducto?: boolean
+  /** En el producto vendido solo NO se pinta: su pantalla aún no funciona sin Cocina o dice «aún no» (C06). */
+  noEnSolo?: boolean
 }
 
 /** El menú de la maqueta, en su orden y con sus separaciones (grupos). */
 export const MENU_CONTA: EntradaMenuConta[][] = [
   [
-    { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: null },
+    // C06: Inicio, solo en el producto vendido solo; con Folvy el menú sigue igual.
+    { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: CONTA.rutas.inicio, soloProducto: true },
     { id: 'por-hacer', etiqueta: 'Por hacer', icono: 'porHacer', ruta: null },
   ],
   [
     // Compras (N18): delante de Bancos, como en la maqueta.
     { id: 'compras', etiqueta: 'Compras', icono: 'facturas', ruta: CONTA.rutas.compras },
     // Ventas: detrás de Compras, como la maqueta (respuesta 1 del repaso de compras).
-    { id: 'ventas', etiqueta: 'Ventas', icono: 'negocio', ruta: CONTA.rutas.ventas },
+    // C06: su pantalla dice «Aún no.»: en el producto vendido solo no se pinta.
+    { id: 'ventas', etiqueta: 'Ventas', icono: 'negocio', ruta: CONTA.rutas.ventas, noEnSolo: true },
     { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: null },
     { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
     // C03: la lista única de terceros. Un tercero que solo es proveedor abre su
@@ -233,7 +260,7 @@ export const MENU_CONTA: EntradaMenuConta[][] = [
 /** La barra inferior del móvil: dos a cada lado del botón central de la IA. */
 export const BARRA_CONTA: { izquierda: EntradaMenuConta[]; derecha: EntradaMenuConta[] } = {
   izquierda: [
-    { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: null },
+    { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: CONTA.rutas.inicio, soloProducto: true },
     { id: 'por-hacer', etiqueta: 'Por hacer', icono: 'porHacer', ruta: null },
   ],
   derecha: [
@@ -282,8 +309,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     grupo: 'Acceso y avisos',
     entradas: [
       { id: 'personas', etiqueta: 'Personas y asesor', ruta: 'ajustes/personas', hueco: 'Quién entra y qué ve, y el acceso de tu asesor, llegan en un encargo propio.' },
-      { id: 'avisos', etiqueta: 'Avisos', ruta: 'ajustes/avisos', hueco: 'Qué te avisa Folvy y por dónde llega en un encargo propio.' },
-      { id: 'folvy', etiqueta: 'Lo que ha hecho Folvy', ruta: 'ajustes/folvy' },
+      { id: 'avisos', etiqueta: 'Avisos', ruta: 'ajustes/avisos', hueco: `Qué te avisa ${MARCA.nombre} y por dónde llega en un encargo propio.` },
+      { id: 'folvy', etiqueta: `Lo que ha hecho ${MARCA.nombre}`, ruta: 'ajustes/folvy' },
     ],
   },
 ]
@@ -297,9 +324,24 @@ export const ENTRADA_DE_APARTADO: Record<string, string> = {
   ejercicio: 'ejercicio', socios: 'socios', registro: 'folvy',
 }
 
-/** Solo las entradas que existen: lo que se pinta. */
-export function entradasVisibles(lista: EntradaMenuConta[]): (EntradaMenuConta & { ruta: string })[] {
-  return lista.filter((e): e is EntradaMenuConta & { ruta: string } => e.ruta !== null)
+/**
+ * Solo las entradas que existen: lo que se pinta. En el producto vendido solo
+ * (C06: con una marca propia, o en una cuenta solo de contabilidad), además,
+ * nada que diga «aún no» y sí su Inicio. Con Folvy (`solo` = false), lo de siempre.
+ *
+ * Para que A (Ventas, facturas recibidas) o B (Bancos) enseñen su pantalla basta
+ * UNA línea: poner su ruta en su entrada de MENU_CONTA (hoy `ruta: null`), o
+ * quitar su `noEnSolo` cuando funcione sin Cocina.
+ */
+export function entradasVisibles(lista: EntradaMenuConta[], solo = false): (EntradaMenuConta & { ruta: string })[] {
+  return lista.filter((e): e is EntradaMenuConta & { ruta: string } =>
+    e.ruta !== null && (solo ? !e.noEnSolo : !e.soloProducto))
+}
+
+/** Las entradas del índice de Ajustes que se pintan: en el producto vendido solo, sin las que dicen «aún no». */
+export function indiceAjustes(solo = false): typeof INDICE_AJUSTES {
+  if (!solo) return INDICE_AJUSTES
+  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !e.hueco) })).filter((g) => g.entradas.length > 0)
 }
 
 /** Dirección absoluta de una ruta del módulo, con sus parámetros rellenos. */
@@ -362,7 +404,7 @@ export function entradaActiva(pathname: string, lista: EntradaMenuConta[]): stri
   const base = `/${CONTA.modulo}`
   if (!pathname.startsWith(base)) return null
   const resto = pathname.slice(base.length).replace(/^\/+|\/+$/g, '')
-  const candidatas = entradasVisibles(lista)
+  const candidatas = lista.filter((e): e is EntradaMenuConta & { ruta: string } => e.ruta !== null)
     .filter(e => resto === e.ruta || (e.ruta === '' ? true : resto.startsWith(`${e.ruta}/`)))
     .sort((a, b) => b.ruta.length - a.ruta.length)
   return candidatas[0]?.id ?? null

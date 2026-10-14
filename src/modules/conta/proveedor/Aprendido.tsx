@@ -20,6 +20,7 @@ import { etiquetaIva, type Aprendido as UnAprendido } from '@/modules/conta/lib/
 import { porcentaje } from '@/modules/conta/lib/formato'
 import { fijarAprendido } from '@/modules/conta/services/proveedorService'
 import type { Apartado } from '@/modules/conta/lib/resumenFicha'
+import { MARCA } from '../cuenta/marca'
 
 /** Adónde lleva lo que no se cambia aquí. */
 const DONDE: Record<UnAprendido['campo'], { ap: Apartado; campo: string }> = {
@@ -92,12 +93,12 @@ function DialogoCambiar({ a, alCerrar }: { a: UnAprendido; alCerrar: (texto?: st
     <Dialogo titulo="Cambiar lo que he aprendido" alCerrar={() => alCerrar()}>
       <p className="cx-ayuda" style={{ margin: 0, fontSize: 15 }}>Ahora: <strong>{a.etiqueta}</strong>. {a.porque}.</p>
       {editor}
-      <p className="cx-ayuda" style={{ margin: 0 }}>Lo que fijes a mano gana a lo que aprenda de sus facturas, y queda en «Lo que ha hecho Folvy».</p>
+      <p className="cx-ayuda" style={{ margin: 0 }}>Lo que fijes a mano gana a lo que aprenda de sus facturas, y queda en «Lo que ha hecho {MARCA.nombre}».</p>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       <div className="cx-pie">
         {a.aMano && (
           <button type="button" className="cx-boton-sec" disabled={ocupado}
-            onClick={() => void hacer(null, null, 'Devuelto a Folvy: lo vuelvo a aprender de sus facturas.')}>Que lo aprenda Folvy</button>
+            onClick={() => void hacer(null, null, `Devuelto a ${MARCA.nombre}: lo vuelvo a aprender de sus facturas.`)}>Que lo aprenda {MARCA.nombre}</button>
         )}
         <button type="button" className="cx-boton-sec" onClick={() => alCerrar()}>Cancelar</button>
         {guardar && <button type="button" className="cx-boton" disabled={ocupado} onClick={guardar}>{ocupado ? 'Guardando…' : 'Fijar así'}</button>}

@@ -32,6 +32,8 @@ export interface CuentaSeriePlan {
 export interface CuentaPlan {
   id: string; code: string; templateCode: string; name: string; plainName: string | null; keywords: string[]
   kind: 'template' | 'own'; status: EstadoCuenta; isCommon: boolean; source: 'serie' | 'manual' | 'ai_accepted' | 'migrated'
+  /** C06: llegó de Diez sin nombre; lleva el de su cuenta del plan hasta que alguien le ponga el suyo. */
+  sinNombre?: boolean
 }
 export interface EnlacePlan { companyAccountId: string; entity: Entidad; entityId: string; role: Papel }
 
@@ -60,6 +62,9 @@ export interface FilaPlan {
   cuentaId: string | null
   estado: EstadoCuenta | null
 }
+
+/** C06, respuesta 3: lo que llegó de Diez sin nombre no se inventa. */
+export const SIN_NOMBRE = 'sin nombre en Diez · pónselo'
 
 const ENTIDAD: Record<Entidad, [string, string]> = {
   supplier: ['proveedor', 'proveedores'], customer: ['cliente', 'clientes'], bank_account: ['banco', 'bancos'],
@@ -152,7 +157,7 @@ export function filasPlan(e: EntradaVista): FilaPlan[] {
   const filaCuenta = (c: CuentaPlan, tipo: 'cuenta' | 'subcuenta'): FilaPlan => {
     const q = queSeApunta(c, e, serieCodigo)
     return {
-      clave: c.id, tipo, numero: c.code, titulo: c.name, plain: q?.texto ?? null, plainPgc: q?.pgc ?? false, lleva: loQueLleva(enlacesDe.get(c.id) ?? []),
+      clave: c.id, tipo, numero: c.code, titulo: c.sinNombre ? SIN_NOMBRE : c.name, plain: c.sinNombre ? c.name : (q?.texto ?? null), plainPgc: q?.pgc ?? false, lleva: loQueLleva(enlacesDe.get(c.id) ?? []),
       origen: origenDe(c, serieCodigo.get(c.templateCode)?.isLeaf ?? true), usada: usadaCuenta(c), cuentaId: c.id, estado: c.status,
     }
   }

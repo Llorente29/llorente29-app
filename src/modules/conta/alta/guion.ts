@@ -20,9 +20,11 @@ import type { DatosDeLaCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
 import { anadirAnuales, modelosQuePresenta, type ClaseActividad, type ReglaModelo, type Territorio, type TipoEmpresa } from '@/modules/conta/lib/modelos'
 import { provinciaPorCp } from '@/modules/conta/lib/direccion'
+import { MARCA } from '../cuenta/marca'
+import { PROGRAMAS } from '@/modules/conta/alta/programa'
 
 export type PasoAlta = 'nif' | 'nombre' | 'actividad' | 'impuestos' | 'cuentas' | 'banco' | 'hecho'
-export type ClavePregunta = 'nif' | 'nombre' | 'direccion' | 'actividad' | 'periodo' | 'retiene' | 'alquiler' | 'retenido70' | 'cuentas' | 'banco'
+export type ClavePregunta = 'nif' | 'nombre' | 'direccion' | 'actividad' | 'periodo' | 'retiene' | 'alquiler' | 'retenido70' | 'cuentas' | 'programa' | 'banco'
 
 export interface OpcionAlta { valor: string; texto: string }
 
@@ -101,8 +103,8 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
     case 'nif':
       return [{
         clave: 'nif',
-        texto: c.nif ? `En tu cuenta de Folvy pone el NIF ${c.nif}. ¿Es el de la empresa?` : '¿Cuál es el NIF de la empresa?',
-        porque: c.nif ? 'Es el que tiene tu cuenta de Folvy.' : null,
+        texto: c.nif ? `En tu cuenta de ${MARCA.nombre} pone el NIF ${c.nif}. ¿Es el de la empresa?` : '¿Cuál es el NIF de la empresa?',
+        porque: c.nif ? `Es el que tiene tu cuenta de ${MARCA.nombre}.` : null,
         ayuda: 'El NIF identifica a la empresa ante Hacienda y sale en todas tus facturas. Si no lo tienes a mano, sigo sin él y lo pones luego, pero sin él no se puede terminar el alta.',
         opciones: c.nif ? [{ valor: 'cuenta', texto: `Sí, ${c.nif}` }] : [],
         entrada: 'nif', normal: c.nif ? 'cuenta' : '', noLoSe: 'No lo sé ahora',
@@ -113,7 +115,7 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
       return [
         {
           clave: 'nombre', texto: '¿Cómo se llama la empresa? El nombre que sale en el NIF.',
-          porque: nombre ? `Es el que tiene tu cuenta de Folvy${c.razonSocial ? ' como razón social' : ''}.` : null,
+          porque: nombre ? `Es el que tiene tu cuenta de ${MARCA.nombre}${c.razonSocial ? ' como razón social' : ''}.` : null,
           ayuda: 'La razón social es el nombre legal: el que sale en el NIF, en tus facturas y en tus impuestos. Si no lo sabes ahora, se lo apunto a tu asesor y lo pones luego en «Tu empresa».',
           transicion: 'Ahora, el nombre.',
           opciones: nombre ? [{ valor: 'cuenta', texto: `Sí, «${nombre}»` }] : [],
@@ -121,7 +123,7 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
         },
         {
           clave: 'direccion', texto: dir ? `¿La dirección fiscal es ${dir}?` : '¿Cuál es la dirección fiscal?',
-          porque: dir ? 'Es la de facturación de tu cuenta de Folvy.' : null,
+          porque: dir ? `Es la de facturación de tu cuenta de ${MARCA.nombre}.` : null,
           ayuda: 'La dirección fiscal dice qué impuesto llevas: IVA en la península y Baleares, IGIC en Canarias, IPSI en Ceuta y Melilla. Si no la sabes, sigo con IVA y la pones luego.',
           opciones: dir ? [{ valor: 'cuenta', texto: 'Sí, esa' }] : [],
           entrada: 'direccion', normal: dir ? 'cuenta' : '', noLoSe: 'La pongo luego',
@@ -189,6 +191,15 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
         ayuda: 'El plan contable es la lista de cuentas donde se apunta todo. El de pymes es más corto y vale si facturas menos de 8 M€ y sois menos de 50. Si no lo sabes, dejo ese: se puede cambiar después sin perder nada.',
         opciones: [{ valor: 'pymes', texto: 'El de pymes, el normal' }, { valor: 'normal', texto: 'El general' }],
         entrada: null, normal: 'pymes', noLoSe: 'Que lo decida mi asesor',
+      }, {
+        // C06, respuesta 4: no se pregunta solo por Cegid. «Otro» pide su
+        // nombre; también vale escribirlo.
+        clave: 'programa',
+        texto: '¿De qué programa vienes?',
+        porque: 'Sin programa anterior, se empieza con el plan contable de serie (el del BOE).',
+        ayuda: 'Lo apunto para saber de dónde traer tus datos. Hoy traigo los de Cegid Diez; con cualquier otro empezamos con el plan contable y te ayudamos a pasar los saldos. Si es otro, escribe su nombre. Si no lo sabes, empezamos de cero y se lo apunto a tu asesor.',
+        opciones: PROGRAMAS.map((x) => ({ valor: x.valor, texto: x.texto })),
+        entrada: 'texto', normal: 'ninguno', noLoSe: 'No lo sé',
       }]
     }
     case 'banco':

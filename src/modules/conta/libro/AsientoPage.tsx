@@ -26,6 +26,7 @@ import {
   anular, cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
 } from '@/modules/conta/services/diarioService'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
+import { MARCA } from '../cuenta/marca'
 import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
 import { estadoDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
 import { guardarDocumento, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
@@ -97,7 +98,7 @@ export default function AsientoPage() {
       const dicho = `Validado: ${NOMBRE_SERIE[v.serie as 1]} nº ${v.numero.toLocaleString('es-ES')}, encadenado con su huella. Ya está en el Mayor y no se toca: si hiciera falta, se anula.`
       // R15 · Las ventas de una plataforma guardan su documento al validarse.
       if (datos?.conDiez) {
-        try { await guardarDocumento(a.id, userName); setHecho(`${dicho} Su «Resumen de ventas» queda guardado en Folvy; aún no se ha enviado a Diez.`) }
+        try { await guardarDocumento(a.id, userName); setHecho(`${dicho} Su «Resumen de ventas» queda guardado en ${MARCA.nombre}; aún no se ha enviado a Diez.`) }
         catch (x) { setHecho(dicho); setFallo(`El documento no se ha guardado: ${x instanceof Error ? x.message : String(x)}. Sin él no se envía a Diez; pulsa «Reintentar» en «Con Diez».`) }
       } else setHecho(dicho)
       recargar()
@@ -121,7 +122,7 @@ export default function AsientoPage() {
           <h1 className="cxp-nombre">{a.concepto}</h1>
           <div className="cxd-chips">
             {a.estado === 'propuesto' && a.confianza
-              ? <Chip tono={a.confianza === 'seguro' ? 'ia' : 'ambar'}>Propuesto por Folvy · {NOMBRE_CONFIANZA[a.confianza]}</Chip>
+              ? <Chip tono={a.confianza === 'seguro' ? 'ia' : 'ambar'}>{MARCA.id === 'folvy' ? 'Propuesto por Folvy' : 'Propuesto automáticamente'} · {NOMBRE_CONFIANZA[a.confianza]}</Chip>
               : <TonoChip tono={e.tono}>{e.texto}</TonoChip>}
             <Chip>Serie {NOMBRE_SERIE[a.serie]}</Chip>
             <Chip>Fecha {fechaLarga(a.fecha)}</Chip>

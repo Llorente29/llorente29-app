@@ -31,6 +31,7 @@ import {
   baseDeTotal, cent, cuotaIva, deCent, peor, red2,
   type Confianza, type LineaAsiento, type Propuesta, type Razon,
 } from './libro'
+import { MARCA } from '../cuenta/marca'
 
 const cita = (k: keyof typeof NORMAS) => NORMAS[k].cita
 
@@ -773,7 +774,7 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
   if (!c.cliente) return no(`${e.socio} no tiene su cuenta de cliente: es a quien le facturas.`)
   if (!c.compras) return no(`A ${e.socio} le falta el tipo de gasto: ponlo en su ficha y su factura se propone.`)
   const raras = e.emitida.lineas.filter((l) => !esMercaderia(l.concepto) && !esServicio(l.concepto))
-  if (raras.length) return no(`En la factura que le haces, Folvy no sabe si «${raras[0].concepto}» es un servicio o una venta de mercaderías: dímelo.`)
+  if (raras.length) return no(`En la factura que le haces, ${MARCA.nombre} no sabe si «${raras[0].concepto}» es un servicio o una venta de mercaderías: dímelo.`)
   if (e.emitida.lineas.some((l) => esServicio(l.concepto)) && !c.ingresoServicios) return no('Falta en tu plan la cuenta de ingresos por servicios (705).')
   if (e.emitida.lineas.some((l) => esMercaderia(l.concepto)) && !c.ingresoMercaderias) return no('Falta en tu plan la cuenta de ventas de mercaderías (700).')
   const cuotasR = cuotasYRedondeo(e.recibida.lineas, e.recibida.total)

@@ -19,6 +19,7 @@ import type {
 import type { Ejercicio } from '@/modules/conta/lib/ejercicios'
 import { limpiarTitulo } from '@/modules/conta/empresa/datosEmpresa'
 import { cargarIa } from '@/modules/conta/services/iaService'
+import { autorVisible } from '@/modules/conta/lib/autor'
 
 type Fila = Record<string, unknown>
 const txt = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null)
@@ -114,7 +115,7 @@ export async function cargarDatosEmpresa(accountId: string, companyId: string, e
       auditorName: txt(e.auditor_name), auditorTaxId: txt(e.auditor_tax_id),
       auditOpinion: (txt(e.audit_opinion) as EjercicioBd['auditOpinion']) ?? null,
     })),
-    cierres: locks.map((l): Cierre => ({ mes: String(l.month), quien: txt(l.locked_by_name), cuando: String(l.locked_at) })),
+    cierres: locks.map((l): Cierre => ({ mes: String(l.month), quien: autorVisible(txt(l.locked_by_name)), cuando: String(l.locked_at) })),
     socios: socios === null ? null : socios.map((s): Socio => ({
       id: String(s.id), fullName: String(s.full_name), taxId: txt(s.tax_id),
       roles: Array.isArray(s.roles) ? (s.roles as unknown[]).map(String) : [], ownershipPct: num(s.ownership_pct),

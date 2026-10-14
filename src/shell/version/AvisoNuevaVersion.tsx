@@ -11,6 +11,7 @@
 
 import { RefreshCw } from 'lucide-react'
 import { useNuevaVersion } from './useNuevaVersion'
+import { MARCA } from '@/marca/marca'
 
 export default function AvisoNuevaVersion() {
   const { hayNueva, recargar } = useNuevaVersion()
@@ -20,7 +21,7 @@ export default function AvisoNuevaVersion() {
     <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-accent/30 bg-card shadow-lg p-3 flex items-start gap-3">
       <RefreshCw size={16} className="text-accent shrink-0 mt-0.5" />
       <div className="text-sm">
-        <p className="text-text-primary font-medium">Hay una versión nueva de Folvy</p>
+        <p className="text-text-primary font-medium">Hay una versión nueva de {MARCA.nombre}</p>
         <p className="text-text-secondary text-xs mt-0.5">
           Lo que tengas a medias no se pierde al recargar, pero termina antes si estás escribiendo.
         </p>

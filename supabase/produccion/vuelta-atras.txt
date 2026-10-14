@@ -1,8 +1,20 @@
 # Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
-# inverso. C04b · Respuesta 15 — el documento de cada asiento de ventas.
-# El .down.sql PARA si ya hay algún documento guardado o algún fichero en el
-# bucket: quitarlo se llevaría el enlace de un PDF de verdad con su asiento.
+# inverso. C06 · Contabilidad sola.
+#   0400: fuera conta_programa_anterior, su registro y su función. PARA si ya
+#         hay respuestas (se copian antes).
+#   0300: conta_diez_subcuentas vuelve al cuerpo de producción (md5
+#         33572edaa7e05e1bab66e024168d0036, medido el 13/10 a las 22:44 UTC:
+#         idéntico); fuera conta_diez_listo, el disparador y name_pending.
+#   0200: fuera conta_diez_base y su registro (con la fila de Foodint).
+#   0100: los seis disparadores vuelven a su cuerpo de producción (mismo
+#         código que el vivo, medido el 13/10: 6 de 6; cuatro los guarda
+#         producción con saltos CRLF y el fichero con LF) y fuera las dos
+#         funciones y las dos columnas. PARA si ya hay alguna cuenta con
+#         business_type 'otra_actividad'.
 # En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
 # esperado: se deshace la tanda) y no para.
-cuenta: scripts/conta/produccion/cuentas/documentos.sql
-supabase/vuelta-atras/20261021T0100_conta_documentos.down.sql
+cuenta: scripts/conta/produccion/cuentas/contabilidad-sola.sql
+supabase/vuelta-atras/20261111T0400_c06_programa_anterior.down.sql
+supabase/vuelta-atras/20261111T0300_c06_traer_listo.down.sql
+supabase/vuelta-atras/20261111T0200_c06_diez_base.down.sql
+supabase/vuelta-atras/20261111T0100_c06_cuenta_sola.down.sql

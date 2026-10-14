@@ -188,8 +188,13 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
     // Escrito con sus palabras también vale para los botones.
     await decir(page, 'el de pymes')
     await expect(log(page).getByText(/^Entendido: plan de pymes\. Te dejo cuentas de 8 dígitos y el ejercicio \d{4} abierto/)).toBeVisible()
+    // C06, respuesta 4: de qué programa viene, escrito con sus palabras.
+    await expect(log(page).getByText('¿De qué programa vienes?').last()).toBeVisible()
+    await decir(page, 'empiezo de cero')
+    await expect(log(page).getByText(/^Empezamos de cero, con el plan general contable de pymes/)).toBeVisible()
     await decir(page, 'ni idea')
-    await expect(log(page).getByText(/^Listo: .* está montada\./)).toBeVisible()
+    // El alta no termina sin el plan activado: lo activa al terminar y lo dice.
+    await expect(log(page).getByText(/^Listo: .* está montada\. Plan activado: \d+ cuentas de serie/)).toBeVisible({ timeout: 45_000 })
     await expect(carril.getByText('6 de 6')).toBeVisible()
   } finally {
     await borrarEmpresas(s, CUENTA_C.id, true)
@@ -229,6 +234,7 @@ test.describe('cuenta C: salir, atrás y cerrar no pierden nada', () => {
       await page.getByRole('status', { name: 'Alta a medias' }).getByRole('link', { name: 'Seguir' }).click()
       await expect(log(page).getByText(PREGUNTA_CUENTAS)).toBeVisible()
       await page.getByRole('button', { name: 'El de pymes, el normal' }).click() // contesta una más antes de irse
+      await page.getByRole('button', { name: 'Empiezo de cero' }).click() // y de qué programa viene (C06, respuesta 4)
       await expect(log(page).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
       await page.goBack()
       await expect(page.getByRole('status', { name: 'Alta a medias' })).toContainText('5 de 6')
@@ -251,7 +257,14 @@ test.describe('cuenta C: salir, atrás y cerrar no pierden nada', () => {
       const otra = await context.newPage()
       await entrarComo(otra, CUENTA_C.email)
       await otra.goto('/conta/alta')
+      // C06, respuesta 4: el plan y «¿De qué programa vienes?» van en el mismo
+      // paso; al volver, el plan ya elegido no se repregunta: sigue en la de programa.
+      await expect(log(otra).getByText('¿De qué programa vienes?').last()).toBeVisible()
+      await expect(log(otra).getByText(PREGUNTA_CUENTAS)).toHaveCount(0)
+      await otra.getByRole('button', { name: 'Holded', exact: true }).click()
+      await expect(log(otra).getByText('De momento no traigo solo los datos de Holded; empezamos con el plan general contable y te ayudamos a pasar los saldos.')).toBeVisible()
       await expect(log(otra).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
+      // Contestada la de programa, «Tus cuentas» queda hecha con el plan que eligió antes de cerrar.
       await expect(otra.getByRole('complementary', { name: 'Lo que llevamos' }).getByText(/^Plan general · 8 dígitos/)).toBeVisible()
     } finally {
       await borrarEmpresas(s, CUENTA_C.id, true)
@@ -429,8 +442,9 @@ test('cuenta A: otra empresa en la ventana, con píldoras; cerrar guarda; y lo q
     // «No lo sé»: deja la normal y lo apunta.
     await page.getByRole('button', { name: 'Que lo decida mi asesor' }).click()
     await expect(log(page).getByText('Lo dejo en «El de pymes, el normal», que es lo normal, y se lo apunto a tu asesor como duda.')).toBeVisible()
+    await page.getByRole('button', { name: 'Empiezo de cero' }).click()
     await page.getByRole('button', { name: 'Lo pongo luego' }).click()
-    await expect(log(page).getByText(/^Listo: .* está montada\./)).toBeVisible()
+    await expect(log(page).getByText(/^Listo: .* está montada\./)).toBeVisible({ timeout: 45_000 })
 
     // En «Tu empresa»: la marca, la sugerencia real y el registro.
     await log(page).getByRole('link', { name: 'Tu empresa' }).click()

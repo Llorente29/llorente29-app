@@ -45,8 +45,12 @@ import {
   PASSWORD_REGEX,
   validatePassword,
 } from '../lib/passwordPolicy'
+import { PieEntrada } from '../marca/PiezasMarca'
+import { CON_MARCA } from '../marca/marca'
+import { avisarContrasenaCambiada, fraseAviso } from '../marca/avisoContrasena'
+import { supabase } from '../lib/supabase'
 
-type FormState = 'idle' | 'submitting' | 'error'
+type FormState = 'idle' | 'submitting' | 'error' | 'hecho'
 
 // Tiempo máximo de espera (ms) para que PKCE procese el ?code= antes de
 // dar por inválido el flow. supabase-js suele tardar 50-200ms; damos 3s
@@ -66,7 +70,9 @@ export default function ResetPasswordConfirmPage() {
   const [initialHasCode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     const params = new URLSearchParams(window.location.search)
-    return params.has('code') || params.has('error')
+    // C06: el correo de contraseña con marca trae ?token_hash= (generateLink
+    // de conta-contrasena), no ?code=: se canjea abajo con verifyOtp.
+    return params.has('code') || params.has('error') || params.has('token_hash')
   })
 
   // Flag de "estamos esperando que termine el procesamiento PKCE".
@@ -76,6 +82,23 @@ export default function ResetPasswordConfirmPage() {
   const [passwordRepeat, setPasswordRepeat] = useState('')
   const [formState, setFormState] = useState<FormState>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  // C06: con la marca, lo que pasó con el aviso de «contraseña cambiada».
+  const [hecho, setHecho] = useState<string | null>(null)
+
+  // C06: ?token_hash=…&type=recovery (correo con marca): canjearlo una vez al
+  // montar, como hace WelcomePage. Sin token_hash no hace nada.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tokenHash = params.get('token_hash')
+    if (!tokenHash || !supabase) return
+    let cancelado = false
+    void supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error }) => {
+      if (cancelado) return
+      if (error) { console.error('[ResetPasswordConfirm] verifyOtp falló:', error); setWaitingForPkce(false) }
+      else window.history.replaceState({}, '', window.location.pathname)
+    })
+    return () => { cancelado = true }
+  }, [])
 
   // Timeout de espera PKCE: si tras 3s sigue sin haber sesión y aún
   // estamos esperando, declarar inválido el flow.
@@ -126,7 +149,7 @@ export default function ResetPasswordConfirmPage() {
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <Logo size="xl" variant="light" className="mb-2" />
-            <p className="text-sm text-text-secondary mt-1">App del equipo</p>
+            <p className="text-sm text-text-secondary mt-1">{CON_MARCA ? 'Tu contabilidad' : 'App del equipo'}</p>
           </div>
           <div className="bg-card rounded-xl shadow-lg overflow-hidden border border-border-default">
             <div className="p-8 text-center space-y-3">
@@ -148,9 +171,7 @@ export default function ResetPasswordConfirmPage() {
               </div>
             </div>
           </div>
-          <p className="text-center text-xs text-text-secondary mt-4">
-            Folvy · Restauración Profesional
-          </p>
+          <PieEntrada />
         </div>
       </div>
     )
@@ -193,6 +214,15 @@ export default function ResetPasswordConfirmPage() {
     //    correctamente vía getCurrentUser() dentro de logSecurityEvent.
     //    Usamos void para no bloquear el flow principal con el INSERT.
     void logSecurityEvent('password_reset_completed')
+
+    // C06 (respuesta 2): con la marca, aviso de «contraseña cambiada» y la
+    // pantalla dice a quién se mandó o por qué no (regla 8). Con Folvy, nada
+    // de esto: el camino de siempre, abajo.
+    if (CON_MARCA) {
+      setHecho(fraseAviso(await avisarContrasenaCambiada()))
+      setFormState('hecho')
+      return
+    }
 
     // 3) Resolver redirect al Shell con checkAccountStatus (Enfoque B,
     //    Decisión 1 Sesión 9). El user ya tiene sesión válida; no
@@ -249,6 +279,15 @@ export default function ResetPasswordConfirmPage() {
             </p>
           </div>
 
+          {formState === 'hecho' && hecho ? (
+            <div className="p-6 space-y-4" role="status">
+              <p className="text-sm text-text-primary">{hecho}</p>
+              <button type="button" onClick={() => navigate('/conta/inicio', { replace: true })}
+                className="w-full py-3 rounded-md bg-accent text-text-on-accent font-semibold hover:bg-accent-hover transition-base">
+                Entrar en tu contabilidad
+              </button>
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">
@@ -316,12 +355,11 @@ export default function ResetPasswordConfirmPage() {
               Una vez guardada, entrarás directamente en tu cuenta.
             </p>
           </form>
+          )}
         </div>
 
         {/* Pie */}
-        <p className="text-center text-xs text-text-secondary mt-4">
-          Folvy · Restauración Profesional
-        </p>
+        <PieEntrada />
       </div>
     </div>
   )

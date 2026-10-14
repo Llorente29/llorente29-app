@@ -8,6 +8,7 @@ import {
   ejercicioActual, mesesConEstado, resumenMeses, textoIva, type DatosEmpresa,
 } from '@/modules/conta/empresa/datosEmpresa'
 import { faltan, requisitosParaPresentar } from '@/modules/conta/lib/presentar'
+import { MARCA } from '../cuenta/marca'
 
 export type ClaveApartado = 'quien-eres' | 'actividad' | 'impuestos' | 'ejercicio' | 'socios' | 'presentar' | 'detalle' | 'registro'
 
@@ -70,7 +71,7 @@ export const APARTADOS: readonly Apartado[] = [
   },
   { id: 'detalle', titulo: () => 'Detalle contable', resumen: () => 'Viene puesto; lo normal es no tocarlo' },
   {
-    id: 'registro', titulo: () => 'Lo que ha hecho Folvy',
+    id: 'registro', titulo: () => `Lo que ha hecho ${MARCA.nombre}`,
     resumen: (d) => {
       const vivas = d.ia.registro.filter((r) => !r.undoneAt).length
       return vivas === 0 ? 'Nada todavía' : `${vivas} ${vivas === 1 ? 'cosa' : 'cosas'}; se pueden deshacer`

@@ -13,6 +13,7 @@ import { useHacer } from '@/modules/conta/empresa/useHacer'
 import { Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import type { Quien } from '@/modules/conta/empresa/apartados'
+import { MARCA } from '../cuenta/marca'
 
 export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil: boolean; alCambiar: () => void }) {
   const [c, setC] = useState<CorteEmpresa | null>(null)
@@ -44,18 +45,18 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
       meses = await fijarCorte(quien.companyId, hasta, prog)
       setEditando(false)
     }, () => (hasta
-      ? `Guardado: hasta el ${fechaLarga(hasta)} lo trae ${prog} (${meses} ${meses === 1 ? 'mes cerrado' : 'meses cerrados'} como traídos); Folvy asienta desde el ${fechaLarga(desde)} y no propone nada de antes.`
-      : 'Guardado: sin corte. Folvy asienta el ejercicio entero.'))
+      ? `Guardado: hasta el ${fechaLarga(hasta)} lo trae ${prog} (${meses} ${meses === 1 ? 'mes cerrado' : 'meses cerrados'} como traídos); ${MARCA.nombre} asienta desde el ${fechaLarga(desde)} y no propone nada de antes.`
+      : `Guardado: sin corte. ${MARCA.nombre} asienta el ejercicio entero.`))
   }
 
   return (
-    <TarjetaApartado titulo="Desde cuándo asienta Folvy" movil={movil}
+    <TarjetaApartado titulo={`Desde cuándo asienta ${MARCA.nombre}`} movil={movil}
       accion={!fijo && !editando ? <button type="button" className="cx-enlace" onClick={empezar}>Cambiar</button> : undefined}>
       {!editando && (
         <p style={{ margin: 0 }} data-testid="corte-actual">
           {c.hasta
-            ? <>Hasta el <strong>{fechaLarga(c.hasta)}</strong> lo trae {c.programa ?? 'el programa anterior'}; desde el <strong>{fechaLarga(diaSiguiente(c.hasta))}</strong> asienta Folvy.</>
-            : <>Sin fecha de corte: Folvy asienta el ejercicio entero.</>}
+            ? <>Hasta el <strong>{fechaLarga(c.hasta)}</strong> lo trae {c.programa ?? 'el programa anterior'}; desde el <strong>{fechaLarga(diaSiguiente(c.hasta))}</strong> asienta {MARCA.nombre}.</>
+            : <>Sin fecha de corte: {MARCA.nombre} asienta el ejercicio entero.</>}
         </p>
       )}
       {fijo && (
@@ -67,9 +68,9 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
       {editando && (
         <form onSubmit={guardar} className="cx-columna" aria-label="Fecha de corte">
           <label className="cx-campo">
-            <span className="cx-etiqueta">¿Desde qué día asienta Folvy?</span>
+            <span className="cx-etiqueta">¿Desde qué día asienta {MARCA.nombre}?</span>
             <input className="cx-input" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
-            <span className="cx-ayuda">Lo de antes lo trae el programa anterior. Vacío: Folvy asienta el ejercicio entero.</span>
+            <span className="cx-ayuda">Lo de antes lo trae el programa anterior. Vacío: {MARCA.nombre} asienta el ejercicio entero.</span>
           </label>
           <label className="cx-campo">
             <span className="cx-etiqueta">¿Con qué programa lo llevabais antes?</span>

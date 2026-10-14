@@ -35,6 +35,7 @@ import type { LecturaPdf } from '@/modules/conta/lib/lectorDiez'
 import { ACEPTA, abrir, type FicheroAbierto } from '@/modules/conta/plan/leerFicheros'
 import { fichasParaCasar, guardarImportacion, huellaDe, tirarImportacion, traerPlan } from '@/modules/conta/services/importarService'
 import type { DatosPlan } from '@/modules/conta/services/planService'
+import { MARCA } from '../cuenta/marca'
 
 type Paso = 1 | 2 | 3
 
@@ -145,7 +146,7 @@ function PasoFichero({ p, empezarDeCero, seguir }: {
         <h2 id="traer-titulo" className="cx-tarjeta-titulo">¿Vienes de otro programa?</h2>
         <p className="cx-ayuda" style={{ margin: 0 }}>
           Si llevabas la contabilidad en otro programa, trae tu plan: tus cuentas se quedan con el mismo número que tenían allí,
-          enlazadas a tus proveedores y bancos de Folvy. Tu asesor podrá comparar y nada cambia de número.
+          enlazadas a tus proveedores y bancos de {MARCA.nombre}. Tu asesor podrá comparar y nada cambia de número.
         </p>
         <div className="cx-traer-programas" role="group" aria-label="De qué programa vienes">
           {PROGRAMAS.map((x) => (
@@ -156,7 +157,7 @@ function PasoFichero({ p, empezarDeCero, seguir }: {
           ))}
           <button type="button" className="cx-traer-programa cx-traer-cero" onClick={empezarDeCero}>
             <span className="cx-fila-titulo">No, empiezo de cero</span>
-            <span className="cx-fila-apoyo">Folvy pone el plan del BOE con su numeración</span>
+            <span className="cx-fila-apoyo">{MARCA.nombre} pone el plan del BOE con su numeración</span>
           </button>
         </div>
       </section>
@@ -234,7 +235,7 @@ function Cambiar({ f, fichas, poner, cerrar }: { f: FilaRevision; fichas: { prov
     <div className="cx-traer-cambiar" role="group" aria-label={`Cambiar ${f.code}`}>
       {f.clase !== 'retencion' && f.clase !== 'iva' && f.clase !== 'otra' && (
         <>
-          <input className="cx-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={banco ? 'Busca un banco de Folvy' : 'Busca una ficha de proveedor'} aria-label="Buscar ficha" autoFocus />
+          <input className="cx-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={banco ? `Busca un banco de ${MARCA.nombre}` : 'Busca una ficha de proveedor'} aria-label="Buscar ficha" autoFocus />
           <ul className="cx-traer-fichas">
             {lista.map((x) => (
               <li key={x.id}><button type="button" className="cx-enlace"
@@ -329,7 +330,7 @@ function PasoRevisar({ revision, fichas, nombreFichero, cambiar, guardar, tirar,
         <div className="cx-traer-cifra"><span className="cx-fila-apoyo">Entran tal cual</span><span className="cx-cifra cx-traer-numero">{k.tal}</span><span className="cx-traer-nota cx-traer-nota-verde">proveedores, bancos, clientes y gastos con su número de {p}</span></div>
         <div className="cx-traer-cifra"><span className="cx-fila-apoyo">Para revisar</span><span className="cx-cifra cx-traer-numero">{k.revisar}</span><span className="cx-traer-nota cx-traer-nota-ambar">{k.pendientes ? `${k.pendientes} sin decidir: nombres parecidos, iguales o sin NIF` : 'nombres parecidos o sin NIF: compruébalos'}</span></div>
         <div className="cx-traer-cifra"><span className="cx-fila-apoyo">Cambian</span><span className="cx-cifra cx-traer-numero">{k.cambian}</span><span className="cx-traer-nota cx-traer-nota-azul">472 y 477: aquí van por tipo de IVA; el 303 suma igual</span></div>
-        <div className="cx-traer-cifra"><span className="cx-fila-apoyo">Nuevas en Folvy</span><span className="cx-cifra cx-traer-numero">{k.nuevas}</span><span className="cx-traer-nota">fichas de proveedor que se crean, por completar</span></div>
+        <div className="cx-traer-cifra"><span className="cx-fila-apoyo">Nuevas en {MARCA.nombre}</span><span className="cx-cifra cx-traer-numero">{k.nuevas}</span><span className="cx-traer-nota">fichas de proveedor que se crean, por completar</span></div>
       </div>
       <div className="cx-tablas-barra">
         <div className="cx-tablas-filtros" role="group" aria-label="Qué filas ver">
@@ -341,7 +342,7 @@ function PasoRevisar({ revision, fichas, nombreFichero, cambiar, guardar, tirar,
         {!movil && (
           <div role="row" className="cx-traer-fila cx-traer-titulos">
             <span role="columnheader">NÚMERO (se conserva)</span><span role="columnheader">EN {p.toUpperCase()}</span><span aria-hidden="true" />
-            <span role="columnheader">EN FOLVY</span><span role="columnheader">CONFIANZA</span><span role="columnheader"><span className="cx-oculto">Acciones</span></span>
+            <span role="columnheader">EN {MARCA.nombre.toUpperCase()}</span><span role="columnheader">CONFIANZA</span><span role="columnheader"><span className="cx-oculto">Acciones</span></span>
           </div>
         )}
         {vistas.map((f) => <FilaTabla key={f.code} f={f} filas={filas} fichas={fichas} movil={movil} choque={choques.get(f.code)} poner={(code, d, porque) => cambiar(decidir(filas, code, d, porque))} />)}
@@ -362,7 +363,7 @@ function PasoRevisar({ revision, fichas, nombreFichero, cambiar, guardar, tirar,
       <Resultado hecho={accion.hecho} fallo={accion.fallo} />
       <div className="cx-pie">
         <button type="button" className="cx-enlace" onClick={tirar} disabled={accion.guardando}>Tirar y empezar de nuevo</button>
-        <span className="cx-ayuda" style={{ flex: 1 }}>Nada se escribe hasta el paso 3. Luego podrás deshacerlo entero desde «Lo que ha hecho Folvy».</span>
+        <span className="cx-ayuda" style={{ flex: 1 }}>Nada se escribe hasta el paso 3. Luego podrás deshacerlo entero desde «Lo que ha hecho {MARCA.nombre}».</span>
         <button type="button" className="cx-boton-sec" onClick={guardar} disabled={accion.guardando}>Guardar y seguir luego</button>
         <button type="button" className="cx-boton" onClick={seguir} disabled={problemas.length > 0 || accion.guardando}>Siguiente: traer el plan →</button>
       </div>
@@ -460,7 +461,7 @@ export function TraerPlan({ p, empezarDeCero, alTraer }: { p: DatosPlan; empezar
         <li>Cada cuenta conserva su número de {corto(revision.programa)}; el nombre de allí se guarda aparte para comparar.</li>
         <li>Se activa el plan de {p.plan === 'pymes' ? 'pymes' : 'general'} con {p.digitos} dígitos: las cuentas del BOE que falten, el IVA por tipo y tus retenciones y tipos de gasto, enlazados.</li>
         {plan3.crear.length > 0 && <li>Se crean {plan3.crear.length} {plan3.crear.length === 1 ? 'ficha' : 'fichas'} de proveedor «Traída de {corto(revision.programa)} · por completar».</li>}
-        <li>Si algo no te convence, en «Lo que ha hecho Folvy» lo deshaces entero mientras no haya asientos.</li>
+        <li>Si algo no te convence, en «Lo que ha hecho {MARCA.nombre}» lo deshaces entero mientras no haya asientos.</li>
       </ul>
       <Resultado hecho={null} fallo={falloTraer} />
       <div className="cx-pie" style={{ justifyContent: 'flex-end' }}>
