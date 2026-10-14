@@ -98,16 +98,20 @@ const tramo = async (desde: number, hasta: number): Promise<Apunte[]> => {
   for (let i = 0; ; i++) {
     try { return await c.todas<Apunte>(ruta) } catch (e) {
       const pasajero = JSON.stringify((e as { cuerpo?: unknown }).cuerpo ?? '').includes('OutOfMemory') || (e as Error)?.name === 'TimeoutError'
-      if (!pasajero || i >= 4) throw e
+      if (!pasajero || i >= 2) throw e
       reintentos[`${desde}`] = i + 1
       await new Promise((r) => setTimeout(r, 30_000 * (i + 1)))
     }
   }
 }
+const sinLeer: string[] = []
 const leerMes = async (mes: string): Promise<Apunte[]> => {
   const [primero, ultimo] = limitesMes(mes)
   const out: Apunte[] = []
-  for (let d = primero; d <= ultimo; d += 7) out.push(...(await tramo(d, Math.min(d + 6, ultimo))))
+  // Por días (14/10: ni una semana de enero contestaba en 90 s).
+  for (let d = primero; d <= ultimo; d++) {
+    try { out.push(...(await tramo(d, d))) } catch { sinLeer.push(String(d)) }
+  }
   return out
 }
 
@@ -118,7 +122,11 @@ const asientosMes: Record<string, number> = {}
 let tras = 0, otroEjercicio = 0
 const vistos = new Set<string>()
 let repetidos = 0
-for (let m = 1; Number(`${EJERCICIO}${String(m).padStart(2, '0')}`) <= Number(HASTA_MES); m++) {
+// Primero lo de después del corte (lo que explica la diferencia); luego el resto.
+const mesCorte = Number(CORTE.slice(4, 6))
+const ordenMeses = [...Array(12).keys()].map((i) => i + 1).filter((m) => Number(`${EJERCICIO}${String(m).padStart(2, '0')}`) <= Number(HASTA_MES))
+  .sort((a, b) => Number(a <= mesCorte) - Number(b <= mesCorte) || a - b)
+for (const m of ordenMeses) {
   const mes = `${EJERCICIO}${String(m).padStart(2, '0')}`
   const apuntes: Apunte[] = await leerMes(mes)
   asientosMes[mes] = apuntes.length
@@ -156,6 +164,9 @@ md(`## Diez · balance abreviado contra Folvy, línea a línea (C0008, ejercicio
 md('### Asientos leídos por mes', '', ...Object.entries(asientosMes).map(([m, k]) => `- ${m}: ${k}`), '')
 md(`Tramos reintentados (Diez sin memoria o más de 90 s): ${Object.keys(reintentos).length ? Object.entries(reintentos).map(([m, k]) => `${m} (${k})`).join(', ') : 'ninguno'}`, '')
 md(`Asientos repetidos en el listado: ${repetidos} · de otro ejercicio: ${otroEjercicio} · con fecha posterior al corte: ${tras}`, '')
+const completo = sinLeer.length === 0
+md(`Días que Diez no ha contestado (tras reintentar): ${sinLeer.length ? `${sinLeer.length} — ${sinLeer.slice(0, 40).join(', ')}${sinLeer.length > 40 ? ' …' : ''}` : 'ninguno'}`, '')
+if (!completo) md('**Lectura INCOMPLETA**: las comparaciones de abajo no valen como prueba (falta lo de esos días).', '')
 md('### Por subcuenta, a la fecha de corte', '', `- subcuentas con saldo en algún lado: ${codigos.size}`, `- que NO coinciden al céntimo: ${distintas.length}`,
   ...Object.entries(distintasPorGrupo).sort().map(([g, k]) => `  - grupo ${g}: ${k}`), '')
 md('### Por línea', '', '| Línea | Diez al corte = Folvy al corte | Diez con todo = Folvy al corte | Diez mueve después del corte |', '|---|---|---|---|')
@@ -164,7 +175,7 @@ for (const k of Object.keys(LINEAS)) {
 }
 md('', 'Las cifras (por línea: Diez al corte, Diez con todo, Folvy, lo de después; y cada subcuenta que no coincide): cifradas.', '')
 
-const claro = gzipSync(Buffer.from(JSON.stringify({ ejercicio: EJERCICIO, corte: CORTE, lineas: { diezAlCorte: lDiezCorte, diezConTodo: lDiezTodo, folvy: lFolvy, despues: lDespues }, distintas, despues: Object.fromEntries(despues) })))
+const claro = gzipSync(Buffer.from(JSON.stringify({ ejercicio: EJERCICIO, corte: CORTE, sinLeer, lineas: { diezAlCorte: lDiezCorte, diezConTodo: lDiezTodo, folvy: lFolvy, despues: lDespues }, distintas, despues: Object.fromEntries(despues) })))
 const clave = randomBytes(32), iv = randomBytes(12)
 const cif = createCipheriv('aes-256-gcm', clave, iv)
 const datos = Buffer.concat([cif.update(claro), cif.final()])

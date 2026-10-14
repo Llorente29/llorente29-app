@@ -125,7 +125,7 @@ jobs:
     # las cifras, cifradas con testigo-clave-publica.pem.
     if: github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura:balance]')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       PROD_REF: xzmpnchlguibclvxyynt
       STAGING_REF: oseymswjlzplqoxrfjzi
