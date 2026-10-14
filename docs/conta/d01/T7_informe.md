@@ -847,3 +847,79 @@ al de las 15:21Z. Los 12 md5, los medidos.
 El resto, igual. La 0210 amplía los dos CHECK manteniendo `ai_accepted` y
 `resumen_ventas`, y su `.down.sql` los deja igual. La vuelta atrás no tropieza
 con esas filas.
+
+## 13 · Después del real #74: las edge functions, y el agente «libro»
+
+### 13.1 · Las edge functions: lo desplegado, medido antes
+
+Las tres que toca D01 son las carpetas cambiadas y cada función que importa un
+`_shared` cambiado (`diezEnviar`, `diezRecibida`, `facturasEntrada`,
+`lecturaFactura`, `ocrAlbaranNucleo`): `ocr-albaran`, `conta-facturas-entrada`
+y `conta-diez-enviar`.
+
+| Función | Producción hoy | Contra `origin/main` |
+|---|---|---|
+| `conta-diez-enviar` | v4 | idéntica: los 7 ficheros, md5 a md5 (#184 y #185 dentro) |
+| `ocr-albaran` | v55 | la de `main`: solo importa `cors.ts`, con la cabecera y el modo MEDIR de `main` |
+| `conta-facturas-entrada` | no está | nueva |
+
+**`conta-diez-enviar` NO se podía desplegar desde la rama tal como estaba**:
+le faltaban #184 y #185 de la C, que están vivos en producción. Desplegarla
+así habría borrado:
+
+- «PDF pendiente en Diez»;
+- la autorización de `conta_diez_autorizo`;
+- el cliente por su subcuenta.
+
+Es la regla 1, literal. Por eso se ha traído `main` (f117885f) a la rama antes
+del PR (e43f2865). `_shared/diezEnviar.ts` se ha juntado a mano:
+
+- el `Plan` del D01 (ventas y recibidas por el mismo `enviar()`);
+- con todo lo de la C06b R7.
+
+**Lo que esto cambia para una recibida, y está probado:** sin almacén en Diez
+va sin adjunto y queda «PDF pendiente en Diez». Sin PDF en Folvy sigue sin
+ir. C0008 solo con su autorización, y C0001 nunca. Las pruebas de la C, sin
+tocar, en verde.
+
+**Staging:** `conta-diez-enviar` desplegada desde e43f2865 (run 38620600063).
+Los 8 ficheros desplegados son los del commit, md5 a md5. La e2e del frente
+D01, en verde (run 38620600125).
+
+### 13.2 · El agente «libro» en rojo: qué mira y por qué
+
+`agente-libro.sql` hace 12 comprobaciones del Libro diario. Lo he lanzado en
+producción en solo lectura, pidiendo solo cuántas filas falla cada una:
+
+- **11 dan 0**: cuadre, cadena, IVA, ventas del día, cedidas, socio, resultado
+  (local y reparto), mes cerrado, cierre del día y día sin asiento.
+- **Solo «huecos»: 566.** Mirados: 14.934 asientos validados con 39.454
+  apuntes, en 1 empresa.
+
+**Los 566 son un único tramo seguido, y es de lo traído de Diez:**
+
+- el ejercicio 2026, mixto de Diez hasta el 30/09, en la serie 1 (Ventas);
+- 1.234 asientos traídos (`migrated`), numerados del 1 al 1800;
+- faltan del 432 al 997: el 431 es del 30/06 y el 998 del 01/07;
+- ninguno de esos números está en otro estado en Folvy.
+
+**Por qué salta ahora.** La comprobación (CCom art. 29.1) solo mira las
+series en las que hay al menos un asiento que **no** es traído. Hasta hoy, la
+serie 1 de 2026 solo tenía traídos, y se saltaba. A las 16:54:48Z se validó el
+primer asiento propio de esa serie: el 1801, «Ventas Uber · Foodint Alcalá»
+del 01/10, el que autorizó la 0710. Desde ese momento la serie entra en la
+comprobación con su máximo, 1801, y cuenta como huecos los números que Diez
+no tenía.
+
+Por eso sale en rojo antes y después de la tanda D01: la tanda no crea ni
+valida asientos.
+
+**Lo que no sé, y no lo supongo:** si del 432 al 997 son asientos de Diez que
+no se trajeron, o números que Diez no usó. Se ve leyendo la serie 1 de 2026 en
+C0008, y eso es del workflow de la C.
+
+**Lo que no he cambiado:** nada. Las dos salidas razonables son de la C, y
+las decide Julio:
+
+1. la comprobación empieza a contar después del último traído (el corte);
+2. o se trae lo que falte de Diez.
