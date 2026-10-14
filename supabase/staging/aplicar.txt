@@ -1,5 +1,7 @@
-# C06 · Tarea 6 — el recorrido entero de la cuenta del frente C.
-#   La semilla del recorrido: e2e_c06_recorrido_base (SOLO staging, no es una
-#   migración): el administrador de plataforma de prueba registra la C0009 para
-#   la empresa de una cuenta «Recorrido de Prueba C06 …», y a nadie más.
-supabase/seeds/conta/seed_c06_recorrido_staging.sql
+# C06 · Respuesta 4 — de qué programa viene cada empresa (el alta pregunta y
+# guarda la respuesta con su registro).
+#   0400: conta_programa_anterior, su registro y conta_programa_anterior_poner.
+#   Su prueba, en una transacción con ROLLBACK (incluida la misma vara antes y
+#   después sobre conta_diez_listo de todas las empresas).
+supabase/migrations/20261111T0400_c06_programa_anterior.sql
+supabase/staging/sql/20261111_c06_programa_anterior_prueba.sql
