@@ -128,6 +128,8 @@ decides tú. **¿Lo quieres para la tarea 7?**
 | Las de antes (bancos, tarjetas) | mismo aplicador | 13/13 y 7/7, siguen |
 | Semilla B01 con las aperturas fechadas a 30/09 | run 38482604756 | aplicada |
 | E2e completa de la rama (e5f6a96) | run 38482604754 | **todas las del B01 en verde**. Fallan 4 ajenas, que no toco (abajo) |
+| E2e completa tras los arreglos (8ec726b) | run 38498562193 | **solo fallan 2**, las dos de `c01b/flujos.spec.ts:161` («marcar pagada», de C, ya rojas antes de esta tanda). **libro.spec del C04 ya pasa** |
+| E2e solo del B01, la de las capturas (8ec726b) | run 38502626395 | **verde**, ordenador y móvil, con la guarda nueva de importes cortados |
 | Agente nocturno con el paso nuevo | run 38482604778 | «Conciliación (solo lectura)» e «Informe» en **verde**; «Aviso» y «Resultado» se saltan porque no hubo rojo, como deben. El job sale rojo por «Plan contable» y «Datos maestros» (semillas de otros frentes) |
 
 Lo que diría hoy el agente, consultado a mano en staging (solo lectura):
@@ -158,14 +160,17 @@ fixture (13/10) ya no sale porque ahora la e2e deja su pasada registrada.
 
    Lo desplazan un manual que dejó una e2e sin deshacer y dos «Ventas Glovo»
    del cierre del día. No lo arreglo porque es de C04/C04b; lo aviso.
+   En la e2e completa siguiente (run 38498562193) libro.spec ya pasó: la cola
+   de «Lo que he hecho yo» se había movido.
 
 ## 5. Capturas
 
 Todas en `docs/conta/capturas/b01/pantallas/`, de staging-conta con datos
 inventados, ordenador 1440 × 900 y móvil 390 × 844, página entera. Primera
 tanda: e2e solo del B01, [run 38490328729](https://github.com/Llorente29/llorente29-app/actions/runs/38490328729)
-(verde, commit 9415dbc). La segunda (abajo) añade el cierre en el móvil y la
-banda corregida.
+(verde, commit 9415dbc). Las de esta página son las de la última, [run 38502626395](https://github.com/Llorente29/llorente29-app/actions/runs/38502626395)
+(verde, commit 8ec726b): añade el cierre en el móvil, la banda corregida y los
+importes sin cortar.
 
 ### 5.1 Movimientos, ordenador y móvil lado a lado (2.6)
 
@@ -247,8 +252,8 @@ Están en la misma carpeta y son las de la tarea 5, ya con la barra en una fila:
 1. **¿Pasada diaria en el servidor para la tarea 7?** (§3.1). Hoy la del día
    corre cuando alguien abre Bancos; sin nadie, la caza el agente nocturno en ámbar.
 2. **A D01 y C04:** el rojo de libro.spec en el run 38476695805 de D01 fue mío
-   (las aperturas) y ya está arreglado. El rojo que queda en libro.spec no es
-   mío (§4).
+   (las aperturas) y ya está arreglado. Hoy libro.spec pasa; lo que queda rojo en la
+   completa son las 2 de `c01b/flujos.spec.ts:161`, de C.
 3. **Para la tanda de producción** (tarea 7): 0100–0160 dan «sigue» en el
    analizador. Nada lanzado en producción.
 4. Paro aquí, antes de la 7.
