@@ -703,3 +703,115 @@ razón. En esta rama la prueba ya esperaba el 409, pero solo por la API.
   - Ahora va dentro del alta (`role="alert"`) mientras está abierta.
   - Se limpia al abrirla, para que no arrastre uno viejo.
   - El texto es el de la base, sin cambiar.
+
+## 12 · `main` traído (C06b, #183), y la tanda de D01 contra la producción de hoy
+
+### 12.1 · La fusión, sin perder nada de ninguno de los dos lados
+
+`origin/main` 45b1bb96 traído a `conta/d01-recibidas`. Hubo 21 conflictos:
+
+- **Las 8 capturas PNG de c00:** las de `main`; las rehace la e2e.
+- **El marco común** (`MarcoConta.tsx`, `MenuConta.tsx`, `module.tsx`): lo
+  de `main`, que con `useProductoSolo()` quita «Volver a Folvy» y «‹ Folvy» y
+  pone `sinPregunta = true` por defecto. Las rutas de Documentos siguen
+  diciendo `true`.
+- **`navegacion.ts`:** «Ventas» con el `noEnSolo` de `main`, y «Documentos» con
+  su ruta. Vendida sola también sale: es de las pantallas que funcionan.
+- **`estilo/index.ts`:** las dos hojas.
+- **`antes-de-subir.sh`:** los dos pasos nuevos, numerados de 10.
+  - el 9, mío: los workflows sacan solo recuentos y huellas;
+  - el 10, de la C06b: la e2e entera, con `PEDIR_TANDA=1`.
+- **`c04/libro.spec.ts`:** los dos imports.
+- **La tanda de producción:**
+  - **La de la C06b ya está aplicada** (historial de producción: real
+    38566632165, las dos). Su manifiesto, su vuelta atrás y su contexto pasan
+    a copia en `tests/conta/produccion/*-c06b-r6-20261014.*`, y su prueba sigue
+    entera como «tal cual».
+  - **El manifiesto vivo es el de D01** (los 12 ficheros).
+  - **`w01.test.ts` y `staging/aplicar.txt`:** los de D01. En
+    `staging/aplicar.txt` no cambia nada respecto a la rama: no dispara
+    ninguna aplicación en staging.
+
+**El puente «solo contabilidad» se ha quitado** (§7). Se borra
+`documentos/producto.ts`. N22 y N23 usan:
+
+- `productoDeDocumentos(useProductoSolo(), MARCA.nombre)`;
+- `useProductoSolo() = MARCA.soloContabilidad || useCuentaConta().soloContabilidad`.
+
+Su prueba está en `tests/conta/d01/documentosPantalla.test.ts`.
+
+**Lo que destapó la guarda de la C06 de «Folvy» escrito a mano**, y cómo se
+resolvió cada uno:
+
+- **La línea de Diez de N23** va por `MARCA.nombre`.
+- **La firma «Folvy (apunta solo lo seguro)»** va a su lista, como la de
+  ventas. Es una firma guardada y `lib/autor.ts` la reconoce como automática.
+- **`marcoC00.test.ts`:** Documentos aparece en el menú del producto solo.
+
+**`diez-importar.yml`** (de la C06, #181, ya en `main`) daba 22 salidas en el
+paso 9, con tope 8. Julio eligió que lo arreglara yo. Ahora da 4 y el tope
+baja a 4. Lo que el workflow **hace** no cambia. Cambia lo que **saca**:
+
+- las máscaras, el mismo Python en heredoc;
+- lo que va a `GITHUB_ENV`, por un fichero;
+- `importar-preparar` y los `echo` con datos, al informe y no al registro. Sin
+  `tee`, su código de salida ya cuenta: un fallo de lectura para el paso en
+  vez de seguir.
+- **El resumen de producción escribía el nombre legal de la empresa.** El
+  paso 9 no lo veía, porque la línea empieza por `{`. Ahora escribe solo su
+  id.
+- «Preparar», al resumen solo por la puerta.
+
+Las 4 que quedan son las de la deuda antigua: el informe al resumen, tres
+veces, y el detalle cifrado.
+
+### 12.2 · La tanda de D01 contra la producción de hoy
+
+**El contexto se ha vuelto a medir el 14/10 a las 15:21Z**, en solo lectura,
+con la consulta del workflow. Sale idéntico al de las 07:14Z:
+
+- existen 5 de las tablas que nombra;
+- no existe ninguna de sus 22 funciones;
+- nada del camino del pedido;
+- nada en el historial.
+
+Los 12 md5, los medidos.
+
+**Paso 8:** las 12 «sigue»; autorizo, ninguno.
+
+**Cuenta de antes** (`scripts/conta/produccion/cuentas/recibidas.sql`, solo
+recuentos; tabla entera, todas las cuentas, a propósito):
+
+| Clave | Antes |
+|---|---|
+| filas de las 8 tablas nuevas | sin tabla (las 8) |
+| facturas recibidas por estado | aprobada 1 · en_revision 5 |
+| líneas de factura | 12 |
+| columnas nuevas de supplier_invoice | 0 |
+| proveedores · columna created_from | 94 · 0 |
+| contactos de proveedor por papel | admin 1 · orders 1 · other 5 |
+| cuentas de empresa por origen | manual 8 · migrated 65 · serie 19 |
+| documentos de asiento por tipo | (ninguno) |
+| CHECK ampliados (huella) | `65c6888ed71554c6af594b3bac8889d6` |
+| disparador de repetidas | 0 |
+| funciones de la tanda | 0 |
+| asientos de facturas recibidas | (ninguno) |
+| envíos a Diez | 0 |
+
+**Los campos del workflow** («Aplicar SQL en PRODUCCIÓN (contabilidad)»,
+`aplicar-produccion-conta.yml`). Cada ejecución se lanza con:
+
+- «Use workflow from»: `conta/d01-recibidas`, en el commit que dé cuando le
+  toque;
+- `confirmo`: `produccion`;
+- `autorizo`: vacío.
+
+| Ejecución | `modo` | Cuándo |
+|---|---|---|
+| 1 | `ensayo` | primero |
+| 2 | `real` | con el ensayo del **mismo commit** en verde |
+
+**No se pide todavía.** Va después de que B01 entre en `main` y lo traiga. Con
+ese `main` vuelvo a medir el contexto y paso el paso 8 otra vez. La base de
+B01 ya está en producción (0100–0170, real 38555481119). Ninguna de sus
+funciones coincide con las 22 de D01.
