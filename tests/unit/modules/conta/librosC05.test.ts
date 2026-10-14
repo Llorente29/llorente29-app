@@ -127,9 +127,15 @@ describe('Reglas 1 y 3 · el balance cuadra en cualquier fecha y el resultado es
     expect(c.cuadra).toBe(false)
     expect(c.porque).toMatch(/57200000/)
   })
-  it('una cuenta de clientes con saldo acreedor se marca anómala (ámbar)', () => {
+  it('C06b: un cliente con saldo acreedor ya no es anómalo: va al pasivo, a «Otros acreedores» (no compensación)', () => {
     const bal = calcularEstado('balance', lineasDe('pymes', 'balance'), mapeoDe('pymes', 'balance'), [saldo('430', 0, 40), saldo('572', 40, 0)])
-    expect(bal.lineas.flatMap((l) => l.cuentas).find((c) => c.templateCode === '430')?.anomalo).toBe(true)
+    const c = bal.lineas.find((l) => l.cuentas.some((x) => x.templateCode === '430'))!
+    expect(c.code).toBe('PNP.C.IV.2')
+    expect(c.cuentas.find((x) => x.templateCode === '430')?.anomalo).toBe(false)
+  })
+  it('una cuenta con saldo del lado contrario que no va por signo sigue anómala (ámbar): la Hacienda acreedora con saldo deudor', () => {
+    const bal = calcularEstado('balance', lineasDe('pymes', 'balance'), mapeoDe('pymes', 'balance'), [saldo('475', 40, 0), saldo('572', 0, 40)])
+    expect(bal.lineas.flatMap((l) => l.cuentas).find((c) => c.templateCode === '475')?.anomalo).toBe(true)
   })
   it('una partida a crear sin saldo no se enseña', () => {
     const pyg = calcularEstado('pyg', lineasDe('pymes', 'pyg'), mapeoDe('pymes', 'pyg'), [saldo('700', 0, 10), saldo('572', 10, 0)])

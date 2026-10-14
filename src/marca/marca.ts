@@ -10,6 +10,7 @@
 import {
   MARCAS, MARCA_POR_DEFECTO, resolverMarca, type Marca, type IdMarca,
 } from '../../supabase/functions/_shared/marcas.ts'
+import { aplicarTema } from './tema'
 
 export { MARCAS, type Marca, type IdMarca }
 
@@ -57,6 +58,8 @@ export function aplicarMarcaAlDocumento(m: Marca = MARCA): void {
   poner('meta[name="apple-mobile-web-app-title"]', 'content', m.nombre)
   poner('meta[name="application-name"]', 'content', m.nombre)
   poner('meta[name="description"]', 'content', m.entrar.lema || m.nombre)
+  // C06b: los colores y la letra de la marca, si los tiene (Sumied).
+  aplicarTema(m)
 }
 
 /** El título de una pantalla en la pestaña: «Libros · Contabilidad». */

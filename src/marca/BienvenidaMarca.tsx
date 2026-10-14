@@ -6,6 +6,7 @@
 // el estado y lo que pasa al pulsar son de WelcomePage, igual con y sin marca.
 
 import '@fontsource-variable/geist'
+import './tema.css' // Inter, para las marcas con tema (Sumied)
 import './entrar.css'
 import type { FormEvent } from 'react'
 import { MARCA } from './marca'

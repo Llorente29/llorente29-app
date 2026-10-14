@@ -30,6 +30,20 @@
     },
     {
       "source": "/(.*)",
+      "has": [{ "type": "host", "value": "app.sumied.com" }],
+      "destination": "/marcas/sumied/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "query", "key": "marca", "value": "sumied" }],
+      "missing": [
+        { "type": "host", "value": "(.*\\.)?folvy\\.app" },
+        { "type": "host", "value": "folvy-app\\.vercel\\.app" }
+      ],
+      "destination": "/marcas/sumied/index.html"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]

@@ -16,7 +16,30 @@
 //     tratamiento): los redacta y aprueba Julio. Aquí son un HUECO (null) y la
 //     pantalla lo dice en vez de inventar.
 
-export type IdMarca = 'folvy' | 'contabilidad'
+export type IdMarca = 'folvy' | 'contabilidad' | 'sumied'
+
+/**
+ * Los colores y la letra de una marca con identidad propia (C06b, Sumied). Se
+ * ponen encima de los tokens del estilo nuevo (--cx-* del módulo y --mx-* de
+ * la entrada): lo que no se nombra, como siempre. Todos medidos para AA sobre
+ * el blanco y sobre `accionSuave` (tests/unit/modules/conta/marcaSumiedC06b.test.ts).
+ */
+export interface TemaMarca {
+  /** Texto principal. */
+  tinta: string
+  /** Texto de apoyo (etiquetas y ayudas). */
+  apoyo: string
+  /** Botón principal, enlaces, menú activo: con texto blanco encima, ≥ 4,5:1. */
+  accion: string
+  /** Fondo del menú activo y de lo seleccionado. */
+  accionSuave: string
+  /** Borde de lo seleccionado. */
+  accionBorde: string
+  /** El punto de la IA y lo hecho: SIEMPRE fondo, con texto oscuro encima. */
+  acento: string
+  /** La familia de letra (con sus alternativas). */
+  letra: string
+}
 
 export interface Marca {
   id: IdMarca
@@ -26,6 +49,10 @@ export interface Marca {
   inicial: string
   /** Color del logo cuadrado. */
   colorLogo: string
+  /** El isotipo dibujado (SVG, ruta del sitio). Null: el cuadrado con la inicial. */
+  logo: string | null
+  /** Colores y letra propios. Null: el estilo nuevo tal cual (azul #2F5BFF, Geist). */
+  tema: TemaMarca | null
   /** Dominios por los que se entra con esta marca. Vacío: aún no tiene. */
   dominios: string[]
   /** La dirección que se enseña en el pie de la entrada («contabilidad.marca.es»). */
@@ -74,6 +101,8 @@ export const MARCAS: Record<IdMarca, Marca> = {
     nombre: 'Folvy',
     inicial: 'F',
     colorLogo: '#15171A',
+    logo: null,
+    tema: null,
     dominios: ['app.folvy.app', 'foodint.folvy.app', 'folvy-app.vercel.app'],
     direccionVisible: 'app.folvy.app',
     soloContabilidad: false,
@@ -103,6 +132,8 @@ export const MARCAS: Record<IdMarca, Marca> = {
     nombre: 'Contabilidad',
     inicial: 'C',
     colorLogo: '#2F5BFF',
+    logo: null,
+    tema: null,
     dominios: [],
     direccionVisible: null,
     soloContabilidad: true,
@@ -128,6 +159,60 @@ export const MARCAS: Record<IdMarca, Marca> = {
       //   «El banco se casa solo; tú confirmas lo dudoso.»     → bancos (frente B)
       //   «El IVA de cada trimestre, listo para presentar.»    → impuestos
       //   «Trae tu contabilidad de Cegid Diez, Holded, Sage o A3.» → hoy solo Diez, y lo configura Folvy
+      frases: [
+        'Tus libros —diario, balance y resultados— en un solo sitio.',
+        'El IVA del trimestre a la vista, con su libro registro.',
+        'Cada mes se cierra con sus pasos, y lo cerrado no se toca.',
+        'Lo que hago yo, lo ves y lo puedes deshacer.',
+      ],
+    },
+  },
+  // C06b (respuesta 6 de Julio, tarea 6): la marca con nombre y dominio.
+  // Identidad aprobada por Julio el 14/10 (lienzo «Sumied · Identidad»,
+  // Marca.dc.html): azul noche #0B1F3B, azul #2F80ED, turquesa #00D1B2, gris
+  // claro #EAF2F8 y blanco; Inter; la «S» de dos píldoras. El azul #2F80ED es
+  // el del logo: con texto blanco encima da 3,87:1 (no llega a AA), así que lo
+  // que se pulsa y los enlaces van con #1E63C9, el azul más hondo del propio
+  // lienzo (5,70:1 con blanco). El turquesa, solo fondo (1,95:1 sobre blanco).
+  sumied: {
+    id: 'sumied',
+    nombre: 'Sumied',
+    inicial: 'S',
+    colorLogo: '#0B1F3B',
+    logo: '/marcas/sumied/isotipo.svg',
+    tema: {
+      tinta: '#0B1F3B',
+      apoyo: '#4A5B73',
+      accion: '#1E63C9',
+      accionSuave: '#EAF2F8',
+      accionBorde: '#B8D0F0',
+      acento: '#00D1B2',
+      letra: "'Inter Variable', 'Inter', 'Helvetica Neue', Arial, sans-serif",
+    },
+    dominios: ['app.sumied.com'],
+    direccionVisible: 'app.sumied.com',
+    soloContabilidad: true,
+    favicon: '/marcas/sumied/favicon.svg',
+    manifiesto: '/marcas/sumied/manifest.json',
+    // Null hasta que Julio dé de alta sumied.com en Resend (pasos en el informe
+    // del C06b): con null, el correo no sale y la pantalla lo dice (regla 8).
+    // Después: 'Sumied <no-reply@sumied.com>'.
+    remitente: null,
+    responderA: null,
+    // Null hasta que entrada.sumied.com reciba correo (su MX en Resend).
+    dominioEntradaCorreo: null,
+    descripcion: 'Tu contabilidad al día, sin saber de cuentas.',
+    imagenVistaPrevia: '/marcas/sumied/vista-previa.png',
+    logoCorreo: 'https://app.sumied.com/marcas/sumied/logo-correo.png',
+    avisoLegal: null,
+    privacidad: null,
+    entrar: {
+      titulo: 'Entra en Sumied',
+      subtitulo: 'Te ha invitado tu asesor o tu empresa. Entra con tu correo.',
+      antetitulo: 'LO QUE TE ESPERA DENTRO',
+      lema: 'Tu contabilidad al día, sin saber de cuentas.',
+      // Las mismas cuatro frases CIERTAS de la marca de pruebas (Julio, C06
+      // respuesta 2): lo que el lienzo dice de nóminas y personal aún no existe.
       frases: [
         'Tus libros —diario, balance y resultados— en un solo sitio.',
         'El IVA del trimestre a la vista, con su libro registro.',

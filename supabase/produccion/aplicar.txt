@@ -5,28 +5,28 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C06b · Respuesta 5, punto 2 — el aviso #178 (rama conta/c06b-repasos).
-# PREPARADA, NO LANZADA: el orden con la B01 lo decide Julio.
+# C06b · Respuesta 6 (rama conta/c06b-repasos). PREPARADA, NO LANZADA.
 #
-#   1. 20261111T0500 — company_account.import_run_id (admite nulos, clave
-#      ajena a import_run) y conta_diez_subcuentas (misma firma, el cuerpo de
-#      producción con un cambio: las tres altas escriben la lectura en curso).
-#   2. 20261111T0510 — las 27 subcuentas de Foodint que dio de alta la lectura
-#      del histórico del 12/10, con su lectura. UPDATE sobre filas que existen:
-#      pide «autorizo». Escribe 27 o para; ninguna se borra ni se recrea.
+#   1. 20261111T0600 — (tarea 1) el balance según la norma: 42 filas de serie
+#      de terceros (40x, 41, 43x, 44, en los tres modelos) pasan a ir por el
+#      signo de su saldo y 42 nuevas para el otro signo. UPDATE sobre filas de
+#      serie que existen: pide «autorizo». Toca 42 o para.
+#   2. 20261111T0610 — (tarea 3) «He olvidado la contraseña» con tope: tabla
+#      de intentos (huellas, un día) y conta_contrasena_pedir. Todo NUEVO.
 #
-# El punto 1 (la banda de la IA) y el 3 (la barra en Libros) son solo front:
-# van en el PR a main, no en esta tanda.
+# ORDEN con el front y las funciones:
+#   · la 0600 no lo necesita: el balance lee el mapeo de la base. Con la 0600
+#     aplicada y el front de antes, Folvy ya da el balance por la norma; la
+#     nota bajo «Clientes» y la banda llegan con el front.
+#   · la 0610 ANTES de desplegar conta-contrasena (la nueva llama a
+#     conta_contrasena_pedir; la desplegada hoy, a conta_contrasena_de_marca,
+#     que no se toca).
 #
-# ORDEN con el front y el agente: el agente nuevo (agente-plan-contable.sql)
-# lee la columna por to_jsonb, así que funciona antes y después; el #178 se
-# apaga con la 0510.
-#
-# Lo que cuenta antes y después (R9): subcuentas, las «migrated» sin
-# importación, la columna y cuántas llevan lectura, el md5 de
-# conta_diez_subcuentas, las lecturas y los apuntes.
+# Lo que cuenta antes y después (R9): filas de serie del mapeo del balance, por
+# signo y de terceros, las propias de las empresas, la tabla de intentos y las
+# funciones de la contraseña.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/cuenta-lectura.sql
-supabase/migrations/20261111T0500_c06b_cuenta_lectura.sql
-supabase/migrations/20261111T0510_c06b_cuenta_lectura_las_27.sql
+cuenta: scripts/conta/produccion/cuentas/terceros-y-contrasena.sql
+supabase/migrations/20261111T0600_c06b_terceros_por_saldo.sql
+supabase/migrations/20261111T0610_c06b_contrasena_tope.sql

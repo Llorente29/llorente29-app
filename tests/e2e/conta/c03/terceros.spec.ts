@@ -34,10 +34,9 @@ async function capturar(page: Page, nombre: string) {
   expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 }
 
-/** El ejemplo de la barra de la IA (solo en ordenador; en el móvil no hay barra). */
-async function ejemploDeLaBarra(page: Page, ejemplo: string) {
-  if (lado(page) !== 'ordenador') return
-  await expect(page.getByPlaceholder(`Pregunta o pide algo. «${ejemplo}»`)).toBeVisible()
+/** C06b (respuesta 6): la barra de la IA ya no se enseña (solo diría «Muy pronto»); el ejemplo de cada pantalla queda para cuando vuelva. */
+async function sinBarra(page: Page) {
+  await expect(page.locator('.cx-pregunta')).toHaveCount(0)
 }
 
 async function partyDe(s: Sesion, nombre: string): Promise<string> {
@@ -92,7 +91,7 @@ test('plataforma (N9): te debe, liquidaciones con diferencia y lo aprendido', as
     await expect(page.getByText('Con diferencia').first()).toBeVisible()
     await expect(page.getByLabel('Lo que he aprendido de este cliente')).toBeVisible()
     await expect(page.getByLabel('Sus cuentas')).toBeVisible()
-    await ejemploDeLaBarra(page, '¿Cuánto me debe la plataforma?')
+    await sinBarra(page)
   } else {
     await expect(page.getByRole('button', { name: 'Subir liquidación' })).toBeVisible()
     await expect(page.getByRole('link', { name: /Liquidaciones/ })).toBeVisible()
@@ -139,7 +138,7 @@ test('socio de marca (N10): el mes por local y «Preparar liquidación»', async
   await page.goto(`/conta/clientes-y-proveedores/${id}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Marcas del Sur' })).toBeVisible()
   await expect(page.getByRole('button', { name: /^Preparar liquidación de / })).toBeVisible()
-  await ejemploDeLaBarra(page, '¿Qué le liquido este mes?')
+  await sinBarra(page)
   if (enOctubre()) {
     // 6.420 − 1.180 + 1.647 = 6.887 € a su favor (4.090 en Norte Centro y 2.797 en Norte Mercado).
     await expect(page.getByText('6.887 €').first()).toBeVisible()
@@ -245,7 +244,7 @@ test('cliente normal: sin facturas, lo dice; archivar y recuperar', async ({ pag
   await page.goto(`/conta/clientes-y-proveedores/${CATERING}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Catering Eventos Norte' })).toBeVisible()
   await expect(page.getByText('Las facturas llegan con Facturación.')).toBeVisible()
-  await ejemploDeLaBarra(page, '¿Cuánto me debe?')
+  await sinBarra(page)
   await capturar(page, 'cliente')
   test.skip(info.project.name === 'movil', 'Archivar escribe en la base: solo en un tamaño')
   try {

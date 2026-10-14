@@ -36,7 +36,10 @@ import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
 import { Portada } from '@/modules/conta/marco/Portada'
 import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
 
-const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = false) => (
+// C06b (respuesta 6 de Julio, tarea 2): la barra «Pregunta o pide algo» solo
+// contesta «Muy pronto», y lo que no funciona no se enseña: ninguna ruta la
+// lleva. Vuelve, ruta a ruta (sinPregunta = false), cuando conteste de verdad.
+const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = true) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo} sinPregunta={sinPregunta}>{pagina}</MarcoConta></EmpresasProveedor>
 )
 
