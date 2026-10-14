@@ -179,4 +179,37 @@ producción, 15:21:38 UTC):
 
 ## 9 · Diseño
 
-**Por rellenar con las capturas de la e2e.**
+Capturas de la e2e (`tests/e2e/conta/c06/pendientesDiez.spec.ts`), con las
+filas dadas por la red (inventadas: no se siembra nada en la cuenta A, que
+comparten los tres frentes), en `docs/conta/capturas/c06b/`.
+
+| Ordenador | Móvil |
+|---|---|
+| ![](capturas/c06b/pendientes-diez-ordenador.png) | ![](capturas/c06b/pendientes-diez-movil.png) |
+
+- **Dónde vive:** Libros › Diario, en su propio grupo «Con Diez». La línea de
+  la acción cuenta lo pendiente («3 sin su PDF», en ámbar); sin nada, «nada
+  pendiente» en gris. La e2e lo comprueba: con filas, nunca «nada pendiente»
+  (regla 7). La primera vuelta de la e2e lo cazó: el doble de red no exponía
+  el recuento como lo hace PostgREST y salía «nada pendiente» con 3 filas.
+- **Arriba, la frase con contenido:** cuántas y la más antigua. Debajo, en
+  llano, por qué pasa y qué hacer.
+- **Cada factura:** el asiento de Folvy (enlace), su fecha, y en negrita lo
+  que se busca en Diez: el asiento (serie/documento, ejercicio) y el número de
+  factura. Debajo, el nombre que lleva en el zip. A la derecha, «Ver PDF» y
+  «Ya está adjunto»; en el móvil, debajo y a lo ancho.
+- **Lo anulado que sigue en Diez**, aparte, con su chip ámbar «falta su
+  contraasiento en Diez».
+- **Una lista, no una tabla:** en el móvil se apila sin barra lateral.
+- En la captura del móvil, la barra de abajo («Folvy · Ajustes») sale a mitad
+  de página: es fija y la captura es de la página entera (pasa igual en las
+  de la R6). La comprobación de solapes de la e2e pasa.
+
+**La e2e, en verde** (frente C, ordenador y móvil): cuántas y la más antigua;
+la etiqueta de la acción; la referencia y el nombre en el zip; lo anulado
+aparte; «Descargar todos» baja un zip con `2026-1-9901.pdf`,
+`2026-1-9902.pdf` y `2026-1-9903.pdf` y lo dice; «Ya está adjunto» lo dice y
+la factura sale de la lista (2 y la más antigua pasa al 02/10).
+
+Por el camino, una ruta: `libros/diario/:entryId` (un asiento) se comía
+`libros/diario/pendientes-diez`. Tiene ruta propia, como el diario resumido.
