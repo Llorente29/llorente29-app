@@ -5,25 +5,48 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C04b · Respuesta 15 — el documento de cada asiento de ventas, en Folvy.
-# La tanda anterior (la regla de ventas por plataforma, 0100–0140) ya está en
-# el historial de producción con su huella (real 38380236640, 13/10); su copia
-# queda en tests/conta/produccion/tanda-ventas-plataforma-20261013.txt.
+# D01 · Tarea 7 — facturas recibidas, para cualquier empresa. PREPARADA, NO
+# LANZADA: no sale hasta que (1) la lectura con el modelo esté probada sobre
+# las 12 facturas inventadas y (2) Julio apruebe las capturas N22/N23. El
+# orden lo da docs/conta/d01/T7_informe.md: BASE (esta tanda), después las
+# edge functions y por último el front.
+# La tanda anterior (R15, 20261021T0100) ya está en el historial de
+# producción con su huella; su copia queda en
+# tests/conta/produccion/tanda-documentos-ventas-20261013.txt.
 #
-#   1. 20261021T0100 — todo NUEVO: el bucket privado conta-documentos (solo
-#      PDF), journal_entry_document (el PDF de un asiento validado, uno por
-#      asiento, no se cambia), conta_resumen_ventas, conta_documento_guardar
-#      y cuatro columnas que admiten nulos en external_send (document_*).
-#      Ningún dato cambia; nada del camino del pedido.
+#   0200 — AÑADE: siete tablas nuevas, columnas que admiten nulos en
+#          supplier_invoice y supplier, funciones nuevas; siembra una fila por
+#          empresa en company_purchase_setting (tabla que nace aquí). La
+#          dirección de facturas nace APAGADA.
+#   0210 — CAMBIA en caliente (declarado en cabecera, con su prueba): amplía
+#          tres CHECK y pone el disparador de repetidas en supplier_invoice.
+#   0220 — AÑADE: inbound_email_log y las funciones de entrada.
+#   0230 — CAMBIA en caliente: la regla de repetidas con el total.
+#   0240 — AÑADE: lo aprendido de Diez y el documento de la factura recibida.
+#   0250 — CAMBIA en caliente: el origen de lo aprendido (misma firma).
+#   0260 — CAMBIA en caliente: la regla de repetidas del C01b (misma firma).
+#   0270 — AÑADE: lo que lee el envío a Diez de una recibida.
+#   0280 — AÑADE: la lectura de N22.
+#   0290 — AÑADE: la lectura de N23 y «Pedírselas».
+# Nada del camino del pedido (medido en producción, 14/10).
 #
-# Análisis contra producción, medido el 13/10 con la consulta de solo lectura
-# del workflow: «sigue». Sin «autorizo».
+# Lo que cuenta antes y después (R9): las ocho tablas nuevas, las facturas por
+# estado, sus líneas, las columnas nuevas, proveedores, contactos por papel,
+# enlaces de cuenta por origen, documentos por tipo, la huella de los tres
+# CHECK, el disparador, las funciones, los asientos de recibidas y los envíos.
 #
-# Lo que cuenta antes y después (R9): el bucket, sus ficheros y políticas, la
-# tabla y sus filas, las funciones, las columnas, los envíos y los asientos de
-# ventas por estado. Si el real se deshace solo, tiene que volver a lo de antes.
-#
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt. PARA si ya hay algún
-# documento guardado o algún fichero en el bucket.
-cuenta: scripts/conta/produccion/cuentas/documentos.sql
-supabase/migrations/20261021T0100_conta_documentos.sql
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt, en orden inverso. Cada
+# .down.sql PARA si ya hay algo de una persona o de un proveedor que se
+# perdería (llegadas, correos, contactos de facturación, enlaces aprendidos,
+# documentos, peticiones confirmadas).
+cuenta: scripts/conta/produccion/cuentas/recibidas.sql
+supabase/migrations/20261021T0200_d01_recibidas.sql
+supabase/migrations/20261021T0210_d01_amplia.sql
+supabase/migrations/20261021T0220_d01_entrada.sql
+supabase/migrations/20261021T0230_d01_repetidas_con_total.sql
+supabase/migrations/20261021T0240_d01_asiento_recibida.sql
+supabase/migrations/20261021T0250_d01_aprendido_origen.sql
+supabase/migrations/20261021T0260_d01_repetidas_c01b.sql
+supabase/migrations/20261021T0270_d01_recibida_envio.sql
+supabase/migrations/20261021T0280_d01_documentos.sql
+supabase/migrations/20261021T0290_d01_revisar_y_pedir.sql

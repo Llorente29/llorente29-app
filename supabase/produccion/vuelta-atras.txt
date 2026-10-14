@@ -1,8 +1,16 @@
 # Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
-# inverso. C04b · Respuesta 15 — el documento de cada asiento de ventas.
-# El .down.sql PARA si ya hay algún documento guardado o algún fichero en el
-# bucket: quitarlo se llevaría el enlace de un PDF de verdad con su asiento.
-# En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
+# inverso. D01 · Tarea 7 — facturas recibidas (0290 → 0200). Cada .down.sql
+# PARA si ya hay algo de una persona o de un proveedor que se perdería. En
+# este modo, lo que se cuenta se enseña antes y después (cambiar es lo
 # esperado: se deshace la tanda) y no para.
-cuenta: scripts/conta/produccion/cuentas/documentos.sql
-supabase/vuelta-atras/20261021T0100_conta_documentos.down.sql
+cuenta: scripts/conta/produccion/cuentas/recibidas.sql
+supabase/vuelta-atras/20261021T0290_d01_revisar_y_pedir.down.sql
+supabase/vuelta-atras/20261021T0280_d01_documentos.down.sql
+supabase/vuelta-atras/20261021T0270_d01_recibida_envio.down.sql
+supabase/vuelta-atras/20261021T0260_d01_repetidas_c01b.down.sql
+supabase/vuelta-atras/20261021T0250_d01_aprendido_origen.down.sql
+supabase/vuelta-atras/20261021T0240_d01_asiento_recibida.down.sql
+supabase/vuelta-atras/20261021T0230_d01_repetidas_con_total.down.sql
+supabase/vuelta-atras/20261021T0220_d01_entrada.down.sql
+supabase/vuelta-atras/20261021T0210_d01_amplia.down.sql
+supabase/vuelta-atras/20261021T0200_d01_recibidas.down.sql

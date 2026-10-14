@@ -167,7 +167,11 @@ usa Folvy. Nada de memoria: si el texto no está, el guion falla.
 
 *Fuente:* Orden EHA/962/2007, digitalización certificada de facturas (D01; ELI https://www.boe.es/eli/es/o/2007/04/10/eha962) · texto publicado (no está consolidada) · [https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-7866](https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-7866) · sha256 del texto `002a95e7af9a3a4f…`
 
-*Ojo:* la Orden se dictó bajo el Real Decreto 1496/2003 (Reglamento de facturación), hoy sustituido por el Real Decreto 1619/2012. Sus remisiones a aquel se leen hoy hechas a este.
+*Ojo:* la Orden se dictó bajo el Real Decreto 1496/2003 (Reglamento de facturación), hoy sustituido por el Real Decreto 1619/2012. Sus remisiones a aquel se leen hechas a este, por la disposición adicional quinta del Real Decreto 1619/2012 (texto consolidado, en el mismo registro):
+
+> Las referencias hechas al Reglamento por el que se regulan las obligaciones de facturación aprobado por el Real Decreto 1496/2003, de 28 de noviembre, se entenderán realizadas a este Reglamento.
+
+*La Orden:*
 
 > Artículo 7. Digitalización certificada de facturas recibidas y documentos sustitutivos recibidos y de otros documentos o justificantes.
 > 1. Los obligados tributarios podrán proceder a la digitalización certificada de las facturas, documentos sustitutivos y de cualesquiera otros documentos que conserven en papel que tengan el carácter de originales.

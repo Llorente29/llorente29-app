@@ -393,15 +393,16 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261021T0100_conta_documentos.sql: sigue')
+    expect(r.out).toContain('20261021T0200_d01_recibidas.sql: sigue')
+    expect(r.out).toContain('20261021T0290_d01_revisar_y_pedir.sql: sigue')
     expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261021T0100_conta_documentos.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261021T0230_d01_repetidas_con_total.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261021T0100_conta_documentos.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261021T0230_d01_repetidas_con_total.sql ha cambiado desde la medida')
   })
 })
