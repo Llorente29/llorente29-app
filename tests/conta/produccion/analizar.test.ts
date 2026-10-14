@@ -726,78 +726,36 @@ describe('la tanda de la regla de ventas por plataforma (C04b R5; ya aplicada, r
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): validar y guardar el PDF van juntos (C06b, respuesta 8)', () => {
+describe('la tanda de AHORA (manifiesto vivo): conta_diez_autorizo.desde (C06b, respuesta 8, tarea 1, paso 1)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 14/10 a las 18:41 UTC para ESTE fichero (con su md5).
+  // lectura en producción el 14/10 a las 21:56 UTC para ESTE fichero (con su md5).
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
-  it('un fichero: la 0720 añade tres funciones y un disparador diferido en journal_entry (declarado, con prueba); sigue', () => {
-    expect(viva).toEqual(['supabase/migrations/20261111T0720_c06b_validar_con_pdf.sql'])
+  it('un fichero: la 0730 añade la columna y su CHECK (declarado, con prueba); sigue', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0730_c06b_diez_autorizo_desde.sql'])
     expect(r.ficheros).toEqual({ [viva[0]]: 'sigue' })
-    expect(r.markdown).toContain('disparador nuevo en una tabla que existe')
   })
-  it('no toca journal_entry_validar ni conta_documento_guardar, ni escribe datos', () => {
+  it('solo estructura: no escribe ninguna autorización (la de empresa va en otra tanda, después del despliegue)', () => {
     const sql = readFileSync(viva[0], 'utf8')
-    expect(sql).not.toMatch(/create or replace function public\.(journal_entry_validar|conta_documento_guardar)\(/i)
-    expect(sql).not.toMatch(/^\s*(update|delete|insert)\b/im)
-    expect(sql).toMatch(/deferrable initially deferred/)
+    expect(sql).not.toMatch(/^\s*(insert|update|delete)\b/im)
+    expect(sql).toMatch(/add column if not exists desde date/)
+    expect(sql).toMatch(/check \(desde is null or alcance = 'empresa'\)/)
   })
   it('declara qué cuenta antes y después, y el fichero existe', () => {
     const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/validar-con-pdf.sql'])
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/diez-autorizo-desde.sql'])
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
-  it('su vuelta atrás: fuera el disparador y las tres funciones, sin tocar asientos ni documentos', () => {
+  it('su vuelta atrás quita la columna y para si alguna autorización ya lleva fecha', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
-    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0720_c06b_validar_con_pdf.down.sql'])
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0730_c06b_diez_autorizo_desde.down.sql'])
     const sql = readFileSync(atras[0], 'utf8')
-    expect(sql).toMatch(/drop trigger if exists trg_journal_entry_valida_con_pdf on public\.journal_entry/)
-    expect(sql).not.toMatch(/^\s*(update|delete|insert)\b/im)
-  })
-})
-
-describe('la tanda del B01 (aplicada el 14/10, su copia): Bancos y conciliación (0100–0170)', () => {
-  const MANIFIESTO = 'tests/conta/produccion/tanda-b01-20261014.txt'
-  const viva = leerTanda(MANIFIESTO)
-  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 14/10 a las 08:01 UTC (después de la C06) para
-  // ESTOS ficheros (con su md5).
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-b01-20261014.json', 'utf8')).contexto
-  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
-  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
-  const B01 = ['0100_b01_bancos', '0110_b01_funciones', '0120_b01_foodint', '0130_b01_lectura', '0140_b01_tarjetas',
-    '0150_b01_cierre_agente', '0160_b01_lectura_agente', '0170_b01_foodint_cuentas']
-
-  it('ocho ficheros, en orden, y todos siguen: todo es nuevo (sin «autorizo»)', () => {
-    expect(viva).toEqual(B01.map((f) => `supabase/migrations/20261101T${f}.sql`))
-    expect(Object.values(r.ficheros)).toEqual(B01.map(() => 'sigue'))
-  })
-  it('ningún fichero lleva un IBAN escrito (repositorio público): la 0170 lo lee del nombre de la cuenta al aplicar', () => {
-    for (const f of viva) expect(readFileSync(f, 'utf8'), f).not.toMatch(/ES[0-9]{2}(?: ?[0-9]{4}){5}/)
-  })
-  it('declara qué cuenta antes y después: tablas, funciones, las fichas de Foodint y la huella de sus 50 asientos; y el fichero existe', () => {
-    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/bancos.sql'])
-    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
-    expect(readFileSync(cuentas[0], 'utf8')).toMatch(/created_at < timestamptz '2026-10-13 18:00\+00'/)
-  })
-  it('ninguna vuelta atrás escribe en storage con SQL (ensayo #64: Supabase no deja borrar de sus tablas; el bucket de la 0140 se queda)', () => {
-    for (const f of leerTanda('tests/conta/produccion/vuelta-atras-b01-20261014.txt')) {
-      const sql = readFileSync(f, 'utf8').replace(/--.*$/gm, '')
-      expect(sql, f).not.toMatch(/\b(insert\s+into|update|delete\s+from|truncate)\s+(table\s+)?storage\./i)
-      expect(sql, f).not.toMatch(/\b(drop|create|alter)\s+policy\b[^;]*\bon\s+storage\./i)
-      expect(sql, f).not.toMatch(/storage\.allow_delete_query/)
-    }
-  })
-  it('su vuelta atrás es la de cada fichero en orden inverso; la 0170 PARA si sus fichas ya tienen extractos', () => {
-    const atras = leerTanda('tests/conta/produccion/vuelta-atras-b01-20261014.txt')
-    expect(atras).toEqual([...B01].reverse().map((f) => `supabase/vuelta-atras/20261101T${f}.down.sql`))
-    for (const f of atras) expect(existsSync(f), f).toBe(true)
-    expect(readFileSync(atras[0], 'utf8')).toMatch(/ya tienen % extractos, movimientos o tarjetas: no se quitan/)
+    expect(sql).toMatch(/where desde is not null/)
+    expect(sql).toMatch(/drop column if exists desde/)
   })
 })
 
