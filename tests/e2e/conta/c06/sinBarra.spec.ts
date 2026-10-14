@@ -1,4 +1,4 @@
-// tests/e2e/conta/c06b/sinBarra.spec.ts
+// tests/e2e/conta/c06/sinBarra.spec.ts
 //
 // C06b (respuesta 6 de Julio, tarea 2): la barra «Pregunta o pide algo» solo
 // contestaba «Muy pronto», y lo que no funciona no se enseña. Ninguna pantalla

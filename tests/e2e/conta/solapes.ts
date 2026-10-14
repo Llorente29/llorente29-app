@@ -80,7 +80,7 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
     // C06b (respuesta 6, tarea 2): en el ordenador ya no flota nada (la barra
     // «Pregunta o pide algo» no se enseña en ninguna ruta): no hay nada que
     // pueda tapar. Lo que se pedía flotando era la barra; que NO esté lo mira
-    // la e2e c06b/sinBarra.spec.ts, en todas las rutas.
+    // la e2e c06/sinBarra.spec.ts, en todas las rutas.
     if (encontrado.error?.startsWith('No encuentro ninguna pieza flotante') && (page.viewportSize()?.width ?? 1440) >= 768 && flotantes.includes('.cx-pregunta')) return []
     if (encontrado.error) throw new Error(encontrado.error)
     if (await altura() !== alto) throw new Error('La página cambió de alto mientras se medía: la medida no vale')
