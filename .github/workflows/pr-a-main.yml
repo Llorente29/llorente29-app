@@ -1,0 +1,41 @@
+name: PR a main · funciones y título
+
+# QUÉ HACE (C06b, respuesta 5, punto 5 · 14/10)
+# La #181 se fusionó con «[skip ci]» en el mensaje: el push a main no lanzó
+# deploy-edge-functions y las funciones de la C06 se quedaron sin desplegar.
+# Dos reglas de Julio, comprobadas aquí en vez de confiadas a la memoria:
+#   1. el título de un PR a main nunca lleva una marca de saltar CI;
+#   2. la descripción dice, en «## Funciones a desplegar a mano», las funciones
+#      que toca el PR (las carpetas cambiadas y las que importan algo de
+#      _shared que cambie), o «ninguna».
+# Lo que no puede ver: el mensaje que se escribe AL FUSIONAR. Ese lo vigila
+# quien fusiona (CLAUDE.md), y si se cuela, deploy-edge-functions no corre:
+# se despliega a mano con su `funciones`.
+# Solo lee: no tiene secretos ni permisos de escritura.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Título y funciones a desplegar a mano
+        env:
+          PR_TITULO: ${{ github.event.pull_request.title }}
+          PR_CUERPO: ${{ github.event.pull_request.body }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/pr/revisar-pr.mjs "$BASE" "$HEAD"

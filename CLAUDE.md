@@ -262,6 +262,28 @@ no había deriva: había dos commits sin fusionar. La pasada de las 03:20 no
 habría retirado nada y se habría ido a buscar una retirada que no podía
 existir. Salió al ir a desplegar el cinturón y comparar los dos lados.)*
 
+### Un PR a `main` dice qué funciones hay que desplegar, y nunca salta CI
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> C06, respuesta 5 (14/10).
+
+- **La descripción de todo PR a `main` lleva `## Funciones a desplegar a mano`**
+  con las funciones que toca —las carpetas de `supabase/functions` cambiadas y
+  **cada función que importa un `_shared` cambiado**, porque
+  `deploy-edge-functions` se salta `_shared`—, o «ninguna».
+- **El título nunca lleva `[skip ci]`** ni sus hermanas, y **el mensaje de la
+  fusión tampoco**: con la marca, el push a `main` no lanza
+  `deploy-edge-functions` y lo fusionado queda sin efecto.
+- Lo comprueba `pr-a-main.yml` (título y sección, contra el diff). El mensaje
+  que se escribe al fusionar no lo ve: ése lo mira quien fusiona.
+
+*Detector automático:* si un PR toca `supabase/functions/_shared` y su lista
+dice «ninguna», falta alguien. La #181 tocó `_shared/diezCliente.ts`:
+`conta-diez-enviar` también iba.
+
+*(14/10. La #181 se fusionó con «[skip ci]» en el mensaje: no corrió el
+despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
+
 ### Un e2e en marcha no se cancela
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,

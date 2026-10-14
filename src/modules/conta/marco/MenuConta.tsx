@@ -119,7 +119,7 @@ export function MenuConta() {
   )
 }
 
-export function BarraInferiorConta() {
+export function BarraInferiorConta({ sinIA = false }: { sinIA?: boolean }) {
   const { pathname } = useLocation()
   const solo = useProductoSolo()
   const [mas, setMas] = useState(false)
@@ -136,7 +136,7 @@ export function BarraInferiorConta() {
       {izquierda.length > 0 ? izquierda.map(enlace) : !solo && (
         <Link to="/" className="cx-barra-item"><Icono nombre="folvy" />Folvy</Link>
       )}
-      {!solo && <BotonIAMovil />}
+      {!solo && !sinIA && <BotonIAMovil />}
       {derecha.map(enlace)}
       {/* C06, respuesta 2: en el producto solo, la barra no tiene sitio para
           todo. «Más» abre el menú entero con lo que funciona; cuando Por hacer

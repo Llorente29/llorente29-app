@@ -164,6 +164,53 @@ describe('agente «Plan contable» · planes traídos de otro programa (C02c §6
   })
 })
 
+describe('C06b · aviso #178: el segundo camino, la lectura del histórico de Diez', () => {
+  // Los 27 códigos de Foodint del #178 (informe del B01, solo códigos): los que
+  // dio de alta conta_diez_subcuentas el 12/10 sin importación del plan.
+  const CODIGOS = [
+    '41000034', '41000035', '41000036', '41000037', '41000038', '41000039', '41000040', '57200003', '62400002', '62700002', '62700003', '62900006',
+    '70000001', '70000002', '70000003', '70000004', '70000005', '70000006', '70000007', '70000008', '70000011',
+    '70800001', '70800002', '70800004', '70800005', '70800006', '70800011',
+  ]
+  const F = '51ad1792-6629-4ef7-833a-b57b09a86710', E = 'e-foodint', R = 'r-historico'
+  const bd = (run: string | null | undefined) => ({
+    company_account: CODIGOS.map((code, i) => ({ id: `k${i}`, account_id: F, company_id: E, code, source: 'migrated', import_id: null, import_run_id: run, name_source: `NOMBRE ${i}`, name_pending: false, status: 'activa', kind: 'own', template_code: code.slice(0, 3), plan: 'pymes' })),
+    company_account_link: [], importaciones: [], proveedores_traidos: [],
+    lecturas: [{ id: R, account_id: F, company_id: E, program: 'diez', kind: 'historico', status: 'hecho' }],
+    apuntes_de_lectura: CODIGOS.map((_, i) => ({ company_account_id: `k${i}`, apuntes: 1 + i })),
+  })
+  it('hoy, sin la lectura escrita: los 27 rojos del #178, con su texto', () => {
+    const t = textos_(revisarImportaciones(bd(undefined)))
+    expect(t).toHaveLength(27)
+    expect(t[0]).toBe('Plan traído · cuenta 51ad1792: 41000034 dice venir de otro programa y no tiene importación.')
+  })
+  it('con la columna y aún vacía (entre la 0500 y la 0510): siguen los 27, y dicen que tampoco hay lectura', () => {
+    const t = textos_(revisarImportaciones(bd(null)))
+    expect(t).toHaveLength(27)
+    expect(t[0]).toBe('Plan traído · cuenta 51ad1792: 41000034 dice venir de otro programa y no tiene importación ni lectura del histórico.')
+  })
+  it('con su lectura escrita (la 0510): verde', () => {
+    expect(revisarImportaciones(bd(R))).toEqual([])
+  })
+  it('la prueba puede fallar: lectura de otra cuenta, sin terminar o sin apuntes suyos, en rojo', () => {
+    const otra = bd(R); otra.lecturas[0].account_id = 'otra-cuenta'
+    expect(textos_(revisarImportaciones(otra))).toContain('Plan traído · cuenta 51ad1792: 41000034 dice venir de una lectura del histórico que no es de su empresa.')
+    const a = bd(R); a.lecturas[0].status = 'en_curso'
+    expect(textos_(revisarImportaciones(a))).toContain('Plan traído · cuenta 51ad1792: 70000001 viene de una lectura del histórico que está en_curso.')
+    const sin = bd(R); sin.apuntes_de_lectura = sin.apuntes_de_lectura.filter((x) => x.company_account_id !== 'k7')
+    expect(textos_(revisarImportaciones(sin))).toEqual(['Plan traído · cuenta 51ad1792: 57200003 viene de una lectura del histórico y no tiene ningún apunte traído por ella.'])
+  })
+  it('nunca por el nombre: «Diez (traída)» sin lectura sigue en rojo', () => {
+    const b = bd(null)
+    for (const c of b.company_account) (c as Record<string, unknown>).created_by_name = 'Diez (traída)'
+    expect(textos_(revisarImportaciones(b))).toHaveLength(27)
+  })
+  it('la que Diez trajo sin nombre (C06) no es rojo por el nombre mientras espera el suyo', () => {
+    const b = bd(R); b.company_account[0].name_source = null as unknown as string; b.company_account[0].name_pending = true
+    expect(revisarImportaciones(b)).toEqual([])
+  })
+})
+
 describe('respuesta 2 del C02c: de una cuenta con hijas solo cuelgan las genéricas traídas', () => {
   const vig = serie.cuentas.filter((c) => c.plan === 'pymes' && !(c as { valid_to?: string | null }).valid_to)
   const hojas = new Set(vig.filter((c) => c.is_leaf).map((c) => c.code))
