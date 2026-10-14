@@ -11,13 +11,51 @@ están en el §9 y las facturas que entran por la recepción (R6), en el §10.
    - Julio pone saldo.
    - Yo relanzo `leer-con-modelo-d01.yml` sobre las 12 facturas inventadas y
      doy los aciertos por campo.
-   - Hoy: **0 de 12**, porque la API contestó `error_saldo_o_limite`. Desde la
-     R3, una factura sin leer cuenta 0 en todos los campos y el run sale en
-     rojo: ya no puede dar verde sin leer.
+   - **Hecha el 14/10** (Julio puso el saldo). Run **24** de
+     `leer-con-modelo-d01.yml` (38547500657), lanzado a mano desde
+     `conta/d01-recibidas` en `a579cbe7` (= `a4ed786c` más las capturas), con
+     el mismo modelo que `ocr-albaran`. En verde.
+   - **Leídas 12 de 12**, todas con HTTP 200. **Aciertos, 12 de 12 en cada uno
+     de los 13 campos.** «Seguro» sin serlo: **0**. Confianza: 11 seguro y 1
+     probable, igual que la esperada en las 12. Líneas retenidas por la puerta
+     de salida: 0.
+
+     | Campo | Correo (10 PDF) | Subida (12: los 10 PDF y 2 fotos) |
+     |---|---|---|
+     | NIF | 10/10 | 12/12 |
+     | Número | 10/10 | 12/12 |
+     | Fecha | 10/10 | 12/12 |
+     | Vencimiento | 10/10 | 12/12 |
+     | Clase | 10/10 | 12/12 |
+     | Qué rectifica | 10/10 | 12/12 |
+     | Tipos (base y cuota por tipo) | 10/10 | 12/12 |
+     | Base | 10/10 | 12/12 |
+     | Cuota | 10/10 | 12/12 |
+     | Recargo | 10/10 | 12/12 |
+     | Retención | 10/10 | 12/12 |
+     | Total | 10/10 | 12/12 |
+     | Confianza | 10/10 | 12/12 |
+     | «Seguro» sin serlo | 0 | 0 |
+
+   - **Cómo se separa correo y subida:** la lectura es la misma función por
+     los dos caminos; cambia lo que trae cada uno. Por correo llegan PDF
+     adjuntos: los 8 formatos y los 2 escaneados. Por subida, eso mismo y
+     además las fotos, la torcida y la borrosa. Las dos fotos solo llegan por
+     subida, y las dos se leyeron enteras.
+   - **Lo que la prueba no mide:**
+     - son 12 facturas inventadas, no la población real;
+     - el correo de verdad (Resend, varios adjuntos, enlaces) no está
+       encendido;
+     - la recepción no entra: ya lee en producción con su propia clave (R6).
    - **Sin esa prueba no sale a producción el modo «factura» de
      `ocr-albaran`.** Como `ocr-albaran` se despliega al fusionar (§4.2),
      esto para la fusión entera, no solo una pieza.
 2. **Julio revisa y aprueba las capturas N22/N23** (§1).
+
+**Estado de las dos condiciones:**
+1. Lectura con el modelo: **hecha, 12 de 12 en los 13 campos** (arriba).
+2. Capturas: las vigentes son las de la e2e 250, en verde. Falta que Julio las
+   vea.
 
 **Decidido en la R5** (Julio):
 - **Empresa solo de contabilidad:** no hay paso de aprobación de Compras;
