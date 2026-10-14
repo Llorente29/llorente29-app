@@ -114,12 +114,13 @@ Deno.serve(async (req) => {
       const bd = String(data.external_account_id ?? config.nombre_bd ?? "");
       return bd ? { id: String(data.id), nombreBd: bd, adjuntar: config.adjuntar_documentos === true } : null;
     },
-    autorizado: async (id, companyId, nombreBd, fecha) => {
-      // R8 (tarea 1): «desde» (0730) limita la de empresa a los asientos desde ese día.
-      const { data, error } = await srv.from("conta_diez_autorizo").select("id, alcance, entry_id, desde")
+    autorizado: async (id, companyId, nombreBd, fecha, tipo) => {
+      // R8 (tarea 1): «desde» (0730) limita la de empresa a los asientos desde ese
+      // día, e «incluye_recibidas» (0740) decide si abre las facturas recibidas.
+      const { data, error } = await srv.from("conta_diez_autorizo").select("id, alcance, entry_id, desde, incluye_recibidas")
         .eq("account_id", r.account_id).eq("company_id", companyId).ilike("nombre_bd", nombreBd);
       if (error) throw new Error(`no se ha podido leer lo autorizado en Diez: ${error.message}`);
-      return autorizacionCubre((data ?? []) as Autorizacion[], id, fecha);
+      return autorizacionCubre((data ?? []) as Autorizacion[], id, fecha, tipo);
     },
     cliente: async (c: ConexionDiez, o) => {
       const { data: s, error } = await srv.rpc("connector_secret_read", { p_account_connector_id: c.id });

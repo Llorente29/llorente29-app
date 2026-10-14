@@ -3,7 +3,7 @@
 // contesta Diez es lo medido en la C0009. Importes inventados.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { enviarRecibidaADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type EnvioFila, type PuertoEnvio, type RecibidaBD } from '../../../supabase/functions/_shared/diezEnviar'
+import { autorizacionCubre, enviarRecibidaADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type EnvioFila, type PuertoEnvio, type RecibidaBD } from '../../../supabase/functions/_shared/diezEnviar'
 import type { Factura, FacturaData } from '../../../supabase/functions/_shared/diezCliente'
 
 const PDF = new TextEncoder().encode('%PDF-1.4 ' + 'y'.repeat(400))
@@ -47,7 +47,7 @@ function diez(o: { facturas?: Factura[]; contenedor?: boolean } = {}): Diez {
 // adjuntar: ¿guarda Diez documentos? (C06b R7). Estas pruebas, como las de R15,
 // son «con almacén» salvo la que dice lo contrario. autorizados: lo que Julio ha
 // autorizado en conta_diez_autorizo para escribir en una base real.
-type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string }
+type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string; desde?: string; recibidas?: boolean }
 function puerto(o: { r?: RecibidaBD; bd?: string | null; d?: Diez; adjuntar?: boolean; autorizados?: Autorizo[] } = {}) {
   let actual: EnvioFila | null = null
   const llamadas = { conexion: 0, cliente: 0 }
@@ -58,7 +58,9 @@ function puerto(o: { r?: RecibidaBD; bd?: string | null; d?: Diez; adjuntar?: bo
     envio: async () => actual,
     guardar: async (f) => { actual = { ...f, id: f.id ?? 's1' }; return actual },
     conexion: async () => { llamadas.conexion++; return o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009', adjuntar: o.adjuntar ?? true } },
-    autorizado: async (id, _emp, bd) => (o.autorizados ?? []).some((a) => a.bd.toUpperCase() === bd.toUpperCase() && (a.alcance === 'empresa' || a.entry === id)),
+    // C06b R8: la misma decisión que la función (autorizacionCubre), con su tipo.
+    autorizado: async (id, _emp, bd, fecha, tipo) => autorizacionCubre((o.autorizados ?? []).filter((a) => a.bd.toUpperCase() === bd.toUpperCase())
+      .map((a) => ({ alcance: a.alcance, entry_id: a.entry ?? null, desde: a.desde ?? null, incluye_recibidas: a.recibidas ?? false })), id, fecha, tipo),
     cliente: async () => { llamadas.cliente++; return d },
     documento: async () => PDF,
     sha256: async (b) => sha(b),
@@ -122,5 +124,26 @@ describe('enviarRecibidaADiez: la serie 2, con los frenos de siempre', () => {
     const x = await enviarRecibidaADiez('r1', t.p)
     expect(x.estado === 'no_llega' && x.motivo).toMatch(/retención/)
     expect(t.llamadas.conexion).toBe(0)
+  })
+})
+
+// C06b R8 · tarea 1 (Julio, 14/10): la autorización de empresa NO abre las
+// recibidas hasta que A arregle la búsqueda antes de escribir (hoy duplicaría).
+describe('C06b R8 · las recibidas, cerradas aunque la empresa esté autorizada (incluye_recibidas, 0740)', () => {
+  const EMPRESA: Autorizo = { alcance: 'empresa', bd: 'C0008', desde: '2026-10-01' }
+  it('con la empresa autorizada desde el 01/10, una recibida de octubre se para: «Diez real está cerrado para facturas recibidas»', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [EMPRESA] })
+    const x = await enviarRecibidaADiez('r1', t.p)
+    expect(x.estado === 'no_llega' && x.motivo).toBe('Diez real está cerrado para facturas recibidas (C0008): no se escribe nada hasta que Julio las autorice')
+    expect(t.llamadas.cliente).toBe(0); expect(t.d.altas).toEqual([])
+  })
+  it('ni con esa recibida autorizada por su asiento, si la fila no incluye recibidas', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'asiento', entry: 'r1', bd: 'C0008' }] })
+    expect(await enviarRecibidaADiez('r1', t.p)).toMatchObject({ estado: 'no_llega' })
+    expect(t.llamadas.cliente).toBe(0)
+  })
+  it('con incluye_recibidas, la misma recibida entra (el día que A lo arregle y Julio lo decida)', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [{ ...EMPRESA, recibidas: true }] })
+    expect(await enviarRecibidaADiez('r1', t.p)).toMatchObject({ estado: 'en_diez', serie: '2' })
   })
 })

@@ -51,7 +51,7 @@ function diez(o: { facturas?: Factura[]; contenedor?: boolean; subida?: number; 
 // adjuntar: ¿guarda Diez documentos? Las pruebas de R15 son «con almacén» (true);
 // las de C06b R7, el día de hoy: sin almacén (false). autorizados: lo que Julio
 // ha autorizado en conta_diez_autorizo para escribir en una base real.
-type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string; desde?: string }
+type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string; desde?: string; recibidas?: boolean }
 function puerto(o: { r?: ResumenBD; bd?: string | null; d?: Diez; envio?: EnvioFila | null; pdf?: Uint8Array; adjuntar?: boolean; autorizados?: Autorizo[] } = {}) {
   const filas: EnvioFila[] = []
   let actual: EnvioFila | null = o.envio ?? null
@@ -63,8 +63,8 @@ function puerto(o: { r?: ResumenBD; bd?: string | null; d?: Diez; envio?: EnvioF
     guardar: async (f) => { actual = { ...f, id: f.id ?? 's1' }; filas.push(actual); return actual },
     conexion: async () => { llamadas.conexion++; return o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009', adjuntar: o.adjuntar ?? true } },
     // La misma decisión que la función (autorizacionCubre), sobre las filas de esa base.
-    autorizado: async (id, _emp, bd, fecha) => autorizacionCubre((o.autorizados ?? []).filter((a) => a.bd.toUpperCase() === bd.toUpperCase())
-      .map((a) => ({ alcance: a.alcance, entry_id: a.entry ?? null, desde: a.desde ?? null })), id, fecha),
+    autorizado: async (id, _emp, bd, fecha, tipo) => autorizacionCubre((o.autorizados ?? []).filter((a) => a.bd.toUpperCase() === bd.toUpperCase())
+      .map((a) => ({ alcance: a.alcance, entry_id: a.entry ?? null, desde: a.desde ?? null, incluye_recibidas: a.recibidas ?? false })), id, fecha, tipo),
     cliente: async (_c, x) => { llamadas.cliente++; llamadas.real.push(x.real); return d },
     documento: async () => o.pdf ?? PDF,
     sha256: async (b) => sha(b),
@@ -460,6 +460,19 @@ describe('C06b R8 · la autorización de empresa con «desde» (0730)', () => {
   it('la de un asiento vale para ESE asiento, sea de la fecha que sea', async () => {
     const t = puerto({ bd: 'C0008', adjuntar: false, r: resumen({ fecha: '2026-09-30' }), autorizados: [{ alcance: 'asiento', entry: 'e1', bd: 'C0008' }] })
     expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+  })
+  it('la fila de C0008 como irá (desde 01/10, sin recibidas): una venta de octubre PASA', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'empresa', bd: 'C0008', desde: '2026-10-01', recibidas: false }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+  })
+  it('autorizacionCubre por tipo: las recibidas solo con incluye_recibidas; las ventas, siempre', () => {
+    const sin = [{ alcance: 'empresa', entry_id: null, desde: '2026-10-01', incluye_recibidas: false }]
+    expect(autorizacionCubre(sin, 'e1', '2026-10-13', 'ventas')).toBe(true)
+    expect(autorizacionCubre(sin, 'e1', '2026-10-13', 'recibidas')).toBe(false)
+    expect(autorizacionCubre([{ ...sin[0], incluye_recibidas: true }], 'e1', '2026-10-13', 'recibidas')).toBe(true)
+    expect(autorizacionCubre([{ ...sin[0], incluye_recibidas: true }], 'e1', '2026-09-30', 'recibidas')).toBe(false)
+    // Sin la columna (antes de la 0740): las recibidas, cerradas.
+    expect(autorizacionCubre([{ alcance: 'empresa', entry_id: null, desde: null }], 'e1', '2026-10-13', 'recibidas')).toBe(false)
   })
   it('autorizacionCubre: por id el asiento; la empresa desde su día; nada más', () => {
     const A = [{ alcance: 'empresa', entry_id: null, desde: '2026-10-01' }, { alcance: 'asiento', entry_id: 'e7', desde: null }]
