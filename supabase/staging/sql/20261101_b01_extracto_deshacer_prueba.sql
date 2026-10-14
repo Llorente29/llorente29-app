@@ -47,7 +47,7 @@ end $$;
 
 -- Cuántos extractos tiene Mercado aparte del de prueba (no se tienen que mover).
 create temp table _antes on commit drop as
-select count(*) n from public.bank_statement where treasury_account_id = 'b0100000-0000-4000-8000-0000000000b3' and id <> (select id from _r where que = 'extracto');
+select count(*) antes from public.bank_statement where treasury_account_id = 'b0100000-0000-4000-8000-0000000000b3' and id <> (select id from _r where que = 'extracto');
 grant select on _antes to authenticated;
 
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
@@ -114,7 +114,7 @@ begin
      and summary like 'Deshecho el extracto prueba-deshacer.n43 de % quitados 3 movimientos, 1 de ellos como «¿es el mismo?». Por qué: Es el de «extracto»; subo el de Firmas'
      and detail->>'extracto' = s::text;
   if n <> 1 then raise exception 'PRUEBA B01 · 5: «Lo que ha hecho Folvy» no lo dice (% apuntes).', n; end if;
-  if (select count(*) from public.bank_statement where treasury_account_id = 'b0100000-0000-4000-8000-0000000000b3') <> (select n from _antes) then
+  if (select count(*) from public.bank_statement where treasury_account_id = 'b0100000-0000-4000-8000-0000000000b3') <> (select antes from _antes) then
     raise exception 'PRUEBA B01 · 5: se han movido otros extractos del banco.';
   end if;
   raise notice '5 · deshecho: %', r;
