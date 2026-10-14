@@ -1,8 +1,6 @@
-# C06b · Respuesta 8, pregunta 1 — validar y guardar el PDF van juntos.
-#   0720: conta_numero_previsto (el número que le tocaría),
-#   journal_entry_validar_con_documento (valida y guarda el PDF en una sola
-#   transacción) y un disparador diferido en journal_entry: un asiento de
-#   ventas de una plataforma no queda validado sin su PDF, por ningún camino.
-#   Su prueba, por sus caminos y como usuario, en transacción con ROLLBACK.
-supabase/migrations/20261111T0720_c06b_validar_con_pdf.sql
-supabase/staging/sql/20261111_c06b_validar_con_pdf_prueba.sql
+# C06b · Respuesta 8, tarea 1 (primer paso de tres) — autorizar a Diez «la
+# empresa desde una fecha».
+#   0730: conta_diez_autorizo.desde (fecha, admite vacío) y su CHECK (solo en
+#   alcance empresa). No escribe datos. Su prueba, en transacción con ROLLBACK.
+supabase/migrations/20261111T0730_c06b_diez_autorizo_desde.sql
+supabase/staging/sql/20261111_c06b_diez_autorizo_desde_prueba.sql
