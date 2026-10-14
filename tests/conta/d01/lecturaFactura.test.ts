@@ -6,7 +6,7 @@
 // Ningún nombre ni NIF es de nadie: el repositorio es público.
 import { describe, expect, it } from 'vitest'
 import datosAlbaranes from '../../unit/modules/conta/datos/albaranes-fecha-importe-foodint-20261004.json'
-import { buscarRepetida, claveNumero, leerFactura, normalizarNif, type LecturaModelo } from '../../../supabase/functions/_shared/lecturaFactura'
+import { buscarRepetida, claveNumero, fechaLeida, leerFactura, normalizarNif, type LecturaModelo } from '../../../supabase/functions/_shared/lecturaFactura'
 
 const HOY = '2026-10-13'
 const mercancia = (o: Partial<LecturaModelo> = {}): LecturaModelo => ({
@@ -109,6 +109,29 @@ describe('leerFactura: lo que no puede pasar sin decirlo', () => {
     expect(ids(larga)).toEqual(['morosidad'])
     expect(larga.confianza).toBe('probable')
     expect(ids(leerFactura(mercancia({ document: { ...mercancia().document, doc_date: '2026-10-20' }, factura: { ...mercancia().factura, due_date: null } }), { hoy: HOY }))).toEqual(['fecha_futura'])
+  })
+  // D01 R5 · El caso del papel de la semilla: «Vencimiento: 10/11/2026 · transferencia».
+  // Si el modelo lo copia tal cual, el vencimiento es el 10 de noviembre (el
+  // día primero), no se pierde ni se lee al revés.
+  it('el vencimiento como viene en el papel: «10/11/2026 · transferencia» → 2026-11-10, y manda el de la factura', () => {
+    for (const due of ['2026-11-10', '10/11/2026', '10/11/2026 · transferencia', 'Vencimiento: 10/11/2026', '10-11-2026', '10.11.2026']) {
+      const l = leerFactura(mercancia({ factura: { ...mercancia().factura, due_date: due } }), { hoy: HOY })
+      expect(l.factura.vencimiento, due).toBe('2026-11-10')
+      expect(ids(l), due).toEqual([])
+    }
+    expect(fechaLeida('11/10/2026')).toBe('2026-10-11')
+    expect(fechaLeida('1/2/2026')).toBe('2026-02-01')
+    expect(fechaLeida('31/02/2026')).toBeNull()
+    expect(fechaLeida('2026-11-10T00:00:00Z')).toBe('2026-11-10')
+  })
+  it('un vencimiento que viene y no se entiende se dice (no «sin vencimiento» callado)', () => {
+    const l = leerFactura(mercancia({ factura: { ...mercancia().factura, due_date: 'a 30 días' } }), { hoy: HOY })
+    expect(l.factura.vencimiento).toBeNull()
+    expect(ids(l)).toEqual(['vencimiento_ilegible'])
+    expect(l.confianza).toBe('probable')
+    expect(l.porque.join(' ')).toContain('«a 30 días»')
+    // Sin vencimiento en el papel, nada que decir.
+    expect(ids(leerFactura(mercancia({ factura: { ...mercancia().factura, due_date: null } }), { hoy: HOY }))).toEqual([])
   })
   it('manuscrita o con poca confianza del modelo → probable, nunca seguro', () => {
     expect(leerFactura(mercancia({ document: { ...mercancia().document, handwritten: true } }), { hoy: HOY }).confianza).toBe('probable')

@@ -76,3 +76,18 @@ begin
     '[{"texto":"Tornillería","cantidad":null,"importe":38.90}]');
   raise notice 'Semilla D01 · cuenta A: 2 proveedores y 3 facturas de octubre.';
 end $$;
+
+-- R5 (14/10) · El papel de la F-2026-1022 dice «Vencimiento: 10/11/2026 ·
+-- transferencia» y la semilla no lo traía: N23 decía «sin vencimiento · sale de
+-- su ficha». No era la lectura (la semilla no pasa por ella; la lectura de
+-- verdad lo lee, tests/conta/d01/lecturaFactura.test.ts): faltaba aquí. Y la
+-- ficha de Alfa, a 30 días, que con la fecha de la factura da el mismo día.
+-- Se puede volver a lanzar: solo rellena lo que falta.
+do $$
+begin
+  update public.supplier_invoice set due_date = '2026-11-10'
+   where id = 'd0100000-0000-4000-8000-0000000000f1' and account_id = 'c01a0000-0000-4000-8000-00000000000a' and due_date is null;
+  update public.supplier set payment_terms_days = 30
+   where id = 'd0100000-0000-4000-8000-000000000001' and account_id = 'c01a0000-0000-4000-8000-00000000000a' and payment_terms_days is null;
+  raise notice 'Semilla D01 R5: el vencimiento de la F-2026-1022 y el plazo de su ficha, puestos si faltaban.';
+end $$;

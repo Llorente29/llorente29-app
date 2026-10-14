@@ -114,7 +114,23 @@ export function normalizarNif(n: string | null | undefined): string | null {
 /** ¿Tiene forma de NIF español (persona, NIE o sociedad)? La letra de control la comprueba la ficha al guardar. */
 export const formaDeNif = (n: string | null): boolean => !!n && /^([0-9]{8}[A-Z]|[XYZ][0-9]{7}[A-Z]|[A-HJNP-SUVW][0-9]{7}[0-9A-J])$/.test(n)
 
-const fechaIso = (s: string | null): string | null => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T12:00:00Z`)) ? s : null)
+/**
+ * Una fecha leída, a 'YYYY-MM-DD'. El modelo la pide así, pero a veces la copia
+ * como está en el papel: «10/11/2026», o «10/11/2026 · transferencia». En
+ * España el día va primero (10/11 es el 10 de noviembre). Una fecha que no
+ * existe (31/02) no vale. Lo demás, null: no se adivina.
+ */
+export function fechaLeida(s: string | null): string | null {
+  if (!s) return null
+  const iso = s.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/)
+  const dmy = iso ? null : s.match(/(?:^|[^\d])(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})(?!\d)/)
+  const [y, m, d] = iso ? [iso[1], iso[2], iso[3]] : dmy ? [dmy[3], dmy[2].padStart(2, '0'), dmy[1].padStart(2, '0')] : []
+  if (!y) return null
+  const r = `${y}-${m}-${d}`
+  const t = new Date(`${r}T12:00:00Z`)
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === r ? r : null
+}
+const fechaIso = fechaLeida
 const dias = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000)
 const masAnios = (iso: string, n: number) => `${Number(iso.slice(0, 4)) + n}${iso.slice(4)}`
 
@@ -221,6 +237,8 @@ export function leerFactura(m: LecturaModelo, o: { hoy: string; minConfianza?: n
   else if (!formaDeNif(nif) && !/^[A-Z]{2}/.test(nif)) add('nif_forma', false, false, `El NIF leído (${nif}) no tiene forma de NIF español: míralo.`)
   if (clase === 'simplificada' && cuota) add('simplificada', false, false, 'Es una factura simplificada (ticket): para deducir su IVA tiene que traer tu NIF y la cuota aparte (RD 1619/2012, art. 7.2).')
   if (clase === 'rectificativa' && !factura.rectificaA) add('rectifica', false, true, 'Es rectificativa y no dice qué factura rectifica.')
+  // Un vencimiento que viene y no se entiende no se calla: si no, la pantalla diría «sin vencimiento» y mandaría el de la ficha.
+  if (!vencimiento && txt(f.due_date)) add('vencimiento_ilegible', false, false, `Trae un vencimiento que no entiendo («${txt(f.due_date)}»): míralo en el papel.`)
   if (vencimiento && fecha && dias(fecha, vencimiento) > 60) add('morosidad', false, false, `Vence a ${dias(fecha, vencimiento)} días: supera los 60 días que permite la ley de morosidad entre empresas (Ley 3/2004, art. 4.3).`)
   if (vencimiento && fecha && vencimiento < fecha) add('vencimiento', false, true, 'Vence antes de la fecha de la factura.')
   if (d.handwritten) add('manuscrita', false, false, 'Está escrita a mano: la he leído con cuidado, pero mírala.')
