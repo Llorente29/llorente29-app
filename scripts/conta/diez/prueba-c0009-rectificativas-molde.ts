@@ -12,7 +12,7 @@
 // TipoFactura 1–13) pero no qué valor lleva cada uno. Lo que no se ha medido
 // no se inventa: aquí se mira cómo están las que la gestoría ya ha hecho.
 //
-// Se recorren las emitidas de 2023-01 a 2026-10 y se cuentan:
+// Se recorren las emitidas de 2026-10 hacia atrás (hasta 2023-01, si da tiempo) y se cuentan:
 //   · las que llevan algo de rectificativa (FacturaRectificativa, TipoRectificativa,
 //     NumeroFacturaRectificativa) y las de total negativo;
 //   · de ellas, la FORMA: TipoFactura, ClaveTipoFactura, TipoRectificativa,
@@ -56,18 +56,25 @@ try {
   await c.asegurarToken()
   md(`- Entrar en ${BD}: sí. El cliente no puede escribir (escribir: false).`, '')
 
-  const meses: string[] = []
-  for (let y = 2023; y <= 2026; y++) for (let m = 1; m <= 12; m++) if (y < 2026 || m <= 10) meses.push(`${y}${String(m).padStart(2, '0')}`)
+  // Del mes más reciente hacia atrás, y para sola a los 11 minutos (el job tiene 15:
+  // el 1.er intento, de 2023-01 en adelante, se quedó sin tiempo). Dice qué meses ha mirado.
+  const todosMeses: string[] = []
+  for (let y = 2026; y >= 2023; y--) for (let m = 12; m >= 1; m--) if (y < 2026 || m <= 10) todosMeses.push(`${y}${String(m).padStart(2, '0')}`)
+  const hasta = Date.now() + 11 * 60_000
   const todas: Factura[] = []
   const sinContestar: string[] = []
-  for (const m of meses) {
+  const meses: string[] = []
+  for (const m of todosMeses) {
+    if (Date.now() > hasta) break
+    meses.push(m)
     try { todas.push(...(await c.facturasDelMes(m))) } catch { sinContestar.push(m) }
   }
+  meses.reverse()
   // El listado de Diez repite filas: una por Ejercicio/Serie/Documento.
   const unicas = [...new Map(todas.map((f) => [`${f.Ejercicio}/${f.Serie}/${f.Documento}`, f])).values()]
   const porNumero = new Map<string, Factura[]>()
   for (const f of unicas) porNumero.set(String(v(f, 'NumeroFactura') ?? ''), [...(porNumero.get(String(v(f, 'NumeroFactura') ?? '')) ?? []), f])
-  md('### Dónde', '', `- Meses ${meses[0]}–${meses.at(-1)}: ${unicas.length} facturas emitidas distintas (sin contestar: ${sinContestar.join(', ') || 'ninguno'}).`, '')
+  md('### Dónde', '', `- Meses ${meses[0]}–${meses.at(-1)} (${meses.length} de ${todosMeses.length}; del más reciente hacia atrás, con 11 minutos): ${unicas.length} facturas emitidas distintas (sin contestar: ${sinContestar.join(', ') || 'ninguno'}).`, '')
 
   const rect = unicas.filter((f) => lleno(v(f, 'FacturaRectificativa')) || lleno(v(f, 'TipoRectificativa')) || lleno(v(f, 'NumeroFacturaRectificativa')) || /^R/i.test(String(v(f, 'ClaveTipoFactura') ?? '')))
   const negativas = unicas.filter((f) => n2(v(f, 'TotalFactura')) < 0)
