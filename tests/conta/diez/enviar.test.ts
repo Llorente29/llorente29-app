@@ -4,7 +4,7 @@
 // exist.» del R14, el listado que repite filas). Importes INVENTADOS.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { enviarAsientoADiez, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
+import { enviarAsientoADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
 import { CORRESPONDENCIA_LLORENTE29 } from '../../../supabase/functions/_shared/diezAnalitica'
 import { resumenDeAsiento, type ResumenBD } from '../../../supabase/functions/_shared/resumenDeAsiento'
 import type { Factura, FacturaData } from '../../../supabase/functions/_shared/diezCliente'
@@ -24,10 +24,13 @@ const resumen = (o: Partial<ResumenBD> = {}): ResumenBD => ({
 })
 
 type Diez = ClienteDiezEnvio & { altas: FacturaData[]; subidas: number; guardado: Uint8Array | null }
-function diez(o: { facturas?: Factura[]; contenedor?: boolean; subida?: number; devuelve?: (g: Uint8Array | null) => Uint8Array | null } = {}): Diez {
+// subcuentas: lo que Diez tiene en su plan (por defecto, la 430 de Uber con su nombre, sin NIF ni nombre comercial, como la captura de Julio de C0008).
+function diez(o: { facturas?: Factura[]; contenedor?: boolean; subida?: number; devuelve?: (g: Uint8Array | null) => Uint8Array | null; subcuentas?: Record<string, Record<string, unknown>> } = {}): Diez {
   const facturas = [...(o.facturas ?? [{ Ejercicio: '2026', Serie: '1', Documento: 1700, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-CAM-20261001' }])]
+  const subcuentas = o.subcuentas ?? { '43000002': { Codigo: '43000002', Descripcion: 'UBER EATS', NIF: '', NombreComercial: '' } }
   const d: Diez = {
     altas: [], subidas: 0, guardado: null,
+    async subcuenta(codigo) { return subcuentas[codigo] ?? null },
     async facturasDelMes() { return [...facturas, ...facturas] }, // el listado de Diez repite filas
     async enviarFactura(fd) { d.altas.push(fd); const f = { ...fd, Documento: 1801, Fecha: Number(fd.FechaFactura) } as Factura; facturas.push(f); return f },
     async adjuntarDocumentoFactura(x) {
@@ -45,17 +48,22 @@ function diez(o: { facturas?: Factura[]; contenedor?: boolean; subida?: number; 
   return d
 }
 
-function puerto(o: { r?: ResumenBD; bd?: string | null; d?: Diez; envio?: EnvioFila | null; pdf?: Uint8Array } = {}) {
+// adjuntar: ¿guarda Diez documentos? Las pruebas de R15 son «con almacén» (true);
+// las de C06b R7, el día de hoy: sin almacén (false). autorizados: lo que Julio
+// ha autorizado en conta_diez_autorizo para escribir en una base real.
+type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string }
+function puerto(o: { r?: ResumenBD; bd?: string | null; d?: Diez; envio?: EnvioFila | null; pdf?: Uint8Array; adjuntar?: boolean; autorizados?: Autorizo[] } = {}) {
   const filas: EnvioFila[] = []
   let actual: EnvioFila | null = o.envio ?? null
-  const llamadas = { conexion: 0, cliente: 0 }
+  const llamadas = { conexion: 0, cliente: 0, real: [] as boolean[] }
   const d = o.d ?? diez()
   const p: PuertoEnvio = {
     resumen: async () => o.r ?? resumen(),
     envio: async () => actual,
     guardar: async (f) => { actual = { ...f, id: f.id ?? 's1' }; filas.push(actual); return actual },
-    conexion: async () => { llamadas.conexion++; return o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009' } },
-    cliente: async () => { llamadas.cliente++; return d },
+    conexion: async () => { llamadas.conexion++; return o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009', adjuntar: o.adjuntar ?? true } },
+    autorizado: async (id, _emp, bd) => (o.autorizados ?? []).some((a) => a.bd.toUpperCase() === bd.toUpperCase() && (a.alcance === 'empresa' || a.entry === id)),
+    cliente: async (_c, x) => { llamadas.cliente++; llamadas.real.push(x.real); return d },
     documento: async () => o.pdf ?? PDF,
     sha256: async (b) => sha(b),
     correspondencia: () => CORRESPONDENCIA_LLORENTE29,
@@ -73,7 +81,7 @@ describe('enviarAsientoADiez (R15): los frenos', () => {
   it('SIN DOCUMENTO NO SE ENVÍA: ni se abre la conexión; queda «falta el documento»', async () => {
     const t = puerto({ r: resumen({ documento: null }) })
     expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', motivo: 'falta el documento', texto: 'No ha llegado a Diez: falta el documento.' })
-    expect(t.llamadas).toEqual({ conexion: 0, cliente: 0 })
+    expect(t.llamadas).toMatchObject({ conexion: 0, cliente: 0 })
     expect(t.actual).toMatchObject({ status: 'pendiente', attempts: 0, document_status: 'pendiente', last_error: 'falta el documento' })
   })
   it('una plataforma sin su factura medida (Glovo) no se envía y dice por qué', async () => {
@@ -196,5 +204,140 @@ describe('resumenDeAsiento (R15): el PDF sale del asiento', () => {
   })
   it('solo de lo validado y con número', () => {
     expect(() => resumenDeAsiento(resumen({ estado: 'propuesto', numero: null }), o)).toThrow(/validado/)
+  })
+})
+
+// ── C06b · Respuesta 7: a Diez sin esperar a Cegid ─────────────────────────────
+const enDiez = (o: Partial<EnvioFila> = {}): EnvioFila => ({ entry_id: 'e1', account_id: 'acc', company_id: 'emp', account_connector_id: 'k1', kind: 'factura', ext_year: '2026', ext_series: '1', ext_number: 1801,
+  ext_invoice_number: 'UBR-FLO-20261001', payload_hash: 'h', status: 'enviado', attempts: 1, last_error: null, sent_at: 'x', document_id: 'd1', document_status: 'pendiente_diez', document_error: null, document_attached_at: null, ...o })
+
+describe('C06b R7 · sin almacén de documentos en Diez: la factura va sin adjunto', () => {
+  it('C0009: alta SIN subir el PDF ni preguntar por el almacén → «En Diez · 1/1801 · PDF pendiente en Diez»', async () => {
+    const d = diez({ contenedor: false })
+    const t = puerto({ d, adjuntar: false })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x).toMatchObject({ estado: 'en_diez', serie: '1', documento: 1801, enlazada: false, pdfPendiente: true })
+    expect(x.texto).toContain(PDF_PENDIENTE)
+    expect(d.altas).toHaveLength(1); expect(d.subidas).toBe(0)
+    expect(t.actual).toMatchObject({ status: 'enviado', ext_number: 1801, attempts: 1, document_status: 'pendiente_diez', document_error: null, last_error: null })
+  })
+  it('SIN DOCUMENTO EN FOLVY SIGUE SIN ENVIARSE, aunque Diez no lo pida', async () => {
+    const t = puerto({ r: resumen({ documento: null }), adjuntar: false })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', motivo: 'falta el documento' })
+    expect(t.llamadas).toMatchObject({ conexion: 0, cliente: 0 }); expect(t.d.altas).toEqual([])
+  })
+  it('NUNCA DOS VECES: enviar otra vez lo que ya está con el PDF pendiente no habla con Diez', async () => {
+    const t = puerto({ envio: enDiez(), adjuntar: false })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x).toMatchObject({ estado: 'en_diez', documento: 1801, pdfPendiente: true })
+    expect(x.texto).toBe('Ya estaba en Diez: 1/1801. PDF pendiente en Diez.')
+    expect(t.llamadas.cliente).toBe(0); expect(t.filas).toEqual([]); expect(t.d.altas).toEqual([])
+  })
+  it('NUNCA DOS VECES: si la factura ya está en Diez (otro envío, o a mano), se enlaza y no se da otra de alta', async () => {
+    const d = diez({ facturas: [{ Ejercicio: '2026', Serie: '1', Documento: 1801, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001' }] })
+    const t = puerto({ d, adjuntar: false })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 1801, enlazada: true, pdfPendiente: true })
+    expect(d.altas).toEqual([]); expect(d.subidas).toBe(0)
+    expect(t.actual).toMatchObject({ status: 'enlazado', attempts: 0, document_status: 'pendiente_diez' })
+  })
+  it('el envío cortado a medias (intención apuntada, sin respuesta): al reintentar lo busca y lo enlaza, no da otra de alta', async () => {
+    const d = diez({ facturas: [{ Ejercicio: '2026', Serie: '1', Documento: 1801, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001' }] })
+    const t = puerto({ d, adjuntar: false, envio: enDiez({ status: 'pendiente', ext_year: null, ext_series: null, ext_number: null, last_error: 'enviando', document_status: 'pendiente' }) })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 1801, enlazada: true })
+    expect(d.altas).toEqual([])
+  })
+  it('EL DÍA QUE CEGID ACTIVE EL ALMACÉN: el mismo envío solo sube el PDF de lo pendiente (sin otra alta) y queda adjunto por Diez', async () => {
+    const d = diez({ facturas: [] })
+    const t = puerto({ d, adjuntar: true, envio: enDiez() })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 1801, pdfPendiente: false })
+    expect(d.altas).toEqual([]); expect(d.subidas).toBe(1)
+    expect(t.actual).toMatchObject({ document_status: 'adjunto', document_attached_via: 'diez' })
+  })
+  it('lo marcado «Ya está adjunto» no se vuelve a tocar', async () => {
+    const t = puerto({ envio: enDiez({ document_status: 'adjunto', document_attached_via: 'a_mano' }), adjuntar: true })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', pdfPendiente: false })
+    expect(t.llamadas.conexion).toBe(0); expect(t.filas).toEqual([])
+  })
+})
+
+describe('C06b R7 · Diez real, solo con lo que autoriza Julio', () => {
+  it('C0008 sin autorización: cerrado como hasta hoy, sin abrir el cliente', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x.estado === 'no_llega' && x.motivo).toBe('Diez real (C0008) está cerrado: no se escribe nada hasta que Julio lo autorice')
+    expect(t.llamadas.cliente).toBe(0); expect(t.d.altas).toEqual([])
+  })
+  it('C0008 con ESE asiento autorizado: se envía, con escribirEnReal', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'asiento', entry: 'e1', bd: 'C0008' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 1801, pdfPendiente: true })
+    expect(t.llamadas.real).toEqual([true]); expect(t.d.altas).toHaveLength(1)
+  })
+  it('C0008 con OTRO asiento autorizado: este no', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'asiento', entry: 'e9', bd: 'C0008' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega' })
+    expect(t.llamadas.cliente).toBe(0)
+  })
+  it('la autorización es de una base: la de C0008 no abre otra base real', async () => {
+    const t = puerto({ bd: 'C0042', adjuntar: false, autorizados: [{ alcance: 'empresa', bd: 'C0008' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega' })
+    expect(t.llamadas.cliente).toBe(0)
+  })
+  it('C0008 con la empresa autorizada: cualquier asiento validado', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'empresa', bd: 'C0008' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+  })
+  it('C0001, NI AUTORIZADA', async () => {
+    const t = puerto({ bd: 'C0001', adjuntar: false, autorizados: [{ alcance: 'empresa', bd: 'C0001' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', reintentar: false, motivo: 'la base C0001 de Diez no se toca nunca' })
+    expect(t.llamadas.cliente).toBe(0)
+  })
+  it('C0009 (pruebas) no necesita autorización y no va con escribirEnReal', async () => {
+    const t = puerto({ adjuntar: false })
+    await enviarAsientoADiez('e1', t.p)
+    expect(t.llamadas.real).toEqual([false])
+  })
+})
+
+// ── C06b R7 · El cliente se busca por su cuenta (Julio, captura de C0008) ───────
+describe('C06b R7 · el cliente, por su subcuenta en Diez (no por NIF ni por nombre comercial)', () => {
+  it('C0008 sin ninguna factura de Uber en el mes: el nombre sale de la subcuenta 43000002 («UBER EATS») y la factura va sin NIF', async () => {
+    const d = diez({ facturas: [] })
+    const t = puerto({ d, bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'asiento', entry: 'e1', bd: 'C0008' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 1801, pdfPendiente: true })
+    expect(d.altas).toHaveLength(1)
+    expect(d.altas[0]).toMatchObject({ CuentaCliente: '43000002', NombreCliente: 'UBER EATS' })
+    expect(JSON.stringify(d.altas[0])).not.toMatch(/"(CifCliente|NifCliente|NIF)":"[^"]/)
+  })
+  it('el nombre comercial y el NIF no cuentan: manda la Descripcion de la subcuenta', async () => {
+    const d = diez({ facturas: [], subcuentas: { '43000002': { Codigo: '43000002', Descripcion: 'UBER EATS', NIF: 'B00000000', NombreComercial: 'Otro nombre' } } })
+    const t = puerto({ d, adjuntar: false })
+    await enviarAsientoADiez('e1', t.p)
+    expect(d.altas[0]).toMatchObject({ NombreCliente: 'UBER EATS' })
+  })
+  it('la subcuenta del cliente no está en Diez: no se da de alta nada y no se reintenta solo', async () => {
+    const d = diez({ facturas: [], subcuentas: {} })
+    const t = puerto({ d, adjuntar: false })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(x.estado === 'no_llega' && x.motivo).toBe('la subcuenta 43000002 del cliente no está en Diez: no se inventa')
+    expect(d.altas).toEqual([]); expect(t.actual).toMatchObject({ attempts: 0 })
+  })
+  it('la subcuenta sin nombre: no se inventa', async () => {
+    const d = diez({ facturas: [], subcuentas: { '43000002': { Codigo: '43000002', Descripcion: '  ' } } })
+    const t = puerto({ d, adjuntar: false })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', motivo: 'la subcuenta 43000002 de Diez no tiene nombre: no se inventa' })
+    expect(d.altas).toEqual([])
+  })
+  it('si Diez devuelve OTRA subcuenta que la pedida, para', async () => {
+    const d = diez({ facturas: [], subcuentas: { '43000002': { Codigo: '43000001', Descripcion: 'GLOVO' } } })
+    const t = puerto({ d, adjuntar: false })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(d.altas).toEqual([])
+  })
+  it('si la factura ya está en Diez, se enlaza sin mirar la subcuenta (nunca dos veces)', async () => {
+    const d = diez({ facturas: [{ Ejercicio: '2026', Serie: '1', Documento: 1801, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001' }], subcuentas: {} })
+    const t = puerto({ d, adjuntar: false })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', enlazada: true })
+    expect(d.altas).toEqual([])
   })
 })

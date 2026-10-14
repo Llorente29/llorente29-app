@@ -84,6 +84,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.libros, element: enMarco(<LibrosPage />, '¿Qué facturas no deducen IVA?', true) },
     { path: CONTA.rutas.libroDiario, element: enMarco(<LibrosPage area="diario" accion="libro-diario" />, '¿Cuánto gané en el Local Norte este mes?', true) },
     { path: CONTA.rutas.diarioResumido, element: enMarco(<LibrosPage area="diario" accion="diario-resumido" />, '¿Cuánto gasté en septiembre?', true) },
+    { path: CONTA.rutas.pendientesDiez, element: enMarco(<LibrosPage area="diario" accion="pendientes-diez" />, '¿Cuánto gasté en septiembre?', true) },
     { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
     { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
     // B01 · Bancos en tres niveles (N17): Movimientos, Reglas, Cuentas y extractos, Cierre del mes.

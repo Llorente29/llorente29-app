@@ -1,0 +1,184 @@
+name: Diez · dar de alta la conexión de una empresa (C06b)
+
+# QUÉ HACE (C06b, respuesta 7, tarea 1)
+# Da de alta, o pone al día, la conexión con Diez de UNA empresa: la fila de
+# public.account_connector (conector «diez», ámbito empresa, su base de Diez) y
+# sus credenciales EN VAULT (connector_secret_save; nunca en una tabla, nunca
+# en el registro). Es lo que conta-diez-enviar necesita para hablar con Diez.
+#
+#   · La base de Diez NO se escribe aquí: es la registrada para la empresa en
+#     public.conta_diez_base. Sin base registrada, para. C0001, nunca.
+#   · «adjuntar_documentos» va siempre a false: Diez aún no guarda documentos
+#     (Cegid). El día que lo active, se cambia aquí y las facturas con el PDF
+#     pendiente se adjuntan solas al volver a enviarlas.
+#   · Dar de alta la conexión NO abre la escritura en una base real: eso solo
+#     lo abre conta_diez_autorizo (lo que autoriza Julio, en una tanda).
+#   · Las credenciales salen del secreto de GitHub DIEZ_LECTURA (o
+#     DIEZ_LECTURA_<sufijo>), el mismo con el que se escribió en C0009 en R13.
+#     En STAGING van siempre unas FALSAS («nada real en staging»): allí se
+#     prueba el camino de la base (la fila, Vault, el estado), no Diez.
+#   · Queda como «conectada por» el primer administrador activo de la cuenta
+#     (connector_secret_save lo exige: solo admin o encargado).
+#
+# Cuándo corre: a mano. En producción exige «produccion» en `confirmo` y
+# «conexion-diez» en `autorizo`. No despliega nada ni envía nada a Diez.
+# Y para probarlo antes de que esté en main (GitHub solo deja lanzar a mano lo
+# que está en main): al empujar a conta/c06b-repasos un commit cuyo mensaje
+# EMPIEZA por «[diez-conexion:staging]», SOLO en staging, con credenciales
+# falsas y la empresa del recorrido del frente C (C0009). Un push nunca toca
+# producción: el entorno de un push es siempre staging.
+
+on:
+  push:
+    branches: ['conta/c06b-repasos']
+  workflow_dispatch:
+    inputs:
+      entorno:
+        description: 'staging o produccion'
+        type: choice
+        options: [staging, produccion]
+        default: staging
+      empresa:
+        description: 'company.id de la empresa (uuid)'
+        type: string
+        required: true
+      confirmo:
+        description: 'En producción: escribe «produccion» (sin tilde)'
+        type: string
+        required: false
+        default: ''
+      autorizo:
+        description: 'En producción: escribe «conexion-diez»'
+        type: string
+        required: false
+        default: ''
+      secreto:
+        description: 'Vacío = DIEZ_LECTURA. Si la empresa tiene su propio acceso: el sufijo de DIEZ_LECTURA_<sufijo>'
+        type: string
+        required: false
+        default: ''
+
+concurrency:
+  group: diez-conexion-${{ inputs.entorno || 'staging' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  conexion:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[diez-conexion:staging]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Los cerrojos
+        env:
+          ENTORNO: ${{ inputs.entorno || 'staging' }}
+          EMPRESA: ${{ inputs.empresa || 'b0d735b4-bf1e-498a-8411-e368f5a4a044' }}
+          CONFIRMO: ${{ inputs.confirmo }}
+          AUTORIZO: ${{ inputs.autorizo }}
+        run: |
+          set -euo pipefail
+          [[ "$EMPRESA" =~ ^[0-9a-f-]{36}$ ]] || { echo "::error::«empresa» tiene que ser un uuid."; exit 1; }
+          if [ "$ENTORNO" = "produccion" ]; then
+            [ "$CONFIRMO" = "produccion" ] || { echo "::error::Producción: falta «produccion» en confirmo. No se hace nada."; exit 1; }
+            [ "$AUTORIZO" = "conexion-diez" ] || { echo "::error::Producción: falta «conexion-diez» en autorizo. No se hace nada."; exit 1; }
+          fi
+          echo "Entorno: $ENTORNO · empresa: $EMPRESA · lanzado por: $GITHUB_ACTOR desde $GITHUB_REF_NAME" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Enmascarar los secretos
+        env:
+          # En staging, credenciales FALSAS (nada real en staging): prueban la fila, Vault y el estado, no Diez.
+          DIEZ_LECTURA: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'produccion' && secrets[inputs.secreto != '' && format('DIEZ_LECTURA_{0}', inputs.secreto) || 'DIEZ_LECTURA'] || '{"client_id":"falso-c06b","client_secret":"falso-c06b","username":"falso-c06b","password":"falso-c06b","grant_type":"password"}' }}
+          DB_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'produccion' && secrets.PROD_CONTA_DB_URL || secrets.STAGING_CONTA_DB_URL }}
+          ENTORNO: ${{ inputs.entorno || 'staging' }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto de Diez."; exit 1; }
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta la URL de la base."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          es_prod = "xzmpnchlguibclvxyynt" in os.environ["DB_URL"]
+          if (os.environ["ENTORNO"] == "produccion") != es_prod:
+              print("::error::La URL de la base no es la del entorno elegido.")
+              raise SystemExit(1)
+          PY
+          for k in client_id client_secret username password; do
+            [ -n "$(jq -r --arg k "$k" '.[$k] // empty' <<<"$DIEZ_LECTURA")" ] || { echo "::error::Al secreto le falta $k."; exit 1; }
+          done
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: La conexión y sus credenciales en Vault
+        env:
+          # En staging, credenciales FALSAS (nada real en staging): prueban la fila, Vault y el estado, no Diez.
+          DIEZ_LECTURA: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'produccion' && secrets[inputs.secreto != '' && format('DIEZ_LECTURA_{0}', inputs.secreto) || 'DIEZ_LECTURA'] || '{"client_id":"falso-c06b","client_secret":"falso-c06b","username":"falso-c06b","password":"falso-c06b","grant_type":"password"}' }}
+          DB_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.entorno == 'produccion' && secrets.PROD_CONTA_DB_URL || secrets.STAGING_CONTA_DB_URL }}
+          EMPRESA: ${{ inputs.empresa || 'b0d735b4-bf1e-498a-8411-e368f5a4a044' }}
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-diez-conexion-${GITHUB_RUN_ID}"
+          # Lo que va a Vault: solo las credenciales (ni la base ni nada más).
+          SECRETO=$(jq -c '{grant_type: (.grant_type // "password"), client_id, client_secret, username, password}' <<<"$DIEZ_LECTURA")
+          BASE_URL=$(jq -r '.base_url // "https://apicon.diezsoftware.com"' <<<"$DIEZ_LECTURA")
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v secreto="$SECRETO" -v base_url="$BASE_URL" <<'SQL'
+          begin;
+          -- (sin devolver los valores: el secreto no sale ni en la salida)
+          select 'ok' from (select set_config('c.empresa', :'empresa', true), set_config('c.secreto', :'secreto', true), set_config('c.base_url', :'base_url', true)) x;
+          do $$
+          declare
+            v_emp uuid := current_setting('c.empresa')::uuid;
+            v_acc uuid; v_bd text; v_con uuid; v_admin uuid; v_id uuid; v_cfg jsonb;
+          begin
+            select account_id into v_acc from public.company where id = v_emp;
+            if v_acc is null then raise exception 'La empresa % no existe en esta base.', v_emp; end if;
+            select upper(trim(nombre_bd)) into v_bd from public.conta_diez_base where company_id = v_emp;
+            if v_bd is null then raise exception 'La empresa no tiene base de Diez registrada (conta_diez_base). No se hace nada.'; end if;
+            if v_bd = 'C0001' then raise exception 'C0001 no se toca nunca.'; end if;
+            select id into v_con from public.connector where code = 'diez';
+            if v_con is null then raise exception 'Falta el conector diez en el catálogo.'; end if;
+            select up.user_id into v_admin from public.user_profiles up
+             where up.account_id = v_acc and up.active and up.role = 'admin' order by up.created_at limit 1;
+            if v_admin is null then raise exception 'La cuenta no tiene ningún administrador activo.'; end if;
+            v_cfg := jsonb_build_object('nombre_bd', v_bd, 'base_url', current_setting('c.base_url'), 'adjuntar_documentos', false);
+            insert into public.account_connector (account_id, connector_id, scope, company_id, external_account_id, config, status, created_by)
+            values (v_acc, v_con, 'company', v_emp, v_bd, v_cfg, 'connecting', v_admin)
+            on conflict (company_id, connector_id) where scope = 'company'
+            do update set external_account_id = excluded.external_account_id, config = excluded.config, updated_at = now()
+            returning id into v_id;
+            perform public.connector_secret_save(v_id, v_admin, current_setting('c.secreto'), v_cfg);
+            raise notice 'conexion=% base=% adjuntar_documentos=false', v_id, v_bd;
+          end $$;
+          select ac.id || '|' || ac.external_account_id || '|' || ac.status || '|' || (ac.credentials_ref is not null)::text || '|' || (ac.config->>'adjuntar_documentos')
+            from public.account_connector ac join public.connector c on c.id = ac.connector_id
+           where c.code = 'diez' and ac.scope = 'company' and ac.company_id = current_setting('c.empresa')::uuid;
+          commit;
+          SQL
+          )
+          linea=$(printf '%s\n' "$r" | grep -E '^[0-9a-f-]{36}\|' | tail -1)
+          [ -n "$linea" ] || { echo "::error::No ha quedado la conexión."; exit 1; }
+          IFS='|' read -r id bd estado con_secreto adjuntar <<<"$linea"
+          {
+            echo "## Conexión con Diez"
+            echo ""
+            echo "| conexión | base | estado | credenciales en Vault | adjuntar documentos |"
+            echo "|---|---|---|---|---|"
+            echo "| \`$id\` | $bd | $estado | $con_secreto | $adjuntar |"
+            echo ""
+            echo "Escribir en una base real sigue cerrado salvo lo que autorice conta_diez_autorizo."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$estado" = "connected" ] && [ "$con_secreto" = "true" ] || { echo "::error::La conexión no ha quedado conectada con sus credenciales."; exit 1; }

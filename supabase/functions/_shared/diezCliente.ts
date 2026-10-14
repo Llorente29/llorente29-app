@@ -314,6 +314,18 @@ export class ClienteDiez {
   subcuentas() { return this.todas<Record<string, unknown>>('/api/subcuentas') }
   series() { return this.todas<{ Codigo: string; Descripcion: string }>('/api/series') }
 
+  /**
+   * C06b R7 · UNA subcuenta por su código (GET /api/subcuentas/subcuenta/{código}):
+   * Codigo, Descripcion (el nombre que Diez pone al cliente en sus facturas),
+   * NIF, NombreComercial… Null si Diez no la tiene.
+   */
+  async subcuenta(codigo: string): Promise<Record<string, unknown> | null> {
+    const r = await this.llamar('GET', `/api/subcuentas/subcuenta/${encodeURIComponent(codigo)}`)
+    if (r.status === 404 || r.json == null) return null
+    if (r.status !== 200) throw new ErrorDiez(`GET subcuenta → ${r.status}`, r.status, r.json)
+    return r.json as Record<string, unknown>
+  }
+
   /** ¿Existe ya el asiento con esa clave? (para no enviar dos veces). */
   async asiento(ejercicio: string, serie: string, documento: number): Promise<Factura | null> {
     const r = await this.llamar('GET', `/api/apuntes/asiento/${encodeURIComponent(ejercicio)}/${encodeURIComponent(serie)}/${documento}`)
