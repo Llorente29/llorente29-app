@@ -182,7 +182,7 @@ function Barra({ d, solo, producto, alSubir, alPedir, alVerApuntadas }: {
 }) {
   const accion: Record<string, (() => void) | undefined> = { subir: alSubir, fijas: alPedir, hecho: alVerApuntadas }
   return (
-    <nav className="cxl-barra" aria-label="Acciones de Facturas recibidas">
+    <nav className="cxl-barra cxr-barra" aria-label="Acciones de Facturas recibidas">
       <div className="cxl-barra-grupos">
         {barra(d, { solo, producto }).map((g) => (
           <div key={g.etiqueta} className="cxl-grupo" role="group" aria-label={g.etiqueta}>

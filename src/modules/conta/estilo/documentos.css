@@ -63,6 +63,8 @@
 .cxr-leido > div { padding: 9px 0; border-top: 1px solid var(--cx-linea); }
 .cxr-leido > div:nth-child(-n+2) { border-top: none; }
 .cxr-leido-valor { text-align: right; font-weight: 600; }
+/* «De Cocina» es un enlace: con el color de las otras entradas de la barra. */
+.cx .cxr-barra a.cxl-accion { color: var(--cx-texto); }
 .cxr-leido-valor .cxr-apoyo { display: block; font-weight: 400; }
 .cxr-aviso { color: var(--cx-ambar); }
 .cxr-apunte { display: grid; grid-template-columns: minmax(0, 1fr) 110px 110px; gap: 4px 10px; font-size: 15px; }
@@ -94,6 +96,8 @@
   .cxr-revisar { grid-template-columns: minmax(0, 1fr); }
   .cxr-papel-hoja { min-height: 0; padding: 10px; }
   .cxr-apunte { grid-template-columns: minmax(0, 1fr) 84px 84px; font-size: 14px; }
+  /* La etiqueta con su sitio: «Base al 10 %» no se parte en tres líneas. */
+  .cxr-leido { grid-template-columns: minmax(0, 44%) minmax(0, 1fr); }
   /* Bajo el pulgar: la barra de abajo, fija, con el botón grande. */
   .cxr-pulgar {
     position: sticky; bottom: 0; z-index: 2; display: flex; gap: 10px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));

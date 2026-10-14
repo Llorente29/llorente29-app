@@ -334,6 +334,39 @@ a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
   (HTTP 200 vacío). No sé su identificador con seguridad y no me lo invento:
   **pégame los artículos**, como dice R2.
 
+### R3 · El cierre de la tarea 6, medido
+
+- **e2e 221** (fe9939df): 165 en verde y 1 fallo, el de **mi** prueba nueva
+  del C04.
+  - Un apunte sin local ni «común» no se valida.
+  - La limpieza intentó anular una propuesta y dejó una «Para revisar» en la
+    cuenta A. Lo comprobé en staging leyendo: 1 resto.
+  - **Arreglado:** sus apuntes van como comunes; validado se anula y
+    propuesto se descarta. Al empezar, limpia lo que quedara de otro run con
+    su nombre.
+- **e2e 224** (43157e2e): **toda la suite en verde, y las capturas subidas**.
+  Mirarlas cazó tres fallos míos:
+  - **La tabla de N22, desalineada.** Mi prefijo de clases (`cxd-`) era el del
+    libro diario: 9 clases chocaban, en los dos sentidos, y `diario.css` hace
+    flex a `.cxd-tabla`. Ahora `cxr-`, que no usa nadie.
+  - **El papel de N23, vacío.** La lectura del papel tenía una clave que no
+    cambiaba al llegar la factura, y nunca se pedía. Lo cazó la e2e 228, con
+    el papel ya subido y enlazado en staging. Además, el PDF se pinta como
+    imagen con `pdfjs`: en un `iframe` no se ve en el Safari del móvil. La
+    factura de la semilla tiene un papel inventado con sus mismas cifras.
+  - **En el móvil, el total se partía y los filtros iban en dos líneas.**
+- **e2e 231** (f7c4a0e6): **toda la suite en verde**: 166 pruebas, D01 en
+  ordenador y móvil. Capturas en `docs/conta/capturas/d01/`, commit 27aed0cb.
+
+### Las capturas frente a la maqueta
+
+| Pantalla | Igual que la maqueta | Distinto, y por qué |
+|---|---|---|
+| N22 ordenador (A) | Tres niveles (menú, pestaña, barra Traer · Esperadas · Leídas con su punto y su dato); «Para mirar» con los cuatro filtros y «Subir facturas»; la banda en una frase; las cinco cifras; cada fila con inicial, proveedor · factura · «llegó por», fecha, total, punto, lo entendido con su porqué y un solo botón; el pie de las repetidas | Sin «Por correo» (el correo de A no está encendido), sin «Por recepción» (§5), sin «Tuyos» ni las pestañas que no existen (§5). La banda no dice «Faltan…» (hoy no hay esperadas, §5). Salen también facturas de otros frentes en la cuenta A compartida, como debe ser (regla 7) |
+| N23 ordenador (A) | Migas con «1 de 5», Anterior y Siguiente; el papel a la izquierda; la banda; «Lo que he leído» (proveedor con NIF y ficha, factura y «no hay otra con su número y su total», base e IVA por tipo, total que cuadra, vencimiento, «Sus facturas se apuntan en» con su origen); «Cómo se apunta» con nombre · código; «Otra cosa» y «Está bien · apuntar» en azul | Sin «Local» (la factura de la semilla no casa con ninguna recepción) ni «Precios» (§5) |
+| N22 y N23 móvil (A) | Hacer foto y Subir PDF; «Para mirar» en tarjetas con su único botón; en N23, el papel arriba y «Otra cosa» y «Está bien · apuntar» abajo, en la mitad de abajo sin desplazarse (lo mide la e2e) | En la captura de página entera el botón sale al final, porque la captura agranda la ventana; en la pantalla va fijo abajo. **Arreglado tras la 231:** las etiquetas de «Lo que he leído» se partían en varias líneas («Base / al 10 / %»). Lo dirá la próxima captura |
+| N22 y N23, frente C (`?marca=contabilidad`) | Lo mismo, sin «De Cocina», con «Lo que he hecho yo», «Lo que he entendido» y el pie sin marca: la e2e no encuentra ni «Cocina» ni «Folvy» en el contenido de Documentos | El marco (menú lateral «Volver a Folvy», barra de abajo «Folvy») es de la C06, que no está en esta rama |
+
 ## 10 · Lo que paro antes de la 7
 
 - **Producción:** nada. La tanda (0200 a 0290) va en la 7, con la fusión, en
