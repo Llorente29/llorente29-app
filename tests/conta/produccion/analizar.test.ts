@@ -353,10 +353,10 @@ describe('la tanda del C04 R4 (ya aplicada: las cuatro en el historial de produc
     // Y el registro del cierre del día (C04b R5, el porqué del día sin asiento).
     const registro = readFileSync('supabase/migrations/20261020T0140_libro_lectura_registro.sql', 'utf8')
     for (const m of `${cierre2}\n${registro}`.matchAll(/grant select on table public\.([a-z_]+) to conta_lectura/g)) tablas.add(m[1])
-    const funciones = new Set([...`${lectura}\n${cierre}`.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
     // C06b (#178): el agente del plan lee import_run, que la lectura de Diez (C04b) ya da a conta_lectura.
     const diez = readFileSync('supabase/migrations/20261019T0120_diez_lectura.sql', 'utf8')
     if (/grant select on table public\.import_run\b/.test(diez)) tablas.add('import_run')
+    const funciones = new Set([...`${lectura}\n${cierre}`.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
     expect(nombrados.size).toBe(43) // 42 + import_run (C06b, #178)
     expect([...nombrados].filter((n) => !tablas.has(n) && !funciones.has(n))).toEqual([])
     expect([...tablas, ...funciones].filter((n) => !nombrados.has(n))).toEqual([])
@@ -506,7 +506,7 @@ describe('la tanda de compras (ya aplicada: las diez en el historial de producci
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
   const bloque = (f: string) => r.markdown.split('### ').find((b) => b.startsWith(`\`${f}\``))!
 
-  it('las doce, en su orden', () => {
+  it('las diez, en su orden', () => {
     expect(viva.map((f) => f.replace(/^.*\/20261017T/, '').replace(/\.sql$/, ''))).toEqual([
       '0100_compras_fusion_proveedores', '0110_compras_socio_una_ficha', '0120_compras_forma_de_facturar',
       '0130_compras_forma_de_facturar_datos', '0140_compras_factura_desde_el_papel', '0150_compras_pendiente_y_fin_de_mes',
@@ -538,7 +538,7 @@ describe('la tanda de compras (ya aplicada: las diez en el historial de producci
     expect(readFileSync('supabase/staging/sql/20261017_compras_repaso_prueba.sql', 'utf8')).toMatch(/_compras_destinatario|compras_nombre_generico/)
     expect(r.ficheros[f]).toBe('sigue')
   })
-  it('su vuelta atrás son sus doce .down.sql, al revés, y existen', () => {
+  it('su vuelta atrás son sus diez .down.sql, al revés, y existen', () => {
     const atras = leerTanda('tests/conta/produccion/vuelta-atras-compras-20261010.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     for (const f of atras) expect(existsSync(f), f).toBe(true)
@@ -832,12 +832,12 @@ describe('la tanda de las facturas recibidas (D01 T7, R5 y R6; ya aplicada, real
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): a Diez sin el PDF y el primer asiento autorizado en C0008 (C06b, respuesta 7)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda de a Diez sin el PDF y el primer asiento autorizado en C0008 (C06b, respuesta 7; ya aplicada), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-r7-20261014.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 14/10 a las 15:20 UTC para ESTOS ficheros (con su md5).
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-r7-20261014.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -859,11 +859,45 @@ describe('la tanda de AHORA (manifiesto vivo): a Diez sin el PDF y el primer asi
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
   it('su vuelta atrás, al revés: la 0710 (para si ya está en Diez) y la 0700 (para si hay algo pendiente, marcado o autorizado)', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c06b-r7-20261014.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261111T0710_c06b_diez_autorizo_primero.down.sql', 'supabase/vuelta-atras/20261111T0700_c06b_diez_pdf_pendiente.down.sql'])
     for (const f of atras) expect(existsSync(f), f).toBe(true)
     expect(readFileSync(atras[0], 'utf8')).toMatch(/status in \('enviado', 'enlazado'\)/)
     expect(readFileSync(atras[1], 'utf8')).toMatch(/n_pend \+ n_mano \+ n_aut > 0/)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): validar y guardar el PDF van juntos (C06b, respuesta 8)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 14/10 a las 18:41 UTC para ESTE fichero (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero: la 0720 añade tres funciones y un disparador diferido en journal_entry (declarado, con prueba); sigue', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0720_c06b_validar_con_pdf.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue' })
+    expect(r.markdown).toContain('disparador nuevo en una tabla que existe')
+  })
+  it('no toca journal_entry_validar ni conta_documento_guardar, ni escribe datos', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    expect(sql).not.toMatch(/create or replace function public\.(journal_entry_validar|conta_documento_guardar)\(/i)
+    expect(sql).not.toMatch(/^\s*(update|delete|insert)\b/im)
+    expect(sql).toMatch(/deferrable initially deferred/)
+  })
+  it('declara qué cuenta antes y después, y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/validar-con-pdf.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('su vuelta atrás: fuera el disparador y las tres funciones, sin tocar asientos ni documentos', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0720_c06b_validar_con_pdf.down.sql'])
+    const sql = readFileSync(atras[0], 'utf8')
+    expect(sql).toMatch(/drop trigger if exists trg_journal_entry_valida_con_pdf on public\.journal_entry/)
+    expect(sql).not.toMatch(/^\s*(update|delete|insert)\b/im)
   })
 })
 
@@ -957,6 +991,15 @@ describe('lo que tiene que parar', () => {
   it('una columna obligatoria sin valor por defecto, o un cambio de tipo', () => {
     expect(sup('alter table public.supplier add column x text not null').para).toHaveLength(1)
     expect(sup('alter table public.supplier alter column name type varchar(10)').para).toHaveLength(1)
+  })
+  it('C06b: un disparador nuevo en una tabla que existe, también «constraint trigger» (diferido): cambia, no se cuela callado', () => {
+    for (const sql of [
+      'create trigger t1 after update on public.supplier for each row execute function public.f()',
+      'create constraint trigger t2 after update of status on public.supplier deferrable initially deferred for each row execute function public.f()',
+    ]) {
+      const ops = sentencias(sql).flatMap((s: string) => clasificar(s))
+      expect(ops, sql).toEqual([expect.objectContaining({ accion: 'crea', tipo: 'disparador', objeto: 'public.supplier' })])
+    }
   })
   it('lo que solo añade, sigue', () => {
     expect(sup('alter table public.supplier add column x text').para).toHaveLength(0)

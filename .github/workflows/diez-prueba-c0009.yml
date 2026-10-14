@@ -22,6 +22,9 @@ name: Diez · factura de prueba en C0009 (C04b)
 # Folvy (scripts/conta/diez/prueba-c0009-emitida-molde.ts). Una etiqueta
 # «[prueba-c0009:…]» desconocida para sin hacer nada.
 #
+# C06b R8: con «[prueba-c0009:rectificativas-molde]», SOLO LEE: cómo anula Diez
+# una factura emitida (scripts/conta/diez/prueba-c0009-rectificativas-molde.ts).
+#
 # C04b R13: con «[prueba-c0009:emitida]», ENVÍA a la C0009 la primera venta de
 # Folvy (Uber · Alcalá del 01/10, visto bueno de Julio): lee el asiento en
 # producción con conta_lectura (solo lectura), lo busca antes en Diez (si ya
@@ -39,7 +42,8 @@ name: Diez · factura de prueba en C0009 (C04b)
 
 on:
   push:
-    branches: ['conta/c04b-diez', 'conta/d01-recibidas']
+    # conta/c06b-validar-pdf: solo para «[prueba-c0009:rectificativas-molde]» (C06b, respuesta 8, solo lectura).
+    branches: ['conta/c04b-diez', 'conta/d01-recibidas', 'conta/c06b-validar-pdf']
   workflow_dispatch:
 
 concurrency:
@@ -125,6 +129,8 @@ jobs:
             '[prueba-c0009:recibida-molde]'*) S=scripts/conta/diez/prueba-c0009-recibida-molde.ts ;;
             # D01: una recibida de Folvy a la C0009 y leída de vuelta (si ya está, no se envía otra).
             '[prueba-c0009:recibida]'*) S=scripts/conta/diez/prueba-c0009-recibida.ts ;;
+            # C06b R8: cómo anula Diez una factura emitida (rectificativas que ya tiene), solo lectura (escribir: false).
+            '[prueba-c0009:rectificativas-molde]'*) S=scripts/conta/diez/prueba-c0009-rectificativas-molde.ts ;;
             # R13: la primera venta de Folvy en Diez (C0009), del volcado del paso anterior.
             '[prueba-c0009:emitida]'*) S=scripts/conta/diez/prueba-c0009-emitida.ts ;;
             # R14: qué dice el Swagger PÚBLICO de los adjuntos (sin credenciales).

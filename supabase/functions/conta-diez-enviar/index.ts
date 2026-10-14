@@ -19,6 +19,10 @@
 //     (config.adjuntar_documentos; hoy, apagado): sin él, la factura va sin
 //     adjunto y queda «PDF pendiente en Diez».
 //
+// C06b · Respuesta 8: con el id de un CONTRAASIENTO (al anular algo que ya
+// está en Diez, el Libro lo llama solo), manda a Diez la factura que anula la
+// de lo anulado, con los mismos frenos (enviarContraasientoADiez).
+//
 // Contesta siempre 200 con el resultado en palabras («En Diez: 1/1801…» o «No
 // ha llegado a Diez: <motivo>.»), salvo sesión (401), permiso (403) o un fallo
 // propio (500, también en palabras): el Libro lo enseña tal cual (regla 8).
@@ -29,7 +33,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { ClienteDiez, type AlmacenToken } from "../_shared/diezCliente.ts";
 import { correspondenciaDeEmpresa } from "../_shared/diezAnalitica.ts";
-import { enviarAsientoADiez, enviarRecibidaADiez, type ConexionDiez, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
+import { enviarAsientoADiez, enviarContraasientoADiez, enviarRecibidaADiez, type ConexionDiez, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
 import type { ResumenBD } from "../_shared/resumenDeAsiento.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -54,11 +58,21 @@ Deno.serve(async (req) => {
   try { const b = await req.json() as { entry_id?: unknown }; entryId = typeof b.entry_id === "string" ? b.entry_id : ""; } catch { /* vacío */ }
   if (!/^[0-9a-f-]{36}$/i.test(entryId)) return json({ error: "falta entry_id" }, 400);
 
-  // El asiento, con los permisos de quien llama. D01: una factura recibida se
-  // lee con conta_recibida_envio y va a la serie 2; lo demás, como siempre.
-  const { data: cab } = await sb.from("journal_entry").select("source_type").eq("id", entryId).maybeSingle();
-  const esRecibida = (cab as { source_type?: string } | null)?.source_type === "supplier_invoice";
-  const { data: leido, error: e1 } = await sb.rpc(esRecibida ? "conta_recibida_envio" : "conta_resumen_ventas", { p_entry: entryId });
+  // C06b R8: ¿es el contraasiento de una anulación? Entonces se manda la factura
+  // que anula la de lo anulado (enviarContraasientoADiez), y el resumen es el
+  // de lo anulado. Leído con los permisos de quien llama (si no es suyo, no está).
+  const { data: je, error: e0 } = await sb.from("journal_entry")
+    .select("id, account_id, company_id, status, entry_date, source_type, reverses_entry_id, number").eq("id", entryId).maybeSingle();
+  if (e0) return json({ estado: "no_llega", motivo: e0.message, reintentar: true, texto: `No ha llegado a Diez: ${e0.message}` }, 400);
+  if (!je) return json({ estado: "no_llega", motivo: "ese asiento no está", reintentar: false, texto: "No ha llegado a Diez: ese asiento no está." }, 404);
+  const contra: ContraasientoBD | null = je.source_type === "reversal"
+    ? { id: je.id, account_id: je.account_id, company_id: je.company_id, estado: je.status, fecha: String(je.entry_date), origen: je.source_type, anula: je.reverses_entry_id, numero: je.number }
+    : null;
+
+  // D01: una factura recibida se lee con conta_recibida_envio y va a la serie 2.
+  const esRecibida = !contra && je.source_type === "supplier_invoice";
+  // El asiento (o, para un contraasiento, lo que anula), con los permisos de quien llama.
+  const { data: leido, error: e1 } = await sb.rpc(esRecibida ? "conta_recibida_envio" : "conta_resumen_ventas", { p_entry: contra?.anula ?? entryId });
   if (e1) return json({ estado: "no_llega", motivo: e1.message, reintentar: false, texto: `No ha llegado a Diez: ${e1.message}` }, e1.code === "P0002" ? 404 : 400);
   const r = leido as ResumenBD;
   const rec = leido as unknown as RecibidaBD;
@@ -67,7 +81,12 @@ Deno.serve(async (req) => {
 
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
   const puerto: PuertoEnvio & { recibida(id: string): Promise<RecibidaBD> } = {
-    resumen: async () => r,
+    resumen: async (id) => {
+      if (id === r.id) return r;
+      const { data, error } = await sb.rpc("conta_resumen_ventas", { p_entry: id });
+      if (error) throw new Error(error.message);
+      return data as ResumenBD;
+    },
     // Los números de la base llegan como texto o número: se pasan a número.
     recibida: async () => ({ ...rec, lineas: (rec.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), tipoIva: l.tipoIva == null ? null : Number(l.tipoIva), baseIva: l.baseIva == null ? null : Number(l.baseIva) })) }),
     envio: async (id) => {
@@ -133,7 +152,7 @@ Deno.serve(async (req) => {
   };
 
   try {
-    return json(await (esRecibida ? enviarRecibidaADiez(entryId, puerto) : enviarAsientoADiez(entryId, puerto)));
+    return json(contra ? await enviarContraasientoADiez(contra, puerto) : esRecibida ? await enviarRecibidaADiez(entryId, puerto) : await enviarAsientoADiez(entryId, puerto));
   } catch (x) {
     const motivo = x instanceof Error ? x.message : String(x);
     return json({ estado: "no_llega", motivo, reintentar: true, texto: `No ha llegado a Diez: ${motivo}.` }, 500);

@@ -23,13 +23,14 @@ import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/forma
 import { deDondeSale, estadoDe, estadoMes, marcaNegativoDiez, mesDe, nombreMes, pastillasDeLinea, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
 import {
-  anular, cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
+  cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
 } from '@/modules/conta/services/diarioService'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { MARCA } from '../cuenta/marca'
 import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
 import { estadoDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
-import { guardarDocumento, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
+import { anularConDiez, leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
+import { noSeValida } from '@/modules/conta/lib/validarConPdf'
 
 interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
 
@@ -93,14 +94,19 @@ export default function AsientoPage() {
   async function hacerValidar() {
     if (!a) return
     setOcupado(true); setFallo(null); setHecho(null)
+    const validado = (v: { serie: number; numero: number }) => `Validado: ${NOMBRE_SERIE[v.serie as 1]} nº ${v.numero.toLocaleString('es-ES')}, encadenado con su huella. Ya está en el Mayor y no se toca: si hiciera falta, se anula.`
+    // Respuesta 8: las ventas de una plataforma se validan con su PDF, en una sola transacción.
+    if (datos?.conDiez) {
+      try {
+        const v = await validarConDocumento(a.id, userName)
+        setHecho(`${validado(v)} Con su «Resumen de ventas» guardado en ${MARCA.nombre}; aún no se ha enviado a Diez.`)
+        recargar()
+      } catch (x) { setFallo(noSeValida(x instanceof Error ? x.message : String(x))) }
+      finally { setOcupado(false) }
+      return
+    }
     try {
-      const v = await validar(a.id, userName)
-      const dicho = `Validado: ${NOMBRE_SERIE[v.serie as 1]} nº ${v.numero.toLocaleString('es-ES')}, encadenado con su huella. Ya está en el Mayor y no se toca: si hiciera falta, se anula.`
-      // R15 · Las ventas de una plataforma guardan su documento al validarse.
-      if (datos?.conDiez) {
-        try { await guardarDocumento(a.id, userName); setHecho(`${dicho} Su «Resumen de ventas» queda guardado en ${MARCA.nombre}; aún no se ha enviado a Diez.`) }
-        catch (x) { setHecho(dicho); setFallo(`El documento no se ha guardado: ${x instanceof Error ? x.message : String(x)}. Sin él no se envía a Diez; pulsa «Reintentar» en «Con Diez».`) }
-      } else setHecho(dicho)
+      setHecho(validado(await validar(a.id, userName)))
       recargar()
     } catch (x) { setFallo(x instanceof Error ? x.message : 'No se ha validado.') }
     finally { setOcupado(false) }
@@ -235,9 +241,12 @@ export default function AsientoPage() {
           ayuda="No se borra: hago un contraasiento que le da la vuelta, apunte por apunte, enlazado con este (CCom 29). Si su mes está cerrado, va al primer día abierto."
           alCerrar={() => setDialogo(null)}
           hacer={async (motivo, fecha) => {
-            const x = await anular(a.id, motivo, fecha, userName)
+            // Respuesta 8: si su factura ya está en Diez, el contraasiento va solo a Diez.
+            const x = await anularConDiez(a.id, motivo, fecha, userName)
             setDialogo(null)
-            setHecho(`Anulado. Contraasiento ${NOMBRE_SERIE[x.serie as 1]} nº ${x.numero.toLocaleString('es-ES')} del ${diaMesCorto(x.fecha)}, enlazado con este.`)
+            const dicho = `Anulado. Contraasiento ${NOMBRE_SERIE[x.serie as 1]} nº ${x.numero.toLocaleString('es-ES')} del ${diaMesCorto(x.fecha)}, enlazado con este.`
+            if (x.diez?.estado === 'no_llega') { setHecho(dicho); setFallo(`${x.diez.texto} Queda en Libros › Pendientes de adjuntar en Diez, con «Enviar el contraasiento».`) }
+            else setHecho(x.diez ? `${dicho} ${x.diez.texto}` : dicho)
             recargar()
           }} />
       )}

@@ -13,6 +13,10 @@
 // el zip, adjunta cada PDF en Diez y lo marca aquí. Y lo anulado en Folvy que
 // sigue en Diez sale aparte: le falta su contraasiento allí.
 //
+// C06b · Respuesta 8: al anular, el contraasiento va solo a Diez. Aquí solo
+// queda lo que no ha llegado (con su motivo) y «Enviar el contraasiento»,
+// que hace lo mismo: nunca dos veces.
+//
 // Regla 7: es una pantalla que se abre a propósito; no esconde ninguna fila.
 // Regla 8: cada botón dice qué ha pasado, con contenido.
 
@@ -23,7 +27,7 @@ import { Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso } from '@/modules/conta/ui/piezas'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { fraseResumen, nombreEnZip, referenciaDiez, type PendienteDiez } from '@/modules/conta/lib/pendientesDiez'
-import { leerPendientesDiez, marcarAdjuntoEnDiez, urlDocumento, zipPendientesDiez } from '@/modules/conta/services/conDiezService'
+import { enviarADiez, leerPendientesDiez, marcarAdjuntoEnDiez, urlDocumento, zipPendientesDiez, type AnuladoEnDiez } from '@/modules/conta/services/conDiezService'
 import { MARCA } from '../cuenta/marca'
 
 const ddmmaa = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`
@@ -52,6 +56,13 @@ export function PendientesDiez() {
     setOcupado(p.entryId); setHecho(null)
     try { setHecho(await marcarAdjuntoEnDiez(p.entryId, L.quien)); d.recargar() }
     catch (e) { setHecho(`No se ha marcado ${referenciaDiez(p)}: ${mensajeDe(e)}`) } finally { setOcupado(null) }
+  }
+
+  async function enviarContra(a: AnuladoEnDiez) {
+    if (!a.contraasiento) return
+    setOcupado(a.entryId); setHecho(null)
+    try { setHecho((await enviarADiez(a.contraasiento)).texto); d.recargar() }
+    catch (e) { setHecho(`No ha llegado a Diez: ${mensajeDe(e)}.`) } finally { setOcupado(null) }
   }
 
   async function ver(p: PendienteDiez) {
@@ -109,7 +120,7 @@ export function PendientesDiez() {
       {anul.length > 0 && (
         <div className="cx-tarjeta">
           <h3 className="cx-tarjeta-titulo">Anulados en {MARCA.nombre} que siguen en Diez</h3>
-          <p className="cx-ayuda">Se anularon aquí con su contraasiento, pero en Diez la factura sigue. Diez no borra: hay que anularla allí con su contraasiento.</p>
+          <p className="cx-ayuda">Se anularon aquí con su contraasiento, pero en Diez la factura sigue. Al anular, {MARCA.nombre} manda el contraasiento a Diez solo; estos no han llegado. «Enviar el contraasiento» lo vuelve a intentar, y nunca lo manda dos veces.</p>
           <ul className="cxp-pendientes" aria-label="Anulados que siguen en Diez">
             {anul.map((a) => (
               <li key={a.entryId} className="cxp-pendiente">
@@ -117,7 +128,15 @@ export function PendientesDiez() {
                   <Link className="cx-enlace" to={rutaAsiento(a.entryId)}><strong>{a.concepto}</strong></Link>
                   <span className="cxp-pendiente-fecha"> · {ddmmaa(a.fecha)}</span>{' '}<Chip tono="ambar">falta su contraasiento en Diez</Chip>
                   <div className="cxp-pendiente-ref">En Diez: asiento <strong>{referenciaDiez(a)}</strong>{a.factura ? <> · factura <strong>{a.factura}</strong></> : null}</div>
+                  {a.motivo && <div className="cxp-pendiente-fecha">No ha llegado: {a.motivo}</div>}
                 </div>
+                {a.contraasiento && (
+                  <div className="cxp-pendiente-acciones">
+                    <button type="button" className="cx-boton-sec" disabled={ocupado === a.entryId} onClick={() => void enviarContra(a)}>
+                      {ocupado === a.entryId ? 'Enviando…' : 'Enviar el contraasiento'}
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

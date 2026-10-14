@@ -1,0 +1,27 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C06b · Respuesta 7, tarea 1 (rama conta/c06b-repasos). PREPARADA, NO LANZADA.
+#
+#   1. 20261111T0700 — «PDF pendiente en Diez» (external_send.document_status
+#      amplía su CHECK), quién lo adjunta y cómo, conta_diez_autorizo y
+#      conta_diez_adjunto_a_mano («Ya está adjunto»). Solo añade y amplía.
+#   2. 20261111T0710 — la autorización de UN asiento en C0008: Uber · Alcalá
+#      del 01/10 (Julio, respuesta 7). Escribe una fila: pide «autorizo». No
+#      envía nada.
+#
+# ORDEN con el front y las funciones:
+#   · la tanda, ANTES de desplegar conta-diez-enviar (la nueva lee
+#     conta_diez_autorizo y escribe «pendiente_diez»);
+#   · la conexión con Diez de la empresa: workflow «Diez · dar de alta la
+#     conexión» (produccion, conexion-diez), cuando esté en main;
+#   · y Julio envía ese asiento desde el Libro («Validar y enviar a Diez»).
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/diez-pdf-pendiente.sql
+supabase/migrations/20261111T0700_c06b_diez_pdf_pendiente.sql
+supabase/migrations/20261111T0710_c06b_diez_autorizo_primero.sql

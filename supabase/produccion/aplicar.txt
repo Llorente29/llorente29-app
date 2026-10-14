@@ -5,23 +5,24 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C06b · Respuesta 7, tarea 1 (rama conta/c06b-repasos). PREPARADA, NO LANZADA.
+# C06b · Respuesta 8, pregunta 1 (rama conta/c06b-validar-pdf). PREPARADA, NO LANZADA.
 #
-#   1. 20261111T0700 — «PDF pendiente en Diez» (external_send.document_status
-#      amplía su CHECK), quién lo adjunta y cómo, conta_diez_autorizo y
-#      conta_diez_adjunto_a_mano («Ya está adjunto»). Solo añade y amplía.
-#   2. 20261111T0710 — la autorización de UN asiento en C0008: Uber · Alcalá
-#      del 01/10 (Julio, respuesta 7). Escribe una fila: pide «autorizo». No
-#      envía nada.
+#   1. 20261111T0720 — validar y guardar el PDF van juntos:
+#      conta_numero_previsto, journal_entry_validar_con_documento y un
+#      disparador DIFERIDO en journal_entry (un asiento de ventas de una
+#      plataforma no queda validado sin su PDF). Solo añade; el disparador
+#      nuevo en una tabla que existe va declarado («cambia: public.journal_entry»)
+#      con su prueba de staging.
 #
 # ORDEN con el front y las funciones:
-#   · la tanda, ANTES de desplegar conta-diez-enviar (la nueva lee
-#     conta_diez_autorizo y escribe «pendiente_diez»);
-#   · la conexión con Diez de la empresa: workflow «Diez · dar de alta la
-#     conexión» (produccion, conexion-diez), cuando esté en main;
-#   · y Julio envía ese asiento desde el Libro («Validar y enviar a Diez»).
+#   · la tanda, ANTES de fusionar el front (el nuevo llama a
+#     conta_numero_previsto y journal_entry_validar_con_documento; sin ellas
+#     no validaría ningún asiento de plataforma, y lo diría);
+#   · con la tanda dentro y el front de antes, validar un asiento de
+#     plataforma desde una pestaña vieja dice «se valida con su PDF» y no
+#     valida: es lo que pidió Julio, y se arregla recargando con el front nuevo;
+#   · conta-diez-enviar (el contraasiento), después de fusionar.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/diez-pdf-pendiente.sql
-supabase/migrations/20261111T0700_c06b_diez_pdf_pendiente.sql
-supabase/migrations/20261111T0710_c06b_diez_autorizo_primero.sql
+cuenta: scripts/conta/produccion/cuentas/validar-con-pdf.sql
+supabase/migrations/20261111T0720_c06b_validar_con_pdf.sql
