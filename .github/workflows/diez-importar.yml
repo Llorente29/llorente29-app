@@ -131,7 +131,12 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "${DB_URL:-}" ] || { echo "::error::Falta STAGING_CONTA_DB_URL."; exit 1; }
-          python3 -c 'import os,urllib.parse as u; p=u.urlsplit(os.environ["DB_URL"]); [print(f"::add-mask::{x}") for x in (os.environ["DB_URL"], p.password, p.username, p.hostname) if x]'
+          python3 - <<'PY'
+          import os, urllib.parse as u
+          p = u.urlsplit(os.environ["DB_URL"])
+          for x in (os.environ["DB_URL"], p.password, p.username, p.hostname):
+              if x: print(f"::add-mask::{x}")
+          PY
           case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
           case "$DB_URL" in *"$STAGING_REF"*) echo "Staging." ;; *) echo "::error::La URL no es de staging."; exit 1 ;; esac
       - name: Instalar psql 17
@@ -148,7 +153,7 @@ jobs:
           DIEZ_DESDE: '202310'
           DIEZ_HASTA: '202412'
           DIEZ_CORTE: '2024-12-30'
-        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee /tmp/informe.md
+        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts > /tmp/informe.md
       - name: Paso 2 · escribir, medir y deshacer (ensayo)
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -210,7 +215,8 @@ jobs:
           [ -z "$IN_HASTA" ] || [[ "$IN_HASTA" =~ ^[0-9]{6}$ ]] || { echo "::error::«hasta» es AAAAMM o nada."; exit 1; }
           [ -z "$IN_CORTE" ] || [[ "$IN_CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::«corte» es AAAA-MM-DD o nada."; exit 1; }
           [ -z "$SECRETO" ] || [[ "$SECRETO" =~ ^[A-Z0-9_]+$ ]] || { echo "::error::«secreto» solo lleva mayúsculas, cifras y _."; exit 1; }
-          echo "AUTORIZO_DADO=$AUTORIZO" >> "$GITHUB_ENV"
+          echo "AUTORIZO_DADO=$AUTORIZO" > /tmp/env.txt
+          cat /tmp/env.txt >> "$GITHUB_ENV"
           echo "# Diez · tanda del histórico · **$MODO**" > /tmp/informe.md
           echo "" >> /tmp/informe.md
           echo "Commit \`${GITHUB_SHA}\` · lanzado por **${GITHUB_ACTOR}** · $(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M') de Madrid" >> /tmp/informe.md
@@ -227,14 +233,19 @@ jobs:
             echo "::error::No hay un ensayo en verde de este commit (${GITHUB_SHA}) para esta empresa. Primero el ensayo; el real, después y desde el mismo commit."
             exit 1
           fi
-          echo "Hay $n ensayo(s) en verde de este commit." | tee -a /tmp/informe.md
+          echo "Hay $n ensayo(s) en verde de este commit." >> /tmp/informe.md
       - name: Guardas · el secreto apunta a PRODUCCIÓN y no a staging
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -euo pipefail
           [ -n "${DB_URL:-}" ] || { echo "::error::Falta PROD_CONTA_DB_URL."; exit 1; }
-          python3 -c 'import os,urllib.parse as u; p=u.urlsplit(os.environ["DB_URL"]); [print(f"::add-mask::{x}") for x in (os.environ["DB_URL"], p.password, p.username, p.hostname) if x]'
+          python3 - <<'PY'
+          import os, urllib.parse as u
+          p = u.urlsplit(os.environ["DB_URL"])
+          for x in (os.environ["DB_URL"], p.password, p.username, p.hostname):
+              if x: print(f"::add-mask::{x}")
+          PY
           case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING. Abortado sin conectar."; exit 1 ;; esac
           case "$DB_URL" in *"$PROD_REF"*) echo "Producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
       - name: Enmascarar el secreto de Diez
@@ -272,14 +283,14 @@ jobs:
           [[ "$DESDE" =~ ^[0-9]{6}$ && "$HASTA" =~ ^[0-9]{6}$ && "$CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Faltan fechas y no hay nada usado antes con esta empresa: escribe desde, hasta y corte."; exit 1; }
           { echo "EMPRESA=$e"; echo "DIEZ_DESDE=$DESDE"; echo "DIEZ_HASTA=$HASTA"; echo "DIEZ_CORTE=$CORTE"; } >> "$GITHUB_ENV"
           origen() { [ -n "$1" ] && echo "escrito" || echo "lo último usado"; }
-          { echo "Empresa **$nombre** (\`$e\`) · desde **$DESDE** ($(origen "$IN_DESDE")) · hasta **$HASTA** ($(origen "$IN_HASTA")) · corte **$CORTE** ($(origen "$IN_CORTE"))."; echo; } | tee -a /tmp/informe.md
+          { echo "Empresa \`$e\` · desde **$DESDE** ($(origen "$IN_DESDE")) · hasta **$HASTA** ($(origen "$IN_HASTA")) · corte **$CORTE** ($(origen "$IN_CORTE"))."; echo; } >> /tmp/informe.md
       - name: Guarda · la empresa, su base registrada, sus pasos y su ejercicio mixto de Diez hasta el corte
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -euo pipefail
           # Los pasos de antes (respuesta 3): datos, plan y banco. Si falta uno, se dice cuál.
-          # (Las variables :'x' de psql solo se sustituyen en lo que entra por la entrada, no con -c.)
+          # (Las variables :'x' del cliente solo se sustituyen en lo que entra por la entrada, no con -c.)
           falta=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" <<'SQL'
           select coalesce(public.conta_diez_listo(:'empresa'::uuid) ->> 'falta', 'nada');
           SQL
@@ -299,8 +310,9 @@ jobs:
           )
           [ "$(printf '%s\n' "$r" | grep -c .)" = "1" ] || { echo "::error::La empresa no tiene base de Diez registrada o su ejercicio $(echo "$DIEZ_CORTE" | cut -c1-4) no es mixto de Diez hasta el $DIEZ_CORTE. Abortado sin escribir nada."; exit 1; }
           BD=${r%%|*}
-          echo "DIEZ_BD=$BD" >> "$GITHUB_ENV"
-          echo "Empresa con la base $BD de Diez y su ejercicio mixto hasta el $DIEZ_CORTE." | tee -a /tmp/informe.md
+          echo "DIEZ_BD=$BD" > /tmp/env.txt
+          cat /tmp/env.txt >> "$GITHUB_ENV"
+          echo "Empresa con la base $BD de Diez y su ejercicio mixto hasta el $DIEZ_CORTE." >> /tmp/informe.md
       - name: El real lleva su autorizo, por empresa
         if: inputs.modo == 'real'
         run: |
@@ -312,7 +324,7 @@ jobs:
           DIEZ_FUENTE: real
           DIEZ_LECTURA: ${{ secrets[inputs.secreto != '' && format('DIEZ_LECTURA_{0}', inputs.secreto) || 'DIEZ_LECTURA'] }}
           CARGA: /tmp/carga
-        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee -a /tmp/informe.md
+        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts >> /tmp/informe.md
       - name: Paso 2 · escribir, medir contra el testigo y decidir (una transacción)
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
@@ -332,7 +344,7 @@ jobs:
           "$PSQL" "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v desde="$DIEZ_DESDE" -v hasta="$DIEZ_HASTA" -v corte="$DIEZ_CORTE" <<'SQL'
           select public.conta_diez_base_recordar(:'empresa'::uuid, :'desde', :'hasta', :'corte'::date);
           SQL
-          echo "Queda como lo último usado: desde $DIEZ_DESDE, hasta $DIEZ_HASTA, corte $DIEZ_CORTE." | tee -a /tmp/informe.md
+          echo "Queda como lo último usado: desde $DIEZ_DESDE, hasta $DIEZ_HASTA, corte $DIEZ_CORTE." >> /tmp/informe.md
       - name: Sumas por subcuenta, CIFRADAS (llevan importes)
         if: always()
         run: |
@@ -371,7 +383,12 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "${DB_URL:-}" ] || { echo "::error::Falta STAGING_CONTA_DB_URL."; exit 1; }
-          python3 -c 'import os,urllib.parse as u; p=u.urlsplit(os.environ["DB_URL"]); [print(f"::add-mask::{x}") for x in (os.environ["DB_URL"], p.password, p.username, p.hostname) if x]'
+          python3 - <<'PY'
+          import os, urllib.parse as u
+          p = u.urlsplit(os.environ["DB_URL"])
+          for x in (os.environ["DB_URL"], p.password, p.username, p.hostname):
+              if x: print(f"::add-mask::{x}")
+          PY
           case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
           case "$DB_URL" in *"$STAGING_REF"*) echo "Staging." ;; *) echo "::error::La URL no es de staging."; exit 1 ;; esac
       - name: Instalar psql 17
@@ -400,8 +417,9 @@ jobs:
           case "$falta" in diez|nada) ;; *) echo "::error::Antes de traer de Diez falta un paso de la empresa: «$falta» (datos → plan → banco). No se lee nada."; exit 1 ;; esac
           # En staging solo se lee la copia de pruebas: lo real nunca va a staging.
           if [ "$MODO" = "lectura-staging" ] && [ "$BD" != "C0009" ]; then echo "::error::En staging solo se lee la C0009; esta empresa tiene la $BD."; exit 1; fi
-          echo "DIEZ_BD=$BD" >> "$GITHUB_ENV"
-          echo "Base registrada para la empresa: **$BD** (conta_diez_base)." | tee -a /tmp/informe.md
+          echo "DIEZ_BD=$BD" > /tmp/env.txt
+          cat /tmp/env.txt >> "$GITHUB_ENV"
+          echo "Base registrada para la empresa: **$BD** (conta_diez_base)." >> /tmp/informe.md
       - name: Lectura · leer la C0009 y preparar (SOLO GET; nada se escribe en staging)
         if: inputs.modo == 'lectura-staging'
         env:
@@ -412,7 +430,8 @@ jobs:
           set -euo pipefail
           [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
           jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
-          npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee /tmp/lectura.md | tee -a /tmp/informe.md
+          npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts > /tmp/lectura.md
+          cat /tmp/lectura.md >> /tmp/informe.md
           # Solo los RECUENTOS, también como aviso del run (sin claves ni motivos).
           grep -E '^(Base |- Meses leídos|- Asientos leídos|- Preparados|- Subcuentas que usan)' /tmp/lectura.md | sed 's/^/::notice::/'
           # Lo leído no sale del runner: ni a staging ni al informe (solo recuentos).
@@ -422,7 +441,7 @@ jobs:
         env:
           DIEZ_FUENTE: simulado
           CARGA: /tmp/carga
-        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts | tee -a /tmp/informe.md
+        run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts >> /tmp/informe.md
       - name: Simulado · escribir, medir y deshacer (ensayo)
         if: inputs.modo == 'simulado-staging'
         env:
@@ -470,14 +489,20 @@ jobs:
           [ -n "$(echo "$MOTIVO" | tr -d '[:space:]')" ] || { echo "::error::Hace falta el motivo."; exit 1; }
           esperado="preparar-diez-$(echo "$BASE" | tr 'A-Z' 'a-z')"
           [ "$AUTORIZO" = "$esperado" ] || { echo "::error::Preparar esta empresa (base $BASE) lleva «$esperado» en «autorizo». No se hace nada."; exit 1; }
-          echo "BASE=$BASE" >> "$GITHUB_ENV"
+          echo "BASE=$BASE" > /tmp/env.txt
+          cat /tmp/env.txt >> "$GITHUB_ENV"
       - name: Guardas · el secreto apunta a PRODUCCIÓN y no a staging
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -euo pipefail
           [ -n "${DB_URL:-}" ] || { echo "::error::Falta PROD_CONTA_DB_URL."; exit 1; }
-          python3 -c 'import os,urllib.parse as u; p=u.urlsplit(os.environ["DB_URL"]); [print(f"::add-mask::{x}") for x in (os.environ["DB_URL"], p.password, p.username, p.hostname) if x]'
+          python3 - <<'PY'
+          import os, urllib.parse as u
+          p = u.urlsplit(os.environ["DB_URL"])
+          for x in (os.environ["DB_URL"], p.password, p.username, p.hostname):
+              if x: print(f"::add-mask::{x}")
+          PY
           case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING. Abortado sin conectar."; exit 1 ;; esac
           case "$DB_URL" in *"$PROD_REF"*) echo "Producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
       - name: Instalar psql 17
@@ -501,4 +526,5 @@ jobs:
             grep -E 'ERROR' /tmp/salida.txt | head -3 | sed 's/^/::error::/'
             echo "No se ha escrito nada (todo iba en una transacción)."; exit 1
           fi
-          { echo "# Diez · preparar la empresa \`$EMPRESA\`"; echo; sed 's/^/- /' /tmp/salida.txt; echo; echo "Por: $POR"; } | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "# Diez · preparar la empresa: base registrada y corte preparado (una transacción)" >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/salida.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"

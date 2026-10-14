@@ -5,7 +5,7 @@
     ".github/workflows/build-apk.yml": 9,
     ".github/workflows/cumplimiento-produccion-conta.yml": 14,
     ".github/workflows/deploy-edge-functions.yml": 23,
-    ".github/workflows/diez-importar.yml": 8,
+    ".github/workflows/diez-importar.yml": 4,
     ".github/workflows/diez-lectura.yml": 8,
     ".github/workflows/medir-ocr-destinatario.yml": 8
   }
