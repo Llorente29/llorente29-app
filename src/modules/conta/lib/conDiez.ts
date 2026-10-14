@@ -15,6 +15,7 @@
 // falta algo, pero no es un fallo). Lo que falla al adjuntar sigue siendo
 // «No ha llegado a Diez: falta el documento». Y lo anulado en Folvy que sigue
 // en Diez no se queda en «Anulado» a secas: falta su contraasiento allí.
+// Respuesta 8: con su contraasiento ya en Diez, «Anulado en Folvy y en Diez».
 
 import { MARCA } from '../cuenta/marca'
 import { cent, deCent } from './libro'
@@ -41,6 +42,8 @@ export interface ConDiez {
   nombreCanal: string
   documento: DocumentoAsiento | null
   envio: EnvioDiez | null
+  /** Respuesta 8: el envío a Diez de su contraasiento, si está anulado. */
+  contraasiento?: EnvioDiez | null
 }
 
 export type TonoDiez = 'ambar' | 'verde' | 'azul' | 'neutro'
@@ -62,6 +65,10 @@ export function estadoDiez(a: { estado: string }, d: ConDiez, o: { enviando?: bo
   if (a.estado === 'propuesto' || a.estado === 'borrador') return { texto: 'Propuesto', corto: 'Propuesto', tono: 'ambar', reintentar: false, enDiez: false }
   if (a.estado === 'anulado') {
     const e = d.envio
+    const c = d.contraasiento
+    if (e && (e.status === 'enviado' || e.status === 'enlazado') && c && (c.status === 'enviado' || c.status === 'enlazado')) {
+      return { texto: `Anulado en ${MARCA.nombre} y en Diez · ${e.serie}/${e.numero} anulada con ${c.serie}/${c.numero}`, corto: `Anulado · en Diez con ${c.serie}/${c.numero}`, tono: 'neutro', reintentar: false, enDiez: true }
+    }
     if (e && (e.status === 'enviado' || e.status === 'enlazado')) {
       return { texto: `Anulado en ${MARCA.nombre} · en Diez sigue ${e.serie}/${e.numero}: falta su contraasiento en Diez`, corto: `Anulado · sigue en Diez ${e.serie}/${e.numero}`, tono: 'ambar', reintentar: false, enDiez: true }
     }

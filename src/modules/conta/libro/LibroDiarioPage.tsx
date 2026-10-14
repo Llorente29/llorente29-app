@@ -26,7 +26,7 @@ import {
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
 import {
-  anular, cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, reabrirMes, resultadoDelMes,
+  cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, reabrirMes, resultadoDelMes,
   type EjercicioLibro,
 } from '@/modules/conta/services/diarioService'
 import { proponerPendientes, type ResultadoProponer } from '@/modules/conta/services/propuestasLibroService'
@@ -37,7 +37,7 @@ import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { MARCA } from '../cuenta/marca'
 import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
-import { leerConDiez } from '@/modules/conta/services/conDiezService'
+import { anularConDiez, leerConDiez } from '@/modules/conta/services/conDiezService'
 
 interface DatosLibro {
   /** La hora de cierre del día de la empresa («06:00»). */
@@ -178,8 +178,9 @@ export default function LibroDiarioPage() {
     if (!a) return
     setFallo(null); setHecho(null)
     try {
-      const r = await anular(id, 'Deshecho desde «Lo que he hecho yo»', null, userName)
-      setHecho(`Deshecho: «${a.concepto}» queda anulado con el contraasiento ${NOMBRE_SERIE[r.serie as 1]} nº ${r.numero.toLocaleString('es-ES')} del ${diaMesCorto(r.fecha)}. Vuelve a salir para proponer.`)
+      const r = await anularConDiez(id, 'Deshecho desde «Lo que he hecho yo»', null, userName)
+      setHecho(`Deshecho: «${a.concepto}» queda anulado con el contraasiento ${NOMBRE_SERIE[r.serie as 1]} nº ${r.numero.toLocaleString('es-ES')} del ${diaMesCorto(r.fecha)}. Vuelve a salir para proponer.${r.diez?.estado === 'en_diez' ? ` ${r.diez.texto}` : ''}`)
+      if (r.diez?.estado === 'no_llega') setFallo(`${r.diez.texto} Queda en Libros › Pendientes de adjuntar en Diez, con «Enviar el contraasiento».`)
       recargar()
     } catch (e) { setFallo(e instanceof Error ? e.message : 'No se ha podido deshacer.') }
   }

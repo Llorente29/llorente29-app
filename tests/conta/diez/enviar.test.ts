@@ -4,7 +4,7 @@
 // exist.» del R14, el listado que repite filas). Importes INVENTADOS.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { enviarAsientoADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
+import { enviarAsientoADiez, enviarContraasientoADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
 import { CORRESPONDENCIA_LLORENTE29 } from '../../../supabase/functions/_shared/diezAnalitica'
 import { resumenDeAsiento, type ResumenBD } from '../../../supabase/functions/_shared/resumenDeAsiento'
 import type { Factura, FacturaData } from '../../../supabase/functions/_shared/diezCliente'
@@ -339,5 +339,100 @@ describe('C06b R7 · el cliente, por su subcuenta en Diez (no por NIF ni por nom
     const t = puerto({ d, adjuntar: false })
     expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', enlazada: true })
     expect(d.altas).toEqual([])
+  })
+})
+
+// ── C06b R8 · al anular lo que está en Diez, el contraasiento va a Diez ─────────
+describe('C06b R8 · el contraasiento de lo anulado, a Diez (nunca dos veces)', () => {
+  const CONTRA: ContraasientoBD = { id: 'c1', account_id: 'acc', company_id: 'emp', estado: 'validado', fecha: '2026-10-14', origen: 'reversal', anula: 'e1', numero: 1290 }
+  const enDiez = (o: Partial<EnvioFila> = {}): EnvioFila => ({
+    id: 's-e1', entry_id: 'e1', account_id: 'acc', company_id: 'emp', account_connector_id: 'k1', kind: 'factura', ext_year: '2026', ext_series: '1', ext_number: 1801,
+    ext_invoice_number: 'UBR-FLO-20261001', payload_hash: 'h', status: 'enviado', attempts: 1, last_error: null, sent_at: '2026-10-13T10:00:00Z',
+    document_id: 'd1', document_status: 'pendiente_diez', document_error: null, document_attached_at: null, ...o,
+  })
+  // Un envío por asiento, como el índice único de external_send: el de lo anulado y el del contraasiento, cada uno el suyo.
+  function conAnulado(o: { original?: EnvioFila | null; contra?: EnvioFila | null; d?: Diez; bd?: string; autorizados?: Autorizo[] } = {}) {
+    const t = puerto({ r: resumen({ estado: 'anulado' }), d: o.d, bd: o.bd, autorizados: o.autorizados, adjuntar: false })
+    const envios = new Map<string, EnvioFila | null>([['e1', o.original === undefined ? enDiez() : o.original], ['c1', o.contra ?? null]])
+    const guardadas: EnvioFila[] = []
+    t.p.envio = async (id) => envios.get(id) ?? null
+    t.p.guardar = async (f) => { const g = { ...f, id: f.id ?? `s-${f.entry_id}` }; envios.set(f.entry_id, g); guardadas.push(g); return g }
+    return { ...t, envios, guardadas }
+  }
+
+  it('manda la factura que anula: los mismos importes en negativo, su número y a qué factura apunta', async () => {
+    const t = conAnulado()
+    const r = await enviarContraasientoADiez(CONTRA, t.p)
+    expect(r).toMatchObject({ estado: 'en_diez', serie: '1', documento: 1801, enlazada: false })
+    expect(r.texto).toBe('Anulada también en Diez: 1/1801 (UBR-FLO-20261001) con 1/1801 (UBR-FLO-20261001-ANUL).')
+    expect(t.d.altas).toHaveLength(1)
+    const fd = t.d.altas[0]
+    expect(fd).toMatchObject({ Ejercicio: '2026', Serie: '1', CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001-ANUL',
+      Fecha: 20261014, FechaFactura: 20261014, BaseImponible1: -30, CuotaIVA1: -3, TotalFactura: -33, TotalGastosIngresos: -30, TipoFactura: 1, Descripcion: 'ANUL UBER EATS FLO 01/10' })
+    // Como la anulación de la gestoría en la C0009: sin campos de rectificativa.
+    for (const k of ['TipoRectificativa', 'NumeroFacturaRectificativa', 'FechaFacturaRectificativa', 'TotalBasesRectificativa', 'TotalCuotasRectificativa', 'ClaveTipoFactura']) expect(fd, k).not.toHaveProperty(k)
+    expect((fd.Apuntes as { Importe: number }[]).map((a) => a.Importe)).toEqual([-10, -20])
+    expect(String(fd.Descripcion).length).toBeLessThanOrEqual(40)
+    // Su envío es el del contraasiento; el de lo anulado no se toca.
+    expect(t.envios.get('c1')).toMatchObject({ status: 'enviado', ext_number: 1801, ext_invoice_number: 'UBR-FLO-20261001-ANUL', document_status: null, attempts: 1 })
+    expect(t.envios.get('e1')).toEqual(enDiez())
+  })
+  it('lo que no llegó a Diez no se anula allí: no se habla con Diez ni se apunta nada', async () => {
+    const t = conAnulado({ original: null })
+    expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'no_llega', reintentar: false, motivo: 'lo que anula no llegó a Diez: allí no hay nada que anular' })
+    expect(t.llamadas.cliente).toBe(0); expect(t.guardadas).toEqual([])
+  })
+  it('nunca dos veces: ya enviado, no habla con Diez', async () => {
+    const t = conAnulado({ contra: { ...enDiez({ entry_id: 'c1', id: 's-c1', ext_number: 1802, ext_invoice_number: 'UBR-FLO-20261001-ANUL', document_status: null }) } })
+    const r = await enviarContraasientoADiez(CONTRA, t.p)
+    expect(r).toMatchObject({ estado: 'en_diez', documento: 1802 })
+    expect(r.texto).toBe('Ya estaba anulada en Diez: 1/1801, con 1/1802.')
+    expect(t.llamadas.cliente).toBe(0); expect(t.d.altas).toEqual([])
+  })
+  it('nunca dos veces: si la que anula ya está en Diez (metida a mano o un envío cortado), se enlaza', async () => {
+    const d = diez({ facturas: [{ Ejercicio: '2026', Serie: '1', Documento: 1950, TipoAsiento: 1, Fecha: 20261014, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001-ANUL' }] })
+    const t = conAnulado({ d })
+    expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'en_diez', documento: 1950, enlazada: true })
+    expect(d.altas).toEqual([])
+    expect(t.envios.get('c1')).toMatchObject({ status: 'enlazado', ext_number: 1950 })
+  })
+  it('dos con ese número en Diez: no se toca nada', async () => {
+    const f = { Ejercicio: '2026', Serie: '1', TipoAsiento: 1, Fecha: 20261014, CuentaCliente: '43000002', NumeroFactura: 'UBR-FLO-20261001-ANUL' }
+    const d = diez({ facturas: [{ ...f, Documento: 1950 }, { ...f, Documento: 1951 }] })
+    const t = conAnulado({ d })
+    expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(d.altas).toEqual([])
+  })
+  it('si la factura rehecha no es la que está en Diez, no anula a ciegas', async () => {
+    const t = conAnulado({ original: enDiez({ ext_invoice_number: 'UBR-CAM-20261001' }) })
+    expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(t.d.altas).toEqual([])
+  })
+  it('C0001, nunca; Diez real, solo con lo autorizado (el asiento que anula vale: autorizar escribirla es autorizar anularla)', async () => {
+    const vetada = conAnulado({ bd: 'C0001' })
+    expect(await enviarContraasientoADiez(CONTRA, vetada.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(vetada.llamadas.cliente).toBe(0)
+    const cerrada = conAnulado({ bd: 'C0008' })
+    expect((await enviarContraasientoADiez(CONTRA, cerrada.p)).texto).toMatch(/Diez real \(C0008\) está cerrado/)
+    expect(cerrada.llamadas.cliente).toBe(0)
+    const porElAnulado = conAnulado({ bd: 'C0008', autorizados: [{ alcance: 'asiento', entry: 'e1', bd: 'C0008' }] })
+    expect(await enviarContraasientoADiez(CONTRA, porElAnulado.p)).toMatchObject({ estado: 'en_diez' })
+    expect(porElAnulado.llamadas.real).toEqual([true])
+    const otroAsiento = conAnulado({ bd: 'C0008', autorizados: [{ alcance: 'asiento', entry: 'otro', bd: 'C0008' }] })
+    expect(await enviarContraasientoADiez(CONTRA, otroAsiento.p)).toMatchObject({ estado: 'no_llega' })
+  })
+  it('solo el contraasiento validado de una anulación', async () => {
+    const t = conAnulado()
+    expect(await enviarContraasientoADiez({ ...CONTRA, origen: 'manual', anula: null }, t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(await enviarContraasientoADiez({ ...CONTRA, estado: 'borrador' }, t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(t.llamadas.cliente).toBe(0)
+  })
+  it('si Diez no lo acepta, queda la intención apuntada (un intento) y se puede reintentar; el reintento lo encuentra si sí entró', async () => {
+    const d = diez()
+    d.enviarFactura = async () => { throw new Error('facturas/add → 500') }
+    const t = conAnulado({ d })
+    expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'no_llega', reintentar: true })
+    expect(t.envios.get('c1')).toMatchObject({ status: 'pendiente', attempts: 1 })
+    expect(String(t.envios.get('c1')?.last_error)).toMatch(/Diez no ha aceptado el contraasiento/)
   })
 })

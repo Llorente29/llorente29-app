@@ -27,21 +27,32 @@ const ASIENTOS = [
   { id: ID(1), concept: 'Ventas Uber · Taberna de Prueba Norte', entry_date: '2026-10-01', series: 1, number: 9101, status: 'validado', doc: 9901, factura: 'UBR-PRU-20261001' },
   { id: ID(2), concept: 'Ventas Uber · Taberna de Prueba Norte', entry_date: '2026-10-02', series: 1, number: 9102, status: 'validado', doc: 9902, factura: 'UBR-PRU-20261002' },
   { id: ID(3), concept: 'Ventas Uber · Taberna de Prueba Norte', entry_date: '2026-10-03', series: 1, number: 9103, status: 'validado', doc: 9903, factura: 'UBR-PRU-20261003' },
-  { id: ID(4), concept: 'Ventas Uber · Taberna de Prueba Norte', entry_date: '2026-09-30', series: 1, number: 9090, status: 'anulado', doc: 9890, factura: 'UBR-PRU-20260930' },
+  { id: ID(4), concept: 'Ventas Uber · Taberna de Prueba Norte', entry_date: '2026-09-30', series: 1, number: 9090, status: 'anulado', doc: 9890, factura: 'UBR-PRU-20260930', contra: ID(5) },
 ]
 
 async function porLaRed(page: Page) {
   const adjuntos = new Set<string>()
+  // R8: el contraasiento del anulado, que no llegó a Diez; «Enviar el contraasiento» lo manda.
+  let contraEnDiez = false
   const json = (r: Route, cuerpo: unknown, cab: Record<string, string> = {}) => r.fulfill({ status: 200, contentType: 'application/json', headers: cab, body: JSON.stringify(cuerpo) })
-  const envios = () => ASIENTOS.map((a) => ({ entry_id: a.id, ext_year: '2026', ext_series: '1', ext_number: a.doc, ext_invoice_number: a.factura, sent_at: `${a.entry_date}T22:00:00Z`,
-    document_status: adjuntos.has(a.id) ? 'adjunto' : 'pendiente_diez' }))
+  const envios = () => [...ASIENTOS.map((a) => ({ entry_id: a.id, ext_year: '2026', ext_series: '1', ext_number: a.doc, ext_invoice_number: a.factura, sent_at: `${a.entry_date}T22:00:00Z`,
+    document_status: adjuntos.has(a.id) ? 'adjunto' : 'pendiente_diez' })),
+    ...(contraEnDiez ? [{ entry_id: ID(5), ext_year: '2026', ext_series: '1', ext_number: 9904, ext_invoice_number: 'UBR-PRU-20260930-ANUL', sent_at: '2026-10-14T10:00:00Z', document_status: null }] : [])]
   await page.route(/\/rest\/v1\/external_send\?/, async (r) => {
     const pendientes = envios().filter((e, i) => e.document_status === 'pendiente_diez' && ASIENTOS[i].status !== 'anulado').length
     // Como PostgREST: el recuento va en content-range, y el navegador solo lo deja leer si se expone por CORS.
     if (r.request().method() === 'HEAD') return r.fulfill({ status: 200, headers: { 'content-range': `*/${pendientes}`, 'access-control-expose-headers': 'content-range', 'access-control-allow-origin': '*' }, body: '' })
-    return json(r, r.request().url().includes('ext_year') ? envios() : [])
+    const url = r.request().url()
+    if (url.includes('last_error')) return json(r, contraEnDiez ? [] : [{ entry_id: ID(5), last_error: 'Diez no ha aceptado el contraasiento: facturas/add → 500' }])
+    return json(r, url.includes('ext_year') ? envios() : [])
   })
-  await page.route(/\/rest\/v1\/journal_entry\?.*c06b7000/, (r) => json(r, ASIENTOS.map(({ id, concept, entry_date, series, number, status }) => ({ id, concept, entry_date, series, number, status }))))
+  await page.route(/\/rest\/v1\/journal_entry\?.*c06b7000/, (r) => json(r, ASIENTOS.map(({ id, concept, entry_date, series, number, status, contra }) => ({ id, concept, entry_date, series, number, status, voided_by_entry_id: contra ?? null }))))
+  await page.route(/\/functions\/v1\/conta-diez-enviar/, async (r) => {
+    const { entry_id } = r.request().postDataJSON() as { entry_id: string }
+    if (entry_id !== ID(5)) return r.fulfill({ status: 400, body: '{}' })
+    contraEnDiez = true
+    return json(r, { estado: 'en_diez', serie: '1', documento: 9904, enlazada: false, pdfPendiente: false, texto: 'Anulada también en Diez: 1/9890 (UBR-PRU-20260930) con 1/9904 (UBR-PRU-20260930-ANUL).' })
+  })
   await page.route(/\/rest\/v1\/journal_entry_document\?.*c06b7000/, (r) => json(r, ASIENTOS.map((a) => ({ entry_id: a.id, storage_path: `${CUENTA_A.id}/${a.id}/0123456789abcdef.pdf`, file_name: `ResumenDeVentas_${a.factura}.pdf` }))))
   await page.route(/\/storage\/v1\/object\/conta-documentos\//, (r) => r.fulfill({ status: 200, contentType: 'application/pdf', body: PDF }))
   await page.route(/\/rest\/v1\/rpc\/conta_diez_adjunto_a_mano/, async (r) => {
@@ -71,6 +82,9 @@ test('Pendientes de adjuntar en Diez: cuántos, el más antiguo, la referencia, 
   const anulados = page.getByRole('list', { name: 'Anulados que siguen en Diez' })
   await expect(anulados.getByRole('listitem')).toHaveCount(1)
   await expect(anulados).toContainText('falta su contraasiento en Diez')
+  // R8: por qué no ha llegado su contraasiento, y el botón que lo manda.
+  await expect(anulados).toContainText('No ha llegado: Diez no ha aceptado el contraasiento: facturas/add → 500')
+  await expect(anulados.getByRole('button', { name: 'Enviar el contraasiento' })).toBeVisible()
 
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
@@ -89,4 +103,9 @@ test('Pendientes de adjuntar en Diez: cuántos, el más antiguo, la referencia, 
   await expect(page.getByRole('status').filter({ hasText: 'Hecho:' })).toContainText('el PDF de 1/9901 queda adjunto en Diez')
   await expect(lista.getByRole('listitem')).toHaveCount(2)
   await expect(page.getByText('2 facturas están en Diez sin su PDF. La más antigua, del 02/10/26.')).toBeVisible()
+
+  // R8: «Enviar el contraasiento»: lo dice con su contenido y el anulado sale de la lista (ya está anulado también en Diez).
+  await anulados.getByRole('button', { name: 'Enviar el contraasiento' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Anulada también en Diez' })).toContainText('1/9890 (UBR-PRU-20260930) con 1/9904 (UBR-PRU-20260930-ANUL)')
+  await expect(page.getByRole('list', { name: 'Anulados que siguen en Diez' })).toHaveCount(0)
 })

@@ -10,6 +10,7 @@
 //   · urlDocumento: «Ver documento», una URL firmada de cinco minutos.
 //   · enviarADiez: la edge function conta-diez-enviar (C0008 cerrado, C0001
 //     vetada, sin documento no se envía, nunca dos veces).
+//   · validarConDocumento (respuesta 8): validar y guardar el PDF, juntos.
 //   · validarYEnviar: los tres pasos, asiento a asiento, diciendo de cada uno
 //     qué ha pasado (regla 8).
 //
@@ -22,11 +23,13 @@
 // 20261021T0100: journal_entry_document, conta_resumen_ventas,
 // conta_documento_guardar, external_send.document_status / document_error, el
 // bucket conta-documentos y la función conta-diez-enviar.
+// Y los de la 20261111T0720 (C06b, respuesta 8): conta_numero_previsto y
+// journal_entry_validar_con_documento.
 
 import { jsPDF } from 'jspdf'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje, hayBase } from '@/modules/conta/services/bd'
-import { validar } from '@/modules/conta/services/diarioService'
+import { anular } from '@/modules/conta/services/diarioService'
 import { correspondenciaDeEmpresa } from '../../../../supabase/functions/_shared/diezAnalitica.ts'
 import { resumenDeAsiento, type ResumenBD } from '../../../../supabase/functions/_shared/resumenDeAsiento.ts'
 import { resumenVentasPdf } from '../../../../supabase/functions/_shared/resumenVentasPdf.ts'
@@ -34,12 +37,18 @@ import type { ResultadoEnvio } from '../../../../supabase/functions/_shared/diez
 import type { ConDiez, EnvioDiez, PasoEnvio } from '@/modules/conta/lib/conDiez'
 import { nombreEnZip, ordenPendientes, type PendienteDiez } from '@/modules/conta/lib/pendientesDiez'
 import { crearZip, type FicheroZip } from '@/modules/conta/lib/zip'
+import { noSeValida, validarConPdf, type ValidadoConPdf } from '@/modules/conta/lib/validarConPdf'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
 const BUCKET = 'conta-documentos'
 const hoyMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
+
+const aEnvio = (f: Fila): EnvioDiez => ({
+  status: String(f.status) as EnvioDiez['status'], serie: s(f.ext_series), numero: f.ext_number == null ? null : Number(f.ext_number), factura: s(f.ext_invoice_number),
+  intentos: Number(f.attempts ?? 0), error: s(f.last_error), documento: (s(f.document_status) as EnvioDiez['documento']) ?? null, errorDocumento: s(f.document_error),
+})
 
 /** Los asientos de ventas de una plataforma de la empresa entre dos fechas, con su documento y su envío. */
 export async function leerConDiez(accountId: string, companyId: string, entryIds: readonly string[]): Promise<Map<string, ConDiez>> {
@@ -80,29 +89,73 @@ export async function leerConDiez(accountId: string, companyId: string, entryIds
     }
     for (const f of (envios.data ?? []) as Fila[]) {
       const x = out.get(String(f.entry_id))
-      if (x) x.envio = {
-        status: String(f.status) as EnvioDiez['status'], serie: s(f.ext_series), numero: f.ext_number == null ? null : Number(f.ext_number), factura: s(f.ext_invoice_number),
-        intentos: Number(f.attempts ?? 0), error: s(f.last_error), documento: (s(f.document_status) as EnvioDiez['documento']) ?? null, errorDocumento: s(f.document_error),
-      }
+      if (x) x.envio = aEnvio(f)
     }
+  }
+  // Respuesta 8: lo anulado, con el envío a Diez de su contraasiento.
+  const anulados = await tabla('journal_entry').select('id, voided_by_entry_id').eq('account_id', accountId).eq('status', 'anulado').in('id', conCanal).not('voided_by_entry_id', 'is', null)
+  if (anulados.error) throw new Error(mensaje('No se han podido leer los anulados', anulados.error))
+  const contraDe = new Map(((anulados.data ?? []) as Fila[]).map((f) => [String(f.voided_by_entry_id), String(f.id)]))
+  if (contraDe.size) {
+    const c = await tabla('external_send').select('entry_id, status, ext_series, ext_number, ext_invoice_number, attempts, last_error, document_status, document_error').eq('account_id', accountId).neq('status', 'rechazado').in('entry_id', [...contraDe.keys()])
+    if (c.error) throw new Error(mensaje('No se han podido leer los envíos de los contraasientos', c.error))
+    for (const f of (c.data ?? []) as Fila[]) { const x = out.get(contraDe.get(String(f.entry_id)) ?? ''); if (x) x.contraasiento = aEnvio(f) }
   }
   return out
 }
 
-/** El PDF del asiento validado, guardado y enlazado. Si ya lo tiene, devuelve el que hay. */
-export async function guardarDocumento(entryId: string, quien: string | null): Promise<{ ruta: string; nombre: string; yaEstaba: boolean }> {
-  const r = await rpc<ResumenBD>('conta_resumen_ventas', { p_entry: entryId })
-  if (r.documento) return { ruta: r.documento.ruta, nombre: r.documento.nombre, yaEstaba: true }
+/** El «Resumen de ventas» del asiento, tal como queda validado (estado y número los pone quien llama). */
+function hacerPdf(r: ResumenBD): { bytes: Uint8Array; nombre: string } {
   const listo = resumenDeAsiento(r, { correspondencia: correspondenciaDeEmpresa(r.company_id), generado: new Date(), hoy: hoyMadrid() })
-  const pdf = resumenVentasPdf(jsPDF, listo.datos)
+  return { bytes: resumenVentasPdf(jsPDF, listo.datos), nombre: listo.nombreFichero }
+}
+
+/** Lo sube a cuenta/asiento/huella.pdf. Subido sin enlazar no es el documento de nadie. */
+async function subirPdf(r: ResumenBD, pdf: Uint8Array): Promise<{ ruta: string; sha256: string }> {
   const sha = hex(await crypto.subtle.digest('SHA-256', pdf as BufferSource))
   const ruta = `${r.account_id}/${r.id}/${sha.slice(0, 16)}.pdf`
   hayBase()
   const sub = await supabase!.storage.from(BUCKET).upload(ruta, new Blob([pdf as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })
   // Ya subido en un intento anterior con la misma huella: es el mismo fichero.
-  if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`No se ha podido subir el documento: ${sub.error.message}`)
-  const g = await rpc<Fila>('conta_documento_guardar', { p_entry: entryId, p_ruta: ruta, p_nombre: listo.nombreFichero, p_sha256: sha, p_bytes: pdf.length, p_quien_nombre: quien })
+  if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`no se ha podido subir su PDF (${sub.error.message})`)
+  return { ruta, sha256: sha }
+}
+
+/**
+ * Solo para un asiento validado ANTES de la 0720 sin su PDF: guardarlo ahora.
+ * Lo nuevo se valida con su PDF en una sola transacción (validarConDocumento).
+ */
+export async function guardarDocumento(entryId: string, quien: string | null): Promise<{ ruta: string; nombre: string; yaEstaba: boolean }> {
+  const r = await rpc<ResumenBD>('conta_resumen_ventas', { p_entry: entryId })
+  if (r.documento) return { ruta: r.documento.ruta, nombre: r.documento.nombre, yaEstaba: true }
+  const pdf = hacerPdf(r)
+  const sub = await subirPdf(r, pdf.bytes)
+  const g = await rpc<Fila>('conta_documento_guardar', { p_entry: entryId, p_ruta: sub.ruta, p_nombre: pdf.nombre, p_sha256: sub.sha256, p_bytes: pdf.bytes.length, p_quien_nombre: quien })
   return { ruta: String(g.ruta), nombre: String(g.nombre), yaEstaba: g.ya_estaba === true }
+}
+
+/**
+ * C06b · Respuesta 8, pregunta 1: validar un asiento de ventas de una
+ * plataforma y guardar su PDF van juntos (lib/validarConPdf.ts y la 0720). Si
+ * el PDF falla, el asiento no se valida y el error dice por qué.
+ */
+export async function validarConDocumento(entryId: string, quien: string | null): Promise<ValidadoConPdf> {
+  const quitar = (e: unknown) => new Error((e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, ''))
+  return validarConPdf(entryId, quien, {
+    resumen: (id) => rpc<ResumenBD>('conta_resumen_ventas', { p_entry: id }),
+    numeroPrevisto: (id) => rpc<number>('conta_numero_previsto', { p_entry: id }),
+    hacerPdf: async (r) => {
+      try { return hacerPdf(r) } catch (e) { throw new Error(`su PDF no se puede hacer (${quitar(e).message.replace(/\.$/, '')})`, { cause: e }) }
+    },
+    subir: subirPdf,
+    validarConDocumento: async (a) => {
+      try {
+        const r = await rpc<Fila>('journal_entry_validar_con_documento', { p_entry: a.entryId, p_numero: a.numero, p_ruta: a.ruta, p_nombre: a.nombre, p_sha256: a.sha256, p_bytes: a.bytes, p_quien_nombre: a.quien })
+        return { serie: Number(r.serie), numero: Number(r.numero) }
+      } catch (e) { throw quitar(e) }
+    },
+    guardarDocumento,
+  })
 }
 
 /** «Ver documento»: una URL firmada de cinco minutos. */
@@ -141,15 +194,16 @@ export async function validarYEnviar(xs: readonly { id: string; concepto: string
     alPaso?.(i)
     const p: PasoEnvio = { concepto: a.concepto, validado: a.estado === 'validado', documento: false, enDiez: false, texto: '' }
     try {
-      if (!p.validado) { await validar(a.id, quien); p.validado = true }
-      await guardarDocumento(a.id, quien); p.documento = true
+      // Validar y guardar su PDF van juntos (respuesta 8): o las dos cosas, o ninguna.
+      if (!p.validado) { await validarConDocumento(a.id, quien); p.validado = true } else await guardarDocumento(a.id, quien)
+      p.documento = true
       const r = await enviarADiez(a.id)
       p.enDiez = r.estado === 'en_diez'
       p.pdfPendiente = r.estado === 'en_diez' && r.pdfPendiente === true
       p.texto = r.texto
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e)
-      p.texto = !p.validado ? `No se ha validado: ${m}` : !p.documento ? `Validado, pero no ha llegado a Diez: falta el documento (${m}).` : `No ha llegado a Diez: ${m}.`
+      p.texto = !p.validado ? noSeValida(m) : !p.documento ? `Validado, pero no ha llegado a Diez: falta el documento (${m}).` : `No ha llegado a Diez: ${m}.`
     }
     pasos.push(p)
   }
@@ -163,7 +217,11 @@ export async function validarYEnviar(xs: readonly { id: string; concepto: string
 // file_name), y la función conta_diez_adjunto_a_mano.
 
 /** Un asiento anulado en Folvy cuya factura sigue en Diez (le falta su contraasiento allí). */
-export interface AnuladoEnDiez { entryId: string; concepto: string; fecha: string; ejercicio: string; serie: string; documento: number; factura: string | null }
+export interface AnuladoEnDiez {
+  entryId: string; concepto: string; fecha: string; ejercicio: string; serie: string; documento: number; factura: string | null
+  /** Respuesta 8: su contraasiento en Folvy, que es lo que se manda a Diez; y por qué no ha llegado aún, si se intentó. */
+  contraasiento: string | null; motivo: string | null
+}
 
 /** Las facturas de la empresa que están en Diez sin su PDF, y lo anulado en Folvy que sigue en Diez. */
 export async function leerPendientesDiez(accountId: string, companyId: string): Promise<{ pendientes: PendienteDiez[]; anulados: AnuladoEnDiez[] }> {
@@ -179,13 +237,22 @@ export async function leerPendientesDiez(accountId: string, companyId: string): 
   for (let i = 0; i < ids.length; i += 200) {
     const t = ids.slice(i, i + 200)
     const [a, d] = await Promise.all([
-      tabla('journal_entry').select('id, concept, entry_date, series, number, status').eq('account_id', accountId).eq('company_id', companyId).in('id', t),
+      tabla('journal_entry').select('id, concept, entry_date, series, number, status, voided_by_entry_id').eq('account_id', accountId).eq('company_id', companyId).in('id', t),
       tabla('journal_entry_document').select('entry_id, storage_path, file_name').eq('account_id', accountId).eq('kind', 'resumen_ventas').in('entry_id', t),
     ])
     if (a.error) throw new Error(mensaje('No se han podido leer los asientos', a.error))
     if (d.error) throw new Error(mensaje('No se han podido leer los documentos', d.error))
     for (const x of (a.data ?? []) as Fila[]) asientos.set(String(x.id), x)
     for (const x of (d.data ?? []) as Fila[]) docs.set(String(x.entry_id), x)
+  }
+  // Respuesta 8: lo anulado cuyo contraasiento ya está en Diez no falta; el que se intentó y no llegó, con su motivo.
+  const enDiez = new Set(ids)
+  const contras = [...asientos.values()].filter((a) => a.status === 'anulado' && a.voided_by_entry_id).map((a) => String(a.voided_by_entry_id)).filter((c) => !enDiez.has(c))
+  const motivoDe = new Map<string, string | null>()
+  if (contras.length) {
+    const { data: m, error: em } = await tabla('external_send').select('entry_id, last_error').eq('account_id', accountId).eq('status', 'pendiente').in('entry_id', contras)
+    if (em) throw new Error(mensaje('No se han podido leer los envíos de los contraasientos', em))
+    for (const x of (m ?? []) as Fila[]) motivoDe.set(String(x.entry_id), s(x.last_error))
   }
   const pendientes: PendienteDiez[] = []
   const anulados: AnuladoEnDiez[] = []
@@ -194,7 +261,11 @@ export async function leerPendientesDiez(accountId: string, companyId: string): 
     const a = asientos.get(id)
     if (!a) continue
     const base = { entryId: id, concepto: String(a.concept ?? ''), fecha: String(a.entry_date), ejercicio: String(f.ext_year ?? String(a.entry_date).slice(0, 4)), serie: String(f.ext_series), documento: Number(f.ext_number), factura: s(f.ext_invoice_number) }
-    if (a.status === 'anulado') { anulados.push(base); continue }
+    if (a.status === 'anulado') {
+      const contra = s(a.voided_by_entry_id)
+      if (contra && enDiez.has(contra)) continue
+      anulados.push({ ...base, contraasiento: contra, motivo: contra ? motivoDe.get(contra) ?? null : null }); continue
+    }
     if (f.document_status !== 'pendiente_diez') continue
     const d = docs.get(id)
     pendientes.push({ ...base, serieFolvy: Number(a.series), numeroFolvy: a.number == null ? null : Number(a.number), enviadoEn: s(f.sent_at),
@@ -222,4 +293,20 @@ export async function zipPendientesDiez(xs: readonly PendienteDiez[]): Promise<{
     ficheros.push({ nombre: nombreEnZip(x), datos: new Uint8Array(await data.arrayBuffer()) })
   }
   return { zip: crearZip(ficheros), n: ficheros.length, sinPdf }
+}
+
+// ── C06b · Respuesta 8, pregunta 2: anular lo que ya está en Diez ──────────────
+
+/**
+ * Anula el asiento y, si su factura ya está en Diez, manda SOLO el
+ * contraasiento a Diez (conta-diez-enviar con el id del contraasiento: nunca
+ * dos veces, como la factura). Si el envío no llega, el anulado sale en
+ * «Pendientes de adjuntar en Diez», con «Enviar el contraasiento».
+ */
+export async function anularConDiez(entryId: string, motivo: string, fecha: string | null, quien: string | null): Promise<{ serie: number; numero: number; fecha: string; contraasiento: string; diez: ResultadoEnvio | null }> {
+  const { data, error } = await tabla('external_send').select('status').eq('entry_id', entryId).in('status', ['enviado', 'enlazado']).limit(1)
+  if (error) throw new Error(mensaje('No se ha podido mirar si está en Diez', error))
+  const enDiez = (data ?? []).length > 0
+  const x = await anular(entryId, motivo, fecha, quien)
+  return { ...x, diez: enDiez ? await enviarADiez(x.contraasiento) : null }
 }
