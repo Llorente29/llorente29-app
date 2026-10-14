@@ -385,6 +385,15 @@ describe('R9 · la tanda de producción en staging (real-con-fallo y real)', () 
   })
 })
 
+describe('R11 · paso 8 sobre la tanda del B01 (su copia, aplicada el 14/10), con su contexto medido', () => {
+  it('los ocho «sigue» y ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-b01-20261014.json',
+      '--manifiesto=tests/conta/produccion/tanda-b01-20261014.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out.match(/_b01_[a-z_]+\.sql: sigue/g)).toHaveLength(8)
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
@@ -393,16 +402,15 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261101T0100_b01_bancos.sql: sigue')
-    expect(r.out).toContain('20261101T0170_b01_foodint_cuentas.sql: sigue')
-    expect(r.out).toContain('autorizo: (ninguno)')
+    expect(r.out).toContain('20261111T0500_c06b_cuenta_lectura.sql: sigue')
+    expect(r.out).toContain('autorizo: 20261111T0510_c06b_cuenta_lectura_las_27.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261101T0170_b01_foodint_cuentas.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261111T0500_c06b_cuenta_lectura.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261101T0170_b01_foodint_cuentas.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261111T0500_c06b_cuenta_lectura.sql ha cambiado desde la medida')
   })
 })

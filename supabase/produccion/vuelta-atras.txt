@@ -1,13 +1,12 @@
-# Vuelta atrás de la tanda del B01 (modo «vuelta_atras»), en orden inverso.
-# Cada .down.sql PARA si ya hay trabajo de verdad encima (extractos,
-# movimientos, casados, cierres, tarjetas o conexiones): quitarlo se llevaría
-# lo que alguien ha hecho.
-cuenta: scripts/conta/produccion/cuentas/bancos.sql
-supabase/vuelta-atras/20261101T0170_b01_foodint_cuentas.down.sql
-supabase/vuelta-atras/20261101T0160_b01_lectura_agente.down.sql
-supabase/vuelta-atras/20261101T0150_b01_cierre_agente.down.sql
-supabase/vuelta-atras/20261101T0140_b01_tarjetas.down.sql
-supabase/vuelta-atras/20261101T0130_b01_lectura.down.sql
-supabase/vuelta-atras/20261101T0120_b01_foodint.down.sql
-supabase/vuelta-atras/20261101T0110_b01_funciones.down.sql
-supabase/vuelta-atras/20261101T0100_b01_bancos.down.sql
+# Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
+# inverso. C06b · aviso #178.
+#   0510: las 27 subcuentas de Foodint vuelven a no tener la lectura escrita
+#         (solo las creadas antes del 14/10). Escribe 27 o para.
+#   0500: conta_diez_subcuentas vuelve al cuerpo de la 0300 (md5
+#         9a545a02237517ed39048277b48e5612, el de producción el 14/10) y fuera
+#         la columna. PARA si alguna subcuenta tiene aún su lectura.
+# En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
+# esperado: se deshace la tanda) y no para.
+cuenta: scripts/conta/produccion/cuentas/cuenta-lectura.sql
+supabase/vuelta-atras/20261111T0510_c06b_cuenta_lectura_las_27.down.sql
+supabase/vuelta-atras/20261111T0500_c06b_cuenta_lectura.down.sql

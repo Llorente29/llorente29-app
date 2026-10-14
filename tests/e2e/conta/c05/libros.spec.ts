@@ -15,7 +15,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, CUENTA_B, entrarComo } from '../sesion'
-import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
+import { loQueTapanSinPregunta } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c05'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -23,7 +23,7 @@ const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movi
 async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
-  expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+  expect(await loQueTapanSinPregunta(page, '.cx-principal')).toEqual([])
 }
 
 function vigilar(page: Page) {

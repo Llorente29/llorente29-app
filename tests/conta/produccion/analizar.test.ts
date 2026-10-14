@@ -353,8 +353,11 @@ describe('la tanda del C04 R4 (ya aplicada: las cuatro en el historial de produc
     // Y el registro del cierre del día (C04b R5, el porqué del día sin asiento).
     const registro = readFileSync('supabase/migrations/20261020T0140_libro_lectura_registro.sql', 'utf8')
     for (const m of `${cierre2}\n${registro}`.matchAll(/grant select on table public\.([a-z_]+) to conta_lectura/g)) tablas.add(m[1])
+    // C06b (#178): el agente del plan lee import_run, que la lectura de Diez (C04b) ya da a conta_lectura.
+    const diez = readFileSync('supabase/migrations/20261019T0120_diez_lectura.sql', 'utf8')
+    if (/grant select on table public\.import_run\b/.test(diez)) tablas.add('import_run')
     const funciones = new Set([...`${lectura}\n${cierre}`.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
-    expect(nombrados.size).toBe(42)
+    expect(nombrados.size).toBe(43) // 42 + import_run (C06b, #178)
     expect([...nombrados].filter((n) => !tablas.has(n) && !funciones.has(n))).toEqual([])
     expect([...tablas, ...funciones].filter((n) => !nombrados.has(n))).toEqual([])
   })
@@ -723,13 +726,45 @@ describe('la tanda de la regla de ventas por plataforma (C04b R5; ya aplicada, r
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): Bancos y conciliación (B01, 0100–0170)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el aviso #178, de qué lectura viene cada subcuenta (C06b)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 14/10 a las 08:32 UTC para ESTOS ficheros (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('dos ficheros: la 0500 sigue (declarada, con prueba); la 0510 cambia filas y pide «autorizo»', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0500_c06b_cuenta_lectura.sql', 'supabase/migrations/20261111T0510_c06b_cuenta_lectura_las_27.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue', [viva[1]]: 'autorizo' })
+  })
+  it('la 0510 escribe 27 o para, y no borra ni recrea ninguna cuenta', () => {
+    const sql = readFileSync(viva[1], 'utf8')
+    expect(sql).toMatch(/if n <> 27 then/)
+    expect(sql).not.toMatch(/delete from|insert into/i)
+    expect(sql).not.toMatch(/created_by_name/)
+  })
+  it('declara qué cuenta antes y después, y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/cuenta-lectura.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('su vuelta atrás, al revés: la 0510 (27 o para) y la 0500, que PARA si queda alguna lectura escrita', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0510_c06b_cuenta_lectura_las_27.down.sql', 'supabase/vuelta-atras/20261111T0500_c06b_cuenta_lectura.down.sql'])
+    expect(readFileSync(atras[0], 'utf8')).toMatch(/if n <> 27 then/)
+    expect(readFileSync(atras[1], 'utf8')).toMatch(/exists \(select 1 from public\.company_account where import_run_id is not null\)/)
+  })
+})
+
+describe('la tanda del B01 (aplicada el 14/10, su copia): Bancos y conciliación (0100–0170)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-b01-20261014.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 14/10 a las 08:01 UTC (después de la C06) para
   // ESTOS ficheros (con su md5).
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-b01-20261014.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
   const B01 = ['0100_b01_bancos', '0110_b01_funciones', '0120_b01_foodint', '0130_b01_lectura', '0140_b01_tarjetas',
@@ -749,7 +784,7 @@ describe('la tanda de AHORA (manifiesto vivo): Bancos y conciliación (B01, 0100
     expect(readFileSync(cuentas[0], 'utf8')).toMatch(/created_at < timestamptz '2026-10-13 18:00\+00'/)
   })
   it('ninguna vuelta atrás escribe en storage con SQL (ensayo #64: Supabase no deja borrar de sus tablas; el bucket de la 0140 se queda)', () => {
-    for (const f of leerTanda('supabase/produccion/vuelta-atras.txt')) {
+    for (const f of leerTanda('tests/conta/produccion/vuelta-atras-b01-20261014.txt')) {
       const sql = readFileSync(f, 'utf8').replace(/--.*$/gm, '')
       expect(sql, f).not.toMatch(/\b(insert\s+into|update|delete\s+from|truncate)\s+(table\s+)?storage\./i)
       expect(sql, f).not.toMatch(/\b(drop|create|alter)\s+policy\b[^;]*\bon\s+storage\./i)
@@ -757,7 +792,7 @@ describe('la tanda de AHORA (manifiesto vivo): Bancos y conciliación (B01, 0100
     }
   })
   it('su vuelta atrás es la de cada fichero en orden inverso; la 0170 PARA si sus fichas ya tienen extractos', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-b01-20261014.txt')
     expect(atras).toEqual([...B01].reverse().map((f) => `supabase/vuelta-atras/20261101T${f}.down.sql`))
     for (const f of atras) expect(existsSync(f), f).toBe(true)
     expect(readFileSync(atras[0], 'utf8')).toMatch(/ya tienen % extractos, movimientos o tarjetas: no se quitan/)

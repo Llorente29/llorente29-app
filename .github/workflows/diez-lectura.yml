@@ -20,7 +20,8 @@ name: Diez · lectura (C04b, solo lectura)
 
 on:
   push:
-    branches: ['conta/c04b-diez']
+    # conta/c06b-repasos: solo para «[lectura:balance]» (C06b, punto 1).
+    branches: ['conta/c04b-diez', 'conta/c06b-repasos']
     paths:
       - 'scripts/conta/diez/**'
       - '.github/workflows/diez-lectura.yml'
@@ -42,7 +43,7 @@ permissions:
 
 jobs:
   swagger:
-    if: github.event_name == 'push' || inputs.modo == 'swagger'
+    if: (github.event_name == 'push' && github.ref_name == 'conta/c04b-diez') || inputs.modo == 'swagger'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -65,7 +66,7 @@ jobs:
   lectura:
     # A mano (cuando el workflow esté en main) o al empujar a la rama del
     # encargo un commit cuyo mensaje EMPIECE por «[lectura]» (no basta con nombrarlo).
-    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura'))
+    if: (github.event_name == 'workflow_dispatch' && inputs.modo == 'lectura') || (github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura') && !startsWith(github.event.head_commit.message, '[lectura:balance'))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -115,3 +116,89 @@ jobs:
             node scripts/conta/diez/lectura.mjs 202301 202609 "$MODO" | tee lectura.md
           fi
           cat lectura.md >> "$GITHUB_STEP_SUMMARY"
+
+  balance:
+    # C06b, punto 1: el balance abreviado de Folvy contra el de Diez, línea a
+    # línea y a la misma fecha. Diez solo GET (balance-lineas.ts); Folvy con
+    # conta_lectura (PROD_CONTA_RO_DB_URL), en una sesión de solo lectura, y
+    # solo las subcuentas de Foodint (regla 9). En claro, recuentos y sí/no;
+    # las cifras, cifradas con testigo-clave-publica.pem.
+    if: github.event_name == 'push' && startsWith(github.event.head_commit.message, '[lectura:balance')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PROD_REF: xzmpnchlguibclvxyynt
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      FOODINT_EMPRESA: 658728c0-fcd7-46ef-a860-d4e5e6eb21d9
+      CORTE: '2026-09-30'
+      PSQL: /usr/lib/postgresql/17/bin/psql
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Guardas · producción, conta_lectura, y el secreto de Diez enmascarado
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta PROD_CONTA_RO_DB_URL."; exit 1; }
+          [ -n "${DIEZ_LECTURA:-}" ] || { echo "::error::Falta DIEZ_LECTURA."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+          python3 - <<'PYX'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          if (u.username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura. Abortado sin conectar.")
+              raise SystemExit(1)
+          PYX
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "Producción, con conta_lectura." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Folvy · saldos de Foodint al corte y el mapeo de serie del abreviado (solo lectura)
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          ro=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select current_setting('transaction_read_only')")
+          [ "$ro" = on ] || { echo "::error::La sesión no es de solo lectura. No se lee nada."; exit 1; }
+          # Por subcuenta: debe − haber en céntimos, del ejercicio que contiene el corte hasta el corte.
+          "$PSQL" "$DB_URL" -X -A -t -F '|' -v ON_ERROR_STOP=1 -v acc="$FOODINT" -v emp="$FOODINT_EMPRESA" -v corte="$CORTE" > folvy.txt <<'SQL'
+          select l.account_code, coalesce(max(l.template_code), ''), round(sum(l.debit - l.credit) * 100)::bigint
+            from public.journal_ledger l
+            join public.fiscal_year f on f.id = l.fiscal_year_id and :'corte'::date between f.starts_on and f.ends_on
+           where l.account_id = :'acc' and l.company_id = :'emp' and l.entry_date <= :'corte'::date
+           group by 1 order by 1;
+          SQL
+          "$PSQL" "$DB_URL" -X -A -t -F '|' -v ON_ERROR_STOP=1 > mapeo.txt <<'SQL'
+          select m.account_prefix, m.line_code, coalesce(m.by_balance, ''), al.side
+            from public.annual_accounts_mapping m
+            join public.annual_accounts_line al on al.model = m.model and al.statement = m.statement and al.code = m.line_code
+           where m.account_id is null and m.company_id is null and m.model = 'abreviado' and m.statement = 'balance' and not m.excluded;
+          SQL
+          echo "Subcuentas de Foodint con movimiento: $(wc -l < folvy.txt) · filas de mapeo: $(wc -l < mapeo.txt)"
+      - name: Diez · comparar (solo GET)
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          MENSAJE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          # «[lectura:balance:202610]» lee solo esos meses (separados por comas).
+          MESES=$(printf '%s' "$MENSAJE" | sed -n '1s/^\[lectura:balance:\([0-9,]*\)\].*/\1/p')
+          BALANCE_MESES="$MESES" BALANCE_EJERCICIO=2026 BALANCE_CORTE="${CORTE//-/}" FOLVY_SALDOS=folvy.txt FOLVY_MAPEO=mapeo.txt \
+            npx --yes tsx@4.19.2 scripts/conta/diez/balance-lineas.ts > balance.txt
+          sed '/-----TESTIGO CIFRADO-----/,$d' balance.txt | tee balance.md
+          sed -n '/-----TESTIGO CIFRADO-----/,$p' balance.txt
+          cat balance.md >> "$GITHUB_STEP_SUMMARY"
+          rm -f folvy.txt mapeo.txt
