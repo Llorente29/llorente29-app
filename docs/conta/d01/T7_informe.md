@@ -815,3 +815,35 @@ recuentos; tabla entera, todas las cuentas, a propósito):
 ese `main` vuelvo a medir el contexto y paso el paso 8 otra vez. La base de
 B01 ya está en producción (0100–0170, real 38555481119). Ninguna de sus
 funciones coincide con las 22 de D01.
+
+### 12.3 · Otra vez, después de la 0700 y la 0710 de la C (16:37Z)
+
+La C aplicó a las 16:37Z la `20261111T0700_c06b_diez_pdf_pendiente` y la
+`20261111T0710_c06b_diez_autorizo_primero`. Las dos están en el historial de
+producción. Lo que tocan:
+
+- `external_send`: columnas nuevas y su CHECK `external_send_document_status_check`;
+- la tabla nueva `conta_diez_autorizo`;
+- `conta_diez_adjunto_a_mano`.
+
+**Ninguno de los 12 ficheros de la tanda ni de sus 12 `.down.sql` nombra
+`external_send`, `conta_diez_autorizo` ni `conta_diez_adjunto_a_mano`.**
+Medido con `grep` sobre los 24 ficheros. Solo la cuenta de antes y después
+lee `external_send`, con un `count(*)` que no depende de sus columnas.
+
+**Contexto, medido otra vez el 14/10 a las 17:03Z en solo lectura:** idéntico
+al de las 15:21Z. Los 12 md5, los medidos.
+
+**Paso 8:** las 12 «sigue»; autorizo, ninguno.
+
+**La cuenta de antes, otra vez.** Cambian tres cifras, y las tres son de la C:
+
+| Clave | 15:21Z | 17:03Z |
+|---|---|---|
+| cuentas de empresa por origen | manual 8 · migrated 65 · serie 19 | ai_accepted 4 · manual 8 · migrated 65 · serie 19 |
+| documentos de asiento por tipo | (ninguno) | resumen_ventas 1 |
+| envíos a Diez | 0 | 1 |
+
+El resto, igual. La 0210 amplía los dos CHECK manteniendo `ai_accepted` y
+`resumen_ventas`, y su `.down.sql` los deja igual. La vuelta atrás no tropieza
+con esas filas.
