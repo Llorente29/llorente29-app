@@ -374,12 +374,17 @@
     },
     {
       "clave": "orden-eha-962-2007",
-      "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01)",
+      "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01; ELI https://www.boe.es/eli/es/o/2007/04/10/eha962)",
       "tipo": "boe",
-      "buscar": "\"EHA/962/2007\"",
-      "tituloDebeContener": "EHA/962/2007",
-      "debeContener": "digitalización certificada",
-      "tituloEmpiezaPor": "Orden EHA/962/2007"
+      "id": "BOE-A-2007-7866",
+      "debeContener": "digitalización certificada"
+    },
+    {
+      "clave": "resolucion-aeat-2007-10-24",
+      "nombre": "Resolución de 24/10/2007 de la AEAT, homologación del software de digitalización certificada (D01)",
+      "tipo": "boe",
+      "id": "BOE-A-2007-18911",
+      "debeContener": "homologación"
     }
   ]
 }
