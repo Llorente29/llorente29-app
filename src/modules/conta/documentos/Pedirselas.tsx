@@ -97,7 +97,7 @@ function UnaEsperada({ e, companyId, quien, cuenta, hayOtra, alSaltar, alPedir }
       </label>
       <p className="cx-ayuda" style={{ margin: 0 }}>No sale nada solo: se abre tu correo con el mensaje y lo mandas tú.</p>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      <div className="cxd-acciones">
+      <div className="cxr-acciones">
         {hayOtra && <button type="button" className="cx-boton-sec" onClick={alSaltar}>Esta no</button>}
         <button type="submit" className="cx-boton" disabled={ocupado || !email.trim()}>{ocupado ? 'Guardando…' : 'Confirmar y abrir mi correo'}</button>
       </div>

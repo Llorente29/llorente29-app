@@ -16,12 +16,32 @@
 // registra dos veces.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { readFileSync } from 'node:fs'
+import { CUENTA_A, STAGING_URL, anonKey, entrarComo, type Sesion } from '../sesion'
+import { rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/d01'
 const MES = '2026-10'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
+
+/**
+ * El papel de la factura de la semilla (Mayorista Prueba Alfa, F-2026-1022),
+ * inventado con sus mismas cifras (scripts/conta/d01/generar-papel-semilla.mjs):
+ * se sube a su ruta fija y se enlaza a la factura. Si ya estaba, sigue.
+ */
+async function ponerPapelDeLaSemilla(s: Sesion) {
+  const ruta = `${CUENTA_A.id}/d01-semilla/semilla-f-2026-1022.pdf`
+  const r = await fetch(`${STAGING_URL}/storage/v1/object/receipt-uploads/${ruta}`, {
+    method: 'POST',
+    headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/pdf' },
+    body: readFileSync('tests/conta/d01/facturas-inventadas/semilla-f-2026-1022.pdf'),
+  })
+  const t = await r.text()
+  expect(r.ok || /exists|duplicate/i.test(t), `subir el papel de la semilla: ${r.status} ${t.slice(0, 200)}`).toBe(true)
+  const p = await rest(s, 'PATCH', 'supplier_invoice?id=eq.d0100000-0000-4000-8000-0000000000f1', { raw_document_url: ruta })
+  expect(p.status, JSON.stringify(p.datos)).toBe(200)
+}
 
 async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
@@ -56,7 +76,7 @@ async function sinFolvyNiCocina(page: Page, donde: string) {
 }
 
 test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien · apuntar»', async ({ page }) => {
-  await entrarComo(page, CUENTA_A.email)
+  await ponerPapelDeLaSemilla(await entrarComo(page, CUENTA_A.email))
   const errores = vigilar(page)
   await page.goto(`/conta/documentos?mes=${MES}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Documentos' })).toBeVisible()
@@ -64,7 +84,7 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await expect(page.getByRole('region', { name: 'Lo que ha pasado con tus facturas' })).toContainText(/Han llegado|no ha llegado ninguna/)
   // Las cinco cifras.
   for (const c of ['Llegadas esta semana', 'Apuntadas solas', 'Para mirar', 'Por aclarar', 'Esperadas y no llegadas']) {
-    await expect(page.locator('.cxd-cifra', { hasText: c })).toBeVisible()
+    await expect(page.locator('.cxr-cifra', { hasText: c })).toBeVisible()
   }
   // «Para mirar»: las dos de la semilla, cada una con su porqué y un solo botón.
   const alfa = page.locator('tr, article', { hasText: 'Mayorista Prueba Alfa' })
@@ -101,6 +121,11 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await expect(page.getByRole('region', { name: 'Cómo se apunta' })).toContainText(/· 60000000|·\s*4000\d+|periodo cerrado|no tiene|Falta/, { timeout: 20_000 })
   await expect(page.getByRole('button', { name: 'Está bien · apuntar' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Está bien · apuntar' })).toBeEnabled()
+  // El papel a la izquierda, pintado (no «no tiene papel» ni «no he podido pintar»).
+  const papel = page.getByRole('region', { name: 'La factura tal como llegó' })
+  await expect(papel.getByRole('img', { name: /La factura F-2026-1022/ })).toBeVisible()
+  await expect(papel).not.toContainText(/no tiene papel|No he podido pintar/, { timeout: 15_000 })
+  await page.waitForTimeout(500)
   await capturar(page, 'n23-revisar-a')
   await page.getByRole('button', { name: 'Otra cosa' }).click()
   await expect(page.getByRole('dialog', { name: '¿Qué le pasa?' })).toBeVisible()
@@ -138,7 +163,7 @@ test('Móvil: se sube con la cámara y «Está bien» queda bajo el pulgar', asy
 })
 
 test('Frente C (?marca=contabilidad): ni Cocina ni «Folvy» en Documentos', async ({ page }) => {
-  await entrarComo(page, CUENTA_A.email)
+  await ponerPapelDeLaSemilla(await entrarComo(page, CUENTA_A.email))
   const errores = vigilar(page)
   await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'contabilidad') })
   await page.goto(`/conta/documentos?mes=${MES}&marca=contabilidad`)
@@ -150,6 +175,8 @@ test('Frente C (?marca=contabilidad): ni Cocina ni «Folvy» en Documentos', asy
   await page.locator('tr, article', { hasText: 'Mayorista Prueba Alfa' }).getByRole('button', { name: /^Mirar/ }).click()
   await expect(page.getByRole('heading', { level: 1, name: 'Mayorista Prueba Alfa · F-2026-1022' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Cómo se apunta' })).toContainText(/· \d{8}|cerrado|no tiene|Falta|asiento/, { timeout: 20_000 })
+  await expect(page.getByRole('region', { name: 'La factura tal como llegó' }).getByRole('img')).toBeVisible()
+  await page.waitForTimeout(500)
   await sinFolvyNiCocina(page, 'N23')
   await capturar(page, 'n23-revisar-c')
   expect(errores).toEqual([])

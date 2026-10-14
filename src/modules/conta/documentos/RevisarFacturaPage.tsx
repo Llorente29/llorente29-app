@@ -23,6 +23,7 @@ import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { eurosExactos, porcentaje } from '@/modules/conta/lib/formato'
 import { VERES, filtrar, limites, verDe } from '@/modules/conta/documentos/documentos'
 import { useProducto } from '@/modules/conta/documentos/producto'
+import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import {
   apuntarFactura, decirProveedor, leerDocumentos, leerFactura, proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura,
   type Apuntada, type FacturaRevisar,
@@ -90,7 +91,7 @@ export default function RevisarFacturaPage() {
   const avisos = (lectura?.comprobaciones ?? []).filter((c) => !c.ok)
 
   const navegacion = ids.length > 1 && pos >= 0 && (
-    <div className="cxd-navegar">
+    <div className="cxr-navegar">
       <button type="button" className="cx-boton-sec" disabled={pos <= 0} onClick={() => ir(ids[pos - 1])}>← Anterior</button>
       <button type="button" className="cx-boton-sec" disabled={pos >= ids.length - 1} onClick={() => ir(ids[pos + 1])}>Siguiente →</button>
     </div>
@@ -115,15 +116,15 @@ export default function RevisarFacturaPage() {
         {!movil && navegacion}
       </header>
 
-      <div className="cxd-revisar">
+      <div className="cxr-revisar">
         <Papel fac={fac} url={papel.datos ?? null} error={papel.error} solo={producto.solo} />
 
-        <div className="cxd-lado">
+        <div className="cxr-lado">
           <BandaFactura fac={fac} />
 
-          <section className="cxd-bloque" aria-label="Lo que he leído">
+          <section className="cxr-bloque" aria-label="Lo que he leído">
             <h2>Lo que he leído</h2>
-            <div className="cxd-leido">
+            <div className="cxr-leido">
               <Leido etiqueta="Proveedor" valor={prov?.nombre ?? fac.propuesto?.nombre ?? 'No lo reconozco'}
                 apoyo={prov ? `${prov.nif ? `NIF ${prov.nif}` : 'sin NIF'} · ficha ✓` : `${fac.propuesto?.nif ? `NIF ${fac.propuesto.nif} · ` : ''}no está en tus proveedores`} />
               <Leido etiqueta="Factura" valor={`${fac.numero ?? 'sin número'} · ${fecha(fac.fecha)}`} apoyo={fac.no_repetida ? 'no está repetida (lo confirmaste)' : 'no hay otra con su número y su total'} />
@@ -138,7 +139,7 @@ export default function RevisarFacturaPage() {
                 apoyo={prov.gasto?.origen ?? 'aún no hay nada aprendido'} />}
               {prov?.facturacion && <Leido etiqueta="Facturación" valor={prov.facturacion.nombre} apoyo={prov.facturacion.email} />}
             </div>
-            {avisos.length > 0 && <ul className="cxd-aviso" style={{ margin: '10px 0 0', paddingLeft: 18 }}>{avisos.map((a) => <li key={a.id}>{a.texto}</li>)}</ul>}
+            {avisos.length > 0 && <ul className="cxr-aviso" style={{ margin: '10px 0 0', paddingLeft: 18 }}>{avisos.map((a) => <li key={a.id}>{a.texto}</li>)}</ul>}
           </section>
 
           {sinProveedor && <DecirProveedor accountId={accountId} invoiceId={fac.id} alGuardar={() => setVuelta((v) => v + 1)} />}
@@ -146,13 +147,13 @@ export default function RevisarFacturaPage() {
           <ComoSeApunta fac={fac} vista={vista.datos} error={vista.error} />
 
           <div role="status" aria-live="polite">
-            {hecho && <div className={`cx-tarjeta cxd-hecho${hecho.validado ? '' : ' cxd-mal'}`}><strong>{hecho.texto}</strong>
+            {hecho && <div className={`cx-tarjeta cxr-hecho${hecho.validado ? '' : ' cxr-mal'}`}><strong>{hecho.texto}</strong>
               {hecho.validado && pos >= 0 && pos < ids.length - 1 && <button type="button" className="cx-enlace" onClick={() => ir(ids[pos + 1])}>Siguiente factura →</button>}
             </div>}
           </div>
 
           {!movil && (
-            <div className="cxd-acciones">
+            <div className="cxr-acciones">
               <button type="button" className="cx-boton-sec" onClick={() => setOtra(true)}>Otra cosa</button>
               {botonApuntar}
             </div>
@@ -161,7 +162,7 @@ export default function RevisarFacturaPage() {
       </div>
 
       {movil && (
-        <div className="cxd-pulgar">
+        <div className="cxr-pulgar">
           <button type="button" className="cx-boton-sec" onClick={() => setOtra(true)}>Otra cosa</button>
           {botonApuntar || <Link to={volver} className="cx-boton-sec">Volver</Link>}
         </div>
@@ -185,7 +186,7 @@ function Leido({ etiqueta, valor, apoyo, aviso }: { etiqueta: string; valor: str
   return (
     <>
       <div>{etiqueta}</div>
-      <div className="cxd-leido-valor">{valor}{apoyo && <span className={`cxd-apoyo${aviso ? ' cxd-aviso' : ''}`}>{apoyo}</span>}</div>
+      <div className="cxr-leido-valor">{valor}{apoyo && <span className={`cxr-apoyo${aviso ? ' cxr-aviso' : ''}`}>{apoyo}</span>}</div>
     </>
   )
 }
@@ -195,15 +196,15 @@ function Papel({ fac, url, error, solo }: { fac: FacturaRevisar; url: string | n
   const esFoto = /^image\//.test(l?.tipo ?? '') || /\.(jpe?g|png|webp)$/i.test(l?.archivo ?? fac.papel ?? '')
   const cuando = l?.cuando ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(l.cuando)) : null
   return (
-    <section className="cxd-papel" aria-label="La factura tal como llegó">
-      <div className="cxd-papel-cabeza">
+    <section className="cxr-papel" aria-label="La factura tal como llegó">
+      <div className="cxr-papel-cabeza">
         <span>{l?.archivo ?? 'Factura'} · llegó {canal(l?.canal ?? fac.canal ?? '', solo)}{l?.a ? ` a ${l.a.replace(/@.*/, '@')}` : ''}{cuando ? ` · ${cuando}` : ''}</span>
         {url && <a href={url} target="_blank" rel="noopener noreferrer" className="cx-enlace">Abrir</a>}
       </div>
-      <div className="cxd-papel-hoja">
+      <div className="cxr-papel-hoja">
         {error && <p className="cx-error">No se ha podido abrir el papel: {error}</p>}
         {!error && !url && <p className="cx-ayuda">Esta factura no tiene papel guardado.</p>}
-        {url && (esFoto ? <img src={url} alt={`La factura ${fac.numero ?? ''} tal como llegó`} /> : <iframe src={url} title={`La factura ${fac.numero ?? ''} tal como llegó`} />)}
+        {url && (esFoto ? <img src={url} alt={`La factura ${fac.numero ?? ''} tal como llegó`} /> : <PapelPdf url={url} titulo={`La factura ${fac.numero ?? ''} tal como llegó`} />)}
       </div>
     </section>
   )
@@ -229,25 +230,25 @@ function BandaFactura({ fac }: { fac: FacturaRevisar }) {
 function ComoSeApunta({ fac, vista, error }: { fac: FacturaRevisar; vista: Awaited<ReturnType<typeof verPropuestaFactura>> | null; error: string | null }) {
   const lineas = useMemo(() => (vista?.propuesta ? vista.propuesta.lineas : []), [vista])
   return (
-    <section className="cxd-bloque" aria-label="Cómo se apunta">
+    <section className="cxr-bloque" aria-label="Cómo se apunta">
       <h2>Cómo se apunta</h2>
       {fac.asiento && <p style={{ margin: 0 }}>Ya tiene su asiento ({fac.asiento.estado}).</p>}
       {!fac.asiento && error && <p className="cx-error">No se ha podido preparar: {error}</p>}
       {!fac.asiento && !error && !vista && <Hueso alto={60} />}
-      {!fac.asiento && vista && !vista.propuesta && <p className="cxd-aviso" style={{ margin: 0 }}>{vista.porque}</p>}
+      {!fac.asiento && vista && !vista.propuesta && <p className="cxr-aviso" style={{ margin: 0 }}>{vista.porque}</p>}
       {!fac.asiento && vista?.propuesta && (
         <>
-          <div className="cxd-apunte">
+          <div className="cxr-apunte">
             {lineas.map((l, i) => (
               <div key={i} style={{ display: 'contents' }}>
                 <span>{vista.nombres.get(l.cuenta) ?? 'Cuenta'} · {l.cuenta}</span>
-                <span className="cxd-der">{l.debe ? eurosExactos(l.debe) : ''}</span>
-                <span className="cxd-der">{l.haber ? eurosExactos(l.haber) : ''}</span>
+                <span className="cxr-der">{l.debe ? eurosExactos(l.debe) : ''}</span>
+                <span className="cxr-der">{l.haber ? eurosExactos(l.haber) : ''}</span>
               </div>
             ))}
           </div>
-          <p className="cxd-apoyo" style={{ margin: '8px 0 0' }}>Facturas recibidas{fac.recepcion?.local ? ` · ${fac.recepcion.local}` : ''} · se enviará a Diez con su PDF</p>
-          {vista.propuesta.avisos.length > 0 && <ul className="cxd-aviso" style={{ margin: '8px 0 0', paddingLeft: 18 }}>{vista.propuesta.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul>}
+          <p className="cxr-apoyo" style={{ margin: '8px 0 0' }}>Facturas recibidas{fac.recepcion?.local ? ` · ${fac.recepcion.local}` : ''} · se enviará a Diez con su PDF</p>
+          {vista.propuesta.avisos.length > 0 && <ul className="cxr-aviso" style={{ margin: '8px 0 0', paddingLeft: 18 }}>{vista.propuesta.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul>}
         </>
       )}
     </section>
@@ -264,7 +265,7 @@ function DecirProveedor({ accountId, invoiceId, alGuardar }: { accountId: string
     try { await decirProveedor(invoiceId, elegido); alGuardar() } catch (e) { setFallo(e instanceof Error ? e.message : String(e)) } finally { setOcupado(false) }
   }
   return (
-    <section className="cxd-bloque" aria-label="De quién es">
+    <section className="cxr-bloque" aria-label="De quién es">
       <h2>¿De quién es?</h2>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <select className="cx-input" value={elegido} onChange={(e) => setElegido(e.target.value)} aria-label="Proveedor" style={{ flex: 1, minWidth: 0 }}>

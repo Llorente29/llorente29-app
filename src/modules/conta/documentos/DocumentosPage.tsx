@@ -136,12 +136,12 @@ export default function DocumentosPage() {
           {!movil && <Barra d={d} solo={producto.solo} producto={producto.nombre}
             alSubir={() => ficheros.current?.click()} alPedir={() => setPidiendo(true)} alVerApuntadas={() => cambiar({ ver: 'apuntadas' })} />}
 
-          <div className="cxd-seccion">
+          <div className="cxr-seccion">
             <div>
               <Migas migas={[{ etiqueta: 'Documentos' }, { etiqueta: 'Facturas recibidas' }]} />
               <h2>{VERES.find((v) => v.id === ver)!.nombre}</h2>
             </div>
-            <div className="cxd-herramientas">
+            <div className="cxr-herramientas">
               <div className="cxl-segmento" role="group" aria-label="Qué facturas ver">
                 {VERES.map((v) => <button key={v.id} type="button" aria-pressed={v.id === ver} onClick={() => cambiar({ ver: v.id })}>{v.nombre}</button>)}
               </div>
@@ -150,7 +150,7 @@ export default function DocumentosPage() {
           </div>
 
           {movil && (
-            <div className="cxd-subir-movil">
+            <div className="cxr-subir-movil">
               <button type="button" className="cx-boton" onClick={() => camara.current?.click()} disabled={!!subiendo}>Hacer foto</button>
               <button type="button" className="cx-boton-sec" onClick={() => ficheros.current?.click()} disabled={!!subiendo}>Subir PDF</button>
             </div>
@@ -228,14 +228,14 @@ function Cifras({ d, ver, solo, alVer, alPedir }: { d: DatosDocumentos; ver: Ver
   const c = d.cifras
   const faltan = d.esperadas.filter((e) => !e.pedida)
   const cifra = (etiqueta: string, valor: number, apoyo: string, alPulsar: () => void, actual = false, ia = false) => (
-    <button type="button" className={`cxd-cifra${ia ? ' cxd-cifra-ia' : ''}`} onClick={alPulsar} aria-pressed={actual}>
-      <span className="cxd-cifra-etiqueta">{etiqueta}</span>
-      <span className="cxd-cifra-valor">{valor.toLocaleString('es-ES')}</span>
-      <span className="cxd-cifra-apoyo">{apoyo}</span>
+    <button type="button" className={`cxr-cifra${ia ? ' cxr-cifra-ia' : ''}`} onClick={alPulsar} aria-pressed={actual}>
+      <span className="cxr-cifra-etiqueta">{etiqueta}</span>
+      <span className="cxr-cifra-valor">{valor.toLocaleString('es-ES')}</span>
+      <span className="cxr-cifra-apoyo">{apoyo}</span>
     </button>
   )
   return (
-    <div className="cxd-cifras">
+    <div className="cxr-cifras">
       {cifra('Llegadas esta semana', c.llegadas, porDonde(c.llegadas_por_canal, solo), () => alVer('todas'), ver === 'todas')}
       {cifra('Apuntadas solas', c.apuntadas_solas, c.apuntadas_solas ? 'las ves en Apuntadas' : 'ninguna esta vez', () => alVer('apuntadas'), ver === 'apuntadas', true)}
       {cifra('Para mirar', c.para_mirar, 'una pantalla cada una', () => alVer('para-mirar'), ver === 'para-mirar')}
@@ -257,7 +257,7 @@ function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: 
   const apoyo = (f: FilaDocumento) => `${f.numero ?? 'sin número'} · llegó por ${nombreCanal(f.canal, solo)}`
   const vacio = ver === 'todas' ? 'Este mes no ha llegado ninguna factura.' : `No hay ninguna ${VERES.find((v) => v.id === ver)!.nombre.toLowerCase()}.`
   const piePagina = (
-    <div className="cxd-pie">
+    <div className="cxr-pie">
       <span>{pie}</span>
       {repetidas > 0 && ver !== 'todas' && <button type="button" className="cx-enlace" onClick={alVerTodas}>Ver {repetidas === 1 ? 'la repetida' : `las ${repetidas} repetidas`}</button>}
     </div>
@@ -270,23 +270,23 @@ function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: 
   if (movil) {
     return (
       <section aria-label="Facturas">
-        {filas.length === 0 && <div className="cx-tarjeta cxd-vacio">{vacio}</div>}
-        <div className="cxd-tarjetas">
+        {filas.length === 0 && <div className="cx-tarjeta cxr-vacio">{vacio}</div>}
+        <div className="cxr-tarjetas">
           {filas.map((f) => {
             const e = entendido(f)
             return (
-              <article key={f.id} className={`cxd-tarjeta${f.estado === 'para_mirar' ? ' cxd-fila-mirar' : ''}`}>
-                <div className="cxd-tarjeta-cabeza">
-                  <div className="cxd-quien">
+              <article key={f.id} className={`cxr-tarjeta${f.estado === 'para_mirar' ? ' cxr-fila-mirar' : ''}`}>
+                <div className="cxr-tarjeta-cabeza">
+                  <div className="cxr-quien">
                     <Inicial texto={ini(f)} redonda={false} tono={f.proveedor.nombre ? undefined : 6} />
-                    <div className="cxd-quien-texto"><span className="cxd-nombre">{nombre(f)}</span><span className="cxd-apoyo">{apoyo(f)}</span></div>
+                    <div className="cxr-quien-texto"><span className="cxr-nombre">{nombre(f)}</span><span className="cxr-apoyo">{apoyo(f)}</span></div>
                   </div>
                   <span className="cx-cifra">{f.total !== null ? eurosExactos(f.total) : '—'}</span>
                 </div>
-                <div className="cxd-entendido">
-                  <span className="cxd-entendido-titulo"><span className={`cxl-punto cxl-punto-${punto(f)}`} aria-hidden="true" /> {e.titulo}</span>
-                  {e.porque && <span className="cxd-apoyo">{e.porque}</span>}
-                  <span className="cxd-apoyo">{diaMes(f.fecha)}</span>
+                <div className="cxr-entendido">
+                  <span className="cxr-entendido-titulo"><span className={`cxl-punto cxl-punto-${punto(f)}`} aria-hidden="true" /> {e.titulo}</span>
+                  {e.porque && <span className="cxr-apoyo">{e.porque}</span>}
+                  <span className="cxr-apoyo">{diaMes(f.fecha)}</span>
                 </div>
                 {botonDe(f)}
               </article>
@@ -300,22 +300,22 @@ function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: 
 
   return (
     <section className="cx-tarjeta" aria-label="Facturas">
-      <table className="cxd-tabla">
+      <table className="cxr-tabla">
         <thead>
-          <tr><th colSpan={2}>Proveedor · factura</th><th>Fecha</th><th className="cxd-der">Total</th><th aria-label="Seguridad" /><th>{entendidoTitulo}</th><th aria-label="Qué hacer" /></tr>
+          <tr><th colSpan={2}>Proveedor · factura</th><th>Fecha</th><th className="cxr-der">Total</th><th aria-label="Seguridad" /><th>{entendidoTitulo}</th><th aria-label="Qué hacer" /></tr>
         </thead>
         <tbody>
-          {filas.length === 0 && <tr><td colSpan={7} className="cxd-vacio">{vacio}</td></tr>}
+          {filas.length === 0 && <tr><td colSpan={7} className="cxr-vacio">{vacio}</td></tr>}
           {filas.map((f) => {
             const e = entendido(f)
             return (
-              <tr key={f.id} className={f.estado === 'para_mirar' ? 'cxd-fila-mirar' : undefined}>
+              <tr key={f.id} className={f.estado === 'para_mirar' ? 'cxr-fila-mirar' : undefined}>
                 <td style={{ width: 48 }}><Inicial texto={ini(f)} tono={f.proveedor.nombre ? undefined : 6} /></td>
-                <td><div className="cxd-quien-texto"><span className="cxd-nombre">{nombre(f)}</span><span className="cxd-apoyo">{apoyo(f)}</span></div></td>
-                <td className="cxd-mono">{diaMes(f.fecha)}</td>
-                <td className="cxd-der">{f.total !== null ? eurosExactos(f.total) : '—'}</td>
+                <td><div className="cxr-quien-texto"><span className="cxr-nombre">{nombre(f)}</span><span className="cxr-apoyo">{apoyo(f)}</span></div></td>
+                <td className="cxr-mono">{diaMes(f.fecha)}</td>
+                <td className="cxr-der">{f.total !== null ? eurosExactos(f.total) : '—'}</td>
                 <td><span className={`cxl-punto cxl-punto-${punto(f)}`} aria-hidden="true" /></td>
-                <td><div className="cxd-entendido"><span className="cxd-entendido-titulo">{e.titulo}</span>{e.porque && <span className="cxd-apoyo">{e.porque}</span>}</div></td>
+                <td><div className="cxr-entendido"><span className="cxr-entendido-titulo">{e.titulo}</span>{e.porque && <span className="cxr-apoyo">{e.porque}</span>}</div></td>
                 <td style={{ textAlign: 'right' }}>{botonDe(f)}</td>
               </tr>
             )
@@ -330,11 +330,11 @@ function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: 
 function ResultadoSubida({ subidas }: { subidas: Subida[] }) {
   const bien = subidas.filter((s) => s.bien).length
   return (
-    <div className="cx-tarjeta cxd-hecho">
+    <div className="cx-tarjeta cxr-hecho">
       <strong>{bien === subidas.length
         ? `${subidas.length === 1 ? 'Subida y leída' : `Subidas y leídas las ${subidas.length}`}.`
         : `${bien} de ${subidas.length} han entrado.`}</strong>
-      <ul>{subidas.map((s, i) => <li key={i} className={s.bien ? undefined : 'cxd-mal'}>{s.texto}</li>)}</ul>
+      <ul>{subidas.map((s, i) => <li key={i} className={s.bien ? undefined : 'cxr-mal'}>{s.texto}</li>)}</ul>
     </div>
   )
 }
