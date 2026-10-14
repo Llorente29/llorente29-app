@@ -1,8 +1,8 @@
 # C06b · Respuesta 8 de Julio — validar con el PDF, y anular también en Diez
 
-Rama `conta/c06b-validar-pdf` (sale de la #185 fusionada). **Nada en
-producción**: la tanda de la 0720 está preparada y sin lanzar (§3), y no hay
-PR a `main`.
+Rama `conta/c06b-validar-pdf` (sale de la #185 fusionada). La tanda de la
+0720 está **aplicada en producción** (real #77, desde `6e7dafdd`; §3). El front
+y `conta-diez-enviar` van en el PR a `main` (§4).
 
 > «1. Sí: validar y generar el PDF van juntos; si falla el PDF, el asiento no
 > se valida y se dice por qué. 2. Sí: al anular un asiento ya enviado, Folvy
@@ -137,7 +137,7 @@ Diez que no acepta) y 1 del estado en `pendientesDiezC06b.test.ts`.
 escrito ningún contraasiento en Diez**, tampoco en la C0009: la primera
 escritura real de una anulación la decide Julio.
 
-## 3 · La tanda de producción (preparada, NO lanzada)
+## 3 · La tanda de producción (aplicada: real #77)
 
 `supabase/produccion/aplicar.txt`: solo la 0720. Su cuenta,
 `scripts/conta/produccion/cuentas/validar-con-pdf.sql`; su vuelta atrás, la
@@ -156,10 +156,17 @@ funciones no existen; la 0720 no está en el historial. El analizador:
 autorizo: (ninguno)
 ```
 
+**Aplicada** por Julio desde `6e7dafdd`: ensayo y **real #77 en verde**,
+comprobado en la base. El «antes» que se dio para lanzarla (producción, solo
+lectura, 14/10 19:14 UTC): las dos funciones `false`, el disparador `0`,
+asientos de Foodint `propuesto 54 · validado 14934`, de plataforma validados
+sin PDF `0`, documentos `1`. Después: funciones `true`, disparador `1`, el
+resto igual.
+
 ## 4 · El orden
 
 1. La tanda (ensayo y real), **antes** de fusionar: el front nuevo llama a
-   las dos funciones.
+   las dos funciones. **Hecho** (real #77).
 2. PR a `main` y fusión; Vercel READY.
 3. Desplegar `conta-diez-enviar` (el contraasiento).
 
@@ -167,17 +174,21 @@ Entre el 1 y el 2, quien valide un asiento de plataforma con el front de
 antes verá «se valida con su PDF» y no validará: es lo pedido, y se arregla
 recargando con el front nuevo.
 
-## 5 · Lo que he decidido yo y Julio tiene que confirmar
+## 5 · Lo que decidí yo — confirmado por Julio (respuesta a la 8: sí a las tres)
 
 1. **Lo autorizado para escribir una factura en Diez real también vale para
    anularla.** Con el asiento de Uber · Alcalá autorizado en C0008, su
    anulación entraría en C0008 sin otra autorización. ¿Vale, o la anulación
-   pide su propio «autorizo»?
+   pide su propio «autorizo»? **Sí, vale**: anular solo toca una factura que
+   Folvy ya puso en Diez con autorización.
 2. **El contraasiento va a Diez sin PDF.** No es un resumen de ventas y no
-   tiene documento propio. ¿Vale, o quieres un PDF de la anulación?
+   tiene documento propio. ¿Vale, o quieres un PDF de la anulación? **Sí,
+   vale**: es una corrección del libro, no una venta nueva; en Folvy el
+   anulado sigue enlazando el PDF de la factura que anula.
 3. **El número de la anulación es el de la original con «-ANUL»**, como el
    único caso que hay en la C0009 (uno, y de compras). Si la gestoría
-   prefiere otro, se cambia en un sitio (`FORMA_ANULACION`).
+   prefiere otro, se cambia en un sitio (`FORMA_ANULACION`). **Sí**, y sale
+   de ese solo sitio por si un día cambia.
 
 ## 6 · La e2e del frente
 
@@ -187,8 +198,11 @@ recargando con el front nuevo.
   rellene al instante» (ordenador). Llega a abrir la contabilidad y se queda
   esperando a que la red esté en calma (`waitForLoadState('networkidle')`,
   120 s). Esa pantalla no carga nada de lo tocado aquí, y **no se repitió**:
-  la misma prueba pasó en los dos runs siguientes. No la doy por arreglada:
-  queda dicha.
+  la misma prueba pasó en los dos runs siguientes.
+  **INESTABLE** (lo pide Julio): no la doy por arreglada hasta que pase en
+  la suite entera. Lo que se sabe: la espera es `networkidle`, que se queda
+  sin cumplir si la página sigue pidiendo algo (un sondeo, una sesión que se
+  refresca); en dos de tres runs se cumplió.
 - 9d0c3dca (la parte 2, run 38615605404): **verde**.
 - 494c7b87 (la forma «-ANUL», run 38617077498): **verde**. La e2e de
   pendientes cubre ya el anulado: su motivo, «Enviar el contraasiento», lo que
