@@ -5,7 +5,7 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# D01 · Tarea 7 (y R5) — facturas recibidas, para cualquier empresa. PREPARADA, NO
+# D01 · Tarea 7 (y R5, R6) — facturas recibidas, para cualquier empresa. PREPARADA, NO
 # LANZADA: no sale hasta que (1) la lectura con el modelo esté probada sobre
 # las 12 facturas inventadas y (2) Julio apruebe las capturas N22/N23. El
 # orden lo da docs/conta/d01/T7_informe.md: BASE (esta tanda), después las
@@ -32,6 +32,10 @@
 #          de la 0280, con la misma firma (R5: el porqué de cada fila, por
 #          dónde llegó de verdad y las cifras del periodo). En producción no
 #          existe aún: llega con la 0280, en esta misma tanda.
+#   0310 — CAMBIA en caliente (declarado, con su prueba): las lecturas de N22
+#          (0300) y N23 (0290), la misma firma (R6: las recepciones cuyo papel
+#          es una factura; antes del corte, enlazadas con Diez, nunca se
+#          apuntan; N23 trae lo que leyó la recepción). Solo leen.
 # Nada del camino del pedido (medido en producción, 14/10).
 #
 # Lo que cuenta antes y después (R9): las ocho tablas nuevas, las facturas por
@@ -55,3 +59,4 @@ supabase/migrations/20261021T0270_d01_recibida_envio.sql
 supabase/migrations/20261021T0280_d01_documentos.sql
 supabase/migrations/20261021T0290_d01_revisar_y_pedir.sql
 supabase/migrations/20261021T0300_d01_documentos_r5.sql
+supabase/migrations/20261021T0310_d01_recepcion.sql

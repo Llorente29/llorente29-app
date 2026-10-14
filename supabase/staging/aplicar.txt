@@ -1,12 +1,10 @@
-# D01 · R5 (14/10) — N22 dice el porqué de cada fila, por dónde llegó de verdad
-# y las cifras del periodo elegido (sesión A; la 0300 reemplaza en caliente la
-# función de lectura de la 0280, con la misma firma, y solo lee).
-#   1. el ensayo: la 0300 y su prueba, en una transacción con ROLLBACK;
-#   2. la 0300 de verdad, con su registro;
-#   3. su prueba como usuario (A y B), con ROLLBACK;
-#   4. la semilla: el vencimiento que trae el papel de la F-2026-1022 y el
-#      plazo de su ficha (solo rellena lo que falta; ids d0100000-…).
-supabase/staging/sql/20261021_d01_documentos_r5_ensayo.sql
-supabase/migrations/20261021T0300_d01_documentos_r5.sql
-supabase/staging/sql/20261021_d01_documentos_r5_prueba.sql
-supabase/seeds/conta/seed_d01_staging.sql
+# D01 · R6 (14/10) — las facturas que ya entran por la recepción (sesión A).
+# La 0310 reemplaza en caliente, con la misma firma, las dos lecturas de N22
+# (0300) y N23 (0290): solo leen. La 0300 ya está (run 38525387878).
+#   1. el ensayo: la 0310 y su prueba, en una transacción con ROLLBACK;
+#   2. la 0310 de verdad, con su registro;
+#   3. su prueba como usuario (A y B), con ROLLBACK: recepciones, lecturas y
+#      un asiento de Diez inventados, todo deshecho al acabar.
+supabase/staging/sql/20261021_d01_recepcion_ensayo.sql
+supabase/migrations/20261021T0310_d01_recepcion.sql
+supabase/staging/sql/20261021_d01_recepcion_prueba.sql

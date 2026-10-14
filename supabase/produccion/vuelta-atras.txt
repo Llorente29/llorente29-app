@@ -1,9 +1,10 @@
 # Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
-# inverso. D01 · Tarea 7 y R5 — facturas recibidas (0300 → 0200). Cada .down.sql
+# inverso. D01 · Tarea 7, R5 y R6 — facturas recibidas (0310 → 0200). Cada .down.sql
 # PARA si ya hay algo de una persona o de un proveedor que se perdería. En
 # este modo, lo que se cuenta se enseña antes y después (cambiar es lo
 # esperado: se deshace la tanda) y no para.
 cuenta: scripts/conta/produccion/cuentas/recibidas.sql
+supabase/vuelta-atras/20261021T0310_d01_recepcion.down.sql
 supabase/vuelta-atras/20261021T0300_d01_documentos_r5.down.sql
 supabase/vuelta-atras/20261021T0290_d01_revisar_y_pedir.down.sql
 supabase/vuelta-atras/20261021T0280_d01_documentos.down.sql
