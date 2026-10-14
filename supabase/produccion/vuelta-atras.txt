@@ -1,8 +1,8 @@
 # Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
-# inverso. C06b · Respuesta 8, tarea 1, paso 1.
-#   0730: fuera la columna «desde» y su CHECK. PARA si alguna autorización ya
-#         lleva fecha (sin la columna valdría para cualquier fecha).
+# inverso. C06b · Respuesta 8, tarea 1.
+#   0740: fuera la columna incluye_recibidas. PARA si alguna autorización ya
+#         abre las recibidas. Ver en el fichero lo que hay que mirar antes.
 # En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
 # esperado: se deshace la tanda) y no para.
-cuenta: scripts/conta/produccion/cuentas/diez-autorizo-desde.sql
-supabase/vuelta-atras/20261111T0730_c06b_diez_autorizo_desde.down.sql
+cuenta: scripts/conta/produccion/cuentas/diez-autorizo-recibidas.sql
+supabase/vuelta-atras/20261111T0740_c06b_diez_autorizo_recibidas.down.sql

@@ -1,0 +1,25 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C06b · Respuesta 8, tarea 1, PASO 1 de 3 (rama conta/c06b-autorizo-desde).
+# PREPARADA, NO LANZADA.
+#
+#   1. 20261111T0730 — conta_diez_autorizo.desde (fecha, admite vacío) y su
+#      CHECK (solo en alcance empresa). Solo añade; no escribe datos. La fila
+#      del 1801 (alcance asiento) no cambia.
+#
+# ORDEN (Julio, 14/10):
+#   · esta tanda;
+#   · PR de conta-diez-enviar que compara la fecha del asiento con «desde»
+#     (el contraasiento, con la fecha de lo que anula); fusiona Julio y se
+#     despliega desde main;
+#   · otra tanda, solo después del despliegue: la fila de empresa C0008
+#     desde 2026-10-01 (ventas y recibidas).
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/diez-autorizo-desde.sql
+supabase/migrations/20261111T0730_c06b_diez_autorizo_desde.sql

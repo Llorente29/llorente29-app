@@ -867,12 +867,12 @@ describe('la tanda de a Diez sin el PDF y el primer asiento autorizado en C0008 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): conta_diez_autorizo.desde (C06b, respuesta 8, tarea 1, paso 1)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda de conta_diez_autorizo.desde (C06b, respuesta 8, tarea 1; ya aplicada, real #78 desde 7276511f), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-r8-desde-20261014.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 14/10 a las 21:56 UTC para ESTE fichero (con su md5).
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-r8-desde-20261014.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -892,11 +892,43 @@ describe('la tanda de AHORA (manifiesto vivo): conta_diez_autorizo.desde (C06b, 
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
   it('su vuelta atrás quita la columna y para si alguna autorización ya lleva fecha', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c06b-r8-desde-20261014.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261111T0730_c06b_diez_autorizo_desde.down.sql'])
     const sql = readFileSync(atras[0], 'utf8')
     expect(sql).toMatch(/where desde is not null/)
     expect(sql).toMatch(/drop column if exists desde/)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): conta_diez_autorizo.incluye_recibidas (C06b, respuesta 8, tarea 1)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 14/10 a las 23:26 UTC para ESTE fichero (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero: la 0740 añade la columna con su valor por defecto; sigue', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0740_c06b_diez_autorizo_recibidas.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue' })
+  })
+  it('solo estructura: not null con default false (lo de hoy queda cerrado para recibidas) y ninguna autorización escrita', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    expect(sql).toMatch(/add column if not exists incluye_recibidas boolean not null default false/)
+    expect(sql).not.toMatch(/^\s*(insert|update|delete)\b/im)
+  })
+  it('declara qué cuenta antes y después, y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/diez-autorizo-recibidas.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('su vuelta atrás quita la columna y para si alguna autorización ya abre las recibidas', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0740_c06b_diez_autorizo_recibidas.down.sql'])
+    const sql = readFileSync(atras[0], 'utf8')
+    expect(sql).toMatch(/where incluye_recibidas/)
+    expect(sql).toMatch(/drop column if exists incluye_recibidas/)
   })
 })
 
