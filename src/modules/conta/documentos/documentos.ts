@@ -14,13 +14,19 @@
 
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
 
-export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida'
+/**
+ * R6 · 'en_diez': una recepción de antes del corte cuyo papel es una factura. La
+ * llevó el programa anterior: sale (en «Todas») enlazada con su asiento traído
+ * de Diez si casa, y nunca se apunta otra vez.
+ */
+export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez'
 export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
 export interface FilaDocumento {
   id: string
-  tipo: 'factura' | 'llegada'
+  /** R6 · 'recepcion': una recepción cuyo papel es una factura y que no es (o no hace falta que sea) factura en Folvy. */
+  tipo: 'factura' | 'llegada' | 'recepcion'
   estado: Estado
   proveedor: { id: string | null; nombre: string | null }
   numero: string | null
@@ -37,6 +43,10 @@ export interface FilaDocumento {
   previas?: number
   /** R5 · 7: el tipo del fichero con que llegó (una foto o un PDF), si llegó con fichero. */
   llegada_tipo?: string | null
+  /** R6 · Su asiento traído de Diez, si casa (proveedor, número y total). */
+  diez?: { id: string; serie: number; numero: number; fecha: string } | null
+  /** R6 · El papel de la recepción (receipt-uploads). */
+  papel?: string | null
   recepcion: { fecha: string; local: string | null } | null
   asiento: { id: string; estado: string; solo: boolean } | null
   llego: string
@@ -157,6 +167,10 @@ const frase = (x: string) => (/[.!?…:]$/.test(x.trim()) ? x.trim() : `${x.trim
  */
 export function entendido(f: FilaDocumento, solo = false): { titulo: string; porque: string | null } {
   if (f.tipo === 'llegada') return { titulo: f.archivo ? `«${f.archivo}»` : 'Un documento sin leer', porque: f.porque ?? 'Ha llegado y aún no la he leído.' }
+  if (f.tipo === 'recepcion') {
+    const titulo = f.estado === 'en_diez' ? (f.diez ? `Ya en Diez · asiento ${f.diez.serie}/${f.diez.numero}` : 'De antes del corte · la llevó Diez') : 'Leída por la recepción · aún no es factura'
+    return { titulo, porque: f.porque ?? 'La leyó la recepción.' }
+  }
   if (!f.proveedor.id) return { titulo: 'No reconozco el emisor', porque: f.porque ?? 'No reconozco el emisor: dime quién es.' }
   const e = f.entendido
   const cuenta = e ? `${e.nombre} · ${e.cuenta}${e.sin_confirmar ? ' · sin confirmar' : ''}` : 'Sin cuenta de gasto todavía'
@@ -183,6 +197,8 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
 
 /** El único botón de la fila. */
 export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
+  // R6 · Una recepción no se apunta desde aquí: se ve su papel.
+  if (f.tipo === 'recepcion') return { texto: 'Ver papel', principal: false }
   if (f.tipo === 'factura' && !f.proveedor.id) return { texto: 'Decirlo yo', principal: true }
   if (f.estado === 'para_mirar') return { texto: 'Mirar', principal: false }
   if (f.estado === 'por_aclarar') return { texto: f.tipo === 'llegada' ? 'Ver' : 'Aclarar', principal: false }
@@ -192,6 +208,7 @@ export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
 /** El punto de la fila: verde seguro, ámbar probable o para mirar, gris lo que no se sabe. */
 export function punto(f: FilaDocumento): 'verde' | 'ambar' | 'gris' | 'rojo' {
   if (f.estado === 'apuntada') return 'verde'
+  if (f.estado === 'en_diez') return f.diez ? 'verde' : 'gris'
   if (f.estado === 'repetida') return 'gris'
   if (f.confianza === 'duda' || f.tipo === 'llegada') return 'gris'
   return 'ambar'

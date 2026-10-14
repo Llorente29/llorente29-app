@@ -24,7 +24,8 @@ import { approveInvoice } from '@/modules/supply/services/supplierInvoiceService
 import { getReceiptFileUrl, uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
 import { fotoAPdf } from '@/modules/conta/lib/fotoAPdf'
 import type { DatosDocumentos, PlazoFicha } from '@/modules/conta/documentos/documentos'
-import type { Lectura } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
+import { leerFactura as comprobarLectura, type Lectura, type LecturaModelo } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
+import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 
 type Fila = Record<string, unknown>
 const RECEPCIONES = 'receipt-uploads'
@@ -70,10 +71,31 @@ export interface FacturaRevisar {
   papel: string | null
   recepcion: { fecha: string; local: string | null } | null
   asiento: { id: string; estado: string; numero: number | null } | null
+  /** R6 · Lo que leyó la recepción de su papel, si la factura salió de ella y no trae lectura propia. */
+  leido_en_recepcion?: { modelo: LecturaModelo; cuando: string; recepcion: string } | null
 }
 
-export function leerFactura(invoiceId: string): Promise<FacturaRevisar> {
-  return rpc<FacturaRevisar>('conta_factura_para_revisar', { p_invoice: invoiceId })
+export async function leerFactura(invoiceId: string): Promise<FacturaRevisar> {
+  return conLoLeidoEnRecepcion(await rpc<FacturaRevisar>('conta_factura_para_revisar', { p_invoice: invoiceId }))
+}
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+/**
+ * R6 · Una factura hecha desde su recepción (Compras) no trae lectura propia:
+ * se comprueba lo que leyó la recepción con la MISMA regla que el modo factura
+ * (cuadra, IVA por tipo, NIF, número…), aquí, sin volver a leerla con el modelo.
+ */
+export function conLoLeidoEnRecepcion(f: FacturaRevisar, hoy = hoyEnMadrid()): FacturaRevisar {
+  if (f.lectura || !f.leido_en_recepcion?.modelo) return f
+  const l = comprobarLectura(f.leido_en_recepcion.modelo, { hoy })
+  const de = `Lo leyó la recepción del ${ddmm(f.leido_en_recepcion.recepcion)} con su papel; no la he vuelto a leer.`
+  return { ...f, lectura: { ...l, porque: [de, ...l.porque] }, confianza: f.confianza ?? l.confianza }
+}
+
+/** R6 · El papel de una recepción, para «Ver papel» en N22: una URL firmada. */
+export async function urlDePapelDeRecepcion(ruta: string | null | undefined): Promise<string | null> {
+  return ruta ? getReceiptFileUrl(ruta) : null
 }
 
 /** El fichero tal como llegó, para verlo a la izquierda: una URL firmada. */

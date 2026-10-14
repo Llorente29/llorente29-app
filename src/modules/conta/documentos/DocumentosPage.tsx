@@ -32,7 +32,7 @@ import {
   type DatosDocumentos, type FilaDocumento, type Ver,
 } from '@/modules/conta/documentos/documentos'
 import { useProducto } from '@/modules/conta/documentos/producto'
-import { leerDocumentos, subirFacturas, urlDeLlegada, type Subida } from '@/modules/conta/services/documentosService'
+import { leerDocumentos, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
 
 const ACEPTA = 'application/pdf,image/jpeg,image/png,image/webp'
@@ -86,7 +86,7 @@ export default function DocumentosPage() {
 
   async function abrirLlegada(f: FilaDocumento) {
     try {
-      const url = await urlDeLlegada(f.id)
+      const url = f.tipo === 'recepcion' ? await urlDePapelDeRecepcion(f.papel) : await urlDeLlegada(f.id)
       if (!url) { setFallo('Ese documento no tiene fichero que enseñar.'); return }
       window.open(url, '_blank', 'noopener')
     } catch (e) { setFallo(e instanceof Error ? e.message : String(e)) }

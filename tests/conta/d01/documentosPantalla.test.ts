@@ -238,3 +238,25 @@ describe('R5 · N23', () => {
     expect(tonoDeLaFactura({ estado: 'validado' })).toBe('verde')
   })
 })
+
+// D01 R6 · Las facturas que ya entran por la recepción.
+describe('R6 · la recepción cuyo papel es una factura', () => {
+  const rec = (o: Partial<FilaDocumento>): FilaDocumento => fila({ tipo: 'recepcion', canal: 'cocina', confianza: null, ...o })
+  it('de antes del corte: «en Diez», enlazada con su asiento si casa; solo en «Todas»; nunca un botón de apuntar', () => {
+    const casa = rec({ estado: 'en_diez', diez: { id: 'e', serie: 2, numero: 9001, fecha: '2024-12-12' }, porque: 'Es de antes del corte y ya está en Diez (asiento 2/9001, mismo proveedor, número y total): no se vuelve a apuntar.' })
+    expect(entendido(casa).titulo).toBe('Ya en Diez · asiento 2/9001')
+    expect(punto(casa)).toBe('verde')
+    expect(boton(casa)).toEqual({ texto: 'Ver papel', principal: false })
+    const noCasa = rec({ estado: 'en_diez', diez: null, porque: 'Es de antes del corte…' })
+    expect(entendido(noCasa).titulo).toBe('De antes del corte · la llevó Diez')
+    expect(punto(noCasa)).toBe('gris')
+    expect(filtrar([casa, noCasa], 'todas')).toHaveLength(2)
+    for (const v of ['para-mirar', 'por-aclarar', 'apuntadas'] as const) expect(filtrar([casa, noCasa], v)).toHaveLength(0)
+  })
+  it('desde el corte sin factura: «por aclarar», con su porqué y «de su recepción en Cocina»', () => {
+    const f = rec({ estado: 'por_aclarar', porque: 'La recepción la leyó, pero el papel no trae importes por línea con su IVA: no he podido hacer la factura. Súbela o díctamela.' })
+    expect(filtrar([f], 'por-aclarar')).toHaveLength(1)
+    expect(entendido(f).porque).toMatch(/no trae importes por línea/)
+    expect(comoLlego(f.canal, null)).toBe('de su recepción en Cocina')
+  })
+})

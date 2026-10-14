@@ -1,8 +1,9 @@
 # D01 · Facturas recibidas · Tarea 7: preparada, sin fusionar
 
-Respuesta 4, entera. **Nada lanzado.** En producción solo se ha leído, con
-recuentos y huellas, el 14/10 entre las 05:50 y las 06:10 UTC. Los dos datos
-que hacen falta para lanzar los da Julio; el orden lo doy yo en el §5.
+Respuestas 4, 5 y 6. **Nada lanzado.** En producción solo se ha leído, con
+recuentos y huellas, el 14/10 entre las 05:50 y las 07:20 UTC. Lo que falta para
+lanzar lo da Julio (§0); el orden lo doy yo en el §5. Los retoques de la R5
+están en el §9 y las facturas que entran por la recepción (R6), en el §10.
 
 ## 0 · Lo que falta antes de fusionar (Julio, R4)
 
@@ -18,9 +19,16 @@ que hacen falta para lanzar los da Julio; el orden lo doy yo en el §5.
      esto para la fusión entera, no solo una pieza.
 2. **Julio revisa y aprueba las capturas N22/N23** (§1).
 
-**Queda abierto de la tarea 6:** en una empresa solo de contabilidad, ¿las
-facturas «seguro» se apuntan sin pasar por la aprobación de Compras? Hoy no:
-el interruptor `post_safe_invoices` nace apagado en todas.
+**Decidido en la R5** (Julio):
+- **Empresa solo de contabilidad:** no hay paso de aprobación de Compras;
+  aprobar es pulsar «Está bien · apuntar» en N23. Es lo que hace hoy
+  `apuntarFactura`: si está `en_revision`, la aprueba y sigue.
+- **«Apuntar solo lo seguro»** sigue apagado al nacer en todas las empresas
+  (`post_safe_invoices default false`). Lo enciende la persona, y queda quién y
+  cuándo (`conta_ajustes_compras_guardar`: `updated_by`, `updated_by_name`,
+  `updated_at`, y el porqué «Lo decidió X el dd/mm/aaaa»).
+- **La prueba con el modelo** vale solo para el modo «factura» nuevo (correo y
+  subida) (R6). La recepción ya lee en producción con su propia clave.
 
 ## 1 · Las capturas frente a la maqueta
 
@@ -112,14 +120,16 @@ igual a los textos oficiales».
 
 ## 4 · La tanda para producción
 
-**Qué va:** la base (0200 a 0290), tres edge functions y el front.
+**Qué va:** la base (0200 a 0310), tres edge functions y el front.
 **En este orden:** base, edge functions y front.
 
 ### 4.1 · La base
 
 **Manifiesto:** `supabase/produccion/aplicar.txt`.
-- Lleva las 10 migraciones en orden: 0200, 0210, 0220, 0230, 0240, 0250,
-  0260, 0270, 0280 y 0290.
+- Lleva las 12 migraciones en orden: 0200, 0210, 0220, 0230, 0240, 0250,
+  0260, 0270, 0280, 0290, **0300** (R5) y **0310** (R6). Las dos nuevas
+  reemplazan en caliente, con la misma firma, las lecturas de N22 y N23;
+  declaradas en su cabecera y con su prueba de staging.
 - Cuenta con `cuenta: scripts/conta/produccion/cuentas/recibidas.sql`.
 - La vuelta atrás, en orden inverso, está en
   `supabase/produccion/vuelta-atras.txt`. Cada `.down.sql` **para** si ya hay
@@ -133,10 +143,13 @@ igual a los textos oficiales».
   `contexto-produccion-documentos-20261013.json`. Sus pruebas leen ahora esas
   copias.
 
-**El contexto, medido en producción** a las **2026-10-14T05:53Z**. Es la
+**El contexto, medido en producción** a las 05:53Z para los 10 primeros, y
+otra vez con la 0300 (06:53Z) y con la 0310 (**2026-10-14T07:14Z**). Es la
 consulta del workflow (`analizar.mjs sql-contexto`, con `CAMINO_TABLAS` y
 `CAMINO_FUNCIONES` del workflow), en solo lectura. Va guardado con el md5 de
-los 10 ficheros en `tests/conta/produccion/contexto-produccion-tanda-viva.json`.
+los 12 ficheros en `tests/conta/produccion/contexto-produccion-tanda-viva.json`.
+Las tres medidas dan el mismo contexto: la 0300 y la 0310 no nombran objetos
+nuevos, solo añaden su versión al historial, que sigue vacío.
 - **Existen 5 de las tablas que toca:** `company_account_link`,
   `journal_entry_document`, `supplier`, `supplier_contact` y
   `supplier_invoice`.
@@ -153,7 +166,7 @@ los 10 ficheros en `tests/conta/produccion/contexto-produccion-tanda-viva.json`.
 **El analizador, paso 8 (salida pegada):**
 
 ```
-Análisis de la tanda viva contra el contexto de producción medido 2026-10-14T05:53Z (md5 de los 10 ficheros: los medidos).
+Análisis de la tanda viva contra el contexto de producción medido 2026-10-14T07:14Z (md5 de los 12 ficheros: los medidos).
   20261021T0200_d01_recibidas.sql: sigue
   20261021T0210_d01_amplia.sql: sigue
   20261021T0220_d01_entrada.sql: sigue
@@ -164,6 +177,8 @@ Análisis de la tanda viva contra el contexto de producción medido 2026-10-14T0
   20261021T0270_d01_recibida_envio.sql: sigue
   20261021T0280_d01_documentos.sql: sigue
   20261021T0290_d01_revisar_y_pedir.sql: sigue
+  20261021T0300_d01_documentos_r5.sql: sigue
+  20261021T0310_d01_recepcion.sql: sigue
   autorizo: (ninguno)
 ```
 
@@ -238,14 +253,20 @@ Cambian tres funciones frente a `origin/main`:
   - La llegada quedaría sin leer.
 - **Al revés no hay riesgo.** Con las funciones nuevas y el front viejo, el
   albarán de Cocina y el envío de ventas no cambian.
-- **Por eso propongo desplegarlas antes de fusionar,** a mano, desde la rama
-  (§5, paso 3). La fusión las vuelve a desplegar iguales, byte a byte.
-- **Lo que cuesta:**
-  - entre ese despliegue y la fusión, lo desplegado va por delante de `main`;
-  - `edge-drift-watchdog` lo vería si la ventana pasara de un día.
-  - Son minutos, y se mide a los dos lados (CLAUDE.md, regla 1).
-- **Si prefieres no abrir esa ventana:** fusionar sin más. El riesgo es el de
-  arriba, durante los minutos en que Vercel gane la carrera.
+- **Decidido (R5): se despliegan primero,** desde el mismo commit que se va a
+  fusionar, con el workflow «Desplegar edge functions» **que lanza Julio**
+  (no a mano desde la sesión), con el md5 medido a los dos lados. Después se
+  fusiona el front, que las vuelve a desplegar iguales, byte a byte.
+- **Lo que cuesta:** entre ese despliegue y la fusión, lo desplegado va por
+  delante de `main` (`edge-drift-watchdog` lo vería si pasara de un día). Son
+  minutos, y se mide a los dos lados (CLAUDE.md, regla 1).
+- **Los campos del workflow, para copiarlos** (§5, paso 3):
+
+  | Campo | Valor |
+  |---|---|
+  | Use workflow from | `conta/d01-recibidas` (en el commit que dé en el §5, paso 1) |
+  | `funciones` | `ocr-albaran conta-facturas-entrada conta-diez-enviar` |
+  | `la_prohibida` | (vacío) |
 
 ### 4.3 · El front
 
@@ -268,7 +289,17 @@ Cambian tres funciones frente a `origin/main`:
 
 ## 5 · El orden (lo lanza Julio cuando yo lo diga)
 
-**Todavía no:** faltan los dos datos del §0. Cuando estén:
+**Todavía no:** falta la prueba de la lectura con el modelo (§0) y que Julio
+vea las capturas nuevas (§1).
+
+**El orden de las tandas en producción** (Julio, R5): **primero C06, después
+B01 y después D01.** Cuando entre la C06, traigo `main` a esta rama y cambio el
+puente de «solo contabilidad» por `useCuentaConta().soloContabilidad`, con su
+prueba (§7). Cuando entre B01, traigo `main` otra vez: su `sinPregunta` es el
+mismo que he puesto aquí, byte a byte (§9), y se une solo. Con cada `main`
+nuevo, vuelvo a medir el contexto y paso el paso 8.
+
+Cuando le toque a D01:
 
 1. **Yo:**
    - si algún fichero de la tanda ha cambiado, vuelvo a medir el contexto y
@@ -281,10 +312,11 @@ Cambian tres funciones frente a `origin/main`:
    - Con el ensayo en verde, `modo = real` **del mismo commit**.
    - El workflow comprueba después D1, el recuento, los agentes y la salud
      del pedido, y si falla se deshace solo.
-3. **Julio · las edge functions:** `deploy-edge-functions.yml`, «Use workflow
-   from» `conta/d01-recibidas`.
-   - En `funciones`: `ocr-albaran conta-facturas-entrada conta-diez-enviar`.
-   - `la_prohibida` vacío.
+3. **Julio · las edge functions:** «Desplegar edge functions»
+   (`deploy-edge-functions.yml`), con los campos de la tabla del §4.2:
+   - «Use workflow from»: `conta/d01-recibidas`, el commit del paso 1;
+   - `funciones`: `ocr-albaran conta-facturas-entrada conta-diez-enviar`;
+   - `la_prohibida`: vacío.
    - **Yo, después:** comparo el md5 de cada una desplegada contra su fichero,
      y hago un GET a cada una, que tiene que dar 405 (arranca sin escribir
      nada).
@@ -306,8 +338,8 @@ Cambian tres funciones frente a `origin/main`:
    `RESEND_API_KEY`.
    - **No lo he podido comprobar** desde aquí: los secretos de producción
      no se leen con lo que tengo.
-   - **Julio:** en Supabase › Edge Functions › Secrets, que
-     `RESEND_FACTURAS_WEBHOOK_SECRET` **no** esté puesto.
+   - **Lo comprueba Julio** (R5) en Supabase › Edge Functions › Secrets:
+     que `RESEND_FACTURAS_WEBHOOK_SECRET` **no** esté puesto.
 3. **Resend no tiene el dominio `entrada.folvy.app`.** Nadie le manda
    correos al webhook. Los pasos están en `docs/conta/d01/pasos_resend.md`.
 
@@ -371,3 +403,202 @@ que fusione segundo trae `main` y resuelve esos tres.
 - **`docs/conta/contraste.md`.** Una sección nueva al final; no cambia nada de
   lo que había.
 - **`scripts/conta/produccion/cuentas/recibidas.sql`.** Es nuevo.
+- **R5 · `src/modules/conta/marco/MarcoConta.tsx` y `MenuConta.tsx`.** El
+  `sinPregunta` de B01 (`conta/b01-bancos`), copiado **byte a byte** de su
+  diff (`git apply` de su parche), para que las dos ramas se unan sin
+  conflicto.
+- **R5 · `src/modules/conta/module.tsx`.** `enMarco` con su tercer argumento,
+  igual que en B01, y `true` en las dos rutas de Documentos.
+
+## 9 · R5 · Los retoques de N22 y N23
+
+Cada punto, con lo que se ha hecho y dónde se prueba.
+
+**N23 · Revisar factura**
+1. **El vencimiento.**
+   - **Era la semilla, no la lectura.** `seed_d01_staging.sql` metía la
+     F-2026-1022 sin `due_date`: la semilla no pasa por la lectura. El camino
+     de verdad (`conta_factura_desde_lectura`, 0220) sí guarda el vencimiento
+     leído.
+   - **Arreglada:** 10/11/2026, y la ficha de Alfa a 30 días (con la fecha da
+     el mismo día).
+   - **Lo que sí faltaba en la lectura:** si el modelo copia la fecha como
+     está en el papel («10/11/2026 · transferencia»), se perdía y la pantalla
+     decía «sin vencimiento».
+     - Ahora `fechaLeida` entiende el día primero (10/11 es el 10 de
+       noviembre), y una fecha que no existe no vale.
+     - Un vencimiento que viene y no se entiende se dice
+       («vencimiento_ilegible»), no se calla.
+   - **Pruebas nuevas** en `lecturaFactura.test.ts`: seis formas del mismo
+     vencimiento, fechas imposibles, y el que no se entiende.
+   - **En pantalla** (`vencimientoAEnsenar`): manda el de la factura; si su
+     ficha da otro día, en ámbar («su ficha (60 días) daría el 10/12/2026»).
+     Sin vencimiento en la factura, el de su ficha; sin ninguno, «ni la
+     factura ni su ficha lo dicen».
+2. **«Se apunta en Folvy · a Diez irá cuando Cegid active los documentos»,** en
+   vez de «se enviará a Diez con su PDF». Vendido solo: «Se apunta aquí · …».
+3. **«Cómo se apunta».**
+   - En el ordenador, dos columnas alineadas con su título pequeño: «Gasto e
+     IVA» y «A pagar».
+   - En el móvil, por grupos: cada cuenta en una línea, sin partirse (se
+     corta con «…» si no cabe), y su cifra a la derecha.
+4. **El papel en el móvil.**
+   - `PapelPdf` mide hasta dónde llega la tinta (`tinta.ts`), y el papel se
+     recorta a eso, con un máximo de 280 px.
+   - Se toca (o «Ver el papel entero») para verlo entero, y «Recoger el
+     papel» lo vuelve a recortar. Lo mide la e2e.
+5. **La banda,** en ámbar (punto y borde) mientras no esté apuntada; verde solo
+   con su asiento validado (`tonoDeLaFactura`). La de N22 también: ámbar si
+   queda algo por mirar.
+
+**N22 · Bandeja**
+
+6. **Cada fila con su porqué y qué hacer.** Para eso la base trae más (0300):
+   cuántas facturas suyas había antes y lo aprendido de ellas (0250).
+   - **SB y PL:** «Es la primera factura de este proveedor: elige dónde se
+     apunta y lo recuerdo».
+   - **Con anteriores sin apuntar:** «Hay 2 facturas suyas anteriores, pero
+     ninguna está apuntada: …».
+   - **Con algo aprendido:** sale como lo entendido, «· sin confirmar», con su
+     porqué y «Confírmalo y lo recuerdo», como en N23.
+   - **LD,** con su cuenta de la ficha y escrita a mano: «Va a su cuenta de
+     siempre, la de su ficha. La escribieron a mano y no la he leído:
+     comprueba los importes con el papel».
+   - Ninguna fila sin apuntar se queda sin porqué: lo prueban la unitaria y la
+     e2e, fila a fila.
+7. **Por dónde llegó,** en minúscula y lo que pasó de verdad:
+   - «llegó por correo»;
+   - «foto subida» o «PDF subido», según su fichero;
+   - «escrita a mano», la de Compras sin papel;
+   - «leída en Compras», la leída allí sin canal;
+   - «de su recepción en Cocina».
+
+   No pongo «subida desde el móvil» ni «subida a mano»: de una subida se sabe
+   si fue una foto o un PDF, no desde qué aparato. Y «a mano» es que se
+   escribió en Compras, no que se subiera. Antes, sin canal apuntado, la base
+   decía «subida» aunque no lo fuera (0280); la 0300 lo arregla.
+8. **El periodo.** La banda y la primera cifra son del mes elegido: «Han
+   llegado 7 facturas en octubre», «Llegadas en octubre». La base contaba los
+   últimos 7 días aunque se eligiera un mes; la 0300 cuenta el periodo pedido,
+   como la lista. Lo prueba staging («la creada hace 30 días cuenta»).
+9. **Móvil.** La fecha va junto al número («F-2026-1022 · 11/10 · llegó por
+   correo»). Las cuatro pestañas caben en 390 px. En un teléfono más estrecho
+   van más juntas y, si aun así no caben, se deslizan. La e2e mide que «Todas»
+   queda entera dentro de la pantalla.
+
+**Las dos**
+
+10. **Sin la barra «Pregunta o pide algo»,** ni el botón de la IA en el móvil,
+    mientras solo diga «Muy pronto». Es el mismo `sinPregunta` de B01, copiado
+    tal cual. La e2e comprueba que no está en N22 ni en N23.
+
+**La base de la R5: la 0300** (staging, run **38525387878**, en verde: el
+ensayo, la real con su registro y su prueba como usuario A y B).
+
+## 10 · R6 · Las facturas que ya entran por la recepción
+
+**Lo medido en producción,** solo leyendo, Foodint (`51ad1792…`, regla 9), el
+14/10.
+
+**Las cifras de la R6 incluyen la cuenta plantilla.** La tabla sale de
+`goods_receipt_ai_session` entera:
+- 252 / 50 / 32 son de Foodint **más la plantilla**, `Folvy Interno`, que
+  aporta 30 / 6 / 3;
+- de Foodint solas son **222 / 44 / 29 lecturas**.
+
+**Y son lecturas, no documentos.** Una recepción se puede leer más de una vez.
+Por recepción (`goods_receipt.ai_session_id`), Foodint tiene:
+
+| Papel leído por la recepción | Recepciones | Vivas (no anuladas) | Desde el corte (01/10) | Con su papel | Ya son factura |
+|---|---|---|---|---|---|
+| factura | 19 | 18 | 2 | 19 | 2 |
+| albarán-factura | 26 | 24 | 3 | 26 | 3 |
+| albarán | 151 | 143 | 18 | 151 | 0 |
+
+**Así que las «82» son 43 recepciones vivas,** o 45 contando las 2 anuladas.
+
+**1 · ¿Salen hoy en la bandeja?**
+- **Hoy, en producción, ninguna:** N22 no está publicada.
+- **Cuando lo esté, desde el corte salen las 5.** Ya son factura recibida:
+  Compras las hizo con el mismo papel al confirmar la recepción (0140). Son
+  las 5 `en_revision` de octubre, con su papel y su recepción. Saldrían «para
+  mirar» y, con la 0300, «de su recepción en Cocina» (con la 0280 habrían
+  dicho «subida»).
+- **Las 38 de antes del corte no salían en ninguna parte:** Compras no las
+  hace factura a propósito, porque las llevó Diez.
+
+**2 · Que salgan (0310), sin volver a leer.**
+- **N22** trae, además de las facturas, las recepciones cuyo papel es una
+  factura y que no son factura:
+  - **de antes del corte:** «en Diez». Enlazadas con su asiento traído cuando
+    casan por proveedor, número y total: «Ya en Diez · asiento 2/…». Solo en
+    «Todas», con «Ver papel» y sin botón de apuntar;
+  - **desde el corte sin factura**, porque la recepción no pudo hacerla (por
+    ejemplo, sin importes por línea): «por aclarar», con el porqué de su
+    camino (regla 7). Hoy en producción son 0: las 5 lo son.
+- **N23:** si la factura salió de su recepción y no trae lectura propia, se
+  comprueba lo que leyó la recepción con la **misma regla** que el modo
+  factura: cuadra, IVA por tipo, NIF, número…
+  - Es `conLoLeidoEnRecepcion`, en el navegador, sin el modelo ni coste
+    nuevo.
+  - Lo dice primero: «Lo leyó la recepción del 11/10 con su papel; no la he
+    vuelto a leer».
+  - Comprobado contra la forma real de esas lecturas: las claves de
+    `parsed_result` de las 73 de Foodint (`document`, `lines`, `confidence`).
+- **Repetidas:** una factura hecha desde la recepción es una `supplier_invoice`
+  como las demás. Si luego llega la misma por correo o subida, la regla la
+  marca «repetida» y el disparador no la deja entrar (prueba de staging de la
+  0310, punto 5).
+
+**3 · El albarán suelto (151)** no sale: no es factura, y sigue esperando la
+suya.
+
+**4 · Hacia atrás.**
+- **Desde el corte** vale solo, porque Compras ya las hace factura.
+- **Antes del corte, solo se enlazan.**
+  - **Nunca se apuntan otra vez:** la fila no tiene botón de apuntar, y la
+    base no deja asentar en fecha anterior a `imported_until` (30/09/2026,
+    C04 0120).
+  - **No se escribe nada en producción:** el enlace con Diez se calcula al
+    leer N22, sin una tabla nueva ni datos que rellenar.
+
+**5 · Recuentos** (las mismas condiciones que la 0310, medidas en producción):
+
+| | Recepciones vivas | En Diez: proveedor + número + total | En Diez: el número con otro total | En Diez: solo el mismo total, ±31 días | Sin rastro en Diez | Sin subcuenta (no se puede casar) |
+|---|---|---|---|---|---|---|
+| Antes del corte | 38 | **21** | 1 | 4 | 12 | 3 |
+| Desde el corte | 5 | 0 | 0 | 1 | 4 | 0 |
+
+- **Cómo se casa con Diez.**
+  - **El número va en el concepto.** El histórico de Diez no trae el número
+    de factura en ningún campo propio: 0 de 5.345 líneas de serie 2 con
+    referencia o justificante. Va en el concepto: 5.210 de 5.345 conceptos
+    llevan cifras.
+  - **Se casa por concepto:** su número, sin signos, dentro del concepto, con
+    el mismo proveedor (su subcuenta) y el mismo total.
+  - **«Solo el mismo total» no se cuenta como casada.** Desde el corte, Diez
+    no tiene nada (acaba el 30/09). Su 1 de «mismo total» es otra factura con
+    el mismo importe: prueba de que el total solo no basta.
+- **Con la regla de la 0310** (recepción confirmada, de esta empresa):
+  - antes del corte salen **37 filas**, 20 con su asiento de Diez y 17 sin
+    casar;
+  - desde el corte, 0, porque las 5 ya son factura.
+
+  De 38 a 37, y de 21 a 20: una de las vivas está en `borrador`, sin confirmar,
+  y no sale.
+- **Una de las 37 tiene fecha de recepción de 2025-09,** con su lectura de
+  2026. Es un dato de la recepción para mirar; aquí sale en su mes, como las
+  demás.
+
+**La prueba con el modelo sigue siendo necesaria** para el modo «factura»
+nuevo (correo y subida). La recepción ya lee en producción con su propia clave.
+
+**Lo que no hace la 0310, y lo digo:**
+- **Una factura de antes del corte que llegue después por correo o subida.**
+  Se crea como factura, `para mirar`, y no se puede apuntar, porque su fecha
+  es anterior al corte. No se reconoce todavía como «ya en Diez»: eso sería
+  llevar la regla de repetidas al histórico de Diez.
+- **Las empresas con varias sociedades.** Una recepción de antes de Compras
+  (sin camino) se atribuye a la empresa del NIF a cuyo nombre va el papel, o
+  a la única de la cuenta. Foodint tiene una. En una cuenta con varias y sin
+  NIF en el papel, esa recepción no sale.
