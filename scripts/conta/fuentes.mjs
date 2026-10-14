@@ -290,7 +290,23 @@ async function descargarUna(f) {
   return { url: f.url, http: r.http, titulo: f.nombre, actualizadoEnFuente: null, texto: r.cuerpo, ext: f.formato ?? 'txt', error: r.error }
 }
 
+/**
+ * B01 (respuesta 3, punto 2): las claves de fuentes.json que son nuevas o han
+ * cambiado frente a otra versión (la del commit anterior al push), separadas
+ * por comas. El workflow baja solo esas.
+ */
+export function tocadas(antes, ahora) {
+  const previas = new Map((antes.fuentes ?? []).map((f) => [f.clave, JSON.stringify(f)]))
+  return (ahora.fuentes ?? []).filter((f) => previas.get(f.clave) !== JSON.stringify(f)).map((f) => f.clave)
+}
+
 async function main() {
+  if (modo === 'tocadas') {
+    const antes = JSON.parse(await readFile(process.argv[3], 'utf8'))
+    const ahora = JSON.parse(await readFile(join(DIR, 'fuentes.json'), 'utf8'))
+    process.stdout.write(tocadas(antes, ahora).join(','))
+    return
+  }
   const todas = JSON.parse(await readFile(join(DIR, 'fuentes.json'), 'utf8')).fuentes
   // FUENTES_SOLO=clave1,clave2 descarga solo esas (el agente «Plan contable»
   // vuelve a bajar el PGC cada noche para ver si el BOE ha corregido una

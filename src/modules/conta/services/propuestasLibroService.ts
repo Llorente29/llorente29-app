@@ -13,7 +13,7 @@
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
   ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
-  type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion,
+  type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion, type SerieTesoreria,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
 import { tandaDeDias } from '@/modules/conta/lib/proponer'
@@ -52,12 +52,14 @@ export interface ContextoLibro {
   apuntarSoloLoSeguro?: boolean
   /** D01: las facturas cuya lectura llegó «seguro» (supplier_invoice.reading_confidence). */
   lecturasSeguras?: Set<string>
+  /** B01 (P3): la serie de tesorería de la empresa (bank_settings; 3 si no hay ajuste). */
+  serieTesoreria: SerieTesoreria
   /** C04b R5: la regla de ventas por plataforma de la empresa (conta_ventas_canal). Null = la regla de antes, un asiento por día y local. */
   ventasPorPlataforma: { porMarca: Set<string>; ventasPorMarca: Record<string, string>; devolucionesPorMarca: Record<string, string> } | null
 }
 
 export async function cargarContexto(accountId: string, companyId: string): Promise<ContextoLibro> {
-  const [cuentas, enlaces, tipos, perfil, ejercicios, cerrados, canales, roles, marcas, locales, bancos, correcciones, reglaCanal, reglaMarca] = await Promise.all([
+  const [cuentas, enlaces, tipos, perfil, ejercicios, cerrados, canales, roles, marcas, locales, bancos, correcciones, reglaCanal, reglaMarca, ajustesBanco] = await Promise.all([
     leer(tabla('company_account').select('id, code, template_code, kind, status').eq('account_id', accountId).eq('company_id', companyId), 'las cuentas'),
     leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
     leer(tabla('tax_rate').select('id, code, rate, tax_system, treatment, valid_to').or(`is_system.eq.true,account_id.eq.${accountId}`), 'los tipos de IVA'),
@@ -73,6 +75,7 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
     // C04b R5 (20261020T0100): la regla de ventas por plataforma.
     leer(tabla('conta_ventas_canal').select('channel_id, por_marca').eq('account_id', accountId).eq('company_id', companyId), 'la regla de ventas por canal'),
     leer(tabla('conta_ventas_marca').select('brand_id, papel, company_account_id').eq('account_id', accountId).eq('company_id', companyId), 'las subcuentas de cada marca'),
+    leer(tabla('bank_settings').select('treasury_series').eq('account_id', accountId).eq('company_id', companyId), 'los ajustes del banco'),
   ])
   // D01: el ajuste de compras de la empresa (0200). Sin fila —o sin la tabla, si
   // el front llegara antes que la base—, no apunta nada solo: lo prudente. Es el
@@ -119,6 +122,7 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
     correcciones: correcciones.map((c) => ({ clave: String(c.origin_key), propuesta: String(c.proposed_code), elegida: String(c.chosen_code), quien: s(c.created_by_name), cuando: String(c.created_at) })),
     validarSegurosDeVentas: perfil[0]?.journal_autovalidate_sales_day === true,
     apuntarSoloLoSeguro: compras[0]?.post_safe_invoices === true,
+    serieTesoreria: Number(ajustesBanco[0]?.treasury_series) === 4 ? 4 : 3,
     ventasPorPlataforma: reglaCanal.length === 0 ? null : {
       porMarca: new Set(reglaCanal.filter((r) => r.por_marca === true).map((r) => String(r.channel_id))),
       ventasPorMarca: Object.fromEntries(reglaMarca.filter((m) => m.papel === 'ventas' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
@@ -362,6 +366,11 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
   const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount')
     .eq('account_id', accountId).is('journal_entry_id', null).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones')
+  // B01 (respuesta 1, P2): el cobro que ya ha casado Bancos lo asienta Bancos;
+  // aquí solo la comisión y los cargos, para que el cobro no salga dos veces.
+  const cobradasPorBanco = new Set((await leer(tabla('bank_match_item').select('channel_settlement_id, bank_match!inner(status)')
+    .eq('account_id', accountId).not('channel_settlement_id', 'is', null).eq('bank_match.status', 'vivo'), 'los cobros casados en Bancos'))
+    .map((x) => String(x.channel_settlement_id)))
   for (const l of liqs) {
     const fecha = s(l.collected_on) ?? String(l.settlement_date)
     if (!abierto(fecha)) continue
@@ -388,13 +397,15 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       flujo: l.flow_type === 'licensed' ? 'licensed' : 'own', ventas: n(l.gross_sales), comision: Math.abs(n(l.commission)), cargos,
       devoluciones: glovo ? 0 : Math.abs(n(l.incidents_refund)),
       neto: l.net_payout === null ? null : glovo ? n(l.net_payout) - n(l.accumulated_debt) : n(l.net_payout),
-      cobrado: l.collected_on ? { fecha: String(l.collected_on), importe: n(l.collected_amount) } : null,
+      cobrado: l.collected_on && !cobradasPorBanco.has(String(l.id)) ? { fecha: String(l.collected_on), importe: n(l.collected_amount) } : null,
+      cobroEnBancos: cobradasPorBanco.has(String(l.id)),
       // Lo que se sabe sin recorrer pedido a pedido: cuántos del periodo FALTAN en un resumen del día.
       pedidos: { total: pendientes, asentados: 0 }, localId: s(l.location_id),
     }, {
       cliente430: c430, proveedor410: c410, comision: ctx.hoja('623') ?? '62300000', otrosCargos: ctx.hoja('629') ?? '62900000',
       iva21: { cuenta: c472, tipoId: t21.id }, banco: ctx.bancoDeLocal(s(l.location_id)),
       pendienteSocio: l.brand_id && socioDeMarca.has(String(l.brand_id)) ? ctx.enlace('customer', socioDeMarca.get(String(l.brand_id))!, 'liquidacion') : null,
+      serieTesoreria: ctx.serieTesoreria,
     })
     if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
     await proponer(companyId, aplicarAprendizaje(res.propuesta, `channel_settlement:${s(l.channel_id)}`, ctx.correcciones), null, r, ctx, quien)

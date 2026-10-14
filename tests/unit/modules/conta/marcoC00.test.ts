@@ -24,14 +24,15 @@ describe('navegación del módulo de contabilidad', () => {
     const visibles = entradasVisibles(MENU_CONTA.flat()).map((e) => e.id)
     // C03: «Clientes y proveedores» ya tiene su pantalla; C04: «Libros» (el libro diario); compras: «Compras»;
     // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no);
-    // D01: «Documentos» (N22, las facturas recibidas).
-    expect(visibles).toEqual(['compras', 'ventas', 'documentos', 'terceros', 'libros', 'ajustes'])
+    // D01: «Documentos» (N22, las facturas recibidas); B01: «Bancos».
+    expect(visibles).toEqual(['compras', 'ventas', 'documentos', 'bancos', 'terceros', 'libros', 'ajustes'])
     expect(entradasVisibles(PESTANAS_AJUSTES).map((e) => e.id)).toEqual(['empresa', 'tablas'])
-    expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['ajustes'])
+    expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['bancos', 'ajustes'])
   })
   it('C06 · en el producto vendido solo: su Inicio y nada que diga «aún no»', () => {
     // D01: Documentos ya tiene pantalla, y vendida sola es de las que funcionan.
-    expect(entradasVisibles(MENU_CONTA.flat(), true).map((e) => e.id)).toEqual(['inicio', 'compras', 'documentos', 'terceros', 'libros', 'ajustes'])
+    // B01: Bancos entra en el producto solo al tener ruta (encargo del C06, tarea 5: «Bancos, cuando el frente B lo tenga»).
+    expect(entradasVisibles(MENU_CONTA.flat(), true).map((e) => e.id)).toEqual(['inicio', 'compras', 'documentos', 'bancos', 'terceros', 'libros', 'ajustes'])
     expect(entradasVisibles(BARRA_CONTA.izquierda, true).map((e) => e.id)).toEqual(['inicio'])
     expect(entradasVisibles(BARRA_CONTA.izquierda).map((e) => e.id)).toEqual([])
     expect(indiceAjustes(true).flatMap((g) => g.entradas).some((e) => e.hueco)).toBe(false)

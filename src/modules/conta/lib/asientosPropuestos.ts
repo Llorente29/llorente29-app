@@ -316,6 +316,8 @@ export interface EntradaLiquidacion {
   devoluciones: number
   neto: number | null
   cobrado: { fecha: string; importe: number } | null
+  /** B01 (P2): el cobro ya lo ha casado Bancos con su asiento; aquí no va. */
+  cobroEnBancos?: boolean
   /** De los pedidos del periodo, cuántos están ya en un resumen del día validado o propuesto. */
   pedidos: { total: number; asentados: number }
   localId: string | null
@@ -329,7 +331,12 @@ export interface CuentasLiquidacion {
   banco: string | null
   /** «Liquidación pendiente con <socio>» (bajo la 410, papel «liquidacion»): lo cobrado por cuenta de él. */
   pendienteSocio: string | null
+  /** B01 (P3): la serie de tesorería de la empresa (Ajustes del banco); 3 si no se dice, como el C04. */
+  serieTesoreria?: SerieTesoreria
 }
+
+/** La serie de los asientos de cobro y pago: 3 (C04) o la que la empresa use para tesorería (Foodint, la 4, como Diez). */
+export type SerieTesoreria = 3 | 4
 
 export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidacion): { propuesta: Propuesta | null; sinPropuesta: string | null } {
   const avisos: string[] = []
@@ -347,7 +354,7 @@ export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidaci
     return {
       sinPropuesta: null,
       propuesta: {
-        serie: 3, fecha: l.cobrado.fecha, concepto: `${cabeza} (marca cedida)`, origen: { tipo: 'channel_settlement', id: l.id },
+        serie: c.serieTesoreria ?? 3, fecha: l.cobrado.fecha, concepto: `${cabeza} (marca cedida)`, origen: { tipo: 'channel_settlement', id: l.id },
         lineas: [
           { cuenta: c.banco, debe: l.cobrado.importe, haber: 0, localId: loc, comun },
           { cuenta: c.pendienteSocio, debe: 0, haber: l.cobrado.importe, localId: loc, comun, concepto: 'Ventas del socio cobradas por ti' },
@@ -380,7 +387,9 @@ export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidaci
     lineas.push({ cuenta: c.banco, debe: l.cobrado.importe, haber: 0, localId: loc, comun, concepto: 'Cobro al banco' })
     lineas.push({ cuenta: c.cliente430, debe: 0, haber: l.cobrado.importe, localId: loc, comun, concepto: 'Cobro de la liquidación' })
   } else {
-    razones.push({ decision: 'Cobro aún no', porque: 'cuando llegue al banco se casa con esta liquidación (Bancos)' })
+    razones.push(l.cobroEnBancos
+      ? { decision: 'Cobro en Bancos', porque: 'el movimiento del banco ya está casado con esta liquidación y lleva su propio asiento' }
+      : { decision: 'Cobro aún no', porque: 'cuando llegue al banco se casa con esta liquidación (Bancos)' })
   }
 
   // Regla 7: las ventas ya van por los resúmenes del día; aquí nunca.
@@ -406,7 +415,7 @@ export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidaci
   return {
     sinPropuesta: null,
     propuesta: {
-      serie: 3, fecha: l.cobrado?.fecha ?? l.fecha, concepto: cabeza, origen: { tipo: 'channel_settlement', id: l.id }, lineas,
+      serie: c.serieTesoreria ?? 3, fecha: l.cobrado?.fecha ?? l.fecha, concepto: cabeza, origen: { tipo: 'channel_settlement', id: l.id }, lineas,
       confianza: peor('seguro', ...confs),
       porque: `Comisión y cargos con su IVA, compensados con lo que te debe${l.cobrado ? ', y el cobro al banco' : ''}; las ventas ya están en sus días.`,
       razones, avisos,
@@ -595,12 +604,12 @@ export function finDeMesCompras(e: EntradaFinDeMes, c: { gasto: string | null; p
 }
 
 export function pagoFactura(p: { facturaId: string; fecha: string; proveedor: string; numero: string | null; importe: number; localId: string | null; terceroId: string | null },
-  c: { proveedor: string; banco: string | null }): { propuesta: Propuesta | null; sinPropuesta: string | null } {
+  c: { proveedor: string; banco: string | null; serieTesoreria?: SerieTesoreria }): { propuesta: Propuesta | null; sinPropuesta: string | null } {
   if (!c.banco) return { propuesta: null, sinPropuesta: 'Falta la cuenta del banco del local: ponla en Tablas › Bancos.' }
   return {
     sinPropuesta: null,
     propuesta: {
-      serie: 3, fecha: p.fecha, concepto: `Pago a ${p.proveedor}${p.numero ? ` · ${p.numero}` : ''}`, origen: { tipo: 'supplier_payment', id: p.facturaId },
+      serie: c.serieTesoreria ?? 3, fecha: p.fecha, concepto: `Pago a ${p.proveedor}${p.numero ? ` · ${p.numero}` : ''}`, origen: { tipo: 'supplier_payment', id: p.facturaId },
       lineas: [
         { cuenta: c.proveedor, debe: p.importe, haber: 0, localId: p.localId, comun: !p.localId, terceroId: p.terceroId, documento: p.numero },
         { cuenta: c.banco, debe: 0, haber: p.importe, localId: p.localId, comun: !p.localId, documento: p.numero },

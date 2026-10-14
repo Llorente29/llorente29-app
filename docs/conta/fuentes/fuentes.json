@@ -386,6 +386,20 @@
       "tipo": "boe",
       "id": "BOE-A-2007-18911",
       "debeContener": "homologación"
+    },
+    {
+      "clave": "aeb-cuaderno-43-cajamar",
+      "nombre": "AEB · Cuaderno 43, Información normalizada de cuenta corriente (publicado por Cajamar)",
+      "tipo": "pdf",
+      "url": "https://www.cajamar.es/storage/documents/1733/cuaderno-43.pdf",
+      "debeContener": "normalizada"
+    },
+    {
+      "clave": "aeb-cuaderno-43-caixabank",
+      "nombre": "AEB · Cuaderno 43, Información normalizada de cuenta corriente, junio 2012 (publicado por CaixaBank)",
+      "tipo": "pdf",
+      "url": "https://www.caixabank.es/deployedfiles/empresas/Estaticos/pdf/Transferenciasyficheros/q43Junio2012.pdf",
+      "debeContener": "normalizada"
     }
   ]
 }

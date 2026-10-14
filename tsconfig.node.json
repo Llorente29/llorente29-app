@@ -6,6 +6,8 @@
     "module": "esnext",
     "types": ["node"],
     "skipLibCheck": true,
+    /* B01: las e2e usan el núcleo puro de src (como lo resuelve Playwright con tsconfig.json) */
+    "paths": { "@/*": ["./src/*"] },
 
     /* Bundler mode */
     "moduleResolution": "bundler",

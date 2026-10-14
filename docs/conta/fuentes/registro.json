@@ -822,6 +822,40 @@
       "error": null,
       "idBoe": "BOE-A-2007-18911",
       "nota": null
+    },
+    "aeb-cuaderno-43-cajamar": {
+      "nombre": "AEB · Cuaderno 43, Información normalizada de cuenta corriente (publicado por Cajamar)",
+      "url": "https://www.cajamar.es/storage/documents/1733/cuaderno-43.pdf",
+      "urlDatos": null,
+      "http": 200,
+      "titulo": "AEB · Cuaderno 43, Información normalizada de cuenta corriente (publicado por Cajamar)",
+      "actualizadoEnFuente": "Wed, 06 Apr 2022 11:13:32 GMT",
+      "fecha": "2026-10-13T15:31:08.466Z",
+      "comprobado": "2026-10-13T15:45:54.305Z",
+      "sha256": "5449c3261c2239c1a9f6f85310e3c81dc4dfd0ae4182b56444bfe57bdebea3e3",
+      "bytes": 60372,
+      "contieneLoEsperado": true,
+      "fichero": "textos/aeb-cuaderno-43-cajamar.txt",
+      "error": null,
+      "idBoe": null,
+      "nota": null
+    },
+    "aeb-cuaderno-43-caixabank": {
+      "nombre": "AEB · Cuaderno 43, Información normalizada de cuenta corriente, junio 2012 (publicado por CaixaBank)",
+      "url": "https://www.caixabank.es/deployedfiles/empresas/Estaticos/pdf/Transferenciasyficheros/q43Junio2012.pdf",
+      "urlDatos": null,
+      "http": 200,
+      "titulo": "AEB · Cuaderno 43, Información normalizada de cuenta corriente, junio 2012 (publicado por CaixaBank)",
+      "actualizadoEnFuente": "Thu, 14 Jul 2022 02:59:29 GMT",
+      "fecha": "2026-10-13T15:31:08.466Z",
+      "comprobado": "2026-10-13T15:45:54.305Z",
+      "sha256": "eeaec332669fb57ebe6d7f878806567fdc2977fa572f8f34df206234dd3fb057",
+      "bytes": 60406,
+      "contieneLoEsperado": true,
+      "fichero": "textos/aeb-cuaderno-43-caixabank.txt",
+      "error": null,
+      "idBoe": null,
+      "nota": null
     }
   }
 }

@@ -216,6 +216,10 @@ export const CONTA = {
     documentos: 'documentos',
     /** D01 · Revisar una factura recibida (N23). */
     revisarFactura: 'documentos/recibidas/:invoiceId',
+    /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
+    bancos: 'bancos',
+    /** Una pestaña de Bancos, o una de sus acciones (subir, hecho-por-folvy). */
+    bancosPestana: 'bancos/:pestana',
   },
 } as const
 
@@ -245,7 +249,7 @@ export const MENU_CONTA: EntradaMenuConta[][] = [
     // C06: su pantalla dice «Aún no.»: en el producto vendido solo no se pinta.
     { id: 'ventas', etiqueta: 'Ventas', icono: 'negocio', ruta: CONTA.rutas.ventas, noEnSolo: true },
     { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: CONTA.rutas.documentos },
-    { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
+    { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: CONTA.rutas.bancos },
     // C03: la lista única de terceros. Un tercero que solo es proveedor abre su
     // ficha de siempre (en Cocina); con papel de cliente, plataforma o socio,
     // la ficha N9/N10 de aquí.
@@ -270,7 +274,7 @@ export const BARRA_CONTA: { izquierda: EntradaMenuConta[]; derecha: EntradaMenuC
     { id: 'por-hacer', etiqueta: 'Por hacer', icono: 'porHacer', ruta: null },
   ],
   derecha: [
-    { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: null },
+    { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: CONTA.rutas.bancos },
     { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: CONTA.rutas.empresa },
   ],
 }
@@ -391,6 +395,8 @@ export const rutaDocumentos = (ver?: string, mes?: string): string => {
 }
 /** D01 · N23. */
 export const rutaRevisarFactura = (invoiceId: string): string => rutaConta(CONTA.rutas.revisarFactura, { invoiceId })
+/** Bancos (B01): sin pestaña, Movimientos. */
+export const rutaBancos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.bancosPestana, { pestana }) : rutaConta(CONTA.rutas.bancos))
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
 /** Subir los documentos de la liquidación de un proveedor, en un local y un mes ('YYYY-MM-01'). */
 export const rutaLiquidacionNueva = (proveedor: string, local: string | null, mes: string): string => {
