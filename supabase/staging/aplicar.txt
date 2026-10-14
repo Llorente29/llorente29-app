@@ -1,4 +1,6 @@
-# C06b · Respuesta 5, punto 4 — «Comercio de Prueba Diez, S.L.» con el plan
-# completo, por la misma puerta que el alta (company_chart_activate). Solo su
-# empresa (de la semilla C06, mía). Se puede volver a aplicar.
-supabase/seeds/conta/seed_c06b_diez_plan_staging.sql
+# C06b · Respuesta 6, tarea 1 — el balance según la norma: los terceros (40x,
+# 41, 43x, 44) van por el signo de su saldo (no compensación).
+#   0600: 42 filas de serie pasan a ir por signo y 42 nuevas para el otro.
+#   Su prueba (con la vuelta atrás dentro), en una transacción con ROLLBACK.
+supabase/migrations/20261111T0600_c06b_terceros_por_saldo.sql
+supabase/staging/sql/20261111_c06b_terceros_por_saldo_prueba.sql

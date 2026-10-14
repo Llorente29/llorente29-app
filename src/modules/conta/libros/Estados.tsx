@@ -17,7 +17,7 @@ import { rutaLibros, rutaMayor } from '@/config/navegacion'
 import { Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import { notaClientes } from '@/modules/conta/lib/notaClientes'
+import { NOTA_CLIENTES_PASIVO, esLineaClientes, notaClientes } from '@/modules/conta/lib/notaClientes'
 import {
   calcularEstado, columnaAnterior, cuadreBalance, mapeoEfectivo, modeloPropuesto, resultadoTresCifras, vistasDeResultado,
   type LineaCalculada, type Modelo, type ResultadoEstado, type SaldoCuenta,
@@ -188,6 +188,8 @@ function TablaEstado({ lineas, anterior, col, fecha, anioAnterior, abiertas, alt
               <span className={`cxl-cifra-celda${l.importe < 0 && !l.isTotal ? ' cxl-anomalo' : ''}`} role="cell">{l.importe === 0 && !hayCuentas && !l.isTotal ? '—' : eurosExactos(l.importe)}</span>
               {col.sale && <span className="cxl-cifra-celda cxl-anterior" role="cell">{a ? (a.importe === 0 && !a.cuentas.length && !a.isTotal ? '—' : eurosExactos(a.importe)) : '—'}</span>}
             </div>
+            {/* C06b: los clientes van por el signo de su saldo (no compensación): dicho debajo, en llano. */}
+            {esLineaClientes(l) && <div className="cxl-nota-linea" role="row"><span role="cell">{NOTA_CLIENTES_PASIVO}</span></div>}
             {abierta && l.cuentas.map((c) => (
               <div key={c.code} className={`cxl-cuenta${sinAnt}`} role="row">
                 <span role="cell">
@@ -234,7 +236,7 @@ function BarraIa({ calc, estado, modelo, plantilla }: {
 }) {
   const notas: { titulo: string; texto: string; enlace?: { a: string; texto: string } }[] = []
   const cuentas = calc.actual.lineas.flatMap((l) => l.cuentas)
-  // C06b: la cifra es la de la línea oficial, no la suma suelta de las 430 en negativo.
+  // C06b: la cifra de la línea oficial de clientes, y los que van al pasivo (no compensación).
   const clientes = notaClientes(calc.actual, eurosExactos)
   if (clientes) {
     notas.push({ titulo: clientes.titulo, texto: clientes.texto, enlace: { a: rutaMayor(clientes.cuenta), texto: 'Ver' } })

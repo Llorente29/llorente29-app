@@ -114,6 +114,41 @@ const LINEA_RESULTADO = { normal: 'PNP.A.A1.VII', abreviado: 'PNP.A.A1.VII', pym
  * @param {string[]} hojas códigos hoja del cuadro de su plan (serie.json, is_leaf)
  * @param {{vigentes: Record<string,string>, citaModelo: (estado:string)=>string}} meta
  */
+/** La cita de la regla de no compensación en los terceros (C06b). */
+export const NO_COMPENSACION = 'RD 1514/2007 (y 1515/2007), primera parte, Marco Conceptual, 3.º Principios contables, 5. No compensación; tercera parte, I. Normas de elaboración, 6.ª Balance, 2'
+const NOTA_CLIENTE = 'Cliente con saldo acreedor: es una deuda con él. Va al pasivo, con los anticipos de clientes; no se compensa con los demás clientes (no compensación).'
+const NOTA_PROVEEDOR = 'Proveedor o acreedor con saldo deudor: es un crédito. Va al activo, con los deudores varios; no se compensa con los demás proveedores (no compensación).'
+const NOTA_DEUDOR = 'Deudor con saldo acreedor: es una deuda con él. Va al pasivo, con los acreedores; no se compensa con los demás deudores (no compensación).'
+/**
+ * Terceros que van por el signo de su saldo (C06b). `lado`: el que nombra el
+ * BOE para ese prefijo; `deudor`/`acreedor`: la línea de cada signo.
+ */
+export const TERCEROS_POR_SALDO = {
+  abreviado: [
+    { prefijos: ['430', '431', '432', '433', '434', '435', '436'], lado: 'deudor', deudor: 'ACT.B.III.1', acreedor: 'PNP.C.V.2', nota: NOTA_CLIENTE },
+    { prefijos: ['44'], lado: 'deudor', deudor: 'ACT.B.III.3', acreedor: 'PNP.C.V.2', nota: NOTA_DEUDOR },
+    { prefijos: ['400', '401', '403', '404', '405'], lado: 'acreedor', deudor: 'ACT.B.III.3', acreedor: 'PNP.C.V.1', nota: NOTA_PROVEEDOR },
+    { prefijos: ['41'], lado: 'acreedor', deudor: 'ACT.B.III.3', acreedor: 'PNP.C.V.2', nota: NOTA_PROVEEDOR },
+  ],
+  pymes: [
+    { prefijos: ['430', '431', '432', '433', '434', '435', '436'], lado: 'deudor', deudor: 'ACT.B.II.1', acreedor: 'PNP.C.IV.2', nota: NOTA_CLIENTE },
+    { prefijos: ['44'], lado: 'deudor', deudor: 'ACT.B.II.3', acreedor: 'PNP.C.IV.2', nota: NOTA_DEUDOR },
+    { prefijos: ['400', '401', '403', '404', '405'], lado: 'acreedor', deudor: 'ACT.B.II.3', acreedor: 'PNP.C.IV.1', nota: NOTA_PROVEEDOR },
+    { prefijos: ['41'], lado: 'acreedor', deudor: 'ACT.B.II.3', acreedor: 'PNP.C.IV.2', nota: NOTA_PROVEEDOR },
+  ],
+  // El normal separa más: el cliente acreedor va con los «acreedores varios»
+  // (V.3; los anticipos, V.7, son entregas a cuenta, no deudas por cobros de
+  // más) y el proveedor deudor con los «deudores varios» (III.3).
+  normal: [
+    { prefijos: ['430', '431', '432', '435', '436'], lado: 'deudor', deudor: 'ACT.B.III.1', acreedor: 'PNP.C.V.3', nota: NOTA_CLIENTE },
+    { prefijos: ['433', '434'], lado: 'deudor', deudor: 'ACT.B.III.2', acreedor: 'PNP.C.V.3', nota: NOTA_CLIENTE },
+    { prefijos: ['44'], lado: 'deudor', deudor: 'ACT.B.III.3', acreedor: 'PNP.C.V.3', nota: NOTA_DEUDOR },
+    { prefijos: ['400', '401', '405'], lado: 'acreedor', deudor: 'ACT.B.III.3', acreedor: 'PNP.C.V.1', nota: NOTA_PROVEEDOR },
+    { prefijos: ['403', '404'], lado: 'acreedor', deudor: 'ACT.B.III.3', acreedor: 'PNP.C.V.2', nota: NOTA_PROVEEDOR },
+    { prefijos: ['41'], lado: 'acreedor', deudor: 'ACT.B.III.3', acreedor: 'PNP.C.V.3', nota: NOTA_PROVEEDOR },
+  ],
+}
+
 export function construirModelo(modelo, estados, hojas, meta) {
   const lineas = []
   const mapeo = []
@@ -157,6 +192,30 @@ export function construirModelo(modelo, estados, hojas, meta) {
   for (const [, ms] of porCuenta) {
     const lados = new Set(ms.map((m) => lado(m.line_code)))
     if (ms.length > 1 && lados.has('activo') && lados.has('pn_pasivo')) for (const m of ms) m.by_balance = lado(m.line_code) === 'activo' ? 'deudor' : 'acreedor'
+  }
+
+  // C06b (respuesta 6 de Julio, tarea 1): NO COMPENSACIÓN en los terceros.
+  // Un cliente con saldo acreedor es una deuda con él, y un proveedor con saldo
+  // deudor es un crédito: no se compensan con los demás de su línea (PGC,
+  // primera parte, principio 5 «No compensación»; tercera parte, norma 6.ª.2).
+  // La fila del modelo se queda para el lado que nombra el BOE y la del otro
+  // signo va a la línea del modelo donde el BOE pone a su homóloga: el cliente
+  // acreedor, con los anticipos de clientes (438); el proveedor deudor, con los
+  // deudores varios (44). Solo cuentas de terceros: no las correctoras (406,
+  // 437, 490, 493) ni los anticipos (407, 438), que tienen su línea propia.
+  const porSaldo = { cambiadas: [], anadidas: [] }
+  for (const t of TERCEROS_POR_SALDO[modelo] ?? []) {
+    for (const prefijo of t.prefijos) {
+      const ms = mapeo.filter((m) => m.statement === 'balance' && m.account_prefix === prefijo && m.origin === 'boe')
+      if (ms.length !== 1 || ms[0].by_balance) throw new Error(`${modelo}: la ${prefijo} no tiene una sola fila del modelo sin signo (tiene ${ms.length})`)
+      const otra = t.lado === 'deudor' ? t.acreedor : t.deudor
+      if (!lineas.some((l) => l.statement === 'balance' && l.code === otra)) throw new Error(`${modelo}: no existe la línea ${otra} para la ${prefijo}`)
+      ms[0].by_balance = t.lado
+      porSaldo.cambiadas.push(ms[0])
+      porSaldo.anadidas.push({ model: modelo, statement: 'balance', line_code: otra, account_prefix: prefijo, sign: 'suma', by_balance: t.lado === 'deudor' ? 'acreedor' : 'deudor', origin: 'boe', any_sign: false,
+        note: t.nota, legal_ref: NO_COMPENSACION })
+      mapeo.push(porSaldo.anadidas[porSaldo.anadidas.length - 1])
+    }
   }
 
   // El resultado del ejercicio: 6 y 7 sin regularizar.
@@ -242,7 +301,7 @@ export function construirModelo(modelo, estados, hojas, meta) {
       mapeo.push({ ...h, account_prefix: code, origin: 'defecto', note: `El modelo no nombra la ${code}; va con su hija ${hija}. Completar si es de grupo o asociadas.` })
     }
   }
-  return { lineas, mapeo }
+  return { lineas, mapeo, porSaldo }
 }
 
 /**
