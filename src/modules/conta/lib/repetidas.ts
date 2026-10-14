@@ -25,6 +25,8 @@
 // proveedores (un fijo de 191,00 € cuatro veces en dos meses). Un importe 0 no
 // casa nada: no dice nada de la factura.
 
+import { claveNumero } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
+
 export interface FacturaParaRepetida {
   id: string
   number: string | null
@@ -62,14 +64,14 @@ export const ETIQUETA_REPETIDA: Record<NivelRepetida, string> = {
   posible: '¿Posible repetida?',
 }
 
-const SIN_NUMERO = /^(s\s*\/?\s*n|sin\s+n[uú]mero|-+|0+)$/i
-
-/** El número para comparar, o null si no es un número de verdad. */
-export function claveNumero(numero: string | null | undefined): string | null {
-  const t = (numero ?? '').trim().replace(/\s+/g, ' ').toUpperCase()
-  if (t === '' || SIN_NUMERO.test(t) || !/[0-9A-Z]/.test(t)) return null
-  return t
-}
+/**
+ * El número para comparar, o null si no es un número de verdad. Desde el D01
+ * es la clave de la REGLA ÚNICA (la misma que la base, conta_clave_numero):
+ * mayúsculas y solo letras y cifras. Antes era más conservadora (dejaba barras
+ * y guiones); medida la nueva contra los 179 números reales: 0 números
+ * distintos de un mismo proveedor juntados, los mismos 2 «no es número».
+ */
+export { claveNumero }
 
 const centimos = (x: number | null): number | null =>
   x === null || !Number.isFinite(x) ? null : Math.round(x * 100)

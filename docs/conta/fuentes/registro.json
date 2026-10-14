@@ -1,5 +1,5 @@
 {
-  "descargado": "2026-10-13T15:45:54.305Z",
+  "descargado": "2026-10-14T05:44:29.386Z",
   "fuentes": {
     "ley-37-1992": {
       "nombre": "Ley 37/1992, del Impuesto sobre el Valor Añadido",
@@ -560,13 +560,7 @@
       "fichero": "textos/istac-iae.json",
       "error": null,
       "idBoe": null,
-      "nota": null,
-      "ultimoFallo": {
-        "fecha": "2026-10-13T15:45:54.305Z",
-        "http": 0,
-        "contieneLoEsperado": false,
-        "error": "TypeError: fetch failed"
-      }
+      "nota": null
     },
     "istac-cnae-2025": {
       "nombre": "ISTAC · CNAE-2025 (CL_CNAE_2025)",
@@ -583,13 +577,7 @@
       "fichero": "textos/istac-cnae-2025.json",
       "error": null,
       "idBoe": null,
-      "nota": null,
-      "ultimoFallo": {
-        "fecha": "2026-10-13T15:45:54.305Z",
-        "http": 0,
-        "contieneLoEsperado": false,
-        "error": "TypeError: fetch failed"
-      }
+      "nota": null
     },
     "eu-paises": {
       "nombre": "Oficina de Publicaciones de la UE · tabla de países (ISO 3166)",
@@ -608,7 +596,7 @@
       "idBoe": null,
       "nota": null,
       "ultimoFallo": {
-        "fecha": "2026-10-13T15:45:54.305Z",
+        "fecha": "2026-10-08T19:57:15.513Z",
         "http": 0,
         "contieneLoEsperado": false,
         "error": "TimeoutError: The operation was aborted due to timeout"
@@ -733,23 +721,6 @@
       "idBoe": null,
       "nota": null
     },
-    "aeat-disenos-libros-registro": {
-      "nombre": "AEAT · Diseños de registro normalizados de los libros registro del IVA y del IRPF (XLSX)",
-      "url": "https://sede.agenciatributaria.gob.es/static_files/AEAT/LSI.xlsx",
-      "urlDatos": null,
-      "http": 200,
-      "titulo": "AEAT · Diseños de registro normalizados de los libros registro del IVA y del IRPF (XLSX) · «Diseños de registro normalizados para los Libros Registro del IVA y del IRPF presentados en formato XLXS (actualizado 01-01-2026)(56,9 KB - xlsx)»",
-      "actualizadoEnFuente": "Tue, 17 Feb 2026 12:16:25 GMT",
-      "fecha": "2026-10-08T20:40:49.573Z",
-      "comprobado": "2026-10-13T15:45:54.305Z",
-      "sha256": "4217c718f6ff11d7b25440147f56716f41aa915aba4e9c86d32b14330a33c810",
-      "bytes": 83641,
-      "contieneLoEsperado": true,
-      "fichero": "textos/aeat-disenos-libros-registro.txt",
-      "error": null,
-      "idBoe": null,
-      "nota": "enlace de https://sede.agenciatributaria.gob.es/Sede/iva/libros-registro.html"
-    },
     "orden-jus-616-2022": {
       "nombre": "Orden JUS/616/2022, modelos de depósito de cuentas anuales individuales en el Registro Mercantil",
       "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2022-10975",
@@ -784,6 +755,23 @@
       "idBoe": "BOE-A-2026-11581",
       "nota": null
     },
+    "aeat-disenos-libros-registro": {
+      "nombre": "AEAT · Diseños de registro normalizados de los libros registro del IVA y del IRPF (XLSX)",
+      "url": "https://sede.agenciatributaria.gob.es/static_files/AEAT/LSI.xlsx",
+      "urlDatos": null,
+      "http": 200,
+      "titulo": "AEAT · Diseños de registro normalizados de los libros registro del IVA y del IRPF (XLSX) · «Diseños de registro normalizados para los Libros Registro del IVA y del IRPF presentados en formato XLXS (actualizado 01-01-2026)(56,9 KB - xlsx)»",
+      "actualizadoEnFuente": "Tue, 17 Feb 2026 12:16:25 GMT",
+      "fecha": "2026-10-08T20:40:49.573Z",
+      "comprobado": "2026-10-13T15:45:54.305Z",
+      "sha256": "4217c718f6ff11d7b25440147f56716f41aa915aba4e9c86d32b14330a33c810",
+      "bytes": 83641,
+      "contieneLoEsperado": true,
+      "fichero": "textos/aeat-disenos-libros-registro.txt",
+      "error": null,
+      "idBoe": null,
+      "nota": "enlace de https://sede.agenciatributaria.gob.es/Sede/iva/libros-registro.html"
+    },
     "rdl-1-2010-lsc": {
       "nombre": "Real Decreto Legislativo 1/2010, texto refundido de la Ley de Sociedades de Capital",
       "url": "https://www.boe.es/buscar/act.php?id=BOE-A-2010-10544",
@@ -799,6 +787,40 @@
       "fichero": "textos/rdl-1-2010-lsc.txt",
       "error": null,
       "idBoe": "BOE-A-2010-10544",
+      "nota": null
+    },
+    "orden-eha-962-2007": {
+      "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01; ELI https://www.boe.es/eli/es/o/2007/04/10/eha962)",
+      "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-7866",
+      "urlDatos": "https://www.boe.es/diario_boe/xml.php?id=BOE-A-2007-7866",
+      "http": 200,
+      "titulo": "Orden EHA/962/2007, de 10 de abril, por la que se desarrollan determinadas disposiciones sobre facturación telemática y conservación electrónica de facturas, contenidas en el Real Decreto 1496/2003, de 28 de noviembre, por el que se aprueba el reglamento por el que se regulan las obligaciones de facturación.",
+      "actualizadoEnFuente": null,
+      "fecha": "2026-10-14T05:44:29.386Z",
+      "comprobado": "2026-10-14T05:44:29.386Z",
+      "sha256": "002a95e7af9a3a4fdb035704584550ffd82ba2816e9bd4109ba0a5a9657d3711",
+      "bytes": 52290,
+      "contieneLoEsperado": true,
+      "fichero": "textos/orden-eha-962-2007.txt",
+      "error": null,
+      "idBoe": "BOE-A-2007-7866",
+      "nota": null
+    },
+    "resolucion-aeat-2007-10-24": {
+      "nombre": "Resolución de 24/10/2007 de la AEAT, homologación del software de digitalización certificada (D01)",
+      "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-18911",
+      "urlDatos": "https://www.boe.es/diario_boe/xml.php?id=BOE-A-2007-18911",
+      "http": 200,
+      "titulo": "Resolución de 24 de octubre de 2007, de la Agencia Estatal de Administración Tributaria, sobre procedimiento para la homologación de software de digitalización contemplado en la Orden EHA/962/2007, de 10 de abril de 2007.",
+      "actualizadoEnFuente": null,
+      "fecha": "2026-10-14T05:38:51.225Z",
+      "comprobado": "2026-10-14T05:38:51.225Z",
+      "sha256": "4c37b22d5c2674037bd668be7c3d3a397b7636b591d2ca4771a40227dfffff66",
+      "bytes": 12762,
+      "contieneLoEsperado": true,
+      "fichero": "textos/resolucion-aeat-2007-10-24.txt",
+      "error": null,
+      "idBoe": "BOE-A-2007-18911",
       "nota": null
     },
     "aeb-cuaderno-43-cajamar": {

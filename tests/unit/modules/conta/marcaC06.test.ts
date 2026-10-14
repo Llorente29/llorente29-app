@@ -119,7 +119,8 @@ describe('contabilidad no escribe «Folvy» a mano', () => {
     ['marco/MenuConta.tsx', /Volver a Folvy|Icono nombre="folvy" \/>Folvy/],
     ['ajustes/MarcoAjustes.tsx', /CON_MARCA \? MARCA\.nombre : 'Folvy Conta'/],
     ['module.tsx', /CON_MARCA \? MARCA\.nombre : 'Folvy Conta'/],
-    ['services/propuestasLibroService.ts', /p_quien_nombre: 'Folvy \(validación automática de ventas\)'/],
+    // D01: «Apuntar solo lo seguro» firma como escritor automático, igual que la de ventas (lib/autor.ts la reconoce).
+    ['services/propuestasLibroService.ts', /p_quien_nombre: 'Folvy \((validación automática de ventas|apunta solo lo seguro)\)'/],
     ['lib/autor.ts', /FIRMA_AUTOMATICA = /],
     ['lib/errorBase.ts', /nombre === 'Folvy' \? texto : texto\.replace/],
   ]

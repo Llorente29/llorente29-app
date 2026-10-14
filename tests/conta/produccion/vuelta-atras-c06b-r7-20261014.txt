@@ -1,0 +1,11 @@
+# Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
+# inverso. C06b · Respuesta 7.
+#   0710: fuera la autorización del primer asiento. PARA si ya está en Diez.
+#   0700: fuera la tabla, la función y las columnas, y el CHECK como estaba.
+#         PARA si hay algo pendiente en Diez, marcado o autorizado. ANTES,
+#         conta-diez-enviar vuelve a la versión anterior.
+# En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
+# esperado: se deshace la tanda) y no para.
+cuenta: scripts/conta/produccion/cuentas/diez-pdf-pendiente.sql
+supabase/vuelta-atras/20261111T0710_c06b_diez_autorizo_primero.down.sql
+supabase/vuelta-atras/20261111T0700_c06b_diez_pdf_pendiente.down.sql

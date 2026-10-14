@@ -39,7 +39,8 @@ for ((i=${#ap[@]}-1; i>=0; i--)); do
     fallo=1; continue
   fi
   node scripts/conta/produccion/analizar.mjs baja "$down" > "$tmp"
-  if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$down" -f "$tmp"; then
+  # D01 R2: de un error, solo fichero, línea y código (sin DETAIL: el registro es público).
+  if "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -1 -f "$down" -f "$tmp"; then
     echo "| $((i+1)) | \`$f\` | deshecho con \`$down\` |" >> "$INFORME"
   else
     echo "| $((i+1)) | \`$f\` | **la vuelta atrás FALLA: queda aplicado** |" >> "$INFORME"

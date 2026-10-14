@@ -1,8 +1,5 @@
-# C06b · Respuesta 8, pregunta 1 — validar y guardar el PDF van juntos.
-#   0720: conta_numero_previsto (el número que le tocaría),
-#   journal_entry_validar_con_documento (valida y guarda el PDF en una sola
-#   transacción) y un disparador diferido en journal_entry: un asiento de
-#   ventas de una plataforma no queda validado sin su PDF, por ningún camino.
-#   Su prueba, por sus caminos y como usuario, en transacción con ROLLBACK.
-supabase/migrations/20261111T0720_c06b_validar_con_pdf.sql
-supabase/staging/sql/20261111_c06b_validar_con_pdf_prueba.sql
+# D01 · 14/10 — la prueba de la 0310 otra vez, con el NIF inventado de su
+# proveedor de prueba con carácter de control válido (B00000810, antes
+# B00000081, que no lo pasaba), como los de la semilla. Solo la prueba: acaba
+# en ROLLBACK y no cambia staging. La 0310 ya está (run 38528709753).
+supabase/staging/sql/20261021_d01_recepcion_prueba.sql

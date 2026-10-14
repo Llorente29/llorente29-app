@@ -17,6 +17,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { informeLibro, revisarLibro } from './lib/libro.mjs'
 import { informeLibros, revisarLibros } from './lib/libros.mjs'
+import { anonimizar, informeAnonimo } from './lib/anonimo.mjs'
 
 const [, , rutaBd, rutaInforme = 'informe-libro.md', donde = 'staging-conta', rutaLibros] = process.argv
 if (!rutaBd) { console.error('Uso: node scripts/conta/agente-libro.mjs <volcado.json> [informe.md] [dónde]'); process.exit(2) }
@@ -26,8 +27,15 @@ const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).form
 const libros = rutaLibros ? JSON.parse(readFileSync(rutaLibros, 'utf8')) : null
 const hallazgosLibros = revisarLibros(libros)
 const hallazgos = [...revisarLibro(bd), ...hallazgosLibros]
-const texto = informeLibro(revisarLibro(bd), { donde, hoy, contado: bd.contado })
-  + (libros ? informeLibros(hallazgosLibros, libros.contado) : '\n_Libros y balances (C05): esta base aún no los tiene._\n')
+// D01 R2 (13/10): en producción (CONTA_ANONIMO=1, lo pone su workflow) sin
+// importes, números de asiento ni conceptos, como los otros dos agentes: el
+// informe completo sacaba Debe/Haber y sumas en € al resumen y a los avisos,
+// que son públicos.
+const contados = Object.entries(bd.contado ?? {}).filter(([, v]) => Number.isInteger(v)).map(([k, v]) => `${k} ${v}`).join(' · ')
+const texto = process.env.CONTA_ANONIMO === '1'
+  ? informeAnonimo('Agente «Libro diario»', anonimizar('libro diario', hallazgos), { donde, hoy, mirado: `Leído: ${contados || 'sin recuentos'}.` })
+  : informeLibro(revisarLibro(bd), { donde, hoy, contado: bd.contado })
+    + (libros ? informeLibros(hallazgosLibros, libros.contado) : '\n_Libros y balances (C05): esta base aún no los tiene._\n')
 writeFileSync(rutaInforme, texto)
 console.log(texto)
 process.exitCode = hallazgos.some((h) => h.nivel === 'rojo') ? 1 : 0

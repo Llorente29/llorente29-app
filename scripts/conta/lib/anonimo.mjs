@@ -10,7 +10,8 @@
 //
 // Lo usan agente-datos-maestros.mjs (datos maestros, coherencia y terceros)
 // y agente-plan-contable.mjs cuando CONTA_ANONIMO=1, que solo pone el
-// workflow de producción. El del libro diario ya sale sin nombres.
+// workflow de producción. Y desde el D01 R2 también agente-libro.mjs: sin
+// nombres ya salía, pero con importes y números de asiento.
 
 /** La cuenta abreviada que el hallazgo diga («cuenta c01a0000»), o null. */
 export function cuentaCorta(texto) {

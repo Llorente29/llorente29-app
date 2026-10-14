@@ -1,0 +1,32 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C06b · Respuesta 6 (rama conta/c06b-repasos). PREPARADA, NO LANZADA.
+#
+#   1. 20261111T0600 — (tarea 1) el balance según la norma: 42 filas de serie
+#      de terceros (40x, 41, 43x, 44, en los tres modelos) pasan a ir por el
+#      signo de su saldo y 42 nuevas para el otro signo. UPDATE sobre filas de
+#      serie que existen: pide «autorizo». Toca 42 o para.
+#   2. 20261111T0610 — (tarea 3) «He olvidado la contraseña» con tope: tabla
+#      de intentos (huellas, un día) y conta_contrasena_pedir. Todo NUEVO.
+#
+# ORDEN con el front y las funciones:
+#   · la 0600 no lo necesita: el balance lee el mapeo de la base. Con la 0600
+#     aplicada y el front de antes, Folvy ya da el balance por la norma; la
+#     nota bajo «Clientes» y la banda llegan con el front.
+#   · la 0610 ANTES de desplegar conta-contrasena (la nueva llama a
+#     conta_contrasena_pedir; la desplegada hoy, a conta_contrasena_de_marca,
+#     que no se toca).
+#
+# Lo que cuenta antes y después (R9): filas de serie del mapeo del balance, por
+# signo y de terceros, las propias de las empresas, la tabla de intentos y las
+# funciones de la contraseña.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/terceros-y-contrasena.sql
+supabase/migrations/20261111T0600_c06b_terceros_por_saldo.sql
+supabase/migrations/20261111T0610_c06b_contrasena_tope.sql
