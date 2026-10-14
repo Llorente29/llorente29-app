@@ -179,7 +179,24 @@ recargando con el front nuevo.
    único caso que hay en la C0009 (uno, y de compras). Si la gestoría
    prefiere otro, se cambia en un sitio (`FORMA_ANULACION`).
 
-## 6 · Diseño
+## 6 · La e2e del frente
+
+`tests/e2e/conta/c06` + `c00/marco` + `rls`, frente C, contra staging:
+
+- 794eecad (la parte 1): **1 roja**, «la bienvenida sin marca… aunque se
+  rellene al instante» (ordenador). Llega a abrir la contabilidad y se queda
+  esperando a que la red esté en calma (`waitForLoadState('networkidle')`,
+  120 s). Esa pantalla no carga nada de lo tocado aquí, y **no se repitió**:
+  la misma prueba pasó en los dos runs siguientes. No la doy por arreglada:
+  queda dicha.
+- 9d0c3dca (la parte 2, run 38615605404): **verde**.
+- 494c7b87 (la forma «-ANUL», run 38617077498): **verde**. La e2e de
+  pendientes cubre ya el anulado: su motivo, «Enviar el contraasiento», lo que
+  dice al pulsarlo y que sale de la lista.
+
+La e2e entera (todas las carpetas) no se ha pasado: va antes del PR a `main`.
+
+## 7 · Diseño
 
 Capturas de la e2e del frente, en `docs/conta/capturas/c06b/`. La pantalla de
 pendientes, ya con un anulado cuyo contraasiento no ha llegado (su motivo y
