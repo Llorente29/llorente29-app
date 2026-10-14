@@ -1,7 +1,4 @@
-# C06b · Respuesta 5, punto 2 — aviso #178: de qué lectura del histórico viene
-# cada subcuenta.
-#   0500: company_account.import_run_id (admite nulos) y conta_diez_subcuentas
-#   (misma firma) que la rellena. Su prueba, en una transacción con ROLLBACK.
-#   La 0510 (las 27 de Foodint, con «autorizo») no va a staging: allí no están.
-supabase/migrations/20261111T0500_c06b_cuenta_lectura.sql
-supabase/staging/sql/20261111_c06b_cuenta_lectura_prueba.sql
+# C06b · Respuesta 5, punto 4 — «Comercio de Prueba Diez, S.L.» con el plan
+# completo, por la misma puerta que el alta (company_chart_activate). Solo su
+# empresa (de la semilla C06, mía). Se puede volver a aplicar.
+supabase/seeds/conta/seed_c06b_diez_plan_staging.sql
