@@ -67,8 +67,25 @@
 .cx .cxr-barra a.cxl-accion { color: var(--cx-texto); }
 .cxr-leido-valor .cxr-apoyo { display: block; font-weight: 400; }
 .cxr-aviso { color: var(--cx-ambar); }
-.cxr-apunte { display: grid; grid-template-columns: minmax(0, 1fr) 110px 110px; gap: 4px 10px; font-size: 15px; }
-.cxr-apunte .cxr-der { text-align: right; font-family: var(--cx-letra-cifras); }
+.cxr-apunte { display: grid; grid-template-columns: minmax(0, 1fr) 120px 120px; gap: 4px 10px; font-size: 15px; }
+.cxr-apunte .cxr-der { text-align: right; font-family: var(--cx-letra-cifras); white-space: nowrap; }
+/* R5 · 3: el título pequeño de cada columna («Gasto e IVA», «A pagar»). */
+.cxr-apunte-titulo { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; }
+.cxr-apunte .cxr-apunte-titulo.cxr-der { font-family: inherit; }
+/* R5 · 3 (móvil): cada cuenta en una línea y su cifra a la derecha, por grupos. */
+.cxr-apunte-movil { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.cxr-apunte-grupo { display: flex; flex-direction: column; gap: 4px; }
+.cxr-apunte-linea { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.cxr-apunte-cuenta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxr-apunte-linea .cxr-der { font-family: var(--cx-letra-cifras); white-space: nowrap; flex: none; }
+/* R5 · 5: la banda en ámbar mientras haya algo por mirar; el verde, para lo apuntado. */
+.cx-ia-bloque.cxr-ia-ambar { background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
+.cx-ia-bloque.cxr-ia-ambar .cx-ia-punto { background: var(--cx-ambar); }
+.cx-ia-bloque.cxr-ia-ambar .cx-ia-porque { color: var(--cx-texto); }
+/* R5 · 4: el papel, recortado en el móvil hasta que se toca. */
+.cxr-papel-recorte { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.cxr-papel-recortado { overflow: hidden; justify-content: flex-start; cursor: zoom-in; }
+.cxr-papel-entero { align-self: center; }
 .cxr-acciones { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .cxr-navegar { display: flex; gap: 10px; }
 
@@ -95,7 +112,11 @@
   .cxr-tarjeta .cx-boton, .cxr-tarjeta .cx-boton-sec { width: 100%; height: 46px; font-size: 15px; }
   .cxr-revisar { grid-template-columns: minmax(0, 1fr); }
   .cxr-papel-hoja { min-height: 0; padding: 10px; }
-  .cxr-apunte { grid-template-columns: minmax(0, 1fr) 84px 84px; font-size: 14px; }
+  /* R5 · 9: las cuatro pestañas caben sin cortarse (en un teléfono de 390 px
+     sobra sitio; en uno más estrecho, más juntas, y si aun así no caben, se
+     deslizan: nunca se corta una a medias sin que se vea). */
+  .cxr-herramientas .cxl-segmento { width: 100%; }
+  .cxr-herramientas .cxl-segmento button { flex: 1 0 auto; padding-left: 8px; padding-right: 8px; font-size: 14px; }
   /* La etiqueta con su sitio: «Base al 10 %» no se parte en tres líneas. */
   .cxr-leido { grid-template-columns: minmax(0, 44%) minmax(0, 1fr); }
   /* Bajo el pulgar: la barra de abajo, fija, con el botón grande. */
@@ -106,4 +127,8 @@
   .cxr-pulgar > * { flex: 1; height: 52px; font-size: 16px; }
   .cxr-subir-movil { display: flex; gap: 10px; }
   .cxr-subir-movil > * { flex: 1; height: 52px; font-size: 16px; }
+}
+
+@media (max-width: 370px) {
+  .cxr-herramientas .cxl-segmento button { padding-left: 5px; padding-right: 5px; font-size: 13px; }
 }

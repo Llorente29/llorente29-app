@@ -12,8 +12,10 @@
 //     recibe la mercancía con Folvy y la cuenta no es solo de contabilidad.
 //   · Las cuentas, siempre nombre · código.
 
+import { calcularVencimiento } from '@/modules/conta/lib/cifras'
+
 export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida'
-export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'a_mano'
+export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
 export interface FilaDocumento {
@@ -27,7 +29,14 @@ export interface FilaDocumento {
   canal: Canal
   confianza: Confianza | null
   porque: string | null
-  entendido: { cuenta: string; nombre: string; origen: string } | null
+  /** La cuenta de gasto: del asiento, de su ficha o, sin nada de eso, lo aprendido (`sin_confirmar`). */
+  entendido: { cuenta: string; nombre: string; origen: string; sin_confirmar?: boolean } | null
+  /** R5 · 6: lo aprendido de sus facturas anteriores, cuando ni el asiento ni la ficha dicen la cuenta. */
+  aprendido?: { cuenta: string | null; facturas: number; confianza: string | null; porque: string | null } | null
+  /** R5 · 6: cuántas facturas suyas había antes de esta. */
+  previas?: number
+  /** R5 · 7: el tipo del fichero con que llegó (una foto o un PDF), si llegó con fichero. */
+  llegada_tipo?: string | null
   recepcion: { fecha: string; local: string | null } | null
   asiento: { id: string; estado: string; solo: boolean } | null
   llego: string
@@ -81,9 +90,14 @@ export function porDonde(c: DatosDocumentos['cifras']['llegadas_por_canal'], sol
   if (c.cocina) partes.push(`${solo ? 'recepciones' : 'Cocina'} ${n(c.cocina)}`)
   if (c.subida) partes.push(`${c.subida === 1 ? 'subida' : 'subidas'} ${n(c.subida)}`)
   if (c.portal) partes.push(`portal ${n(c.portal)}`)
+  if (c.compras) partes.push(`${solo ? 'leídas' : 'Compras'} ${n(c.compras)}`)
   if (c.a_mano) partes.push(`a mano ${n(c.a_mano)}`)
-  return partes.join(' · ') || 'ninguna esta semana'
+  return partes.join(' · ') || 'ninguna'
 }
+
+/** «octubre»: el mes del periodo elegido ('YYYY-MM-DD'). R5 · 8: las cifras y la banda hablan de él, no de «esta semana». */
+export const nombreDelMes = (desde: string): string =>
+  new Intl.DateTimeFormat('es-ES', { month: 'long', timeZone: 'UTC' }).format(new Date(`${desde.slice(0, 7)}-01T00:00:00Z`))
 
 /** «alquiler de octubre», «Telefonía Norte de septiembre». Sin artículo: de una
  *  etiqueta libre no se sabe el género («la de la luz», «la del alquiler»). */
@@ -92,12 +106,17 @@ function laQueFalta(e: Esperada): string {
   return `${e.label ? e.label.toLowerCase() : e.supplier_name} de ${mes}`
 }
 
-/** La banda de la IA: lo que ha pasado en una frase, y si hay algo que pedir. */
-export function banda(d: DatosDocumentos): { titulo: string; porque: string | null; pedir: boolean } {
+/**
+ * La banda de la IA: lo que ha pasado en una frase, y si hay algo que pedir.
+ * R5 · 8: del mes elegido. R5 · 5: ámbar si queda algo por mirar o por aclarar;
+ * el verde, para cuando todo está apuntado.
+ */
+export function banda(d: DatosDocumentos): { titulo: string; porque: string | null; pedir: boolean; tono: 'verde' | 'ambar' } {
   const c = d.cifras
+  const mes = nombreDelMes(d.desde)
   const llegadas = c.llegadas === 0
-    ? 'Esta semana no ha llegado ninguna factura.'
-    : `Han llegado ${plural(c.llegadas, 'factura', 'facturas')} esta semana.`
+    ? `En ${mes} no ha llegado ninguna factura.`
+    : `${c.llegadas === 1 ? 'Ha llegado' : 'Han llegado'} ${plural(c.llegadas, 'factura', 'facturas')} en ${mes}.`
   const pendientes = c.para_mirar + c.por_aclarar
   const quedan = pendientes === 0
     ? 'no te queda ninguna por mirar'
@@ -108,20 +127,58 @@ export function banda(d: DatosDocumentos): { titulo: string; porque: string | nu
   const faltan = d.esperadas.filter((e) => !e.pedida)
   const porque = faltan.length === 0 ? null
     : `${faltan.length === 1 ? 'Falta la factura de' : 'Faltan las facturas de'} ${faltan.slice(0, 3).map(laQueFalta).join(faltan.length === 2 ? ' y ' : ', ')}${faltan.length > 3 ? ` y ${faltan.length - 3} más` : ''}: el mes pasado ya ${faltan.length === 1 ? 'había' : 'habían'} llegado.`
-  return { titulo, porque, pedir: faltan.length > 0 }
+  return { titulo, porque, pedir: faltan.length > 0, tono: pendientes > 0 ? 'ambar' : 'verde' }
 }
 
-/** Por dónde llegó, como lo dice la fila: «llegó por Correo». Vendido solo, sin la palabra Cocina. */
-export const NOMBRE_CANAL: Record<Canal, string> = { correo: 'Correo', subida: 'Subida', cocina: 'Cocina', portal: 'Portal', a_mano: 'a mano' }
-export const nombreCanal = (c: Canal, solo = false): string => (solo && c === 'cocina' ? 'su recepción' : NOMBRE_CANAL[c] ?? c)
+/**
+ * Por dónde llegó, como lo dice la fila, en minúscula y lo que pasó de verdad
+ * (R5 · 7): «llegó por correo», «foto subida», «PDF subido», «escrita a mano».
+ * De una subida se sabe si fue una foto o un PDF, no desde qué aparato: no se
+ * dice «desde el móvil». Vendido solo, sin la palabra Cocina ni Compras.
+ */
+export function comoLlego(canal: Canal | string | null, tipo: string | null | undefined, solo = false): string {
+  switch (canal) {
+    case 'correo': return 'llegó por correo'
+    case 'subida': return /^image\//.test(tipo ?? '') ? 'foto subida' : /pdf/.test(tipo ?? '') ? 'PDF subido' : 'subida'
+    case 'cocina': return solo ? 'de su recepción' : 'de su recepción en Cocina'
+    case 'portal': return 'llegó del portal'
+    case 'compras': return solo ? 'leída del papel' : 'leída en Compras'
+    case 'a_mano': return 'escrita a mano'
+    default: return ''
+  }
+}
 
-/** Lo que Folvy ha entendido, como lo dice la fila. Las cuentas, nombre · código. */
-export function entendido(f: FilaDocumento): { titulo: string; porque: string | null } {
-  if (f.tipo === 'llegada') return { titulo: f.archivo ? `«${f.archivo}»` : 'Un documento sin leer', porque: f.porque }
-  if (!f.proveedor.id) return { titulo: 'No reconozco el emisor', porque: f.porque }
-  const cuenta = f.entendido ? `${f.entendido.nombre} · ${f.entendido.cuenta}` : 'Sin cuenta de gasto todavía'
+const frase = (x: string) => (/[.!?…:]$/.test(x.trim()) ? x.trim() : `${x.trim()}.`)
+
+/**
+ * Lo que Folvy ha entendido, como lo dice la fila. Las cuentas, nombre · código.
+ * R5 · 6: cada fila dice su porqué y qué hacer, también la que no tiene lectura
+ * (escrita a mano) o no tiene cuenta todavía. Nunca solo «Sin cuenta».
+ */
+export function entendido(f: FilaDocumento, solo = false): { titulo: string; porque: string | null } {
+  if (f.tipo === 'llegada') return { titulo: f.archivo ? `«${f.archivo}»` : 'Un documento sin leer', porque: f.porque ?? 'Ha llegado y aún no la he leído.' }
+  if (!f.proveedor.id) return { titulo: 'No reconozco el emisor', porque: f.porque ?? 'No reconozco el emisor: dime quién es.' }
+  const e = f.entendido
+  const cuenta = e ? `${e.nombre} · ${e.cuenta}${e.sin_confirmar ? ' · sin confirmar' : ''}` : 'Sin cuenta de gasto todavía'
   const casa = f.recepcion ? ` · casa con la recepción del ${diaMes(f.recepcion.fecha)}` : ''
-  return { titulo: `${cuenta}${casa}`, porque: f.porque }
+  const partes: string[] = []
+  if (f.porque) partes.push(frase(f.porque))
+  if (f.estado !== 'apuntada') {
+    if (!e) {
+      const previas = f.previas ?? null
+      partes.push(previas === 0 ? 'Es la primera factura de este proveedor: elige dónde se apunta y lo recuerdo.'
+        : previas ? `${previas === 1 ? 'Hay una factura suya anterior' : `Hay ${n(previas)} facturas suyas anteriores`}, pero ${previas === 1 ? 'no está apuntada' : 'ninguna está apuntada'}: elige dónde se apunta y lo recuerdo.`
+          : 'Su ficha no dice dónde se apunta: elígelo y lo recuerdo.')
+    } else if (e.sin_confirmar) {
+      partes.push(`${frase(f.aprendido?.porque ?? `Lo he aprendido de sus facturas anteriores (${e.origen})`)} Confírmalo y lo recuerdo.`)
+    } else if (!f.porque) {
+      const como = f.canal === 'a_mano' ? 'La escribieron a mano y no la he leído: comprueba los importes con el papel.'
+        : f.canal === 'compras' ? `La leyeron en ${solo ? 'otra pantalla' : 'Compras'}: comprueba los importes con el papel.`
+          : 'Comprueba los importes con el papel.'
+      partes.push(`${e.origen === 'de su ficha' ? 'Va a su cuenta de siempre, la de su ficha.' : `Va a esta cuenta (${e.origen}).`} ${como}`)
+    }
+  }
+  return { titulo: `${cuenta}${casa}`, porque: partes.length ? partes.join(' ') : null }
 }
 
 /** El único botón de la fila. */
@@ -183,4 +240,51 @@ export function limites(mes: string): { desde: string; hasta: string } {
   const y = Number(mes.slice(0, 4)), m = Number(mes.slice(5, 7))
   const ultimo = new Date(Date.UTC(y, m, 0)).getUTCDate()
   return { desde: `${mes}-01`, hasta: `${mes}-${String(ultimo).padStart(2, '0')}` }
+}
+
+/** El plazo de pago de la ficha del proveedor (supplier.payment_terms_days y payment_fixed_days). */
+export interface PlazoFicha { dias: number | null; fijos: number[] }
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+
+/**
+ * R5 · 1 · El vencimiento de N23. Si la factura lo trae, manda el de la factura;
+ * si además su ficha da otro día, se dice en ámbar. Sin vencimiento en la
+ * factura, el de la ficha (que es el que se pondrá al aprobarla). Sin ninguno
+ * de los dos, se dice que no hay, y por qué.
+ */
+export function vencimientoAEnsenar(vence: string | null, fecha: string | null, plazo: PlazoFicha | null):
+  { valor: string; apoyo: string; aviso: boolean } {
+  const deFicha = fecha && plazo && plazo.dias !== null ? calcularVencimiento(fecha, plazo.dias, plazo.fijos) : null
+  const plazoTexto = plazo && plazo.dias !== null ? `${plazo.dias} días${plazo.fijos.length ? `, los días ${plazo.fijos.join(' y ')}` : ''}` : null
+  if (vence) {
+    if (deFicha && deFicha !== vence) return { valor: ddmm(vence), apoyo: `lo dice la factura; su ficha (${plazoTexto}) daría el ${ddmm(deFicha)}`, aviso: true }
+    if (deFicha) return { valor: ddmm(vence), apoyo: `lo dice la factura, igual que su ficha (${plazoTexto})`, aviso: false }
+    return { valor: ddmm(vence), apoyo: 'lo dice la factura', aviso: false }
+  }
+  if (deFicha) return { valor: ddmm(deFicha), apoyo: `la factura no lo trae: el de su ficha (${plazoTexto})`, aviso: false }
+  return { valor: 'sin vencimiento', apoyo: 'ni la factura ni su ficha lo dicen', aviso: true }
+}
+
+/**
+ * R5 · 2 · La línea de debajo de «Cómo se apunta». Diez no guarda documentos
+ * (Cegid aún no ha activado su almacén): no se promete que irá «con su PDF».
+ */
+export const lineaDiez = (solo = false): string =>
+  `Se apunta ${solo ? 'aquí' : 'en Folvy'} · a Diez irá cuando Cegid active los documentos`
+
+/** R5 · 5 · El tono de la banda de N23: verde solo si ya está apuntada; si no, ámbar, como su fila en la bandeja. */
+export const tonoDeLaFactura = (asiento: { estado: string } | null): 'verde' | 'ambar' => (asiento?.estado === 'validado' ? 'verde' : 'ambar')
+
+/**
+ * R5 · 3 · «Cómo se apunta» en dos columnas con su título: «Gasto e IVA» (lo
+ * que va al debe) y «A pagar» (al haber).
+ */
+export function columnasDelApunte(lineas: readonly { cuenta: string; debe: number; haber: number }[]): {
+  gasto: { cuenta: string; importe: number }[]; pagar: { cuenta: string; importe: number }[]
+} {
+  return {
+    gasto: lineas.filter((l) => l.debe).map((l) => ({ cuenta: l.cuenta, importe: l.debe })),
+    pagar: lineas.filter((l) => l.haber).map((l) => ({ cuenta: l.cuenta, importe: l.haber })),
+  }
 }

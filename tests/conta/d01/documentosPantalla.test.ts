@@ -5,10 +5,12 @@
 // contra la frase de la maqueta (docs/conta/maquetas/d01/N22Documentos.png).
 import { describe, expect, it } from 'vitest'
 import {
-  banda, barra, boton, entendido, filtrar, limites, meses, nombreCanal, porDonde, punto, textos, verDe,
+  banda, barra, boton, columnasDelApunte, comoLlego, entendido, filtrar, limites, lineaDiez, meses, nombreDelMes, porDonde, punto, textos,
+  tonoDeLaFactura, vencimientoAEnsenar, verDe,
   type DatosDocumentos, type FilaDocumento,
 } from '../../../src/modules/conta/documentos/documentos'
 import { esCuentaConMarca, marcaDeLaPestana } from '../../../src/modules/conta/documentos/producto'
+import { hastaDondeHayTinta } from '../../../src/modules/conta/documentos/tinta'
 
 const fila = (o: Partial<FilaDocumento>): FilaDocumento => ({
   id: 'f', tipo: 'factura', estado: 'para_mirar', proveedor: { id: 'p', nombre: 'Proveedor Prueba' },
@@ -25,14 +27,14 @@ const datos = (o: Partial<DatosDocumentos> = {}, c: Partial<DatosDocumentos['cif
 describe('la banda de la IA', () => {
   it('dice la frase de la maqueta con sus cifras', () => {
     const d = datos({}, { llegadas: 38, apuntadas_solas: 31, para_mirar: 5, por_aclarar: 2 })
-    expect(banda(d).titulo).toBe('Han llegado 38 facturas esta semana. 31 las he apuntado yo; te quedan 5 por mirar y 2 por aclarar.')
+    expect(banda(d).titulo).toBe('Han llegado 38 facturas en octubre. 31 las he apuntado yo; te quedan 5 por mirar y 2 por aclarar.')
   })
   it('sin nada apuntado solo, empieza en mayúscula; una sola, en singular', () => {
-    expect(banda(datos({}, { llegadas: 1, para_mirar: 1 })).titulo).toBe('Han llegado 1 factura esta semana. Te queda 1 por mirar.')
-    expect(banda(datos({}, { llegadas: 1, apuntadas_solas: 1 })).titulo).toBe('Han llegado 1 factura esta semana. 1 la he apuntado yo; no te queda ninguna por mirar.')
+    expect(banda(datos({}, { llegadas: 1, para_mirar: 1 })).titulo).toBe('Ha llegado 1 factura en octubre. Te queda 1 por mirar.')
+    expect(banda(datos({}, { llegadas: 1, apuntadas_solas: 1 })).titulo).toBe('Ha llegado 1 factura en octubre. 1 la he apuntado yo; no te queda ninguna por mirar.')
   })
   it('sin llegadas ni pendientes no se inventa nada', () => {
-    expect(banda(datos()).titulo).toBe('Esta semana no ha llegado ninguna factura. No te queda ninguna por mirar.')
+    expect(banda(datos()).titulo).toBe('En octubre no ha llegado ninguna factura. No te queda ninguna por mirar.')
     expect(banda(datos()).pedir).toBe(false)
   })
   it('dice qué falta (lo ya pedido no) y entonces ofrece pedirlas', () => {
@@ -134,13 +136,14 @@ describe('el producto', () => {
 describe('por dónde llegaron y los meses', () => {
   it('en el orden de la maqueta', () => {
     expect(porDonde({ subida: 5, correo: 24, cocina: 9 })).toBe('correo 24 · Cocina 9 · subidas 5')
-    expect(porDonde({})).toBe('ninguna esta semana')
+    expect(porDonde({})).toBe('ninguna')
   })
   it('vendido solo, ni en las cifras ni en las filas sale la palabra Cocina', () => {
     expect(porDonde({ correo: 2, cocina: 3 }, true)).toBe('correo 2 · recepciones 3')
-    expect(nombreCanal('cocina', true)).toBe('su recepción')
-    expect(nombreCanal('cocina')).toBe('Cocina')
-    expect(nombreCanal('correo', true)).toBe('Correo')
+    expect(comoLlego('cocina', null, true)).toBe('de su recepción')
+    expect(comoLlego('cocina', null)).toBe('de su recepción en Cocina')
+    expect(porDonde({ compras: 3 }, true)).toBe('leídas 3')
+    expect(comoLlego('compras', null, true)).not.toMatch(/Compras|Cocina/)
   })
   it('doce meses hacia atrás, cruzando el año', () => {
     const m = meses('2026-02-10')
@@ -151,5 +154,87 @@ describe('por dónde llegaron y los meses', () => {
   it('los límites de un mes, con febrero bisiesto', () => {
     expect(limites('2028-02')).toEqual({ desde: '2028-02-01', hasta: '2028-02-29' })
     expect(limites('2026-10')).toEqual({ desde: '2026-10-01', hasta: '2026-10-31' })
+  })
+})
+
+// D01 R5 · Lo que vio Julio en las capturas de la e2e 233, caso a caso.
+describe('R5 · N22', () => {
+  it('7 · por dónde llegó, en minúscula y lo que pasó de verdad (nunca «llegó por a mano» ni «llegó por Subida»)', () => {
+    expect(comoLlego('correo', null)).toBe('llegó por correo')
+    expect(comoLlego('a_mano', null)).toBe('escrita a mano')
+    expect(comoLlego('subida', 'image/jpeg')).toBe('foto subida')
+    expect(comoLlego('subida', 'application/pdf')).toBe('PDF subido')
+    expect(comoLlego('subida', null)).toBe('subida')
+    expect(comoLlego('compras', null)).toBe('leída en Compras')
+    for (const c of ['correo', 'a_mano', 'subida', 'compras', 'cocina', 'portal']) {
+      const t = comoLlego(c, null)
+      expect(t, c).toBe(t.charAt(0).toLowerCase() + t.slice(1))
+      expect(t, c).not.toMatch(/por a |por Subida|por Correo/)
+    }
+  })
+  it('8 · la banda y la primera cifra hablan del mes elegido, no de «esta semana»', () => {
+    const d = datos({ desde: '2026-09-01', hasta: '2026-09-30' }, { llegadas: 7, para_mirar: 5, por_aclarar: 2 })
+    expect(banda(d).titulo).toBe('Han llegado 7 facturas en septiembre. Te quedan 5 por mirar y 2 por aclarar.')
+    expect(banda(d).titulo).not.toMatch(/semana/)
+    expect(nombreDelMes('2026-10-01')).toBe('octubre')
+  })
+  it('5 · la banda, ámbar si queda algo por mirar; verde cuando todo está apuntado', () => {
+    expect(banda(datos({}, { llegadas: 7, para_mirar: 5 })).tono).toBe('ambar')
+    expect(banda(datos({}, { llegadas: 3, apuntadas: 3, apuntadas_solas: 3 })).tono).toBe('verde')
+  })
+  it('6 · cada fila con su porqué y qué hacer: las tres que solo decían «Sin cuenta de gasto todavía»', () => {
+    // SB y PL: sin cuenta, sin lectura, escritas a mano o subidas, primeras de su proveedor.
+    const sb = fila({ canal: 'a_mano', confianza: null, porque: null, entendido: null, previas: 0, aprendido: { cuenta: null, facturas: 0, confianza: null, porque: 'No hay facturas anteriores…' } })
+    expect(entendido(sb)).toEqual({ titulo: 'Sin cuenta de gasto todavía', porque: 'Es la primera factura de este proveedor: elige dónde se apunta y lo recuerdo.' })
+    const otra = fila({ porque: null, entendido: null, previas: 2 })
+    expect(entendido(otra).porque).toBe('Hay 2 facturas suyas anteriores, pero ninguna está apuntada: elige dónde se apunta y lo recuerdo.')
+    expect(entendido(fila({ porque: null, entendido: null, previas: 1 })).porque).toBe('Hay una factura suya anterior, pero no está apuntada: elige dónde se apunta y lo recuerdo.')
+    // LD: con su cuenta de la ficha, escrita a mano, sin lectura: por qué se mira.
+    const ld = fila({ canal: 'a_mano', porque: null, entendido: { cuenta: '62100000', nombre: 'Arrendamientos y cánones', origen: 'de su ficha' } })
+    expect(entendido(ld).porque).toBe('Va a su cuenta de siempre, la de su ficha. La escribieron a mano y no la he leído: comprueba los importes con el papel.')
+    // SE: con lectura y sin cuenta: lo leído y qué hacer.
+    const se = fila({ porque: 'Trae todo lo que pide la norma y el total cuadra.', entendido: null, previas: 0 })
+    expect(entendido(se).porque).toBe('Trae todo lo que pide la norma y el total cuadra. Es la primera factura de este proveedor: elige dónde se apunta y lo recuerdo.')
+    // Lo aprendido, sin confirmar, con su porqué.
+    const ap = fila({ porque: null, previas: 3, entendido: { cuenta: '62800000', nombre: 'Suministros', origen: 'aprendido de Diez', sin_confirmar: true },
+      aprendido: { cuenta: '62800000', facturas: 3, confianza: 'seguro', porque: 'Las 3 facturas anteriores de este proveedor fueron a Suministros · 62800000.' } })
+    expect(entendido(ap)).toEqual({ titulo: 'Suministros · 62800000 · sin confirmar', porque: 'Las 3 facturas anteriores de este proveedor fueron a Suministros · 62800000. Confírmalo y lo recuerdo.' })
+    // Ninguna factura sin apuntar se queda sin porqué.
+    for (const f of [sb, otra, ld, se, ap, fila({ porque: null, entendido: null })]) expect(entendido(f).porque, JSON.stringify(f)).toBeTruthy()
+  })
+})
+
+describe('R5 · N23', () => {
+  it('1 · el vencimiento de la factura manda; si su ficha da otro día, en ámbar', () => {
+    // El papel de la semilla: 11/10/2026, vence el 10/11/2026; su ficha, a 30 días: el mismo día.
+    expect(vencimientoAEnsenar('2026-11-10', '2026-10-11', { dias: 30, fijos: [] })).toEqual({ valor: '10/11/2026', apoyo: 'lo dice la factura, igual que su ficha (30 días)', aviso: false })
+    expect(vencimientoAEnsenar('2026-11-10', '2026-10-11', { dias: 60, fijos: [] })).toEqual({ valor: '10/11/2026', apoyo: 'lo dice la factura; su ficha (60 días) daría el 10/12/2026', aviso: true })
+    expect(vencimientoAEnsenar('2026-11-10', '2026-10-11', { dias: null, fijos: [] })).toEqual({ valor: '10/11/2026', apoyo: 'lo dice la factura', aviso: false })
+    // Sin vencimiento en la factura: el de su ficha; sin ninguno, se dice.
+    expect(vencimientoAEnsenar(null, '2026-10-11', { dias: 30, fijos: [5, 20] })).toEqual({ valor: '20/11/2026', apoyo: 'la factura no lo trae: el de su ficha (30 días, los días 5 y 20)', aviso: false })
+    expect(vencimientoAEnsenar(null, '2026-10-11', null)).toEqual({ valor: 'sin vencimiento', apoyo: 'ni la factura ni su ficha lo dicen', aviso: true })
+  })
+  it('2 · no promete «a Diez con su PDF»: Diez no guarda documentos', () => {
+    expect(lineaDiez()).toBe('Se apunta en Folvy · a Diez irá cuando Cegid active los documentos')
+    expect(lineaDiez(true)).not.toMatch(/Folvy/)
+    expect(lineaDiez()).not.toMatch(/con su PDF/)
+  })
+  it('3 · «Cómo se apunta» en dos columnas: Gasto e IVA al debe, A pagar al haber', () => {
+    const c = columnasDelApunte([{ cuenta: '60000000', debe: 1283.15, haber: 0 }, { cuenta: '47200010', debe: 128.32, haber: 0 }, { cuenta: '40000006', debe: 0, haber: 1411.47 }])
+    expect(c.gasto.map((x) => x.cuenta)).toEqual(['60000000', '47200010'])
+    expect(c.pagar).toEqual([{ cuenta: '40000006', importe: 1411.47 }])
+  })
+  it('4 · el papel se recorta a lo escrito: la última fila con tinta, más un margen', () => {
+    const ancho = 10, alto = 100
+    const px = new Uint8ClampedArray(ancho * alto * 4).fill(255)
+    for (let y = 0; y < 40; y += 10) for (let x = 0; x < ancho; x++) { const i = (y * ancho + x) * 4; px[i] = px[i + 1] = px[i + 2] = 20 }
+    expect(hastaDondeHayTinta(px, ancho, alto, { margen: 0 })).toBe(31)
+    expect(hastaDondeHayTinta(px, ancho, alto)).toBe(33)
+    expect(hastaDondeHayTinta(new Uint8ClampedArray(ancho * alto * 4).fill(255), ancho, alto)).toBe(0)
+  })
+  it('5 · el tono de la banda: verde solo con su asiento validado', () => {
+    expect(tonoDeLaFactura(null)).toBe('ambar')
+    expect(tonoDeLaFactura({ estado: 'propuesto' })).toBe('ambar')
+    expect(tonoDeLaFactura({ estado: 'validado' })).toBe('verde')
   })
 })

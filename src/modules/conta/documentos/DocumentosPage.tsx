@@ -28,7 +28,7 @@ import { Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
 import {
-  VERES, banda, nombreCanal, barra, boton, diaMes, entendido, filtrar, limites, meses, porDonde, punto, textos, verDe,
+  VERES, banda, barra, boton, comoLlego, diaMes, entendido, filtrar, limites, meses, nombreDelMes, porDonde, punto, textos, verDe,
   type DatosDocumentos, type FilaDocumento, type Ver,
 } from '@/modules/conta/documentos/documentos'
 import { useProducto } from '@/modules/conta/documentos/producto'
@@ -213,7 +213,7 @@ function Barra({ d, solo, producto, alSubir, alPedir, alVerApuntadas }: {
 function Banda({ d, alPedir }: { d: DatosDocumentos; alPedir: () => void }) {
   const b = banda(d)
   return (
-    <section className="cx-ia-bloque" aria-label="Lo que ha pasado con tus facturas">
+    <section className={`cx-ia-bloque${b.tono === 'ambar' ? ' cxr-ia-ambar' : ''}`} aria-label="Lo que ha pasado con tus facturas">
       <span className="cx-ia-punto" aria-hidden="true" />
       <div className="cx-ia-texto">
         <span className="cx-ia-titulo">{b.titulo}</span>
@@ -236,7 +236,7 @@ function Cifras({ d, ver, solo, alVer, alPedir }: { d: DatosDocumentos; ver: Ver
   )
   return (
     <div className="cxr-cifras">
-      {cifra('Llegadas esta semana', c.llegadas, porDonde(c.llegadas_por_canal, solo), () => alVer('todas'), ver === 'todas')}
+      {cifra(`Llegadas en ${nombreDelMes(d.desde)}`, c.llegadas, porDonde(c.llegadas_por_canal, solo), () => alVer('todas'), ver === 'todas')}
       {cifra('Apuntadas solas', c.apuntadas_solas, c.apuntadas_solas ? 'las ves en Apuntadas' : 'ninguna esta vez', () => alVer('apuntadas'), ver === 'apuntadas', true)}
       {cifra('Para mirar', c.para_mirar, 'una pantalla cada una', () => alVer('para-mirar'), ver === 'para-mirar')}
       {cifra('Por aclarar', c.por_aclarar, 'falta algo: te digo qué', () => alVer('por-aclarar'), ver === 'por-aclarar')}
@@ -254,7 +254,8 @@ function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: 
   const repetidas = d.filas.filter((f) => f.estado === 'repetida').length
   const nombre = (f: FilaDocumento) => f.proveedor.nombre ?? (f.tipo === 'llegada' ? 'Documento sin leer' : 'No reconozco el emisor')
   const ini = (f: FilaDocumento) => (f.proveedor.nombre ? iniciales(f.proveedor.nombre) : '??')
-  const apoyo = (f: FilaDocumento) => `${f.numero ?? 'sin número'} · llegó por ${nombreCanal(f.canal, solo)}`
+  // R5 · 7 y 9: cómo llegó, en minúscula y lo que pasó de verdad; en el móvil, la fecha junto al número.
+  const apoyo = (f: FilaDocumento) => [f.numero ?? 'sin número', movil ? diaMes(f.fecha) : null, comoLlego(f.canal, f.llegada_tipo, solo)].filter(Boolean).join(' · ')
   const vacio = ver === 'todas' ? 'Este mes no ha llegado ninguna factura.' : `No hay ninguna ${VERES.find((v) => v.id === ver)!.nombre.toLowerCase()}.`
   const piePagina = (
     <div className="cxr-pie">
@@ -273,7 +274,7 @@ function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: 
         {filas.length === 0 && <div className="cx-tarjeta cxr-vacio">{vacio}</div>}
         <div className="cxr-tarjetas">
           {filas.map((f) => {
-            const e = entendido(f)
+            const e = entendido(f, solo)
             return (
               <article key={f.id} className={`cxr-tarjeta${f.estado === 'para_mirar' ? ' cxr-fila-mirar' : ''}`}>
                 <div className="cxr-tarjeta-cabeza">
@@ -286,7 +287,6 @@ function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: 
                 <div className="cxr-entendido">
                   <span className="cxr-entendido-titulo"><span className={`cxl-punto cxl-punto-${punto(f)}`} aria-hidden="true" /> {e.titulo}</span>
                   {e.porque && <span className="cxr-apoyo">{e.porque}</span>}
-                  <span className="cxr-apoyo">{diaMes(f.fecha)}</span>
                 </div>
                 {botonDe(f)}
               </article>
@@ -307,7 +307,7 @@ function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: 
         <tbody>
           {filas.length === 0 && <tr><td colSpan={7} className="cxr-vacio">{vacio}</td></tr>}
           {filas.map((f) => {
-            const e = entendido(f)
+            const e = entendido(f, solo)
             return (
               <tr key={f.id} className={f.estado === 'para_mirar' ? 'cxr-fila-mirar' : undefined}>
                 <td style={{ width: 48 }}><Inicial texto={ini(f)} tono={f.proveedor.nombre ? undefined : 6} /></td>

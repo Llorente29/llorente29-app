@@ -112,7 +112,7 @@ export function MenuConta() {
   )
 }
 
-export function BarraInferiorConta() {
+export function BarraInferiorConta({ sinIA = false }: { sinIA?: boolean }) {
   const { pathname } = useLocation()
   const izquierda = entradasVisibles(BARRA_CONTA.izquierda)
   const derecha = entradasVisibles(BARRA_CONTA.derecha)
@@ -127,7 +127,7 @@ export function BarraInferiorConta() {
       {izquierda.length > 0 ? izquierda.map(enlace) : (
         <Link to="/" className="cx-barra-item"><Icono nombre="folvy" />Folvy</Link>
       )}
-      <BotonIAMovil />
+      {!sinIA && <BotonIAMovil />}
       {derecha.map(enlace)}
     </nav>
   )

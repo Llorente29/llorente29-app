@@ -34,8 +34,8 @@ import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
 
-const enMarco = (pagina: ReactNode, ejemplo: string) => (
-  <EmpresasProveedor><MarcoConta ejemplo={ejemplo}>{pagina}</MarcoConta></EmpresasProveedor>
+const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = false) => (
+  <EmpresasProveedor><MarcoConta ejemplo={ejemplo} sinPregunta={sinPregunta}>{pagina}</MarcoConta></EmpresasProveedor>
 )
 
 export const contaModule: ModuleDefinition = {
@@ -75,8 +75,9 @@ export const contaModule: ModuleDefinition = {
     // Compras (encargo de compras, N18 y N19).
     { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },
-    { path: CONTA.rutas.documentos, element: enMarco(<DocumentosPage />, '¿Qué facturas me faltan este mes?') },
-    { path: CONTA.rutas.revisarFactura, element: enMarco(<RevisarFacturaPage />, '¿A qué cuenta va esta factura?') },
+    // D01 R5 · 10: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto» (como Bancos).
+    { path: CONTA.rutas.documentos, element: enMarco(<DocumentosPage />, '¿Qué facturas me faltan este mes?', true) },
+    { path: CONTA.rutas.revisarFactura, element: enMarco(<RevisarFacturaPage />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?') },

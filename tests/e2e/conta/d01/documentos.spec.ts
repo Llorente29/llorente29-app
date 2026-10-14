@@ -81,16 +81,33 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await page.goto(`/conta/documentos?mes=${MES}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Documentos' })).toBeVisible()
   // La banda de la IA dice lo que ha pasado en una frase.
-  await expect(page.getByRole('region', { name: 'Lo que ha pasado con tus facturas' })).toContainText(/Han llegado|no ha llegado ninguna/)
+  // R5 · 8: del mes elegido, no de «esta semana».
+  const bandaN22 = page.getByRole('region', { name: 'Lo que ha pasado con tus facturas' })
+  await expect(bandaN22).toContainText(/Han llegado \d+ facturas en octubre|Ha llegado 1 factura en octubre|En octubre no ha llegado ninguna/)
+  await expect(bandaN22).not.toContainText('semana')
+  // R5 · 10: sin la barra «Pregunta o pide algo» (ni el botón de la IA en el móvil) mientras solo diga «Muy pronto».
+  await expect(page.locator('.cx-pregunta, .cx-barra-ia')).toHaveCount(0)
   // Las cinco cifras.
-  for (const c of ['Llegadas esta semana', 'Apuntadas solas', 'Para mirar', 'Por aclarar', 'Esperadas y no llegadas']) {
+  for (const c of ['Llegadas en octubre', 'Apuntadas solas', 'Para mirar', 'Por aclarar', 'Esperadas y no llegadas']) {
     await expect(page.locator('.cxr-cifra', { hasText: c })).toBeVisible()
   }
   // «Para mirar»: las dos de la semilla, cada una con su porqué y un solo botón.
   const alfa = page.locator('tr, article', { hasText: 'Mayorista Prueba Alfa' })
   await expect(alfa).toHaveCount(1)
   await expect(alfa).toContainText('F-2026-1022')
-  await expect(alfa).toContainText('llegó por Correo')
+  // R5 · 7: en minúscula y lo que pasó de verdad. R5 · 9: en el móvil, la fecha junto al número.
+  await expect(alfa).toContainText(lado(page) === 'movil' ? 'F-2026-1022 · 11/10 · llegó por correo' : 'F-2026-1022 · llegó por correo')
+  await expect(page.locator('.cxr-tabla, .cxr-tarjetas')).not.toContainText(/llegó por a mano|llegó por Subida|llegó por Correo/)
+  // R5 · 6: cada fila de «Para mirar» con su porqué (ninguna se queda en «Sin cuenta de gasto todavía» a secas).
+  const filasN22 = page.locator('.cxr-tabla tbody tr:not(:has(.cxr-vacio)), .cxr-tarjetas article')
+  const nFilas = await filasN22.count()
+  expect(nFilas).toBeGreaterThan(0)
+  for (let i = 0; i < nFilas; i++) await expect(filasN22.nth(i).locator('.cxr-entendido .cxr-apoyo')).not.toHaveText('')
+  if (lado(page) === 'movil') {
+    // R5 · 9: las cuatro pestañas caben: «Todas» entera dentro de la pantalla.
+    const todas = await page.getByRole('group', { name: 'Qué facturas ver' }).getByRole('button', { name: 'Todas' }).boundingBox()
+    expect(todas && todas.x + todas.width <= page.viewportSize()!.width).toBe(true)
+  }
   await expect(alfa).toContainText(/· 60000000/)
   await expect(alfa.getByRole('button')).toHaveCount(1)
   await expect(page.locator('tr, article', { hasText: 'Suministros Eléctricos Prueba Norte' })).toHaveCount(1)
@@ -117,8 +134,23 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await expect(leido).toContainText('1.411,47 €')
   await expect(leido).toContainText(/· 60000000/)
   await expect(leido).toContainText('elegida en su ficha')
+  // R5 · 1: el vencimiento del papel («Vencimiento: 10/11/2026 · transferencia») manda.
+  await expect(leido).toContainText('10/11/2026')
+  await expect(leido).toContainText('lo dice la factura')
+  await expect(leido).not.toContainText('sin vencimiento')
+  // R5 · 5: la banda en ámbar mientras no esté apuntada. R5 · 10: sin la barra de la IA.
+  await expect(page.locator('.cx-ia-bloque.cxr-ia-ambar')).toHaveCount(1)
+  await expect(page.locator('.cx-pregunta, .cx-barra-ia')).toHaveCount(0)
   // «Cómo se apunta»: la propuesta de verdad, con nombre · código; o por qué no sale.
-  await expect(page.getByRole('region', { name: 'Cómo se apunta' })).toContainText(/· 60000000|·\s*4000\d+|periodo cerrado|no tiene|Falta/, { timeout: 20_000 })
+  const comoN23 = page.getByRole('region', { name: 'Cómo se apunta' })
+  await expect(comoN23).toContainText(/· 60000000|·\s*4000\d+|periodo cerrado|no tiene|Falta/, { timeout: 20_000 })
+  // R5 · 2 y 3: no promete «a Diez con su PDF», y las cifras van en dos columnas con su título.
+  await expect(comoN23).not.toContainText('con su PDF')
+  if (await comoN23.getByText('· 60000000').count()) {
+    await expect(comoN23).toContainText('a Diez irá cuando Cegid active los documentos')
+    await expect(comoN23).toContainText('Gasto e IVA')
+    await expect(comoN23).toContainText('A pagar')
+  }
   await expect(page.getByRole('button', { name: 'Está bien · apuntar' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Está bien · apuntar' })).toBeEnabled()
   // El papel a la izquierda, pintado (no «no tiene papel» ni «no he podido pintar»).
@@ -126,6 +158,16 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await expect(papel.getByRole('img', { name: /La factura F-2026-1022/ })).toBeVisible()
   await expect(papel).not.toContainText(/no tiene papel|No he podido pintar/, { timeout: 15_000 })
   await page.waitForTimeout(500)
+  if (lado(page) === 'movil') {
+    // R5 · 4: en el móvil, el papel recortado a lo escrito (unos 280 px como mucho), y entero al tocarlo.
+    const recorte = papel.locator('.cxr-papel-recorte')
+    const antes = (await recorte.boundingBox())!.height
+    expect(antes).toBeLessThanOrEqual(282)
+    await papel.getByRole('button', { name: 'Ver el papel entero' }).click()
+    await expect.poll(async () => (await recorte.boundingBox())!.height).toBeGreaterThan(antes + 50)
+    await papel.getByRole('button', { name: 'Recoger el papel' }).click()
+    await expect.poll(async () => (await recorte.boundingBox())!.height).toBeLessThanOrEqual(282)
+  }
   await capturar(page, 'n23-revisar-a')
   await page.getByRole('button', { name: 'Otra cosa' }).click()
   await expect(page.getByRole('dialog', { name: '¿Qué le pasa?' })).toBeVisible()

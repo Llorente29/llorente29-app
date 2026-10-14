@@ -23,7 +23,7 @@ import { proponerFactura, verPropuestaFactura } from '@/modules/conta/services/p
 import { approveInvoice } from '@/modules/supply/services/supplierInvoiceService'
 import { getReceiptFileUrl, uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
 import { fotoAPdf } from '@/modules/conta/lib/fotoAPdf'
-import type { DatosDocumentos } from '@/modules/conta/documentos/documentos'
+import type { DatosDocumentos, PlazoFicha } from '@/modules/conta/documentos/documentos'
 import type { Lectura } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
 
 type Fila = Record<string, unknown>
@@ -82,6 +82,16 @@ export async function urlDelPapel(f: Pick<FacturaRevisar, 'llegada' | 'papel'>):
 }
 
 export { verPropuestaFactura }
+
+/** R5 · 1 · El plazo de pago de su ficha, para comparar con el vencimiento de la factura (regla 9: por su cuenta). */
+export async function plazoDeLaFicha(accountId: string, supplierId: string): Promise<PlazoFicha> {
+  const { data, error } = await tabla('supplier').select('payment_terms_days, payment_fixed_days').eq('id', supplierId).eq('account_id', accountId).maybeSingle()
+  if (error) throw new Error(`No se ha podido leer el plazo de su ficha: ${error.message}`)
+  const f = data as Fila | null
+  const dias = f && typeof f.payment_terms_days === 'number' ? f.payment_terms_days : null
+  const fijos = f && Array.isArray(f.payment_fixed_days) ? (f.payment_fixed_days as unknown[]).map(Number).filter((x) => Number.isFinite(x)) : []
+  return { dias, fijos }
+}
 
 // ── Subir ───────────────────────────────────────────────────────────────────
 
