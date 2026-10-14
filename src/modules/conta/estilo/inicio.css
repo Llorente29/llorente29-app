@@ -131,5 +131,8 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
 .cxi-diez-paso-apoyo { font-size: 13px; color: var(--cx-apoyo); line-height: 1.4; }
 @media (max-width: 767px) {
   .cxi-diez-paso { flex-wrap: wrap; }
+  /* El texto ocupa su fila entera y el botón baja debajo (sin esto, el texto
+     se apretaba en una columna estrecha al lado del botón: captura del recorrido). */
+  .cxi-diez-paso-texto { flex-basis: calc(100% - 46px); }
   .cxi-diez-paso .cx-boton { margin-left: 46px; }
 }
