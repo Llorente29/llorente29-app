@@ -16,6 +16,7 @@ import { useState } from 'react'
 import { BloqueIA, Chip } from '@/modules/conta/ui/piezas'
 import { fraseHecha, repartirPropuestas, type Confianza, type OpPlan, type Propuesta } from '@/modules/conta/lib/propuestasPlan'
 import { responderPropuesta } from '@/modules/conta/services/planService'
+import { MARCA } from '../cuenta/marca'
 
 const CONFIANZA: Record<Confianza, string> = { alta: 'Confianza alta', media: 'Confianza media', baja: 'Confianza baja' }
 
@@ -61,7 +62,7 @@ export function PropuestasPlan({ propuestas, companyId, quien, alCambiar }: {
       {vista.map((p) => <Tarjeta key={p.clave} p={p} contestar={contestar(p)} ocupado={ocupado} />)}
       {tarjetas.length > 1 && (
         <button type="button" className="cx-enlace" aria-expanded={todas} onClick={() => setTodas((v) => !v)} style={{ alignSelf: 'flex-start' }}>
-          {todas ? 'Ver solo la primera' : `Folvy propone ${tarjetas.length - 1} ${tarjetas.length - 1 === 1 ? 'cosa más' : 'cosas más'}`}
+          {todas ? 'Ver solo la primera' : `${MARCA.nombre} propone ${tarjetas.length - 1} ${tarjetas.length - 1 === 1 ? 'cosa más' : 'cosas más'}`}
         </button>
       )}
       <div role="status" aria-live="polite">{hecho && <div className="cx-guardado">{hecho}</div>}</div>

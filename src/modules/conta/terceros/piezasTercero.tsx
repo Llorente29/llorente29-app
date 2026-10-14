@@ -18,6 +18,7 @@ import { MODELO_PLATAFORMA, linea347Plataforma, type ModeloPlataforma } from '@/
 import { parecido } from '@/modules/conta/lib/importarPlan'
 import { apuntarCobro, confirmarPeriodo, crearCuentaCliente, enlazarCuentaCliente, guardarModeloPlataforma, quitarCobro, asegurarCuentaLiquidacion } from '@/modules/conta/services/tercerosService'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { MARCA } from '../cuenta/marca'
 
 const TONO: Record<Estado['tono'], 'ia' | 'azul' | 'ambar' | 'neutro'> = { verde: 'ia', azul: 'azul', ambar: 'ambar', gris: 'neutro' }
 
@@ -163,7 +164,7 @@ export function ComoSeCalcula() {
         </div>
       )}
       {m.faltan.length > 0 && <div className="cx-aviso" role="status">No se puede cerrar todavía: {m.faltan.join(' ')}</div>}
-      <p className="cx-ayuda" style={{ margin: '10px 0 0' }}>Las tres líneas salen de Folvy: los albaranes de Cocina, las aportaciones que registras y las ventas por marca, en cada local. Al cerrar, Folvy prepara la liquidación de cada local y tú confirmas.</p>
+      <p className="cx-ayuda" style={{ margin: '10px 0 0' }}>Las tres líneas salen de {MARCA.nombre}: los albaranes de Cocina, las aportaciones que registras y las ventas por marca, en cada local. Al cerrar, {MARCA.nombre} prepara la liquidación de cada local y tú confirmas.</p>
     </section>
   )
 }

@@ -18,6 +18,7 @@
 import type { Celda, PaginaPdf } from '@/modules/conta/lib/lectorDiez'
 import { normalizarNif } from '@/modules/conta/lib/nif'
 import { eurosExactos } from '@/modules/conta/lib/formato'
+import { MARCA } from '../cuenta/marca'
 
 export type TipoDocumento = 'factura' | 'transaccion' | 'ventas' | 'inventario' | 'desconocido'
 
@@ -291,7 +292,7 @@ export function leerLiquidacion(docs: readonly DocumentoLiquidacion[], nifEmpres
       } else if (l.referencia && l.referencia === r.recibida?.numero) {
         if (r.recibida.total !== null && cent(l.importe) !== -cent(r.recibida.total)) r.bloqueos.push(`La transacción dice ${eur(l.importe)} de ${l.referencia}, y su factura ${eur(r.recibida.total)}.`)
       } else if (cent(l.importe) !== 0) {
-        r.bloqueos.push(`«${l.concepto}» trae ${eur(l.importe)} y Folvy no sabe qué es: dímelo antes de proponer nada.`)
+        r.bloqueos.push(`«${l.concepto}» trae ${eur(l.importe)} y ${MARCA.nombre} no sabe qué es: dímelo antes de proponer nada.`)
       } else {
         r.avisos.push(`«${l.concepto}» viene a cero.`)
       }

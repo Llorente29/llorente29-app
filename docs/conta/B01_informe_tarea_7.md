@@ -106,11 +106,11 @@ corregida dos veces se apaga sola y lo dice en «Lo que ha hecho Folvy».
 
 **Primero la base, después el front.**
 
-1. **Base** — `supabase/produccion/b01-aplicar.txt` (con su vuelta atrás en
-   `supabase/produccion/b01-vuelta-atras.txt` y lo que cuenta antes y después
-   en `scripts/conta/produccion/cuentas/bancos.sql`). No está en
-   `supabase/produccion/aplicar.txt`, que hoy tiene la tanda del C04b: cuando
-   digas el orden, su contenido pasa allí y lanzas el ensayo.
+1. **Base** — `supabase/produccion/aplicar.txt` (con su vuelta atrás en
+   `supabase/produccion/vuelta-atras.txt` y lo que cuenta antes y después en
+   `scripts/conta/produccion/cuentas/bancos.sql`). *Actualizado el 14/10,
+   después de la C06 (respuesta 6): la tanda estuvo preparada aparte
+   (`b01-aplicar.txt`) hasta su turno; ahora es la tanda viva. Ver §5.*
 
    | Orden | Fichero | Qué hace |
    |---|---|---|
@@ -184,13 +184,13 @@ nuevas · Foodint: 1 ficha de banco, la 57200001 · huella de los 50 ·
 Contexto medido el **14/10 a las 06:01 UTC** con la consulta del workflow
 (`analizar.mjs sql-contexto`, con `CAMINO_TABLAS` y `CAMINO_FUNCIONES` del
 workflow), en solo lectura, guardado con el md5 de cada fichero en
-`tests/conta/produccion/contexto-produccion-b01-20261014.json`. Ninguna tabla ni
+`tests/conta/produccion/contexto-produccion-b01-20261014.json` (sustituido el
+14/10 a las 08:01 por la medida de después de la C06: §5). Ninguna tabla ni
 función del B01 existe; nada del B01 en el historial; nada en el camino del
 pedido. Lanzado así:
 
 ```
-node scripts/conta/produccion/analisis-tanda-viva.mjs tests/conta/produccion/contexto-produccion-b01-20261014.json \
-  --manifiesto=supabase/produccion/b01-aplicar.txt --informe
+node scripts/conta/produccion/analisis-tanda-viva.mjs <contexto> --manifiesto=<tanda preparada> --informe
 ```
 
 ```
@@ -256,3 +256,107 @@ de staging salen limpias.
 Aparte, y no es de semillas: en **producción** el agente «Plan contable» tiene
 abierto el aviso #178 (13/10) con 27 rojos «Plan traído» de la cuenta de Foodint.
 No es del B01; lo dejo dicho.
+
+## 5. El turno (respuesta 6): después de la C06
+
+**`main` traído** (14/10, 08:00 UTC; `main` en `879296b`, la C06 fusionada).
+Antes, solo leyendo: los cuatro ficheros de la C06 están en el historial de
+producción, y su huella es el md5 de los ficheros de `main`.
+
+| Fichero de la C06 | Huella en producción = md5 en `main` |
+|---|---|
+| 20261111T0100_c06_cuenta_sola | `fdd1fc64…` = `fdd1fc64…` |
+| 20261111T0200_c06_diez_base | `a65962e6…` = `a65962e6…` |
+| 20261111T0300_c06_traer_listo | `a7e6f90f…` = `a7e6f90f…` |
+| 20261111T0400_c06_programa_anterior | `9e78b90a…` = `9e78b90a…` |
+
+**Conflictos de la fusión**, resueltos juntando los dos lados:
+- `estilo/index.ts` y `module.tsx`: los imports de los dos.
+- `MarcoConta.tsx` y `MenuConta.tsx`: la barra de la IA no sale ni en el producto solo (C06) ni en Bancos (B01).
+- `supabase/staging/aplicar.txt`: el mío, para no volver a lanzar la 0400 de la C06 en staging.
+
+**Lo que trajo `main` y he tenido que cambiar en el B01:**
+
+| Qué | Por qué | Cambio |
+|---|---|---|
+| Los textos de Bancos escribían «Folvy» a mano (20 sitios) | C06: contabilidad no escribe el nombre del producto, lo pide a la marca (`marcaC06.test.ts`) | `bancos/marca.ts`: con Folvy, los mismos textos de siempre; con una marca propia, lo automático dice «automático», como el libro diario |
+| Bancos sale en el menú del producto solo | Tiene ruta, y el encargo del C06 lo pide («Bancos, cuando el frente B lo tenga») | La prueba de la C06 (`marcoC00.test.ts`) lo espera ahora. **Fichero compartido**, cambio de una línea |
+| La lista de antes de subir pide «-- sin hueco: …» a la 0110 | R9 del C04b: el `delete from journal_entry` de `bank_deshacer` | Una línea de comentario en la 0110. Solo cuenta para el md5: los objetos son los mismos. En staging queda registrada con la huella de antes |
+
+**La tanda pasa a ser la viva:**
+- `supabase/produccion/aplicar.txt` y `vuelta-atras.txt` llevan ahora la del B01.
+- La de la C06 queda copiada en `tests/conta/produccion/tanda-c06-20261014.txt` y `vuelta-atras-c06-20261014.txt`.
+- Las pruebas de «la tanda de AHORA» (`analizar.test.ts`, `w01.test.ts`) ya miran el B01. En `main` fallaban cinco, porque seguían esperando la del C04b.
+
+**Producción medida otra vez, solo leyendo** (14/10, 08:01 UTC, después de la C06):
+
+| Qué | Resultado |
+|---|---|
+| Contexto | El mismo que a las 06:01: ninguna tabla ni función del B01, nada del B01 en el historial, nada en el camino del pedido. Guardado en `tests/conta/produccion/contexto-produccion-tanda-viva.json` |
+| La 0170 en seco | Las dos cuentas con un IBAN cada una, el control bien, ninguna en otra ficha ni enlazada |
+| Lo que cuenta la tanda antes | Foodint 1 ficha; huella `50 · 577331bd83ee711a6d6892f5d4e18d5d`; 0 funciones del B01 |
+
+**El paso 8**, tal cual lo corre la lista de antes de subir:
+
+```
+Análisis de la tanda viva contra el contexto de producción medido 2026-10-14T08:01Z (md5 de los 8 ficheros: los medidos).
+  20261101T0100_b01_bancos.sql: sigue
+  20261101T0110_b01_funciones.sql: sigue
+  20261101T0120_b01_foodint.sql: sigue
+  20261101T0130_b01_lectura.sql: sigue
+  20261101T0140_b01_tarjetas.sql: sigue
+  20261101T0150_b01_cierre_agente.sql: sigue
+  20261101T0160_b01_lectura_agente.sql: sigue
+  20261101T0170_b01_foodint_cuentas.sql: sigue
+  autorizo: (ninguno)
+```
+
+Con el mismo aviso de siempre: el `execute` dinámico de la 0160, que es solo
+`grant select … to conta_lectura` sobre sus 11 tablas.
+
+### 5.1 Para Julio: el ensayo
+
+**El commit:** el que te doy en el chat. Es el último de `conta/b01-bancos`,
+después de que acabe la e2e de esta fusión, porque esa e2e puede empujar un
+commit de capturas. Yo no empujo nada más a la rama hasta que me digas que el
+real está hecho.
+
+1. GitHub → **Actions** → **«Aplicar SQL en PRODUCCIÓN (contabilidad)»** → **Run workflow**.
+2. Los campos, tal cual:
+
+| Campo | Valor |
+|---|---|
+| Use workflow from | **Branch: `conta/b01-bancos`** |
+| confirmo | `produccion` |
+| modo | `ensayo` |
+| autorizo | *(vacío)* |
+
+3. **Nunca entre las :05 y las :10** de ninguna hora.
+4. El título del run lleva el commit; tiene que ser el que te he dado. Si no lo es, para y avísame.
+
+Qué tiene que salir:
+- el análisis con los ocho «sigue»;
+- los ocho ficheros aplicados y deshechos dentro de la transacción;
+- el ensayo de la vuelta atrás en verde;
+- lo que cuenta `bancos.sql`, igual antes y después.
+
+### 5.2 Para Julio: el real (después del ensayo en verde)
+
+Del **mismo commit**: el workflow busca un ensayo en verde de ese commit y, si no lo hay, para. Nadie empuja a `conta/b01-bancos` entre el ensayo y el real.
+
+| Campo | Valor |
+|---|---|
+| Use workflow from | **Branch: `conta/b01-bancos`** (el mismo commit del ensayo) |
+| confirmo | `produccion` |
+| modo | `real` |
+| autorizo | *(vacío)* |
+
+Tampoco entre las :05 y las :10.
+
+### 5.3 Después del real en verde: el front
+
+Lo abro yo cuando me digas que el real está en verde: el PR de `conta/b01-bancos` a `main`. El front lee tablas y funciones que solo existen con la tanda, así que sin ella no se fusiona.
+
+- La rama **no toca ninguna edge function**.
+- Está hecho cuando **Vercel diga READY** en producción.
+- Después, en producción, solo leyendo: las tres fichas de Foodint con su IBAN, `bancos.sql` después del real, y la huella de los 50.

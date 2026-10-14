@@ -17,6 +17,7 @@ import { leerLiquidaciones, FicheroNoReconocido, type LecturaLiquidaciones } fro
 import { liquidarLocal, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
 import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
 import { confirmarLiquidacionSocio, prepararLiquidacionSocio, subirLiquidaciones } from '@/modules/conta/services/tercerosService'
+import { MARCA } from '../cuenta/marca'
 
 const PLATAFORMA = { glovo: 'Glovo', je: 'Just Eat', uber: 'Uber Eats' } as const
 
@@ -141,7 +142,7 @@ export function NuevaFactura({ alCerrar }: { alCerrar: () => void }) {
   return (
     <Dialogo titulo="Nueva factura" alCerrar={alCerrar}>
       <p style={{ margin: 0, fontSize: 15 }}>
-        Folvy aún no emite facturas: llegan con <strong>Facturación</strong>, con su numeración y Verifactu (encargo F01, después de los asientos).
+        {MARCA.nombre} aún no emite facturas: llegan con <strong>Facturación</strong>, con su numeración y Verifactu (encargo F01, después de los asientos).
         Mientras, la ficha guarda todo lo que hará falta para facturarle: sus datos fiscales, su cobro y su cuenta.
       </p>
       <div className="cx-pie"><button type="button" className="cx-boton" onClick={alCerrar}>Entendido</button></div>

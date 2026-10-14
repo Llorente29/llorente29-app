@@ -10,6 +10,7 @@ import UpdateGate from './components/UpdateGate'
 import FranjaEntorno from './shell/version/FranjaEntorno'
 import RootErrorBoundary from './components/RootErrorBoundary'
 import './index.css'
+import { aplicarMarcaAlDocumento } from './marca/marca'
 // Worker de impresión nativo (app Capacitor): reclama la cola print_job por
 // token de dispositivo e imprime por socket a la impresora de red. Import de
 // efecto: al cargar deja disponible window.folvyPrint para arrancarlo/probarlo.
@@ -77,6 +78,10 @@ window.addEventListener('appinstalled', () => {
   window.__folvyAppInstalled = true
   window.dispatchEvent(new Event('folvy:installed'))
 })
+
+// C06: la marca de esta pestaña (dominio, o ?marca= fuera de producción) en el
+// título, el icono y el manifiesto, antes de pintar nada.
+aplicarMarcaAlDocumento()
 
 const queryClient = new QueryClient()
 

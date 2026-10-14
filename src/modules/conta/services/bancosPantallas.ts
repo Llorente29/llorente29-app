@@ -12,6 +12,7 @@ import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { bancos, type BancoFolvy, type ResultadoConciliar } from '@/modules/conta/services/bancosService'
 import { reglasNuevas } from '@/modules/conta/lib/conciliacion'
 import { limitesMes, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
+import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -163,7 +164,7 @@ export async function leerHechos(accountId: string, companyId: string, mes: stri
   const { desde, hasta } = limitesMes(mes)
   const filas = await leer(tabla('bank_activity_log').select('id, created_at, action, summary, movement_id, match_id, by_who, created_by_name, bank_match(status)')
     .eq('account_id', accountId).eq('company_id', companyId).gte('created_at', `${desde}T00:00:00Z`).lte('created_at', `${hasta}T23:59:59Z`)
-    .order('created_at', { ascending: false }).limit(500), 'lo que ha hecho Folvy')
+    .order('created_at', { ascending: false }).limit(500), LO_HECHO.toLowerCase())
   return filas.map((h) => ({ id: String(h.id), fecha: String(h.created_at), accion: String(h.action), resumen: String(h.summary), movimientoId: s(h.movement_id), casadoId: s(h.match_id),
     casadoVivo: (h.bank_match as Fila | null)?.status === 'vivo', porQuien: h.by_who === 'folvy' ? 'folvy' : 'persona', quien: s(h.created_by_name) }))
 }

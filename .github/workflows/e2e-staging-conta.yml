@@ -188,7 +188,9 @@ jobs:
           CLAVE=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
           echo "::add-mask::$CLAVE"
           # Solo los usuarios de ESTE frente: los dobles e2e0000<f>… (y, en el
-          # C, los dos del C06 si su semilla está). Sin frente, los cuatro de
+          # C, los tres del C06 si su semilla está: los dos de las cuentas solas y
+          # el administrador de plataforma de prueba, que invita en el recorrido
+          # de la tarea 6). Sin frente, los cuatro de
           # siempre. Nunca los de otro frente.
           n=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v clave="$CLAVE" -v frente="${E2E_FRENTE:-}" <<'SQL'
           with c as (
@@ -202,8 +204,9 @@ jobs:
                      (id::text like 'e2e0000' || :'frente' || '-0000-4000-8000-0000000000%'
                       and email like '%.frente-' || :'frente' || '@prueba.folvy.test')
                      or (:'frente' = 'c'
-                         and id in ('c0600000-0000-4000-8000-0000000000a1', 'c0600000-0000-4000-8000-0000000000b1')
-                         and email in ('sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test'))
+                         and id in ('c0600000-0000-4000-8000-0000000000a1', 'c0600000-0000-4000-8000-0000000000b1',
+                                    'c0600000-0000-4000-8000-0000000000f0')
+                         and email in ('sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test', 'c06.plataforma@c06-prueba.test'))
                    end
             returning 1)
           select count(*) from c;
@@ -212,11 +215,11 @@ jobs:
           n=$(echo "$n" | tr -d '[:space:]')
           # Sin frente: los dos administradores (C01), el encargado de A (C00,
           # tarea 8) y el administrador de C, sin empresa (C00, respuesta 3).
-          # Con frente: sus cuatro dobles; el C, 6 cuando está la semilla del C06.
+          # Con frente: sus cuatro dobles; el C, 7 cuando está la semilla del C06.
           case "${E2E_FRENTE:-}:$n" in
-            :4|a:4|b:4|c:4|c:6) ;;
+            :4|a:4|b:4|c:4|c:7) ;;
             :*) echo "::error::Esperaba los 4 usuarios de siempre y he tocado $n."; exit 1 ;;
-            *)  echo "::error::Esperaba los 4 usuarios del frente ${E2E_FRENTE} (6 en el C con el C06) y he tocado $n. ¿Está aplicada seed_e2e_frentes_staging.sql?"; exit 1 ;;
+            *)  echo "::error::Esperaba los 4 usuarios del frente ${E2E_FRENTE} (7 en el C con el C06) y he tocado $n. ¿Está aplicada seed_e2e_frentes_staging.sql?"; exit 1 ;;
           esac
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
           echo "Contraseña de un solo uso puesta a los $n usuarios del frente ${E2E_FRENTE:-de siempre}."

@@ -5,25 +5,49 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C04b · Respuesta 15 — el documento de cada asiento de ventas, en Folvy.
-# La tanda anterior (la regla de ventas por plataforma, 0100–0140) ya está en
-# el historial de producción con su huella (real 38380236640, 13/10); su copia
-# queda en tests/conta/produccion/tanda-ventas-plataforma-20261013.txt.
+# B01 · Bancos y conciliación (frente B, rama conta/b01-bancos). Turno de la
+# respuesta 6: después de la C06. La tanda de la C06 (20261111T0100–0400) ya
+# está en el historial de producción con su huella (comprobado el 14/10, los
+# cuatro md5 iguales a los de main); su copia queda en
+# tests/conta/produccion/tanda-c06-20261014.txt.
 #
-#   1. 20261021T0100 — todo NUEVO: el bucket privado conta-documentos (solo
-#      PDF), journal_entry_document (el PDF de un asiento validado, uno por
-#      asiento, no se cambia), conta_resumen_ventas, conta_documento_guardar
-#      y cuatro columnas que admiten nulos en external_send (document_*).
-#      Ningún dato cambia; nada del camino del pedido.
+# Orden: BASE y luego FRONT. Esta es la base; el front (la rama fusionada a
+# main, Vercel READY) va DESPUÉS de un real en verde: lee tablas y funciones
+# que solo existen con esta tanda.
 #
-# Análisis contra producción, medido el 13/10 con la consulta de solo lectura
-# del workflow: «sigue». Sin «autorizo».
+#   1. 0100 — las tablas de Bancos (extractos, movimientos, casados, reglas,
+#      registro, ajustes, contratos), todas NUEVAS, con RLS.
+#   2. 0110 — las funciones del motor (importar, casar, deshacer, proponer…),
+#      NUEVAS.
+#   3. 0120 — Foodint: serie de tesorería 4, «validar solo lo seguro»
+#      apagado, corte el 01/10/2026 (una fila nueva en bank_settings).
+#   4. 0130 — lectura para el agente y las pantallas, NUEVA.
+#   5. 0140 — tarjetas de débito, NUEVO.
+#   6. 0150 — cierre del mes, agente «Conciliación», agregador (sin pantalla),
+#      nombre corto y correcciones de reglas. Amplía el CHECK de
+#      bank_activity_log.action, que es de la 0100 (nueva en esta tanda).
+#   7. 0160 — conta_lectura lee las tablas que mira el agente nocturno.
+#   8. 0170 — Foodint: las dos fichas de banco que faltan (57200002 y
+#      57200003), con el IBAN que dice el nombre de su cuenta. CONFIRMADO por
+#      Julio (respuesta 6, 14/10): los dos IBAN son los buenos y Bancos lleva
+#      las tres cuentas. Sin local: lo pone Julio en «Cuentas y extractos».
 #
-# Lo que cuenta antes y después (R9): el bucket, sus ficheros y políticas, la
-# tabla y sus filas, las funciones, las columnas, los envíos y los asientos de
-# ventas por estado. Si el real se deshace solo, tiene que volver a lo de antes.
+# Análisis contra producción, medido en solo lectura después de la C06: el
+# contexto está en tests/conta/produccion/contexto-produccion-tanda-viva.json
+# (paso 8 de antes-de-subir.sh).
 #
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt. PARA si ya hay algún
-# documento guardado o algún fichero en el bucket.
-cuenta: scripts/conta/produccion/cuentas/documentos.sql
-supabase/migrations/20261021T0100_conta_documentos.sql
+# Lo que cuenta antes y después: scripts/conta/produccion/cuentas/bancos.sql
+# (tablas, filas, funciones, columnas, las fichas de Foodint y la huella de
+# sus 50 asientos de octubre, 577331bd…). Si el real se deshace solo, tiene que
+# volver a lo de antes.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/bancos.sql
+supabase/migrations/20261101T0100_b01_bancos.sql
+supabase/migrations/20261101T0110_b01_funciones.sql
+supabase/migrations/20261101T0120_b01_foodint.sql
+supabase/migrations/20261101T0130_b01_lectura.sql
+supabase/migrations/20261101T0140_b01_tarjetas.sql
+supabase/migrations/20261101T0150_b01_cierre_agente.sql
+supabase/migrations/20261101T0160_b01_lectura_agente.sql
+supabase/migrations/20261101T0170_b01_foodint_cuentas.sql

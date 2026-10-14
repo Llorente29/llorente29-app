@@ -3,6 +3,8 @@
 // B01 · Bancos en tres niveles (N17): las pestañas, las acciones de la barra y
 // lo que encuentra el buscador (Ctrl K). Sin React: se prueba suelto.
 
+import { LO_HECHO } from '@/modules/conta/bancos/marca'
+
 export interface PestanaBancos { id: 'movimientos' | 'reglas' | 'cuentas' | 'cierre'; nombre: string }
 export const PESTANAS_BANCOS: PestanaBancos[] = [
   { id: 'movimientos', nombre: 'Movimientos' },
@@ -28,7 +30,7 @@ export interface Buscable { vista: VistaBancos; nombre: string; donde: string; p
 export const BUSCABLES: Buscable[] = [
   { vista: 'movimientos', nombre: 'Movimientos', donde: 'Bancos', palabras: 'movimientos confirmar aclarar casar conciliar' },
   { vista: 'subir', nombre: 'Subir extracto', donde: 'Traer movimientos', palabras: 'subir extracto norma 43 n43 excel csv fichero importar' },
-  { vista: 'hecho', nombre: 'Lo que ha hecho Folvy', donde: 'Automático', palabras: 'hecho folvy deshacer automatico casado solo' },
+  { vista: 'hecho', nombre: LO_HECHO, donde: 'Automático', palabras: 'hecho folvy deshacer automatico casado solo' },
   { vista: 'reglas', nombre: 'Reglas', donde: 'Automático', palabras: 'reglas aprender siempre concepto' },
   { vista: 'cuentas', nombre: 'Cuentas y extractos', donde: 'Bancos', palabras: 'cuentas extractos tarjetas iban alta local' },
   { vista: 'cuentas', nombre: 'Tarjetas', donde: 'Cuentas y extractos', palabras: 'tarjeta tarjetas debito titular ticket' },
@@ -56,5 +58,5 @@ export function alternarFavorito(usuario: string, vista: VistaBancos, almacen: S
 }
 
 export const NOMBRE_VISTA: Record<VistaBancos, string> = {
-  movimientos: 'Movimientos', reglas: 'Reglas', cuentas: 'Cuentas y extractos', cierre: 'Cierre del mes', subir: 'Subir extracto', hecho: 'Lo que ha hecho Folvy',
+  movimientos: 'Movimientos', reglas: 'Reglas', cuentas: 'Cuentas y extractos', cierre: 'Cierre del mes', subir: 'Subir extracto', hecho: LO_HECHO,
 }

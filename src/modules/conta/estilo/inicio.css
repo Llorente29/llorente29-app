@@ -1,0 +1,138 @@
+/* src/modules/conta/estilo/inicio.css
+ *
+ * C06 · El Inicio del producto vendido solo (maqueta «Estilo nuevo · Inicio»,
+ * docs/conta/maquetas/c06/Estilo.dc.html). Solo tokens de tokens.css: ningún
+ * hex escrito. Todo cuelga de `.cxi-` (frente C).
+ */
+
+.cxi-cabecera { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.cxi-titulos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxi-titulo { margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -1.2px; line-height: 1.15; }
+.cxi-subtitulo { font-size: 16px; color: var(--cx-apoyo); }
+.cxi-acciones { display: flex; align-items: center; gap: 12px; position: relative; }
+.cxi-mes {
+  height: 44px; padding: 0 14px; border-radius: var(--cx-radio-boton); border: 1px solid var(--cx-borde-control);
+  background: var(--cx-blanco); color: var(--cx-texto); font: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
+}
+.cxi-anadir-menu {
+  position: absolute; right: 0; top: 52px; z-index: 5; min-width: 240px; background: var(--cx-blanco);
+  border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); box-shadow: var(--cx-sombra-flotante);
+  padding: 6px; display: flex; flex-direction: column;
+}
+.cxi-anadir-menu a, .cxi-anadir-menu button {
+  display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 10px; color: var(--cx-texto);
+  text-decoration: none; font-size: 15px; background: none; border: none; text-align: left; cursor: pointer; font: inherit;
+}
+.cxi-anadir-menu a:hover, .cxi-anadir-menu button:hover { background: var(--cx-azul-suave); }
+
+/* Las cuatro tarjetas */
+.cxi-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.cxi-cifra {
+  background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque);
+  padding: 18px 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; min-width: 0;
+  text-decoration: none; color: var(--cx-texto);
+}
+.cx a.cxi-cifra { color: var(--cx-texto); }
+a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
+.cxi-cifra-texto { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cxi-cifra-etiqueta { font-size: 14px; color: var(--cx-apoyo); white-space: nowrap; }
+.cxi-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 26px; font-weight: 600; letter-spacing: -1px; white-space: nowrap; color: var(--cx-texto); }
+.cxi-cifra-apoyo { font-size: 13px; font-weight: 500; color: var(--cx-apoyo); line-height: 1.35; overflow-wrap: anywhere; }
+.cxi-cifra-apoyo-verde { color: var(--cx-verde-oscuro); }
+.cxi-cifra-apoyo-ambar { color: var(--cx-ambar); }
+.cxi-barras { display: flex; align-items: flex-end; gap: 4px; height: 40px; flex-shrink: 0; }
+.cxi-barra { width: 9px; border-radius: 4px; background: var(--cx-linea); }
+.cxi-barra-ultima { background: var(--cx-azul); }
+.cxi-barra-ultima-ia { background: var(--cx-ia); }
+
+/* Las dos columnas */
+.cxi-cuerpo { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.cxi-columna { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxi-seccion {
+  background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta);
+  padding: 22px 24px; display: flex; flex-direction: column; min-width: 0;
+}
+.cxi-seccion-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-bottom: 14px; }
+.cxi-seccion-titulo { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.4px; }
+.cxi-seccion-apoyo { font-size: 14px; color: var(--cx-apoyo); white-space: nowrap; }
+.cxi-duda { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-top: 1px solid var(--cx-linea); }
+.cxi-duda-inicial {
+  width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0; color: var(--cx-texto); background: var(--cx-inicial-1);
+}
+.cxi-duda-inicial-ia { background: var(--cx-ia); }
+.cxi-duda-inicial-c { background: var(--cx-inicial-3); }
+.cxi-duda-inicial-l { background: var(--cx-inicial-4); }
+.cxi-duda-texto { flex-grow: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxi-duda-titulo { font-size: 15px; font-weight: 600; }
+.cxi-duda-apoyo { font-size: 14px; color: var(--cx-apoyo); }
+.cxi-duda-acciones { display: flex; gap: 8px; flex-shrink: 0; }
+.cxi-nada { padding: 14px 0 0; border-top: 1px solid var(--cx-linea); font-size: 15px; color: var(--cx-apoyo); margin: 0; }
+
+.cxi-hecho {
+  background: var(--cx-verde-suave); border: 1px solid var(--cx-ia-borde); border-radius: var(--cx-radio-tarjeta);
+  padding: 22px 24px; display: flex; flex-direction: column; gap: 12px;
+}
+.cxi-hecho-cabeza { display: flex; align-items: center; gap: 10px; }
+.cxi-hecho-punto { width: 10px; height: 10px; border-radius: 50%; background: var(--cx-ia); flex-shrink: 0; }
+.cxi-hecho-titulo { margin: 0; font-size: 18px; font-weight: 600; }
+.cxi-hecho-rejilla { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; }
+.cxi-hecho-dato { display: flex; align-items: baseline; gap: 10px; }
+.cxi-hecho-numero { font-family: var(--cx-letra-cifras); font-size: 24px; font-weight: 600; color: var(--cx-verde-oscuro); }
+.cxi-hecho-texto { font-size: 15px; color: var(--cx-ia-apoyo); }
+.cxi-hecho-enlace { font-size: 14px; font-weight: 600; color: var(--cx-verde-oscuro); }
+
+.cxi-cierre { display: flex; flex-direction: column; gap: 6px; }
+.cxi-progreso { height: 8px; border-radius: 99px; background: var(--cx-linea); overflow: hidden; margin-bottom: 6px; }
+.cxi-progreso-barra { height: 100%; background: var(--cx-ia); }
+.cxi-paso { display: flex; align-items: center; gap: 12px; min-height: 34px; font-size: 15px; }
+.cxi-paso-marca {
+  width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; flex-shrink: 0; box-sizing: border-box;
+}
+.cxi-paso-hecho .cxi-paso-marca { background: var(--cx-ia); color: var(--cx-texto); }
+.cxi-paso-hecho .cxi-paso-texto { color: var(--cx-apoyo); text-decoration: line-through; }
+.cxi-paso-falta .cxi-paso-marca { border: 2px solid var(--cx-azul); background: var(--cx-azul-suave); }
+.cxi-paso-falta .cxi-paso-texto { font-weight: 600; }
+
+@media (max-width: 1200px) {
+  .cxi-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cxi-cuerpo { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .cxi-titulo { font-size: 28px; letter-spacing: -1px; }
+  .cxi-cifras { gap: 10px; }
+  .cxi-cifra { padding: 14px; flex-direction: column; align-items: flex-start; }
+  .cxi-cifra-valor { font-size: 22px; }
+  .cxi-barras { height: 28px; }
+  .cxi-seccion, .cxi-hecho { padding: 18px; }
+  .cxi-duda { flex-wrap: wrap; }
+  .cxi-duda-acciones { width: 100%; padding-left: 50px; }
+  .cxi-hecho-rejilla { grid-template-columns: 1fr; }
+  .cxi-acciones { width: 100%; }
+  .cxi-mes { flex: 1; }
+}
+
+/* C06, respuesta 3 · Traer de Diez en cuatro pasos. Clases propias (cxi-diez-*):
+   .cxi-paso es de «Cerrar el mes» y no se comparte. */
+.cxi-diez { margin-bottom: 14px; }
+.cxi-diez-pasos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cxi-diez-paso { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+.cxi-diez-paso:first-child { border-top: none; }
+.cxi-diez-paso-numero {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-family: var(--cx-letra-cifras); font-weight: 600; font-size: 15px; background: var(--cx-linea); color: var(--cx-apoyo);
+}
+.cxi-diez-paso-hecho .cxi-diez-paso-numero { background: var(--cx-verde-oscuro); color: var(--cx-blanco); }
+.cxi-diez-paso-falta .cxi-diez-paso-numero { background: var(--cx-azul); color: var(--cx-blanco); }
+.cxi-diez-paso-texto { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.cxi-diez-paso-titulo { font-size: 15px; font-weight: 600; color: var(--cx-texto); }
+.cxi-diez-paso-espera .cxi-diez-paso-titulo { color: var(--cx-apoyo); }
+.cxi-diez-paso-apoyo { font-size: 13px; color: var(--cx-apoyo); line-height: 1.4; }
+@media (max-width: 767px) {
+  .cxi-diez-paso { flex-wrap: wrap; }
+  /* El texto ocupa su fila entera y el botón baja debajo (sin esto, el texto
+     se apretaba en una columna estrecha al lado del botón: captura del recorrido). */
+  .cxi-diez-paso-texto { flex-basis: calc(100% - 46px); }
+  .cxi-diez-paso .cx-boton { margin-left: 46px; }
+}

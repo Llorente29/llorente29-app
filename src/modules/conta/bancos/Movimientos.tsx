@@ -26,6 +26,7 @@ import { guardarRegla, ignorar, leerMovimientos, saldosContables, subirTicket, u
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
+import { LO_HECHO, LO_QUE_CREE, NOMBRE } from '@/modules/conta/bancos/marca'
 
 type Segmento = 'confirmar' | 'aclarar' | 'todo'
 const SEGMENTOS: { id: Segmento; nombre: string }[] = [{ id: 'confirmar', nombre: 'Para confirmar' }, { id: 'aclarar', nombre: 'Por aclarar' }, { id: 'todo', nombre: 'Todo' }]
@@ -182,7 +183,7 @@ export function Movimientos() {
               Mi última pasada por todos tus bancos, {cuandoPasada(lectura.datos.pasada.cuando, ctx.hoy)} ({lectura.datos.pasada.disparo === 'extracto' ? 'al subir un extracto' : 'la del día'}): {lectura.datos.pasada.resumen}
             </span>
           )}
-          <span>Lo casado solo está en «Lo que ha hecho Folvy», con el porqué y para deshacer. Nada pasa a contabilidad sin que esté seguro o lo confirmes tú.</span>
+          <span>Lo casado solo está en «{LO_HECHO}», con el porqué y para deshacer. Nada pasa a contabilidad sin que esté seguro o lo confirmes tú.</span>
         </div>
         <Link to={`${rutaBancos('hecho')}?banco=${banco.id}&mes=${mes}`} className="cx-boton-sec">Ver lo que he hecho</Link>
       </div>
@@ -225,7 +226,7 @@ export function Movimientos() {
           <span role="columnheader">Lo que dice el banco</span>
           <span role="columnheader" className="cxb-der">Importe</span>
           <span role="columnheader"><span className="cx-oculto">Estado</span></span>
-          <span role="columnheader">Lo que Folvy cree que es</span>
+          <span role="columnheader">{LO_QUE_CREE}</span>
           <span role="columnheader"><span className="cx-oculto">Qué hacer</span></span>
         </div>
         {mostradas.map((f) => {
@@ -256,7 +257,7 @@ export function Movimientos() {
             : segmento === 'confirmar' ? 'No te queda nada por confirmar.' : 'No te queda nada por aclarar.'}</p>
         )}
         <div className="cxb-pie">
-          <span>Verde: casado solo, con deshacer. Ámbar: Folvy lo cree, confírmalo. Gris: falta algo y te dice qué. Cada movimiento se casa una sola vez.</span>
+          <span>Verde: casado solo, con deshacer. Ámbar: {NOMBRE} lo cree, confírmalo. Gris: falta algo y te dice qué. Cada movimiento se casa una sola vez.</span>
           {!todas && elegidas.length > VISIBLES && <button type="button" className="cx-enlace cxb-enlace-boton" onClick={() => setTodas(true)}>Ver los {elegidas.length}</button>}
         </div>
       </div>

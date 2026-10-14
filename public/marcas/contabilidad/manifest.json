@@ -1,0 +1,14 @@
+{
+  "name": "Contabilidad",
+  "short_name": "Contabilidad",
+  "description": "Tu contabilidad al día, sin saber de cuentas.",
+  "start_url": "/conta/inicio",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F5F7FA",
+  "theme_color": "#2F5BFF",
+  "icons": [
+    { "src": "/marcas/contabilidad/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

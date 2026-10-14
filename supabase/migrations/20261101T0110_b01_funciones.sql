@@ -1,6 +1,11 @@
 -- ============================================================================
 -- B01 · 2 · BANCOS Y CONCILIACIÓN: LAS FUNCIONES
 -- ----------------------------------------------------------------------------
+-- sin hueco: el único «delete from journal_entry» está DENTRO de bank_deshacer
+--   (no se ejecuta al aplicar). Borra solo la propuesta de origen «bank» que
+--   creó el propio casado, cuando una persona lo deshace; no toca asientos ni
+--   resúmenes de ventas del día y ningún otro proceso la rehace (R9 del C04b).
+--
 -- Encargo B01, tarea 3. Todo NUEVO: funciones que no existían. Solo ellas
 -- escriben en las tablas de 20261101T0100; cada una comprueba que quien llama
 -- es administrador o encargado de la cuenta (como validar en el libro).

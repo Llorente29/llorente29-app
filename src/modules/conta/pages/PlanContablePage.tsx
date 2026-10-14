@@ -33,6 +33,7 @@ import { propuestasDelPlan } from '@/modules/conta/lib/propuestasPlan'
 import { nombreCorto } from '@/modules/conta/lib/importarPlan'
 import { TraerPlan } from '@/modules/conta/plan/TraerPlan'
 import { DeshacerTraido } from '@/modules/conta/plan/DeshacerTraido'
+import { MARCA } from '../cuenta/marca'
 
 const GRUPOS: Record<number, string> = {
   1: 'Financiación básica', 2: 'Inmovilizado', 3: 'Existencias', 4: 'Acreedores y deudores', 5: 'Cuentas financieras',
@@ -42,7 +43,12 @@ const GRUPOS: Record<number, string> = {
 
 // ── Activar ─────────────────────────────────────────────────────────────────
 
-function Activar({ p }: { p: DatosPlan }) {
+/**
+ * C06 (regla 8): al activarse, la página pasa a la del plan activo y esta tarjeta
+ * desaparece con su «Plan activado: …». Por eso el resultado se le pasa también a
+ * la página (`alActivar`), que lo enseña arriba en la del plan activo.
+ */
+function Activar({ p, alActivar }: { p: DatosPlan; alActivar: (texto: string) => void }) {
   const { quien, plan } = useAjustes()
   const [comun, setComun] = useState(false)
   const h = useHacer(plan.recargar)
@@ -51,7 +57,7 @@ function Activar({ p }: { p: DatosPlan }) {
     <section className="cx-tarjeta cx-apartado" aria-labelledby="activar-titulo">
       <h2 id="activar-titulo" className="cx-tarjeta-titulo">Activar el plan contable</h2>
       <p className="cx-ayuda">
-        Folvy copia las cuentas del plan de {p.plan === 'pymes' ? 'pymes' : 'general'} (las del BOE, con su título oficial) con {p.digitos} dígitos,
+        {MARCA.nombre} copia las cuentas del plan de {p.plan === 'pymes' ? 'pymes' : 'general'} (las del BOE, con su título oficial) con {p.digitos} dígitos,
         y crea las subcuentas que ya se pueden crear: las del IVA por cada tipo, una por cada banco y una por cada proveedor
         ({p.proveedores.length} {p.proveedores.length === 1 ? 'proveedor' : 'proveedores'}, {p.bancos.length} {p.bancos.length === 1 ? 'banco' : 'bancos'}).
         Los que te venden mercancía van a 400 y los que te prestan servicios, a 410.
@@ -63,6 +69,7 @@ function Activar({ p }: { p: DatosPlan }) {
           onClick={() => void h.hacer(async () => {
             const r = await activarPlan(quien.companyId, comun, null)
             resultado.current = `Plan activado: ${r.cuentas} cuentas de serie, ${r.subcuentas} subcuentas y ${r.enlaces} enlaces.${r.avisos.length ? ` Ojo: ${r.avisos.join(' ')}` : ''}`
+            alActivar(resultado.current)
           }, () => resultado.current)}>
           {h.guardando ? 'Activando…' : 'Activar el plan'}
         </button>
@@ -385,7 +392,9 @@ function Contenido() {
   const [panel, setPanel] = useState<{ id: string; modo: Modo } | null>(null)
   const [anadiendo, setAnadiendo] = useState(false)
   // C02c: «No, empiezo de cero» (la activación normal) en vez de traer el plan; y lo que se ha traído o deshecho, en una frase.
-  const [deCero, setDeCero] = useState(false)
+  // C06: «Traer tu contabilidad de Diez» llega con ?empezar=de-cero: lo de Diez lo
+  // trae la marca en su paso; aquí solo se activa el plan del BOE.
+  const [deCero, setDeCero] = useState(() => params.get('empezar') === 'de-cero')
   const [aviso, setAviso] = useState<string | null>(null)
   const accion = useHacer(plan.recargar)
   const p = plan.datos
@@ -438,7 +447,7 @@ function Contenido() {
         {cabeza}
         {avisoTraer}
         {deCero
-          ? <><button type="button" className="cx-enlace cx-traer-volver" onClick={() => setDeCero(false)}>‹ Vengo de otro programa</button><Activar p={p} /></>
+          ? <><button type="button" className="cx-enlace cx-traer-volver" onClick={() => setDeCero(false)}>‹ Vengo de otro programa</button><Activar p={p} alActivar={setAviso} /></>
           : <TraerPlan p={p} empezarDeCero={() => setDeCero(true)} alTraer={(f) => { setAviso(f); setDeCero(false) }} />}
         <Pie p={p} />
       </>

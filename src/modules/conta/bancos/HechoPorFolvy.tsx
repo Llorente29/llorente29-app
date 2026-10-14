@@ -15,6 +15,7 @@ import { bancos as nucleo } from '@/modules/conta/services/bancosService'
 import { leerHechos } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
+import { LO_HECHO, QUIEN_AUTOMATICO, SOLO_AUTOMATICO } from '@/modules/conta/bancos/marca'
 
 const ACCION: Record<string, string> = {
   importado: 'Extracto subido', casado: 'Casado', enlazado: 'Enlazado', propuesto: 'Propuesto', por_aclarar: 'Por aclarar',
@@ -31,7 +32,7 @@ export function HechoPorFolvy() {
   const hechos = useLeer(() => leerHechos(accountId, companyId, mes), `${companyId}:${mes}:${vuelta}`)
 
   if (hechos.error) return <ErrorConReintento mensaje={hechos.error} reintentar={hechos.recargar} />
-  if (!hechos.datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando lo que ha hecho Folvy">{[0, 1, 2].map((i) => <Hueso key={i} alto={44} />)}</div>
+  if (!hechos.datos) return <div className="cx-tarjeta" aria-busy="true" aria-label={`Cargando ${LO_HECHO.toLowerCase()}`}>{[0, 1, 2].map((i) => <Hueso key={i} alto={44} />)}</div>
   const deFolvy = hechos.datos.filter((h) => h.porQuien === 'folvy')
   const vistos = todo ? hechos.datos : deFolvy
   const casados = deFolvy.filter((h) => h.accion === 'casado')
@@ -39,9 +40,9 @@ export function HechoPorFolvy() {
   return (
     <section className="cxb-seccion" aria-labelledby="cxb-hecho-titulo">
       <div className="cxl-seccion">
-        <div><h2 id="cxb-hecho-titulo">Lo que ha hecho Folvy</h2><p className="cx-ayuda">En {nombreMes(mes).toLowerCase()}, con el porqué de cada cosa.</p></div>
+        <div><h2 id="cxb-hecho-titulo">{LO_HECHO}</h2><p className="cx-ayuda">En {nombreMes(mes).toLowerCase()}, con el porqué de cada cosa.</p></div>
         <div className="cxl-segmento" role="group" aria-label="Qué ver">
-          <button type="button" aria-pressed={!todo} onClick={() => setTodo(false)}>Solo Folvy · {deFolvy.length}</button>
+          <button type="button" aria-pressed={!todo} onClick={() => setTodo(false)}>{SOLO_AUTOMATICO} · {deFolvy.length}</button>
           <button type="button" aria-pressed={todo} onClick={() => setTodo(true)}>Y lo de las personas · {hechos.datos.length}</button>
         </div>
       </div>
@@ -59,13 +60,13 @@ export function HechoPorFolvy() {
           <div key={h.id} className="cxb-lista-fila">
             <span className="cxb-lista-texto">
               <strong>{h.resumen}</strong>
-              <span className="cx-ayuda">{fechaLarga(h.fecha)} {hora(h.fecha)} · {ACCION[h.accion] ?? h.accion} · {h.porQuien === 'folvy' ? 'Folvy' : h.quien ?? 'una persona'}{h.accion === 'casado' && !h.casadoVivo ? ' · ya deshecho' : ''}</span>
+              <span className="cx-ayuda">{fechaLarga(h.fecha)} {hora(h.fecha)} · {ACCION[h.accion] ?? h.accion} · {h.porQuien === 'folvy' ? QUIEN_AUTOMATICO : h.quien ?? 'una persona'}{h.accion === 'casado' && !h.casadoVivo ? ' · ya deshecho' : ''}</span>
             </span>
             {h.accion === 'casado' && h.casadoVivo && h.casadoId && (
               <button type="button" className="cx-boton-sec" disabled={!!ocupado} onClick={async () => {
                 setOcupado(h.id); setAviso(null)
                 try {
-                  await nucleo.deshacer(h.casadoId!, 'Deshecho desde «Lo que ha hecho Folvy»')
+                  await nucleo.deshacer(h.casadoId!, `Deshecho desde «${LO_HECHO}»`)
                   setAviso({ tipo: 'ok', texto: `Deshecho: «${h.resumen}». El movimiento vuelve a estar sin casar.` })
                   refrescarCuentasMenu(); recargar(); hechos.recargar()
                 } catch (e) { setAviso({ tipo: 'error', texto: e instanceof Error ? e.message : String(e) }) } finally { setOcupado(null) }

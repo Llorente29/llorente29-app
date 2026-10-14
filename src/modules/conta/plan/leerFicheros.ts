@@ -16,6 +16,7 @@ import * as XLSX from 'xlsx'
 import { partirCsv, type Programa } from '@/modules/conta/lib/importarPlan'
 import { leerPdfDiez, PdfNoReconocido, type LecturaPdf } from '@/modules/conta/lib/lectorDiez'
 import { celdasPdf, type PdfJs } from '@/modules/conta/lib/celdasPdf'
+import { MARCA } from '../cuenta/marca'
 
 export interface FicheroAbierto {
   nombre: string
@@ -51,7 +52,7 @@ export async function abrir(f: File, programa: Programa): Promise<FicheroAbierto
   const ext = EXT(f.name)
   const bytes = await f.arrayBuffer()
   if (ext === 'pdf') {
-    if (programa !== 'diez') throw new FicheroNoValido('De este programa Folvy lee Excel o CSV, no PDF: expórtalo a Excel y suéltalo aquí.')
+    if (programa !== 'diez') throw new FicheroNoValido(`De este programa ${MARCA.nombre} lee Excel o CSV, no PDF: expórtalo a Excel y suéltalo aquí.`)
     let paginas
     try {
       paginas = await celdasPdf(await pdfjs(), bytes)
@@ -81,5 +82,5 @@ export async function abrir(f: File, programa: Programa): Promise<FicheroAbierto
     }
     throw new FicheroNoValido(`«${f.name}» no tiene ninguna hoja con datos.`)
   }
-  throw new FicheroNoValido(`«${f.name}» no es un fichero que Folvy sepa leer: esperaba un PDF de Diez, un Excel (.xlsx, .xls) o un CSV.`)
+  throw new FicheroNoValido(`«${f.name}» no es un fichero que ${MARCA.nombre} sepa leer: esperaba un PDF de Diez, un Excel (.xlsx, .xls) o un CSV.`)
 }

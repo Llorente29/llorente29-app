@@ -20,6 +20,12 @@ export interface Account {
   metadata: Record<string, unknown>
   created_at: string
   updated_at: string
+  /**
+   * C06 · Marca con la que se vendió una cuenta SOLO de contabilidad
+   * (supabase/functions/_shared/marcas.ts). Null: cuenta de Folvy de siempre.
+   * Opcional: hasta que la migración 20261111T0100 esté aplicada no viene.
+   */
+  product_brand?: string | null
 }
 
 export type ModuleCategory = 'core' | 'operations' | 'sales' | 'integrations' | 'custom'

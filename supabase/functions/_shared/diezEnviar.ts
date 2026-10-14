@@ -29,7 +29,7 @@
 //      sube el documento: la factura ya está).
 //   7. Como mucho 3 intentos que escriben en Diez (regla 5 del encargo).
 
-import { BASE_REAL, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
+import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
 import { facturaDeVentas } from './diezFactura.ts'
 import { resumenDeAsiento, type ResumenBD } from './resumenDeAsiento.ts'
@@ -137,12 +137,13 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
   const listo = resumenDeAsiento(r, { correspondencia: corr, generado: p.ahora(), hoy: hoyMadrid(p.ahora()) })
   if (!listo.factura) return apuntar(listo.sinFactura ?? 'esta factura no se sabe mandar', {}, false)
 
-  // 3 · La conexión: ni C0001 ni C0008.
+  // 3 · La conexión: ni C0001 ni ninguna base real. C0008 como hasta hoy, y
+  // (C06) la base registrada de otra empresa también es real: cerrada igual.
   const con = await p.conexion(r.company_id)
   if (!con) return apuntar('la conexión con Diez no está configurada para esta empresa')
   const bd = con.nombreBd.trim().toUpperCase()
   if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
-  if (bd === BASE_REAL) return apuntar(`Diez real (${BASE_REAL}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  if (bd !== BASE_PRUEBAS) return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
   if (previo && previo.attempts >= MAX_INTENTOS) return noLlega(`ya van ${previo.attempts} intentos: lo tiene que mirar una persona`, false)
 
   // El PDF que va es el guardado, y es el registrado.

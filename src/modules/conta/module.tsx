@@ -8,7 +8,6 @@
 // No depende de Cocina para nada: se puede vender solo.
 
 import type { ReactNode } from 'react'
-import { Navigate } from 'react-router-dom'
 import { Calculator } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import { CONTA } from '@/config/navegacion'
@@ -32,6 +31,10 @@ import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
+import InicioPage from '@/modules/conta/inicio/InicioPage'
+import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
+import { Portada } from '@/modules/conta/marco/Portada'
+import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
 
 const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = false) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo} sinPregunta={sinPregunta}>{pagina}</MarcoConta></EmpresasProveedor>
@@ -39,7 +42,7 @@ const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = false) => (
 
 export const contaModule: ModuleDefinition = {
   id: 'conta',
-  name: 'Folvy Conta',
+  name: CON_MARCA ? MARCA.nombre : 'Folvy Conta',
   icon: Calculator,
   topBarOrder: 10,
   requiredRole: 'admin',
@@ -47,7 +50,14 @@ export const contaModule: ModuleDefinition = {
   chrome: 'propio',
   featureFlag: CONTA.interruptor,
   routes: [
-    { path: '', element: <Navigate to={CONTA.rutas.empresa} replace /> },
+    // Con Folvy, Ajustes; en el producto vendido solo (C06), su Inicio.
+    { path: '', element: <Portada /> },
+    // C06 · Inicio («Estilo nuevo · Inicio»): la portada del producto vendido solo.
+    { path: CONTA.rutas.inicio, element: enMarco(<InicioPage />, '¿Cuánto llevo gastado en luz?') },
+    // C06 · La ficha del proveedor dentro de contabilidad, sin las piezas de
+    // Cocina (sin extensiones): la del producto vendido solo.
+    { path: CONTA.rutas.fichaProveedor, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },
+    { path: CONTA.rutas.fichaProveedorApartado, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },
     // Ajustes como índice lateral (C02 §5a): cada entrada en ajustes/:entrada;
     // Plan contable y Tablas generales tienen su propia página dentro del marco.
     { path: CONTA.rutas.empresa, element: enMarco(<AjustesPage />, 'Añade a Pablo como apoderado') },
@@ -85,7 +95,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },
-    { path: '*', element: <Navigate to={`/${CONTA.modulo}/${CONTA.rutas.empresa}`} replace /> },
+    { path: '*', element: <Portada /> },
   ],
   sidebar: {
     // El Shell no pinta este menú (marco propio): sirve para decidir si el

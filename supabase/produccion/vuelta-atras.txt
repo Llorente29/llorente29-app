@@ -1,8 +1,13 @@
-# Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
-# inverso. C04b · Respuesta 15 — el documento de cada asiento de ventas.
-# El .down.sql PARA si ya hay algún documento guardado o algún fichero en el
-# bucket: quitarlo se llevaría el enlace de un PDF de verdad con su asiento.
-# En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
-# esperado: se deshace la tanda) y no para.
-cuenta: scripts/conta/produccion/cuentas/documentos.sql
-supabase/vuelta-atras/20261021T0100_conta_documentos.down.sql
+# Vuelta atrás de la tanda del B01 (modo «vuelta_atras»), en orden inverso.
+# Cada .down.sql PARA si ya hay trabajo de verdad encima (extractos,
+# movimientos, casados, cierres, tarjetas o conexiones): quitarlo se llevaría
+# lo que alguien ha hecho.
+cuenta: scripts/conta/produccion/cuentas/bancos.sql
+supabase/vuelta-atras/20261101T0170_b01_foodint_cuentas.down.sql
+supabase/vuelta-atras/20261101T0160_b01_lectura_agente.down.sql
+supabase/vuelta-atras/20261101T0150_b01_cierre_agente.down.sql
+supabase/vuelta-atras/20261101T0140_b01_tarjetas.down.sql
+supabase/vuelta-atras/20261101T0130_b01_lectura.down.sql
+supabase/vuelta-atras/20261101T0120_b01_foodint.down.sql
+supabase/vuelta-atras/20261101T0110_b01_funciones.down.sql
+supabase/vuelta-atras/20261101T0100_b01_bancos.down.sql

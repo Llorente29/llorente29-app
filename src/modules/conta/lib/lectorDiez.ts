@@ -28,6 +28,7 @@
 // un espacio donde el PDF trae el carácter espacio (textoDeGlifos, abajo).
 
 import { limpiar, nifDeListado, type CuentaLeida, type Lectura, type TerceroLeido } from '@/modules/conta/lib/importarPlan'
+import { MARCA } from '../cuenta/marca'
 
 export interface Celda { x: number; y: number; texto: string }
 export interface PaginaPdf { celdas: Celda[] }
@@ -176,7 +177,7 @@ export function leerPdfDiez(paginas: readonly PaginaPdf[], nombre: string): Lect
     throw new PdfNoReconocido(`«${nombre}» dice que tiene ${totalPaginas} páginas y llegan ${paginas.length}: falta alguna. Vuelve a sacarlo de Diez entero.`)
   }
   if (registros !== null && registros !== cuentas.length) {
-    throw new PdfNoReconocido(`«${nombre}» dice «${registros} registros» y Folvy ha leído ${cuentas.length}: no sigo, porque faltaría o sobraría algo. Vuelve a sacarlo de Diez o mándalo en Excel.`)
+    throw new PdfNoReconocido(`«${nombre}» dice «${registros} registros» y ${MARCA.nombre} ha leído ${cuentas.length}: no sigo, porque faltaría o sobraría algo. Vuelve a sacarlo de Diez o mándalo en Excel.`)
   }
   return { listado, lectura: { programa: 'diez', cuentas, terceros, avisos }, registros }
 }

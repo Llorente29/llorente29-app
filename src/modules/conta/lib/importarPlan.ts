@@ -18,6 +18,7 @@
 
 import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 import { normalizarIban, validarIban } from '@/modules/conta/lib/iban'
+import { MARCA } from '../cuenta/marca'
 
 export type Programa = 'diez' | 'sage50' | 'contasol' | 'holded' | 'otro'
 
@@ -237,7 +238,7 @@ export function resumir(
     return { ...vacio(`El fichero mezcla longitudes: ${porLong.get(digitos)} cuentas de ${digitos} dígitos y ${distintas.length} de otra (${distintas.slice(0, 3).map((c) => c.code).join(', ')}${distintas.length > 3 ? '…' : ''}). No se renumera nada: revisa el fichero.`), digitos }
   }
   if (digitos !== empresa.digitos) {
-    return { ...vacio(`Tus cuentas de ese programa tienen ${digitos} dígitos y tu empresa en Folvy usa ${empresa.digitos}. Para traerlas con su número tienen que coincidir: cambia la longitud en Tus impuestos y detalle contable (aún se puede, no hay asientos) y vuelve.`), digitos }
+    return { ...vacio(`Tus cuentas de ese programa tienen ${digitos} dígitos y tu empresa en ${MARCA.nombre} usa ${empresa.digitos}. Para traerlas con su número tienen que coincidir: cambia la longitud en Tus impuestos y detalle contable (aún se puede, no hay asientos) y vuelve.`), digitos }
   }
   const vistos = new Set<string>()
   const cuentas: CuentaClasificada[] = []

@@ -22,6 +22,7 @@ import { filaDe, limitesMes, nombreConCodigo, nombreMes } from '@/modules/conta/
 import { asientosSinMovimiento, cerrarMes, leerMovimientos, mesesEstado, reabrirMes, type EstadoMes } from '@/modules/conta/services/bancosPantallas'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import type { BancoVista } from '@/modules/conta/services/bancosPantallas'
+import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
 type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
 
@@ -145,7 +146,7 @@ export function CierreDelMes() {
             const d = dialogo
             if (d.que === 'reabrir') { await reabrirMes(d.e.cierre!.id, motivo); setDialogo(null); return `Reabierto ${nombre} de ${d.banco.nombre}: «${motivo}».` }
             await cerrarMes(d.banco.id, mes, true, motivo); setDialogo(null)
-            return `Cerrado ${nombre} de ${d.banco.nombre} a sabiendas: «${motivo}». Queda en «Lo que ha hecho Folvy».`
+            return `Cerrado ${nombre} de ${d.banco.nombre} a sabiendas: «${motivo}». Queda en «${LO_HECHO}».`
           })}
         />
       )}

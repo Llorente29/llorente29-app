@@ -19,6 +19,7 @@ import { abrirExtracto, bancos as nucleo, emparejar, leerYCuadrar, type Extracto
 import { pasarAgente, recordarIban } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
+import { NOMBRE } from '@/modules/conta/bancos/marca'
 
 type Paso =
   | { que: 'elegir' }
@@ -121,7 +122,7 @@ export function SubirExtracto() {
                   {nuevoIban && <span className="cx-ayuda">Recordaré que este IBAN va a {elegido!.nombre}.</span>}
                 </span>
                 <label className="cxb-local">
-                  <span className="cx-oculto">Banco de Folvy</span>
+                  <span className="cx-oculto">Banco de {NOMBRE}</span>
                   <select className="cx-input" value={asignacion[i] ?? ''} onChange={(e) => setAsignacion(asignacion.map((x, j) => (j === i ? e.target.value : x)))}>
                     <option value="">Elige el banco…</option>
                     {datos.bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre}</option>)}

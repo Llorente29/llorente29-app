@@ -14,6 +14,7 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { estadoBanco, filaDe, nombreCorto, resumenFilas, ultimosIban } from '@/modules/conta/lib/bancosVista'
 import { leerMovimientos } from '@/modules/conta/services/bancosPantallas'
 import { useBancos } from '@/modules/conta/bancos/contexto'
+import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
 export function PortadaMovil({ casadosSolos }: { casadosSolos: number }) {
   const { accountId, banco, mes, datos, vuelta, elegirBanco, subir } = useBancos()
@@ -38,7 +39,7 @@ export function PortadaMovil({ casadosSolos }: { casadosSolos: number }) {
   const apartados: { vista: string; extra?: Record<string, string>; titulo: string; resumen: string; ambar?: boolean }[] = [
     { vista: 'movimientos', extra: { ver: 'confirmar' }, titulo: 'Para confirmar', resumen: r.paraConfirmar ? `${r.paraConfirmar} · un «Sí» cada uno` : 'Nada por confirmar', ambar: r.paraConfirmar > 0 },
     { vista: 'movimientos', extra: { ver: 'aclarar' }, titulo: 'Por aclarar', resumen: r.porAclarar ? `${r.porAclarar} · te digo qué falta` : 'Nada por aclarar', ambar: r.porAclarar > 0 },
-    { vista: 'hecho', titulo: 'Lo que ha hecho Folvy', resumen: `${casadosSolos} casados solos este mes, vivos · con deshacer` },
+    { vista: 'hecho', titulo: LO_HECHO, resumen: `${casadosSolos} casados solos este mes, vivos · con deshacer` },
     { vista: 'reglas', titulo: 'Reglas', resumen: `${datos.reglas.activas} ${datos.reglas.activas === 1 ? 'regla' : 'reglas'}${datos.reglas.nuevas ? ` · ${datos.reglas.nuevas} nuevas` : ''}` },
     { vista: 'cuentas', titulo: 'Cuentas y extractos', resumen: `${datos.bancos.length} ${datos.bancos.length === 1 ? 'cuenta' : 'cuentas'} · ${tarjetas} ${tarjetas === 1 ? 'tarjeta' : 'tarjetas'}` },
     { vista: 'cierre', titulo: 'Cierre del mes', resumen: 'El saldo del banco frente al de contabilidad' },

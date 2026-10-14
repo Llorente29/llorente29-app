@@ -4,6 +4,8 @@
 // la marca «IA» y cómo se dice en palabras lo que la IA hizo. Sin React ni
 // base de datos.
 
+import { MARCA } from '../cuenta/marca'
+
 /** De dónde sale un dato que no escribió una persona (ai_data_origin). */
 export interface Origen {
   tableKey: string
@@ -31,10 +33,10 @@ export function hechoAlAceptar(s: Sugerencia, anadidos: string[] = []): string {
     // Con su anual, si la tabla de modelos lo manda (respuesta 3: todo periódico lleva su anual).
     const otros = anadidos.filter((m) => m !== s.payload.modelo)
     return otros.length
-      ? `Añadidos el modelo ${s.payload.modelo} y su resumen anual, el ${otros.join(' y el ')}, a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho Folvy».`
-      : `Añadido el modelo ${s.payload.modelo} a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho Folvy».`
+      ? `Añadidos el modelo ${s.payload.modelo} y su resumen anual, el ${otros.join(' y el ')}, a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho ${MARCA.nombre}».`
+      : `Añadido el modelo ${s.payload.modelo} a lo que presentas. Si no era así, lo deshaces en «Lo que ha hecho ${MARCA.nombre}».`
   }
-  return 'Hecho. Si no era así, lo deshaces en «Lo que ha hecho Folvy».'
+  return `Hecho. Si no era así, lo deshaces en «Lo que ha hecho ${MARCA.nombre}».`
 }
 
 export interface Registro {

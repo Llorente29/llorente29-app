@@ -19,6 +19,7 @@ import { tabla, mensaje } from '@/modules/conta/services/bd'
 import type { AjusteSerie, CuentaEditable, DefinicionTabla, FilaGeneral, Valores } from '@/modules/conta/tablas/registro'
 import { TABLAS_GENERALES } from '@/modules/conta/tablas/registro'
 import type { ContextoUso, ProveedorParaUso } from '@/modules/conta/tablas/usadas'
+import { MARCA } from '../cuenta/marca'
 
 export interface Quien {
   accountId: string
@@ -200,7 +201,7 @@ export function diaAnterior(iso: string): string {
  * Si la segunda escritura falla, se deshace la primera.
  */
 export async function nuevaVigencia(q: Quien, f: FilaGeneral, rate: number, desde: string): Promise<void> {
-  if (f.serie) throw new Error('El porcentaje de una fila de serie lo pone la ley: Folvy lo actualiza.')
+  if (f.serie) throw new Error(`El porcentaje de una fila de serie lo pone la ley: ${MARCA.nombre} lo actualiza.`)
   if (!f.validFrom || desde <= f.validFrom) throw new Error('La fecha nueva tiene que ser posterior a la de ahora.')
   const anterior = f.validTo
   if (anterior !== null && desde > anterior) throw new Error('Esa fila ya no vale en esa fecha: añade una nueva.')

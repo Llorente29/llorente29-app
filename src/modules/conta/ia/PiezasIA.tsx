@@ -13,6 +13,7 @@ import { hechoAlAceptar, queHizo, sePuedeDeshacer, type Registro, type Sugerenci
 import { deshacer, responderSugerencia } from '@/modules/conta/services/iaService'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
 import { Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
+import { MARCA } from '../cuenta/marca'
 
 // La hora de Madrid (regla 4): done_at está en UTC.
 const FECHA = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -46,11 +47,11 @@ export function Sugerencias({ sugerencias, alCambiar }: { sugerencias: Sugerenci
 export function RegistroIA({ registro, alCambiar, movil }: { registro: Registro[]; alCambiar: () => void; movil: boolean }) {
   const h = useHacer(alCambiar)
   return (
-    <TarjetaApartado titulo="Lo que ha hecho Folvy" movil={movil}>
+    <TarjetaApartado titulo={`Lo que ha hecho ${MARCA.nombre}`} movil={movil}>
       {registro.length === 0 ? (
         <p className="cx-vacio">Aún no ha hecho nada por su cuenta. Cuando lo haga, lo verás aquí con su porqué, y lo podrás deshacer.</p>
       ) : (
-        <ul className="cx-registro" aria-label="Lo que ha hecho Folvy">
+        <ul className="cx-registro" aria-label={`Lo que ha hecho ${MARCA.nombre}`}>
           {registro.map((r) => {
             const d = sePuedeDeshacer(r)
             return (

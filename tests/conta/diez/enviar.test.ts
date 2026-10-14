@@ -95,6 +95,12 @@ describe('enviarAsientoADiez (R15): los frenos', () => {
     expect(t.llamadas.cliente).toBe(0); expect(t.d.altas).toEqual([]); expect(t.d.subidas).toBe(0)
     expect(t.actual).toMatchObject({ attempts: 0, status: 'pendiente' })
   })
+  it('C06 · la base REGISTRADA de otra empresa es real: cerrada igual que C0008, sin abrir el cliente', async () => {
+    const t = puerto({ bd: 'C0042' })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x.estado === 'no_llega' && x.motivo).toBe('Diez real (C0042) está cerrado: no se escribe nada hasta que Julio lo autorice')
+    expect(t.llamadas.cliente).toBe(0); expect(t.d.altas).toEqual([]); expect(t.d.subidas).toBe(0)
+  })
   it('C0001 VETADA', async () => {
     const t = puerto({ bd: 'C0001' })
     expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', reintentar: false, motivo: 'la base C0001 de Diez no se toca nunca' })

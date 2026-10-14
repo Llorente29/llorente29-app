@@ -7,6 +7,7 @@
 // Regla 7: nada de aquí decide si una fila existe. Ordena y pone palabras.
 
 import { eurosExactos } from '@/modules/conta/lib/formato'
+import { MARCA } from '../cuenta/marca'
 
 export type FormaFacturar = 'per_delivery' | 'delivery_note_then_invoice' | 'monthly_settlement'
 
@@ -547,22 +548,22 @@ export function veredictoVentas(v: readonly ContrasteVenta[], marcas: string): V
     return {
       estado: 'no_se_puede', titulo: 'Sus ventas no las puedo comprobar.',
       detalle: marcas === 'ninguna'
-        ? 'Folvy no sabe qué marcas son suyas: hace falta ponerle sus acuerdos de cesión en su ficha.'
-        : 'Folvy no tiene ventas de sus marcas en este local y este mes: hacen falta los pedidos cerrados de sus marcas (o sus acuerdos de cesión, si son otras).',
+        ? `${MARCA.nombre} no sabe qué marcas son suyas: hace falta ponerle sus acuerdos de cesión en su ficha.`
+        : `${MARCA.nombre} no tiene ventas de sus marcas en este local y este mes: hacen falta los pedidos cerrados de sus marcas (o sus acuerdos de cesión, si son otras).`,
     }
   }
   const sinDoc = v.filter((x) => x.documento == null)
   const distintas = v.filter((x) => x.documento != null && !coincide(x.diferencia, x.documento))
   if (!sinDoc.length && !distintas.length) {
-    return { estado: 'coincide', titulo: 'Sus ventas y las que tiene Folvy coinciden.', detalle: 'De estas ventas sale tu servicio.' }
+    return { estado: 'coincide', titulo: `Sus ventas y las que tiene ${MARCA.nombre} coinciden.`, detalle: 'De estas ventas sale tu servicio.' }
   }
   const total = Math.round(v.reduce((s, x) => s + x.diferencia, 0) * 100) / 100
   const partes = [...distintas].sort((a, b) => Math.abs(b.diferencia) - Math.abs(a.diferencia))
     .map((x) => `${x.plataforma}, ${eurosExactos(Math.abs(x.diferencia))} ${mas(x.diferencia)}`)
   for (const x of sinDoc) partes.push(`${x.plataforma}, que él no trae`)
   return {
-    estado: 'se_parece', titulo: 'Sus ventas y las que tiene Folvy se parecen, pero no son iguales.',
-    detalle: `Folvy cuenta ${eurosExactos(Math.abs(total))} ${mas(total)} que él, sin IVA: ${partes.join('; ')}. De estas ventas sale tu servicio; para saber quién tiene razón pedido a pedido hace falta el detalle de cada plataforma.`,
+    estado: 'se_parece', titulo: `Sus ventas y las que tiene ${MARCA.nombre} se parecen, pero no son iguales.`,
+    detalle: `${MARCA.nombre} cuenta ${eurosExactos(Math.abs(total))} ${mas(total)} que él, sin IVA: ${partes.join('; ')}. De estas ventas sale tu servicio; para saber quién tiene razón pedido a pedido hace falta el detalle de cada plataforma.`,
   }
 }
 

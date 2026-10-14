@@ -65,6 +65,7 @@ import { getDeviceToken } from '../native/print/printWorker'
 import {
   loQueEsperaLaTablet, sePuedeAplicarAhora, NO_PUEDE_PREGUNTAR,
 } from '../modules/kds/lib/palabrasDeLaActualizacion'
+import { MARCA, CON_MARCA } from '../marca/marca'
 
 const RECHECK_MS = 15 * 60 * 1000  // re-chequea version.json/bundle.json cada 15 min
 const WINDOW_MS = 60 * 1000        // con update pendiente, mira la ventana cada minuto
@@ -411,12 +412,12 @@ export default function UpdateGate() {
         boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
       }}
     >
-      <img src="/folvy-icon-192.png" alt="Folvy" width={48} height={48}
+      <img src={CON_MARCA ? MARCA.favicon : '/folvy-icon-192.png'} alt={MARCA.nombre} width={48} height={48}
         style={{ borderRadius: 14, margin: '0 auto 10px' }} />
       <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 6px' }}>
         {phase === 'installing'
           ? (launched ? 'Abriendo el instalador…' : (downloaded ? 'Preparando la instalación…' : 'Descargando actualización…'))
-          : 'Nueva versión de Folvy'}
+          : `Nueva versión de ${MARCA.nombre}`}
       </h2>
       <p style={{ fontSize: 13, color: '#9fb0c0', margin: '0 0 18px', lineHeight: 1.5 }}>
         {phase === 'installing'

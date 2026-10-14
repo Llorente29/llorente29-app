@@ -46,6 +46,7 @@ import { CuentasYExtractos } from '@/modules/conta/bancos/CuentasYExtractos'
 import { CierreDelMes } from '@/modules/conta/bancos/CierreDelMes'
 import { SubirExtracto } from '@/modules/conta/bancos/SubirExtracto'
 import { HechoPorFolvy } from '@/modules/conta/bancos/HechoPorFolvy'
+import { HECHO_POR } from '@/modules/conta/bancos/marca'
 
 const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
 
@@ -217,7 +218,7 @@ export default function BancosPage() {
                         <span className="cxl-accion-dato">{ctx.datos.reglas.activas}{ctx.datos.reglas.nuevas ? ` · ${ctx.datos.reglas.nuevas} nuevas` : ''}</span>
                       </Link>
                       <Link to={conQuery(rutaBancos('hecho'))} className="cxl-accion" aria-current={vista === 'hecho' ? 'page' : undefined}>
-                        <span className="cxl-accion-nombre">Hecho por Folvy <span className={`cxl-punto${casadosSolos ? ' cxl-punto-verde' : ''}`} aria-hidden="true" /></span>
+                        <span className="cxl-accion-nombre">{HECHO_POR} <span className={`cxl-punto${casadosSolos ? ' cxl-punto-verde' : ''}`} aria-hidden="true" /></span>
                         <span className="cxl-accion-dato">{casadosSolos} este mes</span>
                       </Link>
                     </div>

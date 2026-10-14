@@ -22,6 +22,7 @@ import { finDeMes, importeMano, nombreDeUso } from '@/modules/conta/lib/diario'
 import type { Confianza, OrigenAsiento, Razon, Serie } from '@/modules/conta/lib/libro'
 import { apuntarCorreccion } from '@/modules/conta/services/propuestasLibroService'
 import { normalizarHora } from '@/modules/conta/lib/cierreDelDia'
+import { autorVisible, esFirmaAutomatica } from '@/modules/conta/lib/autor'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -59,8 +60,9 @@ function aAsiento(f: Fila): AsientoDiario {
     id: String(f.id), serie: n(f.series) as Serie, numero: f.number === null ? null : n(f.number), fecha: String(f.entry_date), concepto: String(f.concept),
     origen: String(f.source_type) as OrigenAsiento, origenId: s(f.source_id), estado: String(f.status) as EstadoAsiento,
     confianza: s(f.confidence) as Confianza | null, porque: s(f.reason), razones, documento: s(f.document_ref), terceroId: s(f.party_id),
-    creadoPor: s(f.created_by_name), creadoEn: String(f.created_at), validadoPor: s(f.validated_by_name), validadoEn: s(f.validated_at),
-    anuladoPor: s(f.voided_by_name), anuladoEn: s(f.voided_at), motivoAnulacion: s(f.void_reason), anuladoCon: s(f.voided_by_entry_id), anulaA: s(f.reverses_entry_id),
+    creadoPor: autorVisible(s(f.created_by_name)), creadoEn: String(f.created_at), validadoPor: autorVisible(s(f.validated_by_name)), validadoEn: s(f.validated_at),
+    validadoAutomatico: esFirmaAutomatica(s(f.validated_by_name)),
+    anuladoPor: autorVisible(s(f.voided_by_name)), anuladoEn: s(f.voided_at), motivoAnulacion: s(f.void_reason), anuladoCon: s(f.voided_by_entry_id), anulaA: s(f.reverses_entry_id),
     traido: f.external_program ? { programa: String(f.external_program), serie: s(f.external_series), numero: s(f.external_number) } : null,
     huella: s(f.hash), huellaAnterior: s(f.prev_hash), cadena: f.chain_seq === null ? null : n(f.chain_seq),
     apuntes: ((f.journal_line ?? []) as Fila[]).map(aApunte).sort((a, b) => a.posicion - b.posicion),

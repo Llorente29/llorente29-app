@@ -6,6 +6,7 @@
 // documento» y «Reintentar») y el chip de la fila. Caben tal cual en la
 // pantalla N16 «Libros › Con Diez», cuando toque.
 
+import { MARCA } from '../cuenta/marca'
 import { useState } from 'react'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip } from '@/modules/conta/ui/piezas'
@@ -58,8 +59,8 @@ export function TarjetaDiez({ a, d, e, quien, alHacer, alFallar }: {
       {d.envio?.errorDocumento && !e.enDiez && <p className="cx-ayuda">El documento: {d.envio.errorDocumento}</p>}
       <p className="cx-ayuda">
         {d.documento
-          ? `Su documento, el «Resumen de ventas» de ${d.nombreCanal}, guardado en Folvy el ${diaMesCorto(d.documento.creadoEn.slice(0, 10))}${d.documento.creadoPor ? ` por ${d.documento.creadoPor}` : ''}.`
-          : a.estado === 'validado' ? 'Aún no tiene su documento guardado: sin él no se da por enviado.' : 'Al validarlo, Folvy guarda su «Resumen de ventas» y lo envía a Diez con la factura.'}
+          ? `Su documento, el «Resumen de ventas» de ${d.nombreCanal}, guardado en ${MARCA.nombre} el ${diaMesCorto(d.documento.creadoEn.slice(0, 10))}${d.documento.creadoPor ? ` por ${d.documento.creadoPor}` : ''}.`
+          : a.estado === 'validado' ? 'Aún no tiene su documento guardado: sin él no se da por enviado.' : `Al validarlo, ${MARCA.nombre} guarda su «Resumen de ventas» y lo envía a Diez con la factura.`}
       </p>
       <div className="cxd-dialogo-acciones">
         {d.documento && <VerDocumento ruta={d.documento.ruta} alFallar={alFallar} />}
@@ -105,7 +106,7 @@ export function EnviarADiezDialogo({ candidatos, quien, alCerrar, alTerminar }: 
   }
   return (
     <Dialogo titulo="Validar y enviar a Diez" alCerrar={() => { if (paso === null) alCerrar() }}>
-      <p className="cx-ayuda">Cada asiento se valida, se guarda su «Resumen de ventas» en Folvy y se envía a Diez con su factura. Sin el documento adjunto en Diez no se da por enviado.</p>
+      <p className="cx-ayuda">Cada asiento se valida, se guarda su «Resumen de ventas» en {MARCA.nombre} y se envía a Diez con su factura. Sin el documento adjunto en Diez no se da por enviado.</p>
       <ul className="cxd-diez-lista" aria-label="Asientos para validar y enviar">
         {candidatos.map((c) => (
           <li key={c.id}>

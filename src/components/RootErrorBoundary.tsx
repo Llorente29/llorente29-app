@@ -12,6 +12,7 @@
 // aquéllas aíslan un panel sin recargar; ésta es el último cortafuegos global.
 
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { MARCA } from '../marca/marca'
 
 interface Props {
   children: ReactNode
@@ -37,7 +38,7 @@ export default class RootErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen flex items-center justify-center bg-page p-6">
           <div className="text-center max-w-md">
-            <p className="text-2xl font-display font-medium mb-2 text-accent">Folvy</p>
+            <p className="text-2xl font-display font-medium mb-2 text-accent">{MARCA.nombre}</p>
             <p className="text-base font-medium text-text-primary mb-1">
               Algo ha fallado al mostrar esta pantalla
             </p>

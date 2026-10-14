@@ -12,6 +12,7 @@ import { fechaLarga } from '@/modules/conta/lib/formato'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { cambiarEstadoRegla, guardarRegla, leerReglas, reglasPropuestas, type Regla } from '@/modules/conta/services/bancosPantallas'
 import { useBancos } from '@/modules/conta/bancos/contexto'
+import { LA_PROPUSO, NOMBRE, PROPUESTA_POR } from '@/modules/conta/bancos/marca'
 
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 const ESTADO: Record<Regla['estado'], string> = { activa: 'Encendida', apagada: 'Apagada', propuesta: 'Propuesta', rechazada: 'Rechazada' }
@@ -44,7 +45,7 @@ export function Reglas() {
 
   return (
     <section className="cxb-seccion" aria-labelledby="cxb-reglas-titulo">
-      <div className="cxl-seccion"><div><h2 id="cxb-reglas-titulo">Reglas</h2><p className="cx-ayuda">Lo que se hace siempre igual. Folvy las usa para proponer; ninguna casa sola si no es segura.</p></div></div>
+      <div className="cxl-seccion"><div><h2 id="cxb-reglas-titulo">Reglas</h2><p className="cx-ayuda">Lo que se hace siempre igual. {NOMBRE} las usa para proponer; ninguna casa sola si no es segura.</p></div></div>
       {aviso && <div className={aviso.tipo === 'ok' ? 'cx-guardado' : 'cx-error'} role={aviso.tipo === 'ok' ? 'status' : 'alert'}>{aviso.texto}</div>}
 
       <div className="cxb-banda" role="note">
@@ -59,7 +60,7 @@ export function Reglas() {
         <div className="cx-tarjeta cxb-lista">
           {nuevas.map((p) => (
             <div key={p.contiene} className="cxb-lista-fila">
-              <span className="cxb-lista-texto"><strong>{p.palabras}</strong><span className="cx-ayuda">Propuesta por Folvy</span></span>
+              <span className="cxb-lista-texto"><strong>{p.palabras}</strong><span className="cx-ayuda">{PROPUESTA_POR}</span></span>
               <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => con(p.contiene, async () => {
                 await guardarRegla(companyId, { palabras: p.palabras, contiene: p.contiene, cuenta: p.cuenta, origen: 'folvy' })
                 return `Guardada: ${p.palabras}.`
@@ -71,12 +72,12 @@ export function Reglas() {
 
       <div className="cx-tarjeta cxb-lista" aria-label="Tus reglas">
         <h3 className="cxl-subtitulo">Tus reglas · {vivas.length}</h3>
-        {vivas.length === 0 && <p className="cx-ayuda">Aún no hay ninguna. Al decirle a Folvy a qué va un movimiento, puedes marcar «Hazlo siempre así».</p>}
+        {vivas.length === 0 && <p className="cx-ayuda">Aún no hay ninguna. Al decirle a {NOMBRE} a qué va un movimiento, puedes marcar «Hazlo siempre así».</p>}
         {vivas.map((r) => (
           <div key={r.id} className={`cxb-lista-fila${r.estado === 'apagada' ? ' cxb-apagada' : ''}`}>
             <span className="cxb-lista-texto">
               <strong>Cuando el concepto tenga «{r.contiene}» → {nombre(r.cuenta)}</strong>
-              <span className="cx-ayuda">{ESTADO[r.estado]} · {r.origen === 'folvy' ? 'la propuso Folvy' : 'la pusiste tú'} · {r.veces ? `ha servido ${r.veces} ${r.veces === 1 ? 'vez' : 'veces'}` : 'aún no ha servido'}{r.ultimaVez ? ` · última, el ${fechaLarga(r.ultimaVez)}` : ''}</span>
+              <span className="cx-ayuda">{ESTADO[r.estado]} · {r.origen === 'folvy' ? LA_PROPUSO : 'la pusiste tú'} · {r.veces ? `ha servido ${r.veces} ${r.veces === 1 ? 'vez' : 'veces'}` : 'aún no ha servido'}{r.ultimaVez ? ` · última, el ${fechaLarga(r.ultimaVez)}` : ''}</span>
             </span>
             <span className="cxb-botones">
               {r.estado === 'propuesta' && <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => con(r.id, async () => { await cambiarEstadoRegla(r.id, 'activa'); return `Encendida: «${r.contiene}» → ${nombre(r.cuenta)}.` })}>Aceptar</button>}
