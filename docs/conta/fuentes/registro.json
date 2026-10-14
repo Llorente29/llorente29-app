@@ -1,5 +1,5 @@
 {
-  "descargado": "2026-10-13T19:28:56.818Z",
+  "descargado": "2026-10-14T05:38:51.225Z",
   "fuentes": {
     "ley-37-1992": {
       "nombre": "Ley 37/1992, del Impuesto sobre el Valor Añadido",
@@ -790,20 +790,37 @@
       "nota": null
     },
     "orden-eha-962-2007": {
-      "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01)",
-      "url": "\"EHA/962/2007\"",
+      "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01; ELI https://www.boe.es/eli/es/o/2007/04/10/eha962)",
+      "url": "BOE-A-2007-7866",
       "urlDatos": null,
       "http": 404,
       "titulo": "",
       "actualizadoEnFuente": null,
-      "fecha": "2026-10-13T19:28:56.818Z",
-      "comprobado": "2026-10-13T19:28:56.818Z",
+      "fecha": "2026-10-14T05:38:51.225Z",
+      "comprobado": "2026-10-14T05:38:51.225Z",
       "sha256": null,
       "bytes": 0,
       "contieneLoEsperado": false,
       "fichero": null,
-      "error": "No encontrada. Probado: búsqueda «\"EHA/962/2007\"» sin resultados (HTTP 200): {\n    \"status\": {\n        \"code\": \"200\",\n        \"text\": \"ok\"\n    },\n    \"data\": \"\"\n}",
+      "error": "No encontrada. Probado: BOE-A-2007-7866: «Orden EHA/962/2007, de 10 de abril, por la que se desarrolla»",
       "idBoe": null,
+      "nota": null
+    },
+    "resolucion-aeat-2007-10-24": {
+      "nombre": "Resolución de 24/10/2007 de la AEAT, homologación del software de digitalización certificada (D01)",
+      "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2007-18911",
+      "urlDatos": "https://www.boe.es/diario_boe/xml.php?id=BOE-A-2007-18911",
+      "http": 200,
+      "titulo": "Resolución de 24 de octubre de 2007, de la Agencia Estatal de Administración Tributaria, sobre procedimiento para la homologación de software de digitalización contemplado en la Orden EHA/962/2007, de 10 de abril de 2007.",
+      "actualizadoEnFuente": null,
+      "fecha": "2026-10-14T05:38:51.225Z",
+      "comprobado": "2026-10-14T05:38:51.225Z",
+      "sha256": "4c37b22d5c2674037bd668be7c3d3a397b7636b591d2ca4771a40227dfffff66",
+      "bytes": 12762,
+      "contieneLoEsperado": true,
+      "fichero": "textos/resolucion-aeat-2007-10-24.txt",
+      "error": null,
+      "idBoe": "BOE-A-2007-18911",
       "nota": null
     }
   }
