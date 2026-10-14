@@ -11,6 +11,8 @@
 //   · Del mes más reciente hacia atrás: lo de ayer importa más que lo de
 //     junio. Cada vez, un mes de ventas; y se dice cuántos días quedan.
 
+import { MARCA } from '../cuenta/marca'
+
 export interface EjercicioParaProponer {
   inicio: string
   fin: string
@@ -40,12 +42,12 @@ export function rangoAProponer(e: EjercicioParaProponer, ultimoCerrado: string, 
   const hasta = ultimoCerrado < e.fin ? ultimoCerrado : e.fin
   if (e.traidoHasta) {
     const desde = diaSiguiente(e.traidoHasta)
-    if (desde > hasta) return { tipo: 'nada', porque: `Hasta el ${fecha(e.traidoHasta)} lo trae el programa anterior: aún no hay días de Folvy en este ejercicio.` }
+    if (desde > hasta) return { tipo: 'nada', porque: `Hasta el ${fecha(e.traidoHasta)} lo trae el programa anterior: aún no hay días de ${MARCA.nombre} en este ejercicio.` }
     return { tipo: 'rango', desde: desde > e.inicio ? desde : e.inicio, hasta }
   }
   if (hasta < e.inicio) return { tipo: 'nada', porque: 'El ejercicio aún no ha empezado.' }
   if (o.primeraVenta && o.primeraVenta < e.inicio && o.asientosEnEjercicio === 0) {
-    return { tipo: 'preguntar', porque: `Folvy tiene ventas desde el ${fecha(o.primeraVenta)}, antes de este ejercicio: no sé si este año lo llevaba otro programa.` }
+    return { tipo: 'preguntar', porque: `${MARCA.nombre} tiene ventas desde el ${fecha(o.primeraVenta)}, antes de este ejercicio: no sé si este año lo llevaba otro programa.` }
   }
   return { tipo: 'rango', desde: e.inicio, hasta }
 }

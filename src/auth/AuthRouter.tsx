@@ -18,6 +18,8 @@ import WelcomePage from '../pages/WelcomePage'
 import ResetPasswordPage from '../pages/ResetPasswordPage'
 import AccesoTrabajadorPage from '../pages/AccesoTrabajadorPage'
 import { isPairedEstacion } from '../native/print/printWorker'
+import { CON_MARCA } from '../marca/marca'
+import EntrarMarca from '../marca/EntrarMarca'
 
 export default function AuthRouter() {
   // PERSISTENCIA DE ESTACIÓN (tablet de cocina): si esta app nativa ya está
@@ -31,9 +33,10 @@ export default function AuthRouter() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<LoginPage />} />
+      {/* C06: con una marca propia, su entrada (N18); con Folvy, la de siempre. */}
+      <Route path="/login" element={CON_MARCA ? <EntrarMarca /> : <LoginPage />} />
       <Route path="/welcome" element={<WelcomePage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/reset-password" element={CON_MARCA ? <EntrarMarca modoInicial="olvido" /> : <ResetPasswordPage />} />
       <Route path="/acceso" element={<AccesoTrabajadorPage />} />
       {/* Fallback: cualquier URL desconocida pre-sesión → login.
           /reset-password/confirm NO está aquí: vive en App.tsx 1-bis para

@@ -14,7 +14,7 @@ import { useEffect, type ReactNode } from 'react'
 import { CtxAjustes as Ctx, resumenEntrada, type ContextoAjustes } from '@/modules/conta/ajustes/contextoAjustes'
 import { Link } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { INDICE_AJUSTES, rutaAltaEmpresa, rutaAjustes, rutaConta } from '@/config/navegacion'
+import { indiceAjustes, rutaAltaEmpresa, rutaAjustes, rutaConta } from '@/config/navegacion'
 import { Cabecera, Chip, ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { useEmpresas, type EmpresaResumen } from '@/modules/conta/empresa/contexto'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -26,6 +26,8 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { CabeceraEmpresa } from '@/modules/conta/marco/MenuConta'
 import { Sugerencias } from '@/modules/conta/ia/PiezasIA'
 import type { DatosPlan } from '@/modules/conta/services/planService'
+import { MARCA, CON_MARCA } from '../cuenta/marca'
+import { useProductoSolo } from '../cuenta/useProductoSolo'
 
 function EtiquetaListo({ d, hoy }: { d: DatosEmpresa; hoy: string }) {
   const falta = loQueFalta(d, hoy)
@@ -44,9 +46,11 @@ function AvisoAltaAMedias({ e }: { e: EmpresaResumen }) {
 }
 
 function Indice({ actual, d, plan, hoy, lista }: { actual: string | null; d: DatosEmpresa | null; plan: DatosPlan | null; hoy: string; lista: boolean }) {
+  // C06: en el producto vendido solo, el índice no enseña lo que dice «aún no».
+  const solo = useProductoSolo()
   return (
     <nav aria-label="Ajustes" className={lista ? 'cx-ajustes-lista' : 'cx-tarjeta cx-ajustes-indice'}>
-      {INDICE_AJUSTES.map((g) => (
+      {indiceAjustes(solo).map((g) => (
         <div key={g.grupo} className="cx-ajustes-grupo">
           <h2 className="cx-ajustes-grupo-titulo">{g.grupo}</h2>
           <div className={lista ? 'cx-lista' : undefined}>
@@ -99,7 +103,7 @@ export function MarcoAjustes({ entrada, children }: { entrada: string | null; ch
   const actual = entrada ?? (movil ? null : 'empresa')
   const cabecera = (!movil || entrada === null) && (
     <>
-      <Cabecera antetitulo="Folvy Conta" titulo="Ajustes" derecha={d && !movil ? <EtiquetaListo d={d} hoy={hoy} /> : undefined} />
+      <Cabecera antetitulo={CON_MARCA ? MARCA.nombre : 'Folvy Conta'} titulo="Ajustes" derecha={d && !movil ? <EtiquetaListo d={d} hoy={hoy} /> : undefined} />
       {aMedias && <AvisoAltaAMedias e={aMedias} />}
     </>
   )

@@ -16,16 +16,18 @@
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { renderTemplate, templateExists } from './templates.ts';
+import { PLANTILLAS_MARCA, cuerpoResend, remitenteDe } from './marca.ts';
 
-// Remitente y reply-to fijos de plataforma (Resend + folvy.app verificado).
-const FROM = 'Folvy <no-reply@folvy.app>';
-const REPLY_TO = 'jgcolon@idasal.com';
+// Remitente y reply-to: sin marca, los fijos de plataforma de siempre (Resend +
+// folvy.app verificado), ahora en marca.ts (REMITENTE_FOLVY). Con marca (C06),
+// el de la marca, o no se manda.
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 
 interface SendEmailPayload {
   to: string;                       // destinatario
   template: string;                 // nombre de plantilla registrada
   data?: Record<string, unknown>;   // datos para la plantilla (opcional)
+  marca?: string;                   // C06: id de la marca (supabase/functions/_shared/marcas.ts). Sin él, Folvy.
 }
 
 Deno.serve(async (req) => {
@@ -76,7 +78,13 @@ Deno.serve(async (req) => {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(p.to)) {
       return jsonResponse(400, { error: `Email destino con formato invalido: ${p.to}` });
     }
-    if (!templateExists(p.template)) {
+    // C06: con marca, sus plantillas y su remitente; sin marca, lo de siempre.
+    const remitente = remitenteDe(p.marca);
+    if (!remitente.ok) {
+      return jsonResponse(422, { error: remitente.motivo });
+    }
+    const plantillaMarca = remitente.marca ? PLANTILLAS_MARCA[p.template] : undefined;
+    if (remitente.marca ? !plantillaMarca : !templateExists(p.template)) {
       return jsonResponse(400, { error: `Plantilla desconocida: ${p.template}` });
     }
 
@@ -88,7 +96,9 @@ Deno.serve(async (req) => {
     }
 
     // --- 4. Renderizar la plantilla ---
-    const rendered = renderTemplate(p.template, p.data ?? {});
+    const rendered = remitente.marca && plantillaMarca
+      ? plantillaMarca(remitente.marca, p.data ?? {})
+      : renderTemplate(p.template, p.data ?? {});
     if (!rendered) {
       return jsonResponse(500, { error: `No se pudo renderizar la plantilla: ${p.template}` });
     }
@@ -103,14 +113,7 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${resendKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: FROM,
-        to: p.to,
-        reply_to: REPLY_TO,
-        subject: safeSubject,
-        html: rendered.html,
-        text: rendered.text,
-      }),
+      body: cuerpoResend(remitente, p.to, safeSubject, rendered.html, rendered.text),
     });
 
     const resendBody = await resendRes.json().catch(() => ({}));

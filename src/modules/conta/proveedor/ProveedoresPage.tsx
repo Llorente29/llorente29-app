@@ -20,11 +20,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import '@/modules/conta/estilo'
 import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
-import { useIsMobile } from '@/shell/useIsMobile'
 import { migasProveedores, rutaFichaProveedor, rutaSubirFacturaProveedor } from '@/config/navegacion'
 import { Campo, Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Guardado, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
-import { BarraPregunta } from '@/modules/conta/marco/BarraPregunta'
 import {
   crearProveedor, guardarFicha, listarContactosDeLaCuenta, listarFacturasDeLaCuenta, listarProveedores, listarTiposGasto, proveedoresConCertificadoBanco,
 } from '@/modules/conta/services/proveedorService'
@@ -64,7 +62,6 @@ function textoFalta(faltan: Falta[]): string {
 
 export default function ProveedoresPage({ extensiones = {} }: { extensiones?: ExtensionesProveedor }) {
   const { activeAccountId, accountsLoading } = useActiveAccount()
-  const movil = useIsMobile()
   const location = useLocation()
   const [filas, setFilas] = useState<Fila[] | null>(null)
   const [extra, setExtra] = useState<Record<string, number>>({})
@@ -235,7 +232,7 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
         </Dialogo>
       )}
       {nuevo && activeAccountId && <NuevoProveedor accountId={activeAccountId} otros={filas?.map((x) => x.ficha) ?? []} alCerrar={() => setNuevo(false)} />}
-      {!movil && <BarraPregunta ejemplo="¿A quién le debo más este mes?" />}
+      {/* C06b: sin la barra «Pregunta o pide algo» (solo diría «Muy pronto»); vuelve cuando conteste. */}
     </div>
   )
 }

@@ -34,6 +34,7 @@ import { fijarCorte, primeraVenta } from '@/modules/conta/services/corteService'
 import { corteDesdeRespuesta, rangoAProponer } from '@/modules/conta/lib/proponer'
 import { textoDiaEnCurso, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
+import { MARCA } from '../cuenta/marca'
 import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
 import { leerConDiez } from '@/modules/conta/services/conDiezService'
@@ -167,7 +168,7 @@ export default function LibroDiarioPage() {
     try {
       await fijarCorte(activa.id, r.corte, pregunta.programa.trim() || 'el programa anterior')
       setPregunta(null)
-      setHecho(r.corte ? `Guardado: Folvy asienta desde el ${diaMesCorto(pregunta.desde)}; lo de antes lo trae el programa anterior.` : 'Guardado: Folvy asienta el ejercicio entero.')
+      setHecho(r.corte ? `Guardado: ${MARCA.nombre} asienta desde el ${diaMesCorto(pregunta.desde)}; lo de antes lo trae el programa anterior.` : `Guardado: ${MARCA.nombre} asienta el ejercicio entero.`)
       recargar()
     } catch (e) { setPregunta({ ...pregunta, fallo: e instanceof Error ? e.message : 'No se ha podido guardar.' }) }
   }
@@ -221,8 +222,8 @@ export default function LibroDiarioPage() {
         <p className="cx-ayuda cxd-dia-en-curso" role="note">{textoDiaEnCurso(datos.horaCierre)}</p>
       )}
       {pregunta && (
-        <section className="cx-tarjeta" aria-label="Desde qué día asienta Folvy">
-          <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">¿Desde qué día asienta Folvy?</h2></div>
+        <section className="cx-tarjeta" aria-label={`Desde qué día asienta ${MARCA.nombre}`}>
+          <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">¿Desde qué día asienta {MARCA.nombre}?</h2></div>
           <p className="cx-ayuda" style={{ marginTop: 0 }}>{pregunta.porque} Lo de antes de ese día no lo propongo: lo trae el programa anterior. Se puede cambiar en Ajustes › Ejercicio.</p>
           <form className="cx-rejilla-2" onSubmit={(ev) => { ev.preventDefault(); void contestar() }}>
             <label className="cx-campo"><span className="cx-etiqueta">Desde el día</span>

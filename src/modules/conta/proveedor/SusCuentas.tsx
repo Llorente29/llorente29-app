@@ -37,6 +37,7 @@ import {
 import {
   cargarCuentasProveedor, cambiarCuentaProveedor, gastoAprendido, quitarCuentaProveedor, type DatosCuentasProveedor,
 } from '@/modules/conta/services/cuentasProveedorService'
+import { MARCA } from '../cuenta/marca'
 
 /** Los apuntes del proveedor en el libro (C04): los de su cuenta; si es la común, solo los suyos. */
 function useApuntes(accountId: string, companyId: string | null, cuenta: { id: string; comun: boolean } | null, supplierId: string) {
@@ -264,7 +265,7 @@ export function SusCuentas() {
           <div role="status" aria-live="polite">{hecho && <div className="cx-guardado">{hecho}</div>}</div>
           {fallo && <div className="cx-error" role="alert">{fallo}</div>}
           <p className="cx-ayuda cxp-cuentas-pie">
-            Cada línea se cambia con las cuentas de tu plan; las marcadas IA salen de lo que Folvy ha aprendido de sus facturas.{' '}
+            Cada línea se cambia con las cuentas de tu plan; las marcadas IA salen de lo que {MARCA.nombre} ha aprendido de sus facturas.{' '}
             <Link to={rutaTablasGenerales('tipos-de-gasto')}>Qué tipos de gasto usa tu negocio</Link>
           </p>
         </Tarjeta>

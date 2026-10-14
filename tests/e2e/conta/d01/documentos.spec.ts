@@ -67,6 +67,18 @@ function vigilar(page: Page): string[] {
 }
 
 /** Lo que enseña Documentos (sin el marco): ni «Folvy» ni «Cocina», tampoco en etiquetas. */
+/**
+ * Cuenta C: ni «Volver a Folvy» en el menú del ordenador ni «‹ Folvy» en la
+ * barra del móvil (vienen del marco común; lo arregla la C06 de main con
+ * useProductoSolo). Se mira la página ENTERA, no solo la zona principal.
+ */
+async function sinVolverAFolvy(page: Page, donde: string) {
+  await expect(page.getByRole('link', { name: /Volver a Folvy/ }), `«Volver a Folvy» en ${donde}`).toHaveCount(0)
+  await expect(page.locator('.cx-barra-inferior a[href="/"]'), `«‹ Folvy» en la barra de ${donde}`).toHaveCount(0)
+  const texto = await page.locator('body').innerText()
+  expect(texto.split('\n').filter((l) => /folvy/i.test(l)).slice(0, 5), `«Folvy» en la página de ${donde}`).toEqual([])
+}
+
 async function sinFolvyNiCocina(page: Page, donde: string) {
   const visto = await page.locator('.cx-principal').evaluate((el) => ({
     texto: (el as HTMLElement).innerText,
@@ -228,6 +240,7 @@ test('Frente C (?marca=contabilidad): ni Cocina ni «Folvy» en Documentos', asy
   await expect(page.getByRole('heading', { level: 1, name: 'Documentos' })).toBeVisible()
   await expect(page.locator('tr, article', { hasText: 'Mayorista Prueba Alfa' })).toHaveCount(1)
   await sinFolvyNiCocina(page, 'N22')
+  await sinVolverAFolvy(page, 'N22')
   if (lado(page) === 'ordenador') await expect(page.locator('th', { hasText: 'Lo que he entendido' })).toBeVisible()
   await capturar(page, 'n22-para-mirar-c')
   await page.locator('tr, article', { hasText: 'Mayorista Prueba Alfa' }).getByRole('button', { name: /^Mirar/ }).click()
@@ -236,6 +249,7 @@ test('Frente C (?marca=contabilidad): ni Cocina ni «Folvy» en Documentos', asy
   await expect(page.getByRole('region', { name: 'La factura tal como llegó' }).getByRole('img')).toBeVisible()
   await page.waitForTimeout(500)
   await sinFolvyNiCocina(page, 'N23')
+  await sinVolverAFolvy(page, 'N23')
   await capturar(page, 'n23-revisar-c')
   expect(errores).toEqual([])
 })

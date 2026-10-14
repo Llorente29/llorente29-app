@@ -13,6 +13,7 @@
 //   · Las cuentas, siempre nombre · código.
 
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
+import { MARCA } from '@/modules/conta/cuenta/marca'
 
 /**
  * R6 · 'en_diez': una recepción de antes del corte cuyo papel es una factura. La
@@ -235,6 +236,17 @@ export function barra(d: DatosDocumentos, o: { solo: boolean; producto: string |
 }
 
 /** Lo que cambia con el producto: con nombre («Folvy») o, vendido solo, en primera persona y sin él. */
+/**
+ * Documentos dentro de Folvy o como producto vendido solo (C06): vendido solo,
+ * sin Cocina y sin nombre de producto (la pantalla habla en primera persona,
+ * como la maqueta). `solo` es useProductoSolo(): la cuenta solo de
+ * contabilidad (useCuentaConta().soloContabilidad) o una marca propia.
+ */
+export interface Producto { solo: boolean; nombre: string | null }
+export function productoDeDocumentos(solo: boolean, nombreDeLaMarca: string): Producto {
+  return { solo, nombre: solo ? null : nombreDeLaMarca }
+}
+
 export function textos(producto: string | null) {
   return producto
     ? { hecho: `Lo que ha hecho ${producto}`, entendido: `Lo que ${producto} ha entendido`, repetida: `Una factura repetida nunca entra dos veces: ${producto} la reconoce por su número y su total, venga por donde venga.` }
@@ -290,7 +302,7 @@ export function vencimientoAEnsenar(vence: string | null, fecha: string | null, 
  * (Cegid aún no ha activado su almacén): no se promete que irá «con su PDF».
  */
 export const lineaDiez = (solo = false): string =>
-  `Se apunta ${solo ? 'aquí' : 'en Folvy'} · a Diez irá cuando Cegid active los documentos`
+  `Se apunta ${solo ? 'aquí' : `en ${MARCA.nombre}`} · a Diez irá cuando Cegid active los documentos`
 
 /** R5 · 5 · El tono de la banda de N23: verde solo si ya está apuntada; si no, ámbar, como su fila en la bandeja. */
 export const tonoDeLaFactura = (asiento: { estado: string } | null): 'verde' | 'ambar' => (asiento?.estado === 'validado' ? 'verde' : 'ambar')

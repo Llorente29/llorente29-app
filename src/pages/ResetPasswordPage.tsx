@@ -31,6 +31,8 @@ import { Link } from 'react-router-dom'
 import { Mail, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react'
 import { resetPasswordForEmail, logSecurityEvent } from '../services/authService'
 import Logo from '../components/Logo'
+import { MARCA } from '../marca/marca'
+import { PieEntrada } from '../marca/PiezasMarca'
 
 type FormState = 'idle' | 'submitting' | 'sent' | 'error'
 
@@ -165,7 +167,7 @@ export default function ResetPasswordPage() {
                 </p>
                 <p className="text-sm text-text-secondary">
                   Si <strong className="text-text-primary">{email}</strong> está
-                  registrado en Folvy, recibirás un enlace para crear una
+                  registrado en {MARCA.nombre}, recibirás un enlace para crear una
                   nueva contraseña en los próximos minutos.
                 </p>
                 <p className="text-xs text-text-secondary pt-2">
@@ -185,9 +187,7 @@ export default function ResetPasswordPage() {
         </div>
 
         {/* Pie */}
-        <p className="text-center text-xs text-text-secondary mt-4">
-          Folvy · Restauración Profesional
-        </p>
+        <PieEntrada />
       </div>
     </div>
   )

@@ -354,7 +354,10 @@ describe('la tanda del C04 R4 (ya aplicada: las cuatro en el historial de produc
     const registro = readFileSync('supabase/migrations/20261020T0140_libro_lectura_registro.sql', 'utf8')
     for (const m of `${cierre2}\n${registro}`.matchAll(/grant select on table public\.([a-z_]+) to conta_lectura/g)) tablas.add(m[1])
     const funciones = new Set([...`${lectura}\n${cierre}`.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
-    expect(nombrados.size).toBe(42)
+    // C06b (#178): el agente del plan lee import_run, que la lectura de Diez (C04b) ya da a conta_lectura.
+    const diez = readFileSync('supabase/migrations/20261019T0120_diez_lectura.sql', 'utf8')
+    if (/grant select on table public\.import_run\b/.test(diez)) tablas.add('import_run')
+    expect(nombrados.size).toBe(43) // 42 + import_run (C06b, #178)
     expect([...nombrados].filter((n) => !tablas.has(n) && !funciones.has(n))).toEqual([])
     expect([...tablas, ...funciones].filter((n) => !nombrados.has(n))).toEqual([])
   })
@@ -750,6 +753,39 @@ describe('la tanda del documento de cada asiento de ventas (C04b R15; ya en el h
     const down = readFileSync(atras[0], 'utf8')
     expect(down).toMatch(/exists \(select 1 from public\.journal_entry_document\)/)
     expect(down).toMatch(/exists \(select 1 from storage\.objects where bucket_id = 'conta-documentos'\)/)
+  })
+})
+
+describe('la tanda del balance según la norma y el tope de la contraseña (C06b, respuesta 6; ya aplicada, real 38566632165), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-r6-20261014.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 14/10 a las 10:33 UTC para ESTOS ficheros (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-r6-20261014.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('dos ficheros: la 0600 cambia filas de serie y pide «autorizo»; la 0610 solo añade y sigue', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0600_c06b_terceros_por_saldo.sql', 'supabase/migrations/20261111T0610_c06b_contrasena_tope.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'autorizo', [viva[1]]: 'sigue' })
+  })
+  it('la 0600 toca 42 o para, solo filas de serie sin signo, y las nuevas no pisan nada', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    expect(sql).toMatch(/if n <> 42 then raise exception/)
+    expect(sql).toMatch(/by_balance is null/)
+    expect(sql).toMatch(/on conflict \(model, statement, line_code, account_prefix\) where company_id is null do nothing/)
+    expect(sql).not.toMatch(/delete from/i)
+  })
+  it('declara qué cuenta antes y después, y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/terceros-y-contrasena.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('su vuelta atrás, al revés: la 0610 y la 0600, que quita 42 y devuelve 42 o para', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c06b-r6-20261014.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0610_c06b_contrasena_tope.down.sql', 'supabase/vuelta-atras/20261111T0600_c06b_terceros_por_saldo.down.sql'])
+    for (const f of atras) expect(existsSync(f), f).toBe(true)
+    expect(readFileSync(atras[1], 'utf8').match(/if n <> 42 then/g)).toHaveLength(2)
   })
 })
 

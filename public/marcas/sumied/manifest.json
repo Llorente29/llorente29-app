@@ -1,0 +1,14 @@
+{
+  "name": "Sumied",
+  "short_name": "Sumied",
+  "description": "Tu contabilidad al día, sin saber de cuentas.",
+  "start_url": "/conta/inicio",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0B1F3B",
+  "icons": [
+    { "src": "/marcas/sumied/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

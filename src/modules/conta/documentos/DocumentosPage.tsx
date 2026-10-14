@@ -11,7 +11,7 @@
 // el correo de la empresa encendido, «De Cocina» solo si la empresa recibe la
 // mercancía con Folvy y la cuenta no es solo de contabilidad, y sin «Tuyos»
 // (favoritos y buscar no existen en Documentos). Vendida sola, ni Cocina ni la
-// palabra Folvy (producto.ts).
+// palabra Folvy (productoDeDocumentos, con useProductoSolo de la C06).
 //
 // Regla 7: «Todas» trae todas, también las repetidas; un filtro ordena y
 // etiqueta, nunca decide qué existe. En el móvil, las filas son tarjetas y se
@@ -28,10 +28,11 @@ import { Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
 import {
-  VERES, banda, barra, boton, comoLlego, diaMes, entendido, filtrar, limites, meses, nombreDelMes, porDonde, punto, textos, verDe,
+  VERES, banda, barra, boton, comoLlego, diaMes, entendido, filtrar, limites, meses, nombreDelMes, porDonde, productoDeDocumentos, punto, textos, verDe,
   type DatosDocumentos, type FilaDocumento, type Ver,
 } from '@/modules/conta/documentos/documentos'
-import { useProducto } from '@/modules/conta/documentos/producto'
+import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
+import { MARCA } from '@/modules/conta/cuenta/marca'
 import { leerDocumentos, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
 
@@ -41,7 +42,7 @@ export default function DocumentosPage() {
   const { accountId, cargando, userName } = useCuentaConta()
   const { activa } = useEmpresas()
   const movil = useIsMobile()
-  const producto = useProducto()
+  const producto = productoDeDocumentos(useProductoSolo(), MARCA.nombre)
   const t = textos(producto.nombre)
   const navegar = useNavigate()
   const [query, setQuery] = useSearchParams()

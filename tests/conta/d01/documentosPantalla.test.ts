@@ -5,11 +5,11 @@
 // contra la frase de la maqueta (docs/conta/maquetas/d01/N22Documentos.png).
 import { describe, expect, it } from 'vitest'
 import {
-  banda, barra, boton, columnasDelApunte, comoLlego, entendido, filtrar, limites, lineaDiez, meses, nombreDelMes, porDonde, punto, textos,
+  banda, barra, boton, columnasDelApunte, comoLlego, entendido, filtrar, limites, lineaDiez, meses, nombreDelMes, porDonde, productoDeDocumentos, punto, textos,
   tonoDeLaFactura, vencimientoAEnsenar, verDe,
   type DatosDocumentos, type FilaDocumento,
 } from '../../../src/modules/conta/documentos/documentos'
-import { esCuentaConMarca, marcaDeLaPestana } from '../../../src/modules/conta/documentos/producto'
+import { esCuentaSoloContabilidad } from '../../../src/modules/conta/cuenta/contratoCuenta'
 import { hastaDondeHayTinta } from '../../../src/modules/conta/documentos/tinta'
 
 const fila = (o: Partial<FilaDocumento>): FilaDocumento => ({
@@ -122,14 +122,15 @@ describe('el producto', () => {
     expect(JSON.stringify(textos(null))).not.toMatch(/Folvy/)
     expect(textos(null).entendido).toBe('Lo que he entendido')
   })
-  it('la marca de la pestaña: ?marca= fuera de producción, recordada, y nunca en folvy.app', () => {
-    expect(marcaDeLaPestana('staging.example.test', '?marca=contabilidad', null)).toBe('contabilidad')
-    expect(marcaDeLaPestana('staging.example.test', '', 'contabilidad')).toBe('contabilidad')
-    expect(marcaDeLaPestana('staging.example.test', '?marca=folvy', 'contabilidad')).toBeNull()
-    expect(marcaDeLaPestana('app.folvy.app', '?marca=contabilidad', 'contabilidad')).toBeNull()
-    expect(esCuentaConMarca({ product_brand: 'contabilidad' })).toBe(true)
-    expect(esCuentaConMarca({ product_brand: null })).toBe(false)
-    expect(esCuentaConMarca(null)).toBe(false)
+  it('vendido solo lo dice la C06: la cuenta solo de contabilidad (product_brand) no lleva nombre de producto', () => {
+    // El puente de antes (documentos/producto.ts) se ha quitado al entrar la C06 en main:
+    // lo decide useProductoSolo() = MARCA.soloContabilidad || useCuentaConta().soloContabilidad.
+    expect(esCuentaSoloContabilidad({ product_brand: 'contabilidad' })).toBe(true)
+    expect(esCuentaSoloContabilidad({ product_brand: null })).toBe(false)
+    expect(esCuentaSoloContabilidad(null)).toBe(false)
+    expect(productoDeDocumentos(esCuentaSoloContabilidad({ product_brand: 'contabilidad' }), 'Folvy')).toEqual({ solo: true, nombre: null })
+    expect(productoDeDocumentos(esCuentaSoloContabilidad({ product_brand: null }), 'Folvy')).toEqual({ solo: false, nombre: 'Folvy' })
+    expect(textos(productoDeDocumentos(true, 'Folvy').nombre)).toEqual(textos(null))
   })
 })
 

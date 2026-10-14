@@ -9,6 +9,7 @@
 // factura que Diez tiene pero sin su PDF dice «No ha llegado a Diez: falta el
 // documento», no «En Diez».
 
+import { MARCA } from '../cuenta/marca'
 import { cent, deCent } from './libro'
 
 /** Lo que se lee de external_send. */
@@ -61,7 +62,7 @@ export function estadoDiez(a: { estado: string }, d: ConDiez, o: { enviando?: bo
   }
   if (!d.documento) return no(FALTA_DOCUMENTO)
   if (e?.error && e.error !== 'enviando') return no(e.error, e.intentos < 3)
-  if (e?.error === 'enviando') return no('el envío se cortó a medias: al reintentar, Folvy lo busca antes en Diez y no envía otro')
+  if (e?.error === 'enviando') return no(`el envío se cortó a medias: al reintentar, ${MARCA.nombre} lo busca antes en Diez y no envía otro`)
   return no('aún no se ha enviado')
 }
 

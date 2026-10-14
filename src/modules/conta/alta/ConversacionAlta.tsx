@@ -68,6 +68,10 @@ import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
 import { ivaDeVentas, type ActividadParaIva } from '@/modules/conta/lib/ivaVentas'
 import { codigoIae, ejercicioActual, type DatosEmpresa } from '@/modules/conta/empresa/datosEmpresa'
 import { Buscador } from '@/modules/conta/empresa/ApartadosActividad'
+import { MARCA, CON_MARCA } from '../cuenta/marca'
+import { entenderPrograma, fraseDePrograma } from '@/modules/conta/alta/programa'
+import { planActivado, ponerProgramaAnterior } from '@/modules/conta/services/programaService'
+import { activarPlan } from '@/modules/conta/services/planService'
 
 export type MarcoAlta = 'pantalla' | 'ventana'
 
@@ -143,9 +147,16 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const paso: PasoAlta = !companyId ? 'nif'
     : pasoLocal ?? (d && PASOS.includes(d.empresa.setupStep as PasoAlta) ? d.empresa.setupStep as PasoAlta : 'nombre')
 
+  // C06, respuesta 4: el plan y «¿De qué programa vienes?» comparten paso. Si
+  // se cierra entre las dos, al volver a entrar el plan no se repregunta: el
+  // ejercicio abierto lo dice (solo lo abre esa respuesta) y se toma el plan
+  // que quedó guardado.
+  const planYaElegido = paso === 'cuentas' && respuestas.cuentas === undefined && !vuelta && (d?.ejercicios.length ?? 0) > 0
+  const vistas: Partial<Record<ClavePregunta, string>> = planYaElegido ? { ...respuestas, cuentas: d?.perfil?.chartKind ?? 'pymes' } : respuestas
+
   const ctx: ContextoAlta | null = cuenta ? {
     cuenta, tipo: d?.empresa.entityKind ?? null, cp: d?.empresa.fiscalPostalCode ?? null,
-    clases: (d?.actividades ?? []).filter((a) => a.endedOn === null).map((a) => a.kind), respuestas, hoy,
+    clases: (d?.actividades ?? []).filter((a) => a.endedOn === null).map((a) => a.kind), respuestas: vistas, hoy,
   } : null
   const pregunta = ctx && !propuestas && !aMano ? preguntaActual(paso, ctx) : null
 
@@ -217,7 +228,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   /** Quedan preguntas en este paso después de contestar esta. */
   const quedan = (clave: ClavePregunta) => {
     if (!ctx) return false
-    return preguntaActual(paso, { ...ctx, respuestas: { ...respuestas, [clave]: 'x' } }) !== null
+    return preguntaActual(paso, { ...ctx, respuestas: { ...vistas, [clave]: 'x' } }) !== null
   }
 
   /** El IVA de las ventas que sale de las actividades, puesto por la IA con su porqué. */
@@ -307,13 +318,30 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           apuntado(noLoSe ? fraseDuda(textoDuda(p)) : fraseCuentas(plan, prop.digitos.valor, prop.ejercicio.valor))
           break
         }
+        case 'programa': {
+          const r = noLoSe ? { programa: 'ninguno' as const, otro: null } : entenderPrograma(valor)
+          // «Otro» sin nombre: se pide, y la pregunta sigue abierta.
+          if (!r) { decir('folvy', 'Dime cuál: escribe su nombre abajo.'); return }
+          await ponerProgramaAnterior(id!, r)
+          if (noLoSe) await apuntarDuda(accountId, id!, userId, 'programa', p.texto, 'Empiezo de cero')
+          apuntado([{ t: fraseDePrograma(r, vistas.cuentas === 'normal' ? 'normal' : 'pymes') }])
+          break
+        }
         case 'banco': {
           if (!noLoSe) await anadirBanco(accountId, id!, userId, valor)
+          // C06, respuesta 4: el alta no termina sin el plan activado. Después
+          // del banco, para que su subcuenta (572) salga ya con el plan. Si no
+          // se puede activar, el alta no se da por terminada y se dice por qué.
+          let planHecho: string | null = null
+          if (!(await planActivado(id!))) {
+            const a = await activarPlan(id!, false, null)
+            planHecho = `Plan activado: ${a.cuentas} cuentas de serie, ${a.subcuentas} subcuentas y ${a.enlaces} enlaces.`
+          }
           await terminarAlta(id!)
           setPasoLocal('hecho')
           elegir(id!)
           recargarEmpresas()
-          decir('folvy', <>Listo: <b>{d?.empresa.legalName ?? 'tu empresa'}</b> está montada. {noLoSe ? 'El banco lo pones cuando quieras en «Tablas generales». ' : 'Apuntado el banco como cuenta principal. '}Todo lo que he puesto lleva la marca «IA» y su porqué, y lo puedes cambiar o deshacer en <Link to={rutaTuEmpresa()}>Tu empresa</Link>.</>)
+          decir('folvy', <>Listo: <b>{d?.empresa.legalName ?? 'tu empresa'}</b> está montada. {planHecho ? `${planHecho} ` : ''}{noLoSe ? 'El banco lo pones cuando quieras en «Tablas generales». ' : 'Apuntado el banco como cuenta principal. '}Todo lo que he puesto lleva la marca «IA» y su porqué, y lo puedes cambiar o deshacer en <Link to={rutaTuEmpresa()}>Tu empresa</Link>.</>)
           datos.recargar()
           return
         }
@@ -328,7 +356,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           break
         }
       }
-      const r = { ...respuestas, [p.clave]: noLoSe ? '__nolose' : valor }
+      const r = { ...vistas, [p.clave]: noLoSe ? '__nolose' : valor }
       setRespuestas(r)
       if (!quedan(p.clave)) await terminarPaso(r, id!)
     })
@@ -459,7 +487,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
 
   // ── Lo que llevamos ───────────────────────────────────────────────────
   const actual: ClavePregunta | null = pregunta?.clave ?? (propuestas || aMano ? 'actividad' : null)
-  const puntos = loQueLlevamos({ paso, actual, valores: valoresDe(d, hoy), contestadas: Object.keys(respuestas) as ClavePregunta[] })
+  const puntos = loQueLlevamos({ paso, actual, valores: valoresDe(d, hoy), contestadas: Object.keys(vistas) as ClavePregunta[] })
   const hechos = cuantosHechos(puntos)
 
   // ── Intro envía (respuesta 4) ─────────────────────────────────────────
@@ -516,8 +544,11 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
         )}
         {pregunta && !ocupado && (pregunta.opciones.length > 0 || pregunta.noLoSe) && (
           <div className="cx-alta-respuestas">
-            {pregunta.opciones.map((o, i) => (
-              <button key={o.valor} type="button" className={i === 0 ? 'cx-boton' : 'cx-boton-sec'}
+            {pregunta.opciones.map((o) => (
+              // Marcada, la respuesta normal (la que deja «No lo sé»). En todas es
+              // la primera salvo en «¿De qué programa vienes?», que va en el orden
+              // de la lista y no sugiere ningún programa (C06, respuesta 4).
+              <button key={o.valor} type="button" className={o.valor === pregunta.normal ? 'cx-boton' : 'cx-boton-sec'}
                 onClick={() => void responder(pregunta, o.valor, o.texto)}>{o.texto}</button>
             ))}
             {/* En el móvil, «No lo sé» a secas (M1), para que quepa; la frase entera, para quien lee con lector. */}
@@ -615,7 +646,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   return (
     <div className={`cx cx-alta${movil ? ' cx-alta-movil' : ''}`}>
       <header className="cx-alta-cabeza">
-        <span className="cx-alta-logo">folvy</span>
+        <span className="cx-alta-logo">{CON_MARCA ? MARCA.nombre : 'folvy'}</span>
         <div className="cx-alta-cabeza-derecha">
           {movil ? (
             <button type="button" className="cx-alta-cuantos" aria-haspopup="dialog" aria-expanded={hoja}

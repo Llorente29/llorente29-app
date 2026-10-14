@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { listarHechoPorFolvy, listarHistorial, type HechoPorFolvy, type Suceso } from '@/modules/conta/services/proveedorService'
+import { MARCA } from '../cuenta/marca'
 
 const cuando = (iso: string) =>
   new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
@@ -18,7 +19,7 @@ const QUE: Record<HechoPorFolvy['que'], string> = {
   aprendido: 'Aprendido',
   olvidado: 'Olvidado',
   fijado_a_mano: 'Cambiado a mano',
-  devuelto_a_folvy: 'Devuelto a Folvy',
+  devuelto_a_folvy: `Devuelto a ${MARCA.nombre}`,
 }
 
 export default function Historial() {
@@ -43,7 +44,7 @@ export default function Historial() {
     <section className="cxp-aprendido" aria-labelledby="cxp-hecho-folvy">
       <div className="cxp-aprendido-cabeza">
         <span className="cx-ia-punto" aria-hidden="true" />
-        <h2 id="cxp-hecho-folvy">Lo que ha hecho Folvy</h2>
+        <h2 id="cxp-hecho-folvy">Lo que ha hecho {MARCA.nombre}</h2>
       </div>
       {folvy.length === 0 && <p className="cxp-aprendido-vacio" style={{ margin: 0 }}>Aún no ha aprendido nada de este proveedor.</p>}
       {folvy.map((h, i) => (

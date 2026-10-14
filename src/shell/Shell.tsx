@@ -22,7 +22,7 @@
 //        (el viewport es menor que el tope). Patrón de Toast/R365/Apicbase/Linear.
 
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useLocation, Routes, Route } from 'react-router-dom'
+import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom'
 import ShellTopBar, { HOME_KEY, PENDIENTES_KEY } from './ShellTopBar'
 import ModuleSidebar from './ModuleSidebar'
 import MobileModuleTabs from './MobileModuleTabs'
@@ -40,6 +40,8 @@ import { FolvyAIBubble } from '../modules/folvy-ai/components/FolvyAIBubble'
 import PendientesPage from '../modules/pendientes/PendientesPage'
 import AvisoNuevaVersion from './version/AvisoNuevaVersion'
 import { usePendingBoard } from '../modules/pendientes/hooks/usePendingBoard'
+import { useFeatureGate } from '@/platform/feature-gate/useFeatureGate'
+import { MARCA } from '@/marca/marca'
 
 const SETTINGS_BASE = 'configuracion'
 
@@ -52,6 +54,8 @@ export default function Shell() {
   const location = useLocation()
   const { userProfile, accounts, activeAccount, activeAccountId, setActiveAccountId } = useApp()
   const { isPlatformAdmin } = usePlatformAdmin()
+  const { account: cuentaPlataforma } = useFeatureGate()
+  const soloContabilidad = !!cuentaPlataforma?.product_brand
   // ENCARGO CODE (14/08) Pendientes Fase 1, B.1 — un solo fetch aquí; el
   // contador se pasa al TopBar y decide el aterrizaje en Home. NUNCA cuenta
   // 'salud' (solo ahora+semana, ver usePendingBoard).
@@ -223,6 +227,15 @@ export default function Shell() {
     if (!activeModule) return
     const item = activeModule.sidebar.items.find(i => i.id === itemId)
     if (item) goToItemPath(item.path)
+  }
+
+  // C06 · Contabilidad sola. Con una marca de solo contabilidad, o en una cuenta
+  // dada de alta solo con contabilidad (accounts.product_brand), no hay nada
+  // fuera de /conta: ni el Inicio de hostelería (el aterrizaje en /<slug>/personal
+  // caía ahí), ni la barra de módulos. Todo lleva al Inicio de contabilidad.
+  // Las demás cuentas, como siempre (moduleBasePath manda igual que antes).
+  if ((MARCA.soloContabilidad || soloContabilidad) && moduleBasePath !== 'conta') {
+    return <Navigate to="/conta/inicio" replace />
   }
 
   if (workerMode && userProfile?.employeeId) {

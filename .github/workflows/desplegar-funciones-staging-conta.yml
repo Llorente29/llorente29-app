@@ -1,0 +1,128 @@
+name: Desplegar funciones en staging-conta
+
+# QUÉ HACE (C06, tarea 6, 14/10)
+# Despliega en STAGING-CONTA (oseymswjlzplqoxrfjzi) las edge functions que diga
+# el manifiesto supabase/staging/funciones.txt, desde el código de la rama.
+# Para probar en staging una función que aún no está en producción (la
+# invitación de una marca, conta-crear-cuenta) sin un token en el portátil de
+# nadie: como el SQL de staging, desde git y con traza (CLAUDE.md, regla 1).
+#
+# LO QUE NO PUEDE HACER
+#   · Producción: el ref es el de staging, escrito aquí, y se para si fuera el
+#     de producción. No lee el project_id de config.toml (ese es producción).
+#   · hubrise-webhook: no se despliega por aquí, nunca.
+#   · verify_jwt: como el de producción. Si la función está declarada en
+#     config.toml, manda lo declarado; si no, se conserva el que tiene viva en
+#     staging; si es nueva y no está declarada, para.
+#   · Después lee de vuelta lo desplegado y compara el md5 de cada fichero con
+#     el de la rama —el CLI lo devuelve transpilado: los dos lados pasan por
+#     esbuild antes— (regla 1: lo desplegado se comprueba, no se da por bueno con
+#     el color del run).
+#
+# CUÁNDO: un push a conta/** que cambie supabase/staging/funciones.txt.
+
+on:
+  push:
+    branches: ['conta/**']
+    paths:
+      - 'supabase/staging/funciones.txt'
+
+concurrency:
+  group: desplegar-funciones-staging-conta
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guardas · staging y no producción; la lista, válida
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${TOKEN:-}" ] || { echo "::error::Falta el secreto SUPABASE_ACCESS_TOKEN."; exit 1; }
+          [ "$REF" != "$PROD_REF" ] || { echo "::error::El ref es el de producción. Abortado."; exit 1; }
+          FUNCIONES=$(grep -vE '^\s*(#|$)' supabase/staging/funciones.txt | tr -d '\r' | xargs)
+          [ -n "$FUNCIONES" ] || { echo "::error::El manifiesto no tiene funciones."; exit 1; }
+          for f in $FUNCIONES; do
+            [[ "$f" =~ ^[a-z0-9-]+$ ]] || { echo "::error::Nombre no válido: «$f»."; exit 1; }
+            [ "$f" != "hubrise-webhook" ] || { echo "::error::hubrise-webhook no se despliega por aquí, nunca."; exit 1; }
+            [ -f "supabase/functions/$f/index.ts" ] || { echo "::error::No existe supabase/functions/$f/index.ts."; exit 1; }
+          done
+          echo "FUNCIONES=$FUNCIONES" >> "$GITHUB_ENV"
+          echo "A staging-conta ($REF): $FUNCIONES"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Desplegar en staging-conta (verify_jwt declarado, o el vivo)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -sS --fail-with-body -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$REF/functions" > /tmp/vivas.json
+          { echo "## Funciones desplegadas en staging-conta"; echo; echo "| función | verify_jwt | según |"; echo "|---|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
+          for f in $FUNCIONES; do
+            DECL=""
+            if grep -qE "^\[functions\.$f\]" supabase/config.toml; then
+              DECL=$(awk -v f="[functions.$f]" '$0==f{found=1;next} /^\[/{found=0} found && /^[[:space:]]*verify_jwt[[:space:]]*=/{sub(/^[^=]*=[[:space:]]*/,""); gsub(/[[:space:]]/,""); print; exit}' supabase/config.toml)
+            fi
+            VIVO=$(jq -r --arg s "$f" '[.[] | select(.slug==$s) | .verify_jwt][0] // ""' /tmp/vivas.json)
+            if [ "$DECL" = "true" ] || [ "$DECL" = "false" ]; then JWT=$DECL; ORIGEN=config.toml
+            elif [ "$VIVO" = "true" ] || [ "$VIVO" = "false" ]; then JWT=$VIVO; ORIGEN="lo vivo en staging"
+            else echo "::error::$f es nueva en staging y no está declarada en config.toml: no se adivina su verify_jwt."; exit 1; fi
+            FLAG=""; [ "$JWT" = "false" ] && FLAG="--no-verify-jwt"
+            supabase functions deploy "$f" --project-ref "$REF" $FLAG
+            echo "| \`$f\` | $JWT | $ORIGEN |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Comprobar lo desplegado (md5 de cada fichero contra la rama)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          { echo; echo "| función | fichero | md5 rama | md5 desplegado |"; echo "|---|---|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
+          MAL=0
+          for f in $FUNCIONES; do
+            # Una carpeta nueva por función: nada de la anterior se confunde con ésta.
+            BAJADA=$(mktemp -d) && mkdir -p "$BAJADA/supabase" && cd "$BAJADA"
+            supabase functions download "$f" --project-ref "$REF" > "$BAJADA.log" 2>&1 || { cat "$BAJADA.log"; echo "::error::No se pudo leer de vuelta $f."; exit 1; }
+            find "$BAJADA" -type f | sed 's/^/  bajado: /' | head -20
+            cd "$GITHUB_WORKSPACE"
+            for local in supabase/functions/$f/*.ts; do
+              nombre=$(basename "$local")
+              # El CLI deja lo bajado donde le parece (supabase/functions/…, functions/…):
+              # se busca por nombre dentro de la carpeta de la función, esté donde esté.
+              bajado=$(find "$BAJADA" -type f -name "$nombre" -path "*/$f/*" 2>/dev/null | head -1)
+              a=$(md5sum "$local" | cut -c1-32)
+              b=$([ -n "$bajado" ] && md5sum "$bajado" | cut -c1-32 || echo "—")
+              echo "| \`$f\` | $nombre | $a | $b |" >> "$GITHUB_STEP_SUMMARY"
+              if [ -z "$bajado" ]; then
+                echo "::error::$f/$nombre: no se ha podido leer de vuelta (bajado: $(find "$BAJADA" -type f | tr '\n' ' ' | cut -c1-300))."; MAL=1
+              elif [ "$a" != "$b" ]; then
+                # El CLI devuelve el código YA TRANSPILADO (sin tipos, re-formateado:
+                # medido en el run 38478844313). Se pasan los DOS lados por el mismo
+                # esbuild (quita tipos y comentarios, une comillas y formato) y se
+                # comparan sin espacios. Si así coincide, es el mismo código.
+                a2=$(npx --yes esbuild@0.28.0 --loader=ts --log-level=error < "$local" | tr -d '[:space:]' | md5sum | cut -c1-32)
+                b2=$(npx --yes esbuild@0.28.0 --loader=ts --log-level=error < "$bajado" | tr -d '[:space:]' | md5sum | cut -c1-32)
+                if [ "$a2" = "$b2" ]; then echo "::notice::$f/$nombre: mismo código una vez transpilado ($a2)."; echo "| \`$f\` | $nombre (transpilado) | $a2 | $b2 |" >> "$GITHUB_STEP_SUMMARY"; continue; fi
+                diff <(npx --yes esbuild@0.28.0 --loader=ts --log-level=error < "$local") <(npx --yes esbuild@0.28.0 --loader=ts --log-level=error < "$bajado") | head -c 600 > /tmp/dif.txt || true
+                echo "::error::$f/$nombre desplegado no es el de la rama (transpilados los dos): $(tr '\n' ' ' < /tmp/dif.txt)"; MAL=1
+              fi
+            done
+            echo "::notice::$f desplegada en staging-conta; sus ficheros comparados con la rama."
+          done
+          [ "$MAL" = "0" ] || exit 1

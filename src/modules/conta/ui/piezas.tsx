@@ -8,6 +8,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { entradaActiva, entradasVisibles, type EntradaMenuConta } from '@/config/navegacion'
 import { rutaConta } from '@/config/navegacion'
+import { MARCA } from '../cuenta/marca'
 
 /** Cabecera de página: antetítulo pequeño y título grande. */
 export function Cabecera({ antetitulo, titulo, derecha }: { antetitulo?: string; titulo: string; derecha?: ReactNode }) {
@@ -107,7 +108,7 @@ export function FilaInicial({ inicial, titulo, apoyo, cifra, redonda, tono }: {
  */
 export function BloqueIA({ titulo, porque, acciones }: { titulo: ReactNode; porque?: ReactNode; acciones?: ReactNode }) {
   return (
-    <section className="cx-ia-bloque" aria-label="Lo que propone Folvy">
+    <section className="cx-ia-bloque" aria-label={`Lo que propone ${MARCA.nombre}`}>
       <span className="cx-ia-punto" aria-hidden="true" />
       <div className="cx-ia-texto">
         <span className="cx-ia-titulo">{titulo}</span>
@@ -128,7 +129,7 @@ export function MarcaIA({ motivo, importado = false }: { motivo: string; importa
   return (
     <span style={{ position: 'relative', display: 'inline-flex' }}>
       <button type="button" className="cx-marca-ia" aria-expanded={abierta} aria-controls={id}
-        aria-label={importado ? 'Vino de los datos de tu cuenta. Ver de dónde' : 'Lo puso Folvy. Ver por qué'}
+        aria-label={importado ? 'Vino de los datos de tu cuenta. Ver de dónde' : `Lo puso ${MARCA.nombre}. Ver por qué`}
         onClick={() => setAbierta((v) => !v)}>{importado ? 'Importado' : 'IA'}</button>
       {abierta && (
         <span id={id} role="note" className="cx-ia-porque" style={{

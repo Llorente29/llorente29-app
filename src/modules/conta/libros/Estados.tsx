@@ -17,6 +17,7 @@ import { rutaLibros, rutaMayor } from '@/config/navegacion'
 import { Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
+import { NOTA_CLIENTES_PASIVO, esLineaClientes, notaClientes } from '@/modules/conta/lib/notaClientes'
 import {
   calcularEstado, columnaAnterior, cuadreBalance, mapeoEfectivo, modeloPropuesto, resultadoTresCifras, vistasDeResultado,
   type LineaCalculada, type Modelo, type ResultadoEstado, type SaldoCuenta,
@@ -24,6 +25,7 @@ import {
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import { aSaldoCuenta, leerLineas, leerMapeo, planDeEmpresa, resultadoRepartido, saldosCuentas, type SaldoConLocal } from '@/modules/conta/services/librosService'
+import { MARCA } from '../cuenta/marca'
 
 type Vista = 'oficial' | 'detallado' | 'local' | 'marca'
 const NOMBRE = { balance: 'Balance de situación', pyg: 'Pérdidas y ganancias', ecpn: 'Cambios en el patrimonio neto' } as const
@@ -128,7 +130,7 @@ export function Estados({ estado, salida }: { estado: 'balance' | 'pyg' | 'ecpn'
         </div>
       </div>
       {hecho && <div className="cx-guardado" role="status">{hecho}</div>}
-      {L.ejercicio.origen === 'migrated' && <div className="cx-tarjeta cxd-franja" role="status">Ejercicio <strong>traído</strong> de {L.ejercicio.cierre ? 'Folvy' : 'otro programa'}: se enseña tal cual, sin recalcular su cierre.</div>}
+      {L.ejercicio.origen === 'migrated' && <div className="cx-tarjeta cxd-franja" role="status">Ejercicio <strong>traído</strong> de {L.ejercicio.cierre ? `${MARCA.nombre}` : 'otro programa'}: se enseña tal cual, sin recalcular su cierre.</div>}
 
       {!calc && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={36} />)}</div>}
       {calc && d.datos && <BarraIa calc={calc} estado={estado} modelo={d.datos.modelo} plantilla={L.ejercicio.plantillaMedia} anterior={null} />}
@@ -186,6 +188,8 @@ function TablaEstado({ lineas, anterior, col, fecha, anioAnterior, abiertas, alt
               <span className={`cxl-cifra-celda${l.importe < 0 && !l.isTotal ? ' cxl-anomalo' : ''}`} role="cell">{l.importe === 0 && !hayCuentas && !l.isTotal ? '—' : eurosExactos(l.importe)}</span>
               {col.sale && <span className="cxl-cifra-celda cxl-anterior" role="cell">{a ? (a.importe === 0 && !a.cuentas.length && !a.isTotal ? '—' : eurosExactos(a.importe)) : '—'}</span>}
             </div>
+            {/* C06b: los clientes van por el signo de su saldo (no compensación): dicho debajo, en llano. */}
+            {esLineaClientes(l) && <div className="cxl-nota-linea" role="row"><span role="cell">{NOTA_CLIENTES_PASIVO}</span></div>}
             {abierta && l.cuentas.map((c) => (
               <div key={c.code} className={`cxl-cuenta${sinAnt}`} role="row">
                 <span role="cell">
@@ -232,10 +236,10 @@ function BarraIa({ calc, estado, modelo, plantilla }: {
 }) {
   const notas: { titulo: string; texto: string; enlace?: { a: string; texto: string } }[] = []
   const cuentas = calc.actual.lineas.flatMap((l) => l.cuentas)
-  const clientesNeg = cuentas.filter((c) => c.anomalo && (c.templateCode ?? c.code).startsWith('43'))
-  if (clientesNeg.length) {
-    const t = clientesNeg.reduce((a, c) => a + c.importe, 0)
-    notas.push({ titulo: `Clientes en negativo (${eurosExactos(t)}).`, texto: `Un saldo acreedor en clientes no es normal: suele ser una liquidación asentada dos veces o un cobro sin su venta. Mira la ${clientesNeg[0].code}.`, enlace: { a: rutaMayor(clientesNeg[0].code), texto: 'Ver' } })
+  // C06b: la cifra de la línea oficial de clientes, y los que van al pasivo (no compensación).
+  const clientes = notaClientes(calc.actual, eurosExactos)
+  if (clientes) {
+    notas.push({ titulo: clientes.titulo, texto: clientes.texto, enlace: { a: rutaMayor(clientes.cuenta), texto: 'Ver' } })
   } else {
     const otros = cuentas.filter((c) => c.anomalo)
     if (otros.length) notas.push({ titulo: `${otros.length} ${otros.length === 1 ? 'cuenta con saldo' : 'cuentas con saldo'} del lado contrario.`, texto: `En ámbar en la tabla: ${otros.slice(0, 3).map((c) => c.code).join(', ')}. Puede ser normal (un anticipo) o un apunte en la cuenta equivocada.` })

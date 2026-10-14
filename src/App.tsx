@@ -20,6 +20,7 @@ import SeguimientoRoute from './modules/seguimiento/SeguimientoRoute'
 import ShopHubRoute from './modules/shop/ShopHubRoute'
 import { isShopHost } from './modules/shop/shopHost'
 import TpvSaleRoute from './modules/pos/TpvSaleRoute'
+import { MARCA } from './marca/marca'
 
 // G-8.6 (Sprint 3): App.tsx reducido. El render autenticado es el Shell modular
 // (src/shell/Shell.tsx), que vive en la raÃ­z y resuelve la cuenta por AppContext.
@@ -62,7 +63,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
           <p className="text-2xl font-display font-medium mb-2 text-accent">
-            Folvy
+            {MARCA.nombre}
           </p>
           <p className="text-sm text-text-secondary">Cargando...</p>
         </div>
@@ -139,7 +140,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
           <p className="text-2xl font-display font-medium mb-2 text-accent">
-            Folvy
+            {MARCA.nombre}
           </p>
           <p className="text-sm text-text-secondary">Cargando...</p>
         </div>
@@ -186,7 +187,7 @@ export default function App() {
         <div className="min-h-screen flex items-center justify-center bg-page">
           <div className="text-center">
             <p className="text-2xl font-display font-medium mb-2 text-accent">
-              Folvy
+              {MARCA.nombre}
             </p>
             <p className="text-sm text-text-secondary">Cargando...</p>
           </div>

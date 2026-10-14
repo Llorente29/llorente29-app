@@ -66,14 +66,25 @@ export default function CuentasListPage() {
         <h1 className="text-2xl font-display font-medium" style={{ color: 'var(--color-accent)' }}>
           Cuentas
         </h1>
-        <button
-          type="button"
-          onClick={() => navigate('/_admin/cuentas/nueva')}
-          className="px-4 py-2 rounded-md text-sm font-medium"
-          style={{ background: 'var(--color-terracota)', color: '#fff' }}
-        >
-          + Nueva cuenta
-        </button>
+        <div className="flex gap-2">
+          {/* C06: una cuenta solo de contabilidad, sin Cocina, con su marca. */}
+          <button
+            type="button"
+            onClick={() => navigate('/_admin/cuentas/nueva-contabilidad')}
+            className="px-4 py-2 rounded-md text-sm font-medium"
+            style={{ border: '1px solid var(--color-terracota)', color: 'var(--color-terracota)' }}
+          >
+            + Solo contabilidad
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/_admin/cuentas/nueva')}
+            className="px-4 py-2 rounded-md text-sm font-medium"
+            style={{ background: 'var(--color-terracota)', color: '#fff' }}
+          >
+            + Nueva cuenta
+          </button>
+        </div>
       </div>
 
       {load.state === 'loading' && (

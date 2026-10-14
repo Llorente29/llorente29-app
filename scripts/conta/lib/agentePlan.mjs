@@ -141,9 +141,15 @@ export function revisarEmpresas(bd, serie) {
 
 /**
  * Lo que trae otro programa no se toca ni deja rastro al deshacerse:
- *   · toda cuenta traída (source 'migrated') conserva su código original: está
- *     entre los códigos leídos del fichero de SU importación, y guarda el nombre
- *     de allí (name_source);
+ *   · toda cuenta traída (source 'migrated') viene de uno de los DOS caminos:
+ *     - la importación del plan (import_id): su código está entre los leídos
+ *       del fichero de SU importación;
+ *     - la lectura del histórico de Diez (import_run_id, C06b, aviso #178): la
+ *       lectura es de la misma cuenta y empresa, está «hecho», y la cuenta
+ *       tiene apuntes traídos por ESA lectura. Nunca por su nombre: un
+ *       created_by_name «Diez (traída)» no prueba de dónde vino;
+ *     y guarda el nombre de allí (name_source), salvo la que Diez trajo sin
+ *     nombre, que espera el suyo (name_pending, C06);
  *   · ningún tercero tiene dos enlaces con el mismo papel en una empresa;
  *   · ningún enlace apunta a una cuenta que ya no existe;
  *   · una importación deshecha no deja nada: ni cuentas ni fichas creadas.
@@ -154,10 +160,21 @@ export function revisarImportaciones(bd) {
   const cuentas = bd.company_account ?? []
   const enlaces = bd.company_account_link ?? []
   const importaciones = new Map((bd.importaciones ?? []).map((i) => [i.id, i]))
+  const lecturas = new Map((bd.lecturas ?? []).map((r) => [r.id, r]))
+  const apuntesDeLectura = new Map((bd.apuntes_de_lectura ?? []).map((x) => [x.company_account_id, x.apuntes]))
   const de = (accountId) => `cuenta ${String(accountId).slice(0, 8)}`
   for (const c of cuentas.filter((x) => x.source === 'migrated')) {
     const imp = importaciones.get(c.import_id)
-    if (!imp) { out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} dice venir de otro programa y no tiene importación.` }); continue }
+    if (!imp && c.import_run_id) {
+      // El segundo camino: la lectura del histórico que la dio de alta.
+      const r = lecturas.get(c.import_run_id)
+      if (!r || r.account_id !== c.account_id || r.company_id !== c.company_id) out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} dice venir de una lectura del histórico que no es de su empresa.` })
+      else if (r.status !== 'hecho') out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} viene de una lectura del histórico que está ${r.status}.` })
+      else if (!(apuntesDeLectura.get(c.id) > 0)) out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} viene de una lectura del histórico y no tiene ningún apunte traído por ella.` })
+      if (!c.name_source && !c.name_pending) out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} no guarda el nombre que tenía en el otro programa.` })
+      continue
+    }
+    if (!imp) { out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} dice venir de otro programa y no tiene importación${c.import_run_id === undefined ? '' : ' ni lectura del histórico'}.` }); continue }
     if (imp.status !== 'traida') out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} sigue en el plan y su importación está ${imp.status}.` })
     if (!(imp.codigos ?? []).includes(c.code)) out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} no es ninguno de los códigos que traía el fichero: el código original no se ha conservado.` })
     if (!c.name_source) out.push({ nivel: 'rojo', texto: `Plan traído · ${de(c.account_id)}: ${c.code} no guarda el nombre que tenía en el otro programa.` })

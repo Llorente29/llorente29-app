@@ -13,16 +13,24 @@
 // transacción.
 //
 // Dos fuentes:
-//   · DIEZ_FUENTE=real     — la C0008 con el secreto DIEZ_LECTURA; el testigo,
-//                            de testigo-huellas.json (los Excel de Julio).
+//   · DIEZ_FUENTE=real     — la base DIEZ_BD con el secreto DIEZ_LECTURA; el
+//                            testigo, el de esa base (testigoDeBase: la C0008,
+//                            testigo-huellas.json, los Excel de Julio; otra base,
+//                            testigo-huellas-<BASE>.json si existe, y si no,
+//                            sin testigo: la tanda no puede salir en verde).
 //   · DIEZ_FUENTE=simulado — el Diez de mentira con datos INVENTADOS
 //                            (importar-simulado.mjs); el testigo se calcula de
 //                            esos mismos datos. Es para ensayar la tanda en
 //                            staging: los datos reales nunca van a staging.
 //
-//   CARGA=/tmp/carga DIEZ_FUENTE=real DIEZ_LECTURA='{…}' npx tsx scripts/conta/diez/importar-preparar.ts
+//   CARGA=/tmp/carga DIEZ_FUENTE=real DIEZ_BD=C0008 DIEZ_DESDE=… DIEZ_HASTA=… DIEZ_CORTE=… DIEZ_LECTURA='{…}' npx tsx scripts/conta/diez/importar-preparar.ts
+//
+// C06 (traer de Diez para otra empresa): nada de una empresa escrito aquí. La
+// base (DIEZ_BD) la lee el workflow de conta_diez_base —la base que Folvy
+// registró para la empresa— y se le pasa al cliente como baseRegistrada; las
+// fechas son obligatorias (sin las de Foodint por defecto).
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { ClienteDiez, type AlmacenToken, type Apunte } from '../../../supabase/functions/_shared/diezCliente.ts'
 import { documentoEsperado, paraLaBase, prepararHistorico } from '../../../supabase/functions/_shared/diezImportar.ts'
 import { cent } from '../../../supabase/functions/_shared/diezMapeo.ts'
@@ -34,10 +42,22 @@ import { datosSimulados } from './importar-simulado.mjs'
 
 const FUENTE = process.env.DIEZ_FUENTE
 const CARGA = process.env.CARGA || '/tmp/carga'
-const DESDE = process.env.DIEZ_DESDE || '202310'
-const HASTA = process.env.DIEZ_HASTA || '202609'
-const CORTE = process.env.DIEZ_CORTE || '2026-09-30'
+const DESDE = process.env.DIEZ_DESDE ?? ''
+const HASTA = process.env.DIEZ_HASTA ?? ''
+const CORTE = process.env.DIEZ_CORTE ?? ''
+const BD = (process.env.DIEZ_BD ?? '').trim().toUpperCase()
 if (FUENTE !== 'real' && FUENTE !== 'simulado') { console.log('DIEZ_FUENTE tiene que ser «real» o «simulado».'); process.exit(1) }
+if (!/^\d{6}$/.test(DESDE) || !/^\d{6}$/.test(HASTA) || !/^\d{4}-\d{2}-\d{2}$/.test(CORTE) || DESDE > HASTA) {
+  console.log('Faltan las fechas: DIEZ_DESDE y DIEZ_HASTA (AAAAMM) y DIEZ_CORTE (AAAA-MM-DD). No se lee nada.'); process.exit(1)
+}
+if (FUENTE === 'real' && !/^C\d{4}$/.test(BD)) { console.log('Falta DIEZ_BD (la base registrada para la empresa, C y cuatro cifras). No se lee nada.'); process.exit(1) }
+
+/** El testigo de una base: el fichero de huellas de SUS Excel, o ninguno. */
+function testigoDeBase(bd: string): string | null {
+  const f = bd === 'C0008' ? 'testigo-huellas.json' : `testigo-huellas-${bd}.json`
+  const u = new URL(`./${f}`, import.meta.url)
+  return existsSync(u) ? readFileSync(u, 'utf8') : null
+}
 
 const csv = (xs: unknown[]) => xs.map((x) => (x == null ? '' : `"${String(x).replace(/"/g, '""')}"`)).join(',')
 const sinImportes = (s: string) => s.replace(/-?\d[\d.]*[.,]\d{2}\b/g, '[importe]')
@@ -54,10 +74,11 @@ if (FUENTE === 'real') {
   const cred = JSON.parse(process.env.DIEZ_LECTURA || 'null')
   if (!cred || typeof cred !== 'object') { console.log('Falta el secreto DIEZ_LECTURA. No se lee nada.'); process.exit(1) }
   cliente = new ClienteDiez({
-    base: String(cred.base_url || 'https://apicon.diezsoftware.com'), nombreBd: 'C0008', almacen: memoria(), pausaMs: 120,
+    base: String(cred.base_url || 'https://apicon.diezsoftware.com'), nombreBd: BD, baseRegistrada: BD, almacen: memoria(), pausaMs: 120,
     credenciales: { grant_type: cred.grant_type, client_id: cred.client_id, client_secret: cred.client_secret, username: cred.username, password: cred.password },
   })
-  const h = JSON.parse(readFileSync(new URL('./testigo-huellas.json', import.meta.url), 'utf8'))
+  const t = testigoDeBase(BD)
+  const h = t ? JSON.parse(t) : {}
   testigo = Object.entries(h).filter(([k]) => /^\d{4}$/.test(k)).map(([ejercicio, v]) => ({ ejercicio, ...(v as { hasta: string; cuentas: number; huella: string }) }))
 } else {
   const d = datosSimulados()
@@ -96,7 +117,7 @@ const motivos = new Map<string, string[]>()
 for (const r of p.rechazadosAlConvertir) { const m = sinImportes(r.motivo); motivos.set(m, [...(motivos.get(m) ?? []), r.clave]) }
 console.log([
   `## Diez · tanda del histórico · lectura (${FUENTE})`, '',
-  `Meses ${DESDE}–${HASTA} · corte ${CORTE} · solo GET`, '',
+  `${FUENTE === 'real' ? `Base ${BD} · ` : ''}Meses ${DESDE}–${HASTA} · corte ${CORTE} · solo GET`, '',
   `- Meses leídos: ${p.meses}`,
   `- Asientos leídos: ${p.leidos}`,
   `- Preparados para escribir: ${p.asientos.length}`,
@@ -105,6 +126,6 @@ console.log([
   `- Rechazados al convertir (mueven saldo y no entran: la tanda sale en ROJO): ${p.rechazadosAlConvertir.length}`,
   ...[...motivos.entries()].map(([m, ks]) => `  - ${ks.length} × ${m}: ${ks.join(', ')}`),
   `- Subcuentas que usan: ${p.subcuentas.length}`,
-  `- Testigo: ${testigo.map((t) => `${t.ejercicio} (${t.cuentas} subcuentas, hasta ${t.hasta})`).join(' · ')}`,
+  `- Testigo: ${testigo.length ? testigo.map((t) => `${t.ejercicio} (${t.cuentas} subcuentas, hasta ${t.hasta})`).join(' · ') : '**ninguno**: no hay con qué medir lo traído; la tanda no puede salir en verde'}`,
   '',
 ].join('\n'))

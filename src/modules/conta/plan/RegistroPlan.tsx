@@ -6,11 +6,12 @@
 
 import type { ReactNode } from 'react'
 import { TarjetaApartado } from '@/modules/conta/empresa/campos'
+import { MARCA } from '../cuenta/marca'
 
 const FECHA = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Madrid' })
 const HORA = new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
 const cuando = (iso: string) => `${FECHA.format(new Date(iso))} a las ${HORA.format(new Date(iso))}`
-const ORIGEN: Record<string, string> = { serie: 'Folvy, al activar el plan', manual: 'a mano', ai_accepted: 'propuesta de Folvy aceptada', migrated: 'traído de otro programa' }
+const ORIGEN: Record<string, string> = { serie: `${MARCA.nombre}, al activar el plan`, manual: 'a mano', ai_accepted: `propuesta de ${MARCA.nombre} aceptada`, migrated: 'traído de otro programa' }
 
 export interface EntradaRegistro { id: string; que?: string; detalle: string; doneAt: string; doneByName: string | null; source: string }
 

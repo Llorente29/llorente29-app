@@ -16,7 +16,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo } from '../sesion'
 import { rest } from '../api'
-import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
+import { FLOTANTES_CONTA, loQueTapan, loQueTapanSinPregunta } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c04'
 const BARRA_FOLVY_MOVIL = 'nav[aria-label="Navegacion principal"]'
@@ -29,7 +29,7 @@ async function capturar(page: Page, nombre: string, incrustado = false) {
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
   const flotantes = incrustado && lado(page) === 'movil' ? [BARRA_FOLVY_MOVIL] : FLOTANTES_CONTA
-  expect(await loQueTapan(page, incrustado ? '.cx-incrustado' : '.cx-principal', flotantes)).toEqual([])
+  expect(await (incrustado ? loQueTapan(page, '.cx-incrustado', flotantes) : loQueTapanSinPregunta(page, '.cx-principal', flotantes))).toEqual([])
 }
 
 function vigilar(page: Page) {

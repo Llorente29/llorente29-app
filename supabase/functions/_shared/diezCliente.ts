@@ -7,14 +7,20 @@
 //
 // Los FRENOS, que no se quitan nunca (Julio, 12/10):
 //   · C0001 —la base personal de Julio— vetada: ni se entra.
-//   · Solo se habla con bases conocidas: C0008 (Llorente29) y C0009 (pruebas).
-//     Al entrar, la base que dice Diez (DataBaseName) tiene que ser la pedida;
-//     si no, no se lee nada.
+//   · Solo se habla con bases conocidas: C0008 (Llorente29) y C0009 (pruebas),
+//     y —C06, autorizado por Julio en la respuesta 1— la base que Folvy tiene
+//     REGISTRADA para la empresa (conta_diez_base: una por empresa, con
+//     registro, escrita solo con service_role). Quien llama la lee de esa
+//     tabla y la pasa en `baseRegistrada`; nunca sale de lo que pida el
+//     cliente. Al entrar, la base que dice Diez (DataBaseName) tiene que ser
+//     la pedida; si no, no se lee nada.
 //   · Siempre https (http solo para el Diez simulado en esta máquina), sin
 //     seguir redirecciones, y ninguna petición espera más de 90 s.
 //   · Escribir es una lista cerrada (apuntes/add y facturas/add) y hace falta
 //     pedirlo: `escribir: true`. En C0008 además `escribirEnReal: true`
-//     (regla 4 del encargo: primero el entorno de pruebas).
+//     (regla 4 del encargo: primero el entorno de pruebas). Y lo mismo en
+//     CUALQUIER base que no sea la de pruebas (C06): una base registrada de
+//     otra empresa es real.
 //   · Ningún envío lleva un grupo vetado de la analítica (JDH, José del
 //     Hierro: no es un local abierto), ni un subgrupo vetado (el 9: Lovers
 //     Burgers va siempre con el 11). Ver GRUPOS_VETADOS y SUBGRUPOS_VETADOS.
@@ -90,6 +96,12 @@ export type ConfigDiez = {
   almacen: AlmacenToken
   escribir?: boolean
   escribirEnReal?: boolean
+  /**
+   * C06 · La base que Folvy tiene registrada para ESTA empresa en
+   * conta_diez_base (leída por quien llama con service_role). Es la única base,
+   * además de C0008 y C0009, con la que se habla. C0001 no vale nunca.
+   */
+  baseRegistrada?: string | null
   fetch?: typeof fetch
   ahora?: () => number
   pausaMs?: number
@@ -168,7 +180,10 @@ export class ClienteDiez {
     this.cfg = cfg
     const bd = String(cfg.nombreBd ?? '').trim().toUpperCase()
     if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) throw new FrenoDiez(`la base ${bd} no se toca nunca`)
-    if (!(BASES_CONOCIDAS as readonly string[]).includes(bd)) throw new FrenoDiez(`base ${bd || '(vacía)'} desconocida; solo ${BASES_CONOCIDAS.join(' y ')}`)
+    const registrada = String(cfg.baseRegistrada ?? '').trim().toUpperCase()
+    if (!(BASES_CONOCIDAS as readonly string[]).includes(bd) && !(registrada !== '' && registrada === bd)) {
+      throw new FrenoDiez(`base ${bd || '(vacía)'} desconocida; solo ${BASES_CONOCIDAS.join(' y ')}${registrada ? ` o la registrada para la empresa (${registrada})` : ' o la registrada para la empresa'}`)
+    }
     const b = String(cfg.base ?? '').replace(/\/$/, '')
     if (!b.startsWith('https://') && !esLocal(b)) throw new FrenoDiez('sin https no sale nada')
     this.base = b
@@ -185,7 +200,8 @@ export class ClienteDiez {
     if (metodo !== 'GET' && !esEntrar) {
       if (ESCRITURAS[camino] !== metodo) throw new FrenoDiez(`${metodo} ${camino} no está en la lista de escrituras`)
       if (!this.cfg.escribir) throw new FrenoDiez(`escribir en Diez no está pedido (${camino})`)
-      if (this.nombreBd === BASE_REAL && !this.cfg.escribirEnReal) throw new FrenoDiez(`escribir en ${BASE_REAL} exige escribirEnReal; primero ${BASE_PRUEBAS}`)
+      // Toda base que no es la de pruebas es real: C0008 y la registrada de otra empresa (C06).
+      if (this.nombreBd !== BASE_PRUEBAS && !this.cfg.escribirEnReal) throw new FrenoDiez(`escribir en ${this.nombreBd} exige escribirEnReal; primero ${BASE_PRUEBAS}`)
       const vetados = gruposEn(cuerpo).filter((g) => (GRUPOS_VETADOS[this.nombreBd] ?? []).includes(g))
       if (vetados.length) throw new FrenoDiez(`el grupo ${[...new Set(vetados)].join(', ')} de la analítica no se envía nunca (no es un local abierto)`)
       const subVetados = subgruposEn(cuerpo).filter((g) => (SUBGRUPOS_VETADOS[this.nombreBd] ?? []).includes(g))

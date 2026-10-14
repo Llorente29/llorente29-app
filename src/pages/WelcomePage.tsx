@@ -52,6 +52,9 @@ import {
   PASSWORD_REGEX,
   validatePassword,
 } from '../lib/passwordPolicy'
+import { CON_MARCA, MARCA } from '../marca/marca'
+import { PieEntrada } from '../marca/PiezasMarca'
+import BienvenidaMarca from '../marca/BienvenidaMarca'
 
 type FormState = 'idle' | 'submitting' | 'error'
 
@@ -63,7 +66,22 @@ const SESSION_PROCESSING_TIMEOUT_MS = 3000
 export default function WelcomePage() {
   const navigate = useNavigate()
   const { user, isAuthenticated, isAuthResolved, signOut } = useAuth()
-  const { refreshUserProfile } = useApp()
+  const { refreshUserProfile, activeAccountId } = useApp()
+
+  // C06 (tarea 6): el enlace inicia la sesión, pero la cuenta activa la resuelve
+  // AppContext un momento después. Si se pulsa «Activar cuenta» antes,
+  // refreshUserProfile no tiene cuenta y la pantalla dice «no se pudo actualizar
+  // la sesión» con todo ya guardado (lo cazó el recorrido e2e: quien escribe
+  // rápido o rellena con el gestor de contraseñas). Se espera a la cuenta; si a
+  // los 10 s no llega, se deja pulsar y el camino de siempre dice qué pasa.
+  const esperandoCuenta = isAuthenticated && !activeAccountId
+  const [sinEsperarCuenta, setSinEsperarCuenta] = useState(false)
+  useEffect(() => {
+    if (!esperandoCuenta) return
+    const t = setTimeout(() => setSinEsperarCuenta(true), 10_000)
+    return () => clearTimeout(t)
+  }, [esperandoCuenta])
+  const preparandoCuenta = esperandoCuenta && !sinEsperarCuenta
 
   // Detección inicial al montar: ¿venimos de un link de welcome?
   // Calculado UNA VEZ con useState initializer porque supabase-js LIMPIA el
@@ -278,6 +296,23 @@ export default function WelcomePage() {
   const passwordsDiffer = passwordRepeat.length > 0 && password !== passwordRepeat
   const submitting = formState === 'submitting'
 
+  // C06, respuesta 4: con una marca propia, con su estilo (el de N18). Mismo
+  // estado y mismo envío: solo cambia cómo se ve.
+  if (CON_MARCA) {
+    return (
+      <BienvenidaMarca
+        email={user?.email ?? null}
+        clave={password} ponerClave={setPassword}
+        repetida={passwordRepeat} ponerRepetida={setPasswordRepeat}
+        acepto={acceptedTerms} ponerAcepto={setAcceptedTerms}
+        corta={passwordTooShort} debil={passwordWeak} distintas={passwordsDiffer}
+        fallo={errorMsg}
+        enviando={submitting} preparando={preparandoCuenta}
+        enviar={handleSubmit}
+      />
+    )
+  }
+
   return (
     <div className="min-h-screen bg-page flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -371,14 +406,14 @@ export default function WelcomePage() {
               />
               <span>
                 Acepto los{' '}
-                <a href="#" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
+                <a href={MARCA.avisoLegal ?? '#'} className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
                   Términos y Condiciones
                 </a>
                 {' '}y la{' '}
-                <a href="#" className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
+                <a href={MARCA.privacidad ?? '#'} className="text-accent hover:underline" target="_blank" rel="noopener noreferrer">
                   Política de Privacidad
                 </a>
-                {' '}de Folvy.
+                {' '}de {MARCA.nombre}.
               </span>
             </label>
 
@@ -392,10 +427,10 @@ export default function WelcomePage() {
 
             <button
               type="submit"
-              disabled={submitting || !password || !passwordRepeat || !acceptedTerms}
+              disabled={submitting || preparandoCuenta || !password || !passwordRepeat || !acceptedTerms}
               className="w-full py-3 rounded-md bg-accent text-text-on-accent font-semibold disabled:opacity-40 hover:bg-accent-hover transition-base active:scale-[0.98] inline-flex items-center justify-center gap-2"
             >
-              {submitting ? 'Activando cuenta...' : <><Lock size={16} /> Activar cuenta</>}
+              {submitting ? 'Activando cuenta...' : preparandoCuenta ? 'Preparando tu cuenta…' : <><Lock size={16} /> Activar cuenta</>}
             </button>
 
             <p className="text-xs text-text-secondary text-center pt-2">
@@ -405,9 +440,7 @@ export default function WelcomePage() {
         </div>
 
         {/* Pie */}
-        <p className="text-center text-xs text-text-secondary mt-4">
-          Folvy · Restauración Profesional
-        </p>
+        <PieEntrada />
       </div>
     </div>
   )

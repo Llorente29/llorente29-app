@@ -1,4 +1,5 @@
 name: Pruebas e2e en staging-conta
+run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.pruebas == '' && 'entera' || inputs.pruebas) || 'frente' }} · ${{ github.ref_name }} · ${{ github.sha }}"
 
 # QUÉ HACE
 # Pasa las pruebas de extremo a extremo del módulo de contabilidad
@@ -43,6 +44,20 @@ name: Pruebas e2e en staging-conta
 # Un push a conta/** que toque la app, las pruebas o este workflow. Y a mano
 # (workflow_dispatch) desde la rama: cuando lo que cambia es staging —una
 # semilla rehecha por aplicar-staging-conta— y no el código (12/10, C04 R3).
+#
+# QUÉ CORRE (C06b, respuesta 6 de Julio, tarea 5 · 14/10)
+# La suite entera tarda unos 20 minutos y los tres frentes hacían cola en el
+# cerrojo. Ahora:
+#   · en un PUSH de una rama de frente corre solo su carpeta y el juego común
+#     (el marco y el arranque del C00, y la RLS entre cuentas):
+#       conta/b01-* → tests/e2e/conta/b01 · conta/d01-* → tests/e2e/conta/d01
+#       conta/c06*  → tests/e2e/conta/c06
+#     Una rama sin frente sigue corriendo la suite entera.
+#   · la SUITE ENTERA corre a mano (workflow_dispatch con «pruebas» vacío),
+#     antes de pedir tanda o abrir un PR a main. El título del run lo dice
+#     («entera»), y scripts/conta/e2e-entera.mjs comprueba que hay una en verde
+#     del mismo commit (antes-de-subir.sh, con PEDIR_TANDA=1).
+# Las capturas se siguen subiendo cuando la e2e que corrió sale en verde.
 
 on:
   push:
@@ -56,9 +71,9 @@ on:
       - '.github/workflows/e2e-staging-conta.yml'
   workflow_dispatch:
     inputs:
-      # Una carpeta o un fichero de tests/e2e (vacío = todas).
+      # Carpetas o ficheros de tests/e2e, separados por espacios (vacío = la suite entera).
       pruebas:
-        description: 'Carpeta o fichero de tests/e2e (vacío = todas)'
+        description: 'Carpetas o ficheros de tests/e2e, separados por espacios (vacío = la suite ENTERA)'
         type: string
         required: false
         default: ''
@@ -131,11 +146,23 @@ jobs:
           if [ -n "${FRENTE_PEDIDO:-}" ]; then
             case "$FRENTE_PEDIDO" in a|b|c) FRENTE="$FRENTE_PEDIDO" ;; *) echo "::error::«frente» tiene que ser a, b o c (o nada)."; exit 1 ;; esac
           fi
-          if [ -n "${PRUEBAS:-}" ] && { ! [[ "$PRUEBAS" =~ ^tests/e2e/[A-Za-z0-9_./-]*$ ]] || [[ "$PRUEBAS" == *..* ]]; }; then
-            echo "::error::«pruebas» tiene que ser una carpeta o un fichero de tests/e2e (o nada)."; exit 1
+          # En un push de una rama de frente: su carpeta y el juego común (tarea 5).
+          COMUN="tests/e2e/conta/c00/marco.spec.ts tests/e2e/conta/rls.spec.ts"
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ -z "${PRUEBAS:-}" ]; then
+            case "$GITHUB_REF_NAME" in
+              conta/b01-*) PRUEBAS="tests/e2e/conta/b01 $COMUN" ;;
+              conta/d01-*) PRUEBAS="tests/e2e/conta/d01 $COMUN" ;;
+              conta/c06*)  PRUEBAS="tests/e2e/conta/c06 $COMUN" ;;
+            esac
           fi
+          for p in ${PRUEBAS:-}; do
+            if ! [[ "$p" =~ ^tests/e2e/[A-Za-z0-9_./-]*$ ]] || [[ "$p" == *..* ]]; then
+              echo "::error::«pruebas» son carpetas o ficheros de tests/e2e separados por espacios (o nada): «$p» no lo es."; exit 1
+            fi
+          done
           echo "E2E_FRENTE=$FRENTE" >> "$GITHUB_ENV"
-          echo "Frente: ${FRENTE:-ninguno (los usuarios de siempre)} · pruebas: ${PRUEBAS:-todas}"
+          echo "E2E_PRUEBAS=${PRUEBAS:-}" >> "$GITHUB_ENV"
+          echo "Frente: ${FRENTE:-ninguno (los usuarios de siempre)} · pruebas: ${PRUEBAS:-la suite entera}"
 
       - name: Instalar psql 17
         run: |
@@ -188,7 +215,9 @@ jobs:
           CLAVE=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
           echo "::add-mask::$CLAVE"
           # Solo los usuarios de ESTE frente: los dobles e2e0000<f>… (y, en el
-          # C, los dos del C06 si su semilla está). Sin frente, los cuatro de
+          # C, los tres del C06 si su semilla está: los dos de las cuentas solas y
+          # el administrador de plataforma de prueba, que invita en el recorrido
+          # de la tarea 6). Sin frente, los cuatro de
           # siempre. Nunca los de otro frente.
           n=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v clave="$CLAVE" -v frente="${E2E_FRENTE:-}" <<'SQL'
           with c as (
@@ -202,8 +231,9 @@ jobs:
                      (id::text like 'e2e0000' || :'frente' || '-0000-4000-8000-0000000000%'
                       and email like '%.frente-' || :'frente' || '@prueba.folvy.test')
                      or (:'frente' = 'c'
-                         and id in ('c0600000-0000-4000-8000-0000000000a1', 'c0600000-0000-4000-8000-0000000000b1')
-                         and email in ('sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test'))
+                         and id in ('c0600000-0000-4000-8000-0000000000a1', 'c0600000-0000-4000-8000-0000000000b1',
+                                    'c0600000-0000-4000-8000-0000000000f0')
+                         and email in ('sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test', 'c06.plataforma@c06-prueba.test'))
                    end
             returning 1)
           select count(*) from c;
@@ -212,11 +242,11 @@ jobs:
           n=$(echo "$n" | tr -d '[:space:]')
           # Sin frente: los dos administradores (C01), el encargado de A (C00,
           # tarea 8) y el administrador de C, sin empresa (C00, respuesta 3).
-          # Con frente: sus cuatro dobles; el C, 6 cuando está la semilla del C06.
+          # Con frente: sus cuatro dobles; el C, 7 cuando está la semilla del C06.
           case "${E2E_FRENTE:-}:$n" in
-            :4|a:4|b:4|c:4|c:6) ;;
+            :4|a:4|b:4|c:4|c:7) ;;
             :*) echo "::error::Esperaba los 4 usuarios de siempre y he tocado $n."; exit 1 ;;
-            *)  echo "::error::Esperaba los 4 usuarios del frente ${E2E_FRENTE} (6 en el C con el C06) y he tocado $n. ¿Está aplicada seed_e2e_frentes_staging.sql?"; exit 1 ;;
+            *)  echo "::error::Esperaba los 4 usuarios del frente ${E2E_FRENTE} (7 en el C con el C06) y he tocado $n. ¿Está aplicada seed_e2e_frentes_staging.sql?"; exit 1 ;;
           esac
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
           echo "Contraseña de un solo uso puesta a los $n usuarios del frente ${E2E_FRENTE:-de siempre}."
@@ -231,7 +261,7 @@ jobs:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
           set -euo pipefail
-          if [ -z "${PRUEBAS:-}" ] || [[ "$PRUEBAS" == tests/e2e/reparto* ]]; then
+          if [ -z "${E2E_PRUEBAS:-}" ] || [[ " $E2E_PRUEBAS" == *" tests/e2e/reparto"* ]]; then
             if [ -f supabase/seeds/reparto/seed_r02_e2e.sql ]; then
               /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -q -f supabase/seeds/reparto/seed_r02_e2e.sql
               echo "Escenario del R02 preparado."
@@ -241,7 +271,7 @@ jobs:
           fi
 
       - name: Pruebas (ordenador y móvil)
-        run: npx playwright test ${PRUEBAS:-}
+        run: npx playwright test ${E2E_PRUEBAS:-}
 
       # Pase lo que pase: también si las pruebas fallan o el run se cancela
       # (always() corre en los dos casos; medido el 13/10 cancelando 38457342932,

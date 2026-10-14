@@ -60,7 +60,7 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
   const sistema = perfil?.tax_territory === 'canarias' ? 'igic' : 'iva'
   const [serie, cuentas, enlaces, registro, proveedores, bancos, gastos, tipos, contestadas, importacion] = await Promise.all([
     leer<Fila>(tabla('pgc_account').select('code, name, plain_name, boe_definition, group_code, parent_code, is_leaf').eq('plan', plan).is('valid_to', null).order('code'), 'el cuadro de cuentas'),
-    leer<Fila>(tabla('company_account').select('id, code, template_code, name, plain_name, keywords, kind, status, is_common, source').eq('account_id', accountId).eq('company_id', companyId).order('code'), 'las cuentas de la empresa'),
+    leer<Fila>(tabla('company_account').select('id, code, template_code, name, plain_name, keywords, kind, status, is_common, source, name_pending').eq('account_id', accountId).eq('company_id', companyId).order('code'), 'las cuentas de la empresa'),
     leer<Fila>(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
     leer<Fila>(tabla('company_account_log').select('id, que, code, detalle, done_at, done_by_name, source').eq('account_id', accountId).eq('company_id', companyId).order('done_at', { ascending: false }).limit(50), 'el historial del plan'),
     leer<Fila>(tabla('supplier').select('id, name, expense_category_id, vat_regime, country_code').eq('account_id', accountId).is('archived_at', null).order('name'), 'los proveedores'),
@@ -81,6 +81,7 @@ export async function cargarPlan(accountId: string, companyId: string): Promise<
       id: String(c.id), code: String(c.code), templateCode: String(c.template_code), name: String(c.name), plainName: (c.plain_name as string) ?? null,
       keywords: Array.isArray(c.keywords) ? (c.keywords as unknown[]).map(String) : [], kind: c.kind === 'own' ? 'own' : 'template',
       status: (c.status as CuentaPlan['status']) ?? 'activa', isCommon: c.is_common === true, source: (c.source as CuentaPlan['source']) ?? 'serie',
+      sinNombre: c.name_pending === true,
     })),
     enlaces: enlaces.map((l) => ({ companyAccountId: String(l.company_account_id), entity: l.entity as Entidad, entityId: String(l.entity_id), role: l.role as Papel })),
     registro: registro.map((r) => ({ id: String(r.id), que: String(r.que), code: (r.code as string) ?? null, detalle: String(r.detalle), doneAt: String(r.done_at), doneByName: (r.done_by_name as string) ?? null, source: String(r.source) })),

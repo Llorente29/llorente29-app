@@ -10,6 +10,7 @@
 
 import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
 import type { Origen, Registro, Sugerencia } from '@/modules/conta/ia/tipos'
+import { MARCA } from '../cuenta/marca'
 
 type Fila = Record<string, unknown>
 const sinPrefijo = (e: unknown): Error => new Error((e instanceof Error ? e.message : String(e)).replace(/^conta_[a-z_]+: /, ''))
@@ -27,7 +28,7 @@ export async function cargarIa(companyId: string): Promise<{ origenes: Origen[];
   const [o, s, r] = await Promise.all([
     leer(tabla('ai_data_origin').select('table_key, row_id, field, source, value_set, reason, set_at').eq('company_id', companyId), 'de dónde sale cada dato'),
     leer(tabla('ai_suggestion').select('id, kind, reason_key, title, why, payload, status, created_at').eq('company_id', companyId).eq('status', 'open').order('created_at'), 'las sugerencias'),
-    leer(tabla('ai_action_log').select('*').eq('company_id', companyId).order('done_at', { ascending: false }).limit(50), 'lo que ha hecho Folvy'),
+    leer(tabla('ai_action_log').select('*').eq('company_id', companyId).order('done_at', { ascending: false }).limit(50), `lo que ha hecho ${MARCA.nombre}`),
   ])
   // La forma jurídica se guarda por código: su nombre, del catálogo (regla 30:
   // se busca en el catálogo entero, no en una lista filtrada).

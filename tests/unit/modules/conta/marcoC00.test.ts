@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
-  BARRA_CONTA, CONTA, MENU_CONTA, PESTANAS_AJUSTES, entradaActiva, entradasVisibles,
+  BARRA_CONTA, CONTA, MENU_CONTA, PESTANAS_AJUSTES, entradaActiva, entradasVisibles, indiceAjustes,
   rutaAltaEmpresa, rutaApartadoEmpresa, rutaTablasGenerales, rutaTuEmpresa,
 } from '@/config/navegacion'
 import { leerFilaDeCuenta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -20,13 +20,24 @@ describe('navegación del módulo de contabilidad', () => {
     expect(rutaAltaEmpresa()).toBe('/conta/alta')
   })
   it('las entradas sin pantalla no se pintan', () => {
-    const visibles = MENU_CONTA.flat().filter((e) => e.ruta !== null).map((e) => e.id)
+    // C06: con Folvy, las mismas de siempre (Inicio solo sale en el producto vendido solo).
+    const visibles = entradasVisibles(MENU_CONTA.flat()).map((e) => e.id)
     // C03: «Clientes y proveedores» ya tiene su pantalla; C04: «Libros» (el libro diario); compras: «Compras»;
     // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no);
     // D01: «Documentos» (N22, las facturas recibidas).
     expect(visibles).toEqual(['compras', 'ventas', 'documentos', 'terceros', 'libros', 'ajustes'])
     expect(entradasVisibles(PESTANAS_AJUSTES).map((e) => e.id)).toEqual(['empresa', 'tablas'])
     expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['ajustes'])
+  })
+  it('C06 · en el producto vendido solo: su Inicio y nada que diga «aún no»', () => {
+    // D01: Documentos ya tiene pantalla, y vendida sola es de las que funcionan.
+    expect(entradasVisibles(MENU_CONTA.flat(), true).map((e) => e.id)).toEqual(['inicio', 'compras', 'documentos', 'terceros', 'libros', 'ajustes'])
+    expect(entradasVisibles(BARRA_CONTA.izquierda, true).map((e) => e.id)).toEqual(['inicio'])
+    expect(entradasVisibles(BARRA_CONTA.izquierda).map((e) => e.id)).toEqual([])
+    expect(indiceAjustes(true).flatMap((g) => g.entradas).some((e) => e.hueco)).toBe(false)
+    expect(indiceAjustes().flatMap((g) => g.entradas).filter((e) => e.hueco).map((e) => e.id)).toEqual(['numeracion', 'certificados', 'personas', 'avisos'])
+    // La entrada activa se encuentra aunque solo se pinte en el producto vendido solo.
+    expect(entradaActiva('/conta/inicio', MENU_CONTA.flat())).toBe('inicio')
   })
   it('el menú está entero, en el orden de la maqueta', () => {
     expect(MENU_CONTA.flat().map((e) => e.etiqueta)).toEqual([

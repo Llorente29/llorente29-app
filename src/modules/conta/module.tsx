@@ -8,7 +8,6 @@
 // No depende de Cocina para nada: se puede vender solo.
 
 import type { ReactNode } from 'react'
-import { Navigate } from 'react-router-dom'
 import { Calculator } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import { CONTA } from '@/config/navegacion'
@@ -33,14 +32,21 @@ import ComprasPage from '@/modules/conta/compras/ComprasPage'
 import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
+import InicioPage from '@/modules/conta/inicio/InicioPage'
+import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
+import { Portada } from '@/modules/conta/marco/Portada'
+import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
 
-const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = false) => (
+// C06b (respuesta 6 de Julio, tarea 2): la barra «Pregunta o pide algo» solo
+// contesta «Muy pronto», y lo que no funciona no se enseña: ninguna ruta la
+// lleva. Vuelve, ruta a ruta (sinPregunta = false), cuando conteste de verdad.
+const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = true) => (
   <EmpresasProveedor><MarcoConta ejemplo={ejemplo} sinPregunta={sinPregunta}>{pagina}</MarcoConta></EmpresasProveedor>
 )
 
 export const contaModule: ModuleDefinition = {
   id: 'conta',
-  name: 'Folvy Conta',
+  name: CON_MARCA ? MARCA.nombre : 'Folvy Conta',
   icon: Calculator,
   topBarOrder: 10,
   requiredRole: 'admin',
@@ -48,7 +54,14 @@ export const contaModule: ModuleDefinition = {
   chrome: 'propio',
   featureFlag: CONTA.interruptor,
   routes: [
-    { path: '', element: <Navigate to={CONTA.rutas.empresa} replace /> },
+    // Con Folvy, Ajustes; en el producto vendido solo (C06), su Inicio.
+    { path: '', element: <Portada /> },
+    // C06 · Inicio («Estilo nuevo · Inicio»): la portada del producto vendido solo.
+    { path: CONTA.rutas.inicio, element: enMarco(<InicioPage />, '¿Cuánto llevo gastado en luz?') },
+    // C06 · La ficha del proveedor dentro de contabilidad, sin las piezas de
+    // Cocina (sin extensiones): la del producto vendido solo.
+    { path: CONTA.rutas.fichaProveedor, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },
+    { path: CONTA.rutas.fichaProveedorApartado, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },
     // Ajustes como índice lateral (C02 §5a): cada entrada en ajustes/:entrada;
     // Plan contable y Tablas generales tienen su propia página dentro del marco.
     { path: CONTA.rutas.empresa, element: enMarco(<AjustesPage />, 'Añade a Pablo como apoderado') },
@@ -67,11 +80,13 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.terceroApartado, element: enMarco(<FichaTerceroPage />, '¿Cuánto me debe?') },
     // C04 · Libros › Libro diario (N11), un asiento (N12) y el asiento a mano.
     // C05 · Libros en tres niveles (N13c): el diario del C04 vive dentro, en su ruta de siempre.
-    { path: CONTA.rutas.libros, element: enMarco(<LibrosPage />, '¿Qué facturas no deducen IVA?') },
-    { path: CONTA.rutas.libroDiario, element: enMarco(<LibrosPage area="diario" accion="libro-diario" />, '¿Cuánto gané en el Local Norte este mes?') },
-    { path: CONTA.rutas.diarioResumido, element: enMarco(<LibrosPage area="diario" accion="diario-resumido" />, '¿Cuánto gasté en septiembre?') },
-    { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
-    { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?') },
+    // C06b · respuesta 5, punto 3: sin la barra «Pregunta o pide algo» mientras
+    // solo diga «Muy pronto» (tapaba filas de los libros). Como Bancos en el B01.
+    { path: CONTA.rutas.libros, element: enMarco(<LibrosPage />, '¿Qué facturas no deducen IVA?', true) },
+    { path: CONTA.rutas.libroDiario, element: enMarco(<LibrosPage area="diario" accion="libro-diario" />, '¿Cuánto gané en el Local Norte este mes?', true) },
+    { path: CONTA.rutas.diarioResumido, element: enMarco(<LibrosPage area="diario" accion="diario-resumido" />, '¿Cuánto gasté en septiembre?', true) },
+    { path: CONTA.rutas.librosArea, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
+    { path: CONTA.rutas.librosAccion, element: enMarco(<LibrosPage />, '¿Por qué clientes sale en negativo?', true) },
     // Compras (encargo de compras, N18 y N19).
     { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },
@@ -80,12 +95,12 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.revisarFactura, element: enMarco(<RevisarFacturaPage />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
-    { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?') },
-    { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?') },
+    { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
+    { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },
-    { path: '*', element: <Navigate to={`/${CONTA.modulo}/${CONTA.rutas.empresa}`} replace /> },
+    { path: '*', element: <Portada /> },
   ],
   sidebar: {
     // El Shell no pinta este menú (marco propio): sirve para decidir si el

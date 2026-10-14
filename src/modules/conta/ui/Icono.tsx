@@ -18,6 +18,7 @@ const TRAZOS: Record<IconoConta, string[]> = {
   libros: ['M3 4c3-1 5-1 7 1 2-2 4-2 7-1v12c-3-1-5-1-7 1-2-2-4-2-7-1z', 'M10 5v12'],
   ajustes: ['M10 2v2M10 16v2M2 10h2M16 10h2M4.5 4.5l1.4 1.4M14.1 14.1l1.4 1.4M4.5 15.5l1.4-1.4M14.1 5.9l1.4-1.4'],
   folvy: ['M12 4l-6 6 6 6'],
+  mas: ['M4 10h.01M10 10h.01M16 10h.01'],
 }
 
 export function Icono({ nombre, tam = 20 }: { nombre: IconoConta; tam?: number }) {

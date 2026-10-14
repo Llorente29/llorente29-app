@@ -33,7 +33,8 @@
   --cx-blanco: #FFFFFF;
 
   /* ── Tonos que usan las maquetas y el encargo no nombraba ──────────── */
-  --cx-borde-campo: #C9D0DC;    /* Borde de campos y botones blancos */
+  --cx-borde-campo: #C9D0DC;    /* Borde de botones blancos, píldoras y cajas */
+  --cx-borde-control: #848E9E;  /* C06 R4 · Borde de los CAMPOS (inputs y desplegables): 3,31:1 sobre blanco, 3,08:1 sobre el fondo (WCAG 1.4.11) */
   --cx-neutro-suave: #EEF1F5;   /* Píldora neutra («Principal», «303 IVA») */
   --cx-neutro-texto: #2B3648;   /* Texto de la píldora neutra */
   --cx-pendiente: #F1F3F6;      /* Fondo de lo que aún no ha llegado (meses) */

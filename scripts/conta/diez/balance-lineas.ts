@@ -1,0 +1,192 @@
+// scripts/conta/diez/balance-lineas.ts
+//
+// C06b · punto 1 · El balance abreviado de Folvy contra el de Diez, línea a
+// línea, a la misma fecha. Lee de la C0008 TODOS los apuntes del ejercicio
+// (apertura incluida, mes a mes) y los compara con los saldos del libro de
+// Folvy a una fecha de corte (el fichero que vuelca el workflow con
+// conta_lectura, solo SELECT):
+//   · por subcuenta, Diez a la fecha de corte contra Folvy a la fecha de corte;
+//   · por línea del balance abreviado (el mismo mapeo de serie que usa
+//     Folvy, con el mismo «prefijo más largo» de cuentasAnuales.colocar),
+//     Clientes, Otros deudores y el patrimonio neto;
+//   · lo que Diez tiene DESPUÉS del corte (octubre): cuántos asientos y a qué
+//     líneas mueven.
+//
+// Lo que sale en el registro, que es público:
+//   · en claro, solo RECUENTOS y SÍ/NO (¿coinciden al céntimo?);
+//   · las cifras, CIFRADAS con testigo-clave-publica.pem, como el testigo.
+// Solo GET. Nada sale sin cifrar ni se escribe en ninguna base.
+//
+//   DIEZ_LECTURA='{…}' FOLVY_SALDOS=folvy.txt FOLVY_MAPEO=mapeo.txt \
+//     BALANCE_EJERCICIO=2026 BALANCE_CORTE=20260930 npx tsx scripts/conta/diez/balance-lineas.ts
+
+import { constants, createCipheriv, publicEncrypt, randomBytes } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { gzipSync } from 'node:zlib'
+import { ClienteDiez, limitesMes, type AlmacenToken, type Apunte } from '../../../supabase/functions/_shared/diezCliente.ts'
+import { cent } from '../../../supabase/functions/_shared/diezMapeo.ts'
+// @ts-expect-error módulo .mjs sin tipos
+import { limpiar } from './publicable.mjs'
+
+const EJERCICIO = process.env.BALANCE_EJERCICIO || '2026'
+const CORTE = process.env.BALANCE_CORTE || '20260930'
+const HASTA_MES = process.env.BALANCE_HASTA_MES || `${EJERCICIO}12`
+// Solo estos meses (p. ej. «202610»): para volver a leer lo de después del corte.
+// Sin ellos, el ejercicio entero. Con ellos, la comparación al corte no vale y se dice.
+const SOLO_MESES = (process.env.BALANCE_MESES || '').split(',').filter(Boolean)
+
+const l: string[] = []
+const md = (...x: string[]) => l.push(...x)
+
+// Folvy: «código|plantilla|céntimos deudores» (debe − haber) por subcuenta, a la fecha de corte.
+const folvy = new Map<string, number>()
+const plantilla = new Map<string, string>()
+for (const fila of readFileSync(process.env.FOLVY_SALDOS || 'folvy.txt', 'utf8').split('\n').filter(Boolean)) {
+  const [code, tpl, c] = fila.split('|')
+  folvy.set(code, Number(c))
+  if (tpl) plantilla.set(code, tpl)
+}
+// Mapeo de serie del abreviado: «prefijo|línea|by_balance|lado de la línea».
+interface Fila { prefix: string; line: string; byBalance: string | null; side: string }
+const mapeo: Fila[] = readFileSync(process.env.FOLVY_MAPEO || 'mapeo.txt', 'utf8').split('\n').filter(Boolean)
+  .map((x) => { const [prefix, line, by, side] = x.split('|'); return { prefix, line, byBalance: by || null, side } })
+
+// Lo mismo que cuentasAnuales.colocar: el prefijo más largo; dos filas, por el signo.
+const colocar = (code: string, deudor: number): Fila | null => {
+  const tpl = plantilla.get(code) ?? code
+  const cubren = mapeo.filter((m) => tpl.startsWith(m.prefix))
+  if (!cubren.length) return null
+  const max = Math.max(...cubren.map((m) => m.prefix.length))
+  const top = cubren.filter((m) => m.prefix.length === max)
+  if (top.length === 1) return top[0]
+  const lado = deudor >= 0 ? 'deudor' : 'acreedor'
+  return top.find((m) => m.byBalance === lado) ?? top.find((m) => !m.byBalance) ?? top[0]
+}
+// Las líneas que se miran: las tres de Julio y el total de III.
+const LINEAS: Record<string, (line: string) => boolean> = {
+  'ACT.B.III.1 Clientes por ventas': (x) => x === 'ACT.B.III.1',
+  'ACT.B.III.3 Otros deudores': (x) => x === 'ACT.B.III.3',
+  'ACT.B.III Deudores comerciales (total)': (x) => x.startsWith('ACT.B.III.'),
+  'PNP.A Patrimonio neto': (x) => x === 'PNP.A' || x.startsWith('PNP.A.'),
+}
+const porLinea = (saldos: Map<string, number>) => {
+  const out: Record<string, number> = Object.fromEntries(Object.keys(LINEAS).map((k) => [k, 0]))
+  for (const [code, deudor] of saldos) {
+    if (!/^[1-7]/.test(plantilla.get(code) ?? code)) continue
+    const m = colocar(code, deudor)
+    if (!m) continue
+    const natural = m.side === 'activo' ? deudor : -deudor
+    for (const [k, f] of Object.entries(LINEAS)) if (f(m.line)) out[k] += natural
+  }
+  return out
+}
+
+const cred = JSON.parse(process.env.DIEZ_LECTURA || 'null')
+if (!cred || typeof cred !== 'object') { console.log('Falta el secreto DIEZ_LECTURA. No se lee nada.'); process.exit(1) }
+let guardado: { token: string; expiresAt: string } | null = null
+const almacen: AlmacenToken = { leer: async () => guardado, guardar: async (token, expiresAt) => { guardado = { token, expiresAt } }, caida: async () => { guardado = null } }
+const c = new ClienteDiez({
+  base: String(cred.base_url || 'https://apicon.diezsoftware.com'), nombreBd: 'C0008',
+  credenciales: { grant_type: cred.grant_type, client_id: cred.client_id, client_secret: cred.client_secret, username: cred.username, password: cred.password },
+  almacen, pausaMs: 120,
+})
+
+// Diez a veces contesta 400 «OutOfMemoryException» o tarda más de 90 s en un
+// mes entero (14/10, runs 38533537089 y 38533879424; enero lleva la apertura).
+// Se lee por tramos de siete días —un asiento tiene una sola fecha: ninguno
+// cae en dos tramos— y el tramo que falla así se reintenta con pausa, y se dice.
+const reintentos: Record<string, number> = {}
+const tramo = async (desde: number, hasta: number): Promise<Apunte[]> => {
+  const ruta = `/api/apuntes?$filter=${encodeURIComponent(`Fecha ge ${desde} and Fecha le ${hasta}`)}`
+  for (let i = 0; ; i++) {
+    try { return await c.todas<Apunte>(ruta) } catch (e) {
+      const pasajero = JSON.stringify((e as { cuerpo?: unknown }).cuerpo ?? '').includes('OutOfMemory') || (e as Error)?.name === 'TimeoutError'
+      if (!pasajero || i >= 2) throw e
+      reintentos[`${desde}`] = i + 1
+      await new Promise((r) => setTimeout(r, 30_000 * (i + 1)))
+    }
+  }
+}
+const sinLeer: string[] = []
+const leerMes = async (mes: string): Promise<Apunte[]> => {
+  const [primero, ultimo] = limitesMes(mes)
+  const out: Apunte[] = []
+  // Por días (14/10: ni una semana de enero contestaba en 90 s).
+  for (let d = primero; d <= ultimo; d++) {
+    try { out.push(...(await tramo(d, d))) } catch { sinLeer.push(String(d)) }
+  }
+  return out
+}
+
+// Diez, por subcuenta: a la fecha de corte y con todo lo que hay.
+const alCorte = new Map<string, number>(), todo = new Map<string, number>(), despues = new Map<string, number>()
+const sumar = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v)
+const asientosMes: Record<string, number> = {}
+let tras = 0, otroEjercicio = 0
+const vistos = new Set<string>()
+let repetidos = 0
+// Primero lo de después del corte (lo que explica la diferencia); luego el resto.
+const mesCorte = Number(CORTE.slice(4, 6))
+const ordenMeses = [...Array(12).keys()].map((i) => i + 1).filter((m) => Number(`${EJERCICIO}${String(m).padStart(2, '0')}`) <= Number(HASTA_MES))
+  .filter((m) => !SOLO_MESES.length || SOLO_MESES.includes(`${EJERCICIO}${String(m).padStart(2, '0')}`))
+  .sort((a, b) => Number(a <= mesCorte) - Number(b <= mesCorte) || a - b)
+for (const m of ordenMeses) {
+  const mes = `${EJERCICIO}${String(m).padStart(2, '0')}`
+  const apuntes: Apunte[] = await leerMes(mes)
+  asientosMes[mes] = apuntes.length
+  process.stderr.write(`${mes}: ${apuntes.length} asientos\n`)
+  for (const a of apuntes) {
+    const k = `${a.Ejercicio}|${a.Serie}|${a.Documento}`
+    if (vistos.has(k)) { repetidos++; continue }
+    vistos.add(k)
+    if (String(a.Ejercicio) !== EJERCICIO) { otroEjercicio++; continue }
+    const f = String(a.Fecha ?? '')
+    const enCorte = f <= CORTE
+    if (!enCorte) tras++
+    for (const d of a.Detalles ?? []) {
+      const cta = String(d.Cuenta ?? '').trim(), v = cent(d.Debe) - cent(d.Haber)
+      sumar(todo, cta, v)
+      sumar(enCorte ? alCorte : despues, cta, v)
+    }
+  }
+}
+
+// Comparación por subcuenta, a la fecha de corte.
+const codigos = new Set([...alCorte.keys(), ...folvy.keys()])
+const distintas: { code: string; diez: number; folvy: number }[] = []
+for (const code of codigos) {
+  const a = alCorte.get(code) ?? 0, b = folvy.get(code) ?? 0
+  if (a !== b) distintas.push({ code, diez: a, folvy: b })
+}
+const grupo = (code: string) => code.slice(0, 3)
+const distintasPorGrupo: Record<string, number> = {}
+for (const x of distintas) distintasPorGrupo[grupo(x.code)] = (distintasPorGrupo[grupo(x.code)] ?? 0) + 1
+
+const lDiezCorte = porLinea(alCorte), lDiezTodo = porLinea(todo), lFolvy = porLinea(folvy), lDespues = porLinea(despues)
+
+md(`## Diez · balance abreviado contra Folvy, línea a línea (C0008, ejercicio ${EJERCICIO}, corte ${CORTE.slice(0, 4)}-${CORTE.slice(4, 6)}-${CORTE.slice(6)})`, '', 'Solo GET en Diez; Folvy con conta_lectura. En claro, solo recuentos y sí/no.', '')
+md('### Asientos leídos por mes', '', ...Object.entries(asientosMes).map(([m, k]) => `- ${m}: ${k}`), '')
+md(`Tramos reintentados (Diez sin memoria o más de 90 s): ${Object.keys(reintentos).length ? Object.entries(reintentos).map(([m, k]) => `${m} (${k})`).join(', ') : 'ninguno'}`, '')
+md(`Asientos repetidos en el listado: ${repetidos} · de otro ejercicio: ${otroEjercicio} · con fecha posterior al corte: ${tras}`, '')
+const completo = sinLeer.length === 0 && !SOLO_MESES.length
+if (SOLO_MESES.length) md(`Solo los meses ${SOLO_MESES.join(', ')}: lo de «al corte» de abajo no compara nada (no se ha leído el ejercicio).`, '')
+md(`Días que Diez no ha contestado (tras reintentar): ${sinLeer.length ? `${sinLeer.length} — ${sinLeer.slice(0, 40).join(', ')}${sinLeer.length > 40 ? ' …' : ''}` : 'ninguno'}`, '')
+if (!completo) md('**Lectura INCOMPLETA**: las comparaciones de abajo no valen como prueba (falta lo de esos días).', '')
+md('### Por subcuenta, a la fecha de corte', '', `- subcuentas con saldo en algún lado: ${codigos.size}`, `- que NO coinciden al céntimo: ${distintas.length}`,
+  ...Object.entries(distintasPorGrupo).sort().map(([g, k]) => `  - grupo ${g}: ${k}`), '')
+md('### Por línea', '', '| Línea | Diez al corte = Folvy al corte | Diez con todo = Folvy al corte | Diez mueve después del corte |', '|---|---|---|---|')
+for (const k of Object.keys(LINEAS)) {
+  md(`| ${k} | ${lDiezCorte[k] === lFolvy[k] ? 'sí' : 'NO'} | ${lDiezTodo[k] === lFolvy[k] ? 'sí' : 'NO'} | ${lDespues[k] !== 0 ? 'sí' : 'no'} |`)
+}
+md('', 'Las cifras (por línea: Diez al corte, Diez con todo, Folvy, lo de después; y cada subcuenta que no coincide): cifradas.', '')
+
+const claro = gzipSync(Buffer.from(JSON.stringify({ ejercicio: EJERCICIO, corte: CORTE, sinLeer, lineas: { diezAlCorte: lDiezCorte, diezConTodo: lDiezTodo, folvy: lFolvy, despues: lDespues }, distintas, despues: Object.fromEntries(despues) })))
+const clave = randomBytes(32), iv = randomBytes(12)
+const cif = createCipheriv('aes-256-gcm', clave, iv)
+const datos = Buffer.concat([cif.update(claro), cif.final()])
+const envuelta = publicEncrypt({ key: readFileSync(new URL('./testigo-clave-publica.pem', import.meta.url)), padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' }, clave)
+const paquete = Buffer.from(JSON.stringify({ k: envuelta.toString('base64'), iv: iv.toString('base64'), tag: cif.getAuthTag().toString('base64'), d: datos.toString('base64') })).toString('base64')
+process.stdout.write(limpiar(l.join('\n')) + '\n')
+process.stdout.write('-----TESTIGO CIFRADO-----\n')
+for (let i = 0; i < paquete.length; i += 100) process.stdout.write(`T ${paquete.slice(i, i + 100)}\n`)
+process.stdout.write('-----FIN TESTIGO-----\n')

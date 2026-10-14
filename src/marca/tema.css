@@ -1,0 +1,4 @@
+/* Inter, la letra de las marcas con tema propio (Sumied). La importa la hoja,
+   no el TypeScript (el paquete no trae tipos). Se carga desde la entrada, la
+   bienvenida y el estilo del módulo; tema.ts no, porque también lo leen las e2e. */
+@import '@fontsource-variable/inter';

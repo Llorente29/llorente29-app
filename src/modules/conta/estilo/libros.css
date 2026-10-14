@@ -87,6 +87,7 @@
 .cxl-estado h3 { font-size: 18px; margin: 0 0 8px; }
 .cxl-fila-estado { display: grid; grid-template-columns: minmax(0, 1fr) 28px 120px 120px; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--cx-linea); }
 .cxl-fila-estado.cxl-sin-anterior { grid-template-columns: minmax(0, 1fr) 28px 120px; }
+.cxl-nota-linea { padding: 0 0 8px; font-size: 13px; line-height: 1.4; color: var(--cx-apoyo); }
 .cxl-fila-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; border-top: none; }
 .cxl-n1 { font-weight: 700; }
 .cxl-n2 { padding-left: 14px; font-weight: 600; }

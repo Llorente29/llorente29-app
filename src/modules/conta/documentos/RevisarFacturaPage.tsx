@@ -28,9 +28,10 @@ import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { eurosExactos, porcentaje } from '@/modules/conta/lib/formato'
 import {
-  VERES, columnasDelApunte, comoLlego, filtrar, limites, lineaDiez, tonoDeLaFactura, vencimientoAEnsenar, verDe,
+  VERES, columnasDelApunte, comoLlego, filtrar, limites, lineaDiez, productoDeDocumentos, tonoDeLaFactura, vencimientoAEnsenar, verDe,
 } from '@/modules/conta/documentos/documentos'
-import { useProducto } from '@/modules/conta/documentos/producto'
+import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
+import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import {
   apuntarFactura, decirProveedor, leerDocumentos, leerFactura, plazoDeLaFicha, proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura,
@@ -48,7 +49,7 @@ export default function RevisarFacturaPage() {
   const navegar = useNavigate()
   const { accountId, userId, userName } = useCuentaConta()
   const movil = useIsMobile()
-  const producto = useProducto()
+  const producto = productoDeDocumentos(useProductoSolo(), MARCA.nombre)
   const ver = verDe(query.get('ver'))
   const mes = query.get('mes')
   const [vuelta, setVuelta] = useState(0)
