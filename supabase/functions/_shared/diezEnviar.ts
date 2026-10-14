@@ -21,6 +21,10 @@
 //      envía: una factura sin su PDF no se deja a medias en Diez.
 //   5. «Nunca dos veces»: se busca antes por serie, número de factura y la
 //      430. Una → se enlaza, no se envía. Más de una → no se toca nada.
+//      C06b R7 (Julio, captura de C0008): el cliente se busca POR SU CUENTA (la
+//      subcuenta 430 de la plataforma, «Datos cliente» en Diez), no por NIF ni
+//      por nombre comercial: su nombre es la Descripcion de esa subcuenta. Son
+//      tickets (facturas simplificadas): el NIF va vacío y no se pide.
 //      La intención de escribir se apunta ANTES de escribir: si algo se corta
 //      a medias, el siguiente intento la encuentra en Diez y la enlaza.
 //   6. El documento se sube y se lee de vuelta: «adjunto» solo si Diez
@@ -79,6 +83,8 @@ export interface ClienteDiezEnvio {
   enviarFactura(fd: FacturaData): Promise<Factura>
   adjuntarDocumentoFactura(d: { Ejercicio: string; Serie: string; Documento: number; NombreArchivo: string; Archivo: string }): Promise<{ status: number; json: unknown }>
   documentoDeFactura(ejercicio: string, serie: string, documento: number): Promise<{ status: number; json: unknown }>
+  /** La subcuenta por su código (el cliente: su nombre es Descripcion), o null si Diez no la tiene. */
+  subcuenta(codigo: string): Promise<Record<string, unknown> | null>
 }
 
 export interface PuertoEnvio {
@@ -195,10 +201,16 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
     const ya = [...new Map(delMes.filter((f) => String(f.Serie) === fd0.Serie && String(f.NumeroFactura) === fd0.NumeroFactura && String(f.CuentaCliente) === fd0.CuentaCliente)
       .map((f) => [String(f.Documento), f])).values()]
     if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${fd0.NumeroFactura} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
-    const nombres = [...new Set(delMes.filter((f) => String(f.CuentaCliente) === fd0.CuentaCliente).map((f) => String(f.NombreCliente ?? '')).filter(Boolean))]
-    if (ya.length === 0 && nombres.length !== 1) return apuntar(`el nombre del cliente de la ${fd0.CuentaCliente} no es uno solo en Diez (${nombres.length}): no se inventa`, { account_connector_id: con.id }, false)
+    // El cliente, por su cuenta: la subcuenta de Diez y su nombre (no el NIF ni el nombre comercial).
+    let nombreCliente = ya.length === 1 ? String(ya[0].NombreCliente ?? '').trim() : ''
+    if (ya.length === 0) {
+      const sc = await diez.subcuenta(fd0.CuentaCliente)
+      if (!sc || String(sc.Codigo ?? '').trim() !== fd0.CuentaCliente) return apuntar(`la subcuenta ${fd0.CuentaCliente} del cliente no está en Diez: no se inventa`, { account_connector_id: con.id }, false)
+      nombreCliente = String(sc.Descripcion ?? '').trim()
+      if (!nombreCliente) return apuntar(`la subcuenta ${fd0.CuentaCliente} de Diez no tiene nombre: no se inventa`, { account_connector_id: con.id }, false)
+    }
     const fd = facturaDeVentas({ fecha: r.fecha, local: r.local!.nombre, canal: r.canal!.slug, lineas: r.lineas.map((l) => ({ cuenta: l.cuenta, debe: Number(l.debe), haber: Number(l.haber), marca: l.marca, tipoIva: l.tipoIva })) },
-      { correspondencia: corr!, nombreCliente: nombres[0] ?? '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura
+      { correspondencia: corr!, nombreCliente: nombreCliente || '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura
     const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(fd)))
     const comun = { entry_id: r.id, account_id: r.account_id, company_id: r.company_id, account_connector_id: con.id, kind: 'factura' as const, ext_invoice_number: String(fd.NumeroFactura), payload_hash: hash, document_id: r.documento.id }
     if (ya.length === 1) {
