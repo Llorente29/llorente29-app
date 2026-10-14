@@ -1,4 +1,3 @@
-# C06b · Respuesta 7, tarea 1: conta-diez-enviar a Diez sin el PDF
-# («PDF pendiente en Diez») y Diez real solo con conta_diez_autorizo. Va
-# DESPUÉS de la 0700 (ya aplicada en staging, run 38587569767).
+# C06b · Respuesta 7: conta-diez-enviar busca el cliente por su subcuenta en
+# Diez (GET /api/subcuentas/subcuenta/{código}), no por las facturas del mes.
 conta-diez-enviar
