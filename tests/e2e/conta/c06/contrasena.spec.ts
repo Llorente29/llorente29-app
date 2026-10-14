@@ -1,4 +1,4 @@
-// tests/e2e/conta/c06b/contrasena.spec.ts
+// tests/e2e/conta/c06/contrasena.spec.ts
 //
 // C06b (respuesta 5, punto 5) · «He olvidado la contraseña» no dice si un
 // correo existe: ni por lo que contesta ni por lo que TARDA. Contra la

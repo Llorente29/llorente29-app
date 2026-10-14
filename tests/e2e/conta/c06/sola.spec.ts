@@ -17,7 +17,7 @@
 // acabar lo que crea.
 
 import { test, expect, type Page } from '@playwright/test'
-import { entrarComo, type Sesion } from '../sesion'
+import { FRENTE, entrarComo, type Sesion } from '../sesion'
 import { cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
@@ -25,6 +25,11 @@ const DIR = 'docs/conta/capturas/c06'
 const SOLA = { email: 'sola.admin@c06-prueba.test', empresa: 'Empresa de Prueba Sola, S.L.' }
 const ALTA = { email: 'sola.alta@c06-prueba.test' }
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
+
+// C06b (respuesta 6, tarea 5): las contraseñas de los usuarios del C06
+// (sola.*, c06.plataforma) solo se dan en las ramas conta/c06*. Fuera del
+// frente C entrarían con HTTP 400: se saltan, con el motivo, no se dan por rojas.
+test.skip(FRENTE !== 'c', 'Pruebas del frente C (C06): sus usuarios solo reciben contraseña en las ramas conta/c06*.')
 
 /** La marca de pruebas en esta pestaña, como si se hubiera entrado con ?marca=contabilidad. */
 async function conMarca(page: Page) {

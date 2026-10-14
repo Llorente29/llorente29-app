@@ -11,7 +11,8 @@
 // contraseña). Su frontera:
 //   · responde SIEMPRE lo mismo, exista o no el correo (no se enumeran correos);
 //   · solo manda si el correo es de una persona activa de una cuenta de ESA
-//     marca, y como mucho uno por minuto (conta_contrasena_de_marca);
+//     marca, como mucho uno por minuto, 5 por hora por correo y 20 por hora
+//     por conexión (conta_contrasena_pedir, C06b);
 //   · la marca tiene que ser de solo contabilidad y con remitente.
 //
 // Endpoint: POST /functions/v1/conta-contrasena   Body: { correo, marca }
@@ -47,7 +48,10 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    const { data: filas, error } = await admin.rpc('conta_contrasena_de_marca', { p_correo: correo, p_marca: m.id });
+    // C06b (respuesta 6, tarea 3): con tope, 5 por hora por correo y 20 por
+    // conexión. Se apunta SIEMPRE (exista o no el correo) y, pasado el tope,
+    // no se manda nada; la respuesta es la misma y por el mismo camino.
+    const { data: filas, error } = await admin.rpc('conta_contrasena_pedir', { p_correo: correo, p_marca: m.id, p_conexion: conexionDe(req) });
     if (error) { console.error('[conta-contrasena] rpc', error.message); return json(200, SIEMPRE); }
     const fila = (filas as { user_id: string; se_puede: boolean }[] | null)?.[0];
     if (!fila || !fila.se_puede) return json(200, SIEMPRE);
@@ -63,6 +67,12 @@ Deno.serve(async (req) => {
     return json(200, SIEMPRE);
   }
 });
+
+/** La conexión de quien llama: la primera IP de x-forwarded-for (la pone el borde de Supabase), o null. */
+function conexionDe(req: Request): string | null {
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || (req.headers.get('x-real-ip') ?? '').trim();
+  return ip || null;
+}
 
 /** El enlace de recuperación con la marca. Los fallos van al registro: quien llama ya tiene su respuesta. */
 async function enviarEnlace(admin: ReturnType<typeof createClient>, supabaseUrl: string, serviceKey: string, correo: string, m: (typeof MARCAS)[keyof typeof MARCAS]): Promise<void> {

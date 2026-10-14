@@ -11,6 +11,7 @@
 
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
+import '../../../marca/tema.css' // Inter, para las marcas con tema (Sumied)
 import './tokens.css'
 import './componentes.css'
 import './proveedor.css'

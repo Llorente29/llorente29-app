@@ -1,4 +1,9 @@
-# C06b · Respuesta 5, punto 4 — «Comercio de Prueba Diez, S.L.» con el plan
-# completo, por la misma puerta que el alta (company_chart_activate). Solo su
-# empresa (de la semilla C06, mía). Se puede volver a aplicar.
-supabase/seeds/conta/seed_c06b_diez_plan_staging.sql
+# C06b · Respuesta 6.
+#   Tarea 1 — 0600: los terceros (40x, 41, 43x, 44) van por el signo de su
+#   saldo (no compensación). Su prueba, con la vuelta atrás dentro.
+#   Tarea 3 — 0610: «He olvidado la contraseña» con tope (5/h por correo y
+#   20/h por conexión). Su prueba. Las dos, en transacción con ROLLBACK.
+supabase/migrations/20261111T0600_c06b_terceros_por_saldo.sql
+supabase/staging/sql/20261111_c06b_terceros_por_saldo_prueba.sql
+supabase/migrations/20261111T0610_c06b_contrasena_tope.sql
+supabase/staging/sql/20261111_c06b_contrasena_tope_prueba.sql

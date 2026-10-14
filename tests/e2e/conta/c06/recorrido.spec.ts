@@ -33,11 +33,16 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { STAGING_URL, anonKey, pedirSesion, type Sesion } from '../sesion'
+import { FRENTE, STAGING_URL, anonKey, pedirSesion, type Sesion } from '../sesion'
 import { cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { MARCAS } from '../../../../supabase/functions/_shared/marcas'
 import { contrasenaCambiada, invitacion } from '../../../../supabase/functions/send-email/marca'
+
+// C06b (respuesta 6, tarea 5): las contraseñas de los usuarios del C06
+// (sola.*, c06.plataforma) solo se dan en las ramas conta/c06*. Fuera del
+// frente C entrarían con HTTP 400: se saltan, con el motivo, no se dan por rojas.
+test.skip(FRENTE !== 'c', 'Pruebas del frente C (C06): sus usuarios solo reciben contraseña en las ramas conta/c06*.')
 
 const DIR = 'docs/conta/capturas/c06'
 const PLATAFORMA = 'c06.plataforma@c06-prueba.test'

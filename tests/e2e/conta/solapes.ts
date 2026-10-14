@@ -77,6 +77,11 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
       })
       return { error: null, tapado: out }
     }, [raiz, flotantes] as const)
+    // C06b (respuesta 6, tarea 2): en el ordenador ya no flota nada (la barra
+    // «Pregunta o pide algo» no se enseña en ninguna ruta): no hay nada que
+    // pueda tapar. Lo que se pedía flotando era la barra; que NO esté lo mira
+    // la e2e c06/sinBarra.spec.ts, en todas las rutas.
+    if (encontrado.error?.startsWith('No encuentro ninguna pieza flotante') && (page.viewportSize()?.width ?? 1440) >= 768 && flotantes.includes('.cx-pregunta')) return []
     if (encontrado.error) throw new Error(encontrado.error)
     if (await altura() !== alto) throw new Error('La página cambió de alto mientras se medía: la medida no vale')
     encontrado.tapado.forEach((t) => tapado.add(t))
@@ -90,17 +95,11 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
 export const FLOTANTES_CONTA = ['.cx-pregunta', '.cx-barra-inferior']
 
 /**
- * C06b (respuesta 5, punto 3) · Como loQueTapan, sabiendo que Libros
- * (/conta/libros…) no enseña la barra «Pregunta o pide algo»: solo diría «Muy
- * pronto» y tapaba filas. Allí, en el ordenador no flota nada —no hay nada que
- * pueda tapar— y se exige que la barra no esté. En el móvil (la barra inferior)
- * y en el resto de pantallas, se mide como siempre.
+ * C06b · Como loQueTapan, y además exige que la barra «Pregunta o pide algo»
+ * no esté (respuesta 5: Libros; respuesta 6: todas las pantallas). En el
+ * ordenador no flota nada; en el móvil, la barra inferior, que se mide.
  */
 export async function loQueTapanSinPregunta(page: Page, raiz: string, flotantes = FLOTANTES_CONTA): Promise<string[]> {
-  const movil = (page.viewportSize()?.width ?? 1440) < 768
-  const enLibros = new URL(page.url()).pathname.startsWith('/conta/libros')
-  if (!movil && enLibros) {
-    return (await page.locator('.cx-pregunta').count()) > 0 ? ['la barra «Pregunta o pide algo» está en Libros, y solo diría «Muy pronto»'] : []
-  }
+  if ((await page.locator('.cx-pregunta, .cx-barra-ia').count()) > 0) return ['la barra «Pregunta o pide algo» (o el botón de la IA) está, y solo diría «Muy pronto»']
   return loQueTapan(page, raiz, flotantes)
 }

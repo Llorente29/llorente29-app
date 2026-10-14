@@ -1,4 +1,8 @@
-# C06b · Respuesta 5, punto 5: conta-contrasena manda el enlace en segundo
-# plano (EdgeRuntime.waitUntil): el que existe y el que no contestan igual de
-# rápido. Lo demás, igual.
+# C06b · PR a main de la respuesta 6: las tres funciones que el PR lleva a
+# «Funciones a desplegar a mano». conta-contrasena por el tope (0610, ya en
+# producción); conta-crear-cuenta y send-email porque importan
+# _shared/marcas.ts, que cambia con Sumied. Aquí, para que la e2e entera las
+# pruebe con el código del PR antes de fusionar.
 conta-contrasena
+conta-crear-cuenta
+send-email

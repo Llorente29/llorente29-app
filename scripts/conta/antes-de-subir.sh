@@ -8,6 +8,12 @@
 #
 #   scripts/conta/antes-de-subir.sh && git push origin <rama>
 #
+# Y antes de pedir tanda o abrir un PR a main (C06b, respuesta 6, tarea 5):
+#
+#   PEDIR_TANDA=1 scripts/conta/antes-de-subir.sh
+#
+# que además exige la suite e2e ENTERA en verde en este commit (paso 9).
+#
 # Por qué existe: el 03/10 se subió con dos unitarias en rojo porque los
 # comandos iban encadenados con «;» y la cadena siguió.
 #
@@ -55,5 +61,11 @@ paso '8/8 · la tanda de producción, analizada contra el contexto REAL de produ
 # medido para ESTOS ficheros. Si uno cambió desde la medida, para: se vuelve a
 # medir. La salida (con --informe, entera) va debajo de los datos de Julio.
 node scripts/conta/produccion/analisis-tanda-viva.mjs
+
+if [ "${PEDIR_TANDA:-}" = 1 ]; then
+  paso '9/9 · antes de pedir tanda o abrir PR a main: la suite e2e ENTERA en verde en este commit (C06b R6)'
+  # En un push solo corre la e2e del frente; la entera se lanza a mano.
+  node scripts/conta/e2e-entera.mjs
+fi
 
 printf '\nTodo en verde: se puede subir.\n'

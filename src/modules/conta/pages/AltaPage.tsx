@@ -29,7 +29,7 @@ export default function AltaPage() {
     <>
       {/* Folvy detrás, atenuado y sin poder tocarse: la ventana manda. */}
       <div inert aria-hidden="true" className="cx-alta-detras">
-        <MarcoConta ejemplo="Añade a Pablo como apoderado"><AjustesPage /></MarcoConta>
+        <MarcoConta ejemplo="Añade a Pablo como apoderado" sinPregunta><AjustesPage /></MarcoConta>
       </div>
       <ConversacionAlta marco="ventana" />
     </>
