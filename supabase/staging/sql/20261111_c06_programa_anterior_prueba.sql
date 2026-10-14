@@ -49,6 +49,9 @@ begin
     ('c0600000-0000-4000-8000-0000000000e8', 'c0600000-0000-4000-8000-0000000000e6', 'Prueba Programa, S.L.', 'cuentas');
 end $$;
 
+-- La empresa de OTRA cuenta, tomada antes de ser el cliente (como cliente, la RLS no la deja ver).
+select set_config('prueba.otra_empresa', (select id::text from public.company where account_id <> 'c0600000-0000-4000-8000-0000000000e6' order by created_at limit 1), true);
+
 -- 2 · Como el cliente.
 select set_config('request.jwt.claims', json_build_object('sub', 'c0600000-0000-4000-8000-0000000000e7', 'role', 'authenticated')::text, true);
 select set_config('request.jwt.claim.sub', 'c0600000-0000-4000-8000-0000000000e7', true);
@@ -79,7 +82,7 @@ begin
   exception when check_violation then null;
   end;
   begin
-    perform public.conta_programa_anterior_poner((select id from public.company where account_id <> 'c0600000-0000-4000-8000-0000000000e6' limit 1), 'diez', null);
+    perform public.conta_programa_anterior_poner(current_setting('prueba.otra_empresa')::uuid, 'diez', null);
     raise exception '3: contestó por una empresa de otra cuenta.';
   exception when insufficient_privilege then null;
   end;

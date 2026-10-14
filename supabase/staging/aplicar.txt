@@ -1,7 +1,8 @@
 # C06 · Respuesta 4 — de qué programa viene cada empresa (el alta pregunta y
 # guarda la respuesta con su registro).
 #   0400: conta_programa_anterior, su registro y conta_programa_anterior_poner.
-#   Su prueba, en una transacción con ROLLBACK (incluida la misma vara antes y
+#   Su prueba (2.ª vuelta: la empresa de otra cuenta, tomada antes de ser el
+#   cliente), en una transacción con ROLLBACK (incluida la misma vara antes y
 #   después sobre conta_diez_listo de todas las empresas).
 supabase/migrations/20261111T0400_c06_programa_anterior.sql
 supabase/staging/sql/20261111_c06_programa_anterior_prueba.sql
