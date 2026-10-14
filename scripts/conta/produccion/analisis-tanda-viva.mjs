@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/conta/produccion/analisis-tanda-viva.mjs [contexto.json] [--informe]
+// scripts/conta/produccion/analisis-tanda-viva.mjs [contexto.json] [--informe] [--manifiesto=<f>]
 //
 // Paso 8 de antes-de-subir.sh (R11, Julio, 13/10): «antes de dar datos de
 // lanzamiento a Julio, pasar el analizador de producción con el contexto real
@@ -26,7 +26,9 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+// --manifiesto=<f>: una tanda preparada que aún no está en aplicar.txt (B01, 14/10: «el orden
+// de las tres tandas lo digo yo»), con su contexto medido. Sin él, la tanda viva de siempre.
+const MANIFIESTO = process.argv.find((x) => x.startsWith('--manifiesto='))?.slice('--manifiesto='.length) ?? 'supabase/produccion/aplicar.txt'
 const FIXTURE = process.argv.slice(2).find((x) => !x.startsWith('--')) ?? 'tests/conta/produccion/contexto-produccion-tanda-viva.json'
 const A = 'scripts/conta/produccion/analizar.mjs'
 const tanda = readFileSync(MANIFIESTO, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('cuenta:'))

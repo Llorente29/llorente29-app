@@ -1,8 +1,5 @@
-# B01 · respuesta 5 (14/10): la semilla B01 otra vez, para que las tres
-# aperturas de los bancos B01 (30/09, origen «opening») queden VALIDADAS: son
-# asientos reales. Las valida el administrador de A dentro de la transacción,
-# con el nombre «Semilla B01» (no «Folvy…»: no entran en «Lo que he hecho yo»
-# del C04). Toman los números 3/1, 3/2 y 3/3 de A (la serie 3 de A estaba
-# vacía; ensayado en una transacción deshecha). Con esto el B01 no deja
-# ninguna propuesta suelta en A.
-supabase/seeds/conta/seed_b01_staging.sql
+# B01 · tarea 7 (14/10): la 0170 (las fichas de banco que le faltan a
+# Foodint). En staging Foodint no existe: no crea nada y lo dice; se aplica
+# para que el historial de staging tenga la tanda entera del B01 (0100–0170)
+# con su huella, como la tendrá producción. Solo añade.
+supabase/migrations/20261101T0170_b01_foodint_cuentas.sql
