@@ -150,3 +150,17 @@
    píldora es inline-flex y se comía los espacios («700cambiardejar fuera»,
    captura del e2e 153). */
 .cx-pildora.cxl-mapeo-cuenta { gap: 10px; margin: 0 6px 6px 0; max-width: none; overflow: visible; }
+
+/* C06b R7 · Pendientes de adjuntar en Diez: una lista (no una tabla) que en el
+   móvil apila el qué y los botones. */
+.cxp-pendientes-resumen { margin: 0 0 6px; font-size: 15px; }
+.cxp-pendientes { list-style: none; margin: 12px 0 0; padding: 0; }
+.cxp-pendiente { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+.cxp-pendiente-que { min-width: 0; }
+.cxp-pendiente-ref { margin-top: 4px; font-size: 14px; }
+.cxp-pendiente-fecha { font-size: 13px; color: var(--cx-apoyo); }
+.cxp-pendiente-acciones { display: flex; gap: 8px; flex-shrink: 0; }
+@media (max-width: 767px) {
+  .cxp-pendiente { flex-direction: column; align-items: stretch; }
+  .cxp-pendiente-acciones > * { flex: 1; }
+}

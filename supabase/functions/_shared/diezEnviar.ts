@@ -28,6 +28,18 @@
 //      «No ha llegado a Diez: falta el documento», con Reintentar (que solo
 //      sube el documento: la factura ya está).
 //   7. Como mucho 3 intentos que escriben en Diez (regla 5 del encargo).
+//
+// C06b · Respuesta 7 (decisión de Julio, 14/10): a Diez sin esperar a Cegid.
+//   · El 2 no cambia: sin el PDF guardado en Folvy no se envía.
+//   · El 4 y el 6 solo si la conexión dice que Diez guarda documentos
+//     (account_connector.config.adjuntar_documentos = true; hoy, apagado). Si
+//     no, la factura va SIN adjunto y queda «PDF pendiente en Diez»
+//     (pendiente_diez): la adjunta una persona en Diez y la marca en Folvy, o
+//     Folvy sola el día que Cegid active el almacén (el mismo envío, que con
+//     la factura ya en Diez solo sube el documento).
+//   · El 3 se abre SOLO con lo que Julio autoriza en la base
+//     (conta_diez_autorizo: un asiento, o la empresa en esa base). Sin
+//     autorización, Diez real sigue cerrado; C0001, nunca.
 
 import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
@@ -52,12 +64,14 @@ export type EnvioFila = {
   last_error: string | null
   sent_at: string | null
   document_id: string | null
-  document_status: 'pendiente' | 'adjunto' | 'fallo' | null
+  document_status: 'pendiente' | 'adjunto' | 'fallo' | 'pendiente_diez' | null
   document_error: string | null
   document_attached_at: string | null
+  document_attached_via?: 'diez' | 'a_mano' | null
 }
 
-export type ConexionDiez = { id: string; nombreBd: string }
+/** adjuntar: ¿guarda Diez documentos? (config.adjuntar_documentos; hoy, no). */
+export type ConexionDiez = { id: string; nombreBd: string; adjuntar?: boolean }
 
 /** Lo que el núcleo usa del cliente de Diez (ClienteDiez lo cumple). */
 export interface ClienteDiezEnvio {
@@ -76,8 +90,10 @@ export interface PuertoEnvio {
   guardar(f: EnvioFila): Promise<EnvioFila>
   /** La conexión con Diez de la empresa (conectada), o null. */
   conexion(companyId: string): Promise<ConexionDiez | null>
-  /** El cliente de Diez de esa conexión (escribir: sí; escribirEnReal: nunca). */
-  cliente(c: ConexionDiez): Promise<ClienteDiezEnvio>
+  /** ¿Ha autorizado Julio escribir este asiento en esta base real? (conta_diez_autorizo) */
+  autorizado(entryId: string, companyId: string, nombreBd: string): Promise<boolean>
+  /** El cliente de Diez de esa conexión (escribir: sí; escribirEnReal: solo con autorización). */
+  cliente(c: ConexionDiez, o: { real: boolean }): Promise<ClienteDiezEnvio>
   /** Los bytes del PDF guardado en el bucket. */
   documento(ruta: string): Promise<Uint8Array>
   sha256(b: Uint8Array): Promise<string>
@@ -86,7 +102,7 @@ export interface PuertoEnvio {
 }
 
 export type ResultadoEnvio =
-  | { estado: 'en_diez'; serie: string; documento: number; enlazada: boolean; texto: string }
+  | { estado: 'en_diez'; serie: string; documento: number; enlazada: boolean; pdfPendiente: boolean; texto: string }
   | { estado: 'no_llega'; motivo: string; reintentar: boolean; texto: string }
 
 const iso = (d: Date) => d.toISOString()
@@ -102,6 +118,8 @@ const corto = (x: unknown) => (x == null ? 'sin respuesta' : (typeof x === 'stri
 export const sinContenedor = (r: { status: number; json: unknown }) => r.status >= 500 && /container does not exist/i.test(corto(r.json))
 
 export const TEXTO_CONTENEDOR = 'Diez todavía no guarda documentos (falta que Cegid active su almacén): no se envía la factura sin su PDF'
+export const PDF_PENDIENTE = 'PDF pendiente en Diez'
+const yaEnviado = (e: EnvioFila | null) => !!e && (e.status === 'enviado' || e.status === 'enlazado')
 
 function noLlega(motivo: string, reintentar = true): ResultadoEnvio {
   return { estado: 'no_llega', motivo, reintentar, texto: `No ha llegado a Diez: ${motivo}.` }
@@ -112,8 +130,8 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
   if (r.estado !== 'validado') return noLlega(`el asiento está ${r.estado}: solo se envía lo validado`, false)
 
   let previo = await p.envio(entryId)
-  if (previo && (previo.status === 'enviado' || previo.status === 'enlazado') && previo.document_status === 'adjunto') {
-    return { estado: 'en_diez', serie: String(previo.ext_series), documento: Number(previo.ext_number), enlazada: previo.status === 'enlazado', texto: `Ya estaba en Diez: ${previo.ext_series}/${previo.ext_number}, con su documento.` }
+  if (yaEnviado(previo) && previo!.document_status === 'adjunto') {
+    return { estado: 'en_diez', serie: String(previo!.ext_series), documento: Number(previo!.ext_number), enlazada: previo!.status === 'enlazado', pdfPendiente: false, texto: `Ya estaba en Diez: ${previo!.ext_series}/${previo!.ext_number}, con su documento.` }
   }
 
   // Lo que se apunta cuando no llega, sin haber escrito en Diez (no cuenta como intento).
@@ -143,21 +161,28 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
   if (!con) return apuntar('la conexión con Diez no está configurada para esta empresa')
   const bd = con.nombreBd.trim().toUpperCase()
   if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
-  if (bd !== BASE_PRUEBAS) return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  const real = bd !== BASE_PRUEBAS
+  if (real && !(await p.autorizado(r.id, r.company_id, bd))) return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  const adjuntar = con.adjuntar === true
+  // Ya en Diez sin su PDF, y Diez sigue sin guardar documentos: nada que hacer (nunca dos veces).
+  if (yaEnviado(previo) && previo!.document_status === 'pendiente_diez' && !adjuntar) {
+    return { estado: 'en_diez', serie: String(previo!.ext_series), documento: Number(previo!.ext_number), enlazada: previo!.status === 'enlazado', pdfPendiente: true, texto: `Ya estaba en Diez: ${previo!.ext_series}/${previo!.ext_number}. ${PDF_PENDIENTE}.` }
+  }
   if (previo && previo.attempts >= MAX_INTENTOS) return noLlega(`ya van ${previo.attempts} intentos: lo tiene que mirar una persona`, false)
 
   // El PDF que va es el guardado, y es el registrado.
   const pdf = await p.documento(r.documento.ruta)
   if ((await p.sha256(pdf)) !== r.documento.sha256) return apuntar('el documento guardado no es el que se registró (otra huella): no se envía', { document_status: 'fallo', document_error: 'otra huella' }, false)
 
-  const diez = await p.cliente(con)
+  const diez = await p.cliente(con, { real })
   const ej = r.fecha.slice(0, 4)
   const fd0 = listo.factura.factura
   const delMes = await diez.facturasDelMes(String(fd0.FechaFactura).slice(0, 6))
 
-  // 4 · ¿Guarda Diez documentos? Se pregunta por una factura que ya tiene.
+  // 4 · ¿Guarda Diez documentos? Se pregunta por una factura que ya tiene
+  // (solo si se va a adjuntar: sin adjunto, la factura va igual).
   const muestra = delMes.find((f) => f.Documento != null)
-  if (muestra && !(previo && (previo.status === 'enviado' || previo.status === 'enlazado'))) {
+  if (adjuntar && muestra && !yaEnviado(previo)) {
     const g = await diez.documentoDeFactura(String(muestra.Ejercicio ?? ej), String(muestra.Serie), Number(muestra.Documento))
     if (sinContenedor(g)) return apuntar(TEXTO_CONTENEDOR, { account_connector_id: con.id })
   }
@@ -191,7 +216,12 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
     }
   }
 
-  // 6 · El documento: se sube y se lee de vuelta.
+  // 6 · El documento. Sin almacén en Diez: «PDF pendiente en Diez», y en Diez está.
+  if (!adjuntar) {
+    previo = await p.guardar({ ...previo!, document_status: 'pendiente_diez', document_error: null, last_error: null })
+    return { estado: 'en_diez', serie, documento, enlazada, pdfPendiente: true, texto: `En Diez: ${serie}/${documento}${enlazada ? ' (ya estaba: enlazada, no se ha enviado otra)' : ''}. ${PDF_PENDIENTE}: adjúntalo allí y márcalo en Libros › Pendientes de adjuntar en Diez.` }
+  }
+  // Con almacén: se sube y se lee de vuelta.
   previo = await p.guardar({ ...previo!, attempts: previo!.attempts + (previo!.document_status === 'fallo' ? 1 : 0) })
   const sub = await diez.adjuntarDocumentoFactura({ Ejercicio: ej, Serie: serie, Documento: documento, NombreArchivo: r.documento.nombre, Archivo: base64(pdf) })
   let fallo: string | null = null
@@ -206,6 +236,6 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
     previo = await p.guardar({ ...previo!, document_status: 'fallo', document_error: fallo, last_error: 'falta el documento' })
     return noLlega('falta el documento', true)
   }
-  previo = await p.guardar({ ...previo!, document_status: 'adjunto', document_error: null, document_attached_at: iso(p.ahora()), last_error: null })
-  return { estado: 'en_diez', serie, documento, enlazada, texto: `En Diez: ${serie}/${documento}${enlazada ? ' (ya estaba: enlazada, no se ha enviado otra)' : ''}, con su documento.` }
+  previo = await p.guardar({ ...previo!, document_status: 'adjunto', document_error: null, document_attached_at: iso(p.ahora()), document_attached_via: 'diez', last_error: null })
+  return { estado: 'en_diez', serie, documento, enlazada, pdfPendiente: false, texto: `En Diez: ${serie}/${documento}${enlazada ? ' (ya estaba: enlazada, no se ha enviado otra)' : ''}, con su documento.` }
 }

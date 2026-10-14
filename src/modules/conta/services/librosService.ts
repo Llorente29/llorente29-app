@@ -277,18 +277,22 @@ export async function datosFiscales(companyId: string): Promise<{ nif: string | 
 
 export interface ResumenLibros {
   expedidas: number; recibidas: number; sinNif: number; intracomunitarias: number; bienes: number; retenciones: string[]; suplidos: number
+  /** C06b R7 · Facturas en Diez sin su PDF (de todos los ejercicios: lo pendiente no caduca). */
+  pdfPendientesDiez: number
 }
 
 export async function resumenLibros(accountId: string, companyId: string, desde: string, hasta: string): Promise<ResumenLibros> {
-  const [v, b, r, s] = await Promise.all([
+  const [v, b, r, s, pd] = await Promise.all([
     tabla('vat_book_entry').select('book, operation_key, exempt_cause, counterpart_tax_id, invoice_type')
       .eq('account_id', accountId).eq('company_id', companyId).is('voided_at', null).gte('issue_date', desde).lte('issue_date', hasta),
     tabla('investment_good').select('id', { count: 'exact', head: true }).eq('account_id', accountId).eq('company_id', companyId),
     tabla('journal_ledger').select('withholding_model').eq('account_id', accountId).eq('company_id', companyId)
       .not('withholding_model', 'is', null).gte('entry_date', desde).lte('entry_date', hasta),
     tabla('company_account_link').select('id', { count: 'exact', head: true }).eq('account_id', accountId).eq('company_id', companyId).eq('role', 'suplidos'),
+    tabla('external_send').select('id', { count: 'exact', head: true }).eq('account_id', accountId).eq('company_id', companyId)
+      .in('status', ['enviado', 'enlazado']).eq('document_status', 'pendiente_diez'),
   ])
-  for (const x of [v, b, r, s]) if (x.error) throw new Error(mensaje('No se ha podido leer el resumen de los libros', x.error))
+  for (const x of [v, b, r, s, pd]) if (x.error) throw new Error(mensaje('No se ha podido leer el resumen de los libros', x.error))
   const filas = (v.data ?? []) as Fila[]
   const simplificada = (t: unknown) => t === 'F2' || t === 'F4' || t === 'R5'
   return {
@@ -299,6 +303,7 @@ export async function resumenLibros(accountId: string, companyId: string, desde:
     bienes: b.count ?? 0,
     retenciones: [...new Set(((r.data ?? []) as Fila[]).map((f) => String(f.withholding_model)))].sort(),
     suplidos: s.count ?? 0,
+    pdfPendientesDiez: pd.count ?? 0,
   }
 }
 
