@@ -32,7 +32,7 @@ están en el §9 y las facturas que entran por la recepción (R6), en el §10.
 
 ## 1 · Las capturas frente a la maqueta
 
-**Las vigentes son las de la e2e 245** (`2d9628cd`), **en verde entera**: 166
+**Las vigentes salen de la e2e que sigue a la 247** (la 247, `2a381cb6`, en verde entera, capturas `65d9bec0`; la 245, `2d9628cd`, también en verde): 166
 pasan y 54 se saltan, que son las de otros frentes o de un solo lado. Las sube
 el commit de capturas `3ebd0f54`, en `docs/conta/capturas/d01/`:
 - `n22-para-mirar-{a,c}-{ordenador,movil}.png`;

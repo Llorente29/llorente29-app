@@ -262,7 +262,7 @@ function ComoSeApunta({ fac, vista, error, movil, solo }: {
   const nombre = (cuenta: string) => (
     <span className="cxr-apunte-cuenta" title={`${(vista?.propuesta ? vista.nombres.get(cuenta) : null) ?? 'Cuenta'} · ${cuenta}`}>
       <span className="cxr-apunte-nombre">{(vista?.propuesta ? vista.nombres.get(cuenta) : null) ?? 'Cuenta'}</span>
-      <span className="cxr-apunte-codigo"> · {cuenta}</span>
+      <span className="cxr-apunte-codigo">{`\u00a0· ${cuenta}`}</span>
     </span>
   )
   const col = columnasDelApunte(lineas)
