@@ -377,7 +377,8 @@
       "nombre": "Orden EHA/962/2007, digitalización certificada de facturas (D01; ELI https://www.boe.es/eli/es/o/2007/04/10/eha962)",
       "tipo": "boe",
       "id": "BOE-A-2007-7866",
-      "debeContener": "digitalización certificada"
+      "debeContener": "digitalización certificada",
+      "tituloEmpiezaPor": "Orden EHA/962/2007"
     },
     {
       "clave": "resolucion-aeat-2007-10-24",
