@@ -3,5 +3,8 @@
 #   quién lo adjuntó y cómo, conta_diez_autorizo (lo que Julio autoriza
 #   escribir en Diez real) y conta_diez_adjunto_a_mano («Ya está adjunto»).
 #   Su prueba, por sus caminos y como usuario, en transacción con ROLLBACK.
+#   (2.º intento: la prueba usa Glovo, la plataforma con la contabilidad
+#   configurada de A; con Uber el cierre del día no proponía. La 0700 ya
+#   entró en el 1.º y se vuelve a aplicar sin cambio: if not exists / replace.)
 supabase/migrations/20261111T0700_c06b_diez_pdf_pendiente.sql
 supabase/staging/sql/20261111_c06b_diez_pdf_pendiente_prueba.sql

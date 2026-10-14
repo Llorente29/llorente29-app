@@ -6,7 +6,8 @@
 -- transacción con ROLLBACK: no cambia staging.
 --
 -- Por sus CAMINOS, como quien lo va a usar (regla 10):
---   1. Un día de Uber de la empresa A (19/09, inventado), propuesto por el
+--   1. Un día de Glovo de la empresa A (19/09, inventado; la plataforma con
+--      la que A tiene su contabilidad configurada, la misma que R15), propuesto por el
 --      cierre del día, validado como su administrador y con su PDF guardado.
 --   2. El envío lo apunta el servidor (service_role, como conta-diez-enviar):
 --      en Diez (1/9901) SIN su PDF → document_status 'pendiente_diez'.
@@ -39,19 +40,17 @@ begin
   raise notice 'PRUEBA C06b · 0: tabla, función y columnas: ok.';
 end $$;
 
--- ── 1 · Un día de Uber de A, validado y con su PDF ──────────────────────────
+-- ── 1 · Un día de Glovo de A, validado y con su PDF ──────────────────────────
 do $$
 declare
   v_acc   constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v_loc   constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
   v_marca constant uuid := '7e000000-0000-4000-8000-000000000b01';
   h       constant interval := interval '13 hours';
-  v_e uuid; v_canal uuid; v_s uuid; v_entry uuid;
+  v_canal constant uuid := 'e0200000-0000-4000-8000-00000000a0c1';  -- Glovo de A
+  v_e uuid; v_s uuid; v_entry uuid;
 begin
   select id into v_e from public.company where account_id = v_acc order by created_at limit 1;
-  select id into v_canal from public.sales_channel where account_id = v_acc and slug = 'uber' limit 1;
-  if v_canal is null then select id into v_canal from public.sales_channel where account_id = v_acc and slug = 'glovo' limit 1; end if;
-  if v_canal is null then raise exception 'PRUEBA C06b · 1: A no tiene ninguna plataforma.'; end if;
   if exists (select 1 from public.sale where account_id = v_acc and location_id = v_loc
               and (sold_at at time zone 'Europe/Madrid')::date = '2026-09-19') then
     raise exception 'PRUEBA C06b · 1: A ya tiene ventas el 19/09 en ese local; la prueba no mediría lo que dice.';
