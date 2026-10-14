@@ -10,8 +10,13 @@
 //     es de su cuenta, no está), y tiene que ser administrador o encargado;
 //   · external_send, la conexión, el Vault y el bucket, con la clave de
 //     servicio (escribir en external_send es solo del servidor);
-//   · el cliente de Diez con escribir: sí y escribirEnReal: NUNCA. R15: «No
-//     escribas nada en C0008». C0001 está vetada en el propio cliente.
+//   · el cliente de Diez con escribir: sí, y escribirEnReal SOLO con lo que
+//     Julio autoriza en la base (C06b R7: conta_diez_autorizo, un asiento o la
+//     empresa en esa base). Sin autorización, como en R15: nada en C0008.
+//     C0001 está vetada en el propio cliente.
+//   · si Diez guarda documentos lo dice la conexión
+//     (config.adjuntar_documentos; hoy, apagado): sin él, la factura va sin
+//     adjunto y queda «PDF pendiente en Diez».
 //
 // Contesta siempre 200 con el resultado en palabras («En Diez: 1/1801…» o «No
 // ha llegado a Diez: <motivo>.»), salvo sesión (401), permiso (403) o un fallo
@@ -78,10 +83,17 @@ Deno.serve(async (req) => {
         .eq("account_id", r.account_id).eq("company_id", companyId).eq("scope", "company").eq("connector.code", "diez").eq("status", "connected").maybeSingle();
       if (error) throw new Error(`no se ha podido leer la conexión con Diez: ${error.message}`);
       if (!data) return null;
-      const bd = String(data.external_account_id ?? (data.config as Record<string, unknown> | null)?.nombre_bd ?? "");
-      return bd ? { id: String(data.id), nombreBd: bd } : null;
+      const config = (data.config as Record<string, unknown> | null) ?? {};
+      const bd = String(data.external_account_id ?? config.nombre_bd ?? "");
+      return bd ? { id: String(data.id), nombreBd: bd, adjuntar: config.adjuntar_documentos === true } : null;
     },
-    cliente: async (c: ConexionDiez) => {
+    autorizado: async (id, companyId, nombreBd) => {
+      const { data, error } = await srv.from("conta_diez_autorizo").select("id, alcance, entry_id")
+        .eq("account_id", r.account_id).eq("company_id", companyId).ilike("nombre_bd", nombreBd);
+      if (error) throw new Error(`no se ha podido leer lo autorizado en Diez: ${error.message}`);
+      return (data ?? []).some((a) => a.alcance === "empresa" || a.entry_id === id);
+    },
+    cliente: async (c: ConexionDiez, o) => {
       const { data: s, error } = await srv.rpc("connector_secret_read", { p_account_connector_id: c.id });
       if (error || !s) throw new Error("la conexión con Diez no tiene credenciales guardadas");
       const sec = (s as { secrets: Record<string, string>; config: Record<string, unknown> }).secrets;
@@ -95,11 +107,11 @@ Deno.serve(async (req) => {
         guardar: async (token, expiresAt) => { await srv.rpc("connector_token_save", { p_account_connector_id: c.id, p_token: token, p_expires_at: expiresAt }); },
         caida: async (motivo) => { await srv.rpc("connector_mark_down", { p_account_connector_id: c.id, p_error: motivo }); },
       };
-      // escribirEnReal no se pasa NUNCA (R15): en C0008 el cliente no escribe.
+      // escribirEnReal solo con autorización de Julio (el núcleo ya lo ha mirado).
       return new ClienteDiez({
         base: String(cfg.base_url ?? "https://apicon.diezsoftware.com"), nombreBd: c.nombreBd,
         credenciales: { grant_type: sec.grant_type, client_id: sec.client_id, client_secret: sec.client_secret, username: sec.username, password: sec.password },
-        almacen, escribir: true, pausaMs: 150,
+        almacen, escribir: true, escribirEnReal: o.real, pausaMs: 150,
       });
     },
     documento: async (ruta) => {
