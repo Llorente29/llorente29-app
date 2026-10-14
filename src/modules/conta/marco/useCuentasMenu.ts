@@ -7,6 +7,8 @@
 //   · Clientes y proveedores: las cuentas 430 traídas sin revisar y los
 //     acuerdos de cesión sin socio.
 //   · Libros: los asientos propuestos que esperan que alguien los valide.
+//   · Bancos (B01): los movimientos para confirmar y por aclarar (los mismos
+//     que cuentan las cifras de Movimientos; lo casado solo no pide nada).
 // Es un aviso que interrumpe (el badge del menú, regla 7): cuenta lo que pide
 // una decisión, y si no hay nada no se pinta.
 //
@@ -37,7 +39,7 @@ export function refrescarCuentasMenu(): void {
 const seguro = <T,>(p: Promise<T>, si: T) => p.catch((e: unknown) => { console.error('[menú] no se pudo contar', e); return si })
 
 async function contar(accountId: string, companyId: string | null): Promise<CuentasMenu> {
-  const [compras, terceros, libros] = await Promise.all([
+  const [compras, terceros, libros, bancos] = await Promise.all([
     seguro(cargarMirar(accountId).then((m) => agruparAMirar(m).length), 0),
     seguro((async () => {
       const acuerdos = (await acuerdosSinSocio(accountId)).length
@@ -50,8 +52,12 @@ async function contar(accountId: string, companyId: string | null): Promise<Cuen
       ? tabla('journal_entry').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'propuesto')
           .then(({ count, error }: { count: number | null; error: { message: string } | null }) => { if (error) throw new Error(error.message); return count ?? 0 })
       : Promise.resolve(0), 0),
+    seguro(companyId
+      ? tabla('bank_movement').select('id', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido'])
+          .then(({ count, error }: { count: number | null; error: { message: string } | null }) => { if (error) throw new Error(error.message); return count ?? 0 })
+      : Promise.resolve(0), 0),
   ])
-  return { compras, terceros, libros }
+  return { compras, terceros, libros, bancos }
 }
 
 export function useCuentasMenu(): CuentasMenu {

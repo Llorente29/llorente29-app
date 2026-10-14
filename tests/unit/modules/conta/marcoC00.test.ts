@@ -23,13 +23,14 @@ describe('navegación del módulo de contabilidad', () => {
     // C06: con Folvy, las mismas de siempre (Inicio solo sale en el producto vendido solo).
     const visibles = entradasVisibles(MENU_CONTA.flat()).map((e) => e.id)
     // C03: «Clientes y proveedores» ya tiene su pantalla; C04: «Libros» (el libro diario); compras: «Compras»;
-    // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no).
-    expect(visibles).toEqual(['compras', 'ventas', 'terceros', 'libros', 'ajustes'])
+    // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no); B01: «Bancos».
+    expect(visibles).toEqual(['compras', 'ventas', 'bancos', 'terceros', 'libros', 'ajustes'])
     expect(entradasVisibles(PESTANAS_AJUSTES).map((e) => e.id)).toEqual(['empresa', 'tablas'])
-    expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['ajustes'])
+    expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['bancos', 'ajustes'])
   })
   it('C06 · en el producto vendido solo: su Inicio y nada que diga «aún no»', () => {
-    expect(entradasVisibles(MENU_CONTA.flat(), true).map((e) => e.id)).toEqual(['inicio', 'compras', 'terceros', 'libros', 'ajustes'])
+    // B01: Bancos entra en el producto solo al tener ruta (encargo del C06, tarea 5: «Bancos, cuando el frente B lo tenga»).
+    expect(entradasVisibles(MENU_CONTA.flat(), true).map((e) => e.id)).toEqual(['inicio', 'compras', 'bancos', 'terceros', 'libros', 'ajustes'])
     expect(entradasVisibles(BARRA_CONTA.izquierda, true).map((e) => e.id)).toEqual(['inicio'])
     expect(entradasVisibles(BARRA_CONTA.izquierda).map((e) => e.id)).toEqual([])
     expect(indiceAjustes(true).flatMap((g) => g.entradas).some((e) => e.hueco)).toBe(false)

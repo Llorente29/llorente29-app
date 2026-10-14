@@ -761,6 +761,47 @@ describe('la tanda de AHORA (manifiesto vivo): a Diez sin el PDF y el primer asi
   })
 })
 
+describe('la tanda del B01 (aplicada el 14/10, su copia): Bancos y conciliación (0100–0170)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-b01-20261014.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 14/10 a las 08:01 UTC (después de la C06) para
+  // ESTOS ficheros (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-b01-20261014.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const B01 = ['0100_b01_bancos', '0110_b01_funciones', '0120_b01_foodint', '0130_b01_lectura', '0140_b01_tarjetas',
+    '0150_b01_cierre_agente', '0160_b01_lectura_agente', '0170_b01_foodint_cuentas']
+
+  it('ocho ficheros, en orden, y todos siguen: todo es nuevo (sin «autorizo»)', () => {
+    expect(viva).toEqual(B01.map((f) => `supabase/migrations/20261101T${f}.sql`))
+    expect(Object.values(r.ficheros)).toEqual(B01.map(() => 'sigue'))
+  })
+  it('ningún fichero lleva un IBAN escrito (repositorio público): la 0170 lo lee del nombre de la cuenta al aplicar', () => {
+    for (const f of viva) expect(readFileSync(f, 'utf8'), f).not.toMatch(/ES[0-9]{2}(?: ?[0-9]{4}){5}/)
+  })
+  it('declara qué cuenta antes y después: tablas, funciones, las fichas de Foodint y la huella de sus 50 asientos; y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/bancos.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+    expect(readFileSync(cuentas[0], 'utf8')).toMatch(/created_at < timestamptz '2026-10-13 18:00\+00'/)
+  })
+  it('ninguna vuelta atrás escribe en storage con SQL (ensayo #64: Supabase no deja borrar de sus tablas; el bucket de la 0140 se queda)', () => {
+    for (const f of leerTanda('tests/conta/produccion/vuelta-atras-b01-20261014.txt')) {
+      const sql = readFileSync(f, 'utf8').replace(/--.*$/gm, '')
+      expect(sql, f).not.toMatch(/\b(insert\s+into|update|delete\s+from|truncate)\s+(table\s+)?storage\./i)
+      expect(sql, f).not.toMatch(/\b(drop|create|alter)\s+policy\b[^;]*\bon\s+storage\./i)
+      expect(sql, f).not.toMatch(/storage\.allow_delete_query/)
+    }
+  })
+  it('su vuelta atrás es la de cada fichero en orden inverso; la 0170 PARA si sus fichas ya tienen extractos', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-b01-20261014.txt')
+    expect(atras).toEqual([...B01].reverse().map((f) => `supabase/vuelta-atras/20261101T${f}.down.sql`))
+    for (const f of atras) expect(existsSync(f), f).toBe(true)
+    expect(readFileSync(atras[0], 'utf8')).toMatch(/ya tienen % extractos, movimientos o tarjetas: no se quitan/)
+  })
+})
+
 describe('lo que tiene que parar', () => {
   const sup = (sql: string) => decidir(sentencias(sql).flatMap((s: string) => clasificar(s)), existe)
   it('borrar o renombrar algo existente', () => {
