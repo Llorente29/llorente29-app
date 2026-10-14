@@ -234,6 +234,7 @@ test.describe('cuenta C: salir, atrás y cerrar no pierden nada', () => {
       await page.getByRole('status', { name: 'Alta a medias' }).getByRole('link', { name: 'Seguir' }).click()
       await expect(log(page).getByText(PREGUNTA_CUENTAS)).toBeVisible()
       await page.getByRole('button', { name: 'El de pymes, el normal' }).click() // contesta una más antes de irse
+      await page.getByRole('button', { name: 'Empiezo de cero' }).click() // y de qué programa viene (C06, respuesta 4)
       await expect(log(page).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
       await page.goBack()
       await expect(page.getByRole('status', { name: 'Alta a medias' })).toContainText('5 de 6')
@@ -256,8 +257,14 @@ test.describe('cuenta C: salir, atrás y cerrar no pierden nada', () => {
       const otra = await context.newPage()
       await entrarComo(otra, CUENTA_C.email)
       await otra.goto('/conta/alta')
-      await expect(log(otra).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
+      // C06, respuesta 4: el plan y «¿De qué programa vienes?» van en el mismo
+      // paso; al volver, el plan ya elegido no se repregunta: sigue en la de programa.
+      await expect(log(otra).getByText('¿De qué programa vienes?').last()).toBeVisible()
+      await expect(log(otra).getByText(PREGUNTA_CUENTAS)).toHaveCount(0)
       await expect(otra.getByRole('complementary', { name: 'Lo que llevamos' }).getByText(/^Plan general · 8 dígitos/)).toBeVisible()
+      await otra.getByRole('button', { name: 'Holded', exact: true }).click()
+      await expect(log(otra).getByText('De momento no traigo solo los datos de Holded; empezamos con el plan general contable y te ayudamos a pasar los saldos.')).toBeVisible()
+      await expect(log(otra).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
     } finally {
       await borrarEmpresas(s, CUENTA_C.id, true)
     }

@@ -147,9 +147,16 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const paso: PasoAlta = !companyId ? 'nif'
     : pasoLocal ?? (d && PASOS.includes(d.empresa.setupStep as PasoAlta) ? d.empresa.setupStep as PasoAlta : 'nombre')
 
+  // C06, respuesta 4: el plan y «¿De qué programa vienes?» comparten paso. Si
+  // se cierra entre las dos, al volver a entrar el plan no se repregunta: el
+  // ejercicio abierto lo dice (solo lo abre esa respuesta) y se toma el plan
+  // que quedó guardado.
+  const planYaElegido = paso === 'cuentas' && respuestas.cuentas === undefined && !vuelta && (d?.ejercicios.length ?? 0) > 0
+  const vistas: Partial<Record<ClavePregunta, string>> = planYaElegido ? { ...respuestas, cuentas: d?.perfil?.chartKind ?? 'pymes' } : respuestas
+
   const ctx: ContextoAlta | null = cuenta ? {
     cuenta, tipo: d?.empresa.entityKind ?? null, cp: d?.empresa.fiscalPostalCode ?? null,
-    clases: (d?.actividades ?? []).filter((a) => a.endedOn === null).map((a) => a.kind), respuestas, hoy,
+    clases: (d?.actividades ?? []).filter((a) => a.endedOn === null).map((a) => a.kind), respuestas: vistas, hoy,
   } : null
   const pregunta = ctx && !propuestas && !aMano ? preguntaActual(paso, ctx) : null
 
@@ -221,7 +228,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   /** Quedan preguntas en este paso después de contestar esta. */
   const quedan = (clave: ClavePregunta) => {
     if (!ctx) return false
-    return preguntaActual(paso, { ...ctx, respuestas: { ...respuestas, [clave]: 'x' } }) !== null
+    return preguntaActual(paso, { ...ctx, respuestas: { ...vistas, [clave]: 'x' } }) !== null
   }
 
   /** El IVA de las ventas que sale de las actividades, puesto por la IA con su porqué. */
@@ -317,7 +324,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           if (!r) { decir('folvy', 'Dime cuál: escribe su nombre abajo.'); return }
           await ponerProgramaAnterior(id!, r)
           if (noLoSe) await apuntarDuda(accountId, id!, userId, 'programa', p.texto, 'Empiezo de cero')
-          apuntado([{ t: fraseDePrograma(r, respuestas.cuentas === 'normal' ? 'normal' : 'pymes') }])
+          apuntado([{ t: fraseDePrograma(r, vistas.cuentas === 'normal' ? 'normal' : 'pymes') }])
           break
         }
         case 'banco': {
@@ -349,7 +356,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           break
         }
       }
-      const r = { ...respuestas, [p.clave]: noLoSe ? '__nolose' : valor }
+      const r = { ...vistas, [p.clave]: noLoSe ? '__nolose' : valor }
       setRespuestas(r)
       if (!quedan(p.clave)) await terminarPaso(r, id!)
     })
@@ -480,7 +487,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
 
   // ── Lo que llevamos ───────────────────────────────────────────────────
   const actual: ClavePregunta | null = pregunta?.clave ?? (propuestas || aMano ? 'actividad' : null)
-  const puntos = loQueLlevamos({ paso, actual, valores: valoresDe(d, hoy), contestadas: Object.keys(respuestas) as ClavePregunta[] })
+  const puntos = loQueLlevamos({ paso, actual, valores: valoresDe(d, hoy), contestadas: Object.keys(vistas) as ClavePregunta[] })
   const hechos = cuantosHechos(puntos)
 
   // ── Intro envía (respuesta 4) ─────────────────────────────────────────
