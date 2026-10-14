@@ -88,6 +88,20 @@ const c = new ClienteDiez({
   almacen, pausaMs: 120,
 })
 
+// Diez a veces contesta 400 «OutOfMemoryException» a un mes (14/10, run
+// 38533537089): es suyo y pasajero. Se reintenta ese mes, con pausa, y se dice.
+const reintentos: Record<string, number> = {}
+const leerMes = async (mes: string): Promise<Apunte[]> => {
+  for (let i = 0; ; i++) {
+    try { return await c.apuntesDelMes(mes) } catch (e) {
+      const sinMemoria = JSON.stringify((e as { cuerpo?: unknown }).cuerpo ?? '').includes('OutOfMemory')
+      if (!sinMemoria || i >= 4) throw e
+      reintentos[mes] = i + 1
+      await new Promise((r) => setTimeout(r, 30_000 * (i + 1)))
+    }
+  }
+}
+
 // Diez, por subcuenta: a la fecha de corte y con todo lo que hay.
 const alCorte = new Map<string, number>(), todo = new Map<string, number>(), despues = new Map<string, number>()
 const sumar = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v)
@@ -97,8 +111,9 @@ const vistos = new Set<string>()
 let repetidos = 0
 for (let m = 1; Number(`${EJERCICIO}${String(m).padStart(2, '0')}`) <= Number(HASTA_MES); m++) {
   const mes = `${EJERCICIO}${String(m).padStart(2, '0')}`
-  const apuntes: Apunte[] = await c.apuntesDelMes(mes)
+  const apuntes: Apunte[] = await leerMes(mes)
   asientosMes[mes] = apuntes.length
+  process.stderr.write(`${mes}: ${apuntes.length} asientos\n`)
   for (const a of apuntes) {
     const k = `${a.Ejercicio}|${a.Serie}|${a.Documento}`
     if (vistos.has(k)) { repetidos++; continue }
@@ -130,6 +145,7 @@ const lDiezCorte = porLinea(alCorte), lDiezTodo = porLinea(todo), lFolvy = porLi
 
 md(`## Diez · balance abreviado contra Folvy, línea a línea (C0008, ejercicio ${EJERCICIO}, corte ${CORTE.slice(0, 4)}-${CORTE.slice(4, 6)}-${CORTE.slice(6)})`, '', 'Solo GET en Diez; Folvy con conta_lectura. En claro, solo recuentos y sí/no.', '')
 md('### Asientos leídos por mes', '', ...Object.entries(asientosMes).map(([m, k]) => `- ${m}: ${k}`), '')
+md(`Meses reintentados por «OutOfMemoryException» de Diez: ${Object.keys(reintentos).length ? Object.entries(reintentos).map(([m, k]) => `${m} (${k})`).join(', ') : 'ninguno'}`, '')
 md(`Asientos repetidos en el listado: ${repetidos} · de otro ejercicio: ${otroEjercicio} · con fecha posterior al corte: ${tras}`, '')
 md('### Por subcuenta, a la fecha de corte', '', `- subcuentas con saldo en algún lado: ${codigos.size}`, `- que NO coinciden al céntimo: ${distintas.length}`,
   ...Object.entries(distintasPorGrupo).sort().map(([g, k]) => `  - grupo ${g}: ${k}`), '')
