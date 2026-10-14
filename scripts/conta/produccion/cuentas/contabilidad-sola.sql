@@ -1,7 +1,7 @@
 -- scripts/conta/produccion/cuentas/contabilidad-sola.sql
 --
--- C06 · LO QUE CUENTA LA TANDA DE «CONTABILIDAD SOLA» (20261111T0100, 0200 y
--- 0300), antes y después. Lo declara el manifiesto («cuenta: <este fichero>»)
+-- C06 · LO QUE CUENTA LA TANDA DE «CONTABILIDAD SOLA» (20261111T0100, 0200,
+-- 0300 y 0400), antes y después. Lo declara el manifiesto («cuenta: <este fichero>»)
 -- y lo comparan deshacer.sh y el ensayo de la vuelta atrás. SOLO LEE.
 --
 -- Se puede tomar ANTES de la tanda (conta_diez_base y las columnas
@@ -28,5 +28,8 @@ select clave, valor from (
   select 11, 'bases de Diez registradas', case when to_regclass('public.conta_diez_base') is null then 'sin tabla'
        else (xpath('/row/c/text()', query_to_xml('select count(*) as c from public.conta_diez_base', false, true, '')))[1]::text end union all
   select 12, 'md5 de conta_diez_subcuentas', md5(pg_get_functiondef('public.conta_diez_subcuentas(uuid,uuid,jsonb)'::regprocedure)) union all
-  select 13, 'lecturas de Diez (import_run, program diez)', (select count(*) from public.import_run where program = 'diez')::text
+  select 13, 'lecturas de Diez (import_run, program diez)', (select count(*) from public.import_run where program = 'diez')::text union all
+  select 14, 'tabla conta_programa_anterior', (to_regclass('public.conta_programa_anterior') is not null)::text union all
+  select 15, 'respuestas «¿De qué programa vienes?»', case when to_regclass('public.conta_programa_anterior') is null then 'sin tabla'
+       else (xpath('/row/c/text()', query_to_xml('select count(*) as c from public.conta_programa_anterior', false, true, '')))[1]::text end
 ) t order by o;

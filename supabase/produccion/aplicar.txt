@@ -22,10 +22,13 @@
 #      y su disparador, conta_diez_subcuentas (misma firma, el cuerpo de
 #      producción con un cambio: la subcuenta sin nombre entra marcada) y
 #      conta_diez_listo.
+#   4. 20261111T0400 — (respuesta 4) conta_programa_anterior, su registro y
+#      conta_programa_anterior_poner: de qué programa viene cada empresa, la
+#      pregunta del alta. Todo NUEVO; ningún dato cambia.
 #
-# Análisis contra producción, medido el 13/10 a las 22:44 UTC con la consulta
-# de solo lectura del workflow: los TRES «sigue». Sin «autorizo». Nada en el
-# camino del pedido. Ver docs/conta/C06_informe_final.md, «La tanda».
+# Análisis contra producción, medido el 14/10 a las 06:17 UTC con la consulta
+# de solo lectura del workflow: los CUATRO «sigue». Sin «autorizo». Nada en el
+# camino del pedido. Ninguno en el historial. Ver docs/conta/c06/tanda-analisis-20261014.md.
 #
 # ORDEN con el front: esta tanda ANTES de fusionar el front del C06 (lee
 # name_pending y conta_diez_listo).
@@ -40,3 +43,4 @@ cuenta: scripts/conta/produccion/cuentas/contabilidad-sola.sql
 supabase/migrations/20261111T0100_c06_cuenta_sola.sql
 supabase/migrations/20261111T0200_c06_diez_base.sql
 supabase/migrations/20261111T0300_c06_traer_listo.sql
+supabase/migrations/20261111T0400_c06_programa_anterior.sql
