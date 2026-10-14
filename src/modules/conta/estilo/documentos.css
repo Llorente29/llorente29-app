@@ -1,0 +1,143 @@
+/* src/modules/conta/estilo/documentos.css
+ *
+ * D01 · Documentos › Facturas recibidas (N22) y Revisar factura (N23). Los tres
+ * niveles son los de Libros (libros.css: .cxl-*); aquí solo lo propio. Solo
+ * tokens de tokens.css: ningún color escrito aquí. En el móvil, «Para mirar»
+ * en tarjetas y «Está bien · apuntar» abajo, al alcance del pulgar.
+ */
+
+/* N22 · cabecera de la lista */
+.cxr-seccion { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.cxr-seccion h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.6px; margin: 2px 0 0; }
+.cxr-herramientas { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* Las cinco cifras */
+.cxr-cifras { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.cxr-cifra {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; font: inherit; color: var(--cx-texto); cursor: pointer;
+  background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque); padding: 14px 16px; min-width: 0;
+}
+.cxr-cifra:hover { border-color: var(--cx-azul-borde); }
+.cxr-cifra[aria-pressed='true'] { border-color: var(--cx-azul); }
+.cxr-cifra-etiqueta { font-size: 14px; color: var(--cx-apoyo); }
+.cxr-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 24px; font-weight: 600; letter-spacing: -0.5px; }
+.cxr-cifra-apoyo { font-size: 14px; color: var(--cx-apoyo); overflow-wrap: anywhere; }
+.cxr-cifra-ia .cxr-cifra-apoyo { color: var(--cx-verde-oscuro); }
+
+/* La tabla de facturas */
+.cxr-tabla { width: 100%; border-collapse: collapse; font-size: 15px; }
+.cxr-tabla th { text-align: left; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; padding: 8px; }
+.cxr-tabla td { padding: 12px 8px; border-top: 1px solid var(--cx-linea); vertical-align: middle; }
+.cxr-tabla .cxr-der { text-align: right; white-space: nowrap; }
+.cxr-tabla .cxr-mono { white-space: nowrap; color: var(--cx-apoyo); }
+/* R5b (Julio, capturas de la e2e 250): fechas e importes de la lista y de «Cómo
+   se apunta» en la letra de la app con cifras tabulares, no en monoespaciada. */
+.cxr-tabla .cxr-der, .cxr-tabla .cxr-mono, .cxr-tarjeta .cx-cifra, .cxr-apunte .cxr-der, .cxr-apunte-linea .cxr-der {
+  font-family: inherit; font-variant-numeric: tabular-nums;
+}
+.cxr-fila-mirar td { background: var(--cx-ambar-suave); }
+.cxr-fila-mirar td:first-child { border-radius: var(--cx-radio-caja) 0 0 var(--cx-radio-caja); }
+.cxr-fila-mirar td:last-child { border-radius: 0 var(--cx-radio-caja) var(--cx-radio-caja) 0; }
+.cxr-quien { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.cxr-quien-texto { display: flex; flex-direction: column; min-width: 0; }
+.cxr-nombre { font-weight: 600; }
+.cxr-apoyo { font-size: 13px; color: var(--cx-apoyo); }
+.cxr-entendido { display: flex; flex-direction: column; gap: 2px; max-width: 360px; }
+.cxr-entendido-titulo { font-weight: 600; }
+.cxr-sin { background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+.cxr-pie { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--cx-apoyo); padding-top: 12px; }
+.cxr-vacio { padding: 24px 8px; color: var(--cx-apoyo); }
+
+/* Lo que ha pasado al subir o al apuntar (regla 8) */
+.cxr-hecho { display: flex; flex-direction: column; gap: 4px; }
+.cxr-hecho li { list-style: none; }
+.cxr-hecho ul { margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cxr-mal { color: var(--cx-rojo); }
+
+/* N23 · dos columnas: el papel a la izquierda, lo leído a la derecha */
+.cxr-revisar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.cxr-papel { display: flex; flex-direction: column; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); overflow: hidden; }
+.cxr-papel-cabeza { display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px; font-size: 13px; color: var(--cx-apoyo); border-bottom: 1px solid var(--cx-linea); }
+.cxr-papel-hoja { background: var(--cx-fondo); padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 640px; }
+.cxr-papel-lienzo { max-width: 100%; height: auto; background: var(--cx-blanco); box-shadow: var(--cx-sombra-menu); }
+.cxr-papel-hoja img { max-width: 100%; height: auto; box-shadow: var(--cx-sombra-menu); }
+.cxr-lado { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxr-bloque { background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); padding: 16px 18px; }
+.cxr-bloque h2 { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--cx-apoyo); margin: 0 0 6px; }
+.cxr-leido { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; }
+.cxr-leido > div { padding: 9px 0; border-top: 1px solid var(--cx-linea); }
+.cxr-leido > div:nth-child(-n+2) { border-top: none; }
+.cxr-leido-valor { text-align: right; font-weight: 600; }
+/* «De Cocina» es un enlace: con el color de las otras entradas de la barra. */
+.cx .cxr-barra a.cxl-accion { color: var(--cx-texto); }
+.cxr-leido-valor .cxr-apoyo { display: block; font-weight: 400; }
+.cxr-aviso { color: var(--cx-ambar); }
+.cxr-apunte { display: grid; grid-template-columns: minmax(0, 1fr) 120px 120px; gap: 4px 10px; font-size: 15px; }
+.cxr-apunte .cxr-der { text-align: right; white-space: nowrap; }
+/* R5 · 3: el título pequeño de cada columna («Gasto e IVA», «A pagar»). */
+.cxr-apunte-titulo { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; }
+.cxr-apunte .cxr-apunte-titulo.cxr-der { font-family: inherit; }
+/* R5 · 3 (móvil): cada cuenta en una línea y su cifra a la derecha, por grupos. */
+.cxr-apunte-movil { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.cxr-apunte-grupo { display: flex; flex-direction: column; gap: 4px; }
+.cxr-apunte-linea { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+/* R5b: el nombre de la cuenta no se corta: pasa a dos líneas. «· código» va
+   siempre entero, pegado al nombre. */
+.cxr-apunte-cuenta { min-width: 0; overflow-wrap: anywhere; }
+.cxr-apunte-codigo { white-space: nowrap; }
+.cxr-apunte-celda { min-width: 0; }
+.cxr-apunte-linea .cxr-der { white-space: nowrap; flex: none; }
+/* R5 · 5: la banda en ámbar mientras haya algo por mirar; el verde, para lo apuntado. */
+.cx-ia-bloque.cxr-ia-ambar { background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
+.cx-ia-bloque.cxr-ia-ambar .cx-ia-punto { background: var(--cx-ambar); }
+.cx-ia-bloque.cxr-ia-ambar .cx-ia-porque { color: var(--cx-texto); }
+/* R5 · 4: el papel, recortado en el móvil hasta que se toca. */
+.cxr-papel-recorte { width: 100%; display: flex; flex-direction: column; align-items: center; }
+.cxr-papel-recortado { overflow: hidden; justify-content: flex-start; cursor: zoom-in; }
+.cxr-papel-entero { align-self: center; }
+.cxr-acciones { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.cxr-navegar { display: flex; gap: 10px; }
+
+@media (max-width: 1100px) {
+  .cxr-cifras { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Móvil: tarjetas, cifras de dos en dos, y lo que se pulsa abajo */
+@media (max-width: 767px) {
+  .cxr-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cxr-seccion h2 { font-size: 24px; }
+  .cxr-tarjetas { display: flex; flex-direction: column; gap: 10px; }
+  .cxr-tarjeta {
+    display: flex; flex-direction: column; gap: 8px; background: var(--cx-blanco); border: 1px solid var(--cx-linea);
+    border-radius: var(--cx-radio-bloque); padding: 14px 16px;
+  }
+  .cxr-tarjeta.cxr-fila-mirar { background: var(--cx-ambar-suave); }
+  .cxr-tarjeta-cabeza { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+  .cxr-tarjeta-cabeza .cx-cifra { white-space: nowrap; flex: none; }
+  /* Los cuatro filtros en una línea: se desliza de lado antes que partir «Para mirar». */
+  .cxr-herramientas { width: 100%; }
+  .cxr-herramientas .cxl-segmento { display: flex; overflow-x: auto; max-width: 100%; }
+  .cxr-herramientas .cxl-segmento button { white-space: nowrap; flex: none; }
+  .cxr-tarjeta .cx-boton, .cxr-tarjeta .cx-boton-sec { width: 100%; height: 46px; font-size: 15px; }
+  .cxr-revisar { grid-template-columns: minmax(0, 1fr); }
+  .cxr-papel-hoja { min-height: 0; padding: 10px; }
+  /* R5 · 9: las cuatro pestañas caben sin cortarse (en un teléfono de 390 px
+     sobra sitio; en uno más estrecho, más juntas, y si aun así no caben, se
+     deslizan: nunca se corta una a medias sin que se vea). */
+  .cxr-herramientas .cxl-segmento { width: 100%; }
+  .cxr-herramientas .cxl-segmento button { flex: 1 0 auto; padding-left: 8px; padding-right: 8px; font-size: 14px; }
+  /* La etiqueta con su sitio: «Base al 10 %» no se parte en tres líneas. */
+  .cxr-leido { grid-template-columns: minmax(0, 44%) minmax(0, 1fr); }
+  /* Bajo el pulgar: la barra de abajo, fija, con el botón grande. */
+  .cxr-pulgar {
+    position: sticky; bottom: 0; z-index: 2; display: flex; gap: 10px; padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--cx-fondo);
+  }
+  .cxr-pulgar > * { flex: 1; height: 52px; font-size: 16px; }
+  .cxr-subir-movil { display: flex; gap: 10px; }
+  .cxr-subir-movil > * { flex: 1; height: 52px; font-size: 16px; }
+}
+
+@media (max-width: 370px) {
+  .cxr-herramientas .cxl-segmento button { padding-left: 5px; padding-right: 5px; font-size: 13px; }
+}

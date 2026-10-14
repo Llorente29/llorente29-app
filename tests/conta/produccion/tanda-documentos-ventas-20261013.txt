@@ -1,0 +1,29 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C04b · Respuesta 15 — el documento de cada asiento de ventas, en Folvy.
+# La tanda anterior (la regla de ventas por plataforma, 0100–0140) ya está en
+# el historial de producción con su huella (real 38380236640, 13/10); su copia
+# queda en tests/conta/produccion/tanda-ventas-plataforma-20261013.txt.
+#
+#   1. 20261021T0100 — todo NUEVO: el bucket privado conta-documentos (solo
+#      PDF), journal_entry_document (el PDF de un asiento validado, uno por
+#      asiento, no se cambia), conta_resumen_ventas, conta_documento_guardar
+#      y cuatro columnas que admiten nulos en external_send (document_*).
+#      Ningún dato cambia; nada del camino del pedido.
+#
+# Análisis contra producción, medido el 13/10 con la consulta de solo lectura
+# del workflow: «sigue». Sin «autorizo».
+#
+# Lo que cuenta antes y después (R9): el bucket, sus ficheros y políticas, la
+# tabla y sus filas, las funciones, las columnas, los envíos y los asientos de
+# ventas por estado. Si el real se deshace solo, tiene que volver a lo de antes.
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt. PARA si ya hay algún
+# documento guardado o algún fichero en el bucket.
+cuenta: scripts/conta/produccion/cuentas/documentos.sql
+supabase/migrations/20261021T0100_conta_documentos.sql

@@ -24,6 +24,8 @@ import AltaPage from '@/modules/conta/pages/AltaPage'
 import TercerosPage from '@/modules/conta/terceros/TercerosPage'
 import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 import LibrosPage from '@/modules/conta/libros/LibrosPage'
+import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
+import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
 import ComprasPage from '@/modules/conta/compras/ComprasPage'
@@ -94,6 +96,9 @@ export const contaModule: ModuleDefinition = {
     // Compras (encargo de compras, N18 y N19).
     { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },
+    // D01 R5 · 10: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto» (como Bancos).
+    { path: CONTA.rutas.documentos, element: enMarco(<DocumentosPage />, '¿Qué facturas me faltan este mes?', true) },
+    { path: CONTA.rutas.revisarFactura, element: enMarco(<RevisarFacturaPage />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },

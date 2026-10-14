@@ -67,6 +67,12 @@ export interface EntradaCuentas {
   regimenes: readonly FilaConNorma[]
   /** tax_form del C00: se usan 303 y 349. */
   modelos: readonly FilaConNorma[]
+  /**
+   * D01 · Lo aprendido de sus facturas anteriores (conta_gasto_aprendido, 0250):
+   * la cuenta y de dónde sale de verdad («aprendido de Diez» o «aprendido de
+   * tus facturas», la más reciente). Sin ello, la línea es la de siempre.
+   */
+  aprendido?: { cuenta: string; origen: string } | null
 }
 
 export interface CuentaVista { id: string; code: string; titulo: string }
@@ -159,11 +165,17 @@ export function cuentasDelProveedor(e: EntradaCuentas): { lineas: LineaCuenta[];
   const gastoPropio = enlace('supplier', p.id, 'gasto')
   const gastoTipo = enlace('expense_category', p.expenseCategoryId, 'principal')
   const cGasto = cuentaDe(gastoPropio) ?? cuentaDe(gastoTipo)
+  // D01: de dónde sale. Puesta aceptando lo aprendido y que sigue siéndolo: el
+  // origen de la historia. Sin nada puesto: lo aprendido, como propuesta (es lo
+  // que usará la propuesta del asiento) hasta que se confirme.
+  const cAprendida = e.aprendido ? e.cuentas.find((c) => c.code === e.aprendido!.cuenta && activa(c)) ?? null : null
+  const deLoAprendido = !cGasto && cAprendida ? cAprendida : null
   lineas.push({
-    clave: 'facturas', etiqueta: 'Sus facturas se apuntan en', cuentas: cGasto ? [vista(cGasto)] : [],
-    texto: cGasto ? null : p.expenseCategoryId ? 'Su tipo de gasto aún no tiene cuenta' : 'Sin tipo de gasto: elige su cuenta',
-    nota: gastoPropio ? null : gastoTipo ? 'por su tipo de gasto' : null,
-    ia: (gastoPropio ?? gastoTipo)?.source === 'ai_accepted', papel: 'gasto', propia: gastoPropio ? gastoPropio.companyAccountId : null, opciones: grupo6,
+    clave: 'facturas', etiqueta: 'Sus facturas se apuntan en', cuentas: cGasto ? [vista(cGasto)] : deLoAprendido ? [vista(deLoAprendido)] : [],
+    texto: cGasto || deLoAprendido ? null : p.expenseCategoryId ? 'Su tipo de gasto aún no tiene cuenta' : 'Sin tipo de gasto: elige su cuenta',
+    nota: gastoPropio ? (gastoPropio.source === 'ai_accepted' && cAprendida?.id === cGasto?.id ? e.aprendido!.origen : null)
+      : gastoTipo ? 'por su tipo de gasto' : deLoAprendido ? `${e.aprendido!.origen} · sin confirmar` : null,
+    ia: (gastoPropio ?? gastoTipo)?.source === 'ai_accepted' || !!deLoAprendido, papel: 'gasto', propia: gastoPropio ? gastoPropio.companyAccountId : null, opciones: grupo6,
   })
 
   // El IVA: la cuenta de cada tipo es de la EMPRESA (se cambia en el plan), no del proveedor.

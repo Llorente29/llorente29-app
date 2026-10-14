@@ -161,6 +161,7 @@ export default function SupplierInvoicesPage() {
     setOcrRawUrl(ocr.rawDocumentUrl)
     setOcrSource('ocr')
     setView('list')
+    setError(null)
     setFormOpen(true)
   }
 
@@ -362,7 +363,7 @@ export default function SupplierInvoicesPage() {
           </button>
           <button
             type="button"
-            onClick={() => { resetForm(); setFormOpen(true) }}
+            onClick={() => { resetForm(); setError(null); setFormOpen(true) }}
             disabled={!activeAccountId}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-accent text-text-on-accent hover:opacity-90 disabled:opacity-50 transition-base"
           >
@@ -373,7 +374,8 @@ export default function SupplierInvoicesPage() {
       </div>
 
       {flash && <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm">{flash}</div>}
-      {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
+      {/* Con el alta abierta, el error va dentro de ella: aquí quedaría detrás del velo. */}
+      {error && !formOpen && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
 
       {loading ? (
         <div className="flex items-center gap-2 text-text-secondary text-sm"><Loader2 size={16} className="animate-spin" /> Cargando…</div>
@@ -538,6 +540,7 @@ export default function SupplierInvoicesPage() {
                   className="mt-0.5 w-full px-3 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary" />
               </label>
             </div>
+            {error && <div role="alert" className="mx-5 mb-3 p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
             <div className="px-5 py-3 border-t border-border-default flex items-center justify-end gap-2">
               <button type="button" onClick={() => setFormOpen(false)} disabled={saving}
                 className="px-3 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">Cancelar</button>

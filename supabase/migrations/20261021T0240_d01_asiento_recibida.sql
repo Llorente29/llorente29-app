@@ -1,0 +1,143 @@
+-- ============================================================================
+-- D01 · Tarea 5 · El asiento de la factura recibida: lo aprendido de Diez y el
+-- documento. Todo AÑADE (funciones nuevas). Va detrás de la 0230.
+--
+--   1. conta_gasto_aprendido(empresa, proveedor): la cuenta de gasto a la que
+--      fueron las facturas ANTERIORES de ese proveedor en la serie 2 (lo traído
+--      de Diez y lo validado en Folvy), con su porqué (Julio, R1 punto 2):
+--        · «Las 47 facturas anteriores de este proveedor fueron a Comida y
+--          bebida · 60000000» — seguro si fueron todas a la misma;
+--        · si fueron a dos o más, la de la MÁS RECIENTE, como probable, nunca
+--          segura, y se dice a cuántas fue cada una.
+--      Al confirmarlo, la pantalla rellena «Sus facturas se apuntan en» con
+--      company_account_link_set(…, 'gasto', …, 'aprendido_diez') (0210).
+--   2. conta_documento_factura_guardar: enlaza al asiento VALIDADO de una
+--      factura recibida su PDF (kind 'factura_recibida') ya copiado a
+--      conta-documentos. El original se queda en receipt-uploads; una foto se
+--      convierte a PDF antes de subirla. Las mismas comprobaciones que el
+--      resumen de ventas (R15): su cuenta, su ruta, el fichero subido, su
+--      tamaño y que sea PDF; uno por asiento y no se cambia.
+-- Vuelta atrás: supabase/vuelta-atras/20261021T0240_d01_asiento_recibida.down.sql
+-- ============================================================================
+
+create or replace function public.conta_gasto_aprendido(p_company uuid, p_supplier uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_acc uuid;
+  v_prov uuid;
+  v_total int;
+  v_top record;
+  v_n_cuentas int;
+  v_reparto jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (public.belongs_to_account(v_acc) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Esa empresa no es tuya.' using errcode = '42501';
+  end if;
+  -- La subcuenta del proveedor (400/410), la de su ficha.
+  select k.company_account_id into v_prov from public.company_account_link k
+   where k.company_id = p_company and k.account_id = v_acc and k.entity = 'supplier' and k.entity_id = p_supplier::text and k.role = 'principal';
+  if v_prov is null then
+    return jsonb_build_object('cuenta', null, 'porque', 'El proveedor no tiene su subcuenta en el plan: no hay historia que mirar.');
+  end if;
+
+  with facturas as (
+    select e.id, e.entry_date from public.journal_entry e
+     where e.account_id = v_acc and e.company_id = p_company and e.series = 2 and e.status = 'validado'
+       and exists (select 1 from public.journal_line l where l.entry_id = e.id and l.company_account_id = v_prov and l.credit > 0)
+  ), gasto as (
+    select f.id, f.entry_date, a.id as cuenta_id, a.code, a.name
+      from facturas f join public.journal_line l on l.entry_id = f.id and l.debit > 0
+      join public.company_account a on a.id = l.company_account_id and a.company_id = p_company and a.code like '6%'
+     group by f.id, f.entry_date, a.id, a.code, a.name
+  ), por_cuenta as (
+    select cuenta_id, code, name, count(distinct id) as n, max(entry_date) as ultima from gasto group by 1, 2, 3
+  )
+  select (select count(distinct id) from gasto),
+         (select count(*) from por_cuenta),
+         (select jsonb_agg(jsonb_build_object('cuenta', code, 'nombre', name, 'facturas', n, 'ultima', ultima) order by ultima desc, n desc) from por_cuenta)
+    into v_total, v_n_cuentas, v_reparto;
+
+  if coalesce(v_total, 0) = 0 then
+    return jsonb_build_object('cuenta', null, 'facturas', 0, 'porque', 'No hay facturas anteriores de este proveedor en el libro: no hay nada que aprender.');
+  end if;
+  -- La más reciente manda (si fueron a varias, es la que vale hoy).
+  select x->>'cuenta' as code, x->>'nombre' as name, (x->>'facturas')::int as n into v_top from jsonb_array_elements(v_reparto) x limit 1;
+  return jsonb_build_object(
+    'cuenta', v_top.code,
+    'cuenta_id', (select id from public.company_account where company_id = p_company and code = v_top.code),
+    'nombre', v_top.name,
+    'facturas', v_total,
+    'confianza', case when v_n_cuentas = 1 then 'seguro' else 'probable' end,
+    'origen', 'aprendido de Diez',
+    'reparto', v_reparto,
+    'porque', case
+      when v_n_cuentas = 1 and v_total = 1 then format('La factura anterior de este proveedor fue a %s · %s.', v_top.name, v_top.code)
+      when v_n_cuentas = 1 then format('Las %s facturas anteriores de este proveedor fueron a %s · %s.', v_total, v_top.name, v_top.code)
+      else format('Las %s facturas anteriores de este proveedor fueron a %s cuentas; la más reciente, a %s · %s (%s de %s). Probable, no segura: confírmalo.',
+                  v_total, v_n_cuentas, v_top.name, v_top.code, v_top.n, v_total) end);
+end $$;
+comment on function public.conta_gasto_aprendido(uuid, uuid) is
+  'D01 · La cuenta de gasto aprendida de las facturas anteriores del proveedor (serie 2, validadas: lo traído de Diez y lo de Folvy), con su porqué. Seguro si fueron todas a una; si a varias, la más reciente y probable.';
+revoke all on function public.conta_gasto_aprendido(uuid, uuid) from public, anon;
+grant execute on function public.conta_gasto_aprendido(uuid, uuid) to authenticated, service_role;
+
+create or replace function public.conta_documento_factura_guardar(p_entry uuid, p_ruta text, p_nombre text, p_sha256 text, p_bytes integer, p_quien_nombre text default null)
+returns jsonb language plpgsql security definer set search_path = public, storage as $$
+declare
+  v_e public.journal_entry;
+  v_x public.journal_entry_document;
+  v_obj record;
+  v_prefijo text;
+begin
+  select * into v_e from public.journal_entry where id = p_entry for update;
+  if v_e.id is null or not public.belongs_to_account(v_e.account_id) then
+    raise exception 'Ese asiento no está.' using errcode = 'P0002';
+  end if;
+  if not public.current_user_is_admin_or_manager_of(v_e.account_id) then
+    raise exception 'Solo un administrador o un encargado de la cuenta guarda el documento de un asiento.' using errcode = '42501';
+  end if;
+  if v_e.status <> 'validado' then
+    raise exception 'El documento se guarda con el asiento validado; este está %.', v_e.status using errcode = '23514';
+  end if;
+  if v_e.source_type <> 'supplier_invoice' or not exists (select 1 from public.supplier_invoice i where i.id = v_e.source_id and i.account_id = v_e.account_id) then
+    raise exception 'Ese asiento no es de una factura recibida.' using errcode = '22023';
+  end if;
+  if p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$' then
+    raise exception 'La huella del documento no es un sha256.' using errcode = '22023';
+  end if;
+
+  select * into v_x from public.journal_entry_document where entry_id = v_e.id and kind = 'factura_recibida';
+  if v_x.id is not null then
+    if v_x.sha256 = p_sha256 and v_x.storage_path = p_ruta then
+      return jsonb_build_object('id', v_x.id, 'ruta', v_x.storage_path, 'nombre', v_x.file_name, 'ya_estaba', true);
+    end if;
+    raise exception 'Ese asiento ya tiene su factura (guardada el % por %): no se cambia.',
+      to_char(v_x.created_at at time zone 'Europe/Madrid', 'DD/MM/YYYY HH24:MI'), coalesce(v_x.created_by_name, 'alguien') using errcode = '23505';
+  end if;
+
+  v_prefijo := v_e.account_id::text || '/' || v_e.id::text || '/';
+  if p_ruta is null or left(p_ruta, length(v_prefijo)) <> v_prefijo or substr(p_ruta, length(v_prefijo) + 1) !~ '^[0-9a-f]{16,64}\.pdf$' then
+    raise exception 'La ruta del documento no es la de este asiento (%<huella>.pdf).', v_prefijo using errcode = '22023';
+  end if;
+  select o.name, (o.metadata->>'size')::bigint as bytes, o.metadata->>'mimetype' as tipo into v_obj
+    from storage.objects o where o.bucket_id = 'conta-documentos' and o.name = p_ruta;
+  if v_obj.name is null then
+    raise exception 'La factura no está subida (%): no se enlaza nada.', p_ruta using errcode = 'P0002';
+  end if;
+  if v_obj.bytes is not null and v_obj.bytes <> p_bytes then
+    raise exception 'La factura subida tiene % bytes y se dijeron %: no se enlaza.', v_obj.bytes, p_bytes using errcode = '22023';
+  end if;
+  if v_obj.tipo is not null and v_obj.tipo <> 'application/pdf' then
+    raise exception 'La factura subida no es un PDF (%): una foto se convierte a PDF antes.', v_obj.tipo using errcode = '22023';
+  end if;
+
+  insert into public.journal_entry_document (account_id, company_id, entry_id, kind, storage_path, file_name, sha256, size_bytes, created_by, created_by_name)
+  values (v_e.account_id, v_e.company_id, v_e.id, 'factura_recibida', p_ruta, p_nombre, p_sha256, p_bytes, auth.uid(), p_quien_nombre)
+  returning * into v_x;
+  return jsonb_build_object('id', v_x.id, 'ruta', v_x.storage_path, 'nombre', v_x.file_name, 'ya_estaba', false);
+end $$;
+comment on function public.conta_documento_factura_guardar(uuid, text, text, text, integer, text) is
+  'D01 · Enlaza al asiento validado de una factura recibida su PDF ya copiado a conta-documentos (kind factura_recibida). Comprueba ruta, fichero, tamaño y tipo; uno por asiento, y no se cambia.';
+revoke all on function public.conta_documento_factura_guardar(uuid, text, text, text, integer, text) from public, anon;
+grant execute on function public.conta_documento_factura_guardar(uuid, text, text, text, integer, text) to authenticated;
