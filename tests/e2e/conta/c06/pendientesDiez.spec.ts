@@ -37,7 +37,8 @@ async function porLaRed(page: Page) {
     document_status: adjuntos.has(a.id) ? 'adjunto' : 'pendiente_diez' }))
   await page.route(/\/rest\/v1\/external_send\?/, async (r) => {
     const pendientes = envios().filter((e, i) => e.document_status === 'pendiente_diez' && ASIENTOS[i].status !== 'anulado').length
-    if (r.request().method() === 'HEAD') return r.fulfill({ status: 200, headers: { 'content-range': `*/${pendientes}` }, body: '' })
+    // Como PostgREST: el recuento va en content-range, y el navegador solo lo deja leer si se expone por CORS.
+    if (r.request().method() === 'HEAD') return r.fulfill({ status: 200, headers: { 'content-range': `*/${pendientes}`, 'access-control-expose-headers': 'content-range', 'access-control-allow-origin': '*' }, body: '' })
     return json(r, r.request().url().includes('ext_year') ? envios() : [])
   })
   await page.route(/\/rest\/v1\/journal_entry\?.*c06b7000/, (r) => json(r, ASIENTOS.map(({ id, concept, entry_date, series, number, status }) => ({ id, concept, entry_date, series, number, status }))))
@@ -57,6 +58,8 @@ test('Pendientes de adjuntar en Diez: cuántos, el más antiguo, la referencia, 
   await page.goto('/conta/libros/diario/pendientes-diez')
   await expect(page.getByRole('heading', { name: 'Pendientes de adjuntar en Diez' })).toBeVisible({ timeout: 20_000 })
 
+  // La acción, en la barra de Libros, cuenta lo pendiente: con filas, nunca «nada pendiente» (regla 7).
+  await expect(page.getByRole('link', { name: /Pendientes de adjuntar en Diez/ })).toContainText('3 sin su PDF')
   // Cuántos y el más antiguo (lo anulado no cuenta aquí: va aparte).
   await expect(page.getByText('3 facturas están en Diez sin su PDF. La más antigua, del 01/10/26.')).toBeVisible()
   const lista = page.getByRole('list', { name: 'Facturas en Diez sin su PDF' })
