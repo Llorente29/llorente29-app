@@ -8,6 +8,13 @@
 // El freno de R15, aquí también: SIN DOCUMENTO ADJUNTO NO ESTÁ EN DIEZ. Una
 // factura que Diez tiene pero sin su PDF dice «No ha llegado a Diez: falta el
 // documento», no «En Diez».
+//
+// C06b · Respuesta 7 (Julio, 14/10): a Diez sin esperar a Cegid. La factura
+// que Diez tiene SIN su PDF porque Diez aún no guarda documentos sí está en
+// Diez, y lo dice: «En Diez · 1/1801 · PDF pendiente en Diez» (azul, no verde:
+// falta algo, pero no es un fallo). Lo que falla al adjuntar sigue siendo
+// «No ha llegado a Diez: falta el documento». Y lo anulado en Folvy que sigue
+// en Diez no se queda en «Anulado» a secas: falta su contraasiento allí.
 
 import { MARCA } from '../cuenta/marca'
 import { cent, deCent } from './libro'
@@ -20,7 +27,7 @@ export interface EnvioDiez {
   factura: string | null
   intentos: number
   error: string | null
-  documento: 'pendiente' | 'adjunto' | 'fallo' | null
+  documento: 'pendiente' | 'adjunto' | 'fallo' | 'pendiente_diez' | null
   errorDocumento: string | null
 }
 /** Lo que se lee de journal_entry_document. */
@@ -49,15 +56,23 @@ export interface EstadoDiez {
 }
 
 export const FALTA_DOCUMENTO = 'falta el documento'
+export const PDF_PENDIENTE_DIEZ = 'PDF pendiente en Diez'
 
 export function estadoDiez(a: { estado: string }, d: ConDiez, o: { enviando?: boolean } = {}): EstadoDiez {
   if (a.estado === 'propuesto' || a.estado === 'borrador') return { texto: 'Propuesto', corto: 'Propuesto', tono: 'ambar', reintentar: false, enDiez: false }
-  if (a.estado === 'anulado') return { texto: 'Anulado', corto: 'Anulado', tono: 'neutro', reintentar: false, enDiez: false }
+  if (a.estado === 'anulado') {
+    const e = d.envio
+    if (e && (e.status === 'enviado' || e.status === 'enlazado')) {
+      return { texto: `Anulado en ${MARCA.nombre} · en Diez sigue ${e.serie}/${e.numero}: falta su contraasiento en Diez`, corto: `Anulado · sigue en Diez ${e.serie}/${e.numero}`, tono: 'ambar', reintentar: false, enDiez: true }
+    }
+    return { texto: 'Anulado', corto: 'Anulado', tono: 'neutro', reintentar: false, enDiez: false }
+  }
   if (o.enviando) return { texto: 'Validado · enviando a Diez', corto: 'Enviando a Diez', tono: 'azul', reintentar: false, enDiez: false }
   const no = (motivo: string, reintentar = true): EstadoDiez => ({ texto: `No ha llegado a Diez: ${motivo}`, corto: 'No ha llegado a Diez', tono: 'ambar', reintentar, enDiez: false })
   const e = d.envio
   if (e && (e.status === 'enviado' || e.status === 'enlazado')) {
     if (e.documento === 'adjunto') return { texto: `En Diez · ${e.serie}/${e.numero}`, corto: `En Diez · ${e.serie}/${e.numero}`, tono: 'verde', reintentar: false, enDiez: true }
+    if (e.documento === 'pendiente_diez') return { texto: `En Diez · ${e.serie}/${e.numero} · ${PDF_PENDIENTE_DIEZ}`, corto: `En Diez · ${e.serie}/${e.numero} · PDF pendiente`, tono: 'azul', reintentar: false, enDiez: true }
     return no(FALTA_DOCUMENTO)
   }
   if (!d.documento) return no(FALTA_DOCUMENTO)
@@ -72,13 +87,14 @@ export function resumenSeleccion(xs: readonly { importe: number }[]): { n: numbe
 }
 
 /** El resultado de «Validar y enviar a Diez», con contenido (regla 8). */
-export interface PasoEnvio { concepto: string; validado: boolean; documento: boolean; enDiez: boolean; texto: string }
+export interface PasoEnvio { concepto: string; validado: boolean; documento: boolean; enDiez: boolean; pdfPendiente?: boolean; texto: string }
 export function textoResultado(pasos: readonly PasoEnvio[]): string {
   const v = pasos.filter((p) => p.validado).length
   const en = pasos.filter((p) => p.enDiez).length
   const no = pasos.length - en
   const partes = [`${v} de ${pasos.length} ${pasos.length === 1 ? 'validado' : 'validados'}`, `${pasos.filter((p) => p.documento).length} con su documento guardado`]
-  partes.push(en ? `${en} en Diez` : 'ninguno en Diez')
+  const pend = pasos.filter((p) => p.enDiez && p.pdfPendiente).length
+  partes.push(en ? `${en} en Diez${pend ? ` (${pend} con el PDF pendiente de adjuntar allí)` : ''}` : 'ninguno en Diez')
   if (no) partes.push(`${no} sin llegar a Diez (debajo, por qué)`)
   return `${partes.join(' · ')}.`
 }

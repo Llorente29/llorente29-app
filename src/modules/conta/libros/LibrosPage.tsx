@@ -33,6 +33,7 @@ import { BienesInversion, Retenciones, Suplidos } from '@/modules/conta/libros/O
 import { Estados } from '@/modules/conta/libros/Estados'
 import { CuentasAnuales, Mapeo, PendienteC05b } from '@/modules/conta/libros/Anuales'
 import { CerrarMes, CierreEjercicio, Ejercicios } from '@/modules/conta/libros/Cierre'
+import { PendientesDiez } from '@/modules/conta/libros/PendientesDiez'
 
 const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
 
@@ -41,6 +42,7 @@ function contenido(accion: string): ReactNode {
   switch (accion) {
     case 'libro-diario': return <LibroDiarioPage />
     case 'diario-resumido': return <DiarioResumido />
+    case 'pendientes-diez': return <PendientesDiez />
     case 'libro-mayor': return <LibroMayor />
     case 'sumas-saldos': return <SumasSaldos />
     case 'acumulados': return <Acumulados />
@@ -74,6 +76,7 @@ function estados(r: ResumenLibros | null, nombreTrimestre: string, ctx: Pick<Con
   const ej = ctx.ejercicio
   e['libro-diario'] = { texto: `ejercicio ${ej.code}`, tono: 'verde' }
   e['diario-resumido'] = { texto: 'por mes y cuenta', tono: 'gris' }
+  e['pendientes-diez'] = r?.pdfPendientesDiez ? { texto: `${r.pdfPendientesDiez} sin su PDF`, tono: 'ambar' } : { texto: 'nada pendiente', tono: 'gris' }
   e['libro-mayor'] = { texto: 'por cuenta', tono: 'gris' }
   e['sumas-saldos'] = { texto: 'niveles y opciones', tono: 'gris' }
   e['acumulados'] = { texto: 'saldo de cada mes', tono: 'gris' }

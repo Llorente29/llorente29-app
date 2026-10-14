@@ -32,6 +32,8 @@ import { resumenDeAsiento, type ResumenBD } from '../../../../supabase/functions
 import { resumenVentasPdf } from '../../../../supabase/functions/_shared/resumenVentasPdf.ts'
 import type { ResultadoEnvio } from '../../../../supabase/functions/_shared/diezEnviar.ts'
 import type { ConDiez, EnvioDiez, PasoEnvio } from '@/modules/conta/lib/conDiez'
+import { nombreEnZip, ordenPendientes, type PendienteDiez } from '@/modules/conta/lib/pendientesDiez'
+import { crearZip, type FicheroZip } from '@/modules/conta/lib/zip'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -143,6 +145,7 @@ export async function validarYEnviar(xs: readonly { id: string; concepto: string
       await guardarDocumento(a.id, quien); p.documento = true
       const r = await enviarADiez(a.id)
       p.enDiez = r.estado === 'en_diez'
+      p.pdfPendiente = r.estado === 'en_diez' && r.pdfPendiente === true
       p.texto = r.texto
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e)
@@ -151,4 +154,72 @@ export async function validarYEnviar(xs: readonly { id: string; concepto: string
     pasos.push(p)
   }
   return pasos
+}
+
+// ── C06b · Respuesta 7: lo que está en Diez sin su PDF ──────────────────────────
+// Nombres dentro de cadenas (regla 40), los de la 20261111T0700 y los de antes
+// (external_send.document_status / ext_year / sent_at, journal_entry.concept /
+// entry_date / series / number / status, journal_entry_document.storage_path /
+// file_name), y la función conta_diez_adjunto_a_mano.
+
+/** Un asiento anulado en Folvy cuya factura sigue en Diez (le falta su contraasiento allí). */
+export interface AnuladoEnDiez { entryId: string; concepto: string; fecha: string; ejercicio: string; serie: string; documento: number; factura: string | null }
+
+/** Las facturas de la empresa que están en Diez sin su PDF, y lo anulado en Folvy que sigue en Diez. */
+export async function leerPendientesDiez(accountId: string, companyId: string): Promise<{ pendientes: PendienteDiez[]; anulados: AnuladoEnDiez[] }> {
+  const { data: envios, error } = await tabla('external_send')
+    .select('entry_id, ext_year, ext_series, ext_number, ext_invoice_number, sent_at, document_status')
+    .eq('account_id', accountId).eq('company_id', companyId).in('status', ['enviado', 'enlazado'])
+  if (error) throw new Error(mensaje('No se han podido leer los envíos a Diez', error))
+  const filas = (envios ?? []) as Fila[]
+  if (!filas.length) return { pendientes: [], anulados: [] }
+  const ids = filas.map((f) => String(f.entry_id))
+  const asientos = new Map<string, Fila>()
+  const docs = new Map<string, Fila>()
+  for (let i = 0; i < ids.length; i += 200) {
+    const t = ids.slice(i, i + 200)
+    const [a, d] = await Promise.all([
+      tabla('journal_entry').select('id, concept, entry_date, series, number, status').eq('account_id', accountId).eq('company_id', companyId).in('id', t),
+      tabla('journal_entry_document').select('entry_id, storage_path, file_name').eq('account_id', accountId).eq('kind', 'resumen_ventas').in('entry_id', t),
+    ])
+    if (a.error) throw new Error(mensaje('No se han podido leer los asientos', a.error))
+    if (d.error) throw new Error(mensaje('No se han podido leer los documentos', d.error))
+    for (const x of (a.data ?? []) as Fila[]) asientos.set(String(x.id), x)
+    for (const x of (d.data ?? []) as Fila[]) docs.set(String(x.entry_id), x)
+  }
+  const pendientes: PendienteDiez[] = []
+  const anulados: AnuladoEnDiez[] = []
+  for (const f of filas) {
+    const id = String(f.entry_id)
+    const a = asientos.get(id)
+    if (!a) continue
+    const base = { entryId: id, concepto: String(a.concept ?? ''), fecha: String(a.entry_date), ejercicio: String(f.ext_year ?? String(a.entry_date).slice(0, 4)), serie: String(f.ext_series), documento: Number(f.ext_number), factura: s(f.ext_invoice_number) }
+    if (a.status === 'anulado') { anulados.push(base); continue }
+    if (f.document_status !== 'pendiente_diez') continue
+    const d = docs.get(id)
+    pendientes.push({ ...base, serieFolvy: Number(a.series), numeroFolvy: a.number == null ? null : Number(a.number), enviadoEn: s(f.sent_at),
+      ruta: String(d?.storage_path ?? ''), nombrePdf: String(d?.file_name ?? '') })
+  }
+  return { pendientes: ordenPendientes(pendientes), anulados: ordenPendientes(anulados) }
+}
+
+/** «Ya está adjunto»: una persona lo ha adjuntado en Diez. Devuelve la frase de la pantalla. */
+export async function marcarAdjuntoEnDiez(entryId: string, quien: string | null): Promise<string> {
+  const r = await rpc<Fila>('conta_diez_adjunto_a_mano', { p_entry: entryId, p_quien_nombre: quien })
+  const ref = `${r.serie}/${r.numero}`
+  return r.ya_estaba === true ? `Ya estaba marcado: el PDF de ${ref} está adjunto en Diez.` : `Hecho: el PDF de ${ref} queda adjunto en Diez${quien ? `, marcado por ${quien}` : ''}.`
+}
+
+/** «Descargar todos»: un zip con cada PDF guardado en Folvy, con el nombre de su referencia en Diez. */
+export async function zipPendientesDiez(xs: readonly PendienteDiez[]): Promise<{ zip: Uint8Array; n: number; sinPdf: string[] }> {
+  hayBase()
+  const ficheros: FicheroZip[] = []
+  const sinPdf: string[] = []
+  for (const x of xs) {
+    if (!x.ruta) { sinPdf.push(x.concepto); continue }
+    const { data, error } = await supabase!.storage.from(BUCKET).download(x.ruta)
+    if (error || !data) { sinPdf.push(x.concepto); continue }
+    ficheros.push({ nombre: nombreEnZip(x), datos: new Uint8Array(await data.arrayBuffer()) })
+  }
+  return { zip: crearZip(ficheros), n: ficheros.length, sinPdf }
 }

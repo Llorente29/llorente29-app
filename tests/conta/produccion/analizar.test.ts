@@ -789,14 +789,14 @@ describe('la tanda del balance según la norma y el tope de la contraseña (C06b
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): facturas recibidas (D01 T7, R5 y R6), preparada y sin lanzar', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda de las facturas recibidas (D01 T7, R5 y R6; ya aplicada, real #74 desde 187335e0), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-d01-20261014.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 14/10 para ESTOS doce ficheros
   // (con sus md5): existen las cinco tablas que amplía; ninguna de sus 22
   // funciones; nada del camino del pedido; nada en el historial.
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-d01-20261014.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -826,9 +826,44 @@ describe('la tanda de AHORA (manifiesto vivo): facturas recibidas (D01 T7, R5 y 
     expect(sql).not.toMatch(/\b(insert|update|delete|drop|alter|create|truncate|grant)\b/i)
   })
   it('su vuelta atrás son sus doce .down.sql, al revés, y existen', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-d01-20261014.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     for (const f of atras) expect(existsSync(f), f).toBe(true)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): a Diez sin el PDF y el primer asiento autorizado en C0008 (C06b, respuesta 7)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 14/10 a las 15:20 UTC para ESTOS ficheros (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('dos ficheros: la 0700 amplía y añade (declarada, con prueba); la 0710 escribe en la tabla nueva; los dos siguen', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0700_c06b_diez_pdf_pendiente.sql', 'supabase/migrations/20261111T0710_c06b_diez_autorizo_primero.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue', [viva[1]]: 'sigue' })
+  })
+  it('la 0710 autoriza UN asiento, anclado por cuenta y empresa, o para; y no envía nada', () => {
+    const sql = readFileSync(viva[1], 'utf8')
+    expect(sql).toMatch(/coalesce\(array_length\(v_ids, 1\), 0\) <> 1 then/)
+    expect(sql).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+    // Un asiento, no la empresa entera (eso, en otra tanda, después de mirarlo en Diez).
+    expect(sql).toMatch(/values \(v_cuenta, v_empresa, 'asiento', v_ids\[1\], 'C0008'/)
+    expect(sql).not.toMatch(/external_send|delete from|update /i)
+  })
+  it('declara qué cuenta antes y después, y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/diez-pdf-pendiente.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('su vuelta atrás, al revés: la 0710 (para si ya está en Diez) y la 0700 (para si hay algo pendiente, marcado o autorizado)', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0710_c06b_diez_autorizo_primero.down.sql', 'supabase/vuelta-atras/20261111T0700_c06b_diez_pdf_pendiente.down.sql'])
+    for (const f of atras) expect(existsSync(f), f).toBe(true)
+    expect(readFileSync(atras[0], 'utf8')).toMatch(/status in \('enviado', 'enlazado'\)/)
+    expect(readFileSync(atras[1], 'utf8')).toMatch(/n_pend \+ n_mano \+ n_aut > 0/)
   })
 })
 

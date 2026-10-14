@@ -3,7 +3,7 @@
 // contesta Diez es lo medido en la C0009. Importes inventados.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { enviarRecibidaADiez, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type EnvioFila, type PuertoEnvio, type RecibidaBD } from '../../../supabase/functions/_shared/diezEnviar'
+import { enviarRecibidaADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type EnvioFila, type PuertoEnvio, type RecibidaBD } from '../../../supabase/functions/_shared/diezEnviar'
 import type { Factura, FacturaData } from '../../../supabase/functions/_shared/diezCliente'
 
 const PDF = new TextEncoder().encode('%PDF-1.4 ' + 'y'.repeat(400))
@@ -27,6 +27,8 @@ function diez(o: { facturas?: Factura[]; contenedor?: boolean } = {}): Diez {
   const facturas = [...(o.facturas ?? [{ Ejercicio: '2026', Serie: '2', Documento: 3175, TipoAsiento: 2, Fecha: 20261013, CuentaCliente: '40000099', NumeroFactura: 'OTRA-1' }])]
   const d: Diez = {
     altas: [], subidas: 0, guardado: null,
+    // Una recibida no busca cliente: si la pide, la prueba lo dice.
+    async subcuenta() { throw new Error('una recibida no busca la subcuenta del cliente') },
     async facturasDelMes() { return [...facturas, ...facturas] },
     async enviarFactura(fd) { d.altas.push(fd); const f = { ...fd, Documento: 3176 } as Factura; facturas.push(f); return f },
     async adjuntarDocumentoFactura(x) {
@@ -42,7 +44,11 @@ function diez(o: { facturas?: Factura[]; contenedor?: boolean } = {}): Diez {
   return d
 }
 
-function puerto(o: { r?: RecibidaBD; bd?: string | null; d?: Diez } = {}) {
+// adjuntar: ¿guarda Diez documentos? (C06b R7). Estas pruebas, como las de R15,
+// son «con almacén» salvo la que dice lo contrario. autorizados: lo que Julio ha
+// autorizado en conta_diez_autorizo para escribir en una base real.
+type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string }
+function puerto(o: { r?: RecibidaBD; bd?: string | null; d?: Diez; adjuntar?: boolean; autorizados?: Autorizo[] } = {}) {
   let actual: EnvioFila | null = null
   const llamadas = { conexion: 0, cliente: 0 }
   const d = o.d ?? diez()
@@ -51,7 +57,8 @@ function puerto(o: { r?: RecibidaBD; bd?: string | null; d?: Diez } = {}) {
     recibida: async () => o.r ?? recibida(),
     envio: async () => actual,
     guardar: async (f) => { actual = { ...f, id: f.id ?? 's1' }; return actual },
-    conexion: async () => { llamadas.conexion++; return o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009' } },
+    conexion: async () => { llamadas.conexion++; return o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009', adjuntar: o.adjuntar ?? true } },
+    autorizado: async (id, _emp, bd) => (o.autorizados ?? []).some((a) => a.bd.toUpperCase() === bd.toUpperCase() && (a.alcance === 'empresa' || a.entry === id)),
     cliente: async () => { llamadas.cliente++; return d },
     documento: async () => PDF,
     sha256: async (b) => sha(b),
@@ -78,6 +85,24 @@ describe('enviarRecibidaADiez: la serie 2, con los frenos de siempre', () => {
     const t = puerto({ d: diez({ contenedor: false }) })
     expect(await enviarRecibidaADiez('r1', t.p)).toMatchObject({ estado: 'no_llega', motivo: TEXTO_CONTENEDOR, texto: `No ha llegado a Diez: ${TEXTO_CONTENEDOR}.` })
     expect(t.d.altas).toEqual([]); expect(t.d.subidas).toBe(0)
+  })
+  it('C06b R7 · sin almacén en Diez: la recibida va sin adjunto y queda «PDF pendiente en Diez»; sin PDF en Folvy, sigue sin ir', async () => {
+    const t = puerto({ adjuntar: false })
+    const x = await enviarRecibidaADiez('r1', t.p)
+    expect(x).toMatchObject({ estado: 'en_diez', serie: '2', documento: 3176, pdfPendiente: true })
+    expect(x.texto).toContain(PDF_PENDIENTE)
+    expect(t.d.altas).toHaveLength(1); expect(t.d.subidas).toBe(0)
+    expect(t.actual).toMatchObject({ status: 'enviado', document_status: 'pendiente_diez' })
+    const sin = puerto({ r: recibida({ documento: null }), adjuntar: false })
+    expect(await enviarRecibidaADiez('r1', sin.p)).toMatchObject({ estado: 'no_llega', motivo: 'falta el documento' })
+    expect(sin.d.altas).toEqual([])
+  })
+  it('C0008 sin autorizar, cerrada; C0001, nunca (ni autorizada); lo autorizado para OTRO asiento no abre este', async () => {
+    for (const [bd, autorizados] of [['C0008', []], ['C0001', [{ alcance: 'empresa', bd: 'C0001' }]], ['C0008', [{ alcance: 'asiento', entry: 'otro', bd: 'C0008' }]]] as [string, Autorizo[]][]) {
+      const t = puerto({ bd, autorizados })
+      expect(await enviarRecibidaADiez('r1', t.p)).toMatchObject({ estado: 'no_llega' })
+      expect(t.llamadas.cliente).toBe(0)
+    }
   })
   it('ni C0008 ni C0001', async () => {
     for (const bd of ['C0008', 'C0001']) {

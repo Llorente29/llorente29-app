@@ -5,58 +5,23 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# D01 · Tarea 7 (y R5, R6) — facturas recibidas, para cualquier empresa. PREPARADA, NO
-# LANZADA: no sale hasta que (1) la lectura con el modelo esté probada sobre
-# las 12 facturas inventadas y (2) Julio apruebe las capturas N22/N23. El
-# orden lo da docs/conta/d01/T7_informe.md: BASE (esta tanda), después las
-# edge functions y por último el front.
-# La tanda anterior (R15, 20261021T0100) ya está en el historial de
-# producción con su huella; su copia queda en
-# tests/conta/produccion/tanda-documentos-ventas-20261013.txt.
+# C06b · Respuesta 7, tarea 1 (rama conta/c06b-repasos). PREPARADA, NO LANZADA.
 #
-#   0200 — AÑADE: siete tablas nuevas, columnas que admiten nulos en
-#          supplier_invoice y supplier, funciones nuevas; siembra una fila por
-#          empresa en company_purchase_setting (tabla que nace aquí). La
-#          dirección de facturas nace APAGADA.
-#   0210 — CAMBIA en caliente (declarado en cabecera, con su prueba): amplía
-#          tres CHECK y pone el disparador de repetidas en supplier_invoice.
-#   0220 — AÑADE: inbound_email_log y las funciones de entrada.
-#   0230 — CAMBIA en caliente: la regla de repetidas con el total.
-#   0240 — AÑADE: lo aprendido de Diez y el documento de la factura recibida.
-#   0250 — CAMBIA en caliente: el origen de lo aprendido (misma firma).
-#   0260 — CAMBIA en caliente: la regla de repetidas del C01b (misma firma).
-#   0270 — AÑADE: lo que lee el envío a Diez de una recibida.
-#   0280 — AÑADE: la lectura de N22.
-#   0290 — AÑADE: la lectura de N23 y «Pedírselas».
-#   0300 — CAMBIA en caliente (declarado, con su prueba): la lectura de N22
-#          de la 0280, con la misma firma (R5: el porqué de cada fila, por
-#          dónde llegó de verdad y las cifras del periodo). En producción no
-#          existe aún: llega con la 0280, en esta misma tanda.
-#   0310 — CAMBIA en caliente (declarado, con su prueba): las lecturas de N22
-#          (0300) y N23 (0290), la misma firma (R6: las recepciones cuyo papel
-#          es una factura; antes del corte, enlazadas con Diez, nunca se
-#          apuntan; N23 trae lo que leyó la recepción). Solo leen.
-# Nada del camino del pedido (medido en producción, 14/10).
+#   1. 20261111T0700 — «PDF pendiente en Diez» (external_send.document_status
+#      amplía su CHECK), quién lo adjunta y cómo, conta_diez_autorizo y
+#      conta_diez_adjunto_a_mano («Ya está adjunto»). Solo añade y amplía.
+#   2. 20261111T0710 — la autorización de UN asiento en C0008: Uber · Alcalá
+#      del 01/10 (Julio, respuesta 7). Escribe una fila: pide «autorizo». No
+#      envía nada.
 #
-# Lo que cuenta antes y después (R9): las ocho tablas nuevas, las facturas por
-# estado, sus líneas, las columnas nuevas, proveedores, contactos por papel,
-# enlaces de cuenta por origen, documentos por tipo, la huella de los tres
-# CHECK, el disparador, las funciones, los asientos de recibidas y los envíos.
+# ORDEN con el front y las funciones:
+#   · la tanda, ANTES de desplegar conta-diez-enviar (la nueva lee
+#     conta_diez_autorizo y escribe «pendiente_diez»);
+#   · la conexión con Diez de la empresa: workflow «Diez · dar de alta la
+#     conexión» (produccion, conexion-diez), cuando esté en main;
+#   · y Julio envía ese asiento desde el Libro («Validar y enviar a Diez»).
 #
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt, en orden inverso. Cada
-# .down.sql PARA si ya hay algo de una persona o de un proveedor que se
-# perdería (llegadas, correos, contactos de facturación, enlaces aprendidos,
-# documentos, peticiones confirmadas).
-cuenta: scripts/conta/produccion/cuentas/recibidas.sql
-supabase/migrations/20261021T0200_d01_recibidas.sql
-supabase/migrations/20261021T0210_d01_amplia.sql
-supabase/migrations/20261021T0220_d01_entrada.sql
-supabase/migrations/20261021T0230_d01_repetidas_con_total.sql
-supabase/migrations/20261021T0240_d01_asiento_recibida.sql
-supabase/migrations/20261021T0250_d01_aprendido_origen.sql
-supabase/migrations/20261021T0260_d01_repetidas_c01b.sql
-supabase/migrations/20261021T0270_d01_recibida_envio.sql
-supabase/migrations/20261021T0280_d01_documentos.sql
-supabase/migrations/20261021T0290_d01_revisar_y_pedir.sql
-supabase/migrations/20261021T0300_d01_documentos_r5.sql
-supabase/migrations/20261021T0310_d01_recepcion.sql
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/diez-pdf-pendiente.sql
+supabase/migrations/20261111T0700_c06b_diez_pdf_pendiente.sql
+supabase/migrations/20261111T0710_c06b_diez_autorizo_primero.sql

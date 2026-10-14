@@ -21,6 +21,10 @@
 //      envía: una factura sin su PDF no se deja a medias en Diez.
 //   5. «Nunca dos veces»: se busca antes por serie, número de factura y la
 //      430. Una → se enlaza, no se envía. Más de una → no se toca nada.
+//      C06b R7 (Julio, captura de C0008): el cliente se busca POR SU CUENTA (la
+//      subcuenta 430 de la plataforma, «Datos cliente» en Diez), no por NIF ni
+//      por nombre comercial: su nombre es la Descripcion de esa subcuenta. Son
+//      tickets (facturas simplificadas): el NIF va vacío y no se pide.
 //      La intención de escribir se apunta ANTES de escribir: si algo se corta
 //      a medias, el siguiente intento la encuentra en Diez y la enlaza.
 //   6. El documento se sube y se lee de vuelta: «adjunto» solo si Diez
@@ -28,6 +32,18 @@
 //      «No ha llegado a Diez: falta el documento», con Reintentar (que solo
 //      sube el documento: la factura ya está).
 //   7. Como mucho 3 intentos que escriben en Diez (regla 5 del encargo).
+//
+// C06b · Respuesta 7 (decisión de Julio, 14/10): a Diez sin esperar a Cegid.
+//   · El 2 no cambia: sin el PDF guardado en Folvy no se envía.
+//   · El 4 y el 6 solo si la conexión dice que Diez guarda documentos
+//     (account_connector.config.adjuntar_documentos = true; hoy, apagado). Si
+//     no, la factura va SIN adjunto y queda «PDF pendiente en Diez»
+//     (pendiente_diez): la adjunta una persona en Diez y la marca en Folvy, o
+//     Folvy sola el día que Cegid active el almacén (el mismo envío, que con
+//     la factura ya en Diez solo sube el documento).
+//   · El 3 se abre SOLO con lo que Julio autoriza en la base
+//     (conta_diez_autorizo: un asiento, o la empresa en esa base). Sin
+//     autorización, Diez real sigue cerrado; C0001, nunca.
 
 import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
@@ -53,12 +69,14 @@ export type EnvioFila = {
   last_error: string | null
   sent_at: string | null
   document_id: string | null
-  document_status: 'pendiente' | 'adjunto' | 'fallo' | null
+  document_status: 'pendiente' | 'adjunto' | 'fallo' | 'pendiente_diez' | null
   document_error: string | null
   document_attached_at: string | null
+  document_attached_via?: 'diez' | 'a_mano' | null
 }
 
-export type ConexionDiez = { id: string; nombreBd: string }
+/** adjuntar: ¿guarda Diez documentos? (config.adjuntar_documentos; hoy, no). */
+export type ConexionDiez = { id: string; nombreBd: string; adjuntar?: boolean }
 
 /** Lo que el núcleo usa del cliente de Diez (ClienteDiez lo cumple). */
 export interface ClienteDiezEnvio {
@@ -66,6 +84,8 @@ export interface ClienteDiezEnvio {
   enviarFactura(fd: FacturaData): Promise<Factura>
   adjuntarDocumentoFactura(d: { Ejercicio: string; Serie: string; Documento: number; NombreArchivo: string; Archivo: string }): Promise<{ status: number; json: unknown }>
   documentoDeFactura(ejercicio: string, serie: string, documento: number): Promise<{ status: number; json: unknown }>
+  /** La subcuenta por su código (el cliente: su nombre es Descripcion), o null si Diez no la tiene. */
+  subcuenta(codigo: string): Promise<Record<string, unknown> | null>
 }
 
 export interface PuertoEnvio {
@@ -77,8 +97,10 @@ export interface PuertoEnvio {
   guardar(f: EnvioFila): Promise<EnvioFila>
   /** La conexión con Diez de la empresa (conectada), o null. */
   conexion(companyId: string): Promise<ConexionDiez | null>
-  /** El cliente de Diez de esa conexión (escribir: sí; escribirEnReal: nunca). */
-  cliente(c: ConexionDiez): Promise<ClienteDiezEnvio>
+  /** ¿Ha autorizado Julio escribir este asiento en esta base real? (conta_diez_autorizo) */
+  autorizado(entryId: string, companyId: string, nombreBd: string): Promise<boolean>
+  /** El cliente de Diez de esa conexión (escribir: sí; escribirEnReal: solo con autorización). */
+  cliente(c: ConexionDiez, o: { real: boolean }): Promise<ClienteDiezEnvio>
   /** Los bytes del PDF guardado en el bucket. */
   documento(ruta: string): Promise<Uint8Array>
   sha256(b: Uint8Array): Promise<string>
@@ -87,7 +109,7 @@ export interface PuertoEnvio {
 }
 
 export type ResultadoEnvio =
-  | { estado: 'en_diez'; serie: string; documento: number; enlazada: boolean; texto: string }
+  | { estado: 'en_diez'; serie: string; documento: number; enlazada: boolean; pdfPendiente: boolean; texto: string }
   | { estado: 'no_llega'; motivo: string; reintentar: boolean; texto: string }
 
 const iso = (d: Date) => d.toISOString()
@@ -104,6 +126,9 @@ export const sinContenedor = (r: { status: number; json: unknown }) => r.status 
 
 export const TEXTO_CONTENEDOR = 'Diez todavía no guarda documentos (falta que Cegid active su almacén): no se envía la factura sin su PDF'
 
+export const PDF_PENDIENTE = 'PDF pendiente en Diez'
+const yaEnviado = (e: EnvioFila | null) => !!e && (e.status === 'enviado' || e.status === 'enlazado')
+
 function noLlega(motivo: string, reintentar = true): ResultadoEnvio {
   return { estado: 'no_llega', motivo, reintentar, texto: `No ha llegado a Diez: ${motivo}.` }
 }
@@ -119,7 +144,7 @@ type Base = { id: string; account_id: string; company_id: string; estado: string
  */
 type Plan = {
   preparar(): { serie: string; numero: string; cuenta: string; mes: string } | { motivo: string; reintentar: boolean }
-  construir(delMes: Factura[]): { fd: FacturaData } | { motivo: string; reintentar: boolean }
+  construir(c: { delMes: Factura[]; ya: Factura[]; diez: ClienteDiezEnvio }): Promise<{ fd: FacturaData } | { motivo: string; reintentar: boolean }>
 }
 
 export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promise<ResultadoEnvio> {
@@ -132,13 +157,18 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
       const f = listo.factura.factura
       return { serie: f.Serie, numero: String(f.NumeroFactura), cuenta: f.CuentaCliente, mes: String(f.FechaFactura).slice(0, 6) }
     },
-    construir: (delMes) => {
+    construir: async ({ ya, diez }) => {
       const f0 = (plan.preparar() as { serie: string; numero: string; cuenta: string })
-      const nombres = [...new Set(delMes.filter((f) => String(f.CuentaCliente) === f0.cuenta).map((f) => String(f.NombreCliente ?? '')).filter(Boolean))]
-      const ya = delMes.some((f) => String(f.Serie) === f0.serie && String(f.NumeroFactura) === f0.numero && String(f.CuentaCliente) === f0.cuenta)
-      if (!ya && nombres.length !== 1) return { motivo: `el nombre del cliente de la ${f0.cuenta} no es uno solo en Diez (${nombres.length}): no se inventa`, reintentar: false }
+      // El cliente, por su cuenta: la subcuenta de Diez y su nombre (no el NIF ni el nombre comercial).
+      let nombreCliente = ya.length === 1 ? String(ya[0].NombreCliente ?? '').trim() : ''
+      if (ya.length === 0) {
+        const sc = await diez.subcuenta(f0.cuenta)
+        if (!sc || String(sc.Codigo ?? '').trim() !== f0.cuenta) return { motivo: `la subcuenta ${f0.cuenta} del cliente no está en Diez: no se inventa`, reintentar: false }
+        nombreCliente = String(sc.Descripcion ?? '').trim()
+        if (!nombreCliente) return { motivo: `la subcuenta ${f0.cuenta} de Diez no tiene nombre: no se inventa`, reintentar: false }
+      }
       return { fd: facturaDeVentas({ fecha: r.fecha, local: r.local!.nombre, canal: r.canal!.slug, lineas: r.lineas.map((l) => ({ cuenta: l.cuenta, debe: Number(l.debe), haber: Number(l.haber), marca: l.marca, tipoIva: l.tipoIva })) },
-        { correspondencia: corr!, nombreCliente: nombres[0] ?? '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura }
+        { correspondencia: corr!, nombreCliente: nombreCliente || '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura }
     },
   }
   return enviar(r, plan, p)
@@ -163,7 +193,7 @@ export async function enviarRecibidaADiez(entryId: string, p: PuertoEnvio & { re
     preparar: () => hecha
       ? { serie: '2', numero: String(hecha.factura.NumeroFactura), cuenta: hecha.factura.CuentaCliente, mes: String(hecha.factura.FechaFactura).slice(0, 6) }
       : { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false },
-    construir: () => (hecha ? { fd: hecha.factura } : { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false }),
+    construir: async () => (hecha ? { fd: hecha.factura } : { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false }),
   }
   return enviar(r, plan, p)
 }
@@ -179,8 +209,8 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
   if (r.estado !== 'validado') return noLlega(`el asiento está ${r.estado}: solo se envía lo validado`, false)
 
   let previo = await p.envio(r.id)
-  if (previo && (previo.status === 'enviado' || previo.status === 'enlazado') && previo.document_status === 'adjunto') {
-    return { estado: 'en_diez', serie: String(previo.ext_series), documento: Number(previo.ext_number), enlazada: previo.status === 'enlazado', texto: `Ya estaba en Diez: ${previo.ext_series}/${previo.ext_number}, con su documento.` }
+  if (yaEnviado(previo) && previo!.document_status === 'adjunto') {
+    return { estado: 'en_diez', serie: String(previo!.ext_series), documento: Number(previo!.ext_number), enlazada: previo!.status === 'enlazado', pdfPendiente: false, texto: `Ya estaba en Diez: ${previo!.ext_series}/${previo!.ext_number}, con su documento.` }
   }
 
   // Lo que se apunta cuando no llega, sin haber escrito en Diez (no cuenta como intento).
@@ -209,20 +239,27 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
   if (!con) return apuntar('la conexión con Diez no está configurada para esta empresa')
   const bd = con.nombreBd.trim().toUpperCase()
   if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
-  if (bd !== BASE_PRUEBAS) return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  const real = bd !== BASE_PRUEBAS
+  if (real && !(await p.autorizado(r.id, r.company_id, bd))) return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  const adjuntar = con.adjuntar === true
+  // Ya en Diez sin su PDF, y Diez sigue sin guardar documentos: nada que hacer (nunca dos veces).
+  if (yaEnviado(previo) && previo!.document_status === 'pendiente_diez' && !adjuntar) {
+    return { estado: 'en_diez', serie: String(previo!.ext_series), documento: Number(previo!.ext_number), enlazada: previo!.status === 'enlazado', pdfPendiente: true, texto: `Ya estaba en Diez: ${previo!.ext_series}/${previo!.ext_number}. ${PDF_PENDIENTE}.` }
+  }
   if (previo && previo.attempts >= MAX_INTENTOS) return noLlega(`ya van ${previo.attempts} intentos: lo tiene que mirar una persona`, false)
 
   // El PDF que va es el guardado, y es el registrado.
   const pdf = await p.documento(r.documento.ruta)
   if ((await p.sha256(pdf)) !== r.documento.sha256) return apuntar('el documento guardado no es el que se registró (otra huella): no se envía', { document_status: 'fallo', document_error: 'otra huella' }, false)
 
-  const diez = await p.cliente(con)
+  const diez = await p.cliente(con, { real })
   const ej = r.fecha.slice(0, 4)
   const delMes = await diez.facturasDelMes(plano.mes)
 
-  // 4 · ¿Guarda Diez documentos? Se pregunta por una factura que ya tiene.
+  // 4 · ¿Guarda Diez documentos? Se pregunta por una factura que ya tiene
+  // (solo si se va a adjuntar: sin adjunto, la factura va igual).
   const muestra = delMes.find((f) => f.Documento != null)
-  if (muestra && !(previo && (previo.status === 'enviado' || previo.status === 'enlazado'))) {
+  if (adjuntar && muestra && !yaEnviado(previo)) {
     const g = await diez.documentoDeFactura(String(muestra.Ejercicio ?? ej), String(muestra.Serie), Number(muestra.Documento))
     if (sinContenedor(g)) return apuntar(TEXTO_CONTENEDOR, { account_connector_id: con.id })
   }
@@ -235,7 +272,7 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
     const ya = [...new Map(delMes.filter((f) => String(f.Serie) === plano.serie && String(f.NumeroFactura) === plano.numero && String(f.CuentaCliente) === plano.cuenta)
       .map((f) => [String(f.Documento), f])).values()]
     if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${plano.numero} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
-    const hecha = plan.construir(delMes)
+    const hecha = await plan.construir({ delMes, ya, diez })
     if ('motivo' in hecha) return apuntar(hecha.motivo, { account_connector_id: con.id }, hecha.reintentar)
     const fd = hecha.fd
     const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(fd)))
@@ -255,7 +292,12 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
     }
   }
 
-  // 6 · El documento: se sube y se lee de vuelta.
+  // 6 · El documento. Sin almacén en Diez: «PDF pendiente en Diez», y en Diez está.
+  if (!adjuntar) {
+    previo = await p.guardar({ ...previo!, document_status: 'pendiente_diez', document_error: null, last_error: null })
+    return { estado: 'en_diez', serie, documento, enlazada, pdfPendiente: true, texto: `En Diez: ${serie}/${documento}${enlazada ? ' (ya estaba: enlazada, no se ha enviado otra)' : ''}. ${PDF_PENDIENTE}: adjúntalo allí y márcalo en Libros › Pendientes de adjuntar en Diez.` }
+  }
+  // Con almacén: se sube y se lee de vuelta.
   previo = await p.guardar({ ...previo!, attempts: previo!.attempts + (previo!.document_status === 'fallo' ? 1 : 0) })
   const sub = await diez.adjuntarDocumentoFactura({ Ejercicio: ej, Serie: serie, Documento: documento, NombreArchivo: r.documento.nombre, Archivo: base64(pdf) })
   let fallo: string | null = null
@@ -270,6 +312,6 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
     previo = await p.guardar({ ...previo!, document_status: 'fallo', document_error: fallo, last_error: 'falta el documento' })
     return noLlega('falta el documento', true)
   }
-  previo = await p.guardar({ ...previo!, document_status: 'adjunto', document_error: null, document_attached_at: iso(p.ahora()), last_error: null })
-  return { estado: 'en_diez', serie, documento, enlazada, texto: `En Diez: ${serie}/${documento}${enlazada ? ' (ya estaba: enlazada, no se ha enviado otra)' : ''}, con su documento.` }
+  previo = await p.guardar({ ...previo!, document_status: 'adjunto', document_error: null, document_attached_at: iso(p.ahora()), document_attached_via: 'diez', last_error: null })
+  return { estado: 'en_diez', serie, documento, enlazada, pdfPendiente: false, texto: `En Diez: ${serie}/${documento}${enlazada ? ' (ya estaba: enlazada, no se ha enviado otra)' : ''}, con su documento.` }
 }
