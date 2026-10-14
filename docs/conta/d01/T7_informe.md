@@ -671,3 +671,35 @@ nuevo (correo y subida). La recepción ya lee en producción con su propia clave
   (sin camino) se atribuye a la empresa del NIF a cuyo nombre va el papel, o
   a la única de la cuenta. Foodint tiene una. En una cuenta con varias y sin
   NIF en el papel, esa recepción no sale.
+
+## 11 · La prueba c01b/flujos «marcar pagada… la repetida ni entra»
+
+**De quién es la guarda: del D01.** Es el disparador
+`trg_supplier_invoice_no_repetida` → `tg_supplier_invoice_no_repetida()`,
+que entra en la `20261021T0210_d01_amplia.sql` y cambia en la
+`20261021T0230_d01_repetidas_con_total.sql`. Rechaza con `errcode 23505`
+(PostgREST 409) la misma factura del mismo proveedor, con el mismo número
+normalizado (`conta_clave_numero`: «e2e-001 » = «E2E-001») y el mismo total.
+No se ha tocado.
+
+**Por qué fallaba fuera de esta rama.** `main`, `conta/b01-bancos` y
+`conta/c06-sola` llevan la versión de la prueba que esperaba un 201 para
+«e2e-001 ». Staging es compartido y ya tiene la guarda, así que allí falla con
+razón. En esta rama la prueba ya esperaba el 409, pero solo por la API.
+
+**Lo que cambia:**
+
+- **La prueba** (`tests/e2e/conta/c01b/flujos.spec.ts`). Conserva el 409 por la
+  API. Además mete la misma factura por la pantalla donde se escribe a mano,
+  Compras · «Nueva factura».
+  - Comprueba que, dentro del alta, sale «Repetida: ya está la factura E2E-001
+    de este proveedor… con el mismo total. No entra dos veces».
+  - Comprueba que el alta sigue abierta con lo escrito, que no dice «Factura
+    registrada.» y que el proveedor sigue con una sola factura.
+  - Corre en ordenador y en móvil.
+- **Compartido, cambio pequeño** (`src/modules/supply/pages/SupplierInvoicesPage.tsx`,
+  4 líneas). El error del alta se pintaba en la página, detrás del velo del
+  formulario: la persona no lo veía.
+  - Ahora va dentro del alta (`role="alert"`) mientras está abierta.
+  - Se limpia al abrirla, para que no arrastre uno viejo.
+  - El texto es el de la base, sin cambiar.

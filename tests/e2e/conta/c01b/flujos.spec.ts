@@ -175,6 +175,29 @@ test.describe('cuenta A', () => {
       expect(f2.status).toBe(409)
       expect(JSON.stringify(f2.datos)).toMatch(/Repetida: ya está la factura E2E-001 de este proveedor/)
 
+      // Y en la pantalla donde se escribe una factura a mano (Compras · Nueva
+      // factura): el mismo rechazo, dicho dentro del alta —no detrás de su
+      // velo—, con lo que ya está y que no entra dos veces; el alta sigue
+      // abierta con lo escrito.
+      await page.goto('/supply/facturas')
+      await page.getByRole('button', { name: 'Nueva factura' }).click()
+      const alta = page.getByRole('dialog')
+      await alta.getByLabel('Proveedor').selectOption(id)
+      await alta.getByLabel('Nº de factura').fill('e2e-001 ')
+      await alta.getByLabel('Fecha').fill('2026-09-20')
+      await alta.getByLabel('Base imponible').fill('100')
+      await alta.getByLabel('IVA').fill('21')
+      await alta.getByLabel('Total', { exact: true }).fill('121')
+      await alta.getByRole('button', { name: 'Registrar factura' }).click()
+      const porque = alta.getByRole('alert')
+      await expect(porque).toBeVisible()
+      await expect(porque).toContainText('Repetida: ya está la factura E2E-001 de este proveedor')
+      await expect(porque).toContainText('con el mismo total. No entra dos veces')
+      await expect(alta.getByLabel('Nº de factura')).toHaveValue('e2e-001 ')
+      await expect(page.getByText('Factura registrada.')).toHaveCount(0)
+      const suyas = await rest<{ id: string }[]>(s, 'GET', `supplier_invoice?supplier_id=eq.${id}&select=id`)
+      expect(suyas.datos).toHaveLength(1)
+
       const leDebes = page.locator('.cxp-cifra').filter({ hasText: 'Le debes' })
       await page.goto(ficha(id))
       await expect(leDebes).toContainText('121')
