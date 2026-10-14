@@ -357,6 +357,9 @@ a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
   - **En el móvil, el total se partía y los filtros iban en dos líneas.**
 - **e2e 231** (f7c4a0e6): **toda la suite en verde**: 166 pruebas, D01 en
   ordenador y móvil. Capturas en `docs/conta/capturas/d01/`, commit 27aed0cb.
+- **e2e 233** (575e9144): **toda la suite en verde**, con el arreglo del
+  móvil. Son las capturas vigentes, commit 2bee8718. **La tarea 6 queda
+  cerrada; paro antes de la 7.**
 
 ### Las capturas frente a la maqueta
 
@@ -364,7 +367,7 @@ a leer**. Antes decía «ya estaba subido» y se quedaba sin leer para siempre.
 |---|---|---|
 | N22 ordenador (A) | Tres niveles (menú, pestaña, barra Traer · Esperadas · Leídas con su punto y su dato); «Para mirar» con los cuatro filtros y «Subir facturas»; la banda en una frase; las cinco cifras; cada fila con inicial, proveedor · factura · «llegó por», fecha, total, punto, lo entendido con su porqué y un solo botón; el pie de las repetidas | Sin «Por correo» (el correo de A no está encendido), sin «Por recepción» (§5), sin «Tuyos» ni las pestañas que no existen (§5). La banda no dice «Faltan…» (hoy no hay esperadas, §5). Salen también facturas de otros frentes en la cuenta A compartida, como debe ser (regla 7) |
 | N23 ordenador (A) | Migas con «1 de 5», Anterior y Siguiente; el papel a la izquierda; la banda; «Lo que he leído» (proveedor con NIF y ficha, factura y «no hay otra con su número y su total», base e IVA por tipo, total que cuadra, vencimiento, «Sus facturas se apuntan en» con su origen); «Cómo se apunta» con nombre · código; «Otra cosa» y «Está bien · apuntar» en azul | Sin «Local» (la factura de la semilla no casa con ninguna recepción) ni «Precios» (§5) |
-| N22 y N23 móvil (A) | Hacer foto y Subir PDF; «Para mirar» en tarjetas con su único botón; en N23, el papel arriba y «Otra cosa» y «Está bien · apuntar» abajo, en la mitad de abajo sin desplazarse (lo mide la e2e) | En la captura de página entera el botón sale al final, porque la captura agranda la ventana; en la pantalla va fijo abajo. **Arreglado tras la 231:** las etiquetas de «Lo que he leído» se partían en varias líneas («Base / al 10 / %»). Lo dirá la próxima captura |
+| N22 y N23 móvil (A) | Hacer foto y Subir PDF; «Para mirar» en tarjetas con su único botón; en N23, el papel arriba y «Otra cosa» y «Está bien · apuntar» abajo, en la mitad de abajo sin desplazarse (lo mide la e2e) | En la captura de página entera el botón sale al final, porque la captura agranda la ventana; en la pantalla va fijo abajo. **Arreglado tras la 231 y comprobado en la 233:** las etiquetas de «Lo que he leído» se partían en varias líneas («Base / al 10 / %»); ahora van en una |
 | N22 y N23, frente C (`?marca=contabilidad`) | Lo mismo, sin «De Cocina», con «Lo que he hecho yo», «Lo que he entendido» y el pie sin marca: la e2e no encuentra ni «Cocina» ni «Folvy» en el contenido de Documentos | El marco (menú lateral «Volver a Folvy», barra de abajo «Folvy») es de la C06, que no está en esta rama |
 
 ## 10 · Lo que paro antes de la 7
