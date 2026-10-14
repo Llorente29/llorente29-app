@@ -161,26 +161,27 @@ Capturas de antes y después: §8.
 
 ---
 
-## 4 · Los 291,50 de «Clientes» — cerrado
+## 4 · Los 291,50 de «Clientes» — cerrado, con la causa
 
-**Cerrado por Julio (14/10).** Las 150 subcuentas de Foodint coinciden con
-Diez al céntimo al 30/09, así que la diferencia está en cómo Diez arma su
-informe, no en los datos. Con la §1 esa línea ya no se compara con Diez: Diez
-compensa los clientes de los dos signos y Folvy, por la norma, no.
+**La causa (Julio, respuesta 7):** el balance de Diez con el que se comparó
+era el de la **empresa de pruebas C0009**, no el de Foodint (C0008). C0009
+lleva la factura de prueba UBR-FLO-20261001, de 291,50 €: ésa es la
+diferencia. **En C0008 todo cuadra.**
 
-Lo que se miró, en producción y solo leyendo (las cifras, aquí no):
+Encaja con lo que se midió, en producción y solo leyendo:
 
-1. **La lectura de C0008 al 30/09**: Diez = Folvy en las 150 subcuentas.
-   Octubre trae 4 apuntes y ninguno toca las 43x.
-2. **Ninguna combinación** de hasta cuatro subcuentas de las candidatas que
-   Folvy pone fuera de III (44x, 46x, 47x salvo 472, 5xx de socios, 490/493),
-   ni de clientes más hasta tres de ellas, da ±291,50 ni la cifra de Diez.
-3. **Ningún día de 2026** da la cifra de Diez en la línea de clientes
-   compensada.
-4. **apiCON** (su Swagger, 108 operaciones) no tiene ningún informe ni modelo
-   de balance que leer por GET.
+1. **La lectura de C0008 al 30/09**: Diez = Folvy en las 150 subcuentas, al
+   céntimo. Octubre trae 4 apuntes y ninguno toca las 43x.
+2. **Ninguna combinación** de subcuentas de C0008 da ±291,50: la diferencia
+   no estaba en los datos de Foodint, estaba en otra empresa.
+3. **apiCON** (su Swagger, 108 operaciones) no tiene ningún informe ni modelo
+   de balance que leer por GET, así que desde aquí no se podía ver de qué
+   empresa era el informe.
 
-No se ha cambiado nada para «cuadrar con Diez».
+Lo que deja dicho: **antes de comparar un informe de Diez, se mira de qué
+empresa es** (C0008 Foodint, C0009 pruebas). No se ha cambiado nada para
+«cuadrar con Diez», y con la §1 la línea de clientes de Folvy ya no es la
+compensada de Diez.
 
 ---
 
@@ -245,7 +246,21 @@ ejercicio cerrado tiene asientos nuevos».
 
 ---
 
-## 7 · La tanda de producción (PREPARADA, NO LANZADA)
+## 7 · La tanda de producción — APLICADA (Julio, respuesta 7)
+
+**Ensayo y real de a4fc8626, en verde.** Comprobado por Julio después: la
+tabla de intentos existe, están las dos funciones `conta_contrasena_*` y no
+se ha tocado nada más (39.734 apuntes, 55 propuestos, 781 subcuentas).
+
+**La e2e entera de a4fc8626**
+([38556335769](https://github.com/Llorente29/llorente29-app/actions/runs/38556335769)):
+181 pasan, 51 saltadas, 2 rojas — `c01b/flujos` «la repetida no cuenta», en
+ordenador y móvil. Da de alta «E2E-001» y «e2e-001 » y espera que la base
+acepte la segunda; en staging la guarda de repetidas ya la para al entrar
+(23505, «Repetida: ya está la factura E2E-001…»). **Ajenas a este frente**,
+autorizadas así por Julio; las arregla A.
+
+Lo de abajo es como se preparó.
 
 `supabase/produccion/aplicar.txt`:
 
