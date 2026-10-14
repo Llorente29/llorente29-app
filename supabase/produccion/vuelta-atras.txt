@@ -1,12 +1,11 @@
 # Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
-# inverso. C06b · aviso #178.
-#   0510: las 27 subcuentas de Foodint vuelven a no tener la lectura escrita
-#         (solo las creadas antes del 14/10). Escribe 27 o para.
-#   0500: conta_diez_subcuentas vuelve al cuerpo de la 0300 (md5
-#         9a545a02237517ed39048277b48e5612, el de producción el 14/10) y fuera
-#         la columna. PARA si alguna subcuenta tiene aún su lectura.
+# inverso. C06b · Respuesta 6.
+#   0610: fuera conta_contrasena_pedir y la tabla de intentos. ANTES, la edge
+#         function conta-contrasena vuelve a la versión anterior.
+#   0600: las 42 filas del otro signo fuera y las 42 de la C05 otra vez sin
+#         signo. Toca exactamente esas o para.
 # En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
 # esperado: se deshace la tanda) y no para.
-cuenta: scripts/conta/produccion/cuentas/cuenta-lectura.sql
-supabase/vuelta-atras/20261111T0510_c06b_cuenta_lectura_las_27.down.sql
-supabase/vuelta-atras/20261111T0500_c06b_cuenta_lectura.down.sql
+cuenta: scripts/conta/produccion/cuentas/terceros-y-contrasena.sql
+supabase/vuelta-atras/20261111T0610_c06b_contrasena_tope.down.sql
+supabase/vuelta-atras/20261111T0600_c06b_terceros_por_saldo.down.sql

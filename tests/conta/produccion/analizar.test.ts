@@ -726,35 +726,36 @@ describe('la tanda de la regla de ventas por plataforma (C04b R5; ya aplicada, r
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el aviso #178, de qué lectura viene cada subcuenta (C06b)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el balance según la norma y el tope de la contraseña (C06b, respuesta 6)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 14/10 a las 08:32 UTC para ESTOS ficheros (con su md5).
+  // lectura en producción el 14/10 a las 10:33 UTC para ESTOS ficheros (con su md5).
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
-  it('dos ficheros: la 0500 sigue (declarada, con prueba); la 0510 cambia filas y pide «autorizo»', () => {
-    expect(viva).toEqual(['supabase/migrations/20261111T0500_c06b_cuenta_lectura.sql', 'supabase/migrations/20261111T0510_c06b_cuenta_lectura_las_27.sql'])
-    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue', [viva[1]]: 'autorizo' })
+  it('dos ficheros: la 0600 cambia filas de serie y pide «autorizo»; la 0610 solo añade y sigue', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0600_c06b_terceros_por_saldo.sql', 'supabase/migrations/20261111T0610_c06b_contrasena_tope.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'autorizo', [viva[1]]: 'sigue' })
   })
-  it('la 0510 escribe 27 o para, y no borra ni recrea ninguna cuenta', () => {
-    const sql = readFileSync(viva[1], 'utf8')
-    expect(sql).toMatch(/if n <> 27 then/)
-    expect(sql).not.toMatch(/delete from|insert into/i)
-    expect(sql).not.toMatch(/created_by_name/)
+  it('la 0600 toca 42 o para, solo filas de serie sin signo, y las nuevas no pisan nada', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    expect(sql).toMatch(/if n <> 42 then raise exception/)
+    expect(sql).toMatch(/by_balance is null/)
+    expect(sql).toMatch(/on conflict \(model, statement, line_code, account_prefix\) where company_id is null do nothing/)
+    expect(sql).not.toMatch(/delete from/i)
   })
   it('declara qué cuenta antes y después, y el fichero existe', () => {
     const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/cuenta-lectura.sql'])
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/terceros-y-contrasena.sql'])
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
-  it('su vuelta atrás, al revés: la 0510 (27 o para) y la 0500, que PARA si queda alguna lectura escrita', () => {
+  it('su vuelta atrás, al revés: la 0610 y la 0600, que quita 42 y devuelve 42 o para', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
-    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0510_c06b_cuenta_lectura_las_27.down.sql', 'supabase/vuelta-atras/20261111T0500_c06b_cuenta_lectura.down.sql'])
-    expect(readFileSync(atras[0], 'utf8')).toMatch(/if n <> 27 then/)
-    expect(readFileSync(atras[1], 'utf8')).toMatch(/exists \(select 1 from public\.company_account where import_run_id is not null\)/)
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0610_c06b_contrasena_tope.down.sql', 'supabase/vuelta-atras/20261111T0600_c06b_terceros_por_saldo.down.sql'])
+    for (const f of atras) expect(existsSync(f), f).toBe(true)
+    expect(readFileSync(atras[1], 'utf8').match(/if n <> 42 then/g)).toHaveLength(2)
   })
 })
 
