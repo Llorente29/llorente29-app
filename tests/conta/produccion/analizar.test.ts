@@ -748,6 +748,14 @@ describe('la tanda de AHORA (manifiesto vivo): Bancos y conciliación (B01, 0100
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
     expect(readFileSync(cuentas[0], 'utf8')).toMatch(/created_at < timestamptz '2026-10-13 18:00\+00'/)
   })
+  it('ninguna vuelta atrás escribe en storage con SQL (ensayo #64: Supabase no deja borrar de sus tablas; el bucket de la 0140 se queda)', () => {
+    for (const f of leerTanda('supabase/produccion/vuelta-atras.txt')) {
+      const sql = readFileSync(f, 'utf8').replace(/--.*$/gm, '')
+      expect(sql, f).not.toMatch(/\b(insert\s+into|update|delete\s+from|truncate)\s+(table\s+)?storage\./i)
+      expect(sql, f).not.toMatch(/\b(drop|create|alter)\s+policy\b[^;]*\bon\s+storage\./i)
+      expect(sql, f).not.toMatch(/storage\.allow_delete_query/)
+    }
+  })
   it('su vuelta atrás es la de cada fichero en orden inverso; la 0170 PARA si sus fichas ya tienen extractos', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...B01].reverse().map((f) => `supabase/vuelta-atras/20261101T${f}.down.sql`))

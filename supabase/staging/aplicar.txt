@@ -1,5 +1,8 @@
-# B01 · tarea 7 (14/10): la 0170 (las fichas de banco que le faltan a
-# Foodint). En staging Foodint no existe: no crea nada y lo dice; se aplica
-# para que el historial de staging tenga la tanda entera del B01 (0100–0170)
-# con su huella, como la tendrá producción. Solo añade.
-supabase/migrations/20261101T0170_b01_foodint_cuentas.sql
+# B01 · ensayo #64 de producción (14/10): la vuelta atrás no estaba completa
+# (la de la 0140 borraba el bucket con SQL y Supabase no lo deja). Arreglada:
+# el bucket se queda, vacío y dicho en su cabecera. Esta prueba ejecuta la
+# vuelta atrás COMPLETA de la tanda (los ocho .down.sql, en el orden de
+# supabase/produccion/vuelta-atras.txt), comprueba que no queda nada del B01 y
+# que lo de fuera no cambia, vuelve a aplicar las ocho migraciones y acaba en
+# rollback: staging queda igual.
+supabase/staging/sql/20261101_b01_vuelta_atras_prueba.sql
