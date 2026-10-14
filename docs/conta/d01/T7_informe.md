@@ -32,31 +32,43 @@ están en el §9 y las facturas que entran por la recepción (R6), en el §10.
 
 ## 1 · Las capturas frente a la maqueta
 
-Son las de la e2e **233**, con **toda la suite en verde** (commit de
-capturas `2bee8718`), en `docs/conta/capturas/d01/`:
+**Las vigentes son las de la e2e 245** (`2d9628cd`), **en verde entera**: 166
+pasan y 54 se saltan, que son las de otros frentes o de un solo lado. Las sube
+el commit de capturas `3ebd0f54`, en `docs/conta/capturas/d01/`:
+- `n22-para-mirar-{a,c}-{ordenador,movil}.png`;
+- `n23-revisar-{a,c}-{ordenador,movil}.png`.
 
-- `n22-para-mirar-a-ordenador.png` y `n22-para-mirar-a-movil.png`;
-- `n22-para-mirar-c-ordenador.png` y `n22-para-mirar-c-movil.png`;
-- `n23-revisar-a-ordenador.png` y `n23-revisar-a-movil.png`;
-- `n23-revisar-c-ordenador.png` y `n23-revisar-c-movil.png`.
+Las de la e2e 233 (T6) quedan en el historial.
 
-La tabla entera está en `T6_informe.md` §9, «Las capturas frente a la
-maqueta». Lo que **no** es igual, y por qué:
-
-- **N22:**
-  - **Sin «Por correo».** El correo está apagado, y lo que no funciona no se
-    enseña.
-  - **Sin «Por recepción», sin «Tuyos» y sin las pestañas que no existen.**
-    Son de T6 §5.
-  - **La banda no dice «Faltan…».** Hoy no hay facturas esperadas.
+**Lo que se ve de la R5,** punto por punto (lo detallo en el §9):
 - **N23:**
-  - **Sin «Local».** La factura de la semilla no casa con ninguna recepción.
-  - **Sin «Precios».** Es de T6 §5.
-- **Móvil:** en la captura de página entera, el botón sale al final. En la
-  pantalla va fijo abajo, y la e2e mide que cabe en la mitad de abajo sin
-  desplazarse.
-- **Frente C:** el marco («Volver a Folvy», la barra de abajo) es de la C06.
-  En Documentos la e2e no encuentra ni «Cocina» ni «Folvy».
+  - «Vence 10/11/2026 · lo dice la factura, igual que su ficha (30 días)»;
+  - «Se apunta en Folvy · a Diez irá cuando Cegid active los documentos»;
+  - «Cómo se apunta» con «Gasto e IVA» y «A pagar», y en el móvil por grupos;
+  - el papel del móvil recortado a lo escrito, con «Ver el papel entero»;
+  - la banda en ámbar;
+  - sin la barra de la IA.
+- **N22:**
+  - cada fila con su porqué y qué hacer;
+  - «llegó por correo», «escrita a mano» y «leída en Compras»;
+  - «Han llegado 8 facturas en octubre» y «Llegadas en octubre»;
+  - en el móvil, la fecha junto al número y las cuatro pestañas enteras.
+
+**Dos retoques vistos en las capturas de la 245,** ya en la rama:
+- **En el móvil, el nombre largo cortaba también el código** («Compras de
+  mercaderías · 60000…»). Ahora el que se acorta es el nombre y el código se
+  ve entero, siempre. En el ordenador, la cuenta va en una línea en vez de
+  partirse.
+- **La fila LD decía «Va a esta cuenta (del asiento)»:** su cuenta sale de su
+  asiento ya propuesto, no de la ficha. Ahora dice «Va a la cuenta de su
+  asiento, ya propuesto…», con su prueba.
+
+**Lo que sigue sin ser igual que la maqueta,** y por qué (de T6, sin cambios):
+- **N22:** sin «Por correo», porque el correo está apagado; sin «Por
+  recepción», sin «Tuyos» y sin las pestañas que no existen.
+- **N23:** sin «Local», porque la factura de la semilla no casa con ninguna
+  recepción; y sin «Precios».
+- **Frente C:** el marco es de la C06.
 
 ## 2 · El contraste
 

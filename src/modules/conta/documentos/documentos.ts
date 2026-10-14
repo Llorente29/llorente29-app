@@ -189,7 +189,9 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
       const como = f.canal === 'a_mano' ? 'La escribieron a mano y no la he leído: comprueba los importes con el papel.'
         : f.canal === 'compras' ? `La leyeron en ${solo ? 'otra pantalla' : 'Compras'}: comprueba los importes con el papel.`
           : 'Comprueba los importes con el papel.'
-      partes.push(`${e.origen === 'de su ficha' ? 'Va a su cuenta de siempre, la de su ficha.' : `Va a esta cuenta (${e.origen}).`} ${como}`)
+      const va = e.origen === 'de su ficha' ? 'Va a su cuenta de siempre, la de su ficha.'
+        : e.origen === 'del asiento' ? 'Va a la cuenta de su asiento, ya propuesto.' : `Va a esta cuenta (${e.origen}).`
+      partes.push(`${va} ${como}`)
     }
   }
   return { titulo: `${cuenta}${casa}`, porque: partes.length ? partes.join(' ') : null }

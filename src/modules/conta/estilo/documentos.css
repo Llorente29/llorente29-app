@@ -76,7 +76,10 @@
 .cxr-apunte-movil { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
 .cxr-apunte-grupo { display: flex; flex-direction: column; gap: 4px; }
 .cxr-apunte-linea { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-.cxr-apunte-cuenta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxr-apunte-cuenta { display: flex; min-width: 0; white-space: nowrap; }
+.cxr-apunte-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cxr-apunte-codigo { flex: none; }
+.cxr-apunte-celda { min-width: 0; }
 .cxr-apunte-linea .cxr-der { font-family: var(--cx-letra-cifras); white-space: nowrap; flex: none; }
 /* R5 · 5: la banda en ámbar mientras haya algo por mirar; el verde, para lo apuntado. */
 .cx-ia-bloque.cxr-ia-ambar { background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }

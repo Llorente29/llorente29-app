@@ -192,6 +192,9 @@ describe('R5 · N22', () => {
     // LD: con su cuenta de la ficha, escrita a mano, sin lectura: por qué se mira.
     const ld = fila({ canal: 'a_mano', porque: null, entendido: { cuenta: '62100000', nombre: 'Arrendamientos y cánones', origen: 'de su ficha' } })
     expect(entendido(ld).porque).toBe('Va a su cuenta de siempre, la de su ficha. La escribieron a mano y no la he leído: comprueba los importes con el papel.')
+    // La LD de staging (e2e 245): su cuenta sale del asiento ya propuesto, no de la ficha.
+    const ldAsiento = fila({ canal: 'a_mano', porque: null, entendido: { cuenta: '62100000', nombre: 'Arrendamientos y cánones', origen: 'del asiento' } })
+    expect(entendido(ldAsiento).porque).toBe('Va a la cuenta de su asiento, ya propuesto. La escribieron a mano y no la he leído: comprueba los importes con el papel.')
     // SE: con lectura y sin cuenta: lo leído y qué hacer.
     const se = fila({ porque: 'Trae todo lo que pide la norma y el total cuadra.', entendido: null, previas: 0 })
     expect(entendido(se).porque).toBe('Trae todo lo que pide la norma y el total cuadra. Es la primera factura de este proveedor: elige dónde se apunta y lo recuerdo.')

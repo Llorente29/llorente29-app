@@ -258,7 +258,13 @@ function ComoSeApunta({ fac, vista, error, movil, solo }: {
   fac: FacturaRevisar; vista: Awaited<ReturnType<typeof verPropuestaFactura>> | null; error: string | null; movil: boolean; solo: boolean
 }) {
   const lineas = vista?.propuesta ? vista.propuesta.lineas : []
-  const nombre = (cuenta: string) => `${(vista?.propuesta ? vista.nombres.get(cuenta) : null) ?? 'Cuenta'} · ${cuenta}`
+  // El nombre se acorta si no cabe; el código, nunca: una cuenta siempre con su código al lado.
+  const nombre = (cuenta: string) => (
+    <span className="cxr-apunte-cuenta" title={`${(vista?.propuesta ? vista.nombres.get(cuenta) : null) ?? 'Cuenta'} · ${cuenta}`}>
+      <span className="cxr-apunte-nombre">{(vista?.propuesta ? vista.nombres.get(cuenta) : null) ?? 'Cuenta'}</span>
+      <span className="cxr-apunte-codigo"> · {cuenta}</span>
+    </span>
+  )
   const col = columnasDelApunte(lineas)
   return (
     <section className="cxr-bloque" aria-label="Cómo se apunta">
@@ -276,7 +282,7 @@ function ComoSeApunta({ fac, vista, error, movil, solo }: {
                 <div key={titulo} className="cxr-apunte-grupo">
                   <span className="cxr-apunte-titulo">{titulo}</span>
                   {filas.map((l, i) => (
-                    <div key={i} className="cxr-apunte-linea"><span className="cxr-apunte-cuenta">{nombre(l.cuenta)}</span><span className="cxr-der">{eurosExactos(l.importe)}</span></div>
+                    <div key={i} className="cxr-apunte-linea">{nombre(l.cuenta)}<span className="cxr-der">{eurosExactos(l.importe)}</span></div>
                   ))}
                 </div>
               ))}
@@ -288,7 +294,7 @@ function ComoSeApunta({ fac, vista, error, movil, solo }: {
               <span className="cxr-apunte-titulo cxr-der" role="columnheader">A pagar</span>
               {lineas.map((l, i) => (
                 <div key={i} style={{ display: 'contents' }} role="row">
-                  <span role="cell">{nombre(l.cuenta)}</span>
+                  <span role="cell" className="cxr-apunte-celda">{nombre(l.cuenta)}</span>
                   <span className="cxr-der" role="cell">{l.debe ? eurosExactos(l.debe) : ''}</span>
                   <span className="cxr-der" role="cell">{l.haber ? eurosExactos(l.haber) : ''}</span>
                 </div>
