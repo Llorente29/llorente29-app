@@ -57,7 +57,8 @@ export default function RevisarFacturaPage() {
   const pos = ids.indexOf(invoiceId)
   const ir = (id: string) => navegar(`${rutaRevisarFactura(id)}?ver=${ver}&mes=${mes ?? ''}`)
 
-  const papel = useLeer(fac ? () => urlDelPapel(fac) : null, `${invoiceId}:papel`)
+  // La clave lleva la ruta: sin ella no se vuelve a leer cuando llega la factura (y se quedaba sin papel).
+  const papel = useLeer(fac ? () => urlDelPapel(fac) : null, `${invoiceId}:papel:${fac?.llegada?.ruta ?? fac?.papel ?? ''}`)
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!) : null,
     `${invoiceId}:${fac?.estado}:${fac?.proveedor?.id}:${vuelta}`)
 
