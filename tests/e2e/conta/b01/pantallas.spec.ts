@@ -100,7 +100,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.locator('.cxb-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
       await expect(page.locator('.cxb-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
       await expect(page.locator('.cxb-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
-      await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
+      await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
       // Con la apertura de la semilla, la diferencia es exactamente lo que queda sin casar.
       await expect(page.locator('.cxb-cifra', { hasText: 'Saldo en contabilidad' })).toContainText('difiere 2.175,50 €')
       await capturar(page, 'movimientos')
@@ -201,6 +201,12 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.locator('.cx-barra-ia')).toHaveCount(0)
       await capturar(page, 'movimientos')
       await capturarPieza(page, '.cxb-banda', 'banda-agente')
+
+      // Respuesta 4: el cierre del mes también en el móvil.
+      await page.goto(`/conta/bancos/cierre?banco=${NORTE}&mes=2026-10`)
+      await expect(page.getByRole('heading', { name: 'Cierre de octubre', level: 2 })).toBeVisible()
+      await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
+      await capturar(page, 'cierre')
     } finally {
       await base.deshacerTodo('Limpieza después de las pantallas B01 (móvil)')
       expect(await base.contarAsientosA()).toBe(base.asientosAntes)

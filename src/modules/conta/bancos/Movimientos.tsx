@@ -179,7 +179,7 @@ export function Movimientos() {
           <strong>{r.frase}</strong>
           {lectura.datos.pasada && (
             <span className="cxb-pasada" data-testid="pasada-agente">
-              Mi última pasada, {cuandoPasada(lectura.datos.pasada.cuando, ctx.hoy)} ({lectura.datos.pasada.disparo === 'extracto' ? 'al subir un extracto' : 'la del día'}): {lectura.datos.pasada.resumen}
+              Mi última pasada por todos tus bancos, {cuandoPasada(lectura.datos.pasada.cuando, ctx.hoy)} ({lectura.datos.pasada.disparo === 'extracto' ? 'al subir un extracto' : 'la del día'}): {lectura.datos.pasada.resumen}
             </span>
           )}
           <span>Lo casado solo está en «Lo que ha hecho Folvy», con el porqué y para deshacer. Nada pasa a contabilidad sin que esté seguro o lo confirmes tú.</span>

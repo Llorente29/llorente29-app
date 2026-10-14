@@ -57,9 +57,11 @@ Tiene dos partes, porque una casa y la otra vigila:
   de «validar solo lo seguro» de la empresa. Corre **después de cada extracto**
   (Subir extracto) y **una vez al día**: si hoy no ha pasado, la primera vez que
   alguien abre Bancos. Cada pasada queda en `bank_agent_run` con su resumen, y
-  ese resumen sale en la banda verde («Mi última pasada, hoy a las 09:12 (al
-  subir un extracto): He casado yo 3; te propongo 2 y quedan 4 por aclarar.») y
-  en «Lo que ha hecho Folvy».
+  ese resumen sale en la banda verde («Mi última pasada por todos tus bancos,
+  hoy a las 02:30 (al subir un extracto): He casado yo 3; te propongo 5 y
+  quedan 6 por aclarar.») y en «Lo que ha hecho Folvy». La pasada es de la
+  empresa entera y el titular de la banda es del banco elegido: por eso lo dice
+  (§5, lo que vi en las capturas).
 - **La que vigila** corre cada noche con los demás agentes, en solo lectura
   (`scripts/conta/agente-conciliacion.sql`, `lib/conciliacion.mjs`; en staging
   y en producción). Mira lo del encargo: nada casado dos veces, ningún asiento de
@@ -159,7 +161,70 @@ fixture (13/10) ya no sale porque ahora la e2e deja su pasada registrada.
 
 ## 5. Capturas
 
-(Se completa con el run de las capturas.)
+Todas en `docs/conta/capturas/b01/pantallas/`, de staging-conta con datos
+inventados, ordenador 1440 × 900 y móvil 390 × 844, página entera. Primera
+tanda: e2e solo del B01, [run 38490328729](https://github.com/Llorente29/llorente29-app/actions/runs/38490328729)
+(verde, commit 9415dbc). La segunda (abajo) añade el cierre en el móvil y la
+banda corregida.
+
+### 5.1 Movimientos, ordenador y móvil lado a lado (2.6)
+
+| Ordenador | Móvil |
+|---|---|
+| <img src="capturas/b01/pantallas/movimientos-ordenador.png" width="560"> | <img src="capturas/b01/pantallas/movimientos-movil.png" width="200"> |
+
+Se ve en las dos los retoques del punto 2:
+
+- **barra en una fila** (2 y 1): «Cuenta principal · B01 Norte · B01 Sur · B01 Mercado», con los nombres cortos y sus dudas;
+- **sin «Pregunta o pide algo»** (2.1) ni **«Conectar · pronto»** (2.2);
+- **migas** «Bancos › Banco B01 · Norte · ···0011» (2.4);
+- **un botón principal por fila** (2.3): «Sí» en ámbar, «Decirlo yo» en gris, ninguno en verde;
+- **«difiere 2.175,50 €»** (2.5), que es justo lo que queda sin casar en Norte. El cierre lo desglosa movimiento a movimiento.
+
+En el móvil, la barra de navegación sale **a media imagen**, encima de los saldos.
+Es cosa de la captura de página entera: la barra es fija y Playwright la pinta
+donde cae la primera pantalla. En el teléfono va abajo, y la e2e mide en cada
+captura del móvil que no tapa ninguna fila (`loQueTapan`, en verde).
+
+### 5.2 La banda del agente
+
+| Ordenador | Móvil |
+|---|---|
+| <img src="capturas/b01/pantallas/banda-agente-ordenador.png" width="560"> | <img src="capturas/b01/pantallas/banda-agente-movil.png" width="200"> |
+
+**Lo que vi y he corregido:** la primera tanda decía «Te quedan 2 por confirmar
+y 3 por aclarar» en el titular y «te propongo 5 y quedan 6 por aclarar» en la
+pasada. Las dos cifras están bien —la primera es de Norte (2 + 3) y la segunda
+de los tres bancos (Norte 2 + 3, Sur 1 + 1, Mercado 2 + 2)—, pero leídas juntas
+parecen un error. Ahora la pasada dice «Mi última pasada **por todos tus
+bancos**, …», y la e2e lo exige.
+
+### 5.3 Cierre del mes
+
+| Ordenador | Móvil |
+|---|---|
+| <img src="capturas/b01/pantallas/cierre-ordenador.png" width="560"> | <img src="capturas/b01/pantallas/cierre-movil.png" width="200"> |
+
+Las tres diferencias salen exactas y explicadas por lo que queda sin casar:
+
+| Banco | Saldo del banco | Saldo en contabilidad | Diferencia | Sin casar |
+|---|---|---|---|---|
+| Norte | 44.237,80 € | 46.413,30 € | −2.175,50 € | 5 movimientos, −2.175,50 € |
+| Sur | 9.451,60 € | 9.500,00 € | −48,40 € | 2 movimientos, −48,40 € |
+| Mercado | 4.185,25 € | 2.500,00 € | 1.685,25 € | 4 movimientos, 1.685,25 € |
+
+En la Cuenta principal (sin extracto de B01) la diferencia sale «—, sin saldo
+de fin de mes», con lo que está en contabilidad y no en el banco.
+
+Octubre aún no ha terminado, así que la captura no puede enseñar un mes
+cerrado: el cierre de verdad lo ensaya la prueba de staging (§3.2).
+
+### 5.4 Las demás, sin cambios de fondo
+
+Están en la misma carpeta y son las de la tarea 5, ya con la barra en una fila:
+
+- portada, para confirmar y por aclarar (en el móvil);
+- por aclarar, tarjeta desconocida, reglas, subir extracto, cuentas y «Lo que ha hecho Folvy» (en el ordenador).
 
 ## 6. Ficheros compartidos tocados en esta tanda
 
@@ -168,3 +233,14 @@ fixture (13/10) ya no sale porque ahora la e2e deja su pasada registrada.
 | `src/modules/conta/marco/MarcoConta.tsx`, `MenuConta.tsx`, `module.tsx` | `sinPregunta`: una pantalla puede no enseñar la barra «Pregunta o pide algo» ni el botón central de la IA (solo Bancos la usa) |
 | `.github/workflows/cumplimiento-nocturno-conta.yml`, `cumplimiento-produccion-conta.yml` | el paso del agente «Conciliación», igual que el del libro |
 | `supabase/migrations/20261101T0110_b01_funciones.sql` | (mía, misma tanda) `bank_casar` cuenta la corrección de una regla; `bank_importar` reconoce el mismo movimiento entre fuentes |
+
+## 7. Lo que queda, y lo que te pregunto
+
+1. **¿Pasada diaria en el servidor para la tarea 7?** (§3.1). Hoy la del día
+   corre cuando alguien abre Bancos; sin nadie, la caza el agente nocturno en ámbar.
+2. **A D01 y C04:** el rojo de libro.spec en el run 38476695805 de D01 fue mío
+   (las aperturas) y ya está arreglado. El rojo que queda en libro.spec no es
+   mío (§4).
+3. **Para la tanda de producción** (tarea 7): 0100–0160 dan «sigue» en el
+   analizador. Nada lanzado en producción.
+4. Paro aquí, antes de la 7.
