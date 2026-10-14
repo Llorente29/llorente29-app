@@ -155,7 +155,8 @@ export function clasificar(s, dentroDeDo = false) {
   else if ((m = t.match(new RegExp(`^create (?:or replace )?(?:materialized )?view ${ID}`, 'i')))) add(/or replace/i.test(t) ? 'reemplaza' : 'crea', 'vista', nombre(m[1]))
   else if (/^create (?:or replace )?function/i.test(t)) add(/^create or replace/i.test(t) ? 'reemplaza' : 'crea', 'funcion', firma(t) ?? '(firma ilegible)')
   else if ((m = t.match(new RegExp(`^create (?:unique )?index (concurrently )?(?:if not exists )?(?:${ID} )?on (?:only )?${ID}`, 'i')))) add('crea', 'indice', nombre(m[3]), `${m[1] ? 'concurrently ' : ''}${m[2] ?? ''}`.trim())
-  else if ((m = t.match(new RegExp(`^create (?:or replace )?trigger ${ID} .*? on ${ID}`, 'i')))) add('crea', 'disparador', nombre(m[2]), m[1])
+  // C06b (respuesta 8): también «create constraint trigger» (el diferido de la 0720). Sin él, no se veía: ni crea ni nada.
+  else if ((m = t.match(new RegExp(`^create (?:or replace )?(?:constraint )?trigger ${ID} .*? on ${ID}`, 'i')))) add('crea', 'disparador', nombre(m[2]), m[1])
   else if ((m = t.match(new RegExp(`^create policy ${ID} on ${ID}`, 'i')))) add('crea', 'politica', nombre(m[2]), m[1])
   else if ((m = t.match(new RegExp(`^drop policy (?:if exists )?${ID} on ${ID}`, 'i')))) add('quita', 'politica', nombre(m[2]), m[1])
   else if ((m = t.match(new RegExp(`^drop trigger (?:if exists )?${ID} on ${ID}`, 'i')))) add('quita', 'disparador', nombre(m[2]), m[1])

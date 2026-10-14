@@ -10,6 +10,7 @@
 //   · urlDocumento: «Ver documento», una URL firmada de cinco minutos.
 //   · enviarADiez: la edge function conta-diez-enviar (C0008 cerrado, C0001
 //     vetada, sin documento no se envía, nunca dos veces).
+//   · validarConDocumento (respuesta 8): validar y guardar el PDF, juntos.
 //   · validarYEnviar: los tres pasos, asiento a asiento, diciendo de cada uno
 //     qué ha pasado (regla 8).
 //
@@ -22,11 +23,12 @@
 // 20261021T0100: journal_entry_document, conta_resumen_ventas,
 // conta_documento_guardar, external_send.document_status / document_error, el
 // bucket conta-documentos y la función conta-diez-enviar.
+// Y los de la 20261111T0720 (C06b, respuesta 8): conta_numero_previsto y
+// journal_entry_validar_con_documento.
 
 import { jsPDF } from 'jspdf'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje, hayBase } from '@/modules/conta/services/bd'
-import { validar } from '@/modules/conta/services/diarioService'
 import { correspondenciaDeEmpresa } from '../../../../supabase/functions/_shared/diezAnalitica.ts'
 import { resumenDeAsiento, type ResumenBD } from '../../../../supabase/functions/_shared/resumenDeAsiento.ts'
 import { resumenVentasPdf } from '../../../../supabase/functions/_shared/resumenVentasPdf.ts'
@@ -34,6 +36,7 @@ import type { ResultadoEnvio } from '../../../../supabase/functions/_shared/diez
 import type { ConDiez, EnvioDiez, PasoEnvio } from '@/modules/conta/lib/conDiez'
 import { nombreEnZip, ordenPendientes, type PendienteDiez } from '@/modules/conta/lib/pendientesDiez'
 import { crearZip, type FicheroZip } from '@/modules/conta/lib/zip'
+import { noSeValida, validarConPdf, type ValidadoConPdf } from '@/modules/conta/lib/validarConPdf'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -89,20 +92,58 @@ export async function leerConDiez(accountId: string, companyId: string, entryIds
   return out
 }
 
-/** El PDF del asiento validado, guardado y enlazado. Si ya lo tiene, devuelve el que hay. */
-export async function guardarDocumento(entryId: string, quien: string | null): Promise<{ ruta: string; nombre: string; yaEstaba: boolean }> {
-  const r = await rpc<ResumenBD>('conta_resumen_ventas', { p_entry: entryId })
-  if (r.documento) return { ruta: r.documento.ruta, nombre: r.documento.nombre, yaEstaba: true }
+/** El «Resumen de ventas» del asiento, tal como queda validado (estado y número los pone quien llama). */
+function hacerPdf(r: ResumenBD): { bytes: Uint8Array; nombre: string } {
   const listo = resumenDeAsiento(r, { correspondencia: correspondenciaDeEmpresa(r.company_id), generado: new Date(), hoy: hoyMadrid() })
-  const pdf = resumenVentasPdf(jsPDF, listo.datos)
+  return { bytes: resumenVentasPdf(jsPDF, listo.datos), nombre: listo.nombreFichero }
+}
+
+/** Lo sube a cuenta/asiento/huella.pdf. Subido sin enlazar no es el documento de nadie. */
+async function subirPdf(r: ResumenBD, pdf: Uint8Array): Promise<{ ruta: string; sha256: string }> {
   const sha = hex(await crypto.subtle.digest('SHA-256', pdf as BufferSource))
   const ruta = `${r.account_id}/${r.id}/${sha.slice(0, 16)}.pdf`
   hayBase()
   const sub = await supabase!.storage.from(BUCKET).upload(ruta, new Blob([pdf as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })
   // Ya subido en un intento anterior con la misma huella: es el mismo fichero.
-  if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`No se ha podido subir el documento: ${sub.error.message}`)
-  const g = await rpc<Fila>('conta_documento_guardar', { p_entry: entryId, p_ruta: ruta, p_nombre: listo.nombreFichero, p_sha256: sha, p_bytes: pdf.length, p_quien_nombre: quien })
+  if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`no se ha podido subir su PDF (${sub.error.message})`)
+  return { ruta, sha256: sha }
+}
+
+/**
+ * Solo para un asiento validado ANTES de la 0720 sin su PDF: guardarlo ahora.
+ * Lo nuevo se valida con su PDF en una sola transacción (validarConDocumento).
+ */
+export async function guardarDocumento(entryId: string, quien: string | null): Promise<{ ruta: string; nombre: string; yaEstaba: boolean }> {
+  const r = await rpc<ResumenBD>('conta_resumen_ventas', { p_entry: entryId })
+  if (r.documento) return { ruta: r.documento.ruta, nombre: r.documento.nombre, yaEstaba: true }
+  const pdf = hacerPdf(r)
+  const sub = await subirPdf(r, pdf.bytes)
+  const g = await rpc<Fila>('conta_documento_guardar', { p_entry: entryId, p_ruta: sub.ruta, p_nombre: pdf.nombre, p_sha256: sub.sha256, p_bytes: pdf.bytes.length, p_quien_nombre: quien })
   return { ruta: String(g.ruta), nombre: String(g.nombre), yaEstaba: g.ya_estaba === true }
+}
+
+/**
+ * C06b · Respuesta 8, pregunta 1: validar un asiento de ventas de una
+ * plataforma y guardar su PDF van juntos (lib/validarConPdf.ts y la 0720). Si
+ * el PDF falla, el asiento no se valida y el error dice por qué.
+ */
+export async function validarConDocumento(entryId: string, quien: string | null): Promise<ValidadoConPdf> {
+  const quitar = (e: unknown) => new Error((e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, ''))
+  return validarConPdf(entryId, quien, {
+    resumen: (id) => rpc<ResumenBD>('conta_resumen_ventas', { p_entry: id }),
+    numeroPrevisto: (id) => rpc<number>('conta_numero_previsto', { p_entry: id }),
+    hacerPdf: async (r) => {
+      try { return hacerPdf(r) } catch (e) { throw new Error(`su PDF no se puede hacer (${quitar(e).message.replace(/\.$/, '')})`, { cause: e }) }
+    },
+    subir: subirPdf,
+    validarConDocumento: async (a) => {
+      try {
+        const r = await rpc<Fila>('journal_entry_validar_con_documento', { p_entry: a.entryId, p_numero: a.numero, p_ruta: a.ruta, p_nombre: a.nombre, p_sha256: a.sha256, p_bytes: a.bytes, p_quien_nombre: a.quien })
+        return { serie: Number(r.serie), numero: Number(r.numero) }
+      } catch (e) { throw quitar(e) }
+    },
+    guardarDocumento,
+  })
 }
 
 /** «Ver documento»: una URL firmada de cinco minutos. */
@@ -141,15 +182,16 @@ export async function validarYEnviar(xs: readonly { id: string; concepto: string
     alPaso?.(i)
     const p: PasoEnvio = { concepto: a.concepto, validado: a.estado === 'validado', documento: false, enDiez: false, texto: '' }
     try {
-      if (!p.validado) { await validar(a.id, quien); p.validado = true }
-      await guardarDocumento(a.id, quien); p.documento = true
+      // Validar y guardar su PDF van juntos (respuesta 8): o las dos cosas, o ninguna.
+      if (!p.validado) { await validarConDocumento(a.id, quien); p.validado = true } else await guardarDocumento(a.id, quien)
+      p.documento = true
       const r = await enviarADiez(a.id)
       p.enDiez = r.estado === 'en_diez'
       p.pdfPendiente = r.estado === 'en_diez' && r.pdfPendiente === true
       p.texto = r.texto
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e)
-      p.texto = !p.validado ? `No se ha validado: ${m}` : !p.documento ? `Validado, pero no ha llegado a Diez: falta el documento (${m}).` : `No ha llegado a Diez: ${m}.`
+      p.texto = !p.validado ? noSeValida(m) : !p.documento ? `Validado, pero no ha llegado a Diez: falta el documento (${m}).` : `No ha llegado a Diez: ${m}.`
     }
     pasos.push(p)
   }

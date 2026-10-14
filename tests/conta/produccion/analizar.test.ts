@@ -811,6 +811,15 @@ describe('lo que tiene que parar', () => {
     expect(sup('alter table public.supplier add column x text not null').para).toHaveLength(1)
     expect(sup('alter table public.supplier alter column name type varchar(10)').para).toHaveLength(1)
   })
+  it('C06b: un disparador nuevo en una tabla que existe, también «constraint trigger» (diferido): cambia, no se cuela callado', () => {
+    for (const sql of [
+      'create trigger t1 after update on public.supplier for each row execute function public.f()',
+      'create constraint trigger t2 after update of status on public.supplier deferrable initially deferred for each row execute function public.f()',
+    ]) {
+      const ops = sentencias(sql).flatMap((s: string) => clasificar(s))
+      expect(ops, sql).toEqual([expect.objectContaining({ accion: 'crea', tipo: 'disparador', objeto: 'public.supplier' })])
+    }
+  })
   it('lo que solo añade, sigue', () => {
     expect(sup('alter table public.supplier add column x text').para).toHaveLength(0)
     expect(sup("alter table public.supplier add column y text not null default 'a'").para).toHaveLength(0)
