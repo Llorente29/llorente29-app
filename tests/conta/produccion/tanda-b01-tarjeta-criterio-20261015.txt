@@ -1,0 +1,21 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# B01 · Qué es una tarjeta entera, afinado (Julio, 15/10, opción a). Rama
+# conta/b01-tarjeta-criterio. La anterior de este fichero (0190 y 0191) ya está
+# en el historial de producción; su copia: tests/conta/produccion/tanda-b01-tarjeta-oculta-20261015.txt.
+#
+#   1. 20261101T0192 — se tapa solo la tira de 15 a 19 cifras que empieza como
+#      Visa, Mastercard o Amex y pasa Luhn: las referencias de 14 a 16 cifras
+#      del Excel de BBVA ya no se tocan. Una función nueva y _bank_ocultar_tarjetas
+#      con la misma firma (cambia en caliente, declarado y con prueba de staging).
+#      Lo ya tapado no se destapa.
+#
+# Lo que cuenta antes y después: scripts/conta/produccion/cuentas/tarjeta-criterio.sql
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (vuelve al criterio de 13 a 19 cifras).
+cuenta: scripts/conta/produccion/cuentas/tarjeta-criterio.sql
+supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql

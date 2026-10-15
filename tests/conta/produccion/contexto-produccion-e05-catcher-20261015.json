@@ -1,0 +1,33 @@
+{
+ "_que": "Contexto de PRODUCCIÓN de la tanda E05 preparada (tests/conta/produccion/tanda-e05-catcher-20261015.txt): la respuesta de la consulta de contexto del workflow (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow), lanzada en solo lectura. Vale solo para los ficheros con estos md5.",
+ "medido": "2026-10-15T10:42:11Z",
+ "tanda": {
+  "supabase/migrations/20261112T0100_e05_lotes.sql": "9798d01e003adaec2a0b206bbe7805bf",
+  "supabase/migrations/20261112T0110_e05_recibida_envio_emisor.sql": "f4ae123351ff2a96dc33c09f396965ce",
+  "supabase/migrations/20261112T0120_e05_cruces.sql": "3ded29d70bd87bd809a5019342accf36",
+  "supabase/migrations/20261112T0130_e05_pago_prepago.sql": "6b6c976745b82b0b2a0dfec6ca789c44",
+  "supabase/migrations/20261112T0140_e05_datos.sql": "8f87b40543fe5cf2d8cfbd18622b3362"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account",
+   "public.company_account_link",
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public.conta_recibida_envio(uuid)"
+  ],
+  "filas": {
+   "public.company_account": 751,
+   "public.company_account_link": 82,
+   "public.supplier_invoice": 6
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

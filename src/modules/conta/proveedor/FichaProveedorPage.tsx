@@ -47,6 +47,7 @@ import { deshacerUnion } from '@/modules/conta/services/comprasService'
 import Contabilidad from '@/modules/conta/proveedor/Contabilidad'
 import Documentos from '@/modules/conta/proveedor/Documentos'
 import Historial from '@/modules/conta/proveedor/Historial'
+import { SaldoPrepago } from '@/modules/conta/documentos/SaldoPrepago'
 
 export default function FichaProveedorPage({ extensiones = {} }: { extensiones?: ExtensionesProveedor }) {
   const { supplierId = '' } = useParams()
@@ -333,6 +334,7 @@ function Resumen({ secciones }: { secciones: SeccionDeFicha[] }) {
       <div className="cxp-columnas">
         <div className="cxp-col-ancha"><TarjetaFacturas /></div>
         <div className="cxp-col-estrecha">
+          <SaldoDeCatcher />
           <BloqueAprendido />
           <ConQuienHablas />
           <Notas />
@@ -464,6 +466,7 @@ function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
             : <span className="cxp-cifra-pie">Aún no hay facturas suyas</span>}
         </div>
       </div>
+      <SaldoDeCatcher />
       <FraseAprendido />
       <nav className="cx-lista" aria-label="Apartados de la ficha">
         {apartados.map((a) => {
@@ -503,4 +506,12 @@ function PantallaMovil({ ap, secciones }: { ap: Apartado; secciones: SeccionDeFi
       {contenido}
     </>
   )
+}
+
+/** E05 · En la ficha de Catcher, el saldo prepago de la 40700001 y la casilla del saldo del portal. */
+function SaldoDeCatcher() {
+  const { datos, actor } = useFicha()
+  const empresa = datos.opciones.empresa?.id
+  if (!empresa || !/catcher/i.test(`${datos.ficha.name} ${datos.ficha.legalName ?? ''}`)) return null
+  return <SaldoPrepago companyId={empresa} quien={actor.name} />
 }

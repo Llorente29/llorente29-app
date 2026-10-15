@@ -1,0 +1,21 @@
+{
+ "_que": "B01 · contexto de producción de la tanda viva «qué es una tarjeta entera, afinado» (0192), medido en SOLO LECTURA el 15/10 a las 09:21 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. _bank_ocultar_tarjetas(text) existe (la de la 0190, md5 de su cuerpo d9054177… igual al del fichero); _bank_parece_tarjeta no; nada en el camino del pedido.",
+ "medido": "2026-10-15T09:21Z",
+ "tanda": {
+  "supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql": "98433fb66df3c91c664b659bbe7f21c6"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._bank_ocultar_tarjetas(text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

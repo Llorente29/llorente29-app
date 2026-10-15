@@ -1,0 +1,28 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# E05 · Las facturas de riders de Catcher (rama conta/d01-catcher).
+# La anterior de este fichero (B01, 0192) ya está en el historial de
+# producción; su copia: tests/conta/produccion/tanda-b01-tarjeta-criterio-20261015.txt.
+#
+#   1. 0100 — el emisor en la factura, el origen «lote» (CHECK que amplía:
+#      declarado en su cabecera, con su prueba de staging), el lote, sus
+#      pedidos, la tienda → local y conta_lote_registrar.
+#   2. 0110 — conta_recibida_envio con el emisor (misma firma; declarado).
+#   3. 0120 — la tarifa, «Por aclarar» y sus funciones. Solo añade.
+#   4. 0130 — el pago contra la 40700001 y el saldo prepago. Solo añade.
+#   5. 0140 — los datos de Foodint: la 40700001 «Saldo prepago Catcher», la
+#      62400001 como gasto de «Riders», las tiendas → local y la tarifa desde
+#      el 01/09/2026. Solo añade filas.
+#
+# Ninguna toca el camino del pedido: solo leen sale (conta_lote_pedidos_app),
+# sin clave ajena a ella.
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-e05-catcher-20261015.txt.
+cuenta: scripts/conta/produccion/cuentas/e05-catcher.sql
+supabase/migrations/20261112T0100_e05_lotes.sql
+supabase/migrations/20261112T0110_e05_recibida_envio_emisor.sql
+supabase/migrations/20261112T0120_e05_cruces.sql
+supabase/migrations/20261112T0130_e05_pago_prepago.sql
+supabase/migrations/20261112T0140_e05_datos.sql
