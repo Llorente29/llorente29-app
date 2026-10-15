@@ -4,7 +4,7 @@
 // E05 · Las facturas de riders de Catcher contra staging-conta, en ordenador
 // (1440) y móvil (390), con la quincena INVENTADA de tests/conta/e05/ejemplo.ts
 // (la forma de los ficheros reales; ni un rider de verdad). Capturas en
-// docs/conta/capturas/e05/.
+// docs/conta/capturas/d01-e05/.
 //
 // Datos: supabase/seeds/conta/seed_e05_staging.sql (Riders en la 41000100,
 // Catcher con su 410, la 40700001, las tiendas → local y la tarifa), en la
@@ -25,7 +25,7 @@ import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { EMPRESA, PEDIDOS, quincenaInventada } from '../../../conta/e05/ejemplo'
 import { madridAUtc } from '../../../../src/modules/conta/lib/catcherQuincena'
 
-const DIR = 'docs/conta/capturas/e05'
+const DIR = 'docs/conta/capturas/d01-e05'
 /** La empresa de la cuenta A en staging (su NIF, inventado): las facturas del ejemplo van a su nombre. */
 const EMPRESA_A = { ...EMPRESA, nif: 'B28000016' }
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')

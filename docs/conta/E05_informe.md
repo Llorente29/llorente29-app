@@ -42,8 +42,8 @@ Sin maqueta nueva: va dentro de Documentos (N22), con sus piezas y su estilo (`d
 
 | Ordenador | Móvil |
 |---|---|
-| ![](capturas/e05/catcher-leida-ordenador.png) | ![](capturas/e05/catcher-leida-movil.png) |
-| ![](capturas/e05/catcher-subida-ordenador.png) | ![](capturas/e05/catcher-subida-movil.png) |
+| ![](capturas/d01-e05/catcher-leida-ordenador.png) | ![](capturas/d01-e05/catcher-leida-movil.png) |
+| ![](capturas/d01-e05/catcher-subida-ordenador.png) | ![](capturas/d01-e05/catcher-subida-movil.png) |
 
 ### La quincena (`/conta/documentos/catcher/:lote`)
 
@@ -65,8 +65,8 @@ Sin maqueta nueva: va dentro de Documentos (N22), con sus piezas y su estilo (`d
 
 | Ordenador | Móvil |
 |---|---|
-| ![](capturas/e05/catcher-quincena-ordenador.png) | ![](capturas/e05/catcher-quincena-movil.png) |
-| ![](capturas/e05/catcher-reclamada-ordenador.png) | ![](capturas/e05/catcher-reclamada-movil.png) |
+| ![](capturas/d01-e05/catcher-quincena-ordenador.png) | ![](capturas/d01-e05/catcher-quincena-movil.png) |
+| ![](capturas/d01-e05/catcher-reclamada-ordenador.png) | ![](capturas/d01-e05/catcher-reclamada-movil.png) |
 
 ### El saldo prepago (en la quincena y en la ficha de Catcher)
 
@@ -76,7 +76,7 @@ Sin maqueta nueva: va dentro de Documentos (N22), con sus piezas y su estilo (`d
 
 | Ordenador | Móvil |
 |---|---|
-| ![](capturas/e05/catcher-pago-y-saldo-ordenador.png) | ![](capturas/e05/catcher-pago-y-saldo-movil.png) |
+| ![](capturas/d01-e05/catcher-pago-y-saldo-ordenador.png) | ![](capturas/d01-e05/catcher-pago-y-saldo-movil.png) |
 
 ### Los retoques del 15/10 (Julio, al revisar el diseño)
 
@@ -175,12 +175,19 @@ Fuentes:
   - pago y saldo: run 38716016949;
   - la semilla de la e2e: run 38721271856.
 - **e2e** (`tests/e2e/conta/d01/catcher.spec.ts`): ordenador y móvil, en verde en el run 38728172632 (commit 8dcbc5c6), con el resto del frente A (12 pasadas, 5 saltadas a propósito).
-  - Las capturas son de ese run, en `docs/conta/capturas/e05/`.
+  - Las capturas son de ese run, en `docs/conta/capturas/d01-e05/`.
   - Las dos pasadas comparten la quincena en staging: la segunda la encuentra subida, cruzada y con el pago propuesto, y lo dice. La prueba vuelve a abrir el G236 si la otra pasada lo dejó decidido.
   - La comprobación de la marca mira solo lo nuevo. El resto de Documentos la enseña fuera de `?marca=contabilidad` a propósito; la ausencia ahí la prueba `documentos.spec.ts`.
 
-## La tanda de producción (en el manifiesto vivo desde el 15/10)
+## La tanda de producción (aplicada en real el 15/10)
 
+- **Aplicada**: run #91 en real, sobre 452571c4, con la comprobación en verde.
+  - Julio comprobó en producción las 6 tablas, las 2 tiendas y la tarifa.
+  - Comprobado después, en solo lectura:
+    - la 40700001 «Saldo prepago Catcher» existe, con template_code '407', 'own' y el mismo plan que la 40700000, y sin apuntes todavía;
+    - la 62400001 es el gasto del único proveedor de la 41000100 (Riders): 1 enlace;
+    - las cinco están en el historial.
+- **Antes, el ensayo #89 paró** en el recuento de antes, sin aplicar nada. La cuenta nombraba tablas que crea la propia tanda, y Postgres las resuelve al analizar la consulta, aunque vayan en la rama de un case que no se toma. Se arregló con `query_to_xml`, y `antes-de-subir-sql.mjs` (punto 5) ya lo para antes de subir.
 - **Manifiesto:** `supabase/produccion/aplicar.txt` (copia: `tests/conta/produccion/tanda-e05-catcher-20261015.txt`). La de B (0192) ya estaba en el historial de producción y queda archivada como copia (`tanda-b01-tarjeta-criterio-20261015.txt`, con su vuelta atrás y su contexto).
 - **Comprobado en producción**, en solo lectura:
   - la 40700001 no existe, ni en Foodint ni en toda la tabla;
