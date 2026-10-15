@@ -996,38 +996,6 @@ describe('la tanda de conta_diez_autorizo.incluye_recibidas (C06b, respuesta 8, 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): conta_diez_autorizo.incluye_recibidas (C06b, respuesta 8, tarea 1)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
-  const viva = leerTanda(MANIFIESTO)
-  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 14/10 a las 23:26 UTC para ESTE fichero (con su md5).
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
-  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
-  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
-
-  it('un fichero: la 0740 añade la columna con su valor por defecto; sigue', () => {
-    expect(viva).toEqual(['supabase/migrations/20261111T0740_c06b_diez_autorizo_recibidas.sql'])
-    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue' })
-  })
-  it('solo estructura: not null con default false (lo de hoy queda cerrado para recibidas) y ninguna autorización escrita', () => {
-    const sql = readFileSync(viva[0], 'utf8')
-    expect(sql).toMatch(/add column if not exists incluye_recibidas boolean not null default false/)
-    expect(sql).not.toMatch(/^\s*(insert|update|delete)\b/im)
-  })
-  it('declara qué cuenta antes y después, y el fichero existe', () => {
-    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/diez-autorizo-recibidas.sql'])
-    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
-  })
-  it('su vuelta atrás quita la columna y para si alguna autorización ya abre las recibidas', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
-    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0740_c06b_diez_autorizo_recibidas.down.sql'])
-    const sql = readFileSync(atras[0], 'utf8')
-    expect(sql).toMatch(/where incluye_recibidas/)
-    expect(sql).toMatch(/drop column if exists incluye_recibidas/)
-  })
-})
-
 describe('la tanda del B01 (aplicada el 14/10, su copia): Bancos y conciliación (0100–0170)', () => {
   const MANIFIESTO = 'tests/conta/produccion/tanda-b01-20261014.txt'
   const viva = leerTanda(MANIFIESTO)
@@ -1066,6 +1034,36 @@ describe('la tanda del B01 (aplicada el 14/10, su copia): Bancos y conciliación
     expect(atras).toEqual([...B01].reverse().map((f) => `supabase/vuelta-atras/20261101T${f}.down.sql`))
     for (const f of atras) expect(existsSync(f), f).toBe(true)
     expect(readFileSync(atras[0], 'utf8')).toMatch(/ya tienen % extractos, movimientos o tarjetas: no se quitan/)
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): nunca una tarjeta entera (B01, 0190 y 0191)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const tanda = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 15/10 a las 08:17 UTC para ESTOS ficheros.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(tanda, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('la 0190 sigue (cambia bank_movement, declarado y con prueba); la 0191 pide «autorizo» (update)', () => {
+    expect(tanda).toEqual(['supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql', 'supabase/migrations/20261101T0191_b01_tarjeta_oculta_guardado.sql'])
+    expect(r.ficheros).toEqual({ [tanda[0]]: 'sigue', [tanda[1]]: 'autorizo' })
+  })
+  it('la 0191 para si queda alguna tarjeta entera', () => {
+    expect(readFileSync(tanda[1], 'utf8')).toMatch(/if n > 0 then raise exception/)
+  })
+  it('declara qué cuenta, y lo que cuenta lo repone la vuelta atrás (no las tarjetas: no se devuelven)', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/tarjeta-oculta.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+    expect(readFileSync(cuentas[0], 'utf8')).not.toMatch(/luhn/i)
+  })
+  it('su vuelta atrás, al revés: la 0191 no devuelve nada y la 0190 quita el disparador y sus funciones', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261101T0191_b01_tarjeta_oculta_guardado.down.sql', 'supabase/vuelta-atras/20261101T0190_b01_tarjeta_oculta.down.sql'])
+    expect(readFileSync(atras[0], 'utf8').replace(/--.*$/gm, '').trim()).toBe('select 1;')
+    expect(readFileSync(atras[1], 'utf8')).toMatch(/drop trigger if exists bank_movement_sin_tarjetas/)
   })
 })
 
