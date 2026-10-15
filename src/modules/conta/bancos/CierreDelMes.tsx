@@ -154,7 +154,7 @@ export function CierreDelMes() {
   )
 }
 
-function DialogoMotivo({ titulo, explicacion, boton, alCerrar, alAceptar }: {
+export function DialogoMotivo({ titulo, explicacion, boton, alCerrar, alAceptar }: {
   titulo: string; explicacion: string; boton: string; alCerrar: () => void; alAceptar: (motivo: string) => Promise<void>
 }) {
   const [motivo, setMotivo] = useState('')

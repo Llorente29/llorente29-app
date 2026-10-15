@@ -1,0 +1,30 @@
+# COPIA. La tanda del B01 «deshacer un extracto» (0180) está en el historial de
+# producción con su huella (real 38686485297 desde 71db58bd, 15/10). La viva es otra.
+#
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# B01 · Deshacer un extracto entero (Julio, 15/10: cambiar el primer Norma 43
+# de Foodint, sacado desde «extracto», por el de «Firmas», que trae a quién
+# pagas). Rama conta/b01-extractos. La tanda anterior de este fichero (C06b,
+# 0720) ya está en el historial de producción con su huella; su copia queda en
+# tests/conta/produccion/tanda-c06b-validar-pdf-20261014.txt.
+#
+#   1. 20261101T0180 — bank_extracto_deshacer, NUEVA: quita un extracto y sus
+#      movimientos (también los «¿es el mismo?») si ninguno está casado ni
+#      tiene ticket; pide el porqué y lo deja en «Lo que ha hecho Folvy».
+#      No cambia ninguna tabla, función ni dato al aplicarse.
+#
+# Orden: BASE y luego FRONT (el botón «Deshacer…» de Cuentas y extractos
+# llama a la función: sin ella, falla en pantalla con su error).
+#
+# Lo que cuenta antes y después: scripts/conta/produccion/cuentas/extracto-deshacer.sql
+# (la función, y extractos, movimientos, casados y registro, que no se mueven).
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/extracto-deshacer.sql
+supabase/migrations/20261101T0180_b01_extracto_deshacer.sql

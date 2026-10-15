@@ -14,7 +14,7 @@ import { leerNorma43 } from '@/modules/conta/lib/norma43'
 import {
   avisoConsentimiento, caducaElConsentimiento, movimientoDeEnableBanking, proveedorEnableBanking, proveedorSimulado, type TransaccionEnableBanking,
 } from '@/modules/conta/lib/agregadorBanco'
-import { bancosEnBarra, filaDe, migasBanco, nombreCorto, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
+import { bancosEnBarra, filaDe, migasBanco, nombreCorto, textoExtractoDeshecho, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import { decidir } from '@/modules/conta/lib/conciliacion'
 import { FICHERO } from '../../../e2e/conta/b01/datos'
 
@@ -118,5 +118,16 @@ describe('Respuesta 4 en el núcleo', () => {
     }
     const d = decidir({ id: 'm', cuentaId: 'b', fecha: '2026-10-05', importeCent: -12_345, concepto: 'RECIBO PLENITUDE ENERGIA', conceptoComun: '03', referencias: [], antesDelCorte: false }, ctxVacio)
     expect(d.confianza).toBe('probable')
+  })
+})
+
+describe('deshacer un extracto (15/10): lo que dice la pantalla', () => {
+  it('con cuántos movimientos quitó y cuántos eran «¿es el mismo?»', () => {
+    expect(textoExtractoDeshecho({ fichero: 'extracto.n43', movimientos: 298, posiblesRepetidos: 0 }))
+      .toBe('Extracto «extracto.n43» deshecho: quitados 298 movimientos. Ya puedes subir el bueno.')
+    expect(textoExtractoDeshecho({ fichero: 'firmas.n43', movimientos: 13, posiblesRepetidos: 13 }))
+      .toBe('Extracto «firmas.n43» deshecho: quitados 13 movimientos, 13 de ellos como «¿es el mismo?». Ya puedes subir el bueno.')
+    expect(textoExtractoDeshecho({ fichero: null, movimientos: 1, posiblesRepetidos: 0 }))
+      .toBe('Extracto deshecho: quitados 1 movimiento. Ya puedes subir el bueno.')
   })
 })
