@@ -1,9 +1,9 @@
 # Vuelta atrás de la tanda de producción (modo «vuelta_atras»), en orden
-# inverso. C06b · Respuesta 8, tarea 1, paso 3.
-#   0750: fuera la autorización de empresa en C0008 (la del asiento 1801 se
-#         queda). PARA si con ella ya se ha enviado algo a Diez (o se ha
-#         intentado escribir): quitarla no lo saca de Diez.
+# inverso. C06b · las recibidas abiertas en Diez.
+#   0760: la de empresa en C0008 vuelve a ser solo de ventas (incluye_recibidas
+#         = false, y su motivo como antes). PARA si con ella ya se ha enviado
+#         (o intentado escribir) alguna recibida: cerrarla no la saca de Diez.
 # En este modo, lo que se cuenta se enseña antes y después (cambiar es lo
 # esperado: se deshace la tanda) y no para.
-cuenta: scripts/conta/produccion/cuentas/diez-autorizo-empresa.sql
-supabase/vuelta-atras/20261111T0750_c06b_diez_autorizo_empresa_datos.down.sql
+cuenta: scripts/conta/produccion/cuentas/diez-recibidas-abiertas.sql
+supabase/vuelta-atras/20261111T0760_c06b_diez_recibidas_abiertas_datos.down.sql

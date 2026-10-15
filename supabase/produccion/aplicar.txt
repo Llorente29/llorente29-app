@@ -5,16 +5,15 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# C06b · Respuesta 8, tarea 1, paso 3 de 3 (rama conta/c06b-autorizo-empresa). PREPARADA, NO LANZADA.
+# C06b · las recibidas abiertas en Diez (Julio, 15/10) (rama conta/c06b-recibidas-abiertas). PREPARADA, NO LANZADA.
 #
-#   1. 20261111T0750 — DATOS: la autorización de la EMPRESA de Foodint para
-#      escribir en Diez C0008, desde el 01/10/2026 y solo ventas
-#      (incluye_recibidas = false). Autorizado por Julio. No envía nada: se
-#      sigue enviando con el botón «Validar y enviar a Diez».
+#   1. 20261111T0760 — DATOS: la autorización de EMPRESA de Foodint en C0008
+#      pasa a incluir las facturas recibidas (incluye_recibidas = true); su
+#      desde (2026-10-01) se queda. No envía nada: se sigue con el botón.
 #
-# Va después de: #189 fusionado (a08c8a9), Vercel READY y conta-diez-enviar
-# desplegada desde main (versión 8, lee desde e incluye_recibidas).
+# Va después de: conta-diez-enviar desplegada desde main en 05d4edf (versión 9,
+# con la búsqueda antes de escribir, #190, y la anulación de recibidas, #192).
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/diez-autorizo-empresa.sql
-supabase/migrations/20261111T0750_c06b_diez_autorizo_empresa_datos.sql
+cuenta: scripts/conta/produccion/cuentas/diez-recibidas-abiertas.sql
+supabase/migrations/20261111T0760_c06b_diez_recibidas_abiertas_datos.sql

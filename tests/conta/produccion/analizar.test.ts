@@ -900,12 +900,50 @@ describe('la tanda de conta_diez_autorizo.desde (C06b, respuesta 8, tarea 1; ya 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): DATOS, la empresa de Foodint en C0008 desde el 01/10, solo ventas (C06b, respuesta 8, tarea 1, paso 3)', () => {
+describe('la tanda de AHORA (manifiesto vivo): DATOS, las recibidas abiertas en C0008 para la empresa de Foodint (C06b, Julio, 15/10)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 15/10 a las 05:52 UTC para ESTE fichero (con su md5).
+  // lectura en producción el 15/10 a las 07:26 UTC para ESTE fichero (con su md5).
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero: la 0760 cambia una fila que existe; pide autorizo con su nombre', () => {
+    expect(viva).toEqual(['supabase/migrations/20261111T0760_c06b_diez_recibidas_abiertas_datos.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'autorizo' })
+  })
+  it('lo que cambia: solo incluye_recibidas (y la nota del motivo) de la de empresa en C0008 desde el 01/10; no inserta ni borra', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    expect(sql).toMatch(/v_cuenta\s+constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710'/)
+    expect(sql).toMatch(/set incluye_recibidas = true, motivo = motivo \|\| v_nota/)
+    expect(sql).toMatch(/and desde = v_desde and incluye_recibidas = false;/)
+    expect(sql).toMatch(/if n <> 1 then/)
+    expect(sql).not.toMatch(/^\s*(insert|delete)\b/im)
+    expect(sql).not.toMatch(/set desde/)
+  })
+  it('declara qué cuenta antes y después, y el fichero existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/diez-recibidas-abiertas.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('su vuelta atrás la cierra otra vez y para si con ella ya se ha enviado (o intentado escribir) alguna recibida o su contraasiento', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261111T0760_c06b_diez_recibidas_abiertas_datos.down.sql'])
+    const sql = readFileSync(atras[0], 'utf8')
+    expect(sql).toMatch(/je\.source_type = 'supplier_invoice' or anulado\.source_type = 'supplier_invoice'/)
+    expect(sql).toMatch(/s\.status in \('enviado', 'enlazado'\) or \(s\.status = 'pendiente' and s\.attempts > 0 and s\.payload_hash <> 'sin-enviar'\)/)
+    expect(sql).toMatch(/if n > 0 then\s+raise exception/)
+    expect(sql).toMatch(/set incluye_recibidas = false, motivo = replace\(motivo, v_nota, ''\)/)
+  })
+})
+
+describe('la tanda de DATOS de la empresa de Foodint en C0008 desde el 01/10, solo ventas (C06b, respuesta 8, tarea 1, paso 3; ya aplicada, real desde 1228da9b), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-r8-empresa-20261015.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 15/10 a las 05:52 UTC para ESTE fichero (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-r8-empresa-20261015.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -928,7 +966,7 @@ describe('la tanda de AHORA (manifiesto vivo): DATOS, la empresa de Foodint en C
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
   it('su vuelta atrás quita solo la de empresa y para si con ella ya se ha enviado (o intentado escribir) algo que no cubre un asiento', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c06b-r8-empresa-20261015.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261111T0750_c06b_diez_autorizo_empresa_datos.down.sql'])
     const sql = readFileSync(atras[0], 'utf8')
     expect(sql).toMatch(/s\.status in \('enviado', 'enlazado'\) or \(s\.status = 'pendiente' and s\.attempts > 0 and s\.payload_hash <> 'sin-enviar'\)/)
