@@ -53,7 +53,9 @@ async function borrarRestos(s: Sesion) {
 }
 
 async function cambiarA(page: Page, nombre: RegExp) {
-  await page.getByRole('button', { name: /Cambiar de empresa/ }).click()
+  // M01: la empresa va arriba, en la barra del marco (en el móvil, Ajustes aún
+  // lleva su cabecera debajo: la de arriba es la primera).
+  await page.getByRole('button', { name: /Cambiar de empresa/ }).first().click()
   await page.getByRole('list', { name: 'Tus empresas' }).getByRole('button', { name: nombre }).click()
 }
 

@@ -31,23 +31,48 @@ function vigilar(page: Page) {
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[consola] ${m.text().slice(0, 300)}`) })
 }
 
+/**
+ * M01 · En el ordenador las áreas son las pestañas de arriba del marco nuevo
+ * (las que no caben, en «Más ▾»); en el móvil, Libros sigue por niveles y las
+ * pinta él.
+ */
+async function areaDeLibros(page: Page, nombre: string) {
+  if (lado(page) === 'movil') return page.getByRole('navigation', { name: 'Áreas de Libros' }).getByRole('link', { name: nombre, exact: true })
+  const pestanas = page.getByRole('navigation', { name: 'Pestañas de Libros' })
+  const directa = pestanas.getByRole('link', { name: nombre, exact: true })
+  if (await directa.count()) return directa
+  await pestanas.getByRole('button', { name: /▾$/ }).click()
+  return pestanas.getByRole('link', { name: nombre, exact: true })
+}
+
 test('Libros en tres niveles: áreas, acciones con su estado y el buscador', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros')
   await expect(page.getByRole('heading', { level: 1, name: 'Libros' })).toBeVisible()
-  const areas = page.getByRole('navigation', { name: 'Áreas de Libros' })
-  for (const a of ['Diario', 'Mayor y saldos', 'Libros registro de IVA', 'Balances', 'Cuentas anuales y Registro', 'Cierre']) {
-    await expect(areas.getByRole('link', { name: a, exact: true })).toBeVisible()
+  const AREAS = ['Diario', 'Mayor y saldos', 'Libros registro de IVA', 'Balances', 'Cuentas anuales y Registro', 'Cierre']
+  if (lado(page) === 'movil') {
+    const areas = page.getByRole('navigation', { name: 'Áreas de Libros' })
+    for (const a of AREAS) await expect(areas.getByRole('link', { name: a, exact: true })).toBeVisible()
+  } else {
+    // M01: arriba, en el marco; las que no caben, en «Más ▾». Todas, en su orden, y Libros no las repite.
+    const pestanas = page.getByRole('navigation', { name: 'Pestañas de Libros' })
+    const vistas = await pestanas.getByRole('link').allTextContents()
+    const mas = pestanas.getByRole('button', { name: /▾$/ })
+    if (await mas.count()) { await mas.click(); await expect(pestanas.getByRole('link')).toHaveCount(AREAS.length) }
+    expect(await pestanas.getByRole('link').allTextContents()).toEqual(AREAS)
+    expect(vistas.length).toBeGreaterThan(0)
+    if (await mas.count()) await page.keyboard.press('Escape')
+    await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
   }
   if (lado(page) === 'movil') {
     // En el móvil, por niveles: primero las áreas; al tocar una, sus acciones y «‹ Libros».
     await capturar(page, 'indice')
-    await areas.getByRole('link', { name: 'Libros registro de IVA', exact: true }).click()
+    await (await areaDeLibros(page, 'Libros registro de IVA')).click()
     await expect(page.getByRole('link', { name: '‹ Libros' })).toBeVisible()
     await expect(page.getByRole('navigation', { name: 'Acciones de Libros registro de IVA' })).toBeVisible()
   } else {
-    await areas.getByRole('link', { name: 'Libros registro de IVA', exact: true }).click()
+    await (await areaDeLibros(page, 'Libros registro de IVA')).click()
     const barra = page.getByRole('navigation', { name: 'Acciones de Libros registro de IVA' })
     await expect(barra.getByRole('group', { name: 'Facturas' })).toBeVisible()
     await expect(barra.getByRole('group', { name: 'Otros libros' })).toBeVisible()
@@ -57,16 +82,17 @@ test('Libros en tres niveles: áreas, acciones con su estado y el buscador', asy
     const arriba = async (g: string) => Math.round((await barra.getByRole('group', { name: g, exact: true }).boundingBox())!.y)
     expect([await arriba('Otros libros'), await arriba('Salidas'), await arriba('Tuyos')]).toEqual(Array(3).fill(await arriba('Facturas')))
     // Donde no cabe en una (Cuentas anuales), bajan los grupos y «Tuyos» se queda arriba.
-    await page.getByRole('navigation', { name: 'Áreas de Libros' }).getByRole('link', { name: 'Cuentas anuales y Registro', exact: true }).click()
+    await (await areaDeLibros(page, 'Cuentas anuales y Registro')).click()
     const barraAnuales = page.getByRole('navigation', { name: 'Acciones de Cuentas anuales y Registro' })
     const yAnuales = async (g: string) => Math.round((await barraAnuales.getByRole('group', { name: g, exact: true }).boundingBox())!.y)
     expect(await yAnuales('Tuyos')).toBe(await yAnuales('Cuentas anuales'))
-    await areas.getByRole('link', { name: 'Libros registro de IVA', exact: true }).click()
-    // El buscador: Ctrl K, «requerimiento» lleva al formato AEAT.
+    await (await areaDeLibros(page, 'Libros registro de IVA')).click()
+    // El buscador: Ctrl K, «requerimiento» lleva al formato AEAT. M01: Ctrl K
+    // es del marco; las opciones de Libros salen en su grupo «Opciones».
     await page.keyboard.press('Control+k')
-    const dialogo = page.getByRole('dialog', { name: 'Buscar en Libros' })
+    const dialogo = page.getByRole('dialog', { name: 'Buscar todo' })
     await dialogo.getByLabel('Qué buscas').fill('requerimiento')
-    await dialogo.getByRole('link', { name: /Formato AEAT/ }).click()
+    await dialogo.getByRole('group', { name: 'Opciones' }).getByRole('option', { name: /Formato AEAT/ }).click()
     await expect(page.getByRole('heading', { name: 'Libros en formato AEAT' })).toBeVisible()
   }
 })

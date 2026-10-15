@@ -1,7 +1,8 @@
 // src/modules/conta/module.tsx
 //
 // El módulo de contabilidad (C00, 02/10/2026). Trae su propio marco
-// (`chrome: 'propio'`): menú, barra inferior y barra de la IA de sus maquetas.
+// (`chrome: 'propio'`): desde el M01, el marco nuevo de la maqueta N30
+// (marco/nuevo/MarcoNuevo.tsx), con las pantallas de siempre dentro.
 // Sale en la barra de Folvy solo con el interruptor `conta`; sus rutas están
 // montadas siempre y las protege la RLS. Solo administradores.
 //
@@ -12,7 +13,7 @@ import { Calculator } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 import { CONTA } from '@/config/navegacion'
 import '@/modules/conta/estilo'
-import { MarcoConta } from '@/modules/conta/marco/MarcoConta'
+import { MarcoNuevo } from '@/modules/conta/marco/nuevo/MarcoNuevo'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
@@ -41,9 +42,11 @@ import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
 
 // C06b (respuesta 6 de Julio, tarea 2): la barra «Pregunta o pide algo» solo
 // contesta «Muy pronto», y lo que no funciona no se enseña: ninguna ruta la
-// lleva. Vuelve, ruta a ruta (sinPregunta = false), cuando conteste de verdad.
-const enMarco = (pagina: ReactNode, ejemplo: string, sinPregunta = true) => (
-  <EmpresasProveedor><MarcoConta ejemplo={ejemplo} sinPregunta={sinPregunta}>{pagina}</MarcoConta></EmpresasProveedor>
+// lleva. M01: lo que hacía va al buscador general (grupo «Preguntar»), y solo
+// en las rutas que la llevarían (sinPregunta = false). El ejemplo de cada ruta
+// se queda escrito para cuando la IA conteste de verdad.
+const enMarco = (pagina: ReactNode, _ejemplo: string, sinPregunta = true) => (
+  <EmpresasProveedor><MarcoNuevo sinPregunta={sinPregunta}>{pagina}</MarcoNuevo></EmpresasProveedor>
 )
 
 export const contaModule: ModuleDefinition = {

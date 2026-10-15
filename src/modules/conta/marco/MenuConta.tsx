@@ -1,26 +1,14 @@
 // src/modules/conta/marco/MenuConta.tsx
 //
-// El menú flotante del módulo (ordenador) y la barra inferior (móvil), los dos
-// sacados de la configuración única (src/config/navegacion.ts). Arriba del
-// menú, la empresa con «Cambiar de empresa».
-//
-// Lo que la maqueta no dibuja y hace falta dentro de Folvy: «Volver a Folvy»,
-// para salir del módulo al resto de la aplicación (el módulo trae su propio
-// marco y tapa la barra de Folvy). En el producto vendido solo (C06) no hay
-// resto de la aplicación: ni «Volver a…», ni entradas que digan «aún no». Y en el móvil, la barra inferior no tiene
-// sitio para la empresa: «Tu empresa» saca esta misma cabecera cuando la
-// cuenta lleva más de una (con una sola no hay nada que cambiar).
+// La cabecera de la empresa del menú de antes («Cambiar de empresa»). El menú
+// flotante y la barra inferior se fueron con el marco nuevo (M01,
+// marco/nuevo/); queda esta pieza porque la usa todavía Ajustes en el móvil
+// (ajustes/MarcoAjustes.tsx), dentro de la pantalla.
 
-import { useEffect, useId, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import {
-  BARRA_CONTA, MENU_CONTA, entradaActiva, entradasVisibles, rutaAltaEmpresa, rutaConta,
-} from '@/config/navegacion'
-import { Icono } from '@/modules/conta/ui/Icono'
+import { useId, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaAltaEmpresa } from '@/config/navegacion'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
-import { BotonIAMovil } from '@/modules/conta/marco/BarraPregunta'
-import { useCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
-import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { iniciales } from '@/modules/conta/lib/formato'
 
 export function CabeceraEmpresa() {
@@ -77,112 +65,5 @@ export function CabeceraEmpresa() {
         </div>
       )}
     </>
-  )
-}
-
-export function MenuConta() {
-  const { pathname } = useLocation()
-  const todas = MENU_CONTA.flat()
-  const activa = entradaActiva(pathname, todas)
-  const solo = useProductoSolo()
-  const grupos = MENU_CONTA.map((g) => entradasVisibles(g, solo)).filter((g) => g.length > 0)
-  const cuentas = useCuentasMenu()
-  return (
-    <nav className="cx-menu" aria-label="Menú de contabilidad">
-      <CabeceraEmpresa />
-      {grupos.map((grupo, i) => (
-        <div key={grupo[0].id} style={{ display: 'contents' }}>
-          {i > 0 && <div className="cx-menu-separador" aria-hidden="true" />}
-          {grupo.map((e) => (
-            // El número no cambia el nombre del enlace («Libros» sigue siendo «Libros»): va como su
-            // descripción. Con aria-label dentro, el nombre pasaba a «Libros 3 por mirar» (e2e 172).
-            <Link key={e.id} to={rutaConta(e.ruta)} className="cx-menu-item" aria-current={activa === e.id ? 'page' : undefined}
-              aria-describedby={(cuentas[e.id] ?? 0) > 0 ? `cx-menu-cuenta-${e.id}` : undefined}>
-              <Icono nombre={e.icono} />
-              <span className="cx-menu-item-texto">{e.etiqueta}</span>
-              {(cuentas[e.id] ?? 0) > 0 && <span className="cx-insignia cx-menu-cuenta" aria-hidden="true">{cuentas[e.id]}</span>}
-              {(cuentas[e.id] ?? 0) > 0 && <span id={`cx-menu-cuenta-${e.id}`} hidden>{cuentas[e.id]} por mirar</span>}
-            </Link>
-          ))}
-        </div>
-      ))}
-      {!solo && (
-        <>
-          <div className="cx-menu-separador" aria-hidden="true" />
-          <Link to="/" className="cx-menu-item">
-            <Icono nombre="folvy" />
-            <span className="cx-menu-item-texto">Volver a Folvy</span>
-          </Link>
-        </>
-      )}
-    </nav>
-  )
-}
-
-export function BarraInferiorConta({ sinIA = false }: { sinIA?: boolean }) {
-  const { pathname } = useLocation()
-  const solo = useProductoSolo()
-  const [mas, setMas] = useState(false)
-  const izquierda = entradasVisibles(BARRA_CONTA.izquierda, solo)
-  const derecha = entradasVisibles(BARRA_CONTA.derecha, solo)
-  const activa = entradaActiva(pathname, [...BARRA_CONTA.izquierda, ...BARRA_CONTA.derecha])
-  const enlace = (e: (typeof izquierda)[number]) => (
-    <Link key={e.id} to={rutaConta(e.ruta)} className="cx-barra-item" aria-current={activa === e.id ? 'page' : undefined}>
-      <Icono nombre={e.icono} />{e.etiqueta}
-    </Link>
-  )
-  return (
-    <nav className="cx-barra-inferior" aria-label="Menú de contabilidad">
-      {izquierda.length > 0 ? izquierda.map(enlace) : !solo && (
-        <Link to="/" className="cx-barra-item"><Icono nombre="folvy" />Folvy</Link>
-      )}
-      {!solo && !sinIA && <BotonIAMovil />}
-      {derecha.map(enlace)}
-      {/* C06, respuesta 2: en el producto solo, la barra no tiene sitio para
-          todo. «Más» abre el menú entero con lo que funciona; cuando Por hacer
-          y Bancos tengan ruta, entran en la barra solos y «Más» queda para el resto. */}
-      {solo && (
-        <button type="button" className="cx-barra-item cx-barra-mas" aria-haspopup="dialog" aria-expanded={mas} onClick={() => setMas(true)}>
-          <Icono nombre="mas" />Más
-        </button>
-      )}
-      {solo && mas && <HojaMenu cerrar={() => setMas(false)} />}
-    </nav>
-  )
-}
-
-/** El menú entero en una hoja (móvil, producto solo): las mismas entradas que el menú del ordenador. */
-function HojaMenu({ cerrar }: { cerrar: () => void }) {
-  const { pathname } = useLocation()
-  const id = useId()
-  const grupos = MENU_CONTA.map((g) => entradasVisibles(g, true)).filter((g) => g.length > 0)
-  const activa = entradaActiva(pathname, MENU_CONTA.flat())
-  useEffect(() => {
-    const alPulsar = (e: KeyboardEvent) => { if (e.key === 'Escape') cerrar() }
-    window.addEventListener('keydown', alPulsar)
-    return () => window.removeEventListener('keydown', alPulsar)
-  }, [cerrar])
-  return (
-    <div className="cx-hoja-velo" onClick={cerrar}>
-      <div className="cx-hoja cx-hoja-menu" role="dialog" aria-modal="true" aria-labelledby={id} onClick={(e) => e.stopPropagation()}>
-        <span className="cx-hoja-asa" aria-hidden="true" />
-        <span id={id} className="cx-llevamos-titulo">Menú</span>
-        {grupos.map((grupo, i) => (
-          <div key={grupo[0].id} style={{ display: 'contents' }}>
-            {i > 0 && <div className="cx-menu-separador" aria-hidden="true" />}
-            {grupo.map((e) => (
-              <Link key={e.id} to={rutaConta(e.ruta)} className="cx-menu-item" aria-current={activa === e.id ? 'page' : undefined} onClick={cerrar}>
-                <Icono nombre={e.icono} />
-                <span className="cx-menu-item-texto">{e.etiqueta}</span>
-              </Link>
-            ))}
-          </div>
-        ))}
-        <div className="cx-hoja-pie">
-          <span />
-          <button type="button" className="cx-boton-sec" onClick={cerrar}>Cerrar</button>
-        </div>
-      </div>
-    </div>
   )
 }
