@@ -43,7 +43,7 @@ declare
 begin
   select id into v_nomina   from public.journal_entry where company_id = ea and source_type = 'payroll' and status = 'validado' limit 1;
   select id into v_prestamo from public.journal_entry where company_id = ea and concept = 'Cuota del préstamo · octubre';
-  select id into v_factura  from public.journal_entry where company_id = ea and source_type = 'supplier_invoice' and status = 'validado' limit 1;
+  select id into v_factura  from public.journal_entry where company_id = ea and source_type = 'supplier_invoice' and status = 'validado' order by number limit 1;
   select id into v_ventas   from public.journal_entry where company_id = ea and source_type = 'sales_day' and status = 'validado' limit 1;
   if v_nomina is null or v_prestamo is null or v_factura is null or v_ventas is null then
     raise exception 'PRUEBA agente · 2: falta algún asiento de la semilla del C04.';
@@ -61,10 +61,15 @@ begin
   -- cedidas_70: la venta del día se apunta a la marca cedida.
   update public.journal_line set brand_id = 'e0200000-0000-4000-8000-00000000a0b5' where entry_id = v_ventas and position = 2;
   -- socio_gasto: la compra de la factura queda a nombre del socio de marca.
+  -- Las dos, sobre su apunte del grupo 6 (sea cual sea su posición: el 15/10
+  -- la 400 iba la primera en una de las facturas y esto no rompía nada).
   update public.journal_line set party_id = (select party_id from public.party_role where supplier_id = 'c0300000-0000-4000-8000-000000000002' limit 1)
-   where entry_id = v_factura and position = 1;
+   where id = (select l.id from public.journal_line l join public.company_account a on a.id = l.company_account_id
+                where l.entry_id = v_factura and a.template_code like '6%' order by l.position limit 1);
   -- resultado: un gasto sin local ni «común».
-  update public.journal_line set location_id = null, is_common = false where entry_id = v_factura and position = 1;
+  update public.journal_line set location_id = null, is_common = false
+   where id = (select l.id from public.journal_line l join public.company_account a on a.id = l.company_account_id
+                where l.entry_id = v_factura and a.template_code like '6%' order by l.position limit 1);
   -- ventas_dia: el resumen dice un ticket más de los que guarda.
   update public.sales_day_summary set tickets_count = tickets_count + 1 where entry_id = v_ventas;
   -- mes_cerrado: octubre de B cerrado ANTES de validar su préstamo.
