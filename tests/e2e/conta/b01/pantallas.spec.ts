@@ -123,7 +123,8 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.getByRole('button', { name: 'Por aclarar', exact: true }).click()
       await capturar(page, 'por-aclarar')
       await barra.getByRole('button', { name: /^B01 Mercado/ }).click()
-      await expect(page.getByText(/Por aclarar: tarjeta acabada en 1234, ¿de quién es\?/)).toBeVisible()
+      // B02: la tarjeta sin dar de alta la anota el motor (se pregunta una vez por tarjeta, no en cada pago).
+      await expect(page.locator('.cxb-fila', { hasText: 'FERRETERIA' })).toContainText('tarjeta ···1234 sin dar de alta')
       await expect(page.locator('.cxb-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()
       await capturar(page, 'tarjeta-desconocida')
 

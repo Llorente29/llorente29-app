@@ -50,7 +50,7 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 # cerrojo. Ahora:
 #   · en un PUSH de una rama de frente corre solo su carpeta y el juego común
 #     (el marco y el arranque del C00, y la RLS entre cuentas):
-#       conta/b01-* → tests/e2e/conta/b01 · conta/d01-* → tests/e2e/conta/d01
+#       conta/bNN-* → tests/e2e/conta/b01 · conta/d01-* → tests/e2e/conta/d01
 #       conta/c06*  → tests/e2e/conta/c06
 #     Una rama sin frente sigue corriendo la suite entera.
 #   · la SUITE ENTERA corre a mano (workflow_dispatch con «pruebas» vacío),
@@ -150,7 +150,7 @@ jobs:
           COMUN="tests/e2e/conta/c00/marco.spec.ts tests/e2e/conta/rls.spec.ts"
           if [ "$GITHUB_EVENT_NAME" = push ] && [ -z "${PRUEBAS:-}" ]; then
             case "$GITHUB_REF_NAME" in
-              conta/b01-*) PRUEBAS="tests/e2e/conta/b01 $COMUN" ;;
+              conta/b[0-9]*) PRUEBAS="tests/e2e/conta/b01 $COMUN" ;;  # B01, B02…: las pantallas de Bancos viven en b01
               conta/d01-*) PRUEBAS="tests/e2e/conta/d01 $COMUN" ;;
               conta/c06*)  PRUEBAS="tests/e2e/conta/c06 $COMUN" ;;
             esac

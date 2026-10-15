@@ -104,7 +104,7 @@ export function Movimientos() {
       case 'subir-foto': fotoDe.current = m.id; inputFoto.current?.click(); return
       case 'otra-cosa': case 'decirlo-yo': setDialogo({ que: 'cuenta', m }); return
       case 'buscar-factura': setDialogo({ que: 'factura', m }); return
-      case 'alta-tarjeta': navegar(`${rutaBancos('cuentas')}?banco=${banco.id}&tarjeta=${tarjetaPorAclarar(m.porque) ?? ''}`); return
+      case 'alta-tarjeta': navegar(`${rutaBancos('cuentas')}?banco=${banco.id}&tarjeta=${tarjetaPorAclarar(m.porque, m.propuesta) ?? ''}`); return
     }
   }
 

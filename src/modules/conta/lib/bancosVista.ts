@@ -103,11 +103,14 @@ function filaSinPrincipal(m: MovimientoBanco): Omit<Fila, 'principal'> {
     }
   }
   if (m.estado === 'por_aclarar' || m.estado === 'pendiente') {
-    const tarjetaDesconocida = /tarjeta acabada en \d{4}, ¿de quién es\?/i.test(m.porque ?? '')
+    const ultimos = tarjetaPorAclarar(m.porque, m.propuesta)
+    const tarjetaDesconocida = !!ultimos
+    const porque = sinPunto(m.porque ?? '')
     return {
       id: m.id, tono: 'gris', grupo: 'aclarar', estado: 'Por aclarar',
       titulo: m.estado === 'pendiente' ? 'Aún no lo he mirado' : m.propuesta?.que ?? 'No sé qué es',
-      porque: m.estado === 'pendiente' ? 'Llegó con el último extracto; lo miro al conciliar.' : sinPunto(m.porque ?? ''),
+      porque: m.estado === 'pendiente' ? 'Llegó con el último extracto; lo miro al conciliar.'
+        : m.propuesta?.tarjetaDesconocida ? `${porque}${porque ? ' · ' : ''}tarjeta ···${ultimos} sin dar de alta` : porque,
       botones: tarjetaDesconocida ? ['alta-tarjeta', 'decirlo-yo']
         : m.propuesta?.pideTicket && !m.ticket ? ['subir-foto', 'decirlo-yo']
         : m.importeCent < 0 ? ['buscar-factura', 'decirlo-yo'] : ['decirlo-yo'],
@@ -165,9 +168,13 @@ export function mesesElegibles(primero: string | null, hoy: string): string[] {
 }
 
 /** «ES02 0182 … 0011» → «0011»: lo que la barra enseña de cada banco. */
-/** Los 4 dígitos de «tarjeta acabada en 1234, ¿de quién es?», para dar de alta esa tarjeta. */
-export function tarjetaPorAclarar(porque: string | null): string | null {
-  return /tarjeta acabada en (\d{4})/i.exec(porque ?? '')?.[1] ?? null
+/**
+ * Los 4 dígitos de la tarjeta que no está dada de alta, para darla de alta: los
+ * que anota el motor (B02, `tarjetaDesconocida`) o, en las propuestas guardadas
+ * antes, los de «tarjeta acabada en 1234, ¿de quién es?».
+ */
+export function tarjetaPorAclarar(porque: string | null, propuesta?: PropuestaGuardada | null): string | null {
+  return propuesta?.tarjetaDesconocida ?? /tarjeta acabada en (\d{4})/i.exec(porque ?? '')?.[1] ?? null
 }
 
 export function ultimosIban(iban: string | null): string | null {
