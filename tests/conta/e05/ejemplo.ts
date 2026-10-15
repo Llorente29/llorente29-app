@@ -72,10 +72,10 @@ function libro(hojas: Record<string, unknown[][]>): Uint8Array {
   return new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer)
 }
 
-export function excelFacturas(fs: FacturaInventada[] = FACTURAS): Uint8Array {
+export function excelFacturas(fs: FacturaInventada[] = FACTURAS, empresa: typeof EMPRESA = EMPRESA): Uint8Array {
   const invoices = [['number', 'amount', 'vat', 'total', 'from_name', 'from_cif', 'from_location', 'from_cp', 'from_city', 'to_name', 'to_cif', 'to_location', 'to_cp', 'to_city',
     'total_orders', 'date_from', 'date_to', 'period', 'quarter', 'date_issue', 'external_invoice_number'],
-  ...fs.map((f) => [f.numero, f.base, f.cuota, f.total, f.nombre, f.nif, f.domicilio, f.cp, f.ciudad, EMPRESA.nombre, EMPRESA.nif, 'Calle Inventada 1', '28000', 'Madrid',
+  ...fs.map((f) => [f.numero, f.base, f.cuota, f.total, f.nombre, f.nif, f.domicilio, f.cp, f.ciudad, empresa.nombre, empresa.nif, 'Calle Inventada 1', '28000', 'Madrid',
     f.pedidos, '2026-09-16', '2026-09-30', '2026-09-2', '3T', f.fecha, ''])]
   const partners = [['id', 'name', 'socialName', 'totalOrders', 'total', 'driverId', 'riderDni', 'riderName', 'riderDir', 'type'],
     ...fs.filter((f) => f.tipo !== 'catcher').flatMap((f, i) => f.tiendas.map((t) => [i + 1, t.tienda, f.tipo === 'flota' ? f.nombre : '', t.pedidos, t.total, 100 + i,
@@ -92,13 +92,13 @@ export function excelPedidos(ps = PEDIDOS): Uint8Array {
 // eslint-disable-next-line no-restricted-syntax -- importes inventados de la prueba, nunca null.
 const coma = (x: number) => x.toFixed(2).replace('.', ',')
 /** El PDF de una factura, con lo que lleva el de verdad. `cambia`: para hacer uno que no cuadra. */
-export function pdf(f: FacturaInventada, cambia: Partial<FacturaInventada> = {}): Uint8Array {
+export function pdf(f: FacturaInventada, cambia: Partial<FacturaInventada> = {}, empresa: typeof EMPRESA = EMPRESA): Uint8Array {
   const x = { ...f, ...cambia }
   const d = new jsPDF()
   const l = [
     'FACTURA', `Número: ${x.numero}`, `Fecha: ${x.fecha.split('-').reverse().join('/')}`,
     `Emisor: ${x.nombre}`, `NIF: ${x.nif}`, `${x.domicilio}, ${x.cp} ${x.ciudad}`,
-    `Cobrar a: ${EMPRESA.nombre}`, `NIF: ${EMPRESA.nif}`, EMPRESA.domicilio,
+    `Cobrar a: ${empresa.nombre}`, `NIF: ${empresa.nif}`, empresa.domicilio,
     'Ejercicio: 2026-09-16 - 2026-09-30', `Pedidos entregados: ${x.pedidos}`,
     `Base imponible: ${coma(x.base)} €`, `IVA 21%: ${coma(x.cuota)} €`, `Total: ${coma(x.total)} €`,
   ]
@@ -106,15 +106,15 @@ export function pdf(f: FacturaInventada, cambia: Partial<FacturaInventada> = {})
   return new Uint8Array(d.output('arraybuffer'))
 }
 
-export function zip(fs: FacturaInventada[] = FACTURAS, extra: Record<string, Uint8Array> = {}): Uint8Array {
-  return zipSync({ ...Object.fromEntries(fs.map((f) => [f.pdf, pdf(f)])), ...extra })
+export function zip(fs: FacturaInventada[] = FACTURAS, extra: Record<string, Uint8Array> = {}, empresa: typeof EMPRESA = EMPRESA): Uint8Array {
+  return zipSync({ ...Object.fromEntries(fs.map((f) => [f.pdf, pdf(f, {}, empresa)])), ...extra })
 }
 
-/** Los tres ficheros, como se arrastran. */
-export function quincenaInventada() {
+/** Los tres ficheros, como se arrastran. `empresa`: la que las recibe (en la e2e, la de la cuenta A de staging). */
+export function quincenaInventada(empresa: typeof EMPRESA = EMPRESA) {
   return [
-    { nombre: 'facturas-2026-09-2.zip', bytes: zip() },
-    { nombre: 'FACTURAS_2026-09-2.xlsx', bytes: excelFacturas() },
+    { nombre: 'facturas-2026-09-2.zip', bytes: zip(FACTURAS, {}, empresa) },
+    { nombre: 'FACTURAS_2026-09-2.xlsx', bytes: excelFacturas(FACTURAS, empresa) },
     { nombre: 'PEDIDOS_2026-09-2.xlsx', bytes: excelPedidos() },
   ]
 }

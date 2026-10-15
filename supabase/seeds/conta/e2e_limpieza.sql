@@ -72,3 +72,33 @@ begin
 
   raise notice 'Limpieza e2e: % proveedores y % empresas de runs cortados quitados; % sujetos por otra tabla.', proveedores, empresas, sujetos;
 end $$;
+
+-- E05 · Las quincenas de Catcher que sube la e2e (catcher.spec.ts) en la cuenta
+-- A, de más de 30 minutos: el lote, sus facturas y sus entradas en la bandeja,
+-- su pago propuesto y las comprobaciones del saldo. Así cada run empieza con la
+-- quincena sin subir. Solo lo que viene de un lote (source = 'lote'): nada más.
+do $$
+declare a constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; r record; n int := 0;
+begin
+  if exists (select 1 from accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
+    raise exception 'Limpieza e2e ABORTADA: al otro lado hay cuentas de producción.';
+  end if;
+  if to_regclass('public.supplier_batch') is null then return; end if;
+  for r in select b.id, b.payment_entry_id from public.supplier_batch b where b.account_id = a and b.created_at < now() - interval '30 minutes' loop
+    begin
+      update public.supplier_batch set payment_entry_id = null where id = r.id;
+      update public.supplier_invoice set payment_entry_id = null where batch_id = r.id;
+      delete from public.journal_line where entry_id in (select id from public.journal_entry where account_id = a and source_type = 'supplier_payment' and source_id = r.id and status = 'propuesto');
+      delete from public.journal_entry where account_id = a and source_type = 'supplier_payment' and source_id = r.id and status = 'propuesto';
+      delete from public.document_activity where account_id = a and supplier_invoice_id in (select id from public.supplier_invoice where batch_id = r.id);
+      delete from public.document_inbox where account_id = a and supplier_invoice_id in (select id from public.supplier_invoice where batch_id = r.id);
+      delete from public.supplier_invoice where batch_id = r.id and source = 'lote';
+      delete from public.supplier_batch where id = r.id;
+      n := n + 1;
+    exception when foreign_key_violation then
+      raise notice 'No se puede quitar el lote % de la e2e: %', r.id, sqlerrm;
+    end;
+  end loop;
+  delete from public.supplier_balance_check where account_id = a and checked_at < now() - interval '30 minutes';
+  raise notice 'Limpieza e2e E05: % lote(s) de Catcher quitados.', n;
+end $$;

@@ -27,6 +27,7 @@
 
 import * as XLSX from 'xlsx'
 import { unzipSync } from 'fflate'
+import { eurosExactos } from '@/modules/conta/lib/formato'
 import { claveNumero, formaDeNif, normalizarNif } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
 
 // ── Lo que entra y lo que sale ───────────────────────────────────────────────
@@ -380,14 +381,21 @@ export function leerQuincena(ficheros: Fichero[], o: { tiendas: Record<string, s
   }
 }
 
-/** La confianza de una factura: segura si cumple la norma y su PDF dice lo mismo que el Excel. */
+/**
+ * Cada tienda de la factura tiene su local: una sola (localId), o varias, todas
+ * con local (un rider reparte para las dos tiendas: no es un problema, es su
+ * reparto). Una tienda sin local, o ninguna tienda, sí lo es.
+ */
+export const tieneLocales = (f: Pick<FacturaDelLote, 'localId' | 'reparto'>) => !!f.localId || (f.reparto.length > 0 && f.reparto.every((x) => !!x.localId))
+
+/** La confianza de una factura: segura si cumple la norma, su PDF dice lo mismo que el Excel y sus tiendas tienen local. */
 export function confianzaDe(f: FacturaDelLote): 'seguro' | 'duda' {
-  return f.pdf && f.requisitos.every((x) => x.ok) && f.contraPdf.length > 0 && f.contraPdf.every((x) => x.ok) && f.localId ? 'seguro' : 'duda'
+  return f.pdf && f.requisitos.every((x) => x.ok) && f.contraPdf.length > 0 && f.contraPdf.every((x) => x.ok) && tieneLocales(f) ? 'seguro' : 'duda'
 }
 
 /** El resumen de una línea: «2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 €». */
 export function resumen(q: Quincena): string {
-  const eur = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(q.totales.total)
+  const eur = eurosExactos(q.totales.total)
   return `${q.etiqueta} · ${q.totales.facturas} ${q.totales.facturas === 1 ? 'factura' : 'facturas'} · ${eur}`
 }
 

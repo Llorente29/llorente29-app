@@ -8,6 +8,7 @@ import {
   comprobarPdf, confianzaDe, etiquetaQuincena, loteParaRegistrar, fechaExcel, leerFacturas, leerQuincena, LoteNoValido, madridAUtc, reconocer, resumen, type Fichero,
 } from '../../../src/modules/conta/lib/catcherQuincena'
 import * as XLSX from 'xlsx'
+import { eurosExactos } from '../../../src/modules/conta/lib/formato'
 import { EMPRESA, excelFacturas, excelPedidos, FACTURAS, pdf, quincenaInventada, TIENDA_A, TIENDA_B, zip } from './ejemplo'
 
 const TIENDAS = { [TIENDA_A]: 'local-carabanchel', [TIENDA_B]: 'local-alcala' }
@@ -43,7 +44,7 @@ describe('leerQuincena: una factura por PDF, con los datos del Excel', () => {
   it('el periodo, la etiqueta y el resumen', () => {
     expect([q.desde, q.hasta, q.etiqueta]).toEqual(['2026-09-16', '2026-09-30', '2.ª quincena de septiembre de 2026'])
     const total = FACTURAS.reduce((t, f) => t + Math.round(f.total * 100), 0) / 100
-    expect(resumen(q)).toBe(`2.ª quincena de septiembre de 2026 · 5 facturas · ${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(total)}`)
+    expect(resumen(q)).toBe(`2.ª quincena de septiembre de 2026 · 5 facturas · ${eurosExactos(total)}`)
     expect(q.problemas).toEqual([]); expect(q.avisos).toEqual([])
   })
   it('los totales: la suma de las facturas del Excel, por tipo', () => {
@@ -121,7 +122,8 @@ describe('comprobarPdf: el PDF dice lo mismo que el Excel (texto de pdfjs)', () 
       const ex = leerFacturas(XLSX.read(excelFacturas(), { type: 'array' })).facturas.find((x) => x.numero === f.numero)!
       const r = comprobarPdf(ex, await textoPdf(f.pdf!.bytes))
       expect(r.filter((x) => !x.ok).map((x) => x.id), f.numero).toEqual([])
-      expect(confianzaDe({ ...f, contraPdf: r })).toBe(f.localId ? 'seguro' : 'duda')
+      // Las que reparten en dos tiendas, con local las dos, también son seguras: es su reparto.
+      expect(confianzaDe({ ...f, contraPdf: r })).toBe('seguro')
     }
   })
   it('un PDF con otro total, otro NIF y otros pedidos: lo dice, cada cosa por su nombre', async () => {
@@ -157,5 +159,18 @@ describe('loteParaRegistrar: lo que se manda a la base', () => {
     expect(JSON.stringify(l)).not.toMatch(/"bytes":\{/)
     expect(l.facturas.filter((x) => x.pdf === null)).toHaveLength(4)
     expect(l.pedidos).toHaveLength(q.pedidos.length)
+  })
+})
+
+describe('confianzaDe: el reparto entre tiendas no es un problema; una tienda sin local, sí', () => {
+  it('dos tiendas con local, segura; una sin local, por mirar', async () => {
+    const q = leerQuincena(quincenaInventada(), o)
+    const f = q.facturas.find((x) => x.numero === 'ES_I_1001_26_7')!
+    const ex = leerFacturas(XLSX.read(excelFacturas(), { type: 'array' })).facturas.find((x) => x.numero === f.numero)!
+    const r = comprobarPdf(ex, await textoPdf(f.pdf!.bytes))
+    expect(f.localId).toBeNull()
+    expect(confianzaDe({ ...f, contraPdf: r })).toBe('seguro')
+    expect(confianzaDe({ ...f, contraPdf: r, reparto: [f.reparto[0], { ...f.reparto[1], localId: null }] })).toBe('duda')
+    expect(confianzaDe({ ...f, contraPdf: r, reparto: [] })).toBe('duda')
   })
 })

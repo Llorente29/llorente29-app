@@ -1,8 +1,9 @@
-# E05 · Tarea 4 — el pago contra el saldo prepago (rama conta/d01-catcher).
-#   0130: conta_lote_pago_proponer (el pago del lote contra la 40700001
-#         «Saldo prepago Catcher», en la serie de tesorería), conta_catcher_saldo,
-#         supplier_balance_check y conta_catcher_saldo_comprobar. Solo añade.
-#   (0100, 0110 y 0120 ya están en staging: runs 38707858478 y 38713804585.)
-#   La prueba, en una transacción con ROLLBACK. 3.er intento: la 40700001 cuelga de la 407, y la última comprobación del saldo no empata con la anterior (clock_timestamp).
-supabase/migrations/20261112T0130_e05_pago_prepago.sql
-supabase/staging/sql/20261112_e05_pago_prueba.sql
+# E05 · Tarea 5 — la pantalla de Catcher (rama conta/d01-catcher).
+#   0100 otra vez: una factura que reparte entre tiendas, todas con local, es
+#         segura (un rider reparte para las dos; no es un problema). Su prueba.
+#   La semilla de la e2e y sus capturas (cuenta A, todo inventado): Riders en
+#   la 41000100, Catcher con su 410, la 40700001 «Saldo prepago Catcher», las
+#   tiendas → local y la tarifa desde el 01/09/2026. Se puede volver a lanzar.
+supabase/migrations/20261112T0100_e05_lotes.sql
+supabase/staging/sql/20261112_e05_lotes_prueba.sql
+supabase/seeds/conta/seed_e05_staging.sql

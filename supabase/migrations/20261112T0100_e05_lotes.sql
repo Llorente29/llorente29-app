@@ -226,15 +226,22 @@ begin
       returning id into v_in;
     end if;
 
-    -- Segura solo si cumple la norma, su PDF dice lo mismo, tiene local y proveedor.
-    v_conf := case when f->>'confianza' = 'seguro' and v_pdf is not null and v_loc is not null and v_sup is not null then 'seguro' else 'duda' end;
+    -- Segura solo si cumple la norma, su PDF dice lo mismo, tiene proveedor y cada
+    -- tienda su local (un local, o varios en su reparto: un rider reparte para las
+    -- dos tiendas y eso no es un problema).
+    v_conf := case when f->>'confianza' = 'seguro' and v_pdf is not null and v_sup is not null
+                    and (v_loc is not null or (jsonb_array_length(coalesce(f->'reparto', '[]'::jsonb)) > 0
+                         and not exists (select 1 from jsonb_array_elements(f->'reparto') x where coalesce(x->>'localId', '') = '')))
+               then 'seguro' else 'duda' end;
     insert into public.supplier_invoice (account_id, company_id, supplier_id, location_id, doc_kind, invoice_number, invoice_date, status, source,
                                          raw_document_url, tax_base_total, tax_total, grand_total, needs_review, notes, created_by_name,
                                          arrival_channel, reading, reading_confidence, inbox_id, batch_id, issuer_name, issuer_tax_id, issuer_address)
     values (v_acc, p_company, v_sup, v_loc, 'invoice', f->>'numero', nullif(f->>'fecha', '')::date, 'en_revision', 'lote',
             v_pdf->>'ruta', (f->>'base')::numeric, (f->>'cuota')::numeric, (f->>'total')::numeric, v_conf <> 'seguro',
             case when v_sup is null then 'Catcher no tiene ficha: dalo de alta con los datos de la factura.'
-                 when v_loc is null then 'Reparte en varias tiendas o su tienda no tiene local: el local, por aclarar.' end,
+                 when v_loc is null and (jsonb_array_length(coalesce(f->'reparto', '[]'::jsonb)) = 0
+                                         or exists (select 1 from jsonb_array_elements(f->'reparto') x where coalesce(x->>'localId', '') = ''))
+                   then 'Una de sus tiendas de Catcher no tiene local: dile cuál es.' end,
             v_quien, 'portal',
             jsonb_build_object(
               'factura', jsonb_build_object('proveedor', jsonb_build_object('nombre', f->'emisor'->>'nombre', 'nif', v_nif),
