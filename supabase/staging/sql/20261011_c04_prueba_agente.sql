@@ -50,8 +50,12 @@ begin
   end if;
   -- cuadre (y con él la cadena): un apunte de la nómina cambia de importe.
   update public.journal_line set debit = debit + 1 where entry_id = v_nomina and position = 1;
-  -- huecos: el préstamo (General nº 1) pasa a ser el nº 9.
-  update public.journal_entry set number = 9 where id = v_prestamo;
+  -- huecos: el préstamo (General nº 1) pasa al último de su serie + 2, así
+  -- quedan dos huecos (su nº 1 y el de en medio). Un número fijo (era el 9)
+  -- chocó el 15/10 con los asientos que la General ha ido sumando.
+  update public.journal_entry e set number = (select max(x.number) + 2 from public.journal_entry x
+     where x.company_id = e.company_id and x.fiscal_year_id = e.fiscal_year_id and x.series = e.series)
+   where e.id = v_prestamo;
   -- iva: la base del IVA de la factura deja de dar su cuota.
   update public.journal_line set tax_base = tax_base + 100 where entry_id = v_factura and tax_rate_id is not null;
   -- cedidas_70: la venta del día se apunta a la marca cedida.
