@@ -1,0 +1,24 @@
+{
+ "_que": "COPIA (tanda ya aplicada). B01 · contexto de producción de la tanda viva «nunca una tarjeta entera» (0190 y 0191), medido en SOLO LECTURA el 15/10 a las 08:17 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna de las tres funciones existe; bank_movement existe, fuera del camino del pedido, con 0 filas (los dos extractos de Foodint se deshicieron a las 08:15).",
+ "medido": "2026-10-15T08:17Z",
+ "tanda": {
+  "supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql": "7849b6c47f23c2fa23db55afe53de350",
+  "supabase/migrations/20261101T0191_b01_tarjeta_oculta_guardado.sql": "c59f5bc7741089d6614715ce3e25aec9"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_movement"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.bank_movement": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
