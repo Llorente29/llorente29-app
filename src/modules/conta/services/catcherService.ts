@@ -136,3 +136,41 @@ export async function aclarar(issueId: string, decision: 'aceptada' | 'reclamada
   const r = await rpc<Record<string, unknown>>('conta_lote_aclarar', { p_issue: issueId, p_decision: decision, p_nota: nota, p_quien_nombre: quien })
   return String(r.texto ?? '')
 }
+
+// ── E05 · Tarea 4 · El pago contra el saldo prepago ──────────────────────────────
+
+/** El nombre de la 40700001, tal cual está en Diez C0008 (Julio, 15/10). */
+export const SALDO_PREPAGO = { cuenta: '40700001', nombre: 'Saldo prepago Catcher' } as const
+
+/** Propone el pago del lote contra la 40700001 (serie de tesorería). Si ya estaba, no crea otro y lo dice. */
+export async function proponerPagoLote(loteId: string, quien: string | null): Promise<{ asiento: string; yaEstaba: boolean; texto: string }> {
+  hayBase()
+  const r = await rpc<Record<string, unknown>>('conta_lote_pago_proponer', { p_lote: loteId, p_quien_nombre: quien })
+  return { asiento: String(r.id), yaEstaba: r.ya_estaba === true, texto: String(r.texto ?? '') }
+}
+
+export interface SaldoPrepago {
+  existe: boolean; cuenta: string; nombre?: string; texto?: string
+  recargas?: number; pagos?: number; saldo?: number; saldoValidado?: number; propuesto?: number; ultimoMovimiento?: string | null
+  ultimaComprobacion?: { cuando: string; portal: number; app: number; coincide: boolean; quien: string | null } | null
+}
+
+/** El saldo de la 40700001 en la app (recargas menos pagos; lo validado y lo propuesto). */
+export async function saldoPrepago(companyId: string): Promise<SaldoPrepago> {
+  hayBase()
+  const r = await rpc<Record<string, unknown>>('conta_catcher_saldo', { p_company: companyId })
+  const n = (x: unknown) => (x == null ? undefined : Number(x))
+  return {
+    existe: r.existe === true, cuenta: String(r.cuenta ?? SALDO_PREPAGO.cuenta), nombre: r.nombre == null ? undefined : String(r.nombre), texto: r.texto == null ? undefined : String(r.texto),
+    recargas: n(r.recargas), pagos: n(r.pagos), saldo: n(r.saldo), saldoValidado: n(r.saldo_validado), propuesto: n(r.propuesto),
+    ultimoMovimiento: r.ultimo_movimiento == null ? null : String(r.ultimo_movimiento),
+    ultimaComprobacion: (r.ultima_comprobacion ?? null) as SaldoPrepago['ultimaComprobacion'],
+  }
+}
+
+/** Compara el saldo que se ve en el portal de Catcher con el de la 40700001; queda apuntado y dice si coincide. */
+export async function comprobarSaldoPortal(companyId: string, saldoPortal: number, quien: string | null): Promise<{ coincide: boolean; texto: string }> {
+  hayBase()
+  const r = await rpc<Record<string, unknown>>('conta_catcher_saldo_comprobar', { p_company: companyId, p_saldo_portal: saldoPortal, p_quien_nombre: quien })
+  return { coincide: r.coincide === true, texto: String(r.texto ?? '') }
+}

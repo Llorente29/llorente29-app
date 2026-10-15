@@ -1,11 +1,8 @@
-# E05 · Tareas 2 y 3 (rama conta/d01-catcher). 2.º intento de la 0120: la
-# prueba de staging cazó que una tarifa sin comisión entraba (un valor que
-# falta da NULL y «NULL <> …» no frena). Corregido ahí, en el cruce y en la
-# 0100 (un lote sin la clave «facturas»): por eso vuelven las dos.
-#   0100: los lotes (otra vez, con el arreglo; vuelve a aplicarse entera).
-#   0120: la tarifa fechada, «Por aclarar» y sus funciones. Solo añade.
-#   Las dos pruebas, cada una en una transacción con ROLLBACK.
-supabase/migrations/20261112T0100_e05_lotes.sql
-supabase/staging/sql/20261112_e05_lotes_prueba.sql
-supabase/migrations/20261112T0120_e05_cruces.sql
-supabase/staging/sql/20261112_e05_cruces_prueba.sql
+# E05 · Tarea 4 — el pago contra el saldo prepago (rama conta/d01-catcher).
+#   0130: conta_lote_pago_proponer (el pago del lote contra la 40700001
+#         «Saldo prepago Catcher», en la serie de tesorería), conta_catcher_saldo,
+#         supplier_balance_check y conta_catcher_saldo_comprobar. Solo añade.
+#   (0100, 0110 y 0120 ya están en staging: runs 38707858478 y 38713804585.)
+#   La prueba, en una transacción con ROLLBACK.
+supabase/migrations/20261112T0130_e05_pago_prepago.sql
+supabase/staging/sql/20261112_e05_pago_prueba.sql
