@@ -1,0 +1,19 @@
+{
+ "_que": "COPIA (tanda ya aplicada). B01 · contexto de producción de la tanda viva (20261101T0180, deshacer un extracto), medido en SOLO LECTURA el 14/10 a las 22:35 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. La función no existe; nada en el historial ni en el camino del pedido.",
+ "medido": "2026-10-14T22:35Z",
+ "tanda": {
+  "supabase/migrations/20261101T0180_b01_extracto_deshacer.sql": "dda39cf10bcb2090c440271c650032c5"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

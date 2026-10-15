@@ -43,7 +43,7 @@ test('A · Validar y enviar a Diez: antes de enviar, cuántos y cuánto; y se pu
   // Una casilla por asiento, marcados los propuestos; el resumen con cuántos y el total.
   await expect(dialogo.getByRole('checkbox', { checked: true })).toHaveCount(n)
   await expect(dialogo.getByText(new RegExp(`^${n} asientos? · [\\d.]+,\\d{2}\\s€$`))).toBeVisible()
-  await expect(dialogo.getByText(/Sin el documento adjunto en Diez no se da por enviado/)).toBeVisible()
+  await expect(dialogo.getByText(/Si uno se valida y no llega a Diez, se para ahí y los siguientes se quedan como están/)).toBeVisible()
   await expect(dialogo.getByRole('button', { name: `Validar y enviar ${n} a Diez` })).toBeEnabled()
   await capturar(page, 'validar-y-enviar')
   // Desmarcar uno cambia la cuenta (cuántos y cuánto, antes de enviar).
