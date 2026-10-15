@@ -51,7 +51,13 @@ const c = new ClienteDiez({
 
 const v = (f: Factura, k: string) => String((f as Record<string, unknown>)[k] ?? '')
 const mes = (f: Factura) => Number(v(f, 'FechaFactura').slice(0, 6)) || Number(v(f, 'Fecha').slice(0, 6)) || 0
-await c.asegurarToken()
+try { await c.asegurarToken() } catch (e) {
+  // Solo el tipo y el código: el mensaje puede llevar texto de Diez.
+  const x = e as { name?: string; status?: number }
+  sale('entra_c0008', 0)
+  sale(`error_${String(x.name ?? 'error').toLowerCase().replace(/[^a-z]/g, '')}`, Number(x.status ?? 0))
+  process.exit(1)
+}
 sale('entra_c0008', 1)
 
 // Los tres últimos meses (la primera pasada: de más atrás no contestaba a tiempo).
