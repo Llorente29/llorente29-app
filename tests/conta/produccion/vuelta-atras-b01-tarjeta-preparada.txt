@@ -1,6 +1,0 @@
-# PREPARADA, NO VIVA. Vuelta atrás de la tanda «nunca una tarjeta entera», en
-# orden inverso. La 0191 no devuelve nada, a propósito (no hay número entero
-# guardado en ningún sitio); la 0190 quita el disparador y sus funciones.
-cuenta: scripts/conta/produccion/cuentas/tarjeta-oculta.sql
-supabase/vuelta-atras/20261101T0191_b01_tarjeta_oculta_guardado.down.sql
-supabase/vuelta-atras/20261101T0190_b01_tarjeta_oculta.down.sql
