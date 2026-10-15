@@ -115,7 +115,11 @@ export interface Contexto {
   tarjetas?: Tarjeta[]
   /** B02 · El nombre de la empresa y sus variantes: en el concepto, delata un traspaso entre sus cuentas. */
   nombresPropios?: string[]
-  /** B02 · Adónde va una diferencia pequeña al pagar una factura: de más (gasto) y de menos (ingreso). */
+  /**
+   * B02 · Adónde va una diferencia pequeña al pagar una factura (Julio, 15/10):
+   * de más, 669 «Otros gastos financieros»; de menos, 769 «Otros ingresos
+   * financieros»; si el banco dice que es una comisión, 626. Siempre propuesta.
+   */
   cuentaDiferenciaGasto?: string
   cuentaDiferenciaIngreso?: string
 }
@@ -178,7 +182,7 @@ export function nombreCuenta(ctx: Pick<Contexto, 'nombres'>, codigo: string): st
   return n ? `${n} · ${codigo}` : codigo
 }
 
-const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+export const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
 
 /** ¿El concepto nombra a este tercero? (por cualquiera de sus nombres, sin acentos ni signos). */
 export function nombra(concepto: string, alias: readonly string[]): boolean {
@@ -462,13 +466,14 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
         const dif = pagar - pendiente
         if (dif !== 0 && abs(dif) <= Math.min(300, Math.round(pagar * 0.03))) {
           const deMas = dif > 0
-          const cuenta = deMas ? (ctx.cuentaDiferenciaGasto ?? ctx.cuentas626) : (ctx.cuentaDiferenciaIngreso ?? '76900000')
+          const comision = deMas && /COMISI[OÓ]N|\bCOMIS\b|\bCOMIS\./i.test(txt)
+          const cuenta = comision ? ctx.cuentas626 : deMas ? (ctx.cuentaDiferenciaGasto ?? '66900000') : (ctx.cuentaDiferenciaIngreso ?? '76900000')
           gastar(f, pendiente)
           return { ...b, confianza: 'probable', facturaSinAprobar: sinAprobar(f), origen: 'factura', quedaPorCasarCent: 0,
             que: `Pago de la factura ${f.numero ?? ''} de ${f.proveedor}, con ${eurosCent(abs(dif))} de diferencia${marca([f])}`.replace('  ', ' '),
-            porque: `De la factura del ${ddmm(f.fecha)} quedan ${eurosCent(pendiente)} y ${deMas ? 'pagas' : 'te cobran'} ${eurosCent(pagar)}: la diferencia de ${eurosCent(abs(dif))} ${deMas ? 'parece una comisión' : 'parece un redondeo'} y va a ${nombreCuenta(ctx, cuenta)}. No la apunto hasta que digas que sí.${nota([f])}`,
+            porque: `De la factura del ${ddmm(f.fecha)} quedan ${eurosCent(pendiente)} y ${deMas ? 'pagas' : 'te cobran'} ${eurosCent(pagar)}: la diferencia de ${eurosCent(abs(dif))} ${comision ? 'es la comisión que dice el banco' : deMas ? 'parece un gasto del pago' : 'parece un redondeo'} y va a ${nombreCuenta(ctx, cuenta)}. No la apunto hasta que digas que sí.${nota([f])}`,
             destino: { ...(factura(f, pendiente, m) as Extract<Destino, { tipo: 'factura_recibida' }>),
-              diferencia: { cuenta, importe: euros(dif), concepto: deMas ? `Comisión del pago a ${f.proveedor}` : `Redondeo del pago a ${f.proveedor}` } } }
+              diferencia: { cuenta, importe: euros(dif), concepto: comision ? `Comisión del pago a ${f.proveedor}` : deMas ? `Diferencia del pago a ${f.proveedor}` : `Redondeo del pago a ${f.proveedor}` } } }
         }
       }
       // Un pago en parte: lo que queda por casar se dice.
@@ -650,21 +655,6 @@ export function subconjunto(importes: number[], objetivo: number): number[] | nu
 
 function mesNombre(mes: string): string {
   return MESES[Number(mes.slice(5, 7)) - 1] ?? mes
-}
-
-/**
- * «Regla nueva, ¿la guardo?»: cuando lo confirmado por contraparte llega a 2
- * con la misma cuenta y no hay regla que lo diga, Folvy la propone en palabras.
- */
-export function reglasNuevas(ctx: Pick<Contexto, 'aprendido' | 'reglas' | 'nombres'>): { palabras: string; contiene: string; cuenta: string; terceroId: string | null }[] {
-  const out: { palabras: string; contiene: string; cuenta: string; terceroId: string | null }[] = []
-  for (const a of ctx.aprendido) {
-    if (a.veces < 2) continue
-    if (ctx.reglas.some((r) => normal(r.contiene) === a.contraparte)) continue
-    if (ctx.aprendido.some((x) => x.contraparte === a.contraparte && x.cuenta !== a.cuenta && x.veces >= a.veces)) continue
-    out.push({ palabras: `Cuando el concepto tenga «${a.contraparte}» → ${nombreCuenta(ctx, a.cuenta)}`, contiene: a.contraparte, cuenta: a.cuenta, terceroId: a.terceroId })
-  }
-  return out
 }
 
 /**

@@ -2,7 +2,7 @@
 // y la de que nada se casa dos veces. Datos inventados (repositorio público).
 import { describe, expect, it } from 'vitest'
 import {
-  conciliar, contraparte, decidir, nombra, nombreCuenta, preguntasDeTarjeta, refEn, reglasNuevas, resumenMes, subconjunto,
+  conciliar, contraparte, decidir, nombra, nombreCuenta, preguntasDeTarjeta, refEn, resumenMes, subconjunto,
   type Contexto, type Movimiento,
 } from '@/modules/conta/lib/conciliacion'
 
@@ -301,10 +301,7 @@ describe('Piezas', () => {
     expect(subconjunto([100, 250, 70], 350)).toEqual([0, 1])
     expect(subconjunto([100, 250], 999)).toBeNull()
   })
-  it('regla nueva cuando lo aprendido llega a 2 y no hay regla que lo diga', () => {
-    const r = reglasNuevas({ aprendido: [{ contraparte: 'PLENITUDE', cuenta: '62800000', terceroId: null, veces: 2 }], reglas: [], nombres: ctx().nombres })
-    expect(r).toEqual([{ palabras: 'Cuando el concepto tenga «PLENITUDE» → Luz y agua · 62800000', contiene: 'PLENITUDE', cuenta: '62800000', terceroId: null }])
-  })
+  // La regla nueva «a la 2.ª» del B01 la sustituye reglasQuePropongo (B02, a la 3.ª y con freno): tests/unit/modules/conta/reglasB02.test.ts.
   it('la banda: «He casado yo 142 de 158…»', () => {
     const ds = [...Array(142).fill({ confianza: 'seguro', antesDelCorteSinPareja: false }), ...Array(11).fill({ confianza: 'probable', antesDelCorteSinPareja: false }),
       ...Array(5).fill({ confianza: 'duda', antesDelCorteSinPareja: false })]

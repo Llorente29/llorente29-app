@@ -283,7 +283,7 @@ export function crearBancos(bd: Bd) {
       tarjetas: tarjetas.map((t) => ({ id: String(t.id), cuentaId: String(t.treasury_account_id), ultimos4: String(t.last4), titular: String(t.holder_name), localId: s(t.location_id) })),
       cuentas476: nombre476,
       nombresPropios: nombresDeEmpresa(empresa[0]),
-      cuentaDiferenciaGasto: hoja('626') ?? '62600000',
+      cuentaDiferenciaGasto: hoja('669') ?? '66900000',
       cuentaDiferenciaIngreso: hoja('769') ?? '76900000',
     }
     return { ctx, movimientos }

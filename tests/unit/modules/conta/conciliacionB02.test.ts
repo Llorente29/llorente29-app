@@ -20,7 +20,7 @@ function ctx(p: Partial<Contexto> = {}): Contexto {
     nominas: [], impuestos: [], contratos: [], reglas: [], aprendido: [], asientos: [],
     nombres: { '40700001': 'Saldo prepago', '62600000': 'Servicios bancarios', '76900000': 'Otros ingresos financieros', '40700000': 'Anticipos a proveedores' },
     cuentas626: '62600000', cuentas476: '47600000', cuentaCaja: null,
-    nombresPropios: ['EMPRESA INVENTADA FOOD'], cuentaDiferenciaGasto: '62600000', cuentaDiferenciaIngreso: '76900000',
+    nombresPropios: ['EMPRESA INVENTADA FOOD'], cuentaDiferenciaGasto: '66900000', cuentaDiferenciaIngreso: '76900000',
     ...p,
   }
 }
@@ -94,10 +94,12 @@ describe('facturas: en revisión, varios con varios, en parte y la diferencia pe
     const d = decidir(mov({ importeCent: -17_000, concepto: 'TRANSFERENCIAS · DISTRIBUCIONES INVENTADAS' }), ctx({ facturas: fs }))
     expect(d).toMatchObject({ que: 'Pago de 2 facturas de Distribuciones Inventadas', destino: { facturas: [{ id: 'a', importe: 120 }, { id: 'c', importe: 50 }] } })
   })
-  it('la diferencia pequeña se propone con su cuenta y nunca se crea sola: de más a la 626, de menos a la 769', () => {
+  it('la diferencia pequeña se propone con su cuenta y nunca se crea sola: de más a la 669, de menos a la 769, comisión a la 626 (Julio, 15/10)', () => {
     const deMas = decidir(mov({ importeCent: -25_011, concepto: 'TRANSFERENCIAS · DISTRIBUCIONES INVENTADAS' }), ctx({ facturas: [proveedor] }))
     expect(deMas).toMatchObject({ confianza: 'probable', preseleccionar: false, quedaPorCasarCent: 0,
-      destino: { tipo: 'factura_recibida', facturas: [{ id: 'f1', importe: 248.61 }], diferencia: { cuenta: '62600000', importe: 1.5 } } })
+      destino: { tipo: 'factura_recibida', facturas: [{ id: 'f1', importe: 248.61 }], diferencia: { cuenta: '66900000', importe: 1.5 } } })
+    const comision = decidir(mov({ importeCent: -25_011, concepto: 'TRANSFERENCIAS · DISTRIBUCIONES INVENTADAS · COMISION TRANSFERENCIA' }), ctx({ facturas: [proveedor] }))
+    expect(comision.destino).toMatchObject({ diferencia: { cuenta: '62600000', importe: 1.5 } })
     const deMenos = decidir(mov({ importeCent: -24_860, concepto: 'TRANSFERENCIAS · DISTRIBUCIONES INVENTADAS' }), ctx({ facturas: [proveedor] }))
     expect(deMenos.destino).toMatchObject({ diferencia: { cuenta: '76900000', importe: -0.01 } })
     // Más del 3 % (o de 3 €) no es una diferencia pequeña: no se propone como pago de esa factura entera.

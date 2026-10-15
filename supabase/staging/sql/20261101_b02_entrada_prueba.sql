@@ -11,11 +11,16 @@
 --   2. bank_importar guarda la contraparte limpia y sin tarjeta, y el tipo.
 --   3. bank_facturas_para_casar trae la aprobada y la «en revisión», con su estado.
 --   4. Casar el pago entero de una factura «en revisión»: se casa, la factura
---      NO se aprueba ni se marca pagada.
+--      NO se aprueba ni se marca pagada. Al aprobarla (como usuario, por el
+--      camino de A), queda pagada con la fecha del pago; otra aprobada sin
+--      pago casado, no.
 --   5. La diferencia pequeña: el asiento lleva su tercera línea y cuadra; la
 --      factura aprobada queda pagada. Una diferencia grande, o propuesta por la
 --      máquina, PARA.
 --   6. Lo de antes, igual: un pago a una cuenta, como con la 0110.
+--   7. Reglas: tres confirmaciones; corregir la cuenta las pone a cero (y
+--      cambiar solo las palabras, no); borrar una encendida PARA; apagada, se
+--      borra y queda dicho.
 -- ============================================================================
 
 \set ON_ERROR_STOP 1
@@ -57,6 +62,8 @@ begin
   insert into public.supplier (account_id, name) values (a, 'Proveedor Inventado B02') returning id into s;
   insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, grand_total, status)
   values (a, emp, s, 'B02-REV', date '2026-09-20', 248.61, 'en_revision') returning id into f; insert into _r values ('f_rev', f, null);
+  insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, grand_total, status)
+  values (a, emp, s, 'B02-REV2', date '2026-09-20', 77.00, 'en_revision') returning id into f; insert into _r values ('f_rev2', f, null);
   insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, grand_total, status)
   values (a, emp, s, 'B02-APR', date '2026-09-21', 100.00, 'aprobada') returning id into f; insert into _r values ('f_apr', f, null);
   insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, grand_total, status)
@@ -118,6 +125,20 @@ begin
   if not exists (select 1 from public.bank_match_item where supplier_invoice_id = f.id) then raise exception 'PRUEBA B02 · 4: el casado no apunta a la factura.'; end if;
   raise notice '4 · en revisión: casado, y la factura sigue en revisión y sin pagar';
 end $$;
+-- Se aprueban las dos, como usuario (el disparador de A comprueba el papel).
+update public.supplier_invoice set status = 'aprobada' where id in (select id from _r where que in ('f_rev', 'f_rev2'));
+do $$
+declare f public.supplier_invoice;
+begin
+  select * into f from public.supplier_invoice where id = (select id from _r where que = 'f_rev');
+  if f.status <> 'pagada' or f.paid_at is distinct from date '2026-09-25' or f.paid_method is distinct from 'transfer' then
+    raise exception 'PRUEBA B02 · 4: aprobada con su pago casado quedó % / % / %.', f.status, f.paid_at, f.paid_method; end if;
+  select * into f from public.supplier_invoice where id = (select id from _r where que = 'f_rev2');
+  if f.status <> 'aprobada' or f.paid_at is not null then raise exception 'PRUEBA B02 · 4: aprobada SIN pago quedó %.', f.status; end if;
+  if not exists (select 1 from public.bank_activity_log where movement_id = (select id from _r where que = 'm1') and summary like 'La factura B02-REV se ha aprobado y ya tenía su pago casado: la he marcado pagada el 25/09/2026.') then
+    raise exception 'PRUEBA B02 · 4: no queda dicho que la ha marcado pagada.'; end if;
+  raise notice '4 · al aprobarla, pagada con la fecha de su pago (y lo dice); la que no tiene pago, solo aprobada';
+end $$;
 
 -- ── 5 · La diferencia pequeña ───────────────────────────────────────────────
 do $$
@@ -163,6 +184,32 @@ begin
   select count(*) into n from public.journal_line where entry_id = (r->>'asiento')::uuid;
   if n <> 2 then raise exception 'PRUEBA B02 · 6: un pago a una cuenta tenía que dar 2 líneas y dio %.', n; end if;
   raise notice '6 · lo de antes, igual';
+end $$;
+
+-- ── 7 · Reglas ──────────────────────────────────────────────────────────────
+do $$
+declare emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; r uuid; c int; v text;
+        c629 text := (select texto from _r where que = 'c629'); c626 text := (select texto from _r where que = 'c626');
+begin
+  r := public.bank_regla_guardar(emp, null, 'Cuando el concepto tenga «PROVEEDOR INVENTADO B02» → ' || c629, '{"contiene": "PROVEEDOR INVENTADO B02"}'::jsonb,
+                                 jsonb_build_object('cuenta', c629), 'persona', 'activa');
+  perform public.bank_regla_confirmada(r); perform public.bank_regla_confirmada(r); perform public.bank_regla_confirmada(r);
+  -- Solo las palabras: las confirmaciones se quedan.
+  perform public.bank_regla_guardar(emp, r, 'Lo de prueba → ' || c629, '{"contiene": "PROVEEDOR INVENTADO B02"}'::jsonb, jsonb_build_object('cuenta', c629), 'persona', 'activa');
+  select confirmations into c from public.bank_rule where id = r;
+  if c <> 3 then raise exception 'PRUEBA B02 · 7: cambiar solo las palabras dejó % confirmaciones.', c; end if;
+  -- Corregir la cuenta: a cero.
+  perform public.bank_regla_guardar(emp, r, 'Lo de prueba → ' || c626, '{"contiene": "PROVEEDOR INVENTADO B02"}'::jsonb, jsonb_build_object('cuenta', c626), 'persona', 'activa');
+  select confirmations into c from public.bank_rule where id = r;
+  if c <> 0 then raise exception 'PRUEBA B02 · 7: corregir la cuenta dejó % confirmaciones.', c; end if;
+  begin perform public.bank_regla_borrar(r); exception when others then v := sqlerrm; end;
+  if v is distinct from 'Solo se borra una regla apagada: apágala antes.' then raise exception 'PRUEBA B02 · 7: borrar una encendida dijo «%».', v; end if;
+  perform public.bank_regla_estado(r, 'apagada');
+  perform public.bank_regla_borrar(r);
+  if exists (select 1 from public.bank_rule where id = r) then raise exception 'PRUEBA B02 · 7: la apagada no se borró.'; end if;
+  if not exists (select 1 from public.bank_activity_log where company_id = emp and action = 'regla' and summary = 'Borrada la regla «Lo de prueba → ' || c626 || '».') then
+    raise exception 'PRUEBA B02 · 7: no queda dicho que se borró.'; end if;
+  raise notice '7 · reglas: corregir empieza de cero, borrar solo apagada y queda dicho';
 end $$;
 reset role;
 

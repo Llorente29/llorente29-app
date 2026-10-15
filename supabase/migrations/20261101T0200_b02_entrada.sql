@@ -14,12 +14,22 @@
 --    redondeo) en un pago de facturas, con su cuenta, hasta 3 € y el 3 %, y
 --    solo la confirma la persona; (b) una factura «en revisión» pagada entera
 --    no se marca pagada (confirmar el pago no la aprueba).
+-- 6. Al aprobar una factura «en revisión» que ya tiene su pago casado entero,
+--    se marca pagada (mark_supplier_invoice_paid, el camino de siempre) con la
+--    fecha del último pago: un disparador NUEVO después de la aprobación, sin
+--    tocar la de A (trg_supplier_invoice_aprobacion). Si no puede marcarla, la
+--    aprobación sigue y queda dicho en «Ver y deshacer lo que he hecho».
+-- 7. Reglas (B02): bank_regla_borrar, NUEVA, solo si está apagada; y
+--    bank_regla_guardar (misma firma) pone a cero las confirmaciones y las
+--    correcciones cuando se corrige el texto o la cuenta.
 -- Lo de antes no cambia: un casado sin diferencia ni facturas en revisión hace
 -- lo mismo que con la 0110.
 --
 -- Vuelta atrás: supabase/vuelta-atras/20261101T0200_b02_entrada.down.sql
 -- cambia: public.bank_importar · prueba: supabase/staging/sql/20261101_b02_entrada_prueba.sql
 -- cambia: public.bank_casar · prueba: supabase/staging/sql/20261101_b02_entrada_prueba.sql
+-- cambia: public.supplier_invoice · prueba: supabase/staging/sql/20261101_b02_entrada_prueba.sql
+-- cambia: public.bank_regla_guardar · prueba: supabase/staging/sql/20261101_b02_entrada_prueba.sql
 -- ============================================================================
 
 alter table public.bank_movement add column if not exists counterparty text;
@@ -394,3 +404,90 @@ begin
   end if;
   return jsonb_build_object('match', v_match, 'asiento', v_entry, 'creado', v_creado, 'validado', v_validado, 'aviso', v_aviso);
 end $$;
+
+-- ── 6 · Aprobada con el pago ya casado → pagada ─────────────────────────────
+create or replace function public._bank_factura_aprobada_con_pago()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_pagado numeric; v_fecha date; v_metodo text; v_mov public.bank_movement;
+begin
+  if new.status <> 'aprobada' or old.status = 'aprobada' or new.paid_at is not null then return null; end if;
+  select coalesce(sum(i.amount), 0) into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
+   where i.supplier_invoice_id = new.id and b.status = 'vivo';
+  if v_pagado = 0 or v_pagado < coalesce(new.grand_total, 0) - 0.005 then return null; end if;
+  select m.* into v_mov from public.bank_match_item i join public.bank_match b on b.id = i.match_id join public.bank_movement m on m.id = b.movement_id
+   where i.supplier_invoice_id = new.id and b.status = 'vivo' order by m.op_date desc limit 1;
+  v_fecha := v_mov.op_date;
+  v_metodo := case when v_mov.common_code = '03' or v_mov.bank_concept ~* 'RECIBO|ADEUDO|DOMICILIA' then 'direct_debit' else 'transfer' end;
+  begin
+    perform public.mark_supplier_invoice_paid(new.id, v_fecha, v_metodo);
+    perform public._bank_log(v_mov.account_id, v_mov.company_id, v_mov.id, null, null, 'validado', 'folvy',
+      format('La factura %s se ha aprobado y ya tenía su pago casado: la he marcado pagada el %s.', coalesce(new.invoice_number, ''), to_char(v_fecha, 'DD/MM/YYYY')),
+      jsonb_build_object('factura', new.id, 'pagada', v_fecha));
+  exception when others then
+    perform public._bank_log(v_mov.account_id, v_mov.company_id, v_mov.id, null, null, 'por_aclarar', 'folvy',
+      format('La factura %s se ha aprobado y ya tenía su pago casado, pero no he podido marcarla pagada: %s', coalesce(new.invoice_number, ''), sqlerrm),
+      jsonb_build_object('factura', new.id));
+  end;
+  return null;
+end $$;
+revoke all on function public._bank_factura_aprobada_con_pago() from public, anon, authenticated;
+drop trigger if exists bank_factura_aprobada_con_pago on public.supplier_invoice;
+create trigger bank_factura_aprobada_con_pago after update of status on public.supplier_invoice
+  for each row execute function public._bank_factura_aprobada_con_pago();
+
+-- ── 7 · Reglas: corregir empieza de cero; borrar, solo apagada ─────────────
+create or replace function public.bank_regla_guardar(p_company uuid, p_id uuid, p_palabras text, p_condicion jsonb, p_destino jsonb, p_origen text, p_estado text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare v_cuenta uuid := public._bank_cuenta_de_empresa(p_company); v_id uuid := p_id; v_antes public.bank_rule;
+begin
+  if p_origen not in ('persona', 'folvy') or p_estado not in ('propuesta', 'activa', 'apagada') then
+    raise exception 'Origen o estado de la regla no válidos.' using errcode = '23514';
+  end if;
+  if p_origen = 'folvy' and p_estado = 'activa' and v_id is null then
+    raise exception 'Una regla que propone Folvy nace «propuesta»: la guarda la persona.' using errcode = '23514';
+  end if;
+  if not exists (select 1 from public.company_account where company_id = p_company and code = p_destino->>'cuenta') then
+    raise exception 'La cuenta % no está en el plan de la empresa.', p_destino->>'cuenta' using errcode = '23514';
+  end if;
+  if v_id is null then
+    insert into public.bank_rule (account_id, company_id, words, condition, target, origin, status, created_by, created_by_name)
+    values (v_cuenta, p_company, trim(p_palabras), p_condicion, p_destino, p_origen, p_estado, auth.uid(),
+            case when p_origen = 'folvy' then 'Folvy' else public.conta_nombre_actor() end)
+    returning id into v_id;
+    insert into public.bank_rule_log (account_id, rule_id, action, after, created_by, created_by_name)
+    values (v_cuenta, v_id, case when p_estado = 'propuesta' then 'propuesta' else 'creada' end,
+            jsonb_build_object('palabras', trim(p_palabras), 'condicion', p_condicion, 'destino', p_destino, 'estado', p_estado), auth.uid(),
+            case when p_origen = 'folvy' then 'Folvy' else public.conta_nombre_actor() end);
+  else
+    select * into v_antes from public.bank_rule where id = v_id and company_id = p_company for update;
+    if v_antes.id is null then raise exception 'Esa regla no es de la empresa.' using errcode = 'P0002'; end if;
+    -- B02: corregir el texto o la cuenta empieza de cero: una regla corregida no casa sola por lo confirmado antes.
+    update public.bank_rule set words = trim(p_palabras), condition = p_condicion, target = p_destino, status = p_estado, updated_at = now(),
+           confirmations = case when condition is distinct from p_condicion or target is distinct from p_destino then 0 else confirmations end,
+           corrections = case when condition is distinct from p_condicion or target is distinct from p_destino then 0 else corrections end
+     where id = v_id;
+    insert into public.bank_rule_log (account_id, rule_id, action, before, after, created_by, created_by_name)
+    values (v_cuenta, v_id, 'cambiada',
+            jsonb_build_object('palabras', v_antes.words, 'condicion', v_antes.condition, 'destino', v_antes.target, 'estado', v_antes.status),
+            jsonb_build_object('palabras', trim(p_palabras), 'condicion', p_condicion, 'destino', p_destino, 'estado', p_estado), auth.uid(), public.conta_nombre_actor());
+  end if;
+  return v_id;
+end $$;
+
+create or replace function public.bank_regla_borrar(p_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare v public.bank_rule;
+begin
+  select * into v from public.bank_rule where id = p_id for update;
+  if v.id is null then raise exception 'Esa regla no existe.' using errcode = 'P0002'; end if;
+  perform public._bank_cuenta_de_empresa(v.company_id);
+  if v.status <> 'apagada' then raise exception 'Solo se borra una regla apagada: apágala antes.' using errcode = '23514'; end if;
+  if exists (select 1 from public.bank_match where rule_id = p_id and status = 'vivo') then
+    raise exception 'Esa regla tiene casados vivos: se queda apagada, no se borra.' using errcode = '23514';
+  end if;
+  perform public._bank_log(v.account_id, v.company_id, null, null, null, 'regla', 'persona', format('Borrada la regla «%s».', v.words),
+    jsonb_build_object('regla', v.id, 'condicion', v.condition, 'destino', v.target));
+  delete from public.bank_rule where id = p_id;
+end $$;
+revoke all on function public.bank_regla_borrar(uuid) from public, anon;
+grant execute on function public.bank_regla_borrar(uuid) to authenticated;

@@ -307,6 +307,43 @@ begin
   return jsonb_build_object('match', v_match, 'asiento', v_entry, 'creado', v_creado, 'validado', v_validado, 'aviso', v_aviso);
 end $$;
 
+create or replace function public.bank_regla_guardar(p_company uuid, p_id uuid, p_palabras text, p_condicion jsonb, p_destino jsonb, p_origen text, p_estado text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare v_cuenta uuid := public._bank_cuenta_de_empresa(p_company); v_id uuid := p_id; v_antes public.bank_rule;
+begin
+  if p_origen not in ('persona', 'folvy') or p_estado not in ('propuesta', 'activa', 'apagada') then
+    raise exception 'Origen o estado de la regla no válidos.' using errcode = '23514';
+  end if;
+  if p_origen = 'folvy' and p_estado = 'activa' and v_id is null then
+    raise exception 'Una regla que propone Folvy nace «propuesta»: la guarda la persona.' using errcode = '23514';
+  end if;
+  if not exists (select 1 from public.company_account where company_id = p_company and code = p_destino->>'cuenta') then
+    raise exception 'La cuenta % no está en el plan de la empresa.', p_destino->>'cuenta' using errcode = '23514';
+  end if;
+  if v_id is null then
+    insert into public.bank_rule (account_id, company_id, words, condition, target, origin, status, created_by, created_by_name)
+    values (v_cuenta, p_company, trim(p_palabras), p_condicion, p_destino, p_origen, p_estado, auth.uid(),
+            case when p_origen = 'folvy' then 'Folvy' else public.conta_nombre_actor() end)
+    returning id into v_id;
+    insert into public.bank_rule_log (account_id, rule_id, action, after, created_by, created_by_name)
+    values (v_cuenta, v_id, case when p_estado = 'propuesta' then 'propuesta' else 'creada' end,
+            jsonb_build_object('palabras', trim(p_palabras), 'condicion', p_condicion, 'destino', p_destino, 'estado', p_estado), auth.uid(),
+            case when p_origen = 'folvy' then 'Folvy' else public.conta_nombre_actor() end);
+  else
+    select * into v_antes from public.bank_rule where id = v_id and company_id = p_company for update;
+    if v_antes.id is null then raise exception 'Esa regla no es de la empresa.' using errcode = 'P0002'; end if;
+    update public.bank_rule set words = trim(p_palabras), condition = p_condicion, target = p_destino, status = p_estado, updated_at = now() where id = v_id;
+    insert into public.bank_rule_log (account_id, rule_id, action, before, after, created_by, created_by_name)
+    values (v_cuenta, v_id, 'cambiada',
+            jsonb_build_object('palabras', v_antes.words, 'condicion', v_antes.condition, 'destino', v_antes.target, 'estado', v_antes.status),
+            jsonb_build_object('palabras', trim(p_palabras), 'condicion', p_condicion, 'destino', p_destino, 'estado', p_estado), auth.uid(), public.conta_nombre_actor());
+  end if;
+  return v_id;
+end $$;
+
+drop function if exists public.bank_regla_borrar(uuid);
+drop trigger if exists bank_factura_aprobada_con_pago on public.supplier_invoice;
+drop function if exists public._bank_factura_aprobada_con_pago();
 drop function if exists public.bank_facturas_para_casar(uuid);
 drop function if exists public._bank_contraparte_limpia(text);
 alter table public.bank_movement drop column if exists movement_type;
