@@ -24,6 +24,7 @@
 // línea que una factura recibida no lleva.
 
 import type { FacturaData } from './diezCliente.ts'
+import { FORMA_ANULACION } from './diezFactura.ts'
 
 export type LineaRecibida = { cuenta: string; debe: number; haber: number; tipoIva?: number | null; baseIva?: number | null }
 export type AsientoRecibida = {
@@ -106,4 +107,40 @@ export function facturaRecibida(a: AsientoRecibida, o: { hoy: string }): Factura
     Apuntes: cuentas.map((k, i) => ({ Linea: i + 1, Cuenta: k, Concepto: descripcion, Fecha: fecha, Importe: e(porCuenta.get(k)!) })),
   }
   return { factura, esperado: { total: e(total), bases: e(bases), cuotas: e(cuotas), tipos } }
+}
+
+// ── D01 · La factura que ANULA una recibida ya enviada (su contraasiento) ──────
+//
+// Julio (15/10): «anular una recibida ya enviada a Diez con su "-ANUL", igual
+// que las ventas». Es la forma de facturaQueAnula (diezFactura.ts, medida en la
+// C0009 el 14/10): el número de la original con «-ANUL», la descripción con
+// «ANUL » delante, todos los importes en negativo, la fecha del contraasiento,
+// el mismo TipoFactura y SIN campos de rectificativa. En la serie 2 se niegan
+// los TRES tipos (base y cuota; el porcentaje se queda) y cada Apunte; la
+// cuenta, el NIF y el nombre del proveedor, los de la original.
+
+/** La recibida de la serie 2 que anula `original`. `fecha`: la del contraasiento; `hoy`: el día en que se mete. */
+export function facturaRecibidaQueAnula(original: FacturaData, o: { fecha: string; hoy: string }): FacturaData {
+  if (!FECHA.test(o.fecha) || !FECHA.test(o.hoy)) throw new Error('fechas que no son AAAA-MM-DD')
+  if (String(original.Serie) !== '2') throw new Error('no es una factura recibida (serie 2): no se anula como recibida')
+  const numero = String(original.NumeroFactura ?? '').trim()
+  if (!numero) throw new Error('la factura que se anula no tiene número: no se puede decir cuál anula')
+  const neg = (x: unknown) => (Number(x ?? 0) === 0 ? 0 : e(-c(Number(x))))
+  const fecha = aaaammdd(o.fecha)
+  const descripcion = `${FORMA_ANULACION.prefijoDescripcion}${String(original.Descripcion ?? '')}`.slice(0, 40)
+  const tipos: Record<string, number> = {}
+  for (const i of [1, 2, 3]) {
+    if (original[`BaseImponible${i}`] != null) tipos[`BaseImponible${i}`] = neg(original[`BaseImponible${i}`])
+    if (original[`CuotaIVA${i}`] != null) tipos[`CuotaIVA${i}`] = neg(original[`CuotaIVA${i}`])
+  }
+  const apuntes = ((original.Apuntes as { Linea: number; Cuenta: string; Concepto: string; Fecha: number; Importe: number }[] | undefined) ?? [])
+    .map((a) => ({ ...a, Concepto: descripcion, Fecha: fecha, Importe: neg(a.Importe) }))
+  return {
+    ...original,
+    Ejercicio: o.fecha.slice(0, 4), Documento: undefined,
+    Fecha: fecha, FechaFactura: fecha, FechaIntroduccionFactura: aaaammdd(o.hoy),
+    NumeroFactura: `${numero}${FORMA_ANULACION.sufijo}`, Descripcion: descripcion,
+    ...tipos, TotalFactura: neg(original.TotalFactura), TotalGastosIngresos: neg(original.TotalGastosIngresos),
+    Apuntes: apuntes,
+  }
 }

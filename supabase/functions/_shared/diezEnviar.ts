@@ -48,7 +48,7 @@
 import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
 import { facturaDeVentas, facturaQueAnula, PATRONES } from './diezFactura.ts'
-import { facturaRecibida, type FacturaRecibida } from './diezRecibida.ts'
+import { facturaRecibida, facturaRecibidaQueAnula, type FacturaRecibida } from './diezRecibida.ts'
 import { claveNumero } from './lecturaFactura.ts'
 import { resumenDeAsiento, type ResumenBD } from './resumenDeAsiento.ts'
 
@@ -468,6 +468,102 @@ export async function enviarContraasientoADiez(c: ContraasientoBD, p: PuertoEnvi
     serie = String(ya[0].Serie); documento = Number(ya[0].Documento); enlazada = true
     previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'enlazado', ext_year: ej, ext_series: serie, ext_number: documento, attempts: previo?.attempts ?? 0, last_error: null, sent_at: iso(p.ahora()) })
   } else {
+    previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'pendiente', ext_year: null, ext_series: null, ext_number: null, attempts: (previo?.attempts ?? 0) + 1, last_error: 'enviando', sent_at: null })
+    let creada: Factura
+    try { creada = await diez.enviarFactura(fd) } catch (x) {
+      return apuntar(`Diez no ha aceptado el contraasiento: ${x instanceof Error ? x.message : String(x)}`)
+    }
+    serie = String(creada.Serie ?? fd.Serie); documento = Number(creada.Documento); enlazada = false
+    previo = await p.guardar({ ...previo, status: 'enviado', ext_year: ej, ext_series: serie, ext_number: documento, last_error: null, sent_at: iso(p.ahora()) })
+  }
+  return { estado: 'en_diez', serie, documento, enlazada, pdfPendiente: false,
+    texto: `Anulada también en Diez: ${orig!.ext_series}/${orig!.ext_number} (${orig!.ext_invoice_number}) con ${serie}/${documento} (${fd.NumeroFactura})${enlazada ? ', que ya estaba: enlazada, no se ha enviado otra' : ''}.` }
+}
+
+// ── D01 · El contraasiento de una RECIBIDA ya enviada, a Diez (su «-ANUL») ──────
+//
+// Julio (15/10): «anular una recibida ya enviada a Diez con su "-ANUL", igual
+// que las ventas, con los mismos frenos». La factura que la anula es
+// facturaRecibidaQueAnula (diezRecibida.ts): la recibida rehecha de lo anulado,
+// con el número y los importes al revés. Los frenos, en el orden de las ventas:
+//   1. Solo el contraasiento VALIDADO de una anulación, y solo si la recibida
+//      está en Diez (enviada o enlazada, en la serie 2). Si no, allí no hay
+//      nada que anular: no se escribe nada.
+//   3. C0001 nunca; Diez real solo con lo que Julio autoriza (la empresa, el
+//      contraasiento o la recibida que anula).
+//   5. Nunca dos veces: se busca antes como una recibida (del mes del
+//      contraasiento a hoy, el número normalizado, el proveedor por su cuenta
+//      o su NIF); una → se enlaza; más de una → no se toca. La intención se
+//      apunta antes de escribir.
+//   7. Como mucho 3 intentos que escriben.
+// Sin PDF, como el contraasiento de ventas: su envío queda sin document_status.
+
+export async function enviarContraasientoRecibidaADiez(c: ContraasientoBD, p: PuertoEnvio & { recibida(entryId: string): Promise<RecibidaBD> }): Promise<ResultadoEnvio> {
+  if (c.origen !== 'reversal' || !c.anula) return noLlega('ese asiento no es el contraasiento de una anulación', false)
+  if (c.estado !== 'validado') return noLlega(`el contraasiento está ${c.estado}: solo se envía lo validado`, false)
+
+  const orig = await p.envio(c.anula)
+  if (!yaEnviado(orig)) return noLlega('la factura recibida que anula no llegó a Diez: allí no hay nada que anular', false)
+  if (String(orig!.ext_series) !== '2') return noLlega(`lo que anula está en la serie ${orig!.ext_series} de Diez, no en la de recibidas: no se anula a ciegas`, false)
+  let previo = await p.envio(c.id)
+  if (yaEnviado(previo)) {
+    return { estado: 'en_diez', serie: String(previo!.ext_series), documento: Number(previo!.ext_number), enlazada: previo!.status === 'enlazado', pdfPendiente: false,
+      texto: `Ya estaba anulada en Diez: ${orig!.ext_series}/${orig!.ext_number}, con ${previo!.ext_series}/${previo!.ext_number}.` }
+  }
+  const apuntar = async (motivo: string, extra: Partial<EnvioFila> = {}, reintentar = true): Promise<ResultadoEnvio> => {
+    previo = await p.guardar({
+      ...(previo ?? {
+        entry_id: c.id, account_id: c.account_id, company_id: c.company_id, account_connector_id: null, kind: 'factura',
+        ext_year: null, ext_series: null, ext_number: null, ext_invoice_number: null, payload_hash: 'sin-enviar', status: 'pendiente', attempts: 0,
+        sent_at: null, document_id: null, document_status: null, document_error: null, document_attached_at: null,
+      }),
+      last_error: motivo, ...extra,
+    } as EnvioFila)
+    return noLlega(motivo, reintentar)
+  }
+
+  // La recibida que se anula, rehecha de lo anulado (las mismas líneas que se enviaron).
+  const r = await p.recibida(c.anula)
+  const hoy = hoyMadrid(p.ahora())
+  let fd: FacturaData
+  try {
+    const original = facturaRecibida({ fecha: r.fecha, fechaFactura: r.factura.fecha, numero: r.factura.numero ?? '', proveedor: r.proveedor, lineas: r.lineas }, { hoy }).factura
+    if (String(original.NumeroFactura) !== String(orig!.ext_invoice_number)) {
+      return apuntar(`la recibida rehecha (${original.NumeroFactura}) no es la que está en Diez (${orig!.ext_invoice_number}): no se anula a ciegas`, {}, false)
+    }
+    fd = facturaRecibidaQueAnula(original, { fecha: c.fecha, hoy })
+  } catch (x) { return apuntar(x instanceof Error ? x.message : String(x), {}, false) }
+
+  const con = await p.conexion(c.company_id)
+  if (!con) return apuntar('la conexión con Diez no está configurada para esta empresa')
+  const bd = con.nombreBd.trim().toUpperCase()
+  if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
+  const real = bd !== BASE_PRUEBAS
+  if (real && !(await p.autorizado(c.id, c.company_id, bd)) && !(await p.autorizado(c.anula, c.company_id, bd))) {
+    return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  }
+  if (previo && previo.attempts >= MAX_INTENTOS) return noLlega(`ya van ${previo.attempts} intentos: lo tiene que mirar una persona`, false)
+
+  // 5 · Nunca dos veces: ¿ya está en Diez la que anula? Se busca como una recibida.
+  const esLaMisma = esLaMismaRecibida({ numero: fd.NumeroFactura, cuenta: fd.CuentaCliente, nif: r.proveedor.nif })
+  if (!esLaMisma) return apuntar('sin un número que sirva para buscarla en Diez no se manda', { account_connector_id: con.id }, false)
+  const meses = mesesEntre(String(fd.FechaFactura).slice(0, 6), hoy.replace(/-/g, '').slice(0, 6))
+  if (!meses.length) return apuntar('el contraasiento es de una fecha posterior a hoy: no se manda', { account_connector_id: con.id }, false)
+  if (meses.length > MESES_BUSQUEDA_RECIBIDA) return apuntar(`el contraasiento es de hace más de ${MESES_BUSQUEDA_RECIBIDA - 1} meses: no se manda solo, míralo a mano en Diez`, { account_connector_id: con.id }, false)
+  const diez = await p.cliente(con, { real })
+  const delMes: Factura[] = []
+  for (const m of meses) delMes.push(...await diez.facturasDelMes(m))
+  const ya = [...new Map(delMes.filter(esLaMisma).map((f) => [`${f.Ejercicio ?? ''}|${f.Serie}|${f.Documento}`, f])).values()]
+  if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${fd.NumeroFactura} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
+  const ej = c.fecha.slice(0, 4)
+  const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(fd)))
+  const comun = { entry_id: c.id, account_id: c.account_id, company_id: c.company_id, account_connector_id: con.id, kind: 'factura' as const, ext_invoice_number: String(fd.NumeroFactura), payload_hash: hash, document_id: null, document_status: null, document_error: null, document_attached_at: null }
+  let serie: string, documento: number, enlazada: boolean
+  if (ya.length === 1) {
+    serie = String(ya[0].Serie); documento = Number(ya[0].Documento); enlazada = true
+    previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'enlazado', ext_year: String(ya[0].Ejercicio ?? ej), ext_series: serie, ext_number: documento, attempts: previo?.attempts ?? 0, last_error: null, sent_at: iso(p.ahora()) })
+  } else {
+    // La intención, antes de escribir: cuenta como intento.
     previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'pendiente', ext_year: null, ext_series: null, ext_number: null, attempts: (previo?.attempts ?? 0) + 1, last_error: 'enviando', sent_at: null })
     let creada: Factura
     try { creada = await diez.enviarFactura(fd) } catch (x) {

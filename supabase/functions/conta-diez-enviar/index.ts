@@ -33,7 +33,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { ClienteDiez, type AlmacenToken } from "../_shared/diezCliente.ts";
 import { correspondenciaDeEmpresa } from "../_shared/diezAnalitica.ts";
-import { enviarAsientoADiez, enviarContraasientoADiez, enviarRecibidaADiez, type ConexionDiez, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
+import { enviarAsientoADiez, enviarContraasientoADiez, enviarContraasientoRecibidaADiez, enviarRecibidaADiez, type ConexionDiez, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
 import type { ResumenBD } from "../_shared/resumenDeAsiento.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -70,7 +70,15 @@ Deno.serve(async (req) => {
     : null;
 
   // D01: una factura recibida se lee con conta_recibida_envio y va a la serie 2.
-  const esRecibida = !contra && je.source_type === "supplier_invoice";
+  // Y el contraasiento de una recibida (15/10), con la recibida que anula: su «-ANUL».
+  let anulaRecibida = false;
+  if (contra?.anula) {
+    const { data: an, error: e2 } = await sb.from("journal_entry").select("source_type")
+      .eq("id", contra.anula).eq("account_id", je.account_id).maybeSingle();
+    if (e2) return json({ estado: "no_llega", motivo: e2.message, reintentar: true, texto: `No ha llegado a Diez: ${e2.message}` }, 400);
+    anulaRecibida = an?.source_type === "supplier_invoice";
+  }
+  const esRecibida = (!contra && je.source_type === "supplier_invoice") || anulaRecibida;
   // El asiento (o, para un contraasiento, lo que anula), con los permisos de quien llama.
   const { data: leido, error: e1 } = await sb.rpc(esRecibida ? "conta_recibida_envio" : "conta_resumen_ventas", { p_entry: contra?.anula ?? entryId });
   if (e1) return json({ estado: "no_llega", motivo: e1.message, reintentar: false, texto: `No ha llegado a Diez: ${e1.message}` }, e1.code === "P0002" ? 404 : 400);
@@ -152,7 +160,7 @@ Deno.serve(async (req) => {
   };
 
   try {
-    return json(contra ? await enviarContraasientoADiez(contra, puerto) : esRecibida ? await enviarRecibidaADiez(entryId, puerto) : await enviarAsientoADiez(entryId, puerto));
+    return json(contra ? await (anulaRecibida ? enviarContraasientoRecibidaADiez(contra, puerto) : enviarContraasientoADiez(contra, puerto)) : esRecibida ? await enviarRecibidaADiez(entryId, puerto) : await enviarAsientoADiez(entryId, puerto));
   } catch (x) {
     const motivo = x instanceof Error ? x.message : String(x);
     return json({ estado: "no_llega", motivo, reintentar: true, texto: `No ha llegado a Diez: ${motivo}.` }, 500);
