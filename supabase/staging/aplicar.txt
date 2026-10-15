@@ -1,4 +1,4 @@
-# E05 · Tarea 2 — los lotes de Catcher (rama conta/d01-catcher).
+# E05 · Tarea 2 — los lotes de Catcher (rama conta/d01-catcher). 2.º intento: el texto de «1 ya estaba», en singular.
 #   0100: el emisor en la factura, el origen «lote», supplier_batch,
 #         supplier_batch_order, supplier_batch_store y conta_lote_registrar.
 #         Añade (y amplía el CHECK de source con «lote»).

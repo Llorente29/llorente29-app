@@ -275,7 +275,7 @@ begin
   return jsonb_build_object('lote_id', v_lote, 'ya_estaba', false, 'facturas', v_n, 'ya_estaban', v_rep_n, 'sin_pdf', v_sin_pdf,
     'total', v_total, 'catcher_sin_ficha', v_catcher_nuevo,
     'texto', 'Subida la ' || coalesce(p_lote->>'etiqueta', 'quincena') || ': ' || v_n || case v_n when 1 then ' factura' else ' facturas' end || ' (' || v_eur || ')'
-             || case when v_rep_n > 0 then '. ' || v_rep_n || case v_rep_n when 1 then ' ya estaba' else ' ya estaban' end || ' y no se han vuelto a apuntar' else '' end
+             || case when v_rep_n = 1 then '. 1 ya estaba y no se ha vuelto a apuntar' when v_rep_n > 1 then '. ' || v_rep_n || ' ya estaban y no se han vuelto a apuntar' else '' end
              || case when v_sin_pdf > 0 then '. ' || v_sin_pdf || ' sin su PDF' else '' end || '.');
 end $$;
 comment on function public.conta_lote_registrar(uuid, jsonb, text) is
