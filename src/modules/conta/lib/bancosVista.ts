@@ -220,3 +220,14 @@ export function cierreBanco(saldoBancoCent: number | null, saldoLibroCent: numbe
       : 'La diferencia no se explica solo con los movimientos sin casar: hay algo en contabilidad que no está en el banco.',
   }
 }
+
+// ── Deshacer un extracto (15/10) ────────────────────────────────────────────
+
+export interface ExtractoDeshecho { fichero: string | null; movimientos: number; posiblesRepetidos: number }
+
+/** Lo que dice la pantalla al deshacer un extracto (regla 8: con contenido). */
+export function textoExtractoDeshecho(r: ExtractoDeshecho): string {
+  const cuantos = `${r.movimientos} ${r.movimientos === 1 ? 'movimiento' : 'movimientos'}`
+  const repetidos = r.posiblesRepetidos > 0 ? `, ${r.posiblesRepetidos} de ellos como «¿es el mismo?»` : ''
+  return `Extracto ${r.fichero ? `«${r.fichero}» ` : ''}deshecho: quitados ${cuantos}${repetidos}. Ya puedes subir el bueno.`
+}

@@ -1,6 +1,4 @@
-# C06b · Respuesta 8, tarea 1 — la autorización de empresa no abre las
-# facturas recibidas.
-#   0740: conta_diez_autorizo.incluye_recibidas (boolean, not null, por
-#   defecto false). Solo añade. Su prueba, en transacción con ROLLBACK.
-supabase/migrations/20261111T0740_c06b_diez_autorizo_recibidas.sql
-supabase/staging/sql/20261111_c06b_diez_autorizo_recibidas_prueba.sql
+# B01 · qué es una tarjeta entera, afinado (Julio, 15/10, opción a): la 0192 y
+# su prueba, fichero entero y como usuario, con rollback (incluye su vuelta atrás).
+supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql
+supabase/staging/sql/20261101_b01_tarjeta_criterio_prueba.sql

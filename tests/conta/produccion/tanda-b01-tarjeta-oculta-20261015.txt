@@ -1,0 +1,23 @@
+# COPIA. La tanda del B01 «nunca una tarjeta entera» (0190 y 0191) está en el
+# historial de producción con su huella (real desde d1779f00, 15/10). La viva es otra.
+#
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# B01 · Nunca se guarda una tarjeta entera (Julio, 15/10): solo las 4 últimas.
+# Rama conta/b01-tarjeta. Va ANTES que la de la C (recibidas, en espera por
+# decisión de Julio). La anterior de este fichero (C06b, 0740) ya está en el
+# historial de producción; su copia: tests/conta/produccion/tanda-c06b-r8-recibidas-20261015.txt.
+#
+#   1. 20261101T0190 — el disparador bank_movement_sin_tarjetas y sus funciones:
+#      desde aquí la base solo guarda las 4 últimas («····1234»). Cambia en
+#      caliente bank_movement (declarado, con prueba de staging).
+#   2. 20261101T0191 — lo ya guardado: hoy 0 (medido el 15/10 a las 08:17; los 10 de
+#      Foodint se fueron al deshacer sus extractos). Update: pide «autorizo» y para si queda alguna.
+cuenta: scripts/conta/produccion/cuentas/tarjeta-oculta.sql
+supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql
+supabase/migrations/20261101T0191_b01_tarjeta_oculta_guardado.sql

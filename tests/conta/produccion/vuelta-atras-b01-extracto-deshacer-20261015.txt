@@ -1,0 +1,8 @@
+# COPIA de la vuelta atrás de la tanda de arriba, ya aplicada.
+#
+# Vuelta atrás de la tanda viva (modo «vuelta_atras»), en orden inverso.
+# B01 · deshacer un extracto (0180): quita la función. Lo ya deshecho con ella
+# no vuelve (los extractos se vuelven a subir); su rastro se queda en
+# «Lo que ha hecho Folvy».
+cuenta: scripts/conta/produccion/cuentas/extracto-deshacer.sql
+supabase/vuelta-atras/20261101T0180_b01_extracto_deshacer.down.sql

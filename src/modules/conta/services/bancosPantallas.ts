@@ -11,7 +11,7 @@ import { supabase } from '@/lib/supabase'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { bancos, type BancoFolvy, type ResultadoConciliar } from '@/modules/conta/services/bancosService'
 import { reglasNuevas } from '@/modules/conta/lib/conciliacion'
-import { limitesMes, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
+import { limitesMes, type ExtractoDeshecho, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
 type Fila = Record<string, unknown>
@@ -235,6 +235,12 @@ export async function mesesEstado(companyId: string, mes: string): Promise<Estad
 export const cerrarMes = (bancoId: string, mes: string, aSabiendas: boolean, motivo: string | null) =>
   rpc<Fila>('bank_mes_cerrar', { p_treasury: bancoId, p_mes: `${mes}-01`, p_a_sabiendas: aSabiendas, p_motivo: motivo })
 export const reabrirMes = (cierreId: string, motivo: string) => rpc<void>('bank_mes_reabrir', { p_cierre: cierreId, p_motivo: motivo })
+
+/** Deshacer un extracto entero (15/10): solo si ninguno de sus movimientos está casado; se lleva también los «¿es el mismo?». */
+export async function deshacerExtracto(extractoId: string, motivo: string): Promise<ExtractoDeshecho> {
+  const r = await rpc<Fila>('bank_extracto_deshacer', { p_statement: extractoId, p_motivo: motivo })
+  return { fichero: s(r.fichero), movimientos: Number(r.movimientos ?? 0), posiblesRepetidos: Number(r.posibles_repetidos ?? 0) }
+}
 
 export interface Pasada { id: string; disparo: 'extracto' | 'diario'; cuando: string; resumen: string; casados: number; propuestos: number; porAclarar: number }
 
