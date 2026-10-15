@@ -111,7 +111,7 @@ create table if not exists public.supplier_balance_check (
   account_id uuid not null references public.accounts(id) on delete cascade,
   company_id uuid not null references public.company(id) on delete cascade,
   provider text not null check (provider in ('catcher')),
-  checked_at timestamptz not null default now(),
+  checked_at timestamptz not null default clock_timestamp(),
   portal_amount numeric(14,2) not null,
   app_amount numeric(14,2) not null,
   app_validated_amount numeric(14,2) not null,
@@ -119,6 +119,8 @@ create table if not exists public.supplier_balance_check (
   checked_by uuid,
   checked_by_name text
 );
+-- clock_timestamp, no now(): dos comprobaciones en la misma transacción no empatan (la última es la última).
+alter table public.supplier_balance_check alter column checked_at set default clock_timestamp();
 create index if not exists supplier_balance_check_idx on public.supplier_balance_check (company_id, provider, checked_at desc);
 comment on table public.supplier_balance_check is
   'E05 · Cada vez que alguien escribe el saldo que enseña el portal del proveedor (Catcher) y la app lo compara con el de su cuenta prepago (40700001).';
