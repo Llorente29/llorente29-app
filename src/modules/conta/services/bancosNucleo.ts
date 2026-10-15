@@ -94,6 +94,26 @@ const ventanas = (dias: { fecha: string; c: number }[]): Plataforma['pendiente']
 
 export interface ResultadoConciliar { casadosSolos: number; propuestos: number; porAclarar: number; antesDelCorte: number; fallos: { movimiento: string; motivo: string }[]; decisiones: Decision[] }
 
+/**
+ * B02 · Con qué texto paga cada plataforma en el banco, además de su nombre
+ * (Uber paga como «STICHTING CUSTODIAN UBER PAYMENTS»). Cada cobro se reconoce
+ * por su texto propio y se casa con su liquidación, nunca con una regla.
+ */
+const PAGADORES: [RegExp, string[]][] = [
+  [/uber/i, ['STICHTING CUSTODIAN UBER', 'UBER PAYMENTS', 'UBER EATS SPAIN']],
+  [/glovo/i, ['GLOVOAPP', 'GLOVO APP']],
+  [/just ?eat/i, ['JUST EAT', 'TAKEAWAY']],
+  [/deliveroo/i, ['ROOFOODS', 'DELIVEROO']],
+]
+export const pagadorDe = (plataforma: string): string[] => PAGADORES.filter(([re]) => re.test(plataforma)).flatMap(([, xs]) => xs)
+
+/** B02 · El nombre de la empresa, sin su forma jurídica: en el concepto, delata un traspaso entre sus cuentas. */
+export function nombresDeEmpresa(e: Fila | undefined): string[] {
+  if (!e) return []
+  const sinForma = (x: unknown) => String(x ?? '').replace(/[.,]/g, ' ').replace(/\b(S ?L ?U?|S ?A|S ?C|C ?B|SOCIEDAD LIMITADA|SOCIEDAD ANONIMA)\s*$/i, '').replace(/\s+/g, ' ').trim()
+  return [...new Set([sinForma(e.legal_name), sinForma(e.trade_name)].filter((x) => x.length >= 4))]
+}
+
 /** Las funciones que hablan con la base, sobre la base que se les dé. */
 export function crearBancos(bd: Bd) {
   const rpc = bd.rpc.bind(bd)
@@ -133,6 +153,7 @@ export function crearBancos(bd: Bd) {
       const movs = leidos.map((m, j) => ({
         fecha: m.fecha, fecha_valor: m.fechaValor, importe: m.importeCent / 100, concepto_banco: m.conceptoBanco, concepto_limpio: limpiarConcepto(m.conceptoBanco),
         comun: m.conceptoComun, propio: m.conceptoPropio, documento: m.numeroDocumento, ref1: m.referencia1, ref2: m.referencia2,
+        contraparte: m.contraparte, tipo: m.tipoMovimiento,
         ...(m.equivalencia ? { divisa_origen: m.equivalencia.divisa, importe_origen: m.equivalencia.importeCent / 100 } : {}),
         huella: hs[j], huella_suave: ss[j],
       }))
@@ -152,11 +173,12 @@ export function crearBancos(bd: Bd) {
 
   async function cargarContexto(accountId: string, companyId: string, hoy: string): Promise<{ ctx: Contexto; movimientos: Movimiento[] }> {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
-    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas] = await Promise.all([
+    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
-      leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status')
+      leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status, counterparty, movement_type')
         .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
-      rpc<Fila[]>('bank_facturas_recibidas_pendientes', { p_company: companyId }),
+      // B02: también las «en revisión» (en ámbar, «factura sin aprobar»).
+      rpc<Fila[]>('bank_facturas_para_casar', { p_company: companyId }),
       rpc<Fila[]>('bank_saldos_cuentas', { p_company: companyId, p_hasta: hoy, p_prefijos: ['400', '410', '430', '465', '475', '476'] }),
       rpc<Fila[]>('bank_asientos_sin_movimiento', { p_company: companyId, p_desde: hace(400), p_hasta: hoy }),
       rpc<Fila[]>('bank_historial', { p_company: companyId, p_desde: hace(400) }),
@@ -168,9 +190,10 @@ export function crearBancos(bd: Bd) {
       leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
       leer(tabla('company_account').select('id, code, name, plain_name, template_code, kind').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
       leer(tabla('recurring_contract').select('*').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los contratos'),
-      leer(tabla('bank_rule').select('id, words, condition, target').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'activa'), 'las reglas'),
+      leer(tabla('bank_rule').select('id, words, condition, target, confirmations').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'activa'), 'las reglas'),
       leer(tabla('supplier').select('id, name, legal_name').eq('account_id', accountId).eq('is_active', true), 'los proveedores'),
       leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las tarjetas'),
+      leer(tabla('company').select('legal_name, trade_name').eq('id', companyId), 'la empresa'),
     ])
     const codigo = new Map(cuentas.map((c) => [String(c.id), String(c.code)]))
     const nombres: Record<string, string> = {}
@@ -183,7 +206,8 @@ export function crearBancos(bd: Bd) {
 
     const movimientos: Movimiento[] = movs.map((m) => ({
       id: String(m.id), cuentaId: String(m.treasury_account_id), fecha: String(m.op_date), importeCent: cent(m.amount),
-      concepto: String(m.bank_concept || m.clean_concept || ''), conceptoComun: s(m.common_code),
+      concepto: String(m.bank_concept || m.clean_concept || m.movement_type || ''), conceptoComun: s(m.common_code),
+      contraparte: s(m.counterparty), tipo: s(m.movement_type),
       referencias: [s(m.document_no), s(m.reference_1), s(m.reference_2)].filter((x): x is string => !!x), antesDelCorte: !!m.before_cutover,
     }))
 
@@ -205,17 +229,18 @@ export function crearBancos(bd: Bd) {
       const suyas = liqs.filter((l) => String(l.channel_id) === canal && n(l.gross_sales) > 0)
       const comision = suyas.length ? suyas.reduce((t, l) => t + abs(n(l.commission)) / n(l.gross_sales), 0) / suyas.length : null
       const dias = ventas.filter((v) => v.cuenta === c430).map((v) => ({ fecha: String(v.fecha), c: cent(v.importe) }))
-      plataformas.push({ nombre, alias: [nombre], cuenta430: c430, terceroId: partyDeCanal.get(canal) ?? null, comisionHabitual: comision, pendiente: ventanas(dias) })
+      plataformas.push({ nombre, alias: [nombre, ...pagadorDe(nombre)], cuenta430: c430, terceroId: partyDeCanal.get(canal) ?? null, comisionHabitual: comision, pendiente: ventanas(dias) })
     }
 
     const conTercero = (entidad: 'supplier' | 'customer') => saldos.filter((x) => x.tercero_entidad === entidad)
     const nombreProv = new Map(proveedores.map((p) => [String(p.id), p]))
     const nombre476 = hoja('476') ?? '47600000'
     const ctx: Contexto = {
-      cuentas: bancos.map((b) => ({ id: b.id, nombre: b.nombre, cuenta: b.cuenta })),
+      cuentas: bancos.map((b) => ({ id: b.id, nombre: b.nombre, cuenta: b.cuenta, ultimos4: b.iban ? b.iban.slice(-4) : null })),
       sinCasar: movimientos.filter((m) => !m.antesDelCorte),
       facturas: facturas.filter((f) => f.cuenta_tercero).map((f) => ({ id: String(f.id), numero: s(f.numero), fecha: String(f.fecha ?? hoy), totalCent: cent(f.total), pagadoCent: cent(f.pagado),
-        proveedor: String(f.proveedor ?? ''), alias: (f.alias as string[] | null) ?? [], terceroId: s(f.tercero_id), cuentaTercero: String(f.cuenta_tercero) })),
+        proveedor: String(f.proveedor ?? ''), alias: (f.alias as string[] | null) ?? [], terceroId: s(f.tercero_id), cuentaTercero: String(f.cuenta_tercero),
+        aprobada: f.estado !== 'en_revision' })),
       // P5: los proveedores con saldo acreedor en el libro (traído de Diez) y sin factura de Folvy pendiente.
       saldosTraidos: conTercero('supplier').filter((x) => n(x.saldo) < 0).map((x) => {
         const p = nombreProv.get(String(x.tercero_id))
@@ -247,7 +272,7 @@ export function crearBancos(bd: Bd) {
       reglas: reglas.map((r) => {
         const cond = r.condition as Fila, dest = r.target as Fila
         return { id: String(r.id), palabras: String(r.words), contiene: String(cond.contiene), signo: cond.signo === 1 || cond.signo === -1 ? cond.signo : null,
-          cuenta: String(dest.cuenta), terceroId: s(dest.tercero_id) }
+          cuenta: String(dest.cuenta), terceroId: s(dest.tercero_id), confirmaciones: n(r.confirmations) }
       }),
       aprendido: [...veces.values()],
       asientos: asientos.map((a): AsientoLibre => ({ id: String(a.entry_id), cuentaId: String(a.treasury_account_id), fecha: String(a.fecha), importeCent: cent(a.importe),
@@ -257,6 +282,9 @@ export function crearBancos(bd: Bd) {
       cuentaCaja: hoja('570') ?? null,
       tarjetas: tarjetas.map((t) => ({ id: String(t.id), cuentaId: String(t.treasury_account_id), ultimos4: String(t.last4), titular: String(t.holder_name), localId: s(t.location_id) })),
       cuentas476: nombre476,
+      nombresPropios: nombresDeEmpresa(empresa[0]),
+      cuentaDiferenciaGasto: hoja('626') ?? '62600000',
+      cuentaDiferenciaIngreso: hoja('769') ?? '76900000',
     }
     return { ctx, movimientos }
   }
@@ -269,7 +297,9 @@ export function crearBancos(bd: Bd) {
     for (const d of decisiones) {
       // El otro lado de un traspaso lo casa la decisión de su pareja: no se propone aparte.
       if (hechos.has(d.movimientoId) || d.otroLadoDe) continue
-      const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte, tarjetaId: d.tarjetaId }
+      const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte, tarjetaId: d.tarjetaId,
+        origen: d.origen, preseleccionar: d.preseleccionar, tarjetaDesconocida: d.tarjetaDesconocida, alternativas: d.alternativas,
+        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar }
       try {
         if (d.tarjetaId) await rpc('bank_tarjeta_del_movimiento', { p_movement: d.movimientoId, p_card: d.tarjetaId })
         if (d.confianza === 'seguro' && d.destino) {

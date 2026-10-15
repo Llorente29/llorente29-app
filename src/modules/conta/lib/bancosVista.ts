@@ -26,6 +26,13 @@ export interface PropuestaGuardada {
   reglaId?: string | null
   contraparte?: string | null
   tarjetaId?: string | null
+  /** B02 · La píldora, el punto verde y lo demás que dice el motor (ver Decision en conciliacion.ts). */
+  origen?: string | null
+  preseleccionar?: boolean
+  tarjetaDesconocida?: string | null
+  alternativas?: { etiqueta: string; destino: Record<string, unknown> }[]
+  quedaPorCasarCent?: number | null
+  facturaSinAprobar?: boolean
 }
 
 export interface MovimientoBanco {

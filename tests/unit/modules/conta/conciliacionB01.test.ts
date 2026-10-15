@@ -2,7 +2,7 @@
 // y la de que nada se casa dos veces. Datos inventados (repositorio público).
 import { describe, expect, it } from 'vitest'
 import {
-  conciliar, contraparte, decidir, nombra, nombreCuenta, refEn, reglasNuevas, resumenMes, subconjunto,
+  conciliar, contraparte, decidir, nombra, nombreCuenta, preguntasDeTarjeta, refEn, reglasNuevas, resumenMes, subconjunto,
   type Contexto, type Movimiento,
 } from '@/modules/conta/lib/conciliacion'
 
@@ -138,13 +138,11 @@ describe('Probable: una línea con el porqué', () => {
     expect(d.destino).toMatchObject({ tipo: 'anticipo', lineas: [{ cuenta: '40700000', importe: 300 }] })
   })
 
-  it('P7 · cobro de plataforma SIN liquidación: probable contra su 430, nunca seguro', () => {
+  it('B02 · cobro de plataforma SIN liquidación: «falta su liquidación», sin inventar nada (antes P7 lo proponía contra su 430)', () => {
     const d = decidir(mov({ importeCent: 340_000, concepto: 'TRANSFERENCIA DE PLATAFORMA NORTE SL', fecha: '2026-10-09' }), ctx({
       plataformas: [{ nombre: 'Plataforma Norte', alias: ['PLATAFORMA NORTE'], cuenta430: '43000001', terceroId: 't-pn', comisionHabitual: 0.17,
         pendiente: [{ desde: '2026-10-01', hasta: '2026-10-07', ventasCent: 412_040 }] }] }))
-    expect(d.confianza).toBe('probable')
-    expect(d.porque).toBe('Sin liquidación: cuadra con las ventas de 01/10–07/10 menos un 17 % de comisión (su comisión habitual es 17 %). La diferencia queda pendiente en su 430 hasta que llegue la liquidación.')
-    expect(d.destino).toMatchObject({ tipo: 'cuenta', lineas: [{ cuenta: '43000001', importe: 3400 }] })
+    expect(d).toMatchObject({ confianza: 'duda', que: 'Cobro de Plataforma Norte · falta su liquidación', falta: 'su liquidación', destino: null, origen: 'liquidacion' })
   })
 
   it('seguros sociales que cuadran con la nómina del mes (476)', () => {
@@ -157,12 +155,17 @@ describe('Probable: una línea con el porqué', () => {
   it('reglas y lo aprendido por contraparte; la tarjeta pide el ticket', () => {
     const regla = { id: 'r1', palabras: 'Cuando el concepto tenga «PLENITUDE» → Luz y agua · 62800000', contiene: 'PLENITUDE', signo: -1 as const, cuenta: '62800000', terceroId: null }
     const d = decidir(mov({ importeCent: -12_345, concepto: 'RECIBO PLENITUDE ENERGIA' }), ctx({ reglas: [regla] }))
-    expect(d).toMatchObject({ confianza: 'probable', reglaId: 'r1', que: 'Luz y agua · 62800000', porque: `Regla: ${regla.palabras}.` })
+    // B02: una regla sin 3 confirmaciones propone con punto verde («la casaría sola, pero aún no puedo»).
+    expect(d).toMatchObject({ confianza: 'probable', preseleccionar: true, origen: 'regla', reglaId: 'r1', que: 'Luz y agua · 62800000',
+      porque: `Regla: ${regla.palabras} (confirmada 0 veces; a la 3.ª caso sola).` })
+    const sola = decidir(mov({ importeCent: -12_345, concepto: 'RECIBO PLENITUDE ENERGIA' }), ctx({ reglas: [{ ...regla, confirmaciones: 3 }] }))
+    expect(sola).toMatchObject({ confianza: 'seguro', preseleccionar: false, porque: `Regla confirmada 3 veces: ${regla.palabras}.` })
     const t = decidir(mov({ importeCent: -8_640, concepto: 'PAGO CON TARJETA MERCADO CENTRAL 0937', conceptoComun: '12' }),
       ctx({ aprendido: [{ contraparte: 'MERCADO CENTRAL', cuenta: '60000000', terceroId: null, veces: 6 }] }))
     expect(t).toMatchObject({ confianza: 'probable', pideTicket: true, que: 'Comida y bebida · 60000000 · ¿ticket?' })
-    // La tarjeta (···0937) no está dada de alta: lo aprendido se sigue proponiendo, y además pregunta de quién es (respuesta 3).
-    expect(t.porque).toBe('Las 6 anteriores de este comercio fueron Comida y bebida · 60000000. Falta el ticket. Y la tarjeta acabada en 0937, ¿de quién es? Dala de alta en Cuentas y extractos y sabré a quién pedirle el ticket.')
+    // La tarjeta (···0937) no está dada de alta: lo aprendido se sigue proponiendo; de quién es, se pregunta una vez por tarjeta (B02).
+    expect(t.porque).toBe('Las 6 anteriores de este comercio fueron Comida y bebida · 60000000. Falta el ticket.')
+    expect(t.tarjetaDesconocida).toBe('0937')
   })
 
   it('comisiones del banco (concepto común 17) a la 626', () => {
@@ -219,7 +222,7 @@ describe('Lo que enseñó la demostración de staging (run 190)', () => {
     expect(d).toMatchObject({ confianza: 'duda', pideTicket: true, que: 'Pago con tarjeta · ¿ticket?', falta: 'el ticket' })
     expect(d.porque).toBe('Pago con tarjeta en GASOLINERA que aún no conozco: sube la foto del ticket y lo aprendo.')
     const conDigitos = decidir(mov({ importeCent: -8_640, concepto: 'PAGO CON TARJETA MERCADO CENTRAL 0937', conceptoComun: '12' }), ctx())
-    expect(conDigitos).toMatchObject({ confianza: 'duda', pideTicket: true, que: 'Tarjeta acabada en 0937', falta: 'de quién es la tarjeta' })
+    expect(conDigitos).toMatchObject({ confianza: 'duda', pideTicket: true, que: 'Pago con tarjeta · ¿ticket?', tarjetaDesconocida: '0937' })
   })
   it('ingreso de efectivo: probable desde la caja (570)', () => {
     const d = decidir(mov({ importeCent: 200_000, concepto: 'INGRESO EFECTIVO', conceptoComun: '02' }), ctx())
@@ -354,17 +357,20 @@ describe('Tarjetas de débito (respuesta 3): qué tarjeta pagó y a quién pedir
     expect(l.porque).toBe('Pago con la tarjeta de Luis (···0937) en GASOLINERA SUR que aún no conozco: pídele el ticket a Luis y lo aprendo.')
   })
 
-  it('una tarjeta no dada de alta: «Por aclarar: tarjeta acabada en 1234, ¿de quién es?»', () => {
+  it('B02 · una tarjeta no dada de alta se anota, y «¿de quién es la tarjeta ···1234?» se pregunta UNA vez, no en cada pago', () => {
     const d = decidir(mov({ importeCent: -1_500, concepto: 'COMPRA TARJ. ****1234 FERRETERIA', conceptoComun: '12' }), ctx({ tarjetas }))
-    expect(d).toMatchObject({ confianza: 'duda', tarjetaId: null, que: 'Tarjeta acabada en 1234', falta: 'de quién es la tarjeta' })
-    expect(d.porque.startsWith('Por aclarar: tarjeta acabada en 1234, ¿de quién es?')).toBe(true)
+    expect(d).toMatchObject({ confianza: 'duda', tarjetaId: null, tarjetaDesconocida: '1234', que: 'Pago con tarjeta · ¿ticket?' })
+    const varios = [1, 2, 3].map((i) => mov({ id: `t${i}`, importeCent: -10_000 - i, concepto: 'COMPRA TARJ. ****1234 FERRETERIA', conceptoComun: '12' }))
+    const otra = mov({ id: 't9', importeCent: -999, concepto: 'COMPRA TARJ. ****5678 KIOSCO', conceptoComun: '12' })
+    expect(preguntasDeTarjeta(conciliar([...varios, otra], ctx({ tarjetas })))).toEqual([
+      { ultimos4: '1234', movimientos: ['t1', 't2', 't3'] }, { ultimos4: '5678', movimientos: ['t9'] }])
   })
 
   it('la tarjeta de otra cuenta no vale; sin ninguna dada de alta, también pregunta de quién es (e2e del 13/10)', () => {
     const otra = decidir(mov({ importeCent: -1_500, concepto: 'COMPRA TARJ. ****4821 FERRETERIA', conceptoComun: '12', cuentaId: SUR }), ctx({ tarjetas }))
     expect(otra.tarjetaId).toBeNull()
     const sin = decidir(mov({ importeCent: -1_500, concepto: 'COMPRA TARJ. ****1234 FERRETERIA', conceptoComun: '12' }), ctx())
-    expect(sin).toMatchObject({ confianza: 'duda', que: 'Tarjeta acabada en 1234' })
+    expect(sin).toMatchObject({ confianza: 'duda', tarjetaDesconocida: '1234' })
     // Un año no es una tarjeta.
     const anio = decidir(mov({ importeCent: -1_500, concepto: 'COMPRA TARJ. FERRETERIA 2026', conceptoComun: '12' }), ctx())
     expect(anio.que).toBe('Pago con tarjeta · ¿ticket?')

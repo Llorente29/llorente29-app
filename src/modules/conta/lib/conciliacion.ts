@@ -44,12 +44,19 @@ export interface Movimiento {
   conceptoComun: string | null
   referencias: string[]
   antesDelCorte: boolean
+  /** A quién pagas o quién te paga, limpio (B02: `bank_movement.counterparty`). */
+  contraparte?: string | null
+  /** El tipo de movimiento del banco, aparte (B02: `bank_movement.movement_type`). */
+  tipo?: string | null
 }
 
-export interface CuentaPropia { id: string; nombre: string; cuenta: string | null }
+/** Una cuenta del banco de la empresa: su 572 y sus 4 últimos («···0133»). */
+export interface CuentaPropia { id: string; nombre: string; cuenta: string | null; ultimos4?: string | null }
 export interface FacturaPendiente {
   id: string; numero: string | null; fecha: string; totalCent: number; pagadoCent: number
   proveedor: string; alias: string[]; terceroId: string | null; cuentaTercero: string
+  /** B02: false si está «en revisión»: se propone en ámbar, «factura sin aprobar», nunca preseleccionada. */
+  aprobada?: boolean
 }
 export interface SaldoProveedor { terceroId: string | null; proveedor: string; alias: string[]; cuenta: string; pendienteCent: number }
 export interface ProveedorConocido { terceroId: string | null; proveedor: string; alias: string[]; cuentaTercero: string; cuentaAnticipo: string }
@@ -72,7 +79,11 @@ export interface Contrato {
 }
 /** Una tarjeta de débito de la empresa (respuesta 3): de qué cuenta, sus 4 últimos, quién la lleva y su local. */
 export interface Tarjeta { id: string; cuentaId: string; ultimos4: string; titular: string; localId: string | null }
-export interface Regla { id: string; palabras: string; contiene: string; signo: 1 | -1 | null; cuenta: string; terceroId: string | null }
+export interface Regla {
+  id: string; palabras: string; contiene: string; signo: 1 | -1 | null; cuenta: string; terceroId: string | null
+  /** Veces que la persona la ha confirmado sin corregir: a la 3.ª casa sola (B01). */
+  confirmaciones?: number
+}
 /** Lo confirmado antes (por la persona, o traído del libro de Diez) por contraparte. */
 export interface Aprendido { contraparte: string; cuenta: string; terceroId: string | null; veces: number }
 /** Un asiento del libro con la 572 de esta cuenta (traído de Diez o apuntado a mano) sin movimiento. */
@@ -102,12 +113,22 @@ export interface Contexto {
   cuentaCaja?: string | null
   /** Las tarjetas de débito dadas de alta (respuesta 3). */
   tarjetas?: Tarjeta[]
+  /** B02 · El nombre de la empresa y sus variantes: en el concepto, delata un traspaso entre sus cuentas. */
+  nombresPropios?: string[]
+  /** B02 · Adónde va una diferencia pequeña al pagar una factura: de más (gasto) y de menos (ingreso). */
+  cuentaDiferenciaGasto?: string
+  cuentaDiferenciaIngreso?: string
 }
+
+/** De dónde sale la propuesta: la píldora de la fila (N17b). */
+export type Origen = 'factura' | 'traspaso' | 'regla' | 'liquidacion' | 'historial' | 'libro' | 'contrato' | 'nomina' | 'impuesto' | 'banco' | 'cliente' | 'anticipo'
 
 /** El destino tal y como lo recibe bank_casar (20261101T0110). */
 export type Destino =
   | { tipo: 'asiento'; entry_id: string; concepto?: string }
-  | { tipo: 'factura_recibida'; facturas: { id: string; importe: number }[]; cuenta_tercero: string; tercero_id: string | null; concepto: string; metodo?: string }
+  | { tipo: 'factura_recibida'; facturas: { id: string; importe: number }[]; cuenta_tercero: string; tercero_id: string | null; concepto: string; metodo?: string
+      /** B02 · La diferencia pequeña (comisión, redondeo), con su cuenta: + de más (gasto), − de menos (ingreso). Nunca se crea sola. */
+      diferencia?: { cuenta: string; importe: number; concepto: string } }
   | { tipo: 'liquidacion'; liquidacion_id: string; cuenta_cliente: string; tercero_id: string | null; concepto: string }
   | { tipo: 'traspaso'; otro_movimiento_id: string; concepto: string }
   | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string }[];
@@ -134,6 +155,18 @@ export interface Decision {
   otroLadoDe: string | null
   /** La tarjeta que pagó, si es un pago con tarjeta dada de alta. */
   tarjetaId: string | null
+  /** B02 · La píldora: de dónde sale la propuesta. */
+  origen: Origen | null
+  /** B02 · Punto verde: «lo casaría solo, pero aún no puedo». Viene marcado para confirmar en bloque. */
+  preseleccionar: boolean
+  /** B02 · Los 4 últimos de una tarjeta que no está dada de alta: se pregunta UNA vez por tarjeta, no aquí. */
+  tarjetaDesconocida: string | null
+  /** B02 · Cuando hay que elegir (un traspaso con dos cuentas posibles): cada opción con su destino. */
+  alternativas: { etiqueta: string; destino: Destino }[]
+  /** B02 · Lo que queda por casar de la factura después de este pago (pagos en parte). */
+  quedaPorCasarCent: number | null
+  /** B02 · La factura propuesta está «en revisión»: confirmar el pago no la aprueba. */
+  facturaSinAprobar: boolean
 }
 
 const euros = (c: number) => c / 100
@@ -173,12 +206,31 @@ interface Gastado { facturas: Map<string, number>; liquidaciones: Set<string>; m
 const nuevoGastado = (): Gastado => ({ facturas: new Map(), liquidaciones: new Set(), movimientos: new Set(), asientos: new Set(), saldos: new Map(), pendiente430: new Map() })
 
 function base(m: Movimiento): Omit<Decision, 'confianza' | 'que' | 'porque' | 'destino'> {
-  return { movimientoId: m.id, falta: null, antesDelCorteSinPareja: false, pideTicket: false, reglaId: null, contraparte: contraparte(m.concepto), otroLadoDe: null, tarjetaId: null }
+  return { movimientoId: m.id, falta: null, antesDelCorteSinPareja: false, pideTicket: false, reglaId: null, contraparte: contraparteDe(m), otroLadoDe: null, tarjetaId: null,
+    origen: null, preseleccionar: false, tarjetaDesconocida: null, alternativas: [], quedaPorCasarCent: null, facturaSinAprobar: false }
+}
+
+/** La contraparte con la que se aprende: la limpia del banco si la hay (B02); si no, la sacada del concepto. */
+export function contraparteDe(m: Pick<Movimiento, 'concepto' | 'contraparte'>): string | null {
+  if (m.contraparte) { const n = normal(m.contraparte); return n.length >= 3 ? n : null }
+  return contraparte(m.concepto)
+}
+
+/** El texto en el que se buscan nombres y referencias: el del banco, la contraparte limpia y las referencias. */
+const textoDe = (m: Movimiento) => [m.concepto, m.contraparte ?? '', ...m.referencias].join(' ')
+
+/** La píldora que corresponde a una decisión, si la rama no la dijo. */
+function conOrigen(d: Decision): Decision {
+  if (d.origen) return d
+  const t = d.destino?.tipo ?? d.alternativas[0]?.destino.tipo
+  const origen: Origen | null = d.reglaId ? 'regla' : t === 'factura_recibida' ? 'factura' : t === 'traspaso' ? 'traspaso' : t === 'liquidacion' ? 'liquidacion'
+    : t === 'asiento' ? 'libro' : t === 'contrato' ? 'contrato' : t === 'anticipo' ? 'anticipo' : t === 'factura_emitida' ? 'cliente' : null
+  return { ...d, origen }
 }
 
 /** Una decisión para un movimiento, sin gastar nada (para el que se mira suelto). */
 export function decidir(m: Movimiento, ctx: Contexto): Decision {
-  return decidirCon(m, ctx, nuevoGastado())
+  return conOrigen(decidirCon(m, ctx, nuevoGastado()))
 }
 
 /** Un lote entero, en orden de fecha: cada candidato se usa una sola vez. */
@@ -188,7 +240,7 @@ export function conciliar(movs: readonly Movimiento[], ctx: Contexto): Decision[
   const porId = new Map<string, Decision>()
   for (const m of orden) {
     if (g.movimientos.has(m.id)) continue // ya casado como el otro lado de un traspaso
-    porId.set(m.id, decidirCon(m, ctx, g))
+    porId.set(m.id, conOrigen(decidirCon(m, ctx, g)))
   }
   // El otro lado de un traspaso queda casado por el mismo asiento.
   for (const d of porId.values()) {
@@ -224,16 +276,14 @@ function decidirCon(m: Movimiento, ctx: Contexto, g: Gastado): Decision {
   const digitos = digitosTarjeta(`${m.concepto} ${m.referencias.join(' ')}`)
   const t = delBanco.find((x) => digitos.includes(x.ultimos4))
   if (!t) {
-    // Una tarjeta que no está dada de alta pregunta SIEMPRE de quién es, tenga o
-    // no la cuenta otras (respuesta 3; la e2e del 13/10 lo cazó en una cuenta sin
-    // ninguna). Un año suelto no es una tarjeta.
+    // Una tarjeta que no está dada de alta: «¿de quién es la tarjeta ···3085?» se
+    // pregunta UNA vez por tarjeta (B02, preguntasDeTarjeta), no en cada
+    // movimiento. El movimiento sigue su camino: si una regla o lo aprendido sabe
+    // a qué va (las recargas de saldo prepago), lo propone sin pedir nada más.
+    // Un año suelto no es una tarjeta.
     const ultimos = digitos.find((x) => !/^(19|20)\d\d$/.test(x))
-    if (!ultimos) return decidirSin(m, ctx, g)
     const d = decidirSin(m, ctx, g)
-    const pregunta = `tarjeta acabada en ${ultimos}, ¿de quién es? Dala de alta en Cuentas y extractos y sabré a quién pedirle el ticket.`
-    // Si ya sabía a qué va (lo aprendido, una regla), lo sigue proponiendo y además pregunta de quién es.
-    if (d.confianza !== 'duda') return { ...d, porque: `${d.porque} Y la ${pregunta}` }
-    return { ...d, confianza: 'duda', falta: 'de quién es la tarjeta', que: `Tarjeta acabada en ${ultimos}`, porque: `Por aclarar: ${pregunta}` }
+    return ultimos ? { ...d, tarjetaDesconocida: ultimos } : d
   }
   const d = decidirSin(m, ctx, g, t)
   const destino = d.destino && d.destino.tipo !== 'asiento' && d.destino.tipo !== 'traspaso' && t.localId ? { ...d.destino, local_id: t.localId } : d.destino
@@ -244,7 +294,7 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   const b = base(m)
   const imp = m.importeCent
   const entra = imp > 0
-  const txt = `${m.concepto} ${m.referencias.join(' ')}`
+  const txt = textoDe(m)
 
   // ── P4 · Antes del corte: solo su pareja en el libro ─────────────────────
   if (m.antesDelCorte) {
@@ -272,7 +322,10 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   }
 
   // ── 2 · Traspaso entre dos cuentas propias ───────────────────────────────
-  const otros = ctx.sinCasar.filter((o) => o.cuentaId !== m.cuentaId && o.importeCent === -imp && !g.movimientos.has(o.id) && o.id !== m.id && abs(dias(o.fecha, m.fecha)) <= 3)
+  // Mismo importe con signo contrario, el mismo día o ±2 días, en otra cuenta de
+  // la empresa. El nombre de la empresa en el concepto lo confirma (B02).
+  const nombraEmpresa = (ctx.nombresPropios ?? []).some((n) => nombra(txt, [n]))
+  const otros = ctx.sinCasar.filter((o) => o.cuentaId !== m.cuentaId && o.importeCent === -imp && !g.movimientos.has(o.id) && o.id !== m.id && abs(dias(o.fecha, m.fecha)) <= 2)
   if (otros.length >= 1) {
     const mismoDia = otros.filter((o) => o.fecha === m.fecha)
     const o = mismoDia.length === 1 ? mismoDia[0] : otros.length === 1 ? otros[0] : null
@@ -281,11 +334,30 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
       const orig = ctx.cuentas.find((c) => c.id === m.cuentaId)
       g.movimientos.add(o.id); g.movimientos.add(m.id)
       const desde = entra ? dest : orig, hacia = entra ? orig : dest
-      return { ...b, confianza: o.fecha === m.fecha ? 'seguro' : 'probable', que: 'Traspaso entre tus cuentas', contraparte: null,
+      return { ...b, confianza: o.fecha === m.fecha || nombraEmpresa ? 'seguro' : 'probable', que: 'Traspaso entre tus cuentas', contraparte: null, origen: 'traspaso',
         porque: o.fecha === m.fecha
           ? `Sale de ${desde?.nombre ?? 'una cuenta'} y entra en ${hacia?.nombre ?? 'la otra'} el mismo día, mismo importe.`
-          : `Sale de ${desde?.nombre ?? 'una cuenta'} el ${ddmm(entra ? o.fecha : m.fecha)} y entra en ${hacia?.nombre ?? 'la otra'} el ${ddmm(entra ? m.fecha : o.fecha)}, mismo importe.`,
+          : `Sale de ${desde?.nombre ?? 'una cuenta'} el ${ddmm(entra ? o.fecha : m.fecha)} y entra en ${hacia?.nombre ?? 'la otra'} el ${ddmm(entra ? m.fecha : o.fecha)}, mismo importe${nombraEmpresa ? ' y a nombre de la empresa' : ''}.`,
         destino: { tipo: 'traspaso', otro_movimiento_id: o.id, concepto: `Traspaso de ${desde?.nombre ?? ''} a ${hacia?.nombre ?? ''}`.trim() } }
+    }
+  }
+  // Un solo lado subido (B02): el banco lo llama traspaso o lo manda la propia
+  // empresa. Se propone contra la 572 de la otra cuenta; si hay varias, se elige.
+  if (otros.length === 0 && (nombraEmpresa || /\bTRASPASO/i.test(txt))) {
+    const otras = ctx.cuentas.filter((c) => c.id !== m.cuentaId && c.cuenta)
+    const etiqueta = (c: CuentaPropia) => (c.ultimos4 ? `···${c.ultimos4}` : c.nombre)
+    const destinoDe = (c: CuentaPropia): Destino => ({ tipo: 'cuenta', concepto: entra ? `Traspaso desde ${c.nombre}` : `Traspaso a ${c.nombre}`,
+      lineas: [{ cuenta: c.cuenta!, importe: euros(abs(imp)) }] })
+    const sentido = entra ? 'desde' : 'a'
+    if (otras.length === 1) {
+      return { ...b, confianza: 'probable', origen: 'traspaso', contraparte: null, que: `Traspaso ${sentido} tu cuenta ${etiqueta(otras[0])}`,
+        porque: `${nombraEmpresa ? 'Lo manda tu propia empresa' : 'El banco lo llama traspaso'} y la otra cuenta aún no tiene este movimiento subido: cuando lo subas, se enlaza solo.`,
+        destino: destinoDe(otras[0]) }
+    }
+    if (otras.length > 1) {
+      return { ...b, confianza: 'probable', origen: 'traspaso', contraparte: null, que: `Traspaso ${sentido} otra cuenta tuya`,
+        porque: `${nombraEmpresa ? 'Lo manda tu propia empresa' : 'El banco lo llama traspaso'}, pero no dice de qué cuenta: elige ${otras.map(etiqueta).join(' o ')}.`,
+        destino: null, alternativas: otras.map((c) => ({ etiqueta: `${entra ? 'Desde' : 'A'} ${etiqueta(c)}`, destino: destinoDe(c) })) }
     }
   }
 
@@ -327,93 +399,117 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
         destino: { tipo: 'liquidacion', liquidacion_id: l.id, cuenta_cliente: l.cuenta430, tercero_id: l.terceroId, concepto: `Cobro de ${l.plataforma}${periodo}` } }
     }
     if (plats.length === 1) {
-      // P7: sin liquidación, contra lo pendiente en su 430 del periodo. Nunca seguro.
+      // Sin su liquidación no se casa: se dice que falta, sin inventar nada (B02).
+      // En cuanto la liquidación exista, la rama de arriba la casa sin tocar nada.
       const p = plats[0]
-      const per = p.pendiente.filter((x) => dias(x.hasta, m.fecha) >= 0 && dias(x.hasta, m.fecha) <= 15).at(-1)
-      const ventas = per ? per.ventasCent - (g.pendiente430.get(`${p.nombre}:${per.desde}`) ?? 0) : 0
-      const pct = ventas > 0 ? 1 - imp / ventas : null
-      if (per && pct !== null && pct >= 0 && pct <= 0.45) {
-        g.pendiente430.set(`${p.nombre}:${per.desde}`, (g.pendiente430.get(`${p.nombre}:${per.desde}`) ?? 0) + imp)
-        const habitual = p.comisionHabitual !== null ? ` (su comisión habitual es ${Math.round(p.comisionHabitual * 100)} %)` : ''
-        return { ...b, confianza: 'probable', que: `Cobro de ${p.nombre} · ${ddmm(per.desde)}–${ddmm(per.hasta)}`,
-          porque: `Sin liquidación: cuadra con las ventas de ${ddmm(per.desde)}–${ddmm(per.hasta)} menos un ${Math.round(pct * 100)} % de comisión${habitual}. La diferencia queda pendiente en su 430 hasta que llegue la liquidación.`,
-          destino: { tipo: 'cuenta', tercero_id: p.terceroId, concepto: `Cobro de ${p.nombre} ${ddmm(per.desde)}–${ddmm(per.hasta)}`, lineas: [{ cuenta: p.cuenta430, importe: euros(imp) }] } }
-      }
-      return { ...b, confianza: 'duda', que: `Cobro de ${p.nombre}`, falta: 'su liquidación',
-        porque: `Es de ${p.nombre}, pero no hay liquidación de ${eurosCent(imp)} ni ventas pendientes del periodo con las que cuadre: ¿subes su liquidación?`, destino: null }
+      return { ...b, confianza: 'duda', origen: 'liquidacion', que: `Cobro de ${p.nombre} · falta su liquidación`, falta: 'su liquidación',
+        porque: `Es un cobro de ${p.nombre}, pero no hay ninguna liquidación de ${eurosCent(imp)} con la que cuadre: cuando llegue, lo caso con ella.`, destino: null }
     }
   }
 
   // ── 5 · Facturas recibidas (pagos) ───────────────────────────────────────
+  // Las aprobadas y, en ámbar, las «en revisión» (B02: «factura sin aprobar»,
+  // nunca preseleccionada; confirmar el pago no la aprueba).
   if (!entra) {
     const pagar = -imp
     const queda = (f: FacturaPendiente) => f.totalCent - f.pagadoCent - (g.facturas.get(f.id) ?? 0)
+    const sinAprobar = (f: FacturaPendiente) => f.aprobada === false
+    const marca = (fs: FacturaPendiente[]) => (fs.some(sinAprobar) ? ' · factura sin aprobar' : '')
+    const nota = (fs: FacturaPendiente[]) => (fs.some(sinAprobar) ? ' Está en revisión: confirmar el pago no la aprueba.' : '')
+    const gastar = (f: FacturaPendiente, c: number) => g.facturas.set(f.id, (g.facturas.get(f.id) ?? 0) + c)
     const vivas = ctx.facturas.filter((f) => queda(f) > 0)
     const conRef = vivas.filter((f) => queda(f) === pagar && f.numero && refEn(txt, f.numero))
     if (conRef.length === 1) {
       const f = conRef[0]
-      g.facturas.set(f.id, (g.facturas.get(f.id) ?? 0) + pagar)
-      return { ...b, confianza: 'seguro', que: `Pago de la factura ${f.numero} de ${f.proveedor}`,
-        porque: `Casado solo: mismo importe y misma referencia (${f.numero}) que la factura pendiente del ${ddmm(f.fecha)}.`,
+      gastar(f, pagar)
+      return { ...b, confianza: sinAprobar(f) ? 'probable' : 'seguro', facturaSinAprobar: sinAprobar(f), origen: 'factura',
+        que: `Pago de la factura ${f.numero} de ${f.proveedor}${marca([f])}`,
+        porque: `${sinAprobar(f) ? '' : 'Casado solo: '}mismo importe y misma referencia (${f.numero}) que la factura pendiente del ${ddmm(f.fecha)}.${nota([f])}`,
         destino: factura(f, pagar, m) }
     }
     const delProv = vivas.filter((f) => nombra(txt, [f.proveedor, ...f.alias]))
     const exactas = delProv.filter((f) => queda(f) === pagar)
-    if (exactas.length === 1) {
-      const f = exactas[0]
-      g.facturas.set(f.id, (g.facturas.get(f.id) ?? 0) + pagar)
-      return { ...b, confianza: 'probable', que: `Pago de la factura ${f.numero ?? ''} de ${f.proveedor}`.replace('  ', ' '),
-        porque: `Mismo importe y proveedor que la factura pendiente del ${ddmm(f.fecha)}; la referencia ${m.referencias.length ? 'no coincide' : 'del recibo no viene'}.`,
+    if (exactas.length >= 1) {
+      // La aprobada antes que la que está en revisión; entre iguales, la más antigua (diciéndolo).
+      const orden = [...exactas].sort((a, c) => Number(sinAprobar(a)) - Number(sinAprobar(c)) || a.fecha.localeCompare(c.fecha))
+      const f = orden[0]
+      gastar(f, pagar)
+      const varias = exactas.length > 1
+      return { ...b, confianza: 'probable', preseleccionar: !varias && !sinAprobar(f), facturaSinAprobar: sinAprobar(f), origen: 'factura',
+        que: `Pago de la factura ${f.numero ?? ''} de ${f.proveedor}${marca([f])}`.replace('  ', ' '),
+        porque: (varias ? `Hay ${exactas.length} facturas pendientes de ${f.proveedor} por este importe: propongo la más antigua, del ${ddmm(f.fecha)}.`
+          : `Mismo importe y proveedor que la factura pendiente del ${ddmm(f.fecha)}; la referencia ${m.referencias.length ? 'no coincide' : 'del recibo no viene'}.`) + nota([f]),
         destino: factura(f, pagar, m) }
     }
-    if (exactas.length > 1) {
-      // Varias iguales del mismo proveedor: la más antigua, diciéndolo.
-      const f = [...exactas].sort((a, c) => a.fecha.localeCompare(c.fecha))[0]
-      g.facturas.set(f.id, (g.facturas.get(f.id) ?? 0) + pagar)
-      return { ...b, confianza: 'probable', que: `Pago de la factura ${f.numero ?? ''} de ${f.proveedor}`.replace('  ', ' '),
-        porque: `Hay ${exactas.length} facturas pendientes de ${f.proveedor} por este importe: propongo la más antigua, del ${ddmm(f.fecha)}.`,
-        destino: factura(f, pagar, m) }
-    }
-    // Varias facturas del mismo proveedor en un pago.
     const prov = [...new Set(delProv.map((f) => f.proveedor))]
     if (prov.length === 1) {
       const suyas = delProv.filter((f) => f.proveedor === prov[0]).sort((a, c) => a.fecha.localeCompare(c.fecha))
+      // Un pago con varias facturas.
       const grupo = subconjunto(suyas.map(queda), pagar)
       if (grupo && grupo.length > 1) {
         const fs = grupo.map((i) => ({ f: suyas[i], importe: queda(suyas[i]) }))
-        for (const x of fs) g.facturas.set(x.f.id, (g.facturas.get(x.f.id) ?? 0) + x.importe)
-        return { ...b, confianza: 'probable', que: `Pago de ${fs.length} facturas de ${prov[0]}`,
-          porque: `Suman justo ${eurosCent(pagar)}: ${fs.map((x) => x.f.numero ?? ddmm(x.f.fecha)).join(', ')}.`,
+        for (const x of fs) gastar(x.f, x.importe)
+        return { ...b, confianza: 'probable', facturaSinAprobar: fs.some((x) => sinAprobar(x.f)), origen: 'factura',
+          que: `Pago de ${fs.length} facturas de ${prov[0]}${marca(fs.map((x) => x.f))}`,
+          porque: `Suman justo ${eurosCent(pagar)}: ${fs.map((x) => x.f.numero ?? ddmm(x.f.fecha)).join(', ')}.${nota(fs.map((x) => x.f))}`,
           destino: { tipo: 'factura_recibida', facturas: fs.map((x) => ({ id: x.f.id, importe: euros(x.importe) })),
             cuenta_tercero: fs[0].f.cuentaTercero, tercero_id: fs[0].f.terceroId, concepto: `Pago a ${prov[0]}`, metodo: metodo(m) } }
       }
-      // Un pago en partes.
+      // Una sola factura y una diferencia pequeña (comisión o redondeo): se propone con su cuenta, nunca sola.
+      if (suyas.length === 1) {
+        const f = suyas[0]
+        const pendiente = queda(f)
+        const dif = pagar - pendiente
+        if (dif !== 0 && abs(dif) <= Math.min(300, Math.round(pagar * 0.03))) {
+          const deMas = dif > 0
+          const cuenta = deMas ? (ctx.cuentaDiferenciaGasto ?? ctx.cuentas626) : (ctx.cuentaDiferenciaIngreso ?? '76900000')
+          gastar(f, pendiente)
+          return { ...b, confianza: 'probable', facturaSinAprobar: sinAprobar(f), origen: 'factura', quedaPorCasarCent: 0,
+            que: `Pago de la factura ${f.numero ?? ''} de ${f.proveedor}, con ${eurosCent(abs(dif))} de diferencia${marca([f])}`.replace('  ', ' '),
+            porque: `De la factura del ${ddmm(f.fecha)} quedan ${eurosCent(pendiente)} y ${deMas ? 'pagas' : 'te cobran'} ${eurosCent(pagar)}: la diferencia de ${eurosCent(abs(dif))} ${deMas ? 'parece una comisión' : 'parece un redondeo'} y va a ${nombreCuenta(ctx, cuenta)}. No la apunto hasta que digas que sí.${nota([f])}`,
+            destino: { ...(factura(f, pendiente, m) as Extract<Destino, { tipo: 'factura_recibida' }>),
+              diferencia: { cuenta, importe: euros(dif), concepto: deMas ? `Comisión del pago a ${f.proveedor}` : `Redondeo del pago a ${f.proveedor}` } } }
+        }
+      }
+      // Un pago en parte: lo que queda por casar se dice.
       const mayor = suyas.filter((f) => queda(f) > pagar)
       if (mayor.length === 1) {
         const f = mayor[0]
         const resto = queda(f) - pagar
-        g.facturas.set(f.id, (g.facturas.get(f.id) ?? 0) + pagar)
-        return { ...b, confianza: 'probable', que: `Pago en parte de la factura ${f.numero ?? ''} de ${f.proveedor}`.replace('  ', ' '),
-          porque: `Paga ${eurosCent(pagar)} de los ${eurosCent(f.totalCent - f.pagadoCent)} que quedan; seguirán pendientes ${eurosCent(resto)}.`,
+        gastar(f, pagar)
+        return { ...b, confianza: 'probable', facturaSinAprobar: sinAprobar(f), origen: 'factura', quedaPorCasarCent: resto,
+          que: `Pago en parte de la factura ${f.numero ?? ''} de ${f.proveedor}${marca([f])}`.replace('  ', ' '),
+          porque: `Paga ${eurosCent(pagar)} de los ${eurosCent(resto + pagar)} que quedan; seguirán pendientes ${eurosCent(resto)}.${nota([f])}`,
           destino: factura(f, pagar, m) }
       }
     }
-    // P5 de la respuesta 2: proveedor del libro traído, sin factura de Folvy.
-    const saldo = ctx.saldosTraidos.filter((s) => nombra(txt, [s.proveedor, ...s.alias]) && s.pendienteCent - (g.saldos.get(s.cuenta) ?? 0) >= pagar)
+    // P5 de la respuesta 2: proveedor del libro traído, sin factura.
+    const saldo = ctx.saldosTraidos.filter((x) => nombra(txt, [x.proveedor, ...x.alias]) && x.pendienteCent - (g.saldos.get(x.cuenta) ?? 0) >= pagar)
     if (saldo.length === 1) {
-      const s = saldo[0]
-      const antes = s.pendienteCent - (g.saldos.get(s.cuenta) ?? 0)
-      g.saldos.set(s.cuenta, (g.saldos.get(s.cuenta) ?? 0) + pagar)
-      return { ...b, confianza: 'probable', que: `Pago a ${s.proveedor}`,
-        porque: `Pago a ${s.proveedor} · su saldo pendiente en el libro era ${eurosCent(antes).replace(' €', '')}.`,
-        destino: { tipo: 'cuenta', tercero_id: s.terceroId, concepto: `Pago a ${s.proveedor}`, lineas: [{ cuenta: s.cuenta, importe: euros(pagar) }] } }
+      const x = saldo[0]
+      const antes = x.pendienteCent - (g.saldos.get(x.cuenta) ?? 0)
+      g.saldos.set(x.cuenta, (g.saldos.get(x.cuenta) ?? 0) + pagar)
+      return { ...b, confianza: 'probable', que: `Pago a ${x.proveedor}`, origen: 'libro',
+        porque: `Pago a ${x.proveedor} · su saldo pendiente en el libro era ${eurosCent(antes).replace(' €', '')}.`,
+        destino: { tipo: 'cuenta', tercero_id: x.terceroId, concepto: `Pago a ${x.proveedor}`, lineas: [{ cuenta: x.cuenta, importe: euros(pagar) }] } }
+    }
+    // B02 · Mismo importe que una factura, aunque el banco no nombre al proveedor
+    // (antes de dejarlo como anticipo, se busca más): por aclarar, con la propuesta.
+    const porImporte = vivas.filter((f) => queda(f) === pagar && !delProv.includes(f) && dias(f.fecha, m.fecha) >= -3 && dias(f.fecha, m.fecha) <= 120)
+    if (porImporte.length === 1) {
+      const f = porImporte[0]
+      gastar(f, pagar)
+      return { ...b, confianza: 'duda', facturaSinAprobar: sinAprobar(f), origen: 'factura', falta: 'que me digas si es esta factura',
+        que: `¿Pago de la factura ${f.numero ?? ''} de ${f.proveedor}?${marca([f])}`.replace('  ', ' '),
+        porque: `Mismo importe que la factura de ${f.proveedor} del ${ddmm(f.fecha)}, pero el banco no la nombra: ¿es esta?${nota([f])}`,
+        destino: factura(f, pagar, m) }
     }
     // P6: proveedor conocido sin nada pendiente → anticipo (407), que se compensa cuando llegue su factura.
     const conocidos = ctx.proveedores.filter((p) => nombra(txt, [p.proveedor, ...p.alias]))
     if (conocidos.length === 1 && delProv.length === 0) {
       const p = conocidos[0]
-      return { ...b, confianza: 'probable', que: `Anticipo a ${p.proveedor}`,
-        porque: `${p.proveedor} no tiene ninguna factura pendiente: lo dejo como anticipo (${nombreCuenta(ctx, p.cuentaAnticipo)}) y se compensa cuando llegue su factura.`,
+      return { ...b, confianza: 'probable', que: `Anticipo a ${p.proveedor}`, origen: 'anticipo',
+        porque: `${p.proveedor} no tiene ninguna factura pendiente, ni aprobada ni en revisión, por este importe: lo dejo como anticipo (${nombreCuenta(ctx, p.cuentaAnticipo)}) y se compensa cuando llegue su factura.`,
         destino: { tipo: 'anticipo', tercero_id: p.terceroId, concepto: `Anticipo a ${p.proveedor}`, lineas: [{ cuenta: p.cuentaAnticipo, importe: euros(pagar) }] } }
     }
   }
@@ -434,18 +530,18 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     const n = ctx.nominas.filter((x) => x.ssPendienteCent === -imp)
     if (n.length === 1) {
       const x = n[0]
-      return { ...b, confianza: 'probable', que: `Seguros sociales de ${mesNombre(x.mes)}`,
+      return { ...b, confianza: 'probable', origen: 'nomina', que: `Seguros sociales de ${mesNombre(x.mes)}`,
         porque: `Cuadra con las nóminas de ${mesNombre(x.mes)} (476 a pagar ${eurosCent(x.ssPendienteCent).replace(' €', '')}).`,
         destino: { tipo: 'cuenta', concepto: `Seguros sociales de ${mesNombre(x.mes)}`, lineas: [{ cuenta: x.cuenta476, importe: euros(-imp) }] } }
     }
-    return { ...b, confianza: 'duda', que: 'Seguros sociales', falta: 'el asiento de nóminas del mes',
+    return { ...b, confianza: 'duda', origen: 'nomina', que: 'Seguros sociales', falta: 'el asiento de nóminas del mes',
       porque: `Es un recibo de la Seguridad Social, pero no hay nómina asentada con ${eurosCent(-imp)} a pagar: propongo ${nombreCuenta(ctx, ctx.cuentas476)}. Al confirmarlo, lo aprendo.`,
       destino: { tipo: 'cuenta', concepto: 'Seguros sociales', lineas: [{ cuenta: ctx.cuentas476, importe: euros(-imp) }] } }
   }
   if (!entra && /NOMINA|NÓMINA/i.test(txt)) {
     const n = ctx.nominas.filter((x) => x.netoPendienteCent === -imp)
     if (n.length === 1) {
-      return { ...b, confianza: 'probable', que: `Nóminas de ${mesNombre(n[0].mes)}`, porque: `Cuadra con lo pendiente de pagar de las nóminas de ${mesNombre(n[0].mes)} (465).`,
+      return { ...b, confianza: 'probable', origen: 'nomina', que: `Nóminas de ${mesNombre(n[0].mes)}`, porque: `Cuadra con lo pendiente de pagar de las nóminas de ${mesNombre(n[0].mes)} (465).`,
         destino: { tipo: 'cuenta', concepto: `Nóminas de ${mesNombre(n[0].mes)}`, lineas: [{ cuenta: n[0].cuenta465, importe: euros(-imp) }] } }
     }
   }
@@ -456,10 +552,10 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     const xs = ctx.impuestos.filter((x) => x.importeCent === -imp && (!modelo || x.modelo === modelo))
     if (xs.length === 1) {
       const x = xs[0]
-      return { ...b, confianza: 'probable', que: `Modelo ${x.modelo} · ${x.periodo}`, porque: `Mismo importe que el ${x.modelo} de ${x.periodo} pendiente en ${nombreCuenta(ctx, x.cuenta)}.`,
+      return { ...b, confianza: 'probable', origen: 'impuesto', que: `Modelo ${x.modelo} · ${x.periodo}`, porque: `Mismo importe que el ${x.modelo} de ${x.periodo} pendiente en ${nombreCuenta(ctx, x.cuenta)}.`,
         destino: { tipo: 'cuenta', concepto: `Pago del modelo ${x.modelo} · ${x.periodo}`, lineas: [{ cuenta: x.cuenta, importe: euros(-imp) }] } }
     }
-    return { ...b, confianza: 'duda', que: 'Pago a Hacienda', falta: 'el modelo y el periodo',
+    return { ...b, confianza: 'duda', origen: 'impuesto', que: 'Pago a Hacienda', falta: 'el modelo y el periodo',
       porque: `Es un pago a Hacienda de ${eurosCent(-imp)}, pero no hay ningún modelo pendiente por ese importe: ¿de qué modelo y periodo es?`, destino: null }
   }
 
@@ -467,8 +563,12 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   const reglas = ctx.reglas.filter((r) => nombra(txt, [r.contiene]) && (r.signo === null || r.signo === Math.sign(imp)))
   if (reglas.length === 1) {
     const r = reglas[0]
-    return { ...b, confianza: 'probable', reglaId: r.id, que: nombreCuenta(ctx, r.cuenta),
-      porque: `Regla: ${r.palabras}.`, destino: { tipo: 'cuenta', tercero_id: r.terceroId, concepto: limpiarConcepto(m.concepto) || ctx.nombres[r.cuenta] || r.cuenta,
+    // Una regla propone; casa sola cuando la persona la ha confirmado 3 veces sin corregir (B01).
+    // Antes, punto verde: «lo casaría sola, pero aún no puedo».
+    const conf = r.confirmaciones ?? 0
+    const sola = conf >= 3
+    return { ...b, confianza: sola ? 'seguro' : 'probable', preseleccionar: !sola, reglaId: r.id, origen: 'regla', que: nombreCuenta(ctx, r.cuenta),
+      porque: sola ? `Regla confirmada ${conf} veces: ${r.palabras}.` : `Regla: ${r.palabras} (confirmada ${conf} ${conf === 1 ? 'vez' : 'veces'}; a la 3.ª caso sola).`, destino: { tipo: 'cuenta', tercero_id: r.terceroId, concepto: limpiarConcepto(m.concepto) || ctx.nombres[r.cuenta] || r.cuenta,
         lineas: [{ cuenta: r.cuenta, importe: euros(abs(imp)) }] } }
   }
 
@@ -478,14 +578,14 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   const visto = cp ? ctx.aprendido.filter((a) => a.contraparte === cp).sort((x, y) => y.veces - x.veces) : []
   if (visto.length && visto[0].veces >= 2 && (visto.length === 1 || visto[0].veces > visto[1].veces)) {
     const a = visto[0]
-    return { ...b, confianza: 'probable', pideTicket: tarjeta && !entra, que: `${nombreCuenta(ctx, a.cuenta)}${tarjeta && !entra ? ' · ¿ticket?' : ''}`,
+    return { ...b, confianza: 'probable', origen: 'historial', pideTicket: tarjeta && !entra, que: `${nombreCuenta(ctx, a.cuenta)}${tarjeta && !entra ? ' · ¿ticket?' : ''}`,
       porque: `Las ${a.veces} anteriores de este ${tarjeta ? 'comercio' : 'concepto'} fueron ${nombreCuenta(ctx, a.cuenta)}.${tarjeta && !entra ? (tj ? ` Tarjeta de ${tj.titular} (···${tj.ultimos4}): pídele el ticket.` : ' Falta el ticket.') : ''}`,
       destino: { tipo: 'cuenta', tercero_id: a.terceroId, concepto: limpiarConcepto(m.concepto), lineas: [{ cuenta: a.cuenta, importe: euros(abs(imp)) }] } }
   }
 
   // ── 11 · Comisiones del banco ────────────────────────────────────────────
   if (!entra && (m.conceptoComun === '17' || /COMISI[OÓ]N|COMIS\.|MANTENIMIENTO/i.test(m.concepto))) {
-    return { ...b, confianza: 'probable', que: `Comisión del banco`,
+    return { ...b, confianza: 'probable', origen: 'banco', que: `Comisión del banco`,
       porque: `El banco lo da como ${m.conceptoComun === '17' ? '«intereses, comisiones, gastos» (concepto 17)' : 'comisión'}: ${nombreCuenta(ctx, ctx.cuentas626)}.`,
       destino: { tipo: 'cuenta', concepto: limpiarConcepto(m.concepto) || 'Comisión del banco', lineas: [{ cuenta: ctx.cuentas626, importe: euros(-imp) }] } }
   }
@@ -493,7 +593,7 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   // ── 12 · Por aclarar: lo que falta ───────────────────────────────────────
   if (visto.length === 1 && visto[0].veces === 1) {
     const a = visto[0]
-    return { ...b, confianza: 'duda', pideTicket: tarjeta && !entra, que: 'No sé qué es', falta: 'confirmarlo una vez más',
+    return { ...b, confianza: 'duda', origen: 'historial', pideTicket: tarjeta && !entra, que: 'No sé qué es', falta: 'confirmarlo una vez más',
       porque: `Solo una vez antes fue ${nombreCuenta(ctx, a.cuenta)}: ¿es lo mismo?`,
       destino: { tipo: 'cuenta', tercero_id: a.terceroId, concepto: limpiarConcepto(m.concepto), lineas: [{ cuenta: a.cuenta, importe: euros(abs(imp)) }] } }
   }
@@ -565,6 +665,16 @@ export function reglasNuevas(ctx: Pick<Contexto, 'aprendido' | 'reglas' | 'nombr
     out.push({ palabras: `Cuando el concepto tenga «${a.contraparte}» → ${nombreCuenta(ctx, a.cuenta)}`, contiene: a.contraparte, cuenta: a.cuenta, terceroId: a.terceroId })
   }
   return out
+}
+
+/**
+ * B02 · «¿De quién es la tarjeta ···3085?», UNA vez por tarjeta: las tarjetas
+ * que no están dadas de alta, con los movimientos que las usan.
+ */
+export function preguntasDeTarjeta(ds: readonly Pick<Decision, 'movimientoId' | 'tarjetaDesconocida'>[]): { ultimos4: string; movimientos: string[] }[] {
+  const por = new Map<string, string[]>()
+  for (const d of ds) if (d.tarjetaDesconocida) por.set(d.tarjetaDesconocida, [...(por.get(d.tarjetaDesconocida) ?? []), d.movimientoId])
+  return [...por.entries()].map(([ultimos4, movimientos]) => ({ ultimos4, movimientos })).sort((a, b) => b.movimientos.length - a.movimientos.length)
 }
 
 /** Las cinco cifras de arriba y la frase de la banda («He casado yo 142 de 158…»). */

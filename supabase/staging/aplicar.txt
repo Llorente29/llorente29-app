@@ -1,4 +1,5 @@
-# B01 · qué es una tarjeta entera, afinado (Julio, 15/10, opción a): la 0192 y
-# su prueba, fichero entero y como usuario, con rollback (incluye su vuelta atrás).
-supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql
-supabase/staging/sql/20261101_b01_tarjeta_criterio_prueba.sql
+# B02 · lo que entra y el motor (T1 0200) y lo ya guardado, legible (T2 0201),
+# con sus pruebas: fichero entero, como usuario donde hay usuario, con rollback.
+supabase/migrations/20261101T0200_b02_entrada.sql
+supabase/staging/sql/20261101_b02_entrada_prueba.sql
+supabase/staging/sql/20261101_b02_relleno_prueba.sql

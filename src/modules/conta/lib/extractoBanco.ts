@@ -25,8 +25,24 @@ export interface MovimientoLeido {
   fechaValor: string
   /** Céntimos con signo: + entra en la cuenta, − sale. */
   importeCent: number
-  /** El concepto tal y como lo da el banco (registros 22 y 23 juntos). */
+  /**
+   * El concepto tal y como lo da el banco: a quién pagas o quién te paga (en
+   * Norma 43, los complementarios, registros 23). Vacío si el banco no lo da:
+   * nunca se rellena con el tipo (15/10).
+   */
   conceptoBanco: string
+  /**
+   * El tipo de movimiento, aparte del concepto (15/10): en Norma 43, la
+   * descripción del concepto común de la AEB («Giros, transferencias…») o la
+   * etiqueta del código propio del banco cuando el fichero solo trae eso.
+   */
+  tipoMovimiento: string | null
+  /**
+   * A quién pagas o quién te paga, limpio (B02): el comercio o la persona, sin
+   * la tarjeta, sin asteriscos, sin códigos («Catcher», «Pago Fact Coheldi»).
+   * Null si la fuente no lo dice. El texto del banco sigue en `conceptoBanco`.
+   */
+  contraparte: string | null
   /** Concepto común AEB (dos cifras) si lo hay. */
   conceptoComun: string | null
   /** Concepto propio de la entidad (tres cifras) si lo hay. */
@@ -178,7 +194,38 @@ export function ocultarTarjetas(texto: string | null): string | null {
 /** El movimiento tal y como se guarda: sin tarjetas enteras en el concepto, el documento ni las referencias. */
 export function movimientoSinTarjetas(m: MovimientoLeido): MovimientoLeido {
   return { ...m, conceptoBanco: ocultarTarjetas(m.conceptoBanco), numeroDocumento: ocultarTarjetas(m.numeroDocumento),
-    referencia1: ocultarTarjetas(m.referencia1), referencia2: ocultarTarjetas(m.referencia2) }
+    referencia1: ocultarTarjetas(m.referencia1), referencia2: ocultarTarjetas(m.referencia2), contraparte: ocultarTarjetas(m.contraparte) }
+}
+
+// ── La contraparte limpia (B02) ──────────────────────────────────────────────
+// La MISMA regla que la base (_bank_contraparte_limpia, 20261101T0200), para lo
+// que se rellena de lo ya guardado: los ejemplos de su prueba de staging
+// (supabase/staging/sql/20261101_b02_entrada_prueba.sql) los pasa también una
+// prueba unitaria contra esta función.
+//   1. fuera la tarjeta enmascarada («************1234», «XXXX 1234»);
+//   2. fuera las referencias tipo IBAN («ES0182…») y toda tira de 5 o más cifras;
+//   3. fuera lo que no es letra, cifra, espacio, «&», «.» o «-»;
+//   4. con mayúscula inicial en cada palabra; «de», «del», «la», «las», «los»,
+//      «el», «y», «en» en minúscula (salvo al principio) y las formas jurídicas
+//      (SL, SA, SLU, SC, CB) en mayúsculas.
+const CONECTORES = ['De', 'Del', 'La', 'Las', 'Los', 'El', 'Y', 'En']
+const FORMAS = ['Sl', 'Sa', 'Slu', 'Sc', 'Cb']
+
+/** El nombre de quien paga o cobra, limpio. Null si no queda nada. */
+export function limpiarContraparte(texto: string | null): string | null {
+  if (!texto) return null
+  let s = texto.toUpperCase()
+    .replace(/[*X•·]{3,} ?[0-9]{4}/g, ' ')
+    .replace(/[A-Z]{2}[0-9]{2}[A-Z0-9]{10,}/g, ' ')
+    .replace(/[0-9]{5,}/g, ' ')
+    .replace(/[^\p{L}\p{N} &.-]/gu, ' ')
+    .replace(/\s+/g, ' ').trim()
+    .replace(/^[ -]+|[ -]+$/g, '')
+  if (!s) return null
+  s = s.toLowerCase().replace(/(^|[^\p{L}\p{N}])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase())
+  for (const c of CONECTORES) s = s.replace(new RegExp(` ${c}(?= )`, 'g'), ` ${c.toLowerCase()}`)
+  for (const f of FORMAS) s = s.replace(new RegExp(`(?<![\\p{L}\\p{N}])${f}(?![\\p{L}\\p{N}])`, 'gu'), f.toUpperCase())
+  return s
 }
 
 /**
