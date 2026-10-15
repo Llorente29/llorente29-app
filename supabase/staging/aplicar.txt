@@ -1,6 +1,9 @@
-# C06b · Respuesta 8, tarea 1 — la autorización de empresa no abre las
-# facturas recibidas.
-#   0740: conta_diez_autorizo.incluye_recibidas (boolean, not null, por
-#   defecto false). Solo añade. Su prueba, en transacción con ROLLBACK.
-supabase/migrations/20261111T0740_c06b_diez_autorizo_recibidas.sql
-supabase/staging/sql/20261111_c06b_diez_autorizo_recibidas_prueba.sql
+# E05 · Tarea 2 — los lotes de Catcher (rama conta/d01-catcher).
+#   0100: el emisor en la factura, el origen «lote», supplier_batch,
+#         supplier_batch_order, supplier_batch_store y conta_lote_registrar.
+#         Añade (y amplía el CHECK de source con «lote»).
+#   0110: conta_recibida_envio con el emisor (misma firma; sin emisor, lo de antes).
+#   La prueba, en una transacción con ROLLBACK.
+supabase/migrations/20261112T0100_e05_lotes.sql
+supabase/migrations/20261112T0110_e05_recibida_envio_emisor.sql
+supabase/staging/sql/20261112_e05_lotes_prueba.sql
