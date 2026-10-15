@@ -122,11 +122,11 @@ test.describe('B02 · Bancos, conciliar', () => {
       const bloque = page.getByRole('region', { name: 'Confirmar en bloque' })
       await expect(bloque).toContainText('3 seguros seleccionados')
       await expect(bloque.getByRole('button', { name: 'Confirmar los 3' })).toBeVisible()
-      const recargas = page.locator('.cxc-fila', { hasText: 'RECARGA MONEDERO INVENTADO' })
+      const recargas = page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' })
       await capturar(page, 'conciliar')
-      await expect(recargas, `Las filas: ${(await page.locator('.cxc-fila').allTextContents()).join(' ‖ ').slice(0, 900)}`).toHaveCount(1)
+      await expect(recargas, `Las filas: ${(await page.locator('.cxn-fila').allTextContents()).join(' ‖ ').slice(0, 900)}`).toHaveCount(1)
       await expect(recargas).toContainText('3 iguales')
-      await expect(recargas.locator('.cxc-pildora', { hasText: 'Regla' })).toBeVisible()
+      await expect(recargas.locator('.cxn-pildora', { hasText: 'Regla' })).toBeVisible()
       await expect(recargas.getByRole('button', { name: 'Confirmar las 3' })).toBeVisible()
 
       // La casilla quita: ya no son «los seguros».
@@ -138,29 +138,29 @@ test.describe('B02 · Bancos, conciliar', () => {
       await page.keyboard.press(' ')
       await expect(bloque).toContainText('3 seguros seleccionados')
       await page.keyboard.press('ArrowDown')
-      await expect(page.locator('.cxc-panel')).toBeVisible()
-      await expect(page.locator('.cxc-panel')).toContainText('Lo que dice el banco, tal cual')
+      await expect(page.locator('.cxn-panel')).toBeVisible()
+      await expect(page.locator('.cxn-panel')).toContainText('Lo que dice el banco, tal cual')
 
       // El buscador: por importe.
       await page.getByRole('searchbox', { name: 'Buscar movimientos' }).fill('34,75')
-      await expect(page.locator('.cxc-fila')).toHaveCount(1)
-      await expect(page.locator('.cxc-fila')).toContainText('FERRETERIA')
+      await expect(page.locator('.cxn-fila')).toHaveCount(1)
+      await expect(page.locator('.cxn-fila')).toContainText('FERRETERIA')
       await page.getByRole('searchbox', { name: 'Buscar movimientos' }).fill('')
 
       // El panel de un pago: «¿Es otra cosa?» y el asiento que se crea.
-      await page.locator('.cxc-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).click()
-      const panel = page.locator('.cxc-panel')
+      await page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).click()
+      const panel = page.locator('.cxn-panel')
       await expect(panel).toContainText('RECARGA MONEDERO INVENTADO')
       await panel.getByText('¿Es otra cosa?').click()
       await expect(panel.getByRole('button', { name: 'Apuntar sin factura…' })).toBeVisible()
       await expect(panel.getByRole('button', { name: /^Traspaso a / }).first()).toBeVisible()
       await expect(panel.getByRole('button', { name: 'No va a contabilidad…' })).toBeVisible()
       await panel.getByText('Ver el asiento que se crea').click()
-      await expect(panel.locator('.cxc-asiento')).toContainText('40700001')
+      await expect(panel.locator('.cxn-asiento')).toContainText('40700001')
       await capturar(page, 'panel')
 
       // Intro confirma la fila enfocada (los 3 iguales), cada uno como si fuera solo, y lo dice.
-      await page.locator('.cxc-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).getByRole('button', { name: 'Confirmar las 3' }).click()
+      await page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).getByRole('button', { name: 'Confirmar las 3' }).click()
       await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Confirmados los 3')
 
       // Casados solos: en Norte, cada línea dice de qué movimiento habla y se deshace desde ella.
@@ -195,13 +195,13 @@ test.describe('B02 · Bancos, conciliar', () => {
       await page.getByRole('link', { name: 'Confirmar los 3 seguros' }).click()
       await expect(page.getByRole('region', { name: 'Confirmar en bloque' }).getByRole('button', { name: 'Confirmar los 3 seguros' })).toBeVisible()
       await capturar(page, 'conciliar')
-      await expect(page.locator('.cxc-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }), `Las filas: ${(await page.locator('.cxc-fila').allTextContents()).join(' ‖ ').slice(0, 900)}`).toHaveCount(1)
-      await page.locator('.cxc-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).locator('.cxc-quien').click()
+      await expect(page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }), `Las filas: ${(await page.locator('.cxn-fila').allTextContents()).join(' ‖ ').slice(0, 900)}`).toHaveCount(1)
+      await page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).locator('.cxn-quien').click()
       await expect(page.getByRole('dialog')).toContainText('Lo que dice el banco, tal cual')
       await capturar(page, 'panel')
       await page.getByRole('dialog').getByRole('button', { name: 'Cerrar el panel' }).click()
       await page.getByRole('button', { name: /^Por aclarar/ }).click()
-      await expect(page.locator('.cxc-fila', { hasText: 'FERRETERIA' })).toBeVisible()
+      await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' })).toBeVisible()
       await capturar(page, 'por-aclarar')
     } finally {
       await base.deshacerTodo('Limpieza después de Conciliar B02 (móvil)')

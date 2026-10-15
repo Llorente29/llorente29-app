@@ -102,9 +102,9 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByText(/Tarjeta de Ana \(···0937\)|pídele el ticket a Ana/).first()).toBeVisible()
       // Las migas, sin caracteres raros; un solo botón principal por fila; y la banda del agente.
       await expect(page.getByRole('navigation', { name: 'Estás en' })).toHaveText(/^Bancos›Banco B01 · Norte · ···0011$/)
-      await expect(page.locator('.cxc-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
-      await expect(page.locator('.cxc-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
-      await expect(page.locator('.cxc-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
+      await expect(page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
+      await expect(page.locator('.cxn-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
+      await expect(page.locator('.cxn-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
       await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
       // Con la apertura de la semilla, lo que falta por casar es exactamente lo que queda sin casar.
       await expect(page.getByTestId('cuadre')).toContainText('2.175,50 €')
@@ -114,10 +114,10 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await capturarPieza(page, '.cxb-banda', 'banda-agente')
 
       // «Sí» confirma con contenido, y «Deshacer» lo devuelve (regla 8).
-      const comision = page.locator('.cxc-fila', { hasText: 'Comision mantenimiento' })
+      const comision = page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' })
       await comision.getByRole('button', { name: 'Sí', exact: true }).click()
       await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Casado: Comisión del banco')
-      await page.locator('.cxc-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Deshacer' }).click()
+      await page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Deshacer' }).click()
       await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Deshecho: el movimiento del 03/10')
 
       // Por aclarar, y la tarjeta que nadie ha dado de alta (respuesta 3).
@@ -125,8 +125,8 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await capturar(page, 'por-aclarar')
       await barra.getByRole('button', { name: /^B01 Mercado/ }).click()
       // B02: la tarjeta sin dar de alta la anota el motor (se pregunta una vez por tarjeta, no en cada pago).
-      await expect(page.locator('.cxc-fila', { hasText: 'FERRETERIA' })).toContainText('tarjeta ···1234 sin dar de alta')
-      await expect(page.locator('.cxc-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()
+      await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' })).toContainText('tarjeta ···1234 sin dar de alta')
+      await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()
       await capturar(page, 'tarjeta-desconocida')
 
       // Reglas.
@@ -197,7 +197,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.locator('.cxb-apartado', { hasText: 'Para confirmar' }).click()
       await expect(page.getByRole('heading', { name: 'Movimientos', level: 2 })).toBeVisible()
       await expect(page.getByRole('link', { name: '‹ Bancos' })).toBeVisible()
-      await expect(page.locator('.cxc-fila').first()).toBeVisible()
+      await expect(page.locator('.cxn-fila').first()).toBeVisible()
       await capturar(page, 'para-confirmar')
 
       await page.getByRole('button', { name: /^Por aclarar \d+$/ }).click()

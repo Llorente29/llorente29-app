@@ -64,27 +64,27 @@ export function PanelMovimiento(p: PanelProps) {
   const alternarFactura = (id: string) => setElegidas((e) => (e.includes(id) ? e.filter((x) => x !== id) : [...e, id]))
 
   return (
-    <aside className="cxc-panel" aria-label={`El movimiento de ${quienEs(m)}`}>
-      <div className="cxc-panel-cabeza">
+    <aside className="cxn-panel" aria-label={`El movimiento de ${quienEs(m)}`}>
+      <div className="cxn-panel-cabeza">
         <div>
           <h3>{quienEs(m)}</h3>
           <span className="cx-ayuda">{diaMesCorto(m.fecha)}{m.tipo ? ` · ${m.tipo}` : ''}</span>
         </div>
-        <span className={`cxc-panel-importe${m.importeCent > 0 ? ' cxb-entra' : ''}`}>{eurosExactos(m.importeCent / 100)}</span>
-        <button type="button" className="cxc-cerrar" onClick={p.alCerrar} aria-label="Cerrar el panel">×</button>
+        <span className={`cxn-panel-importe${m.importeCent > 0 ? ' cxb-entra' : ''}`}>{eurosExactos(m.importeCent / 100)}</span>
+        <button type="button" className="cxn-cerrar" onClick={p.alCerrar} aria-label="Cerrar el panel">×</button>
       </div>
 
-      <section className="cxc-bloque" aria-label="Lo que dice el banco">
+      <section className="cxn-bloque" aria-label="Lo que dice el banco">
         <h4>Lo que dice el banco, tal cual</h4>
-        <p className="cxc-banco-literal">{textoDelBanco(m) || '—'}</p>
+        <p className="cxn-banco-literal">{textoDelBanco(m) || '—'}</p>
       </section>
 
       {m.estado === 'casado' && m.casado && (
-        <section className="cxc-bloque" aria-label="Casado">
+        <section className="cxn-bloque" aria-label="Casado">
           <h4>{m.casado.porQuien === 'folvy' ? 'Lo casé yo' : 'Lo casaste tú'}</h4>
           <p><strong>{m.casado.asientoConcepto ?? m.propuesta?.que ?? 'Casado'}</strong></p>
           <p className="cx-ayuda">{m.casado.porque}</p>
-          <div className="cxc-acciones">
+          <div className="cxn-acciones">
             {m.casado.asientoId && <button type="button" className="cx-boton-sec" onClick={p.alVerAsiento}>Abrir el asiento</button>}
             <button type="button" className="cx-boton-sec" disabled={p.ocupado} onClick={p.alDeshacer}>{p.ocupado ? 'Deshaciendo…' : 'Deshacer'}</button>
           </div>
@@ -92,16 +92,16 @@ export function PanelMovimiento(p: PanelProps) {
       )}
 
       {sinCasar && m.propuesta?.que && (
-        <section className="cxc-bloque" aria-label="Lo que propongo">
+        <section className="cxn-bloque" aria-label="Lo que propongo">
           <h4>Lo que propongo</h4>
-          <p className="cxc-propuesta">
-            {origen && <span className="cxc-pildora">{origen}</span>}
+          <p className="cxn-propuesta">
+            {origen && <span className="cxn-pildora">{origen}</span>}
             <strong>{m.propuesta.que}</strong>
           </p>
           {m.porque && <p className="cx-ayuda">{m.porque}</p>}
-          {m.propuesta.facturaSinAprobar && <p className="cxc-ambar-texto">Factura sin aprobar: confirmar el pago no la aprueba.</p>}
+          {m.propuesta.facturaSinAprobar && <p className="cxn-ambar-texto">Factura sin aprobar: confirmar el pago no la aprueba.</p>}
           {(m.propuesta.alternativas ?? []).length > 0 && (
-            <div className="cxc-acciones">
+            <div className="cxn-acciones">
               {m.propuesta.alternativas!.map((a) => (
                 <button key={a.etiqueta} type="button" className="cx-boton-sec" disabled={p.ocupado}
                   onClick={() => p.alConfirmar(a.destino as unknown as Destino, `Lo dijiste tú: ${a.etiqueta}.`, a.etiqueta)}>{a.etiqueta}</button>
@@ -109,16 +109,16 @@ export function PanelMovimiento(p: PanelProps) {
             </div>
           )}
           {confirmable(m) && !reparto && (
-            <div className="cxc-acciones"><button type="button" className="cx-boton" disabled={p.ocupado} onClick={p.alConfirmarPropuesta}>{p.ocupado ? 'Confirmando…' : 'Sí, es esto'}</button></div>
+            <div className="cxn-acciones"><button type="button" className="cx-boton" disabled={p.ocupado} onClick={p.alConfirmarPropuesta}>{p.ocupado ? 'Confirmando…' : 'Sí, es esto'}</button></div>
           )}
         </section>
       )}
 
       {sinCasar && pago && (
-        <section className="cxc-bloque" aria-label="Facturas pendientes">
+        <section className="cxn-bloque" aria-label="Facturas pendientes">
           <h4>{lista.length ? `Facturas pendientes de ${lista[0].proveedor}` : 'Facturas pendientes'}</h4>
           {lista.length === 0 && <p className="cx-ayuda">No encuentro facturas sin pagar de {quienEs(m)}.</p>}
-          <ul className="cxc-facturas">
+          <ul className="cxn-facturas">
             {lista.map((f) => {
               const r = reparto?.facturas.find((x) => x.id === f.id)
               return (
@@ -127,8 +127,8 @@ export function PanelMovimiento(p: PanelProps) {
                     <input type="checkbox" checked={elegidas.includes(f.id)} onChange={() => alternarFactura(f.id)} />
                     <span>
                       <strong>{f.numero ?? 'Sin número'}</strong> <span className="cx-ayuda">del {diaMesCorto(f.fecha)}</span>
-                      {f.enRevision && <span className="cxc-pildora cxc-pildora-ambar">sin aprobar</span>}
-                      <span className="cx-ayuda cxc-factura-pie">
+                      {f.enRevision && <span className="cxn-pildora cxn-pildora-ambar">sin aprobar</span>}
+                      <span className="cx-ayuda cxn-factura-pie">
                         quedan <span className="cx-cifra">{eurosExactos((f.totalCent - f.pagadoCent) / 100)}</span>
                         {r && <> · pagas <span className="cx-cifra">{eurosExactos(r.importeCent / 100)}</span>{r.quedaCent > 0 && <> · le quedarán <span className="cx-cifra">{eurosExactos(r.quedaCent / 100)}</span></>}</>}
                       </span>
@@ -139,7 +139,7 @@ export function PanelMovimiento(p: PanelProps) {
             })}
           </ul>
           {reparto && (
-            <div className="cxc-queda" role="status">
+            <div className="cxn-queda" role="status">
               <span>Queda por casar</span>
               <span className="cx-cifra">{eurosExactos(reparto.quedaPorCasarCent / 100)}</span>
             </div>
@@ -155,8 +155,8 @@ export function PanelMovimiento(p: PanelProps) {
               <span>Dejar la factura pagada: la diferencia va a {cuentaLegible(p.nombres, p.cuentasDiferencia.c769)}</span>
             </label>
           )}
-          {reparto?.noSePuede && <p className="cxc-ambar-texto">{reparto.noSePuede}</p>}
-          <div className="cxc-acciones">
+          {reparto?.noSePuede && <p className="cxn-ambar-texto">{reparto.noSePuede}</p>}
+          <div className="cxn-acciones">
             {reparto && (
               <button type="button" className="cx-boton" disabled={p.ocupado || !!reparto.noSePuede}
                 onClick={() => {
@@ -173,9 +173,9 @@ export function PanelMovimiento(p: PanelProps) {
       )}
 
       {sinCasar && (
-        <details className="cxc-bloque cxc-otra-cosa">
+        <details className="cxn-bloque cxn-otra-cosa">
           <summary>¿Es otra cosa?</summary>
-          <div className="cxc-acciones cxc-acciones-columna">
+          <div className="cxn-acciones cxn-acciones-columna">
             <button type="button" className="cx-boton-sec" onClick={p.alApuntarSinFactura}>Apuntar sin factura…</button>
             {p.otrosBancos.filter((b) => b.cuenta).map((b) => (
               <button key={b.id} type="button" className="cx-boton-sec" disabled={p.ocupado}
@@ -191,9 +191,9 @@ export function PanelMovimiento(p: PanelProps) {
       )}
 
       {lineas && (
-        <details className="cxc-bloque">
+        <details className="cxn-bloque">
           <summary>Ver el asiento que se crea</summary>
-          <table className="cxc-asiento">
+          <table className="cxn-asiento">
             <thead><tr><th>Cuenta</th><th className="cxb-der">Debe</th><th className="cxb-der">Haber</th></tr></thead>
             <tbody>
               {lineas.map((l, i) => (

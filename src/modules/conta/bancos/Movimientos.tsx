@@ -29,7 +29,7 @@ import { rutaAsiento, rutaBancos } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
-import { useLeer } from '@/modules/conta/libros/contexto'
+import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { TEXTO_BOTON, filaDe, limitesMes, migasBanco, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import {
@@ -71,7 +71,8 @@ export function Movimientos() {
 
   const { hasta } = limitesMes(mes)
   const corte = hasta < ctx.hoy ? hasta : ctx.hoy
-  const lectura = useLeer(banco ? async () => {
+  // Conserva lo leído mientras vuelve a leer (la pasada del agente recarga): la lista no se vacía.
+  const lectura = useLeerConservando(banco ? async () => {
     const [movs, saldos, pasada, facturas] = await Promise.all([
       leerMovimientos(accountId, banco.id, mes),
       saldosContables(companyId, corte, banco.cuenta ? [banco.cuenta] : []),
@@ -79,7 +80,7 @@ export function Movimientos() {
       facturasParaCasar(companyId),
     ])
     return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, pasada, facturas }
-  } : null, `${banco?.id}:${mes}:${vuelta}`)
+  } : null, `${banco?.id}:${mes}`, String(vuelta))
 
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
   const porId = useMemo(() => new Map(movs.map((m) => [m.id, m])), [movs])
@@ -193,7 +194,7 @@ export function Movimientos() {
       const n = Math.max(0, Math.min(grupos.length - 1, foco + (e.key === 'ArrowDown' ? 1 : -1)))
       setFoco(n)
       if (!movil && grupos[n]) setElegido(grupos[n].m.id)
-      document.getElementById(`cxc-fila-${grupos[n]?.m.id}`)?.scrollIntoView({ block: 'nearest' })
+      document.getElementById(`cxn-fila-${grupos[n]?.m.id}`)?.scrollIntoView({ block: 'nearest' })
     } else if (e.key === 'Enter' && g && marcables(g).length) {
       e.preventDefault(); void confirmarVarios(marcables(g), g.m.id)
     } else if (e.key === ' ' && g && marcables(g).length) {
@@ -225,7 +226,7 @@ export function Movimientos() {
   )
 
   return (
-    <section className="cxb-movimientos cxc-conciliar" aria-labelledby="cxb-mov-titulo">
+    <section className="cxb-movimientos cxn-conciliar" aria-labelledby="cxb-mov-titulo">
       <div className="cxl-seccion">
         <div>
           <nav className="cxp-migas" aria-label="Estás en"><span>Bancos</span><span aria-hidden="true">›</span><span aria-current="page">{migasBanco(banco).replace(/^Bancos › /, '')}</span></nav>
@@ -235,21 +236,21 @@ export function Movimientos() {
       </div>
 
       {/* El cuadre: en el banco − en contabilidad = te falta por casar, y la barra. */}
-      <div className="cxc-cuadre" data-testid="cuadre">
-        <div className="cxc-cuenta">
-          <div className="cxc-cifra">
+      <div className="cxn-cuadre" data-testid="cuadre">
+        <div className="cxn-cuenta">
+          <div className="cxn-cifra">
             <span className="cxb-cifra-etiqueta">En el banco</span>
             <span className="cxb-cifra-valor">{cuadre.bancoCent === null ? '—' : euros(cuadre.bancoCent)}</span>
             <span className="cxb-cifra-pie">{extracto ? `extracto hasta el ${fechaLarga(extracto.hasta)}` : 'sube un extracto con saldos'}</span>
           </div>
-          <span className="cxc-signo" aria-hidden="true">−</span>
-          <div className="cxc-cifra">
+          <span className="cxn-signo" aria-hidden="true">−</span>
+          <div className="cxn-cifra">
             <span className="cxb-cifra-etiqueta">En contabilidad</span>
             <span className="cxb-cifra-valor">{cuadre.libroCent === null ? '—' : euros(cuadre.libroCent)}</span>
             <span className="cxb-cifra-pie">{cuadre.libroCent === null ? 'el banco no tiene su cuenta' : `a ${fechaLarga(corte)}`}</span>
           </div>
-          <span className="cxc-signo" aria-hidden="true">=</span>
-          <div className="cxc-cifra cxc-falta">
+          <span className="cxn-signo" aria-hidden="true">=</span>
+          <div className="cxn-cifra cxn-falta">
             <span className="cxb-cifra-etiqueta">Te falta por casar</span>
             <span className={`cxb-cifra-valor${cuadre.faltaCent === 0 ? ' cxb-verde' : ''}`}>{cuadre.faltaCent === null ? '—' : euros(cuadre.faltaCent)}</span>
             <span className={`cxb-cifra-pie${cuadre.faltaCent === 0 ? ' cxb-verde' : ''}`}>
@@ -258,13 +259,13 @@ export function Movimientos() {
             </span>
           </div>
         </div>
-        <div className="cxc-barra-bloque">
-          <div className="cxc-barra" role="img" aria-label={`${cuadre.cuenta.casados} casados solos, ${cuadre.cuenta.confirmar} para confirmar y ${cuadre.cuenta.aclarar} por aclarar`}>
-            <span className="cxc-tramo cxc-tramo-casados" style={{ width: ancho(cuadre.cuenta.casados) }} />
-            <span className="cxc-tramo cxc-tramo-confirmar" style={{ width: ancho(cuadre.cuenta.confirmar) }} />
-            <span className="cxc-tramo cxc-tramo-aclarar" style={{ width: ancho(cuadre.cuenta.aclarar) }} />
+        <div className="cxn-barra-bloque">
+          <div className="cxn-barra" role="img" aria-label={`${cuadre.cuenta.casados} casados solos, ${cuadre.cuenta.confirmar} para confirmar y ${cuadre.cuenta.aclarar} por aclarar`}>
+            <span className="cxn-tramo cxn-tramo-casados" style={{ width: ancho(cuadre.cuenta.casados) }} />
+            <span className="cxn-tramo cxn-tramo-confirmar" style={{ width: ancho(cuadre.cuenta.confirmar) }} />
+            <span className="cxn-tramo cxn-tramo-aclarar" style={{ width: ancho(cuadre.cuenta.aclarar) }} />
           </div>
-          <div className="cxc-leyenda" data-testid="barra">
+          <div className="cxn-leyenda" data-testid="barra">
             <span><span className="cxb-punto cxb-punto-verde" aria-hidden="true" /> <b>{cuadre.cuenta.casados}</b> casados solos</span>
             <span><span className="cxb-punto cxb-punto-ambar" aria-hidden="true" /> <b>{cuadre.cuenta.confirmar}</b> para confirmar</span>
             <span><span className="cxb-punto" aria-hidden="true" /> <b>{cuadre.cuenta.aclarar}</b> por aclarar</span>
@@ -286,15 +287,15 @@ export function Movimientos() {
         <button type="button" className="cx-boton-sec" onClick={() => ir('casados')}>Ver y deshacer lo que he hecho</button>
       </div>
 
-      <div className="cxc-bandejas-fila">
+      <div className="cxn-bandejas-fila">
         <div className="cxl-segmento" role="group" aria-label="Bandejas">
           {BANDEJAS.map((b) => (
             <button key={b.id} type="button" aria-pressed={bandeja === b.id} onClick={() => ir(b.id)}>
-              {b.nombre} <span className="cxc-contador" data-testid={`contador-${b.id}`}>{cuadre.cuenta[b.id]}</span>
+              {b.nombre} <span className="cxn-contador" data-testid={`contador-${b.id}`}>{cuadre.cuenta[b.id]}</span>
             </button>
           ))}
         </div>
-        <label className="cxc-buscar">
+        <label className="cxn-buscar">
           <span className="cx-oculto">Buscar movimientos</span>
           <input className="cx-input" type="search" value={busca} onChange={(e) => { setBusca(e.target.value); setFoco(0) }} placeholder="Busca por nombre, importe o concepto" />
         </label>
@@ -303,7 +304,7 @@ export function Movimientos() {
       {aviso && <div className={aviso.tipo === 'ok' ? 'cx-guardado' : 'cx-error'} role={aviso.tipo === 'ok' ? 'status' : 'alert'}>{aviso.texto}</div>}
 
       {bandeja !== 'casados' && bandeja !== 'aclarar' && seleccionables.length > 0 && (
-        <div className="cxc-bloque-barra" role="region" aria-label="Confirmar en bloque">
+        <div className="cxn-bloque-barra" role="region" aria-label="Confirmar en bloque">
           <span><strong>{bloque.etiqueta}</strong>{!movil && <span className="cx-ayuda"> · las casillas quitan o añaden; cada uno se confirma como si fuera solo</span>}</span>
           <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => confirmarVarios(seleccionables, 'bloque')}>
             {ocupado === 'bloque' ? 'Confirmando…' : movil && bloque.seguros ? `${bloque.boton} seguros` : bloque.boton}
@@ -311,16 +312,16 @@ export function Movimientos() {
         </div>
       )}
 
-      <div className={`cxc-cuerpo${panel && !movil ? ' cxc-con-panel' : ''}`}>
+      <div className={`cxn-cuerpo${panel && !movil ? ' cxn-con-panel' : ''}`}>
         {bandeja === 'casados' ? (
           <CasadosSolos movs={vistos} ocupado={ocupado} alAbrir={(m) => setElegido(m.id)} alDeshacer={deshacer}
             alVerAsiento={(m) => m.casado?.asientoId && navegar(rutaAsiento(m.casado.asientoId))} />
         ) : (
-          <div className="cx-tarjeta cxc-lista" role="grid" tabIndex={0} aria-label={`Movimientos de ${nombreMes(mes).toLowerCase()} de ${banco.nombre}`}
+          <div className="cx-tarjeta cxn-lista" role="grid" tabIndex={0} aria-label={`Movimientos de ${nombreMes(mes).toLowerCase()} de ${banco.nombre}`}
             aria-keyshortcuts="ArrowUp ArrowDown Enter Space" onKeyDown={teclado}>
             {dias.map((d) => (
-              <div key={d.fecha} role="rowgroup" className="cxc-dia">
-                <div className="cxc-dia-cabeza" role="row"><span role="columnheader">{diaConNombre(d.fecha)}</span></div>
+              <div key={d.fecha} role="rowgroup" className="cxn-dia">
+                <div className="cxn-dia-cabeza" role="row"><span role="columnheader">{diaConNombre(d.fecha)}</span></div>
                 {d.grupos.map((g) => {
                   const i = grupos.indexOf(g)
                   return (
@@ -371,24 +372,24 @@ function FilaMovimiento({ g, movil, enfocada, elegida, ocupado, marcadas, marcab
   const texto = (b: Boton) => (b === 'subir-foto' && movil ? 'Hacer foto del ticket' : TEXTO_BOTON[b])
   const principal = fotoPrincipal ? 'subir-foto' : f.principal
   return (
-    <div id={`cxc-fila-${m.id}`} role="row" aria-selected={elegida} data-testid={`mov-${m.id}`}
-      className={`cxc-fila cxc-fila-${tono}${enfocada ? ' cxc-enfocada' : ''}${elegida ? ' cxc-elegida' : ''}`} onClick={alElegir}>
-      <span role="gridcell" className="cxc-casilla" onClick={(e) => e.stopPropagation()}>
+    <div id={`cxn-fila-${m.id}`} role="row" aria-selected={elegida} data-testid={`mov-${m.id}`}
+      className={`cxn-fila cxn-fila-${tono}${enfocada ? ' cxn-enfocada' : ''}${elegida ? ' cxn-elegida' : ''}`} onClick={alElegir}>
+      <span role="gridcell" className="cxn-casilla" onClick={(e) => e.stopPropagation()}>
         {marcable && <input type="checkbox" checked={marcadas} onChange={alMarcar} aria-label={`Marcar ${quienEs(m)} para confirmar en bloque`} />}
       </span>
-      <span role="gridcell" className="cxc-quien">
-        <strong>{quienEs(m)}{n > 1 && <span className="cxc-iguales"> · {n} iguales</span>}</strong>
-        <span className="cxc-texto-banco">{textoDelBanco(m)}{m.tarjeta && ` · tarjeta de ${m.tarjeta.titular} (···${m.tarjeta.ultimos4})`}</span>
+      <span role="gridcell" className="cxn-quien">
+        <strong>{quienEs(m)}{n > 1 && <span className="cxn-iguales"> · {n} iguales</span>}</strong>
+        <span className="cxn-texto-banco">{textoDelBanco(m)}{m.tarjeta && ` · tarjeta de ${m.tarjeta.titular} (···${m.tarjeta.ultimos4})`}</span>
       </span>
-      <span role="gridcell" className={`cxb-importe ${m.importeCent > 0 ? 'cxb-entra' : ''}`}>{signo(m.importeCent)}{n > 1 && <span className="cxc-por"> × {n}</span>}</span>
-      <span role="gridcell" className="cxc-propongo">
-        <span className="cxc-propongo-linea">
+      <span role="gridcell" className={`cxb-importe ${m.importeCent > 0 ? 'cxb-entra' : ''}`}>{signo(m.importeCent)}{n > 1 && <span className="cxn-por"> × {n}</span>}</span>
+      <span role="gridcell" className="cxn-propongo">
+        <span className="cxn-propongo-linea">
           <span className={`cxb-punto cxb-punto-${tono === 'casado' ? 'verde' : tono}`} title={verde ? 'Lo casaría solo' : f.estado} /><span className="cx-oculto">{verde ? 'Lo casaría solo' : f.estado}</span>
-          {origen && <span className="cxc-pildora">{origen}</span>}
+          {origen && <span className="cxn-pildora">{origen}</span>}
           <strong>{f.titulo}</strong>
-          {m.propuesta?.facturaSinAprobar && m.estado !== 'casado' && <span className="cxc-pildora cxc-pildora-ambar">factura sin aprobar</span>}
+          {m.propuesta?.facturaSinAprobar && m.estado !== 'casado' && <span className="cxn-pildora cxn-pildora-ambar">factura sin aprobar</span>}
         </span>
-        <span className="cxc-porque">{f.porque}</span>
+        <span className="cxn-porque">{f.porque}</span>
       </span>
       <span role="gridcell" className="cxb-botones" onClick={(e) => e.stopPropagation()}>
         {n > 1 && marcable ? (
@@ -410,11 +411,11 @@ function CasadosSolos({ movs, ocupado, alAbrir, alDeshacer, alVerAsiento }: {
 }) {
   if (!movs.length) return <div className="cx-tarjeta"><p className="cxb-vacio">Este mes no he casado nada solo.</p></div>
   return (
-    <div className="cx-tarjeta cxc-casados" role="list" aria-label="Casados solos">
+    <div className="cx-tarjeta cxn-casados" role="list" aria-label="Casados solos">
       {movs.map((m) => (
-        <div key={m.id} role="listitem" className="cxc-casado" data-testid={`casado-${m.id}`}>
-          <span className="cxc-casado-que">
-            <span className="cxc-casado-mov"><span className="cx-cifra">{diaMesCorto(m.fecha)}</span> · <strong>{quienEs(m)}</strong> · <span className={`cx-cifra${m.importeCent > 0 ? ' cxb-entra' : ''}`}>{euros(m.importeCent)}</span></span>
+        <div key={m.id} role="listitem" className="cxn-casado" data-testid={`casado-${m.id}`}>
+          <span className="cxn-casado-que">
+            <span className="cxn-casado-mov"><span className="cx-cifra">{diaMesCorto(m.fecha)}</span> · <strong>{quienEs(m)}</strong> · <span className={`cx-cifra${m.importeCent > 0 ? ' cxb-entra' : ''}`}>{euros(m.importeCent)}</span></span>
             <span>Casado con <strong>{m.casado?.asientoConcepto ?? m.propuesta?.que ?? 'su asiento'}</strong></span>
             <span className="cx-ayuda">{(m.casado?.porque ?? '').replace(/^casado solo\s*[:·]\s*/i, '')}</span>
           </span>
