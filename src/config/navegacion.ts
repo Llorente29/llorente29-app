@@ -216,6 +216,8 @@ export const CONTA = {
     documentos: 'documentos',
     /** D01 · Revisar una factura recibida (N23). */
     revisarFactura: 'documentos/recibidas/:invoiceId',
+    /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
+    loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
     bancos: 'bancos',
     /** Una pestaña de Bancos, o una de sus acciones (subir, hecho-por-folvy). */
@@ -395,6 +397,8 @@ export const rutaDocumentos = (ver?: string, mes?: string): string => {
 }
 /** D01 · N23. */
 export const rutaRevisarFactura = (invoiceId: string): string => rutaConta(CONTA.rutas.revisarFactura, { invoiceId })
+/** E05 · Una quincena de Catcher. */
+export const rutaLoteCatcher = (loteId: string): string => rutaConta(CONTA.rutas.loteCatcher, { loteId })
 /** Bancos (B01): sin pestaña, Movimientos. */
 export const rutaBancos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.bancosPestana, { pestana }) : rutaConta(CONTA.rutas.bancos))
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })

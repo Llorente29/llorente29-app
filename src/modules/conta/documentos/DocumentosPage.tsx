@@ -35,6 +35,7 @@ import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { leerDocumentos, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
+import { QuincenaCatcher } from '@/modules/conta/documentos/QuincenaCatcher'
 
 const ACEPTA = 'application/pdf,image/jpeg,image/png,image/webp'
 
@@ -165,6 +166,7 @@ export default function DocumentosPage() {
 
           <Banda d={d} alPedir={() => setPidiendo(true)} />
           <Cifras d={d} ver={ver} solo={producto.solo} alVer={(v) => cambiar({ ver: v })} alPedir={() => setPidiendo(true)} />
+          {accountId && <QuincenaCatcher accountId={accountId} companyId={activa.id} quien={userName} />}
           <Lista d={d} ver={ver} movil={movil} solo={producto.solo} entendidoTitulo={t.entendido} pie={t.repetida} alIr={irA} alVerTodas={() => cambiar({ ver: 'todas' })} />
         </>
       )}
