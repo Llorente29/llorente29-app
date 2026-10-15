@@ -1,21 +1,33 @@
 {
- "_que": "B01 · contexto de producción de la tanda viva «qué es una tarjeta entera, afinado» (0192), medido en SOLO LECTURA el 15/10 a las 09:21 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. _bank_ocultar_tarjetas(text) existe (la de la 0190, md5 de su cuerpo d9054177… igual al del fichero); _bank_parece_tarjeta no; nada en el camino del pedido.",
- "medido": "2026-10-15T09:21Z",
- "tanda": {
-  "supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql": "98433fb66df3c91c664b659bbe7f21c6"
- },
- "contexto": {
-  "tablas": [],
-  "funciones": [
-   "public._bank_ocultar_tarjetas(text)"
-  ],
-  "filas": {},
-  "otras": {},
-  "camino": {
-   "tablas": [],
-   "funciones": []
+  "_que": "E05 · contexto de producción de la tanda viva «las facturas de riders de Catcher» (0100–0140), medido en SOLO LECTURA el 15/10 a las 11:55 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna tabla ni función nueva existe aún; conta_recibida_envio(uuid) sí (la 0110 la cambia con la misma firma); nada en el camino del pedido; ninguna de las cinco en el historial. La 40700001 no existe en Foodint (ni en toda la tabla) y la 407 sí (40700000).",
+  "medido": "2026-10-15T11:55Z",
+  "tanda": {
+    "supabase/migrations/20261112T0100_e05_lotes.sql": "9798d01e003adaec2a0b206bbe7805bf",
+    "supabase/migrations/20261112T0110_e05_recibida_envio_emisor.sql": "f4ae123351ff2a96dc33c09f396965ce",
+    "supabase/migrations/20261112T0120_e05_cruces.sql": "3ded29d70bd87bd809a5019342accf36",
+    "supabase/migrations/20261112T0130_e05_pago_prepago.sql": "6b6c976745b82b0b2a0dfec6ca789c44",
+    "supabase/migrations/20261112T0140_e05_datos.sql": "8f87b40543fe5cf2d8cfbd18622b3362"
   },
-  "usos": {},
-  "registro": []
- }
+  "contexto": {
+    "tablas": [
+      "public.company_account",
+      "public.company_account_link",
+      "public.supplier_invoice"
+    ],
+    "funciones": [
+      "public.conta_recibida_envio(uuid)"
+    ],
+    "filas": {
+      "public.company_account": 751,
+      "public.company_account_link": 82,
+      "public.supplier_invoice": 6
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
 }

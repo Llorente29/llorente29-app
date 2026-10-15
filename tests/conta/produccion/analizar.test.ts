@@ -1067,36 +1067,35 @@ describe('la tanda de nunca una tarjeta entera (B01, 0190 y 0191; ya aplicada, r
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): qué es una tarjeta entera, afinado (B01, 0192)', () => {
+describe('la tanda de AHORA (manifiesto vivo): las facturas de riders de Catcher (E05, 0100–0140)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción para ESTE fichero (con su md5): ver el _que del JSON.
+  // lectura en producción para ESTOS ficheros (con sus md5): ver el _que del JSON.
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const E05 = ['0100_e05_lotes', '0110_e05_recibida_envio_emisor', '0120_e05_cruces', '0130_e05_pago_prepago', '0140_e05_datos']
 
-  it('un fichero: cambia _bank_ocultar_tarjetas en caliente (declarado, con prueba) y añade una función; sigue', () => {
-    expect(viva).toEqual(['supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql'])
-    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue' })
+  it('cinco ficheros, en orden, y los cinco siguen (sin «autorizo»)', () => {
+    expect(viva).toEqual(E05.map((f) => `supabase/migrations/20261112T${f}.sql`))
+    expect(r.ficheros).toEqual(Object.fromEntries(viva.map((f) => [f, 'sigue'])))
   })
-  it('al aplicarse no escribe datos: lo tapado no se destapa y nada se vuelve a tapar', () => {
-    const fuera = readFileSync(viva[0], 'utf8').replace(/\$\$[\s\S]*?\$\$/g, '')
-    expect(fuera).not.toMatch(/^\s*(update|delete|insert)\b/im)
+  it('los datos (0140) solo añaden filas, con account_id, y si ya están no hacen nada', () => {
+    const sql = readFileSync(viva[4], 'utf8')
+    expect(sql).not.toMatch(/^\s*(update|delete)\b/im)
+    expect(sql).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect((sql.match(/insert into/g) ?? []).length).toBe((sql.match(/where not exists|on conflict do nothing/g) ?? []).length)
   })
-  it('declara qué cuenta, y la cuenta mira la huella de la función (la vuelta atrás la repone)', () => {
+  it('declara qué cuenta, y la cuenta existe', () => {
     const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/tarjeta-criterio.sql'])
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/e05-catcher.sql'])
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
-    expect(readFileSync(cuentas[0], 'utf8')).toMatch(/md5\(prosrc\)/)
   })
-  it('su vuelta atrás devuelve el cuerpo de la 0190 tal cual y quita la función nueva', () => {
+  it('su vuelta atrás va en orden inverso y cada fichero para si se perdería algo', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
-    expect(atras).toEqual(['supabase/vuelta-atras/20261101T0192_b01_tarjeta_criterio.down.sql'])
-    const sql = readFileSync(atras[0], 'utf8')
-    const cuerpo = (t: string) => t.slice(t.indexOf('create or replace function public._bank_ocultar_tarjetas'), t.indexOf('end $$;', t.indexOf('create or replace function public._bank_ocultar_tarjetas')))
-    expect(cuerpo(sql)).toBe(cuerpo(readFileSync('supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql', 'utf8')))
-    expect(sql).toMatch(/drop function if exists public._bank_parece_tarjeta\(text\)/)
+    expect(atras).toEqual([...E05].reverse().map((f) => `supabase/vuelta-atras/20261112T${f}.down.sql`))
+    for (const f of atras) expect(readFileSync(f, 'utf8'), f).toMatch(/raise exception/)
   })
 })
 

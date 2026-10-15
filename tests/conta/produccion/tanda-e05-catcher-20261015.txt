@@ -4,8 +4,8 @@
 # ensayo en verde del mismo commit, en REAL.
 #
 # E05 · Las facturas de riders de Catcher (rama conta/d01-catcher).
-# PREPARADA, NO LANZADA: el manifiesto vivo es de B; esta va después, cuando
-# Julio diga. Para lanzarla se copia a supabase/produccion/aplicar.txt.
+# La anterior de este fichero (B01, 0192) ya está en el historial de
+# producción; su copia: tests/conta/produccion/tanda-b01-tarjeta-criterio-20261015.txt.
 #
 #   1. 0100 — el emisor en la factura, el origen «lote» (CHECK que amplía:
 #      declarado en su cabecera, con su prueba de staging), el lote, sus

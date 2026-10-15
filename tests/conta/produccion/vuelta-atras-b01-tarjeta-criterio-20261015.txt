@@ -1,0 +1,5 @@
+# Vuelta atrás de la tanda viva (modo «vuelta_atras»), en orden inverso.
+# B01 · 0192: vuelve al criterio de la 0190 (13 a 19 cifras que pasan Luhn) y
+# quita _bank_parece_tarjeta. Lo tapado mientras tanto se queda tapado.
+cuenta: scripts/conta/produccion/cuentas/tarjeta-criterio.sql
+supabase/vuelta-atras/20261101T0192_b01_tarjeta_criterio.down.sql
