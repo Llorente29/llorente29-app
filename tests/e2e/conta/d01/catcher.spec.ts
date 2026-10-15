@@ -107,28 +107,45 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   // Lo que dice la quincena (no el aviso de staging, que también es un role=status).
   const dice = page.locator('[data-prueba="hecho-quincena"]')
   if (!(await page.locator('[data-prueba="cosa-por-aclarar"]').count())) {
-    await page.getByRole('button', { name: 'Cruzar otra vez' }).click()
+    await page.getByRole('button', { name: 'Volver a comprobar' }).click()
     await expect(dice).toContainText('Cruzada la 2.ª quincena de septiembre de 2026', { timeout: 60_000 })
   }
   const g236 = page.locator('[data-prueba="cosa-por-aclarar"]', { hasText: 'G236' })
   await expect(g236).toContainText('G236 del 23/09 a las 16:29: cancelado, con comisión cobrada (0,79 €) y ningún rider que lo facture.')
-  await expect(page.locator('[data-prueba="cosa-por-aclarar"]')).toHaveCount(1)
-  for (const g of ['Riders', 'Flotas', 'Catcher']) await expect(page.getByRole('region', { name: g, exact: true })).toBeVisible()
-  await expect(page.getByText(/^2\.ª quincena de septiembre de 2026 · 5 facturas · 54,69 € · cuadra con los pedidos salvo 1$/)).toBeVisible()
-  await sinMarca(page, 'la quincena')
-  await capturar(page, 'catcher-quincena')
-
-  // 4 · Reclamar (diciendo qué) y volver a abrir: cada botón dice lo que ha hecho.
   // Si otra pasada la dejó decidida (staging es compartido), se vuelve a abrir antes.
   if (await g236.getByRole('button', { name: 'Volver a abrir' }).count()) {
     await g236.getByRole('button', { name: 'Volver a abrir' }).click()
     await expect(dice).toContainText('Vuelto a abrir (G236).', { timeout: 30_000 })
   }
+  await expect(page.locator('[data-prueba="cosa-por-aclarar"]')).toHaveCount(1)
+  for (const g of ['Riders', 'Flotas', 'Catcher']) await expect(page.getByRole('region', { name: g, exact: true })).toBeVisible()
+  // Retoque 6: bajo el título, solo si cuadra; y en el G236, la frase sin un título que diga lo mismo.
+  await expect(page.locator('[data-prueba="cuadra"]')).toHaveText('Cuadra con los pedidos salvo 1')
+  await expect(g236.locator('.cxk-pedido')).toHaveCount(0)
+  // Retoque 3: la comisión que no cuadra, dicha.
+  await expect(page.locator('.cxk-diferencia')).toHaveText('0,79 € de más')
+  // Retoque 1: abierta, las cuatro dicen «por aclarar».
+  const tarjeta = page.locator('[data-prueba="tarjeta-por-aclarar"]')
+  const bloqueCatcher = page.getByRole('region', { name: 'Catcher', exact: true })
+  await expect(tarjeta).toContainText('Por aclarar1')
+  await expect(bloqueCatcher.locator('h3')).toContainText('1 por aclarar')
+  await expect(bloqueCatcher).toContainText('Por aclarar (1)')
+  await sinMarca(page, 'la quincena')
+  await capturar(page, 'catcher-quincena')
+
+  // 4 · Reclamar (diciendo qué) y volver a abrir: cada botón dice lo que ha hecho.
   await g236.getByRole('button', { name: 'Reclamar' }).click()
   await g236.getByLabel('Qué se reclama a Catcher').fill('La comisión de un pedido cancelado')
   await g236.getByRole('button', { name: 'Apuntar la reclamación' }).click()
   await expect(dice).toContainText('Apuntado para reclamar a Catcher (G236). A su factura le queda 1 cosa.', { timeout: 30_000 })
   await expect(g236).toContainText('Reclamada a Catcher')
+  // Retoque 1: reclamada, las cuatro dicen «Reclamada» y ninguna «por aclarar».
+  await expect(tarjeta).toContainText('Por aclarar0')
+  await expect(tarjeta).toContainText('1 reclamada · 0 dadas por buenas')
+  await expect(bloqueCatcher.locator('h3')).toContainText('1 reclamada')
+  await expect(bloqueCatcher).not.toContainText(/por aclarar/i)
+  await expect(bloqueCatcher).toContainText('Reclamada')
+  await expect(page.locator('[data-prueba="cuadra"]')).toHaveText('Cuadra con los pedidos salvo 1 (1 reclamada)')
   await capturar(page, 'catcher-reclamada')
   await g236.getByRole('button', { name: 'Volver a abrir' }).click()
   await expect(dice).toContainText('Vuelto a abrir (G236).', { timeout: 30_000 })
@@ -140,9 +157,15 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
     await pagar.click()
     await expect(dice).toContainText('Propuesto el pago de la 2.ª quincena de septiembre de 2026: 5 facturas, 54,69 € desde la 40700001 «Saldo prepago Catcher» (serie 3).', { timeout: 30_000 })
   }
-  await expect(page.getByRole('button', { name: 'Pago propuesto' })).toBeDisabled({ timeout: 30_000 })
+  // Retoque 5: el pago propuesto se ve hecho, y lleva a su asiento.
+  const asiento = page.getByRole('link', { name: '✓ Pago propuesto · Ver asiento' })
+  await expect(asiento).toBeVisible({ timeout: 30_000 })
+  await expect(asiento).toHaveAttribute('href', /\/conta\/.+/)
   const saldo = page.locator('section.cxk-saldo')
   await expect(saldo).toContainText('Saldo prepago Catcher')
+  // Retoque 2: en palabras, y lo sin validar aparte.
+  await expect(saldo.locator('[data-prueba="saldo-frase"]')).toHaveText(/^Has recargado [\d.]+,\d\d € · se han pagado [\d.]+,\d\d € · te quedan -?[\d.]+,\d\d €$/)
+  await expect(saldo.locator('[data-prueba="saldo-sin-validar"]')).toHaveText(/^De esos pagos, [\d.]+,\d\d € aún sin validar\.$/)
   await saldo.locator('input[data-prueba="saldo-portal"]').fill('100,00')
   await saldo.getByRole('button', { name: 'Comprobar' }).click()
   await expect(saldo.getByRole('status')).toContainText(/^No coincide: el portal dice 100,00 € y la 40700001 /, { timeout: 30_000 })

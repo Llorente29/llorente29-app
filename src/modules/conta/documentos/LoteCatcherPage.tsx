@@ -1,8 +1,7 @@
 // src/modules/conta/documentos/LoteCatcherPage.tsx
 //
 // E05 · Una quincena de Catcher subida, dentro de Documentos y con su estilo:
-//   · el resumen en una línea («2.ª quincena de septiembre de 2026 · 58
-//     facturas · 1.062,25 € · cuadra con los pedidos salvo 1») y sus cifras;
+//   · bajo el título, solo «Cuadra con los pedidos salvo 1», y las cifras;
 //   · «Por aclarar», cada cosa con su pedido, su porqué y sus botones: «Dar por
 //     buena», «Reclamar» (diciendo qué) y «Volver a abrir». Lo ya decidido se
 //     sigue viendo, con quién y qué (regla 7: nada se esconde);
@@ -10,10 +9,14 @@
 //     «Por aclarar»;
 //   · el pago contra la 40700001 y el saldo prepago.
 // Cada botón dice lo que ha hecho o por qué no (regla 8).
+// Retoques de Julio (15/10): lo abierto y lo reclamado salen de UNA cuenta
+// (catcherCuenta) en la tarjeta, cada bloque y cada fila; la comisión que no
+// cuadra, en ámbar; «Volver a comprobar»; el pago propuesto, hecho y con su
+// asiento; y nada dicho dos veces.
 
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
+import { rutaAsiento, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -21,7 +24,10 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import { cuando, resumenLote } from '@/modules/conta/lib/catcherCruces'
+import { cuando } from '@/modules/conta/lib/catcherCruces'
+import {
+  apoyoDeLaTarjeta, cuadraConLosPedidos, cuentaDeGrupo, diferenciaDeComision, estadoDeFactura, etiquetasDe, type Cuenta,
+} from '@/modules/conta/lib/catcherCuenta'
 import type { TipoFactura } from '@/modules/conta/lib/catcherQuincena'
 import {
   aclarar, cruzarLote, leerLote, proponerPagoLote, SALDO_PREPAGO, type CosaPorAclarar, type FacturaDeLote,
@@ -51,7 +57,7 @@ export default function LoteCatcherPage() {
 
   if (!activa || !accountId) return <div className="cx-tarjeta"><Vacio titulo="Aún no hay ninguna empresa." explicacion="Da de alta tu empresa y aquí llegan sus facturas." /></div>
   const d = datos.datos
-  const abiertas = d ? d.porAclarar.filter((x) => x.estado === 'abierta') : []
+  const dif = d ? diferenciaDeComision(d.comision) : null
 
   return (
     <div className="cxl-pagina">
@@ -72,14 +78,16 @@ export default function LoteCatcherPage() {
             </div>
             <div className="cxr-herramientas">
               <button type="button" className="cx-boton-sec" disabled={!!paso}
-                onClick={() => void hacer('Cruzando con los pedidos…', async () => (await cruzarLote(accountId, activa.id, loteId, userName)).texto)}>Cruzar otra vez</button>
-              <button type="button" className="cx-boton" disabled={!!paso || !!d.lote.pago}
-                onClick={() => void hacer('Proponiendo el pago…', async () => (await proponerPagoLote(loteId, userName)).texto)}>
-                {d.lote.pago ? 'Pago propuesto' : `Proponer el pago desde la ${SALDO_PREPAGO.cuenta}`}
-              </button>
+                onClick={() => void hacer('Comprobando con los pedidos…', async () => (await cruzarLote(accountId, activa.id, loteId, userName)).texto)}>Volver a comprobar</button>
+              {d.lote.pago
+                ? <Link to={rutaAsiento(d.lote.pago)} className="cxk-hecho-enlace">✓ Pago propuesto · Ver asiento</Link>
+                : <button type="button" className="cx-boton" disabled={!!paso}
+                    onClick={() => void hacer('Proponiendo el pago…', async () => (await proponerPagoLote(loteId, userName)).texto)}>
+                    {`Proponer el pago desde la ${SALDO_PREPAGO.cuenta}`}
+                  </button>}
             </div>
           </div>
-          <p className="cxk-resumen"><strong>{resumenLote({ etiqueta: d.lote.etiqueta, facturas: d.lote.facturas, total: d.lote.total, cruzado: d.lote.cruzado, abiertas: d.lote.abiertas })}</strong></p>
+          <p className="cxk-resumen" data-prueba="cuadra"><strong>{cuadraConLosPedidos(d.lote.cruzado, d.lote.cuenta)}</strong></p>
 
           <div role="status" aria-live="polite" data-prueba="hecho-quincena">
             {paso && <div className="cx-tarjeta">{paso}</div>}
@@ -92,17 +100,18 @@ export default function LoteCatcherPage() {
               <span className="cxr-cifra-apoyo">{GRUPOS.map((g) => `${d.facturas.filter((f) => f.tipo === g.tipo).length} ${g.nombre.toLowerCase()}`).join(' · ')}</span></div>
             <div className="cxr-cifra"><span className="cxr-cifra-etiqueta">Total</span><span className="cxr-cifra-valor">{eurosExactos(d.lote.total)}</span>
               <span className="cxr-cifra-apoyo">lo que baja la {SALDO_PREPAGO.cuenta}</span></div>
-            <div className="cxr-cifra"><span className="cxr-cifra-etiqueta">Por aclarar</span><span className="cxr-cifra-valor">{abiertas.length}</span>
-              <span className="cxr-cifra-apoyo">{d.lote.cruzado ? `${d.porAclarar.length - abiertas.length} ya decididas` : 'sin cruzar todavía'}</span></div>
+            <div className="cxr-cifra" data-prueba="tarjeta-por-aclarar"><span className="cxr-cifra-etiqueta">Por aclarar</span><span className="cxr-cifra-valor">{d.lote.cuenta.abiertas}</span>
+              <span className="cxr-cifra-apoyo">{apoyoDeLaTarjeta(d.lote.cruzado, d.lote.cuenta)}</span></div>
             <div className="cxr-cifra"><span className="cxr-cifra-etiqueta">Comisión de Catcher</span>
               <span className="cxr-cifra-valor">{d.comision ? eurosExactos(d.comision.cobrada) : '—'}</span>
-              <span className="cxr-cifra-apoyo">{d.comision ? `por pedido entregado serían ${eurosExactos(d.comision.esperada)}` : 'sin cruzar todavía'}</span></div>
+              <span className="cxr-cifra-apoyo">{d.comision ? `por pedido entregado serían ${eurosExactos(d.comision.esperada)}` : 'sin cruzar todavía'}</span>
+              {dif && <span className="cxk-diferencia">{eurosExactos(dif.centimos / 100)} {dif.sentido}</span>}</div>
           </div>
 
-          <PorAclarar cosas={d.porAclarar} ocupado={!!paso}
+          <PorAclarar cosas={d.porAclarar} cuenta={d.lote.cuenta} ocupado={!!paso}
             alDecidir={(c, decision, nota) => void hacer('Guardando…', () => aclarar(c.id, decision, nota, userName))} />
 
-          {GRUPOS.map((g) => <Grupo key={g.tipo} nombre={g.nombre} facturas={d.facturas.filter((f) => f.tipo === g.tipo)} movil={movil} />)}
+          {GRUPOS.map((g) => <Grupo key={g.tipo} nombre={g.nombre} facturas={d.facturas.filter((f) => f.tipo === g.tipo)} porFactura={d.porFactura} movil={movil} />)}
 
           <SaldoPrepago key={vuelta} companyId={activa.id} quien={userName} />
         </>
@@ -111,8 +120,8 @@ export default function LoteCatcherPage() {
   )
 }
 
-function PorAclarar({ cosas, ocupado, alDecidir }: {
-  cosas: CosaPorAclarar[]; ocupado: boolean
+function PorAclarar({ cosas, cuenta, ocupado, alDecidir }: {
+  cosas: CosaPorAclarar[]; cuenta: Cuenta; ocupado: boolean
   alDecidir: (c: CosaPorAclarar, decision: 'aceptada' | 'reclamada' | 'abierta', nota: string | null) => void
 }) {
   const [reclamando, setReclamando] = useState<string | null>(null)
@@ -120,13 +129,14 @@ function PorAclarar({ cosas, ocupado, alDecidir }: {
   const orden = [...cosas].sort((a, b) => Number(a.estado !== 'abierta') - Number(b.estado !== 'abierta'))
   return (
     <section className="cx-tarjeta cxk-aclarar" aria-labelledby="cxk-aclarar-titulo">
-      <h3 id="cxk-aclarar-titulo">Por aclarar <span className="cxk-contador">{cosas.filter((c) => c.estado === 'abierta').length}</span></h3>
+      <h3 id="cxk-aclarar-titulo">Por aclarar <span className="cxk-contador">{cuenta.abiertas}</span></h3>
       {cosas.length === 0 && <p className="cxr-apoyo">Nada: todos los pedidos, la tarifa, la comisión y los totales cuadran.</p>}
       <ul className="cxk-cosas">
         {orden.map((c) => (
           <li key={c.id} className={`cxk-cosa cxk-cosa-${c.estado}`} data-prueba="cosa-por-aclarar">
             <div className="cxk-cosa-cabeza">
-              <span className="cxk-pedido">{c.codigo ? `${c.codigo} · ${cuando(c.momento)}` : 'Toda la quincena'}</span>
+              {/* Retoque 6: si la frase ya nombra el pedido, el título lo diría dos veces. */}
+              {!(c.codigo && c.texto.includes(c.codigo)) && <span className="cxk-pedido">{c.codigo ? `${c.codigo} · ${cuando(c.momento)}` : 'Toda la quincena'}</span>}
               {c.factura && <span className="cxr-apoyo cxr-mono">{c.factura}</span>}
               <span className={`cxk-estado cxk-estado-${c.estado}`}>{ESTADO[c.estado]}</span>
             </div>
@@ -153,17 +163,18 @@ function PorAclarar({ cosas, ocupado, alDecidir }: {
   )
 }
 
-const estadoFactura = (f: FacturaDeLote) =>
-  f.sinProveedor ? 'Sin ficha del proveedor' : f.aclarar > 0 ? `Por aclarar (${f.aclarar})` : f.confianza === 'seguro' ? 'Cuadra' : 'Por mirar'
-
-function Grupo({ nombre, facturas, movil }: { nombre: string; facturas: FacturaDeLote[]; movil: boolean }) {
+function Grupo({ nombre, facturas, porFactura, movil }: { nombre: string; facturas: FacturaDeLote[]; porFactura: Map<string, Cuenta>; movil: boolean }) {
   if (!facturas.length) return null
   const total = facturas.reduce((t, f) => t + Math.round(f.total * 100), 0) / 100
-  const porAclarar = facturas.filter((f) => f.aclarar > 0 || f.confianza !== 'seguro').length
+  const etiquetas = etiquetasDe(cuentaDeGrupo(facturas.map((f) => f.id), porFactura))
+  const estado = (f: FacturaDeLote) => {
+    const e = estadoDeFactura(porFactura.get(f.id), f)
+    return <span className={`cxk-estado cxk-estado-${e.tono}`}>{e.texto}</span>
+  }
   return (
     <section className="cx-tarjeta cxk-grupo" aria-label={nombre}>
       <h3>{nombre} <span className="cxr-apoyo">· {facturas.length} {facturas.length === 1 ? 'factura' : 'facturas'} · {eurosExactos(total)}</span>
-        {porAclarar > 0 && <span className="cxk-contador">{porAclarar} por aclarar</span>}</h3>
+        {etiquetas.map((e) => <span key={e.tono} className={`cxk-contador cxk-contador-${e.tono}`}>{e.texto}</span>)}</h3>
       {movil ? (
         <div className="cxr-tarjetas">
           {facturas.map((f) => (
@@ -171,7 +182,7 @@ function Grupo({ nombre, facturas, movil }: { nombre: string; facturas: FacturaD
               <span className="cxr-nombre">{f.emisor ?? 'Sin emisor'}</span>
               <span className="cxr-apoyo cxr-mono">{f.numero}</span>
               <span className="cxr-apoyo">{f.local ?? 'Varios locales'} · {eurosExactos(f.total)}</span>
-              <span className={`cxk-estado ${f.aclarar > 0 || f.confianza !== 'seguro' ? 'cxk-estado-abierta' : 'cxk-estado-aceptada'}`}>{estadoFactura(f)}</span>
+              {estado(f)}
             </Link>
           ))}
         </div>
@@ -185,7 +196,7 @@ function Grupo({ nombre, facturas, movil }: { nombre: string; facturas: FacturaD
                 <td className="cxr-mono">{f.numero}</td>
                 <td>{f.local ?? 'Varios locales'}</td>
                 <td className="cxr-der cxr-mono">{eurosExactos(f.total)}</td>
-                <td><span className={`cxk-estado ${f.aclarar > 0 || f.confianza !== 'seguro' ? 'cxk-estado-abierta' : 'cxk-estado-aceptada'}`}>{estadoFactura(f)}</span></td>
+                <td>{estado(f)}</td>
               </tr>
             ))}
           </tbody>

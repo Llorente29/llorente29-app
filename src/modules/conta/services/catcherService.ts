@@ -15,6 +15,7 @@ import { uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptServic
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
 import { comprobarPdf, leerFacturas, leerQuincena, loteParaRegistrar, reconocer, type Fichero, type PdfSubido, type PedidoExcel, type Quincena, type TipoFactura } from '@/modules/conta/lib/catcherQuincena'
 import { cruzar, type Cruce, type PedidoApp, type Tarifa } from '@/modules/conta/lib/catcherCruces'
+import { cuentaDelLote, type Cuenta, type EstadoCosa } from '@/modules/conta/lib/catcherCuenta'
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
 const sha256 = async (b: Uint8Array) => hex(await crypto.subtle.digest('SHA-256', new Uint8Array(b)))
@@ -152,6 +153,8 @@ export async function proponerPagoLote(loteId: string, quien: string | null): Pr
 export interface SaldoPrepago {
   existe: boolean; cuenta: string; nombre?: string; texto?: string
   recargas?: number; pagos?: number; saldo?: number; saldoValidado?: number; propuesto?: number; ultimoMovimiento?: string | null
+  /** De los pagos, los que están en asientos aún sin validar (propuestos o en borrador). */
+  pagosSinValidar?: number
   ultimaComprobacion?: { cuando: string; portal: number; app: number; coincide: boolean; quien: string | null } | null
 }
 
@@ -160,7 +163,17 @@ export async function saldoPrepago(companyId: string): Promise<SaldoPrepago> {
   hayBase()
   const r = await rpc<Record<string, unknown>>('conta_catcher_saldo', { p_company: companyId })
   const n = (x: unknown) => (x == null ? undefined : Number(x))
+  // La función da lo propuesto neto (recargas menos pagos); para decir «de esos
+  // pagos, Y € aún sin validar» hace falta el haber de los asientos sin validar.
+  let pagosSinValidar: number | undefined
+  if (r.existe === true) {
+    const { data, error } = await tabla('journal_line').select('credit, journal_entry!inner(status), company_account!inner(code)')
+      .eq('company_id', companyId).eq('company_account.code', SALDO_PREPAGO.cuenta).in('journal_entry.status', ['propuesto', 'borrador']).gt('credit', 0)
+    if (error) throw new Error(`No se han podido leer los pagos sin validar de la ${SALDO_PREPAGO.cuenta}: ${error.message}`)
+    pagosSinValidar = ((data ?? []) as { credit: number }[]).reduce((t, l) => t + Math.round(Number(l.credit) * 100), 0) / 100
+  }
   return {
+    pagosSinValidar,
     existe: r.existe === true, cuenta: String(r.cuenta ?? SALDO_PREPAGO.cuenta), nombre: r.nombre == null ? undefined : String(r.nombre), texto: r.texto == null ? undefined : String(r.texto),
     recargas: n(r.recargas), pagos: n(r.pagos), saldo: n(r.saldo), saldoValidado: n(r.saldo_validado), propuesto: n(r.propuesto),
     ultimoMovimiento: r.ultimo_movimiento == null ? null : String(r.ultimo_movimiento),
@@ -179,13 +192,15 @@ export async function comprobarSaldoPortal(companyId: string, saldoPortal: numbe
 
 export interface LoteFila {
   id: string; etiqueta: string; desde: string; hasta: string; facturas: number; total: number
-  cruzado: boolean; abiertas: number; pago: string | null; subido: string; quien: string | null
+  cruzado: boolean; pago: string | null; subido: string; quien: string | null
+  /** Lo abierto, lo reclamado y lo dado por bueno ahora mismo (catcherCuenta: una sola cuenta para todas las pantallas). */
+  cuenta: Cuenta
 }
 
-type FilaLote = { id: string; label: string; period_from: string; period_to: string; invoice_count: number; grand_total: number | null; crossed_at: string | null; cross_summary: { abiertas?: number } | null; payment_entry_id: string | null; created_at: string; created_by_name: string | null }
-const deFila = (r: FilaLote): LoteFila => ({
+type FilaLote = { id: string; label: string; period_from: string; period_to: string; invoice_count: number; grand_total: number | null; crossed_at: string | null; cross_summary: unknown; payment_entry_id: string | null; created_at: string; created_by_name: string | null }
+const deFila = (r: FilaLote, cuenta: Cuenta): LoteFila => ({
   id: r.id, etiqueta: r.label, desde: r.period_from, hasta: r.period_to, facturas: r.invoice_count, total: Number(r.grand_total ?? 0),
-  cruzado: !!r.crossed_at, abiertas: Number(r.cross_summary?.abiertas ?? 0), pago: r.payment_entry_id, subido: r.created_at, quien: r.created_by_name,
+  cruzado: !!r.crossed_at, pago: r.payment_entry_id, subido: r.created_at, quien: r.created_by_name, cuenta,
 })
 const COLUMNAS_LOTE = 'id, label, period_from, period_to, invoice_count, grand_total, crossed_at, cross_summary, payment_entry_id, created_at, created_by_name'
 
@@ -194,18 +209,27 @@ export async function leerLotes(accountId: string, companyId: string): Promise<L
   hayBase()
   const { data, error } = await tabla('supplier_batch').select(COLUMNAS_LOTE).eq('account_id', accountId).eq('company_id', companyId).eq('provider', 'catcher').order('period_from', { ascending: false })
   if (error) throw new Error(`No se han podido leer las quincenas de Catcher: ${error.message}`)
-  return ((data ?? []) as FilaLote[]).map(deFila)
+  const filas = (data ?? []) as FilaLote[]
+  if (!filas.length) return []
+  const { data: is, error: e2 } = await tabla('supplier_batch_issue').select('batch_id, supplier_invoice_id, status').eq('account_id', accountId).in('batch_id', filas.map((f) => f.id))
+  if (e2) throw new Error(`No se ha podido leer lo que queda por aclarar: ${e2.message}`)
+  const cosas = (is ?? []) as { batch_id: string; supplier_invoice_id: string | null; status: EstadoCosa }[]
+  return filas.map((f) => deFila(f, cuentaDelLote(cosas.filter((c) => c.batch_id === f.id).map((c) => ({ facturaId: c.supplier_invoice_id, estado: c.status }))).total))
 }
 
 export interface FacturaDeLote {
   id: string; numero: string; tipo: TipoFactura; emisor: string | null; nif: string | null; local: string | null
-  total: number; confianza: 'seguro' | 'probable' | 'duda' | null; aclarar: number; estado: string; sinProveedor: boolean
+  total: number; confianza: 'seguro' | 'probable' | 'duda' | null; estado: string; sinProveedor: boolean
 }
 export interface CosaPorAclarar {
   id: string; factura: string | null; facturaId: string | null; motivo: string; codigo: string | null; momento: string | null
   texto: string; estado: 'abierta' | 'aceptada' | 'reclamada'; nota: string | null; quien: string | null
 }
-export interface LoteDetalle { lote: LoteFila; facturas: FacturaDeLote[]; porAclarar: CosaPorAclarar[]; comision: { esperada: number; cobrada: number } | null }
+export interface LoteDetalle {
+  lote: LoteFila; facturas: FacturaDeLote[]; porAclarar: CosaPorAclarar[]; comision: { esperada: number; cobrada: number } | null
+  /** La cuenta de cada factura, de la misma pasada que lote.cuenta. */
+  porFactura: Map<string, Cuenta>
+}
 
 /** Una quincena con sus facturas (agrupables por tipo) y lo que queda por aclarar. */
 export async function leerLote(accountId: string, loteId: string): Promise<LoteDetalle> {
@@ -218,11 +242,11 @@ export async function leerLote(accountId: string, loteId: string): Promise<LoteD
   ])
   for (const r of [l, fs, is, ls]) if (r.error) throw new Error(`No se ha podido leer la quincena: ${r.error.message}`)
   const locales = new Map(((ls.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name]))
-  type F = { id: string; invoice_number: string; issuer_name: string | null; issuer_tax_id: string | null; location_id: string | null; grand_total: number; reading_confidence: FacturaDeLote['confianza']; reading: { lote?: { tipo?: TipoFactura }; cruce?: { aclarar?: number } } | null; status: string; supplier_id: string | null }
+  type F = { id: string; invoice_number: string; issuer_name: string | null; issuer_tax_id: string | null; location_id: string | null; grand_total: number; reading_confidence: FacturaDeLote['confianza']; reading: { lote?: { tipo?: TipoFactura } } | null; status: string; supplier_id: string | null }
   const facturas = ((fs.data ?? []) as F[]).map((f): FacturaDeLote => ({
     id: f.id, numero: f.invoice_number, tipo: f.reading?.lote?.tipo ?? 'rider', emisor: f.issuer_name, nif: f.issuer_tax_id,
     local: f.location_id ? locales.get(f.location_id) ?? null : null, total: Number(f.grand_total), confianza: f.reading_confidence,
-    aclarar: Number(f.reading?.cruce?.aclarar ?? 0), estado: f.status, sinProveedor: !f.supplier_id,
+    estado: f.status, sinProveedor: !f.supplier_id,
   }))
   const numeroDe = new Map(facturas.map((f) => [f.id, f.numero]))
   type I = { id: string; supplier_invoice_id: string | null; reason: string; order_code: string | null; ordered_at: string | null; text: string; status: CosaPorAclarar['estado']; note: string | null; resolved_by_name: string | null }
@@ -230,7 +254,8 @@ export async function leerLote(accountId: string, loteId: string): Promise<LoteD
     id: i.id, facturaId: i.supplier_invoice_id, factura: i.supplier_invoice_id ? numeroDe.get(i.supplier_invoice_id) ?? null : null, motivo: i.reason,
     codigo: i.order_code, momento: i.ordered_at, texto: i.text, estado: i.status, nota: i.note, quien: i.resolved_by_name,
   }))
-  const lote = l.data as FilaLote & { cross_summary: { abiertas?: number; totales?: { comisionEsperada?: number; comisionCobrada?: number } } | null }
+  const lote = l.data as FilaLote & { cross_summary: { totales?: { comisionEsperada?: number; comisionCobrada?: number } } | null }
   const t = lote.cross_summary?.totales
-  return { lote: deFila(lote), facturas, porAclarar, comision: t && t.comisionCobrada != null ? { esperada: Number(t.comisionEsperada ?? 0), cobrada: Number(t.comisionCobrada) } : null }
+  const cuenta = cuentaDelLote(porAclarar)
+  return { lote: deFila(lote, cuenta.total), facturas, porAclarar, porFactura: cuenta.porFactura, comision: t && t.comisionCobrada != null ? { esperada: Number(t.comisionEsperada ?? 0), cobrada: Number(t.comisionCobrada) } : null }
 }

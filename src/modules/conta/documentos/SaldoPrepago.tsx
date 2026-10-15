@@ -1,7 +1,8 @@
 // src/modules/conta/documentos/SaldoPrepago.tsx
 //
 // E05 · El saldo prepago de Catcher (la 40700001 «Saldo prepago Catcher»): lo
-// que hay en la contabilidad (recargas menos pagos, con lo propuesto aparte) y
+// que hay en la contabilidad, en palabras («Has recargado X € · se han pagado
+// Y € · te quedan Z €», y aparte lo que de esos pagos aún no está validado) y
 // la casilla para escribir el saldo que enseña el portal. Al comprobar, dice
 // si coincide y cuánto no (regla 8: confirma con contenido o falla en pantalla).
 // Lo enseñan la quincena (LoteCatcherPage) y la ficha de Catcher.
@@ -35,20 +36,18 @@ export function SaldoPrepago({ companyId, quien }: { companyId: string; quien: s
 
   return (
     <section className="cx-tarjeta cxk-saldo" aria-labelledby="cxk-saldo-titulo">
-      <h3 id="cxk-saldo-titulo">Saldo prepago · {SALDO_PREPAGO.cuenta}</h3>
+      <h3 id="cxk-saldo-titulo">{s?.nombre ?? SALDO_PREPAGO.nombre} · {SALDO_PREPAGO.cuenta}</h3>
       {saldo.error && <div className="cx-error" role="alert">{saldo.error}</div>}
       {s && !s.existe && <p className="cxr-apoyo">{s.texto}</p>}
       {s && s.existe && (
         <>
-          <div className="cxk-saldo-cifra">
-            <span className="cxr-cifra-valor">{eurosExactos(s.saldo ?? 0)}</span>
-            <span className="cxr-apoyo">{s.nombre ?? SALDO_PREPAGO.nombre}</span>
-          </div>
-          <dl className="cxk-saldo-desglose">
-            <div><dt>Recargas</dt><dd>{eurosExactos(s.recargas ?? 0)}</dd></div>
-            <div><dt>Pagos</dt><dd>{eurosExactos(s.pagos ?? 0)}</dd></div>
-            {Math.round((s.propuesto ?? 0) * 100) !== 0 && <div><dt>Sin validar</dt><dd>{eurosExactos(s.propuesto ?? 0)}</dd></div>}
-          </dl>
+          {/* Retoque 2 (Julio, 15/10): en palabras, y lo sin validar aparte. */}
+          <p className="cxk-saldo-frase" data-prueba="saldo-frase">
+            Has recargado <strong>{eurosExactos(s.recargas ?? 0)}</strong> · se han pagado <strong>{eurosExactos(s.pagos ?? 0)}</strong> · te quedan <strong>{eurosExactos(s.saldo ?? 0)}</strong>
+          </p>
+          {Math.round((s.pagosSinValidar ?? 0) * 100) !== 0 && (
+            <p className="cxr-apoyo" data-prueba="saldo-sin-validar">De esos pagos, {eurosExactos(s.pagosSinValidar ?? 0)} aún sin validar.</p>
+          )}
           {s.ultimaComprobacion && (
             <p className="cxr-apoyo">
               La última vez ({diaMes(s.ultimaComprobacion.cuando.slice(0, 10))}{s.ultimaComprobacion.quien ? `, ${s.ultimaComprobacion.quien}` : ''}), el portal decía {eurosExactos(Number(s.ultimaComprobacion.portal))}: {s.ultimaComprobacion.coincide ? 'coincidía' : 'no coincidía'}.

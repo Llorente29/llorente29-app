@@ -125,8 +125,8 @@ describe('la tarifa: fechada y con sus reglas', () => {
 describe('resumenLote: la línea de cada quincena', () => {
   it('cuadra, salvo N, o sin cruzar', () => {
     const l = { etiqueta: '2.ª quincena de septiembre de 2026', facturas: 58, total: 1062.25 }
-    expect(resumenLote({ ...l, cruzado: true, abiertas: 1 })).toBe('2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 € · cuadra con los pedidos salvo 1')
-    expect(resumenLote({ ...l, cruzado: true, abiertas: 0 })).toBe('2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 € · cuadra con los pedidos')
-    expect(resumenLote({ ...l, facturas: 1, cruzado: false, abiertas: 0 })).toBe('2.ª quincena de septiembre de 2026 · 1 factura · 1.062,25 € · sin cruzar con los pedidos todavía')
+    expect(resumenLote({ ...l, cruzado: true, cuenta: { abiertas: 1, reclamadas: 0, aceptadas: 0 } })).toBe('2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 € · cuadra con los pedidos salvo 1')
+    expect(resumenLote({ ...l, cruzado: true, cuenta: { abiertas: 0, reclamadas: 0, aceptadas: 2 } })).toBe('2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 € · cuadra con los pedidos')
+    expect(resumenLote({ ...l, facturas: 1, cruzado: false, cuenta: { abiertas: 0, reclamadas: 0, aceptadas: 0 } })).toBe('2.ª quincena de septiembre de 2026 · 1 factura · 1.062,25 € · sin cruzar con los pedidos todavía')
   })
 })

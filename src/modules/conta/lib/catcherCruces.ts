@@ -26,6 +26,7 @@
 
 import type { FacturaDelLote, PedidoExcel, TipoFactura } from '@/modules/conta/lib/catcherQuincena'
 import { eurosExactos } from '@/modules/conta/lib/formato'
+import { cuadraConLosPedidos, type Cuenta } from '@/modules/conta/lib/catcherCuenta'
 
 // ── La tarifa (fechada y editable: supplier_rate) ────────────────────────────
 
@@ -293,9 +294,10 @@ export function resumenCruce(x: Cruce): string {
 /**
  * El resumen de un lote en una línea, como lo pide el encargo:
  * «2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 € · cuadra con los pedidos salvo 1».
- * `abiertas`: lo que queda por aclarar; sin cruzar, lo dice.
+ * `cuenta`: la de catcherCuenta (lo abierto y lo reclamado ahora); sin cruzar, lo dice.
  */
-export function resumenLote(l: { etiqueta: string; facturas: number; total: number; cruzado: boolean; abiertas: number }): string {
-  const cuadra = !l.cruzado ? 'sin cruzar con los pedidos todavía' : l.abiertas === 0 ? 'cuadra con los pedidos' : `cuadra con los pedidos salvo ${l.abiertas}`
+export function resumenLote(l: { etiqueta: string; facturas: number; total: number; cruzado: boolean; cuenta: Cuenta }): string {
+  const c = cuadraConLosPedidos(l.cruzado, l.cuenta)
+  const cuadra = c.charAt(0).toLowerCase() + c.slice(1)
   return `${l.etiqueta} · ${l.facturas} ${l.facturas === 1 ? 'factura' : 'facturas'} · ${eur(l.total)} · ${cuadra}`
 }

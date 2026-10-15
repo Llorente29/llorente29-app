@@ -153,6 +153,15 @@
 .cxk-lote { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); color: var(--cx-texto); text-decoration: none; font-size: 15px; }
 .cxk-lote:hover { border-color: var(--cx-azul-borde); }
 .cxk-contador { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--cx-ambar-suave); color: var(--cx-ambar); white-space: nowrap; }
+.cxk-contador-reclamada { background: var(--cx-azul-suave); color: var(--cx-azul); }
+/* Retoque 3: la comisión que no cuadra, en ámbar. */
+.cxk-diferencia { display: inline-block; margin-top: 4px; font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+/* Retoque 5: el pago ya propuesto se ve como hecho, y lleva a su asiento. */
+.cxk-hecho-enlace { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--cx-verde-oscuro); text-decoration: none; padding: 10px 4px; }
+.cxk-hecho-enlace:hover, .cxk-hecho-enlace:focus-visible { text-decoration: underline; }
+/* Retoque 2: el saldo prepago, en palabras. */
+.cxk-saldo-frase { font-size: 16px; margin: 4px 0; }
+.cxk-saldo-frase strong { font-variant-numeric: tabular-nums; }
 .cxk-cifras { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .cxk-cifras .cxr-cifra { cursor: default; }
 .cxk-cosas { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }

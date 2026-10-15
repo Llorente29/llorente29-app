@@ -16,6 +16,7 @@ import { rutaLoteCatcher } from '@/config/navegacion'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { resumen, LoteNoValido } from '@/modules/conta/lib/catcherQuincena'
 import { resumenLote } from '@/modules/conta/lib/catcherCruces'
+import { etiquetasDe } from '@/modules/conta/lib/catcherCuenta'
 import { abrirQuincena, cruzarLote, leerLotes, subirQuincena, type QuincenaAbierta } from '@/modules/conta/services/catcherService'
 
 const ACEPTA = '.zip,.xlsx,.xls,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -114,8 +115,8 @@ export function QuincenaCatcher({ accountId, companyId, quien }: { accountId: st
           {lotes.datos.map((l) => (
             <li key={l.id}>
               <Link to={rutaLoteCatcher(l.id)} className="cxk-lote">
-                <span>{resumenLote({ etiqueta: l.etiqueta, facturas: l.facturas, total: l.total, cruzado: l.cruzado, abiertas: l.abiertas })}</span>
-                {l.abiertas > 0 && <span className="cxk-contador" aria-label={`${l.abiertas} por aclarar`}>{l.abiertas} por aclarar</span>}
+                <span>{resumenLote({ etiqueta: l.etiqueta, facturas: l.facturas, total: l.total, cruzado: l.cruzado, cuenta: l.cuenta })}</span>
+                {etiquetasDe(l.cuenta).map((e) => <span key={e.tono} className={`cxk-contador cxk-contador-${e.tono}`}>{e.texto}</span>)}
               </Link>
             </li>
           ))}
