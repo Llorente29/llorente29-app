@@ -1,6 +1,3 @@
-# C06b · «Datos maestros e impuestos» en verde (Julio, 15/10): la semilla sin
-# sus rojos (dos NIF, dos 347 y el IGIC de la empresa B), y detrás las dos
-# pruebas del agente «libro» con el agente ejecutado entero con \i.
-supabase/seeds/conta/seed_c06b_semilla_verde_staging.sql
-supabase/staging/sql/20261011_c04_prueba_agente.sql
-supabase/staging/sql/20261015_c06b_prueba_agente_huecos.sql
+# C06b · El céntimo de redondeo en el IVA (Julio, 15/10): la prueba aplica la
+# migración DENTRO de su transacción (\i) y acaba en ROLLBACK. Staging no cambia.
+supabase/staging/sql/20261113_c06b_centimo_iva_prueba.sql

@@ -276,7 +276,7 @@ export function ventasDelDia(entrada: EntradaVentasDia): ResultadoVentasDia {
     }
   }
   if (cedidas.length) {
-    razones.push({ decision: `Fuera: ${cedidas.length} pedidos de marcas cedidas (${eurosExactos(resumen.cedidasFuera.total)})`, porque: 'son ventas del socio y su IVA es del socio: entran solo en su liquidación mensual, que comparas con estos tickets', cita: cita('ivaMediacionNombreAjeno') })
+    razones.push({ decision: `Fuera: ${cedidas.length} pedido${cedidas.length === 1 ? '' : 's'} de marcas cedidas (${eurosExactos(resumen.cedidasFuera.total)})`, porque: 'son ventas del socio y su IVA es del socio: entran solo en su liquidación mensual, que comparas con estos tickets', cita: cita('ivaMediacionNombreAjeno') })
   }
   if (cancelados.length) razones.push({ decision: `Fuera: ${cancelados.length} cancelado${cancelados.length === 1 ? '' : 's'}`, porque: 'cancelado antes de entregar no es venta' })
 
@@ -287,8 +287,8 @@ export function ventasDelDia(entrada: EntradaVentasDia): ResultadoVentasDia {
       origen: { tipo: 'sales_day', id: null }, lineas,
       confianza: peor('seguro', ...confs),
       porque: u
-        ? `${filas.length} tickets de tus marcas en ${e.nombreCanal(u.canalId)} cuadran con lo que cobra, al céntimo${calculada ? '; base calculada al ' + tipo + ' %' : ''}.`
-        : `${filas.length} tickets de tus marcas cuadran con lo que cobran las plataformas, al céntimo${calculada ? '; base calculada al ' + tipo + ' %' : ''}.`,
+        ? `${filas.length} ${filas.length === 1 ? 'ticket de tus marcas en ' + e.nombreCanal(u.canalId) + ' cuadra' : 'tickets de tus marcas en ' + e.nombreCanal(u.canalId) + ' cuadran'} con lo que cobra, al céntimo${calculada ? '; base calculada al ' + tipo + ' %' : ''}.`
+        : `${filas.length} ${filas.length === 1 ? 'ticket de tus marcas cuadra' : 'tickets de tus marcas cuadran'} con lo que cobran las plataformas, al céntimo${calculada ? '; base calculada al ' + tipo + ' %' : ''}.`,
       razones, avisos,
     },
     sinPropuesta: null,
