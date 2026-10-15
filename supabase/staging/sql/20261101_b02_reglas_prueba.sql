@@ -50,7 +50,9 @@ end $$;
 
 -- ── 1 · Sin la 40700001, PARA (y no toca nada) ─────────────────────────────
 savepoint sin_cuenta;
-delete from public.company_account where company_id = '3b34403a-a7d6-4a48-a8d7-737e8cababdc' and code = '40700001';
+-- En staging la 40700001 puede existir ya (y con asientos): le cambio el
+-- código dentro del savepoint, que se deshace (el id no cambia).
+update public.company_account set code = '40700099' where company_id = '3b34403a-a7d6-4a48-a8d7-737e8cababdc' and code = '40700001';
 \set ON_ERROR_STOP 0
 \ir ../../migrations/20261101T0210_b02_reglas_foodint.sql
 \set ON_ERROR_STOP 1
