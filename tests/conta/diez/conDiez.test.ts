@@ -1,6 +1,6 @@
 // C04b · R15 · El estado «con Diez» de un asiento de ventas, en palabras (R13).
 import { describe, expect, it } from 'vitest'
-import { cobroDe, estadoDiez, resumenSeleccion, textoResultado, type ConDiez, type EnvioDiez } from '../../../src/modules/conta/lib/conDiez'
+import { cobroDe, estadoDiez, numerosFolvyDiez, resumenSeleccion, textoResultado, type ConDiez, type EnvioDiez } from '../../../src/modules/conta/lib/conDiez'
 
 const doc = { ruta: 'a/e/x.pdf', nombre: 'x.pdf', bytes: 10, creadoEn: '2026-10-13T10:00:00Z', creadoPor: 'Julio' }
 const envio = (o: Partial<EnvioDiez> = {}): EnvioDiez => ({ status: 'enviado', serie: '1', numero: 1801, factura: 'UBR-FLO-20261001', intentos: 1, error: null, documento: 'adjunto', errorDocumento: null, ...o })
@@ -38,5 +38,26 @@ describe('cuántos y cuánto (R13)', () => {
   it('el resultado dice cuántos validados, con documento y en Diez', () => {
     expect(textoResultado([{ concepto: 'a', validado: true, documento: true, enDiez: true, texto: '' }, { concepto: 'b', validado: true, documento: true, enDiez: false, texto: '' }]))
       .toBe('2 de 2 validados · 2 con su documento guardado · 1 en Diez · 1 sin llegar a Diez (debajo, por qué).')
+  })
+})
+
+// 15/10 · Folvy y Diez ya no numeran igual (el Glovo 1803 no llegó a Diez, y el
+// siguiente Uber, el 1804 de Folvy, es el 1/1803 de Diez): el asiento enseña los dos.
+describe('los dos números de un asiento (15/10)', () => {
+  const env = (o: Partial<EnvioDiez>): EnvioDiez => ({ status: 'enviado', serie: '1', numero: 1803, factura: 'UBR-XXX-20261001', intentos: 1, error: null, documento: 'adjunto', errorDocumento: null, ...o })
+  const con = (envio: EnvioDiez | null): ConDiez => ({ entryId: 'e', canal: 'uber', nombreCanal: 'Uber', documento: null, envio })
+  it('enviado: «Folvy 1804 · Diez 1803»', () => {
+    expect(numerosFolvyDiez({ numero: 1804 }, con(env({})))).toBe('Folvy 1804 · Diez 1803')
+  })
+  it('validado y sin llegar (el Glovo del 01/10): lo dice', () => {
+    expect(numerosFolvyDiez({ numero: 1803 }, con(env({ status: 'pendiente', numero: null, serie: null })))).toBe('Folvy 1803 · aún no está en Diez')
+    expect(numerosFolvyDiez({ numero: 1803 }, con(null))).toBe('Folvy 1803 · aún no está en Diez')
+  })
+  it('una recibida, en la serie 2 de Diez: con su serie', () => {
+    expect(numerosFolvyDiez({ numero: 12 }, con(env({ serie: '2', numero: 3176 })))).toBe('Folvy 12 · Diez 2/3176')
+  })
+  it('sin número todavía, nada; sin Diez (no es de una plataforma), solo el propio', () => {
+    expect(numerosFolvyDiez({ numero: null }, con(env({})))).toBeNull()
+    expect(numerosFolvyDiez({ numero: 40 }, null)).toBe('Folvy 40')
   })
 })

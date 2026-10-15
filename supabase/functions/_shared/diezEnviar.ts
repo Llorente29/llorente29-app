@@ -167,6 +167,28 @@ export const cerradoEn = (bd: string, tipo: TipoEnvio) => tipo === 'recibidas'
 
 const yaEnviado = (e: EnvioFila | null) => !!e && (e.status === 'enviado' || e.status === 'enlazado')
 
+/**
+ * 15/10 · Lo que dice un envío que empezó y no terminó. El 1806 y el 1807 se
+ * validaron, la función leyó el asiento, el PDF y las credenciales de Diez, y
+ * se cortó sin contestar y sin haber escrito nada: ni en Diez ni en Folvy. Un
+ * validado nunca puede quedar sin su envío o su motivo, así que la fila se deja
+ * ANTES de la primera llamada a Diez, con esto; lo de después la sobrescribe.
+ */
+export const EN_MARCHA = 'el envío empezó y no terminó: se cortó antes de escribir en Diez (allí no se ha escrito nada). Pulsa «Reintentar»'
+
+/** La fila del envío antes de hablar con Diez (ver EN_MARCHA). No toca lo enviado ni un «enviando» a medias. */
+async function dejarRastro(previo: EnvioFila | null, a: { id: string; account_id: string; company_id: string }, conexion: string, p: PuertoEnvio): Promise<EnvioFila> {
+  if (previo && (yaEnviado(previo) || previo.last_error === 'enviando')) return previo
+  return p.guardar({
+    ...(previo ?? {
+      entry_id: a.id, account_id: a.account_id, company_id: a.company_id, kind: 'factura',
+      ext_year: null, ext_series: null, ext_number: null, ext_invoice_number: null, payload_hash: 'sin-enviar', status: 'pendiente', attempts: 0,
+      sent_at: null, document_id: null, document_status: null, document_error: null, document_attached_at: null,
+    }),
+    account_connector_id: conexion, last_error: EN_MARCHA,
+  } as EnvioFila)
+}
+
 function noLlega(motivo: string, reintentar = true): ResultadoEnvio {
   return { estado: 'no_llega', motivo, reintentar, texto: `No ha llegado a Diez: ${motivo}.` }
 }
@@ -347,6 +369,8 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
   const busca = plan.buscar?.() ?? { meses: [plano.mes], esLaMisma: (f: Factura) => String(f.Serie) === plano.serie && String(f.NumeroFactura) === plano.numero && String(f.CuentaCliente) === plano.cuenta }
   if ('motivo' in busca) return apuntar(busca.motivo, { account_connector_id: con.id }, busca.reintentar)
 
+  // 15/10: antes de hablar con Diez, el envío deja su fila: si se corta aquí (la página se cierra, Diez no contesta), queda con su motivo.
+  previo = await dejarRastro(previo, r, con.id, p)
   const diez = await p.cliente(con, { real })
   const ej = r.fecha.slice(0, 4)
   const delMes: Factura[] = []
@@ -482,6 +506,8 @@ export async function enviarContraasientoADiez(c: ContraasientoBD, p: PuertoEnvi
   }
   if (previo && previo.attempts >= MAX_INTENTOS) return noLlega(`ya van ${previo.attempts} intentos: lo tiene que mirar una persona`, false)
 
+  // 15/10: antes de hablar con Diez, el envío deja su fila: si se corta aquí (la página se cierra, Diez no contesta), queda con su motivo.
+  previo = await dejarRastro(previo, c, con.id, p)
   const diez = await p.cliente(con, { real })
   const hoy = hoyMadrid(p.ahora())
   const asiento = { fecha: r.fecha, local: r.local.nombre, canal: r.canal.slug, lineas: r.lineas.map((l) => ({ cuenta: l.cuenta, debe: Number(l.debe), haber: Number(l.haber), marca: l.marca, tipoIva: l.tipoIva })) }
@@ -596,6 +622,8 @@ export async function enviarContraasientoRecibidaADiez(c: ContraasientoBD, p: Pu
   const meses = mesesEntre(String(fd.FechaFactura).slice(0, 6), hoy.replace(/-/g, '').slice(0, 6))
   if (!meses.length) return apuntar('el contraasiento es de una fecha posterior a hoy: no se manda', { account_connector_id: con.id }, false)
   if (meses.length > MESES_BUSQUEDA_RECIBIDA) return apuntar(`el contraasiento es de hace más de ${MESES_BUSQUEDA_RECIBIDA - 1} meses: no se manda solo, míralo a mano en Diez`, { account_connector_id: con.id }, false)
+  // 15/10: antes de hablar con Diez, el envío deja su fila: si se corta aquí (la página se cierra, Diez no contesta), queda con su motivo.
+  previo = await dejarRastro(previo, c, con.id, p)
   const diez = await p.cliente(con, { real })
   const delMes: Factura[] = []
   for (const m of meses) delMes.push(...await diez.facturasDelMes(m))
