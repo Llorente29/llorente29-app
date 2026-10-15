@@ -28,6 +28,13 @@
 //      qué no con una línea «-- sin hueco: …». (13/10: la 0130 retiraba los 24
 //      y esperaba al cierre de los :07; la comprobación de después vio 22
 //      días×local sin asiento y el real se deshizo.)
+//   5. Lo que cuenta la tanda se toma ANTES de aplicarla, cuando sus tablas
+//      nuevas aún no existen, y Postgres resuelve todas las tablas de una
+//      consulta al analizarla, aunque vayan en la rama de un case que no se
+//      toma. Una cuenta que nombra fuera de una cadena una tabla que crea la
+//      propia tanda falla antes de empezar; va dentro de query_to_xml('…'),
+//      que solo se analiza si se llama. (15/10, ensayo #89 de la E05:
+//      «relation public.supplier_batch_store does not exist» a los 31 s.)
 // Sale con 1 si algo no cumple.
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 
@@ -64,7 +71,17 @@ if (existsSync(tanda)) {
   if (!lineas.some((l) => /^cuenta:\s*scripts\/conta\/produccion\/cuentas\/[A-Za-z0-9_-]+\.sql$/.test(l))) {
     mal.push(`${tanda}: no declara qué cuenta antes y después («cuenta: scripts/conta/produccion/cuentas/<f>.sql»)`)
   }
-  for (const f of lineas.filter((l) => !l.startsWith('cuenta:') && existsSync(l))) {
+  const ficheros = lineas.filter((l) => !l.startsWith('cuenta:') && existsSync(l))
+  const nuevas = new Set(ficheros.flatMap((f) => [...readFileSync(f, 'utf8').replace(/--.*$/gm, '').matchAll(/\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?(\w+)/gi)].map((m) => m[1].toLowerCase())))
+  for (const c of lineas.filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, ''))) {
+    if (!existsSync(c)) { mal.push(`${tanda}: la cuenta ${c} no existe`); continue }
+    // Sin comentarios ni cadenas: lo que queda es lo que Postgres analiza de entrada.
+    const fuera = readFileSync(c, 'utf8').replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    for (const m of fuera.matchAll(/\b(?:from|join)\s+(?:public\.)?(\w+)/gi)) {
+      if (nuevas.has(m[1].toLowerCase())) mal.push(`${c}: nombra ${m[1]}, que crea la propia tanda y aún no existe al contar ANTES; cuéntala con query_to_xml('…')`)
+    }
+  }
+  for (const f of ficheros) {
     const t = readFileSync(f, 'utf8')
     const sinComentarios = t.replace(/--.*$/gm, '')
     if (/\bdelete\s+from\s+(public\.)?(journal_entry|sales_day_summary)\b/i.test(sinComentarios)
@@ -74,6 +91,6 @@ if (existsSync(tanda)) {
   }
 }
 if (mal.length) { console.error(mal.map((m) => `✗ ${m}`).join('\n')); process.exit(1) }
-console.log('Pruebas de staging como usuario, \\gset en su sitio, la tanda dice qué cuenta y no deja huecos.')
+console.log('Pruebas de staging como usuario, \\gset en su sitio, la tanda dice qué cuenta (sin tablas que aún no existen) y no deja huecos.')
 console.log('Lo que esto no ve, y se hace igual: el fichero ENTERO, no un trozo, y como usuario; lo prueba staging con la base real antes del real de producción.')
 console.log('Y lo que el ensayo no ve (los agentes de después, la salud del pedido, lo que hacen otros procesos más tarde): un ensayo en verde no garantiza el real. Lo prueba staging con «real-con-fallo» y «real».')
