@@ -28,7 +28,7 @@ import {
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { MARCA } from '../cuenta/marca'
 import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
-import { estadoDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
+import { estadoDiez, motivoSinPatron, numerosFolvyDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 import { noSeValida } from '@/modules/conta/lib/validarConPdf'
 
@@ -119,6 +119,10 @@ export default function AsientoPage() {
     catch (x) { setFallo(x instanceof Error ? x.message : 'No se ha cambiado.') }
   }
 
+  // 15/10: el número de la marca y el de Diez, que ya no coinciden.
+  const dosNumeros = numerosFolvyDiez(a, datos.conDiez)
+  // 15/10: una plataforma sin patrón en Diez (Glovo) no ofrece «Validar y enviar»: validar no se deshace.
+  const sinPatron = datos.conDiez ? motivoSinPatron(datos.conDiez.canal) : null
   const migaFinal = editable ? 'Para revisar' : a.numero ? `${NOMBRE_SERIE[a.serie]} nº ${a.numero.toLocaleString('es-ES')}` : 'Asiento'
   return (
     <div className="cxd-pagina">
@@ -131,6 +135,7 @@ export default function AsientoPage() {
               ? <Chip tono={a.confianza === 'seguro' ? 'ia' : 'ambar'}>{MARCA.id === 'folvy' ? 'Propuesto por Folvy' : 'Propuesto automáticamente'} · {NOMBRE_CONFIANZA[a.confianza]}</Chip>
               : <TonoChip tono={e.tono}>{e.texto}</TonoChip>}
             <Chip>Serie {NOMBRE_SERIE[a.serie]}</Chip>
+            {dosNumeros && <Chip>{dosNumeros}</Chip>}
             <Chip>Fecha {fechaLarga(a.fecha)}</Chip>
             <Chip tono="azul">{deDondeSale(a)}</Chip>
           </div>
@@ -138,7 +143,7 @@ export default function AsientoPage() {
         <div className="cxd-acciones">
           {editable && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('descartar')} disabled={ocupado}>Descartar</button>}
           {editable && <button type="button" className={datos.conDiez ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando…' : 'Validar asiento'}</button>}
-          {editable && datos.conDiez && <button type="button" className="cx-boton" onClick={hacerValidarYEnviar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando y enviando…' : 'Validar y enviar a Diez'}</button>}
+          {editable && datos.conDiez && !sinPatron && <button type="button" className="cx-boton" onClick={hacerValidarYEnviar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando y enviando…' : 'Validar y enviar a Diez'}</button>}
           {a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
         </div>
       </header>

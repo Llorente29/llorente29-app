@@ -36,9 +36,61 @@ export type AsientoVentas = {
   lineas: LineaVentas[]
 }
 type Patron = { prefijoNumero: string; descripcion: string; cuentaCliente: string }
-/** El patrón de cada plataforma, solo si se ha medido en Diez. */
+/**
+ * El patrón de cada plataforma, solo si se ha medido en Diez.
+ *
+ * Medido en C0008, solo GET, el 15/10 (scripts/conta/diez/patrones-ventas-c0008.ts,
+ * runs 38700752691 y 38703072135; agosto a octubre, 1.543 facturas emitidas):
+ *   · Uber (43000002): las 126, «UBR-<grupo>-<AAAAMMDD>» con la fecha de la
+ *     factura y «UBER EATS <grupo> dd/mm»; una por local y día. El testigo.
+ *   · Just Eat (43000003): las 31 de agosto y septiembre, «JUS-<grupo>-<AAAAMMDD>»
+ *     con la fecha de la factura y «JUST EAT <grupo> dd/mm»; una por local y día.
+ *     (Las de siete cifras sueltas son de mayo a julio: la forma de antes.)
+ *   · Glovo (43000001): la gestoría la hacía por tienda de Glovo y día (ver
+ *     FORMA_GESTORIA). Julio decide (15/10) una por local y día, como Just
+ *     Eat: «GLV-<grupo>-<AAAAMMDD>» y «GLOVO <grupo> dd/mm».
+ */
 export const PATRONES: Record<string, Patron> = {
   uber: { prefijoNumero: 'UBR', descripcion: 'UBER EATS', cuentaCliente: '43000002' },
+  justeat: { prefijoNumero: 'JUS', descripcion: 'JUST EAT', cuentaCliente: '43000003' },
+  // Glovo, por decisión de Julio (15/10): una factura por local y día, con la
+  // forma de Just Eat. La gestoría la hacía por tienda (FORMA_GESTORIA).
+  glovo: { prefijoNumero: 'GLV', descripcion: 'GLOVO', cuentaCliente: '43000001' },
+}
+
+/**
+ * Lo medido que NO se puede mandar como está, con su porqué. Hoy, nada.
+ * (Glovo estuvo aquí hasta que Julio decidió, el 15/10, una factura por local
+ * y día como Uber y Just Eat: ver PATRONES y FORMA_GESTORIA.)
+ */
+export const PATRONES_PENDIENTES: Record<string, string> = {}
+
+/**
+ * La forma con la que la gestoría metía en Diez las facturas de una plataforma
+ * cuando no era la de Folvy, para que la búsqueda de antes de escribir la
+ * reconozca y NUNCA se duplique si la gestoría mete una tarde.
+ *
+ * Glovo (43000001): «GLV<seis cifras>-<AAAAMMDD>», una por TIENDA de Glovo y
+ * día, con el grupo del local en la descripción (275 de 275 en agosto y
+ * septiembre). Medido en C0008 el 15/10 (run 38717358137): con fecha de
+ * factura desde el 01/10, ninguna. Si aparece alguna del mismo local y día, la
+ * de Folvy (que es la suma del día) la duplicaría: no se manda y se dice.
+ */
+export const FORMA_GESTORIA: Record<string, { cuentaCliente: string; numero: RegExp }> = {
+  glovo: { cuentaCliente: '43000001', numero: /^GLV\d{6}-(\d{8})$/ },
+}
+
+/** ¿Es esta factura de Diez una de la gestoría, con su forma, del mismo local (grupo) y día? */
+export function esDeLaGestoria(canal: string, grupo: string, fecha: string): ((f: { Serie?: unknown; CuentaCliente?: unknown; NumeroFactura?: unknown; Descripcion?: unknown }) => boolean) | null {
+  const forma = FORMA_GESTORIA[canal.toLowerCase()]
+  if (!forma) return null
+  const dia = fecha.replaceAll('-', '')
+  const enGrupo = new RegExp(`\\b${grupo}\\b`)
+  return (f) => {
+    const m = forma.numero.exec(String(f.NumeroFactura ?? '').toUpperCase().trim())
+    return !!m && m[1] === dia && String(f.Serie ?? '') === '1' && String(f.CuentaCliente ?? '') === forma.cuentaCliente
+      && enGrupo.test(String(f.Descripcion ?? '').toUpperCase())
+  }
 }
 const c = (x: number) => Math.round(x * 100)
 const e = (x: number) => x / 100
@@ -53,7 +105,7 @@ export type FacturaVentas = { factura: FacturaData; sinPoner: string[]; esperado
  */
 export function facturaDeVentas(a: AsientoVentas, o: { correspondencia: Correspondencia; nombreCliente: string; hoy: string; conAnalitica: boolean }): FacturaVentas {
   const p = PATRONES[a.canal.toLowerCase()]
-  if (!p) throw new Error(`la plataforma «${a.canal}» no tiene su patrón de factura medido en Diez: no se envía`)
+  if (!p) throw new Error(PATRONES_PENDIENTES[a.canal.toLowerCase()] ?? `la plataforma «${a.canal}» no tiene su patrón de factura medido en Diez: no se envía`)
   const grupo = o.correspondencia.localAlEnviar[a.local]
   if (!grupo) throw new Error(`el local «${a.local}» no tiene grupo en Diez: no se puede numerar la factura`)
   const de = (pref: string) => a.lineas.filter((l) => l.cuenta.startsWith(pref))

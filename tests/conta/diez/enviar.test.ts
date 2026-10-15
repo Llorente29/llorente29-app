@@ -4,7 +4,7 @@
 // exist.» del R14, el listado que repite filas). Importes INVENTADOS.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { autorizacionCubre, enviarAsientoADiez, enviarContraasientoADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
+import { autorizacionCubre, enviarAsientoADiez, enviarContraasientoADiez, EN_MARCHA, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
 import { CORRESPONDENCIA_LLORENTE29 } from '../../../supabase/functions/_shared/diezAnalitica'
 import { resumenDeAsiento, type ResumenBD } from '../../../supabase/functions/_shared/resumenDeAsiento'
 import type { Factura, FacturaData } from '../../../supabase/functions/_shared/diezCliente'
@@ -86,11 +86,11 @@ describe('enviarAsientoADiez (R15): los frenos', () => {
     expect(t.llamadas).toMatchObject({ conexion: 0, cliente: 0 })
     expect(t.actual).toMatchObject({ status: 'pendiente', attempts: 0, document_status: 'pendiente', last_error: 'falta el documento' })
   })
-  it('una plataforma sin su factura medida (Glovo) no se envía y dice por qué', async () => {
-    const t = puerto({ r: resumen({ canal: { id: 'c2', slug: 'glovo', nombre: 'Glovo' } }) })
+  it('una plataforma sin su factura medida no se envía y dice por qué', async () => {
+    const t = puerto({ r: resumen({ canal: { id: 'c9', slug: 'deliveroo', nombre: 'Deliveroo' } }) })
     const x = await enviarAsientoADiez('e1', t.p)
     expect(x).toMatchObject({ estado: 'no_llega', reintentar: false })
-    expect(x.estado === 'no_llega' && x.motivo).toMatch(/glovo.*patrón de factura medido/)
+    expect(x.estado === 'no_llega' && x.motivo).toMatch(/deliveroo.*patrón de factura medido/)
     expect(t.llamadas.conexion).toBe(0)
   })
   it('sin conexión: «la conexión con Diez no está configurada»', async () => {
@@ -136,8 +136,10 @@ describe('enviarAsientoADiez (R15): el camino', () => {
     expect(t.d.altas[0]).toMatchObject({ NumeroFactura: 'UBR-FLO-20261001', NombreCliente: 'UBER EATS', CuentaCliente: '43000002' })
     expect((t.d.altas[0].Analitica as unknown[]).length).toBe(2)
     expect(t.actual).toMatchObject({ status: 'enviado', ext_series: '1', ext_number: 1801, attempts: 1, document_status: 'adjunto', document_id: 'd1', last_error: null })
-    // La intención se apuntó ANTES de escribir en Diez.
-    expect(t.filas[0]).toMatchObject({ status: 'pendiente', attempts: 1, last_error: 'enviando' })
+    // 15/10: antes de hablar con Diez, la fila con su motivo (EN_MARCHA); y la
+    // intención, ANTES de escribir en Diez.
+    expect(t.filas[0]).toMatchObject({ status: 'pendiente', attempts: 0, last_error: EN_MARCHA, payload_hash: 'sin-enviar' })
+    expect(t.filas[1]).toMatchObject({ status: 'pendiente', attempts: 1, last_error: 'enviando' })
   })
   it('NUNCA DOS VECES: si ya está en Diez, se enlaza y no se envía otra', async () => {
     const t = puerto({ d: diez({ facturas: [{ Ejercicio: '2026', Serie: '1', Documento: 1801, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000002', NombreCliente: 'UBER EATS', NumeroFactura: 'UBR-FLO-20261001' }] }) })
@@ -191,9 +193,9 @@ describe('resumenDeAsiento (R15): el PDF sale del asiento', () => {
     expect(x.datos).toMatchObject({ numeroFactura: 'UBR-FLO-20261001', asiento: 'Ventas nº 1287', tipoIva: 10, factura: { base: 30, cuota: 3, total: 33 }, cobro: 33 })
     expect(x.datos.pedidos[1]).toEqual({ hora: '14:10', codigo: 'A2', marca: 'Milanesa House', base: 10, cuota: 1, total: 11 })
   })
-  it('Glovo: sin factura de Diez, el PDF lleva el asiento y dice por qué no hay factura', () => {
-    const x = resumenDeAsiento(resumen({ canal: { id: 'c2', slug: 'glovo', nombre: 'Glovo' }, lineas: resumen().lineas.map((l) => l.cuenta === '43000002' ? { ...l, cuenta: '43000001' } : l) }), o)
-    expect(x.factura).toBeNull(); expect(x.sinFactura).toMatch(/glovo/)
+  it('una plataforma sin medir: sin factura de Diez, el PDF lleva el asiento y dice por qué no hay factura', () => {
+    const x = resumenDeAsiento(resumen({ canal: { id: 'c9', slug: 'deliveroo', nombre: 'Deliveroo' } }), o)
+    expect(x.factura).toBeNull(); expect(x.sinFactura).toMatch(/deliveroo/)
     expect(x.datos.numeroFactura).toBeNull(); expect(x.nombreFichero).toBe('ResumenDeVentas_Ventas-1287.pdf')
   })
   it('el reembolso sale de sus líneas (708, 477 al debe, 430 al haber, con su documento)', () => {
@@ -510,5 +512,79 @@ describe('C06b R8 · el contraasiento, con la fecha de lo que ANULA', () => {
     const t = anulado('2026-10-01', '2026-10-01')
     expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'en_diez' })
     expect(t.llamadas.real).toEqual([true])
+  })
+})
+
+// 15/10 · El 1806 y el 1807: validados, la función leyó el asiento, el PDF y las
+// credenciales de Diez, y se cortó sin contestar y sin escribir nada en ningún
+// sitio. Un validado nunca puede quedar sin su envío o su motivo.
+describe('15/10 · si el envío se corta al hablar con Diez, queda su fila con el motivo', () => {
+  it('Diez no contesta al leer el mes: la fila queda «empezó y no terminó», sin intento y sin nada escrito en Diez', async () => {
+    const t = puerto()
+    t.d.facturasDelMes = async () => { throw new Error('Diez no contesta') }
+    await expect(enviarAsientoADiez('e1', t.p)).rejects.toThrow(/Diez no contesta/)
+    expect(t.actual).toMatchObject({ status: 'pendiente', attempts: 0, last_error: EN_MARCHA, payload_hash: 'sin-enviar' })
+    expect(t.d.altas).toEqual([])
+  })
+  it('…y al volver a pulsar, se busca en Diez y se envía como siempre (la fila se reutiliza)', async () => {
+    const t = puerto()
+    const leer = t.d.facturasDelMes
+    t.d.facturasDelMes = async () => { throw new Error('Diez no contesta') }
+    await expect(enviarAsientoADiez('e1', t.p)).rejects.toThrow()
+    t.d.facturasDelMes = leer
+    t.p.envio = async () => t.actual
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 1801 })
+    expect(t.d.altas).toHaveLength(1)
+    expect(new Set(t.filas.map((f) => f.id))).toEqual(new Set(['s1']))
+  })
+  it('un «enviando» de antes (se cortó a medias escribiendo) no se tapa con el motivo nuevo', async () => {
+    const enviando = { id: 's9', entry_id: 'e1', account_id: 'acc', company_id: 'emp', account_connector_id: 'k1', kind: 'factura', ext_year: null, ext_series: null, ext_number: null,
+      ext_invoice_number: 'UBR-FLO-20261001', payload_hash: 'h', status: 'pendiente', attempts: 1, last_error: 'enviando', sent_at: null, document_id: 'd1', document_status: 'pendiente', document_error: null, document_attached_at: null } as EnvioFila
+    const t = puerto({ envio: enviando })
+    t.d.facturasDelMes = async () => { throw new Error('Diez no contesta') }
+    await expect(enviarAsientoADiez('e1', t.p)).rejects.toThrow()
+    expect(t.filas.some((f) => f.last_error === EN_MARCHA)).toBe(false)
+  })
+})
+
+// 15/10 · Glovo, por decisión de Julio: una factura por local y día, «GLV-<grupo>-<AAAAMMDD>».
+// La gestoría la hacía por tienda de Glovo («GLV<seis cifras>-<AAAAMMDD>», el grupo
+// en la descripción): si mete una tarde del mismo local y día, no se duplica.
+describe('Glovo por local y día (15/10)', () => {
+  const glovo = (o: Partial<ResumenBD> = {}) => resumen({ canal: { id: 'c2', slug: 'glovo', nombre: 'Glovo' }, lineas: resumen().lineas.map((l) => l.cuenta === '43000002' ? { ...l, cuenta: '43000001' } : l), ...o })
+  const SC = { '43000001': { Codigo: '43000001', Descripcion: 'GLOVO', NIF: '', NombreComercial: '' } }
+  const deLaGestoria = (o: Partial<Factura>): Factura => ({ Ejercicio: '2026', Serie: '1', Documento: 2900, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000001', NumeroFactura: 'GLV123456-20261001', Descripcion: 'GLOVO FLO MARCA DE PRUEBA 01/10', ...o })
+  it('sin nada de la gestoría: se da de alta «GLV-FLO-20261001», «GLOVO FLO 01/10», la 43000001', async () => {
+    const t = puerto({ r: glovo(), d: diez({ subcuentas: SC }) })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+    expect(t.d.altas[0]).toMatchObject({ NumeroFactura: 'GLV-FLO-20261001', Descripcion: 'GLOVO FLO 01/10', CuentaCliente: '43000001' })
+  })
+  it('con facturas de la gestoría del mismo local y día (por tienda): no se escribe ni se enlaza, y dice cuántas y cuáles', async () => {
+    const d = diez({ subcuentas: SC, facturas: [deLaGestoria({}), deLaGestoria({ Documento: 2901, NumeroFactura: 'GLV654321-20261001' })] })
+    const t = puerto({ r: glovo(), d })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(x.estado === 'no_llega' && x.motivo).toMatch(/la gestoría ya ha metido en Diez 2 facturas de este local y día con su forma \(1\/2900, 1\/2901\)/)
+    expect(d.altas).toEqual([])
+  })
+  it('…también si la metió tarde (fecha de asiento de otro mes: se busca hasta hoy)', async () => {
+    const d = diez({ subcuentas: SC, facturas: [deLaGestoria({ Fecha: 20261105 })] })
+    const t = puerto({ r: glovo(), d })
+    t.p.ahora = () => new Date('2026-11-10T10:00:00Z')
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x.estado === 'no_llega' && x.motivo).toMatch(/la gestoría ya ha metido en Diez una factura de este local y día/)
+    expect(d.altas).toEqual([])
+  })
+  it('las de otro local o de otro día no cuentan: se da de alta', async () => {
+    const d = diez({ subcuentas: SC, facturas: [deLaGestoria({ Descripcion: 'GLOVO CAM MARCA 01/10' }), deLaGestoria({ Documento: 2902, NumeroFactura: 'GLV123456-20261002' })] })
+    const t = puerto({ r: glovo(), d })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+    expect(d.altas).toHaveLength(1)
+  })
+  it('si ya está la de Folvy (GLV-FLO-…), se enlaza como siempre', async () => {
+    const d = diez({ subcuentas: SC, facturas: [deLaGestoria({ NumeroFactura: 'GLV-FLO-20261001', Documento: 2950, Descripcion: 'GLOVO FLO 01/10' })] })
+    const t = puerto({ r: glovo(), d })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 2950, enlazada: true })
+    expect(d.altas).toEqual([])
   })
 })

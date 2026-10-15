@@ -18,6 +18,7 @@
 // Respuesta 8: con su contraasiento ya en Diez, «Anulado en Folvy y en Diez».
 
 import { MARCA } from '../cuenta/marca'
+import { PATRONES, PATRONES_PENDIENTES } from '../../../../supabase/functions/_shared/diezFactura.ts'
 import { cent, deCent } from './libro'
 
 /** Lo que se lee de external_send. */
@@ -59,6 +60,34 @@ export interface EstadoDiez {
 }
 
 export const FALTA_DOCUMENTO = 'falta el documento'
+
+/**
+ * 15/10 · Por qué un asiento de ventas de esta plataforma no se puede mandar
+ * a Diez hoy (su patrón de factura no está medido, o está medido y no encaja:
+ * Glovo), o null si se puede. Se mira ANTES de validar: validar no se deshace.
+ */
+export function motivoSinPatron(canal: string): string | null {
+  const c = canal.toLowerCase()
+  if (PATRONES[c]) return null
+  return PATRONES_PENDIENTES[c] ?? `la plataforma «${canal}» no tiene su patrón de factura medido en Diez`
+}
+
+
+/**
+ * 15/10 · Los dos números de un asiento validado, el de la marca y el de Diez:
+ * ya no coinciden (Folvy 1803 es el Glovo que no llegó; Diez 1803 es
+ * UBR-CAM-20261001, que en Folvy es el 1804). Sin número en la marca, null.
+ * La serie de Diez solo se dice si no es la 1 (las recibidas van a la 2).
+ */
+export function numerosFolvyDiez(a: { numero: number | null }, d: ConDiez | null | undefined): string | null {
+  if (a.numero == null) return null
+  const propio = `${MARCA.nombre} ${a.numero.toLocaleString('es-ES')}`
+  if (!d) return propio
+  const e = d.envio
+  if (!e || (e.status !== 'enviado' && e.status !== 'enlazado') || e.numero == null) return `${propio} · aún no está en Diez`
+  return `${propio} · Diez ${e.serie && e.serie !== '1' ? `${e.serie}/` : ''}${e.numero.toLocaleString('es-ES')}`
+}
+
 export const PDF_PENDIENTE_DIEZ = 'PDF pendiente en Diez'
 
 export function estadoDiez(a: { estado: string }, d: ConDiez, o: { enviando?: boolean } = {}): EstadoDiez {
