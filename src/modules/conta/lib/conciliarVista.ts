@@ -76,8 +76,15 @@ export function cuadreDe(movs: readonly MovimientoBanco[], bancoCent: number | n
   }
 }
 
-/** Quién: el nombre limpio de la contraparte, o lo que dice el banco limpio si no la hay. */
-export const quienEs = (m: MovimientoBanco) => m.contraparte?.trim() || m.conceptoLimpio
+/**
+ * Quién: el nombre limpio de la contraparte; si no la hay, lo que dice el banco
+ * limpio; y si el banco solo trae su etiqueta (un Norma 43 cuyos 23 la repiten:
+ * va al tipo), la etiqueta. Nunca una fila sin nombre.
+ */
+export const quienEs = (m: MovimientoBanco) => m.contraparte?.trim() || m.conceptoLimpio.trim() || m.tipo?.trim() || 'Sin texto del banco'
+
+/** Lo que dice el banco tal cual: el concepto, o su etiqueta si es lo único que trae. */
+export const textoDelBanco = (m: MovimientoBanco) => m.conceptoBanco.trim() || m.tipo?.trim() || ''
 
 /** «12,50», «-12.5», «1.234,56», «1234» → céntimos; null si no es un importe. */
 export function importeBuscado(q: string): number | null {
@@ -99,7 +106,7 @@ export function coincide(m: MovimientoBanco, q: string): boolean {
   if (!t) return true
   const cent = importeBuscado(q)
   if (cent !== null && Math.abs(m.importeCent) === cent) return true
-  return [quienEs(m), m.conceptoBanco, m.propuesta?.que ?? '', m.casado?.asientoConcepto ?? ''].some((x) => normal(x).includes(t))
+  return [quienEs(m), textoDelBanco(m), m.propuesta?.que ?? '', m.casado?.asientoConcepto ?? ''].some((x) => normal(x).includes(t))
 }
 
 export interface Grupo {

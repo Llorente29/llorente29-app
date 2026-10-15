@@ -33,7 +33,7 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { TEXTO_BOTON, filaDe, limitesMes, migasBanco, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import {
-  BANDEJAS, PILDORA, bandejaDe, coincide, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, quienEs, textoBloque, type Bandeja, type Grupo,
+  BANDEJAS, PILDORA, bandejaDe, coincide, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, quienEs, textoBloque, textoDelBanco, type Bandeja, type Grupo,
 } from '@/modules/conta/lib/conciliarVista'
 import { bancos as nucleo } from '@/modules/conta/services/bancosService'
 import {
@@ -378,7 +378,7 @@ function FilaMovimiento({ g, movil, enfocada, elegida, ocupado, marcadas, marcab
       </span>
       <span role="gridcell" className="cxc-quien">
         <strong>{quienEs(m)}{n > 1 && <span className="cxc-iguales"> · {n} iguales</span>}</strong>
-        <span className="cxc-texto-banco">{m.conceptoBanco}{m.tarjeta && ` · tarjeta de ${m.tarjeta.titular} (···${m.tarjeta.ultimos4})`}</span>
+        <span className="cxc-texto-banco">{textoDelBanco(m)}{m.tarjeta && ` · tarjeta de ${m.tarjeta.titular} (···${m.tarjeta.ultimos4})`}</span>
       </span>
       <span role="gridcell" className={`cxb-importe ${m.importeCent > 0 ? 'cxb-entra' : ''}`}>{signo(m.importeCent)}{n > 1 && <span className="cxc-por"> × {n}</span>}</span>
       <span role="gridcell" className="cxc-propongo">

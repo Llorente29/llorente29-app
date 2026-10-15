@@ -14,7 +14,7 @@ import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import {
-  PILDORA, asientoQueSeCrea, confirmable, destinoDelReparto, facturasDe, quienEs, repartir, type FacturaParaCasar,
+  PILDORA, asientoQueSeCrea, confirmable, destinoDelReparto, facturasDe, quienEs, repartir, textoDelBanco, type FacturaParaCasar,
 } from '@/modules/conta/lib/conciliarVista'
 
 export interface CuentasDiferencia { c626: string; c669: string; c769: string }
@@ -76,7 +76,7 @@ export function PanelMovimiento(p: PanelProps) {
 
       <section className="cxc-bloque" aria-label="Lo que dice el banco">
         <h4>Lo que dice el banco, tal cual</h4>
-        <p className="cxc-banco-literal">{m.conceptoBanco || '—'}</p>
+        <p className="cxc-banco-literal">{textoDelBanco(m) || '—'}</p>
       </section>
 
       {m.estado === 'casado' && m.casado && (

@@ -11,7 +11,7 @@ import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import {
   BANDEJAS, asientoQueSeCrea, bandejaDe, coincide, confirmable, cuadreDe, destinoDelReparto, diaConNombre, facturasDe, importeBuscado, porDia,
-  preseleccionado, repartir, textoBloque, type FacturaParaCasar,
+  preseleccionado, quienEs, repartir, textoBloque, textoDelBanco, type FacturaParaCasar,
 } from '@/modules/conta/lib/conciliarVista'
 
 let n = 0
@@ -73,6 +73,15 @@ describe('el punto verde y el bloque', () => {
     expect(textoBloque(seguros, seguros)).toEqual({ etiqueta: '24 seguros seleccionados', boton: 'Confirmar los 24', seguros: true })
     expect(textoBloque(seguros.slice(1), seguros)).toEqual({ etiqueta: '23 seleccionados', boton: 'Confirmar los 23', seguros: false })
     expect(textoBloque(['x'], [])).toEqual({ etiqueta: '1 seleccionado', boton: 'Confirmar el 1', seguros: false })
+  })
+})
+
+describe('nunca una fila sin nombre', () => {
+  it('si el banco solo trae su etiqueta (va al tipo), la fila y el panel la enseñan', () => {
+    const soloEtiqueta = mov({ conceptoBanco: '', conceptoLimpio: '', contraparte: null, tipo: 'RECARGA MONEDERO INVENTADO' })
+    expect(quienEs(soloEtiqueta)).toBe('RECARGA MONEDERO INVENTADO')
+    expect(textoDelBanco(soloEtiqueta)).toBe('RECARGA MONEDERO INVENTADO')
+    expect(quienEs(mov({ conceptoBanco: '', conceptoLimpio: '', contraparte: null, tipo: null }))).toBe('Sin texto del banco')
   })
 })
 
