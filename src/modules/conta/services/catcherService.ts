@@ -13,7 +13,8 @@
 import { rpc, tabla, hayBase } from '@/modules/conta/services/bd'
 import { uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
-import { comprobarPdf, leerFacturas, leerQuincena, loteParaRegistrar, reconocer, type Fichero, type PdfSubido, type Quincena } from '@/modules/conta/lib/catcherQuincena'
+import { comprobarPdf, leerFacturas, leerQuincena, loteParaRegistrar, reconocer, type Fichero, type PdfSubido, type PedidoExcel, type Quincena, type TipoFactura } from '@/modules/conta/lib/catcherQuincena'
+import { cruzar, type Cruce, type PedidoApp, type Tarifa } from '@/modules/conta/lib/catcherCruces'
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
 const sha256 = async (b: Uint8Array) => hex(await crypto.subtle.digest('SHA-256', new Uint8Array(b)))
@@ -76,4 +77,62 @@ export async function subirQuincena(accountId: string, companyId: string, q: Qui
     loteId: String(r.lote_id), yaEstaba: r.ya_estaba === true, facturas: Number(r.facturas ?? 0), yaEstaban: Number(r.ya_estaban ?? 0),
     sinPdf: Number(r.sin_pdf ?? 0), total: Number(r.total ?? 0), catcherSinFicha: r.catcher_sin_ficha === true, texto: String(r.texto ?? ''),
   }
+}
+
+// ── E05 · Tarea 3 · Cruzar el lote ─────────────────────────────────────────────
+
+/** Las tarifas de Catcher de la empresa (supplier_rate), de la más antigua a la más nueva. */
+export async function tarifasDeCatcher(accountId: string, companyId: string): Promise<Tarifa[]> {
+  hayBase()
+  const { data, error } = await tabla('supplier_rate').select('valid_from, params').eq('account_id', accountId).eq('company_id', companyId).eq('provider', 'catcher').order('valid_from')
+  if (error) throw new Error(`No se ha podido leer la tarifa de Catcher: ${error.message}`)
+  return ((data ?? []) as { valid_from: string; params: Omit<Tarifa, 'desde'> }[]).map((r) => ({ ...r.params, desde: r.valid_from }))
+}
+
+/** Guarda una versión de la tarifa (vale desde `t.desde`; si ya hay una ese día, la corrige). */
+export async function guardarTarifa(companyId: string, t: Tarifa, quien: string | null): Promise<string> {
+  hayBase()
+  const { desde, ...params } = t
+  const r = await rpc<Record<string, unknown>>('conta_tarifa_guardar', { p_company: companyId, p_provider: 'catcher', p_desde: desde, p_params: params, p_quien_nombre: quien })
+  return String(r.texto ?? '')
+}
+
+/**
+ * Cruza un lote ya subido: sus facturas y pedidos (de la base), lo que la app
+ * mandó a Catcher en su periodo y la tarifa; y guarda lo que sale. Devuelve el
+ * cruce y la frase de lo que se ha hecho.
+ */
+export async function cruzarLote(accountId: string, companyId: string, loteId: string, quien: string | null): Promise<{ cruce: Cruce; texto: string }> {
+  hayBase()
+  const [lote, facs, peds, app, tarifas] = await Promise.all([
+    tabla('supplier_batch').select('period_from, period_to, grand_total').eq('id', loteId).eq('account_id', accountId).single(),
+    tabla('supplier_invoice').select('invoice_number, tax_base_total, grand_total, reading').eq('batch_id', loteId).eq('account_id', accountId),
+    tabla('supplier_batch_order').select('invoice_number, kind, order_code, order_status, ordered_at, tax_base, tax_amount, total').eq('batch_id', loteId).eq('account_id', accountId),
+    rpc<PedidoApp[]>('conta_lote_pedidos_app', { p_lote: loteId }),
+    tarifasDeCatcher(accountId, companyId),
+  ])
+  for (const r of [lote, facs, peds]) if (r.error) throw new Error(`No se ha podido leer el lote: ${r.error.message}`)
+  const l = lote.data as { period_from: string; period_to: string; grand_total: number | null }
+  type F = { invoice_number: string; tax_base_total: number; grand_total: number; reading: { confianza?: string; lote?: { tipo?: TipoFactura } } | null }
+  const facturas = ((facs.data ?? []) as F[]).map((f) => ({
+    numero: f.invoice_number, tipo: f.reading?.lote?.tipo ?? 'rider', base: Number(f.tax_base_total), total: Number(f.grand_total), seguraAlLeer: f.reading?.confianza === 'seguro',
+  }))
+  type P = { invoice_number: string; kind: string; order_code: string; order_status: string; ordered_at: string | null; tax_base: number; tax_amount: number; total: number }
+  const pedidos: PedidoExcel[] = ((peds.data ?? []) as P[]).map((p) => ({
+    factura: p.invoice_number, tipo: p.kind, codigo: p.order_code, estado: p.order_status,
+    momento: p.ordered_at ? new Date(p.ordered_at).toISOString() : null, base: Number(p.tax_base), cuota: Number(p.tax_amount), total: Number(p.total),
+  }))
+  const cruce = cruzar({
+    facturas, pedidos, app: app.map((a) => ({ ...a, momento: new Date(a.momento).toISOString(), precio: a.precio == null ? null : Number(a.precio) })),
+    tarifas, periodo: { desde: l.period_from, hasta: l.period_to }, totalLote: l.grand_total == null ? null : Number(l.grand_total),
+  })
+  const r = await rpc<Record<string, unknown>>('conta_lote_cruce_guardar', { p_lote: loteId, p_cruce: cruce, p_quien_nombre: quien })
+  return { cruce, texto: String(r.texto ?? '') }
+}
+
+/** La persona decide sobre una cosa por aclarar: se da por buena, se reclama (con lo que se reclama) o se vuelve a abrir. */
+export async function aclarar(issueId: string, decision: 'aceptada' | 'reclamada' | 'abierta', nota: string | null, quien: string | null): Promise<string> {
+  hayBase()
+  const r = await rpc<Record<string, unknown>>('conta_lote_aclarar', { p_issue: issueId, p_decision: decision, p_nota: nota, p_quien_nombre: quien })
+  return String(r.texto ?? '')
 }

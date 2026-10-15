@@ -4,6 +4,20 @@
 -- cuenta), pero sin su lote ni su emisor: por eso no se deshace con lotes ya
 -- subidos sin mirarlo antes (lo cuenta la tanda).
 
+-- Freno: con algún lote subido, no se borra nada (se perderían sus pedidos y el
+-- emisor de sus facturas). Para y lo dice.
+do $$
+declare n int; f int;
+begin
+  if to_regclass('public.supplier_batch') is null then return; end if;
+  execute 'select count(*) from public.supplier_batch' into n;
+  if n > 0 then
+    select count(*) into f from public.supplier_invoice where source = 'lote';
+    raise exception 'VUELTA ATRÁS 0100 PARADA: hay % lote(s) subido(s) con % factura(s). Deshacerla borraría sus pedidos y el emisor de esas facturas: no se toca nada. Hay que decidir antes qué se hace con ellos.', n, f
+      using errcode = 'P0001';
+  end if;
+end $$;
+
 drop function if exists public.conta_lote_registrar(uuid, jsonb, text);
 drop table if exists public.supplier_batch_store;
 drop table if exists public.supplier_batch_order;

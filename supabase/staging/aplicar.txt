@@ -1,9 +1,8 @@
-# E05 · Tarea 2 — los lotes de Catcher (rama conta/d01-catcher). 2.º intento: el texto de «1 ya estaba», en singular.
-#   0100: el emisor en la factura, el origen «lote», supplier_batch,
-#         supplier_batch_order, supplier_batch_store y conta_lote_registrar.
-#         Añade (y amplía el CHECK de source con «lote»).
-#   0110: conta_recibida_envio con el emisor (misma firma; sin emisor, lo de antes).
+# E05 · Tarea 3 — los cruces y «Por aclarar» (rama conta/d01-catcher).
+#   0120: supplier_rate (la tarifa fechada), supplier_batch_issue («Por
+#         aclarar»), supplier_batch_order.sale_id, y conta_lote_pedidos_app,
+#         conta_lote_cruce_guardar, conta_lote_aclarar y conta_tarifa_guardar.
+#         Solo añade. (La 0100 y la 0110 ya están en staging: run 38707858478.)
 #   La prueba, en una transacción con ROLLBACK.
-supabase/migrations/20261112T0100_e05_lotes.sql
-supabase/migrations/20261112T0110_e05_recibida_envio_emisor.sql
-supabase/staging/sql/20261112_e05_lotes_prueba.sql
+supabase/migrations/20261112T0120_e05_cruces.sql
+supabase/staging/sql/20261112_e05_cruces_prueba.sql
