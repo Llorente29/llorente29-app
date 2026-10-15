@@ -13,7 +13,7 @@ import { rutaLibros } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
-import { resumenSeleccion, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
+import { motivoSinPatron, resumenSeleccion, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
 import { textoVarios, type PasoVarios } from '@/modules/conta/lib/enviarVarios'
 import { urlDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 
@@ -68,7 +68,9 @@ export function TarjetaDiez({ a, d, e, quien, alHacer, alFallar }: {
       <p className="cx-ayuda">
         {d.documento
           ? `Su documento, el «Resumen de ventas» de ${d.nombreCanal}, guardado en ${MARCA.nombre} el ${diaMesCorto(d.documento.creadoEn.slice(0, 10))}${d.documento.creadoPor ? ` por ${d.documento.creadoPor}` : ''}.`
-          : a.estado === 'validado' ? 'Aún no tiene su documento guardado: sin él no se da por enviado.' : `Al validarlo, ${MARCA.nombre} guarda su «Resumen de ventas» y lo envía a Diez con la factura.`}
+          : a.estado === 'validado' ? 'Aún no tiene su documento guardado: sin él no se da por enviado.'
+            : motivoSinPatron(d.canal) ? `No se puede enviar a Diez todavía: ${motivoSinPatron(d.canal)}.`
+              : `Al validarlo, ${MARCA.nombre} guarda su «Resumen de ventas» y lo envía a Diez con la factura.`}
       </p>
       <div className="cxd-dialogo-acciones">
         {d.documento && <VerDocumento ruta={d.documento.ruta} alFallar={alFallar} />}

@@ -149,7 +149,6 @@ export default function AsientoPage() {
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      {sinPatron && a.estado !== 'anulado' && !datos.conDiez?.envio?.serie && <p className="cx-ayuda cxt-ambar" role="note">No se puede enviar a Diez todavía: {sinPatron}.</p>}
       {datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
       {editable && mes.cerrado && (
         <div className="cx-tarjeta cxd-franja" role="status">
