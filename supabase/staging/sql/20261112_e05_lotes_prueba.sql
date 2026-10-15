@@ -170,8 +170,13 @@ begin
     v_falla := null;
   exception when sqlstate '22023' then v_falla := sqlerrm; end;
   if v_falla is null then raise exception 'PRUEBA E05 lotes · 4: ha aceptado una factura cuya base + IVA no es el total.'; end if;
+  begin
+    perform public.conta_lote_registrar(v_e, '{"proveedor":"catcher","desde":"2026-08-16","hasta":"2026-08-31"}', 'Prueba E05');
+    v_falla := null;
+  exception when sqlstate '22023' then v_falla := sqlerrm; end;
+  if v_falla is null then raise exception 'PRUEBA E05 lotes · 4: ha aceptado un lote sin facturas (sin la clave).'; end if;
   if exists (select 1 from public.supplier_batch where account_id = v_acc and period_from = '2026-08-16') then raise exception 'PRUEBA E05 lotes · 4: un lote rechazado ha dejado algo.'; end if;
-  raise notice 'PRUEBA E05 lotes · 4: un PDF que no está subido, no; base + IVA ≠ total, no; y no deja nada.';
+  raise notice 'PRUEBA E05 lotes · 4: un PDF que no está subido, no; base + IVA ≠ total, no; un lote sin facturas, no; y no deja nada.';
 
   -- 5 · La del rider uno, asentada: lo que va a Diez es el emisor, no la ficha «Riders».
   r := public.journal_entry_proponer(v_e,

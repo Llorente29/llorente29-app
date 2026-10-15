@@ -143,7 +143,8 @@ begin
   end if;
   if v_prov <> 'catcher' then raise exception 'Solo se suben lotes de Catcher.' using errcode = '22023'; end if;
   if v_desde is null or v_hasta is null or v_hasta < v_desde then raise exception 'El lote no dice de qué periodo es.' using errcode = '22023'; end if;
-  if jsonb_typeof(p_lote->'facturas') <> 'array' or jsonb_array_length(p_lote->'facturas') = 0 then
+  -- Sin la clave, jsonb_typeof da NULL y «NULL <> …» no frena: con coalesce.
+  if coalesce(jsonb_typeof(p_lote->'facturas'), '') <> 'array' or jsonb_array_length(p_lote->'facturas') = 0 then
     raise exception 'El lote no trae ninguna factura.' using errcode = '22023';
   end if;
 

@@ -1,8 +1,11 @@
-# E05 · Tarea 3 — los cruces y «Por aclarar» (rama conta/d01-catcher).
-#   0120: supplier_rate (la tarifa fechada), supplier_batch_issue («Por
-#         aclarar»), supplier_batch_order.sale_id, y conta_lote_pedidos_app,
-#         conta_lote_cruce_guardar, conta_lote_aclarar y conta_tarifa_guardar.
-#         Solo añade. (La 0100 y la 0110 ya están en staging: run 38707858478.)
-#   La prueba, en una transacción con ROLLBACK.
+# E05 · Tareas 2 y 3 (rama conta/d01-catcher). 2.º intento de la 0120: la
+# prueba de staging cazó que una tarifa sin comisión entraba (un valor que
+# falta da NULL y «NULL <> …» no frena). Corregido ahí, en el cruce y en la
+# 0100 (un lote sin la clave «facturas»): por eso vuelven las dos.
+#   0100: los lotes (otra vez, con el arreglo; vuelve a aplicarse entera).
+#   0120: la tarifa fechada, «Por aclarar» y sus funciones. Solo añade.
+#   Las dos pruebas, cada una en una transacción con ROLLBACK.
+supabase/migrations/20261112T0100_e05_lotes.sql
+supabase/staging/sql/20261112_e05_lotes_prueba.sql
 supabase/migrations/20261112T0120_e05_cruces.sql
 supabase/staging/sql/20261112_e05_cruces_prueba.sql

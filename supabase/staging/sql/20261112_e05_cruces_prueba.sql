@@ -148,6 +148,10 @@ begin
   end if;
   raise notice 'PRUEBA E05 cruces · 3: %', r->>'texto';
 
+  begin perform public.conta_lote_cruce_guardar(v_lote, cruce - 'facturas', 'Prueba E05'); v_falla := null;
+  exception when sqlstate '22023' then v_falla := sqlerrm; end;
+  if v_falla is null then raise exception 'PRUEBA E05 cruces · 3: ha guardado un cruce sin sus facturas.'; end if;
+
   -- 4
   perform public.conta_lote_cruce_guardar(v_lote, cruce, 'Prueba E05');
   if (select count(*) from public.supplier_batch_issue where batch_id = v_lote) <> 1 then raise exception 'PRUEBA E05 cruces · 4: cruzar otra vez ha duplicado lo por aclarar.'; end if;

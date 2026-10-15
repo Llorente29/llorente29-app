@@ -117,7 +117,7 @@ begin
   if not public.current_user_is_admin_or_manager_of(v_l.account_id) then
     raise exception 'Solo un administrador o un encargado de la cuenta cruza las facturas.' using errcode = '42501';
   end if;
-  if jsonb_typeof(p_cruce->'facturas') <> 'object' or jsonb_typeof(p_cruce->'porAclarar') <> 'array' then
+  if coalesce(jsonb_typeof(p_cruce->'facturas'), '') <> 'object' or coalesce(jsonb_typeof(p_cruce->'porAclarar'), '') <> 'array' then
     raise exception 'El cruce no trae sus facturas y lo que hay que aclarar.' using errcode = '22023';
   end if;
 
@@ -219,12 +219,13 @@ begin
   if not public.current_user_is_admin_or_manager_of(v_acc) then raise exception 'Solo un administrador o un encargado de la cuenta cambia la tarifa.' using errcode = '42501'; end if;
   if p_provider <> 'catcher' then raise exception 'Solo hay tarifa de Catcher.' using errcode = '22023'; end if;
   if p_desde is null then raise exception 'Di desde cuándo vale.' using errcode = '22023'; end if;
-  if jsonb_typeof(p_params->'tramos') <> 'array' or jsonb_array_length(p_params->'tramos') = 0 then raise exception 'La tarifa necesita al menos un tramo por km.' using errcode = '22023'; end if;
+  -- Un valor que falta da NULL, y «NULL <> …» no frena: todo con coalesce (lo cazó la prueba de staging).
+  if coalesce(jsonb_typeof(p_params->'tramos'), '') <> 'array' or jsonb_array_length(p_params->'tramos') = 0 then raise exception 'La tarifa necesita al menos un tramo por km.' using errcode = '22023'; end if;
   for t in select * from jsonb_array_elements(p_params->'tramos') loop
     if coalesce((t->>'hastaKm')::numeric, 0) <= 0 or coalesce((t->>'precio')::numeric, -1) < 0 then raise exception 'Cada tramo lleva hasta cuántos km y su precio.' using errcode = '22023'; end if;
   end loop;
   if exists (select 1 from unnest(array['porKmExtra', 'maximo', 'bonoLluviaPct', 'bonoDemandaPct', 'bonoMaxPct', 'pedidoExtra', 'comisionPedido']) k
-              where jsonb_typeof(p_params->k) <> 'number' or (p_params->>k)::numeric < 0) then
+              where coalesce(jsonb_typeof(p_params->k), '') <> 'number' or coalesce((p_params->>k)::numeric, -1) < 0) then
     raise exception 'Faltan valores de la tarifa (por km de más, máximo, bonos, pedido extra o comisión), o alguno es negativo.' using errcode = '22023';
   end if;
   select exists (select 1 from public.supplier_rate where account_id = v_acc and company_id = p_company and provider = p_provider and valid_from = p_desde) into v_ya;
