@@ -55,7 +55,26 @@ begin
      or pg_get_constraintdef((select oid from pg_constraint where conname = 'supplier_invoice_source_check')) not like '%liquidacion%' then
     raise exception 'PRUEBA D01 liquidaciones · 0: algún CHECK no se ha ampliado.';
   end if;
-  raise notice 'PRUEBA D01 liquidaciones · 0: el mapa de tiendas, las 13 columnas y los tres CHECK ampliados.';
+  -- Las dos tablas que cambian en caliente (declaradas en la cabecera de la 0100), por su nombre:
+  -- public.company_inbound_address (la clase y su prefijo, atados) y public.inbound_email_log (los resultados nuevos).
+  if (select count(*) from pg_constraint where conrelid = 'public.company_inbound_address'::regclass and contype = 'c'
+        and conname in ('company_inbound_address_kind_check', 'company_inbound_address_local_part_check')) <> 2
+     or pg_get_constraintdef((select oid from pg_constraint where conrelid = 'public.company_inbound_address'::regclass and conname = 'company_inbound_address_local_part_check')) not like '%kind%'
+     or (select count(*) from pg_constraint where conrelid = 'public.inbound_email_log'::regclass and conname = 'inbound_email_log_outcome_check'
+           and pg_get_constraintdef(oid) like '%liquidacion%' and pg_get_constraintdef(oid) like '%no_es_liquidacion%') <> 1 then
+    raise exception 'PRUEBA D01 liquidaciones · 0: los CHECK de public.company_inbound_address o de public.inbound_email_log no son los de la 0100.';
+  end if;
+  -- Y lo que no pueden guardar: una dirección cuya clase no es su prefijo, y un resultado que no existe.
+  begin
+    insert into public.company_inbound_address (account_id, company_id, kind, local_part) values (v_acc, '3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'liquidaciones', 'facturas-cruzada');
+    raise exception 'PRUEBA D01 liquidaciones · 0: public.company_inbound_address acepta «liquidaciones» con prefijo de facturas.';
+  exception when check_violation then null; end;
+  begin
+    insert into public.inbound_email_log (email_id, to_address, outcome) values ('prueba-d01-x', 'x@entrada.folvy.app', 'inventado');
+    raise exception 'PRUEBA D01 liquidaciones · 0: public.inbound_email_log acepta un resultado que no existe.';
+  exception when check_violation then null; end;
+  insert into public.inbound_email_log (email_id, to_address, outcome) values ('prueba-d01-confirmacion', 'liquidaciones-x@entrada.folvy.app', 'confirmacion');
+  raise notice 'PRUEBA D01 liquidaciones · 0: el mapa de tiendas, las 13 columnas y los tres CHECK ampliados; en public.company_inbound_address la clase y el prefijo van atados, y public.inbound_email_log guarda «confirmacion» y rechaza lo que no existe.';
 
   select id into v_canal from public.sales_channel where account_id = v_acc and slug = 'uber';
   if v_canal is null then raise exception 'PRUEBA D01 liquidaciones · 0: la cuenta A no tiene el canal de Uber.'; end if;

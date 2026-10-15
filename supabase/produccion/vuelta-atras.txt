@@ -1,10 +1,7 @@
-# Vuelta atrás de la tanda E05 (modo «vuelta_atras»), en orden inverso. Cada
-# fichero PARA, sin tocar nada, si ya hay algo que se perdería (apuntes en la
-# 40700001, quincenas subidas, pagos propuestos, lo decidido por aclarar,
-# tarifas guardadas o saldos comparados).
-cuenta: scripts/conta/produccion/cuentas/e05-catcher.sql
-supabase/vuelta-atras/20261112T0140_e05_datos.down.sql
-supabase/vuelta-atras/20261112T0130_e05_pago_prepago.down.sql
-supabase/vuelta-atras/20261112T0120_e05_cruces.down.sql
-supabase/vuelta-atras/20261112T0110_e05_recibida_envio_emisor.down.sql
-supabase/vuelta-atras/20261112T0100_e05_lotes.down.sql
+# Vuelta atrás de la tanda D01 de las liquidaciones por correo (modo
+# «vuelta_atras»), en orden inverso. Cada fichero PARA, sin tocar nada, si ya
+# hay algo que se perdería (la dirección encendida o con correos; liquidaciones
+# leídas de un correo, direcciones de liquidaciones o facturas de comisión).
+cuenta: scripts/conta/produccion/cuentas/d01-liquidaciones.sql
+supabase/vuelta-atras/20261113T0110_d01_liquidaciones_direccion_foodint.down.sql
+supabase/vuelta-atras/20261113T0100_d01_liquidaciones_correo.down.sql

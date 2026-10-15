@@ -3,26 +3,25 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# E05 · Las facturas de riders de Catcher (rama conta/d01-catcher).
-# La anterior de este fichero (B01, 0192) ya está en el historial de
-# producción; su copia: tests/conta/produccion/tanda-b01-tarjeta-criterio-20261015.txt.
+# D01 · Las liquidaciones por correo, empezando por Uber Eats (rama
+# conta/d01-liquidaciones-uber, PR #204). Va ANTES de fusionar el #204: su
+# front lee lo que crea la 0100. Después se fusiona y se despliega
+# conta-facturas-entrada desde main.
+# La anterior de este fichero (E05, 0100–0140) ya está en el historial de
+# producción; su copia: tests/conta/produccion/tanda-e05-catcher-20261015.txt.
 #
-#   1. 0100 — el emisor en la factura, el origen «lote» (CHECK que amplía:
-#      declarado en su cabecera, con su prueba de staging), el lote, sus
-#      pedidos, la tienda → local y conta_lote_registrar.
-#   2. 0110 — conta_recibida_envio con el emisor (misma firma; declarado).
-#   3. 0120 — la tarifa, «Por aclarar» y sus funciones. Solo añade.
-#   4. 0130 — el pago contra la 40700001 y el saldo prepago. Solo añade.
-#   5. 0140 — los datos de Foodint: la 40700001 «Saldo prepago Catcher», la
-#      62400001 como gasto de «Riders», las tiendas → local y la tarifa desde
-#      el 01/09/2026. Solo añade filas.
+#   1. 0100 — la dirección de liquidaciones (dos CHECK que amplían y
+#      conta_entrada_destino con la misma firma: declarados en su cabecera,
+#      con su prueba de staging), el mapa de tiendas de las plataformas, las
+#      columnas del resumen de Uber (nulas), la factura de comisión (el origen
+#      «liquidacion», su marca y la cuenta de cada línea), lo que queda por
+#      aclarar, conta_liquidacion_registrar y conta_recibida_envio con el freno
+#      de «sin número no va a Diez» (misma firma; declarado).
+#   2. 0110 — los datos de Foodint: su dirección liquidaciones-foodint@,
+#      APAGADA (no se enciende hasta configurar Resend). Solo añade una fila.
 #
-# Ninguna toca el camino del pedido: solo leen sale (conta_lote_pedidos_app),
-# sin clave ajena a ella.
-# Vuelta atrás: tests/conta/produccion/vuelta-atras-e05-catcher-20261015.txt.
-cuenta: scripts/conta/produccion/cuentas/e05-catcher.sql
-supabase/migrations/20261112T0100_e05_lotes.sql
-supabase/migrations/20261112T0110_e05_recibida_envio_emisor.sql
-supabase/migrations/20261112T0120_e05_cruces.sql
-supabase/migrations/20261112T0130_e05_pago_prepago.sql
-supabase/migrations/20261112T0140_e05_datos.sql
+# Ninguna toca el camino del pedido.
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-d01-liquidaciones-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-liquidaciones.sql
+supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql
+supabase/migrations/20261113T0110_d01_liquidaciones_direccion_foodint.sql
