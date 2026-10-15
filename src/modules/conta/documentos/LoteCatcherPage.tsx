@@ -26,7 +26,7 @@ import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { cuando } from '@/modules/conta/lib/catcherCruces'
 import {
-  apoyoDeLaTarjeta, cuadraConLosPedidos, cuentaDeGrupo, diferenciaDeComision, estadoDeFactura, etiquetasDe, type Cuenta,
+  apoyoDeLaTarjeta, contar, cuadraConLosPedidos, facturasPorGrupo, cuentaDeGrupo, diferenciaDeComision, estadoDeFactura, etiquetasDe, type Cuenta,
 } from '@/modules/conta/lib/catcherCuenta'
 import type { TipoFactura } from '@/modules/conta/lib/catcherQuincena'
 import {
@@ -97,7 +97,7 @@ export default function LoteCatcherPage() {
 
           <div className="cxr-cifras cxk-cifras">
             <div className="cxr-cifra"><span className="cxr-cifra-etiqueta">Facturas</span><span className="cxr-cifra-valor">{d.lote.facturas}</span>
-              <span className="cxr-cifra-apoyo">{GRUPOS.map((g) => `${d.facturas.filter((f) => f.tipo === g.tipo).length} ${g.nombre.toLowerCase()}`).join(' · ')}</span></div>
+              <span className="cxr-cifra-apoyo">{facturasPorGrupo({ rider: d.facturas.filter((f) => f.tipo === 'rider').length, flota: d.facturas.filter((f) => f.tipo === 'flota').length, catcher: d.facturas.filter((f) => f.tipo === 'catcher').length })}</span></div>
             <div className="cxr-cifra"><span className="cxr-cifra-etiqueta">Total</span><span className="cxr-cifra-valor">{eurosExactos(d.lote.total)}</span>
               <span className="cxr-cifra-apoyo">lo que baja la {SALDO_PREPAGO.cuenta}</span></div>
             <div className="cxr-cifra" data-prueba="tarjeta-por-aclarar"><span className="cxr-cifra-etiqueta">Por aclarar</span><span className="cxr-cifra-valor">{d.lote.cuenta.abiertas}</span>
@@ -173,7 +173,7 @@ function Grupo({ nombre, facturas, porFactura, movil }: { nombre: string; factur
   }
   return (
     <section className="cx-tarjeta cxk-grupo" aria-label={nombre}>
-      <h3>{nombre} <span className="cxr-apoyo">· {facturas.length} {facturas.length === 1 ? 'factura' : 'facturas'} · {eurosExactos(total)}</span>
+      <h3>{nombre} <span className="cxr-apoyo">· {contar(facturas.length, 'factura', 'facturas')} · {eurosExactos(total)}</span>
         {etiquetas.map((e) => <span key={e.tono} className={`cxk-contador cxk-contador-${e.tono}`}>{e.texto}</span>)}</h3>
       {movil ? (
         <div className="cxr-tarjetas">

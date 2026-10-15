@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import { leerQuincena } from '../../../src/modules/conta/lib/catcherQuincena'
 import { cruzar, resumenLote, TARIFA_PORTAL_20261014, type PedidoApp } from '../../../src/modules/conta/lib/catcherCruces'
 import {
-  apoyoDeLaTarjeta, cuadraConLosPedidos, cuentaDeGrupo, cuentaDelLote, diferenciaDeComision, estadoDeFactura, etiquetasDe, type EstadoCosa,
+  apoyoDeLaTarjeta, contar, cuadraConLosPedidos, facturasPorGrupo, cuentaDeGrupo, cuentaDelLote, diferenciaDeComision, estadoDeFactura, etiquetasDe, type EstadoCosa,
 } from '../../../src/modules/conta/lib/catcherCuenta'
 import { EMPRESA, quincenaInventada, TIENDA_A, TIENDA_B } from './ejemplo'
 
@@ -85,5 +85,19 @@ describe('la comisión que no cuadra (retoque 3)', () => {
     expect(diferenciaDeComision({ esperada: 7.11, cobrada: 7.11 })).toBeNull()
     expect(diferenciaDeComision({ esperada: 7.9, cobrada: 7.11 })).toEqual({ centimos: 79, sentido: 'de menos' })
     expect(diferenciaDeComision(null)).toBeNull()
+  })
+})
+
+describe('singular y plural en los contadores (15/10)', () => {
+  it('la quincena de ejemplo: «3 riders · 1 flota · 1 de Catcher»', () => {
+    const n = (t: string) => q.facturas.filter((f) => f.tipo === t).length
+    expect(facturasPorGrupo({ rider: n('rider'), flota: n('flota'), catcher: n('catcher') })).toBe('3 riders · 1 flota · 1 de Catcher')
+  })
+  it('uno en singular; cero y varios, en plural', () => {
+    expect(facturasPorGrupo({ rider: 1, flota: 2, catcher: 0 })).toBe('1 rider · 2 flotas · 0 de Catcher')
+    expect(facturasPorGrupo({ rider: 0, flota: 0, catcher: 2 })).toBe('0 riders · 0 flotas · 2 de Catcher')
+    expect(contar(1, 'pedido', 'pedidos')).toBe('1 pedido')
+    expect(contar(19, 'pedido', 'pedidos')).toBe('19 pedidos')
+    expect(contar(0, 'factura', 'facturas')).toBe('0 facturas')
   })
 })
