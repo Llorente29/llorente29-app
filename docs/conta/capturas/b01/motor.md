@@ -22,5 +22,5 @@ Importación: Banco B01 · Norte: Este fichero ya se subió el 13/10/2026 a las 
 | Banco B01 · Norte | 2026-10-13 | Transferencia a SUMINISTROS B01 DEL NORTE | −250,00 € | para confirmar | Pago en parte de la factura B01-0478 de Suministros B01 del Norte | Paga 250,00 € de los 600,00 € que quedan; seguirán pendientes 350,00 €. |
 | Banco B01 · Mercado | 2026-10-13 | Compra tarj. 1234 FERRETERIA LOPEZ | −34,75 € | por aclarar | Pago con tarjeta · ¿ticket? | Pago con tarjeta en FERRETERIA LOPEZ que aún no conozco: sube la foto del ticket y lo aprendo. |
 
-Asientos de la empresa A antes: 62.
-Asientos de la empresa A después de deshacer: 62 (antes 62).
+Asientos de la empresa A antes: 64.
+Asientos de la empresa A después de deshacer: 64 (antes 64).
