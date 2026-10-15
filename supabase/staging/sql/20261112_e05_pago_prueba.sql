@@ -78,7 +78,7 @@ begin
       'base', 4.7, 'cuota', 0.99, 'total', 5.69, 'tipoIva', 21, 'pedidos', 1, 'periodo', '{"desde":"2026-09-16","hasta":"2026-09-30"}'::jsonb, 'localId', v_l2,
       'reparto', '[]'::jsonb, 'requisitos', bien, 'contraPdf', bien, 'confianza', 'seguro',
       'pdf', jsonb_build_object('ruta', v_acc::text || '/e05-prueba/f1.pdf', 'nombre', 'invoice_fleet_2001_ES_F_2001_26_7.pdf', 'sha256', repeat('a3', 32), 'bytes', 2000)),
-    jsonb_build_object('numero', 'CMS_2026_09_2', 'tipo', 'catcher', 'fecha', '2026-09-30', 'emisor', jsonb_build_object('nombre', 'Catcher Marketplace SL', 'nif', 'B00000055', 'domicilio', 'Avenida Inventada 5, 28005 Madrid'),
+    jsonb_build_object('numero', 'CMS_2026_09_2', 'tipo', 'catcher', 'fecha', '2026-09-30', 'emisor', jsonb_build_object('nombre', 'Catcher Marketplace SL', 'nif', 'B00000125', 'domicilio', 'Avenida Inventada 5, 28005 Madrid'),
       'base', 3.16, 'cuota', 0.66, 'total', 3.82, 'tipoIva', 21, 'pedidos', 4, 'periodo', '{"desde":"2026-09-16","hasta":"2026-09-30"}'::jsonb, 'localId', v_l1,
       'reparto', '[]'::jsonb, 'requisitos', bien, 'contraPdf', bien, 'confianza', 'seguro',
       'pdf', jsonb_build_object('ruta', v_acc::text || '/e05-prueba/c1.pdf', 'nombre', 'invoice_3001_CMS_2026_09_2.pdf', 'sha256', repeat('a4', 32), 'bytes', 2000)));
@@ -112,7 +112,7 @@ declare
   v_e   constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
   v_c uuid; v_ca uuid;
 begin
-  insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name) values (v_acc, 'Catcher (prueba E05)', 'Catcher Marketplace SL', 'B00000055', true, 'Prueba E05') returning id into v_c;
+  insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name) values (v_acc, 'Catcher (prueba E05)', 'Catcher Marketplace SL', 'B00000125', true, 'Prueba E05') returning id into v_c;
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source, created_by_name)
   select v_acc, v_e, plan, '41000201', '4100', 'Catcher Marketplace (prueba E05)', 'own', 'manual', 'Prueba E05' from public.company_account where company_id = v_e limit 1
   returning id into v_ca;

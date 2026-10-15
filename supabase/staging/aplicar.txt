@@ -1,6 +1,7 @@
-# C06b · «Datos maestros e impuestos» en verde (Julio, 15/10): la semilla sin
-# sus rojos (dos NIF, dos 347 y el IGIC de la empresa B), y detrás las dos
-# pruebas del agente «libro» con el agente ejecutado entero con \i.
-supabase/seeds/conta/seed_c06b_semilla_verde_staging.sql
-supabase/staging/sql/20261011_c04_prueba_agente.sql
-supabase/staging/sql/20261015_c06b_prueba_agente_huecos.sql
+# D01 · El NIF de «Catcher Marketplace» de la semilla de E05 (rama conta/d01-nif-catcher).
+#   B00000055 no pasa su control: B00000125, en lo ya sembrado (la ficha y su
+#   tercero) y en las pruebas de E05 que lo cruzan, que se vuelven a pasar.
+supabase/seeds/conta/seed_d01_nif_catcher_staging.sql
+supabase/staging/sql/20261112_e05_lotes_prueba.sql
+supabase/staging/sql/20261112_e05_cruces_prueba.sql
+supabase/staging/sql/20261112_e05_pago_prueba.sql
