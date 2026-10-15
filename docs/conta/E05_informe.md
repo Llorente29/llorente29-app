@@ -38,7 +38,7 @@ Sin maqueta nueva: va dentro de Documentos (N22), con sus piezas y su estilo (`d
   - Lo que impide subirla (un fichero que falta, periodos mezclados) se dice y el botón no se puede pulsar.
   - Lo que no cuadra en una factura sube igual y queda por aclarar.
 - **«Subir y cruzar con los pedidos»**: dice lo que ha hecho. Por ejemplo: «Subida la 2.ª quincena…: 5 facturas (54,69 €).» y «Cruzada…: 5 facturas, 4 cuadran y 1 por aclarar (1 cosa que mirar).»
-- **Debajo, las quincenas subidas**: una línea cada una, con su contador. Por ejemplo: «2.ª quincena de septiembre de 2026 · 5 facturas · 54,69 € · cuadra con los pedidos salvo 1».
+- **Debajo, las quincenas subidas**: una línea cada una, con sus contadores («1 por aclarar», «1 reclamada»). Por ejemplo: «2.ª quincena de septiembre de 2026 · 5 facturas · 54,69 € · cuadra con los pedidos salvo 1».
 
 | Ordenador | Móvil |
 |---|---|
@@ -47,20 +47,20 @@ Sin maqueta nueva: va dentro de Documentos (N22), con sus piezas y su estilo (`d
 
 ### La quincena (`/conta/documentos/catcher/:lote`)
 
-- **Arriba**: el resumen en una línea y cuatro cifras.
+- **Arriba**: bajo el título, solo «Cuadra con los pedidos salvo 1», y cuatro cifras.
   - Facturas, por grupo.
   - Total («lo que baja la 40700001»).
-  - Por aclarar, y cuántas ya están decididas.
-  - La comisión cobrada, frente a la que saldría por pedido entregado.
+  - Por aclarar, y debajo lo ya decidido con su nombre («1 reclamada · 0 dadas por buenas»).
+  - La comisión cobrada, frente a la que saldría por pedido entregado; si no cuadra, «0,79 € de más» en ámbar.
 - **«Por aclarar»**, cada cosa con:
-  - su pedido (código y hora de Madrid) y su factura;
+  - su factura, y su pedido (código y hora de Madrid) solo si la frase no lo dice ya;
   - el porqué, en una frase con el importe;
   - los botones «Dar por buena», «Reclamar» (pide qué se reclama) y «Volver a abrir».
   - Lo decidido no desaparece: se queda abajo, con quién lo decidió y su nota (regla 7).
-- **Las facturas, por riders, flotas y Catcher**: cada grupo con su número, su total y su contador «N por aclarar».
+- **Las facturas, por riders, flotas y Catcher**: cada grupo con su número, su total y sus contadores («N por aclarar», «N reclamada»).
   - Cada factura, con su emisor, número, local («Varios locales» si reparte) y estado.
   - Cada una lleva a Revisar factura (N23).
-- **«Proponer el pago desde la 40700001»** (una vez; luego dice «Pago propuesto») y **«Cruzar otra vez»**.
+- **«Proponer el pago desde la 40700001»**, una vez. Luego se ve hecho: «✓ Pago propuesto · Ver asiento», un enlace al asiento. Al lado, **«Volver a comprobar»**.
 - **El saldo prepago**: ver abajo.
 
 | Ordenador | Móvil |
@@ -70,13 +70,30 @@ Sin maqueta nueva: va dentro de Documentos (N22), con sus piezas y su estilo (`d
 
 ### El saldo prepago (en la quincena y en la ficha de Catcher)
 
-- **El saldo de la 40700001**, recargas menos pagos, con lo que está sin validar aparte.
+- **El saldo de la 40700001, en palabras**: «Has recargado 0,00 € · se han pagado 54,69 € · te quedan −54,69 €». Aparte: «De esos pagos, 54,69 € aún sin validar».
 - **La última comparación con el portal**, si la hay.
 - **La casilla «Saldo que ves en el portal de Catcher»** con «Comprobar». Contesta, por ejemplo: «No coincide: el portal dice 100,00 € y la 40700001 −54,69 € (el portal tiene 154,69 € más). Hay pagos o recargas propuestos sin validar.»
 
 | Ordenador | Móvil |
 |---|---|
 | ![](capturas/e05/catcher-pago-y-saldo-ordenador.png) | ![](capturas/e05/catcher-pago-y-saldo-movil.png) |
+
+### Los retoques del 15/10 (Julio, al revisar el diseño)
+
+| # | Antes | Ahora |
+|---|---|---|
+| 1 | Lo reclamado seguía contando como «por aclarar» en el bloque y la fila (salían del resumen del cruce, que no se mueve al decidir) | **Una sola cuenta** (`lib/catcherCuenta.ts`), del estado de cada cosa ahora. De ella salen la tarjeta de arriba, el bloque de cada grupo, su fila, la línea bajo el título y la lista de Documentos. Lo reclamado dice «Reclamada» en todas |
+| 2 | «Recargas · Pagos · Sin validar», con el saldo suelto | «Has recargado X € · se han pagado Y € · te quedan Z €» y, aparte, «De esos pagos, Y € aún sin validar» |
+| 3 | La comisión, sin decir si cuadraba | «0,79 € de más» en ámbar, cuando no cuadra |
+| 4 | «Cruzar otra vez» | «Volver a comprobar» |
+| 5 | «Pago propuesto», un botón apagado | «✓ Pago propuesto · Ver asiento», un enlace al asiento |
+| 6 | En el G236, un título que repetía la frase; bajo el título de la quincena, la línea entera | La frase sola; y bajo el título, solo «Cuadra con los pedidos salvo 1» |
+
+- **Prueba de la 1**: `tests/conta/e05/catcherCuenta.test.ts`, sobre el cruce de la quincena de ejemplo. Abierta, reclamada y dada por buena, y las cuatro pantallas tienen que decir lo mismo; con la reclamada, ninguna dice «por aclarar». La e2e lo mira en la pantalla de verdad, antes y después de «Reclamar».
+- **Los pagos sin validar** salen del diario: el haber de la 40700001 en asientos propuestos o en borrador. La función del saldo solo da lo propuesto neto. Solo front: la tanda no cambia.
+- **Queda una frase de la base** que no es del front: tras «Reclamar», la confirmación dice «A su factura le queda 1 cosa». La escribe `conta_lote_aclarar` (0120), y cambiarla es tocar la tanda. Si la quieres como «1 reclamada», va en otra.
+
+Las capturas de arriba ya son las de después de los retoques, de la e2e de esta rama: «la quincena» es antes de «Reclamar», y «reclamada» es justo después. Así se ven las cuatro con lo reclamado.
 
 En el móvil, las filas de las facturas son tarjetas, las cifras van de dos en dos y los botones bajan debajo de cada cosa por aclarar.
 
@@ -148,7 +165,7 @@ Fuentes:
 
 ## Pruebas
 
-- **Núcleo** (`tests/conta/e05`): 36 pruebas.
+- **Núcleo** (`tests/conta/e05`): 43 pruebas (las 7 nuevas, de la cuenta única y la comisión).
   - La lectura de los tres ficheros (con PDF de verdad, hechos con jspdf y leídos con pdfjs), la norma, el PDF contra el Excel y las horas de Madrid a UTC.
   - Los cruces, con el caso real G236 y cada cosa que puede no cuadrar.
   - La tarifa fechada, el resumen de cada quincena y el reparto entre tiendas.
@@ -162,15 +179,20 @@ Fuentes:
   - Las dos pasadas comparten la quincena en staging: la segunda la encuentra subida, cruzada y con el pago propuesto, y lo dice. La prueba vuelve a abrir el G236 si la otra pasada lo dejó decidido.
   - La comprobación de la marca mira solo lo nuevo. El resto de Documentos la enseña fuera de `?marca=contabilidad` a propósito; la ausencia ahí la prueba `documentos.spec.ts`.
 
-## La tanda de producción (preparada, no lanzada)
+## La tanda de producción (en el manifiesto vivo desde el 15/10)
 
-- **Manifiesto:** `tests/conta/produccion/tanda-e05-catcher-20261015.txt`. Para lanzarla se copia a `supabase/produccion/aplicar.txt` cuando Julio diga: el manifiesto vivo es de B y va antes.
+- **Manifiesto:** `supabase/produccion/aplicar.txt` (copia: `tests/conta/produccion/tanda-e05-catcher-20261015.txt`). La de B (0192) ya estaba en el historial de producción y queda archivada como copia (`tanda-b01-tarjeta-criterio-20261015.txt`, con su vuelta atrás y su contexto).
+- **Comprobado en producción**, en solo lectura:
+  - la 40700001 no existe, ni en Foodint ni en toda la tabla;
+  - la 407 sí: es la 40700000, con template_code '407';
+  - ninguna de las cinco está en el historial.
+- **Suite e2e entera** en verde en el commit de la tanda (26739fea): run 38731824155.
 - **Ficheros**, en orden: 0100, 0110, 0120, 0130 y 0140 (los datos de Foodint):
   - la 40700001 «Saldo prepago Catcher», colgada de la 407;
   - la 62400001 como gasto de «Riders»;
   - las tiendas → local: Camichi → Carabanchel, Florencio Llorente → Alcalá;
   - la tarifa desde el 01/09/2026.
-- **Analizador**, con el contexto de producción medido en solo lectura (`contexto-produccion-e05-catcher-20261015.json`): las cinco, «sigue»; «autorizo», ninguno. Ninguna está en el camino del pedido.
+- **Analizador**, con el contexto de producción medido en solo lectura (`contexto-produccion-tanda-viva.json`, medido el 15/10 a las 11:55 UTC): las cinco, «sigue»; «autorizo», ninguno. Ninguna está en el camino del pedido.
 - **Vuelta atrás:** `tests/conta/produccion/vuelta-atras-e05-catcher-20261015.txt`. Cada fichero para, sin tocar nada, si ya hay algo que se perdería.
 
 ## Lo que queda
