@@ -1,13 +1,17 @@
 {
- "_que": "B01 · contexto de producción de la tanda viva (20261101T0180, deshacer un extracto), medido en SOLO LECTURA el 14/10 a las 22:35 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. La función no existe; nada en el historial ni en el camino del pedido.",
- "medido": "2026-10-14T22:35Z",
+ "_que": "Contexto de PRODUCCIÓN de la tanda viva (supabase/produccion/aplicar.txt): la respuesta de la consulta de contexto del workflow (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow), lanzada en solo lectura. Vale solo para los ficheros con estos md5: si uno cambia, se vuelve a medir (paso 8 de antes-de-subir, R11).",
+ "medido": "2026-10-14T23:26:55Z",
  "tanda": {
-  "supabase/migrations/20261101T0180_b01_extracto_deshacer.sql": "dda39cf10bcb2090c440271c650032c5"
+  "supabase/migrations/20261111T0740_c06b_diez_autorizo_recibidas.sql": "5cf518eb9246833815e9a4e7dba3bc31"
  },
  "contexto": {
-  "tablas": [],
+  "tablas": [
+   "public.conta_diez_autorizo"
+  ],
   "funciones": [],
-  "filas": {},
+  "filas": {
+   "public.conta_diez_autorizo": 0
+  },
   "otras": {},
   "camino": {
    "tablas": [],

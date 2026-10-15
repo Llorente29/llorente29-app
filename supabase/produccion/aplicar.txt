@@ -5,23 +5,20 @@
 # su transacción con su registro en el historial; después la comprobación y,
 # si falla, la vuelta atrás automática).
 #
-# B01 · Deshacer un extracto entero (Julio, 15/10: cambiar el primer Norma 43
-# de Foodint, sacado desde «extracto», por el de «Firmas», que trae a quién
-# pagas). Rama conta/b01-extractos. La tanda anterior de este fichero (C06b,
-# 0720) ya está en el historial de producción con su huella; su copia queda en
-# tests/conta/produccion/tanda-c06b-validar-pdf-20261014.txt.
+# C06b · Respuesta 8, tarea 1 (rama conta/c06b-autorizo-desde). PREPARADA, NO LANZADA.
 #
-#   1. 20261101T0180 — bank_extracto_deshacer, NUEVA: quita un extracto y sus
-#      movimientos (también los «¿es el mismo?») si ninguno está casado ni
-#      tiene ticket; pide el porqué y lo deja en «Lo que ha hecho Folvy».
-#      No cambia ninguna tabla, función ni dato al aplicarse.
+#   1. 20261111T0740 — conta_diez_autorizo.incluye_recibidas (boolean, not
+#      null, por defecto false): la autorización no abre las facturas
+#      recibidas hasta que A arregle la búsqueda antes de escribir. Solo
+#      añade; la fila del 1801 queda en false (lo que ya hace).
 #
-# Orden: BASE y luego FRONT (el botón «Deshacer…» de Cuentas y extractos
-# llama a la función: sin ella, falla en pantalla con su error).
-#
-# Lo que cuenta antes y después: scripts/conta/produccion/cuentas/extracto-deshacer.sql
-# (la función, y extractos, movimientos, casados y registro, que no se mueven).
+# ORDEN (Julio, 14/10):
+#   · esta tanda;
+#   · la #189 al día con main → fusiona Julio → Vercel READY → desplegar
+#     conta-diez-enviar desde main (lee desde e incluye_recibidas);
+#   · otra tanda: la fila de empresa C0008 desde 2026-10-01 con
+#     incluye_recibidas = false.
 #
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/extracto-deshacer.sql
-supabase/migrations/20261101T0180_b01_extracto_deshacer.sql
+cuenta: scripts/conta/produccion/cuentas/diez-autorizo-recibidas.sql
+supabase/migrations/20261111T0740_c06b_diez_autorizo_recibidas.sql

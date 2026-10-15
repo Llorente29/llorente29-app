@@ -44,6 +44,9 @@
 //   · El 3 se abre SOLO con lo que Julio autoriza en la base
 //     (conta_diez_autorizo: un asiento, o la empresa en esa base). Sin
 //     autorización, Diez real sigue cerrado; C0001, nunca.
+//   · R8 (tarea 1): la de la empresa puede llevar «desde»: solo vale para los
+//     asientos con fecha desde ese día (autorizacionCubre). El contraasiento,
+//     con la fecha de lo que anula.
 
 import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
@@ -98,8 +101,12 @@ export interface PuertoEnvio {
   guardar(f: EnvioFila): Promise<EnvioFila>
   /** La conexión con Diez de la empresa (conectada), o null. */
   conexion(companyId: string): Promise<ConexionDiez | null>
-  /** ¿Ha autorizado Julio escribir este asiento en esta base real? (conta_diez_autorizo) */
-  autorizado(entryId: string, companyId: string, nombreBd: string): Promise<boolean>
+  /**
+   * ¿Ha autorizado Julio escribir este asiento en esta base real?
+   * (conta_diez_autorizo; `fecha`, AAAA-MM-DD, la del asiento: una
+   * autorización de empresa con «desde» solo vale desde ese día.)
+   */
+  autorizado(entryId: string, companyId: string, nombreBd: string, fecha: string, tipo: TipoEnvio): Promise<boolean>
   /** El cliente de Diez de esa conexión (escribir: sí; escribirEnReal: solo con autorización). */
   cliente(c: ConexionDiez, o: { real: boolean }): Promise<ClienteDiezEnvio>
   /** Los bytes del PDF guardado en el bucket. */
@@ -128,6 +135,36 @@ export const sinContenedor = (r: { status: number; json: unknown }) => r.status 
 export const TEXTO_CONTENEDOR = 'Diez todavía no guarda documentos (falta que Cegid active su almacén): no se envía la factura sin su PDF'
 
 export const PDF_PENDIENTE = 'PDF pendiente en Diez'
+/** Una fila de public.conta_diez_autorizo (lo que se mira de ella). */
+export type Autorizacion = { alcance: string; entry_id: string | null; desde: string | null; incluye_recibidas?: boolean | null }
+
+/** Qué se escribe en Diez: la factura de ventas (serie 1) o una recibida (serie 2). */
+export type TipoEnvio = 'ventas' | 'recibidas'
+
+/**
+ * C06b R8 · tarea 1: ¿cubre alguna de estas autorizaciones (de la empresa, en
+ * esa base) a este asiento? La de un asiento, por su id; la de la empresa,
+ * desde su «desde» (inclusive) o, sin él, siempre. `fecha`: AAAA-MM-DD.
+ *
+ * Y las RECIBIDAS (Julio, 14/10), solo con `incluye_recibidas` (0740; por
+ * defecto, no). Se cerraron porque duplicaban en Diez (A lo midió: buscaba en
+ * el mes de la factura y Diez filtra por la fecha del asiento; el número sin
+ * normalizar; el proveedor solo por su cuenta). A lo arregló en la #190
+ * (esLaMismaRecibida, mesesEntre), pero abrirlas lo decide Julio: hasta que
+ * una fila lleve incluye_recibidas, una autorización no abre las recibidas,
+ * sea de empresa o de un asiento.
+ */
+export function autorizacionCubre(xs: readonly Autorizacion[], entryId: string, fecha: string, tipo: TipoEnvio = 'ventas'): boolean {
+  return xs.some((a) => (tipo === 'ventas' || a.incluye_recibidas === true)
+    && ((a.alcance === 'asiento' && a.entry_id === entryId)
+      || (a.alcance === 'empresa' && (a.desde == null || fecha.slice(0, 10) >= String(a.desde).slice(0, 10)))))
+}
+
+/** El texto de Diez real cerrado, para cada tipo. */
+export const cerradoEn = (bd: string, tipo: TipoEnvio) => tipo === 'recibidas'
+  ? `Diez real está cerrado para facturas recibidas (${bd}): no se escribe nada hasta que Julio las autorice`
+  : `Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`
+
 const yaEnviado = (e: EnvioFila | null) => !!e && (e.status === 'enviado' || e.status === 'enlazado')
 
 function noLlega(motivo: string, reintentar = true): ResultadoEnvio {
@@ -144,6 +181,8 @@ type Base = { id: string; account_id: string; company_id: string; estado: string
  *     Diez (el nombre del cliente de la 430, en ventas); o por qué no.
  */
 type Plan = {
+  /** Ventas o recibidas: lo que Julio autoriza va por separado (R8, tarea 1). */
+  tipo: TipoEnvio
   preparar(): { serie: string; numero: string; cuenta: string; mes: string } | { motivo: string; reintentar: boolean }
   construir(c: { delMes: Factura[]; ya: Factura[]; diez: ClienteDiezEnvio }): Promise<{ fd: FacturaData } | { motivo: string; reintentar: boolean }>
   /**
@@ -190,6 +229,7 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
   const r = await p.resumen(entryId)
   const corr = p.correspondencia(r.company_id)
   const plan: Plan = {
+    tipo: 'ventas',
     preparar: () => {
       const listo = resumenDeAsiento(r, { correspondencia: corr, generado: p.ahora(), hoy: hoyMadrid(p.ahora()) })
       if (!listo.factura) return { motivo: listo.sinFactura ?? 'esta factura no se sabe mandar', reintentar: false }
@@ -229,6 +269,7 @@ export async function enviarRecibidaADiez(entryId: string, p: PuertoEnvio & { re
     hecha = facturaRecibida({ fecha: r.fecha, fechaFactura: r.factura.fecha, numero: r.factura.numero ?? '', proveedor: r.proveedor, lineas: r.lineas }, { hoy: hoyMadrid(p.ahora()) })
   } catch (x) { porque = x instanceof Error ? x.message : String(x) }
   const plan: Plan = {
+    tipo: 'recibidas',
     preparar: () => hecha
       ? { serie: '2', numero: String(hecha.factura.NumeroFactura), cuenta: hecha.factura.CuentaCliente, mes: String(hecha.factura.FechaFactura).slice(0, 6) }
       : { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false },
@@ -291,7 +332,7 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
   const bd = con.nombreBd.trim().toUpperCase()
   if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
   const real = bd !== BASE_PRUEBAS
-  if (real && !(await p.autorizado(r.id, r.company_id, bd))) return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  if (real && !(await p.autorizado(r.id, r.company_id, bd, r.fecha, plan.tipo))) return apuntar(cerradoEn(bd, plan.tipo), { account_connector_id: con.id })
   const adjuntar = con.adjuntar === true
   // Ya en Diez sin su PDF, y Diez sigue sin guardar documentos: nada que hacer (nunca dos veces).
   if (yaEnviado(previo) && previo!.document_status === 'pendiente_diez' && !adjuntar) {
@@ -435,8 +476,9 @@ export async function enviarContraasientoADiez(c: ContraasientoBD, p: PuertoEnvi
   const bd = con.nombreBd.trim().toUpperCase()
   if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
   const real = bd !== BASE_PRUEBAS
-  if (real && !(await p.autorizado(c.id, c.company_id, bd)) && !(await p.autorizado(c.anula, c.company_id, bd))) {
-    return apuntar(`Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`, { account_connector_id: con.id })
+  // La fecha que cuenta es la de lo que anula (r.fecha), no la del contraasiento.
+  if (real && !(await p.autorizado(c.id, c.company_id, bd, r.fecha, 'ventas')) && !(await p.autorizado(c.anula, c.company_id, bd, r.fecha, 'ventas'))) {
+    return apuntar(cerradoEn(bd, 'ventas'), { account_connector_id: con.id })
   }
   if (previo && previo.attempts >= MAX_INTENTOS) return noLlega(`ya van ${previo.attempts} intentos: lo tiene que mirar una persona`, false)
 

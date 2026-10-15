@@ -13,7 +13,8 @@
 //     servicio (escribir en external_send es solo del servidor);
 //   · el cliente de Diez con escribir: sí, y escribirEnReal SOLO con lo que
 //     Julio autoriza en la base (C06b R7: conta_diez_autorizo, un asiento o la
-//     empresa en esa base). Sin autorización, como en R15: nada en C0008.
+//     empresa en esa base; R8: la de empresa, desde su fecha «desde»). Sin
+//     autorización, como en R15: nada en C0008.
 //     C0001 está vetada en el propio cliente.
 //   · si Diez guarda documentos lo dice la conexión
 //     (config.adjuntar_documentos; hoy, apagado): sin él, la factura va sin
@@ -33,7 +34,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { ClienteDiez, type AlmacenToken } from "../_shared/diezCliente.ts";
 import { correspondenciaDeEmpresa } from "../_shared/diezAnalitica.ts";
-import { enviarAsientoADiez, enviarContraasientoADiez, enviarRecibidaADiez, type ConexionDiez, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
+import { autorizacionCubre, enviarAsientoADiez, enviarContraasientoADiez, enviarRecibidaADiez, type Autorizacion, type ConexionDiez, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
 import type { ResumenBD } from "../_shared/resumenDeAsiento.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -113,11 +114,13 @@ Deno.serve(async (req) => {
       const bd = String(data.external_account_id ?? config.nombre_bd ?? "");
       return bd ? { id: String(data.id), nombreBd: bd, adjuntar: config.adjuntar_documentos === true } : null;
     },
-    autorizado: async (id, companyId, nombreBd) => {
-      const { data, error } = await srv.from("conta_diez_autorizo").select("id, alcance, entry_id")
+    autorizado: async (id, companyId, nombreBd, fecha, tipo) => {
+      // R8 (tarea 1): «desde» (0730) limita la de empresa a los asientos desde ese
+      // día, e «incluye_recibidas» (0740) decide si abre las facturas recibidas.
+      const { data, error } = await srv.from("conta_diez_autorizo").select("id, alcance, entry_id, desde, incluye_recibidas")
         .eq("account_id", r.account_id).eq("company_id", companyId).ilike("nombre_bd", nombreBd);
       if (error) throw new Error(`no se ha podido leer lo autorizado en Diez: ${error.message}`);
-      return (data ?? []).some((a) => a.alcance === "empresa" || a.entry_id === id);
+      return autorizacionCubre((data ?? []) as Autorizacion[], id, fecha, tipo);
     },
     cliente: async (c: ConexionDiez, o) => {
       const { data: s, error } = await srv.rpc("connector_secret_read", { p_account_connector_id: c.id });
