@@ -39,6 +39,9 @@ name: Diez · factura de prueba en C0009 (C04b)
 # Y en conta/d01-buscar-en-diez, con «[prueba-c0009:recibida-buscar]», SOLO LEE
 # para repetir sobre cada recibida de la C0009 la búsqueda que hace el envío
 # antes de escribir (scripts/conta/diez/prueba-c0009-recibida-buscar.ts).
+# Y en conta/d01-anular-recibida, con «[prueba-c0009:recibida-anular]», SOLO LEE
+# (GET) cómo anula la gestoría una recibida en la serie 2 y ensaya sin escribir
+# la «-ANUL» de Folvy (scripts/conta/diez/prueba-c0009-recibida-anular.ts).
 # Con «[prueba-c0009:recibida]», ENVÍA a la C0009 UNA factura recibida inventada
 # hecha por la cadena de Folvy (facturaProveedor → facturaRecibida) y la lee de
 # vuelta, para medir la serie 2 (scripts/conta/diez/prueba-c0009-recibida.ts).
@@ -46,7 +49,7 @@ name: Diez · factura de prueba en C0009 (C04b)
 on:
   push:
     # conta/c06b-validar-pdf: solo para «[prueba-c0009:rectificativas-molde]» (C06b, respuesta 8, solo lectura).
-    branches: ['conta/c04b-diez', 'conta/d01-recibidas', 'conta/c06b-validar-pdf', 'conta/d01-buscar-en-diez']
+    branches: ['conta/c04b-diez', 'conta/d01-recibidas', 'conta/c06b-validar-pdf', 'conta/d01-buscar-en-diez', 'conta/d01-anular-recibida']
   workflow_dispatch:
 
 concurrency:
@@ -130,6 +133,8 @@ jobs:
             '[prueba-c0009:emitida-molde]'*) S=scripts/conta/diez/prueba-c0009-emitida-molde.ts ;;
             # D01: la recibida de molde (serie 2), solo lectura (escribir: false).
             '[prueba-c0009:recibida-molde]'*) S=scripts/conta/diez/prueba-c0009-recibida-molde.ts ;;
+            # D01 (15/10): cómo se anula una recibida en la serie 2 y la «-ANUL» de Folvy, ensayada sin escribir (solo GET).
+            '[prueba-c0009:recibida-anular]'*) S=scripts/conta/diez/prueba-c0009-recibida-anular.ts ;;
             # D01 (14/10): la búsqueda antes de escribir, contra las recibidas de verdad (escribir: false).
             '[prueba-c0009:recibida-buscar]'*) S=scripts/conta/diez/prueba-c0009-recibida-buscar.ts ;;
             # D01: una recibida de Folvy a la C0009 y leída de vuelta (si ya está, no se envía otra).
