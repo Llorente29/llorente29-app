@@ -89,7 +89,7 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
     mimeType: f.nombre.endsWith('.zip') ? 'application/zip' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })))
   await expect(bloque.getByText(/^2\.ª quincena de septiembre de 2026 · 5 facturas · 54,69 €$/)).toBeVisible({ timeout: 30_000 })
-  await expect(bloque.getByText('3 de riders · 1 de flotas · 1 de Catcher · 19 pedidos en el Excel')).toBeVisible()
+  await expect(bloque.getByText('3 riders · 1 flota · 1 de Catcher · 19 pedidos en el Excel')).toBeVisible()
   await sinMarca(page, 'Documentos con la quincena leída', 'section.cxk-quincena')
   await capturar(page, 'catcher-leida')
 
@@ -125,6 +125,8 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   // Retoque 3: la comisión que no cuadra, dicha.
   await expect(page.locator('.cxk-diferencia')).toHaveText('0,79 € de más')
   // Retoque 1: abierta, las cuatro dicen «por aclarar».
+  // Singular y plural (15/10): «1 flota · 1 de Catcher».
+  await expect(page.locator('.cxk-cifras')).toContainText('3 riders · 1 flota · 1 de Catcher')
   const tarjeta = page.locator('[data-prueba="tarjeta-por-aclarar"]')
   const bloqueCatcher = page.getByRole('region', { name: 'Catcher', exact: true })
   await expect(tarjeta).toContainText('Por aclarar1')

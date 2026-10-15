@@ -81,3 +81,11 @@ export function diferenciaDeComision(c: { esperada: number; cobrada: number } | 
   const d = Math.round(c.cobrada * 100) - Math.round(c.esperada * 100)
   return d === 0 ? null : { centimos: Math.abs(d), sentido: d > 0 ? 'de más' : 'de menos' }
 }
+
+/** «1 factura» / «3 facturas»: el número con su nombre, en singular o en plural. */
+export const contar = (n: number, uno: string, varios: string): string => `${n} ${n === 1 ? uno : varios}`
+
+/** Cuántas facturas de cada grupo (retoque del 15/10): «3 riders · 1 flota · 1 de Catcher». */
+export function facturasPorGrupo(n: { rider: number; flota: number; catcher: number }): string {
+  return [contar(n.rider, 'rider', 'riders'), contar(n.flota, 'flota', 'flotas'), `${n.catcher} de Catcher`].join(' · ')
+}

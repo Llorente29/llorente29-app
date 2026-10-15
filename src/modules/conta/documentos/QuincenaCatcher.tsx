@@ -16,7 +16,7 @@ import { rutaLoteCatcher } from '@/config/navegacion'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { resumen, LoteNoValido } from '@/modules/conta/lib/catcherQuincena'
 import { resumenLote } from '@/modules/conta/lib/catcherCruces'
-import { etiquetasDe } from '@/modules/conta/lib/catcherCuenta'
+import { contar, etiquetasDe, facturasPorGrupo } from '@/modules/conta/lib/catcherCuenta'
 import { abrirQuincena, cruzarLote, leerLotes, subirQuincena, type QuincenaAbierta } from '@/modules/conta/services/catcherService'
 
 const ACEPTA = '.zip,.xlsx,.xls,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -46,7 +46,7 @@ export function QuincenaCatcher({ accountId, companyId, quien }: { accountId: st
 
   async function subir() {
     if (!leida) return
-    setFallo(null); setPaso(`Subiendo ${leida.facturas.length} facturas…`)
+    setFallo(null); setPaso(`Subiendo ${contar(leida.facturas.length, 'factura', 'facturas')}…`)
     try {
       const s = await subirQuincena(accountId, companyId, leida, quien)
       const textos = [s.texto]
@@ -85,8 +85,8 @@ export function QuincenaCatcher({ accountId, companyId, quien }: { accountId: st
           <div className="cxk-leida">
             <p className="cxk-resumen"><strong>{resumen(leida)}</strong></p>
             <p className="cxr-apoyo">
-              {leida.totales.porTipo.rider.facturas} de riders · {leida.totales.porTipo.flota.facturas} de flotas · {leida.totales.porTipo.catcher.facturas} de Catcher
-              {' · '}{leida.pedidos.length} pedidos en el Excel
+              {facturasPorGrupo({ rider: leida.totales.porTipo.rider.facturas, flota: leida.totales.porTipo.flota.facturas, catcher: leida.totales.porTipo.catcher.facturas })}
+              {' · '}{contar(leida.pedidos.length, 'pedido', 'pedidos')} en el Excel
             </p>
             {leida.problemas.length > 0 && (
               <ul className="cxk-lista-avisos" aria-label="Lo que impide subirla">{leida.problemas.map((p) => <li key={p} className="cxr-mal">{p}</li>)}</ul>
