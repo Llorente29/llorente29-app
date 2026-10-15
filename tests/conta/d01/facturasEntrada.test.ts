@@ -7,6 +7,7 @@ import {
   clasificarAdjuntos, comprobarFirma, direccionesDeFacturas, enlacesDeFactura, firmaSvix, nombreSeguro, recibirCorreo, rutaEntrada,
   type AdjuntoResend, type CorreoResend, type PuertoEntrada,
 } from '../../../supabase/functions/_shared/facturasEntrada'
+import { correoUber } from './uberInventado'
 
 const SECRETO = 'whsec_' + Buffer.from('secreto-de-prueba-del-webhook-32b').toString('base64')
 const sha = async (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
@@ -119,5 +120,70 @@ describe('recibirCorreo: el recorrido', () => {
     const r = await recibirCorreo(correo(), m.p)
     expect(r.texto).toBe('El correo no trae ninguna factura (logo.png: es una imagen pequeña (la firma o el logo del correo)) ni un enlace para bajarla.')
     expect(m.registro).toMatchObject([{ resultado: 'sin_facturas' }])
+  })
+})
+
+// D01 · Liquidaciones por correo (T2, 15/10): la misma entrada, enrutada por la
+// clase de la dirección. Resúmenes inventados con la forma de los de Uber.
+describe('recibirCorreo: liquidaciones-<empresa>@', () => {
+  const resumen = correoUber({ desde: '2026-09-21', hasta: '2026-09-27', dias: [{ fecha: '2026-09-24', pedidos: 2, ventas: 40, impuesto: 4 }],
+    desglose: { ventas: 44, pedidosVentas: 2, tasas: -13.31, promociones: -5 } })
+  function mundoLiq(o: { adjuntos?: AdjuntoResend[]; cuerpoEnWebhook?: boolean } = {}) {
+    const m = mundo({ adjuntos: o.adjuntos })
+    const registradas: { companyId: string; datos: Record<string, unknown> }[] = []
+    const cuerpos: string[] = []
+    m.p.destino = async (lp) => (lp === 'liquidaciones-taberna-norte' ? { companyId: 'emp', accountId: 'acc', activa: true, tipo: 'liquidaciones' }
+      : lp === 'facturas-taberna-norte' ? { companyId: 'emp', accountId: 'acc', activa: true, tipo: 'facturas' } : null)
+    m.p.cuerpo = async (id) => { cuerpos.push(id); return { html: resumen.html, text: null } }
+    m.p.liquidacion = async (x) => { registradas.push(x as never); return { id: 'liq-1', yaEstaba: false, texto: 'Liquidación del 21/09 al 27/09/2026 leída.', factura: 'creada' } }
+    return { ...m, registradas, cuerpos }
+  }
+  const aLiq = (o: Partial<CorreoResend> = {}) => correo({ to: ['liquidaciones-taberna-norte@entrada.folvy.app'], from: 'noreply@uber.com', subject: resumen.subject, ...o })
+
+  it('las dos clases de dirección se reconocen; otras, no', () => {
+    expect(direccionesDeFacturas({ to: ['liquidaciones-taberna-norte@entrada.folvy.app', 'nominas-x@entrada.folvy.app'] }).map((d) => d.localPart)).toEqual(['liquidaciones-taberna-norte'])
+  })
+  it('un resumen de Uber: pide el cuerpo a Resend, lo lee y lo registra con su factura; al registro, solo ids y recuentos', async () => {
+    const m = mundoLiq()
+    const r = await recibirCorreo(aLiq(), m.p)
+    expect([r.resultado, r.texto]).toEqual(['liquidacion', 'Liquidación del 21/09 al 27/09/2026 leída.'])
+    expect(m.cuerpos).toEqual(['e1'])
+    expect(m.registradas).toHaveLength(1)
+    expect(m.registradas[0]).toMatchObject({ companyId: 'emp', datos: { proveedor: 'uber', email_id: 'e1', desde: '2026-09-21', neto: 25.69, factura: { total: 13.31 } } })
+    expect(m.registro).toEqual([expect.objectContaining({ resultado: 'liquidacion', companyId: 'emp',
+      detalle: { liquidacion_id: 'liq-1', ya_estaba: false, factura: 'creada', avisos: 0, mensual: false } })])
+    expect(m.llegadas).toEqual([])
+  })
+  it('el resumen del mes adjunto se guarda con la liquidación (y nada más se toma)', async () => {
+    const m = mundoLiq({ adjuntos: [
+      { id: '1', filename: 'monthly_statement_September_2026.pdf', content_type: 'application/pdf', size: 90_000, download_url: 'https://r/mes' },
+      { id: '2', filename: 'logo.png', content_type: 'image/png', size: 2_000, download_url: 'https://r/logo' }] })
+    await recibirCorreo(aLiq(), m.p)
+    expect(m.subidas).toEqual(['acc/_liquidaciones/e1/monthly_statement_September_2026.pdf'])
+    expect((m.registradas[0].datos as { mensual: unknown }).mensual).toBeNull() // este resumen inventado no trae «Resumen unificado»
+  })
+  it('lo que no es un resumen de pagos se apunta y se dice; no se registra nada', async () => {
+    const m = mundoLiq()
+    const r = await recibirCorreo(aLiq({ subject: 'Novedades de la plataforma', html: '<p>Hola</p>' }), m.p)
+    expect(r.resultado).toBe('no_es_liquidacion')
+    expect(r.texto).toBe('No es un resumen de pagos de Uber Eats. Queda apuntado y no se lee: por ahora solo se leen los resúmenes de pagos de Uber Eats.')
+    expect(m.registradas).toEqual([])
+    expect(m.registro).toMatchObject([{ resultado: 'no_es_liquidacion', detalle: { motivo: 'No es un resumen de pagos de Uber Eats.' } }])
+  })
+  it('la confirmación de reenvío de Gmail: se apunta su código, en las dos clases', async () => {
+    for (const to of ['liquidaciones-taberna-norte@entrada.folvy.app', 'facturas-taberna-norte@entrada.folvy.app']) {
+      const m = mundoLiq()
+      const r = await recibirCorreo(correo({ to: [to], from: 'Equipo de Gmail <forwarding-noreply@google.com>', subject: '(#123456789) Confirmación de reenvío de Gmail - Recibir correo de alguien@ejemplo.test' }), m.p)
+      expect([r.resultado, r.texto]).toEqual(['confirmacion', `Gmail pide confirmar el reenvío a ${to}: el código es 123456789. Escríbelo en Gmail.`])
+      expect(m.registro).toMatchObject([{ resultado: 'confirmacion', detalle: { codigo: '123456789' } }])
+      expect(m.llegadas).toEqual([])
+    }
+  })
+  it('a facturas-…@, lo de siempre (aunque sea un resumen de Uber: no se lee como liquidación)', async () => {
+    const m = mundoLiq({ adjuntos: [{ id: '1', filename: 'f.pdf', content_type: 'application/pdf', size: 30_000, download_url: 'https://r/1' }] })
+    const r = await recibirCorreo(correo({ subject: resumen.subject }), m.p)
+    expect(r.resultado).toBe('recibido')
+    expect(m.registradas).toEqual([])
+    expect(m.cuerpos).toEqual([])
   })
 })

@@ -321,6 +321,14 @@ export interface EntradaLiquidacion {
   /** De los pedidos del periodo, cuántos están ya en un resumen del día validado o propuesto. */
   pedidos: { total: number; asentados: number }
   localId: string | null
+  /**
+   * D01 · Su factura de comisión, si va aparte (las del correo de Uber: serie 2,
+   * a la 410 de la plataforma). Entonces aquí no van la comisión ni los cargos
+   * ni su IVA —irían dos veces—: solo la compensación con lo que te debe.
+   */
+  facturaAparte?: { total: number; numero: string | null } | null
+  /** D01 · Lo que la liquidación descuenta y no está en ninguna factura (promociones en artículos, contracargos): queda en su 430, dicho. */
+  apartado?: readonly { concepto: string; importe: number }[]
 }
 export interface CuentasLiquidacion {
   cliente430: string
@@ -367,6 +375,7 @@ export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidaci
     }
   }
 
+  if (l.facturaAparte) return liquidacionConFacturaAparte(l, l.facturaAparte, c, cabeza)
   const cargos = l.cargos.filter((x) => cent(x.importe) !== 0)
   const baseFactura = red2(l.comision + cargos.reduce((t, x) => t + x.importe, 0))
   const iva = cuotaIva(baseFactura, 21)
@@ -423,6 +432,52 @@ export function liquidacionPlataforma(l: EntradaLiquidacion, c: CuentasLiquidaci
   }
 }
 
+/**
+ * D01 · La liquidación cuya factura de comisión va aparte (serie 2): aquí solo
+ * se compensa esa factura con lo que la plataforma te debe por ventas (410 al
+ * debe, 430 al haber) y, si ya llegó al banco y no lo ha casado Bancos, el
+ * cobro. Lo apartado (promociones en artículos, contracargos) se queda en su
+ * 430 y se dice: hasta que Julio decida cómo se apunta, ningún asiento lo toca.
+ */
+function liquidacionConFacturaAparte(l: EntradaLiquidacion, fa: { total: number; numero: string | null }, c: CuentasLiquidacion, cabeza: string):
+  { propuesta: Propuesta | null; sinPropuesta: string | null } {
+  const loc = l.localId, comun = !loc
+  const lineas: LineaAsiento[] = []
+  const razones: Razon[] = [{ decision: 'Comisión en su factura', porque: `la comisión, los cargos y su IVA van en la factura de ${l.plataforma}${fa.numero ? ` ${fa.numero}` : ''} (serie 2): aquí solo se compensa` }]
+  const avisos: string[] = []
+  const confs: Confianza[] = []
+  if (cent(fa.total)) {
+    lineas.push({ cuenta: c.proveedor410, debe: fa.total, haber: 0, localId: loc, comun, concepto: `Factura de ${l.plataforma}${fa.numero ? ` ${fa.numero}` : ''}, compensada` })
+    lineas.push({ cuenta: c.cliente430, debe: 0, haber: fa.total, localId: loc, comun, concepto: 'Compensada con su factura' })
+  }
+  if (!fa.numero) { avisos.push('Su factura de comisión aún no tiene número: la compensación lo llevará cuando llegue.'); confs.push('duda') }
+  if (l.cobrado && c.banco) {
+    lineas.push({ cuenta: c.banco, debe: l.cobrado.importe, haber: 0, localId: loc, comun, concepto: 'Cobro al banco' })
+    lineas.push({ cuenta: c.cliente430, debe: 0, haber: l.cobrado.importe, localId: loc, comun, concepto: 'Cobro de la liquidación' })
+  } else {
+    razones.push(l.cobroEnBancos
+      ? { decision: 'Cobro en Bancos', porque: 'el movimiento del banco ya está casado con esta liquidación y lleva su propio asiento' }
+      : l.neto !== null && cent(l.neto) <= 0
+        ? { decision: 'Sin cobro', porque: 'el neto no es positivo: no hay transferencia y pasa a la siguiente liquidación' }
+        : { decision: 'Cobro aún no', porque: 'cuando llegue al banco se casa con esta liquidación (Bancos)' })
+  }
+  const apartado = (l.apartado ?? []).filter((x) => cent(x.importe) !== 0)
+  if (apartado.length) {
+    avisos.push(`Queda en su 430 sin apuntar, hasta decidir cómo: ${apartado.map((x) => `${x.concepto} ${eurosExactos(x.importe)}`).join(' · ')}.`)
+    confs.push('duda')
+  }
+  if (lineas.length < 2) return { propuesta: null, sinPropuesta: 'La liquidación no trae factura que compensar ni cobro: no hay nada que asentar.' }
+  return {
+    sinPropuesta: null,
+    propuesta: {
+      serie: c.serieTesoreria ?? 3, fecha: l.cobrado?.fecha ?? l.fecha, concepto: cabeza, origen: { tipo: 'channel_settlement', id: l.id }, lineas,
+      confianza: peor('probable', ...confs),
+      porque: `Su factura de comisión, compensada con lo que te debe${l.cobrado ? ', y el cobro al banco' : ''}; las ventas ya están en sus días.`,
+      razones, avisos,
+    },
+  }
+}
+
 // ── Factura de proveedor y su pago (regla 8) ────────────────────────────────
 
 export interface LineaFactura { base: number; tipo: { id: string; porcentaje: number } | null; cuentaGasto: string | null }
@@ -446,6 +501,16 @@ export interface EntradaFactura {
    * recibidas como deducible (supplier_invoice.vat_non_deductible).
    */
   ivaNoDeducible?: boolean
+  /**
+   * D01 · Liquidaciones: el IVA tal como lo dice la factura, por tipo (la de
+   * comisión de Uber: la base del total y su cuota, que a veces no es base ×
+   * 21 % al céntimo). Sin esto, se calcula por tipo como siempre.
+   */
+  cuotas?: readonly { porcentaje: number; base: number; cuota: number }[]
+  /** D01 · La marca de la factura (analítica de cada apunte). */
+  marcaId?: string | null
+  /** D01 · La factura de comisión de una liquidación sale sin número: se propone, pero en duda y diciéndolo. */
+  faltaNumero?: boolean
 }
 export interface CuentasFactura {
   proveedor: string
@@ -499,7 +564,8 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
       },
     }
   }
-  for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
+  const marca = f.marcaId ?? null
+  for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}) })
   const porTipo = new Map<number, { id: string; base: number }>()
   for (const l of f.lineas) {
     if (!l.tipo) continue
@@ -513,9 +579,12 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
     const cta = c.ivaSoportado(pct)
     if (!cta) { avisos.push(`No hay 472 del ${pct} % en tu plan.`); confs.push('duda'); continue }
     const base = deCent(x.base)
-    const cuota = cuotaIva(base, pct)
+    const dicha = f.cuotas?.find((q) => q.porcentaje === pct)
+    if (dicha && cent(dicha.base) !== x.base) { avisos.push(`La base del ${pct} % de la factura (${eurosExactos(dicha.base)}) no es la de sus líneas (${eurosExactos(base)}).`); confs.push('duda') }
+    const cuota = dicha ? dicha.cuota : cuotaIva(base, pct)
     ivaTotal += cent(cuota)
-    lineas.push({ cuenta: cta.cuenta, debe: cuota, haber: 0, localId: loc, comun: !loc, documento: f.numero, iva: { tipoId: cta.tipoId, tipo: pct, base, libro: 'received', deducible: 'yes' } })
+    lineas.push({ cuenta: cta.cuenta, debe: cuota, haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}),
+      iva: { tipoId: cta.tipoId, tipo: pct, base, libro: 'received', deducible: 'yes' } })
   }
   if (f.retencion) {
     lineas.push({ cuenta: c.retencion, debe: 0, haber: f.retencion.importe, localId: loc, comun: !loc, documento: f.numero,
@@ -524,7 +593,12 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
   }
   const baseTotal = f.lineas.reduce((t, l) => t + cent(l.base), 0)
   const aPagar = deCent(baseTotal + ivaTotal - cent(f.retencion?.importe ?? 0))
-  lineas.push({ cuenta: c.proveedor, debe: 0, haber: aPagar, localId: loc, comun: !loc, documento: f.numero, terceroId: f.terceroId })
+  lineas.push({ cuenta: c.proveedor, debe: 0, haber: aPagar, localId: loc, comun: !loc, documento: f.numero, terceroId: f.terceroId, ...(marca ? { marcaId: marca } : {}) })
+  if (f.cuotas?.length) razones.push({ decision: 'IVA el de la factura', porque: 'la cuota de cada tipo es la que dice la factura, no la base por el tipo redondeada' })
+  if (f.faltaNumero) {
+    avisos.push('Falta el número de la factura: la plataforma no lo manda en el correo. Sin él no se valida ni va a Diez.')
+    confs.push('duda')
+  }
   if (cent(deCent(baseTotal + ivaTotal)) !== cent(f.total)) {
     avisos.push(`Base + IVA = ${eurosExactos(deCent(baseTotal + ivaTotal))}, y la factura dice ${eurosExactos(f.total)}.`)
     confs.push('duda')

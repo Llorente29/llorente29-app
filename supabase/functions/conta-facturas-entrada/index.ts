@@ -13,6 +13,12 @@
 //   · la lectura, con ocr-albaran en modo «factura» (llamada interna);
 //   · la base, con la clave de servicio (las funciones de la 0220 son solo suyas).
 //
+// D01 · Liquidaciones (T2, 15/10): la misma función recibe lo que llega a
+// liquidaciones-<empresa>@entrada.folvy.app. La base dice la clase de cada
+// dirección y _shared/facturasEntrada.ts enruta: un resumen de pagos de Uber
+// Eats va a conta_liquidacion_registrar (la 0100 de las liquidaciones). El
+// cuerpo del correo se pide a Resend (el webhook no lo trae).
+//
 // Mientras Julio no dé de alta el dominio entrada.folvy.app en Resend, aquí no
 // llega nada; y aunque llegara, las direcciones nacen apagadas.
 //
@@ -51,8 +57,8 @@ Deno.serve(async (req) => {
   };
   const puerto: PuertoEntrada = {
     destino: async (lp, dom) => {
-      const d = await rpc<{ company_id: string; account_id: string; activa: boolean } | null>("conta_entrada_destino", { p_local_part: lp, p_domain: dom });
-      return d ? { companyId: d.company_id, accountId: d.account_id, activa: d.activa } : null;
+      const d = await rpc<{ company_id: string; account_id: string; activa: boolean; tipo?: "facturas" | "liquidaciones" } | null>("conta_entrada_destino", { p_local_part: lp, p_domain: dom });
+      return d ? { companyId: d.company_id, accountId: d.account_id, activa: d.activa, tipo: d.tipo ?? "facturas" } : null;
     },
     yaVisto: async (id) => {
       const { data } = await sb.from("inbound_email_log").select("id").eq("email_id", id).maybeSingle();
@@ -83,6 +89,16 @@ Deno.serve(async (req) => {
              ruta: x.ruta, nombre: x.nombre, tipo: x.tipo, bytes: x.bytes, sha256: x.sha256, enlace: x.enlace },
       });
       return { id: r.id, yaEstaba: r.ya_estaba };
+    },
+    cuerpo: async (id) => {
+      const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${RESEND}` } });
+      if (!r.ok) throw new Error(`Resend no da el cuerpo del correo (${r.status})`);
+      const j = await r.json() as { html?: string | null; text?: string | null };
+      return { html: j.html ?? null, text: j.text ?? null };
+    },
+    liquidacion: async ({ companyId, datos }) => {
+      const r = await rpc<{ liquidacion_id: string; ya_estaba: boolean; texto: string; factura?: { estado?: string } | null }>("conta_liquidacion_registrar", { p_company: companyId, p: datos, p_quien_nombre: null });
+      return { id: r.liquidacion_id, yaEstaba: r.ya_estaba, texto: r.texto, factura: r.factura?.estado ?? null };
     },
     leer: async (inboxId) => {
       const { data: l } = await sb.from("document_inbox").select("account_id, file_path").eq("id", inboxId).single();
