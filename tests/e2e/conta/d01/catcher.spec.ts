@@ -135,7 +135,8 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
 
   // 5 · El pago contra la 40700001 (una vez) y el saldo del portal.
   const pagar = page.getByRole('button', { name: 'Proponer el pago desde la 40700001' })
-  if (await pagar.isEnabled()) {
+  // La otra pasada ya lo pudo proponer: entonces el botón ya dice «Pago propuesto».
+  if (await pagar.count() && await pagar.isEnabled()) {
     await pagar.click()
     await expect(dice).toContainText('Propuesto el pago de la 2.ª quincena de septiembre de 2026: 5 facturas, 54,69 € desde la 40700001 «Saldo prepago Catcher» (serie 3).', { timeout: 30_000 })
   }
