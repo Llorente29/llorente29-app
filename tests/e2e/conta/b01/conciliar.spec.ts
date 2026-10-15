@@ -157,7 +157,11 @@ test.describe('B02 · Bancos, conciliar', () => {
       await expect(panel.getByRole('button', { name: 'No va a contabilidad…' })).toBeVisible()
       await panel.getByText('Ver el asiento que se crea').click()
       await expect(panel.locator('.cxn-asiento')).toContainText('40700001')
+      // La lista y el panel, a la vez, antes y después de la captura: si algo los desmonta, se ve aquí.
+      await expect(page.getByRole('grid')).toBeVisible()
+      await expect(panel).toBeVisible()
       await capturar(page, 'panel')
+      await expect(panel, 'el panel se ha cerrado solo durante la captura').toBeVisible({ timeout: 1_000 })
 
       // Intro confirma la fila enfocada (los 3 iguales), cada uno como si fuera solo, y lo dice.
       await page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).getByRole('button', { name: 'Confirmar las 3' }).click()
