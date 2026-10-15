@@ -4,7 +4,7 @@
 // exist.» del R14, el listado que repite filas). Importes INVENTADOS.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { enviarAsientoADiez, enviarContraasientoADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
+import { autorizacionCubre, enviarAsientoADiez, enviarContraasientoADiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
 import { CORRESPONDENCIA_LLORENTE29 } from '../../../supabase/functions/_shared/diezAnalitica'
 import { resumenDeAsiento, type ResumenBD } from '../../../supabase/functions/_shared/resumenDeAsiento'
 import type { Factura, FacturaData } from '../../../supabase/functions/_shared/diezCliente'
@@ -51,7 +51,7 @@ function diez(o: { facturas?: Factura[]; contenedor?: boolean; subida?: number; 
 // adjuntar: ¿guarda Diez documentos? Las pruebas de R15 son «con almacén» (true);
 // las de C06b R7, el día de hoy: sin almacén (false). autorizados: lo que Julio
 // ha autorizado en conta_diez_autorizo para escribir en una base real.
-type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string }
+type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string; desde?: string; recibidas?: boolean }
 function puerto(o: { r?: ResumenBD; bd?: string | null; d?: Diez; envio?: EnvioFila | null; pdf?: Uint8Array; adjuntar?: boolean; autorizados?: Autorizo[] } = {}) {
   const filas: EnvioFila[] = []
   let actual: EnvioFila | null = o.envio ?? null
@@ -62,7 +62,9 @@ function puerto(o: { r?: ResumenBD; bd?: string | null; d?: Diez; envio?: EnvioF
     envio: async () => actual,
     guardar: async (f) => { actual = { ...f, id: f.id ?? 's1' }; filas.push(actual); return actual },
     conexion: async () => { llamadas.conexion++; return o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009', adjuntar: o.adjuntar ?? true } },
-    autorizado: async (id, _emp, bd) => (o.autorizados ?? []).some((a) => a.bd.toUpperCase() === bd.toUpperCase() && (a.alcance === 'empresa' || a.entry === id)),
+    // La misma decisión que la función (autorizacionCubre), sobre las filas de esa base.
+    autorizado: async (id, _emp, bd, fecha, tipo) => autorizacionCubre((o.autorizados ?? []).filter((a) => a.bd.toUpperCase() === bd.toUpperCase())
+      .map((a) => ({ alcance: a.alcance, entry_id: a.entry ?? null, desde: a.desde ?? null, incluye_recibidas: a.recibidas ?? false })), id, fecha, tipo),
     cliente: async (_c, x) => { llamadas.cliente++; llamadas.real.push(x.real); return d },
     documento: async () => o.pdf ?? PDF,
     sha256: async (b) => sha(b),
@@ -434,5 +436,79 @@ describe('C06b R8 · el contraasiento de lo anulado, a Diez (nunca dos veces)', 
     expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'no_llega', reintentar: true })
     expect(t.envios.get('c1')).toMatchObject({ status: 'pendiente', attempts: 1 })
     expect(String(t.envios.get('c1')?.last_error)).toMatch(/Diez no ha aceptado el contraasiento/)
+  })
+})
+
+// ── C06b R8 · tarea 1: la empresa autorizada «desde» una fecha ─────────────────
+describe('C06b R8 · la autorización de empresa con «desde» (0730)', () => {
+  // resumen(): el asiento e1 es del 01/10 (fecha 2026-10-01).
+  it('desde el mismo día: entra (inclusive)', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'empresa', bd: 'C0008', desde: '2026-10-01' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+    expect(t.llamadas.real).toEqual([true])
+  })
+  it('un asiento anterior a «desde»: cerrado como sin autorización, sin abrir el cliente', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, r: resumen({ fecha: '2026-09-30' }), autorizados: [{ alcance: 'empresa', bd: 'C0008', desde: '2026-10-01' }] })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x.estado === 'no_llega' && x.motivo).toBe('Diez real (C0008) está cerrado: no se escribe nada hasta que Julio lo autorice')
+    expect(t.llamadas.cliente).toBe(0); expect(t.d.altas).toEqual([])
+  })
+  it('sin «desde», la de empresa vale para cualquier fecha (como hasta hoy)', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, r: resumen({ fecha: '2026-01-15' }), autorizados: [{ alcance: 'empresa', bd: 'C0008' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+  })
+  it('la de un asiento vale para ESE asiento, sea de la fecha que sea', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, r: resumen({ fecha: '2026-09-30' }), autorizados: [{ alcance: 'asiento', entry: 'e1', bd: 'C0008' }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+  })
+  it('la fila de C0008 como irá (desde 01/10, sin recibidas): una venta de octubre PASA', async () => {
+    const t = puerto({ bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'empresa', bd: 'C0008', desde: '2026-10-01', recibidas: false }] })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+  })
+  it('autorizacionCubre por tipo: las recibidas solo con incluye_recibidas; las ventas, siempre', () => {
+    const sin = [{ alcance: 'empresa', entry_id: null, desde: '2026-10-01', incluye_recibidas: false }]
+    expect(autorizacionCubre(sin, 'e1', '2026-10-13', 'ventas')).toBe(true)
+    expect(autorizacionCubre(sin, 'e1', '2026-10-13', 'recibidas')).toBe(false)
+    expect(autorizacionCubre([{ ...sin[0], incluye_recibidas: true }], 'e1', '2026-10-13', 'recibidas')).toBe(true)
+    expect(autorizacionCubre([{ ...sin[0], incluye_recibidas: true }], 'e1', '2026-09-30', 'recibidas')).toBe(false)
+    // Sin la columna (antes de la 0740): las recibidas, cerradas.
+    expect(autorizacionCubre([{ alcance: 'empresa', entry_id: null, desde: null }], 'e1', '2026-10-13', 'recibidas')).toBe(false)
+  })
+  it('autorizacionCubre: por id el asiento; la empresa desde su día; nada más', () => {
+    const A = [{ alcance: 'empresa', entry_id: null, desde: '2026-10-01' }, { alcance: 'asiento', entry_id: 'e7', desde: null }]
+    expect(autorizacionCubre(A, 'e1', '2026-10-01')).toBe(true)
+    expect(autorizacionCubre(A, 'e1', '2026-10-31')).toBe(true)
+    expect(autorizacionCubre(A, 'e1', '2026-09-30')).toBe(false)
+    expect(autorizacionCubre(A, 'e7', '2025-01-01')).toBe(true)
+    expect(autorizacionCubre([], 'e1', '2026-10-01')).toBe(false)
+    // Lo que devuelve PostgREST de una columna date es AAAA-MM-DD; si viniera con hora, cuenta el día.
+    expect(autorizacionCubre([{ alcance: 'empresa', entry_id: null, desde: '2026-10-01T00:00:00' }], 'e1', '2026-10-01')).toBe(true)
+  })
+})
+
+describe('C06b R8 · el contraasiento, con la fecha de lo que ANULA', () => {
+  const enDiez: EnvioFila = {
+    id: 's-e1', entry_id: 'e1', account_id: 'acc', company_id: 'emp', account_connector_id: 'k1', kind: 'factura', ext_year: '2026', ext_series: '1', ext_number: 1801,
+    ext_invoice_number: 'UBR-FLO-20261001', payload_hash: 'h', status: 'enviado', attempts: 1, last_error: null, sent_at: '2026-10-13T10:00:00Z',
+    document_id: 'd1', document_status: 'pendiente_diez', document_error: null, document_attached_at: null,
+  }
+  function anulado(fechaOriginal: string, desde: string) {
+    const t = puerto({ r: resumen({ estado: 'anulado', fecha: fechaOriginal }), bd: 'C0008', adjuntar: false, autorizados: [{ alcance: 'empresa', bd: 'C0008', desde }] })
+    const envios = new Map<string, EnvioFila | null>([['e1', { ...enDiez, ext_invoice_number: `UBR-FLO-${fechaOriginal.replaceAll('-', '')}` }]])
+    t.p.envio = async (id) => envios.get(id) ?? null
+    t.p.guardar = async (f) => { const g = { ...f, id: f.id ?? `s-${f.entry_id}` }; envios.set(f.entry_id, g); return g }
+    return t
+  }
+  // El contraasiento es del 14/10 (posterior a «desde»): lo que decide es la fecha de lo anulado.
+  const CONTRA: ContraasientoBD = { id: 'c1', account_id: 'acc', company_id: 'emp', estado: 'validado', fecha: '2026-10-14', origen: 'reversal', anula: 'e1', numero: 1290 }
+  it('anular algo de antes de «desde»: cerrado, aunque el contraasiento sea de después', async () => {
+    const t = anulado('2026-09-30', '2026-10-01')
+    expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'no_llega', motivo: 'Diez real (C0008) está cerrado: no se escribe nada hasta que Julio lo autorice' })
+    expect(t.llamadas.cliente).toBe(0)
+  })
+  it('anular algo desde «desde»: entra', async () => {
+    const t = anulado('2026-10-01', '2026-10-01')
+    expect(await enviarContraasientoADiez(CONTRA, t.p)).toMatchObject({ estado: 'en_diez' })
+    expect(t.llamadas.real).toEqual([true])
   })
 })

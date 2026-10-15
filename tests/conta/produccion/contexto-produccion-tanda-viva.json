@@ -1,16 +1,16 @@
 {
  "_que": "Contexto de PRODUCCIÓN de la tanda viva (supabase/produccion/aplicar.txt): la respuesta de la consulta de contexto del workflow (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow), lanzada en solo lectura. Vale solo para los ficheros con estos md5: si uno cambia, se vuelve a medir (paso 8 de antes-de-subir, R11).",
- "medido": "2026-10-14T18:41:02Z",
+ "medido": "2026-10-14T23:26:55Z",
  "tanda": {
-  "supabase/migrations/20261111T0720_c06b_validar_con_pdf.sql": "9c3c3fa88aab52219d387f304f436c04"
+  "supabase/migrations/20261111T0740_c06b_diez_autorizo_recibidas.sql": "5cf518eb9246833815e9a4e7dba3bc31"
  },
  "contexto": {
   "tablas": [
-   "public.journal_entry"
+   "public.conta_diez_autorizo"
   ],
   "funciones": [],
   "filas": {
-   "public.journal_entry": 14955
+   "public.conta_diez_autorizo": 0
   },
   "otras": {},
   "camino": {

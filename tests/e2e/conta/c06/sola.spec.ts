@@ -196,7 +196,7 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   if (lado(page) === 'ordenador') {
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     // El texto de cada entrada (sin el número de lo que hay por mirar, que va aparte).
-    await expect(menu.locator('.cx-menu-item-texto')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Clientes y proveedores', 'Libros', 'Ajustes'])
+    await expect(menu.locator('.cx-menu-item-texto')).toHaveText(['Inicio', 'Compras', 'Documentos', 'Bancos', 'Clientes y proveedores', 'Libros', 'Ajustes'])
   } else {
     const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     await expect(barra.getByRole('link', { name: 'Inicio' })).toBeVisible()
@@ -212,7 +212,7 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     await barra.getByRole('button', { name: 'Más' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
-    await expect(hoja.locator('.cx-menu-item-texto')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Clientes y proveedores', 'Libros', 'Ajustes'])
+    await expect(hoja.locator('.cx-menu-item-texto')).toHaveText(['Inicio', 'Compras', 'Documentos', 'Bancos', 'Clientes y proveedores', 'Libros', 'Ajustes'])
     await sinFolvy(page, 'el menú «Más»')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/mas-movil.png` })
