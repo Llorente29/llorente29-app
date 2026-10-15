@@ -7,13 +7,20 @@
 --   2. Se rompe a propósito una cosa por comprobación (con los disparadores
 --      apagados: es lo que la base no deja hacer por las buenas).
 --   3. El agente encuentra cada una.
--- El agente se lee del MISMO fichero que corre cada noche (\set con cat): la
--- prueba mide lo que se despliega, no una copia.
+-- El agente es el MISMO fichero que corre cada noche: la prueba mide lo que se
+-- despliega, no una copia. Se ejecuta entero con \i y se lee como lo lee el
+-- workflow (sin alinear y sin cabeceras): desde el 13/10 lleva \gset y \if, y
+-- ya no se puede pegar dentro de un «create table as» (C06b, 15/10).
 
 begin;
-\set agente `cat scripts/conta/agente-libro.sql`
+\pset format unaligned
+\pset tuples_only on
 
-create temp table antes on commit drop as :agente
+\o /tmp/agente_c04_antes.json
+\i scripts/conta/agente-libro.sql
+\o
+\set salida `cat /tmp/agente_c04_antes.json`
+create temp table antes on commit drop as select :'salida'::json j;
 
 do $$
 declare j json := (select * from antes); k text;
@@ -65,7 +72,11 @@ begin
      and id = (select id from public.journal_entry where company_id = ea and status = 'propuesto' limit 1);
 end $$;
 
-create temp table despues on commit drop as :agente
+\o /tmp/agente_c04_despues.json
+\i scripts/conta/agente-libro.sql
+\o
+\set salida `cat /tmp/agente_c04_despues.json`
+create temp table despues on commit drop as select :'salida'::json j;
 
 do $$
 declare j json := (select * from despues); k text; faltan text := '';

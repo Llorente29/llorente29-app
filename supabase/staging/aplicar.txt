@@ -1,3 +1,3 @@
-# C06b · los huecos del agente «libro» desde el siguiente al último traído
-# (Julio, 15/10). Solo la prueba, con rollback, con los tramos reales de C0008.
-supabase/staging/sql/20261015_c06b_prueba_agente_huecos.sql
+# C06b · la prueba del agente «libro» del C04, con el agente ejecutado entero
+# con \i (lleva \gset y \if desde el 13/10). Solo la prueba, con rollback.
+supabase/staging/sql/20261011_c04_prueba_agente.sql
