@@ -22,14 +22,15 @@ const recibida = (o: Partial<RecibidaBD> = {}): RecibidaBD => ({
   ...o,
 })
 
-type Diez = ClienteDiezEnvio & { altas: FacturaData[]; subidas: number; guardado: Uint8Array | null }
+type Diez = ClienteDiezEnvio & { altas: FacturaData[]; subidas: number; guardado: Uint8Array | null; mesesPedidos: string[] }
 function diez(o: { facturas?: Factura[]; contenedor?: boolean } = {}): Diez {
   const facturas = [...(o.facturas ?? [{ Ejercicio: '2026', Serie: '2', Documento: 3175, TipoAsiento: 2, Fecha: 20261013, CuentaCliente: '40000099', NumeroFactura: 'OTRA-1' }])]
   const d: Diez = {
-    altas: [], subidas: 0, guardado: null,
+    altas: [], subidas: 0, guardado: null, mesesPedidos: [],
     // Una recibida no busca cliente: si la pide, la prueba lo dice.
     async subcuenta() { throw new Error('una recibida no busca la subcuenta del cliente') },
-    async facturasDelMes() { return [...facturas, ...facturas] },
+    // Como Diez: el listado del mes filtra por la fecha del ASIENTO (Fecha), y repite filas.
+    async facturasDelMes(m) { d.mesesPedidos.push(m); const delMes = facturas.filter((f) => String(f.Fecha ?? '').slice(0, 6) === m); return [...delMes, ...delMes] },
     async enviarFactura(fd) { d.altas.push(fd); const f = { ...fd, Documento: 3176 } as Factura; facturas.push(f); return f },
     async adjuntarDocumentoFactura(x) {
       d.subidas++
@@ -122,5 +123,62 @@ describe('enviarRecibidaADiez: la serie 2, con los frenos de siempre', () => {
     const x = await enviarRecibidaADiez('r1', t.p)
     expect(x.estado === 'no_llega' && x.motivo).toMatch(/retención/)
     expect(t.llamadas.conexion).toBe(0)
+  })
+})
+
+// D01 · Antes de escribir, se busca la que Julio ya metió a mano en Diez (14/10):
+// el mes de la factura y los siguientes hasta hoy, el número normalizado (la
+// clave de conta_clave_numero) y el proveedor por su cuenta o por su NIF. Los
+// casos son los que la búsqueda de antes no veía. Datos inventados.
+const enDiezAMano = (o: Partial<Factura>): Factura => ({ Ejercicio: '2026', Serie: '2', Documento: 3100, TipoAsiento: 2, Fecha: 20261013, CuentaCliente: '40000012', NumeroFactura: 'PD01/77', ...o })
+
+describe('enviarRecibidaADiez: la que ya está en Diez se enlaza, no se duplica', () => {
+  it('1 · factura del 30/09 que Julio asentó el 02/10: se busca en septiembre y en octubre, y se enlaza', async () => {
+    const d = diez({ facturas: [enDiezAMano({ Fecha: 20261002 })] })
+    const t = puerto({ d, r: recibida({ factura: { numero: 'PD01/77', fecha: '2026-09-30' } }) })
+    expect(await enviarRecibidaADiez('r1', t.p)).toMatchObject({ estado: 'en_diez', documento: 3100, enlazada: true })
+    expect(d.altas).toEqual([])
+    expect(d.mesesPedidos).toEqual(['202609', '202610'])
+  })
+  it('1b · y la del año anterior que se asentó en enero, se enlaza con SU ejercicio', async () => {
+    const d = diez({ facturas: [enDiezAMano({ Ejercicio: '2027', Fecha: 20270105, Documento: 12 })] })
+    const t = puerto({ d, r: recibida({ fecha: '2026-12-30', factura: { numero: 'PD01/77', fecha: '2026-12-30' } }) })
+    t.p.ahora = () => new Date('2027-01-10T10:00:00Z')
+    expect(await enviarRecibidaADiez('r1', t.p)).toMatchObject({ estado: 'en_diez', documento: 12, enlazada: true })
+    expect(d.altas).toEqual([])
+    expect(t.actual).toMatchObject({ status: 'enlazado', ext_year: '2027', ext_number: 12 })
+  })
+  it('2 · el número escrito de otra forma («PD01-77», «pd01 77») es el mismo: se enlaza', async () => {
+    for (const NumeroFactura of ['PD01-77', 'pd01 77', 'PD-01/77']) {
+      const d = diez({ facturas: [enDiezAMano({ NumeroFactura })] })
+      const t = puerto({ d })
+      expect(await enviarRecibidaADiez('r1', t.p), NumeroFactura).toMatchObject({ estado: 'en_diez', documento: 3100, enlazada: true })
+      expect(d.altas).toEqual([])
+    }
+  })
+  it('3 · metida en Diez con otra subcuenta pero su NIF: se enlaza; ni su cuenta ni su NIF: es otra, y se da de alta', async () => {
+    const conNif = diez({ facturas: [enDiezAMano({ CuentaCliente: '41000007', CifCliente: 'ES-B00000011' })] })
+    expect(await enviarRecibidaADiez('r1', puerto({ d: conNif }).p)).toMatchObject({ estado: 'en_diez', documento: 3100, enlazada: true })
+    expect(conNif.altas).toEqual([])
+    const otra = diez({ facturas: [enDiezAMano({ CuentaCliente: '41000007', CifCliente: 'B00000029' })] })
+    expect(await enviarRecibidaADiez('r1', puerto({ d: otra }).p)).toMatchObject({ estado: 'en_diez', documento: 3176, enlazada: false })
+    expect(otra.altas).toHaveLength(1)
+  })
+  it('lo de otra serie, aunque tenga el mismo número y proveedor, no es ella', async () => {
+    const d = diez({ facturas: [enDiezAMano({ Serie: '1' })] })
+    expect(await enviarRecibidaADiez('r1', puerto({ d }).p)).toMatchObject({ estado: 'en_diez', documento: 3176, enlazada: false })
+  })
+  it('si hay más de una (en dos meses), no se toca nada', async () => {
+    const d = diez({ facturas: [enDiezAMano({ Fecha: 20260930, Documento: 3001 }), enDiezAMano({ Fecha: 20261005, NumeroFactura: 'PD01-77', Documento: 3101 })] })
+    const t = puerto({ d, r: recibida({ factura: { numero: 'PD01/77', fecha: '2026-09-30' } }) })
+    expect(await enviarRecibidaADiez('r1', t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(d.altas).toEqual([]); expect(d.subidas).toBe(0)
+  })
+  it('una factura de hace más de un año no se manda sola (no se busca a ciegas tan atrás)', async () => {
+    const d = diez({ facturas: [] })
+    const t = puerto({ d, r: recibida({ factura: { numero: 'PD01/77', fecha: '2025-09-01' } }) })
+    const x = await enviarRecibidaADiez('r1', t.p)
+    expect(x.estado === 'no_llega' && x.motivo).toMatch(/más de 12 meses/)
+    expect(d.altas).toEqual([]); expect(d.mesesPedidos).toEqual([])
   })
 })

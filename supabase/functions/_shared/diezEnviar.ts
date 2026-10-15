@@ -49,6 +49,7 @@ import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type Factur
 import type { Correspondencia } from './diezAnalitica.ts'
 import { facturaDeVentas, facturaQueAnula, PATRONES } from './diezFactura.ts'
 import { facturaRecibida, type FacturaRecibida } from './diezRecibida.ts'
+import { claveNumero } from './lecturaFactura.ts'
 import { resumenDeAsiento, type ResumenBD } from './resumenDeAsiento.ts'
 
 /** Una fila de public.external_send (lo que este núcleo lee y escribe). */
@@ -145,6 +146,44 @@ type Base = { id: string; account_id: string; company_id: string; estado: string
 type Plan = {
   preparar(): { serie: string; numero: string; cuenta: string; mes: string } | { motivo: string; reintentar: boolean }
   construir(c: { delMes: Factura[]; ya: Factura[]; diez: ClienteDiezEnvio }): Promise<{ fd: FacturaData } | { motivo: string; reintentar: boolean }>
+  /**
+   * D01 · Dónde buscarla antes de escribir (los meses AAAAMM del listado de
+   * Diez, que filtra por la fecha del ASIENTO) y qué es «la misma». Sin ellos,
+   * como siempre: el mes de la factura y serie, número y cuenta exactos.
+   */
+  buscar?(): { meses: string[]; esLaMisma(f: Factura): boolean } | { motivo: string; reintentar: boolean }
+}
+
+/** Los meses AAAAMM de `desde` (AAAAMM) a `hasta` (AAAAMM), los dos incluidos. */
+export function mesesEntre(desde: string, hasta: string): string[] {
+  const out: string[] = []
+  let a = Number(desde.slice(0, 4)), m = Number(desde.slice(4, 6))
+  const fin = Number(hasta.slice(0, 4)) * 12 + Number(hasta.slice(4, 6))
+  while (a * 12 + m <= fin && out.length < 240) { out.push(`${a}${String(m).padStart(2, '0')}`); m++; if (m > 12) { m = 1; a++ } }
+  return out
+}
+/** El NIF para comparar: mayúsculas, solo letras y cifras, sin el «ES» de delante. */
+export const nifParaComparar = (x: unknown): string | null => {
+  const k = String(x ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^ES(?=[A-Z0-9]{9}$)/, '')
+  return k || null
+}
+/**
+ * Hasta cuántos meses atrás se busca una recibida antes de escribirla. Una
+ * factura más vieja no se manda sola: se mira a mano (que no se cuele otra).
+ */
+export const MESES_BUSQUEDA_RECIBIDA = 13
+/**
+ * ¿Es esta factura de Diez la recibida que se va a mandar? Serie 2, el número
+ * con la clave de conta_clave_numero y el proveedor por su cuenta O por su NIF.
+ * Sin clave de número no hay con qué buscar: null.
+ */
+export function esLaMismaRecibida(q: { numero: unknown; cuenta: unknown; nif: unknown }): ((f: Factura) => boolean) | null {
+  const clave = claveNumero(String(q.numero ?? ''))
+  if (!clave) return null
+  const cuenta = String(q.cuenta ?? '')
+  const nif = nifParaComparar(q.nif)
+  return (f) => String(f.Serie) === '2' && claveNumero(String(f.NumeroFactura ?? '')) === clave
+    && ((cuenta !== '' && String(f.CuentaCliente ?? '') === cuenta) || (nif !== null && nifParaComparar(f.CifCliente) === nif))
 }
 
 export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promise<ResultadoEnvio> {
@@ -194,6 +233,18 @@ export async function enviarRecibidaADiez(entryId: string, p: PuertoEnvio & { re
       ? { serie: '2', numero: String(hecha.factura.NumeroFactura), cuenta: hecha.factura.CuentaCliente, mes: String(hecha.factura.FechaFactura).slice(0, 6) }
       : { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false },
     construir: async () => (hecha ? { fd: hecha.factura } : { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false }),
+    // Julio puede haberla metido a mano: se busca desde el mes de la factura
+    // hasta hoy (Diez lista por la fecha del ASIENTO, que en 599 de 1.432 es
+    // posterior), con el número normalizado (la clave de conta_clave_numero) y
+    // el proveedor por su cuenta O por su NIF.
+    buscar: () => {
+      if (!hecha) return { motivo: porque ?? 'esta factura no se sabe mandar', reintentar: false }
+      const esLaMisma = esLaMismaRecibida({ numero: hecha.factura.NumeroFactura, cuenta: hecha.factura.CuentaCliente, nif: r.proveedor.nif })
+      if (!esLaMisma) return { motivo: 'sin un número que sirva para buscarla en Diez no se manda', reintentar: false }
+      const meses = mesesEntre(String(hecha.factura.FechaFactura).slice(0, 6), hoyMadrid(p.ahora()).replace(/-/g, '').slice(0, 6))
+      if (meses.length > MESES_BUSQUEDA_RECIBIDA) return { motivo: `la factura es de hace más de ${MESES_BUSQUEDA_RECIBIDA - 1} meses: no se manda sola, mírala a mano en Diez`, reintentar: false }
+      return { meses, esLaMisma }
+    },
   }
   return enviar(r, plan, p)
 }
@@ -252,9 +303,13 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
   const pdf = await p.documento(r.documento.ruta)
   if ((await p.sha256(pdf)) !== r.documento.sha256) return apuntar('el documento guardado no es el que se registró (otra huella): no se envía', { document_status: 'fallo', document_error: 'otra huella' }, false)
 
+  const busca = plan.buscar?.() ?? { meses: [plano.mes], esLaMisma: (f: Factura) => String(f.Serie) === plano.serie && String(f.NumeroFactura) === plano.numero && String(f.CuentaCliente) === plano.cuenta }
+  if ('motivo' in busca) return apuntar(busca.motivo, { account_connector_id: con.id }, busca.reintentar)
+
   const diez = await p.cliente(con, { real })
   const ej = r.fecha.slice(0, 4)
-  const delMes = await diez.facturasDelMes(plano.mes)
+  const delMes: Factura[] = []
+  for (const m of busca.meses) delMes.push(...await diez.facturasDelMes(m))
 
   // 4 · ¿Guarda Diez documentos? Se pregunta por una factura que ya tiene
   // (solo si se va a adjuntar: sin adjunto, la factura va igual).
@@ -268,9 +323,12 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
   let serie = String(previo?.ext_series ?? '')
   let documento = Number(previo?.ext_number ?? 0)
   let enlazada = previo?.status === 'enlazado'
+  // El ejercicio de la factura EN DIEZ: si se enlaza una que ya estaba, el suyo (puede ser otro año).
+  let ejDiez = String(previo?.ext_year ?? ej)
   if (!(previo && (previo.status === 'enviado' || previo.status === 'enlazado'))) {
-    const ya = [...new Map(delMes.filter((f) => String(f.Serie) === plano.serie && String(f.NumeroFactura) === plano.numero && String(f.CuentaCliente) === plano.cuenta)
-      .map((f) => [String(f.Documento), f])).values()]
+    // El listado de Diez repite filas: una por ejercicio, serie y documento.
+    const ya = [...new Map(delMes.filter(busca.esLaMisma)
+      .map((f) => [`${f.Ejercicio ?? ''}|${f.Serie}|${f.Documento}`, f])).values()]
     if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${plano.numero} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
     const hecha = await plan.construir({ delMes, ya, diez })
     if ('motivo' in hecha) return apuntar(hecha.motivo, { account_connector_id: con.id }, hecha.reintentar)
@@ -278,8 +336,8 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
     const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(fd)))
     const comun = { entry_id: r.id, account_id: r.account_id, company_id: r.company_id, account_connector_id: con.id, kind: 'factura' as const, ext_invoice_number: String(fd.NumeroFactura), payload_hash: hash, document_id: r.documento.id }
     if (ya.length === 1) {
-      documento = Number(ya[0].Documento); serie = String(ya[0].Serie); enlazada = true
-      previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'enlazado', ext_year: ej, ext_series: serie, ext_number: documento, attempts: previo?.attempts ?? 0, last_error: null, sent_at: iso(p.ahora()), document_status: 'pendiente', document_error: null, document_attached_at: null })
+      documento = Number(ya[0].Documento); serie = String(ya[0].Serie); enlazada = true; ejDiez = String(ya[0].Ejercicio ?? ej)
+      previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'enlazado', ext_year: ejDiez, ext_series: serie, ext_number: documento, attempts: previo?.attempts ?? 0, last_error: null, sent_at: iso(p.ahora()), document_status: 'pendiente', document_error: null, document_attached_at: null })
     } else {
       // La intención, antes de escribir: cuenta como intento.
       previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'pendiente', ext_year: null, ext_series: null, ext_number: null, attempts: (previo?.attempts ?? 0) + 1, last_error: 'enviando', sent_at: null, document_status: 'pendiente', document_error: null, document_attached_at: null })
@@ -299,11 +357,11 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
   }
   // Con almacén: se sube y se lee de vuelta.
   previo = await p.guardar({ ...previo!, attempts: previo!.attempts + (previo!.document_status === 'fallo' ? 1 : 0) })
-  const sub = await diez.adjuntarDocumentoFactura({ Ejercicio: ej, Serie: serie, Documento: documento, NombreArchivo: r.documento.nombre, Archivo: base64(pdf) })
+  const sub = await diez.adjuntarDocumentoFactura({ Ejercicio: ejDiez, Serie: serie, Documento: documento, NombreArchivo: r.documento.nombre, Archivo: base64(pdf) })
   let fallo: string | null = null
   if (sub.status !== 200) fallo = sinContenedor(sub) ? TEXTO_CONTENEDOR : `Diez no ha guardado el documento (${sub.status}: ${corto(sub.json)})`
   else {
-    const v = await diez.documentoDeFactura(ej, serie, documento)
+    const v = await diez.documentoDeFactura(ejDiez, serie, documento)
     const vuelta = v.status === 200 && typeof v.json === 'string' && v.json.length > 100 ? deBase64(v.json) : null
     if (!vuelta) fallo = `Diez no devuelve el documento después de subirlo (${v.status})`
     else if ((await p.sha256(vuelta)) !== r.documento.sha256) fallo = 'Diez devuelve otro documento (otra huella)'
