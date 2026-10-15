@@ -402,14 +402,14 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261111T0740_c06b_diez_autorizo_recibidas.sql: sigue')
+    expect(r.out).toContain('20261111T0750_c06b_diez_autorizo_empresa_datos.sql: sigue')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261111T0740_c06b_diez_autorizo_recibidas.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261111T0750_c06b_diez_autorizo_empresa_datos.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261111T0740_c06b_diez_autorizo_recibidas.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261111T0750_c06b_diez_autorizo_empresa_datos.sql ha cambiado desde la medida')
   })
 })
