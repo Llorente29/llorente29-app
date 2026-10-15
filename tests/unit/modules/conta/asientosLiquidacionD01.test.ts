@@ -81,3 +81,10 @@ describe('la liquidación con su factura de comisión aparte', () => {
     expect(p.lineas.some((l) => l.cuenta === '47200021')).toBe(true)
   })
 })
+
+describe('por aclarar (Julio, 16/10): nunca se suma doble', () => {
+  it('la factura de una liquidación que se solapa o no cuadra no se propone, y dice por qué', () => {
+    const r = facturaProveedor({ ...comision, porAclarar: ['Por aclarar: Se solapa con la liquidación del 31/08 al 27/09/2026: esta factura puede repetir cargos ya facturados.'] }, cf)
+    expect(r).toEqual({ propuesta: null, sinPropuesta: 'Por aclarar: Se solapa con la liquidación del 31/08 al 27/09/2026: esta factura puede repetir cargos ya facturados.' })
+  })
+})

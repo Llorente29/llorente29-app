@@ -364,7 +364,7 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   // liquidación de SU socio (marca → acuerdo de cesión → socio → enlace «liquidacion»).
   const acuerdos = await leer(tabla('brand_licensing_agreement').select('brand_id, party_id').eq('account_id', accountId), 'los acuerdos de cesión')
   const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
-  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount, commission_invoice_id, promo_charges, ads_spend, item_promotions, chargebacks, other_earnings, adjustments')
+  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount, commission_invoice_id, promo_charges, ads_spend, item_promotions, chargebacks, other_earnings, adjustments, needs_review, review_note')
     .eq('account_id', accountId).is('journal_entry_id', null).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones')
   // B01 (respuesta 1, P2): el cobro que ya ha casado Bancos lo asienta Bancos;
   // aquí solo la comisión y los cargos, para que el cobro no salga dos veces.
@@ -395,6 +395,11 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       ['Pedido mínimo', l.min_order_fee], ['Otros cargos', l.other_cost],
     ] as const).map(([concepto, v]) => ({ concepto, importe: Math.abs(n(v)) })).filter((x) => x.importe !== 0)
     const delCorreo = String(l.source ?? '').startsWith('correo_')
+    // D01 (Julio, 16/10): por aclarar —un solape, algo que no cuadró al leer, la tienda sin asignar— no se asienta: nunca se suma doble.
+    if (delCorreo && l.needs_review) {
+      r.sinPropuesta.push({ que, porque: s(l.review_note) ?? 'Por aclarar: revisa la liquidación antes de asentarla.' })
+      continue
+    }
     const facturaAparte = l.commission_invoice_id ? facturaDe.get(String(l.commission_invoice_id)) ?? null : null
     if (delCorreo && !facturaAparte && [l.commission, l.other_cost, l.promo_charges, l.ads_spend].some((v) => Math.round(n(v) * 100) !== 0)) {
       r.sinPropuesta.push({ que, porque: 'Falta su factura de comisión (la liquidación la propone al leerse): sin ella, la comisión no se asienta aquí.' })
@@ -520,7 +525,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   const [facturas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id), supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
+    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
       .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).is('journal_entry_id', null).or(`company_id.is.null,company_id.eq.${companyId}`)
       .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
@@ -569,6 +574,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       ...(f.source === 'liquidacion' ? {
         cuotas: ((f.supplier_invoice_tax ?? []) as Fila[]).map((x) => ({ porcentaje: n(x.vat_pct), base: n(x.base), cuota: n(x.vat_amount) })),
         marcaId: s(f.brand_id), faltaNumero: !s(f.invoice_number),
+        porAclarar: (((f.reading as Fila | null)?.requisitos ?? []) as Fila[]).filter((x) => (x.id === 'solape' || x.id === 'cuadre') && x.ok === false).map((x) => String(x.texto)),
       } : {}),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: n(f.withholding_amount), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
       ivaNoDeducible: f.vat_non_deductible === true,

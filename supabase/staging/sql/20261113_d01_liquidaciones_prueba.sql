@@ -23,8 +23,9 @@
 --   5. El mismo resumen otra vez: no crea nada y lo dice.
 --   6. Asignar la tienda: su marca, su local y su banco; la liquidación los toma.
 --   7. Un neto negativo (cuatro semanas): «sin cobro», y la factura sale igual
---      (con el aviso de varias semanas); como se solapa con la del paso 3, la
---      liquidación y su factura lo dicen; un resumen sin cargos: sin factura.
+--      (con el aviso de varias semanas); como se solapa con la del paso 3, las
+--      DOS liquidaciones y sus facturas quedan por aclarar enseñando la otra; lo
+--      que no cuadra al leer va también a su factura; sin cargos: sin factura.
 --   8. conta_recibida_envio: la factura de comisión sin número no va a Diez;
 --      con número, sí.
 --   9. B no registra en A ni ve sus tiendas; anon no llama a nada.
@@ -185,8 +186,9 @@ begin
   r := public.conta_liquidacion_registrar(v_e, p || jsonb_build_object('email_id', 'prueba-d01-correo-2', 'desde', '2026-08-31', 'hasta', '2026-09-27', 'neto', -4.5, 'avisos', '["Algo inventado no cuadra."]'::jsonb), null);
   select * into v_cs from public.channel_settlement where id = (r->>'liquidacion_id')::uuid;
   if v_cs.net_payout <> -4.5 or v_cs.period_grain <> 'weeks' or r->>'texto' not like '%neto −4,50 € (sin cobro: pasa al siguiente)%' or r->'factura'->>'estado' <> 'creada'
-     or v_cs.review_note not like '%1 cosa no cuadra al leer.%' or v_cs.review_note not like '%Se solapa con la liquidación del 21/09 al 27/09/2026: puede repetir días ya liquidados.%'
-     or r->>'texto' not like '%Se solapa con la liquidación del 21/09 al 27/09/2026: revísala.' then
+     or v_cs.review_note not like '%Por aclarar: 1 cosa no cuadra al leer.%'
+     or v_cs.review_note not like '%Por aclarar: Se solapa con la liquidación del 21/09 al 27/09/2026. Cada día cuenta una sola vez%'
+     or r->>'texto' not like '%Por aclarar: Se solapa con la liquidación del 21/09 al 27/09/2026 (cada día cuenta una sola vez).' then
     raise exception 'PRUEBA D01 liquidaciones · 7: %', r;
   end if;
   if not exists (select 1 from public.supplier_invoice i, jsonb_array_elements(i.reading->'requisitos') x where i.id = v_cs.commission_invoice_id and x->>'id' = 'semanas') then
@@ -194,6 +196,14 @@ begin
   end if;
   if not exists (select 1 from public.supplier_invoice i, jsonb_array_elements(i.reading->'requisitos') x where i.id = v_cs.commission_invoice_id and x->>'id' = 'solape') then
     raise exception 'PRUEBA D01 liquidaciones · 7: la factura de la que se solapa no lo avisa.';
+  end if;
+  if not exists (select 1 from public.supplier_invoice i, jsonb_array_elements(i.reading->'requisitos') x where i.id = v_cs.commission_invoice_id and x->>'id' = 'cuadre' and x->>'texto' like '%Algo inventado no cuadra.%') then
+    raise exception 'PRUEBA D01 liquidaciones · 7: la factura de la que no cuadra al leer no lo dice.';
+  end if;
+  -- Los DOS lados del solape: la del paso 3 ahora también lo dice, enseñando la otra, y su factura también.
+  if (select review_note from public.channel_settlement where id = current_setting('prueba.liq')::uuid) not like '%Por aclarar: Se solapa con la liquidación del 31/08 al 27/09/2026.%'
+     or not exists (select 1 from public.supplier_invoice i, jsonb_array_elements(i.reading->'requisitos') x where i.id = current_setting('prueba.factura')::uuid and x->>'id' = 'solape') then
+    raise exception 'PRUEBA D01 liquidaciones · 7: la otra liquidación del solape (o su factura) no lo dice.';
   end if;
   r := public.conta_liquidacion_registrar(v_e, p || jsonb_build_object('email_id', 'prueba-d01-correo-3', 'desde', '2026-09-28', 'hasta', '2026-10-04', 'factura', null), null);
   if r->'factura'->>'estado' <> 'sin_factura' then raise exception 'PRUEBA D01 liquidaciones · 7: sin cargos ha hecho factura: %', r; end if;
@@ -207,7 +217,7 @@ begin
     raise exception 'PRUEBA D01 liquidaciones · 7: ha aceptado una factura que no cuadra.';
   exception when sqlstate '22023' then null; end;
   if exists (select 1 from public.channel_settlement where account_id = v_acc and period_from = '2026-10-05' and source = 'correo_uber') then raise exception 'PRUEBA D01 liquidaciones · 7: lo rechazado ha dejado algo.'; end if;
-  raise notice 'PRUEBA D01 liquidaciones · 7: neto negativo «sin cobro» con su factura (y el aviso de las semanas); sin cargos, sin factura; otra plataforma o una factura que no cuadra, no, y no dejan nada.';
+  raise notice 'PRUEBA D01 liquidaciones · 7: neto negativo «sin cobro» con su factura (y el aviso de las semanas); el solape, por aclarar en las dos y en sus facturas; sin cargos, sin factura; otra plataforma o una factura que no cuadra, no, y no dejan nada.';
 end $$;
 reset role;
 
@@ -232,7 +242,7 @@ begin
   select * into v_cs from public.channel_settlement where id = current_setting('prueba.liq')::uuid;
   -- Asignar la tienda quita «sin asignar», no el solape con la de cuatro semanas (paso 7): sigue por revisar por eso, y solo por eso.
   if v_cs.brand_id::text <> current_setting('prueba.marca') or v_cs.location_id::text <> current_setting('prueba.loc') or not v_cs.needs_review
-     or v_cs.review_note <> 'Se solapa con la liquidación del 31/08 al 27/09/2026: puede repetir días ya liquidados.' then
+     or v_cs.review_note <> 'Por aclarar: Se solapa con la liquidación del 31/08 al 27/09/2026. Cada día cuenta una sola vez: ninguna de las dos se asienta hasta aclararlo.' then
     raise exception 'PRUEBA D01 liquidaciones · 6: la liquidación no toma la marca y el local: %', to_jsonb(v_cs) - 'raw';
   end if;
   begin
@@ -258,12 +268,25 @@ begin
     v_falla := null;
   exception when sqlstate '22023' then v_falla := sqlerrm; end;
   if v_falla is distinct from 'La factura de comisión no tiene número: no va a Diez hasta tenerlo.' then raise exception 'PRUEBA D01 liquidaciones · 8: sin número ha salido hacia Diez (%).', v_falla; end if;
+  -- Validado (como lo validaría una persona), queda en el libro: de él se aprenden las cuentas.
+  perform public.journal_entry_validar(v_entry, 'Prueba D01');
   perform set_config('prueba.asiento', v_entry::text, true);
   perform set_config('prueba.falla', v_falla, true);
 end $$;
 reset role;
 
--- 8 (como postgres) · Llega el número.
+-- 8 (como postgres) · Lo aprendido del libro: con ese asiento validado, la 623x y la
+-- 627x de las facturas de la 41000003 son las suyas. Y llega el número.
+do $$
+declare v_e constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; c623 text; c627 text;
+begin
+  c623 := public._conta_cuenta_aprendida(v_e, '41000003', '623');
+  c627 := public._conta_cuenta_aprendida(v_e, '41000003', '627');
+  if c627 is distinct from '62700000' or c623 is null or public._conta_cuenta_aprendida(v_e, null, '623') is not null then
+    raise exception 'PRUEBA D01 liquidaciones · 8: lo aprendido no es lo del libro (623 %, 627 %).', c623, c627;
+  end if;
+  raise notice 'PRUEBA D01 liquidaciones · 8: lo aprendido del libro para la 41000003: 627 → %, 623 → % (la más usada en su serie 2 validada); sin 410, nada.', c627, c623;
+end $$;
 update public.supplier_invoice set invoice_number = 'INVENTADA-0001' where id = current_setting('prueba.factura')::uuid;
 
 set local role authenticated;

@@ -4,7 +4,7 @@
 // después. Una → propuesta; varias → por aclarar, enseñando cuáles; un neto
 // negativo no se busca en el banco. Datos inventados.
 import { describe, expect, it } from 'vitest'
-import { conciliar, decidir, referenciaDeLiquidacion, ventanaDeCobro, type Contexto, type Liquidacion, type Movimiento } from '@/modules/conta/lib/conciliacion'
+import { conciliar, cuentaDeTienda, decidir, referenciaDeLiquidacion, ventanaDeCobro, type Contexto, type Liquidacion, type Movimiento } from '@/modules/conta/lib/conciliacion'
 
 const NORTE = 'cta-norte', SUR = 'cta-sur'
 const PLAT = { nombre: 'Uber Eats', alias: ['UBER'], cuenta430: '43000003', terceroId: 't-uber', comisionHabitual: null, pendiente: [] }
@@ -84,5 +84,15 @@ describe('casar por tienda', () => {
     const l: Liquidacion = { id: 'g1', plataforma: 'Uber Eats', fecha: '2026-10-08', desde: '2026-10-01', hasta: '2026-10-07', netoCent: 5_000, cuenta430: '43000003', terceroId: 't-uber' }
     const d = decidir(mov({ importeCent: 5_000, fecha: '2026-10-20' }), ctx([l]))
     expect([d.confianza, d.destino?.tipo]).toEqual(['seguro', 'liquidacion'])
+  })
+})
+
+describe('la cuenta de la tienda (Julio, 16/10: una por local, otra si la marca cobra aparte)', () => {
+  const bancos = [{ id: 'b-alcala', localId: 'alcala' }, { id: 'b-camichi', localId: 'camichi' }, { id: 'b-otra', localId: null }]
+  it('la de la marca × local manda; si no, la de su local; con dos o ninguna en el local, ninguna', () => {
+    expect(cuentaDeTienda({ cuentaId: 'b-otra', localId: 'camichi' }, bancos)).toBe('b-otra')
+    expect(cuentaDeTienda({ cuentaId: null, localId: 'camichi' }, bancos)).toBe('b-camichi')
+    expect(cuentaDeTienda({ cuentaId: null, localId: 'alcala' }, [...bancos, { id: 'b-alcala-2', localId: 'alcala' }])).toBeNull()
+    expect(cuentaDeTienda({ cuentaId: null, localId: null }, bancos)).toBeNull()
   })
 })

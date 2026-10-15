@@ -511,6 +511,8 @@ export interface EntradaFactura {
   marcaId?: string | null
   /** D01 · La factura de comisión de una liquidación sale sin número: se propone, pero en duda y diciéndolo. */
   faltaNumero?: boolean
+  /** D01 (Julio, 16/10) · Lo que la deja por aclarar (un solape, su liquidación que no cuadra): no se propone hasta aclararlo. */
+  porAclarar?: readonly string[]
 }
 export interface CuentasFactura {
   proveedor: string
@@ -524,6 +526,7 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
   // factura sin NIF o sin tipo de gasto NO cae a una cuenta genérica.
   if (!f.tieneNif && !f.ivaNoDeducible) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.` }
   if (f.lineas.some((l) => !l.cuentaGasto)) return { propuesta: null, sinPropuesta: `A ${f.proveedor} le falta el tipo de gasto: ponlo en su ficha y la factura se propone.` }
+  if (f.porAclarar?.length) return { propuesta: null, sinPropuesta: f.porAclarar.join(' ') }
   const razones: Razon[] = []
   const avisos: string[] = []
   const confs: Confianza[] = []

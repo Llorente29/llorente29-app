@@ -226,6 +226,17 @@ export function ventanaDeCobro(hasta: string): { desde: string; hasta: string } 
   return { desde: d(1), hasta: d(5) }
 }
 
+/**
+ * D01 · La cuenta del banco donde cobra una tienda (Julio, 16/10): cada local cobra en
+ * la suya y una marca puede cobrar en otra. La de la tienda (marca × local) manda; si no
+ * la tiene, la del local, si el local tiene UNA sola; si no, ninguna (se casa por importe y fecha).
+ */
+export function cuentaDeTienda(t: { cuentaId: string | null; localId: string | null }, bancos: readonly { id: string; localId: string | null }[]): string | null {
+  if (t.cuentaId) return t.cuentaId
+  const xs = t.localId ? bancos.filter((b) => b.localId === t.localId) : []
+  return xs.length === 1 ? xs[0].id : null
+}
+
 /** ¿Es un pago con tarjeta? (concepto común 12 de la AEB, o lo dice el concepto) */
 export const esTarjeta = (m: Pick<Movimiento, 'conceptoComun' | 'concepto'>) => m.conceptoComun === '12' || /\bTARJ(ETA)?\b|COMPRA TARJ/i.test(m.concepto)
 
