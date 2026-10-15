@@ -157,7 +157,10 @@ Fuentes:
   - cruces: run 38713804585;
   - pago y saldo: run 38716016949;
   - la semilla de la e2e: run 38721271856.
-- **e2e** (`tests/e2e/conta/d01/catcher.spec.ts`): ordenador y móvil; ver el PR.
+- **e2e** (`tests/e2e/conta/d01/catcher.spec.ts`): ordenador y móvil, en verde en el run 38728172632 (commit 8dcbc5c6), con el resto del frente A (12 pasadas, 5 saltadas a propósito).
+  - Las capturas son de ese run, en `docs/conta/capturas/e05/`.
+  - Las dos pasadas comparten la quincena en staging: la segunda la encuentra subida, cruzada y con el pago propuesto, y lo dice. La prueba vuelve a abrir el G236 si la otra pasada lo dejó decidido.
+  - La comprobación de la marca mira solo lo nuevo. El resto de Documentos la enseña fuera de `?marca=contabilidad` a propósito; la ausencia ahí la prueba `documentos.spec.ts`.
 
 ## La tanda de producción (preparada, no lanzada)
 
