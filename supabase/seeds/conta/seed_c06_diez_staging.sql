@@ -35,7 +35,7 @@ begin
   -- su plan elegido (pymes, 8 dígitos, como Diez).
   if not exists (select 1 from public.company_tax_profile where company_id = v_empresa) then
     insert into public.company_tax_profile (company_id, account_id, chart_kind, account_digits, tax_forms)
-    values (v_empresa, v_cuenta, 'pymes', 8, array['303', '390']);
+    values (v_empresa, v_cuenta, 'pymes', 8, array['303', '347', '390']);
   end if;
   -- Y su cuenta de banco, como la deja el alta («Bancos · Cuenta principal»):
   -- los datos del Diez simulado la traen SIN nombre, y el importador no
