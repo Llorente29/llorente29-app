@@ -244,6 +244,17 @@
 .cxn-asiento th { text-align: left; font-size: 12px; color: var(--cx-apoyo); font-weight: 700; padding: 4px 0; }
 .cxn-asiento td { padding: 4px 0; border-top: 1px solid var(--cx-linea); }
 
+/* Con el panel abierto, la fila en dos pisos: quién e importe arriba; lo que propongo y los botones debajo. */
+.cxn-con-panel .cxn-fila {
+  grid-template-columns: 28px minmax(0, 1fr) auto; gap: 4px 12px;
+  grid-template-areas: 'casilla quien importe' '. propongo propongo' '. botones botones';
+}
+.cxn-con-panel .cxn-casilla { grid-area: casilla; }
+.cxn-con-panel .cxn-quien { grid-area: quien; }
+.cxn-con-panel .cxn-fila .cxb-importe { grid-area: importe; }
+.cxn-con-panel .cxn-propongo { grid-area: propongo; }
+.cxn-con-panel .cxn-fila .cxb-botones { grid-area: botones; justify-content: flex-start; }
+
 @media (max-width: 1100px) {
   .cxn-cuadre { grid-template-columns: 1fr; }
   .cxn-con-panel { grid-template-columns: minmax(0, 1fr) 320px; }
