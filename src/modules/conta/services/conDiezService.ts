@@ -11,8 +11,8 @@
 //   · enviarADiez: la edge function conta-diez-enviar (C0008 cerrado, C0001
 //     vetada, sin documento no se envía, nunca dos veces).
 //   · validarConDocumento (respuesta 8): validar y guardar el PDF, juntos.
-//   · validarYEnviar: los tres pasos, asiento a asiento, diciendo de cada uno
-//     qué ha pasado (regla 8).
+//   · validarYEnviar: asiento a asiento y por fecha, diciendo de cada uno qué
+//     ha pasado (regla 8); para en el primero que se valida y no llega a Diez.
 //
 // Nombres dentro de cadenas (regla 40), comprobados contra producción el 13/10
 // (pg_class, pg_proc, pg_constraint e information_schema): sales_day_summary
@@ -34,10 +34,11 @@ import { correspondenciaDeEmpresa } from '../../../../supabase/functions/_shared
 import { resumenDeAsiento, type ResumenBD } from '../../../../supabase/functions/_shared/resumenDeAsiento.ts'
 import { resumenVentasPdf } from '../../../../supabase/functions/_shared/resumenVentasPdf.ts'
 import type { ResultadoEnvio } from '../../../../supabase/functions/_shared/diezEnviar.ts'
-import type { ConDiez, EnvioDiez, PasoEnvio } from '@/modules/conta/lib/conDiez'
+import type { ConDiez, EnvioDiez } from '@/modules/conta/lib/conDiez'
 import { nombreEnZip, ordenPendientes, type PendienteDiez } from '@/modules/conta/lib/pendientesDiez'
 import { crearZip, type FicheroZip } from '@/modules/conta/lib/zip'
-import { noSeValida, validarConPdf, type ValidadoConPdf } from '@/modules/conta/lib/validarConPdf'
+import { validarConPdf, type ValidadoConPdf } from '@/modules/conta/lib/validarConPdf'
+import { validarYEnviarVarios, type AsientoParaEnviar, type PasoVarios } from '@/modules/conta/lib/enviarVarios'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -184,30 +185,13 @@ export async function enviarADiez(entryId: string): Promise<ResultadoEnvio> {
 }
 
 /**
- * «Validar y enviar a Diez», asiento a asiento: validar (si no lo está), su
- * documento y el envío. Si un paso falla, ese asiento se queda donde llegó y
- * se dice; los demás siguen.
+ * «Validar y enviar a Diez», asiento a asiento y por fecha: validar con su PDF
+ * (si no lo está) y el envío. Si uno no se valida, se dice y se sigue; si uno
+ * se valida y no llega a Diez, se para y lo demás queda como estaba
+ * (lib/enviarVarios.ts, respuesta 8, tarea 1b).
  */
-export async function validarYEnviar(xs: readonly { id: string; concepto: string; estado: string }[], quien: string | null, alPaso?: (i: number) => void): Promise<PasoEnvio[]> {
-  const pasos: PasoEnvio[] = []
-  for (const [i, a] of xs.entries()) {
-    alPaso?.(i)
-    const p: PasoEnvio = { concepto: a.concepto, validado: a.estado === 'validado', documento: false, enDiez: false, texto: '' }
-    try {
-      // Validar y guardar su PDF van juntos (respuesta 8): o las dos cosas, o ninguna.
-      if (!p.validado) { await validarConDocumento(a.id, quien); p.validado = true } else await guardarDocumento(a.id, quien)
-      p.documento = true
-      const r = await enviarADiez(a.id)
-      p.enDiez = r.estado === 'en_diez'
-      p.pdfPendiente = r.estado === 'en_diez' && r.pdfPendiente === true
-      p.texto = r.texto
-    } catch (e) {
-      const m = e instanceof Error ? e.message : String(e)
-      p.texto = !p.validado ? noSeValida(m) : !p.documento ? `Validado, pero no ha llegado a Diez: falta el documento (${m}).` : `No ha llegado a Diez: ${m}.`
-    }
-    pasos.push(p)
-  }
-  return pasos
+export async function validarYEnviar(xs: readonly AsientoParaEnviar[], quien: string | null, alPaso?: (i: number) => void): Promise<PasoVarios[]> {
+  return validarYEnviarVarios(xs, quien, { validarConDocumento, guardarDocumento, enviarADiez }, alPaso)
 }
 
 // ── C06b · Respuesta 7: lo que está en Diez sin su PDF ──────────────────────────
