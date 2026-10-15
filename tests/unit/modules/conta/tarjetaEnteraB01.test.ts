@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { escribirNorma43, leerNorma43 } from '@/modules/conta/lib/norma43'
-import { cuadrar, limpiarConcepto, ocultarTarjetas, pasaLuhn } from '@/modules/conta/lib/extractoBanco'
+import { cuadrar, limpiarConcepto, ocultarTarjetas, pareceTarjeta, pasaLuhn } from '@/modules/conta/lib/extractoBanco'
 import { digitosTarjeta } from '@/modules/conta/lib/conciliacion'
 import { crearBancos, type Bd } from '@/modules/conta/services/bancosNucleo'
 
@@ -18,6 +18,31 @@ describe('Luhn: qué es una tarjeta', () => {
     expect(pasaLuhn('4111111111111112')).toBe(false)
     expect(pasaLuhn('123456789012345')).toBe(false)
     expect(pasaLuhn('411111111111')).toBe(false) // 12: no es tira de tarjeta
+  })
+})
+
+describe('qué se tapa (Julio, 15/10, opción a): 15 a 19 cifras, comienzo de tarjeta y Luhn', () => {
+  it('Visa, Mastercard (51–55 y 2221–2720) y Amex, sí', () => {
+    for (const t of ['4111111111111111', '5555555555554444', '2221000000000009', '2720000000000005', '378282246310005']) expect(pareceTarjeta(t), t).toBe(true)
+  })
+  it('la referencia de 14 cifras que pasa Luhn por casualidad, no: pasa sin tocar', () => {
+    expect(pasaLuhn('12345678901237')).toBe(true)
+    expect(pareceTarjeta('12345678901237')).toBe(false)
+    expect(ocultarTarjetas('TRANSFERENCIA REF 12345678901237')).toBe('TRANSFERENCIA REF 12345678901237')
+  })
+  it('una tira de 16 cifras que pasa Luhn pero no empieza como tarjeta, no: pasa sin tocar', () => {
+    for (const t of ['1234567890123452', '2721000000000004', '6011000000000004']) {
+      expect(pasaLuhn(t), t).toBe(true)
+      expect(ocultarTarjetas(`RECIBO ${t}`), t).toBe(`RECIBO ${t}`)
+    }
+  })
+  it('la tarjeta en un movimiento de código 99, sin «TARJ» en el texto, se tapa', () => {
+    const n43 = escribirNorma43([{ entidad: '0182', oficina: '0937', cuenta: '0200000001', nombre: 'PRUEBA', desde: '2026-09-10', hasta: '2026-09-10', saldoInicialCent: 10000,
+      movimientos: [{ fecha: '2026-09-10', importeCent: -990, comun: '99', propio: '956', concepto: 'COMERCIO INVENTADO 4111111111111111' }] }])
+    const m = leerNorma43(n43).cuentas[0].movimientos[0]
+    expect(m.conceptoComun).toBe('99')
+    expect(m.conceptoBanco).not.toMatch(/TARJ/)
+    expect(ocultarTarjetas(m.conceptoBanco)).toBe('COMERCIO INVENTADO ····1111')
   })
 })
 

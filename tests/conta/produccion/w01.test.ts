@@ -418,6 +418,15 @@ describe('R11 · paso 8 sobre la tanda de la C06b «incluye_recibidas» (0740, s
   })
 })
 
+describe('R11 · paso 8 sobre la tanda del B01 «nunca una tarjeta entera» (0190 y 0191, su copia, aplicada), con su contexto medido', () => {
+  it('la 0190 sigue y la 0191 pide autorizo', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-b01-tarjeta-oculta-20261015.json',
+      '--manifiesto=tests/conta/produccion/tanda-b01-tarjeta-oculta-20261015.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261101T0190_b01_tarjeta_oculta.sql: sigue')
+    expect(out).toContain('autorizo: 20261101T0191_b01_tarjeta_oculta_guardado.sql')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
@@ -426,16 +435,15 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261101T0190_b01_tarjeta_oculta.sql: sigue')
-    expect(r.out).toContain('20261101T0191_b01_tarjeta_oculta_guardado.sql: AUTORIZO')
-    expect(r.out).toContain('autorizo: 20261101T0191_b01_tarjeta_oculta_guardado.sql')
+    expect(r.out).toContain('20261101T0192_b01_tarjeta_criterio.sql: sigue')
+    expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261101T0190_b01_tarjeta_oculta.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261101T0192_b01_tarjeta_criterio.sql ha cambiado desde la medida')
   })
 })

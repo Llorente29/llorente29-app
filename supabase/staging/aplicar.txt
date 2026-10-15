@@ -1,5 +1,4 @@
-# B01 · nunca una tarjeta entera (15/10): el disparador (0190), lo ya guardado
-# (0191) y su prueba, fichero entero y como usuario, con rollback.
-supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql
-supabase/migrations/20261101T0191_b01_tarjeta_oculta_guardado.sql
-supabase/staging/sql/20261101_b01_tarjeta_oculta_prueba.sql
+# B01 · qué es una tarjeta entera, afinado (Julio, 15/10, opción a): la 0192 y
+# su prueba, fichero entero y como usuario, con rollback (incluye su vuelta atrás).
+supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql
+supabase/staging/sql/20261101_b01_tarjeta_criterio_prueba.sql

@@ -139,10 +139,13 @@ export function huellas(movs: readonly MovimientoLeido[]): string[] {
 }
 
 // ── Nunca una tarjeta entera (15/10) ──────────────────────────────────────────
-// Una tira de 13 a 19 cifras, sin cifras pegadas a los lados, que pasa Luhn,
-// se guarda solo con sus 4 últimas: «····1234». Las que no pasan Luhn
-// (referencias de recibos y transferencias) se quedan. La base hace lo mismo
-// con un disparador (20261101T0190), para lo que llegue por otro camino.
+// Una tira de 15 a 19 cifras, sin cifras pegadas a los lados, que empieza como
+// una tarjeta (Visa 4, Mastercard 51–55 o 2221–2720, Amex 34/37) y pasa Luhn,
+// se guarda solo con sus 4 últimas: «····1234». Lo demás se queda: las
+// referencias de recibos y transferencias (en el Excel de BBVA hay de 14 a 16
+// cifras, y alguna pasa Luhn por casualidad) sirven para casar (Julio, 15/10,
+// opción a). La base hace lo mismo con un disparador (20261101T0190, criterio
+// de 20261101T0192), para lo que llegue por otro camino.
 
 /** ¿Pasa el control de Luhn? (solo cifras, de 13 a 19). */
 export function pasaLuhn(cifras: string): boolean {
@@ -156,12 +159,20 @@ export function pasaLuhn(cifras: string): boolean {
   return suma % 10 === 0
 }
 
+/** ¿Es una tarjeta entera? 15 a 19 cifras, el comienzo de Visa, Mastercard o Amex, y Luhn. */
+export function pareceTarjeta(cifras: string): boolean {
+  if (!/^\d{15,19}$/.test(cifras)) return false
+  const iin4 = Number(cifras.slice(0, 4))
+  const marca = /^4/.test(cifras) || /^5[1-5]/.test(cifras) || (iin4 >= 2221 && iin4 <= 2720) || /^3[47]/.test(cifras)
+  return marca && pasaLuhn(cifras)
+}
+
 /** El texto con cada tarjeta entera reducida a «····» y sus 4 últimas. */
 export function ocultarTarjetas(texto: string): string
 export function ocultarTarjetas(texto: string | null): string | null
 export function ocultarTarjetas(texto: string | null): string | null {
   if (texto === null) return null
-  return texto.replace(/(?<!\d)\d{13,19}(?!\d)/g, (t) => (pasaLuhn(t) ? `····${t.slice(-4)}` : t))
+  return texto.replace(/(?<!\d)\d{15,19}(?!\d)/g, (t) => (pareceTarjeta(t) ? `····${t.slice(-4)}` : t))
 }
 
 /** El movimiento tal y como se guarda: sin tarjetas enteras en el concepto, el documento ni las referencias. */
