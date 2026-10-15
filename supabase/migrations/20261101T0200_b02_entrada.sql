@@ -29,7 +29,7 @@ comment on column public.bank_movement.movement_type is 'B02. El tipo de movimie
 
 create or replace function public._bank_contraparte_limpia(p text)
 returns text language plpgsql immutable set search_path = public as $$
-declare s text; w text;
+declare s text; w text; r text := ''; c text; prev text := ' '; i int;
 begin
   if p is null then return null; end if;
   s := upper(p);
@@ -40,7 +40,15 @@ begin
   s := trim(regexp_replace(s, '\s+', ' ', 'g'));
   s := regexp_replace(s, '^[ -]+|[ -]+$', '', 'g');
   if s = '' then return null; end if;
-  s := initcap(s);
+  -- Mayúscula en cada letra que no va detrás de otra letra o cifra (no initcap:
+  -- deja «S.L.» como «S.l.»; esto es lo mismo que hace el front).
+  s := lower(s);
+  for i in 1..length(s) loop
+    c := substr(s, i, 1);
+    r := r || case when c ~ '[[:alpha:]]' and prev !~ '[[:alpha:][:digit:]]' then upper(c) else c end;
+    prev := c;
+  end loop;
+  s := r;
   foreach w in array array['De', 'Del', 'La', 'Las', 'Los', 'El', 'Y', 'En'] loop
     s := regexp_replace(s, ' ' || w || '(?= )', ' ' || lower(w), 'g');
   end loop;
