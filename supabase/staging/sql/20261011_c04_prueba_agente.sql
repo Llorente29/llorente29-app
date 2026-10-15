@@ -7,13 +7,20 @@
 --   2. Se rompe a propósito una cosa por comprobación (con los disparadores
 --      apagados: es lo que la base no deja hacer por las buenas).
 --   3. El agente encuentra cada una.
--- El agente se lee del MISMO fichero que corre cada noche (\set con cat): la
--- prueba mide lo que se despliega, no una copia.
+-- El agente es el MISMO fichero que corre cada noche: la prueba mide lo que se
+-- despliega, no una copia. Se ejecuta entero con \i y se lee como lo lee el
+-- workflow (sin alinear y sin cabeceras): desde el 13/10 lleva \gset y \if, y
+-- ya no se puede pegar dentro de un «create table as» (C06b, 15/10).
 
 begin;
-\set agente `cat scripts/conta/agente-libro.sql`
+\pset format unaligned
+\pset tuples_only on
 
-create temp table antes on commit drop as :agente
+\o /tmp/agente_c04_antes.json
+\i scripts/conta/agente-libro.sql
+\o
+\set salida `cat /tmp/agente_c04_antes.json`
+create temp table antes on commit drop as select :'salida'::json j;
 
 do $$
 declare j json := (select * from antes); k text;
@@ -36,24 +43,33 @@ declare
 begin
   select id into v_nomina   from public.journal_entry where company_id = ea and source_type = 'payroll' and status = 'validado' limit 1;
   select id into v_prestamo from public.journal_entry where company_id = ea and concept = 'Cuota del préstamo · octubre';
-  select id into v_factura  from public.journal_entry where company_id = ea and source_type = 'supplier_invoice' and status = 'validado' limit 1;
+  select id into v_factura  from public.journal_entry where company_id = ea and source_type = 'supplier_invoice' and status = 'validado' order by number limit 1;
   select id into v_ventas   from public.journal_entry where company_id = ea and source_type = 'sales_day' and status = 'validado' limit 1;
   if v_nomina is null or v_prestamo is null or v_factura is null or v_ventas is null then
     raise exception 'PRUEBA agente · 2: falta algún asiento de la semilla del C04.';
   end if;
   -- cuadre (y con él la cadena): un apunte de la nómina cambia de importe.
   update public.journal_line set debit = debit + 1 where entry_id = v_nomina and position = 1;
-  -- huecos: el préstamo (General nº 1) pasa a ser el nº 9.
-  update public.journal_entry set number = 9 where id = v_prestamo;
+  -- huecos: el préstamo (General nº 1) pasa al último de su serie + 2, así
+  -- quedan dos huecos (su nº 1 y el de en medio). Un número fijo (era el 9)
+  -- chocó el 15/10 con los asientos que la General ha ido sumando.
+  update public.journal_entry e set number = (select max(x.number) + 2 from public.journal_entry x
+     where x.company_id = e.company_id and x.fiscal_year_id = e.fiscal_year_id and x.series = e.series)
+   where e.id = v_prestamo;
   -- iva: la base del IVA de la factura deja de dar su cuota.
   update public.journal_line set tax_base = tax_base + 100 where entry_id = v_factura and tax_rate_id is not null;
   -- cedidas_70: la venta del día se apunta a la marca cedida.
   update public.journal_line set brand_id = 'e0200000-0000-4000-8000-00000000a0b5' where entry_id = v_ventas and position = 2;
   -- socio_gasto: la compra de la factura queda a nombre del socio de marca.
+  -- Las dos, sobre su apunte del grupo 6 (sea cual sea su posición: el 15/10
+  -- la 400 iba la primera en una de las facturas y esto no rompía nada).
   update public.journal_line set party_id = (select party_id from public.party_role where supplier_id = 'c0300000-0000-4000-8000-000000000002' limit 1)
-   where entry_id = v_factura and position = 1;
+   where id = (select l.id from public.journal_line l join public.company_account a on a.id = l.company_account_id
+                where l.entry_id = v_factura and a.template_code like '6%' order by l.position limit 1);
   -- resultado: un gasto sin local ni «común».
-  update public.journal_line set location_id = null, is_common = false where entry_id = v_factura and position = 1;
+  update public.journal_line set location_id = null, is_common = false
+   where id = (select l.id from public.journal_line l join public.company_account a on a.id = l.company_account_id
+                where l.entry_id = v_factura and a.template_code like '6%' order by l.position limit 1);
   -- ventas_dia: el resumen dice un ticket más de los que guarda.
   update public.sales_day_summary set tickets_count = tickets_count + 1 where entry_id = v_ventas;
   -- mes_cerrado: octubre de B cerrado ANTES de validar su préstamo.
@@ -65,7 +81,11 @@ begin
      and id = (select id from public.journal_entry where company_id = ea and status = 'propuesto' limit 1);
 end $$;
 
-create temp table despues on commit drop as :agente
+\o /tmp/agente_c04_despues.json
+\i scripts/conta/agente-libro.sql
+\o
+\set salida `cat /tmp/agente_c04_despues.json`
+create temp table despues on commit drop as select :'salida'::json j;
 
 do $$
 declare j json := (select * from despues); k text; faltan text := '';
