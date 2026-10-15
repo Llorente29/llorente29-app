@@ -1,4 +1,3 @@
-# B01 · qué es una tarjeta entera, afinado (Julio, 15/10, opción a): la 0192 y
-# su prueba, fichero entero y como usuario, con rollback (incluye su vuelta atrás).
-supabase/migrations/20261101T0192_b01_tarjeta_criterio.sql
-supabase/staging/sql/20261101_b01_tarjeta_criterio_prueba.sql
+# C06b · los huecos del agente «libro» desde el siguiente al último traído
+# (Julio, 15/10). Solo la prueba, con rollback, con los tramos reales de C0008.
+supabase/staging/sql/20261015_c06b_prueba_agente_huecos.sql
