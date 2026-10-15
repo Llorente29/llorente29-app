@@ -29,7 +29,7 @@ const NORTE = BANCOS_B01[0]
 const MERCADO = BANCOS_B01[2]
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
-// Mercado, después de su primer extracto (2.500 + 2.000 − 220 − 60 − 34,75): 4.185,25 €.
+// Mercado, después de su primer extracto (2.500 + 2.000 − 220 − 60 − 34,75): 4.185,25 €; después de este, 3.885,25 €.
 const RECARGAS = escribirNorma43([
   { entidad: '0182', oficina: '9103', cuenta: '0000000013', nombre: 'TABERNA DE PRUEBA NORTE', desde: '2026-10-14', hasta: '2026-10-14', saldoInicialCent: 418_525, movimientos: [
     { fecha: '2026-10-14', importeCent: -10_000, comun: '99', concepto: 'RECARGA MONEDERO INVENTADO' },
@@ -98,6 +98,8 @@ async function lasCifras(page: Page) {
 
 test.describe('B02 · Bancos, conciliar', () => {
   test.describe.configure({ timeout: 300_000 })
+  // Un clic que no puede darse falla en 20 s con su motivo, no al acabarse la prueba.
+  test.use({ actionTimeout: 20_000 })
 
   test('ordenador: cuadre, bloque, iguales, teclado, panel y Casados solos', async ({ page }) => {
     test.skip(lado(page) !== 'ordenador', 'En el móvil va la suya.')
@@ -113,7 +115,8 @@ test.describe('B02 · Bancos, conciliar', () => {
       expect(c.frase).toEqual({ casados: c.contadores.casados, todos: c.contadores.todos, confirmar: c.contadores.confirmar, aclarar: c.contadores.aclarar })
       expect(c.barra).toEqual({ casados: c.contadores.casados, confirmar: c.contadores.confirmar, aclarar: c.contadores.aclarar })
       for (const t of ['En el banco', 'En contabilidad', 'Te falta por casar']) await expect(page.getByTestId('cuadre')).toContainText(t)
-      await expect(page.getByTestId('cuadre')).toContainText('4.185,25 €')
+      // El último extracto de Mercado (el de las recargas) acaba en 4.185,25 − 300 = 3.885,25 €.
+      await expect(page.getByTestId('cuadre')).toContainText('3.885,25 €')
 
       // El bloque: lo de punto verde viene marcado; los iguales, en una fila.
       const bloque = page.getByRole('region', { name: 'Confirmar en bloque' })

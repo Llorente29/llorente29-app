@@ -254,7 +254,7 @@
   .cxc-bandejas-fila .cxl-segmento { overflow-x: auto; flex-wrap: nowrap; max-width: 100%; }
   .cxc-bandejas-fila .cxl-segmento button { white-space: nowrap; }
   .cxc-buscar { flex: 1 1 100%; min-width: 0; }
-  .cxc-bloque-barra { position: sticky; top: 0; z-index: 2; }
+  .cxc-bloque-barra { flex-direction: column; align-items: stretch; }
   .cxc-lista { padding: 2px 10px 10px; }
   /* Una tarjeta por movimiento: casilla, quién e importe arriba; lo que propongo; y sus botones a lo ancho. */
   .cxc-fila { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: 'casilla quien importe' 'propongo propongo propongo' 'botones botones botones'; gap: 6px 10px; padding: 14px 4px; }
