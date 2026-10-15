@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import { leerQuincena, type PedidoExcel } from '../../../src/modules/conta/lib/catcherQuincena'
 import {
-  cabeEnTarifa, cruzar, cuando, precioPorKm, resumenCruce, TARIFA_PORTAL_20261014, tarifaDel, type PedidoApp, type Tarifa,
+  cabeEnTarifa, cruzar, cuando, precioPorKm, resumenCruce, resumenLote, TARIFA_PORTAL_20261014, tarifaDel, type PedidoApp, type Tarifa,
 } from '../../../src/modules/conta/lib/catcherCruces'
 import { EMPRESA, quincenaInventada, TIENDA_A, TIENDA_B } from './ejemplo'
 
@@ -119,5 +119,14 @@ describe('la tarifa: fechada y con sus reglas', () => {
   })
   it('la hora, en Madrid', () => {
     expect(cuando('2026-09-23T14:29:00.000Z')).toBe('23/09 a las 16:29')
+  })
+})
+
+describe('resumenLote: la línea de cada quincena', () => {
+  it('cuadra, salvo N, o sin cruzar', () => {
+    const l = { etiqueta: '2.ª quincena de septiembre de 2026', facturas: 58, total: 1062.25 }
+    expect(resumenLote({ ...l, cruzado: true, abiertas: 1 })).toBe('2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 € · cuadra con los pedidos salvo 1')
+    expect(resumenLote({ ...l, cruzado: true, abiertas: 0 })).toBe('2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 € · cuadra con los pedidos')
+    expect(resumenLote({ ...l, facturas: 1, cruzado: false, abiertas: 0 })).toBe('2.ª quincena de septiembre de 2026 · 1 factura · 1.062,25 € · sin cruzar con los pedidos todavía')
   })
 })

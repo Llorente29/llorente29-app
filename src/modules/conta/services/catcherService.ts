@@ -174,3 +174,63 @@ export async function comprobarSaldoPortal(companyId: string, saldoPortal: numbe
   const r = await rpc<Record<string, unknown>>('conta_catcher_saldo_comprobar', { p_company: companyId, p_saldo_portal: saldoPortal, p_quien_nombre: quien })
   return { coincide: r.coincide === true, texto: String(r.texto ?? '') }
 }
+
+// ── E05 · Tarea 5 · Lo que enseñan las pantallas ─────────────────────────────
+
+export interface LoteFila {
+  id: string; etiqueta: string; desde: string; hasta: string; facturas: number; total: number
+  cruzado: boolean; abiertas: number; pago: string | null; subido: string; quien: string | null
+}
+
+type FilaLote = { id: string; label: string; period_from: string; period_to: string; invoice_count: number; grand_total: number | null; crossed_at: string | null; cross_summary: { abiertas?: number } | null; payment_entry_id: string | null; created_at: string; created_by_name: string | null }
+const deFila = (r: FilaLote): LoteFila => ({
+  id: r.id, etiqueta: r.label, desde: r.period_from, hasta: r.period_to, facturas: r.invoice_count, total: Number(r.grand_total ?? 0),
+  cruzado: !!r.crossed_at, abiertas: Number(r.cross_summary?.abiertas ?? 0), pago: r.payment_entry_id, subido: r.created_at, quien: r.created_by_name,
+})
+const COLUMNAS_LOTE = 'id, label, period_from, period_to, invoice_count, grand_total, crossed_at, cross_summary, payment_entry_id, created_at, created_by_name'
+
+/** Las quincenas de Catcher subidas por la empresa, la más reciente primero. */
+export async function leerLotes(accountId: string, companyId: string): Promise<LoteFila[]> {
+  hayBase()
+  const { data, error } = await tabla('supplier_batch').select(COLUMNAS_LOTE).eq('account_id', accountId).eq('company_id', companyId).eq('provider', 'catcher').order('period_from', { ascending: false })
+  if (error) throw new Error(`No se han podido leer las quincenas de Catcher: ${error.message}`)
+  return ((data ?? []) as FilaLote[]).map(deFila)
+}
+
+export interface FacturaDeLote {
+  id: string; numero: string; tipo: TipoFactura; emisor: string | null; nif: string | null; local: string | null
+  total: number; confianza: 'seguro' | 'probable' | 'duda' | null; aclarar: number; estado: string; sinProveedor: boolean
+}
+export interface CosaPorAclarar {
+  id: string; factura: string | null; facturaId: string | null; motivo: string; codigo: string | null; momento: string | null
+  texto: string; estado: 'abierta' | 'aceptada' | 'reclamada'; nota: string | null; quien: string | null
+}
+export interface LoteDetalle { lote: LoteFila; facturas: FacturaDeLote[]; porAclarar: CosaPorAclarar[]; comision: { esperada: number; cobrada: number } | null }
+
+/** Una quincena con sus facturas (agrupables por tipo) y lo que queda por aclarar. */
+export async function leerLote(accountId: string, loteId: string): Promise<LoteDetalle> {
+  hayBase()
+  const [l, fs, is, ls] = await Promise.all([
+    tabla('supplier_batch').select(COLUMNAS_LOTE).eq('id', loteId).eq('account_id', accountId).single(),
+    tabla('supplier_invoice').select('id, invoice_number, issuer_name, issuer_tax_id, location_id, grand_total, reading_confidence, reading, status, supplier_id').eq('batch_id', loteId).eq('account_id', accountId).order('invoice_number'),
+    tabla('supplier_batch_issue').select('id, supplier_invoice_id, reason, order_code, ordered_at, text, status, note, resolved_by_name').eq('batch_id', loteId).eq('account_id', accountId).order('created_at'),
+    tabla('locations').select('id, name').eq('account_id', accountId),
+  ])
+  for (const r of [l, fs, is, ls]) if (r.error) throw new Error(`No se ha podido leer la quincena: ${r.error.message}`)
+  const locales = new Map(((ls.data ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name]))
+  type F = { id: string; invoice_number: string; issuer_name: string | null; issuer_tax_id: string | null; location_id: string | null; grand_total: number; reading_confidence: FacturaDeLote['confianza']; reading: { lote?: { tipo?: TipoFactura }; cruce?: { aclarar?: number } } | null; status: string; supplier_id: string | null }
+  const facturas = ((fs.data ?? []) as F[]).map((f): FacturaDeLote => ({
+    id: f.id, numero: f.invoice_number, tipo: f.reading?.lote?.tipo ?? 'rider', emisor: f.issuer_name, nif: f.issuer_tax_id,
+    local: f.location_id ? locales.get(f.location_id) ?? null : null, total: Number(f.grand_total), confianza: f.reading_confidence,
+    aclarar: Number(f.reading?.cruce?.aclarar ?? 0), estado: f.status, sinProveedor: !f.supplier_id,
+  }))
+  const numeroDe = new Map(facturas.map((f) => [f.id, f.numero]))
+  type I = { id: string; supplier_invoice_id: string | null; reason: string; order_code: string | null; ordered_at: string | null; text: string; status: CosaPorAclarar['estado']; note: string | null; resolved_by_name: string | null }
+  const porAclarar = ((is.data ?? []) as I[]).map((i): CosaPorAclarar => ({
+    id: i.id, facturaId: i.supplier_invoice_id, factura: i.supplier_invoice_id ? numeroDe.get(i.supplier_invoice_id) ?? null : null, motivo: i.reason,
+    codigo: i.order_code, momento: i.ordered_at, texto: i.text, estado: i.status, nota: i.note, quien: i.resolved_by_name,
+  }))
+  const lote = l.data as FilaLote & { cross_summary: { abiertas?: number; totales?: { comisionEsperada?: number; comisionCobrada?: number } } | null }
+  const t = lote.cross_summary?.totales
+  return { lote: deFila(lote), facturas, porAclarar, comision: t && t.comisionCobrada != null ? { esperada: Number(t.comisionEsperada ?? 0), cobrada: Number(t.comisionCobrada) } : null }
+}

@@ -141,3 +141,42 @@
 @media (max-width: 370px) {
   .cxr-herramientas .cxl-segmento button { padding-left: 5px; padding-right: 5px; font-size: 13px; }
 }
+
+/* E05 · Las facturas de Catcher (la quincena en Documentos y su página). Solo tokens. */
+.cxk-quincena h3, .cxk-aclarar h3, .cxk-grupo h3, .cxk-saldo h3 { margin: 0 0 4px; font-size: 18px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cxk-elegir { display: inline-flex; align-items: center; cursor: pointer; white-space: nowrap; }
+.cxk-leida { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.cxk-resumen { margin: 4px 0; font-size: 16px; overflow-wrap: anywhere; }
+.cxk-lista-avisos { margin: 4px 0; padding-left: 18px; font-size: 14px; color: var(--cx-apoyo); }
+.cxk-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.cxk-lotes { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cxk-lote { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); color: var(--cx-texto); text-decoration: none; font-size: 15px; }
+.cxk-lote:hover { border-color: var(--cx-azul-borde); }
+.cxk-contador { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--cx-ambar-suave); color: var(--cx-ambar); white-space: nowrap; }
+.cxk-cifras { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cxk-cifras .cxr-cifra { cursor: default; }
+.cxk-cosas { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.cxk-cosa { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); padding: 12px; }
+.cxk-cosa-abierta { border-color: var(--cx-ambar); background: var(--cx-ambar-suave); }
+.cxk-cosa-cabeza { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.cxk-pedido { font-family: var(--cx-letra-cifras); font-weight: 600; }
+.cxk-porque { margin: 6px 0; font-size: 15px; }
+.cxk-estado { font-size: 13px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; margin-left: auto; }
+.cxk-estado-abierta { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxk-estado-aceptada { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxk-estado-reclamada { background: var(--cx-azul-suave); color: var(--cx-azul); }
+.cxk-reclamar { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-top: 6px; }
+.cxk-campo { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--cx-apoyo); flex: 1 1 220px; }
+.cxk-tarjeta { display: flex; flex-direction: column; gap: 4px; text-decoration: none; color: var(--cx-texto); }
+.cxk-saldo-cifra { display: flex; flex-direction: column; gap: 2px; margin: 6px 0; }
+.cxk-saldo-desglose { display: flex; gap: 18px; margin: 0 0 8px; flex-wrap: wrap; font-size: 14px; }
+.cxk-saldo-desglose div { display: flex; gap: 6px; }
+.cxk-saldo-desglose dt { color: var(--cx-apoyo); }
+.cxk-saldo-desglose dd { margin: 0; font-family: var(--cx-letra-cifras); }
+.cxk-saldo-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.cxk-no-coincide { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+@media (max-width: 767px) {
+  .cxk-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cxk-estado { margin-left: 0; }
+  .cxk-lote { flex-direction: column; align-items: flex-start; }
+}

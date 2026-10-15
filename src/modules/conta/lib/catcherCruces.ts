@@ -25,6 +25,7 @@
 // con su pedido; no hay «y N más».
 
 import type { FacturaDelLote, PedidoExcel, TipoFactura } from '@/modules/conta/lib/catcherQuincena'
+import { eurosExactos } from '@/modules/conta/lib/formato'
 
 // ── La tarifa (fechada y editable: supplier_rate) ────────────────────────────
 
@@ -122,7 +123,7 @@ export type Cruce = {
 
 // ── Utilidades de presentación ──────────────────────────────────────────────
 
-const eur = (x: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(x).replace(/\u00a0/g, ' ')
+const eur = eurosExactos
 /** «23/09 a las 16:29», en hora de Madrid. */
 export function cuando(utc: string | null): string {
   if (!utc) return 'sin fecha'
@@ -287,4 +288,14 @@ export function resumenCruce(x: Cruce): string {
   const mal = fs.length - bien
   return `${fs.length} ${fs.length === 1 ? 'factura' : 'facturas'}: ${bien} ${bien === 1 ? 'cuadra' : 'cuadran'}${mal ? ` y ${mal} por aclarar` : ''}` +
     (x.porAclarar.length ? ` (${x.porAclarar.length} ${x.porAclarar.length === 1 ? 'cosa' : 'cosas'} que mirar)` : '')
+}
+
+/**
+ * El resumen de un lote en una línea, como lo pide el encargo:
+ * «2.ª quincena de septiembre de 2026 · 58 facturas · 1.062,25 € · cuadra con los pedidos salvo 1».
+ * `abiertas`: lo que queda por aclarar; sin cruzar, lo dice.
+ */
+export function resumenLote(l: { etiqueta: string; facturas: number; total: number; cruzado: boolean; abiertas: number }): string {
+  const cuadra = !l.cruzado ? 'sin cruzar con los pedidos todavía' : l.abiertas === 0 ? 'cuadra con los pedidos' : `cuadra con los pedidos salvo ${l.abiertas}`
+  return `${l.etiqueta} · ${l.facturas} ${l.facturas === 1 ? 'factura' : 'facturas'} · ${eur(l.total)} · ${cuadra}`
 }
