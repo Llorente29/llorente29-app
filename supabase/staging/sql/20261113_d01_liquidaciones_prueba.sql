@@ -23,7 +23,8 @@
 --   5. El mismo resumen otra vez: no crea nada y lo dice.
 --   6. Asignar la tienda: su marca, su local y su banco; la liquidación los toma.
 --   7. Un neto negativo (cuatro semanas): «sin cobro», y la factura sale igual
---      (con el aviso de varias semanas); un resumen sin cargos: sin factura.
+--      (con el aviso de varias semanas); como se solapa con la del paso 3, la
+--      liquidación y su factura lo dicen; un resumen sin cargos: sin factura.
 --   8. conta_recibida_envio: la factura de comisión sin número no va a Diez;
 --      con número, sí.
 --   9. B no registra en A ni ve sus tiendas; anon no llama a nada.
@@ -137,7 +138,11 @@ declare v_sup uuid;
 begin
   insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name)
   values ('c01a0000-0000-4000-8000-00000000000a', 'Plataforma inventada', 'Plataforma Inventada SL', 'B00000099', true, 'Prueba D01') returning id into v_sup;
-  insert into public.party_role (account_id, party_id, role, supplier_id) values ('c01a0000-0000-4000-8000-00000000000a', current_setting('prueba.party')::uuid, 'supplier', v_sup);
+  -- Dar de alta un proveedor ya le crea su tercero y su papel: ese papel pasa al tercero de la plataforma.
+  update public.party_role set party_id = current_setting('prueba.party')::uuid where account_id = 'c01a0000-0000-4000-8000-00000000000a' and supplier_id = v_sup and role = 'supplier';
+  if not found then
+    insert into public.party_role (account_id, party_id, role, supplier_id) values ('c01a0000-0000-4000-8000-00000000000a', current_setting('prueba.party')::uuid, 'supplier', v_sup);
+  end if;
   perform set_config('prueba.sup', v_sup::text, true);
 end $$;
 
@@ -180,11 +185,15 @@ begin
   r := public.conta_liquidacion_registrar(v_e, p || jsonb_build_object('email_id', 'prueba-d01-correo-2', 'desde', '2026-08-31', 'hasta', '2026-09-27', 'neto', -4.5, 'avisos', '["Algo inventado no cuadra."]'::jsonb), null);
   select * into v_cs from public.channel_settlement where id = (r->>'liquidacion_id')::uuid;
   if v_cs.net_payout <> -4.5 or v_cs.period_grain <> 'weeks' or r->>'texto' not like '%neto −4,50 € (sin cobro: pasa al siguiente)%' or r->'factura'->>'estado' <> 'creada'
-     or v_cs.review_note not like '%1 cosa no cuadra al leer.%' then
+     or v_cs.review_note not like '%1 cosa no cuadra al leer.%' or v_cs.review_note not like '%Se solapa con la liquidación del 21/09 al 27/09/2026: puede repetir días ya liquidados.%'
+     or r->>'texto' not like '%Se solapa con la liquidación del 21/09 al 27/09/2026: revísala.' then
     raise exception 'PRUEBA D01 liquidaciones · 7: %', r;
   end if;
   if not exists (select 1 from public.supplier_invoice i, jsonb_array_elements(i.reading->'requisitos') x where i.id = v_cs.commission_invoice_id and x->>'id' = 'semanas') then
     raise exception 'PRUEBA D01 liquidaciones · 7: la factura de cuatro semanas no lo avisa.';
+  end if;
+  if not exists (select 1 from public.supplier_invoice i, jsonb_array_elements(i.reading->'requisitos') x where i.id = v_cs.commission_invoice_id and x->>'id' = 'solape') then
+    raise exception 'PRUEBA D01 liquidaciones · 7: la factura de la que se solapa no lo avisa.';
   end if;
   r := public.conta_liquidacion_registrar(v_e, p || jsonb_build_object('email_id', 'prueba-d01-correo-3', 'desde', '2026-09-28', 'hasta', '2026-10-04', 'factura', null), null);
   if r->'factura'->>'estado' <> 'sin_factura' then raise exception 'PRUEBA D01 liquidaciones · 7: sin cargos ha hecho factura: %', r; end if;
@@ -221,14 +230,16 @@ begin
   r := public.conta_tienda_plataforma_asignar(current_setting('prueba.tienda')::uuid, current_setting('prueba.marca')::uuid, current_setting('prueba.loc')::uuid,
                                               nullif(current_setting('prueba.banco'), '')::uuid, 'Prueba D01');
   select * into v_cs from public.channel_settlement where id = current_setting('prueba.liq')::uuid;
-  if v_cs.brand_id::text <> current_setting('prueba.marca') or v_cs.location_id::text <> current_setting('prueba.loc') or v_cs.needs_review then
+  -- Asignar la tienda quita «sin asignar», no el solape con la de cuatro semanas (paso 7): sigue por revisar por eso, y solo por eso.
+  if v_cs.brand_id::text <> current_setting('prueba.marca') or v_cs.location_id::text <> current_setting('prueba.loc') or not v_cs.needs_review
+     or v_cs.review_note <> 'Se solapa con la liquidación del 31/08 al 27/09/2026: puede repetir días ya liquidados.' then
     raise exception 'PRUEBA D01 liquidaciones · 6: la liquidación no toma la marca y el local: %', to_jsonb(v_cs) - 'raw';
   end if;
   begin
     perform public.conta_tienda_plataforma_asignar(current_setting('prueba.tienda')::uuid, gen_random_uuid(), null, null, 'Prueba D01');
     raise exception 'PRUEBA D01 liquidaciones · 6: ha aceptado una marca que no es de la cuenta.';
   exception when sqlstate '22023' then null; end;
-  raise notice 'PRUEBA D01 liquidaciones · 6: la tienda con su marca, su local y su banco; su liquidación los toma y deja de estar por revisar.';
+  raise notice 'PRUEBA D01 liquidaciones · 6: la tienda con su marca, su local y su banco; su liquidación los toma y ya no está «sin asignar» (sigue por revisar por el solape: %).', v_cs.review_note;
 
   -- 8 · El asiento propuesto de la factura de comisión y lo que va a Diez.
   r := public.journal_entry_proponer(v_e,

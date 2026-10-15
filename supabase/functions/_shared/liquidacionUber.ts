@@ -41,7 +41,8 @@ const MESES_LARGOS_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
 export class NoEsResumenUber extends Error {}
 
 export interface DiaUber { fecha: string; pedidos: number; ventas: number; impuesto: number; total: number }
-export interface ContracargoUber { pedido: string; momento: string | null; venta: number | null; contracargo: number | null; tipo: string | null }
+/** Un pedido del detalle de contracargos: su código corto, la hora de recogida (Madrid, sin zona), la venta, lo descontado, el tipo de error y cuántos artículos nombra. */
+export interface ContracargoUber { pedido: string; momento: string | null; venta: number; contracargo: number; tipo: string | null; articulos: number }
 
 export interface ResumenUber {
   /** La marca, como la dice el asunto. */
@@ -58,7 +59,7 @@ export interface ResumenUber {
   diario: DiaUber[]
   /** La fila Total del resumen diario. */
   ventas: { base: number; iva: number; total: number; pedidos: number }
-  ganancias: { ventas: number; pedidosVentas: number; otras: number; total: number }
+  ganancias: { ventas: number; pedidosVentas: number; propinas: number; otras: number; total: number }
   uber: { tasas: number; otros: number; total: number }
   marketing: { promociones: number; otrosPromo: number; anuncios: number; total: number }
   modificaciones: { contracargo: number; pedidosContracargo: number; ajustes: number; total: number }
@@ -66,6 +67,8 @@ export interface ResumenUber {
   contracargos: ContracargoUber[]
   /** «Resumen unificado del mes pasado – <Mes> <Año>»: el mes (AAAA-MM). */
   mensual: { mes: string } | null
+  /** Días del resumen diario con pedidos fuera del periodo (Uber los incluye en el periodo: es un dato, no un error). */
+  diasFuera: number
   /** Lo que no cuadra al leer (cada total contra sus líneas): la liquidación queda por revisar. */
   avisos: string[]
 }
@@ -212,33 +215,35 @@ export function leerResumenUber(c: { subject?: string | null; html?: string | nu
   const iDes = ts.findIndex((t) => /^desglose de pagos$/i.test(t))
   if (iDes < 0) throw new NoEsResumenUber('El resumen no trae el desglose de pagos.')
   const iFin = (() => {
-    const j = ts.findIndex((t, k) => k > iDes && /^(resumen unificado del mes pasado|una forma sencilla de ver|accede a tus resúmenes)/i.test(t))
+    const j = ts.findIndex((t, k) => k > iDes && /^#*\s*(resumen unificado del mes pasado|una forma sencilla de ver|accede a tus resúmenes)/i.test(t))
     return j < 0 ? ts.length : j
   })()
   const L = (re: RegExp) => lineaDesglose(ts, re, iDes, iFin)
   const v = (re: RegExp) => L(re)?.centimos ?? 0
   const ventasL = L(/^Ventas \((\d+) Pedidos?\)$/i)
   const netoL = L(/^Pago neto$/i)
-  if (!netoL) throw new NoEsResumenUber('El resumen no trae el pago neto.')
+  // El neto de la tarjeta de arriba. Algunos resúmenes (los del 06/09) dejan vacía
+  // la línea del desglose y solo lo dicen arriba.
+  const netoArriba = centimos(valorTras(ts, 'Pago neto', 0, iDes))
+  if (!netoL && netoArriba === null) throw new NoEsResumenUber('El resumen no trae el pago neto.')
   const contracargoL = L(/^Importe neto del contracargo \((\d+) Pedidos?\)$/i)
 
-  const g = { ventas: ventasL?.centimos ?? 0, pedidosVentas: ventasL?.pedidos ?? 0, otras: v(/^Otras ganancias$/i), total: v(/^Ganancias totales$/i) }
+  const g = { ventas: ventasL?.centimos ?? 0, pedidosVentas: ventasL?.pedidos ?? 0, propinas: v(/^Propinas$/i), otras: v(/^Otras ganancias$/i), total: v(/^Ganancias totales$/i) }
   const u = { tasas: v(/^Tasas de mercado$/i), otros: v(/^Otros cargos$/i), total: v(/^Precios totales de Uber$/i) }
   const mk = { promociones: v(/^Promociones en artículos$/i), otrosPromo: v(/^Otros cargos de la promoción$/i), anuncios: v(/^Gastos en anuncios$/i), total: v(/^Gastos totales de marketing$/i) }
   const md = { contracargo: contracargoL?.centimos ?? 0, pedidosContracargo: contracargoL?.pedidos ?? 0, ajustes: v(/^Ajustes$/i), total: v(/^Modificaciones totales$/i) }
-  const neto = netoL.centimos
+  const neto = netoL?.centimos ?? (netoArriba as number)
 
   // Cada total contra sus líneas, y el neto contra todo. Lo que no cuadra se dice.
   const cuadra = (que: string, total: number, partes: number[]) => {
     const s = partes.reduce((a, b) => a + b, 0)
     if (s !== total) avisos.push(`${que}: las líneas suman ${fmt(s)} y el total dice ${fmt(total)}.`)
   }
-  cuadra('Ganancias', g.total, [g.ventas, g.otras])
+  cuadra('Ganancias', g.total, [g.ventas, g.propinas, g.otras])
   cuadra('Precios de Uber', u.total, [u.tasas, u.otros])
   cuadra('Gastos de marketing', mk.total, [mk.promociones, mk.otrosPromo, mk.anuncios])
   cuadra('Modificaciones', md.total, [md.contracargo, md.ajustes])
   cuadra('Pago neto', neto, [g.total, u.total, mk.total, md.total])
-  const netoArriba = centimos(valorTras(ts, 'Pago neto', 0, iDes))
   if (netoArriba !== null && netoArriba !== neto) avisos.push(`El pago neto de arriba (${fmt(netoArriba)}) no es el del desglose (${fmt(neto)}).`)
 
   // El resumen diario.
@@ -266,26 +271,39 @@ export function leerResumenUber(c: { subject?: string | null; html?: string | nu
     if (diario.length && s !== totalDiario.total) avisos.push(`El resumen diario: los días suman ${fmt(s)} y su Total dice ${fmt(totalDiario.total)}.`)
   }
   if (ventasL && totalDiario.total !== g.ventas) avisos.push(`Las ventas del desglose (${fmt(g.ventas)}) no son las del resumen diario (${fmt(totalDiario.total)}).`)
-  const fuera = diario.filter((d) => (d.fecha < desde || d.fecha > hasta) && d.pedidos > 0)
-  if (fuera.length) avisos.push(`${fuera.length} ${fuera.length === 1 ? 'día' : 'días'} del resumen diario con pedidos fuera del periodo.`)
+  const diasFuera = diario.filter((d) => (d.fecha < desde || d.fecha > hasta) && d.pedidos > 0).length
 
   const pedidosArriba = Number(valorTras(ts, 'Pedidos', 0, iDia >= 0 ? iDia : iDes))
   const pedidos = Number.isInteger(pedidosArriba) ? pedidosArriba : totalDiario.pedidos
 
-  // Los contracargos: «Detalles del error del pedido», fila a fila (pedido, momento, venta, contracargo, tipo).
+  // Los contracargos: «Detalles del error del pedido*». Cada pedido es «<código> <Mmm d, aaaa • h:mm PM>»,
+  // su venta, lo descontado, los artículos que nombra (uno o varios) y el tipo de
+  // error (el último antes del pedido siguiente). Acaba en «*Las cifras están sujetas…».
   const contracargos: ContracargoUber[] = []
-  const iCc = ts.findIndex((t) => /^detalles del error del pedido$/i.test(t))
+  const iCc = ts.findIndex((t) => /^detalles del error del pedido\*?$/i.test(t))
   if (iCc >= 0) {
-    for (let i = iCc + 1; i + 4 < ts.length; i++) {
-      if (/^(desglose de pagos|resumen diario|ventas totales)$/i.test(ts[i])) break
-      const venta = centimos(ts[i + 2]), cc = centimos(ts[i + 3])
-      if (venta === null || cc === null || centimos(ts[i]) !== null) continue
-      contracargos.push({ pedido: ts[i], momento: ts[i + 1] || null, venta: euros(venta), contracargo: euros(cc), tipo: ts[i + 4] && centimos(ts[i + 4]) === null ? ts[i + 4] : null })
-      i += 4
+    const fin = (() => { const j = ts.findIndex((t, k) => k > iCc && /^(\*las cifras|desglose de pagos$|resumen diario$)/i.test(t)); return j < 0 ? ts.length : j })()
+    const inicio = (t: string) => t.match(/^([A-Z0-9]{4,8}) ([A-Za-zé]{3,10}\.? \d{1,2},? \d{4}) • (\d{1,2}):(\d{2}) ?([AP]M)$/i)
+    for (let i = iCc + 1; i < fin; i++) {
+      const m = inicio(ts[i])
+      if (!m) continue
+      const venta = centimos(ts[i + 1]), cc = centimos(ts[i + 2])
+      if (venta === null || cc === null) continue
+      let j = i + 3
+      while (j < fin && !inicio(ts[j])) j++
+      const resto = ts.slice(i + 3, j)
+      const dia = fechaUber(m[2])
+      const h = (Number(m[3]) % 12) + (m[5].toUpperCase() === 'PM' ? 12 : 0)
+      contracargos.push({ pedido: m[1], momento: dia ? `${dia}T${String(h).padStart(2, '0')}:${m[4]}` : null, venta: euros(venta), contracargo: euros(cc),
+        tipo: resto.length ? resto[resto.length - 1] : null, articulos: Math.max(resto.length - 1, 0) })
+      i = j - 1
     }
   }
-  if (contracargoL && contracargoL.pedidos && contracargos.length && contracargos.length !== contracargoL.pedidos) {
-    avisos.push(`El contracargo dice ${contracargoL.pedidos} pedidos y el detalle trae ${contracargos.length}.`)
+  if (contracargoL && contracargoL.pedidos !== contracargos.length && (contracargoL.pedidos > 0 || contracargos.length > 0)) {
+    avisos.push(`El contracargo dice ${contracargoL.pedidos} ${contracargoL.pedidos === 1 ? 'pedido' : 'pedidos'} y el detalle trae ${contracargos.length}.`)
+  }
+  if (contracargos.length && contracargos.reduce((t, x) => t + Math.round(x.contracargo * 100), 0) !== md.contracargo) {
+    avisos.push('El detalle de los contracargos no suma el importe neto del contracargo.')
   }
 
   // El resumen del mes pasado (solo se apunta de qué mes es: sus importes no se leen).
@@ -306,11 +324,11 @@ export function leerResumenUber(c: { subject?: string | null; html?: string | nu
   return {
     marca, tienda, desde, hasta, referencia, depositoIniciado, pedidos, diario,
     ventas: { base: euros(totalDiario.base), iva: euros(totalDiario.iva), total: euros(totalDiario.total), pedidos: totalDiario.pedidos },
-    ganancias: { ventas: euros(g.ventas), pedidosVentas: g.pedidosVentas, otras: euros(g.otras), total: euros(g.total) },
+    ganancias: { ventas: euros(g.ventas), pedidosVentas: g.pedidosVentas, propinas: euros(g.propinas), otras: euros(g.otras), total: euros(g.total) },
     uber: { tasas: euros(u.tasas), otros: euros(u.otros), total: euros(u.total) },
     marketing: { promociones: euros(mk.promociones), otrosPromo: euros(mk.otrosPromo), anuncios: euros(mk.anuncios), total: euros(mk.total) },
     modificaciones: { contracargo: euros(md.contracargo), pedidosContracargo: md.pedidosContracargo, ajustes: euros(md.ajustes), total: euros(md.total) },
-    neto: euros(neto), contracargos, mensual, avisos,
+    neto: euros(neto), contracargos, mensual, diasFuera, avisos,
   }
 }
 
@@ -340,6 +358,13 @@ export interface FacturaComision {
 export function facturaDeComision(r: Pick<ResumenUber, 'uber' | 'marketing'>): FacturaComision | null {
   const c = (x: number) => Math.round(x * 100)
   const avisos: string[] = []
+  // Si las líneas no suman su total (medido: seis resúmenes de agosto traen solo
+  // «Promociones en artículos» y un total mayor), falta algo que puede ir en la
+  // factura: se dice, nunca se supone.
+  const faltaMk = c(r.marketing.total) - (c(r.marketing.promociones) + c(r.marketing.otrosPromo) + c(r.marketing.anuncios))
+  const faltaU = c(r.uber.total) - (c(r.uber.tasas) + c(r.uber.otros))
+  if (faltaMk) avisos.push(`Los gastos de marketing no suman su total: faltan ${fmt(-faltaMk)} sin línea, que pueden ir en esta factura (otros cargos de la promoción o anuncios).`)
+  if (faltaU) avisos.push(`Los precios de Uber no suman su total: faltan ${fmt(-faltaU)} sin línea.`)
   const tc = -(c(r.uber.tasas) + c(r.uber.otros) + c(r.marketing.otrosPromo)) || 0
   const ta = -c(r.marketing.anuncios) || 0
   if (tc < 0) avisos.push('Los cargos de Uber salen a tu favor: la factura puede ser rectificativa.')
@@ -364,7 +389,7 @@ export function paraRegistrar(r: ResumenUber, x: { emailId: string; adjunto?: { 
     proveedor: 'uber', email_id: x.emailId, tienda: r.tienda, marca: r.marca, desde: r.desde, hasta: r.hasta,
     referencia: r.referencia, deposito_iniciado: r.depositoIniciado, pedidos: r.pedidos,
     ventas: r.ventas, ganancias: r.ganancias, uber: r.uber, marketing: r.marketing, modificaciones: r.modificaciones, neto: r.neto,
-    diario: r.diario, contracargos: r.contracargos, mensual: r.mensual ? { ...r.mensual, adjunto: x.adjunto ?? null } : null, avisos: r.avisos,
+    diario: r.diario, dias_fuera: r.diasFuera, contracargos: r.contracargos, mensual: r.mensual ? { ...r.mensual, adjunto: x.adjunto ?? null } : null, avisos: r.avisos,
     factura: f ? { comision: f.comision, publicidad: f.publicidad, base: f.base, iva: f.iva, total: f.total, tipo_iva: f.tipoIva, avisos: f.avisos } : null,
   }
 }

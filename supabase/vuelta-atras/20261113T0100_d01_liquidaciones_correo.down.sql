@@ -60,6 +60,7 @@ grant execute on function public.conta_recibida_envio(uuid) to authenticated;
 
 drop function if exists public.conta_liquidacion_registrar(uuid, jsonb, text);
 drop function if exists public.conta_liquidacion_factura_proponer(uuid, text);
+drop function if exists public._conta_liquidacion_solape(uuid);
 alter table public.party_role drop column if exists ads_account_code;
 alter table public.party_role drop column if exists commission_account_code;
 alter table public.supplier_invoice_line drop column if exists expense_account_code;

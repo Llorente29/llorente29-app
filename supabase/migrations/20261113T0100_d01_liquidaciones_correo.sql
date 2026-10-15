@@ -141,6 +141,21 @@ create policy platform_store_read on public.platform_store for select using (acc
 revoke insert, update, delete, truncate on public.platform_store from anon, authenticated;
 grant select on public.platform_store to authenticated;
 
+-- ¿Se solapa con otra liquidación de la misma tienda? (Medido en los 33
+-- resúmenes reales: uno de 13 semanas repite los días de otros dos. Nunca se
+-- decide solo cuál vale: se dice.)
+create or replace function public._conta_liquidacion_solape(p_settlement uuid)
+returns text language sql stable security definer set search_path = public as $$
+  select 'Se solapa con ' || case when count(*) = 1 then 'la liquidación del ' else count(*) || ' liquidaciones, la primera del ' end ||
+         to_char(min(o.period_from), 'DD/MM') || ' al ' || to_char(min(o.period_to), 'DD/MM/YYYY')
+    from public.channel_settlement c
+    join public.channel_settlement o on o.account_id = c.account_id and o.store_id = c.store_id and o.id <> c.id
+     and daterange(o.period_from, o.period_to, '[]') && daterange(c.period_from, c.period_to, '[]')
+   where c.id = p_settlement and c.store_id is not null
+  having count(*) > 0
+$$;
+revoke all on function public._conta_liquidacion_solape(uuid) from public, anon, authenticated;
+
 -- Dar a una tienda su marca, su local y su banco (los tres, de la misma cuenta).
 create or replace function public.conta_tienda_plataforma_asignar(p_store uuid, p_marca uuid, p_local uuid, p_banco uuid default null, p_quien_nombre text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
@@ -162,12 +177,14 @@ begin
   -- Sus liquidaciones aún sin marca ni local las toman ahora (las que ya tenían, no se tocan).
   -- Lo que no cuadró al leer sigue por revisar: asignar la tienda no lo arregla.
   update public.channel_settlement c set brand_id = coalesce(c.brand_id, p_marca), location_id = coalesce(c.location_id, p_local),
-         needs_review = (coalesce(c.brand_id, p_marca) is null or coalesce(c.location_id, p_local) is null or x.avisos > 0),
+         needs_review = (coalesce(c.brand_id, p_marca) is null or coalesce(c.location_id, p_local) is null or x.avisos > 0 or x.solape is not null),
          review_note = nullif(concat_ws(' ',
            case when coalesce(c.brand_id, p_marca) is null or coalesce(c.location_id, p_local) is null then 'Tienda sin asignar: dale su marca y su local.' end,
-           case when x.avisos > 0 then x.avisos || case when x.avisos = 1 then ' cosa no cuadra al leer.' else ' cosas no cuadran al leer.' end end), ''),
+           case when x.avisos > 0 then x.avisos || case when x.avisos = 1 then ' cosa no cuadra al leer.' else ' cosas no cuadran al leer.' end end,
+           x.solape || ': puede repetir días ya liquidados.'), ''),
          updated_at = now()
-    from (select id, coalesce(jsonb_array_length(case when jsonb_typeof(raw->'avisos') = 'array' then raw->'avisos' end), 0) as avisos
+    from (select id, coalesce(jsonb_array_length(case when jsonb_typeof(raw->'avisos') = 'array' then raw->'avisos' end), 0) as avisos,
+                 public._conta_liquidacion_solape(id) as solape
             from public.channel_settlement where store_id = p_store) x
    where x.id = c.id and c.store_id = p_store and (c.brand_id is null or c.location_id is null);
   return to_jsonb(v_s);
@@ -218,7 +235,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_cs public.channel_settlement; v_e uuid; v_f jsonb; v_sup uuid; v_rol public.party_role; v_inv uuid;
   v_c623 text; v_c627 text; v_tasa uuid; v_fecha date; v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), 'Liquidación por correo');
-  v_base numeric; v_iva numeric; v_total numeric; v_bc numeric; v_ba numeric; v_sem int;
+  v_base numeric; v_iva numeric; v_total numeric; v_bc numeric; v_ba numeric; v_sem int; v_solape text;
 begin
   select * into v_cs from public.channel_settlement where id = p_settlement for update;
   if v_cs.id is null then raise exception 'Esa liquidación no está.' using errcode = 'P0002'; end if;
@@ -260,6 +277,7 @@ begin
   -- La fecha la pone la plataforma con el número: se propone el martes siguiente (Uber, medido en Diez).
   v_fecha := v_cs.period_to + 2;
   v_sem := ((v_cs.period_to - v_cs.period_from) + 1) / 7;
+  v_solape := public._conta_liquidacion_solape(v_cs.id);
   insert into public.supplier_invoice (account_id, company_id, supplier_id, location_id, brand_id, doc_kind, invoice_number, invoice_date, status, source,
                                        arrival_channel, tax_base_total, tax_total, grand_total, needs_review, notes, reading, reading_confidence, created_by_name)
   values (v_cs.account_id, v_e, v_sup, v_cs.location_id, v_cs.brand_id, 'invoice', null, v_fecha, 'en_revision', 'liquidacion', 'correo',
@@ -271,7 +289,9 @@ begin
               jsonb_build_object('id', 'numero', 'ok', false, 'texto', 'Falta el número: la plataforma no lo manda en el correo.'),
               jsonb_build_object('id', 'fecha', 'ok', false, 'texto', 'Fecha propuesta: la pone la plataforma con el número.')) ||
               case when v_sem > 1 then jsonb_build_array(jsonb_build_object('id', 'semanas', 'ok', false,
-                'texto', 'La liquidación es de ' || v_sem || ' semanas: la plataforma puede haber hecho una factura por semana.')) else '[]'::jsonb end,
+                'texto', 'La liquidación es de ' || v_sem || ' semanas: la plataforma puede haber hecho una factura por semana.')) else '[]'::jsonb end ||
+              case when v_solape is not null then jsonb_build_array(jsonb_build_object('id', 'solape', 'ok', false,
+                'texto', v_solape || ': esta factura puede repetir cargos ya facturados.')) else '[]'::jsonb end,
             'avisos', coalesce(v_f->'avisos', '[]'::jsonb)),
           'duda', v_quien)
   returning id into v_inv;
@@ -297,7 +317,7 @@ declare
   v_s public.platform_store; v_canal uuid; v_clave text; v_ya public.channel_settlement; v_id uuid; v_fac jsonb; v_nueva boolean := false;
   v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), 'Liquidación por correo');
   v_avisos int := coalesce(jsonb_array_length(case when jsonb_typeof(p->'avisos') = 'array' then p->'avisos' end), 0);
-  v_neto numeric := nullif(p->>'neto', '')::numeric; v_texto text;
+  v_neto numeric := nullif(p->>'neto', '')::numeric; v_texto text; v_solape text;
 begin
   select account_id into v_acc from public.company where id = p_company;
   if v_acc is null then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
@@ -346,11 +366,17 @@ begin
                           case when v_avisos > 0 then v_avisos || case when v_avisos = 1 then ' cosa no cuadra al leer.' else ' cosas no cuadran al leer.' end end), ''),
     v_s.id, nullif(p->>'email_id', ''), v_quien)
   returning id into v_id;
+  v_solape := public._conta_liquidacion_solape(v_id);
+  if v_solape is not null then
+    update public.channel_settlement set needs_review = true,
+           review_note = concat_ws(' ', review_note, v_solape || ': puede repetir días ya liquidados.') where id = v_id;
+  end if;
 
   v_fac := public.conta_liquidacion_factura_proponer(v_id, v_quien);
   v_texto := 'Liquidación del ' || to_char(v_desde, 'DD/MM') || ' al ' || to_char(v_hasta, 'DD/MM/YYYY') || ' leída: neto ' ||
              public.conta_euros_exactos(v_neto) || case when v_neto <= 0 then ' (sin cobro: pasa al siguiente)' else '' end || '. ' ||
-             (v_fac->>'texto') || case when v_nueva then ' Tienda nueva: dale su marca y su local.' else '' end;
+             (v_fac->>'texto') || case when v_nueva then ' Tienda nueva: dale su marca y su local.' else '' end ||
+             case when v_solape is not null then ' ' || v_solape || ': revísala.' else '' end;
   return jsonb_build_object('liquidacion_id', v_id, 'ya_estaba', false, 'tienda_id', v_s.id, 'tienda_nueva', v_nueva,
                             'factura', v_fac, 'texto', v_texto);
 end $$;

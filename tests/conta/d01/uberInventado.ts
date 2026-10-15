@@ -27,7 +27,7 @@ const bloque = (titulo: string, filas: [string, number | null][], total?: [strin
   (total ? fila(total[0], eur(total[1])) : '') + '</table>'
 
 export interface Desglose {
-  ventas: number; pedidosVentas: number; otras?: number | null
+  ventas: number; pedidosVentas: number; propinas?: number | null; otras?: number | null
   tasas: number; otros?: number | null
   promociones?: number | null; otrosPromo?: number | null; anuncios?: number | null
   contracargo?: number; pedidosContracargo?: number; ajustes?: number
@@ -43,28 +43,33 @@ export interface OpcionesCorreo {
   desglose: Desglose
   /** Neto escrito a mano (para un correo que no cuadra); si no, la suma. */
   neto?: number
-  contracargos?: { pedido: string; momento: string; venta: number; contracargo: number; tipo: string }[]
+  /** Como los del 06/09: la línea «Pago neto» del desglose vacía; el neto, solo en la tarjeta de arriba. */
+  netoSoloArriba?: boolean
+  /** Como seis de agosto: el total de marketing escrito a mano (mayor que sus líneas). */
+  totalMarketing?: number
+  /** El detalle de contracargos como lo trae Uber: «<código> <Mmm d, aaaa • h:mm PM>», venta, contracargo, artículos y tipo. */
+  contracargos?: { pedido: string; momento: string; venta: number; contracargo: number; articulos: string[]; tipo: string }[]
   /** El resumen del mes pasado (como el primero de cada mes), con otro desglose que NO hay que leer. */
   mesPasado?: { titulo: string; desglose: Desglose }
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 export function sumas(d: Desglose) {
-  const g = r2(d.ventas + (d.otras ?? 0))
+  const g = r2(d.ventas + (d.propinas ?? 0) + (d.otras ?? 0))
   const u = r2(d.tasas + (d.otros ?? 0))
   const m = r2((d.promociones ?? 0) + (d.otrosPromo ?? 0) + (d.anuncios ?? 0))
   const md = r2((d.contracargo ?? 0) + (d.ajustes ?? 0))
   return { g, u, m, md, neto: r2(g + u + m + md) }
 }
 
-function desgloseHtml(d: Desglose, cierre: 'Pago neto' | 'Total neto', neto?: number) {
+function desgloseHtml(d: Desglose, cierre: 'Pago neto' | 'Total neto', neto?: number, o: { soloArriba?: boolean; totalMarketing?: number } = {}) {
   const s = sumas(d)
-  return bloque('Ganancias', [[`Ventas\r\n(${d.pedidosVentas} Pedidos)`, d.ventas], ['Otras ganancias', d.otras ?? null]], ['Ganancias totales', s.g]) +
+  return bloque('Ganancias', [[`Ventas\r\n(${d.pedidosVentas} Pedidos)`, d.ventas], ['Propinas', d.propinas ?? null], ['Otras ganancias', d.otras ?? null]], ['Ganancias totales', s.g]) +
     bloque('Precios de Uber', [['Tasas de mercado', d.tasas], ['Otros cargos', d.otros ?? null]], ['Precios totales de Uber', s.u]) +
-    bloque('Gastos de marketing', [['Promociones en artículos', d.promociones ?? null], ['Otros cargos de la promoción', d.otrosPromo ?? null], ['Gastos en anuncios', d.anuncios ?? null]], ['Gastos totales de marketing', s.m]) +
+    bloque('Gastos de marketing', [['Promociones en artículos', d.promociones ?? null], ['Otros cargos de la promoción', d.otrosPromo ?? null], ['Gastos en anuncios', d.anuncios ?? null]], ['Gastos totales de marketing', o.totalMarketing ?? s.m]) +
     `<table style="width:100%"><tr><th colspan="2">Modificaciones</th></tr>${fila(`Importe neto del contracargo\r\n(${d.pedidosContracargo ?? 0} Pedidos)`, eur(d.contracargo ?? 0))}${fila('Ajustes', eur(d.ajustes ?? 0))}${fila('Modificaciones totales', eur(s.md))}` +
     `<tr><td style="font-weight:700">${cierre}</td><td style="font-weight:700"></td></tr>` +
-    (cierre === 'Pago neto' ? fila('Pago neto', eur(neto ?? s.neto)) : '') + '</table>'
+    (cierre === 'Pago neto' && !o.soloArriba ? fila('Pago neto', eur(neto ?? s.neto)) : '') + '</table>'
 }
 
 /** Un correo «Resumen de pagos» inventado: { subject, html }. */
@@ -80,8 +85,10 @@ export function correoUber(o: OpcionesCorreo): { subject: string; html: string; 
     o.dias.map((x) => `<tr>${celda(mdy(x.fecha), true)}${celda(String(x.pedidos))}${celda(eur(x.ventas))}${celda(eur(x.impuesto))}${celda(eur(r2(x.ventas + x.impuesto)))}</tr>`).join('') +
     `<tr style="background-color:#e0e0e0">${celda('Total', true)}${celda(String(tot.p))}${celda(eur(tot.v))}${celda(eur(tot.i))}${celda(eur(r2(tot.v + tot.i)))}</tr></table>`
   const cc = o.contracargos?.length
-    ? `<div style="background-color:#555;color:#fff">Contracargos</div><div>Detalles del error del pedido</div><table><tr><th>ID del pedido</th><th>Fecha y hora de recogida</th><th>Venta</th><th>Contracargo neto</th><th>Tipo de error</th></tr>` +
-      o.contracargos.map((x) => `<tr>${celda(x.pedido, true)}${celda(x.momento)}${celda(eur(x.venta))}${celda(eur(x.contracargo))}${celda(x.tipo)}</tr>`).join('') + '</table>'
+    ? `<div style="background-color:#555;color:#fff">Contracargos</div><table><tr>${tarjeta('Pedidos con contracargos', String(o.contracargos.length))}${tarjeta('Importe neto del contracargo', eur(r2(o.contracargos.reduce((t, x) => t + x.contracargo, 0))))}</tr></table>` +
+      `<div>Detalles del error del pedido*</div><table><tr><th>ID del pedido y día: hora de recogida</th><th>Ventas (impuestos incluidos)</th><th>Contracargo neto</th><th>Faltan artículos o son incorrectos</th><th>Tipo de error del pedido</th></tr>` +
+      o.contracargos.map((x) => `<tr>${celda(`${x.pedido} ${x.momento}`, true)}${celda(eur(x.venta))}${celda(eur(x.contracargo))}<td>${x.articulos.map((a) => `<div>${a}</div>`).join('')}</td>${celda(x.tipo)}</tr>`).join('') +
+      '</table><p>*Las cifras están sujetas a cambios en función de los contracargos actualizados.</p>'
     : ''
   const mes = o.mesPasado
     ? `<table><tr><th>Resumen unificado del mes pasado – ${o.mesPasado.titulo} También te hemos adjuntado tu resumen mensual de pagos de ${o.mesPasado.titulo.replace(' ', '')} para que lo tengas archivado.</th></tr></table>${desgloseHtml(o.mesPasado.desglose, 'Total neto')}`
@@ -92,7 +99,7 @@ export function correoUber(o: OpcionesCorreo): { subject: string; html: string; 
     `<table><tr>${tarjeta('Periodo de pago', periodo)}${tarjeta('ID de referencia del pago', o.referencia ?? '')}${tarjeta('Depósito iniciado', o.deposito ? largo(o.deposito) : '')}</tr></table>` +
     `<div style="background-color:#555;color:#fff">Ventas totales</div><table><tr>${tarjeta('Pedidos', String(tot.p))}${tarjeta('Pago neto', eur(neto))}</tr></table>` +
     diario + cc +
-    `<div style="background-color:#000;color:#fff">Desglose de pagos</div>${desgloseHtml(o.desglose, 'Pago neto', neto)}` + mes +
+    `<div style="background-color:#000;color:#fff">Desglose de pagos</div>${desgloseHtml(o.desglose, 'Pago neto', neto, { soloArriba: o.netoSoloArriba, totalMarketing: o.totalMarketing })}` + mes +
     `<h3>Una forma sencilla de ver tu información financiera</h3><p>Accede al informe desde la pestaña <a href="https://ejemplo.test/informes">Informes</a>.</p></main>` +
     `<footer><p>¿Tienes alguna pregunta?</p></footer></body></html>`
   return { subject: `Resumen de pagos de Uber Eats correspondiente a ${marca} del ${periodo}`, html, from: 'noreply@uber.com' }

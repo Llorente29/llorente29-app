@@ -36,7 +36,7 @@ describe('una semana normal', () => {
     expect([r.tienda, r.marca, r.desde, r.hasta, r.referencia, r.depositoIniciado]).toEqual([TIENDA_INVENTADA, 'Marca Inventada', '2026-09-21', '2026-09-27', null, null])
   })
   it('el desglose y el neto, y todo cuadra', () => {
-    expect(r.ganancias).toEqual({ ventas: 44, pedidosVentas: 2, otras: 0, total: 44 })
+    expect(r.ganancias).toEqual({ ventas: 44, pedidosVentas: 2, propinas: 0, otras: 0, total: 44 })
     expect(r.uber).toEqual({ tasas: -13.31, otros: 0, total: -13.31 })
     expect(r.neto).toBe(30.69)
     expect(r.pedidos).toBe(2)
@@ -66,7 +66,7 @@ describe('cuatro semanas acumuladas, neto negativo y el resumen del mes pasado',
   })
   const r = leerResumenUber(c)
   it('lee el desglose del periodo, nunca el del mes pasado (que repite las etiquetas)', () => {
-    expect(r.ganancias).toEqual({ ventas: 132, pedidosVentas: 4, otras: 8.5, total: 140.5 })
+    expect(r.ganancias).toEqual({ ventas: 132, pedidosVentas: 4, propinas: 0, otras: 8.5, total: 140.5 })
     expect(r.uber.tasas).toBe(-20)
     expect(r.marketing).toEqual({ promociones: -60, otrosPromo: -10, anuncios: -55, total: -125 })
     expect(r.neto).toBe(-4.5)
@@ -102,20 +102,50 @@ describe('contracargos, ajustes y líneas que no salen', () => {
     desde: '2026-08-03', hasta: '2026-08-09',
     dias: [{ fecha: '2026-08-05', pedidos: 3, ventas: 60.0, impuesto: 6.0 }, { fecha: '2026-08-10', pedidos: 1, ventas: 10.0, impuesto: 1.0 }],
     desglose: { ventas: 77.0, pedidosVentas: 4, tasas: -23.1, otros: -1.0, contracargo: -12.5, pedidosContracargo: 1, ajustes: 3.0 },
-    contracargos: [{ pedido: 'A1B2C', momento: '8/5/2026 21:14', venta: 25.0, contracargo: -12.5, tipo: 'Falta un artículo' }],
+    contracargos: [{ pedido: 'A1B2C', momento: 'Aug 5, 2026 • 9:14 PM', venta: 25.0, contracargo: -12.5, articulos: ['Plato inventado uno', 'Plato inventado dos'], tipo: 'Todo el pedido es incorrecto' }],
   })
   const r = leerResumenUber(c)
   it('lee el contracargo con su detalle y los ajustes; sin promociones ni anuncios, cero', () => {
     expect(r.modificaciones).toEqual({ contracargo: -12.5, pedidosContracargo: 1, ajustes: 3, total: -9.5 })
-    expect(r.contracargos).toEqual([{ pedido: 'A1B2C', momento: '8/5/2026 21:14', venta: 25, contracargo: -12.5, tipo: 'Falta un artículo' }])
+    expect(r.contracargos).toEqual([{ pedido: 'A1B2C', momento: '2026-08-05T21:14', venta: 25, contracargo: -12.5, tipo: 'Todo el pedido es incorrecto', articulos: 2 }])
     expect(r.marketing).toEqual({ promociones: 0, otrosPromo: 0, anuncios: 0, total: 0 })
     expect(r.uber).toEqual({ tasas: -23.1, otros: -1, total: -24.1 })
   })
-  it('un día con pedidos fuera del periodo se dice', () => {
-    expect(r.avisos).toEqual(['1 día del resumen diario con pedidos fuera del periodo.'])
+  it('un día con pedidos fuera del periodo es un dato (Uber lo mete en el periodo), no algo que no cuadra', () => {
+    expect(r.diasFuera).toBe(1)
+    expect(r.avisos).toEqual([])
   })
   it('los otros cargos de Uber van en la comisión', () => {
     expect(facturaDeComision(r)!.comision.total).toBe(24.1)
+  })
+})
+
+describe('lo que enseñaron los 33 correos de verdad (15/10)', () => {
+  const base = { desde: '2026-08-31', hasta: '2026-09-06', dias: [{ fecha: '2026-09-02', pedidos: 2, ventas: 60, impuesto: 6 }] }
+  it('el neto solo en la tarjeta de arriba (la línea del desglose, vacía): se lee de arriba y cuadra', () => {
+    const r = leerResumenUber(correoUber({ ...base, netoSoloArriba: true, desglose: { ventas: 66, pedidosVentas: 2, tasas: -14, promociones: -20 } }))
+    expect([r.neto, r.avisos]).toEqual([32, []])
+  })
+  it('«Propinas» entre las ganancias', () => {
+    const r = leerResumenUber(correoUber({ ...base, desglose: { ventas: 66, pedidosVentas: 2, propinas: 2, otras: 4, tasas: -14 } }))
+    expect([r.ganancias.propinas, r.ganancias.total, r.avisos]).toEqual([2, 72, []])
+  })
+  it('el marketing que no suma su total: se dice en el resumen Y en la factura (puede faltarle una línea)', () => {
+    const r = leerResumenUber(correoUber({ ...base, totalMarketing: -25, neto: 27, desglose: { ventas: 66, pedidosVentas: 2, tasas: -14, promociones: -20 } }))
+    expect(r.avisos).toEqual(['Gastos de marketing: las líneas suman −20,00 € y el total dice −25,00 €.'])
+    expect(facturaDeComision(r)!.avisos).toEqual(['Los gastos de marketing no suman su total: faltan 5,00 € sin línea, que pueden ir en esta factura (otros cargos de la promoción o anuncios).'])
+  })
+  it('varios contracargos, uno con varios artículos; si el detalle no es lo que dice el total, se dice', () => {
+    const cc = [
+      { pedido: 'F0F0F', momento: 'Jul 21, 2026 • 2:41 PM', venta: 20, contracargo: -5, articulos: ['Plato inventado'], tipo: 'Artículo(s) incorrecto(s)' },
+      { pedido: 'E1E1E', momento: 'Jul 23, 2026 • 10:20 AM', venta: 30, contracargo: -7.5, articulos: ['Uno', 'Dos', 'Tres'], tipo: 'Todo el pedido es incorrecto' },
+    ]
+    const r = leerResumenUber(correoUber({ ...base, contracargos: cc, desglose: { ventas: 66, pedidosVentas: 2, tasas: -14, contracargo: -12.5, pedidosContracargo: 2 } }))
+    expect(r.contracargos.map((x) => [x.pedido, x.momento, x.articulos, x.tipo])).toEqual([
+      ['F0F0F', '2026-07-21T14:41', 1, 'Artículo(s) incorrecto(s)'], ['E1E1E', '2026-07-23T10:20', 3, 'Todo el pedido es incorrecto']])
+    expect(r.avisos).toEqual([])
+    const mal = leerResumenUber(correoUber({ ...base, contracargos: cc.slice(0, 1), desglose: { ventas: 66, pedidosVentas: 2, tasas: -14, contracargo: -12.5, pedidosContracargo: 2 } }))
+    expect(mal.avisos).toEqual(['El contracargo dice 2 pedidos y el detalle trae 1.', 'El detalle de los contracargos no suma el importe neto del contracargo.'])
   })
 })
 
