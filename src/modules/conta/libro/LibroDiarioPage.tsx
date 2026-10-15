@@ -36,7 +36,7 @@ import { textoDiaEnCurso, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDel
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { MARCA } from '../cuenta/marca'
 import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
-import { cobroDe, estadoDiez, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
+import { cobroDe, estadoDiez, motivoSinPatron, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, leerConDiez } from '@/modules/conta/services/conDiezService'
 
 interface DatosLibro {
@@ -117,10 +117,10 @@ export default function LibroDiarioPage() {
     ? datos.asientos.flatMap((a) => {
       const e = diezDe(a)
       if (!e || !(a.estado === 'propuesto' || (a.estado === 'validado' && e.reintentar))) return []
-      return [{ id: a.id, concepto: a.concepto, fecha: a.fecha, estado: a.estado, cobro: cobroDe(a.apuntes), estadoDiez: e }]
+      return [{ id: a.id, concepto: a.concepto, fecha: a.fecha, estado: a.estado, cobro: cobroDe(a.apuntes), estadoDiez: e, noSeEnvia: motivoSinPatron(datos.conDiez.get(a.id)!.canal) }]
     }).sort((x, y) => x.fecha.localeCompare(y.fecha) || x.concepto.localeCompare(y.concepto))
     : []
-  const propuestosDiez = candidatosDiez.filter((c) => c.estado === 'propuesto').length
+  const propuestosDiez = candidatosDiez.filter((c) => c.estado === 'propuesto' && !c.noSeEnvia).length
   const cambiarFiltro = (f: FiltroDiario) => {
     const p = new URLSearchParams(params)
     if (f === 'todos') p.delete('ver'); else p.set('ver', f)

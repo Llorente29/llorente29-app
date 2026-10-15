@@ -302,6 +302,35 @@ informe del cancelado no dice nada de lo que había probado.
 148. El 149 lo canceló. El 149 llevaba lo mismo y algo más, pero el 148 ya no
 dijo nada: perdió su resultado.)*
 
+### Capturas: artefacto en cada push y fijar las de tu frente antes del informe
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> 15/10, después del choque del #194.
+
+- **En cada e2e, las capturas van como artefacto del run, nunca como commit.**
+  `e2e-staging-conta.yml` deja en el artefacto «capturas» las que ha sacado
+  ESE run, y un comentario del PR (uno solo, que se va editando) da el enlace.
+- **Antes de dar tu informe, fija las de tu frente**: Actions → «Pruebas e2e en
+  staging-conta» → Run workflow en tu rama con **`fijar_capturas`**. Si sale
+  verde, commitea solo la carpeta del frente de la rama —A `d01`, B `b01`,
+  C `c00`…`c06b`, reparto `docs/reparto/capturas`— y nada más. Es lo que Julio
+  mira en «Files changed»: un informe sin ellas no se puede revisar.
+- **Tu rama no lleva capturas de otro frente.** `antes-de-subir.sh` (paso 10)
+  para si las trae, y dice cómo devolverlas a las de `main`.
+- Las que ya están en el repositorio se quedan. `cierre/`, `compras/` y
+  `diez/` no son de ningún frente de hoy: no las fija nadie.
+- El reparto vive en `scripts/conta/capturas.mjs`, y una prueba lo compara con
+  el paso «Frente» del workflow, rama a rama.
+
+*Detector automático:* si un commit de capturas toca una carpeta que no es la
+de tu frente, ése es el choque del próximo PR de otro.
+
+*(15/10. Cada e2e en verde commiteaba todas sus capturas, también las de otros
+frentes, y un PNG cambia unos bytes en cada pasada. El #194 chocó con `main` en
+12 PNG de `b01` y `c00`; sus commits de capturas habían tocado 14 carpetas, entre
+ellas `b01`, `d01` y `r02`. Desde el 01/10 entraron en `main` 60 commits de
+capturas con 2.489 cambios de PNG.)*
+
 ### Numeradas por la secuencia maestra
 
 > Estas dos citan el número de `folvy_deudas_abiertas.md`, que es **la única

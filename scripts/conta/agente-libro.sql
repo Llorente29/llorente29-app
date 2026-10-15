@@ -12,7 +12,11 @@
 --
 -- Lo que se mira (encargo C04, agente):
 --   1. cuadre        · todo asiento validado o anulado cuadra al céntimo.
---   2. huecos        · numeración sin huecos por empresa, ejercicio y serie.
+--   2. huecos        · numeración sin huecos por empresa, ejercicio y serie,
+--                      desde el siguiente al último TRAÍDO (C06b, 15/10): la
+--                      numeración traída es la del programa de antes, con sus
+--                      saltos (C0008 salta del 431 al 998 el 01/07, también en
+--                      Diez); lo que se mira es lo que numera Folvy.
 --   3. cadena        · cada huella encadena con la anterior y es la de su contenido.
 --   4. iva           · los apuntes de IVA llevan base, tipo y libro, y la cuota es la base por el tipo.
 --   5. ventas_dia    · el resumen del día suma lo mismo que sus tickets, y su asiento lo mismo que el resumen.
@@ -72,9 +76,12 @@ select json_build_object(
   'huecos', (select coalesce(json_agg(json_build_object('account_id', x.account_id, 'company_id', x.company_id, 'ejercicio', x.fiscal_year_id,
       'serie', x.series, 'falta', x.falta)), '[]')
     from (select e.account_id, e.company_id, e.fiscal_year_id, e.series, g as falta
-            from (select account_id, company_id, fiscal_year_id, series, max(number) m
-                    from libro where source_type <> 'migrated' group by 1, 2, 3, 4) e
-            cross join lateral generate_series(1, e.m) g
+            from (select account_id, company_id, fiscal_year_id, series,
+                         max(number) filter (where source_type <> 'migrated') m,
+                         coalesce(max(number) filter (where source_type = 'migrated'), 0) traido
+                    from libro group by 1, 2, 3, 4
+                  having count(*) filter (where source_type <> 'migrated') > 0) e
+            cross join lateral generate_series(e.traido + 1, e.m) g
            where not exists (select 1 from libro x where x.company_id = e.company_id and x.fiscal_year_id = e.fiscal_year_id
                                and x.series = e.series and x.number = g)) x),
 

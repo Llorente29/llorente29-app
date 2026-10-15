@@ -4,8 +4,8 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 # QUÉ HACE
 # Pasa las pruebas de extremo a extremo del módulo de contabilidad
 # (tests/e2e, Playwright) contra staging-conta, en ordenador (1440 × 900) y en
-# móvil (390 × 844), y deja las capturas en docs/conta/capturas/ de la misma
-# rama, para compararlas con las maquetas en el PR.
+# móvil (390 × 844). Las capturas que saca van como ARTEFACTO del run, con un
+# comentario en el PR que da el enlace; a la rama solo van a mano (abajo).
 #
 # POR QUÉ AQUÍ Y NO EN EL CONTENEDOR DE DESARROLLO
 # Desde ese contenedor no se llega a *.supabase.co (el proxy lo corta).
@@ -57,7 +57,19 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 #     antes de pedir tanda o abrir un PR a main. El título del run lo dice
 #     («entera»), y scripts/conta/e2e-entera.mjs comprueba que hay una en verde
 #     del mismo commit (antes-de-subir.sh, con PEDIR_TANDA=1).
-# Las capturas se siguen subiendo cuando la e2e que corrió sale en verde.
+#
+# LAS CAPTURAS (C06b, Julio, 15/10): «capturas: artefacto en cada push y fijar
+# las de tu frente antes del informe».
+#   · En CADA run, las capturas que ha sacado ese run (las escritas después de
+#     la marca) van en el artefacto «capturas», 30 días, y un comentario del PR
+#     (uno solo, que se va editando) da el enlace. Nunca un commit en la rama.
+#   · Antes de dar su informe, la sesión lanza este workflow a mano con
+#     «fijar_capturas»: si sale verde, commitea SOLO la carpeta del frente de
+#     la rama (scripts/conta/capturas.mjs fijar), y Julio las ve en «Files
+#     changed». Las de otros frentes de ese run se quedan en el artefacto.
+# Por qué: cada e2e commiteaba todas sus capturas, también las de otros
+# frentes, y un PNG cambia unos bytes en cada pasada: el #194 chocó con main en
+# 12 PNG de b01 y c00. Las que ya están en el repositorio se quedan.
 
 on:
   push:
@@ -84,6 +96,12 @@ on:
         type: string
         required: false
         default: ''
+      # Antes del informe: commitea en la rama las capturas de SU frente (solo esas).
+      fijar_capturas:
+        description: 'Fijar en la rama las capturas del frente de la rama (antes del informe)'
+        type: boolean
+        required: false
+        default: false
 
 # Un push nuevo ESPERA en cola: no cancela el e2e que está corriendo (C05,
 # respuesta 3). GitHub deja como mucho uno en espera por rama: si llegan dos,
@@ -96,6 +114,8 @@ concurrency:
 
 permissions:
   contents: write
+  # El comentario del PR con el enlace al artefacto de las capturas.
+  pull-requests: write
 
 jobs:
   e2e:
@@ -270,6 +290,10 @@ jobs:
             echo "Sin pruebas de reparto en esta ejecución: el escenario no se toca."
           fi
 
+      # Lo que se escribe después de esta marca es lo que ha sacado este run.
+      - name: Capturas · la marca
+        run: touch "$RUNNER_TEMP/capturas.marca"
+
       - name: Pruebas (ordenador y móvil)
         run: npx playwright test ${E2E_PRUEBAS:-}
 
@@ -294,17 +318,63 @@ jobs:
             test-results
           retention-days: 14
 
-      - name: Subir las capturas a la rama
-        if: success()
+      # En cada run, pase lo que pase: lo que ha sacado, como artefacto.
+      - name: Capturas · las de este run
+        id: recoger
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/capturas.marca" ]; then
+            node scripts/conta/capturas.mjs recoger "$RUNNER_TEMP/capturas.marca" "$RUNNER_TEMP/capturas"
+          else
+            echo "Las pruebas no llegaron a empezar: no hay capturas."; echo "n=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Capturas · artefacto
+        id: artefacto
+        if: always() && steps.recoger.outputs.n != '' && steps.recoger.outputs.n != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas
+          path: ${{ runner.temp }}/capturas
+          retention-days: 30
+
+      # Un solo comentario por PR, que se edita en cada run: el enlace, no los PNG.
+      - name: Capturas · el enlace en el PR
+        if: always() && steps.artefacto.outputs.artifact-url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.artefacto.outputs.artifact-url }}
+          N: ${{ steps.recoger.outputs.n }}
+          ESTADO: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          MARCA='<!-- capturas-e2e -->'
+          T="$(printf '%s\n**Capturas de la e2e** · run [%s](%s/%s/actions/runs/%s) · `%s` · %s\n\n%s capturas de este run: [descargar el artefacto](%s) (caduca a los 30 días).\n\nPara verlas en «Files changed», antes del informe: Actions → «Pruebas e2e en staging-conta» → Run workflow en esta rama con **fijar_capturas**. Solo se fijan las del frente de la rama.' \
+            "$MARCA" "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "${GITHUB_SHA::7}" "$([ "$ESTADO" = success ] && echo 'en verde' || echo "en $ESTADO")" "$N" "$URL")"
+          echo "$T" >> "$GITHUB_STEP_SUMMARY"
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number -q '.[0].number')
+          if [ -z "$PR" ]; then echo "La rama no tiene PR abierto: el enlace queda en el resumen del run."; exit 0; fi
+          ID=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -q ".[] | select(.body | startswith(\"$MARCA\")) | .id" | tail -1)
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" -f body="$T" > /dev/null; echo "Comentario del PR #$PR actualizado."
+          else
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$T" > /dev/null; echo "Comentario en el PR #$PR."
+          fi
+
+      # Solo a mano y solo en verde: las del frente de la rama, y ninguna más.
+      - name: Capturas · fijar las del frente en la rama
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.fijar_capturas
         run: |
           set -euo pipefail
           git config user.name "folvy-e2e"
           git config user.email "e2e@folvy.invalid"
-          git add docs/conta/capturas
-          [ -d docs/reparto/capturas ] && git add docs/reparto/capturas
-          if git diff --cached --quiet; then echo "Las capturas no han cambiado."; exit 0; fi
-          git commit -m "Capturas en staging-conta (${GITHUB_SHA::7}, ordenador y móvil)"
-          # Dos frentes forzados desde la misma rama sacan las mismas capturas: si
-          # chocan, las de esta ejecución (-X theirs, en un rebase, son las nuestras).
+          node scripts/conta/capturas.mjs fijar "$GITHUB_REF_NAME"
+          if git diff --cached --quiet; then echo "Las capturas del frente no han cambiado."; exit 0; fi
+          git commit -m "Capturas fijadas en staging-conta (${GITHUB_SHA::7}, frente de ${GITHUB_REF_NAME})"
+          # Lo de otros frentes no se sube: se descarta antes de traer la rama.
+          git restore --worktree -- docs/conta/capturas docs/reparto/capturas 2>/dev/null || true
+          git clean -fdq -- docs/conta/capturas docs/reparto/capturas
+          # Si alguien ha empujado a la rama mientras tanto: las de este run (-X theirs, en un rebase, son las nuestras).
           git pull --rebase -X theirs origin "$GITHUB_REF_NAME"
           git push origin "HEAD:$GITHUB_REF_NAME"
