@@ -18,6 +18,7 @@
 // Respuesta 8: con su contraasiento ya en Diez, «Anulado en Folvy y en Diez».
 
 import { MARCA } from '../cuenta/marca'
+import { PATRONES, PATRONES_PENDIENTES } from '../../../../supabase/functions/_shared/diezFactura.ts'
 import { cent, deCent } from './libro'
 
 /** Lo que se lee de external_send. */
@@ -59,6 +60,18 @@ export interface EstadoDiez {
 }
 
 export const FALTA_DOCUMENTO = 'falta el documento'
+
+/**
+ * 15/10 · Por qué un asiento de ventas de esta plataforma no se puede mandar
+ * a Diez hoy (su patrón de factura no está medido, o está medido y no encaja:
+ * Glovo), o null si se puede. Se mira ANTES de validar: validar no se deshace.
+ */
+export function motivoSinPatron(canal: string): string | null {
+  const c = canal.toLowerCase()
+  if (PATRONES[c]) return null
+  return PATRONES_PENDIENTES[c] ?? `la plataforma «${canal}» no tiene su patrón de factura medido en Diez`
+}
+
 
 /**
  * 15/10 · Los dos números de un asiento validado, el de la marca y el de Diez:

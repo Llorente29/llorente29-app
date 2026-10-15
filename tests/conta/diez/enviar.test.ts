@@ -90,7 +90,7 @@ describe('enviarAsientoADiez (R15): los frenos', () => {
     const t = puerto({ r: resumen({ canal: { id: 'c2', slug: 'glovo', nombre: 'Glovo' } }) })
     const x = await enviarAsientoADiez('e1', t.p)
     expect(x).toMatchObject({ estado: 'no_llega', reintentar: false })
-    expect(x.estado === 'no_llega' && x.motivo).toMatch(/glovo.*patrón de factura medido/)
+    expect(x.estado === 'no_llega' && x.motivo).toMatch(/una factura por tienda de Glovo y día/)
     expect(t.llamadas.conexion).toBe(0)
   })
   it('sin conexión: «la conexión con Diez no está configurada»', async () => {
@@ -195,7 +195,7 @@ describe('resumenDeAsiento (R15): el PDF sale del asiento', () => {
   })
   it('Glovo: sin factura de Diez, el PDF lleva el asiento y dice por qué no hay factura', () => {
     const x = resumenDeAsiento(resumen({ canal: { id: 'c2', slug: 'glovo', nombre: 'Glovo' }, lineas: resumen().lineas.map((l) => l.cuenta === '43000002' ? { ...l, cuenta: '43000001' } : l) }), o)
-    expect(x.factura).toBeNull(); expect(x.sinFactura).toMatch(/glovo/)
+    expect(x.factura).toBeNull(); expect(x.sinFactura).toMatch(/una factura por tienda de Glovo y día/)
     expect(x.datos.numeroFactura).toBeNull(); expect(x.nombreFichero).toBe('ResumenDeVentas_Ventas-1287.pdf')
   })
   it('el reembolso sale de sus líneas (708, 477 al debe, 430 al haber, con su documento)', () => {

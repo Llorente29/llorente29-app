@@ -1,6 +1,6 @@
 // C04b · R15 · El estado «con Diez» de un asiento de ventas, en palabras (R13).
 import { describe, expect, it } from 'vitest'
-import { cobroDe, estadoDiez, numerosFolvyDiez, resumenSeleccion, textoResultado, type ConDiez, type EnvioDiez } from '../../../src/modules/conta/lib/conDiez'
+import { cobroDe, estadoDiez, motivoSinPatron, numerosFolvyDiez, resumenSeleccion, textoResultado, type ConDiez, type EnvioDiez } from '../../../src/modules/conta/lib/conDiez'
 
 const doc = { ruta: 'a/e/x.pdf', nombre: 'x.pdf', bytes: 10, creadoEn: '2026-10-13T10:00:00Z', creadoPor: 'Julio' }
 const envio = (o: Partial<EnvioDiez> = {}): EnvioDiez => ({ status: 'enviado', serie: '1', numero: 1801, factura: 'UBR-FLO-20261001', intentos: 1, error: null, documento: 'adjunto', errorDocumento: null, ...o })
@@ -59,5 +59,15 @@ describe('los dos números de un asiento (15/10)', () => {
   it('sin número todavía, nada; sin Diez (no es de una plataforma), solo el propio', () => {
     expect(numerosFolvyDiez({ numero: null }, con(env({})))).toBeNull()
     expect(numerosFolvyDiez({ numero: 40 }, null)).toBe('Folvy 40')
+  })
+})
+
+// 15/10 · Antes de validar se sabe si una plataforma se puede mandar a Diez (validar no se deshace).
+describe('qué plataformas se pueden mandar hoy (15/10)', () => {
+  it('Uber y Just Eat, sí; Glovo no, con su porqué; una sin medir, lo dice', () => {
+    expect(motivoSinPatron('uber')).toBeNull()
+    expect(motivoSinPatron('justeat')).toBeNull()
+    expect(motivoSinPatron('glovo')).toMatch(/una factura por tienda de Glovo y día/)
+    expect(motivoSinPatron('deliveroo')).toBe('la plataforma «deliveroo» no tiene su patrón de factura medido en Diez')
   })
 })

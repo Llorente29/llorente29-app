@@ -36,9 +36,36 @@ export type AsientoVentas = {
   lineas: LineaVentas[]
 }
 type Patron = { prefijoNumero: string; descripcion: string; cuentaCliente: string }
-/** El patrón de cada plataforma, solo si se ha medido en Diez. */
+/**
+ * El patrón de cada plataforma, solo si se ha medido en Diez.
+ *
+ * Medido en C0008, solo GET, el 15/10 (scripts/conta/diez/patrones-ventas-c0008.ts,
+ * runs 38700752691 y 38703072135; agosto a octubre, 1.543 facturas emitidas):
+ *   · Uber (43000002): las 126, «UBR-<grupo>-<AAAAMMDD>» con la fecha de la
+ *     factura y «UBER EATS <grupo> dd/mm»; una por local y día. El testigo.
+ *   · Just Eat (43000003): las 31 de agosto y septiembre, «JUS-<grupo>-<AAAAMMDD>»
+ *     con la fecha de la factura y «JUST EAT <grupo> dd/mm»; una por local y día.
+ *     (Las de siete cifras sueltas son de mayo a julio: la forma de antes.)
+ */
 export const PATRONES: Record<string, Patron> = {
   uber: { prefijoNumero: 'UBR', descripcion: 'UBER EATS', cuentaCliente: '43000002' },
+  justeat: { prefijoNumero: 'JUS', descripcion: 'JUST EAT', cuentaCliente: '43000003' },
+}
+
+/**
+ * Lo medido que NO se puede mandar como está, con su porqué.
+ *
+ * Glovo (43000001), en C0008: las 275 de agosto y septiembre son
+ * «GLV<seis cifras>-<AAAAMMDD>», con la fecha de la factura. Las seis cifras
+ * toman 14 valores, cada uno siempre con el mismo local: la gestoría hace UNA
+ * FACTURA POR TIENDA DE GLOVO Y DÍA, no por local. El asiento de Folvy es uno
+ * por local y día con todas sus marcas. Mandarlo así sería una factura que la
+ * gestoría no hace (y no se encontraría al buscarla). Lo decide Julio:
+ * partir el asiento por tienda de Glovo (y saber qué código es cada una) o
+ * mandar uno por local con otra numeración.
+ */
+export const PATRONES_PENDIENTES: Record<string, string> = {
+  glovo: 'Glovo va en Diez con una factura por tienda de Glovo y día («GLV» + el código de la tienda + la fecha), y el asiento de Folvy es uno por local con todas sus marcas: falta decidir cómo se parte antes de enviarlo',
 }
 const c = (x: number) => Math.round(x * 100)
 const e = (x: number) => x / 100
@@ -53,7 +80,7 @@ export type FacturaVentas = { factura: FacturaData; sinPoner: string[]; esperado
  */
 export function facturaDeVentas(a: AsientoVentas, o: { correspondencia: Correspondencia; nombreCliente: string; hoy: string; conAnalitica: boolean }): FacturaVentas {
   const p = PATRONES[a.canal.toLowerCase()]
-  if (!p) throw new Error(`la plataforma «${a.canal}» no tiene su patrón de factura medido en Diez: no se envía`)
+  if (!p) throw new Error(PATRONES_PENDIENTES[a.canal.toLowerCase()] ?? `la plataforma «${a.canal}» no tiene su patrón de factura medido en Diez: no se envía`)
   const grupo = o.correspondencia.localAlEnviar[a.local]
   if (!grupo) throw new Error(`el local «${a.local}» no tiene grupo en Diez: no se puede numerar la factura`)
   const de = (pref: string) => a.lineas.filter((l) => l.cuenta.startsWith(pref))

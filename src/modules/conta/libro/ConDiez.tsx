@@ -17,7 +17,8 @@ import { resumenSeleccion, type ConDiez, type EstadoDiez } from '@/modules/conta
 import { textoVarios, type PasoVarios } from '@/modules/conta/lib/enviarVarios'
 import { urlDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 
-export interface CandidatoDiez { id: string; concepto: string; fecha: string; estado: string; cobro: number; estadoDiez: EstadoDiez }
+/** `noSeEnvia`: por qué no se puede mandar hoy (sale en la lista, sin marcar y sin poder marcarse). */
+export interface CandidatoDiez { id: string; concepto: string; fecha: string; estado: string; cobro: number; estadoDiez: EstadoDiez; noSeEnvia?: string | null }
 
 const tonoChip = (t: EstadoDiez['tono']) => (t === 'verde' ? 'ia' : t === 'azul' ? 'azul' : t === 'ambar' ? 'ambar' : 'neutro')
 
@@ -86,7 +87,7 @@ export function TarjetaDiez({ a, d, e, quien, alHacer, alFallar }: {
 export function EnviarADiezDialogo({ candidatos, quien, alCerrar, alTerminar }: {
   candidatos: CandidatoDiez[]; quien: string | null; alCerrar: () => void; alTerminar: (t: string) => void
 }) {
-  const [marcados, setMarcados] = useState<Set<string>>(() => new Set(candidatos.filter((c) => c.estado !== 'validado').map((c) => c.id)))
+  const [marcados, setMarcados] = useState<Set<string>>(() => new Set(candidatos.filter((c) => c.estado !== 'validado' && !c.noSeEnvia).map((c) => c.id)))
   const [paso, setPaso] = useState<number | null>(null)
   const [pasos, setPasos] = useState<PasoVarios[] | null>(null)
   const elegidos = candidatos.filter((c) => marcados.has(c.id))
@@ -128,8 +129,10 @@ export function EnviarADiezDialogo({ candidatos, quien, alCerrar, alTerminar }: 
         {candidatos.map((c) => (
           <li key={c.id}>
             <label className="cxd-diez-opcion">
-              <input type="checkbox" checked={marcados.has(c.id)} onChange={() => cambiar(c.id)} disabled={paso !== null} />
-              <span className="cxd-diez-concepto">{diaMesCorto(c.fecha)} · {c.concepto}<span className="cx-ayuda"> · {c.estadoDiez.texto}</span></span>
+              <input type="checkbox" checked={marcados.has(c.id)} onChange={() => cambiar(c.id)} disabled={paso !== null || !!c.noSeEnvia} />
+              <span className="cxd-diez-concepto">{diaMesCorto(c.fecha)} · {c.concepto}{c.noSeEnvia
+                ? <span className="cx-ayuda cxt-ambar"> · No se puede enviar todavía: {c.noSeEnvia}.</span>
+                : <span className="cx-ayuda"> · {c.estadoDiez.texto}</span>}</span>
               <span className="cxd-importe">{eurosExactos(c.cobro)}</span>
             </label>
           </li>

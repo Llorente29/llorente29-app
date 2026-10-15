@@ -39,7 +39,9 @@ describe('facturaDeVentas (R13): como las emitidas de Uber de Diez', () => {
     expect(f.Analitica).toEqual([])
   })
   it('lo que no se ha medido o no cuadra no sale: otra plataforma, otro tipo, otra 430, sin cuadrar, otras cuentas', () => {
-    expect(() => facturaDeVentas({ ...uber(), canal: 'glovo' }, opciones)).toThrow(/patrón de factura medido/)
+    expect(() => facturaDeVentas({ ...uber(), canal: 'deliveroo' }, opciones)).toThrow(/patrón de factura medido/)
+    // Glovo está medido y no se manda como está: dice por qué (una factura por tienda de Glovo y día).
+    expect(() => facturaDeVentas({ ...uber(), canal: 'glovo' }, opciones)).toThrow(/una factura por tienda de Glovo y día/)
     expect(() => facturaDeVentas(uber([L('43000002', 32.1, 0), L('70000002', 0, 30, 'Meraki Pita'), L('47700021', 0, 2.1, null, 7)]), opciones)).toThrow(/otro tipo/)
     expect(() => facturaDeVentas(uber([L('43000001', 33, 0), L('70000002', 0, 30, 'Meraki Pita'), L('47700010', 0, 3, null, 10)]), opciones)).toThrow(/no es la de uber/)
     expect(() => facturaDeVentas(uber([L('43000002', 33.01, 0), L('70000002', 0, 30, 'Meraki Pita'), L('47700010', 0, 3, null, 10)]), opciones)).toThrow(/no cuadra/)
@@ -48,5 +50,20 @@ describe('facturaDeVentas (R13): como las emitidas de Uber de Diez', () => {
   it('una marca sin subgrupo sale sin él y se dice', () => {
     const { sinPoner } = facturaDeVentas(uber([L('43000002', 33, 0), L('70000009', 0, 30, 'Marca Nueva'), L('47700010', 0, 3, null, 10)]), opciones)
     expect(sinPoner).toEqual(['70000009: marca «Marca Nueva»: sin subgrupo en Diez'])
+  })
+})
+
+// 15/10 · Just Eat, medido en C0008 (las 31 de agosto y septiembre): como Uber,
+// una por local y día, con su prefijo, su descripción y su 430. Importes inventados.
+describe('Just Eat (medido en C0008 el 15/10)', () => {
+  const je = (local = 'Foodint Alcalá'): AsientoVentas => ({ fecha: '2026-10-01', local, canal: 'justeat',
+    lineas: [L('43000003', 22, 0), L('70000002', 0, 20, 'Meraki Pita'), L('47700010', 0, 2, null, 10)] })
+  it('«JUS-<grupo>-<AAAAMMDD>», «JUST EAT <grupo> dd/mm» y la 43000003', () => {
+    const { factura: f } = facturaDeVentas(je(), opciones)
+    expect(f).toMatchObject({ NumeroFactura: 'JUS-FLO-20261001', Descripcion: 'JUST EAT FLO 01/10', CuentaCliente: '43000003', Serie: '1', TipoAsiento: 1, TipoFactura: 1, PorcentajeIVA1: 10, BaseImponible1: 20, CuotaIVA1: 2, TotalFactura: 22 })
+    expect(facturaDeVentas(je('Foodint Carabanchel'), opciones).factura.NumeroFactura).toBe('JUS-CAM-20261001')
+  })
+  it('con la 430 de otra plataforma, no', () => {
+    expect(() => facturaDeVentas({ ...je(), lineas: [L('43000002', 22, 0), L('70000002', 0, 20, 'Meraki Pita'), L('47700010', 0, 2, null, 10)] }, opciones)).toThrow(/no es la de justeat/)
   })
 })
