@@ -70,10 +70,10 @@ try {
   seccion('riders_por_mes_de_factura')
   for (const m of [...new Set(riders.map((f) => mes(f.FechaFactura)))].sort()) {
     const del = riders.filter((f) => mes(f.FechaFactura) === m)
-    di(`${m}.facturas`, del.length)
-    di(`${m}.primera_quincena`, del.filter((f) => dia(f.FechaFactura) <= 15).length)
-    di(`${m}.segunda_quincena`, del.filter((f) => dia(f.FechaFactura) > 15).length)
-    di(`${m}.asiento_otro_mes`, del.filter((f) => mes(f.Fecha) !== m).length)
+    di(`mes_${m}.facturas`, del.length)
+    di(`mes_${m}.primera_quincena`, del.filter((f) => dia(f.FechaFactura) <= 15).length)
+    di(`mes_${m}.segunda_quincena`, del.filter((f) => dia(f.FechaFactura) > 15).length)
+    di(`mes_${m}.asiento_otro_mes`, del.filter((f) => mes(f.Fecha) !== m).length)
   }
 
   // Septiembre, que es lo que se subiría primero.
@@ -82,6 +82,10 @@ try {
   seccion('septiembre')
   di('riders', sep.length)
   di('de_catcher', sepCatcher.length)
+  // El día de la factura: Catcher las emite al cerrar cada quincena.
+  for (const d of [...new Set(sep.map((f) => dia(f.FechaFactura)))].sort((x, y) => x - y)) di(`riders.dia_${String(d).padStart(2, '0')}`, sep.filter((f) => dia(f.FechaFactura) === d).length)
+  for (const d of [...new Set(sep.filter((f) => esEmpresa(f.CifCliente)).map((f) => dia(f.FechaFactura)))].sort((x, y) => x - y)) di(`riders.empresa_dia_${String(d).padStart(2, '0')}`, sep.filter((f) => esEmpresa(f.CifCliente) && dia(f.FechaFactura) === d).length)
+  for (const d of [...new Set(sepCatcher.map((f) => dia(f.FechaFactura)))].sort((x, y) => x - y)) di(`de_catcher.dia_${String(d).padStart(2, '0')}`, sepCatcher.filter((f) => dia(f.FechaFactura) === d).length)
   di('riders.con_nif', sep.filter((f) => nifParaComparar(f.CifCliente)).length)
   di('riders.nif_de_persona', sep.filter((f) => esPersona(f.CifCliente)).length)
   di('riders.nif_de_empresa', sep.filter((f) => esEmpresa(f.CifCliente)).length)
