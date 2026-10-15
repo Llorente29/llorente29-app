@@ -81,7 +81,7 @@ export default function LoteCatcherPage() {
           </div>
           <p className="cxk-resumen"><strong>{resumenLote({ etiqueta: d.lote.etiqueta, facturas: d.lote.facturas, total: d.lote.total, cruzado: d.lote.cruzado, abiertas: d.lote.abiertas })}</strong></p>
 
-          <div role="status" aria-live="polite">
+          <div role="status" aria-live="polite" data-prueba="hecho-quincena">
             {paso && <div className="cx-tarjeta">{paso}</div>}
             {hecho && <div className="cx-tarjeta cxr-hecho"><strong>{hecho}</strong></div>}
           </div>

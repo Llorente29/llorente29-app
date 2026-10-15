@@ -104,9 +104,11 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   // 3 · La quincena: resumen, «Por aclarar» con el G236 y las facturas por grupos.
   await bloque.getByRole('link', { name: /2\.ª quincena de septiembre de 2026 · 5 facturas · 54,69 €/ }).click()
   await expect(page.getByRole('heading', { name: '2.ª quincena de septiembre de 2026' })).toBeVisible({ timeout: 30_000 })
+  // Lo que dice la quincena (no el aviso de staging, que también es un role=status).
+  const dice = page.locator('[data-prueba="hecho-quincena"]')
   if (!(await page.locator('[data-prueba="cosa-por-aclarar"]').count())) {
     await page.getByRole('button', { name: 'Cruzar otra vez' }).click()
-    await expect(page.getByRole('status')).toContainText('Cruzada la 2.ª quincena de septiembre de 2026', { timeout: 60_000 })
+    await expect(dice).toContainText('Cruzada la 2.ª quincena de septiembre de 2026', { timeout: 60_000 })
   }
   const g236 = page.locator('[data-prueba="cosa-por-aclarar"]', { hasText: 'G236' })
   await expect(g236).toContainText('G236 del 23/09 a las 16:29: cancelado, con comisión cobrada (0,79 €) y ningún rider que lo facture.')
@@ -117,20 +119,25 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   await capturar(page, 'catcher-quincena')
 
   // 4 · Reclamar (diciendo qué) y volver a abrir: cada botón dice lo que ha hecho.
+  // Si otra pasada la dejó decidida (staging es compartido), se vuelve a abrir antes.
+  if (await g236.getByRole('button', { name: 'Volver a abrir' }).count()) {
+    await g236.getByRole('button', { name: 'Volver a abrir' }).click()
+    await expect(dice).toContainText('Vuelto a abrir (G236).', { timeout: 30_000 })
+  }
   await g236.getByRole('button', { name: 'Reclamar' }).click()
   await g236.getByLabel('Qué se reclama a Catcher').fill('La comisión de un pedido cancelado')
   await g236.getByRole('button', { name: 'Apuntar la reclamación' }).click()
-  await expect(page.getByRole('status').first()).toContainText('Apuntado para reclamar a Catcher (G236). A su factura le queda 1 cosa.', { timeout: 30_000 })
+  await expect(dice).toContainText('Apuntado para reclamar a Catcher (G236). A su factura le queda 1 cosa.', { timeout: 30_000 })
   await expect(g236).toContainText('Reclamada a Catcher')
   await capturar(page, 'catcher-reclamada')
   await g236.getByRole('button', { name: 'Volver a abrir' }).click()
-  await expect(page.getByRole('status').first()).toContainText('Vuelto a abrir (G236).', { timeout: 30_000 })
+  await expect(dice).toContainText('Vuelto a abrir (G236).', { timeout: 30_000 })
 
   // 5 · El pago contra la 40700001 (una vez) y el saldo del portal.
   const pagar = page.getByRole('button', { name: 'Proponer el pago desde la 40700001' })
   if (await pagar.isEnabled()) {
     await pagar.click()
-    await expect(page.getByRole('status').first()).toContainText('Propuesto el pago de la 2.ª quincena de septiembre de 2026: 5 facturas, 54,69 € desde la 40700001 «Saldo prepago Catcher» (serie 3).', { timeout: 30_000 })
+    await expect(dice).toContainText('Propuesto el pago de la 2.ª quincena de septiembre de 2026: 5 facturas, 54,69 € desde la 40700001 «Saldo prepago Catcher» (serie 3).', { timeout: 30_000 })
   }
   await expect(page.getByRole('button', { name: 'Pago propuesto' })).toBeDisabled({ timeout: 30_000 })
   const saldo = page.locator('section.cxk-saldo')
