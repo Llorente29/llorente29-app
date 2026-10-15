@@ -41,6 +41,8 @@ export interface PerfilBanco {
   abono?: Patrones
   saldo?: Patrones
   referencia?: Patrones
+  /** El código propio del banco (BBVA: «CÓDIGO», cinco cifras). */
+  propio?: Patrones
   /** La tarjeta da los cargos en positivo: se les da la vuelta. */
   cargosEnPositivo?: boolean
 }
@@ -48,8 +50,17 @@ export interface PerfilBanco {
 const r = (s: string) => new RegExp(`^${s}$`, 'i')
 
 export const PERFILES: Record<BancoCsv, PerfilBanco> = {
-  bbva: { nombre: 'BBVA', entidad: '0182', fecha: [r('fecha')], fechaValor: [r('f\\.? ?valor')],
-    concepto: [[r('concepto')], [r('movimiento')], [r('observaciones')]], importe: [r('importe')], saldo: [r('disponible'), r('saldo')] },
+  // BBVA «Histórico» (15/10, el primer fichero de verdad de Foodint): hoja
+  // «Historico», datos desde la columna C, cabecera en pares etiqueta/valor
+  // (Titular, Cuenta…) y títulos en la fila 16: F. CONTABLE · F. VALOR ·
+  // CÓDIGO · CONCEPTO · BENEFICIARIO/ORDENANTE · OBSERVACIONES · IMPORTE ·
+  // SALDO · DIVISA · OFICINA · REMESA. El concepto es la etiqueta del banco; a
+  // quién pagas va en BENEFICIARIO/ORDENANTE (19 de 47) u OBSERVACIONES (en
+  // tarjeta, con la tarjeta ya enmascarada por el banco). REMESA, una por
+  // movimiento: a la huella.
+  bbva: { nombre: 'BBVA', entidad: '0182', fecha: [r('fecha'), r('f\\. ?contable'), r('fecha contable')], fechaValor: [r('f\\.? ?valor')],
+    concepto: [[r('concepto')], [r('movimiento')], [r('beneficiario ?/ ?ordenante')], [r('observaciones')]], importe: [r('importe')], saldo: [r('disponible'), r('saldo')],
+    referencia: [r('remesa')], propio: [r('c[oó]digo')] },
   santander: { nombre: 'Santander', entidad: '0049', fecha: [r('fecha operaci[oó]n'), r('fecha')], fechaValor: [r('fecha valor')],
     concepto: [[r('concepto')]], importe: [r('importe')], saldo: [r('saldo')] },
   caixabank: { nombre: 'CaixaBank', entidad: '2100', fecha: [r('fecha')], fechaValor: [r('fecha valor')],
@@ -173,6 +184,28 @@ function filaDeCabecera(filas: string[][], p: PerfilBanco): number {
   return -1
 }
 
+/** ¿Vienen del más reciente al más antiguo? Por la cadena de saldos si la hay; si no, por las fechas. */
+function masRecienteArriba(fs: { m: MovimientoLeido; saldo: number | null }[]): boolean {
+  let subiendo = 0, bajando = 0
+  for (let i = 1; i < fs.length; i++) {
+    const a = fs[i - 1], b = fs[i]
+    if (a.saldo === null || b.saldo === null) continue
+    if (b.saldo === a.saldo + b.m.importeCent) subiendo++
+    if (a.saldo === b.saldo + a.m.importeCent) bajando++
+  }
+  if (subiendo !== bajando) return bajando > subiendo
+  return fs[0].m.fecha > fs[fs.length - 1].m.fecha
+}
+
+/** El valor de una etiqueta de la cabecera en pares («Titular» … «EMPRESA SL »): la siguiente celda no vacía de su fila. */
+function valorDeCabecera(filas: string[][], etiqueta: RegExp): string | null {
+  for (const f of filas) {
+    const i = f.findIndex((c) => etiqueta.test(norm(c)))
+    if (i >= 0) { const v = f.slice(i + 1).map(norm).find((c) => c !== ''); if (v) return v }
+  }
+  return null
+}
+
 /** Lee las filas de un Excel/CSV con el perfil de su banco. */
 export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido {
   const p = PERFILES[banco]
@@ -186,7 +219,7 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
     fecha: buscar(cab, p.fecha), valor: buscar(cab, p.fechaValor),
     concepto: p.concepto.map((c) => buscar(cab, c)).filter((i) => i >= 0),
     importe: buscar(cab, p.importe), cargo: buscar(cab, p.cargo), abono: buscar(cab, p.abono),
-    saldo: buscar(cab, p.saldo), ref: buscar(cab, p.referencia),
+    saldo: buscar(cab, p.saldo), ref: buscar(cab, p.referencia), propio: buscar(cab, p.propio),
   }
   const avisos: string[] = []
   const filasMov: { m: MovimientoLeido; saldo: number | null }[] = []
@@ -206,20 +239,23 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
     }
     if (imp === null) throw new CsvBancoNoValido(`Fila ${i + 1}: el importe «${f[col.importe] ?? ''}» no es un número.`)
     if (p.cargosEnPositivo) imp = -imp
-    const concepto = norm(col.concepto.map((j) => f[j] ?? '').filter((x) => norm(x) !== '').join(' · '))
+    // Las columnas del concepto, sin vacías ni repetidas (el beneficiario a veces se repite en las observaciones).
+    const partes = col.concepto.map((j) => norm(f[j] ?? '')).filter((x, k, xs) => x !== '' && xs.indexOf(x) === k)
+    const concepto = partes.join(' · ')
     filasMov.push({
       m: {
         fecha, fechaValor: (col.valor >= 0 ? leerFecha(f[col.valor] ?? '') : null) ?? fecha, importeCent: imp,
-        conceptoBanco: concepto, conceptoComun: null, conceptoPropio: null, numeroDocumento: null,
+        conceptoBanco: concepto, conceptoComun: null, conceptoPropio: col.propio >= 0 ? (norm(f[col.propio] ?? '') || null) : null, numeroDocumento: null,
         referencia1: col.ref >= 0 ? (norm(f[col.ref] ?? '') || null) : null, referencia2: null, equivalencia: null,
       },
       saldo: col.saldo >= 0 ? leerImporte(f[col.saldo] ?? '') : null,
     })
   }
   if (filasMov.length === 0) throw new CsvBancoNoValido(`El fichero de ${p.nombre} no trae ningún movimiento.`)
-  // Las bancas online suelen dar lo más reciente arriba: se pone en orden de fechas.
-  const primera = filasMov[0].m.fecha, ultima = filasMov[filasMov.length - 1].m.fecha
-  if (primera > ultima) filasMov.reverse()
+  // Las bancas online suelen dar lo más reciente arriba: se pone en orden. Lo
+  // dice la cadena de saldos (el saldo de cada fila es el de después de ese
+  // movimiento), que vale también dentro de un mismo día; sin saldos, las fechas.
+  if (masRecienteArriba(filasMov)) filasMov.reverse()
   const movimientos = filasMov.map((x) => x.m)
   const saldos = col.saldo >= 0 ? filasMov.map((x) => x.saldo) : null
   const conSaldo = saldos?.filter((s): s is number => s !== null) ?? []
@@ -227,7 +263,7 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
   const cuenta: CuentaLeida = {
     iban,
     identificacion: iban ? `${p.nombre} ···· ${iban.slice(-4)}` : p.nombre,
-    titular: null, divisa: 'EUR',
+    titular: valorDeCabecera(filas.slice(0, ic), /^titular:?$/i), divisa: 'EUR',
     desde: movimientos[0].fecha, hasta: movimientos[movimientos.length - 1].fecha,
     saldoInicialCent: saldos && saldos[0] !== null ? saldos[0] - movimientos[0].importeCent : null,
     saldoFinalCent: conSaldo.length ? conSaldo[conSaldo.length - 1] : null,
