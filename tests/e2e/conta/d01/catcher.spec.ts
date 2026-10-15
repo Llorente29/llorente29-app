@@ -164,7 +164,7 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   const saldo = page.locator('section.cxk-saldo')
   await expect(saldo).toContainText('Saldo prepago Catcher')
   // Retoque 2: en palabras, y lo sin validar aparte.
-  await expect(saldo.locator('[data-prueba="saldo-frase"]')).toHaveText(/^Has recargado [\d.]+,\d\d € · se han pagado [\d.]+,\d\d € · te quedan -?[\d.]+,\d\d €$/)
+  await expect(saldo.locator('[data-prueba="saldo-frase"]')).toHaveText(/^Has recargado [\d.]+,\d\d € · se han pagado [\d.]+,\d\d € · te quedan −?[\d.]+,\d\d €$/)
   await expect(saldo.locator('[data-prueba="saldo-sin-validar"]')).toHaveText(/^De esos pagos, [\d.]+,\d\d € aún sin validar\.$/)
   await saldo.locator('input[data-prueba="saldo-portal"]').fill('100,00')
   await saldo.getByRole('button', { name: 'Comprobar' }).click()
