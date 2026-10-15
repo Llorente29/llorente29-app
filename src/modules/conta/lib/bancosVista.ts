@@ -10,12 +10,13 @@
 // mes; «Para confirmar» y «Por aclarar» solo filtran a petición.
 
 export type Tono = 'verde' | 'ambar' | 'gris'
-export type Boton = 'ver' | 'deshacer' | 'si' | 'otra-cosa' | 'subir-foto' | 'si-sin-ticket' | 'buscar-factura' | 'decirlo-yo' | 'alta-tarjeta'
+export type Boton = 'ver' | 'deshacer' | 'si' | 'otra-cosa' | 'subir-foto' | 'si-sin-ticket' | 'buscar-factura' | 'decirlo-yo' | 'alta-tarjeta' | 'es-el-mismo' | 'son-dos'
 
 /** Lo que dice cada botón de la tabla. */
 export const TEXTO_BOTON: Record<Boton, string> = {
   ver: 'Ver', deshacer: 'Deshacer', si: 'Sí', 'otra-cosa': 'Otra cosa', 'subir-foto': 'Subir foto', 'si-sin-ticket': 'Sí, sin ticket',
   'buscar-factura': 'Buscar factura', 'decirlo-yo': 'Decirlo yo', 'alta-tarjeta': 'Dar de alta la tarjeta',
+  'es-el-mismo': 'Es el mismo', 'son-dos': 'Son dos',
 }
 
 export interface PropuestaGuardada {
@@ -42,6 +43,9 @@ export interface MovimientoBanco {
   importeCent: number
   conceptoBanco: string
   conceptoLimpio: string
+  /** B02 · A quién pagas o quién te paga, limpio (`counterparty`), y el tipo de movimiento del banco (`movement_type`). */
+  contraparte?: string | null
+  tipo?: string | null
   estado: 'pendiente' | 'propuesto' | 'por_aclarar' | 'casado' | 'posible_repetido' | 'antes_corte_sin_pareja' | 'ignorado'
   confianza: 'seguro' | 'probable' | 'duda' | null
   porque: string | null
@@ -120,7 +124,7 @@ function filaSinPrincipal(m: MovimientoBanco): Omit<Fila, 'principal'> {
     return { id: m.id, tono: 'gris', grupo: 'otro', estado: 'Antes del corte', titulo: 'Antes del corte · sin pareja en el libro', porque: sinPunto(m.porque ?? ''), botones: [] }
   }
   if (m.estado === 'posible_repetido') {
-    return { id: m.id, tono: 'gris', grupo: 'aclarar', estado: 'Por aclarar', titulo: '¿Es el mismo movimiento otra vez?', porque: 'Mismo día e importe que otro que ya estaba, por otro camino.', botones: [] }
+    return { id: m.id, tono: 'gris', grupo: 'aclarar', estado: 'Por aclarar', titulo: '¿Es el mismo movimiento otra vez?', porque: 'Mismo día e importe que otro que ya estaba, por otro camino.', botones: ['es-el-mismo', 'son-dos'] }
   }
   return { id: m.id, tono: 'gris', grupo: 'otro', estado: 'Apartado', titulo: 'Apartado', porque: sinPunto(m.motivoIgnorado ?? ''), botones: [] }
 }

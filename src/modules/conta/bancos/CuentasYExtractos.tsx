@@ -22,7 +22,7 @@ import {
 } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
-import { LO_HECHO, NOMBRE } from '@/modules/conta/bancos/marca'
+import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
 type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
 const COMUN = 'comun'
@@ -52,7 +52,7 @@ export function CuentasYExtractos() {
       <div className="cx-tarjeta cxb-lista" aria-label="Cuentas por dar de alta">
         <h3 className="cxl-subtitulo">Cuentas del plan que aún no son un banco</h3>
         {porDar.error && <div className="cx-error" role="alert">{porDar.error}</div>}
-        {porDar.datos?.length === 0 && <p className="cx-ayuda">Ninguna: cada cuenta de bancos del plan tiene su banco en {NOMBRE}.</p>}
+        {porDar.datos?.length === 0 && <p className="cx-ayuda">Ninguna: cada cuenta de bancos del plan tiene su banco aquí.</p>}
         {(porDar.datos ?? []).map((c) => (
           <div key={c.codigo} className="cxb-lista-fila">
             <span className="cxb-lista-texto"><strong>{nombreConCodigo(c.nombre, c.codigo)}</strong>{c.ibanEnNombre && <span className="cx-ayuda">El nombre trae un IBAN: {ibanLegible(c.ibanEnNombre)}</span>}</span>

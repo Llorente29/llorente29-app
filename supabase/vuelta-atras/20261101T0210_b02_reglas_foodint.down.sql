@@ -1,5 +1,5 @@
 -- Vuelta atrás de B02 · 0210: cada regla vuelve a lo que tenía antes de la
--- tanda (palabras, destino, estado, confirmaciones y correcciones), leído de su
+-- tanda (palabras, condición, destino, estado, confirmaciones y correcciones), leído de su
 -- registro («Tanda B02 · 0210»). PARA si alguna ha casado algo desde entonces.
 do $$
 begin
@@ -8,7 +8,7 @@ begin
   end if;
 end $$;
 update public.bank_rule r
-   set words = l.before->>'palabras', target = l.before->'destino', status = l.before->>'estado',
+   set words = l.before->>'palabras', target = l.before->'destino', status = l.before->>'estado', condition = coalesce(l.before->'condicion', r.condition),
        confirmations = (l.before->>'confirmaciones')::int, corrections = (l.before->>'correcciones')::int, updated_at = now()
   from (select distinct on (rule_id) rule_id, before from public.bank_rule_log where created_by_name = 'Tanda B02 · 0210' order by rule_id, created_at desc) l
  where l.rule_id = r.id;

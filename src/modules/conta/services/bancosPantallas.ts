@@ -10,6 +10,7 @@
 import { supabase } from '@/lib/supabase'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { bancos, type BancoFolvy, type ResultadoConciliar } from '@/modules/conta/services/bancosService'
+import type { FacturaParaCasar } from '@/modules/conta/lib/conciliarVista'
 import { reglasQuePropongo, type Casado, type MovRegla, type NoLaPropongo, type ReglaPropuesta } from '@/modules/conta/lib/reglasBanco'
 import { limitesMes, type ExtractoDeshecho, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
@@ -89,7 +90,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
 export async function leerMovimientos(accountId: string, bancoId: string, mes: string): Promise<MovimientoBanco[]> {
   const { desde, hasta } = limitesMes(mes)
   const filas = await leer(tabla('bank_movement')
-    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept))')
+    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept))')
     .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
     .order('op_date', { ascending: false }).order('created_at', { ascending: false }), 'los movimientos')
   return filas.map((m) => {
@@ -98,6 +99,7 @@ export async function leerMovimientos(accountId: string, bancoId: string, mes: s
     return {
       id: String(m.id), cuentaId: String(m.treasury_account_id), fecha: String(m.op_date), importeCent: cent(m.amount),
       conceptoBanco: String(m.bank_concept ?? ''), conceptoLimpio: String(m.clean_concept || m.bank_concept || ''),
+      contraparte: s(m.counterparty), tipo: s(m.movement_type),
       estado: m.status as MovimientoBanco['estado'], confianza: (s(m.confidence) as MovimientoBanco['confianza']) ?? null, porque: s(m.reason),
       propuesta: (m.proposal as PropuestaGuardada | null) ?? null,
       casado: vivo ? {
@@ -208,7 +210,18 @@ export async function facturasPendientes(companyId: string): Promise<FacturaPend
     terceroId: s(f.tercero_id), cuentaTercero: s(f.cuenta_tercero) })).filter((f) => f.pendienteCent > 0)
 }
 
+/** B02 · Las facturas que se pueden casar (aprobadas y en revisión, sin pagar del todo), para el panel lateral. */
+export async function facturasParaCasar(companyId: string): Promise<FacturaParaCasar[]> {
+  const filas = await rpc<Fila[]>('bank_facturas_para_casar', { p_company: companyId })
+  return (filas ?? []).map((f) => ({ id: String(f.id), numero: s(f.numero), fecha: String(f.fecha ?? ''), totalCent: cent(f.total), pagadoCent: cent(f.pagado),
+    proveedor: String(f.proveedor ?? ''), alias: ((f.alias as string[] | null) ?? []).filter(Boolean), terceroId: s(f.tercero_id), cuentaTercero: s(f.cuenta_tercero),
+    enRevision: f.estado === 'en_revision' }))
+}
+
 // ── Lo que hace la persona ─────────────────────────────────────────────────
+
+/** B02 · «Es el mismo» (se aparta, no cuenta dos veces) o «Son dos» (se queda como uno más). */
+export const resolverRepetido = (movimientoId: string, esElMismo: boolean) => rpc<void>('bank_repetido_resolver', { p_movement: movimientoId, p_es_el_mismo: esElMismo })
 
 export const guardarTarjeta = (bancoId: string, t: { id?: string | null; ultimos4: string; titular: string; localId: string | null; comun: boolean }) =>
   rpc<string>('bank_tarjeta_guardar', { p_treasury: bancoId, p_id: t.id ?? null, p_last4: t.ultimos4, p_titular: t.titular, p_local: t.localId, p_comun: t.comun })

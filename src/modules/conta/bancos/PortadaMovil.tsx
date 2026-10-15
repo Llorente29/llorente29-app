@@ -11,17 +11,18 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { rutaBancos } from '@/config/navegacion'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { useLeer } from '@/modules/conta/libros/contexto'
-import { estadoBanco, filaDe, nombreCorto, resumenFilas, ultimosIban } from '@/modules/conta/lib/bancosVista'
+import { estadoBanco, nombreCorto, ultimosIban } from '@/modules/conta/lib/bancosVista'
+import { cuadreDe } from '@/modules/conta/lib/conciliarVista'
 import { leerMovimientos } from '@/modules/conta/services/bancosPantallas'
 import { useBancos } from '@/modules/conta/bancos/contexto'
-import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
-export function PortadaMovil({ casadosSolos }: { casadosSolos: number }) {
+export function PortadaMovil() {
   const { accountId, banco, mes, datos, vuelta, elegirBanco, subir } = useBancos()
   const [query] = useSearchParams()
   const lectura = useLeer(banco ? () => leerMovimientos(accountId, banco.id, mes) : null, `${banco?.id}:${mes}:${vuelta}`)
   const movs = useMemo(() => lectura.datos ?? [], [lectura.datos])
-  const filas = useMemo(() => movs.map(filaDe), [movs])
+  // Las mismas cuentas que Movimientos (cuadreDe): la portada no puede decir otra cosa.
+  const c = useMemo(() => cuadreDe(movs, null, null, mes), [movs, mes])
   const ir = (vista: string, extra: Record<string, string> = {}) => {
     const p = new URLSearchParams(query)
     for (const [k, v] of Object.entries(extra)) p.set(k, v)
@@ -32,14 +33,13 @@ export function PortadaMovil({ casadosSolos }: { casadosSolos: number }) {
   if (lectura.error) return <ErrorConReintento mensaje={lectura.error} reintentar={lectura.recargar} />
   if (!lectura.datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando los bancos">{[0, 1, 2].map((i) => <Hueso key={i} alto={56} />)}</div>
 
-  const deFolvy = movs.filter((m) => m.estado === 'casado' && m.casado?.porQuien === 'folvy').length
-  const r = resumenFilas(filas, mes, deFolvy)
+  const r = { paraConfirmar: c.cuenta.confirmar, porAclarar: c.cuenta.aclarar, casados: c.cuenta.casados, frase: c.frase, seguros: c.preseleccionados.length }
   const tarjetas = datos.bancos.reduce((t, b) => t + b.tarjetas.length, 0)
 
   const apartados: { vista: string; extra?: Record<string, string>; titulo: string; resumen: string; ambar?: boolean }[] = [
     { vista: 'movimientos', extra: { ver: 'confirmar' }, titulo: 'Para confirmar', resumen: r.paraConfirmar ? `${r.paraConfirmar} · un «Sí» cada uno` : 'Nada por confirmar', ambar: r.paraConfirmar > 0 },
     { vista: 'movimientos', extra: { ver: 'aclarar' }, titulo: 'Por aclarar', resumen: r.porAclarar ? `${r.porAclarar} · te digo qué falta` : 'Nada por aclarar', ambar: r.porAclarar > 0 },
-    { vista: 'hecho', titulo: LO_HECHO, resumen: `${casadosSolos} casados solos este mes, vivos · con deshacer` },
+    { vista: 'movimientos', extra: { ver: 'casados' }, titulo: 'Casados solos', resumen: `${r.casados} este mes · se abren y se deshacen desde aquí` },
     { vista: 'reglas', titulo: 'Reglas', resumen: `${datos.reglas.activas} ${datos.reglas.activas === 1 ? 'regla' : 'reglas'}${datos.reglas.nuevas ? ` · ${datos.reglas.nuevas} nuevas` : ''}` },
     { vista: 'cuentas', titulo: 'Cuentas y extractos', resumen: `${datos.bancos.length} ${datos.bancos.length === 1 ? 'cuenta' : 'cuentas'} · ${tarjetas} ${tarjetas === 1 ? 'tarjeta' : 'tarjetas'}` },
     { vista: 'cierre', titulo: 'Cierre del mes', resumen: 'El saldo del banco frente al de contabilidad' },
@@ -61,7 +61,7 @@ export function PortadaMovil({ casadosSolos }: { casadosSolos: number }) {
 
       <div className="cxb-botones-grandes">
         <button type="button" className="cx-boton-sec" onClick={() => subir()}>Subir extracto</button>
-        <Link to={ir('movimientos', { ver: 'confirmar' })} className="cx-boton">Confirmar {r.paraConfirmar || ''}</Link>
+        <Link to={ir('movimientos', { ver: 'confirmar' })} className="cx-boton">{r.seguros ? `Confirmar los ${r.seguros} seguros` : `Confirmar ${r.paraConfirmar || ''}`}</Link>
       </div>
 
       <div className="cxb-cifras cxb-cifras-movil">
