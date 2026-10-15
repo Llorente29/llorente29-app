@@ -1,0 +1,13 @@
+# PREPARADA, NO VIVA. La tanda del B01 «nunca una tarjeta entera» (Julio, 15/10).
+# Va DESPUÉS de la de la C (la fila de C0008): cuando la C la tenga aplicada,
+# este contenido pasa a supabase/produccion/aplicar.txt (y su vuelta atrás a
+# vuelta-atras.txt), se vuelve a medir el contexto y se dan los valores.
+#
+#   1. 20261101T0190 — el disparador bank_movement_sin_tarjetas y sus funciones:
+#      desde aquí la base solo guarda las 4 últimas («····1234»). Cambia en
+#      caliente bank_movement (declarado, con prueba de staging).
+#   2. 20261101T0191 — lo ya guardado: 10 movimientos de Foodint (16 cifras que
+#      pasan Luhn). Update: pide «autorizo». Para si queda alguna.
+cuenta: scripts/conta/produccion/cuentas/tarjeta-oculta.sql
+supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql
+supabase/migrations/20261101T0191_b01_tarjeta_oculta_guardado.sql

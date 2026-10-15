@@ -1,0 +1,24 @@
+{
+ "_que": "B01 · contexto de producción de la tanda «nunca una tarjeta entera» (0190 y 0191), medido en SOLO LECTURA el 15/10 a las 07:37 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna de las tres funciones existe; bank_movement no está en el camino del pedido.",
+ "medido": "2026-10-15T07:37Z",
+ "tanda": {
+  "supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql": "7849b6c47f23c2fa23db55afe53de350",
+  "supabase/migrations/20261101T0191_b01_tarjeta_oculta_guardado.sql": "c59f5bc7741089d6614715ce3e25aec9"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_movement"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.bank_movement": 298
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -973,6 +973,36 @@ describe('la tanda del B01 (aplicada el 14/10, su copia): Bancos y conciliación
   })
 })
 
+describe('la tanda SIGUIENTE del B01 (preparada, después de la de la C): nunca una tarjeta entera (0190 y 0191)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-b01-tarjeta-preparada.txt'
+  const tanda = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 15/10 a las 07:37 UTC para ESTOS ficheros.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-b01-tarjeta-preparada.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(tanda, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('la 0190 sigue (cambia bank_movement, declarado y con prueba); la 0191 pide «autorizo» (update)', () => {
+    expect(tanda).toEqual(['supabase/migrations/20261101T0190_b01_tarjeta_oculta.sql', 'supabase/migrations/20261101T0191_b01_tarjeta_oculta_guardado.sql'])
+    expect(r.ficheros).toEqual({ [tanda[0]]: 'sigue', [tanda[1]]: 'autorizo' })
+  })
+  it('la 0191 para si queda alguna tarjeta entera', () => {
+    expect(readFileSync(tanda[1], 'utf8')).toMatch(/if n > 0 then raise exception/)
+  })
+  it('declara qué cuenta, y lo que cuenta lo repone la vuelta atrás (no las tarjetas: no se devuelven)', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/tarjeta-oculta.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+    expect(readFileSync(cuentas[0], 'utf8')).not.toMatch(/luhn/i)
+  })
+  it('su vuelta atrás, al revés: la 0191 no devuelve nada y la 0190 quita el disparador y sus funciones', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-b01-tarjeta-preparada.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261101T0191_b01_tarjeta_oculta_guardado.down.sql', 'supabase/vuelta-atras/20261101T0190_b01_tarjeta_oculta.down.sql'])
+    expect(readFileSync(atras[0], 'utf8').replace(/--.*$/gm, '').trim()).toBe('select 1;')
+    expect(readFileSync(atras[1], 'utf8')).toMatch(/drop trigger if exists bank_movement_sin_tarjetas/)
+  })
+})
+
 describe('lo que tiene que parar', () => {
   const sup = (sql: string) => decidir(sentencias(sql).flatMap((s: string) => clasificar(s)), existe)
   it('borrar o renombrar algo existente', () => {

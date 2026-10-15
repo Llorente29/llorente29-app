@@ -138,6 +138,38 @@ export function huellas(movs: readonly MovimientoLeido[]): string[] {
   return conOrden(movs, (m) => [m.fecha, m.importeCent, m.numeroDocumento ?? '', m.referencia1 ?? '', m.referencia2 ?? ''].join('|'))
 }
 
+// ── Nunca una tarjeta entera (15/10) ──────────────────────────────────────────
+// Una tira de 13 a 19 cifras, sin cifras pegadas a los lados, que pasa Luhn,
+// se guarda solo con sus 4 últimas: «····1234». Las que no pasan Luhn
+// (referencias de recibos y transferencias) se quedan. La base hace lo mismo
+// con un disparador (20261101T0190), para lo que llegue por otro camino.
+
+/** ¿Pasa el control de Luhn? (solo cifras, de 13 a 19). */
+export function pasaLuhn(cifras: string): boolean {
+  if (!/^\d{13,19}$/.test(cifras)) return false
+  let suma = 0
+  for (let i = 0; i < cifras.length; i++) {
+    let d = Number(cifras[cifras.length - 1 - i])
+    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9 }
+    suma += d
+  }
+  return suma % 10 === 0
+}
+
+/** El texto con cada tarjeta entera reducida a «····» y sus 4 últimas. */
+export function ocultarTarjetas(texto: string): string
+export function ocultarTarjetas(texto: string | null): string | null
+export function ocultarTarjetas(texto: string | null): string | null {
+  if (texto === null) return null
+  return texto.replace(/(?<!\d)\d{13,19}(?!\d)/g, (t) => (pasaLuhn(t) ? `····${t.slice(-4)}` : t))
+}
+
+/** El movimiento tal y como se guarda: sin tarjetas enteras en el concepto, el documento ni las referencias. */
+export function movimientoSinTarjetas(m: MovimientoLeido): MovimientoLeido {
+  return { ...m, conceptoBanco: ocultarTarjetas(m.conceptoBanco), numeroDocumento: ocultarTarjetas(m.numeroDocumento),
+    referencia1: ocultarTarjetas(m.referencia1), referencia2: ocultarTarjetas(m.referencia2) }
+}
+
 /**
  * La huella SUAVE: solo fecha, importe y orden. Sirve para cazar el mismo
  * movimiento traído por dos caminos que no dan las mismas referencias (un Excel

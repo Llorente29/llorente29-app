@@ -16,7 +16,7 @@
 //                        aclarar con su porqué (bank_proponer).
 //   confirmar / deshacer lo que hace la persona.
 
-import { cuadrar, huellas, huellasSuaves, limpiarConcepto, resumenLectura, type Cuadre, type ExtractoLeido } from '@/modules/conta/lib/extractoBanco'
+import { cuadrar, huellas, huellasSuaves, limpiarConcepto, movimientoSinTarjetas, resumenLectura, type Cuadre, type ExtractoLeido } from '@/modules/conta/lib/extractoBanco'
 import { leerFicheroBanco, type ContenidoFichero } from '@/modules/conta/lib/fuentesBanco'
 import { partirCsv } from '@/modules/conta/lib/importarPlan'
 import type { BancoCsv } from '@/modules/conta/lib/lectorCsvBanco'
@@ -127,8 +127,10 @@ export function crearBancos(bd: Bd) {
     for (const [i, c] of e.cuentas.entries()) {
       const banco = asignacion[i]
       if (!banco) continue
-      const hs = huellas(c.movimientos), ss = huellasSuaves(c.movimientos)
-      const movs = c.movimientos.map((m, j) => ({
+      // Nunca una tarjeta entera (15/10): ni en lo que se guarda ni en la huella.
+      const leidos = c.movimientos.map(movimientoSinTarjetas)
+      const hs = huellas(leidos), ss = huellasSuaves(leidos)
+      const movs = leidos.map((m, j) => ({
         fecha: m.fecha, fecha_valor: m.fechaValor, importe: m.importeCent / 100, concepto_banco: m.conceptoBanco, concepto_limpio: limpiarConcepto(m.conceptoBanco),
         comun: m.conceptoComun, propio: m.conceptoPropio, documento: m.numeroDocumento, ref1: m.referencia1, ref2: m.referencia2,
         ...(m.equivalencia ? { divisa_origen: m.equivalencia.divisa, importe_origen: m.equivalencia.importeCent / 100 } : {}),
