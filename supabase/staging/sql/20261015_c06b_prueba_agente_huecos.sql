@@ -15,10 +15,13 @@
 --   1. con esos tramos, 0 huecos (y la regla de antes habría dado 566);
 --   2. si Folvy se salta dos números después del último traído, el agente los
 --      ve, y solo esos dos.
--- El agente se lee del MISMO fichero que corre cada noche (\set con cat).
+-- El agente es el MISMO fichero que corre cada noche, ejecutado entero con \i
+-- y leído como lo lee el workflow (sin alinear y sin cabeceras): lleva \gset y
+-- \if, así que no se puede pegar dentro de un «create table as».
 
 begin;
-\set agente `cat scripts/conta/agente-libro.sql`
+\pset format unaligned
+\pset tuples_only on
 
 -- Los traídos se escriben como los escribe el importador: validados, con su
 -- programa de origen y fuera de la cadena de Folvy. Con los disparadores
@@ -50,7 +53,11 @@ begin
    where g <= 431 or g >= 998;
 end $$;
 
-create temp table con_tramos on commit drop as :agente
+\o /tmp/agente_huecos_con_tramos.json
+\i scripts/conta/agente-libro.sql
+\o
+\set salida `cat /tmp/agente_huecos_con_tramos.json`
+create temp table con_tramos on commit drop as select :'salida'::json j;
 
 do $$
 declare
@@ -73,7 +80,11 @@ end $$;
 update public.journal_entry set number = 1803
  where company_id = '3b34403a-a7d6-4a48-a8d7-737e8cababdc' and series = 1 and number = 1801;
 
-create temp table con_salto on commit drop as :agente
+\o /tmp/agente_huecos_con_salto.json
+\i scripts/conta/agente-libro.sql
+\o
+\set salida `cat /tmp/agente_huecos_con_salto.json`
+create temp table con_salto on commit drop as select :'salida'::json j;
 
 do $$
 declare
