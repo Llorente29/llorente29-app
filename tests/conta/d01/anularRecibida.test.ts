@@ -5,7 +5,7 @@
 // nombres inventados.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { enviarContraasientoRecibidaADiez, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from '../../../supabase/functions/_shared/diezEnviar'
+import { autorizacionCubre, enviarContraasientoRecibidaADiez, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from '../../../supabase/functions/_shared/diezEnviar'
 import { facturaRecibida, facturaRecibidaQueAnula } from '../../../supabase/functions/_shared/diezRecibida'
 import { MAX_INTENTOS, type Factura, type FacturaData } from '../../../supabase/functions/_shared/diezCliente'
 
@@ -47,10 +47,12 @@ function diez(o: { facturas?: Factura[]; falla?: boolean } = {}): Diez {
   return d
 }
 
-type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string }
+// Lo que Julio autoriza (conta_diez_autorizo): recibidas = incluye_recibidas (0740).
+type Autorizo = { alcance: 'asiento' | 'empresa'; entry?: string; bd: string; desde?: string; recibidas?: boolean }
 function puerto(o: { r?: RecibidaBD; orig?: EnvioFila | null; bd?: string | null; d?: Diez; autorizados?: Autorizo[]; previo?: EnvioFila | null; ahora?: string } = {}) {
   const filas = new Map<string, EnvioFila | null>([['r1', o.orig === undefined ? enviada() : o.orig], ['c1', o.previo ?? null]])
   const llamadas = { conexion: 0, cliente: 0, guardar: 0 }
+  const pedidos: { id: string; fecha: string; tipo: string }[] = []
   const d = o.d ?? diez()
   const p: PuertoEnvio & { recibida(id: string): Promise<RecibidaBD> } = {
     resumen: async () => { throw new Error('una recibida no tiene resumen de ventas') },
@@ -58,14 +60,19 @@ function puerto(o: { r?: RecibidaBD; orig?: EnvioFila | null; bd?: string | null
     envio: async (id) => filas.get(id) ?? null,
     guardar: async (f) => { llamadas.guardar++; const g = { ...f, id: f.id ?? 's-c1' }; filas.set(String(f.entry_id), g); return g },
     conexion: async () => { llamadas.conexion++; return o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009', adjuntar: true } },
-    autorizado: async (id, _emp, bd) => (o.autorizados ?? []).some((a) => a.bd.toUpperCase() === bd.toUpperCase() && (a.alcance === 'empresa' || a.entry === id)),
+    // La misma decisión que la función (autorizacionCubre), con su fecha y su tipo; se apunta qué se ha pedido.
+    autorizado: async (id, _emp, bd, fecha, tipo) => {
+      pedidos.push({ id, fecha, tipo })
+      return autorizacionCubre((o.autorizados ?? []).filter((a) => a.bd.toUpperCase() === bd.toUpperCase())
+        .map((a) => ({ alcance: a.alcance, entry_id: a.entry ?? null, desde: a.desde ?? null, incluye_recibidas: a.recibidas ?? false })), id, fecha, tipo)
+    },
     cliente: async () => { llamadas.cliente++; return d },
     documento: async () => { throw new Error('un contraasiento no lleva PDF') },
     sha256: async (b) => sha(b),
     correspondencia: () => null,
     ahora: () => new Date(o.ahora ?? '2026-10-14T10:00:00Z'),
   }
-  return { p, d, llamadas, get envio() { return filas.get('c1') ?? null } }
+  return { p, d, llamadas, pedidos, get envio() { return filas.get('c1') ?? null } }
 }
 
 describe('facturaRecibidaQueAnula: la recibida con «-ANUL», como las ventas', () => {
@@ -165,9 +172,9 @@ describe('enviarContraasientoRecibidaADiez: la anulación de una recibida, a Die
     }
   })
 
-  it('C0008 autorizada para la recibida que anula, o para el contraasiento: se escribe', async () => {
+  it('C0008 autorizada (con incluye_recibidas) para la recibida que anula, o para el contraasiento: se escribe', async () => {
     for (const entry of ['r1', 'c1']) {
-      const t = puerto({ bd: 'C0008', autorizados: [{ alcance: 'asiento', entry, bd: 'C0008' }] })
+      const t = puerto({ bd: 'C0008', autorizados: [{ alcance: 'asiento', entry, bd: 'C0008', recibidas: true }] })
       expect(await enviarContraasientoRecibidaADiez(contra(), t.p)).toMatchObject({ estado: 'en_diez', documento: 3190 })
     }
   })
@@ -203,5 +210,32 @@ describe('enviarContraasientoRecibidaADiez: la anulación de una recibida, a Die
     const x = await enviarContraasientoRecibidaADiez(contra(), viejo.p)
     expect(x.estado === 'no_llega' && x.motivo).toMatch(/más de 12 meses/)
     expect(viejo.llamadas.cliente).toBe(0)
+  })
+
+  it('0740 · SIN incluye_recibidas NO ESCRIBE: ni la de empresa, ni la de la recibida, ni la del contraasiento; y lo dice', async () => {
+    for (const a of [{ alcance: 'empresa' }, { alcance: 'asiento', entry: 'r1' }, { alcance: 'asiento', entry: 'c1' }] as Autorizo[]) {
+      const t = puerto({ bd: 'C0008', autorizados: [{ ...a, bd: 'C0008' }] })
+      const x = await enviarContraasientoRecibidaADiez(contra(), t.p)
+      expect(x).toMatchObject({ estado: 'no_llega', motivo: 'Diez real está cerrado para facturas recibidas (C0008): no se escribe nada hasta que Julio las autorice' })
+      expect(t.llamadas.cliente).toBe(0)
+      expect(t.d.altas).toEqual([])
+      expect(t.pedidos.every((q) => q.tipo === 'recibidas')).toBe(true)
+    }
+  })
+
+  it('0740 · la de empresa CON incluye_recibidas abre, desde su «desde» con la fecha de la RECIBIDA que anula (no la del contraasiento)', async () => {
+    const abre = puerto({ bd: 'C0008', autorizados: [{ alcance: 'empresa', bd: 'C0008', recibidas: true, desde: '2026-10-01' }] })
+    expect(await enviarContraasientoRecibidaADiez(contra(), abre.p)).toMatchObject({ estado: 'en_diez', documento: 3190 })
+    expect(abre.pedidos[0]).toEqual({ id: 'c1', fecha: '2026-10-13', tipo: 'recibidas' })
+    // La recibida es del 13/10 y el contraasiento del 14/10: una autorización desde el 14 no la cubre.
+    const cerrada = puerto({ bd: 'C0008', autorizados: [{ alcance: 'empresa', bd: 'C0008', recibidas: true, desde: '2026-10-14' }] })
+    expect(await enviarContraasientoRecibidaADiez(contra(), cerrada.p)).toMatchObject({ estado: 'no_llega' })
+    expect(cerrada.d.altas).toEqual([])
+  })
+
+  it('0740 · C0001, ni con incluye_recibidas', async () => {
+    const t = puerto({ bd: 'C0001', autorizados: [{ alcance: 'empresa', bd: 'C0001', recibidas: true }] })
+    expect(await enviarContraasientoRecibidaADiez(contra(), t.p)).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(t.llamadas.cliente).toBe(0)
   })
 })
