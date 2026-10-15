@@ -7,13 +7,14 @@
 // pantalla N16 «Libros › Con Diez», cuando toque.
 
 import { MARCA } from '../cuenta/marca'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaLibros } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
-import { resumenSeleccion, textoResultado, type ConDiez, type EstadoDiez, type PasoEnvio } from '@/modules/conta/lib/conDiez'
+import { resumenSeleccion, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
+import { textoVarios, type PasoVarios } from '@/modules/conta/lib/enviarVarios'
 import { urlDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 
 export interface CandidatoDiez { id: string; concepto: string; fecha: string; estado: string; cobro: number; estadoDiez: EstadoDiez }
@@ -79,31 +80,41 @@ export function TarjetaDiez({ a, d, e, quien, alHacer, alFallar }: {
 /**
  * «Validar y enviar a Diez»: varios a la vez. Antes de enviar, cuántos y el
  * total (lo que cobra la plataforma); después, qué ha pasado con cada uno.
+ * Van por fecha y se para en el primero que se valida y no llega a Diez: lo
+ * demás queda como estaba (respuesta 8, tarea 1b).
  */
 export function EnviarADiezDialogo({ candidatos, quien, alCerrar, alTerminar }: {
   candidatos: CandidatoDiez[]; quien: string | null; alCerrar: () => void; alTerminar: (t: string) => void
 }) {
   const [marcados, setMarcados] = useState<Set<string>>(() => new Set(candidatos.filter((c) => c.estado !== 'validado').map((c) => c.id)))
   const [paso, setPaso] = useState<number | null>(null)
-  const [pasos, setPasos] = useState<PasoEnvio[] | null>(null)
+  const [pasos, setPasos] = useState<PasoVarios[] | null>(null)
   const elegidos = candidatos.filter((c) => marcados.has(c.id))
   const r = resumenSeleccion(elegidos.map((c) => ({ importe: c.cobro })))
   const cambiar = (id: string) => setMarcados((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n })
+
+  // Mientras va, cerrar la página lo corta a medias: el navegador lo pregunta.
+  useEffect(() => {
+    if (paso === null) return
+    const aviso = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', aviso)
+    return () => window.removeEventListener('beforeunload', aviso)
+  }, [paso])
 
   async function ir() {
     setPaso(0)
     const p = await validarYEnviar(elegidos, quien, setPaso)
     setPasos(p); setPaso(null)
-    alTerminar(textoResultado(p))
+    alTerminar(textoVarios(p))
   }
 
   if (pasos) {
     return (
       <Dialogo titulo="Validar y enviar a Diez · hecho" alCerrar={alCerrar}>
-        <p role="status"><strong>{textoResultado(pasos)}</strong></p>
+        <p role="status"><strong>{textoVarios(pasos)}</strong></p>
         <ul className="cxd-diez-lista">
           {pasos.map((p, i) => (
-            <li key={i} className={p.enDiez && !p.pdfPendiente ? 'cxt-verde' : p.enDiez ? undefined : 'cxt-ambar'}><strong>{p.concepto}</strong> · {p.texto}</li>
+            <li key={i} className={p.sinTocar ? 'cx-ayuda' : p.enDiez && !p.pdfPendiente ? 'cxt-verde' : p.enDiez ? undefined : 'cxt-ambar'}><strong>{p.concepto}</strong> · {p.texto}</li>
           ))}
         </ul>
         <div className="cxd-dialogo-acciones"><button type="button" className="cx-boton" onClick={alCerrar}>Cerrar</button></div>
@@ -112,7 +123,7 @@ export function EnviarADiezDialogo({ candidatos, quien, alCerrar, alTerminar }: 
   }
   return (
     <Dialogo titulo="Validar y enviar a Diez" alCerrar={() => { if (paso === null) alCerrar() }}>
-      <p className="cx-ayuda">Cada asiento se valida, se guarda su «Resumen de ventas» en {MARCA.nombre} y se envía a Diez con su factura. Sin el documento adjunto en Diez no se da por enviado.</p>
+      <p className="cx-ayuda">Cada asiento se valida con su «Resumen de ventas» guardado en {MARCA.nombre} y se envía a Diez con su factura. Van por fecha, uno detrás de otro. Si uno se valida y no llega a Diez, se para ahí y los siguientes se quedan como están.</p>
       <ul className="cxd-diez-lista" aria-label="Asientos para validar y enviar">
         {candidatos.map((c) => (
           <li key={c.id}>
@@ -125,6 +136,7 @@ export function EnviarADiezDialogo({ candidatos, quien, alCerrar, alTerminar }: 
         ))}
       </ul>
       <p role="status"><strong>{r.n} {r.n === 1 ? 'asiento' : 'asientos'} · {eurosExactos(r.total)}</strong> en total, lo que cobran las plataformas.</p>
+      {paso !== null && <p className="cxt-ambar" role="note">No cierres esta página hasta que acabe: si se corta, lo que falte se queda sin enviar.</p>}
       <div className="cxd-dialogo-acciones">
         <button type="button" className="cx-boton-sec" onClick={alCerrar} disabled={paso !== null}>Cancelar</button>
         <button type="button" className="cx-boton" onClick={ir} disabled={paso !== null || r.n === 0}>
