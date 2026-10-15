@@ -1,9 +1,6 @@
-# E05 · Tarea 5 — la pantalla de Catcher (rama conta/d01-catcher).
-#   0100 otra vez: una factura que reparte entre tiendas, todas con local, es
-#         segura (un rider reparte para las dos; no es un problema). Su prueba.
-#   La semilla de la e2e y sus capturas (cuenta A, todo inventado): Riders en
-#   la 41000100, Catcher con su 410, la 40700001 «Saldo prepago Catcher», las
-#   tiendas → local y la tarifa desde el 01/09/2026. Se puede volver a lanzar.
-supabase/migrations/20261112T0100_e05_lotes.sql
-supabase/staging/sql/20261112_e05_lotes_prueba.sql
-supabase/seeds/conta/seed_e05_staging.sql
+# D01 · Liquidaciones por correo · T1 (rama conta/d01-liquidaciones-uber).
+#   La base: la dirección liquidaciones-<empresa>@, el mapa de tiendas de las
+#   plataformas, las columnas del resumen de Uber, la factura de comisión sin
+#   número y conta_liquidacion_registrar. Y su prueba (todo en ROLLBACK).
+supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql
+supabase/staging/sql/20261113_d01_liquidaciones_prueba.sql
