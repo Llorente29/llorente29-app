@@ -49,9 +49,9 @@ function vigilar(page: Page): string[] {
   return errores
 }
 
-/** Ningún texto de lo nuevo nombra la marca. */
-async function sinMarca(page: Page, donde: string) {
-  const texto = await page.locator('.cx-principal').innerText()
+/** Ningún texto de lo nuevo nombra la marca. Solo lo nuevo: el resto de Documentos la enseña fuera de ?marca=contabilidad, a propósito. */
+async function sinMarca(page: Page, donde: string, dentro = '.cx-principal') {
+  const texto = await page.locator(dentro).innerText()
   expect(texto.split('\n').filter((l) => /folvy|sumied/i.test(l)).slice(0, 5), `la marca en ${donde}`).toEqual([])
 }
 
@@ -90,7 +90,7 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   })))
   await expect(bloque.getByText(/^2\.ª quincena de septiembre de 2026 · 5 facturas · 54,69 €$/)).toBeVisible({ timeout: 30_000 })
   await expect(bloque.getByText('3 de riders · 1 de flotas · 1 de Catcher · 19 pedidos en el Excel')).toBeVisible()
-  await sinMarca(page, 'Documentos con la quincena leída')
+  await sinMarca(page, 'Documentos con la quincena leída', 'section.cxk-quincena')
   await capturar(page, 'catcher-leida')
 
   // 2 · Subir y cruzar: dice lo que ha hecho (o que ya estaba).
