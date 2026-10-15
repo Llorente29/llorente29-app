@@ -53,9 +53,10 @@ async function borrarRestos(s: Sesion) {
 }
 
 async function cambiarA(page: Page, nombre: RegExp) {
-  // M01: la empresa va arriba, en la barra del marco (en el móvil, Ajustes aún
-  // lleva su cabecera debajo: la de arriba es la primera).
-  await page.getByRole('button', { name: /Cambiar de empresa/ }).first().click()
+  // M01: la empresa va arriba, en la barra del marco, también en el móvil (y
+  // solo ahí: Ajustes ya no repite la suya). Un solo botón.
+  await expect(page.getByRole('button', { name: /Cambiar de empresa/ })).toHaveCount(1)
+  await page.getByRole('button', { name: /Cambiar de empresa/ }).click()
   await page.getByRole('list', { name: 'Tus empresas' }).getByRole('button', { name: nombre }).click()
 }
 
@@ -70,7 +71,7 @@ test('cambiar de empresa, rechazar una sugerencia y cambiar un dato que puso la 
     await page.goto('/conta/ajustes')
     await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible()
 
-    // Cambiar de empresa (en el móvil, la cabecera sale arriba del índice de Ajustes porque hay dos).
+    // Cambiar de empresa (M01: arriba, en la barra del marco, en los dos tamaños).
     await cambiarA(page, new RegExp(escapar(nombre)))
     const sugerencia = page.getByRole('region', { name: 'Lo que propone Folvy' })
     await expect(sugerencia.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toBeVisible()
