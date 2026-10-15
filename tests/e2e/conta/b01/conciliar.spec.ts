@@ -123,11 +123,11 @@ test.describe('B02 · Bancos, conciliar', () => {
       await expect(bloque).toContainText('3 seguros seleccionados')
       await expect(bloque.getByRole('button', { name: 'Confirmar los 3' })).toBeVisible()
       const recargas = page.locator('.cxc-fila', { hasText: 'RECARGA MONEDERO INVENTADO' })
-      await expect(recargas).toHaveCount(1)
+      await capturar(page, 'conciliar')
+      await expect(recargas, `Las filas: ${(await page.locator('.cxc-fila').allTextContents()).join(' ‖ ').slice(0, 900)}`).toHaveCount(1)
       await expect(recargas).toContainText('3 iguales')
       await expect(recargas.locator('.cxc-pildora', { hasText: 'Regla' })).toBeVisible()
       await expect(recargas.getByRole('button', { name: 'Confirmar las 3' })).toBeVisible()
-      await capturar(page, 'conciliar')
 
       // La casilla quita: ya no son «los seguros».
       await recargas.getByRole('checkbox').uncheck()
@@ -195,6 +195,7 @@ test.describe('B02 · Bancos, conciliar', () => {
       await page.getByRole('link', { name: 'Confirmar los 3 seguros' }).click()
       await expect(page.getByRole('region', { name: 'Confirmar en bloque' }).getByRole('button', { name: 'Confirmar los 3 seguros' })).toBeVisible()
       await capturar(page, 'conciliar')
+      await expect(page.locator('.cxc-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }), `Las filas: ${(await page.locator('.cxc-fila').allTextContents()).join(' ‖ ').slice(0, 900)}`).toHaveCount(1)
       await page.locator('.cxc-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).locator('.cxc-quien').click()
       await expect(page.getByRole('dialog')).toContainText('Lo que dice el banco, tal cual')
       await capturar(page, 'panel')
