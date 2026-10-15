@@ -3,6 +3,6 @@
 #         «Saldo prepago Catcher», en la serie de tesorería), conta_catcher_saldo,
 #         supplier_balance_check y conta_catcher_saldo_comprobar. Solo añade.
 #   (0100, 0110 y 0120 ya están en staging: runs 38707858478 y 38713804585.)
-#   La prueba, en una transacción con ROLLBACK.
+#   La prueba, en una transacción con ROLLBACK. 2.º intento: la 40700001 cuelga de la hoja 407 (no 4070).
 supabase/migrations/20261112T0130_e05_pago_prepago.sql
 supabase/staging/sql/20261112_e05_pago_prueba.sql

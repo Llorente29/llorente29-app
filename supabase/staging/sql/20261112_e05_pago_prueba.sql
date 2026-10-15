@@ -34,7 +34,7 @@ begin
     raise exception 'PRUEBA E05 pago · 0: falta el pago del lote, el saldo o su comprobación.';
   end if;
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source, created_by_name)
-  select v_acc, v_e, plan, '40700001', '4070', 'Saldo prepago Catcher', 'own', 'manual', 'Prueba E05' from public.company_account where company_id = v_e limit 1
+  select v_acc, v_e, plan, '40700001', '407', 'Saldo prepago Catcher', 'own', 'manual', 'Prueba E05' from public.company_account where company_id = v_e limit 1
   on conflict do nothing;
   raise notice 'PRUEBA E05 pago · 0: el pago del lote, el saldo y su comprobación; la 40700001 «Saldo prepago Catcher».';
   select plan into v_plan from public.company_account where company_id = v_e limit 1;
