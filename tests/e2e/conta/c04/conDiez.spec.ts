@@ -27,39 +27,35 @@ async function capturar(page: Page, nombre: string) {
   expect(await loQueTapanSinPregunta(page, '.cx-principal')).toEqual([])
 }
 
-test('A · Validar y enviar a Diez: Glovo sale en la lista con su porqué, sin poder marcarse (15/10), y cancelar no toca nada', async ({ page }) => {
+test('A · Validar y enviar a Diez: antes de enviar, cuántos y cuánto; y se puede cancelar sin tocar nada', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   page.on('pageerror', (e) => console.log(`[error de la página] ${e.message}`))
   await page.goto('/conta/libros/diario')
   await expect(page.getByRole('heading', { level: 1, name: 'Libro diario' })).toBeVisible()
-  // Las ventas propuestas de A son de Glovo, que no se puede enviar todavía
-  // (una factura por tienda de Glovo y día): el botón no las cuenta.
-  const boton = page.getByRole('button', { name: /^Validar y enviar a Diez( · \d+)?$/ })
+  // Las ventas de Glovo de A están propuestas: el botón dice cuántas.
+  const boton = page.getByRole('button', { name: /^Validar y enviar a Diez · \d+$/ })
   await expect(boton).toBeVisible()
-  const t = (await boton.textContent())!
-  const n = /· (\d+)$/.test(t) ? Number(t.match(/(\d+)$/)![1]) : 0
+  const n = Number((await boton.textContent())!.match(/(\d+)$/)![1])
+  expect(n).toBeGreaterThan(0)
   await boton.click()
   const dialogo = page.getByRole('dialog', { name: 'Validar y enviar a Diez' })
   await expect(dialogo).toBeVisible()
-  await expect(dialogo.getByText(/Si uno se valida y no llega a Diez, se para ahí y los siguientes se quedan como están/)).toBeVisible()
-  // Regla 7: Glovo sale (no se esconde), sin marcar, sin poder marcarse y con su porqué.
-  const glovo = dialogo.getByRole('listitem').filter({ hasText: /Ventas Glovo · / })
-  expect(await glovo.count()).toBeGreaterThan(0)
-  await expect(glovo.first().getByRole('checkbox')).toBeDisabled()
-  await expect(glovo.first().getByRole('checkbox')).not.toBeChecked()
-  await expect(glovo.first().getByText(/No se puede enviar todavía: Glovo va en Diez con una factura por tienda de Glovo y día/)).toBeVisible()
-  // Marcados, solo los que se pueden enviar: los que contaba el botón.
+  // Una casilla por asiento, marcados los propuestos; el resumen con cuántos y el total.
   await expect(dialogo.getByRole('checkbox', { checked: true })).toHaveCount(n)
-  await expect(dialogo.getByRole('button', { name: `Validar y enviar ${n} a Diez` })).toBeVisible()
-  if (n === 0) await expect(dialogo.getByRole('button', { name: 'Validar y enviar 0 a Diez' })).toBeDisabled()
+  await expect(dialogo.getByText(new RegExp(`^${n} asientos? · [\\d.]+,\\d{2}\\s€$`))).toBeVisible()
+  await expect(dialogo.getByText(/Si uno se valida y no llega a Diez, se para ahí y los siguientes se quedan como están/)).toBeVisible()
+  await expect(dialogo.getByRole('button', { name: `Validar y enviar ${n} a Diez` })).toBeEnabled()
   await capturar(page, 'validar-y-enviar')
-  // Cancelar no valida nada: el botón sigue igual.
+  // Desmarcar uno cambia la cuenta (cuántos y cuánto, antes de enviar).
+  await dialogo.getByRole('checkbox').first().uncheck()
+  await expect(dialogo.getByRole('button', { name: `Validar y enviar ${n - 1} a Diez` })).toBeVisible()
+  // Cancelar no valida nada: el botón sigue diciendo los mismos.
   await dialogo.getByRole('button', { name: 'Cancelar' }).click()
   await expect(dialogo).toHaveCount(0)
-  await expect(page.getByRole('button', { name: t })).toBeVisible()
+  await expect(page.getByRole('button', { name: `Validar y enviar a Diez · ${n}` })).toBeVisible()
 })
 
-test('A · un asiento de ventas de Glovo: «Con Diez» dice por qué no se puede enviar todavía, y solo se ofrece validar (15/10)', async ({ page }) => {
+test('A · un asiento de ventas de Glovo: «Con Diez» dice dónde está y qué pasará al validarlo', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario?ver=revisar')
   await page.getByRole('button', { name: /Ventas Glovo · / }).first().click()
@@ -68,12 +64,11 @@ test('A · un asiento de ventas de Glovo: «Con Diez» dice por qué no se puede
   const tarjeta = page.getByRole('region', { name: 'Con Diez' })
   await expect(tarjeta).toBeVisible()
   await expect(tarjeta.getByRole('status')).toHaveText('Propuesto')
-  await expect(tarjeta.getByText(/No se puede enviar a Diez todavía: Glovo va en Diez con una factura por tienda de Glovo y día/)).toBeVisible()
-  await expect(tarjeta.getByText(/lo envía a Diez con la factura/)).toHaveCount(0)
+  await expect(tarjeta.getByText(/Al validarlo, Folvy guarda su «Resumen de ventas» y lo envía a Diez con la factura/)).toBeVisible()
   // Sin documento todavía: ni «Ver documento» ni «Reintentar».
   await expect(tarjeta.getByRole('button')).toHaveCount(0)
-  // Validar sí; «Validar y enviar a Diez», no (validar no se deshace).
+  // Los dos botones de arriba: validar solo, o validar y enviar.
   await expect(page.getByRole('button', { name: 'Validar asiento' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Validar y enviar a Diez' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Validar y enviar a Diez' })).toBeVisible()
   await capturar(page, 'asiento-con-diez')
 })

@@ -50,7 +50,7 @@
 
 import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
-import { facturaDeVentas, facturaQueAnula, PATRONES } from './diezFactura.ts'
+import { esDeLaGestoria, facturaDeVentas, facturaQueAnula, PATRONES } from './diezFactura.ts'
 import { facturaRecibida, facturaRecibidaQueAnula, type FacturaRecibida } from './diezRecibida.ts'
 import { claveNumero } from './lecturaFactura.ts'
 import { resumenDeAsiento, type ResumenBD } from './resumenDeAsiento.ts'
@@ -213,6 +213,12 @@ type Plan = {
    * como siempre: el mes de la factura y serie, número y cuenta exactos.
    */
   buscar?(): { meses: string[]; esLaMisma(f: Factura): boolean } | { motivo: string; reintentar: boolean }
+  /**
+   * 15/10 · Facturas que la gestoría metió con SU forma para lo mismo (Glovo,
+   * por tienda): si hay alguna, la de Folvy las duplicaría. No se escribe ni se
+   * enlaza (no son la misma factura) y se dice.
+   */
+  ajena?(f: Factura): boolean
 }
 
 /** Los meses AAAAMM de `desde` (AAAAMM) a `hasta` (AAAAMM), los dos incluidos. */
@@ -271,6 +277,20 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
       return { fd: facturaDeVentas({ fecha: r.fecha, local: r.local!.nombre, canal: r.canal!.slug, lineas: r.lineas.map((l) => ({ cuenta: l.cuenta, debe: Number(l.debe), haber: Number(l.haber), marca: l.marca, tipoIva: l.tipoIva })) },
         { correspondencia: corr!, nombreCliente: nombreCliente || '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura }
     },
+  }
+  // 15/10 · Glovo: la gestoría hacía una factura por tienda y día. Si mete una
+  // tarde, se reconoce por local y fecha, también en los meses de después (Diez
+  // lista por la fecha del asiento), y no se manda la de Folvy.
+  const grupo = r.local && r.canal ? corr?.localAlEnviar[r.local.nombre] : undefined
+  const ajena = grupo && r.canal ? esDeLaGestoria(r.canal.slug, grupo, r.fecha) : null
+  if (ajena) {
+    plan.ajena = ajena
+    plan.buscar = () => {
+      const plano = plan.preparar()
+      if ('motivo' in plano) return plano
+      const meses = mesesEntre(plano.mes, hoyMadrid(p.ahora()).replace(/-/g, '').slice(0, 6))
+      return { meses: meses.slice(0, MESES_BUSQUEDA_RECIBIDA), esLaMisma: (f: Factura) => String(f.Serie) === plano.serie && String(f.NumeroFactura) === plano.numero && String(f.CuentaCliente) === plano.cuenta }
+    }
   }
   return enviar(r, plan, p)
 }
@@ -395,6 +415,10 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
     const ya = [...new Map(delMes.filter(busca.esLaMisma)
       .map((f) => [`${f.Ejercicio ?? ''}|${f.Serie}|${f.Documento}`, f])).values()]
     if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${plano.numero} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
+    if (ya.length === 0 && plan.ajena) {
+      const ajenas = [...new Map(delMes.filter(plan.ajena).map((f) => [`${f.Ejercicio ?? ''}|${f.Serie}|${f.Documento}`, f])).values()]
+      if (ajenas.length) return apuntar(`la gestoría ya ha metido en Diez ${ajenas.length === 1 ? 'una factura' : `${ajenas.length} facturas`} de este local y día con su forma (${ajenas.map((f) => `${f.Serie}/${f.Documento}`).join(', ')}): no se envía la de este asiento, que las duplicaría. Míralo con la gestoría`, { account_connector_id: con.id }, false)
+    }
     const hecha = await plan.construir({ delMes, ya, diez })
     if ('motivo' in hecha) return apuntar(hecha.motivo, { account_connector_id: con.id }, hecha.reintentar)
     const fd = hecha.fd

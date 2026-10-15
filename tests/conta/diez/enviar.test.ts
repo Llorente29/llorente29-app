@@ -86,11 +86,11 @@ describe('enviarAsientoADiez (R15): los frenos', () => {
     expect(t.llamadas).toMatchObject({ conexion: 0, cliente: 0 })
     expect(t.actual).toMatchObject({ status: 'pendiente', attempts: 0, document_status: 'pendiente', last_error: 'falta el documento' })
   })
-  it('una plataforma sin su factura medida (Glovo) no se envía y dice por qué', async () => {
-    const t = puerto({ r: resumen({ canal: { id: 'c2', slug: 'glovo', nombre: 'Glovo' } }) })
+  it('una plataforma sin su factura medida no se envía y dice por qué', async () => {
+    const t = puerto({ r: resumen({ canal: { id: 'c9', slug: 'deliveroo', nombre: 'Deliveroo' } }) })
     const x = await enviarAsientoADiez('e1', t.p)
     expect(x).toMatchObject({ estado: 'no_llega', reintentar: false })
-    expect(x.estado === 'no_llega' && x.motivo).toMatch(/una factura por tienda de Glovo y día/)
+    expect(x.estado === 'no_llega' && x.motivo).toMatch(/deliveroo.*patrón de factura medido/)
     expect(t.llamadas.conexion).toBe(0)
   })
   it('sin conexión: «la conexión con Diez no está configurada»', async () => {
@@ -193,9 +193,9 @@ describe('resumenDeAsiento (R15): el PDF sale del asiento', () => {
     expect(x.datos).toMatchObject({ numeroFactura: 'UBR-FLO-20261001', asiento: 'Ventas nº 1287', tipoIva: 10, factura: { base: 30, cuota: 3, total: 33 }, cobro: 33 })
     expect(x.datos.pedidos[1]).toEqual({ hora: '14:10', codigo: 'A2', marca: 'Milanesa House', base: 10, cuota: 1, total: 11 })
   })
-  it('Glovo: sin factura de Diez, el PDF lleva el asiento y dice por qué no hay factura', () => {
-    const x = resumenDeAsiento(resumen({ canal: { id: 'c2', slug: 'glovo', nombre: 'Glovo' }, lineas: resumen().lineas.map((l) => l.cuenta === '43000002' ? { ...l, cuenta: '43000001' } : l) }), o)
-    expect(x.factura).toBeNull(); expect(x.sinFactura).toMatch(/una factura por tienda de Glovo y día/)
+  it('una plataforma sin medir: sin factura de Diez, el PDF lleva el asiento y dice por qué no hay factura', () => {
+    const x = resumenDeAsiento(resumen({ canal: { id: 'c9', slug: 'deliveroo', nombre: 'Deliveroo' } }), o)
+    expect(x.factura).toBeNull(); expect(x.sinFactura).toMatch(/deliveroo/)
     expect(x.datos.numeroFactura).toBeNull(); expect(x.nombreFichero).toBe('ResumenDeVentas_Ventas-1287.pdf')
   })
   it('el reembolso sale de sus líneas (708, 477 al debe, 430 al haber, con su documento)', () => {
@@ -544,5 +544,47 @@ describe('15/10 · si el envío se corta al hablar con Diez, queda su fila con e
     t.d.facturasDelMes = async () => { throw new Error('Diez no contesta') }
     await expect(enviarAsientoADiez('e1', t.p)).rejects.toThrow()
     expect(t.filas.some((f) => f.last_error === EN_MARCHA)).toBe(false)
+  })
+})
+
+// 15/10 · Glovo, por decisión de Julio: una factura por local y día, «GLV-<grupo>-<AAAAMMDD>».
+// La gestoría la hacía por tienda de Glovo («GLV<seis cifras>-<AAAAMMDD>», el grupo
+// en la descripción): si mete una tarde del mismo local y día, no se duplica.
+describe('Glovo por local y día (15/10)', () => {
+  const glovo = (o: Partial<ResumenBD> = {}) => resumen({ canal: { id: 'c2', slug: 'glovo', nombre: 'Glovo' }, lineas: resumen().lineas.map((l) => l.cuenta === '43000002' ? { ...l, cuenta: '43000001' } : l), ...o })
+  const SC = { '43000001': { Codigo: '43000001', Descripcion: 'GLOVO', NIF: '', NombreComercial: '' } }
+  const deLaGestoria = (o: Partial<Factura>): Factura => ({ Ejercicio: '2026', Serie: '1', Documento: 2900, TipoAsiento: 1, Fecha: 20261001, CuentaCliente: '43000001', NumeroFactura: 'GLV123456-20261001', Descripcion: 'GLOVO FLO MARCA DE PRUEBA 01/10', ...o })
+  it('sin nada de la gestoría: se da de alta «GLV-FLO-20261001», «GLOVO FLO 01/10», la 43000001', async () => {
+    const t = puerto({ r: glovo(), d: diez({ subcuentas: SC }) })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+    expect(t.d.altas[0]).toMatchObject({ NumeroFactura: 'GLV-FLO-20261001', Descripcion: 'GLOVO FLO 01/10', CuentaCliente: '43000001' })
+  })
+  it('con facturas de la gestoría del mismo local y día (por tienda): no se escribe ni se enlaza, y dice cuántas y cuáles', async () => {
+    const d = diez({ subcuentas: SC, facturas: [deLaGestoria({}), deLaGestoria({ Documento: 2901, NumeroFactura: 'GLV654321-20261001' })] })
+    const t = puerto({ r: glovo(), d })
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x).toMatchObject({ estado: 'no_llega', reintentar: false })
+    expect(x.estado === 'no_llega' && x.motivo).toMatch(/la gestoría ya ha metido en Diez 2 facturas de este local y día con su forma \(1\/2900, 1\/2901\)/)
+    expect(d.altas).toEqual([])
+  })
+  it('…también si la metió tarde (fecha de asiento de otro mes: se busca hasta hoy)', async () => {
+    const d = diez({ subcuentas: SC, facturas: [deLaGestoria({ Fecha: 20261105 })] })
+    const t = puerto({ r: glovo(), d })
+    t.p.ahora = () => new Date('2026-11-10T10:00:00Z')
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x.estado === 'no_llega' && x.motivo).toMatch(/la gestoría ya ha metido en Diez una factura de este local y día/)
+    expect(d.altas).toEqual([])
+  })
+  it('las de otro local o de otro día no cuentan: se da de alta', async () => {
+    const d = diez({ subcuentas: SC, facturas: [deLaGestoria({ Descripcion: 'GLOVO CAM MARCA 01/10' }), deLaGestoria({ Documento: 2902, NumeroFactura: 'GLV123456-20261002' })] })
+    const t = puerto({ r: glovo(), d })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez' })
+    expect(d.altas).toHaveLength(1)
+  })
+  it('si ya está la de Folvy (GLV-FLO-…), se enlaza como siempre', async () => {
+    const d = diez({ subcuentas: SC, facturas: [deLaGestoria({ NumeroFactura: 'GLV-FLO-20261001', Documento: 2950, Descripcion: 'GLOVO FLO 01/10' })] })
+    const t = puerto({ r: glovo(), d })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 2950, enlazada: true })
+    expect(d.altas).toEqual([])
   })
 })

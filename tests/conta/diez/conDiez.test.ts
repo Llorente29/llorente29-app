@@ -64,10 +64,10 @@ describe('los dos números de un asiento (15/10)', () => {
 
 // 15/10 · Antes de validar se sabe si una plataforma se puede mandar a Diez (validar no se deshace).
 describe('qué plataformas se pueden mandar hoy (15/10)', () => {
-  it('Uber y Just Eat, sí; Glovo no, con su porqué; una sin medir, lo dice', () => {
+  it('Uber, Just Eat y Glovo (por local y día desde el 15/10), sí; una sin medir, lo dice', () => {
     expect(motivoSinPatron('uber')).toBeNull()
     expect(motivoSinPatron('justeat')).toBeNull()
-    expect(motivoSinPatron('glovo')).toMatch(/una factura por tienda de Glovo y día/)
+    expect(motivoSinPatron('glovo')).toBeNull()
     expect(motivoSinPatron('deliveroo')).toBe('la plataforma «deliveroo» no tiene su patrón de factura medido en Diez')
   })
 })

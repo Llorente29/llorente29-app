@@ -50,7 +50,6 @@ const c = new ClienteDiez({
 })
 
 const v = (f: Factura, k: string) => String((f as Record<string, unknown>)[k] ?? '')
-const mes = (f: Factura) => Number(v(f, 'FechaFactura').slice(0, 6)) || Number(v(f, 'Fecha').slice(0, 6)) || 0
 try { await c.asegurarToken() } catch (e) {
   // Solo el tipo y el código: el mensaje puede llevar texto de Diez.
   const x = e as { name?: string; status?: number }

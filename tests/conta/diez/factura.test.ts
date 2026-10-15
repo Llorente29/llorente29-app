@@ -2,7 +2,7 @@
 // Importes INVENTADOS: el repositorio es público. La forma es la medida en la
 // C0009 el 13/10 (scripts/conta/diez/prueba-c0009-emitida-molde.ts).
 import { describe, expect, it } from 'vitest'
-import { facturaDeVentas, type AsientoVentas } from '../../../supabase/functions/_shared/diezFactura'
+import { esDeLaGestoria, facturaDeVentas, type AsientoVentas } from '../../../supabase/functions/_shared/diezFactura'
 import { CORRESPONDENCIA_LLORENTE29 } from '../../../supabase/functions/_shared/diezAnalitica'
 
 const L = (cuenta: string, debe: number, haber: number, marca: string | null = null, tipoIva: number | null = null) => ({ cuenta, debe, haber, marca, tipoIva })
@@ -40,8 +40,6 @@ describe('facturaDeVentas (R13): como las emitidas de Uber de Diez', () => {
   })
   it('lo que no se ha medido o no cuadra no sale: otra plataforma, otro tipo, otra 430, sin cuadrar, otras cuentas', () => {
     expect(() => facturaDeVentas({ ...uber(), canal: 'deliveroo' }, opciones)).toThrow(/patrón de factura medido/)
-    // Glovo está medido y no se manda como está: dice por qué (una factura por tienda de Glovo y día).
-    expect(() => facturaDeVentas({ ...uber(), canal: 'glovo' }, opciones)).toThrow(/una factura por tienda de Glovo y día/)
     expect(() => facturaDeVentas(uber([L('43000002', 32.1, 0), L('70000002', 0, 30, 'Meraki Pita'), L('47700021', 0, 2.1, null, 7)]), opciones)).toThrow(/otro tipo/)
     expect(() => facturaDeVentas(uber([L('43000001', 33, 0), L('70000002', 0, 30, 'Meraki Pita'), L('47700010', 0, 3, null, 10)]), opciones)).toThrow(/no es la de uber/)
     expect(() => facturaDeVentas(uber([L('43000002', 33.01, 0), L('70000002', 0, 30, 'Meraki Pita'), L('47700010', 0, 3, null, 10)]), opciones)).toThrow(/no cuadra/)
@@ -65,5 +63,24 @@ describe('Just Eat (medido en C0008 el 15/10)', () => {
   })
   it('con la 430 de otra plataforma, no', () => {
     expect(() => facturaDeVentas({ ...je(), lineas: [L('43000002', 22, 0), L('70000002', 0, 20, 'Meraki Pita'), L('47700010', 0, 2, null, 10)] }, opciones)).toThrow(/no es la de justeat/)
+  })
+})
+
+// 15/10 · Glovo (decisión de Julio): una por local y día, con la forma de Just Eat.
+describe('Glovo por local y día (15/10)', () => {
+  const gl = (local = 'Foodint Alcalá'): AsientoVentas => ({ fecha: '2026-10-01', local, canal: 'glovo',
+    lineas: [L('43000001', 22, 0), L('70000002', 0, 20, 'Meraki Pita'), L('47700010', 0, 2, null, 10)] })
+  it('«GLV-<grupo>-<AAAAMMDD>», «GLOVO <grupo> dd/mm» y la 43000001', () => {
+    expect(facturaDeVentas(gl(), opciones).factura).toMatchObject({ NumeroFactura: 'GLV-FLO-20261001', Descripcion: 'GLOVO FLO 01/10', CuentaCliente: '43000001', TotalFactura: 22 })
+    expect(facturaDeVentas(gl('Foodint Carabanchel'), opciones).factura.NumeroFactura).toBe('GLV-CAM-20261001')
+  })
+  it('la forma de la gestoría (por tienda) se reconoce por local y día', () => {
+    const es = esDeLaGestoria('glovo', 'FLO', '2026-10-01')!
+    expect(es({ Serie: '1', CuentaCliente: '43000001', NumeroFactura: 'GLV123456-20261001', Descripcion: 'GLOVO FLO MARCA 01/10' })).toBe(true)
+    expect(es({ Serie: '1', CuentaCliente: '43000001', NumeroFactura: 'GLV123456-20261002', Descripcion: 'GLOVO FLO MARCA 02/10' })).toBe(false)
+    expect(es({ Serie: '1', CuentaCliente: '43000001', NumeroFactura: 'GLV123456-20261001', Descripcion: 'GLOVO CAM MARCA 01/10' })).toBe(false)
+    expect(es({ Serie: '1', CuentaCliente: '43000001', NumeroFactura: 'GLV-FLO-20261001', Descripcion: 'GLOVO FLO 01/10' })).toBe(false)
+    expect(es({ Serie: '2', CuentaCliente: '43000001', NumeroFactura: 'GLV123456-20261001', Descripcion: 'GLOVO FLO 01/10' })).toBe(false)
+    expect(esDeLaGestoria('uber', 'FLO', '2026-10-01')).toBeNull()
   })
 })

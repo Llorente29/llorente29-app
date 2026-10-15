@@ -46,26 +46,51 @@ type Patron = { prefijoNumero: string; descripcion: string; cuentaCliente: strin
  *   · Just Eat (43000003): las 31 de agosto y septiembre, «JUS-<grupo>-<AAAAMMDD>»
  *     con la fecha de la factura y «JUST EAT <grupo> dd/mm»; una por local y día.
  *     (Las de siete cifras sueltas son de mayo a julio: la forma de antes.)
+ *   · Glovo (43000001): la gestoría la hacía por tienda de Glovo y día (ver
+ *     FORMA_GESTORIA). Julio decide (15/10) una por local y día, como Just
+ *     Eat: «GLV-<grupo>-<AAAAMMDD>» y «GLOVO <grupo> dd/mm».
  */
 export const PATRONES: Record<string, Patron> = {
   uber: { prefijoNumero: 'UBR', descripcion: 'UBER EATS', cuentaCliente: '43000002' },
   justeat: { prefijoNumero: 'JUS', descripcion: 'JUST EAT', cuentaCliente: '43000003' },
+  // Glovo, por decisión de Julio (15/10): una factura por local y día, con la
+  // forma de Just Eat. La gestoría la hacía por tienda (FORMA_GESTORIA).
+  glovo: { prefijoNumero: 'GLV', descripcion: 'GLOVO', cuentaCliente: '43000001' },
 }
 
 /**
- * Lo medido que NO se puede mandar como está, con su porqué.
- *
- * Glovo (43000001), en C0008: las 275 de agosto y septiembre son
- * «GLV<seis cifras>-<AAAAMMDD>», con la fecha de la factura. Las seis cifras
- * toman 14 valores, cada uno siempre con el mismo local: la gestoría hace UNA
- * FACTURA POR TIENDA DE GLOVO Y DÍA, no por local. El asiento de Folvy es uno
- * por local y día con todas sus marcas. Mandarlo así sería una factura que la
- * gestoría no hace (y no se encontraría al buscarla). Lo decide Julio:
- * partir el asiento por tienda de Glovo (y saber qué código es cada una) o
- * mandar uno por local con otra numeración.
+ * Lo medido que NO se puede mandar como está, con su porqué. Hoy, nada.
+ * (Glovo estuvo aquí hasta que Julio decidió, el 15/10, una factura por local
+ * y día como Uber y Just Eat: ver PATRONES y FORMA_GESTORIA.)
  */
-export const PATRONES_PENDIENTES: Record<string, string> = {
-  glovo: 'Glovo va en Diez con una factura por tienda de Glovo y día («GLV» + el código de la tienda + la fecha), y el asiento de Folvy es uno por local con todas sus marcas: falta decidir cómo se parte antes de enviarlo',
+export const PATRONES_PENDIENTES: Record<string, string> = {}
+
+/**
+ * La forma con la que la gestoría metía en Diez las facturas de una plataforma
+ * cuando no era la de Folvy, para que la búsqueda de antes de escribir la
+ * reconozca y NUNCA se duplique si la gestoría mete una tarde.
+ *
+ * Glovo (43000001): «GLV<seis cifras>-<AAAAMMDD>», una por TIENDA de Glovo y
+ * día, con el grupo del local en la descripción (275 de 275 en agosto y
+ * septiembre). Medido en C0008 el 15/10 (run 38717358137): con fecha de
+ * factura desde el 01/10, ninguna. Si aparece alguna del mismo local y día, la
+ * de Folvy (que es la suma del día) la duplicaría: no se manda y se dice.
+ */
+export const FORMA_GESTORIA: Record<string, { cuentaCliente: string; numero: RegExp }> = {
+  glovo: { cuentaCliente: '43000001', numero: /^GLV\d{6}-(\d{8})$/ },
+}
+
+/** ¿Es esta factura de Diez una de la gestoría, con su forma, del mismo local (grupo) y día? */
+export function esDeLaGestoria(canal: string, grupo: string, fecha: string): ((f: { Serie?: unknown; CuentaCliente?: unknown; NumeroFactura?: unknown; Descripcion?: unknown }) => boolean) | null {
+  const forma = FORMA_GESTORIA[canal.toLowerCase()]
+  if (!forma) return null
+  const dia = fecha.replaceAll('-', '')
+  const enGrupo = new RegExp(`\\b${grupo}\\b`)
+  return (f) => {
+    const m = forma.numero.exec(String(f.NumeroFactura ?? '').toUpperCase().trim())
+    return !!m && m[1] === dia && String(f.Serie ?? '') === '1' && String(f.CuentaCliente ?? '') === forma.cuentaCliente
+      && enGrupo.test(String(f.Descripcion ?? '').toUpperCase())
+  }
 }
 const c = (x: number) => Math.round(x * 100)
 const e = (x: number) => x / 100
