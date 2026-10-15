@@ -1,4 +1,5 @@
-# B01 · deshacer un extracto entero (15/10): la función nueva (0180) y su
-# prueba, fichero entero y como usuario, en una transacción con rollback.
-supabase/migrations/20261101T0180_b01_extracto_deshacer.sql
-supabase/staging/sql/20261101_b01_extracto_deshacer_prueba.sql
+# D01 · 14/10 — la prueba de la 0310 otra vez, con el NIF inventado de su
+# proveedor de prueba con carácter de control válido (B00000810, antes
+# B00000081, que no lo pasaba), como los de la semilla. Solo la prueba: acaba
+# en ROLLBACK y no cambia staging. La 0310 ya está (run 38528709753).
+supabase/staging/sql/20261021_d01_recepcion_prueba.sql

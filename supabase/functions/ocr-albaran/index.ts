@@ -34,214 +34,45 @@
 // misma vara a los dos lados (regla 31): mismo modelo, mismo día, mismas fotos.
 // Lo lanza el workflow «Medir el NIF del destinatario (ocr-albaran)».
 //
+// D01 (13/10) · MODO FACTURA: con { modo: 'factura' } el prompt de siempre
+// lleva al final PROMPT_FACTURA y la respuesta, la lectura comprobada
+// («factura»: proveedor, número y su clave, bases y cuotas por tipo, recargo,
+// retención, vencimiento, rectificativa; con su confianza y su porqué). Lo
+// puro está en _shared/ocrAlbaranNucleo.ts (sacado tal cual) y
+// _shared/lecturaFactura.ts. Sin modo, lo que devuelve a Cocina no cambia.
+//
 // Auth: usuario autenticado (JWT, respeta RLS) o llamada interna (x-internal-key).
 // Patrón calcado de extract-recipe. Deploy NORMAL (no es webhook externo).
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
+import { MODELO_VISION, buildPrompt, extractJson, validate, type ParsedDoc } from '../_shared/ocrAlbaranNucleo.ts';
+import { leerFactura, PROMPT_FACTURA, type LecturaModelo } from '../_shared/lecturaFactura.ts';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
-const DEFAULT_VISION_MODEL = 'claude-opus-4-8';
+// D01 R2: el modelo vive en el núcleo, para que la prueba de lectura use el mismo.
+const DEFAULT_VISION_MODEL = MODELO_VISION;
 const BUCKET = 'receipt-uploads';
-// Descuadre máximo aceptado entre Σlíneas y la base imponible declarada (1%).
-const BASE_TOLERANCE = 0.01;
 
 interface OcrRequest {
   account_id: string;
   file_paths?: string[];       // rutas dentro de receipt-uploads/{account_id}/...
   medir_sesiones?: string[];   // MEDIR: ids de goods_receipt_ai_session a releer (máx. MEDIR_MAX)
+  // D01 (13/10): «factura» añade al prompt de siempre la clave «factura»
+  // (vencimiento, cuadro de impuestos, recargo, retención, rectificativa, IBAN)
+  // y devuelve la lectura comprobada (_shared/lecturaFactura.ts). Sin modo,
+  // todo es exactamente como antes.
+  modo?: 'factura';
 }
 
 const MEDIR_MAX = 40;
-
-interface ParsedDoc {
-  document: {
-    supplier_name: string | null;
-    supplier_tax_id: string | null;
-    supplier_phone: string | null;          // Mejora 1
-    supplier_email: string | null;          // Mejora 1
-    supplier_address: string | null;        // Mejora 1 (domicilio del PROVEEDOR, no el de entrega)
-    supplier_health_registry: string | null;// Mejora 1 (RGSEAA / nº registro sanitario)
-    doc_number: string | null;
-    doc_date: string | null;          // YYYY-MM-DD
-    doc_type: 'albaran' | 'factura' | 'albaran_factura' | null;
-    ship_to: string | null;
-    bill_to_name: string | null;
-    bill_to_tax_id?: string | null;   // Compras (10/10): NIF del destinatario. Solo con el prompt de ahora.
-    handwritten: boolean;
-    tax_base_total: number | null;    // base imponible total
-    tax_total: number | null;         // IVA total
-    grand_total: number | null;       // total a pagar (con IVA)
-  };
-  lines: {
-    raw_text: string;
-    supplier_code: string | null;
-    quantity: number | null;
-    packages: number | null;          // nº de bultos/cajas físicas (columna CAJAS/BULTOS si existe)
-    unit: string | null;
-    unit_price_net: number | null;    // precio NETO por unidad (tras descuento)
-    discount_pct: number | null;
-    line_amount: number | null;       // importe neto de la línea
-    vat_pct: number | null;
-    lot_code: string | null;
-    expiry_date: string | null;       // YYYY-MM-DD
-    note: string | null;
-    // Mejora 3 — pista de FORMATO de compra (lo que la IA ve; sin convertir a base).
-    format_name: string | null;       // nombre de la unidad de compra: "Caja","Saco","Garrafa","Unidad"...
-    pack_size: number | null;         // contenido de UN formato (80 si "(80u)"; 5 si "Garrafa 5 L")
-    pack_unit: string | null;         // unidad del contenido: "ud"|"kg"|"g"|"l"|"ml"
-  }[];
-  confidence: number;                 // 0..1 global
-}
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
-}
-
-// conNifDestinatario = false es el prompt de ANTES del 10/10, tal cual: solo
-// lo usa MEDIR, para comparar con la misma vara.
-function buildPrompt(conNifDestinatario = true): string {
-  return (
-    `Eres un asistente experto en albaranes y facturas de proveedores de hostelería en España.\n` +
-    `Te paso una o varias imágenes (o PDF) que pueden ser PÁGINAS de un mismo documento, en cualquier orden.\n` +
-    `Trátalas como un ÚNICO documento y ordénalas tú. Extrae su contenido en JSON ESTRICTO\n` +
-    `(sin texto adicional, sin markdown), con esta forma EXACTA:\n` +
-    `{\n` +
-    `  "document": {\n` +
-    `    "supplier_name": "<razón social del PROVEEDOR que emite, o null>",\n` +
-    `    "supplier_tax_id": "<CIF/NIF del proveedor, o null>",\n` +
-    `    "supplier_phone": "<teléfono del proveedor si aparece, o null>",\n` +
-    `    "supplier_email": "<email del proveedor si aparece, o null>",\n` +
-    `    "supplier_address": "<domicilio FISCAL/SOCIAL del proveedor (NO el de entrega), o null>",\n` +
-    `    "supplier_health_registry": "<nº de registro sanitario / RGSEAA del proveedor si aparece, o null>",\n` +
-    `    "doc_number": "<nº de albarán o factura, o null>",\n` +
-    `    "doc_date": "<fecha del documento YYYY-MM-DD, o null>",\n` +
-    `    "doc_type": "<albaran|factura|albaran_factura|null>",\n` +
-    `    "ship_to": "<domicilio/local de ENTREGA tal cual aparece, o null>",\n` +
-    `    "bill_to_name": "<a quién se FACTURA: razón social del cliente, o null>",\n` +
-    (conNifDestinatario
-      ? `    "bill_to_tax_id": "<CIF/NIF del CLIENTE a quien se factura, tal cual aparece, o null>",\n`
-      : '') +
-    `    "handwritten": <true si el documento está escrito A MANO, si no false>,\n` +
-    `    "tax_base_total": <base imponible total (suma de bases, SIN IVA) o null>,\n` +
-    `    "tax_total": <importe total de IVA o null>,\n` +
-    `    "grand_total": <total a pagar CON IVA o null>\n` +
-    `  },\n` +
-    `  "lines": [\n` +
-    `    {\n` +
-    `      "raw_text": "<nombre del artículo TAL CUAL, sin el código>",\n` +
-    `      "supplier_code": "<código de artículo del proveedor si aparece, o null>",\n` +
-    `      "quantity": <cantidad servida/entregada como número, o null>,\n` +
-    `      "packages": <nº de BULTOS/CAJAS físicas si hay una columna aparte (CAJAS, BULTOS, Nº CAJAS), o null>,\n` +
-    `      "unit": "<ud|caja|kg|l|saco|bandeja u otra, o null>",\n` +
-    `      "unit_price_net": <precio por unidad YA con el descuento aplicado, o null>,\n` +
-    `      "discount_pct": <% de descuento de la línea si aparece, o null>,\n` +
-    `      "line_amount": <importe NETO de la línea (lo que se paga por ella), o null>,\n` +
-    `      "vat_pct": <% de IVA de la línea si aparece, o null>,\n` +
-    `      "lot_code": "<lote si aparece, o null>",\n` +
-    `      "expiry_date": "<caducidad YYYY-MM-DD si aparece, o null>",\n` +
-    `      "note": "<cualquier coletilla relevante, o null>",\n` +
-    `      "format_name": "<nombre del FORMATO de compra de la línea: 'Caja','Saco','Garrafa','Bandeja','Estuche','Unidad','Kilogramo'... o null>",\n` +
-    `      "pack_size": <cuánto CONTIENE un formato como número (80 si pone '(80u)'; 5 si 'Garrafa 5 L'; 6 si 'Caja 6x1L'), o null>,\n` +
-    `      "pack_unit": "<unidad del contenido del formato: ud|kg|g|l|ml, o null>"\n` +
-    `    }\n` +
-    `  ],\n` +
-    `  "confidence": <0 a 1: tu confianza GLOBAL en la lectura>\n` +
-    `}\n\n` +
-    `REGLAS CRÍTICAS:\n` +
-    `- NO inventes NADA. Si un dato no está, usa null. Es preferible null a un valor inventado.\n` +
-    `- "line_amount" y "unit_price_net" son el importe NETO (después de descuentos). Si hay precio\n` +
-    `  bruto y descuento, calcula/usa el neto; pon el % en "discount_pct".\n` +
-    `- "raw_text" es SOLO el nombre del artículo (sin el código de proveedor, que va en supplier_code).\n` +
-    `- Distingue PROVEEDOR (emite) de CLIENTE (recibe/factura): supplier_* es siempre el proveedor.\n` +
-    (conNifDestinatario
-      ? `- "bill_to_tax_id" es el NIF del CLIENTE, no el del proveedor. Si en el papel solo ves un NIF\n` +
-        `  y no sabes con seguridad de cuál de los dos es, déjalo en null en el sitio dudoso.\n`
-      : '') +
-    `- Captura lote y caducidad por línea si aparecen (suelen ir debajo o al lado de la línea).\n` +
-    `- FORMATO de compra (format_name/pack_size/pack_unit): describe la UNIDAD EN LA QUE SE COMPRA\n` +
-    `  y FACTURA la línea (la misma a la que se refieren "quantity" y "unit_price_net").\n` +
-    `    · Si la línea va por cajas/sacos/garrafas → format_name = ese envase ("Caja","Saco","Garrafa")\n` +
-    `      y pack_size/pack_unit = cuánto contiene UNO (del texto: "(80u)" → 80 "ud"; "5 L" → 5 "l";\n` +
-    `      "6x1L" → 6 "l"; "Saco 25 kg" → 25 "kg").\n` +
-    `    · Si la línea va por unidades sueltas/peso → format_name = "Unidad"/"Kilogramo"/"Litro" y\n` +
-    `      pack_size/pack_unit = 1 de esa unidad (1 "ud", 1 "kg", 1 "l").\n` +
-    `    · Si NO puedes deducir el contenido con seguridad, deja pack_size y/o pack_unit en null\n` +
-    `      (NO inventes la equivalencia; el humano la confirmará).\n` +
-    `- Las cantidades e importes son números decimales con punto (no "5,99" sino 5.99; no "5 kg" sino 5).\n` +
-    `- DOS COLUMNAS DE CANTIDAD: algunos albaranes traen una columna de BULTOS (CAJAS, BULTOS, Nº CAJAS)\n` +
-    `  separada de la cantidad FACTURABLE (CANTIDAD, UDS, KG). En ese caso:\n` +
-    `    · "packages" = los BULTOS físicos (la columna CAJAS/BULTOS).\n` +
-    `    · "quantity" = la cantidad FACTURABLE, la que multiplicada por "unit_price_net" da "line_amount"\n` +
-    `      (verifícalo: quantity × unit_price_net ≈ line_amount). Esa es la que va en "quantity".\n` +
-    `    · Si SOLO hay una columna de cantidad, ponla en "quantity" y deja "packages" en null.\n` +
-    `    · NO inventes "packages": si no hay columna de bultos separada, es null.\n` +
-    `- Si el documento está MANUSCRITO o es poco legible: ponle handwritten=true, baja "confidence",\n` +
-    `  y extrae solo lo que veas con seguridad (el resto null).\n` +
-    `- Si no es un albarán/factura legible, devuelve {"document":{...con nulls...},"lines":[],"confidence":0}.\n` +
-    `- Responde ÚNICAMENTE el JSON.`
-  );
-}
-
-function extractJson(textOut: string): ParsedDoc | null {
-  try {
-    const clean = textOut.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean) as ParsedDoc;
-  } catch {
-    return null;
-  }
-}
-
-// Validación por BASE IMPONIBLE: Σ(line_amount) ≈ tax_base_total.
-// Si no hay base declarada, intenta (grand_total - tax_total). Si nada, no se
-// puede validar → needs_review por validación desconocida.
-function validate(parsed: ParsedDoc): {
-  base_declared: number | null;
-  lines_sum: number | null;
-  diff_pct: number | null;
-  cuadra: boolean | null;
-  needs_review: boolean;
-  reasons: string[];
-} {
-  const reasons: string[] = [];
-  const linesSum = (parsed.lines ?? []).reduce(
-    (acc, l) => acc + (typeof l.line_amount === 'number' ? l.line_amount : 0), 0,
-  );
-  const haveLineAmounts = (parsed.lines ?? []).some(l => typeof l.line_amount === 'number');
-
-  let base = parsed.document?.tax_base_total ?? null;
-  if (base === null && parsed.document?.grand_total != null && parsed.document?.tax_total != null) {
-    base = parsed.document.grand_total - parsed.document.tax_total;
-  }
-
-  let diffPct: number | null = null;
-  let cuadra: boolean | null = null;
-  if (base !== null && base > 0 && haveLineAmounts) {
-    diffPct = Math.abs(linesSum - base) / base;
-    cuadra = diffPct <= BASE_TOLERANCE;
-    if (!cuadra) reasons.push(`Σlíneas (${linesSum.toFixed(2)}) no cuadra con base imponible (${base.toFixed(2)})`);
-  } else {
-    reasons.push('No se pudo validar por base imponible (faltan importes)');
-  }
-
-  if (parsed.document?.handwritten) reasons.push('Documento manuscrito');
-  if (typeof parsed.confidence === 'number' && parsed.confidence < 0.6) reasons.push('Confianza de lectura baja');
-
-  const needsReview = cuadra === false || cuadra === null || !!parsed.document?.handwritten ||
-    (typeof parsed.confidence === 'number' && parsed.confidence < 0.6);
-
-  return {
-    base_declared: base,
-    lines_sum: haveLineAmounts ? Number(linesSum.toFixed(2)) : null,
-    diff_pct: diffPct === null ? null : Number((diffPct * 100).toFixed(2)),
-    cuadra,
-    needs_review: needsReview,
-    reasons,
-  };
 }
 
 // deno-lint-ignore no-explicit-any
@@ -375,7 +206,8 @@ Deno.serve(async (req) => {
   let body: OcrRequest;
   try { body = await req.json(); } catch { return jsonResponse(400, { error: 'Body JSON inválido' }); }
 
-  const { account_id, file_paths, medir_sesiones } = body;
+  const { account_id, file_paths, medir_sesiones, modo } = body;
+  const esFactura = modo === 'factura';
   if (!account_id) return jsonResponse(400, { error: 'Falta account_id' });
 
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -398,7 +230,7 @@ Deno.serve(async (req) => {
   let parsed: ParsedDoc | null = null;
   let rawResponse: unknown = null;
   try {
-    const r = await leerConIa(anthropicKey, model, contentBlocks, buildPrompt());
+    const r = await leerConIa(anthropicKey, model, contentBlocks, esFactura ? buildPrompt() + PROMPT_FACTURA : buildPrompt());
     if ('error' in r) return jsonResponse(502, { error: 'Error del servicio de IA', detail: r.error });
     parsed = r.parsed;
     rawResponse = r.raw;
@@ -414,6 +246,9 @@ Deno.serve(async (req) => {
 
   // ── 3) Validación por base imponible ──
   const validation = validate(parsed);
+  // D01 · modo factura: la lectura comprobada va dentro de la validación de la sesión.
+  const lecturaFactura = esFactura ? leerFactura(parsed as unknown as LecturaModelo, { hoy: new Date().toISOString().slice(0, 10) }) : null;
+  const validacionGuardada = lecturaFactura ? { ...validation, factura: lecturaFactura } : validation;
 
   // ── 4) Guardar la sesión IA (pending_review) ──
   const kind = inputFiles.some(f => f.path.toLowerCase().endsWith('.pdf')) ? 'pdf' : 'photo';
@@ -423,7 +258,7 @@ Deno.serve(async (req) => {
     input_files: inputFiles as unknown,
     raw_response: rawResponse as unknown,
     parsed_result: parsed as unknown,
-    validation: validation as unknown,
+    validation: validacionGuardada as unknown,
     ai_model: model,
     ai_latency_ms: latencyMs,
     status: 'pending_review',
@@ -442,5 +277,6 @@ Deno.serve(async (req) => {
     lines_extracted: (parsed.lines ?? []).length,
     ai_model: model,
     ai_latency_ms: latencyMs,
+    ...(lecturaFactura ? { factura: lecturaFactura } : {}),
   });
 });

@@ -29,11 +29,24 @@ name: Diez · factura de prueba en C0009 (C04b)
 # Folvy (Uber · Alcalá del 01/10, visto bueno de Julio): lee el asiento en
 # producción con conta_lectura (solo lectura), lo busca antes en Diez (si ya
 # está, no envía otra) y lo lee de vuelta (scripts/conta/diez/prueba-c0009-emitida.ts).
+#
+# D01 R2 (13/10): la salida pasa entera por scripts/conta/salida-segura.mjs: solo
+# recuentos y huellas (el run 60 sacó nombres por la descripción).
+#
+# D01 (13/10): también corre en conta/d01-recibidas. Con
+# «[prueba-c0009:recibida-molde]», SOLO LEE cómo guarda Diez en la C0009 las
+# facturas recibidas de la serie 2 (scripts/conta/diez/prueba-c0009-recibida-molde.ts).
+# Y en conta/d01-buscar-en-diez, con «[prueba-c0009:recibida-buscar]», SOLO LEE
+# para repetir sobre cada recibida de la C0009 la búsqueda que hace el envío
+# antes de escribir (scripts/conta/diez/prueba-c0009-recibida-buscar.ts).
+# Con «[prueba-c0009:recibida]», ENVÍA a la C0009 UNA factura recibida inventada
+# hecha por la cadena de Folvy (facturaProveedor → facturaRecibida) y la lee de
+# vuelta, para medir la serie 2 (scripts/conta/diez/prueba-c0009-recibida.ts).
 
 on:
   push:
     # conta/c06b-validar-pdf: solo para «[prueba-c0009:rectificativas-molde]» (C06b, respuesta 8, solo lectura).
-    branches: ['conta/c04b-diez', 'conta/c06b-validar-pdf']
+    branches: ['conta/c04b-diez', 'conta/d01-recibidas', 'conta/c06b-validar-pdf', 'conta/d01-buscar-en-diez']
   workflow_dispatch:
 
 concurrency:
@@ -115,6 +128,12 @@ jobs:
             '[prueba-c0009:subcuentas]'*) S=scripts/conta/diez/prueba-c0009-subcuentas.ts ;;
             # R13: la factura emitida de molde, solo lectura (escribir: false).
             '[prueba-c0009:emitida-molde]'*) S=scripts/conta/diez/prueba-c0009-emitida-molde.ts ;;
+            # D01: la recibida de molde (serie 2), solo lectura (escribir: false).
+            '[prueba-c0009:recibida-molde]'*) S=scripts/conta/diez/prueba-c0009-recibida-molde.ts ;;
+            # D01 (14/10): la búsqueda antes de escribir, contra las recibidas de verdad (escribir: false).
+            '[prueba-c0009:recibida-buscar]'*) S=scripts/conta/diez/prueba-c0009-recibida-buscar.ts ;;
+            # D01: una recibida de Folvy a la C0009 y leída de vuelta (si ya está, no se envía otra).
+            '[prueba-c0009:recibida]'*) S=scripts/conta/diez/prueba-c0009-recibida.ts ;;
             # C06b R8: cómo anula Diez una factura emitida (rectificativas que ya tiene), solo lectura (escribir: false).
             '[prueba-c0009:rectificativas-molde]'*) S=scripts/conta/diez/prueba-c0009-rectificativas-molde.ts ;;
             # R13: la primera venta de Folvy en Diez (C0009), del volcado del paso anterior.
@@ -126,5 +145,7 @@ jobs:
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac
-          npx --yes tsx@4.19.2 "$S" | tee prueba.md
-          cat prueba.md >> "$GITHUB_STEP_SUMMARY"
+          # D01 R2 (13/10): todo por la puerta de salida, que solo deja pasar
+          # «@@ clave número|huella». Lo de los scripts anteriores al D01, que
+          # escribían Markdown con texto, ya no sale: se cuentan sus líneas.
+          npx --yes tsx@4.19.2 "$S" 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"

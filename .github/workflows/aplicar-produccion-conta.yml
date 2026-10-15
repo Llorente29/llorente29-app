@@ -103,7 +103,11 @@ jobs:
       MODO: ${{ inputs.modo }}
       PSQL: /usr/lib/postgresql/17/bin/psql
       PGAPPNAME: gha-produccion-conta-${{ github.run_id }}
-      PGOPTIONS: -c lock_timeout=5s
+      # D01 R2 (13/10): sin NOTICE (los avisos de una migración pueden llevar
+      # valores de filas) y, abajo, psql con VERBOSITY=sqlstate: de un error sale
+      # el fichero, la línea y el código, nunca el DETAIL («Key (x)=(…)»,
+      # «Failing row contains (…)»). El registro y el resumen son públicos.
+      PGOPTIONS: -c lock_timeout=5s -c client_min_messages=warning
       INFORME: /tmp/informe.md
       # La salud del camino del pedido: con SALUD_MINIMO pedidos o más en los
       # SALUD_MINUTOS de antes, en los SALUD_MINUTOS de después tiene que haber
@@ -360,13 +364,13 @@ jobs:
             echo "\\echo '>>> ROLLBACK: no queda nada.'"
           } > /tmp/ensayo.sql
           set +e
-          "$PSQL" "$DB_URL" -X -f /tmp/ensayo.sql > /tmp/ensayo.log 2>&1
+          "$PSQL" "$DB_URL" -X -v VERBOSITY=sqlstate -f /tmp/ensayo.sql > /tmp/ensayo.log 2>&1
           rc=$?
           set -e
-          grep -E '^>>>|ERROR|NOTICE' /tmp/ensayo.log | head -200
+          grep -E '^>>>|ERROR' /tmp/ensayo.log | head -200
           if [ "$rc" -ne 0 ]; then
             ult=$(grep '^>>>' /tmp/ensayo.log | tail -1)
-            { echo "## Ensayo: **FALLA**"; echo; echo "Falló en: \`$ult\`. La conexión se cerró sin commit: no ha quedado nada."; echo; echo '```'; grep -E 'ERROR|DETAIL|CONTEXT' /tmp/ensayo.log | head -20; echo '```'; } >> "$INFORME"
+            { echo "## Ensayo: **FALLA**"; echo; echo "Falló en: \`$ult\`. La conexión se cerró sin commit: no ha quedado nada."; echo; echo '```'; grep -E 'ERROR' /tmp/ensayo.log | head -20; echo '```'; } >> "$INFORME"
             cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
             echo "::error::El ensayo falla en: $ult"
             exit 1
@@ -415,7 +419,7 @@ jobs:
           } > /tmp/ensayo-atras.sql
           while IFS= read -r f; do [ -f "supabase/vuelta-atras/$(basename "$f" .sql).down.sql" ] || sin="$sin \`$f\`"; done < /tmp/tanda.txt
           set +e
-          "$PSQL" "$DB_URL" -X -f /tmp/ensayo-atras.sql > /tmp/ensayo-atras.log 2>&1
+          "$PSQL" "$DB_URL" -X -v VERBOSITY=sqlstate -f /tmp/ensayo-atras.sql > /tmp/ensayo-atras.log 2>&1
           rc=$?
           set -e
           igual=1
@@ -438,7 +442,7 @@ jobs:
           else
             { echo "## Ensayo de la vuelta atrás: **NO estaría completa**"; echo
               [ -n "$sin" ] && echo "- Sin \`.down.sql\`:$sin. Si la comprobación de después falla, eso y lo anterior quedarían aplicados."
-              [ "$rc" -ne 0 ] && { echo "- Falla en \`$(grep '^>>>' /tmp/ensayo-atras.log | tail -1)\`:"; echo; echo '```'; grep -E 'ERROR|DETAIL' /tmp/ensayo-atras.log | head -10; echo '```'; }
+              [ "$rc" -ne 0 ] && { echo "- Falla en \`$(grep '^>>>' /tmp/ensayo-atras.log | tail -1)\`:"; echo; echo '```'; grep -E 'ERROR' /tmp/ensayo-atras.log | head -10; echo '```'; }
               echo; } >> "$INFORME"
             echo "::warning::La vuelta atrás automática no estaría completa: ver el informe."
           fi
@@ -461,7 +465,7 @@ jobs:
             if [ "$MODO" = "vuelta_atras" ]; then node scripts/conta/produccion/analizar.mjs baja "$f" > /tmp/registro.sql
             else node scripts/conta/produccion/analizar.mjs registro "$f" "real ${GITHUB_RUN_ID} · ${GITHUB_ACTOR}" > /tmp/registro.sql; fi
             echo "::group::[$i] $f (md5 $md5)"
-            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" -f /tmp/registro.sql 2>&1; then
+            if "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -1 -f "$f" -f /tmp/registro.sql 2>&1 | grep -E 'ERROR' ; [ "${PIPESTATUS[0]}" -eq 0 ]; then
               echo "::endgroup::"
               echo "$f" >> /tmp/aplicados.txt
               echo "| $i | \`$f\` | \`$md5\` | **aplicado** $(TZ=Europe/Madrid date +%H:%M:%S) |" >> "$INFORME"

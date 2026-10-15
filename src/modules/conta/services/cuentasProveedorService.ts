@@ -113,3 +113,14 @@ export async function cuentasDelResumen(accountId: string, companyId: string, su
   const de = (entity: string, role: string) => enlaces.find((l) => l.entity === entity && l.role === role)
   return { suCuenta: code(de('supplier', 'principal')), facturas: code(de('supplier', 'gasto') ?? de('expense_category', 'principal')) }
 }
+
+/**
+ * D01 · Lo aprendido de sus facturas anteriores (conta_gasto_aprendido, 0250):
+ * la cuenta y de dónde sale («aprendido de Diez» o «aprendido de tus
+ * facturas»). Null si no hay nada aprendido, o si la función aún no está en
+ * esta base (la línea sigue como siempre).
+ */
+export async function gastoAprendido(companyId: string, supplierId: string): Promise<{ cuenta: string; origen: string } | null> {
+  const r = await rpc<Record<string, unknown> | null>('conta_gasto_aprendido', { p_company: companyId, p_supplier: supplierId }).catch(() => null)
+  return r && typeof r.cuenta === 'string' && typeof r.origen === 'string' ? { cuenta: r.cuenta, origen: r.origen } : null
+}

@@ -1,0 +1,8 @@
+[
+  {"document": {"supplier_name": "Mayorista Alfa, S.A.", "supplier_tax_id": "A00000001", "doc_number": "ALB-77", "doc_date": "2026-10-10", "doc_type": "albaran", "handwritten": false, "tax_base_total": 100.0, "tax_total": 10.0, "grand_total": 110.0}, "lines": [{"raw_text": "Aceite", "line_amount": 60.0, "vat_pct": 10}, {"raw_text": "Harina", "line_amount": 40.0, "vat_pct": 10}], "confidence": 0.95},
+  {"document": {"supplier_name": "Mayorista Alfa, S.A.", "doc_type": "factura", "handwritten": false, "tax_base_total": 100.0, "tax_total": 10.0, "grand_total": 110.0}, "lines": [{"raw_text": "Aceite", "line_amount": 80.0, "vat_pct": 10}], "confidence": 0.9},
+  {"document": {"doc_type": "albaran", "handwritten": false, "tax_base_total": null, "tax_total": 21.0, "grand_total": 121.0}, "lines": [{"raw_text": "Cajas", "line_amount": 100.0, "vat_pct": 21}], "confidence": 0.8},
+  {"document": {"doc_type": "albaran", "handwritten": true, "tax_base_total": 50.0, "tax_total": null, "grand_total": null}, "lines": [{"raw_text": "Pan", "line_amount": 50.0}], "confidence": 0.5},
+  {"document": {"doc_type": null, "handwritten": false, "tax_base_total": null, "tax_total": null, "grand_total": null}, "lines": [{"raw_text": "Sin precio", "line_amount": null}], "confidence": 0.7},
+  {"document": {"doc_type": "albaran_factura", "handwritten": false, "tax_base_total": 200.0, "tax_total": 30.0, "grand_total": 230.0}, "lines": [{"raw_text": "A", "line_amount": 100.0, "vat_pct": 10}, {"raw_text": "B", "line_amount": 101.5, "vat_pct": 21}], "confidence": 0.88}
+]

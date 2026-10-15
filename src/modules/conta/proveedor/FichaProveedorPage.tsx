@@ -22,7 +22,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { migasProveedores, rutaFichaProveedor, rutaListaProveedores, rutaSubirFacturaProveedor } from '@/config/navegacion'
 import { useFichaProveedor } from '@/modules/conta/hooks/useFichaProveedor'
 import { FichaContext, useFicha, type ContextoFicha } from '@/modules/conta/proveedor/contexto'
-import { cuentasDelResumen } from '@/modules/conta/services/cuentasProveedorService'
+import { cuentasDelResumen, gastoAprendido } from '@/modules/conta/services/cuentasProveedorService'
 import {
   Dialogo, EsqueletoFicha, IconoCamara, IconoTelefono, Migas, PildoraNif, TextoNif,
 } from '@/modules/conta/proveedor/piezas'
@@ -402,7 +402,10 @@ function useCuentasDelResumen(accountId: string | null, companyId: string | null
   useEffect(() => {
     if (!accountId || !companyId) return
     let vivo = true
-    cuentasDelResumen(accountId, companyId, supplierId, gastoId).then((r) => { if (vivo) setC(r) }).catch(() => { if (vivo) setC(null) })
+    // D01: sin nada puesto, lo aprendido de sus facturas, con de dónde sale y sin confirmar.
+    Promise.all([cuentasDelResumen(accountId, companyId, supplierId, gastoId), gastoAprendido(companyId, supplierId)])
+      .then(([r, a]) => { if (vivo) setC(r && !r.facturas && a ? { ...r, facturas: `${a.cuenta} (${a.origen}, sin confirmar)` } : r) })
+      .catch(() => { if (vivo) setC(null) })
     return () => { vivo = false }
   }, [accountId, companyId, supplierId, gastoId])
   return c

@@ -510,3 +510,61 @@ C0008), en solo lectura. El detalle está en `docs/conta/c04b/T1_comprobaciones.
 | `getSumasYsaldos/{periodo}/…` | `periodo` es el ejercicio. Devuelve **líneas de asiento**, y en 2025 solo de 22 de las 102 cuentas con movimiento (1.776 líneas de 1.735 asientos). Iguales al céntimo a esas mismas líneas leídas: **no es un testigo independiente** | 10 |
 | `getfile` | **500 en todas** las facturas probadas (20 en el run 8; 3 facturas × 4 `accept` en el run 10): «The specified container does not exist.» El almacén de documentos de esta base no existe en el servidor de Diez. Va a Cegid | 8, 10 |
 | Límites | Ningún 429 ni cabecera de límite en 341 peticiones (~22 min, ~39 MB) | 9 |
+
+## Facturas recibidas (D01, 14/10/2026)
+
+Base: el benchmark de la sesión («IA en los líderes», Holded, Pennylane,
+Puzzle, Hubdoc), más Diez, Dext y Quipu, leídos en sus ayudas y webs públicas
+el 14/10. Lo que no se ha encontrado se dice. Sin nombres de empresa ni
+importes: el repositorio es público.
+
+### Qué hace cada uno
+
+- **Holded:** escáner de gastos por foto, correo o arrastrando el fichero; la
+  IA lee importe, fecha, IVA, proveedor y categoría, y la persona valida. Avisa
+  de duplicados (holded.com/es/ia-asesorias).
+- **Pennylane:** lectura con prerrelleno y **petición de justificantes**: botón
+  «?» en el movimiento, se envía sola si no aparece la factura en 15 días, y un
+  resumen de lo que falta los días 1 y 15 (help.pennylane.com, art. 18635).
+- **Puzzle:** nada se contabiliza sin aprobar; pulgar arriba o abajo tras cada
+  tarea de la IA (help.puzzle.io).
+- **Hubdoc (Xero):** dirección de entrada por organización. Marca «posible
+  duplicada» con el mismo proveedor, fecha y total, y además el mismo número
+  si lo hay. Una posible duplicada **no se publica sola** aunque el proveedor
+  tenga regla. Se resuelve con «Move to Trash» o «Not a duplicate», y el aviso
+  se apaga por proveedor (support.hubdoc.com, art. 16695858907789;
+  blog.xero.com, «Hubdoc duplicate document detection»).
+- **Dext:** direcciones de entrada por cuenta (gastos y ventas por separado,
+  una para un documento por correo y otra que parte cada página); reglas de
+  reenvío desde el buzón; «Fetch» trae facturas de proveedores conectados, y
+  «Auto-publish» contabiliza sin revisar los de un proveedor ya conocido
+  (help.dext.com, «How to Submit Items by Email»; Fetch, según una asesoría,
+  no según Dext).
+- **Quipu:** dirección de correo por cuenta, de ingresos y de gastos. Lo que
+  la IA lee con confianza alta sale en 1–2 minutos; lo demás lo revisa **un
+  equipo de personas en 12–24 horas**. Después, «pendientes de verificar»
+  antes de contabilizar. Solo lee facturas, simplificadas y rectificativas,
+  una por PDF (getquipu.com/es/digitalizacion-facturas; intercom.help/quipu,
+  art. 7193855).
+- **Cegid Diez:** diezSCAN lee facturas desde foto y las contabiliza, con
+  supervisión manual; el cliente las sube por el Portal del Asesor o la app
+  «Cegid Diez Asesor» (anuncio de Cegid Diez en X, 2020; ficha de la app).
+  En la introducción de factura recibida, el **PDF al lado** y la
+  visualización del asiento antes de guardar (capturas de Julio, 04/10). No
+  hay ayuda pública con más detalle. Y medido por nosotros: en la base de
+  la empresa **el almacén de documentos no existe** (anexo de la API, arriba).
+
+### Pieza a pieza: qué cogemos y dónde estamos un escalón por encima
+
+| Pieza | Lo cogido, y de quién | El escalón de más | Lo que todavía no |
+|---|---|---|---|
+| Entrada por correo | Dirección por empresa (Hubdoc, Dext, Quipu): `facturas-<empresa>@entrada.folvy.app` | Una por **empresa**, no por cuenta: un grupo con varias sociedades no mezcla papeles. Lo que llega a una dirección que no es de nadie, o apagada, queda registrado (`inbound_email_log`) | **Apagada** hasta que exista el dominio. Sin «Fetch» de portales, y sin conectar el buzón (E01 lo deja para después) |
+| Subir y foto | Foto, correo o arrastrar (Holded); la foto pasa a PDF | El mismo PDF dos veces se reconoce por su huella (`document_inbox.sha256`) antes de leerlo | Recorte y enderezado al hacer la foto (E02) |
+| Lectura | Prerrelleno y validación de una persona (Holded, Quipu, Puzzle) | **Cada dato con su porqué** y su confianza (seguro, probable o duda), en ámbar lo que hay que mirar. Base × tipo = cuota comprobado, y el total que cuadra. Sin un equipo de personas detrás (Quipu): lo que duda, se pregunta | **Sin probar con el modelo:** 0 de 12 por falta de saldo. Sin esa prueba el modo «factura» de `ocr-albaran` no sale a producción |
+| Repetidas | Proveedor, número y total (Hubdoc, con número); la posible no se publica sola (Hubdoc) | **Una sola regla en la base** (disparador), la misma para Compras, Supply, la ficha y la bandeja: la repetida **no entra**; la posible pregunta. Medida contra la población real: 0 y 0 en los 179 albaranes y en las 6 facturas de producción | — |
+| Esperadas y «Pedírselas» | Petición de justificantes (Pennylane) | Se aprende **qué proveedor factura cada mes** y se dice cuál falta antes de que sea un hueco del trimestre | **Nunca sale sola** (decisión de Julio): la persona confirma, y mientras no haya dominio el correo lo manda ella desde el suyo. Pennylane la envía sola a los 15 días |
+| Cruce con Cocina | — Nadie lo tiene: ningún programa contable recibe la mercancía | La factura **casa con la recepción** de Cocina, y en N23 se ve con qué albarán. «De Cocina» solo sale si la empresa recibe la mercancía con Folvy | — |
+| Cuenta de gasto | Aprender del proveedor (Dext auto-publish, Pennylane) | **Dice de dónde sale:** «aprendido de Diez» o «de tus facturas», con a cuántas fue cada una. Si fueron a dos o más, es «probable», nunca «seguro» | — |
+| Apuntar solo | Auto-publish por proveedor (Dext) | Solo lo **seguro**, por interruptor de empresa (`post_safe_invoices`), apagado de serie; lo hecho queda en la actividad de la bandeja (`document_activity`) | Encenderlo es de Julio, cuando la lectura demuestre que acierta |
+| Documento con el asiento | El PDF al lado (Diez) | El PDF queda **enlazado al asiento validado** y no se cambia; sin documento no se envía a Diez | El envío de recibidas a Diez **para** mientras Cegid no active su almacén de documentos |
+| Papel y norma | — | No decimos nunca que el papel se pueda tirar: sin software homologado (Orden EHA/962/2007, art. 7), se conserva | Homologar Folvy: decisión pendiente de Julio |
