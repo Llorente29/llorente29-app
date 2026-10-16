@@ -302,7 +302,8 @@ begin
     v_device := public.kds_resolve_device(p_token);
     v_por := 'tablet · ' || coalesce(v_device.label, 'sin nombre');
   else
-    v_por := coalesce(auth.uid()::text, 'sesión');
+    -- Quién: el nombre, para que la oficina lo lea («Completada por Ana»).
+    v_por := coalesce(nullif(btrim(public.conta_nombre_actor()), ''), auth.uid()::text, 'sesión');
   end if;
 
   update public.sale

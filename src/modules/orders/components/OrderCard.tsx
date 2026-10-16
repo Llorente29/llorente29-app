@@ -24,10 +24,9 @@
 // la decide `deliveryView().phase` en el servicio; aquí solo se pinta.
 
 import { useEffect, useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, AlertTriangle, ShoppingBag, MapPin, ExternalLink } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, ShoppingBag, MapPin } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
-import { fmtNum } from '@/lib/format'
 import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from '../lib/passCode'
 import { elSubtitulo } from '@/modules/pase/lib/lasTresZonas'
@@ -35,10 +34,12 @@ import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
 import { esRepartoPropio, lineaTelefono } from '@/modules/reparto/lib/entregaTicket'
 import EtiquetaReparto from '@/modules/reparto/components/EtiquetaReparto'
+import CompletarDireccion from '@/modules/reparto/components/CompletarDireccion'
+import { avisoDeLaTarjeta, enlaceAlMapa } from '@/modules/reparto/lib/direccionFalta'
 import {
   primaryAction, secondaryAction, childVisual, deliveryView,
   isOwnDeliveryUndispatched, dispatchOrder,
-  portalDeLaPlataforma, coordenadasDeEntrega, type CoordenadasEntrega,
+  coordenadasDeEntrega, type CoordenadasEntrega,
   cookingChip, DEFAULT_KITCHEN_THRESHOLDS,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
   type DeliveryView, type DeliveryTone,
@@ -293,85 +294,52 @@ function GreenCallPill({ phone, label = true, big = false }: { phone: string; la
 
 // ── B68 §1/§2 (05/09/2026). Sin dirección: qué falta, y adónde ir. ──
 //
-// EL CARTEL YA NO AFIRMA QUIÉN REPARTE. La frase vieja decía «este pedido no lo
-// repartimos nosotros» y era FALSA: G569 es `own_delivery` —lo reparte el
-// local— y Glovo simplemente no mandó la dirección. La frase contradecía a la
-// propia fila. El texto lo escribe `resolve_dispatch`; aquí sólo se añade el
-// nombre del canal, que la base no tiene a mano y la web sí.
-//
-// Y SI HAY COORDENADAS, SE ENSEÑAN. Estaban llegando y se tiraban. Se etiquetan
-// como lo que son —un punto, no un portal— porque quien reparte tiene que saber
-// que va a una zona. No se despacha automáticamente con ellas: eso sigue
-// bloqueado y es otra decisión.
-function SinDireccionAviso(
-  { order, portal, compacto = false, token = null }: { order: OrderFeedItem; portal: { url: string; nombre: string } | null; compacto?: boolean; token?: string | null },
+// R03 · SIN DIRECCIÓN COMPLETA (Julio, 16/10, tras ver las capturas). El
+// pedido sale a Catcher como cualquier otro, con el punto del mapa; aquí solo
+// una línea informativa, sin franja que tape nada y sin acciones para la
+// cocina. Debajo, el punto del mapa (en la tablet, por su variante con token:
+// solo su local) y, si una persona la completó, la dirección. En el ordenador
+// (oficina o encargado), el botón pequeño «Completar dirección».
+function AvisoSinDireccion(
+  { order, token = null, puedeCompletar = false, onCompletada }: { order: OrderFeedItem; token?: string | null; puedeCompletar?: boolean; onCompletada?: () => void },
 ) {
   const [coords, setCoords] = useState<CoordenadasEntrega | null>(null)
+  // Recién completada aquí: la confirmación (y «Llamar») sigue a la vista
+  // aunque el pedido ya llegue completado (regla 8).
+  const [recien, setRecien] = useState(false)
 
   useEffect(() => {
     let vivo = true
     coordenadasDeEntrega(order.sale_id, token)
       .then(c => { if (vivo) setCoords(c) })
-      .catch(() => { if (vivo) setCoords({ hay: false, motivo: 'no se pudieron leer' }) })
+      .catch(() => { if (vivo) setCoords(null) })
     return () => { vivo = false }
   }, [order.sale_id, token])
 
-  const canal = order.channel?.trim() || 'La plataforma'
-  // R02: con la etiqueta de reparto encima, aquí solo quedan las coordenadas
-  // (lo que «falta la dirección» y el portal ya lo dicen la etiqueta y su acción).
-  // R03: la dirección que pegó la cocina, aunque el feed aún no la traiga.
-  const pegada = (coords?.direccion ?? '').trim()
-  if (compacto && coords?.hay !== true && !pegada) return null
+  const completada = (order.delivery_address_fixed ?? coords?.direccion ?? '').trim()
+  const mapa = coords?.hay === true ? enlaceAlMapa(coords.lat ?? null, coords.lng ?? null) : null
+  const abierto = !['closed', 'cancelled', 'canceled'].includes((order.status ?? 'open').toLowerCase())
   return (
-    <div className={compacto ? 'mx-4 mb-2.5 ml-5 px-3 py-2 rounded-xl border border-default bg-white' : 'px-3 py-2.5 border-b border-[#CFE4FA] bg-white/60'}>
-      {!compacto && <div className="flex items-start gap-2">
-        <AlertTriangle size={15} className="text-[#B4690E] shrink-0 mt-0.5" />
-        <div className="text-[12.5px] leading-snug text-gray-700">
-          <b className="block text-[11px] uppercase tracking-wide text-[#B4690E]">Falta la dirección</b>
-          {canal} no ha enviado la dirección de entrega.
-        </div>
-      </div>}
-
-      {pegada && (
-        <div className="mt-1 text-[12.5px] leading-snug text-gray-700" data-testid="direccion-pegada">
-          <b>Dirección pegada:</b> {pegada}
-        </div>
+    <div className="mx-4 mb-2.5 ml-5 px-3 py-2 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] text-[12.5px] leading-snug text-gray-700"
+      data-testid="aviso-sin-direccion" onClick={e => e.stopPropagation()}>
+      <div className="flex items-start gap-2">
+        <MapPin size={14} className="text-[#2563A8] shrink-0 mt-0.5" />
+        <span data-testid="aviso-sin-direccion-texto">
+          {avisoDeLaTarjeta({ enCatcher: !!order.carrier_code, dispatchError: order.dispatch_error ?? null, dispatchMode: order.dispatch_mode ?? null })}
+        </span>
+      </div>
+      {completada && (
+        <div className="mt-1 pl-[22px]" data-testid="direccion-completada"><b>Dirección completada:</b> {completada}</div>
       )}
-
-      {coords?.hay === true && Number.isFinite(Number(coords.lat)) && Number.isFinite(Number(coords.lng)) && (
-        <div className="mt-2 flex items-start gap-2">
-          <MapPin size={15} className="text-[#2563A8] shrink-0 mt-0.5" />
-          <div className="text-[12.5px] leading-snug">
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`}
-              target="_blank" rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              className="font-bold text-[#2563A8] underline"
-            >
-              {fmtNum(coords.lat, 6)}, {fmtNum(coords.lng, 6)}
-            </a>
-            <span className="block text-[11.5px] text-gray-500">
-              Ubicación aproximada (sin dirección postal). Es un punto, no un portal.
-            </span>
-          </div>
-        </div>
-      )}
-
-      {!compacto && coords?.hay === false && (
-        <div className="mt-2 text-[11.5px] text-gray-500 pl-[23px]">
-          Tampoco hay coordenadas: {coords.motivo}.
-        </div>
-      )}
-
-      {!compacto && portal && (
-        <a
-          href={portal.url}
-          target="_blank" rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#2563A8] no-underline"
-        >
-          <ExternalLink size={13} /> Abrir el portal de {portal.nombre}
+      {mapa && (
+        <a href={mapa} target="_blank" rel="noopener noreferrer" className="mt-1 ml-[22px] inline-block font-bold text-[#2563A8] underline">
+          Ver el punto del mapa
         </a>
+      )}
+      {puedeCompletar && ((!completada && abierto) || recien) && (
+        <div className="mt-1.5 pl-[22px]">
+          <CompletarDireccion saleId={order.sale_id} token={token} onGuardada={() => { setRecien(true); onCompletada?.() }} />
+        </div>
       )}
     </div>
   )
@@ -383,9 +351,7 @@ function SinDireccionAviso(
 // src/modules/reparto/components/EtiquetaReparto.tsx, con sus acciones; lo
 // que reparte la plataforma, la GRIS. Antes: tarjeta roja y «Reintentar
 // despacho», que sin dirección no podía funcionar nunca.
-function DeliveryRow({ order, onDispatched, puedeDecidirReparto = false, onRepartoCambiado, token = null }: {
-  order: OrderFeedItem; onDispatched?: () => void; puedeDecidirReparto?: boolean; onRepartoCambiado?: () => void; token?: string | null
-}) {
+function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatched?: () => void }) {
   const [dispatching, setDispatching] = useState(false)
   const [dispatchErr, setDispatchErr] = useState<string | null>(null)
   const d: DeliveryView = deliveryView(order)
@@ -406,20 +372,12 @@ function DeliveryRow({ order, onDispatched, puedeDecidirReparto = false, onRepar
   // (A) Reparto propio SIN despachar (modo manual, tras fallo o sin dirección).
   // En modo 'off' (lo despacha un sistema externo) Folvy no despacha: nada aquí.
   if (isOwnDeliveryUndispatched(order) && order.dispatch_mode !== 'off') {
-    const sinDireccion = !(order.delivery_address ?? '').trim()
-    const portal = portalDeLaPlataforma(order.channel)
     return (
-      <>
-        <EtiquetaReparto
-          pedido={{ ...order, dispatch_error: dispatchErr ?? order.dispatch_error }}
-          portal={portal}
-          puedeDecidir={puedeDecidirReparto}
-          onDespachar={doDispatch}
-          despachando={dispatching}
-          onCambiado={onRepartoCambiado}
-        />
-        {sinDireccion && <SinDireccionAviso order={order} portal={portal} compacto token={token} />}
-      </>
+      <EtiquetaReparto
+        pedido={{ ...order, dispatch_error: dispatchErr ?? order.dispatch_error }}
+        onDespachar={doDispatch}
+        despachando={dispatching}
+      />
     )
   }
 
@@ -639,8 +597,9 @@ interface OrderCardProps {
   minutosDeLaFase?: number | null
   nivelDeLaFase?: 'fresh' | 'warn' | null
   /**
-   * R02: la web con sesión (no la tablet) puede cambiar quién reparte desde la
-   * etiqueta ámbar («Cambiar a “la reparte Uber”»). Tras cambiarlo, refrescar.
+   * La web con sesión (oficina o encargado; no la tablet de cocina). R03: le da
+   * el botón «Completar dirección» a los pedidos sin dirección completa. Tras
+   * guardar, refrescar.
    */
   puedeDecidirReparto?: boolean
   onRepartoCambiado?: () => void
@@ -827,7 +786,10 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         ))}
       </div>
 
-      <DeliveryRow order={order} puedeDecidirReparto={puedeDecidirReparto} onRepartoCambiado={onRepartoCambiado} token={token} />
+      <DeliveryRow order={order} />
+      {esRepartoPropio(order.service_type) && !(order.delivery_address ?? '').trim() && (
+        <AvisoSinDireccion order={order} token={token} puedeCompletar={puedeDecidirReparto} onCompletada={onRepartoCambiado} />
+      )}
 
       <div className="px-4 py-3 pl-5 border-t border-default">
         <div className="flex items-center gap-3">

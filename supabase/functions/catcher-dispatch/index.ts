@@ -70,12 +70,11 @@
 // se guarda: Mapbox no deja almacenar lo que da su geocodificador temporal.
 // NINGUNA dirección de cliente va a los logs.
 //
-// LA ESPERA (Julio, 16/10, opción B): cuando lo llama el disparador del
-// pedido (internal) y no hay dirección, NO manda nada durante 5 minutos desde
-// que se aceptó: contesta «esperando». Si en ese tiempo la cocina pega la
-// dirección, el aviso lo manda con ella (llamada desde la pantalla, sin
-// esperar). Si no, despachar_sin_calle_vencidos() lo pide con `tras_espera` y
-// sale por el punto del mapa. Los pedidos con dirección no esperan nunca.
+// SIN ESPERA (Julio, 16/10, tras ver las capturas): un pedido sin dirección
+// completa sale al momento, como cualquier otro. Esperar es lo que provoca las
+// cancelaciones, y en la cocina nadie va a buscar la dirección al portal. Si
+// la oficina la completa después y Catcher ya lo tiene, se le dicta al
+// repartidor: su API no deja cambiar un pedido creado.
 //
 // EL CÓDIGO DE UBER: el teléfono de Uber es una centralita que solo conecta
 // con customer.phone_access_code. No sabemos qué campo enseña la app del
@@ -111,7 +110,6 @@ interface DeliveryInfo {
 }
 
 const NOTA_DIRECCION_INCOMPLETA = "Dirección incompleta: llamar al cliente para piso y portal";
-const ESPERA_SIN_CALLE_MS = 5 * 60 * 1000;
 
 /** El código de acceso del teléfono (Uber por HubRise). null si no hay. */
 function codigoDelTelefono(rawTab: string | null): string | null {
@@ -416,7 +414,7 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const sb = createClient(url, serviceKey);
 
-  let body: { sale_id?: string; dry_run?: boolean; internal?: boolean; tras_espera?: boolean };
+  let body: { sale_id?: string; dry_run?: boolean; internal?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -551,15 +549,6 @@ Deno.serve(async (req: Request) => {
   let typedText = (delivery.address ?? "").trim() || (delivery.geocodedAddress ?? "").trim();
   const origin = delivery.origin ?? "plataforma";
   let addressDetails = delivery.details ?? "";
-  // LA ESPERA: solo cuando llama el disparador, sin dirección y antes de los 5 minutos.
-  if (origin === "punto_del_mapa" && isInternal && body.tras_espera !== true && !dryRun) {
-    const desde = Date.parse(sale.accepted_at ?? sale.created_at ?? "");
-    const saleSolo = Number.isFinite(desde) ? desde + ESPERA_SIN_CALLE_MS : 0;
-    if (Date.now() < saleSolo) {
-      console.log("CATCHER_ESPERANDO_DIRECCION", { saleId });
-      return json(200, { ok: true, esperando: true, sale_solo_at: new Date(saleSolo).toISOString() });
-    }
-  }
   if (origin === "punto_del_mapa") {
     const calle = await mapboxCalleMasCercana(Number(delivery.latitude), Number(delivery.longitude));
     typedText = calle

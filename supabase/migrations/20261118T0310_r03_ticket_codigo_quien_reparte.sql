@@ -1,22 +1,20 @@
--- R03 · 2 · Cinco minutos para pegar la dirección, y lo que necesita el
--- repartidor en el ticket y en la tarjeta (Julio, 16/10).
+-- R03 · 2 · Lo que necesita el repartidor en el ticket y en la tarjeta, quién
+-- reparte cada Uber, y la lista de los que llegan sin dirección completa
+-- (Julio, 16/10).
 --
--- cambia: public.pedidos_sin_direccion · prueba: supabase/staging/sql/20261118_r03_espera_ticket_codigo_prueba.sql
--- cambia: public.orders_feed · prueba: supabase/staging/sql/20261118_r03_espera_ticket_codigo_prueba.sql
--- cambia: public.orders_feed_by_token · prueba: supabase/staging/sql/20261118_r03_espera_ticket_codigo_prueba.sql
--- cambia: public.order_for_print · prueba: supabase/staging/sql/20261118_r03_espera_ticket_codigo_prueba.sql
+-- cambia: public.pedidos_sin_direccion · prueba: supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
+-- cambia: public.orders_feed · prueba: supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
+-- cambia: public.orders_feed_by_token · prueba: supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
+-- cambia: public.order_for_print · prueba: supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
 --
 -- Va DETRÁS de la 0300 (que crea pedidos_sin_direccion y las columnas de la
 -- dirección pegada).
 --
--- 1. LA ESPERA (opción B de Julio). Un pedido de reparto propio que llega sin
---    calle espera hasta 5 minutos antes de salir a Catcher: si alguien pega la
---    dirección, sale con ella; si no, sale igual con el punto del mapa. Quien
---    espera es catcher-dispatch (cuando lo llama el disparador del pedido y no
---    hay dirección, contesta «esperando» y no manda nada). Quien lo manda al
---    vencer es despachar_sin_calle_vencidos(), cada minuto. Marca
---    `delivery_wait_sent_at` al pedirlo, para no pedirlo dos veces. Los pedidos
---    CON dirección no pasan por aquí: salen como hoy.
+-- 1. SIN ESPERA (Julio, tras ver las capturas): un pedido de reparto propio
+--    sin dirección completa sale a Catcher al momento, como cualquier otro, con
+--    el punto del mapa (catcher-dispatch). Aquí solo está la lista de los de
+--    hoy (pedidos_sin_direccion) para la oficina, la tarjeta y el aviso rojo
+--    de cuando NO ha podido salir.
 -- 2. LO QUE NECESITA EL REPARTIDOR, separado de lo que vino mezclado. Tres
 --    columnas nuevas, nulas, que rellena un disparador desde raw_tab:
 --      customer_phone_code    Uber por HubRise: customer.phone_access_code (el
@@ -50,13 +48,12 @@
 --      order_for_print 54ff49ac454780ea643164771aa86dec
 --
 -- Rellenar los abiertos: 20261118T0320_r03_entrega_datos.sql (aparte: escribe en sale).
--- Vuelta atrás: supabase/vuelta-atras/20261118T0310_r03_espera_ticket_codigo.down.sql
+-- Vuelta atrás: supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql
 
 -- ── Columnas ────────────────────────────────────────────────────────────────
 alter table public.sale add column if not exists customer_phone_code   text;
 alter table public.sale add column if not exists delivery_instructions text;
 alter table public.sale add column if not exists order_customer_note   text;
-alter table public.sale add column if not exists delivery_wait_sent_at timestamptz;
 
 comment on column public.sale.customer_phone_code is
   'R03: código de acceso del teléfono del cliente (Uber por HubRise: customer.phone_access_code). Sin él la centralita no conecta. Lo rellena tg_sale_entrega_desde_raw.';
@@ -64,9 +61,6 @@ comment on column public.sale.delivery_instructions is
   'R03: indicaciones de entrega para el repartidor (HubRise: customer.delivery_notes; Last: delivery.details). Lo rellena tg_sale_entrega_desde_raw.';
 comment on column public.sale.order_customer_note is
   'R03: nota del cliente al pedido (HubRise: customer_notes; Last: customerNote), aparte de las indicaciones. Lo rellena tg_sale_entrega_desde_raw.';
-comment on column public.sale.delivery_wait_sent_at is
-  'R03: cuándo despachar_sin_calle_vencidos() pidió mandarlo a Catcher tras los 5 minutos de espera sin calle. Evita pedirlo dos veces.';
-
 -- ── Leerlas de lo que mandó la plataforma ───────────────────────────────────
 create or replace function public.sale_entrega_desde_raw(p_source text, p_raw_tab text)
 returns table(customer_phone_code text, delivery_instructions text, order_customer_note text)
@@ -250,7 +244,12 @@ comment on function public.decidir_quien_reparte(uuid, text, text) is
 revoke all on function public.decidir_quien_reparte(uuid, text, text) from public;
 grant execute on function public.decidir_quien_reparte(uuid, text, text) to anon, authenticated, service_role;
 
--- ── El aviso, con la hora a la que sale solo ────────────────────────────────
+-- ── Los de hoy sin dirección completa ──────────────────────────────────────
+-- Una lista, tres usos: «Despacho» (la oficina, todos los de hoy, también los
+-- ya completados: una pantalla que se abre a propósito no esconde filas), la
+-- tarjeta y el aviso rojo (solo los que NO han podido salir a Catcher, o los
+-- Uber que tiene que decidir una persona). Día de servicio con el corte de
+-- siempre (_pase_dia_de_negocio, 4 h).
 create or replace function public.pedidos_sin_direccion(p_location_id uuid, p_token text default null)
 returns jsonb
 language plpgsql
@@ -261,6 +260,7 @@ as $function$
 declare
   v_device kds_device;
   v_loc    uuid;
+  v_acc    uuid;
   v_mode   text;
   v_result jsonb;
 begin
@@ -274,9 +274,10 @@ begin
     perform public.kds_authorize(v_loc, null);
   end if;
 
-  select coalesce(l.dispatch_mode, 'auto') into v_mode from public.locations l where l.id = v_loc;
+  select coalesce(l.dispatch_mode, 'auto'), l.account_id into v_mode, v_acc
+    from public.locations l where l.id = v_loc;
 
-  select coalesce(jsonb_agg(to_jsonb(x) order by x.sold_at), '[]'::jsonb)
+  select coalesce(jsonb_agg(to_jsonb(x) order by x.sold_at desc), '[]'::jsonb)
     into v_result
     from (
       select s.id                                   as sale_id,
@@ -285,6 +286,9 @@ begin
              s.platform_order_ref,
              s.external_channel_text                as channel,
              b.name                                 as brand,
+             s.status,
+             s.order_status,
+             s.delivery_state,
              (case when left(btrim(coalesce(s.raw_tab,'')),1)='{'
                    then coalesce(nullif(s.raw_tab::jsonb->'customer'->>'latitude',''),
                                  nullif(s.raw_tab::jsonb->'delivery'->>'latitude','')) end)::numeric  as lat,
@@ -296,93 +300,27 @@ begin
              s.rider_name,
              s.rider_phone,
              s.dispatch_error,
-             -- R03 · 2: a qué hora sale solo a Catcher por el punto del mapa.
-             coalesce(s.accepted_at, s.created_at) + interval '5 minutes' as sale_solo_at,
              v_mode                                 as dispatch_mode,
+             nullif(btrim(s.delivery_address_fixed), '') as direccion_completada,
+             s.delivery_address_fixed_at            as completada_at,
+             s.delivery_address_fixed_by            as completada_por,
              -- R03 · Uber: señales mezcladas, lo decide una persona.
-             (s.delivery_by_reason = 'uber_decidir') as decidir
+             (s.delivery_by_reason = 'uber_decidir') as decidir,
+             -- El aviso rojo: abierto, sin salir a Catcher y con el motivo.
+             (s.status = 'open' and s.carrier_order_id is null and s.dispatch_error is not null
+              and coalesce(btrim(s.delivery_address_fixed), '') = '') as no_ha_salido
         from public.sale s
         left join public.brand b on b.id = s.brand_id
        where s.location_id = v_loc
          and s.service_type = 'own_delivery'
-         and s.status = 'open'
-         and coalesce(s.order_status, '') not in ('completed', 'cancelled', 'rejected', 'delivery_failed')
-         and coalesce(s.delivery_state, '') not in ('delivered', 'completed')
-         and s.sold_at > now() - interval '12 hours'
-         and (   (coalesce(btrim(s.delivery_address), '') = '' and coalesce(btrim(s.delivery_address_fixed), '') = '')
-              or s.delivery_by_reason = 'uber_decidir')
+         and s.sold_at > now() - interval '30 hours'
+         and public._pase_dia_de_negocio(v_acc, s.sold_at) = public._pase_dia_de_negocio(v_acc, now())
+         and (coalesce(btrim(s.delivery_address), '') = '' or s.delivery_by_reason = 'uber_decidir')
     ) x;
 
   return jsonb_build_object('location_id', v_loc, 'now', now(), 'pedidos', v_result);
 end;
 $function$;
-
--- ── Los que han esperado sus 5 minutos sin dirección: a Catcher ─────────────
--- Igual que tg_auto_dispatch: solo locales en automático, solo Catcher, con el
--- secreto interno de Vault. `tras_espera` le dice a catcher-dispatch que ya no
--- espere. Se marca antes de pedirlo: un fallo de red no lo repite cada minuto
--- (catcher-dispatch deja el motivo en dispatch_error y el vigía de siempre lo ve).
-create or replace function public.despachar_sin_calle_vencidos()
-returns integer
-language plpgsql
-security definer
-set search_path to 'public', 'pg_temp'
-as $function$
-declare
-  v_secret text;
-  v_url    text := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/catcher-dispatch';
-  v_anon   text := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6bXBuY2hsZ3VpYmNsdnh5eW50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzE1NTksImV4cCI6MjA5Mzc0NzU1OX0.v5GsOW5hxwzJZA0z5Le26E9vAWflG1XFZ7ec2hvMphY';
-  v_row    record;
-  v_c      text;
-  v_n      int := 0;
-begin
-  for v_row in
-    select s.id
-      from public.sale s
-      join public.locations l on l.id = s.location_id
-     where s.service_type = 'own_delivery'
-       and coalesce(l.dispatch_mode, 'auto') = 'auto'
-       and s.status = 'open'
-       and s.order_status in ('accepted', 'in_preparation', 'awaiting_collection')
-       and s.carrier_order_id is null
-       and s.dispatch_error is null
-       and s.delivery_wait_sent_at is null
-       and coalesce(btrim(s.delivery_address), '') = ''
-       and coalesce(btrim(s.delivery_address_fixed), '') = ''
-       and s.created_at > now() - interval '6 hours'
-       and coalesce(s.accepted_at, s.created_at) <= now() - interval '5 minutes'
-       and not exists (select 1 from public.delivery_assignment da
-                        where da.sale_id = s.id and da.state not in ('failed', 'canceled'))
-     for update of s skip locked
-  loop
-    select r.carrier into v_c from public.resolve_dispatch(v_row.id) r;
-    continue when v_c is distinct from 'catcher';
-    if v_secret is null then
-      select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'catcher_dispatch_secret';
-    end if;
-    update public.sale set delivery_wait_sent_at = now() where id = v_row.id;
-    perform net.http_post(
-      url     := v_url,
-      headers := jsonb_build_object('Content-Type', 'application/json',
-                                    'Authorization', 'Bearer ' || v_anon,
-                                    'x-catcher-dispatch-secret', v_secret),
-      body    := jsonb_build_object('sale_id', v_row.id, 'internal', true, 'tras_espera', true));
-    v_n := v_n + 1;
-  end loop;
-  return v_n;
-end;
-$function$;
-
-comment on function public.despachar_sin_calle_vencidos() is
-  'R03: cada minuto, manda a Catcher los pedidos de reparto propio sin calle que han esperado 5 minutos a que alguien pegara la dirección. Solo locales en automático y solo Catcher.';
-revoke all on function public.despachar_sin_calle_vencidos() from public, anon, authenticated;
-
-do $$ begin
-  if exists (select 1 from cron.job where jobname = 'r03-despachar-sin-calle') then
-    perform cron.unschedule('r03-despachar-sin-calle');
-  end if;
-end $$;
-select cron.schedule('r03-despachar-sin-calle', '* * * * *', $cron$select public.despachar_sin_calle_vencidos()$cron$);
 
 -- ── Pedidos y ticket: la dirección pegada, el código y las dos notas ────────
 do $$

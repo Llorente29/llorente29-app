@@ -1,9 +1,11 @@
--- supabase/vuelta-atras/20261118T0310_r03_espera_ticket_codigo.down.sql
+-- supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql
 --
 -- Vuelta atrás de 20261118T0310: Pedidos y el ticket como estaban (la misma
 -- sustitución quirúrgica, al revés), pedidos_sin_direccion como la dejó la
--- 0300, fuera la espera (cron y función), los disparadores (lo de la entrega y
--- quién reparte en Uber), decidir_quien_reparte y las cuatro columnas.
+-- 0300, los disparadores (lo de la entrega y quién reparte en Uber),
+-- decidir_quien_reparte y las tres columnas. La espera de 5 minutos (cron,
+-- función y delivery_wait_sent_at) ya no la crea la 0310; se quita con
+-- «if exists» porque staging tuvo la versión anterior: en producción no hace nada.
 -- Antes, la 0320 (datos) deshecha. Las columnas se quitan aunque tengan datos:
 -- son copia de raw_tab, que no se toca.
 

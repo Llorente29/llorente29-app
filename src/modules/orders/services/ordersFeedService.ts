@@ -518,8 +518,9 @@ export async function coordenadasDeEntrega(saleId: string, token?: string | null
   requireSupabase()
   // R03: la tablet (token, sin sesión) por su variante, que solo enseña los
   // pedidos de su local; la de sesión sigue cerrada a anon.
-  const llamar = supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
-    => Promise<{ data: unknown; error: { message: string } | null }>
+  // .bind: `supabase.rpc` suelto pierde su `this` y revienta sin llamar a nadie.
+  const llamar = (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+    => Promise<{ data: unknown; error: { message: string } | null }>).bind(supabase!)
   const { data, error } = token
     ? await llamar('sale_coordenadas_de_entrega_by_token', { p_device_token: token, p_sale_id: saleId })
     : await llamar('sale_coordenadas_de_entrega', { p_sale_id: saleId })

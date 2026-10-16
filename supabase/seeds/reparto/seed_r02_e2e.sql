@@ -40,15 +40,12 @@ on conflict (id) do update
       delivery_alarm_at = null, delivery_alarm_kind = null, delivery_alarm_ack_at = null, updated_at = now();
 
 -- El 7B000, de hoy otra vez (no se crea aquí: si no existe, no hace nada).
--- Sigue siendo el más nuevo de Pita del Sur en Uber, como espera
--- 20261005_r02_prueba_sugerencia.sql.
--- R03: desde la 0310, un Uber sin calle entra como «la reparte Uber · fuera de
--- zona», y la 0320 pasa así los abiertos. El 7B000 es el «propio sin dirección»
--- que prueban las e2e del R02 (la etiqueta ámbar y su sugerencia): se le
--- devuelve el «propio», con «tal cual», para que sigan probando eso.
+-- R03: es un Uber sin calle, sin punto y sin cargo de envío: por la regla de
+-- las tres señales lo reparte Uber («fuera de zona»). Ya no se le fuerza el
+-- «propio»: lo pone la regla, en el bloque del R03 de abajo.
 update public.sale
    set sold_at = now() - interval '8 minutes', created_at = now() - interval '8 minutes',
-       status = 'open', order_status = 'accepted', service_type = 'own_delivery', updated_at = now()
+       status = 'open', order_status = 'accepted', updated_at = now()
  where id = 'e0200000-0000-4000-8000-0000000052a1'
    and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
@@ -73,11 +70,14 @@ delete from public.delivery_policy_suggestion where account_id = 'c01a0000-0000-
 -- local. Inventado, sin datos de cliente. Solo si las migraciones del R03 están
 -- en staging (las columnas nuevas): sin ella, esta parte no hace nada y el resto
 -- de la semilla sigue igual.
---   R03A · con dirección              → no sale en el aviso
---   R03B · sin calle, con punto       → sale; la pega el ordenador
---   R03C · sin nada                   → sale; nadie la pega (se lee en las dos vistas)
---   R03D · sin calle, con punto       → sale; la pega la tablet
---   R03E · sin calle, con punto       → sale; nadie la pega (se lee en las dos vistas)
+--   R03A · con dirección              → ticket con el bloque ENTREGA
+--   R03N · con dirección, indicaciones y nota → ticket con el recuadro de notas
+--   R03B · sin calle, con punto       → línea «Sin dirección completa»; la completa el ordenador
+--   R03C · sin calle ni punto         → no ha podido salir: aviso rojo con el motivo
+--   R03D · sin calle, con punto       → la tablet: solo la línea informativa, sin botón
+--   R03E · sin calle, con punto       → en la lista de Despacho, sin completar
+-- (Locales de staging en «manual»: no sale nada a Catcher de verdad. El motivo
+-- del R03C es el de resolve_dispatch en un local automático.)
 --   R03V · Uber sin calle, sin punto, sin cargo → la reparte Uber, fuera de
 --          zona: ni aviso ni Catcher; ticket como el de la plataforma
 --   R03T · Uber con las tres, marca con Uber en «Plataforma» → propio (la regla
@@ -90,17 +90,17 @@ delete from public.delivery_policy_suggestion where account_id = 'c01a0000-0000-
 do $r03$
 begin
   if not exists (select 1 from information_schema.columns
-                  where table_schema = 'public' and table_name = 'sale' and column_name = 'delivery_wait_sent_at') then
+                  where table_schema = 'public' and table_name = 'sale' and column_name = 'customer_phone_code') then
     raise notice 'R03: las migraciones 0300 y 0310 no están en staging; escenario del R03 sin sembrar.';
     return;
   end if;
 
-  perform set_config('folvy.reparto_tal_cual', 'on', true);
-
-  -- El 7B000 es el «propio sin dirección» del R02: sin el motivo que le puso la
-  -- regla de Uber al entrar (fuera de zona), que ya no vale para lo que prueba.
-  update public.sale set delivery_by_reason = null
+  -- El 7B000 por la regla de Uber (sin «tal cual»): sin ninguna de las tres
+  -- señales → la reparte Uber · fuera de zona.
+  update public.sale set delivery_by_reason = null, updated_at = now()
    where id = 'e0200000-0000-4000-8000-0000000052a1' and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
+  perform set_config('folvy.reparto_tal_cual', 'on', true);
 
   insert into public.kds_device (id, account_id, location_id, label, token) values
     ('e0300000-0000-4000-8000-0000000000e1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2', 'R03 e2e Norte Centro', 'r03-e2e-norte-centro'),
@@ -114,7 +114,12 @@ begin
     ('e0300000-0000-4000-8000-0000000000a1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
      'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '5 minutes', now() - interval '5 minutes',
      21.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba, 1, Floor: 4, Door: A, 28000', 'Glovo', 'R03A', 'R03A', '100000000031',
-     '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":"Calle Inventada de Prueba, 1","address_2":"Floor: 4, Door: A","delivery_notes":"Timbre 4A","latitude":"40.4300","longitude":"-3.6800"}}', '+34600000001'),
+     '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":"Calle Inventada de Prueba, 1","address_2":"Floor: 4, Door: A","latitude":"40.4300","longitude":"-3.6800"}}', '+34600000001'),
+    -- R03N · con dirección, indicaciones de entrega y nota del cliente.
+    ('e0300000-0000-4000-8000-0000000000b1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '5 minutes', now() - interval '5 minutes',
+     20.50, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba, 9, Floor: 2, Door: C, 28000', 'Glovo', 'R03N', 'R03N', '100000000036',
+     '{"channel":"Glovo","service_type":"delivery","customer_notes":"Sin pepinillos, por favor","customer":{"address_1":"Calle Inventada de Prueba, 9","address_2":"Floor: 2, Door: C","delivery_notes":"Portal azul, timbre 2C","latitude":"40.4310","longitude":"-3.6810"}}', '+34600000006'),
     ('e0300000-0000-4000-8000-0000000000a2', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
      'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '4 minutes', now() - interval '4 minutes',
      22.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03B', 'R03B', '100000000032',
@@ -140,8 +145,11 @@ begin
         service_type = 'own_delivery', delivery_address = excluded.delivery_address, raw_tab = excluded.raw_tab,
         brand_id = excluded.brand_id, channel_id = excluded.channel_id, carrier_code = null, carrier_order_id = null, delivery_state = null, dispatch_error = null,
         delivery_address_fixed = null, delivery_address_fixed_at = null, delivery_address_fixed_by = null,
-        delivery_address_origin = null, customer_phone = excluded.customer_phone,
-        delivery_wait_sent_at = null, updated_at = now();
+        delivery_address_origin = null, customer_phone = excluded.customer_phone, updated_at = now();
+
+  update public.sale
+     set dispatch_error = 'No se despachó: la dirección no ha llegado y tampoco el punto del mapa: no se puede despachar'
+   where id = 'e0300000-0000-4000-8000-0000000000a3' and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
   perform set_config('folvy.reparto_tal_cual', '', true);
 

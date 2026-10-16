@@ -28,7 +28,7 @@ async function abrirQuienReparte(page: Page) {
   await expect(page.getByTestId('fila-Smash de Prueba')).toBeVisible()
 }
 
-test('la pantalla: marcas × plataformas, herencia, avisos y la sugerencia de Folvy', async ({ page }, info) => {
+test('la pantalla: marcas × plataformas y herencia; sin sugerencias de pasar a «Plataforma»', async ({ page }, info) => {
   const movil = info.project.name === 'movil'
   await entrarComo(page, CUENTA_A.email)
   await abrirQuienReparte(page)
@@ -41,11 +41,13 @@ test('la pantalla: marcas × plataformas, herencia, avisos y la sugerencia de Fo
   await expect(page.getByRole('group', { name: 'Burger Norte en Glovo' })).toHaveAttribute('data-valor', 'own')
   await expect(page.getByTestId('herencia-own')).toBeVisible()
   await expect(page.getByTestId('herencia-licensed')).toBeVisible()
-  // Pita del Sur en Uber: «propios» sin dirección → punto ámbar.
-  await expect(page.getByRole('group', { name: 'Pita del Sur en Uber Eats' }).locator('.cx-rp-aviso')).toBeVisible()
-  // La sugerencia de Folvy (3 seguidos sin dirección en Uber). En ordenador va
-  // la primera; en móvil ya la ha respondido la prueba de la sugerencia.
-  if (!movil) await expect(page.getByText('En Uber, Pita del Sur lleva 3 pedidos seguidos sin dirección.')).toBeVisible()
+  // R03 (Julio, 16/10): la sugerencia «lleva 3 pedidos seguidos sin dirección,
+  // ¿la paso a Plataforma?» no puede existir; tampoco el aviso de las celdas ni
+  // «Lo que ha hecho Folvy». Pita del Sur en Uber tiene pedidos «propios» sin
+  // dirección en la semilla (los 7A1F*): si volviera, saldría aquí.
+  await expect(page.getByText(/pedidos seguidos sin dirección|¿La paso a «Plataforma»/)).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'Lo que ha hecho Folvy' })).toHaveCount(0)
+  await expect(page.locator('.cx-rp-aviso')).toHaveCount(0)
   // Nada en rojo en la página.
   expect(await page.locator('.cx-rp').evaluate(el =>
     [...el.querySelectorAll('*')].some(n => getComputedStyle(n).color === 'rgb(163, 32, 26)' && (n.textContent ?? '').trim() !== ''))).toBe(false)
@@ -76,42 +78,28 @@ test('guardar al tocar, lo que dice y «Deshacer»', async ({ page }, info) => {
   await expect(celda).toHaveAttribute('data-valor', 'platform')
 })
 
-test('la cocina: ámbar sin dirección, gris si reparte la plataforma, nada en rojo; y cambiar desde la etiqueta', async ({ page }, info) => {
+test('la cocina: gris si reparte la plataforma, nada en rojo y ningún «Cambiar a “la reparte X”»', async ({ page }, info) => {
   const movil = info.project.name === 'movil'
-  const s = await entrarComo(page, CUENTA_A.email)
+  await entrarComo(page, CUENTA_A.email)
   await page.addInitScript((id) => { window.localStorage.setItem('andy-app-active-location', id) }, NORTE_CENTRO)
   await page.goto('/orders')
 
-  // E2E01 (Burger Norte · Just Eat). Hay otro ámbar en el local (7B000, Uber):
-  // se elige por la plataforma, no por el orden.
-  // R03: el detalle ya no culpa a la plataforma («Just Eat no la ha mandado»
-  // no es verdad: la manda y se pierde por el camino). Se elige por su acción.
-  const ambar = page.getByTestId('etiqueta-reparto')
-    .filter({ hasText: 'Nosotros · falta la dirección' }).filter({ hasText: 'La dirección no ha llegado' })
-    .filter({ has: page.getByRole('button', { name: 'Cambiar a «la reparte Just Eat»' }) }).first()
-  await expect(ambar).toBeVisible()
-  await expect(ambar).toHaveAttribute('data-tono', 'ambar')
-  await expect(page.getByTestId('etiqueta-reparto').filter({ hasText: 'La dirección no ha llegado' })
-    .filter({ has: page.getByRole('button', { name: 'Cambiar a «la reparte Uber»' }) }).first())
-    .toHaveAttribute('data-tono', 'ambar')
+  // E2E01 (Burger Norte · Just Eat, «propio» sin dirección): R03, ya no es un
+  // estado aparte. Sale como cualquier otro (aquí, local a mano: sin rider, con
+  // «Despachar») y la línea informativa lo dice. Sin «Pedirla al cliente» ni
+  // «Cambiar a “la reparte Just Eat”»: pasar la marca a «Plataforma» por
+  // pedidos sin dirección no puede existir.
+  const e2e01 = page.locator('[data-testid="tarjeta-pedido"][data-sale-id="e0200000-0000-4000-8000-0000000053a1"]')
+  await expect(e2e01.getByTestId('etiqueta-reparto')).toContainText('Nosotros · aún sin rider')
+  await expect(e2e01.getByTestId('aviso-sin-direccion-texto')).toContainText('Sin dirección completa')
+  await expect(page.getByRole('button', { name: /Cambiar a «la reparte/ })).toHaveCount(0)
+  await expect(page.getByText('Pedirla al cliente')).toHaveCount(0)
   await expect(page.getByText(/no la ha mandado/)).toHaveCount(0)
   const gris = page.getByTestId('etiqueta-reparto').filter({ hasText: 'La reparte Glovo' }).first()
   await expect(gris).toHaveAttribute('data-tono', 'gris')
   await expect(page.getByText('No se pudo despachar')).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Reintentar despacho/ })).toHaveCount(0)
   await page.screenshot({ path: `${DIR}/cocina-${movil ? 'movil' : 'ordenador'}.png`, fullPage: false })
-
-  if (movil) return
-  // «Cambiar a “la reparte Just Eat”»: escribe la celda y recoloca ESTE pedido.
-  // Y se deja como estaba AUNQUE falle a medias: si no, la prueba del móvil,
-  // en la misma ejecución, ya no encuentra el ámbar (e2e 37216044758).
-  try {
-    await ambar.getByRole('button', { name: 'Cambiar a «la reparte Just Eat»' }).click()
-    await expect(page.getByText('Hecho: a partir de ahora esta marca en Just Eat la reparte Just Eat.')).toBeVisible()
-    await expect(page.getByTestId('etiqueta-reparto').filter({ hasText: 'La reparte Just Eat' }).first()).toBeVisible()
-  } finally {
-    await rpc(s, 'reparto_cambiar_desde_pedido', { p_sale_id: 'e0200000-0000-4000-8000-0000000053a1', p_delivery_by: 'own' })
-  }
 })
 
 test('la cuenta B no ve las marcas de A ni puede cambiar sus celdas', async ({ page }, info) => {
@@ -125,14 +113,4 @@ test('la cuenta B no ve las marcas de A ni puede cambiar sus celdas', async ({ p
     p_account_id: CUENTA_A.id, p_brand_id: 'e0200000-0000-4000-8000-00000000a0b3', p_channel_slug: 'uber',
     p_location_id: null, p_delivery_by: 'own', p_source: 'manual',
   })).rejects.toThrow(/HTTP 403|42501|permiso/)
-})
-
-test('la sugerencia de Folvy: «No, lo arreglo en Uber» queda escrito y no se vuelve a proponer', async ({ page }, info) => {
-  test.skip(info.project.name === 'movil', 'Escribe: una vez basta')
-  await entrarComo(page, CUENTA_A.email)
-  await abrirQuienReparte(page)
-  await page.getByRole('button', { name: 'No, lo arreglo en Uber' }).click()
-  await expect(page.getByText('Anotado: Pita del Sur en Uber Eats sigue en «Nosotros».')).toBeVisible()
-  await expect(page.getByText('En Uber, Pita del Sur lleva 3 pedidos seguidos sin dirección.')).toHaveCount(0)
-  await expect(page.getByRole('region', { name: 'Lo que ha hecho Folvy' })).toContainText('No aceptado')
 })

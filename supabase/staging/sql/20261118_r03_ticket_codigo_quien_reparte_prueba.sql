@@ -1,18 +1,18 @@
--- supabase/staging/sql/20261118_r03_espera_ticket_codigo_prueba.sql
+-- supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261118T0310_r03_espera_ticket_codigo (y de la 0320,
+-- SOLO STAGING. Prueba de 20261118T0310_r03_ticket_codigo_quien_reparte (y de la 0320,
 -- el relleno de los abiertos). Aplica la 0300, la 0310 y la 0320 con \i dentro
 -- de su transacción y acaba en ROLLBACK: staging no cambia. Datos inventados.
 --
 --   1. El disparador lee de raw_tab el código del teléfono, las indicaciones
 --      y la nota del cliente (HubRise y Last). Espacios y saltos de línea
 --      solos = null. Un raw_tab roto NO tumba el pedido.
---   2. La espera: despachar_sin_calle_vencidos() solo pide los de reparto
---      propio sin calle con punto del mapa, en local automático, con 5
---      minutos cumplidos; los marca para no pedirlos dos veces; los recientes,
---      con dirección o pegada, no. (pg_net no envía nada: la transacción se
---      revierte.)
---   3. El aviso dice a qué hora sale solo (sale_solo_at) y el modo del local.
+--   2. Sin espera: un pedido sin calle con punto del mapa puede salir ya a
+--      Catcher (resolve_dispatch). La lista de hoy (pedidos_sin_direccion)
+--      trae los de hoy sin dirección completa, también los ya completados, y
+--      marca para el aviso rojo solo los que NO han podido salir; los de otro
+--      día, no.
+--   3. La lista dice el modo del local y quién la completó.
 --   4. Pedidos por token y el ticket devuelven el código, las dos notas y la
 --      dirección pegada.
 --   0. Uber, por pedido: las tres señales → propio (aunque la tabla diga
@@ -32,7 +32,7 @@ begin
 end $$;
 
 \i supabase/migrations/20261118T0300_r03_direccion_incompleta.sql
-\i supabase/migrations/20261118T0310_r03_espera_ticket_codigo.sql
+\i supabase/migrations/20261118T0310_r03_ticket_codigo_quien_reparte.sql
 
 select set_config('folvy.reparto_tal_cual', 'on', true);
 
@@ -42,8 +42,8 @@ insert into public.kds_device (id, account_id, location_id, label, token) values
 -- U1: Uber por HubRise con código, indicaciones y nota. L1: Last con nota e
 -- indicaciones. B1: raw_tab roto (como reparto de la plataforma: en uno propio
 -- lo rompería también resolve_dispatch, que convierte raw_tab sin protegerse;
--- eso ya era así y no se toca aquí). V1/V2/V3: sin calle con punto (vencido,
--- reciente, vencido pero con dirección pegada).
+-- eso ya era así y no se toca aquí). V1/V2/V3/V4: sin calle con punto (no ha
+-- podido salir, recién entrado, completado por una persona, de hace dos días).
 insert into public.sale
   (id, account_id, location_id, brand_id, channel_id, source, sold_at, created_at, accepted_at, total, status, order_status,
    service_type, delivery_address, delivery_address_fixed, external_channel_text, pos_short_code, customer_phone, raw_tab)
@@ -71,6 +71,10 @@ values
   ('e0310000-0000-4000-8000-0000000000e3', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
    'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '7 minutes', now() - interval '7 minutes', now() - interval '6 minutes',
    20.00, 'open', 'accepted', 'own_delivery', null, 'Calle Pegada de Prueba, 3', 'Glovo', 'G0310V3', null,
+   '{"customer":{"latitude":"40.4100","longitude":"-3.7000"}}'),
+  ('e0310000-0000-4000-8000-0000000000e4', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+   'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '2 days', now() - interval '2 days', now() - interval '2 days',
+   20.00, 'open', 'accepted', 'own_delivery', null, null, 'Glovo', 'G0310V4', null,
    '{"customer":{"latitude":"40.4100","longitude":"-3.7000"}}');
 
 select set_config('folvy.reparto_tal_cual', '', true);
@@ -155,28 +159,34 @@ begin
   raise notice 'R03 0310 1: disparador · HubRise código, indicaciones y nota · Last indicaciones y nota en blanco = null · raw_tab roto, el pedido entra.';
 end $$;
 
--- 2. La espera, con Norte Centro en automático (solo dentro de esta transacción).
-update public.locations set dispatch_mode = 'auto' where id = 'c01a0000-0000-4000-8000-0000000000a2';
+-- 2. Sin espera, y la lista de hoy.
+update public.sale set dispatch_error = 'Catcher rechazó el pedido (422)' where id = 'e0310000-0000-4000-8000-0000000000e1';
+update public.sale set delivery_address_fixed_by = 'Persona de Prueba', delivery_address_fixed_at = now()
+ where id = 'e0310000-0000-4000-8000-0000000000e3';
 
 do $$
-declare n int; v_ids text;
+declare r record; j jsonb; v_codes text; v_rojo text;
 begin
-  n := public.despachar_sin_calle_vencidos();
-  select string_agg(pos_short_code, ',' order by pos_short_code) into v_ids
-    from public.sale where id::text like 'e0310000-%' and delivery_wait_sent_at is not null;
-  if v_ids is distinct from 'G0310V1' then
-    raise exception 'R03 0310 2a: ha pedido % (esperaba solo G0310V1: vencido, sin calle, con punto).', v_ids;
+  select * into r from public.resolve_dispatch('e0310000-0000-4000-8000-0000000000e2');
+  if r.carrier is distinct from 'catcher' then
+    raise exception 'R03 0310 2a: un pedido sin calle con punto del mapa no puede salir ya a Catcher (%, %).', r.carrier, r.reason;
   end if;
-  n := public.despachar_sin_calle_vencidos();  -- segunda pasada: no lo vuelve a pedir
-  select count(*) into n from net.http_request_queue q where convert_from(q.body, 'UTF8') like '%e0310000-0000-4000-8000-0000000000e1%';
-  if n <> 1 then raise exception 'R03 0310 2b: pedido a Catcher % veces (esperaba 1, también tras la segunda pasada).', n; end if;
-  if not exists (select 1 from net.http_request_queue q where convert_from(q.body, 'UTF8') like '%e0310000-0000-4000-8000-0000000000e1%' and convert_from(q.body, 'UTF8') like '%tras_espera%') then
-    raise exception 'R03 0310 2c: la petición no lleva tras_espera.';
+  if to_regprocedure('public.despachar_sin_calle_vencidos()') is not null
+     or exists (select 1 from cron.job where jobname = 'r03-despachar-sin-calle') then
+    raise exception 'R03 0310 2b: sigue la espera de 5 minutos (función o cron).';
   end if;
-  raise notice 'R03 0310 2: la espera · sale G0310V1 (vencido) · no salen el reciente ni el de dirección pegada · una sola petición, con tras_espera.';
+  j := public.pedidos_sin_direccion(null, 'r03-0310-prueba-norte-centro');
+  select string_agg(x->>'code', ',' order by x->>'code'), string_agg(case when (x->>'no_ha_salido')::boolean then x->>'code' end, ',')
+    into v_codes, v_rojo
+    from jsonb_array_elements(j->'pedidos') x where x->>'code' like 'G0310V%';
+  if v_codes is distinct from 'G0310V1,G0310V2,G0310V3' then
+    raise exception 'R03 0310 2c: la lista de hoy trae % (esperaba V1, V2 y V3; V4 es de otro día).', v_codes;
+  end if;
+  if v_rojo is distinct from 'G0310V1' then
+    raise exception 'R03 0310 2d: el aviso rojo sería para % (esperaba solo V1, el que no ha podido salir).', v_rojo;
+  end if;
+  raise notice 'R03 0310 2: sin espera · sale ya con el punto del mapa · la lista de hoy trae V1, V2 y V3 (no el de otro día) · rojo solo V1.';
 end $$;
-
-update public.locations set dispatch_mode = 'manual' where id = 'c01a0000-0000-4000-8000-0000000000a2';
 
 -- 3 y 4, como la tablet (anon).
 set local role anon;
@@ -185,9 +195,10 @@ do $$
 declare j jsonb; p jsonb; o jsonb;
 begin
   j := public.pedidos_sin_direccion(null, 'r03-0310-prueba-norte-centro');
-  select x into p from jsonb_array_elements(j->'pedidos') x where x->>'code' = 'G0310V2';
-  if p is null or p->>'sale_solo_at' is null or p->>'dispatch_mode' is distinct from 'manual' then
-    raise exception 'R03 0310 3: el aviso no dice cuándo sale ni el modo: %', p;
+  select x into p from jsonb_array_elements(j->'pedidos') x where x->>'code' = 'G0310V3';
+  if p is null or p->>'dispatch_mode' is distinct from 'manual' or p->>'completada_por' is distinct from 'Persona de Prueba'
+     or p->>'direccion_completada' is distinct from 'Calle Pegada de Prueba, 3' then
+    raise exception 'R03 0310 3: la lista no dice el modo ni quién la completó: %', p;
   end if;
 
   j := public.orders_feed_by_token('r03-0310-prueba-norte-centro');
@@ -202,7 +213,7 @@ begin
   if o::text not like '%"customer_phone_code": "12345678"%' or o::text not like '%"delivery_instructions": "Timbre 2B"%' then
     raise exception 'R03 0310 4c: el ticket no trae el código ni las indicaciones.';
   end if;
-  raise notice 'R03 0310 3 y 4: aviso con sale_solo_at y modo · Pedidos de la tablet y ticket con código, indicaciones, nota y dirección pegada.';
+  raise notice 'R03 0310 3 y 4: la lista dice el modo y quién la completó · Pedidos de la tablet y ticket con código, indicaciones, nota y dirección pegada.';
 
   -- El mezclado sale en el aviso para decidir; el de las tres y el de ninguna, no.
   j := public.pedidos_sin_direccion(null, 'r03-0310-prueba-norte-centro');

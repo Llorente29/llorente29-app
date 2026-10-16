@@ -143,3 +143,16 @@
   .cx-rp-celda-plataforma { display: inline; font-size: 14px; font-weight: 600; }
   .cx-rp-pie { background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque); }
 }
+
+/* R03 · «Completar dirección»: pequeño, para la oficina o el encargado. */
+.cx-cd-boton {
+  height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--cx-borde-campo);
+  background: var(--cx-blanco); color: var(--cx-azul); font-size: 13px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; text-decoration: none; white-space: nowrap;
+}
+.cx-cd-boton-pri { background: var(--cx-azul); color: var(--cx-blanco); border-color: var(--cx-azul); }
+.cx-cd-boton:disabled { opacity: 0.55; cursor: not-allowed; }
+.cx-cd-casilla {
+  width: 100%; height: 34px; border-radius: 8px; border: 1px solid var(--cx-borde-campo); background: var(--cx-blanco);
+  padding: 0 10px; font-size: 13.5px; color: var(--cx-texto);
+}

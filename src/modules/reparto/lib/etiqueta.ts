@@ -4,15 +4,16 @@
 // NUNCA rojo: la cocina cocina; lo del reparto va en su propia etiqueta.
 //   · gris  «La reparte Glovo / Uber / Just Eat» — sin despacho, sin aviso.
 //   · verde «Nosotros · rider asignado» (o en camino, o entregado).
-//   · ámbar «Nosotros · falta la dirección · La dirección no ha llegado» (R03:
-//     no «Glovo no la ha mandado», que no es verdad: Glovo la manda y se pierde
-//     por el camino), con «Pedirla al cliente» y
-//     «Cambiar a “la reparte Uber”»; y «Nosotros · aún sin rider» cuando hay
-//     dirección pero no ha salido (con «Despachar»).
+//   · ámbar «Nosotros · aún sin rider» cuando no ha salido (con «Despachar»).
+//   R03: un pedido sin dirección completa no tiene etiqueta propia: sale a
+//   Catcher como cualquier otro (lo dice la línea informativa de la tarjeta,
+//   src/modules/reparto/lib/direccionFalta.ts). Ni «Pedirla al cliente» ni
+//   «Cambiar a “la reparte X”»: pasar la marca a «Plataforma» por pedidos sin
+//   dirección no puede existir (Julio, 16/10).
 // Pura: la prueba tests/unit/modules/reparto/etiqueta.test.ts.
 
 export type TonoEtiqueta = 'gris' | 'verde' | 'ambar' | 'azul'
-export type AccionEtiqueta = 'pedir_direccion' | 'cambiar_a_plataforma' | 'despachar'
+export type AccionEtiqueta = 'despachar'
 
 export interface Etiqueta {
   tono: TonoEtiqueta
@@ -66,15 +67,9 @@ export function etiquetaDeReparto(p: PedidoParaEtiqueta): Etiqueta | null {
     return { tono: 'ambar', texto: 'Nosotros · falta decidir quién reparte', detalle: 'decídelo en el aviso rojo', acciones: [] }
   }
 
-  const sinDireccion = !(p.delivery_address ?? '').trim()
-  if (sinDireccion) {
-    return {
-      tono: 'ambar',
-      texto: 'Nosotros · falta la dirección',
-      detalle: 'La dirección no ha llegado',
-      acciones: ['pedir_direccion', 'cambiar_a_plataforma'],
-    }
-  }
+  // R03 (Julio, tras las capturas): sin dirección completa ya no es un estado
+  // aparte. Sale a Catcher como cualquier otro y la etiqueta dice cómo va el
+  // reparto; lo de la dirección es la línea informativa de la tarjeta.
 
   const estado = (p.delivery_state ?? '').toLowerCase()
   const transportista = p.carrier_code ? (p.carrier_code === 'catcher' ? 'Catcher' : p.carrier_code) : null
