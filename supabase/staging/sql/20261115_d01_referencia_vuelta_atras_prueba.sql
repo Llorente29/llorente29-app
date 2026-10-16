@@ -36,9 +36,10 @@ declare
   v_e constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
   v_canal uuid; v_party uuid; v_sup uuid; p jsonb; e jsonb;
 begin
-  if exists (select 1 from public.channel_settlement where account_id = v_acc and source like 'correo\_%') then
-    raise exception 'PRUEBA D01 referencia · 0: la cuenta A ya tiene liquidaciones del correo en staging; la prueba necesita empezar sin ninguna.';
-  end if;
+  -- La tanda cuenta TODAS las del correo de la cuenta: la prueba empieza sin ninguna. Las que haya
+  -- (la de la semilla de Libros, seed_d01_liquidacion_referencia_staging.sql) se quitan aquí dentro,
+  -- y el rollback del final las devuelve.
+  delete from public.channel_settlement where account_id = v_acc and source like 'correo\_%';
   delete from public.bank_settings where company_id = v_e;
   if public._conta_corte(v_e) >= date '2026-07-27' then raise exception 'PRUEBA D01 referencia · 0: sin Bancos, el corte de A (%) no deja crear facturas de agosto.', public._conta_corte(v_e); end if;
   select id into v_canal from public.sales_channel where account_id = v_acc and slug = 'uber';
