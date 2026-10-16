@@ -150,6 +150,7 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
     await capturar(page, 'diario-abierto')
   }
   // Para revisar: solo lo que espera, sin esconder el resto (Todos sigue con todo).
+  await abrirVistas(page)
   await vistas.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
   await expect(filaDe(page, /Ventas del día/).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
   await expect(filaDe(page, /Alquiler Norte Mercado · octubre/)).toBeVisible()
