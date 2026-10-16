@@ -6,9 +6,10 @@ name: Carril de prueba · ensayo en staging-conta
 # dice cuánto tarda y qué copia, y para si el clon quedaría incompleto (una
 # clave ajena colgando, una fila que choca). No deja nada en staging.
 #
-# Y, si se pide «de-verdad», hace el ciclo entero de una e2e sin pruebas:
-# coger un carril, clonar, comprobar que sus usuarios entran, borrar y soltar.
-# Eso sí escribe en staging, pero solo en el carril que coge, y lo borra.
+# Y el ciclo entero de una e2e sin pruebas (en cada push, y a mano con
+# «de_verdad»): coger un carril, clonar, comprobar que sus siete usuarios
+# entran y solo ven lo suyo, borrar y soltar. Eso sí escribe en staging, pero
+# solo en el carril que coge, y lo borra.
 #
 # CUÁNDO: al empujar un cambio del carril a una rama conta/w02-*, y a mano.
 # Mismas guardas que las e2e: la URL es de staging-conta, no es de
@@ -84,13 +85,13 @@ jobs:
           scripts/e2e/carril.sh ensayo 4001 | tee "$RUNNER_TEMP/ensayo.txt"
 
       - name: Carril · esperar a que no se esté migrando y coger uno
-        if: inputs.de_verdad
+        if: github.event_name == 'push' || inputs.de_verdad
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: scripts/e2e/carril.sh coger
 
       - name: Carril · clonar las cuentas de prueba
-        if: inputs.de_verdad
+        if: github.event_name == 'push' || inputs.de_verdad
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -100,14 +101,14 @@ jobs:
           CLAVE_PRUEBAS="$CLAVE" scripts/e2e/carril.sh clonar
 
       - name: Carril · sus siete usuarios entran, y solo ven lo suyo
-        if: inputs.de_verdad
+        if: github.event_name == 'push' || inputs.de_verdad
         run: |
           set -euo pipefail
           N=$(cat "$RUNNER_TEMP/carril/numero")
           node scripts/e2e/carril-entrar.mjs "$N"
 
       - name: Carril · borrar y soltar (pase lo que pase)
-        if: always() && inputs.de_verdad
+        if: always() && (github.event_name == 'push' || inputs.de_verdad)
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: scripts/e2e/carril.sh soltar
