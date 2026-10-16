@@ -2329,34 +2329,95 @@ El cliente paga 40,00 €, IVA dentro al 10 %: base 36,36 y cuota 3,64. La carta
    - **La liquidación dice menos de lo que restaron los pedidos:** la diferencia la pagó Uber, y va con el **asiento de ajuste** de arriba (Debe 430 de Uber, Haber 70009001 y 477).
    - **La liquidación dice más:** se dice como «Mira esto» y no se apunta solo.
 
-### Cargos al cliente (envío, pedido pequeño): medido el 16/10, sin decidir
+### Cargos al cliente (envío, pedido pequeño): medido el 16/10 y decidido por Julio
 
 Pedidos de marcas propias de octubre (del 01 al 15/10, 526 pedidos, todos de HubRise). Los cargos van en `raw_tab.charges` de HubRise.
 
 - **`sale.dispatch_mode`** vale «auto» en los 526 y no dice quién reparte.
-- **Quién reparte sale de «Quién reparte»** (`brand_delivery_policy.delivery_by`, por marca × plataforma × local): «own» es reparto propio, con Catcher; «platform» es el rider de la plataforma.
+- **Quién repartió cada pedido** lo dice su **`sale.service_type`**, que pone al entrar el disparador del R02 con `resolve_delivery_by` (la pantalla «Quién reparte»): `own_delivery` es reparto propio, con Catcher; `platform_delivery` es el rider de la plataforma.
 
-| Plataforma | Quién reparte | Pedidos | Con envío | Envío | Con «Small order fee» | Pedido pequeño |
+> **Corrección (16/10).** La primera medida decía «18 pedidos sin política».
+> Estaba mal: las celdas generales de «Quién reparte» llevan el local
+> `00000000-0000-0000-0000-000000000000`, no `null`, y la consulta solo miraba
+> `null`. Con `resolve_delivery_by`, que es la resolución que usa todo lo
+> demás, los 526 pedidos de octubre tienen su celda (manual o migrada). En 90
+> días son 2.423 pedidos en 35 combinaciones marca × plataforma × local, y
+> **ninguna sale por defecto**.
+
+| Plataforma | Repartió (guardado en el pedido) | Pedidos | Con envío | Envío | Con pedido pequeño | Pedido pequeño |
 |---|---|---|---|---|---|---|
-| Glovo | propio | 149 | 149 | 670,50 € | 11 | 33,00 € |
-| Glovo | plataforma | 82 | 0 | — | 0 | — |
-| Glovo | sin política | 9 | 8 | 36,00 € | 3 | 9,00 € |
-| Uber Eats | propio | 126 | 99 | 409,90 € | 0 | — |
-| Uber Eats | plataforma | 144 | 0 | — | 0 | — |
-| Uber Eats | sin política | 9 | 1 | 4,50 € | 0 | — |
+| Glovo | propio | 153 | 152 | 684,00 € | 13 | 39,00 € |
+| Glovo | plataforma | 87 | **5** | **22,50 €** | 1 | 3,00 € |
+| Uber Eats | propio | 123 | 97 | 403,43 € | 0 | — |
+| Uber Eats | plataforma | 155 | **3** | **10,97 €** | 0 | — |
+| Uber Eats | recogida | 1 | 0 | — | 0 | — |
 | Just Eat | propio | 7 | 7 | 20,93 € | 0 | — |
 | **Total** | | **526** | **264** | **1.141,83 €** | **14** | **42,00 €** |
 
-- **Solo hay cargos cuando reparte el restaurante.** Con rider de la plataforma, ninguno: el envío lo cobra y se lo queda la plataforma, y no llega al pedido.
-- **Uber «propio»** incluye 1 pedido «collection» (recogida) sin envío.
+- **Casi todo el envío es de reparto propio.** Hay **8 pedidos con envío que repartió la plataforma**, que suman 33,47 €: eso es lo que irá a «Por aclarar», abajo.
+- **26 pedidos de reparto propio sin envío** (1 de Glovo y 26 de Uber): envío gratis para el cliente. No hay nada que apuntar.
+- **La celda de hoy no siempre es la del día del pedido:** 29 pedidos de octubre tienen hoy una celda distinta de lo que guardaron al entrar. Manda lo guardado, que es lo que pasó ese día.
 - **En los 59 asientos validados de octubre** los 1.183,83 € de cargos (envío + pedido pequeño) están **dentro de la venta**:
   - van en la 7000000x de su marca, con IVA al 10 %;
   - los 526 pedidos llevan «Base calculada», porque HubRise no trae la base, y se calcula del total, cargos incluidos, al tipo de las ventas;
   - el 430 de los 59 suma 12.504,56 €, exactamente la suma de los totales de sus pedidos.
 
-**Preguntas de negocio para Julio:**
-1. **Cuando reparte Catcher, ¿de quién es el envío que paga el cliente?** ¿La plataforma lo pasa entero al restaurante en la liquidación, o se queda una parte?
-2. **Si es del restaurante, ¿es venta del restaurante?** Es un servicio accesorio a la venta de comida a domicilio, y por eso va al mismo tipo del 10 %; no está cotejado con la DGT. ¿Se queda dentro de la venta de la marca, como hoy, o va a una subcuenta propia (705 Prestaciones de servicios, o una 7000x «Envíos»)?
-3. **«Small order fee» de Glovo** (3,00 € por pedido): ¿lo cobra el restaurante o Glovo? Si es de Glovo, hoy está entrando como venta del restaurante.
-4. **Los 18 pedidos «sin política»** (9 de Glovo y 9 de Uber): falta decir quién reparte esa marca × plataforma × local en «Quién reparte».
-5. **El coste de Catcher** (su factura por reparto) va a gasto, como ya hace la E05. ¿Se quiere ver el envío cobrado frente al coste de Catcher por local?
+**Lo que decidió Julio (16/10):**
+1. Cuando reparte Catcher, **el envío es del restaurante**: la plataforma se lo pasa en la liquidación.
+2. El envío va a **una subcuenta propia, «Envíos cobrados», con su local**, para compararlo con lo que factura Catcher.
+3. El **pedido pequeño** de Glovo también es del restaurante y **se queda dentro de la venta de la marca**, como hoy: es un recargo sobre el precio.
+
+### La construcción: el asiento del día con promociones y envíos
+
+**La subcuenta nueva de envíos (Julio la crea en Diez antes del primer envío):**
+
+| Número | Nombre | Cuelga de |
+|---|---|---|
+| **70500001** | ENVÍOS COBRADOS | 705 Prestaciones de servicios |
+
+- **Por qué la 705 y no la 759 (ingresos por servicios diversos):**
+  - El envío al cliente es parte de la actividad ordinaria, que es vender comida a domicilio. Va, por tanto, en el **importe neto de la cifra de negocios**, y ahí la cuenta de servicios es la 705.
+  - La 759 es para ingresos accesorios ajenos a la actividad y saldría fuera de la cifra de negocios.
+  - **Número libre:** en Foodint solo existe la 70500000, la de plantilla.
+  - **Una sola subcuenta para todos los locales:** cada apunte del día lleva su local, como todos los del grupo 7, así que «por local» sale del libro sin abrir una subcuenta por local.
+- **El IVA del envío, al 10 % como accesorio: NO cotejado.**
+  - Ley 37/1992, art. 78.Dos.1.º: la base incluye «los gastos de comisiones, portes y transporte… derivados de la prestación principal o de las accesorias». El transporte que cobra el que vende va con la operación principal y lleva su tipo.
+  - La cita es de memoria: la red de este entorno no deja abrir el BOE ni la DGT (403).
+  - Antes de construir se abre el artículo y una consulta de la DGT sobre reparto a domicilio propio.
+- **El asiento del día con envío** (ejemplo inventado, reparto propio por Catcher):
+  - Un pedido de carta 25,00 €, con envío de 3,50 € y sin promoción. El cliente paga 28,50 €, IVA dentro al 10 %: base 25,91 y cuota 2,59.
+  - El envío en base es 3,50 ÷ 1,10 = 3,18, al céntimo; la venta en base es la diferencia, 25,91 − 3,18 = 22,73.
+  - **El IVA va en una sola línea por tipo**, como hoy.
+
+| Cuenta | Debe | Haber |
+|---|---|---|
+| 430 de la plataforma | 28,50 | |
+| 7000000x Ventas de la marca | | 22,73 |
+| **70500001 Envíos cobrados** (con su local) | | **3,18** |
+| 47700010 IVA 10 % · base 25,91 | | 2,59 |
+
+- Con promoción, va igual que arriba: la promoción en su 7000900x y el IVA sobre lo que paga el cliente.
+- **El pedido pequeño** se queda en la 7000000x de la marca, como hoy.
+
+**Quién reparte, desde dónde se lee y qué pasa si no se sabe:**
+- Se lee de **`sale.service_type` del pedido**: lo puso `resolve_delivery_by` al entrar el pedido, con `brand_delivery_policy` o su herencia. Es lo que pasó ese día, aunque la celda cambie después.
+  - **`own_delivery` con envío:** el envío va a la 70500001.
+  - **`platform_delivery` sin envío:** no hay envío que apuntar.
+- **A «Por aclarar», sin adivinar:**
+  - un pedido con envío que la plataforma repartió (`platform_delivery`): 8 en octubre, 33,47 €;
+  - un pedido con envío sin `service_type` de reparto;
+  - un pedido cuya celda sale «por defecto» en `resolve_delivery_by` (nadie lo ha dicho). Esa función, sin celda ni herencia, devuelve «plataforma», y **ese «plataforma» por defecto no vale para la contabilidad**. Hoy son 0 pedidos.
+- **Qué hace «Por aclarar» en el asiento del día:**
+  - El asiento de esa plataforma y día sale en **«duda»** con su «Mira esto»: el código del pedido, la marca, el local y el envío.
+  - No se valida hasta que alguien diga quién lo repartió, con dos respuestas: **«Lo repartimos nosotros»**, y el envío va a la 70500001; o **«Lo repartió la plataforma»**.
+  - **Pregunta para Julio:** con la segunda, ¿el envío es de la plataforma y sale de la venta y del 430? Hoy está dentro, porque el total del pedido lo incluye.
+- **Lo ya validado no se toca:** los 59 asientos de octubre, con la cifra y el IVA bien. Solo cambia la subcuenta desde ahora.
+
+**Las subcuentas que crea la tanda en el plan de Foodint, en Folvy** (con los mismos números y nombres que en Diez):
+
+| Número | Nombre | En Diez |
+|---|---|---|
+| 70009001 | PROMOCIONES UBER EATS | creada por Julio, 16/10 |
+| 70009002 | PROMOCIONES GLOVO | creada por Julio, 16/10 |
+| 70009003 | PROMOCIONES JUST EAT | creada por Julio, 16/10 |
+| 70500001 | ENVÍOS COBRADOS | **pendiente: la crea Julio antes del primer envío** |
