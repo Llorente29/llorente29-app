@@ -126,7 +126,8 @@ def main():
     esperan = [f for f in fs if f['cerrojo'] > 1]
     print(f"\n{len(fs)} e2e desde {a.desde}: cerrojo {suma('cerrojo'):.0f} min · cola GitHub {suma('cola'):.0f} min · "
           f"preparación {suma('prep'):.0f} min · pruebas {suma('pruebas'):.0f} min. "
-          f"Esperaron más de 1 min al cerrojo {len(esperan)}; media de esa espera {statistics.mean(f['cerrojo'] for f in esperan):.1f} min.")
+          f"Esperaron más de 1 min al cerrojo {len(esperan)}"
+          + (f"; media de esa espera {statistics.mean(f['cerrojo'] for f in esperan):.1f} min." if esperan else '.'))
 
 
 if __name__ == '__main__':
