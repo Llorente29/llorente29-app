@@ -34,7 +34,7 @@ do $$
 declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v_e constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
-  v_canal uuid; v_party uuid; v_sup uuid; p jsonb; r jsonb;
+  v_canal uuid; v_party uuid; v_sup uuid; p jsonb; e jsonb;
 begin
   if exists (select 1 from public.channel_settlement where account_id = v_acc and source like 'correo\_%') then
     raise exception 'PRUEBA D01 referencia · 0: la cuenta A ya tiene liquidaciones del correo en staging; la prueba necesita empezar sin ninguna.';
@@ -60,12 +60,12 @@ begin
     'factura', jsonb_build_object('comision', jsonb_build_object('total', 10, 'base', 8.27), 'publicidad', jsonb_build_object('total', 10, 'base', 8.26),
                                   'base', 16.53, 'iva', 3.47, 'total', 20, 'tipo_iva', 21, 'avisos', '[]'::jsonb));
   perform set_config('request.jwt.claims', '', true);
-  for r in select x from (values
+  for e in select v.x from (values
       (jsonb_build_object('email_id', 'prueba-ref-1', 'desde', '2026-07-27', 'hasta', '2026-08-02')),
       (jsonb_build_object('email_id', 'prueba-ref-2', 'desde', '2026-07-27', 'hasta', '2026-08-09')),
       (jsonb_build_object('email_id', 'prueba-ref-3', 'desde', '2026-10-05', 'hasta', '2026-10-11'))) v(x) loop
-    if public.conta_liquidacion_registrar(v_e, p || (r.x), null)->'factura'->>'estado' <> 'creada' then
-      raise exception 'PRUEBA D01 referencia · 0: un resumen de % no ha creado su factura.', r.x->>'desde';
+    if public.conta_liquidacion_registrar(v_e, p || e, null)->'factura'->>'estado' <> 'creada' then
+      raise exception 'PRUEBA D01 referencia · 0: un resumen de % no ha creado su factura.', e->>'desde';
     end if;
   end loop;
   if (select count(*) from public.channel_settlement where account_id = v_acc and source like 'correo\_%' and review_note like '%Se solapa con%') <> 2 then
