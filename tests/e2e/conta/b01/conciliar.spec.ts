@@ -157,10 +157,31 @@ test.describe('B02 · Bancos, conciliar', () => {
       await expect(panel.getByRole('button', { name: 'No va a contabilidad…' })).toBeVisible()
       await panel.getByText('Ver el asiento que se crea').click()
       await expect(panel.locator('.cxn-asiento')).toContainText('40700001')
+      // Cambiar el alto de la ventana con el panel abierto no vuelve a montar la pantalla:
+      // ni recarga la página (la marca en window sigue), ni reaparece el esqueleto, ni navega.
+      const navegaciones: string[] = []
+      page.on('framenavigated', (f) => { if (f === page.mainFrame()) navegaciones.push(f.url()) })
+      await page.evaluate(() => {
+        const w = window as unknown as { __marca: number; __esqueletos: number }
+        w.__marca = 1; w.__esqueletos = 0
+        new MutationObserver(() => { if (document.querySelector('[aria-label="Cargando los movimientos"]')) w.__esqueletos++ })
+          .observe(document.body, { subtree: true, childList: true })
+      })
+      for (const alto of [2400, 700, 1600, 900]) { await page.setViewportSize({ width: 1440, height: alto }); await page.waitForTimeout(700) }
+      const tras = await page.evaluate(() => {
+        const w = window as unknown as { __marca?: number; __esqueletos?: number }
+        return { marca: w.__marca ?? null, esqueletos: w.__esqueletos ?? null }
+      })
+      expect(tras, `al cambiar el alto: navegaciones ${JSON.stringify(navegaciones)}`).toEqual({ marca: 1, esqueletos: 0 })
+      await expect(panel).toBeVisible()
       // La lista y el panel, a la vez, antes y después de la captura: si algo los desmonta, se ve aquí.
       await expect(page.getByRole('grid')).toBeVisible()
-      await expect(panel).toBeVisible()
       await capturar(page, 'panel')
+      const trasCaptura = await page.evaluate(() => {
+        const w = window as unknown as { __marca?: number; __esqueletos?: number }
+        return { marca: w.__marca ?? null, esqueletos: w.__esqueletos ?? null }
+      })
+      expect(trasCaptura, `durante la captura: navegaciones ${JSON.stringify(navegaciones)}`).toEqual({ marca: 1, esqueletos: 0 })
       await expect(panel, 'el panel se ha cerrado solo durante la captura').toBeVisible()
 
       // Intro confirma la fila enfocada (los 3 iguales), cada uno como si fuera solo, y lo dice.
