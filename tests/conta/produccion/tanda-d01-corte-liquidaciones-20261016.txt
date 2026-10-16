@@ -1,0 +1,28 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# D01 · El corte por fecha de las liquidaciones por correo (T5, Julio, 16/10).
+# La anterior de este fichero (D01, encender liquidaciones-foodint@, 0100 del
+# 14) ya está en el historial de producción (real #100); su copia:
+# tests/conta/produccion/tanda-d01-encender-liquidaciones-20261016.txt.
+#
+#   1. 0100 del 15 — el corte: una liquidación cuyo periodo acaba antes de la
+#      fecha de corte de Bancos (en Foodint, 01/10/2026) es de referencia: sin
+#      factura de comisión ni asiento. La que cruza el corte es real, con su
+#      factura entera y su fecha. Una columna nueva (is_reference), una función
+#      nueva (_conta_corte) y dos que cambian con la misma firma
+#      (conta_liquidacion_factura_proponer y _conta_liquidacion_marcar):
+#      declaradas en la cabecera, con su prueba de staging.
+#   2. 0110 del 15 — los datos de Foodint: las 7 de agosto que entraron antes
+#      del corte pasan a de referencia y sus 7 facturas de comisión en revisión
+#      se quitan (guardadas en una copia para la vuelta atrás). Freno: 7 y 7,
+#      sin número, sin asiento, sin nada colgando; después, los solapes siguen
+#      por aclarar. Es un «delete»: pide «autorizo».
+#
+# Va ANTES de fusionar: el front lee is_reference. Ninguna toca el camino del pedido.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-corte-liquidaciones.sql
+supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql
+supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql

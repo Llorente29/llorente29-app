@@ -1,0 +1,20 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# D01 · Encender la dirección de liquidaciones de Foodint
+# (liquidaciones-foodint@entrada.folvy.app). Se lanza cuando Resend diga
+# «Verified» para entrada.folvy.app. La anterior de este fichero (D01, las
+# liquidaciones por correo, 0100 y 0110) ya está en el historial de
+# producción (real #96); su copia: tests/conta/produccion/tanda-d01-liquidaciones-20261016.txt.
+#
+#   1. 0100 del 14 — pone active a true solo en esa fila (cuenta y empresa de
+#      Foodint, clase «liquidaciones»). Freno: una sola fila y apagada antes;
+#      después comprueba que ha encendido exactamente una. Es un «update» sobre
+#      lo que existe: pide «autorizo» con el nombre entero del fichero.
+#
+# Ninguna toca el camino del pedido.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-encender-liquidaciones.sql
+supabase/migrations/20261114T0100_d01_encender_liquidaciones_foodint.sql

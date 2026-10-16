@@ -42,9 +42,31 @@
 //      que ya las tiene de una pasada anterior, no se ve. (16/10, ensayo #92 de
 //      la D01: 42703 en _conta_liquidacion_solape, que leía
 //      channel_settlement.store_id antes de añadirlo. Staging, verde.)
+//   7. Los nombres ambiguos en PL/pgSQL, en esos mismos ficheros (tanda y
+//      vuelta atrás pasan el MISMO control): una variable, parámetro o columna
+//      de «returns table» que se llama como una columna de una tabla que su
+//      bloque nombra y se usa sin cualificar; y un «execute format('… select %s
+//      from A a, B b …')» que rellena la lista con columnas sin cualificar.
+//      Las dos paran con 42702 al EJECUTAR, no al crear. Las columnas salen de
+//      src/types/database.ts y de lo que crean los propios ficheros. (16/10,
+//      ensayo #103 de la D01: la vuelta atrás de la 0110 metía «id» sin
+//      cualificar sobre la copia y el registro devuelto, que lo tienen los dos;
+//      en staging no hay Foodint y la vuelta atrás salía sin hacer nada.)
+//   8. Cada vuelta atrás de producción (supabase/produccion/vuelta-atras.txt)
+//      la ejecuta de verdad («\i <fichero>») alguna prueba de staging
+//      (supabase/staging/sql/*_prueba.sql), sobre datos, o dice por qué no con
+//      «-- sin prueba con datos: …». Todas las pruebas de la carpeta, no solo
+//      las del manifiesto de staging: el manifiesto de cada rama nombra lo suyo
+//      y se vacía al fusionar, y la prueba sigue ahí (16/10: la de C06b, #215,
+//      corrió en staging y no está en el manifiesto de main).
+//      Una vuelta atrás que en staging no encuentra nada que deshacer no ha
+//      ejecutado ni una de sus sentencias. Vale «\i» (desde la raíz) y «\ir»
+//      (desde la carpeta de la prueba). La que ya estaba viva el 16/10 (B02 ·
+//      T1) va nombrada en ANTES_DE_LA_REGLA_8.
 // Sale con 1 si algo no cumple.
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
-import { ordenEnElFichero } from './produccion/analizar.mjs'
+import { posix } from 'node:path'
+import { ordenEnElFichero, ambiguosEnPlpgsql, columnasConocidas } from './produccion/analizar.mjs'
 
 const mal = []
 const manifiesto = 'supabase/staging/aplicar.txt'
@@ -108,7 +130,41 @@ for (const f of sqlDeLasTandas) {
     mal.push(`${f}: ${x.objeto} (sentencia ${x.sentencia}) lee ${x.lee}, que este fichero crea más abajo (sentencia ${x.nace}). En una base limpia falla al crearla (42703/42P01); staging no lo ve si ya la tiene. Créala antes.`)
   }
 }
+const textos = new Map([...sqlDeLasTandas].map((f) => [f, readFileSync(f, 'utf8')]))
+const columnas = columnasConocidas(readFileSync('src/types/database.ts', 'utf8'), [...textos.values()])
+for (const [f, t] of textos) {
+  for (const x of ambiguosEnPlpgsql(t, (tabla) => columnas.get(tabla))) {
+    mal.push(x.tipo === 'dinamico'
+      ? `${f}: en ${x.bloque}, ${x.nombre} ${x.detalle}.`
+      : `${f}: en ${x.bloque}, «${x.nombre}» es ${x.detalle}, y se usa sin cualificar: 42702 al ejecutarlo. Cámbiale el nombre (v_${x.nombre}).`)
+  }
+}
+// La regla 8 es del 16/10. La vuelta atrás que ya estaba en el manifiesto vivo ese día, de una
+// tanda ya aplicada (B02 · T1, la 0200), se queda como estaba: nombrada aquí, una por una, y
+// ninguna más. La siguiente tanda de ese fichero ya cumple la regla.
+const ANTES_DE_LA_REGLA_8 = new Set(['supabase/vuelta-atras/20261101T0200_b02_entrada.down.sql'])
+const vueltas = 'supabase/produccion/vuelta-atras.txt'
+if (existsSync(vueltas)) {
+  // Lo que ejecuta cada prueba: «\i ruta» (desde la raíz, como corre el workflow) y «\ir ruta» (desde la carpeta de la prueba).
+  const ejecutadas = new Set()
+  const carpeta = 'supabase/staging/sql'
+  if (existsSync(carpeta)) {
+    for (const p of readdirSync(carpeta).filter((n) => /_prueba\.sql$/.test(n)).map((n) => `${carpeta}/${n}`)) {
+      for (const l of readFileSync(p, 'utf8').split('\n')) {
+        const m = l.trim().match(/^\\(i|ir)\s+(\S+)\s*$/)
+        if (m) ejecutadas.add(posix.normalize(m[1] === 'ir' ? posix.join(posix.dirname(p), m[2]) : m[2]))
+      }
+    }
+  }
+  for (const v of readFileSync(vueltas, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && /\.sql$/.test(l))) {
+    if (!existsSync(v)) continue
+    if (ANTES_DE_LA_REGLA_8.has(v)) continue
+    if (!ejecutadas.has(v) && !/^--\s*sin prueba con datos:\s*\S/m.test(readFileSync(v, 'utf8'))) {
+      mal.push(`${v}: ninguna prueba de staging (supabase/staging/sql) la ejecuta («\\i ${v}») sobre datos, ni dice por qué no («-- sin prueba con datos: …»).`)
+    }
+  }
+}
 if (mal.length) { console.error(mal.map((m) => `✗ ${m}`).join('\n')); process.exit(1) }
-console.log('Pruebas de staging como usuario, \\gset en su sitio, la tanda dice qué cuenta (sin tablas que aún no existen), no deja huecos y ninguna función SQL ni vista lee algo que su fichero crea después.')
+console.log('Pruebas de staging como usuario, \\gset en su sitio, la tanda dice qué cuenta (sin tablas que aún no existen), no deja huecos, ninguna función SQL ni vista lee algo que su fichero crea después, ningún nombre es ambiguo en PL/pgSQL y cada vuelta atrás la ejecuta una prueba de staging.')
 console.log('Lo que esto no ve, y se hace igual: el fichero ENTERO, no un trozo, y como usuario; lo prueba staging con la base real antes del real de producción.')
 console.log('Y lo que el ensayo no ve (los agentes de después, la salud del pedido, lo que hacen otros procesos más tarde): un ensayo en verde no garantiza el real. Lo prueba staging con «real-con-fallo» y «real».')
