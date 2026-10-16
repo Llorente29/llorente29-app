@@ -117,6 +117,26 @@
   .cxp-tabla-cabeza.cxt-fila, .cxp-tabla-fila.cxt-fila { grid-template-columns: minmax(0, 2fr) minmax(0, 1.4fr) 150px; }
   .cxp-tabla-cabeza.cxt-fila > :nth-child(4), .cxp-tabla-fila.cxt-fila > :nth-child(4) { display: none; }
 }
+/* D01 · «Sus tiendas» (16/10): una fila por tienda, con sus tres desplegables. */
+.cxt-tiendas-resumen { margin: 0 0 4px; font-size: 14px; color: var(--cx-apoyo); }
+.cxt-tienda {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: center;
+  padding: 12px 0; border-top: 1px solid var(--cx-linea);
+}
+.cxt-tienda-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px; border-top: none; padding: 4px 0; }
+.cxt-tienda-nombre { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+.cxt-tienda-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cxt-tienda-campo .cx-input { width: 100%; min-width: 0; }
+.cxt-tienda-etiqueta { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cxt-tienda-acciones { display: flex; justify-content: flex-end; }
+.cxt-tienda-fallo { grid-column: 1 / -1; }
+@media (max-width: 767px) {
+  .cxt-tienda { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .cxt-tienda-cabeza { display: none; }
+  .cxt-tienda-etiqueta { position: static; width: auto; height: auto; overflow: visible; clip: auto; font-size: 13px; font-weight: 600; color: var(--cx-apoyo); }
+  .cxt-tienda-acciones { justify-content: flex-start; }
+}
+
 @media (max-width: 767px) {
   .cxp-tabla-fila.cxt-fila { grid-template-columns: minmax(0, 1fr) auto; }
   .cxp-tabla-fila.cxt-fila > :nth-child(2) { display: flex; grid-column: 1 / -1; padding-left: 48px; }

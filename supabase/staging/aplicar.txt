@@ -14,3 +14,8 @@ supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
 supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
 supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
 supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql
+
+# D01 · «Sus tiendas» en la ficha de una plataforma (16/10): Reparto Rápido
+# Inventado, plataforma en Uber Eats de la cuenta A, con tres tiendas sin
+# asignar, para la e2e y sus capturas. Solo añade; si ya está, no hace nada.
+supabase/seeds/conta/seed_d01_tiendas_staging.sql
