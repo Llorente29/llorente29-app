@@ -107,6 +107,25 @@ test.describe('B02 · Bancos, conciliar', () => {
     try {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
+      // La pasada del día del agente, a propósito y cuando el panel ya está abierto: se le dice
+      // que hoy toca y se retiene la respuesta hasta soltarla (los fallos del panel cerrado
+      // solo pasaban en los runs después de medianoche, cuando la pasada corría con él abierto).
+      let soltarPasada: () => void = () => {}
+      const pasadaSoltada = new Promise<void>((r) => { soltarPasada = r })
+      await page.route('**/rest/v1/rpc/bank_agente_toca_hoy', async (ruta) => {
+        await pasadaSoltada
+        await ruta.fulfill({ status: 200, contentType: 'application/json', body: 'true' })
+      })
+      // Cuántas veces vuelve a salir el esqueleto de Movimientos después de haber tenido datos.
+      await page.addInitScript(() => {
+        const w = window as unknown as { __conDatos: boolean; __esqueletos: number }
+        w.__conDatos = false; w.__esqueletos = 0
+        new MutationObserver(() => {
+          const esqueleto = !!document.querySelector('[aria-label="Cargando los movimientos"]')
+          if (!esqueleto && document.querySelector('[data-testid="cuadre"]')) w.__conDatos = true
+          else if (esqueleto && w.__conDatos) { w.__esqueletos++; w.__conDatos = false }
+        }).observe(document, { subtree: true, childList: true })
+      })
       await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10`)
       await expect(page.getByRole('heading', { name: 'Movimientos', level: 2 })).toBeVisible()
 
@@ -150,6 +169,13 @@ test.describe('B02 · Bancos, conciliar', () => {
       // El panel de un pago: «¿Es otra cosa?» y el asiento que se crea.
       await page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).click()
       const panel = page.locator('.cxn-panel')
+      await expect(panel).toContainText('RECARGA MONEDERO INVENTADO')
+      // Ahora, con el panel abierto, la pasada del día: ni se cierra el panel ni vuelve el esqueleto.
+      soltarPasada()
+      await expect(page.getByText('Haciendo la pasada del día: miro los movimientos pendientes…')).toBeVisible()
+      await expect(page.getByText('Haciendo la pasada del día: miro los movimientos pendientes…')).toHaveCount(0, { timeout: 60_000 })
+      await page.waitForTimeout(1_500)
+      expect(await page.evaluate(() => (window as unknown as { __esqueletos: number }).__esqueletos), 'la pasada del día ha vuelto a montar Movimientos').toBe(0)
       await expect(panel).toContainText('RECARGA MONEDERO INVENTADO')
       await panel.getByText('¿Es otra cosa?').click()
       await expect(panel.getByRole('button', { name: 'Apuntar sin factura…' })).toBeVisible()
