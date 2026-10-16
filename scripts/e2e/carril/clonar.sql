@@ -153,11 +153,12 @@ begin
       v := 'x.' || quote_ident(c.attname);
       v := case
         when c.atttypid = 'uuid'::regtype then format('coalesce((select nuevo from _k where viejo = %s), %s)', v, v)
-        when c.atttypid = 'uuid[]'::regtype then format('(select array_agg(coalesce((select nuevo from _k where viejo = e), e) order by o) from unnest(%s) with ordinality u(e, o))', v)
+        -- Una lista vacía sigue vacía (array_agg de nada es null, no {}).
+        when c.atttypid = 'uuid[]'::regtype then format('case when %s is null then null else coalesce((select array_agg(coalesce((select nuevo from _k where viejo = e), e) order by o) from unnest(%s) with ordinality u(e, o)), ''{}''::uuid[]) end', v, v)
         when c.atttypid in ('text'::regtype, 'varchar'::regtype, 'bpchar'::regtype) then format('pg_temp.mt(%s)', v)
         when c.atttypid = 'jsonb'::regtype then format('pg_temp.mt(%s::text)::jsonb', v)
         when c.atttypid = 'json'::regtype then format('pg_temp.mt(%s::text)::json', v)
-        when c.atttypid = 'text[]'::regtype then format('(select array_agg(pg_temp.mt(e) order by o) from unnest(%s) with ordinality u(e, o))', v)
+        when c.atttypid = 'text[]'::regtype then format('case when %s is null then null else coalesce((select array_agg(pg_temp.mt(e) order by o) from unnest(%s) with ordinality u(e, o)), ''{}''::text[]) end', v, v)
         else v end;
       if c.unico is not null then v := format('case when %s is null or not (%s) then %s else %s || %L end', v, c.unico, v, v, '-c' || n); end if;
       -- Un usuario del carril nace sin enlaces pendientes: los tokens de
