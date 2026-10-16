@@ -1,9 +1,4 @@
-# C06b · Las dos vueltas atrás de la tanda de promociones y envíos, de verdad
-# (A, 16/10, regla 8): aplica la 0100 y la 0110 con \i sobre un doble de
-# Foodint montado con los datos de la cuenta A, ejecuta las dos .down.sql en
-# orden inverso y compara parte por parte con lo de antes. Acaba en ROLLBACK.
-supabase/staging/sql/20261116_c06b_promociones_envios_vuelta_atras_prueba.sql
-# C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
-# prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
-# staging no cambia.
-supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
+# C06b · Staging al día con producción en el céntimo del IVA (Julio, 16/10):
+# la 20261113T0100 (journal_entry_validar y conta_propuesta_ventas_unidad)
+# estaba en producción y no en staging. Con el cerrojo de las e2e cogido a mano.
+supabase/migrations/20261113T0100_c06b_centimo_iva.sql
