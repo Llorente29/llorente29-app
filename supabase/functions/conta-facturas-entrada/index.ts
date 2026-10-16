@@ -26,7 +26,7 @@
 // la firma de svix, como en payroll-inbound.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { comprobarFirma, recibirCorreo, type AdjuntoResend, type CorreoResend, type PuertoEntrada } from "../_shared/facturasEntrada.ts";
+import { comprobarFirma, recibirCorreo, type AdjuntoResend, type CorreoResend, type PuertoEntrada, type Sobre } from "../_shared/facturasEntrada.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   const mal = await comprobarFirma(SECRETO, { id: req.headers.get("svix-id"), timestamp: req.headers.get("svix-timestamp"), firma: req.headers.get("svix-signature") }, cuerpo, Math.floor(Date.now() / 1000));
   if (mal) return json(401, { error: mal });
 
-  let ev: { type?: string; data?: CorreoResend };
+  let ev: { type?: string; data?: CorreoResend & Sobre };
   try { ev = JSON.parse(cuerpo); } catch { return json(400, { error: "cuerpo no es JSON" }); }
   if (ev.type !== "email.received" || !ev.data?.email_id) return json(200, { ignorado: ev.type ?? "sin tipo" });
 
@@ -65,7 +65,9 @@ Deno.serve(async (req) => {
       return !!data;
     },
     registrarCorreo: async (r) => {
-      await rpc("conta_entrada_correo", { p: { email_id: r.emailId, to: r.to, from: r.from, subject: r.subject, company_id: r.companyId, resultado: r.resultado, detalle: r.detalle } });
+      // Si se enrutó por el sobre (el To: era otro), queda dicho en el detalle.
+      const detalle = r.porSobre ? { ...(r.detalle as Record<string, unknown> ?? {}), por_sobre: true } : r.detalle;
+      await rpc("conta_entrada_correo", { p: { email_id: r.emailId, to: r.to, from: r.from, subject: r.subject, company_id: r.companyId, resultado: r.resultado, detalle } });
     },
     adjuntos: async (id) => {
       const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}/attachments`, { headers: { Authorization: `Bearer ${RESEND}` } });
@@ -89,6 +91,12 @@ Deno.serve(async (req) => {
              ruta: x.ruta, nombre: x.nombre, tipo: x.tipo, bytes: x.bytes, sha256: x.sha256, enlace: x.enlace },
       });
       return { id: r.id, yaEstaba: r.ya_estaba };
+    },
+    // El correo entero: sus destinatarios y, si Resend las da, sus cabeceras y su sobre.
+    correoEntero: async (id) => {
+      const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${RESEND}` } });
+      if (!r.ok) return null;
+      return await r.json() as Sobre & Pick<CorreoResend, "to" | "cc" | "bcc">;
     },
     cuerpo: async (id) => {
       const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${RESEND}` } });

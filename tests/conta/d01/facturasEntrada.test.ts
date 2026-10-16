@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
-  clasificarAdjuntos, comprobarFirma, direccionesDeFacturas, enlacesDeFactura, firmaSvix, nombreSeguro, recibirCorreo, rutaEntrada,
+  clasificarAdjuntos, comprobarFirma, destinatariosDelSobre, direccionesDeFacturas, enlacesDeFactura, firmaSvix, nombreSeguro, recibirCorreo, rutaEntrada,
   type AdjuntoResend, type CorreoResend, type PuertoEntrada,
 } from '../../../supabase/functions/_shared/facturasEntrada'
 import { correoUber } from './uberInventado'
@@ -185,5 +185,79 @@ describe('recibirCorreo: liquidaciones-<empresa>@', () => {
     expect(r.resultado).toBe('recibido')
     expect(m.registradas).toEqual([])
     expect(m.cuerpos).toEqual([])
+  })
+})
+
+// D01 · Que no se pierda ningún correo (Julio, 16/10). Un reenvío automático de
+// Gmail conserva el To: original —el buzón de quien reenvía— y la dirección de
+// entrada va solo en el sobre. Antes, un correo así se contestaba «ignorado» y
+// no quedaba en el registro: se perdía sin rastro. Ahora se enruta por el sobre
+// si Resend lo trae (en el evento o al pedir el correo entero), y si no lo trae,
+// se apunta «sin destino». Buzones y correos inventados.
+describe('recibirCorreo: el reenvío que conserva el To: original', () => {
+  const resumen = correoUber({ desde: '2026-09-21', hasta: '2026-09-27', dias: [{ fecha: '2026-09-24', pedidos: 2, ventas: 40, impuesto: 4 }],
+    desglose: { ventas: 44, pedidosVentas: 2, tasas: -13.31, promociones: -5 } })
+  const NUESTRA = 'liquidaciones-taberna-norte@entrada.folvy.app'
+  // Como lo deja Gmail al reenviar con un filtro: el To: y el From: de siempre.
+  const reenviado = (o: Partial<CorreoResend> & Record<string, unknown> = {}) =>
+    correo({ email_id: 'e-reenvio', from: 'Uber Eats <noreply@uber.com>', to: ['Buzón Inventado <buzon.inventado@ejemplo.test>'], subject: resumen.subject, ...o })
+  function mundoReenvio(entero: Record<string, unknown> | null = null) {
+    const m = mundo()
+    const registradas: unknown[] = []
+    const pedidos: string[] = []
+    m.p.destino = async (lp) => (lp === 'liquidaciones-taberna-norte' ? { companyId: 'emp', accountId: 'acc', activa: true, tipo: 'liquidaciones' } : null)
+    m.p.cuerpo = async () => ({ html: resumen.html, text: null })
+    m.p.liquidacion = async (x) => { registradas.push(x); return { id: 'liq-1', yaEstaba: false, texto: 'Liquidación del 21/09 al 27/09/2026 leída.', factura: 'creada' } }
+    m.p.correoEntero = async (id) => { pedidos.push(id); return entero as never }
+    return { ...m, registradas, pedidos }
+  }
+
+  it('el To: es el buzón de quien reenvía y la nuestra va en el sobre del evento: se enruta por él y se dice', async () => {
+    const m = mundoReenvio()
+    const r = await recibirCorreo(reenviado({ envelope: { to: [NUESTRA] } } as never), m.p)
+    expect([r.resultado, r.texto]).toEqual(['liquidacion', 'Liquidación del 21/09 al 27/09/2026 leída.'])
+    expect(m.registradas).toHaveLength(1)
+    expect(m.registro).toEqual([expect.objectContaining({ resultado: 'liquidacion', companyId: 'emp', to: NUESTRA, porSobre: true })])
+    expect(m.pedidos).toEqual([]) // con el sobre en el evento no hace falta pedir el correo entero
+  })
+  it('la nuestra solo en bcc (como deja Resend un destinatario que no está en las cabeceras): se enruta igual', async () => {
+    const m = mundoReenvio()
+    const r = await recibirCorreo(reenviado({ bcc: [NUESTRA] }), m.p)
+    expect(r.resultado).toBe('liquidacion')
+  })
+  it('el evento no trae el sobre; el correo entero sí, en sus cabeceras (X-Forwarded-To, Delivered-To): se pide y se enruta', async () => {
+    for (const headers of [{ 'X-Forwarded-To': NUESTRA }, [{ name: 'Delivered-To', value: NUESTRA }], { 'X-Forwarded-For': `buzon.inventado@ejemplo.test ${NUESTRA}` }]) {
+      const m = mundoReenvio({ to: ['buzon.inventado@ejemplo.test'], headers })
+      const r = await recibirCorreo(reenviado(), m.p)
+      expect([r.resultado, m.pedidos]).toEqual(['liquidacion', ['e-reenvio']])
+      expect(m.registro).toEqual([expect.objectContaining({ resultado: 'liquidacion', porSobre: true })])
+    }
+  })
+  it('sin la nuestra en ningún sitio: NO se pierde, queda apuntado «sin destino» (solo con el recuento de destinatarios) y no se lee', async () => {
+    const m = mundoReenvio({ to: ['buzon.inventado@ejemplo.test'], headers: { Subject: 'x' } })
+    const r = await recibirCorreo(reenviado(), m.p)
+    expect(r.resultado).toBe('sin_destino')
+    expect(m.registradas).toEqual([])
+    expect(m.registro).toEqual([{ emailId: 'e-reenvio', to: 'Buzón Inventado <buzon.inventado@ejemplo.test>', from: 'Uber Eats <noreply@uber.com>', subject: resumen.subject,
+      companyId: null, resultado: 'sin_destino', detalle: { motivo: 'ninguna dirección de entrada en sus destinatarios ni en el sobre', destinatarios: 1 } }])
+  })
+  it('si Resend no da el correo entero (falla o no está), también se apunta «sin destino»', async () => {
+    const m = mundoReenvio()
+    m.p.correoEntero = async () => { throw new Error('Resend 500') }
+    expect((await recibirCorreo(reenviado(), m.p)).resultado).toBe('sin_destino')
+    expect(m.registro).toHaveLength(1)
+  })
+  it('el mismo correo otra vez (Resend reintenta): no se apunta dos veces', async () => {
+    const m = mundoReenvio()
+    m.p.yaVisto = async () => true
+    expect((await recibirCorreo(reenviado(), m.p)).resultado).toBe('repetido')
+    expect(m.registro).toEqual([])
+  })
+  it('el sobre se lee en sus formas: lista, cadena, cabeceras como objeto o como lista; lo que no es de entrada, fuera', () => {
+    expect(destinatariosDelSobre({ envelope: { to: NUESTRA } }).map((d) => d.direccion)).toEqual([NUESTRA])
+    expect(destinatariosDelSobre({ delivered_to: ['otro@ejemplo.test', `<${NUESTRA}>`] }).map((d) => d.direccion)).toEqual([NUESTRA])
+    expect(destinatariosDelSobre({ headers: { 'x-original-to': 'Facturas-Taberna-Norte@Entrada.Folvy.App' } }).map((d) => d.localPart)).toEqual(['facturas-taberna-norte'])
+    expect(destinatariosDelSobre({ headers: { To: NUESTRA } })).toEqual([]) // el To: no es el sobre
+    expect(destinatariosDelSobre(null)).toEqual([])
   })
 })
