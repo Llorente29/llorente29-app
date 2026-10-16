@@ -25,6 +25,13 @@ export async function fijarDireccion(saleId: string, direccion: string, token: s
   return data as ResultadoFijar
 }
 
+/** Una persona decide quién reparte un Uber con señales mezcladas. */
+export async function decidirQuienReparte(saleId: string, quien: 'nosotros' | 'uber', token: string | null): Promise<ResultadoFijar> {
+  const { data, error } = await rpc()('decidir_quien_reparte', { p_sale_id: saleId, p_quien: quien, p_token: token })
+  if (error) throw new Error(error.message)
+  return data as ResultadoFijar
+}
+
 /** Manda el pedido a Catcher (catcher-dispatch, idempotente). Lanza con el motivo si no. */
 export async function mandarACatcher(saleId: string): Promise<void> {
   if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')

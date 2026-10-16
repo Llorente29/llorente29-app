@@ -147,6 +147,7 @@ alter table public.sale drop column if exists delivery_address_fixed;
 alter table public.sale drop column if exists delivery_address_fixed_at;
 alter table public.sale drop column if exists delivery_address_fixed_by;
 alter table public.sale drop column if exists delivery_address_origin;
+alter table public.sale drop column if exists delivery_by_reason;
 
 do $verif$
 begin

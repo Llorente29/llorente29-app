@@ -106,6 +106,8 @@ export interface OrderFeedItem {
   delivery_instructions?: string | null
   /** R03: nota del cliente al pedido, aparte de las indicaciones. */
   order_customer_note?: string | null
+  /** R03: 'fuera_de_zona' = Uber sin calle, la reparte Uber. */
+  delivery_by_reason?: string | null
   total: number
   paid: number | null
   payment_method: string | null

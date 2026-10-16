@@ -21,10 +21,10 @@ import { AlertTriangle, MapPin, Send } from 'lucide-react'
 import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import { playAlarmSound } from '@/modules/kds/kdsUtils'
 import {
-  enlaceAlMapa, estadoDeSalida, mandadoACatcher, nombreDelPortal, numeroParaElPortal, siguientePaso,
-  type PedidoSinDireccion,
+  DECIDIDO_UBER, enlaceAlMapa, estadoDeSalida, mandadoACatcher, nombreDelPortal, numeroParaElPortal, siguientePaso,
+  type PedidoSinDireccion, type ResultadoFijar,
 } from '../lib/direccionFalta'
-import { fijarDireccion, mandarACatcher, pedidosSinDireccion } from '../services/direccionFaltaService'
+import { decidirQuienReparte, fijarDireccion, mandarACatcher, pedidosSinDireccion } from '../services/direccionFaltaService'
 
 const POLL_MS = 10_000
 const IDLE_MS = 60_000
@@ -92,6 +92,38 @@ export default function AvisoDireccionFalta({ locationId, token = null, variant 
     return () => window.clearInterval(id)
   }, [resultados])
 
+  // Lo que sigue a guardar (pegar o decidir «nosotros»): mandar a Catcher o decir por qué no.
+  async function despues(r: ResultadoFijar, poner: (t: string, error: boolean) => void, saleId: string) {
+    const paso = siguientePaso(r)
+    if (paso.tipo === 'mandar') {
+      try {
+        await mandarACatcher(saleId)
+        poner(mandadoACatcher(r.direccion), false)
+      } catch (e) {
+        poner(`Guardada: «${r.direccion}». ${e instanceof Error ? e.message : 'Catcher no lo ha cogido.'} Despáchalo a mano desde el pedido.`, true)
+      }
+    } else {
+      poner(paso.texto, false)
+    }
+  }
+
+  async function decidir(p: PedidoSinDireccion, quien: 'nosotros' | 'uber') {
+    if (enviando) return
+    setEnviando(p.sale_id)
+    const poner = (t: string, error: boolean) =>
+      setResultados(prev => ({ ...prev, [p.sale_id]: { texto: t, error, hasta: Date.now() + RESULTADO_MS, pedido: p } }))
+    try {
+      const r = await decidirQuienReparte(p.sale_id, quien, token)
+      if (quien === 'uber') poner(DECIDIDO_UBER, false)
+      else await despues(r, poner, p.sale_id)
+      pollRef.current?.wake()
+    } catch (e) {
+      poner(e instanceof Error ? e.message : 'No se ha podido guardar.', true)
+    } finally {
+      setEnviando(null)
+    }
+  }
+
   async function mandar(p: PedidoSinDireccion) {
     if (enviando) return
     const texto = (textos[p.sale_id] ?? '').trim()
@@ -100,17 +132,7 @@ export default function AvisoDireccionFalta({ locationId, token = null, variant 
       setResultados(prev => ({ ...prev, [p.sale_id]: { texto: t, error, hasta: Date.now() + RESULTADO_MS, pedido: p } }))
     try {
       const r = await fijarDireccion(p.sale_id, texto, token)
-      const paso = siguientePaso(r)
-      if (paso.tipo === 'mandar') {
-        try {
-          await mandarACatcher(p.sale_id)
-          poner(mandadoACatcher(r.direccion), false)
-        } catch (e) {
-          poner(`Guardada: «${r.direccion}». ${e instanceof Error ? e.message : 'Catcher no lo ha cogido.'} Despáchalo a mano desde el pedido.`, true)
-        }
-      } else {
-        poner(paso.texto, false)
-      }
+      await despues(r, poner, p.sale_id)
       setTextos(prev => { const n = { ...prev }; delete n[p.sale_id]; return n })
       pollRef.current?.wake()
     } catch (e) {
@@ -136,6 +158,33 @@ export default function AvisoDireccionFalta({ locationId, token = null, variant 
           const mapa = enlaceAlMapa(p.lat, p.lng)
           const r = resultados[p.sale_id]
           const texto = textos[p.sale_id] ?? ''
+          if (p.decidir) return (
+            <section key={p.sale_id} className="px-4 py-4 sm:px-5 border-b border-white/20 last:border-b-0"
+              data-testid="aviso-decidir-pedido" aria-label={`Decide quién reparte el pedido ${p.code ?? ''}`}>
+              <h2 className="flex items-center gap-2.5 text-[22px] sm:text-[24px] font-extrabold leading-tight">
+                <AlertTriangle size={26} className="shrink-0" /> Decide quién reparte este pedido
+              </h2>
+              <p className="mt-2 text-[17px] leading-snug">
+                <b>{p.code}</b>{p.brand ? ` · ${p.brand}` : ''} · {nombreDelPortal(p.channel)}
+              </p>
+              <p className="mt-1 text-[16px] leading-snug">
+                {nombreDelPortal(p.channel)} ha mandado solo parte de la entrega (la calle, el punto o el cargo de envío): no se sabe si lo reparte {nombreDelPortal(p.channel)} o nosotros. No sale a Catcher hasta que lo decidas.
+              </p>
+              <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                <button type="button" onClick={() => void decidir(p, 'nosotros')} disabled={enviando === p.sale_id}
+                  className="h-14 px-6 rounded-xl bg-white text-[#C62828] text-[19px] font-extrabold disabled:opacity-60">
+                  Lo repartimos nosotros
+                </button>
+                <button type="button" onClick={() => void decidir(p, 'uber')} disabled={enviando === p.sale_id}
+                  className="h-14 px-6 rounded-xl bg-white/20 text-white text-[19px] font-extrabold disabled:opacity-60">
+                  Lo reparte {nombreDelPortal(p.channel)}
+                </button>
+              </div>
+              <div role="status" aria-live="polite">
+                {r && <p className={`mt-2 text-[16px] font-semibold rounded-lg px-3 py-2 ${r.error ? 'bg-black/25' : 'bg-white/20'}`}>{r.texto}</p>}
+              </div>
+            </section>
+          )
           return (
             <section key={p.sale_id} className="px-4 py-4 sm:px-5 border-b border-white/20 last:border-b-0"
               data-testid="aviso-direccion-pedido" aria-label={`Falta la dirección del pedido ${p.code ?? ''}`}>

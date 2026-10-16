@@ -2,7 +2,8 @@
 --
 -- Vuelta atrás de 20261118T0310: Pedidos y el ticket como estaban (la misma
 -- sustitución quirúrgica, al revés), pedidos_sin_direccion como la dejó la
--- 0300, fuera la espera (cron y función), el disparador y las cuatro columnas.
+-- 0300, fuera la espera (cron y función), los disparadores (lo de la entrega y
+-- quién reparte en Uber), decidir_quien_reparte y las cuatro columnas.
 -- Antes, la 0320 (datos) deshecha. Las columnas se quitan aunque tengan datos:
 -- son copia de raw_tab, que no se toca.
 
@@ -21,9 +22,9 @@ drop function if exists public.despachar_sin_calle_vencidos();
 
 do $$
 declare
-  f_s  text := 's\.expected_time, s\.customer_note, s\.delivery_address_fixed, s\.customer_phone_code, s\.delivery_instructions, s\.order_customer_note,';
+  f_s  text := 's\.expected_time, s\.customer_note, s\.delivery_address_fixed, s\.customer_phone_code, s\.delivery_instructions, s\.order_customer_note, s\.delivery_by_reason,';
   f_sn text := 's.expected_time, s.customer_note,';
-  f_v  text := 'v\.expected_time, v\.customer_note, v\.delivery_address_fixed, v\.customer_phone_code, v\.delivery_instructions, v\.order_customer_note,';
+  f_v  text := 'v\.expected_time, v\.customer_note, v\.delivery_address_fixed, v\.customer_phone_code, v\.delivery_instructions, v\.order_customer_note, v\.delivery_by_reason,';
   f_vn text := 'v.expected_time, v.customer_note,';
   r record; v_def text; c int;
 begin
@@ -40,6 +41,10 @@ begin
   end loop;
 end $$;
 
+drop trigger if exists trg_sale_tipo_uber_quien_reparte on public.sale;
+drop function if exists public.tg_sale_uber_quien_reparte();
+drop function if exists public.uber_senales_de_reparto(text);
+drop function if exists public.decidir_quien_reparte(uuid, text, text);
 drop trigger if exists trg_sale_entrega_desde_raw on public.sale;
 drop function if exists public.tg_sale_entrega_desde_raw();
 drop function if exists public.sale_entrega_desde_raw(text, text);

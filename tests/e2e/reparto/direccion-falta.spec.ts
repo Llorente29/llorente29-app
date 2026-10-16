@@ -11,6 +11,9 @@
 //   R03D · sin calle, con punto           → aviso; la pega la tablet
 //   R03E · sin calle, con punto, sin pegar → aviso en las dos vistas
 //   R03U · Uber con dirección y código    → sin aviso; tarjeta y ticket con «Tel. … · código …»
+//   R03V · Uber sin calle, punto ni cargo → la reparte Uber, fuera de zona: ni aviso ni Catcher
+//   R03T · Uber con las tres, tabla en «Plataforma» → propio (la regla por pedido manda)
+//   R03M · Uber mezclado                  → aviso «Decide quién reparte»; se decide «Uber»
 // Los locales de prueba despachan a mano (en automático, el disparador llamaría
 // a la función de producción): el aviso dice «Este local despacha a mano» en
 // vez de la cuenta atrás, y pegar no llama a Catcher. La cuenta atrás está
@@ -41,6 +44,8 @@ const avisoDe = (page: Page, codigo: string) => page.getByTestId('aviso-direccio
 const ID: Record<string, string> = {
   R03A: 'e0300000-0000-4000-8000-0000000000a1', R03B: 'e0300000-0000-4000-8000-0000000000a2',
   R03C: 'e0300000-0000-4000-8000-0000000000a3', R03U: 'e0300000-0000-4000-8000-0000000000a6',
+  R03V: 'e0300000-0000-4000-8000-0000000000a7', R03T: 'e0300000-0000-4000-8000-0000000000a8',
+  R03M: 'e0300000-0000-4000-8000-0000000000a9',
 }
 const tarjeta = (page: Page, codigo: string) => page.locator(`[data-testid="tarjeta-pedido"][data-sale-id="${ID[codigo]}"]`)
 
@@ -57,6 +62,7 @@ async function lasDeLaCocina(page: Page) {
   // Con dirección (R03A, R03U): no salen. Sin dirección (R03C sin nada, R03E con punto): sí.
   await expect(avisoDe(page, 'R03A')).toHaveCount(0)
   await expect(avisoDe(page, 'R03U')).toHaveCount(0)
+  await expect(avisoDe(page, 'R03V')).toHaveCount(0)
   await expect(avisoDe(page, 'R03C').getByRole('heading', { name: 'Falta la dirección de este pedido' })).toBeVisible()
   await expect(avisoDe(page, 'R03C').getByTestId('aviso-direccion-numero')).toHaveText('100000000033')
   await expect(avisoDe(page, 'R03C').getByRole('link', { name: 'Ver el punto del mapa' })).toHaveCount(0)
@@ -133,6 +139,53 @@ test('ordenador: el ticket con dirección, sin dirección y de Uber con código'
   await expect(t).toContainText('Unit: 3C')
   await expect(t).toContainText('Indicaciones: Timbre 3C')
   await expect(t).toContainText('Nota del cliente: Sin cebolla')
+})
+
+test('ordenador: Uber con las tres señales (R03T) → lo repartimos nosotros, aunque la tabla diga «Plataforma»', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Una vez basta')
+  await abrirPedidos(page)
+  const tt = tarjeta(page, 'R03T')
+  await expect(tt.getByTestId('etiqueta-reparto')).toContainText('Nosotros')
+  await expect(tt.getByTestId('etiqueta-reparto')).not.toContainText('La reparte Uber')
+  await expect(avisoDe(page, 'R03T')).toHaveCount(0)
+  await tt.screenshot({ path: `${DIR}/tarjeta-uber-tres-senales.png` })
+  const t = await fotoDelTicket(page, 'R03T', 'ticket-uber-tres-senales.png')
+  await expect(t).toContainText('ENTREGA')
+  await expect(t).toContainText('Unit: 1A')
+})
+
+test('ordenador: Uber mezclado (R03M) → «Decide quién reparte»; se decide «Lo reparte Uber»', async ({ page }, info) => {
+  const movil = info.project.name === 'movil'
+  await abrirPedidos(page)
+  const m = page.getByTestId('aviso-decidir-pedido').filter({ hasText: 'R03M' })
+  await expect(m.getByRole('heading', { name: 'Decide quién reparte este pedido' })).toBeVisible()
+  await expect(tarjeta(page, 'R03M').getByTestId('etiqueta-reparto')).toContainText('Nosotros · falta decidir quién reparte')
+  await m.screenshot({ path: `${DIR}/aviso-decidir${movil ? '-movil' : ''}.png` })
+  if (movil) return
+  await m.getByRole('button', { name: 'Lo reparte Uber' }).click()
+  await expect(page.getByTestId('aviso-direccion-resuelto').filter({ hasText: 'R03M' }))
+    .toContainText('Hecho: lo reparte Uber. No sale a Catcher.')
+  await expect(page.getByTestId('aviso-decidir-pedido').filter({ hasText: 'R03M' })).toHaveCount(0)
+  await page.reload()
+  await expect(tarjeta(page, 'R03M').getByTestId('etiqueta-reparto')).toContainText('La reparte Uber · fuera de zona')
+})
+
+test('ordenador: Uber sin calle (R03V) → la reparte Uber, fuera de zona; nada a Catcher', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Una vez basta')
+  await abrirPedidos(page)
+  const v = tarjeta(page, 'R03V')
+  await expect(v.getByTestId('etiqueta-reparto')).toHaveAttribute('data-tono', 'gris')
+  await expect(v.getByTestId('etiqueta-reparto')).toContainText('La reparte Uber · fuera de zona')
+  await expect(v.getByRole('button', { name: /Despachar|Mandar a Catcher/ })).toHaveCount(0)
+  await expect(avisoDe(page, 'R03V')).toHaveCount(0)
+  await v.screenshot({ path: `${DIR}/tarjeta-uber-fuera-de-zona.png` })
+  // El ticket, como el de los que reparte la plataforma: sin bloque ENTREGA.
+  const t = await fotoDelTicket(page, 'R03V', 'ticket-uber-fuera-de-zona.png')
+  await expect(t).not.toContainText('ENTREGA')
+  await expect(t).not.toContainText('SIN DIRECCIÓN')
+  // Y la base no lo ofrece a Catcher: no está en el aviso ni para el vigía de los 5 minutos.
+  const centro = await rpcAnon('pedidos_sin_direccion', { p_location_id: null, p_token: TOKEN_CENTRO })
+  expect(((centro.body?.pedidos ?? []) as { code: string }[]).map(p => p.code)).not.toContain('R03V')
 })
 
 test('tablet: el mismo aviso por el token del dispositivo, y pegar la dirección (R03D)', async ({ page }, info) => {

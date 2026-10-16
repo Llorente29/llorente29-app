@@ -42,9 +42,13 @@ on conflict (id) do update
 -- El 7B000, de hoy otra vez (no se crea aquí: si no existe, no hace nada).
 -- Sigue siendo el más nuevo de Pita del Sur en Uber, como espera
 -- 20261005_r02_prueba_sugerencia.sql.
+-- R03: desde la 0310, un Uber sin calle entra como «la reparte Uber · fuera de
+-- zona», y la 0320 pasa así los abiertos. El 7B000 es el «propio sin dirección»
+-- que prueban las e2e del R02 (la etiqueta ámbar y su sugerencia): se le
+-- devuelve el «propio», con «tal cual», para que sigan probando eso.
 update public.sale
    set sold_at = now() - interval '8 minutes', created_at = now() - interval '8 minutes',
-       status = 'open', order_status = 'accepted', updated_at = now()
+       status = 'open', order_status = 'accepted', service_type = 'own_delivery', updated_at = now()
  where id = 'e0200000-0000-4000-8000-0000000052a1'
    and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
@@ -74,6 +78,11 @@ delete from public.delivery_policy_suggestion where account_id = 'c01a0000-0000-
 --   R03C · sin nada                   → sale; nadie la pega (se lee en las dos vistas)
 --   R03D · sin calle, con punto       → sale; la pega la tablet
 --   R03E · sin calle, con punto       → sale; nadie la pega (se lee en las dos vistas)
+--   R03V · Uber sin calle, sin punto, sin cargo → la reparte Uber, fuera de
+--          zona: ni aviso ni Catcher; ticket como el de la plataforma
+--   R03T · Uber con las tres, marca con Uber en «Plataforma» → propio (la regla
+--          por pedido manda sobre la tabla)
+--   R03M · Uber mezclado → aviso «Decide quién reparte»; no sale a Catcher
 --   R03U · Uber con dirección y código de acceso → no sale en el aviso; el
 --          ticket y la tarjeta llevan «Tel. … · código …»
 -- Teléfonos y códigos inventados (900 000 000, 600 000 000, 12345678).
@@ -120,7 +129,7 @@ begin
     ('e0300000-0000-4000-8000-0000000000a6', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
      'e0200000-0000-4000-8000-00000000a0b2', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '6 minutes', now() - interval '6 minutes',
      26.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 5, 28000 Madrid, Spain, Unit: 3C', 'Uber Eats', 'R03U', 'R03U', null,
-     '{"channel":"Uber Eats","service_type":"delivery","customer_notes":"Sin cebolla","customer":{"address_1":"Calle Inventada de Prueba 5, 28000 Madrid, Spain","address_2":"Unit: 3C","phone":"+34900000000","phone_access_code":"12345678","delivery_notes":"Timbre 3C","latitude":"40.4180","longitude":"-3.6900"}}', '+34900000000')
+     '{"channel":"Uber Eats","service_type":"delivery","customer_notes":"Sin cebolla","charges":[{"type":"delivery","price":"2.99 EUR"}],"customer":{"address_1":"Calle Inventada de Prueba 5, 28000 Madrid, Spain","address_2":"Unit: 3C","phone":"+34900000000","phone_access_code":"12345678","delivery_notes":"Timbre 3C","latitude":"40.4180","longitude":"-3.6900"}}', '+34900000000')
   on conflict (id) do update
     set sold_at = excluded.sold_at, created_at = excluded.created_at, status = 'open', order_status = 'accepted',
         service_type = 'own_delivery', delivery_address = excluded.delivery_address, raw_tab = excluded.raw_tab,
@@ -130,5 +139,32 @@ begin
         delivery_wait_sent_at = null, updated_at = now();
 
   perform set_config('folvy.reparto_tal_cual', '', true);
+
+  -- R03V · Uber sin calle de una marca en «Nosotros» (Pita del Sur): entra SIN
+  -- «tal cual» para que pase por «Quién reparte» y por la regla de fuera de
+  -- zona, y sale como «la reparte Uber». Se borra y se crea de nuevo: así no
+  -- hereda el tipo de reparto de la ejecución anterior.
+  delete from public.sale where id in ('e0300000-0000-4000-8000-0000000000a7', 'e0300000-0000-4000-8000-0000000000a8',
+                                        'e0300000-0000-4000-8000-0000000000a9')
+     and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+  insert into public.sale
+    (id, account_id, location_id, brand_id, channel_id, source, sold_at, created_at, total, status, order_status,
+     service_type, delivery_address, external_channel_text, pos_short_code, platform_order_code, raw_tab, customer_phone)
+  values
+    ('e0300000-0000-4000-8000-0000000000a7', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b2', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     27.00, 'open', 'accepted', 'own_delivery', null, 'Uber Eats', 'R03V', 'R03V',
+     '{"channel":"Uber Eats","service_type":"delivery","customer":{"address_1":null,"phone":"+34900000001","phone_access_code":"87654321"}}', '+34900000001'),
+    -- R03T · Uber con calle, punto y cargo de envío, de una marca con Uber en
+    -- «Plataforma» (Smash): la regla por pedido manda → lo repartimos nosotros.
+    ('e0300000-0000-4000-8000-0000000000a8', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b3', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     28.00, 'open', 'accepted', 'platform_delivery', 'Calle Inventada de Prueba 6, Unit: 1A', 'Uber Eats', 'R03T', 'R03T',
+     '{"channel":"Uber Eats","service_type":"delivery","charges":[{"type":"delivery","price":"2.99 EUR"}],"customer":{"address_1":"Calle Inventada de Prueba 6","address_2":"Unit: 1A","latitude":"40.4170","longitude":"-3.6910"}}', '+34900000002'),
+    -- R03M · Uber mezclado (calle y punto, sin cargo de envío): lo decide una persona.
+    ('e0300000-0000-4000-8000-0000000000a9', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b2', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     29.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 7', 'Uber Eats', 'R03M', 'R03M',
+     '{"channel":"Uber Eats","service_type":"delivery","customer":{"address_1":"Calle Inventada de Prueba 7","latitude":"40.4160","longitude":"-3.6920"}}', '+34900000003');
 end
 $r03$;

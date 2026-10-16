@@ -45,6 +45,10 @@ alter table public.sale add column if not exists delivery_address_fixed    text;
 alter table public.sale add column if not exists delivery_address_fixed_at timestamptz;
 alter table public.sale add column if not exists delivery_address_fixed_by text;
 alter table public.sale add column if not exists delivery_address_origin   text;
+-- R03 · Uber: por qué reparte quien reparte, cuando no lo decide la tabla
+-- marca × plataforma (la regla por pedido de la 0310). 'uber_decidir' = Uber
+-- mandó solo parte de la entrega y lo decide una persona: no sale a Catcher.
+alter table public.sale add column if not exists delivery_by_reason        text;
 
 comment on column public.sale.delivery_address_fixed is
   'R03: la dirección que pega la cocina cuando la plataforma no la manda. Manda sobre delivery_address en catcher-dispatch. delivery_address y raw_tab se quedan como llegaron.';
@@ -79,7 +83,7 @@ DECLARE
   v_c      text;
 BEGIN
   SELECT s.account_id, s.location_id, s.brand_id, s.total, s.service_type, s.raw_tab,
-         s.delivery_address, s.delivery_address_fixed
+         s.delivery_address, s.delivery_address_fixed, s.delivery_by_reason
     INTO v_sale FROM public.sale s WHERE s.id = p_sale_id;
   IF NOT FOUND THEN
     RETURN QUERY SELECT NULL::text, 'venta no encontrada'::text; RETURN;
@@ -94,6 +98,14 @@ BEGIN
   -- Así cambiar una celda en «Quién reparte» no toca pedidos ya abiertos.
   IF v_sale.service_type IS DISTINCT FROM 'own_delivery' THEN
     RETURN QUERY SELECT NULL::text, 'la reparte la plataforma: no se despacha'::text;
+    RETURN;
+  END IF;
+
+  -- GUARD (R03 · Uber, 16/10): Uber mandó solo parte de la entrega (calle,
+  -- punto o cargo de envío) y no se sabe quién reparte: lo decide una persona
+  -- en el aviso. Hasta entonces, no sale.
+  IF v_sale.delivery_by_reason = 'uber_decidir' THEN
+    RETURN QUERY SELECT NULL::text, 'falta decidir quién reparte este pedido de Uber'::text;
     RETURN;
   END IF;
 

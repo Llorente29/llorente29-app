@@ -46,4 +46,16 @@ describe('la etiqueta de reparto', () => {
     expect(['Uber Eats', 'Glovo', 'JustEat', 'Just Eat', null].map(plataformaCorta))
       .toEqual(['Uber', 'Glovo', 'Just Eat', 'Just Eat', 'la plataforma'])
   })
+  it('R03: Uber sin calle, fuera de zona: la reparte Uber, gris y sin acciones', () => {
+    expect(etiquetaDeReparto({ ...base, channel: 'Uber Eats', service_type: 'platform_delivery', delivery_address: null, delivery_by_reason: 'fuera_de_zona' }))
+      .toEqual({ tono: 'gris', texto: 'La reparte Uber · fuera de zona', detalle: 'nada que hacer', acciones: [] })
+  })
+  it('R03: Uber decidido «lo reparte Uber»: igual que fuera de zona', () => {
+    expect(etiquetaDeReparto({ ...base, channel: 'Uber Eats', service_type: 'platform_delivery', delivery_by_reason: 'decidido_uber' })?.texto)
+      .toBe('La reparte Uber · fuera de zona')
+  })
+  it('R03: Uber con señales mezcladas: ámbar, sin botones (se decide en el aviso)', () => {
+    expect(etiquetaDeReparto({ ...base, channel: 'Uber Eats', service_type: 'own_delivery', delivery_address: 'Calle Inventada 1', delivery_by_reason: 'uber_decidir' }))
+      .toEqual({ tono: 'ambar', texto: 'Nosotros · falta decidir quién reparte', detalle: 'decídelo en el aviso rojo', acciones: [] })
+  })
 })

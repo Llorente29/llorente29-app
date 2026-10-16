@@ -26,6 +26,22 @@
 --      order_customer_note    HubRise: customer_notes · Last: customerNote
 --    El disparador NO PUEDE TUMBAR UN PEDIDO (regla 10): si algo falla al leer,
 --    las deja a null y el pedido entra igual.
+-- 2b. UBER: QUIÉN REPARTE, POR PEDIDO (Julio, 16/10), por encima de la tabla
+--    marca × plataforma. Foodint tiene activado en Uber «Llega a los clientes
+--    que se encuentran fuera de tu zona»: fuera del radio reparte Uber y no
+--    manda la entrega. Medido en 30 días, todas las marcas, Uber con
+--    service_type delivery por HubRise: 121 traen calle, coordenadas y cargo
+--    de envío (charges[].type delivery > 0) → los repartimos nosotros; 302 no
+--    traen ninguna de las tres → los reparte Uber; mezclados, 0. La regla:
+--      · las tres  → reparto propio (a Catcher)
+--      · ninguna   → «La reparte Uber · fuera de zona»: ni Catcher, ni aviso,
+--                    ni espera, y el ticket de los de la plataforma
+--      · mezcladas → delivery_by_reason 'uber_decidir': aviso rojo para que
+--                    decida una persona (decidir_quien_reparte), y no sale a
+--                    Catcher hasta que decida (guard en resolve_dispatch, 0300)
+--    Lo decidido a mano ('decidido_propio' / 'decidido_uber') no se vuelve a
+--    tocar. Corre DESPUÉS del disparador de «Quién reparte» (por nombre). Los
+--    abiertos, en la 0320.
 -- 3. Pedidos (oficina y tablet) y el ticket devuelven esas tres y la dirección
 --    pegada. Sustitución quirúrgica sobre pg_get_functiondef() en vivo, como la
 --    20261008T1125: si un fragmento no aparece EXACTAMENTE una vez, para. md5
@@ -111,6 +127,116 @@ create trigger trg_sale_entrega_desde_raw
   before insert or update of raw_tab on public.sale
   for each row execute function public.tg_sale_entrega_desde_raw();
 
+-- ── Uber: quién reparte, por pedido ────────────────────────────────────────
+-- Las tres señales de que el reparto es nuestro: calle, coordenadas y cargo de
+-- envío. Pura, para el disparador, el relleno de los abiertos y las pruebas.
+create or replace function public.uber_senales_de_reparto(p_raw_tab text)
+returns table(calle boolean, coordenadas boolean, cargo_envio boolean)
+language plpgsql
+immutable
+set search_path to 'public'
+as $function$
+declare v_t jsonb;
+begin
+  if left(btrim(coalesce(p_raw_tab, '')), 1) <> '{' then
+    return query select false, false, false; return;
+  end if;
+  v_t := p_raw_tab::jsonb;
+  return query select
+    nullif(btrim(coalesce(v_t->'customer'->>'address_1', ''), E' \t\r\n'), '') is not null,
+    nullif(v_t->'customer'->>'latitude', '') is not null and nullif(v_t->'customer'->>'longitude', '') is not null,
+    exists (select 1 from jsonb_array_elements(case when jsonb_typeof(v_t->'charges') = 'array' then v_t->'charges' else '[]'::jsonb end) c
+             where coalesce(c->>'type', c->>'charge_type') = 'delivery'
+               and coalesce(nullif(regexp_replace(coalesce(c->>'price', ''), '[^0-9.]', '', 'g'), '')::numeric, 0) > 0);
+end;
+$function$;
+
+comment on function public.uber_senales_de_reparto(text) is
+  'R03: las tres señales de que un pedido de Uber lo repartimos nosotros (calle, coordenadas y cargo de envío > 0), leídas de raw_tab.';
+
+create or replace function public.tg_sale_uber_quien_reparte()
+returns trigger
+language plpgsql
+set search_path to 'public'
+as $function$
+declare r record;
+begin
+  if new.source is distinct from 'hubrise' then return new; end if;
+  if new.service_type is null or new.service_type not in ('own_delivery', 'platform_delivery') then return new; end if;
+  if lower(coalesce(new.external_channel_text, '')) not like '%uber%' then return new; end if;
+  if coalesce(current_setting('folvy.reparto_tal_cual', true), '') = 'on' then return new; end if;
+  if new.carrier_order_id is not null then return new; end if;
+  if new.delivery_by_reason in ('decidido_propio', 'decidido_uber') then return new; end if;
+  begin
+    select * into r from public.uber_senales_de_reparto(new.raw_tab);
+    if r.calle and r.coordenadas and r.cargo_envio then
+      new.service_type := 'own_delivery';
+      new.delivery_by_reason := null;
+    elsif not r.calle and not r.coordenadas and not r.cargo_envio then
+      new.service_type := 'platform_delivery';
+      new.delivery_by_reason := 'fuera_de_zona';
+    else
+      new.service_type := 'own_delivery';
+      new.delivery_by_reason := 'uber_decidir';
+    end if;
+  exception when others then
+    raise warning 'tg_sale_uber_quien_reparte: % (venta %)', sqlstate, new.id;
+  end;
+  return new;
+end;
+$function$;
+
+drop trigger if exists trg_sale_tipo_uber_quien_reparte on public.sale;
+create trigger trg_sale_tipo_uber_quien_reparte
+  before insert or update on public.sale
+  for each row execute function public.tg_sale_uber_quien_reparte();
+
+-- Una persona decide quién reparte un Uber con señales mezcladas. Misma doble
+-- puerta que el aviso (token de la tablet: solo su local; o sesión).
+create or replace function public.decidir_quien_reparte(p_sale_id uuid, p_quien text, p_token text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare
+  v_s record; v_carrier text; v_reason text; v_mode text;
+begin
+  select s.id, s.location_id, s.delivery_by_reason, s.status, s.carrier_order_id, s.delivery_address, s.delivery_address_fixed,
+         s.rider_name, s.rider_phone
+    into v_s from public.sale s where s.id = p_sale_id;
+  if v_s.id is null then raise exception 'decidir_quien_reparte: el pedido no existe'; end if;
+  perform public.kds_authorize(v_s.location_id, p_token);
+  if v_s.status is distinct from 'open' then raise exception 'Este pedido ya está cerrado.'; end if;
+  if p_quien not in ('nosotros', 'uber') then raise exception 'decidir_quien_reparte: «nosotros» o «uber»'; end if;
+  if v_s.carrier_order_id is not null then raise exception 'Este pedido ya está en Catcher.'; end if;
+
+  -- «Tal cual»: que el disparador de «Quién reparte» no lo devuelva a lo de antes.
+  perform set_config('folvy.reparto_tal_cual', 'on', true);
+  update public.sale
+     set service_type = case when p_quien = 'nosotros' then 'own_delivery' else 'platform_delivery' end,
+         delivery_by_reason = case when p_quien = 'nosotros' then 'decidido_propio' else 'decidido_uber' end,
+         updated_at = now()
+   where id = p_sale_id;
+  perform set_config('folvy.reparto_tal_cual', '', true);
+
+  if p_quien = 'nosotros' then
+    select r.carrier, r.reason into v_carrier, v_reason from public.resolve_dispatch(p_sale_id) r;
+  end if;
+  select coalesce(l.dispatch_mode, 'auto') into v_mode from public.locations l where l.id = v_s.location_id;
+  return jsonb_build_object(
+    'ok', true, 'sale_id', p_sale_id, 'quien', p_quien,
+    'direccion', nullif(coalesce(nullif(btrim(v_s.delivery_address_fixed), ''), btrim(v_s.delivery_address)), ''),
+    'carrier', v_carrier, 'reason', v_reason, 'dispatch_mode', v_mode,
+    'ya_en_catcher', false, 'rider_name', v_s.rider_name, 'rider_phone', v_s.rider_phone);
+end;
+$function$;
+
+comment on function public.decidir_quien_reparte(uuid, text, text) is
+  'R03: una persona decide quién reparte un pedido de Uber con señales mezcladas (calle, punto o cargo de envío). «nosotros» → propio (decidido_propio); «uber» → la reparte Uber (decidido_uber). Con token, solo pedidos del local del dispositivo.';
+revoke all on function public.decidir_quien_reparte(uuid, text, text) from public;
+grant execute on function public.decidir_quien_reparte(uuid, text, text) to anon, authenticated, service_role;
+
 -- ── El aviso, con la hora a la que sale solo ────────────────────────────────
 create or replace function public.pedidos_sin_direccion(p_location_id uuid, p_token text default null)
 returns jsonb
@@ -159,7 +285,9 @@ begin
              s.dispatch_error,
              -- R03 · 2: a qué hora sale solo a Catcher por el punto del mapa.
              coalesce(s.accepted_at, s.created_at) + interval '5 minutes' as sale_solo_at,
-             v_mode                                 as dispatch_mode
+             v_mode                                 as dispatch_mode,
+             -- R03 · Uber: señales mezcladas, lo decide una persona.
+             (s.delivery_by_reason = 'uber_decidir') as decidir
         from public.sale s
         left join public.brand b on b.id = s.brand_id
        where s.location_id = v_loc
@@ -167,9 +295,9 @@ begin
          and s.status = 'open'
          and coalesce(s.order_status, '') not in ('completed', 'cancelled', 'rejected', 'delivery_failed')
          and coalesce(s.delivery_state, '') not in ('delivered', 'completed')
-         and coalesce(btrim(s.delivery_address), '') = ''
-         and coalesce(btrim(s.delivery_address_fixed), '') = ''
          and s.sold_at > now() - interval '12 hours'
+         and (   (coalesce(btrim(s.delivery_address), '') = '' and coalesce(btrim(s.delivery_address_fixed), '') = '')
+              or s.delivery_by_reason = 'uber_decidir')
     ) x;
 
   return jsonb_build_object('location_id', v_loc, 'now', now(), 'pedidos', v_result);
@@ -247,9 +375,9 @@ select cron.schedule('r03-despachar-sin-calle', '* * * * *', $cron$select public
 do $$
 declare
   f_s  text := 's\.expected_time,\s*s\.customer_note,';
-  f_sn text := 's.expected_time, s.customer_note, s.delivery_address_fixed, s.customer_phone_code, s.delivery_instructions, s.order_customer_note,';
+  f_sn text := 's.expected_time, s.customer_note, s.delivery_address_fixed, s.customer_phone_code, s.delivery_instructions, s.order_customer_note, s.delivery_by_reason,';
   f_v  text := 'v\.expected_time,\s*v\.customer_note,';
-  f_vn text := 'v.expected_time, v.customer_note, v.delivery_address_fixed, v.customer_phone_code, v.delivery_instructions, v.order_customer_note,';
+  f_vn text := 'v.expected_time, v.customer_note, v.delivery_address_fixed, v.customer_phone_code, v.delivery_instructions, v.order_customer_note, v.delivery_by_reason,';
   r record; v_def text; c int; v_n int := 0;
 begin
   for r in

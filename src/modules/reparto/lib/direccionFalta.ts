@@ -27,7 +27,12 @@ export interface PedidoSinDireccion {
   sale_solo_at?: string | null
   /** El modo de despacho del local ('auto' | 'manual' | 'off'). */
   dispatch_mode?: string | null
+  /** R03 · Uber con señales mezcladas (calle, punto, cargo): lo decide una persona. */
+  decidir?: boolean
 }
+
+/** Después de «Lo reparte Uber». */
+export const DECIDIDO_UBER = 'Hecho: lo reparte Uber. No sale a Catcher.'
 
 /**
  * Lo que dice el aviso sobre cuándo sale (Julio, 16/10, opción B): cuánto

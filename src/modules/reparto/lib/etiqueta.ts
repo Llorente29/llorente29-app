@@ -31,6 +31,8 @@ export interface PedidoParaEtiqueta {
   delivery_state: string | null
   dispatch_mode: string | null
   dispatch_error: string | null
+  /** R03: 'fuera_de_zona' = Uber sin calle: el cliente está fuera del radio y reparte Uber. */
+  delivery_by_reason?: string | null
 }
 
 /** «Glovo», «Uber», «Just Eat»: el nombre corto con el que se habla en cocina. */
@@ -50,9 +52,19 @@ const EN_CAMINO = new Set(['picked_up', 'in_delivery', 'on_the_way', 'in_transit
 export function etiquetaDeReparto(p: PedidoParaEtiqueta): Etiqueta | null {
   const plataforma = plataformaCorta(p.channel)
   if (p.service_type === 'platform_delivery') {
+    // R03: Uber sin calle, sin punto y sin cargo de envío = fuera del radio de
+    // reparto propio: la reparte Uber. O lo decidió una persona.
+    if (p.delivery_by_reason === 'fuera_de_zona' || p.delivery_by_reason === 'decidido_uber') {
+      return { tono: 'gris', texto: `La reparte ${plataforma} · fuera de zona`, detalle: 'nada que hacer', acciones: [] }
+    }
     return { tono: 'gris', texto: `La reparte ${plataforma}`, detalle: 'nada que hacer', acciones: [] }
   }
   if (p.service_type !== 'own_delivery') return null
+
+  // R03: Uber con señales mezcladas: lo decide una persona en el aviso rojo, y no sale antes.
+  if (p.delivery_by_reason === 'uber_decidir') {
+    return { tono: 'ambar', texto: 'Nosotros · falta decidir quién reparte', detalle: 'decídelo en el aviso rojo', acciones: [] }
+  }
 
   const sinDireccion = !(p.delivery_address ?? '').trim()
   if (sinDireccion) {
