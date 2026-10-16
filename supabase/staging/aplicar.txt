@@ -2,3 +2,6 @@
 # prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
 # staging no cambia.
 supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
+# D01 · Compras y la ficha de proveedor (rama conta/d01-compras-ficha): la semilla de la e2e,
+#   el caso de COHELDI (Lácteos Prueba Ocho) y el de Cloudtown Brands (Marca Prueba Cedida) en la cuenta A.
+supabase/seeds/conta/seed_d01_compras_ficha_staging.sql
