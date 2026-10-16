@@ -1067,7 +1067,7 @@ describe('la tanda de nunca una tarjeta entera (B01, 0190 y 0191; ya aplicada, r
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): las facturas de riders de Catcher (E05, 0100–0140)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el céntimo de redondeo en el IVA (C06b, 0100)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
@@ -1075,27 +1075,30 @@ describe('la tanda de AHORA (manifiesto vivo): las facturas de riders de Catcher
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
-  const E05 = ['0100_e05_lotes', '0110_e05_recibida_envio_emisor', '0120_e05_cruces', '0130_e05_pago_prepago', '0140_e05_datos']
+  const F = 'supabase/migrations/20261113T0100_c06b_centimo_iva.sql'
 
-  it('cinco ficheros, en orden, y los cinco siguen (sin «autorizo»)', () => {
-    expect(viva).toEqual(E05.map((f) => `supabase/migrations/20261112T${f}.sql`))
-    expect(r.ficheros).toEqual(Object.fromEntries(viva.map((f) => [f, 'sigue'])))
+  it('un fichero, y sigue (sin «autorizo»): cambia dos funciones con la misma firma, declarado y con su prueba', () => {
+    expect(viva).toEqual([F])
+    expect(r.ficheros).toEqual({ [F]: 'sigue' })
+    expect(r.markdown).toContain('declarado, prueba `supabase/staging/sql/20261113_c06b_centimo_iva_prueba.sql`')
   })
-  it('los datos (0140) solo añaden filas, con account_id, y si ya están no hacen nada', () => {
-    const sql = readFileSync(viva[4], 'utf8')
-    expect(sql).not.toMatch(/^\s*(update|delete)\b/im)
-    expect(sql).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
-    expect((sql.match(/insert into/g) ?? []).length).toBe((sql.match(/where not exists|on conflict do nothing/g) ?? []).length)
+  it('no toca datos ni crea sobrecargas: solo create or replace de las dos funciones existentes', () => {
+    expect(analizarFichero(F).map((o: Op) => `${o.accion} ${o.objeto}`)).toEqual([
+      'reemplaza public.journal_entry_validar(uuid,text)', 'reemplaza public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)'])
+    expect(readFileSync(F, 'utf8').match(/^create or replace function public\.[a-z_]+\(/gm)).toEqual(['create or replace function public.journal_entry_validar(', 'create or replace function public.conta_propuesta_ventas_unidad('])
   })
   it('declara qué cuenta, y la cuenta existe', () => {
     const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/e05-catcher.sql'])
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/centimo-iva.sql'])
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
-  it('su vuelta atrás va en orden inverso y cada fichero para si se perdería algo', () => {
+  it('su vuelta atrás deja las dos funciones como estaban (las mismas que en la versión anterior del repositorio)', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
-    expect(atras).toEqual([...E05].reverse().map((f) => `supabase/vuelta-atras/20261112T${f}.down.sql`))
-    for (const f of atras) expect(readFileSync(f, 'utf8'), f).toMatch(/raise exception/)
+    expect(atras).toEqual(['supabase/vuelta-atras/20261113T0100_c06b_centimo_iva.down.sql'])
+    const cuerpo = (sql: string, nombre: string, q: string) => { const i = sql.indexOf(`function public.${nombre}`); const a = sql.indexOf(q, i) + q.length; return sql.slice(a, sql.indexOf(q, a)) }
+    const down = readFileSync(atras[0], 'utf8')
+    expect(cuerpo(down, 'journal_entry_validar', '$function$')).toBe(cuerpo(readFileSync('supabase/migrations/20261019T0160_diez_numeracion.sql', 'utf8'), 'journal_entry_validar', '$function$'))
+    expect(cuerpo(down, 'conta_propuesta_ventas_unidad', '$$')).toBe(cuerpo(readFileSync('supabase/migrations/20261020T0100_ventas_por_plataforma.sql', 'utf8'), 'conta_propuesta_ventas_unidad', '$$'))
   })
 })
 

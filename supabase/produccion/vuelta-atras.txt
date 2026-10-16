@@ -1,10 +1,7 @@
-# Vuelta atrás de la tanda E05 (modo «vuelta_atras»), en orden inverso. Cada
-# fichero PARA, sin tocar nada, si ya hay algo que se perdería (apuntes en la
-# 40700001, quincenas subidas, pagos propuestos, lo decidido por aclarar,
-# tarifas guardadas o saldos comparados).
-cuenta: scripts/conta/produccion/cuentas/e05-catcher.sql
-supabase/vuelta-atras/20261112T0140_e05_datos.down.sql
-supabase/vuelta-atras/20261112T0130_e05_pago_prepago.down.sql
-supabase/vuelta-atras/20261112T0120_e05_cruces.down.sql
-supabase/vuelta-atras/20261112T0110_e05_recibida_envio_emisor.down.sql
-supabase/vuelta-atras/20261112T0100_e05_lotes.down.sql
+# Vuelta atrás de la tanda del céntimo de redondeo en el IVA (modo
+# «vuelta_atras»). Las dos funciones como estaban; no toca ningún asiento:
+# lo validado con el céntimo sigue validado (su número y su huella no se
+# tocan nunca), solo vuelve a parar los siguientes.
+# La anterior de este fichero (E05): tests/conta/produccion/vuelta-atras-e05-catcher-20261015.txt.
+cuenta: scripts/conta/produccion/cuentas/centimo-iva.sql
+supabase/vuelta-atras/20261113T0100_c06b_centimo_iva.down.sql

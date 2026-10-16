@@ -1,4 +1,3 @@
-# M01 · El frente D (el marco nuevo, ramas conta/m01-*): sus cuatro usuarios de
-# prueba y su cuenta C, como los de A, B y C. Se puede volver a lanzar: lo que
-# ya está se deja, y solo se crea lo del D. Comprueba al final 4 frentes × 4.
-supabase/seeds/conta/seed_e2e_frentes_staging.sql
+# C06b · El céntimo de redondeo en el IVA (Julio, 15/10): la prueba aplica la
+# migración DENTRO de su transacción (\i) y acaba en ROLLBACK. Staging no cambia.
+supabase/staging/sql/20261113_c06b_centimo_iva_prueba.sql

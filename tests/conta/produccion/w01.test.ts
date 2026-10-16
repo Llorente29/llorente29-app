@@ -427,6 +427,15 @@ describe('R11 · paso 8 sobre la tanda del B01 «nunca una tarjeta entera» (019
   })
 })
 
+describe('R11 · paso 8 sobre la tanda del E05 «facturas de riders de Catcher» (0100–0140, su copia, aplicada), con su contexto medido', () => {
+  it('las cinco siguen, sin «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-e05-catcher-20261015.json',
+      '--manifiesto=tests/conta/produccion/tanda-e05-catcher-20261015.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out.match(/_e05_[a-z_]+\.sql: sigue/g)).toHaveLength(5)
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
@@ -435,15 +444,15 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261112T0100_e05_lotes.sql: sigue')
+    expect(r.out).toContain('20261113T0100_c06b_centimo_iva.sql: sigue')
     expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261112T0100_e05_lotes.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261113T0100_c06b_centimo_iva.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261112T0100_e05_lotes.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261113T0100_c06b_centimo_iva.sql ha cambiado desde la medida')
   })
 })
