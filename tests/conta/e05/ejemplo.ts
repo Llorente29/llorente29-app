@@ -43,7 +43,7 @@ export const FACTURAS: FacturaInventada[] = [
   fac({ numero: 'ES_F_2001_26_7', pdf: 'invoice_fleet_2001_ES_F_2001_26_7.pdf', nombre: 'FLOTA INVENTADA, S.L.', nif: 'B00000044', domicilio: 'Polígono Inventado 4', cp: '28004', ciudad: 'Madrid',
     base: 4.7, pedidos: 1, tiendas: [{ tienda: TIENDA_B, total: 4.7, pedidos: 1 }], tipo: 'flota' }),
   // La comisión: 0,79 € de base por pedido, 10 pedidos (9 entregados + el cancelado).
-  fac({ numero: 'CMS_2026_09_2', pdf: 'invoice_3001_CMS_2026_09_2.pdf', nombre: 'Catcher Marketplace SL', nif: 'B00000055', domicilio: 'Avenida Inventada 5', cp: '28005', ciudad: 'Madrid',
+  fac({ numero: 'CMS_2026_09_2', pdf: 'invoice_3001_CMS_2026_09_2.pdf', nombre: 'Catcher Marketplace SL', nif: 'B00000125', domicilio: 'Avenida Inventada 5', cp: '28005', ciudad: 'Madrid',
     base: 7.9, pedidos: 10, tiendas: [{ tienda: TIENDA_A, total: 3.16, pedidos: 4 }, { tienda: TIENDA_B, total: 4.74, pedidos: 6 }], tipo: 'catcher' }),
 ]
 
