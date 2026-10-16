@@ -24,7 +24,20 @@ begin
 end $$;
 
 -- Las tres vueltas atrás, de verdad y en su orden (la 0310 quita también la
--- espera de la versión anterior: cron, función y columna).
+-- espera de la versión anterior: cron, función y columna). Solo si el R03 está
+-- puesto: una ejecución anterior pudo quitarlo y pararse después, y las
+-- vueltas atrás no se repiten sobre una base sin R03.
+select to_regclass('public.r03_entrega_relleno') is not null as r03_con_0320,
+       exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'sale' and column_name = 'customer_phone_code') as r03_con_0310,
+       to_regprocedure('public.fijar_direccion_entrega(uuid, text, text)') is not null as r03_con_0300
+\gset
+\if :r03_con_0320
 \i supabase/vuelta-atras/20261118T0320_r03_entrega_datos.down.sql
+\endif
+\if :r03_con_0310
 \i supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql
+\endif
+\if :r03_con_0300
 \i supabase/vuelta-atras/20261118T0300_r03_direccion_incompleta.down.sql
+\endif

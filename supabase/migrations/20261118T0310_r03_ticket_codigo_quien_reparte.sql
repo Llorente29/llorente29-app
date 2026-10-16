@@ -249,7 +249,8 @@ grant execute on function public.decidir_quien_reparte(uuid, text, text) to anon
 -- ya completados: una pantalla que se abre a propósito no esconde filas), la
 -- tarjeta y el aviso rojo (solo los que NO han podido salir a Catcher, o los
 -- Uber que tiene que decidir una persona). Día de servicio con el corte de
--- siempre (_pase_dia_de_negocio, 4 h).
+-- siempre: 4 h, en la zona de la cuenta (la regla de orders_feed). Escrito
+-- aquí: _pase_dia_de_negocio no existe ni en producción ni en staging (16/10).
 create or replace function public.pedidos_sin_direccion(p_location_id uuid, p_token text default null)
 returns jsonb
 language plpgsql
@@ -262,6 +263,8 @@ declare
   v_loc    uuid;
   v_acc    uuid;
   v_mode   text;
+  v_tz     text;
+  v_hoy    date;
   v_result jsonb;
 begin
   if p_token is not null then
@@ -276,6 +279,9 @@ begin
 
   select coalesce(l.dispatch_mode, 'auto'), l.account_id into v_mode, v_acc
     from public.locations l where l.id = v_loc;
+  select coalesce(a.timezone, 'Europe/Madrid') into v_tz from public.accounts a where a.id = v_acc;
+  v_tz  := coalesce(v_tz, 'Europe/Madrid');
+  v_hoy := ((now() at time zone v_tz) - interval '4 hours')::date;
 
   select coalesce(jsonb_agg(to_jsonb(x) order by x.sold_at desc), '[]'::jsonb)
     into v_result
@@ -314,7 +320,7 @@ begin
        where s.location_id = v_loc
          and s.service_type = 'own_delivery'
          and s.sold_at > now() - interval '30 hours'
-         and public._pase_dia_de_negocio(v_acc, s.sold_at) = public._pase_dia_de_negocio(v_acc, now())
+         and ((s.sold_at at time zone v_tz) - interval '4 hours')::date = v_hoy
          and (coalesce(btrim(s.delivery_address), '') = '' or s.delivery_by_reason = 'uber_decidir')
     ) x;
 
