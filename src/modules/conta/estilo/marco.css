@@ -102,6 +102,7 @@
 }
 .cxm-modulos[data-desplegada='no'] .cxm-modulo-cuenta { display: none; }
 
+.cxm button.cxm-modulo { width: 100%; border: none; background: none; font-family: inherit; }
 .cxm .cxm-modulo-apagado { opacity: 0.55; cursor: default; }
 .cxm .cxm-modulo-apagado:hover { background: none; color: var(--cxm-apoyo); }
 .cxm-pronto {

@@ -31,11 +31,13 @@ function Modulo({ m, activo, cuenta }: { m: ModuloConta; activo: boolean; cuenta
   if (m.ruta === null) {
     return (
       <li>
-        <span className="cxm-modulo cxm-modulo-apagado" role="link" aria-disabled="true" tabIndex={0} aria-describedby={id}>
+        {/* Un botón desactivado, no un enlace: no lleva a ningún sitio (y así no se
+            confunde con los enlaces «Impuestos» de las pantallas, como el de Tablas). */}
+        <button type="button" className="cxm-modulo cxm-modulo-apagado" aria-disabled="true" aria-describedby={id}>
           <Circulo m={m} />
           <span className="cxm-modulo-nombre">{m.etiqueta}</span>
           <span id={id} role="tooltip" className="cxm-pronto">{TEXTO_PROXIMAMENTE}</span>
-        </span>
+        </button>
       </li>
     )
   }
