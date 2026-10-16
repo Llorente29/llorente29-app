@@ -130,7 +130,9 @@ export function problemas(lineas: readonly LineaAsiento[], esDeIva: (cuenta: str
     if (l.iva) {
       const cuota = cent(l.debe) + cent(l.haber)
       const esperada = cent(cuotaIva(l.iva.base, l.iva.tipo))
-      const margen = Math.floor((l.iva.facturas ?? 1) / 2)
+      // Medio céntimo por factura de un resumen y, en cualquier apunte, un céntimo de
+      // redondeo (C06b, 15/10: 20,40 € con el IVA dentro al 10 % da 18,55 + 1,85).
+      const margen = Math.max(1, Math.floor((l.iva.facturas ?? 1) / 2))
       if (Math.abs(cuota - esperada) > margen) {
         out.push(`${n}: la cuota ${eurosExactos(deCent(cuota))} no es la base ${eurosExactos(l.iva.base)} × ${l.iva.tipo} % = ${eurosExactos(deCent(esperada))}.`)
       }

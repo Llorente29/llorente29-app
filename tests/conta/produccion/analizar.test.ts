@@ -1099,6 +1099,41 @@ describe('la tanda de las facturas de riders de Catcher (E05, 0100–0140; ya ap
   })
 })
 
+describe('la tanda del céntimo de redondeo en el IVA (C06b, 0100; ya en el historial de producción), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-centimo-iva-20261016.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción para ESTOS ficheros (con sus md5): ver el _que del JSON.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-centimo-iva-20261016.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const F = 'supabase/migrations/20261113T0100_c06b_centimo_iva.sql'
+
+  it('un fichero, y sigue (sin «autorizo»): cambia dos funciones con la misma firma, declarado y con su prueba', () => {
+    expect(viva).toEqual([F])
+    expect(r.ficheros).toEqual({ [F]: 'sigue' })
+    expect(r.markdown).toContain('declarado, prueba `supabase/staging/sql/20261113_c06b_centimo_iva_prueba.sql`')
+  })
+  it('no toca datos ni crea sobrecargas: solo create or replace de las dos funciones existentes', () => {
+    expect(analizarFichero(F).map((o: Op) => `${o.accion} ${o.objeto}`)).toEqual([
+      'reemplaza public.journal_entry_validar(uuid,text)', 'reemplaza public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)'])
+    expect(readFileSync(F, 'utf8').match(/^create or replace function public\.[a-z_]+\(/gm)).toEqual(['create or replace function public.journal_entry_validar(', 'create or replace function public.conta_propuesta_ventas_unidad('])
+  })
+  it('declara qué cuenta, y la cuenta existe', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/centimo-iva.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+  })
+  it('su vuelta atrás deja las dos funciones como estaban (las mismas que en la versión anterior del repositorio)', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c06b-centimo-iva-20261016.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261113T0100_c06b_centimo_iva.down.sql'])
+    const cuerpo = (sql: string, nombre: string, q: string) => { const i = sql.indexOf(`function public.${nombre}`); const a = sql.indexOf(q, i) + q.length; return sql.slice(a, sql.indexOf(q, a)) }
+    const down = readFileSync(atras[0], 'utf8')
+    expect(cuerpo(down, 'journal_entry_validar', '$function$')).toBe(cuerpo(readFileSync('supabase/migrations/20261019T0160_diez_numeracion.sql', 'utf8'), 'journal_entry_validar', '$function$'))
+    expect(cuerpo(down, 'conta_propuesta_ventas_unidad', '$$')).toBe(cuerpo(readFileSync('supabase/migrations/20261020T0100_ventas_por_plataforma.sql', 'utf8'), 'conta_propuesta_ventas_unidad', '$$'))
+  })
+})
+
 describe('la tanda de AHORA (manifiesto vivo): las liquidaciones por correo (D01, 0100 y 0110)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)

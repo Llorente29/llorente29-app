@@ -13,7 +13,7 @@
 // La contraseña llega por la variable CLAVE_PRUEBAS, que el workflow genera
 // al azar en cada ejecución y no se imprime. Nunca está en el repositorio.
 //
-// USUARIOS POR FRENTE (C06, respuesta 2): cada frente (A, B y C) tiene sus
+// USUARIOS POR FRENTE (C06, respuesta 2): cada frente (A, B, C y D) tiene sus
 // propios dobles de los cuatro usuarios de prueba (seed_e2e_frentes_staging.sql),
 // y su e2e solo cambia la contraseña de los suyos: dos frentes a la vez ya no se
 // pisan. El frente lo pone el workflow en E2E_FRENTE, sacado de la rama. Sin
@@ -25,18 +25,20 @@ import type { Page } from '@playwright/test'
 export const STAGING_URL = 'https://oseymswjlzplqoxrfjzi.supabase.co'
 export const CLAVE_STORAGE = 'sb-oseymswjlzplqoxrfjzi-auth-token'
 
-/** El frente de esta ejecución ('a', 'b' o 'c'), o null: los usuarios de siempre. */
+/** El frente de esta ejecución ('a', 'b', 'c' o 'd'), o null: los usuarios de siempre. */
 export const FRENTE = frenteDe(process.env.E2E_FRENTE)
 
-export function frenteDe(valor: string | undefined): 'a' | 'b' | 'c' | null {
+export type Frente = 'a' | 'b' | 'c' | 'd'
+
+export function frenteDe(valor: string | undefined): Frente | null {
   const v = (valor ?? '').trim().toLowerCase()
   if (v === '') return null
-  if (v === 'a' || v === 'b' || v === 'c') return v
-  throw new Error(`E2E_FRENTE tiene que ser a, b, c o nada; es «${valor}».`)
+  if (v === 'a' || v === 'b' || v === 'c' || v === 'd') return v
+  throw new Error(`E2E_FRENTE tiene que ser a, b, c, d o nada; es «${valor}».`)
 }
 
 /** El correo del usuario de prueba para el frente: a.admin@… → a.admin.frente-b@…; sin frente, el de siempre. */
-export function correoDelFrente(correo: string, frente: 'a' | 'b' | 'c' | null = FRENTE): string {
+export function correoDelFrente(correo: string, frente: Frente | null = FRENTE): string {
   if (!frente) return correo
   const [local, dominio] = correo.split('@')
   return `${local}.frente-${frente}@${dominio}`

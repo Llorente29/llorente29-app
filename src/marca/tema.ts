@@ -1,8 +1,10 @@
 // src/marca/tema.ts
 //
 // Los colores y la letra de una marca con identidad propia (C06b, Sumied),
-// puestos encima del estilo nuevo: los tokens del módulo (--cx-*, en `.cx`) y
-// los de la entrada (--mx-*, en `.mx-entrar`). Se escriben con más peso
+// puestos encima del estilo nuevo: los tokens del módulo (--cx-*, en `.cx`),
+// los de la entrada (--mx-*, en `.mx-entrar`) y, desde el M01, los del marco
+// nuevo (--cxm-*, en `.cxm`): misma estructura, densidad y teclado; en la
+// marca, su letra y su azul (decisión de Julio, F01 respuesta 3). Se escriben con más peso
 // (html[data-marca="<id>"] …) para ganar a los de siempre sin tocar sus
 // ficheros; lo que el tema no nombra se queda como estaba. Sin tema (Folvy y
 // la marca de pruebas), no se escribe nada.
@@ -22,6 +24,11 @@ export function cssDelTema(m: Marca): string | null {
   --cx-azul-borde: ${t.accionBorde};
   --cx-ia: ${t.acento};
   --cx-letra: ${t.letra};
+}
+${raiz('.cxm')} {
+  --cxm-azul: ${t.accion};
+  --cxm-azul-encima: color-mix(in srgb, ${t.accion} 82%, #000);
+  --cxm-letra: ${t.letra};
 }
 ${raiz('.mx-entrar')} {
   --mx-tinta: ${t.tinta};
