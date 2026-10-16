@@ -192,6 +192,24 @@ begin
     end if;
   end loop;
 
+  -- 4b · La cadena de asientos, rehecha -----------------------------------------
+  -- La huella de cada asiento validado (C04: journal_entry_canonico) lleva su
+  -- id, su empresa y los ids de sus apuntes; en la copia son otros, así que la
+  -- cadena copiada no casa («Comprobar la cadena» decía que no). Se rehace con
+  -- las MISMAS funciones de la base, en el orden de la cadena, empresa a
+  -- empresa: queda como la dejaría validar uno a uno en el carril.
+  -- (Medido el 16/10, e2e 38906045875: c04/libro.spec.ts:231 en los dos tamaños.)
+  for c in
+    select distinct e.company_id from public.journal_entry e
+     where e.account_id in (select nuevo from _k where viejo in (select id from _plantilla_cuentas)) and e.chain_seq is not null
+  loop
+    v := null;
+    for t in select e.id from public.journal_entry e where e.company_id = c.company_id and e.chain_seq is not null order by e.chain_seq loop
+      update public.journal_entry set prev_hash = v, hash = public.journal_huella(v, public.journal_entry_canonico(t.id)) where id = t.id
+      returning hash into v;
+    end loop;
+  end loop;
+
   -- 5 · La contraseña de un solo uso -------------------------------------------
   if coalesce(current_setting('e2e.clave', true), '') <> '' then
     update auth.users set encrypted_password = extensions.crypt(current_setting('e2e.clave'), extensions.gen_salt('bf'))

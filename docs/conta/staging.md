@@ -492,3 +492,89 @@ se borra **después** de que ningún front lo lea: `scripts/conta/antes-de-subir
 busca en el `src/` de `origin/main` (lo publicado) y en el del commit que se
 sube los nombres que la tanda de producción borra o renombra, y para si
 alguno se usa todavía.
+
+## Cada e2e con sus propias cuentas: el carril (W02, 16/10)
+
+Hasta el 16/10 todas las e2e entraban en las mismas cuentas A y B y, para no
+romperse los datos, iban de una en una detrás de `e2e.cerrojo`: en tres días,
+1.741 minutos de espera, tantos como de pruebas (`claude/folvy_w02_paso1_medida_y_propuesta_20261016.md`).
+Ahora cada job de la e2e coge un **carril**: una copia de las cuentas de prueba
+con ids propios, que se clona al empezar y se borra al acabar.
+
+**Qué se copia (la plantilla).** Las cuentas A (Taberna de Prueba Norte), B
+(Cocina de Prueba Sur), C (sin empresa), Comercio de Prueba Diez y las dos
+«solas» del C06; sus siete usuarios (a.admin, a.encargado, b.admin, c.admin,
+sola.admin, sola.alta y c06.plataforma) con sus identidades y el permiso de
+plataforma; todo lo que tiene su columna de cuenta, y lo que cuelga de ello por
+clave ajena. Medido el 16/10: unas 17.900 filas en 101 tablas, en 6 s. No se
+copian los dobles por frente ni el acceso de Julio a la A.
+
+**Cómo se llaman las cosas del carril N.** El id de una fila es el de la
+plantilla con el segundo grupo XOR N: los de las semillas (`…-0000-…`) quedan
+con N a la vista (`c01a0000-0007-4000-…` en el carril 7). Un correo lleva
+`.carril-N` detrás de la parte local (`a.admin.carril-7@prueba.folvy.test`). Lo
+que es único en toda la base sin ningún uuid (el slug de la cuenta, un token,
+una clave de importación) lleva `-cN` detrás. Las pruebas calculan lo mismo con
+`enCarril` y `correoDelCarril` de `tests/e2e/conta/sesion.ts`, y
+`tests/unit/e2e/carril.test.ts` comprueba que las tres reglas (SQL, pruebas,
+scripts) dicen lo mismo, con valores que devolvió la función SQL en staging.
+
+**Cómo se copia sin romper nada.**
+
+- **Una sola transacción, con una foto fija.** Es `REPEATABLE READ`: o entra el
+  carril entero o no entra nada, y lo que otra e2e esté cambiando a la vez no
+  entra a medias.
+- **Sin disparadores ni comprobación de claves, solo en esa sesión**
+  (`session_replication_role = replica`, que supautils deja poner a `postgres`).
+  La copia sale tal cual. Si se insertara con disparadores:
+  - `party_desde_proveedor` crearía otro tercero por cada proveedor;
+  - `journal_line_inalterable` no dejaría poner apuntes a un asiento validado;
+  - cada cuenta nueva volvería a sembrar sus valores por defecto.
+
+  Sin claves ajenas, el clon las comprueba él: una a una, al final, y si una
+  queda colgando para. Nada de DDL y nada que bloquee las tablas de nadie.
+- **Después, la semilla del R02 en el carril**, con disparadores
+  (`scripts/e2e/carril/semilla.sql`): los pedidos vivos «de hoy».
+
+**Por qué no volver a pasar las semillas.** Las cuentas A y B son las semillas
+**más** 106 ficheros de `supabase/staging/sql` y todo lo que han hecho las
+pruebas. Las propias semillas fijan ids que no crea ninguna semilla: la empresa
+de A (`3b34403a…`) la crea `seed_c00_empresas_prueba.sql` con un id al azar, y
+`seed_c03`, `seed_c04` y `seed_c05` la nombran por ese id. Repetirlas en cuentas
+nuevas no reproduce A y B: copiarlas sí.
+
+**Los cerrojos** (`scripts/e2e/carril.sh`) son consultivos de Postgres. Los
+mantiene un psql en segundo plano mientras dura el job:
+
+| Cerrojo | Quién lo coge | Para qué |
+|---|---|---|
+| `(4202, 0)`, compartido | cada e2e | No entra mientras se migra. |
+| `(4202, 0)`, exclusivo | `aplicar-staging-conta` | Espera a que acaben las e2e en marcha y, mientras aplica, no empieza ninguna. Postgres pone en cola a las nuevas, así que no se cuela nadie. |
+| `(4203, N)` | cada e2e | El carril N es suyo, de 1 a 16. |
+
+Con el pooler de Supabase, si el cliente muere, **su consulta sigue viva en el
+servidor**. Medido el 16/10: un `pg_sleep(7200)` huérfano con los cerrojos
+cogidos dos horas. Por eso el guardián:
+
+- duerme a tramos de 20 s;
+- apunta su pid y, al soltar, se termina en el servidor con `pg_terminate_backend`.
+
+Si el runner muere sin soltar, los cerrojos se sueltan solos al acabar el
+tramo: medido, a los 20 s (`carril-staging-conta.yml`, paso «si el runner
+muere»). Lo que el carril deja a medias lo borra el siguiente que coge ese
+número, antes de clonar. Supavisor no pasa el `application_name`; el guardián
+lo pone él, y así se ve en `pg_stat_activity` de quién es cada cerrojo.
+
+**La entera en cuatro trozos.** `scripts/e2e/trozos.mjs` reparte los ficheros
+del más lento al más rápido, cada uno al trozo que menos lleva, con los
+tiempos de `tests/e2e/tiempos.json`. Los cuatro calculan el mismo reparto, y
+el job «entera» comprueba que entre todos están todos los ficheros, una vez
+cada uno, y que los cuatro salieron en verde. `scripts/conta/e2e-entera.mjs`
+solo la da por buena en el **primer intento**: relanzar un trozo que falló
+sirve para diagnosticar, no para dar valores a Julio.
+
+**Para probar un cambio del carril** basta con empujarlo a una rama
+`conta/w02-*`: `carril-staging-conta.yml` hace el ensayo, que se deshace, y el
+ciclo entero en un carril de verdad. Las cuentas de la plantilla siguen
+cambiándose como siempre, con `aplicar-staging-conta`. Lo que se le añade a la
+A, el próximo carril ya lo trae.

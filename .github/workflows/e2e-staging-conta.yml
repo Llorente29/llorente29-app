@@ -399,6 +399,8 @@ jobs:
           fi
 
       - name: Entera · juntar las listas
+        if: always()
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: trozo-*
@@ -406,6 +408,7 @@ jobs:
           merge-multiple: true
 
       - name: Entera · entre los trozos están todos los ficheros, una vez cada uno
+        if: always()
         env:
           N: ${{ needs.plan.outputs.n }}
         run: |

@@ -37,12 +37,36 @@ begin
     raise exception 'Carril %: entre lo que borraría hay una cuenta de la plantilla o de producción. No se borra nada.', n;
   end if;
 
+  -- Se busca como se copió, no recorriendo todas las claves ajenas de la
+  -- base: lo que es de una cuenta, por su cuenta (con índice); lo que es de un
+  -- usuario, por su usuario; y las hijas, solo en las tablas que no tienen
+  -- cuenta. Medido el 16/10 (e2e 38906045875): recorriendo las 981 claves
+  -- ajenas, el borrado tardaba 50-97 s con otras e2e en marcha, leyendo tablas
+  -- enteras, y les tumbaba consultas (57014, statement timeout) y un inicio de
+  -- sesión (504). Solo, 4,8 s.
   perform pg_temp.anadir('public.accounts', 'x.id in (select id from _carril_cuentas)');
   perform pg_temp.anadir('auth.users', 'x.id in (select id from _carril_usuarios)');
   for f in select * from _tabla where col_cuenta is not null and tabla <> 'public.accounts'::regclass loop
     perform pg_temp.anadir(f.tabla, format('x.%I in (select id from _carril_cuentas)', f.col_cuenta));
   end loop;
-  perform pg_temp.hijas(false);
+  -- Lo que cuelga de sus usuarios fuera de una cuenta: en auth (identidades,
+  -- sesiones, códigos de un solo uso…) y en public (administrador de
+  -- plataforma, registro de plataforma).
+  for f in
+    select fk.hija, fk.cols[1] as col from _fk fk join _tabla tb on tb.tabla = fk.hija
+     where fk.madre = 'auth.users'::regclass and array_length(fk.cols, 1) = 1
+       and tb.col_cuenta is null and fk.hija <> 'public.accounts'::regclass
+  loop
+    perform pg_temp.anadir(f.hija, format('x.%I in (select id from _carril_usuarios)', f.col));
+  end loop;
+  -- Y los tokens de esas sesiones (cuelgan de la sesión, no del usuario).
+  for f in select fk.hija, fk.cols, fk.mcols, c.temp from _fk fk join _copia c on c.tabla = fk.madre
+            where fk.madre = 'auth.sessions'::regclass loop
+    perform pg_temp.anadir(f.hija, format('(%s) in (select %s from %I)',
+      (select string_agg('x.' || quote_ident(x), ', ') from unnest(f.cols) x),
+      (select string_agg(quote_ident(x), ', ') from unnest(f.mcols) x), f.temp));
+  end loop;
+  perform pg_temp.hijas(true);
 
   if not exists (select 1 from _copia) then
     insert into _informe values ('(el carril estaba vacío)', 0);
