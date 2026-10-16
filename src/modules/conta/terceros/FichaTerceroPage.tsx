@@ -25,6 +25,7 @@ import {
   type ApartadoTercero, type ContextoTercero,
 } from '@/modules/conta/terceros/contextoTercero'
 import { Aprendido, ComoSeCalcula, ConQuienHablas, LiquidacionesAnteriores, SusCuentas, TarjetaLiquidaciones } from '@/modules/conta/terceros/piezasTercero'
+import { SusTiendas } from '@/modules/conta/terceros/SusTiendas'
 import { NuevaFactura, PrepararLiquidacion, SubirLiquidacion } from '@/modules/conta/terceros/dialogosTercero'
 import {
   CobroTercero, ContabilidadTercero, ContactosTercero, DatosFiscalesTercero, DocumentosTercero, HistorialTercero, LiquidacionesTercero,
@@ -611,7 +612,7 @@ function PantallaMovil({ ap, aviso }: { ap: ApartadoTercero; aviso: string | nul
   const { plataforma, socio } = papelesDe(ficha)
   let contenido: ReactNode
   if (ap === 'ficha') contenido = null
-  else if (ap === 'liquidaciones' && plataforma) contenido = <TarjetaLiquidaciones todas />
+  else if (ap === 'liquidaciones' && plataforma) contenido = <><SusTiendas /><TarjetaLiquidaciones todas /></>
   else if (ap === 'liquidaciones' && socio) contenido = <><ComoSeCalcula /><LiquidacionesTercero /></>
   else if (ap === 'contabilidad') contenido = <SusCuentas completa />
   else contenido = <section className="cx-tarjeta">{PANTALLA[ap]()}</section>

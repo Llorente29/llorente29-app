@@ -60,12 +60,13 @@ test('A · Sus tiendas: cada tienda con su marca, su local y su cuenta de cobro;
   await expect(tarjeta.getByRole('status')).toContainText(/no tienen marca y local: sus liquidaciones no se comparan ni se asientan hasta que se lo digas/)
 
   // La que se llama como una marca sale con esa marca propuesta; la que no, sin ninguna.
+  // exact: «Guardar Marca Rara…» también se llama «Marca» (run 453).
   const burger = page.getByTestId(`tienda-${BURGER}`)
   await expect(burger.getByText('Burger Norte (Calle Inventada 7, Madrid, ES, 28001)', { exact: true })).toBeVisible()
   await expect(burger.getByText('Sin marca ni local')).toBeVisible()
-  await expect(burger.getByLabel('Marca')).toHaveValue(MARCA_BURGER)
+  await expect(burger.getByLabel('Marca', { exact: true })).toHaveValue(MARCA_BURGER)
   await expect(burger.getByText(/marca propuesta por el nombre: guárdala si es esa/)).toBeVisible()
-  await expect(page.getByTestId(`tienda-${RARA}`).getByLabel('Marca')).toHaveValue('')
+  await expect(page.getByTestId(`tienda-${RARA}`).getByLabel('Marca', { exact: true })).toHaveValue('')
   await capturar(page, 'tiendas-antes')
 
   // Solo la marca, sin local: no se guarda, y se dice por qué.
@@ -74,8 +75,8 @@ test('A · Sus tiendas: cada tienda con su marca, su local y su cuenta de cobro;
   expect(asignadas).toEqual([])
 
   // Con su local y su cuenta: se guarda y se dice qué ha quedado.
-  await burger.getByLabel('Local').selectOption({ label: 'Norte Centro' })
-  await burger.getByLabel('Cuenta de cobro').selectOption({ label: 'Cuenta principal ···1332' })
+  await burger.getByLabel('Local', { exact: true }).selectOption({ label: 'Norte Centro' })
+  await burger.getByLabel('Cuenta de cobro', { exact: true }).selectOption({ label: 'Cuenta principal ···1332' })
   await burger.getByRole('button', { name: /^Guardar / }).click()
   await expect(page.getByText('Guardado: «Burger Norte (Calle Inventada 7, Madrid, ES, 28001)» es Burger Norte en Norte Centro; cobra en Cuenta principal ···1332.', { exact: true })).toBeVisible()
   expect(asignadas).toEqual([expect.objectContaining({ p_store: BURGER, p_marca: MARCA_BURGER, p_local: 'c01a0000-0000-4000-8000-0000000000a2', p_banco: '3315cb3a-ad30-44ea-958b-253b1ae8811f' })])
