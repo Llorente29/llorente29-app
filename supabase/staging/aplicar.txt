@@ -1,9 +1,16 @@
-# R03 · La dirección que no llega, la espera de 5 minutos, el ticket y el
-# código de Uber (16/10). Las dos pruebas aplican sus migraciones con \i dentro
-# de su transacción y acaban en ROLLBACK (staging no cambia). Si salen verdes,
-# las tres de verdad, para que las e2e de tests/e2e/reparto las tengan.
-supabase/staging/sql/20261118_r03_direccion_incompleta_prueba.sql
-supabase/staging/sql/20261118_r03_espera_ticket_codigo_prueba.sql
-supabase/migrations/20261118T0300_r03_direccion_incompleta.sql
-supabase/migrations/20261118T0310_r03_espera_ticket_codigo.sql
-supabase/migrations/20261118T0320_r03_entrega_datos.sql
+# C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
+# prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
+# staging no cambia.
+supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
+
+# D01 · El corte por fecha de las liquidaciones por correo (rama conta/d01-corte-liquidaciones).
+#   0100: el corte (de referencia antes de la fecha de Bancos; la que cruza, real).
+#   0110: los datos de Foodint; en staging no hace nada (Foodint no está).
+#   Y su prueba (ROLLBACK): antes, cruzando, varias semanas antes y cruzando, solapes.
+#   Y la tanda y las dos vueltas atrás, de verdad sobre datos de la cuenta A (ROLLBACK).
+#   Y la semilla de la e2e de Libros: una de referencia en A (22–28/12/2025, depósito 02/01/2026).
+supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql
+supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
+supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
+supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
+supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql

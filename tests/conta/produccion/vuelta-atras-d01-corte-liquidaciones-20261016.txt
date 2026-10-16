@@ -1,0 +1,7 @@
+# Vuelta atrás de la tanda del corte por fecha (modo «vuelta_atras»), en orden
+# inverso: primero devuelve las 7 facturas de agosto desde su copia (0110), y
+# después quita el corte (0100), que para si queda alguna de referencia.
+# La anterior de este fichero (encender): tests/conta/produccion/vuelta-atras-d01-encender-liquidaciones-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-corte-liquidaciones.sql
+supabase/vuelta-atras/20261115T0110_d01_liquidaciones_referencia_foodint.down.sql
+supabase/vuelta-atras/20261115T0100_d01_liquidaciones_corte.down.sql
