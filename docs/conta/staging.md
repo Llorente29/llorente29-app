@@ -565,11 +565,44 @@ muere»). Lo que el carril deja a medias lo borra el siguiente que coge ese
 número, antes de clonar. Supavisor no pasa el `application_name`; el guardián
 lo pone él, y así se ve en `pg_stat_activity` de quién es cada cerrojo.
 
-**La entera en cuatro trozos.** `scripts/e2e/trozos.mjs` reparte los ficheros
-del más lento al más rápido, cada uno al trozo que menos lleva, con los
-tiempos de `tests/e2e/tiempos.json`. Los cuatro calculan el mismo reparto, y
-el job «entera» comprueba que entre todos están todos los ficheros, una vez
-cada uno, y que los cuatro salieron en verde. `scripts/conta/e2e-entera.mjs`
+**La transición: ramas con la e2e de antes y ramas con carril.** Hasta que
+cada rama de A, B, C y D fusione `main`, conviven los dos workflows. La e2e de
+antes no tiene carril: corre en las cuentas de la plantilla y **escribe en
+ellas** (contraseña, escenario del R02, las pruebas), siempre después de coger
+`e2e.cerrojo` y hasta soltarlo. Quién coge qué:
+
+| Quién | `(4202, 0)` | `(4203, N)` | `e2e.cerrojo` |
+|---|---|---|---|
+| e2e de antes (rama sin fusionar `main`) | — | — | toda la e2e (caduca a los 50 min) |
+| e2e de carril | compartido, todo el job | exclusivo, todo el job | **solo el clon**: de acabar de esperar a terminar el clon (segundos; caduca a los 10 min) |
+| `aplicar-staging-conta` nuevo (desde `main` o una rama que lo traiga) | exclusivo | — | mientras aplica |
+| `aplicar-staging-conta` de antes (lanzado desde una rama vieja) | — | — | — (como hasta hoy) |
+
+- **Ninguna e2e de antes escribe en la plantilla mientras un carril la copia**:
+  el clon espera a que esté libre `e2e.cerrojo` (`carril.sh plantilla-coger`)
+  y la e2e de antes no escribe nada sin tenerlo. Al revés, una e2e de antes
+  espera como mucho los segundos del clon. Lo prueba
+  `tests/unit/e2e/transicion.test.ts` y, de verdad, `carril-staging-conta.yml`.
+- **Sin abrazo mortal**: la e2e de carril y `aplicar` cogen los dos en el
+  mismo orden, primero `(4202, 0)` y luego `e2e.cerrojo`; la e2e de antes solo
+  coge uno.
+- **Lo que cuesta**: mientras corre una e2e de antes (unos 35 min), los carriles
+  que arrancan esperan a que acabe para clonar —lo mismo que hoy, pero solo al
+  clonar—. Por eso el trozo tiene 90 min de tope y no 60.
+- **Lo que no cubre**: una e2e de antes que pase de 50 min pierde su cerrojo
+  (como hoy con otra e2e), y un `aplicar` lanzado desde una rama vieja no
+  espera a nadie (como hoy). Una rama vieja que vaya a aplicar a staging,
+  mejor que fusione `main` antes.
+- **Cuando no quede ninguna rama vieja**, `CARRIL_CERROJO_VIEJO=0` en el
+  workflow lo apaga, y en otra tanda se quitan `e2e.cerrojo` y `cerrojo.sh`.
+
+**La entera en trozos (2 por defecto).** `scripts/e2e/trozos.mjs` reparte los
+ficheros del más lento al más rápido, cada uno al trozo que menos lleva, con
+los tiempos de `tests/e2e/tiempos.json`. Por defecto son 2: con 4 a la vez, la
+Micro de staging se ahoga (medido el 16/10: de 1 fallo a 6-8). A mano se
+pueden pedir de 1 a 4. Todos calculan el mismo reparto, y el job «entera»
+comprueba que entre todos están todos los ficheros, una vez cada uno, y que
+todos salieron en verde. `scripts/conta/e2e-entera.mjs`
 solo la da por buena en el **primer intento**: relanzar un trozo que falló
 sirve para diagnosticar, no para dar valores a Julio.
 

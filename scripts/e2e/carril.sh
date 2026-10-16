@@ -8,6 +8,10 @@
 #   carril.sh borrar         borra lo del carril (también lo que dejó un run
 #                            cortado que usó el mismo número)
 #   carril.sh soltar         borra y suelta (pase lo que pase: if: always())
+#   carril.sh plantilla-coger   TRANSICIÓN: espera a que ninguna e2e de las de
+#                            antes (e2e.cerrojo) esté escribiendo en la plantilla
+#                            y coge ese cerrojo para el rato del clon
+#   carril.sh plantilla-soltar  lo suelta (clonar lo hace al acabar; soltar, siempre)
 #   carril.sh migrar-coger   aplicar-staging-conta: espera a que acaben las e2e
 #                            en marcha y no deja empezar ninguna mientras aplica
 #   carril.sh migrar-soltar  lo suelta
@@ -32,6 +36,15 @@
 # Por qué no el cerrojo de antes (e2e.cerrojo): aquel ponía en fila TODAS las
 # e2e porque compartían las cuentas A y B. Con un carril cada una, solo hace
 # falta esperar mientras se aplica algo a staging (mediana 0,6 min).
+#
+# LA TRANSICIÓN (mientras quede una rama con la e2e de antes). La e2e de antes
+# no tiene carril: corre en las cuentas de la plantilla y ESCRIBE en ellas,
+# cogiendo e2e.cerrojo para toda su duración. El clon las lee. Para no copiar
+# una plantilla a medio escribir, el carril coge también e2e.cerrojo, solo
+# desde que acaba de esperar hasta que termina el clon (segundos), con
+# caducidad corta. Orden siempre el mismo —primero (4202,0), luego
+# e2e.cerrojo— aquí y en aplicar-staging-conta: así no hay abrazo mortal.
+# Cuando no quede ninguna rama vieja, CARRIL_CERROJO_VIEJO=0 lo apaga.
 set -euo pipefail
 
 PSQL=${PSQL:-/usr/lib/postgresql/17/bin/psql}
@@ -40,6 +53,7 @@ SQL="$AQUI/carril"
 CARRIL_DIR=${CARRIL_DIR:-${RUNNER_TEMP:-/tmp}/carril}
 ESPERA_MIN=${CARRIL_ESPERA_MIN:-40}
 MAX=${CARRIL_MAX:-16}
+VIEJO=${CARRIL_CERROJO_VIEJO:-1}
 : "${DB_URL:?Falta DB_URL}"
 mkdir -p "$CARRIL_DIR"
 
@@ -131,6 +145,22 @@ parametros() {
     '\o' > "$CARRIL_DIR/parametros.sql"
 }
 
+# El cerrojo de antes, para el rato del clon (ver LA TRANSICIÓN, arriba).
+# Caduca a los 10 min: si el job muere entre coger y soltar, no para a nadie más.
+plantilla_yo() { echo "carril $(numero) clonando · ${CARRIL_YO:-?}"; }
+plantilla_coger() {
+  [ "$VIEJO" = 1 ] || { echo "Cerrojo de antes: apagado (CARRIL_CERROJO_VIEJO=0)."; return 0; }
+  local t0; t0=$(date +%s)
+  CERROJO_YO=$(plantilla_yo) CERROJO_MINUTOS=10 CERROJO_INTENTOS=$(( ESPERA_MIN * 2 )) CERROJO_PAUSA=${CERROJO_PAUSA:-30} PSQL="$PSQL" \
+    "$AQUI/cerrojo.sh" coger || { echo "::error::Una e2e de las de antes lleva ${ESPERA_MIN} min escribiendo en la plantilla."; return 1; }
+  echo "Ninguna e2e de antes escribe en la plantilla (esperado $(( $(date +%s) - t0 )) s)."
+}
+plantilla_soltar() {
+  [ "$VIEJO" = 1 ] || return 0
+  [ -s "$CARRIL_DIR/numero" ] || return 0
+  CERROJO_YO=$(plantilla_yo) PSQL="$PSQL" "$AQUI/cerrojo.sh" soltar || true
+}
+
 clonar() {
   local n; n=$(numero)
   : "${CLAVE_PRUEBAS:?Falta CLAVE_PRUEBAS}"
@@ -142,7 +172,8 @@ clonar() {
     -c 'set transaction isolation level repeatable read' \
     -f "$CARRIL_DIR/parametros.sql" -f "$SQL/comun.sql" -f "$SQL/clonar.sql" -f "$SQL/semilla.sql" \
     -c '\pset footer off' -c "select count(*) || ' tablas, ' || sum(filas) || ' filas' as copiado from _informe" > "$CARRIL_DIR/clonar.log" \
-    || { echo "::error::No se ha podido clonar el carril $n (arriba, el error de psql)."; return 1; }
+    || { echo "::error::No se ha podido clonar el carril $n (arriba, el error de psql)."; plantilla_soltar; return 1; }
+  plantilla_soltar
   echo "Carril $n clonado en $(( ($(date +%s%N) - t0) / 1000000 )) ms: $(grep -E 'tablas, ' "$CARRIL_DIR/clonar.log" | tr -d ' ')."
 }
 
@@ -159,6 +190,7 @@ borrar() {
 }
 
 soltar() {
+  plantilla_soltar
   if [ -s "$CARRIL_DIR/numero" ]; then
     borrar || echo "::warning::No se ha podido borrar el carril $(cat "$CARRIL_DIR/numero"): lo borra el próximo que lo coja."
   fi
@@ -202,8 +234,10 @@ case "${1:-}" in
   clonar) clonar ;;
   borrar) borrar ;;
   soltar) soltar ;;
+  plantilla-coger) plantilla_coger ;;
+  plantilla-soltar) plantilla_soltar ;;
   migrar-coger) migrar_coger ;;
   migrar-soltar) migrar_soltar ;;
   ensayo) ensayo "${2:-}" ;;
-  *) echo "uso: carril.sh coger|clonar|borrar|soltar|migrar-coger|migrar-soltar|ensayo [N]" >&2; exit 2 ;;
+  *) echo "uso: carril.sh coger|clonar|borrar|soltar|plantilla-coger|plantilla-soltar|migrar-coger|migrar-soltar|ensayo [N]" >&2; exit 2 ;;
 esac

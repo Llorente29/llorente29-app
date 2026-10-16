@@ -204,7 +204,9 @@ jobs:
     runs-on: ubuntu-latest
     # Un trozo de la entera lleva unos 9-17 min de pruebas; uno solo con la
     # suite entera (si alguna vez hiciera falta), 35. La preparación, hasta 10.
-    timeout-minutes: 60
+    # Y, mientras queden ramas con la e2e de antes, hasta 40 esperando a que
+    # una de aquellas deje de escribir en la plantilla (carril.sh plantilla-coger).
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -291,6 +293,9 @@ jobs:
           set -euo pipefail
           scripts/e2e/carril.sh coger
           echo "E2E_CARRIL=$(cat "$RUNNER_TEMP/carril/numero")" >> "$GITHUB_ENV"
+          # Transición: que ninguna e2e de las de antes esté escribiendo en la
+          # plantilla mientras se copia. Lo suelta el clon, al acabar.
+          scripts/e2e/carril.sh plantilla-coger
 
       - name: Carril · clonar las cuentas de prueba (con la contraseña de un solo uso)
         env:

@@ -88,7 +88,10 @@ jobs:
         if: github.event_name == 'push' || inputs.de_verdad
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
-        run: scripts/e2e/carril.sh coger
+        run: |
+          set -euo pipefail
+          scripts/e2e/carril.sh coger
+          scripts/e2e/carril.sh plantilla-coger
 
       - name: Carril · clonar las cuentas de prueba
         if: github.event_name == 'push' || inputs.de_verdad
@@ -99,6 +102,10 @@ jobs:
           CLAVE=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24); echo "::add-mask::$CLAVE"
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
           CLAVE_PRUEBAS="$CLAVE" scripts/e2e/carril.sh clonar
+          # La transición: el clon ha soltado e2e.cerrojo al acabar.
+          q=$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -c "select coalesce(quien, 'nadie') from e2e.cerrojo where id = 1")
+          echo "e2e.cerrojo después del clon: $q" | tee -a "$GITHUB_STEP_SUMMARY"
+          case "$q" in "carril "*) echo "::error::El clon no ha soltado e2e.cerrojo."; exit 1 ;; esac
 
       - name: Carril · sus siete usuarios entran, y solo ven lo suyo
         if: github.event_name == 'push' || inputs.de_verdad
