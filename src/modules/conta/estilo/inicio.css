@@ -137,6 +137,7 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
   .cxi-diez-paso .cx-boton { margin-left: 46px; }
 }
 .cxi-cifra-mono { font-family: var(--cx-letra-cifras); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cxi-iva { display: flex; flex-direction: column; gap: 1px; }
-.cxi-iva-linea { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxi-iva { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+/* Cada línea puede partir (en el móvil la tarjeta mide unos 170 px); el importe, nunca. */
+.cxi-iva-linea { min-width: 0; overflow-wrap: anywhere; }
 .cxi-iva-nota { color: var(--cx-apoyo); font-weight: 400; }
