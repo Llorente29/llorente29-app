@@ -51,8 +51,11 @@ import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { MARCA } from '../cuenta/marca'
 import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, motivoSinPatron, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
-import { anularConDiez, leerConDiez } from '@/modules/conta/services/conDiezService'
+import { anularConDiez, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
 import { numeroEnDiez } from '@/modules/conta/lib/numeroEnDiez'
+import { localDelAsiento, porQueNoLlegaADiez, primerMotivo, type MotivoEspera, type NoLlegaADiez } from '@/modules/conta/lib/esperan'
+import { leerEsperan } from '@/modules/conta/services/esperanService'
+import { correspondenciaDeEmpresa } from '../../../../supabase/functions/_shared/diezAnalitica.ts'
 import { AccionesPantalla, BotonAccion } from '@/modules/conta/ui/marco/AccionesPantalla'
 import { TablaDensa, type ColumnaDensa } from '@/modules/conta/ui/tabla/TablaDensa'
 import { borrarVista, cumpleFiltros, guardarVista, leerVistas, miles, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
@@ -80,6 +83,10 @@ interface DatosLibro {
   conDiez: Map<string, ConDiez>
   /** Si no se ha podido leer, por qué (el libro sigue: es el estado con Diez, no el libro). */
   conDiezError: string | null
+  /** M01 · «Esperan»: lo propuesto que la validación pararía, con sus motivos (conta_esperan). */
+  esperan: Map<string, MotivoEspera[]>
+  /** Si no se ha podido leer, por qué: entonces todo lo propuesto cuenta, como antes, y «Esperan» dice «—». */
+  esperanError: string | null
 }
 
 function useLibro(accountId: string | null, companyId: string | null, codigo: string | null, vuelta: number) {
@@ -92,22 +99,25 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const [ejercicios, cierres, locales, horaCierre] = await Promise.all([leerEjercicios(accountId, companyId), leerCierres(accountId, companyId), localesDeLaCuenta(accountId), horaDeCierre(accountId, companyId)])
       const hoy = hoyEnMadrid()
       const ejercicio = ejercicios.find((e) => e.code === codigo) ?? ejercicios.find((e) => hoy >= e.inicio && hoy <= e.fin) ?? ejercicios[0] ?? null
-      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null, conDiez: new Map<string, ConDiez>(), conDiezError: null }
+      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null, conDiez: new Map<string, ConDiez>(), conDiezError: null, esperan: new Map<string, MotivoEspera[]>(), esperanError: null }
       const mes = hoy >= ejercicio.inicio && hoy <= ejercicio.fin ? mesDe(hoy) : mesDe(ejercicio.fin)
       const asientos = await leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin)
       const anterior = mesAnterior(mes)
       let resultadoError: string | null = null
       let conDiezError: string | null = null
+      let esperanError: string | null = null
       // M01 (Julio, 16/10): el cierre del mes anterior no se pide si ya está
       // cerrado fuera (la regla de la validación, de la base: pedirCierre).
       const pedir = anterior >= ejercicio.inicio && pedirCierre(anterior, await primerDiaAbierto(companyId, anterior), cierres)
-      const [resultado, cierre, conDiez] = await Promise.all([
+      const [resultado, cierre, conDiez, esperan] = await Promise.all([
         resultadoDelMes(companyId, mes, locales).catch((e: unknown) => { resultadoError = e instanceof Error ? e.message : String(e); return null }),
         pedir ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
         leerConDiez(accountId, companyId, asientos.filter((a) => a.origen === 'sales_day').map((a) => a.id))
           .catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() }),
+        leerEsperan(companyId, ejercicio.inicio, ejercicio.fin)
+          .catch((e: unknown) => { esperanError = e instanceof Error ? e.message : String(e); return new Map<string, MotivoEspera[]>() }),
       ])
-      return { horaCierre, ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre, conDiez, conDiezError }
+      return { horaCierre, ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre, conDiez, conDiezError, esperan, esperanError }
     })().then((datos) => { if (vivo) setR({ clave, datos, error: null }) },
       (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
@@ -151,6 +161,8 @@ export default function LibroDiarioPage() {
   const [soloSinDiez, setSoloSinDiez] = useState(false)
   const [guardadas, setGuardadas] = useState<VistaGuardada[]>(() => leerVistas('libro-diario', usuario, almacen()))
   const [vistaGuardada, setVistaGuardada] = useState<string | null>(null)
+  // «Esperan» no es un filtro del libro (no sale de lib/diario): es lo que dice la base.
+  const [vista, setVista] = useState<'esperan' | null>(null)
 
   const visibles = useMemo(() => (datos ? filtrosVisibles(datos.asientos) : []), [datos])
   const pedido = params.get('ver') as FiltroDiario | null
@@ -165,18 +177,43 @@ export default function LibroDiarioPage() {
     ? datos.asientos.flatMap((a) => {
       const e = diezDe(a)
       if (!e || !(a.estado === 'propuesto' || (a.estado === 'validado' && e.reintentar))) return []
+      // M01: lo propuesto que la validación pararía espera; no se ofrece validar y enviar.
+      if (a.estado === 'propuesto' && datos.esperan.has(a.id)) return []
       return [{ id: a.id, concepto: a.concepto, fecha: a.fecha, estado: a.estado, cobro: cobroDe(a.apuntes), estadoDiez: e, noSeEnvia: motivoSinPatron(datos.conDiez.get(a.id)!.canal) }]
     }).sort((x, y) => x.fecha.localeCompare(y.fecha) || x.concepto.localeCompare(y.concepto))
     : []
   const propuestosDiez = candidatosDiez.filter((c) => c.estado === 'propuesto' && !c.noSeEnvia).length
-  // Lo validado de las plataformas que no está en Diez: el chip de «Te toca hoy».
-  const noLlegados = (a: AsientoDiario): boolean => { const e = diezDe(a); return !!e && a.estado === 'validado' && !e.enDiez }
-  const sinDiez = datos ? datos.asientos.filter(noLlegados).length : 0
+  // M01 · «Esperan» (Julio, 16/10). Lo que todavía no se puede hacer no cuenta
+  // como tarea: lo propuesto que la validación pararía (la base, conta_esperan)
+  // y lo validado que no llega a Diez por algo que no se arregla desde aquí.
+  // Lo validado que no llega por algo que sí (le falta su documento, el envío
+  // falló) es tarea, con su botón.
+  const correspondencia = correspondenciaDeEmpresa(activa?.id)
+  // Sin correspondencia, la empresa no tiene Diez: el envío decide, no el grupo.
+  const grupoDe = (local: string) => (correspondencia ? correspondencia.localAlEnviar[local] : 'sin correspondencia')
+  const noDiez = (a: AsientoDiario): NoLlegaADiez | null => {
+    const d = datos?.conDiez.get(a.id)
+    return d ? porQueNoLlegaADiez(a, d, localDelAsiento(a.apuntes), grupoDe) : null
+  }
+  const motivoEspera = (a: AsientoDiario): string | null => {
+    if (a.estado === 'propuesto' || a.estado === 'borrador') return primerMotivo(datos?.esperan.get(a.id))
+    const n = noDiez(a)
+    return n?.tipo === 'espera' ? n.motivo : null
+  }
+  const tareaDiez = (a: AsientoDiario): Extract<NoLlegaADiez, { tipo: 'tarea' }> | null => { const n = noDiez(a); return n?.tipo === 'tarea' ? n : null }
+  const esperanTodos = datos ? datos.asientos.filter((a) => motivoEspera(a) !== null) : []
+  const porEnviar = datos ? datos.asientos.filter((a) => tareaDiez(a) !== null).length : 0
+  const revisables = datos ? datos.asientos.filter((a) => a.estado === 'propuesto' && !motivoEspera(a)).length : 0
+  const enEsperan = vista === 'esperan'
 
   // Sin memo: filtrar unos miles de asientos es nada, y así no se queda viejo.
   const lista: AsientoDiario[] = !datos ? [] : (() => {
     const diez = (a: AsientoDiario) => numeroEnDiez(a, datos.conDiez.get(a.id))
-    return filtrar(datos.asientos, filtro).filter((a) => (!soloSinDiez || noLlegados(a)) && cumpleFiltros(campos, filtros, {
+    const base = enEsperan ? filtrar(datos.asientos, 'todos').filter((a) => motivoEspera(a) !== null)
+      // «Para revisar» es lo que se puede revisar: lo que espera va en «Esperan».
+      : filtro === 'revisar' ? filtrar(datos.asientos, filtro).filter((a) => !motivoEspera(a))
+        : filtrar(datos.asientos, filtro)
+    return base.filter((a) => (!soloSinDiez || tareaDiez(a) !== null) && cumpleFiltros(campos, filtros, {
       fecha: a.fecha,
       opcion: (id) => (id === 'serie' ? String(a.serie) : id === 'estado' ? estadoDe(a).texto
         : a.apuntes.map((l) => (l.comun ? 'Común' : l.local ?? '')).filter(Boolean)),
@@ -192,6 +229,8 @@ export default function LibroDiarioPage() {
   }
   const elegirVista = (id: string) => {
     setSoloSinDiez(false)
+    if (id === 'esperan') { setVistaGuardada(null); setVista('esperan'); return }
+    setVista(null)
     const g = guardadas.find((v) => v.id === id)
     if (g) {
       setVistaGuardada(g.id)
@@ -293,11 +332,11 @@ export default function LibroDiarioPage() {
             <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
             {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
             {d && a.estado !== 'propuesto' && <ChipDiez e={d} />}
-            <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
+            <QueLePasa a={a} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />
           </span>
         )
       },
-      exportar: (a) => `${a.concepto} · ${deDondeSale(a)}`,
+      exportar: (a) => `${a.concepto} · ${motivoEspera(a) ?? tareaDiez(a)?.texto ?? deDondeSale(a)}`,
     },
     { id: 'importe', titulo: 'Importe', ancho: '116px', cifra: true, celda: (a) => <span className="cxd-importe">{eurosExactos(importe(a))}</span>, exportar: (a) => importe(a) },
     { id: 'estado', titulo: 'Estado', ancho: '128px', celda: (a) => { const e = estadoDe(a); return <TonoChip tono={e.tono}>{e.texto}</TonoChip> }, exportar: (a) => estadoDe(a).texto },
@@ -317,6 +356,7 @@ export default function LibroDiarioPage() {
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {datos?.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo están con Diez las ventas por plataforma: {datos.conDiezError}</p>}
+      {datos?.esperanError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer qué asientos esperan (lo que la validación pararía): {datos.esperanError}. Mientras tanto, todo lo propuesto cuenta como para revisar.</p>}
       {datos?.ejercicio && hoyEnMadrid() >= datos.ejercicio.inicio && hoyEnMadrid() <= datos.ejercicio.fin && (
         // Información, no un aviso: el día en curso no se propone hasta su cierre.
         <p className="cx-ayuda cxd-dia-en-curso" role="note">{textoDiaEnCurso(datos.horaCierre)}</p>
@@ -380,21 +420,23 @@ export default function LibroDiarioPage() {
                 etiqueta="Asientos del libro diario" nombreFila={['asiento', 'asientos']} filas={lista} total={datos.asientos.length}
                 clave={(a) => a.id} columnas={columnas} movil={movil}
                 teTocaHoy={[
-                  { id: 'revisar', etiqueta: 'para revisar', numero: c.revisar, activo: filtro === 'revisar' && !vistaGuardada,
-                    alPulsar: () => { setVistaGuardada(null); setSoloSinDiez(false); cambiarFiltro(filtro === 'revisar' ? 'todos' : 'revisar') } },
+                  { id: 'revisar', etiqueta: 'para revisar', numero: revisables, activo: filtro === 'revisar' && !vistaGuardada && !enEsperan,
+                    alPulsar: () => { setVistaGuardada(null); setVista(null); setSoloSinDiez(false); cambiarFiltro(filtro === 'revisar' && !enEsperan ? 'todos' : 'revisar') } },
                   ...(datos.conDiez.size > 0 || datos.conDiezError ? [{
-                    id: 'sin-diez', etiqueta: 'validados sin llegar a Diez', numero: datos.conDiezError ? null : sinDiez, activo: soloSinDiez,
-                    alPulsar: () => setSoloSinDiez((v) => !v),
+                    id: 'sin-diez', etiqueta: 'para enviar a Diez', numero: datos.conDiezError ? null : porEnviar, activo: soloSinDiez,
+                    alPulsar: () => { setVista(null); setSoloSinDiez((v) => !v) },
                   }] : []),
                 ]}
                 vistas={{
                   lista: [
-                    ...visibles.map((f) => ({ id: f.id, texto: f.texto, n: f.id === 'todos' ? undefined : f.n })),
+                    ...visibles.map((f) => ({ id: f.id, texto: f.texto, n: f.id === 'todos' ? undefined : f.id === 'revisar' ? revisables : f.n })),
+                    // Siempre, como «Para revisar»: con 0 dice que no espera nada (regla 7); sin poder leerlo, «—».
+                    { id: 'esperan', texto: datos.esperanError ? 'Esperan · —' : 'Esperan', n: datos.esperanError ? undefined : esperanTodos.length },
                     ...guardadas.map((g) => ({ id: g.id, texto: g.nombre, guardada: true })),
                   ],
-                  activa: vistaGuardada ?? filtro,
+                  activa: enEsperan ? 'esperan' : vistaGuardada ?? filtro,
                   alElegir: elegirVista,
-                  alGuardar: (nombre) => {
+                  alGuardar: enEsperan ? undefined : (nombre) => {
                     const l = guardarVista('libro-diario', usuario, nombre, filtro, filtros, almacen())
                     setGuardadas(l)
                     setVistaGuardada(l.find((v) => v.nombre.toLowerCase() === nombre.toLowerCase())?.id ?? null)
@@ -410,10 +452,13 @@ export default function LibroDiarioPage() {
                 cuadre={(a) => ({ debe: a.apuntes.reduce((t, l) => t + l.debe, 0), haber: a.apuntes.reduce((t, l) => t + l.haber, 0) })}
                 abierta={abierto}
                 alAbrir={(a) => (movil ? navegar(rutaAsiento(a.id)) : setAbierto(abierto === a.id ? null : a.id))}
-                detalle={(a) => <Apuntes a={a} />}
+                detalle={(a) => <Apuntes a={a} espera={motivoEspera(a)} tarea={tareaDiez(a)} quien={userName}
+                  alHacer={(t) => { setHecho(t); recargar() }} alFallar={setFallo} />}
                 claseFila={(a) => (a.estado === 'anulado' ? 'cxd-anulado' : undefined)}
-                tarjeta={(a) => <TarjetaAsiento a={a} diez={diezDe(a)} />}
-                vacio={filtro === 'revisar' && !soloSinDiez
+                tarjeta={(a) => <TarjetaAsiento a={a} diez={diezDe(a)} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />}
+                vacio={enEsperan
+                  ? <Vacio titulo="Nada esperando." explicacion="Aquí sale lo que todavía no se puede validar o enviar, con su motivo: un mes cerrado, un envío por aclarar, una plataforma sin su factura medida en Diez…" />
+                  : filtro === 'revisar' && !soloSinDiez
                   ? <Vacio titulo="Nada que revisar." explicacion="Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ventas, facturas, liquidaciones y nóminas." />
                   : datos.asientos.length === 0
                     ? <Vacio titulo="Aún no hay asientos en este ejercicio." explicacion="Pulsa «Proponer lo pendiente» y los preparo con su porqué; o haz uno a mano con «+ Nuevo asiento»." />
@@ -454,9 +499,30 @@ export default function LibroDiarioPage() {
 const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
 /** Lo que se ve al desplegar un asiento en el ordenador: sus apuntes y «Abrir el asiento». */
-function Apuntes({ a }: { a: AsientoDiario }) {
+function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
+  a: AsientoDiario; espera: string | null; tarea: Extract<NoLlegaADiez, { tipo: 'tarea' }> | null; quien: string | null
+  alHacer: (t: string) => void; alFallar: (t: string) => void
+}) {
+  const [ocupado, setOcupado] = useState(false)
+  // «Adjuntar» y «Reintentar» hacen lo mismo que en la tarjeta «Con Diez»: guardar
+  // su documento si le falta y enviarlo. Lo que ha pasado se dice con contenido (regla 8).
+  async function hacer() {
+    setOcupado(true)
+    try { const [p] = await validarYEnviar([a], quien); alHacer(p.texto) }
+    catch (e) { alFallar(e instanceof Error ? e.message : 'No se ha podido enviar a Diez.') }
+    finally { setOcupado(false) }
+  }
   return (
     <div className="cxd-apuntes">
+      {espera && <p className="cxd-espera" role="note"><strong>Espera:</strong> {espera}</p>}
+      {tarea && (
+        <p className="cxd-tarea-diez">
+          <span>{tarea.texto}</span>
+          <button type="button" className="cx-boton" disabled={ocupado} onClick={(e) => { e.stopPropagation(); void hacer() }}>
+            {ocupado ? (tarea.accion === 'adjuntar' ? 'Adjuntando…' : 'Reintentando…') : tarea.accion === 'adjuntar' ? 'Adjuntar' : 'Reintentar'}
+          </button>
+        </p>
+      )}
       {a.apuntes.map((l) => (
         <div key={l.posicion} className="cxd-apunte">
           <span className="cxd-apunte-cuenta">
@@ -476,8 +542,18 @@ function Apuntes({ a }: { a: AsientoDiario }) {
   )
 }
 
+/**
+ * Lo que va en la fila después de los chips: el motivo si espera, lo que falta
+ * para Diez si es tarea, y si no, de dónde sale (en una línea, con «…»).
+ */
+function QueLePasa({ a, espera, tarea }: { a: AsientoDiario; espera: string | null; tarea: string | null }) {
+  if (espera) return <span className="cxd-sale cxd-sale-espera" title={espera}>Espera: {espera}</span>
+  if (tarea) return <span className="cxd-sale cxd-sale-tarea" title={tarea}>{tarea}</span>
+  return <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
+}
+
 /** Un asiento en el móvil: fecha y número, el concepto, sus chips, el importe y el estado. */
-function TarjetaAsiento({ a, diez }: { a: AsientoDiario; diez?: EstadoDiez }) {
+function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez?: EstadoDiez; espera: string | null; tarea: string | null }) {
   const e = estadoDe(a)
   return (
     <span className={`cxd-tarjeta${a.estado === 'anulado' ? ' cxd-anulado' : ''}`}>
@@ -487,7 +563,7 @@ function TarjetaAsiento({ a, diez }: { a: AsientoDiario; diez?: EstadoDiez }) {
         <span className="cxd-concepto-apoyo">
           {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
           {diez && a.estado !== 'propuesto' && <ChipDiez e={diez} />}
-          <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
+          <QueLePasa a={a} espera={espera} tarea={tarea} />
         </span>
       </span>
       <span className="cxd-tarjeta-derecha">

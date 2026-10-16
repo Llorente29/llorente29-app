@@ -93,3 +93,9 @@
 .cxm .cxl-movil-grupo:last-child { border-bottom: none; }
 .cxm .cxl-movil-grupo .cxl-grupo-etiqueta { padding: 6px 8px 2px; font-size: 11px; }
 .cxm .cxl-movil-grupo .cxl-accion { width: 100%; }
+
+/* M01 · «Esperan» y lo que falta para Diez, en la fila y al desplegarla. */
+.cxm .cxd-linea-libro .cxd-sale-espera, .cxm .cxd-tarjeta .cxd-sale-espera { color: var(--cxm-ambar); }
+.cxm .cxd-linea-libro .cxd-sale-tarea, .cxm .cxd-tarjeta .cxd-sale-tarea { color: var(--cxm-azul); }
+.cxm .cxd-espera { margin: 0 0 8px; padding: 6px 10px; border-radius: var(--cxm-radio-campo); background: var(--cxm-ambar-fondo); color: var(--cxm-texto); font-size: 13px; }
+.cxm .cxd-tarea-diez { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; font-size: 13px; }
