@@ -70,16 +70,10 @@ test('Pendientes de adjuntar en Diez: cuántos, el más antiguo, la referencia, 
   await expect(page.getByRole('heading', { name: 'Pendientes de adjuntar en Diez' })).toBeVisible({ timeout: 20_000 })
 
   // La acción, en la barra de Libros, cuenta lo pendiente: con filas, nunca «nada pendiente» (regla 7).
-  // M01: en el ordenador va en la segunda fila de la barra de arriba, con el
-  // punto ámbar; el dato, en su title y en lo que oye el lector. En el móvil,
-  // en la lista del área, escrito.
-  const accion = page.getByRole('link', { name: /Pendientes de adjuntar en Diez/ })
-  if ((page.viewportSize()?.width ?? 1440) >= 768) {
-    await expect(accion).toHaveAttribute('title', /3 sin su PDF/)
-    await expect(accion).toHaveAccessibleName(/Pendientes de adjuntar en Diez\s*,\s*3 sin su PDF/)
-  } else {
-    await expect(accion).toContainText('3 sin su PDF')
-  }
+  // M01 (Julio, 16/10): en el ordenador, en la segunda fila de la barra de
+  // arriba, con el número escrito («· 3»); en el móvil, en la lista del área.
+  await expect(page.getByRole('link', { name: /Pendientes de adjuntar en Diez/ }))
+    .toContainText((page.viewportSize()?.width ?? 1440) >= 768 ? 'Pendientes de adjuntar en Diez · 3' : '3 sin su PDF')
   // Cuántos y el más antiguo (lo anulado no cuenta aquí: va aparte).
   await expect(page.getByText('3 facturas están en Diez sin su PDF. La más antigua, del 01/10/26.')).toBeVisible()
   const lista = page.getByRole('list', { name: 'Facturas en Diez sin su PDF' })

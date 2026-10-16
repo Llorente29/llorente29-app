@@ -321,3 +321,5 @@
 .cxm .cxm-sub[aria-current='page'], .cxm .cxm-sub-activa { color: var(--cxm-azul); font-weight: 600; background: var(--cxm-propuesto); }
 .cxm .cxm-sub-gris { opacity: 0.6; }
 .cxm-sub-punto { width: 7px; height: 7px; border-radius: 50%; background: var(--cxm-ambar); display: inline-block; flex-shrink: 0; }
+.cxm .cxm-sub-numero { color: inherit; }
+.cxm .cxm-sub-numero .cxm-cifra { font-size: 12px; }

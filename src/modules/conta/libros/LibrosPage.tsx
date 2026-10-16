@@ -166,9 +166,22 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
   // Ordenador: la segunda fila de la barra de arriba del marco; el dato va en
   // el title y un punto ámbar dice que esa acción pide algo (ninguna se
   // esconde: regla 7).
+  // Julio, 16/10: lo que hoy enseña un número lo lleva escrito («Pendientes
+  // de adjuntar en Diez · 3»), nunca solo al pasar el ratón. Los mismos
+  // números del resumen con los que se escribe su dato.
+  const r = resumen.datos
+  const numeros: Record<string, number | undefined> = r ? {
+    'pendientes-diez': r.pdfPendientesDiez, expedidas: r.expedidas, recibidas: r.recibidas, 'bienes-inversion': r.bienes,
+    intracomunitarias: r.intracomunitarias, suplidos: r.suplidos,
+  } : {}
+  numeros.ejercicios = ctx.ejercicios.length
   const subpestanas: Subpestana[] = accionesDe(area).map((x) => {
     const e = est[x.id] ?? NINGUNO
-    return { id: x.id, etiqueta: x.nombre, ruta: ruta(area.id, x.id), activa: x.id === accion.id, dato: e.texto, aviso: e.tono === 'ambar', gris: e.texto === 'ninguno' || e.texto === 'ninguna' }
+    const n = numeros[x.id]
+    return {
+      id: x.id, etiqueta: x.nombre, ruta: ruta(area.id, x.id), activa: x.id === accion.id, dato: e.texto, aviso: e.tono === 'ambar',
+      gris: e.texto === 'ninguno' || e.texto === 'ninguna', numero: n && n > 0 ? n : undefined,
+    }
   })
 
   return (
