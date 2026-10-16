@@ -38,6 +38,12 @@ async function capturar(page: Page, nombre: string, medir = true) {
 
 const menu = (page: Page) => page.getByRole('navigation', { name: 'Menú de contabilidad' })
 
+/** En el móvil (Julio, 16/10) las vistas van en una línea desplegable: se abre antes de mirarlas. */
+async function abrirVistas(page: Page) {
+  if (lado(page) === 'movil') await page.getByRole('button', { name: /^Vista: / }).click()
+}
+
+
 /** El «Te toca hoy» ya ha contado: la franja deja de estar ocupada y ningún número dice «…». */
 async function esperarNumeros(page: Page) {
   const franja = page.getByRole('region', { name: 'Te toca hoy' })
@@ -256,9 +262,19 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   await expect(page.locator('.cxm-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
   // Te toca hoy: lo que espera revisión, que filtra al pulsarlo.
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()
-  // Vistas, filtros y exportar.
+  // Vistas, filtros y exportar. En el móvil, la línea dice la vista en la que estás.
+  if (lado(page) === 'movil') await expect(page.getByRole('button', { name: /^Vista: Todos/ })).toBeVisible()
+  await abrirVistas(page)
   await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Todos' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: '+ Guardar vista' })).toBeVisible()
+  if (lado(page) === 'movil') {
+    // Elegir una cierra el desplegable y la línea lo dice.
+    await page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: /^Ventas · / }).click()
+    await expect(page.getByRole('group', { name: 'Vistas' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^Vista: Ventas · \d+$/ })).toBeVisible()
+    await abrirVistas(page)
+    await page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Todos' }).click()
+  }
   for (const b of ['Excel', 'CSV', 'PDF']) await expect(page.getByRole('group', { name: 'Exportar' }).getByRole('button', { name: b })).toBeVisible()
   // El pie: cuántos y el cuadre.
   await expect(page.getByRole('status', { name: 'Cuadre' })).toContainText(/^Debe .+ · Haber .+ · Cuadra$/)
@@ -367,6 +383,7 @@ test('la muestra de las piezas: tabla densa, formulario por bloques y panel del 
   await expect(page.getByRole('status', { name: 'Cuadre' })).toContainText('Cuadra')
   await page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /para revisar$/ }).click()
   await expect(page.locator('.cxt-pie').first()).toContainText(/^\d+ de 40 asientos/)
+  await abrirVistas(page)
   await page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Todos' }).click()
 
   if (lado(page) === 'movil') {

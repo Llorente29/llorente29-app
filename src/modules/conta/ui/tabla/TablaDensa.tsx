@@ -29,6 +29,7 @@ import {
 } from '@/modules/conta/ui/tabla/tablaDensa'
 import { exportarTabla, type FormatoExportar } from '@/modules/conta/ui/tabla/exportar'
 import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
+import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 
 export interface ColumnaDensa<T> {
   id: string
@@ -145,7 +146,7 @@ export function TablaDensa<T>(p: PropsTablaDensa<T>) {
 
       {(p.vistas || p.exportar) && (
         <div className="cxt-barra">
-          {p.vistas && <Vistas {...p.vistas} />}
+          {p.vistas && (p.movil ? <VistasMovil {...p.vistas} /> : <Vistas {...p.vistas} />)}
           {p.exportar && (
             <div className="cxt-exportar" role="group" aria-label="Exportar">
               <span className="cxt-exportar-titulo" aria-hidden="true">Exportar</span>
@@ -237,7 +238,34 @@ function FilaConDetalle({ children, detalle, columnas }: { children: ReactNode; 
   )
 }
 
-function Vistas({ lista, activa, alElegir, alGuardar, alBorrar }: NonNullable<PropsTablaDensa<unknown>['vistas']>) {
+type PropsVistas = NonNullable<PropsTablaDensa<unknown>['vistas']>
+
+/**
+ * En el móvil (Julio, 16/10): las vistas en UNA línea desplegable, como el
+ * menú del área de Libros, para que el libro empiece arriba. La línea dice la
+ * vista en la que estás, con su número; al elegir otra, se cierra.
+ */
+function VistasMovil(p: PropsVistas) {
+  const { abierto, alternar, setAbierto, caja, boton } = useDesplegable()
+  const v = p.lista.find((x) => x.id === p.activa) ?? p.lista[0]
+  const texto = v ? `${v.texto}${v.n !== undefined ? ` · ${miles(v.n)}` : ''}` : 'Vistas'
+  return (
+    <div className="cxt-vistas-movil" ref={caja}>
+      <button type="button" ref={boton} className="cxt-vistas-boton" aria-expanded={abierto} aria-haspopup="true" onClick={alternar}
+        aria-label={`Vista: ${texto}`}>
+        <span className="cxt-vistas-boton-texto">{texto}</span>
+        <span className="cxt-vistas-flecha" aria-hidden="true">▾</span>
+      </button>
+      {abierto && (
+        <div className="cxt-vistas-menu">
+          <Vistas {...p} alElegir={(id) => { p.alElegir(id); setAbierto(false) }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Vistas({ lista, activa, alElegir, alGuardar, alBorrar }: PropsVistas) {
   const [nombrando, setNombrando] = useState(false)
   const [nombre, setNombre] = useState('')
   const [hecho, setHecho] = useState<string | null>(null)

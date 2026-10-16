@@ -194,7 +194,8 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
           <label className="cxl-ejercicio">
             <span className="cx-oculto">Ejercicio</span>
             <select className="cxm-select" value={ejercicio.code} onChange={(e) => { const p = new URLSearchParams(query); p.set('ejercicio', e.target.value); setQuery(p, { replace: true }) }}>
-              {ejercicios.map((e) => <option key={e.id} value={e.code}>Ejercicio {e.code}{e.origen === 'migrated' ? ' · traído' : e.estado === 'closed' ? ' · cerrado' : ''}</option>)}
+              {/* En el móvil, solo el año (Julio, 16/10): «Ejercicio 2026» se cortaba. El lector oye «Ejercicio» por la etiqueta. */}
+              {ejercicios.map((e) => <option key={e.id} value={e.code}>{movil ? e.code : `Ejercicio ${e.code}${e.origen === 'migrated' ? ' · traído' : e.estado === 'closed' ? ' · cerrado' : ''}`}</option>)}
             </select>
           </label>
         </PeriodoEnBarra>

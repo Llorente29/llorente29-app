@@ -41,6 +41,11 @@ function vigilar(page: Page) {
  * M01 · Un asiento del libro: en el ordenador, una fila de la tabla densa del
  * marco (role «row»); en el móvil, su tarjeta (un botón).
  */
+/** En el móvil (Julio, 16/10) las vistas van en una línea desplegable: se abre antes de mirarlas. */
+async function abrirVistas(page: Page) {
+  if (lado(page) === 'movil') await page.getByRole('button', { name: /^Vista: / }).click()
+}
+
 function filaDe(page: Page, nombre: RegExp) {
   return lado(page) === 'ordenador'
     ? page.getByRole('grid', { name: 'Asientos del libro diario' }).getByRole('row', { name: nombre })
@@ -62,11 +67,13 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   // Desde el menú: «Libros» ya tiene su pantalla.
   if (lado(page) === 'ordenador') await expect(page.getByRole('link', { name: 'Libros', exact: true }).first()).toBeVisible()
   // Las vistas: solo los orígenes que hay, con cuántos (los filtros de antes).
+  await abrirVistas(page)
   const vistas = page.getByRole('group', { name: 'Vistas' })
   for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Plataformas · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {
     await expect(vistas.getByRole('button', { name: f })).toBeVisible()
   }
   await expect(vistas.getByRole('button', { name: /^Banco · / })).toHaveCount(0)
+  if (lado(page) === 'movil') await page.keyboard.press('Escape')
   // «Te toca hoy»: lo que espera revisión, con su número (filtra al pulsarlo).
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()
   // El mes, en una línea: sus asientos, si está abierto y su resultado.
@@ -319,6 +326,7 @@ test('B · sin plataformas ni ventas, septiembre cerrado y un borrador que no se
   vigilar(page)
   await page.goto('/conta/libros/diario')
   await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
+  await abrirVistas(page)
   await expect(page.getByRole('group', { name: 'Vistas' })).toBeVisible()
   // Regla 9: nada de A.
   await expect(page.getByText(/Norte Centro|Plataforma Norte/)).toHaveCount(0)
@@ -327,6 +335,7 @@ test('B · sin plataformas ni ventas, septiembre cerrado y un borrador que no se
   await expect(vistas.getByRole('button', { name: /^Plataformas/ })).toHaveCount(0)
   await expect(vistas.getByRole('button', { name: /^Ventas/ })).toHaveCount(0)
   await expect(vistas.getByRole('button', { name: /^Manuales · \d+$/ })).toBeVisible()
+  if (lado(page) === 'movil') await page.keyboard.press('Escape')
   await expect(page.getByText('septiembre cerrado')).toBeVisible()
   await capturar(page, 'diario-b')
   await abrirAsiento(page, 'Honorarios de la gestoría · septiembre')
