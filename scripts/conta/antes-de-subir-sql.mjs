@@ -42,9 +42,24 @@
 //      que ya las tiene de una pasada anterior, no se ve. (16/10, ensayo #92 de
 //      la D01: 42703 en _conta_liquidacion_solape, que leía
 //      channel_settlement.store_id antes de añadirlo. Staging, verde.)
+//   7. Los nombres ambiguos en PL/pgSQL, en esos mismos ficheros (tanda y
+//      vuelta atrás pasan el MISMO control): una variable, parámetro o columna
+//      de «returns table» que se llama como una columna de una tabla que su
+//      bloque nombra y se usa sin cualificar; y un «execute format('… select %s
+//      from A a, B b …')» que rellena la lista con columnas sin cualificar.
+//      Las dos paran con 42702 al EJECUTAR, no al crear. Las columnas salen de
+//      src/types/database.ts y de lo que crean los propios ficheros. (16/10,
+//      ensayo #103 de la D01: la vuelta atrás de la 0110 metía «id» sin
+//      cualificar sobre la copia y el registro devuelto, que lo tienen los dos;
+//      en staging no hay Foodint y la vuelta atrás salía sin hacer nada.)
+//   8. Cada vuelta atrás de producción (supabase/produccion/vuelta-atras.txt)
+//      la ejecuta de verdad («\i <fichero>») alguna prueba del manifiesto de
+//      staging, sobre datos, o dice por qué no con «-- sin prueba con datos: …».
+//      Una vuelta atrás que en staging no encuentra nada que deshacer no ha
+//      ejecutado ni una de sus sentencias.
 // Sale con 1 si algo no cumple.
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
-import { ordenEnElFichero } from './produccion/analizar.mjs'
+import { ordenEnElFichero, ambiguosEnPlpgsql, columnasConocidas } from './produccion/analizar.mjs'
 
 const mal = []
 const manifiesto = 'supabase/staging/aplicar.txt'
@@ -108,7 +123,29 @@ for (const f of sqlDeLasTandas) {
     mal.push(`${f}: ${x.objeto} (sentencia ${x.sentencia}) lee ${x.lee}, que este fichero crea más abajo (sentencia ${x.nace}). En una base limpia falla al crearla (42703/42P01); staging no lo ve si ya la tiene. Créala antes.`)
   }
 }
+const textos = new Map([...sqlDeLasTandas].map((f) => [f, readFileSync(f, 'utf8')]))
+const columnas = columnasConocidas(readFileSync('src/types/database.ts', 'utf8'), [...textos.values()])
+for (const [f, t] of textos) {
+  for (const x of ambiguosEnPlpgsql(t, (tabla) => columnas.get(tabla))) {
+    mal.push(x.tipo === 'dinamico'
+      ? `${f}: en ${x.bloque}, ${x.nombre} ${x.detalle}.`
+      : `${f}: en ${x.bloque}, «${x.nombre}» es ${x.detalle}, y se usa sin cualificar: 42702 al ejecutarlo. Cámbiale el nombre (v_${x.nombre}).`)
+  }
+}
+const vueltas = 'supabase/produccion/vuelta-atras.txt'
+if (existsSync(vueltas)) {
+  const pruebas = existsSync(manifiesto)
+    ? readFileSync(manifiesto, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && /_prueba\.sql$/.test(l) && existsSync(l)).map((l) => readFileSync(l, 'utf8'))
+    : []
+  for (const v of readFileSync(vueltas, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && /\.sql$/.test(l))) {
+    if (!existsSync(v)) continue
+    const laEjecuta = pruebas.some((t) => t.split('\n').some((l) => /^\\i\s+(\S+)\s*$/.test(l.trim()) && l.trim().replace(/^\\i\s+/, '') === v))
+    if (!laEjecuta && !/^--\s*sin prueba con datos:\s*\S/m.test(readFileSync(v, 'utf8'))) {
+      mal.push(`${v}: ninguna prueba del manifiesto de staging la ejecuta («\\i ${v}») sobre datos, ni dice por qué no («-- sin prueba con datos: …»).`)
+    }
+  }
+}
 if (mal.length) { console.error(mal.map((m) => `✗ ${m}`).join('\n')); process.exit(1) }
-console.log('Pruebas de staging como usuario, \\gset en su sitio, la tanda dice qué cuenta (sin tablas que aún no existen), no deja huecos y ninguna función SQL ni vista lee algo que su fichero crea después.')
+console.log('Pruebas de staging como usuario, \\gset en su sitio, la tanda dice qué cuenta (sin tablas que aún no existen), no deja huecos, ninguna función SQL ni vista lee algo que su fichero crea después, ningún nombre es ambiguo en PL/pgSQL y cada vuelta atrás la ejecuta una prueba de staging.')
 console.log('Lo que esto no ve, y se hace igual: el fichero ENTERO, no un trozo, y como usuario; lo prueba staging con la base real antes del real de producción.')
 console.log('Y lo que el ensayo no ve (los agentes de después, la salud del pedido, lo que hacen otros procesos más tarde): un ensayo en verde no garantiza el real. Lo prueba staging con «real-con-fallo» y «real».')

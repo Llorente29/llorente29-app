@@ -768,3 +768,122 @@ if (modo === 'objetivos') {
   process.stdout.write(l.join('\n') + '\n')
   process.exitCode = alguno ? 1 : 0
 }
+
+// ── Nombres ambiguos en PL/pgSQL (16/10, ensayo #103 de la D01) ─────────────
+//
+// Dos formas de que un nombre sea de dos cosas, y Postgres pare con 42702
+// («column reference … is ambiguous») AL EJECUTAR, no al crear: un ensayo que
+// no llega a esa línea no lo ve, y una base sin los datos no llega.
+//   · variable: una variable declarada (o un parámetro, o una columna de
+//     «returns table») se llama como una columna de una tabla que el mismo
+//     bloque nombra, y se usa sin cualificar. (La 0110 del 15 tenía «tanda».)
+//   · dinamico: un «execute format('… select %s from A a, B b …')» rellena la
+//     lista del select con columnas sin cualificar sobre dos relaciones o más.
+//     (La vuelta atrás de la 0110: la copia y el registro devuelto tenían los
+//     dos «id».) La lista tiene que salir de un «'x.' || …».
+// `columnasDe(tabla)` da las columnas que se conocen de una tabla (Set).
+// Devuelve [{ bloque, tipo, nombre, detalle }].
+const sinComentariosNiCadenas = (s) => s.replace(/'(?:[^']|'')*'/g, "''").replace(/--.*$/gm, '')
+function partirArriba(s) {
+  const out = []; let prof = 0; let cur = ''; let enCad = false
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (c === "'") { if (enCad && s[i + 1] === "'") { cur += "''"; i++; continue } enCad = !enCad }
+    if (!enCad && c === '(') prof++
+    if (!enCad && c === ')') prof--
+    if (!enCad && prof === 0 && c === ',') { out.push(cur.trim()); cur = ''; continue }
+    cur += c
+  }
+  if (cur.trim()) out.push(cur.trim())
+  return out
+}
+export function ambiguosEnPlpgsql(texto, columnasDe) {
+  const fallos = []
+  for (const s of sentencias(texto)) {
+    const m = s.match(/\$([A-Za-z_]*)\$([\s\S]*?)\$\1\$/)
+    if (!m) continue
+    const fuera = s.replace(m[0], '')
+    let bloque
+    const fn = s.match(new RegExp(`^create\\s+(?:or\\s+replace\\s+)?function\\s+${ID}`, 'i'))
+    if (/^do\b/i.test(s)) bloque = 'do'
+    else if (fn && /\blanguage\s+plpgsql\b/i.test(fuera)) bloque = nombre(fn[1])
+    else continue
+    const cuerpo = m[2]
+    const limpio = sinComentariosNiCadenas(cuerpo)
+    // Lo que se declara: variables, y en una función sus parámetros y su «returns table».
+    const nombres = new Map()
+    const dec = limpio.match(/^\s*(?:<<\w+>>\s*)?declare\b([\s\S]*?)\bbegin\b/i)
+    if (dec) for (const d of dec[1].split(';')) { const v = d.trim().match(/^"?([A-Za-z_][A-Za-z0-9_]*)"?\s/); if (v) nombres.set(v[1].toLowerCase(), 'variable') }
+    if (bloque !== 'do') {
+      const cab = fuera.replace(/^[^(]*\(/, '(')
+      const args = cab.match(/^\(([\s\S]*?)\)\s*returns\b/i)
+      if (args) for (const a of partirArriba(args[1])) { const v = a.replace(/^(in|out|inout|variadic)\s+/i, '').match(/^"?([A-Za-z_][A-Za-z0-9_]*)"?\s+\S/); if (v) nombres.set(v[1].toLowerCase(), 'parámetro') }
+      const rt = cab.match(/\breturns\s+table\s*\(([\s\S]*?)\)\s*(?:language|as|security|stable|volatile|immutable|set)\b/i)
+      if (rt) for (const a of partirArriba(rt[1])) { const v = a.match(/^"?([A-Za-z_][A-Za-z0-9_]*)"?\s+\S/); if (v) nombres.set(v[1].toLowerCase(), 'columna de returns table') }
+    }
+    if (/#variable_conflict/i.test(cuerpo)) nombres.clear()
+    const tablas = new Set([...limpio.matchAll(/\b(?:from|join|update|insert\s+into|delete\s+from|using)\s+(?:only\s+)?(?:public\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?/gi)].map((x) => x[1].toLowerCase()))
+    // Donde un nombre no se confunde: un alias («as x»), la lista de columnas de un insert o
+    // de un on conflict, el lado izquierdo de un «set x =» y el de una asignación «x :=».
+    const tras = (dec ? limpio.slice(limpio.indexOf(dec[0]) + dec[0].length) : limpio)
+      .replace(/\binsert\s+into\s+[A-Za-z0-9_."]+\s*\([^()]*\)/gi, ' ')
+      .replace(/\bon\s+conflict\s*\([^()]*\)/gi, ' ')
+      .replace(/\bas\s+"?[A-Za-z_][A-Za-z0-9_]*"?/gi, ' ')
+      .replace(/(\bset\b|,)\s*"?[A-Za-z_][A-Za-z0-9_]*"?\s*=(?!=)/gi, '$1 ')
+      .replace(/(^|;|\bthen|\belse|\bloop|\bbegin)\s*[A-Za-z_][A-Za-z0-9_]*\s*:=/gi, '$1 ')
+    for (const [v, tipo] of nombres) {
+      const deTabla = [...tablas].filter((t) => columnasDe(t)?.has(v))
+      if (!deTabla.length) continue
+      if (!new RegExp(`(?<![A-Za-z0-9_.$"])${v}(?![A-Za-z0-9_."])`, 'i').test(tras)) continue
+      fallos.push({ bloque, tipo: 'variable', nombre: v, detalle: `${tipo} con el nombre de una columna de ${deTabla.join(', ')}` })
+    }
+    // Dinámico: execute format('… select %s from <dos o más> …', args)
+    const asignado = new Map() // variable → expresión que la llena
+    for (const a of cuerpo.matchAll(/\bselect\s+([\s\S]*?)\s+into\s+((?:[A-Za-z_][A-Za-z0-9_]*\s*,\s*)*[A-Za-z_][A-Za-z0-9_]*)\s+from\b/gi)) {
+      const exprs = partirArriba(a[1]); const vars = a[2].split(',').map((x) => x.trim().toLowerCase())
+      vars.forEach((x, k) => asignado.set(x, exprs[k] ?? ''))
+    }
+    for (const a of cuerpo.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*)\s*:=\s*([^;]*);/g)) asignado.set(a[1].toLowerCase(), a[2])
+    for (const e of cuerpo.matchAll(/\bexecute\s+format\s*\(/gi)) {
+      let i = e.index + e[0].length; let prof = 1; let enCad = false
+      for (; i < cuerpo.length && prof > 0; i++) {
+        const c = cuerpo[i]
+        if (c === "'") { if (enCad && cuerpo[i + 1] === "'") { i++; continue } enCad = !enCad }
+        if (!enCad && c === '(') prof++
+        if (!enCad && c === ')') prof--
+      }
+      const partes = partirArriba(cuerpo.slice(e.index + e[0].length, i - 1))
+      const fmt = (partes[0] ?? '').replace(/^'|'$/g, '').replace(/''/g, "'")
+      const args = partes.slice(1)
+      let sec = 0
+      const huecos = [...fmt.matchAll(/%(?:(\d+)\$)?([sIL])/g)].map((h) => ({ pos: h.index, n: h[1] ? Number(h[1]) : ++sec }))
+      for (const sel of fmt.matchAll(/\bselect\s+(?:distinct\s+)?%(?:(\d+)\$)?s\s+from\s+([\s\S]*?)(?=\bwhere\b|\bgroup\b|\border\b|\bon\s+conflict\b|\breturning\b|$)/gi)) {
+        const desde = sel[2]
+        if (!/,|\bjoin\b/i.test(desde.replace(/\([^()]*\)/g, ''))) continue
+        const hueco = huecos.find((h) => h.pos === sel.index + sel[0].indexOf('%'))
+        const arg = (args[(hueco?.n ?? 1) - 1] ?? '').trim()
+        const expr = asignado.get(arg.toLowerCase()) ?? arg
+        if (/'[A-Za-z_][A-Za-z0-9_]*\.'\s*\|\|/.test(expr)) continue
+        fallos.push({ bloque, tipo: 'dinamico', nombre: arg || '?', detalle: `rellena «select %s from ${desde.trim().replace(/\s+/g, ' ').slice(0, 80)}» sin cualificar las columnas (con dos relaciones, una columna que tengan las dos es ambigua: 42702); llénala con «'x.' || …»` })
+      }
+    }
+  }
+  return fallos
+}
+
+/** Las columnas de cada tabla, de los tipos generados (src/types/database.ts) y de lo que crean los ficheros dados. */
+export function columnasConocidas(tipos, ficheros = []) {
+  const mapa = new Map()
+  const add = (t, c) => { const k = t.toLowerCase(); if (!mapa.has(k)) mapa.set(k, new Set()); mapa.get(k).add(c.toLowerCase()) }
+  const re = /^ {6}([a-z_][a-z0-9_]*): \{\n {8}Row: \{\n([\s\S]*?)\n {8}\}/gm
+  for (const m of tipos.matchAll(re)) for (const c of m[2].matchAll(/^ {10}([a-z_][a-z0-9_]*)\??:/gm)) add(m[1], c[1])
+  for (const texto of ficheros) {
+    for (const s of sentencias(texto)) {
+      const ct = s.match(new RegExp(`^create\\s+(?:unlogged\\s+)?table\\s+(?:if\\s+not\\s+exists\\s+)?${ID}\\s*\\(([\\s\\S]*)\\)`, 'i'))
+      if (ct) for (const c of partirArriba(ct[2])) { const v = c.match(/^"?([A-Za-z_][A-Za-z0-9_]*)"?\s+\S/); if (v && !/^(constraint|primary|unique|foreign|check|exclude)$/i.test(v[1])) add(nombre(ct[1]).replace(/^public\./, ''), v[1]) }
+      const at = s.match(new RegExp(`^alter\\s+table\\s+(?:if\\s+exists\\s+)?(?:only\\s+)?${ID}`, 'i'))
+      if (at) for (const m of s.matchAll(/\badd\s+column\s+(?:if\s+not\s+exists\s+)?"?([A-Za-z_][A-Za-z0-9_]*)"?/gi)) add(nombre(at[1]).replace(/^public\./, ''), m[1])
+    }
+  }
+  return mapa
+}

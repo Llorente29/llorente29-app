@@ -23,6 +23,11 @@
 -- Después comprueba: 7 de referencia, 0 facturas de comisión de antes del corte,
 -- la de octubre (Bendito Burrito, 05–11/10) sigue con la suya, y los dos
 -- solapes siguen «por aclarar».
+-- En producción no hay nada que elegir: Foodint, 7 y 2. La prueba de staging
+-- (20261115_d01_referencia_vuelta_atras_prueba.sql) la ejecuta de verdad sobre
+-- datos inventados de la cuenta A, diciéndole cuenta, empresa, cuántas espera y
+-- cuántos solapes con d01_prueba.*; con esos ajustes puestos, en una base con
+-- cuentas de producción, para.
 -- Vuelta atrás: supabase/vuelta-atras/20261115T0110_d01_liquidaciones_referencia_foodint.down.sql
 
 create table if not exists public.conta_respaldo_liquidacion_factura (
@@ -42,11 +47,17 @@ revoke all on public.conta_respaldo_liquidacion_factura from public, anon, authe
 
 do $$
 declare
-  acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
-  emp constant uuid := '658728c0-fcd7-46ef-a860-d4e5e6eb21d9';
+  acc constant uuid := coalesce(nullif(current_setting('d01_prueba.cuenta', true), ''), '51ad1792-6629-4ef7-833a-b57b09a86710')::uuid;
+  emp constant uuid := coalesce(nullif(current_setting('d01_prueba.empresa', true), ''), '658728c0-fcd7-46ef-a860-d4e5e6eb21d9')::uuid;
+  esperadas constant int := coalesce(nullif(current_setting('d01_prueba.esperadas', true), ''), '7')::int;
+  solapes_min constant int := coalesce(nullif(current_setting('d01_prueba.solapes', true), ''), '2')::int;
   v_tanda constant text := '20261115T0110_d01_liquidaciones_referencia_foodint';
   v_corte date; n_liq int; n_fac int; n_mal int; n_colgando int; n_solape_antes int; n_solape_despues int; n int; r record;
 begin
+  if coalesce(current_setting('d01_prueba.cuenta', true), '') <> ''
+     and exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
+    raise exception 'REFERENCIA PARADA: d01_prueba.* es solo para la prueba de staging, y esta base tiene cuentas de producción.' using errcode = 'P0001';
+  end if;
   if not exists (select 1 from public.company where id = emp and account_id = acc) then
     raise notice 'Liquidaciones de referencia: esta base no tiene a Foodint; no se toca nada.';
     return;
@@ -75,13 +86,13 @@ begin
        + (select count(*) from public.licensed_settlement b join _ref x on x.invoice_id = b.received_invoice_id)
        + (select count(*) from public.supplier_invoice b join _ref x on x.invoice_id = b.corrects_invoice_id)
     into n_colgando;
-  if n_liq <> 7 or n_fac <> 7 or n_mal <> 0 or n_colgando <> 0 then
-    raise exception 'REFERENCIA PARADA: % liquidación(es) antes del corte, % con factura, % factura(s) que no son una de comisión en revisión sin número ni asiento, % cosa(s) colgando de ellas. Se esperaban 7, 7, 0 y 0. No se toca nada.',
-      n_liq, n_fac, n_mal, n_colgando using errcode = 'P0001';
+  if n_liq <> esperadas or n_fac <> esperadas or n_mal <> 0 or n_colgando <> 0 then
+    raise exception 'REFERENCIA PARADA: % liquidación(es) antes del corte, % con factura, % factura(s) que no son una de comisión en revisión sin número ni asiento, % cosa(s) colgando de ellas. Se esperaban %, %, 0 y 0. No se toca nada.',
+      n_liq, n_fac, n_mal, n_colgando, esperadas, esperadas using errcode = 'P0001';
   end if;
   if exists (select 1 from _ref x where (select count(*) from public.supplier_invoice_line l where l.supplier_invoice_id = x.invoice_id) = 0
                                       or (select count(*) from public.supplier_invoice_tax t where t.supplier_invoice_id = x.invoice_id) = 0) then
-    raise exception 'REFERENCIA PARADA: alguna de las 7 facturas no tiene su línea o su IVA. No se toca nada.' using errcode = 'P0001';
+    raise exception 'REFERENCIA PARADA: alguna de las facturas no tiene su línea o su IVA. No se toca nada.' using errcode = 'P0001';
   end if;
   select count(*) into n_solape_antes from public.channel_settlement where account_id = acc and source like 'correo\_%' and review_note like '%Se solapa con%';
 
@@ -97,13 +108,13 @@ begin
   -- 3 · quitar las facturas (líneas e IVA, en cascada)
   delete from public.supplier_invoice i using _ref x where i.id = x.invoice_id;
   get diagnostics n = row_count;
-  if n <> 7 then raise exception 'REFERENCIA: se esperaban quitar 7 facturas y se han quitado %. Se deshace todo.', n using errcode = 'P0001'; end if;
+  if n <> esperadas then raise exception 'REFERENCIA: se esperaban quitar % facturas y se han quitado %. Se deshace todo.', esperadas, n using errcode = 'P0001'; end if;
   -- 4 · lo que queda por aclarar, dicho otra vez
   for r in select settlement_id from _ref loop perform public._conta_liquidacion_marcar(r.settlement_id); end loop;
 
   -- Después
   select count(*) into n from public.channel_settlement where account_id = acc and source like 'correo\_%' and is_reference;
-  if n <> 7 then raise exception 'REFERENCIA: quedan % de referencia, no 7. Se deshace todo.', n using errcode = 'P0001'; end if;
+  if n <> esperadas then raise exception 'REFERENCIA: quedan % de referencia, no %. Se deshace todo.', n, esperadas using errcode = 'P0001'; end if;
   if exists (select 1 from public.supplier_invoice where account_id = acc and source = 'liquidacion' and invoice_date < v_corte) then
     raise exception 'REFERENCIA: sigue habiendo facturas de comisión de antes del corte. Se deshace todo.' using errcode = 'P0001';
   end if;
@@ -111,7 +122,7 @@ begin
     raise exception 'REFERENCIA: una liquidación desde el corte se ha quedado sin su factura. Se deshace todo.' using errcode = 'P0001';
   end if;
   select count(*) into n_solape_despues from public.channel_settlement where account_id = acc and source like 'correo\_%' and review_note like '%Se solapa con%';
-  if n_solape_despues <> n_solape_antes or n_solape_despues < 2 then
+  if n_solape_despues <> n_solape_antes or n_solape_despues < solapes_min then
     raise exception 'REFERENCIA: los solapes por aclarar eran % y ahora son % (el de Smash tiene que seguir diciéndose). Se deshace todo.', n_solape_antes, n_solape_despues using errcode = 'P0001';
   end if;
 end $$;

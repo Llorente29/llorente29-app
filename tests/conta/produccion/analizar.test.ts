@@ -36,7 +36,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — módulo .mjs sin tipos
-import { analizarFichero, clasificar, creadosPorLaTanda, decidir, informe, ordenEnElFichero, sentencias } from '../../../scripts/conta/produccion/analizar.mjs'
+import { ambiguosEnPlpgsql, analizarFichero, columnasConocidas, clasificar, creadosPorLaTanda, decidir, informe, ordenEnElFichero, sentencias } from '../../../scripts/conta/produccion/analizar.mjs'
 
 type Op = { accion: string; tipo: string; objeto: string; detalle: string }
 type Existentes = { tablas: string[]; funciones: string[] }
@@ -1244,9 +1244,15 @@ describe('la tanda de AHORA (manifiesto vivo): el corte por fecha de las liquida
   it('los datos: solo Foodint, el freno de 7 y 7 sin nada colgando, la copia antes de borrar, y los solapes después', () => {
     const s = sin(F1)
     expect(s).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
-    expect(s).toMatch(/if n_liq <> 7 or n_fac <> 7 or n_mal <> 0 or n_colgando <> 0 then\s+raise exception/)
+    // En producción, Foodint, 7 y 2: lo que la prueba de staging cambia con d01_prueba.* solo vale sin cuentas de producción.
+    expect(s).toMatch(/acc constant uuid := coalesce\(nullif\(current_setting\('d01_prueba\.cuenta', true\), ''\), '51ad1792-6629-4ef7-833a-b57b09a86710'\)::uuid;/)
+    expect(s).toMatch(/emp constant uuid := coalesce\(nullif\(current_setting\('d01_prueba\.empresa', true\), ''\), '658728c0-fcd7-46ef-a860-d4e5e6eb21d9'\)::uuid;/)
+    expect(s).toMatch(/esperadas constant int := coalesce\(nullif\(current_setting\('d01_prueba\.esperadas', true\), ''\), '7'\)::int;/)
+    expect(s).toMatch(/solapes_min constant int := coalesce\(nullif\(current_setting\('d01_prueba\.solapes', true\), ''\), '2'\)::int;/)
+    expect(s).toMatch(/if coalesce\(current_setting\('d01_prueba\.cuenta', true\), ''\) <> ''\s+and exists \(select 1 from public\.accounts where id in \('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001'\)\) then\s+raise exception/)
+    expect(s).toMatch(/if n_liq <> esperadas or n_fac <> esperadas or n_mal <> 0 or n_colgando <> 0 then\s+raise exception/)
     expect(s.indexOf('insert into public.conta_respaldo_liquidacion_factura')).toBeLessThan(s.indexOf('delete from public.supplier_invoice'))
-    expect(s).toMatch(/n_solape_despues <> n_solape_antes or n_solape_despues < 2/)
+    expect(s).toMatch(/n_solape_despues <> n_solape_antes or n_solape_despues < solapes_min/)
     expect((s.match(/\bdelete\b/gi) ?? []).length).toBe(1)
   })
   it('declara qué cuenta; la cuenta solo lee y cuenta lo nuevo sin nombrarlo fuera de una cadena', () => {
@@ -1263,6 +1269,16 @@ describe('la tanda de AHORA (manifiesto vivo): el corte por fecha de las liquida
     for (const f of atras) expect(readFileSync(f, 'utf8'), f).toMatch(/raise exception/)
     expect(readFileSync(atras[0], 'utf8')).toMatch(/jsonb_populate_record\(null::public\.supplier_invoice/)
     expect(readFileSync(atras[0], 'utf8')).toMatch(/is_generated = 'NEVER'/)
+    expect(readFileSync(atras[0], 'utf8')).toMatch(/esperadas constant int := coalesce\(nullif\(current_setting\('d01_prueba\.esperadas', true\), ''\), '7'\)::int;/)
+  })
+  it('tanda y vuelta atrás, sin nombres ambiguos; y las dos vueltas atrás las ejecuta de verdad la prueba de staging, sobre datos', () => {
+    const fs = [F0, F1, ...leerTanda('supabase/produccion/vuelta-atras.txt')]
+    const cols = columnasConocidas(readFileSync('src/types/database.ts', 'utf8'), fs.map((f) => readFileSync(f, 'utf8')))
+    for (const f of fs) expect(ambiguosEnPlpgsql(readFileSync(f, 'utf8'), (t: string) => cols.get(t)), f).toEqual([])
+    const prueba = 'supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql'
+    expect(leerTanda('supabase/staging/aplicar.txt')).toContain(prueba)
+    const ies = readFileSync(prueba, 'utf8').split('\n').filter((l) => l.startsWith('\\i ')).map((l) => l.slice(3).trim())
+    expect(ies).toEqual([F1, ...leerTanda('supabase/produccion/vuelta-atras.txt')])
   })
   it('la vuelta atrás del corte deja las dos funciones con el texto de la 0100 del 13, tal cual', () => {
     const down = readFileSync('supabase/vuelta-atras/20261115T0100_d01_liquidaciones_corte.down.sql', 'utf8')
@@ -1366,6 +1382,53 @@ describe('D1: el comparador', () => {
 // SQL (y la consulta de una vista) al crearla; staging ya tenía la columna de
 // una pasada anterior y salió verde. Lo reproduce una base limpia: el fichero
 // de 8731545a falla en la línea 161 y el reordenado entra, sale y vuelve a entrar.
+describe('nombres ambiguos en PL/pgSQL: tanda y vuelta atrás, el mismo control (16/10, ensayo #103)', () => {
+  const cols = (m: Record<string, string[]>) => (t: string) => (m[t] ? new Set(m[t]) : undefined)
+  it('la vuelta atrás de 0b0a6a89, la que paró el ensayo #103 con 42702: sus tres inserts dinámicos', () => {
+    // Su texto, tal cual estaba en ese commit (la copia de la medida, abajo).
+    const viejo = readFileSync('tests/conta/produccion/vuelta-atras-0110-0b0a6a89-42702.sql', 'utf8')
+    const r = ambiguosEnPlpgsql(viejo, () => undefined)
+    expect(r.map((x) => [x.tipo, x.nombre])).toEqual([['dinamico', 'cols_i'], ['dinamico', 'cols_l'], ['dinamico', 'cols_t']])
+  })
+  it('con la lista cualificada («x.» || …) no hay nada', () => {
+    const t = `do $$ declare a text; b text; begin
+  select string_agg(quote_ident(column_name), ', '), string_agg('x.' || quote_ident(column_name), ', ') into a, b from information_schema.columns where table_name = 't';
+  execute format('insert into public.t (%1$s) select %2$s from public.copia c, jsonb_populate_record(null::public.t, c.j) x', a, b);
+end $$;`
+    expect(ambiguosEnPlpgsql(t, () => undefined)).toEqual([])
+    expect(ambiguosEnPlpgsql(t.replace('%2$s from', '%1$s from'), () => undefined).map((x) => x.nombre)).toEqual(['a'])
+  })
+  it('con una sola relación, la lista sin cualificar no es ambigua', () => {
+    const t = `do $$ declare a text; begin select string_agg(column_name, ', ') into a from information_schema.columns; execute format('select %s from public.t where true', a); end $$;`
+    expect(ambiguosEnPlpgsql(t, () => undefined)).toEqual([])
+  })
+  it('una variable que se llama como una columna de su tabla, usada sin cualificar (la «tanda» de la 0110)', () => {
+    const t = `do $$ declare tanda constant text := 'x'; n int; begin select count(*) into n from public.copia c where c.tanda = tanda; end $$;`
+    expect(ambiguosEnPlpgsql(t, cols({ copia: ['id', 'tanda'] }))).toEqual([{ bloque: 'do', tipo: 'variable', nombre: 'tanda', detalle: 'variable con el nombre de una columna de copia' }])
+    expect(ambiguosEnPlpgsql(t.replace(/\btanda\b(?! =)/g, 'v_tanda').replace('c.v_tanda', 'c.tanda'), cols({ copia: ['id', 'tanda'] }))).toEqual([])
+  })
+  it('un parámetro o una columna de «returns table»; y no cuenta donde no se confunde (alias, lista de un insert, set x =, x :=)', () => {
+    const f = `create function public.f(estado text) returns table (total numeric) language plpgsql as $$
+begin
+  total := 0;
+  insert into public.t (estado, total) values ('a', 1);
+  update public.t set total = 2 where id is null;
+  return query select sum(t.total) as total from public.t t where t.estado = estado;
+end $$;`
+    expect(ambiguosEnPlpgsql(f, cols({ t: ['id', 'estado', 'total'] })).map((x) => x.nombre)).toEqual(['estado'])
+    expect(ambiguosEnPlpgsql(f.replace("where t.estado = estado", "where t.estado = $1"), cols({ t: ['id', 'estado', 'total'] }))).toEqual([])
+    expect(ambiguosEnPlpgsql(f.replace('begin\n', 'begin\n#variable_conflict use_column\n'), cols({ t: ['id', 'estado', 'total'] }))).toEqual([])
+  })
+  it('las columnas: de los tipos generados y de lo que crean los ficheros (la copia, is_reference)', () => {
+    const c = columnasConocidas(readFileSync('src/types/database.ts', 'utf8'), [
+      readFileSync('supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql', 'utf8'),
+      readFileSync('supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql', 'utf8')])
+    expect(c.get('supplier_invoice')?.has('id')).toBe(true)
+    expect(c.get('channel_settlement')?.has('is_reference')).toBe(true)
+    expect([...(c.get('conta_respaldo_liquidacion_factura') ?? [])]).toEqual(['id', 'tanda', 'settlement_id', 'invoice_id', 'invoice', 'lines', 'taxes', 'saved_at'])
+  })
+})
+
 describe('el orden dentro de un fichero: nada SQL lee lo que el fichero crea después', () => {
   const forma = (antes: boolean) => {
     const columna = 'alter table public.liquidacion_inventada add column if not exists tienda_id uuid;'

@@ -2,6 +2,8 @@
 #   0100: el corte (de referencia antes de la fecha de Bancos; la que cruza, real).
 #   0110: los datos de Foodint; en staging no hace nada (Foodint no está).
 #   Y su prueba (ROLLBACK): antes, cruzando, varias semanas antes y cruzando, solapes.
+#   Y la tanda y las dos vueltas atrás, de verdad sobre datos de la cuenta A (ROLLBACK).
 supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql
 supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
 supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
+supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
