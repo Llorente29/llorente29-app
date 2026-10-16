@@ -349,7 +349,18 @@ test('la bienvenida sin marca (la de Folvy): «Activar cuenta» abre la cuenta a
     const visto = (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 500)
     throw new Error(`Sin marca, tras «Activar cuenta», no abre su contabilidad. URL ${page.url()} · «${visto}»`)
   }
-  await page.waitForLoadState('networkidle')
+  // Con tope, como en solapes.ts: sin él, «networkidle» espera hasta que muere
+  // la prueba si la página no deja de pedir (15/10, e2e 38792955068: dentro de
+  // la cuenta y dos minutos esperando a la red). Si no se calla, el log dice qué
+  // sigue pidiendo: un bucle de peticiones es un fallo de la app, no una espera.
+  const abiertas = new Map<object, string>()
+  const alPedir = (q: { url: () => string }) => abiertas.set(q, q.url())
+  const alAcabar = (q: object) => abiertas.delete(q)
+  page.on('request', alPedir); page.on('requestfinished', alAcabar); page.on('requestfailed', alAcabar)
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {
+    console.log(`[red sin parar] ${page.url()} · ${abiertas.size} abiertas: ${[...new Set(abiertas.values())].slice(0, 10).join(' · ')}`)
+  })
+  page.off('request', alPedir); page.off('requestfinished', alAcabar); page.off('requestfailed', alAcabar)
   await page.screenshot({ path: `${DIR}/recorrido-bienvenida-sin-marca-hecha-${lado(page)}.png` })
   expect(errores).toEqual([])
 })

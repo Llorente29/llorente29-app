@@ -93,7 +93,7 @@ async function empresaDelRecorrido(s: Sesion, cuenta: string): Promise<string> {
   expect(r.status, `se prepara la empresa del recorrido: ${JSON.stringify(r.datos)}`).toBe(201)
   const id = r.datos[0].id
   expect((await rest(s, 'POST', 'company_tax_profile', {
-    account_id: cuenta, company_id: id, tax_territory: 'peninsula_baleares', vat_period: 'quarterly', tax_forms: ['303', '390'],
+    account_id: cuenta, company_id: id, tax_territory: 'peninsula_baleares', vat_period: 'quarterly', tax_forms: ['303', '347', '390'],
   })).status, 'y su perfil fiscal').toBe(201)
   // Una ferretería: nada de hostelería.
   expect((await rest(s, 'POST', 'company_activity', {
