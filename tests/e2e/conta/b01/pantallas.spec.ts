@@ -16,7 +16,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { crearBancos, emparejar, leerYCuadrar } from '@/modules/conta/services/bancosNucleo'
-import { BANCOS_B01, EMPRESA_A, FICHERO, baseDeA } from './datos'
+import { BANCOS_B01, EMPRESA_A, FICHERO, baseDeA, conLimpieza } from './datos'
 
 const DIR = 'docs/conta/capturas/b01/pantallas'
 const NORTE = BANCOS_B01[0]
@@ -75,7 +75,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
   test('ordenador: N17 en tres niveles, las cinco sin maqueta y los botones que confirman', async ({ page }) => {
     test.skip(lado(page) !== 'ordenador', 'En el móvil va su prueba.')
     const base = await preparar()
-    try {
+    await conLimpieza(page, async () => {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
       await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
@@ -174,16 +174,16 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByRole('heading', { name: 'Lo que he hecho', level: 2 })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Deshacer' }).first()).toBeVisible()
       await capturar(page, 'hecho-por-folvy')
-    } finally {
+    }, async () => {
       await base.deshacerTodo('Limpieza después de las pantallas B01')
       expect(await base.contarAsientosA()).toBe(base.asientosAntes)
-    }
+    })
   })
 
   test('móvil (M4): portada, Para confirmar y Por aclarar en tarjetas', async ({ page }) => {
     test.skip(lado(page) !== 'movil', 'En el ordenador va la suya.')
     const base = await preparar()
-    try {
+    await conLimpieza(page, async () => {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
       await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
@@ -218,9 +218,9 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
       expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'cierre')
-    } finally {
+    }, async () => {
       await base.deshacerTodo('Limpieza después de las pantallas B01 (móvil)')
       expect(await base.contarAsientosA()).toBe(base.asientosAntes)
-    }
+    })
   })
 })

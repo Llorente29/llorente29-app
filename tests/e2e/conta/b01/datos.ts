@@ -78,3 +78,29 @@ export async function baseDeA() {
   }
   return { cliente, bd, contarAsientosA, deshacerTodo }
 }
+
+/**
+ * La limpieza del final de una prueba de Bancos (W, 16/10): sale en rojo cuando
+ * staging va cargado porque `bank_deshacer` choca con el motor de conciliación
+ * que la página aún tiene en marcha (la pasada del agente, una recarga). No es
+ * volumen: 1.222 llamadas, 29 ms de media. Así que:
+ *   · primero se CIERRA la página (su motor deja de correr), y después se deshace;
+ *   · si el cuerpo de la prueba ya había fallado, su error es el que sale: el de
+ *     la limpieza se apunta en el registro y no lo tapa.
+ */
+export async function conLimpieza(page: { close: () => Promise<void> }, cuerpo: () => Promise<void>, limpieza: () => Promise<void>): Promise<void> {
+  let fallo: unknown = null
+  try {
+    await cuerpo()
+  } catch (e) {
+    fallo = e
+  }
+  await page.close().catch(() => {})
+  try {
+    await limpieza()
+  } catch (e) {
+    if (!fallo) throw e
+    console.log(`[limpieza] también ha fallado (el error de la prueba va arriba): ${e instanceof Error ? e.message : String(e)}`)
+  }
+  if (fallo) throw fallo
+}
