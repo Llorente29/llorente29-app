@@ -1,4 +1,10 @@
-# C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
-# prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
-# staging no cambia.
-supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
+# M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
+# pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)
+# con \i dentro de su transacción y acaban en ROLLBACK: staging no cambia.
+#   1. Los motivos: cinco casos validados como usuario con la validación de
+#      antes y con la nueva, el mismo texto, y «Esperan» da lo que pararía.
+#   2. La vuelta atrás, ejecutada de verdad: todo vuelve a la huella de antes.
+# La anterior de este fichero (la prueba de promociones y envíos de C) ya pasó;
+# su tanda está en producción desde el 16/10 a las 21:29.
+supabase/staging/sql/20261117_m01_motivos_para_validar_prueba.sql
+supabase/staging/sql/20261117_m01_motivos_para_validar_vuelta_atras_prueba.sql

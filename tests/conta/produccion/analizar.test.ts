@@ -25,11 +25,10 @@
 //   · La del C05 (libros y balances), ya aplicada: los seis en el historial de
 //     producción con la huella del repositorio (medido el 09/10). Copia fija en
 //     tanda-c05-20261009.txt, con su vuelta atrás en vuelta-atras-c05-20261009.txt.
-//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt): las
-//     políticas de lectura de contabilidad una vez por consulta, con el
-//     contexto de producción leído en solo lectura el 09/10 y la regla del W01
-//     (`informe`, la misma del ensayo). Al reescribir el manifiesto para otra
-//     tanda, esta parte se reescribe con él.
+//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt):
+//     «Esperan» (M01), con el contexto de producción leído en solo lectura el
+//     16/10 y la regla del W01 (`informe`, la misma del ensayo). Al reescribir
+//     el manifiesto para otra tanda, esta parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
@@ -1170,12 +1169,69 @@ describe('la tanda de las liquidaciones por correo (D01, 0100 y 0110; ya en el h
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): las promociones y los envíos en el asiento de ventas del día (C06b, diseño de Julio del 16/10)', () => {
+describe('la tanda de AHORA (manifiesto vivo): «Esperan», los motivos para validar en un solo sitio (M01, Julio, 16/10)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 16/10 para ESTOS ficheros (con su md5).
+  // lectura en producción el 16/10 a las 19:49 UTC para ESTE fichero (con su md5).
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const PRUEBA = 'supabase/staging/sql/20261117_m01_motivos_para_validar_prueba.sql'
+
+  it('un fichero, «sigue»: añade dos funciones y cambia dos, con la misma firma', () => {
+    expect(viva).toEqual(['supabase/migrations/20261117T0100_m01_motivos_para_validar.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue' })
+  })
+  it('declara lo que cambia, con su prueba de staging, y no toca ninguna tabla', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    for (const o of ['public.journal_entry_validar', 'public.tg_journal_entry_envio_por_aclarar']) expect(sql).toContain(`-- cambia: ${o} · prueba: ${PRUEBA}`)
+    expect(existsSync(PRUEBA)).toBe(true)
+    // Fuera de los cuerpos de las funciones (journal_entry_validar sí escribe al validar: eso no es la tanda).
+    const codigo = sql.replace(/--.*$/gm, '').replace(/(\$\w*\$)[\s\S]*?\1/g, '')
+    expect(codigo).toMatch(/create or replace function public\.journal_entry_validar\(/)
+    expect(codigo).not.toMatch(/^\s*(alter|drop|create)\s+table\b/im)
+    expect(codigo).not.toMatch(/^\s*(insert|update|delete)\b/im)
+  })
+  it('las dos que cambia están en producción con la huella de la que parte la vuelta atrás (medida el 16/10)', () => {
+    expect(ctx.funciones).toEqual(['public.journal_entry_validar(uuid,text)', 'public.tg_journal_entry_envio_por_aclarar()'])
+    const md5 = (s: string) => createHash('md5').update(s).digest('hex')
+    const cuerpo = (f: string, nombre: string) => {
+      const m = new RegExp(`create or replace function public\\.${nombre}\\(.*?as (\\$\\w*\\$)([\\s\\S]*?)\\1`, 's').exec(readFileSync(f, 'utf8'))
+      return m ? md5(m[2]) : null
+    }
+    const atras = 'supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql'
+    // Las huellas de producción (md5 de prosrc), las que pega la cuenta.
+    expect(cuerpo(atras, 'journal_entry_validar')).toBe('798e4c431fe9d790288d974b7fe22431')
+    expect(cuerpo(atras, 'tg_journal_entry_envio_por_aclarar')).toBe('7a2549b0b50731d33bfafb5cd5ee5fd9')
+    expect(cuerpo('supabase/migrations/20261113T0100_c06b_centimo_iva.sql', 'journal_entry_validar')).toBe('798e4c431fe9d790288d974b7fe22431')
+    expect(cuerpo('supabase/migrations/20261116T0100_c06b_promociones_envios.sql', 'tg_journal_entry_envio_por_aclarar')).toBe('7a2549b0b50731d33bfafb5cd5ee5fd9')
+  })
+  it('declara qué cuenta; la cuenta existe, solo lee y no nombra las funciones nuevas fuera de una cadena', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/m01-esperan.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+    const fuera = readFileSync(cuentas[0], 'utf8').replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).toMatch(/to_regprocedure/)
+    expect(fuera).not.toMatch(/conta_motivos_para_validar|conta_esperan/)
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter)\b/i)
+    expect(readFileSync(cuentas[0], 'utf8')).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás es un fichero, con la misma cuenta, y su prueba de staging la ejecuta de verdad', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual(['supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql'])
+    expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql')
+    const p = readFileSync('supabase/staging/sql/20261117_m01_motivos_para_validar_vuelta_atras_prueba.sql', 'utf8')
+    expect(p).toContain('\\i supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql')
+    expect(p).toMatch(/rollback;\s*$/)
+  })
+})
+
+describe('la tanda de las promociones y los envíos (C06b, 16/10), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 16/10 para ESTOS ficheros (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-promociones-envios-20261016.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -1207,7 +1263,7 @@ describe('la tanda de AHORA (manifiesto vivo): las promociones y los envíos en 
     expect(fuera).toMatch(/to_regclass/)
   })
   it('su vuelta atrás va en orden inverso y cada fichero para si se perdería algo', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-c06b-promociones-envios-20261016.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261116T0110_c06b_promociones_envios_datos.down.sql', 'supabase/vuelta-atras/20261116T0100_c06b_promociones_envios.down.sql'])
     for (const f of atras) expect(readFileSync(f, 'utf8'), f).toMatch(/raise exception/)
   })

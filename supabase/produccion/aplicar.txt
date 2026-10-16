@@ -3,26 +3,27 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# C06b · Las promociones y los envíos en el asiento de ventas del día
-# (diseño aprobado por Julio, 16/10). La anterior de este fichero (0760, las
-# recibidas abiertas) ya está en el historial de producción (run #98); su
-# copia: tests/conta/produccion/tanda-c06b-recibidas-abiertas-20261016.txt.
-# La de B02 · T1 (0200), también en el historial; su copia:
-# tests/conta/produccion/tanda-b02-entrada-20261016.txt.
+# M01 · «Esperan» (Julio, 16/10, decisión 1: opción A). La anterior de este
+# fichero (C06b, promociones y envíos: 0100 y 0110) ya está en el historial de
+# producción (real del 16/10, 21:29); su copia:
+# tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt.
 #
-#   1. 0100 — añade conta_ventas_canal_cuenta, conta_envio_aclarado,
-#      conta_cargos_de_pedidos, conta_envio_aclarar y el freno al validar; y
-#      cambia, con la misma firma, conta_propuesta_ventas_unidad (la venta a
-#      precio de carta, la promoción en su 7000900x y el envío cobrado en la
-#      70500001) y conta_resumen_ventas (el descuento, el envío y el papel de
-#      cada línea). Declarado en su cabecera, con su prueba de staging.
-#   2. 0110 — DATOS de Foodint: las 4 subcuentas (70009001–70009003 y
-#      70500001, los números y nombres de Diez) y sus 6 enlaces. Solo inserta.
+#   1. 0100 — añade conta_motivos_para_validar (todo lo que haría que un
+#      asiento no se valide, por orden y con el mismo texto con el que hoy lo
+#      para) y conta_esperan (lo propuesto que pararía, con su motivo); y
+#      cambia, con la misma firma, journal_entry_validar (para con el primer
+#      motivo) y tg_journal_entry_envio_por_aclarar (el freno de C lee su
+#      motivo de la misma función). Declarado en su cabecera, con su prueba de
+#      staging. No toca ninguna tabla ni ningún asiento.
 #
-# Antes de la tanda, el front y conta-diez-enviar con lo de este PR (el front
-# nuevo funciona con la base de antes; la base nueva con el front de antes
-# daría líneas que el envío de antes no manda: lo para y lo dice).
+# VA DESPUÉS DE LA DE C, y se escribe sobre ella: las dos funciones que cambia
+# están en producción con la huella de la que parte (798e4c43… y 7a2549b0…,
+# medidas el 16/10 a las 19:49 UTC en solo lectura).
+#
+# Antes o después del front, da igual: la base nueva para con los mismos
+# textos que la de antes, así que el front de antes valida igual; y el front
+# nuevo, con la base de antes, dice que no puede leer lo que espera y cuenta
+# todo lo propuesto como «para revisar», como hoy.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/promociones-envios.sql
-supabase/migrations/20261116T0100_c06b_promociones_envios.sql
-supabase/migrations/20261116T0110_c06b_promociones_envios_datos.sql
+cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql
+supabase/migrations/20261117T0100_m01_motivos_para_validar.sql

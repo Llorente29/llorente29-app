@@ -1,23 +1,16 @@
 {
- "_que": "C06b · contexto de producción de la tanda viva «promociones y envíos en el asiento de ventas del día» (0100 y 0110), medido en SOLO LECTURA el 16/10 a las 06:36 UTC (vuelto a medir tras añadir a la 0100 su cabecera de journal_entry y su «sin hueco»: la misma consulta y la misma respuesta) con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen company_account y journal_entry (fuera del camino del pedido) y las dos funciones que cambian (con la huella de su vuelta atrás: 32bb2645… y c99b05cd…); nada de lo que añade la 0100 existe; ninguno de los dos ficheros está en el historial.",
- "medido": "2026-10-16T06:36Z",
+ "_que": "M01 · contexto de producción de la tanda viva «Esperan» (20261117T0100, motivos para validar), medido en SOLO LECTURA el 16/10 a las 19:49 UTC, con la tanda de C (promociones y envíos) ya aplicada (real de las 21:29 de Madrid), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las dos funciones que cambia, con la huella de su vuelta atrás (journal_entry_validar 798e4c43… y tg_journal_entry_envio_por_aclarar 7a2549b0…); no existe ninguna de las dos que añade; nada del camino del pedido; el fichero no está en el historial.",
+ "medido": "2026-10-16T19:49Z",
  "tanda": {
-  "supabase/migrations/20261116T0100_c06b_promociones_envios.sql": "2111d047adc8e303cc24bf4a34f4b71c",
-  "supabase/migrations/20261116T0110_c06b_promociones_envios_datos.sql": "3fb2e375972518a0428311446528b4cb"
+  "supabase/migrations/20261117T0100_m01_motivos_para_validar.sql": "8f4ce36505b1c67bd07611ce95a9dec7"
  },
  "contexto": {
-  "tablas": [
-   "public.company_account",
-   "public.journal_entry"
-  ],
+  "tablas": [],
   "funciones": [
-   "public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)",
-   "public.conta_resumen_ventas(uuid)"
+   "public.journal_entry_validar(uuid,text)",
+   "public.tg_journal_entry_envio_por_aclarar()"
   ],
-  "filas": {
-   "public.company_account": 751,
-   "public.journal_entry": 14955
-  },
+  "filas": {},
   "otras": {},
   "camino": {
    "tablas": [],
