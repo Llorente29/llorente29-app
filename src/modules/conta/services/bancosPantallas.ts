@@ -27,7 +27,7 @@ async function leer(q: PromiseLike<{ data: unknown; error: { message: string } |
 
 export interface Tarjeta { id: string; cuentaId: string; ultimos4: string; titular: string; localId: string | null }
 export interface Extracto {
-  id: string; cuentaId: string; fichero: string | null; formato: string; desde: string; hasta: string; saldoFinalCent: number | null
+  id: string; cuentaId: string; fichero: string | null; formato: string; desde: string; hasta: string; saldoInicialCent: number | null; saldoFinalCent: number | null
   movimientos: number; nuevos: number; repetidos: number; cuadra: boolean | null; sinComprobar: string | null; continuidad: string; huecoCent: number | null
   subido: string; quien: string | null
 }
@@ -45,26 +45,29 @@ export interface DatosBancos {
   /** Por banco: los movimientos que piden una decisión (para confirmar + por aclarar). */
   dudas: Record<string, number>
   reglas: { activas: number; nuevas: number }
+  /** La fecha de corte de los bancos de la empresa (bank_settings): antes, la contabilidad está cerrada. */
+  corte: string | null
 }
 
 /** Lo de arriba de todas las pestañas: los bancos, sus tarjetas y extractos, los locales y el plan. */
 export async function leerDatosBancos(accountId: string, companyId: string): Promise<DatosBancos> {
-  const [bs, tarjetas, extractos, locales, cuentas, primero, dudas, reglas] = await Promise.all([
+  const [bs, tarjetas, extractos, locales, cuentas, primero, dudas, reglas, ajustes] = await Promise.all([
     bancos.bancosDeLaEmpresa(accountId, companyId),
     leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).order('created_at', { ascending: true }), 'las tarjetas'),
-    leer(tabla('bank_statement').select('id, treasury_account_id, file_name, format, period_from, period_to, closing_balance, movements_count, new_count, repeated_count, balanced, unchecked_reason, continuity, continuity_gap, imported_at, imported_by_name')
+    leer(tabla('bank_statement').select('id, treasury_account_id, file_name, format, period_from, period_to, opening_balance, closing_balance, movements_count, new_count, repeated_count, balanced, unchecked_reason, continuity, continuity_gap, imported_at, imported_by_name')
       .eq('account_id', accountId).eq('company_id', companyId).order('period_to', { ascending: false }).limit(200), 'los extractos'),
     leer(tabla('locations').select('id, name').eq('account_id', accountId).order('name'), 'los locales'),
     leer(tabla('company_account').select('code, name, plain_name').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
     leer(tabla('bank_movement').select('op_date').eq('account_id', accountId).eq('company_id', companyId).order('op_date', { ascending: true }).limit(1), 'el primer movimiento'),
     leer(tabla('bank_movement').select('treasury_account_id').eq('account_id', accountId).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido']), 'las dudas'),
     leer(tabla('bank_rule').select('status').eq('account_id', accountId).eq('company_id', companyId), 'las reglas'),
+    leer(tabla('bank_settings').select('cutover_date').eq('account_id', accountId).eq('company_id', companyId).limit(1), 'los ajustes del banco'),
   ])
   const nombres: Record<string, string> = {}
   for (const c of cuentas) nombres[String(c.code)] = String(c.plain_name ?? c.name).trim().replace(/[.\s]+$/, '')
   const ext: Extracto[] = extractos.map((e) => ({
     id: String(e.id), cuentaId: String(e.treasury_account_id), fichero: s(e.file_name), formato: String(e.format), desde: String(e.period_from), hasta: String(e.period_to),
-    saldoFinalCent: e.closing_balance === null ? null : cent(e.closing_balance), movimientos: Number(e.movements_count), nuevos: Number(e.new_count), repetidos: Number(e.repeated_count),
+    saldoInicialCent: e.opening_balance === null ? null : cent(e.opening_balance), saldoFinalCent: e.closing_balance === null ? null : cent(e.closing_balance), movimientos: Number(e.movements_count), nuevos: Number(e.new_count), repetidos: Number(e.repeated_count),
     cuadra: e.balanced === null ? null : !!e.balanced, sinComprobar: s(e.unchecked_reason), continuidad: String(e.continuity), huecoCent: e.continuity_gap === null ? null : cent(e.continuity_gap),
     subido: String(e.imported_at), quien: s(e.imported_by_name),
   }))
@@ -83,6 +86,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
     primerMovimiento: primero[0] ? String(primero[0].op_date) : null,
     dudas: porBanco,
     reglas: { activas: reglas.filter((r) => r.status === 'activa').length, nuevas: reglas.filter((r) => r.status === 'propuesta').length },
+    corte: s(ajustes[0]?.cutover_date),
   }
 }
 
