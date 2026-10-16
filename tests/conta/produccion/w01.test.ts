@@ -446,6 +446,15 @@ describe('R11 · paso 8 sobre la tanda de la C06b «recibidas abiertas» (0760, 
   })
 })
 
+describe('R11 · paso 8 sobre la tanda B02 · T1 «lo que entra» (0200, su copia, aplicada), con su contexto medido', () => {
+  it('la 0200 sigue, sin «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-b02-entrada-20261016.json',
+      '--manifiesto=tests/conta/produccion/tanda-b02-entrada-20261016.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261101T0200_b02_entrada.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }

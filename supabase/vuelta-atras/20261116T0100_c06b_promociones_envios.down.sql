@@ -9,9 +9,17 @@
 -- conta_ventas_canal_cuenta, para sin tocar nada. Y si hay un envío aclarado,
 -- también para: es lo que dijo una liquidación y no se tira.
 -- No toca ningún asiento: lo validado sigue validado.
+-- Y no va sola si está aplicada la tanda de D (20261117T0100,
+-- conta_motivos_para_validar): con ella, la validación y el freno llaman a
+-- conta_cargos_de_pedidos, que esto quita. Primero se deshace la de D; si
+-- conta_motivos_para_validar sigue existiendo, para sin tocar nada.
 
 do $$
 begin
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname = 'public' and p.proname = 'conta_motivos_para_validar') then
+    raise exception 'Vuelta atrás C06b 0100: está aplicada la tanda de D (conta_motivos_para_validar), que llama a conta_cargos_de_pedidos. Deshaz antes la 20261117T0100 de D. No se toca nada.';
+  end if;
   if exists (select 1 from public.conta_ventas_canal_cuenta) then
     raise exception 'Vuelta atrás C06b 0100: aún hay subcuentas enlazadas (conta_ventas_canal_cuenta). Deshaz antes la 0110. No se toca nada.';
   end if;

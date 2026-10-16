@@ -18,8 +18,10 @@ const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLower
 export interface Eleccion { cuenta: string; concepto: string; regla: string | null }
 
 /** «Otra cosa» / «Decirlo yo»: a qué va, en palabras; y si se quiere, que sea siempre así. */
-export function DialogoCuenta({ m, alCerrar, alElegir, alApartar }: {
+export function DialogoCuenta({ m, alCerrar, alElegir, alApartar, apartando = false }: {
   m: MovimientoBanco
+  /** B02 · Abrir directamente en «No va a contabilidad» (desde «¿Es otra cosa?»). */
+  apartando?: boolean
   alCerrar: () => void
   alElegir: (e: Eleccion) => Promise<void>
   alApartar: (motivo: string) => Promise<void>
@@ -30,7 +32,7 @@ export function DialogoCuenta({ m, alCerrar, alElegir, alApartar }: {
   const [concepto, setConcepto] = useState(m.propuesta?.que && m.estado === 'propuesto' ? m.propuesta.que : m.conceptoLimpio)
   const cp = contraparte(m.conceptoBanco || m.conceptoLimpio)
   const [siempre, setSiempre] = useState(false)
-  const [apartar, setApartar] = useState(false)
+  const [apartar, setApartar] = useState(apartando)
   const [motivo, setMotivo] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState<string | null>(null)

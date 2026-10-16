@@ -1,0 +1,29 @@
+{
+ "_que": "B02 · contexto de producción de la tanda viva T1 «lo que entra» (0200), medido en SOLO LECTURA el 16/10 a las 07:49 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. bank_casar, bank_importar y bank_regla_guardar existen con la misma firma (las tres cambian, declaradas en la cabecera con su prueba de staging); _bank_contraparte_limpia, bank_facturas_para_casar, bank_regla_borrar y _bank_factura_aprobada_con_pago aún no existen; nada en el camino del pedido; la 0200 no está en el historial. Deriva medida el 15/10: lo desplegado de bank_casar, bank_importar y bank_regla_guardar es el md5 de sus migraciones anteriores.",
+ "medido": "2026-10-16T07:49Z",
+ "tanda": {
+  "supabase/migrations/20261101T0200_b02_entrada.sql": "7efd1817ab36c79da43763cd9a6f6134"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_movement",
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public.bank_casar(uuid,jsonb,text,text,jsonb,text,uuid)",
+   "public.bank_importar(uuid,text,text,text,text,date,date,numeric,numeric,text,text,jsonb)",
+   "public.bank_regla_guardar(uuid,uuid,text,jsonb,jsonb,text,text)"
+  ],
+  "filas": {
+   "public.bank_movement": 108,
+   "public.supplier_invoice": 6
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

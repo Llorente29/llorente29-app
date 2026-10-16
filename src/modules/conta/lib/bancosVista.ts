@@ -10,12 +10,13 @@
 // mes; «Para confirmar» y «Por aclarar» solo filtran a petición.
 
 export type Tono = 'verde' | 'ambar' | 'gris'
-export type Boton = 'ver' | 'deshacer' | 'si' | 'otra-cosa' | 'subir-foto' | 'si-sin-ticket' | 'buscar-factura' | 'decirlo-yo' | 'alta-tarjeta'
+export type Boton = 'ver' | 'deshacer' | 'si' | 'otra-cosa' | 'subir-foto' | 'si-sin-ticket' | 'buscar-factura' | 'decirlo-yo' | 'alta-tarjeta' | 'es-el-mismo' | 'son-dos'
 
 /** Lo que dice cada botón de la tabla. */
 export const TEXTO_BOTON: Record<Boton, string> = {
   ver: 'Ver', deshacer: 'Deshacer', si: 'Sí', 'otra-cosa': 'Otra cosa', 'subir-foto': 'Subir foto', 'si-sin-ticket': 'Sí, sin ticket',
   'buscar-factura': 'Buscar factura', 'decirlo-yo': 'Decirlo yo', 'alta-tarjeta': 'Dar de alta la tarjeta',
+  'es-el-mismo': 'Es el mismo', 'son-dos': 'Son dos',
 }
 
 export interface PropuestaGuardada {
@@ -26,6 +27,13 @@ export interface PropuestaGuardada {
   reglaId?: string | null
   contraparte?: string | null
   tarjetaId?: string | null
+  /** B02 · La píldora, el punto verde y lo demás que dice el motor (ver Decision en conciliacion.ts). */
+  origen?: string | null
+  preseleccionar?: boolean
+  tarjetaDesconocida?: string | null
+  alternativas?: { etiqueta: string; destino: Record<string, unknown> }[]
+  quedaPorCasarCent?: number | null
+  facturaSinAprobar?: boolean
 }
 
 export interface MovimientoBanco {
@@ -35,6 +43,9 @@ export interface MovimientoBanco {
   importeCent: number
   conceptoBanco: string
   conceptoLimpio: string
+  /** B02 · A quién pagas o quién te paga, limpio (`counterparty`), y el tipo de movimiento del banco (`movement_type`). */
+  contraparte?: string | null
+  tipo?: string | null
   estado: 'pendiente' | 'propuesto' | 'por_aclarar' | 'casado' | 'posible_repetido' | 'antes_corte_sin_pareja' | 'ignorado'
   confianza: 'seguro' | 'probable' | 'duda' | null
   porque: string | null
@@ -96,11 +107,14 @@ function filaSinPrincipal(m: MovimientoBanco): Omit<Fila, 'principal'> {
     }
   }
   if (m.estado === 'por_aclarar' || m.estado === 'pendiente') {
-    const tarjetaDesconocida = /tarjeta acabada en \d{4}, ¿de quién es\?/i.test(m.porque ?? '')
+    const ultimos = tarjetaPorAclarar(m.porque, m.propuesta)
+    const tarjetaDesconocida = !!ultimos
+    const porque = sinPunto(m.porque ?? '')
     return {
       id: m.id, tono: 'gris', grupo: 'aclarar', estado: 'Por aclarar',
       titulo: m.estado === 'pendiente' ? 'Aún no lo he mirado' : m.propuesta?.que ?? 'No sé qué es',
-      porque: m.estado === 'pendiente' ? 'Llegó con el último extracto; lo miro al conciliar.' : sinPunto(m.porque ?? ''),
+      porque: m.estado === 'pendiente' ? 'Llegó con el último extracto; lo miro al conciliar.'
+        : m.propuesta?.tarjetaDesconocida ? `${porque}${porque ? ' · ' : ''}tarjeta ···${ultimos} sin dar de alta` : porque,
       botones: tarjetaDesconocida ? ['alta-tarjeta', 'decirlo-yo']
         : m.propuesta?.pideTicket && !m.ticket ? ['subir-foto', 'decirlo-yo']
         : m.importeCent < 0 ? ['buscar-factura', 'decirlo-yo'] : ['decirlo-yo'],
@@ -110,7 +124,7 @@ function filaSinPrincipal(m: MovimientoBanco): Omit<Fila, 'principal'> {
     return { id: m.id, tono: 'gris', grupo: 'otro', estado: 'Antes del corte', titulo: 'Antes del corte · sin pareja en el libro', porque: sinPunto(m.porque ?? ''), botones: [] }
   }
   if (m.estado === 'posible_repetido') {
-    return { id: m.id, tono: 'gris', grupo: 'aclarar', estado: 'Por aclarar', titulo: '¿Es el mismo movimiento otra vez?', porque: 'Mismo día e importe que otro que ya estaba, por otro camino.', botones: [] }
+    return { id: m.id, tono: 'gris', grupo: 'aclarar', estado: 'Por aclarar', titulo: '¿Es el mismo movimiento otra vez?', porque: 'Mismo día e importe que otro que ya estaba, por otro camino.', botones: ['es-el-mismo', 'son-dos'] }
   }
   return { id: m.id, tono: 'gris', grupo: 'otro', estado: 'Apartado', titulo: 'Apartado', porque: sinPunto(m.motivoIgnorado ?? ''), botones: [] }
 }
@@ -158,9 +172,13 @@ export function mesesElegibles(primero: string | null, hoy: string): string[] {
 }
 
 /** «ES02 0182 … 0011» → «0011»: lo que la barra enseña de cada banco. */
-/** Los 4 dígitos de «tarjeta acabada en 1234, ¿de quién es?», para dar de alta esa tarjeta. */
-export function tarjetaPorAclarar(porque: string | null): string | null {
-  return /tarjeta acabada en (\d{4})/i.exec(porque ?? '')?.[1] ?? null
+/**
+ * Los 4 dígitos de la tarjeta que no está dada de alta, para darla de alta: los
+ * que anota el motor (B02, `tarjetaDesconocida`) o, en las propuestas guardadas
+ * antes, los de «tarjeta acabada en 1234, ¿de quién es?».
+ */
+export function tarjetaPorAclarar(porque: string | null, propuesta?: PropuestaGuardada | null): string | null {
+  return propuesta?.tarjetaDesconocida ?? /tarjeta acabada en (\d{4})/i.exec(porque ?? '')?.[1] ?? null
 }
 
 export function ultimosIban(iban: string | null): string | null {
