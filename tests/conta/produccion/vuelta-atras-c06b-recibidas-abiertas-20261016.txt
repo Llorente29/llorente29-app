@@ -1,0 +1,7 @@
+# Vuelta atrás de la tanda de las recibidas abiertas en C0008 (modo
+# «vuelta_atras»). La vuelve a cerrar (incluye_recibidas = false, y el motivo
+# al de antes) y PARA si con ella ya se ha enviado o intentado escribir alguna
+# recibida en C0008, o el contraasiento de una.
+# La anterior de este fichero (D01): tests/conta/produccion/vuelta-atras-d01-liquidaciones-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/diez-recibidas-abiertas.sql
+supabase/vuelta-atras/20261111T0760_c06b_diez_recibidas_abiertas_datos.down.sql

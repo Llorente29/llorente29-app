@@ -45,6 +45,11 @@ name: Diez · factura de prueba en C0009 (C04b)
 # Y en conta/d01-anular-recibida, con «[prueba-c0009:recibida-anular]», SOLO LEE
 # (GET) cómo anula la gestoría una recibida en la serie 2 y ensaya sin escribir
 # la «-ANUL» de Folvy (scripts/conta/diez/prueba-c0009-recibida-anular.ts).
+# C06b (16/10): con «[prueba-c0009:promociones]» —a mano, en «Run workflow»
+# con esa etiqueta—, ENVÍA a la C0009 UNA factura emitida inventada con la
+# forma nueva del asiento del día (la promoción en negativo en la 70009002 y el
+# envío en la 70500001), crea esas dos subcuentas en la C0009 si no están y la
+# lee de vuelta (scripts/conta/diez/prueba-c0009-promociones.ts).
 # Con «[prueba-c0009:recibida]», ENVÍA a la C0009 UNA factura recibida inventada
 # hecha por la cadena de Folvy (facturaProveedor → facturaRecibida) y la lee de
 # vuelta, para medir la serie 2 (scripts/conta/diez/prueba-c0009-recibida.ts).
@@ -54,6 +59,15 @@ on:
     # conta/c06b-validar-pdf: solo para «[prueba-c0009:rectificativas-molde]» (C06b, respuesta 8, solo lectura).
     branches: ['conta/c04b-diez', 'conta/d01-recibidas', 'conta/c06b-validar-pdf', 'conta/d01-buscar-en-diez', 'conta/d01-anular-recibida', 'conta/d01-catcher']
   workflow_dispatch:
+    inputs:
+      etiqueta:
+        # C06b (16/10): a mano, desde cualquier rama (también main), la prueba
+        # que diga la etiqueta, p. ej. «[prueba-c0009:promociones]». Vacía, la
+        # de siempre (scripts/conta/diez/prueba-c0009.ts).
+        description: 'Etiqueta de la prueba, p. ej. [prueba-c0009:promociones]. Vacía: la de siempre.'
+        type: string
+        required: false
+        default: ''
 
 concurrency:
   group: diez-lectura
@@ -127,7 +141,7 @@ jobs:
       - name: Factura (o subcuentas) de prueba en C0009
         env:
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
-          MENSAJE: ${{ github.event.head_commit.message }}
+          MENSAJE: ${{ github.event_name == 'workflow_dispatch' && inputs.etiqueta || github.event.head_commit.message }}
         run: |
           set -euo pipefail
           case "$MENSAJE" in
@@ -152,6 +166,8 @@ jobs:
             '[prueba-c0009:adjunto-swagger]'*) S=scripts/conta/diez/adjuntos-swagger.mjs ;;
             # R14: el PDF del día adjunto a la UBR-FLO-20261001 de la C0009 (facturas/upload) y leído de vuelta.
             '[prueba-c0009:adjunto]'*) S=scripts/conta/diez/prueba-c0009-adjunto.ts ;;
+            # C06b (16/10): la forma nueva del asiento del día (promoción en negativo y envíos) en la C0009, leída de vuelta.
+            '[prueba-c0009:promociones]'*) S=scripts/conta/diez/prueba-c0009-promociones.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac

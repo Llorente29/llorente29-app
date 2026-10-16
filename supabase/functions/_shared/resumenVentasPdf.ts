@@ -20,8 +20,13 @@
 // Estilo: el de las maquetas de contabilidad (tinta #0E1A2B, gris #5B6678,
 // líneas #E6EAF0, azul #2F5BFF, menta #2EE6A8) en Helvetica, como los libros.
 
-export type PedidoResumen = { hora: string; codigo: string; marca: string; base: number; cuota: number; total: number }
-export type MarcaResumen = { marca: string; cuenta: string; importe: number }
+/**
+ * Un pedido. C06b (16/10): `promocion` y `envio`, en base, si el asiento las
+ * lleva aparte: la venta de su marca es base + promoción − envío.
+ */
+export type PedidoResumen = { hora: string; codigo: string; marca: string; base: number; cuota: number; total: number; promocion?: number; envio?: number }
+/** Una línea de la factura. C06b: `papel` en la de promociones (resta) y la de envíos cobrados. */
+export type MarcaResumen = { marca: string; cuenta: string; importe: number; papel?: 'promociones' | 'envios' }
 export type DatosResumenVentas = {
   empresa: { nombre: string; nif: string }
   local: string
@@ -77,8 +82,16 @@ export function comprobarResumen(d: DatosResumenVentas): string[] {
   const suma = (xs: PedidoResumen[], k: 'base' | 'cuota' | 'total') => xs.reduce((t, x) => t + cts(x[k]), 0)
   for (const p of [...d.pedidos, ...d.reembolsos]) if (cts(p.base) + cts(p.cuota) !== cts(p.total)) mal.push(`el pedido ${p.codigo}: base + IVA no es su total`)
   // Por marca: lo de sus pedidos menos sus reembolsos = su línea de la factura.
+  // C06b: la marca a precio de carta (base + promoción − envío); la promoción
+  // y el envío, cada uno contra su línea.
   const porMarca = new Map<string, number>()
-  for (const p of d.pedidos) porMarca.set(p.marca, (porMarca.get(p.marca) ?? 0) + cts(p.base))
+  const promo = d.lineasFactura.find((l) => l.papel === 'promociones')?.marca
+  const envio = d.lineasFactura.find((l) => l.papel === 'envios')?.marca
+  for (const p of d.pedidos) {
+    porMarca.set(p.marca, (porMarca.get(p.marca) ?? 0) + cts(p.base) + cts(p.promocion ?? 0) - cts(p.envio ?? 0))
+    if (p.promocion) porMarca.set(promo ?? 'Promociones (sin línea)', (porMarca.get(promo ?? 'Promociones (sin línea)') ?? 0) - cts(p.promocion))
+    if (p.envio) porMarca.set(envio ?? 'Envíos (sin línea)', (porMarca.get(envio ?? 'Envíos (sin línea)') ?? 0) + cts(p.envio))
+  }
   for (const p of d.reembolsos) porMarca.set(p.marca, (porMarca.get(p.marca) ?? 0) - cts(p.base))
   const lineas = new Map<string, number>()
   for (const l of d.lineasFactura) lineas.set(l.marca, (lineas.get(l.marca) ?? 0) + cts(l.importe))
@@ -219,9 +232,11 @@ export function resumenVentasPdf(JsPDF: JsPdfCtor, d: DatosResumenVentas): Uint8
 
   // Por marca: exactamente las líneas de la factura (o las del asiento).
   titulo('Por marca', `son las líneas ${ref.de}`)
-  const nPed = (m: string) => d.pedidos.filter((p) => p.marca === m).length
+  const nPed = (l: MarcaResumen) => (l.papel === 'promociones' ? d.pedidos.filter((p) => p.promocion).length
+    : l.papel === 'envios' ? d.pedidos.filter((p) => p.envio).length : d.pedidos.filter((p) => p.marca === l.marca).length)
+  const reembolso = (l: MarcaResumen) => !l.papel && l.importe < 0
   tabla([{ t: 'Marca', w: 82 }, { t: 'Subcuenta', w: 34 }, { t: 'Pedidos', w: 24, der: true }, { t: 'Base', w: 38, der: true }],
-    [...d.lineasFactura].sort((a, b) => a.cuenta.localeCompare(b.cuenta)).map((l) => [l.marca + (l.importe < 0 ? ' (reembolsos)' : ''), l.cuenta, l.importe < 0 ? '' : String(nPed(l.marca)), euros(l.importe)]),
+    [...d.lineasFactura].sort((a, b) => a.cuenta.localeCompare(b.cuenta)).map((l) => [l.marca + (reembolso(l) ? ' (reembolsos)' : ''), l.cuenta, reembolso(l) ? '' : String(nPed(l)), euros(l.importe)]),
     { total: ['Base imponible', '', '', euros(d.factura.base)] })
 
   // ── El total del día ───────────────────────────────────────────────────────

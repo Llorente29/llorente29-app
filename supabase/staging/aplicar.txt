@@ -1,7 +1,4 @@
-# B02 · lo que entra y el motor (T1 0200) y lo ya guardado, legible (T2 0201),
-# con sus pruebas: fichero entero, como usuario donde hay usuario, con rollback.
-supabase/migrations/20261101T0200_b02_entrada.sql
-supabase/staging/sql/20261101_b02_entrada_prueba.sql
-supabase/staging/sql/20261101_b02_relleno_prueba.sql
-# B02 · T3 (0210): las reglas de Foodint, con la tanda y su vuelta atrás de verdad (\ir), con rollback.
-supabase/staging/sql/20261101_b02_reglas_prueba.sql
+# C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
+# prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
+# staging no cambia.
+supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql

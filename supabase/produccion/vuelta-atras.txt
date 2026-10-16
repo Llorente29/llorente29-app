@@ -1,8 +1,14 @@
-# Vuelta atrás de la tanda B02 · T1 «lo que entra» (modo «vuelta_atras»). La
-# .down.sql vuelve a la 0110 tal cual (bank_importar, bank_casar,
-# bank_regla_guardar), quita lo nuevo (funciones, disparador y las dos
-# columnas) y PARA, sin tocar nada, si ya hay casados con más de dos líneas
-# (los de la diferencia pequeña): se perderían.
-# La anterior de este fichero (D01): tests/conta/produccion/vuelta-atras-d01-liquidaciones-20261016.txt.
-cuenta: scripts/conta/produccion/cuentas/b02-entrada.sql
-supabase/vuelta-atras/20261101T0200_b02_entrada.down.sql
+# Vuelta atrás de la tanda de promociones y envíos (modo «vuelta_atras»), en
+# orden inverso: primero los datos de Foodint (PARA si alguna de las cuatro
+# subcuentas ya tiene apuntes) y después la estructura (PARA si queda algún
+# enlace o un envío aclarado con su liquidación). Las dos funciones vuelven a
+# su huella de antes. No toca ningún asiento.
+# Con la tanda de D aplicada (20261117T0100, conta_motivos_para_validar), esta
+# vuelta atrás NO va sola: la validación y el freno de D llaman a
+# conta_cargos_de_pedidos, de la 0100. Primero se deshace la de D y después
+# esta. La .down.sql de la 0100 para si conta_motivos_para_validar existe.
+# La anterior de este fichero (0760): tests/conta/produccion/vuelta-atras-c06b-recibidas-abiertas-20261016.txt.
+# La de B02 · T1: tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/promociones-envios.sql
+supabase/vuelta-atras/20261116T0110_c06b_promociones_envios_datos.down.sql
+supabase/vuelta-atras/20261116T0100_c06b_promociones_envios.down.sql
