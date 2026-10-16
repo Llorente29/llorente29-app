@@ -2380,10 +2380,7 @@ Pedidos de marcas propias de octubre (del 01 al 15/10, 526 pedidos, todos de Hub
   - La 759 es para ingresos accesorios ajenos a la actividad y saldría fuera de la cifra de negocios.
   - **Número libre:** en Foodint solo existe la 70500000, la de plantilla.
   - **Una sola subcuenta para todos los locales:** cada apunte del día lleva su local, como todos los del grupo 7, así que «por local» sale del libro sin abrir una subcuenta por local.
-- **El IVA del envío, al 10 % como accesorio: NO cotejado.**
-  - Ley 37/1992, art. 78.Dos.1.º: la base incluye «los gastos de comisiones, portes y transporte… derivados de la prestación principal o de las accesorias». El transporte que cobra el que vende va con la operación principal y lleva su tipo.
-  - La cita es de memoria: la red de este entorno no deja abrir el BOE ni la DGT (403).
-  - Antes de construir se abre el artículo y una consulta de la DGT sobre reparto a domicilio propio.
+- **El IVA del envío: el de la venta** (Julio, 16/10). Ley 37/1992, art. 78.Dos.1.º: los portes forman parte de la base de la operación principal, así que el envío va al tipo de la venta, el 10 %.
 - **El asiento del día con envío** (ejemplo inventado, reparto propio por Catcher):
   - Un pedido de carta 25,00 €, con envío de 3,50 € y sin promoción. El cliente paga 28,50 €, IVA dentro al 10 %: base 25,91 y cuota 2,59.
   - El envío en base es 3,50 ÷ 1,10 = 3,18, al céntimo; la venta en base es la diferencia, 25,91 − 3,18 = 22,73.
@@ -2410,8 +2407,13 @@ Pedidos de marcas propias de octubre (del 01 al 15/10, 526 pedidos, todos de Hub
 - **Qué hace «Por aclarar» en el asiento del día:**
   - El asiento de esa plataforma y día sale en **«duda»** con su «Mira esto»: el código del pedido, la marca, el local y el envío.
   - No se valida hasta que alguien diga quién lo repartió, con dos respuestas: **«Lo repartimos nosotros»**, y el envío va a la 70500001; o **«Lo repartió la plataforma»**.
-  - **Pregunta para Julio:** con la segunda, ¿el envío es de la plataforma y sale de la venta y del 430? Hoy está dentro, porque el total del pedido lo incluye.
-- **Lo ya validado no se toca:** los 59 asientos de octubre, con la cifra y el IVA bien. Solo cambia la subcuenta desde ahora.
+  - **Lo decidió Julio (16/10): se resuelve con la liquidación de esa semana.**
+    - Si la plataforma **paga** ese envío al restaurante, va a la 70500001 como cualquier envío.
+    - Si **no lo paga**, sale de la venta y del 430: el envío no era del restaurante.
+    - Mientras la liquidación no llega, el pedido sigue en «Por aclarar».
+- **La contabilidad está cerrada a 30/09/2026** (regla de Julio, 16/10): nada de esta construcción lleva fecha anterior al 01/10/2026, ni asientos, ni ajustes, ni reprocesos.
+
+**Lo ya validado no se toca:** los 59 asientos de octubre, con la cifra y el IVA bien. Solo cambia la subcuenta desde ahora.
 
 **Las subcuentas que crea la tanda en el plan de Foodint, en Folvy** (con los mismos números y nombres que en Diez):
 
