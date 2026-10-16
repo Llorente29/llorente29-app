@@ -1,9 +1,5 @@
-# D01 · Liquidaciones por correo · T1 (rama conta/d01-liquidaciones-uber).
-#   La base: la dirección liquidaciones-<empresa>@, el mapa de tiendas de las
-#   plataformas, las columnas del resumen de Uber, la factura de comisión sin
-#   número, conta_liquidacion_registrar, lo que queda por aclarar (solapes en
-#   los dos lados) y las cuentas aprendidas del libro. Y su prueba (ROLLBACK).
-#   0110: la dirección de Foodint; en staging no hace nada (Foodint no está).
-supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql
-supabase/migrations/20261113T0110_d01_liquidaciones_direccion_foodint.sql
-supabase/staging/sql/20261113_d01_liquidaciones_prueba.sql
+# C06b · El agente «libro» con la regla del IVA de la base (Julio, 16/10): sus
+# dos pruebas de staging, que ejecutan el agente entero con \i, con la línea
+# nueva. Las dos acaban en ROLLBACK: staging no cambia.
+supabase/staging/sql/20261011_c04_prueba_agente.sql
+supabase/staging/sql/20261015_c06b_prueba_agente_huecos.sql

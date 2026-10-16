@@ -18,7 +18,10 @@
 --                      saltos (C0008 salta del 431 al 998 el 01/07, también en
 --                      Diez); lo que se mira es lo que numera Folvy.
 --   3. cadena        · cada huella encadena con la anterior y es la de su contenido.
---   4. iva           · los apuntes de IVA llevan base, tipo y libro, y la cuota es la base por el tipo.
+--   4. iva           · los apuntes de IVA llevan base, tipo y libro, y la cuota es la base por el tipo,
+--                      con la MISMA tolerancia que journal_entry_validar: medio céntimo por factura
+--                      de un resumen y, en cualquier apunte, un céntimo de redondeo (C06b, 16/10;
+--                      tests/conta/agenteLibroIva.test.ts compara las dos).
 --   5. ventas_dia    · el resumen del día suma lo mismo que sus tickets, y su asiento lo mismo que el resumen.
 --   6. cedidas_70    · ninguna venta de una marca cedida en el grupo 70.
 --   7. socio_gasto   · nada comprado a nombre del socio de marca como gasto (grupo 6).
@@ -99,7 +102,7 @@ select json_build_object(
     cross join lateral (select case
        when (a.template_code like '472%' or a.template_code like '477%') and l.tax_rate_id is null then 'apunte de IVA sin base, tipo ni libro'
        when l.tax_rate_id is not null and (l.tax_base is null or l.vat_book is null) then 'IVA sin base o sin libro registro'
-       when l.tax_rate_id is not null and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > floor(l.tax_documents / 2.0) / 100
+       when l.tax_rate_id is not null and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > greatest(1, floor(l.tax_documents / 2.0)) / 100
          then format('cuota %s y base %s × %s %% = %s', l.debit + l.credit, l.tax_base, t.rate, round(l.tax_base * t.rate / 100, 2))
        end as motivo) m
    where e.source_type <> 'migrated' and m.motivo is not null),
