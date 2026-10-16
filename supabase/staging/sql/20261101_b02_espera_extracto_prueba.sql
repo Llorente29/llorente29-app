@@ -2,8 +2,8 @@
 -- PRUEBA (staging) · B02 · T4 (0220): «Espera el extracto» y el punto de
 -- partida del cierre. Todo en una transacción con ROLLBACK. Ejecuta los
 -- ficheros DE VERDAD (\ir): la tanda y su vuelta atrás. Un banco INVENTADO
--- en la empresa A (sin IBAN), con su 572 propia, para no mezclarse con lo que
--- dejan las e2e en los bancos de la semilla.
+-- en la empresa A, con su 572 propia, para no mezclarse con lo que
+-- dejan las e2e en los bancos de la semilla. Su IBAN, inventado (mod 97 válido).
 --
 --   1. Antes de la 0220, bank_movement no admite «espera_extracto».
 --   2. Con la 0220, bank_proponer lo acepta (y sigue rechazando lo demás) y el
@@ -41,7 +41,7 @@ begin
   select id into v_ca from public.company_account where company_id = emp and code = '57200921';
   if v_ca is null then raise exception 'PRUEBA B02 · 0220 · 0: la empresa A no tiene la 57200001 de la que copiar.'; end if;
   insert into public.treasury_account (id, account_id, company_id, kind, name, iban, pgc_hint, is_default, is_active)
-  values (t, a, emp, 'bank', 'Banco B02 · Espera', null, '572', false, true);
+  values (t, a, emp, 'bank', 'Banco B02 · Espera', 'ES4001829109210000000921', '572', false, true);
   insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
   values (a, emp, v_ca, 'bank_account', t::text, 'principal', 'manual');
   -- El contable a 30/09 (290,01), distinto del extracto (0,01): como ···4525 en producción.
