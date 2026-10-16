@@ -1,0 +1,9 @@
+{
+ "_que": "D01 · contexto de producción de la tanda «facturas de los proveedores por correo» (0100 y 0110 del 19), medido en SOLO LECTURA el 16/10 con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. conta_entrada_llegada(jsonb) existe, una firma, con el texto de la 0220 del 21 (md5 de su definición igual en producción y en staging, 2b167f38); company_inbound_sender y conta_entrada_remitente no existen; nada en el camino del pedido; ninguna en el historial. La función conta-facturas-entrada desplegada (v4) es byte a byte la de main.",
+ "medido": "2026-10-16T19:15Z",
+ "tanda": {
+  "supabase/migrations/20261119T0100_d01_facturas_correo.sql": "a25845b80583b81b90ff16600f9a111b",
+  "supabase/migrations/20261119T0110_d01_facturas_foodint.sql": "29078a24085919d29bc208c39cdb2579"
+ },
+ "contexto": {"tablas": ["public.company_inbound_address"], "funciones": ["public.conta_entrada_llegada(jsonb)"], "filas": {"public.company_inbound_address": 0}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
