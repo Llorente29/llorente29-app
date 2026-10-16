@@ -31,9 +31,9 @@ import { cargarIa, responderSugerencia } from '@/modules/conta/services/iaServic
 import { hechoAlAceptar, type Sugerencia } from '@/modules/conta/ia/tipos'
 import { subcuentasSinNombre } from '@/modules/conta/services/pasosDiezService'
 import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
-import { diaMes, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { diaMes, euros, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  barras, cambio, diaDeHoy, dudas, fraseIva, frasePago, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
+  barras, cambio, diaDeHoy, dudas, fraseIva, frasePago, textoIva, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
 } from '@/modules/conta/lib/inicio'
 import { mesAnterior, nombreMes, type CierreMes, type PasoCierre } from '@/modules/conta/lib/diario'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
@@ -174,21 +174,27 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
         tono={pago.estado === 'listo' && pago.v !== null && pago.v < hoy ? 'ambar' : undefined} barras={barras(serie('debes'))} />
       <Cifra etiqueta="IVA del trimestre" valor={iva.estado === 'listo' ? euros(iva.v.aPagar) : iva.estado === 'fallo' ? '—' : '…'}
         ruta={rutaLibros('registro', 'expedidas')}
-        apoyo={iva.estado === 'listo' ? fraseIva(iva.v.trimestre, iva.v.repercutido, iva.v.soportado, euros) : iva.estado === 'fallo' ? iva.texto : ' '}
+        apoyo={iva.estado === 'listo' ? textoIva(fraseIvaDe(iva.v)) : iva.estado === 'fallo' ? iva.texto : ' '}
+        apoyoNodo={iva.estado === 'listo' ? fraseIvaDe(iva.v).map((x, i) => (x.cifra ? <span key={i} className="cxi-cifra-mono">{x.texto}</span> : x.texto)) : undefined}
         barras={ivaMeses.estado === 'listo' ? barras(ivaMeses.v) : []} ia />
     </div>
   )
 }
 
-function Cifra({ etiqueta, valor, apoyo, tono, barras: bs, ruta, ia = false }: {
+/** M01 · La frase del IVA del trimestre, con los importes en euros con sus céntimos. */
+const fraseIvaDe = (v: { trimestre: string; repercutido: number; soportado: number }) => fraseIva(v.trimestre, v.repercutido, v.soportado, eurosExactos)
+
+function Cifra({ etiqueta, valor, apoyo, apoyoNodo, tono, barras: bs, ruta, ia = false }: {
   etiqueta: string; valor: string; apoyo: string; tono?: 'verde' | 'ambar'; barras: { alto: number; ultima: boolean }[]; ruta: string; ia?: boolean
+  /** Lo mismo que `apoyo`, pintado (con cifras en mono); el lector oye `apoyo`. */
+  apoyoNodo?: ReactNode
 }) {
   return (
     <Link to={ruta} className="cxi-cifra" aria-label={`${etiqueta}: ${valor}. ${apoyo}`}>
       <span className="cxi-cifra-texto">
         <span className="cxi-cifra-etiqueta">{etiqueta}</span>
         <span className="cxi-cifra-valor">{valor}</span>
-        <span className={`cxi-cifra-apoyo${tono ? ` cxi-cifra-apoyo-${tono}` : ''}`}>{apoyo}</span>
+        <span className={`cxi-cifra-apoyo${tono ? ` cxi-cifra-apoyo-${tono}` : ''}`}>{apoyoNodo ?? apoyo}</span>
       </span>
       {bs.length > 0 && (
         <span className="cxi-barras" aria-hidden="true">

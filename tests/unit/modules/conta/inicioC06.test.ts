@@ -3,10 +3,10 @@
 // C06 · El Inicio del producto vendido solo: lo que se decide sin base.
 
 import {
-  barras, cambio, diaDeHoy, dudas, fraseIva, frasePago, mesYAnio, mesesHasta, primerNombre, puntoDeMes, resumenDudas, saldoDe, saludo, trimestreDe,
+  barras, cambio, diaDeHoy, dudas, fraseIva, frasePago, textoIva, mesYAnio, mesesHasta, primerNombre, puntoDeMes, resumenDudas, saldoDe, saludo, trimestreDe,
 } from '@/modules/conta/lib/inicio'
 import { ayerEnMadrid } from '@/modules/conta/services/inicioService'
-import { diaMes, euros } from '@/modules/conta/lib/formato'
+import { diaMes, euros, eurosExactos } from '@/modules/conta/lib/formato'
 
 describe('la cabecera', () => {
   it('saluda según la hora de Madrid', () => {
@@ -107,14 +107,21 @@ describe('lo que tiene que decir la persona', () => {
   })
 })
 
-describe('M01 · el IVA del trimestre, cada importe con su nombre', () => {
-  it('un soportado en negativo (un abono) no sale como «− −5 €»', () => {
-    // El caso de staging que vio Julio: 8,99 € repercutido y −5 € soportado.
-    const f = fraseIva('4.º trimestre', 8.99, -5, euros)
-    expect(f).toBe(`4.º trimestre: repercutido ${euros(8.99)} · soportado ${euros(-5)}`)
+describe('M01 · el IVA del trimestre, como una cuenta que se lee entera', () => {
+  const frase = (r: number, s: number) => textoIva(fraseIva('4.º trimestre', r, s, eurosExactos))
+  it('repercutido − soportado = lo que sale, a pagar', () => {
+    expect(frase(8.99, 5)).toBe('4.º trimestre: repercutido 8,99 € − soportado 5,00 € = 3,99 € a pagar')
+    expect(frase(1200, 450.5)).toBe('4.º trimestre: repercutido 1.200,00 € − soportado 450,50 € = 749,50 € a pagar')
+  })
+  it('negativo, «a devolver» y sin signo', () => {
+    expect(frase(100, 250)).toBe('4.º trimestre: repercutido 100,00 € − soportado 250,00 € = 150,00 € a devolver')
+  })
+  it('el soportado en negativo (el caso de staging: 8,99 y −5) se suma y se dice, sin «− −»', () => {
+    const f = frase(8.99, -5)
+    expect(f).toBe('4.º trimestre: repercutido 8,99 € + 5,00 € de soportado en negativo = 13,99 € a pagar')
     expect(f).not.toMatch(/[−-]\s*[−-]/)
   })
-  it('con los dos en positivo, igual: nombrados, sin resta', () => {
-    expect(fraseIva('3.er trimestre', 1200, 450.5, euros)).toBe(`3.er trimestre: repercutido ${euros(1200)} · soportado ${euros(450.5)}`)
+  it('los importes van aparte, para pintarlos en mono', () => {
+    expect(fraseIva('T', 8.99, 5, eurosExactos).filter((x) => x.cifra).map((x) => x.texto)).toEqual(['8,99 €', '5,00 €', '3,99 €'])
   })
 })

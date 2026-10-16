@@ -53,7 +53,7 @@
 }
 .cxm .cxt-tabla:focus-visible { outline: 2px solid var(--cxm-azul); outline-offset: 2px; }
 .cxm .cxt-tabla thead th {
-  position: sticky; top: 48px; z-index: 2; height: 30px; padding: 0 8px; background: var(--cxm-suave);
+  position: sticky; top: var(--cxm-alto-arriba, 48px); z-index: 2; height: 30px; padding: 0 8px; background: var(--cxm-suave);
   border-bottom: 1px solid var(--cxm-borde); text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.04em; color: var(--cxm-apoyo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -140,7 +140,7 @@
 
 /* ── 6 · Panel del documento ───────────────────────────────────────────── */
 .cxm .cxdoc {
-  width: 420px; display: flex; flex-direction: column; gap: 10px; padding: 10px; position: sticky; top: 60px;
+  width: 420px; display: flex; flex-direction: column; gap: 10px; padding: 10px; position: sticky; top: calc(var(--cxm-alto-arriba, 48px) + 12px);
   background: var(--cxm-documento); border: 1px solid var(--cxm-borde); border-radius: var(--cxm-radio-bloque); font-family: var(--cxm-letra);
 }
 .cxm .cxdoc-oculto { width: auto; padding: 6px; }

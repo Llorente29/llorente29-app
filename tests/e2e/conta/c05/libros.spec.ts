@@ -76,11 +76,10 @@ test('Libros en tres niveles: áreas, acciones con su estado y el buscador', asy
   } else {
     await (await areaDeLibros(page, 'Libros registro de IVA')).click()
     // M01 (Julio, 16/10): fuera el recuadro de antes (Facturas / Otros libros /
-    // Salidas con su dato y «Tuyos» con Ctrl K). Las acciones del área, en una
-    // fila de pestañas pequeñas, todas (regla 7) y en su orden.
+    // Salidas con su dato y «Tuyos» con Ctrl K). Las acciones del área, en la
+    // segunda fila de la barra de arriba del marco (las que no caben, en «Más ▾»).
     const barra = page.getByRole('navigation', { name: 'Acciones de Libros registro de IVA' })
     await expect(barra.getByRole('link', { name: /^Expedidas/ })).toBeVisible()
-    await expect(barra.getByRole('link', { name: /^Formato AEAT/ })).toBeVisible()
     await expect(page.getByRole('group', { name: 'Tuyos' })).toHaveCount(0)
     await expect(page.locator('.cxl-tuyos')).toHaveCount(0)
     // Una sola fila: todas a la misma altura.

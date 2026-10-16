@@ -136,3 +136,4 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
   .cxi-diez-paso-texto { flex-basis: calc(100% - 46px); }
   .cxi-diez-paso .cx-boton { margin-left: 46px; }
 }
+.cxi-cifra-mono { font-family: var(--cx-letra-cifras); font-variant-numeric: tabular-nums; white-space: nowrap; }

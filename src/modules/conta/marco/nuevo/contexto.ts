@@ -20,6 +20,8 @@ export interface Marco {
   huecoAcciones: HTMLElement | null
   /** Donde va el ejercicio y el periodo, a la izquierda de la barra de arriba. */
   huecoPeriodo: HTMLElement | null
+  /** La segunda fila de la barra de arriba: las acciones de la pestaña (SubpestanasEnBarra). */
+  huecoSubpestanas: HTMLElement | null
 }
 
 export const MarcoContexto = createContext<Marco | null>(null)

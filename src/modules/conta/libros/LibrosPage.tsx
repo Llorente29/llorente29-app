@@ -3,8 +3,8 @@
 // C05 · Libros en tres niveles (maqueta N13cLibros), dentro del marco nuevo.
 // Nivel 1, el módulo (barra de módulos del marco). Nivel 2, las áreas: en el
 // ordenador son las pestañas de arriba del marco. Nivel 3, las acciones del
-// área, en una fila de pestañas pequeñas debajo, con un punto ámbar si piden
-// algo. Debajo, el contenido de la acción elegida. Dos clics como máximo a
+// área, en la segunda fila de esa barra (SubpestanasEnBarra), con un punto
+// ámbar si piden algo y «Más ▾» si no caben. Debajo, el contenido de la acción elegida. Dos clics como máximo a
 // cualquier libro. El ejercicio va en la barra de arriba (PeriodoEnBarra).
 //
 // M01 (encargo F01, tarea 4; Julio, 16/10): fuera el recuadro de antes
@@ -24,6 +24,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { usePestanasArriba } from '@/modules/conta/marco/nuevo/contexto'
 import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
+import { SubpestanasEnBarra, type Subpestana } from '@/modules/conta/ui/marco/SubpestanasEnBarra'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
@@ -162,18 +163,13 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
       </Link>
     )
   }
-  // Ordenador: una fila de pestañas pequeñas; el dato va en el title y un punto
-  // ámbar dice que esa acción pide algo (ninguna se esconde: regla 7).
-  const pestanaAccion = (x: Accion) => {
+  // Ordenador: la segunda fila de la barra de arriba del marco; el dato va en
+  // el title y un punto ámbar dice que esa acción pide algo (ninguna se
+  // esconde: regla 7).
+  const subpestanas: Subpestana[] = accionesDe(area).map((x) => {
     const e = est[x.id] ?? NINGUNO
-    const gris = e.texto === 'ninguno' || e.texto === 'ninguna'
-    return (
-      <Link key={x.id} to={ruta(area.id, x.id)} className={`cxl-sub-pestana${gris ? ' cxl-sub-gris' : ''}`} title={`${x.nombre}: ${e.texto}`}
-        aria-current={x.id === accion.id ? 'page' : undefined}>
-        {x.nombre}{e.tono === 'ambar' && <span className="cxl-sub-punto" aria-label={`, ${e.texto}`} />}
-      </Link>
-    )
-  }
+    return { id: x.id, etiqueta: x.nombre, ruta: ruta(area.id, x.id), activa: x.id === accion.id, dato: e.texto, aviso: e.tono === 'ambar', gris: e.texto === 'ninguno' || e.texto === 'ninguna' }
+  })
 
   return (
     <LibrosCtx.Provider value={ctx}>
@@ -210,16 +206,7 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
                   ))}
                 </div>
               </nav>
-            ) : accionesDe(area).length > 1 && (
-              <nav className="cxl-sub" aria-label={`Acciones de ${area.nombre}`}>
-                {area.grupos.map((g, i) => (
-                  <span key={g.etiqueta} className="cxl-sub-grupo" role="group" aria-label={g.etiqueta}>
-                    {i > 0 && <span className="cxl-sub-separador" aria-hidden="true" />}
-                    {g.acciones.map(pestanaAccion)}
-                  </span>
-                ))}
-              </nav>
-            )}
+            ) : accionesDe(area).length > 1 && <SubpestanasEnBarra etiqueta={`Acciones de ${area.nombre}`} pestanas={subpestanas} />}
             {resumen.error && <div className="cx-error" role="alert">No se ha podido leer el estado de los libros: {resumen.error}</div>}
             <div key={`${area.id}:${accion.id}`}>{contenido(accion.id)}</div>
           </>
