@@ -87,6 +87,11 @@ describe('staging contra producción', () => {
     expect(corto({ objeto: 'funcion', diferencia: 'cuerpo', nombre: 'a_b(x int)' })).toBe('a_b')
   })
 
+  it('la consulta no corta las firmas: la primera rama del union va en text, no en name (63 caracteres)', () => {
+    const sql = readFileSync('scripts/conta/staging/comparar.sql', 'utf8')
+    expect(sql).toMatch(/select 'tabla'::text as tipo, tabla::text as nombre/)
+  })
+
   it('la lista de aceptadas del repositorio se lee sin errores', () => {
     expect(() => leerAceptadas(readFileSync('scripts/conta/staging/diferencias-aceptadas.txt', 'utf8'))).not.toThrow()
   })

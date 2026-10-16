@@ -25,7 +25,10 @@ col as (
    where c.relkind in ('r', 'p') and c.oid not in (select objid from ext)
 ),
 fila as (
-  select 'tabla' as tipo, tabla as nombre, md5(string_agg(columna || ':' || def, ',' order by columna)) as huella
+  -- ::text: la primera rama fija el tipo de la columna en el union, y con
+  -- `name` (el de relname) todo lo de debajo se corta a 63 caracteres. El
+  -- 16/10 cortó diez firmas largas y ninguna aceptada casaba.
+  select 'tabla'::text as tipo, tabla::text as nombre, md5(string_agg(columna || ':' || def, ',' order by columna)) as huella
     from col group by tabla
   union all
   select 'columna', tabla || '.' || columna, md5(def) from col
