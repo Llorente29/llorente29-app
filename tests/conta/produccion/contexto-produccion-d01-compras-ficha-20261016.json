@@ -1,0 +1,8 @@
+{
+ "_que": "D01 · contexto de producción de la tanda «Compras y la ficha» (0100 del 18), medido en SOLO LECTURA el 16/10 con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. compras_mirar(uuid) y compras_ficha_le_falta(uuid) existen, una firma cada una, con el mismo texto que la 0170 y la 0120 de compras (md5 de su cuerpo igual en producción y en main); nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-10-16T15:32Z",
+ "tanda": {
+  "supabase/migrations/20261118T0100_d01_compras_ficha.sql": "7fa4397921c07755db443cb4be419e9d"
+ },
+ "contexto": {"tablas": [], "funciones": ["public.compras_ficha_le_falta(uuid)", "public.compras_mirar(uuid)"], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
