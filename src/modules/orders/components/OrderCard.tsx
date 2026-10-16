@@ -33,6 +33,7 @@ import { passCode } from '../lib/passCode'
 import { elSubtitulo } from '@/modules/pase/lib/lasTresZonas'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
+import { esRepartoPropio, lineaTelefono } from '@/modules/reparto/lib/entregaTicket'
 import EtiquetaReparto from '@/modules/reparto/components/EtiquetaReparto'
 import {
   primaryAction, secondaryAction, childVisual, deliveryView,
@@ -303,22 +304,24 @@ function GreenCallPill({ phone, label = true, big = false }: { phone: string; la
 // que va a una zona. No se despacha automáticamente con ellas: eso sigue
 // bloqueado y es otra decisión.
 function SinDireccionAviso(
-  { order, portal, compacto = false }: { order: OrderFeedItem; portal: { url: string; nombre: string } | null; compacto?: boolean },
+  { order, portal, compacto = false, token = null }: { order: OrderFeedItem; portal: { url: string; nombre: string } | null; compacto?: boolean; token?: string | null },
 ) {
   const [coords, setCoords] = useState<CoordenadasEntrega | null>(null)
 
   useEffect(() => {
     let vivo = true
-    coordenadasDeEntrega(order.sale_id)
+    coordenadasDeEntrega(order.sale_id, token)
       .then(c => { if (vivo) setCoords(c) })
       .catch(() => { if (vivo) setCoords({ hay: false, motivo: 'no se pudieron leer' }) })
     return () => { vivo = false }
-  }, [order.sale_id])
+  }, [order.sale_id, token])
 
   const canal = order.channel?.trim() || 'La plataforma'
   // R02: con la etiqueta de reparto encima, aquí solo quedan las coordenadas
   // (lo que «falta la dirección» y el portal ya lo dicen la etiqueta y su acción).
-  if (compacto && coords?.hay !== true) return null
+  // R03: la dirección que pegó la cocina, aunque el feed aún no la traiga.
+  const pegada = (coords?.direccion ?? '').trim()
+  if (compacto && coords?.hay !== true && !pegada) return null
   return (
     <div className={compacto ? 'mx-4 mb-2.5 ml-5 px-3 py-2 rounded-xl border border-default bg-white' : 'px-3 py-2.5 border-b border-[#CFE4FA] bg-white/60'}>
       {!compacto && <div className="flex items-start gap-2">
@@ -328,6 +331,12 @@ function SinDireccionAviso(
           {canal} no ha enviado la dirección de entrega.
         </div>
       </div>}
+
+      {pegada && (
+        <div className="mt-1 text-[12.5px] leading-snug text-gray-700" data-testid="direccion-pegada">
+          <b>Dirección pegada:</b> {pegada}
+        </div>
+      )}
 
       {coords?.hay === true && Number.isFinite(Number(coords.lat)) && Number.isFinite(Number(coords.lng)) && (
         <div className="mt-2 flex items-start gap-2">
@@ -374,8 +383,8 @@ function SinDireccionAviso(
 // src/modules/reparto/components/EtiquetaReparto.tsx, con sus acciones; lo
 // que reparte la plataforma, la GRIS. Antes: tarjeta roja y «Reintentar
 // despacho», que sin dirección no podía funcionar nunca.
-function DeliveryRow({ order, onDispatched, puedeDecidirReparto = false, onRepartoCambiado }: {
-  order: OrderFeedItem; onDispatched?: () => void; puedeDecidirReparto?: boolean; onRepartoCambiado?: () => void
+function DeliveryRow({ order, onDispatched, puedeDecidirReparto = false, onRepartoCambiado, token = null }: {
+  order: OrderFeedItem; onDispatched?: () => void; puedeDecidirReparto?: boolean; onRepartoCambiado?: () => void; token?: string | null
 }) {
   const [dispatching, setDispatching] = useState(false)
   const [dispatchErr, setDispatchErr] = useState<string | null>(null)
@@ -409,7 +418,7 @@ function DeliveryRow({ order, onDispatched, puedeDecidirReparto = false, onRepar
           despachando={dispatching}
           onCambiado={onRepartoCambiado}
         />
-        {sinDireccion && <SinDireccionAviso order={order} portal={portal} compacto />}
+        {sinDireccion && <SinDireccionAviso order={order} portal={portal} compacto token={token} />}
       </>
     )
   }
@@ -576,6 +585,8 @@ function PlatformDeliveryRow({ view, order }: { view: DeliveryView; order: Order
 
 interface OrderCardProps {
   order: OrderFeedItem
+  /** R03: token del dispositivo en la tablet (sin sesión): el punto del mapa sale por su variante, solo de su local. */
+  token?: string | null
   allowGrow?: boolean
   onAdvance?: (saleId: string, next: OrderStatus) => void | Promise<void>
   onOpenRecipe?: (line: OrderFeedLine) => void
@@ -635,7 +646,7 @@ interface OrderCardProps {
   onRepartoCambiado?: () => void
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase, puedeDecidirReparto = false, onRepartoCambiado }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase, puedeDecidirReparto = false, onRepartoCambiado, token = null }: OrderCardProps) {
   const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
   const now = nowMs
   const [busy, setBusy] = useState(false)
@@ -720,7 +731,8 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
   const pass = passCode(order)
 
   return (
-    <div className={`relative rounded-2xl overflow-hidden bg-card border ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}>
+    <div className={`relative rounded-2xl overflow-hidden bg-card border ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}
+      data-testid="tarjeta-pedido" data-sale-id={order.sale_id}>
       <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: tc.spine }} />
 
       <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5 pl-5">
@@ -783,6 +795,16 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         <span className="font-mono text-[11px] opacity-55" title="Referencia interna">· {ticketCode(order.external_tab_ref, order.external_ref)}</span>
       </div>
 
+      {/* R03: en reparto propio, el teléfono del cliente con su código (Uber:
+          la centralita no conecta sin él), para quien llama desde cocina. */}
+      {esRepartoPropio(order.service_type) && order.customer_phone && (
+        <div className="mx-4 mb-2 ml-5 text-[13.5px] font-bold text-text-primary" data-testid="telefono-cliente">
+          <a href={`tel:${order.customer_phone.replace(/\s+/g, '')}`} onClick={e => e.stopPropagation()} className="no-underline text-inherit">
+            {lineaTelefono(order.customer_phone, order.customer_phone_code)}
+          </a>
+        </div>
+      )}
+
       {order.customer_note && (
         <div className="mx-4 mb-2 ml-5 bg-danger-bg border border-danger/30 border-l-4 border-l-danger rounded-lg px-3 py-2.5 flex gap-2.5 items-start">
           <span className="text-[16px] leading-none">⚠</span>
@@ -805,7 +827,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         ))}
       </div>
 
-      <DeliveryRow order={order} puedeDecidirReparto={puedeDecidirReparto} onRepartoCambiado={onRepartoCambiado} />
+      <DeliveryRow order={order} puedeDecidirReparto={puedeDecidirReparto} onRepartoCambiado={onRepartoCambiado} token={token} />
 
       <div className="px-4 py-3 pl-5 border-t border-default">
         <div className="flex items-center gap-3">

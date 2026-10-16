@@ -18,7 +18,7 @@ describe('la etiqueta de reparto', () => {
   it('el 431 (Scandal · Glovo, propio sin dirección): ámbar con sus dos acciones, aunque traiga el error del vigía', () => {
     const e = etiquetaDeReparto({ ...base, delivery_address: null,
       dispatch_error: 'No se despachó: sin dirección de entrega: la plataforma no la ha enviado' })
-    expect(e).toEqual({ tono: 'ambar', texto: 'Nosotros · falta la dirección', detalle: 'Glovo no la ha mandado',
+    expect(e).toEqual({ tono: 'ambar', texto: 'Nosotros · falta la dirección', detalle: 'La dirección no ha llegado',
       acciones: ['pedir_direccion', 'cambiar_a_plataforma'] })
   })
   it('propio con rider asignado: verde', () => {

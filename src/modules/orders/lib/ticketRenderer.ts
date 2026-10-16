@@ -26,6 +26,7 @@ import { childVisual } from '../services/ordersFeedService'
 import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from './passCode'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
+import { bloqueEntrega, SIN_DIRECCION } from '@/modules/reparto/lib/entregaTicket'
 
 // ── Modelo intermedio ───────────────────────────────────────────────────────
 
@@ -202,14 +203,32 @@ export function renderBagTicket(order: OrderFeedItem, fiscal?: { legalName?: str
   const bagRef = platformRef(order)
   if (bagRef) b.push({ kind: 'text', text: bagRef, align: 'center', muted: true })
 
+  // R03 · ENTREGA (solo reparto propio), debajo del código, en grande.
+  const ent = bloqueEntrega(order)
+  if (ent) {
+    b.push({ kind: 'banner', text: 'ENTREGA' })
+    if (ent.sinDireccion) b.push({ kind: 'text', text: SIN_DIRECCION, bold: true, size: 2 })
+    else {
+      if (ent.calle) b.push({ kind: 'text', text: ent.calle, size: 2 })
+      if (ent.detalles) b.push({ kind: 'text', text: ent.detalles, bold: true, size: 2 })
+    }
+    if (ent.telefono) b.push({ kind: 'text', text: ent.telefono, bold: true, size: 2 })
+    if (ent.notas.length) {
+      b.push({ kind: 'rule' })
+      for (const n of ent.notas) b.push({ kind: 'text', text: n })
+      b.push({ kind: 'rule' })
+    }
+    b.push({ kind: 'space' })
+  }
+
   // Datos de entrega
   b.push({ kind: 'text', text: 'Método: ' + deliveryLabel(order.service_type) })
   if (order.customer_name)   b.push({ kind: 'text', text: 'Cliente: ' + order.customer_name })
   // Etiquetas en castellano SOLO al imprimir: delivery_address se queda como
   // lo mandó el proveedor. Misma función que la pantalla, para que el papel
   // y el móvil del repartidor no digan cosas distintas.
-  if (order.delivery_address) b.push({ kind: 'text', text: 'Dir: ' + direccionParaMostrar(order.delivery_address) })
-  if (order.customer_phone)  b.push({ kind: 'text', text: 'Tel: ' + order.customer_phone })
+  if (!ent && order.delivery_address) b.push({ kind: 'text', text: 'Dir: ' + direccionParaMostrar(order.delivery_address) })
+  if (!ent && order.customer_phone)  b.push({ kind: 'text', text: 'Tel: ' + order.customer_phone })
   if (order.expected_time)   b.push({ kind: 'text', text: 'Hora: ' + fmtDate(order.expected_time) })
 
   // Productos CON precios

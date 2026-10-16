@@ -84,12 +84,17 @@ test('la cocina: ámbar sin dirección, gris si reparte la plataforma, nada en r
 
   // E2E01 (Burger Norte · Just Eat). Hay otro ámbar en el local (7B000, Uber):
   // se elige por la plataforma, no por el orden.
+  // R03: el detalle ya no culpa a la plataforma («Just Eat no la ha mandado»
+  // no es verdad: la manda y se pierde por el camino). Se elige por su acción.
   const ambar = page.getByTestId('etiqueta-reparto')
-    .filter({ hasText: 'Nosotros · falta la dirección' }).filter({ hasText: 'Just Eat no la ha mandado' }).first()
+    .filter({ hasText: 'Nosotros · falta la dirección' }).filter({ hasText: 'La dirección no ha llegado' })
+    .filter({ has: page.getByRole('button', { name: 'Cambiar a «la reparte Just Eat»' }) }).first()
   await expect(ambar).toBeVisible()
   await expect(ambar).toHaveAttribute('data-tono', 'ambar')
-  await expect(page.getByTestId('etiqueta-reparto').filter({ hasText: 'Uber no la ha mandado' }).first())
+  await expect(page.getByTestId('etiqueta-reparto').filter({ hasText: 'La dirección no ha llegado' })
+    .filter({ has: page.getByRole('button', { name: 'Cambiar a «la reparte Uber»' }) }).first())
     .toHaveAttribute('data-tono', 'ambar')
+  await expect(page.getByText(/no la ha mandado/)).toHaveCount(0)
   const gris = page.getByTestId('etiqueta-reparto').filter({ hasText: 'La reparte Glovo' }).first()
   await expect(gris).toHaveAttribute('data-tono', 'gris')
   await expect(page.getByText('No se pudo despachar')).toHaveCount(0)

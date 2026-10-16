@@ -56,9 +56,35 @@
 // el número de 12 dígitos de la plataforma: es el que puede cantar al llegar y
 // comparar con el que lleva la bolsa impresa. externalId sigue siendo sale.id
 // INTACTO (identidad de reconciliación y de las alarmas de reparto).
+//
+// ── R03 · LA DIRECCIÓN QUE NO LLEGA (16/10) ──────────────────────────────────
+// ≈8 % de los Glovo de reparto propio llegan sin calle: Glovo la manda en
+// `delivery_address.label` y Glovo Bridge no la copia. Las coordenadas sí
+// llegan. Desde el R03 el pedido SALE IGUAL, por este orden:
+//   1. la dirección que pegó la cocina (sale.delivery_address_fixed)  → 'pegada'
+//   2. la de la plataforma (sale.delivery_address o las piezas)        → 'plataforma'
+//   3. ninguna: el punto del mapa + la calle más cercana (Mapbox, el mismo
+//      MAPBOX_TOKEN) y la nota «Dirección incompleta: llamar al cliente para
+//      piso y portal»                                                   → 'punto_del_mapa'
+// De dónde salió queda en sale.delivery_address_origin. La calle más cercana NO
+// se guarda: Mapbox no deja almacenar lo que da su geocodificador temporal.
+// NINGUNA dirección de cliente va a los logs.
+//
+// LA ESPERA (Julio, 16/10, opción B): cuando lo llama el disparador del
+// pedido (internal) y no hay dirección, NO manda nada durante 5 minutos desde
+// que se aceptó: contesta «esperando». Si en ese tiempo la cocina pega la
+// dirección, el aviso lo manda con ella (llamada desde la pantalla, sin
+// esperar). Si no, despachar_sin_calle_vencidos() lo pide con `tras_espera` y
+// sale por el punto del mapa. Los pedidos con dirección no esperan nunca.
+//
+// EL CÓDIGO DE UBER: el teléfono de Uber es una centralita que solo conecta
+// con customer.phone_access_code. No sabemos qué campo enseña la app del
+// repartidor, así que va al PRINCIPIO de orderInstructions:
+// «Tel. centralita <tel> + código <código>».
 
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
+import { instruccionesParaCatcher } from "./instrucciones.ts";
 
 // Base URLs de Catcher. Sandbox = staging. Producción = api.catcher.es.
 const CATCHER_AUTH_URL = "https://api.catcher.es/auth/v1/authorize";
@@ -80,7 +106,26 @@ interface DeliveryInfo {
   longitude?: number;
   postalCode?: string;
   geocodedAddress?: string;
+  /** R03: de dónde sale la dirección que se manda (ver cabecera). */
+  origin?: "plataforma" | "pegada" | "punto_del_mapa";
 }
+
+const NOTA_DIRECCION_INCOMPLETA = "Dirección incompleta: llamar al cliente para piso y portal";
+const ESPERA_SIN_CALLE_MS = 5 * 60 * 1000;
+
+/** El código de acceso del teléfono (Uber por HubRise). null si no hay. */
+function codigoDelTelefono(rawTab: string | null): string | null {
+  if (!rawTab) return null;
+  try {
+    const t = JSON.parse(rawTab);
+    const c = t?.customer?.phone_access_code;
+    return typeof c === "string" && c.trim() ? c.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+
 
 // Extrae el objeto "delivery" del raw_tab (JSON crudo del ticket).
 function extractDelivery(rawTab: string | null): DeliveryInfo | null {
@@ -186,7 +231,7 @@ function streetLine(address1: string, city: string): string {
 // re-geocodificación sería cambiar un pin bueno por uno adivinado.
 function deliveryFromHubrise(
   rawTab: string | null,
-  sale: { delivery_address?: string | null },
+  sale: { delivery_address?: string | null; delivery_address_fixed?: string | null },
 ): DeliveryInfo | null {
   if (!rawTab) return null;
   let c: Record<string, unknown> | null = null;
@@ -219,15 +264,18 @@ function deliveryFromHubrise(
   // `city` puede ser el portal (Glovo) o la ciudad (Just Eat): decide streetLine()
   const compuesta = [streetLine(txt(c.address_1), ciudad), a2 && a2 !== ciudad ? a2 : "", txt(c.postal_code)]
     .filter(Boolean).join(", ");
-  const address = txt(sale.delivery_address) || compuesta;
-  if (!address) return null;
+  const pegada = txt(sale.delivery_address_fixed);
+  const address = pegada || txt(sale.delivery_address) || compuesta;
 
+  // R03: sin ninguna dirección, sale por el punto del mapa (antes: null y no
+  // salía). La calle más cercana la pone el llamador.
   return {
     address,
     details: txt(c.delivery_notes) || undefined,
     latitude: lat,
     longitude: lng,
     postalCode: txt(c.postal_code) || undefined,
+    origin: pegada ? "pegada" : address ? "plataforma" : "punto_del_mapa",
     // geocodedAddress: A PROPÓSITO SIN PONER. Ver el comentario de arriba.
   };
 }
@@ -285,7 +333,33 @@ async function mapboxGeocode(query: string): Promise<{ lat: number; lng: number 
     if (typeof lat !== "number" || typeof lng !== "number") return null;
     return { lat, lng };
   } catch (e) {
-    console.log("MAPBOX_GEOCODE_ERR", String(e));
+    // Solo el tipo de error: el mensaje de fetch lleva la URL, y en la URL van
+    // la dirección y el token (R03).
+    console.log("MAPBOX_GEOCODE_ERR", e instanceof Error ? e.name : "error");
+    return null;
+  }
+}
+
+// R03: la calle más cercana a un punto (geocodificación inversa de Mapbox, el
+// mismo token). null si no resuelve. El texto NO va a los logs ni se guarda.
+async function mapboxCalleMasCercana(lat: number, lng: number): Promise<string | null> {
+  const token = Deno.env.get("MAPBOX_TOKEN") ?? "";
+  if (!token) return null;
+  try {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json`
+      + `?access_token=${token}&types=address&language=es&limit=1`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (!res.ok) { console.log("MAPBOX_REVERSE_HTTP", res.status); return null; }
+    const data = await res.json();
+    const f = data?.features?.[0];
+    if (!f || typeof f.text !== "string") return null;
+    const cp = (f.context ?? []).find((x: { id?: string }) => (x.id ?? "").startsWith("postcode"))?.text;
+    return [`${f.text}${f.address ? " " + f.address : ""}`, cp].filter(Boolean).join(", ");
+  } catch (e) {
+    console.log("MAPBOX_REVERSE_ERR", e instanceof Error ? e.name : "error");
     return null;
   }
 }
@@ -342,7 +416,7 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const sb = createClient(url, serviceKey);
 
-  let body: { sale_id?: string; dry_run?: boolean; internal?: boolean };
+  let body: { sale_id?: string; dry_run?: boolean; internal?: boolean; tras_espera?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -373,7 +447,7 @@ Deno.serve(async (req: Request) => {
   // 1. Leer el pedido.
   const { data: sale, error: saleErr } = await sb
     .from("sale")
-    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, pos_short_code, platform_order_code, external_ref, carrier_order_id, customer_note, source, customer_id, delivery_address")
+    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, pos_short_code, platform_order_code, external_ref, carrier_order_id, customer_note, source, customer_id, delivery_address, delivery_address_fixed, accepted_at, created_at")
     .eq("id", saleId)
     .single();
   if (saleErr || !sale) return json(404, { ok: false, error: "sale not found" });
@@ -452,6 +526,12 @@ Deno.serve(async (req: Request) => {
   } else {
     delivery = extractDelivery(sale.raw_tab);
   }
+  // R03: una dirección pegada por la cocina manda sobre la de la plataforma,
+  // venga el pedido de donde venga.
+  const pegadaTxt = (sale.delivery_address_fixed ?? "").trim();
+  if (delivery && pegadaTxt) {
+    delivery = { ...delivery, address: pegadaTxt, origin: "pegada", geocodedAddress: undefined };
+  }
   if (!delivery || delivery.latitude == null || delivery.longitude == null) {
     const motivo =
       sale.source === "folvy_shop"
@@ -464,7 +544,26 @@ Deno.serve(async (req: Request) => {
 
   // ── F2: TEXTO = lo que escribió el cliente (nunca el geocoded). PIN = si el
   // geocoded coincide, sus coords; si discrepa, re-geocode Mapbox del texto. ──
-  const typedText = (delivery.address ?? "").trim() || (delivery.geocodedAddress ?? "").trim();
+  let typedText = (delivery.address ?? "").trim() || (delivery.geocodedAddress ?? "").trim();
+  const origin = delivery.origin ?? "plataforma";
+  let addressDetails = delivery.details ?? "";
+  // LA ESPERA: solo cuando llama el disparador, sin dirección y antes de los 5 minutos.
+  if (origin === "punto_del_mapa" && isInternal && body.tras_espera !== true && !dryRun) {
+    const desde = Date.parse(sale.accepted_at ?? sale.created_at ?? "");
+    const saleSolo = Number.isFinite(desde) ? desde + ESPERA_SIN_CALLE_MS : 0;
+    if (Date.now() < saleSolo) {
+      console.log("CATCHER_ESPERANDO_DIRECCION", { saleId });
+      return json(200, { ok: true, esperando: true, sale_solo_at: new Date(saleSolo).toISOString() });
+    }
+  }
+  if (origin === "punto_del_mapa") {
+    const calle = await mapboxCalleMasCercana(Number(delivery.latitude), Number(delivery.longitude));
+    typedText = calle
+      ? `${calle} (calle más cercana al punto del mapa)`
+      : "Sin calle: ir al punto del mapa";
+    addressDetails = [NOTA_DIRECCION_INCOMPLETA, addressDetails].filter(Boolean).join(" · ");
+    console.log("CATCHER_PUNTO_DEL_MAPA", { saleId, calleMasCercana: calle != null });
+  }
   const mism = addressMismatch(delivery.address, delivery.geocodedAddress);
   let dLat = delivery.latitude;
   let dLng = delivery.longitude;
@@ -478,7 +577,8 @@ Deno.serve(async (req: Request) => {
     } else {
       coordsSource = "platform_fallback_mismatch"; // Mapbox no resolvió; último recurso.
     }
-    console.log("CATCHER_ADDR_MISMATCH", { saleId, typed: delivery.address, geo: delivery.geocodedAddress, coordsSource });
+    // Sin la dirección: ni direcciones ni datos de cliente en los logs (R03).
+    console.log("CATCHER_ADDR_MISMATCH", { saleId, coordsSource });
   }
 
   // 6. Construir el payload de Catcher (/pitcher/v1/order).
@@ -488,7 +588,7 @@ Deno.serve(async (req: Request) => {
     orderPickupTime: new Date(Date.now() + 10 * 60 * 1000).toISOString().slice(0, 19).replace("T", " "),
     orderPaymentMethod: "card",
     orderDeliveryLocation: typedText,                 // ⟵ F2: dirección del CLIENTE, no el geocoded
-    addressDetails: delivery.details ?? "",
+    addressDetails,
     orderDeliveryLat: String(dLat),                   // ⟵ F2: pin re-geocodeado si discrepaba
     orderDeliveryLong: String(dLng),
     orderPickupLocation: loc.address ?? "",
@@ -512,7 +612,7 @@ Deno.serve(async (req: Request) => {
     // resto del fichero no depende de ella.
     orderSource: "folvy",
     orderTotalAmount: sale.total != null ? String(Math.round(Number(sale.total) * 100)) : "0",
-    orderInstructions: sale.customer_note ?? "",
+    orderInstructions: instruccionesParaCatcher(sale.customer_note ?? null, sale.customer_phone ?? null, codigoDelTelefono(sale.raw_tab)),
     // CÓDIGO DE PASE: al repartidor propio le mandamos el CORTO (pos_short_code), no
     // el nº de 12 dígitos de plataforma — es el que puede cantar y comparar. Fallbacks:
     // nº de plataforma, external_ref, y en último caso los primeros 8 del id.
@@ -522,7 +622,7 @@ Deno.serve(async (req: Request) => {
 
   // DRY RUN: devolver el payload sin enviarlo.
   if (dryRun) {
-    return json(200, { ok: true, dryRun: true, wouldSendTo: CATCHER_ORDER_URL, coordsSource, addressMismatch: mism, payload: orderPayload });
+    return json(200, { ok: true, dryRun: true, wouldSendTo: CATCHER_ORDER_URL, coordsSource, addressMismatch: mism, origin, payload: orderPayload });
   }
 
   // 7. Autenticar contra Catcher.
@@ -586,9 +686,10 @@ Deno.serve(async (req: Request) => {
       carrier_order_id: carrierOrderId ? String(carrierOrderId) : null,
       delivery_state: "pending",
       dispatch_error: null,
+      delivery_address_origin: origin,
     }).eq("id", saleId);
 
-    return json(200, { ok: true, carrier_order_id: carrierOrderId, coordsSource, catcherResponse: orderJson ?? orderText.slice(0, 500) });
+    return json(200, { ok: true, carrier_order_id: carrierOrderId, coordsSource, origin, catcherResponse: orderJson ?? orderText.slice(0, 500) });
   } catch (e) {
     // El POST del pedido se cayó por red: Catcher NO lo tiene.
     return await sinLlegarACatcher(sb, saleId, 502,

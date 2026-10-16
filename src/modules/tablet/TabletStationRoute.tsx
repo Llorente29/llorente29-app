@@ -16,6 +16,7 @@ import { ClipboardList, MonitorPlay, CircleOff, Printer as PrinterIcon, Loader2,
 import KdsBoard from '../kds/components/KdsBoard'
 import KdsAlarmOverlay from '../kds/components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from '../kds/components/AvailabilityNoticeOverlay'
+import AvisoDireccionFalta from '../reparto/components/AvisoDireccionFalta'
 import TabletAvailabilityTab from './TabletAvailabilityTab'
 import PaseBoard from '@/modules/pase/PaseBoard'
 import { getLoQueEsLaTablet, type LoQueEsLaTablet } from '@/modules/pase/services/paseService'
@@ -322,6 +323,7 @@ export default function TabletStationRoute() {
 
       {/* Alarma de reparto: banner+sonido a nivel de ruta → visible en CUALQUIER pestaña. */}
       <KdsAlarmOverlay locationId={locInfo?.locationId ?? null} token={token} />
+      <AvisoDireccionFalta locationId={null} token={token} />
       {/* Aviso multi-integrador: recuerda desconectar en Last/Otter tras un 86. */}
       <AvailabilityNoticeOverlay locationId={locInfo?.locationId ?? null} token={token} />
 

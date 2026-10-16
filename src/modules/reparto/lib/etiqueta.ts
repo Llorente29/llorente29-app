@@ -4,7 +4,9 @@
 // NUNCA rojo: la cocina cocina; lo del reparto va en su propia etiqueta.
 //   · gris  «La reparte Glovo / Uber / Just Eat» — sin despacho, sin aviso.
 //   · verde «Nosotros · rider asignado» (o en camino, o entregado).
-//   · ámbar «Nosotros · falta la dirección», con «Pedirla al cliente» y
+//   · ámbar «Nosotros · falta la dirección · La dirección no ha llegado» (R03:
+//     no «Glovo no la ha mandado», que no es verdad: Glovo la manda y se pierde
+//     por el camino), con «Pedirla al cliente» y
 //     «Cambiar a “la reparte Uber”»; y «Nosotros · aún sin rider» cuando hay
 //     dirección pero no ha salido (con «Despachar»).
 // Pura: la prueba tests/unit/modules/reparto/etiqueta.test.ts.
@@ -57,7 +59,7 @@ export function etiquetaDeReparto(p: PedidoParaEtiqueta): Etiqueta | null {
     return {
       tono: 'ambar',
       texto: 'Nosotros · falta la dirección',
-      detalle: `${plataforma} no la ha mandado`,
+      detalle: 'La dirección no ha llegado',
       acciones: ['pedir_direccion', 'cambiar_a_plataforma'],
     }
   }
