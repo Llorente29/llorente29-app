@@ -1,5 +1,5 @@
-# C06b · El agente «libro» con la regla del IVA de la base (Julio, 16/10): sus
-# dos pruebas de staging, que ejecutan el agente entero con \i, con la línea
-# nueva. Las dos acaban en ROLLBACK: staging no cambia.
-supabase/staging/sql/20261011_c04_prueba_agente.sql
-supabase/staging/sql/20261015_c06b_prueba_agente_huecos.sql
+# C06b · Recibidas abiertas (16/10, después de la 0760 en producción, run #98):
+# lo que conta-diez-enviar lee de la base para mandar una recibida validada de
+# octubre, con la autorización de empresa como la tiene hoy producción. Acaba
+# en ROLLBACK: staging no cambia.
+supabase/staging/sql/20261116_c06b_recibida_abierta_prueba.sql

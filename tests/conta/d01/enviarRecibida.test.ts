@@ -149,6 +149,50 @@ describe('C06b R8 · las recibidas, cerradas aunque la empresa esté autorizada 
   })
 })
 
+// C06b · 16/10: la 0760 ya está en producción (run #98). Las filas son las de
+// producción hoy (leídas en solo lectura): la de empresa en C0008 desde el 01/10
+// CON recibidas y la del asiento 1801 (otro asiento) sin ellas; la conexión sin
+// almacén de documentos (adjuntar_documentos = false). Lo que lee la función de
+// la base con esas filas lo prueba staging (20261116_c06b_recibida_abierta_prueba.sql).
+describe('C06b · 16/10 · con la 0760 aplicada, una recibida validada de octubre va a C0008', () => {
+  const HOY: Autorizo[] = [{ alcance: 'empresa', bd: 'C0008', desde: '2026-10-01', recibidas: true }, { alcance: 'asiento', entry: 'e1801', bd: 'c0008' }]
+  const conReal = (o: Parameters<typeof puerto>[0]) => {
+    const t = puerto(o)
+    const reales: boolean[] = []
+    const cliente = t.p.cliente
+    t.p.cliente = async (c, x) => { reales.push(x.real); return cliente(c, x) }
+    return Object.assign(t, { reales })
+  }
+  it('se escribe en la base REAL (escribirEnReal), en la serie 2, sin adjunto y con «PDF pendiente en Diez»: lo que verá Julio', async () => {
+    const t = conReal({ bd: 'C0008', adjuntar: false, autorizados: HOY, r: recibida({ fecha: '2026-10-14', factura: { numero: 'PD01/77', fecha: '2026-10-13' } }) })
+    const x = await enviarRecibidaADiez('r1', t.p)
+    expect(t.reales).toEqual([true])
+    expect(t.d.altas).toHaveLength(1)
+    expect(t.d.altas[0]).toMatchObject({ Serie: '2', CuentaCliente: '40000012', NumeroFactura: 'PD01/77', TotalFactura: 110 })
+    expect(t.d.subidas).toBe(0)
+    expect(x).toMatchObject({ estado: 'en_diez', serie: '2', documento: 3176, enlazada: false, pdfPendiente: true })
+    // documentosService.apuntarFactura antepone «Apuntada y en Diez.»: es la frase de la pantalla.
+    expect(`Apuntada y en Diez. ${x.texto}`).toBe('Apuntada y en Diez. En Diez: 2/3176. PDF pendiente en Diez: adjúntalo allí y márcalo en Libros › Pendientes de adjuntar en Diez.')
+    expect(t.actual).toMatchObject({ status: 'enviado', ext_series: '2', ext_number: 3176, document_status: 'pendiente_diez', last_error: null })
+  })
+  it('el 01/10 entra; el 30/09 sigue cerrada (lo de antes del «desde» no se abre), sin abrir Diez', async () => {
+    const dentro = conReal({ bd: 'C0008', adjuntar: false, autorizados: HOY, r: recibida({ fecha: '2026-10-01', factura: { numero: 'PD01/77', fecha: '2026-09-30' } }) })
+    expect(await enviarRecibidaADiez('r1', dentro.p)).toMatchObject({ estado: 'en_diez', serie: '2' })
+    const fuera = conReal({ bd: 'C0008', adjuntar: false, autorizados: HOY, r: recibida({ fecha: '2026-09-30', factura: { numero: 'PD01/77', fecha: '2026-09-29' } }) })
+    const x = await enviarRecibidaADiez('r1', fuera.p)
+    expect(x.estado === 'no_llega' && x.motivo).toBe('Diez real está cerrado para facturas recibidas (C0008): no se escribe nada hasta que Julio las autorice')
+    expect(fuera.reales).toEqual([]); expect(fuera.d.altas).toEqual([])
+  })
+  it('si Julio ya la metió a mano en Diez, se enlaza y no se escribe otra (también en la base real)', async () => {
+    const d = diez({ facturas: [{ Ejercicio: '2026', Serie: '2', Documento: 3175, TipoAsiento: 2, Fecha: 20261014, CuentaCliente: '40000012', NumeroFactura: 'PD01/77' }] })
+    const t = conReal({ bd: 'C0008', adjuntar: false, autorizados: HOY, d, r: recibida({ fecha: '2026-10-14' }) })
+    const x = await enviarRecibidaADiez('r1', t.p)
+    expect(x).toMatchObject({ estado: 'en_diez', documento: 3175, enlazada: true, pdfPendiente: true })
+    expect(x.texto).toBe('En Diez: 2/3175 (ya estaba: enlazada, no se ha enviado otra). PDF pendiente en Diez: adjúntalo allí y márcalo en Libros › Pendientes de adjuntar en Diez.')
+    expect(t.d.altas).toEqual([])
+  })
+})
+
 // D01 · Antes de escribir, se busca la que Julio ya metió a mano en Diez (14/10):
 // el mes de la factura y los siguientes hasta hoy, el número normalizado (la
 // clave de conta_clave_numero) y el proveedor por su cuenta o por su NIF. Los
