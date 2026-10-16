@@ -1,37 +1,23 @@
 {
-  "_que": "D01 · contexto de producción de la tanda viva «las liquidaciones por correo» (0100 y 0110), medido en SOLO LECTURA el 15/10 a las 23:12 UTC y otra vez el 16/10 a las 04:16 UTC, tras reordenar la 0100 (ensayo #92: 42703); las dos medidas, idénticas con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna tabla ni función nueva existe aún; conta_entrada_destino(text,text) y conta_recibida_envio(uuid) sí (las dos cambian con la misma firma); nada en el camino del pedido; ninguna de las dos en el historial. company_inbound_address e inbound_email_log, vacías.",
-  "medido": "2026-10-16T04:16Z",
-  "tanda": {
-    "supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql": "b8ac5f141008cfb726e6c91fdbd40e9f",
-    "supabase/migrations/20261113T0110_d01_liquidaciones_direccion_foodint.sql": "82672478c20a656d0001779b9cbad908"
+ "_que": "D01 · contexto de producción de la tanda viva «encender liquidaciones-foodint@» (0100 del 14), medido en SOLO LECTURA el 16/10 con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. company_inbound_address existe; la fila de liquidaciones-foodint, 1 y apagada (cuenta de la tanda: «1 / 0»); nada en el camino del pedido; el fichero no está en el historial.",
+ "medido": "2026-10-16T07:48Z",
+ "tanda": {
+  "supabase/migrations/20261114T0100_d01_encender_liquidaciones_foodint.sql": "1bc61a8c67cc40040293f50470c75e54"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_inbound_address"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.company_inbound_address": 0
   },
-  "contexto": {
-    "tablas": [
-      "public.channel_settlement",
-      "public.company_inbound_address",
-      "public.inbound_email_log",
-      "public.party_role",
-      "public.supplier_invoice",
-      "public.supplier_invoice_line"
-    ],
-    "funciones": [
-      "public.conta_entrada_destino(text,text)",
-      "public.conta_recibida_envio(uuid)"
-    ],
-    "filas": {
-      "public.channel_settlement": 247,
-      "public.company_inbound_address": 0,
-      "public.inbound_email_log": 0,
-      "public.party_role": 88,
-      "public.supplier_invoice": 6,
-      "public.supplier_invoice_line": 0
-    },
-    "otras": {},
-    "camino": {
-      "tablas": [],
-      "funciones": []
-    },
-    "usos": {},
-    "registro": []
-  }
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
 }

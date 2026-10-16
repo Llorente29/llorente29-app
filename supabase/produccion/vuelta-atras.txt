@@ -1,8 +1,6 @@
-# Vuelta atrás de la tanda D01 de las liquidaciones por correo (modo
-# «vuelta_atras»), en orden inverso. Cada fichero PARA, sin tocar nada, si ya
-# hay algo que se perdería (la dirección encendida o con correos; liquidaciones
-# leídas de un correo, direcciones de liquidaciones o facturas de comisión).
-# La anterior de este fichero (C06b): tests/conta/produccion/vuelta-atras-c06b-centimo-iva-20261016.txt.
-cuenta: scripts/conta/produccion/cuentas/d01-liquidaciones.sql
-supabase/vuelta-atras/20261113T0110_d01_liquidaciones_direccion_foodint.down.sql
-supabase/vuelta-atras/20261113T0100_d01_liquidaciones_correo.down.sql
+# Vuelta atrás de la tanda que enciende liquidaciones-foodint@ (modo
+# «vuelta_atras»): la vuelve a apagar. Apagar no borra nada: lo recibido y lo
+# leído se queda; lo que llegue después se apunta «apagada» y no se lee.
+# La anterior de este fichero (D01): tests/conta/produccion/vuelta-atras-d01-liquidaciones-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-encender-liquidaciones.sql
+supabase/vuelta-atras/20261114T0100_d01_encender_liquidaciones_foodint.down.sql
