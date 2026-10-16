@@ -319,3 +319,97 @@ No he buscado su origen.
 **Una línea se quedó retenida en la puerta.** Su clave pasaba de 48 caracteres:
 es un disparador de producción, con nombre de tabla y disparador largos. El
 total de rojas lo cuenta igual.
+
+## Tercera vuelta (16/10, noche)
+
+### El manifiesto del hueco (preparado, sin empujar)
+
+Va en este orden y se empuja solo con «hueco». Cada fichero, comprobado contra
+el historial de producción:
+
+| Fichero | Contra producción |
+|---|---|
+| `20261006T0140_c01b_elimina` | md5 = huella (`bf3da856…`) |
+| `20261006T1200_dosier_visita` y `T1400_dosier_visita_lugar` | lo dirá la comparación de después (el conector no guardó los comentarios) |
+| `20261008124905_alta_de_cuenta_sin_permission_sets` | el texto exacto de su registro (#217) |
+| **`20261113T0100_c06b_centimo_iva`** | md5 = huella (`b806958a…`) |
+| `20261116T0100_c06b_promociones_envios` | md5 = huella (`2111d047…`) |
+| `20261116T0110_c06b_promociones_envios_datos` | md5 = huella (`3fb2e375…`) |
+
+- **El céntimo va aunque no estaba en la lista.** Staging no la tiene: a las
+  22:02 `journal_entry_validar` seguía con el cuerpo de la `20261019T0160`, y
+  el historial de staging no tiene ni la `20261113` ni las `20261116`. La
+  `20261116T0100` vuelve a escribir `conta_propuesta_ventas_unidad` encima de
+  la del céntimo, así que va detrás.
+- **Se puede repetir sin daño**: son dos `create or replace` con la misma firma.
+  Si C la aplica esta noche, no pasa nada.
+- **La `0110` no hace nada en staging**: su propio `notice` dice «esta base no
+  tiene Foodint; no se hace nada».
+
+### Las semillas y las pruebas de staging con las 4 columnas de `supplier`
+
+El PR va suelto **después** de aplicar `c01b_elimina`, como pediste. Lo que va
+dentro:
+
+| Fichero | Qué hace hoy con las columnas | El cambio (sin tocar lo que prueba) |
+|---|---|---|
+| `seeds/conta/seed_c01_staging.sql` | Deja correo, teléfono y dirección en las columnas viejas, para que la migración del C01 tuviera algo que pasar | Deja lo que dejó la migración, copiado de staging hoy: Hermanos Ruiz (principal de pedidos con teléfono, comercial con correo y su dirección como propuesta `fiscal_address`), Bebidas Sol (principal con teléfono) y Carnes Sur (principal con correo) |
+| `seeds/conta/seed_c01b_staging.sql` | Mercados del Norte, con teléfono y dirección viejos | Principal con teléfono y propuesta de dirección, como está hoy |
+| `seeds/conta/seed_c01_capturas.sql` | `usual_vat_rates = '{10,21}'` | `usual_tax_rate_ids` con los tipos del 10 y el 21 |
+| `staging/sql/20261006_c01b_prueba_movimiento.sql` (línea 133) | Mira si quedan datos en las columnas viejas | Lo mismo, en el contacto principal |
+| `staging/sql/20261004_prueba_vuelta_atras.sql` | Pone y lista `usual_vat_rates` | `usual_tax_rate_ids` |
+
+Las semillas tocan la plantilla, así que llevarán la cabecera nueva
+(`-- plantilla: … · lo leen: …`).
+
+**No se tocan**, porque existen para medir esas columnas: la prueba de la propia
+`c01b_elimina` (`20261006_c01b_prueba_elimina.sql`) y su medida de antes y
+después (`scripts/conta/c01b_antes_despues.sql`). Quedan como registro de la
+migración. Sí les pondré una línea arriba: «solo antes de la 0140».
+
+### Las cuentas que deja el recorrido del C06 (propuesta, sin borrar nada)
+
+**Medido en staging (solo lectura, 16/10 22:3x):**
+
+- **248 cuentas** «Recorrido de Prueba C06 …» (no 150), de las **258** que
+  tiene staging. La primera es del 13/10 y la última, de las 17:43 de hoy.
+- **Cada una lleva** su perfil y un usuario de `@c06-prueba.test` que no está
+  en ninguna otra cuenta: 248 usuarios de auth.
+- **Ni una tiene** empresa, asientos ni base de Diez enlazada.
+- **Lo que arrastran:** 986 filas en 4 tablas.
+
+  | Tabla | Filas |
+  |---|---:|
+  | `conta_diez_base_registro` | 250 |
+  | `feature_flags` | 248 |
+  | `user_profiles` | 248 |
+  | `conta_programa_anterior_registro` | 240 |
+
+- **Todas las creó el administrador de plataforma de prueba del C06**
+  (`created_by = c0600000-…-0000000000f0`).
+- **Ningún disparador impide borrarlas** (`accounts`, `user_profiles`,
+  `feature_flags` y los dos registros).
+
+**Limpiarlas, una vez:** un `staging/sql` con su ensayo dentro de una
+transacción que acaba en `rollback`.
+
+- **Qué borra:** solo las cuentas con ese nombre, `product_brand = 'contabilidad'`,
+  creadas por ese usuario y sin empresa. Con ellas, sus filas y sus usuarios
+  de auth, y solo los que no pertenecen a ninguna otra cuenta.
+- **Topes:** como mucho 300 cuentas, y la plantilla intacta antes y después.
+- **Con el recuento de antes y después pegado.** Lo aplica
+  `aplicar-staging-conta`, con su registro.
+
+**Que no se acumulen**, cuando el #212 esté en `main`, con el carril:
+
+- En un carril, el usuario de plataforma es la copia del carril. Las cuentas
+  del recorrido nacen con `created_by` = ese usuario del carril.
+- `scripts/e2e/carril/borrar.sql` borraría también las cuentas que creó
+  cualquier usuario del carril, con los mismos topes.
+- Así se van al acabar cada run, salga verde o rojo, sin depender de que la
+  prueba llegue a su final.
+
+Si prefieres que lo haga la propia prueba, su alternativa es una función de
+staging, `e2e_c06_recorrido_borrar`, como la `e2e_c06_recorrido_base` que ya
+existe, llamada en un `afterAll`. **Recomiendo la del carril**: no depende de que
+la prueba acabe, y vale para cualquier otra prueba que cree cuentas.
