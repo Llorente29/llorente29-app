@@ -75,9 +75,9 @@ begin
   perform pg_temp.anadir('auth.identities', 'x.user_id in (select id from _plantilla_usuarios)');
   -- Lo que es de un usuario sin ser de ninguna cuenta (quién administra la plataforma).
   for f in
-    select fk.hija, fk.cols[1] as col from _fk fk join _tabla t on t.tabla = fk.hija
-     where fk.madre = 'auth.users'::regclass and array_length(fk.cols, 1) = 1 and t.col_cuenta is null
-       and t.esquema <> 'auth' and fk.hija <> 'public.accounts'::regclass
+    select fk.hija, fk.cols[1] as col from _fk fk join _tabla tb on tb.tabla = fk.hija
+     where fk.madre = 'auth.users'::regclass and array_length(fk.cols, 1) = 1 and tb.col_cuenta is null
+       and tb.esquema <> 'auth' and fk.hija <> 'public.accounts'::regclass
        and exists (select 1 from pg_index i join pg_attribute a on a.attrelid = i.indrelid and a.attnum = i.indkey[0]
                     where i.indrelid = fk.hija and i.indisunique and i.indnatts = 1 and a.attname = fk.cols[1])
   loop
@@ -92,9 +92,9 @@ begin
   insert into _k select id, pg_temp.en_carril(id, n) from _plantilla_cuentas;
   insert into _k select id, pg_temp.en_carril(id, n) from _plantilla_usuarios on conflict do nothing;
   for c in
-    select cp.tabla, cp.temp, a.attname from _copia cp
-      join pg_index i on i.indrelid = cp.tabla and i.indisprimary and i.indnatts = 1
-      join pg_attribute a on a.attrelid = cp.tabla and a.attnum = i.indkey[0] and a.atttypid = 'uuid'::regtype
+    select cx.tabla, cx.temp, a.attname from _copia cx
+      join pg_index i on i.indrelid = cx.tabla and i.indisprimary and i.indnatts = 1
+      join pg_attribute a on a.attrelid = cx.tabla and a.attnum = i.indkey[0] and a.atttypid = 'uuid'::regtype
   loop
     execute format('insert into _k select %I, pg_temp.en_carril(%I, %s) from %I where %I is not null on conflict do nothing', c.attname, c.attname, n, c.temp, c.attname);
   end loop;
@@ -117,8 +117,8 @@ begin
   -- detrás. En un índice de expresión (lower(col)), esa col.
   create temp table _unico (tabla regclass, col name, primary key (tabla, col)) on commit drop;
   for f in
-    select i.indexrelid, i.indrelid, i.indkey from pg_index i join _copia cp on cp.tabla = i.indrelid
-     where i.indisunique and not i.indisprimary and cp.tabla::text not like 'auth.%'
+    select i.indexrelid, i.indrelid, i.indkey from pg_index i join _copia cx on cx.tabla = i.indrelid
+     where i.indisunique and not i.indisprimary and cx.tabla::text not like 'auth.%'
        and not exists (select 1 from unnest(i.indkey) x join pg_attribute b on b.attrelid = i.indrelid and b.attnum = x where b.atttypid = 'uuid'::regtype)
   loop
     insert into _unico
@@ -169,7 +169,7 @@ begin
   -- 4 · Las claves ajenas, una a una -------------------------------------------
   -- Sin disparadores la base no las ha mirado: si el clon se dejó una madre
   -- fuera (o la cambió de id sin copiarla), aquí sale y no se da por bueno.
-  for f in select fk.*, cp.temp from _fk fk join _copia cp on cp.tabla = fk.hija loop
+  for f in select fk.*, cx.temp from _fk fk join _copia cx on cx.tabla = fk.hija loop
     execute format('select count(*) from %I h where %s and not exists (select 1 from %s m where %s)',
       f.temp,
       (select string_agg(format('h.%I is not null', x), ' and ') from unnest(f.cols) x),

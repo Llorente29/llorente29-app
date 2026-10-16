@@ -116,7 +116,7 @@ clonar() {
   # carril entero o nada. La semilla del R02 va dentro, con los ids del carril.
   q -1 -v carril="$n" -v clave="$CLAVE_PRUEBAS" -v semilla="$(cat "$AQUI/../../supabase/seeds/reparto/seed_r02_e2e.sql")" \
     -c 'set transaction isolation level repeatable read' \
-    -c "select set_config('e2e.carril', :'carril', true), set_config('e2e.clave', :'clave', true), set_config('e2e.semilla', :'semilla', true)" \
+    -c '\o /dev/null' -c "select set_config('e2e.carril', :'carril', true), set_config('e2e.clave', :'clave', true), set_config('e2e.semilla', :'semilla', true)" -c '\o' \
     -f "$SQL/comun.sql" -f "$SQL/clonar.sql" -f "$SQL/semilla.sql" \
     -c '\pset footer off' -c "select count(*) || ' tablas, ' || sum(filas) || ' filas' as copiado from _informe" > "$CARRIL_DIR/clonar.log"
   echo "Carril $n clonado en $(( ($(date +%s%N) - t0) / 1000000 )) ms: $(grep -E 'tablas, ' "$CARRIL_DIR/clonar.log" | tr -d ' ')."
@@ -157,7 +157,9 @@ ensayo() {
   # Lo mismo que clonar, pero se deshace: begin … rollback, sin -1.
   {
     echo "begin isolation level repeatable read;"
+    echo "\\o /dev/null"
     echo "select set_config('e2e.carril', :'carril', true), set_config('e2e.clave', 'ensayo-sin-uso', true), set_config('e2e.semilla', :'semilla', true);"
+    echo "\\o"
     echo "\\i $SQL/comun.sql"
     echo "\\i $SQL/clonar.sql"
     echo "\\i $SQL/semilla.sql"

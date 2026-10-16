@@ -79,7 +79,9 @@ jobs:
       - name: Ensayo del clon (se deshace)
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
-        run: scripts/e2e/carril.sh ensayo 4001 | tee "$RUNNER_TEMP/ensayo.txt"
+        run: |
+          set -euo pipefail
+          scripts/e2e/carril.sh ensayo 4001 | tee "$RUNNER_TEMP/ensayo.txt"
 
       - name: Carril · esperar a que no se esté migrando y coger uno
         if: inputs.de_verdad
