@@ -23,7 +23,6 @@ import { usePlan } from '@/modules/conta/plan/usePlan'
 import { fraseFalta, loQueFalta, type DatosEmpresa } from '@/modules/conta/empresa/datosEmpresa'
 import { TOTAL_PUNTOS, hechosDeUnaAMedias } from '@/modules/conta/alta/llevamos'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { CabeceraEmpresa } from '@/modules/conta/marco/MenuConta'
 import { Sugerencias } from '@/modules/conta/ia/PiezasIA'
 import type { DatosPlan } from '@/modules/conta/services/planService'
 import { MARCA, CON_MARCA } from '../cuenta/marca'
@@ -131,8 +130,7 @@ export function MarcoAjustes({ entrada, children }: { entrada: string | null; ch
     return (
       <Ctx.Provider value={valor}>
         {cabecera}
-        {/* Como la lista de M2: con más de una empresa, en el móvil no hay otro sitio para cambiar. */}
-        {empresas.length > 1 && <div className="cx-tarjeta cx-empresa-movil"><CabeceraEmpresa /></div>}
+        {/* M01: la empresa se cambia arriba, en la barra del marco (también en el móvil): aquí ya no se repite. */}
         {d && <EtiquetaListo d={d} hoy={hoy} />}
         {d && <Sugerencias sugerencias={d.ia.sugerencias} alCambiar={datos.recargar} />}
         <Indice actual={null} d={d} plan={plan.datos} hoy={hoy} lista />

@@ -2150,3 +2150,56 @@ Sesión larga y muy productiva: se construyó y cerró C2 entero, con varias ite
 ### PENDIENTE
 - Verificar E1 en vivo. E2 cascada margen en ficha. brand_channel vacío. Fotos catálogo (Last.app no las trae).
 - CONTEXTO_CLAUDE.md NO se actualizó al cierre de esta sesión → actualizado en la sesión del 06/06.
+
+---
+
+## C06b · 16/10/2026 — APARCADO: el IGIC en el cierre del día (propuesta, sin construir)
+
+> Aparcado por Julio el 16/10. **Fuentes sin cotejar:** la red del entorno de
+> trabajo bloqueaba BOE, BOC, ICAC, Agencia Tributaria Canaria, DGT y EUR-Lex
+> (403). Lo de abajo sale de resúmenes que las citan; antes de construir se
+> abren las fuentes.
+
+**El fallo, de verdad (no de la semilla):** la propuesta de ventas del día
+(`conta_propuesta_ventas_unidad`, CTE `tipo`) solo busca tipos con
+`tax_system = 'iva'`. Una empresa de Canarias no tiene asiento de ventas nunca:
+«Falta el IVA de tus ventas…». Lo saca el agente «libro» como día sin asiento
+en la empresa B de staging (Cocina de Prueba Sur, Canarias).
+
+**Lo que ya hay:** los tipos de IGIC existen en producción (0, 3, 5, 7, 9,5,
+15 y 20 %), y la empresa B tiene sus 477/472 enlazadas a cada tipo. Sus
+nombres dicen «IVA repercutido X %» y la del 9,5 % sale «IVA repercutido 95 %»
+(47700095): viene del alta del plan.
+
+**La norma (sin cotejar):**
+- Tipos: Decreto Legislativo 1/2025, de 13 de octubre (texto refundido del
+  IGIC y el AIEM, en vigor desde el 21/10/2025; sustituye a la Ley 4/2012),
+  arts. 32–41.
+- Consumo en el local: servicio de restauración, tipo general del 7 %
+  (consulta ATC 2279/2025, por resumen).
+- Para llevar y a domicilio: la ATC lo trata como entrega de bienes, con el
+  tipo de cada producto (0, 3 o 7 %). Una consulta citada en prensa pone la
+  comida a domicilio al 3 %. Falta el texto de los arts. 32–34.
+- Asiento resumen: Decreto 268/2011, art. 50.4. En una versión de 2013 exigía
+  el mismo tipo en cada resumen; no se ha visto si sigue.
+- Plataforma en nombre propio: el equivalente IGIC del art. 11.Dos.15.º / 8.Dos.6.º
+  LIVA. La comisión de una plataforma peninsular sin establecimiento en
+  Canarias va por inversión del sujeto pasivo (Ley 20/1991, art. 19.1.2.º).
+- Modelos: 420 (trimestral) y 425 (anual), ante la ATC; no 303 ni 390.
+- Sin recargo de equivalencia; el régimen de comerciante minorista no encaja
+  con restauración.
+
+**Propuesta:**
+1. El tipo de las ventas del día sale del impuesto del territorio de la empresa:
+   `tax_system = 'igic'` cuando `tax_territory = 'canarias'`.
+2. Las citas de la propuesta pasan a ser las del IGIC.
+3. Subcuentas «IGIC repercutido X %» / «IGIC soportado X %», y arreglar el
+   nombre de la del 9,5 %.
+4. Modelos 420/425 en lugar de 303/390.
+5. **Decide Julio:** si lo que va a domicilio lleva el tipo de cada producto,
+   un pedido puede llevar varios tipos y el asiento se parte por tipo (lo que
+   el modelo de hoy no hace). Si es un tipo fijo de ventas por empresa, como
+   en el IVA, el cambio es pequeño.
+
+No se ha cambiado la semilla para esconderlo: el rojo del día sin asiento de la
+empresa B sigue siendo de verdad hasta que esto se construya.

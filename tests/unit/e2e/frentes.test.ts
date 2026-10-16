@@ -22,10 +22,13 @@ describe('usuarios de prueba por frente', () => {
     ])
   })
 
-  it('el frente: a, b, c o nada; cualquier otra cosa es un error, no los de siempre', () => {
+  it('el frente: a, b, c, d o nada; cualquier otra cosa es un error, no los de siempre', () => {
     expect(frenteDe(undefined)).toBeNull()
     expect(frenteDe('')).toBeNull()
     expect(frenteDe(' C ')).toBe('c')
-    expect(() => frenteDe('d')).toThrow(/a, b, c o nada/)
+    // F01 (15/10): el frente D, el del marco nuevo.
+    expect(frenteDe('d')).toBe('d')
+    expect(correoDelFrente('a.admin@prueba.folvy.test', 'd')).toBe('a.admin.frente-d@prueba.folvy.test')
+    expect(() => frenteDe('e')).toThrow(/a, b, c, d o nada/)
   })
 })

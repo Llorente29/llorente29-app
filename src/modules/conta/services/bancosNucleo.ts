@@ -21,7 +21,7 @@ import { leerFicheroBanco, type ContenidoFichero } from '@/modules/conta/lib/fue
 import { partirCsv } from '@/modules/conta/lib/importarPlan'
 import type { BancoCsv } from '@/modules/conta/lib/lectorCsvBanco'
 import {
-  conciliar, contraparte, type Aprendido, type AsientoLibre, type Contexto, type Decision, type Destino, type Movimiento, type Plataforma,
+  conciliar, contraparte, cuentaDeTienda, ventanaDeCobro, type Aprendido, type AsientoLibre, type Contexto, type Decision, type Destino, type Movimiento, type Plataforma,
 } from '@/modules/conta/lib/conciliacion'
 
 type Fila = Record<string, unknown>
@@ -152,7 +152,7 @@ export function crearBancos(bd: Bd) {
 
   async function cargarContexto(accountId: string, companyId: string, hoy: string): Promise<{ ctx: Contexto; movimientos: Movimiento[] }> {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
-    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas] = await Promise.all([
+    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, tiendas, cuentasLocal] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
       leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status')
         .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
@@ -161,7 +161,7 @@ export function crearBancos(bd: Bd) {
       rpc<Fila[]>('bank_asientos_sin_movimiento', { p_company: companyId, p_desde: hace(400), p_hasta: hoy }),
       rpc<Fila[]>('bank_historial', { p_company: companyId, p_desde: hace(400) }),
       rpc<Fila[]>('bank_ventas_plataforma', { p_company: companyId, p_desde: hace(60), p_hasta: hoy }),
-      leer(tabla('channel_settlement').select('id, channel_id, settlement_date, period_from, period_to, net_payout, accumulated_debt, gross_sales, commission, source, collected_on')
+      leer(tabla('channel_settlement').select('id, channel_id, settlement_date, period_from, period_to, net_payout, accumulated_debt, gross_sales, commission, source, collected_on, store_id')
         .eq('account_id', accountId).order('settlement_date', { ascending: false }).limit(400), 'las liquidaciones'),
       leer(tabla('sales_channel').select('id, name').eq('account_id', accountId), 'los canales'),
       leer(tabla('party_role').select('party_id, role, channel_id, supplier_id').eq('account_id', accountId), 'los papeles'),
@@ -171,7 +171,12 @@ export function crearBancos(bd: Bd) {
       leer(tabla('bank_rule').select('id, words, condition, target').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'activa'), 'las reglas'),
       leer(tabla('supplier').select('id, name, legal_name').eq('account_id', accountId).eq('is_active', true), 'los proveedores'),
       leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las tarjetas'),
+      // D01 · El mapa de tiendas de las plataformas: la cuenta del banco de cada marca × local.
+      leer(tabla('platform_store').select('id, external_text, treasury_account_id, location_id').eq('account_id', accountId).eq('company_id', companyId), 'las tiendas de las plataformas'),
+      leer(tabla('treasury_account').select('id, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las cuentas de cada local'),
     ])
+    const tiendaDe = new Map(tiendas.map((t) => [String(t.id), t]))
+    const bancosLocal = cuentasLocal.map((c) => ({ id: String(c.id), localId: s(c.location_id) }))
     const codigo = new Map(cuentas.map((c) => [String(c.id), String(c.code)]))
     const nombres: Record<string, string> = {}
     for (const c of cuentas) nombres[String(c.code)] = String(c.plain_name ?? c.name)
@@ -225,10 +230,18 @@ export function crearBancos(bd: Bd) {
         cuentaTercero: enlace('supplier', String(p.id)) ?? '', cuentaAnticipo: hoja('407') ?? '40700000' })).filter((p) => p.cuentaTercero),
       clientes: conTercero('customer').filter((x) => n(x.saldo) > 0 && !plataformas.some((p) => p.cuenta430 === x.cuenta))
         .map((x) => ({ terceroId: null, nombre: String(x.nombre), alias: [String(x.nombre)], cuenta: String(x.cuenta), pendienteCent: cent(x.saldo) })),
-      liquidaciones: liqs.filter((l) => !l.collected_on && l.net_payout !== null && l.channel_id && cuentaDeCanal(String(l.channel_id))).map((l) => ({
-        id: String(l.id), plataforma: nombreCanal.get(String(l.channel_id)) ?? 'la plataforma', fecha: String(l.settlement_date ?? l.period_to ?? hoy),
-        desde: s(l.period_from), hasta: s(l.period_to), netoCent: cent(l.net_payout) - (l.source === 'import_csv_glovo' ? cent(l.accumulated_debt) : 0),
-        cuenta430: cuentaDeCanal(String(l.channel_id))!, terceroId: partyDeCanal.get(String(l.channel_id)) ?? null })),
+      // D01 · Las del correo (una por marca × local): con su tienda, su banco y su ventana. Un neto
+      // negativo o cero no se espera en el banco («sin cobro: pasa al siguiente»): no se busca.
+      liquidaciones: liqs.filter((l) => !l.collected_on && l.net_payout !== null && l.channel_id && cuentaDeCanal(String(l.channel_id)))
+        .filter((l) => !(String(l.source ?? '').startsWith('correo_') && cent(l.net_payout) <= 0)).map((l) => {
+          const t = l.store_id ? tiendaDe.get(String(l.store_id)) : undefined
+          return {
+            id: String(l.id), plataforma: nombreCanal.get(String(l.channel_id)) ?? 'la plataforma', fecha: String(l.settlement_date ?? l.period_to ?? hoy),
+            desde: s(l.period_from), hasta: s(l.period_to), netoCent: cent(l.net_payout) - (l.source === 'import_csv_glovo' ? cent(l.accumulated_debt) : 0),
+            cuenta430: cuentaDeCanal(String(l.channel_id))!, terceroId: partyDeCanal.get(String(l.channel_id)) ?? null,
+            porTienda: t && l.period_to ? { tienda: String(t.external_text).replace(/, [^,()]+, [A-Z]{2}, \d{5}\)$/, ')'), cuentaId: cuentaDeTienda({ cuentaId: s(t.treasury_account_id), localId: s(t.location_id) }, bancosLocal), ventana: ventanaDeCobro(String(l.period_to)) } : null,
+          }
+        }),
       plataformas,
       // Nóminas: lo que queda por pagar en 476 y 465 es la nómina del mes anterior (si está asentada).
       nominas: (() => {

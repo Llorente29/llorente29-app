@@ -1,26 +1,30 @@
 {
-  "_que": "E05 · contexto de producción de la tanda viva «las facturas de riders de Catcher» (0100–0140), medido en SOLO LECTURA el 15/10 a las 11:55 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna tabla ni función nueva existe aún; conta_recibida_envio(uuid) sí (la 0110 la cambia con la misma firma); nada en el camino del pedido; ninguna de las cinco en el historial. La 40700001 no existe en Foodint (ni en toda la tabla) y la 407 sí (40700000).",
-  "medido": "2026-10-15T11:55Z",
+  "_que": "D01 · contexto de producción de la tanda viva «las liquidaciones por correo» (0100 y 0110), medido en SOLO LECTURA el 15/10 a las 23:12 UTC y otra vez el 16/10 a las 04:16 UTC, tras reordenar la 0100 (ensayo #92: 42703); las dos medidas, idénticas con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna tabla ni función nueva existe aún; conta_entrada_destino(text,text) y conta_recibida_envio(uuid) sí (las dos cambian con la misma firma); nada en el camino del pedido; ninguna de las dos en el historial. company_inbound_address e inbound_email_log, vacías.",
+  "medido": "2026-10-16T04:16Z",
   "tanda": {
-    "supabase/migrations/20261112T0100_e05_lotes.sql": "9798d01e003adaec2a0b206bbe7805bf",
-    "supabase/migrations/20261112T0110_e05_recibida_envio_emisor.sql": "f4ae123351ff2a96dc33c09f396965ce",
-    "supabase/migrations/20261112T0120_e05_cruces.sql": "3ded29d70bd87bd809a5019342accf36",
-    "supabase/migrations/20261112T0130_e05_pago_prepago.sql": "6b6c976745b82b0b2a0dfec6ca789c44",
-    "supabase/migrations/20261112T0140_e05_datos.sql": "8f87b40543fe5cf2d8cfbd18622b3362"
+    "supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql": "b8ac5f141008cfb726e6c91fdbd40e9f",
+    "supabase/migrations/20261113T0110_d01_liquidaciones_direccion_foodint.sql": "82672478c20a656d0001779b9cbad908"
   },
   "contexto": {
     "tablas": [
-      "public.company_account",
-      "public.company_account_link",
-      "public.supplier_invoice"
+      "public.channel_settlement",
+      "public.company_inbound_address",
+      "public.inbound_email_log",
+      "public.party_role",
+      "public.supplier_invoice",
+      "public.supplier_invoice_line"
     ],
     "funciones": [
+      "public.conta_entrada_destino(text,text)",
       "public.conta_recibida_envio(uuid)"
     ],
     "filas": {
-      "public.company_account": 751,
-      "public.company_account_link": 82,
-      "public.supplier_invoice": 6
+      "public.channel_settlement": 247,
+      "public.company_inbound_address": 0,
+      "public.inbound_email_log": 0,
+      "public.party_role": 88,
+      "public.supplier_invoice": 6,
+      "public.supplier_invoice_line": 0
     },
     "otras": {},
     "camino": {

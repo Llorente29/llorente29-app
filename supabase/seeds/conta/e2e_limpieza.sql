@@ -28,7 +28,8 @@ do $$
 declare
   cuentas constant uuid[] := array[
     'c01a0000-0000-4000-8000-00000000000a', 'c01b0000-0000-4000-8000-00000000000b', 'c01c0000-0000-4000-8000-00000000000c',
-    'e2e0000a-0000-4000-8000-00000000000c', 'e2e0000b-0000-4000-8000-00000000000c', 'e2e0000c-0000-4000-8000-00000000000c']::uuid[];
+    'e2e0000a-0000-4000-8000-00000000000c', 'e2e0000b-0000-4000-8000-00000000000c', 'e2e0000c-0000-4000-8000-00000000000c',
+    'e2e0000d-0000-4000-8000-00000000000c']::uuid[];
   r record;
   proveedores int := 0;
   empresas int := 0;
@@ -58,7 +59,8 @@ begin
      where c.created_at < now() - interval '30 minutes'
        and ((c.account_id = 'c01a0000-0000-4000-8000-00000000000a' and c.setup_completed_at is null and c.legal_name like 'Alta e2e%')
             or c.account_id = any (array['c01c0000-0000-4000-8000-00000000000c', 'e2e0000a-0000-4000-8000-00000000000c',
-                                         'e2e0000b-0000-4000-8000-00000000000c', 'e2e0000c-0000-4000-8000-00000000000c']::uuid[])
+                                         'e2e0000b-0000-4000-8000-00000000000c', 'e2e0000c-0000-4000-8000-00000000000c',
+                                         'e2e0000d-0000-4000-8000-00000000000c']::uuid[])
             or c.account_id in (select a.id from accounts a where a.name like 'Recorrido de Prueba C06 %' and a.product_brand = 'contabilidad'))
   loop
     begin
