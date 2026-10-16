@@ -60,7 +60,7 @@ describe('de quién es cada carpeta de capturas (las que hay en el repositorio)'
   const de = (dueno: 'a' | 'b' | 'c' | 'd' | 'reparto') => carpetas.filter((c) => repartir([`${c}/x.png`], dueno).suyas.length).map((c) => c.split('/').pop())
 
   it('cada frente, las suyas y solo las suyas', () => {
-    expect(de('a')).toEqual(['d01', 'd01-e05'])
+    expect(de('a')).toEqual(['d01', 'd01-compras', 'd01-e05'])
     expect(de('b')).toEqual(['b01', 'b02'])
     expect(de('c')).toEqual(['c00', 'c01b', 'c02', 'c02c', 'c03', 'c04', 'c04b', 'c05', 'c06', 'c06b'])
     expect(de('d')).toEqual(carpetas.some((c) => c.endsWith('/m01')) ? ['m01'] : [])

@@ -197,7 +197,7 @@ describe('Repaso · una fila por decisión', () => {
   it('13 papeles a nombre de dos locales son dos filas; la ficha incompleta, una con todo junto', () => {
     expect(filas.map((f) => [f.tipo, 'papeles' in f ? f.papeles.length : 0])).toEqual([['nombre', 9], ['nombre', 4], ['ficha', 1]])
     const ficha = filas[2]
-    expect(ficha.tipo === 'ficha' && fraseFicha(ficha.proveedor_nombre, ficha.falta)).toBe('A Verduras Prueba Ocho, S.L. le faltan el NIF, el tipo de gasto y cómo te factura.')
+    expect(ficha.tipo === 'ficha' && fraseFicha(ficha.proveedor_nombre, ficha.falta)).toBe('A Verduras Prueba Ocho, S.L. le faltan el NIF, dónde se apuntan sus facturas y cómo te factura.')
     expect(ficha.tipo === 'ficha' && ficha.sugerida).toBe('delivery_note_then_invoice')
   })
   it('agrupar no esconde: todos los papeles están en alguna fila', () => {
@@ -210,7 +210,7 @@ describe('Repaso · una fila por decisión', () => {
   })
   it('lo que falta, dicho con su porqué', () => {
     expect(porQueFicha([{ falta: 'nif', ofrece: 'B12345674', veces: 1, otros_distintos: 0 }, { falta: 'tipo_gasto' }]))
-      .toBe('Sin NIF no puedo contabilizar sus facturas; en su último papel pone B12345674: compruébalo antes de aceptarlo; sin tipo de gasto no sé a qué cuenta van.')
+      .toBe('Sin NIF no puedo contabilizar sus facturas; en su último papel pone B12345674: compruébalo antes de aceptarlo; sin saber a qué cuenta van sus facturas no las puedo apuntar.')
   })
 })
 

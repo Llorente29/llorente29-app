@@ -96,7 +96,9 @@ export default function ComoTeFactura({ proveedor: id, nombre, alGuardar }: { pr
         </div>
         <div className="cx-pie">
           <button type="button" className="cx-boton-sec" disabled={!cambiado || ocupado} onClick={() => { setElegida(guardada); setAviso(null) }}>Dejarlo como estaba</button>
-          <button type="button" className="cx-boton" disabled={!cambiado || ocupado || !elegida.modo} onClick={async () => {
+          {/* Con la misma que ya tiene también se guarda (Julio, 16/10): no se queda en gris sin decir nada,
+              y volver a guardar mira otra vez sus recepciones abiertas. */}
+          <button type="button" className="cx-boton" disabled={ocupado || !elegida.modo} onClick={async () => {
             if (!elegida.modo) return
             setOcupado(true); setFallo(null); setAviso(null)
             try {
@@ -105,7 +107,10 @@ export default function ComoTeFactura({ proveedor: id, nombre, alGuardar }: { pr
                 elegida.modo === 'delivery_note_then_invoice' ? elegida.frecuencia : null)
               const nueva = { ...elegida, porLocal: elegida.modo === 'delivery_note_then_invoice' ? !!elegida.porLocal : null }
               setGuardada(nueva); setElegida(nueva)
-              setAviso(`Guardado: ${nombre} factura «${tituloForma(elegida.modo)}».${r.recepciones > 0 ? ` He vuelto a mirar ${r.recepciones === 1 ? 'su recepción abierta' : `sus ${r.recepciones} recepciones abiertas`} con esta costumbre.` : ''}`)
+              const mirado = r.recepciones > 0 ? ` He vuelto a mirar ${r.recepciones === 1 ? 'su recepción abierta' : `sus ${r.recepciones} recepciones abiertas`} con esta costumbre.` : ''
+              setAviso(cambiado
+                ? `Guardado: ${nombre} factura «${tituloForma(elegida.modo)}».${mirado}`
+                : `Ya estaba guardado: ${nombre} factura «${tituloForma(elegida.modo)}».${mirado || ' No tiene recepciones abiertas que volver a mirar.'}`)
               alGuardar?.()
             } catch (e) {
               setFallo(e instanceof Error ? e.message : 'No se pudo guardar cómo factura.')

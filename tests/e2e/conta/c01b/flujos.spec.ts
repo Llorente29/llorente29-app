@@ -85,9 +85,9 @@ test.describe('cuenta A', () => {
       if (movil(page)) return
 
       // C02 (respuesta 3): el tipo de gasto se elige desde la tarjeta «Sus cuentas»,
-      // en el «Cambiar» de «Sus facturas se apuntan en» (el mismo #campo-expenseCategoryId).
+      // en el «Cambiar» de «Sus facturas se apuntan en» (su fila es #campo-expenseCategoryId).
       await page.goto(ficha(id, 'contabilidad'))
-      await page.locator('#campo-expenseCategoryId').click()
+      await page.getByRole('button', { name: 'Cambiar: Sus facturas se apuntan en' }).click()
       const tipo = page.getByRole('combobox', { name: 'Cuenta: Sus facturas se apuntan en' })
       const primero = await tipo.locator('option[value^="tipo:"]').first().getAttribute('value')
       await tipo.selectOption(primero!)

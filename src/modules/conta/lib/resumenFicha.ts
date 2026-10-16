@@ -88,7 +88,7 @@ const FALTA_EN: Record<Exclude<Apartado, 'resumen' | 'historial' | 'facturas' | 
   'datos-fiscales': { nif: 'Falta comprobar el NIF', razon_social: 'Falta la razón social', direccion: 'Falta la dirección fiscal', regimen_iva: 'Falta el régimen de IVA' },
   contactos: { contacto_pedidos: 'Falta el de pedidos', contacto_admin: 'Falta el de administración' },
   pago: { forma_pago: 'Falta la forma y el plazo de pago', iban: 'Falta el IBAN comprobado' },
-  contabilidad: { tipo_gasto: 'Falta el tipo de gasto' },
+  contabilidad: { tipo_gasto: 'Falta dónde se apuntan sus facturas' },
   documentos: { certificado_banco: 'Falta el certificado del banco' },
 }
 

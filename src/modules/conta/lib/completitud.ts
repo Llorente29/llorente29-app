@@ -32,6 +32,12 @@ export interface EntradaCompletitud {
   ficha: FichaProveedor
   contactos: ContactoProveedor[]
   tieneCertificadoBanco: boolean
+  /**
+   * Tiene una cuenta solo para él donde se apuntan sus facturas (enlace «gasto»).
+   * Es la misma pregunta que el tipo de gasto —a qué cuenta van sus facturas—:
+   * con una de las dos está contestada (Julio, 16/10: no se pregunta dos veces).
+   */
+  cuentaDeFacturas?: boolean
 }
 
 export function direccionFiscalCompleta(f: FichaProveedor): boolean {
@@ -50,7 +56,7 @@ export function pideIban(f: FichaProveedor): boolean {
   return f.paymentMethod === 'transfer' || f.paymentMethod === 'direct_debit'
 }
 
-export function calcularCompletitud({ ficha: f, contactos, tieneCertificadoBanco }: EntradaCompletitud): Completitud {
+export function calcularCompletitud({ ficha: f, contactos, tieneCertificadoBanco, cuentaDeFacturas = false }: EntradaCompletitud): Completitud {
   const tieneIban = !!f.iban
   const items: Array<{ hecho: boolean; aplica: boolean; falta: Falta }> = [
     { hecho: nifValidado(f), aplica: true,
@@ -61,8 +67,8 @@ export function calcularCompletitud({ ficha: f, contactos, tieneCertificadoBanco
       falta: { clave: 'direccion', texto: 'dirección fiscal', destino: { pestana: 'fiscal', campo: 'fiscalStreet' }, peso: 10 } },
     { hecho: f.vatRegime !== null, aplica: true,
       falta: { clave: 'regimen_iva', texto: 'régimen de IVA', destino: { pestana: 'fiscal', campo: 'vatRegime' }, peso: 10 } },
-    { hecho: f.expenseCategoryId !== null, aplica: true,
-      falta: { clave: 'tipo_gasto', texto: 'tipo de gasto', destino: { pestana: 'contabilidad', campo: 'expenseCategoryId' }, peso: 10 } },
+    { hecho: f.expenseCategoryId !== null || cuentaDeFacturas, aplica: true,
+      falta: { clave: 'tipo_gasto', texto: 'dónde se apuntan sus facturas', destino: { pestana: 'contabilidad', campo: 'expenseCategoryId' }, peso: 10 } },
     { hecho: f.paymentMethod !== null && f.paymentTermsDays !== null, aplica: true,
       falta: { clave: 'forma_pago', texto: 'forma y plazo de pago', destino: { pestana: 'pago', campo: 'paymentMethod' }, peso: 10 } },
     { hecho: tieneIban && f.ibanVerifiedAt !== null, aplica: pideIban(f),

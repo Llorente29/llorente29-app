@@ -34,6 +34,7 @@ import { diaMesCorto, euros, hoyEnMadrid, iniciales } from '@/modules/conta/lib/
 import { normalizarNif, tipoEntidadPorNif, validarNifEs } from '@/modules/conta/lib/nif'
 import type { ExtensionesProveedor } from '@/modules/conta/extensiones'
 import type { FichaProveedor } from '@/modules/conta/types'
+import { proveedoresConCuentaDeFacturas } from '@/modules/conta/services/cuentasProveedorService'
 
 interface Fila {
   ficha: FichaProveedor
@@ -98,13 +99,14 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
       proveedoresConCertificadoBanco(activeAccountId),
       listarFacturasDeLaCuenta(activeAccountId),
       listarTiposGasto(activeAccountId, null),
-    ]).then(([provs, contactos, certs, facturas, tipos]) => {
+      proveedoresConCuentaDeFacturas(activeAccountId).catch(() => new Set<string>()),
+    ]).then(([provs, contactos, certs, facturas, tipos, conCuenta]) => {
       if (!vivo) return
       const hoy = hoyEnMadrid()
       const nombreTipo = new Map(tipos.map((t) => [t.id, t.name]))
       setFilas(provs.map((ficha) => {
         const suyos = contactos.filter((c) => c.supplierId === ficha.id)
-        const { pct, faltan } = calcularCompletitud({ ficha, contactos: suyos, tieneCertificadoBanco: certs.has(ficha.id) && certificadoVale(certs.get(ficha.id)!, ficha.ibanChangedAt) })
+        const { pct, faltan } = calcularCompletitud({ ficha, contactos: suyos, tieneCertificadoBanco: certs.has(ficha.id) && certificadoVale(certs.get(ficha.id)!, ficha.ibanChangedAt), cuentaDeFacturas: conCuenta.has(ficha.id) })
         const deEl = facturas.filter((x) => x.supplierId === ficha.id)
         const rep = detectarRepetidas(deEl.map((x) => ({ id: x.id, number: x.invoiceNumber, total: x.grandTotal, status: x.status, createdAt: x.createdAt, fecha: x.invoiceDate, noRepetidaConfirmada: x.noRepetidaConfirmada })))
         const buenas = deEl.filter((x) => !rep.has(x.id))

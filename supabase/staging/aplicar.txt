@@ -5,3 +5,6 @@ supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
 # D01 · Compras y la ficha de proveedor (rama conta/d01-compras-ficha): la semilla de la e2e,
 #   Lácteos Prueba Ocho (la pregunta de cómo factura que se queda abierta) y Marca Prueba Cedida (su cuenta de facturas sin tipo de gasto) en la cuenta A.
 supabase/seeds/conta/seed_d01_compras_ficha_staging.sql
+# … y la 0100 del 18 (lo que Compras pregunta de la ficha), con su prueba (ROLLBACK; ejecuta también su vuelta atrás).
+supabase/migrations/20261118T0100_d01_compras_ficha.sql
+supabase/staging/sql/20261118_d01_compras_ficha_prueba.sql
