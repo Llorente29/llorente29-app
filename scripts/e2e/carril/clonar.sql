@@ -13,7 +13,7 @@
 --   2. Calcula el id nuevo de cada fila (comun.sql: el segundo grupo = N).
 --   3. Inserta la copia con todo cambiado: los uuid, las listas de uuid, los
 --      uuid y los correos que van dentro de textos y json, y lo que tiene que
---      ser único en toda la base (un token, una clave de importación) con «·cN».
+--      ser único en toda la base (un token, una clave de importación) con «-cN».
 --   4. Comprueba que no ha quedado ninguna clave ajena colgando: sin
 --      disparadores no las mira la base, así que las mira esto, una a una.
 --   5. Pone a los siete usuarios del carril la contraseña de un solo uso.
@@ -113,7 +113,7 @@ begin
   end loop;
 
   -- Lo que tiene que ser único en TODA la base y no lleva ningún uuid (un token,
-  -- una clave de importación, una ruta): su última columna de texto lleva «·cN»
+  -- una clave de importación, una ruta): su última columna de texto lleva «-cN»
   -- detrás. En un índice de expresión (lower(col)), esa col.
   create temp table _unico (tabla regclass, col name, primary key (tabla, col)) on commit drop;
   for f in
@@ -157,7 +157,7 @@ begin
         when c.atttypid = 'json'::regtype then format('pg_temp.mt(%s::text)::json', v)
         when c.atttypid = 'text[]'::regtype then format('(select array_agg(pg_temp.mt(e) order by o) from unnest(%s) with ordinality u(e, o))', v)
         else v end;
-      if c.unico then v := format('case when %s is null then null else %s || %L end', v, v, '·c' || n); end if;
+      if c.unico then v := format('case when %s is null then null else %s || %L end', v, v, '-c' || n); end if;
       exprs := exprs || ', ' || v;
     end loop;
     execute format('insert into %s (%s) %s select %s from %I x', cp.tabla, substr(cols, 3),
