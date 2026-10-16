@@ -3,28 +3,24 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# D01 · Las liquidaciones por correo, empezando por Uber Eats (rama
-# conta/d01-liquidaciones-uber, PR #204). Va ANTES de fusionar el #204: su
-# front lee lo que crea la 0100. Después se fusiona y se despliega
-# conta-facturas-entrada desde main.
-# La anterior de este fichero (C06b, el céntimo de redondeo en el IVA, 0100)
+# B02 · T1 «lo que entra» (rama conta/b02-conciliacion, PR #209). Va ANTES de
+# fusionar el #209: su front lee lo que crea la 0200 (counterparty,
+# movement_type y bank_facturas_para_casar). Orden acordado: T1 → fusionar el
+# #209 → T2 (0201) → T3 (0210).
+# La anterior de este fichero (D01, las liquidaciones por correo, 0100 y 0110)
 # ya está en el historial de producción; su copia:
-# tests/conta/produccion/tanda-c06b-centimo-iva-20261016.txt. (Las dos 0100
-# empiezan por 20261113T0100 y no chocan: el historial las registra por su
-# nombre entero, y el workflow aplica en el orden de las líneas de aquí.)
+# tests/conta/produccion/tanda-d01-liquidaciones-20261016.txt.
 #
-#   1. 0100 — la dirección de liquidaciones (dos CHECK que amplían y
-#      conta_entrada_destino con la misma firma: declarados en su cabecera,
-#      con su prueba de staging), el mapa de tiendas de las plataformas, las
-#      columnas del resumen de Uber (nulas), la factura de comisión (el origen
-#      «liquidacion», su marca y la cuenta de cada línea), lo que queda por
-#      aclarar, conta_liquidacion_registrar y conta_recibida_envio con el freno
-#      de «sin número no va a Diez» (misma firma; declarado).
-#   2. 0110 — los datos de Foodint: su dirección liquidaciones-foodint@,
-#      APAGADA (no se enciende hasta configurar Resend). Solo añade una fila.
+#   1. 0200 — añade las columnas counterparty y movement_type (nulas) a
+#      bank_movement, _bank_contraparte_limpia y bank_facturas_para_casar
+#      (nuevas), bank_regla_borrar (nueva) y el disparador de la factura
+#      aprobada con su pago casado (AFTER UPDATE OF status en supplier_invoice:
+#      no toca la aprobación de A); cambia con la misma firma bank_importar,
+#      bank_casar y bank_regla_guardar. Todo lo que cambia está declarado en su
+#      cabecera, con su prueba de staging.
 #
-# Ninguna toca el camino del pedido.
-# Vuelta atrás: tests/conta/produccion/vuelta-atras-d01-liquidaciones-20261016.txt.
-cuenta: scripts/conta/produccion/cuentas/d01-liquidaciones.sql
-supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql
-supabase/migrations/20261113T0110_d01_liquidaciones_direccion_foodint.sql
+# Ninguna toca el camino del pedido. No escribe ningún asiento (regla de Julio:
+# contabilidad cerrada a 30/09/2026; la T1 no crea ni mueve asientos).
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/b02-entrada.sql
+supabase/migrations/20261101T0200_b02_entrada.sql

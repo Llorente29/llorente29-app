@@ -95,36 +95,38 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByText('Por correo')).toHaveCount(0)
       await expect(page.getByText(/crédito/i)).toHaveCount(0)
 
-      // La banda, las cinco cifras y la tabla.
+      // La banda, el cuadre (B02: en el banco − en contabilidad = te falta por casar) y la lista.
       await expect(page.getByText(/^He casado yo 3 de 8 movimientos de octubre\./)).toBeVisible()
-      for (const c of ['Saldo en el banco', 'Saldo en contabilidad', 'Casado solo', 'Para confirmar', 'Por aclarar']) await expect(page.locator('.cxb-cifra-etiqueta', { hasText: c })).toBeVisible()
-      await expect(page.getByText('· tarjeta de Ana Prueba (···0937)')).toBeVisible()
+      for (const c of ['En el banco', 'En contabilidad', 'Te falta por casar']) await expect(page.locator('.cxb-cifra-etiqueta', { hasText: c })).toBeVisible()
+      await expect(page.getByText(/· tarjeta de Ana Prueba \(···0937\)/)).toBeVisible()
       await expect(page.getByText(/Tarjeta de Ana \(···0937\)|pídele el ticket a Ana/).first()).toBeVisible()
       // Las migas, sin caracteres raros; un solo botón principal por fila; y la banda del agente.
       await expect(page.getByRole('navigation', { name: 'Estás en' })).toHaveText(/^Bancos›Banco B01 · Norte · ···0011$/)
-      await expect(page.locator('.cxb-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
-      await expect(page.locator('.cxb-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
-      await expect(page.locator('.cxb-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
+      await expect(page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
+      await expect(page.locator('.cxn-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
+      await expect(page.locator('.cxn-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
       await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
-      // Con la apertura de la semilla, la diferencia es exactamente lo que queda sin casar.
-      await expect(page.locator('.cxb-cifra', { hasText: 'Saldo en contabilidad' })).toContainText('difiere 2.175,50 €')
+      // Con la apertura de la semilla, lo que falta por casar es exactamente lo que queda sin casar.
+      await expect(page.getByTestId('cuadre')).toContainText('2.175,50 €')
+      await expect(page.getByTestId('cuadre')).toContainText('son justo los movimientos sin casar')
       expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'movimientos')
       await capturarPieza(page, '.cxb-banda', 'banda-agente')
 
       // «Sí» confirma con contenido, y «Deshacer» lo devuelve (regla 8).
-      const comision = page.locator('.cxb-fila', { hasText: 'Comision mantenimiento' })
+      const comision = page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' })
       await comision.getByRole('button', { name: 'Sí', exact: true }).click()
       await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Casado: Comisión del banco')
-      await page.locator('.cxb-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Deshacer' }).click()
+      await page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Deshacer' }).click()
       await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Deshecho: el movimiento del 03/10')
 
       // Por aclarar, y la tarjeta que nadie ha dado de alta (respuesta 3).
-      await page.getByRole('button', { name: 'Por aclarar', exact: true }).click()
+      await page.getByRole('button', { name: /^Por aclarar \d+$/ }).click()
       await capturar(page, 'por-aclarar')
       await barra.getByRole('button', { name: /^B01 Mercado/ }).click()
-      await expect(page.getByText(/Por aclarar: tarjeta acabada en 1234, ¿de quién es\?/)).toBeVisible()
-      await expect(page.locator('.cxb-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()
+      // B02: la tarjeta sin dar de alta la anota el motor (se pregunta una vez por tarjeta, no en cada pago).
+      await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' })).toContainText('tarjeta ···1234 sin dar de alta')
+      await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()
       await capturar(page, 'tarjeta-desconocida')
 
       // Reglas.
@@ -161,7 +163,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.goto(`/conta/bancos/cuentas?banco=${MERCADO}&tarjeta=1234&mes=2026-10`)
       await expect(page.getByRole('form', { name: 'Añadir una tarjeta a Banco B01 · Mercado' }).getByLabel('Últimos 4 dígitos')).toHaveValue('1234')
 
-      // Cierre del mes y «Lo que ha hecho Folvy».
+      // Cierre del mes y «Lo que he hecho» (B02: sin la marca, en primera persona).
       await page.goto(`/conta/bancos/cierre?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { name: 'Cierre de octubre', level: 2 })).toBeVisible()
       await expect(page.getByText('Octubre aún no ha terminado: se cierra a partir del día 1 del mes siguiente.')).toBeVisible()
@@ -169,7 +171,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'cierre')
       await page.goto(`/conta/bancos/hecho?banco=${NORTE}&mes=2026-10`)
-      await expect(page.getByRole('heading', { name: 'Lo que ha hecho Folvy', level: 2 })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Lo que he hecho', level: 2 })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Deshacer' }).first()).toBeVisible()
       await capturar(page, 'hecho-por-folvy')
     } finally {
@@ -195,15 +197,15 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.locator('.cxb-apartado', { hasText: 'Para confirmar' }).click()
       await expect(page.getByRole('heading', { name: 'Movimientos', level: 2 })).toBeVisible()
       await expect(page.getByRole('link', { name: '‹ Bancos' })).toBeVisible()
-      await expect(page.locator('.cxb-fila:not(.cxb-cabeza)').first()).toBeVisible()
+      await expect(page.locator('.cxn-fila').first()).toBeVisible()
       await capturar(page, 'para-confirmar')
 
-      await page.getByRole('button', { name: 'Por aclarar', exact: true }).click()
-      await expect(page.getByText('· tarjeta de Ana Prueba (···0937)')).toBeVisible()
+      await page.getByRole('button', { name: /^Por aclarar \d+$/ }).click()
+      await expect(page.getByText(/· tarjeta de Ana Prueba \(···0937\)/)).toBeVisible()
       await capturar(page, 'por-aclarar')
 
       // Respuesta 4, punto 2.6: Movimientos entero en el móvil, para verlo al lado del de ordenador.
-      await page.getByRole('button', { name: 'Todo', exact: true }).click()
+      await page.getByRole('button', { name: /^Todos \d+$/ }).click()
       await expect(page.getByTestId('pasada-agente')).toBeVisible()
       await expect(page.locator('.cx-barra-ia')).toHaveCount(0)
       expect(await importesCortados(page)).toEqual([])
