@@ -33,7 +33,7 @@ import { subcuentasSinNombre } from '@/modules/conta/services/pasosDiezService'
 import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
 import { diaMes, euros, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  barras, cambio, diaDeHoy, dudas, fraseIva, frasePago, textoIva, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
+  barras, cambio, diaDeHoy, dudas, frasePago, lineasIva, textoIva, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
 } from '@/modules/conta/lib/inicio'
 import { mesAnterior, nombreMes, type CierreMes, type PasoCierre } from '@/modules/conta/lib/diario'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
@@ -174,15 +174,23 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
         tono={pago.estado === 'listo' && pago.v !== null && pago.v < hoy ? 'ambar' : undefined} barras={barras(serie('debes'))} />
       <Cifra etiqueta="IVA del trimestre" valor={iva.estado === 'listo' ? euros(iva.v.aPagar) : iva.estado === 'fallo' ? '—' : '…'}
         ruta={rutaLibros('registro', 'expedidas')}
-        apoyo={iva.estado === 'listo' ? textoIva(fraseIvaDe(iva.v)) : iva.estado === 'fallo' ? iva.texto : ' '}
-        apoyoNodo={iva.estado === 'listo' ? fraseIvaDe(iva.v).map((x, i) => (x.cifra ? <span key={i} className="cxi-cifra-mono">{x.texto}</span> : x.texto)) : undefined}
+        apoyo={iva.estado === 'listo' ? textoIva(iva.v.trimestre, lineasIvaDe(iva.v)) : iva.estado === 'fallo' ? iva.texto : ' '}
+        apoyoNodo={iva.estado === 'listo' ? (
+          <span className="cxi-iva">
+            {lineasIvaDe(iva.v).map((l) => (
+              <span key={l.etiqueta} className="cxi-iva-linea">
+                <span>{l.etiqueta}</span> <span className="cxi-cifra-mono">{l.importe}</span>{l.nota && <span className="cxi-iva-nota"> {l.nota}</span>}
+              </span>
+            ))}
+          </span>
+        ) : undefined}
         barras={ivaMeses.estado === 'listo' ? barras(ivaMeses.v) : []} ia />
     </div>
   )
 }
 
-/** M01 · La frase del IVA del trimestre, con los importes en euros con sus céntimos. */
-const fraseIvaDe = (v: { trimestre: string; repercutido: number; soportado: number }) => fraseIva(v.trimestre, v.repercutido, v.soportado, eurosExactos)
+/** M01 · Las tres líneas del IVA del trimestre, con los importes en euros con sus céntimos. */
+const lineasIvaDe = (v: { repercutido: number; soportado: number }) => lineasIva(v.repercutido, v.soportado, eurosExactos)
 
 function Cifra({ etiqueta, valor, apoyo, apoyoNodo, tono, barras: bs, ruta, ia = false }: {
   etiqueta: string; valor: string; apoyo: string; tono?: 'verde' | 'ambar'; barras: { alto: number; ultima: boolean }[]; ruta: string; ia?: boolean

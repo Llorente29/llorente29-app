@@ -3,7 +3,7 @@
 // C06 · El Inicio del producto vendido solo: lo que se decide sin base.
 
 import {
-  barras, cambio, diaDeHoy, dudas, fraseIva, frasePago, textoIva, mesYAnio, mesesHasta, primerNombre, puntoDeMes, resumenDudas, saldoDe, saludo, trimestreDe,
+  barras, cambio, diaDeHoy, dudas, frasePago, lineasIva, textoIva, mesYAnio, mesesHasta, primerNombre, puntoDeMes, resumenDudas, saldoDe, saludo, trimestreDe,
 } from '@/modules/conta/lib/inicio'
 import { ayerEnMadrid } from '@/modules/conta/services/inicioService'
 import { diaMes, euros, eurosExactos } from '@/modules/conta/lib/formato'
@@ -107,21 +107,19 @@ describe('lo que tiene que decir la persona', () => {
   })
 })
 
-describe('M01 · el IVA del trimestre, como una cuenta que se lee entera', () => {
-  const frase = (r: number, s: number) => textoIva(fraseIva('4.º trimestre', r, s, eurosExactos))
-  it('repercutido − soportado = lo que sale, a pagar', () => {
-    expect(frase(8.99, 5)).toBe('4.º trimestre: repercutido 8,99 € − soportado 5,00 € = 3,99 € a pagar')
-    expect(frase(1200, 450.5)).toBe('4.º trimestre: repercutido 1.200,00 € − soportado 450,50 € = 749,50 € a pagar')
+describe('M01 · el IVA del trimestre, en tres líneas cortas', () => {
+  const lineas = (r: number, s: number) => lineasIva(r, s, eurosExactos).map((l) => `${l.etiqueta} ${l.importe}${l.nota ? ` ${l.nota}` : ''}`)
+  it('soportado en negativo (el caso de staging): con su signo y su porqué, y lo que sale', () => {
+    expect(lineas(8.99, -5)).toEqual(['IVA de tus ventas 8,99 €', 'IVA de tus compras −5,00 € (más abonos que facturas)', 'A pagar 13,99 €'])
   })
-  it('negativo, «a devolver» y sin signo', () => {
-    expect(frase(100, 250)).toBe('4.º trimestre: repercutido 100,00 € − soportado 250,00 € = 150,00 € a devolver')
+  it('soportado normal: las mismas tres líneas, sin nota', () => {
+    expect(lineas(8.99, 5)).toEqual(['IVA de tus ventas 8,99 €', 'IVA de tus compras 5,00 €', 'A pagar 3,99 €'])
+    expect(lineas(1200, 450.5)).toEqual(['IVA de tus ventas 1.200,00 €', 'IVA de tus compras 450,50 €', 'A pagar 749,50 €'])
   })
-  it('el soportado en negativo (el caso de staging: 8,99 y −5) se suma y se dice, sin «− −»', () => {
-    const f = frase(8.99, -5)
-    expect(f).toBe('4.º trimestre: repercutido 8,99 € + 5,00 € de soportado en negativo = 13,99 € a pagar')
-    expect(f).not.toMatch(/[−-]\s*[−-]/)
+  it('si sale negativo, «A devolver», sin signo', () => {
+    expect(lineas(100, 250)).toEqual(['IVA de tus ventas 100,00 €', 'IVA de tus compras 250,00 €', 'A devolver 150,00 €'])
   })
-  it('los importes van aparte, para pintarlos en mono', () => {
-    expect(fraseIva('T', 8.99, 5, eurosExactos).filter((x) => x.cifra).map((x) => x.texto)).toEqual(['8,99 €', '5,00 €', '3,99 €'])
+  it('para el lector, una frase con las tres', () => {
+    expect(textoIva('4.º trimestre', lineasIva(8.99, -5, eurosExactos))).toBe('4.º trimestre: IVA de tus ventas 8,99 €. IVA de tus compras −5,00 € (más abonos que facturas). A pagar 13,99 €.')
   })
 })

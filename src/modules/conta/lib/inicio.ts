@@ -128,31 +128,32 @@ export function cambio(antes: number | null, ahora: number, formato: (n: number)
   return `${d > 0 ? '+' : '−'}${formato(Math.abs(d))} este mes`
 }
 
-/** Un trozo de la frase del IVA: texto, o un importe (que se pinta en mono). */
-export interface TrozoIva { texto: string; cifra?: boolean }
+/** Una línea del IVA del trimestre: qué es, su importe y, si hace falta, por qué. */
+export interface LineaIva { etiqueta: string; importe: string; nota?: string }
 
 /**
- * M01 · Lo de debajo del IVA del trimestre, como una cuenta que se lee entera
- * (Julio, 16/10): «4.º trimestre: repercutido 8,99 € − soportado 5,00 € =
- * 3,99 € a pagar», o «a devolver» si sale negativo. Los importes, con sus
- * decimales y en mono.
- *
- * El soportado en negativo (más abonos de proveedores que facturas) no se
- * escribe «− −5,00 €», que se leía como una errata, ni «− 5,00 €», que haría
- * mal la cuenta: se SUMA y se dice por qué («+ 5,00 € de soportado en
- * negativo»). El resultado es siempre el de la tarjeta (repercutido − soportado).
+ * M01 · Debajo del IVA del trimestre, tres líneas cortas (Julio, 16/10):
+ *   «IVA de tus ventas 8,99 €»
+ *   «IVA de tus compras −5,00 € (más abonos que facturas)»
+ *   «A pagar 13,99 €» (o «A devolver», sin signo).
+ * El importe de compras va con su signo: un soportado en negativo es lo que
+ * hay en el libro, y la nota dice por qué. Lo de abajo es siempre la cifra
+ * de la tarjeta (ventas − compras).
  */
-export function fraseIva(trimestre: string, repercutido: number, soportado: number, formato: (n: number) => string): TrozoIva[] {
+export function lineasIva(repercutido: number, soportado: number, formato: (n: number) => string): LineaIva[] {
   const resultado = Math.round((repercutido - soportado) * 100) / 100
-  const t: TrozoIva[] = [{ texto: `${trimestre}: repercutido ` }, { texto: formato(repercutido), cifra: true }]
-  if (soportado < 0) t.push({ texto: ' + ' }, { texto: formato(-soportado), cifra: true }, { texto: ' de soportado en negativo' })
-  else t.push({ texto: ' − soportado ' }, { texto: formato(soportado), cifra: true })
-  t.push({ texto: ' = ' }, { texto: formato(Math.abs(resultado)), cifra: true }, { texto: resultado < 0 ? ' a devolver' : ' a pagar' })
-  return t
+  return [
+    { etiqueta: 'IVA de tus ventas', importe: formato(repercutido) },
+    soportado < 0
+      ? { etiqueta: 'IVA de tus compras', importe: formato(soportado), nota: '(más abonos que facturas)' }
+      : { etiqueta: 'IVA de tus compras', importe: formato(soportado) },
+    { etiqueta: resultado < 0 ? 'A devolver' : 'A pagar', importe: formato(Math.abs(resultado)) },
+  ]
 }
 
-/** La frase del IVA en una línea de texto (para el lector y las pruebas). */
-export const textoIva = (t: readonly TrozoIva[]): string => t.map((x) => x.texto).join('')
+/** Las tres líneas en texto (para el lector y las pruebas). */
+export const textoIva = (trimestre: string, l: readonly LineaIva[]): string =>
+  `${trimestre}: ${l.map((x) => `${x.etiqueta} ${x.importe}${x.nota ? ` ${x.nota}` : ''}`).join('. ')}.`
 
 /** «Próximo pago el 24 oct» o, si ya pasó, «Vencido desde el 24 oct». */
 export function frasePago(fecha: string | null, hoy: string, diaMes: (iso: string) => string): string | null {
