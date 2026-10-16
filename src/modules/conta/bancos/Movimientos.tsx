@@ -403,6 +403,7 @@ function FilaMovimiento({ g, movil, enfocada, elegida, ocupado, marcadas, marcab
           <span className={`cxb-punto cxb-punto-${tono === 'casado' ? 'verde' : tono}`} title={verde ? 'Lo casaría solo' : f.estado} /><span className="cx-oculto">{verde ? 'Lo casaría solo' : f.estado}</span>
           {origen && <span className="cxn-pildora">{origen}</span>}
           <strong>{f.titulo}</strong>
+          {m.estado === 'espera_extracto' && <span className="cxn-pildora cxn-pildora-espera" data-testid="espera">Espera el extracto de {m.propuesta?.esperaExtracto ?? 'otra cuenta'}</span>}
           {m.propuesta?.facturaSinAprobar && m.estado !== 'casado' && <span className="cxn-pildora cxn-pildora-ambar">factura sin aprobar</span>}
         </span>
         <span className="cxn-porque">{f.porque}</span>

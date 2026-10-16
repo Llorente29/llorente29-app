@@ -34,6 +34,8 @@ export interface PropuestaGuardada {
   alternativas?: { etiqueta: string; destino: Record<string, unknown> }[]
   quedaPorCasarCent?: number | null
   facturaSinAprobar?: boolean
+  /** B02 · «···0133»: el traspaso espera el extracto de esa cuenta (estado espera_extracto). */
+  esperaExtracto?: string | null
 }
 
 export interface MovimientoBanco {
@@ -46,7 +48,7 @@ export interface MovimientoBanco {
   /** B02 · A quién pagas o quién te paga, limpio (`counterparty`), y el tipo de movimiento del banco (`movement_type`). */
   contraparte?: string | null
   tipo?: string | null
-  estado: 'pendiente' | 'propuesto' | 'por_aclarar' | 'casado' | 'posible_repetido' | 'antes_corte_sin_pareja' | 'ignorado'
+  estado: 'pendiente' | 'propuesto' | 'por_aclarar' | 'casado' | 'posible_repetido' | 'antes_corte_sin_pareja' | 'ignorado' | 'espera_extracto'
   confianza: 'seguro' | 'probable' | 'duda' | null
   porque: string | null
   propuesta: PropuestaGuardada | null
@@ -119,6 +121,10 @@ function filaSinPrincipal(m: MovimientoBanco): Omit<Fila, 'principal'> {
         : m.propuesta?.pideTicket && !m.ticket ? ['subir-foto', 'decirlo-yo']
         : m.importeCent < 0 ? ['buscar-factura', 'decirlo-yo'] : ['decirlo-yo'],
     }
+  }
+  if (m.estado === 'espera_extracto') {
+    // B02 · Un traspaso con un solo lado: no es una duda, es que falta subir el otro extracto.
+    return { id: m.id, tono: 'gris', grupo: 'otro', estado: 'Espera el extracto', titulo: m.propuesta?.que ?? 'Traspaso entre tus cuentas', porque: sinPunto(m.porque ?? ''), botones: [] }
   }
   if (m.estado === 'antes_corte_sin_pareja') {
     return { id: m.id, tono: 'gris', grupo: 'otro', estado: 'Antes del corte', titulo: 'Antes del corte · sin pareja en el libro', porque: sinPunto(m.porque ?? ''), botones: [] }

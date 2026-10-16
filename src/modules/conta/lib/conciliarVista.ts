@@ -53,6 +53,8 @@ export interface Cuadre {
   /** Lo que suman los movimientos sin casar (si es igual a lo que falta, cuadra en cuanto se casen). */
   sinCasarCent: number
   cuenta: Record<Bandeja, number>
+  /** B02 · Los traspasos que esperan el extracto de otra cuenta: no cuentan por aclarar, pero se dicen. */
+  esperan: { n: number; de: string[] }
   /** Los que vienen marcados para confirmar en bloque. */
   preseleccionados: string[]
   /** La banda, en primera persona. */
@@ -65,15 +67,28 @@ export function cuadreDe(movs: readonly MovimientoBanco[], bancoCent: number | n
   for (const m of movs) { const b = bandejaDe(m); if (b) cuenta[b]++ }
   const sinCasarCent = movs.filter((m) => m.estado !== 'casado' && m.estado !== 'ignorado').reduce((t, m) => t + m.importeCent, 0)
   const nombre = nombreMes(mes).toLowerCase()
+  const esperan = esperanDe(movs)
   const frase = movs.length === 0
     ? `No hay movimientos de ${nombre}: sube el extracto y los miro.`
     : `He casado yo ${cuenta.casados} de ${movs.length} movimientos de ${nombre}. ${cuenta.confirmar || cuenta.aclarar
       ? `Te quedan ${cuenta.confirmar} por confirmar y ${cuenta.aclarar} por aclarar.`
-      : 'No te queda nada.'}`
+      : esperan.n ? 'No te queda nada por confirmar ni por aclarar.' : 'No te queda nada.'}${esperan.n ? ` ${fraseEsperan(esperan)}` : ''}`
   return {
     bancoCent, libroCent, faltaCent: bancoCent === null || libroCent === null ? null : bancoCent - libroCent, sinCasarCent,
-    cuenta, preseleccionados: movs.filter(preseleccionado).map((m) => m.id), frase,
+    cuenta, esperan, preseleccionados: movs.filter(preseleccionado).map((m) => m.id), frase,
   }
+}
+
+/** B02 · Cuántos traspasos esperan el extracto de otra cuenta, y de cuáles («···0133»). */
+export function esperanDe(movs: readonly Pick<MovimientoBanco, 'estado' | 'propuesta'>[]): { n: number; de: string[] } {
+  const suyos = movs.filter((m) => m.estado === 'espera_extracto')
+  return { n: suyos.length, de: [...new Set(suyos.map((m) => m.propuesta?.esperaExtracto ?? 'otra cuenta'))].sort() }
+}
+
+/** «1 movimiento espera el extracto de ···0133.» / «3 movimientos esperan el extracto de ···0133 y ···6536.» */
+export function fraseEsperan(e: { n: number; de: string[] }): string {
+  const de = e.de.length > 1 ? `${e.de.slice(0, -1).join(', ')} y ${e.de.at(-1)}` : e.de[0] ?? 'otra cuenta'
+  return e.n === 1 ? `1 movimiento espera el extracto de ${de}.` : `${e.n} movimientos esperan el extracto de ${de}.`
 }
 
 /**
@@ -305,16 +320,18 @@ export function puntoDePartida(corte: string | null, hasta: string, extractos: r
   if (!corte || libroAhoraCent === null || libroAntesCent === null || hasta < corte) return { libroCent: libroAhoraCent, apertura: null }
   const vispera = dia(corte, -1)
   const bancoCent = saldoDelExtractoA(extractos, vispera)
+  const apertura = { fecha: vispera, bancoCent, contableCent: libroAntesCent, frase: fraseApertura(vispera, bancoCent, libroAntesCent) }
+  return { libroCent: bancoCent === null ? libroAhoraCent : bancoCent + (libroAhoraCent - libroAntesCent), apertura }
+}
+
+/**
+ * La frase del punto de partida, la misma en Movimientos y en «Cierre del mes»
+ * (que la calcula la base: _bank_mes_estado, 0220). `vispera`: el día antes del corte.
+ */
+export function fraseApertura(vispera: string, bancoCent: number | null, contableCent: number): string {
   const e = (c: number) => `${(c / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
-  if (bancoCent === null) {
-    return { libroCent: libroAhoraCent, apertura: { fecha: vispera, bancoCent: null, contableCent: libroAntesCent,
-      frase: `No tengo el saldo del extracto a ${ddmm(vispera)}: parto del contable (${e(libroAntesCent)}). Sube el extracto que empieza el ${ddmm(corte)}.` } }
-  }
-  return {
-    libroCent: bancoCent + (libroAhoraCent - libroAntesCent),
-    apertura: { fecha: vispera, bancoCent, contableCent: libroAntesCent,
-      frase: bancoCent === libroAntesCent
-        ? `Parto del saldo del extracto a ${ddmm(vispera)} (${e(bancoCent)}), que coincide con el contable.`
-        : `Parto del saldo del extracto a ${ddmm(vispera)} (${e(bancoCent)}), no del contable (${e(libroAntesCent)}): hasta esa fecha la contabilidad está cerrada y casi sin conciliar.` },
-  }
+  if (bancoCent === null) return `No tengo el saldo del extracto a ${ddmm(vispera)}: parto del contable (${e(contableCent)}). Sube el extracto que empieza el ${ddmm(dia(vispera, 1))}.`
+  return bancoCent === contableCent
+    ? `Parto del saldo del extracto a ${ddmm(vispera)} (${e(bancoCent)}), que coincide con el contable.`
+    : `Parto del saldo del extracto a ${ddmm(vispera)} (${e(bancoCent)}), no del contable (${e(contableCent)}): hasta esa fecha la contabilidad está cerrada y casi sin conciliar.`
 }

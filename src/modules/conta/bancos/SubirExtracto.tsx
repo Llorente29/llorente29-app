@@ -154,6 +154,7 @@ export function SubirExtracto() {
             <p className="cxb-frase-verde">
               Después los he mirado: he casado yo {paso.conciliado.casadosSolos}, te propongo {paso.conciliado.propuestos} y quedan {paso.conciliado.porAclarar} por aclarar
               {paso.conciliado.antesDelCorte ? ` (y ${paso.conciliado.antesDelCorte} de antes del corte, solo para enlazar)` : ''}.
+              {paso.conciliado.esperan ? ` ${paso.conciliado.esperan === 1 ? 'Un traspaso espera' : `${paso.conciliado.esperan} traspasos esperan`} el extracto de tu otra cuenta: cuando lo subas, les busco su pareja.` : ''}
             </p>
           )}
           {paso.avisoConciliar && <div className="cx-aviso" role="alert">Subido, pero no he podido mirar los movimientos: {paso.avisoConciliar}</div>}

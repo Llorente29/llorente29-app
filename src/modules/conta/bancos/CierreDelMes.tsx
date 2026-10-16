@@ -21,6 +21,7 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { filaDe, limitesMes, nombreConCodigo, nombreMes } from '@/modules/conta/lib/bancosVista'
 import { asientosSinMovimiento, cerrarMes, leerMovimientos, mesesEstado, reabrirMes, type EstadoMes } from '@/modules/conta/services/bancosPantallas'
 import { useBancos } from '@/modules/conta/bancos/contexto'
+import { fraseApertura, fraseEsperan } from '@/modules/conta/lib/conciliarVista'
 import type { BancoVista } from '@/modules/conta/services/bancosPantallas'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
@@ -112,6 +113,8 @@ export function CierreDelMes() {
                 </span></div>
             </div>
           )}
+          {e?.apertura && <p className="cx-ayuda" data-testid="apertura">{fraseApertura(e.apertura.fecha, e.apertura.bancoCent, e.apertura.contableCent)}</p>}
+          {e && e.esperan.n > 0 && <p className="cx-ayuda" data-testid="esperan">{fraseEsperan(e.esperan)} Cuando lo subas, les busco su pareja.</p>}
           {sueltos.length > 0 && (
             <>
               <h4>En el banco y sin casar · {sueltos.length} · {eurosExactos(sueltos.reduce((t, m) => t + m.importeCent, 0) / 100)}</h4>

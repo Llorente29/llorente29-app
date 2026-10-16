@@ -1,16 +1,12 @@
-# C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
-# prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
-# staging no cambia.
-supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
-
-# D01 · El corte por fecha de las liquidaciones por correo (rama conta/d01-corte-liquidaciones).
-#   0100: el corte (de referencia antes de la fecha de Bancos; la que cruza, real).
-#   0110: los datos de Foodint; en staging no hace nada (Foodint no está).
-#   Y su prueba (ROLLBACK): antes, cruzando, varias semanas antes y cruzando, solapes.
-#   Y la tanda y las dos vueltas atrás, de verdad sobre datos de la cuenta A (ROLLBACK).
-#   Y la semilla de la e2e de Libros: una de referencia en A (22–28/12/2025, depósito 02/01/2026).
-supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql
-supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
-supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
+# D01 · La prueba de la vuelta atrás de la referencia (ROLLBACK: staging no
+# cambia). Se queda en el manifiesto porque su prueba de analizar.test.ts lo
+# exige; sus migraciones ya están en staging y no se vuelven a aplicar.
 supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
-supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql
+
+# B02 · T4 (0220) · «Espera el extracto» y el punto de partida del cierre
+# (rama conta/b02-espera-extracto).
+#   Primero su prueba (ROLLBACK): aplica la 0220 con \ir, la ejercita como
+#   usuario de A sobre un banco inventado y la quita con su vuelta atrás.
+#   Después la 0220 de verdad, para la e2e de pantallas (Cierre del mes).
+supabase/staging/sql/20261101_b02_espera_extracto_prueba.sql
+supabase/migrations/20261101T0220_b02_espera_extracto.sql

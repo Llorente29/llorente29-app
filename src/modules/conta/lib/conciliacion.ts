@@ -130,6 +130,15 @@ export interface Contexto {
    */
   cuentaDiferenciaGasto?: string
   cuentaDiferenciaIngreso?: string
+  /**
+   * B02 · Los días que cubren los extractos subidos de cada cuenta. Con esto, un
+   * traspaso con un solo lado sabe si el otro lado puede llegar todavía (su
+   * extracto no está: «Espera el extracto de ···0133») o ya no (está y no lo
+   * tiene: por aclarar). Sin el dato, se espera.
+   */
+  extractos?: { cuentaId: string; desde: string; hasta: string }[]
+  /** B02 · La fecha de corte: antes de ella no se sube nada que esperar. */
+  corte?: string | null
 }
 
 /** De dónde sale la propuesta: la píldora de la fila (N17b). */
@@ -179,9 +188,32 @@ export interface Decision {
   quedaPorCasarCent: number | null
   /** B02 · La factura propuesta está «en revisión»: confirmar el pago no la aprueba. */
   facturaSinAprobar: boolean
+  /**
+   * B02 · Un traspaso con un solo lado cuya otra cuenta no tiene subido el
+   * extracto de esos días: «···0133» (o «···0133 o ···6536»). Queda en
+   * «espera_extracto»: se ve en «Todos», no cuenta por aclarar, y se casa solo
+   * cuando llega el otro lado.
+   */
+  esperaExtracto: string | null
 }
 
 const euros = (c: number) => c / 100
+const unDia = (f: string, n: number) => new Date(Date.parse(`${f}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10)
+
+/**
+ * B02 · ¿Están subidos los días en que puede estar el otro lado de un traspaso
+ * (la fecha ±2 días, desde el corte)? Sin dato de extractos, no.
+ */
+export function extractoCubre(ctx: Pick<Contexto, 'extractos' | 'corte'>, cuentaId: string, fecha: string): boolean {
+  if (!ctx.extractos) return false
+  const suyos = ctx.extractos.filter((e) => e.cuentaId === cuentaId)
+  for (let n = -2; n <= 2; n++) {
+    const d = unDia(fecha, n)
+    if (ctx.corte && d < ctx.corte) continue
+    if (!suyos.some((e) => e.desde <= d && d <= e.hasta)) return false
+  }
+  return true
+}
 const abs = Math.abs
 
 /** «Luz y agua · 62800000»: nunca un código a secas, nunca «subcuenta». */
@@ -219,7 +251,7 @@ const nuevoGastado = (): Gastado => ({ facturas: new Map(), liquidaciones: new S
 
 function base(m: Movimiento): Omit<Decision, 'confianza' | 'que' | 'porque' | 'destino'> {
   return { movimientoId: m.id, falta: null, antesDelCorteSinPareja: false, pideTicket: false, reglaId: null, contraparte: contraparteDe(m), otroLadoDe: null, tarjetaId: null,
-    origen: null, preseleccionar: false, tarjetaDesconocida: null, alternativas: [], quedaPorCasarCent: null, facturaSinAprobar: false }
+    origen: null, preseleccionar: false, tarjetaDesconocida: null, alternativas: [], quedaPorCasarCent: null, facturaSinAprobar: false, esperaExtracto: null }
 }
 
 /** La contraparte con la que se aprende: la limpia del banco si la hay (B02); si no, la sacada del concepto. */
@@ -381,22 +413,30 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     }
   }
   // Un solo lado subido (B02): el banco lo llama traspaso o lo manda la propia
-  // empresa. Se propone contra la 572 de la otra cuenta; si hay varias, se elige.
+  // empresa. Si la otra cuenta no tiene subido el extracto de esos días, se
+  // espera (y se casa solo cuando llegue); si lo tiene y no está, por aclarar.
   if (otros.length === 0 && (nombraEmpresa || /\bTRASPASO/i.test(txt))) {
     const otras = ctx.cuentas.filter((c) => c.id !== m.cuentaId && c.cuenta)
     const etiqueta = (c: CuentaPropia) => (c.ultimos4 ? `···${c.ultimos4}` : c.nombre)
     const destinoDe = (c: CuentaPropia): Destino => ({ tipo: 'cuenta', concepto: entra ? `Traspaso desde ${c.nombre}` : `Traspaso a ${c.nombre}`,
       lineas: [{ cuenta: c.cuenta!, importe: euros(abs(imp)) }] })
     const sentido = entra ? 'desde' : 'a'
-    if (otras.length === 1) {
-      return { ...b, confianza: 'probable', origen: 'traspaso', contraparte: null, que: `Traspaso ${sentido} tu cuenta ${etiqueta(otras[0])}`,
-        porque: `${nombraEmpresa ? 'Lo manda tu propia empresa' : 'El banco lo llama traspaso'} y la otra cuenta aún no tiene este movimiento subido: cuando lo subas, se enlaza solo.`,
-        destino: destinoDe(otras[0]) }
+    const quien = nombraEmpresa ? 'Lo manda tu propia empresa' : 'El banco lo llama traspaso'
+    const que = otras.length === 1 ? `Traspaso ${sentido} tu cuenta ${etiqueta(otras[0])}` : `Traspaso ${sentido} otra cuenta tuya`
+    // Si la persona lo sabe, no tiene que esperar: cada cuenta posible, con su botón.
+    const opciones = (cs: CuentaPropia[]) => cs.map((c) => ({ etiqueta: `${entra ? 'Desde' : 'A'} ${etiqueta(c)}`, destino: destinoDe(c) }))
+    const sinExtracto = otras.filter((c) => !extractoCubre(ctx, c.id, m.fecha))
+    if (sinExtracto.length > 0) {
+      const lista = sinExtracto.map(etiqueta).join(' o ')
+      return { ...b, confianza: 'duda', origen: 'traspaso', contraparte: null, que, esperaExtracto: lista,
+        porque: `${quien} y aún no está subido el extracto de ${lista} de esos días: cuando lo subas, le busco su pareja.`,
+        destino: sinExtracto.length === 1 ? destinoDe(sinExtracto[0]) : null, alternativas: opciones(sinExtracto) }
     }
-    if (otras.length > 1) {
-      return { ...b, confianza: 'probable', origen: 'traspaso', contraparte: null, que: `Traspaso ${sentido} otra cuenta tuya`,
-        porque: `${nombraEmpresa ? 'Lo manda tu propia empresa' : 'El banco lo llama traspaso'}, pero no dice de qué cuenta: elige ${otras.map(etiqueta).join(' o ')}.`,
-        destino: null, alternativas: otras.map((c) => ({ etiqueta: `${entra ? 'Desde' : 'A'} ${etiqueta(c)}`, destino: destinoDe(c) })) }
+    if (otras.length > 0) {
+      const de = otras.length === 1 ? `el extracto de ${etiqueta(otras[0])} ya está subido y no tiene` : `los extractos de ${otras.map(etiqueta).join(' y ')} ya están subidos y no tienen`
+      return { ...b, confianza: 'duda', origen: 'traspaso', contraparte: null, que,
+        porque: `${quien}, pero ${de} este movimiento (mismo importe, ±2 días): mira si es de otra cuenta, de otro día o no es un traspaso.`,
+        destino: null, alternativas: opciones(otras) }
     }
   }
 

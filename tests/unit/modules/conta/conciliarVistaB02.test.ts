@@ -11,8 +11,10 @@ import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import {
   BANDEJAS, asientoQueSeCrea, bandejaDe, coincide, confirmable, cuadreDe, destinoDelReparto, diaConNombre, facturasDe, importeBuscado, porDia,
-  preseleccionado, puntoDePartida, quienEs, repartir, saldoDelExtractoA, textoBloque, textoDelBanco, type ExtractoSaldos, type FacturaParaCasar,
+  esperanDe, fraseApertura, fraseEsperan, preseleccionado, puntoDePartida, quienEs, repartir, saldoDelExtractoA, textoBloque, textoDelBanco,
+  type ExtractoSaldos, type FacturaParaCasar,
 } from '@/modules/conta/lib/conciliarVista'
+import { filaDe } from '@/modules/conta/lib/bancosVista'
 
 let n = 0
 function mov(p: Partial<MovimientoBanco> = {}): MovimientoBanco {
@@ -204,5 +206,42 @@ describe('de dónde parte el cuadre: con fecha de corte, del saldo del extracto 
   it('sin fecha de corte, o con el cuadre antes del corte, el contable de siempre y sin frase', () => {
     expect(puntoDePartida(null, '2026-10-16', ext4525, 29_001, 75_201)).toEqual({ libroCent: 75_201, apertura: null })
     expect(puntoDePartida('2026-10-01', '2026-09-30', ext4525, 29_001, 29_001)).toEqual({ libroCent: 29_001, apertura: null })
+  })
+})
+
+describe('«Espera el extracto»: un traspaso con un solo lado se ve en «Todos» y no cuenta por aclarar', () => {
+  const espera = (de: string) => mov({ estado: 'espera_extracto', confianza: 'duda', importeCent: 24_861,
+    porque: `Lo manda tu propia empresa y aún no está subido el extracto de ${de} de esos días: cuando lo subas, le busco su pareja.`,
+    propuesta: { que: 'Traspaso desde tu cuenta ···0133', origen: 'traspaso', esperaExtracto: de } })
+  const conEspera = [...MES, espera('···0133'), espera('···0133'), espera('···4525')]
+  const c = cuadreDe(conEspera, 50_000, 30_000, '2026-10')
+  it('no está en ninguna bandeja más que «Todos», y cada contador sigue siendo el número de filas que enseña', () => {
+    expect(bandejaDe(espera('···0133'))).toBeNull()
+    for (const b of BANDEJAS) expect(c.cuenta[b.id], b.nombre).toBe(conEspera.filter((m) => b.id === 'todos' || bandejaDe(m) === b.id).length)
+    expect(c.cuenta).toEqual({ confirmar: 6, aclarar: 3, casados: 2, todos: 17 })
+  })
+  it('pero la banda lo dice: no se esconde (regla 7)', () => {
+    expect(c.esperan).toEqual({ n: 3, de: ['···0133', '···4525'] })
+    expect(c.frase).toBe('He casado yo 2 de 17 movimientos de octubre. Te quedan 6 por confirmar y 3 por aclarar. 3 movimientos esperan el extracto de ···0133 y ···4525.')
+    expect(cuadreDe([casado('folvy'), espera('···0133')], null, null, '2026-10').frase)
+      .toBe('He casado yo 1 de 2 movimientos de octubre. No te queda nada por confirmar ni por aclarar. 1 movimiento espera el extracto de ···0133.')
+  })
+  it('y suma en lo que está sin casar: el cuadre sigue explicando la diferencia', () => {
+    expect(c.sinCasarCent - cuadreDe(MES, 50_000, 30_000, '2026-10').sinCasarCent).toBe(3 * 24_861)
+  })
+  it('la fila: gris, «Espera el extracto», sin botones; lo que propongo sigue en el panel', () => {
+    expect(filaDe(espera('···0133'))).toMatchObject({ tono: 'gris', grupo: 'otro', estado: 'Espera el extracto', titulo: 'Traspaso desde tu cuenta ···0133', botones: [], principal: null })
+  })
+  it('sin ninguno, nada que decir', () => {
+    expect(esperanDe(MES)).toEqual({ n: 0, de: [] })
+    expect(fraseEsperan({ n: 2, de: ['···0133'] })).toBe('2 movimientos esperan el extracto de ···0133.')
+  })
+})
+
+describe('«Cierre del mes» dice el mismo punto de partida que Movimientos', () => {
+  it('con los datos que devuelve la base (_bank_mes_estado, 0220), la misma frase que puntoDePartida', () => {
+    const p = puntoDePartida('2026-10-01', '2026-10-16', [{ desde: '2026-10-01', hasta: '2026-10-14', saldoInicialCent: 1, saldoFinalCent: 46_301 }], 29_001, 75_201)
+    expect(fraseApertura('2026-09-30', 1, 29_001)).toBe(p.apertura?.frase)
+    expect(fraseApertura('2026-09-30', null, 29_001)).toBe('No tengo el saldo del extracto a 30/09: parto del contable (290,01 €). Sube el extracto que empieza el 01/10.')
   })
 })

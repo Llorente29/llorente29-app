@@ -47,16 +47,46 @@ describe('recargas de saldo prepago con una tarjeta sin dar de alta', () => {
 })
 
 describe('traspasos entre cuentas propias', () => {
-  it('con un solo lado subido y la empresa en el concepto: «Traspaso desde otra cuenta tuya», con las dos para elegir', () => {
+  it('con un solo lado subido y sin el extracto de las otras: espera el de las dos («···0133 o ···4525»), con las dos para elegir', () => {
     const d = decidir(mov({ importeCent: 24_861, concepto: 'TRASPASO · EMPRESA INVENTADA FOOD S.L.', contraparte: 'Empresa Inventada Food SL' }), ctx())
-    expect(d).toMatchObject({ confianza: 'probable', preseleccionar: false, origen: 'traspaso', que: 'Traspaso desde otra cuenta tuya', destino: null, contraparte: null })
+    expect(d).toMatchObject({ confianza: 'duda', preseleccionar: false, origen: 'traspaso', que: 'Traspaso desde otra cuenta tuya', destino: null, contraparte: null,
+      esperaExtracto: '···0133 o ···4525' })
+    expect(d.porque).toBe('Lo manda tu propia empresa y aún no está subido el extracto de ···0133 o ···4525 de esos días: cuando lo subas, le busco su pareja.')
     expect(d.alternativas.map((a) => a.etiqueta)).toEqual(['Desde ···0133', 'Desde ···4525'])
     expect(d.alternativas[0].destino).toMatchObject({ tipo: 'cuenta', lineas: [{ cuenta: '57200002', importe: 248.61 }] })
   })
-  it('con una sola cuenta más, la nombra: «Traspaso desde tu cuenta ···0133»', () => {
+  it('con una sola cuenta más, la nombra y la espera: «Espera el extracto de ···0133»', () => {
     const solo = ctx({ cuentas: ctx().cuentas.slice(0, 2) })
     const d = decidir(mov({ importeCent: 24_861, concepto: 'TRASPASO · EMPRESA INVENTADA FOOD S.L.' }), solo)
-    expect(d).toMatchObject({ que: 'Traspaso desde tu cuenta ···0133', destino: { tipo: 'cuenta', lineas: [{ cuenta: '57200002', importe: 248.61 }] } })
+    expect(d).toMatchObject({ que: 'Traspaso desde tu cuenta ···0133', esperaExtracto: '···0133', destino: { tipo: 'cuenta', lineas: [{ cuenta: '57200002', importe: 248.61 }] } })
+    expect(d.alternativas.map((a) => a.etiqueta)).toEqual(['Desde ···0133'])
+  })
+
+  // Los extractos de producción (16/10) tienen esta forma: los tres del 01/10 al 13 o 14/10, corte el 01/10.
+  const subidos = [{ cuentaId: A, desde: '2026-10-01', hasta: '2026-10-14' }, { cuentaId: B, desde: '2026-10-01', hasta: '2026-10-14' },
+    { cuentaId: C, desde: '2026-10-01', hasta: '2026-10-13' }]
+  it('si el extracto de la otra cuenta YA cubre esos días y no lo tiene: por aclarar, con el porqué y sin esperar', () => {
+    const d = decidir(mov({ importeCent: 24_861, fecha: '2026-10-07', concepto: 'TRASPASO · EMPRESA INVENTADA FOOD S.L.' }), ctx({ extractos: subidos, corte: '2026-10-01' }))
+    expect(d).toMatchObject({ confianza: 'duda', esperaExtracto: null, destino: null, que: 'Traspaso desde otra cuenta tuya' })
+    expect(d.porque).toBe('Lo manda tu propia empresa, pero los extractos de ···0133 y ···4525 ya están subidos y no tienen este movimiento (mismo importe, ±2 días): mira si es de otra cuenta, de otro día o no es un traspaso.')
+    expect(d.alternativas.map((a) => a.etiqueta)).toEqual(['Desde ···0133', 'Desde ···4525'])
+  })
+  it('si una la cubre y la otra no llega a esos días (acaba el 13 y el traspaso es del 12, ±2 = 14): espera solo la que falta', () => {
+    const d = decidir(mov({ importeCent: 24_861, fecha: '2026-10-12', concepto: 'TRASPASO · EMPRESA INVENTADA FOOD S.L.' }), ctx({ extractos: subidos, corte: '2026-10-01' }))
+    expect(d).toMatchObject({ esperaExtracto: '···4525', destino: { tipo: 'cuenta', lineas: [{ cuenta: '57200003', importe: 248.61 }] } })
+    expect(d.alternativas.map((a) => a.etiqueta)).toEqual(['Desde ···4525'])
+  })
+  it('el corte no se espera: un traspaso del 01/10 no busca su pareja del 29 o el 30/09', () => {
+    const d = decidir(mov({ importeCent: 24_861, fecha: '2026-10-01', concepto: 'TRASPASO A CUENTA PROPIA' }), ctx({ extractos: subidos, corte: '2026-10-01' }))
+    expect(d).toMatchObject({ confianza: 'duda', esperaExtracto: null })
+    expect(d.porque).toMatch(/^El banco lo llama traspaso, pero los extractos/)
+  })
+  it('y cuando llega el otro lado, el que esperaba se casa solo con él', () => {
+    const espera = mov({ id: 'w1', importeCent: 24_861, fecha: '2026-10-15', concepto: 'TRASPASO · EMPRESA INVENTADA FOOD S.L.' })
+    expect(decidir(espera, ctx({ extractos: subidos, corte: '2026-10-01', sinCasar: [espera] })).esperaExtracto).toBe('···0133 o ···4525')
+    const llega = mov({ id: 'w2', cuentaId: B, importeCent: -24_861, fecha: '2026-10-15', concepto: 'TRASPASO A CUENTA PROPIA' })
+    const ds = conciliar([espera, llega], ctx({ extractos: [...subidos, { cuentaId: B, desde: '2026-10-15', hasta: '2026-10-20' }], corte: '2026-10-01', sinCasar: [espera, llega] }))
+    expect(ds.find((d) => d.movimientoId === 'w1')).toMatchObject({ confianza: 'seguro', esperaExtracto: null, destino: { tipo: 'traspaso', otro_movimiento_id: 'w2' } })
   })
   it('con los dos lados subidos, ±2 días y la empresa en el concepto: se casa solo; a 3 días, no es la pareja', () => {
     const entra = mov({ id: 'e1', importeCent: 50_000, fecha: '2026-10-08', concepto: 'TRASPASO · EMPRESA INVENTADA FOOD SL' })

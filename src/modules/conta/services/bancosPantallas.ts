@@ -163,7 +163,7 @@ export async function datosDeReglas(accountId: string, companyId: string, hoy: s
     rpc<Fila[]>('bank_historial', { p_company: companyId, p_desde: desde }),
   ])
   const movs: MovRegla[] = filas.map((m) => ({ id: String(m.id), fecha: String(m.op_date), importeCent: cent(m.amount), concepto: String(m.bank_concept ?? ''),
-    contraparte: s(m.counterparty), sinCasar: ['pendiente', 'propuesto', 'por_aclarar'].includes(String(m.status)) }))
+    contraparte: s(m.counterparty), sinCasar: ['pendiente', 'propuesto', 'por_aclarar', 'espera_extracto'].includes(String(m.status)) }))
   const casados: Casado[] = (historial ?? []).filter((h) => h.cuenta).map((h) => ({ concepto: String(h.concepto ?? ''), cuenta: String(h.cuenta) }))
   return { ...reglasQuePropongo(ctx, movs, casados), movs, casados }
 }
@@ -263,7 +263,17 @@ export interface EstadoMes {
   bancoId: string; mes: string; hasta: string; cuenta: string | null
   saldoBancoCent: number | null; extractoHasta: string | null; saldoLibroCent: number; diferenciaCent: number | null
   sueltos: number; sueltosCent: number
+  /** B02 · Desde el corte, de dónde parte contabilidad: el extracto a la víspera (o el contable, si no lo hay). */
+  apertura: { fecha: string; bancoCent: number | null; contableCent: number } | null
+  /** B02 · Los traspasos que esperan el extracto de otra cuenta (cuentan en sueltos). */
+  esperan: { n: number; de: string[] }
   cierre: { id: string; aSabiendas: boolean; por: string | null; el: string; motivo: string | null } | null
+}
+
+const aperturaDe = (a: unknown): EstadoMes['apertura'] => {
+  if (!a || typeof a !== 'object') return null
+  const x = a as Fila
+  return { fecha: String(x.fecha), bancoCent: x.saldo_banco === null || x.saldo_banco === undefined ? null : cent(x.saldo_banco), contableCent: cent(x.saldo_libro) }
 }
 
 /** El estado del mes de cada banco (la base lo calcula: el mismo que comprueba el cierre). */
@@ -275,6 +285,8 @@ export async function mesesEstado(companyId: string, mes: string): Promise<Estad
       bancoId: String(f.treasury_account_id), mes: String(e.mes), hasta: String(e.hasta), cuenta: s(e.cuenta),
       saldoBancoCent: e.saldo_banco === null ? null : cent(e.saldo_banco), extractoHasta: s(e.extracto_hasta), saldoLibroCent: cent(e.saldo_libro),
       diferenciaCent: e.diferencia === null ? null : cent(e.diferencia), sueltos: Number(e.sueltos ?? 0), sueltosCent: cent(e.sueltos_importe),
+      apertura: aperturaDe(e.apertura),
+      esperan: { n: Number(e.esperan ?? 0), de: Array.isArray(e.esperan_de) ? (e.esperan_de as unknown[]).map(String) : [] },
       cierre: f.cierre_id ? { id: String(f.cierre_id), aSabiendas: !!f.cerrado_a_sabiendas, por: s(f.cerrado_por), el: String(f.cerrado_el), motivo: s(f.motivo) } : null,
     }
   })

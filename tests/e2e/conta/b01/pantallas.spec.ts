@@ -163,11 +163,19 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.goto(`/conta/bancos/cuentas?banco=${MERCADO}&tarjeta=1234&mes=2026-10`)
       await expect(page.getByRole('form', { name: 'Añadir una tarjeta a Banco B01 · Mercado' }).getByLabel('Últimos 4 dígitos')).toHaveValue('1234')
 
+      // B02 (0220) · El punto de partida: «Cierre del mes» dice lo mismo que Movimientos, con la misma frase o ninguna.
+      await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
+      await expect(page.getByTestId('cuadre')).toBeVisible()
+      const aperturaMovimientos = (await page.getByTestId('apertura').count()) ? await page.getByTestId('apertura').innerText() : null
+
       // Cierre del mes y «Lo que he hecho» (B02: sin la marca, en primera persona).
       await page.goto(`/conta/bancos/cierre?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { name: 'Cierre de octubre', level: 2 })).toBeVisible()
       await expect(page.getByText('Octubre aún no ha terminado: se cierra a partir del día 1 del mes siguiente.')).toBeVisible()
       await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
+      const aperturaCierre = page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' }).getByTestId('apertura')
+      if (aperturaMovimientos) await expect(aperturaCierre).toHaveText(aperturaMovimientos)
+      else await expect(aperturaCierre).toHaveCount(0)
       expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'cierre')
       await page.goto(`/conta/bancos/hecho?banco=${NORTE}&mes=2026-10`)

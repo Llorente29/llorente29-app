@@ -214,6 +214,7 @@
   background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); white-space: nowrap;
 }
 .cxn-pildora-ambar { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxn-pildora-espera { background: var(--cx-neutro-suave); color: var(--cx-texto); }
 
 .cxn-casados { padding: 4px 18px 8px; display: flex; flex-direction: column; }
 .cxn-casado { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }

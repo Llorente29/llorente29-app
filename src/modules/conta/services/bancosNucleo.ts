@@ -92,7 +92,7 @@ const ventanas = (dias: { fecha: string; c: number }[]): Plataforma['pendiente']
   return [...out.values()].sort((a, b) => a.hasta.localeCompare(b.hasta))
 }
 
-export interface ResultadoConciliar { casadosSolos: number; propuestos: number; porAclarar: number; antesDelCorte: number; fallos: { movimiento: string; motivo: string }[]; decisiones: Decision[] }
+export interface ResultadoConciliar { casadosSolos: number; propuestos: number; porAclarar: number; antesDelCorte: number; /** B02 · Traspasos que esperan el extracto de su otra cuenta. */ esperan: number; fallos: { movimiento: string; motivo: string }[]; decisiones: Decision[] }
 
 /**
  * B02 · Con qué texto paga cada plataforma en el banco, además de su nombre
@@ -173,10 +173,10 @@ export function crearBancos(bd: Bd) {
 
   async function cargarContexto(accountId: string, companyId: string, hoy: string): Promise<{ ctx: Contexto; movimientos: Movimiento[] }> {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
-    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal] = await Promise.all([
+    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, extractos, ajustes] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
       leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status, counterparty, movement_type')
-        .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
+        .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar', 'espera_extracto']), 'los movimientos sin casar'),
       // B02: también las «en revisión» (en ámbar, «factura sin aprobar»).
       rpc<Fila[]>('bank_facturas_para_casar', { p_company: companyId }),
       rpc<Fila[]>('bank_saldos_cuentas', { p_company: companyId, p_hasta: hoy, p_prefijos: ['400', '410', '430', '465', '475', '476'] }),
@@ -197,6 +197,9 @@ export function crearBancos(bd: Bd) {
       // D01 · El mapa de tiendas de las plataformas: la cuenta del banco de cada marca × local.
       leer(tabla('platform_store').select('id, external_text, treasury_account_id, location_id').eq('account_id', accountId).eq('company_id', companyId), 'las tiendas de las plataformas'),
       leer(tabla('treasury_account').select('id, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las cuentas de cada local'),
+      // B02 · Los días subidos de cada cuenta y el corte: un traspaso con un solo lado sabe si su otra mitad puede llegar aún.
+      leer(tabla('bank_statement').select('treasury_account_id, period_from, period_to').eq('account_id', accountId).eq('company_id', companyId), 'los extractos'),
+      leer(tabla('bank_settings').select('cutover_date').eq('account_id', accountId).eq('company_id', companyId), 'la fecha de corte'),
     ])
     const tiendaDe = new Map(tiendas.map((t) => [String(t.id), t]))
     const bancosLocal = cuentasLocal.map((c) => ({ id: String(c.id), localId: s(c.location_id) }))
@@ -298,6 +301,8 @@ export function crearBancos(bd: Bd) {
       nombresPropios: nombresDeEmpresa(empresa[0]),
       cuentaDiferenciaGasto: hoja('669') ?? '66900000',
       cuentaDiferenciaIngreso: hoja('769') ?? '76900000',
+      extractos: extractos.map((e) => ({ cuentaId: String(e.treasury_account_id), desde: String(e.period_from), hasta: String(e.period_to) })),
+      corte: s(ajustes[0]?.cutover_date),
     }
     return { ctx, movimientos }
   }
@@ -305,14 +310,14 @@ export function crearBancos(bd: Bd) {
   async function conciliarPendientes(accountId: string, companyId: string, hoy: string): Promise<ResultadoConciliar> {
     const { ctx, movimientos } = await cargarContexto(accountId, companyId, hoy)
     const decisiones = conciliar(movimientos, ctx)
-    const r: ResultadoConciliar = { casadosSolos: 0, propuestos: 0, porAclarar: 0, antesDelCorte: 0, fallos: [], decisiones }
+    const r: ResultadoConciliar = { casadosSolos: 0, propuestos: 0, porAclarar: 0, antesDelCorte: 0, esperan: 0, fallos: [], decisiones }
     const hechos = new Set<string>()
     for (const d of decisiones) {
       // El otro lado de un traspaso lo casa la decisión de su pareja: no se propone aparte.
       if (hechos.has(d.movimientoId) || d.otroLadoDe) continue
       const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte, tarjetaId: d.tarjetaId,
         origen: d.origen, preseleccionar: d.preseleccionar, tarjetaDesconocida: d.tarjetaDesconocida, alternativas: d.alternativas,
-        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar }
+        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar, esperaExtracto: d.esperaExtracto }
       try {
         if (d.tarjetaId) await rpc('bank_tarjeta_del_movimiento', { p_movement: d.movimientoId, p_card: d.tarjetaId })
         if (d.confianza === 'seguro' && d.destino) {
@@ -322,6 +327,10 @@ export function crearBancos(bd: Bd) {
         } else if (d.antesDelCorteSinPareja) {
           await rpc('bank_proponer', { p_movement: d.movimientoId, p_estado: 'antes_corte_sin_pareja', p_confianza: 'duda', p_porque: d.porque, p_propuesta: propuesta })
           r.antesDelCorte++
+        } else if (d.esperaExtracto) {
+          // B02 · El otro lado de un traspaso aún no está subido: espera, no cuenta por aclarar.
+          await rpc('bank_proponer', { p_movement: d.movimientoId, p_estado: 'espera_extracto', p_confianza: 'duda', p_porque: d.porque, p_propuesta: propuesta })
+          r.esperan++
         } else {
           await rpc('bank_proponer', { p_movement: d.movimientoId, p_estado: d.confianza === 'probable' ? 'propuesto' : 'por_aclarar', p_confianza: d.confianza, p_porque: d.porque, p_propuesta: propuesta })
           if (d.confianza === 'probable') r.propuestos++; else r.porAclarar++
