@@ -85,8 +85,10 @@ export function comparar(prod, stag) {
         if (objeto !== 'funcion') difs.push({ objeto, diferencia: 'distinta', nombre: n })
         else {
           const [cp, ap] = h.split('|'), [cs, as] = s.get(n).split('|')
-          if (cp !== cs) difs.push({ objeto, diferencia: 'cuerpo', nombre: n })
-          if (ap !== as) difs.push({ objeto, diferencia: 'atributos', nombre: n })
+          // Las dos huellas viajan con la diferencia: «staging tiene la de
+          // antes» se escribe pegándolas, no recordando otra foto (16/10).
+          if (cp !== cs) difs.push({ objeto, diferencia: 'cuerpo', nombre: n, prod: cp, stag: cs })
+          if (ap !== as) difs.push({ objeto, diferencia: 'atributos', nombre: n, prod: ap, stag: as })
         }
       }
     }
@@ -128,6 +130,10 @@ export function salida(difs, aceptadas, iguales) {
       // De una función roja, también lo largo de su firma: si una aceptada no
       // casa, dice en qué se diferencia el nombre sin enseñarlo.
       if (grupo === 'rojas' && d.objeto === 'funcion') out.push(`@@ ${LETRA[d.objeto]}.${corto(d)}.largo ${d.nombre.length}`)
+      // De una función con otro cuerpo (o atributos), la huella a cada lado:
+      // los 16 primeros de md5(prosrc), lo mismo que left(md5(prosrc), 16) a
+      // mano. En las aceptadas también: aceptar no es dejar de mirar.
+      if (d.prod && d.stag) out.push(`@@ ${LETRA[d.objeto]}.${corto(d)}.prod ${d.prod.slice(0, 16)}`, `@@ ${LETRA[d.objeto]}.${corto(d)}.stag ${d.stag.slice(0, 16)}`)
     }
   }
   return { texto: out.join('\n') + '\n', rojas, vistas }
@@ -135,10 +141,10 @@ export function salida(difs, aceptadas, iguales) {
 
 /** El detalle, con las firmas enteras y el motivo de cada aceptada: a un fichero. */
 export function detalle(difs, aceptadas) {
-  const l = ['| objeto | diferencia | nombre | huella | aceptada |', '|---|---|---|---|---|']
+  const l = ['| objeto | diferencia | nombre | huella | producción | staging | aceptada |', '|---|---|---|---|---|---|---|']
   for (const d of difs) {
     const m = aceptadas.get(`${d.objeto}|${d.diferencia}|${d.nombre}`)
-    l.push(`| ${d.objeto} | ${d.diferencia} | \`${d.nombre}\` | ${huella16(d.nombre)} | ${m ?? '**no: roja**'} |`)
+    l.push(`| ${d.objeto} | ${d.diferencia} | \`${d.nombre}\` | ${huella16(d.nombre)} | ${d.prod ? d.prod.slice(0, 16) : ''} | ${d.stag ? d.stag.slice(0, 16) : ''} | ${m ?? '**no: roja**'} |`)
   }
   return l.join('\n') + '\n'
 }

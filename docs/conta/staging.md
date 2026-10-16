@@ -629,6 +629,16 @@ guardas del nocturno de cumplimiento. Lo compara `comparar.mjs`.
 cada tanda. No para la tanda: la tanda puede ser justo la que cierra una
 diferencia. El «después» dice si la ha cerrado o ha abierto otra.
 
+**Las dos huellas de cada función distinta (16/10).** De cada función con otro
+cuerpo, el resumen da `f.<nombre>.prod` y `f.<nombre>.stag`, los 16 primeros
+caracteres de `md5(prosrc)` a cada lado. Es lo mismo que
+`left(md5(prosrc), 16)` a mano. En «atributos», la huella de los atributos.
+Sale también en las aceptadas y en el detalle del artefacto.
+
+Por qué: el 16/10 di por hecho que staging había vuelto al
+`journal_entry_validar` de antes porque lo recordaba de una foto anterior, y no
+era verdad. Con las dos huellas, esa frase se escribe pegándolas.
+
 **Qué sale en rojo.** Toda diferencia que no esté aceptada **por su nombre
 exacto y con su motivo** en `scripts/conta/staging/diferencias-aceptadas.txt`.
 Las aceptadas salen igual, en su sección y con su recuento. Una aceptada que

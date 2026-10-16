@@ -119,3 +119,44 @@ describe('el registro de staging', () => {
     expect(r).toMatch(/created_by like 'staging aplicar%%'[\s\S]*analizar\.mjs registro "\$f"[^\n]*>> "\$T\/registro\.sql"/)
   })
 })
+
+describe('la huella del cuerpo, a los dos lados (16/10)', () => {
+  // Las huellas REALES de las 15:42 del 16/10 (md5(prosrc), leídas a los dos
+  // lados): staging tenía las de antes del céntimo; producción, las de 20261113T0100.
+  const A = 'a'.repeat(32)
+  const prod = foto([
+    ['funcion', 'journal_entry_validar(p_entry uuid, p_quien_nombre text)', `798e4c431fe9d790288d974b7fe22431|${A}`],
+    ['funcion', 'conta_propuesta_ventas_unidad(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid)', `32bb2645585207249c7c46bd2100b119|${A}`],
+    ['tabla', 'supplier', H('2')],
+  ])
+  const stag = foto([
+    ['funcion', 'journal_entry_validar(p_entry uuid, p_quien_nombre text)', `72a4f4a090d3a739dbf1bad5813292cf|${A}`],
+    ['funcion', 'conta_propuesta_ventas_unidad(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid)', `78e1fc8ae374e9106ace62c6fd5b5536|${A}`],
+    ['tabla', 'supplier', H('2')],
+  ])
+
+  it('cada función con otro cuerpo saca su huella en producción y en staging, por la puerta', () => {
+    const r = salida(comparar(prod, stag), new Map(), iguales(prod, stag))
+    const pasa = filtrar(r.texto)
+    expect(pasa.retenidas).toBe(0)
+    const v = Object.fromEntries(pasa.filas.filter((f) => 'clave' in f).map((f) => [(f as { clave: string }).clave, (f as { valor: string }).valor]))
+    expect(v['f.journal_entry_validar.prod']).toBe('798e4c431fe9d790')
+    expect(v['f.journal_entry_validar.stag']).toBe('72a4f4a090d3a739')
+    expect(v['f.conta_propuesta_ventas_unidad.prod']).toBe('32bb2645585207249c7c46bd2100b119'.slice(0, 16))
+    expect(v['f.conta_propuesta_ventas_unidad.stag']).toBe('78e1fc8ae374e910')
+  })
+
+  it('también en las aceptadas, y en el detalle del artefacto', () => {
+    const acep = leerAceptadas('funcion | cuerpo | journal_entry_validar(p_entry uuid, p_quien_nombre text) | prueba')
+    const difs = comparar(prod, stag)
+    const pasa = filtrar(salida(difs, acep, iguales(prod, stag)).texto)
+    expect(pasa.filas).toContainEqual({ clave: 'f.journal_entry_validar.stag', valor: '72a4f4a090d3a739' })
+    expect(detalle(difs, acep)).toContain('| 798e4c431fe9d790 | 72a4f4a090d3a739 | prueba |')
+  })
+
+  it('lo que no es un cuerpo distinto no lleva huellas de cuerpo', () => {
+    const solo = foto([['funcion', 'nueva()', `${A}|${A}`], ['tabla', 'x', H('1')]])
+    const pasa = filtrar(salida(comparar(foto([['tabla', 'x', H('1')]]), solo), new Map(), {}).texto)
+    expect(pasa.filas.some((f) => 'clave' in f && /\.(prod|stag)$/.test((f as { clave: string }).clave))).toBe(false)
+  })
+})
