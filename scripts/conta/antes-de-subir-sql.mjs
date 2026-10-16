@@ -53,8 +53,12 @@
 //      cualificar sobre la copia y el registro devuelto, que lo tienen los dos;
 //      en staging no hay Foodint y la vuelta atrás salía sin hacer nada.)
 //   8. Cada vuelta atrás de producción (supabase/produccion/vuelta-atras.txt)
-//      la ejecuta de verdad («\i <fichero>») alguna prueba del manifiesto de
-//      staging, sobre datos, o dice por qué no con «-- sin prueba con datos: …».
+//      la ejecuta de verdad («\i <fichero>») alguna prueba de staging
+//      (supabase/staging/sql/*_prueba.sql), sobre datos, o dice por qué no con
+//      «-- sin prueba con datos: …». Todas las pruebas de la carpeta, no solo
+//      las del manifiesto de staging: el manifiesto de cada rama nombra lo suyo
+//      y se vacía al fusionar, y la prueba sigue ahí (16/10: la de C06b, #215,
+//      corrió en staging y no está en el manifiesto de main).
 //      Una vuelta atrás que en staging no encuentra nada que deshacer no ha
 //      ejecutado ni una de sus sentencias. Vale «\i» (desde la raíz) y «\ir»
 //      (desde la carpeta de la prueba). La que ya estaba viva el 16/10 (B02 ·
@@ -143,8 +147,9 @@ const vueltas = 'supabase/produccion/vuelta-atras.txt'
 if (existsSync(vueltas)) {
   // Lo que ejecuta cada prueba: «\i ruta» (desde la raíz, como corre el workflow) y «\ir ruta» (desde la carpeta de la prueba).
   const ejecutadas = new Set()
-  if (existsSync(manifiesto)) {
-    for (const p of readFileSync(manifiesto, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && /_prueba\.sql$/.test(l) && existsSync(l))) {
+  const carpeta = 'supabase/staging/sql'
+  if (existsSync(carpeta)) {
+    for (const p of readdirSync(carpeta).filter((n) => /_prueba\.sql$/.test(n)).map((n) => `${carpeta}/${n}`)) {
       for (const l of readFileSync(p, 'utf8').split('\n')) {
         const m = l.trim().match(/^\\(i|ir)\s+(\S+)\s*$/)
         if (m) ejecutadas.add(posix.normalize(m[1] === 'ir' ? posix.join(posix.dirname(p), m[2]) : m[2]))
@@ -155,7 +160,7 @@ if (existsSync(vueltas)) {
     if (!existsSync(v)) continue
     if (ANTES_DE_LA_REGLA_8.has(v)) continue
     if (!ejecutadas.has(v) && !/^--\s*sin prueba con datos:\s*\S/m.test(readFileSync(v, 'utf8'))) {
-      mal.push(`${v}: ninguna prueba del manifiesto de staging la ejecuta («\\i ${v}») sobre datos, ni dice por qué no («-- sin prueba con datos: …»).`)
+      mal.push(`${v}: ninguna prueba de staging (supabase/staging/sql) la ejecuta («\\i ${v}») sobre datos, ni dice por qué no («-- sin prueba con datos: …»).`)
     }
   }
 }

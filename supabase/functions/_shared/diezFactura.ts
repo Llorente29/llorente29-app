@@ -109,7 +109,8 @@ export function facturaDeVentas(a: AsientoVentas, o: { correspondencia: Correspo
   const grupo = o.correspondencia.localAlEnviar[a.local]
   if (!grupo) throw new Error(`el local «${a.local}» no tiene grupo en Diez: no se puede numerar la factura`)
   const de = (pref: string) => a.lineas.filter((l) => l.cuenta.startsWith(pref))
-  const otras = a.lineas.filter((l) => !/^(430|700|708|477)/.test(l.cuenta))
+  // C06b (16/10): también la 7000900x (promociones, al debe: resta) y la 705 (envíos cobrados).
+  const otras = a.lineas.filter((l) => !/^(430|700|705|708|477)/.test(l.cuenta))
   if (otras.length) throw new Error(`líneas que una factura de ventas no lleva: ${otras.map((l) => l.cuenta).join(', ')}`)
   const clientes = [...new Set(de('430').map((l) => l.cuenta))]
   if (clientes.length !== 1 || clientes[0] !== p.cuentaCliente) throw new Error(`la 430 del asiento (${clientes.join(', ') || 'ninguna'}) no es la de ${a.canal} (${p.cuentaCliente})`)
@@ -119,9 +120,10 @@ export function facturaDeVentas(a: AsientoVentas, o: { correspondencia: Correspo
   const fecha = aaaammdd(a.fecha)
   const [y, m, d] = a.fecha.split('-')
   const descripcion = `${p.descripcion} ${grupo} ${d}/${m}`
-  // Ventas (700, al haber) en positivo y reembolsos (708, al debe) en negativo, por cuenta.
+  // Ventas (700 y 705, al haber) en positivo; reembolsos (708) y promociones
+  // (7000900x), al debe, en negativo; por cuenta.
   const porCuenta = new Map<string, { importe: number; marca: string | null }>()
-  for (const l of [...de('700'), ...de('708')]) {
+  for (const l of [...de('700'), ...de('705'), ...de('708')]) {
     const x = porCuenta.get(l.cuenta) ?? { importe: 0, marca: l.marca ?? null }
     x.importe += c(l.haber) - c(l.debe)
     porCuenta.set(l.cuenta, x)

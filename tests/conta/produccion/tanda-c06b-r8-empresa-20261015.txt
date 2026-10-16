@@ -1,0 +1,20 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): a cualquier hora,
+# primero en ENSAYO (todo en una transacción y rollback, con el registro
+# dentro) y, con un ensayo en verde del mismo commit, en REAL (cada fichero en
+# su transacción con su registro en el historial; después la comprobación y,
+# si falla, la vuelta atrás automática).
+#
+# C06b · Respuesta 8, tarea 1, paso 3 de 3 (rama conta/c06b-autorizo-empresa). APLICADA: real en verde desde 1228da9b (15/10), comprobado en la base. Copia de archivo.
+#
+#   1. 20261111T0750 — DATOS: la autorización de la EMPRESA de Foodint para
+#      escribir en Diez C0008, desde el 01/10/2026 y solo ventas
+#      (incluye_recibidas = false). Autorizado por Julio. No envía nada: se
+#      sigue enviando con el botón «Validar y enviar a Diez».
+#
+# Va después de: #189 fusionado (a08c8a9), Vercel READY y conta-diez-enviar
+# desplegada desde main (versión 8, lee desde e incluye_recibidas).
+#
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/diez-autorizo-empresa.sql
+supabase/migrations/20261111T0750_c06b_diez_autorizo_empresa_datos.sql

@@ -1,0 +1,20 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# C06b · DATOS: las facturas recibidas abiertas en Diez C0008 para la empresa
+# de Foodint (Julio, 15/10). La anterior de este fichero (D01, liquidaciones
+# por correo) ya está en el historial de producción; su copia:
+# tests/conta/produccion/tanda-d01-liquidaciones-20261016.txt.
+#
+#   1. 0760 — la autorización de EMPRESA de Foodint en C0008 pasa a
+#      incluye_recibidas = true; su desde (2026-10-01) se queda. Cambia UNA
+#      fila que existe: AUTORIZO con su nombre. No envía nada.
+#
+# conta-diez-enviar en producción (versión 10) es, fichero a fichero, la de
+# main (16/10), con la búsqueda antes de escribir (#190) y la anulación de
+# recibidas (#192).
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/diez-recibidas-abiertas.sql
+supabase/migrations/20261111T0760_c06b_diez_recibidas_abiertas_datos.sql
