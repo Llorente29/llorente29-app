@@ -20,10 +20,12 @@ begin
   return pg_temp.mt(r);
 end $f$;
 
+-- Con disparadores y claves ajenas otra vez (el clon ya está entero y
+-- comprobado). Tiene que ser un SET: supautils no deja cambiarlo desde plpgsql.
+set local session_replication_role = origin;
+
 do $$
 begin
   if coalesce(current_setting('e2e.semilla', true), '') = '' then return; end if;
-  perform set_config('session_replication_role', 'origin', true);
   execute pg_temp.mt_semilla(current_setting('e2e.semilla'));
-  perform set_config('session_replication_role', 'replica', true);
 end $$;
