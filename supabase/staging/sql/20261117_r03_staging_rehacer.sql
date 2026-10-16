@@ -3,7 +3,7 @@
 -- SOLO STAGING. Staging tiene aplicada la versión anterior del R03 (con la
 -- espera de 5 minutos). Para aplicar la nueva desde cero, la tanda pasa antes
 -- por las tres vueltas atrás de verdad (0320, 0310, 0300), que así quedan
--- probadas sobre datos. La de la 0300 para si hay direcciones pegadas, y las
+-- probadas sobre datos (con \i, abajo). La de la 0300 para si hay direcciones pegadas, y las
 -- e2e dejan pegadas las de la cuenta A de prueba (R03B, R03D): aquí se borran.
 -- Datos inventados de la semilla; producción no pasa por aquí (guarda).
 
@@ -22,3 +22,9 @@ begin
     end if;
   end if;
 end $$;
+
+-- Las tres vueltas atrás, de verdad y en su orden (la 0310 quita también la
+-- espera de la versión anterior: cron, función y columna).
+\i supabase/vuelta-atras/20261118T0320_r03_entrega_datos.down.sql
+\i supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql
+\i supabase/vuelta-atras/20261118T0300_r03_direccion_incompleta.down.sql

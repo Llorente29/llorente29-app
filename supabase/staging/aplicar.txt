@@ -3,9 +3,6 @@
 # las tres vueltas atrás de verdad (así quedan probadas sobre datos), se prueban
 # las dos pruebas (ROLLBACK) y se aplican 0300, 0310 y 0320 de verdad.
 supabase/staging/sql/20261117_r03_staging_rehacer.sql
-supabase/vuelta-atras/20261118T0320_r03_entrega_datos.down.sql
-supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql
-supabase/vuelta-atras/20261118T0300_r03_direccion_incompleta.down.sql
 supabase/staging/sql/20261118_r03_direccion_incompleta_prueba.sql
 supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
 supabase/migrations/20261118T0300_r03_direccion_incompleta.sql
