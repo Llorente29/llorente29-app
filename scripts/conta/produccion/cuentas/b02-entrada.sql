@@ -15,5 +15,9 @@ select clave, valor from (
   select 5, 'movimientos (todas las cuentas)', (select count(*) from public.bank_movement)::text union all
   select 6, 'movimientos con tipo (todas las cuentas)', (select count(*) from public.bank_movement m where to_jsonb(m)->>'movement_type' is not null)::text union all
   select 7, 'movimientos con contraparte (todas las cuentas)', (select count(*) from public.bank_movement m where to_jsonb(m)->>'counterparty' is not null)::text union all
-  select 8, 'casados vivos (todas las cuentas)', (select count(*) from public.bank_match where status = 'vivo')::text
+  select 8, 'casados vivos (todas las cuentas)', (select count(*) from public.bank_match where status = 'vivo')::text union all
+  select 9, 'disparador bank_factura_aprobada_con_pago', (select count(*) from pg_trigger where tgname = 'bank_factura_aprobada_con_pago' and not tgisinternal)::text union all
+  select 10, 'función bank_regla_borrar', ((to_regprocedure('public.bank_regla_borrar(uuid)') is not null)::int)::text union all
+  select 11, 'huella de bank_regla_guardar', (select md5(prosrc) from pg_proc where oid = to_regprocedure('public.bank_regla_guardar(uuid,uuid,text,jsonb,jsonb,text,text)')) union all
+  select 12, 'facturas pagadas (todas las cuentas)', (select count(*) from public.supplier_invoice where paid_at is not null)::text
 ) t order by o;
