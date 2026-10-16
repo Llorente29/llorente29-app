@@ -1,9 +1,4 @@
-# D01 · El NIF de «Catcher Marketplace» de la semilla de E05 (rama conta/d01-nif-catcher).
-#   B00000055 no pasa su control: B00000125 en lo ya sembrado (la ficha y su
-#   tercero). Se puede volver a lanzar: dice cuántos quedan con el de antes (0).
-#   Las tres pruebas de staging de E05 (lotes, cruces, pago) ya no se pueden
-#   volver a pasar sobre este staging: se escribieron antes de su semilla y de
-#   su e2e, que dejaron la 41000100 con «Riders», Catcher, su tarifa, sus
-#   tiendas y el lote de la 2.ª quincena de septiembre (run 248: el primer
-#   choque es la 41000100, no el NIF). Lo que cruza el NIF lo prueba la e2e.
-supabase/seeds/conta/seed_d01_nif_catcher_staging.sql
+# C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
+# prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
+# staging no cambia.
+supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
