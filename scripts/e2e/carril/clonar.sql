@@ -160,6 +160,11 @@ begin
         when c.atttypid = 'text[]'::regtype then format('(select array_agg(pg_temp.mt(e) order by o) from unnest(%s) with ordinality u(e, o))', v)
         else v end;
       if c.unico is not null then v := format('case when %s is null or not (%s) then %s else %s || %L end', v, c.unico, v, v, '-c' || n); end if;
+      -- Un usuario del carril nace sin enlaces pendientes: los tokens de
+      -- confirmar, recuperar o cambiar el correo son únicos y no son suyos.
+      if cp.tabla = 'auth.users'::regclass and c.attname::text like '%token%' and c.atttypid in ('text'::regtype, 'varchar'::regtype) then
+        v := quote_literal('');
+      end if;
       exprs := exprs || ', ' || v;
     end loop;
     execute format('insert into %s (%s) %s select %s from %I x', cp.tabla, substr(cols, 3),
