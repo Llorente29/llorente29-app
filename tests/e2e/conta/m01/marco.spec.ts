@@ -23,7 +23,14 @@ function vigilar(page: Page) {
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[consola] ${m.text().slice(0, 300)}`) })
 }
 
+/** Ningún esqueleto de carga a la vista (la empresa de arriba, el Inicio, el balance…). */
+async function esperarCargado(page: Page) {
+  await expect(page.locator('.cxm .cx-hueso')).toHaveCount(0, { timeout: 30_000 })
+}
+
 async function capturar(page: Page, nombre: string, medir = true) {
+  // La foto, con la pantalla ya cargada: no con su esqueleto.
+  await esperarCargado(page)
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: false })
   if (medir) expect(await loQueTapanSinPregunta(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
@@ -54,6 +61,9 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
   await expect(franja.getByRole('link')).toHaveCount(4)
   await esperarNumeros(page)
   await expect(franja.locator('.cxm-chip-numero')).not.toContainText(['—'])
+  // Lo de la primera carga, para compararlo después de recargar: no se cuenta
+  // antes de saber la empresa (e2e 375 dio «0» en Libros con 6 esperando).
+  const primeraCarga = await franja.locator('.cxm-chip-numero').allTextContents()
 
   if (lado(page) === 'movil') {
     // Abajo: Inicio, Compras, Bancos, Libros y «Más».
@@ -64,6 +74,7 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
     const hoja = page.getByRole('dialog', { name: 'Menú' })
     await expect(hoja.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Ventas', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes', 'Volver a Folvy'])
     await expect(hoja.locator('.cxm-modulo-apagado')).toContainText('Próximamente')
+    await esperarCargado(page)
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/marco-mas-movil.png` })
     await hoja.getByRole('button', { name: 'Cerrar' }).click()
@@ -93,6 +104,7 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
   // Al recargar, el navegador vuelve a donde estaba la página: arriba del todo
   // para la foto, y con los números ya contados (no «…»).
   await esperarNumeros(page)
+  await expect(page.getByRole('region', { name: 'Te toca hoy' }).locator('.cxm-chip-numero')).toHaveText(primeraCarga)
   await page.evaluate(() => window.scrollTo(0, 0))
   await capturar(page, 'marco-desplegado')
   await menu(page).getByRole('button', { name: 'Plegar el menú' }).click()
@@ -147,7 +159,6 @@ test('las pestañas de Libros, arriba; las que no caben, en «Más ▾»', async
   const activa = pestanas.locator('[aria-current="page"], .cxm-pestana-activa')
   await expect(activa).toHaveText(/^Balances/)
   await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
-  // La foto con el balance ya cargado, no con su esqueleto.
   await expect(page.getByRole('heading', { name: 'Balance de situación' })).toBeVisible({ timeout: 30_000 })
   await capturar(page, 'pestanas-libros')
 })

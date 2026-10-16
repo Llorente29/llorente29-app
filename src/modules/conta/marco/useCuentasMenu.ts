@@ -14,6 +14,9 @@
 //
 // M01: si un número no se ha podido contar es null, no 0. El badge no se pinta
 // igual, pero el «Te toca hoy» del Inicio no dice «al día» de lo que no sabe.
+// Y no se cuenta hasta saber la empresa: sin ella, Libros y Bancos salían 0
+// (e2e 375: «0 asientos para revisar» con 6 esperando). Lo contado es de una
+// cuenta y una empresa: al cambiar de empresa no se enseña el de la otra.
 //
 // Se recuerda 30 s por cuenta y empresa; una pantalla que decide algo avisa
 // con `refrescarCuentasMenu()` y el número cambia sin esperar.
@@ -31,6 +34,7 @@ import { cargarRevision430 } from '@/modules/conta/services/revision430Service'
 export type CuentasMenu = Partial<Record<string, number | null>>
 
 const EVENTO = 'folvy:conta:cuentas-menu'
+const NADA: CuentasMenu = {}
 const cache = new Map<string, { cuando: number; valor: Promise<CuentasMenu> }>()
 
 /** Tras decidir algo en una pantalla: el menú vuelve a contar. */
@@ -65,8 +69,9 @@ async function contar(accountId: string, companyId: string | null): Promise<Cuen
 
 export function useCuentasMenu(): CuentasMenu {
   const { accountId } = useCuentaConta()
-  const { activa } = useEmpresas()
-  const [cuentas, setCuentas] = useState<CuentasMenu>({})
+  const { activa, cargando } = useEmpresas()
+  const [cuentas, setCuentas] = useState<{ clave: string; valor: CuentasMenu } | null>(null)
+  const clave = accountId && !cargando ? `${accountId}|${activa?.id ?? ''}` : null
   const [vuelta, setVuelta] = useState(0)
   useEffect(() => {
     const f = () => setVuelta((v) => v + 1)
@@ -74,16 +79,16 @@ export function useCuentasMenu(): CuentasMenu {
     return () => window.removeEventListener(EVENTO, f)
   }, [])
   useEffect(() => {
-    if (!accountId) return
-    const clave = `${accountId}|${activa?.id ?? ''}`
+    if (!accountId || !clave) return
     let c = cache.get(clave)
     if (!c || Date.now() - c.cuando > 30_000) {
       c = { cuando: Date.now(), valor: contar(accountId, activa?.id ?? null) }
       cache.set(clave, c)
     }
     let vivo = true
-    c.valor.then((v) => { if (vivo) setCuentas(v) })
+    c.valor.then((v) => { if (vivo) setCuentas({ clave, valor: v }) })
     return () => { vivo = false }
-  }, [accountId, activa?.id, vuelta])
-  return cuentas
+  }, [accountId, activa?.id, clave, vuelta])
+  // Hasta que no está contado para ESTA cuenta y empresa: nada (el «Te toca hoy» dice «…»).
+  return cuentas && cuentas.clave === clave ? cuentas.valor : NADA
 }
