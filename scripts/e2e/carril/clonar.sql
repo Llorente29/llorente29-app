@@ -115,18 +115,20 @@ begin
   -- Lo que tiene que ser único en TODA la base y no lleva ningún uuid (un token,
   -- una clave de importación, una ruta): su última columna de texto lleva «-cN»
   -- detrás. En un índice de expresión (lower(col)), esa col.
-  create temp table _unico (tabla regclass, col name, primary key (tabla, col)) on commit drop;
+  -- Un índice parcial (where company_id is null) solo obliga a las filas que
+  -- cumplen su condición: a las demás no se les toca nada.
+  create temp table _unico (tabla regclass, col name, cuando text, primary key (tabla, col)) on commit drop;
   for f in
-    select i.indexrelid, i.indrelid, i.indkey from pg_index i join _copia cx on cx.tabla = i.indrelid
+    select i.indexrelid, i.indrelid, i.indkey, coalesce(pg_get_expr(i.indpred, i.indrelid), 'true') as cuando from pg_index i join _copia cx on cx.tabla = i.indrelid
      where i.indisunique and not i.indisprimary and cx.tabla::text not like 'auth.%'
        and not exists (select 1 from unnest(i.indkey) x join pg_attribute b on b.attrelid = i.indrelid and b.attnum = x where b.atttypid = 'uuid'::regtype)
   loop
     insert into _unico
-      select f.indrelid, b.attname from unnest(f.indkey) with ordinality x(num, o) join pg_attribute b on b.attrelid = f.indrelid and b.attnum = x.num
+      select f.indrelid, b.attname, f.cuando from unnest(f.indkey) with ordinality x(num, o) join pg_attribute b on b.attrelid = f.indrelid and b.attnum = x.num
        where b.atttypid in ('text'::regtype, 'varchar'::regtype) order by x.o desc limit 1
       on conflict do nothing;
     insert into _unico
-      select f.indrelid, (regexp_matches(pg_get_indexdef(f.indexrelid), 'lower\(([a-z_0-9]+)\)', 'g'))[1]::name
+      select f.indrelid, (regexp_matches(pg_get_indexdef(f.indexrelid), 'lower\(([a-z_0-9]+)\)', 'g'))[1]::name, f.cuando
       on conflict do nothing;
   end loop;
 
@@ -140,7 +142,7 @@ begin
              (exists (select 1 from pg_index i where i.indrelid = cp.tabla and i.indisprimary and i.indnatts = 1 and i.indkey[0] = a.attnum)
               and a.atttypid <> 'uuid'::regtype
               and (a.attidentity <> '' or exists (select 1 from pg_attrdef d where d.adrelid = cp.tabla and d.adnum = a.attnum))) as numero_nuevo,
-             exists (select 1 from _unico u where u.tabla = cp.tabla and u.col = a.attname) as unico
+             (select string_agg('(' || u.cuando || ')', ' or ') from _unico u where u.tabla = cp.tabla and u.col = a.attname) as unico
         from pg_attribute a
        where a.attrelid = cp.tabla and a.attnum > 0 and not a.attisdropped
        order by a.attnum
@@ -157,7 +159,7 @@ begin
         when c.atttypid = 'json'::regtype then format('pg_temp.mt(%s::text)::json', v)
         when c.atttypid = 'text[]'::regtype then format('(select array_agg(pg_temp.mt(e) order by o) from unnest(%s) with ordinality u(e, o))', v)
         else v end;
-      if c.unico then v := format('case when %s is null then null else %s || %L end', v, v, '-c' || n); end if;
+      if c.unico is not null then v := format('case when %s is null or not (%s) then %s else %s || %L end', v, c.unico, v, v, '-c' || n); end if;
       exprs := exprs || ', ' || v;
     end loop;
     execute format('insert into %s (%s) %s select %s from %I x', cp.tabla, substr(cols, 3),
