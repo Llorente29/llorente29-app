@@ -1,0 +1,5 @@
+# Vuelta atrás de la tanda D01 · Compras y la ficha (modo «vuelta_atras»). La
+# .down.sql deja compras_mirar y compras_ficha_le_falta como las dejaron la
+# 0170 y la 0120 de compras (su texto, tal cual). No toca datos.
+cuenta: scripts/conta/produccion/cuentas/d01-compras-ficha.sql
+supabase/vuelta-atras/20261118T0100_d01_compras_ficha.down.sql

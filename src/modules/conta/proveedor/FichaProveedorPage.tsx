@@ -121,22 +121,24 @@ function Ficha({ supplierId, extensiones }: { supplierId: string; extensiones: E
 
 /** Los enlaces de «Falta: …» llevan a `#campo-<campo>`: se baja hasta él y se le da el foco. */
 function IrAlCampo() {
-  const { hash, pathname } = useLocation()
+  // `key`: pulsar otra vez el mismo enlace (misma URL) vuelve a llevar al campo.
+  const { hash, pathname, key } = useLocation()
   useEffect(() => {
     if (!hash.startsWith('#campo-')) return
-    // Algunos apartados se pintan al cargar sus datos («Cómo te factura»): se
-    // busca el campo cada 100 ms, como mucho 2 s.
+    // Algunos apartados se pintan al cargar sus datos («Cómo te factura», «Sus
+    // cuentas», que lee el plan entero): se busca el campo cada 100 ms, como
+    // mucho 10 s. Con 2 s, en una cuenta con el plan grande, el enlace no hacía nada.
     let intentos = 0
     let t = 0
     const buscar = () => {
       const el = document.getElementById(decodeURIComponent(hash.slice(1)))
-      if (!el) { if (++intentos < 20) t = window.setTimeout(buscar, 100); return }
+      if (!el) { if (++intentos < 100) t = window.setTimeout(buscar, 100); return }
       el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       el.focus({ preventScroll: true })
     }
     t = window.setTimeout(buscar, 60)
     return () => window.clearTimeout(t)
-  }, [hash, pathname])
+  }, [hash, pathname, key])
   return null
 }
 

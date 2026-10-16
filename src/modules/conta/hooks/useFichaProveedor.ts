@@ -25,6 +25,7 @@ import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/modules/conta/types'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { validarFicha, type ResultadoValidacion } from '@/modules/conta/lib/validacionesFicha'
 import { leerOpcionesFicha } from '@/modules/conta/services/fichaTablasService'
+import { proveedoresConCuentaDeFacturas } from '@/modules/conta/services/cuentasProveedorService'
 import type { OpcionesFicha } from '@/modules/conta/lib/opcionesFicha'
 
 export interface DatosFicha {
@@ -41,6 +42,8 @@ export interface DatosFicha {
    */
   otros: OtroDeLaCuenta[]
   conta: boolean
+  /** Tiene una cuenta solo suya para sus facturas: ya se sabe a qué cuenta van (completitud). */
+  cuentaDeFacturas: boolean
   /** IVA, retención, forma y plazo de pago, de las tablas generales del C00 (tarea 7). */
   opciones: OpcionesFicha
   /** «Lo que he aprendido de este proveedor», tal como está guardado (C01b, tarea 5). */
@@ -130,7 +133,7 @@ async function leerFicha(
   }
   // Primero las tablas: de ellas sale la empresa, y con ella qué tipos de gasto ocultó.
   const opciones = await leerOpcionesFicha(accountId, hoyEnMadrid())
-  const [contactos, propuestas, tiposGasto, locales, facturas, documentos, todos, conta] = await Promise.all([
+  const [contactos, propuestas, tiposGasto, locales, facturas, documentos, todos, conta, conCuenta] = await Promise.all([
     listarContactos(supplierId),
     listarPropuestas(supplierId),
     listarTiposGasto(accountId, opciones.empresa?.id ?? null),
@@ -139,13 +142,15 @@ async function leerFicha(
     listarDocumentos(accountId, supplierId),
     listarProveedores(accountId),
     contaActiva(accountId),
+    // Si no se puede leer, la ficha se abre igual: solo decide si «Falta» pregunta por sus facturas.
+    proveedoresConCuentaDeFacturas(accountId, supplierId).catch(() => new Set<string>()),
   ])
   const aprendidos = await leerAprendido(supplierId, facturas).catch(() => [] as Aprendido[])
   const otros = todos.map((p) => ({
     id: p.id, name: p.name, taxId: p.taxId, expenseCategoryId: p.expenseCategoryId, usualTaxRateIds: p.usualTaxRateIds,
     irpfWithholdingPct: p.irpfWithholdingPct, paymentTermsDays: p.paymentTermsDays,
   }))
-  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta, opciones, aprendidos } }
+  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta, cuentaDeFacturas: conCuenta.has(supplierId), opciones, aprendidos } }
 }
 
 export function useFichaProveedor(accountId: string | null, supplierId: string): UsoFicha {
@@ -220,7 +225,7 @@ export function useFichaProveedor(accountId: string | null, supplierId: string):
   }, [datos, comprobarNifUe])
 
   const completitud = useMemo(() => datos
-    ? calcularCompletitud({ ficha: datos.ficha, contactos: datos.contactos, tieneCertificadoBanco: tieneCertificadoBanco(datos.documentos, datos.ficha.ibanChangedAt) })
+    ? calcularCompletitud({ ficha: datos.ficha, contactos: datos.contactos, tieneCertificadoBanco: tieneCertificadoBanco(datos.documentos, datos.ficha.ibanChangedAt), cuentaDeFacturas: datos.cuentaDeFacturas })
     : null, [datos])
 
   const repetidas = useMemo(() => datos ? repetidasDe(datos.facturas) : new Map<string, Repetida>(), [datos])

@@ -124,3 +124,14 @@ export async function gastoAprendido(companyId: string, supplierId: string): Pro
   const r = await rpc<Record<string, unknown> | null>('conta_gasto_aprendido', { p_company: companyId, p_supplier: supplierId }).catch(() => null)
   return r && typeof r.cuenta === 'string' && typeof r.origen === 'string' ? { cuenta: r.cuenta, origen: r.origen } : null
 }
+
+/**
+ * Los proveedores de la cuenta con una cuenta solo suya para sus facturas
+ * (enlace «gasto»). Con ella ya está contestado a qué cuenta van sus facturas,
+ * igual que con un tipo de gasto (completitud, «Falta: …»).
+ */
+export async function proveedoresConCuentaDeFacturas(accountId: string, supplierId?: string): Promise<Set<string>> {
+  let q = tabla('company_account_link').select('entity_id').eq('account_id', accountId).eq('entity', 'supplier').eq('role', 'gasto')
+  if (supplierId) q = q.eq('entity_id', supplierId)
+  return new Set((await leer(q, 'las cuentas de sus facturas')).map((l) => String(l.entity_id)))
+}

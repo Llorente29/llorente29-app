@@ -466,13 +466,14 @@ export function agruparAMirar(m: Mirar): FilaAMirar[] {
   return filas
 }
 
-/** «el NIF», «el tipo de gasto» y «cómo te factura», unidos como se dice. */
+/** «el NIF», «dónde se apuntan sus facturas» y «cómo te factura», unidos como se dice. */
 export function listaFaltas(falta: readonly FaltaFicha[]): string {
-  const t = falta.map((f) => (f.falta === 'nif' ? 'el NIF' : f.falta === 'tipo_gasto' ? 'el tipo de gasto' : 'cómo te factura'))
+  // El tipo de gasto y la cuenta de sus facturas son una sola pregunta (Julio, 16/10): a qué cuenta van.
+  const t = falta.map((f) => (f.falta === 'nif' ? 'el NIF' : f.falta === 'tipo_gasto' ? 'dónde se apuntan sus facturas' : 'cómo te factura'))
   return t.length <= 1 ? (t[0] ?? '') : `${t.slice(0, -1).join(', ')} y ${t[t.length - 1]}`
 }
 
-/** «A Verduras del Huerto le faltan el NIF, el tipo de gasto y cómo te factura.» */
+/** «A Verduras del Huerto le faltan el NIF, dónde se apuntan sus facturas y cómo te factura.» */
 export function fraseFicha(prov: string, falta: readonly FaltaFicha[]): string {
   return `A ${prov} le ${falta.length === 1 ? 'falta' : 'faltan'} ${listaFaltas(falta)}.`
 }
@@ -482,9 +483,9 @@ export function porQueFicha(falta: readonly FaltaFicha[]): string {
   const t: string[] = []
   const nif = falta.find((f) => f.falta === 'nif')
   if (nif && nif.falta === 'nif') t.push(nif.ofrece ? `Sin NIF no puedo contabilizar sus facturas; ${nif.veces && nif.veces > 1 ? `en ${nif.veces} de sus papeles` : 'en su último papel'} pone ${nif.ofrece}${nif.otros_distintos > 0 ? ' (y hay otro distinto)' : ''}: compruébalo antes de aceptarlo` : 'Sin NIF no puedo contabilizar sus facturas, y ninguno de sus papeles lo trae')
-  if (falta.some((f) => f.falta === 'tipo_gasto')) t.push('sin tipo de gasto no sé a qué cuenta van')
+  if (falta.some((f) => f.falta === 'tipo_gasto')) t.push('sin saber a qué cuenta van sus facturas no las puedo apuntar')
   const forma = falta.find((f) => f.falta === 'forma_facturar')
-  if (forma && forma.falta === 'forma_facturar') t.push(`sin saber cómo factura no sé si esperar su factura${forma.ultimo_papel ? ` (su último papel fue ${papelConArticulo(forma.ultimo_papel)})` : ''}`)
+  if (forma && forma.falta === 'forma_facturar') t.push(`no sé si trae la factura con cada entrega o si manda albaranes y la factura después, así que no sé si tengo que esperar su factura${forma.ultimo_papel ? ` (su último papel fue ${papelConArticulo(forma.ultimo_papel)})` : ''}`)
   return conPunto(t.join('; ').replace(/^./, (l) => l.toUpperCase()))
 }
 

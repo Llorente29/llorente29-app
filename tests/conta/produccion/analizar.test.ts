@@ -1322,6 +1322,41 @@ describe('la tanda B02 · T1 «lo que entra» (0200; ya en el historial de produ
   })
 })
 
+describe('la tanda de Compras y la ficha (D01, 0100 del 18; su copia, para cuando el manifiesto vivo quede libre)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-d01-compras-ficha-20261016.txt'
+  const F = 'supabase/migrations/20261118T0100_d01_compras_ficha.sql'
+  const viva = leerTanda(MANIFIESTO)
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-d01-compras-ficha-20261016.json', 'utf8'))
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx.contexto, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  it('un fichero, y sigue (sin «autorizo»): las dos funciones cambian con la misma firma, declarado y con su prueba', () => {
+    expect(viva).toEqual([F])
+    expect(r.ficheros).toEqual({ [F]: 'sigue' })
+    expect(ctx.tanda[F]).toBe(createHash('md5').update(readFileSync(F)).digest('hex'))
+    const cabecera = readFileSync(F, 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l)).map((l) => l.replace(/^-- cambia: (\S+) .*$/, '$1'))
+    expect(cabecera).toEqual(['public.compras_mirar', 'public.compras_ficha_le_falta'])
+  })
+  it('no toca datos: ni update, ni delete, ni insert fuera de sus funciones', () => {
+    const fuera = readFileSync(F, 'utf8').replace(/--.*$/gm, '').replace(/\$([a-z_]*)\$[\s\S]*?\$\1\$/g, '')
+    expect(fuera).not.toMatch(/^\s*(update|delete|insert)\b/im)
+  })
+  it('su vuelta atrás deja las dos funciones con el texto de la 0170 y la 0120 de compras, tal cual', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-d01-compras-ficha-20261016.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261118T0100_d01_compras_ficha.down.sql'])
+    const down = readFileSync(atras[0], 'utf8')
+    const cuerpo = (t: string, n: string) => { const i = t.indexOf(`create or replace function public.${n}(`); const a = t.indexOf('$$', i) + 2; return t.slice(a, t.indexOf('$$', a)) }
+    expect(cuerpo(down, 'compras_mirar')).toBe(cuerpo(readFileSync('supabase/migrations/20261017T0170_compras_pantallas.sql', 'utf8'), 'compras_mirar'))
+    expect(cuerpo(down, 'compras_ficha_le_falta')).toBe(cuerpo(readFileSync('supabase/migrations/20261017T0120_compras_forma_de_facturar.sql', 'utf8'), 'compras_ficha_le_falta'))
+    // Y lo que cambia la tanda, solo esas líneas: la 0100 del 18 es la de antes más su filtro.
+    expect(cuerpo(readFileSync(F, 'utf8'), 'compras_mirar')).toContain("and not (p.question = 'ficha_sin_forma' and p.consumed_at is not null and s.invoicing_mode is not null)")
+  })
+  it('declara qué cuenta, y la cuenta solo lee', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d01-compras-ficha.sql'])
+    expect(readFileSync(cuentas[0], 'utf8').replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(update|delete|insert)\b/i)
+  })
+})
+
 describe('lo que tiene que parar', () => {
   const sup = (sql: string) => decidir(sentencias(sql).flatMap((s: string) => clasificar(s)), existe)
   it('borrar o renombrar algo existente', () => {

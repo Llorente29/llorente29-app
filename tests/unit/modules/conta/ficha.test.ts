@@ -55,6 +55,15 @@ describe('completitud (§5.5)', () => {
     expect(r).toEqual({ pct: 100, faltan: [] })
   })
 
+  it('el tipo de gasto y la cuenta de sus facturas son una sola pregunta: con cualquiera de las dos, no falta', () => {
+    const sinNada = calcularCompletitud({ ficha: vacia, contactos: [], tieneCertificadoBanco: false })
+    expect(sinNada.faltan.find((f) => f.clave === 'tipo_gasto')?.texto).toBe('dónde se apuntan sus facturas')
+    const conCuenta = calcularCompletitud({ ficha: vacia, contactos: [], tieneCertificadoBanco: false, cuentaDeFacturas: true })
+    expect(conCuenta.faltan.some((f) => f.clave === 'tipo_gasto')).toBe(false)
+    expect(conCuenta.pct).toBeGreaterThan(sinNada.pct)
+    const conTipo = calcularCompletitud({ ficha: { ...vacia, expenseCategoryId: 't1' }, contactos: [], tieneCertificadoBanco: false })
+    expect(conTipo.faltan.some((f) => f.clave === 'tipo_gasto')).toBe(false)
+  })
   it('cada cosa que falta lleva adónde ir', () => {
     const r = calcularCompletitud({ ficha: vacia, contactos: [], tieneCertificadoBanco: false })
     const nif = r.faltan.find((f) => f.clave === 'nif')

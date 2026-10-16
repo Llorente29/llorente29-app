@@ -19,7 +19,7 @@
 //     que parezcan datos.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { Chip, Dato, ErrorConReintento, Tarjeta, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { rutaMayor, rutaPlan, rutaTablasGenerales } from '@/config/navegacion'
@@ -94,7 +94,13 @@ function FilaCuenta({ l, cambiar, quitar, tipos, elegirTipo, idCambiar }: {
   /** Solo «Sus facturas»: elegir su tipo de gasto, en el mismo buscador. */
   tipos?: readonly TipoElegible[]; elegirTipo?: (id: string) => Promise<void>; idCambiar?: string
 }) {
-  const [abierta, setAbierta] = useState(false)
+  // Los enlaces de «Falta: …» y de Compras llegan con #campo-…: el buscador sale abierto para elegir ya.
+  // Lo que se pulsa aquí manda, hasta la siguiente vez que se llega por un enlace (otra `key`).
+  const { hash, key } = useLocation()
+  const porEnlace = !!idCambiar && hash === `#${idCambiar}`
+  const [aMano, setAMano] = useState<{ key: string; abierta: boolean } | null>(null)
+  const abierta = aMano && aMano.key === key ? aMano.abierta : porEnlace
+  const setAbierta = (v: boolean | ((a: boolean) => boolean)) => setAMano({ key, abierta: typeof v === 'function' ? v(abierta) : v })
   const [busca, setBusca] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const opciones = useMemo(() => l.opciones.filter((o) => encaja(busca, { code: o.code, name: o.titulo, plainName: null })), [l.opciones, busca])
@@ -105,12 +111,12 @@ function FilaCuenta({ l, cambiar, quitar, tipos, elegirTipo, idCambiar }: {
     ? <>{l.cuentas.map((c, i) => <span key={c.id}>{i > 0 && <span className="cx-dato-vacio"> y </span>}<Link to={rutaMayor(c.code)} className="cxp-cuenta-mayor" aria-label={`Mayor de la cuenta ${c.titulo}`}>{c.titulo}</Link></span>)}</>
     : null
   return (
-    <div className="cxp-cuenta">
+    <div className="cxp-cuenta" id={idCambiar} tabIndex={idCambiar ? -1 : undefined}>
       <Dato etiqueta={l.etiqueta}>
         {valor ? <>{valor}{l.texto && <span className="cx-dato-vacio">· {l.texto}</span>}</> : <span>{l.texto ?? 'Sin poner'}</span>}
         {l.ia && <Chip tono="ia">IA</Chip>}
         {l.papel && (l.opciones.length > 0 || (tipos?.length ?? 0) > 0) && (
-          <button type="button" id={idCambiar} className="cx-enlace" aria-expanded={abierta} aria-label={`Cambiar: ${l.etiqueta}`} onClick={() => setAbierta((a) => !a)}>
+          <button type="button" className="cx-enlace" aria-expanded={abierta} aria-label={`Cambiar: ${l.etiqueta}`} onClick={() => setAbierta((a) => !a)}>
             {abierta ? 'Cerrar' : 'Cambiar'}
           </button>
         )}
