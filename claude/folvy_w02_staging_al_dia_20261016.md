@@ -245,3 +245,77 @@ En 2 por defecto. No mido 4 hasta que me digas que staging está en Small.
 | `conta/w02-staging-al-dia` | `a993a3d9` | Las firmas no se cortan a 63 |
 
 Antes de cada empuje, `antes-de-subir.sh`: todo en verde.
+
+## Segunda vuelta (16/10, noche): lo que pediste en tu segunda respuesta
+
+1. **`create_account_tx`: PR #217 a `main`**, un solo fichero,
+   `supabase/migrations/20261008124905_alta_de_cuenta_sin_permission_sets.sql`.
+   - Es exactamente el texto que guarda el historial de producción: md5
+     `e9677bdd…` a los dos lados.
+   - Byte a byte contra la función viva: aplicado con un `SELECT` sobre la
+     función de antes, que aún tiene staging (`4effd0a8…`), da el cuerpo de
+     producción, `d82fbbc5…`.
+   - Sin tanda. Lo fusiona Julio.
+2. **Staging al día, preparado y sin aplicar** hasta que digas «hueco».
+
+   **El manifiesto, en este orden:**
+   1. `20261006T1200_dosier_visita`
+   2. `20261006T1400_dosier_visita_lugar`
+   3. `20261006T0140_c01b_elimina`
+   4. `20261008124905_alta_de_cuenta_sin_permission_sets`
+
+   **Lo comprobado:**
+   - **`c01b_elimina`** es la de producción: la huella del historial es la del
+     fichero.
+   - **Su guarda hoy pasaría en staging**:
+     - los lectores son los esperados;
+     - no falta ninguno de los 22 proveedores;
+     - copiaría 4 con datos.
+   - **`dosier_visita`** difiere en bytes de lo que guardó el conector en
+     producción (1.233 frente a 815). Por el tamaño serán los comentarios; se
+     confirma con la comparación de después.
+
+   **Quién usa las 4 columnas de `supplier`** (`email`, `phone`, `address`,
+   `usual_vat_rates`):
+   - **Pruebas e2e y front: nadie.** Ni `tests/e2e` ni `src` las leen (salvo
+     los tipos generados).
+   - **Las semillas que las escriben**, que fallarían si se volvieran a pasar
+     después: `seed_c01_staging.sql` (email, phone, address),
+     `seed_c01b_staging.sql` (phone, address) y `seed_c01_capturas.sql`
+     (usual_vat_rates). El carril no las vuelve a pasar: copia.
+   - **Pruebas de staging de SQL que las leen**:
+     `20261006_c01b_prueba_movimiento.sql`, `20261006_c01b_prueba_elimina.sql`
+     (la de esta migración) y `20261004_prueba_vuelta_atras.sql`, y el script
+     `scripts/conta/c01b_antes_despues.sql`.
+   - **Una unitaria comprueba que la columna existe**:
+     `tests/unit/modules/conta/tablasC00.test.ts:199` («las columnas del
+     proveedor que lee "Los que usas" existen»). Mira `usual_vat_rates` en el
+     texto de las migraciones, no en la base: no se rompe, pero comprueba una
+     columna que producción ya no tiene.
+3. **La regla de la plantilla**, en `conta/w02-staging-al-dia` (`2a257e93`), con
+   sus pruebas contra los ficheros reales:
+   - **La cabecera**: el paso 10b de `antes-de-subir.sh`
+     (`scripts/conta/plantilla.mjs`).
+   - **La huella nocturna**: el job «plantilla» de
+     `comparar-staging-produccion.yml`. Primera foto: 344 tablas, 27 s de
+     lectura (run 38959280375).
+   - **Medida contra los 160 ficheros de semillas y `staging/sql`**: 131 tocan
+     la plantilla. De esos, la mayoría la leen entre 4 y 12 pruebas.
+4. **Las mesas del TPV**, S1 y S2: no las toco y siguen aceptadas.
+5. **#212**: listo y sin fusionar.
+
+**La comparación a las 22:02** se ha movido mucho desde las 15:42, por las tandas
+de esta tarde:
+
+- **Staging por delante:** reparto (columnas de entrega en `sale`,
+  `trg_sale_entrega_desde_raw`, `decidir_quien_reparte`, `r03_entrega_relleno`…)
+  y la entrada de documentos (`company_inbound_sender`, `conta_entrada_remitente`).
+- **Producción por delante:** `conta_envio_aclarado`, `conta_ventas_canal_cuenta`,
+  `conta_cargos_de_pedidos`, `conta_envio_aclarar` y
+  `tg_journal_entry_envio_por_aclarar`.
+
+No he buscado su origen.
+
+**Una línea se quedó retenida en la puerta.** Su clave pasaba de 48 caracteres:
+es un disparador de producción, con nombre de tabla y disparador largos. El
+total de rojas lo cuenta igual.
