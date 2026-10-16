@@ -158,10 +158,16 @@ test('ordenador: Uber mezclado (R03M) → «Decide quién reparte»; se decide �
   const movil = info.project.name === 'movil'
   await abrirPedidos(page)
   const m = page.getByTestId('aviso-decidir-pedido').filter({ hasText: 'R03M' })
+  // El móvil corre después del ordenador, con la decisión ya tomada: comprueba
+  // que se ha quedado (ni vuelve a preguntar ni sale a Catcher).
+  if (movil) {
+    await expect(m).toHaveCount(0)
+    await expect(tarjeta(page, 'R03M').getByTestId('etiqueta-reparto')).toContainText('La reparte Uber · fuera de zona')
+    return
+  }
   await expect(m.getByRole('heading', { name: 'Decide quién reparte este pedido' })).toBeVisible()
   await expect(tarjeta(page, 'R03M').getByTestId('etiqueta-reparto')).toContainText('Nosotros · falta decidir quién reparte')
-  await m.screenshot({ path: `${DIR}/aviso-decidir${movil ? '-movil' : ''}.png` })
-  if (movil) return
+  await m.screenshot({ path: `${DIR}/aviso-decidir.png` })
   await m.getByRole('button', { name: 'Lo reparte Uber' }).click()
   await expect(page.getByTestId('aviso-direccion-resuelto').filter({ hasText: 'R03M' }))
     .toContainText('Hecho: lo reparte Uber. No sale a Catcher.')

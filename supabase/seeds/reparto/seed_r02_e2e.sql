@@ -138,7 +138,7 @@ begin
   on conflict (id) do update
     set sold_at = excluded.sold_at, created_at = excluded.created_at, status = 'open', order_status = 'accepted',
         service_type = 'own_delivery', delivery_address = excluded.delivery_address, raw_tab = excluded.raw_tab,
-        carrier_code = null, carrier_order_id = null, delivery_state = null, dispatch_error = null,
+        brand_id = excluded.brand_id, channel_id = excluded.channel_id, carrier_code = null, carrier_order_id = null, delivery_state = null, dispatch_error = null,
         delivery_address_fixed = null, delivery_address_fixed_at = null, delivery_address_fixed_by = null,
         delivery_address_origin = null, customer_phone = excluded.customer_phone,
         delivery_wait_sent_at = null, updated_at = now();
