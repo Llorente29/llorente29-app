@@ -125,6 +125,9 @@ export function salida(difs, aceptadas, iguales) {
       const sec = `${grupo}.${d.objeto}.${d.diferencia}`
       if (sec !== actual) { out.push(`@@ # ${sec}`); actual = sec }
       out.push(`@@ ${LETRA[d.objeto]}.${corto(d)} ${huella16(d.nombre)}`)
+      // De una función roja, también lo largo de su firma: si una aceptada no
+      // casa, dice en qué se diferencia el nombre sin enseñarlo.
+      if (grupo === 'rojas' && d.objeto === 'funcion') out.push(`@@ ${LETRA[d.objeto]}.${corto(d)}.largo ${d.nombre.length}`)
     }
   }
   return { texto: out.join('\n') + '\n', rojas, vistas }
