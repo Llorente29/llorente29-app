@@ -83,7 +83,12 @@ q --csv -f scripts/conta/produccion/recuento-serie.sql > "$T/recuento-antes.csv"
 i=0; fallo=0
 while IFS= read -r f; do
   i=$((i+1))
-  node scripts/conta/produccion/analizar.mjs registro "$f" "staging ${modo} · run ${GITHUB_RUN_ID:-local}" > "$T/registro.sql"
+  # W02 (16/10): si el manifiesto de staging ya lo aplicó y lo registró
+  # («staging aplicar · …»), ese registro no es el del real: fuera, en la misma
+  # transacción, y el insert de abajo es exactamente el de producción.
+  v=$(basename "$f" .sql)
+  printf "delete from supabase_migrations.schema_migrations where version = '%s' and created_by like 'staging aplicar%%';\n" "$v" > "$T/registro.sql"
+  node scripts/conta/produccion/analizar.mjs registro "$f" "staging ${modo} · run ${GITHUB_RUN_ID:-local}" >> "$T/registro.sql"
   echo "::group::[$i] $f"
   if q -1 -f "$f" -f "$T/registro.sql" > "$T/f.log" 2>&1; then
     cat "$T/f.log"; cp "$T/f.log" "$T/f-$i.log"; echo "::endgroup::"

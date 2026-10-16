@@ -500,6 +500,15 @@ export function sqlRegistro(f, md5, quien) {
   const q = quien.replace(/[^A-Za-z0-9 ._·:-]/g, '')
   return `insert into supabase_migrations.schema_migrations (version, name, statements, created_by) values ('${v}', '${v.replace(/^[^_]*_/, '')}', array['${marcaHuella(md5)}'], '${q}');\n`
 }
+/**
+ * El registro en STAGING (W02, 16/10): el mismo de producción, pero staging
+ * reaplica ficheros a propósito (las semillas, las pruebas de staging, una
+ * tanda que se corrige), así que el segundo no falla: pone la huella nueva y
+ * quién. En producción no: allí un fichero repetido tiene que parar.
+ */
+export function sqlRegistroStaging(f, md5, quien) {
+  return sqlRegistro(f, md5, quien).replace(/;\n$/, ' on conflict (version) do update set statements = excluded.statements, created_by = excluded.created_by;\n')
+}
 export function sqlBaja(f) {
   const v = versionDe(f)
   if (!/^[A-Za-z0-9_]+$/.test(v)) throw new Error(`baja: nombre no válido (${f})`)
@@ -709,6 +718,10 @@ if (modo === 'objetivos') {
   // registro f quien → el insert del historial (va en la misma transacción que el fichero)
   const [f, quien] = resto
   process.stdout.write(sqlRegistro(f, md5De(f), quien ?? 'aplicar-produccion-conta'))
+} else if (modo === 'registro-staging') {
+  // registro-staging f quien → el registro de aplicar-staging-conta (reaplicable)
+  const [f, quien] = resto
+  process.stdout.write(sqlRegistroStaging(f, md5De(f), quien ?? 'staging aplicar'))
 } else if (modo === 'baja') {
   process.stdout.write(sqlBaja(resto[0]))
 } else if (modo === 'front-compatible') {

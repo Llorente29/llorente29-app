@@ -1,0 +1,147 @@
+name: Staging contra producción (estructura, solo lectura)
+
+# QUÉ HACE (W02, 16/10)
+# Saca la foto de la estructura de `public` en PRODUCCIÓN y en staging-conta
+# con la MISMA consulta (scripts/conta/staging/comparar.sql: la huella de
+# prosrc de cada función, las columnas de cada tabla y los disparadores) y las
+# compara (scripts/conta/staging/comparar.mjs). Una diferencia que no está
+# aceptada por su nombre en scripts/conta/staging/diferencias-aceptadas.txt
+# deja el run en ROJO. Las aceptadas salen igual, en su sección: no se esconden.
+#
+# POR QUÉ: el 16/10 C encontró a mano que a staging le faltaba una migración de
+# producción (20261113T0100, el céntimo del IVA) y otras diferencias que nadie
+# había visto. Una prueba en staging vale lo que staging se parezca a producción.
+#
+# CUÁNDO: cada noche, a mano («Run workflow»), y desde aplicar-staging-conta
+# antes y después de cada tanda (workflow_call). No para nada: avisa.
+#
+# QUÉ NO HACE: no escribe en ninguna de las dos bases. Producción, con
+# conta_lectura, sesión de solo lectura y las cuatro guardas del nocturno de
+# cumplimiento. Solo lee el catálogo (pg_class, pg_attribute, pg_proc,
+# pg_trigger): ni una fila de datos. El resumen solo lleva lo que deja pasar la
+# puerta de salida: nombres de objetos del esquema y huellas. El detalle (las
+# firmas enteras de las funciones) va en el artefacto «comparacion».
+
+on:
+  schedule:
+    # 04:20 de Madrid en verano, 03:20 en invierno: lejos de las 00:30 y del cierre.
+    - cron: '20 2 * * *'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      momento:
+        description: 'antes o después de la tanda (sale en el resumen)'
+        type: string
+        default: ''
+  push:
+    branches: ['conta/w02-**']
+    paths:
+      - 'scripts/conta/staging/**'
+      - '.github/workflows/comparar-staging-produccion.yml'
+
+concurrency:
+  group: comparar-staging-produccion-${{ github.run_id }}-${{ inputs.momento }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  comparar:
+    name: Estructura · producción contra staging ${{ inputs.momento }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROD_REF: xzmpnchlguibclvxyynt
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      PSQL: /usr/lib/postgresql/17/bin/psql
+      PGAPPNAME: gha-comparar-staging-${{ github.run_id }}
+      PGOPTIONS: '-c default_transaction_read_only=on'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guarda 1 y 2 · producción con conta_lectura; staging con su ref
+        env:
+          PROD_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+          STAGING_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${PROD_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          [ -n "${STAGING_URL:-}" ] || { echo "::error::Falta el secreto STAGING_CONTA_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          for v in ("PROD_URL", "STAGING_URL"):
+              u = urllib.parse.urlsplit(os.environ[v])
+              for parte in (os.environ[v], u.password, u.hostname):
+                  if parte:
+                      print(f"::add-mask::{parte}")
+          if (urllib.parse.urlsplit(os.environ["PROD_URL"]).username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura. Abortado sin conectar.")
+              raise SystemExit(1)
+          PY
+          case "$PROD_URL" in *"$STAGING_REF"*) echo "::error::La URL de producción apunta a STAGING."; exit 1 ;; esac
+          case "$PROD_URL" in *"$PROD_REF"*) ;; *) echo "::error::La URL de producción no es de producción."; exit 1 ;; esac
+          case "$STAGING_URL" in *"$PROD_REF"*) echo "::error::La URL de staging apunta a PRODUCCIÓN."; exit 1 ;; esac
+          case "$STAGING_URL" in *"$STAGING_REF"*) ;; *) echo "::error::La URL de staging no es de staging-conta."; exit 1 ;; esac
+          echo "Producción con conta_lectura; staging con su ref."
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 y 4 · Foodint en producción y no en staging; solo lectura y sin permisos de escritura
+        env:
+          PROD_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+          STAGING_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          "$PSQL" "$PROD_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select (select count(*) from public.supplier where account_id = '$FOODINT') > 0
+               and current_setting('transaction_read_only') = 'on'" > "$RUNNER_TEMP/g3.txt" 2>&1 \
+            || { echo "::error::No se ha podido comprobar la guarda 3 en producción."; exit 1; }
+          [ "$(cat "$RUNNER_TEMP/g3.txt")" = t ] || { echo "::error::Falla la guarda 3: o no está Foodint, o la sesión no es de solo lectura. No se lee nada."; exit 1; }
+          "$PSQL" "$PROD_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/produccion/guarda-lectura.sql > "$RUNNER_TEMP/g4.txt" 2>&1 \
+            || { echo "::error::No se ha podido comprobar la guarda 4."; exit 1; }
+          [ ! -s "$RUNNER_TEMP/g4.txt" ] || { echo "::error::Falla la guarda 4: el usuario de producción podría escribir. No se lee nada."; exit 1; }
+          "$PSQL" "$STAGING_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select count(*) from public.accounts where id in ('$FOODINT', '00000000-0000-0000-0000-000000000001')" > "$RUNNER_TEMP/g5.txt" 2>&1 \
+            || { echo "::error::No se ha podido comprobar staging."; exit 1; }
+          [ "$(cat "$RUNNER_TEMP/g5.txt")" = 0 ] || { echo "::error::Al otro lado de la URL de staging hay cuentas de producción. No se lee nada."; exit 1; }
+          echo "Guardas en verde: producción de solo lectura, staging sin cuentas de producción."
+
+      - name: Las dos fotos (la misma consulta, solo catálogo)
+        env:
+          PROD_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+          STAGING_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          "$PSQL" "$PROD_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/staging/comparar.sql > "$RUNNER_TEMP/produccion.tsv"
+          "$PSQL" "$STAGING_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/staging/comparar.sql > "$RUNNER_TEMP/staging.tsv"
+          wc -l "$RUNNER_TEMP/produccion.tsv" "$RUNNER_TEMP/staging.tsv" | awk '{print $1}' > "$RUNNER_TEMP/lineas.txt"
+
+      - name: Comparar
+        run: |
+          set -euo pipefail
+          echo "## Staging contra producción" >> "$GITHUB_STEP_SUMMARY"
+          set +e
+          node scripts/conta/staging/comparar.mjs "$RUNNER_TEMP/produccion.tsv" "$RUNNER_TEMP/staging.tsv" \
+            scripts/conta/staging/diferencias-aceptadas.txt "$RUNNER_TEMP/comparacion.md" > "$RUNNER_TEMP/salida.txt"
+          rc=$?
+          set -e
+          cat "$RUNNER_TEMP/salida.txt" | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$rc" -eq 1 ]; then echo "::error::Staging se ha quedado distinto de producción en lo que no está aceptado: arriba, en «rojas»."; fi
+          if [ "$rc" -gt 1 ]; then echo "::error::No se ha podido comparar (una foto vacía o una línea de aceptadas mal escrita)."; fi
+          exit "$rc"
+
+      - name: El detalle (firmas enteras y el motivo de cada aceptada)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparacion-${{ github.run_id }}${{ inputs.momento && format('-{0}', inputs.momento) || '' }}
+          path: ${{ runner.temp }}/comparacion.md
+          if-no-files-found: ignore

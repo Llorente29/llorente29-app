@@ -1,0 +1,18 @@
+# scripts/conta/staging/diferencias-aceptadas.txt
+#
+# Las diferencias entre staging-conta y producción que se ACEPTAN, una por
+# línea y por su nombre exacto (comparar-staging-produccion.yml). Todo lo que
+# no esté aquí sale en rojo. Aceptada no es escondida: sale igual, en su
+# sección «aceptadas», con su recuento (regla 7).
+#
+#   objeto | diferencia | nombre exacto | motivo
+#
+#   objeto:     tabla · columna · funcion · disparador
+#   diferencia: solo_produccion · solo_staging · distinta (tabla, columna,
+#               disparador) · cuerpo · atributos (funcion)
+#   nombre:     tabla · tabla.columna · tabla.disparador · funcion(argumentos),
+#               tal cual lo escribe scripts/conta/staging/comparar.sql
+#   motivo:     por qué, y de dónde sale. Sin motivo no se acepta.
+#
+# Una línea que ya no casa con ninguna diferencia la cuenta el resumen
+# («aceptadas_que_ya_no_hacen_falta»): se quita en el siguiente cambio.

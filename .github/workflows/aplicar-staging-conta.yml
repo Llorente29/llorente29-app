@@ -70,7 +70,21 @@ permissions:
   contents: read
 
 jobs:
+  # W02 (16/10): la estructura de staging contra la de producción, antes y
+  # después de la tanda (comparar-staging-produccion.yml, solo lectura). No
+  # para la tanda —la tanda puede ser justo la que cierra la diferencia—: lo
+  # que no está aceptado sale en rojo en su job, y el «después» dice si la
+  # tanda la ha cerrado o ha abierto otra.
+  antes:
+    name: Staging contra producción · antes
+    uses: ./.github/workflows/comparar-staging-produccion.yml
+    with:
+      momento: antes
+    secrets: inherit
+
   aplicar:
+    needs: antes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     # 15 de aplicar y hasta 45 esperando a que acaben las e2e que están
     # corriendo (una entera en trozos, unos 12 min; una de las de antes, 35).
@@ -203,13 +217,18 @@ jobs:
               continue
             fi
             echo "::group::[$i] $f  (md5 $md5)"
+            # W02 (16/10): el registro en el historial, con su huella, en la
+            # MISMA transacción que el fichero, como en producción. Antes no se
+            # registraba nada y no había forma de saber qué tenía staging: el
+            # 16/10 le faltaba 20261113T0100 (el céntimo del IVA) y nadie lo vio.
+            node scripts/conta/produccion/analizar.mjs registro-staging "$f" "staging aplicar · run ${GITHUB_RUN_ID} · ${GITHUB_REF_NAME}" > /tmp/registro.sql
             # -1: todo el fichero en una transacción. ON_ERROR_STOP: el primer
             # error la revierte entera. -X: sin .psqlrc.
-            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" > /tmp/salida.txt 2>&1; then
+            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f" -f /tmp/registro.sql > /tmp/salida.txt 2>&1; then
               cat /tmp/salida.txt
               echo "::endgroup::"
               echo "OK [$i] $f"
-              echo "| $i | \`$f\` | \`$md5\` | **aplicado** |" >> "$GITHUB_STEP_SUMMARY"
+              echo "| $i | \`$f\` | \`$md5\` | **aplicado y registrado** |" >> "$GITHUB_STEP_SUMMARY"
             else
               cat /tmp/salida.txt
               echo "::endgroup::"
@@ -256,3 +275,12 @@ jobs:
         run: |
           scripts/e2e/carril.sh migrar-soltar || true
           scripts/e2e/cerrojo.sh soltar
+
+  despues:
+    name: Staging contra producción · después
+    needs: aplicar
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/comparar-staging-produccion.yml
+    with:
+      momento: despues
+    secrets: inherit
