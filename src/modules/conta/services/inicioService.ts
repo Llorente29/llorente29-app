@@ -12,11 +12,11 @@
 
 import { tabla, mensaje } from '@/modules/conta/services/bd'
 import { saldosCuentas, aSaldoCuenta, movimientoIva } from '@/modules/conta/services/librosService'
-import { leerAsientos, leerCierres, fuenteCierre } from '@/modules/conta/services/diarioService'
+import { leerAsientos, leerCierres, fuenteCierre, primerDiaAbierto } from '@/modules/conta/services/diarioService'
 import { listarFacturasDeLaCuenta } from '@/modules/conta/services/proveedorService'
 import { calcularCifras } from '@/modules/conta/lib/cifras'
 import { esFirmaAutomatica } from '@/modules/conta/lib/autor'
-import { pasosCierre, type PasoCierre, type CierreMes } from '@/modules/conta/lib/diario'
+import { pasosCierre, pedirCierre, type PasoCierre, type CierreMes } from '@/modules/conta/lib/diario'
 import { finDeMes, mesesHasta, puntoDeMes, trimestreDe, type PuntoMes } from '@/modules/conta/lib/inicio'
 
 type Fila = Record<string, unknown>
@@ -82,8 +82,11 @@ export async function hechoDesdeAyer(companyId: string, desde: string): Promise<
 }
 
 /** El cierre de un mes: sus pasos (los del Libro diario) y si ya está cerrado. */
-export async function cierreDelMes(accountId: string, companyId: string, mes: string): Promise<{ pasos: PasoCierre[]; cierres: CierreMes[] }> {
-  const [asientos, cierres] = await Promise.all([leerAsientos(accountId, companyId, mes, finDeMes(mes)), leerCierres(accountId, companyId)])
+/** Los pasos del cierre del mes; null si ese mes ya está cerrado fuera y no hay nada que pedir (pedirCierre). */
+export async function cierreDelMes(accountId: string, companyId: string, mes: string): Promise<{ pasos: PasoCierre[]; cierres: CierreMes[] } | null> {
+  const [cierres, primero] = await Promise.all([leerCierres(accountId, companyId), primerDiaAbierto(companyId, mes)])
+  if (!pedirCierre(mes, primero, cierres)) return null
+  const asientos = await leerAsientos(accountId, companyId, mes, finDeMes(mes))
   const f = await fuenteCierre(accountId, companyId, mes, asientos, cierres.some((c) => c.mes === mes))
   return { pasos: pasosCierre(f), cierres }
 }

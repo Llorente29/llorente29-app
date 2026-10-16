@@ -25,6 +25,8 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { usePestanasArriba } from '@/modules/conta/marco/nuevo/contexto'
 import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
 import { SubpestanasEnBarra, type Subpestana } from '@/modules/conta/ui/marco/SubpestanasEnBarra'
+import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
+import { miles } from '@/modules/conta/ui/tabla/tablaDensa'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
@@ -87,8 +89,8 @@ function estados(r: ResumenLibros | null, nombreTrimestre: string, ctx: Pick<Con
   e['sumas-saldos'] = { texto: 'niveles y opciones', tono: 'gris' }
   e['acumulados'] = { texto: 'saldo de cada mes', tono: 'gris' }
   if (r) {
-    e.expedidas = r.expedidas ? { texto: `${nombreTrimestre.split(' ')[0]} · ${r.expedidas.toLocaleString('es-ES')}`, tono: 'verde' } : NINGUNO
-    e.recibidas = r.recibidas ? { texto: `${nombreTrimestre.split(' ')[0]} · ${r.recibidas.toLocaleString('es-ES')}${r.sinNif ? ` · ${r.sinNif} sin NIF` : ''}`, tono: r.sinNif ? 'ambar' : 'verde' } : NINGUNO
+    e.expedidas = r.expedidas ? { texto: `${nombreTrimestre.split(' ')[0]} · ${miles(r.expedidas)}`, tono: 'verde' } : NINGUNO
+    e.recibidas = r.recibidas ? { texto: `${nombreTrimestre.split(' ')[0]} · ${miles(r.recibidas)}${r.sinNif ? ` · ${r.sinNif} sin NIF` : ''}`, tono: r.sinNif ? 'ambar' : 'verde' } : NINGUNO
     e['bienes-inversion'] = r.bienes ? { texto: `${r.bienes} ${r.bienes === 1 ? 'bien' : 'bienes'}`, tono: 'verde' } : NINGUNO
     e.intracomunitarias = r.intracomunitarias ? { texto: String(r.intracomunitarias), tono: 'verde' } : { texto: 'ninguna', tono: 'gris' }
     e.suplidos = r.suplidos ? { texto: `${r.suplidos} ${r.suplidos === 1 ? 'cuenta' : 'cuentas'}`, tono: 'verde' } : NINGUNO
@@ -207,18 +209,20 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
 
         {!enIndiceMovil && (
           <>
-            {movil && <Link to={rutaLibros()} className="cx-enlace">‹ Libros</Link>}
             {movil ? (
-              <nav className="cxl-barra" aria-label={`Acciones de ${area.nombre}`}>
-                <div className="cxl-barra-grupos">
+              // M01 (Julio, 16/10): en el móvil, el menú del área en UNA línea
+              // desplegable («Libro diario ▾»), para que el libro empiece arriba.
+              <div className="cxl-movil-fila">
+                <Link to={rutaLibros()} className="cx-enlace">‹ Libros</Link>
+                <AccionesMovil etiqueta={`Acciones de ${area.nombre}`} activa={accion.nombre} dato={(est[accion.id] ?? NINGUNO).texto}>
                   {area.grupos.map((g) => (
-                    <div key={g.etiqueta} className="cxl-grupo" role="group" aria-label={g.etiqueta}>
-                      <div className="cxl-grupo-acciones">{g.acciones.map(tarjetaAccion)}</div>
+                    <div key={g.etiqueta} className="cxl-movil-grupo" role="group" aria-label={g.etiqueta}>
                       <span className="cxl-grupo-etiqueta">{g.etiqueta}</span>
+                      {g.acciones.map(tarjetaAccion)}
                     </div>
                   ))}
-                </div>
-              </nav>
+                </AccionesMovil>
+              </div>
             ) : accionesDe(area).length > 1 && <SubpestanasEnBarra etiqueta={`Acciones de ${area.nombre}`} pestanas={subpestanas} />}
             {resumen.error && <div className="cx-error" role="alert">No se ha podido leer el estado de los libros: {resumen.error}</div>}
             <div key={`${area.id}:${accion.id}`}>{contenido(accion.id)}</div>
@@ -226,5 +230,25 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
         )}
       </div>
     </LibrosCtx.Provider>
+  )
+}
+
+/**
+ * El menú del área en el móvil: una línea con la acción en la que estás y su
+ * dato escrito («Pendientes de adjuntar en Diez · 3 sin su PDF ▾»); al tocarla,
+ * todas las del área por grupos. Se cierra al elegir (cambia la dirección),
+ * al tocar fuera o con Escape.
+ */
+function AccionesMovil({ etiqueta, activa, dato, children }: { etiqueta: string; activa: string; dato: string; children: ReactNode }) {
+  const { abierto, alternar, caja, boton } = useDesplegable<HTMLElement>()
+  return (
+    <nav className="cxl-movil-acciones" aria-label={etiqueta} ref={caja}>
+      <button type="button" ref={boton} className="cxl-movil-boton" aria-expanded={abierto} aria-haspopup="true" onClick={alternar}>
+        <span className="cxl-movil-nombre">{activa}</span>
+        {dato && <span className="cxl-movil-dato"> · {dato}</span>}
+        <span className="cxl-movil-flecha" aria-hidden="true">▾</span>
+      </button>
+      {abierto && <div className="cxl-movil-menu">{children}</div>}
+    </nav>
   )
 }

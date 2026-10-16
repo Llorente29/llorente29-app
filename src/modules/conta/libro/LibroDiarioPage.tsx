@@ -36,11 +36,11 @@ import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta
 import { diaMesCorto, eurosExactos, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
   cifras, deDondeSale, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, marcaNegativoDiez, mesAnterior, mesDe, nombreMes, numeroVisible,
-  pasosCierre, pastillas, sePuedeCerrar, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
+  pasosCierre, pastillas, pedirCierre, sePuedeCerrar, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
 import {
-  cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, reabrirMes, resultadoDelMes,
+  cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, primerDiaAbierto, reabrirMes, resultadoDelMes,
   type EjercicioLibro,
 } from '@/modules/conta/services/diarioService'
 import { proponerPendientes, type ResultadoProponer } from '@/modules/conta/services/propuestasLibroService'
@@ -55,7 +55,8 @@ import { anularConDiez, leerConDiez } from '@/modules/conta/services/conDiezServ
 import { numeroEnDiez } from '@/modules/conta/lib/numeroEnDiez'
 import { AccionesPantalla, BotonAccion } from '@/modules/conta/ui/marco/AccionesPantalla'
 import { TablaDensa, type ColumnaDensa } from '@/modules/conta/ui/tabla/TablaDensa'
-import { borrarVista, cumpleFiltros, guardarVista, leerVistas, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
+import { borrarVista, cumpleFiltros, guardarVista, leerVistas, miles, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
+import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
 
 const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
 
@@ -97,9 +98,12 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const anterior = mesAnterior(mes)
       let resultadoError: string | null = null
       let conDiezError: string | null = null
+      // M01 (Julio, 16/10): el cierre del mes anterior no se pide si ya está
+      // cerrado fuera (la regla de la validación, de la base: pedirCierre).
+      const pedir = anterior >= ejercicio.inicio && pedirCierre(anterior, await primerDiaAbierto(companyId, anterior), cierres)
       const [resultado, cierre, conDiez] = await Promise.all([
         resultadoDelMes(companyId, mes, locales).catch((e: unknown) => { resultadoError = e instanceof Error ? e.message : String(e); return null }),
-        anterior >= ejercicio.inicio ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
+        pedir ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
         leerConDiez(accountId, companyId, asientos.filter((a) => a.origen === 'sales_day').map((a) => a.id))
           .catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() }),
       ])
@@ -237,7 +241,7 @@ export default function LibroDiarioPage() {
       if (r.sinPropuesta.length) partes.push(`${r.sinPropuesta.length} sin propuesta (debajo, por qué)`)
       const ventas = r.mesVentas ? ` Ventas de ${nombreMes(r.mesVentas)}.` : ''
       const quedan = r.quedanDias > 0
-        ? ` Quedan ${r.quedanDias.toLocaleString('es-ES')} ${r.quedanDias === 1 ? 'día' : 'días'} de ventas más antiguos por proponer: vuelve a pulsar.`
+        ? ` Quedan ${miles(r.quedanDias)} ${r.quedanDias === 1 ? 'día' : 'días'} de ventas más antiguos por proponer: vuelve a pulsar.`
         : ' No queda ningún día de ventas por proponer.'
       setHecho(`Repasado del ${diaMesCorto(desde)} al ${diaMesCorto(hasta)}${e.traidoHasta ? ` (hasta el ${diaMesCorto(e.traidoHasta)} lo trae el programa anterior)` : ''}: ${partes.join(' · ')}.${ventas}${quedan}`)
       recargar()
@@ -263,7 +267,7 @@ export default function LibroDiarioPage() {
     setFallo(null); setHecho(null)
     try {
       const r = await anularConDiez(id, 'Deshecho desde «Lo que he hecho yo»', null, userName)
-      setHecho(`Deshecho: «${a.concepto}» queda anulado con el contraasiento ${NOMBRE_SERIE[r.serie as 1]} nº ${r.numero.toLocaleString('es-ES')} del ${diaMesCorto(r.fecha)}. Vuelve a salir para proponer.${r.diez?.estado === 'en_diez' ? ` ${r.diez.texto}` : ''}`)
+      setHecho(`Deshecho: «${a.concepto}» queda anulado con el contraasiento ${NOMBRE_SERIE[r.serie as 1]} nº ${r.numero} del ${diaMesCorto(r.fecha)}. Vuelve a salir para proponer.${r.diez?.estado === 'en_diez' ? ` ${r.diez.texto}` : ''}`)
       if (r.diez?.estado === 'no_llega') setFallo(`${r.diez.texto} Queda en Libros › Pendientes de adjuntar en Diez, con «Enviar el contraasiento».`)
       recargar()
     } catch (e) { setFallo(e instanceof Error ? e.message : 'No se ha podido deshacer.') }
@@ -323,7 +327,7 @@ export default function LibroDiarioPage() {
           <p className="cx-ayuda" style={{ marginTop: 0 }}>{pregunta.porque} Lo de antes de ese día no lo propongo: lo trae el programa anterior. Se puede cambiar en Ajustes › Ejercicio.</p>
           <form className="cx-rejilla-2" onSubmit={(ev) => { ev.preventDefault(); void contestar() }}>
             <label className="cx-campo"><span className="cx-etiqueta">Desde el día</span>
-              <input className="cx-input" type="date" value={pregunta.desde} onChange={(ev) => setPregunta({ ...pregunta, desde: ev.target.value, fallo: null })} /></label>
+              <CampoFecha className="cx-input" valor={pregunta.desde} alCambiar={(v) => setPregunta({ ...pregunta, desde: v, fallo: null })} /></label>
             <label className="cx-campo"><span className="cx-etiqueta">Programa anterior</span>
               <input className="cx-input" value={pregunta.programa} placeholder="Diez, A3, Sage…" onChange={(ev) => setPregunta({ ...pregunta, programa: ev.target.value })} /></label>
             <div className="cx-pie">
@@ -356,7 +360,7 @@ export default function LibroDiarioPage() {
         <>
           {/* El mes, en una línea: las cifras de N11, en pequeño (lo que espera revisión va en «Te toca hoy»). */}
           <dl className="cxd-resumen" aria-label={`Cómo va ${nombreMes(datos.mes)}`}>
-            <div><dt>Asientos en {nombreMes(datos.mes)}</dt><dd className="cxd-resumen-cifra">{c.asientosMes.toLocaleString('es-ES')}</dd><dd className="cxd-resumen-apoyo">{c.apoyoAsientos}</dd></div>
+            <div><dt>Asientos en {nombreMes(datos.mes)}</dt><dd className="cxd-resumen-cifra">{miles(c.asientosMes)}</dd><dd className="cxd-resumen-apoyo">{c.apoyoAsientos}</dd></div>
             <div><dt>{capital(nombreMes(datos.mes))}</dt><dd className="cxd-resumen-cifra">{c.mes.texto}</dd><dd className={c.mes.cerrado ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo cxt-verde'}>{c.mes.apoyo}</dd></div>
             <div><dt>Resultado de {nombreMes(datos.mes)}</dt>
               <dd className="cxd-resumen-cifra">{c.resultado === null ? '—' : `${c.resultado >= 0 ? '+' : ''}${euros(c.resultado)}`}</dd>

@@ -29,12 +29,15 @@
 .cxi-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .cxi-cifra {
   background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque);
-  padding: 18px 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; min-width: 0;
+  padding: 18px 20px; display: flex; justify-content: space-between; align-items: stretch; gap: 12px; min-width: 0;
   text-decoration: none; color: var(--cx-texto);
 }
 .cx a.cxi-cifra { color: var(--cx-texto); }
 a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
-.cxi-cifra-texto { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* M01 (Julio, 16/10): las cuatro alineadas arriba —etiqueta, cifra y nota a la
+   misma altura— y del mismo alto (la rejilla estira); las barritas, abajo. */
+.cxi-cifra-texto { display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; min-width: 0; }
+.cxi-cifra .cxi-barras { align-self: flex-end; }
 .cxi-cifra-etiqueta { font-size: 14px; color: var(--cx-apoyo); white-space: nowrap; }
 .cxi-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 26px; font-weight: 600; letter-spacing: -1px; white-space: nowrap; color: var(--cx-texto); }
 .cxi-cifra-apoyo { font-size: 13px; font-weight: 500; color: var(--cx-apoyo); line-height: 1.35; overflow-wrap: anywhere; }
@@ -105,6 +108,7 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
   .cxi-cifra { padding: 14px; flex-direction: column; align-items: flex-start; }
   .cxi-cifra-valor { font-size: 22px; }
   .cxi-barras { height: 28px; }
+  .cxi-cifra .cxi-barras { align-self: flex-start; margin-top: auto; }
   .cxi-seccion, .cxi-hecho { padding: 18px; }
   .cxi-duda { flex-wrap: wrap; }
   .cxi-duda-acciones { width: 100%; padding-left: 50px; }
@@ -137,7 +141,9 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
   .cxi-diez-paso .cx-boton { margin-left: 46px; }
 }
 .cxi-cifra-mono { font-family: var(--cx-letra-cifras); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cxi-iva { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-/* Cada línea puede partir (en el móvil la tarjeta mide unos 170 px); el importe, nunca. */
-.cxi-iva-linea { min-width: 0; overflow-wrap: anywhere; }
-.cxi-iva-nota { color: var(--cx-apoyo); font-weight: 400; }
+.cxi-iva { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12px; line-height: 1.35; }
+/* El desglose en letra más pequeña: cada línea, el nombre a la izquierda y el
+   importe a la derecha, que nunca parte; la nota, debajo, si no cabe. */
+.cxi-iva-linea { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 6px; min-width: 0; }
+.cxi-iva-linea > span:first-child { min-width: 0; }
+.cxi-iva-nota { flex-basis: 100%; color: var(--cx-apoyo); font-weight: 400; font-size: 11px; }

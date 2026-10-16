@@ -28,6 +28,7 @@ import {
   type Celda, type CampoFiltro, type ValoresFiltro,
 } from '@/modules/conta/ui/tabla/tablaDensa'
 import { exportarTabla, type FormatoExportar } from '@/modules/conta/ui/tabla/exportar'
+import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
 
 export interface ColumnaDensa<T> {
   id: string
@@ -287,9 +288,12 @@ function Filtros({ campos, valores, alCambiar, movil, puestos }: {
             <select className="cxt-campo" value={valores[c.id] ?? ''} onChange={(e) => poner(c.id, e.target.value)}>
               {(c.opciones ?? []).map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
             </select>
-          ) : (
-            <input className="cxt-campo" type={c.tipo === 'texto' ? 'search' : 'date'} value={valores[c.id] ?? ''} placeholder={c.pista}
+          ) : c.tipo === 'texto' ? (
+            <input className="cxt-campo" type="search" value={valores[c.id] ?? ''} placeholder={c.pista}
               onChange={(e) => poner(c.id, e.target.value)} />
+          ) : (
+            <CampoFecha className="cxt-campo" valor={valores[c.id] ?? ''} alCambiar={(v) => poner(c.id, v)}
+              etiquetaCalendario={`${c.etiqueta}: elegir en el calendario`} />
           )}
         </label>
       ))}

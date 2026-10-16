@@ -103,7 +103,7 @@
 .cxm-modulos[data-desplegada='no'] .cxm-modulo-cuenta { display: none; }
 
 .cxm button.cxm-modulo { width: 100%; border: none; background: none; font-family: inherit; }
-.cxm .cxm-modulo-apagado { opacity: 0.55; cursor: default; }
+.cxm .cxm-modulo-apagado { position: relative; opacity: 0.55; cursor: default; }
 .cxm .cxm-modulo-apagado:hover { background: none; color: var(--cxm-apoyo); }
 .cxm-pronto {
   display: none; position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); z-index: 45;
@@ -221,6 +221,7 @@
 .cxm-te-toca { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; font-family: var(--cxm-letra); }
 .cxm-te-toca-titulo { margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cxm-apoyo); }
 .cxm-te-toca-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cxm-te-toca-nada { margin: 0; font-size: 13px; color: var(--cxm-apoyo); }
 .cxm .cxm-chip {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px;
   border: 1px solid transparent; font: inherit; font-size: 13px; text-decoration: none; cursor: pointer;
@@ -256,6 +257,8 @@
   column-gap: 12px; padding: 6px 10px; border-radius: var(--cxm-radio-boton); cursor: pointer;
 }
 .cxm-buscador-opcion[aria-selected='true'] { background: var(--cxm-propuesto); }
+/* Lo anulado o archivado: al final de su grupo y en gris (Julio, 16/10). */
+.cxm-buscador-opcion-apagada .cxm-buscador-titulo, .cxm-buscador-opcion-apagada .cxm-buscador-cifra { color: var(--cxm-apoyo); }
 .cxm-buscador-titulo { grid-area: titulo; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cxm-buscador-opcion .cxm-apoyo { grid-area: apoyo; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cxm-buscador-cifra { grid-area: cifra; align-self: center; font-size: 12px; color: var(--cxm-texto); }
@@ -266,7 +269,14 @@
 .cxm-es-movil .cxm-arriba { padding: 0 12px; gap: 8px; }
 .cxm-es-movil .cxm-arriba-izquierda { flex: 1; min-width: 0; border-right: none; padding-right: 0; }
 .cxm-es-movil .cxm-arriba-centro { display: none; }
-.cxm.cxm-es-movil .cxm-empresa { max-width: 100%; }
+.cxm.cxm-es-movil .cxm-empresa { max-width: 100%; flex: 0 1 auto; min-width: 0; }
+/* M01 (Julio, 16/10): en el móvil, la empresa y el ejercicio encogen (la empresa
+   con «…») y la lupa nunca tapa el selector: cada cosa en su sitio de la fila. */
+.cxm-es-movil .cxm-arriba-izquierda { overflow: hidden; }
+.cxm-es-movil .cxm-periodo { flex: 0 1 auto; min-width: 0; }
+.cxm-es-movil .cxm-periodo > * { display: flex; min-width: 0; max-width: 100%; }
+.cxm.cxm-es-movil .cxm-periodo .cxm-select { max-width: 132px; min-width: 0; height: 36px; }
+.cxm-es-movil .cxm-arriba-derecha { flex-shrink: 0; }
 .cxm.cxm-es-movil .cxm-buscar { min-width: 0; width: 40px; height: 40px; justify-content: center; padding: 0; }
 .cxm-pestanas-movil {
   height: 40px; overflow-x: auto; padding: 0 8px; background: var(--cxm-superficie); border-bottom: 1px solid var(--cxm-borde);
@@ -323,3 +333,13 @@
 .cxm-sub-punto { width: 7px; height: 7px; border-radius: 50%; background: var(--cxm-ambar); display: inline-block; flex-shrink: 0; }
 .cxm .cxm-sub-numero { color: inherit; }
 .cxm .cxm-sub-numero .cxm-cifra { font-size: 12px; }
+
+/* M01 · La barra de acciones en el móvil: el principal y «⋯» con el resto. */
+.cxm-acciones-mas { position: relative; margin-left: auto; }
+.cxm .cxm-acciones-mas-boton { min-width: 40px; justify-content: center; font-size: 18px; line-height: 1; }
+.cxm-acciones-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; min-width: 220px; display: flex; flex-direction: column; gap: 4px;
+  padding: 6px; background: var(--cxm-superficie); border: 1px solid var(--cxm-borde); border-radius: var(--cxm-radio-campo);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+.cxm .cxm-acciones-menu .cxm-boton { width: 100%; justify-content: flex-start; }

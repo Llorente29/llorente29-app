@@ -186,3 +186,21 @@
   .cxm .cxf-con-documento { grid-template-columns: minmax(0, 1fr); }
   .cxm .cxdoc { width: auto; position: static; }
 }
+
+/* ── Campo de fecha (ui/fecha/CampoFecha.tsx): dd/mm/aaaa escrito, el calendario al lado ── */
+.cx-fecha { position: relative; display: inline-flex; align-items: center; min-width: 0; }
+.cx-fecha > input[type='text'] { padding-right: 28px; font-variant-numeric: tabular-nums; }
+.cx-fecha > input[aria-invalid='true'] { border-color: var(--cxm-rojo, #c2410c); }
+.cx-fecha-calendario {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; display: grid; place-items: center;
+  border: 0; border-radius: 4px; background: transparent; color: var(--cxm-apoyo, #64748b); cursor: pointer; padding: 0;
+}
+.cx-fecha-calendario:hover, .cx-fecha-calendario:focus-visible { color: var(--cxm-azul, #2563eb); background: var(--cxm-suave, #f1f5f9); }
+.cx-fecha-calendario:disabled { display: none; }
+/* El nativo solo presta el calendario: debajo del botón, sin verse ni llevarse el foco. */
+.cx-fecha-nativo { position: absolute; right: 4px; bottom: 0; width: 22px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+.cxm .cxt-filtro-desde .cx-fecha, .cxm .cxt-filtro-hasta .cx-fecha { width: 136px; }
+.cxm .cxt-filtro-desde .cxt-campo, .cxm .cxt-filtro-hasta .cxt-campo { width: 100%; }
+.cxm .cxf-campo .cx-fecha { display: flex; width: 100%; }
+.cxm .cxt-filtros-movil .cx-fecha { display: flex; width: 100%; }
+.cx-campo > .cx-fecha { display: flex; width: 100%; }

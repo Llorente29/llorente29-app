@@ -55,12 +55,18 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
   const raiz = await page.locator('.cxm').evaluate((el) => { const s = getComputedStyle(el); return { fondo: s.backgroundColor, imagen: s.backgroundImage } })
   expect(raiz).toEqual({ fondo: 'rgb(238, 241, 245)', imagen: 'none' })
 
-  // «Te toca hoy»: los cuatro, siempre, con su número. Mientras cuenta dice «…»
-  // (y la franja está ocupada); «—» sería que no se ha podido contar.
+  // «Te toca hoy» (Julio, 16/10): sale lo que tiene algo, con su número; lo que
+  // está a 0, no; y si todo está a 0, una línea gris «Nada pendiente hoy».
+  // Mientras cuenta dice «…» (y la franja está ocupada); «—» sería que no se ha
+  // podido contar.
   const franja = page.getByRole('region', { name: 'Te toca hoy' })
-  await expect(franja.getByRole('link')).toHaveCount(4)
   await esperarNumeros(page)
-  await expect(franja.locator('.cxm-chip-numero')).not.toContainText(['—'])
+  const numeros = await franja.locator('.cxm-chip-numero').allTextContents()
+  expect(numeros).not.toContain('—')
+  expect(numeros).not.toContain('0')
+  if (numeros.length === 0) await expect(franja.getByText('Nada pendiente hoy')).toBeVisible()
+  else await expect(franja.getByText('Nada pendiente hoy')).toHaveCount(0)
+  await expect(franja.getByRole('link')).toHaveCount(numeros.length)
   // Lo de la primera carga, para compararlo después de recargar: no se cuenta
   // antes de saber la empresa (e2e 375 dio «0» en Libros con 6 esperando).
   const primeraCarga = await franja.locator('.cxm-chip-numero').allTextContents()
@@ -92,6 +98,13 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
   await expect(impuestos).toHaveAttribute('aria-disabled', 'true')
   await impuestos.hover()
   await expect(barra.getByRole('tooltip')).toHaveText('Próximamente')
+  // Al lado del botón, a su altura (no debajo, encima de la tarjeta).
+  const caja = (await impuestos.boundingBox())!, globo = (await barra.getByRole('tooltip').boundingBox())!
+  expect(globo.x).toBeGreaterThanOrEqual(caja.x + caja.width)
+  expect(Math.abs(globo.y + globo.height / 2 - (caja.y + caja.height / 2))).toBeLessThanOrEqual(2)
+  // Solo al pasar el ratón o con el foco del teclado (Julio, 16/10): fuera, no se pinta.
+  await page.mouse.move(720, 640)
+  await expect(barra.getByRole('tooltip')).toHaveCount(0)
   await capturar(page, 'marco-plegado')
 
   // Desplegada: 232 px; se recuerda al volver.
@@ -100,7 +113,6 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
   await page.reload()
   await expect(menu(page).getByRole('button', { name: 'Plegar el menú' })).toBeVisible()
   expect(Math.round((await menu(page).boundingBox())!.width)).toBe(232)
-  await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('link')).toHaveCount(4)
   // Al recargar, el navegador vuelve a donde estaba la página: arriba del todo
   // para la foto, y con los números ya contados (no «…»).
   await esperarNumeros(page)
@@ -183,6 +195,14 @@ test('el buscador general: Ctrl K es del marco, agrupa por tipo y abre con Intro
   await expect(dialogo.getByRole('alert')).toHaveCount(0)
   await page.screenshot({ path: `${DIR}/buscador-${lado(page)}.png` })
 
+  // Lo vivo primero (Julio, 16/10): los asientos anulados de las e2e, al final de su grupo y en gris.
+  await dialogo.getByLabel('Qué buscas').fill('Prueba e2e')
+  const asientos = dialogo.getByRole('group', { name: 'Asientos' })
+  await expect(asientos.getByRole('option').first()).toBeVisible({ timeout: 15_000 })
+  await expect(dialogo.getByText('buscando…')).toHaveCount(0, { timeout: 15_000 })
+  const apagados = await asientos.getByRole('option').evaluateAll((os) => os.map((o) => o.classList.contains('cxm-buscador-opcion-apagada')))
+  expect(apagados).toEqual([...apagados].sort((a, b) => Number(a) - Number(b)))
+
   // Una opción, con ↓ e Intro: «balance» lleva al Balance de situación.
   await dialogo.getByLabel('Qué buscas').fill('balance de situ')
   const opcion = dialogo.getByRole('group', { name: 'Opciones' }).getByRole('option', { name: /Balance de situación/ })
@@ -223,7 +243,16 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   // En la barra de acciones del marco, con su tecla; el ejercicio, en la barra de arriba.
   const acciones = page.getByRole('toolbar', { name: 'Acciones del libro diario' })
   await expect(acciones.getByRole('button', { name: '+ Nuevo asiento' })).toHaveAttribute('aria-keyshortcuts', 'Insert')
-  await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toBeVisible()
+  if (lado(page) === 'movil') {
+    // En el móvil (Julio, 16/10): solo el principal a la vista; lo demás en «⋯».
+    await expect(acciones.getByRole('button')).toHaveCount(2)
+    await acciones.getByRole('button', { name: 'Más acciones del libro diario' }).click()
+    await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toHaveCount(0)
+  } else {
+    await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toBeVisible()
+  }
   await expect(page.locator('.cxm-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
   // Te toca hoy: lo que espera revisión, que filtra al pulsarlo.
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()
@@ -275,6 +304,15 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   await page.evaluate(() => window.scrollTo(0, 0))
   await capturar(page, 'libro-diario-comoda')
   await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: 'Compacta' }).click()
+
+  // Las fechas, en dd/mm/aaaa y en español, sea cual sea el idioma del navegador (Julio, 16/10).
+  const desde = page.getByRole('group', { name: 'Filtros' }).getByLabel('Desde', { exact: true })
+  await expect(desde).toHaveAttribute('placeholder', 'dd/mm/aaaa')
+  await desde.fill('01102026')
+  await expect(desde).toHaveValue('01/10/2026')
+  await expect(page.locator('.cxt-pie')).toContainText(/ de \d+ asientos/)
+  await page.getByRole('group', { name: 'Filtros' }).getByRole('button', { name: 'Quitar filtros' }).click()
+  await expect(desde).toHaveValue('')
 
   // Una vista guardada: con un filtro puesto, se guarda con nombre y se borra (del navegador).
   await page.getByRole('group', { name: 'Filtros' }).getByLabel('Buscar').fill('ventas')
@@ -341,6 +379,8 @@ test('la muestra de las piezas: tabla densa, formulario por bloques y panel del 
   // El formulario: lo propuesto en azul hasta que Tab lo acepta; F4 busca subcuenta; Ctrl S guarda y lo dice.
   const form = page.getByRole('form', { name: 'Factura F-2026-118 · Distribuciones Prueba SL' })
   await expect(form.locator('.cxf-leyenda')).toContainText('propuesto por la máquina: Tab lo acepta, escribir lo cambia')
+  await expect(form.getByLabel('Fecha', { exact: true })).toHaveValue('12/10/2026')
+  await expect(form.getByLabel('Vence', { exact: true })).toHaveValue('11/11/2026')
   const gasto = form.getByLabel(/^Subcuenta de gasto/)
   await expect(gasto).toHaveClass(/cxf-propuesto/)
   await gasto.focus()

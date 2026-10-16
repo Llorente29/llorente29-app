@@ -35,6 +35,7 @@ Una pantalla vieja **se ve igual que antes** dentro del marco, con su estilo y s
    ```
 
    - `tecla` es lo que se dibuja y `atajo` lo que oye el lector.
+   - En el móvil solo se ve el `principal`; los demás van en «⋯» («Más acciones de…»), con el mismo texto.
    - La tecla la escucha **tu** pantalla, y no salta mientras se escribe en un campo (mira `escribiendo()` en el diario).
    - **Nunca uses F5, F10, F11 ni F12**: son del navegador. Ctrl K es del marco.
 
@@ -72,9 +73,9 @@ Para cualquier listado.
 | `etiqueta`, `nombreFila` | El nombre de la tabla para el lector, y «asiento» / «asientos» para el pie. |
 | `filas`, `total`, `clave` | Las filas ya filtradas y cuántas hay sin filtros. El pie dice «12 de 340 asientos» (regla 7). |
 | `columnas` | `{ id, titulo, celda, exportar?, cifra?, ancho?, pesoPdf? }`. Las cifras van a la derecha y en mono. Sin `exportar`, la columna no se baja. |
-| `teTocaHoy` | Chips con su número que filtran al pulsarlos: «…» mientras cuenta y «—» si no se pudo contar. |
+| `teTocaHoy` | Chips con su número que filtran al pulsarlos: «…» mientras cuenta y «—» si no se pudo contar. Los que están a 0 no salen; si todo está a 0, la franja dice «Nada pendiente hoy». |
 | `vistas` | Botones como «Todos» o «Para revisar · 4», más las que guarda la persona (`guardarVista` / `leerVistas`, en el navegador y por usuario) y «+ Guardar vista». |
-| `filtros` | `{ campos, valores, alCambiar }`. Tipos: `desde`, `hasta`, `opciones` y `texto`. Las listas salen de lo que hay en tus datos (regla 30) y la fila se comprueba con `cumpleFiltros`. |
+| `filtros` | `{ campos, valores, alCambiar }`. Tipos: `desde`, `hasta`, `opciones` y `texto`. Las listas salen de lo que hay en tus datos (regla 30) y la fila se comprueba con `cumpleFiltros`. Las fechas se escriben y se leen en dd/mm/aaaa, sea cual sea el idioma del navegador; por dentro van en ISO. |
 | `exportar` | Excel, CSV y PDF de lo que se ve, o solo de lo marcado. Lo dice en pantalla con el nombre del fichero y cuántas filas (regla 8). |
 | `cuadre` | El Debe y el Haber de cada fila. El pie dice «Debe … · Haber … · Cuadra», o la diferencia. |
 | `alAbrir`, `abierta`, `detalle` | Intro o un clic. Para desplegar algo debajo de la fila, pasa `abierta` y `detalle`. |
@@ -112,6 +113,15 @@ Va en `documento` del formulario, a la derecha, en unos 420 px.
 - **Ocultar ›** deja el formulario a todo el ancho y se recuerda por usuario (preferencias del marco).
 - **Sin documento** lo dice, con «Subir» si pasas `alCambiar`.
 - **En el móvil o por debajo de 1.100 px**, baja debajo del formulario.
+
+### Campo de fecha · `ui/fecha/CampoFecha.tsx`
+
+Para cualquier fecha de tu pantalla: **nunca `<input type="date">`**, que pinta `mm/dd/yyyy` en un navegador en inglés.
+
+- `valor` en ISO («2026-10-16») o vacío, y `alCambiar(iso)`. Se escribe con las barras puestas solas («16102026» → «16/10/2026»).
+- El valor solo cambia cuando la fecha está entera y existe; «31/02/2026» se marca en rojo.
+- El botón de al lado abre el calendario del navegador. No entra en el Tab.
+- En una e2e: `getByLabel('Desde', { exact: true })`, y `fill('01102026')` deja «01/10/2026».
 
 ## Antes de subir
 

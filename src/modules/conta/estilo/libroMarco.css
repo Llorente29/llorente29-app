@@ -72,3 +72,24 @@
 }
 .cxm.cxm-es-movil .cxd-en-marco .cxd-cuerpo { grid-template-columns: minmax(0, 1fr); }
 .cxm.cxm-es-movil .cxd-resumen { flex-direction: column; gap: 4px; }
+
+/* Móvil · el menú del área en una sola línea desplegable (Julio, 16/10). */
+.cxm .cxl-movil-fila { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cxm .cxl-movil-acciones { position: relative; flex: 1 1 auto; min-width: 0; }
+.cxm .cxl-movil-boton {
+  display: flex; align-items: center; gap: 4px; width: 100%; min-height: 40px; padding: 0 12px; min-width: 0;
+  border: 1px solid var(--cxm-borde-campo); border-radius: var(--cxm-radio-campo); background: var(--cxm-superficie);
+  font: inherit; font-family: var(--cxm-letra); font-size: 14px; font-weight: 600; color: var(--cxm-azul); cursor: pointer; text-align: left;
+}
+.cxm .cxl-movil-nombre { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxm .cxl-movil-dato { flex: 0 1 auto; min-width: 0; font-weight: 400; color: var(--cxm-apoyo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxm .cxl-movil-flecha { margin-left: auto; color: var(--cxm-apoyo); }
+.cxm .cxl-movil-menu {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 40; max-height: 70vh; overflow-y: auto;
+  background: var(--cxm-superficie); border: 1px solid var(--cxm-borde); border-radius: var(--cxm-radio-campo);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); padding: 6px;
+}
+.cxm .cxl-movil-grupo { display: flex; flex-direction: column; padding: 4px 0; border-bottom: 1px solid var(--cxm-borde); }
+.cxm .cxl-movil-grupo:last-child { border-bottom: none; }
+.cxm .cxl-movil-grupo .cxl-grupo-etiqueta { padding: 6px 8px 2px; font-size: 11px; }
+.cxm .cxl-movil-grupo .cxl-accion { width: 100%; }

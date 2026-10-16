@@ -301,9 +301,12 @@ function Dato({ n, uno, varios }: { n: number; uno: string; varios: string }) {
 // ── «Cerrar <mes>» ─────────────────────────────────────────────────────────
 
 function Cierre({ accountId, companyId, mes }: { accountId: string; companyId: string; mes: string }) {
-  const [c, reintentar] = useCarga<{ pasos: PasoCierre[] }>(() => cierreDelMes(accountId, companyId, mes), `${accountId}|${companyId}|${mes}`)
-  const hechos = c.estado === 'listo' ? c.v.pasos.filter((p) => p.hecho).length : 0
-  const total = c.estado === 'listo' ? c.v.pasos.length : 0
+  const [c, reintentar] = useCarga<{ pasos: PasoCierre[] } | null>(() => cierreDelMes(accountId, companyId, mes), `${accountId}|${companyId}|${mes}`)
+  // M01 (Julio, 16/10): un mes ya cerrado fuera (traído de Diez, ejercicio
+  // cerrado…) no se pide cerrar: la tarjeta no sale.
+  if (c.estado === 'listo' && c.v === null) return null
+  const hechos = c.estado === 'listo' && c.v ? c.v.pasos.filter((p) => p.hecho).length : 0
+  const total = c.estado === 'listo' && c.v ? c.v.pasos.length : 0
   return (
     <section className="cxi-seccion cxi-cierre" aria-labelledby="cxi-cierre">
       <div className="cxi-seccion-cabeza" style={{ paddingBottom: 6 }}>
@@ -312,7 +315,7 @@ function Cierre({ accountId, companyId, mes }: { accountId: string; companyId: s
       </div>
       {c.estado === 'cargando' && <Hueso ancho={200} />}
       {c.estado === 'fallo' && <ErrorConReintento mensaje={c.texto} reintentar={reintentar} />}
-      {c.estado === 'listo' && (
+      {c.estado === 'listo' && c.v && (
         <>
           <div className="cxi-progreso" role="progressbar" aria-valuenow={Math.round((hechos / Math.max(total, 1)) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`Cierre de ${nombreMes(mes)}`}>
             <div className="cxi-progreso-barra" style={{ width: `${(hechos / Math.max(total, 1)) * 100}%` }} />

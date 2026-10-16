@@ -21,6 +21,7 @@
 
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Tecla } from '@/modules/conta/ui/marco/Tecla'
+import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
 import { accionDeTecla, buscarSubcuentas, estadoCampo, textoPosicion, type Subcuenta } from '@/modules/conta/ui/formulario/formulario'
 
 export interface CampoBloque {
@@ -149,15 +150,17 @@ function Campo({ c, valor, aceptado, alCambiar, buscando, subcuentas, alElegir, 
   const volver = () => requestAnimationFrame(() => document.getElementById(id)?.focus())
   const clase = `cxf-input cxf-${estado}${c.tipo === 'importe' ? ' cxm-cifra cxf-derecha' : ''}${c.tipo === 'subcuenta' ? ' cxm-cifra' : ''}`
   const comun = {
-    id, 'data-campo': c.id, 'data-tipo': c.tipo ?? 'texto', className: clase, value: valor, readOnly: c.soloLectura,
+    id, 'data-campo': c.id, 'data-tipo': c.tipo ?? 'texto', className: clase, readOnly: c.soloLectura,
     'aria-describedby': estado === 'propuesto' ? `${id}-p` : undefined,
   }
   return (
     <div className="cxf-campo" style={{ gridColumn: `span ${c.columnas ?? 2}` }}>
       <label htmlFor={id} className="cxf-etiqueta">{c.etiqueta}{c.tipo === 'subcuenta' && <span className="cxf-f4"> · F4</span>}</label>
       {c.tipo === 'opciones'
-        ? <select {...comun} onChange={(e) => alCambiar(e.target.value)}>{(c.opciones ?? []).map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}</select>
-        : <input {...comun} type={c.tipo === 'fecha' ? 'date' : 'text'} inputMode={c.tipo === 'importe' ? 'decimal' : c.tipo === 'subcuenta' ? 'numeric' : undefined}
+        ? <select {...comun} value={valor} onChange={(e) => alCambiar(e.target.value)}>{(c.opciones ?? []).map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}</select>
+        : c.tipo === 'fecha'
+          ? <CampoFecha {...comun} valor={valor} alCambiar={alCambiar} etiquetaCalendario={`${c.etiqueta}: elegir en el calendario`} />
+          : <input {...comun} value={valor} type="text" inputMode={c.tipo === 'importe' ? 'decimal' : c.tipo === 'subcuenta' ? 'numeric' : undefined}
           placeholder={c.pista} onChange={(e) => alCambiar(e.target.value)} />}
       {estado === 'propuesto' && <span id={`${id}-p`} className="cx-oculto">Propuesto por la máquina</span>}
       {buscando && subcuentas && (

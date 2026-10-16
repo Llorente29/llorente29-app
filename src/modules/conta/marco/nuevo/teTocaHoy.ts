@@ -20,3 +20,15 @@ export function chipsDelInicio(c: CuentasMenu): ChipPendiente[] {
     { id: 'terceros', etiqueta: 'Clientes y proveedores · por revisar', numero: n('terceros'), ruta: rutaTerceros() },
   ]
 }
+
+/**
+ * Qué chips salen en la franja (Julio, 16/10): los que tienen algo, los que
+ * aún cuentan («…»), los que no se han podido contar («—») y el que está
+ * pulsado (para poder soltarlo). Los que están a 0, no. Y solo si TODOS han
+ * contado y están a 0, `nada`: la franja dice «Nada pendiente hoy». Un «—»
+ * nunca se convierte en «nada pendiente».
+ */
+export function chipsQueSalen(chips: readonly ChipPendiente[]): { visibles: ChipPendiente[]; nada: boolean } {
+  const visibles = chips.filter((c) => c.numero !== 0 || c.activo)
+  return { visibles, nada: chips.length > 0 && chips.every((c) => c.numero === 0) && !chips.some((c) => c.activo) }
+}

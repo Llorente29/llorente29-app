@@ -33,6 +33,9 @@ test('A · Validar y enviar a Diez: antes de enviar, cuántos y cuánto; y se pu
   await page.goto('/conta/libros/diario')
   // M01: el diario va en el marco; su encabezado es para el lector.
   await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
+  // M01 (Julio, 16/10): en el móvil solo «+ Nuevo asiento» está a la vista; lo demás, en «⋯».
+  const abrirMas = async () => { if (lado(page) === 'movil') await page.getByRole('button', { name: 'Más acciones del libro diario' }).click() }
+  await abrirMas()
   // Las ventas de Glovo de A están propuestas: el botón dice cuántas.
   const boton = page.getByRole('button', { name: /^Validar y enviar a Diez · \d+$/ })
   await expect(boton).toBeVisible()
@@ -53,6 +56,7 @@ test('A · Validar y enviar a Diez: antes de enviar, cuántos y cuánto; y se pu
   // Cancelar no valida nada: el botón sigue diciendo los mismos.
   await dialogo.getByRole('button', { name: 'Cancelar' }).click()
   await expect(dialogo).toHaveCount(0)
+  await abrirMas()
   await expect(page.getByRole('button', { name: `Validar y enviar a Diez · ${n}` })).toBeVisible()
 })
 
