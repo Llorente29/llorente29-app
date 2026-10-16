@@ -101,9 +101,9 @@ begin
     raise exception 'R03 0310 2a: ha pedido % (esperaba solo G0310V1: vencido, sin calle, con punto).', v_ids;
   end if;
   n := public.despachar_sin_calle_vencidos();  -- segunda pasada: no lo vuelve a pedir
-  select count(*) into n from net.http_request_queue q where q.body::text like '%e0310000-0000-4000-8000-0000000000e1%';
+  select count(*) into n from net.http_request_queue q where convert_from(q.body, 'UTF8') like '%e0310000-0000-4000-8000-0000000000e1%';
   if n <> 1 then raise exception 'R03 0310 2b: pedido a Catcher % veces (esperaba 1, también tras la segunda pasada).', n; end if;
-  if not exists (select 1 from net.http_request_queue q where q.body::text like '%e0310000-0000-4000-8000-0000000000e1%' and q.body::text like '%tras_espera%') then
+  if not exists (select 1 from net.http_request_queue q where convert_from(q.body, 'UTF8') like '%e0310000-0000-4000-8000-0000000000e1%' and convert_from(q.body, 'UTF8') like '%tras_espera%') then
     raise exception 'R03 0310 2c: la petición no lleva tras_espera.';
   end if;
   raise notice 'R03 0310 2: la espera · sale G0310V1 (vencido) · no salen el reciente ni el de dirección pegada · una sola petición, con tras_espera.';
