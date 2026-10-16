@@ -2422,4 +2422,39 @@ Pedidos de marcas propias de octubre (del 01 al 15/10, 526 pedidos, todos de Hub
 | 70009001 | PROMOCIONES UBER EATS | creada por Julio, 16/10 |
 | 70009002 | PROMOCIONES GLOVO | creada por Julio, 16/10 |
 | 70009003 | PROMOCIONES JUST EAT | creada por Julio, 16/10 |
-| 70500001 | ENVÍOS COBRADOS | **pendiente: la crea Julio antes del primer envío** |
+| 70500001 | ENVÍOS COBRADOS | creada por Julio, 16/10 |
+
+### Construido (16/10, rama `conta/c06b-construccion-promociones`, sin tanda lanzada)
+
+**La base (tanda viva, las dos «sigue» contra el contexto de producción medido en solo lectura):**
+- `20261116T0100_c06b_promociones_envios.sql`:
+  - **añade** `conta_ventas_canal_cuenta` (la 7000900x y la 70500001 de cada plataforma), `conta_envio_aclarado` (lo que dijo la liquidación: `lo_paga` / `no_lo_paga`), `conta_cargos_de_pedidos(cuenta, pedidos)`, `conta_envio_aclarar(pedido, decisión, motivo)` y el freno al validar (disparador en `journal_entry`);
+  - **cambia**, con la misma firma, `conta_propuesta_ventas_unidad` y `conta_resumen_ventas`.
+- `20261116T0110_c06b_promociones_envios_datos.sql`: las cuatro subcuentas de Foodint y sus 6 enlaces. Solo inserta.
+- **Prueba de staging** `20261116_c06b_promociones_envios_prueba.sql`, en verde: el ejemplo del diseño al céntimo; el «Por aclarar» que no se valida; lo aclarado que sale de la venta y del cobro; y un día de antes que da las mismas líneas.
+
+**Cómo se calcula cada pedido (en céntimos, al tipo de la venta):**
+- promoción en base = descuento × 100 / (100 + tipo);
+- envío cobrado en base = envío × 100 / (100 + tipo), solo si `service_type = own_delivery` y quién reparte no sale «por defecto», o si la liquidación dijo `lo_paga`;
+- venta de la marca = base pagada + promoción − envío cobrado;
+- la 430 y la 477, como hoy, sobre lo que paga el cliente.
+- Sin la subcuenta de su plataforma, la promoción se queda restada y el envío dentro de la venta, y el asiento sale en «duda» con su «Mira esto».
+
+**«Por aclarar»:**
+- El asiento sale en «duda» con el pedido, la marca, el envío y el porqué.
+- **No se valida**: el freno lo para con «No se valida: N pedido(s) con envío por aclarar: …».
+- `conta_envio_aclarar` apunta lo que dice la liquidación y quita el PROPUESTO de su día; el cierre del día lo vuelve a proponer. Lo validado no se toca.
+
+**Pendiente, dicho y no hecho:**
+- El agente «libro» compara el total del resumen con la suma de los pedidos. Un envío aclarado `no_lo_paga` lo pondría en rojo ese día: se ajusta después de la tanda, cuando `conta_cargos_de_pedidos` exista en producción.
+- La forma de la factura de Diez con una 7000900x en negativo y una 705 no se ha medido en la C0009. Es la misma que el reembolso (708 en negativo), que sí está medido.
+
+### Para A: la vara de medir de la promoción por pedido (la liquidación de Uber)
+
+- **Dónde:** `public.sale.discount_amount`, por pedido. Viene de HubRise (`discounts[].price_off`): en los 526 pedidos del 01 al 15/10 es igual, céntimo a céntimo, a la suma de `price_off`. La lee también `conta_cargos_de_pedidos(cuenta, pedidos)`, columna `descuento`.
+- **Signo:** positivo, o nulo si el pedido no lleva (0 negativos de 526).
+- **IVA:** **dentro**. Lo que resta el asiento en la 70009001 es su base, `descuento × 100 / 110`, al céntimo, pedido a pedido.
+- **Solo Uber:** `sale.channel_id` = el canal Uber de la cuenta (slug `uber`), con `account_id` (regla 9), marcas propias, `status = 'closed'`, `is_active`.
+- **Días:** en Europe/Madrid, como el asiento del día: `sold_at >= (dia::timestamp at time zone 'Europe/Madrid')` y `< ((dia + 1)::timestamp at time zone 'Europe/Madrid')`.
+- **IVA de cada pedido:** el de las ventas de la empresa (10 %), el mismo del asiento del día. La cuota de la promoción es el descuento menos su base.
+- **Identidad comprobada (526 de 526):** `total = artículos − descuento + cargos`.
