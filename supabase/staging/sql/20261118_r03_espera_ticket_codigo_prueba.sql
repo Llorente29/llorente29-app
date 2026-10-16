@@ -125,6 +125,15 @@ begin
      is distinct from 'platform_delivery/fuera_de_zona' then
     raise exception 'R03 0310 0e: tras un aviso posterior ha cambiado.';
   end if;
+  -- Un raw_tab ilegible es «no lo sé», no «ninguna señal»: ni falla ni manda a Uber.
+  select * into r from public.uber_senales_de_reparto('{"customer": roto');
+  if r.calle is not null or r.coordenadas is not null or r.cargo_envio is not null then
+    raise exception 'R03 0310 0f: un raw_tab roto da señales (%/%/%).', r.calle, r.coordenadas, r.cargo_envio;
+  end if;
+  select * into r from public.sale_entrega_desde_raw('hubrise', '{"customer": roto');
+  if r.customer_phone_code is not null or r.delivery_instructions is not null or r.order_customer_note is not null then
+    raise exception 'R03 0310 0g: un raw_tab roto da datos de entrega.';
+  end if;
   raise notice 'R03 0310 0: Uber · las tres → propio (aunque la tabla diga «Plataforma») · ninguna → la reparte Uber, fuera de zona (también tras otro aviso) · mezcladas → para decidir, sin Catcher («%»).', r.reason;
 end $$;
 

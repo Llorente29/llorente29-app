@@ -59,6 +59,7 @@ with c as (
      and s.sold_at > now() - interval '48 hours'
      and coalesce(s.delivery_by_reason, '') not in ('decidido_propio', 'decidido_uber')
      and coalesce(btrim(s.delivery_address_fixed), '') = ''
+     and g.calle is not null  -- raw_tab ilegible: no se recoloca
 ), n as (
   select c.*,
          case when calle and coordenadas and cargo_envio then 'own_delivery'

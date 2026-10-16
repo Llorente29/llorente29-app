@@ -81,7 +81,13 @@ begin
   if left(btrim(coalesce(p_raw_tab, '')), 1) <> '{' then
     return query select null::text, null::text, null::text; return;
   end if;
-  v_t := p_raw_tab::jsonb;
+  -- Un raw_tab roto no es un error de nadie que esté pidiendo: no se lee y ya
+  -- (la 0320 llama aquí fila a fila; un solo roto tumbaba la tanda entera).
+  begin
+    v_t := p_raw_tab::jsonb;
+  exception when others then
+    return query select null::text, null::text, null::text; return;
+  end;
   if p_source = 'hubrise' then
     return query select
       nullif(btrim(coalesce(v_t->'customer'->>'phone_access_code', ''), v_w), ''),
@@ -139,9 +145,15 @@ as $function$
 declare v_t jsonb;
 begin
   if left(btrim(coalesce(p_raw_tab, '')), 1) <> '{' then
-    return query select false, false, false; return;
+    return query select null::boolean, null::boolean, null::boolean; return;
   end if;
-  v_t := p_raw_tab::jsonb;
+  -- Ilegible = no lo sé (nulos), no «ninguna señal»: un raw_tab que no se lee
+  -- no puede mandar un pedido a «la reparte Uber».
+  begin
+    v_t := p_raw_tab::jsonb;
+  exception when others then
+    return query select null::boolean, null::boolean, null::boolean; return;
+  end;
   return query select
     nullif(btrim(coalesce(v_t->'customer'->>'address_1', ''), E' \t\r\n'), '') is not null,
     nullif(v_t->'customer'->>'latitude', '') is not null and nullif(v_t->'customer'->>'longitude', '') is not null,
@@ -169,6 +181,7 @@ begin
   if new.delivery_by_reason in ('decidido_propio', 'decidido_uber') then return new; end if;
   begin
     select * into r from public.uber_senales_de_reparto(new.raw_tab);
+    if r.calle is null then return new; end if;  -- ilegible: se queda como está
     if r.calle and r.coordenadas and r.cargo_envio then
       new.service_type := 'own_delivery';
       new.delivery_by_reason := null;
