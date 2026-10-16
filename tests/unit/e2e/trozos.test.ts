@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { ficheros, filtrar, repartir, tiemposDelRepo } from '../../../scripts/e2e/trozos.mjs'
 
 const TODOS = ficheros()
@@ -75,8 +76,15 @@ describe('el workflow de la e2e (W02)', () => {
     expect(wf).toContain('- name: Carril · esperar a que no se esté migrando y coger uno')
   })
 
-  it('la entera: 4 trozos con la suite entera, 1 con una parte', () => {
-    expect(wf).toMatch(/if \[ -z "\$\{PRUEBAS:-\}" \]; then N=4; TROZOS='\[1,2,3,4\]'; else N=1; TROZOS='\[1\]'; fi/)
+  it('la entera: 2 trozos por defecto (1 a 4 a mano) con la suite entera, 1 con una parte', () => {
+    const i = wf.indexOf('N=${TROZOS_PEDIDOS:-2}')
+    expect(i).toBeGreaterThan(0)
+    const bloque = wf.slice(i, wf.indexOf('{ echo "frente=', i))
+    const correr = (pedidos: string, pruebas: string) => execFileSync('bash', ['-c', `set -e; TROZOS_PEDIDOS="$1"; PRUEBAS="$2"\n${bloque}\nprintf %s "$N $TROZOS"`, 'x', pedidos, pruebas], { encoding: 'utf8' })
+    expect(correr('', '')).toBe('2 [1,2]')
+    expect(correr('4', '')).toBe('4 [1,2,3,4]')
+    expect(correr('3', 'tests/e2e/conta/b01')).toBe('1 [1]')
+    expect(() => correr('9', '')).toThrow()
     expect(wf).toMatch(/trozo: \$\{\{ fromJSON\(needs\.plan\.outputs\.trozos\) \}\}/)
   })
 

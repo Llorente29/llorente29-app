@@ -28,12 +28,12 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 # staging a mitad de una e2e. Son cerrojos consultivos de Postgres que mantiene
 # un psql en segundo plano: si el runner muere, se sueltan solos.
 #
-# LA ENTERA, EN CUATRO TROZOS A LA VEZ (W02, paso 1c)
+# LA ENTERA, EN TROZOS A LA VEZ (W02, paso 1c)
 # Con «pruebas» vacío (y en un push de una rama sin frente) la suite se reparte
-# en 4 trozos (scripts/e2e/trozos.mjs: fichero a fichero, del más lento al más
+# en 2 trozos (4 a mano con «trozos»: la Micro de staging no los aguanta) (scripts/e2e/trozos.mjs: fichero a fichero, del más lento al más
 # rápido, al trozo que menos lleva), cada uno en su runner y en su carril. El
-# job «entera» los junta: comprueba que entre los 4 están TODOS los ficheros,
-# una vez cada uno, y que los 4 han salido en verde en este commit. Solo así el
+# job «entera» los junta: comprueba que entre todos están TODOS los ficheros,
+# una vez cada uno, y que todos han salido en verde en este commit. Solo así el
 # run sale en verde, y solo así cuenta como entera (scripts/conta/e2e-entera.mjs,
 # que además exige que sea el PRIMER intento: relanzar un trozo que falló sirve
 # para diagnosticar, no para dar valores a Julio).
@@ -109,6 +109,14 @@ on:
         type: string
         required: false
         default: ''
+      # W02 (1c): en cuántos trozos a la vez va la suite entera. 2 por defecto:
+      # con 4, la Micro de staging no aguanta (medido el 16/10: las mismas
+      # pruebas ×1,20 y 6-8 que no llegan a pintar en 15 s por run).
+      trozos:
+        description: 'En cuántos trozos a la vez va la suite entera (1 a 4). Vacío = 2'
+        type: string
+        required: false
+        default: ''
       # Antes del informe: commitea en la rama las capturas de SU frente (solo esas).
       fijar_capturas:
         description: 'Fijar en la rama las capturas del frente de la rama (antes del informe)'
@@ -149,6 +157,7 @@ jobs:
     env:
       PRUEBAS: ${{ inputs.pruebas }}
       FRENTE_PEDIDO: ${{ inputs.frente }}
+      TROZOS_PEDIDOS: ${{ inputs.trozos }}
     steps:
       - name: Frente (de la rama, o el pedido a mano)
         id: frente
@@ -180,8 +189,12 @@ jobs:
               echo "::error::«pruebas» son carpetas o ficheros de tests/e2e separados por espacios (o nada): «$p» no lo es."; exit 1
             fi
           done
-          # La suite entera, en 4 trozos a la vez; una parte, en uno.
-          if [ -z "${PRUEBAS:-}" ]; then N=4; TROZOS='[1,2,3,4]'; else N=1; TROZOS='[1]'; fi
+          # La suite entera, en N trozos a la vez (2 por defecto: la Micro no
+          # aguanta 4, medido el 16/10); una parte, en uno.
+          N=${TROZOS_PEDIDOS:-2}
+          case "$N" in 1|2|3|4) ;; *) echo "::error::«trozos» tiene que ser 1, 2, 3 o 4 (o nada)."; exit 1 ;; esac
+          [ -z "${PRUEBAS:-}" ] || N=1
+          TROZOS=$(seq -s, 1 "$N" | sed 's/^/[/; s/$/]/')
           { echo "frente=$FRENTE"; echo "pruebas=${PRUEBAS:-}"; echo "trozos=$TROZOS"; echo "n=$N"; } >> "$GITHUB_OUTPUT"
           echo "Frente: ${FRENTE:-ninguno} · pruebas: ${PRUEBAS:-la suite entera} · trozos: $N"
 
@@ -189,7 +202,7 @@ jobs:
     needs: plan
     name: trozo ${{ matrix.trozo }}/${{ needs.plan.outputs.n }}
     runs-on: ubuntu-latest
-    # Un trozo de la entera lleva unos 8-9 min de pruebas; uno solo con la
+    # Un trozo de la entera lleva unos 9-17 min de pruebas; uno solo con la
     # suite entera (si alguna vez hiciera falta), 35. La preparación, hasta 10.
     timeout-minutes: 60
     strategy:
