@@ -52,10 +52,15 @@ numero() {
 # El psql que mantiene los cerrojos. Escribe una línea por cosa que pasa en
 # $CARRIL_DIR/guardian.log y se queda durmiendo hasta que lo matan.
 guardian() {
-  local modo=$1 app=$2
+  local modo=$1 app
+  # Solo ASCII y 63 bytes como mucho: lo que cabe en application_name.
+  app=$(printf '%s' "$2" | LC_ALL=C tr -cd '\40-\176' | cut -c1-63)
+  GUARDIAN_APP=$app; echo "$app" > "$CARRIL_DIR/guardian.app"
   : > "$CARRIL_DIR/guardian.log"
-  PGAPPNAME="$app" stdbuf -oL -eL "$PSQL" "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -v espera="${ESPERA_MIN}min" -v max="$MAX" \
-    -f "$SQL/guardian_${modo}.sql" > "$CARRIL_DIR/guardian.log" 2>&1 &
+  # Dos horas de latido en tramos de 20 s (ver guardian_e2e.sql).
+  for _ in $(seq 360); do echo 'select pg_sleep(20);'; done > "$CARRIL_DIR/latido.sql"
+  PGAPPNAME="$app" stdbuf -oL -eL "$PSQL" "$DB_URL" -X -q -A -t -v ON_ERROR_STOP=1 -v espera="${ESPERA_MIN}min" -v max="$MAX" -v quien="$app" \
+    -f "$SQL/guardian_${modo}.sql" -f "$CARRIL_DIR/latido.sql" > "$CARRIL_DIR/guardian.log" 2>&1 &
   echo $! > "$CARRIL_DIR/guardian.pid"
 }
 
@@ -83,9 +88,17 @@ quien_hay() {
                where l.locktype = 'advisory' and l.classid = 4202 and l.objid = 0" 2>/dev/null || true
 }
 
+# Suelta los cerrojos: termina en el servidor el proceso del guardián (si no,
+# con el pooler, su consulta seguiría viva con los cerrojos) y mata el psql.
 matar_guardian() {
   [ -s "$CARRIL_DIR/guardian.pid" ] || return 0
-  local pid; pid=$(cat "$CARRIL_DIR/guardian.pid")
+  GUARDIAN_APP=${GUARDIAN_APP:-$(cat "$CARRIL_DIR/guardian.app" 2>/dev/null || true)}
+  local pid bpid; pid=$(cat "$CARRIL_DIR/guardian.pid")
+  bpid=$(grep -m1 '^pid ' "$CARRIL_DIR/guardian.log" 2>/dev/null | awk '{print $2}' || true)
+  if [ -n "$bpid" ]; then
+    q -A -t -c "select pg_terminate_backend($bpid) from pg_stat_activity where pid = $bpid and application_name = '$(sed "s/'/''/g" <<< "$GUARDIAN_APP")'" > /dev/null 2>&1 \
+      || echo "::warning::No he podido terminar el proceso $bpid del guardián en el servidor: se suelta al acabar su tramo (20 s)."
+  fi
   kill "$pid" 2>/dev/null || true
   for _ in $(seq 1 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
   kill -9 "$pid" 2>/dev/null || true
@@ -93,7 +106,7 @@ matar_guardian() {
 }
 
 coger() {
-  guardian e2e "e2e-carril · ${CARRIL_YO:-?}"
+  guardian e2e "e2e-carril ${CARRIL_YO:-?}"
   local t0 n otros; t0=$(date +%s)
   otros=$(quien_hay)
   [ -n "$otros" ] && echo "Cerrojo de migrar ahora: $otros"
@@ -153,7 +166,7 @@ soltar() {
 }
 
 migrar_coger() {
-  guardian migrar "e2e-migrar · ${CARRIL_YO:-?}"
+  guardian migrar "e2e-migrar ${CARRIL_YO:-?}"
   local t0; t0=$(date +%s)
   local otros; otros=$(quien_hay)
   [ -n "$otros" ] && echo "Esperando a que acaben: $otros"
