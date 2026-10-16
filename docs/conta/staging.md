@@ -611,3 +611,64 @@ sirve para diagnosticar, no para dar valores a Julio.
 ciclo entero en un carril de verdad. Las cuentas de la plantilla siguen
 cambiándose como siempre, con `aplicar-staging-conta`. Lo que se le añade a la
 A, el próximo carril ya lo trae.
+
+## Staging contra producción, cada noche (W02, 16/10)
+
+**Qué hace.** `comparar-staging-produccion.yml` saca la estructura de `public`
+en los dos lados con la **misma** consulta, `scripts/conta/staging/comparar.sql`:
+
+- la huella de `prosrc` de cada función (el método de C) y, aparte, la de lo
+  demás: lo que devuelve, `security definer`, volatilidad y `set`;
+- las columnas de cada tabla (tipo, `not null`, `default`);
+- los disparadores.
+
+Solo lee el catálogo. En producción entra con `conta_lectura` y las cuatro
+guardas del nocturno de cumplimiento. Lo compara `comparar.mjs`.
+
+**Cuándo.** Cada noche, a mano, y en `aplicar-staging-conta` antes y después de
+cada tanda. No para la tanda: la tanda puede ser justo la que cierra una
+diferencia. El «después» dice si la ha cerrado o ha abierto otra.
+
+**Qué sale en rojo.** Toda diferencia que no esté aceptada **por su nombre
+exacto y con su motivo** en `scripts/conta/staging/diferencias-aceptadas.txt`.
+Las aceptadas salen igual, en su sección y con su recuento. Una aceptada que
+ya no casa con nada la cuenta el resumen, para quitarla.
+
+**El registro.** Desde el W02, `aplicar-staging-conta` apunta cada fichero en
+`supabase_migrations.schema_migrations` con su huella md5, en la misma
+transacción que el fichero (`analizar.mjs registro-staging`). Es el mismo
+registro de producción, pero reaplicable: staging reaplica a propósito.
+`real-en-staging.sh` quita ese registro antes de poner el suyo, que es
+exactamente el de producción.
+
+Lo aplicado antes del 16/10 no tiene registro: para eso está la comparación.
+
+### Las 52 diferencias del 16/10 y de dónde sale cada una
+
+Primera pasada, run 38923607587:
+
+- **iguales:** 458 tablas, 6.066 columnas, 1.057 funciones y 218 disparadores;
+- **distintas:** 52.
+
+No se ha arreglado ninguna.
+
+| Diferencia | Origen | Cómo queda |
+|---|---|---|
+| `journal_entry_validar` y `conta_propuesta_ventas_unidad`, otro cuerpo | Staging tiene las de **antes del céntimo**: los cuerpos casan con `20261019T0160_diez_numeracion` y con `20261020T0100_ventas_por_plataforma`. Producción tiene las de `20261113T0100_c06b_centimo_iva`. A staging le faltaba esa migración. | **roja** (C la está aplicando) |
+| `create_account_tx`, otro cuerpo | Producción tiene `20261008124905 alta_de_cuenta_sin_permission_sets`, aplicada por el conector el 08/10. Su fichero (`20261008T1449_…`) solo está en la rama `fix/alta-de-cuenta-sin-permission-sets` (a106ac28), **sin fusionar**: una corrección que vive en producción y no en `main` (regla 1). Staging no la tiene. | **roja** |
+| `dosier_visita`, solo en producción | `20261006110719` y `20261006114129` en producción (por el conector). Sus ficheros, `20261006T1200` y `T1400`, están en `main`. No se aplicaron en staging (no es de contabilidad). | **roja** |
+| `c01b_columnas_eliminadas`, solo en producción, y `supplier.address`, `email`, `phone` y `usual_vat_rates`, solo en staging | Es la misma migración, `20261006T0140_c01b_elimina`: copia las cuatro columnas a esa tabla y las borra. Está en el historial de producción, pero nunca entró en el manifiesto de staging. | **roja** (5) |
+| 21 funciones de mesas (`_pos_table_*`, `_pos_actor_name`, `_pos_device_for`, `_pos_enqueue_print`, `_pos_insert_order_line`, `_pos_sala_channel_id`, `pos_floor`, `pos_table_*`, `pos_void_reasons`), `sale_fire`, `sale_line_void` y 8 columnas de `sale` y `sale_line` | **TPV Sala S1, parte B** (`20261009T0040`, en `main` desde el 08/10). En staging la aplicó el conector el 08/10, con `staging/sql/20261008_tpv_sala_s1_lo_que_falta_en_staging.sql`. En producción no está: va fuera de banda. La parte A sí (`20261008114424`). | aceptada, en desarrollo |
+| `order_for_print`: `(text, uuid)` en producción y `(text, uuid, uuid)` en staging | La misma S1B, punto 6.4 (DROP + CREATE con `p_fire_id`). | aceptada (2) |
+| `tg_auto_print_on_accept`, `upsert_pos_sale` y `pos_open_sales`, otro cuerpo | La misma S1B, puntos 6.1–6.3. Parchea la definición con `regexp_replace`: por eso no casan con el texto de ningún fichero. Producción sigue con `20260919T1530_las_pegatinas_salen_con_la_bolsa`, `20260816T1100_tpv_t1d_pos_open_sales` y el `upsert_pos_sale` de agosto. | aceptada (3) |
+| `sale_table_move`, `sale.merged_into_sale_id`, `_pos_dest_table`, `_pos_print_table_notice`, `pos_table_move` y `pos_table_move_lines` | **TPV Sala S2** (`20261009T0050`). Solo existe en la rama `claude/affectionate-albattani-6lv2af`, **sin fusionar**, y se aplicó en staging desde ella. | aceptada, en desarrollo |
+| `e2e_c06_recorrido_base`, solo en staging | La crea la semilla `supabase/seeds/conta/seed_c06_recorrido_staging.sql`. Es de staging a propósito. | aceptada |
+
+Con esas aceptadas quedan **9 rojas**:
+
+- las 2 del céntimo;
+- `create_account_tx`;
+- `dosier_visita`;
+- las 5 de `c01b_elimina`.
+
+Todas son staging atrasado respecto a producción.
