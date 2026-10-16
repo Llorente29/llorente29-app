@@ -16,7 +16,9 @@
 #
 # Entorno: DB_URL; CARRIL_DIR (por defecto $RUNNER_TEMP/carril); CARRIL_YO (quién:
 # «run 123 · trozo 2/4 · conta/b02…», sale en pg_stat_activity); CLAVE_PRUEBAS
-# (clonar). Opcionales: PSQL, CARRIL_ESPERA_MIN (40), CARRIL_MAX (64).
+# (clonar). Opcionales: PSQL, CARRIL_ESPERA_MIN (40), CARRIL_MAX (16: cada
+# carril en uso es una conexión más, y la Micro tiene 60, 30 ya ocupadas por
+# PostgREST, auth y el pooler; medido el 16/10).
 #
 # CÓMO SE CIERRA SIN TABLAS NI CADUCIDADES. Dos cerrojos consultivos de
 # Postgres que mantiene un psql en segundo plano mientras dura el job:
@@ -37,7 +39,7 @@ AQUI=$(cd "$(dirname "$0")" && pwd)
 SQL="$AQUI/carril"
 CARRIL_DIR=${CARRIL_DIR:-${RUNNER_TEMP:-/tmp}/carril}
 ESPERA_MIN=${CARRIL_ESPERA_MIN:-40}
-MAX=${CARRIL_MAX:-64}
+MAX=${CARRIL_MAX:-16}
 : "${DB_URL:?Falta DB_URL}"
 mkdir -p "$CARRIL_DIR"
 

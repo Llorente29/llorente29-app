@@ -8,12 +8,12 @@
 // Datos inventados. Ninguna tarjeta dada de alta sobrevive a una prueba.
 
 import { createClient } from '@supabase/supabase-js'
-import { STAGING_URL, anonKey, pedirSesion, CUENTA_A } from '../sesion'
+import { STAGING_URL, anonKey, pedirSesion, CUENTA_A, enCarril } from '../sesion'
 import { escribirNorma43 } from '@/modules/conta/lib/norma43'
 import type { Bd, Consulta } from '@/modules/conta/services/bancosNucleo'
 
-export const EMPRESA_A = '3b34403a-a7d6-4a48-a8d7-737e8cababdc'
-export const BANCOS_B01 = ['b0100000-0000-4000-8000-0000000000b1', 'b0100000-0000-4000-8000-0000000000b2', 'b0100000-0000-4000-8000-0000000000b3']
+export const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
+export const BANCOS_B01 = ['b0100000-0000-4000-8000-0000000000b1', 'b0100000-0000-4000-8000-0000000000b2', 'b0100000-0000-4000-8000-0000000000b3'].map((id) => enCarril(id))
 
 export const FICHERO = escribirNorma43([
   { entidad: '0182', oficina: '9101', cuenta: '0000000011', nombre: 'TABERNA DE PRUEBA NORTE', desde: '2026-10-01', hasta: '2026-10-13', saldoInicialCent: 4_500_000, movimientos: [

@@ -7,8 +7,12 @@ e2e-staging-conta.yml y, de cada una, el tiempo de cada paso del job:
   cola GitHub   desde que se crea el run hasta que arranca el job
                 (el grupo de concurrency: misma rama y mismo frente)
   preparación   checkout, psql, npm ci, build y navegador (antes del cerrojo)
-  cerrojo       el paso «Cerrojo · esperar…»: lo que espera a otra e2e
+  cerrojo       el paso «Cerrojo · esperar…» (antes del W02: lo que espera a
+                otra e2e) o «Carril · esperar…» (después: lo que espera a que
+                acabe una migración de staging)
   pruebas       el paso «Pruebas (ordenador y móvil)»
+
+Con trozos (W02, 1c), las de cada run son las del trozo más largo: corren a la vez.
 
 Es la vara del antes y del después (regla 31): el mismo script, las mismas
 columnas, a los dos lados del cambio.
@@ -21,7 +25,7 @@ from datetime import datetime, timedelta
 
 REPO = 'https://api.github.com/repos/Llorente29/llorente29-app'
 PREP = ('Set up job', 'Run actions/checkout', 'Guarda 1', 'Frente', 'Instalar psql',
-        'Run actions/setup-node', 'Dependencias', 'Build', 'Navegador')
+        'Run actions/setup-node', 'Dependencias', 'Build', 'Navegador', 'Trozo ·', 'Carril · clonar')
 
 
 def api(url):
@@ -60,19 +64,34 @@ def filas(dir_, paginas):
         jobs = json.load(open(f))['jobs']
         if not jobs:
             continue
-        j = jobs[0]
+        # Desde el W02 (1c) un run tiene varios jobs: «plan», N «trozo i/N» y
+        # «entera». Las pruebas corren en los trozos A LA VEZ: la espera, la
+        # preparación y las pruebas del run son las del trozo más largo; la cola,
+        # hasta que arranca el primero; el total, hasta que acaba el último job.
+        # Con un solo job (antes del W02), el de siempre: la misma vara.
+        trozos = [j for j in jobs if j['name'].startswith('trozo ')] or [jobs[0]]
+        if not all(j['started_at'] for j in trozos):
+            continue
 
-        def paso(prefijo):
+        def paso(j, prefijo):
             for s in j['steps']:
                 if s['name'].startswith(prefijo) and s['conclusion'] != 'skipped' and s['completed_at']:
                     return minutos(s['started_at'], s['completed_at'])
             return None
 
-        yield dict(id=r['id'], frente=frente(r['head_branch']), creado=r['created_at'],
+        def maximo(xs):
+            xs = [x for x in xs if x is not None]
+            return max(xs) if xs else None
+
+        espera = lambda j: paso(j, 'Cerrojo · esperar') if paso(j, 'Cerrojo · esperar') is not None else paso(j, 'Carril · esperar')
+        yield dict(id=r['id'], frente=frente(r['head_branch']), rama=r['head_branch'], creado=r['created_at'],
                    que='entera' if '· entera ·' in r.get('display_title', '') else ('push' if r['event'] == 'push' else 'parcial'),
-                   resultado=r['conclusion'], cola=minutos(r['created_at'], j['started_at']),
-                   prep=sum(x for x in map(paso, PREP) if x), cerrojo=paso('Cerrojo · esperar'),
-                   pruebas=paso('Pruebas'), total=minutos(r['created_at'], j['completed_at']))
+                   resultado=r['conclusion'], trozos=len(trozos) if trozos[0]['name'].startswith('trozo ') else 1,
+                   cola=minutos(r['created_at'], min(j['started_at'] for j in trozos)),
+                   prep=maximo(sum(x for x in (paso(j, p) for p in PREP) if x) for j in trozos),
+                   cerrojo=maximo(espera(j) for j in trozos),
+                   pruebas=maximo(paso(j, 'Pruebas') for j in trozos),
+                   total=minutos(r['created_at'], max(j['completed_at'] for j in jobs if j['completed_at'])))
 
 
 def resumen(xs):
@@ -87,8 +106,11 @@ def main():
     ap.add_argument('--desde', default='2026-10-13T19:45:00Z', help='desde cuándo (UTC). Por defecto, desde que hay cerrojo')
     ap.add_argument('--dir', default='/tmp/e2e-esperas')
     ap.add_argument('--paginas', type=int, default=3)
+    ap.add_argument('--hasta', default='9999', help='hasta cuándo (UTC), para medir un tramo cerrado')
+    ap.add_argument('--rama', default='', help='solo las de esta rama (o prefijo)')
     a = ap.parse_args()
-    fs = [f for f in filas(a.dir, a.paginas) if f['creado'] >= a.desde and f['cerrojo'] is not None and f['pruebas']]
+    fs = [f for f in filas(a.dir, a.paginas)
+          if a.desde <= f['creado'] < a.hasta and f['cerrojo'] is not None and f['pruebas'] and f['rama'].startswith(a.rama)]
     madrid = lambda s: (t(s) + timedelta(hours=2)).strftime('%d/%m %H:%M')  # CEST hasta el 25/10
     for fr in 'ABCD':
         print(f'\n### Frente {fr}\n')

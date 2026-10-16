@@ -88,11 +88,18 @@ describe('el cerrojo de las e2e', () => {
     expect(r.stdout).toContain('caduca solo a los 50 minutos')
   })
 
-  it('el workflow lo suelta pase lo que pase (always) y no espera más de una hora', () => {
-    const wf = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
-    const soltar = wf.slice(wf.indexOf('- name: Cerrojo · soltarlo'))
+  // W02 (1c, 16/10): la e2e ya no lo coge (cada una tiene su carril). Mientras
+  // queden ramas con la e2e de antes, lo coge quien aplica a staging, para no
+  // entrar a mitad de una de ellas; y lo suelta pase lo que pase.
+  it('aplicar-staging-conta lo coge antes de aplicar y lo suelta pase lo que pase; la e2e de carril, no', () => {
+    const ap = readFileSync('.github/workflows/aplicar-staging-conta.yml', 'utf8')
+    const coger = ap.indexOf('scripts/e2e/cerrojo.sh coger')
+    expect(coger).toBeGreaterThan(0)
+    expect(coger).toBeLessThan(ap.indexOf('- name: Aplicar, fichero a fichero'))
+    const soltar = ap.slice(ap.indexOf('- name: Cerrojo de migrar · soltarlo'))
     expect(soltar.slice(0, 400)).toMatch(/if: always\(\)[\s\S]*scripts\/e2e\/cerrojo\.sh soltar/)
-    expect(wf).toContain('scripts/e2e/cerrojo.sh coger')
-    expect(wf).not.toMatch(/CERROJO_INTENTOS/) // por defecto: 120 × 30 s
+    expect(ap).not.toMatch(/CERROJO_INTENTOS/) // por defecto: 120 × 30 s
+    const e2e = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
+    expect(e2e).not.toContain('scripts/e2e/cerrojo.sh coger')
   })
 })

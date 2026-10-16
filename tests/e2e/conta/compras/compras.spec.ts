@@ -19,13 +19,13 @@
 // no escribe, y «Recibido» solo sale tras recibir de verdad.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/compras'
-const VERDURAS = 'c0c00000-0000-4000-8000-000000000001'
-const BODEGA = 'c0c00000-0000-4000-8000-000000000002'
-const AURORA = 'c0c00000-0000-4000-8000-000000000004'
+const VERDURAS = enCarril('c0c00000-0000-4000-8000-000000000001')
+const BODEGA = enCarril('c0c00000-0000-4000-8000-000000000002')
+const AURORA = enCarril('c0c00000-0000-4000-8000-000000000004')
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // La captura de página entera con `fullPage` pinta las piezas fijas (la

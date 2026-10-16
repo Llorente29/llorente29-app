@@ -15,18 +15,18 @@
 
 import { mkdirSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { loQueTapanSinPregunta } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c06b'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
-const CON = 'c06b9000-0000-4000-8000-000000000001'
-const ACLARAR = 'c06b9000-0000-4000-8000-000000000002'
-const LOC = 'c01a0000-0000-4000-8000-0000000000a2'
+const CON = enCarril('c06b9000-0000-4000-8000-000000000001')
+const ACLARAR = enCarril('c06b9000-0000-4000-8000-000000000002')
+const LOC = enCarril('c01a0000-0000-4000-8000-0000000000a2')
 
 const cuenta = (code: string, name: string) => ({ code, name, kind: 'own', plain_name: null, template_code: code.slice(0, 3), plan: 'pymes' })
 const linea = (position: number, code: string, name: string, debit: number, credit: number, concept: string, extra: Record<string, unknown> = {}) => ({
-  position, company_account_id: `c06b9100-0000-4000-8000-00000000000${position}`, debit, credit, concept, location_id: LOC, is_common: false,
+  position, company_account_id: enCarril(`c06b9100-0000-4000-8000-00000000000${position}`), debit, credit, concept, location_id: LOC, is_common: false,
   brand_id: null, document_ref: null, tax_rate_id: null, tax_base: null, vat_book: null, withholding_base: null, withholding_model: null, external_negative_side: null,
   company_account: cuenta(code, name), locations: { name: 'Local de prueba' }, brand: null, tax_rate: null, ...extra,
 })
@@ -42,13 +42,13 @@ const asiento = (id: string, o: { total: number; venta: number; cuota: number; b
   confidence: o.confianza, reason: o.porque, reasons: o.razones, party_id: null, document_ref: null,
   external_program: null, external_series: null, external_number: null, validated_at: null, validated_by_name: null, chain_seq: null, prev_hash: null, hash: null,
   reverses_entry_id: null, voided_by_entry_id: null, voided_at: null, voided_by_name: null, void_reason: null, created_at: '2026-10-22T00:07:00Z', created_by_name: 'Folvy (cierre del día)',
-  company_id: '3b34403a-a7d6-4a48-a8d7-737e8cababdc',
+  company_id: enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc'),
   journal_line: [
     linea(1, '43000001', 'GLOVO', o.total, 0, 'Cobra Glovo'),
     linea(2, '70009002', 'PROMOCIONES GLOVO', 9.09, 0, 'Promociones Glovo · 1 pedido'),
-    linea(3, '70000001', 'VENTAS CASA LOLA', 0, o.venta, 'Ventas Casa Lola', { brand_id: '7e000000-0000-4000-8000-000000000b01', brand: { name: 'Casa Lola', ownership_type: 'own' } }),
+    linea(3, '70000001', 'VENTAS CASA LOLA', 0, o.venta, 'Ventas Casa Lola', { brand_id: enCarril('7e000000-0000-4000-8000-000000000b01'), brand: { name: 'Casa Lola', ownership_type: 'own' } }),
     linea(4, '70500001', 'ENVÍOS COBRADOS', 0, 3.18, 'Envíos cobrados · 1 pedido'),
-    linea(5, '47700010', 'H.P. IVA REPERCUTIDO 10%', 0, o.cuota, 'IVA repercutido 10 %', { tax_rate_id: 'c06b9200-0000-4000-8000-000000000001', tax_base: o.base, vat_book: 'issued', tax_rate: { rate: 10 } }),
+    linea(5, '47700010', 'H.P. IVA REPERCUTIDO 10%', 0, o.cuota, 'IVA repercutido 10 %', { tax_rate_id: enCarril('c06b9200-0000-4000-8000-000000000001'), tax_base: o.base, vat_book: 'issued', tax_rate: { rate: 10 } }),
   ],
 })
 const ASIENTOS: Record<string, unknown> = {

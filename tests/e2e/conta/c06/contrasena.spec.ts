@@ -13,9 +13,9 @@
 // enlace y al correo antes de contestar.
 
 import { test, expect } from '@playwright/test'
-import { STAGING_URL } from '../sesion'
+import { STAGING_URL, correoDelCarril } from '../sesion'
 
-const EXISTEN = ['sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test']
+const EXISTEN = ['sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test'].map((c) => correoDelCarril(c))
 const mediana = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)] }
 
 test('el que existe y el que no contestan lo mismo y tardan lo mismo', async ({ request }) => {

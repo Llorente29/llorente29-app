@@ -17,7 +17,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
-import { CUENTA_A, STAGING_URL, anonKey, entrarComo, type Sesion } from '../sesion'
+import { CUENTA_A, STAGING_URL, anonKey, entrarComo, type Sesion, enCarril } from '../sesion'
 import { rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
@@ -40,7 +40,7 @@ async function ponerPapelDeLaSemilla(s: Sesion) {
   })
   const t = await r.text()
   expect(r.ok || /exists|duplicate/i.test(t), `subir el papel de la semilla: ${r.status} ${t.slice(0, 200)}`).toBe(true)
-  const p = await rest(s, 'PATCH', 'supplier_invoice?id=eq.d0100000-0000-4000-8000-0000000000f1', { raw_document_url: ruta })
+  const p = await rest(s, 'PATCH', `supplier_invoice?id=eq.${enCarril('d0100000-0000-4000-8000-0000000000f1')}`, { raw_document_url: ruta })
   expect(p.status, JSON.stringify(p.datos)).toBe(200)
 }
 
