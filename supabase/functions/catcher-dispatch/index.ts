@@ -447,7 +447,11 @@ Deno.serve(async (req: Request) => {
   // 1. Leer el pedido.
   const { data: sale, error: saleErr } = await sb
     .from("sale")
-    .select("id, account_id, location_id, raw_tab, total, customer_name, customer_phone, pos_short_code, platform_order_code, external_ref, carrier_order_id, customer_note, source, customer_id, delivery_address, delivery_address_fixed, accepted_at, created_at")
+    // `*` y no la lista: esta función sale a producción al fusionar, y las
+    // columnas del R03 (delivery_address_fixed, delivery_address_origin) llegan
+    // con la tanda, que puede ir después. Con la lista, un pedido sin ellas
+    // daría «sale not found» y no saldría ninguno a Catcher.
+    .select("*")
     .eq("id", saleId)
     .single();
   if (saleErr || !sale) return json(404, { ok: false, error: "sale not found" });
@@ -686,7 +690,9 @@ Deno.serve(async (req: Request) => {
       carrier_order_id: carrierOrderId ? String(carrierOrderId) : null,
       delivery_state: "pending",
       dispatch_error: null,
-      delivery_address_origin: origin,
+      // Solo si la columna ya existe: si no, el update entero fallaría y se
+      // perdería el carrier_order_id de un pedido que Catcher ya tiene.
+      ...("delivery_address_origin" in sale ? { delivery_address_origin: origin } : {}),
     }).eq("id", saleId);
 
     return json(200, { ok: true, carrier_order_id: carrierOrderId, coordsSource, origin, catcherResponse: orderJson ?? orderText.slice(0, 500) });
