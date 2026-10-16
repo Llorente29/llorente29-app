@@ -16,7 +16,7 @@
 // En el móvil, por niveles: la lista de áreas, al tocar una, sus acciones en
 // lista, y al tocar una acción, su contenido con «‹ Libros» para volver.
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { rutaLibros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -241,11 +241,15 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
  */
 function AccionesMovil({ etiqueta, activa, dato, children }: { etiqueta: string; activa: string; dato: string; children: ReactNode }) {
   const { abierto, alternar, caja, boton } = useDesplegable<HTMLElement>()
+  const idDato = useId()
   return (
     <nav className="cxl-movil-acciones" aria-label={etiqueta} ref={caja}>
-      <button type="button" ref={boton} className="cxl-movil-boton" aria-expanded={abierto} aria-haspopup="true" onClick={alternar}>
+      {/* El botón se llama como la acción; su dato, escrito al lado, va de descripción
+          (en el nombre, «oficial · por local» se leía como un botón «Por local»). */}
+      <button type="button" ref={boton} className="cxl-movil-boton" aria-expanded={abierto} aria-haspopup="true" onClick={alternar}
+        aria-label={activa} aria-describedby={dato ? idDato : undefined}>
         <span className="cxl-movil-nombre">{activa}</span>
-        {dato && <span className="cxl-movil-dato"> · {dato}</span>}
+        {dato && <span className="cxl-movil-dato" id={idDato}> · {dato}</span>}
         <span className="cxl-movil-flecha" aria-hidden="true">▾</span>
       </button>
       {abierto && <div className="cxl-movil-menu">{children}</div>}
