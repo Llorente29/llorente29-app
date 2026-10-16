@@ -1,0 +1,21 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# B02 · T4 · «Espera el extracto de ···XXXX» y el punto de partida del cierre
+# (aprobada por Julio, 16/10). La anterior de este fichero (C06b, promociones y
+# envíos, 0100 y 0110) ya está en el historial de producción; su copia:
+# tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt.
+#
+#   1. 0220 — amplía el CHECK de bank_movement.status con «espera_extracto»;
+#      cambia, con la misma firma, bank_proponer (lo acepta) y
+#      _bank_mes_estado (desde el corte, contabilidad parte del saldo del
+#      extracto a la víspera, y cuenta los que esperan). No escribe filas.
+#      Declarado en su cabecera, con su prueba de staging.
+#
+# Antes del front: el PR de «Espera el extracto» se fusiona DESPUÉS de esta
+# tanda (con la base de antes, bank_proponer rechazaría el estado nuevo).
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/b02-espera.sql
+supabase/migrations/20261101T0220_b02_espera_extracto.sql

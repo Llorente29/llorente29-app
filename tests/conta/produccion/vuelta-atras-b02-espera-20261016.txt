@@ -1,0 +1,10 @@
+# Vuelta atrás de B02 · T4 (0220) (modo «vuelta_atras»): lo que esperaba el
+# extracto pasa a «por aclarar» con su porqué y queda en el registro; el CHECK
+# vuelve a sus siete estados; bank_proponer y _bank_mes_estado, a su cuerpo de
+# la 0110 y la 0150 byte a byte (md5 de producción del 16/10: 6213b853… y
+# a4c3169e…). Antes de deshacerla, el front de antes: el de «Espera el
+# extracto» seguiría pidiendo el estado nuevo.
+# La anterior de este fichero (C06b, promociones y envíos):
+# tests/conta/produccion/vuelta-atras-c06b-promociones-envios-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/b02-espera.sql
+supabase/vuelta-atras/20261101T0220_b02_espera_extracto.down.sql

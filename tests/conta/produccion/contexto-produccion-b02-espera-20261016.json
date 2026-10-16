@@ -1,0 +1,26 @@
+{
+ "_que": "B02 · T4 · contexto de producción de la tanda viva «Espera el extracto» y el punto de partida del cierre (0220), medido en SOLO LECTURA el 16/10 a las 20:41 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen bank_movement (108 filas, fuera del camino del pedido) y las dos funciones que cambian con la misma firma, sin otras firmas (su huella de antes, la de la vuelta atrás: 6213b853… y a4c3169e…); el fichero no está en el historial.",
+ "medido": "2026-10-16T20:41Z",
+ "tanda": {
+  "supabase/migrations/20261101T0220_b02_espera_extracto.sql": "b91a1fefe6f0b3fb6fb7d8d3df4a619e"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_movement"
+  ],
+  "funciones": [
+   "public._bank_mes_estado(uuid,date)",
+   "public.bank_proponer(uuid,text,text,text,jsonb)"
+  ],
+  "filas": {
+   "public.bank_movement": 108
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
