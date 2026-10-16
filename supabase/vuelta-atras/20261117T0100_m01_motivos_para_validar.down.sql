@@ -5,6 +5,10 @@
 --   3. journal_entry_validar vuelve a la vigente (20261113T0100_c06b_centimo_iva), copiada tal cual;
 --   2 y 1. fuera conta_esperan y conta_motivos_para_validar (ya nadie las llama).
 -- Las dos que vuelven no cambian de firma: create or replace, sin sobrecarga.
+-- Si hay que deshacer el 0100 de C (20261116T0100_c06b_promociones_envios),
+-- ESTA va antes: deja la validación sin llamar a nada de C.
+-- Nota: la correspondencia local → grupo de Diez sigue escrita en código
+-- (_shared/diezAnalitica.ts); pasarla a un dato por empresa es de C.
 
 -- 4 ----------------------------------------------------------------------------------
 create or replace function public.tg_journal_entry_envio_por_aclarar()

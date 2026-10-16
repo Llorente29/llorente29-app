@@ -16,6 +16,13 @@
 -- (versión vigente: 20261113T0100_c06b_centimo_iva, la misma que producción el
 -- 16/10) y ese disparador. Este fichero junta las dos en una sola función.
 --
+-- ORDEN (Julio, 16/10): esta tanda va DESPUÉS de la de C, y se lanza cuando
+-- Julio diga «te toca». Y AL REVÉS TAMBIÉN: si hay que deshacer el 0100 de C
+-- (20261116T0100_c06b_promociones_envios), primero se deshace esta. La
+-- validación nueva llama a conta_motivos_para_validar, que llama a
+-- conta_cargos_de_pedidos (de C): si C se deshace sola, se lleva esa función y
+-- deja sin poder validar todos los asientos de ventas del día.
+--
 -- LO QUE HACE:
 --   1. conta_motivos_para_validar(asiento) (NUEVA, solo lee): todo lo que
 --      haría que journal_entry_validar no lo valide, por orden, con el MISMO
