@@ -54,7 +54,15 @@ export interface FacturaPendiente {
 export interface SaldoProveedor { terceroId: string | null; proveedor: string; alias: string[]; cuenta: string; pendienteCent: number }
 export interface ProveedorConocido { terceroId: string | null; proveedor: string; alias: string[]; cuentaTercero: string; cuentaAnticipo: string }
 export interface Cliente { terceroId: string | null; nombre: string; alias: string[]; cuenta: string; pendienteCent: number }
-export interface Liquidacion { id: string; plataforma: string; fecha: string; desde: string | null; hasta: string | null; netoCent: number; cuenta430: string; terceroId: string | null }
+export interface Liquidacion {
+  id: string; plataforma: string; fecha: string; desde: string | null; hasta: string | null; netoCent: number; cuenta430: string; terceroId: string | null
+  /**
+   * D01 · Liquidación por tienda (las del correo de Uber: una transferencia por
+   * marca × local). Con esto se casa por SU regla: la cuenta del banco de la
+   * tienda (si está dada), el neto exacto y la fecha dentro de la ventana.
+   */
+  porTienda?: { tienda: string; cuentaId: string | null; ventana: { desde: string; hasta: string } } | null
+}
 export interface Plataforma {
   nombre: string; alias: string[]; cuenta430: string; terceroId: string | null
   /** Comisión habitual (0–1) sacada de sus liquidaciones; null si no hay. */
@@ -202,6 +210,33 @@ export function conciliar(movs: readonly Movimiento[], ctx: Contexto): Decision[
   return movs.map((m) => porId.get(m.id)!).filter(Boolean)
 }
 
+/** La referencia del pago que pone el banco a una transferencia de Uber («LIQ. OP. N 123456789012345»): se guarda en el concepto del cobro. */
+export function referenciaDeLiquidacion(texto: string): string | null {
+  const m = texto.match(/LIQ\.?\s*OP\.?\s*N\.?\s*(\d{10,20})/i)
+  return m ? `LIQ. OP. N ${m[1]}` : null
+}
+
+/**
+ * D01 · La ventana de cobro de una liquidación por tienda: del día siguiente al
+ * fin del periodo a cuatro días después (Uber paga el lunes, o el martes con
+ * fecha valor del lunes). Medido el 15/10 sobre los dos ingresos del extracto.
+ */
+export function ventanaDeCobro(hasta: string): { desde: string; hasta: string } {
+  const d = (n: number) => new Date(Date.parse(`${hasta}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10)
+  return { desde: d(1), hasta: d(5) }
+}
+
+/**
+ * D01 · La cuenta del banco donde cobra una tienda (Julio, 16/10): cada local cobra en
+ * la suya y una marca puede cobrar en otra. La de la tienda (marca × local) manda; si no
+ * la tiene, la del local, si el local tiene UNA sola; si no, ninguna (se casa por importe y fecha).
+ */
+export function cuentaDeTienda(t: { cuentaId: string | null; localId: string | null }, bancos: readonly { id: string; localId: string | null }[]): string | null {
+  if (t.cuentaId) return t.cuentaId
+  const xs = t.localId ? bancos.filter((b) => b.localId === t.localId) : []
+  return xs.length === 1 ? xs[0].id : null
+}
+
 /** ¿Es un pago con tarjeta? (concepto común 12 de la AEB, o lo dice el concepto) */
 export const esTarjeta = (m: Pick<Movimiento, 'conceptoComun' | 'concepto'>) => m.conceptoComun === '12' || /\bTARJ(ETA)?\b|COMPRA TARJ/i.test(m.concepto)
 
@@ -316,9 +351,31 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   // ── 4 · Cobro de plataforma ──────────────────────────────────────────────
   if (entra) {
     const plats = ctx.plataformas.filter((p) => nombra(txt, [p.nombre, ...p.alias]))
-    const liqs = ctx.liquidaciones.filter((l) => !g.liquidaciones.has(l.id) && l.netoCent === imp && dias(l.fecha, m.fecha) >= -3 && dias(l.fecha, m.fecha) <= 30
+    // D01 · Por tienda (plan de Uber aprobado el 15/10): misma cuenta del banco
+    // que su marca × local, neto exacto y fecha en la ventana. Una → propuesta;
+    // varias → por aclarar, enseñando cuáles; ninguna → sigue la regla de siempre.
+    const enVentana = ctx.liquidaciones.filter((l) => l.porTienda && !g.liquidaciones.has(l.id) && l.netoCent === imp
+      && m.fecha >= l.porTienda.ventana.desde && m.fecha <= l.porTienda.ventana.hasta && (!l.porTienda.cuentaId || l.porTienda.cuentaId === m.cuentaId)
       && (plats.length === 0 || plats.some((p) => p.nombre === l.plataforma)))
-    if (liqs.length === 1 && (plats.length > 0 || ctx.liquidaciones.filter((l) => l.netoCent === imp).length === 1)) {
+    const ref = referenciaDeLiquidacion(txt)
+    if (enVentana.length === 1) {
+      const l = enVentana[0], t = l.porTienda!
+      g.liquidaciones.add(l.id)
+      const periodo = l.desde && l.hasta ? ` ${ddmm(l.desde)}–${ddmm(l.hasta)}` : ''
+      return { ...b, confianza: 'probable', que: `Cobro de ${l.plataforma} · ${t.tienda}${periodo}`,
+        porque: `Cuadra con su liquidación${periodo} de ${t.tienda}: neto ${eurosCent(l.netoCent)} exacto${t.cuentaId ? ', en la cuenta de esa tienda' : ''} y llegado ${ddmm(m.fecha)}.` +
+          (t.cuentaId ? '' : ' La tienda no tiene su cuenta del banco: casa por importe y fecha.'),
+        destino: { tipo: 'liquidacion', liquidacion_id: l.id, cuenta_cliente: l.cuenta430, tercero_id: l.terceroId,
+          concepto: `Cobro de ${l.plataforma} · ${t.tienda}${periodo}${ref ? ` · ${ref}` : ''}` } }
+    }
+    if (enVentana.length > 1) {
+      return { ...b, confianza: 'duda', que: `Cobro de ${enVentana[0].plataforma}`, falta: `cuál de las ${enVentana.length} liquidaciones es`,
+        porque: `Por aclarar: ${enVentana.length} liquidaciones con el mismo neto (${eurosCent(imp)}) esos días: ${enVentana.map((l) => `${l.porTienda!.tienda}${l.desde && l.hasta ? ` ${ddmm(l.desde)}–${ddmm(l.hasta)}` : ''}`).join('; ')}. Elige la suya.`,
+        destino: null }
+    }
+    const liqs = ctx.liquidaciones.filter((l) => !l.porTienda && !g.liquidaciones.has(l.id) && l.netoCent === imp && dias(l.fecha, m.fecha) >= -3 && dias(l.fecha, m.fecha) <= 30
+      && (plats.length === 0 || plats.some((p) => p.nombre === l.plataforma)))
+    if (liqs.length === 1 && (plats.length > 0 || ctx.liquidaciones.filter((l) => !l.porTienda && l.netoCent === imp).length === 1)) {
       const l = liqs[0]
       g.liquidaciones.add(l.id)
       const periodo = l.desde && l.hasta ? ` ${ddmm(l.desde)}–${ddmm(l.hasta)}` : ''

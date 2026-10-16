@@ -13,6 +13,12 @@
 //   · la lectura, con ocr-albaran en modo «factura» (llamada interna);
 //   · la base, con la clave de servicio (las funciones de la 0220 son solo suyas).
 //
+// D01 · Liquidaciones (T2, 15/10): la misma función recibe lo que llega a
+// liquidaciones-<empresa>@entrada.folvy.app. La base dice la clase de cada
+// dirección y _shared/facturasEntrada.ts enruta: un resumen de pagos de Uber
+// Eats va a conta_liquidacion_registrar (la 0100 de las liquidaciones). El
+// cuerpo del correo se pide a Resend (el webhook no lo trae).
+//
 // Mientras Julio no dé de alta el dominio entrada.folvy.app en Resend, aquí no
 // llega nada; y aunque llegara, las direcciones nacen apagadas.
 //
@@ -20,7 +26,7 @@
 // la firma de svix, como en payroll-inbound.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { comprobarFirma, recibirCorreo, type AdjuntoResend, type CorreoResend, type PuertoEntrada } from "../_shared/facturasEntrada.ts";
+import { comprobarFirma, recibirCorreo, type AdjuntoResend, type CorreoResend, type PuertoEntrada, type Sobre } from "../_shared/facturasEntrada.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -39,7 +45,7 @@ Deno.serve(async (req) => {
   const mal = await comprobarFirma(SECRETO, { id: req.headers.get("svix-id"), timestamp: req.headers.get("svix-timestamp"), firma: req.headers.get("svix-signature") }, cuerpo, Math.floor(Date.now() / 1000));
   if (mal) return json(401, { error: mal });
 
-  let ev: { type?: string; data?: CorreoResend };
+  let ev: { type?: string; data?: CorreoResend & Sobre };
   try { ev = JSON.parse(cuerpo); } catch { return json(400, { error: "cuerpo no es JSON" }); }
   if (ev.type !== "email.received" || !ev.data?.email_id) return json(200, { ignorado: ev.type ?? "sin tipo" });
 
@@ -51,15 +57,17 @@ Deno.serve(async (req) => {
   };
   const puerto: PuertoEntrada = {
     destino: async (lp, dom) => {
-      const d = await rpc<{ company_id: string; account_id: string; activa: boolean } | null>("conta_entrada_destino", { p_local_part: lp, p_domain: dom });
-      return d ? { companyId: d.company_id, accountId: d.account_id, activa: d.activa } : null;
+      const d = await rpc<{ company_id: string; account_id: string; activa: boolean; tipo?: "facturas" | "liquidaciones" } | null>("conta_entrada_destino", { p_local_part: lp, p_domain: dom });
+      return d ? { companyId: d.company_id, accountId: d.account_id, activa: d.activa, tipo: d.tipo ?? "facturas" } : null;
     },
     yaVisto: async (id) => {
       const { data } = await sb.from("inbound_email_log").select("id").eq("email_id", id).maybeSingle();
       return !!data;
     },
     registrarCorreo: async (r) => {
-      await rpc("conta_entrada_correo", { p: { email_id: r.emailId, to: r.to, from: r.from, subject: r.subject, company_id: r.companyId, resultado: r.resultado, detalle: r.detalle } });
+      // Si se enrutó por el sobre (el To: era otro), queda dicho en el detalle.
+      const detalle = r.porSobre ? { ...(r.detalle as Record<string, unknown> ?? {}), por_sobre: true } : r.detalle;
+      await rpc("conta_entrada_correo", { p: { email_id: r.emailId, to: r.to, from: r.from, subject: r.subject, company_id: r.companyId, resultado: r.resultado, detalle } });
     },
     adjuntos: async (id) => {
       const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}/attachments`, { headers: { Authorization: `Bearer ${RESEND}` } });
@@ -83,6 +91,22 @@ Deno.serve(async (req) => {
              ruta: x.ruta, nombre: x.nombre, tipo: x.tipo, bytes: x.bytes, sha256: x.sha256, enlace: x.enlace },
       });
       return { id: r.id, yaEstaba: r.ya_estaba };
+    },
+    // El correo entero: sus destinatarios y, si Resend las da, sus cabeceras y su sobre.
+    correoEntero: async (id) => {
+      const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${RESEND}` } });
+      if (!r.ok) return null;
+      return await r.json() as Sobre & Pick<CorreoResend, "to" | "cc" | "bcc">;
+    },
+    cuerpo: async (id) => {
+      const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${RESEND}` } });
+      if (!r.ok) throw new Error(`Resend no da el cuerpo del correo (${r.status})`);
+      const j = await r.json() as { html?: string | null; text?: string | null };
+      return { html: j.html ?? null, text: j.text ?? null };
+    },
+    liquidacion: async ({ companyId, datos }) => {
+      const r = await rpc<{ liquidacion_id: string; ya_estaba: boolean; texto: string; factura?: { estado?: string } | null }>("conta_liquidacion_registrar", { p_company: companyId, p: datos, p_quien_nombre: null });
+      return { id: r.liquidacion_id, yaEstaba: r.ya_estaba, texto: r.texto, factura: r.factura?.estado ?? null };
     },
     leer: async (inboxId) => {
       const { data: l } = await sb.from("document_inbox").select("account_id, file_path").eq("id", inboxId).single();

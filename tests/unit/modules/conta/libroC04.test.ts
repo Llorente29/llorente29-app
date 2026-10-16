@@ -71,6 +71,22 @@ describe('reglas 1 y 5 · cuadra, y la cuota es base × tipo', () => {
     const resumen: LineaAsiento = { cuenta: '47700010', debe: 0, haber: 10.04, localId: NORTE, iva: { tipoId: 't10', tipo: 10, base: 100, libro: 'issued', facturas: 9 } }
     expect(problemas([{ cuenta: '43000001', debe: 110.04, haber: 0, localId: NORTE }, { cuenta: '70000000', debe: 0, haber: 100, localId: NORTE }, resumen], esIva, esRet)).toEqual([])
   })
+  // C06b (15/10): el caso real, «Ventas Glovo · Foodint Carabanchel» del 13/10. Un ticket
+  // de 20,40 € con el IVA dentro da base 18,55 y cuota 1,85, y 18,55 × 10 % = 1,86: no
+  // hay reparto que cuadre. Un céntimo de redondeo pasa; dos, no; sin diferencia, igual.
+  it('un céntimo de redondeo en la cuota pasa; dos céntimos paran', () => {
+    const ticket = (total: number, base: number, cuota: number): LineaAsiento[] => [
+      { cuenta: '43000001', debe: total, haber: 0, localId: NORTE },
+      { cuenta: '70000000', debe: 0, haber: base, localId: NORTE },
+      { cuenta: '47700010', debe: 0, haber: cuota, localId: NORTE, iva: { tipoId: 't10', tipo: 10, base, libro: 'issued', facturas: 1 } },
+    ]
+    expect(problemas(ticket(20.4, 18.55, 1.85), esIva, esRet)).toEqual([])
+    expect(problemas(ticket(20.39, 18.55, 1.84), esIva, esRet)).toEqual(['Apunte 3 (47700010): la cuota 1,84 € no es la base 18,55 € × 10 % = 1,86 €.'])
+    expect(problemas(ticket(20.46, 18.6, 1.86), esIva, esRet)).toEqual([])
+    // El resumen de 9 sigue con sus 4 céntimos: 5 paran.
+    const resumen5: LineaAsiento = { cuenta: '47700010', debe: 0, haber: 10.05, localId: NORTE, iva: { tipoId: 't10', tipo: 10, base: 100, libro: 'issued', facturas: 9 } }
+    expect(problemas([{ cuenta: '43000001', debe: 110.05, haber: 0, localId: NORTE }, { cuenta: '70000000', debe: 0, haber: 100, localId: NORTE }, resumen5], esIva, esRet)).toHaveLength(1)
+  })
 })
 
 describe('reglas 2, 3 y 4 · número, contraasiento y fecha', () => {
@@ -106,7 +122,7 @@ describe('reglas 6 y 13 · el resumen de ventas del día', () => {
     expect(r.resumen.cedidasFuera).toEqual({ pedidos: 1, total: 24.2 })
     expect(r.resumen.canceladosFuera).toBe(1)
     expect(r.propuesta!.lineas.some((l) => l.marcaId === CEDIDA)).toBe(false)
-    expect(r.propuesta!.razones.map((x) => x.decision)).toContain('Fuera: 1 pedidos de marcas cedidas (24,20 €)')
+    expect(r.propuesta!.razones.map((x) => x.decision)).toContain('Fuera: 1 pedido de marcas cedidas (24,20 €)')
   })
   it('cobro por plataforma, venta por marca, IVA con base, cuota y número de facturas', () => {
     const p = r.propuesta!
@@ -126,6 +142,9 @@ describe('reglas 6 y 13 · el resumen de ventas del día', () => {
     expect(r.propuesta!.razones.find((x) => x.decision === 'Base calculada')).toBeTruthy()
     const todosConBase = ventasDelDia(dia([pedido({ id: 'u2', total: 11, canalId: UBER, base: 10, cuota: 1, tiposEnLineas: [10] })]))
     expect(todosConBase.propuesta!.confianza).toBe('seguro')
+    // Singular y plural (C06b, 15/10): «1 ticket … cuadra», «4 tickets … cuadran».
+    expect(todosConBase.propuesta!.porque).toBe('1 ticket de tus marcas cuadra con lo que cobran las plataformas, al céntimo.')
+    expect(r.propuesta!.porque).toMatch(/^4 tickets de tus marcas cuadran /)
   })
   it('un pedido con otro tipo: si trae su cuota al 21 %, no se propone; si solo lo dicen sus líneas, duda', () => {
     const conCuota = ventasDelDia(dia([pedido({ id: 'u3', total: 12.1, canalId: UBER, base: 10, cuota: 2.1, tiposEnLineas: [21] })]))

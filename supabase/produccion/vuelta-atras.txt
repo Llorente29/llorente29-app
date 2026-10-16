@@ -1,10 +1,9 @@
-# Vuelta atrás de la tanda E05 (modo «vuelta_atras»), en orden inverso. Cada
-# fichero PARA, sin tocar nada, si ya hay algo que se perdería (apuntes en la
-# 40700001, quincenas subidas, pagos propuestos, lo decidido por aclarar,
-# tarifas guardadas o saldos comparados).
-cuenta: scripts/conta/produccion/cuentas/e05-catcher.sql
-supabase/vuelta-atras/20261112T0140_e05_datos.down.sql
-supabase/vuelta-atras/20261112T0130_e05_pago_prepago.down.sql
-supabase/vuelta-atras/20261112T0120_e05_cruces.down.sql
-supabase/vuelta-atras/20261112T0110_e05_recibida_envio_emisor.down.sql
-supabase/vuelta-atras/20261112T0100_e05_lotes.down.sql
+# Vuelta atrás de la tanda de promociones y envíos (modo «vuelta_atras»), en
+# orden inverso: primero los datos de Foodint (PARA si alguna de las cuatro
+# subcuentas ya tiene apuntes) y después la estructura (PARA si queda algún
+# enlace o un envío aclarado con su liquidación). Las dos funciones vuelven a
+# su huella de antes. No toca ningún asiento.
+# La anterior de este fichero (0760): tests/conta/produccion/vuelta-atras-c06b-recibidas-abiertas-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/promociones-envios.sql
+supabase/vuelta-atras/20261116T0110_c06b_promociones_envios_datos.down.sql
+supabase/vuelta-atras/20261116T0100_c06b_promociones_envios.down.sql

@@ -1,4 +1,4 @@
-# M01 · El frente D (el marco nuevo, ramas conta/m01-*): sus cuatro usuarios de
-# prueba y su cuenta C, como los de A, B y C. Se puede volver a lanzar: lo que
-# ya está se deja, y solo se crea lo del D. Comprueba al final 4 frentes × 4.
-supabase/seeds/conta/seed_e2e_frentes_staging.sql
+# C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
+# prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
+# staging no cambia.
+supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql

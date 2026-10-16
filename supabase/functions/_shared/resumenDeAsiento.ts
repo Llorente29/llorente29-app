@@ -32,8 +32,11 @@ export type ResumenBD = {
   empresa: { nombre: string; nif: string } | null
   local: { id: string; nombre: string } | null
   canal: { id: string; slug: string; nombre: string } | null
-  pedidos: { hora: string; codigo: string; marca: string | null; total: number; base: number | null; cuota: number | null }[]
-  lineas: { cuenta: string; debe: number; haber: number; marca: string | null; tipoIva: number | null; documento: string | null }[]
+  /** C06b (16/10): descuento y envío con el IVA dentro, y qué se hizo con el envío (conta_cargos_de_pedidos). */
+  pedidos: { hora: string; codigo: string; marca: string | null; total: number; base: number | null; cuota: number | null
+    descuento?: number | null; envio?: number | null; clase?: 'ninguno' | 'cobrado' | 'por_aclarar' | 'fuera' | null }[]
+  /** C06b: `papel`, si la línea es la de promociones o la de envíos cobrados de su plataforma. */
+  lineas: { cuenta: string; debe: number; haber: number; marca: string | null; tipoIva: number | null; documento: string | null; papel?: 'promociones' | 'envios' | null }[]
   documento: { id: string; ruta: string; nombre: string; sha256: string; bytes: number; creado_en: string; creado_por: string | null } | null
 }
 
@@ -49,6 +52,9 @@ export type ResumenListo = {
 const c = (x: number | null | undefined) => Math.round(Number(x ?? 0) * 100)
 const e = (x: number) => x / 100
 const SIN_MARCA = 'Sin marca'
+/** C06b: cómo se llaman en el PDF las líneas de promociones y de envíos cobrados. */
+export const LINEA_PROMOCIONES = 'Promociones'
+export const LINEA_ENVIOS = 'Envíos cobrados'
 
 /** «Ventas nº 1287», como lo dice el Libro (NOMBRE_SERIE y toLocaleString es-ES). */
 export const nombreAsiento = (numero: number | null) => (numero == null ? 'Ventas (sin número)' : `Ventas nº ${numero.toLocaleString('es-ES')}`)
@@ -69,10 +75,12 @@ export function resumenDeAsiento(r: ResumenBD, o: { correspondencia: Corresponde
   if (tipoIva.length > 1) throw new Error(`El asiento tiene IVA a más de un tipo (${tipoIva.join(', ')} %): el resumen es de un tipo.`)
   const tipo = tipoIva[0] ?? 10
 
-  // Las líneas por marca: 700 en positivo y 708 en negativo, por cuenta.
+  // Las líneas por marca: 700 en positivo y 708 en negativo, por cuenta. C06b:
+  // la de promociones (al debe, resta) y la de envíos cobrados (705), con su nombre.
   const porCuenta = new Map<string, MarcaResumen>()
-  for (const l of [...de('700'), ...de('708')]) {
-    const x = porCuenta.get(l.cuenta) ?? { marca: l.marca ?? SIN_MARCA, cuenta: l.cuenta, importe: 0 }
+  const nombreDe = (l: ResumenBD['lineas'][number]) => (l.papel === 'promociones' ? LINEA_PROMOCIONES : l.papel === 'envios' ? LINEA_ENVIOS : l.marca ?? SIN_MARCA)
+  for (const l of [...de('700'), ...de('705'), ...de('708')]) {
+    const x = porCuenta.get(l.cuenta) ?? { marca: nombreDe(l), cuenta: l.cuenta, importe: 0, ...(l.papel ? { papel: l.papel } : {}) }
     x.importe = e(c(x.importe) + c(l.haber) - c(l.debe))
     porCuenta.set(l.cuenta, x)
   }
@@ -81,12 +89,21 @@ export function resumenDeAsiento(r: ResumenBD, o: { correspondencia: Corresponde
   const cuota = de('477').reduce((t, l) => t + c(l.haber) - c(l.debe), 0)
   const cobro = de('430').reduce((t, l) => t + c(l.debe) - c(l.haber), 0)
 
-  // Los pedidos, con su base como la propuesta.
+  // Los pedidos, con su base como la propuesta. C06b: si el asiento lleva la
+  // línea de promociones o la de envíos, cada pedido lleva la suya en base (al
+  // tipo y al céntimo, como conta_propuesta_ventas_unidad); un envío «fuera»
+  // (la plataforma no lo paga) sale de su total.
+  const conPromo = r.lineas.some((l) => l.papel === 'promociones')
+  const conEnvio = r.lineas.some((l) => l.papel === 'envios')
+  const enBase = (x: number) => Math.round((x * 100) / (100 + tipo))
   const pedidos: PedidoResumen[] = r.pedidos.map((p) => {
-    const t = c(p.total)
-    const trae = p.base != null && p.cuota != null && c(p.base) + c(p.cuota) === t
+    const fuera = p.clase === 'fuera' && c(p.envio) > 0
+    const t = c(p.total) - (fuera ? c(p.envio) : 0)
+    const trae = !fuera && p.base != null && p.cuota != null && c(p.base) + c(p.cuota) === t
     const b = trae ? c(p.base) : Math.sign(t) * Math.round((Math.abs(t) * 100) / (100 + tipo))
-    return { hora: p.hora, codigo: p.codigo, marca: p.marca ?? SIN_MARCA, base: e(b), cuota: e(t - b), total: e(t) }
+    const promocion = conPromo && c(p.descuento) > 0 ? e(enBase(c(p.descuento))) : 0
+    const envio = conEnvio && p.clase === 'cobrado' && c(p.envio) > 0 ? e(enBase(c(p.envio))) : 0
+    return { hora: p.hora, codigo: p.codigo, marca: p.marca ?? SIN_MARCA, base: e(b), cuota: e(t - b), total: e(t), ...(promocion ? { promocion } : {}), ...(envio ? { envio } : {}) }
   })
 
   // Los reembolsos, de sus líneas: la 708 lleva el documento (el pedido).

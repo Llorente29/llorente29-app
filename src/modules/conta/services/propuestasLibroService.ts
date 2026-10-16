@@ -55,7 +55,9 @@ export interface ContextoLibro {
   /** B01 (P3): la serie de tesorería de la empresa (bank_settings; 3 si no hay ajuste). */
   serieTesoreria: SerieTesoreria
   /** C04b R5: la regla de ventas por plataforma de la empresa (conta_ventas_canal). Null = la regla de antes, un asiento por día y local. */
-  ventasPorPlataforma: { porMarca: Set<string>; ventasPorMarca: Record<string, string>; devolucionesPorMarca: Record<string, string> } | null
+  ventasPorPlataforma: { porMarca: Set<string>; ventasPorMarca: Record<string, string>; devolucionesPorMarca: Record<string, string>
+    /** C06b (16/10): la subcuenta de promociones y la de envíos cobrados de cada canal (conta_ventas_canal_cuenta). */
+    promocionesPorCanal: Record<string, string>; enviosPorCanal: Record<string, string> } | null
 }
 
 export async function cargarContexto(accountId: string, companyId: string): Promise<ContextoLibro> {
@@ -81,6 +83,9 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
   // el front llegara antes que la base—, no apunta nada solo: lo prudente. Es el
   // único ajuste que se lee así: por él no se deja de cargar el Libro entero.
   const compras = await leer(tabla('company_purchase_setting').select('post_safe_invoices').eq('company_id', companyId), 'los ajustes de compras').catch(() => [] as Fila[])
+  // C06b (16/10): las subcuentas de promociones y envíos de cada canal (0100).
+  // Sin la tabla —el front antes que la base—, como hasta hoy: sin ellas.
+  const reglaCuenta = await leer(tabla('conta_ventas_canal_cuenta').select('channel_id, papel, company_account_id').eq('account_id', accountId).eq('company_id', companyId), 'las subcuentas de promociones y envíos').catch(() => [] as Fila[])
   const porId = new Map(cuentas.map((c) => [String(c.id), c]))
   const hojas = new Map<string, string>()
   for (const c of cuentas) if (c.kind === 'template' && c.status !== 'cerrada' && !hojas.has(String(c.template_code))) hojas.set(String(c.template_code), String(c.code))
@@ -129,6 +134,10 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
         .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.brand_id), String(c.code)]] : [] })),
       devolucionesPorMarca: Object.fromEntries(reglaMarca.filter((m) => m.papel === 'devoluciones' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
         .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.brand_id), String(c.code)]] : [] })),
+      promocionesPorCanal: Object.fromEntries(reglaCuenta.filter((m) => m.papel === 'promociones' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
+        .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.channel_id), String(c.code)]] : [] })),
+      enviosPorCanal: Object.fromEntries(reglaCuenta.filter((m) => m.papel === 'envios' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
+        .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.channel_id), String(c.code)]] : [] })),
     },
   }
 }
@@ -216,10 +225,22 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     ])
     const cobroPorCanal: Record<string, string> = {}
     for (const [id, c] of ctx.canales) { const cta = c.partyId ? ctx.enlace('customer', c.partyId, 'principal') : null; if (cta) cobroPorCanal[id] = cta }
+    // C06b (16/10): el descuento, el envío y qué se hace con él (conta_cargos_de_pedidos).
+    // Sin la función —el front antes que la base—, como hasta hoy.
+    const cerrados = (pedidos ?? []).filter((p) => p.estado === 'closed').map((p) => String(p.id))
+    const cargos = new Map<string, Fila>()
+    if (cerrados.length && ctx.ventasPorPlataforma) {
+      const cs = await (rpc('conta_cargos_de_pedidos', { p_account: accountId, p_sales: cerrados }) as Promise<Fila[] | null>).catch(() => null)
+      for (const c of cs ?? []) cargos.set(String(c.id), c)
+    }
     const losPedidos = (pedidos ?? []).map((p): PedidoDia => ({
       id: String(p.id), codigo: s(p.codigo), canalId: s(p.canal_id), marcaId: s(p.marca_id), marcaPropia: p.propia !== false,
       estado: (String(p.estado) as PedidoDia['estado']), total: n(p.total), base: p.base === null ? null : n(p.base), cuota: p.cuota === null ? null : n(p.cuota),
       tiposEnLineas: Array.isArray(p.tipos) ? (p.tipos as unknown[]).map(Number) : [],
+      ...(cargos.has(String(p.id)) ? {
+        descuento: n(cargos.get(String(p.id))!.descuento), envio: n(cargos.get(String(p.id))!.envio),
+        claseEnvio: String(cargos.get(String(p.id))!.clase) as PedidoDia['claseEnvio'], porQueEnvio: s(cargos.get(String(p.id))!.por_que),
+      } : {}),
     }))
     const lasDevoluciones = (devs ?? []).map((x): DevolucionDia => ({
       pedidoId: s(x.pedido_id), codigo: s(x.codigo), canalId: s(x.canal_id), marcaId: s(x.marca_id), marcaPropia: x.propia !== false, importe: n(x.importe),
@@ -237,7 +258,8 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       const res = ventasDelDia({
         fecha: dia, localId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(localId) ?? 'local',
         nombreCanal, nombreMarca: (id) => (id ? ctx.marcas.get(id)?.nombre ?? 'una marca' : 'sin marca'), unidad,
-        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477, ventasPorMarca: regla?.ventasPorMarca, devolucionesPorMarca: regla?.devolucionesPorMarca },
+        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477, ventasPorMarca: regla?.ventasPorMarca, devolucionesPorMarca: regla?.devolucionesPorMarca,
+          promocionesPorCanal: regla?.promocionesPorCanal, enviosPorCanal: regla?.enviosPorCanal },
         pedidos: losPedidos, devoluciones: lasDevoluciones,
       })
       if (!res.propuesta) {
@@ -364,13 +386,17 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   // liquidación de SU socio (marca → acuerdo de cesión → socio → enlace «liquidacion»).
   const acuerdos = await leer(tabla('brand_licensing_agreement').select('brand_id, party_id').eq('account_id', accountId), 'los acuerdos de cesión')
   const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
-  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount')
+  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount, commission_invoice_id, promo_charges, ads_spend, item_promotions, chargebacks, other_earnings, adjustments, needs_review, review_note')
     .eq('account_id', accountId).is('journal_entry_id', null).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones')
   // B01 (respuesta 1, P2): el cobro que ya ha casado Bancos lo asienta Bancos;
   // aquí solo la comisión y los cargos, para que el cobro no salga dos veces.
   const cobradasPorBanco = new Set((await leer(tabla('bank_match_item').select('channel_settlement_id, bank_match!inner(status)')
     .eq('account_id', accountId).not('channel_settlement_id', 'is', null).eq('bank_match.status', 'vivo'), 'los cobros casados en Bancos'))
     .map((x) => String(x.channel_settlement_id)))
+  // D01 · Las del correo llevan su factura de comisión aparte (serie 2).
+  const idsFactura = liqs.map((l) => s(l.commission_invoice_id)).filter((x): x is string => !!x)
+  const facturaDe = new Map((idsFactura.length ? await leer(tabla('supplier_invoice').select('id, invoice_number, grand_total').eq('account_id', accountId).in('id', idsFactura), 'las facturas de comisión') : [])
+    .map((f) => [String(f.id), { total: n(f.grand_total), numero: s(f.invoice_number) }]))
   for (const l of liqs) {
     const fecha = s(l.collected_on) ?? String(l.settlement_date)
     if (!abierto(fecha)) continue
@@ -390,6 +416,17 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       ['Cuota prime', l.prime_fee], ['Cuota recurrente', l.recurring_fee], ['Incidencias (espera del repartidor y otras)', l.incidents_cost],
       ['Pedido mínimo', l.min_order_fee], ['Otros cargos', l.other_cost],
     ] as const).map(([concepto, v]) => ({ concepto, importe: Math.abs(n(v)) })).filter((x) => x.importe !== 0)
+    const delCorreo = String(l.source ?? '').startsWith('correo_')
+    // D01 (Julio, 16/10): por aclarar —un solape, algo que no cuadró al leer, la tienda sin asignar— no se asienta: nunca se suma doble.
+    if (delCorreo && l.needs_review) {
+      r.sinPropuesta.push({ que, porque: s(l.review_note) ?? 'Por aclarar: revisa la liquidación antes de asentarla.' })
+      continue
+    }
+    const facturaAparte = l.commission_invoice_id ? facturaDe.get(String(l.commission_invoice_id)) ?? null : null
+    if (delCorreo && !facturaAparte && [l.commission, l.other_cost, l.promo_charges, l.ads_spend].some((v) => Math.round(n(v) * 100) !== 0)) {
+      r.sinPropuesta.push({ que, porque: 'Falta su factura de comisión (la liquidación la propone al leerse): sin ella, la comisión no se asienta aquí.' })
+      continue
+    }
     const asentados = (await rpc('conta_dias_por_asentar', { p_company: companyId, p_desde: s(l.period_from) ?? fecha, p_hasta: s(l.period_to) ?? fecha })) as Fila[] | null
     const pendientes = (asentados ?? []).filter((x) => !l.location_id || String(x.location_id) === String(l.location_id)).reduce((t, x) => t + n(x.pedidos), 0)
     const res = liquidacionPlataforma({
@@ -401,6 +438,9 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       cobroEnBancos: cobradasPorBanco.has(String(l.id)),
       // Lo que se sabe sin recorrer pedido a pedido: cuántos del periodo FALTAN en un resumen del día.
       pedidos: { total: pendientes, asentados: 0 }, localId: s(l.location_id),
+      facturaAparte,
+      apartado: delCorreo ? ([['Promociones en artículos', l.item_promotions], ['Contracargos', l.chargebacks], ['Otras ganancias', l.other_earnings], ['Ajustes', l.adjustments]] as const)
+        .map(([concepto, v]) => ({ concepto, importe: Math.abs(n(v)) })) : [],
     }, {
       cliente430: c430, proveedor410: c410, comision: ctx.hoja('623') ?? '62300000', otrosCargos: ctx.hoja('629') ?? '62900000',
       iva21: { cuenta: c472, tipoId: t21.id }, banco: ctx.bancoDeLocal(s(l.location_id)),
@@ -507,7 +547,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   const [facturas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id), supplier_invoice_line(line_amount, vat_pct)')
+    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
       .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).is('journal_entry_id', null).or(`company_id.is.null,company_id.eq.${companyId}`)
       .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
@@ -548,10 +588,16 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const res = facturaProveedor({
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
       esSocio: socioPorProveedor.has(sup), tieneNif: !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
+      // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
       lineas: ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
         const t = ctx.tipos.find((x) => x.rate === n(l.vat_pct) && x.code.startsWith('iva_')) ?? null
-        return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: gasto }
+        return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: s(l.expense_account_code) ?? gasto }
       }),
+      ...(f.source === 'liquidacion' ? {
+        cuotas: ((f.supplier_invoice_tax ?? []) as Fila[]).map((x) => ({ porcentaje: n(x.vat_pct), base: n(x.base), cuota: n(x.vat_amount) })),
+        marcaId: s(f.brand_id), faltaNumero: !s(f.invoice_number),
+        porAclarar: (((f.reading as Fila | null)?.requisitos ?? []) as Fila[]).filter((x) => (x.id === 'solape' || x.id === 'cuadre') && x.ok === false).map((x) => String(x.texto)),
+      } : {}),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: n(f.withholding_amount), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
       ivaNoDeducible: f.vat_non_deductible === true,
     }, {

@@ -13,8 +13,12 @@
 //   1. La firma se comprueba (svix: HMAC-SHA256 de «id.timestamp.cuerpo» con el
 //      secreto del webhook) y el sello de tiempo no puede tener más de 5
 //      minutos: un correo falso o repetido por otro no entra.
-//   2. Se miran TODOS los destinatarios (to y cc), no solo el primero: un
-//      reenvío puede dejar la dirección de Folvy en copia.
+//   2. Se miran TODOS los destinatarios (to, cc y bcc), no solo el primero: un
+//      reenvío puede dejar la dirección de entrada en copia. Si no está en
+//      ninguno, el sobre (lo que traiga Resend en el evento o al pedir el
+//      correo entero): un reenvío automático de Gmail conserva el To: original.
+//      Y si tampoco, se apunta igual, «sin destino»: ningún correo que llega se
+//      pierde sin rastro (Julio, 16/10).
 //   3. Si la dirección no es de ninguna empresa, o está apagada, se apunta en
 //      el registro de entrada y se contesta 200: nada se pierde sin rastro y
 //      Resend no reintenta.
@@ -27,9 +31,20 @@
 //   6. Se registra en la bandeja (document_inbox) y se lee con el modo factura
 //      de ocr-albaran; de la lectura sale la factura (o la repetida).
 //   7. Nunca dos veces: el mismo correo (email_id) no se procesa dos veces.
+//
+// LIQUIDACIONES (D01 · T2, 15/10). La misma función recibe también lo que llega a
+// liquidaciones-<empresa>@…: la base dice de qué clase es cada dirección
+// (conta_entrada_destino) y aquí se enruta. Un resumen de pagos de Uber Eats se
+// lee con _shared/liquidacionUber.ts (puro) y va a conta_liquidacion_registrar:
+// la liquidación y su factura de comisión. El resumen del mes (el PDF
+// monthly_statement_*.pdf) se guarda con ella. Lo que no es un resumen se
+// apunta y se dice. Y en las dos clases, el correo con el que Gmail pide
+// confirmar un reenvío se apunta con su código, para enseñarlo.
+
+import { leerResumenUber, NoEsResumenUber, paraRegistrar, type ResumenUber } from './liquidacionUber.ts'
 
 export const DOMINIO_ENTRADA = 'entrada.folvy.app'
-export const DIRECCION = /^(facturas-[a-z0-9][a-z0-9-]{1,40})@([a-z0-9.-]+)$/
+export const DIRECCION = /^((?:facturas|liquidaciones)-[a-z0-9][a-z0-9-]{1,40})@([a-z0-9.-]+)$/
 export const TIPOS_ADMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const
 export const MAX_BYTES = 10 * 1024 * 1024 // el límite del bucket receipt-uploads
 const TOLERANCIA_FIRMA_S = 5 * 60
@@ -70,6 +85,7 @@ export type CorreoResend = {
   from?: string | null
   to?: string[] | null
   cc?: string[] | null
+  bcc?: string[] | null
   subject?: string | null
   created_at?: string | null
   text?: string | null
@@ -77,12 +93,13 @@ export type CorreoResend = {
 }
 export type AdjuntoResend = { id: string; filename?: string | null; content_type?: string | null; size?: number | null; download_url?: string | null }
 
-/** Las direcciones de facturas que trae el correo (to y cc), sin repetir, en minúsculas. */
-export function direccionesDeFacturas(c: Pick<CorreoResend, 'to' | 'cc'>): { localPart: string; dominio: string; direccion: string }[] {
-  const todas = [...(c.to ?? []), ...(c.cc ?? [])]
-    .map((d) => (d.match(/<([^>]+)>/)?.[1] ?? d).trim().toLowerCase())
+type Direccion = { localPart: string; dominio: string; direccion: string }
+
+/** De una lista de destinatarios («Nombre <a@b>», «a@b» o varias separadas por comas o espacios), las de entrada. */
+function deEntrada(xs: readonly string[]): Direccion[] {
+  const todas = xs.flatMap((x) => x.split(/[\s,;]+/)).map((d) => (d.match(/<([^>]+)>/)?.[1] ?? d).replace(/^<|>$/g, '').trim().toLowerCase())
   const vistas = new Set<string>()
-  const out: { localPart: string; dominio: string; direccion: string }[] = []
+  const out: Direccion[] = []
   for (const d of todas) {
     const m = d.match(DIRECCION)
     if (!m || vistas.has(d)) continue
@@ -90,6 +107,35 @@ export function direccionesDeFacturas(c: Pick<CorreoResend, 'to' | 'cc'>): { loc
     out.push({ localPart: m[1], dominio: m[2], direccion: d })
   }
   return out
+}
+
+/** Las direcciones de entrada que trae el correo en sus destinatarios (to, cc y bcc), sin repetir, en minúsculas. */
+export function direccionesDeFacturas(c: Pick<CorreoResend, 'to' | 'cc' | 'bcc'>): Direccion[] {
+  return deEntrada([...(c.to ?? []), ...(c.cc ?? []), ...(c.bcc ?? [])])
+}
+
+/**
+ * Lo que dice el SOBRE, cuando el To: no es el nuestro. Un reenvío automático
+ * de Gmail conserva el To: original (el buzón de quien reenvía) y la dirección
+ * de entrada solo va en el sobre: lo que se lee aquí es lo que Resend traiga de
+ * él, sea en el evento o al pedir el correo entero. Ninguno de estos nombres es
+ * obligatorio: si no viene ninguno, no se inventa un destino (y el correo queda
+ * apuntado igual, ver recibirCorreo).
+ */
+export type Sobre = {
+  envelope?: { to?: string[] | string | null } | null
+  delivered_to?: string[] | string | null
+  headers?: Record<string, string | string[]> | { name: string; value: string }[] | null
+}
+const CABECERAS_SOBRE = ['delivered-to', 'x-original-to', 'x-forwarded-to', 'x-forwarded-for', 'envelope-to', 'x-envelope-to']
+export function destinatariosDelSobre(s: Sobre | null | undefined): Direccion[] {
+  if (!s) return []
+  const lista = (v: string[] | string | null | undefined) => (v == null ? [] : Array.isArray(v) ? v : [v])
+  const cab: string[] = []
+  const h = s.headers
+  if (Array.isArray(h)) for (const x of h) { if (CABECERAS_SOBRE.includes(String(x.name).toLowerCase())) cab.push(String(x.value)) }
+  else if (h) for (const [k, v] of Object.entries(h)) { if (CABECERAS_SOBRE.includes(k.toLowerCase())) cab.push(...lista(v)) }
+  return deEntrada([...lista(s.envelope?.to), ...lista(s.delivered_to), ...cab])
 }
 
 /** Un nombre de fichero que se puede guardar: sin rutas, sin signos raros, con su extensión. */
@@ -145,14 +191,16 @@ export const rutaEntrada = (accountId: string, emailId: string, i: number, nombr
 
 // ── El orquestador ─────────────────────────────────────────────────────────
 
-export type Destino = { companyId: string; accountId: string; activa: boolean }
+export type ClaseDireccion = 'facturas' | 'liquidaciones'
+export type Destino = { companyId: string; accountId: string; activa: boolean; tipo?: ClaseDireccion }
+export type DatosLiquidacion = ReturnType<typeof paraRegistrar>
 export interface PuertoEntrada {
   /** La empresa de una dirección de facturas, o null. */
   destino(localPart: string, dominio: string): Promise<Destino | null>
   /** ¿Ya se procesó este correo? */
   yaVisto(emailId: string): Promise<boolean>
   /** Apunta el correo en el registro de entrada (también el que no es de nadie). */
-  registrarCorreo(r: { emailId: string; to: string; from: string | null; subject: string | null; companyId: string | null; resultado: string; detalle: unknown }): Promise<void>
+  registrarCorreo(r: { emailId: string; to: string; from: string | null; subject: string | null; companyId: string | null; resultado: string; detalle: unknown; porSobre?: boolean }): Promise<void>
   adjuntos(emailId: string): Promise<AdjuntoResend[]>
   bajar(url: string): Promise<Uint8Array>
   subir(ruta: string, bytes: Uint8Array, tipo: string): Promise<void>
@@ -161,21 +209,61 @@ export interface PuertoEntrada {
   llegada(x: { accountId: string; companyId: string; emailId: string; to: string; from: string | null; subject: string | null; recibido: string | null; ruta: string | null; nombre: string | null; tipo: string | null; bytes: number | null; sha256: string | null; enlace: string | null }): Promise<{ id: string; yaEstaba: boolean }>
   /** Lee la llegada (ocr-albaran, modo factura) y saca de ella la factura. */
   leer(inboxId: string): Promise<{ estado: string; texto: string }>
+  /** El correo entero según Resend (sus destinatarios y cabeceras), para buscar el sobre si el evento no lo trae. */
+  correoEntero?(emailId: string): Promise<(Sobre & Pick<CorreoResend, 'to' | 'cc' | 'bcc'>) | null>
+  /** El cuerpo del correo (Resend no lo manda en el webhook). */
+  cuerpo?(emailId: string): Promise<{ html: string | null; text: string | null }>
+  /** Registra un resumen leído (conta_liquidacion_registrar). */
+  liquidacion?(x: { companyId: string; datos: DatosLiquidacion }): Promise<{ id: string; yaEstaba: boolean; texto: string; factura: string | null }>
 }
 
-export type ResultadoEntrada = { resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido'; texto: string; llegadas: { id: string; estado: string; texto: string }[] }
+export type ResultadoEntrada = {
+  resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido' | 'liquidacion' | 'confirmacion' | 'no_es_liquidacion'
+  texto: string
+  llegadas: { id: string; estado: string; texto: string }[]
+}
 
-export async function recibirCorreo(c: CorreoResend, p: PuertoEntrada): Promise<ResultadoEntrada> {
-  const dirs = direccionesDeFacturas(c)
-  if (!dirs.length) return { resultado: 'ignorado', texto: 'El correo no va a ninguna dirección de facturas.', llegadas: [] }
+/** El correo con el que Gmail pide confirmar un reenvío: su código (para enseñarlo y escribirlo en Gmail). */
+export function confirmacionDeReenvio(c: Pick<CorreoResend, 'from' | 'subject' | 'text' | 'html'>): { codigo: string } | null {
+  const de = (c.from ?? '').toLowerCase()
+  const asunto = c.subject ?? ''
+  if (!/forwarding-noreply@google\.com/.test(de) && !/(confirmaci[oó]n de reenv[ií]o|forwarding confirmation)/i.test(asunto)) return null
+  const codigo = asunto.match(/#(\d{6,12})/)?.[1] ?? `${c.text ?? ''} ${(c.html ?? '').replace(/<[^>]+>/g, ' ')}`.match(/(?:c[oó]digo de confirmaci[oó]n|confirmation code)\D{0,20}(\d{6,12})/i)?.[1]
+  return codigo ? { codigo } : null
+}
+
+/** El resumen mensual que Uber adjunta al primero del mes (monthly_statement_<Mes>_<Año>.pdf). */
+export const esResumenMensual = (a: Pick<AdjuntoResend, 'filename' | 'content_type'>) =>
+  /^monthly_statement_[a-z]+_\d{4}\.pdf$/i.test(a.filename ?? '') || (/monthly_statement/i.test(a.filename ?? '') && /pdf/i.test(a.content_type ?? ''))
+export const rutaLiquidacion = (accountId: string, emailId: string, nombre: string) =>
+  `${accountId}/_liquidaciones/${emailId.replace(/[^A-Za-z0-9-]/g, '')}/${nombre}`
+
+export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): Promise<ResultadoEntrada> {
   if (await p.yaVisto(c.email_id)) return { resultado: 'repetido', texto: 'Este correo ya se recibió: no se procesa dos veces.', llegadas: [] }
+  // Primero los destinatarios; si no está la nuestra, el sobre del evento; y si
+  // tampoco, el correo entero según Resend (Julio, 16/10: que no se pierda
+  // ninguno; un reenvío de Gmail conserva el To: original).
+  let dirs = direccionesDeFacturas(c)
+  let porSobre = false
+  if (!dirs.length) { dirs = destinatariosDelSobre(c); porSobre = dirs.length > 0 }
+  if (!dirs.length && p.correoEntero) {
+    const e = await p.correoEntero(c.email_id).catch(() => null)
+    if (e) { dirs = [...direccionesDeFacturas(e), ...destinatariosDelSobre(e)]; porSobre = dirs.length > 0 }
+  }
+  if (!dirs.length) {
+    // Antes se contestaba «ignorado» sin apuntar nada: un correo así se perdía sin rastro.
+    const destinatarios = [...(c.to ?? []), ...(c.cc ?? []), ...(c.bcc ?? [])]
+    await p.registrarCorreo({ emailId: c.email_id, to: destinatarios[0] ?? '', from: c.from ?? null, subject: c.subject ?? null, companyId: null, resultado: 'sin_destino',
+      detalle: { motivo: 'ninguna dirección de entrada en sus destinatarios ni en el sobre', destinatarios: destinatarios.length } })
+    return { resultado: 'sin_destino', texto: 'El correo no lleva ninguna dirección de entrada (ni en sus destinatarios ni en el sobre): queda apuntado y no se lee.', llegadas: [] }
+  }
 
   let destino: (Destino & { direccion: string }) | null = null
   for (const d of dirs) {
     const x = await p.destino(d.localPart, d.dominio)
     if (x) { destino = { ...x, direccion: d.direccion }; break }
   }
-  const base = { emailId: c.email_id, to: destino?.direccion ?? dirs[0].direccion, from: c.from ?? null, subject: c.subject ?? null }
+  const base = { emailId: c.email_id, to: destino?.direccion ?? dirs[0].direccion, from: c.from ?? null, subject: c.subject ?? null, ...(porSobre ? { porSobre: true } : {}) }
   if (!destino) {
     await p.registrarCorreo({ ...base, companyId: null, resultado: 'sin_destino', detalle: { direcciones: dirs.map((d) => d.direccion) } })
     return { resultado: 'sin_destino', texto: `${dirs[0].direccion} no es la dirección de ninguna empresa: queda apuntado y no se lee.`, llegadas: [] }
@@ -184,6 +272,14 @@ export async function recibirCorreo(c: CorreoResend, p: PuertoEntrada): Promise<
     await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'apagada', detalle: {} })
     return { resultado: 'apagada', texto: `La dirección ${destino.direccion} está apagada: queda apuntado y no se lee.`, llegadas: [] }
   }
+
+  // Gmail pide confirmar el reenvío (en las dos clases): se apunta con su código.
+  const conf = confirmacionDeReenvio(c)
+  if (conf) {
+    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'confirmacion', detalle: { codigo: conf.codigo } })
+    return { resultado: 'confirmacion', texto: `Gmail pide confirmar el reenvío a ${destino.direccion}: el código es ${conf.codigo}. Escríbelo en Gmail.`, llegadas: [] }
+  }
+  if (destino.tipo === 'liquidaciones') return recibirLiquidacion(c, { ...destino }, base, p)
 
   const { tomar, dejar } = clasificarAdjuntos(await p.adjuntos(c.email_id))
   const llegadas: ResultadoEntrada['llegadas'] = []
@@ -213,4 +309,37 @@ export async function recibirCorreo(c: CorreoResend, p: PuertoEntrada): Promise<
     ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ninguna factura${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarla.`
   return { resultado: 'recibido', texto, llegadas }
+}
+
+// ── Las liquidaciones ────────────────────────────────────────────────────────
+
+async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccion: string },
+  base: { emailId: string; to: string; from: string | null; subject: string | null }, p: PuertoEntrada): Promise<ResultadoEntrada> {
+  if (!p.liquidacion) throw new Error('La función no sabe registrar liquidaciones.')
+  const cuerpo = c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id) : { html: null, text: null }
+  let resumen: ResumenUber
+  try {
+    resumen = leerResumenUber({ subject: c.subject, html: cuerpo.html, text: cuerpo.text })
+  } catch (x) {
+    if (!(x instanceof NoEsResumenUber)) throw x
+    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'no_es_liquidacion', detalle: { motivo: x.message } })
+    return { resultado: 'no_es_liquidacion', texto: `${x.message} Queda apuntado y no se lee: por ahora solo se leen los resúmenes de pagos de Uber Eats.`, llegadas: [] }
+  }
+  // El resumen del mes, si viene: se guarda con la liquidación.
+  let adjunto: { ruta: string; nombre: string; sha256: string } | null = null
+  const mensual = (await p.adjuntos(c.email_id)).find((a) => esResumenMensual(a) && a.download_url && (a.size ?? 0) <= MAX_BYTES)
+  if (mensual?.download_url) {
+    const nombre = nombreSeguro(mensual.filename, 'application/pdf')
+    const bytes = await p.bajar(mensual.download_url)
+    if (bytes.length <= MAX_BYTES) {
+      const ruta = rutaLiquidacion(destino.accountId, c.email_id, nombre)
+      await p.subir(ruta, bytes, 'application/pdf')
+      adjunto = { ruta, nombre, sha256: await p.sha256(bytes) }
+    }
+  }
+  const r = await p.liquidacion({ companyId: destino.companyId, datos: paraRegistrar(resumen, { emailId: c.email_id, adjunto }) })
+  // Al registro, solo ids, recuentos y estados: nunca importes ni nombres.
+  await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'liquidacion',
+    detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: resumen.avisos.length, mensual: !!adjunto } })
+  return { resultado: 'liquidacion', texto: r.texto, llegadas: [] }
 }
