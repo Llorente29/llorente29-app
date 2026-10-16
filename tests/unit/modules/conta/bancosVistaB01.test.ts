@@ -68,6 +68,14 @@ describe('filaDe: una fila por movimiento, como N17', () => {
     expect(tarjetaPorAclarar('No hay factura de 60,00 €')).toBeNull()
   })
 
+  it('B02 · la tarjeta que anota el motor (tarjetaDesconocida): el botón y «tarjeta ···3085 sin dar de alta»', () => {
+    const propuesta = { que: 'Pago con tarjeta · ¿ticket?', pideTicket: true, tarjetaDesconocida: '3085' }
+    const f = filaDe(mov({ estado: 'por_aclarar', importeCent: -10000, porque: 'Pago con tarjeta que aún no conozco: sube la foto del ticket y lo aprendo.', propuesta }))
+    expect(f.botones.map((b) => TEXTO_BOTON[b])).toEqual(['Dar de alta la tarjeta', 'Decirlo yo'])
+    expect(f.porque).toBe('Pago con tarjeta que aún no conozco: sube la foto del ticket y lo aprendo · tarjeta ···3085 sin dar de alta')
+    expect(tarjetaPorAclarar(null, propuesta)).toBe('3085')
+  })
+
   it('tarjeta dada de alta sin historial (run del 13/10): Subir foto y Decirlo yo', () => {
     const f = filaDe(mov({ estado: 'por_aclarar', importeCent: -8640, porque: 'Pago con la tarjeta de Ana Prueba (···0937) en MERCADO CENTRAL que aún no conozco: pídele el ticket a Ana Prueba y lo aprendo.',
       propuesta: { que: 'Pago con tarjeta · ¿ticket?', pideTicket: true, destino: null } }))

@@ -17,7 +17,7 @@
 // Puro (lo asíncrono es solo la interfaz del agregador). Pruebas en
 // tests/unit/modules/conta/bancosB01.test.ts.
 
-import type { ExtractoLeido, MovimientoLeido } from '@/modules/conta/lib/extractoBanco'
+import { limpiarContraparte, type ExtractoLeido, type MovimientoLeido } from '@/modules/conta/lib/extractoBanco'
 import { leerNorma43, pareceNorma43 } from '@/modules/conta/lib/norma43'
 import { CsvBancoNoValido, leerCsvBanco, reconocerBanco, type BancoCsv } from '@/modules/conta/lib/lectorCsvBanco'
 
@@ -110,7 +110,7 @@ export async function leerDesdeAgregador(p: ProveedorAgregador, conexion: string
         fecha: m.fecha, fechaValor: m.fechaValor ?? m.fecha, importeCent: m.importeCent,
         conceptoBanco: [m.concepto, m.contraparte].filter(Boolean).join(' · '),
         conceptoComun: null, conceptoPropio: null, numeroDocumento: null, referencia1: null,
-        referencia2: m.id, equivalencia: null,
+        referencia2: m.id, equivalencia: null, tipoMovimiento: null, contraparte: limpiarContraparte(m.contraparte),
       }))
     return {
       iban: c.iban, identificacion: `${p.nombre} ···· ${c.iban.slice(-4)}`, titular: c.titular, divisa: c.divisa,

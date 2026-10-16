@@ -3,26 +3,24 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# D01 · El corte por fecha de las liquidaciones por correo (T5, Julio, 16/10).
-# La anterior de este fichero (D01, encender liquidaciones-foodint@, 0100 del
-# 14) ya está en el historial de producción (real #100); su copia:
-# tests/conta/produccion/tanda-d01-encender-liquidaciones-20261016.txt.
+# B02 · T1 «lo que entra» (rama conta/b02-conciliacion, PR #209). Va ANTES de
+# fusionar el #209: su front lee lo que crea la 0200 (counterparty,
+# movement_type y bank_facturas_para_casar). Orden acordado: T1 → fusionar el
+# #209 → T2 (0201) → T3 (0210).
+# La anterior de este fichero (D01, las liquidaciones por correo, 0100 y 0110)
+# ya está en el historial de producción; su copia:
+# tests/conta/produccion/tanda-d01-liquidaciones-20261016.txt.
 #
-#   1. 0100 del 15 — el corte: una liquidación cuyo periodo acaba antes de la
-#      fecha de corte de Bancos (en Foodint, 01/10/2026) es de referencia: sin
-#      factura de comisión ni asiento. La que cruza el corte es real, con su
-#      factura entera y su fecha. Una columna nueva (is_reference), una función
-#      nueva (_conta_corte) y dos que cambian con la misma firma
-#      (conta_liquidacion_factura_proponer y _conta_liquidacion_marcar):
-#      declaradas en la cabecera, con su prueba de staging.
-#   2. 0110 del 15 — los datos de Foodint: las 7 de agosto que entraron antes
-#      del corte pasan a de referencia y sus 7 facturas de comisión en revisión
-#      se quitan (guardadas en una copia para la vuelta atrás). Freno: 7 y 7,
-#      sin número, sin asiento, sin nada colgando; después, los solapes siguen
-#      por aclarar. Es un «delete»: pide «autorizo».
+#   1. 0200 — añade las columnas counterparty y movement_type (nulas) a
+#      bank_movement, _bank_contraparte_limpia y bank_facturas_para_casar
+#      (nuevas), bank_regla_borrar (nueva) y el disparador de la factura
+#      aprobada con su pago casado (AFTER UPDATE OF status en supplier_invoice:
+#      no toca la aprobación de A); cambia con la misma firma bank_importar,
+#      bank_casar y bank_regla_guardar. Todo lo que cambia está declarado en su
+#      cabecera, con su prueba de staging.
 #
-# Va ANTES de fusionar: el front lee is_reference. Ninguna toca el camino del pedido.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/d01-corte-liquidaciones.sql
-supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql
-supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
+# Ninguna toca el camino del pedido. No escribe ningún asiento (regla de Julio:
+# contabilidad cerrada a 30/09/2026; la T1 no crea ni mueve asientos).
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/b02-entrada.sql
+supabase/migrations/20261101T0200_b02_entrada.sql

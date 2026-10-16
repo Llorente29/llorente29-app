@@ -10,7 +10,8 @@
 import { supabase } from '@/lib/supabase'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { bancos, type BancoFolvy, type ResultadoConciliar } from '@/modules/conta/services/bancosService'
-import { reglasNuevas } from '@/modules/conta/lib/conciliacion'
+import type { FacturaParaCasar } from '@/modules/conta/lib/conciliarVista'
+import { reglasQuePropongo, type Casado, type MovRegla, type NoLaPropongo, type ReglaPropuesta } from '@/modules/conta/lib/reglasBanco'
 import { limitesMes, type ExtractoDeshecho, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
@@ -89,7 +90,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
 export async function leerMovimientos(accountId: string, bancoId: string, mes: string): Promise<MovimientoBanco[]> {
   const { desde, hasta } = limitesMes(mes)
   const filas = await leer(tabla('bank_movement')
-    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept))')
+    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept))')
     .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
     .order('op_date', { ascending: false }).order('created_at', { ascending: false }), 'los movimientos')
   return filas.map((m) => {
@@ -98,6 +99,7 @@ export async function leerMovimientos(accountId: string, bancoId: string, mes: s
     return {
       id: String(m.id), cuentaId: String(m.treasury_account_id), fecha: String(m.op_date), importeCent: cent(m.amount),
       conceptoBanco: String(m.bank_concept ?? ''), conceptoLimpio: String(m.clean_concept || m.bank_concept || ''),
+      contraparte: s(m.counterparty), tipo: s(m.movement_type),
       estado: m.status as MovimientoBanco['estado'], confianza: (s(m.confidence) as MovimientoBanco['confianza']) ?? null, porque: s(m.reason),
       propuesta: (m.proposal as PropuestaGuardada | null) ?? null,
       casado: vivo ? {
@@ -126,20 +128,51 @@ export async function asientosSinMovimiento(companyId: string, mes: string): Pro
   return (filas ?? []).map((a) => ({ id: String(a.entry_id), cuentaId: String(a.treasury_account_id), fecha: String(a.fecha), importeCent: cent(a.importe), concepto: String(a.concepto) }))
 }
 
-export interface Regla { id: string; palabras: string; contiene: string; cuenta: string; origen: 'persona' | 'folvy'; estado: 'propuesta' | 'activa' | 'apagada' | 'rechazada'; veces: number; ultimaVez: string | null }
+export interface Regla {
+  id: string; palabras: string; contiene: string; signo: 1 | -1 | null; cuenta: string; origen: 'persona' | 'folvy'; estado: 'propuesta' | 'activa' | 'apagada' | 'rechazada'
+  veces: number; ultimaVez: string | null
+}
 
 export async function leerReglas(accountId: string, companyId: string): Promise<Regla[]> {
   const filas = await leer(tabla('bank_rule').select('id, words, condition, target, origin, status, confirmations, last_used_at').eq('account_id', accountId).eq('company_id', companyId)
     .order('created_at', { ascending: false }), 'las reglas')
-  return filas.map((r) => ({ id: String(r.id), palabras: String(r.words), contiene: String((r.condition as Fila).contiene ?? ''), cuenta: String((r.target as Fila).cuenta ?? ''),
-    origen: r.origin === 'folvy' ? 'folvy' : 'persona', estado: r.status as Regla['estado'], veces: Number(r.confirmations ?? 0), ultimaVez: s(r.last_used_at) }))
+  return filas.map((r) => {
+    const cond = r.condition as Fila
+    return { id: String(r.id), palabras: String(r.words), contiene: String(cond.contiene ?? ''), signo: cond.signo === 1 || cond.signo === -1 ? cond.signo : null,
+      cuenta: String((r.target as Fila).cuenta ?? ''), origen: r.origin === 'folvy' ? 'folvy' : 'persona', estado: r.status as Regla['estado'],
+      veces: Number(r.confirmations ?? 0), ultimaVez: s(r.last_used_at) }
+  })
 }
 
-/** Las reglas que Folvy propone por lo aprendido (aún sin guardar). */
-export async function reglasPropuestas(accountId: string, companyId: string, hoy: string): Promise<{ palabras: string; contiene: string; cuenta: string; terceroId: string | null }[]> {
-  const { ctx } = await bancos.cargarContexto(accountId, companyId, hoy)
-  return reglasNuevas(ctx)
+/**
+ * B02 · Lo que necesitan las reglas para enseñarse: lo que propongo (lo hecho
+ * al menos 3 veces igual) y lo que no propongo (texto genérico), y los
+ * movimientos y lo casado antes, para los ejemplos y «qué cambiaría».
+ */
+export async function datosDeReglas(accountId: string, companyId: string, hoy: string):
+  Promise<{ propongo: ReglaPropuesta[]; noPropongo: NoLaPropongo[]; movs: MovRegla[]; casados: Casado[] }> {
+  const desde = new Date(Date.parse(`${hoy}T00:00:00Z`) - 400 * 86400000).toISOString().slice(0, 10)
+  const [{ ctx }, filas, historial] = await Promise.all([
+    bancos.cargarContexto(accountId, companyId, hoy),
+    leer(tabla('bank_movement').select('id, op_date, amount, bank_concept, counterparty, status').eq('account_id', accountId).eq('company_id', companyId)
+      .gte('op_date', desde).neq('status', 'ignorado'), 'los movimientos'),
+    rpc<Fila[]>('bank_historial', { p_company: companyId, p_desde: desde }),
+  ])
+  const movs: MovRegla[] = filas.map((m) => ({ id: String(m.id), fecha: String(m.op_date), importeCent: cent(m.amount), concepto: String(m.bank_concept ?? ''),
+    contraparte: s(m.counterparty), sinCasar: ['pendiente', 'propuesto', 'por_aclarar'].includes(String(m.status)) }))
+  const casados: Casado[] = (historial ?? []).filter((h) => h.cuenta).map((h) => ({ concepto: String(h.concepto ?? ''), cuenta: String(h.cuenta) }))
+  return { ...reglasQuePropongo(ctx, movs, casados), movs, casados }
 }
+
+/** B02 · «No» a una regla que propongo y aún no está guardada: queda rechazada y no la vuelvo a proponer. */
+export async function rechazarPropuesta(companyId: string, p: { palabras: string; contiene: string; cuenta: string }): Promise<void> {
+  const id = await rpc<string>('bank_regla_guardar', { p_company: companyId, p_id: null, p_palabras: p.palabras, p_condicion: { contiene: p.contiene },
+    p_destino: { cuenta: p.cuenta }, p_origen: 'folvy', p_estado: 'propuesta' })
+  await rpc<void>('bank_regla_estado', { p_id: id, p_estado: 'rechazada' })
+}
+
+/** B02 · Borrar una regla: solo si está apagada (la base lo comprueba). */
+export const borrarRegla = (id: string) => rpc<void>('bank_regla_borrar', { p_id: id })
 
 /**
  * Guarda una regla encendida. La que propone Folvy nace «propuesta» y la
@@ -177,7 +210,18 @@ export async function facturasPendientes(companyId: string): Promise<FacturaPend
     terceroId: s(f.tercero_id), cuentaTercero: s(f.cuenta_tercero) })).filter((f) => f.pendienteCent > 0)
 }
 
+/** B02 · Las facturas que se pueden casar (aprobadas y en revisión, sin pagar del todo), para el panel lateral. */
+export async function facturasParaCasar(companyId: string): Promise<FacturaParaCasar[]> {
+  const filas = await rpc<Fila[]>('bank_facturas_para_casar', { p_company: companyId })
+  return (filas ?? []).map((f) => ({ id: String(f.id), numero: s(f.numero), fecha: String(f.fecha ?? ''), totalCent: cent(f.total), pagadoCent: cent(f.pagado),
+    proveedor: String(f.proveedor ?? ''), alias: ((f.alias as string[] | null) ?? []).filter(Boolean), terceroId: s(f.tercero_id), cuentaTercero: s(f.cuenta_tercero),
+    enRevision: f.estado === 'en_revision' }))
+}
+
 // ── Lo que hace la persona ─────────────────────────────────────────────────
+
+/** B02 · «Es el mismo» (se aparta, no cuenta dos veces) o «Son dos» (se queda como uno más). */
+export const resolverRepetido = (movimientoId: string, esElMismo: boolean) => rpc<void>('bank_repetido_resolver', { p_movement: movimientoId, p_es_el_mismo: esElMismo })
 
 export const guardarTarjeta = (bancoId: string, t: { id?: string | null; ultimos4: string; titular: string; localId: string | null; comun: boolean }) =>
   rpc<string>('bank_tarjeta_guardar', { p_treasury: bancoId, p_id: t.id ?? null, p_last4: t.ultimos4, p_titular: t.titular, p_local: t.localId, p_comun: t.comun })

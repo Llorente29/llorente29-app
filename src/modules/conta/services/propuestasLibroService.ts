@@ -380,6 +380,13 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     if (!abierto(fecha)) continue
     const canal = l.channel_id ? ctx.canales.get(String(l.channel_id)) : undefined
     const que = `Liquidación ${canal?.nombre ?? 'de plataforma'}${l.settlement_ref ? ` · ${l.settlement_ref}` : ''}`
+    // D01 (Julio, 16/10): la contabilidad está cerrada hasta el corte; una liquidación de antes es de
+    // referencia: sin asiento de liquidación (su cobro, si llega, lo asienta Bancos al casarlo).
+    // Va antes que sus cuentas: no se asienta, así que no le faltan; el motivo es éste.
+    if (l.is_reference === true) {
+      r.sinPropuesta.push({ que, porque: s(l.review_note) ?? 'De referencia: es de antes del cierre de la contabilidad; no lleva factura ni asiento.' })
+      continue
+    }
     const c430 = canal?.partyId ? ctx.enlace('customer', canal.partyId, 'principal') : null
     const c410 = canal?.supplierId ? ctx.enlace('supplier', canal.supplierId, 'principal') : null
     const t21 = ctx.tipos.find((x) => x.code === 'iva_general')
@@ -395,12 +402,6 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       ['Pedido mínimo', l.min_order_fee], ['Otros cargos', l.other_cost],
     ] as const).map(([concepto, v]) => ({ concepto, importe: Math.abs(n(v)) })).filter((x) => x.importe !== 0)
     const delCorreo = String(l.source ?? '').startsWith('correo_')
-    // D01 (Julio, 16/10): la contabilidad está cerrada hasta el corte; una liquidación de antes es de
-    // referencia: sin asiento de liquidación (su cobro, si llega, lo asienta Bancos al casarlo).
-    if (l.is_reference === true) {
-      r.sinPropuesta.push({ que, porque: s(l.review_note) ?? 'De referencia: es de antes del cierre de la contabilidad; no lleva factura ni asiento.' })
-      continue
-    }
     // D01 (Julio, 16/10): por aclarar —un solape, algo que no cuadró al leer, la tienda sin asignar— no se asienta: nunca se suma doble.
     if (delCorreo && l.needs_review) {
       r.sinPropuesta.push({ que, porque: s(l.review_note) ?? 'Por aclarar: revisa la liquidación antes de asentarla.' })

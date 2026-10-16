@@ -56,9 +56,12 @@
 //      la ejecuta de verdad («\i <fichero>») alguna prueba del manifiesto de
 //      staging, sobre datos, o dice por qué no con «-- sin prueba con datos: …».
 //      Una vuelta atrás que en staging no encuentra nada que deshacer no ha
-//      ejecutado ni una de sus sentencias.
+//      ejecutado ni una de sus sentencias. Vale «\i» (desde la raíz) y «\ir»
+//      (desde la carpeta de la prueba). La que ya estaba viva el 16/10 (B02 ·
+//      T1) va nombrada en ANTES_DE_LA_REGLA_8.
 // Sale con 1 si algo no cumple.
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { posix } from 'node:path'
 import { ordenEnElFichero, ambiguosEnPlpgsql, columnasConocidas } from './produccion/analizar.mjs'
 
 const mal = []
@@ -132,15 +135,26 @@ for (const [f, t] of textos) {
       : `${f}: en ${x.bloque}, «${x.nombre}» es ${x.detalle}, y se usa sin cualificar: 42702 al ejecutarlo. Cámbiale el nombre (v_${x.nombre}).`)
   }
 }
+// La regla 8 es del 16/10. La vuelta atrás que ya estaba en el manifiesto vivo ese día, de una
+// tanda ya aplicada (B02 · T1, la 0200), se queda como estaba: nombrada aquí, una por una, y
+// ninguna más. La siguiente tanda de ese fichero ya cumple la regla.
+const ANTES_DE_LA_REGLA_8 = new Set(['supabase/vuelta-atras/20261101T0200_b02_entrada.down.sql'])
 const vueltas = 'supabase/produccion/vuelta-atras.txt'
 if (existsSync(vueltas)) {
-  const pruebas = existsSync(manifiesto)
-    ? readFileSync(manifiesto, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && /_prueba\.sql$/.test(l) && existsSync(l)).map((l) => readFileSync(l, 'utf8'))
-    : []
+  // Lo que ejecuta cada prueba: «\i ruta» (desde la raíz, como corre el workflow) y «\ir ruta» (desde la carpeta de la prueba).
+  const ejecutadas = new Set()
+  if (existsSync(manifiesto)) {
+    for (const p of readFileSync(manifiesto, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && /_prueba\.sql$/.test(l) && existsSync(l))) {
+      for (const l of readFileSync(p, 'utf8').split('\n')) {
+        const m = l.trim().match(/^\\(i|ir)\s+(\S+)\s*$/)
+        if (m) ejecutadas.add(posix.normalize(m[1] === 'ir' ? posix.join(posix.dirname(p), m[2]) : m[2]))
+      }
+    }
+  }
   for (const v of readFileSync(vueltas, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && /\.sql$/.test(l))) {
     if (!existsSync(v)) continue
-    const laEjecuta = pruebas.some((t) => t.split('\n').some((l) => /^\\i\s+(\S+)\s*$/.test(l.trim()) && l.trim().replace(/^\\i\s+/, '') === v))
-    if (!laEjecuta && !/^--\s*sin prueba con datos:\s*\S/m.test(readFileSync(v, 'utf8'))) {
+    if (ANTES_DE_LA_REGLA_8.has(v)) continue
+    if (!ejecutadas.has(v) && !/^--\s*sin prueba con datos:\s*\S/m.test(readFileSync(v, 'utf8'))) {
       mal.push(`${v}: ninguna prueba del manifiesto de staging la ejecuta («\\i ${v}») sobre datos, ni dice por qué no («-- sin prueba con datos: …»).`)
     }
   }

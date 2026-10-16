@@ -24,7 +24,7 @@
 // dígitos de control del CCC). Se reconstruye: dígitos de control del CCC
 // (módulo 11, pesos 1 2 4 8 5 10 9 7 3 6) y, con ellos, el IBAN (módulo 97).
 
-import type { CuentaLeida, ExtractoLeido, MovimientoLeido } from '@/modules/conta/lib/extractoBanco'
+import { limpiarContraparte, type CuentaLeida, type ExtractoLeido, type MovimientoLeido } from '@/modules/conta/lib/extractoBanco'
 
 export class Norma43NoValido extends Error {}
 
@@ -189,6 +189,8 @@ export function leerNorma43(contenido: string): ExtractoLeido {
           fechaValor: fecha(campo(l, c.fechaValor), donde),
           importeCent: signo(campo(l, c.claveDebeHaber), donde) * importe(campo(l, c.importe), donde),
           conceptoBanco: '',
+          tipoMovimiento: CONCEPTOS_COMUNES[comun] ?? null,
+          contraparte: null,
           conceptoComun: /^\d{2}$/.test(comun) ? comun : null,
           conceptoPropio: texto(campo(l, c.conceptoPropio)),
           numeroDocumento: texto(campo(l, c.documento).replace(/^0+$/, '')),
@@ -229,7 +231,12 @@ export function leerNorma43(contenido: string): ExtractoLeido {
           totalHaberCent: importe(campo(l, c.totalHaber), donde),
         }
         actual.saldoFinalCent = signo(campo(l, c.claveSaldo), donde) * importe(campo(l, c.saldoFinal), donde)
-        for (const m of actual.movimientos) if (!m.conceptoBanco) m.conceptoBanco = m.conceptoComun ? CONCEPTOS_COMUNES[m.conceptoComun] ?? '' : ''
+        // El concepto no se rellena con el tipo (15/10): si los 23 solo repiten la etiqueta, esa etiqueta es el tipo.
+        if (soloEtiquetas(actual.movimientos)) {
+          for (const m of actual.movimientos) if (m.conceptoBanco) { m.tipoMovimiento = m.conceptoBanco; m.conceptoBanco = '' }
+        }
+        // B02: a quién pagas o quién te paga, de los complementarios (sin tarjeta ni códigos).
+        for (const m of actual.movimientos) m.contraparte = limpiarContraparte(m.conceptoBanco)
         const { _entidad, _oficina, _cuenta, ...limpia } = actual
         void _entidad; void _oficina; void _cuenta
         cuentas.push(limpia)
@@ -260,6 +267,47 @@ export function leerNorma43(contenido: string): ExtractoLeido {
   return { formato: 'norma43', cuentas, avisos }
 }
 
+/**
+ * ¿Los complementarios (23) de una cuenta solo repiten la etiqueta del tipo?
+ * (15/10, Foodint.) El Norma 43 de BBVA sacado desde «extracto» trae un 23 por
+ * movimiento con el nombre del código propio del banco: el mismo texto para
+ * todos los de ese código (25 códigos, un texto cada uno, en 298 movimientos).
+ * El sacado desde «Firmas» trae a quién pagas: el mismo código lleva textos
+ * distintos. Se mira la cuenta entera, no cada movimiento: un texto suelto no
+ * dice nada. Es «solo etiqueta» si ningún código lleva dos textos distintos,
+ * alguno se repite en 3 o más movimientos y los movimientos con 23 son al
+ * menos el doble que los códigos (si no, no hay base para decirlo y se deja
+ * el texto como concepto).
+ */
+export function soloEtiquetas(movs: readonly MovimientoLeido[]): boolean {
+  const con = movs.filter((m) => m.conceptoBanco !== '')
+  if (!con.length) return false
+  const textos = new Map<string, Set<string>>()
+  const cuantos = new Map<string, number>()
+  for (const m of con) {
+    const k = `${m.conceptoComun ?? ''}|${m.conceptoPropio ?? ''}`
+    textos.set(k, (textos.get(k) ?? new Set()).add(m.conceptoBanco.toUpperCase().replace(/\s+/g, ' ').trim()))
+    cuantos.set(k, (cuantos.get(k) ?? 0) + 1)
+  }
+  if ([...textos.values()].some((t) => t.size > 1)) return false
+  return Math.max(...cuantos.values()) >= 3 && con.length >= 2 * textos.size
+}
+
+/** Cuántos movimientos no dicen a quién pagas o quién te paga (sin concepto del banco), de cuántos. */
+export function sinDetalle(e: ExtractoLeido): { sin: number; total: number } {
+  const movs = e.cuentas.flatMap((c) => c.movimientos)
+  return { sin: movs.filter((m) => !m.conceptoBanco.trim()).length, total: movs.length }
+}
+
+/** El aviso al subir un Norma 43 sin el detalle (15/10, Julio). Null si todos lo traen o no es Norma 43. */
+export function avisoSinDetalle(e: ExtractoLeido): string | null {
+  if (e.formato !== 'norma43') return null
+  const { sin, total } = sinDetalle(e)
+  if (sin === 0) return null
+  return `${sin} de ${total} ${total === 1 ? 'movimiento' : 'movimientos'} no ${sin === 1 ? 'dice' : 'dicen'} a quién pagas o quién te paga. `
+    + 'Pide a tu banco la Norma 43 con conceptos complementarios; en BBVA, descárgalo desde Firmas.'
+}
+
 /** ¿Parece Norma 43? (para elegir lector al soltar un fichero) */
 export function pareceNorma43(contenido: string): boolean {
   const primera = contenido.replace(/^\uFEFF/, '').split(/\r?\n|\r/, 1)[0] ?? ''
@@ -271,6 +319,7 @@ export function pareceNorma43(contenido: string): boolean {
 export interface CuentaAEscribir {
   entidad: string; oficina: string; cuenta: string; nombre: string
   desde: string; hasta: string; saldoInicialCent: number
+  /** `concepto` vacío: el movimiento sale sin complementarios (23), como el Norma 43 «de extracto». */
   movimientos: { fecha: string; fechaValor?: string; importeCent: number; comun: string; propio?: string; documento?: string; ref1?: string; ref2?: string; concepto: string }[]
 }
 
@@ -298,7 +347,7 @@ export function escribirNorma43(cuentas: CuentaAEscribir[]): string {
     let debe = 0, haber = 0, nDebe = 0, nHaber = 0
     for (const m of c.movimientos) {
       ls.push(`22    ${c.oficina}${aammdd(m.fecha)}${aammdd(m.fechaValor ?? m.fecha)}${m.comun}${txt(m.propio ?? '000', 3)}${clave(m.importeCent)}${num(m.importeCent, 14)}${num(Number(m.documento ?? '0'), 10)}${txt(m.ref1 ?? '', 12)}${txt(m.ref2 ?? '', 16)}`)
-      const trozos = trozosDe38(m.concepto)
+      const trozos = m.concepto.trim() ? trozosDe38(m.concepto) : []
       for (let i = 0; i < trozos.length; i += 2) ls.push(`23${String(i / 2 + 1).padStart(2, '0')}${txt(trozos[i], 38)}${txt(trozos[i + 1] ?? '', 38)}`)
       if (m.importeCent < 0) { debe -= m.importeCent; nDebe++ } else { haber += m.importeCent; nHaber++ }
     }

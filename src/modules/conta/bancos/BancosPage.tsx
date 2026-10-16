@@ -159,7 +159,7 @@ export default function BancosPage() {
           )}
         </header>
 
-        {enPortadaMovil ? <PortadaMovil casadosSolos={casadosSolos} /> : (
+        {enPortadaMovil ? <PortadaMovil /> : (
           <>
             {movil ? <Link to={conQuery(rutaBancos())} className="cx-enlace">‹ Bancos</Link> : (
               <nav className="cxl-areas" aria-label="Pestañas de Bancos">
@@ -217,9 +217,9 @@ export default function BancosPage() {
                         <span className="cxl-accion-nombre">Reglas <span className={`cxl-punto${ctx.datos.reglas.activas ? ' cxl-punto-verde' : ''}`} aria-hidden="true" /></span>
                         <span className="cxl-accion-dato">{ctx.datos.reglas.activas}{ctx.datos.reglas.nuevas ? ` · ${ctx.datos.reglas.nuevas} nuevas` : ''}</span>
                       </Link>
-                      <Link to={conQuery(rutaBancos('hecho'))} className="cxl-accion" aria-current={vista === 'hecho' ? 'page' : undefined}>
+                      <Link to={conQuery(rutaBancos(), { ver: 'casados' })} className="cxl-accion" aria-current={vista === 'movimientos' && query.get('ver') === 'casados' ? 'page' : undefined}>
                         <span className="cxl-accion-nombre">{HECHO_POR} <span className={`cxl-punto${casadosSolos ? ' cxl-punto-verde' : ''}`} aria-hidden="true" /></span>
-                        <span className="cxl-accion-dato">{casadosSolos} este mes</span>
+                        <span className="cxl-accion-dato">{casadosSolos} este mes, en todos</span>
                       </Link>
                     </div>
                     <span className="cxl-grupo-etiqueta">Automático</span>
