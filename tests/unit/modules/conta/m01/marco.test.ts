@@ -177,8 +177,8 @@ describe('el buscador general (Ctrl K)', () => {
 })
 
 describe('el «Te toca hoy» del Inicio', () => {
-  it('los cuatro, siempre; el que no se ha podido contar, con «—» (null), nunca 0', () => {
-    expect(chipsDelInicio({}).map((c) => c.numero)).toEqual([null, null, null, null])
+  it('los cuatro, siempre; contando (undefined) o sin poder contar (null), nunca 0', () => {
+    expect(chipsDelInicio({}).map((c) => c.numero)).toEqual([undefined, undefined, undefined, undefined])
     expect(chipsDelInicio({ compras: 3, libros: 0, bancos: null, terceros: 2 }).map((c) => [c.id, c.numero])).toEqual([
       ['compras', 3], ['libros', 0], ['bancos', null], ['terceros', 2],
     ])

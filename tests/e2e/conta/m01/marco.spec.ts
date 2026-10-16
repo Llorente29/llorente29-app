@@ -31,6 +31,13 @@ async function capturar(page: Page, nombre: string, medir = true) {
 
 const menu = (page: Page) => page.getByRole('navigation', { name: 'Menú de contabilidad' })
 
+/** El «Te toca hoy» ya ha contado: la franja deja de estar ocupada y ningún número dice «…». */
+async function esperarNumeros(page: Page) {
+  const franja = page.getByRole('region', { name: 'Te toca hoy' })
+  await expect(franja).toHaveAttribute('aria-busy', 'false', { timeout: 30_000 })
+  await expect(franja.locator('.cxm-chip-numero', { hasText: '…' })).toHaveCount(0)
+}
+
 test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toca hoy» del Inicio', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
@@ -41,10 +48,12 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
   const raiz = await page.locator('.cxm').evaluate((el) => { const s = getComputedStyle(el); return { fondo: s.backgroundColor, imagen: s.backgroundImage } })
   expect(raiz).toEqual({ fondo: 'rgb(238, 241, 245)', imagen: 'none' })
 
-  // «Te toca hoy»: los cuatro, siempre, con su número (o «—» si no se ha podido contar).
+  // «Te toca hoy»: los cuatro, siempre, con su número. Mientras cuenta dice «…»
+  // (y la franja está ocupada); «—» sería que no se ha podido contar.
   const franja = page.getByRole('region', { name: 'Te toca hoy' })
   await expect(franja.getByRole('link')).toHaveCount(4)
-  await expect(franja.locator('.cxm-chip-numero').first()).not.toHaveText('—')
+  await esperarNumeros(page)
+  await expect(franja.locator('.cxm-chip-numero')).not.toContainText(['—'])
 
   if (lado(page) === 'movil') {
     // Abajo: Inicio, Compras, Bancos, Libros y «Más».
@@ -81,6 +90,10 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
   await expect(menu(page).getByRole('button', { name: 'Plegar el menú' })).toBeVisible()
   expect(Math.round((await menu(page).boundingBox())!.width)).toBe(232)
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('link')).toHaveCount(4)
+  // Al recargar, el navegador vuelve a donde estaba la página: arriba del todo
+  // para la foto, y con los números ya contados (no «…»).
+  await esperarNumeros(page)
+  await page.evaluate(() => window.scrollTo(0, 0))
   await capturar(page, 'marco-desplegado')
   await menu(page).getByRole('button', { name: 'Plegar el menú' }).click()
   expect(Math.round((await menu(page).boundingBox())!.width)).toBe(76)
@@ -134,6 +147,8 @@ test('las pestañas de Libros, arriba; las que no caben, en «Más ▾»', async
   const activa = pestanas.locator('[aria-current="page"], .cxm-pestana-activa')
   await expect(activa).toHaveText(/^Balances/)
   await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
+  // La foto con el balance ya cargado, no con su esqueleto.
+  await expect(page.getByRole('heading', { name: 'Balance de situación' })).toBeVisible({ timeout: 30_000 })
   await capturar(page, 'pestanas-libros')
 })
 

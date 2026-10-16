@@ -6,15 +6,16 @@
 //
 // Regla 7: es una pantalla que se abre a propósito, así que el chip sale
 // también con 0 —en verde, «al día»—; el número ordena y da el tono, no
-// decide si existe.
+// decide si existe. Mientras se cuenta sale «…»; si no se ha podido contar,
+// «—»: ninguno de los dos se confunde con un 0.
 
 import { Link } from 'react-router-dom'
 
 export interface ChipPendiente {
   id: string
   etiqueta: string
-  /** null = no se ha podido contar (sale, y lo dice). */
-  numero: number | null
+  /** undefined = contando todavía («…»); null = no se ha podido contar («—»). */
+  numero: number | null | undefined
   ruta?: string
   alPulsar?: () => void
   activo?: boolean
@@ -23,7 +24,7 @@ export interface ChipPendiente {
 function Contenido({ c }: { c: ChipPendiente }) {
   return (
     <>
-      <span className="cxm-chip-numero">{c.numero === null ? '—' : c.numero.toLocaleString('es-ES')}</span>
+      <span className="cxm-chip-numero">{c.numero === undefined ? '…' : c.numero === null ? '—' : c.numero.toLocaleString('es-ES')}</span>
       <span>{c.etiqueta}</span>
     </>
   )
@@ -31,9 +32,9 @@ function Contenido({ c }: { c: ChipPendiente }) {
 
 export function TeTocaHoy({ chips, titulo = 'Te toca hoy' }: { chips: ChipPendiente[]; titulo?: string }) {
   if (chips.length === 0) return null
-  const tono = (c: ChipPendiente) => (c.numero === null ? 'cxm-chip cxm-chip-gris' : c.numero > 0 ? 'cxm-chip cxm-chip-ambar' : 'cxm-chip cxm-chip-verde')
+  const tono = (c: ChipPendiente) => (c.numero == null ? 'cxm-chip cxm-chip-gris' : c.numero > 0 ? 'cxm-chip cxm-chip-ambar' : 'cxm-chip cxm-chip-verde')
   return (
-    <section className="cxm-te-toca" aria-label={titulo}>
+    <section className="cxm-te-toca" aria-label={titulo} aria-busy={chips.some((c) => c.numero === undefined)}>
       <h2 className="cxm-te-toca-titulo">{titulo}</h2>
       <ul className="cxm-te-toca-lista">
         {chips.map((c) => (
