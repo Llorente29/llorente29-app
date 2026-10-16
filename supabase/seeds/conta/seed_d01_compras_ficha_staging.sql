@@ -12,11 +12,11 @@
 -- la cuenta A.
 --
 -- Cuenta A (Taberna de Prueba Norte, empresa 3b34403a…):
---   · Lácteos Prueba Ocho (el caso de COHELDI): NIF y tipo de gasto puestos,
+--   · Lácteos Prueba Ocho (el primer caso): NIF y tipo de gasto puestos,
 --     su ficha no decía cómo factura cuando llegó su factura del 07/10 (la
 --     factura se hizo desde el papel), y DESPUÉS se le dijo «Entrega con
 --     albarán y factura después». La pregunta de esa recepción se quedó abierta.
---   · Marca Prueba Cedida (el caso de Cloudtown Brands): liquida cada mes, sin
+--   · Marca Prueba Cedida (el segundo): liquida cada mes, sin
 --     tipo de gasto, pero sus facturas tienen su cuenta (la 60000000).
 
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
@@ -62,17 +62,17 @@ begin
     (lacteos, a, 'Lácteos Prueba Ocho, S.L.', 'B00000141', v_tipo, null, 'semilla compras ficha'),
     (cedida,  a, 'Marca Prueba Cedida, S.L.', 'B00000158', null, 'monthly_settlement', 'semilla compras ficha');
 
-  -- 1 · COHELDI: llega su factura con la ficha sin decir cómo factura; la factura se hace desde el papel.
+  -- 1 · Llega su factura con la ficha sin decir cómo factura; la factura se hace desde el papel.
   perform pg_temp.recibe('d1c00000-0000-4000-8000-000000000101', lacteos, centro, date '2026-10-07',
     jsonb_build_object('doc_type', 'factura', 'doc_number', 'LP-7', 'bill_to_name', empresa, 'supplier_tax_id', 'B00000141'), 120.00);
   select * into v_p from public.goods_receipt_path where goods_receipt_id = 'd1c00000-0000-4000-8000-000000000101';
   if v_p.question is distinct from 'ficha_sin_forma' or v_p.consumed_at is null then
-    raise exception 'Semilla compras ficha: la recepción de Lácteos no ha quedado como la de COHELDI (pregunta %, usada %).', v_p.question, v_p.consumed_at is not null;
+    raise exception 'Semilla compras ficha: la recepción de Lácteos no ha quedado como la que se buscaba (pregunta %, usada %).', v_p.question, v_p.consumed_at is not null;
   end if;
   -- … y después se le dice cómo factura, como en su ficha («Cómo te factura»).
   perform public.compras_forma_facturar(lacteos, 'delivery_note_then_invoice', false, 'monthly');
 
-  -- 2 · Cloudtown Brands: sus facturas tienen su cuenta, sin tipo de gasto.
+  -- 2 · Sus facturas tienen su cuenta, sin tipo de gasto.
   perform public.company_account_link_set(ea, 'supplier', cedida::text, 'gasto', v_600, 'semilla compras ficha', 'manual');
 
   raise notice 'Semilla compras ficha: Lácteos con su pregunta «¿cómo factura?» abierta y su ficha ya contestada; Marca Prueba Cedida con su cuenta de facturas y sin tipo de gasto.';

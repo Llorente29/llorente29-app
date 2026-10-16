@@ -9,9 +9,9 @@
 // arreglar nada. No escribe: abre, mira y captura.
 //
 // Datos: supabase/seeds/conta/seed_d01_compras_ficha_staging.sql (inventados):
-//   · Lácteos Prueba Ocho — el caso de COHELDI: su ficha ya dice cómo factura,
+//   · Lácteos Prueba Ocho: su ficha ya dice cómo factura,
 //     pero su factura del 07/10 llegó antes y su pregunta se quedó abierta.
-//   · Marca Prueba Cedida — el caso de Cloudtown Brands: sin tipo de gasto,
+//   · Marca Prueba Cedida: sin tipo de gasto,
 //     y sus facturas ya tienen su cuenta (60000000).
 
 import { test, expect, type Page } from '@playwright/test'
@@ -38,7 +38,7 @@ test('ANTES · Compras pregunta lo que ya está contestado, y la ficha pregunta 
   test.setTimeout(180_000)
   await entrarComo(page, CUENTA_A.email)
 
-  // 1 y 5 · Compras: a Lácteos (como a COHELDI) «le falta cómo te factura», aunque su ficha ya lo dice.
+  // 1 y 5 · Compras: a Lácteos «le falta cómo te factura», aunque su ficha ya lo dice.
   await page.goto('/conta/compras')
   await expect(page.getByRole('heading', { name: 'Qué tienes que mirar' })).toBeVisible()
   await expect(page.locator('.cxc-cosa', { hasText: 'A Lácteos Prueba Ocho, S.L. le falta cómo te factura.' })).toBeVisible()
