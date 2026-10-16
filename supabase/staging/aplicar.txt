@@ -1,8 +1,3 @@
-# D01 · La prueba de la vuelta atrás de la referencia (ROLLBACK: staging no
-# cambia). Se queda en el manifiesto porque su prueba de analizar.test.ts lo
-# exige; sus migraciones ya están en staging y no se vuelven a aplicar.
-supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
-
 # B02 · T4 (0220) · «Espera el extracto» y el punto de partida del cierre
 # (rama conta/b02-espera-extracto).
 #   Primero su prueba (ROLLBACK): aplica la 0220 con \ir, la ejercita como
@@ -10,3 +5,9 @@ supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
 #   Después la 0220 de verdad, para la e2e de pantallas (Cierre del mes).
 supabase/staging/sql/20261101_b02_espera_extracto_prueba.sql
 supabase/migrations/20261101T0220_b02_espera_extracto.sql
+
+# D01 · La prueba de la vuelta atrás de la referencia (ROLLBACK: staging no
+# cambia). Va la ÚLTIMA: su prueba de analizar.test.ts exige que esté aquí, y
+# el 16/10 a las 21:13 UTC falló en staging por un dato de otro (ya existe el
+# papel de plataforma de su canal, ux_party_role_canal): así no para lo demás.
+supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
