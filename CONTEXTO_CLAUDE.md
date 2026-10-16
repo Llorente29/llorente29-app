@@ -2449,6 +2449,24 @@ Pedidos de marcas propias de octubre (del 01 al 15/10, 526 pedidos, todos de Hub
 - El agente «libro» compara el total del resumen con la suma de los pedidos. Un envío aclarado `no_lo_paga` lo pondría en rojo ese día: se ajusta después de la tanda, cuando `conta_cargos_de_pedidos` exista en producción.
 - La forma de la factura de Diez con una 7000900x en negativo y una 705 no se ha medido en la C0009. Es la misma que el reembolso (708 en negativo), que sí está medido.
 
+### Orden de puesta en marcha (Julio, 16/10)
+
+1. Julio fusiona el #210 y se comprueba que Vercel diga READY en producción.
+2. Julio despliega `conta-diez-enviar` desde `main`.
+3. **La factura de prueba en la C0009**, con una línea de promoción en negativo y otra de envíos. Se lanza desde `main`: Actions → «Diez · factura de prueba en C0009» → «Run workflow», con la etiqueta `[prueba-c0009:promociones]`. Script: `scripts/conta/diez/prueba-c0009-promociones.ts`.
+   - La base C0009 está escrita en el script, y el cliente no escribe en C0008 sin `escribirEnReal`.
+   - Si la 70009002 y la 70500001 no están en la C0009, las crea con los mismos códigos y nombres.
+   - Nunca dos veces: si ya está, la lee y no envía otra.
+   - Qué se mira, en la salida del run y después en Diez:
+     - Diez acepta la factura;
+     - vuelve igual: base, cuota, total y los tres apuntes, con la 70009002 en negativo;
+     - el asiento que hace Diez cuadra, con la 70009002 al debe, la 70500001 y la venta al haber y la 47700010 con la cuota;
+     - la analítica vuelve igual que la mandada;
+     - hay una sola factura con ese número.
+4. Si Diez la acepta bien, el ensayo y el real de la tanda.
+
+Después: un PR suelto con los dos textos de recibidas. Uno es la línea «a Diez irá cuando Cegid active los documentos»; el otro, el PDF de las recibidas en «Pendientes de adjuntar en Diez». Hasta entonces, el PDF de una recibida se adjunta en Diez a mano. Y el agente «libro» con «no lo paga», después de la tanda.
+
 ### Para A: la vara de medir de la promoción por pedido (la liquidación de Uber)
 
 - **Dónde:** `public.sale.discount_amount`, por pedido. Viene de HubRise (`discounts[].price_off`): en los 526 pedidos del 01 al 15/10 es igual, céntimo a céntimo, a la suma de `price_off`. La lee también `conta_cargos_de_pedidos(cuenta, pedidos)`, columna `descuento`.
