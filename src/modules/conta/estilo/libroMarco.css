@@ -1,0 +1,85 @@
+/* src/modules/conta/estilo/libroMarco.css
+ *
+ * M01 · El libro diario y Libros dentro del marco nuevo (maqueta N30, encargo
+ * F01 tarea 4). La tabla, la franja, las vistas y el pie son de la pieza
+ * común (piezas.css); aquí, lo propio del diario —la línea del concepto, el
+ * número en Diez, el mes en una línea, el lado derecho más estrecho— y la
+ * fila de acciones de un área de Libros que sustituye al recuadro de antes.
+ * Con los tokens del marco (.cxm), como las piezas.
+ */
+
+/* ── Libros: el ejercicio en la barra de arriba y las acciones del área ── */
+.cxm .cxm-select {
+  height: 32px; padding: 0 8px; border: 1px solid var(--cxm-borde-campo); border-radius: var(--cxm-radio-campo);
+  background: var(--cxm-superficie); color: var(--cxm-texto); font: inherit; font-family: var(--cxm-letra); font-size: 13px; font-weight: 600;
+}
+.cxm .cxl-en-marco { gap: 12px; }
+.cxm .cxl-sub {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; font-family: var(--cxm-letra);
+  border-bottom: 1px solid var(--cxm-borde); padding-bottom: 2px;
+}
+.cxm .cxl-sub-grupo { display: inline-flex; align-items: center; gap: 2px 4px; flex-wrap: wrap; }
+.cxm .cxl-sub-separador { width: 1px; height: 16px; background: var(--cxm-borde); margin: 0 6px; }
+.cxm .cxl-sub-pestana {
+  position: relative; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 8px;
+  font-size: 13px; color: var(--cxm-apoyo); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -3px;
+}
+.cxm .cxl-sub-pestana:hover { color: var(--cxm-texto); }
+.cxm .cxl-sub-pestana[aria-current='page'] { color: var(--cxm-azul); font-weight: 600; border-bottom-color: var(--cxm-azul); }
+.cxm .cxl-sub-gris { opacity: 0.6; }
+.cxm .cxl-sub-punto { width: 7px; height: 7px; border-radius: 50%; background: var(--cxm-ambar); display: inline-block; }
+
+/* ── El libro diario ─────────────────────────────────────────────────── */
+.cxm .cxd-en-marco { gap: 10px; font-family: var(--cxm-letra); }
+/* La tabla a la izquierda y lo que he hecho yo y el cierre a la derecha, más estrecho que antes. */
+.cxm .cxd-en-marco .cxd-cuerpo { grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
+.cxm .cxd-en-marco .cxd-diario { padding: 0; }
+.cxm .cxd-en-marco .cxd-ia { padding: 12px 14px; }
+.cxm .cxd-en-marco .cxd-ia-titulo { font-size: 14px; }
+.cxm .cxd-en-marco .cxd-ia-fila { padding: 7px 0; font-size: 13px; }
+.cxm .cxd-en-marco .cxd-cierre { padding: 12px 14px; }
+.cxm .cxd-en-marco .cxd-cierre .cx-tarjeta-titulo { font-size: 14px; }
+.cxm .cxd-en-marco .cxd-pasos { font-size: 13px; }
+
+/* El mes en una línea: las tres cifras de N11, en pequeño. */
+.cxm .cxd-resumen { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 0; font-size: 12px; color: var(--cxm-apoyo); }
+.cxm .cxd-resumen > div { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.cxm .cxd-resumen dt { color: var(--cxm-apoyo); }
+.cxm .cxd-resumen dd { margin: 0; }
+.cxm .cxd-resumen-cifra { font-family: var(--cxm-letra-cifras); font-size: 13px; font-weight: 600; color: var(--cxm-texto); }
+.cxm .cxd-resumen-apoyo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+
+/* La fila: todo en UNA línea; los chips enteros y «de dónde sale» con «…» en lo que quede. */
+.cxm .cxd-en-marco .cxt-tabla td { font-size: 13px; }
+.cxm .cxd-linea-libro { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.cxm .cxd-en-marco .cxd-linea-libro .cxd-concepto-titulo {
+  display: block; flex: 0 1 auto; min-width: 60px; font-size: 13px; line-height: 18px; color: var(--cxm-texto);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset;
+}
+.cxm .cxd-en-marco .cx-chip { flex: none; padding: 0 7px; font-size: 11px; line-height: 17px; white-space: nowrap; }
+.cxm .cxd-en-marco .cxd-linea-libro .cxd-sale {
+  display: block; flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--cxm-apoyo);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset;
+}
+.cxm .cxd-en-marco .cxd-fecha, .cxm .cxd-en-marco .cxd-num { font-family: var(--cxm-letra-cifras); font-size: 12px; color: var(--cxm-apoyo); }
+.cxm .cxd-en-marco .cxd-diez { font-size: 12px; color: var(--cxm-texto); }
+.cxm .cxd-en-marco .cxd-importe { font-family: var(--cxm-letra-cifras); font-weight: 600; font-size: 13px; }
+.cxm .cxd-en-marco .cxt-fila.cxd-anulado .cxd-concepto-titulo, .cxm .cxd-en-marco .cxt-fila.cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cxm-apoyo); }
+.cxm .cxd-en-marco .cxd-apuntes { padding: 6px 12px 10px 230px; }
+.cxm .cxd-en-marco .cxd-apunte { padding: 4px 0; font-size: 13px; }
+
+/* El móvil: cada asiento en una tarjeta de dos o tres líneas. */
+.cxm .cxd-tarjeta { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 4px 10px; align-items: start; font-size: 14px; }
+.cxm .cxd-tarjeta-concepto { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cxm .cxd-tarjeta .cxd-concepto-titulo { font-size: 14px; line-height: 19px; }
+.cxm .cxd-tarjeta .cxd-concepto-apoyo { display: flex; flex-wrap: wrap; gap: 3px 5px; font-size: 12px; color: var(--cxm-apoyo); }
+.cxm .cxd-tarjeta .cxd-sale { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.cxm .cxd-tarjeta-derecha { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.cxm .cxd-tarjeta.cxd-anulado .cxd-concepto-titulo, .cxm .cxd-tarjeta.cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cxm-apoyo); }
+
+/* Pantallas estrechas del ordenador: el lado derecho baja. */
+@media (max-width: 1180px) {
+  .cxm .cxd-en-marco .cxd-cuerpo { grid-template-columns: minmax(0, 1fr); }
+}
+.cxm.cxm-es-movil .cxd-en-marco .cxd-cuerpo { grid-template-columns: minmax(0, 1fr); }
+.cxm.cxm-es-movil .cxd-resumen { flex-direction: column; gap: 4px; }

@@ -31,7 +31,8 @@ test('A · Validar y enviar a Diez: antes de enviar, cuántos y cuánto; y se pu
   await entrarComo(page, CUENTA_A.email)
   page.on('pageerror', (e) => console.log(`[error de la página] ${e.message}`))
   await page.goto('/conta/libros/diario')
-  await expect(page.getByRole('heading', { level: 1, name: 'Libro diario' })).toBeVisible()
+  // M01: el diario va en el marco; su encabezado es para el lector.
+  await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
   // Las ventas de Glovo de A están propuestas: el botón dice cuántas.
   const boton = page.getByRole('button', { name: /^Validar y enviar a Diez · \d+$/ })
   await expect(boton).toBeVisible()
@@ -58,7 +59,11 @@ test('A · Validar y enviar a Diez: antes de enviar, cuántos y cuánto; y se pu
 test('A · un asiento de ventas de Glovo: «Con Diez» dice dónde está y qué pasará al validarlo', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario?ver=revisar')
-  await page.getByRole('button', { name: /Ventas Glovo · / }).first().click()
+  // M01: en el ordenador, una fila de la tabla densa; en el móvil, su tarjeta.
+  const filas = lado(page) === 'ordenador'
+    ? page.getByRole('grid', { name: 'Asientos del libro diario' }).getByRole('row', { name: /Ventas Glovo · / })
+    : page.getByRole('list', { name: 'Asientos del libro diario' }).getByRole('button', { name: /Ventas Glovo · / })
+  await filas.first().click()
   if (lado(page) === 'ordenador') await page.getByRole('link', { name: 'Abrir el asiento' }).click()
   await expect(page.getByRole('heading', { level: 1, name: /^Ventas Glovo · / })).toBeVisible()
   const tarjeta = page.getByRole('region', { name: 'Con Diez' })

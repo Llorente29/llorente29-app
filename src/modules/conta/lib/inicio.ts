@@ -128,6 +128,15 @@ export function cambio(antes: number | null, ahora: number, formato: (n: number)
   return `${d > 0 ? '+' : '−'}${formato(Math.abs(d))} este mes`
 }
 
+/**
+ * M01 · Lo de debajo del IVA del trimestre, cada importe con su nombre:
+ * «4.º trimestre: repercutido 8,99 € · soportado −5 €». Escrito como resta
+ * («8,99 € − −5 €») un soportado en negativo (un abono) se leía como errata.
+ */
+export function fraseIva(trimestre: string, repercutido: number, soportado: number, formato: (n: number) => string): string {
+  return `${trimestre}: repercutido ${formato(repercutido)} · soportado ${formato(soportado)}`
+}
+
 /** «Próximo pago el 24 oct» o, si ya pasó, «Vencido desde el 24 oct». */
 export function frasePago(fecha: string | null, hoy: string, diaMes: (iso: string) => string): string | null {
   if (!fecha) return null

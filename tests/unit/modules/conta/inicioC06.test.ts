@@ -3,7 +3,7 @@
 // C06 · El Inicio del producto vendido solo: lo que se decide sin base.
 
 import {
-  barras, cambio, diaDeHoy, dudas, frasePago, mesYAnio, mesesHasta, primerNombre, puntoDeMes, resumenDudas, saldoDe, saludo, trimestreDe,
+  barras, cambio, diaDeHoy, dudas, fraseIva, frasePago, mesYAnio, mesesHasta, primerNombre, puntoDeMes, resumenDudas, saldoDe, saludo, trimestreDe,
 } from '@/modules/conta/lib/inicio'
 import { ayerEnMadrid } from '@/modules/conta/services/inicioService'
 import { diaMes, euros } from '@/modules/conta/lib/formato'
@@ -104,5 +104,17 @@ describe('lo que tiene que decir la persona', () => {
     expect(resumenDudas(4)).toBe('4 dudas · 2 minutos')
     expect(resumenDudas(1)).toBe('1 duda · 1 minuto')
     expect(resumenDudas(0)).toBe('nada pendiente')
+  })
+})
+
+describe('M01 · el IVA del trimestre, cada importe con su nombre', () => {
+  it('un soportado en negativo (un abono) no sale como «− −5 €»', () => {
+    // El caso de staging que vio Julio: 8,99 € repercutido y −5 € soportado.
+    const f = fraseIva('4.º trimestre', 8.99, -5, euros)
+    expect(f).toBe(`4.º trimestre: repercutido ${euros(8.99)} · soportado ${euros(-5)}`)
+    expect(f).not.toMatch(/[−-]\s*[−-]/)
+  })
+  it('con los dos en positivo, igual: nombrados, sin resta', () => {
+    expect(fraseIva('3.er trimestre', 1200, 450.5, euros)).toBe(`3.er trimestre: repercutido ${euros(1200)} · soportado ${euros(450.5)}`)
   })
 })

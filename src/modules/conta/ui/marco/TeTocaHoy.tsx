@@ -10,6 +10,7 @@
 // «—»: ninguno de los dos se confunde con un 0.
 
 import { Link } from 'react-router-dom'
+import { miles } from '@/modules/conta/ui/tabla/tablaDensa'
 
 export interface ChipPendiente {
   id: string
@@ -24,7 +25,7 @@ export interface ChipPendiente {
 function Contenido({ c }: { c: ChipPendiente }) {
   return (
     <>
-      <span className="cxm-chip-numero">{c.numero === undefined ? '…' : c.numero === null ? '—' : c.numero.toLocaleString('es-ES')}</span>
+      <span className="cxm-chip-numero">{c.numero === undefined ? '…' : c.numero === null ? '—' : miles(c.numero)}</span>
       <span>{c.etiqueta}</span>
     </>
   )

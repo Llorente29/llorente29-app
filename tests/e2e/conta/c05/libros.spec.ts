@@ -49,7 +49,9 @@ test('Libros en tres niveles: áreas, acciones con su estado y el buscador', asy
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros')
-  await expect(page.getByRole('heading', { level: 1, name: 'Libros' })).toBeVisible()
+  // M01: sin el título grande «Contabilidad · Libros» (lo dicen el módulo y las pestañas); el encabezado, para el lector.
+  await expect(page.getByRole('heading', { level: 1, name: 'Libros' })).toHaveCount(1)
+  await expect(page.getByText('Contabilidad', { exact: true })).toHaveCount(0)
   const AREAS = ['Diario', 'Mayor y saldos', 'Libros registro de IVA', 'Balances', 'Cuentas anuales y Registro', 'Cierre']
   if (lado(page) === 'movil') {
     const areas = page.getByRole('navigation', { name: 'Áreas de Libros' })
@@ -73,19 +75,19 @@ test('Libros en tres niveles: áreas, acciones con su estado y el buscador', asy
     await expect(page.getByRole('navigation', { name: 'Acciones de Libros registro de IVA' })).toBeVisible()
   } else {
     await (await areaDeLibros(page, 'Libros registro de IVA')).click()
+    // M01 (Julio, 16/10): fuera el recuadro de antes (Facturas / Otros libros /
+    // Salidas con su dato y «Tuyos» con Ctrl K). Las acciones del área, en una
+    // fila de pestañas pequeñas, todas (regla 7) y en su orden.
     const barra = page.getByRole('navigation', { name: 'Acciones de Libros registro de IVA' })
-    await expect(barra.getByRole('group', { name: 'Facturas' })).toBeVisible()
-    await expect(barra.getByRole('group', { name: 'Otros libros' })).toBeVisible()
-    await expect(barra.getByRole('group', { name: 'Salidas' })).toBeVisible()
-    // Una sola fila, como N13c: «Tuyos» a la derecha de «Salidas», no debajo
-    // (e2e 154: bajaba sola a una segunda fila).
-    const arriba = async (g: string) => Math.round((await barra.getByRole('group', { name: g, exact: true }).boundingBox())!.y)
-    expect([await arriba('Otros libros'), await arriba('Salidas'), await arriba('Tuyos')]).toEqual(Array(3).fill(await arriba('Facturas')))
-    // Donde no cabe en una (Cuentas anuales), bajan los grupos y «Tuyos» se queda arriba.
-    await (await areaDeLibros(page, 'Cuentas anuales y Registro')).click()
-    const barraAnuales = page.getByRole('navigation', { name: 'Acciones de Cuentas anuales y Registro' })
-    const yAnuales = async (g: string) => Math.round((await barraAnuales.getByRole('group', { name: g, exact: true }).boundingBox())!.y)
-    expect(await yAnuales('Tuyos')).toBe(await yAnuales('Cuentas anuales'))
+    await expect(barra.getByRole('link', { name: /^Expedidas/ })).toBeVisible()
+    await expect(barra.getByRole('link', { name: /^Formato AEAT/ })).toBeVisible()
+    await expect(page.getByRole('group', { name: 'Tuyos' })).toHaveCount(0)
+    await expect(page.locator('.cxl-tuyos')).toHaveCount(0)
+    // Una sola fila: todas a la misma altura.
+    const ys = await barra.getByRole('link').evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().top)))
+    expect(new Set(ys).size).toBe(1)
+    // El ejercicio, en la barra de arriba del marco (no en un título).
+    await expect(page.locator('.cxm-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
     await (await areaDeLibros(page, 'Libros registro de IVA')).click()
     // El buscador: Ctrl K, «requerimiento» lleva al formato AEAT. M01: Ctrl K
     // es del marco; las opciones de Libros salen en su grupo «Opciones».

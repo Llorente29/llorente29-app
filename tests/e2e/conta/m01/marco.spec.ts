@@ -200,3 +200,169 @@ test('el buscador general: Ctrl K es del marco, agrupa por tipo y abre con Intro
     await expect(dialogo).toHaveCount(0)
   }
 })
+
+// ── Tarea 4 · El libro diario en el marco ────────────────────────────────
+
+/** El diario ya pintado: la tabla (o la lista del móvil) con filas y nada contando. */
+async function esperarDiario(page: Page) {
+  const lista = lado(page) === 'ordenador'
+    ? page.getByRole('grid', { name: 'Asientos del libro diario' })
+    : page.getByRole('list', { name: 'Asientos del libro diario' })
+  await expect(lista).toBeVisible({ timeout: 30_000 })
+  await esperarCargado(page)
+  const franja = page.getByRole('region', { name: 'Te toca hoy' })
+  await expect(franja).toHaveAttribute('aria-busy', 'false')
+  return lista
+}
+
+test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca hoy, vistas, Diez y el cuadre', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  await page.goto('/conta/libros/diario')
+  const lista = await esperarDiario(page)
+  // En la barra de acciones del marco, con su tecla; el ejercicio, en la barra de arriba.
+  const acciones = page.getByRole('toolbar', { name: 'Acciones del libro diario' })
+  await expect(acciones.getByRole('button', { name: '+ Nuevo asiento' })).toHaveAttribute('aria-keyshortcuts', 'Insert')
+  await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toBeVisible()
+  await expect(page.locator('.cxm-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
+  // Te toca hoy: lo que espera revisión, que filtra al pulsarlo.
+  await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()
+  // Vistas, filtros y exportar.
+  await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Todos' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: '+ Guardar vista' })).toBeVisible()
+  for (const b of ['Excel', 'CSV', 'PDF']) await expect(page.getByRole('group', { name: 'Exportar' }).getByRole('button', { name: b })).toBeVisible()
+  // El pie: cuántos y el cuadre.
+  await expect(page.getByRole('status', { name: 'Cuadre' })).toContainText(/^Debe .+ · Haber .+ · Cuadra$/)
+  // Lo de C de antes en Libros no está: ni el recuadro ni su Ctrl K, ni el título grande.
+  await expect(page.locator('.cxl-tuyos, .cxl-cabeza')).toHaveCount(0)
+
+  if (lado(page) === 'movil') {
+    await page.evaluate(() => window.scrollTo(0, 0))
+    await capturar(page, 'libro-diario')
+    // En el móvil, tocar un asiento lo abre.
+    await lista.getByRole('button').first().click()
+    await expect(page).toHaveURL(/\/conta\/libros\/diario\/[0-9a-f-]{36}/)
+    return
+  }
+
+  // La columna del número en Diez; y la cabecera se queda arriba al bajar.
+  await expect(lista.getByRole('columnheader', { name: 'Diez' })).toBeVisible()
+  // Compacta (de serie): filas de unos 28 px, unas 30 por pantalla.
+  await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'compacta')
+  const altoCompacta = (await lista.locator('.cxt-fila').first().boundingBox())!.height
+  expect(altoCompacta).toBeLessThanOrEqual(30)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await capturar(page, 'libro-diario-compacta')
+
+  // Teclado: ↓ marca la fila activa, Espacio la marca, Intro la despliega.
+  await lista.focus()
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Space')
+  await expect(lista.locator('.cxt-fila').nth(1)).toHaveAttribute('aria-selected', 'true')
+  await expect(page.locator('.cxt-pie')).toContainText('1 marcado')
+  await page.keyboard.press('Enter')
+  await expect(lista.locator('.cxt-fila').nth(1)).toHaveAttribute('aria-expanded', 'true')
+  await expect(lista.getByRole('link', { name: 'Abrir el asiento' })).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(lista.getByRole('link', { name: 'Abrir el asiento' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Desmarcar' }).click()
+
+  // Cómoda: filas más altas (unas 20 por pantalla); se recuerda.
+  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: 'Cómoda' }).click()
+  await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'comoda')
+  const altoComoda = (await lista.locator('.cxt-fila').first().boundingBox())!.height
+  expect(altoComoda).toBeGreaterThan(altoCompacta + 8)
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await capturar(page, 'libro-diario-comoda')
+  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: 'Compacta' }).click()
+
+  // Una vista guardada: con un filtro puesto, se guarda con nombre y se borra (del navegador).
+  await page.getByRole('group', { name: 'Filtros' }).getByLabel('Buscar').fill('ventas')
+  await expect(page.locator('.cxt-pie')).toContainText(/ de \d+ asientos/)
+  await page.getByRole('button', { name: '+ Guardar vista' }).click()
+  await page.getByLabel('Nombre de la vista').fill('Ventas e2e')
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click()
+  await expect(page.getByText('Vista guardada: «Ventas e2e». Sale aquí cada vez que abras la pantalla.')).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Ventas e2e' })).toHaveAttribute('aria-pressed', 'true')
+  await page.getByRole('button', { name: 'Borrar la vista «Ventas e2e»' }).click()
+  await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Ventas e2e' })).toHaveCount(0)
+
+  // Exportar: lo dice en pantalla, con el fichero y cuántos (regla 8).
+  const bajada = page.waitForEvent('download')
+  await page.getByRole('group', { name: 'Exportar' }).getByRole('button', { name: 'CSV' }).click()
+  expect((await bajada).suggestedFilename()).toMatch(/^libro-diario-\d{4}.*\.csv$/)
+  await expect(page.getByRole('status').filter({ hasText: /^Bajado libro-diario-.+\.csv: \d+ asientos\.$/ })).toBeVisible()
+})
+
+test('Libros sin el recuadro de antes: las acciones del área en una fila y el ejercicio arriba', async ({ page }) => {
+  test.skip(lado(page) === 'movil', 'En el móvil Libros va por niveles')
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  await page.goto('/conta/libros/balances/balance')
+  await expect(page.getByRole('heading', { name: 'Balance de situación' })).toBeVisible({ timeout: 30_000 })
+  const sub = page.getByRole('navigation', { name: 'Acciones de Balances' })
+  await expect(sub.getByRole('link', { name: 'Balance de situación' })).toHaveAttribute('aria-current', 'page')
+  await expect(sub.getByRole('link', { name: 'Pérdidas y ganancias' })).toBeVisible()
+  await expect(page.locator('.cxl-tuyos, .cxl-cabeza, .cxl-barra')).toHaveCount(0)
+  await sub.getByRole('link', { name: 'Pérdidas y ganancias' }).click()
+  await expect(page.getByRole('heading', { name: 'Pérdidas y ganancias' })).toBeVisible()
+})
+
+// ── Tarea 3 · Las tres piezas comunes, en su página de muestra ───────────
+
+test('la muestra de las piezas: tabla densa, formulario por bloques y panel del documento', async ({ page }) => {
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  await page.goto('/conta/ajustes/muestra-piezas')
+  await expect(page.getByRole('heading', { name: 'Muestra de las piezas' })).toBeVisible()
+  await expect(page.getByText('Datos inventados, escritos en la página')).toBeVisible()
+
+  // La tabla: 40 asientos, el cuadre, y la franja que filtra.
+  await expect(page.locator('.cxt-pie').first()).toContainText('40 asientos')
+  await expect(page.getByRole('status', { name: 'Cuadre' })).toContainText('Cuadra')
+  await page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /para revisar$/ }).click()
+  await expect(page.locator('.cxt-pie').first()).toContainText(/^\d+ de 40 asientos/)
+  await page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Todos' }).click()
+
+  if (lado(page) === 'movil') {
+    await capturar(page, 'piezas', false)
+    return
+  }
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await capturar(page, 'piezas-tabla', false)
+
+  // El formulario: lo propuesto en azul hasta que Tab lo acepta; F4 busca subcuenta; Ctrl S guarda y lo dice.
+  const form = page.getByRole('form', { name: 'Factura F-2026-118 · Distribuciones Prueba SL' })
+  await expect(form.getByText('propuesto por la máquina')).toBeVisible()
+  const gasto = form.getByLabel(/^Subcuenta de gasto/)
+  await expect(gasto).toHaveClass(/cxf-propuesto/)
+  await gasto.focus()
+  await page.keyboard.press('Tab')
+  await expect(gasto).toHaveClass(/cxf-aceptado/)
+  await gasto.focus()
+  await page.keyboard.press('F4')
+  const buscar = page.getByRole('dialog', { name: 'Buscar subcuenta' })
+  await buscar.getByLabel('Número o nombre de la subcuenta').fill('publicidad')
+  await page.keyboard.press('Enter')
+  await expect(gasto).toHaveValue('62700000')
+  await page.keyboard.press('Control+s')
+  await expect(form.getByRole('status')).toHaveText('Guardado (de muestra: no se escribe nada en ninguna parte).')
+  await expect(form.getByText('3 de 12')).toBeVisible()
+  await gasto.focus()
+  await page.keyboard.press('PageDown')
+  await expect(form.getByText('4 de 12')).toBeVisible()
+
+  // El panel del documento: «Ocultar ›» deja el formulario a todo el ancho y se recuerda.
+  const doc = page.getByRole('complementary', { name: 'Documento' })
+  await expect(doc.getByRole('img', { name: /F-2026-118/ })).toBeVisible()
+  await expect(doc.getByRole('region', { name: 'Por qué lo propongo así' })).toBeVisible()
+  await form.scrollIntoViewIfNeeded()
+  await capturar(page, 'piezas-formulario', false)
+  const ancho = (await form.boundingBox())!.width
+  await doc.getByRole('button', { name: 'Ocultar ›' }).click()
+  await expect(doc.getByRole('button', { name: '‹ Documento' })).toBeVisible()
+  expect((await form.boundingBox())!.width).toBeGreaterThan(ancho + 300)
+  await page.reload()
+  await expect(page.getByRole('complementary', { name: 'Documento' }).getByRole('button', { name: '‹ Documento' })).toBeVisible()
+  await page.getByRole('button', { name: '‹ Documento' }).click()
+})

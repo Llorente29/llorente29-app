@@ -33,7 +33,7 @@ import { subcuentasSinNombre } from '@/modules/conta/services/pasosDiezService'
 import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
 import { diaMes, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  barras, cambio, diaDeHoy, dudas, frasePago, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
+  barras, cambio, diaDeHoy, dudas, fraseIva, frasePago, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
 } from '@/modules/conta/lib/inicio'
 import { mesAnterior, nombreMes, type CierreMes, type PasoCierre } from '@/modules/conta/lib/diario'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
@@ -174,7 +174,7 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
         tono={pago.estado === 'listo' && pago.v !== null && pago.v < hoy ? 'ambar' : undefined} barras={barras(serie('debes'))} />
       <Cifra etiqueta="IVA del trimestre" valor={iva.estado === 'listo' ? euros(iva.v.aPagar) : iva.estado === 'fallo' ? '—' : '…'}
         ruta={rutaLibros('registro', 'expedidas')}
-        apoyo={iva.estado === 'listo' ? `${iva.v.trimestre}: ${euros(iva.v.repercutido)} − ${euros(iva.v.soportado)}` : iva.estado === 'fallo' ? iva.texto : ' '}
+        apoyo={iva.estado === 'listo' ? fraseIva(iva.v.trimestre, iva.v.repercutido, iva.v.soportado, euros) : iva.estado === 'fallo' ? iva.texto : ' '}
         barras={ivaMeses.estado === 'listo' ? barras(ivaMeses.v) : []} ia />
     </div>
   )

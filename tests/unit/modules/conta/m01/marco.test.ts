@@ -30,6 +30,7 @@ describe('cada dirección del módulo es de un módulo', () => {
     libroDiario: 'libros', nuevoAsiento: 'libros', asiento: 'libros', libros: 'libros', diarioResumido: 'libros', pendientesDiez: 'libros',
     librosArea: 'libros', librosAccion: 'libros', compras: 'compras', ventas: 'ventas', liquidacionNueva: 'compras', liquidacion: 'compras',
     documentos: 'compras', revisarFactura: 'compras', loteCatcher: 'compras', bancos: 'bancos', bancosPestana: 'bancos',
+    muestraPiezas: 'ajustes',
   }
   it('las de CONTA.rutas, todas, con el suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
