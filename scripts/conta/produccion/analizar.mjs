@@ -209,6 +209,49 @@ export function analizarFichero(f, texto = readFileSync(f, 'utf8')) {
   return sentencias(texto).flatMap((s) => clasificar(s))
 }
 
+/**
+ * El orden dentro de UN fichero. Postgres comprueba al crearlos el cuerpo de una
+ * función «language sql» y la consulta de una vista: todas sus tablas y columnas
+ * tienen que existir YA. Si el mismo fichero las crea más abajo, en una base
+ * limpia falla con 42P01/42703; en una que ya las tiene (staging, de una pasada
+ * anterior) no se ve. Las plpgsql no: su cuerpo se resuelve al ejecutarlas.
+ * (16/10, ensayo #92 de la D01: _conta_liquidacion_solape leía
+ * channel_settlement.store_id, que la 0100 añadía 80 líneas más abajo; staging
+ * lo tenía de antes y salió verde.)
+ * Devuelve [{ sentencia, objeto, lee, nace }] por cada lectura adelantada.
+ */
+export function ordenEnElFichero(texto) {
+  const ss = sentencias(texto)
+  const nacen = [] // { i, tabla, columna? }
+  ss.forEach((s, i) => {
+    const t = s.replace(/'(?:[^']|'')*'/g, "''")
+    const ct = t.match(new RegExp(`^create\\s+(?:unlogged\\s+)?table\\s+(?:if\\s+not\\s+exists\\s+)?${ID}`, 'i'))
+    if (ct) nacen.push({ i, tabla: nombre(ct[1]) })
+    const at = t.match(new RegExp(`^alter\\s+table\\s+(?:if\\s+exists\\s+)?(?:only\\s+)?${ID}`, 'i'))
+    if (at) for (const m of t.matchAll(/\badd\s+column\s+(?:if\s+not\s+exists\s+)?"?([A-Za-z_][A-Za-z0-9_]*)"?/gi)) nacen.push({ i, tabla: nombre(at[1]), columna: m[1].toLowerCase() })
+  })
+  const fallos = []
+  ss.forEach((s, j) => {
+    const low = s.toLowerCase()
+    let objeto, cuerpo
+    const fn = s.match(new RegExp(`^create\\s+(?:or\\s+replace\\s+)?function\\s+${ID}`, 'i'))
+    if (fn && /\blanguage\s+sql\b/i.test(low.replace(/\$([a-z_]*)\$[\s\S]*?\$\1\$/g, ''))) {
+      objeto = nombre(fn[1]); cuerpo = (s.match(/\$([A-Za-z_]*)\$([\s\S]*?)\$\1\$/) ?? [])[2] ?? (s.match(/\bbegin\s+atomic\b([\s\S]*)$/i) ?? [])[1] ?? ''
+    }
+    const vi = s.match(new RegExp(`^create\\s+(?:or\\s+replace\\s+)?(?:materialized\\s+)?view\\s+${ID}[\\s\\S]*?\\bas\\b([\\s\\S]*)$`, 'i'))
+    if (vi) { objeto = nombre(vi[1]); cuerpo = vi[2] }
+    if (!objeto) return
+    const c = cuerpo.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''").toLowerCase()
+    const nombra = (tabla) => new RegExp(`(?<![a-z0-9_.])(?:public\\.)?${tabla.replace(/^public\./, '')}(?![a-z0-9_])`).test(c)
+    for (const n of nacen.filter((x) => x.i > j)) {
+      if (!nombra(n.tabla)) continue
+      if (!n.columna) { fallos.push({ sentencia: j + 1, objeto, lee: n.tabla, nace: n.i + 1 }); continue }
+      if (new RegExp(`(?<![a-z0-9_])${n.columna}(?![a-z0-9_])`).test(c)) fallos.push({ sentencia: j + 1, objeto, lee: `${n.tabla}.${n.columna}`, nace: n.i + 1 })
+    }
+  })
+  return fallos
+}
+
 /** Lo que la tanda crea ella misma: no cuenta como existente aunque ya esté. */
 export function creadosPorLaTanda(porFichero) {
   const s = new Set()

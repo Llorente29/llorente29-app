@@ -27,9 +27,20 @@
 //   6. Se registra en la bandeja (document_inbox) y se lee con el modo factura
 //      de ocr-albaran; de la lectura sale la factura (o la repetida).
 //   7. Nunca dos veces: el mismo correo (email_id) no se procesa dos veces.
+//
+// LIQUIDACIONES (D01 · T2, 15/10). La misma función recibe también lo que llega a
+// liquidaciones-<empresa>@…: la base dice de qué clase es cada dirección
+// (conta_entrada_destino) y aquí se enruta. Un resumen de pagos de Uber Eats se
+// lee con _shared/liquidacionUber.ts (puro) y va a conta_liquidacion_registrar:
+// la liquidación y su factura de comisión. El resumen del mes (el PDF
+// monthly_statement_*.pdf) se guarda con ella. Lo que no es un resumen se
+// apunta y se dice. Y en las dos clases, el correo con el que Gmail pide
+// confirmar un reenvío se apunta con su código, para enseñarlo.
+
+import { leerResumenUber, NoEsResumenUber, paraRegistrar, type ResumenUber } from './liquidacionUber.ts'
 
 export const DOMINIO_ENTRADA = 'entrada.folvy.app'
-export const DIRECCION = /^(facturas-[a-z0-9][a-z0-9-]{1,40})@([a-z0-9.-]+)$/
+export const DIRECCION = /^((?:facturas|liquidaciones)-[a-z0-9][a-z0-9-]{1,40})@([a-z0-9.-]+)$/
 export const TIPOS_ADMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const
 export const MAX_BYTES = 10 * 1024 * 1024 // el límite del bucket receipt-uploads
 const TOLERANCIA_FIRMA_S = 5 * 60
@@ -145,7 +156,9 @@ export const rutaEntrada = (accountId: string, emailId: string, i: number, nombr
 
 // ── El orquestador ─────────────────────────────────────────────────────────
 
-export type Destino = { companyId: string; accountId: string; activa: boolean }
+export type ClaseDireccion = 'facturas' | 'liquidaciones'
+export type Destino = { companyId: string; accountId: string; activa: boolean; tipo?: ClaseDireccion }
+export type DatosLiquidacion = ReturnType<typeof paraRegistrar>
 export interface PuertoEntrada {
   /** La empresa de una dirección de facturas, o null. */
   destino(localPart: string, dominio: string): Promise<Destino | null>
@@ -161,9 +174,32 @@ export interface PuertoEntrada {
   llegada(x: { accountId: string; companyId: string; emailId: string; to: string; from: string | null; subject: string | null; recibido: string | null; ruta: string | null; nombre: string | null; tipo: string | null; bytes: number | null; sha256: string | null; enlace: string | null }): Promise<{ id: string; yaEstaba: boolean }>
   /** Lee la llegada (ocr-albaran, modo factura) y saca de ella la factura. */
   leer(inboxId: string): Promise<{ estado: string; texto: string }>
+  /** El cuerpo del correo (Resend no lo manda en el webhook). */
+  cuerpo?(emailId: string): Promise<{ html: string | null; text: string | null }>
+  /** Registra un resumen leído (conta_liquidacion_registrar). */
+  liquidacion?(x: { companyId: string; datos: DatosLiquidacion }): Promise<{ id: string; yaEstaba: boolean; texto: string; factura: string | null }>
 }
 
-export type ResultadoEntrada = { resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido'; texto: string; llegadas: { id: string; estado: string; texto: string }[] }
+export type ResultadoEntrada = {
+  resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido' | 'liquidacion' | 'confirmacion' | 'no_es_liquidacion'
+  texto: string
+  llegadas: { id: string; estado: string; texto: string }[]
+}
+
+/** El correo con el que Gmail pide confirmar un reenvío: su código (para enseñarlo y escribirlo en Gmail). */
+export function confirmacionDeReenvio(c: Pick<CorreoResend, 'from' | 'subject' | 'text' | 'html'>): { codigo: string } | null {
+  const de = (c.from ?? '').toLowerCase()
+  const asunto = c.subject ?? ''
+  if (!/forwarding-noreply@google\.com/.test(de) && !/(confirmaci[oó]n de reenv[ií]o|forwarding confirmation)/i.test(asunto)) return null
+  const codigo = asunto.match(/#(\d{6,12})/)?.[1] ?? `${c.text ?? ''} ${(c.html ?? '').replace(/<[^>]+>/g, ' ')}`.match(/(?:c[oó]digo de confirmaci[oó]n|confirmation code)\D{0,20}(\d{6,12})/i)?.[1]
+  return codigo ? { codigo } : null
+}
+
+/** El resumen mensual que Uber adjunta al primero del mes (monthly_statement_<Mes>_<Año>.pdf). */
+export const esResumenMensual = (a: Pick<AdjuntoResend, 'filename' | 'content_type'>) =>
+  /^monthly_statement_[a-z]+_\d{4}\.pdf$/i.test(a.filename ?? '') || (/monthly_statement/i.test(a.filename ?? '') && /pdf/i.test(a.content_type ?? ''))
+export const rutaLiquidacion = (accountId: string, emailId: string, nombre: string) =>
+  `${accountId}/_liquidaciones/${emailId.replace(/[^A-Za-z0-9-]/g, '')}/${nombre}`
 
 export async function recibirCorreo(c: CorreoResend, p: PuertoEntrada): Promise<ResultadoEntrada> {
   const dirs = direccionesDeFacturas(c)
@@ -184,6 +220,14 @@ export async function recibirCorreo(c: CorreoResend, p: PuertoEntrada): Promise<
     await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'apagada', detalle: {} })
     return { resultado: 'apagada', texto: `La dirección ${destino.direccion} está apagada: queda apuntado y no se lee.`, llegadas: [] }
   }
+
+  // Gmail pide confirmar el reenvío (en las dos clases): se apunta con su código.
+  const conf = confirmacionDeReenvio(c)
+  if (conf) {
+    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'confirmacion', detalle: { codigo: conf.codigo } })
+    return { resultado: 'confirmacion', texto: `Gmail pide confirmar el reenvío a ${destino.direccion}: el código es ${conf.codigo}. Escríbelo en Gmail.`, llegadas: [] }
+  }
+  if (destino.tipo === 'liquidaciones') return recibirLiquidacion(c, { ...destino }, base, p)
 
   const { tomar, dejar } = clasificarAdjuntos(await p.adjuntos(c.email_id))
   const llegadas: ResultadoEntrada['llegadas'] = []
@@ -213,4 +257,37 @@ export async function recibirCorreo(c: CorreoResend, p: PuertoEntrada): Promise<
     ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ninguna factura${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarla.`
   return { resultado: 'recibido', texto, llegadas }
+}
+
+// ── Las liquidaciones ────────────────────────────────────────────────────────
+
+async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccion: string },
+  base: { emailId: string; to: string; from: string | null; subject: string | null }, p: PuertoEntrada): Promise<ResultadoEntrada> {
+  if (!p.liquidacion) throw new Error('La función no sabe registrar liquidaciones.')
+  const cuerpo = c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id) : { html: null, text: null }
+  let resumen: ResumenUber
+  try {
+    resumen = leerResumenUber({ subject: c.subject, html: cuerpo.html, text: cuerpo.text })
+  } catch (x) {
+    if (!(x instanceof NoEsResumenUber)) throw x
+    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'no_es_liquidacion', detalle: { motivo: x.message } })
+    return { resultado: 'no_es_liquidacion', texto: `${x.message} Queda apuntado y no se lee: por ahora solo se leen los resúmenes de pagos de Uber Eats.`, llegadas: [] }
+  }
+  // El resumen del mes, si viene: se guarda con la liquidación.
+  let adjunto: { ruta: string; nombre: string; sha256: string } | null = null
+  const mensual = (await p.adjuntos(c.email_id)).find((a) => esResumenMensual(a) && a.download_url && (a.size ?? 0) <= MAX_BYTES)
+  if (mensual?.download_url) {
+    const nombre = nombreSeguro(mensual.filename, 'application/pdf')
+    const bytes = await p.bajar(mensual.download_url)
+    if (bytes.length <= MAX_BYTES) {
+      const ruta = rutaLiquidacion(destino.accountId, c.email_id, nombre)
+      await p.subir(ruta, bytes, 'application/pdf')
+      adjunto = { ruta, nombre, sha256: await p.sha256(bytes) }
+    }
+  }
+  const r = await p.liquidacion({ companyId: destino.companyId, datos: paraRegistrar(resumen, { emailId: c.email_id, adjunto }) })
+  // Al registro, solo ids, recuentos y estados: nunca importes ni nombres.
+  await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'liquidacion',
+    detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: resumen.avisos.length, mensual: !!adjunto } })
+  return { resultado: 'liquidacion', texto: r.texto, llegadas: [] }
 }

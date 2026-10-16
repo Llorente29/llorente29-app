@@ -1,7 +1,8 @@
-# Vuelta atrás de la tanda del céntimo de redondeo en el IVA (modo
-# «vuelta_atras»). Las dos funciones como estaban; no toca ningún asiento:
-# lo validado con el céntimo sigue validado (su número y su huella no se
-# tocan nunca), solo vuelve a parar los siguientes.
-# La anterior de este fichero (E05): tests/conta/produccion/vuelta-atras-e05-catcher-20261015.txt.
-cuenta: scripts/conta/produccion/cuentas/centimo-iva.sql
-supabase/vuelta-atras/20261113T0100_c06b_centimo_iva.down.sql
+# Vuelta atrás de la tanda D01 de las liquidaciones por correo (modo
+# «vuelta_atras»), en orden inverso. Cada fichero PARA, sin tocar nada, si ya
+# hay algo que se perdería (la dirección encendida o con correos; liquidaciones
+# leídas de un correo, direcciones de liquidaciones o facturas de comisión).
+# La anterior de este fichero (C06b): tests/conta/produccion/vuelta-atras-c06b-centimo-iva-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-liquidaciones.sql
+supabase/vuelta-atras/20261113T0110_d01_liquidaciones_direccion_foodint.down.sql
+supabase/vuelta-atras/20261113T0100_d01_liquidaciones_correo.down.sql
