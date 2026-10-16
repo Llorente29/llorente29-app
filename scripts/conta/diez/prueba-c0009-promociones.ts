@@ -115,13 +115,46 @@ try {
     di('diez.promocion_al_debe', lado('70009002', 'Debe') === 909 || lado('70009002', 'Haber') === -909)
     di('diez.envio_al_haber', lado('70500001', 'Haber') === 318)
     di('diez.venta_al_haber', lado('70000002', 'Haber') === 4545)
-    di('diez.477_al_haber_la_cuota', lado('47700010', 'Haber') === n2(fd.CuotaIVA1))
+    // La 477 la elige Diez por el tipo de IVA (R13: en la C0009, la 47700000);
+    // la factura no tiene campo para ella. Se mira la familia 477 entera y se
+    // dice cuál es, como número.
+    const c477 = [...new Set(det.filter((d) => String(d.Cuenta).startsWith('477')).map((d) => String(d.Cuenta)))]
+    const ladoFamilia = (pref: string, k: 'Debe' | 'Haber') => det.filter((d) => String(d.Cuenta).startsWith(pref)).reduce((t, d) => t + n2(d[k]), 0)
+    di('diez.477_al_haber_la_cuota', ladoFamilia('477', 'Haber') === n2(fd.CuotaIVA1) && ladoFamilia('477', 'Debe') === 0)
+    di('diez.477_lineas', det.filter((d) => String(d.Cuenta).startsWith('477')).length)
+    di('diez.477_subcuentas', c477.length)
+    if (c477.length === 1 && /^\d+$/.test(c477[0])) di('diez.477_cuenta', Number(c477[0]))
+    di('diez.477_es_la_de_folvy', c477.length === 1 && c477[0] === '47700010')
     const an = await c.get<unknown>(`/api/analitica/asiento/2026/1/${doc}`)
     const filas = (Array.isArray(an) ? an : an && typeof an === 'object' ? [an] : []) as Record<string, unknown>[]
+    const mandada = fd.Analitica as Record<string, unknown>[]
     const clave = (x: Record<string, unknown>) => `${x.Subcuenta}|${x.Grupo}|${x.Subgrupo ?? ''}|${x.Nivel3}|${n2(x.ImporteDebe)}|${n2(x.ImporteHaber)}`
     seccion('analitica')
     di('analitica.filas', filas.length)
-    di('analitica.igual_que_la_mandada', filas.map(clave).sort().join() === (fd.Analitica as Record<string, unknown>[]).map(clave).sort().join())
+    di('analitica.igual_que_la_mandada', filas.map(clave).sort().join() === mandada.map(clave).sort().join())
+    // Fila a fila, por subcuenta: qué campo difiere. Solo sí/no y códigos.
+    const t = (v: unknown) => String(v ?? '').trim()
+    const sinCeros = (v: unknown) => t(v).replace(/^0+(?=\d)/, '')
+    for (const m of mandada) {
+      const k = `an_${t(m.Subcuenta)}`
+      const v = filas.filter((x) => t(x.Subcuenta) === t(m.Subcuenta))
+      di(`${k}.filas_en_diez`, v.length)
+      const x = v[0]
+      if (!x) continue
+      di(`${k}.grupo_igual`, t(x.Grupo) === t(m.Grupo))
+      di(`${k}.nivel3_igual`, t(x.Nivel3) === t(m.Nivel3))
+      di(`${k}.subgrupo_mandado`, t(m.Subgrupo) !== '')
+      di(`${k}.subgrupo_vuelta`, t(x.Subgrupo) !== '')
+      di(`${k}.subgrupo_igual`, t(x.Subgrupo) === t(m.Subgrupo))
+      di(`${k}.subgrupo_igual_sin_ceros`, sinCeros(x.Subgrupo) === sinCeros(m.Subgrupo))
+      if (/^\d+$/.test(t(x.Subgrupo))) di(`${k}.subgrupo_vuelta_numero`, Number(t(x.Subgrupo)))
+      di(`${k}.subgrupo_es_null`, x.Subgrupo === null)
+      di(`${k}.debe_igual`, n2(x.ImporteDebe) === n2(m.ImporteDebe))
+      di(`${k}.haber_igual`, n2(x.ImporteHaber) === n2(m.ImporteHaber))
+      di(`${k}.al_haber_en_negativo`, n2(x.ImporteDebe) === 0 && n2(x.ImporteHaber) === -n2(m.ImporteDebe) && n2(m.ImporteDebe) !== 0)
+      di(`${k}.al_reves`, n2(x.ImporteDebe) === n2(m.ImporteHaber) && n2(x.ImporteHaber) === n2(m.ImporteDebe))
+    }
+    di('analitica.filas_sin_pareja', filas.filter((x) => !mandada.some((m) => t(m.Subcuenta) === t(x.Subcuenta))).length)
     const oct = await c.facturasDelMes(String(fd.FechaFactura).slice(0, 6))
     di('libro.una_sola', new Set(oct.filter((x) => String(x.NumeroFactura) === fd.NumeroFactura && String(x.CuentaCliente) === fd.CuentaCliente).map((x) => String(x.Documento))).size === 1)
   }
