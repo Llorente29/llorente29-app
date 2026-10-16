@@ -78,6 +78,12 @@ paso '10/11 · capturas: solo las de tu frente (C06b, 15/10)'
 # Las de otro frente en tu rama son las que chocan con su PR: cada run las deja
 # en el artefacto, y a la rama solo van las tuyas, fijadas a mano antes del informe.
 node scripts/conta/capturas.mjs comprobar
+
+paso '10b/11 · la plantilla solo se cambia con un fichero que dice quién la lee (W02, 16/10)'
+# Una semilla o un staging/sql nuevo o tocado que nombra una cuenta o un usuario
+# de la plantilla lleva «-- plantilla: <qué> · lo leen: <pruebas>», con todas
+# las pruebas e2e que usan sus ids. El 16/10, 9 de 15 enteras rojas fueron eso.
+node scripts/conta/plantilla.mjs
 if [ "${PEDIR_TANDA:-}" = 1 ]; then
   paso '11/11 · antes de pedir tanda o abrir PR a main: la suite e2e ENTERA en verde en este commit (C06b R6)'
   # En un push solo corre la e2e del frente; la entera se lanza a mano.

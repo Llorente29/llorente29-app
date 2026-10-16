@@ -685,3 +685,43 @@ sobrecargas con el mismo principio podían pisarse. Medido después con la
 consulta buena, no se escondía ninguna diferencia (mismo total). Lo vigila
 `tests/conta/staging/comparar.test.ts`. De cada función roja, el resumen da
 también lo largo de su firma: si una aceptada no casa, se ve por qué.
+
+## La plantilla solo se cambia con un fichero (W02, regla aprobada el 16/10)
+
+**La plantilla de prueba** son las cuentas A, B, C, Diez y las solas, con sus
+siete usuarios. Es lo que copia cada carril y lo que leen las pruebas de todos
+los frentes. El 16/10, **9 de las 15 enteras rojas** fueron datos de la
+plantilla que había cambiado otro frente:
+
+- 7 de `c01b/flujos:161` («409 repetidas»), por una guarda del D01;
+- 2 del NIF de `catcher`.
+
+1. **Solo con un fichero de la rama.** Una semilla de `supabase/seeds/conta` o
+   un `supabase/staging/sql`, aplicado por `aplicar-staging-conta`, que lo
+   registra con su huella. Nunca a mano ni por el conector.
+2. **El fichero dice quién la lee**, en la cabecera:
+   `-- plantilla: <qué cambia> · lo leen: <pruebas de tests/e2e, o «ninguna»>`.
+   Lo comprueba `antes-de-subir.sh` (paso 10b, `scripts/conta/plantilla.mjs`)
+   en todo fichero nuevo o tocado que nombre una cuenta o un usuario de la
+   plantilla. En «lo leen» tienen que estar, por lo menos, las pruebas que
+   nombran alguno de sus ids propios: proveedores, empresas, asientos… Las
+   once cuentas y usuarios base no cuentan, porque salen en casi todas.
+3. **Quien cambia la plantilla arregla las pruebas de los demás que rompe**, en
+   su rama y antes de aplicarlo. Si hace falta ensayarlo, en un carril: es una
+   copia y no toca la plantilla de nadie.
+4. **Las pruebas no fijan lo que la plantilla puede cambiar.** Un NIF, un
+   nombre o un recuento se leen de la semilla, no se escriben en la prueba.
+5. **La huella, cada noche** (job «plantilla» de
+   `comparar-staging-produccion.yml`):
+   - **Qué calcula.** Un md5 por tabla de las filas de la plantilla
+     (`scripts/conta/staging/plantilla_huella.sql`). Lo compara con el de la
+     vez anterior, que guarda la caché de Actions.
+   - **En rojo.** Si una tabla cambia y el historial de staging no, alguien la
+     ha cambiado sin fichero.
+   - **En verde.** Si el historial también ha cambiado, ha entrado un fichero:
+     sale en verde, con las tablas que ha tocado.
+
+**Mientras queden ramas con la e2e de antes**, que escribe en la plantilla sin
+carril, la huella saldrá en rojo cada noche que haya corrido una. Es verdad: la
+plantilla ha cambiado sin fichero. Deja de pasar cuando todas las ramas usen
+carril (#212).
