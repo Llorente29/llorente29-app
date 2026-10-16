@@ -107,7 +107,7 @@ jobs:
           [ "$(cat "$RUNNER_TEMP/g3.txt")" = t ] || { echo "::error::Falla la guarda 3: o no está Foodint, o la sesión no es de solo lectura. No se lee nada."; exit 1; }
           "$PSQL" "$PROD_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/produccion/guarda-lectura.sql > "$RUNNER_TEMP/g4.txt" 2>&1 \
             || { echo "::error::No se ha podido comprobar la guarda 4."; exit 1; }
-          [ ! -s "$RUNNER_TEMP/g4.txt" ] || { echo "::error::Falla la guarda 4: el usuario de producción podría escribir. No se lee nada."; exit 1; }
+          [ -z "$(tr -d "[:space:]" < "$RUNNER_TEMP/g4.txt")" ] || { echo "::error::Falla la guarda 4: el usuario de producción podría escribir. No se lee nada."; exit 1; }
           "$PSQL" "$STAGING_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
             select count(*) from public.accounts where id in ('$FOODINT', '00000000-0000-0000-0000-000000000001')" > "$RUNNER_TEMP/g5.txt" 2>&1 \
             || { echo "::error::No se ha podido comprobar staging."; exit 1; }
