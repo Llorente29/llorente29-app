@@ -2355,8 +2355,8 @@ Pedidos de marcas propias de octubre (del 01 al 15/10, 526 pedidos, todos de Hub
 | **Total** | | **526** | **264** | **1.141,83 €** | **14** | **42,00 €** |
 
 - **Casi todo el envío es de reparto propio.** Hay **8 pedidos con envío que repartió la plataforma**, que suman 33,47 €: eso es lo que irá a «Por aclarar», abajo.
-- **26 pedidos de reparto propio sin envío** (1 de Glovo y 26 de Uber): envío gratis para el cliente. No hay nada que apuntar.
-- **La celda de hoy no siempre es la del día del pedido:** 29 pedidos de octubre tienen hoy una celda distinta de lo que guardaron al entrar. Manda lo guardado, que es lo que pasó ese día.
+- **27 pedidos de reparto propio sin envío** (1 de Glovo y 26 de Uber): envío gratis para el cliente. No hay nada que apuntar.
+- **La celda de hoy no siempre es la del día del pedido:** 30 pedidos de octubre tienen hoy una celda distinta de lo que guardaron al entrar. Manda lo guardado, que es lo que pasó ese día.
 - **En los 59 asientos validados de octubre** los 1.183,83 € de cargos (envío + pedido pequeño) están **dentro de la venta**:
   - van en la 7000000x de su marca, con IVA al 10 %;
   - los 526 pedidos llevan «Base calculada», porque HubRise no trae la base, y se calcula del total, cargos incluidos, al tipo de las ventas;
