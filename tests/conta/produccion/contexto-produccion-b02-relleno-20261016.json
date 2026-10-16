@@ -1,0 +1,23 @@
+{
+ "_que": "B02 · contexto de producción de la tanda viva T2 «lo ya guardado, legible» (0201), medido en SOLO LECTURA el 16/10 a las 09:23 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow, después de la T1 (la 0200 ya en el historial). bank_movement existe con 108 filas, las 108 de Foodint de los tres Excel de BBVA, sin tipo ni contraparte; nada en el camino del pedido; la 0201 no está en el historial. Es un update sobre filas que existen: pide «autorizo».",
+ "medido": "2026-10-16T09:23Z",
+ "tanda": {
+  "supabase/migrations/20261101T0201_b02_entrada_relleno.sql": "42ef5deb15242b27a2ed629ae97a2b14"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_movement"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.bank_movement": 108
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -3,24 +3,21 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# B02 · T1 «lo que entra» (rama conta/b02-conciliacion, PR #209). Va ANTES de
-# fusionar el #209: su front lee lo que crea la 0200 (counterparty,
-# movement_type y bank_facturas_para_casar). Orden acordado: T1 → fusionar el
-# #209 → T2 (0201) → T3 (0210).
-# La anterior de este fichero (D01, las liquidaciones por correo, 0100 y 0110)
-# ya está en el historial de producción; su copia:
-# tests/conta/produccion/tanda-d01-liquidaciones-20261016.txt.
+# B02 · T2 «lo ya guardado, legible» (rama conta/b02-conciliacion, PR #209).
+# Va DESPUÉS de fusionar el #209. Orden acordado: T1 (aplicada el 16/10, run
+# real sobre d8c07c77) → fusionar el #209 → T2 (0201) → T3 (0210).
+# La anterior de este fichero (B02 · T1, 0200) ya está en el historial de
+# producción; su copia: tests/conta/produccion/tanda-b02-entrada-20261016.txt.
 #
-#   1. 0200 — añade las columnas counterparty y movement_type (nulas) a
-#      bank_movement, _bank_contraparte_limpia y bank_facturas_para_casar
-#      (nuevas), bank_regla_borrar (nueva) y el disparador de la factura
-#      aprobada con su pago casado (AFTER UPDATE OF status en supplier_invoice:
-#      no toca la aprobación de A); cambia con la misma firma bank_importar,
-#      bank_casar y bank_regla_guardar. Todo lo que cambia está declarado en su
-#      cabecera, con su prueba de staging.
+#   1. 0201 — rellena counterparty y movement_type de lo ya subido en los
+#      Excel de BBVA (108 de Foodint, medido el 16/10), sacándolos del texto
+#      del banco con la misma regla que el lector. Es un UPDATE sobre filas
+#      que existen: el analizador pide «autorizo» con su nombre entero. No
+#      toca bank_concept ni ningún asiento (contabilidad cerrada a 30/09/2026:
+#      no escribe nada en el libro). Al final comprueba que no queda ninguno
+#      sin tipo y, si queda, PARA.
 #
-# Ninguna toca el camino del pedido. No escribe ningún asiento (regla de Julio:
-# contabilidad cerrada a 30/09/2026; la T1 no crea ni mueve asientos).
-# Vuelta atrás: tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
+# No toca el camino del pedido.
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-b02-relleno-20261016.txt.
 cuenta: scripts/conta/produccion/cuentas/b02-entrada.sql
-supabase/migrations/20261101T0200_b02_entrada.sql
+supabase/migrations/20261101T0201_b02_entrada_relleno.sql

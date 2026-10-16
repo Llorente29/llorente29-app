@@ -1,0 +1,7 @@
+# Vuelta atrás de la tanda B02 · T2 «lo ya guardado, legible» (modo
+# «vuelta_atras»). Vacía la contraparte y el tipo de los movimientos de los
+# Excel de BBVA. No se pierde nada: salen del texto del banco (bank_concept, que
+# no se toca) y se vuelven a sacar igual aplicando la 0201 otra vez.
+# La anterior de este fichero (B02 · T1): tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/b02-entrada.sql
+supabase/vuelta-atras/20261101T0201_b02_entrada_relleno.down.sql

@@ -1170,12 +1170,12 @@ describe('la tanda de las liquidaciones por correo (D01, 0100 y 0110; ya en el h
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): B02 · T1 «lo que entra» (0200)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda B02 · T1 «lo que entra» (0200; ya en el historial de producción, run real sobre d8c07c77), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-b02-entrada-20261016.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción para ESTE fichero (con su md5): ver el _que del JSON.
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-b02-entrada-20261016.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
   const F = 'supabase/migrations/20261101T0200_b02_entrada.sql'
@@ -1197,13 +1197,49 @@ describe('la tanda de AHORA (manifiesto vivo): B02 · T1 «lo que entra» (0200)
     for (const c of cuentas) expect(existsSync(c), c).toBe(true)
   })
   it('su vuelta atrás para si se perdería algo (casados con diferencia)', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261101T0200_b02_entrada.down.sql'])
     for (const f of atras) expect(readFileSync(f, 'utf8'), f).toMatch(/raise exception/)
   })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): B02 · T2 «lo ya guardado, legible» (0201)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción para ESTE fichero (con su md5): ver el _que del JSON.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const F = 'supabase/migrations/20261101T0201_b02_entrada_relleno.sql'
+
+  it('un fichero, que pide «autorizo» con su nombre entero (es un update sobre filas que existen)', () => {
+    expect(viva).toEqual([F])
+    expect(r.ficheros).toEqual({ [F]: 'autorizo' })
+  })
+  it('solo rellena las dos columnas nuevas, solo en los Excel de BBVA y solo donde están vacías; no toca el texto del banco ni el libro', () => {
+    const sql = readFileSync(F, 'utf8').replace(/--.*$/gm, '')
+    expect(sql.match(/^\s*update\b[\s\S]*?;/gim)).toHaveLength(1)
+    expect(sql).toMatch(/set movement_type = [\s\S]*counterparty = /)
+    expect(sql).toContain("s.format = 'csv:bbva' and m.movement_type is null and m.counterparty is null")
+    expect(sql).not.toMatch(/bank_concept\s*=|journal_|bank_match|insert\b|delete\b/i)
+    expect(sql).toMatch(/raise exception/)
+  })
+  it('declara qué cuenta, y la cuenta mide el tipo y la contraparte', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/b02-entrada.sql'])
+    expect(readFileSync(cuentas[0], 'utf8')).toMatch(/movimientos con tipo[\s\S]*movimientos con contraparte/)
+  })
+  it('su vuelta atrás vacía solo esas dos columnas de los mismos movimientos', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261101T0201_b02_entrada_relleno.down.sql'])
+    const sql = readFileSync(atras[0], 'utf8').replace(/--.*$/gm, '')
+    expect(sql).toMatch(/set movement_type = null, counterparty = null/)
+    expect(sql).toContain("s.format = 'csv:bbva'")
+  })
   it('su copia es el manifiesto vivo, tal cual', () => {
-    expect(readFileSync('tests/conta/produccion/tanda-b02-entrada-20261016.txt', 'utf8')).toBe(readFileSync(MANIFIESTO, 'utf8'))
-    expect(readFileSync('tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt', 'utf8')).toBe(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8'))
+    expect(readFileSync('tests/conta/produccion/tanda-b02-relleno-20261016.txt', 'utf8')).toBe(readFileSync(MANIFIESTO, 'utf8'))
+    expect(readFileSync('tests/conta/produccion/vuelta-atras-b02-relleno-20261016.txt', 'utf8')).toBe(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8'))
   })
 })
 
