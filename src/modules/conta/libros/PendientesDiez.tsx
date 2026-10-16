@@ -28,7 +28,6 @@ import { Chip, ErrorConReintento, Guardado, Hueso } from '@/modules/conta/ui/pie
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { fraseResumen, nombreEnZip, referenciaDiez, type PendienteDiez } from '@/modules/conta/lib/pendientesDiez'
 import { enviarADiez, leerPendientesDiez, marcarAdjuntoEnDiez, urlDocumento, zipPendientesDiez, type AnuladoEnDiez } from '@/modules/conta/services/conDiezService'
-import { MARCA } from '../cuenta/marca'
 
 const ddmmaa = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`
 const mensajeDe = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -90,7 +89,7 @@ export function PendientesDiez() {
         <div className="cx-tarjeta">
           <p role="status" className="cxp-pendientes-resumen"><strong>{fraseResumen(pend, ddmmaa)}</strong></p>
           <p className="cx-ayuda">
-            Diez aún no guarda documentos (falta que Cegid lo active), así que {MARCA.nombre} manda la factura sin su PDF. En Diez, busca cada una por su asiento o su número de factura,
+            Diez aún no guarda documentos (falta que Cegid lo active), así que mando la factura sin su PDF. En Diez, busca cada una por su asiento o su número de factura,
             adjunta el PDF y pulsa «Ya está adjunto». El zip trae cada PDF con el nombre de su referencia en Diez.
           </p>
           {pend.length > 0 && (
@@ -119,8 +118,8 @@ export function PendientesDiez() {
       )}
       {anul.length > 0 && (
         <div className="cx-tarjeta">
-          <h3 className="cx-tarjeta-titulo">Anulados en {MARCA.nombre} que siguen en Diez</h3>
-          <p className="cx-ayuda">Se anularon aquí con su contraasiento, pero en Diez la factura sigue. Al anular, {MARCA.nombre} manda el contraasiento a Diez solo; estos no han llegado. «Enviar el contraasiento» lo vuelve a intentar, y nunca lo manda dos veces.</p>
+          <h3 className="cx-tarjeta-titulo">Anulados aquí que siguen en Diez</h3>
+          <p className="cx-ayuda">Se anularon aquí con su contraasiento, pero en Diez la factura sigue. Al anular, mando yo el contraasiento a Diez; estos no han llegado. «Enviar el contraasiento» lo vuelve a intentar, y nunca lo manda dos veces.</p>
           <ul className="cxp-pendientes" aria-label="Anulados que siguen en Diez">
             {anul.map((a) => (
               <li key={a.entryId} className="cxp-pendiente">

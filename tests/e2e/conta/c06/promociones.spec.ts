@@ -12,6 +12,13 @@
 // siembra nada en la cuenta A, que comparten los frentes. Las líneas y las
 // razones son las que sacan la base y el espejo del front con el ejemplo del
 // diseño (tests/unit/modules/conta/promocionesEnvios.test.ts). Todo inventado.
+//
+// Textos de Libros (C06b, Julio, 16/10): los nombres de cuenta que Diez da en
+// mayúsculas salen con mayúscula inicial; sin marca («Propuesto por mí», «lo
+// preparé yo»); y el «Por aclarar» sale con «Validar asiento» en gris y su
+// motivo ANTES de pulsar. Para eso la red contesta también su resumen del día
+// (sale_ids), conta_cargos_de_pedidos y el código del pedido: lo mismo que lee
+// el freno de la base.
 
 import { mkdirSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
@@ -59,6 +66,7 @@ const ASIENTOS: Record<string, unknown> = {
       porque: 'Por aclarar: 1 pedido con envío y sin saber si es del restaurante (PR-3 · Casa Lola · envío 2,00 € · repartió la plataforma). Se resuelve con la liquidación de esa semana: si la plataforma lo paga, va a Envíos cobrados; si no, sale de la venta y del cobro. Hasta entonces no se valida.' }],
     porque: '3 tickets de tus marcas en Glovo cuadran con lo que cobra, al céntimo; base calculada al 10 %.' }),
 }
+const PEDIDO = 'c06b9300-0000-4000-8000-000000000003'
 const FRENO = 'No se valida: 1 pedido con envío por aclarar: PR-3 (envío 2,00 €, repartió la plataforma). Se resuelve con la liquidación de esa semana.'
 
 async function porLaRed(page: Page) {
@@ -70,6 +78,12 @@ async function porLaRed(page: Page) {
     return (r.request().headers()['accept'] ?? '').includes('vnd.pgrst.object') ? json(r, a) : json(r, a ? [a] : [])
   })
   await page.route(/\/rest\/v1\/rpc\/journal_entry_validar/, (r) => json(r, { code: '23514', details: null, hint: null, message: FRENO }, 400))
+  // Lo que lee la pantalla para decir «Por aclarar» antes de pulsar (lo mismo que el freno).
+  await page.route(/\/rest\/v1\/sales_day_summary\?.*select=sale_ids.*c06b9000/, (r) =>
+    json(r, r.request().url().includes(ACLARAR) ? [{ sale_ids: [PEDIDO] }] : []))
+  await page.route(/\/rest\/v1\/rpc\/conta_cargos_de_pedidos/, (r) =>
+    json(r, [{ id: PEDIDO, descuento: 0, envio: 2, reparto: 'platform_delivery', clase: 'por_aclarar', por_que: 'repartió la plataforma' }]))
+  await page.route(/\/rest\/v1\/sale\?.*c06b9300/, (r) => json(r, [{ id: PEDIDO, platform_order_code: 'PR-3', sold_at: '2026-10-21T20:10:00Z' }]))
 }
 
 test('Libros: el asiento del día con su promoción (al debe) y su envío cobrado, con sus razones y sus citas', async ({ page }) => {
@@ -77,9 +91,16 @@ test('Libros: el asiento del día con su promoción (al debe) y su envío cobrad
   await porLaRed(page)
   await page.goto(`/conta/libros/diario/${CON}`)
   const apuntes = page.getByRole('region', { name: 'Apuntes' })
-  await expect(apuntes).toContainText('PROMOCIONES GLOVO', { timeout: 20_000 })
+  await expect(apuntes).toContainText('Promociones Glovo', { timeout: 20_000 })
   await expect(apuntes).toContainText('70009002')
-  await expect(apuntes).toContainText('ENVÍOS COBRADOS')
+  await expect(apuntes).toContainText('Envíos Cobrados')
+  await expect(apuntes).toContainText('H.P. IVA Repercutido 10%')
+  // El nombre que da Diez en mayúsculas no sale tal cual (el dato guardado no cambia).
+  for (const n of ['PROMOCIONES GLOVO', 'ENVÍOS COBRADOS', 'VENTAS CASA LOLA', 'H.P. IVA REPERCUTIDO']) await expect(apuntes).not.toContainText(n)
+  await expect(page.getByText('Propuesto por mí · Probable')).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Documento' })).toContainText('lo preparé yo')
+  await expect(page.getByRole('button', { name: 'Validar asiento' })).toBeEnabled()
+  await expect(page.getByRole('region', { name: 'Por qué no se valida' })).toHaveCount(0)
   await expect(apuntes).toContainText('70500001')
   await expect(apuntes).toContainText('45,45')
   await expect(apuntes).toContainText('9,09')
@@ -95,15 +116,19 @@ test('Libros: el asiento del día con su promoción (al debe) y su envío cobrad
   expect(await loQueTapanSinPregunta(page, '.cx-principal')).toEqual([])
 })
 
-test('Libros: un asiento «Por aclarar» dice qué pedido y por qué, y al validar no se valida y lo dice (regla 8)', async ({ page }) => {
+test('Libros: un asiento «Por aclarar» dice qué pedido y por qué, con «Validar asiento» en gris y su motivo antes de pulsar', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await porLaRed(page)
   await page.goto(`/conta/libros/diario/${ACLARAR}`)
   const ia = page.getByRole('region', { name: 'Por qué lo propongo así' })
   await expect(ia).toContainText('Por aclarar: 1 pedido con envío', { timeout: 20_000 })
   await expect(ia).toContainText('PR-3 · Casa Lola · envío 2,00 € · repartió la plataforma')
-  await page.getByRole('button', { name: 'Validar asiento' }).click()
-  await expect(page.getByText(FRENO)).toBeVisible()
+  await expect(page.getByText('Propuesto por mí · Duda')).toBeVisible()
+  const validar = page.getByRole('button', { name: 'Validar asiento' })
+  await expect(validar).toBeDisabled()
+  await expect(validar).toHaveAttribute('title', FRENO)
+  await expect(validar).toHaveClass(/cx-boton-sec/)
+  await expect(page.getByRole('status', { name: 'Por qué no se valida' })).toContainText(FRENO)
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
   await page.screenshot({ path: `${DIR}/promociones-por-aclarar-${lado(page)}.png`, fullPage: true })

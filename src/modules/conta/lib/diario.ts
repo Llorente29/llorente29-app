@@ -10,9 +10,9 @@
 // (una ferretería no ve «Plataformas»), pero «Todos» enseña siempre todo,
 // también lo anulado, y cada filtro dice cuántos tiene.
 
-import { euros } from '@/modules/conta/lib/formato'
-import { CON_MARCA } from '../cuenta/marca'
+import { euros, eurosExactos } from '@/modules/conta/lib/formato'
 import { esFirmaAutomatica } from './autor'
+import { nombreEnPantalla } from './nombreCuenta'
 import { NOMBRE_SERIE, cuadre, red2, type Confianza, type OrigenAsiento, type Razon, type Serie } from '@/modules/conta/lib/libro'
 
 export type EstadoAsiento = 'propuesto' | 'borrador' | 'validado' | 'anulado'
@@ -62,6 +62,8 @@ export interface AsientoDiario {
   documento: string | null
   terceroId: string | null
   creadoPor: string | null
+  /** Lo preparó un escritor automático (el cierre del día…): ver lib/autor.ts. */
+  creadoAutomatico?: boolean
   creadoEn: string
   validadoPor: string | null
   /** Lo validó un escritor automático (no una persona): ver lib/autor.ts. */
@@ -153,9 +155,9 @@ export type TonoEstado = 'ambar' | 'verde' | 'azul' | 'neutro' | 'gris'
 export const hechoAutomatico = (a: Pick<AsientoDiario, 'validadoPor' | 'validadoAutomatico'>): boolean =>
   a.validadoAutomatico ?? esFirmaAutomatica(a.validadoPor)
 
-/** Cómo se dice lo automático: «Hecho por Folvy»; con una marca propia, «Automático». */
-const HECHO_AUTOMATICO = CON_MARCA ? 'Automático' : 'Hecho por Folvy'
-const PROPUESTOS_AUTOMATICOS = CON_MARCA ? 'propuestos automáticamente' : 'propuestos por Folvy'
+/** Cómo se dice lo automático, sin marca (Julio, 16/10): en primera persona, como «Por qué lo propongo así». */
+const HECHO_AUTOMATICO = 'Hecho por mí'
+const PROPUESTOS_AUTOMATICOS = 'propuestos por mí'
 
 export function estadoDe(a: AsientoDiario): { texto: string; tono: TonoEstado } {
   if (a.estado === 'propuesto') return { texto: 'Para revisar', tono: 'ambar' }
@@ -172,10 +174,11 @@ export function estadoDe(a: AsientoDiario): { texto: string; tono: TonoEstado } 
  * subcuenta de la empresa, por su nombre («Comisiones de plataformas»); una
  * hoja de serie, por su «qué se apunta aquí» del C02 («Nóminas, en bruto»).
  * El título del BOE va al Mayor y a «Detalle contable». Sin nada de eso, el
- * título (nunca un literal de reserva: regla 30).
+ * título (nunca un literal de reserva: regla 30). Lo que viene de Diez entero en
+ * mayúsculas, con mayúscula inicial (nombreCuenta.ts); lo guardado no cambia.
  */
 export function nombreDeUso(c: { kind: string | null; name: string; plainName: string | null }): string {
-  if (c.kind === 'own' || !c.plainName?.trim()) return c.name
+  if (c.kind === 'own' || !c.plainName?.trim()) return nombreEnPantalla(c.name)
   return c.plainName.trim().replace(/\.$/, '')
 }
 
@@ -415,3 +418,17 @@ export function cuadreMano(lineas: readonly LineaMano[]) {
 }
 
 export const importeMano = (t: string): number => (t.trim() ? numero(t) : 0)
+
+/** C06b (16/10): un pedido del asiento de ventas con su envío por aclarar (conta_cargos_de_pedidos). */
+export interface EnvioPorAclarar { codigo: string; envio: number; porQue: string | null }
+
+/**
+ * Por qué no se puede validar un asiento con envíos por aclarar: el mismo
+ * texto que da la base al intentarlo (el freno de la 20261116T0100), para que
+ * el botón salga en gris diciéndolo antes de pulsar. Sin ninguno, null.
+ */
+export function motivoPorAclarar(xs: readonly EnvioPorAclarar[]): string | null {
+  if (!xs.length) return null
+  const lista = xs.map((x) => `${x.codigo} (envío ${eurosExactos(x.envio)}${x.porQue ? `, ${x.porQue}` : ''})`).join('; ')
+  return `No se valida: ${xs.length} ${xs.length === 1 ? 'pedido' : 'pedidos'} con envío por aclarar: ${lista}. Se resuelve con la liquidación de esa semana.`
+}

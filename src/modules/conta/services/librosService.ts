@@ -14,7 +14,7 @@ import type { Estado, FilaMapeo, LineaModelo, Modelo, SaldoCuenta } from '@/modu
 import type { SaldoPartido } from '@/modules/conta/lib/sumasSaldos'
 import type { AnotacionLibro, Libro } from '@/modules/conta/lib/libroRegistro'
 import type { AsientoCierre } from '@/modules/conta/lib/cierre'
-import { MARCA } from '../cuenta/marca'
+import { nombreEnPantalla } from '@/modules/conta/lib/nombreCuenta'
 
 type Fila = Record<string, unknown>
 const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v))
@@ -80,7 +80,7 @@ export interface SaldoConLocal extends SaldoPartido { companyAccountId: string; 
 export async function saldosCuentas(companyId: string, desde: string, hasta: string, porLocal = false): Promise<SaldoConLocal[]> {
   const filas = (await rpc<Fila[] | null>('conta_saldos_cuentas', { p_company: companyId, p_desde: desde, p_hasta: hasta, p_por_local: porLocal })) ?? []
   return filas.map((f) => ({
-    companyAccountId: String(f.company_account_id), code: String(f.code), name: String(f.name), templateCode: txt(f.template_code),
+    companyAccountId: String(f.company_account_id), code: String(f.code), name: nombreEnPantalla(String(f.name)), templateCode: txt(f.template_code),
     locationId: txt(f.location_id), brandId: txt(f.brand_id),
     inicialDebe: num(f.inicial_debe), inicialHaber: num(f.inicial_haber), aperturaDebe: num(f.apertura_debe), aperturaHaber: num(f.apertura_haber),
     periodoDebe: num(f.periodo_debe), periodoHaber: num(f.periodo_haber), regularizacionDebe: num(f.regularizacion_debe),
@@ -151,9 +151,9 @@ export async function prepararCierreEnBase(companyId: string, fiscalYearId: stri
     if (!a) { ids.push(i === 0 ? regularizacionEnlazada : null); continue }
     const r = await rpc<{ id: string }>('journal_entry_proponer', {
       p_company: companyId,
-      p_entry: { fecha: a.fecha, source_type: a.sourceType, series: a.serie, concepto: a.concepto, confianza: 'seguro', porque: `Preparado por ${MARCA.nombre}: ${a.tipo} del ejercicio (PGC, quinta parte, cuenta 129 y normas de cierre).`,
+      p_entry: { fecha: a.fecha, source_type: a.sourceType, series: a.serie, concepto: a.concepto, confianza: 'seguro', porque: `Lo preparo yo: ${a.tipo} del ejercicio (PGC, quinta parte, cuenta 129 y normas de cierre).`,
         // La marca del generador: con ella y el enlace del ejercicio, el validador no le pide IVA a las 472/477/4751 que deja a cero (0140).
-        razones: [{ decision: 'cierre-del-ejercicio', porque: `Asiento de ${a.tipo} calculado por ${MARCA.nombre} con los saldos del ejercicio.` }] },
+        razones: [{ decision: 'cierre-del-ejercicio', porque: `Asiento de ${a.tipo} calculado por mí con los saldos del ejercicio.` }] },
       p_lines: a.apuntes.map((p) => ({ cuenta: p.cuenta, debe: p.debe || undefined, haber: p.haber || undefined, concepto: p.concepto, local_id: p.localId ?? '', marca_id: p.marcaId ?? '', comun: p.comun })),
       p_summary: null, p_quien_nombre: quien,
     })
@@ -343,7 +343,7 @@ export async function movimientos(accountId: string, companyId: string, desde: s
     const filas = (data ?? []) as Fila[]
     for (const f of filas) fuera.push({
       entryId: String(f.entry_id), serie: num(f.series), numero: numO(f.number), fecha: String(f.entry_date), concepto: String(f.concept ?? ''),
-      cuenta: String(f.account_code), nombreCuenta: String(f.account_name), plantilla: txt(f.template_code), debe: num(f.debit), haber: num(f.credit),
+      cuenta: String(f.account_code), nombreCuenta: nombreEnPantalla(String(f.account_name)), plantilla: txt(f.template_code), debe: num(f.debit), haber: num(f.credit),
       localId: txt(f.location_id), marcaId: txt(f.brand_id), comun: f.is_common === true, origen: String(f.source_type), documento: txt(f.document_ref),
     })
     if (filas.length < lote) break
@@ -388,7 +388,7 @@ export async function cuentasDeSuplidos(accountId: string, companyId: string): P
     .eq('account_id', accountId).eq('company_id', companyId).eq('role', 'suplidos')
   if (error) throw new Error(mensaje('No se han podido leer las cuentas de suplidos', error))
   const m = new Map<string, string>()
-  for (const f of (data ?? []) as Fila[]) { const ca = f.company_account as Fila | null; if (ca) m.set(String(ca.code), String(ca.name)) }
+  for (const f of (data ?? []) as Fila[]) { const ca = f.company_account as Fila | null; if (ca) m.set(String(ca.code), nombreEnPantalla(String(ca.name))) }
   return [...m.entries()].map(([code, name]) => ({ code, name })).sort((a, b) => a.code.localeCompare(b.code))
 }
 

@@ -17,7 +17,6 @@
 // en Diez no se queda en «Anulado» a secas: falta su contraasiento allí.
 // Respuesta 8: con su contraasiento ya en Diez, «Anulado en Folvy y en Diez».
 
-import { MARCA } from '../cuenta/marca'
 import { PATRONES, PATRONES_PENDIENTES } from '../../../../supabase/functions/_shared/diezFactura.ts'
 import { cent, deCent } from './libro'
 
@@ -81,7 +80,7 @@ export function motivoSinPatron(canal: string): string | null {
  */
 export function numerosFolvyDiez(a: { numero: number | null }, d: ConDiez | null | undefined): string | null {
   if (a.numero == null) return null
-  const propio = `${MARCA.nombre} ${a.numero.toLocaleString('es-ES')}`
+  const propio = `Aquí ${a.numero.toLocaleString('es-ES')}`
   if (!d) return propio
   const e = d.envio
   if (!e || (e.status !== 'enviado' && e.status !== 'enlazado') || e.numero == null) return `${propio} · aún no está en Diez`
@@ -96,10 +95,10 @@ export function estadoDiez(a: { estado: string }, d: ConDiez, o: { enviando?: bo
     const e = d.envio
     const c = d.contraasiento
     if (e && (e.status === 'enviado' || e.status === 'enlazado') && c && (c.status === 'enviado' || c.status === 'enlazado')) {
-      return { texto: `Anulado en ${MARCA.nombre} y en Diez · ${e.serie}/${e.numero} anulada con ${c.serie}/${c.numero}`, corto: `Anulado · en Diez con ${c.serie}/${c.numero}`, tono: 'neutro', reintentar: false, enDiez: true }
+      return { texto: `Anulado aquí y en Diez · ${e.serie}/${e.numero} anulada con ${c.serie}/${c.numero}`, corto: `Anulado · en Diez con ${c.serie}/${c.numero}`, tono: 'neutro', reintentar: false, enDiez: true }
     }
     if (e && (e.status === 'enviado' || e.status === 'enlazado')) {
-      return { texto: `Anulado en ${MARCA.nombre} · en Diez sigue ${e.serie}/${e.numero}: falta su contraasiento en Diez`, corto: `Anulado · sigue en Diez ${e.serie}/${e.numero}`, tono: 'ambar', reintentar: false, enDiez: true }
+      return { texto: `Anulado aquí · en Diez sigue ${e.serie}/${e.numero}: falta su contraasiento en Diez`, corto: `Anulado · sigue en Diez ${e.serie}/${e.numero}`, tono: 'ambar', reintentar: false, enDiez: true }
     }
     return { texto: 'Anulado', corto: 'Anulado', tono: 'neutro', reintentar: false, enDiez: false }
   }
@@ -113,7 +112,7 @@ export function estadoDiez(a: { estado: string }, d: ConDiez, o: { enviando?: bo
   }
   if (!d.documento) return no(FALTA_DOCUMENTO)
   if (e?.error && e.error !== 'enviando') return no(e.error, e.intentos < 3)
-  if (e?.error === 'enviando') return no(`el envío se cortó a medias: al reintentar, ${MARCA.nombre} lo busca antes en Diez y no envía otro`)
+  if (e?.error === 'enviando') return no(`el envío se cortó a medias: al reintentar, lo busco antes en Diez y no envío otro`)
   return no('aún no se ha enviado')
 }
 

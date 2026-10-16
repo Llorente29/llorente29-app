@@ -222,7 +222,8 @@ export async function leerPendientesDiez(accountId: string, companyId: string): 
     const t = ids.slice(i, i + 200)
     const [a, d] = await Promise.all([
       tabla('journal_entry').select('id, concept, entry_date, series, number, status, voided_by_entry_id').eq('account_id', accountId).eq('company_id', companyId).in('id', t),
-      tabla('journal_entry_document').select('entry_id, storage_path, file_name').eq('account_id', accountId).eq('kind', 'resumen_ventas').in('entry_id', t),
+      // C06b (16/10): también el PDF de una recibida (kind factura_recibida, mismo almacén).
+      tabla('journal_entry_document').select('entry_id, storage_path, file_name').eq('account_id', accountId).in('kind', ['resumen_ventas', 'factura_recibida']).in('entry_id', t),
     ])
     if (a.error) throw new Error(mensaje('No se han podido leer los asientos', a.error))
     if (d.error) throw new Error(mensaje('No se han podido leer los documentos', d.error))

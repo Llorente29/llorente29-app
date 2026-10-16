@@ -27,7 +27,6 @@ import type { EjercicioLibros } from '@/modules/conta/services/librosService'
 import {
   aSaldoCuenta, cambiarMapeo, elegirModelo, historialMapeo, leerLineas, leerMapeo, planDeEmpresa, saldosCuentas, volverAlEstandar,
 } from '@/modules/conta/services/librosService'
-import { MARCA } from '../cuenta/marca'
 
 const NOMBRE_MODELO: Record<Modelo, string> = { normal: 'Normal', abreviado: 'Abreviado', pymes: 'Pymes' }
 const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
@@ -72,7 +71,7 @@ export function CuentasAnuales() {
     setOcupado(true); setError(null)
     try {
       await elegirModelo(L.accountId, L.companyId, L.ejercicio.id, m, prop.modelo, { actual: d.datos.actual, anterior: d.datos.anterior, plan: d.datos.plan }, L.quien)
-      setHecho(`Modelo ${NOMBRE_MODELO[m].toLowerCase()} elegido para ${L.ejercicio.code}${m !== prop.modelo ? ` (${MARCA.nombre} proponía el ${NOMBRE_MODELO[prop.modelo].toLowerCase()})` : ''}. El balance y la PyG ya salen con él.`)
+      setHecho(`Modelo ${NOMBRE_MODELO[m].toLowerCase()} elegido para ${L.ejercicio.code}${m !== prop.modelo ? ` (yo proponía el ${NOMBRE_MODELO[prop.modelo].toLowerCase()})` : ''}. El balance y la PyG ya salen con él.`)
       L.recargar()
     } catch (e) { setError(e instanceof Error ? e.message : 'No se ha podido guardar.') } finally { setOcupado(false) }
   }

@@ -46,19 +46,19 @@ describe('cuántos y cuánto (R13)', () => {
 describe('los dos números de un asiento (15/10)', () => {
   const env = (o: Partial<EnvioDiez>): EnvioDiez => ({ status: 'enviado', serie: '1', numero: 1803, factura: 'UBR-XXX-20261001', intentos: 1, error: null, documento: 'adjunto', errorDocumento: null, ...o })
   const con = (envio: EnvioDiez | null): ConDiez => ({ entryId: 'e', canal: 'uber', nombreCanal: 'Uber', documento: null, envio })
-  it('enviado: «Folvy 1804 · Diez 1803»', () => {
-    expect(numerosFolvyDiez({ numero: 1804 }, con(env({})))).toBe('Folvy 1804 · Diez 1803')
+  it('enviado: «Aquí 1804 · Diez 1803»', () => {
+    expect(numerosFolvyDiez({ numero: 1804 }, con(env({})))).toBe('Aquí 1804 · Diez 1803')
   })
   it('validado y sin llegar (el Glovo del 01/10): lo dice', () => {
-    expect(numerosFolvyDiez({ numero: 1803 }, con(env({ status: 'pendiente', numero: null, serie: null })))).toBe('Folvy 1803 · aún no está en Diez')
-    expect(numerosFolvyDiez({ numero: 1803 }, con(null))).toBe('Folvy 1803 · aún no está en Diez')
+    expect(numerosFolvyDiez({ numero: 1803 }, con(env({ status: 'pendiente', numero: null, serie: null })))).toBe('Aquí 1803 · aún no está en Diez')
+    expect(numerosFolvyDiez({ numero: 1803 }, con(null))).toBe('Aquí 1803 · aún no está en Diez')
   })
   it('una recibida, en la serie 2 de Diez: con su serie', () => {
-    expect(numerosFolvyDiez({ numero: 12 }, con(env({ serie: '2', numero: 3176 })))).toBe('Folvy 12 · Diez 2/3176')
+    expect(numerosFolvyDiez({ numero: 12 }, con(env({ serie: '2', numero: 3176 })))).toBe('Aquí 12 · Diez 2/3176')
   })
   it('sin número todavía, nada; sin Diez (no es de una plataforma), solo el propio', () => {
     expect(numerosFolvyDiez({ numero: null }, con(env({})))).toBeNull()
-    expect(numerosFolvyDiez({ numero: 40 }, null)).toBe('Folvy 40')
+    expect(numerosFolvyDiez({ numero: 40 }, null)).toBe('Aquí 40')
   })
 })
 

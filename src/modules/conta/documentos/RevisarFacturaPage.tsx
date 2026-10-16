@@ -156,7 +156,7 @@ export default function RevisarFacturaPage() {
 
           {sinProveedor && <DecirProveedor accountId={accountId} invoiceId={fac.id} alGuardar={() => setVuelta((v) => v + 1)} />}
 
-          <ComoSeApunta fac={fac} vista={vista.datos} error={vista.error} movil={movil} solo={producto.solo} />
+          <ComoSeApunta fac={fac} vista={vista.datos} error={vista.error} movil={movil} />
 
           <div role="status" aria-live="polite">
             {hecho && <div className={`cx-tarjeta cxr-hecho${hecho.validado ? '' : ' cxr-mal'}`}><strong>{hecho.texto}</strong>
@@ -255,8 +255,8 @@ function BandaFactura({ fac }: { fac: FacturaRevisar }) {
   )
 }
 
-function ComoSeApunta({ fac, vista, error, movil, solo }: {
-  fac: FacturaRevisar; vista: Awaited<ReturnType<typeof verPropuestaFactura>> | null; error: string | null; movil: boolean; solo: boolean
+function ComoSeApunta({ fac, vista, error, movil }: {
+  fac: FacturaRevisar; vista: Awaited<ReturnType<typeof verPropuestaFactura>> | null; error: string | null; movil: boolean
 }) {
   const lineas = vista?.propuesta ? vista.propuesta.lineas : []
   // El nombre se acorta si no cabe; el código, nunca: una cuenta siempre con su código al lado.
@@ -302,7 +302,7 @@ function ComoSeApunta({ fac, vista, error, movil, solo }: {
               ))}
             </div>
           )}
-          <p className="cxr-apoyo" style={{ margin: '8px 0 0' }}>Facturas recibidas{fac.recepcion?.local ? ` · ${fac.recepcion.local}` : ''} · {lineaDiez(solo)}</p>
+          <p className="cxr-apoyo" style={{ margin: '8px 0 0' }}>Facturas recibidas{fac.recepcion?.local ? ` · ${fac.recepcion.local}` : ''} · {lineaDiez()}</p>
           {vista.propuesta.avisos.length > 0 && <ul className="cxr-aviso" style={{ margin: '8px 0 0', paddingLeft: 18 }}>{vista.propuesta.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul>}
         </>
       )}

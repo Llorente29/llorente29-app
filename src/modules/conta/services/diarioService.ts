@@ -17,7 +17,7 @@
 // company_account.kind / plain_name / template_code / plan (12/10).
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
-import type { AsientoDiario, ApunteDiario, CierreMes, EstadoAsiento, FuenteCierre, LineaMano } from '@/modules/conta/lib/diario'
+import type { AsientoDiario, ApunteDiario, CierreMes, EnvioPorAclarar, EstadoAsiento, FuenteCierre, LineaMano } from '@/modules/conta/lib/diario'
 import { finDeMes, importeMano, nombreDeUso } from '@/modules/conta/lib/diario'
 import type { Confianza, OrigenAsiento, Razon, Serie } from '@/modules/conta/lib/libro'
 import { apuntarCorreccion } from '@/modules/conta/services/propuestasLibroService'
@@ -60,7 +60,7 @@ function aAsiento(f: Fila): AsientoDiario {
     id: String(f.id), serie: n(f.series) as Serie, numero: f.number === null ? null : n(f.number), fecha: String(f.entry_date), concepto: String(f.concept),
     origen: String(f.source_type) as OrigenAsiento, origenId: s(f.source_id), estado: String(f.status) as EstadoAsiento,
     confianza: s(f.confidence) as Confianza | null, porque: s(f.reason), razones, documento: s(f.document_ref), terceroId: s(f.party_id),
-    creadoPor: autorVisible(s(f.created_by_name)), creadoEn: String(f.created_at), validadoPor: autorVisible(s(f.validated_by_name)), validadoEn: s(f.validated_at),
+    creadoPor: autorVisible(s(f.created_by_name)), creadoAutomatico: esFirmaAutomatica(s(f.created_by_name)), creadoEn: String(f.created_at), validadoPor: autorVisible(s(f.validated_by_name)), validadoEn: s(f.validated_at),
     validadoAutomatico: esFirmaAutomatica(s(f.validated_by_name)),
     anuladoPor: autorVisible(s(f.voided_by_name)), anuladoEn: s(f.voided_at), motivoAnulacion: s(f.void_reason), anuladoCon: s(f.voided_by_entry_id), anulaA: s(f.reverses_entry_id),
     traido: f.external_program ? { programa: String(f.external_program), serie: s(f.external_series), numero: s(f.external_number) } : null,
@@ -324,4 +324,26 @@ export async function guardarAMano(accountId: string, companyId: string, ejercic
     throw new Error(mensaje('No se ha guardado el asiento', r.error))
   }
   return id
+}
+
+/**
+ * C06b (16/10): los pedidos de un asiento de ventas del día con su envío por
+ * aclarar. Lee lo mismo que el freno de la base al validar (su resumen del día
+ * y conta_cargos_de_pedidos), para que la pantalla lo diga antes de pulsar.
+ */
+export async function enviosPorAclarar(accountId: string, entryId: string): Promise<EnvioPorAclarar[]> {
+  const { data: d, error } = await tabla('sales_day_summary').select('sale_ids').eq('account_id', accountId).eq('entry_id', entryId)
+  if (error) throw new Error(mensaje('No se ha podido leer el resumen del día', error))
+  const ids = [...new Set(((d ?? []) as Fila[]).flatMap((f) => (Array.isArray(f.sale_ids) ? (f.sale_ids as unknown[]).map(String) : [])))]
+  if (!ids.length) return []
+  const cargos = ((await rpc('conta_cargos_de_pedidos', { p_account: accountId, p_sales: ids })) ?? []) as Fila[]
+  const aclarar = cargos.filter((c) => c.clase === 'por_aclarar')
+  if (!aclarar.length) return []
+  const { data: v, error: ev } = await tabla('sale').select('id, platform_order_code, sold_at').eq('account_id', accountId).in('id', aclarar.map((c) => String(c.id)))
+  if (ev) throw new Error(mensaje('No se han podido leer los pedidos', ev))
+  const pedido = new Map(((v ?? []) as Fila[]).map((f) => [String(f.id), f]))
+  return aclarar
+    .map((c) => ({ c, p: pedido.get(String(c.id)) }))
+    .sort((a, b) => String(a.p?.sold_at ?? '').localeCompare(String(b.p?.sold_at ?? '')))
+    .map(({ c, p }) => ({ codigo: s(p?.platform_order_code) ?? String(c.id).slice(0, 8), envio: n(c.envio), porQue: s(c.por_que) }))
 }

@@ -13,7 +13,6 @@
 //   · Las cuentas, siempre nombre · código.
 
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
-import { MARCA } from '@/modules/conta/cuenta/marca'
 
 /**
  * R6 · 'en_diez': una recepción de antes del corte cuyo papel es una factura. La
@@ -300,9 +299,11 @@ export function vencimientoAEnsenar(vence: string | null, fecha: string | null, 
 /**
  * R5 · 2 · La línea de debajo de «Cómo se apunta». Diez no guarda documentos
  * (Cegid aún no ha activado su almacén): no se promete que irá «con su PDF».
+ * C06b (16/10): la recibida ya va a Diez al apuntarla, sin el PDF; esta página
+ * no sabe si la empresa tiene Diez, así que no lo da por hecho. Sin marca.
  */
-export const lineaDiez = (solo = false): string =>
-  `Se apunta ${solo ? 'aquí' : `en ${MARCA.nombre}`} · a Diez irá cuando Cegid active los documentos`
+export const lineaDiez = (): string =>
+  'Se apunta aquí · si va a Diez, va sin el PDF: se adjunta allí a mano'
 
 /** R5 · 5 · El tono de la banda de N23: verde solo si ya está apuntada; si no, ámbar, como su fila en la bandeja. */
 export const tonoDeLaFactura = (asiento: { estado: string } | null): 'verde' | 'ambar' => (asiento?.estado === 'validado' ? 'verde' : 'ambar')

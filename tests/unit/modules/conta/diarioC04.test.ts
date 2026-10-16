@@ -61,7 +61,7 @@ describe('filtros por origen', () => {
 describe('estado, importe y pastillas', () => {
   it('cada estado con su texto y su tono', () => {
     expect(estadoDe(asiento({}))).toEqual({ texto: 'Para revisar', tono: 'ambar' })
-    expect(estadoDe(asiento({ estado: 'validado', validadoPor: 'Folvy (validación automática de ventas)' }))).toEqual({ texto: 'Hecho por Folvy', tono: 'verde' })
+    expect(estadoDe(asiento({ estado: 'validado', validadoPor: 'Folvy (validación automática de ventas)' }))).toEqual({ texto: 'Hecho por mí', tono: 'verde' })
     expect(estadoDe(asiento({ estado: 'validado', validadoPor: 'Ana' })).texto).toBe('Validado')
     expect(estadoDe(asiento({ estado: 'anulado' })).tono).toBe('gris')
     expect(estadoDe(asiento({ estado: 'borrador' })).texto).toBe('Borrador')
@@ -104,7 +104,7 @@ describe('las cuatro cifras y el mes', () => {
     expect(c.asientosMes).toBe(2)
     expect(c.apoyoAsientos).toBe('1 de ventas del día · 1 factura')
     expect(c.revisar).toBe(2)
-    expect(c.apoyoRevisar).toBe('1 propuestos por Folvy · 1 borradores')
+    expect(c.apoyoRevisar).toBe('1 propuestos por mí · 1 borradores')
     expect(c.resultado).toBe(1234.5)
     expect(c.apoyoResultado).toBe('Norte +1.500 · Sur −266')
   })

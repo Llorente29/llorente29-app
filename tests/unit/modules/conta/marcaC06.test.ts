@@ -97,7 +97,7 @@ describe('quién lo hizo: persona o automático', () => {
     expect(hechoAutomatico(asiento({ validadoAutomatico: true, validadoPor: 'automático' }))).toBe(true)
     expect(hechoAutomatico(asiento({ validadoAutomatico: false, validadoPor: 'Folvy (algo)' }))).toBe(false)
     expect(hechoAutomatico(asiento({ validadoPor: 'Folvy (validación automática de ventas)' }))).toBe(true)
-    expect(estadoDe(asiento({ validadoPor: 'Folvy (validación automática de ventas)' })).texto).toBe('Hecho por Folvy')
+    expect(estadoDe(asiento({ validadoPor: 'Folvy (validación automática de ventas)' })).texto).toBe('Hecho por mí')
   })
 })
 
@@ -114,8 +114,6 @@ describe('los errores de la base dicen la marca', () => {
 // tiene que ir por la marca (src/modules/conta/cuenta/marca.ts).
 describe('contabilidad no escribe «Folvy» a mano', () => {
   const PERMITIDAS: [string, RegExp][] = [
-    ['lib/diario.ts', /CON_MARCA \? 'Automático' : 'Hecho por Folvy'|CON_MARCA \? 'propuestos automáticamente' : 'propuestos por Folvy'/],
-    ['libro/AsientoPage.tsx', /MARCA\.id === 'folvy' \? 'Propuesto por Folvy'/],
     // M01: «Volver a Folvy» vive en el marco nuevo, en el menú del usuario y en la hoja del móvil (detrás de `!solo`).
     ['marco/nuevo/BarraSuperior.tsx', /Volver a Folvy/],
     ['marco/nuevo/BarraInferior.tsx', /Volver a Folvy/],

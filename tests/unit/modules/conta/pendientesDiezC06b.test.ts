@@ -41,13 +41,13 @@ describe('el estado con Diez, en palabras', () => {
   it('si adjuntarlo FALLÓ, sigue sin estar en Diez (el freno de R15)', () => {
     expect(estadoDiez({ estado: 'validado' }, con(envio({ documento: 'fallo' })))).toMatchObject({ texto: 'No ha llegado a Diez: falta el documento', enDiez: false })
   })
-  it('anulado en Folvy y en Diez: lo dice, en ámbar (no «Anulado» a secas)', () => {
-    expect(estadoDiez({ estado: 'anulado' }, con(envio()))).toMatchObject({ texto: expect.stringMatching(/^Anulado en .* · en Diez sigue 1\/1801: falta su contraasiento en Diez$/), tono: 'ambar' })
+  it('anulado aquí y en Diez: lo dice, en ámbar (no «Anulado» a secas)', () => {
+    expect(estadoDiez({ estado: 'anulado' }, con(envio()))).toMatchObject({ texto: expect.stringMatching(/^Anulado aquí · en Diez sigue 1\/1801: falta su contraasiento en Diez$/), tono: 'ambar' })
     expect(estadoDiez({ estado: 'anulado' }, con(null))).toMatchObject({ texto: 'Anulado', tono: 'neutro' })
   })
-  it('R8: con su contraasiento ya en Diez, «Anulado en … y en Diez», sin ámbar; si el contraasiento no ha llegado, sigue en ámbar', () => {
+  it('R8: con su contraasiento ya en Diez, «Anulado aquí y en Diez», sin ámbar; si el contraasiento no ha llegado, sigue en ámbar', () => {
     const anulado = { ...con(envio()), contraasiento: envio({ numero: 1802, factura: 'UBR-ALC-20261001-ANUL', documento: null }) }
-    expect(estadoDiez({ estado: 'anulado' }, anulado)).toMatchObject({ texto: expect.stringMatching(/^Anulado en .* y en Diez · 1\/1801 anulada con 1\/1802$/), tono: 'neutro', enDiez: true })
+    expect(estadoDiez({ estado: 'anulado' }, anulado)).toMatchObject({ texto: expect.stringMatching(/^Anulado aquí y en Diez · 1\/1801 anulada con 1\/1802$/), tono: 'neutro', enDiez: true })
     const sinLlegar = { ...con(envio()), contraasiento: envio({ status: 'pendiente', serie: null, numero: null, documento: null, error: 'Diez no ha aceptado el contraasiento' }) }
     expect(estadoDiez({ estado: 'anulado' }, sinLlegar)).toMatchObject({ texto: expect.stringMatching(/falta su contraasiento en Diez$/), tono: 'ambar' })
   })

@@ -62,7 +62,7 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   // Estados: lo propuesto, lo hecho por Folvy, lo anulado.
   const ventas = page.getByRole('button', { name: /Ventas del día · Norte Centro/ })
   await expect(ventas.filter({ hasText: 'Para revisar' })).toHaveCount(1)
-  await expect(ventas.filter({ hasText: 'Hecho por Folvy' })).toHaveCount(1)
+  await expect(ventas.filter({ hasText: 'Hecho por mí' })).toHaveCount(1)
   await expect(page.getByRole('button', { name: /Publicidad en la plataforma · octubre/ }).getByText('Anulado')).toBeVisible()
   // La marca cedida, dicha.
   await expect(page.getByRole('button', { name: /Liquidación Plataforma Norte/ }).getByText('Brasa Prestada · cedida')).toBeVisible()
@@ -123,14 +123,14 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
 
   if (lado(page) === 'ordenador') {
     // La fila se despliega en sus apuntes.
-    await ventas.filter({ hasText: 'Hecho por Folvy' }).click()
+    await ventas.filter({ hasText: 'Hecho por mí' }).click()
     await expect(page.getByRole('link', { name: '47700010' }).first()).toBeVisible()
     await expect(page.getByText('al Haber').first()).toBeVisible()
     await capturar(page, 'diario-abierto')
   }
   // Para revisar: solo lo que espera, sin esconder el resto (Todos sigue con todo).
   await page.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
-  await expect(page.getByRole('button', { name: /Ventas del día/ }).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /Ventas del día/ }).filter({ hasText: 'Hecho por mí' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Alquiler Norte Mercado · octubre/ })).toBeVisible()
 })
 
@@ -189,7 +189,7 @@ test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable',
   vigilar(page)
   await page.goto('/conta/libros/diario')
   await abrirAsiento(page, 'Liquidación Plataforma Norte · 16–30 sep')
-  await expect(page.getByText('Propuesto por Folvy · Seguro')).toBeVisible()
+  await expect(page.getByText('Propuesto por mí · Seguro')).toBeVisible()
   await expect(page.getByText('Serie Banco')).toBeVisible()
   const porque = page.getByRole('region', { name: 'Por qué lo propongo así' })
   await expect(porque.getByText('Brasa Prestada va al socio, no a tus ventas')).toBeVisible()

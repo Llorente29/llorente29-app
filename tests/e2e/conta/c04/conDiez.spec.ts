@@ -64,7 +64,7 @@ test('A · un asiento de ventas de Glovo: «Con Diez» dice dónde está y qué 
   const tarjeta = page.getByRole('region', { name: 'Con Diez' })
   await expect(tarjeta).toBeVisible()
   await expect(tarjeta.getByRole('status')).toHaveText('Propuesto')
-  await expect(tarjeta.getByText(/Al validarlo, Folvy guarda su «Resumen de ventas» y lo envía a Diez con la factura/)).toBeVisible()
+  await expect(tarjeta.getByText(/Al validarlo, guardo su «Resumen de ventas» y lo envío a Diez con la factura/)).toBeVisible()
   // Sin documento todavía: ni «Ver documento» ni «Reintentar».
   await expect(tarjeta.getByRole('button')).toHaveCount(0)
   // Los dos botones de arriba: validar solo, o validar y enviar.

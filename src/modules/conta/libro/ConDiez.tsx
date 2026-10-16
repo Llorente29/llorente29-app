@@ -6,7 +6,6 @@
 // documento» y «Reintentar») y el chip de la fila. Caben tal cual en la
 // pantalla N16 «Libros › Con Diez», cuando toque.
 
-import { MARCA } from '../cuenta/marca'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaLibros } from '@/config/navegacion'
@@ -16,6 +15,7 @@ import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import { motivoSinPatron, resumenSeleccion, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
 import { textoVarios, type PasoVarios } from '@/modules/conta/lib/enviarVarios'
 import { urlDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
+import { esFirmaAutomatica } from '@/modules/conta/lib/autor'
 
 /** `noSeEnvia`: por qué no se puede mandar hoy (sale en la lista, sin marcar y sin poder marcarse). */
 export interface CandidatoDiez { id: string; concepto: string; fecha: string; estado: string; cobro: number; estadoDiez: EstadoDiez; noSeEnvia?: string | null }
@@ -67,10 +67,10 @@ export function TarjetaDiez({ a, d, e, quien, alHacer, alFallar }: {
       {d.envio?.errorDocumento && !e.enDiez && <p className="cx-ayuda">El documento: {d.envio.errorDocumento}</p>}
       <p className="cx-ayuda">
         {d.documento
-          ? `Su documento, el «Resumen de ventas» de ${d.nombreCanal}, guardado en ${MARCA.nombre} el ${diaMesCorto(d.documento.creadoEn.slice(0, 10))}${d.documento.creadoPor ? ` por ${d.documento.creadoPor}` : ''}.`
+          ? `Su documento, el «Resumen de ventas» de ${d.nombreCanal}, guardado aquí el ${diaMesCorto(d.documento.creadoEn.slice(0, 10))}${d.documento.creadoPor ? (esFirmaAutomatica(d.documento.creadoPor) ? ', lo guardé yo' : ` por ${d.documento.creadoPor}`) : ''}.`
           : a.estado === 'validado' ? 'Aún no tiene su documento guardado: sin él no se da por enviado.'
             : motivoSinPatron(d.canal) ? `No se puede enviar a Diez todavía: ${motivoSinPatron(d.canal)}.`
-              : `Al validarlo, ${MARCA.nombre} guarda su «Resumen de ventas» y lo envía a Diez con la factura.`}
+              : 'Al validarlo, guardo su «Resumen de ventas» y lo envío a Diez con la factura.'}
       </p>
       <div className="cxd-dialogo-acciones">
         {d.documento && <VerDocumento ruta={d.documento.ruta} alFallar={alFallar} />}
@@ -126,7 +126,7 @@ export function EnviarADiezDialogo({ candidatos, quien, alCerrar, alTerminar }: 
   }
   return (
     <Dialogo titulo="Validar y enviar a Diez" alCerrar={() => { if (paso === null) alCerrar() }}>
-      <p className="cx-ayuda">Cada asiento se valida con su «Resumen de ventas» guardado en {MARCA.nombre} y se envía a Diez con su factura. Van por fecha, uno detrás de otro. Si uno se valida y no llega a Diez, se para ahí y los siguientes se quedan como están.</p>
+      <p className="cx-ayuda">Cada asiento se valida con su «Resumen de ventas» guardado aquí y se envía a Diez con su factura. Van por fecha, uno detrás de otro. Si uno se valida y no llega a Diez, se para ahí y los siguientes se quedan como están.</p>
       <ul className="cxd-diez-lista" aria-label="Asientos para validar y enviar">
         {candidatos.map((c) => (
           <li key={c.id}>

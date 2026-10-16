@@ -175,7 +175,7 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
       expect(await c.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && getComputedStyle(el).textOverflow !== 'ellipsis')).toBe(true)
       await expect(c).toContainText(/· \d{8}/)
     }
-    await expect(comoN23).toContainText('a Diez irá cuando Cegid active los documentos')
+    await expect(comoN23).toContainText('si va a Diez, va sin el PDF: se adjunta allí a mano')
     await expect(comoN23).toContainText('Gasto e IVA')
     await expect(comoN23).toContainText('A pagar')
   }

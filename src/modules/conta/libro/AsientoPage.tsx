@@ -20,19 +20,22 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
-import { deDondeSale, estadoDe, estadoMes, marcaNegativoDiez, mesDe, nombreMes, pastillasDeLinea, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
+import { deDondeSale, estadoDe, estadoMes, marcaNegativoDiez, mesDe, motivoPorAclarar, nombreMes, pastillasDeLinea, type AsientoDiario, type CierreMes, type EnvioPorAclarar } from '@/modules/conta/lib/diario'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
 import {
-  cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
+  cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, enviosPorAclarar, leerAsiento, leerCierres, validar, type CuentaPlan,
 } from '@/modules/conta/services/diarioService'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
-import { MARCA } from '../cuenta/marca'
 import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
 import { estadoDiez, motivoSinPatron, numerosFolvyDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 import { noSeValida } from '@/modules/conta/lib/validarConPdf'
 
-interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
+interface Datos {
+  asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null
+  /** C06b (16/10): los pedidos con su envío por aclarar; null si no se han podido leer. */
+  porAclarar: EnvioPorAclarar[] | null; porAclararError: string | null
+}
 
 export default function AsientoPage() {
   const { entryId = '' } = useParams()
@@ -53,7 +56,12 @@ export default function AsientoPage() {
         const conDiez = asiento?.origen === 'sales_day'
           ? (await leerConDiez(accountId, activa.id, [asiento.id]).catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() })).get(asiento.id) ?? null
           : null
-        return { asiento, cuentas, cierres, conDiez, conDiezError }
+        // C06b (16/10): con un envío por aclarar no se valida (lo frena la base); se dice antes de pulsar.
+        let porAclararError: string | null = null
+        const porAclarar = asiento?.origen === 'sales_day' && (asiento.estado === 'propuesto' || asiento.estado === 'borrador')
+          ? await enviosPorAclarar(accountId, asiento.id).catch((e: unknown) => { porAclararError = e instanceof Error ? e.message : String(e); return null })
+          : []
+        return { asiento, cuentas, cierres, conDiez, conDiezError, porAclarar, porAclararError }
       })
       .then((d) => { if (vivo) setR({ clave, datos: d, error: null }) },
         (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
@@ -99,7 +107,7 @@ export default function AsientoPage() {
     if (datos?.conDiez) {
       try {
         const v = await validarConDocumento(a.id, userName)
-        setHecho(`${validado(v)} Con su «Resumen de ventas» guardado en ${MARCA.nombre}; aún no se ha enviado a Diez.`)
+        setHecho(`${validado(v)} Con su «Resumen de ventas» guardado aquí; aún no se ha enviado a Diez.`)
         recargar()
       } catch (x) { setFallo(noSeValida(x instanceof Error ? x.message : String(x))) }
       finally { setOcupado(false) }
@@ -123,6 +131,8 @@ export default function AsientoPage() {
   const dosNumeros = numerosFolvyDiez(a, datos.conDiez)
   // 15/10: una plataforma sin patrón en Diez (Glovo) no ofrece «Validar y enviar»: validar no se deshace.
   const sinPatron = datos.conDiez ? motivoSinPatron(datos.conDiez.canal) : null
+  // C06b (16/10): «Por aclarar» deja los dos botones de validar en gris, con su motivo.
+  const aclarar = editable ? motivoPorAclarar(datos.porAclarar ?? []) : null
   const migaFinal = editable ? 'Para revisar' : a.numero ? `${NOMBRE_SERIE[a.serie]} nº ${a.numero.toLocaleString('es-ES')}` : 'Asiento'
   return (
     <div className="cxd-pagina">
@@ -132,7 +142,7 @@ export default function AsientoPage() {
           <h1 className="cxp-nombre">{a.concepto}</h1>
           <div className="cxd-chips">
             {a.estado === 'propuesto' && a.confianza
-              ? <Chip tono={a.confianza === 'seguro' ? 'ia' : 'ambar'}>{MARCA.id === 'folvy' ? 'Propuesto por Folvy' : 'Propuesto automáticamente'} · {NOMBRE_CONFIANZA[a.confianza]}</Chip>
+              ? <Chip tono={a.confianza === 'seguro' ? 'ia' : 'ambar'}>Propuesto por mí · {NOMBRE_CONFIANZA[a.confianza]}</Chip>
               : <TonoChip tono={e.tono}>{e.texto}</TonoChip>}
             <Chip>Serie {NOMBRE_SERIE[a.serie]}</Chip>
             {dosNumeros && <Chip>{dosNumeros}</Chip>}
@@ -142,13 +152,19 @@ export default function AsientoPage() {
         </div>
         <div className="cxd-acciones">
           {editable && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('descartar')} disabled={ocupado}>Descartar</button>}
-          {editable && <button type="button" className={datos.conDiez ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando…' : 'Validar asiento'}</button>}
-          {editable && datos.conDiez && !sinPatron && <button type="button" className="cx-boton" onClick={hacerValidarYEnviar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando y enviando…' : 'Validar y enviar a Diez'}</button>}
+          {editable && <button type="button" className={datos.conDiez || aclarar ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!aclarar} title={aclarar ?? undefined}>{ocupado ? 'Validando…' : 'Validar asiento'}</button>}
+          {editable && datos.conDiez && !sinPatron && <button type="button" className={aclarar ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidarYEnviar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!aclarar} title={aclarar ?? undefined}>{ocupado ? 'Validando y enviando…' : 'Validar y enviar a Diez'}</button>}
           {a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
         </div>
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      {aclarar && (
+        <div className="cx-tarjeta cxd-franja" role="status" aria-label="Por qué no se valida">
+          <span><strong>Por aclarar</strong> · {aclarar}</span>
+        </div>
+      )}
+      {editable && datos.porAclararError && <p className="cx-ayuda cxt-ambar" role="note">No he podido mirar si tiene envíos por aclarar: {datos.porAclararError}. Si los tiene, al validar lo diré.</p>}
       {datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
       {editable && mes.cerrado && (
         <div className="cx-tarjeta cxd-franja" role="status">
@@ -225,7 +241,7 @@ export default function AsientoPage() {
           <section className="cx-tarjeta" aria-label="Documento">
             <h2 className="cx-tarjeta-titulo">Documento</h2>
             <p>{a.documento ?? 'Sin documento propio'}</p>
-            <span className="cx-ayuda">{deDondeSale(a)}{a.creadoPor ? ` · lo preparó ${a.creadoPor}` : ''}</span>
+            <span className="cx-ayuda">{deDondeSale(a)}{a.creadoAutomatico ? ' · lo preparé yo' : a.creadoPor ? ` · lo preparó ${a.creadoPor}` : ''}</span>
           </section>
           <section className="cx-tarjeta" aria-label="Detalle contable">
             <button type="button" className="cxd-detalle-boton" aria-expanded={detalle} onClick={() => setDetalle((v) => !v)}>

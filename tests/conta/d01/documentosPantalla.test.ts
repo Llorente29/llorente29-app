@@ -219,8 +219,9 @@ describe('R5 · N23', () => {
     expect(vencimientoAEnsenar(null, '2026-10-11', null)).toEqual({ valor: 'sin vencimiento', apoyo: 'ni la factura ni su ficha lo dicen', aviso: true })
   })
   it('2 · no promete «a Diez con su PDF»: Diez no guarda documentos', () => {
-    expect(lineaDiez()).toBe('Se apunta en Folvy · a Diez irá cuando Cegid active los documentos')
-    expect(lineaDiez(true)).not.toMatch(/Folvy/)
+    // C06b (16/10): la recibida ya va a Diez al apuntarla, sin el PDF; sin marca.
+    expect(lineaDiez()).toBe('Se apunta aquí · si va a Diez, va sin el PDF: se adjunta allí a mano')
+    expect(lineaDiez()).not.toMatch(/Folvy|Sumied|Cegid active/)
     expect(lineaDiez()).not.toMatch(/con su PDF/)
   })
   it('3 · «Cómo se apunta» en dos columnas: Gasto e IVA al debe, A pagar al haber', () => {
