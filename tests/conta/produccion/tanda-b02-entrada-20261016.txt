@@ -1,0 +1,26 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# B02 · T1 «lo que entra» (rama conta/b02-conciliacion, PR #209). Va ANTES de
+# fusionar el #209: su front lee lo que crea la 0200 (counterparty,
+# movement_type y bank_facturas_para_casar). Orden acordado: T1 → fusionar el
+# #209 → T2 (0201) → T3 (0210).
+# La anterior de este fichero (D01, las liquidaciones por correo, 0100 y 0110)
+# ya está en el historial de producción; su copia:
+# tests/conta/produccion/tanda-d01-liquidaciones-20261016.txt.
+#
+#   1. 0200 — añade las columnas counterparty y movement_type (nulas) a
+#      bank_movement, _bank_contraparte_limpia y bank_facturas_para_casar
+#      (nuevas), bank_regla_borrar (nueva) y el disparador de la factura
+#      aprobada con su pago casado (AFTER UPDATE OF status en supplier_invoice:
+#      no toca la aprobación de A); cambia con la misma firma bank_importar,
+#      bank_casar y bank_regla_guardar. Todo lo que cambia está declarado en su
+#      cabecera, con su prueba de staging.
+#
+# Ninguna toca el camino del pedido. No escribe ningún asiento (regla de Julio:
+# contabilidad cerrada a 30/09/2026; la T1 no crea ni mueve asientos).
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/b02-entrada.sql
+supabase/migrations/20261101T0200_b02_entrada.sql
