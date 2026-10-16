@@ -33,7 +33,7 @@ import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { TEXTO_BOTON, filaDe, limitesMes, migasBanco, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import {
-  BANDEJAS, PILDORA, bandejaDe, coincide, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, quienEs, textoBloque, textoDelBanco, type Bandeja, type Grupo,
+  BANDEJAS, PILDORA, bandejaDe, coincide, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, puntoDePartida, quienEs, textoBloque, textoDelBanco, type Bandeja, type Grupo,
 } from '@/modules/conta/lib/conciliarVista'
 import { bancos as nucleo } from '@/modules/conta/services/bancosService'
 import {
@@ -79,21 +79,29 @@ export function Movimientos() {
   const { hasta } = limitesMes(mes)
   const corte = hasta < ctx.hoy ? hasta : ctx.hoy
   // Conserva lo leído mientras vuelve a leer (la pasada del agente recarga): la lista no se vacía.
+  // Con fecha de corte (antes, la contabilidad está cerrada y casi sin conciliar), también la 572 a la víspera:
+  // el cuadre parte del saldo del EXTRACTO ese día, no del contable (regla de Julio, 16/10).
+  const fechaCorte = ctx.datos.corte
+  const vispera = fechaCorte ? new Date(Date.parse(`${fechaCorte}T12:00:00Z`) - 86400000).toISOString().slice(0, 10) : null
   const lectura = useLeerConservando(banco ? async () => {
-    const [movs, saldos, pasada, facturas] = await Promise.all([
+    const cuentas = banco.cuenta ? [banco.cuenta] : []
+    const [movs, saldos, antes, pasada, facturas] = await Promise.all([
       leerMovimientos(accountId, banco.id, mes),
-      saldosContables(companyId, corte, banco.cuenta ? [banco.cuenta] : []),
+      saldosContables(companyId, corte, cuentas),
+      vispera && corte >= (fechaCorte ?? '') ? saldosContables(companyId, vispera, cuentas) : Promise.resolve(null),
       ultimaPasada(accountId, companyId),
       facturasParaCasar(companyId),
     ])
-    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, pasada, facturas }
+    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas }
   } : null, `${banco?.id}:${mes}`, String(vuelta))
 
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
   const porId = useMemo(() => new Map(movs.map((m) => [m.id, m])), [movs])
   // El saldo del banco: el último extracto con saldo hasta fin de mes.
   const extracto = banco ? ctx.datos.extractos.find((e) => e.cuentaId === banco.id && e.hasta <= hasta && e.saldoFinalCent !== null) ?? null : null
-  const cuadre = useMemo(() => cuadreDe(movs, extracto?.saldoFinalCent ?? null, lectura.datos?.libroCent ?? null, mes), [movs, extracto, lectura.datos, mes])
+  const partida = useMemo(() => puntoDePartida(fechaCorte, corte, banco ? ctx.datos.extractos.filter((e) => e.cuentaId === banco.id) : [], lectura.datos?.libroAntesCent ?? null, lectura.datos?.libroCent ?? null),
+    [fechaCorte, corte, banco, ctx.datos.extractos, lectura.datos])
+  const cuadre = useMemo(() => cuadreDe(movs, extracto?.saldoFinalCent ?? null, partida.libroCent, mes), [movs, extracto, partida, mes])
   const seleccion = marcado && marcado.de === lectura.datos ? marcado.ids : cuadre.preseleccionados
 
   const vistos = useMemo(() => movs.filter((m) => (bandeja === 'todos' || bandejaDe(m) === bandeja) && coincide(m, busca)), [movs, bandeja, busca])
@@ -255,6 +263,7 @@ export function Movimientos() {
             <span className="cxb-cifra-etiqueta">En contabilidad</span>
             <span className="cxb-cifra-valor">{cuadre.libroCent === null ? '—' : euros(cuadre.libroCent)}</span>
             <span className="cxb-cifra-pie">{cuadre.libroCent === null ? 'el banco no tiene su cuenta' : `a ${fechaLarga(corte)}`}</span>
+            {partida.apertura && <span className="cxb-cifra-pie cxn-apertura" data-testid="apertura">{partida.apertura.frase}</span>}
           </div>
           <span className="cxn-signo" aria-hidden="true">=</span>
           <div className="cxn-cifra cxn-falta">
