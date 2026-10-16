@@ -19,7 +19,7 @@
 //     (`fijar`): es lo que Julio ve en «Files changed»;
 //   · antes de subir, `comprobar` para si la rama trae capturas de otro frente.
 //
-//   node scripts/conta/capturas.mjs frente <rama>          → a, b, c o nada
+//   node scripts/conta/capturas.mjs frente <rama>          → a, b, c, d o nada
 //   node scripts/conta/capturas.mjs fijar <rama>           → git add de las del frente
 //   node scripts/conta/capturas.mjs recoger <marca> <dir>  → copia las de este run
 //   node scripts/conta/capturas.mjs comprobar [rama]       → sale con 1 si hay de otro
@@ -38,6 +38,7 @@ export function frenteDeLaRama(rama) {
   if (/^conta\/d\d/.test(rama)) return 'a'      // A · facturas recibidas (D01…)
   if (/^conta\/b\d/.test(rama)) return 'b'      // B · bancos (B01…)
   if (/^conta\/(c06|f\d)/.test(rama)) return 'c' // C · contabilidad sola y facturas emitidas (C06, F01…)
+  if (/^conta\/m\d/.test(rama)) return 'd'      // D · el marco nuevo y sus piezas (M01…)
   return ''
 }
 
@@ -50,6 +51,7 @@ export const DE_QUIEN = {
   a: /^docs\/conta\/capturas\/d\d[^/]*\//,
   b: /^docs\/conta\/capturas\/b\d[^/]*\//,
   c: /^docs\/conta\/capturas\/c\d[^/]*\//,
+  d: /^docs\/conta\/capturas\/m\d[^/]*\//,
   reparto: /^docs\/reparto\/capturas\//,
 }
 

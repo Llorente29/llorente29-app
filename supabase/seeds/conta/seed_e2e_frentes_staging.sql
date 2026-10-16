@@ -1,5 +1,5 @@
 -- ============================================================================
--- Usuarios de prueba PROPIOS de cada frente (A, B y C). SOLO STAGING.
+-- Usuarios de prueba PROPIOS de cada frente (A, B, C y D). SOLO STAGING.
 -- ----------------------------------------------------------------------------
 -- Por qué (C06, respuesta 2 de Julio, 13/10): las tres sesiones lanzan sus e2e
 -- a la vez, y cada ejecución pone una contraseña al azar a los MISMOS cuatro
@@ -8,7 +8,10 @@
 -- La salida no es aflojar el freno de la contraseña de un solo uso: es que cada
 -- frente tenga los suyos y su e2e solo toque esos.
 --
--- Lo que crea, para cada frente f ∈ {a, b, c}:
+-- F01 (15/10): el frente D, el del marco nuevo (ramas conta/m01-*). Volver a
+-- lanzar este fichero entero solo crea lo suyo: lo de A, B y C ya está y se deja.
+--
+-- Lo que crea, para cada frente f ∈ {a, b, c, d}:
 --   · un doble de cada uno de los cuatro usuarios de siempre, con el MISMO
 --     perfil (cuenta, rol, nombre visible, bienvenida hecha), copiado columna a
 --     columna del perfil de verdad:
@@ -73,7 +76,7 @@ begin
      and column_name not in ('user_id', 'id', 'created_at', 'updated_at')
      and is_generated = 'NEVER' and coalesce(identity_generation, '') <> 'ALWAYS';
 
-  foreach f in array array['a', 'b', 'c'] loop
+  foreach f in array array['a', 'b', 'c', 'd'] loop
     -- Su cuenta C, sin empresa: como la de siempre, con otro slug.
     v_cuenta_c := ('e2e0000' || f || '-0000-4000-8000-00000000000c')::uuid;
     v_local_c  := ('e2e0000' || f || '-0000-4000-8000-0000000000c2')::uuid;
@@ -117,7 +120,7 @@ begin
     end loop;
   end loop;
 
-  raise notice 'Semilla e2e por frente OK: % usuarios y % cuentas C nuevos (3 frentes × 4 usuarios y 1 cuenta C cuando está entera).', creados, cuentas;
+  raise notice 'Semilla e2e por frente OK: % usuarios y % cuentas C nuevos (4 frentes × 4 usuarios y 1 cuenta C cuando está entera; si A, B y C ya estaban, 4 y 1: los del D).', creados, cuentas;
 end $$;
 
 -- Comprobación, con la misma vara que usa el workflow: 4 por frente, cada uno
@@ -127,7 +130,7 @@ declare
   f text;
   n int;
 begin
-  foreach f in array array['a', 'b', 'c'] loop
+  foreach f in array array['a', 'b', 'c', 'd'] loop
     select count(*) into n
       from auth.users u join user_profiles p on p.user_id = u.id and p.active
      where u.id::text like 'e2e0000' || f || '-%' and u.email like '%.frente-' || f || '@prueba.folvy.test';
@@ -141,7 +144,7 @@ begin
       raise notice 'Frente %: su cuenta C tiene empresas viejas; las quita e2e_limpieza.sql.', f;
     end if;
   end loop;
-  raise notice 'Comprobación OK: 3 frentes × 4 usuarios, cada C en su cuenta.';
+  raise notice 'Comprobación OK: 4 frentes × 4 usuarios, cada C en su cuenta.';
 end $$;
 
 -- ============================================================================
