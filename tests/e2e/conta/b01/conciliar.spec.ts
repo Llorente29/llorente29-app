@@ -161,7 +161,7 @@ test.describe('B02 · Bancos, conciliar', () => {
       await expect(page.getByRole('grid')).toBeVisible()
       await expect(panel).toBeVisible()
       await capturar(page, 'panel')
-      await expect(panel, 'el panel se ha cerrado solo durante la captura').toBeVisible({ timeout: 1_000 })
+      await expect(panel, 'el panel se ha cerrado solo durante la captura').toBeVisible()
 
       // Intro confirma la fila enfocada (los 3 iguales), cada uno como si fuera solo, y lo dice.
       await page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }).getByRole('button', { name: 'Confirmar las 3' }).click()

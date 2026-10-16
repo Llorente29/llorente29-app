@@ -62,7 +62,14 @@ export function Movimientos() {
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [dialogo, setDialogo] = useState<{ que: 'cuenta' | 'factura' | 'apartar'; m: MovimientoBanco } | null>(null)
-  const [elegido, setElegido] = useState<string | null>(null)
+  // El movimiento del panel va en la dirección (?mov=), como la bandeja: si algo de arriba vuelve a
+  // montar la pantalla, el panel sigue abierto (lo cazó la e2e: se cerraba solo de vez en cuando).
+  const elegido = query.get('mov')
+  const setElegido = (id: string | null) => {
+    const p = new URLSearchParams(query)
+    if (id) p.set('mov', id); else p.delete('mov')
+    setQuery(p, { replace: true })
+  }
   const [foco, setFoco] = useState(0)
   // La selección es de la lectura en la que se hizo; con datos nuevos, vuelve lo de punto verde.
   const [marcado, setMarcado] = useState<{ de: unknown; ids: string[] } | null>(null)
@@ -103,7 +110,7 @@ export function Movimientos() {
   const fallo = (e: unknown) => setAviso({ tipo: 'error', texto: e instanceof Error ? e.message : String(e) })
   const con = async (id: string, f: () => Promise<void>) => { setOcupado(id); setAviso(null); try { await f() } catch (e) { fallo(e) } finally { setOcupado(null) } }
   const quien = (m: MovimientoBanco) => `${diaMesCorto(m.fecha)} de ${euros(m.importeCent)}`
-  const ir = (b: Bandeja) => { const p = new URLSearchParams(query); p.set('ver', b); setQuery(p, { replace: true }); setFoco(0) }
+  const ir = (b: Bandeja) => { const p = new URLSearchParams(query); p.set('ver', b); p.delete('mov'); setQuery(p, { replace: true }); setFoco(0) }
 
   const confirmarPropuesta = async (m: MovimientoBanco) => {
     const p = m.propuesta!
