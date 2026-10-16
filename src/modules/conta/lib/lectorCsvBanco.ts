@@ -16,7 +16,7 @@
 //
 // Puro y probado (tests/unit/modules/conta/bancosB01.test.ts).
 
-import type { CuentaLeida, ExtractoLeido, MovimientoLeido } from '@/modules/conta/lib/extractoBanco'
+import { limpiarContraparte, type CuentaLeida, type ExtractoLeido, type MovimientoLeido } from '@/modules/conta/lib/extractoBanco'
 import { validarIban } from '@/modules/conta/lib/iban'
 
 export class CsvBancoNoValido extends Error {}
@@ -43,6 +43,10 @@ export interface PerfilBanco {
   referencia?: Patrones
   /** El código propio del banco (BBVA: «CÓDIGO», cinco cifras). */
   propio?: Patrones
+  /** El tipo de movimiento: la etiqueta del banco («PAGO CON TARJETA»), aparte del concepto (B02). */
+  tipo?: Patrones
+  /** A quién pagas o quién te paga, por orden de preferencia: la primera columna con algo (B02). */
+  contraparte?: Patrones[]
   /** La tarjeta da los cargos en positivo: se les da la vuelta. */
   cargosEnPositivo?: boolean
 }
@@ -60,7 +64,8 @@ export const PERFILES: Record<BancoCsv, PerfilBanco> = {
   // movimiento: a la huella.
   bbva: { nombre: 'BBVA', entidad: '0182', fecha: [r('fecha'), r('f\\. ?contable'), r('fecha contable')], fechaValor: [r('f\\.? ?valor')],
     concepto: [[r('concepto')], [r('movimiento')], [r('beneficiario ?/ ?ordenante')], [r('observaciones')]], importe: [r('importe')], saldo: [r('disponible'), r('saldo')],
-    referencia: [r('remesa')], propio: [r('c[oó]digo')] },
+    referencia: [r('remesa')], propio: [r('c[oó]digo')], tipo: [r('concepto')],
+    contraparte: [[r('beneficiario ?/ ?ordenante')], [r('observaciones')]] },
   santander: { nombre: 'Santander', entidad: '0049', fecha: [r('fecha operaci[oó]n'), r('fecha')], fechaValor: [r('fecha valor')],
     concepto: [[r('concepto')]], importe: [r('importe')], saldo: [r('saldo')] },
   caixabank: { nombre: 'CaixaBank', entidad: '2100', fecha: [r('fecha')], fechaValor: [r('fecha valor')],
@@ -220,6 +225,7 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
     concepto: p.concepto.map((c) => buscar(cab, c)).filter((i) => i >= 0),
     importe: buscar(cab, p.importe), cargo: buscar(cab, p.cargo), abono: buscar(cab, p.abono),
     saldo: buscar(cab, p.saldo), ref: buscar(cab, p.referencia), propio: buscar(cab, p.propio),
+    tipo: buscar(cab, p.tipo), contraparte: (p.contraparte ?? []).map((c) => buscar(cab, c)).filter((i) => i >= 0),
   }
   const avisos: string[] = []
   const filasMov: { m: MovimientoLeido; saldo: number | null }[] = []
@@ -247,6 +253,8 @@ export function leerCsvBanco(filas: string[][], banco: BancoCsv): ExtractoLeido 
         fecha, fechaValor: (col.valor >= 0 ? leerFecha(f[col.valor] ?? '') : null) ?? fecha, importeCent: imp,
         conceptoBanco: concepto, conceptoComun: null, conceptoPropio: col.propio >= 0 ? (norm(f[col.propio] ?? '') || null) : null, numeroDocumento: null,
         referencia1: col.ref >= 0 ? (norm(f[col.ref] ?? '') || null) : null, referencia2: null, equivalencia: null,
+        tipoMovimiento: col.tipo >= 0 ? (norm(f[col.tipo] ?? '') || null) : null,
+        contraparte: limpiarContraparte(col.contraparte.map((j) => norm(f[j] ?? '')).find((x) => x !== '') ?? null),
       },
       saldo: col.saldo >= 0 ? leerImporte(f[col.saldo] ?? '') : null,
     })

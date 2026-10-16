@@ -4,6 +4,7 @@
 # enlace o un envío aclarado con su liquidación). Las dos funciones vuelven a
 # su huella de antes. No toca ningún asiento.
 # La anterior de este fichero (0760): tests/conta/produccion/vuelta-atras-c06b-recibidas-abiertas-20261016.txt.
+# La de B02 · T1: tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
 cuenta: scripts/conta/produccion/cuentas/promociones-envios.sql
 supabase/vuelta-atras/20261116T0110_c06b_promociones_envios_datos.down.sql
 supabase/vuelta-atras/20261116T0100_c06b_promociones_envios.down.sql

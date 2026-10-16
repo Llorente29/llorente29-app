@@ -93,6 +93,10 @@ describe('el Excel «Histórico» de BBVA, con su forma de verdad', () => {
     expect(c.movimientos[2].conceptoBanco).toBe('TRASPASO · EMPRESA INVENTADA SL')
     expect(c.movimientos[0].conceptoBanco).toBe('PAGO CON TARJETA · ************1234 COMERCIO INVENTADO')
   })
+  it('B02 · a quién (BENEFICIARIO/ORDENANTE o, si falta, OBSERVACIONES sin la tarjeta), limpio; el tipo (CONCEPTO), aparte', () => {
+    expect(c.movimientos.map((m) => m.contraparte)).toEqual(['Comercio Inventado', 'Plataforma Norte SL', 'Empresa Inventada SL', 'Suministros del Norte', 'Otro Comercio'])
+    expect(c.movimientos.map((m) => m.tipoMovimiento)).toEqual(['PAGO CON TARJETA', 'TRANSFERENCIA RECIBIDA', 'TRASPASO', 'ADEUDO DOMICILIADO', 'PAGO CON TARJETA'])
+  })
   it('la tarjeta, ya enmascarada por el banco, la reconoce el motor por sus 4 últimas', () => {
     expect(digitosTarjeta(c.movimientos[0].conceptoBanco)).toContain('1234')
   })

@@ -7,6 +7,8 @@
 # (diseño aprobado por Julio, 16/10). La anterior de este fichero (0760, las
 # recibidas abiertas) ya está en el historial de producción (run #98); su
 # copia: tests/conta/produccion/tanda-c06b-recibidas-abiertas-20261016.txt.
+# La de B02 · T1 (0200), también en el historial; su copia:
+# tests/conta/produccion/tanda-b02-entrada-20261016.txt.
 #
 #   1. 0100 — añade conta_ventas_canal_cuenta, conta_envio_aclarado,
 #      conta_cargos_de_pedidos, conta_envio_aclarar y el freno al validar; y
