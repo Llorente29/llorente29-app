@@ -95,14 +95,30 @@ esquema y huellas, nada de datos. Las firmas enteras van al artefacto.
 - en `aplicar-staging-conta`, antes y después de la tanda. No la para: la tanda
   puede ser la que cierra una diferencia.
 
-**Ensayado:** run 38923607587, contra las dos bases de verdad.
+**Ensayado** contra las dos bases de verdad. Primero el run 38923607587, a
+las 15:24; con las cifras buenas, el run 38926005313, a las 15:42.
 
-| | |
-|---|---|
-| Iguales | 458 tablas · 6.066 columnas · 1.057 funciones · 218 disparadores |
-| Distintas | **52** |
-| Aceptadas (en desarrollo / de staging) | 43 |
-| **Rojas** | **9** |
+| | 15:24 | 15:42 |
+|---|---:|---:|
+| Iguales | 458 tablas · 6.066 columnas · 1.057 funciones · 218 disparadores | 458 · 6.066 · **1.055** · 218 |
+| Distintas | **52** | **54** |
+| Aceptadas (en desarrollo / de staging) | — | 43 |
+| **Rojas** | 52 | **11** |
+
+**Las 2 de más de las 15:42** son `compras_ficha_le_falta` y `compras_mirar`:
+staging ya tiene las de `20261118T0100_d01_compras_ficha`, la tanda de A (casan
+md5 a md5), aplicada hacia las 15:30 y todavía no en producción. Es staging
+**por delante**. Se cierra cuando la tanda llegue a producción, así que no la
+acepto. La comparación la vio sola, a los diez minutos de entrar.
+
+**Un fallo mío, arreglado antes de dar las cifras.**
+
+- **Qué pasaba.** La primera rama del `union` fijaba `nombre` en el tipo
+  `name`, que corta a 63 caracteres, y 503 firmas pasan de 63.
+- **Cómo se vio.** Las 10 aceptadas de firmas largas no casaban, y el resumen,
+  con lo largo de cada firma roja, dio 63 en todas.
+- **El arreglo.** Va en `a993a3d9`, con su prueba.
+- **Qué escondía.** Nada: el total coincide.
 
 Las mismas que encontró C más una que no estaba en su lista:
 `conta_propuesta_ventas_unidad`, con otro cuerpo. Hay 27 funciones solo en
@@ -225,5 +241,7 @@ En 2 por defecto. No mido 4 hasta que me digas que staging está en Small.
 | `conta/w02-staging-al-dia` | `4c142a80` | Registro y comparación |
 | `conta/w02-staging-al-dia` | `79761f40` | Arreglo de la guarda 4 de la comparación |
 | `conta/w02-staging-al-dia` | `e58699ec` | Aceptadas y origen en `docs/conta/staging.md` |
+| `conta/w02-staging-al-dia` | `74ec3048` | En una función roja, cuánto mide su firma |
+| `conta/w02-staging-al-dia` | `a993a3d9` | Las firmas no se cortan a 63 |
 
 Antes de cada empuje, `antes-de-subir.sh`: todo en verde.

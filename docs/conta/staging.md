@@ -664,11 +664,24 @@ No se ha arreglado ninguna.
 | `sale_table_move`, `sale.merged_into_sale_id`, `_pos_dest_table`, `_pos_print_table_notice`, `pos_table_move` y `pos_table_move_lines` | **TPV Sala S2** (`20261009T0050`). Solo existe en la rama `claude/affectionate-albattani-6lv2af`, **sin fusionar**, y se aplicó en staging desde ella. | aceptada, en desarrollo |
 | `e2e_c06_recorrido_base`, solo en staging | La crea la semilla `supabase/seeds/conta/seed_c06_recorrido_staging.sql`. Es de staging a propósito. | aceptada |
 
-Con esas aceptadas quedan **9 rojas**:
+Con esas aceptadas quedaban **9 rojas**, todas de staging atrasado respecto a
+producción:
 
 - las 2 del céntimo;
 - `create_account_tx`;
 - `dosier_visita`;
 - las 5 de `c01b_elimina`.
 
-Todas son staging atrasado respecto a producción.
+A las 15:42 eran **11** (run 38926005313: 11 rojas, 43 aceptadas, 0 aceptadas
+de más). Las dos nuevas son `compras_ficha_le_falta` y `compras_mirar`: staging
+tiene ya las de `20261118T0100_d01_compras_ficha`, la tanda de A, aplicada hacia
+las 15:30 y todavía no en producción. Esto es staging **por delante**, y se
+cierra cuando esa tanda llegue a producción.
+
+**Un fallo mío, ya arreglado (a993a3d9).** La primera rama del `union` de
+`comparar.sql` fijaba la columna `nombre` en el tipo `name`, que corta a 63
+caracteres. 503 firmas de staging pasan de 63: diez aceptadas no casaban, y dos
+sobrecargas con el mismo principio podían pisarse. Medido después con la
+consulta buena, no se escondía ninguna diferencia (mismo total). Lo vigila
+`tests/conta/staging/comparar.test.ts`. De cada función roja, el resumen da
+también lo largo de su firma: si una aceptada no casa, se ve por qué.
