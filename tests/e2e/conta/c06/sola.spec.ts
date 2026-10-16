@@ -93,7 +93,7 @@ async function empresaDelRecorrido(s: Sesion, cuenta: string): Promise<string> {
   expect(r.status, `se prepara la empresa del recorrido: ${JSON.stringify(r.datos)}`).toBe(201)
   const id = r.datos[0].id
   expect((await rest(s, 'POST', 'company_tax_profile', {
-    account_id: cuenta, company_id: id, tax_territory: 'peninsula_baleares', vat_period: 'quarterly', tax_forms: ['303', '390'],
+    account_id: cuenta, company_id: id, tax_territory: 'peninsula_baleares', vat_period: 'quarterly', tax_forms: ['303', '347', '390'],
   })).status, 'y su perfil fiscal').toBe(201)
   // Una ferretería: nada de hostelería.
   expect((await rest(s, 'POST', 'company_activity', {
@@ -196,11 +196,12 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   if (lado(page) === 'ordenador') {
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     // El texto de cada entrada (sin el número de lo que hay por mirar, que va aparte).
-    await expect(menu.locator('.cx-menu-item-texto')).toHaveText(['Inicio', 'Compras', 'Documentos', 'Bancos', 'Clientes y proveedores', 'Libros', 'Ajustes'])
+    // M01: los módulos del marco nuevo (Documentos va dentro de Compras; Impuestos, apagado).
+    await expect(menu.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes'])
   } else {
     const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     await expect(barra.getByRole('link', { name: 'Inicio' })).toBeVisible()
-    await expect(barra.getByRole('link', { name: 'Ajustes' })).toBeVisible()
+    await expect(barra.getByRole('link', { name: 'Libros' })).toBeVisible()
     await expect(barra.getByRole('button', { name: /Preguntar/ })).toHaveCount(0)
   }
   await sinFolvy(page, 'el Inicio')
@@ -212,7 +213,7 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     await barra.getByRole('button', { name: 'Más' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
-    await expect(hoja.locator('.cx-menu-item-texto')).toHaveText(['Inicio', 'Compras', 'Documentos', 'Bancos', 'Clientes y proveedores', 'Libros', 'Ajustes'])
+    await expect(hoja.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes'])
     await sinFolvy(page, 'el menú «Más»')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/mas-movil.png` })

@@ -25,8 +25,11 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
   await expect(page.locator('button[aria-label$="Folvy Copiloto"]')).toHaveCount(0)
   await expect(page.getByRole('navigation', { name: 'Navegacion principal' })).toHaveCount(0)
 
-  // Ajustes activo; las entradas sin pantalla no salen.
-  await expect(page.getByRole('link', { name: 'Ajustes', exact: true })).toHaveAttribute('aria-current', 'page')
+  // Ajustes activo (M01: en el móvil, Ajustes va dentro de «Más», que se marca);
+  // las entradas sin pantalla no salen.
+  const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+  if (movil) await expect(menu.getByRole('button', { name: 'Más' })).toHaveAttribute('aria-current', 'page')
+  else await expect(menu.getByRole('link', { name: 'Ajustes', exact: true })).toHaveAttribute('aria-current', 'page')
   // D01 y B01: «Documentos» y «Bancos» ya tienen pantalla (y salen con su enlace).
   for (const sinPantalla of ['Por hacer']) {
     await expect(page.getByRole('link', { name: sinPantalla, exact: true })).toHaveCount(0)

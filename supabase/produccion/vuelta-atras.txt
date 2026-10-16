@@ -1,5 +1,8 @@
-# Vuelta atrás de la tanda viva (modo «vuelta_atras»), en orden inverso.
-# B01 · 0192: vuelve al criterio de la 0190 (13 a 19 cifras que pasan Luhn) y
-# quita _bank_parece_tarjeta. Lo tapado mientras tanto se queda tapado.
-cuenta: scripts/conta/produccion/cuentas/tarjeta-criterio.sql
-supabase/vuelta-atras/20261101T0192_b01_tarjeta_criterio.down.sql
+# Vuelta atrás de la tanda D01 de las liquidaciones por correo (modo
+# «vuelta_atras»), en orden inverso. Cada fichero PARA, sin tocar nada, si ya
+# hay algo que se perdería (la dirección encendida o con correos; liquidaciones
+# leídas de un correo, direcciones de liquidaciones o facturas de comisión).
+# La anterior de este fichero (C06b): tests/conta/produccion/vuelta-atras-c06b-centimo-iva-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-liquidaciones.sql
+supabase/vuelta-atras/20261113T0110_d01_liquidaciones_direccion_foodint.down.sql
+supabase/vuelta-atras/20261113T0100_d01_liquidaciones_correo.down.sql

@@ -1,0 +1,7 @@
+# Vuelta atrás de la tanda del céntimo de redondeo en el IVA (modo
+# «vuelta_atras»). Las dos funciones como estaban; no toca ningún asiento:
+# lo validado con el céntimo sigue validado (su número y su huella no se
+# tocan nunca), solo vuelve a parar los siguientes.
+# La anterior de este fichero (E05): tests/conta/produccion/vuelta-atras-e05-catcher-20261015.txt.
+cuenta: scripts/conta/produccion/cuentas/centimo-iva.sql
+supabase/vuelta-atras/20261113T0100_c06b_centimo_iva.down.sql

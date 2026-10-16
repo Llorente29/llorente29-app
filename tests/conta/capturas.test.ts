@@ -34,6 +34,22 @@ describe('el frente de la rama', () => {
     expect(duenoDeLaRama('reparto-r02-quien-reparte')).toBe('reparto')
     expect(duenoDeLaRama('conta/w01-banda')).toBeNull()
   })
+  // F01 (15/10): el frente D, el del marco nuevo. Ninguna de las 45 ramas
+  // reales empieza por conta/m: el frente nuevo no le quita ninguna a otro.
+  it('el frente D: conta/m01-… en el workflow y aquí, y ninguna rama de antes cambia de frente', () => {
+    for (const r of ['conta/m01-marco', 'conta/m01-piezas', 'conta/m02-diario']) {
+      expect(frenteDeLaRama(r)).toBe('d')
+      expect(frenteDelWorkflow(r)).toBe('d')
+    }
+    expect(RAMAS.filter((r) => frenteDeLaRama(r) === 'd')).toEqual([])
+    expect(frenteDeLaRama('conta/marco')).toBe('')   // empieza por m, pero no es M01…
+    expect(duenoDeLaRama('conta/m01-marco')).toBe('d')
+  })
+  it('el frente D fija solo m01/…, y m01/ no es de ningún otro', () => {
+    const rutas = ['docs/conta/capturas/m01/marco-plegado-ordenador.png', 'docs/conta/capturas/c00/marco-ordenador.png', 'docs/conta/capturas/b01/x.png']
+    expect(repartir(rutas, 'd').suyas).toEqual(['docs/conta/capturas/m01/marco-plegado-ordenador.png'])
+    for (const otro of ['a', 'b', 'c', 'reparto'] as const) expect(repartir(['docs/conta/capturas/m01/x.png'], otro).suyas).toEqual([])
+  })
 })
 
 describe('de quién es cada carpeta de capturas (las que hay en el repositorio)', () => {
@@ -41,16 +57,17 @@ describe('de quién es cada carpeta de capturas (las que hay en el repositorio)'
     ...readdirSync('docs/conta/capturas', { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `docs/conta/capturas/${e.name}`),
     ...readdirSync('docs/reparto/capturas', { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `docs/reparto/capturas/${e.name}`),
   ]
-  const de = (dueno: 'a' | 'b' | 'c' | 'reparto') => carpetas.filter((c) => repartir([`${c}/x.png`], dueno).suyas.length).map((c) => c.split('/').pop())
+  const de = (dueno: 'a' | 'b' | 'c' | 'd' | 'reparto') => carpetas.filter((c) => repartir([`${c}/x.png`], dueno).suyas.length).map((c) => c.split('/').pop())
 
   it('cada frente, las suyas y solo las suyas', () => {
-    expect(de('a')).toEqual(['d01'])
+    expect(de('a')).toEqual(['d01', 'd01-e05'])
     expect(de('b')).toEqual(['b01', 'b02'])
     expect(de('c')).toEqual(['c00', 'c01b', 'c02', 'c02c', 'c03', 'c04', 'c04b', 'c05', 'c06', 'c06b'])
+    expect(de('d')).toEqual(carpetas.some((c) => c.endsWith('/m01')) ? ['m01'] : [])
     expect(de('reparto')).toEqual(['r02'])
   })
   it('cierre, compras y diez (y los PNG sueltos de la raíz) no son de nadie: nadie las fija', () => {
-    const nadie = carpetas.filter((c) => (['a', 'b', 'c', 'reparto'] as const).every((d) => !repartir([`${c}/x.png`], d).suyas.length))
+    const nadie = carpetas.filter((c) => (['a', 'b', 'c', 'd', 'reparto'] as const).every((d) => !repartir([`${c}/x.png`], d).suyas.length))
     expect(nadie.map((c) => c.split('/').pop()).sort()).toEqual(['cierre', 'compras', 'diez'])
     expect(repartir(['docs/conta/capturas/ficha-movil.png'], 'c').suyas).toEqual([])
   })

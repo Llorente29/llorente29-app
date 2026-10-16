@@ -48,8 +48,9 @@ begin
     values (b_cuenta, 'Cocina de Prueba Sur, S.L.', 'Cocina de Prueba Sur', 'B35000017', 'nif_es', 'company',
       'Calle', 'del Ensayo', '3', '35001', 'Las Palmas de Gran Canaria', 'Las Palmas', 'ES', 'hecho', now())
     returning id into emp_b;
-    insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms)
-    values (emp_b, b_cuenta, 'canarias', 'quarterly', 'pymes', 8, array['111', '190', '200', '202', '347']);
+    -- Canarias: sus ventas, con IGIC general (7 %); sin él, el cierre del día no propone (C06b, 15/10).
+    insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms, sales_tax_rate_code)
+    values (emp_b, b_cuenta, 'canarias', 'quarterly', 'pymes', 8, array['111', '190', '200', '202', '347'], 'igic_general');
   end if;
 
   raise notice 'EMPRESAS DE PRUEBA: A % · B % · empresas en total: %', emp_a, emp_b, (select count(*) from public.company);

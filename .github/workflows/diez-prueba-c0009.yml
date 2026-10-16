@@ -39,6 +39,9 @@ name: Diez · factura de prueba en C0009 (C04b)
 # Y en conta/d01-buscar-en-diez, con «[prueba-c0009:recibida-buscar]», SOLO LEE
 # para repetir sobre cada recibida de la C0009 la búsqueda que hace el envío
 # antes de escribir (scripts/conta/diez/prueba-c0009-recibida-buscar.ts).
+# Y en conta/d01-catcher, con «[prueba-c0009:riders]», SOLO LEE cuántas recibidas
+# de riders (41000100), flotas y Catcher hay y qué enlazaría la búsqueda
+# (scripts/conta/diez/prueba-c0009-riders.ts).
 # Y en conta/d01-anular-recibida, con «[prueba-c0009:recibida-anular]», SOLO LEE
 # (GET) cómo anula la gestoría una recibida en la serie 2 y ensaya sin escribir
 # la «-ANUL» de Folvy (scripts/conta/diez/prueba-c0009-recibida-anular.ts).
@@ -49,7 +52,7 @@ name: Diez · factura de prueba en C0009 (C04b)
 on:
   push:
     # conta/c06b-validar-pdf: solo para «[prueba-c0009:rectificativas-molde]» (C06b, respuesta 8, solo lectura).
-    branches: ['conta/c04b-diez', 'conta/d01-recibidas', 'conta/c06b-validar-pdf', 'conta/d01-buscar-en-diez', 'conta/d01-anular-recibida']
+    branches: ['conta/c04b-diez', 'conta/d01-recibidas', 'conta/c06b-validar-pdf', 'conta/d01-buscar-en-diez', 'conta/d01-anular-recibida', 'conta/d01-catcher']
   workflow_dispatch:
 
 concurrency:
@@ -135,6 +138,8 @@ jobs:
             '[prueba-c0009:recibida-molde]'*) S=scripts/conta/diez/prueba-c0009-recibida-molde.ts ;;
             # D01 (15/10): cómo se anula una recibida en la serie 2 y la «-ANUL» de Folvy, ensayada sin escribir (solo GET).
             '[prueba-c0009:recibida-anular]'*) S=scripts/conta/diez/prueba-c0009-recibida-anular.ts ;;
+            # E05 (15/10): las recibidas de riders, flotas y Catcher en la serie 2, solo recuentos (escribir: false).
+            '[prueba-c0009:riders]'*) S=scripts/conta/diez/prueba-c0009-riders.ts ;;
             # D01 (14/10): la búsqueda antes de escribir, contra las recibidas de verdad (escribir: false).
             '[prueba-c0009:recibida-buscar]'*) S=scripts/conta/diez/prueba-c0009-recibida-buscar.ts ;;
             # D01: una recibida de Folvy a la C0009 y leída de vuelta (si ya está, no se envía otra).

@@ -62,8 +62,8 @@ begin
   insert into public.supplier (id, account_id, name, tax_id, invoicing_mode, invoicing_per_location, invoicing_frequency, created_by_name) values
     (verduras, a, 'Verduras del Huerto Prueba, S.L.', null, null, null, null, 'semilla compras'),
     (bodega,   a, 'Bodega Prueba Ribera, S.L.', 'B00000091', 'per_delivery', null, 'per_delivery', 'semilla compras'),
-    (carnes,   a, 'Carnes Prueba del Valle, S.L.', 'B00000092', 'delivery_note_then_invoice', true, 'monthly', 'semilla compras'),
-    (aurora,   a, 'Distribuciones Prueba Aurora, S.L.', 'B00000093', 'monthly_settlement', null, 'monthly', 'semilla compras');
+    (carnes,   a, 'Carnes Prueba del Valle, S.L.', 'B00000109', 'delivery_note_then_invoice', true, 'monthly', 'semilla compras'),
+    (aurora,   a, 'Distribuciones Prueba Aurora, S.L.', 'B00000117', 'monthly_settlement', null, 'monthly', 'semilla compras');
 
   -- Qué tienes que mirar
   perform pg_temp.recibe('c0c00000-0000-4000-8000-000000000101', verduras, centro, date '2026-10-05',
@@ -88,12 +88,12 @@ begin
   -- sus cinco documentos (inventados, y cuadrados entre sí).
   perform public.compras_liquidacion_guardar(ea, aurora, centro, jsonb_build_object(
     'emitida', jsonb_build_object('numero', 'AF-P9', 'fecha', '2026-09-30', 'periodo', jsonb_build_object('desde', '2026-09-01', 'hasta', '2026-09-30'),
-      'desde', jsonb_build_object('nombre', empresa, 'nif', null), 'a', jsonb_build_object('nombre', 'Distribuciones Prueba Aurora, S.L.', 'nif', 'B00000093'),
+      'desde', jsonb_build_object('nombre', empresa, 'nif', null), 'a', jsonb_build_object('nombre', 'Distribuciones Prueba Aurora, S.L.', 'nif', 'B00000117'),
       'total', 1320, 'lineas', jsonb_build_array(
         jsonb_build_object('concepto', 'Servicio por sus ventas (25 %)', 'base', 1000, 'tipo', 10, 'total', 1100),
         jsonb_build_object('concepto', 'Mercaderías que pusiste tú', 'base', 200, 'tipo', 10, 'total', 220))),
     'recibida', jsonb_build_object('numero', 'FV-P9', 'fecha', '2026-09-30', 'periodo', jsonb_build_object('desde', '2026-09-01', 'hasta', '2026-09-30'),
-      'desde', jsonb_build_object('nombre', 'Distribuciones Prueba Aurora, S.L.', 'nif', 'B00000093'), 'a', jsonb_build_object('nombre', empresa, 'nif', null),
+      'desde', jsonb_build_object('nombre', 'Distribuciones Prueba Aurora, S.L.', 'nif', 'B00000117'), 'a', jsonb_build_object('nombre', empresa, 'nif', null),
       'total', 434, 'lineas', jsonb_build_array(
         jsonb_build_object('concepto', 'Género que queda en el local, al 4 %', 'base', 100, 'tipo', 4, 'total', 104),
         jsonb_build_object('concepto', 'Género que queda en el local, al 10 %', 'base', 300, 'tipo', 10, 'total', 330))),

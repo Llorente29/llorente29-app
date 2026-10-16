@@ -13,7 +13,7 @@ import { useState } from 'react'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { ConversacionAlta } from '@/modules/conta/alta/ConversacionAlta'
-import { MarcoConta } from '@/modules/conta/marco/MarcoConta'
+import { MarcoNuevo } from '@/modules/conta/marco/nuevo/MarcoNuevo'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 
 export default function AltaPage() {
@@ -29,7 +29,7 @@ export default function AltaPage() {
     <>
       {/* Folvy detrás, atenuado y sin poder tocarse: la ventana manda. */}
       <div inert aria-hidden="true" className="cx-alta-detras">
-        <MarcoConta ejemplo="Añade a Pablo como apoderado" sinPregunta><AjustesPage /></MarcoConta>
+        <MarcoNuevo sinPregunta><AjustesPage /></MarcoNuevo>
       </div>
       <ConversacionAlta marco="ventana" />
     </>

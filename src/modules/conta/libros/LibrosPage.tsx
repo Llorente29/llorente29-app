@@ -16,6 +16,7 @@ import { rutaLibros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
+import { usePestanasArriba } from '@/modules/conta/marco/nuevo/contexto'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -116,6 +117,8 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
   const [vuelta, setVuelta] = useState(0)
   const { area, accion } = resolver(areaFija ?? params.area, accionFija ?? params.accion)
   const enIndiceMovil = movil && !params.area && !areaFija
+  // M01: con el marco nuevo, las áreas son las pestañas de arriba; aquí no se repiten.
+  const areasArriba = usePestanasArriba()
 
   const base = useLeer(accountId && activa ? async () => {
     const [ejercicios, lm] = await Promise.all([leerEjerciciosLibros(accountId, activa.id), localesYMarcas(accountId)])
@@ -181,7 +184,7 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
           </label>
         </header>
 
-        {(!movil || enIndiceMovil) && (
+        {(!movil || enIndiceMovil) && !areasArriba && (
           <nav className="cxl-areas" aria-label="Áreas de Libros">
             {AREAS_LIBROS.map((a) => (
               <Link key={a.id} to={ruta(a.id, accionesDe(a)[0].id)} className="cxl-area" aria-current={!enIndiceMovil && a.id === area.id ? 'page' : undefined}>{a.nombre}</Link>

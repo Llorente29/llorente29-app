@@ -23,6 +23,8 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 # la contraseña de los suyos. El frente sale de la rama (paso «Frente», una
 # línea por frente); sin frente, los cuatro de siempre, como antes. La
 # contraseña sigue siendo de un solo uso: no se ha aflojado ningún freno.
+# F01 (15/10): el frente D, el del marco nuevo (ramas conta/m01-*, capturas en
+# docs/conta/capturas/m01/), con sus cuatro dobles como los otros tres.
 # Al empezar, e2e_limpieza.sql quita lo que dejaron runs cortados (más de 30
 # minutos: nada que esté usando otra ejecución en marcha).
 #
@@ -92,7 +94,7 @@ on:
       # El frente sale de la rama; esto lo fuerza (para probar dos frentes a
       # la vez desde una misma rama). Vacío = el de la rama.
       frente:
-        description: 'Frente (a, b o c). Vacío = el de la rama'
+        description: 'Frente (a, b, c o d). Vacío = el de la rama'
         type: string
         required: false
         default: ''
@@ -161,10 +163,11 @@ jobs:
             conta/d[0-9]*)              FRENTE=a ;;  # A · facturas recibidas (D01…)
             conta/b[0-9]*)              FRENTE=b ;;  # B · bancos (B01…)
             conta/c06*|conta/f[0-9]*)   FRENTE=c ;;  # C · contabilidad sola y facturas emitidas (C06, F01…)
+            conta/m[0-9]*)              FRENTE=d ;;  # D · el marco nuevo y sus piezas (M01…)
             *)                          FRENTE= ;;
           esac
           if [ -n "${FRENTE_PEDIDO:-}" ]; then
-            case "$FRENTE_PEDIDO" in a|b|c) FRENTE="$FRENTE_PEDIDO" ;; *) echo "::error::«frente» tiene que ser a, b o c (o nada)."; exit 1 ;; esac
+            case "$FRENTE_PEDIDO" in a|b|c|d) FRENTE="$FRENTE_PEDIDO" ;; *) echo "::error::«frente» tiene que ser a, b, c o d (o nada)."; exit 1 ;; esac
           fi
           # En un push de una rama de frente: su carpeta y el juego común (tarea 5).
           COMUN="tests/e2e/conta/c00/marco.spec.ts tests/e2e/conta/rls.spec.ts"
@@ -173,6 +176,7 @@ jobs:
               conta/b[0-9]*) PRUEBAS="tests/e2e/conta/b01 $COMUN" ;;  # B01, B02…: las pantallas de Bancos viven en b01
               conta/d01-*) PRUEBAS="tests/e2e/conta/d01 $COMUN" ;;
               conta/c06*)  PRUEBAS="tests/e2e/conta/c06 $COMUN" ;;
+              conta/m01-*) PRUEBAS="tests/e2e/conta/m01 $COMUN" ;;
             esac
           fi
           for p in ${PRUEBAS:-}; do
@@ -264,7 +268,7 @@ jobs:
           # tarea 8) y el administrador de C, sin empresa (C00, respuesta 3).
           # Con frente: sus cuatro dobles; el C, 7 cuando está la semilla del C06.
           case "${E2E_FRENTE:-}:$n" in
-            :4|a:4|b:4|c:4|c:7) ;;
+            :4|a:4|b:4|c:4|c:7|d:4) ;;
             :*) echo "::error::Esperaba los 4 usuarios de siempre y he tocado $n."; exit 1 ;;
             *)  echo "::error::Esperaba los 4 usuarios del frente ${E2E_FRENTE} (7 en el C con el C06) y he tocado $n. ¿Está aplicada seed_e2e_frentes_staging.sql?"; exit 1 ;;
           esac

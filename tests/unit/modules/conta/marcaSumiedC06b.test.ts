@@ -61,6 +61,18 @@ describe('los colores de Sumied, con AA donde se usan', () => {
     expect(cssDelTema(MARCAS.folvy)).toBeNull()
     expect(cssDelTema(MARCAS.contabilidad)).toBeNull()
   })
+  // M01 (F01, respuesta 3): el marco nuevo va con tokens por marca. En Sumied,
+  // su letra y su azul; el resto (fondos, bordes, ámbar, radios) es el de N30.
+  it('el marco nuevo: en Sumied, su letra y su azul, y nada más', () => {
+    const css = cssDelTema(S)!
+    const desde = css.indexOf('html[data-marca="sumied"] .cxm {')
+    const bloque = css.slice(desde, css.indexOf('}', desde))
+    expect(desde).toBeGreaterThan(-1)
+    expect(bloque).toContain('--cxm-azul: #1E63C9;')
+    expect(bloque).toContain("--cxm-letra: 'Inter Variable'")
+    expect(bloque).toContain('--cxm-azul-encima: color-mix(in srgb, #1E63C9')
+    expect(bloque.match(/--cxm-[a-z-]+/g)).toEqual(['--cxm-azul', '--cxm-azul-encima', '--cxm-letra'])
+  })
 })
 
 describe('en nada de lo que ve un cliente de Sumied aparece «Folvy»', () => {
