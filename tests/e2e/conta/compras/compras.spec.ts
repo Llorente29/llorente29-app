@@ -89,15 +89,16 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   // El número del menú cuenta filas, como la cabecera (en ordenador; en el móvil el menú va plegado).
   if (lado(page) === 'ordenador') {
     const filas = await page.locator('.cxc-mirar > .cxc-cosa').count()
-    await expect(page.locator('.cx-menu-item', { hasText: 'Compras' }).locator('.cx-menu-cuenta')).toHaveText(String(filas))
+    // M01: en el globo ámbar del círculo (la barra va plegada de serie).
+    const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+    await expect(menu.locator('.cxm-modulo', { hasText: 'Compras' }).locator('.cxm-globo')).toHaveText(String(filas))
     // El número no cambia el nombre del enlace: va como su descripción (e2e 172).
-    const enlace = page.getByRole('link', { name: 'Compras', exact: true })
+    const enlace = menu.getByRole('link', { name: 'Compras', exact: true })
     await expect(enlace).toBeVisible()
     await expect(enlace).toHaveAccessibleDescription(`${filas} por mirar`)
-    // «Ventas» en el menú, detrás de Compras, como la maqueta (respuesta 1 del repaso).
-    const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
-    const nombres = await menu.locator('.cx-menu-item-texto').allTextContents()
-    expect(nombres.indexOf('Ventas')).toBe(nombres.indexOf('Compras') + 1)
+    // «Ventas» en el menú, delante de Compras, como N30 (V C B L I P A).
+    const nombres = await menu.locator('.cxm-modulo-nombre').allTextContents()
+    expect(nombres.indexOf('Compras')).toBe(nombres.indexOf('Ventas') + 1)
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()

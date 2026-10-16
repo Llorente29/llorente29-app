@@ -12,6 +12,12 @@
 // Es un aviso que interrumpe (el badge del menú, regla 7): cuenta lo que pide
 // una decisión, y si no hay nada no se pinta.
 //
+// M01: si un número no se ha podido contar es null, no 0. El badge no se pinta
+// igual, pero el «Te toca hoy» del Inicio no dice «al día» de lo que no sabe.
+// Y no se cuenta hasta saber la empresa: sin ella, Libros y Bancos salían 0
+// (e2e 375: «0 asientos para revisar» con 6 esperando). Lo contado es de una
+// cuenta y una empresa: al cambiar de empresa no se enseña el de la otra.
+//
 // Se recuerda 30 s por cuenta y empresa; una pantalla que decide algo avisa
 // con `refrescarCuentasMenu()` y el número cambia sin esperar.
 
@@ -25,9 +31,10 @@ import { cargarMirar } from '@/modules/conta/services/comprasService'
 import { acuerdosSinSocio, listarTercerosBase } from '@/modules/conta/services/tercerosService'
 import { cargarRevision430 } from '@/modules/conta/services/revision430Service'
 
-export type CuentasMenu = Partial<Record<string, number>>
+export type CuentasMenu = Partial<Record<string, number | null>>
 
 const EVENTO = 'folvy:conta:cuentas-menu'
+const NADA: CuentasMenu = {}
 const cache = new Map<string, { cuando: number; valor: Promise<CuentasMenu> }>()
 
 /** Tras decidir algo en una pantalla: el menú vuelve a contar. */
@@ -36,34 +43,35 @@ export function refrescarCuentasMenu(): void {
   window.dispatchEvent(new Event(EVENTO))
 }
 
-const seguro = <T,>(p: Promise<T>, si: T) => p.catch((e: unknown) => { console.error('[menú] no se pudo contar', e); return si })
+const seguro = (p: Promise<number>): Promise<number | null> => p.catch((e: unknown) => { console.error('[menú] no se pudo contar', e); return null })
 
 async function contar(accountId: string, companyId: string | null): Promise<CuentasMenu> {
   const [compras, terceros, libros, bancos] = await Promise.all([
-    seguro(cargarMirar(accountId).then((m) => agruparAMirar(m).length), 0),
+    seguro(cargarMirar(accountId).then((m) => agruparAMirar(m).length)),
     seguro((async () => {
       const acuerdos = (await acuerdosSinSocio(accountId)).length
       if (!companyId) return acuerdos
       const [rev, { terceros: ts }] = await Promise.all([cargarRevision430(accountId, companyId), listarTercerosBase(accountId)])
       const t430 = ts.map((t) => ({ id: t.id, nombre: t.nombre, nif: t.nif, papeles: t.papeles, supplierId: t.supplierId, archivado: !!t.archivadoEn, codigoProveedor: null }))
       return acuerdos + rev.cuentas.filter((c) => !hecha(c, t430)).length
-    })(), 0),
+    })()),
     seguro(companyId
       ? tabla('journal_entry').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'propuesto')
           .then(({ count, error }: { count: number | null; error: { message: string } | null }) => { if (error) throw new Error(error.message); return count ?? 0 })
-      : Promise.resolve(0), 0),
+      : Promise.resolve(0)),
     seguro(companyId
       ? tabla('bank_movement').select('id', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido'])
           .then(({ count, error }: { count: number | null; error: { message: string } | null }) => { if (error) throw new Error(error.message); return count ?? 0 })
-      : Promise.resolve(0), 0),
+      : Promise.resolve(0)),
   ])
   return { compras, terceros, libros, bancos }
 }
 
 export function useCuentasMenu(): CuentasMenu {
   const { accountId } = useCuentaConta()
-  const { activa } = useEmpresas()
-  const [cuentas, setCuentas] = useState<CuentasMenu>({})
+  const { activa, cargando } = useEmpresas()
+  const [cuentas, setCuentas] = useState<{ clave: string; valor: CuentasMenu } | null>(null)
+  const clave = accountId && !cargando ? `${accountId}|${activa?.id ?? ''}` : null
   const [vuelta, setVuelta] = useState(0)
   useEffect(() => {
     const f = () => setVuelta((v) => v + 1)
@@ -71,16 +79,16 @@ export function useCuentasMenu(): CuentasMenu {
     return () => window.removeEventListener(EVENTO, f)
   }, [])
   useEffect(() => {
-    if (!accountId) return
-    const clave = `${accountId}|${activa?.id ?? ''}`
+    if (!accountId || !clave) return
     let c = cache.get(clave)
     if (!c || Date.now() - c.cuando > 30_000) {
       c = { cuando: Date.now(), valor: contar(accountId, activa?.id ?? null) }
       cache.set(clave, c)
     }
     let vivo = true
-    c.valor.then((v) => { if (vivo) setCuentas(v) })
+    c.valor.then((v) => { if (vivo) setCuentas({ clave, valor: v }) })
     return () => { vivo = false }
-  }, [accountId, activa?.id, vuelta])
-  return cuentas
+  }, [accountId, activa?.id, clave, vuelta])
+  // Hasta que no está contado para ESTA cuenta y empresa: nada (el «Te toca hoy» dice «…»).
+  return cuentas && cuentas.clave === clave ? cuentas.valor : NADA
 }

@@ -8,7 +8,8 @@
 -- Cuenta A (empresa 3b34403a…), lo mismo que la tanda de datos de producción,
 -- con datos de prueba:
 --   · la 41000100 «Acreedores · RIDERS» y el proveedor genérico «Riders»;
---   · Catcher Marketplace (NIF inventado B00000055, el del ejemplo de las
+--   · Catcher Marketplace (NIF inventado B00000125 —antes B00000055, que no pasaba
+--     su control: seed_d01_nif_catcher_staging.sql lo arregla en lo sembrado—, el del ejemplo de las
 --     pruebas) con su 41000201;
 --   · la 40700001 «Saldo prepago Catcher», colgada de la 407;
 --   · las dos tiendas del ejemplo → los dos primeros locales de A;
@@ -39,7 +40,7 @@ begin
   insert into public.supplier (id, account_id, name, legal_name, is_active, created_by_name)
   values (riders, a, 'Riders', 'Riders', true, 'semilla E05') on conflict (id) do nothing;
   insert into public.supplier (id, account_id, name, legal_name, tax_id, is_active, created_by_name)
-  values (catch, a, 'Catcher Marketplace', 'Catcher Marketplace SL', 'B00000055', true, 'semilla E05') on conflict (id) do nothing;
+  values (catch, a, 'Catcher Marketplace', 'Catcher Marketplace SL', 'B00000125', true, 'semilla E05') on conflict (id) do nothing;
 
   for v_ca, v_s in select ca.id, x.s from (values ('41000100', riders), ('41000201', catch)) as x(code, s)
                      join public.company_account ca on ca.company_id = ea and ca.code = x.code loop

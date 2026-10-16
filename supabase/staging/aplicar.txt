@@ -1,6 +1,4 @@
-# C06b · «Datos maestros e impuestos» en verde (Julio, 15/10): la semilla sin
-# sus rojos (dos NIF, dos 347 y el IGIC de la empresa B), y detrás las dos
-# pruebas del agente «libro» con el agente ejecutado entero con \i.
-supabase/seeds/conta/seed_c06b_semilla_verde_staging.sql
-supabase/staging/sql/20261011_c04_prueba_agente.sql
-supabase/staging/sql/20261015_c06b_prueba_agente_huecos.sql
+# M01 · El frente D (el marco nuevo, ramas conta/m01-*): sus cuatro usuarios de
+# prueba y su cuenta C, como los de A, B y C. Se puede volver a lanzar: lo que
+# ya está se deja, y solo se crea lo del D. Comprueba al final 4 frentes × 4.
+supabase/seeds/conta/seed_e2e_frentes_staging.sql
