@@ -2422,7 +2422,7 @@ Pedidos de marcas propias de octubre (del 01 al 15/10, 526 pedidos, todos de Hub
 | 70009001 | PROMOCIONES UBER EATS | creada por Julio, 16/10 |
 | 70009002 | PROMOCIONES GLOVO | creada por Julio, 16/10 |
 | 70009003 | PROMOCIONES JUST EAT | creada por Julio, 16/10 |
-| 70500001 | ENVÍOS COBRADOS | creada por Julio, 16/10 |
+| 70500001 | ENVÍOS COBRADOS | la crea Julio (16/10); no lo he comprobado en Diez |
 
 ### Construido (16/10, rama `conta/c06b-construccion-promociones`, sin tanda lanzada)
 
