@@ -179,5 +179,14 @@ begin
      'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
      29.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 7', 'Uber Eats', 'R03M', 'R03M',
      '{"channel":"Uber Eats","service_type":"delivery","customer":{"address_1":"Calle Inventada de Prueba 7","latitude":"40.4160","longitude":"-3.6920"}}', '+34900000003');
+
+  -- El modo de despacho del pedido, el de su local, como en producción (allí
+  -- coinciden siempre: 135 de 135 propios de Foodint en 7 días). La tarjeta lo
+  -- lee del pedido y la lista del local: en staging, si no, dirían cosas distintas.
+  update public.sale s set dispatch_mode = coalesce(l.dispatch_mode, 'auto')
+    from public.locations l
+   where l.id = s.location_id and s.account_id = 'c01a0000-0000-4000-8000-00000000000a'
+     and s.id::text like 'e0300000-0000-4000-8000-0000000000%'
+     and s.dispatch_mode is distinct from coalesce(l.dispatch_mode, 'auto');
 end
 $r03$;
