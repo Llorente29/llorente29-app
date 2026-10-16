@@ -165,10 +165,10 @@ select (:'LAST_ERROR_MESSAGE' like 'VUELTA ATRÁS 0110 (facturas de Foodint) PAR
 \else
   do $$ begin raise exception 'PRUEBA D01 facturas por correo · 4: la vuelta atrás de la 0110 NO ha parado con correos llegados.'; end $$;
 \endif
--- La de la 0100 con filas en company_inbound_sender: para (primero va la de la 0110).
+-- La de la 0100 con filas en company_inbound_sender: su guarda para (primero va la de la 0110).
 savepoint freno_0100;
 \set ON_ERROR_STOP 0
-\i supabase/vuelta-atras/20261119T0100_d01_facturas_correo.down.sql
+\i supabase/vuelta-atras/20261119T0100_d01_facturas_correo.down.guarda.sql
 \set ON_ERROR_STOP 1
 rollback to savepoint freno_0100;
 select (:'LAST_ERROR_MESSAGE' like 'VUELTA ATRÁS 0100 (facturas por correo) PARADA:%') as freno_0100_ok \gset

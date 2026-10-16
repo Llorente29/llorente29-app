@@ -3,14 +3,11 @@
 -- Deshace la 0100 del 19 (las facturas por correo): conta_entrada_llegada
 -- vuelve al texto de la 0220 del 21 (sin la línea de «ha vuelto a llegar»), y
 -- se quitan conta_entrada_remitente y company_inbound_sender.
--- Freno: si company_inbound_sender tiene alguna fila (la 0110 del 19 pone la de
--- Foodint), no se toca nada: primero va la vuelta atrás de la 0110.
+-- Freno (aparte, en su .guarda.sql, para probarlo solo): si
+-- company_inbound_sender tiene alguna fila (la 0110 del 19 pone la de Foodint),
+-- no se toca nada: primero va la vuelta atrás de la 0110.
 
-do $$ begin
-  if to_regclass('public.company_inbound_sender') is not null and exists (select 1 from public.company_inbound_sender) then
-    raise exception 'VUELTA ATRÁS 0100 (facturas por correo) PARADA: company_inbound_sender tiene filas; primero la vuelta atrás de la 0110. No se toca nada.' using errcode = 'P0001';
-  end if;
-end $$;
+\ir 20261119T0100_d01_facturas_correo.down.guarda.sql
 
 drop function if exists public.conta_entrada_remitente(uuid, text);
 drop table if exists public.company_inbound_sender;
