@@ -1,0 +1,29 @@
+{
+ "_que": "D01 · contexto de producción de la tanda viva «el corte por fecha» (0100 y 0110 del 15), medido en SOLO LECTURA el 16/10 con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. channel_settlement y supplier_invoice existen; _conta_liquidacion_marcar(uuid) y conta_liquidacion_factura_proponer(uuid,text) existen, una firma cada una (la 0100 las cambia con la misma firma); _conta_corte y conta_respaldo_liquidacion_factura no existen; nada en el camino del pedido; ninguna en el historial. La cuenta de la tanda, antes: 8 del correo, 7 antes del 01/10, 8 con factura, 2 solapes, facturas 8 / 7.",
+ "medido": "2026-10-16T09:04Z",
+ "tanda": {
+  "supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql": "ac563f722a3e43a6d24b5f9af96a8fcb",
+  "supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql": "7b3bfad7c5033a90e1ea0b86da975864"
+ },
+ "contexto": {
+  "tablas": [
+   "public.channel_settlement",
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public._conta_liquidacion_marcar(uuid)",
+   "public.conta_liquidacion_factura_proponer(uuid,text)"
+  ],
+  "filas": {
+   "public.channel_settlement": 247,
+   "public.supplier_invoice": 6
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

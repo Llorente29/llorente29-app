@@ -1,5 +1,7 @@
-# D01 · Encender liquidaciones-foodint@ (rama conta/d01-encender-liquidaciones).
-#   En staging no hace nada (Foodint no está): se aplica para ver que el
-#   fichero entra entero y lo dice. Lo que enciende de verdad lo mide el ensayo
-#   de producción (transacción con rollback) con la cuenta de la tanda.
-supabase/migrations/20261114T0100_d01_encender_liquidaciones_foodint.sql
+# D01 · El corte por fecha de las liquidaciones por correo (rama conta/d01-corte-liquidaciones).
+#   0100: el corte (de referencia antes de la fecha de Bancos; la que cruza, real).
+#   0110: los datos de Foodint; en staging no hace nada (Foodint no está).
+#   Y su prueba (ROLLBACK): antes, cruzando, varias semanas antes y cruzando, solapes.
+supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql
+supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
+supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql

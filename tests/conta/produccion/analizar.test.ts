@@ -1170,13 +1170,13 @@ describe('la tanda de las liquidaciones por correo (D01, 0100 y 0110; ya aplicad
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): encender liquidaciones-foodint@ (D01, 0100 del 14)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda que encendió liquidaciones-foodint@ (D01, 0100 del 14; ya aplicada, real #100), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-d01-encender-liquidaciones-20261016.txt'
   const F = 'supabase/migrations/20261114T0100_d01_encender_liquidaciones_foodint.sql'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción para ESTE fichero (con su md5): ver el _que del JSON.
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-d01-encender-liquidaciones-20261016.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
   const sql = readFileSync(F, 'utf8').replace(/--.*$/gm, '')
@@ -1205,16 +1205,74 @@ describe('la tanda de AHORA (manifiesto vivo): encender liquidaciones-foodint@ (
     expect(c).not.toMatch(/\b(update|delete|insert)\b/i)
   })
   it('su vuelta atrás la vuelve a apagar, solo esa fila, y para si no hay exactamente una', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-d01-encender-liquidaciones-20261016.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261114T0100_d01_encender_liquidaciones_foodint.down.sql'])
     const down = readFileSync(atras[0], 'utf8').replace(/--.*$/gm, '')
     expect(down).toMatch(/set active = false/)
     expect(down).toMatch(/if n <> 1 then\s+raise exception/)
     expect(down).not.toMatch(/\bdelete\b/i)
   })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): el corte por fecha de las liquidaciones (D01, 0100 y 0110 del 15)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const F0 = 'supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql'
+  const F1 = 'supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql'
+  const viva = leerTanda(MANIFIESTO)
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const sin = (f: string) => readFileSync(f, 'utf8').replace(/--.*$/gm, '')
+
+  it('dos ficheros, en orden: el corte sigue (lo que cambia, declarado y con su prueba) y los datos piden «autorizo»', () => {
+    expect(viva).toEqual([F0, F1])
+    expect(r.ficheros).toEqual({ [F0]: 'sigue', [F1]: 'autorizo' })
+    const cabecera = readFileSync(F0, 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l)).map((l) => l.replace(/^-- cambia: (\S+) .*$/, '$1'))
+    expect(cabecera).toEqual(['public._conta_liquidacion_marcar', 'public.conta_liquidacion_factura_proponer'])
+  })
+  it('el corte es el de Bancos y decide por el último día del periodo; la que cruza, real con su factura', () => {
+    const s = sin(F0)
+    expect(s).toMatch(/select cutover_date from public\.bank_settings where company_id = p_company/)
+    expect(s).toMatch(/max\(imported_until\) \+ 1 from public\.fiscal_year/)
+    expect(s).toMatch(/if v_corte is not null and v_cs\.period_to < v_corte then/)
+    expect(s).toMatch(/v_fecha := v_cs\.period_to \+ 2;/)
+  })
+  it('la columna nueva admite nulos (añadir), y nada lee algo que el fichero crea después', () => {
+    expect(sin(F0)).toMatch(/add column if not exists is_reference boolean;/)
+    expect(ordenEnElFichero(readFileSync(F0, 'utf8'))).toEqual([])
+  })
+  it('los datos: solo Foodint, el freno de 7 y 7 sin nada colgando, la copia antes de borrar, y los solapes después', () => {
+    const s = sin(F1)
+    expect(s).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(s).toMatch(/if n_liq <> 7 or n_fac <> 7 or n_mal <> 0 or n_colgando <> 0 then\s+raise exception/)
+    expect(s.indexOf('insert into public.conta_respaldo_liquidacion_factura')).toBeLessThan(s.indexOf('delete from public.supplier_invoice'))
+    expect(s).toMatch(/n_solape_despues <> n_solape_antes or n_solape_despues < 2/)
+    expect((s.match(/\bdelete\b/gi) ?? []).length).toBe(1)
+  })
+  it('declara qué cuenta; la cuenta solo lee y cuenta lo nuevo sin nombrarlo fuera de una cadena', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d01-corte-liquidaciones.sql'])
+    const fuera = sin(cuentas[0]).replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(update|delete|insert)\b/i)
+    expect(fuera).not.toMatch(/\b(from|join)\s+(public\.)?conta_respaldo_liquidacion_factura\b/i)
+    expect(fuera).not.toMatch(/\bis_reference\b/)
+  })
+  it('su vuelta atrás va en orden inverso: devuelve las facturas desde la copia y para si algo no cuadra', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261115T0110_d01_liquidaciones_referencia_foodint.down.sql', 'supabase/vuelta-atras/20261115T0100_d01_liquidaciones_corte.down.sql'])
+    for (const f of atras) expect(readFileSync(f, 'utf8'), f).toMatch(/raise exception/)
+    expect(readFileSync(atras[0], 'utf8')).toMatch(/jsonb_populate_record\(null::public\.supplier_invoice/)
+    expect(readFileSync(atras[0], 'utf8')).toMatch(/is_generated = 'NEVER'/)
+  })
+  it('la vuelta atrás del corte deja las dos funciones con el texto de la 0100 del 13, tal cual', () => {
+    const down = readFileSync('supabase/vuelta-atras/20261115T0100_d01_liquidaciones_corte.down.sql', 'utf8')
+    const antes = readFileSync('supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql', 'utf8')
+    const funcion = (t: string, nombre: string) => { const i = t.indexOf(`create or replace function public.${nombre}(`); return t.slice(i, t.indexOf('end $$;', i)) }
+    for (const n of ['_conta_liquidacion_marcar', 'conta_liquidacion_factura_proponer']) expect(funcion(down, n)).toBe(funcion(antes, n))
+  })
   it('su copia es el manifiesto vivo, tal cual', () => {
-    expect(readFileSync('tests/conta/produccion/tanda-d01-encender-liquidaciones-20261016.txt', 'utf8')).toBe(readFileSync(MANIFIESTO, 'utf8'))
-    expect(readFileSync('tests/conta/produccion/vuelta-atras-d01-encender-liquidaciones-20261016.txt', 'utf8')).toBe(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8'))
+    expect(readFileSync('tests/conta/produccion/tanda-d01-corte-liquidaciones-20261016.txt', 'utf8')).toBe(readFileSync(MANIFIESTO, 'utf8'))
+    expect(readFileSync('tests/conta/produccion/vuelta-atras-d01-corte-liquidaciones-20261016.txt', 'utf8')).toBe(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8'))
   })
 })
 
