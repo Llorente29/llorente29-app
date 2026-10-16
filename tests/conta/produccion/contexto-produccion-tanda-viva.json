@@ -1,16 +1,18 @@
 {
- "_que": "B02 · contexto de producción de la tanda viva T2 «lo ya guardado, legible» (0201), medido en SOLO LECTURA el 16/10 a las 09:23 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow, después de la T1 (la 0200 ya en el historial). bank_movement existe con 108 filas, las 108 de Foodint de los tres Excel de BBVA, sin tipo ni contraparte; nada en el camino del pedido; la 0201 no está en el historial. Es un update sobre filas que existen: pide «autorizo».",
- "medido": "2026-10-16T09:23Z",
+ "_que": "B02 · contexto de producción de la tanda viva T3 «las reglas de Foodint, corregidas» (0210), medido en SOLO LECTURA el 16/10 a las 11:26 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow, después de la T1 y la T2 (0200 y 0201 en el historial). bank_rule y bank_rule_log existen (las filas son la estimación de pg_class); _b02_reglas es la tabla temporal de la tanda y no existe; nada en el camino del pedido; la 0210 no está en el historial. Medido a la vez: las cuatro reglas como las espera la tanda (apagadas, 0 confirmaciones, «CATCHER DISCO»), 0 casados por ellas y las cuatro cuentas de destino, la 40700001 incluida. Es un update sobre filas que existen: pide «autorizo».",
+ "medido": "2026-10-16T11:26Z",
  "tanda": {
-  "supabase/migrations/20261101T0201_b02_entrada_relleno.sql": "42ef5deb15242b27a2ed629ae97a2b14"
+  "supabase/migrations/20261101T0210_b02_reglas_foodint.sql": "c21c1a6ea4cd76a9abb7174c4a2c10d4"
  },
  "contexto": {
   "tablas": [
-   "public.bank_movement"
+   "public.bank_rule",
+   "public.bank_rule_log"
   ],
   "funciones": [],
   "filas": {
-   "public.bank_movement": 108
+   "public.bank_rule": 29,
+   "public.bank_rule_log": 58
   },
   "otras": {},
   "camino": {
