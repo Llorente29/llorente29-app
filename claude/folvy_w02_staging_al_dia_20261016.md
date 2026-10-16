@@ -336,11 +336,12 @@ el historial de producción:
 | `20261116T0100_c06b_promociones_envios` | md5 = huella (`2111d047…`) |
 | `20261116T0110_c06b_promociones_envios_datos` | md5 = huella (`3fb2e375…`) |
 
-- **El céntimo va aunque no estaba en la lista.** Staging no la tiene: a las
-  22:02 `journal_entry_validar` seguía con el cuerpo de la `20261019T0160`, y
-  el historial de staging no tiene ni la `20261113` ni las `20261116`. La
-  `20261116T0100` vuelve a escribir `conta_propuesta_ventas_unidad` encima de
-  la del céntimo, así que va detrás.
+- **El céntimo va en el manifiesto, pero lo de «staging no la tiene» era
+  FALSO** (corregido el 16/10 por la noche, ver abajo). C la aplicó a las
+  16:29 UTC (run 269) y staging tiene las huellas de producción en las dos
+  funciones. Sigue en el manifiesto porque repetirla no hace daño y así queda
+  en el historial con su huella, que hoy no tiene: C aplicó con el workflow de
+  antes, que no registraba nada.
 - **Se puede repetir sin daño**: son dos `create or replace` con la misma firma.
   Si C la aplica esta noche, no pasa nada.
 - **La `0110` no hace nada en staging**: su propio `notice` dice «esta base no
@@ -413,3 +414,59 @@ Si prefieres que lo haga la propia prueba, su alternativa es una función de
 staging, `e2e_c06_recorrido_borrar`, como la `e2e_c06_recorrido_base` que ya
 existe, llamada en un `afterAll`. **Recomiendo la del carril**: no depende de que
 la prueba acabe, y vale para cualquier otra prueba que cree cuentas.
+
+## Corrección: nadie deshizo el céntimo en staging (16/10, noche)
+
+**Fue un error mío.** El céntimo está en staging desde las 16:29 UTC.
+
+### Lo comprobado, solo leyendo
+
+- **Staging, ahora.** `conta_propuesta_ventas_unidad` = `32bb2645` y
+  `journal_entry_validar` = `798e4c43`. Son las huellas que comprobó C.
+- **Producción, ahora.** `journal_entry_validar` = `798e4c43`, la misma.
+  `conta_propuesta_ventas_unidad` = `dfd76826`: la de la tanda de C
+  (`20261116T0100`), aplicada en producción a las 19:29 UTC (las 21:29 en
+  Madrid).
+- **Los runs de `aplicar-staging-conta` del 16/10**, del 269 al 280, con su
+  manifiesto **y todo lo que incluyen con `\i` / `\ir`, recorrido entero**:
+
+| Run (UTC) | Rama | Qué define |
+|---|---|---|
+| 269 · 16:29 | `conta/c06b-tanda-promociones` | `20261113T0100`: las dos funciones (el céntimo) |
+| 270 · 16:31 | `conta/c06b-tanda-promociones` | solo `conta_propuesta_ventas_unidad`, dentro de su prueba de vuelta atrás, con `rollback` |
+| 271–275 · 17:18–18:25 | R03 | ninguna de las dos (los manuales, en modo «aplicar», no la tanda de producción) |
+| 276–278 · 19:19–19:34 | D01 | solo `conta_propuesta_ventas_unidad`, dentro de la prueba de C06b, con `rollback` |
+| 279 · 20:03 | D01 | lo mismo |
+| 280 · 20:04 | `conta/m01-esperan` | `journal_entry_validar`, dentro de las dos pruebas de M01, con `rollback` |
+
+Entre el 269 y mi foto de las 20:02 UTC, nadie vuelve a escribir
+`journal_entry_validar`.
+
+### De dónde salió el error
+
+- **Mi foto de las 20:02 no tenía `journal_entry_validar` en rojo.** Sí tenía
+  `conta_propuesta_ventas_unidad`, porque producción ya tenía la de la tanda de
+  C y staging la del céntimo: «producción por delante», correcto. Quien tenía
+  `journal_entry_validar` en rojo era la foto de las 15:42, antes de que C
+  aplicara.
+- **Lo arrastré al informe sin volver a mirar la foto.** Y añadí como prueba
+  que el historial de staging no la tenía, cuando el workflow con el que
+  aplicó C no registra nada.
+- **Fueron las dos reglas de siempre:** afirmé sin pegar la medida, y di por
+  buena una señal parecida (el historial vacío) en vez de la de verdad (la
+  huella del cuerpo).
+
+### Qué lo evita
+
+1. **El registro de esta rama.** Con él, la `20261113T0100` habría quedado en
+   el historial de staging con su huella, y «staging no la tiene» no se habría
+   podido escribir.
+
+   Por eso la mantengo en el manifiesto del hueco: la deja registrada.
+2. **Lo que falta, y propongo:** que la comparación, en cada función con otro
+   cuerpo, saque la huella del cuerpo a los dos lados
+   (`@@ f.<nombre>.produccion <16 hex>` y `.staging`), no solo la del nombre.
+   Así una frase como «staging tiene la de antes» se escribe pegando dos
+   huellas, no recordando una foto anterior.
+
+   Son unas líneas en `comparar.mjs` y su prueba. No lo hago sin tu sí.
