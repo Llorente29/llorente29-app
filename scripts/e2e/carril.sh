@@ -108,27 +108,38 @@ coger() {
   echo "Carril $n cogido (${CARRIL_YO:-?})."
 }
 
+# Los parámetros, en un fichero: psql sustituye :'variable' en lo que lee de
+# un fichero, no en -c. La clave y la semilla no salen nunca por pantalla.
+parametros() {
+  printf '%s\n' '\o /dev/null' \
+    "select set_config('e2e.carril', :'carril', true), set_config('e2e.clave', :'clave', true), set_config('e2e.semilla', :'semilla', true);" \
+    '\o' > "$CARRIL_DIR/parametros.sql"
+}
+
 clonar() {
   local n; n=$(numero)
   : "${CLAVE_PRUEBAS:?Falta CLAVE_PRUEBAS}"
   local t0; t0=$(date +%s%N)
+  parametros
   # Una foto de la plantilla (REPEATABLE READ) y una sola transacción: o el
   # carril entero o nada. La semilla del R02 va dentro, con los ids del carril.
   q -1 -v carril="$n" -v clave="$CLAVE_PRUEBAS" -v semilla="$(cat "$AQUI/../../supabase/seeds/reparto/seed_r02_e2e.sql")" \
     -c 'set transaction isolation level repeatable read' \
-    -c '\o /dev/null' -c "select set_config('e2e.carril', :'carril', true), set_config('e2e.clave', :'clave', true), set_config('e2e.semilla', :'semilla', true)" -c '\o' \
-    -f "$SQL/comun.sql" -f "$SQL/clonar.sql" -f "$SQL/semilla.sql" \
-    -c '\pset footer off' -c "select count(*) || ' tablas, ' || sum(filas) || ' filas' as copiado from _informe" > "$CARRIL_DIR/clonar.log"
+    -f "$CARRIL_DIR/parametros.sql" -f "$SQL/comun.sql" -f "$SQL/clonar.sql" -f "$SQL/semilla.sql" \
+    -c '\pset footer off' -c "select count(*) || ' tablas, ' || sum(filas) || ' filas' as copiado from _informe" > "$CARRIL_DIR/clonar.log" \
+    || { echo "::error::No se ha podido clonar el carril $n (arriba, el error de psql)."; return 1; }
   echo "Carril $n clonado en $(( ($(date +%s%N) - t0) / 1000000 )) ms: $(grep -E 'tablas, ' "$CARRIL_DIR/clonar.log" | tr -d ' ')."
 }
 
 borrar() {
   local n; n=$(numero)
   local t0; t0=$(date +%s%N)
-  q -1 -A -t -v carril="$n" \
-    -c "select set_config('e2e.carril', :'carril', true)" \
-    -f "$SQL/comun.sql" -f "$SQL/borrar.sql" \
-    -c "select coalesce(sum(filas), 0) || ' filas en ' || count(*) || ' tablas' from _informe where filas > 0" > "$CARRIL_DIR/borrar.log"
+  parametros
+  # Sin -c con variables (ver parametros): clave y semilla vacías, no hacen falta.
+  q -1 -A -t -v carril="$n" -v clave= -v semilla= \
+    -f "$CARRIL_DIR/parametros.sql" -f "$SQL/comun.sql" -f "$SQL/borrar.sql" \
+    -c "select coalesce(sum(filas), 0) || ' filas en ' || count(*) || ' tablas' from _informe where filas > 0" > "$CARRIL_DIR/borrar.log" \
+    || { echo "::error::No se ha podido borrar el carril $n (arriba, el error de psql)."; return 1; }
   echo "Carril $n borrado en $(( ($(date +%s%N) - t0) / 1000000 )) ms: $(tail -1 "$CARRIL_DIR/borrar.log")."
 }
 
