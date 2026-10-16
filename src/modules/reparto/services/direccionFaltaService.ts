@@ -10,7 +10,9 @@ type Rpc = (fn: string, args: Record<string, unknown>) => Promise<{ data: unknow
 
 function rpc(): Rpc {
   if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
-  return supabase.rpc as unknown as Rpc
+  // Atado al cliente: `supabase.rpc` suelto pierde su `this` y revienta antes
+  // de mandar nada (la e2e del 16/10 lo cazó: el aviso no llegaba a pedir).
+  return (supabase.rpc as unknown as Rpc).bind(supabase)
 }
 
 export async function pedidosSinDireccion(locationId: string | null, token: string | null): Promise<PedidoSinDireccion[]> {

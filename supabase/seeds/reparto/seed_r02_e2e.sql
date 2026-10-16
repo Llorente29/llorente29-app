@@ -97,6 +97,11 @@ begin
 
   perform set_config('folvy.reparto_tal_cual', 'on', true);
 
+  -- El 7B000 es el «propio sin dirección» del R02: sin el motivo que le puso la
+  -- regla de Uber al entrar (fuera de zona), que ya no vale para lo que prueba.
+  update public.sale set delivery_by_reason = null
+   where id = 'e0200000-0000-4000-8000-0000000052a1' and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
   insert into public.kds_device (id, account_id, location_id, label, token) values
     ('e0300000-0000-4000-8000-0000000000e1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2', 'R03 e2e Norte Centro', 'r03-e2e-norte-centro'),
     ('e0300000-0000-4000-8000-0000000000e2', 'c01a0000-0000-4000-8000-00000000000a', 'e0200000-0000-4000-8000-0000000000a3', 'R03 e2e Norte Mercado', 'r03-e2e-norte-mercado')
@@ -127,7 +132,7 @@ begin
      25.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03E', 'R03E', '100000000035',
      '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":null,"latitude":"40.4120","longitude":"-3.6980"}}', '+34600000005'),
     ('e0300000-0000-4000-8000-0000000000a6', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
-     'e0200000-0000-4000-8000-00000000a0b2', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '6 minutes', now() - interval '6 minutes',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '6 minutes', now() - interval '6 minutes',
      26.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 5, 28000 Madrid, Spain, Unit: 3C', 'Uber Eats', 'R03U', 'R03U', null,
      '{"channel":"Uber Eats","service_type":"delivery","customer_notes":"Sin cebolla","charges":[{"type":"delivery","price":"2.99 EUR"}],"customer":{"address_1":"Calle Inventada de Prueba 5, 28000 Madrid, Spain","address_2":"Unit: 3C","phone":"+34900000000","phone_access_code":"12345678","delivery_notes":"Timbre 3C","latitude":"40.4180","longitude":"-3.6900"}}', '+34900000000')
   on conflict (id) do update
@@ -163,7 +168,7 @@ begin
      '{"channel":"Uber Eats","service_type":"delivery","charges":[{"type":"delivery","price":"2.99 EUR"}],"customer":{"address_1":"Calle Inventada de Prueba 6","address_2":"Unit: 1A","latitude":"40.4170","longitude":"-3.6910"}}', '+34900000002'),
     -- R03M · Uber mezclado (calle y punto, sin cargo de envío): lo decide una persona.
     ('e0300000-0000-4000-8000-0000000000a9', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
-     'e0200000-0000-4000-8000-00000000a0b2', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
      29.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 7', 'Uber Eats', 'R03M', 'R03M',
      '{"channel":"Uber Eats","service_type":"delivery","customer":{"address_1":"Calle Inventada de Prueba 7","latitude":"40.4160","longitude":"-3.6920"}}', '+34900000003');
 end
