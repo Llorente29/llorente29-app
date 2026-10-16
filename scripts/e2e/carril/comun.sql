@@ -9,8 +9,12 @@
 -- «.carril-N». Dos e2e a la vez ya no se pisan: cada una entra con lo suyo.
 --
 -- El id de una fila del carril N es el de la plantilla con el SEGUNDO grupo
--- cambiado por N en hexadecimal:
+-- «o exclusivo» N (XOR). Los ids de las semillas llevan 0000 ahí, así que
+-- quedan con N, que se lee a simple vista:
 --     c01a0000-0000-4000-8000-0000000000a3  →  c01a0000-0007-4000-8000-0000000000a3  (N = 7)
+-- y un id al azar nunca se queda igual (con «poner N» sí: uno de cada 65.536
+-- ya lo tenía, y con 18.000 filas eso le pasaba a uno de cada cuatro carriles;
+-- lo encontró el ensayo del 16/10 en journal_correction, con N = 4001).
 -- La misma regla está en tests/e2e/conta/sesion.ts (enCarril): una prueba que
 -- busca «Hermanos Ruiz» en su carril calcula el id igual que el clon.
 --
@@ -37,9 +41,9 @@ begin
   end if;
 end $$;
 
--- El id de la plantilla en el carril n (la regla de arriba).
+-- El id de la plantilla en el carril n (la regla de arriba: segundo grupo XOR n).
 create function pg_temp.en_carril(u uuid, n int) returns uuid language sql immutable as $f$
-  select overlay(u::text placing lpad(to_hex(n), 4, '0') from 10 for 4)::uuid
+  select overlay(u::text placing lpad(to_hex(('x' || substr(u::text, 10, 4))::bit(16)::int # n), 4, '0') from 10 for 4)::uuid
 $f$;
 
 -- El correo de la plantilla en el carril n: parte local + «.carril-n».
