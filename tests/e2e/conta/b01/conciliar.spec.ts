@@ -118,12 +118,12 @@ test.describe('B02 · Bancos, conciliar', () => {
       })
       // Cuántas veces vuelve a salir el esqueleto de Movimientos después de haber tenido datos.
       await page.addInitScript(() => {
-        const w = window as unknown as { __conDatos: boolean; __esqueletos: number }
-        w.__conDatos = false; w.__esqueletos = 0
+        const w = window as unknown as { __conDatos: boolean; __esqueletos: number; __donde: string[] }
+        w.__conDatos = false; w.__esqueletos = 0; w.__donde = []
         new MutationObserver(() => {
           const esqueleto = !!document.querySelector('[aria-label="Cargando los movimientos"]')
           if (!esqueleto && document.querySelector('[data-testid="cuadre"]')) w.__conDatos = true
-          else if (esqueleto && w.__conDatos) { w.__esqueletos++; w.__conDatos = false }
+          else if (esqueleto && w.__conDatos) { w.__esqueletos++; w.__conDatos = false; w.__donde.push(`${Math.round(performance.now())} ${location.pathname}${location.search}`) }
         }).observe(document, { subtree: true, childList: true })
       })
       await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10`)
@@ -202,6 +202,16 @@ test.describe('B02 · Bancos, conciliar', () => {
       await expect(panel).toBeVisible()
       // La lista y el panel, a la vez, antes y después de la captura: si algo los desmonta, se ve aquí.
       await expect(page.getByRole('grid')).toBeVisible()
+      // Diez capturas seguidas con el panel abierto: si alguna vuelve a montar la pantalla, se dice dónde.
+      for (let i = 0; i < 10; i++) {
+        await page.screenshot({ fullPage: true })
+        await page.waitForTimeout(300)
+        const d = await page.evaluate(() => {
+          const w = window as unknown as { __marca?: number; __esqueletos?: number; __donde?: string[] }
+          return { marca: w.__marca ?? null, esqueletos: w.__esqueletos ?? null, donde: w.__donde ?? [] }
+        })
+        expect(d, `captura ${i + 1}: navegaciones ${JSON.stringify(navegaciones)} · ahora ${page.url()}`).toEqual({ marca: 1, esqueletos: 0, donde: [] })
+      }
       await capturar(page, 'panel')
       const trasCaptura = await page.evaluate(() => {
         const w = window as unknown as { __marca?: number; __esqueletos?: number }
