@@ -283,9 +283,9 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   await page.getByLabel('Nombre de la vista').fill('Ventas e2e')
   await page.getByRole('button', { name: 'Guardar', exact: true }).click()
   await expect(page.getByText('Vista guardada: «Ventas e2e». Sale aquí cada vez que abras la pantalla.')).toBeVisible()
-  await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Ventas e2e' })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Ventas e2e', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: 'Borrar la vista «Ventas e2e»' }).click()
-  await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Ventas e2e' })).toHaveCount(0)
+  await expect(page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Ventas e2e', exact: true })).toHaveCount(0)
 
   // Exportar: lo dice en pantalla, con el fichero y cuántos (regla 8).
   const bajada = page.waitForEvent('download')
@@ -340,7 +340,7 @@ test('la muestra de las piezas: tabla densa, formulario por bloques y panel del 
 
   // El formulario: lo propuesto en azul hasta que Tab lo acepta; F4 busca subcuenta; Ctrl S guarda y lo dice.
   const form = page.getByRole('form', { name: 'Factura F-2026-118 · Distribuciones Prueba SL' })
-  await expect(form.getByText('propuesto por la máquina')).toBeVisible()
+  await expect(form.locator('.cxf-leyenda')).toContainText('propuesto por la máquina: Tab lo acepta, escribir lo cambia')
   const gasto = form.getByLabel(/^Subcuenta de gasto/)
   await expect(gasto).toHaveClass(/cxf-propuesto/)
   await gasto.focus()
