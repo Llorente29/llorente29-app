@@ -2,6 +2,9 @@
 --
 -- cambia: public.conta_propuesta_ventas_unidad · prueba: supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
 -- cambia: public.conta_resumen_ventas · prueba: supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
+-- cambia: public.journal_entry · prueba: supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
+--   (el freno al validar es un disparador nuevo en journal_entry; ponerlo toma un
+--   momento un cierre SHARE ROW EXCLUSIVE sobre journal_entry, que no es del camino del pedido)
 --
 -- C06b · Las promociones y los envíos en el asiento de ventas del día (diseño
 -- aprobado por Julio el 16/10, en CONTEXTO_CLAUDE.md, «DISEÑO: las promociones
@@ -49,6 +52,9 @@
 -- (la contabilidad está cerrada a 30/09; lo para la validación).
 -- Ninguna está en el camino del pedido: el cierre del día y el Libro leen.
 -- Vuelta atrás: supabase/vuelta-atras/20261116T0100_c06b_promociones_envios.down.sql
+-- sin hueco: el único «delete from public.journal_entry» está DENTRO de conta_envio_aclarar,
+--   solo de un asiento PROPUESTO (o borrador) del día de ese pedido, y lo rehace el cierre del día
+--   (conta_proponer_dias, cada hora a los 7 minutos) con lo aclarado. Aplicar la tanda no retira nada.
 
 -- 1 ----------------------------------------------------------------------------------
 create table if not exists public.conta_ventas_canal_cuenta (
@@ -75,7 +81,8 @@ create trigger trg_conta_ventas_canal_cuenta_misma_cuenta before insert or updat
 
 -- 2 ----------------------------------------------------------------------------------
 create table if not exists public.conta_envio_aclarado (
-  sale_id          uuid primary key references public.sale(id) on delete cascade,
+  -- Sin clave ajena a sale: crearla tomaría un cierre sobre sale, que es del camino del pedido.
+  sale_id          uuid primary key,
   account_id       uuid not null references public.accounts(id) on delete cascade,
   company_id       uuid not null references public.company(id) on delete cascade,
   decision         text not null check (decision in ('lo_paga', 'no_lo_paga')),

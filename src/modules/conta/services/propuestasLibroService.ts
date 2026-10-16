@@ -55,7 +55,9 @@ export interface ContextoLibro {
   /** B01 (P3): la serie de tesorería de la empresa (bank_settings; 3 si no hay ajuste). */
   serieTesoreria: SerieTesoreria
   /** C04b R5: la regla de ventas por plataforma de la empresa (conta_ventas_canal). Null = la regla de antes, un asiento por día y local. */
-  ventasPorPlataforma: { porMarca: Set<string>; ventasPorMarca: Record<string, string>; devolucionesPorMarca: Record<string, string> } | null
+  ventasPorPlataforma: { porMarca: Set<string>; ventasPorMarca: Record<string, string>; devolucionesPorMarca: Record<string, string>
+    /** C06b (16/10): la subcuenta de promociones y la de envíos cobrados de cada canal (conta_ventas_canal_cuenta). */
+    promocionesPorCanal: Record<string, string>; enviosPorCanal: Record<string, string> } | null
 }
 
 export async function cargarContexto(accountId: string, companyId: string): Promise<ContextoLibro> {
@@ -81,6 +83,9 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
   // el front llegara antes que la base—, no apunta nada solo: lo prudente. Es el
   // único ajuste que se lee así: por él no se deja de cargar el Libro entero.
   const compras = await leer(tabla('company_purchase_setting').select('post_safe_invoices').eq('company_id', companyId), 'los ajustes de compras').catch(() => [] as Fila[])
+  // C06b (16/10): las subcuentas de promociones y envíos de cada canal (0100).
+  // Sin la tabla —el front antes que la base—, como hasta hoy: sin ellas.
+  const reglaCuenta = await leer(tabla('conta_ventas_canal_cuenta').select('channel_id, papel, company_account_id').eq('account_id', accountId).eq('company_id', companyId), 'las subcuentas de promociones y envíos').catch(() => [] as Fila[])
   const porId = new Map(cuentas.map((c) => [String(c.id), c]))
   const hojas = new Map<string, string>()
   for (const c of cuentas) if (c.kind === 'template' && c.status !== 'cerrada' && !hojas.has(String(c.template_code))) hojas.set(String(c.template_code), String(c.code))
@@ -129,6 +134,10 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
         .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.brand_id), String(c.code)]] : [] })),
       devolucionesPorMarca: Object.fromEntries(reglaMarca.filter((m) => m.papel === 'devoluciones' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
         .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.brand_id), String(c.code)]] : [] })),
+      promocionesPorCanal: Object.fromEntries(reglaCuenta.filter((m) => m.papel === 'promociones' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
+        .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.channel_id), String(c.code)]] : [] })),
+      enviosPorCanal: Object.fromEntries(reglaCuenta.filter((m) => m.papel === 'envios' && porId.get(String(m.company_account_id))?.status !== 'cerrada')
+        .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.channel_id), String(c.code)]] : [] })),
     },
   }
 }
@@ -216,10 +225,22 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     ])
     const cobroPorCanal: Record<string, string> = {}
     for (const [id, c] of ctx.canales) { const cta = c.partyId ? ctx.enlace('customer', c.partyId, 'principal') : null; if (cta) cobroPorCanal[id] = cta }
+    // C06b (16/10): el descuento, el envío y qué se hace con él (conta_cargos_de_pedidos).
+    // Sin la función —el front antes que la base—, como hasta hoy.
+    const cerrados = (pedidos ?? []).filter((p) => p.estado === 'closed').map((p) => String(p.id))
+    const cargos = new Map<string, Fila>()
+    if (cerrados.length && ctx.ventasPorPlataforma) {
+      const cs = await (rpc('conta_cargos_de_pedidos', { p_account: accountId, p_sales: cerrados }) as Promise<Fila[] | null>).catch(() => null)
+      for (const c of cs ?? []) cargos.set(String(c.id), c)
+    }
     const losPedidos = (pedidos ?? []).map((p): PedidoDia => ({
       id: String(p.id), codigo: s(p.codigo), canalId: s(p.canal_id), marcaId: s(p.marca_id), marcaPropia: p.propia !== false,
       estado: (String(p.estado) as PedidoDia['estado']), total: n(p.total), base: p.base === null ? null : n(p.base), cuota: p.cuota === null ? null : n(p.cuota),
       tiposEnLineas: Array.isArray(p.tipos) ? (p.tipos as unknown[]).map(Number) : [],
+      ...(cargos.has(String(p.id)) ? {
+        descuento: n(cargos.get(String(p.id))!.descuento), envio: n(cargos.get(String(p.id))!.envio),
+        claseEnvio: String(cargos.get(String(p.id))!.clase) as PedidoDia['claseEnvio'], porQueEnvio: s(cargos.get(String(p.id))!.por_que),
+      } : {}),
     }))
     const lasDevoluciones = (devs ?? []).map((x): DevolucionDia => ({
       pedidoId: s(x.pedido_id), codigo: s(x.codigo), canalId: s(x.canal_id), marcaId: s(x.marca_id), marcaPropia: x.propia !== false, importe: n(x.importe),
@@ -237,7 +258,8 @@ export async function proponerPendientes(accountId: string, companyId: string, d
       const res = ventasDelDia({
         fecha: dia, localId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(localId) ?? 'local',
         nombreCanal, nombreMarca: (id) => (id ? ctx.marcas.get(id)?.nombre ?? 'una marca' : 'sin marca'), unidad,
-        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477, ventasPorMarca: regla?.ventasPorMarca, devolucionesPorMarca: regla?.devolucionesPorMarca },
+        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477, ventasPorMarca: regla?.ventasPorMarca, devolucionesPorMarca: regla?.devolucionesPorMarca,
+          promocionesPorCanal: regla?.promocionesPorCanal, enviosPorCanal: regla?.enviosPorCanal },
         pedidos: losPedidos, devoluciones: lasDevoluciones,
       })
       if (!res.propuesta) {

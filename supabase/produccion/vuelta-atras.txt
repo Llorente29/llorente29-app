@@ -1,7 +1,9 @@
-# Vuelta atrás de la tanda de las recibidas abiertas en C0008 (modo
-# «vuelta_atras»). La vuelve a cerrar (incluye_recibidas = false, y el motivo
-# al de antes) y PARA si con ella ya se ha enviado o intentado escribir alguna
-# recibida en C0008, o el contraasiento de una.
-# La anterior de este fichero (D01): tests/conta/produccion/vuelta-atras-d01-liquidaciones-20261016.txt.
-cuenta: scripts/conta/produccion/cuentas/diez-recibidas-abiertas.sql
-supabase/vuelta-atras/20261111T0760_c06b_diez_recibidas_abiertas_datos.down.sql
+# Vuelta atrás de la tanda de promociones y envíos (modo «vuelta_atras»), en
+# orden inverso: primero los datos de Foodint (PARA si alguna de las cuatro
+# subcuentas ya tiene apuntes) y después la estructura (PARA si queda algún
+# enlace o un envío aclarado con su liquidación). Las dos funciones vuelven a
+# su huella de antes. No toca ningún asiento.
+# La anterior de este fichero (0760): tests/conta/produccion/vuelta-atras-c06b-recibidas-abiertas-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/promociones-envios.sql
+supabase/vuelta-atras/20261116T0110_c06b_promociones_envios_datos.down.sql
+supabase/vuelta-atras/20261116T0100_c06b_promociones_envios.down.sql
