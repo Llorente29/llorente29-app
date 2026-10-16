@@ -1,8 +1,8 @@
 {
-  "_que": "D01 · contexto de producción de la tanda viva «las liquidaciones por correo» (0100 y 0110), medido en SOLO LECTURA el 15/10 a las 23:12 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna tabla ni función nueva existe aún; conta_entrada_destino(text,text) y conta_recibida_envio(uuid) sí (las dos cambian con la misma firma); nada en el camino del pedido; ninguna de las dos en el historial. company_inbound_address e inbound_email_log, vacías.",
-  "medido": "2026-10-15T23:12Z",
+  "_que": "D01 · contexto de producción de la tanda viva «las liquidaciones por correo» (0100 y 0110), medido en SOLO LECTURA el 15/10 a las 23:12 UTC y otra vez el 16/10 a las 04:16 UTC, tras reordenar la 0100 (ensayo #92: 42703); las dos medidas, idénticas con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna tabla ni función nueva existe aún; conta_entrada_destino(text,text) y conta_recibida_envio(uuid) sí (las dos cambian con la misma firma); nada en el camino del pedido; ninguna de las dos en el historial. company_inbound_address e inbound_email_log, vacías.",
+  "medido": "2026-10-16T04:16Z",
   "tanda": {
-    "supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql": "09a866aaf8c920d2bfb66f36957d304f",
+    "supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql": "b8ac5f141008cfb726e6c91fdbd40e9f",
     "supabase/migrations/20261113T0110_d01_liquidaciones_direccion_foodint.sql": "82672478c20a656d0001779b9cbad908"
   },
   "contexto": {

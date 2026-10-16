@@ -31,12 +31,12 @@
 //     (`informe`, la misma del ensayo). Al reescribir el manifiesto para otra
 //     tanda, esta parte se reescribe con él.
 // Y los casos que tienen que parar, sobre la población del C00.
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — módulo .mjs sin tipos
-import { analizarFichero, clasificar, creadosPorLaTanda, decidir, informe, sentencias } from '../../../scripts/conta/produccion/analizar.mjs'
+import { analizarFichero, clasificar, creadosPorLaTanda, decidir, informe, ordenEnElFichero, sentencias } from '../../../scripts/conta/produccion/analizar.mjs'
 
 type Op = { accion: string; tipo: string; objeto: string; detalle: string }
 type Existentes = { tablas: string[]; funciones: string[] }
@@ -1220,5 +1220,52 @@ describe('D1: el comparador', () => {
     const r = comparar('reducido,2025-01-01,10,1.4\n', 'reducido,2025-01-01,21,5.2\n')
     expect(r.ok).toBe(false)
     expect(r.out).toContain('diferencias: 1')
+  })
+})
+
+// 16/10 · Ensayo #92 de la D01: 42703 al crear _conta_liquidacion_solape, una
+// función «language sql» que leía channel_settlement.store_id; la 0100 añadía
+// esa columna 80 líneas más abajo. Postgres comprueba el cuerpo de una función
+// SQL (y la consulta de una vista) al crearla; staging ya tenía la columna de
+// una pasada anterior y salió verde. Lo reproduce una base limpia: el fichero
+// de 8731545a falla en la línea 161 y el reordenado entra, sale y vuelve a entrar.
+describe('el orden dentro de un fichero: nada SQL lee lo que el fichero crea después', () => {
+  const forma = (antes: boolean) => {
+    const columna = 'alter table public.liquidacion_inventada add column if not exists tienda_id uuid;'
+    const fn = `create or replace function public._inventada_solape(p uuid)
+returns text language sql stable as $$
+  select 'Se solapa con ' || count(*) from public.liquidacion_inventada c where c.id = p and c.tienda_id is not null
+$$;`
+    return antes ? [columna, fn].join('\n') : [fn, columna].join('\n')
+  }
+  it('una función SQL que lee una columna que nace más abajo: se dice cuál, dónde y dónde nace', () => {
+    expect(ordenEnElFichero(forma(false))).toEqual([{ sentencia: 1, objeto: 'public._inventada_solape', lee: 'public.liquidacion_inventada.tienda_id', nace: 2 }])
+    expect(ordenEnElFichero(forma(true))).toEqual([])
+  })
+  it('una tabla que nace más abajo, también; y en una vista, igual', () => {
+    const t = `create view public.v_inventada as select id from public.tabla_inventada;
+create table if not exists public.tabla_inventada (id uuid);`
+    expect(ordenEnElFichero(t)).toEqual([{ sentencia: 1, objeto: 'public.v_inventada', lee: 'public.tabla_inventada', nace: 2 }])
+  })
+  it('plpgsql no: su cuerpo se resuelve al ejecutarla (y el nombre dentro de una cadena tampoco cuenta)', () => {
+    const t = `create function public.f_inventada() returns void language plpgsql as $$ begin perform tienda_id from public.liquidacion_inventada; end $$;
+create function public.g_inventada() returns text language sql as $$ select 'liquidacion_inventada tienda_id' $$;
+alter table public.liquidacion_inventada add column tienda_id uuid;`
+    expect(ordenEnElFichero(t)).toEqual([])
+  })
+  it('la población real: los SQL del repositorio no tienen ninguna (si alguno la tuviera, ya habría fallado al aplicarse limpio)', () => {
+    const malos: string[] = []
+    let n = 0
+    for (const d of ['supabase/migrations', 'supabase/vuelta-atras', 'supabase/staging/sql']) {
+      for (const f of readdirSync(d).filter((x) => x.endsWith('.sql'))) {
+        n++
+        if (ordenEnElFichero(readFileSync(`${d}/${f}`, 'utf8')).length) malos.push(`${d}/${f}`)
+      }
+    }
+    expect(n).toBeGreaterThan(1600)
+    expect(malos).toEqual([])
+  })
+  it('la 0100 de la D01, reordenada: ninguna', () => {
+    expect(ordenEnElFichero(readFileSync('supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql', 'utf8'))).toEqual([])
   })
 })

@@ -146,6 +146,33 @@ create policy platform_store_read on public.platform_store for select using (acc
 revoke insert, update, delete, truncate on public.platform_store from anon, authenticated;
 grant select on public.platform_store to authenticated;
 
+-- 3 · Lo que trae el resumen de Uber ---------------------------------------------------
+-- (Va antes de las funciones de abajo: _conta_liquidacion_solape es SQL y su
+-- cuerpo se comprueba al crearla, así que store_id tiene que existir ya. El
+-- 16/10 el ensayo en producción paró aquí con 42703; staging no lo vio porque
+-- ya tenía la columna de una pasada anterior.)
+alter table public.channel_settlement add column if not exists other_earnings numeric;
+alter table public.channel_settlement add column if not exists promo_charges numeric;
+alter table public.channel_settlement add column if not exists ads_spend numeric;
+alter table public.channel_settlement add column if not exists item_promotions numeric;
+alter table public.channel_settlement add column if not exists chargebacks numeric;
+alter table public.channel_settlement add column if not exists adjustments numeric;
+alter table public.channel_settlement add column if not exists store_id uuid references public.platform_store(id) on delete set null;
+alter table public.channel_settlement add column if not exists inbound_email_id text;
+alter table public.channel_settlement add column if not exists commission_invoice_id uuid references public.supplier_invoice(id) on delete set null;
+comment on column public.channel_settlement.other_earnings is 'D01 · «Otras ganancias» del resumen (Uber): a tu favor, signo del origen.';
+comment on column public.channel_settlement.promo_charges is 'D01 · «Otros cargos de la promoción» (Uber): va en su factura de comisión.';
+comment on column public.channel_settlement.ads_spend is 'D01 · «Gastos en anuncios» (Uber): va en su factura de comisión, a la cuenta de publicidad.';
+comment on column public.channel_settlement.item_promotions is
+  'D01 · «Promociones en artículos» (Uber): NO va en la factura de comisión ni en los cargos del asiento. Se guarda aparte hasta que Julio decida cómo se apunta.';
+comment on column public.channel_settlement.chargebacks is 'D01 · «Importe neto del contracargo» (Uber): lo que la plataforma descuenta por pedidos con error.';
+comment on column public.channel_settlement.adjustments is 'D01 · «Ajustes» (Uber).';
+comment on column public.channel_settlement.store_id is 'D01 · La tienda de la plataforma (platform_store) de la que es la liquidación.';
+comment on column public.channel_settlement.inbound_email_id is 'D01 · El correo (inbound_email_log.email_id) del que se leyó.';
+comment on column public.channel_settlement.commission_invoice_id is
+  'D01 · Su factura de comisión (supplier_invoice). Si la tiene, el asiento de la liquidación ya no lleva la comisión: va en la factura (serie 2).';
+create index if not exists channel_settlement_tienda_idx on public.channel_settlement (store_id, period_to) where store_id is not null;
+
 -- ¿Se solapa con otra liquidación de la misma tienda? (Medido en los 33
 -- resúmenes reales: uno de 13 semanas repite los días de otros dos. Nunca se
 -- decide solo cuál vale: se dice.)
@@ -229,29 +256,6 @@ begin
 end $$;
 revoke all on function public.conta_tienda_plataforma_asignar(uuid, uuid, uuid, uuid, text) from public, anon;
 grant execute on function public.conta_tienda_plataforma_asignar(uuid, uuid, uuid, uuid, text) to authenticated;
-
--- 3 · Lo que trae el resumen de Uber ---------------------------------------------------
-alter table public.channel_settlement add column if not exists other_earnings numeric;
-alter table public.channel_settlement add column if not exists promo_charges numeric;
-alter table public.channel_settlement add column if not exists ads_spend numeric;
-alter table public.channel_settlement add column if not exists item_promotions numeric;
-alter table public.channel_settlement add column if not exists chargebacks numeric;
-alter table public.channel_settlement add column if not exists adjustments numeric;
-alter table public.channel_settlement add column if not exists store_id uuid references public.platform_store(id) on delete set null;
-alter table public.channel_settlement add column if not exists inbound_email_id text;
-alter table public.channel_settlement add column if not exists commission_invoice_id uuid references public.supplier_invoice(id) on delete set null;
-comment on column public.channel_settlement.other_earnings is 'D01 · «Otras ganancias» del resumen (Uber): a tu favor, signo del origen.';
-comment on column public.channel_settlement.promo_charges is 'D01 · «Otros cargos de la promoción» (Uber): va en su factura de comisión.';
-comment on column public.channel_settlement.ads_spend is 'D01 · «Gastos en anuncios» (Uber): va en su factura de comisión, a la cuenta de publicidad.';
-comment on column public.channel_settlement.item_promotions is
-  'D01 · «Promociones en artículos» (Uber): NO va en la factura de comisión ni en los cargos del asiento. Se guarda aparte hasta que Julio decida cómo se apunta.';
-comment on column public.channel_settlement.chargebacks is 'D01 · «Importe neto del contracargo» (Uber): lo que la plataforma descuenta por pedidos con error.';
-comment on column public.channel_settlement.adjustments is 'D01 · «Ajustes» (Uber).';
-comment on column public.channel_settlement.store_id is 'D01 · La tienda de la plataforma (platform_store) de la que es la liquidación.';
-comment on column public.channel_settlement.inbound_email_id is 'D01 · El correo (inbound_email_log.email_id) del que se leyó.';
-comment on column public.channel_settlement.commission_invoice_id is
-  'D01 · Su factura de comisión (supplier_invoice). Si la tiene, el asiento de la liquidación ya no lleva la comisión: va en la factura (serie 2).';
-create index if not exists channel_settlement_tienda_idx on public.channel_settlement (store_id, period_to) where store_id is not null;
 
 -- 4 · La factura de comisión ------------------------------------------------------------
 alter table public.supplier_invoice drop constraint if exists supplier_invoice_source_check;

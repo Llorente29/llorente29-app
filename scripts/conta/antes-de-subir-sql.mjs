@@ -35,8 +35,16 @@
 //      propia tanda falla antes de empezar; va dentro de query_to_xml('…'),
 //      que solo se analiza si se llama. (15/10, ensayo #89 de la E05:
 //      «relation public.supplier_batch_store does not exist» a los 31 s.)
+//   6. El orden dentro de cada fichero SQL de las dos tandas (producción y
+//      staging) y de sus vueltas atrás: una función «language sql» o una vista
+//      no lee una tabla o columna que el mismo fichero crea más abajo. Postgres
+//      comprueba su cuerpo al crearla; en una base limpia falla, y en staging,
+//      que ya las tiene de una pasada anterior, no se ve. (16/10, ensayo #92 de
+//      la D01: 42703 en _conta_liquidacion_solape, que leía
+//      channel_settlement.store_id antes de añadirlo. Staging, verde.)
 // Sale con 1 si algo no cumple.
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { ordenEnElFichero } from './produccion/analizar.mjs'
 
 const mal = []
 const manifiesto = 'supabase/staging/aplicar.txt'
@@ -90,7 +98,17 @@ if (existsSync(tanda)) {
     }
   }
 }
+const sqlDeLasTandas = new Set()
+for (const m of ['supabase/produccion/aplicar.txt', 'supabase/produccion/vuelta-atras.txt', 'supabase/staging/aplicar.txt']) {
+  if (!existsSync(m)) continue
+  for (const l of readFileSync(m, 'utf8').split('\n').map((x) => x.trim())) if (l && !l.startsWith('#') && !l.startsWith('cuenta:') && /\.sql$/.test(l) && existsSync(l)) sqlDeLasTandas.add(l)
+}
+for (const f of sqlDeLasTandas) {
+  for (const x of ordenEnElFichero(readFileSync(f, 'utf8'))) {
+    mal.push(`${f}: ${x.objeto} (sentencia ${x.sentencia}) lee ${x.lee}, que este fichero crea más abajo (sentencia ${x.nace}). En una base limpia falla al crearla (42703/42P01); staging no lo ve si ya la tiene. Créala antes.`)
+  }
+}
 if (mal.length) { console.error(mal.map((m) => `✗ ${m}`).join('\n')); process.exit(1) }
-console.log('Pruebas de staging como usuario, \\gset en su sitio, la tanda dice qué cuenta (sin tablas que aún no existen) y no deja huecos.')
+console.log('Pruebas de staging como usuario, \\gset en su sitio, la tanda dice qué cuenta (sin tablas que aún no existen), no deja huecos y ninguna función SQL ni vista lee algo que su fichero crea después.')
 console.log('Lo que esto no ve, y se hace igual: el fichero ENTERO, no un trozo, y como usuario; lo prueba staging con la base real antes del real de producción.')
 console.log('Y lo que el ensayo no ve (los agentes de después, la salud del pedido, lo que hacen otros procesos más tarde): un ensayo en verde no garantiza el real. Lo prueba staging con «real-con-fallo» y «real».')
