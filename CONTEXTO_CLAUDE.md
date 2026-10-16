@@ -2203,3 +2203,86 @@ nombres dicen «IVA repercutido X %» y la del 9,5 % sale «IVA repercutido 95 %
 
 No se ha cambiado la semilla para esconderlo: el rojo del día sin asiento de la
 empresa B sigue siendo de verdad hasta que esto se construya.
+
+---
+
+## C06b · 16/10/2026 — DISEÑO: las promociones en el asiento de ventas del día (sin construir)
+
+> Aprobado por Julio el 16/10. Diseño, sin código: la construcción, con su
+> tanda y su PR, es la tarea siguiente. Cifras medidas en producción en solo
+> lectura el 16/10, solo Foodint (`account_id 51ad1792…`).
+
+**Lo aprobado:**
+- La venta **bruta** (precio de carta), en la subcuenta de ventas de su marca (7000000x).
+- La **promoción**, en una subcuenta propia del grupo 70 que **resta** (saldo deudor), una por plataforma.
+- El **IVA sobre lo que paga el cliente** (Ley 37/1992, art. 78.Tres.2.º: el descuento concedido en la operación no forma parte de la base).
+- **Solo lo que entre desde ahora.** Lo validado y enviado a Diez no se toca.
+
+### El asiento del día, con un ejemplo inventado
+
+Marca de Prueba, Uber Eats, un día, dos pedidos:
+- Pedido 1: carta 20,00 €, sin promoción. Paga 20,00 €.
+- Pedido 2: carta 30,00 €, promoción de la marca de 10,00 € (2×1). Paga 20,00 €.
+
+El cliente paga 40,00 €, IVA dentro al 10 %: base 36,36 y cuota 3,64. La carta, 50,00 €, tiene una base de 45,45. La promoción en base es la diferencia, 45,45 − 36,36 = 9,09, así que el asiento siempre cuadra al céntimo.
+
+| Cuenta | Concepto | Debe | Haber |
+|---|---|---|---|
+| 430000xx | Cobra Uber Eats | 40,00 | |
+| **70009001** | **Promociones Uber Eats** | **9,09** | |
+| 7000000x | Ventas Marca de Prueba (carta) | | 45,45 |
+| 47700010 | IVA repercutido 10 % · base 36,36 · 2 facturas | | 3,64 |
+| | **Total** | **49,09** | **49,09** |
+
+- **El 430** sigue siendo lo que paga el cliente, como hoy.
+- **El IVA** va sobre la base neta, y la regla del céntimo se mide sobre esa base.
+- **La factura simplificada** de cada pedido es por lo que paga el cliente; el resumen del día lleva esa base.
+- **La «Base calculada»** (pedido sin base) se sigue deduciendo del total al tipo de las ventas. La carta se calcula igual: el total más el descuento.
+
+### Las subcuentas nuevas (Julio las crea también en Diez antes del primer envío)
+
+| Número | Nombre | Cuelga de |
+|---|---|---|
+| **70009001** | PROMOCIONES UBER EATS | 700 Ventas de mercaderías |
+| **70009002** | PROMOCIONES GLOVO | 700 |
+| **70009003** | PROMOCIONES JUST EAT | 700 |
+
+- **Por qué en la 700 y no en otra del grupo 70:**
+  - La 706 es solo el pronto pago, la 708 las devoluciones y la 709 los rappels por volumen; una promoción no es ninguna de las tres.
+  - Colgadas de la 700, con saldo deudor, restan en la misma línea de la cifra de negocios.
+- **Los números están libres en Foodint:** las de marca van de 70000001 a 70000011, sin huecos de 7000900x.
+- **En Folvy:** las tres se enlazan a su canal (como la 430 de cada plataforma). Si una plataforma no tiene la suya, el asiento sale en «duda» con «Mira esto» y no se valida, igual que la subcuenta de marca.
+
+### De dónde sale el importe de la promoción, y si hoy llega
+
+**Por pedido (lo que usa el asiento del día):** `sale.discount_amount`. Viene de HubRise (`discounts[].price_off`) y **hoy llega** en las tres plataformas.
+
+| Pedidos de octubre, marcas propias (del 01 al 15/10) | Pedidos | Con descuento | Descuento (IVA dentro) |
+|---|---|---|---|
+| Uber Eats (HubRise) | 279 | 249 | 4.434,57 € |
+| Glovo (HubRise) | 240 | 194 | 2.564,68 € |
+| Just Eat (HubRise) | 7 | 2 | 11,28 € |
+
+- **Lo que no llega por pedido: quién lo paga.** HubRise dice el importe («Discount», `pricing_effect: price_off`), pero no si lo paga la marca o la plataforma.
+- **Glovo:** el `total` del pedido incluye los cargos al cliente (envío), así que la carta no es total + descuento. Es la suma de las líneas.
+  - Ejemplo real medido: líneas 27,80, descuento 8,34 y total 23,96. La diferencia son 4,50 € de cargos.
+  - **Esto hay que resolverlo al construir:** cómo van esos cargos hoy en el asiento del día.
+
+**Quién la paga (lo dice la liquidación de cada plataforma, no el pedido):**
+- **Uber Eats:** el «Resumen de pagos» semanal por marca × local trae «Promociones en artículos», que paga la marca.
+  - Lo lee la rama de A `conta/d01-liquidaciones-uber` (#204), columna `channel_settlement.item_promotions`.
+  - **Hoy no llega a producción:** la columna no existe aún, el #204 no está aplicado.
+- **Glovo:** la liquidación CSV trae `promo_product` («promociones a tu cargo»), `promo_flash` y `offer_flash_credit` (lo que Glovo pone de la flash).
+  - Hay liquidaciones importadas hasta junio.
+  - **De octubre, ninguna.**
+- **Just Eat:** su CSV no trae columna de promociones (0 en las 53 importadas). **No llega.**
+
+**Propuesta para el asiento del día (lo decide Julio al construir):**
+- Toma el descuento del pedido como promoción de la marca, que es el caso de «Promociones en artículos».
+- La liquidación lo contrasta después. Si la plataforma dice que pagó ella parte de un descuento, esa parte no es menos venta: es cobro de la plataforma, y se ajusta contra su 430 al liquidar.
+
+### Asientos abiertos afectados
+
+- **Ninguno del día.** Los 59 asientos de ventas de octubre (del 01 al 15/10) están **validados**: 526 pedidos, 445 con descuento y 7.010,53 € de descuento. Por lo aprobado, se quedan con la venta neta.
+- **Los 7 propuestos que hay son de banco:** no los toca.
+- **A coordinar con A (#204):** su liquidación de Uber deja «Promociones en artículos» **apartada en la 430**. Con este diseño, la promoción de la marca ya queda contabilizada el día de la venta, y el 430 de ese día es lo que paga el cliente. Al cuadrar la liquidación no debe volver a restarse ni quedar como pendiente: es un contraste. Si no, saldría dos veces.
