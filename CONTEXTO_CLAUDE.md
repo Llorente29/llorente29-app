@@ -2463,7 +2463,11 @@ Pedidos de marcas propias de octubre (del 01 al 15/10, 526 pedidos, todos de Hub
      - el asiento que hace Diez cuadra, con la 70009002 al debe, la 70500001 y la venta al haber y la 47700010 con la cuota;
      - la analítica vuelve igual que la mandada;
      - hay una sola factura con ese número.
-4. Si Diez la acepta bien, el ensayo y el real de la tanda.
+4. Si Diez la acepta bien, el ensayo y el real de la tanda, **después de la T2 de B** (de una en una) y solo cuando Julio diga «te toca». Antes se vuelve a medir el contexto de producción: la T2 cambia los movimientos del banco.
+
+**Lo que viene detrás (aviso de D, 16/10):** la tanda de D (20261117T0100, `conta_motivos_para_validar`) va después de esta. Con ella, la validación y el freno llaman a `conta_cargos_de_pedidos`, de la 0100. Así que **la vuelta atrás de la 0100 no va sola**: primero se deshace la de D. Escrito en `supabase/produccion/vuelta-atras.txt`, y la `.down.sql` de la 0100 para, sin tocar nada, si `conta_motivos_para_validar` existe.
+
+**Deuda, para cuando acabe la construcción (Julio, 16/10):** la correspondencia local → grupo analítico de Diez está escrita en código (`supabase/functions/_shared/diezAnalitica.ts`, `CORRESPONDENCIA_LLORENTE29`). Folvy es multiempresa: tiene que ser un dato por empresa, con su pantalla en Ajustes para verlo y cambiarlo. Pendiente: proponer diseño y tanda.
 
 Después: un PR suelto con los dos textos de recibidas. Uno es la línea «a Diez irá cuando Cegid active los documentos»; el otro, el PDF de las recibidas en «Pendientes de adjuntar en Diez». Hasta entonces, el PDF de una recibida se adjunta en Diez a mano. Y el agente «libro» con «no lo paga», después de la tanda.
 

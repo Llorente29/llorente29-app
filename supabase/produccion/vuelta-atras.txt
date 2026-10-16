@@ -3,6 +3,10 @@
 # subcuentas ya tiene apuntes) y después la estructura (PARA si queda algún
 # enlace o un envío aclarado con su liquidación). Las dos funciones vuelven a
 # su huella de antes. No toca ningún asiento.
+# Con la tanda de D aplicada (20261117T0100, conta_motivos_para_validar), esta
+# vuelta atrás NO va sola: la validación y el freno de D llaman a
+# conta_cargos_de_pedidos, de la 0100. Primero se deshace la de D y después
+# esta. La .down.sql de la 0100 para si conta_motivos_para_validar existe.
 # La anterior de este fichero (0760): tests/conta/produccion/vuelta-atras-c06b-recibidas-abiertas-20261016.txt.
 # La de B02 · T1: tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
 cuenta: scripts/conta/produccion/cuentas/promociones-envios.sql
