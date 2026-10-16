@@ -1,8 +1,7 @@
-# Vuelta atrás de la tanda D01 de las liquidaciones por correo (modo
-# «vuelta_atras»), en orden inverso. Cada fichero PARA, sin tocar nada, si ya
-# hay algo que se perdería (la dirección encendida o con correos; liquidaciones
-# leídas de un correo, direcciones de liquidaciones o facturas de comisión).
-# La anterior de este fichero (C06b): tests/conta/produccion/vuelta-atras-c06b-centimo-iva-20261016.txt.
-cuenta: scripts/conta/produccion/cuentas/d01-liquidaciones.sql
-supabase/vuelta-atras/20261113T0110_d01_liquidaciones_direccion_foodint.down.sql
-supabase/vuelta-atras/20261113T0100_d01_liquidaciones_correo.down.sql
+# Vuelta atrás de la tanda de las recibidas abiertas en C0008 (modo
+# «vuelta_atras»). La vuelve a cerrar (incluye_recibidas = false, y el motivo
+# al de antes) y PARA si con ella ya se ha enviado o intentado escribir alguna
+# recibida en C0008, o el contraasiento de una.
+# La anterior de este fichero (D01): tests/conta/produccion/vuelta-atras-d01-liquidaciones-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/diez-recibidas-abiertas.sql
+supabase/vuelta-atras/20261111T0760_c06b_diez_recibidas_abiertas_datos.down.sql
