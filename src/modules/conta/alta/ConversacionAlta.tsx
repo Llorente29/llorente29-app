@@ -393,11 +393,12 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
         })
       }
       const iva = await ponerIvaVentas(companyId, elegidas.map((x) => ({ iaeCode: x.iae?.code ?? null, cnaeCode: x.cnae?.code ?? null })))
-      apuntado(fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva))
       // S01: la marca de hostelería, por lo que hace (se cambia en Ajustes › Empresa).
+      // Va en la MISMA frase que las actividades: la pregunta siguiente se pega
+      // a la última frase apuntada, y tiene que seguir en la burbuja del «Entendido».
       const hosteleria = esHosteleriaPorGrupos(elegidas.map((x) => x.clave)) || elegidas.some((x) => esHosteleriaPorCodigos(x.iae?.code ?? null, x.cnae?.code ?? null))
       await ponerHosteleriaDelAlta(accountId!, companyId, hosteleria)
-      apuntado(fraseHosteleria(hosteleria))
+      apuntado([...fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva), { t: ' ' }, ...fraseHosteleria(hosteleria)])
       setPropuestas(null)
       await avanzar('impuestos')
     })
@@ -415,10 +416,9 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       })
       const iva = await ponerIvaVentas(companyId, [{ iaeCode: a.iae?.code ?? null, cnaeCode: a.cnae?.code ?? null }])
       setAMano(false)
-      apuntado(fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva))
       const hosteleria = esHosteleriaPorCodigos(a.iae?.code ?? null, a.cnae?.code ?? null)
       await ponerHosteleriaDelAlta(accountId!, companyId, hosteleria)
-      apuntado(fraseHosteleria(hosteleria))
+      apuntado([...fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva), { t: ' ' }, ...fraseHosteleria(hosteleria)])
       await avanzar('impuestos')
     })
   }
