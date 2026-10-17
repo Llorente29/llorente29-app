@@ -130,8 +130,21 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
   await abrirFavoritos(page)
   await expect(page.getByRole('group', { name: 'Favoritos' })).toHaveAttribute('aria-busy', 'false')
   await page.keyboard.press('Escape')
-  const cajas = async () => page.locator('.s-barra a, .s-barra-inferior a, .s-pestanas a, .s-cinta a, .s-cinta button, .s-cab-empresa')
+  const medir = async () => page.locator('.s-barra a, .s-barra-inferior a, .s-pestanas a, .s-cinta a, .s-cinta button, .s-cab-empresa')
     .evaluateAll((xs) => xs.map((x) => { const r = x.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)].join(',') }))
+  // Se mide con la pantalla quieta: lo que llega de la base después (lo que hay
+  // por revisar bajo Inicio, el ejercicio de Libros en la cabecera) mueve cosas,
+  // y eso no es el nivel. Dos lecturas iguales separadas 1 s, o 15 s de margen.
+  const cajas = async () => {
+    let previa = await medir()
+    for (let i = 0; i < 15; i++) {
+      await page.waitForTimeout(1000)
+      const ahora = await medir()
+      if (ahora.join('|') === previa.join('|')) return ahora
+      previa = ahora
+    }
+    return previa
+  }
   const antes = await cajas()
   expect(antes.length).toBeGreaterThan(8)
 
