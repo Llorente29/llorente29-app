@@ -16,7 +16,8 @@
 # misma vara y lo compara (cuentas-comparar.mjs). Sin CUENTAS_ANTES, no puede
 # decir que está como antes, y no lo dice.
 #
-# Entorno: PSQL, DB_URL, INFORME, CUENTAS y CUENTAS_ANTES y, si los .down.sql
+# Entorno: PSQL, DB_URL, INFORME, CUENTAS y CUENTAS_ANTES, SIN_VUELTA (lo
+# declarado sin vuelta atrás, «ruta<TAB>motivo»: solo cambia el mensaje) y, si los .down.sql
 # no están en supabase/vuelta-atras, VUELTA_ATRAS_DIR (el ensayo de staging,
 # C04 R4). Sale con:
 #   0  deshecho todo Y las cuentas iguales que antes de la tanda;
@@ -34,8 +35,15 @@ for ((i=${#ap[@]}-1; i>=0; i--)); do
   down="${VUELTA_ATRAS_DIR:-supabase/vuelta-atras}/$(basename "$f" .sql).down.sql"
   if [ "$fallo" -ne 0 ]; then echo "| $((i+1)) | \`$f\` | **queda aplicado** (la vuelta atrás paró antes) |" >> "$INFORME"; continue; fi
   if [ ! -f "$down" ]; then
-    echo "| $((i+1)) | \`$f\` | **sin vuelta atrás: queda aplicado** |" >> "$INFORME"
-    echo "::error::$f no tiene $down: queda aplicado, y lo anterior también."
+    # W02: si el manifiesto lo declaró sin vuelta atrás, se dice así, con su motivo.
+    motivo="$( [ -s "${SIN_VUELTA:-/nonexistent}" ] && awk -F'\t' -v f="$f" '$1 == f { print $2 }' "$SIN_VUELTA" || true)"
+    if [ -n "$motivo" ]; then
+      echo "| $((i+1)) | \`$f\` | **sin vuelta atrás declarada: queda aplicado** ($motivo) |" >> "$INFORME"
+      echo "::error::$f va sin vuelta atrás, declarada ($motivo): queda aplicado, y lo anterior también."
+    else
+      echo "| $((i+1)) | \`$f\` | **sin vuelta atrás: queda aplicado** |" >> "$INFORME"
+      echo "::error::$f no tiene $down: queda aplicado, y lo anterior también."
+    fi
     fallo=1; continue
   fi
   node scripts/conta/produccion/analizar.mjs baja "$down" > "$tmp"
