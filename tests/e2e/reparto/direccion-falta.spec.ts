@@ -273,9 +273,16 @@ test('tablet: la misma línea y «Completar dirección» grande; el aviso rojo, 
   await expect(c.getByTestId('aviso-motivo')).toHaveText(MOTIVO_R03C)
   await expect(c.getByTestId('aviso-llamar-cliente')).toHaveText('Tel. +34600000003 · Llamar')
   await expect(c.getByRole('button', { name: 'Completar dirección' })).toBeVisible()
-  // El aviso va en su sitio, no flotando: el «Listo» de las tarjetas se ve y se puede pulsar.
+  // El aviso va dentro de la página de Pedidos, debajo de la barra (Pedidos,
+  // Cocina, Disponibilidad, Impresoras), no flotando ni encima de ella; y el
+  // «Listo» de las tarjetas se ve y se puede pulsar.
   const aviso = page.getByTestId('aviso-direccion-falta')
+  await expect(aviso).toHaveAttribute('data-en-pagina', 'si')
   expect(await aviso.evaluate(el => getComputedStyle(el).position)).not.toBe('fixed')
+  const barra = (await page.locator('header').first().boundingBox())!
+  expect((await aviso.boundingBox())!.y).toBeGreaterThanOrEqual(barra.y + barra.height)
+  // R03U (Uber de reparto nuestro, con calle): ha salido a Catcher, como en automático.
+  await expect(tarjeta(page, 'R03U')).not.toContainText('aún sin rider')
   const listo = d.getByRole('button', { name: 'Listo' })
   await expect(listo).toBeVisible()
   expect(await seVeEntero(page, listo)).toBe(true)

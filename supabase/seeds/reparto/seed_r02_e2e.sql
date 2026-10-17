@@ -98,8 +98,8 @@ delete from public.delivery_policy_suggestion where account_id = 'c01a0000-0000-
 --   R03T · Uber con las tres, marca con Uber en «Plataforma» → propio (la regla
 --          por pedido manda sobre la tabla)
 --   R03M · Uber mezclado → aviso «Decide quién reparte»; no sale a Catcher
---   R03U · Uber con dirección y código de acceso → no sale en el aviso; el
---          ticket y la tarjeta llevan «Tel. … · código …»
+--   R03U · Uber con dirección y código de acceso → ha salido a Catcher; no sale
+--          en el aviso; el ticket y la tarjeta llevan «Tel. … · código …»
 -- Teléfonos y códigos inventados (900 000 000, 600 000 000, 12345678).
 -- ============================================================================
 do $r03$
@@ -171,15 +171,19 @@ begin
      set dispatch_error = 'No se despachó: la dirección no ha llegado y tampoco el punto del mapa: no se puede despachar'
    where id = 'e0300000-0000-4000-8000-0000000000a3' and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
-  -- Los que tienen el punto del mapa han salido a Catcher (lo que hace
-  -- catcher-dispatch en un local automático). Pedidos de Catcher inventados; el
-  -- R03B ya con repartidor (inventado) para «Llamar».
+  -- Los que tienen calle o punto del mapa han salido a Catcher: es lo que hace
+  -- tg_auto_dispatch + catcher-dispatch en un local automático (R03U incluido:
+  -- lo prueba supabase/staging/sql/20261118_r03_uber_auto_despacho_prueba.sql).
+  -- Aquí no sale nada de verdad: pedidos de Catcher inventados; el R03B ya con
+  -- repartidor (inventado) para «Llamar».
   update public.sale
      set carrier_code = 'catcher', carrier_order_id = 'R03-PRUEBA-' || pos_short_code, delivery_state = 'assigned',
          rider_name = case when pos_short_code = 'R03B' then 'Repartidor de Prueba' end,
          rider_phone = case when pos_short_code = 'R03B' then '+34600000090' end
-   where id in ('e0300000-0000-4000-8000-0000000000a2', 'e0300000-0000-4000-8000-0000000000a4',
-                'e0300000-0000-4000-8000-0000000000a5', 'e0300000-0000-4000-8000-0000000000b2')
+   where id in ('e0300000-0000-4000-8000-0000000000a1', 'e0300000-0000-4000-8000-0000000000b1',
+                'e0300000-0000-4000-8000-0000000000a2', 'e0300000-0000-4000-8000-0000000000a4',
+                'e0300000-0000-4000-8000-0000000000a5', 'e0300000-0000-4000-8000-0000000000b2',
+                'e0300000-0000-4000-8000-0000000000a6')
      and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
   perform set_config('folvy.reparto_tal_cual', '', true);

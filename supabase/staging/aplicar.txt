@@ -4,6 +4,9 @@
 # solo cambió un comentario de su cabecera. Aquí, las tres vueltas atrás que van
 # a producción, de verdad, en orden y sobre datos, con ROLLBACK: staging no cambia.
 supabase/staging/sql/20261118_r03_vuelta_atras_prueba.sql
+# Y que un Uber de reparto nuestro sale solo a Catcher en un local automático
+# (lo de R03U en las capturas es la semilla), con ROLLBACK: no se envía nada.
+supabase/staging/sql/20261118_r03_uber_auto_despacho_prueba.sql
 
 # C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
 # prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:

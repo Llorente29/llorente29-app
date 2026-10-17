@@ -36,11 +36,13 @@ export interface AvisoDireccionFaltaProps {
   /** Local (sesión). En la tablet va null: la base lo saca del token. */
   locationId: string | null
   token?: string | null
+  /** Dentro de una página que se desplaza (Pedidos de la tablet): sin alto máximo propio. */
+  enPagina?: boolean
 }
 
 interface Resultado { texto: string; error: boolean; hasta: number; pedido: PedidoSinDireccion }
 
-export default function AvisoDireccionFalta({ locationId, token = null }: AvisoDireccionFaltaProps) {
+export default function AvisoDireccionFalta({ locationId, token = null, enPagina = false }: AvisoDireccionFaltaProps) {
   const [pedidos, setPedidos] = useState<PedidoSinDireccion[]>([])
   const [enviando, setEnviando] = useState<string | null>(null)
   const [resultados, setResultados] = useState<Record<string, Resultado>>({})
@@ -120,8 +122,9 @@ export default function AvisoDireccionFalta({ locationId, token = null }: AvisoD
   if (pedidos.length === 0 && resueltos.length === 0) return null
 
   return (
-    <div className="relative z-30 shrink-0 px-2 sm:px-3 pt-2 sm:pt-3" data-testid="aviso-direccion-falta">
-      <div className="mx-auto max-w-4xl max-h-[45vh] overflow-y-auto rounded-2xl bg-[#C62828] text-white shadow-[0_10px_40px_rgba(198,40,40,0.5)] ring-2 ring-white/30">
+    <div className={enPagina ? 'max-w-5xl mx-auto mb-3' : 'relative z-30 shrink-0 bg-page px-2 sm:px-3 pt-2 sm:pt-3'}
+      data-testid="aviso-direccion-falta" data-en-pagina={enPagina ? 'si' : 'no'}>
+      <div className={`mx-auto max-w-4xl ${enPagina ? '' : 'max-h-[45vh] overflow-y-auto '} rounded-2xl bg-[#C62828] text-white shadow-[0_10px_40px_rgba(198,40,40,0.5)] ring-2 ring-white/30`}>
         {pedidos.map(p => {
           const r = resultados[p.sale_id]
           const quien = <p className="mt-2 text-[17px] leading-snug"><b>{p.code}</b>{p.brand ? ` · ${p.brand}` : ''} · {nombreDelPortal(p.channel)}</p>
