@@ -60,6 +60,7 @@ const ms = async <T>(clave: string, f: () => Promise<T>): Promise<T | null> => {
 try { await c.asegurarToken() } catch (e) { sale('entra_c0008', 0); fallo('entra', e); process.exit(1) }
 sale('entra_c0008', 1)
 
+const P2 = process.env.DIAGNOSTICO_PASADA === '2'
 // 2 · El listado de octubre, como lo pide el envío.
 seccion('listado_octubre')
 const oct = await ms('octubre', () => c.facturasDelMes('202610'))
@@ -68,7 +69,7 @@ if (oct) sale('octubre.facturas', oct.length)
 // Día a día, del 01 al 17: dónde contesta y dónde no.
 seccion('listado_por_dia')
 const delDia: Factura[] = []
-for (let d = 1; d <= 17; d++) {
+for (let d = 1; d <= (P2 ? 0 : 17); d++) {
   const f = 20261000 + d
   const r = await ms(`dia${String(d).padStart(2, '0')}`, () => c.todas<Factura>(`/api/facturas?$filter=${encodeURIComponent(`Fecha ge ${f} and Fecha le ${f}`)}`))
   if (r) { sale(`dia${String(d).padStart(2, '0')}.facturas`, r.length); if (f === DIA) delDia.push(...r) }
@@ -126,6 +127,25 @@ for (const cod of [...NUEVAS, ...OTRAS]) {
     }
   }
   sale(`sc_${cod}.campos_distintos`, distintos)
+}
+// Segunda pasada (17/10): ¿los 500 son de unas cuentas o días concretos, o
+// Diez falla a ratos? Cada lectura, tres veces, con su código y su tiempo.
+seccion('repeticion')
+const codigo = async (clave: string, ruta: string) => {
+  for (let i = 1; i <= 3; i++) {
+    const t0 = Date.now()
+    try {
+      const r = await (c as unknown as { llamar(m: string, r: string): Promise<{ status: number }> }).llamar('GET', ruta)
+      sale(`${clave}.v${i}.status`, r.status)
+    } catch (e) { fallo(`${clave}.v${i}`, e) }
+    sale(`${clave}.v${i}.ms`, Date.now() - t0)
+  }
+}
+if (process.env.DIAGNOSTICO_PASADA === '2') {
+  for (const cod of ['43000001', '43000002', '43000003', '70000001', '70009001', '70009002', '70500001']) await codigo(`sc_${cod}`, `/api/subcuentas/subcuenta/${cod}`)
+  await codigo('facturas_dia01', `/api/facturas?$filter=${encodeURIComponent('Fecha ge 20261001 and Fecha le 20261001')}&$top=200&$skip=0`)
+  await codigo('facturas_dia15', `/api/facturas?$filter=${encodeURIComponent('Fecha ge 20261015 and Fecha le 20261015')}&$top=200&$skip=0`)
+  await codigo('apuntes_dia16', `/api/apuntes?$filter=${encodeURIComponent('Fecha ge 20261016 and Fecha le 20261016')}&$top=200&$skip=0`)
 }
 sale('peticiones', c.metrica.peticiones)
 sale('reintentos429', c.metrica.reintentos429)

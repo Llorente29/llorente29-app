@@ -46,4 +46,4 @@ jobs:
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
         run: |
           set -euo pipefail
-          npx --yes tsx@4.19.2 scripts/conta/diez/diagnostico-1860-c0008.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          DIAGNOSTICO_PASADA=2 npx --yes tsx@4.19.2 scripts/conta/diez/diagnostico-1860-c0008.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
