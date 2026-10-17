@@ -65,6 +65,16 @@ El inventario es el del paso 1 (`S01_paso1_comprobaciones.md`, §2).
   cada vista lo dice la línea de debajo («3 terceros en «Plataformas»»).
 - «Nuevo cliente», en la cinta (abre el mismo diálogo con `?nuevo`).
 
+### Ajustes › Empresa: «¿Es un negocio de hostelería?»
+
+- La marca de la empresa (`company.is_hospitality`) se cambia aquí, al lado de «A
+  qué te dedicas»: «Sí, es hostelería» / «No», y dice qué sale o deja de salir
+  (regla 8). El esqueleto la vuelve a leer al momento (`refrescarContextoEsqueleto`):
+  Liquidaciones aparece en Compras y gastos sin recargar.
+- «Hora de cierre del día» (Ajustes › Ejercicio) es de pedidos: solo con
+  hostelería (inventario, §3).
+- La e2e de la cuenta D la pone en «Sí», mira que sale Liquidaciones y la deja en «No».
+
 ### La cinta: el título de cada grupo, debajo (Julio, 17/10)
 
 Medido a 1440 px: con el título al lado de sus botones, Bancos pedía ~1.365 px
@@ -89,7 +99,7 @@ maqueta: no lo he hecho.
 ## Queda (paso 3)
 
 Lo de hostelería que queda en otras pantallas (Ventas, textos del diario,
-fichas, alta), Ajustes (Empresa con su logo, Registro de la IA, la marca de
-hostelería), la marca al dar de alta, Definiciones › Analítica, la vista
+fichas, alta), Ajustes (el logo de la empresa, Registro de la IA), la marca al
+dar de alta, Definiciones › Analítica, la vista
 Recibida en Contabilidad › Asientos, `?tipo=` en el asiento nuevo y el
 `journal_entry_id` (paso 1).

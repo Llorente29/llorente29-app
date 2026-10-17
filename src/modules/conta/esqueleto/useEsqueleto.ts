@@ -68,9 +68,21 @@ export function usePreferenciasEsqueleto(accountId: string | null, userId: strin
   return { prefs, cargadas: estado.clave === clave && estado.cargadas, cambiar, aviso, quitarAviso: () => setAviso(null) }
 }
 
+const EVENTO_CONTEXTO = 'folvy:conta:contexto-esqueleto'
+/** Tras cambiar algo que decide qué sale (la marca de hostelería): el esqueleto lo vuelve a leer. */
+export function refrescarContextoEsqueleto(): void {
+  window.dispatchEvent(new Event(EVENTO_CONTEXTO))
+}
+
 export function useContextoEsqueleto(accountId: string | null, companyId: string | null) {
   const clave = accountId ? `${accountId}:${companyId ?? ''}` : null
   const [estado, setEstado] = useState<{ clave: string | null; ctx: Contexto; error: string | null }>({ clave: null, ctx: CONTEXTO_VACIO, error: null })
+  const [vuelta, setVuelta] = useState(0)
+  useEffect(() => {
+    const f = () => setVuelta((v) => v + 1)
+    window.addEventListener(EVENTO_CONTEXTO, f)
+    return () => window.removeEventListener(EVENTO_CONTEXTO, f)
+  }, [])
   useEffect(() => {
     if (!accountId || !clave) return
     let vivo = true
@@ -78,7 +90,7 @@ export function useContextoEsqueleto(accountId: string | null, companyId: string
       .then((ctx) => { if (vivo) setEstado({ clave, ctx, error: null }) })
       .catch((e: unknown) => { if (vivo) setEstado({ clave, ctx: CONTEXTO_VACIO, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
-  }, [accountId, companyId, clave])
+  }, [accountId, companyId, clave, vuelta])
   const alDia = estado.clave === clave
   // listo: ya se sabe lo de esta empresa (hasta entonces, lo de hostelería ni sale ni se niega).
   return { ctx: alDia ? estado.ctx : CONTEXTO_VACIO, error: alDia ? estado.error : null, listo: alDia && estado.error === null }

@@ -231,6 +231,36 @@ test('Favoritos: se fija desde el menú, se guarda en la base y sigue en otro na
   }
 })
 
+test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esqueleto cambia sin recargar', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_D.email)
+  vigilar(page, errores)
+  await page.goto('/conta/ajustes')
+  const marca = page.getByRole('group', { name: '¿Es un negocio de hostelería?' })
+  await expect(page.getByTestId('es-hosteleria')).toHaveText('No', { timeout: 30_000 })
+  try {
+    await marca.getByRole('button', { name: 'Sí, es hostelería' }).click()
+    // Regla 8: dice qué sale.
+    await expect(page.getByText(/^Hecho: es de hostelería\. Ya salen Liquidaciones/)).toBeVisible()
+    await expect(page.getByTestId('es-hosteleria')).toHaveText('Sí')
+    // El esqueleto lo lee otra vez: Liquidaciones sale en Compras y gastos sin recargar.
+    if (lado(page) === 'ordenador') await barra(page).getByRole('link', { name: 'Compras y gastos' }).click()
+    else await page.goto('/conta/compras')
+    await expect(pestanas(page, 'Compras y gastos').getByRole('link')).toHaveText(['Por revisar', 'Facturas recibidas', 'Liquidaciones'])
+  } finally {
+    // Pase lo que pase, D vuelve a no ser de hostelería (las demás pruebas lo cuentan).
+    await page.goto('/conta/ajustes')
+    await expect(page.getByTestId('es-hosteleria')).not.toHaveText('', { timeout: 30_000 })
+    if ((await page.getByTestId('es-hosteleria').textContent()) !== 'No') {
+      await marca.getByRole('button', { name: 'No', exact: true }).click()
+      await expect(page.getByText(/^Hecho: no es de hostelería\./)).toBeVisible()
+    }
+  }
+  await page.goto('/conta/compras')
+  await expect(pestanas(page, 'Compras y gastos').getByRole('link')).toHaveText(['Por revisar', 'Facturas recibidas'])
+  expect(errores).toEqual([])
+})
+
 test('la cinta se oculta, se recuerda y vuelve (nunca desaparece sin decir dónde está)', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')

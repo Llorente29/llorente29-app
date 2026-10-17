@@ -41,6 +41,12 @@ export interface Empresa {
   /** Teléfono y correo de contacto de la empresa (hoja de identificación del depósito). */
   phone?: string | null
   email?: string | null
+  /**
+   * S01 · La empresa es de hostelería (company.is_hospitality): la marca
+   * explícita que decide si salen Liquidaciones, plataformas y socios de marca.
+   * null = sin decir (se trata como no).
+   */
+  hosteleria?: boolean | null
   /** Por dónde va el alta conversada (company.setup_step). */
   setupStep: string
   setupCompletedAt: string | null
