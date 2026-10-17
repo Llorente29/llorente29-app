@@ -222,6 +222,8 @@ export const CONTA = {
     bancos: 'bancos',
     /** Una pestaña de Bancos, o una de sus acciones (subir, hecho-por-folvy). */
     bancosPestana: 'bancos/:pestana',
+    /** M01 · La muestra de las tres piezas comunes, con datos inventados. Solo fuera de producción (module.tsx). */
+    muestraPiezas: 'ajustes/muestra-piezas',
   },
 } as const
 

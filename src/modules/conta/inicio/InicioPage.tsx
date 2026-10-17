@@ -31,9 +31,9 @@ import { cargarIa, responderSugerencia } from '@/modules/conta/services/iaServic
 import { hechoAlAceptar, type Sugerencia } from '@/modules/conta/ia/tipos'
 import { subcuentasSinNombre } from '@/modules/conta/services/pasosDiezService'
 import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
-import { diaMes, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { diaMes, euros, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  barras, cambio, diaDeHoy, dudas, frasePago, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
+  barras, cambio, diaDeHoy, dudas, frasePago, lineasIva, textoIva, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
 } from '@/modules/conta/lib/inicio'
 import { mesAnterior, nombreMes, type CierreMes, type PasoCierre } from '@/modules/conta/lib/diario'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
@@ -174,21 +174,35 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
         tono={pago.estado === 'listo' && pago.v !== null && pago.v < hoy ? 'ambar' : undefined} barras={barras(serie('debes'))} />
       <Cifra etiqueta="IVA del trimestre" valor={iva.estado === 'listo' ? euros(iva.v.aPagar) : iva.estado === 'fallo' ? '—' : '…'}
         ruta={rutaLibros('registro', 'expedidas')}
-        apoyo={iva.estado === 'listo' ? `${iva.v.trimestre}: ${euros(iva.v.repercutido)} − ${euros(iva.v.soportado)}` : iva.estado === 'fallo' ? iva.texto : ' '}
+        apoyo={iva.estado === 'listo' ? textoIva(iva.v.trimestre, lineasIvaDe(iva.v)) : iva.estado === 'fallo' ? iva.texto : ' '}
+        apoyoNodo={iva.estado === 'listo' ? (
+          <span className="cxi-iva">
+            {lineasIvaDe(iva.v).map((l) => (
+              <span key={l.etiqueta} className="cxi-iva-linea">
+                <span>{l.etiqueta}</span> <span className="cxi-cifra-mono">{l.importe}</span>{l.nota && <span className="cxi-iva-nota"> {l.nota}</span>}
+              </span>
+            ))}
+          </span>
+        ) : undefined}
         barras={ivaMeses.estado === 'listo' ? barras(ivaMeses.v) : []} ia />
     </div>
   )
 }
 
-function Cifra({ etiqueta, valor, apoyo, tono, barras: bs, ruta, ia = false }: {
+/** M01 · Las tres líneas del IVA del trimestre, con los importes en euros con sus céntimos. */
+const lineasIvaDe = (v: { repercutido: number; soportado: number }) => lineasIva(v.repercutido, v.soportado, eurosExactos)
+
+function Cifra({ etiqueta, valor, apoyo, apoyoNodo, tono, barras: bs, ruta, ia = false }: {
   etiqueta: string; valor: string; apoyo: string; tono?: 'verde' | 'ambar'; barras: { alto: number; ultima: boolean }[]; ruta: string; ia?: boolean
+  /** Lo mismo que `apoyo`, pintado (con cifras en mono); el lector oye `apoyo`. */
+  apoyoNodo?: ReactNode
 }) {
   return (
     <Link to={ruta} className="cxi-cifra" aria-label={`${etiqueta}: ${valor}. ${apoyo}`}>
       <span className="cxi-cifra-texto">
         <span className="cxi-cifra-etiqueta">{etiqueta}</span>
         <span className="cxi-cifra-valor">{valor}</span>
-        <span className={`cxi-cifra-apoyo${tono ? ` cxi-cifra-apoyo-${tono}` : ''}`}>{apoyo}</span>
+        <span className={`cxi-cifra-apoyo${tono ? ` cxi-cifra-apoyo-${tono}` : ''}`}>{apoyoNodo ?? apoyo}</span>
       </span>
       {bs.length > 0 && (
         <span className="cxi-barras" aria-hidden="true">
@@ -287,9 +301,12 @@ function Dato({ n, uno, varios }: { n: number; uno: string; varios: string }) {
 // ── «Cerrar <mes>» ─────────────────────────────────────────────────────────
 
 function Cierre({ accountId, companyId, mes }: { accountId: string; companyId: string; mes: string }) {
-  const [c, reintentar] = useCarga<{ pasos: PasoCierre[] }>(() => cierreDelMes(accountId, companyId, mes), `${accountId}|${companyId}|${mes}`)
-  const hechos = c.estado === 'listo' ? c.v.pasos.filter((p) => p.hecho).length : 0
-  const total = c.estado === 'listo' ? c.v.pasos.length : 0
+  const [c, reintentar] = useCarga<{ pasos: PasoCierre[] } | null>(() => cierreDelMes(accountId, companyId, mes), `${accountId}|${companyId}|${mes}`)
+  // M01 (Julio, 16/10): un mes ya cerrado fuera (traído de Diez, ejercicio
+  // cerrado…) no se pide cerrar: la tarjeta no sale.
+  if (c.estado === 'listo' && c.v === null) return null
+  const hechos = c.estado === 'listo' && c.v ? c.v.pasos.filter((p) => p.hecho).length : 0
+  const total = c.estado === 'listo' && c.v ? c.v.pasos.length : 0
   return (
     <section className="cxi-seccion cxi-cierre" aria-labelledby="cxi-cierre">
       <div className="cxi-seccion-cabeza" style={{ paddingBottom: 6 }}>
@@ -298,7 +315,7 @@ function Cierre({ accountId, companyId, mes }: { accountId: string; companyId: s
       </div>
       {c.estado === 'cargando' && <Hueso ancho={200} />}
       {c.estado === 'fallo' && <ErrorConReintento mensaje={c.texto} reintentar={reintentar} />}
-      {c.estado === 'listo' && (
+      {c.estado === 'listo' && c.v && (
         <>
           <div className="cxi-progreso" role="progressbar" aria-valuenow={Math.round((hechos / Math.max(total, 1)) * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={`Cierre de ${nombreMes(mes)}`}>
             <div className="cxi-progreso-barra" style={{ width: `${(hechos / Math.max(total, 1)) * 100}%` }} />

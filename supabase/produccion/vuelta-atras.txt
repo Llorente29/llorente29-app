@@ -1,11 +1,11 @@
-# Vuelta atrás de la tanda del R03 (modo «vuelta_atras»), en orden inverso:
-# primero los datos (la 0320 devuelve los pedidos como estaban, desde
-# r03_entrega_relleno), después la 0310 (los feeds y el ticket vuelven a su
-# huella de antes) y por último la 0300 (resolve_dispatch byte a byte como en
-# producción, prosrc md5 9d645a51…; PARA si hay direcciones completadas a mano).
-# La anterior de este fichero (C06b):
-# tests/conta/produccion/vuelta-atras-c06b-promociones-envios-20261016.txt.
-cuenta: scripts/conta/produccion/cuentas/r03-direccion.sql
-supabase/vuelta-atras/20261118T0320_r03_entrega_datos.down.sql
-supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql
-supabase/vuelta-atras/20261118T0300_r03_direccion_incompleta.down.sql
+# Vuelta atrás de la tanda de «Esperan» (modo «vuelta_atras»): las dos
+# funciones que cambia vuelven, copiadas tal cual, a la huella de antes
+# (journal_entry_validar a la de 20261113T0100_c06b_centimo_iva y
+# tg_journal_entry_envio_por_aclarar a la de 20261116T0100_c06b_promociones_envios),
+# y fuera las dos nuevas. No toca ninguna tabla ni ningún asiento.
+# Si hay que deshacer TAMBIÉN la de C (promociones y envíos), primero esta y
+# después la de C: la validación nueva llama a conta_cargos_de_pedidos, de la
+# 0100 de C. La vuelta atrás de C: tests/conta/produccion/vuelta-atras-c06b-promociones-envios-20261016.txt.
+# La anterior de este fichero (R03): tests/conta/produccion/vuelta-atras-r03-direccion-20261017.txt.
+cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql
+supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql

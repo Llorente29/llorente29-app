@@ -3,27 +3,31 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# R03 · La dirección que no llega (PR #219, Julio, 16 y 17/10). La anterior de
-# este fichero (C06b, promociones y envíos) ya está en el historial de
-# producción (run 38954792366); su copia:
+# M01 · «Esperan» (Julio, 16/10, decisión 1: opción A). La anterior de este
+# fichero (R03, la dirección que no llega: 0300, 0310 y 0320) ya está en el
+# historial de producción; su copia: tests/conta/produccion/tanda-r03-direccion-20261017.txt.
+# La de antes (C06b, promociones y envíos), también; su copia:
 # tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt.
 #
-#   1. 0300 — 5 columnas que admiten nulos en sale; fijar_direccion_entrega,
-#      pedidos_sin_direccion y sale_coordenadas_de_entrega_by_token, nuevas; y,
-#      en caliente con la misma firma, resolve_dispatch (solo las guardas de la
-#      dirección y de uber_decidir). En el camino del pedido: autorizo.
-#   2. 0310 — 3 columnas que admiten nulos; los disparadores de la entrega y de
-#      Uber; decidir_quien_reparte; y, en caliente, pedidos_sin_direccion,
-#      orders_feed, orders_feed_by_token y order_for_print (añaden campos).
-#      En el camino del pedido: autorizo.
-#   3. 0320 — DATOS: rellena los abiertos de las últimas 48 h y recoloca los
-#      Uber abiertos (apunta cómo estaban en r03_entrega_relleno). Autorizo.
+#   1. 0100 — añade conta_motivos_para_validar (todo lo que haría que un
+#      asiento no se valide, por orden y con el mismo texto con el que hoy lo
+#      para) y conta_esperan (lo propuesto que pararía, con su motivo); y
+#      cambia, con la misma firma, journal_entry_validar (para con el primer
+#      motivo) y tg_journal_entry_envio_por_aclarar (el freno de C lee su
+#      motivo de la misma función). Declarado en su cabecera, con su prueba de
+#      staging. No toca ninguna tabla ni ningún asiento.
 #
-# Antes de la tanda: fusionado el PR y desplegado catcher-dispatch (funciona
-# con la base de antes y con la nueva). El front nuevo funciona sin la base
-# nueva (sin ella no hay lista ni aviso).
+# ORDEN (Julio, 17/10): va ANTES que la 0220 de B (B02 · T4, rama
+# conta/b02-espera-extracto), que espera a que esta esté en el historial.
+#
+# VA DESPUÉS DE LA DE C, y se escribe sobre ella: las dos funciones que cambia
+# están en producción con la huella de la que parte (798e4c43… y 7a2549b0…,
+# medidas el 16/10 a las 19:49 UTC en solo lectura).
+#
+# Antes o después del front, da igual: la base nueva para con los mismos
+# textos que la de antes, así que el front de antes valida igual; y el front
+# nuevo, con la base de antes, dice que no puede leer lo que espera y cuenta
+# todo lo propuesto como «para revisar», como hoy.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/r03-direccion.sql
-supabase/migrations/20261118T0300_r03_direccion_incompleta.sql
-supabase/migrations/20261118T0310_r03_ticket_codigo_quien_reparte.sql
-supabase/migrations/20261118T0320_r03_entrega_datos.sql
+cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql
+supabase/migrations/20261117T0100_m01_motivos_para_validar.sql

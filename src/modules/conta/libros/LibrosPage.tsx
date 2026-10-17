@@ -1,27 +1,36 @@
 // src/modules/conta/libros/LibrosPage.tsx
 //
-// C05 · Libros en tres niveles (maqueta N13cLibros). Nivel 1, el menú lateral
-// (MarcoConta). Nivel 2, las pestañas de área. Nivel 3, la barra de acciones
-// agrupadas con la etiqueta del grupo debajo y, a la derecha, «Tuyos»
-// (Favoritos y Buscar, Ctrl K). Debajo, el contenido de la acción elegida.
-// Dos clics como máximo a cualquier libro. Lo que la empresa no usa sale en
-// gris con «ninguno» (son libros obligatorios: no desaparece).
+// C05 · Libros en tres niveles (maqueta N13cLibros), dentro del marco nuevo.
+// Nivel 1, el módulo (barra de módulos del marco). Nivel 2, las áreas: en el
+// ordenador son las pestañas de arriba del marco. Nivel 3, las acciones del
+// área, en la segunda fila de esa barra (SubpestanasEnBarra), con un punto
+// ámbar si piden algo y «Más ▾» si no caben. Debajo, el contenido de la acción elegida. Dos clics como máximo a
+// cualquier libro. El ejercicio va en la barra de arriba (PeriodoEnBarra).
+//
+// M01 (encargo F01, tarea 4; Julio, 16/10): fuera el recuadro de antes
+// (grupos Estados / Salidas con su dato debajo y «Tuyos» con favoritos y
+// Ctrl K) y el título grande «Contabilidad · Libros»: con las pestañas de
+// arriba sobraban. Ctrl K es del marco y las acciones de Libros salen en su
+// buscador, en «Opciones».
 //
 // En el móvil, por niveles: la lista de áreas, al tocar una, sus acciones en
 // lista, y al tocar una acción, su contenido con «‹ Libros» para volver.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useId, useMemo, useState, type ReactNode } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { rutaLibros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { usePestanasArriba } from '@/modules/conta/marco/nuevo/contexto'
-import { Dialogo } from '@/modules/conta/proveedor/piezas'
+import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
+import { SubpestanasEnBarra, type Subpestana } from '@/modules/conta/ui/marco/SubpestanasEnBarra'
+import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
+import { miles } from '@/modules/conta/ui/tabla/tablaDensa'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  AREAS_LIBROS, NINGUNO, accionesDe, alternarFavorito, buscar, dondeEsta, leerFavoritos, resolver, type Accion, type EstadoAccion,
+  AREAS_LIBROS, NINGUNO, accionesDe, resolver, type Accion, type EstadoAccion,
 } from '@/modules/conta/libros/navegacion'
 import { LibrosCtx, trimestreDe, useLeer, type ContextoLibros } from '@/modules/conta/libros/contexto'
 import { leerEjerciciosLibros, localesYMarcas, resumenLibros, type ResumenLibros } from '@/modules/conta/services/librosService'
@@ -35,8 +44,6 @@ import { Estados } from '@/modules/conta/libros/Estados'
 import { CuentasAnuales, Mapeo, PendienteC05b } from '@/modules/conta/libros/Anuales'
 import { CerrarMes, CierreEjercicio, Ejercicios } from '@/modules/conta/libros/Cierre'
 import { PendientesDiez } from '@/modules/conta/libros/PendientesDiez'
-
-const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
 
 /** El contenido de cada acción. */
 function contenido(accion: string): ReactNode {
@@ -82,8 +89,8 @@ function estados(r: ResumenLibros | null, nombreTrimestre: string, ctx: Pick<Con
   e['sumas-saldos'] = { texto: 'niveles y opciones', tono: 'gris' }
   e['acumulados'] = { texto: 'saldo de cada mes', tono: 'gris' }
   if (r) {
-    e.expedidas = r.expedidas ? { texto: `${nombreTrimestre.split(' ')[0]} · ${r.expedidas.toLocaleString('es-ES')}`, tono: 'verde' } : NINGUNO
-    e.recibidas = r.recibidas ? { texto: `${nombreTrimestre.split(' ')[0]} · ${r.recibidas.toLocaleString('es-ES')}${r.sinNif ? ` · ${r.sinNif} sin NIF` : ''}`, tono: r.sinNif ? 'ambar' : 'verde' } : NINGUNO
+    e.expedidas = r.expedidas ? { texto: `${nombreTrimestre.split(' ')[0]} · ${miles(r.expedidas)}`, tono: 'verde' } : NINGUNO
+    e.recibidas = r.recibidas ? { texto: `${nombreTrimestre.split(' ')[0]} · ${miles(r.recibidas)}${r.sinNif ? ` · ${r.sinNif} sin NIF` : ''}`, tono: r.sinNif ? 'ambar' : 'verde' } : NINGUNO
     e['bienes-inversion'] = r.bienes ? { texto: `${r.bienes} ${r.bienes === 1 ? 'bien' : 'bienes'}`, tono: 'verde' } : NINGUNO
     e.intracomunitarias = r.intracomunitarias ? { texto: String(r.intracomunitarias), tono: 'verde' } : { texto: 'ninguna', tono: 'gris' }
     e.suplidos = r.suplidos ? { texto: `${r.suplidos} ${r.suplidos === 1 ? 'cuenta' : 'cuentas'}`, tono: 'verde' } : NINGUNO
@@ -113,7 +120,6 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
   const movil = useIsMobile()
   const params = useParams()
   const [query, setQuery] = useSearchParams()
-  const navegar = useNavigate()
   const [vuelta, setVuelta] = useState(0)
   const { area, accion } = resolver(areaFija ?? params.area, accionFija ?? params.accion)
   const enIndiceMovil = movil && !params.area && !areaFija
@@ -135,15 +141,6 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
   const resumen = useLeer(accountId && activa && trimestre ? () => resumenLibros(accountId, activa.id, trimestre.desde, trimestre.hasta) : null,
     `${accountId}:${activa?.id}:${trimestre?.desde}:${vuelta}`)
 
-  const usuario = userName ?? 'yo'
-  const [favoritos, setFavoritos] = useState<string[]>(() => leerFavoritos(usuario, almacen()))
-  const [buscando, setBuscando] = useState(false)
-  useEffect(() => {
-    const tecla = (ev: KeyboardEvent) => { if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); setBuscando(true) } }
-    window.addEventListener('keydown', tecla)
-    return () => window.removeEventListener('keydown', tecla)
-  }, [])
-
   const ctx: ContextoLibros | null = useMemo(() => (accountId && activa && ejercicio ? {
     accountId, companyId: activa.id, quien: userName ?? null, movil, ejercicios, ejercicio, anterior,
     locales: base.datos?.locales ?? [], marcas: base.datos?.marcas ?? [], vuelta, recargar: () => setVuelta((v) => v + 1),
@@ -157,7 +154,8 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
   const est = estados(resumen.datos, trimestre!.nombre, ctx)
   const ruta = (a: string, x: string) => `${rutaLibros(a, x)}${pedido ? `?ejercicio=${encodeURIComponent(pedido)}` : ''}`
 
-  const barraAccion = (x: Accion) => {
+  // Móvil: la acción como tarjeta, con su dato debajo (por niveles, como antes).
+  const tarjetaAccion = (x: Accion) => {
     const e = est[x.id] ?? NINGUNO
     return (
       <Link key={x.id} to={ruta(area.id, x.id)} className={`cxl-accion${e.texto === 'ninguno' || e.texto === 'ninguna' ? ' cxl-accion-gris' : ''}`}
@@ -167,22 +165,39 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
       </Link>
     )
   }
+  // Ordenador: la segunda fila de la barra de arriba del marco; el dato va en
+  // el title y un punto ámbar dice que esa acción pide algo (ninguna se
+  // esconde: regla 7).
+  // Julio, 16/10: lo que hoy enseña un número lo lleva escrito («Pendientes
+  // de adjuntar en Diez · 3»), nunca solo al pasar el ratón. Los mismos
+  // números del resumen con los que se escribe su dato.
+  const r = resumen.datos
+  const numeros: Record<string, number | undefined> = r ? {
+    'pendientes-diez': r.pdfPendientesDiez, expedidas: r.expedidas, recibidas: r.recibidas, 'bienes-inversion': r.bienes,
+    intracomunitarias: r.intracomunitarias, suplidos: r.suplidos,
+  } : {}
+  numeros.ejercicios = ctx.ejercicios.length
+  const subpestanas: Subpestana[] = accionesDe(area).map((x) => {
+    const e = est[x.id] ?? NINGUNO
+    const n = numeros[x.id]
+    return {
+      id: x.id, etiqueta: x.nombre, ruta: ruta(area.id, x.id), activa: x.id === accion.id, dato: e.texto, aviso: e.tono === 'ambar',
+      gris: e.texto === 'ninguno' || e.texto === 'ninguna', numero: n && n > 0 ? n : undefined,
+    }
+  })
 
   return (
     <LibrosCtx.Provider value={ctx}>
-      <div className="cxl-pagina">
-        <header className="cxl-cabeza">
-          <div>
-            <span className="cxl-ante">Contabilidad</span>
-            <h1 className="cxl-titulo">Libros</h1>
-          </div>
-          <label>
+      <div className="cxl-pagina cxl-en-marco">
+        <h1 className="cx-oculto">Libros</h1>
+        <PeriodoEnBarra>
+          <label className="cxl-ejercicio">
             <span className="cx-oculto">Ejercicio</span>
-            <select className="cx-input" value={ejercicio.code} onChange={(e) => { const p = new URLSearchParams(query); p.set('ejercicio', e.target.value); setQuery(p, { replace: true }) }}>
+            <select className="cxm-select" value={ejercicio.code} onChange={(e) => { const p = new URLSearchParams(query); p.set('ejercicio', e.target.value); setQuery(p, { replace: true }) }}>
               {ejercicios.map((e) => <option key={e.id} value={e.code}>Ejercicio {e.code}{e.origen === 'migrated' ? ' · traído' : e.estado === 'closed' ? ' · cerrado' : ''}</option>)}
             </select>
           </label>
-        </header>
+        </PeriodoEnBarra>
 
         {(!movil || enIndiceMovil) && !areasArriba && (
           <nav className="cxl-areas" aria-label="Áreas de Libros">
@@ -194,62 +209,50 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
 
         {!enIndiceMovil && (
           <>
-            {movil && <Link to={rutaLibros()} className="cx-enlace">‹ Libros</Link>}
-            <nav className="cxl-barra" aria-label={`Acciones de ${area.nombre}`}>
-              {/* Los grupos pueden partir en filas; «Tuyos» se queda arriba a la derecha (N13c). */}
-              <div className="cxl-barra-grupos">
-                {area.grupos.map((g) => (
-                  <div key={g.etiqueta} className="cxl-grupo" role="group" aria-label={g.etiqueta}>
-                    <div className="cxl-grupo-acciones">{g.acciones.map(barraAccion)}</div>
-                    <span className="cxl-grupo-etiqueta">{g.etiqueta}</span>
-                  </div>
-                ))}
+            {movil ? (
+              // M01 (Julio, 16/10): en el móvil, el menú del área en UNA línea
+              // desplegable («Libro diario ▾»), para que el libro empiece arriba.
+              <div className="cxl-movil-fila">
+                <Link to={rutaLibros()} className="cx-enlace">‹ Libros</Link>
+                <AccionesMovil etiqueta={`Acciones de ${area.nombre}`} activa={accion.nombre} dato={(est[accion.id] ?? NINGUNO).texto}>
+                  {area.grupos.map((g) => (
+                    <div key={g.etiqueta} className="cxl-movil-grupo" role="group" aria-label={g.etiqueta}>
+                      <span className="cxl-grupo-etiqueta">{g.etiqueta}</span>
+                      {g.acciones.map(tarjetaAccion)}
+                    </div>
+                  ))}
+                </AccionesMovil>
               </div>
-              <div className="cxl-tuyos" role="group" aria-label="Tuyos">
-                <div className="cxl-grupo-acciones">
-                  <button type="button" className="cxl-accion" aria-pressed={favoritos.includes(accion.id)}
-                    onClick={() => setFavoritos(alternarFavorito(usuario, accion.id, almacen()))}
-                    title={favoritos.includes(accion.id) ? `Quitar «${accion.nombre}» de favoritos` : `Guardar «${accion.nombre}» en favoritos`}>
-                    <span className="cxl-accion-nombre">{favoritos.includes(accion.id) ? '★' : '☆'} <span className={`cxl-punto${favoritos.length ? ' cxl-punto-verde' : ''}`} aria-hidden="true" /></span>
-                    <span className="cxl-accion-dato">favoritos</span>
-                  </button>
-                  <button type="button" className="cxl-accion" onClick={() => setBuscando(true)} aria-keyshortcuts="Control+K">
-                    <span className="cxl-accion-nombre">⌕</span><span className="cxl-accion-dato">Ctrl K</span>
-                  </button>
-                </div>
-                <span className="cxl-grupo-etiqueta">Tuyos</span>
-              </div>
-            </nav>
-            {favoritos.length > 0 && (
-              <div className="cx-tablas-filtros" role="group" aria-label="Tus favoritos">
-                {favoritos.map((id) => { const d = dondeEsta(id)!; return <Link key={id} to={ruta(d.area.id, id)} className="cx-pildora" aria-pressed={id === accion.id}>★ {d.accion.nombre}</Link> })}
-              </div>
-            )}
+            ) : accionesDe(area).length > 1 && <SubpestanasEnBarra etiqueta={`Acciones de ${area.nombre}`} pestanas={subpestanas} />}
             {resumen.error && <div className="cx-error" role="alert">No se ha podido leer el estado de los libros: {resumen.error}</div>}
             <div key={`${area.id}:${accion.id}`}>{contenido(accion.id)}</div>
           </>
         )}
-
-        {buscando && <Buscar alCerrar={() => setBuscando(false)} alElegir={(a, x) => { setBuscando(false); navegar(ruta(a, x)) }} />}
       </div>
     </LibrosCtx.Provider>
   )
 }
 
-function Buscar({ alCerrar, alElegir }: { alCerrar: () => void; alElegir: (area: string, accion: string) => void }) {
-  const [q, setQ] = useState('')
-  const r = buscar(q)
+/**
+ * El menú del área en el móvil: una línea con la acción en la que estás y su
+ * dato escrito («Pendientes de adjuntar en Diez · 3 sin su PDF ▾»); al tocarla,
+ * todas las del área por grupos. Se cierra al elegir (cambia la dirección),
+ * al tocar fuera o con Escape.
+ */
+function AccionesMovil({ etiqueta, activa, dato, children }: { etiqueta: string; activa: string; dato: string; children: ReactNode }) {
+  const { abierto, alternar, caja, boton } = useDesplegable<HTMLElement>()
+  const idDato = useId()
   return (
-    <Dialogo titulo="Buscar en Libros" alCerrar={alCerrar}>
-      <input className="cx-input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Escribe: recibidas, balance, 347, cierre…"
-        aria-label="Qué buscas" onKeyDown={(e) => { if (e.key === 'Enter' && r[0]) alElegir(r[0].area.id, r[0].accion.id) }} />
-      {q && r.length === 0 && <p className="cx-ayuda">No hay ninguna opción que se llame así.</p>}
-      <ul className="cxl-buscar-lista">
-        {r.slice(0, 12).map((x) => (
-          <li key={x.accion.id}><a href="#" onClick={(e) => { e.preventDefault(); alElegir(x.area.id, x.accion.id) }}>
-            <span>{x.accion.nombre}</span><span className="cx-ayuda">{x.area.nombre} › {x.grupo.etiqueta}</span></a></li>
-        ))}
-      </ul>
-    </Dialogo>
+    <nav className="cxl-movil-acciones" aria-label={etiqueta} ref={caja}>
+      {/* El botón se llama como la acción; su dato, escrito al lado, va de descripción
+          (en el nombre, «oficial · por local» se leía como un botón «Por local»). */}
+      <button type="button" ref={boton} className="cxl-movil-boton" aria-expanded={abierto} aria-haspopup="true" onClick={alternar}
+        aria-label={activa} aria-describedby={dato ? idDato : undefined}>
+        <span className="cxl-movil-nombre">{activa}</span>
+        {dato && <span className="cxl-movil-dato" id={idDato}> · {dato}</span>}
+        <span className="cxl-movil-flecha" aria-hidden="true">▾</span>
+      </button>
+      {abierto && <div className="cxl-movil-menu">{children}</div>}
+    </nav>
   )
 }

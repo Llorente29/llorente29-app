@@ -51,6 +51,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const [buscando, setBuscando] = useState(false)
   const [huecoAcciones, setHuecoAcciones] = useState<HTMLDivElement | null>(null)
   const [huecoPeriodo, setHuecoPeriodo] = useState<HTMLDivElement | null>(null)
+  const [huecoSubpestanas, setHuecoSubpestanas] = useState<HTMLDivElement | null>(null)
 
   const modulo = moduloDe(pathname)
   const arriba = pestanasArriba(modulo, movil)
@@ -75,7 +76,8 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
     pestanasArriba: arriba,
     huecoAcciones,
     huecoPeriodo,
-  }), [prefs.densidad, prefs.documentoOculto, cambiar, arriba, huecoAcciones, huecoPeriodo])
+    huecoSubpestanas,
+  }), [prefs.densidad, prefs.documentoOculto, cambiar, arriba, huecoAcciones, huecoPeriodo, huecoSubpestanas])
 
   const clases = ['cx', 'cxm', solo ? 'cx-solo' : null, movil ? 'cxm-es-movil' : null].filter(Boolean).join(' ')
   return (
@@ -89,6 +91,8 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
           <BarraSuperior modulo={modulo} conPestanas={arriba} movil={movil} solo={solo} usuario={userName}
             densidad={prefs.densidad} cambiarDensidad={(densidad: Densidad) => cambiar({ densidad })}
             abrirBuscador={() => setBuscando(true)} huecoPeriodo={setHuecoPeriodo} />
+          {/* La segunda fila de la barra de arriba (las acciones de la pestaña): la llena la pantalla; vacía, no se pinta. */}
+          {!movil && <div className="cxm-subpestanas" ref={setHuecoSubpestanas} />}
           {/* La barra de acciones: la llena la pantalla (AccionesPantalla); vacía, no se pinta. */}
           <div className="cxm-acciones" ref={setHuecoAcciones} />
           <main className="cx-principal cxm-principal">
