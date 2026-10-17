@@ -54,7 +54,9 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/compras')
-  await expect(page.getByRole('heading', { level: 1, name: 'Compras' })).toBeVisible()
+  // S01 · paso 3: Compras y gastos › Por revisar. El título lo dice la cabecera del esqueleto.
+  await expect(page.getByRole('heading', { level: 1, name: 'Compras y gastos · Por revisar' })).toHaveCount(1)
+  await expect(page.locator('.s-cabecera').getByRole('link', { name: 'Por revisar' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Qué tienes que mirar' })).toBeVisible()
   // Una fila por decisión. Lo que le falta a la ficha, todo junto:
   const ficha = page.locator('.cxc-cosa', { hasText: /^A Verduras del Huerto Prueba, S\.L\. le faltan/ })
@@ -108,7 +110,8 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await capturar(page, 'compras')
 
   // Subir una factura: el diálogo, sin subir nada.
-  await page.getByRole('button', { name: 'Subir una factura' }).click()
+  // «Subir factura» está en la cinta (paso 3): abre el mismo diálogo.
+  await page.getByRole('toolbar', { name: 'Acciones de Por revisar' }).getByRole('link', { name: /Subir factura/ }).click()
   const dialogo = page.getByRole('dialog', { name: 'Subir una factura' })
   await expect(dialogo.getByLabel('La factura (foto o PDF)')).toBeVisible()
   await capturar(page, 'subir-factura', 'dialogo')

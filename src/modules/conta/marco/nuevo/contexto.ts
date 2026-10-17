@@ -30,6 +30,11 @@ export interface Marco {
    * «Tus bancos». Null lo quita.
    */
   ponerEntradasCinta: (entradas: EntradasCinta | null) => void
+  /**
+   * S01 · ¿La empresa activa es de hostelería? (company.is_hospitality). Null
+   * mientras no se sabe: lo de hostelería no sale hasta saberlo.
+   */
+  hosteleria: boolean | null
 }
 
 /** Una entrada de la cinta puesta por la pantalla: un enlace (`a`) o un botón (`alPulsar`). */
@@ -100,4 +105,14 @@ export function useEntradasEnCinta(entradas: EntradasCinta | null): void {
     poner(conFunciones)
     return () => poner(null)
   }, [poner, clave])
+}
+
+/**
+ * Lo de hostelería dentro de una pantalla (la tarjeta de Catcher, las
+ * liquidaciones): sale solo si la empresa lo es. Fuera del marco nuevo, como
+ * antes del S01: sale.
+ */
+export function useHosteleria(): boolean {
+  const marco = useContext(MarcoContexto)
+  return marco ? marco.hosteleria === true : true
 }

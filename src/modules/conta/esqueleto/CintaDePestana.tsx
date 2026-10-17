@@ -35,7 +35,10 @@ export function CintaDePestana({ etiqueta, grupos, datos, entradas, oculta, alCa
             ? (
               <BotonEnlace key={e.id} a={e.a} actual={e.actual} aviso={e.aviso} contador={e.numero} contadorTono={e.aviso ? 'duda' : 'neutro'} titulo={e.titulo ?? e.dato}>{e.etiqueta}</BotonEnlace>
             )
-            : <Boton key={e.id} onClick={e.alPulsar} title={e.titulo ?? e.dato}>{e.etiqueta}</Boton>))}
+            : e.alPulsar
+              ? <Boton key={e.id} onClick={e.alPulsar} title={e.titulo ?? e.dato}>{e.etiqueta}</Boton>
+              // Solo dice algo («Por correo» y su dirección): no es un botón que no hace nada.
+              : <span key={e.id} className="s-cinta-dato" title={e.titulo ?? e.dato}>{e.etiqueta}{e.titulo || e.dato ? ` · ${e.titulo ?? e.dato}` : ''}</span>))}
           {g.ordenes.map((o) => ('ruta' in o.a
             ? (
               <BotonEnlace key={o.id} a={conConsulta(rutaConta(o.a.ruta), search)} icono={o.icono} actual={esLaActual(o, pathname, search)}

@@ -95,7 +95,8 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await ponerPapelDeLaSemilla(await entrarComo(page, CUENTA_A.email))
   const errores = vigilar(page)
   await page.goto(`/conta/documentos?mes=${MES}`)
-  await expect(page.getByRole('heading', { level: 1, name: 'Documentos' })).toBeVisible()
+  // S01 · paso 3: Compras y gastos › Facturas recibidas (el título, en la cabecera del esqueleto).
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
   // La banda de la IA dice lo que ha pasado en una frase.
   // R5 · 8: del mes elegido, no de «esta semana».
   const bandaN22 = page.getByRole('region', { name: 'Lo que ha pasado con tus facturas' })
@@ -131,7 +132,12 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await expect(alfa).toContainText(/· 60000000/)
   await expect(alfa.getByRole('button')).toHaveCount(1)
   await expect(page.locator('tr, article', { hasText: 'Suministros Eléctricos Prueba Norte' })).toHaveCount(1)
-  if (lado(page) === 'ordenador') await expect(page.getByRole('navigation', { name: 'Acciones de Facturas recibidas' })).toContainText('Subir')
+  // La barra de la N22, en la cinta de la pestaña (paso 3): TRAER · ESPERADAS · LEÍDAS.
+  if (lado(page) === 'ordenador') {
+    const cinta = page.getByRole('toolbar', { name: 'Acciones de Facturas recibidas' })
+    for (const g of ['Traer', 'Esperadas', 'Leídas']) await expect(cinta.getByRole('group', { name: g })).toBeVisible()
+    await expect(cinta.getByRole('button', { name: /^Subir/ })).toBeVisible()
+  }
   await capturar(page, 'n22-para-mirar-a')
 
   // «Por aclarar»: la que no tiene emisor reconocido, con «Decirlo yo».
@@ -237,7 +243,8 @@ test('Frente C (?marca=contabilidad): ni Cocina ni «Folvy» en Documentos', asy
   const errores = vigilar(page)
   await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'contabilidad') })
   await page.goto(`/conta/documentos?mes=${MES}&marca=contabilidad`)
-  await expect(page.getByRole('heading', { level: 1, name: 'Documentos' })).toBeVisible()
+  // S01 · paso 3: Compras y gastos › Facturas recibidas (el título, en la cabecera del esqueleto).
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
   await expect(page.locator('tr, article', { hasText: 'Mayorista Prueba Alfa' })).toHaveCount(1)
   await sinFolvyNiCocina(page, 'N22')
   await sinVolverAFolvy(page, 'N22')

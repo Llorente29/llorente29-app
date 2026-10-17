@@ -172,6 +172,15 @@ describe('el catálogo de órdenes', () => {
       expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : '').split('?')[0])), id).toBe(`bancos.${o.pestana}`)
     }
   })
+  it('paso 3: Compras y gastos · «Subir factura» en Por revisar; la barra de la N22 en Facturas recibidas, puesta por la pantalla', () => {
+    expect(cintaDe('compras', 'por-revisar', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([['Nuevo', ['Subir factura']]])
+    const subir = ordenPorId('compras.subir')!
+    expect('ruta' in subir.a && subir.a.ruta).toBe('compras?subir=')
+    expect(de(rutaConta('compras'))).toBe('compras.por-revisar')
+    expect(cintaDe('compras', 'recibidas', NADA).map((g) => [g.titulo, g.dePantalla])).toEqual([['Traer', 'traer'], ['Esperadas', 'esperadas'], ['Leídas', 'leidas']])
+    // Liquidaciones no lleva cinta, y en una empresa sin hostelería ni sale la pestaña.
+    expect(cintaDe('compras', 'liquidaciones', HOSTELERIA)).toEqual([])
+  })
   it('lo elegido viaja por la cinta (ejercicio, mes, banco) y la consulta de la orden manda', () => {
     expect(conConsulta('/conta/bancos/subir', '?banco=b1&mes=2026-10&ver=casados')).toBe('/conta/bancos/subir?mes=2026-10&banco=b1')
     expect(conConsulta('/conta/libros/diario?ver=revisar', '?ejercicio=2026')).toBe('/conta/libros/diario?ver=revisar&ejercicio=2026')

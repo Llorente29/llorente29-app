@@ -80,5 +80,6 @@ export function useContextoEsqueleto(accountId: string | null, companyId: string
     return () => { vivo = false }
   }, [accountId, companyId, clave])
   const alDia = estado.clave === clave
-  return { ctx: alDia ? estado.ctx : CONTEXTO_VACIO, error: alDia ? estado.error : null }
+  // listo: ya se sabe lo de esta empresa (hasta entonces, lo de hostelería ni sale ni se niega).
+  return { ctx: alDia ? estado.ctx : CONTEXTO_VACIO, error: alDia ? estado.error : null, listo: alDia && estado.error === null }
 }

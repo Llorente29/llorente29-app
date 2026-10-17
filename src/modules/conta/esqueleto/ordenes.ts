@@ -67,6 +67,9 @@ const DE_LA_CINTA: Orden[] = [
   { id: 'bancos.subir', etiqueta: 'Subir extracto', icono: 'subir', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/subir` }, sinonimos: ['extracto', 'norma 43', 'n43', 'excel', 'importar movimientos'] },
   { id: 'bancos.reglas', etiqueta: 'Reglas', icono: 'ia', producto: 'bancos', pestana: 'reglas', a: { ruta: `${R.bancos}/reglas` }, sinonimos: ['aprender', 'siempre', 'concepto'] },
   { id: 'bancos.casados', etiqueta: HECHO_POR, icono: 'ok', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}?ver=casados` }, sinonimos: ['casado solo', 'automatico', 'deshacer'] },
+  // Compras y gastos (paso 3). «Por revisar» (N18) sube con su diálogo
+  // (?subir); Facturas recibidas (N22) pone sus grupos desde la pantalla.
+  { id: 'compras.subir', etiqueta: 'Subir factura', icono: 'subir', producto: 'compras', pestana: 'por-revisar', a: { ruta: `${R.compras}?subir=` }, sinonimos: ['subir factura', 'factura de proveedor', 'albaran'] },
   { id: 'bancos.hecho', etiqueta: LO_HECHO, icono: 'revisar', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/hecho` }, sinonimos: ['hecho', 'registro', 'deshacer'] },
 ]
 
@@ -128,6 +131,16 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   ],
   'contabilidad.importar': [
     { titulo: 'Diez', ordenes: ['libros.pendientes-diez'] },
+  ],
+  // Paso 3: Compras y gastos. Facturas recibidas: la barra de la N22 (TRAER ·
+  // ESPERADAS · LEÍDAS), que depende de la empresa (el correo, Cocina): la pone la pantalla.
+  'compras.por-revisar': [
+    { titulo: 'Nuevo', ordenes: ['compras.subir'] },
+  ],
+  'compras.recibidas': [
+    { titulo: 'Traer', ordenes: [], dePantalla: 'traer' },
+    { titulo: 'Esperadas', ordenes: [], dePantalla: 'esperadas' },
+    { titulo: 'Leídas', ordenes: [], dePantalla: 'leidas' },
   ],
   // Paso 3: la barra de Bancos (B01), la misma en sus cuatro pestañas.
   'bancos.movimientos': CINTA_BANCOS,

@@ -159,3 +159,6 @@ html:has(.s-barra-inferior) { scroll-padding-bottom: 80px; }
 .s-usuario-nivel { display: inline-grid; }
 .s-usuario-nivel > span { grid-area: 1 / 1; visibility: hidden; }
 .s-usuario-nivel > span[data-actual] { visibility: visible; }
+
+/* Una entrada de la cinta que solo informa («Por correo · facturas@…»). */
+.s-cinta-dato { display: inline-flex; align-items: center; padding: 0 var(--s-2); min-height: var(--s-alto-control); color: var(--s-apoyo); font-size: var(--s-t-s); white-space: nowrap; }

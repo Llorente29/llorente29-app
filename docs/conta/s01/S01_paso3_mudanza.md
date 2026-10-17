@@ -35,10 +35,36 @@ El inventario es el del paso 1 (`S01_paso1_comprobaciones.md`, §2).
 - Lo elegido viaja por la cinta: ejercicio, mes y banco (`conConsulta`). De paso
   se arregla «Para revisar» con ejercicio, que salía con dos `?`.
 
+### Compras y gastos › Por revisar · Facturas recibidas
+
+- **Por revisar** (N18, `compras`): el título lo dice la cabecera; «Subir una
+  factura» pasa a la cinta (NUEVO «Subir factura», que abre el mismo diálogo con
+  `?subir`, también estando ya en la pantalla).
+- **Facturas recibidas** (N22, `documentos`): la barra de la N22 (TRAER ·
+  ESPERADAS · LEÍDAS) es la cinta de la pestaña, con sus números y su punto
+  ámbar. La pone la pantalla, porque depende de la empresa (el correo, Cocina).
+  «Por correo» solo informa de su dirección: en la cinta es texto, no un botón
+  que no hace nada. El mes, en la cabecera. Fuera la fila «Áreas de Documentos».
+- **Lo de hostelería dentro de las pantallas** (inventario, §3), con la marca de
+  la empresa (`company.is_hospitality`, `useHosteleria`): la tarjeta
+  «Liquidaciones del mes» y la frase «Lo que llega con el género…» en Por
+  revisar, y la tarjeta de la quincena de Catcher en Facturas recibidas. Mientras
+  no se sabe de qué es la empresa, no salen; fuera del esqueleto, como antes.
+- La e2e de la cuenta D (sin hostelería) lo comprueba.
+
+### La cabecera, medida
+
+A 1440 px y con un periodo al lado (el mes de Bancos, el ejercicio de Libros)
+solo cabían dos pestañas. Con menos aire y la empresa hasta 180 px: Bancos, tres
+de cuatro; Contabilidad sin periodo, las cinco. Lo que no cabe, en «Más ▾».
+**Para Julio:** si se quiere ver siempre las cuatro de Bancos, lo siguiente que
+da sitio (unos 70 px) es dejar «Favoritos» solo con su estrella. Eso cambia la
+maqueta: no lo he hecho.
+
 ## Queda (paso 3)
 
-Compras y gastos (cintas de Por revisar, Facturas recibidas y Liquidaciones),
-las condiciones de hostelería dentro de las pantallas, Contactos y sus
+Lo de hostelería que queda en otras pantallas (Ventas, textos del diario,
+fichas, alta), Contactos y sus
 pestañas, Ajustes (Empresa con su logo, Registro de la IA, la marca de
 hostelería), la marca al dar de alta, Definiciones › Analítica, la vista
 Recibida en Contabilidad › Asientos, `?tipo=` en el asiento nuevo y el

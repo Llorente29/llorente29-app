@@ -49,7 +49,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const { pathname } = useLocation()
   const cuentas = useCuentasMenu()
   const { prefs, cargadas, cambiar, aviso, quitarAviso } = usePreferenciasEsqueleto(accountId, userId)
-  const { ctx, error: errorCtx } = useContextoEsqueleto(accountId, activa?.id ?? null)
+  const { ctx, error: errorCtx, listo: ctxListo } = useContextoEsqueleto(accountId, activa?.id ?? null)
   const [buscando, setBuscando] = useState(false)
   const [huecoAcciones, setHuecoAcciones] = useState<HTMLDivElement | null>(null)
   const [huecoPeriodo, setHuecoPeriodo] = useState<HTMLDivElement | null>(null)
@@ -93,7 +93,8 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
     huecoPeriodo,
     ponerDatosCinta: setDatosCinta,
     ponerEntradasCinta: setEntradasCinta,
-  }), [prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo])
+    hosteleria: ctxListo ? ctx.hosteleria : null,
+  }), [prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria])
 
   // Lo que se puede fijar desde aquí: esta pantalla y lo de su cinta.
   const fijables: Orden[] = [

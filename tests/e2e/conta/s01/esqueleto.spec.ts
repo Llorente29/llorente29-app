@@ -117,7 +117,17 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await page.goto('/conta/compras/liquidacion/nueva')
   await expect(pestanas(page, 'Compras y gastos').locator('[aria-current="page"]')).toHaveCount(0)
   await page.goto('/conta/compras')
+  // Paso 3: dentro de las pantallas, tampoco (inventario del paso 1, §3). Se mira con la red quieta:
+  // lo de hostelería no sale hasta saber de qué es la empresa, y aquí no tiene que salir nunca.
+  await expect(page.getByRole('heading', { name: 'Qué tienes que mirar' })).toBeVisible({ timeout: 30_000 })
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByRole('heading', { name: 'Liquidaciones del mes' })).toHaveCount(0)
+  await expect(page.getByText('Lo que llega con el género')).toHaveCount(0)
   await capturar(page, 'esqueleto-compras-sin-hosteleria')
+  await page.goto('/conta/documentos')
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByText(/Sube la quincena de Catcher/)).toHaveCount(0)
   expect(errores).toEqual([])
 })
 
