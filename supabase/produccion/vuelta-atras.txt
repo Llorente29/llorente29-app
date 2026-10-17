@@ -6,6 +6,6 @@
 # Si hay que deshacer TAMBIÉN la de C (promociones y envíos), primero esta y
 # después la de C: la validación nueva llama a conta_cargos_de_pedidos, de la
 # 0100 de C. La vuelta atrás de C: tests/conta/produccion/vuelta-atras-c06b-promociones-envios-20261016.txt.
-# La anterior de este fichero: esa misma copia.
+# La anterior de este fichero (R03): tests/conta/produccion/vuelta-atras-r03-direccion-20261017.txt.
 cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql
 supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql

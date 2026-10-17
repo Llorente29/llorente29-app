@@ -455,7 +455,7 @@ describe('R11 · paso 8 sobre la tanda B02 · T1 «lo que entra» (0200, su copi
   })
 })
 
-describe('R11 · paso 8 sobre la tanda de la C06b «promociones y envíos» (0100 y 0110, su copia, aplicada), con su contexto medido', () => {
+describe('R11 · paso 8 sobre la tanda de la C06b «promociones y envíos» (0100 y 0110, su copia, aplicada: run 38954792366), con su contexto medido', () => {
   it('las dos siguen, sin «autorizo»', () => {
     const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-promociones-envios-20261016.json',
       '--manifiesto=tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt'], { encoding: 'utf8', stdio: 'pipe' })
@@ -465,12 +465,22 @@ describe('R11 · paso 8 sobre la tanda de la C06b «promociones y envíos» (010
   })
 })
 
+describe('R11 · paso 8 sobre la tanda del R03 «la dirección que no llega» (0300, 0310 y 0320, su copia, aplicada), con su contexto medido', () => {
+  it('las tres, en el camino del pedido: autorizo con su nombre', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-r03-direccion-20261017.json',
+      '--manifiesto=tests/conta/produccion/tanda-r03-direccion-20261017.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261118T0300_r03_direccion_incompleta.sql: AUTORIZO')
+    expect(out).toContain('20261118T0310_r03_ticket_codigo_quien_reparte.sql: AUTORIZO')
+    expect(out).toContain('20261118T0320_r03_entrega_datos.sql: AUTORIZO')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
+  it('con los ficheros medidos, da el estado de cada uno y los «autorizo» (M01 «Esperan»: sigue)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
     expect(r.out).toContain('20261117T0100_m01_motivos_para_validar.sql: sigue')

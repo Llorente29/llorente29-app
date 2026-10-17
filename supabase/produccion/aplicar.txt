@@ -4,8 +4,9 @@
 # ensayo en verde del mismo commit, en REAL.
 #
 # M01 · «Esperan» (Julio, 16/10, decisión 1: opción A). La anterior de este
-# fichero (C06b, promociones y envíos: 0100 y 0110) ya está en el historial de
-# producción (real del 16/10, 21:29); su copia:
+# fichero (R03, la dirección que no llega: 0300, 0310 y 0320) ya está en el
+# historial de producción; su copia: tests/conta/produccion/tanda-r03-direccion-20261017.txt.
+# La de antes (C06b, promociones y envíos), también; su copia:
 # tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt.
 #
 #   1. 0100 — añade conta_motivos_para_validar (todo lo que haría que un

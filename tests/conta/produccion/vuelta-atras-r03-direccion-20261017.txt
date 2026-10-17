@@ -1,0 +1,11 @@
+# Vuelta atrás de la tanda del R03 (modo «vuelta_atras»), en orden inverso:
+# primero los datos (la 0320 devuelve los pedidos como estaban, desde
+# r03_entrega_relleno), después la 0310 (los feeds y el ticket vuelven a su
+# huella de antes) y por último la 0300 (resolve_dispatch byte a byte como en
+# producción, prosrc md5 9d645a51…; PARA si hay direcciones completadas a mano).
+# La anterior de este fichero (C06b):
+# tests/conta/produccion/vuelta-atras-c06b-promociones-envios-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/r03-direccion.sql
+supabase/vuelta-atras/20261118T0320_r03_entrega_datos.down.sql
+supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql
+supabase/vuelta-atras/20261118T0300_r03_direccion_incompleta.down.sql

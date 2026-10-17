@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { X, Printer, Loader2, Check, AlertCircle } from 'lucide-react'
 import QRCode from 'qrcode'
 import type { OrderFeedItem } from '../services/ordersFeedService'
+import { renderBagImage } from '@/native/print/ticketImage'
 import {
   renderBagTicket, renderKitchenTicket, renderLabels,
   type TicketDoc, type TicketBlock,
@@ -57,9 +58,22 @@ export default function TicketPreviewModal({ order, fiscal, onClose, onReprint }
 
   const current: TicketDoc[] = docs[tab]
 
+  // R03: la bolsa, también como la IMAGEN que imprime la tablet
+  // (src/native/print/ticketImage.ts). Es lo que sale en papel; el texto de
+  // abajo es la vista de siempre.
+  const [bolsaImpresa, setBolsaImpresa] = useState<string | null>(null)
+  useEffect(() => {
+    let vivo = true
+    renderBagImage(order, fiscal)
+      .then(c => { if (vivo) setBolsaImpresa(c.toDataURL('image/png')) })
+      .catch(() => { if (vivo) setBolsaImpresa(null) })
+    return () => { vivo = false }
+  }, [order, fiscal])
+
   return (
     <div
       onClick={onClose}
+      data-testid="ticket-preview"
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(8,12,18,0.7)', display: 'flex',
@@ -104,6 +118,13 @@ export default function TicketPreviewModal({ order, fiscal, onClose, onReprint }
 
         {/* Tickets */}
         <div style={{ overflowY: 'auto', padding: 18, display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', background: '#0a1219' }}>
+          {tab === 'bag' && bolsaImpresa && (
+            <figure style={{ margin: 0, textAlign: 'center' }}>
+              <img src={bolsaImpresa} alt="La bolsa, como sale en la impresora" data-testid="ticket-bolsa-impreso"
+                style={{ width: 288, background: '#fff', borderRadius: 4, display: 'block' }} />
+              <figcaption style={{ color: '#9fb0bd', fontSize: 12, marginTop: 6 }}>Como sale en la impresora</figcaption>
+            </figure>
+          )}
           {current.map((doc, i) => <PaperTicket key={i} doc={doc} />)}
         </div>
 

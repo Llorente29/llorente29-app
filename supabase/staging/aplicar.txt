@@ -5,8 +5,8 @@
 #      antes y con la nueva, el mismo texto, y «Esperan» da lo que pararía.
 #   2. La vuelta atrás, ejecutada de verdad: todo vuelve a la huella de antes.
 # Van las primeras: lo de D01 de abajo puede fallar por datos de otro frente
-# y no debe parar estas. La prueba de promociones y envíos de C ya pasó; su
-# tanda está en producción desde el 16/10 a las 21:29.
+# y no debe parar estas. Las pruebas de C (promociones y envíos) y del R03 ya
+# pasaron: sus tandas están en el historial de producción (16/10 y 17/10).
 supabase/staging/sql/20261117_m01_motivos_para_validar_prueba.sql
 supabase/staging/sql/20261117_m01_motivos_para_validar_vuelta_atras_prueba.sql
 
