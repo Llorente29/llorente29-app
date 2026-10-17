@@ -62,9 +62,20 @@ describe('el workflow de la e2e (W02)', () => {
   const wf = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
   const ap = readFileSync('.github/workflows/aplicar-staging-conta.yml', 'utf8')
 
-  it('la entera del mismo commit no espera a la e2e del push: el tipo de evento va en la cola', () => {
-    expect(wf).toMatch(/group: e2e-staging-conta-\$\{\{ github\.ref \}\}-\$\{\{ github\.event_name \}\}-\$\{\{ inputs\.frente \}\}/)
+  it('el push y la entera de la misma rama comparten cola, y ninguna cancela a la que corre (W02, 17/10)', () => {
+    expect(wf).toMatch(/group: e2e-staging-conta-\$\{\{ github\.ref \}\}-\$\{\{ inputs\.frente \}\}\n/)
+    expect(wf).not.toMatch(/group:.*event_name/)
     expect(wf).toMatch(/cancel-in-progress: false/)
+  })
+
+  it('el tope de trozos a la vez es un ajuste del repositorio, 2 si no está puesto', () => {
+    expect(wf).toContain("CARRIL_MAX: ${{ vars.E2E_CARRILES || '2' }}")
+    const sh = readFileSync('scripts/e2e/carril.sh', 'utf8')
+    expect(sh).toContain('MAX=${CARRIL_MAX:-2}')
+    // Con los carriles cogidos, espera su turno: no falla al momento.
+    const g = readFileSync('scripts/e2e/carril/guardian_e2e.sql', 'utf8')
+    expect(g).toMatch(/pg_temp\.coger_carril\(:max, :'espera'\)/)
+    expect(g).toMatch(/perform pg_sleep/)
   })
 
   it('cada trozo coge su carril, lo clona y lo suelta pase lo que pase', () => {

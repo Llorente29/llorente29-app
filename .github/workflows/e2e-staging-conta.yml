@@ -65,11 +65,14 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 #     y qué capturas se fijan, y las pruebas del C06 que solo son del frente C
 #     siguen mirándolo (E2E_FRENTE). Los usuarios ya no: son los del carril.
 #
-# LA COLA (W02, paso 1c): el push y la entera lanzada a mano no comparten cola.
-# Antes, en 24 de 41 enteras, la entera esperaba a que acabara la e2e del push
-# del MISMO commit (381 min en tres días): ahora corren a la vez, cada una en
-# su carril. Un push nuevo sigue esperando a que acabe el anterior de su rama
-# (no lo cancela: C05, respuesta 3).
+# LA COLA (W02, 17/10, deshace el paso 1c): el push y la entera lanzada a mano
+# de la misma rama vuelven a compartir cola, y ninguna cancela a la que corre.
+# En el 1c corrían a la vez, y con la suite en 2 trozos cada una eran 4 trozos
+# contra la Micro: la entera de R sobre 59334b37 (run 484, con el push 482 al
+# lado) cayó en 6 pruebas por tiempo, distintas en cada vuelta. Además, todo
+# staging corre como mucho E2E_CARRILES trozos a la vez (variable del
+# repositorio, vacía = 2; 4 si staging pasa a Small): el que llega con los
+# carriles cogidos espera su turno en carril.sh coger.
 #
 # LAS CAPTURAS (C06b, Julio, 15/10): «capturas: artefacto en cada push y fijar
 # las de tu frente antes del informe».
@@ -127,10 +130,10 @@ on:
 # Un push nuevo ESPERA en cola: no cancela el e2e que está corriendo (C05,
 # respuesta 3). GitHub deja como mucho uno en espera por grupo: si llegan dos,
 # el de en medio se descarta y corre el último, que lleva todo lo anterior.
-# Con el tipo de evento en el grupo: la entera lanzada a mano no espera a la
-# e2e del push del mismo commit (W02).
+# Sin el tipo de evento en el grupo: la entera lanzada a mano espera a la e2e
+# del push de su rama, y al revés (W02, 17/10).
 concurrency:
-  group: e2e-staging-conta-${{ github.ref }}-${{ github.event_name }}-${{ inputs.frente }}
+  group: e2e-staging-conta-${{ github.ref }}-${{ inputs.frente }}
   cancel-in-progress: false
 
 permissions:
@@ -206,7 +209,8 @@ jobs:
     # suite entera (si alguna vez hiciera falta), 35. La preparación, hasta 10.
     # Y, mientras queden ramas con la e2e de antes, hasta 40 esperando a que
     # una de aquellas deje de escribir en la plantilla (carril.sh plantilla-coger).
-    timeout-minutes: 90
+    # Y, con el tope de carriles (ver LA COLA), hasta 40 más esperando su turno.
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -216,6 +220,8 @@ jobs:
       E2E_PRUEBAS: ${{ needs.plan.outputs.pruebas }}
       TROZO: ${{ matrix.trozo }}
       TROZOS: ${{ needs.plan.outputs.n }}
+      # Cuántos trozos a la vez en todo staging (ver LA COLA). Un ajuste, no código.
+      CARRIL_MAX: ${{ vars.E2E_CARRILES || '2' }}
       CARRIL_YO: "run ${{ github.run_id }}/${{ github.run_attempt }} · trozo ${{ matrix.trozo }}/${{ needs.plan.outputs.n }} · ${{ github.ref_name }}"
     steps:
       - uses: actions/checkout@v4
