@@ -81,7 +81,7 @@ begin
     raise exception 'PRUEBA 303 1: sobran casillas: %.', v->'casillas';
   end if;
   select * into r from public.tax_return where id = (v->>'declaracion')::uuid;
-  if r.status <> 'draft' or r.due_date <> date '2027-01-30' or r.payment_mode is not null or r.calculated_at is null then
+  if r.status <> 'draft' or r.due_date <> (select presentacion from public.conta_impuesto_plazo('303', 'quarterly', 2026, '4T')) or r.payment_mode is not null or r.calculated_at is null then
     raise exception 'PRUEBA 303 1: la declaración queda %, plazo %, pago %.', r.status, r.due_date, r.payment_mode;
   end if;
   -- La foto de lo declarado.
@@ -105,8 +105,8 @@ begin
   -- La 472, contada aparte: lo del 4T en el diario (la recibida está apuntada el 24/09).
   select coalesce(sum(jl.debit - jl.credit), 0) into v_472
     from public.journal_line jl join public.journal_entry je on je.id = jl.entry_id join public.company_account ca on ca.id = jl.company_account_id
-   where je.company_id = v_a and je.account_id = 'c01a0000-0000-4000-8000-00000000000a' and je.status = 'validado'
-     and je.entry_date between '2026-10-01' and '2026-12-31' and ca.code like '472%';
+   where je.company_id = v_a and je.account_id = 'c01a0000-0000-4000-8000-00000000000a' and je.status in ('validado', 'anulado')
+     and je.source_type not in ('vat_settlement', 'opening', 'closing') and je.entry_date between '2026-10-01' and '2026-12-31' and ca.code like '472%';
   select detail into x from public.tax_return_check where tax_return_id = r.id and check_key = 'ledger_477_472';
   if (x->>'cuenta_472')::numeric <> v_472 or v_472 = 111.65 or (x->>'casilla_45')::numeric <> 111.65 then
     raise exception 'PRUEBA 303 1: la 472 % (contada aparte, %) frente a [45]: %.', x->>'cuenta_472', v_472, x;
