@@ -120,16 +120,19 @@ function mesAnterior(): { inicio: string; fin: string } {
  * copia cada carril); aquí se comprueba antes de mirar la tarjeta, para que un
  * fallo diga si es la pantalla o el estado. Devuelve el ejercicio.
  */
-async function mesAnteriorAbierto(s: Sesion, empresa: string): Promise<{ id: string; imported_until: string | null }> {
+type Ejercicio = { id: string; ends_on: string; origin: string; origin_program: string | null; imported_until: string | null }
+
+async function mesAnteriorAbierto(s: Sesion, empresa: string): Promise<Ejercicio> {
   const m = mesAnterior()
-  const ej = await rest<{ id: string; status: string; imported_until: string | null }[]>(s, 'GET',
-    `fiscal_year?select=id,status,imported_until&company_id=eq.${empresa}&starts_on=lte.${m.inicio}&ends_on=gte.${m.fin}`)
+  const ej = await rest<(Ejercicio & { status: string })[]>(s, 'GET',
+    `fiscal_year?select=id,status,ends_on,origin,origin_program,imported_until&company_id=eq.${empresa}&starts_on=lte.${m.inicio}&ends_on=gte.${m.fin}`)
   expect(ej.datos, `un ejercicio cubre ${m.inicio} (semilla seed_c06_sola_ejercicio_staging.sql)`).toHaveLength(1)
   expect(ej.datos[0].status, 'el ejercicio está abierto').toBe('open')
   expect(ej.datos[0].imported_until === null || ej.datos[0].imported_until < m.inicio, `${m.inicio} no está traído de otro programa`).toBe(true)
   const cierres = await rest<unknown[]>(s, 'GET', `fiscal_period_lock?select=month&company_id=eq.${empresa}&month=eq.${m.inicio}&reopened_at=is.null`)
   expect(cierres.datos, `${m.inicio} sin cerrar`).toEqual([])
-  return { id: ej.datos[0].id, imported_until: ej.datos[0].imported_until }
+  const { id, ends_on, origin, origin_program, imported_until } = ej.datos[0]
+  return { id, ends_on, origin, origin_program, imported_until }
 }
 
 // ── La entrada N18 ──────────────────────────────────────────────────────────
@@ -289,9 +292,9 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     ['/conta/ajustes', 'ajustes', 'ajustes'],
   ] as const) {
     await page.goto(ruta)
-    await expect(page.locator('.cx-principal')).toBeVisible()
+    await expect(page.locator('.cx-principal'), `${ruta} (${lado(page)}) abre dentro del marco`).toBeVisible()
     await redQuieta(page)
-    await expect(page.getByRole('alert')).toHaveCount(0)
+    await expect(page.getByRole('alert'), `${ruta} (${lado(page)}) sin avisos de error`).toHaveCount(0)
     await sinFolvy(page, titulo)
     if (nombre === 'libro' || nombre === 'balance' || nombre === 'fichas') await capturar(page, nombre)
   }
@@ -309,7 +312,11 @@ test('Inicio no pide cerrar el mes anterior si ya está cerrado fuera: sin «Cer
   const empresa = await empresaDelRecorrido(s, await cuentaDe(s))
   const ej = await mesAnteriorAbierto(s, empresa)
   const m = mesAnterior()
-  const cambio = await rest(s, 'PATCH', `fiscal_year?id=eq.${ej.id}`, { imported_until: m.fin })
+  // Traído de Diez hasta el último día del mes anterior, como lo deja el corte
+  // (20261012T0110_c04r_corte_datos): «mixed» si el ejercicio sigue después;
+  // «migrated» si ese día es el último del ejercicio (CHECK fiscal_year_traido_coherente).
+  const traido = { origin: m.fin === ej.ends_on ? 'migrated' : 'mixed', origin_program: 'diez', imported_until: m.fin }
+  const cambio = await rest(s, 'PATCH', `fiscal_year?id=eq.${ej.id}`, traido)
   expect(cambio.status, `el ejercicio, traído hasta el ${m.fin}: ${JSON.stringify(cambio.datos)}`).toBe(200)
   try {
     await page.goto('/conta/inicio')
@@ -324,7 +331,8 @@ test('Inicio no pide cerrar el mes anterior si ya está cerrado fuera: sin «Cer
     await expect(page.getByRole('alert')).toHaveCount(0)
     await sinFolvy(page, 'el Inicio con el mes cerrado fuera')
   } finally {
-    const vuelta = await rest(s, 'PATCH', `fiscal_year?id=eq.${ej.id}`, { imported_until: ej.imported_until })
+    const vuelta = await rest(s, 'PATCH', `fiscal_year?id=eq.${ej.id}`,
+      { origin: ej.origin, origin_program: ej.origin_program, imported_until: ej.imported_until })
     expect(vuelta.status, `el ejercicio, como estaba: ${JSON.stringify(vuelta.datos)}`).toBe(200)
   }
   expect(errores).toEqual([])
