@@ -74,7 +74,9 @@ begin
   if exists (select 1 from pg_proc where proname = 'decidir_quien_reparte' and pronamespace = 'public'::regnamespace) then
     raise exception 'R03 vuelta atrás 2c: sigue decidir_quien_reparte.';
   end if;
-  foreach f in array array['public.orders_feed(uuid)', 'public.orders_feed_by_token(text)', 'public.order_for_print(text,uuid)'] loop
+  -- Por nombre: order_for_print no tiene la misma firma en staging (text, uuid, uuid) que en producción (text, uuid).
+  for f in select p.oid::regprocedure::text from pg_proc p
+            where p.pronamespace = 'public'::regnamespace and p.proname in ('orders_feed', 'orders_feed_by_token', 'order_for_print') loop
     if position('customer_phone_code' in pg_get_functiondef(f::regprocedure)) > 0 then
       raise exception 'R03 vuelta atrás 2d: % sigue nombrando el código.', f;
     end if;
