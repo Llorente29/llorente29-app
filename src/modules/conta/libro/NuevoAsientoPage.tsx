@@ -11,6 +11,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { rutaAsiento, rutaLibroDiario } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid, eurosExactos } from '@/modules/conta/lib/formato'
@@ -48,7 +49,9 @@ export default function NuevoAsientoPage() {
   const [ocupado, setOcupado] = useState(false)
 
   const codigos = useMemo(() => new Set((base?.cuentas ?? []).map((c) => c.code)), [base])
-  const problemas = problemasMano(concepto, fecha, lineas.map((l) => ({ ...l, localId: l.localId ?? unLocal })), codigos)
+  // S01: con el eje «local» apagado (Definiciones › Analítica), ni la columna ni el aviso; los apuntes van sin local.
+  const { local: ejeLocal } = useAnalitica()
+  const problemas = problemasMano(concepto, fecha, lineas.map((l) => ({ ...l, localId: l.localId ?? unLocal })), codigos, !!ejeLocal)
   const c = cuadreMano(lineas)
   const ejercicio = base?.ejercicios.find((e) => fecha >= e.inicio && fecha <= e.fin) ?? null
   const cambia = (i: number, p: Partial<LineaMano>) => setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
@@ -60,7 +63,7 @@ export default function NuevoAsientoPage() {
     if (problemas.length) return
     setOcupado(true)
     try {
-      const id = await guardarAMano(accountId, activa.id, ejercicio.id, serie, fecha, concepto, lineas.map((l) => ({ ...l, localId: l.localId ?? unLocal })), base.cuentas, userName)
+      const id = await guardarAMano(accountId, activa.id, ejercicio.id, serie, fecha, concepto, lineas.map((l) => (ejeLocal ? { ...l, localId: l.localId ?? unLocal } : { ...l, localId: null, comun: false })), base.cuentas, userName)
       if (yValidar) {
         try {
           const v = await validar(id, userName)
@@ -108,20 +111,22 @@ export default function NuevoAsientoPage() {
 
       <section className="cx-tarjeta" aria-label="Apuntes">
         <datalist id="cuentas-de-apunte">{base.cuentas.map((c) => <option key={c.id} value={c.code}>{c.nombre}</option>)}</datalist>
-        <div className="cxd-mano-linea cxd-linea-cabeza" aria-hidden="true"><span>Cuenta</span><span>Local</span><span className="cxd-der">Debe</span><span className="cxd-der">Haber</span><span>Concepto</span><span /></div>
+        <div className={`cxd-mano-linea cxd-linea-cabeza${ejeLocal ? '' : ' cxd-mano-sin-local'}`} aria-hidden="true"><span>Cuenta</span>{ejeLocal && <span>{ejeLocal.nombre}</span>}<span className="cxd-der">Debe</span><span className="cxd-der">Haber</span><span>Concepto</span><span /></div>
         {lineas.map((l, i) => {
           const cta = base.cuentas.find((x) => x.code === l.cuenta.trim())
           return (
-            <div key={i} className="cxd-mano-linea">
+            <div key={i} className={`cxd-mano-linea${ejeLocal ? '' : ' cxd-mano-sin-local'}`}>
               <label><span className="cx-oculto">Cuenta del apunte {i + 1}</span>
                 <input className="cx-input" list="cuentas-de-apunte" value={l.cuenta} onChange={(e) => cambia(i, { cuenta: buscarCodigo(e.target.value, base.cuentas) })} placeholder="Nombre o código" />
                 <span className="cx-ayuda">{cta ? cta.nombre : ' '}</span></label>
-              <label><span className="cx-oculto">Local del apunte {i + 1}</span>
-                <select className="cx-input" value={l.comun ? 'comun' : l.localId ?? unLocal ?? ''} onChange={(e) => cambia(i, e.target.value === 'comun' ? { comun: true, localId: null } : { comun: false, localId: e.target.value || null })}>
-                  <option value="">Elige el local</option>
-                  {base.locales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-                  <option value="comun">Común (se reparte)</option>
-                </select></label>
+              {ejeLocal && (
+                <label><span className="cx-oculto">{ejeLocal.nombre} del apunte {i + 1}</span>
+                  <select className="cx-input" value={l.comun ? 'comun' : l.localId ?? unLocal ?? ''} onChange={(e) => cambia(i, e.target.value === 'comun' ? { comun: true, localId: null } : { comun: false, localId: e.target.value || null })}>
+                    <option value="">Elige el {ejeLocal.nombre.toLowerCase()}</option>
+                    {base.locales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+                    <option value="comun">Común (se reparte)</option>
+                  </select></label>
+              )}
               <label><span className="cx-oculto">Debe del apunte {i + 1}</span><input className="cx-input cxd-der" inputMode="decimal" value={l.debe} onChange={(e) => cambia(i, { debe: e.target.value })} /></label>
               <label><span className="cx-oculto">Haber del apunte {i + 1}</span><input className="cx-input cxd-der" inputMode="decimal" value={l.haber} onChange={(e) => cambia(i, { haber: e.target.value })} /></label>
               <label><span className="cx-oculto">Concepto del apunte {i + 1}</span><input className="cx-input" value={l.concepto} onChange={(e) => cambia(i, { concepto: e.target.value })} /></label>

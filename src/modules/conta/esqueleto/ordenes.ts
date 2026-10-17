@@ -20,6 +20,7 @@
 
 import { CONTA, rutaConta, rutaLibros } from '@/config/navegacion'
 import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
+import { TABLAS_GENERALES } from '@/modules/conta/tablas/registro'
 import { HECHO_POR, LO_HECHO } from '@/modules/conta/bancos/marca'
 import type { NombreIcono } from '@/modules/conta/diseno/iconos'
 import { PRODUCTOS, pestanasVisibles, productoVisible, type Condicion, type Contexto, type IdProducto } from './productos'
@@ -94,6 +95,20 @@ const DE_LIBROS: Orden[] = AREAS_LIBROS.flatMap((area) => area.grupos.flatMap((g
     a: { ruta: sinModulo(rutaLibros(area.id, x.id)) }, sinonimos: x.sinonimos, solo: x.id === 'pendientes-diez' ? 'diez' : undefined,
   }))))
 
+/**
+ * Contabilidad › Definiciones (paso 3): el plan, las nueve tablas generales
+ * (sacadas de TABLAS_GENERALES: una sola lista) y la analítica.
+ */
+const DE_DEFINICIONES: Orden[] = [
+  { id: 'def.plan', etiqueta: 'Plan contable', icono: 'contabilidad', producto: 'contabilidad', pestana: 'definiciones', a: { ruta: R.plan }, sinonimos: ['cuentas', 'pgc', 'subcuentas'] },
+  { id: 'def.sitio', etiqueta: 'Qué va a cada sitio', producto: 'contabilidad', pestana: 'definiciones', a: { ruta: R.planSitio }, sinonimos: ['dónde va', 'a qué cuenta'] },
+  ...TABLAS_GENERALES.map((t): Orden => ({
+    id: `def.tabla.${t.id}`, etiqueta: t.titulo, producto: 'contabilidad', pestana: 'definiciones',
+    a: { ruta: R.tabla.replace(':tabla', t.id) }, sinonimos: [t.singular],
+  })),
+  { id: 'def.analitica', etiqueta: 'Analítica', icono: 'graficas', producto: 'contabilidad', pestana: 'definiciones', a: { ruta: R.analitica }, sinonimos: ['local', 'marca', 'centro de coste', 'proyecto', 'ejes'] },
+]
+
 /** Una orden por pestaña: «ir a…», para fijar una pantalla en Favoritos. */
 const DE_PESTANA: Orden[] = PRODUCTOS.flatMap((p) => p.pestanas.length > 0
   ? p.pestanas.filter((t) => t.ruta !== null).map((t): Orden => ({
@@ -102,7 +117,7 @@ const DE_PESTANA: Orden[] = PRODUCTOS.flatMap((p) => p.pestanas.length > 0
     }))
   : p.ruta !== null ? [{ id: `ir.${p.id}`, etiqueta: p.etiqueta, producto: p.id, pestana: '', a: { ruta: p.ruta } }] : [])
 
-export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_LIBROS, ...DE_PESTANA]
+export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_LIBROS, ...DE_DEFINICIONES, ...DE_PESTANA]
 const POR_ID = new Map(ORDENES.map((o) => [o.id, o]))
 export const ordenPorId = (id: string): Orden | null => POR_ID.get(id) ?? null
 
@@ -132,6 +147,12 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   'contabilidad.cierre': [
     { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.cierre-ejercicio'] },
     { titulo: 'Cuentas anuales', ordenes: ['libros.cuentas-anuales', 'libros.mapeo'] },
+  ],
+  // Paso 3: Definiciones, que no tenía cinta: el plan, las tablas y la analítica.
+  'contabilidad.definiciones': [
+    { titulo: 'Plan', ordenes: ['def.plan', 'def.sitio'] },
+    { titulo: 'Tablas', ordenes: TABLAS_GENERALES.map((t) => `def.tabla.${t.id}`) },
+    { titulo: 'Analítica', ordenes: ['def.analitica'] },
   ],
   'contabilidad.importar': [
     { titulo: 'Diez', ordenes: ['libros.pendientes-diez'] },

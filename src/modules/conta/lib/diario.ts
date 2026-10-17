@@ -191,7 +191,11 @@ export function numeroVisible(a: Pick<AsientoDiario, 'numero' | 'serie'>): strin
 export const nombreSerie = (s: Serie): string => NOMBRE_SERIE[s]
 
 /** Las pastillas de la fila: el local (o «N locales», o «Común») y la marca (propias o la cedida, dicha). */
-export function pastillas(a: Pick<AsientoDiario, 'apuntes'>): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
+/** Ejes de analítica que se enseñan (S01, Definiciones › Analítica); de serie, los dos. */
+export interface EjesVisibles { local: boolean; marca: boolean }
+const LOS_DOS: EjesVisibles = { local: true, marca: true }
+
+export function pastillas(a: Pick<AsientoDiario, 'apuntes'>, ejes: EjesVisibles = LOS_DOS): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
   const locales = new Map<string, string>()
   let comun = false
   for (const l of a.apuntes) {
@@ -199,9 +203,12 @@ export function pastillas(a: Pick<AsientoDiario, 'apuntes'>): { texto: string; t
     else if (l.localId) locales.set(l.localId, l.local ?? 'local')
   }
   const r: { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] = []
-  if (locales.size === 1) r.push({ texto: [...locales.values()][0], tono: 'azul' })
-  else if (locales.size > 1) r.push({ texto: `${locales.size} locales`, tono: 'azul' })
-  if (comun) r.push({ texto: 'Común', tono: 'azul' })
+  if (ejes.local) {
+    if (locales.size === 1) r.push({ texto: [...locales.values()][0], tono: 'azul' })
+    else if (locales.size > 1) r.push({ texto: `${locales.size} locales`, tono: 'azul' })
+    if (comun) r.push({ texto: 'Común', tono: 'azul' })
+  }
+  if (!ejes.marca) return r
   const cedidas = new Map<string, string>()
   let propias = false
   for (const l of a.apuntes) {
@@ -219,11 +226,11 @@ export function pastillas(a: Pick<AsientoDiario, 'apuntes'>): { texto: string; t
  * marca con su NOMBRE, propia o cedida, para que la marca se lea junto a la
  * subcuenta (7000000x, 7080000x) sin tener que traducir códigos.
  */
-export function pastillasDeLinea(l: Pick<ApunteDiario, 'comun' | 'localId' | 'local' | 'marcaId' | 'marca' | 'cedida'>): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
+export function pastillasDeLinea(l: Pick<ApunteDiario, 'comun' | 'localId' | 'local' | 'marcaId' | 'marca' | 'cedida'>, ejes: EjesVisibles = LOS_DOS): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
   const r: { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] = []
-  if (l.comun) r.push({ texto: 'Común', tono: 'azul' })
-  else if (l.localId) r.push({ texto: l.local ?? 'local', tono: 'azul' })
-  if (l.marcaId) r.push(l.cedida ? { texto: `${l.marca ?? 'marca'} · cedida`, tono: 'ambar' } : { texto: l.marca ?? 'marca propia', tono: 'neutro' })
+  if (ejes.local && l.comun) r.push({ texto: 'Común', tono: 'azul' })
+  else if (ejes.local && l.localId) r.push({ texto: l.local ?? 'local', tono: 'azul' })
+  if (ejes.marca && l.marcaId) r.push(l.cedida ? { texto: `${l.marca ?? 'marca'} · cedida`, tono: 'ambar' } : { texto: l.marca ?? 'marca propia', tono: 'neutro' })
   return r
 }
 
@@ -401,7 +408,8 @@ const numero = (t: string): number => {
 }
 
 /** Lo que falta para poder guardar un asiento a mano, en frases; vacío = se puede. */
-export function problemasMano(concepto: string, fecha: string, lineas: readonly LineaMano[], cuentas: ReadonlySet<string>): string[] {
+/** pideLocal (S01): con el eje «local» apagado en Definiciones › Analítica, el local ni se pide. */
+export function problemasMano(concepto: string, fecha: string, lineas: readonly LineaMano[], cuentas: ReadonlySet<string>, pideLocal = true): string[] {
   const r: string[] = []
   if (!concepto.trim()) r.push('Ponle un concepto.')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) r.push('Pon la fecha.')
@@ -416,7 +424,7 @@ export function problemasMano(concepto: string, fecha: string, lineas: readonly 
     if (Number.isNaN(d) || Number.isNaN(h)) r.push(`${n}: el importe no es un número.`)
     else if ((d > 0) === (h > 0)) r.push(`${n}: va al Debe o al Haber, uno de los dos.`)
     else if (d < 0 || h < 0) r.push(`${n}: sin importes negativos; cámbialo de lado.`)
-    if (!l.comun && !l.localId) r.push(`${n}: elige el local, o márcalo como común.`)
+    if (pideLocal && !l.comun && !l.localId) r.push(`${n}: elige el local, o márcalo como común.`)
   })
   const c = cuadreMano(lineas)
   if (usadas.length >= 2 && !c.cuadra) r.push(c.texto)

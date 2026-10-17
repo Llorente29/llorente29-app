@@ -17,6 +17,7 @@ import { extracto } from '@/modules/conta/lib/extractos'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import { cuentasConSaldo, movimientos } from '@/modules/conta/services/librosService'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 
 const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
 const SERIES: Record<number, string> = { 1: 'Ventas', 2: 'Compras', 3: 'Bancos', 4: 'General' }
@@ -30,6 +31,7 @@ export function LibroMayor() {
   const [hasta, setHasta] = useState(L.ejercicio.fin)
   const [local, setLocal] = useState<string>('')
   const [marca, setMarca] = useState<string>('')
+  const { local: ejeLocal, marca: ejeMarca } = useAnalitica()
   const [hecho, setHecho] = useState<string | null>(null)
 
   const cuentas = useLeer(() => cuentasConSaldo(L.companyId, L.ejercicio.inicio, L.ejercicio.fin), `${L.companyId}:${L.ejercicio.id}:${L.vuelta}`)
@@ -77,13 +79,14 @@ export function LibroMayor() {
         </label>
         <label>Desde<input type="date" className="cx-input" value={desde} min={L.ejercicio.inicio} max={hasta} onChange={(e) => setDesde(e.target.value || L.ejercicio.inicio)} /></label>
         <label>Hasta<input type="date" className="cx-input" value={hasta} min={desde} max={L.ejercicio.fin} onChange={(e) => setHasta(e.target.value || L.ejercicio.fin)} /></label>
-        {L.locales.length > 0 && (
-          <label>Local<select className="cx-input" value={local} onChange={(e) => setLocal(e.target.value)}>
+        {/* S01: cada filtro, solo con su eje encendido (Definiciones › Analítica) y con su nombre. */}
+        {ejeLocal && L.locales.length > 0 && (
+          <label>{ejeLocal.nombre}<select className="cx-input" value={local} onChange={(e) => setLocal(e.target.value)}>
             <option value="">Todos</option>{L.locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}<option value="comun">Solo lo común</option>
           </select></label>
         )}
-        {L.marcas.length > 0 && (
-          <label>Marca<select className="cx-input" value={marca} onChange={(e) => setMarca(e.target.value)}>
+        {ejeMarca && L.marcas.length > 0 && (
+          <label>{ejeMarca.nombre}<select className="cx-input" value={marca} onChange={(e) => setMarca(e.target.value)}>
             <option value="">Todas</option>{L.marcas.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}<option value="sin">Sin marca</option>
           </select></label>
         )}

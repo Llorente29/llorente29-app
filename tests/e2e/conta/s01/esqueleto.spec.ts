@@ -295,6 +295,41 @@ test('Ajustes › Empresa: el logo de la empresa sale en la cabecera; lo que no 
   expect(errores).toEqual([])
 })
 
+test('Definiciones › Analítica: apagar el local lo quita del asiento a mano; encenderlo lo devuelve, y lo dice', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page, errores)
+  await page.goto('/conta/ajustes/analitica')
+  // En Contabilidad › Definiciones, con su cinta: Plan · Tablas · Analítica.
+  await expect(pestanas(page, 'Contabilidad').locator('[aria-current="page"]').first()).toHaveText(/^Definiciones/)
+  if (lado(page) === 'ordenador') await expect(page.getByRole('toolbar', { name: 'Acciones de Definiciones' }).getByRole('link', { name: /^Analítica/ })).toHaveAttribute('aria-current', 'page')
+  const local = page.getByRole('region', { name: 'Local' })
+  await expect(local.getByText('Encendido')).toBeVisible({ timeout: 30_000 })
+  await page.goto('/conta/libros/diario/nuevo')
+  await expect(page.getByLabel('Local del apunte 1')).toBeVisible({ timeout: 30_000 })
+  try {
+    await page.goto('/conta/ajustes/analitica')
+    await local.getByRole('button', { name: 'Apagar' }).click()
+    // Regla 8: dice qué deja de salir y que lo guardado se queda.
+    await expect(local.getByText(/^«Local» apagado: ya no se pide ni se enseña en el asiento a mano.*Lo guardado se queda\.$/)).toBeVisible()
+    await expect(local.getByText('Apagado')).toBeVisible()
+    await page.goto('/conta/libros/diario/nuevo')
+    await expect(page.getByLabel('Cuenta del apunte 1')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByLabel('Local del apunte 1')).toHaveCount(0)
+    await capturar(page, 'analitica-asiento-sin-local')
+  } finally {
+    await page.goto('/conta/ajustes/analitica')
+    await expect(local.getByText(/^(Encendido|Apagado)$/)).toBeVisible({ timeout: 30_000 })
+    if (await local.getByRole('button', { name: 'Encender' }).count()) {
+      await local.getByRole('button', { name: 'Encender' }).click()
+      await expect(local.getByText(/^«Local» encendido: se pide y se enseña/)).toBeVisible()
+    }
+  }
+  await page.goto('/conta/libros/diario/nuevo')
+  await expect(page.getByLabel('Local del apunte 1')).toBeVisible({ timeout: 30_000 })
+  expect(errores).toEqual([])
+})
+
 test('la cinta se oculta, se recuerda y vuelve (nunca desaparece sin decir dónde está)', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')

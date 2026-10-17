@@ -17,6 +17,7 @@ import { MarcoNuevo } from '@/modules/conta/marco/nuevo/MarcoNuevo'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
+import AnaliticaPage from '@/modules/conta/analitica/AnaliticaPage'
 import MayorPage from '@/modules/conta/pages/MayorPage'
 import AlMayor from '@/modules/conta/plan/AlMayor'
 import QueVaACadaSitioPage from '@/modules/conta/pages/QueVaACadaSitioPage'
@@ -77,6 +78,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.tablas, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.tabla, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.plan, element: enMarco(<PlanContablePage />, '¿Dónde va el alquiler?') },
+    { path: CONTA.rutas.analitica, element: enMarco(<AnaliticaPage />, '¿Puedo llamar «Proyecto» a la marca?') },
     { path: CONTA.rutas.planSitio, element: enMarco(<QueVaACadaSitioPage />, '¿Dónde va el alquiler?') },
     { path: CONTA.rutas.planCuenta, element: <AlMayor /> },
     // Una cuenta del plan (respuesta 5): su Mayor, o «Sumas y saldos» si tiene hijas.

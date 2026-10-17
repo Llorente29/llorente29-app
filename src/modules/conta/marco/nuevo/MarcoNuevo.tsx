@@ -94,7 +94,8 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
     ponerDatosCinta: setDatosCinta,
     ponerEntradasCinta: setEntradasCinta,
     hosteleria: ctxListo ? ctx.hosteleria : null,
-  }), [prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria])
+    analitica: ctxListo ? ctx.analitica ?? null : null,
+  }), [prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.analitica])
 
   // Lo que se puede fijar desde aquí: esta pantalla y lo de su cinta.
   const fijables: Orden[] = [

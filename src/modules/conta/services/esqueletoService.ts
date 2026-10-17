@@ -17,7 +17,7 @@
 import { tabla, mensaje } from '@/modules/conta/services/bd'
 import { supabase } from '@/lib/supabase'
 import { aFila, deFila, type Preferencias } from '@/modules/conta/esqueleto/preferencias'
-import { INTERRUPTORES, type Contexto } from '@/modules/conta/esqueleto/productos'
+import { INTERRUPTORES, type Analitica, type Contexto } from '@/modules/conta/esqueleto/productos'
 
 const COLUMNAS = 'nivel, favoritos, cinta_oculta, densidad, barra_desplegada, documento_oculto'
 
@@ -40,7 +40,7 @@ export async function guardarPreferencias(accountId: string, userId: string, cam
 
 /** Hostelería y Diez de la empresa, e interruptores de la cuenta. */
 export async function leerContexto(accountId: string, companyId: string | null): Promise<Contexto> {
-  const [empresa, diez, flags] = await Promise.all([
+  const [empresa, diez, flags, ejes] = await Promise.all([
     companyId
       // «*»: logo_path llega con la 0120; hasta que esté aplicada, la columna no está y no se pide por nombre.
       ? tabla('company').select('*').eq('account_id', accountId).eq('id', companyId).maybeSingle()
@@ -49,6 +49,7 @@ export async function leerContexto(accountId: string, companyId: string | null):
       ? tabla('conta_diez_base').select('company_id').eq('account_id', accountId).eq('company_id', companyId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     tabla('feature_flags').select('feature_key, enabled, expires_at').eq('account_id', accountId).in('feature_key', [...INTERRUPTORES]),
+    companyId ? leerEjes(accountId, companyId) : Promise.resolve(null),
   ])
   if (empresa.error) throw new Error(mensaje('No se ha podido leer la empresa', empresa.error))
   if (diez.error) throw new Error(mensaje('No se ha podido saber si la empresa trabaja con Diez', diez.error))
@@ -63,7 +64,50 @@ export async function leerContexto(accountId: string, companyId: string | null):
     diez: !!diez.data,
     interruptores: new Set(encendidos),
     logoEmpresa: typeof fila?.logo_path === 'string' && fila.logo_path ? await urlDelLogo(fila.logo_path) : null,
+    analitica: ejes ? analiticaDe(ejes) : null,
   }
+}
+
+// ── S01 · La analítica de la empresa (conta_eje_analitico, 0130) ────────────
+
+export type IdEje = 'local' | 'marca'
+export interface FilaEje { eje: IdEje; activo: boolean; nombre: string; nombrePlural: string | null; updatedAt: string | null }
+
+/** Los ejes guardados de la empresa. null si la tabla aún no está (la 0130 sin aplicar): entonces todo sale, como antes. */
+export async function leerEjes(accountId: string, companyId: string): Promise<FilaEje[] | null> {
+  const { data, error } = await tabla('conta_eje_analitico').select('eje, activo, nombre, nombre_plural, updated_at')
+    .eq('account_id', accountId).eq('company_id', companyId)
+  if (error) {
+    if (error.code === '42P01' || error.code === 'PGRST205' || /conta_eje_analitico/.test(error.message)) return null
+    throw new Error(mensaje('No se ha podido leer la analítica de la empresa', error))
+  }
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    eje: String(r.eje) as IdEje, activo: r.activo === true, nombre: String(r.nombre),
+    nombrePlural: typeof r.nombre_plural === 'string' ? r.nombre_plural : null, updatedAt: typeof r.updated_at === 'string' ? r.updated_at : null,
+  }))
+}
+
+/** Sin fila = apagado. */
+export function analiticaDe(filas: readonly FilaEje[]): Analitica {
+  const de = (eje: IdEje) => {
+    const f = filas.find((x) => x.eje === eje && x.activo)
+    return f ? { nombre: f.nombre, plural: f.nombrePlural ?? `${f.nombre}s` } : null
+  }
+  return { local: de('local'), marca: de('marca') }
+}
+
+/** Enciende, apaga o renombra un eje (crea la fila si no la hay). Devuelve lo que quedó. */
+export async function guardarEje(accountId: string, companyId: string, eje: IdEje, cambio: { activo: boolean; nombre: string; nombrePlural: string | null }): Promise<FilaEje> {
+  const nombre = cambio.nombre.trim()
+  if (!nombre) throw new Error('El eje necesita un nombre.')
+  if (nombre.length > 40) throw new Error('El nombre del eje cabe en 40 letras.')
+  const { data, error } = await tabla('conta_eje_analitico')
+    .upsert({ account_id: accountId, company_id: companyId, eje, activo: cambio.activo, nombre, nombre_plural: cambio.nombrePlural?.trim() || null, posicion: eje === 'local' ? 1 : 2 },
+      { onConflict: 'company_id,eje' })
+    .select('eje, activo, nombre, nombre_plural, updated_at').single()
+  if (error) throw new Error(mensaje('No se ha guardado la analítica', error))
+  const r = data as Record<string, unknown>
+  return { eje, activo: r.activo === true, nombre: String(r.nombre), nombrePlural: typeof r.nombre_plural === 'string' ? r.nombre_plural : null, updatedAt: typeof r.updated_at === 'string' ? r.updated_at : null }
 }
 
 // ── S01 · El logo de la empresa (bucket company-logos, 0120) ────────────────

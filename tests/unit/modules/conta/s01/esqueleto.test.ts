@@ -33,7 +33,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     inicio: 'inicio',
     empresa: 'ajustes.empresa', empresaApartado: 'ajustes.empresa', ajustesEntrada: 'ajustes.empresa', alta: 'ajustes',
     muestraPiezas: 'ajustes.empresa', sistemaDiseno: 'ajustes.empresa',
-    tablas: 'contabilidad.definiciones', tabla: 'contabilidad.definiciones',
+    tablas: 'contabilidad.definiciones', tabla: 'contabilidad.definiciones', analitica: 'contabilidad.definiciones',
     plan: 'contabilidad.definiciones', planSitio: 'contabilidad.definiciones', planCuenta: 'contabilidad.definiciones',
     mayor: 'contabilidad.listados',
     libroDiario: 'contabilidad.asientos', nuevoAsiento: 'contabilidad.asientos', asiento: 'contabilidad.asientos',
@@ -283,5 +283,23 @@ describe('el logo de la empresa: lo que no vale se dice antes de subir', () => {
     expect(motivoLogoNoValido({ type: 'image/svg+xml', size: 10 })).toBe('El logo tiene que ser PNG, JPG o WebP.')
     expect(motivoLogoNoValido({ type: 'text/plain', size: 4 })).toBe('El logo tiene que ser PNG, JPG o WebP.')
     expect(motivoLogoNoValido({ type: 'image/png', size: 1024 * 1024 * 2.5 })).toBe('El logo pesa 2,5 MB y caben hasta 1 MB.')
+  })
+})
+
+describe('Definiciones › Analítica (0130): sin fila, apagado', () => {
+  it('cada eje sale solo si está encendido, con el nombre que le da la empresa', async () => {
+    const { analiticaDe } = await import('@/modules/conta/services/esqueletoService')
+    expect(analiticaDe([])).toEqual({ local: null, marca: null })
+    expect(analiticaDe([
+      { eje: 'local', activo: true, nombre: 'Local', nombrePlural: 'Locales', updatedAt: null },
+      { eje: 'marca', activo: false, nombre: 'Marca', nombrePlural: 'Marcas', updatedAt: null },
+    ])).toEqual({ local: { nombre: 'Local', plural: 'Locales' }, marca: null })
+    expect(analiticaDe([{ eje: 'marca', activo: true, nombre: 'Proyecto', nombrePlural: null, updatedAt: null }]))
+      .toEqual({ local: null, marca: { nombre: 'Proyecto', plural: 'Proyectos' } })
+  })
+  it('la cinta de Definiciones: el plan, las nueve tablas y la analítica, y cada una lleva a su pestaña', () => {
+    const c = cintaDe('contabilidad', 'definiciones', NADA)
+    expect(c.map((g) => [g.titulo, g.ordenes.length])).toEqual([['Plan', 2], ['Tablas', 9], ['Analítica', 1]])
+    for (const o of c.flatMap((g) => g.ordenes)) expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : ''))), o.id).toBe('contabilidad.definiciones')
   })
 })

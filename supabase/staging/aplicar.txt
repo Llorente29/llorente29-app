@@ -16,6 +16,12 @@ supabase/staging/sql/20261121_s01_esqueleto_prueba.sql
 #   con su prueba (ROLLBACK): como usuario de A sube el suyo y no toca la carpeta de B.
 supabase/migrations/20261121T0120_s01_logo_empresa.sql
 supabase/staging/sql/20261121_s01_logo_empresa_prueba.sql
+#   0130: los ejes de analítica de cada empresa (conta_eje_analitico), de verdad.
+#   0140 (cambia conta_motivos_para_validar): SOLO dentro de su prueba (ROLLBACK).
+#   Staging no tiene la tanda «Esperan» (M01) que crea esa función; la prueba la
+#   aplica antes, dentro de su transacción, como la prueba de la M01.
+supabase/migrations/20261121T0130_s01_ejes_analiticos.sql
+supabase/staging/sql/20261121_s01_analitica_prueba.sql
 
 # M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
 # pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)

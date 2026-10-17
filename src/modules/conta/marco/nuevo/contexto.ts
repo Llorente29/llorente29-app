@@ -9,6 +9,7 @@
 
 import { createContext, useContext, useEffect, useRef } from 'react'
 import type { Densidad } from '@/modules/conta/esqueleto/preferencias'
+import type { Analitica, EjeVista } from '@/modules/conta/esqueleto/productos'
 
 export interface Marco {
   densidad: Densidad
@@ -35,6 +36,8 @@ export interface Marco {
    * mientras no se sabe: lo de hostelería no sale hasta saberlo.
    */
   hosteleria: boolean | null
+  /** S01 · Los ejes de analítica de la empresa; null mientras no se sabe o si no se pueden leer. */
+  analitica: Analitica | null
 }
 
 /** Una entrada de la cinta puesta por la pantalla: un enlace (`a`) o un botón (`alPulsar`). */
@@ -115,4 +118,20 @@ export function useEntradasEnCinta(entradas: EntradasCinta | null): void {
 export function useHosteleria(): boolean {
   const marco = useContext(MarcoContexto)
   return marco ? marco.hosteleria === true : true
+}
+
+const DE_SERIE_LOCAL: EjeVista = { nombre: 'Local', plural: 'Locales' }
+const DE_SERIE_MARCA: EjeVista = { nombre: 'Marca', plural: 'Marcas' }
+
+/**
+ * S01 · Los ejes de analítica que se piden y se enseñan en esta empresa
+ * (Definiciones › Analítica), con su nombre. Apagado: null (ni se pide ni se
+ * enseña; lo guardado se queda). Fuera del marco nuevo, o si aún no se sabe o
+ * no se puede leer, los dos, como antes del S01.
+ */
+export function useAnalitica(): { local: EjeVista | null; marca: EjeVista | null } {
+  const marco = useContext(MarcoContexto)
+  const a = marco?.analitica
+  if (!a) return { local: DE_SERIE_LOCAL, marca: DE_SERIE_MARCA }
+  return a
 }

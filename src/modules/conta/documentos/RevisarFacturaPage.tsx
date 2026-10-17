@@ -37,6 +37,7 @@ import {
   apuntarFactura, decirProveedor, leerDocumentos, leerFactura, plazoDeLaFicha, proveedoresDeLaCuenta, urlDelPapel, verPropuestaFactura,
   type Apuntada, type FacturaRevisar,
 } from '@/modules/conta/services/documentosService'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 
 const fecha = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—')
 /** R5 · 4: lo más que ocupa el papel en el móvil antes de tocarlo. */
@@ -44,6 +45,8 @@ const PAPEL_MOVIL_MAX = 280
 const euro = (n: number | null) => (n === null ? '—' : eurosExactos(n))
 
 export default function RevisarFacturaPage() {
+  // S01: el local de la recepción, solo con el eje encendido (Definiciones › Analítica).
+  const { local: ejeLocal } = useAnalitica()
   const { invoiceId = '' } = useParams()
   const [query] = useSearchParams()
   const navegar = useNavigate()
@@ -145,7 +148,7 @@ export default function RevisarFacturaPage() {
               {!!fac.recargo && <Leido etiqueta="Recargo de equivalencia" valor={euro(fac.recargo)} />}
               {!!fac.retencion && <Leido etiqueta="Retención" valor={euro(-Math.abs(fac.retencion))} />}
               <Leido etiqueta="Total" valor={euro(fac.total)} apoyo={avisos.some((a) => a.id === 'total' || a.id === 'suma') ? 'no cuadra con sus bases' : 'cuadra con sus bases'} aviso={avisos.some((a) => a.id === 'total' || a.id === 'suma')} />
-              {fac.recepcion && <Leido etiqueta="Local" valor={fac.recepcion.local ?? '—'} apoyo={`de la recepción del ${fecha(fac.recepcion.fecha).slice(0, 5)}`} />}
+              {ejeLocal && fac.recepcion && <Leido etiqueta={ejeLocal.nombre} valor={fac.recepcion.local ?? '—'} apoyo={`de la recepción del ${fecha(fac.recepcion.fecha).slice(0, 5)}`} />}
               <Leido etiqueta="Vence" valor={vence.valor} apoyo={vence.apoyo} aviso={vence.aviso} />
               {prov && <Leido etiqueta="Sus facturas se apuntan en" valor={prov.gasto ? `${prov.gasto.nombre} · ${prov.gasto.cuenta}` : 'sin decidir'}
                 apoyo={prov.gasto?.origen ?? 'aún no hay nada aprendido'} />}

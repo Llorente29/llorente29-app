@@ -72,7 +72,17 @@ export interface Contexto {
   interruptores: ReadonlySet<string>
   /** S01 · El logo de la empresa (URL firmada del bucket company-logos), o null. No decide qué sale. */
   logoEmpresa?: string | null
+  /**
+   * S01 · Los ejes de analítica encendidos de la empresa (conta_eje_analitico):
+   * null = no se han podido leer (la tabla aún no está): todo sale, como antes.
+   */
+  analitica?: Analitica | null
 }
+
+/** Un eje de analítica encendido, con el nombre que le da la empresa. */
+export interface EjeVista { nombre: string; plural: string }
+/** Los dos ejes; null = apagado (ni se pide ni se enseña; lo guardado se queda). */
+export interface Analitica { local: EjeVista | null; marca: EjeVista | null }
 
 const R = CONTA.rutas
 
@@ -86,7 +96,7 @@ export const PRODUCTOS: Producto[] = [
         id: 'listados', etiqueta: 'Libros y listados', ruta: `${R.libros}/mayor/libro-mayor`,
         prefijos: [R.libros, R.diarioResumido, `${R.libros}/mayor`, `${R.libros}/registro`, `${R.libros}/balances`, 'plan'],
       },
-      { id: 'definiciones', etiqueta: 'Definiciones', ruta: R.plan, prefijos: [R.plan, R.tablas] },
+      { id: 'definiciones', etiqueta: 'Definiciones', ruta: R.plan, prefijos: [R.plan, R.tablas, R.analitica] },
       { id: 'cierre', etiqueta: 'Cierre y Registro', ruta: `${R.libros}/cierre/ejercicios`, prefijos: [`${R.libros}/cierre`, `${R.libros}/anuales`] },
       { id: 'importar', etiqueta: 'Importar', ruta: R.pendientesDiez, prefijos: [R.pendientesDiez], solo: 'diez' },
     ],

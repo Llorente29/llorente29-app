@@ -23,7 +23,7 @@ import { rutaLibros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { useDatosEnCinta, type DatosCinta } from '@/modules/conta/marco/nuevo/contexto'
+import { useAnalitica, useDatosEnCinta, type DatosCinta } from '@/modules/conta/marco/nuevo/contexto'
 import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
 import { miles } from '@/modules/conta/ui/tabla/tablaDensa'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
@@ -76,7 +76,7 @@ function contenido(accion: string): ReactNode {
 }
 
 /** El dato o estado de cada acción, con lo que se ha leído (gris «ninguno» si no hay). */
-function estados(r: ResumenLibros | null, nombreTrimestre: string, ctx: Pick<ContextoLibros, 'ejercicio' | 'ejercicios'>): Record<string, EstadoAccion> {
+function estados(r: ResumenLibros | null, nombreTrimestre: string, ctx: Pick<ContextoLibros, 'ejercicio' | 'ejercicios'>, ejeLocal: string | null = 'local'): Record<string, EstadoAccion> {
   const e: Record<string, EstadoAccion> = {}
   const ej = ctx.ejercicio
   e['libro-diario'] = { texto: `ejercicio ${ej.code}`, tono: 'verde' }
@@ -95,7 +95,8 @@ function estados(r: ResumenLibros | null, nombreTrimestre: string, ctx: Pick<Con
     e['formato-aeat'] = { texto: 'requerimientos', tono: r.sinNif ? 'ambar' : 'verde' }
   }
   e.balance = { texto: ej.origen === 'migrated' ? 'traído' : `a ${ej.fin.slice(8, 10)}/${ej.fin.slice(5, 7)}`, tono: 'gris' }
-  e.pyg = { texto: 'oficial · por local', tono: 'gris' }
+  // S01: «por local» solo con el eje encendido (Definiciones › Analítica).
+  e.pyg = { texto: ejeLocal ? `oficial · por ${ejeLocal}` : 'oficial', tono: 'gris' }
   e.ecpn = { texto: 'ingresos y gastos · total', tono: 'gris' }
   e['balances-pdf'] = { texto: 'balance y PyG', tono: 'gris' }
   e['balances-excel'] = { texto: 'balance y PyG', tono: 'gris' }
@@ -144,7 +145,8 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
 
   // Lo que esta pantalla sabe de cada acción, a la cinta (antes, su segunda fila).
   // Julio, 16/10: lo que enseña un número lo lleva escrito, nunca solo al pasar el ratón.
-  useDatosEnCinta(ctx && trimestre ? datosDeLaCinta(estados(resumen.datos, trimestre.nombre, ctx), resumen.datos, ctx.ejercicios.length) : null)
+  const { local: ejeLocal } = useAnalitica()
+  useDatosEnCinta(ctx && trimestre ? datosDeLaCinta(estados(resumen.datos, trimestre.nombre, ctx, ejeLocal?.nombre.toLowerCase() ?? null), resumen.datos, ctx.ejercicios.length) : null)
 
   if (enLaPortada) return <Navigate to={`${rutaLibros('mayor', 'libro-mayor')}${pedido ? `?ejercicio=${encodeURIComponent(pedido)}` : ''}`} replace />
   if (!accountId && !cargando) return <Vacio titulo="No hay cuenta activa." explicacion="Elige una cuenta para ver sus libros." />

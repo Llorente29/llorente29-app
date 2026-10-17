@@ -226,6 +226,8 @@ export const CONTA = {
     muestraPiezas: 'ajustes/muestra-piezas',
     /** S01 · El sistema de diseño: tokens y componentes, con datos inventados. Solo fuera de producción (module.tsx). */
     sistemaDiseno: 'ajustes/sistema-diseno',
+    /** S01 · Contabilidad › Definiciones › Analítica: los ejes de la empresa (conta_eje_analitico). */
+    analitica: 'ajustes/analitica',
   },
 } as const
 

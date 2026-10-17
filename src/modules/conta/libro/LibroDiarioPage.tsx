@@ -60,6 +60,8 @@ import { AccionesPantalla, BotonAccion } from '@/modules/conta/ui/marco/Acciones
 import { TablaDensa, type ColumnaDensa } from '@/modules/conta/ui/tabla/TablaDensa'
 import { borrarVista, cumpleFiltros, guardarVista, leerVistas, miles, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
 import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import type { EjeVista } from '@/modules/conta/esqueleto/productos'
 
 const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
 
@@ -126,7 +128,7 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
 }
 
 /** Los filtros de arriba de la tabla; las listas salen de lo que hay en el libro (regla 30). */
-function camposDelLibro(asientos: readonly AsientoDiario[]): CampoFiltro[] {
+function camposDelLibro(asientos: readonly AsientoDiario[], ejeLocal: EjeVista | null): CampoFiltro[] {
   const series = [...new Set(asientos.map((a) => a.serie))].sort((x, y) => Number(x) - Number(y))
   const estados = [...new Set(asientos.map((a) => estadoDe(a).texto))].sort((x, y) => x.localeCompare(y, 'es'))
   const locales = [...new Set(asientos.flatMap((a) => a.apuntes.map((l) => (l.comun ? 'Común' : l.local)).filter((x): x is string => !!x)))].sort((x, y) => x.localeCompare(y, 'es'))
@@ -135,13 +137,16 @@ function camposDelLibro(asientos: readonly AsientoDiario[]): CampoFiltro[] {
     { id: 'hasta', etiqueta: 'Hasta', tipo: 'hasta' },
     { id: 'serie', etiqueta: 'Serie', tipo: 'opciones', opciones: [{ valor: '', texto: 'Todas' }, ...series.map((x) => ({ valor: String(x), texto: NOMBRE_SERIE[x] }))] },
     { id: 'estado', etiqueta: 'Estado', tipo: 'opciones', opciones: [{ valor: '', texto: 'Todos' }, ...estados.map((x) => ({ valor: x, texto: x }))] },
-    ...(locales.length > 1 ? [{ id: 'local', etiqueta: 'Local', tipo: 'opciones' as const, opciones: [{ valor: '', texto: 'Todos' }, ...locales.map((x) => ({ valor: x, texto: x }))] }] : []),
+    ...(ejeLocal && locales.length > 1 ? [{ id: 'local', etiqueta: ejeLocal.nombre, tipo: 'opciones' as const, opciones: [{ valor: '', texto: 'Todos' }, ...locales.map((x) => ({ valor: x, texto: x }))] }] : []),
     { id: 'texto', etiqueta: 'Buscar', tipo: 'texto', pista: 'Concepto, número, cuenta, importe…' },
   ]
 }
 
 export default function LibroDiarioPage() {
   const { accountId, cargando, userName } = useCuentaConta()
+  // S01: el local y la marca, solo con su eje encendido (Definiciones › Analítica).
+  const analitica = useAnalitica()
+  const ejes = { local: !!analitica.local, marca: !!analitica.marca }
   const { activa } = useEmpresas()
   const movil = useIsMobile()
   const navegar = useNavigate()
@@ -167,7 +172,7 @@ export default function LibroDiarioPage() {
   const visibles = useMemo(() => (datos ? filtrosVisibles(datos.asientos) : []), [datos])
   const pedido = params.get('ver') as FiltroDiario | null
   const filtro: FiltroDiario = visibles.some((f) => f.id === pedido) ? pedido! : 'todos'
-  const campos = useMemo(() => (datos ? camposDelLibro(datos.asientos) : []), [datos])
+  const campos = useMemo(() => (datos ? camposDelLibro(datos.asientos, analitica.local) : []), [datos, analitica.local])
   const c = datos ? cifras(datos.asientos, datos.mes, datos.cierres, datos.resultado) : null
   const hechos = datos ? loQueHeHechoYo(datos.asientos) : []
   // R15 · Con Diez: el estado de cada asiento de ventas de una plataforma, y lo
@@ -324,13 +329,13 @@ export default function LibroDiarioPage() {
       exportar: (a) => numeroEnDiez(a, datos.conDiez.get(a.id)).valor,
     },
     {
-      id: 'concepto', titulo: 'Concepto · local · marca · de dónde sale', pesoPdf: 4,
+      id: 'concepto', titulo: ['Concepto', analitica.local?.nombre.toLowerCase(), analitica.marca?.nombre.toLowerCase(), 'de dónde sale'].filter(Boolean).join(' · '), pesoPdf: 4,
       celda: (a) => {
         const d = diezDe(a)
         return (
           <span className="cxd-linea-libro">
             <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
-            {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+            {pastillas(a, ejes).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
             {d && a.estado !== 'propuesto' && <ChipDiez e={d} />}
             <QueLePasa a={a} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />
           </span>
@@ -512,6 +517,7 @@ function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
     catch (e) { alFallar(e instanceof Error ? e.message : 'No se ha podido enviar a Diez.') }
     finally { setOcupado(false) }
   }
+  const { local: ejeLocal, marca: ejeMarca } = useAnalitica()
   return (
     <div className="cxd-apuntes">
       {espera && <p className="cxd-espera" role="note"><strong>Espera:</strong> {espera}</p>}
@@ -526,11 +532,11 @@ function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
       {a.apuntes.map((l) => (
         <div key={l.posicion} className="cxd-apunte">
           <span className="cxd-apunte-cuenta">
-            <span>{l.nombreCuenta}{l.local ? ` · ${l.local}` : l.comun ? ' · común' : ''}</span>
+            <span>{l.nombreCuenta}{!ejeLocal ? '' : l.local ? ` · ${l.local}` : l.comun ? ' · común' : ''}</span>
             <Link to={rutaMayor(l.cuenta)} className="cxd-codigo" onClick={(e) => e.stopPropagation()}>{l.cuenta}</Link>
           </span>
           <span>
-            {l.marca && <Chip tono={l.cedida ? 'ambar' : 'neutro'}>{l.cedida ? `${l.marca} · cedida` : l.marca}</Chip>}
+            {ejeMarca && l.marca && <Chip tono={l.cedida ? 'ambar' : 'neutro'}>{l.cedida ? `${l.marca} · cedida` : l.marca}</Chip>}
             {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
           </span>
           <span className="cxd-importe">{eurosExactos(l.debe || l.haber)}</span>
@@ -555,13 +561,15 @@ function QueLePasa({ a, espera, tarea }: { a: AsientoDiario; espera: string | nu
 /** Un asiento en el móvil: fecha y número, el concepto, sus chips, el importe y el estado. */
 function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez?: EstadoDiez; espera: string | null; tarea: string | null }) {
   const e = estadoDe(a)
+  const analitica = useAnalitica()
+  const ejes = { local: !!analitica.local, marca: !!analitica.marca }
   return (
     <span className={`cxd-tarjeta${a.estado === 'anulado' ? ' cxd-anulado' : ''}`}>
       <span className="cxd-fecha">{diaMesCorto(a.fecha)}<span className="cxd-num-movil">{numeroVisible(a)}</span></span>
       <span className="cxd-tarjeta-concepto">
         <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
         <span className="cxd-concepto-apoyo">
-          {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+          {pastillas(a, ejes).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
           {diez && a.estado !== 'propuesto' && <ChipDiez e={diez} />}
           <QueLePasa a={a} espera={espera} tarea={tarea} />
         </span>

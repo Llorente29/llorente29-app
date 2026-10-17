@@ -91,6 +91,37 @@ El inventario es el del paso 1 (`S01_paso1_comprobaciones.md`, §2).
   columna. La e2e de la cuenta D sube un PNG, lo ve en la cabecera y lo quita.
 - **Va en la tanda del S01** (clase «añadir»).
 
+### Contabilidad › Definiciones › Analítica (0130 y 0140)
+
+- **0130 · `conta_eje_analitico`**: una fila por empresa y eje (`local` →
+  `journal_line.location_id`, `marca` → `brand_id`), encendido o apagado y con
+  el nombre que quiera la empresa. **Sin fila = apagado.** RLS por cuenta (lee
+  la cuenta; cambia el administrador o el gestor; la empresa tiene que ser de esa
+  cuenta). Siembra: «Local» si la cuenta tiene locales, «Marca» si tiene marcas.
+  Medido el 17/10 en producción, por cuenta: solo Foodint tiene empresa (3
+  locales, 18 marcas; 345 apuntes con local y 203 con marca): las dos encendidas.
+- **0140 · la regla 5 de la validación** (`conta_motivos_para_validar`, cambiar
+  en caliente, misma firma): el local solo se pide con el eje «local» encendido.
+  Es la vigente en producción (comprobada contra `pg_get_functiondef`) con dos
+  cambios y nada más. Para Foodint no cambia nada.
+- **Staging no tiene la tanda «Esperan» (M01)**, que crea esa función: la 0140 va
+  en staging solo dentro de su prueba (ROLLBACK), que aplica antes la de C y la
+  M01 si faltan, como la prueba de la M01. La 0130 sí se aplica de verdad.
+- **Pantalla**: Definiciones › Analítica (nueva), con las piezas del sistema de
+  diseño: cada eje se enciende, se apaga y se renombra, y lo dice. Definiciones
+  tiene ahora cinta: PLAN · TABLAS (las nueve) · ANALÍTICA.
+- **Apagado, ni se pide ni se enseña**: el asiento a mano (sin columna ni aviso;
+  los apuntes van sin local), subir una factura, Bancos (el local de cada cuenta
+  y tarjeta, y el alta de una cuenta o una tarjeta: van «común», que es lo que la
+  base pide), el Mayor (sus filtros), el libro diario (pastillas, filtro y
+  cabecera), el asiento (cabecera y pastillas), la PyG «Por local» y el local de
+  la recepción al revisar una factura. Con su nombre: «Proyecto» si se llama así.
+- **Queda, dicho:** el agente «libro» sigue mirando «6/7 sin local ni común» en
+  todas las empresas. En producción no cambia nada hoy (Foodint tiene «Local»
+  encendido); cuando la 0130 esté en producción, el agente leerá el eje.
+- e2e (cuenta A): apaga «Local», el asiento a mano ya no lo pide, y lo vuelve a
+  encender.
+
 ### El alta pone la marca de hostelería
 
 - Al decir a qué se dedica la empresa, el alta pone `company.is_hospitality`
@@ -138,6 +169,6 @@ e2e de la B01 lo comprueba.
 ## Queda (paso 3)
 
 Lo de hostelería que queda en otras pantallas (Ventas, textos del diario,
-fichas), Definiciones › Analítica, la vista
+fichas), la vista
 Recibida en Contabilidad › Asientos, `?tipo=` en el asiento nuevo y el
 `journal_entry_id` (paso 1).
