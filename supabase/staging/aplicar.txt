@@ -24,3 +24,11 @@ supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
 supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
 supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
 supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql
+
+# D01 · Las facturas de los proveedores por correo (16/10): la 0100 añade los
+# remitentes que no mandan facturas y el rastro de la repetida; la 0110 no hace
+# nada en staging (no está Foodint). La prueba ejecuta la 0110 sobre la cuenta A
+# y las dos vueltas atrás con \i, con correos inventados, y acaba en ROLLBACK.
+supabase/migrations/20261119T0100_d01_facturas_correo.sql
+supabase/migrations/20261119T0110_d01_facturas_foodint.sql
+supabase/staging/sql/20261119_d01_facturas_correo_prueba.sql

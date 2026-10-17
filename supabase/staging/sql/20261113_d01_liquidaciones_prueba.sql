@@ -78,8 +78,17 @@ begin
 
   select id into v_canal from public.sales_channel where account_id = v_acc and slug = 'uber';
   if v_canal is null then raise exception 'PRUEBA D01 liquidaciones · 0: la cuenta A no tiene el canal de Uber.'; end if;
-  insert into public.party (account_id, name, created_by_name) values (v_acc, 'Plataforma inventada (prueba D01)', 'Prueba D01') returning id into v_party;
-  insert into public.party_role (account_id, party_id, role, channel_id, commission_account_code) values (v_acc, v_party, 'platform', v_canal, '62300001');
+  -- Un canal tiene una sola plataforma (ux_party_role_canal). Si el Uber de A
+  -- ya la tiene (la de seed_d01_tiendas_staging.sql, 17/10), se usa esa, con
+  -- la cuenta de comisión que pide la prueba; si no, una inventada.
+  select pr.party_id into v_party from public.party_role pr
+   where pr.account_id = v_acc and pr.role = 'platform' and pr.channel_id = v_canal;
+  if v_party is null then
+    insert into public.party (account_id, name, created_by_name) values (v_acc, 'Plataforma inventada (prueba D01)', 'Prueba D01') returning id into v_party;
+    insert into public.party_role (account_id, party_id, role, channel_id, commission_account_code) values (v_acc, v_party, 'platform', v_canal, '62300001');
+  else
+    update public.party_role set commission_account_code = '62300001' where account_id = v_acc and party_id = v_party and role = 'platform';
+  end if;
   perform set_config('prueba.party', v_party::text, true);
   perform set_config('prueba.loc', (select id::text from public.locations where account_id = v_acc order by created_at limit 1), true);
   perform set_config('prueba.marca', (select id::text from public.brand where account_id = v_acc order by created_at limit 1), true);

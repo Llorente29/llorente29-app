@@ -1,0 +1,25 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# D01 · Las facturas de los proveedores entran solas por correo (Julio, 16/10;
+# rama conta/d01-facturas-correo). Esta es la COPIA: va al manifiesto vivo
+# (supabase/produccion/aplicar.txt) cuando Julio lo diga, detrás de la de C y
+# de las de reparto.
+#
+#   1. 0100 del 19 — añade company_inbound_sender y conta_entrada_remitente
+#      (los remitentes que no mandan facturas, por su huella) y cambia con la
+#      misma firma conta_entrada_llegada (la repetida deja rastro en su
+#      actividad). Declarado en su cabecera, con su prueba de staging.
+#   2. 0110 del 19 — los datos de Foodint: su dirección de facturas,
+#      facturas-foodint@entrada.folvy.app, encendida, y el remitente de los
+#      justificantes de un proveedor, por su huella. Solo añade dos filas.
+#
+# Ninguna toca el camino del pedido. No escribe ningún asiento.
+# La función conta-facturas-entrada (y su _shared/facturasEntrada.ts) va con el
+# PR: sin esta tanda funciona igual que hoy (sin la regla del remitente).
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-d01-facturas-correo-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-facturas-correo.sql
+supabase/migrations/20261119T0100_d01_facturas_correo.sql
+supabase/migrations/20261119T0110_d01_facturas_foodint.sql
