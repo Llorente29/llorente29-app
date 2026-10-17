@@ -1490,6 +1490,81 @@ describe('la tanda B02 · T1 «lo que entra» (0200; ya en el historial de produ
   })
 })
 
+describe('la tanda B02 · T2 «lo ya guardado, legible» (0201; ya en el historial de producción, run real sobre d0d9a74c), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-b02-relleno-20261016.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción para ESTE fichero (con su md5): ver el _que del JSON.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-b02-relleno-20261016.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const F = 'supabase/migrations/20261101T0201_b02_entrada_relleno.sql'
+
+  it('un fichero, que pide «autorizo» con su nombre entero (es un update sobre filas que existen)', () => {
+    expect(viva).toEqual([F])
+    expect(r.ficheros).toEqual({ [F]: 'autorizo' })
+  })
+  it('solo rellena las dos columnas nuevas, solo en los Excel de BBVA y solo donde están vacías; no toca el texto del banco ni el libro', () => {
+    const sql = readFileSync(F, 'utf8').replace(/--.*$/gm, '')
+    expect(sql.match(/^\s*update\b[\s\S]*?;/gim)).toHaveLength(1)
+    expect(sql).toMatch(/set movement_type = [\s\S]*counterparty = /)
+    expect(sql).toContain("s.format = 'csv:bbva' and m.movement_type is null and m.counterparty is null")
+    expect(sql).not.toMatch(/bank_concept\s*=|journal_|bank_match|insert\b|delete\b/i)
+    expect(sql).toMatch(/raise exception/)
+  })
+  it('declara qué cuenta, y la cuenta mide el tipo y la contraparte', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/b02-entrada.sql'])
+    expect(readFileSync(cuentas[0], 'utf8')).toMatch(/movimientos con tipo[\s\S]*movimientos con contraparte/)
+  })
+  it('su vuelta atrás vacía solo esas dos columnas de los mismos movimientos', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-b02-relleno-20261016.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261101T0201_b02_entrada_relleno.down.sql'])
+    const sql = readFileSync(atras[0], 'utf8').replace(/--.*$/gm, '')
+    expect(sql).toMatch(/set movement_type = null, counterparty = null/)
+    expect(sql).toContain("s.format = 'csv:bbva'")
+  })
+})
+
+describe('la tanda B02 · T3 «las reglas de Foodint, corregidas» (0210; ya en el historial de producción, run real sobre db0fc5f4), tal cual', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-b02-reglas-20261016.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción para ESTE fichero (con su md5): ver el _que del JSON.
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-b02-reglas-20261016.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const F = 'supabase/migrations/20261101T0210_b02_reglas_foodint.sql'
+
+  it('un fichero, que pide «autorizo» con su nombre entero (es un update sobre filas que existen)', () => {
+    expect(viva).toEqual([F])
+    expect(r.ficheros).toEqual({ [F]: 'autorizo' })
+  })
+  it('toca solo las cuatro reglas por su id, y ANTES de escribir para si falta la 40700001, si una regla ha cambiado o si alguna ha casado algo', () => {
+    const sql = readFileSync(F, 'utf8')
+    for (const id of ['f2afd853-b93a-43b8-bc1c-fdd5136a0c13', 'a094fd3a-c8e5-4209-a989-52ecb3c862a3', '11f54405-a466-455d-be9c-6583d9ae58be', '103ccdd6-ce74-4464-ab6a-645e43dff288']) expect(sql).toContain(id)
+    expect(sql).toContain("'CATCHER DISCO', 'CATCHER'")
+    const freno = sql.indexOf('PARO'), escribe = sql.search(/^update public\.bank_rule/m)
+    expect(freno).toBeGreaterThan(0)
+    expect(freno).toBeLessThan(escribe)
+    expect(sql).toMatch(/ha cambiado, vuelve a medir/)
+    expect(sql).toMatch(/ya ha casado algo/)
+    expect(sql.replace(/--.*$/gm, '')).not.toMatch(/journal_|delete\b/i)
+  })
+  it('declara qué cuenta; la cuenta mide estado, cuenta, condición y confirmaciones de las cuatro', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/b02-reglas.sql'])
+    expect(readFileSync(cuentas[0], 'utf8')).toMatch(/condition->>'contiene'/)
+  })
+  it('su vuelta atrás devuelve lo de antes desde el registro, también la condición, y para si alguna ha casado algo', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-b02-reglas-20261016.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261101T0210_b02_reglas_foodint.down.sql'])
+    const sql = readFileSync(atras[0], 'utf8')
+    expect(sql).toMatch(/condition = coalesce\(l\.before->'condicion', r\.condition\)/)
+    expect(sql).toMatch(/raise exception/)
+  })
+})
+
 describe('lo que tiene que parar', () => {
   const sup = (sql: string) => decidir(sentencias(sql).flatMap((s: string) => clasificar(s)), existe)
   it('borrar o renombrar algo existente', () => {

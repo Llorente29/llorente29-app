@@ -7,10 +7,10 @@
 // Capturas junto a la maqueta en docs/reparto/capturas/r02/.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, CUENTA_B, STAGING_URL, anonKey, entrarComo, type Sesion } from '../conta/sesion'
+import { CUENTA_A, CUENTA_B, STAGING_URL, anonKey, entrarComo, type Sesion, enCarril } from '../conta/sesion'
 
 const DIR = 'docs/reparto/capturas/r02'
-const NORTE_CENTRO = 'c01a0000-0000-4000-8000-0000000000a2'
+const NORTE_CENTRO = enCarril('c01a0000-0000-4000-8000-0000000000a2')
 
 async function rpc(s: Sesion, fn: string, args: Record<string, unknown>) {
   const r = await fetch(`${STAGING_URL}/rest/v1/rpc/${fn}`, {
@@ -69,7 +69,7 @@ test('guardar al tocar, lo que dice y «Deshacer»', async ({ page }, info) => {
   await expect(celda).toHaveAttribute('data-valor', 'own')
   // La base dice lo mismo: el siguiente pedido de Smash en Uber entra como «propio».
   const r = await rpc(s, 'resolve_delivery_by', {
-    p_account_id: CUENTA_A.id, p_brand_id: 'e0200000-0000-4000-8000-00000000a0b3', p_channel_slug: 'uber', p_location_id: null,
+    p_account_id: CUENTA_A.id, p_brand_id: enCarril('e0200000-0000-4000-8000-00000000a0b3'), p_channel_slug: 'uber', p_location_id: null,
   }) as { delivery_by: string; source: string }[]
   expect(r[0]).toMatchObject({ delivery_by: 'own', source: 'manual' })
 
@@ -90,7 +90,7 @@ test('la cocina: gris si reparte la plataforma, nada en rojo y ningún «Cambiar
   // cliente (Julio, 17/10). Sin «Pedirla al cliente» ni
   // «Cambiar a “la reparte Just Eat”»: pasar la marca a «Plataforma» por
   // pedidos sin dirección no puede existir.
-  const e2e01 = page.locator('[data-testid="tarjeta-pedido"][data-sale-id="e0200000-0000-4000-8000-0000000053a1"]')
+  const e2e01 = page.locator(`[data-testid="tarjeta-pedido"][data-sale-id="${enCarril('e0200000-0000-4000-8000-0000000053a1')}"]`)
   await expect(e2e01.getByTestId('etiqueta-reparto')).toContainText('Nosotros · aún sin rider')
   await expect(e2e01.getByTestId('aviso-sin-direccion-texto')).toHaveText('No ha salido a Catcher · llama al cliente y completa la dirección')
   await expect(page.getByRole('button', { name: /Cambiar a «la reparte/ })).toHaveCount(0)
@@ -111,7 +111,7 @@ test('la cuenta B no ve las marcas de A ni puede cambiar sus celdas', async ({ p
   await expect(page.getByTestId('fila-Kebab de Prueba')).toBeVisible()
   await expect(page.getByTestId('fila-Smash de Prueba')).toHaveCount(0)
   await expect(rpc(s, 'reparto_guardar_celda', {
-    p_account_id: CUENTA_A.id, p_brand_id: 'e0200000-0000-4000-8000-00000000a0b3', p_channel_slug: 'uber',
+    p_account_id: CUENTA_A.id, p_brand_id: enCarril('e0200000-0000-4000-8000-00000000a0b3'), p_channel_slug: 'uber',
     p_location_id: null, p_delivery_by: 'own', p_source: 'manual',
   })).rejects.toThrow(/HTTP 403|42501|permiso/)
 })

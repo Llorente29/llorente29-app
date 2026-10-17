@@ -14,7 +14,7 @@
 // tanda SQL de staging (20261010_c04_prueba_libro.sql) dentro de un ROLLBACK.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo } from '../sesion'
+import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo, enCarril } from '../sesion'
 import { rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan, loQueTapanSinPregunta } from '../solapes'
 
@@ -144,7 +144,7 @@ test('A · «Lo que he hecho yo»: lo que valida Folvy sale con su Deshacer, y d
   test.skip(lado(page) === 'movil', 'Escribe en el libro de la cuenta A: una vez, en el ordenador.')
   const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
-  const EMPRESA_A = '3b34403a-a7d6-4a48-a8d7-737e8cababdc'
+  const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
   const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
   const PREFIJO = 'Ventas del día · Prueba e2e'
   // Lo que dejó un run cortado: lo validado se anula y lo propuesto se descarta.

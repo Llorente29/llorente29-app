@@ -117,9 +117,13 @@ begin
 
   perform set_config('folvy.reparto_tal_cual', 'on', true);
 
+  -- El token es único en toda la base y no lleva uuid: en un carril (W02) lleva
+  -- «-cN» detrás, igual que se lo pone el clon (scripts/e2e/carril/clonar.sql).
   insert into public.kds_device (id, account_id, location_id, label, token) values
-    ('e0300000-0000-4000-8000-0000000000e1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2', 'R03 e2e Norte Centro', 'r03-e2e-norte-centro'),
-    ('e0300000-0000-4000-8000-0000000000e2', 'c01a0000-0000-4000-8000-00000000000a', 'e0200000-0000-4000-8000-0000000000a3', 'R03 e2e Norte Mercado', 'r03-e2e-norte-mercado')
+    ('e0300000-0000-4000-8000-0000000000e1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2', 'R03 e2e Norte Centro',
+     'r03-e2e-norte-centro' || coalesce('-c' || nullif(current_setting('e2e.carril', true), ''), '')),
+    ('e0300000-0000-4000-8000-0000000000e2', 'c01a0000-0000-4000-8000-00000000000a', 'e0200000-0000-4000-8000-0000000000a3', 'R03 e2e Norte Mercado',
+     'r03-e2e-norte-mercado' || coalesce('-c' || nullif(current_setting('e2e.carril', true), ''), ''))
   on conflict (id) do update set is_active = true, location_id = excluded.location_id, token = excluded.token;
 
   insert into public.sale

@@ -10,68 +10,77 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 # POR QUÉ AQUÍ Y NO EN EL CONTENEDOR DE DESARROLLO
 # Desde ese contenedor no se llega a *.supabase.co (el proxy lo corta).
 #
-# CÓMO ENTRA, SIN NINGÚN SECRETO NUEVO
-# Los cuatro usuarios de prueba (a.admin@, b.admin@, a.encargado@ y
-# c.admin@prueba.folvy.test, de las semillas) reciben en cada ejecución una contraseña ALEATORIA, que se
-# enmascara y no sale de este job.
+# CADA E2E CON SUS PROPIAS CUENTAS (W02, paso 1c, 16/10)
+# Hasta el 16/10 todas las e2e compartían las cuentas A y B de staging y, para
+# no romperse los datos, iban de una en una detrás de un cerrojo (e2e.cerrojo):
+# 1.741 min de espera en tres días, tantos como de pruebas. Ahora cada job coge
+# un CARRIL (scripts/e2e/carril.sh): una copia de las cuentas de prueba (A, B,
+# C, Diez, las dos «solas» del C06 y sus siete usuarios) con ids propios, que
+# se clona al empezar y se borra al acabar. Dos e2e a la vez ya no se pisan.
+# Los usuarios del carril reciben en cada ejecución una contraseña ALEATORIA,
+# que se enmascara y no sale del job. Las pruebas calculan los ids y correos
+# del carril con tests/e2e/conta/sesion.ts (enCarril, correoDelCarril).
 #
-# USUARIOS POR FRENTE (C06, respuesta 2 de Julio, 13/10)
-# Los frentes A, B y C lanzan sus e2e a la vez. Con los mismos cuatro usuarios,
-# cada ejecución le cambiaba la contraseña a la otra a mitad (400 y 429 al
-# entrar). Ahora cada frente tiene sus dobles (seed_e2e_frentes_staging.sql:
-# a.admin.frente-a@…, y su propia cuenta C sin empresa), y su e2e SOLO cambia
-# la contraseña de los suyos. El frente sale de la rama (paso «Frente», una
-# línea por frente); sin frente, los cuatro de siempre, como antes. La
-# contraseña sigue siendo de un solo uso: no se ha aflojado ningún freno.
-# F01 (15/10): el frente D, el del marco nuevo (ramas conta/m01-*, capturas en
-# docs/conta/capturas/m01/), con sus cuatro dobles como los otros tres.
-# Al empezar, e2e_limpieza.sql quita lo que dejaron runs cortados (más de 30
-# minutos: nada que esté usando otra ejecución en marcha).
+# EL ÚNICO CERROJO QUE QUEDA: MIENTRAS SE MIGRA. Una e2e coge el cerrojo de
+# migrar COMPARTIDO (entran todas a la vez); aplicar-staging-conta lo coge
+# EXCLUSIVO: espera a que acaben las que están corriendo y, mientras aplica
+# (mediana 0,6 min), no empieza ninguna. Así una tanda ya no puede entrar en
+# staging a mitad de una e2e. Son cerrojos consultivos de Postgres que mantiene
+# un psql en segundo plano: si el runner muere, se sueltan solos.
 #
-# Y EL CERROJO: medido el mismo día, los usuarios propios no bastan. Las
-# cuentas A y B y el escenario de reparto son de todos, y dos ejecuciones
-# enteras a la vez se rompen los datos. Cada una prepara a la vez (dependencias,
-# build, navegador), pero lo que toca staging va de una en una: coge
-# e2e.cerrojo, y la otra espera dentro de su job (no en la cola de GitHub).
-# Ver el paso «Cerrojo». Se pone con el mismo y único secreto del
-# otro workflow, STAGING_CONTA_DB_URL, y con las mismas tres guardas: la URL es
-# de staging-conta, no es de producción, y al otro lado no hay ni Foodint ni
-# Folvy Interno. La UPDATE solo toca esos cuatro usuarios, por id y por email.
+# LA ENTERA, EN TROZOS A LA VEZ (W02, paso 1c)
+# Con «pruebas» vacío (y en un push de una rama sin frente) la suite se reparte
+# en 2 trozos (4 a mano con «trozos»: la Micro de staging no los aguanta) (scripts/e2e/trozos.mjs: fichero a fichero, del más lento al más
+# rápido, al trozo que menos lleva), cada uno en su runner y en su carril. El
+# job «entera» los junta: comprueba que entre todos están TODOS los ficheros,
+# una vez cada uno, y que todos han salido en verde en este commit. Solo así el
+# run sale en verde, y solo así cuenta como entera (scripts/conta/e2e-entera.mjs,
+# que además exige que sea el PRIMER intento: relanzar un trozo que falló sirve
+# para diagnosticar, no para dar valores a Julio).
+#
+# Se pone con el mismo y único secreto del otro workflow, STAGING_CONTA_DB_URL,
+# y con las mismas tres guardas: la URL es de staging-conta, no es de
+# producción, y al otro lado no hay ni Foodint ni Folvy Interno.
 #
 # La URL y la clave anónima de staging-conta van escritas abajo: son públicas
 # por diseño (las lleva cualquier navegador que abra la app) y no dan acceso a
 # nada que la RLS no permita. No sirven para producción.
 #
 # CUÁNDO SE DISPARA
-# Un push a conta/** que toque la app, las pruebas o este workflow. Y a mano
-# (workflow_dispatch) desde la rama: cuando lo que cambia es staging —una
-# semilla rehecha por aplicar-staging-conta— y no el código (12/10, C04 R3).
+# Un push a conta/** que toque la app, las pruebas, el carril o este workflow.
+# Y a mano (workflow_dispatch) desde la rama: cuando lo que cambia es staging
+# —una semilla rehecha por aplicar-staging-conta— y no el código (12/10, C04 R3).
 #
 # QUÉ CORRE (C06b, respuesta 6 de Julio, tarea 5 · 14/10)
-# La suite entera tarda unos 20 minutos y los tres frentes hacían cola en el
-# cerrojo. Ahora:
 #   · en un PUSH de una rama de frente corre solo su carpeta y el juego común
 #     (el marco y el arranque del C00, y la RLS entre cuentas):
 #       conta/bNN-* → tests/e2e/conta/b01 · conta/d01-* → tests/e2e/conta/d01
-#       conta/c06*  → tests/e2e/conta/c06
-#     Una rama sin frente sigue corriendo la suite entera.
+#       conta/c06*  → tests/e2e/conta/c06 · conta/m01-* → tests/e2e/conta/m01
+#     Una rama sin frente sigue corriendo la suite entera (en 4 trozos).
 #   · la SUITE ENTERA corre a mano (workflow_dispatch con «pruebas» vacío),
 #     antes de pedir tanda o abrir un PR a main. El título del run lo dice
 #     («entera»), y scripts/conta/e2e-entera.mjs comprueba que hay una en verde
 #     del mismo commit (antes-de-subir.sh, con PEDIR_TANDA=1).
+#   · el frente sigue saliendo de la rama: decide qué carpeta corre en un push
+#     y qué capturas se fijan, y las pruebas del C06 que solo son del frente C
+#     siguen mirándolo (E2E_FRENTE). Los usuarios ya no: son los del carril.
+#
+# LA COLA (W02, paso 1c): el push y la entera lanzada a mano no comparten cola.
+# Antes, en 24 de 41 enteras, la entera esperaba a que acabara la e2e del push
+# del MISMO commit (381 min en tres días): ahora corren a la vez, cada una en
+# su carril. Un push nuevo sigue esperando a que acabe el anterior de su rama
+# (no lo cancela: C05, respuesta 3).
 #
 # LAS CAPTURAS (C06b, Julio, 15/10): «capturas: artefacto en cada push y fijar
 # las de tu frente antes del informe».
-#   · En CADA run, las capturas que ha sacado ese run (las escritas después de
-#     la marca) van en el artefacto «capturas», 30 días, y un comentario del PR
-#     (uno solo, que se va editando) da el enlace. Nunca un commit en la rama.
+#   · En CADA trozo, las capturas que ha sacado (las escritas después de la
+#     marca) van en su artefacto «capturas-N»; el job «entera» las junta en el
+#     artefacto «capturas», 30 días, y un comentario del PR (uno solo, que se va
+#     editando) da el enlace. Nunca un commit en la rama.
 #   · Antes de dar su informe, la sesión lanza este workflow a mano con
 #     «fijar_capturas»: si sale verde, commitea SOLO la carpeta del frente de
 #     la rama (scripts/conta/capturas.mjs fijar), y Julio las ve en «Files
 #     changed». Las de otros frentes de ese run se quedan en el artefacto.
-# Por qué: cada e2e commiteaba todas sus capturas, también las de otros
-# frentes, y un PNG cambia unos bytes en cada pasada: el #194 chocó con main en
-# 12 PNG de b01 y c00. Las que ya están en el repositorio se quedan.
 
 on:
   push:
@@ -82,6 +91,9 @@ on:
       - 'supabase/seeds/reparto/seed_r02_e2e.sql'
       - 'tests/e2e/**'
       - 'playwright.config.ts'
+      - 'scripts/e2e/carril/**'
+      - 'scripts/e2e/carril.sh'
+      - 'scripts/e2e/trozos.mjs'
       - '.github/workflows/e2e-staging-conta.yml'
   workflow_dispatch:
     inputs:
@@ -91,10 +103,17 @@ on:
         type: string
         required: false
         default: ''
-      # El frente sale de la rama; esto lo fuerza (para probar dos frentes a
-      # la vez desde una misma rama). Vacío = el de la rama.
+      # El frente sale de la rama; esto lo fuerza. Vacío = el de la rama.
       frente:
         description: 'Frente (a, b, c o d). Vacío = el de la rama'
+        type: string
+        required: false
+        default: ''
+      # W02 (1c): en cuántos trozos a la vez va la suite entera. 2 por defecto:
+      # con 4, la Micro de staging no aguanta (medido el 16/10: las mismas
+      # pruebas ×1,20 y 6-8 que no llegan a pintar en 15 s por run).
+      trozos:
+        description: 'En cuántos trozos a la vez va la suite entera (1 a 4). Vacío = 2'
         type: string
         required: false
         default: ''
@@ -106,12 +125,12 @@ on:
         default: false
 
 # Un push nuevo ESPERA en cola: no cancela el e2e que está corriendo (C05,
-# respuesta 3). GitHub deja como mucho uno en espera por rama: si llegan dos,
+# respuesta 3). GitHub deja como mucho uno en espera por grupo: si llegan dos,
 # el de en medio se descarta y corre el último, que lleva todo lo anterior.
-# Con el frente en el grupo: dos frentes forzados desde la misma rama no se
-# esperan (cada uno toca solo sus usuarios).
+# Con el tipo de evento en el grupo: la entera lanzada a mano no espera a la
+# e2e del push del mismo commit (W02).
 concurrency:
-  group: e2e-staging-conta-${{ github.ref }}-${{ inputs.frente }}
+  group: e2e-staging-conta-${{ github.ref }}-${{ github.event_name }}-${{ inputs.frente }}
   cancel-in-progress: false
 
 permissions:
@@ -119,46 +138,32 @@ permissions:
   # El comentario del PR con el enlace al artefacto de las capturas.
   pull-requests: write
 
+env:
+  STAGING_REF: oseymswjlzplqoxrfjzi
+  PROD_REF: xzmpnchlguibclvxyynt
+  VITE_SUPABASE_URL: https://oseymswjlzplqoxrfjzi.supabase.co
+  VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zZXltc3dqbHpwbHFveHJmanppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4ODYzNzUsImV4cCI6MjEwNjQ2MjM3NX0.xszvWohb2R7MWidy1ZsIL0IZg2E55aQSFRc1WX8A4js
+
 jobs:
-  e2e:
+  # Qué se corre y en cuántos trozos. Sin secretos y sin tocar staging.
+  plan:
     runs-on: ubuntu-latest
-    # 40: las 164 pruebas tardan unos 18 min y la preparación (fuentes y navegador)
-    # llegó a tardar 9,5 el 08/10 (run 37801003944, cortado en la 142 sin ningún fallo).
-    # 100: las pruebas tardan unos 20-25 min, la preparación hasta 10, y con
-    # el cerrojo (abajo) se puede esperar hasta 60 a que acabe otra.
-    timeout-minutes: 100
+    timeout-minutes: 5
+    outputs:
+      frente: ${{ steps.frente.outputs.frente }}
+      pruebas: ${{ steps.frente.outputs.pruebas }}
+      trozos: ${{ steps.frente.outputs.trozos }}
+      n: ${{ steps.frente.outputs.n }}
     env:
-      STAGING_REF: oseymswjlzplqoxrfjzi
-      PROD_REF: xzmpnchlguibclvxyynt
-      VITE_SUPABASE_URL: https://oseymswjlzplqoxrfjzi.supabase.co
-      # Solo a mano; en un push, vacías: todas las pruebas y el frente de la rama.
       PRUEBAS: ${{ inputs.pruebas }}
       FRENTE_PEDIDO: ${{ inputs.frente }}
-      VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zZXltc3dqbHpwbHFveHJmanppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4ODYzNzUsImV4cCI6MjEwNjQ2MjM3NX0.xszvWohb2R7MWidy1ZsIL0IZg2E55aQSFRc1WX8A4js
+      TROZOS_PEDIDOS: ${{ inputs.trozos }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
-        env:
-          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${DB_URL:-}" ]; then echo "::error::Falta STAGING_CONTA_DB_URL."; exit 1; fi
-          python3 - <<'PY'
-          import os, urllib.parse
-          u = urllib.parse.urlsplit(os.environ["DB_URL"])
-          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
-              if parte:
-                  print(f"::add-mask::{parte}")
-          PY
-          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN."; exit 1 ;; esac
-          case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
-
       - name: Frente (de la rama, o el pedido a mano)
+        id: frente
         run: |
           set -euo pipefail
-          # Una línea por frente. Una rama que no casa con ninguna usa los
-          # usuarios de siempre (como antes de existir los frentes).
+          # Una línea por frente. Una rama que no casa con ninguna no tiene frente.
           case "$GITHUB_REF_NAME" in
             conta/d[0-9]*)              FRENTE=a ;;  # A · facturas recibidas (D01…)
             conta/b[0-9]*)              FRENTE=b ;;  # B · bancos (B01…)
@@ -184,9 +189,52 @@ jobs:
               echo "::error::«pruebas» son carpetas o ficheros de tests/e2e separados por espacios (o nada): «$p» no lo es."; exit 1
             fi
           done
-          echo "E2E_FRENTE=$FRENTE" >> "$GITHUB_ENV"
-          echo "E2E_PRUEBAS=${PRUEBAS:-}" >> "$GITHUB_ENV"
-          echo "Frente: ${FRENTE:-ninguno (los usuarios de siempre)} · pruebas: ${PRUEBAS:-la suite entera}"
+          # La suite entera, en N trozos a la vez (2 por defecto: la Micro no
+          # aguanta 4, medido el 16/10); una parte, en uno.
+          N=${TROZOS_PEDIDOS:-2}
+          case "$N" in 1|2|3|4) ;; *) echo "::error::«trozos» tiene que ser 1, 2, 3 o 4 (o nada)."; exit 1 ;; esac
+          [ -z "${PRUEBAS:-}" ] || N=1
+          TROZOS=$(seq -s, 1 "$N" | sed 's/^/[/; s/$/]/')
+          { echo "frente=$FRENTE"; echo "pruebas=${PRUEBAS:-}"; echo "trozos=$TROZOS"; echo "n=$N"; } >> "$GITHUB_OUTPUT"
+          echo "Frente: ${FRENTE:-ninguno} · pruebas: ${PRUEBAS:-la suite entera} · trozos: $N"
+
+  trozo:
+    needs: plan
+    name: trozo ${{ matrix.trozo }}/${{ needs.plan.outputs.n }}
+    runs-on: ubuntu-latest
+    # Un trozo de la entera lleva unos 9-17 min de pruebas; uno solo con la
+    # suite entera (si alguna vez hiciera falta), 35. La preparación, hasta 10.
+    # Y, mientras queden ramas con la e2e de antes, hasta 40 esperando a que
+    # una de aquellas deje de escribir en la plantilla (carril.sh plantilla-coger).
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        trozo: ${{ fromJSON(needs.plan.outputs.trozos) }}
+    env:
+      E2E_FRENTE: ${{ needs.plan.outputs.frente }}
+      E2E_PRUEBAS: ${{ needs.plan.outputs.pruebas }}
+      TROZO: ${{ matrix.trozo }}
+      TROZOS: ${{ needs.plan.outputs.n }}
+      CARRIL_YO: "run ${{ github.run_id }}/${{ github.run_attempt }} · trozo ${{ matrix.trozo }}/${{ needs.plan.outputs.n }} · ${{ github.ref_name }}"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ]; then echo "::error::Falta STAGING_CONTA_DB_URL."; exit 1; fi
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
 
       - name: Instalar psql 17
         run: |
@@ -210,119 +258,110 @@ jobs:
       - name: Navegador de Playwright
         run: npx playwright install --with-deps chromium
 
-      # EL CERROJO (C06, respuesta 2). Las cuentas A y B y el escenario de
-      # reparto son de todos los frentes: medido el 13/10, dos ejecuciones a la
-      # vez se rompen los datos la una a la otra aunque cada una entre con sus
-      # usuarios. Así que lo que toca datos compartidos (la siembra del reparto
-      # y las pruebas) va de una en una: se coge el cerrojo de staging
-      # (e2e.cerrojo), y la otra ESPERA dentro de su job —no en la cola de
-      # GitHub, que cancela las pendientes—. Se suelta al acabar, pase lo que
-      # pase; si una ejecución muere sin soltarlo, caduca a los 50 minutos.
-      - name: Cerrojo · esperar a que no haya otra e2e en staging y cogerlo
-        env:
-          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+      - name: Trozo · qué ficheros le tocan
         run: |
           set -euo pipefail
-          YO="run ${GITHUB_RUN_ID} · ${GITHUB_REF_NAME} · frente ${E2E_FRENTE:-ninguno}"
-          echo "CERROJO_YO=$YO" >> "$GITHUB_ENV"
-          # Como mucho 120 intentos cada 30 s (una hora). Lo cogido caduca a los 50 min.
-          CERROJO_YO="$YO" scripts/e2e/cerrojo.sh coger
+          # shellcheck disable=SC2086
+          node scripts/e2e/trozos.mjs reparto "$TROZO" "$TROZOS" ${E2E_PRUEBAS:-} > "$RUNNER_TEMP/ficheros.txt"
+          node scripts/e2e/trozos.mjs todos ${E2E_PRUEBAS:-} > "$RUNNER_TEMP/todos.txt"
+          mkdir -p e2e-lista && cp "$RUNNER_TEMP/ficheros.txt" "e2e-lista/trozo-$TROZO.txt" && cp "$RUNNER_TEMP/todos.txt" "e2e-lista/todos-$TROZO.txt"
+          echo "E2E_FICHEROS=$(tr '\n' ' ' < "$RUNNER_TEMP/ficheros.txt")" >> "$GITHUB_ENV"
+          sed 's/^/  · /' "$RUNNER_TEMP/ficheros.txt"
 
-      - name: Guarda 3 y contraseña de un solo uso para los usuarios de prueba
+      - name: Guarda 3 · al otro lado no hay cuentas de producción
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
           set -euo pipefail
-          PSQL=/usr/lib/postgresql/17/bin/psql
-          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710','00000000-0000-0000-0000-000000000001')")
+          r=$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710','00000000-0000-0000-0000-000000000001')")
           if [ "$r" != "0" ]; then echo "::error::Al otro lado hay cuentas de producción. Abortado."; exit 1; fi
+
+      # W02 (1c): cuánto aprieta la e2e a staging (Micro), medido desde el trozo
+      # 1: consultas a la vez, conexiones y ocupación de la base cada 5 s.
+      - name: Carga · empezar a medir (trozo 1)
+        if: matrix.trozo == 1
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: scripts/e2e/carga.sh empezar
+
+      # El nombre empieza por «Carril · esperar»: scripts/e2e/medir_esperas.py
+      # cuenta su duración como la espera (antes era «Cerrojo · esperar»).
+      - name: Carril · esperar a que no se esté migrando y coger uno
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          scripts/e2e/carril.sh coger
+          echo "E2E_CARRIL=$(cat "$RUNNER_TEMP/carril/numero")" >> "$GITHUB_ENV"
+          # Transición: que ninguna e2e de las de antes esté escribiendo en la
+          # plantilla mientras se copia. Lo suelta el clon, al acabar.
+          scripts/e2e/carril.sh plantilla-coger
+
+      - name: Carril · clonar las cuentas de prueba (con la contraseña de un solo uso)
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
           CLAVE=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
           echo "::add-mask::$CLAVE"
-          # Solo los usuarios de ESTE frente: los dobles e2e0000<f>… (y, en el
-          # C, los tres del C06 si su semilla está: los dos de las cuentas solas y
-          # el administrador de plataforma de prueba, que invita en el recorrido
-          # de la tarea 6). Sin frente, los cuatro de
-          # siempre. Nunca los de otro frente.
-          n=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v clave="$CLAVE" -v frente="${E2E_FRENTE:-}" <<'SQL'
-          with c as (
-            update auth.users set encrypted_password = extensions.crypt(:'clave', extensions.gen_salt('bf'))
-             where case when :'frente' = '' then
-                     id in ('c01a0000-0000-4000-8000-0000000000a1', 'c01b0000-0000-4000-8000-0000000000b1',
-                            'c01a0000-0000-4000-8000-0000000000a6', 'c01c0000-0000-4000-8000-0000000000c1')
-                     and email in ('a.admin@prueba.folvy.test', 'b.admin@prueba.folvy.test',
-                                   'a.encargado@prueba.folvy.test', 'c.admin@prueba.folvy.test')
-                   else
-                     (id::text like 'e2e0000' || :'frente' || '-0000-4000-8000-0000000000%'
-                      and email like '%.frente-' || :'frente' || '@prueba.folvy.test')
-                     or (:'frente' = 'c'
-                         and id in ('c0600000-0000-4000-8000-0000000000a1', 'c0600000-0000-4000-8000-0000000000b1',
-                                    'c0600000-0000-4000-8000-0000000000f0')
-                         and email in ('sola.admin@c06-prueba.test', 'sola.alta@c06-prueba.test', 'c06.plataforma@c06-prueba.test'))
-                   end
-            returning 1)
-          select count(*) from c;
-          SQL
-          )
-          n=$(echo "$n" | tr -d '[:space:]')
-          # Sin frente: los dos administradores (C01), el encargado de A (C00,
-          # tarea 8) y el administrador de C, sin empresa (C00, respuesta 3).
-          # Con frente: sus cuatro dobles; el C, 7 cuando está la semilla del C06.
-          case "${E2E_FRENTE:-}:$n" in
-            :4|a:4|b:4|c:4|c:7|d:4) ;;
-            :*) echo "::error::Esperaba los 4 usuarios de siempre y he tocado $n."; exit 1 ;;
-            *)  echo "::error::Esperaba los 4 usuarios del frente ${E2E_FRENTE} (7 en el C con el C06) y he tocado $n. ¿Está aplicada seed_e2e_frentes_staging.sql?"; exit 1 ;;
-          esac
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
-          echo "Contraseña de un solo uso puesta a los $n usuarios del frente ${E2E_FRENTE:-de siempre}."
-          # Lo que dejaron runs cortados (más de 30 minutos), de cualquier frente.
-          "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -q -f supabase/seeds/conta/e2e_limpieza.sql
+          # Lo que dejó un run cortado con este mismo número, fuera; luego el clon.
+          scripts/e2e/carril.sh borrar
+          CLAVE_PRUEBAS="$CLAVE" scripts/e2e/carril.sh clonar
+          CLAVE_PRUEBAS="$CLAVE" node scripts/e2e/carril-entrar.mjs "$E2E_CARRIL"
 
-      # R02: el escenario de reparto, igual en cada ejecución (pedidos vivos de
-      # hoy, celdas como las dejó la migración, sin respuestas a Folvy). Dentro
-      # del cerrojo: volver a sembrarlo a mitad de otra ejecución la rompe.
-      - name: Escenario del R02
-        env:
-          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${E2E_PRUEBAS:-}" ] || [[ " $E2E_PRUEBAS" == *" tests/e2e/reparto"* ]]; then
-            if [ -f supabase/seeds/reparto/seed_r02_e2e.sql ]; then
-              /usr/lib/postgresql/17/bin/psql "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -q -f supabase/seeds/reparto/seed_r02_e2e.sql
-              echo "Escenario del R02 preparado."
-            fi
-          else
-            echo "Sin pruebas de reparto en esta ejecución: el escenario no se toca."
-          fi
-
-      # Lo que se escribe después de esta marca es lo que ha sacado este run.
+      # Lo que se escribe después de esta marca es lo que ha sacado este trozo.
       - name: Capturas · la marca
         run: touch "$RUNNER_TEMP/capturas.marca"
 
       - name: Pruebas (ordenador y móvil)
-        run: npx playwright test ${E2E_PRUEBAS:-}
+        env:
+          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report
+        run: |
+          set -euo pipefail
+          echo "PRUEBAS_DESDE=$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$GITHUB_ENV"
+          if [ -z "${E2E_FICHEROS// /}" ]; then echo "A este trozo no le toca ningún fichero."; exit 0; fi
+          # shellcheck disable=SC2086
+          npx playwright test $E2E_FICHEROS --reporter=list,github,blob,html
 
-      # Pase lo que pase: también si las pruebas fallan o el run se cancela
-      # (always() corre en los dos casos; medido el 13/10 cancelando 38457342932,
-      # que lo tenía: quedó libre). Si ni esto llega a correr, caduca solo.
-      - name: Cerrojo · soltarlo (pase lo que pase)
+      # Pase lo que pase: también si las pruebas fallan o el run se cancela.
+      # Si ni esto llega a correr, el carril lo borra el próximo que lo coja y
+      # los cerrojos se sueltan al caerse la conexión.
+      - name: Carril · borrar y soltar (pase lo que pase)
         if: always()
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
-          [ -n "${CERROJO_YO:-}" ] || { echo "Este run no llegó a pedir el cerrojo."; exit 0; }
-          scripts/e2e/cerrojo.sh soltar
+          [ -s "$RUNNER_TEMP/carril/guardian.pid" ] || [ -s "$RUNNER_TEMP/carril/numero" ] || { echo "Este trozo no llegó a coger carril."; exit 0; }
+          scripts/e2e/carril.sh soltar
+
+      - name: Carga · lo medido mientras corrían las pruebas (trozo 1)
+        if: always() && matrix.trozo == 1
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: scripts/e2e/carga.sh acabar "${PRUEBAS_DESDE:-}"
 
       - name: Informe de Playwright
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.trozo }}
           path: |
             playwright-report
             test-results
           retention-days: 14
 
-      # En cada run, pase lo que pase: lo que ha sacado, como artefacto.
+      - name: Informe para juntar y la lista del trozo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trozo-${{ matrix.trozo }}
+          path: |
+            blob-report
+            e2e-lista
+          retention-days: 3
+
+      # En cada trozo, pase lo que pase: lo que ha sacado, como artefacto.
       - name: Capturas · las de este run
         id: recoger
         if: always()
@@ -332,6 +371,131 @@ jobs:
             node scripts/conta/capturas.mjs recoger "$RUNNER_TEMP/capturas.marca" "$RUNNER_TEMP/capturas"
           else
             echo "Las pruebas no llegaron a empezar: no hay capturas."; echo "n=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Capturas · artefacto
+        id: artefacto
+        if: always() && steps.recoger.outputs.n != '' && steps.recoger.outputs.n != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-${{ matrix.trozo }}
+          path: ${{ runner.temp }}/capturas
+          retention-days: 3
+
+  # Junta los trozos: una sola respuesta para el run. En verde solo si los N
+  # trozos están en verde en este commit y entre todos han pasado TODOS los
+  # ficheros, una vez cada uno.
+  entera:
+    needs: [plan, trozo]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Entera · los trozos, todos en verde y sin faltar ni sobrar ningún fichero
+        id: trozos
+        env:
+          RESULTADO: ${{ needs.trozo.result }}
+          N: ${{ needs.plan.outputs.n }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Cómo salió cada trozo, en ESTE intento.
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" --paginate \
+            -q '.jobs[] | select(.name | startswith("trozo ")) | "\(.name)\t\(.conclusion // .status)"' | sort > "$RUNNER_TEMP/trozos.tsv"
+          {
+            echo "### Los trozos de este run"
+            echo
+            echo '| trozo | resultado |'; echo '|---|---|'
+            sed 's/\t/ | /; s/^/| /; s/$/ |/' "$RUNNER_TEMP/trozos.tsv"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "intento=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          if [ "$RESULTADO" != success ]; then
+            echo "::error::No todos los trozos están en verde ($RESULTADO): esto no es una entera en verde."; exit 1
+          fi
+
+      - name: Entera · juntar las listas
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: trozo-*
+          path: ${{ runner.temp }}/trozos
+          merge-multiple: true
+
+      - name: Entera · entre los trozos están todos los ficheros, una vez cada uno
+        if: always()
+        env:
+          N: ${{ needs.plan.outputs.n }}
+        run: |
+          set -euo pipefail
+          L="$RUNNER_TEMP/trozos/e2e-lista"
+          [ "$(ls "$L"/trozo-*.txt | wc -l)" = "$N" ] || { echo "::error::Faltan listas de trozos: hay $(ls "$L"/trozo-*.txt | wc -l) de $N."; exit 1; }
+          # Todos calcularon la misma suite.
+          for f in "$L"/todos-*.txt; do cmp -s "$f" "$L/todos-1.txt" || { echo "::error::Los trozos no calcularon la misma suite ($f)."; exit 1; }; done
+          cat "$L"/trozo-*.txt | grep -v '^$' | sort > "$RUNNER_TEMP/pasados.txt"
+          sort "$L/todos-1.txt" | grep -v '^$' > "$RUNNER_TEMP/todos.txt"
+          if ! diff -u "$RUNNER_TEMP/todos.txt" "$RUNNER_TEMP/pasados.txt"; then
+            echo "::error::Entre los trozos no están todos los ficheros una vez cada uno (arriba, la diferencia)."; exit 1
+          fi
+          echo "Los $N trozos han pasado los $(wc -l < "$RUNNER_TEMP/todos.txt") ficheros, una vez cada uno." | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$GITHUB_RUN_ATTEMPT" != 1 ]; then
+            echo "> Intento $GITHUB_RUN_ATTEMPT: sirve para diagnosticar, NO cuenta como entera para dar valores (scripts/conta/e2e-entera.mjs pide el primer intento)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: always()
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Informe · juntar los de los trozos
+        if: always()
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts > /dev/null
+          if ls "$RUNNER_TEMP"/trozos/blob-report/*.zip > /dev/null 2>&1; then
+            npx playwright merge-reports --reporter html "$RUNNER_TEMP/trozos/blob-report"
+            # Las mismas pruebas, ahora y en la entera en serie del 16/10.
+            PLAYWRIGHT_JSON_OUTPUT_FILE="$RUNNER_TEMP/informe.json" npx playwright merge-reports --reporter json "$RUNNER_TEMP/trozos/blob-report"
+            node scripts/e2e/inflacion.mjs "$RUNNER_TEMP/informe.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Ningún trozo dejó informe."
+          fi
+
+      - name: Informe de Playwright (los trozos juntos)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # Las capturas de todos los trozos, en su sitio del repositorio (para
+      # fijarlas) y en un solo artefacto.
+      - name: Capturas · juntar las de los trozos
+        id: juntar
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: capturas-*
+          path: ${{ runner.temp }}/capturas
+          merge-multiple: true
+
+      - name: Capturas · las de este run
+        id: recoger
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -d "$RUNNER_TEMP/capturas" ]; then
+            cp -r "$RUNNER_TEMP/capturas/." .
+            echo "n=$(find "$RUNNER_TEMP/capturas" -type f | wc -l)" >> "$GITHUB_OUTPUT"
+          else
+            echo "Ningún trozo sacó capturas."; echo "n=0" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Capturas · artefacto
@@ -366,7 +530,7 @@ jobs:
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$T" > /dev/null; echo "Comentario en el PR #$PR."
           fi
 
-      # Solo a mano y solo en verde: las del frente de la rama, y ninguna más.
+      # Solo a mano y solo en verde (los N trozos): las del frente de la rama, y ninguna más.
       - name: Capturas · fijar las del frente en la rama
         if: success() && github.event_name == 'workflow_dispatch' && inputs.fijar_capturas
         run: |

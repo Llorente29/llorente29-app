@@ -17,12 +17,12 @@
 // escribir nada, para que salgan siempre iguales.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, CUENTA_B, entrarComo, pedirSesion, type Sesion } from '../sesion'
+import { CUENTA_A, CUENTA_B, entrarComo, pedirSesion, type Sesion, enCarril } from '../sesion'
 import { borrarProveedor, cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c03'
-const CATERING = 'c0300000-0000-4000-8000-000000000011'
+const CATERING = enCarril('c0300000-0000-4000-8000-000000000011')
 const FIXTURE_GLOVO = 'tests/conta/fixtures/liquidaciones/glovo.csv'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 // La semilla es de octubre de 2026: las cifras del mes solo se comprueban ese mes.
@@ -186,8 +186,8 @@ test('plataforma: el 347 según su contrato (respuesta 2) — sin decir pregunta
 })
 
 const LOCALES = [
-  { id: 'c01a0000-0000-4000-8000-0000000000a2', nombre: 'Norte Centro' },
-  { id: 'e0200000-0000-4000-8000-0000000000a3', nombre: 'Norte Mercado' },
+  { id: enCarril('c01a0000-0000-4000-8000-0000000000a2'), nombre: 'Norte Centro' },
+  { id: enCarril('e0200000-0000-4000-8000-0000000000a3'), nombre: 'Norte Mercado' },
 ]
 
 test('socio de marca: preparar, lo que no se cierra dice por qué, y confirmar la de un local', async ({ page }, info) => {

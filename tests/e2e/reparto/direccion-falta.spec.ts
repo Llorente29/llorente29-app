@@ -27,13 +27,16 @@
 // Capturas y fotos de los tickets en docs/reparto/capturas/r03/.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, STAGING_URL, anonKey, entrarComo } from '../conta/sesion'
+import { CARRIL, CUENTA_A, STAGING_URL, anonKey, enCarril, entrarComo } from '../conta/sesion'
 
 const DIR = 'docs/reparto/capturas/r03'
-const NORTE_CENTRO = 'c01a0000-0000-4000-8000-0000000000a2'
-const TOKEN_CENTRO = 'r03-e2e-norte-centro'
-const TOKEN_MERCADO = 'r03-e2e-norte-mercado'
-const R03B = 'e0300000-0000-4000-8000-0000000000a2'
+// W02: cada e2e corre en su carril, con sus ids (enCarril) y, en lo que es
+// único en toda la base sin uuid (el token de la tablet), con «-cN» detrás.
+const NORTE_CENTRO = enCarril('c01a0000-0000-4000-8000-0000000000a2')
+const enElCarril = (token: string) => (CARRIL !== null ? `${token}-c${CARRIL}` : token)
+const TOKEN_CENTRO = enElCarril('r03-e2e-norte-centro')
+const TOKEN_MERCADO = enElCarril('r03-e2e-norte-mercado')
+const R03B = enCarril('e0300000-0000-4000-8000-0000000000a2')
 const MOTIVO_R03C = 'La dirección no ha llegado y tampoco el punto del mapa: no se puede despachar'
 const HA_SALIDO = 'Ha salido a Catcher con el punto del mapa · el repartidor llamará al cliente'
 const NO_HA_SALIDO = 'No ha salido a Catcher · llama al cliente y completa la dirección'
@@ -60,7 +63,7 @@ async function rpcAnon(fn: string, args: Record<string, unknown>) {
 }
 
 // La tarjeta, por el id del pedido (el código de pase lo decide passCode, no la tarjeta).
-const ID: Record<string, string> = {
+const ID: Record<string, string> = Object.fromEntries(Object.entries({
   R03A: 'e0300000-0000-4000-8000-0000000000a1', R03B: 'e0300000-0000-4000-8000-0000000000a2',
   R03C: 'e0300000-0000-4000-8000-0000000000a3', R03D: 'e0300000-0000-4000-8000-0000000000a4',
   R03E: 'e0300000-0000-4000-8000-0000000000a5', R03U: 'e0300000-0000-4000-8000-0000000000a6',
@@ -68,7 +71,7 @@ const ID: Record<string, string> = {
   R03M: 'e0300000-0000-4000-8000-0000000000a9', R03N: 'e0300000-0000-4000-8000-0000000000b1',
   R03K: 'e0300000-0000-4000-8000-0000000000b2',
   '7B000': 'e0200000-0000-4000-8000-0000000052a1',
-}
+}).map(([k, v]) => [k, enCarril(v)]))
 const tarjeta = (page: Page, codigo: string) => page.locator(`[data-testid="tarjeta-pedido"][data-sale-id="${ID[codigo]}"]`)
 const noHaSalido = (page: Page, codigo: string) => page.getByTestId('aviso-no-ha-salido').filter({ hasText: codigo })
 
