@@ -81,7 +81,12 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { level: 1, name: 'Bancos' })).toBeVisible()
       const pestanas = page.getByRole('navigation', { name: 'Pestañas de Bancos' })
-      for (const p of ['Movimientos', 'Reglas', 'Cuentas y extractos', 'Cierre del mes']) await expect(pestanas.getByRole('link', { name: p })).toBeVisible()
+      // Las cuatro, en la cabecera; las que no caben al lado del mes, en «Más ▾» (Julio, respuesta 3).
+      const masBoton = pestanas.getByRole('button', { name: /▾$/ })
+      if (await masBoton.count()) await masBoton.click()
+      await expect(pestanas.getByRole('link')).toHaveText(['Movimientos', 'Reglas', 'Cuentas y extractos', 'Cierre del mes'])
+      if (await masBoton.count()) await masBoton.click()
+      await expect(pestanas.getByRole('link', { name: 'Movimientos' })).toHaveAttribute('aria-current', 'page')
       // S01 · paso 3: las pestañas, en la cabecera del esqueleto; la barra, en la cinta de la pestaña.
       // «Tuyos» ya no está: Favoritos y Ctrl K son del esqueleto.
       const barra = page.getByRole('toolbar', { name: 'Acciones de Movimientos' })

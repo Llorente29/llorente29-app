@@ -39,11 +39,11 @@
 .s-cabecera {
   position: sticky; top: 0; z-index: 30;
   height: var(--s-alto-cabecera); flex-shrink: 0;
-  display: flex; align-items: stretch; gap: var(--s-3); padding: 0 var(--s-4);
+  display: flex; align-items: stretch; gap: var(--s-2); padding: 0 var(--s-4);
   background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
   font-size: var(--s-t-m);
 }
-.s-cab-izquierda, .s-cab-derecha { display: flex; align-items: center; gap: var(--s-3); flex-shrink: 0; }
+.s-cab-izquierda, .s-cab-derecha { display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
 .s-cab-centro { flex: 1; min-width: 0; display: flex; align-items: stretch; }
 .s-cab-logotipo { display: flex; align-items: center; padding-right: var(--s-3); border-right: var(--s-linea) solid var(--s-borde-decorativo); height: 60%; }
 .s-cab-cliente { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
@@ -53,7 +53,7 @@
   background: var(--s-neutro-fondo); color: var(--s-tinta); font-weight: var(--s-peso-titulo); font-size: var(--s-t-s);
 }
 .s-cab-empresa {
-  display: inline-flex; align-items: center; gap: var(--s-1); max-width: 260px;
+  display: inline-flex; align-items: center; gap: var(--s-1); max-width: 180px;
   background: none; border: 0; padding: var(--s-1) var(--s-2); border-radius: var(--s-radio-boton);
   font: inherit; font-weight: var(--s-peso-fuerte); color: var(--s-tinta); cursor: pointer; text-decoration: none;
 }
@@ -70,7 +70,7 @@
 .s-pestanas-medida { position: absolute; visibility: hidden; pointer-events: none; display: flex; gap: var(--s-1); white-space: nowrap; height: 0; overflow: hidden; }
 .s-pestanas { display: flex; align-items: stretch; gap: var(--s-1); min-width: 0; }
 .s-pestana {
-  display: inline-flex; align-items: center; padding: 0 var(--s-3); white-space: nowrap;
+  display: inline-flex; align-items: center; padding: 0 var(--s-2); white-space: nowrap;
   color: var(--s-apoyo); text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer;
   border-bottom: 2px solid transparent;
 }

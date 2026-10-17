@@ -178,7 +178,7 @@ export default function BancosPage() {
           <>
             <h1 className="cx-oculto">Bancos</h1>
             <PeriodoEnBarra>
-              <select className="cx-input cxb-mes" value={mes} aria-label="Mes" onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
+              <select className="cxm-select" value={mes} aria-label="Mes" onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
                 {meses.map((m) => <option key={m} value={m}>{nombreMes(m)} {m.slice(0, 4)}</option>)}
               </select>
             </PeriodoEnBarra>

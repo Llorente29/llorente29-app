@@ -40,6 +40,17 @@ async function capturar(page: Page, nombre: string, medir = true) {
 
 const menu = (page: Page) => page.getByRole('navigation', { name: 'Menú de contabilidad' })
 
+/**
+ * Las preferencias se guardan en la base (conta_user_pref). Antes de recargar
+ * o de pasar a la siguiente prueba, que la base haya contestado: recargar a
+ * medias corta el guardado y la prueba mediría lo de antes.
+ */
+async function guardandoPreferencias(page: Page, hacer: () => Promise<unknown>) {
+  const guardado = page.waitForResponse((r) => r.url().includes('/rest/v1/conta_user_pref') && r.request().method() !== 'GET')
+  await hacer()
+  expect((await guardado).ok()).toBe(true)
+}
+
 /** S01: el menú del usuario («Admin · Medio ▾»), con el nivel, la densidad y la cinta. */
 async function abrirUsuario(page: Page) {
   await page.getByRole('button', { name: /\. Tus preferencias$/ }).click()
@@ -109,7 +120,7 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
   await capturar(page, 'marco-desplegado')
 
   // Plegada: solo los iconos, con su nombre para el lector; se recuerda (en la base).
-  await barra.getByRole('button', { name: 'Plegar el menú' }).click()
+  await guardandoPreferencias(page, () => barra.getByRole('button', { name: 'Plegar el menú' }).click())
   expect(Math.round((await barra.boundingBox())!.width)).toBe(56)
   await expect(barra.getByRole('link', { name: 'Contabilidad' })).toBeVisible()
   await page.reload()
@@ -119,14 +130,14 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).locator('.cxm-chip-numero')).toHaveText(primeraCarga)
   await page.evaluate(() => window.scrollTo(0, 0))
   await capturar(page, 'marco-plegado')
-  await menu(page).getByRole('button', { name: 'Desplegar el menú' }).click()
+  await guardandoPreferencias(page, () => menu(page).getByRole('button', { name: 'Desplegar el menú' }).click())
   expect(Math.round((await menu(page).boundingBox())!.width)).toBe(88)
 
   // La densidad, en el menú del usuario (S01): compacta de serie; se recuerda.
-  await cambiarDensidad(page, 'Cómoda')
+  await guardandoPreferencias(page, () => cambiarDensidad(page, 'Cómoda'))
   await page.reload()
   await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'comoda')
-  await cambiarDensidad(page, 'Compacta')
+  await guardandoPreferencias(page, () => cambiarDensidad(page, 'Compacta'))
   await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'compacta')
 
   // «Volver a Folvy», en el menú del usuario (con Folvy; en el producto solo no hay).

@@ -18,12 +18,12 @@ import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { Boton, Icono } from '@/modules/conta/diseno'
 import { iniciales } from '@/modules/conta/lib/formato'
 import { cuantasCaben, type Pestana, type Producto } from './productos'
+import { conConsulta } from './ordenes'
 
-/** La dirección de una pestaña, llevándose el ejercicio elegido si lo hay (lo leen Libros y el diario). */
+/** La dirección de una pestaña, llevándose lo elegido: el ejercicio (Libros), el mes y el banco (Bancos). */
 function useRutaPestana() {
   const { search } = useLocation()
-  const ejercicio = new URLSearchParams(search).get('ejercicio')
-  return (t: Pestana) => `${rutaConta(t.ruta!)}${ejercicio ? `?ejercicio=${encodeURIComponent(ejercicio)}` : ''}`
+  return (t: Pestana) => conConsulta(rutaConta(t.ruta!), search)
 }
 
 const ANCHO_MAS = 80
