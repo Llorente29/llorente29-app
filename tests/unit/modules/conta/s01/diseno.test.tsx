@@ -240,3 +240,21 @@ describe('Tarjeta y Cinta', () => {
     expect(h).not.toContain('Expedida')
   })
 })
+
+describe('el botón del usuario mide lo mismo en los tres niveles (el nivel no mueve nada)', () => {
+  it('lleva los tres nombres en la misma celda; solo el actual se ve y se lee', async () => {
+    const { MenuUsuario } = await import('@/modules/conta/esqueleto/MenuUsuario')
+    const { DE_SERIE, NIVELES, NOMBRE_NIVEL } = await import('@/modules/conta/esqueleto/preferencias')
+    for (const nivel of NIVELES) {
+      const html = renderToStaticMarkup(
+        <MemoryRouter><MenuUsuario nombre="Julio" prefs={{ ...DE_SERIE, nivel }} solo={false} movil={false} cambiar={() => {}} /></MemoryRouter>,
+      )
+      const celda = html.match(/<strong class="s-usuario-nivel">(.*?)<\/strong>/)![1]
+      for (const n of NIVELES) expect(celda).toContain(`>${NOMBRE_NIVEL[n]}<`)
+      expect(celda.match(/data-actual="true"/g)).toHaveLength(1)
+      expect(celda).toContain(`aria-hidden="false" data-actual="true">${NOMBRE_NIVEL[nivel]}<`)
+    }
+    const css = readFileSync('src/modules/conta/esqueleto/esqueleto.css', 'utf8')
+    expect(css).toMatch(/\.s-usuario-nivel > span \{ grid-area: 1 \/ 1; visibility: hidden; \}/)
+  })
+})

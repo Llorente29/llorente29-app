@@ -153,3 +153,9 @@
    ni de la barra de abajo del móvil (WCAG 2.4.11, foco no tapado). */
 html:has(.s-cabecera) { scroll-padding-top: 56px; }   /* 48 de la cabecera + 8: los tokens viven en .cx, no en html */
 html:has(.s-barra-inferior) { scroll-padding-bottom: 80px; }
+
+/* El nivel en el botón del usuario: los tres en la misma celda, solo se ve el
+   actual. El botón mide siempre lo del más largo («Sin experiencia»). */
+.s-usuario-nivel { display: inline-grid; }
+.s-usuario-nivel > span { grid-area: 1 / 1; visibility: hidden; }
+.s-usuario-nivel > span[data-actual] { visibility: visible; }

@@ -130,7 +130,7 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
   await abrirFavoritos(page)
   await expect(page.getByRole('group', { name: 'Favoritos' })).toHaveAttribute('aria-busy', 'false')
   await page.keyboard.press('Escape')
-  const medir = async () => page.locator('.s-barra a, .s-barra-inferior a, .s-pestanas a, .s-cinta a, .s-cinta button, .s-cab-empresa')
+  const medir = async () => page.locator('.s-barra a, .s-barra-inferior a, .s-pestanas a, .s-cinta a, .s-cinta button, .s-cab-empresa, .s-cab-derecha button')
     .evaluateAll((xs) => xs.map((x) => { const r = x.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)].join(',') }))
   // Se mide con la pantalla quieta: lo que llega de la base después (lo que hay
   // por revisar bajo Inicio, el ejercicio de Libros en la cabecera) mueve cosas,
