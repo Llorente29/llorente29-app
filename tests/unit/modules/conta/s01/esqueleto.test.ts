@@ -181,6 +181,22 @@ describe('el catálogo de órdenes', () => {
     // Liquidaciones no lleva cinta, y en una empresa sin hostelería ni sale la pestaña.
     expect(cintaDe('compras', 'liquidaciones', HOSTELERIA)).toEqual([])
   })
+  it('paso 3: Contactos · los papeles son pestañas (?ver=); Plataformas y Socios, solo con hostelería; la ficha, en «Todos»', () => {
+    const c = PRODUCTOS.find((p) => p.id === 'contactos')!
+    expect(pestanasVisibles(c, NADA).map((t) => t.etiqueta)).toEqual(['Todos', 'Clientes', 'Proveedores'])
+    expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.etiqueta)).toEqual(['Todos', 'Clientes', 'Proveedores', 'Plataformas', 'Socios de marca'])
+    const en = (path: string, search = '') => dondeEsta(path, undefined, search)?.pestana?.id
+    expect(en('/conta/clientes-y-proveedores')).toBe('todos')
+    expect(en('/conta/clientes-y-proveedores', '?ver=clientes')).toBe('clientes')
+    expect(en('/conta/clientes-y-proveedores', '?ver=socios')).toBe('socios')
+    expect(en('/conta/clientes-y-proveedores', '?ver=archivados')).toBe('todos')
+    // Una ficha no es una vista de la lista, aunque la dirección traiga ?ver.
+    expect(en('/conta/clientes-y-proveedores/abc', '?ver=clientes')).toBe('todos')
+    // Lo de otros productos con ?ver no cambia (Bancos «Casados solos», el diario «Para revisar»).
+    expect(en('/conta/bancos', '?ver=casados')).toBe('movimientos')
+    expect(en('/conta/libros/diario', '?ver=revisar')).toBe('asientos')
+    expect(cintaDe('contactos', 'clientes', NADA).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Nuevo cliente']])
+  })
   it('lo elegido viaja por la cinta (ejercicio, mes, banco) y la consulta de la orden manda', () => {
     expect(conConsulta('/conta/bancos/subir', '?banco=b1&mes=2026-10&ver=casados')).toBe('/conta/bancos/subir?mes=2026-10&banco=b1')
     expect(conConsulta('/conta/libros/diario?ver=revisar', '?ejercicio=2026')).toBe('/conta/libros/diario?ver=revisar&ejercicio=2026')

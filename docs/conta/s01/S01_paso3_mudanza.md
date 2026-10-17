@@ -52,6 +52,19 @@ El inventario es el del paso 1 (`S01_paso1_comprobaciones.md`, §2).
   no se sabe de qué es la empresa, no salen; fuera del esqueleto, como antes.
 - La e2e de la cuenta D (sin hostelería) lo comprueba.
 
+### Contactos › Todos · Clientes · Proveedores (· Plataformas · Socios de marca)
+
+- Los **papeles** de la lista (antes, filtros con su número en la pantalla) son
+  las **pestañas** de Contactos. Una pestaña puede ser una vista de la misma
+  pantalla (`ver` en `productos.ts`): se marca cuando la dirección lo pide
+  (`?ver=clientes`); en una ficha, «Todos».
+- **Plataformas y Socios de marca, solo con hostelería.** En otra empresa sus
+  contactos siguen en «Todos» (regla 7) y, si alguien llega con `?ver=plataformas`,
+  la pantalla enseña ese filtro como hasta ahora.
+- En la pantalla queda lo que no es un papel: «Archivados · N». El número de
+  cada vista lo dice la línea de debajo («3 terceros en «Plataformas»»).
+- «Nuevo cliente», en la cinta (abre el mismo diálogo con `?nuevo`).
+
 ### La cabecera, medida
 
 A 1440 px y con un periodo al lado (el mes de Bancos, el ejercicio de Libros)
@@ -64,8 +77,7 @@ maqueta: no lo he hecho.
 ## Queda (paso 3)
 
 Lo de hostelería que queda en otras pantallas (Ventas, textos del diario,
-fichas, alta), Contactos y sus
-pestañas, Ajustes (Empresa con su logo, Registro de la IA, la marca de
+fichas, alta), Ajustes (Empresa con su logo, Registro de la IA, la marca de
 hostelería), la marca al dar de alta, Definiciones › Analítica, la vista
 Recibida en Contabilidad › Asientos, `?tipo=` en el asiento nuevo y el
 `journal_entry_id` (paso 1).

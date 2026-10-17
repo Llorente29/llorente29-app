@@ -70,6 +70,8 @@ const DE_LA_CINTA: Orden[] = [
   // Compras y gastos (paso 3). «Por revisar» (N18) sube con su diálogo
   // (?subir); Facturas recibidas (N22) pone sus grupos desde la pantalla.
   { id: 'compras.subir', etiqueta: 'Subir factura', icono: 'subir', producto: 'compras', pestana: 'por-revisar', a: { ruta: `${R.compras}?subir=` }, sinonimos: ['subir factura', 'factura de proveedor', 'albaran'] },
+  // Contactos (paso 3): «Nuevo cliente», con el diálogo de siempre (?nuevo).
+  { id: 'contactos.nuevo', etiqueta: 'Nuevo cliente', icono: 'nuevo', producto: 'contactos', pestana: 'todos', a: { ruta: `${R.terceros}?nuevo=` }, sinonimos: ['alta cliente', 'nuevo contacto', 'crear cliente'] },
   { id: 'bancos.hecho', etiqueta: LO_HECHO, icono: 'revisar', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/hecho` }, sinonimos: ['hecho', 'registro', 'deshacer'] },
 ]
 
@@ -142,6 +144,8 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
     { titulo: 'Esperadas', ordenes: [], dePantalla: 'esperadas' },
     { titulo: 'Leídas', ordenes: [], dePantalla: 'leidas' },
   ],
+  // Paso 3: Contactos, la misma en todas sus pestañas.
+  ...Object.fromEntries(['todos', 'clientes', 'proveedores', 'plataformas', 'socios'].map((t) => [`contactos.${t}`, [{ titulo: 'Nuevo', ordenes: ['contactos.nuevo'] }]])),
   // Paso 3: la barra de Bancos (B01), la misma en sus cuatro pestañas.
   'bancos.movimientos': CINTA_BANCOS,
   'bancos.reglas': CINTA_BANCOS,

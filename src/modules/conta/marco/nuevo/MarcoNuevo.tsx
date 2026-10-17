@@ -46,7 +46,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const solo = useProductoSolo()
   const { accountId, userId, userName, logoCuenta } = useCuentaConta()
   const { activa } = useEmpresas()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const cuentas = useCuentasMenu()
   const { prefs, cargadas, cambiar, aviso, quitarAviso } = usePreferenciasEsqueleto(accountId, userId)
   const { ctx, error: errorCtx, listo: ctxListo } = useContextoEsqueleto(accountId, activa?.id ?? null)
@@ -56,7 +56,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const [datosCinta, setDatosCinta] = useState<DatosCinta | null>(null)
   const [entradasCinta, setEntradasCinta] = useState<EntradasCinta | null>(null)
 
-  const donde = dondeEsta(pathname)
+  const donde = dondeEsta(pathname, undefined, search)
   const producto = donde?.producto ?? null
   const productos = productosVisibles(ctx)
   // En el móvil, un producto por niveles (Bancos) lleva su portada: ni fila de pestañas ni cinta.

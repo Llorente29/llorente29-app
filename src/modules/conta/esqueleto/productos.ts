@@ -38,6 +38,11 @@ export interface Pestana {
   /** Las direcciones que caen en esta pestaña. */
   prefijos: string[]
   solo?: Condicion
+  /**
+   * La pestaña es una vista de la misma pantalla (`?ver=`): Contactos. Se marca
+   * cuando la dirección la pide; la que no lleva `ver` es la de serie.
+   */
+  ver?: string
 }
 
 export interface Producto {
@@ -120,7 +125,14 @@ export const PRODUCTOS: Producto[] = [
   {
     id: 'contactos', etiqueta: 'Contactos', icono: 'contactos', ruta: R.terceros, prefijos: [],
     pestanas: [
+      // Paso 3: los papeles de la lista (antes, sus filtros en la pantalla) pasan a pestañas.
+      // Plataformas y Socios de marca, solo con hostelería (inventario §3; en otra empresa
+      // siguen en «Todos»: ninguna fila se esconde, regla 7).
       { id: 'todos', etiqueta: 'Todos', ruta: R.terceros, prefijos: [R.terceros] },
+      { id: 'clientes', etiqueta: 'Clientes', ruta: `${R.terceros}?ver=clientes`, prefijos: [R.terceros], ver: 'clientes' },
+      { id: 'proveedores', etiqueta: 'Proveedores', ruta: `${R.terceros}?ver=proveedores`, prefijos: [R.terceros], ver: 'proveedores' },
+      { id: 'plataformas', etiqueta: 'Plataformas', ruta: `${R.terceros}?ver=plataformas`, prefijos: [R.terceros], ver: 'plataformas', solo: 'hosteleria' },
+      { id: 'socios', etiqueta: 'Socios de marca', ruta: `${R.terceros}?ver=socios`, prefijos: [R.terceros], ver: 'socios', solo: 'hosteleria' },
     ],
   },
   {
@@ -169,13 +181,19 @@ const prefijosDe = (p: Producto) => [...p.prefijos, ...p.pestanas.flatMap((t) =>
  * TODAS las pestañas (también las que no salen: una dirección de una pestaña
  * oculta sigue siendo de su producto, y la cabecera no marca ninguna).
  */
-export function dondeEsta(pathname: string, lista: Producto[] = PRODUCTOS): { producto: Producto; pestana: Pestana | null } | null {
+export function dondeEsta(pathname: string, lista: Producto[] = PRODUCTOS, search = ''): { producto: Producto; pestana: Pestana | null } | null {
   const rel = relativa(pathname)
+  // Una pestaña con `ver` solo vale si la dirección lo pide, y entonces gana a la de serie
+  // del mismo prefijo (en la ficha, sin `ver`, se marca la de serie).
+  const ver = new URLSearchParams(search).get('ver')
   let mejor: { producto: Producto; pestana: Pestana | null; largo: number } | null = null
   for (const producto of lista) {
     for (const x of producto.prefijos) if (casa(rel, x) && (!mejor || x.length > mejor.largo)) mejor = { producto, pestana: null, largo: x.length }
     for (const pestana of producto.pestanas) for (const x of pestana.prefijos) {
-      if (casa(rel, x) && (!mejor || x.length > mejor.largo)) mejor = { producto, pestana, largo: x.length }
+      if (!casa(rel, x)) continue
+      if (pestana.ver && (pestana.ver !== ver || rel !== x)) continue
+      const largo = x.length + (pestana.ver ? 0.5 : 0)
+      if (!mejor || largo > mejor.largo) mejor = { producto, pestana, largo }
     }
   }
   return mejor ? { producto: mejor.producto, pestana: mejor.pestana } : null
