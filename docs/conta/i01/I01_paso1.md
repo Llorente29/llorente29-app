@@ -1,41 +1,40 @@
 # I01 · Impuestos · Paso 1: lo que hay que saber antes de construir
 
-> Encargo de Julio, 17/10/2026. **Solo lectura**: sin código, sin migraciones, sin push y sin e2e.
+> Encargo de Julio, 17/10/2026. **Solo lectura**: sin código, sin migraciones y sin e2e.
 >
 > **Base leída:**
 > - el código de `origin/main` @ `46d01527`;
 > - la producción, solo con `begin read only … rollback`: estructura y recuentos, filtrados por la cuenta de Foodint (regla 9), sin NIF, IBAN ni CSV;
-> - los textos oficiales que el repositorio ya guarda en `docs/conta/fuentes/textos/` (BOE consolidado).
+> - los textos oficiales que el repositorio ya guarda en `docs/conta/fuentes/textos/` (BOE consolidado);
+> - y, **desde el 17/10 por la tarde**, los documentos de la AEAT y del BOE del §1.1, leídos enteros. Julio abrió en el entorno `sede.agenciatributaria.gob.es`, `www.agenciatributaria.es`, `www3.agenciatributaria.gob.es`, `preportal.aeat.es` y `www.boe.es`.
 >
-> **Lo que NO he podido leer.** Desde este entorno la AEAT y el BOE no responden:
-> - `sede.agenciatributaria.gob.es`, `www.agenciatributaria.es`, `www3.agenciatributaria.gob.es`, `prewww1.aeat.es` y `www.boe.es`;
-> - la política de red del entorno los deniega, y la herramienta de páginas web no los resuelve.
+> **Nota técnica sobre `www.agenciatributaria.es`.** Su cadena de certificados lleva una firma SHA-1 que OpenSSL rechaza por defecto («CA signature digest algorithm too weak»). Se ha leído con la cadena **verificada** contra el almacén de CA, rebajando solo el nivel de algoritmos admitidos para esas descargas (`SECLEVEL=0`). **No se ha desactivado la verificación TLS.**
 >
-> Lo que viene de la AEAT sale de **fragmentos de buscador** que citan sus páginas y PDF. Va marcado así:
-> - **[F]**: lo dice un fragmento de la fuente citada; leído de segunda mano.
-> - **[T]**: lo dice un texto oficial guardado en el repositorio; leído entero.
-> - **[I]**: deducido de datos [F] o [T].
-> - **[?]**: sin verificar; hay que leerlo en el PDF oficial antes de programar.
+> **No se ha hecho ninguna llamada** a los servidores de presentación (`www1`, `www2`, `www10`, `prewww1`, `prewww2`, `prewww10`).
 >
-> En el §10 está la lista de lo que Julio tiene que descargar a mano, o los dominios que hay que permitir en el entorno para leerlo desde aquí.
+> **Marcas:**
+> - **[T]**: leído entero en el documento oficial. Se cita documento y apartado.
+> - **[F]**: solo fragmento de buscador. Queda poco; se dice por qué.
+> - **[I]**: deducido de lo leído.
+> - **[?]**: sin verificar.
 
 ---
 
 ## 0. En diez líneas
 
-1. **Se puede presentar desde un programa la mayoría de los modelos.**
-   - Las autoliquidaciones (303, 111, 115, 202, 390) van por **«Presentación Directa»**: un POST HTTPS con el fichero del diseño de registro y autenticación por **certificado de cliente en TLS**. Responde CSV y la dirección del PDF justificante [F].
-   - Las informativas (190, 180, 347, 349) van por **TGVI Online**: primero se valida y después se presenta [F].
-   - El **200** solo lo he visto confirmado por **Sociedades WEB**, el formulario con importación de fichero. Que vaya por servicio directo está sin confirmar [?].
-2. **Hay validación sin presentar y hay entorno de pruebas** (`prewww1.aeat.es`, sin trascendencia tributaria) [F].
-   - En pruebas **no se puede presentar en nombre de terceros** [F], así que el camino de la asesoría no se puede ensayar allí.
-3. **No he encontrado ninguna API que devuelva el justificante a partir de un CSV.**
-   - El cotejo por CSV es una página para personas [F].
-   - Lo que sí hay es un servicio de **consulta de declaraciones presentadas** [F].
-   - «Pegar el CSV y que se traiga solo el justificante» está por confirmar (§8).
-4. **El certificado se guarda con un KMS externo, no en el Vault de Supabase.**
-   - Con el Vault, cualquiera con acceso SQL de servicio lo descifra. Eso contradice lo que promete el tablero 8.
-   - Además está **sin confirmar** que las funciones de Supabase sepan abrir una conexión con certificado de cliente (§2).
+1. **Todos los modelos del encargo se pueden presentar desde un programa, con certificado de cliente en TLS** [T]:
+   - **303, 390, 111, 115, 202 y también el 200** por **Presentación Directa** (`PresBasicaDos`): un POST con JSON que lleva el fichero del diseño de registro. Responde CSV, número de justificante, quién presentó y en calidad de qué, y la URL del PDF justificante [T, Especificaciones v3.0 §1 y §4].
+   - **190, 180, 347 y 349** por **TGVI Online**: primero se valida, luego se presenta [T, TGVI v2.8].
+   - **El 200 tiene envío directo** «destinado a empresas desarrolladoras de software» [T, coordinación del 200 §3 y §6.3]. Es el canal de Diez y ERP10.
+2. **Validar sin presentar existe, pero solo en el entorno de pruebas, y no se puede usar dentro de la presentación real** [T].
+   - El portal de pruebas dice que no es para «validaciones integradas en procesos de presentación en producción».
+   - En producción, **la propia presentación valida**: si hay errores no se graba nada y no hay CSV.
+3. **El justificante se recupera a partir del CSV** con una URL de la AEAT que devuelve el PDF de ese CSV [T, TGVI v2.8 §3.5.2].
+   - El servicio de **consulta de declaraciones presentadas** devuelve CSV, justificante y fecha de lo presentado por NIF, modelo, ejercicio y periodo [T, v3.0 §2 y `consultas.xsd`].
+   - Con los dos, «Ya lo presenté fuera · pegar CSV» se puede hacer entero: se comprueba el CSV contra la consulta y se trae el PDF.
+4. **Certificado** (decisión del 17/10):
+   - **Vault para Foodint; KMS antes de cualquier otro cliente**, y lo impide el código.
+   - Sigue **sin confirmar** que las funciones de Supabase abran conexiones con certificado de cliente (§2).
 5. **Los libros de IVA de hoy dan el 303 de una empresa «normal»** (régimen general, tipos 21/10/4, sin recargo ni intracomunitarias). Para el resto falta:
    - el recargo de equivalencia en el libro (está a 0 siempre);
    - la autorrepercusión de la ISP y de las adquisiciones intracomunitarias;
@@ -46,21 +45,21 @@
 6. **Los modelos de cada empresa ya se deducen y se guardan** (`company_tax_profile.tax_forms`; la regla está en `lib/modelos.ts`).
    - Falta guardar el **porqué** de cada uno y los datos de los que sale: empleados, alquiler con retención, ROI y volumen del año anterior. Hoy se preguntan en el alta y se tiran (§4).
 7. **Los asientos de liquidación están en el PGC, cuentas 470–477 y 630** [T] (§5). Solo generan asiento el 303 y el 200/202; el 111 y el 115 solo el pago; las informativas, ninguno.
-8. **Plazos (§6).** Con una diferencia respecto a lo que decidió Julio:
-   - desde la **Orden HAC/241/2025** la domiciliación acaba **3 días hábiles** antes del último día, no «5 días» fijos [F];
-   - casi siempre cae el 15, pero el 303 del 4T/2025 se pudo domiciliar **hasta el 27/01/2026**, no el 25;
-   - y el **111 y el 115 del 4T se domicilian hasta el 15/01**, no el 25/01 [T].
+8. **Domiciliación (§6.2), leída en la Orden EHA/1658/2009 consolidada, art. 3.2 y anexo II, con la HAC/241/2025** [T]:
+   - la regla de «3 días hábiles hasta el último día de presentación, contando inhábiles los nacionales y los de la Comunidad de Madrid» **reproduce las 14 fechas** del calendario oficial de 2026;
+   - por ejemplo, el 303 del 4T/2025 hasta el **27/01**;
+   - y el 111/115 del 4T hasta el **15/01**.
 9. **Modelo de datos (§7):**
    - una tabla de **declaraciones** con su estado, enlazada al asiento, al movimiento del banco y al justificante;
    - sus **casillas**;
    - sus **comprobaciones**;
    - las **obligaciones** con su porqué;
    - y tres tablas del **certificado**: custodia, permisos y registro de usos.
-10. **De los tableros aprobados (§8)**, hay que cambiar dos textos (plazos de 190/180 y «5 días») y dejar condicionadas cuatro cosas a lo que digan los PDF:
-    - «Probar con Hacienda»;
-    - traer el justificante con el CSV;
-    - presentar el 200;
-    - «nadie puede verlo, tampoco en Sumied».
+   - Más el enlace **asesoría–empresa con consentimiento**.
+10. **De los tableros (§8):**
+    - hay que cambiar tres textos: los plazos del 190/180, «5 días» y la promesa de custodia mientras haya Vault;
+    - «Antes de enviar, Hacienda lo valida» hay que reformularlo, porque la validación de pruebas no vale para eso;
+    - lo demás se puede hacer.
 
 ---
 
@@ -80,58 +79,97 @@
    - **Mientras no haya KMS, la pantalla no dice «nadie puede verlo, tampoco en Sumied».** El texto del tablero 8 sale según el almacén: con el Vault dice lo que es verdad (cifrado, solo lo usa el servidor, cada uso queda apuntado) sin esa frase.
 3. **Enlace asesoría–empresa con consentimiento: obligatorio y dentro del encargo.** Es `company_tax_presenter` con `consented_by` / `consented_at` (§7.3), más el permiso entre cuentas (RLS) que hoy no existe.
 4. **Modelo 200: hay canal directo.** Diez y ERP10 lo presentan directamente. Hay que encontrarlo en la documentación (`PresBasicaDos` u otro). **No vale** «se prepara el fichero y se sube a mano». Lo que encuentre va en §1.
+   - **Encontrado (17/10, leído):** el 200 está en la lista de modelos de Presentación Directa (`PresBasicaDos`) de las Especificaciones v3.0, §4, y la coordinación del 200 lo describe como «envío directo al servidor de la AEAT, opción destinada a empresas desarrolladoras de software» (§3 y §6.3). Detalle en §1.2.
 
 ---
 
 ## 1. El canal técnico de la AEAT, modelo a modelo
 
-### 1.1 Tabla
+### 1.1 Documentos leídos
 
-| Modelo | Cómo se presenta desde un programa | Documento técnico | Validación previa | Respuesta | Estado |
-|---|---|---|---|---|---|
-| **303** IVA | **Presentación Directa**: POST JSON al servicio `PresBasicaDos` con el fichero del diseño de registro en el campo `F01` y `FIR="FirmaBasica"`. Alternativa: formulario Pre303 importando el `.303` | «Especificaciones de Servicios Comunes Declaraciones AEAT (Presentación Directa, Validación e Impresión y Consulta de Declaraciones Presentadas) v2.9». «IVA303-CoordColabora 7.02». Diseño de registro «303 – Ejercicio 2026 y siguientes» (28/01/26) | Servicio de validación e impresión: devuelve el PDF «Borrador NO VÁLIDO» o la lista de errores [F]. Si está en producción o solo en pruebas, los fragmentos se contradicen [?] | JSON con **CSV** (`CEL`) y **`urlPdf`**. El justificante a efectos de la AEAT es el **PDF**, no el JSON [F]. Con errores: sin CSV y hasta 100 errores `E00…` | Canal [F]; diseño 2026 nuevo por la Orden HAC/27/2026 [F][T] |
-| **390** | Presentación Directa / formulario con importación | v2.9 + página del 390 en desarrolladores | Igual que el 303 | Igual | [I] |
-| **111** | Presentación Directa / formulario | v2.9 + «retenciones» en desarrolladores | Igual | Igual | [I] |
-| **115** | Presentación Directa / formulario | Igual | Igual | Igual | [I] |
-| **202** | Presentación Directa / formulario | — | — | — | [?] |
-| **200** | **Sociedades WEB**: formulario de la Sede que importa el `.200` del diseño del ejercicio; hay «presentación por lotes» | Desarrolladores › Impuesto sobre Sociedades › Modelo 200 › Ejercicio N: diseño, XSD contable, «Controles y especificaciones de Sociedades Web» | El botón «Validar» del formulario [F] | Justificante del formulario | Formulario [F]. **Servicio directo sin confirmar** [?] |
-| **190**, **180**, **347**, **349** | **TGVI Online**: 1) validación del fichero con certificado; 2) presentación con firma no criptográfica. Rechaza selectivamente los registros tipo 2 erróneos | «Especificaciones … TGVI Online (v 2.8)» | Sí, es un paso obligatorio aparte [F] | CSV + justificante | [F]. Una vez se usa una vía en un ejercicio, las siguientes del mismo ejercicio van por esa [F] |
-| **036** | Solo formulario (aquí solo como aviso) | — | — | — | [?] |
+| Documento | Versión | Qué se ha usado |
+|---|---|---|
+| «Especificaciones de los servicios de Presentación Directa, Consulta de Declaraciones Presentadas y Validación de Impresión» (`EspecificacionesServiciosDeclaracionesAEAT_ES.pdf`) | **Versión 30** (el índice de desarrolladores la llama v3.0; antes la citaba como v2.9) | Todo: §1 presentación, §2 consulta, §3 validación, §4–5 modelos admitidos, §6 caracteres |
+| `consultas.xsd` | — | La respuesta de la consulta |
+| «303 – IVA. Servicios de Ayuda a la Declaración. Ejercicio 2019 y siguientes» (`IVA303-CoordColabora_7.02.pdf`) | 7.02, 27/12/2019 | §1.2, §2.3, §6, §7 |
+| «Servicios de Ayuda a la Declaración I. Sociedades 2021 y siguientes» (`Sociedades2021-CoordColabor-1.0.pdf`) | 1.0, 13/05/2022 | §3, §4, §6 |
+| «Datos Fiscales de Sociedades 2025 en programas de ayuda» (`Autenticacion_datos_fiscales_IS2025.pdf`) | 1.0, 04/06/2026 | §1–3 |
+| «Especificaciones … TGVI Online» (`Especificaciones_TGVI_Online.pdf`) | 2.8, actualizado 03/10/2024 | Todo |
+| Páginas de la Sede: colaboradores sociales, errores en nombre de terceros, 200 en nombre de terceros, cotejo por CSV, calendario 2026 y su domiciliación, PRE-Exteriores | Las de hoy | Lo citado en cada punto |
+| BOE: Orden EHA/1658/2009 consolidada, Orden HAC/241/2025, Orden HAC/529/2026 | Las de hoy | Art. 3.2 y anexo II; plazos y domiciliación del 200 |
 
-Direcciones de Presentación Directa según la v2.9 [F]:
-- producción: `https://www1.agenciatributaria.gob.es/wlpl/PFTW-PICW/PresBasicaDos`;
-- pruebas: el mismo camino en `https://prewww1.aeat.es/…`.
+### 1.2 Tabla
 
-### 1.2 Autenticación
+| Modelo | Canal desde programa | Validar antes | Respuesta |
+|---|---|---|---|
+| **303** | **Presentación Directa**: POST `application/json;charset=UTF-8` a `…/wlpl/PFTW-PICW/PresBasicaDos` con `MODELO`, `EJERCICIO`, `PERIODO`, `NRC` (si es pago con NRC), `IDI`, `F01` (el fichero del diseño de registro, sin CRLF ni tabuladores), `FIR="FirmaBasica"`, `FIRNIF` y `FIRNOMBRE` del titular del certificado [T, v3.0 §1.2]. La AEAT comprueba que `FIRNIF` es el titular del certificado | Solo en pruebas (§1.4) | JSON. **Correcta:** `CodigoSeguroVerificacion`, `Fecha`, `Hora`, `Expediente`, `NIFPresentador`, `TipoRepresentacion` («Nombre propio», «Apoderado», «Colaborador»), `NIFDeclarante`, `Justificante` (13 dígitos), `NRCPago`, `ImporteAIngresar`, **`urlPdf`**, `avisos`, `advertencias`. **Error:** hasta 100 errores `E00…`, nunca CSV. «El justificante de la presentación no es la respuesta devuelta sino el **PDF**». «**No es posible anular declaraciones ya grabadas**» [T, v3.0 §1.3] |
+| **390** | Presentación Directa [T, v3.0 §4] | Igual | Igual |
+| **111**, **115** | Presentación Directa [T, v3.0 §4; el ejemplo del §1.2 es un 111] | Igual | Igual |
+| **202** | Presentación Directa [T, v3.0 §4] | Igual | Igual |
+| **200** | **Presentación Directa** [T, v3.0 §4]. La coordinación del 200 lo dice así: «Igualmente puede realizarse un **envío directo al servidor de la AEAT**, opción destinada a empresas desarrolladoras de software» [T, §3], con firma no criptográfica y certificado [T, §6.3]. El fichero es de datos etiquetados (`<T200020XX0A0000>` …) según el diseño de registro del ejercicio [T, §6.3.1.1.2]. La información contable puede ir en XML (`mod2002025.xsd`) [T, §4.1]. **Los datos fiscales de Sociedades** se pueden bajar desde un programa con certificado o con apoderamiento [T, Datos Fiscales IS2025 §2–3] | En pruebas y en producción, según la coordinación del 200 [T, §4.2]. El único servicio de validación documentado está en el dominio de pruebas [T, v3.0 §3] | Igual que el 303 |
+| **190**, **180**, **347**, **349** | **TGVI Online**: `InicializarEnvio` → `EnviarDatos` (bloques de registros tipo 2) → `RecuperarEnvio` (estado) → `PresentarEnvio` con `firnif`, `firnombre`, `fir=FirmaBasica`. Hay también `RecuperarErroneos`, `RecuperarErrores`, `BajaDeclaracion`, `RecuperarAvisos` y vista previa [T, TGVI §3]. Rechazo selectivo: se presentan los registros buenos y los malos van después en una complementaria [T, §1]. «En ningún momento la generación de un envío equivale a la presentación» [T, §1] | La validación es el propio primer paso [T] | `csv`; el PDF en `https://www2.agenciatributaria.gob.es/wlpl/inwinvoc/es.aeat.dit.adu.eeca.catalogo.VisualizaSc?COMPLETA=SI&ORIGEN=C&CSV=<csv>` [T, §3.5.2] |
+| **036** | Presentación Directa [T, v3.0 §4] (aquí solo como aviso) | — | — |
 
-- **Certificado de cliente en la conexión TLS** (mTLS, la «firma no criptográfica»). La AEAT toma el NIF del presentador del certificado (`FIRNIF`). Desde el ejercicio 2018 **no se acepta la firma criptográfica del fichero** [F].
-- **El titular del certificado tiene que ser** [F]:
-  - el propio **declarante**: certificado de representante de la persona jurídica. No necesita ni censo ni poder [I];
-  - un **colaborador social** o un **delegado** suyo, en el censo y con un acuerdo que cubra ese modelo (art. 92 LGT; Orden HAC/1398/2003, modificada por la HFP/534/2022) [F];
-  - o un **apoderado** en el Registro de apoderamientos.
-- Si no es ninguno de los tres, la AEAT contesta «el titular del certificado no es colaborador social ni apoderado» [F].
-- **Sello de entidad: no he encontrado nada que diga que sirve para presentar declaraciones** [?]. No conviene contar con él.
-- **Domiciliar en una cuenta que no es del presentador** pide un apoderamiento específico (citado como `PAGOAPODECC`) [F, fuente comercial; ?].
-  - Afecta al camino «asesoría»: el colaborador social presenta, pero la domiciliación en la cuenta del cliente puede necesitar ese poder.
+**No admite Presentación Directa:** las declaraciones informativas (van por TGVI) [T, v3.0 §4].
 
-### 1.3 Entorno de pruebas
+### 1.3 Autenticación y quién puede presentar
 
-- **Portal de Pruebas Externas («PRE-Exteriores»)**, en `preportal.aeat.es` / `prewww1.aeat.es`, **de lunes a viernes de 8:00 a 15:00**. Lo presentado allí se guarda «sin que en ningún caso tenga trascendencia tributaria» [F].
-- **No permite presentar en nombre de terceros** [F]. Se prueba con el certificado del propio titular.
-- Una vez presentado un NIF y periodo, lo siguiente del mismo periodo tiene que ir como complementaria [F].
-  - Para repetir pruebas hacen falta periodos distintos o declarar «complementaria».
-- Si acepta un certificado real o da certificados de prueba: [?]. Creo, sin confirmarlo, que se usa el certificado real.
-- **Regla para el paso 2: ninguna prueba sale hacia `www1.agenciatributaria.gob.es`.**
-  - La dirección de producción no estará en el código de pruebas.
-  - Sigue el patrón del freno de Diez (`_shared/diezCliente.ts`: lista blanca, `escribirEnReal`, sin redirecciones).
+- **Certificado de cliente en la conexión** («Firma No Criptográfica»). **No se acepta firma criptográfica del fichero** [T, v3.0 §1].
+  - El titular del certificado es el «presentador».
+  - El programa tiene que **enseñar los datos de la declaración y pedir conformidad** antes de enviar: «el propio envío de la declaración supone la aceptación de los datos» [T, v3.0, «Obtención de datos y autorización»].
+  - Es la confirmación de cada uso que pide el tablero 9.
+- **El presentador puede ser** [T, Sede, «El titular del certificado no es colaborador social y no está apoderado»]:
+  - el **titular** de la declaración;
+  - un **colaborador social o delegado** suyo, y el tipo de acuerdo tiene que cubrir el trámite;
+  - un **apoderado** (Registro de apoderamientos). Si el apoderamiento es para notificaciones, tiene que estar «Confirmado».
+- **Certificados admitidos para colaborador social** [T, Sede, «Presentación de declaraciones por colaboradores sociales»]:
+  - **persona física**;
+  - **representante de persona jurídica**;
+  - **sello de entidad, «únicamente para comunicaciones máquina a máquina»**. Los delegados, con certificado de persona física o de empleado.
+- **Sello de entidad en TGVI:** sus llamadas van por el dominio `www10` en lugar de `www1` [T, TGVI §3.2].
+- **Pago en nombre de terceros** [T, misma página]:
+  - el colaborador **puede domiciliar** el pago de su cliente;
+  - **pero para pagar con NRC** desde la cuenta del cliente hace falta el apoderamiento **`PAGOAPODECC`**; si no, la cuenta tiene que ser del titular del certificado.
+- **303 de una S.A. o S.L.: obligatorio con certificado electrónico** (también los mensuales) [T, coordinación 303 §1.2].
+- **Consecuencia para Sumied** [I]:
+  - **empresa con su certificado:** presenta en nombre propio;
+  - **asesoría:** su certificado, o su sello de entidad si es colaboradora social, que es lo natural en un servidor. Tiene que ser colaboradora social con acuerdo que cubra cada modelo, o tener poder de cada cliente.
+  - La domiciliación en la cuenta del cliente funciona en los dos casos.
 
-### 1.4 Traer el justificante a partir de un CSV
+### 1.4 Validación y entorno de pruebas
 
-- **Cotejo de documentos mediante CSV**: solo lo he encontrado como página para personas y en la app de la AEAT [F]. **No he encontrado ninguna API.**
-- **Servicio de consulta de declaraciones presentadas** (en la v2.9, esquema `consultas.xsd`, hasta 100 por consulta) [F]. Puede ser la vía para traer lo presentado fuera, pero:
-  - sus parámetros están por leer (modelo, ejercicio, periodo… ¿o CSV?) [?];
-  - y no sé si un colaborador o apoderado puede consultar lo de su cliente [?].
-  - Desde la web, el colaborador social ve lo presentado por él y sus delegados, en ventanas de 15 días [F].
+- **Validación sin presentar.**
+  - `ServValiDos` (JSON; devuelve el PDF «Borrador NO VÁLIDO» en base64 o los errores) en `https://prewww2.aeat.es/wlpl/PFTW-PICW/ServValiDos` [T, v3.0 §3.2]. `ServVali` ya no vale para ejercicios 2025 y siguientes [T, §3.1].
+  - **No necesita certificado** [T, coordinación 303 §2.3 y §6.1.1] y está «**sólo disponible en el entorno de Pruebas de Externos**» [T, coordinación 303 §6.1].
+  - Para el 200, la coordinación dice que está en pruebas **y en producción** [T, §4.2], pero no da otra URL que la de pruebas [?].
+  - **No se puede usar dentro de la presentación real:** el portal de pruebas dice que no es para «pruebas masivas, **validaciones integradas en procesos de presentación en producción**» y que puede cortar los usos abusivos [T, `preportal.aeat.es`].
+  - Para el 303 de Sumied: **la presentación real es la validación**. Si la AEAT da errores, no graba nada y no hay CSV [T, v3.0 §1.3]. Antes, Sumied valida contra el diseño de registro.
+- **Entorno de pruebas para externos**, en `prewww1` (presentación), `prewww2` (validación y PDF) y `prewww10` (sello) [T, TGVI §4]:
+  - laborables de **8:00 a 15:00** [T, v3.0 §1.4];
+  - con **certificado electrónico de usuario** [T, v3.0 §1.4; portal: «con la única condición de autenticarse mediante un certificado electrónico»]. No hay certificados de prueba: se usa uno real;
+  - «sin que en ningún caso tengan trascendencia tributaria» [T, portal];
+  - en TGVI, «deben utilizarse datos de prueba y **nunca datos reales**» [T, TGVI §4];
+  - la CA del servidor de pruebas es **distinta** de la de producción [T];
+  - tras una presentación correcta, las siguientes del mismo periodo van como **complementarias** [T, v3.0 §1.4];
+  - los logs se borran cada día [T].
+- **Presentar en nombre de terceros en pruebas:** el fragmento que lo negaba no lo he encontrado en los documentos leídos. Queda [F]. Si es así, el camino de la asesoría no se puede ensayar en pruebas.
+
+### 1.5 Justificante, consulta y «pegar el CSV»
+
+- **Justificante de lo presentado desde Sumied:** el PDF de `urlPdf` [T, v3.0 §1.3]. Se descarga en el momento y se guarda.
+- **Consulta de declaraciones presentadas:**
+  - `https://www1.agenciatributaria.gob.es/wlpl/SCEJ-MANT/ConsultaExt`, con certificado;
+  - POST de formulario con `NIF`, `ANR`, `MOD`, `EJF`, `PER` y rango de fechas y horas [T, v3.0 §2];
+  - responde XML con hasta 100 declaraciones: `ejercicio`, `modelo`, `periodo`, `nif`, **`csv`**, `expediente`, **`justificante`**, `just_anterior` y `fechaYHoraPresentacion` [T, `consultas.xsd`].
+  - **No busca por CSV y no trae el PDF.**
+- **PDF a partir del CSV:** `…/VisualizaSc?COMPLETA=SI&ORIGEN=C&CSV=<csv>` [T, TGVI §3.5.2]. La página de cotejo de la Sede hace lo mismo para personas: «Si el CSV se corresponde con una declaración que genera PDF, obtienes en pantalla el PDF» [T, Sede, cotejo].
+  - Si esa URL pide certificado o la sesión de la Sede desde un programa: [?] (no se ha llamado).
+- **«Ya lo presenté fuera · pegar CSV»** [I]:
+  1. Sumied pide el CSV, el modelo y el periodo.
+  2. La **consulta** confirma que existe una declaración de ese NIF, modelo y periodo con ese CSV, y da justificante y fecha.
+  3. El **PDF** se trae con la URL del CSV.
+  4. Si alguna de las dos no responde desde el programa, se pide subir el PDF.
+- **«Probar con Hacienda»** [I]: la **consulta de declaraciones presentadas** es una llamada **con certificado que no presenta nada**. Si contesta (aunque sea con 0 declaraciones), el certificado está vivo y la AEAT lo acepta para ese NIF. Es la «prueba» del tablero 8.
 
 ---
 
@@ -158,6 +196,12 @@ Direcciones de Presentación Directa según la v2.9 [F]:
 | ¿Cumple «Nadie puede verlo ni descargarlo, tampoco en Sumied» (tablero 8)? | **No** | **Casi**: nadie con acceso a la base lo puede abrir. Un administrador del KMS que se dé permiso a sí mismo sí podría, y queda registrado |
 
 **Propuesta: KMS externo con cifrado envolvente.** El Vault solo guarda la credencial de acceso al KMS de la función.
+
+**Decisión del 17/10:**
+- **Foodint empieza con el Vault.**
+- **El KMS es obligatorio antes de cualquier otro cliente**, y el código lo impide: con el almacén «vault», guardar un certificado solo se admite si la cuenta es la de Foodint.
+- El almacén es una pieza aparte (guardar · abrir para usar · quitar), con dos implementaciones, y `tax_certificate.storage` dice en cuál está cada certificado.
+- El texto del tablero 8 depende del almacén (§8).
 
 ### 2.3 Cómo se usa sin que salga de la función
 
@@ -318,58 +362,81 @@ Además, **por empresa**:
 | 390 | 1–30 de enero | Orden EHA/3111/2009 | [T] |
 | 111 / 115 trimestral | 1–20 de abril, julio, octubre y enero | RIRPF (RD 439/2007), art. 108.1 | [T] |
 | 111 / 115 mensual | 1–20 del mes siguiente | RIRPF art. 108.1, segundo párrafo | [T] |
-| 190 / 180 | 1–31 de enero | RIRPF art. 108.2 (por vía electrónica, 1–31 de enero). Las órdenes guardadas del 190 y 180 dicen «20 primeros días»; el 31 lo confirma el calendario AEAT 2026 | [T]+[F] |
-| 347 | Mes de febrero | Orden EHA/3012/2008, en la redacción guardada (línea 174) | [T] |
+| 190 / 180 | 1–31 de enero | RIRPF art. 108.2. Calendario AEAT 2026: «Hasta el 2 de febrero · Resumen anual 2025: 180, … 190» | [T] |
+| 347 | Mes de febrero | Orden EHA/3012/2008. Calendario AEAT 2026: «Hasta el 2 de marzo · Año 2025: 347» | [T] |
 | 349 trimestral | 1–20 del mes siguiente al trimestre; 4T: 1–30 de enero (mensual si pasa de 50.000 €) | RIVA art. 81; Orden EHA/769/2010 | [T] |
 | 202 | 1–20 de abril, octubre y diciembre | Ley 27/2014 (LIS), art. 40.1 | [T] |
-| 200 | Los 25 días naturales siguientes a los 6 meses del cierre (año natural: 1–25 de julio) | LIS art. 124.1 | [T] |
-| Día inhábil | Si el último día es sábado, domingo o festivo nacional, pasa al siguiente hábil | Ley 39/2015, art. 30.5, según la doctrina; la AEAT lo aplica en su calendario | [F]; no está en las fuentes del repositorio |
+| 200 | Los 25 días naturales siguientes a los 6 meses del cierre (año natural: 1–25 de julio) | LIS art. 124.1; para el de 2025, Orden HAC/529/2026 | [T] |
+| Día inhábil | Si el último día es sábado, domingo o festivo, el plazo acaba el primer día hábil siguiente. **También si coincide con un festivo autonómico o local** (del obligado), según el calendario AEAT 2026 («Vencimientos en días inhábiles, sábados y festivos») | La AEAT lo aplica así en su calendario | [T]. La base legal citada por la doctrina (Ley 39/2015, art. 30.5) no la he leído: [F] |
 
-### 6.2 Domiciliación: aquí hay que corregir la regla de los 5 días
+**Consecuencia:** el último día de presentación **depende de dónde está la empresa**, por los festivos autonómicos y locales. Hace falta una tabla de festivos por año, comunidad y municipio.
 
-**Lo que dicen las órdenes guardadas en el repositorio** [T]:
-- 303: «Desde el día 1 hasta el 15 de los meses de abril, julio y octubre, y desde el día 1 hasta el 25 del mes de enero» (Orden EHA/3786/2008, disposición final tercera).
-- 111: «Desde el día 1 hasta el 15 de los meses de abril, julio, octubre **y enero**» (Orden EHA/586/2011). **El 4T del 111, y del 115, se domicilia hasta el 15 de enero, no el 25.**
-- 202: «desde el día 1 hasta el 15 de los meses de abril, octubre y diciembre» (Orden HFP/227/2017).
-- 200: lo fija la orden de cada año. La guardada es la del ejercicio 2019 (1–22 de julio de 2020). La del ejercicio 2025 es la **Orden HAC/529/2026** [F].
+### 6.2 Domiciliación: la regla, leída
 
-**Lo que cambió después** [F]: la **Orden HAC/241/2025** (BOE 14/03/2025) modificó la Orden EHA/1658/2009, art. 3.2:
-- tiene que haber **al menos 3 días hábiles** entre el fin de la domiciliación y el fin del plazo general;
-- para contarlos son inhábiles los sábados, domingos y festivos nacionales y **de Madrid**;
-- y si el plazo de presentación se alarga por un inhábil, **el de domiciliación se alarga igual**.
+**Orden EHA/1658/2009, art. 3.2, en la redacción de la Orden HAC/241/2025** [T, BOE consolidado]:
+> a) Con carácter general, en el plazo que a tal efecto se recoge en el anexo II, de la presente orden.
+>
+> b) No obstante, cuando el último día del plazo para la presentación de una autoliquidación […] sea inhábil, el plazo de domiciliación establecido en el anexo II se ampliará el mismo número de días que resulte ampliado el plazo de presentación […].
+>
+> Entre la finalización del plazo de presentación de una autoliquidación con domiciliación del pago y la finalización del plazo genérico de presentación e ingreso voluntario de esa misma autoliquidación, deberá existir un mínimo de tres días hábiles o cinco naturales.
+>
+> A los efectos de lo establecido en la presente letra, se considerarán días inhábiles los sábados, los domingos, las festividades nacionales y las festividades autonómicas o locales que afecten al municipio en el que radique el Departamento de Informática de la Agencia Tributaria.
 
-**Datos oficiales de la AEAT que cuadran con esa regla y no con «5 días»** [F]:
-- 303 4T/2025: presentación hasta el 30/01/2026, domiciliación **hasta el 27/01/2026**, no el 25;
-- 303 2T/2025: hasta el 21/07, domiciliado hasta el 16/07;
-- 200 de 2025: hasta el 27/07/2026, domiciliado **hasta el 22/07/2026**;
-- 202 de diciembre de 2026: hasta el 21/12, domiciliado **hasta el 16/12**.
+**Anexo II** [T]:
+
+| Modelo | Domiciliación |
+|---|---|
+| 303 trimestral | 1–15 de abril, julio y octubre; 1–25 de enero |
+| 303 mensual | 1–25; el de enero, 1–23 de febrero (24 en bisiesto) |
+| 111 / 115 trimestral | 1–15 de abril, julio, octubre **y enero** |
+| 111 / 115 mensual | 1–15 de cada mes |
+| 202 | 1–15 de abril, octubre y diciembre |
+| 200 | 1–20 de julio |
+| 390, 190, 180, 347, 349 | No están: no tienen ingreso |
+
+**Lo que publica la AEAT para 2026** [T, calendario 2026, «Plazos de presentación de autoliquidaciones con domiciliación bancaria»]:
+- 303 4T/2025: domiciliación del 1 al **27** de enero (presentación hasta el 30);
+- 111/115 4T/2025: 1–15 de enero;
+- 111/115 mensuales: hasta el 15/01, **17/02**, **16/03**, 15/04, 15/05, **17/06**, 15/07, **17/08**, **16/09**, 15/10, **17/11** y **16/12**;
+- 200 de 2025: 1–**22** de julio (presentación hasta el 27);
+- 202: 15/04, 15/10 y **16/12**.
+- El 22/07 del 200 lo fija también la Orden HAC/529/2026, art. 2: «desde el día 1 de julio hasta el 22 de julio de 2026, ambos inclusive» [T].
+
+**La regla que reproduce todas esas fechas** [I, comprobado]:
+- **la domiciliación acaba el último día hábil que deja exactamente 3 días hábiles hasta el último día de presentación (incluido), ya trasladado si caía en inhábil**;
+- inhábiles: sábados, domingos, festivos nacionales y de la Comunidad de Madrid.
+- Aplicada a los 14 casos publicados de 2026: **14 de 14**.
+- Contando además los festivos de la ciudad de Madrid (San Isidro, 15/05) falla uno: la AEAT da el 15/05 como último día de domiciliación del 111 de abril. **La AEAT no cuenta los festivos locales de la ciudad** aunque la orden los nombre.
+- Es la regla que decidió Julio el 17/10.
 
 **Propuesta:**
-- el plazo de domiciliación **se calcula** con la regla de los 3 días hábiles sobre el plazo ya trasladado;
-- y se guarda **por declaración** como fecha, no «5 días antes».
-- En los trimestres normales sale el 15, como dijo Julio; en enero, diciembre y julio a veces no.
-- **Hay que confirmarlo con el texto literal del anexo II de la Orden EHA/1658/2009 consolidada** (§10).
+- la fecha de domiciliación **se calcula** con esa regla y una tabla de festivos (nacionales y de la Comunidad de Madrid) por año;
+- se **guarda en cada declaración**;
+- y **una prueba la compara con el calendario oficial de la AEAT** de cada año en cuanto se publica. Para 2026 están las 14 fechas de arriba.
 
 ### 6.3 Tabla 2026
 
-Festivos nacionales usados: 1/1, 6/1, 3/4 (Viernes Santo), 1/5, 15/8, 12/10, 1/11, 8/12 y 25/12. Ninguno cae en una fecha de la tabla. Los de Madrid no los he comprobado uno a uno [?].
+Fechas del calendario oficial de la AEAT de 2026 [T]. Los festivos autonómicos o locales de la empresa pueden mover el último día de presentación (§6.1).
 
-| Obligación | Sin domiciliar (último día) | Domiciliado (último día) | |
-|---|---|---|---|
-| 303 4T/2025 | vie 30/01/2026 | **mar 27/01/2026** | [F] |
-| 349 4T/2025 · 390 de 2025 | vie 30/01/2026 | — (sin ingreso) | [T] |
-| 111 / 115 4T/2025 | mar 20/01/2026 | jue 15/01/2026 | [T] |
-| 190 / 180 de 2025 | **lun 02/02/2026** (el 31 es sábado) | — | [F] |
-| 347 de 2025 | **lun 02/03/2026** (el 28/02 es sábado) | — | [F] |
-| 303/111/115/349 1T · 202 1P | lun 20/04/2026 | mié 15/04/2026 | [T]+[F] |
-| 303/111/115/349 2T | lun 20/07/2026 | mié 15/07/2026 | [T]+[F] |
-| 200 de 2025 (año natural) | **lun 27/07/2026** (el 25 es sábado) | **mié 22/07/2026** | [F] |
-| 303/111/115/349 3T · 202 2P | mar 20/10/2026 | jue 15/10/2026 | [T]+[F] |
-| 202 3P | **lun 21/12/2026** (el 20 es domingo) | **mié 16/12/2026** | [F] |
+| Obligación | Sin domiciliar (último día) | Domiciliado (último día) |
+|---|---|---|
+| 303 4T/2025 | vie 30/01/2026 | **mar 27/01/2026** |
+| 349 4T/2025 · 390 de 2025 | vie 30/01/2026 | — (sin ingreso) |
+| 111 / 115 4T/2025 | mar 20/01/2026 | jue 15/01/2026 |
+| 190 / 180 de 2025 | **lun 02/02/2026** (el 31 es sábado) | — |
+| 347 de 2025 | **lun 02/03/2026** (el 28/02 es sábado) | — |
+| 303/111/115/349 1T · 202 1P | lun 20/04/2026 | mié 15/04/2026 |
+| 303/111/115/349 2T | lun 20/07/2026 | mié 15/07/2026 |
+| 200 de 2025 (año natural) | **lun 27/07/2026** (el 25 es sábado) | **mié 22/07/2026** |
+| 303/111/115/349 3T · 202 2P | mar 20/10/2026 | jue 15/10/2026 |
+| 202 3P | **lun 21/12/2026** (el 20 es domingo) | **mié 16/12/2026** |
 
 ### 6.4 Tabla 2027
 
-El calendario oficial de 2027 aún no está publicado: todo es **calculado** [I]. Festivos nacionales usados: 1/1, 6/1, 26/3 (Viernes Santo), 1/5, 15/8, 12/10, 1/11, 6/12, 8/12 y 25/12.
+El calendario oficial de 2027 aún no está publicado: todo es **calculado** [I] con las reglas del §6.1 y del §6.2.
+- Festivos usados: nacionales y de la Comunidad de Madrid de 2027 (1/1, 6/1, 25/3, 26/3, 1/5, 3/5, 16/8, 12/10, 1/11, 6/12, 8/12 y 25/12).
+- Es una lista **provisional**: hay que cargar la oficial (BOE y BOCM) cuando se publique.
+- Con ella, la domiciliación sale igual que con la regla de los 3 hábiles.
 
 | Obligación | Sin domiciliar | Domiciliado |
 |---|---|---|
@@ -480,7 +547,8 @@ Nombres en inglés y snake_case, como el resto de la contabilidad. Todo con `acc
   - `subject_name`, `subject_tax_id_hash` (para buscar sin enseñar el NIF entero);
   - `issuer`, `serial`, `valid_from`, `valid_to`, `fingerprint_sha256`;
   - `kind` (`legal_representative` · `natural_person` · `other`);
-  - `ciphertext` (bytea o ruta de Storage), `wrapped_key`, `kms_key_ref`;
+  - `storage` (`vault` · `kms`): en qué almacén está. Con `vault` solo se admite la cuenta de Foodint (decisión del 17/10);
+  - `ciphertext` (bytea o ruta de Storage), `wrapped_key`, `kms_key_ref` (solo `kms`), `vault_secret_id` (solo `vault`);
   - `status` (`active` · `expired` · `removed`), `removed_at`, `removed_by`;
   - `last_test_at`, `last_test_result`.
 - **`tax_certificate_grant`**: `certificate_id`, `user_id`, `permission` (`file` = puede presentar · `view` = solo ver).
@@ -511,15 +579,16 @@ Nombres en inglés y snake_case, como el resto de la contabilidad. Todo con `acc
 
 | Tablero | Lo que dice | Problema | Propuesta |
 |---|---|---|---|
-| 10 · Calendario | «Resúmenes del año: IVA (390), retenciones (190) y alquiler (180) · hasta el 25/01 o el 30/01» | El 25/01 es el plazo domiciliado del 303, no de estos. El 390, 190 y 180 **no se pagan** y no tienen domiciliación. El 190 y el 180 son hasta el **31/01** (01/02 en 2027) [T][F] | «390 hasta el 30/01; 190 y 180 hasta el 31/01», con la fecha trasladada si cae en inhábil |
-| 10 · Calendario | «Si se domicilia, el plazo acaba 5 días antes» | Desde la Orden HAC/241/2025 son 3 días hábiles; el 4T del 303 fue el 27/01, no el 25 [F] | Enseñar la **fecha** calculada, no «5 días antes» |
-| 10 · Calendario | «hasta el 28/02 · Clientes y proveedores… (347)» | En 2027 el 28/02 es domingo: 01/03 | Fecha calculada |
-| 9 · 303 | «Antes de enviar, Hacienda lo valida. Si devuelve un error, no se presenta nada y te dice qué casilla falla» | Se puede de dos formas: el servicio de validación (si está en producción [?]) o el propio envío, que con errores no presenta nada y no da CSV [F]. «Qué casilla falla» depende de que el código de error la nombre [?] | Se mantiene; el detalle de la casilla, cuando lo dé la AEAT |
-| 9 · 303 | «Ya lo presenté fuera · pegar CSV» | No he encontrado una API que devuelva el justificante con el CSV [F] | Pegar el CSV **y** subir el PDF; o, si el servicio de consulta lo permite, traerlo por modelo y periodo [?] |
-| 8 · Certificados | «Queda cifrado. Nadie puede verlo ni descargarlo, tampoco en Sumied» | Solo es verdad con KMS externo y descifrado solo en la función (§2). Con el Vault de Supabase es falso | KMS. El texto puede quedarse si se cumple el §2; si no, cambiarlo |
-| 8 · Certificados | «Probar con Hacienda» · «Funciona · probado con Hacienda el 09/10» | Hace falta una llamada a la AEAT que use el certificado y **no presente nada**: la validación (si pide certificado) o una consulta de declaraciones presentadas [?] | Elegirla con la v2.9 delante. Si no hay ninguna inocua, «probar» comprueba caducidad y cadena, y dice que la prueba de verdad es la primera presentación |
-| 8 · Certificados | «Mi asesoría, con su certificado… tú no ves nada de él» | Se puede: el certificado es de la cuenta de la asesoría y la empresa solo ve que existe. Pero **no se puede probar en el entorno de pruebas de la AEAT** (no hay presentación en nombre de terceros) [F], y la asesoría debe estar en el censo con un acuerdo que cubra cada modelo, o tener poder | Mantener; avisar de que la primera presentación por asesoría es la prueba |
-| Impuesto de sociedades | Presentar el 200 desde Sumied | Solo está confirmado por Sociedades WEB (formulario con importación de fichero) [F]; el servicio directo está sin confirmar [?] | Si no hay servicio directo: Sumied genera el `.200`, se presenta en Sociedades WEB y se trae el CSV |
+| 10 · Calendario | «Resúmenes del año: IVA (390), retenciones (190) y alquiler (180) · hasta el 25/01 o el 30/01» | El 25/01 es el plazo domiciliado del 303, no de estos. El 390, 190 y 180 **no se pagan** y no tienen domiciliación (no están en el anexo II) [T]. El 190 y el 180 son hasta el **31/01** (02/02 en 2026; 01/02 en 2027) [T] | «390 hasta el 30/01; 190 y 180 hasta el 31/01», con la fecha trasladada |
+| 10 · Calendario | «Si se domicilia, el plazo acaba 5 días antes» | Son 3 días hábiles (Madrid). El 4T del 303 de 2025 fue el **27/01**, no el 25 [T] | Enseñar la **fecha** de la declaración, no «5 días antes» |
+| 10 · Calendario | «hasta el 28/02 · Clientes y proveedores… (347)» | En 2026 fue el 02/03 y en 2027 será el 01/03 [T][I] | Fecha calculada |
+| 9 · 303 | «Antes de enviar, Hacienda lo valida. Si devuelve un error, no se presenta nada y te dice qué casilla falla» | La validación sin presentar solo está en el entorno de pruebas y **no se puede usar en la presentación real** [T, portal de pruebas]. Pero la presentación real devuelve hasta 100 errores y, con error, no graba nada [T, v3.0 §1.3] | Mantener «Si Hacienda devuelve un error, no se presenta nada y te dice qué falla», sin «antes de enviar lo valida». Sumied valida el fichero contra el diseño de registro antes de enviar. «Qué casilla» solo si el texto del error la nombra |
+| 9 · 303 | Botón «Presentar 6.360,00 €» | La AEAT exige que el programa **enseñe los datos y pida conformidad** antes del envío [T, v3.0] | Ya está en el diseño (confirmación); el texto de la confirmación debe decir que el envío supone aceptar los datos |
+| 9 · 303 | «Ya lo presenté fuera · pegar CSV» | Se puede: la consulta confirma el CSV y da justificante y fecha [T]; el PDF se trae con la URL del CSV [T, TGVI §3.5.2] | Mantener. Si la URL del PDF no responde a un programa, se pide subir el PDF [?] |
+| 8 · Certificados | «Queda cifrado. Nadie puede verlo ni descargarlo, tampoco en Sumied» | **Con el Vault es falso** (§2.2) | Decisión del 17/10: mientras esté en el Vault (solo Foodint), el texto **no** dice «nadie puede verlo, tampoco en Sumied». Con KMS, se puede decir |
+| 8 · Certificados | «Probar con Hacienda» · «Funciona · probado con Hacienda el 09/10» | Se puede con la **consulta de declaraciones presentadas**: lleva certificado y no presenta nada [T, v3.0 §2] | Mantener |
+| 8 · Certificados | «Mi asesoría, con su certificado… tú no ves nada de él» | Se puede: la asesoría usa su certificado o su **sello de entidad** (máquina a máquina) si es colaboradora social [T]. Tiene que estar en el censo con un acuerdo que cubra cada modelo, o tener poder [T]. Para pagar con NRC desde la cuenta del cliente hace falta `PAGOAPODECC`; domiciliar sí se puede sin él [T] | Mantener, con el enlace asesoría–empresa con consentimiento (decisión del 17/10). Si se paga sin domiciliar, avisar de `PAGOAPODECC` |
+| Impuesto de sociedades | Presentar el 200 desde Sumied | **Hay envío directo** (`PresBasicaDos`) [T, v3.0 §4; coordinación del 200 §3] | Mantener. El fichero del 200 es grande: páginas etiquetadas, datos contables y datos fiscales que se pueden bajar de la AEAT con certificado [T] |
 | 9 · 303 | «1 factura de un proveedor con fecha del 30/09 llegó el 03/10: va en este trimestre» | Se puede: es `received_date` frente a `issue_date`, y ya están en el libro | — |
 | 9 · 303 | «Hacienda lo carga el 20/10 y Sumied lo casa con el banco» | Se puede, con `bank_match_item.tax_return_id` (§7.4) | — |
 
@@ -527,83 +596,66 @@ El resto de los tres tableros se puede hacer con lo descrito arriba.
 
 ---
 
-## 9. Qué hace falta medir o decidir antes de construir
+## 9. Qué queda por decidir, medir o leer antes de construir
 
-**Decisiones de Julio:** tomadas el 17/10; están en «Decisiones del 17/10», al principio. Queda abierto:
-- **cuándo y qué KMS** (AWS o Google), antes del primer cliente que no sea Foodint;
-- y **encontrar el canal directo del 200** en la documentación.
+**Decisiones:** tomadas el 17/10, en «Decisiones del 17/10». Queda abierto **qué KMS y cuándo**, antes del primer cliente que no sea Foodint.
 
 **Lo que se prueba en el paso 2, en staging:**
-1. `Deno.createHttpClient` con certificado de cliente en el Edge Runtime de Supabase, contra un servidor público de pruebas de mTLS. Nunca contra la AEAT.
-2. Con los PDF delante:
-   - el servicio de validación en pruebas;
-   - el formato de respuesta;
-   - qué llamada sirve para «Probar con Hacienda».
+1. `Deno.createHttpClient` con certificado de cliente en el Edge Runtime de Supabase, contra un servidor **público** de pruebas de mTLS. Nunca contra la AEAT.
+2. Con autorización de Julio, y solo en el **entorno de pruebas de la AEAT**:
+   - la consulta de declaraciones presentadas (para «Probar con Hacienda»);
+   - una presentación de prueba del 303 de Foodint con su certificado, en horario de 8:00 a 15:00;
+   - la URL del PDF a partir del CSV.
+   - El entorno de pruebas pide **certificado real**; lo presentado allí no tiene trascendencia tributaria [T]. Hoy Julio ha dicho que no se llame a `prewww1`: no se hace sin su permiso.
+
+**Lo que queda por leer:**
+- Los **diseños de registro** de cada modelo, para generar los ficheros:
+  - 303 de 2026: `DR303e26v101.xlsx`, ya descargado;
+  - 390, 347, 349, 111, 115, 180, 190, 202 y 200 de 2025.
+  - Es trabajo del paso de construcción, modelo a modelo.
+- «Nueva Firma No Criptográfica»: la v3.0 la cita como publicada en los portales de entidades colaboradoras y desarrolladoras. **No está en el índice público de desarrolladores**; puede pedir registro.
+- Si en pruebas se puede presentar en nombre de terceros: solo lo dice un fragmento [F].
 
 **Lo que depende de otros frentes:**
-- las recibidas por correo (D01) para la comprobación «no falta ninguna factura recibida por correo»;
-- el S01 de D en `main` para las pantallas.
+- las recibidas por correo (D01), para «no falta ninguna factura recibida por correo»;
+- el S01 de D en `main`, para las pantallas.
 
 ---
 
-## 10. Lo que Julio tiene que descargar (o dejar leer desde aquí)
+## 10. Documentos
 
-**Dominios para permitir en el entorno** (Ajustes del entorno › Acceso a red › Dominios permitidos), si se quiere que lo lea yo:
-- `sede.agenciatributaria.gob.es`
-- `www.agenciatributaria.es`
-- `www1.agenciatributaria.gob.es`
-- `www3.agenciatributaria.gob.es`
-- `preportal.aeat.es`
-- `www.boe.es`
+**Leídos enteros (17/10):** los del §1.1. Copias de trabajo fuera del repositorio (no se suben PDF de terceros).
 
-**Ojo:** `prewww1.aeat.es` y `www1.agenciatributaria.gob.es` son los servidores de presentación. Para leer documentación no hacen falta, y es mejor no abrirlos hasta el paso de pruebas.
+**Antes, sin acceso:** el informe de la mañana citaba fragmentos de buscador. Lo que ha cambiado al leer los originales:
 
-**Documentos**, en orden de importancia (URL tal como salieron en el buscador):
-
-1. «Especificaciones de Servicios Comunes Declaraciones AEAT (Presentación Directa, Validación e Impresión y Consulta de Declaraciones Presentadas) **v2.9**», y su `consultas.xsd`
-   https://www.agenciatributaria.es/static_files/AEAT_Desarrolladores/EEDD/General/EspecificacionesServiciosDeclaracionesAEAT_ES.pdf
-2. «**IVA303-CoordColabora 7.02**», coordinación con colaboradores del 303 (comprobar si hay una versión posterior)
-   https://www.agenciatributaria.es/static_files/AEAT_Desarrolladores/EEDD/IVA/Mod_303/IVA303-CoordColabora_7.02.pdf
-3. Diseños de registro: «303 – Ejercicio 2026 y siguientes» (xlsx, 28/01/26), 390, 349 y 347 (modelos 300–399), 111/115/180/190 (100–199) y 200/202 (200–299)
-   https://sede.agenciatributaria.gob.es/Sede/ayuda/disenos-registro/modelos-300-399.html
-4. «Informativas: Especificaciones … **TGVI Online** (v 2.8)»
-   https://www.agenciatributaria.es/static_files/AEAT_Desarrolladores/EEDD/Informativas/General/Especificaciones_TGVI_Online.pdf
-5. Portal de desarrolladores › Documentación (índice; incluye «Nueva Firma No Criptográfica»)
-   https://www.agenciatributaria.es/AEAT.desarrolladores/Desarrolladores/_menu_/Documentacion/Documentacion.html
-6. Modelo 200, ejercicio 2025, en desarrolladores (diseño, XSD contable, «Controles y especificaciones de Sociedades Web»), para confirmar si hay presentación directa.
-7. Portal de pruebas PRE-Exteriores (303 e informativas)
-   https://preportal.aeat.es/PRE-Exteriores/Inicio/_menu_/IVA/Modelo_303/Modelo_303.html
-8. **Orden EHA/1658/2009 consolidada** (art. 3.2 y anexo II), y la **Orden HAC/241/2025**
-   https://www.boe.es/buscar/act.php?id=BOE-A-2009-10326
-   https://www.boe.es/buscar/doc.php?id=BOE-A-2025-5048
-9. **Orden HAC/529/2026** (modelo 200 del ejercicio 2025)
-   https://www.boe.es/buscar/doc.php?id=BOE-A-2026-11583
-10. **Orden HAC/27/2026** (cambios en el 303 y el 390 de 2026). No está entre las fuentes del repositorio; `fuentes.mjs` la traería al refrescar la orden del 303.
-11. Calendario del contribuyente 2026 y su tabla de domiciliación (y el de 2027 cuando salga)
-    https://sede.agenciatributaria.gob.es/Sede/ayuda/calendario-contribuyente/calendario-contribuyente-2026.html
-12. Colaboración social: «Presentación de declaraciones por colaboradores sociales» y la página de errores en nombre de terceros, en la ayuda técnica de la Sede.
-
-**Preguntas que tienen que contestar esos documentos:**
-- ¿El servicio de validación está en producción y pide certificado?
-- ¿Para qué modelos vale `PresBasicaDos` (en especial 202 y 200)?
-- ¿Qué parámetros tiene la consulta de declaraciones presentadas, y puede un colaborador o apoderado consultar lo de su cliente?
-- ¿El JSON de respuesta trae el número de justificante además del CSV?
-- ¿El entorno de pruebas acepta el certificado real?
-- ¿Cuál es el texto literal del anexo II de la Orden EHA/1658/2009 tras la HAC/241/2025?
+| Antes [F]/[?] | Ahora [T] |
+|---|---|
+| El 200 solo por Sociedades WEB | **Envío directo** (`PresBasicaDos`) |
+| La validación, ¿en producción? | **Solo en pruebas**, sin certificado, y **prohibido** integrarla en la presentación real |
+| No hay API para el PDF a partir del CSV | **Hay URL** que devuelve el PDF del CSV (TGVI §3.5.2) |
+| ¿El JSON trae número de justificante? | **Sí**: `Justificante`, 13 dígitos |
+| ¿Sello de entidad? | **Sí** para colaborador social, máquina a máquina; en TGVI por `www10` |
+| Domiciliación «3 hábiles» de segunda mano | Art. 3.2 y anexo II leídos; la regla reproduce las 14 fechas de 2026 |
+| Domiciliación del 200 de 2025 | 1–22 de julio (Orden HAC/529/2026) |
+| Pruebas con certificado real | Sí: «certificado electrónico de usuario», sin certificados de prueba |
 
 ---
 
 ## 11. Cómo se ha medido
 
-**Producción**: una docena de consultas (tres fallaron por nombres de tabla o de expresión y se repitieron), todas `begin read only … rollback`, filtradas por la cuenta de Foodint o leyendo catálogos globales (`tax_form`, restricciones):
+**Producción:** una docena de consultas (tres fallaron por nombres de tabla o de expresión y se repitieron), todas `begin read only … rollback`, filtradas por la cuenta de Foodint o leyendo catálogos globales (`tax_form`, restricciones):
 - columnas y restricciones de `vat_book_entry`, `company_tax_profile`, `tax_rate`, `withholding_rate`, `tax_form`;
 - recuentos del libro de Foodint por libro, tipo, recargo, ISP, inversión, retención, país, clave y fechas;
 - el perfil fiscal de su única empresa, sin NIF;
 - extensiones y número de secretos del Vault;
-- y el texto de `conta_vat_book_desde_asiento` y `conta_motivos_para_validar`, para comprobar si rellenan el recargo y cómo tratan 472/477/4751.
+- y el texto de `conta_vat_book_desde_asiento` y `conta_motivos_para_validar`.
 
-**Código:** `origin/main` @ `46d01527`. Las referencias de fichero y línea de §3, §4 y §7 son de esa versión.
+**Código:** `origin/main` @ `46d01527`.
 
-**Textos oficiales:** los de `docs/conta/fuentes/textos/` (RIVA, RIRPF, LIS, RGAT, PGC y las órdenes de cada modelo), en la versión vigente de cada artículo.
+**Textos oficiales:**
+- los de `docs/conta/fuentes/textos/` (RIVA, RIRPF, LIS, RGAT, PGC y las órdenes de cada modelo), en la versión vigente de cada artículo;
+- y los documentos de la AEAT y del BOE del §1.1, descargados el 17/10.
 
-**AEAT y BOE en línea:** solo fragmentos de buscador, marcados [F]; no se ha podido abrir ninguna página.
+**Domiciliación:** la regla del §6.2 se ha comprobado con un cálculo contra las 14 fechas publicadas de 2026: 14 de 14 con festivos nacionales y de la Comunidad de Madrid.
+
+**Ninguna llamada** a los servidores de presentación, ni de producción ni de pruebas.
