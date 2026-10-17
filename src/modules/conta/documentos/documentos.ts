@@ -319,3 +319,14 @@ export function columnasDelApunte(lineas: readonly { cuenta: string; debe: numbe
     pagar: lineas.filter((l) => l.haber).map((l) => ({ cuenta: l.cuenta, importe: l.haber })),
   }
 }
+
+/**
+ * S01 · Desde Contabilidad › Asientos, «para revisar» no va por mes: todas las
+ * que esperan de los últimos 12 meses (este incluido), en el orden de N22.
+ */
+export function ventanaParaRevisar(hoy: string): { desde: string; hasta: string } {
+  const y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7))
+  const ini = new Date(Date.UTC(y, m - 12, 1))
+  const desde = `${ini.getUTCFullYear()}-${String(ini.getUTCMonth() + 1).padStart(2, '0')}-01`
+  return { desde, hasta: limites(hoy.slice(0, 7)).hasta }
+}

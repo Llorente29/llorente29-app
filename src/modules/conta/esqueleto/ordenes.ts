@@ -52,7 +52,7 @@ const DE_LA_CINTA: Orden[] = [
   // Contabilidad › Asientos · NUEVO. Lo que aún no tiene su pantalla propia
   // (expedida, tesorería, predefinidos) abre el asiento a mano con su tipo.
   { id: 'asiento.expedida', etiqueta: 'Expedida', icono: 'expedida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=expedida` }, sinonimos: ['nueva expedida', 'factura emitida'] },
-  { id: 'asiento.recibida', etiqueta: 'Recibida', icono: 'recibida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.documentos }, sinonimos: ['nueva recibida', 'factura recibida', 'factura de proveedor'] },
+  { id: 'asiento.recibida', etiqueta: 'Recibida', icono: 'recibida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.recibidasEnAsientos }, sinonimos: ['nueva recibida', 'factura recibida', 'factura de proveedor'] },
   { id: 'asiento.tesoreria', etiqueta: 'Tesorería', icono: 'tesoreria', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=tesoreria` }, sinonimos: ['cobro', 'pago'] },
   { id: 'asiento.general', etiqueta: 'General', icono: 'general', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.nuevoAsiento }, sinonimos: ['nuevo asiento', 'asiento a mano'] },
   { id: 'asiento.predefinidos', etiqueta: 'Predefinidos', icono: 'predefinidos', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=predefinido` }, sinonimos: ['plantilla', 'asiento tipo'] },

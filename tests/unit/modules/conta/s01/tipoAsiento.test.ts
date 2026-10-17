@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { lineasDePredefinido, predefinidoDeMano, tipoDeAsiento, TIPOS_ASIENTO } from '@/modules/conta/lib/tipoAsiento'
 import { ORDENES } from '@/modules/conta/esqueleto/ordenes'
+import { ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
 
 describe('S01 · ?tipo= del asiento a mano', () => {
   it('cada tipo pone su serie; lo desconocido es el asiento de siempre', () => {
@@ -53,5 +54,13 @@ describe('S01 · ?tipo= del asiento a mano', () => {
       { cuentaId: 'c572', lado: 'credit', importe: 1200, concepto: null, localId: null, comun: true },
     ])
     expect(predefinidoDeMano(mano, idDe, false).map((l) => l.importe)).toEqual([null, null])
+  })
+})
+
+describe('S01 · Recibidas desde Asientos', () => {
+  it('para revisar: los últimos 12 meses, este incluido, hasta su último día', () => {
+    expect(ventanaParaRevisar('2026-10-17')).toEqual({ desde: '2025-11-01', hasta: '2026-10-31' })
+    expect(ventanaParaRevisar('2026-01-05')).toEqual({ desde: '2025-02-01', hasta: '2026-01-31' })
+    expect(ventanaParaRevisar('2028-02-10').hasta).toBe('2028-02-29')
   })
 })

@@ -219,7 +219,55 @@ Medido en staging dentro de un bloque deshecho: A ve 0 empresas de B, y las dos
 escrituras dan 42501. Ahora la empresa de B se coge antes, como postgres, y las
 dos escrituras van con `values`.
 
+## Lo de hostelería en las demás pantallas
+
+Sin la marca, ninguna pantalla habla de plataformas, liquidaciones ni socios:
+
+- **Ventas**: con hostelería, como antes (el detalle de las plataformas llegará;
+  hoy los asientos del cierre del día). Sin ella: «Tus ventas llegan con
+  Facturación», y un enlace a «Apuntar una factura expedida» (`?tipo=expedida`).
+- **Libro diario**: los textos de «Nada esperando» y «Nada que revisar» no
+  nombran la plataforma ni las liquidaciones.
+- **La ficha de un tercero**: «Más» solo ofrece añadir el papel de cliente (ni
+  «plataforma de reparto» ni «socio de marca»). Un tercero que ya tenga esos
+  papeles los sigue enseñando: lo guardado no se esconde.
+- El ejemplo de razón social ya no es «Plataforma Norte Spain, S.L.».
+- La e2e de la cuenta D lo mira en Ventas y entra desde ahí a la expedida.
+
+## Recibida en Contabilidad › Asientos (maqueta 3)
+
+**El mismo componente** que «Compras y gastos › Facturas recibidas» (N23), con
+otro marco, como dice el inventario §6: la factura es una sola.
+
+- `libros/diario/recibidas` (el botón «Recibida» de la cinta) abre la primera
+  para revisar; sin ninguna, lo dice y enlaza a las facturas recibidas.
+- `libros/diario/recibidas/:id`: migas «Contabilidad › Asientos › Recibidas ·
+  1 de N para revisar», y arriba a la derecha «← Anterior», «Otra cosa» y
+  **«Validar y siguiente ⏎»**. Intro hace lo mismo (no escribiendo ni con un
+  diálogo abierto). Si queda validada pasa a la siguiente y allí dice lo que
+  ha hecho (regla 8); si no, se queda y dice por qué.
+- «Para revisar» desde Asientos no va por mes: son las de los **últimos 12
+  meses**. Desde Compras y gastos, como antes, por el mes elegido.
+- La unitaria del catálogo ya solo deja fuera de su producto a «Digitalizar»
+  (subir un papel vive en Compras y gastos).
+
+**Lo que no está como en la maqueta, y lo digo antes de cambiarlo (regla 5):**
+
+1. **«No es una factura»**: no hay en la base ningún estado ni función que
+   marque un documento como «no es una factura» (ni en `supplier_invoice` ni
+   en `document_inbox`). En su sitio está «Otra cosa», el diálogo que ya
+   había (corregir en Compras o elegir otro proveedor). Hacerlo bien pide base
+   nueva: ¿un estado `descartada` con su motivo, que la saque de «para
+   revisar» y deje rastro? Espero a Julio.
+2. **«Lo que he leído» con campos que se escriben**: en la maqueta son
+   cuadros editables (proveedor, NIF, número, fecha, local, cuenta de gasto,
+   forma de pago, vence, cuenta de pago). Hoy es lectura, y lo que está mal se
+   corrige en Compras (lo dice «Otra cosa»). Hacerlos editables cambia cómo se
+   aprueba una factura y no lo toco sin decisión.
+3. **«Lo que he comprobado»** en verde y **«Ver el asiento»** plegable: la
+   página enseña lo mismo con sus piezas de hoy (los avisos en «Lo que he
+   leído» y «Cómo se apunta» con la propuesta de verdad), no con esa forma.
+
 ## Queda (paso 3)
 
-Lo de hostelería que queda en otras pantallas (Ventas, textos del diario,
-fichas) y la vista Recibida en Contabilidad › Asientos.
+Nada más del inventario: lo de arriba (1–3) espera decisión.

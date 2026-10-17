@@ -41,7 +41,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     pendientesDiez: 'contabilidad.importar',
     terceros: 'contactos.todos', tercero: 'contactos.todos', terceroApartado: 'contactos.todos',
     comoTeFactura: 'contactos.todos', fichaProveedor: 'contactos.todos', fichaProveedorApartado: 'contactos.todos',
-    compras: 'compras.por-revisar', documentos: 'compras.recibidas', revisarFactura: 'compras.recibidas',
+    compras: 'compras.por-revisar', documentos: 'compras.recibidas', revisarFactura: 'compras.recibidas', recibidasEnAsientos: 'contabilidad.asientos', recibidaEnAsientos: 'contabilidad.asientos',
     liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
@@ -123,11 +123,12 @@ describe('el catálogo de órdenes', () => {
     expect(new Set(ORDENES.map((o) => o.id)).size).toBe(ORDENES.length)
     for (const grupos of Object.values(CINTAS)) for (const g of grupos) for (const id of g.ordenes) expect(ordenPorId(id), id).not.toBeNull()
   })
-  it('cada orden lleva a una dirección de SU producto, salvo las dos de la factura recibida (hasta el paso 3)', () => {
+  it('cada orden lleva a una dirección de SU producto, salvo «Digitalizar»', () => {
     const fuera = ORDENES.filter((o) => 'ruta' in o.a).filter((o) => dondeEsta(rutaConta(('ruta' in o.a ? o.a.ruta : '').split('?')[0]))?.producto.id !== o.producto)
-    // «Recibida» y «Digitalizar» abren hoy Compras y gastos › Facturas recibidas;
-    // la misma factura vista desde Contabilidad (maqueta 3) llega en el paso 3.
-    expect(fuera.map((o) => o.id)).toEqual(['asiento.recibida', 'asiento.digitalizar'])
+    // Paso 3: «Recibida» abre la factura desde Contabilidad › Asientos (maqueta 3).
+    // «Digitalizar» es subir un papel, y eso vive en Compras y gastos › Facturas recibidas.
+    expect(fuera.map((o) => o.id)).toEqual(['asiento.digitalizar'])
+    expect(dondeEsta(rutaConta(CONTA.rutas.recibidaEnAsientos, { invoiceId: 'x' }))?.pestana?.id).toBe('asientos')
     expect(ORDENES.filter((o) => o.id.startsWith('ir.')).filter((o) => fuera.includes(o))).toEqual([])
   })
   it('la cinta de Asientos, la de la maqueta 1: NUEVO · REVISAR · UTILIDADES', () => {

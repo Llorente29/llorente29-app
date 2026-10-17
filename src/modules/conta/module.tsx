@@ -28,6 +28,7 @@ import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 import LibrosPage from '@/modules/conta/libros/LibrosPage'
 import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
+import RecibidasEnAsientos from '@/modules/conta/documentos/RecibidasEnAsientos'
 import LoteCatcherPage from '@/modules/conta/documentos/LoteCatcherPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
@@ -112,6 +113,9 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
+    // S01 · La factura recibida desde Contabilidad › Asientos (maqueta 3): el mismo componente que N23.
+    { path: CONTA.rutas.recibidasEnAsientos, element: enMarco(<RecibidasEnAsientos />, '¿A qué cuenta va esta factura?', true) },
+    { path: CONTA.rutas.recibidaEnAsientos, element: enMarco(<RevisarFacturaPage enAsientos />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
     // M01 · La muestra de las piezas comunes (datos inventados): solo fuera de producción.
     ...(baseDeDatos().tipo === 'produccion' ? [] : [{ path: CONTA.rutas.muestraPiezas, element: enMarco(<MuestraPiezasPage />, '') }]),

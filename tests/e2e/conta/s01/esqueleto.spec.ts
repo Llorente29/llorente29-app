@@ -131,6 +131,12 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
   await page.waitForLoadState('networkidle')
   await expect(page.getByText(/Sube la quincena de Catcher/)).toHaveCount(0)
+  // Ventas: sin plataformas; la factura emitida, a mano («Expedida»).
+  await page.goto('/conta/ventas')
+  await expect(page.getByText(/^Tus ventas llegan con Facturación/)).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(/plataforma/i)).toHaveCount(0)
+  await page.getByRole('link', { name: 'Apuntar una factura expedida' }).click()
+  await expect(page.getByRole('heading', { name: 'Nueva factura expedida' })).toBeVisible({ timeout: 30_000 })
   expect(errores).toEqual([])
 })
 
@@ -368,6 +374,30 @@ test('Asientos › Predefinidos: se guarda uno desde el asiento a mano, sale en 
   await expect(page.getByLabel('Cuenta del apunte 2')).toHaveValue('57200001')
   await expect(page.getByLabel('Debe del apunte 1')).toHaveValue('')
   await capturar(page, 'asiento-predefinido')
+  expect(errores).toEqual([])
+})
+
+test('Asientos › Recibida (maqueta 3): la misma factura que en Compras y gastos, con el marco de Contabilidad', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page, errores)
+  await page.goto('/conta/libros/diario/recibidas')
+  // Lleva a la primera para revisar, en Contabilidad › Asientos.
+  await expect(page).toHaveURL(/\/conta\/libros\/diario\/recibidas\/[0-9a-f-]{36}\?ver=para-mirar$/, { timeout: 30_000 })
+  await expect(pestanas(page, 'Contabilidad').locator('[aria-current="page"]').first()).toHaveText(/^Asientos/)
+  await expect(page.getByRole('navigation', { name: 'Estás en' }).first()).toContainText(/Contabilidad›Asientos›Recibidas · 1 de \d+ para revisar/)
+  await expect(page.getByRole('region', { name: 'Lo que he leído' })).toBeVisible({ timeout: 30_000 })
+  const id = page.url().match(/recibidas\/([0-9a-f-]{36})/)![1]
+  if (lado(page) === 'ordenador') {
+    await expect(page.getByRole('button', { name: /^Validar y siguiente/ })).toBeVisible()
+    await expect(page.getByRole('button', { name: '← Anterior' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Está bien · apuntar' })).toHaveCount(0)
+  }
+  await capturar(page, 'asientos-recibida')
+  // La misma factura desde Compras y gastos: su botón de siempre.
+  await page.goto(`/conta/documentos/recibidas/${id}?ver=para-mirar`)
+  await expect(page.getByRole('region', { name: 'Lo que he leído' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('button', { name: /^Validar y siguiente/ })).toHaveCount(0)
   expect(errores).toEqual([])
 })
 
