@@ -362,7 +362,7 @@ test('Definiciones › Analítica: apagar el local lo quita del asiento a mano; 
   await expect(pestanas(page, 'Contabilidad').locator('[aria-current="page"]').first()).toHaveText(/^Definiciones/)
   if (lado(page) === 'ordenador') await expect(page.getByRole('toolbar', { name: 'Acciones de Definiciones' }).getByRole('link', { name: /^Analítica/ })).toHaveAttribute('aria-current', 'page')
   const local = page.getByRole('region', { name: 'Local' })
-  await expect(local.getByText('Encendido')).toBeVisible({ timeout: 30_000 })
+  await expect(local.getByText('Encendido', { exact: true })).toBeVisible({ timeout: 30_000 })
   await page.goto('/conta/libros/diario/nuevo')
   await expect(page.getByLabel('Local del apunte 1')).toBeVisible({ timeout: 30_000 })
   try {
@@ -370,7 +370,7 @@ test('Definiciones › Analítica: apagar el local lo quita del asiento a mano; 
     await local.getByRole('button', { name: 'Apagar' }).click()
     // Regla 8: dice qué deja de salir y que lo guardado se queda.
     await expect(local.getByText(/^«Local» apagado: ya no se pide ni se enseña en el asiento a mano.*Lo guardado se queda\.$/)).toBeVisible()
-    await expect(local.getByText('Apagado')).toBeVisible()
+    await expect(local.getByText('Apagado', { exact: true })).toBeVisible()
     await page.goto('/conta/libros/diario/nuevo')
     await expect(page.getByLabel('Cuenta del apunte 1')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByLabel('Local del apunte 1')).toHaveCount(0)
