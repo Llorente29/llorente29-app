@@ -371,6 +371,19 @@ export function pasosCierre(f: FuenteCierre): PasoCierre[] {
   return r
 }
 
+/**
+ * M01 (Julio, 16/10) · ¿Se pide cerrar este mes? No si ya está cerrado fuera:
+ * traído de otro programa, con el ejercicio cerrado o cerrado al presentar o
+ * al traerlo. La regla es la de la validación, leída de la base:
+ * `primerDiaAbierto` es lo que contesta `conta_primer_dia_abierto` desde el
+ * día 1 del mes. Si cae dentro del mes, al mes le queda algo abierto y se pide.
+ * Lo que se cerró a mano en Folvy sí sale, hecho («Mes cerrado ✓»).
+ */
+export function pedirCierre(mes: string, primerDiaAbierto: string | null, cierres: readonly CierreMes[]): boolean {
+  if (cierres.some((c) => c.mes === mes && c.tipo === 'manual')) return true
+  return primerDiaAbierto !== null && primerDiaAbierto >= mes && primerDiaAbierto <= finDeMes(mes)
+}
+
 /** ¿Se puede cerrar? Todo lo anterior hecho. Si no, qué falta (en una frase). */
 export function sePuedeCerrar(pasos: readonly PasoCierre[]): { puede: boolean; falta: string | null } {
   const faltan = pasos.slice(0, -1).filter((p) => !p.hecho)

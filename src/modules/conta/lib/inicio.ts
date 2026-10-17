@@ -128,6 +128,33 @@ export function cambio(antes: number | null, ahora: number, formato: (n: number)
   return `${d > 0 ? '+' : '−'}${formato(Math.abs(d))} este mes`
 }
 
+/** Una línea del IVA del trimestre: qué es, su importe y, si hace falta, por qué. */
+export interface LineaIva { etiqueta: string; importe: string; nota?: string }
+
+/**
+ * M01 · Debajo del IVA del trimestre, tres líneas cortas (Julio, 16/10):
+ *   «IVA de tus ventas 8,99 €»
+ *   «IVA de tus compras −5,00 € (más abonos que facturas)»
+ *   «A pagar 13,99 €» (o «A devolver», sin signo).
+ * El importe de compras va con su signo: un soportado en negativo es lo que
+ * hay en el libro, y la nota dice por qué. Lo de abajo es siempre la cifra
+ * de la tarjeta (ventas − compras).
+ */
+export function lineasIva(repercutido: number, soportado: number, formato: (n: number) => string): LineaIva[] {
+  const resultado = Math.round((repercutido - soportado) * 100) / 100
+  return [
+    { etiqueta: 'IVA de tus ventas', importe: formato(repercutido) },
+    soportado < 0
+      ? { etiqueta: 'IVA de tus compras', importe: formato(soportado), nota: '(más abonos que facturas)' }
+      : { etiqueta: 'IVA de tus compras', importe: formato(soportado) },
+    { etiqueta: resultado < 0 ? 'A devolver' : 'A pagar', importe: formato(Math.abs(resultado)) },
+  ]
+}
+
+/** Las tres líneas en texto (para el lector y las pruebas). */
+export const textoIva = (trimestre: string, l: readonly LineaIva[]): string =>
+  `${trimestre}: ${l.map((x) => `${x.etiqueta} ${x.importe}${x.nota ? ` ${x.nota}` : ''}`).join('. ')}.`
+
 /** «Próximo pago el 24 oct» o, si ya pasó, «Vencido desde el 24 oct». */
 export function frasePago(fecha: string | null, hoy: string, diaMes: (iso: string) => string): string | null {
   if (!fecha) return null

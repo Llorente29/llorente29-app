@@ -30,6 +30,7 @@ import { tabla } from '@/modules/conta/services/bd'
 import { cargarMirar } from '@/modules/conta/services/comprasService'
 import { acuerdosSinSocio, listarTercerosBase } from '@/modules/conta/services/tercerosService'
 import { cargarRevision430 } from '@/modules/conta/services/revision430Service'
+import { leerEsperan } from '@/modules/conta/services/esperanService'
 
 export type CuentasMenu = Partial<Record<string, number | null>>
 
@@ -55,9 +56,19 @@ async function contar(accountId: string, companyId: string | null): Promise<Cuen
       const t430 = ts.map((t) => ({ id: t.id, nombre: t.nombre, nif: t.nif, papeles: t.papeles, supplierId: t.supplierId, archivado: !!t.archivadoEn, codigoProveedor: null }))
       return acuerdos + rev.cuentas.filter((c) => !hecha(c, t430)).length
     })()),
+    // M01 («Esperan», Julio, 16/10): lo propuesto que la validación pararía no
+    // es una tarea; no cuenta. La regla la dice la base (conta_esperan). Si aún
+    // no se puede leer (la función no está en esa base), cuenta todo lo
+    // propuesto, como antes, y lo dice en la consola.
     seguro(companyId
-      ? tabla('journal_entry').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'propuesto')
-          .then(({ count, error }: { count: number | null; error: { message: string } | null }) => { if (error) throw new Error(error.message); return count ?? 0 })
+      ? (async () => {
+          const { data, error } = await tabla('journal_entry').select('id').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'propuesto')
+          if (error) throw new Error(error.message)
+          const ids = ((data ?? []) as { id: string }[]).map((f) => f.id)
+          if (ids.length === 0) return 0
+          const esperan = await leerEsperan(companyId).catch((e: unknown) => { console.warn('[menú] no se pudo leer lo que espera', e); return null })
+          return esperan ? ids.filter((id) => !esperan.has(id)).length : ids.length
+        })()
       : Promise.resolve(0)),
     seguro(companyId
       ? tabla('bank_movement').select('id', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido'])

@@ -1294,12 +1294,69 @@ describe('la tanda del corte por fecha de las liquidaciones (D01, 0100 y 0110 de
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): la dirección que no llega (R03, 0300, 0310 y 0320; PR #219)', () => {
+describe('la tanda de AHORA (manifiesto vivo): «Esperan», los motivos para validar en un solo sitio (M01, Julio, 16/10)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 17/10 a las 04:25 UTC para ESTOS ficheros (con su md5).
+  // lectura en producción el 16/10 a las 19:49 UTC para ESTE fichero (con su md5).
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const PRUEBA = 'supabase/staging/sql/20261117_m01_motivos_para_validar_prueba.sql'
+
+  it('un fichero, «sigue»: añade dos funciones y cambia dos, con la misma firma', () => {
+    expect(viva).toEqual(['supabase/migrations/20261117T0100_m01_motivos_para_validar.sql'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'sigue' })
+  })
+  it('declara lo que cambia, con su prueba de staging, y no toca ninguna tabla', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    for (const o of ['public.journal_entry_validar', 'public.tg_journal_entry_envio_por_aclarar']) expect(sql).toContain(`-- cambia: ${o} · prueba: ${PRUEBA}`)
+    expect(existsSync(PRUEBA)).toBe(true)
+    // Fuera de los cuerpos de las funciones (journal_entry_validar sí escribe al validar: eso no es la tanda).
+    const codigo = sql.replace(/--.*$/gm, '').replace(/(\$\w*\$)[\s\S]*?\1/g, '')
+    expect(codigo).toMatch(/create or replace function public\.journal_entry_validar\(/)
+    expect(codigo).not.toMatch(/^\s*(alter|drop|create)\s+table\b/im)
+    expect(codigo).not.toMatch(/^\s*(insert|update|delete)\b/im)
+  })
+  it('las dos que cambia están en producción con la huella de la que parte la vuelta atrás (medida el 16/10)', () => {
+    expect(ctx.funciones).toEqual(['public.journal_entry_validar(uuid,text)', 'public.tg_journal_entry_envio_por_aclarar()'])
+    const md5 = (s: string) => createHash('md5').update(s).digest('hex')
+    const cuerpo = (f: string, nombre: string) => {
+      const m = new RegExp(`create or replace function public\\.${nombre}\\(.*?as (\\$\\w*\\$)([\\s\\S]*?)\\1`, 's').exec(readFileSync(f, 'utf8'))
+      return m ? md5(m[2]) : null
+    }
+    const atras = 'supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql'
+    // Las huellas de producción (md5 de prosrc), las que pega la cuenta.
+    expect(cuerpo(atras, 'journal_entry_validar')).toBe('798e4c431fe9d790288d974b7fe22431')
+    expect(cuerpo(atras, 'tg_journal_entry_envio_por_aclarar')).toBe('7a2549b0b50731d33bfafb5cd5ee5fd9')
+    expect(cuerpo('supabase/migrations/20261113T0100_c06b_centimo_iva.sql', 'journal_entry_validar')).toBe('798e4c431fe9d790288d974b7fe22431')
+    expect(cuerpo('supabase/migrations/20261116T0100_c06b_promociones_envios.sql', 'tg_journal_entry_envio_por_aclarar')).toBe('7a2549b0b50731d33bfafb5cd5ee5fd9')
+  })
+  it('declara qué cuenta; la cuenta existe, solo lee y no nombra las funciones nuevas fuera de una cadena', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/m01-esperan.sql'])
+    for (const c of cuentas) expect(existsSync(c), c).toBe(true)
+    const fuera = readFileSync(cuentas[0], 'utf8').replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).toMatch(/to_regprocedure/)
+    expect(fuera).not.toMatch(/conta_motivos_para_validar|conta_esperan/)
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter)\b/i)
+    expect(readFileSync(cuentas[0], 'utf8')).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás es un fichero, con la misma cuenta, y su prueba de staging la ejecuta de verdad', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual(['supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql'])
+    expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql')
+    const p = readFileSync('supabase/staging/sql/20261117_m01_motivos_para_validar_vuelta_atras_prueba.sql', 'utf8')
+    expect(p).toContain('\\i supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql')
+    expect(p).toMatch(/rollback;\s*$/)
+  })
+})
+
+describe('la tanda de la dirección que no llega (R03, 0300, 0310 y 0320; PR #219), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-r03-direccion-20261017.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 17/10 a las 04:25 UTC para ESTOS ficheros (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-r03-direccion-20261017.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -1331,7 +1388,7 @@ describe('la tanda de AHORA (manifiesto vivo): la dirección que no llega (R03, 
     expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant)\b/i)
   })
   it('su vuelta atrás va en orden inverso, y la de la 0300 para si hay direcciones completadas', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-r03-direccion-20261017.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261118T0320_r03_entrega_datos.down.sql',
       'supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql', 'supabase/vuelta-atras/20261118T0300_r03_direccion_incompleta.down.sql'])
     expect(readFileSync(atras[2], 'utf8')).toMatch(/raise exception/)

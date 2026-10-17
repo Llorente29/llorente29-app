@@ -1,0 +1,31 @@
+{
+ "_que": "R03 · contexto de producción de la tanda viva «la dirección que no llega» (0300, 0310 y 0320), medido en SOLO LECTURA el 17/10 a las 04:25 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen sale (19.386 filas, en el camino del pedido) y resolve_dispatch(uuid) (en el camino, con huella 9d645a51…); nada de lo que añaden las tres existe; ninguno de los tres ficheros está en el historial. La copia de la anterior (C06b): contexto-produccion-c06b-promociones-envios-20261016.json.",
+ "medido": "2026-10-17T04:25Z",
+ "tanda": {
+  "supabase/migrations/20261118T0300_r03_direccion_incompleta.sql": "2815c76d8ba0ded275c028c5c09202e7",
+  "supabase/migrations/20261118T0310_r03_ticket_codigo_quien_reparte.sql": "72d31707dc1a0ce26b2a95e73a1aa4c7",
+  "supabase/migrations/20261118T0320_r03_entrega_datos.sql": "031fdd2feac0c68d4070258009e4aef7"
+ },
+ "contexto": {
+  "tablas": [
+   "public.sale"
+  ],
+  "funciones": [
+   "public.resolve_dispatch(uuid)"
+  ],
+  "filas": {
+   "public.sale": 19386
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [
+    "public.sale"
+   ],
+   "funciones": [
+    "public.resolve_dispatch(uuid)"
+   ]
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -26,6 +26,8 @@ export interface Resultado {
   cifra?: string
   /** A dónde lleva; null = no navega (la pregunta). */
   ruta: string | null
+  /** Lo que ya no cuenta (un asiento anulado, un tercero archivado): sale, en gris y al final de su grupo. */
+  apagado?: boolean
 }
 
 export interface Grupo { tipo: TipoResultado; nombre: string; resultados: Resultado[]; buscando?: boolean; error?: string | null }
@@ -118,6 +120,14 @@ export function pregunta(q: string): Resultado | null {
 export function ordenar(grupos: Grupo[]): Grupo[] {
   return ORDEN_GRUPOS.flatMap((t) => grupos.filter((g) => g.tipo === t))
     .filter((g) => g.resultados.length > 0 || g.buscando || g.error)
+}
+
+/**
+ * Primero lo vivo y después lo apagado, cada parte en el orden en que venía
+ * (Julio, 16/10). Ordena, no esconde (regla 7): lo apagado sigue saliendo.
+ */
+export function vivoPrimero<T extends { apagado?: boolean }>(lista: readonly T[]): T[] {
+  return [...lista.filter((r) => !r.apagado), ...lista.filter((r) => r.apagado)]
 }
 
 /** Todos los resultados en el orden en que se ven: ↑ ↓ se mueven por aquí. */
