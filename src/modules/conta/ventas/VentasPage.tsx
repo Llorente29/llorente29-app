@@ -9,14 +9,18 @@
 import { Link } from 'react-router-dom'
 import { rutaLibroDiario } from '@/config/navegacion'
 import { Cabecera, Vacio } from '@/modules/conta/ui/piezas'
+import { useVendePorPlataformas } from '@/modules/conta/services/plataformasCuenta'
 
 export default function VentasPage() {
+  const vende = useVendePorPlataformas()
   return (
     <div className="cxc">
       <Cabecera antetitulo="Contabilidad" titulo="Ventas" />
       <div className="cx-tarjeta">
         <Vacio titulo="Aún no."
-          explicacion="Lo que vendes cada día, plataforma a plataforma, llega con el detalle de las plataformas. Hoy las ventas ya se apuntan solas al cerrar cada día: están en el libro diario."
+          explicacion={vende
+            ? 'Lo que vendes cada día, plataforma a plataforma, llega con el detalle de las plataformas. Hoy las ventas ya se apuntan solas al cerrar cada día: están en el libro diario.'
+            : 'Esta pantalla aún no está. Lo que hay de ventas está en el libro diario.'}
           accion={<Link to={rutaLibroDiario('ventas')} className="cx-enlace">Ver los asientos de ventas</Link>} />
       </div>
     </div>

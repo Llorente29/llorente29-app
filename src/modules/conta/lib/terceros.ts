@@ -81,6 +81,18 @@ export function mismoNif(terceros: readonly Tercero[], nif: string | null | unde
   return { tercero: t, yaLoEs, texto }
 }
 
+/**
+ * Regla de Julio (17/10): lo de plataformas (el papel, Liquidaciones, «Sus
+ * tiendas») es para quien vende por Uber, Glovo o Just Eat. Una cuenta vende
+ * por plataformas si tiene un canal de venta de una de ellas; «shop», «salon»
+ * o «tpv-mostrador» no cuentan (en producción hay los tres, 17/10).
+ */
+export const CANALES_DE_PLATAFORMA: readonly string[] = ['glovo', 'uber', 'justeat', 'deliveroo']
+
+export function vendePorPlataformas(canales: readonly { slug?: string | null }[]): boolean {
+  return canales.some((c) => !!c.slug && CANALES_DE_PLATAFORMA.includes(c.slug))
+}
+
 export type FiltroTerceros = 'todos' | 'proveedores' | 'clientes' | 'plataformas' | 'socios' | 'archivados'
 
 export const FILTROS_TERCEROS: { id: FiltroTerceros; texto: string }[] = [

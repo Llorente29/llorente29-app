@@ -35,6 +35,7 @@ import {
   completarAnotacion, cuentasPorAsiento, datosFiscales, documentosDeFacturas, leerBienes, leerLibroRegistro, movimientoIva,
 } from '@/modules/conta/services/librosService'
 import { MARCA } from '../cuenta/marca'
+import { useVendePorPlataformas } from '@/modules/conta/services/plataformasCuenta'
 
 type Vista = 'issued' | 'received' | 'intracomunitarias'
 const TITULO: Record<Vista, string> = { issued: 'Facturas expedidas', received: 'Facturas recibidas', intracomunitarias: 'Operaciones intracomunitarias' }
@@ -59,6 +60,7 @@ function periodos(inicio: string, fin: string): { id: string; desde: string; has
 
 export function RegistroIva({ libro }: { libro: Vista }) {
   const L = useLibros()
+  const vende = useVendePorPlataformas()
   const ps = periodos(L.ejercicio.inicio, L.ejercicio.fin)
   const hoy = new Date().toISOString().slice(0, 10)
   const [periodo, setPeriodo] = useState(() => (ps.find((p) => p.desde <= hoy && hoy <= p.hasta) ?? ps[0]).id)
@@ -141,7 +143,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
         {hayFiltro && <button type="button" className="cx-boton-sec" onClick={() => setF({ verAnuladas: f.verAnuladas })}>Quitar filtros</button>}
       </details>
 
-      {vistas && !vistas.total && <div className="cx-tarjeta"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion="El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas." /></div>}
+      {vistas && !vistas.total && <div className="cx-tarjeta"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion={vende ? 'El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas.' : 'El libro se llena solo al validar los asientos con IVA: ventas, facturas de proveedor y las demás.'} /></div>}
       {vistas && vistas.total > 0 && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
           <p className="cxl-apoyo" role="status">{hayFiltro ? `${vistas.filas.length} de ${anotaciones(vistas.total)} con los filtros puestos.` : `${anotaciones(vistas.total)}.`}</p>

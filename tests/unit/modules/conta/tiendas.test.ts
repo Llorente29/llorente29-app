@@ -4,6 +4,7 @@
 // ciudad, país, código postal)»); ninguno real.
 import { describe, expect, it } from 'vitest'
 import { estadoTienda, marcaPropuesta, resumenTiendas, textoGuardada, type TiendaPlataforma } from '@/modules/conta/lib/tiendas'
+import { vendePorPlataformas } from '@/modules/conta/lib/terceros'
 
 const marcas = [
   { id: 'm1', nombre: 'Burger Norte' }, { id: 'm2', nombre: 'Pita del Sur' }, { id: 'm3', nombre: 'Lovers de Prueba' },
@@ -44,5 +45,18 @@ describe('Sus tiendas', () => {
     expect(textoGuardada(t({ liquidaciones: 1 }), 'Burger Norte', 'Norte Centro', null))
       .toBe('Guardado: «Burger Norte (Calle Inventada 5, Madrid, ES, 28001)» es Burger Norte en Norte Centro; sin cuenta de cobro. Su liquidación ya tiene marca y local.')
     expect(textoGuardada(t(), null, null, null)).toBe('Guardado: «Burger Norte (Calle Inventada 5, Madrid, ES, 28001)» queda sin marca y local; sin cuenta de cobro.')
+  })
+})
+
+// Regla de Julio (17/10). Los slugs son los de producción el 17/10: glovo,
+// justeat, shop, uber, salon y tpv-mostrador.
+describe('¿vende por plataformas?', () => {
+  it('sí con un canal de Glovo, Uber o Just Eat; no con tienda, salón o mostrador, ni sin canales', () => {
+    expect(vendePorPlataformas([{ slug: 'glovo' }])).toBe(true)
+    expect(vendePorPlataformas([{ slug: 'shop' }, { slug: 'uber' }])).toBe(true)
+    expect(vendePorPlataformas([{ slug: 'justeat' }])).toBe(true)
+    expect(vendePorPlataformas([{ slug: 'shop' }, { slug: 'salon' }, { slug: 'tpv-mostrador' }])).toBe(false)
+    expect(vendePorPlataformas([])).toBe(false)
+    expect(vendePorPlataformas([{ slug: null }, {}])).toBe(false)
   })
 })
