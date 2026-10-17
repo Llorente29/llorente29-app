@@ -493,23 +493,33 @@ describe('R11 · paso 8 sobre la tanda del relevo del secreto del despacho (W02,
   })
 })
 
+describe('R11 · paso 8 sobre la tanda del fin del relevo (W02, 0200, su copia, aplicada), con su contexto medido', () => {
+  it('AUTORIZO, con su nombre', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-w02-secreto-despacho-20261017.json',
+      '--manifiesto=tests/conta/produccion/tanda-w02-secreto-despacho-20261017.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261120T0200_w02_secreto_despacho_fin_relevo.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261120T0200_w02_secreto_despacho_fin_relevo.sql')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con los ficheros medidos, da el estado de cada uno y los «autorizo» (W02, el fin del relevo del secreto del despacho: AUTORIZO)', () => {
+  it('con los ficheros medidos, da el estado de cada uno y los «autorizo» (S01: la 0110, AUTORIZO; las demás siguen)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261120T0200_w02_secreto_despacho_fin_relevo.sql: AUTORIZO')
-    expect(r.out).toContain('autorizo: 20261120T0200_w02_secreto_despacho_fin_relevo.sql')
+    expect(r.out).toContain('20261121T0110_s01_hosteleria_de_hoy.sql: AUTORIZO')
+    expect(r.out).toContain('20261121T0140_s01_regla5_eje_local.sql: sigue')
+    expect(r.out).toContain('autorizo: 20261121T0110_s01_hosteleria_de_hoy.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261121T0150_s01_recibidas_asiento_por_origen.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261120T0200_w02_secreto_despacho_fin_relevo.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261121T0150_s01_recibidas_asiento_por_origen.sql ha cambiado desde la medida')
   })
 })

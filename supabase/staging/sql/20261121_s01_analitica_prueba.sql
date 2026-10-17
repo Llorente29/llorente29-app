@@ -174,8 +174,33 @@ begin
   if coalesce(v, '') not like '%falta el local (o marcarlo como común)%' then
     raise exception 'PRUEBA S01 analítica 5a: tras la vuelta atrás de la 0140 el local tenía que pedirse siempre; dice: %', coalesce(v, 'nada');
   end if;
-  raise notice 'S01 analítica 5a: vuelta atrás de la 0140, el local se pide siempre.';
+  -- Y el cuerpo, byte a byte el de producción (la M01, 17/10: md5 66965ffa…).
+  if md5(pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure)) <> '66965ffa02a036b1bed356d46ca755ec' then
+    raise exception 'PRUEBA S01 analítica 5a: la vuelta atrás de la 0140 no deja conta_motivos_para_validar como en producción (md5 %).',
+      md5(pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure));
+  end if;
+  raise notice 'S01 analítica 5a: vuelta atrás de la 0140, el local se pide siempre y el cuerpo es el de producción byte a byte.';
 end $$;
+-- La guarda: con un eje cambiado por una persona, la vuelta atrás PARA sin tocar nada (savepoint y
+-- ON_ERROR_STOP 0 para ver que falla; después, como si no hubiera pasado).
+do $$ begin
+  if not (exists (select 1 from public.conta_eje_analitico where updated_by is not null)) then raise exception 'PRUEBA S01 analítica 5b: para probar la guarda hacía falta un eje cambiado por una persona.'; end if;
+end $$;
+savepoint guarda;
+\set ON_ERROR_STOP 0
+\i supabase/vuelta-atras/20261121T0130_s01_ejes_analiticos.down.sql
+\set guarda_fallo :ERROR
+\set ON_ERROR_STOP 1
+rollback to savepoint guarda;
+\if :guarda_fallo
+\echo 'S01 analítica 5b guarda: con un eje cambiado por una persona, la vuelta atrás para y no toca nada.'
+\else
+do $$ begin raise exception 'PRUEBA S01 analítica 5b: con un eje cambiado por una persona, la vuelta atrás no ha parado.'; end $$;
+\endif
+-- Sin eso (como justo después de la tanda), se deshace entera.
+-- Sin usuario (el disparador pone updated_by con el del JWT, que sigue puesto desde el paso 3).
+select set_config('request.jwt.claims', '', true);
+update public.conta_eje_analitico set updated_by = null where updated_by is not null;
 \i supabase/vuelta-atras/20261121T0130_s01_ejes_analiticos.down.sql
 do $$ begin
   if to_regclass('public.conta_eje_analitico') is not null or to_regprocedure('public.conta_eje_analitico_al_dia()') is not null then

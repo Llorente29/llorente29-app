@@ -116,6 +116,24 @@ do $$ begin
   end if;
   raise notice 'S01 4a: vuelta atrás de la 0110, todas las marcas nulas.';
 end $$;
+-- La guarda: con preferencias guardadas, la vuelta atrás PARA sin tocar nada (savepoint y
+-- ON_ERROR_STOP 0 para ver que falla; después, como si no hubiera pasado).
+do $$ begin
+  if not (exists (select 1 from public.conta_user_pref)) then raise exception 'PRUEBA S01 4b: para probar la guarda hacía falta preferencias guardadas.'; end if;
+end $$;
+savepoint guarda;
+\set ON_ERROR_STOP 0
+\i supabase/vuelta-atras/20261121T0100_s01_esqueleto.down.sql
+\set guarda_fallo :ERROR
+\set ON_ERROR_STOP 1
+rollback to savepoint guarda;
+\if :guarda_fallo
+\echo 'S01 4b guarda: con preferencias guardadas, la vuelta atrás para y no toca nada.'
+\else
+do $$ begin raise exception 'PRUEBA S01 4b: con preferencias guardadas, la vuelta atrás no ha parado.'; end $$;
+\endif
+-- Sin eso (como justo después de la tanda), se deshace entera.
+delete from public.conta_user_pref;
 \i supabase/vuelta-atras/20261121T0100_s01_esqueleto.down.sql
 do $$ begin
   if to_regclass('public.conta_user_pref') is not null or to_regprocedure('public.conta_user_pref_al_dia()') is not null

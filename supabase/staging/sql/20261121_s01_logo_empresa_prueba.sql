@@ -71,6 +71,24 @@ end $$;
 reset role;
 
 -- 4 · La vuelta atrás, de verdad.
+-- La guarda: con un logo puesto, la vuelta atrás PARA sin tocar nada (savepoint y
+-- ON_ERROR_STOP 0 para ver que falla; después, como si no hubiera pasado).
+do $$ begin
+  if not (exists (select 1 from public.company where logo_path is not null)) then raise exception 'PRUEBA S01 0120 4: para probar la guarda hacía falta un logo puesto.'; end if;
+end $$;
+savepoint guarda;
+\set ON_ERROR_STOP 0
+\i supabase/vuelta-atras/20261121T0120_s01_logo_empresa.down.sql
+\set guarda_fallo :ERROR
+\set ON_ERROR_STOP 1
+rollback to savepoint guarda;
+\if :guarda_fallo
+\echo 'S01 0120 4 guarda: con un logo puesto, la vuelta atrás para y no toca nada.'
+\else
+do $$ begin raise exception 'PRUEBA S01 0120 4: con un logo puesto, la vuelta atrás no ha parado.'; end $$;
+\endif
+-- Sin eso (como justo después de la tanda), se deshace entera.
+update public.company set logo_path = null where logo_path is not null;
 \i supabase/vuelta-atras/20261121T0120_s01_logo_empresa.down.sql
 do $$ begin
   if exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname like 'company_logos_%')
