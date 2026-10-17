@@ -60,7 +60,13 @@ begin
      or not exists (select 1 from jsonb_array_elements(v) x0 where x0->>'modelo' = '202' and x0->>'regla' = 'is_202') then
     raise exception 'PRUEBA obligaciones 1: faltan reglas en %.', v;
   end if;
-  raise notice 'PRUEBA obligaciones 1: % modelos, cada uno con su regla y su porqué; el 111: «%».', jsonb_array_length(v), o.why;
+  -- Las reglas no se llaman desde el front: leen datos de cualquier empresa.
+  begin
+    perform * from public.conta_impuesto_reglas(v_h);
+    raise exception 'PRUEBA obligaciones 1: un usuario llama a conta_impuesto_reglas.';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'PRUEBA obligaciones 1: % modelos, cada uno con su regla y su porqué; el 111: «%»; las reglas, solo por dentro.', jsonb_array_length(v), o.why;
 
   -- 2 · Otra vez: nada nuevo.
   select count(*) into v_n from public.tax_obligation where company_id = v_a;

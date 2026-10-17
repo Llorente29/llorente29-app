@@ -21,7 +21,8 @@ supabase/staging/sql/20261122_i01_modelo_datos_prueba.sql
 #   aplica DE VERDAD arriba, probada en el run 316, para que el alta tome los
 #   modelos de la base. Su prueba, otra vez con \i y ROLLBACK: regla, datos y porqué de cada
 #   modelo; calcular dos veces no escribe dos; quitar pide motivo y ninguna
-#   regla lo pisa; un dato cambia la regla; Canarias; el 130 de un autónomo.
+#   regla lo pisa; un dato cambia la regla; Canarias; el 130 de un autónomo;
+#   y las reglas no se pueden llamar como usuario (otra vez tras 032068bf).
 supabase/staging/sql/20261122_i01_obligaciones_prueba.sql
 
 # M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos

@@ -237,8 +237,12 @@ begin
   return v_id;
 end $$;
 
-revoke all on function public.conta_impuesto_reglas(uuid), public.conta_impuesto_obligaciones_calcular(uuid),
+revoke all on function public.conta_impuesto_obligaciones_calcular(uuid),
   public.conta_impuesto_obligacion_decidir(uuid, text, boolean, text) from public, anon;
+-- Las reglas leen nóminas y datos de cualquier empresa (security definer) y no
+-- miran la cuenta: solo las llama calcular, que sí la mira. Fuera también de
+-- authenticated, que Supabase da por defecto a toda función nueva.
+revoke all on function public.conta_impuesto_reglas(uuid) from public, anon, authenticated;
 grant execute on function public.conta_impuesto_obligaciones_calcular(uuid), public.conta_impuesto_obligacion_decidir(uuid, text, boolean, text)
   to authenticated, service_role;
 grant execute on function public.conta_impuesto_reglas(uuid) to service_role;
