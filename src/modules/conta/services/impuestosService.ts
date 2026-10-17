@@ -1,8 +1,9 @@
 // src/modules/conta/services/impuestosService.ts
 //
 // I01a · Impuestos por dentro. Lo que el front escribe de Impuestos va por
-// funciones de la base (security definer): aquí, las respuestas del alta, que
-// hasta el I01a se usaban para proponer los modelos y se tiraban.
+// funciones de la base (security definer): las respuestas del alta, que
+// hasta el I01a se usaban para proponer los modelos y se tiraban, y los
+// modelos que salen de las reglas de la base.
 
 import { rpc } from '@/modules/conta/services/bd'
 
@@ -22,4 +23,29 @@ export async function guardarRespuestasDelAlta(companyId: string, respuestas: Pa
   }
   if (Object.keys(p).length === 0) return 0
   return rpc<number>('conta_impuesto_datos_del_alta', { p_company: companyId, p_respuestas: p })
+}
+
+/** Lo que devuelve conta_impuesto_obligaciones_calcular por cada modelo. */
+interface ObligacionCalculada {
+  modelo: string
+  presenta: boolean
+  regla: string
+  por_que: string
+  hecho: 'igual' | 'nuevo' | 'cambiado' | 'no_toca' | 'lo_decidio_una_persona'
+}
+
+/**
+ * Escribe los modelos que dicen las reglas de la base (cada uno con su regla,
+ * sus datos y su porqué; lo que decidió una persona no se toca) y devuelve los
+ * que presenta, ordenados, con el porqué de cada uno en una frase.
+ */
+export async function calcularObligaciones(companyId: string): Promise<{ modelos: string[]; porque: string }> {
+  const filas = await rpc<ObligacionCalculada[]>('conta_impuesto_obligaciones_calcular', { p_company: companyId })
+  const presenta = filas.filter((f) => f.presenta).sort((a, b) => a.modelo.localeCompare(b.modelo))
+  return {
+    modelos: presenta.map((f) => f.modelo),
+    porque: presenta.length
+      ? presenta.map((f) => `${f.modelo}: ${f.por_que}`).join(' ')
+      : 'Con lo que me has dicho, no presentas ningún modelo de los que conozco.',
+  }
 }
