@@ -22,6 +22,12 @@ supabase/staging/sql/20261121_s01_logo_empresa_prueba.sql
 #   aplica antes, dentro de su transacción, como la prueba de la M01.
 supabase/migrations/20261121T0130_s01_ejes_analiticos.sql
 supabase/staging/sql/20261121_s01_analitica_prueba.sql
+#   0150 (cambia banco_facturas_recibidas_pendientes, misma firma y contrato): el
+#   asiento de la factura por source_type + source_id, no por la columna que nadie
+#   escribe. De verdad, y su prueba (ROLLBACK): como usuario de A, con y sin
+#   asiento vivo, y la vuelta atrás byte a byte.
+supabase/migrations/20261121T0150_s01_recibidas_asiento_por_origen.sql
+supabase/staging/sql/20261121_s01_recibidas_asiento_prueba.sql
 
 # M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
 # pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)
