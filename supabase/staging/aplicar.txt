@@ -24,7 +24,8 @@ supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql
 
 # C06 · Las pruebas del frente C con carriles (rama conta/c06-pruebas-carriles).
 #   La función del recorrido reconoce al administrador de plataforma de prueba
-#   de su carril, no solo al de la plantilla (create or replace, misma firma).
+#   de su carril, no solo al de la plantilla (create or replace, misma firma),
+#   y reparte la C0009 por turnos entre carriles («ocupada» hasta 10 min).
 #   La cuenta «sola» de la plantilla, con su ejercicio abierto: Inicio pide
 #   cerrar el mes anterior (M01). Solo añade; si ya está, no hace nada.
 supabase/seeds/conta/seed_c06_recorrido_staging.sql
