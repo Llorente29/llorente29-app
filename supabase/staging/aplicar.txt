@@ -21,3 +21,11 @@ supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
 supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
 supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
 supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql
+
+# C06 · Las pruebas del frente C con carriles (rama conta/c06-pruebas-carriles).
+#   La función del recorrido reconoce al administrador de plataforma de prueba
+#   de su carril, no solo al de la plantilla (create or replace, misma firma).
+#   La cuenta «sola» de la plantilla, con su ejercicio abierto: Inicio pide
+#   cerrar el mes anterior (M01). Solo añade; si ya está, no hace nada.
+supabase/seeds/conta/seed_c06_recorrido_staging.sql
+supabase/seeds/conta/seed_c06_sola_ejercicio_staging.sql
