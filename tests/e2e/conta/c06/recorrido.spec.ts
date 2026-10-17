@@ -33,7 +33,8 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { FRENTE, STAGING_URL, anonKey, pedirSesion, type Sesion } from '../sesion'
+import { FRENTE, STAGING_URL, anonKey, pedirSesion, type Sesion, correoDelCarril } from '../sesion'
+import { redQuieta } from '../red'
 import { cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { MARCAS } from '../../../../supabase/functions/_shared/marcas'
@@ -45,7 +46,7 @@ import { contrasenaCambiada, invitacion } from '../../../../supabase/functions/s
 test.skip(FRENTE !== 'c', 'Pruebas del frente C (C06): sus usuarios solo reciben contraseña en las ramas conta/c06*.')
 
 const DIR = 'docs/conta/capturas/c06'
-const PLATAFORMA = 'c06.plataforma@c06-prueba.test'
+const PLATAFORMA = correoDelCarril('c06.plataforma@c06-prueba.test')
 const MARCA = MARCAS.contabilidad
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
@@ -298,7 +299,7 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
   ] as const) {
     await page.goto(ruta)
     await expect(page.locator('.cx-principal')).toBeVisible()
-    await page.waitForLoadState('networkidle')
+    await redQuieta(page)
     await expect(page.getByRole('alert')).toHaveCount(0)
     await sinFolvy(page, titulo)
     await capturar(page, nombre)
