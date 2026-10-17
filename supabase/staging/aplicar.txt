@@ -25,6 +25,11 @@ supabase/staging/sql/20261122_i01_modelo_datos_prueba.sql
 #   y las reglas no se pueden llamar como usuario (otra vez tras 032068bf);
 #   y la IA escribiendo en el perfil no da de baja los modelos (tras ad8ccdd8).
 supabase/staging/sql/20261122_i01_obligaciones_prueba.sql
+#   Pieza 4, certificados: la prueba aplica la 0130 (el almacén con el Vault)
+#   con \i y ROLLBACK: fuera de Foodint no se guarda; Foodint guarda (con una
+#   cuenta de su id creada solo dentro de la transacción); el token de un solo
+#   uso; «solo ver» no presenta; «quitar ahora» borra el secreto del Vault.
+supabase/staging/sql/20261122_i01_certificados_prueba.sql
 
 # M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
 # pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)
