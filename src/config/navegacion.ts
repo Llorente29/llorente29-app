@@ -224,6 +224,8 @@ export const CONTA = {
     bancosPestana: 'bancos/:pestana',
     /** M01 · La muestra de las tres piezas comunes, con datos inventados. Solo fuera de producción (module.tsx). */
     muestraPiezas: 'ajustes/muestra-piezas',
+    /** S01 · El sistema de diseño: tokens y componentes, con datos inventados. Solo fuera de producción (module.tsx). */
+    sistemaDiseno: 'ajustes/sistema-diseno',
   },
 } as const
 

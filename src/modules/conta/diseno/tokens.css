@@ -1,0 +1,102 @@
+/* src/modules/conta/diseno/tokens.css
+ *
+ * S01 · EL ÚNICO SITIO de los colores, la letra, los tamaños, los espacios y
+ * los radios del sistema de diseño. Ningún componente lleva un valor escrito a
+ * mano: lo comprueba tests/unit/modules/conta/s01/diseno-reglas.test.ts.
+ *
+ * Los valores de serie son los del marco N30 (aprobado el 15/10), o sea Folvy
+ * y la marca de pruebas tal como se ven hoy. Una marca con tema (Sumied) pone
+ * encima los suyos desde src/marca/tema.ts, que los saca de marcas.ts (la
+ * identidad) y de diseno/temas.ts (la pintura).
+ *
+ * Los tokens de antes (--cxm-* del marco) son alias de éstos desde el S01; los
+ * --cx-* de las pantallas de antes se quedan como estaban hasta que cada
+ * pantalla pase al esqueleto, y se retiran cuando ya no los lea nadie.
+ */
+
+.cx, .cx-colores, .cxm {
+  /* ── Color ──────────────────────────────────────────────────────────── */
+  --s-tinta: #0E1A2B;            /* Texto principal */
+  --s-apoyo: #5B6678;            /* Etiquetas, ayudas, cabeceras de tabla */
+  --s-fondo: #EEF1F5;            /* Fondo de página */
+  --s-superficie: #FFFFFF;       /* Tarjetas, cabecera, campos */
+  --s-suave: #F7F9FC;            /* Cinta y fondos suaves */
+  --s-borde: #DDE3EB;            /* Tarjetas, botones, separadores */
+  --s-borde-campo: #7A8496;      /* Campos: ≥ 3:1 sobre la superficie y el fondo (C06 R4) */
+  --s-separador: color-mix(in srgb, var(--s-borde) 55%, var(--s-superficie)); /* Entre filas: fino */
+  --s-accion: #2F5BFF;           /* Botón principal, enlaces, pestaña activa */
+  --s-accion-encima: #1F45D6;    /* Acción al pasar el ratón */
+  --s-accion-suave: #EAF0FF;     /* Lo seleccionado */
+  --s-accion-borde: #C9D7FF;     /* Borde de lo seleccionado */
+  --s-acento: #2EE6A8;           /* La IA y lo hecho: SIEMPRE fondo */
+  --s-sobre-accion: #FFFFFF;     /* Texto encima de la acción */
+  --s-ok: #0B7A55;               /* Seguro, hecho */
+  --s-ok-fondo: #E3FBF2;
+  --s-duda: #7A4A00;             /* Duda, pendiente */
+  --s-duda-fondo: #FFE7B8;
+  --s-falta: #A3201A;            /* Falta, error */
+  --s-falta-fondo: #FDECEA;
+  --s-neutro-fondo: #EEF1F5;     /* Píldora neutra */
+  --s-oscuro: var(--s-tinta);    /* Píldora oscura («Experto») */
+  --s-propuesto: #EEF3FF;        /* Lo que propone la máquina */
+  --s-propuesto-borde: #B9C9FF;
+  --s-documento: #E9EDF3;        /* Fondo del panel del documento */
+  --s-resaltado: #FFF3B0;        /* Lo leído en el documento */
+  --s-velo: rgba(14, 26, 43, 0.32);
+  --s-sombra: 0 4px 14px rgba(14, 26, 43, 0.08); /* Solo desplegables y diálogos */
+
+  /* La barra de productos. En Folvy, clara (N30); en Sumied, azul noche. */
+  --s-barra: #F7F9FC;
+  --s-barra-texto: #5B6678;
+  --s-barra-activo: #FFFFFF;
+  --s-barra-activo-texto: #0E1A2B;
+  --s-barra-destacado: #2F5BFF;
+
+  /* ── Letra ──────────────────────────────────────────────────────────── */
+  --s-letra: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
+  --s-letra-cifras: 'Geist Mono Variable', 'Geist Mono', 'SF Mono', Menlo, monospace;
+  --s-t-xs: 12px;                /* Cabeceras de tabla, grupos de la cinta */
+  --s-t-s: 13px;                 /* Apoyo, chips */
+  --s-t-m: 14px;                 /* Texto, botones, campos */
+  --s-t-l: 16px;                 /* Títulos de bloque */
+  --s-t-xl: 18px;                /* Títulos de tarjeta */
+  --s-t-titulo: 24px;            /* Título de página */
+  --s-t-cifra: 28px;             /* Cifras grandes de la bandeja */
+  --s-peso-normal: 400;
+  --s-peso-medio: 500;
+  --s-peso-fuerte: 600;
+  --s-peso-titulo: 700;
+  --s-interlinea: 1.4;
+  --s-espaciado-mayus: 0.06em;   /* Lo que va en mayúsculas pequeñas */
+
+  /* ── Espacios (base 4) ──────────────────────────────────────────────── */
+  --s-0: 0;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-12: 48px;
+
+  /* ── Formas ─────────────────────────────────────────────────────────── */
+  --s-radio-boton: 6px;
+  --s-radio-campo: 5px;
+  --s-radio-bloque: 8px;
+  --s-radio-pildora: 999px;
+  --s-linea: 1px;
+  --s-foco: 0 0 0 2px var(--s-superficie), 0 0 0 4px var(--s-accion);
+
+  /* ── Medidas del esqueleto ──────────────────────────────────────────── */
+  --s-alto-control: 32px;        /* Botones y campos */
+  --s-alto-cabecera: 48px;
+  --s-ancho-barra: 88px;
+  --s-icono: 16px;
+  --s-icono-trazo: 1.75;
+
+  /* ── Densidad (las tablas leen estas dos) ───────────────────────────── */
+  --s-fila: 28px;                /* Compacta: unas 30 filas por pantalla */
+  --s-hueco: 8px;
+}
+.cxm[data-densidad='comoda'], .cx[data-densidad='comoda'] { --s-fila: 40px; --s-hueco: 12px; }

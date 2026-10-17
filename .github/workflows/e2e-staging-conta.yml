@@ -183,7 +183,7 @@ jobs:
             conta/d[0-9]*)              FRENTE=a ;;  # A · facturas recibidas (D01…)
             conta/b[0-9]*)              FRENTE=b ;;  # B · bancos (B01…)
             conta/c06*|conta/f[0-9]*)   FRENTE=c ;;  # C · contabilidad sola y facturas emitidas (C06, F01…)
-            conta/m[0-9]*)              FRENTE=d ;;  # D · el marco nuevo y sus piezas (M01…)
+            conta/m[0-9]*|conta/s[0-9]*) FRENTE=d ;; # D · el marco nuevo, sus piezas y el esqueleto (M01, S01…)
             *)                          FRENTE= ;;
           esac
           if [ -n "${FRENTE_PEDIDO:-}" ]; then
