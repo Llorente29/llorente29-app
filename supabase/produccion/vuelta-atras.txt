@@ -1,14 +1,11 @@
-# Vuelta atrás de la tanda de promociones y envíos (modo «vuelta_atras»), en
-# orden inverso: primero los datos de Foodint (PARA si alguna de las cuatro
-# subcuentas ya tiene apuntes) y después la estructura (PARA si queda algún
-# enlace o un envío aclarado con su liquidación). Las dos funciones vuelven a
-# su huella de antes. No toca ningún asiento.
-# Con la tanda de D aplicada (20261117T0100, conta_motivos_para_validar), esta
-# vuelta atrás NO va sola: la validación y el freno de D llaman a
-# conta_cargos_de_pedidos, de la 0100. Primero se deshace la de D y después
-# esta. La .down.sql de la 0100 para si conta_motivos_para_validar existe.
-# La anterior de este fichero (0760): tests/conta/produccion/vuelta-atras-c06b-recibidas-abiertas-20261016.txt.
-# La de B02 · T1: tests/conta/produccion/vuelta-atras-b02-entrada-20261016.txt.
-cuenta: scripts/conta/produccion/cuentas/promociones-envios.sql
-supabase/vuelta-atras/20261116T0110_c06b_promociones_envios_datos.down.sql
-supabase/vuelta-atras/20261116T0100_c06b_promociones_envios.down.sql
+# Vuelta atrás de la tanda del R03 (modo «vuelta_atras»), en orden inverso:
+# primero los datos (la 0320 devuelve los pedidos como estaban, desde
+# r03_entrega_relleno), después la 0310 (los feeds y el ticket vuelven a su
+# huella de antes) y por último la 0300 (resolve_dispatch byte a byte como en
+# producción, prosrc md5 9d645a51…; PARA si hay direcciones completadas a mano).
+# La anterior de este fichero (C06b):
+# tests/conta/produccion/vuelta-atras-c06b-promociones-envios-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/r03-direccion.sql
+supabase/vuelta-atras/20261118T0320_r03_entrega_datos.down.sql
+supabase/vuelta-atras/20261118T0310_r03_ticket_codigo_quien_reparte.down.sql
+supabase/vuelta-atras/20261118T0300_r03_direccion_incompleta.down.sql

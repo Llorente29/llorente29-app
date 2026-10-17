@@ -10,6 +10,7 @@ import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import OrdersFeed from '../components/OrdersFeed'
 import KdsAlarmOverlay from '@/modules/kds/components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from '@/modules/kds/components/AvailabilityNoticeOverlay'
+import AvisoDireccionFalta from '@/modules/reparto/components/AvisoDireccionFalta'
 
 export default function OrdersFeedPage() {
   const { resolvedLocationId, isConsolidated } = useLocationScope()
@@ -31,8 +32,9 @@ export default function OrdersFeedPage() {
     <>
       {/* Alarma de reparto (banner+sonido): el equipo trabaja desde Pedidos, aquí
           es donde tiene que gritar. Misma superficie que Cocina (kds_alarms). */}
-      <KdsAlarmOverlay locationId={resolvedLocationId} token={null} variant="inline" />
-      <AvailabilityNoticeOverlay locationId={resolvedLocationId} token={null} variant="inline" />
+      <KdsAlarmOverlay locationId={resolvedLocationId} token={null} />
+      <AvisoDireccionFalta locationId={resolvedLocationId} token={null} />
+      <AvailabilityNoticeOverlay locationId={resolvedLocationId} token={null} />
       <OrdersFeed locationId={resolvedLocationId} accountId={activeAccountId} />
     </>
   )
