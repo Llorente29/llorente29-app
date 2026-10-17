@@ -14,3 +14,8 @@ supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
 supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
 supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
 supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql
+
+# C06b · El nombre del PDF de un asiento lo limpia la base (rama conta/c06b-recibida-nombre).
+# La prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
+# staging no cambia.
+supabase/staging/sql/20261120_c06b_nombre_documento_prueba.sql
