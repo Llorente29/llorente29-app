@@ -135,7 +135,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
           </main>
         </div>
         {movil && <BarraInferior productos={productos} activo={producto?.id ?? null} solo={solo} />}
-        {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={!solo && !sinPregunta} />}
+        {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={!solo && !sinPregunta} ctx={ctxListo ? ctx : undefined} />}
       </div>
     </MarcoContexto.Provider>
   )

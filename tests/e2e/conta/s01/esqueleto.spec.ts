@@ -401,6 +401,35 @@ test('Asientos › Recibida (maqueta 3): la misma factura que en Compras y gasto
   expect(errores).toEqual([])
 })
 
+test('Ctrl K es la paleta de órdenes: «cobro» abre Tesorería y «mayor 57200001» su mayor', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page, errores)
+  await page.goto('/conta/inicio')
+  await expect(page.locator('.s-cab-empresa')).toBeVisible({ timeout: 30_000 })
+  const abrir = async () => {
+    if (lado(page) === 'movil') await page.getByRole('button', { name: 'Buscar', exact: true }).click()
+    else await page.keyboard.press('Control+k')
+    const d = page.getByRole('dialog', { name: 'Buscar todo' })
+    await expect(d).toBeVisible()
+    return d
+  }
+  let dialogo = await abrir()
+  await dialogo.getByLabel('Qué buscas').fill('cobro')
+  const tesoreria = dialogo.getByRole('group', { name: 'Opciones' }).getByRole('option', { name: /Tesorería.*Contabilidad › Asientos/ })
+  await expect(tesoreria).toBeVisible()
+  await tesoreria.click()
+  await expect(page.getByRole('heading', { name: 'Nuevo cobro o pago' })).toBeVisible({ timeout: 30_000 })
+
+  dialogo = await abrir()
+  await dialogo.getByLabel('Qué buscas').fill('mayor 57200001')
+  const mayor = dialogo.getByRole('group', { name: 'Opciones' }).getByRole('option', { name: /Mayor de la 57200001/ })
+  await expect(mayor).toBeVisible()
+  await mayor.click()
+  await expect(page).toHaveURL(/\/conta\/plan\/57200001$/, { timeout: 30_000 })
+  expect(errores).toEqual([])
+})
+
 test('la cinta se oculta, se recuerda y vuelve (nunca desaparece sin decir dónde está)', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')
