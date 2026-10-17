@@ -123,7 +123,7 @@ describe('el workflow', () => {
     }
     expect(WF).toMatch(/pull-requests: write/)
   })
-  it('un e2e en marcha sigue sin cancelarse', () => {
-    expect(WF).toMatch(/cancel-in-progress: false/)
+  it('un e2e en marcha solo lo cancela un push más nuevo de su rama (W02, 17/10)', () => {
+    expect(WF).toContain("cancel-in-progress: ${{ github.event_name == 'push' }}")
   })
 })
