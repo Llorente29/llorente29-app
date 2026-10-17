@@ -22,11 +22,20 @@ type Carga = { estado: 'cargando' } | { estado: 'error'; error: string } | { est
 
 const ORDEN = { sin_asignar: 0, sin_banco: 1, asignada: 2 } as const
 
+// Lo último leído de cada plataforma, por cuenta, empresa y canal. Si la ficha
+// vuelve a montar la tarjeta (lo hace al guardar, en el ordenador), se enseña
+// eso al momento y se vuelve a leer detrás, en vez de un «Leyendo…» en blanco.
+const ULTIMA = new Map<string, { tiendas: TiendaPlataforma[]; marcas: MarcaOpcion[] }>()
+
 export function SusTiendas() {
   const { ficha, accountId, companyId, avisar } = useTercero()
   const { rolPlataforma } = papelesDe(ficha)
   const canal = rolPlataforma?.channelId ?? null
-  const [carga, setCarga] = useState<Carga>({ estado: 'cargando' })
+  const clave = `${accountId}|${companyId ?? ''}|${canal ?? ''}`
+  const [carga, setCarga] = useState<Carga>(() => {
+    const u = ULTIMA.get(clave)
+    return u ? { estado: 'lista', ...u } : { estado: 'cargando' }
+  })
   const [vuelta, setVuelta] = useState(0)
   const recargar = useCallback(() => setVuelta((v) => v + 1), [])
 
@@ -34,10 +43,10 @@ export function SusTiendas() {
     if (!companyId || !canal) return
     let vivo = true
     leerTiendas(accountId, companyId, canal)
-      .then((r) => { if (vivo) setCarga({ estado: 'lista', ...r }) })
+      .then((r) => { ULTIMA.set(clave, r); if (vivo) setCarga({ estado: 'lista', ...r }) })
       .catch((e: unknown) => { if (vivo) setCarga({ estado: 'error', error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
-  }, [accountId, companyId, canal, vuelta])
+  }, [accountId, companyId, canal, clave, vuelta])
 
   if (!companyId || !canal) return null
   return (
@@ -60,7 +69,8 @@ function Lista({ tiendas, marcas, alGuardar }: { tiendas: TiendaPlataforma[]; ma
           <span>TIENDA · como la nombra la plataforma</span><span>MARCA</span><span>LOCAL</span><span>CUENTA DE COBRO</span><span />
         </div>
       )}
-      {ordenadas.map((t) => <FilaTienda key={t.id} t={t} marcas={marcas} alGuardar={alGuardar} />)}
+      {/* La clave lleva lo guardado: si cambia en la base, la fila arranca de ello. */}
+      {ordenadas.map((t) => <FilaTienda key={`${t.id}|${t.marcaId}|${t.localId}|${t.bancoId}`} t={t} marcas={marcas} alGuardar={alGuardar} />)}
     </>
   )
 }
