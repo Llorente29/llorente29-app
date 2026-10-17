@@ -81,6 +81,9 @@ test('A · Sus tiendas: cada tienda con su marca, su local y su cuenta de cobro;
   await expect(page.getByText('Guardado: «Burger Norte (Calle Inventada 7, Madrid, ES, 28001)» es Burger Norte en Norte Centro; cobra en Cuenta principal ···1332.', { exact: true })).toBeVisible()
   expect(asignadas).toEqual([expect.objectContaining({ p_store: BURGER, p_marca: MARCA_BURGER, p_local: 'c01a0000-0000-4000-8000-0000000000a2', p_banco: '3315cb3a-ad30-44ea-958b-253b1ae8811f' })])
   await expect(burger.getByText('Asignada')).toBeVisible()
+  // La captura, con la lista ya leída de nuevo (la de 674ef9b salió en «Leyendo sus tiendas…»).
+  await expect(tarjeta.getByText('Leyendo sus tiendas…')).toHaveCount(0)
+  await expect(tarjeta.getByTestId(`tienda-${BURGER}`).getByText('Asignada')).toBeVisible()
   await capturar(page, 'tiendas-guardada')
 
   expect(otras).toEqual([])

@@ -41,7 +41,7 @@ export function SusTiendas() {
 
   if (!companyId || !canal) return null
   return (
-    <section className="cx-tarjeta" aria-label="Sus tiendas">
+    <section className="cx-tarjeta cxt-tiendas" aria-label="Sus tiendas">
       <h2 className="cx-tarjeta-titulo">Sus tiendas</h2>
       {carga.estado === 'cargando' && <p className="cxt-liq-explica">Leyendo sus tiendas…</p>}
       {carga.estado === 'error' && <div className="cx-error" role="alert">{carga.error}</div>}
