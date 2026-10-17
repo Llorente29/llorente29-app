@@ -148,6 +148,8 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
     await expect(entendido).toBeVisible()
     // Y en la MISMA burbuja, la pregunta siguiente (el texto es de la burbuja entera).
     await expect(entendido).toContainText('Ahora, tus impuestos. ¿Presentas el IVA cada tres meses?')
+    // S01: una dark kitchen es hostelería; el alta lo marca y dice dónde se cambia.
+    await expect(entendido).toContainText('La marco como hostelería: salen Liquidaciones, las plataformas y los socios de marca. Se cambia en Ajustes › Empresa.')
     await expect(log(page).getByText(/^Apuntad[oa]\.$/)).toHaveCount(0)
     await hastaLasCuentas(page)
 

@@ -75,6 +75,18 @@ El inventario es el del paso 1 (`S01_paso1_comprobaciones.md`, §2).
   hostelería (inventario, §3).
 - La e2e de la cuenta D la pone en «Sí», mira que sale Liquidaciones y la deja en «No».
 
+### El alta pone la marca de hostelería
+
+- Al decir a qué se dedica la empresa, el alta pone `company.is_hospitality`
+  y lo dice en la conversación («La marco como hostelería: salen… Se cambia en
+  Ajustes › Empresa.»). Volver a «A qué te dedicas» mientras el alta está a
+  medias la vuelve a poner.
+- Es hostelería lo que da de comer, de beber o alojamiento: los grupos
+  restaurante, bar, reparto, catering, heladería y alojamiento; a mano, IAE 67 y
+  68 (sección 1) y CNAE 55 y 56. Una panadería u obrador, no.
+- Medido en staging: en `iae_heading` el código lleva la sección delante
+  («1_671»). La prueba está escrita contra esos códigos (regla 31).
+
 ### La cinta: el título de cada grupo, debajo (Julio, 17/10)
 
 Medido a 1440 px: con el título al lado de sus botones, Bancos pedía ~1.365 px
@@ -110,7 +122,6 @@ e2e de la B01 lo comprueba.
 ## Queda (paso 3)
 
 Lo de hostelería que queda en otras pantallas (Ventas, textos del diario,
-fichas, alta), Ajustes (el logo de la empresa, Registro de la IA), la marca al
-dar de alta, Definiciones › Analítica, la vista
+fichas), Ajustes (el logo de la empresa, Registro de la IA), Definiciones › Analítica, la vista
 Recibida en Contabilidad › Asientos, `?tipo=` en el asiento nuevo y el
 `journal_entry_id` (paso 1).

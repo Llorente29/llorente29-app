@@ -93,3 +93,10 @@ export function fraseCuentas(plan: 'pymes' | 'normal', digitos: number, ejercici
 export function fraseDuda(textoDuda: string): Frase {
   return [{ t: textoDuda }]
 }
+
+/** S01 · Lo que se ha puesto de la marca de hostelería, y dónde se cambia (regla 8). */
+export function fraseHosteleria(es: boolean): Frase {
+  return es
+    ? [{ t: 'La marco como ' }, n('hostelería'), { t: ': salen Liquidaciones, las plataformas y los socios de marca. Se cambia en Ajustes › Empresa.' }]
+    : [{ t: 'No la marco como ' }, n('hostelería'), { t: '. Si lo es, se cambia en Ajustes › Empresa.' }]
+}
