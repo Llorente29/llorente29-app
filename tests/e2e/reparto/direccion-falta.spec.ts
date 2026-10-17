@@ -12,6 +12,7 @@
 //   R03C · sin calle ni punto, no ha salido     → aviso rojo con el motivo y el teléfono; ticket «SIN DIRECCIÓN»
 //   R03D · sin calle, con punto, ha salido      → en la tablet, solo la línea, sin botón; el aviso no tapa «Listo»
 //   R03E · sin calle, con punto, ha salido      → en la lista de Despacho, en gris, sin completar
+//   R03K · sin calle, con punto, ha salido      → la completa la tablet, con el teclado abierto
 //   R03U · Uber con dirección y código          → tarjeta y ticket con «Tel. … · código …»
 //   R03V · Uber sin calle, punto ni cargo       → la reparte Uber, fuera de zona: ni aviso ni Catcher
 //   7B000 · Uber sin calle, punto ni cargo (R02) → lo mismo, por la regla
@@ -65,6 +66,7 @@ const ID: Record<string, string> = {
   R03E: 'e0300000-0000-4000-8000-0000000000a5', R03U: 'e0300000-0000-4000-8000-0000000000a6',
   R03V: 'e0300000-0000-4000-8000-0000000000a7', R03T: 'e0300000-0000-4000-8000-0000000000a8',
   R03M: 'e0300000-0000-4000-8000-0000000000a9', R03N: 'e0300000-0000-4000-8000-0000000000b1',
+  R03K: 'e0300000-0000-4000-8000-0000000000b2',
   '7B000': 'e0200000-0000-4000-8000-0000000052a1',
 }
 const tarjeta = (page: Page, codigo: string) => page.locator(`[data-testid="tarjeta-pedido"][data-sale-id="${ID[codigo]}"]`)
@@ -113,12 +115,13 @@ test('ordenador: sin dirección completa, ha salido a Catcher: una línea que in
   await b.getByTestId('completar-direccion-casilla').fill('Calle Pegada de Prueba, 2, Piso 3, Puerta A, Portal B')
   await b.getByRole('button', { name: 'Guardar' }).click()
   // UNA línea: quién y el ticket reimpreso (hay impresora de bolsa en Norte
-  // Centro), «Reimprimir» y el repartidor con «Llamar». Sin bloque que repita la dirección.
+  // Centro) y «Reimprimir». Sin bloque que repita la dirección y sin el
+  // repartidor: su «Llamar» sigue en su fila de reparto de siempre.
   const hecho = b.getByTestId('completar-direccion-resultado')
   await expect(hecho).toContainText(/Dirección completada por .+ · ticket reimpreso/)
   await expect(hecho.getByRole('button', { name: 'Reimprimir' })).toBeVisible()
-  await expect(hecho.getByTestId('completar-direccion-llamar')).toHaveText('Repartidor de Prueba · Llamar')
-  await expect(hecho.getByTestId('completar-direccion-llamar')).toHaveAttribute('href', 'tel:+34600000090')
+  await expect(hecho).not.toContainText('Repartidor de Prueba')
+  await expect(b.getByRole('link', { name: /Llamar/ }).first()).toBeVisible()
   await expect(b.getByTestId('completar-direccion-nota')).toHaveCount(0)
   await expect(b.getByTestId('aviso-sin-direccion')).not.toContainText('Calle Pegada de Prueba')
   await expect(b.getByTestId('aviso-sin-direccion-texto')).toHaveCount(0)
@@ -254,18 +257,22 @@ test('ordenador: Uber sin calle, punto ni cargo (R03V y el 7B000) → la reparte
   expect(codigos).not.toContain('7B000')
 })
 
-test('tablet: la misma línea, sin acciones en la tarjeta; el aviso rojo, encima de los pedidos y sin tapar «Listo»', async ({ page }, info) => {
+test('tablet: la misma línea y «Completar dirección» grande; el aviso rojo, encima de los pedidos y sin tapar «Listo»', async ({ page }, info) => {
   const movil = info.project.name === 'movil'
   if (!movil) await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto(`/estacion?token=${TOKEN_CENTRO}`)
   const d = tarjeta(page, 'R03D')
   await expect(d.getByTestId('aviso-sin-direccion-texto')).toHaveText(HA_SALIDO)
   await expect(d.getByRole('link', { name: 'Ver el punto del mapa' })).toBeVisible()
-  await expect(d.getByRole('button', { name: 'Completar dirección' })).toHaveCount(0)
+  // También desde la cocina (Julio, 17/10), y para el dedo: 48 px de alto como mínimo.
+  const boton = d.getByRole('button', { name: 'Completar dirección' })
+  await expect(boton).toBeVisible()
+  expect((await boton.boundingBox())!.height).toBeGreaterThanOrEqual(48)
   await expect(page.getByTestId('aviso-direccion-casilla')).toHaveCount(0)
   const c = noHaSalido(page, 'R03C')
   await expect(c.getByTestId('aviso-motivo')).toHaveText(MOTIVO_R03C)
   await expect(c.getByTestId('aviso-llamar-cliente')).toHaveText('Tel. +34600000003 · Llamar')
+  await expect(c.getByRole('button', { name: 'Completar dirección' })).toBeVisible()
   // El aviso va en su sitio, no flotando: el «Listo» de las tarjetas se ve y se puede pulsar.
   const aviso = page.getByTestId('aviso-direccion-falta')
   expect(await aviso.evaluate(el => getComputedStyle(el).position)).not.toBe('fixed')
@@ -276,6 +283,32 @@ test('tablet: la misma línea, sin acciones en la tarjeta; el aviso rojo, encima
   await page.evaluate(() => document.fonts.ready)
   await d.screenshot({ path: `${DIR}/tarjeta-tablet${movil ? '-movil' : ''}.png` })
   await page.screenshot({ path: `${DIR}/tablet${movil ? '-movil' : ''}.png`, fullPage: false })
+  if (movil) return // la completa una vez
+
+  // Completar desde la tablet (R03K). Con el teclado abierto la pantalla de la
+  // tablet se queda en algo menos de la mitad de alto: se simula así (un
+  // navegador sin pantalla no saca teclado) y el campo tiene que verse entero.
+  const k = tarjeta(page, 'R03K')
+  await k.getByRole('button', { name: 'Completar dirección' }).click()
+  await page.setViewportSize({ width: 1280, height: 380 })
+  const casilla = k.getByTestId('completar-direccion-casilla')
+  await expect(casilla).toBeFocused()
+  await casilla.fill('Calle Tablet de Prueba, 7, Piso 1, Puerta B')
+  await page.waitForTimeout(600) // el campo se coloca al centro tras abrirse el teclado
+  const caja = (await casilla.boundingBox())!
+  expect(caja.height).toBeGreaterThanOrEqual(50)
+  expect(caja.y).toBeGreaterThanOrEqual(0)
+  expect(caja.y + caja.height).toBeLessThanOrEqual(380)
+  expect(await seVeEntero(page, casilla)).toBe(true)
+  await page.screenshot({ path: `${DIR}/tablet-completar-teclado.png`, fullPage: false })
+  await k.getByRole('button', { name: 'Guardar' }).click()
+  // Igual que en el ordenador: la marca de quién (la tablet) y el ticket reimpreso.
+  await expect(k.getByTestId('completar-direccion-resultado'))
+    .toContainText('Dirección completada por tablet · R03 e2e Norte Centro · ticket reimpreso')
+  await expect(k.getByTestId('completar-direccion-resultado').getByRole('button', { name: 'Reimprimir' })).toBeVisible()
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await k.scrollIntoViewIfNeeded()
+  await k.screenshot({ path: `${DIR}/tarjeta-tablet-completada.png` })
 })
 
 test('Despacho: la lista «Sin dirección completa» de hoy, una frase por pedido y un botón', async ({ page }, info) => {

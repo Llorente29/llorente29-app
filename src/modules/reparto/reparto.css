@@ -157,6 +157,10 @@
 .cx-cd-hecho-texto { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--cx-verde-oscuro); }
 .cx-cd-nota { flex-basis: 100%; font-size: 12.5px; color: var(--cx-apoyo); }
 .cx-cd-error { flex-basis: 100%; margin: 4px 0 0; font-size: 12.5px; font-weight: 600; color: var(--cx-rojo); }
+/* En la tablet (Julio, 17/10): para el dedo. 48 px de alto como mínimo. */
+.cx-cd-boton.cx-cd-grande { height: 48px; padding: 0 18px; border-radius: 12px; font-size: 17px; font-weight: 700; gap: 8px; }
+.cx-cd-casilla.cx-cd-grande { height: 54px; border-radius: 12px; font-size: 18px; padding: 0 14px; }
+.cx-cd-hecho-texto.cx-cd-grande { font-size: 15px; }
 /* La lista de Despacho: lo que necesita a alguien, en rojo y arriba; lo que ha salido, en gris. */
 .cx-lsd-rojo { background: var(--cx-rojo-suave); border-left: 4px solid var(--cx-rojo); }
 .cx-lsd-rojo .cx-lsd-frase { color: var(--cx-rojo); font-weight: 700; }

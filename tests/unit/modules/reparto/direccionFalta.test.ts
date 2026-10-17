@@ -55,10 +55,9 @@ describe('«Completar dirección»: una línea', () => {
   it('sin Catcher todavía, local en automático y resolutor en Catcher: se manda', () => {
     expect(siguientePaso(base)).toEqual({ tipo: 'mandar' })
   })
-  it('ya en Catcher con repartidor: su nombre para «Llamar», sin más texto', () => {
-    expect(siguientePaso({ ...base, ya_en_catcher: true, rider_name: 'Ana Prueba', rider_phone: '+34600000009' })).toEqual({
-      tipo: 'mensaje', texto: '', llamar: { nombre: 'Ana Prueba', telefono: '+34600000009' },
-    })
+  it('ya en Catcher con repartidor: nada que añadir (su «Llamar» está en su fila de reparto)', () => {
+    expect(siguientePaso({ ...base, ya_en_catcher: true, rider_name: 'Ana Prueba', rider_phone: '+34600000009' }))
+      .toEqual({ tipo: 'mensaje', texto: '' })
   })
   it('ya en Catcher sin repartidor: nada que añadir', () => {
     expect(siguientePaso({ ...base, ya_en_catcher: true })).toEqual({ tipo: 'mensaje', texto: '' })

@@ -171,7 +171,7 @@ export interface ResultadoFijar {
  */
 export type SiguientePaso =
   | { tipo: 'mandar' }
-  | { tipo: 'mensaje'; texto: string; llamar?: { nombre: string; telefono: string } }
+  | { tipo: 'mensaje'; texto: string }
 
 /** El número con el que se busca el pedido en el portal de la plataforma. */
 export function numeroParaElPortal(p: Pick<PedidoSinDireccion, 'platform_order_ref' | 'code'>): string | null {
@@ -198,24 +198,17 @@ export function enlaceAlMapa(lat: number | string | null, lng: number | string |
  * Después de guardar la dirección: ¿se manda a Catcher? Solo si el resolutor
  * dice Catcher, el local despacha solo y Catcher aún no lo tiene. Si ya lo
  * tiene, la dirección se le dicta al repartidor (su API no deja cambiar un
- * pedido creado): sale su nombre con «Llamar». La línea de confirmación la
+ * pedido creado), desde su fila de reparto de siempre. La línea de confirmación la
  * pone lineaDeCompletada; aquí solo lo que hay que añadir, si algo.
  */
 export function siguientePaso(r: ResultadoFijar): SiguientePaso {
-  const llamar = repartidor(r.rider_name, r.rider_phone)
-  if (r.ya_en_catcher) return { tipo: 'mensaje', texto: '', ...(llamar ? { llamar } : {}) }
+  if (r.ya_en_catcher) return { tipo: 'mensaje', texto: '' }
   if (!r.carrier) return { tipo: 'mensaje', texto: `No se manda a Catcher: ${r.reason ?? 'sin motivo'}.` }
   if (r.dispatch_mode && r.dispatch_mode !== 'auto') {
     return { tipo: 'mensaje', texto: 'Este local despacha a mano: pulsa «Despachar» en el pedido y sale con ella.' }
   }
   if (r.carrier !== 'catcher') return { tipo: 'mensaje', texto: 'Lo reparte la flota propia: ya la tiene.' }
   return { tipo: 'mandar' }
-}
-
-/** El repartidor, si Catcher ya lo ha asignado y hay a quién llamar. */
-export function repartidor(nombre: string | null | undefined, telefono: string | null | undefined): { nombre: string; telefono: string } | null {
-  const n = (nombre ?? '').trim(), t = (telefono ?? '').trim()
-  return n && t ? { nombre: n, telefono: t } : null
 }
 
 /** Lo que pasó con el ticket al reimprimirlo: cuántos trabajos, o el fallo. */

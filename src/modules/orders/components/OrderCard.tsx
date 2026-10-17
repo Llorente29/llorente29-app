@@ -302,10 +302,11 @@ function GreenCallPill({ phone, label = true, big = false }: { phone: string; la
 //     «No ha salido a Catcher · llama al cliente y completa la dirección», con
 //     el teléfono del cliente y «Llamar»;
 //   · completada → UNA línea, «Dirección completada por <nombre>», con
-//     «Reimprimir» y el repartidor con «Llamar» (CompletarDireccion).
-// En el ordenador (oficina o encargado), el botón pequeño «Completar dirección».
+//     «Reimprimir» (CompletarDireccion); el repartidor, en su fila de siempre.
+// «Completar dirección» en el ordenador y en la tablet (Julio, 17/10: también
+// desde la cocina); en la tablet, grande para el dedo.
 function AvisoSinDireccion(
-  { order, token = null, puedeCompletar = false, onCompletada }: { order: OrderFeedItem; token?: string | null; puedeCompletar?: boolean; onCompletada?: () => void },
+  { order, token = null, onCompletada }: { order: OrderFeedItem; token?: string | null; onCompletada?: () => void },
 ) {
   const [coords, setCoords] = useState<CoordenadasEntrega | null>(null)
   // Recién completada aquí: la confirmación (y «Llamar») sigue a la vista
@@ -355,11 +356,10 @@ function AvisoSinDireccion(
           Ver el punto del mapa
         </a>
       )}
-      {(hecha || (puedeCompletar && abierto)) && (
+      {(hecha || abierto) && (
         <div className={hecha ? '' : 'mt-1.5 pl-[22px]'}>
           <CompletarDireccion saleId={order.sale_id} token={token}
             completada={completada ? { por: order.delivery_address_fixed_by ?? null } : null}
-            riderName={order.rider_name} riderPhone={order.rider_phone}
             onGuardada={() => { setRecien(true); onCompletada?.() }} />
         </div>
       )}
@@ -618,16 +618,11 @@ interface OrderCardProps {
    */
   minutosDeLaFase?: number | null
   nivelDeLaFase?: 'fresh' | 'warn' | null
-  /**
-   * La web con sesión (oficina o encargado; no la tablet de cocina). R03: le da
-   * el botón «Completar dirección» a los pedidos sin dirección completa. Tras
-   * guardar, refrescar.
-   */
-  puedeDecidirReparto?: boolean
+  /** R03: tras «Completar dirección» (ordenador o tablet), refrescar. */
   onRepartoCambiado?: () => void
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase, puedeDecidirReparto = false, onRepartoCambiado, token = null }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase, onRepartoCambiado, token = null }: OrderCardProps) {
   const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
   const now = nowMs
   const [busy, setBusy] = useState(false)
@@ -810,7 +805,7 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
 
       <DeliveryRow order={order} />
       {esRepartoPropio(order.service_type) && !(order.delivery_address ?? '').trim() && (
-        <AvisoSinDireccion order={order} token={token} puedeCompletar={puedeDecidirReparto} onCompletada={onRepartoCambiado} />
+        <AvisoSinDireccion order={order} token={token} onCompletada={onRepartoCambiado} />
       )}
 
       <div className="px-4 py-3 pl-5 border-t border-default">

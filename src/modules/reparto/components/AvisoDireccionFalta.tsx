@@ -167,7 +167,7 @@ export default function AvisoDireccionFalta({ locationId, token = null }: AvisoD
                   </a>
                 )}
                 <div className="rounded-xl bg-white p-2">
-                  <CompletarDireccion saleId={p.sale_id} token={token} riderName={p.rider_name} riderPhone={p.rider_phone}
+                  <CompletarDireccion saleId={p.sale_id} token={token}
                     onGuardada={(resumen, fallo) => { anotar(p, resumen, fallo); pollRef.current?.wake() }} />
                 </div>
               </div>

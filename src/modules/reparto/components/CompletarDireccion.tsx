@@ -7,16 +7,15 @@
 // Al guardar, la dirección queda en el pedido con la marca de quién la
 // escribió (fijar_direccion_entrega), se reimprime el ticket de la bolsa con
 // ella y queda UNA línea (Julio, 17/10): «Dirección completada por <nombre> ·
-// ticket reimpreso», con «Reimprimir» y, si Catcher ya ha asignado
-// repartidor, su nombre con «Llamar» para dictársela (la API de Catcher no
-// deja cambiar un pedido creado). Sin bloque que repita la dirección.
+// ticket reimpreso», con «Reimprimir». Sin bloque que repita la dirección y
+// sin el repartidor: su «Llamar» ya está en su fila de reparto de siempre.
+// En la tablet (con token) también: botones grandes para el dedo y el campo se
+// coloca en el centro al abrirse el teclado, para que no lo tape.
 // Lo que dice sale de lib/direccionFalta.ts (regla 8: con contenido).
 import { useState } from 'react'
-import { Check, Phone, Printer } from 'lucide-react'
+import { Check, Printer } from 'lucide-react'
 import { reprintOrder } from '@/modules/orders/services/ordersFeedService'
-import {
-  enlaceTel, lineaDeCompletada, repartidor, siguientePaso, type Reimpresion,
-} from '../lib/direccionFalta'
+import { lineaDeCompletada, siguientePaso, type Reimpresion } from '../lib/direccionFalta'
 import { fijarDireccion, mandarACatcher } from '../services/direccionFaltaService'
 import '@/modules/conta/estilo/tokens.css'
 import '../reparto.css'
@@ -27,9 +26,6 @@ export interface CompletarDireccionProps {
   token?: string | null
   /** Si ya está completada (al volver a cargar): quién, para la misma línea. */
   completada?: { por: string | null } | null
-  /** El repartidor que ya conoce el pedido, si lo hay. */
-  riderName?: string | null
-  riderPhone?: string | null
   /** Tras guardar: refrescar lo de alrededor. Recibe la línea que se ha dicho (y si fue un fallo). */
   onGuardada?: (resumen: string, fallo: boolean) => void
 }
@@ -40,7 +36,6 @@ interface Hecho {
   /** Algo más que decir (no ha salido, local a mano…). */
   nota?: string
   error?: boolean
-  llamar?: { nombre: string; telefono: string } | null
 }
 
 async function reimprimir(saleId: string, token: string | null): Promise<Reimpresion> {
@@ -52,8 +47,10 @@ async function reimprimir(saleId: string, token: string | null): Promise<Reimpre
 }
 
 export default function CompletarDireccion(
-  { saleId, token = null, completada = null, riderName = null, riderPhone = null, onGuardada }: CompletarDireccionProps,
+  { saleId, token = null, completada = null, onGuardada }: CompletarDireccionProps,
 ) {
+  // En la tablet (con token): para el dedo.
+  const g = token ? ' cx-cd-grande' : ''
   const [abierto, setAbierto] = useState(false)
   const [texto, setTexto] = useState('')
   const [guardando, setGuardando] = useState(false)
@@ -81,7 +78,7 @@ export default function CompletarDireccion(
         nota = paso.texto
       }
       const ticket = await reimprimir(saleId, token)
-      setHecho({ por: r.por ?? null, ticket, nota, error: fallo, llamar: paso.tipo === 'mensaje' ? paso.llamar ?? null : null })
+      setHecho({ por: r.por ?? null, ticket, nota, error: fallo })
       setAbierto(false); setTexto('')
       onGuardada?.([lineaDeCompletada(r.por ?? null, ticket), nota].filter(Boolean).join('. '), fallo)
     } catch (e) {
@@ -100,12 +97,11 @@ export default function CompletarDireccion(
   }
 
   const mostrar: Hecho | null = hecho ?? (completada ? { por: completada.por, ticket: null } : null)
-  const llamar = mostrar?.llamar ?? repartidor(riderName, riderPhone)
 
   return (
     <div className="cx-colores" data-testid="completar-direccion" onClick={e => e.stopPropagation()}>
       {!abierto && !mostrar && (
-        <button type="button" className="cx-cd-boton" onClick={() => setAbierto(true)}>
+        <button type="button" className={`cx-cd-boton${g}`} onClick={() => setAbierto(true)}>
           Completar dirección
         </button>
       )}
@@ -117,17 +113,22 @@ export default function CompletarDireccion(
               value={texto}
               onChange={e => setTexto(e.target.value)}
               placeholder="Calle, número, piso y portal"
-              className="cx-cd-casilla"
+              className={`cx-cd-casilla${g}`}
               data-testid="completar-direccion-casilla"
+              autoComplete="off"
+              enterKeyHint="done"
+              onKeyDown={e => { if (e.key === 'Enter' && texto.trim()) void guardar() }}
+              // Al abrirse el teclado la pantalla encoge: el campo, al centro de lo que queda.
+              onFocus={e => { const el = e.currentTarget; window.setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350) }}
               autoFocus
             />
           </label>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button type="button" className="cx-cd-boton cx-cd-boton-pri"
+            <button type="button" className={`cx-cd-boton cx-cd-boton-pri${g}`}
               onClick={() => void guardar()} disabled={guardando || texto.trim().length === 0}>
               {guardando ? 'Guardando…' : 'Guardar'}
             </button>
-            <button type="button" className="cx-cd-boton"
+            <button type="button" className={`cx-cd-boton${g}`}
               onClick={() => { setAbierto(false); setTexto('') }} disabled={guardando}>
               Cancelar
             </button>
@@ -138,18 +139,13 @@ export default function CompletarDireccion(
         {error && <p className="cx-cd-error" data-testid="completar-direccion-error">{error}</p>}
         {mostrar && (
           <div className="cx-cd-hecho" data-testid="completar-direccion-resultado">
-            <span className="cx-cd-hecho-texto">
+            <span className={`cx-cd-hecho-texto${g}`}>
               <Check size={14} strokeWidth={3} /> {lineaDeCompletada(mostrar.por, mostrar.ticket)}
             </span>
-            <button type="button" className="cx-cd-boton" onClick={() => void otraVez()} disabled={reimprimiendo}
+            <button type="button" className={`cx-cd-boton${g}`} onClick={() => void otraVez()} disabled={reimprimiendo}
               data-testid="completar-direccion-reimprimir">
               <Printer size={13} /> {reimprimiendo ? 'Reimprimiendo…' : 'Reimprimir'}
             </button>
-            {llamar && (
-              <a href={enlaceTel(llamar.telefono)} className="cx-cd-boton cx-cd-boton-pri" data-testid="completar-direccion-llamar">
-                <Phone size={13} /> {llamar.nombre} · Llamar
-              </a>
-            )}
             {mostrar.nota && (
               <span className={mostrar.error ? 'cx-cd-error' : 'cx-cd-nota'} data-testid="completar-direccion-nota">{mostrar.nota}</span>
             )}

@@ -74,7 +74,7 @@ export default function ListaSinDireccion({ locationId }: { locationId: string }
                   </a>
                 )}
                 {(puedeCompletar(p) || recien.has(p.sale_id)) && (
-                  <CompletarDireccion saleId={p.sale_id} riderName={p.rider_name} riderPhone={p.rider_phone}
+                  <CompletarDireccion saleId={p.sale_id}
                     onGuardada={() => { setRecien(prev => new Set(prev).add(p.sale_id)); void cargar() }} />
                 )}
               </li>

@@ -89,6 +89,7 @@ delete from public.delivery_policy_suggestion where account_id = 'c01a0000-0000-
 --   R03C · sin calle ni punto         → no ha podido salir: aviso rojo con el motivo y el teléfono
 --   R03D · sin calle, con punto       → la tablet: ha salido, solo la línea informativa, sin botón
 --   R03E · sin calle, con punto       → en la lista de Despacho, ha salido, sin completar
+--   R03K · sin calle, con punto       → ha salido; la completa la tablet (Julio, 17/10)
 -- (Nada sale a Catcher de verdad: «ha salido» es el estado que deja
 -- catcher-dispatch, puesto a mano con un pedido de Catcher inventado. El motivo
 -- del R03C es el de resolve_dispatch en un local automático.)
@@ -150,6 +151,10 @@ begin
      'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
      25.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03E', 'R03E', '100000000035',
      '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":null,"latitude":"40.4120","longitude":"-3.6980"}}', '+34600000005'),
+    ('e0300000-0000-4000-8000-0000000000b2', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     19.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03K', 'R03K', '100000000037',
+     '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":null,"latitude":"40.4130","longitude":"-3.6970"}}', '+34600000007'),
     ('e0300000-0000-4000-8000-0000000000a6', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
      'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '6 minutes', now() - interval '6 minutes',
      26.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 5, 28000 Madrid, Spain, Unit: 3C', 'Uber Eats', 'R03U', 'R03U', null,
@@ -174,7 +179,7 @@ begin
          rider_name = case when pos_short_code = 'R03B' then 'Repartidor de Prueba' end,
          rider_phone = case when pos_short_code = 'R03B' then '+34600000090' end
    where id in ('e0300000-0000-4000-8000-0000000000a2', 'e0300000-0000-4000-8000-0000000000a4',
-                'e0300000-0000-4000-8000-0000000000a5')
+                'e0300000-0000-4000-8000-0000000000a5', 'e0300000-0000-4000-8000-0000000000b2')
      and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
   perform set_config('folvy.reparto_tal_cual', '', true);
