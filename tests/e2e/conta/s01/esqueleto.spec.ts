@@ -186,6 +186,58 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
   expect(await cajas()).toEqual(antes)
 })
 
+test('Inicio como bandeja: impuestos con sus dos plazos, las gráficas a un clic y el nivel cambia palabras, no cajas', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page, errores)
+  await page.goto('/conta/inicio')
+  // Los impuestos que vienen: o sus modelos con los dos plazos, o que no toca nada, o que aún no los sabe.
+  const impuestos = page.getByRole('region', { name: 'Impuestos que vienen' })
+  await expect(impuestos).toBeVisible({ timeout: 30_000 })
+  await expect(impuestos.getByText(/Si lo domicilias, hasta el|Domiciliar ya no se puede|domiciliando el pago, hasta el|No se paga: es informativo|no toca presentar nada|Aún no sé qué modelos presentas/).first()).toBeVisible({ timeout: 30_000 })
+  // Las gráficas, a un clic: de serie no están.
+  await expect(page.locator('.cxi-barras')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Ver la evolución' }).click()
+  await expect(page.locator('.cxi-cifra .cxi-barras').first()).toBeVisible()
+  await page.getByRole('button', { name: 'Ocultar la evolución' }).click()
+  await expect(page.locator('.cxi-barras')).toHaveCount(0)
+
+  await page.waitForLoadState('networkidle')
+  const medir = async () => page.locator('.cxi-cifra, .cxi-seccion-titulo, .cxi-cifras-cabeza button')
+    .evaluateAll((xs) => xs.map((x) => { const r = x.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)].join(',') }))
+  const cajas = async () => {
+    let previa = await medir()
+    for (let i = 0; i < 15; i++) {
+      await page.waitForTimeout(1000)
+      const ahora = await medir()
+      if (ahora.join('|') === previa.join('|')) return ahora
+      previa = ahora
+    }
+    return previa
+  }
+  const banco = page.locator('.cxi-cifra-etiqueta [data-actual]').first()
+  await expect(banco).toHaveText('En el banco')
+  const antes = await cajas()
+  expect(antes.length).toBeGreaterThan(5)
+  try {
+    await nivel(page, 'Experto')
+    await expect(banco).toHaveText('Bancos (572)')
+    await expect(page.getByRole('heading', { name: 'Calendario fiscal' })).toBeVisible()
+    expect(await cajas()).toEqual(antes)
+    await capturar(page, 'inicio-experto')
+    await nivel(page, 'Sin experiencia')
+    await expect(banco).toHaveText('Tienes en el banco')
+    await expect(page.getByRole('heading', { name: 'Lo que toca presentar a Hacienda' })).toBeVisible()
+    expect(await cajas()).toEqual(antes)
+    await capturar(page, 'inicio-sin-experiencia')
+  } finally {
+    await nivel(page, 'Medio')
+  }
+  await expect(banco).toHaveText('En el banco')
+  await capturar(page, 'inicio-bandeja')
+  expect(errores).toEqual([])
+})
+
 async function favoritosEnOtroNavegador(browser: Browser, email: string): Promise<string[]> {
   const contexto = await browser.newContext()
   const otra = await contexto.newPage()

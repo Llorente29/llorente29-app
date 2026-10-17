@@ -18,6 +18,9 @@ import { calcularCifras } from '@/modules/conta/lib/cifras'
 import { esFirmaAutomatica } from '@/modules/conta/lib/autor'
 import { pasosCierre, pedirCierre, type PasoCierre, type CierreMes } from '@/modules/conta/lib/diario'
 import { finDeMes, mesesHasta, puntoDeMes, trimestreDe, type PuntoMes } from '@/modules/conta/lib/inicio'
+import type { PerfilFiscal } from '@/modules/conta/lib/plazosImpuestos'
+import { filtrar, ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
+import { leerDocumentos } from '@/modules/conta/services/documentosService'
 
 type Fila = Record<string, unknown>
 
@@ -100,4 +103,24 @@ export function ayerEnMadrid(hoy: string): string {
   const hora = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(ayer))
   const desfase = hora - 12
   return `${dia}T00:00:00+0${desfase}:00`
+}
+
+// ── S01 (paso 4) · La bandeja ─────────────────────────────────────────────
+// Nombres de la base entre comillas (regla 40), comprobados en producción el
+// 17/10: company_tax_profile.vat_period, tax_forms (text[]) y sii.
+
+/** Los modelos que presenta la empresa y cómo declara el IVA; null si aún no tiene perfil fiscal. */
+export async function perfilFiscal(companyId: string): Promise<PerfilFiscal | null> {
+  const { data, error } = await tabla('company_tax_profile').select('vat_period, tax_forms, sii').eq('company_id', companyId).maybeSingle()
+  if (error) throw new Error(mensaje('No se han podido leer tus impuestos', error))
+  if (!data) return null
+  const f = data as { vat_period: string | null; tax_forms: string[] | null; sii: boolean | null }
+  return { modelos: f.tax_forms ?? [], periodoIva: f.vat_period === 'monthly' ? 'monthly' : f.vat_period === 'quarterly' ? 'quarterly' : null, sii: f.sii === true }
+}
+
+/** Las facturas recibidas para revisar (las de N22 «Para mirar») de los últimos 12 meses: el recorrido de Asientos › Recibida. */
+export async function recibidasParaRevisar(companyId: string, hoy: string): Promise<number> {
+  const { desde, hasta } = ventanaParaRevisar(hoy)
+  const d = await leerDocumentos(companyId, desde, hasta)
+  return filtrar(d.filas, 'para-mirar').filter((x) => x.tipo === 'factura').length
 }

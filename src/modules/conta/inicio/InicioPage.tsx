@@ -18,19 +18,28 @@
 //     reclamados»: aún no existen (Bancos es del frente B).
 //   · «Cerrar <mes anterior>»: los pasos del cierre del mes, los del Libro diario.
 //
+// S01 (paso 4) · Inicio como bandeja: las cuatro cifras arriba (las barritas, a
+// un clic: «Ver la evolución»); lo pendiente, cada cosa con su acción, y las
+// facturas recibidas con su recorrido «Validar y siguiente» (Asientos ›
+// Recibida); y los impuestos que vienen con sus DOS plazos (domiciliando, el 15;
+// si no, el 20; lib/plazosImpuestos). Las palabras van por nivel (PorNivel):
+// cambian las palabras, no las cajas.
+//
 // Sin empresa todavía, el Inicio no tiene nada que enseñar: lleva al alta
 // conversada (N1b), que es donde aterriza el cliente la primera vez.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { rutaAltaEmpresa, rutaAjustes, rutaCompras, rutaLibroDiario, rutaLibros, rutaMayor, rutaNuevoAsiento, rutaTerceros } from '@/config/navegacion'
+import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaCompras, rutaLibroDiario, rutaLibros, rutaMayor, rutaNuevoAsiento, rutaRecibidaEnAsientos, rutaTerceros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu, refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { cargarIa, responderSugerencia } from '@/modules/conta/services/iaService'
 import { hechoAlAceptar, type Sugerencia } from '@/modules/conta/ia/tipos'
 import { subcuentasSinNombre } from '@/modules/conta/services/pasosDiezService'
-import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
+import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, perfilFiscal, proximoPago, puntosDeSaldo, recibidasParaRevisar, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
+import { avisosDeImpuestos, frasePlazo, type PerfilFiscal } from '@/modules/conta/lib/plazosImpuestos'
+import { PorNivel } from '@/modules/conta/textos/PorNivel'
 import { diaMes, euros, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
   barras, cambio, diaDeHoy, dudas, frasePago, lineasIva, textoIva, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
@@ -88,6 +97,7 @@ export default function InicioPage() {
       <div className="cxi-cuerpo">
         <Dudas accountId={accountId} companyId={activa.id} />
         <div className="cxi-columna">
+          <Impuestos companyId={activa.id} hoy={hoy} />
           <HechoYo companyId={activa.id} hoy={hoy} />
           <Cierre accountId={accountId} companyId={activa.id} mes={mesAnterior(mesActual)} />
         </div>
@@ -152,6 +162,8 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
   const [iva] = useCarga(() => ivaDelTrimestre(accountId, companyId, mes, hoy), `${accountId}|${companyId}|${mes}|${hoy}`)
   const [pago] = useCarga(() => proximoPago(accountId, hoy), `${accountId}|${hoy}`)
   const [ivaMeses] = useCarga(() => ivaPorMes(accountId, companyId, mes, hoy), `${accountId}|${companyId}|${mes}|${hoy}|ivas`)
+  // S01 (paso 4): las gráficas, a un clic. De serie, solo las cifras.
+  const [graficas, setGraficas] = useState(false)
 
   if (puntos.estado === 'fallo') return <ErrorConReintento mensaje={puntos.texto} reintentar={reintentar} />
   if (puntos.estado === 'cargando') {
@@ -162,17 +174,24 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
   const ant = p.length > 1 ? p[p.length - 2] : null
   const serie = (k: 'banco' | 'teDeben' | 'debes') => p.map((x) => (x ? x[k] : null))
   const sinEjercicio = ult === null
+  const b = (xs: (number | null)[]) => (graficas ? barras(xs) : [])
   return (
+    <>
+    <div className="cxi-cifras-cabeza">
+      <button type="button" className="cx-enlace" aria-pressed={graficas} onClick={() => setGraficas((v) => !v)}>
+        <PorNivel clave={graficas ? 'inicio.ocultarGraficas' : 'inicio.verGraficas'} />
+      </button>
+    </div>
     <div className="cxi-cifras">
-      <Cifra etiqueta="En el banco" valor={ult ? euros(ult.banco) : '—'} ruta={rutaMayor('572')}
+      <Cifra etiqueta="En el banco" clave="inicio.banco" valor={ult ? euros(ult.banco) : '—'} ruta={rutaMayor('572')}
         apoyo={sinEjercicio ? 'sin ejercicio abierto en este mes' : cambio(ant?.banco ?? null, ult.banco, euros) ?? 'saldo del libro'}
-        tono={ult && ant && ult.banco >= ant.banco ? 'verde' : undefined} barras={barras(serie('banco'))} />
-      <Cifra etiqueta="Te deben" valor={ult ? euros(ult.teDeben) : '—'} ruta={rutaTerceros('clientes')}
-        apoyo="clientes y deudores, del libro" barras={barras(serie('teDeben'))} />
-      <Cifra etiqueta="Debes" valor={ult ? euros(ult.debes) : '—'} ruta={rutaTerceros('proveedores')}
+        tono={ult && ant && ult.banco >= ant.banco ? 'verde' : undefined} barras={b(serie('banco'))} />
+      <Cifra etiqueta="Te deben" clave="inicio.teDeben" valor={ult ? euros(ult.teDeben) : '—'} ruta={rutaTerceros('clientes')}
+        apoyo="clientes y deudores, del libro" barras={b(serie('teDeben'))} />
+      <Cifra etiqueta="Debes" clave="inicio.debes" valor={ult ? euros(ult.debes) : '—'} ruta={rutaTerceros('proveedores')}
         apoyo={pago.estado === 'listo' ? frasePago(pago.v, hoy, diaMes) ?? 'proveedores y acreedores' : 'proveedores y acreedores'}
-        tono={pago.estado === 'listo' && pago.v !== null && pago.v < hoy ? 'ambar' : undefined} barras={barras(serie('debes'))} />
-      <Cifra etiqueta="IVA del trimestre" valor={iva.estado === 'listo' ? euros(iva.v.aPagar) : iva.estado === 'fallo' ? '—' : '…'}
+        tono={pago.estado === 'listo' && pago.v !== null && pago.v < hoy ? 'ambar' : undefined} barras={b(serie('debes'))} />
+      <Cifra etiqueta="IVA del trimestre" clave="inicio.iva" valor={iva.estado === 'listo' ? euros(iva.v.aPagar) : iva.estado === 'fallo' ? '—' : '…'}
         ruta={rutaLibros('registro', 'expedidas')}
         apoyo={iva.estado === 'listo' ? textoIva(iva.v.trimestre, lineasIvaDe(iva.v)) : iva.estado === 'fallo' ? iva.texto : ' '}
         apoyoNodo={iva.estado === 'listo' ? (
@@ -184,23 +203,27 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
             ))}
           </span>
         ) : undefined}
-        barras={ivaMeses.estado === 'listo' ? barras(ivaMeses.v) : []} ia />
+        barras={ivaMeses.estado === 'listo' ? b(ivaMeses.v) : []} ia />
     </div>
+    </>
   )
 }
 
 /** M01 · Las tres líneas del IVA del trimestre, con los importes en euros con sus céntimos. */
 const lineasIvaDe = (v: { repercutido: number; soportado: number }) => lineasIva(v.repercutido, v.soportado, eurosExactos)
 
-function Cifra({ etiqueta, valor, apoyo, apoyoNodo, tono, barras: bs, ruta, ia = false }: {
-  etiqueta: string; valor: string; apoyo: string; tono?: 'verde' | 'ambar'; barras: { alto: number; ultima: boolean }[]; ruta: string; ia?: boolean
+function Cifra({ etiqueta, clave, valor, apoyo, apoyoNodo, tono, barras: bs, ruta, ia = false }: {
+  etiqueta: string
+  /** S01: la etiqueta por nivel (la del lector, `etiqueta`, es la de siempre). */
+  clave: 'inicio.banco' | 'inicio.teDeben' | 'inicio.debes' | 'inicio.iva'
+  valor: string; apoyo: string; tono?: 'verde' | 'ambar'; barras: { alto: number; ultima: boolean }[]; ruta: string; ia?: boolean
   /** Lo mismo que `apoyo`, pintado (con cifras en mono); el lector oye `apoyo`. */
   apoyoNodo?: ReactNode
 }) {
   return (
     <Link to={ruta} className="cxi-cifra" aria-label={`${etiqueta}: ${valor}. ${apoyo}`}>
       <span className="cxi-cifra-texto">
-        <span className="cxi-cifra-etiqueta">{etiqueta}</span>
+        <span className="cxi-cifra-etiqueta"><PorNivel clave={clave} /></span>
         <span className="cxi-cifra-valor">{valor}</span>
         <span className={`cxi-cifra-apoyo${tono ? ` cxi-cifra-apoyo-${tono}` : ''}`}>{apoyoNodo ?? apoyo}</span>
       </span>
@@ -219,11 +242,12 @@ function Dudas({ accountId, companyId }: { accountId: string; companyId: string 
   const cuentas = useCuentasMenu()
   const [sinNombre] = useCarga<number>(() => subcuentasSinNombre(accountId, companyId), `${accountId}|${companyId}`)
   const [ia, recargar] = useCarga<Sugerencia[]>(() => cargarIa(companyId).then((r) => r.sugerencias), companyId)
+  const [recibidas] = useCarga<number>(() => recibidasParaRevisar(companyId, hoyEnMadrid()), `${companyId}|recibidas`)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const sugerencias = ia.estado === 'listo' ? ia.v : []
-  const lista = dudas(sugerencias, cuentas.compras ?? 0, cuentas.libros ?? 0, sinNombre.estado === 'listo' ? sinNombre.v : 0)
+  const lista = dudas(sugerencias, cuentas.compras ?? 0, cuentas.libros ?? 0, sinNombre.estado === 'listo' ? sinNombre.v : 0, recibidas.estado === 'listo' ? recibidas.v : 0)
 
   async function responder(s: Sugerencia, acepta: boolean) {
     setOcupado(true); setHecho(null); setFallo(null)
@@ -239,7 +263,7 @@ function Dudas({ accountId, companyId }: { accountId: string; companyId: string 
   return (
     <section className="cxi-seccion" aria-labelledby="cxi-dudas">
       <div className="cxi-seccion-cabeza">
-        <h2 id="cxi-dudas" className="cxi-seccion-titulo">Solo necesito que me digas esto</h2>
+        <h2 id="cxi-dudas" className="cxi-seccion-titulo"><PorNivel clave="inicio.pendiente" /></h2>
         <span className="cxi-seccion-apoyo">{ia.estado === 'cargando' ? '…' : resumenDudas(lista.length)}</span>
       </div>
       {ia.estado === 'fallo' && <p className="cx-aviso" role="alert">{ia.texto}</p>}
@@ -254,6 +278,8 @@ function Dudas({ accountId, companyId }: { accountId: string; companyId: string 
           </>
         } else if (d.tipo === 'sinNombre') {
           acciones = <Link className="cx-boton" to={rutaAjustes('plan')}>Ponerles nombre</Link>
+        } else if (d.tipo === 'recibidas') {
+          acciones = <Link className="cx-boton" to={rutaRecibidaEnAsientos()}>Validarlas una a una</Link>
         } else if (d.tipo === 'compras') {
           acciones = <Link className="cx-boton" to={rutaCompras()}>Mirarlos</Link>
         } else {
@@ -269,6 +295,46 @@ function Dudas({ accountId, companyId }: { accountId: string; companyId: string 
       })}
       {hecho && <p className="cx-guardado" role="status">{hecho}</p>}
       {fallo && <p className="cx-aviso" role="alert">No se ha guardado: {fallo}</p>}
+    </section>
+  )
+}
+
+// ── Los impuestos que vienen (S01, paso 4) ─────────────────────────────────
+
+/**
+ * Lo que toca presentar a Hacienda, con sus dos plazos: domiciliando el pago,
+ * hasta el 15 (en enero, el 25 de lo que acaba el 30); si no, hasta el 20. De
+ * los modelos de la empresa (los del alta). Pasado el día de domiciliar, lo dice
+ * en ámbar: aún se puede presentar, pero ya no domiciliado.
+ */
+function Impuestos({ companyId, hoy }: { companyId: string; hoy: string }) {
+  const [p, reintentar] = useCarga<PerfilFiscal | null>(() => perfilFiscal(companyId), `${companyId}|perfil`)
+  const avisos = p.estado === 'listo' && p.v ? avisosDeImpuestos(p.v, hoy) : []
+  return (
+    <section className="cxi-seccion" aria-labelledby="cxi-impuestos">
+      <div className="cxi-seccion-cabeza">
+        <h2 id="cxi-impuestos" className="cxi-seccion-titulo" style={{ fontSize: 18 }}><PorNivel clave="inicio.impuestos" /></h2>
+        {p.estado === 'listo' && p.v && <span className="cxi-seccion-apoyo">{avisos.length ? `${avisos.length} ${avisos.length === 1 ? 'modelo' : 'modelos'}` : 'nada en 15 días'}</span>}
+      </div>
+      {p.estado === 'cargando' && <Hueso ancho={200} />}
+      {p.estado === 'fallo' && <ErrorConReintento mensaje={p.texto} reintentar={reintentar} />}
+      {p.estado === 'listo' && !p.v && (
+        <p className="cxi-nada">Aún no sé qué modelos presentas: se deciden con tu empresa. <Link to={rutaApartadoEmpresa('impuestos')}>Decírmelo</Link></p>
+      )}
+      {p.estado === 'listo' && p.v && avisos.length === 0 && <p className="cxi-nada">En los próximos 15 días no toca presentar nada.</p>}
+      {avisos.map((a) => {
+        const tarde = a.domiciliado !== null && hoy > a.domiciliado
+        return (
+          <div key={`${a.modelo}:${a.hasta}`} className="cxi-impuesto">
+            <span className="cxi-impuesto-modelo">{a.modelo}</span>
+            <span className="cxi-duda-texto">
+              <span className="cxi-duda-titulo">{a.que}</span>
+              <span className={`cxi-duda-apoyo${tarde ? ' cxt-ambar' : ''}`}>{frasePlazo(a, hoy)}</span>
+            </span>
+          </div>
+        )
+      })}
+      {avisos.length > 0 && <p className="cx-ayuda" style={{ margin: 0 }}>Si el último día cae en fin de semana, cuento el lunes; los festivos aún no los cuento.</p>}
     </section>
   )
 }

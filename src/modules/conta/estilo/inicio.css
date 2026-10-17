@@ -147,3 +147,9 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
 .cxi-iva-linea { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 6px; min-width: 0; }
 .cxi-iva-linea > span:first-child { min-width: 0; }
 .cxi-iva-nota { flex-basis: 100%; color: var(--cx-apoyo); font-weight: 400; font-size: 11px; }
+.cxi-duda-inicial-r { background: var(--cx-inicial-2); }
+
+/* S01 (paso 4) · La bandeja: el enlace de las gráficas sobre las cifras y los impuestos que vienen. */
+.cxi-cifras-cabeza { display: flex; justify-content: flex-end; margin: 0 0 -6px; }
+.cxi-impuesto { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
+.cxi-impuesto-modelo { font-family: var(--cx-letra-cifras); font-weight: 600; min-width: 36px; }
