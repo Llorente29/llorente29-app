@@ -44,6 +44,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
       - name: Guardas · staging y no producción
         env:
           TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -52,7 +56,8 @@ jobs:
           [ -n "${TOKEN:-}" ] || { echo "::error::Falta SUPABASE_ACCESS_TOKEN."; exit 1; }
           [ "$REF" != "$PROD_REF" ] || { echo "::error::El ref es el de producción. Abortado."; exit 1; }
           grep -q "const DESTINO = 'https://client.badssl.com/'" scripts/conta/i01/prueba-mtls/index.ts || { echo "::error::La función no apunta a client.badssl.com."; exit 1; }
-          ! grep -qiE 'agenciatributaria|aeat' scripts/conta/i01/prueba-mtls/index.ts || { echo "::error::La función menciona la AEAT."; exit 1; }
+          # Ningún dominio de la AEAT en la función (se buscan dominios, no la palabra).
+          ! grep -qiE 'agenciatributaria|aeat\.es' scripts/conta/i01/prueba-mtls/index.ts || { echo "::error::La función lleva un dominio de la AEAT."; exit 1; }
 
       - name: Certificado de prueba de badssl.com (fuera del repositorio, enmascarado)
         run: |
@@ -81,10 +86,6 @@ jobs:
             echo "- sujeto: $(openssl x509 -in cert.pem -noout -subject | sed 's/^subject=//')"
             echo "- clave: $(head -1 key.pem)"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
 
       - name: Secretos y despliegue en staging-conta
         env:
