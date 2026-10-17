@@ -26,6 +26,7 @@ import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import { aSaldoCuenta, leerLineas, leerMapeo, planDeEmpresa, resultadoRepartido, saldosCuentas, type SaldoConLocal } from '@/modules/conta/services/librosService'
 import { MARCA } from '../cuenta/marca'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 
 type Vista = 'oficial' | 'detallado' | 'local' | 'marca'
 const NOMBRE = { balance: 'Balance de situación', pyg: 'Pérdidas y ganancias', ecpn: 'Cambios en el patrimonio neto' } as const
@@ -85,7 +86,9 @@ export function Estados({ estado, salida }: { estado: 'balance' | 'pyg' | 'ecpn'
   }, [d.datos, estado])
 
   const col = columnaAnterior(L.anterior ? { estado: L.anterior.origen === 'migrated' ? 'traido' : L.anterior.estado === 'closed' ? 'cerrado' : 'abierto' } : null)
-  const vistas = vistasDeResultado(L.locales.length, L.marcas.length)
+  // S01: «Por local», solo con el eje encendido (Definiciones › Analítica), y con su nombre.
+  const { local: ejeLocal } = useAnalitica()
+  const vistas = vistasDeResultado(ejeLocal ? L.locales.length : 0, L.marcas.length)
   const titulo = NOMBRE[estado]
 
   const filasExport = (r: ResultadoEstado, ant: ResultadoEstado | null): FilaTabla[] => r.lineas.filter((l) => !l.oculta).map((l) => {
@@ -116,7 +119,7 @@ export function Estados({ estado, salida }: { estado: 'balance' | 'pyg' | 'ecpn'
             <div className="cxl-segmento" role="group" aria-label="Cómo verlo">
               <button type="button" aria-pressed={vista === 'oficial'} onClick={() => setVista('oficial')}>Oficial</button>
               <button type="button" aria-pressed={vista === 'detallado'} onClick={() => setVista('detallado')}>{estado === 'pyg' ? 'Detallada' : 'Detallado'}</button>
-              {estado === 'pyg' && vistas.porLocal && <button type="button" aria-pressed={vista === 'local'} onClick={() => setVista('local')}>Por local</button>}
+              {estado === 'pyg' && vistas.porLocal && <button type="button" aria-pressed={vista === 'local'} onClick={() => setVista('local')}>Por {ejeLocal?.nombre.toLowerCase() ?? 'local'}</button>}
             </div>
           )}
           <label><span className="cx-oculto">A qué fecha</span>

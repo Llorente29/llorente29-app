@@ -17,6 +17,7 @@
 // están en su filtro y lo dicen.
 
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaFichaTercero, rutaMayor } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -90,7 +91,14 @@ export default function TercerosPage() {
   const filtro = (FILTROS_TERCEROS.some((f) => f.id === params.get('ver')) ? params.get('ver') : 'todos') as FiltroTerceros
   const [busca, setBusca] = useState('')
   const [vuelta, setVuelta] = useState(0)
+  // S01 · paso 3: «Nuevo cliente» está en la cinta (?nuevo), también estando ya aquí.
   const [nuevo, setNuevo] = useState(false)
+  const pideNuevo = params.get('nuevo') !== null
+  const hosteleria = useHosteleria()
+  // Los papeles que ya son pestaña de la cabecera (productos.ts): Plataformas y Socios, solo con hostelería.
+  const PAPELES_EN_PESTANA = new Set<string>(hosteleria ? ['todos', 'clientes', 'proveedores', 'plataformas', 'socios'] : ['todos', 'clientes', 'proveedores'])
+  if (pideNuevo && !nuevo) setNuevo(true)
+  useEffect(() => { if (pideNuevo) setParams((p) => { p.delete('nuevo'); return p }, { replace: true }) }, [pideNuevo, setParams])
   // Lo que viene hecho de la ficha (archivar): se dice aquí, con su contenido (regla 8).
   const llegada = useLocation().state as { aviso?: string } | null
   const [hecho, setHecho] = useState<string | null>(llegada?.aviso ?? null)
@@ -123,13 +131,10 @@ export default function TercerosPage() {
 
   return (
     <div className="cxt-pagina">
-      <header className="cxp-cabecera">
-        <div className="cxp-titulos">
-          <h1 className="cxp-nombre">Clientes y proveedores</h1>
-          <span className="cx-ayuda" style={{ fontSize: 15 }}>Con quién trabajas, qué papel tiene cada uno y quién debe a quién.</span>
-        </div>
-        <button type="button" className="cx-boton" onClick={() => setNuevo(true)} disabled={!accountId}>Nuevo cliente</button>
-      </header>
+      {/* S01 · paso 3: Contactos. El título y los papeles (Todos · Clientes · Proveedores…) son
+          la cabecera y sus pestañas; «Nuevo cliente», la cinta. */}
+      <h1 className="cx-oculto">Contactos</h1>
+      <p className="cx-ayuda cxt-entra">Con quién trabajas, qué papel tiene cada uno y quién debe a quién.</p>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
 
@@ -144,9 +149,10 @@ export default function TercerosPage() {
         <input id="buscar-tercero" className="cx-input cxp-buscar" type="search" value={busca} onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar por nombre o NIF" />
         <div className="cx-tablas-filtros" role="group" aria-label="Qué terceros ver">
-          {filtrosVisibles(filas ?? [], filtro).map((f) => (
+          {/* Los papeles son pestañas de la cabecera; aquí queda lo que no es un papel: los archivados. */}
+          {filtrosVisibles(filas ?? [], filtro).filter((f) => f.id === 'archivados' || (f.id === filtro && !PAPELES_EN_PESTANA.has(f.id))).map((f) => (
             <button key={f.id} type="button" className="cx-pildora" aria-pressed={filtro === f.id}
-              onClick={() => setParams(f.id === 'todos' ? {} : { ver: f.id }, { replace: true })}>
+              onClick={() => setParams(f.id === filtro ? {} : { ver: f.id }, { replace: true })}>
               {f.texto}{cuantos ? ` · ${cuantos[f.id]}` : ''}
             </button>
           ))}

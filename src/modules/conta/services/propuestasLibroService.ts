@@ -29,6 +29,31 @@ async function leer(q: PromiseLike<{ data: unknown; error: { message: string } |
   return (data ?? []) as Fila[]
 }
 
+/**
+ * S01 (inventario §11): de estos orígenes, los que ya tienen asiento VIVO en la
+ * empresa (propuesto, borrador o validado), por journal_entry.source_type +
+ * source_id —el enlace que escribe la base, con su índice único—. Sustituye a
+ * `.is('journal_entry_id', null)`, que no filtraba nada: esa columna no la
+ * escribe nadie y se quitará en otra tanda.
+ */
+async function conAsientoVivo(companyId: string, tipo: 'supplier_invoice' | 'channel_settlement' | 'licensed_settlement', ids: readonly string[]): Promise<Set<string>> {
+  const vivos = new Set<string>()
+  for (let i = 0; i < ids.length; i += 100) {
+    const trozo = ids.slice(i, i + 100)
+    const filas = await leer(tabla('journal_entry').select('source_id').eq('company_id', companyId).eq('source_type', tipo)
+      .in('source_id', trozo).in('status', ['propuesto', 'borrador', 'validado']), 'los asientos que ya hay')
+    for (const f of filas) vivos.add(String(f.source_id))
+  }
+  return vivos
+}
+
+/** Quita los que ya tienen asiento vivo y los cuenta como «ya estaban», que es lo que diría la base al proponerlos. */
+async function sinAsientoVivo(companyId: string, tipo: Parameters<typeof conAsientoVivo>[1], filas: Fila[], r: ResultadoProponer): Promise<Fila[]> {
+  const vivos = await conAsientoVivo(companyId, tipo, filas.map((f) => String(f.id)))
+  r.yaEstaban += vivos.size
+  return filas.filter((f) => !vivos.has(String(f.id)))
+}
+
 /** Lo que hace falta para poner cuentas a una propuesta. */
 export interface ContextoLibro {
   calendario: CalendarioEmpresa
@@ -386,8 +411,8 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   // liquidación de SU socio (marca → acuerdo de cesión → socio → enlace «liquidacion»).
   const acuerdos = await leer(tabla('brand_licensing_agreement').select('brand_id, party_id').eq('account_id', accountId), 'los acuerdos de cesión')
   const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
-  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount, commission_invoice_id, promo_charges, ads_spend, item_promotions, chargebacks, other_earnings, adjustments, needs_review, review_note, is_reference')
-    .eq('account_id', accountId).is('journal_entry_id', null).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones')
+  const liqs = await sinAsientoVivo(companyId, 'channel_settlement', await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount, commission_invoice_id, promo_charges, ads_spend, item_promotions, chargebacks, other_earnings, adjustments, needs_review, review_note, is_reference')
+    .eq('account_id', accountId).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones'), r)
   // B01 (respuesta 1, P2): el cobro que ya ha casado Bancos lo asienta Bancos;
   // aquí solo la comisión y los cargos, para que el cobro no salga dos veces.
   const cobradasPorBanco = new Set((await leer(tabla('bank_match_item').select('channel_settlement_id, bank_match!inner(status)')
@@ -466,8 +491,9 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   // (brand_partner_settlement_compute); aquí solo se asienta.
   const [liqSocio, partes] = await Promise.all([
     leer(tabla('licensed_settlement').select('id, party_id, location_id, period_from, period_to, status, purchases_amount, contributions_amount, commission_amount')
-      .eq('account_id', accountId).eq('formula', 'compras_aportaciones_comision').in('status', ['confirmada', 'saldada']).is('journal_entry_id', null)
-      .gte('period_to', desde).lte('period_to', hasta).order('period_to', { ascending: false }), 'las liquidaciones del socio'),
+      .eq('account_id', accountId).eq('formula', 'compras_aportaciones_comision').in('status', ['confirmada', 'saldada'])
+      .gte('period_to', desde).lte('period_to', hasta).order('period_to', { ascending: false }), 'las liquidaciones del socio')
+      .then((filas) => sinAsientoVivo(companyId, 'licensed_settlement', filas, r)),
     leer(tabla('party').select('id, name').eq('account_id', accountId), 'los terceros'),
   ])
   const nombreDe = new Map(partes.map((x) => [String(x.id), String(x.name)]))
@@ -552,13 +578,15 @@ function proveedorDeParty(roles: readonly Fila[], partyId: string): string | nul
 async function facturasDeProveedor(accountId: string, companyId: string, desde: string, hasta: string, ctx: ContextoLibro, r: ResultadoProponer,
   quien: string | null, abierto: (f: string) => boolean, soloFactura?: string, ver?: (p: Propuesta) => void) {
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
-  const [facturas, socios] = await Promise.all([
+  const [leidas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
     leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
-      .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).is('journal_entry_id', null).or(`company_id.is.null,company_id.eq.${companyId}`)
+      .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).or(`company_id.is.null,company_id.eq.${companyId}`)
       .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
   ])
+  // «Cómo se apunta» (ver) enseña la propuesta aunque ya tenga asiento; al proponer, las que lo tienen ya estaban.
+  const facturas = ver ? leidas : await sinAsientoVivo(companyId, 'supplier_invoice', leidas, r)
   const socioPorProveedor = new Set<string>()
   const partyPorProveedor = new Map<string, string>()
   for (const x of socios) if (x.role === 'supplier' && x.supplier_id) partyPorProveedor.set(String(x.supplier_id), String(x.party_id))

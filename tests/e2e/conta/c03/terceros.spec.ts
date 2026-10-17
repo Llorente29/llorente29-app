@@ -54,7 +54,10 @@ test('lista de clientes y proveedores: papeles, filtros y archivados', async ({ 
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/clientes-y-proveedores')
-  await expect(page.getByRole('heading', { level: 1, name: 'Clientes y proveedores' })).toBeVisible()
+  // S01 · paso 3: Contactos; los papeles son pestañas de la cabecera (Plataformas y Socios, con hostelería: A lo es).
+  await expect(page.getByRole('heading', { level: 1, name: 'Contactos' })).toHaveCount(1)
+  const papeles = page.getByRole('navigation', { name: 'Pestañas de Contactos' })
+  await expect(papeles.getByRole('link')).toHaveText(['Todos', 'Clientes', 'Proveedores', 'Plataformas', 'Socios de marca'])
   const plataforma = page.getByRole('link', { name: /Plataforma Norte/ })
   await expect(plataforma).toBeVisible()
   await expect(page.getByRole('link', { name: /Marcas del Sur/ })).toBeVisible()
@@ -62,14 +65,15 @@ test('lista de clientes y proveedores: papeles, filtros y archivados', async ({ 
   // Regla 7: el archivado no sale en «Todos», sale en su filtro.
   await expect(page.getByRole('link', { name: /Distribuciones Antiguas/ })).toHaveCount(0)
   await capturar(page, 'lista')
-  await page.getByRole('button', { name: /^Plataformas · \d+$/ }).click()
+  await papeles.getByRole('link', { name: 'Plataformas', exact: true }).click()
+  await expect(papeles.getByRole('link', { name: 'Plataformas', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('link', { name: /Plataforma Norte/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /Catering Eventos Norte/ })).toHaveCount(0)
   await page.getByRole('button', { name: /^Archivados · \d+$/ }).click()
   await expect(page.getByRole('link', { name: /Distribuciones Antiguas/ })).toBeVisible()
   await expect(page.getByText(/histórico de 2024/).first()).toBeVisible()
   // Buscar por NIF.
-  await page.getByRole('button', { name: /^Todos · \d+$/ }).click()
+  await papeles.getByRole('link', { name: 'Todos', exact: true }).click()
   await page.getByLabel('Buscar por nombre o NIF').fill('B91030023')
   await expect(page.getByRole('link', { name: /Marcas del Sur/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /Plataforma Norte/ })).toHaveCount(0)
@@ -277,7 +281,7 @@ test('alta de cliente con el NIF de un proveedor: un solo tercero con los dos pa
   expect(p.status, 'se crea el proveedor de prueba').toBe(201)
   try {
     await page.goto('/conta/clientes-y-proveedores')
-    await page.getByRole('button', { name: 'Nuevo cliente' }).click()
+    await page.getByRole('toolbar', { name: 'Acciones de Todos' }).getByRole('link', { name: /Nuevo cliente/ }).click()
     await page.getByLabel('Nombre con el que lo conocéis').fill('Otro nombre cualquiera')
     await page.getByLabel('NIF (opcional)').fill(nif)
     // Regla 1: un NIF, un tercero.

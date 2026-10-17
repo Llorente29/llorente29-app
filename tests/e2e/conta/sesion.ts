@@ -84,6 +84,12 @@ export function correoDelFrente(correo: string, frente: Frente | null = FRENTE):
 
 export const CUENTA_A = { id: enCarril('c01a0000-0000-4000-8000-00000000000a'), email: correoDePrueba('a.admin@prueba.folvy.test') }
 export const CUENTA_B = { id: enCarril('c01b0000-0000-4000-8000-00000000000b'), email: correoDePrueba('b.admin@prueba.folvy.test') }
+/**
+ * S01 · La cuenta SIN hostelería (Julio, 17/10): «Asesoría de Prueba Oeste», de
+ * otra actividad, con su empresa marcada como no de hostelería. Semilla
+ * seed_s01_cuenta_d_sin_hosteleria_staging.sql. Solo existe en los carriles.
+ */
+export const CUENTA_D = { id: enCarril('c01d0000-0000-4000-8000-00000000000d'), email: correoDePrueba('d.admin@prueba.folvy.test') }
 /** El encargado de A (rol manager, no administrador): semilla seed_c00_encargado_prueba.sql. */
 export const ENCARGADO_A = { id: enCarril('c01a0000-0000-4000-8000-0000000000a6'), email: correoDePrueba('a.encargado@prueba.folvy.test') }
 /**

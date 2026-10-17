@@ -38,7 +38,7 @@ export function frenteDeLaRama(rama) {
   if (/^conta\/d\d/.test(rama)) return 'a'      // A · facturas recibidas (D01…)
   if (/^conta\/b\d/.test(rama)) return 'b'      // B · bancos (B01…)
   if (/^conta\/(c06|f\d)/.test(rama)) return 'c' // C · contabilidad sola y facturas emitidas (C06, F01…)
-  if (/^conta\/m\d/.test(rama)) return 'd'      // D · el marco nuevo y sus piezas (M01…)
+  if (/^conta\/[ms]\d/.test(rama)) return 'd'   // D · el marco nuevo, sus piezas y el esqueleto (M01, S01…)
   return ''
 }
 
@@ -51,7 +51,7 @@ export const DE_QUIEN = {
   a: /^docs\/conta\/capturas\/d\d[^/]*\//,
   b: /^docs\/conta\/capturas\/b\d[^/]*\//,
   c: /^docs\/conta\/capturas\/c\d[^/]*\//,
-  d: /^docs\/conta\/capturas\/m\d[^/]*\//,
+  d: /^docs\/conta\/capturas\/[ms]\d[^/]*\//,
   reparto: /^docs\/reparto\/capturas\//,
 }
 

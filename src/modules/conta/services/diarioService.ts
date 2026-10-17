@@ -23,6 +23,7 @@ import type { Confianza, OrigenAsiento, Razon, Serie } from '@/modules/conta/lib
 import { apuntarCorreccion } from '@/modules/conta/services/propuestasLibroService'
 import { normalizarHora } from '@/modules/conta/lib/cierreDelDia'
 import { autorVisible, esFirmaAutomatica } from '@/modules/conta/lib/autor'
+import type { LineaPredefinida, Predefinido } from '@/modules/conta/lib/tipoAsiento'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -332,6 +333,49 @@ export async function guardarAMano(accountId: string, companyId: string, ejercic
   if (r.error) {
     await tabla('journal_entry').delete().eq('id', id)
     throw new Error(mensaje('No se ha guardado el asiento', r.error))
+  }
+  return id
+}
+
+// ── S01 · Asientos predefinidos (entry_template, del C04) ─────────────────
+// La cinta de Asientos abre «Predefinidos» con ?tipo=predefinido. Se leen los
+// de la empresa que no están archivados; al usarlos, el asiento a mano se rellena.
+
+/** Los predefinidos de la empresa, por nombre, con sus apuntes en orden. */
+export async function leerPredefinidos(accountId: string, companyId: string): Promise<Predefinido[]> {
+  const { data, error } = await tabla('entry_template')
+    .select('id, name, series, concept, entry_template_line(position, company_account_id, side, fixed_amount, concept, location_id, is_common)')
+    .eq('account_id', accountId).eq('company_id', companyId).is('archived_at', null).order('name')
+  if (error) throw new Error(mensaje('No se han podido leer los asientos predefinidos', error))
+  return ((data ?? []) as Fila[]).map((t) => ({
+    id: String(t.id), nombre: String(t.name), serie: Number(t.series) as Serie, concepto: String(t.concept),
+    lineas: ((t.entry_template_line ?? []) as Fila[]).sort((a, b) => Number(a.position) - Number(b.position)).map((l) => ({
+      cuentaId: String(l.company_account_id), lado: l.side === 'credit' ? 'credit' as const : 'debit' as const,
+      importe: l.fixed_amount === null || l.fixed_amount === undefined ? null : Number(l.fixed_amount),
+      concepto: l.concept ? String(l.concept) : null, localId: l.location_id ? String(l.location_id) : null, comun: l.is_common === true,
+    })),
+  }))
+}
+
+/** Guarda un predefinido nuevo con sus apuntes. Si los apuntes no entran, no deja la cabecera sola. */
+export async function guardarPredefinido(accountId: string, companyId: string, nombre: string, serie: Serie, concepto: string,
+  lineas: readonly LineaPredefinida[]): Promise<string> {
+  if (lineas.length < 2) throw new Error('Un predefinido necesita al menos dos apuntes con cuenta.')
+  const { data, error } = await tabla('entry_template').insert({
+    account_id: accountId, company_id: companyId, name: nombre.trim(), series: serie, concept: concepto.trim(),
+  }).select('id').single()
+  if (error) {
+    if (error.code === '23505') throw new Error(`Ya tienes un predefinido que se llama «${nombre.trim()}».`)
+    throw new Error(mensaje('No se ha guardado el predefinido', error))
+  }
+  const id = String((data as Fila).id)
+  const r = await tabla('entry_template_line').insert(lineas.map((l, i) => ({
+    account_id: accountId, company_id: companyId, template_id: id, position: i + 1, company_account_id: l.cuentaId,
+    side: l.lado, fixed_amount: l.importe, concept: l.concepto, location_id: l.comun ? null : l.localId, is_common: l.comun,
+  })))
+  if (r.error) {
+    await tabla('entry_template').delete().eq('id', id)
+    throw new Error(mensaje('No se ha guardado el predefinido', r.error))
   }
   return id
 }

@@ -13,6 +13,7 @@ import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import '../../../marca/tema.css' // Inter, para las marcas con tema (Sumied)
 import './tokens.css'
+import '../diseno/tokens.css' // S01 · el sistema de diseño (--s-*)
 import './componentes.css'
 import './proveedor.css'
 import './traer.css'
@@ -26,3 +27,5 @@ import './inicio.css'
 import './marco.css'
 import './piezas.css'
 import './libroMarco.css'
+import '../diseno/diseno.css'
+import '../esqueleto/esqueleto.css' // S01 · el esqueleto (barra, cabecera, cinta)

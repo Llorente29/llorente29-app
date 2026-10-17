@@ -1,0 +1,168 @@
+/* src/modules/conta/esqueleto/esqueleto.css
+ *
+ * S01 · El esqueleto: barra de productos, cabecera de 48 px en una sola fila,
+ * cinta y menús (maquetas 1, 3 y 4; respuestas de Julio del 17/10). Solo
+ * tokens del sistema de diseño (lo comprueba diseno-reglas.test.ts).
+ */
+
+/* ── El marco entero ─────────────────────────────────────────────────── */
+.cx.cxm.s-esqueleto { font-family: var(--s-letra); color: var(--s-tinta); }
+.s-esq-cuerpo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ── 1 · La barra de productos ───────────────────────────────────────── */
+.s-barra {
+  width: var(--s-ancho-barra); flex-shrink: 0; position: sticky; top: 0; height: 100vh; z-index: 35;
+  background: var(--s-barra); color: var(--s-barra-texto);
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--s-1); padding: var(--s-3) var(--s-1);
+  font-family: var(--s-letra);
+}
+.s-barra[data-desplegada='no'] { width: calc(var(--s-ancho-barra) - var(--s-8)); }
+.s-barra-marca { display: flex; justify-content: center; padding: var(--s-1) 0 var(--s-4); }
+.s-barra-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.s-barra-lista-abajo { margin-top: auto; }
+.s-barra .s-barra-item, .s-barra-inferior .s-barra-item {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: var(--s-alto-control); padding: var(--s-2) var(--s-1); border-radius: var(--s-radio-bloque);
+  color: var(--s-barra-texto); text-decoration: none; text-align: center;
+  font-size: var(--s-t-s); line-height: 1.2;
+}
+.s-barra .s-barra-item:hover, .s-barra-inferior .s-barra-item:hover { color: var(--s-barra-activo-texto); background: color-mix(in srgb, var(--s-barra-activo) 60%, transparent); }
+.s-barra .s-barra-item[aria-current='page'], .s-barra-inferior .s-barra-item[aria-current='page'] { background: var(--s-barra-activo); color: var(--s-barra-activo-texto); font-weight: var(--s-peso-fuerte); }
+.s-barra .s-barra-item:focus-visible, .s-barra-inferior .s-barra-item:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-barra-destacado { font-size: var(--s-t-xs); color: var(--s-barra-destacado); font-weight: var(--s-peso-medio); white-space: nowrap; letter-spacing: -0.01em; }
+.s-barra[data-desplegada='no'] .s-barra-nombre, .s-barra[data-desplegada='no'] .s-barra-destacado { display: none; }
+.s-barra[data-desplegada='si'] .s-icono { display: none; }
+.s-barra-plegar { align-self: center; color: var(--s-barra-texto); }
+.s-barra-plegar:hover:not(:disabled) { color: var(--s-barra-activo-texto); }
+
+/* ── 2 · La cabecera: una fila de 48 px ──────────────────────────────── */
+.s-cabecera {
+  position: sticky; top: 0; z-index: 30;
+  height: var(--s-alto-cabecera); flex-shrink: 0;
+  display: flex; align-items: stretch; gap: var(--s-2); padding: 0 var(--s-4);
+  background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
+  font-size: var(--s-t-m);
+}
+.s-cab-izquierda, .s-cab-derecha { display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
+.s-cab-centro { flex: 1; min-width: 0; display: flex; align-items: stretch; }
+.s-cab-logotipo { display: flex; align-items: center; padding-right: var(--s-3); border-right: var(--s-linea) solid var(--s-borde-decorativo); height: 60%; }
+.s-cab-cliente { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.s-cab-cliente-logo {
+  width: var(--s-8); height: var(--s-8); border-radius: var(--s-radio-campo); object-fit: contain;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: var(--s-neutro-fondo); color: var(--s-tinta); font-weight: var(--s-peso-titulo); font-size: var(--s-t-s);
+}
+.s-cab-empresa {
+  display: inline-flex; align-items: center; gap: var(--s-1); max-width: 160px;
+  background: none; border: 0; padding: var(--s-1) var(--s-2); border-radius: var(--s-radio-boton);
+  font: inherit; font-weight: var(--s-peso-fuerte); color: var(--s-tinta); cursor: pointer; text-decoration: none;
+}
+.s-cab-empresa:hover { background: var(--s-suave); }
+.s-cab-empresa:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-cab-empresa-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-cab-periodo { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.s-cab-periodo:empty { display: none; }
+.cxm-es-movil .s-cab-periodo > * { display: flex; min-width: 0; max-width: 100%; }
+.cxm.cxm-es-movil .s-cab-periodo .cxm-select { max-width: 132px; min-width: 0; }
+
+/* Pestañas del producto: la activa en negrita y subrayada (maqueta 1). */
+.s-pestanas-caja { position: relative; flex: 1; min-width: 0; display: flex; }
+.s-pestanas-medida { position: absolute; visibility: hidden; pointer-events: none; display: flex; gap: var(--s-1); white-space: nowrap; height: 0; overflow: hidden; }
+.s-pestanas { display: flex; align-items: stretch; gap: var(--s-1); min-width: 0; }
+.s-pestana {
+  display: inline-flex; align-items: center; padding: 0 var(--s-2); white-space: nowrap;
+  color: var(--s-apoyo); text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.s-pestana:hover { color: var(--s-tinta); }
+.s-pestana[aria-current='page'], .s-pestana-activa { color: var(--s-tinta); font-weight: var(--s-peso-fuerte); border-bottom-color: var(--s-accion); }
+.s-pestana:focus-visible { outline: none; box-shadow: inset var(--s-foco); }
+
+/* Los enlaces del esqueleto dentro de «.cx a» (componentes.css, azul): con el mismo peso, su color. */
+.cx a.s-pestana { color: var(--s-apoyo); }
+.cx a.s-pestana[aria-current='page'] { color: var(--s-tinta); }
+.cx a.s-menu-item { color: var(--s-tinta); }
+.cx a.s-cab-empresa, .cx a.s-cab-logotipo { color: var(--s-tinta); }
+.cx .s-barra a.s-barra-item, .cx .s-barra-inferior a.s-barra-item { color: var(--s-barra-texto); }
+.cx .s-barra a.s-barra-item[aria-current='page'], .cx .s-barra-inferior a.s-barra-item[aria-current='page'] { color: var(--s-barra-activo-texto); }
+
+/* Buscar · Ctrl K: un botón corto (Julio, respuesta 3). */
+.s-cab-buscar { color: var(--s-apoyo); }
+
+/* ── Menús desplegables de la cabecera ───────────────────────────────── */
+.s-desplegable { position: relative; display: flex; align-items: center; }
+.s-menu {
+  position: absolute; top: calc(100% + var(--s-1)); left: 0; z-index: 40; min-width: 240px; max-width: 360px;
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+  box-shadow: var(--s-sombra); padding: var(--s-2); display: flex; flex-direction: column; gap: 2px;
+  font-size: var(--s-t-m); font-weight: var(--s-peso-normal);
+}
+.s-menu-derecha { left: auto; right: 0; }
+.s-menu-titulo { padding: var(--s-1) var(--s-2); font-size: var(--s-t-xs); color: var(--s-apoyo); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); }
+.s-menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); width: 100%;
+  padding: var(--s-2); border-radius: var(--s-radio-boton); background: none; border: 0;
+  color: var(--s-tinta); text-decoration: none; text-align: left; font: inherit; cursor: pointer;
+}
+.s-menu-item:hover { background: var(--s-suave); }
+.s-menu-item[aria-current='true'], .s-menu-item[aria-checked='true'] { font-weight: var(--s-peso-fuerte); color: var(--s-accion); }
+.s-menu-item:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-menu-item[aria-disabled='true'] { color: var(--s-apoyo); cursor: default; }
+.s-menu-separador { height: var(--s-linea); background: var(--s-borde-decorativo); margin: var(--s-1) 0; }
+.s-menu-nota { padding: var(--s-1) var(--s-2); font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-menu-fila { display: flex; align-items: center; gap: var(--s-1); }
+.s-menu-fila .s-menu-item { flex: 1; }
+
+/* ── El aviso de lo que ha pasado (regla 8) ──────────────────────────── */
+/* Flota debajo de la cabecera: decir lo que ha pasado no mueve nada de sitio
+   (el nivel cambia palabras, nunca posiciones; y la cinta no salta). */
+.s-esq-aviso {
+  position: fixed; top: calc(var(--s-alto-cabecera) + var(--s-2)); right: var(--s-4); z-index: 45;
+  max-width: min(440px, calc(100vw - var(--s-8))); margin: 0; padding: var(--s-2) var(--s-3);
+  font-size: var(--s-t-s); border-radius: var(--s-radio-bloque); box-shadow: var(--s-sombra);
+  background: var(--s-ok-fondo); color: var(--s-ok); border: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-esq-aviso[data-tono='falta'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.s-esq-aviso:empty { display: none; }
+
+/* ── El móvil ────────────────────────────────────────────────────────── */
+.s-pestanas-movil { display: flex; overflow-x: auto; scrollbar-width: none; background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); min-height: var(--s-alto-control); }
+.s-barra-inferior {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 35;
+  display: flex; justify-content: space-around; padding: var(--s-1) var(--s-1) calc(var(--s-1) + env(safe-area-inset-bottom, 0px));
+  background: var(--s-barra); color: var(--s-barra-texto); font-family: var(--s-letra);
+}
+.s-barra-inferior .s-barra-item { flex: 1; min-height: 44px; background: none; border: 0; font-family: inherit; cursor: pointer; }
+.s-barra-inferior .s-icono { display: block; }
+.s-hoja-velo { position: fixed; inset: 0; z-index: 60; background: var(--s-velo); display: flex; align-items: flex-end; }
+.s-hoja {
+  width: 100%; max-height: 80vh; overflow: auto; background: var(--s-superficie); color: var(--s-tinta);
+  border-radius: var(--s-radio-bloque) var(--s-radio-bloque) 0 0; padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-1);
+}
+@media (max-width: 767px) {
+  /* Nada de la cabecera puede ensanchar la página (los menús del móvil son fijos: no se recortan). */
+  .s-cabecera { gap: var(--s-2); padding: 0 var(--s-3); overflow: hidden; max-width: 100vw; }
+  .s-cab-izquierda { flex-shrink: 1; min-width: 0; }
+  .s-cab-logotipo { display: none; }
+  .s-cab-empresa { max-width: 46vw; }
+  .s-esq-cuerpo { padding-bottom: 64px; }
+  .s-menu { position: fixed; top: var(--s-alto-cabecera); left: var(--s-2); right: var(--s-2); max-width: none; }
+}
+
+/* Lo que se enfoca o se lleva a la vista no queda debajo de la cabecera fija
+   ni de la barra de abajo del móvil (WCAG 2.4.11, foco no tapado). */
+html:has(.s-cabecera) { scroll-padding-top: 56px; }   /* 48 de la cabecera + 8: los tokens viven en .cx, no en html */
+html:has(.s-barra-inferior) { scroll-padding-bottom: 80px; }
+
+/* El nivel en el botón del usuario: los tres en la misma celda, solo se ve el
+   actual. El botón mide siempre lo del más largo («Sin experiencia»). */
+.s-usuario-nivel { display: inline-grid; }
+.s-usuario-nivel > span { grid-area: 1 / 1; visibility: hidden; }
+.s-usuario-nivel > span[data-actual] { visibility: visible; }
+
+/* Una entrada de la cinta que solo informa («Por correo · facturas@…»). */
+.s-cinta-dato { display: inline-flex; align-items: center; padding: 0 var(--s-2); min-height: var(--s-alto-control); color: var(--s-apoyo); font-size: var(--s-t-s); white-space: nowrap; }
+
+/* El nombre en el botón del usuario: un nombre largo se corta con «…» (entero al
+   pasar el ratón; el botón lo dice entero al lector). */
+.s-usuario-nombre { display: inline-block; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }

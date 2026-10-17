@@ -31,10 +31,13 @@ import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
 import { estadoDiez, motivoSinPatron, numerosFolvyDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 import { noSeValida } from '@/modules/conta/lib/validarConPdf'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 
 interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
 
 export default function AsientoPage() {
+  // S01: el local y la marca de cada apunte, solo con su eje encendido (Definiciones › Analítica).
+  const analitica = useAnalitica()
   const { entryId = '' } = useParams()
   const { accountId, cargando, userName, esAdmin } = useCuentaConta()
   const { activa } = useEmpresas()
@@ -170,14 +173,14 @@ export default function AsientoPage() {
       <div className="cxd-cuerpo">
         <section className="cx-tarjeta cxd-asiento" aria-label="Apuntes">
           <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">Apuntes</h2></div>
-          <div className="cxd-linea cxd-linea-cabeza" aria-hidden="true"><span>Cuenta · local · marca</span><span className="cxd-der">Debe</span><span className="cxd-der">Haber</span><span /></div>
+          <div className="cxd-linea cxd-linea-cabeza" aria-hidden="true"><span>{['Cuenta', analitica.local?.nombre.toLowerCase(), analitica.marca?.nombre.toLowerCase()].filter(Boolean).join(' · ')}</span><span className="cxd-der">Debe</span><span className="cxd-der">Haber</span><span /></div>
           {a.apuntes.map((l) => (
             <div key={l.posicion} className="cxd-linea-envoltura">
               <div className="cxd-linea">
                 <span className="cxd-linea-cuenta">
                   <span className="cxd-linea-nombre">{l.nombreCuenta}</span>
                   <span className="cxd-concepto-apoyo">
-                    {pastillasDeLinea(l).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+                    {pastillasDeLinea(l, { local: !!analitica.local, marca: !!analitica.marca }).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
                     {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
                     <Link to={rutaMayor(l.cuenta)} className="cxd-codigo">{l.cuenta}</Link>
                     {l.concepto && <span className="cxd-sale">· {l.concepto}</span>}

@@ -15,7 +15,7 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 # no romperse los datos, iban de una en una detrás de un cerrojo (e2e.cerrojo):
 # 1.741 min de espera en tres días, tantos como de pruebas. Ahora cada job coge
 # un CARRIL (scripts/e2e/carril.sh): una copia de las cuentas de prueba (A, B,
-# C, Diez, las dos «solas» del C06 y sus siete usuarios) con ids propios, que
+# C, D, Diez, las dos «solas» del C06 y sus ocho usuarios) con ids propios, que
 # se clona al empezar y se borra al acabar. Dos e2e a la vez ya no se pisan.
 # Los usuarios del carril reciben en cada ejecución una contraseña ALEATORIA,
 # que se enmascara y no sale del job. Las pruebas calculan los ids y correos
@@ -183,7 +183,7 @@ jobs:
             conta/d[0-9]*)              FRENTE=a ;;  # A · facturas recibidas (D01…)
             conta/b[0-9]*)              FRENTE=b ;;  # B · bancos (B01…)
             conta/c06*|conta/f[0-9]*)   FRENTE=c ;;  # C · contabilidad sola y facturas emitidas (C06, F01…)
-            conta/m[0-9]*)              FRENTE=d ;;  # D · el marco nuevo y sus piezas (M01…)
+            conta/m[0-9]*|conta/s[0-9]*) FRENTE=d ;; # D · el marco nuevo, sus piezas y el esqueleto (M01, S01…)
             *)                          FRENTE= ;;
           esac
           if [ -n "${FRENTE_PEDIDO:-}" ]; then

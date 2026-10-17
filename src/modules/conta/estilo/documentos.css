@@ -189,3 +189,19 @@
   .cxk-estado { margin-left: 0; }
   .cxk-lote { flex-direction: column; align-items: flex-start; }
 }
+
+/* S01 · Decisiones de la maqueta 3 (17/10): el enlace a Compras junto a «Lo que he leído»,
+   «No es una factura», el bloque verde «Lo que he comprobado» y «Ver el asiento» plegable. */
+.cxr-bloque-cabeza { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cxr-bloque-enlaces { display: inline-flex; gap: 14px; flex-wrap: wrap; }
+.cxr-descartada { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
+.cxr-motivos { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.cxr-comprobado { background: var(--cx-verde-suave); border: 1px solid color-mix(in srgb, var(--cx-verde-oscuro) 25%, transparent); border-radius: var(--cx-radio-tarjeta); padding: 16px 18px; }
+.cxr-comprobado-ambar { background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
+.cxr-comprobado h2 { margin: 0 0 8px; font-size: inherit; font-weight: 700; color: var(--cx-texto); }
+.cxr-comprobado ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.cxr-comprobado .cxr-ok span { color: var(--cx-verde-oscuro); font-weight: 700; }
+.cxr-comprobado .cxr-falta { color: var(--cx-ambar); }
+.cxr-comprobado .cxr-falta span { font-weight: 700; }
+.cxr-plegable > summary { cursor: pointer; list-style: revert; }
+.cxr-plegable > summary h2 { display: inline; }

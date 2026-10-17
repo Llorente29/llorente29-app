@@ -1,10 +1,16 @@
-# Vuelta atrás de la tanda viva: NINGUNA, a propósito.
-#
-# La tanda viva (20261120T0200, fin del relevo del secreto del despacho) borra
-# catcher_dispatch_secret_anterior de Vault: el secreto de antes deja de
-# existir y no hay a qué volver. Este fichero no lista ningún .down.sql, así
-# que el modo «vuelta_atras» PARA al leerlo («no lista ningún fichero»).
-#
-# La anterior de este fichero (W02, el relevo: 0100):
-# tests/conta/produccion/vuelta-atras-w02-secreto-relevo-20261017.txt. Su
-# .down.sql solo valía antes de la 0200; después, para solo (no hay _anterior).
+# Vuelta atrás de la tanda del S01 (modo «vuelta_atras»), en orden inverso.
+# ANTES, el front tiene que volver al de antes del S01: el del S01 lee lo que
+# esto quita. Cada fichero PARA, sin tocar nada, si ya hay algo que se perdería
+# (preferencias guardadas, un logo puesto, un eje cambiado por una persona, una
+# factura descartada); la 0140, la 0150 y la 0160 dejan las funciones byte a
+# byte como estaban en producción.
+# La anterior de este fichero (W02, sin vuelta atrás a propósito):
+# tests/conta/produccion/vuelta-atras-w02-secreto-despacho-20261017.txt.
+cuenta: scripts/conta/produccion/cuentas/s01-esqueleto.sql
+supabase/vuelta-atras/20261121T0160_s01_factura_descartada.down.sql
+supabase/vuelta-atras/20261121T0150_s01_recibidas_asiento_por_origen.down.sql
+supabase/vuelta-atras/20261121T0140_s01_regla5_eje_local.down.sql
+supabase/vuelta-atras/20261121T0130_s01_ejes_analiticos.down.sql
+supabase/vuelta-atras/20261121T0120_s01_logo_empresa.down.sql
+supabase/vuelta-atras/20261121T0110_s01_hosteleria_de_hoy.down.sql
+supabase/vuelta-atras/20261121T0100_s01_esqueleto.down.sql

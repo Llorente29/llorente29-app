@@ -4,7 +4,7 @@
 #   carril.sh coger          espera a que nadie esté migrando staging, coge un
 #                            carril libre y deja su número en $CARRIL_DIR/numero
 #   carril.sh clonar         copia la plantilla de prueba en ese carril (y le pone
-#                            a sus siete usuarios la contraseña de un solo uso)
+#                            a sus usuarios la contraseña de un solo uso)
 #   carril.sh borrar         borra lo del carril (también lo que dejó un run
 #                            cortado que usó el mismo número)
 #   carril.sh soltar         borra y suelta (pase lo que pase: if: always())

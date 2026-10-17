@@ -20,7 +20,8 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
  * llevó el programa anterior: sale (en «Todas») enlazada con su asiento traído
  * de Diez si casa, y nunca se apunta otra vez.
  */
-export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez'
+/** S01 (0160) · 'descartada': «No es una factura», con su motivo; sale en «Todas» y se deshace. */
+export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada'
 export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -212,7 +213,7 @@ export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
 export function punto(f: FilaDocumento): 'verde' | 'ambar' | 'gris' | 'rojo' {
   if (f.estado === 'apuntada') return 'verde'
   if (f.estado === 'en_diez') return f.diez ? 'verde' : 'gris'
-  if (f.estado === 'repetida') return 'gris'
+  if (f.estado === 'repetida' || f.estado === 'descartada') return 'gris'
   if (f.confianza === 'duda' || f.tipo === 'llegada') return 'gris'
   return 'ambar'
 }
@@ -318,4 +319,15 @@ export function columnasDelApunte(lineas: readonly { cuenta: string; debe: numbe
     gasto: lineas.filter((l) => l.debe).map((l) => ({ cuenta: l.cuenta, importe: l.debe })),
     pagar: lineas.filter((l) => l.haber).map((l) => ({ cuenta: l.cuenta, importe: l.haber })),
   }
+}
+
+/**
+ * S01 · Desde Contabilidad › Asientos, «para revisar» no va por mes: todas las
+ * que esperan de los últimos 12 meses (este incluido), en el orden de N22.
+ */
+export function ventanaParaRevisar(hoy: string): { desde: string; hasta: string } {
+  const y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7))
+  const ini = new Date(Date.UTC(y, m - 12, 1))
+  const desde = `${ini.getUTCFullYear()}-${String(ini.getUTCMonth() + 1).padStart(2, '0')}-01`
+  return { desde, hasta: limites(hoy.slice(0, 7)).hasta }
 }

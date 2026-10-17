@@ -61,17 +61,19 @@ describe('los colores de Sumied, con AA donde se usan', () => {
     expect(cssDelTema(MARCAS.folvy)).toBeNull()
     expect(cssDelTema(MARCAS.contabilidad)).toBeNull()
   })
-  // M01 (F01, respuesta 3): el marco nuevo va con tokens por marca. En Sumied,
-  // su letra y su azul; el resto (fondos, bordes, ámbar, radios) es el de N30.
-  it('el marco nuevo: en Sumied, su letra y su azul, y nada más', () => {
+  // M01 (F01, respuesta 3): el marco nuevo va con tokens por marca. Desde el
+  // S01 sus --cxm-* son alias del sistema de diseño (--s-*), y el tema de
+  // Sumied escribe estos últimos: su letra, sus colores y su barra (maquetas
+  // del S01). Los contrastes, en tests/unit/modules/conta/s01/diseno.test.tsx.
+  it('el marco nuevo: en Sumied, el tema va a los --s-* (de los que --cxm-* es alias), no a los --cxm-*', () => {
     const css = cssDelTema(S)!
     const desde = css.indexOf('html[data-marca="sumied"] .cxm {')
     const bloque = css.slice(desde, css.indexOf('}', desde))
     expect(desde).toBeGreaterThan(-1)
-    expect(bloque).toContain('--cxm-azul: #1E63C9;')
-    expect(bloque).toContain("--cxm-letra: 'Inter Variable'")
-    expect(bloque).toContain('--cxm-azul-encima: color-mix(in srgb, #1E63C9')
-    expect(bloque.match(/--cxm-[a-z-]+/g)).toEqual(['--cxm-azul', '--cxm-azul-encima', '--cxm-letra'])
+    expect(bloque).toContain('--s-accion: #1E63C9;')
+    expect(bloque).toContain("--s-letra: 'Inter Variable'")
+    expect(bloque).toContain('--s-accion-encima: color-mix(in srgb, #1E63C9')
+    expect(css).not.toMatch(/--cxm-/)
   })
 })
 

@@ -15,16 +15,17 @@ import { rutaLibroDiario, rutaLiquidacion, rutaLiquidacionNueva } from '@/config
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
-import { Cabecera, ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
+import { ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
   agruparAMirar, albaranesDesde, cuandoLlega, diasEntre, DIAS_SIN_FACTURAR, estadoLiquidacion, fraseLiquidacion, fraseSaldo, importeEsperando,
-  mesAnterior, mesLargo, mesSiguiente, nombreMes, primeroDeMes, type EsperandoFactura, type FilaLiquidacion, type Mirar,
+  mesAnterior, mesSiguiente, nombreMes, primeroDeMes, type EsperandoFactura, type FilaLiquidacion, type Mirar,
 } from '@/modules/conta/lib/compras'
 import { cargarEsperando, cargarLiquidaciones, cargarMirar, contarContabilizadas } from '@/modules/conta/services/comprasService'
 import SubirFactura from '@/modules/conta/compras/SubirFactura'
 import { FilasAMirar } from '@/modules/conta/compras/QueMirar'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
+import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 interface Datos {
   mirar: Mirar
@@ -45,8 +46,12 @@ export default function ComprasPage() {
   // C06: «Subir factura» desde la ficha del proveedor llega aquí con ?subir=<proveedor>
   // (sin Cocina no hay /supply/facturas). Se abre el diálogo de subir.
   const [params, setParams] = useSearchParams()
-  const [subir, setSubir] = useState<{ ficheros?: File[] } | null>(() => (params.get('subir') !== null ? {} : null))
-  useEffect(() => { if (params.get('subir') !== null) setParams((p) => { p.delete('subir'); return p }, { replace: true }) }, [params, setParams])
+  // S01: «Subir factura» de la cinta llega igual (?subir), también estando ya aquí.
+  const [subir, setSubir] = useState<{ ficheros?: File[] } | null>(null)
+  const pideSubir = params.get('subir') !== null
+  if (pideSubir && subir === null) setSubir({})
+  useEffect(() => { if (pideSubir) setParams((p) => { p.delete('subir'); return p }, { replace: true }) }, [pideSubir, setParams])
+  const hosteleria = useHosteleria()
 
   useEffect(() => {
     if (!accountId) return
@@ -67,12 +72,9 @@ export default function ComprasPage() {
 
   const hecho = (frase: string) => { setAviso(frase); setVuelta((v) => v + 1); refrescarCuentasMenu() }
 
-  const cabecera = (
-    <Cabecera antetitulo="Contabilidad" titulo="Compras" derecha={<>
-      <span className="cxc-pie-mes">{mesLargo(hoy).replace(/^./, (c) => c.toUpperCase())}</span>
-      <button type="button" className="cx-boton" onClick={() => setSubir({})} disabled={!accountId}>Subir una factura</button>
-    </>} />
-  )
+  // S01 · paso 3: el título lo dice la cabecera del esqueleto (Compras y gastos › Por revisar)
+  // y «Subir factura» está en la cinta.
+  const cabecera = <h1 className="cx-oculto">Compras y gastos · Por revisar</h1>
 
   if (error) return <div className="cxc">{cabecera}<ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
   if (!datos || !accountId) return <div className="cxc">{cabecera}<TarjetaCargando /><TarjetaCargando /></div>
@@ -82,7 +84,7 @@ export default function ComprasPage() {
   return (
     <div className="cxc">
       {cabecera}
-      <p className="cxc-entra">Lo que llega con el género ya entra solo desde el local. Aquí sólo ves lo que necesita que alguien decida.</p>
+      <p className="cxc-entra">{hosteleria ? 'Lo que llega con el género ya entra solo desde el local. ' : ''}Aquí sólo ves lo que necesita que alguien decida.</p>
       <Guardado texto={aviso} />
 
       <Tarjeta titulo="Qué tienes que mirar" accion={<span className={n === 0 ? 'cxc-cuenta cxc-cuenta-cero' : 'cxc-cuenta'} aria-label={`${n} por decidir`}>{n}</span>}>
@@ -93,12 +95,12 @@ export default function ComprasPage() {
 
       <Esperando filas={datos.esperando} hoy={hoy} soltar={(fs) => setSubir({ ficheros: fs })} />
 
-      <Tarjeta titulo="Liquidaciones del mes">
+      {hosteleria && <Tarjeta titulo="Liquidaciones del mes">
         <p className="cx-ayuda" style={{ marginTop: 0 }}>Proveedores que no facturan cada entrega: liquidan una vez al mes, local por local.</p>
         {datos.liquidaciones.every((x) => x.filas.length === 0)
           ? <p style={{ margin: 0, color: 'var(--cx-apoyo)' }}>Ningún proveedor tiene puesto que liquida cada mes. Se pone en su ficha, en «Cómo te factura».</p>
           : datos.liquidaciones.flatMap((x) => x.filas.map((f) => <FilaLiq key={`${x.mes}-${f.proveedor}-${f.local}`} f={f} mes={x.mes} hoy={hoy} />))}
-      </Tarjeta>
+      </Tarjeta>}
 
       {datos.contabilizadas !== null && (
         <p className="cxc-pie-mes">

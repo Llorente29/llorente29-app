@@ -17,6 +17,7 @@ import { diaCorto, papelConArticulo } from '@/modules/conta/lib/compras'
 import { scanReceipt } from '@/modules/supply/services/goodsReceiptService'
 import { resolveInvoiceHeader } from '@/modules/supply/services/supplierInvoiceService'
 import { listarLocales, listarProveedores } from '@/modules/conta/services/proveedorService'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import {
   candidatasDeFactura, casarFactura, facturaDesdePapel, type Candidata, type ResultadoFactura,
 } from '@/modules/conta/services/comprasService'
@@ -58,6 +59,8 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
   const [locales, setLocales] = useState<{ id: string; name: string }[]>([])
   const [proveedor, setProveedor] = useState('')
   const [local, setLocal] = useState('')
+  // S01: con el eje «local» apagado (Definiciones › Analítica), ni se pide ni se guarda.
+  const { local: ejeLocal } = useAnalitica()
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set())
   const [ocupado, setOcupado] = useState(false)
 
@@ -100,7 +103,7 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
     if (!proveedor) { setFallo('Elige de qué proveedor es.'); return }
     setOcupado(true); setFallo(null)
     try {
-      const r: ResultadoFactura = await facturaDesdePapel(sesion, proveedor, local || null, empresaId)
+      const r: ResultadoFactura = await facturaDesdePapel(sesion, proveedor, ejeLocal ? local || null : null, empresaId)
       if (!r.factura) { setFallo(r.motivo); return }
       const cs = await candidatasDeFactura(r.factura)
       setMarcadas(new Set(cs.filter((c) => c.proposed).map((c) => c.goods_receipt_id)))
@@ -141,13 +144,15 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
                 {proveedores.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </label>
-            <label className="cx-campo">
-              <span className="cx-etiqueta">Local</span>
-              <select className="cx-input" value={local} onChange={(e) => setLocal(e.target.value)}>
-                <option value="">De todos (sin local)</option>
-                {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-            </label>
+            {ejeLocal && (
+              <label className="cx-campo">
+                <span className="cx-etiqueta">{ejeLocal.nombre}</span>
+                <select className="cx-input" value={local} onChange={(e) => setLocal(e.target.value)}>
+                  <option value="">De todos (sin {ejeLocal.nombre.toLowerCase()})</option>
+                  {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </label>
+            )}
             <div className="cx-pie">
               <button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button>
               <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void registrar(paso.sesion)}>

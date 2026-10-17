@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // scripts/e2e/carril-entrar.mjs <N>
 //
-// W02 (paso 1c): los siete usuarios del carril N entran con la contraseña de
+// W02 (paso 1c): los usuarios del carril N entran con la contraseña de
 // un solo uso (CLAVE_PRUEBAS) y cada uno ve SU cuenta del carril, no la de la
 // plantilla ni la de otro carril. Es lo primero que haría una prueba: si esto
 // falla, el carril no sirve y se dice aquí, no a mitad de la suite.
@@ -19,12 +19,13 @@ if (!Number.isInteger(n) || n < 1 || !URL_ || !ANON || !CLAVE) {
   process.exit(2)
 }
 
-// Los siete de la plantilla y la cuenta que tiene que ver cada uno (null: ninguna, el de plataforma).
+// Los de la plantilla (ocho desde el S01) y la cuenta que tiene que ver cada uno (null: ninguna, el de plataforma).
 const PLANTILLA = [
   ['a.admin@prueba.folvy.test', 'c01a0000-0000-4000-8000-00000000000a'],
   ['a.encargado@prueba.folvy.test', 'c01a0000-0000-4000-8000-00000000000a'],
   ['b.admin@prueba.folvy.test', 'c01b0000-0000-4000-8000-00000000000b'],
   ['c.admin@prueba.folvy.test', 'c01c0000-0000-4000-8000-00000000000c'],
+  ['d.admin@prueba.folvy.test', 'c01d0000-0000-4000-8000-00000000000d'],
   ['sola.admin@c06-prueba.test', null],
   ['sola.alta@c06-prueba.test', null],
   ['c06.plataforma@c06-prueba.test', null],

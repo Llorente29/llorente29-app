@@ -150,3 +150,12 @@ export async function quitarActividadesDelAlta(companyId: string): Promise<void>
   const { error } = await tabla('company_activity').delete().eq('company_id', companyId)
   if (error) throw new Error(mensaje('No se han podido quitar las actividades de antes', error))
 }
+
+/**
+ * S01 · La marca de hostelería que pone el alta, por la actividad. Mientras el
+ * alta está a medias, volver a «A qué te dedicas» la vuelve a poner.
+ */
+export async function ponerHosteleriaDelAlta(accountId: string, companyId: string, esHosteleria: boolean): Promise<void> {
+  const { error } = await tabla('company').update({ is_hospitality: esHosteleria }).eq('id', companyId).eq('account_id', accountId)
+  if (error) throw new Error(mensaje('No se ha guardado si es de hostelería', error))
+}

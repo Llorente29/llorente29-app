@@ -23,12 +23,14 @@ import {
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 
 type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
 const COMUN = 'comun'
 
 export function CuentasYExtractos() {
   const { companyId, datos, vuelta, recargar } = useBancos()
+  const { local: ejeLocal } = useAnalitica()
   const [query] = useSearchParams()
   const [aviso, setAviso] = useState<Aviso>(null)
   const porDar = useLeer(() => cuentasPorDarDeAlta(companyId), `${companyId}:${vuelta}`)
@@ -62,7 +64,7 @@ export function CuentasYExtractos() {
       </div>
       {alta && <DialogoAlta inicial={alta} alCerrar={() => setAlta(null)} alGuardar={(c) => hacer(async () => {
         await altaCuenta(companyId, c); setAlta(null)
-        return `Dada de alta: ${nombreConCodigo(c.nombre, c.codigo)}, ${c.comun ? 'común a todos los locales' : `del local ${datos.locales.find((l) => l.id === c.localId)?.nombre ?? ''}`}. Ya puedes subir su extracto.`
+        return `Dada de alta: ${nombreConCodigo(c.nombre, c.codigo)}${!ejeLocal ? '' : c.comun ? ', común a todos los locales' : `, del local ${datos.locales.find((l) => l.id === c.localId)?.nombre ?? ''}`}. Ya puedes subir su extracto.`
       })} />}
     </section>
   )
@@ -71,6 +73,9 @@ export function CuentasYExtractos() {
 function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extractos: Extracto[]; hacer: (f: () => Promise<string>) => Promise<void>; prellenar: string | null }) {
   const { datos } = useBancos()
   const nombreLocal = (id: string | null) => (id ? datos.locales.find((l) => l.id === id)?.nombre ?? 'un local' : 'Común')
+  // S01: con el eje «local» apagado (Definiciones › Analítica), ni se pide ni se enseña;
+  // lo que se da de alta va «común» (sin local), que es lo que la base pide.
+  const { local: ejeLocal } = useAnalitica()
   const [local, setLocal] = useState(b.localId ?? COMUN)
   const [alias, setAlias] = useState(b.alias ?? '')
   const [deshacer, setDeshacer] = useState<Extracto | null>(null)
@@ -90,16 +95,18 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
             onChange={(e) => setAlias(e.target.value)}
             onBlur={() => { if (alias.trim() !== (b.alias ?? '')) hacer(async () => { await guardarAlias(b.id, alias); return alias.trim() ? `${b.nombre} sale en la barra como «${alias.trim()}».` : `${b.nombre} sale en la barra con su nombre entero.` }) }} />
         </label>
-        <label className="cxb-local">
-          <span>Local</span>
-          <select className="cx-input" value={local} onChange={(e) => {
-            const v = e.target.value; setLocal(v)
-            hacer(async () => { await localDeCuenta(b.id, v === COMUN ? null : v, v === COMUN); return `${b.nombre}: ahora es ${v === COMUN ? 'común a todos los locales' : `del local ${nombreLocal(v)}`}.` })
-          }}>
-            <option value={COMUN}>Común a todos</option>
-            {datos.locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
-        </label>
+        {ejeLocal && (
+          <label className="cxb-local">
+            <span>{ejeLocal.nombre}</span>
+            <select className="cx-input" value={local} onChange={(e) => {
+              const v = e.target.value; setLocal(v)
+              hacer(async () => { await localDeCuenta(b.id, v === COMUN ? null : v, v === COMUN); return `${b.nombre}: ahora es ${v === COMUN ? 'común a todos los locales' : `del local ${nombreLocal(v)}`}.` })
+            }}>
+              <option value={COMUN}>Común a todos</option>
+              {datos.locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+            </select>
+          </label>
+        )}
       </div>
       {!b.cuenta && <div className="cx-aviso" role="note">Este banco no tiene su cuenta en contabilidad: no puedo casar nada hasta que la tenga.</div>}
 
@@ -118,13 +125,13 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
         <p className="cx-ayuda">Sus pagos salen en el extracto de esta cuenta. Con la tarjeta dada de alta sé quién la lleva y a quién pedirle el ticket.</p>
         {b.tarjetas.map((t) => (
           <div key={t.id} className="cxb-lista-fila">
-            <span className="cxb-lista-texto"><strong>Tarjeta ···{t.ultimos4} · {t.titular}</strong><span className="cx-ayuda">{t.localId ? `Del local ${nombreLocal(t.localId)}` : 'Común a todos los locales'}</span></span>
+            <span className="cxb-lista-texto"><strong>Tarjeta ···{t.ultimos4} · {t.titular}</strong>{ejeLocal && <span className="cx-ayuda">{t.localId ? `Del local ${nombreLocal(t.localId)}` : 'Común a todos los locales'}</span>}</span>
             <button type="button" className="cx-boton-sec" onClick={() => hacer(async () => { await bajaTarjeta(t.id); return `Tarjeta ···${t.ultimos4} de ${t.titular} dada de baja. Sus pagos ya casados siguen siendo suyos.` })}>Dar de baja</button>
           </div>
         ))}
         <form className="cxb-tarjeta-nueva" aria-label={`Añadir una tarjeta a ${b.nombre}`} onSubmit={(e) => {
           e.preventDefault()
-          const comun = nueva.local === COMUN
+          const comun = !ejeLocal || nueva.local === COMUN
           hacer(async () => {
             await guardarTarjeta(b.id, { ultimos4: nueva.ultimos4, titular: nueva.titular, localId: comun || !nueva.local ? null : nueva.local, comun })
             const t = `Tarjeta ···${nueva.ultimos4.replace(/\D/g, '')} de ${nueva.titular.trim()} dada de alta en ${b.nombre}. Desde ahora sus pagos van a su nombre.`
@@ -139,14 +146,16 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
           <label className="cx-campo"><span>Quién la lleva</span>
             <input className="cx-input" value={nueva.titular} onChange={(e) => setNueva({ ...nueva, titular: e.target.value })} placeholder="Nombre" />
           </label>
-          <label className="cx-campo"><span>¿De qué local?</span>
-            <select className="cx-input" value={nueva.local} onChange={(e) => setNueva({ ...nueva, local: e.target.value })}>
-              <option value="">Elige…</option>
-              <option value={COMUN}>Común a todos</option>
-              {datos.locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-            </select>
-          </label>
-          <button type="submit" className="cx-boton" disabled={nueva.ultimos4.length !== 4 || !nueva.titular.trim() || !nueva.local}>Añadir tarjeta</button>
+          {ejeLocal && (
+            <label className="cx-campo"><span>¿De qué {ejeLocal.nombre.toLowerCase()}?</span>
+              <select className="cx-input" value={nueva.local} onChange={(e) => setNueva({ ...nueva, local: e.target.value })}>
+                <option value="">Elige…</option>
+                <option value={COMUN}>Común a todos</option>
+                {datos.locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+              </select>
+            </label>
+          )}
+          <button type="submit" className="cx-boton" disabled={nueva.ultimos4.length !== 4 || !nueva.titular.trim() || (!!ejeLocal && !nueva.local)}>Añadir tarjeta</button>
         </form>
         <p className="cx-ayuda">Solo los 4 últimos dígitos: el número entero no se guarda nunca.</p>
       </div>
@@ -194,19 +203,22 @@ function DialogoAlta({ inicial, alCerrar, alGuardar }: {
   const [nombre, setNombre] = useState(inicial.nombre)
   const [iban, setIban] = useState(inicial.iban)
   const [local, setLocal] = useState('')
+  const { local: ejeLocal } = useAnalitica()
   return (
     <Dialogo titulo={`Dar de alta ${inicial.codigo}`} alCerrar={alCerrar}>
-      <form className="cx-formulario" onSubmit={(e) => { e.preventDefault(); alGuardar({ nombre: nombre.trim(), iban, codigo: inicial.codigo, localId: local === COMUN ? null : local, comun: local === COMUN }) }}>
+      <form className="cx-formulario" onSubmit={(e) => { e.preventDefault(); alGuardar({ nombre: nombre.trim(), iban, codigo: inicial.codigo, localId: !ejeLocal || local === COMUN ? null : local, comun: !ejeLocal || local === COMUN }) }}>
         <label className="cx-campo"><span>Cómo la llamas</span><input className="cx-input" value={nombre} onChange={(e) => setNombre(e.target.value)} /></label>
         <label className="cx-campo"><span>IBAN</span><input className="cx-input cx-cifra" value={iban} onChange={(e) => setIban(e.target.value)} placeholder="ES00 0000 0000 0000 0000 0000" /></label>
-        <label className="cx-campo"><span>¿De qué local es esta cuenta?</span>
-          <select className="cx-input" value={local} onChange={(e) => setLocal(e.target.value)}>
-            <option value="">Elige…</option>
-            <option value={COMUN}>Común a todos</option>
-            {datos.locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
-          </select>
-        </label>
-        <div className="cx-pie"><button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button><button type="submit" className="cx-boton" disabled={!nombre.trim() || !iban.trim() || !local}>Dar de alta</button></div>
+        {ejeLocal && (
+          <label className="cx-campo"><span>¿De qué {ejeLocal.nombre.toLowerCase()} es esta cuenta?</span>
+            <select className="cx-input" value={local} onChange={(e) => setLocal(e.target.value)}>
+              <option value="">Elige…</option>
+              <option value={COMUN}>Común a todos</option>
+              {datos.locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}
+            </select>
+          </label>
+        )}
+        <div className="cx-pie"><button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button><button type="submit" className="cx-boton" disabled={!nombre.trim() || !iban.trim() || (!!ejeLocal && !local)}>Dar de alta</button></div>
       </form>
     </Dialogo>
   )

@@ -1,7 +1,9 @@
 // src/modules/conta/bancos/navegacion.ts
 //
-// B01 · Bancos en tres niveles (N17): las pestañas, las acciones de la barra y
-// lo que encuentra el buscador (Ctrl K). Sin React: se prueba suelto.
+// B01 · Bancos: sus vistas y lo que encuentra el buscador (Ctrl K). Las
+// pestañas las pinta el esqueleto (esqueleto/productos.ts) y la barra de
+// acciones es su cinta (esqueleto/ordenes.ts) desde el paso 3 del S01; los
+// favoritos son los del esqueleto, para todo. Sin React: se prueba suelto.
 
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
@@ -43,20 +45,4 @@ export function buscarEnBancos(q: string): Buscable[] {
   const t = normal(q).trim()
   if (!t) return BUSCABLES
   return BUSCABLES.filter((b) => normal(`${b.nombre} ${b.donde} ${b.palabras}`).includes(t))
-}
-
-/** Favoritos de Bancos, por persona (comodidad del navegador: si no hay almacén, no hay favoritos y nada falla). */
-const clave = (usuario: string) => `folvy:conta:bancos:favoritos:${usuario}`
-export function leerFavoritos(usuario: string, almacen: Storage | null): VistaBancos[] {
-  try { const v = JSON.parse(almacen?.getItem(clave(usuario)) ?? '[]'); return Array.isArray(v) ? v.filter((x) => (VISTAS as string[]).includes(x)) : [] } catch { return [] }
-}
-export function alternarFavorito(usuario: string, vista: VistaBancos, almacen: Storage | null): VistaBancos[] {
-  const ahora = leerFavoritos(usuario, almacen)
-  const nuevo = ahora.includes(vista) ? ahora.filter((x) => x !== vista) : [...ahora, vista]
-  try { almacen?.setItem(clave(usuario), JSON.stringify(nuevo)) } catch { /* sin almacén: solo en esta sesión */ }
-  return nuevo
-}
-
-export const NOMBRE_VISTA: Record<VistaBancos, string> = {
-  movimientos: 'Movimientos', reglas: 'Reglas', cuentas: 'Cuentas y extractos', cierre: 'Cierre del mes', subir: 'Subir extracto', hecho: LO_HECHO,
 }

@@ -18,8 +18,8 @@
 // sube con la cámara.
 
 import { useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaCompras, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { rutaCompras, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -36,6 +36,11 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
 import { leerDocumentos, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
 import { QuincenaCatcher } from '@/modules/conta/documentos/QuincenaCatcher'
+import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
+import { useEntradasEnCinta, useHosteleria, type EntradaPantalla, type EntradasCinta } from '@/modules/conta/marco/nuevo/contexto'
+
+/** El grupo de la cinta (esqueleto/ordenes.ts, dePantalla) de cada grupo de la barra de la N22. */
+const GRUPO_CINTA: Record<string, string> = { Traer: 'traer', Esperadas: 'esperadas', 'Leídas': 'leidas' }
 
 const ACEPTA = 'application/pdf,image/jpeg,image/png,image/webp'
 
@@ -94,6 +99,24 @@ export default function DocumentosPage() {
     } catch (e) { setFallo(e instanceof Error ? e.message : String(e)) }
   }
 
+  // S01 · paso 3: la barra de la N22 (TRAER · ESPERADAS · LEÍDAS) va en la cinta
+  // de Compras y gastos › Facturas recibidas. Depende de la empresa (el correo,
+  // Cocina): la pone esta pantalla. Con sus números escritos y su punto ámbar.
+  const hosteleria = useHosteleria()
+  const dc = datos.datos
+  const entradas: EntradasCinta | null = dc && !movil ? Object.fromEntries(barra(dc, { solo: producto.solo, producto: producto.nombre }).map((g) => [
+    GRUPO_CINTA[g.etiqueta] ?? g.etiqueta,
+    g.entradas.map((e): EntradaPantalla => {
+      const comun = { id: e.id, etiqueta: e.nombre, aviso: e.tono === 'ambar', titulo: e.id === 'correo' ? dc.correo.direccion ?? e.dato : e.dato }
+      if (e.id === 'cocina') return { ...comun, a: rutaCompras() }
+      if (e.id === 'subir') return { ...comun, alPulsar: () => ficheros.current?.click() }
+      if (e.id === 'fijas') return { ...comun, numero: dc.cifras.esperadas_no_llegadas || undefined, alPulsar: () => setPidiendo(true) }
+      if (e.id === 'hecho') return { ...comun, numero: dc.cifras.apuntadas_solas || undefined, actual: ver === 'apuntadas', alPulsar: () => cambiar({ ver: 'apuntadas' }) }
+      return comun // «Por correo»: enseña su dirección; no hace nada más.
+    }),
+  ])) : null
+  useEntradasEnCinta(entradas)
+
   if (!accountId && !cargando) return <Vacio titulo="No hay cuenta activa." explicacion="Elige una cuenta para ver sus documentos." />
   if (!activa) return <div className="cx-tarjeta"><Vacio titulo="Aún no hay ninguna empresa." explicacion="Da de alta tu empresa y aquí llegan sus facturas." /></div>
 
@@ -110,24 +133,16 @@ export default function DocumentosPage() {
 
   return (
     <div className="cxl-pagina">
-      <header className="cxl-cabeza">
-        <div>
-          <span className="cxl-ante">Contabilidad</span>
-          <h1 className="cxl-titulo">Documentos</h1>
-        </div>
-        <label>
-          <span className="cx-oculto">Mes</span>
-          <select className="cx-input" value={mes} onChange={(e) => cambiar({ mes: e.target.value })}>
+      {/* S01 · paso 3: Compras y gastos › Facturas recibidas. El título y las pestañas, en la
+          cabecera del esqueleto; el mes, al lado (PeriodoEnBarra), como el de Bancos. */}
+      <h1 className="cx-oculto">Facturas recibidas</h1>
+      {movil
+        ? <label className="cxr-mes-movil"><select className={movil ? 'cx-input' : 'cxm-select'} aria-label="Mes" value={mes} onChange={(e) => cambiar({ mes: e.target.value })}>
             {listaMeses.map((m) => <option key={m.valor} value={m.valor}>{m.nombre}</option>)}
-          </select>
-        </label>
-      </header>
-
-      {!movil && (
-        <nav className="cxl-areas" aria-label="Áreas de Documentos">
-          <Link to={rutaDocumentos()} className="cxl-area" aria-current="page">Facturas recibidas</Link>
-        </nav>
-      )}
+          </select></label>
+        : <PeriodoEnBarra><select className={movil ? 'cx-input' : 'cxm-select'} aria-label="Mes" value={mes} onChange={(e) => cambiar({ mes: e.target.value })}>
+            {listaMeses.map((m) => <option key={m.valor} value={m.valor}>{m.nombre}</option>)}
+          </select></PeriodoEnBarra>}
 
       {inputs}
       {datos.error && <ErrorConReintento mensaje={datos.error} reintentar={datos.recargar} />}
@@ -135,9 +150,6 @@ export default function DocumentosPage() {
 
       {d && (
         <>
-          {!movil && <Barra d={d} solo={producto.solo} producto={producto.nombre}
-            alSubir={() => ficheros.current?.click()} alPedir={() => setPidiendo(true)} alVerApuntadas={() => cambiar({ ver: 'apuntadas' })} />}
-
           <div className="cxr-seccion">
             <div>
               <Migas migas={[{ etiqueta: 'Documentos' }, { etiqueta: 'Facturas recibidas' }]} />
@@ -166,7 +178,7 @@ export default function DocumentosPage() {
 
           <Banda d={d} alPedir={() => setPidiendo(true)} />
           <Cifras d={d} ver={ver} solo={producto.solo} alVer={(v) => cambiar({ ver: v })} alPedir={() => setPidiendo(true)} />
-          {accountId && <QuincenaCatcher accountId={accountId} companyId={activa.id} quien={userName} />}
+          {accountId && hosteleria && <QuincenaCatcher accountId={accountId} companyId={activa.id} quien={userName} />}
           <Lista d={d} ver={ver} movil={movil} solo={producto.solo} entendidoTitulo={t.entendido} pie={t.repetida} alIr={irA} alVerTodas={() => cambiar({ ver: 'todas' })} />
         </>
       )}
@@ -176,40 +188,6 @@ export default function DocumentosPage() {
           alCerrar={() => setPidiendo(false)} alPedir={() => setVuelta((v) => v + 1)} />
       )}
     </div>
-  )
-}
-
-/** Nivel 3: Traer · Esperadas · Leídas. */
-function Barra({ d, solo, producto, alSubir, alPedir, alVerApuntadas }: {
-  d: DatosDocumentos; solo: boolean; producto: string | null; alSubir: () => void; alPedir: () => void; alVerApuntadas: () => void
-}) {
-  const accion: Record<string, (() => void) | undefined> = { subir: alSubir, fijas: alPedir, hecho: alVerApuntadas }
-  return (
-    <nav className="cxl-barra cxr-barra" aria-label="Acciones de Facturas recibidas">
-      <div className="cxl-barra-grupos">
-        {barra(d, { solo, producto }).map((g) => (
-          <div key={g.etiqueta} className="cxl-grupo" role="group" aria-label={g.etiqueta}>
-            <div className="cxl-grupo-acciones">
-              {g.entradas.map((e) => {
-                const dentro = (
-                  <>
-                    <span className="cxl-accion-nombre">{e.nombre} <span className={`cxl-punto cxl-punto-${e.tono}`} aria-hidden="true" /></span>
-                    <span className="cxl-accion-dato">{e.dato}</span>
-                  </>
-                )
-                // «De Cocina» lleva a sus recepciones; «Por correo» enseña su dirección (no hace nada más).
-                if (e.id === 'cocina') return <Link key={e.id} to={rutaCompras()} className="cxl-accion">{dentro}</Link>
-                const hacer = accion[e.id]
-                return hacer
-                  ? <button key={e.id} type="button" className="cxl-accion" onClick={hacer}>{dentro}</button>
-                  : <span key={e.id} className="cxl-accion" title={e.id === 'correo' ? d.correo.direccion ?? undefined : undefined}>{dentro}</span>
-              })}
-            </div>
-            <span className="cxl-grupo-etiqueta">{g.etiqueta}</span>
-          </div>
-        ))}
-      </div>
-    </nav>
   )
 }
 

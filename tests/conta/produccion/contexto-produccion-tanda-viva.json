@@ -1,16 +1,33 @@
 {
- "_que": "W02 · contexto de producción de la tanda viva «fin del relevo del secreto del despacho» (20261120T0200), medido en SOLO LECTURA el 17/10 a las 15:59 UTC (begin read only … rollback), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow, con la 0100 ya en el historial (real de las 15:54 UTC) y los dos secretos del relevo en Vault. Existe vault.secrets (reltuples 0: estadística sin refrescar, no el número de secretos); nada del camino del pedido; el fichero no está en el historial.",
- "medido": "2026-10-17T15:59Z",
+ "_que": "S01 · contexto de producción de la tanda viva «el esqueleto de Sumied» (20261121T0100–0160), medido en SOLO LECTURA el 17/10 a las 20:50 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen company, supplier_invoice, storage.buckets y storage.objects (reltuples de company y buckets en 0: estadística sin refrescar, no el número de filas) y las cuatro funciones que cambian con la misma firma: conta_motivos_para_validar(uuid) (md5 de pg_get_functiondef 66965ffa…, la de la M01), banco_facturas_recibidas_pendientes(uuid,date) (f6e2f68f…), conta_documentos_recibidos(uuid,date,date) (ea1dd614…) y tg_supplier_invoice_no_repetida() (a69d2408…). Nada del camino del pedido; ninguno de los siete en el historial.",
+ "medido": "2026-10-17T20:50Z",
  "tanda": {
-  "supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql": "74779624d887a6fba86e1ff2a72637af"
+  "supabase/migrations/20261121T0100_s01_esqueleto.sql": "afe0ce92d3f98e37d995ac63f7a6f28c",
+  "supabase/migrations/20261121T0110_s01_hosteleria_de_hoy.sql": "094cf7aee3f21d72875b7bc7e76b915b",
+  "supabase/migrations/20261121T0120_s01_logo_empresa.sql": "1e1466d41c5ecb49743d2c2ca7c959e5",
+  "supabase/migrations/20261121T0130_s01_ejes_analiticos.sql": "94f9fc23a58892273c7e10d7f8a04d18",
+  "supabase/migrations/20261121T0140_s01_regla5_eje_local.sql": "91c3838367aa1adb5e2d18749f59f86a",
+  "supabase/migrations/20261121T0150_s01_recibidas_asiento_por_origen.sql": "ed343ee42098e161d79c084cbba1416c",
+  "supabase/migrations/20261121T0160_s01_factura_descartada.sql": "ac4b8fd6a3efdfbb068d19921019cdc0"
  },
  "contexto": {
   "tablas": [
-   "vault.secrets"
+   "public.company",
+   "public.supplier_invoice",
+   "storage.buckets",
+   "storage.objects"
   ],
-  "funciones": [],
+  "funciones": [
+   "public.banco_facturas_recibidas_pendientes(uuid,date)",
+   "public.conta_documentos_recibidos(uuid,date,date)",
+   "public.conta_motivos_para_validar(uuid)",
+   "public.tg_supplier_invoice_no_repetida()"
+  ],
   "filas": {
-   "vault.secrets": 0
+   "public.company": 0,
+   "public.supplier_invoice": 6,
+   "storage.buckets": 0,
+   "storage.objects": 1407
   },
   "otras": {},
   "camino": {

@@ -35,6 +35,8 @@ const ESTADO: Record<string, { texto: string; tono: string }> = {
   borrador: { texto: 'Borrador', tono: 'cx-chip' },
   en_revision: { texto: 'En revisión', tono: 'cx-chip' },
   con_discrepancias: { texto: 'Con diferencias', tono: 'cx-chip' },
+  // S01 (0160): sale, con lo que es (regla 7); se deshace en Contabilidad › Asientos › Recibida.
+  descartada: { texto: 'No es una factura', tono: 'cx-chip' },
 }
 
 const numero = (f: FacturaDeProveedor) => f.invoiceNumber ?? f.code ?? 'Sin número'
@@ -251,7 +253,7 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
         </button>
       )}
 
-      {f.status !== 'aprobada' && f.status !== 'pagada' && !rep && (
+      {f.status !== 'aprobada' && f.status !== 'pagada' && f.status !== 'descartada' && !rep && (
         <p className="cx-ayuda" style={{ margin: 0 }}>Aún no está aprobada: hasta que se apruebe en Facturas no cuenta en lo que le debes.</p>
       )}
 
