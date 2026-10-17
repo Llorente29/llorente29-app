@@ -1,0 +1,51 @@
+name: Medir el PDF del 3174 (producción, solo lectura)
+
+# QUÉ HACE (C06b, 17/10)
+# El asiento 3174 de Foodint (Europastry, 24048027) se quedó sin documento el
+# 16/10: su PDF se subió a conta-documentos y no se enlazó (el nombre con
+# espacios no cumplía el CHECK de journal_entry_document.file_name). Para
+# enlazarlo en la tanda hace falta su sha256 ENTERO, y la base no lo guarda:
+# solo sus 16 primeros caracteres, en el nombre del fichero. Esto lo baja y lo
+# mide. No escribe nada.
+#
+# QUÉ SALE: solo «@@ clave número|huella», por scripts/conta/salida-segura.mjs
+# (D01 R2): los bytes, el sha256 y si sus 16 primeros caracteres son los del
+# nombre. Ni el PDF ni nada de lo que dice.
+#
+# Usa el secreto SUPABASE_ACCESS_TOKEN (el del despliegue): el script pide con
+# él la clave de servicio a la Management API en el momento y no la escribe
+# nunca (como medir-ocr-destinatario.yml); no hay secreto nuevo.
+#
+# CUÁNDO: al empujar a la rama del encargo un commit cuyo mensaje EMPIECE por
+# «[medir-3174]».
+
+on:
+  push:
+    branches: ['conta/c06b-recibida-nombre']
+
+concurrency:
+  group: medir-pdf-3174
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  medir:
+    if: startsWith(github.event.head_commit.message, '[medir-3174]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RUTA: '51ad1792-6629-4ef7-833a-b57b09a86710/379bd799-0938-4684-afd0-e75cc4ceaa3c/dbfb48faf59310fc.pdf'
+      HUELLA_NOMBRE: 'dbfb48faf59310fc'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Bajar y medir (solo GET; la clave la pide el script y no la escribe)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          node scripts/conta/produccion/medir-pdf-3174.mjs | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
