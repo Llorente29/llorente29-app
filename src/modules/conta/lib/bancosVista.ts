@@ -150,6 +150,12 @@ export function nombreMes(mes: string): string {
   return MESES[Number(mes.slice(5, 7)) - 1] ?? mes
 }
 
+/** El mes corto de la cabecera (N30: «2026 · Oct»): '2026-09' → 'Sep 2026'. */
+export function mesCorto(mes: string): string {
+  const n = nombreMes(mes)
+  return `${n.charAt(0).toUpperCase()}${n.slice(1, 3)} ${mes.slice(0, 4)}`
+}
+
 /** '2026-10' → { desde: '2026-10-01', hasta: '2026-10-31' }. */
 export function limitesMes(mes: string): { desde: string; hasta: string } {
   const [a, m] = mes.split('-').map(Number)

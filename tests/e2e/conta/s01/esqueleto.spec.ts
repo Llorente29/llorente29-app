@@ -63,6 +63,9 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
   // Buscar · Ctrl K y Favoritos, en la cabecera.
   if (lado(page) === 'ordenador') await expect(cabecera.getByRole('button', { name: 'Buscar', exact: true })).toHaveAttribute('aria-keyshortcuts', 'Control+K')
   await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toBeVisible()
+  // Solo la estrella (Julio, 17/10): sin texto a la vista; «Favoritos» al pasar el ratón y para el lector.
+  await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveText('')
+  await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveAttribute('title', 'Favoritos')
 
   // Las pestañas de Contabilidad, con Asientos marcada.
   const tabs = pestanas(page, 'Contabilidad')

@@ -81,11 +81,14 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { level: 1, name: 'Bancos' })).toBeVisible()
       const pestanas = page.getByRole('navigation', { name: 'Pestañas de Bancos' })
-      // Las cuatro, en la cabecera; las que no caben al lado del mes, en «Más ▾» (Julio, respuesta 3).
-      const masBoton = pestanas.getByRole('button', { name: /▾$/ })
-      if (await masBoton.count()) await masBoton.click()
+      // Las cuatro, a la vista en la cabecera al lado del mes (Julio, 17/10: «Favoritos» solo con
+      // su estrella para que quepan a 1440 px): sin «Más ▾».
       await expect(pestanas.getByRole('link')).toHaveText(['Movimientos', 'Reglas', 'Cuentas y extractos', 'Cierre del mes'])
-      if (await masBoton.count()) await masBoton.click()
+      for (const l of await pestanas.getByRole('link').all()) await expect(l).toBeVisible()
+      await expect(pestanas.getByRole('button', { name: /▾$/ })).toHaveCount(0)
+      // El mes, corto en la cabecera («Oct 2026», como la N30).
+      await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Mes' })).toHaveValue('2026-10')
+      await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Mes' }).locator('option:checked')).toHaveText('Oct 2026')
       await expect(pestanas.getByRole('link', { name: 'Movimientos' })).toHaveAttribute('aria-current', 'page')
       // S01 · paso 3: las pestañas, en la cabecera del esqueleto; la barra, en la cinta de la pestaña.
       // «Tuyos» ya no está: Favoritos y Ctrl K son del esqueleto.

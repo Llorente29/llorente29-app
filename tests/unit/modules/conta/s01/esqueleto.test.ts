@@ -18,6 +18,7 @@ import {
 import { CINTAS, ORDENES, alternarFavorito, cintaDe, conConsulta, esLaActual, favoritosDe, ordenPorId } from '@/modules/conta/esqueleto/ordenes'
 import { DE_SERIE, aFila, claveDelNavegador, deFila, deNavegador } from '@/modules/conta/esqueleto/preferencias'
 import { logoDe } from '@/modules/conta/cuenta/contratoCuenta'
+import { mesCorto } from '@/modules/conta/lib/bancosVista'
 
 const rellena = (r: string) => rutaConta(r, { apartado: 'x', tabla: 'x', entrada: 'impuestos', codigo: '40000002', partyId: 'p', supplierId: 's', entryId: 'e', area: 'mayor', accion: 'libro-mayor', liqId: 'l', invoiceId: 'i', loteId: 'k', pestana: 'reglas' })
 const de = (path: string) => { const d = dondeEsta(path); return d ? (d.pestana ? `${d.producto.id}.${d.pestana.id}` : d.producto.id) : null }
@@ -262,5 +263,13 @@ describe('el logo del cliente en la cabecera', () => {
     expect(logoDe({ id: 'a', logo_url: 'https://x/l.png' }, 'b')).toBeNull()
     expect(logoDe({ id: 'a', logo_url: '  ' }, 'a')).toBeNull()
     expect(logoDe(null, 'a')).toBeNull()
+  })
+})
+
+describe('el mes corto de la cabecera (N30: «2026 · Oct»)', () => {
+  it('tres letras y el año, para que quepan las pestañas', () => {
+    expect(mesCorto('2026-10')).toBe('Oct 2026')
+    expect(mesCorto('2026-09')).toBe('Sep 2026')
+    expect(mesCorto('2027-01')).toBe('Ene 2027')
   })
 })

@@ -34,7 +34,7 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
-import { bancosEnBarra, estadoBanco, mesesElegibles, nombreCorto, nombreMes, ultimosIban } from '@/modules/conta/lib/bancosVista'
+import { bancosEnBarra, estadoBanco, mesCorto, mesesElegibles, nombreCorto, nombreMes, ultimosIban } from '@/modules/conta/lib/bancosVista'
 import { agenteTocaHoy, leerDatosBancos, leerHechos, pasarAgente } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { BancosCtx, type ContextoBancos } from '@/modules/conta/bancos/contexto'
@@ -177,9 +177,10 @@ export default function BancosPage() {
         ) : (
           <>
             <h1 className="cx-oculto">Bancos</h1>
+            {/* En la cabecera, el mes corto («Sep 2026», como la N30): así caben las cuatro pestañas a 1440 px. */}
             <PeriodoEnBarra>
               <select className="cxm-select" value={mes} aria-label="Mes" onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
-                {meses.map((m) => <option key={m} value={m}>{nombreMes(m)} {m.slice(0, 4)}</option>)}
+                {meses.map((m) => <option key={m} value={m}>{mesCorto(m)}</option>)}
               </select>
             </PeriodoEnBarra>
           </>

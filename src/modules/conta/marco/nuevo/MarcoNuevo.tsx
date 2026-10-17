@@ -118,7 +118,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
         <div className="s-esq-cuerpo">
           <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} movil={movil} logoCliente={logoCuenta}
             huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)}
-            favoritos={<Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} movil={movil} alternar={fijar} alAbrirBuscador={() => setBuscando(true)} />}
+            favoritos={<Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} alternar={fijar} alAbrirBuscador={() => setBuscando(true)} />}
             usuario={<MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} />} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
           {producto && pestana && (

@@ -92,9 +92,20 @@ grupos y ya no le quita sitio a la primera.
 A 1440 px y con un periodo al lado (el mes de Bancos, el ejercicio de Libros)
 solo cabían dos pestañas. Con menos aire y la empresa hasta 180 px: Bancos, tres
 de cuatro; Contabilidad sin periodo, las cinco. Lo que no cabe, en «Más ▾».
-**Para Julio:** si se quiere ver siempre las cuatro de Bancos, lo siguiente que
-da sitio (unos 70 px) es dejar «Favoritos» solo con su estrella. Eso cambia la
-maqueta: no lo he hecho.
+
+**Julio (17/10): «Favoritos» solo con su estrella, en todas las pantallas**, y
+las cuatro de Bancos tienen que caber a 1440 px. Al pasar el ratón y para el
+lector dice «Favoritos». Con eso no bastaba (medido con un nombre de empresa y
+de usuario largos y la barra de desplazamiento: 1424 px útiles), así que además:
+
+- el mes de Bancos, corto en la cabecera («Oct 2026», como el «2026 · Oct» de la N30);
+- el nombre del usuario, hasta 110 px con «…» (entero al pasar el ratón y para el lector);
+- la empresa, hasta 160 px (entera al pasar el ratón).
+
+Medido a 1424 y 1440 px: las cuatro de Bancos a la vista, sin «Más ▾», también
+con «María José Fernández de la Vega». Contabilidad con el ejercicio sigue
+llevando a «Más ▾» la quinta (Importar o Cierre y Registro, según el ancho). La
+e2e de la B01 lo comprueba.
 
 ## Queda (paso 3)
 

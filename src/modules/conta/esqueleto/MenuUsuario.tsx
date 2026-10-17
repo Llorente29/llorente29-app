@@ -34,7 +34,7 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar }: {
         {/* En el móvil no cabe «Nombre · Nivel»: sus iniciales; el nivel, en el menú y en el nombre del botón. */}
         {/* El nivel ocupa siempre lo del más largo: cambiarlo no mueve nada (ni manda una pestaña a «Más»). */}
         {movil ? iniciales(nombre) : (
-          <>{nombre} · <strong className="s-usuario-nivel">
+          <><span className="s-usuario-nombre" title={nombre}>{nombre}</span> · <strong className="s-usuario-nivel">
             {NIVELES.map((n) => <span key={n} aria-hidden={n !== prefs.nivel} data-actual={n === prefs.nivel || undefined}>{NOMBRE_NIVEL[n]}</span>)}
           </strong></>
         )}
