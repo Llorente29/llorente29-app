@@ -1,3 +1,12 @@
+# I01a · Impuestos por dentro · pieza 1, los plazos (rama conta/i01a-impuestos-por-dentro).
+#   La prueba aplica la 20261122T0100 (festivos del BOE 2026 y 2027, reglas de
+#   plazo por modelo y conta_impuesto_plazo) con \i dentro de su transacción y
+#   acaba en ROLLBACK: staging no cambia. Comprueba, como usuario, las 14 fechas
+#   de domiciliación del calendario oficial de la AEAT de 2026 y los últimos
+#   días de presentación; 2027 provisional; y que para si falta algo.
+#   Va la primera: lo de abajo es de otros frentes y no se toca.
+supabase/staging/sql/20261122_i01_plazos_prueba.sql
+
 # M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
 # pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)
 # con \i dentro de su transacción y acaban en ROLLBACK: staging no cambia.
