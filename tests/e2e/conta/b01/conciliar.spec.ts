@@ -22,7 +22,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
 import { crearBancos, emparejar, leerYCuadrar } from '@/modules/conta/services/bancosNucleo'
 import { escribirNorma43 } from '@/modules/conta/lib/norma43'
-import { BANCOS_B01, EMPRESA_A, FICHERO, baseDeA } from './datos'
+import { BANCOS_B01, EMPRESA_A, FICHERO, baseDeA, conLimpieza } from './datos'
 
 const DIR = 'docs/conta/capturas/b02'
 const NORTE = BANCOS_B01[0]
@@ -104,7 +104,7 @@ test.describe('B02 · Bancos, conciliar', () => {
   test('ordenador: cuadre, bloque, iguales, teclado, panel y Casados solos', async ({ page }) => {
     test.skip(lado(page) !== 'ordenador', 'En el móvil va la suya.')
     const base = await preparar()
-    try {
+    await conLimpieza(page, async () => {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
       // La pasada del día del agente, a propósito y cuando el panel ya está abierto: se le dice
@@ -237,17 +237,17 @@ test.describe('B02 · Bancos, conciliar', () => {
       const d = await lasCifras(page)
       expect(d.contadores.casados).toBe(antes - 1)
       expect(d.frase.casados).toBe(antes - 1)
-    } finally {
+    }, async () => {
       await base.deshacerTodo('Limpieza después de Conciliar B02')
       await quitarLoMio(base)
       expect(await base.contarAsientosA()).toBe(base.asientosAntes)
-    }
+    })
   })
 
   test('móvil: tarjetas, «Confirmar los 3 seguros» arriba y el panel en hoja', async ({ page }) => {
     test.skip(lado(page) !== 'movil', 'En el ordenador va la suya.')
     const base = await preparar()
-    try {
+    await conLimpieza(page, async () => {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
       await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10`)
@@ -264,10 +264,10 @@ test.describe('B02 · Bancos, conciliar', () => {
       await page.getByRole('button', { name: /^Por aclarar/ }).click()
       await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' })).toBeVisible()
       await capturar(page, 'por-aclarar')
-    } finally {
+    }, async () => {
       await base.deshacerTodo('Limpieza después de Conciliar B02 (móvil)')
       await quitarLoMio(base)
       expect(await base.contarAsientosA()).toBe(base.asientosAntes)
-    }
+    })
   })
 })

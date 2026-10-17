@@ -9,10 +9,10 @@
 // sigue igual.
 
 import { test, expect } from '@playwright/test'
-import { CUENTA_A, CUENTA_B, pedirSesion } from '../sesion'
+import { CUENTA_A, CUENTA_B, pedirSesion, enCarril } from '../sesion'
 import { rest } from '../api'
 
-const EMPRESA_A = '3b34403a-a7d6-4a48-a8d7-737e8cababdc'
+const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
 
 test('la cuenta B no ve ni toca los libros de A', async ({ browserName }, info) => {
   void browserName

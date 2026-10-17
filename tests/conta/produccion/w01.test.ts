@@ -455,24 +455,35 @@ describe('R11 · paso 8 sobre la tanda B02 · T1 «lo que entra» (0200, su copi
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de la C06b «promociones y envíos» (0100 y 0110, su copia, aplicada: run 38954792366), con su contexto medido', () => {
+  it('las dos siguen, sin «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-promociones-envios-20261016.json',
+      '--manifiesto=tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261116T0100_c06b_promociones_envios.sql: sigue')
+    expect(out).toContain('20261116T0110_c06b_promociones_envios_datos.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
+  it('con los ficheros medidos, da el estado de cada uno y los «autorizo» (R03: las tres en el camino del pedido)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261116T0100_c06b_promociones_envios.sql: sigue')
-    expect(r.out).toContain('20261116T0110_c06b_promociones_envios_datos.sql: sigue')
-    expect(r.out).toContain('autorizo: (ninguno)')
+    expect(r.out).toContain('20261118T0300_r03_direccion_incompleta.sql: AUTORIZO')
+    expect(r.out).toContain('20261118T0310_r03_ticket_codigo_quien_reparte.sql: AUTORIZO')
+    expect(r.out).toContain('20261118T0320_r03_entrega_datos.sql: AUTORIZO')
+    expect(r.out).toContain('autorizo: 20261118T0300_r03_direccion_incompleta.sql 20261118T0310_r03_ticket_codigo_quien_reparte.sql 20261118T0320_r03_entrega_datos.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261116T0100_c06b_promociones_envios.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261118T0300_r03_direccion_incompleta.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261116T0100_c06b_promociones_envios.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261118T0300_r03_direccion_incompleta.sql ha cambiado desde la medida')
   })
 })

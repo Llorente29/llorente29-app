@@ -17,13 +17,14 @@
 // acabar lo que crea.
 
 import { test, expect, type Page } from '@playwright/test'
-import { FRENTE, entrarComo, type Sesion } from '../sesion'
+import { FRENTE, entrarComo, type Sesion, correoDelCarril } from '../sesion'
+import { redQuieta } from '../red'
 import { cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c06'
-const SOLA = { email: 'sola.admin@c06-prueba.test', empresa: 'Empresa de Prueba Sola, S.L.' }
-const ALTA = { email: 'sola.alta@c06-prueba.test' }
+const SOLA = { email: correoDelCarril('sola.admin@c06-prueba.test'), empresa: 'Empresa de Prueba Sola, S.L.' }
+const ALTA = { email: correoDelCarril('sola.alta@c06-prueba.test') }
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // C06b (respuesta 6, tarea 5): las contraseñas de los usuarios del C06
@@ -230,7 +231,7 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     await expect(page.getByText(/^Plan activado: /)).toBeVisible({ timeout: 30_000 })
   }
   await expect(page.locator('.cx-principal')).toBeVisible()
-  await page.waitForLoadState('networkidle')
+  await redQuieta(page)
   await sinFolvy(page, 'el plan contable')
   await capturar(page, 'plan')
 
@@ -256,7 +257,7 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   ] as const) {
     await page.goto(ruta)
     await expect(page.locator('.cx-principal')).toBeVisible()
-    await page.waitForLoadState('networkidle')
+    await redQuieta(page)
     await expect(page.getByRole('alert')).toHaveCount(0)
     await sinFolvy(page, titulo)
     if (nombre === 'libro' || nombre === 'balance' || nombre === 'fichas') await capturar(page, nombre)

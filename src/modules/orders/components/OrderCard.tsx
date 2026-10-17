@@ -24,20 +24,22 @@
 // la decide `deliveryView().phase` en el servicio; aquí solo se pinta.
 
 import { useEffect, useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, AlertTriangle, ShoppingBag, MapPin, ExternalLink } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, ShoppingBag, MapPin, AlertTriangle } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
-import { fmtNum } from '@/lib/format'
 import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from '../lib/passCode'
 import { elSubtitulo } from '@/modules/pase/lib/lasTresZonas'
 import ChannelBadge from './ChannelBadge'
 import TicketPreviewModal from './TicketPreviewModal'
+import { esRepartoPropio, lineaTelefono } from '@/modules/reparto/lib/entregaTicket'
 import EtiquetaReparto from '@/modules/reparto/components/EtiquetaReparto'
+import CompletarDireccion from '@/modules/reparto/components/CompletarDireccion'
+import { avisoDeLaTarjeta, enlaceAlMapa, enlaceTel, haSalido, telefonoDelCliente } from '@/modules/reparto/lib/direccionFalta'
 import {
   primaryAction, secondaryAction, childVisual, deliveryView,
   isOwnDeliveryUndispatched, dispatchOrder,
-  portalDeLaPlataforma, coordenadasDeEntrega, type CoordenadasEntrega,
+  coordenadasDeEntrega, type CoordenadasEntrega,
   cookingChip, DEFAULT_KITCHEN_THRESHOLDS,
   type OrderFeedItem, type OrderFeedLine, type OrderFeedChild, type OrderStatus,
   type DeliveryView, type DeliveryTone,
@@ -292,77 +294,74 @@ function GreenCallPill({ phone, label = true, big = false }: { phone: string; la
 
 // ── B68 §1/§2 (05/09/2026). Sin dirección: qué falta, y adónde ir. ──
 //
-// EL CARTEL YA NO AFIRMA QUIÉN REPARTE. La frase vieja decía «este pedido no lo
-// repartimos nosotros» y era FALSA: G569 es `own_delivery` —lo reparte el
-// local— y Glovo simplemente no mandó la dirección. La frase contradecía a la
-// propia fila. El texto lo escribe `resolve_dispatch`; aquí sólo se añade el
-// nombre del canal, que la base no tiene a mano y la web sí.
-//
-// Y SI HAY COORDENADAS, SE ENSEÑAN. Estaban llegando y se tiraban. Se etiquetan
-// como lo que son —un punto, no un portal— porque quien reparte tiene que saber
-// que va a una zona. No se despacha automáticamente con ellas: eso sigue
-// bloqueado y es otra decisión.
-function SinDireccionAviso(
-  { order, portal, compacto = false }: { order: OrderFeedItem; portal: { url: string; nombre: string } | null; compacto?: boolean },
+// R03 · SIN DIRECCIÓN COMPLETA (Julio, 16/10 y 17/10). El pedido sale a
+// Catcher como cualquier otro, con el punto del mapa; aquí una línea:
+//   · ha salido → «Ha salido a Catcher con el punto del mapa · el repartidor
+//     llamará al cliente», informativa, sin acciones para la cocina;
+//   · no ha salido (ni calle ni punto, o Catcher lo ha rechazado) → en rojo,
+//     «No ha salido a Catcher · llama al cliente y completa la dirección», con
+//     el teléfono del cliente y «Llamar»;
+//   · completada → UNA línea, «Dirección completada por <nombre>», con
+//     «Reimprimir» (CompletarDireccion); el repartidor, en su fila de siempre.
+// «Completar dirección» en el ordenador y en la tablet (Julio, 17/10: también
+// desde la cocina); en la tablet, grande para el dedo.
+function AvisoSinDireccion(
+  { order, token = null, onCompletada }: { order: OrderFeedItem; token?: string | null; onCompletada?: () => void },
 ) {
   const [coords, setCoords] = useState<CoordenadasEntrega | null>(null)
+  // Recién completada aquí: la confirmación (y «Llamar») sigue a la vista
+  // aunque el pedido ya llegue completado (regla 8).
+  const [recien, setRecien] = useState(false)
 
   useEffect(() => {
     let vivo = true
-    coordenadasDeEntrega(order.sale_id)
+    coordenadasDeEntrega(order.sale_id, token)
       .then(c => { if (vivo) setCoords(c) })
-      .catch(() => { if (vivo) setCoords({ hay: false, motivo: 'no se pudieron leer' }) })
+      .catch(() => { if (vivo) setCoords(null) })
     return () => { vivo = false }
-  }, [order.sale_id])
+  }, [order.sale_id, token])
 
-  const canal = order.channel?.trim() || 'La plataforma'
-  // R02: con la etiqueta de reparto encima, aquí solo quedan las coordenadas
-  // (lo que «falta la dirección» y el portal ya lo dicen la etiqueta y su acción).
-  if (compacto && coords?.hay !== true) return null
+  const completada = (order.delivery_address_fixed ?? coords?.direccion ?? '').trim()
+  const abierto = !['closed', 'cancelled', 'canceled'].includes((order.status ?? 'open').toLowerCase())
+  const hecha = !!completada || recien
+  const estado = {
+    enCatcher: !!order.carrier_code, dispatchError: order.dispatch_error ?? null,
+    dispatchMode: order.dispatch_mode ?? null, hayPunto: coords ? coords.hay === true : null,
+  }
+  const salido = hecha || haSalido(estado)
+  const mapa = coords?.hay === true ? enlaceAlMapa(coords.lat ?? null, coords.lng ?? null) : null
+  const tel = !salido ? telefonoDelCliente(order.customer_phone, order.customer_phone_code) : null
+  // Una sola estructura: CompletarDireccion no se desmonta al guardar, así su
+  // confirmación («· ticket reimpreso») sigue a la vista (regla 8).
   return (
-    <div className={compacto ? 'mx-4 mb-2.5 ml-5 px-3 py-2 rounded-xl border border-default bg-white' : 'px-3 py-2.5 border-b border-[#CFE4FA] bg-white/60'}>
-      {!compacto && <div className="flex items-start gap-2">
-        <AlertTriangle size={15} className="text-[#B4690E] shrink-0 mt-0.5" />
-        <div className="text-[12.5px] leading-snug text-gray-700">
-          <b className="block text-[11px] uppercase tracking-wide text-[#B4690E]">Falta la dirección</b>
-          {canal} no ha enviado la dirección de entrega.
-        </div>
-      </div>}
-
-      {coords?.hay === true && Number.isFinite(Number(coords.lat)) && Number.isFinite(Number(coords.lng)) && (
-        <div className="mt-2 flex items-start gap-2">
-          <MapPin size={15} className="text-[#2563A8] shrink-0 mt-0.5" />
-          <div className="text-[12.5px] leading-snug">
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`}
-              target="_blank" rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              className="font-bold text-[#2563A8] underline"
-            >
-              {fmtNum(coords.lat, 6)}, {fmtNum(coords.lng, 6)}
-            </a>
-            <span className="block text-[11.5px] text-gray-500">
-              Ubicación aproximada (sin dirección postal). Es un punto, no un portal.
-            </span>
-          </div>
+    <div className={`mx-4 mb-2.5 ml-5 px-3 py-2 rounded-xl border text-[12.5px] leading-snug ${
+      hecha ? 'border-default bg-card' : salido ? 'border-[#CFE4FA] bg-[#F0F7FF] text-gray-700' : 'border-danger/40 bg-danger-bg text-danger'}`}
+      data-testid="aviso-sin-direccion" data-salido={salido ? 'si' : 'no'} onClick={e => e.stopPropagation()}>
+      {!hecha && (
+        <div className="flex items-start gap-2">
+          {salido
+            ? <MapPin size={14} className="text-[#2563A8] shrink-0 mt-0.5" />
+            : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+          <span data-testid="aviso-sin-direccion-texto" className={salido ? '' : 'font-bold'}>{avisoDeLaTarjeta(estado)}</span>
         </div>
       )}
-
-      {!compacto && coords?.hay === false && (
-        <div className="mt-2 text-[11.5px] text-gray-500 pl-[23px]">
-          Tampoco hay coordenadas: {coords.motivo}.
-        </div>
-      )}
-
-      {!compacto && portal && (
-        <a
-          href={portal.url}
-          target="_blank" rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="mt-2 inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#2563A8] no-underline"
-        >
-          <ExternalLink size={13} /> Abrir el portal de {portal.nombre}
+      {!hecha && tel && order.customer_phone && (
+        <a href={enlaceTel(order.customer_phone)} className="mt-1.5 ml-[22px] inline-flex items-center gap-1.5 rounded-full bg-danger text-white px-3 py-1 font-bold no-underline"
+          data-testid="aviso-sin-direccion-llamar">
+          <Phone size={13} /> {tel} · Llamar
         </a>
+      )}
+      {!hecha && mapa && (
+        <a href={mapa} target="_blank" rel="noopener noreferrer" className="mt-1 ml-[22px] block font-bold text-[#2563A8] underline">
+          Ver el punto del mapa
+        </a>
+      )}
+      {(hecha || abierto) && (
+        <div className={hecha ? '' : 'mt-1.5 pl-[22px]'}>
+          <CompletarDireccion saleId={order.sale_id} token={token}
+            completada={completada ? { por: order.delivery_address_fixed_by ?? null } : null}
+            onGuardada={() => { setRecien(true); onCompletada?.() }} />
+        </div>
       )}
     </div>
   )
@@ -374,9 +373,7 @@ function SinDireccionAviso(
 // src/modules/reparto/components/EtiquetaReparto.tsx, con sus acciones; lo
 // que reparte la plataforma, la GRIS. Antes: tarjeta roja y «Reintentar
 // despacho», que sin dirección no podía funcionar nunca.
-function DeliveryRow({ order, onDispatched, puedeDecidirReparto = false, onRepartoCambiado }: {
-  order: OrderFeedItem; onDispatched?: () => void; puedeDecidirReparto?: boolean; onRepartoCambiado?: () => void
-}) {
+function DeliveryRow({ order, onDispatched }: { order: OrderFeedItem; onDispatched?: () => void }) {
   const [dispatching, setDispatching] = useState(false)
   const [dispatchErr, setDispatchErr] = useState<string | null>(null)
   const d: DeliveryView = deliveryView(order)
@@ -397,20 +394,12 @@ function DeliveryRow({ order, onDispatched, puedeDecidirReparto = false, onRepar
   // (A) Reparto propio SIN despachar (modo manual, tras fallo o sin dirección).
   // En modo 'off' (lo despacha un sistema externo) Folvy no despacha: nada aquí.
   if (isOwnDeliveryUndispatched(order) && order.dispatch_mode !== 'off') {
-    const sinDireccion = !(order.delivery_address ?? '').trim()
-    const portal = portalDeLaPlataforma(order.channel)
     return (
-      <>
-        <EtiquetaReparto
-          pedido={{ ...order, dispatch_error: dispatchErr ?? order.dispatch_error }}
-          portal={portal}
-          puedeDecidir={puedeDecidirReparto}
-          onDespachar={doDispatch}
-          despachando={dispatching}
-          onCambiado={onRepartoCambiado}
-        />
-        {sinDireccion && <SinDireccionAviso order={order} portal={portal} compacto />}
-      </>
+      <EtiquetaReparto
+        pedido={{ ...order, dispatch_error: dispatchErr ?? order.dispatch_error }}
+        onDespachar={doDispatch}
+        despachando={dispatching}
+      />
     )
   }
 
@@ -576,6 +565,8 @@ function PlatformDeliveryRow({ view, order }: { view: DeliveryView; order: Order
 
 interface OrderCardProps {
   order: OrderFeedItem
+  /** R03: token del dispositivo en la tablet (sin sesión): el punto del mapa sale por su variante, solo de su local. */
+  token?: string | null
   allowGrow?: boolean
   onAdvance?: (saleId: string, next: OrderStatus) => void | Promise<void>
   onOpenRecipe?: (line: OrderFeedLine) => void
@@ -627,15 +618,11 @@ interface OrderCardProps {
    */
   minutosDeLaFase?: number | null
   nivelDeLaFase?: 'fresh' | 'warn' | null
-  /**
-   * R02: la web con sesión (no la tablet) puede cambiar quién reparte desde la
-   * etiqueta ámbar («Cambiar a “la reparte Uber”»). Tras cambiarlo, refrescar.
-   */
-  puedeDecidirReparto?: boolean
+  /** R03: tras «Completar dirección» (ordenador o tablet), refrescar. */
   onRepartoCambiado?: () => void
 }
 
-export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase, puedeDecidirReparto = false, onRepartoCambiado }: OrderCardProps) {
+export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRecipe, onMarkLine, onReprint, thresholds, nowMs, sinMarcarListo = false, distintivo = null, sinReloj = false, minutosDeLaFase, nivelDeLaFase, onRepartoCambiado, token = null }: OrderCardProps) {
   const cfg = thresholds ?? DEFAULT_KITCHEN_THRESHOLDS
   const now = nowMs
   const [busy, setBusy] = useState(false)
@@ -720,7 +707,8 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
   const pass = passCode(order)
 
   return (
-    <div className={`relative rounded-2xl overflow-hidden bg-card border ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}>
+    <div className={`relative rounded-2xl overflow-hidden bg-card border ${halo} ${grow} ${terminal ? 'opacity-70' : ''}`}
+      data-testid="tarjeta-pedido" data-sale-id={order.sale_id}>
       <div className="absolute left-0 top-0 bottom-0 w-[4px]" style={{ backgroundColor: tc.spine }} />
 
       <div className="flex items-center gap-2.5 px-4 pt-3.5 pb-2.5 pl-5">
@@ -783,6 +771,16 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         <span className="font-mono text-[11px] opacity-55" title="Referencia interna">· {ticketCode(order.external_tab_ref, order.external_ref)}</span>
       </div>
 
+      {/* R03: en reparto propio, el teléfono del cliente con su código (Uber:
+          la centralita no conecta sin él), para quien llama desde cocina. */}
+      {esRepartoPropio(order.service_type) && order.customer_phone && (
+        <div className="mx-4 mb-2 ml-5 text-[13.5px] font-bold text-text-primary" data-testid="telefono-cliente">
+          <a href={`tel:${order.customer_phone.replace(/\s+/g, '')}`} onClick={e => e.stopPropagation()} className="no-underline text-inherit">
+            {lineaTelefono(order.customer_phone, order.customer_phone_code)}
+          </a>
+        </div>
+      )}
+
       {order.customer_note && (
         <div className="mx-4 mb-2 ml-5 bg-danger-bg border border-danger/30 border-l-4 border-l-danger rounded-lg px-3 py-2.5 flex gap-2.5 items-start">
           <span className="text-[16px] leading-none">⚠</span>
@@ -805,7 +803,10 @@ export default function OrderCard({ order, allowGrow = true, onAdvance, onOpenRe
         ))}
       </div>
 
-      <DeliveryRow order={order} puedeDecidirReparto={puedeDecidirReparto} onRepartoCambiado={onRepartoCambiado} />
+      <DeliveryRow order={order} />
+      {esRepartoPropio(order.service_type) && !(order.delivery_address ?? '').trim() && (
+        <AvisoSinDireccion order={order} token={token} onCompletada={onRepartoCambiado} />
+      )}
 
       <div className="px-4 py-3 pl-5 border-t border-default">
         <div className="flex items-center gap-3">

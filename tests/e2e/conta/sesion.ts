@@ -28,6 +28,44 @@ export const CLAVE_STORAGE = 'sb-oseymswjlzplqoxrfjzi-auth-token'
 /** El frente de esta ejecución ('a', 'b', 'c' o 'd'), o null: los usuarios de siempre. */
 export const FRENTE = frenteDe(process.env.E2E_FRENTE)
 
+// CARRIL (W02, paso 1c, 16/10): cada e2e entra en SU copia de las cuentas de
+// prueba (scripts/e2e/carril.sh). El workflow pone el número en E2E_CARRIL.
+// Un id de la plantilla en el carril N lleva su segundo grupo XOR N (los de
+// las semillas, 0000, quedan con N en hexadecimal); un correo, «.carril-N»
+// detrás de la parte local. La misma regla que
+// scripts/e2e/carril/comun.sql: la comprueba tests/unit/e2e/carril.test.ts.
+// Sin carril (otra rama con el workflow de antes), todo como antes.
+
+/** El carril de esta ejecución (1 a 4095), o null. */
+export const CARRIL = carrilDe(process.env.E2E_CARRIL)
+
+export function carrilDe(valor: string | undefined): number | null {
+  const v = (valor ?? '').trim()
+  if (v === '') return null
+  const n = Number(v)
+  if (!Number.isInteger(n) || n < 1 || n > 4095) throw new Error(`E2E_CARRIL tiene que ser un número de 1 a 4095 o nada; es «${valor}».`)
+  return n
+}
+
+/** El id de una fila de la plantilla en el carril (sin carril, el mismo). */
+export function enCarril(id: string, carril: number | null = CARRIL): string {
+  if (carril === null) return id
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) throw new Error(`enCarril: «${id}» no es un uuid`)
+  return `${id.slice(0, 9)}${(parseInt(id.slice(9, 13), 16) ^ carril).toString(16).padStart(4, '0')}${id.slice(13)}`
+}
+
+/** El correo de un usuario de la plantilla en el carril: parte local + «.carril-N». */
+export function correoDelCarril(correo: string, carril: number | null = CARRIL): string {
+  if (carril === null) return correo
+  const [local, dominio] = correo.toLowerCase().split('@')
+  return `${local}.carril-${carril}@${dominio}`
+}
+
+/** El correo con el que entra esta ejecución: el del carril, si lo hay; si no, el del frente. */
+export function correoDePrueba(correo: string): string {
+  return CARRIL !== null ? correoDelCarril(correo) : correoDelFrente(correo)
+}
+
 export type Frente = 'a' | 'b' | 'c' | 'd'
 
 export function frenteDe(valor: string | undefined): Frente | null {
@@ -44,20 +82,21 @@ export function correoDelFrente(correo: string, frente: Frente | null = FRENTE):
   return `${local}.frente-${frente}@${dominio}`
 }
 
-export const CUENTA_A = { id: 'c01a0000-0000-4000-8000-00000000000a', email: correoDelFrente('a.admin@prueba.folvy.test') }
-export const CUENTA_B = { id: 'c01b0000-0000-4000-8000-00000000000b', email: correoDelFrente('b.admin@prueba.folvy.test') }
+export const CUENTA_A = { id: enCarril('c01a0000-0000-4000-8000-00000000000a'), email: correoDePrueba('a.admin@prueba.folvy.test') }
+export const CUENTA_B = { id: enCarril('c01b0000-0000-4000-8000-00000000000b'), email: correoDePrueba('b.admin@prueba.folvy.test') }
 /** El encargado de A (rol manager, no administrador): semilla seed_c00_encargado_prueba.sql. */
-export const ENCARGADO_A = { id: 'c01a0000-0000-4000-8000-0000000000a6', email: correoDelFrente('a.encargado@prueba.folvy.test') }
+export const ENCARGADO_A = { id: enCarril('c01a0000-0000-4000-8000-0000000000a6'), email: correoDePrueba('a.encargado@prueba.folvy.test') }
 /**
  * Una cuenta SIN empresa, para el alta a pantalla completa (N1bAlta): semilla
  * seed_c00_cuenta_c_sin_empresa.sql; con frente, la C de ese frente.
  */
 export const CUENTA_C = {
-  id: FRENTE ? `e2e0000${FRENTE}-0000-4000-8000-00000000000c` : 'c01c0000-0000-4000-8000-00000000000c',
-  email: correoDelFrente('c.admin@prueba.folvy.test'),
+  id: CARRIL !== null ? enCarril('c01c0000-0000-4000-8000-00000000000c')
+    : FRENTE ? `e2e0000${FRENTE}-0000-4000-8000-00000000000c` : 'c01c0000-0000-4000-8000-00000000000c',
+  email: correoDePrueba('c.admin@prueba.folvy.test'),
 }
-export const HERMANOS_RUIZ = 'c01a0000-0000-4000-8000-0000000000a3'
-export const CARNES_SUR = 'c01b0000-0000-4000-8000-0000000000b3'
+export const HERMANOS_RUIZ = enCarril('c01a0000-0000-4000-8000-0000000000a3')
+export const CARNES_SUR = enCarril('c01b0000-0000-4000-8000-0000000000b3')
 
 export function anonKey(): string {
   const k = process.env.VITE_SUPABASE_ANON_KEY

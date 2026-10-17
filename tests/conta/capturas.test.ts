@@ -64,7 +64,7 @@ describe('de quién es cada carpeta de capturas (las que hay en el repositorio)'
     expect(de('b')).toEqual(['b01', 'b02'])
     expect(de('c')).toEqual(['c00', 'c01b', 'c02', 'c02c', 'c03', 'c04', 'c04b', 'c05', 'c06', 'c06b'])
     expect(de('d')).toEqual(carpetas.some((c) => c.endsWith('/m01')) ? ['m01'] : [])
-    expect(de('reparto')).toEqual(['r02'])
+    expect(de('reparto')).toEqual(['r02', 'r03'])
   })
   it('cierre, compras y diez (y los PNG sueltos de la raíz) no son de nadie: nadie las fija', () => {
     const nadie = carpetas.filter((c) => (['a', 'b', 'c', 'd', 'reparto'] as const).every((d) => !repartir([`${c}/x.png`], d).suyas.length))
