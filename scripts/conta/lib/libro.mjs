@@ -8,7 +8,10 @@
 // cadena rota, IVA mal, venta cedida en el 70, compra del socio como gasto,
 // 6/7 sin local, asiento validado en un mes ya cerrado, resumen del día que no
 // es sus tickets, pedido propio abierto en un día ya cerrado, día cerrado sin su asiento a las 24 h). Ámbar: lo que espera a una persona (propuestas de más de
-// 7 días, lo común sin su reparto al 100 %).
+// 7 días, lo común sin su reparto al 100 %). Ya sabido: lo que está en rojo por
+// algo que falta construir y ya está apuntado; se enseña, pero no abre aviso
+// (#176: una empresa en IGIC no tiene asiento de ventas hasta que el cierre del
+// día sepa de IGIC).
 //
 // Sin conceptos ni nombres (el informe va a un repositorio público): serie por
 // su palabra, número, fecha e ids cortos.
@@ -31,6 +34,7 @@ export const NORMAS = {
   propuestas: 'Encargo C04, agente: una propuesta no espera más de 7 días sin que nadie la mire',
   cierre_dia: 'Encargo del 09/10 (cierre del día): un día se cierra a su hora y lo que sigue abierto se cierra como no confirmado',
   dia_sin_asiento: 'Encargo del 11/10 (cierre del día 2): un día cerrado tiene su resumen y su asiento propuesto antes de 24 h',
+  dia_sin_asiento_igic: 'Pendiente de construir: el IGIC en el cierre del día (CONTEXTO_CLAUDE.md, «C06b · 16/10 — APARCADO: el IGIC en el cierre del día»; aviso #176)',
 }
 
 // C04b R5: lo que apuntó el cierre del día la última vez (sales_day_proposal_log),
@@ -42,7 +46,7 @@ function porqueDelCierre(x) {
   return `: la última vez, ${RESULTADO[x.resultado] ?? x.resultado}${x.porque ? ` — «${x.porque}»` : ''}`
 }
 
-/** @returns {{ nivel: 'rojo'|'ambar', tipo: string, donde: string, detalle: string, norma: string }[]} */
+/** @returns {{ nivel: 'rojo'|'ambar'|'sabido', tipo: string, donde: string, detalle: string, norma: string }[]} */
 export function revisarLibro(bd) {
   const out = []
   const h = (nivel, tipo, x, detalle) => out.push({ nivel, tipo, donde: donde(x), detalle, norma: NORMAS[tipo] })
@@ -56,7 +60,12 @@ export function revisarLibro(bd) {
   for (const x of bd.resultado ?? []) h(x.numero == null ? 'ambar' : 'rojo', 'resultado', x, x.numero == null ? x.motivo : `${asiento(x)}, cuenta ${x.cuenta}: ${x.motivo}`)
   for (const x of bd.mes_cerrado ?? []) h('rojo', 'mes_cerrado', x, `${asiento(x)} del ${x.fecha}, validado después de cerrar su mes`)
   for (const x of bd.cierre_dia ?? []) h('rojo', 'cierre_dia', x, `${x.pedidos} ${x.pedidos === 1 ? 'pedido' : 'pedidos'} de tus marcas (${x.importe} €) ${x.pedidos === 1 ? 'sigue abierto' : 'siguen abiertos'} en días ya cerrados; el más antiguo, del ${x.dia}, lleva ${x.horas} h desde que acabó: el cierre del día no ha pasado o ha fallado`)
-  for (const x of bd.dia_sin_asiento ?? []) h('rojo', 'dia_sin_asiento', x, `${x.dia} local ${corto(x.local)}: ${x.pedidos} ${x.pedidos === 1 ? 'pedido' : 'pedidos'} de tus marcas, ${x.resumen ? 'con resumen pero sin asiento' : 'sin resumen ni asiento'}, ${x.horas} h después de su cierre: el cierre del día no lo ha propuesto${porqueDelCierre(x)}`)
+  for (const x of bd.dia_sin_asiento ?? []) {
+    const que = `${x.dia} local ${corto(x.local)}: ${x.pedidos} ${x.pedidos === 1 ? 'pedido' : 'pedidos'} de tus marcas, ${x.resumen ? 'con resumen pero sin asiento' : 'sin resumen ni asiento'}, ${x.horas} h después de su cierre`
+    // Ya sabido (#176): en IGIC el cierre todavía no propone. Se dice, no se calla.
+    if (x.igic) h('sabido', 'dia_sin_asiento_igic', x, `${que}: la empresa está en IGIC y el cierre del día aún no sabe proponer su asiento de ventas (pendiente de construir)${porqueDelCierre(x)}`)
+    else h('rojo', 'dia_sin_asiento', x, `${que}: el cierre del día no lo ha propuesto${porqueDelCierre(x)}`)
+  }
   for (const x of bd.propuestas ?? []) h('ambar', 'propuestas', x, `${SERIE[x.serie] ?? x.serie} del ${x.fecha} (${x.origen}) lleva ${x.dias} días sin validar ni descartar`)
   return out
 }
@@ -65,6 +74,7 @@ export function revisarLibro(bd) {
 export function informeLibro(hallazgos, { donde: dondeCorre, hoy, contado }) {
   const rojos = hallazgos.filter((x) => x.nivel === 'rojo')
   const ambar = hallazgos.filter((x) => x.nivel === 'ambar')
+  const sabido = hallazgos.filter((x) => x.nivel === 'sabido')
   const c = contado ?? {}
   const l = [
     `## Agente «Libro diario» · ${dondeCorre} · ${hoy}`,
@@ -80,5 +90,6 @@ export function informeLibro(hallazgos, { donde: dondeCorre, hoy, contado }) {
   }
   grupo('Rojo', rojos)
   grupo('Ámbar (espera a una persona)', ambar)
+  grupo('Ya sabido (pendiente de construir; no abre aviso)', sabido)
   return l.join('\n') + '\n'
 }
