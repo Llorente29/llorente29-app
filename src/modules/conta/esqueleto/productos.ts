@@ -70,6 +70,8 @@ export interface Contexto {
   hosteleria: boolean
   diez: boolean
   interruptores: ReadonlySet<string>
+  /** S01 · El logo de la empresa (URL firmada del bucket company-logos), o null. No decide qué sale. */
+  logoEmpresa?: string | null
 }
 
 const R = CONTA.rutas

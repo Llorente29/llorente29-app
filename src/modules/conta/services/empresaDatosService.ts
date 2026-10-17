@@ -39,6 +39,7 @@ function aEmpresa(r: Fila): Empresa {
     registryName: txt(r.registry_name), registryVolume: txt(r.registry_volume), registryFolio: txt(r.registry_folio),
     registrySheet: txt(r.registry_sheet), registryEntry: txt(r.registry_entry),
     hosteleria: r.is_hospitality === true ? true : r.is_hospitality === false ? false : null,
+    logoPath: typeof r.logo_path === 'string' && r.logo_path ? r.logo_path : null,
     incorporatedOn: txt(r.incorporated_on), dehuEmail: txt(r.dehu_email), dehuPhone: txt(r.dehu_phone),
     phone: txt(r.phone), email: txt(r.email),
     setupStep: txt(r.setup_step) ?? 'nif', setupCompletedAt: txt(r.setup_completed_at),

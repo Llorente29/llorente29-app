@@ -28,6 +28,7 @@ import { ApartadoCierreDelDia } from '@/modules/conta/empresa/ApartadoCierreDelD
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
+import { ApartadoLogo } from '@/modules/conta/empresa/ApartadoLogo'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
@@ -70,6 +71,8 @@ function Entrada({ id }: { id: string }) {
               <Actividades {...p} />
               {/* S01: la marca de hostelería de la empresa, al lado de lo que hace. */}
               <ApartadoHosteleria {...p} />
+              {/* S01: el logo de la empresa, el de la cabecera. */}
+              <ApartadoLogo {...p} />
             </div>
           </div>
         </>

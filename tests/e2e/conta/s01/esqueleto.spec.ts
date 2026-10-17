@@ -265,6 +265,36 @@ test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esque
   expect(errores).toEqual([])
 })
 
+// Un PNG de 1 × 1 de verdad (para que el bucket lo acepte por su tipo).
+const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64')
+
+test('Ajustes › Empresa: el logo de la empresa sale en la cabecera; lo que no vale, se dice antes de subir', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_D.email)
+  vigilar(page, errores)
+  await page.goto('/conta/ajustes/empresa')
+  const tarjeta = page.getByRole('region', { name: 'El logo de la empresa' })
+  await expect(tarjeta.getByTestId('logo-empresa-sin')).toBeVisible({ timeout: 30_000 })
+  const elegir = page.getByLabel('Elegir el logo de la empresa')
+  // Un texto no es un logo: se dice, y no se sube nada (regla 8).
+  await elegir.setInputFiles({ name: 'notas.txt', mimeType: 'text/plain', buffer: Buffer.from('hola') })
+  await expect(tarjeta.getByText('El logo tiene que ser PNG, JPG o WebP. No se ha subido nada.')).toBeVisible()
+  try {
+    await elegir.setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: PNG_1X1 })
+    await expect(tarjeta.getByText('Logo puesto: «logo.png». Ya sale en la cabecera, al lado del nombre de la empresa.')).toBeVisible({ timeout: 30_000 })
+    await expect(tarjeta.getByTestId('logo-empresa')).toBeVisible()
+    if (lado(page) === 'ordenador') await expect(page.locator('.s-cabecera img.s-cab-cliente-logo')).toBeVisible()
+  } finally {
+    if (await tarjeta.getByRole('button', { name: 'Quitar el logo' }).count()) {
+      await tarjeta.getByRole('button', { name: 'Quitar el logo' }).click()
+      await expect(tarjeta.getByText(/^Logo quitado\./)).toBeVisible()
+    }
+  }
+  await expect(tarjeta.getByTestId('logo-empresa-sin')).toBeVisible()
+  if (lado(page) === 'ordenador') await expect(page.locator('.s-cabecera img.s-cab-cliente-logo')).toHaveCount(0)
+  expect(errores).toEqual([])
+})
+
 test('la cinta se oculta, se recuerda y vuelve (nunca desaparece sin decir dónde está)', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')

@@ -75,6 +75,22 @@ El inventario es el del paso 1 (`S01_paso1_comprobaciones.md`, §2).
   hostelería (inventario, §3).
 - La e2e de la cuenta D la pone en «Sí», mira que sale Liquidaciones y la deja en «No».
 
+### Ajustes › Empresa: el logo de la empresa (0120)
+
+- `company.logo_path` (admite nulos) y el bucket **privado** `company-logos`
+  (PNG, JPG o WebP de hasta 1 MB; sin SVG), con sus políticas como las de
+  `banco-tickets`: lee quien es de la cuenta; sube, cambia y borra el
+  administrador o el gestor. Ruta `<cuenta>/<empresa>/<huella>.<ext>`.
+- En Ajustes › Empresa, «El logo de la empresa»: subir, cambiar y quitar, y
+  cada cosa lo dice. Lo que no vale (tipo o tamaño) se dice antes de subir.
+- En la cabecera, el de la empresa; si no hay, el de la cuenta; si tampoco, la
+  inicial. El esqueleto lee la empresa con `*`, así que hasta que la 0120 esté
+  aplicada no pide la columna por nombre.
+- Prueba de staging (`rollback`): como usuario de A sube el suyo, lo ve, no ve
+  el de B, no sube en la carpeta de B, y la vuelta atrás quita políticas y
+  columna. La e2e de la cuenta D sube un PNG, lo ve en la cabecera y lo quita.
+- **Va en la tanda del S01** (clase «añadir»).
+
 ### El alta pone la marca de hostelería
 
 - Al decir a qué se dedica la empresa, el alta pone `company.is_hospitality`
@@ -122,6 +138,6 @@ e2e de la B01 lo comprueba.
 ## Queda (paso 3)
 
 Lo de hostelería que queda en otras pantallas (Ventas, textos del diario,
-fichas), Ajustes (el logo de la empresa, Registro de la IA), Definiciones › Analítica, la vista
+fichas), Definiciones › Analítica, la vista
 Recibida en Contabilidad › Asientos, `?tipo=` en el asiento nuevo y el
 `journal_entry_id` (paso 1).

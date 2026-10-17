@@ -47,6 +47,8 @@ export interface Empresa {
    * null = sin decir (se trata como no).
    */
   hosteleria?: boolean | null
+  /** S01 · La ruta del logo en el bucket company-logos (company.logo_path), o null. */
+  logoPath?: string | null
   /** Por dónde va el alta conversada (company.setup_step). */
   setupStep: string
   setupCompletedAt: string | null

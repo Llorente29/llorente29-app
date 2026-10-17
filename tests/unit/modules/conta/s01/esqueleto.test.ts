@@ -273,3 +273,15 @@ describe('el mes corto de la cabecera (N30: «2026 · Oct»)', () => {
     expect(mesCorto('2027-01')).toBe('Ene 2027')
   })
 })
+
+describe('el logo de la empresa: lo que no vale se dice antes de subir', () => {
+  it('PNG, JPG o WebP de hasta 1 MB', async () => {
+    const { motivoLogoNoValido } = await import('@/modules/conta/services/esqueletoService')
+    expect(motivoLogoNoValido({ type: 'image/png', size: 1024 * 1024 })).toBeNull()
+    expect(motivoLogoNoValido({ type: 'image/webp', size: 10 })).toBeNull()
+    expect(motivoLogoNoValido({ type: 'image/jpeg', size: 10 })).toBeNull()
+    expect(motivoLogoNoValido({ type: 'image/svg+xml', size: 10 })).toBe('El logo tiene que ser PNG, JPG o WebP.')
+    expect(motivoLogoNoValido({ type: 'text/plain', size: 4 })).toBe('El logo tiene que ser PNG, JPG o WebP.')
+    expect(motivoLogoNoValido({ type: 'image/png', size: 1024 * 1024 * 2.5 })).toBe('El logo pesa 2,5 MB y caben hasta 1 MB.')
+  })
+})
