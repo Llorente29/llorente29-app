@@ -1,9 +1,9 @@
 // ─── Enriquecimiento de datos de ventas ──────────────────────────────────────
 // 1. Meteorología: Open-Meteo API (gratuita, sin clave)
-// 2. Eventos deportivos: partidos del Real Madrid y otros relevantes en Madrid,
-//    vía la función futbol-partidos (el token de football-data.org vive allí)
-
-import { supabase } from '../lib/supabase'
+// (Los partidos de fútbol se quitaron el 17/10, W02: venían de football-data.org
+// con un token de pruebas escrito en el front. La predicción va sin partidos,
+// igual que cuando aquel servicio fallaba. Los tipos de evento se quedan porque
+// los patrones guardados antes pueden traerlos.)
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 export interface DayEnrichment {
@@ -48,15 +48,6 @@ export interface EnrichedDayStats {
 
 // ─── COEFICIENTES BASE ────────────────────────────────────────────────────────
 const COEF = {
-  CLASICO:           1.40,  // Real Madrid vs Barcelona
-  DERBI:             1.35,  // Real Madrid vs Atlético
-  CHAMPIONS_FINAL:   1.35,
-  CHAMPIONS_ELIM:    1.30,
-  REAL_MADRID_HOME:  1.20,
-  REAL_MADRID_AWAY:  1.15,
-  MADRID_DERBY:      1.10,  // Atlético vs otro (sin RM)
-  SPAIN_NT:          1.15,
-  OTHER_BIG:         1.08,
   RAIN:              1.25,  // lluvia aumenta delivery
 }
 
@@ -88,60 +79,6 @@ export async function fetchWeatherHistory(
   } catch { return {} }
 }
 
-// ─── EVENTOS DEPORTIVOS ────────────────────────────────────────────────────────
-// Los partidos del Real Madrid de football-data.org, a través de la función
-// futbol-partidos (el token vive allí, no aquí).
-
-export async function fetchSportEvents(
-  startDate: string,
-  endDate: string
-): Promise<Record<string, SportEvent>> {
-  const events: Record<string, SportEvent> = {}
-
-  try {
-    // Los partidos los trae la función futbol-partidos: el token de
-    // football-data.org no vive en el front (W02, 17/10).
-    if (!supabase) return events
-    const { data, error } = await supabase.functions.invoke('futbol-partidos', {
-      body: { dateFrom: startDate, dateTo: endDate },
-    })
-    if (error || !data?.ok) return events
-    const matches = (data.matches ?? []) as { competition: string; utcDate: string; home: string; away: string; stage: string | null }[]
-
-    for (const m of matches) {
-      const comp = m.competition
-      const date = m.utcDate?.slice(0, 10)
-      if (!date) continue
-      const home = m.home || ''
-      const away = m.away || ''
-      const isRM  = home.includes('Real Madrid') || away.includes('Real Madrid')
-      if (!isRM) continue
-
-      const isElClasico = (home.includes('Barcelona') || away.includes('Barcelona'))
-      const isDerbi     = (home.includes('Atlético') || away.includes('Atlético') || home.includes('Atletico') || away.includes('Atletico'))
-      const isChampions = comp === 'CL'
-      const isKnockout  = ['ROUND_OF_16','QUARTER_FINAL','SEMI_FINAL','FINAL'].includes(m.stage ?? '')
-
-      let coef = COEF.REAL_MADRID_AWAY
-      if (isElClasico)              coef = COEF.CLASICO
-      else if (isDerbi)             coef = COEF.DERBI
-      else if (isChampions && isKnockout) coef = COEF.CHAMPIONS_ELIM
-      else if (isChampions)         coef = COEF.CHAMPIONS_FINAL
-      else if (home.includes('Real Madrid')) coef = COEF.REAL_MADRID_HOME
-
-      const compLabel = isElClasico ? 'Clásico' : isDerbi ? 'Derbi' : isChampions ? 'Champions' : 'LaLiga'
-      events[date] = {
-        competition: compLabel, home, away,
-        isRealMadrid: true, isElClasico, isDerbi, isChampions,
-        importance: (isElClasico || isDerbi || (isChampions && isKnockout)) ? 'alta' : 'media',
-        coeficient: coef
-      }
-    }
-  } catch { /* silencio — sin partidos si falla, como antes */ }
-
-  return events
-}
-
 // ─── CALCULAR COEFICIENTE EFECTIVO ────────────────────────────────────────────
 export function calcDayCoeficient(rain: number, event?: SportEvent): number {
   let coef = 1.0
@@ -161,10 +98,7 @@ export async function enrichRecords(
   const dates = [...new Set(records.map(r => r.date))].sort()
   if (!dates.length) return { enriched: {}, rainCoeficient: 1 }
 
-  const [weather, events] = await Promise.all([
-    fetchWeatherHistory(dates, lat || MADRID_LAT, lon || MADRID_LON),
-    fetchSportEvents(dates[0], dates[dates.length - 1])
-  ])
+  const weather = await fetchWeatherHistory(dates, lat || MADRID_LAT, lon || MADRID_LON)
 
   // Calcular correlación lluvia→ventas automáticamente
   const rainyDays    = dates.filter(d => (weather[d] || 0) > 1)
@@ -178,13 +112,11 @@ export async function enrichRecords(
   const enriched: Record<string, DayEnrichment> = {}
   dates.forEach(date => {
     const rain  = weather[date] || 0
-    const event = events[date]
     enriched[date] = {
       date,
       rain,
       isRainy: rain > 1,
-      sportEvent: event,
-      coeficient: calcDayCoeficient(rain, event)
+      coeficient: calcDayCoeficient(rain)
     }
   })
 
@@ -317,11 +249,8 @@ export async function predictWeekStaff(
     return d.toISOString().slice(0, 10)
   })
 
-  // Obtener eventos y lluvia de la semana futura
-  const [futureWeather, futureEvents] = await Promise.all([
-    fetchWeatherHistory(weekDates, lat || MADRID_LAT, lon || MADRID_LON).catch(() => ({} as Record<string,number>)),
-    fetchSportEvents(weekDates[0], weekDates[6]).catch(() => ({} as Record<string,SportEvent>))
-  ])
+  // Lluvia de la semana futura
+  const futureWeather = await fetchWeatherHistory(weekDates, lat || MADRID_LAT, lon || MADRID_LON).catch(() => ({} as Record<string,number>))
 
   weekDates.forEach(date => {
     const d = new Date(date + 'T12:00:00')
@@ -339,14 +268,9 @@ export async function predictWeekStaff(
 
     // Coeficientes futuros
     const rain  = futureWeather[date] || 0
-    const event = futureEvents[date]
     const coefReasons: string[] = []
     let coef = 1.0
 
-    if (event) {
-      coef = Math.max(coef, event.coeficient)
-      coefReasons.push(`${event.competition}: ${event.home} vs ${event.away} (+${Math.round((event.coeficient-1)*100)}%)`)
-    }
     if (rain > 1) {
       const rc = Math.max(rainCoeficient, 1.05)
       coef = Math.max(coef, coef * rc)
@@ -371,7 +295,6 @@ export async function predictWeekStaff(
       coeficient: Math.round(coef * 100) / 100,
       coefReason: coefReasons,
       confidence,
-      sportEvent: event,
       isRainy: rain > 1
     })
   })
