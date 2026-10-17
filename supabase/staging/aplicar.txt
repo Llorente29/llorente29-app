@@ -11,6 +11,8 @@
 supabase/migrations/20261121T0100_s01_esqueleto.sql
 supabase/migrations/20261121T0110_s01_hosteleria_de_hoy.sql
 supabase/seeds/conta/seed_s01_cuenta_d_sin_hosteleria_staging.sql
+#   Y su plan completo, como lo deja el alta (el agente «Plan contable» lo pide).
+supabase/seeds/conta/seed_s01_cuenta_d_plan_staging.sql
 supabase/staging/sql/20261121_s01_esqueleto_prueba.sql
 #   0120: el logo de cada empresa (company.logo_path y el bucket privado company-logos),
 #   con su prueba (ROLLBACK): como usuario de A sube el suyo y no toca la carpeta de B.
