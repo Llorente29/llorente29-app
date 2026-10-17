@@ -37,83 +37,104 @@ function vigilar(page: Page) {
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[consola] ${m.text().slice(0, 300)}`) })
 }
 
+/**
+ * M01 · Un asiento del libro: en el ordenador, una fila de la tabla densa del
+ * marco (role «row»); en el móvil, su tarjeta (un botón).
+ */
+/** En el móvil (Julio, 16/10) las vistas van en una línea desplegable: se abre antes de mirarlas. */
+async function abrirVistas(page: Page) {
+  if (lado(page) === 'movil') await page.getByRole('button', { name: /^Vista: / }).click()
+}
+
+function filaDe(page: Page, nombre: RegExp) {
+  return lado(page) === 'ordenador'
+    ? page.getByRole('grid', { name: 'Asientos del libro diario' }).getByRole('row', { name: nombre })
+    : page.getByRole('list', { name: 'Asientos del libro diario' }).getByRole('button', { name: nombre })
+}
+
 async function abrirAsiento(page: Page, concepto: string) {
-  await page.getByRole('button', { name: new RegExp(concepto) }).first().click()
+  await filaDe(page, new RegExp(concepto)).first().click()
   if (lado(page) === 'ordenador') await page.getByRole('link', { name: 'Abrir el asiento' }).click()
   await expect(page.getByRole('heading', { level: 1, name: concepto })).toBeVisible()
 }
 
-test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo que he hecho yo', async ({ page }) => {
+test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, Diez y lo que he hecho yo', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros/diario')
-  await expect(page.getByRole('heading', { level: 1, name: 'Libro diario' })).toBeVisible()
+  // M01: el título lo dicen las pestañas del marco (Diario › Libro diario); el encabezado, para el lector.
+  await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
   // Desde el menú: «Libros» ya tiene su pantalla.
   if (lado(page) === 'ordenador') await expect(page.getByRole('link', { name: 'Libros', exact: true }).first()).toBeVisible()
-  // Filtros: solo los orígenes que hay, con cuántos.
+  // Las vistas: solo los orígenes que hay, con cuántos (los filtros de antes).
+  await abrirVistas(page)
+  const vistas = page.getByRole('group', { name: 'Vistas' })
   for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Plataformas · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {
-    await expect(page.getByRole('button', { name: f })).toBeVisible()
+    await expect(vistas.getByRole('button', { name: f })).toBeVisible()
   }
-  await expect(page.getByRole('button', { name: /^Banco · / })).toHaveCount(0)
-  // Las cuatro cifras.
+  await expect(vistas.getByRole('button', { name: /^Banco · / })).toHaveCount(0)
+  if (lado(page) === 'movil') await page.keyboard.press('Escape')
+  // «Te toca hoy»: lo que espera revisión, con su número (filtra al pulsarlo).
+  await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()
+  // El mes, en una línea: sus asientos, si está abierto y su resultado.
   await expect(page.getByText(/^Asientos en (octubre|noviembre|diciembre)$/)).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Para revisar: \d+\. Ver$/ })).toBeVisible()
   await expect(page.getByText(/^Resultado de /)).toBeVisible()
   // Estados: lo propuesto, lo hecho por Folvy, lo anulado.
-  const ventas = page.getByRole('button', { name: /Ventas del día · Norte Centro/ })
+  const ventas = filaDe(page, /Ventas del día · Norte Centro/)
   await expect(ventas.filter({ hasText: 'Para revisar' })).toHaveCount(1)
   await expect(ventas.filter({ hasText: 'Hecho por Folvy' })).toHaveCount(1)
-  await expect(page.getByRole('button', { name: /Publicidad en la plataforma · octubre/ }).getByText('Anulado')).toBeVisible()
+  await expect(filaDe(page, /Publicidad en la plataforma · octubre/).getByText('Anulado')).toBeVisible()
   // La marca cedida, dicha.
-  await expect(page.getByRole('button', { name: /Liquidación Plataforma Norte/ }).getByText('Brasa Prestada · cedida')).toBeVisible()
+  await expect(filaDe(page, /Liquidación Plataforma Norte/).getByText('Brasa Prestada · cedida')).toBeVisible()
   // Respuesta 3 · 1: el número con su serie, y el contraasiento la dice por su nombre.
-  const contra = page.getByRole('button', { name: /^.*Anula General nº 2: Estaba repetido/ })
+  const contra = filaDe(page, /Anula General nº 2: Estaba repetido/)
   await expect(contra).toBeVisible()
   if (lado(page) === 'ordenador') {
     await expect(contra.locator('.cxd-num')).toHaveText('General 3')
-    await expect(page.getByRole('button', { name: /Nóminas de septiembre/ }).locator('.cxd-num')).toHaveText('Nóminas 1')
+    await expect(filaDe(page, /Nóminas de septiembre/).locator('.cxd-num')).toHaveText('Nóminas 1')
+    // El número en Diez, en su columna; sin número, «—» con su porqué (nunca un hueco mudo).
+    await expect(page.getByRole('columnheader', { name: 'Diez' })).toBeVisible()
+    await expect(contra.locator('.cxd-diez')).toHaveText(/^—/)
+    await expect(contra.locator('.cxd-diez')).toHaveAttribute('title', /.+/)
   } else {
     await expect(contra.locator('.cxd-num-movil')).toHaveText('General 3')
   }
   await expect(page.getByText(/Anula el \d+\/\d+/)).toHaveCount(0)
-  // Respuesta 5 (decisión de Julio): ≤ 96 px por fila en el ordenador y ≤ 110 en
-  // el móvil; el concepto en dos líneas como mucho; los chips y «de dónde sale»
-  // en UNA línea, los chips enteros y «de dónde sale» con «…» en lo que quede; el
-  // texto entero, en el title. Se mide fila a fila, todas las del libro.
-  const tope = lado(page) === 'ordenador' ? 96 : 110
-  const filas = await page.locator('.cxd-fila:not(.cxd-fila-cabeza)').all()
-  expect(filas.length).toBeGreaterThan(5)
-  const altos: number[] = []
-  for (const f of filas) {
-    const m = await f.evaluate((fila) => {
-      const t = fila.querySelector('.cxd-concepto-titulo') as HTMLElement
-      const apoyo = fila.querySelector('.cxd-concepto-apoyo') as HTMLElement
-      const caja = apoyo.getBoundingClientRect()
-      const chips = [...apoyo.querySelectorAll('.cx-chip')].map((c) => {
-        const r = c.getBoundingClientRect()
-        return { texto: c.textContent ?? '', cortado: c.scrollWidth > c.clientWidth + 0.5 || r.right > caja.right + 0.5 || r.left < caja.left - 0.5, arriba: Math.round(r.top) }
+  // M01 (maqueta N30 §4): en el ordenador, cada asiento en UNA fila del alto que
+  // pone la densidad (compacta, unas 30 por pantalla); el concepto en una línea
+  // con «…» y entero en el title; los chips enteros. En el móvil, la tarjeta
+  // sigue en ≤ 110 px (respuesta 5). Se mide fila a fila, todas las del libro.
+  if (lado(page) === 'ordenador') {
+    const fila = await page.locator('.cxm').evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--cxm-fila')))
+    const filas = await page.locator('.cxt-fila').all()
+    expect(filas.length).toBeGreaterThan(5)
+    for (const f of filas) {
+      const m = await f.evaluate((tr) => {
+        const t = tr.querySelector('.cxd-concepto-titulo') as HTMLElement
+        const linea = tr.querySelector('.cxd-linea-libro') as HTMLElement
+        const caja = linea.getBoundingClientRect()
+        const chips = [...linea.querySelectorAll('.cx-chip')].map((c) => {
+          const r = c.getBoundingClientRect()
+          return { texto: c.textContent ?? '', cortado: c.scrollWidth > c.clientWidth + 0.5 || r.right > caja.right + 0.5 }
+        })
+        return { alto: tr.getBoundingClientRect().height, concepto: t.textContent ?? '', title: t.title, altoConcepto: t.getBoundingClientRect().height, chips }
       })
-      const s = apoyo.querySelector('.cxd-sale') as HTMLElement | null
-      const alturaLinea = parseFloat(getComputedStyle(t).lineHeight)
-      return {
-        alto: fila.getBoundingClientRect().height,
-        concepto: t.textContent ?? '', titleConcepto: t.title, lineasConcepto: Math.round(t.getBoundingClientRect().height / alturaLinea),
-        chips, unaLinea: new Set(chips.map((c) => c.arriba)).size <= 1 && caja.height <= 22,
-        sale: s ? { texto: s.textContent ?? '', title: s.title, lineas: Math.round(s.getBoundingClientRect().height / 16) } : null,
-      }
-    })
-    altos.push(Math.round(m.alto))
-    expect(m.alto, `fila «${m.concepto}» de ${m.alto} px (tope ${tope})`).toBeLessThanOrEqual(tope)
-    expect(m.lineasConcepto, `«${m.concepto}» en ${m.lineasConcepto} líneas`).toBeLessThanOrEqual(2)
-    expect(m.titleConcepto, 'el concepto entero, en el title').toBe(m.concepto)
-    for (const c of m.chips) expect(c.cortado, `chip «${c.texto}» cortado`).toBe(false)
-    expect(m.unaLinea, `chips y «de dónde sale» de «${m.concepto}» en más de una línea`).toBe(true)
-    if (m.sale) {
-      expect(m.sale.lineas, `«${m.sale.texto}» en ${m.sale.lineas} líneas`).toBeLessThanOrEqual(1)
-      expect(m.sale.title, '«de dónde sale» entero, en el title').toBe(m.sale.texto)
+      expect(m.alto, `fila «${m.concepto}» de ${m.alto} px (la densidad pide ${fila})`).toBeLessThanOrEqual(fila + 1.5)
+      expect(m.altoConcepto, `«${m.concepto}» en más de una línea`).toBeLessThanOrEqual(20)
+      expect(m.title, 'el concepto entero, en el title').toBe(m.concepto)
+      for (const c of m.chips) expect(c.cortado, `chip «${c.texto}» cortado en «${m.concepto}»`).toBe(false)
+    }
+  } else {
+    const tarjetas = await page.locator('.cxt-tarjeta').all()
+    expect(tarjetas.length).toBeGreaterThan(5)
+    for (const t of tarjetas) {
+      const alto = (await t.boundingBox())!.height
+      expect(alto, `tarjeta de ${alto} px (tope 110)`).toBeLessThanOrEqual(110)
     }
   }
-  console.log(`[filas ${lado(page)}] alturas: máx ${Math.max(...altos)} px, mín ${Math.min(...altos)} px, ${altos.length} filas`)
+  // El pie: cuántos y el cuadre del libro.
+  await expect(page.getByRole('status', { name: 'Cuadre' })).toContainText('Cuadra')
+  await expect(page.locator('.cxt-pie')).toContainText(/\d+ asientos/)
   // «Lo que he hecho yo» está; lo que dice se prueba aparte, con su propio
   // asiento (abajo): aquí enseña los cinco últimos de una cuenta compartida.
   await expect(page.getByRole('region', { name: 'Lo que he hecho yo' })).toBeVisible()
@@ -122,16 +143,18 @@ test('A · libro diario (N11): filtros que existen, cuatro cifras, estados y lo 
   await capturar(page, 'diario')
 
   if (lado(page) === 'ordenador') {
-    // La fila se despliega en sus apuntes.
+    // La fila se despliega en sus apuntes (clic, o Intro con la tabla).
     await ventas.filter({ hasText: 'Hecho por Folvy' }).click()
     await expect(page.getByRole('link', { name: '47700010' }).first()).toBeVisible()
     await expect(page.getByText('al Haber').first()).toBeVisible()
     await capturar(page, 'diario-abierto')
   }
   // Para revisar: solo lo que espera, sin esconder el resto (Todos sigue con todo).
-  await page.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
-  await expect(page.getByRole('button', { name: /Ventas del día/ }).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /Alquiler Norte Mercado · octubre/ })).toBeVisible()
+  await abrirVistas(page)
+  await vistas.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
+  await expect(filaDe(page, /Ventas del día/).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
+  await expect(filaDe(page, /Alquiler Norte Mercado · octubre/)).toBeVisible()
+  await expect(page.locator('.cxt-pie')).toContainText(/\d+ de \d+ asientos/)
 })
 
 // D01 R3 (14/10): «Lo que he hecho yo» se prueba con un asiento que crea la
@@ -284,7 +307,7 @@ test('A · asiento a mano: cuadre en vivo, borrador y descartar', async ({ page 
   await page.getByLabel('Por qué').fill('Era una prueba')
   await page.getByRole('dialog').getByRole('button', { name: 'Descartar' }).click()
   await expect(page).toHaveURL(/\/conta\/libros\/diario\?ver=revisar$/)
-  await expect(page.getByRole('button', { name: /Prueba e2e · se descarta/ })).toHaveCount(0)
+  await expect(page.getByText('Prueba e2e · se descarta')).toHaveCount(0)
 })
 
 test('A · el extracto del proveedor lee del libro y lleva a su asiento', async ({ page }) => {
@@ -303,13 +326,17 @@ test('B · sin plataformas ni ventas, septiembre cerrado y un borrador que no se
   await entrarComo(page, CUENTA_B.email)
   vigilar(page)
   await page.goto('/conta/libros/diario')
-  await expect(page.getByRole('heading', { level: 1, name: 'Libro diario' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
+  await abrirVistas(page)
+  await expect(page.getByRole('group', { name: 'Vistas' })).toBeVisible()
   // Regla 9: nada de A.
   await expect(page.getByText(/Norte Centro|Plataforma Norte/)).toHaveCount(0)
   // Solo los filtros de lo que B tiene.
-  await expect(page.getByRole('button', { name: /^Plataformas/ })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^Ventas/ })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^Manuales · \d+$/ })).toBeVisible()
+  const vistas = page.getByRole('group', { name: 'Vistas' })
+  await expect(vistas.getByRole('button', { name: /^Plataformas/ })).toHaveCount(0)
+  await expect(vistas.getByRole('button', { name: /^Ventas/ })).toHaveCount(0)
+  await expect(vistas.getByRole('button', { name: /^Manuales · \d+$/ })).toBeVisible()
+  if (lado(page) === 'movil') await page.keyboard.press('Escape')
   await expect(page.getByText('septiembre cerrado')).toBeVisible()
   await capturar(page, 'diario-b')
   await abrirAsiento(page, 'Honorarios de la gestoría · septiembre')

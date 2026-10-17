@@ -252,6 +252,16 @@ export async function descartar(entryId: string, motivo: string, quien: string |
   try { await rpc('journal_entry_descartar', { p_entry: entryId, p_motivo: motivo, p_quien_nombre: quien }) } catch (e) { throw sinPrefijo(e) }
 }
 
+/**
+ * El primer día desde `fecha` en que se puede asentar, con la misma regla que
+ * la validación (`conta_primer_dia_abierto`: ejercicio abierto, después de lo
+ * traído y mes sin cerrar). null: ninguno en los 400 días siguientes.
+ */
+export async function primerDiaAbierto(companyId: string, fecha: string): Promise<string | null> {
+  const d = await rpc<string | null>('conta_primer_dia_abierto', { p_company: companyId, p_fecha: fecha })
+  return typeof d === 'string' && d ? d.slice(0, 10) : null
+}
+
 export async function cerrarMes(companyId: string, mes: string): Promise<void> {
   try { await rpc('conta_cerrar_mes', { p_company: companyId, p_mes: mes }) } catch (e) { throw sinPrefijo(e) }
 }

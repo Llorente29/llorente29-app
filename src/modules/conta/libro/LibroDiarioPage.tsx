@@ -1,15 +1,29 @@
 // src/modules/conta/libro/LibroDiarioPage.tsx
 //
-// C04 · Libros › Libro diario (maqueta N11Diario). Arriba, los filtros por
-// origen (solo los que la empresa tiene, con cuántos), las cuatro cifras del
-// mes y, si el mes está cerrado, la franja con «Pedir desbloqueo». Debajo, el
-// diario: cada asiento en una fila que se despliega en sus apuntes, con su
-// estado (Para revisar ámbar, Hecho por Folvy verde, Validado, Borrador,
-// Anulado gris). A la derecha, «Lo que he hecho yo» (con Deshacer) y el cierre
-// del mes anterior. En el móvil, por niveles: la lista y, al tocar, el asiento.
+// C04 · Libros › Libro diario (maqueta N11Diario), pasado al marco nuevo en
+// el M01 (maqueta N30 §4, encargo F01 tarea 4) con la tabla densa:
+//   · arriba, en la barra de acciones del marco: «+ Nuevo asiento» (Ins),
+//     «Proponer lo pendiente» y «Validar y enviar a Diez»; el ejercicio, en la
+//     barra de arriba (lo pone Libros);
+//   · la franja «Te toca hoy»: lo que espera revisión y lo validado que no ha
+//     llegado a Diez, que filtran al pulsarlos;
+//   · el mes en una línea: sus asientos, si está abierto o cerrado y su
+//     resultado (las cifras de N11, en pequeño);
+//   · las vistas (Todos, Para revisar y los orígenes que la empresa tiene, con
+//     cuántos), las que guarda cada persona, los filtros (fechas, serie,
+//     estado, local, texto) y Exportar (Excel, CSV y PDF);
+//   · la tabla: fecha, número con su serie, el número en Diez, el concepto con
+//     sus chips y de dónde sale, el importe y el estado. Intro (o un clic)
+//     despliega sus apuntes; en el móvil, abre el asiento;
+//   · el pie: cuántos, los marcados y el cuadre («Debe … · Haber … · Cuadra»);
+//   · a la derecha, «Lo que he hecho yo» (con Deshacer) y el cierre del mes
+//     anterior.
+// Nada de lo de antes se pierde: proponer, el corte, enviar a Diez, el mes
+// cerrado con «Pedir desbloqueo», lo que no se propuso y por qué.
 //
-// Regla 7: «Todos» enseña todo, también lo anulado. Regla 8: cada botón dice lo
-// que ha hecho, con contenido («Validado: Ventas nº 1.287»).
+// Regla 7: «Todos» enseña todo, también lo anulado, y el pie dice siempre
+// cuántos hay de cuántos. Regla 8: cada botón dice lo que ha hecho, con
+// contenido («Validado: Ventas nº 1.287»).
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -17,16 +31,16 @@ import { rutaAsiento, rutaMayor, rutaNuevoAsiento } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
+import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
   cifras, deDondeSale, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, marcaNegativoDiez, mesAnterior, mesDe, nombreMes, numeroVisible,
-  pasosCierre, pastillas, sePuedeCerrar, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
+  pasosCierre, pastillas, pedirCierre, sePuedeCerrar, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
 import {
-  cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, reabrirMes, resultadoDelMes,
+  cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, primerDiaAbierto, reabrirMes, resultadoDelMes,
   type EjercicioLibro,
 } from '@/modules/conta/services/diarioService'
 import { proponerPendientes, type ResultadoProponer } from '@/modules/conta/services/propuestasLibroService'
@@ -38,6 +52,17 @@ import { MARCA } from '../cuenta/marca'
 import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, motivoSinPatron, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, leerConDiez } from '@/modules/conta/services/conDiezService'
+import { numeroEnDiez } from '@/modules/conta/lib/numeroEnDiez'
+import { AccionesPantalla, BotonAccion } from '@/modules/conta/ui/marco/AccionesPantalla'
+import { TablaDensa, type ColumnaDensa } from '@/modules/conta/ui/tabla/TablaDensa'
+import { borrarVista, cumpleFiltros, guardarVista, leerVistas, miles, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
+import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
+
+const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
+
+/** ¿Está escribiendo en un campo? (Ins no abre un asiento nuevo a media palabra.) */
+const escribiendo = (t: EventTarget | null): boolean =>
+  t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
 
 interface DatosLibro {
   /** La hora de cierre del día de la empresa («06:00»). */
@@ -73,9 +98,12 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const anterior = mesAnterior(mes)
       let resultadoError: string | null = null
       let conDiezError: string | null = null
+      // M01 (Julio, 16/10): el cierre del mes anterior no se pide si ya está
+      // cerrado fuera (la regla de la validación, de la base: pedirCierre).
+      const pedir = anterior >= ejercicio.inicio && pedirCierre(anterior, await primerDiaAbierto(companyId, anterior), cierres)
       const [resultado, cierre, conDiez] = await Promise.all([
         resultadoDelMes(companyId, mes, locales).catch((e: unknown) => { resultadoError = e instanceof Error ? e.message : String(e); return null }),
-        anterior >= ejercicio.inicio ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
+        pedir ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
         leerConDiez(accountId, companyId, asientos.filter((a) => a.origen === 'sales_day').map((a) => a.id))
           .catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() }),
       ])
@@ -85,6 +113,21 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
     return () => { vivo = false }
   }, [accountId, companyId, codigo, clave])
   return r.clave === clave ? r : { clave, datos: null, error: null }
+}
+
+/** Los filtros de arriba de la tabla; las listas salen de lo que hay en el libro (regla 30). */
+function camposDelLibro(asientos: readonly AsientoDiario[]): CampoFiltro[] {
+  const series = [...new Set(asientos.map((a) => a.serie))].sort((x, y) => Number(x) - Number(y))
+  const estados = [...new Set(asientos.map((a) => estadoDe(a).texto))].sort((x, y) => x.localeCompare(y, 'es'))
+  const locales = [...new Set(asientos.flatMap((a) => a.apuntes.map((l) => (l.comun ? 'Común' : l.local)).filter((x): x is string => !!x)))].sort((x, y) => x.localeCompare(y, 'es'))
+  return [
+    { id: 'desde', etiqueta: 'Desde', tipo: 'desde' },
+    { id: 'hasta', etiqueta: 'Hasta', tipo: 'hasta' },
+    { id: 'serie', etiqueta: 'Serie', tipo: 'opciones', opciones: [{ valor: '', texto: 'Todas' }, ...series.map((x) => ({ valor: String(x), texto: NOMBRE_SERIE[x] }))] },
+    { id: 'estado', etiqueta: 'Estado', tipo: 'opciones', opciones: [{ valor: '', texto: 'Todos' }, ...estados.map((x) => ({ valor: x, texto: x }))] },
+    ...(locales.length > 1 ? [{ id: 'local', etiqueta: 'Local', tipo: 'opciones' as const, opciones: [{ valor: '', texto: 'Todos' }, ...locales.map((x) => ({ valor: x, texto: x }))] }] : []),
+    { id: 'texto', etiqueta: 'Buscar', tipo: 'texto', pista: 'Concepto, número, cuenta, importe…' },
+  ]
 }
 
 export default function LibroDiarioPage() {
@@ -103,11 +146,16 @@ export default function LibroDiarioPage() {
   const [sinPropuesta, setSinPropuesta] = useState<ResultadoProponer['sinPropuesta']>([])
   const [desbloqueo, setDesbloqueo] = useState(false)
   const [enviarDiez, setEnviarDiez] = useState(false)
+  const usuario = userName ?? 'yo'
+  const [filtros, setFiltros] = useState<Record<string, string>>({})
+  const [soloSinDiez, setSoloSinDiez] = useState(false)
+  const [guardadas, setGuardadas] = useState<VistaGuardada[]>(() => leerVistas('libro-diario', usuario, almacen()))
+  const [vistaGuardada, setVistaGuardada] = useState<string | null>(null)
 
   const visibles = useMemo(() => (datos ? filtrosVisibles(datos.asientos) : []), [datos])
   const pedido = params.get('ver') as FiltroDiario | null
   const filtro: FiltroDiario = visibles.some((f) => f.id === pedido) ? pedido! : 'todos'
-  const lista = useMemo(() => (datos ? filtrar(datos.asientos, filtro) : []), [datos, filtro])
+  const campos = useMemo(() => (datos ? camposDelLibro(datos.asientos) : []), [datos])
   const c = datos ? cifras(datos.asientos, datos.mes, datos.cierres, datos.resultado) : null
   const hechos = datos ? loQueHeHechoYo(datos.asientos) : []
   // R15 · Con Diez: el estado de cada asiento de ventas de una plataforma, y lo
@@ -121,11 +169,51 @@ export default function LibroDiarioPage() {
     }).sort((x, y) => x.fecha.localeCompare(y.fecha) || x.concepto.localeCompare(y.concepto))
     : []
   const propuestosDiez = candidatosDiez.filter((c) => c.estado === 'propuesto' && !c.noSeEnvia).length
+  // Lo validado de las plataformas que no está en Diez: el chip de «Te toca hoy».
+  const noLlegados = (a: AsientoDiario): boolean => { const e = diezDe(a); return !!e && a.estado === 'validado' && !e.enDiez }
+  const sinDiez = datos ? datos.asientos.filter(noLlegados).length : 0
+
+  // Sin memo: filtrar unos miles de asientos es nada, y así no se queda viejo.
+  const lista: AsientoDiario[] = !datos ? [] : (() => {
+    const diez = (a: AsientoDiario) => numeroEnDiez(a, datos.conDiez.get(a.id))
+    return filtrar(datos.asientos, filtro).filter((a) => (!soloSinDiez || noLlegados(a)) && cumpleFiltros(campos, filtros, {
+      fecha: a.fecha,
+      opcion: (id) => (id === 'serie' ? String(a.serie) : id === 'estado' ? estadoDe(a).texto
+        : a.apuntes.map((l) => (l.comun ? 'Común' : l.local ?? '')).filter(Boolean)),
+      texto: [a.concepto, numeroVisible(a), deDondeSale(a), eurosExactos(importe(a)), diez(a).valor ?? '',
+        ...a.apuntes.flatMap((l) => [l.cuenta, l.nombreCuenta])].join(' '),
+    }))
+  })()
+
   const cambiarFiltro = (f: FiltroDiario) => {
     const p = new URLSearchParams(params)
     if (f === 'todos') p.delete('ver'); else p.set('ver', f)
     setParams(p, { replace: true })
   }
+  const elegirVista = (id: string) => {
+    setSoloSinDiez(false)
+    const g = guardadas.find((v) => v.id === id)
+    if (g) {
+      setVistaGuardada(g.id)
+      setFiltros(g.filtros)
+      cambiarFiltro(visibles.some((f) => f.id === g.base) ? g.base as FiltroDiario : 'todos')
+      return
+    }
+    setVistaGuardada(null)
+    cambiarFiltro(id as FiltroDiario)
+  }
+
+  // Ins: un asiento a mano (la tecla que lleva el botón; no es del navegador).
+  const puedeNuevo = !!datos?.ejercicio
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== 'Insert' || e.ctrlKey || e.metaKey || e.altKey || escribiendo(e.target) || !puedeNuevo) return
+      e.preventDefault()
+      navegar(rutaNuevoAsiento())
+    }
+    window.addEventListener('keydown', tecla)
+    return () => window.removeEventListener('keydown', tecla)
+  }, [navegar, puedeNuevo])
 
   // Respuesta 4: el corte manda (nada ≤ imported_until), sin corte y con ventas
   // de antes del ejercicio se pregunta primero, y cada vez un mes de ventas del
@@ -153,7 +241,7 @@ export default function LibroDiarioPage() {
       if (r.sinPropuesta.length) partes.push(`${r.sinPropuesta.length} sin propuesta (debajo, por qué)`)
       const ventas = r.mesVentas ? ` Ventas de ${nombreMes(r.mesVentas)}.` : ''
       const quedan = r.quedanDias > 0
-        ? ` Quedan ${r.quedanDias.toLocaleString('es-ES')} ${r.quedanDias === 1 ? 'día' : 'días'} de ventas más antiguos por proponer: vuelve a pulsar.`
+        ? ` Quedan ${miles(r.quedanDias)} ${r.quedanDias === 1 ? 'día' : 'días'} de ventas más antiguos por proponer: vuelve a pulsar.`
         : ' No queda ningún día de ventas por proponer.'
       setHecho(`Repasado del ${diaMesCorto(desde)} al ${diaMesCorto(hasta)}${e.traidoHasta ? ` (hasta el ${diaMesCorto(e.traidoHasta)} lo trae el programa anterior)` : ''}: ${partes.join(' · ')}.${ventas}${quedan}`)
       recargar()
@@ -179,7 +267,7 @@ export default function LibroDiarioPage() {
     setFallo(null); setHecho(null)
     try {
       const r = await anularConDiez(id, 'Deshecho desde «Lo que he hecho yo»', null, userName)
-      setHecho(`Deshecho: «${a.concepto}» queda anulado con el contraasiento ${NOMBRE_SERIE[r.serie as 1]} nº ${r.numero.toLocaleString('es-ES')} del ${diaMesCorto(r.fecha)}. Vuelve a salir para proponer.${r.diez?.estado === 'en_diez' ? ` ${r.diez.texto}` : ''}`)
+      setHecho(`Deshecho: «${a.concepto}» queda anulado con el contraasiento ${NOMBRE_SERIE[r.serie as 1]} nº ${r.numero} del ${diaMesCorto(r.fecha)}. Vuelve a salir para proponer.${r.diez?.estado === 'en_diez' ? ` ${r.diez.texto}` : ''}`)
       if (r.diez?.estado === 'no_llega') setFallo(`${r.diez.texto} Queda en Libros › Pendientes de adjuntar en Diez, con «Enviar el contraasiento».`)
       recargar()
     } catch (e) { setFallo(e instanceof Error ? e.message : 'No se ha podido deshacer.') }
@@ -188,33 +276,44 @@ export default function LibroDiarioPage() {
   if (!accountId && !cargando) return <Vacio titulo="No hay cuenta activa." explicacion="Elige una cuenta para ver su libro." />
 
   const mesCerrado = c?.mes.cerrado ? c.mes : null
+  const columnas: ColumnaDensa<AsientoDiario>[] = datos ? [
+    { id: 'fecha', titulo: 'Fecha', ancho: '64px', celda: (a) => <span className="cxd-fecha">{diaMesCorto(a.fecha)}</span>, exportar: (a) => a.fecha },
+    { id: 'numero', titulo: 'Nº', ancho: '118px', celda: (a) => <span className="cxd-num">{numeroVisible(a)}</span>, exportar: (a) => numeroVisible(a), pesoPdf: 1.3 },
+    {
+      id: 'diez', titulo: 'Diez', ancho: '76px', cifra: true,
+      celda: (a) => { const n = numeroEnDiez(a, datos.conDiez.get(a.id)); return <span className="cxd-diez" title={n.explicacion}>{n.texto}<span className="cx-oculto"> ({n.explicacion})</span></span> },
+      exportar: (a) => numeroEnDiez(a, datos.conDiez.get(a.id)).valor,
+    },
+    {
+      id: 'concepto', titulo: 'Concepto · local · marca · de dónde sale', pesoPdf: 4,
+      celda: (a) => {
+        const d = diezDe(a)
+        return (
+          <span className="cxd-linea-libro">
+            <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
+            {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+            {d && a.estado !== 'propuesto' && <ChipDiez e={d} />}
+            <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
+          </span>
+        )
+      },
+      exportar: (a) => `${a.concepto} · ${deDondeSale(a)}`,
+    },
+    { id: 'importe', titulo: 'Importe', ancho: '116px', cifra: true, celda: (a) => <span className="cxd-importe">{eurosExactos(importe(a))}</span>, exportar: (a) => importe(a) },
+    { id: 'estado', titulo: 'Estado', ancho: '128px', celda: (a) => { const e = estadoDe(a); return <TonoChip tono={e.tono}>{e.texto}</TonoChip> }, exportar: (a) => estadoDe(a).texto },
+    { id: 'abrir', titulo: '', ancho: '24px', celda: (a) => <span className="cxd-flecha" aria-hidden="true">{abierto === a.id ? '▾' : '▸'}</span> },
+  ] : []
+
   return (
-    <div className="cxd-pagina">
-      <header className="cxp-cabecera cxd-cabecera">
-        <div className="cxp-titulos">
-          <Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libro diario' }]} />
-          <h1 className="cxp-nombre">Libro diario</h1>
-        </div>
-        <div className="cxd-acciones">
-          {datos && datos.ejercicios.length > 0 && (
-            <label className="cxd-ejercicio">
-              <span className="cx-oculto">Ejercicio</span>
-              <select className="cx-input" value={datos.ejercicio?.code ?? ''} onChange={(e) => { const p = new URLSearchParams(params); p.set('ejercicio', e.target.value); setParams(p, { replace: true }) }}>
-                {datos.ejercicios.map((e) => <option key={e.id} value={e.code}>Ejercicio {e.code}</option>)}
-              </select>
-            </label>
-          )}
-          <button type="button" className="cx-boton-sec" onClick={proponer} disabled={proponiendo || !datos?.ejercicio}>
-            {proponiendo ? 'Repasando…' : 'Proponer lo pendiente'}
-          </button>
-          {candidatosDiez.length > 0 && (
-            <button type="button" className="cx-boton-sec" onClick={() => setEnviarDiez(true)}>
-              Validar y enviar a Diez{propuestosDiez ? ` · ${propuestosDiez}` : ''}
-            </button>
-          )}
-          <button type="button" className="cx-boton" onClick={() => navegar(rutaNuevoAsiento())} disabled={!datos?.ejercicio}>+ Nuevo asiento</button>
-        </div>
-      </header>
+    <div className="cxd-pagina cxd-en-marco">
+      <h2 className="cx-oculto">Libro diario</h2>
+      <AccionesPantalla etiqueta="Acciones del libro diario">
+        <BotonAccion principal tecla="Ins" atajo="Insert" onClick={() => navegar(rutaNuevoAsiento())} disabled={!puedeNuevo}>+ Nuevo asiento</BotonAccion>
+        <BotonAccion onClick={proponer} disabled={proponiendo || !datos?.ejercicio}>{proponiendo ? 'Repasando…' : 'Proponer lo pendiente'}</BotonAccion>
+        {candidatosDiez.length > 0 && (
+          <BotonAccion onClick={() => setEnviarDiez(true)}>Validar y enviar a Diez{propuestosDiez ? ` · ${propuestosDiez}` : ''}</BotonAccion>
+        )}
+      </AccionesPantalla>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {datos?.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo están con Diez las ventas por plataforma: {datos.conDiezError}</p>}
@@ -228,7 +327,7 @@ export default function LibroDiarioPage() {
           <p className="cx-ayuda" style={{ marginTop: 0 }}>{pregunta.porque} Lo de antes de ese día no lo propongo: lo trae el programa anterior. Se puede cambiar en Ajustes › Ejercicio.</p>
           <form className="cx-rejilla-2" onSubmit={(ev) => { ev.preventDefault(); void contestar() }}>
             <label className="cx-campo"><span className="cx-etiqueta">Desde el día</span>
-              <input className="cx-input" type="date" value={pregunta.desde} onChange={(ev) => setPregunta({ ...pregunta, desde: ev.target.value, fallo: null })} /></label>
+              <CampoFecha className="cx-input" valor={pregunta.desde} alCambiar={(v) => setPregunta({ ...pregunta, desde: v, fallo: null })} /></label>
             <label className="cx-campo"><span className="cx-etiqueta">Programa anterior</span>
               <input className="cx-input" value={pregunta.programa} placeholder="Diez, A3, Sage…" onChange={(ev) => setPregunta({ ...pregunta, programa: ev.target.value })} /></label>
             <div className="cx-pie">
@@ -259,26 +358,14 @@ export default function LibroDiarioPage() {
 
       {datos?.ejercicio && c && (
         <>
-          <div className="cx-tablas-filtros" role="group" aria-label="Qué asientos ver">
-            {visibles.map((f) => (
-              <button key={f.id} type="button" className="cx-pildora" aria-pressed={filtro === f.id} onClick={() => cambiarFiltro(f.id)}>
-                {f.texto}{f.id === 'todos' ? '' : ` · ${f.n}`}
-              </button>
-            ))}
-          </div>
-
-          <div className="cxd-cifras">
-            <div className="cx-tarjeta cxd-cifra"><span className="cxd-cifra-etiqueta">Asientos en {nombreMes(datos.mes)}</span>
-              <strong className="cxd-cifra-valor">{c.asientosMes.toLocaleString('es-ES')}</strong><span className="cx-ayuda">{c.apoyoAsientos}</span></div>
-            <button type="button" className="cx-tarjeta cxd-cifra cxd-cifra-boton" onClick={() => cambiarFiltro('revisar')} aria-label={`Para revisar: ${c.revisar}. Ver`}>
-              <span className="cxd-cifra-etiqueta">Para revisar</span>
-              <strong className="cxd-cifra-valor">{c.revisar}</strong><span className={c.revisar ? 'cxt-ambar' : 'cx-ayuda'}>{c.apoyoRevisar}</span></button>
-            <div className="cx-tarjeta cxd-cifra"><span className="cxd-cifra-etiqueta">{capital(nombreMes(datos.mes))}</span>
-              <strong className="cxd-cifra-valor">{c.mes.texto}</strong><span className={c.mes.cerrado ? 'cxt-ambar' : 'cxt-verde'}>{c.mes.apoyo}</span></div>
-            <div className="cx-tarjeta cxd-cifra"><span className="cxd-cifra-etiqueta">Resultado de {nombreMes(datos.mes)}</span>
-              <strong className="cxd-cifra-valor">{c.resultado === null ? '—' : `${c.resultado >= 0 ? '+' : ''}${euros(c.resultado)}`}</strong>
-              <span className={datos.resultadoError ? 'cxt-ambar' : 'cx-ayuda'}>{datos.resultadoError ? `No se ha podido calcular: ${datos.resultadoError}` : c.apoyoResultado}</span></div>
-          </div>
+          {/* El mes, en una línea: las cifras de N11, en pequeño (lo que espera revisión va en «Te toca hoy»). */}
+          <dl className="cxd-resumen" aria-label={`Cómo va ${nombreMes(datos.mes)}`}>
+            <div><dt>Asientos en {nombreMes(datos.mes)}</dt><dd className="cxd-resumen-cifra">{miles(c.asientosMes)}</dd><dd className="cxd-resumen-apoyo">{c.apoyoAsientos}</dd></div>
+            <div><dt>{capital(nombreMes(datos.mes))}</dt><dd className="cxd-resumen-cifra">{c.mes.texto}</dd><dd className={c.mes.cerrado ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo cxt-verde'}>{c.mes.apoyo}</dd></div>
+            <div><dt>Resultado de {nombreMes(datos.mes)}</dt>
+              <dd className="cxd-resumen-cifra">{c.resultado === null ? '—' : `${c.resultado >= 0 ? '+' : ''}${euros(c.resultado)}`}</dd>
+              <dd className={datos.resultadoError ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo'}>{datos.resultadoError ? `No se ha podido calcular: ${datos.resultadoError}` : c.apoyoResultado}</dd></div>
+          </dl>
 
           {mesCerrado && (
             <div className="cx-tarjeta cxd-franja" role="status">
@@ -288,24 +375,50 @@ export default function LibroDiarioPage() {
           )}
 
           <div className="cxd-cuerpo">
-            <section className="cx-tarjeta cxd-diario" aria-label="Asientos">
-              {lista.length === 0 ? (
-                filtro === 'revisar'
+            <section className="cxd-diario" aria-label="Asientos">
+              <TablaDensa<AsientoDiario>
+                etiqueta="Asientos del libro diario" nombreFila={['asiento', 'asientos']} filas={lista} total={datos.asientos.length}
+                clave={(a) => a.id} columnas={columnas} movil={movil}
+                teTocaHoy={[
+                  { id: 'revisar', etiqueta: 'para revisar', numero: c.revisar, activo: filtro === 'revisar' && !vistaGuardada,
+                    alPulsar: () => { setVistaGuardada(null); setSoloSinDiez(false); cambiarFiltro(filtro === 'revisar' ? 'todos' : 'revisar') } },
+                  ...(datos.conDiez.size > 0 || datos.conDiezError ? [{
+                    id: 'sin-diez', etiqueta: 'validados sin llegar a Diez', numero: datos.conDiezError ? null : sinDiez, activo: soloSinDiez,
+                    alPulsar: () => setSoloSinDiez((v) => !v),
+                  }] : []),
+                ]}
+                vistas={{
+                  lista: [
+                    ...visibles.map((f) => ({ id: f.id, texto: f.texto, n: f.id === 'todos' ? undefined : f.n })),
+                    ...guardadas.map((g) => ({ id: g.id, texto: g.nombre, guardada: true })),
+                  ],
+                  activa: vistaGuardada ?? filtro,
+                  alElegir: elegirVista,
+                  alGuardar: (nombre) => {
+                    const l = guardarVista('libro-diario', usuario, nombre, filtro, filtros, almacen())
+                    setGuardadas(l)
+                    setVistaGuardada(l.find((v) => v.nombre.toLowerCase() === nombre.toLowerCase())?.id ?? null)
+                  },
+                  alBorrar: (id) => { setGuardadas(borrarVista('libro-diario', usuario, id, almacen())); if (vistaGuardada === id) setVistaGuardada(null) },
+                }}
+                filtros={{ campos, valores: filtros, alCambiar: (v) => { setFiltros(v); setVistaGuardada(null) } }}
+                exportar={{
+                  nombre: `Libro diario ${datos.ejercicio.code}${activa ? ` ${activa.nombre}` : ''}`,
+                  titulo: 'Libro diario',
+                  subtitulo: `${activa?.nombre ?? ''} · ejercicio ${datos.ejercicio.code} · ${visibles.find((f) => f.id === filtro)?.texto ?? 'Todos'}`,
+                }}
+                cuadre={(a) => ({ debe: a.apuntes.reduce((t, l) => t + l.debe, 0), haber: a.apuntes.reduce((t, l) => t + l.haber, 0) })}
+                abierta={abierto}
+                alAbrir={(a) => (movil ? navegar(rutaAsiento(a.id)) : setAbierto(abierto === a.id ? null : a.id))}
+                detalle={(a) => <Apuntes a={a} />}
+                claseFila={(a) => (a.estado === 'anulado' ? 'cxd-anulado' : undefined)}
+                tarjeta={(a) => <TarjetaAsiento a={a} diez={diezDe(a)} />}
+                vacio={filtro === 'revisar' && !soloSinDiez
                   ? <Vacio titulo="Nada que revisar." explicacion="Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ventas, facturas, liquidaciones y nóminas." />
-                  : <Vacio titulo="Aún no hay asientos en este ejercicio." explicacion="Pulsa «Proponer lo pendiente» y los preparo con su porqué; o haz uno a mano con «+ Nuevo asiento»." />
-              ) : (
-                <div className="cxd-tabla">
-                  {!movil && (
-                    <div className="cxd-fila cxd-fila-cabeza" aria-hidden="true">
-                      <span>Fecha</span><span>Nº</span><span>Concepto · local · marca · de dónde sale</span><span className="cxd-der">Importe</span><span /><span />
-                    </div>
-                  )}
-                  {lista.map((a) => (
-                    <FilaAsiento key={a.id} a={a} diez={diezDe(a)} abierto={abierto === a.id} movil={movil}
-                      alAbrir={() => (movil ? navegar(rutaAsiento(a.id)) : setAbierto(abierto === a.id ? null : a.id))} />
-                  ))}
-                </div>
-              )}
+                  : datos.asientos.length === 0
+                    ? <Vacio titulo="Aún no hay asientos en este ejercicio." explicacion="Pulsa «Proponer lo pendiente» y los preparo con su porqué; o haz uno a mano con «+ Nuevo asiento»." />
+                    : <Vacio titulo="Ningún asiento con lo que hay puesto." explicacion="Prueba con «Todos» o quita los filtros: el libro tiene más." />}
+              />
             </section>
 
             <aside className="cxd-lado">
@@ -340,47 +453,48 @@ export default function LibroDiarioPage() {
 
 const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
 
-function FilaAsiento({ a, diez, abierto, movil, alAbrir }: { a: AsientoDiario; diez?: EstadoDiez; abierto: boolean; movil: boolean; alAbrir: () => void }) {
-  const e = estadoDe(a)
-  const anulado = a.estado === 'anulado'
+/** Lo que se ve al desplegar un asiento en el ordenador: sus apuntes y «Abrir el asiento». */
+function Apuntes({ a }: { a: AsientoDiario }) {
   return (
-    <div className={`cxd-envoltura${anulado ? ' cxd-anulado' : ''}`}>
-      <button type="button" className="cxd-fila" aria-expanded={movil ? undefined : abierto} onClick={alAbrir}>
-        {movil
-          ? <span className="cxd-fecha">{diaMesCorto(a.fecha)}<span className="cxd-num-movil">{numeroVisible(a)}</span></span>
-          : <><span className="cxd-fecha">{diaMesCorto(a.fecha)}</span><span className="cxd-num">{numeroVisible(a)}</span></>}
-        <span className="cxd-concepto">
-          <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
-          <span className="cxd-concepto-apoyo">
-            {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
-            {diez && a.estado !== 'propuesto' && <ChipDiez e={diez} />}
-            <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
+    <div className="cxd-apuntes">
+      {a.apuntes.map((l) => (
+        <div key={l.posicion} className="cxd-apunte">
+          <span className="cxd-apunte-cuenta">
+            <span>{l.nombreCuenta}{l.local ? ` · ${l.local}` : l.comun ? ' · común' : ''}</span>
+            <Link to={rutaMayor(l.cuenta)} className="cxd-codigo" onClick={(e) => e.stopPropagation()}>{l.cuenta}</Link>
           </span>
+          <span>
+            {l.marca && <Chip tono={l.cedida ? 'ambar' : 'neutro'}>{l.cedida ? `${l.marca} · cedida` : l.marca}</Chip>}
+            {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
+          </span>
+          <span className="cxd-importe">{eurosExactos(l.debe || l.haber)}</span>
+          <span className="cx-ayuda">{l.debe ? 'al Debe' : 'al Haber'}</span>
+        </div>
+      ))}
+      <div className="cxd-apunte-pie"><Link to={rutaAsiento(a.id)} className="cx-enlace">Abrir el asiento</Link></div>
+    </div>
+  )
+}
+
+/** Un asiento en el móvil: fecha y número, el concepto, sus chips, el importe y el estado. */
+function TarjetaAsiento({ a, diez }: { a: AsientoDiario; diez?: EstadoDiez }) {
+  const e = estadoDe(a)
+  return (
+    <span className={`cxd-tarjeta${a.estado === 'anulado' ? ' cxd-anulado' : ''}`}>
+      <span className="cxd-fecha">{diaMesCorto(a.fecha)}<span className="cxd-num-movil">{numeroVisible(a)}</span></span>
+      <span className="cxd-tarjeta-concepto">
+        <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
+        <span className="cxd-concepto-apoyo">
+          {pastillas(a).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
+          {diez && a.estado !== 'propuesto' && <ChipDiez e={diez} />}
+          <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
         </span>
+      </span>
+      <span className="cxd-tarjeta-derecha">
         <span className="cxd-importe">{eurosExactos(importe(a))}</span>
         <TonoChip tono={e.tono}>{e.texto}</TonoChip>
-        {!movil && <span className="cxd-flecha" aria-hidden="true">{abierto ? '▾' : '▸'}</span>}
-      </button>
-      {abierto && !movil && (
-        <div className="cxd-apuntes">
-          {a.apuntes.map((l) => (
-            <div key={l.posicion} className="cxd-apunte">
-              <span className="cxd-apunte-cuenta">
-                <span>{l.nombreCuenta}{l.local ? ` · ${l.local}` : l.comun ? ' · común' : ''}</span>
-                <Link to={rutaMayor(l.cuenta)} className="cxd-codigo">{l.cuenta}</Link>
-              </span>
-              <span>
-                {l.marca && <Chip tono={l.cedida ? 'ambar' : 'neutro'}>{l.cedida ? `${l.marca} · cedida` : l.marca}</Chip>}
-                {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
-              </span>
-              <span className="cxd-importe">{eurosExactos(l.debe || l.haber)}</span>
-              <span className="cx-ayuda">{l.debe ? 'al Debe' : 'al Haber'}</span>
-            </div>
-          ))}
-          <div className="cxd-apunte-pie"><Link to={rutaAsiento(a.id)} className="cx-enlace">Abrir el asiento</Link></div>
-        </div>
-      )}
-    </div>
+      </span>
+    </span>
   )
 }
 
