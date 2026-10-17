@@ -284,23 +284,30 @@ dice «ninguna», falta alguien. La #181 tocó `_shared/diezCliente.ts`:
 *(14/10. La #181 se fusionó con «[skip ci]» en el mensaje: no corrió el
 despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 
-### Un e2e en marcha no se cancela
+### Un e2e lo cancela solo un commit más nuevo de su rama
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
-> C05, respuesta 3 (08/10).
+> C05, respuesta 3 (08/10), **cambiada en el W02 (17/10) por el gasto de
+> Actions**: antes decía «un e2e en marcha no se cancela».
 
-Un e2e que está corriendo termina siempre. Lo garantiza el workflow, no la
-disciplina de quien empuja: `e2e-staging-conta.yml` tiene
-`cancel-in-progress: false`, así que un push nuevo espera en cola y empieza
-cuando acaba el anterior.
+En `e2e-staging-conta.yml`, el push y la entera de una rama van en **una sola
+cola** (sin `event_name` en el grupo), y:
 
-*Detector automático:* si un workflow que tarda minutos tiene
-`cancel-in-progress: true`, cualquier push lo puede matar a medias, y el
-informe del cancelado no dice nada de lo que había probado.
+- **un push nuevo cancela** la e2e que corre en su rama —la del push anterior o
+  una entera—: es de un commit que ya no es el último, y la nueva prueba lo
+  mismo y algo más (`cancel-in-progress` solo es `true` para `push`);
+- **una e2e lanzada a mano no cancela nada**: espera a que acabe la que corre.
+- La entera vale solo sobre el **commit final**: si después llega un push, hay
+  que volver a lanzarla (`e2e-entera.mjs` pide una en verde del mismo commit).
 
-*(08/10. Empujé un arreglo del cierre que tocaba `src` mientras corría el e2e
-148. El 149 lo canceló. El 149 llevaba lo mismo y algo más, pero el 148 ya no
-dijo nada: perdió su resultado.)*
+*Detector automático:* si vas a lanzar la entera y aún tienes algo por
+empujar, empújalo antes: lanzarla y empujar después es tirar sus minutos.
+
+*(08/10. El 149 canceló el e2e 148, que perdió su resultado: de ahí la regla
+de antes. 16/10: las e2e gastaron 2.953 min de Actions en un día, frente a unos
+250 de un día normal, con cada push esperando a correr la suite entera de un
+commit ya superado. Se acepta perder el informe de un commit viejo a cambio de
+no pagarlo.)*
 
 ### Capturas: artefacto en cada push y fijar las de tu frente antes del informe
 

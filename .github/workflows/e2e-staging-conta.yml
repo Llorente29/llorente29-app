@@ -52,11 +52,11 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 # —una semilla rehecha por aplicar-staging-conta— y no el código (12/10, C04 R3).
 #
 # QUÉ CORRE (C06b, respuesta 6 de Julio, tarea 5 · 14/10)
-#   · en un PUSH de una rama de frente corre solo su carpeta y el juego común
-#     (el marco y el arranque del C00, y la RLS entre cuentas):
-#       conta/bNN-* → tests/e2e/conta/b01 · conta/d01-* → tests/e2e/conta/d01
-#       conta/c06*  → tests/e2e/conta/c06 · conta/m01-* → tests/e2e/conta/m01
-#     Una rama sin frente sigue corriendo la suite entera (en 4 trozos).
+#   · en un PUSH corre solo el área de la rama, en un trozo
+#     (scripts/e2e/area.mjs; W02, 17/10): la carpeta del frente o la de su
+#     nombre (conta/c02c-* → c02c), con el juego común (el marco y el arranque
+#     del C00, y la RLS entre cuentas); reparto-** → tests/e2e/reparto; una
+#     rama sin área (conta/w02-…), solo el juego común. Nunca la suite entera.
 #   · la SUITE ENTERA corre a mano (workflow_dispatch con «pruebas» vacío),
 #     antes de pedir tanda o abrir un PR a main. El título del run lo dice
 #     («entera»), y scripts/conta/e2e-entera.mjs comprueba que hay una en verde
@@ -65,14 +65,23 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 #     y qué capturas se fijan, y las pruebas del C06 que solo son del frente C
 #     siguen mirándolo (E2E_FRENTE). Los usuarios ya no: son los del carril.
 #
-# LA COLA (W02, 17/10, deshace el paso 1c): el push y la entera lanzada a mano
-# de la misma rama vuelven a compartir cola, y ninguna cancela a la que corre.
-# En el 1c corrían a la vez, y con la suite en 2 trozos cada una eran 4 trozos
-# contra la Micro: la entera de R sobre 59334b37 (run 484, con el push 482 al
-# lado) cayó en 6 pruebas por tiempo, distintas en cada vuelta. Además, todo
-# staging corre como mucho E2E_CARRILES trozos a la vez (variable del
-# repositorio, vacía = 2; 4 si staging pasa a Small): el que llega con los
-# carriles cogidos espera su turno en carril.sh coger.
+# LA COLA (W02, 17/10, deshace el paso 1c). Una sola cola por rama, para el
+# push y para la entera lanzada a mano:
+#   · un PUSH nuevo cancela la e2e que corre en su rama: es de un commit que ya
+#     no es el último, y lo que probaba lo vuelve a probar la nueva;
+#   · una e2e lanzada A MANO no cancela nada: espera a que acabe la que corre;
+#   · GitHub deja como mucho una en espera por cola: si llega otra, la que
+#     esperaba se descarta antes de empezar.
+# En el 1c el push y la entera corrían a la vez, y con la suite en 2 trozos
+# cada una eran 4 trozos contra la Micro: la entera de R sobre 59334b37 (run
+# 484, con el push 482 al lado) cayó en 6 pruebas por tiempo, distintas en
+# cada vuelta. Además, todo staging corre como mucho E2E_CARRILES trozos a la
+# vez (variable del repositorio, vacía = 2; 4 si staging pasa a Small): el que
+# llega con los carriles cogidos espera su turno en carril.sh coger.
+#
+# EL GASTO (W02, 17/10): el 16/10 las e2e se llevaron 2.953 min de Actions.
+# Por eso: el push corre solo su área (scripts/e2e/area.mjs), la entera solo a
+# mano, y un push nuevo cancela la e2e del commit anterior.
 #
 # LAS CAPTURAS (C06b, Julio, 15/10): «capturas: artefacto en cada push y fijar
 # las de tu frente antes del informe».
@@ -97,6 +106,7 @@ on:
       - 'scripts/e2e/carril/**'
       - 'scripts/e2e/carril.sh'
       - 'scripts/e2e/trozos.mjs'
+      - 'scripts/e2e/area.mjs'
       - '.github/workflows/e2e-staging-conta.yml'
   workflow_dispatch:
     inputs:
@@ -127,14 +137,11 @@ on:
         required: false
         default: false
 
-# Un push nuevo ESPERA en cola: no cancela el e2e que está corriendo (C05,
-# respuesta 3). GitHub deja como mucho uno en espera por grupo: si llegan dos,
-# el de en medio se descarta y corre el último, que lleva todo lo anterior.
-# Sin el tipo de evento en el grupo: la entera lanzada a mano espera a la e2e
-# del push de su rama, y al revés (W02, 17/10).
+# Sin el tipo de evento en el grupo: el push y la entera de la misma rama van
+# en la misma cola. Cancela solo un push (ver LA COLA).
 concurrency:
   group: e2e-staging-conta-${{ github.ref }}-${{ inputs.frente }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 permissions:
   contents: write
@@ -162,6 +169,11 @@ jobs:
       FRENTE_PEDIDO: ${{ inputs.frente }}
       TROZOS_PEDIDOS: ${{ inputs.trozos }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            scripts/e2e
+            tests/e2e
       - name: Frente (de la rama, o el pedido a mano)
         id: frente
         run: |
@@ -177,15 +189,12 @@ jobs:
           if [ -n "${FRENTE_PEDIDO:-}" ]; then
             case "$FRENTE_PEDIDO" in a|b|c|d) FRENTE="$FRENTE_PEDIDO" ;; *) echo "::error::«frente» tiene que ser a, b, c o d (o nada)."; exit 1 ;; esac
           fi
-          # En un push de una rama de frente: su carpeta y el juego común (tarea 5).
-          COMUN="tests/e2e/conta/c00/marco.spec.ts tests/e2e/conta/rls.spec.ts"
-          if [ "$GITHUB_EVENT_NAME" = push ] && [ -z "${PRUEBAS:-}" ]; then
-            case "$GITHUB_REF_NAME" in
-              conta/b[0-9]*) PRUEBAS="tests/e2e/conta/b01 $COMUN" ;;  # B01, B02…: las pantallas de Bancos viven en b01
-              conta/d01-*) PRUEBAS="tests/e2e/conta/d01 $COMUN" ;;
-              conta/c06*)  PRUEBAS="tests/e2e/conta/c06 $COMUN" ;;
-              conta/m01-*) PRUEBAS="tests/e2e/conta/m01 $COMUN" ;;
-            esac
+          # En un push, SOLO las pruebas del área de la rama, en un trozo
+          # (scripts/e2e/area.mjs). La suite entera nunca corre en un push:
+          # solo a mano, sobre el commit final (W02, 17/10: gasto de Actions).
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            PRUEBAS=$(node scripts/e2e/area.mjs "$GITHUB_REF_NAME")
+            [ -n "$PRUEBAS" ] || { echo "::error::area.mjs no ha dado pruebas para $GITHUB_REF_NAME: sería la suite entera."; exit 1; }
           fi
           for p in ${PRUEBAS:-}; do
             if ! [[ "$p" =~ ^tests/e2e/[A-Za-z0-9_./-]*$ ]] || [[ "$p" == *..* ]]; then
