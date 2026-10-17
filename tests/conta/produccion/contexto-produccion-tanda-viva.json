@@ -1,16 +1,17 @@
 {
- "_que": "M01 · contexto de producción de la tanda viva «Esperan» (20261117T0100, motivos para validar), medido en SOLO LECTURA el 16/10 a las 19:49 UTC y vuelto a medir el 17/10 a las 05:40 UTC tras traer main (#212) y a las 08:57 UTC con el R03 ya en el historial (#219) — la misma consulta y la misma respuesta, y nada posterior a la 0110 de C en el historial —, con la tanda de C (promociones y envíos) ya aplicada (real de las 21:29 de Madrid), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las dos funciones que cambia, con la huella de su vuelta atrás (journal_entry_validar 798e4c43… y tg_journal_entry_envio_por_aclarar 7a2549b0…); no existe ninguna de las dos que añade; nada del camino del pedido; el fichero no está en el historial.",
- "medido": "2026-10-17T08:57Z",
+ "_que": "W02 · contexto de producción de la tanda viva «fin del relevo del secreto del despacho» (20261120T0200), medido en SOLO LECTURA el 17/10 a las 15:59 UTC (begin read only … rollback), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow, con la 0100 ya en el historial (real de las 15:54 UTC) y los dos secretos del relevo en Vault. Existe vault.secrets (reltuples 0: estadística sin refrescar, no el número de secretos); nada del camino del pedido; el fichero no está en el historial.",
+ "medido": "2026-10-17T15:59Z",
  "tanda": {
-  "supabase/migrations/20261117T0100_m01_motivos_para_validar.sql": "8f4ce36505b1c67bd07611ce95a9dec7"
+  "supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql": "74779624d887a6fba86e1ff2a72637af"
  },
  "contexto": {
-  "tablas": [],
-  "funciones": [
-   "public.journal_entry_validar(uuid,text)",
-   "public.tg_journal_entry_envio_por_aclarar()"
+  "tablas": [
+   "vault.secrets"
   ],
-  "filas": {},
+  "funciones": [],
+  "filas": {
+   "vault.secrets": 0
+  },
   "otras": {},
   "camino": {
    "tablas": [],

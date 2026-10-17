@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, BarChart3, Settings, ChevronLeft, ChevronRight, RefreshCw, Trophy, Cloud, CheckCircle2, AlertTriangle, Sun, Moon, Activity } from 'lucide-react'
+import { Calendar, BarChart3, Settings, ChevronLeft, ChevronRight, RefreshCw, Cloud, CheckCircle2, AlertTriangle, Sun, Moon, Activity } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Button, Select, Card, Alert } from '../components/ui'
 import { loadSavedAnalysis } from '../services/salesAnalysis'
@@ -93,9 +93,6 @@ export default function PrediccionPersonalPage() {
     addLog('🌧 Descargando histórico meteorológico de Madrid...')
     const { enriched: enr, rainCoeficient } = await enrichRecords(saved.records)
     addLog(`✓ Coeficiente lluvia: ${rainCoeficient}x`)
-    addLog('⚽ Descargando partidos del Real Madrid...')
-    const sportDays = Object.values(enr).filter(e => e.sportEvent).length
-    addLog(`✓ ${sportDays} días con partido detectados`)
     const pats = buildMonthlyPatterns(saved.records, enr)
     addLog(`✓ ${pats.length} patrones mes/día construidos`)
     saveMonthlyPatterns(locId, pats, rainCoeficient)
@@ -116,7 +113,6 @@ export default function PrediccionPersonalPage() {
     const logs: string[] = []
     const addLog = (m: string) => { logs.push(m); setLog([...logs]) }
     addLog(`📅 Calculando semana del ${weekStart}...`)
-    addLog('⚽ Consultando eventos deportivos...')
     addLog('🌧 Consultando previsión meteorológica...')
     try {
       const preds = await predictWeekStaff(weekStart, patterns, rainCoef)
@@ -126,9 +122,8 @@ export default function PrediccionPersonalPage() {
         staffNoche:    Math.max(2, Math.ceil(p.predictedDishesNoche    / (dishesPerWorkerHour * 4.5))),
       }))
       setPredictions(adjusted)
-      const hasEvents = adjusted.filter(p => p.sportEvent).length
-      const hasRain   = adjusted.filter(p => p.isRainy).length
-      addLog(`✓ ${hasEvents} día(s) con partido · ${hasRain} día(s) con lluvia prevista`)
+      const hasRain = adjusted.filter(p => p.isRainy).length
+      addLog(`✓ ${hasRain} día(s) con lluvia prevista`)
       addLog('✅ Predicción lista')
     } catch (e: unknown) {
       addLog(`❌ ${e instanceof Error ? e.message : 'Error'}`)
@@ -176,7 +171,7 @@ export default function PrediccionPersonalPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="font-display text-2xl text-accent">Predicción de Personal</h1>
-          <p className="text-sm text-text-secondary mt-0.5">Basado en platos históricos · Lluvia · Partidos Real Madrid</p>
+          <p className="text-sm text-text-secondary mt-0.5">Basado en platos históricos · Lluvia</p>
         </div>
         <Select value={locId} onChange={e => setLocId(e.target.value)} className="w-48">
           {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -264,17 +259,13 @@ export default function PrediccionPersonalPage() {
 
           {predictions.length > 0 && (
             <div className="space-y-4">
-              {/* Alertas eventos */}
-              {predictions.filter(p => p.sportEvent || p.isRainy).map((p, i) => (
-                <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border text-sm ${p.sportEvent?.isElClasico||p.sportEvent?.isDerbi?'bg-danger-bg border-danger/30':p.sportEvent?'bg-warning-bg border-warning/30':'bg-accent-bg border-accent/30'}`}>
-                  {p.sportEvent
-                    ? <Trophy size={18} className={p.sportEvent?.isElClasico||p.sportEvent?.isDerbi?'text-danger':'text-warning'} />
-                    : <Cloud size={18} className="text-accent" />}
+              {/* Avisos: días con lluvia prevista */}
+              {predictions.filter(p => p.isRainy).map((p, i) => (
+                <div key={i} className="flex items-start gap-3 p-3 rounded-xl border text-sm bg-accent-bg border-accent/30">
+                  <Cloud size={18} className="text-accent" />
                   <div>
                     <p className="font-semibold text-text-primary">
-                      {p.dayName} {p.date}
-                      {p.sportEvent && ` · ${p.sportEvent.competition}: ${p.sportEvent.home} vs ${p.sportEvent.away}`}
-                      {p.isRainy && !p.sportEvent && ' · Lluvia prevista'}
+                      {p.dayName} {p.date} · Lluvia prevista
                     </p>
                     <p className="text-xs text-text-secondary mt-0.5">Coeficiente: +{Math.round((p.coeficient-1)*100)}% en pedidos estimados</p>
                   </div>
@@ -305,7 +296,7 @@ export default function PrediccionPersonalPage() {
                     </tr></thead>
                     <tbody>
                       {predictions.map((p, i) => (
-                        <tr key={i} className={`border-b border-border-default last:border-0 ${p.sportEvent?.isElClasico||p.sportEvent?.isDerbi?'bg-danger-bg/40':p.sportEvent?'bg-warning-bg':p.isRainy?'bg-accent-bg':i>=4?'bg-accent-bg/40':''}`}>
+                        <tr key={i} className={`border-b border-border-default last:border-0 ${p.isRainy?'bg-accent-bg':i>=4?'bg-accent-bg/40':''}`}>
                           <td className="p-3"><p className="font-semibold">{p.dayName}</p><p className="text-[10px] text-text-secondary">{p.date}</p></td>
                           <td className="p-3 text-center"><span className="text-2xl font-bold text-amber-700">{p.staffMediadia}</span></td>
                           <td className="p-3 text-center"><span className="text-2xl font-bold text-violet-700">{p.staffNoche}</span></td>
@@ -324,13 +315,11 @@ export default function PrediccionPersonalPage() {
               {/* Resumen visual */}
               <div className="grid grid-cols-7 gap-1.5">
                 {predictions.map((p, i) => (
-                  <div key={i} className={`p-2 rounded-xl border text-center space-y-1 ${p.sportEvent?.isElClasico||p.sportEvent?.isDerbi?'border-danger/30 bg-danger-bg':p.sportEvent?'border-warning/30 bg-warning-bg':p.isRainy?'border-accent/30 bg-accent-bg':i>=4?'border-accent bg-accent-bg':'border-border-default bg-card'}`}>
+                  <div key={i} className={`p-2 rounded-xl border text-center space-y-1 ${p.isRainy?'border-accent/30 bg-accent-bg':i>=4?'border-accent bg-accent-bg':'border-border-default bg-card'}`}>
                     <p className="text-xs font-bold text-text-secondary">{DAY_SHORT[i]}</p>
-                    {(p.sportEvent||p.isRainy) && (
+                    {p.isRainy && (
                       <div className="flex justify-center">
-                        {p.sportEvent
-                          ? <Trophy size={12} className={p.sportEvent?.isElClasico?'text-danger':'text-warning'} />
-                          : <Cloud size={12} className="text-accent" />}
+                        <Cloud size={12} className="text-accent" />
                       </div>
                     )}
                     <div className="text-amber-600"><p className="text-lg font-bold leading-none">{p.staffMediadia}</p><p className="text-[8px]">mediodía</p></div>
@@ -439,7 +428,6 @@ export default function PrediccionPersonalPage() {
                       <th className="p-3 text-left">Mes</th><th className="p-3 text-left">Día</th>
                       <th className="p-3 text-center">Platos med.</th><th className="p-3 text-center">Platos noch.</th>
                       <th className="p-3 text-center">Normalizado</th><th className="p-3 text-center">Muestras</th>
-                      <th className="p-3 text-center"><Trophy size={12} className="inline" /></th>
                       <th className="p-3 text-center"><Cloud size={12} className="inline" /></th>
                     </tr></thead>
                     <tbody>
@@ -453,7 +441,6 @@ export default function PrediccionPersonalPage() {
                           <td className="p-3 text-center">
                             <span className={`px-1.5 py-0.5 rounded-full font-medium ${p.samples>=8?'bg-success-bg text-success':p.samples>=4?'bg-warning-bg text-warning':'bg-page text-text-secondary'}`}>{p.samples}</span>
                           </td>
-                          <td className="p-3 text-center">{p.sportEventDays>0?<span className="text-amber-600 font-medium">{p.sportEventDays}</span>:'—'}</td>
                           <td className="p-3 text-center">{p.rainyDays>0?<span className="text-accent font-medium">{p.rainyDays}</span>:'—'}</td>
                         </tr>
                       ))}
@@ -513,26 +500,6 @@ export default function PrediccionPersonalPage() {
                 <div className="p-2 bg-page rounded-lg border border-border-default"><p className="font-bold text-text-secondary">mín. 2</p><p className="text-text-secondary">siempre en noche</p></div>
               </div>
             </div>
-          </Card>
-          <Card className="p-5 space-y-3">
-            <p className="font-semibold text-text-primary">Coeficientes de eventos deportivos</p>
-            {[
-              { label:'Clásico (vs Barcelona)', val:40, Icon: Trophy },
-              { label:'Derbi (vs Atlético)', val:35, Icon: Trophy },
-              { label:'Champions eliminatoria', val:30, Icon: Trophy },
-              { label:'Real Madrid en casa', val:20, Icon: Trophy },
-              { label:'Real Madrid visitante', val:15, Icon: Trophy },
-            ].map(item=>{
-              const ItemIcon = item.Icon
-              return (
-                <div key={item.label} className="flex items-center justify-between">
-                  <span className="text-xs text-text-primary inline-flex items-center gap-1.5">
-                    <ItemIcon size={12} className="text-warning" /> {item.label}
-                  </span>
-                  <span className="text-xs font-bold text-accent">+{item.val}%</span>
-                </div>
-              )
-            })}
           </Card>
           <Card className="p-5 space-y-3">
             <p className="font-semibold text-text-primary inline-flex items-center gap-1.5">

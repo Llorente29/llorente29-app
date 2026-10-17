@@ -33,6 +33,10 @@ name: Aplicar SQL en PRODUCCIÓN (contabilidad)
 #   · Modo «ensayo»: TODO en una transacción (con el registro en el historial),
 #     D1 y recuento dentro, y ROLLBACK. Luego, en otra transacción que también
 #     se deshace, ensaya la vuelta atrás: la tanda y sus .down.sql al revés.
+#     Una tanda SIN VUELTA ATRÁS a propósito (W02) se declara en el manifiesto
+#     («sin-vuelta-atras: <f> · motivo: …» y un «esperado:» por medida; va sola
+#     y necesita «autorizo»): en vez de «como antes», el ensayo comprueba que
+#     deja exactamente lo esperado (ensayo-sin-vuelta.sh), y para si no.
 #   · Modo «real»: solo con un ENSAYO EN VERDE DEL MISMO COMMIT. Un fichero por
 #     transacción, con su registro en el historial dentro de la misma. Para al
 #     primer fallo. D1 antes y después del fichero que reemplaza vat_rate_for.
@@ -173,7 +177,9 @@ jobs:
           # («cuenta: …»), obligatorio en la tanda de aplicar (manifiesto.sh).
           if [ "$MODO" = "vuelta_atras" ]; then M=supabase/produccion/vuelta-atras.txt; PAT='^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.down\.sql$'; OBLIG=no
           else M=supabase/produccion/aplicar.txt; PAT='^supabase/migrations/[A-Za-z0-9_./-]+\.sql$'; OBLIG=si; fi
-          bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG"
+          # W02: y si la tanda va SIN VUELTA ATRÁS, a propósito («sin-vuelta-atras:»),
+          # con lo que se espera después («esperado:»). Vacíos si no lo declara.
+          bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG" /tmp/sin-vuelta.txt /tmp/esperado.txt
 
       - name: Instalar psql 17
         run: |
@@ -255,6 +261,9 @@ jobs:
           sed -n 's/^VAT_RATE_FOR_EN: //p' /tmp/analisis.md | sed 's/(ninguno)//' > /tmp/vat_rate_for_en.txt
           sed -n 's/^### `\([^`]*\)` — \*\*AUTORIZO\*\*$/\1/p' /tmp/analisis.md > /tmp/autorizables.txt
           sed -n 's/^### `\([^`]*\)` — \*\*BLOQUEA\*\*$/\1/p' /tmp/analisis.md > /tmp/bloquean.txt
+          # W02: una tanda SIN VUELTA ATRÁS declarada necesita «autorizo» siempre,
+          # diga lo que diga el análisis (un BLOQUEA sigue bloqueando).
+          if [ -s /tmp/sin-vuelta.txt ]; then cut -f1 /tmp/sin-vuelta.txt >> /tmp/autorizables.txt; sort -u -o /tmp/autorizables.txt /tmp/autorizables.txt; fi
           # Lo autorizado: nombres enteros, sin carpeta, uno por línea.
           set -f; printf '%s\n' $AUTORIZO | sed '/^$/d' > /tmp/autorizo.txt; set +f
           mal=0
@@ -401,6 +410,15 @@ jobs:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
           set -euo pipefail
+          # W02: una tanda SIN VUELTA ATRÁS declarada (manifiesto.sh) no puede salir
+          # «como antes»: no hay con qué deshacerla. Se compara, en su lugar, con lo
+          # que el manifiesto dice que dejará («esperado:»), y si no, para igual.
+          # Para cualquier otra tanda, este paso sigue exactamente como estaba, debajo.
+          if [ -s /tmp/sin-vuelta.txt ]; then
+            bash scripts/conta/produccion/ensayo-sin-vuelta.sh /tmp/tanda.txt /tmp/cuentas.txt /tmp/sin-vuelta.txt /tmp/esperado.txt /tmp/cuentas-antes.csv \
+              || { cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
+            exit 0
+          fi
           sin=""
           {
             echo '\set ON_ERROR_STOP 1'
@@ -498,6 +516,8 @@ jobs:
           RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
           # R9: deshacer.sh vuelve a contar lo que la tanda declara y lo compara con el «antes».
           CUENTAS: /tmp/cuentas.txt
+          # W02: lo declarado sin vuelta atrás (deshacer.sh lo dice así, y queda aplicado).
+          SIN_VUELTA: /tmp/sin-vuelta.txt
           CUENTAS_ANTES: /tmp/cuentas-antes.csv
         run: |
           set -uo pipefail

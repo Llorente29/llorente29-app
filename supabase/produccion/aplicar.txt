@@ -3,31 +3,30 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# M01 · «Esperan» (Julio, 16/10, decisión 1: opción A). La anterior de este
-# fichero (R03, la dirección que no llega: 0300, 0310 y 0320) ya está en el
-# historial de producción; su copia: tests/conta/produccion/tanda-r03-direccion-20261017.txt.
-# La de antes (C06b, promociones y envíos), también; su copia:
-# tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt.
+# W02 · Fin del relevo del secreto del despacho (Julio, 17/10). La anterior de
+# este fichero (W02, el relevo: 0100, real de las 15:54 UTC del 17/10) ya está
+# en el historial de producción; su copia:
+# tests/conta/produccion/tanda-w02-secreto-relevo-20261017.txt.
 #
-#   1. 0100 — añade conta_motivos_para_validar (todo lo que haría que un
-#      asiento no se valide, por orden y con el mismo texto con el que hoy lo
-#      para) y conta_esperan (lo propuesto que pararía, con su motivo); y
-#      cambia, con la misma firma, journal_entry_validar (para con el primer
-#      motivo) y tg_journal_entry_envio_por_aclarar (el freno de C lee su
-#      motivo de la misma función). Declarado en su cabecera, con su prueba de
-#      staging. No toca ninguna tabla ni ningún asiento.
+#   1. 0200 — borra catcher_dispatch_secret_anterior de Vault. Desde aquí solo
+#      vale el secreto nuevo. AUTORIZO: borra en vault.secrets.
 #
-# ORDEN (Julio, 17/10): va ANTES que la 0220 de B (B02 · T4, rama
-# conta/b02-espera-extracto), que espera a que esta esté en el historial.
+# CUÁNDO: después de que haya salido a Catcher un pedido en automático con el
+# secreto nuevo y con 15 minutos seguidos sin CATCHER_DISPATCH_SECRETO_ANTERIOR
+# en los logs de catcher-dispatch.
 #
-# VA DESPUÉS DE LA DE C, y se escribe sobre ella: las dos funciones que cambia
-# están en producción con la huella de la que parte (798e4c43… y 7a2549b0…,
-# medidas el 16/10 a las 19:49 UTC en solo lectura).
+# SIN VUELTA ATRÁS, a propósito: el de antes se borra y no hay a qué volver.
+# Va declarado («sin-vuelta-atras:», W02): el ensayo no compara «como antes»
+# sino lo que la tanda dice que deja («esperado:»), medida a medida, y para si
+# no sale así. supabase/produccion/vuelta-atras.txt no lista ningún fichero.
+# (El ensayo #118, sobre 61f7e037, paró por no declararlo: la cuenta no salía
+# como antes, y no podía.)
 #
-# Antes o después del front, da igual: la base nueva para con los mismos
-# textos que la de antes, así que el front de antes valida igual; y el front
-# nuevo, con la base de antes, dice que no puede leer lo que espera y cuenta
-# todo lo propuesto como «para revisar», como hoy.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql
-supabase/migrations/20261117T0100_m01_motivos_para_validar.sql
+# autorizo:
+#   20261120T0200_w02_secreto_despacho_fin_relevo.sql
+cuenta: scripts/conta/produccion/cuentas/w02-secreto-despacho.sql
+supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql
+sin-vuelta-atras: supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql · motivo: borra catcher_dispatch_secret_anterior, el secreto de antes, a propósito; no hay a qué volver
+esperado: w02-secreto-despacho · secretos del despacho en Vault = catcher_dispatch_secret
+esperado: w02-secreto-despacho · huella corta de catcher_dispatch_secret = como antes
+esperado: w02-secreto-despacho · huella corta de catcher_dispatch_secret_anterior = no existe

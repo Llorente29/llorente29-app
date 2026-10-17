@@ -16,6 +16,8 @@
 //     la pedida; si no, no se lee nada.
 //   · Siempre https (http solo para el Diez simulado en esta máquina), sin
 //     seguir redirecciones, y ninguna petición espera más de 90 s.
+//   · Una lectura que Diez contesta con 429 o con 5xx se repite (hasta 3 veces
+//     en total); una escritura, nunca: no se sabe si entró (17/10).
 //   · Escribir es una lista cerrada (apuntes/add y facturas/add) y hace falta
 //     pedirlo: `escribir: true`. En C0008 además `escribirEnReal: true`
 //     (regla 4 del encargo: primero el entorno de pruebas). Y lo mismo en
@@ -172,7 +174,7 @@ export class ClienteDiez {
   private readonly ahora: () => number
   private token: string | null = null
   /** Métrica de la sesión (para el registro de la lectura: solo recuentos). */
-  readonly metrica = { peticiones: 0, reintentos429: 0 }
+  readonly metrica = { peticiones: 0, reintentos429: 0, reintentos5xx: 0 }
 
   private readonly cfg: ConfigDiez
 
@@ -213,6 +215,7 @@ export class ClienteDiez {
     if (form) { cab['content-type'] = 'application/x-www-form-urlencoded'; body = new URLSearchParams(form).toString() }
     else if (cuerpo !== undefined) { cab['content-type'] = 'application/json'; body = JSON.stringify(cuerpo) }
     if (!esEntrar) cab.authorization = `Bearer ${await this.asegurarToken()}`
+    const inicio = this.ahora()
     for (let intento = 1; ; intento++) {
       if (this.cfg.pausaMs) await espera(this.cfg.pausaMs)
       this.metrica.peticiones++
@@ -229,6 +232,16 @@ export class ClienteDiez {
         continue
       }
       const txt = await r.text()
+      // 17/10 · Diez contesta 500 a ratos (medido en C0008, run 39004201118: la
+      // misma lectura falla y a la vez siguiente contesta). Una LECTURA se repite
+      // como el 429, hasta MAX_INTENTOS y sin pasar de un minuto en total; una
+      // escritura nunca (no se sabe si entró). «No existe el contenedor» (R14) no
+      // es un fallo pasajero: se devuelve a la primera.
+      if (r.status >= 500 && metodo === 'GET' && intento < MAX_INTENTOS && this.ahora() - inicio < 60_000 && !/container does not exist/i.test(txt)) {
+        this.metrica.reintentos5xx++
+        await espera(2000 * intento)
+        continue
+      }
       let json: unknown = null
       try { json = txt ? JSON.parse(txt) : null } catch { json = txt }
       return { status: r.status, json }

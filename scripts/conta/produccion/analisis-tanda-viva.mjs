@@ -31,7 +31,7 @@ import { tmpdir } from 'node:os'
 const MANIFIESTO = process.argv.find((x) => x.startsWith('--manifiesto='))?.slice('--manifiesto='.length) ?? 'supabase/produccion/aplicar.txt'
 const FIXTURE = process.argv.slice(2).find((x) => !x.startsWith('--')) ?? 'tests/conta/produccion/contexto-produccion-tanda-viva.json'
 const A = 'scripts/conta/produccion/analizar.mjs'
-const tanda = readFileSync(MANIFIESTO, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('cuenta:'))
+const tanda = readFileSync(MANIFIESTO, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !/^(cuenta|sin-vuelta-atras|esperado):/.test(l))
 const medida = JSON.parse(readFileSync(FIXTURE, 'utf8'))
 const md5 = (f) => createHash('md5').update(readFileSync(f)).digest('hex')
 

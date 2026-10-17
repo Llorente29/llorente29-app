@@ -74,3 +74,9 @@ test-results/
 # su forma. Nunca al repositorio, ni a staging, ni a una fixture; se borran
 # cuando la fixture inventada está hecha.
 tmp/privado/
+
+# Datos reales de Glovo (pedidos y liquidaciones con comisiones e ingresos): los
+# genera procesar_glovo_xlsx.py y los lee cargar_glovo_orders.py en local. No se
+# suben (W02, 17/10: el repositorio pasa a privado y aun así no van).
+/glovo_orders.csv
+/glovo_settlements.csv

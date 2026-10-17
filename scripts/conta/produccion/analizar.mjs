@@ -111,6 +111,14 @@ function firma(s) {
   return `${nombre(m[1])}(${args.join(',')})`
 }
 
+// W02 (17/10). Un secreto de Vault no se escribe con insert ni update: se
+// escribe llamando a vault.create_secret(…) o vault.update_secret(…). Sin esto,
+// la 0100 del relevo del secreto del despacho salía «sigue» aunque cambia el
+// secreto con el que el despacho se autentica. Las dos cuentan como escritura
+// en vault.secrets: si existe, «autorizo», como un update.
+const SECRETO_DE_VAULT = /\bvault\.(create_secret|update_secret)\s*\(/gi
+export const secretosDeVault = (texto) => [...new Set([...String(texto).matchAll(SECRETO_DE_VAULT)].map((m) => m[1].toLowerCase()))]
+
 /** Clasifica UNA sentencia. Devuelve [{accion, objeto, tipo, detalle}]. */
 export function clasificar(s, dentroDeDo = false) {
   const t = s.replace(/\s+/g, ' ').trim()
@@ -146,7 +154,19 @@ export function clasificar(s, dentroDeDo = false) {
         }
       }
       if (/\bexecute\b/i.test(x)) add('dinamico', 'desconocido', '(execute dinámico)', x.replace(/\s+/g, ' ').slice(0, 160))
+      const vault = secretosDeVault(x)
+      if (vault.length && !visto.has('cambia_datos|vault.secrets')) {
+        visto.add('cambia_datos|vault.secrets')
+        add('cambia_datos', 'tabla', 'vault.secrets', `escribe un secreto de Vault (${vault.map((v) => `vault.${v}`).join(', ')})`)
+      }
     }
+    return r
+  }
+
+  // Fuera de un DO: «select vault.update_secret(…)» también escribe (W02).
+  const vaultFuera = secretosDeVault(t)
+  if (vaultFuera.length) {
+    add('cambia_datos', 'tabla', 'vault.secrets', `escribe un secreto de Vault (${vaultFuera.map((v) => `vault.${v}`).join(', ')})`)
     return r
   }
 
@@ -716,7 +736,7 @@ if (modo === 'objetivos') {
   // todavía el front publicado (origin/main) o el del commit que se sube? Sale
   // con 1 si alguno lo lee: primero se quita del front, después de la base.
   const manifiesto = resto[0] ?? 'supabase/produccion/aplicar.txt'
-  const ficheros = readFileSync(manifiesto, 'utf8').split('\n').map((x) => x.trim()).filter((x) => x && !x.startsWith('#') && !x.startsWith('cuenta:'))
+  const ficheros = readFileSync(manifiesto, 'utf8').split('\n').map((x) => x.trim()).filter((x) => x && !x.startsWith('#') && !/^(cuenta|sin-vuelta-atras|esperado):/.test(x))
   const vistos = new Map()
   for (const f of ficheros) for (const o of analizarFichero(f)) { const d = destruido(o); if (d) vistos.set(d.clave, d) }
   const destruidos = [...vistos.values()]
