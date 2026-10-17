@@ -31,6 +31,7 @@ const NORMA_347_REVENDEDOR = 'RD 1065/2007, art. 34.3, párrafo 2.º (en nombre 
 const NORMA_347_COMISIONISTA = 'RD 1065/2007, art. 34.3 (en nombre ajeno: solo su comisión) y art. 33.2.a (ventas con ticket, fuera)'
 const NORMA_347_MODELO = 'RD 1065/2007, art. 34.3: depende de si la plataforma actúa en nombre del restaurante o en el suyo'
 const NORMA_CUENTAS = 'RD 1514/2007: una subcuenta por tercero y papel'
+const NORMA_LECTOR = 'D01 · liquidaciones por correo: lo que no cuadra al leer queda «por aclarar» con su motivo y no se asienta solo'
 const NORMA_NETO = 'Encargo C03, regla 3: una liquidación que no cuadra se enseña con su diferencia, no se cuadra sola'
 
 /** 3.005,06 € en céntimos: el mismo número que LIMITE_347 de la app. */
@@ -105,6 +106,17 @@ const euros = (c) => {
  */
 export function descuadre(l) {
   if (l.gross_sales == null || l.net_payout == null) return null
+  // D01 · el resumen de Uber por correo (source «correo_uber»): cada importe con el signo
+  // del origen, como lo suma el lector (_shared/liquidacionUber.ts: neto = ganancias +
+  // tasas de Uber + marketing + modificaciones). Las seis columnas de la 20261113T0100
+  // (otras ganancias, otros cargos de la promoción, anuncios, promociones en artículos,
+  // contracargos y ajustes) entran en la cuenta; sin ellas, el neto «no cuadraba» (17/10).
+  if (String(l.source ?? '').startsWith('correo_')) {
+    const d = l.d01 ?? {}
+    const suma = [l.gross_sales, l.commission, ...(l.otros ?? []), d.otras_ganancias, d.otros_promo, d.anuncios, d.promociones, d.contracargos, d.ajustes]
+      .reduce((t, x) => t + centimos(x ?? 0), 0)
+    return centimos(l.net_payout) - suma
+  }
   if (l.source === 'import_csv_glovo') {
     const calculado = centimos(l.gross_sales) - Math.round(centimos(abs(l.commission)) * 1.21) + centimos(l.accumulated_debt ?? 0)
     const d = centimos(l.net_payout) - calculado
@@ -116,9 +128,24 @@ export function descuadre(l) {
 }
 
 /**
+ * Lo que el lector ya dijo al leer y explica la diferencia, al céntimo: un aviso
+ * «…: las líneas suman X € y el total dice Y €» explica Y − X (las líneas son las
+ * columnas; el neto se cobró con el total). null si ningún aviso la explica.
+ */
+export function explicadoPorElLector(l, d) {
+  for (const a of l.avisos_lector ?? []) {
+    const m = /suman (−|-)?([\d.]+,\d{2}) € y el total dice (−|-)?([\d.]+,\d{2}) €/.exec(String(a))
+    if (!m) continue
+    const imp = (signo, v) => (signo ? -1 : 1) * Number(v.replace(/\./g, '').replace(',', ''))
+    if (imp(m[3], m[4]) - imp(m[1], m[2]) === d) return String(a)
+  }
+  return null
+}
+
+/**
  * bd.terceros: { terceros: [{ account_id, id, name, tax_id, supplier_tax_id, tax_id_type, archived }],
  *                cuentas: [{ account_id, company_id, entity, entity_id, role, codes: [] }],
- *                liquidaciones: [{ account_id, id, party_id, ref, gross_sales, commission, otros, net_payout, needs_review, source, accumulated_debt }],
+ *                liquidaciones: [{ account_id, id, party_id, ref, gross_sales, commission, otros, net_payout, needs_review, source, accumulated_debt, d01, avisos_lector }],
  *                ventas_anio: [{ account_id, party_id, anio, ventas, comisiones, modelo }],
  *                excluidos_347: [{ account_id, party_id, motivo }] }
  */
@@ -194,10 +221,19 @@ export function revisarTerceros(t) {
 
   // 2 · Neto = ventas − comisiones − otros cargos.
   const porCuenta = new Map()
+  const porAclarar = new Map()
   for (const l of t.liquidaciones ?? []) {
     const d = descuadre(l)
     if (d == null || d === 0) continue
+    // Lo que el lector ya avisó al leer no es un descuadre sin explicar: se dice con su motivo.
+    const motivo = explicadoPorElLector(l, d)
+    if (motivo) { porAclarar.set(l.account_id, [...(porAclarar.get(l.account_id) ?? []), { ...l, d, motivo }]); continue }
     porCuenta.set(l.account_id, [...(porCuenta.get(l.account_id) ?? []), { ...l, d }])
+  }
+  for (const [cuenta, ls] of porAclarar) {
+    const ej = ls.slice(0, 3).map((l) => `${l.ref ?? l.id}: ${l.motivo}`).join('; ')
+    out.push({ nivel: 'ambar', tipo: 'liquidacion_por_aclarar', donde: `cuenta ${cuenta}`,
+      detalle: `${ls.length === 1 ? '1 liquidación' : `${ls.length} liquidaciones`} del correo no ${ls.length === 1 ? 'cuadra' : 'cuadran'} por lo que ya dijo el lector al leer${ls.length === 1 ? 'la' : 'las'}. ${ej}${ls.length > 3 ? '…' : '.'} Están «por aclarar».`, norma: NORMA_LECTOR })
   }
   for (const [cuenta, ls] of porCuenta) {
     const ej = ls.slice(0, 3).map((l) => `${l.ref ?? l.id}: ${l.d > 0 ? 'llegan' : 'faltan'} ${euros(Math.abs(l.d))}`).join('; ')
