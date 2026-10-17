@@ -15,11 +15,18 @@
 # secreto nuevo y con 15 minutos seguidos sin CATCHER_DISPATCH_SECRETO_ANTERIOR
 # en los logs de catcher-dispatch.
 #
-# SIN VUELTA ATRÁS, a propósito: el de antes se borra y no hay a qué volver. El
-# ensayo lo dirá («la vuelta atrás no estaría completa», aviso, no para) y
-# supabase/produccion/vuelta-atras.txt no lista ningún fichero.
+# SIN VUELTA ATRÁS, a propósito: el de antes se borra y no hay a qué volver.
+# Va declarado («sin-vuelta-atras:», W02): el ensayo no compara «como antes»
+# sino lo que la tanda dice que deja («esperado:»), medida a medida, y para si
+# no sale así. supabase/produccion/vuelta-atras.txt no lista ningún fichero.
+# (El ensayo #118, sobre 61f7e037, paró por no declararlo: la cuenta no salía
+# como antes, y no podía.)
 #
 # autorizo:
 #   20261120T0200_w02_secreto_despacho_fin_relevo.sql
 cuenta: scripts/conta/produccion/cuentas/w02-secreto-despacho.sql
 supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql
+sin-vuelta-atras: supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql · motivo: borra catcher_dispatch_secret_anterior, el secreto de antes, a propósito; no hay a qué volver
+esperado: w02-secreto-despacho · secretos del despacho en Vault = catcher_dispatch_secret
+esperado: w02-secreto-despacho · huella corta de catcher_dispatch_secret = como antes
+esperado: w02-secreto-despacho · huella corta de catcher_dispatch_secret_anterior = no existe

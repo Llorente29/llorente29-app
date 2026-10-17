@@ -41,7 +41,7 @@ import { ambiguosEnPlpgsql, analizarFichero, columnasConocidas, clasificar, crea
 type Op = { accion: string; tipo: string; objeto: string; detalle: string }
 type Existentes = { tablas: string[]; funciones: string[] }
 // Las líneas «cuenta:» declaran qué se cuenta antes y después (R9): no son ficheros de la tanda.
-const leerTanda = (f: string) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !l.startsWith('cuenta:'))
+const leerTanda = (f: string) => readFileSync(f, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && !/^(cuenta|sin-vuelta-atras|esperado):/.test(l))
 const leerExistentes = (f: string) => JSON.parse(readFileSync(f, 'utf8')) as Existentes
 function poblacion(tanda: string[], ex: Existentes) {
   const porFichero: Record<string, Op[]> = Object.fromEntries(tanda.map((f) => [f, analizarFichero(f)]))
