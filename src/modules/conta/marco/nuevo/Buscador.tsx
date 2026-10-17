@@ -132,7 +132,7 @@ export function Buscador({ cerrar, solo, conPregunta }: { cerrar: () => void; so
               {g.resultados.map((r) => {
                 const i = fila.indexOf(r)
                 return (
-                  <div key={r.clave} id={idDe(r)} role="option" aria-selected={i === activo} className="cxm-buscador-opcion"
+                  <div key={r.clave} id={idDe(r)} role="option" aria-selected={i === activo} className={r.apagado ? 'cxm-buscador-opcion cxm-buscador-opcion-apagada' : 'cxm-buscador-opcion'}
                     onMouseEnter={() => setIndice(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => abrir(r)}>
                     <span className="cxm-buscador-titulo">{r.titulo}</span>
                     {r.apoyo && <span className="cxm-apoyo">{r.apoyo}</span>}

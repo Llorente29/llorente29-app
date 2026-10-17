@@ -54,7 +54,10 @@ test('A · Libros: una liquidación de referencia no se propone, y dice por qué
 
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')
-  await expect(page.getByRole('heading', { level: 1, name: 'Libro diario' })).toBeVisible()
+  // M01: el título lo dicen las pestañas del marco; el encabezado, para el lector (como en c04/libro).
+  await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
+  // M01: en el móvil, lo que no es la acción principal va en «⋯».
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Más acciones del libro diario' }).click()
   await page.getByRole('button', { name: 'Proponer lo pendiente' }).click()
   await expect(page.getByRole('button', { name: 'Repasando…' })).toHaveCount(0, { timeout: 150_000 })
 

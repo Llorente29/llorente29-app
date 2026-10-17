@@ -39,6 +39,8 @@ import InicioPage from '@/modules/conta/inicio/InicioPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
 import { Portada } from '@/modules/conta/marco/Portada'
 import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
+import MuestraPiezasPage from '@/modules/conta/muestra/MuestraPiezasPage'
+import { baseDeDatos } from '@/services/versionApp'
 
 // C06b (respuesta 6 de Julio, tarea 2): la barra «Pregunta o pide algo» solo
 // contesta «Muy pronto», y lo que no funciona no se enseña: ninguna ruta la
@@ -108,6 +110,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
+    // M01 · La muestra de las piezas comunes (datos inventados): solo fuera de producción.
+    ...(baseDeDatos().tipo === 'produccion' ? [] : [{ path: CONTA.rutas.muestraPiezas, element: enMarco(<MuestraPiezasPage />, '') }]),
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },
