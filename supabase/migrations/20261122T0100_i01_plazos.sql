@@ -13,7 +13,7 @@
 --      provisional (falta el BOCM) y la fecha lo dice.
 --   2. tax_form_deadline: la regla de plazo de cada modelo y periodo, con su
 --      norma. Es la única fuente de los plazos: ninguna fecha está escrita.
---   3. conta_impuesto_plazo(modelo, periodicidad, ejercicio, periodo, ámbito):
+--   3. conta_impuesto_plazo(modelo, cadencia, ejercicio, periodo, ámbito):
 --        · presentación: el día de la regla; si es inhábil para la empresa
 --          (sábado, domingo o festivo de su ámbito), el primer hábil siguiente;
 --        · domiciliación (solo los modelos con ingreso del anexo II de la Orden
@@ -53,17 +53,17 @@ comment on table public.tax_holiday is
   'I01a. Festivos que mueven los plazos de Hacienda. ES: fiestas nacionales del art. 45.1 del RD 2001/1983 (aunque una comunidad las sustituya). ES-MD: los que no se trabaja en la Comunidad de Madrid. Del BOE, por scripts/conta/i01/festivos.mjs.';
 
 -- ── Reglas de plazo ─────────────────────────────────────────────────────────
--- period '*' = cualquier periodo de esa periodicidad que no tenga fila propia.
+-- period '*' = cualquier periodo de esa cadencia que no tenga fila propia.
 -- months_after: meses tras el último mes del periodo; day null = último día del mes.
 create table if not exists public.tax_form_deadline (
   form_code     text not null references public.tax_form(code),
-  periodicity   text not null check (periodicity in ('trimestral', 'mensual', 'anual', 'pago_fraccionado')),
+  cadence       text not null check (cadence in ('quarterly', 'monthly', 'annual', 'instalments_202')),
   period        text not null check (period ~ '^(\*|[1-4]T|0[1-9]|1[0-2]|0A|[1-3]P)$'),
   months_after  smallint not null check (months_after between 1 and 12),
   day           smallint check (day between 1 and 31),
   direct_debit  boolean not null,
   legal_ref     text not null,
-  primary key (form_code, periodicity, period)
+  primary key (form_code, cadence, period)
 );
 comment on table public.tax_form_deadline is
   'I01a. Plazo de presentación de cada modelo y periodo, con su norma: meses tras el último mes del periodo y día (null = último del mes). direct_debit: tiene ingreso domiciliable (Orden EHA/1658/2009, anexo II).';
@@ -74,26 +74,26 @@ begin
   if not found then raise exception 'Faltan modelos en tax_form: los plazos se cuelgan de ellos.'; end if;
 end $$;
 
-insert into public.tax_form_deadline (form_code, periodicity, period, months_after, day, direct_debit, legal_ref) values
-  ('303', 'trimestral', '*',  1, 20,   true,  'RIVA (RD 1624/1992), art. 71.4: del 1 al 20 de abril, julio y octubre'),
-  ('303', 'trimestral', '4T', 1, 30,   true,  'RIVA (RD 1624/1992), art. 71.4: el cuarto trimestre, del 1 al 30 de enero'),
-  ('303', 'mensual',    '*',  1, 30,   true,  'RIVA (RD 1624/1992), art. 71.4: los 30 primeros días del mes siguiente'),
-  ('303', 'mensual',    '01', 1, null, true,  'RIVA (RD 1624/1992), art. 71.4: la de enero, hasta el último día de febrero'),
-  ('390', 'anual',      '0A', 1, 30,   false, 'Orden EHA/3111/2009: del 1 al 30 de enero'),
-  ('111', 'trimestral', '*',  1, 20,   true,  'RIRPF (RD 439/2007), art. 108.1: los 20 primeros días de abril, julio, octubre y enero'),
-  ('111', 'mensual',    '*',  1, 20,   true,  'RIRPF (RD 439/2007), art. 108.1: los 20 primeros días del mes siguiente'),
-  ('115', 'trimestral', '*',  1, 20,   true,  'RIRPF (RD 439/2007), art. 108.1: los 20 primeros días de abril, julio, octubre y enero'),
-  ('115', 'mensual',    '*',  1, 20,   true,  'RIRPF (RD 439/2007), art. 108.1: los 20 primeros días del mes siguiente'),
-  ('190', 'anual',      '0A', 1, 31,   false, 'RIRPF (RD 439/2007), art. 108.2: del 1 al 31 de enero'),
-  ('180', 'anual',      '0A', 1, 31,   false, 'RIRPF (RD 439/2007), art. 108.2: del 1 al 31 de enero'),
-  ('347', 'anual',      '0A', 2, null, false, 'Orden EHA/3012/2008: el mes de febrero'),
-  ('349', 'trimestral', '*',  1, 20,   false, 'RIVA, art. 81; Orden EHA/769/2010: los 20 primeros días del mes siguiente al trimestre'),
-  ('349', 'trimestral', '4T', 1, 30,   false, 'RIVA, art. 81; Orden EHA/769/2010: el cuarto trimestre, del 1 al 30 de enero'),
-  ('202', 'pago_fraccionado', '1P', 1, 20, true, 'Ley 27/2014 (LIS), art. 40.1: los 20 primeros días de abril'),
-  ('202', 'pago_fraccionado', '2P', 1, 20, true, 'Ley 27/2014 (LIS), art. 40.1: los 20 primeros días de octubre'),
-  ('202', 'pago_fraccionado', '3P', 1, 20, true, 'Ley 27/2014 (LIS), art. 40.1: los 20 primeros días de diciembre'),
-  ('200', 'anual',      '0A', 7, 25,   true,  'Ley 27/2014 (LIS), art. 124.1: los 25 días naturales siguientes a los 6 meses del cierre (año natural: del 1 al 25 de julio)')
-on conflict (form_code, periodicity, period) do nothing;
+insert into public.tax_form_deadline (form_code, cadence, period, months_after, day, direct_debit, legal_ref) values
+  ('303', 'quarterly', '*',  1, 20,   true,  'RIVA (RD 1624/1992), art. 71.4: del 1 al 20 de abril, julio y octubre'),
+  ('303', 'quarterly', '4T', 1, 30,   true,  'RIVA (RD 1624/1992), art. 71.4: el cuarto trimestre, del 1 al 30 de enero'),
+  ('303', 'monthly',    '*',  1, 30,   true,  'RIVA (RD 1624/1992), art. 71.4: los 30 primeros días del mes siguiente'),
+  ('303', 'monthly',    '01', 1, null, true,  'RIVA (RD 1624/1992), art. 71.4: la de enero, hasta el último día de febrero'),
+  ('390', 'annual',      '0A', 1, 30,   false, 'Orden EHA/3111/2009: del 1 al 30 de enero'),
+  ('111', 'quarterly', '*',  1, 20,   true,  'RIRPF (RD 439/2007), art. 108.1: los 20 primeros días de abril, julio, octubre y enero'),
+  ('111', 'monthly',    '*',  1, 20,   true,  'RIRPF (RD 439/2007), art. 108.1: los 20 primeros días del mes siguiente'),
+  ('115', 'quarterly', '*',  1, 20,   true,  'RIRPF (RD 439/2007), art. 108.1: los 20 primeros días de abril, julio, octubre y enero'),
+  ('115', 'monthly',    '*',  1, 20,   true,  'RIRPF (RD 439/2007), art. 108.1: los 20 primeros días del mes siguiente'),
+  ('190', 'annual',      '0A', 1, 31,   false, 'RIRPF (RD 439/2007), art. 108.2: del 1 al 31 de enero'),
+  ('180', 'annual',      '0A', 1, 31,   false, 'RIRPF (RD 439/2007), art. 108.2: del 1 al 31 de enero'),
+  ('347', 'annual',      '0A', 2, null, false, 'Orden EHA/3012/2008: el mes de febrero'),
+  ('349', 'quarterly', '*',  1, 20,   false, 'RIVA, art. 81; Orden EHA/769/2010: los 20 primeros días del mes siguiente al trimestre'),
+  ('349', 'quarterly', '4T', 1, 30,   false, 'RIVA, art. 81; Orden EHA/769/2010: el cuarto trimestre, del 1 al 30 de enero'),
+  ('202', 'instalments_202', '1P', 1, 20, true, 'Ley 27/2014 (LIS), art. 40.1: los 20 primeros días de abril'),
+  ('202', 'instalments_202', '2P', 1, 20, true, 'Ley 27/2014 (LIS), art. 40.1: los 20 primeros días de octubre'),
+  ('202', 'instalments_202', '3P', 1, 20, true, 'Ley 27/2014 (LIS), art. 40.1: los 20 primeros días de diciembre'),
+  ('200', 'annual',      '0A', 7, 25,   true,  'Ley 27/2014 (LIS), art. 124.1: los 25 días naturales siguientes a los 6 meses del cierre (año natural: del 1 al 25 de julio)')
+on conflict (form_code, cadence, period) do nothing;
 
 -- festivos: desde aquí lo escribe scripts/conta/i01/festivos.mjs (no se toca a mano)
 insert into public.official_source (key, name, url, sha256, downloaded_at) values ('boe-fiestas-laborales-2026', 'Resolución de 17 de octubre de 2025, de la Dirección General de Trabajo, por la que se publica la relación de fiestas laborales para el año 2026.', 'https://www.boe.es/diario_boe/txt.php?id=BOE-A-2025-21667', 'f85e22b21de215dafdc2491eab6a535b0c92e744c8d2ae79d3d4c0532c9770e0', '2026-10-17T20:34:06.235Z')
@@ -199,20 +199,20 @@ begin
 end $$;
 
 -- ── El último mes de un periodo ─────────────────────────────────────────────
-create or replace function public.conta_impuesto_fin_periodo(p_periodicidad text, p_periodo text)
+create or replace function public.conta_impuesto_fin_periodo(p_cadencia text, p_periodo text)
 returns smallint language sql immutable set search_path = public as $$
   select case
-    when p_periodicidad = 'trimestral' and p_periodo ~ '^[1-4]T$' then (substr(p_periodo, 1, 1)::int * 3)::smallint
-    when p_periodicidad = 'mensual' and p_periodo ~ '^(0[1-9]|1[0-2])$' then p_periodo::smallint
-    when p_periodicidad = 'anual' and p_periodo = '0A' then 12::smallint
-    when p_periodicidad = 'pago_fraccionado' and p_periodo = '1P' then 3::smallint
-    when p_periodicidad = 'pago_fraccionado' and p_periodo = '2P' then 9::smallint
-    when p_periodicidad = 'pago_fraccionado' and p_periodo = '3P' then 11::smallint
+    when p_cadencia = 'quarterly' and p_periodo ~ '^[1-4]T$' then (substr(p_periodo, 1, 1)::int * 3)::smallint
+    when p_cadencia = 'monthly' and p_periodo ~ '^(0[1-9]|1[0-2])$' then p_periodo::smallint
+    when p_cadencia = 'annual' and p_periodo = '0A' then 12::smallint
+    when p_cadencia = 'instalments_202' and p_periodo = '1P' then 3::smallint
+    when p_cadencia = 'instalments_202' and p_periodo = '2P' then 9::smallint
+    when p_cadencia = 'instalments_202' and p_periodo = '3P' then 11::smallint
   end
 $$;
 
 -- ── El plazo de un modelo y periodo ─────────────────────────────────────────
-create or replace function public.conta_impuesto_plazo(p_modelo text, p_periodicidad text, p_ejercicio int, p_periodo text,
+create or replace function public.conta_impuesto_plazo(p_modelo text, p_cadencia text, p_ejercicio int, p_periodo text,
                                                        p_ambito text default 'ES-MD')
 returns table (presentacion date, presentacion_regla date, domiciliacion date, regla text, provisional text)
 language plpgsql stable set search_path = public as $$
@@ -221,15 +221,17 @@ declare
   v_empresa constant text[] := array[p_ambito];
   v_aeat constant text[] := array['ES', 'ES-MD'];
 begin
-  v_fin := public.conta_impuesto_fin_periodo(p_periodicidad, p_periodo);
+  v_fin := public.conta_impuesto_fin_periodo(p_cadencia, p_periodo);
   if v_fin is null then
-    raise exception 'El periodo «%» no es de un modelo %.', p_periodo, p_periodicidad using errcode = '22023';
+    raise exception 'El periodo «%» no es de un modelo %.', p_periodo,
+      case p_cadencia when 'quarterly' then 'trimestral' when 'monthly' then 'mensual' when 'annual' then 'anual' when 'instalments_202' then 'de pagos fraccionados' else p_cadencia end
+      using errcode = '22023';
   end if;
   select * into r from public.tax_form_deadline d
-   where d.form_code = p_modelo and d.periodicity = p_periodicidad and d.period in (p_periodo, '*')
+   where d.form_code = p_modelo and d.cadence = p_cadencia and d.period in (p_periodo, '*')
    order by (d.period = p_periodo) desc limit 1;
   if r.form_code is null then
-    raise exception 'No tengo la regla del plazo del % % (%): no se inventa.', p_modelo, p_periodicidad, p_periodo using errcode = 'P0002';
+    raise exception 'No tengo la regla del plazo del % (%, periodo %): no se inventa.', p_modelo, p_cadencia, p_periodo using errcode = 'P0002';
   end if;
 
   -- El día de la regla: meses después del último mes del periodo, ese día o el último del mes.

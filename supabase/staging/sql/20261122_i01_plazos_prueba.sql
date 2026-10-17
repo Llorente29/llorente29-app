@@ -17,7 +17,7 @@
 --   3. 2027 sale con su fecha y marcado provisional (falta el BOCM); el 303
 --      4T/2026: presentación 01/02/2027, domiciliación 27/01/2027.
 --   4. Lo que no hay no se inventa: un año sin festivos, una regla que no está
---      (349 mensual) y un periodo que no es de esa periodicidad, paran.
+--      (349 mensual) y un periodo que no es de esa cadencia, paran.
 
 begin;
 do $$ begin
@@ -37,33 +37,33 @@ begin
   -- 1 y 2 · El calendario oficial de 2026.
   for c in select * from (values
     -- modelo, periodicidad, ejercicio, periodo, presentación, domiciliación (null = sin ingreso)
-    ('303', 'trimestral',       2025, '4T', date '2026-01-30', date '2026-01-27'),
-    ('303', 'trimestral',       2026, '1T', date '2026-04-20', date '2026-04-15'),
-    ('303', 'trimestral',       2026, '2T', date '2026-07-20', date '2026-07-15'),
-    ('303', 'trimestral',       2026, '3T', date '2026-10-20', date '2026-10-15'),
-    ('111', 'trimestral',       2025, '4T', date '2026-01-20', date '2026-01-15'),
-    ('115', 'trimestral',       2025, '4T', date '2026-01-20', date '2026-01-15'),
-    ('111', 'mensual',          2025, '12', date '2026-01-20', date '2026-01-15'),
-    ('111', 'mensual',          2026, '01', date '2026-02-20', date '2026-02-17'),
-    ('111', 'mensual',          2026, '02', date '2026-03-20', date '2026-03-16'),
-    ('111', 'mensual',          2026, '03', date '2026-04-20', date '2026-04-15'),
-    ('111', 'mensual',          2026, '04', date '2026-05-20', date '2026-05-15'),
-    ('111', 'mensual',          2026, '05', date '2026-06-22', date '2026-06-17'),
-    ('111', 'mensual',          2026, '06', date '2026-07-20', date '2026-07-15'),
-    ('111', 'mensual',          2026, '07', date '2026-08-20', date '2026-08-17'),
-    ('111', 'mensual',          2026, '08', date '2026-09-21', date '2026-09-16'),
-    ('111', 'mensual',          2026, '09', date '2026-10-20', date '2026-10-15'),
-    ('111', 'mensual',          2026, '10', date '2026-11-20', date '2026-11-17'),
-    ('115', 'mensual',          2026, '11', date '2026-12-21', date '2026-12-16'),
-    ('200', 'anual',            2025, '0A', date '2026-07-27', date '2026-07-22'),
-    ('202', 'pago_fraccionado', 2026, '1P', date '2026-04-20', date '2026-04-15'),
-    ('202', 'pago_fraccionado', 2026, '2P', date '2026-10-20', date '2026-10-15'),
-    ('202', 'pago_fraccionado', 2026, '3P', date '2026-12-21', date '2026-12-16'),
-    ('390', 'anual',            2025, '0A', date '2026-01-30', null::date),
-    ('349', 'trimestral',       2025, '4T', date '2026-01-30', null::date),
-    ('190', 'anual',            2025, '0A', date '2026-02-02', null::date),
-    ('180', 'anual',            2025, '0A', date '2026-02-02', null::date),
-    ('347', 'anual',            2025, '0A', date '2026-03-02', null::date)
+    ('303', 'quarterly',       2025, '4T', date '2026-01-30', date '2026-01-27'),
+    ('303', 'quarterly',       2026, '1T', date '2026-04-20', date '2026-04-15'),
+    ('303', 'quarterly',       2026, '2T', date '2026-07-20', date '2026-07-15'),
+    ('303', 'quarterly',       2026, '3T', date '2026-10-20', date '2026-10-15'),
+    ('111', 'quarterly',       2025, '4T', date '2026-01-20', date '2026-01-15'),
+    ('115', 'quarterly',       2025, '4T', date '2026-01-20', date '2026-01-15'),
+    ('111', 'monthly',          2025, '12', date '2026-01-20', date '2026-01-15'),
+    ('111', 'monthly',          2026, '01', date '2026-02-20', date '2026-02-17'),
+    ('111', 'monthly',          2026, '02', date '2026-03-20', date '2026-03-16'),
+    ('111', 'monthly',          2026, '03', date '2026-04-20', date '2026-04-15'),
+    ('111', 'monthly',          2026, '04', date '2026-05-20', date '2026-05-15'),
+    ('111', 'monthly',          2026, '05', date '2026-06-22', date '2026-06-17'),
+    ('111', 'monthly',          2026, '06', date '2026-07-20', date '2026-07-15'),
+    ('111', 'monthly',          2026, '07', date '2026-08-20', date '2026-08-17'),
+    ('111', 'monthly',          2026, '08', date '2026-09-21', date '2026-09-16'),
+    ('111', 'monthly',          2026, '09', date '2026-10-20', date '2026-10-15'),
+    ('111', 'monthly',          2026, '10', date '2026-11-20', date '2026-11-17'),
+    ('115', 'monthly',          2026, '11', date '2026-12-21', date '2026-12-16'),
+    ('200', 'annual',            2025, '0A', date '2026-07-27', date '2026-07-22'),
+    ('202', 'instalments_202', 2026, '1P', date '2026-04-20', date '2026-04-15'),
+    ('202', 'instalments_202', 2026, '2P', date '2026-10-20', date '2026-10-15'),
+    ('202', 'instalments_202', 2026, '3P', date '2026-12-21', date '2026-12-16'),
+    ('390', 'annual',            2025, '0A', date '2026-01-30', null::date),
+    ('349', 'quarterly',       2025, '4T', date '2026-01-30', null::date),
+    ('190', 'annual',            2025, '0A', date '2026-02-02', null::date),
+    ('180', 'annual',            2025, '0A', date '2026-02-02', null::date),
+    ('347', 'annual',            2025, '0A', date '2026-03-02', null::date)
   ) as t(modelo, periodicidad, ejercicio, periodo, pres, dom) loop
     select * into p from public.conta_impuesto_plazo(c.modelo, c.periodicidad, c.ejercicio, c.periodo);
     if p.presentacion is distinct from c.pres or p.domiciliacion is distinct from c.dom then
@@ -83,7 +83,7 @@ begin
   raise notice 'PRUEBA plazos 1 y 2: % casos del calendario oficial de 2026; las 14 fechas de domiciliación, 14 de 14.', v_ok;
 
   -- 3 · 2027, provisional.
-  select * into p from public.conta_impuesto_plazo('303', 'trimestral', 2026, '4T');
+  select * into p from public.conta_impuesto_plazo('303', 'quarterly', 2026, '4T');
   if p.presentacion <> date '2027-02-01' or p.domiciliacion <> date '2027-01-27' or p.provisional is null then
     raise exception 'PRUEBA plazos 3: 303 4T/2026: % / % / provisional «%».', p.presentacion, p.domiciliacion, p.provisional;
   end if;
@@ -91,18 +91,18 @@ begin
 
   -- 4 · Lo que no hay, para.
   begin
-    perform public.conta_impuesto_plazo('303', 'trimestral', 2028, '1T');
+    perform public.conta_impuesto_plazo('303', 'quarterly', 2028, '1T');
     raise exception 'PRUEBA plazos 4: un año sin festivos ha dado fecha.';
   exception when sqlstate 'P0002' then get stacked diagnostics v_err = message_text;
     if v_err not like 'No están cargados los festivos de 2028%' then raise exception 'PRUEBA plazos 4: mensaje «%».', v_err; end if;
   end;
   begin
-    perform public.conta_impuesto_plazo('349', 'mensual', 2026, '07');
+    perform public.conta_impuesto_plazo('349', 'monthly', 2026, '07');
     raise exception 'PRUEBA plazos 4: el 349 mensual ha dado fecha sin regla.';
   exception when sqlstate 'P0002' then null;
   end;
   begin
-    perform public.conta_impuesto_plazo('303', 'trimestral', 2026, '07');
+    perform public.conta_impuesto_plazo('303', 'quarterly', 2026, '07');
     raise exception 'PRUEBA plazos 4: «07» ha valido como trimestre.';
   exception when sqlstate '22023' then null;
   end;
