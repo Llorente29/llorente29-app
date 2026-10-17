@@ -111,28 +111,28 @@ function FilaTienda({ t, marcas, alGuardar }: { t: TiendaPlataforma; marcas: Mar
           {propuesta && marca === propuesta && <> · marca propuesta por el nombre: guárdala si es esa</>}
         </span>
       </span>
-      <label className="cxt-tienda-campo" htmlFor={id('marca')}>
-        <span className="cxt-tienda-etiqueta">Marca</span>
+      <div className="cxt-tienda-campo">
+        <label className="cxt-tienda-etiqueta" htmlFor={id('marca')}>Marca</label>
         <select id={id('marca')} className="cx-input" value={marca} disabled={ocupado} onChange={(e) => setMarca(e.target.value)}>
           <option value="">Sin marca</option>
           {opcionesMarca.map((m) => <option key={m.id} value={m.id}>{m.nombre}{m.archivada ? ' (archivada)' : ''}</option>)}
         </select>
-      </label>
-      <label className="cxt-tienda-campo" htmlFor={id('local')}>
-        <span className="cxt-tienda-etiqueta">Local</span>
+      </div>
+      <div className="cxt-tienda-campo">
+        <label className="cxt-tienda-etiqueta" htmlFor={id('local')}>Local</label>
         <select id={id('local')} className="cx-input" value={local} disabled={ocupado} onChange={(e) => setLocal(e.target.value)}>
           <option value="">Sin local</option>
           {ficha.locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
-      </label>
-      <label className="cxt-tienda-campo" htmlFor={id('banco')}>
-        <span className="cxt-tienda-etiqueta">Cuenta de cobro</span>
+      </div>
+      <div className="cxt-tienda-campo">
+        <label className="cxt-tienda-etiqueta" htmlFor={id('banco')}>Cuenta de cobro</label>
         <select id={id('banco')} className="cx-input" value={banco} disabled={ocupado} onChange={(e) => setBanco(e.target.value)}>
           <option value="">Sin cuenta</option>
           {ficha.bancos.map((b) => <option key={b.id} value={b.id}>{b.name}{b.iban ? ` ···${b.iban.slice(-4)}` : ''}</option>)}
           {t.bancoId && !ficha.bancos.some((b) => b.id === t.bancoId) && <option value={t.bancoId}>La que tenía (ya no está activa)</option>}
         </select>
-      </label>
+      </div>
       <span className="cxt-tienda-acciones">
         <button type="submit" className="cx-boton" disabled={ocupado || !cambiado} aria-label={`Guardar ${t.nombre}`}>{ocupado ? 'Guardando…' : 'Guardar'}</button>
       </span>
