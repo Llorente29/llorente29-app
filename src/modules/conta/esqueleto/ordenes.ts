@@ -124,8 +124,10 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   'contabilidad.listados': [
     { titulo: 'Diario', ordenes: ['libros.diario-resumido'] },
     { titulo: 'Mayor', ordenes: ['libros.libro-mayor', 'libros.sumas-saldos', 'libros.acumulados'] },
-    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.retenciones', 'libros.formato-aeat'] },
+    // Estados antes que IVA (medido a 1440 px con sus números): IVA, con siete
+    // libros, va solo en la segunda fila y la cinta ocupa dos, no tres.
     { titulo: 'Estados', ordenes: ['libros.balance', 'libros.pyg', 'libros.ecpn'] },
+    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.retenciones', 'libros.formato-aeat'] },
   ],
   'contabilidad.cierre': [
     { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.cierre-ejercicio'] },

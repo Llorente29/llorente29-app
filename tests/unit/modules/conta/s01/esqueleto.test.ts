@@ -139,7 +139,7 @@ describe('el catálogo de órdenes', () => {
     expect(cintaDe('contabilidad', null, NADA)).toEqual([])
   })
   it('paso 3: las acciones de Libros, en la cinta de su pestaña; Importar (Diez), solo con Diez', () => {
-    expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['IVA', 7], ['Estados', 3]])
+    expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['Estados', 3], ['IVA', 7]])
     expect(cintaDe('contabilidad', 'cierre', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([
       ['Cierre', ['Ejercicios', 'Cerrar el mes', 'Regularización, cierre y apertura']],
       ['Cuentas anuales', ['Cuentas anuales del ejercicio', 'Qué cuentas alimentan cada línea']],

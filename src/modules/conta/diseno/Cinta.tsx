@@ -27,8 +27,11 @@ export function Cinta({ etiqueta, oculta, alCambiarOculta, children }: {
   }
   return (
     <div className="s-cinta" role="toolbar" aria-label={etiqueta}>
-      <div className="s-cinta-grupos">{children}</div>
-      <Boton variante="fantasma" icono="plegar" aria-expanded="true" className="s-cinta-ocultar" onClick={() => alCambiarOculta(true)}>Ocultar</Boton>
+      {/* «Ocultar» va con los grupos, al final: no le quita sitio a la primera fila. */}
+      <div className="s-cinta-grupos">
+        {children}
+        <Boton variante="fantasma" icono="plegar" aria-expanded="true" className="s-cinta-ocultar" onClick={() => alCambiarOculta(true)}>Ocultar</Boton>
+      </div>
     </div>
   )
 }

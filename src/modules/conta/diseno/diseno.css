@@ -146,7 +146,7 @@
   font-size: var(--s-t-xs); color: var(--s-apoyo); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
   padding-left: var(--s-2); line-height: 1.2;
 }
-.s-cinta-ocultar { align-self: flex-end; }
+.s-cinta-ocultar { margin-left: auto; align-self: flex-start; }
 /* En la cinta, los botones más bajos y apretados (maqueta 1: una fila en 1440). */
 .s-cinta .s-boton { min-height: calc(var(--s-alto-control) - var(--s-1)); padding: 0 6px; gap: var(--s-1); font-size: var(--s-t-s); }
 .s-cinta-grupos { row-gap: var(--s-1); }

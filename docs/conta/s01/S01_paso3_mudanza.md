@@ -71,6 +71,11 @@ Medido a 1440 px: con el título al lado de sus botones, Bancos pedía ~1.365 px
 (hay 1.210) y Libros y listados, tres filas. Julio eligió el título **debajo**
 de sus botones, como en las barras de la N17 y la N22: Bancos cabe en una fila
 (lo pedía la B01) y Libros y listados, en dos. La cinta mide 61 px por fila.
+En la e2e, con los números de verdad de los libros de IVA, Libros y listados
+salía en tres: IVA (siete libros con su número) mide ~970 px y no cabe al lado
+de Diario y Mayor. Estados va ahora antes que IVA (el orden era propuesta mía,
+no de maqueta) e IVA ocupa sola la segunda fila. «Ocultar» va al final de los
+grupos y ya no le quita sitio a la primera.
 
 ### La cabecera, medida
 
