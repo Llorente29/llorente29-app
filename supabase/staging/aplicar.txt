@@ -31,6 +31,13 @@ supabase/staging/sql/20261122_i01_obligaciones_prueba.sql
 #   uso; «solo ver» no presenta; «quitar ahora» borra el secreto del Vault.
 #   (Otra vez tras 084986dc: la cuenta de prueba se crea sin persona en la sesión.)
 supabase/staging/sql/20261122_i01_certificados_prueba.sql
+#   Pieza 5, el 303: la prueba aplica la 0130 y la 0140 (el cálculo desde el
+#   libro de IVA, sus comprobaciones y lo que pide el fichero) con \i y
+#   ROLLBACK, contra el libro de verdad de la empresa A (3 apuntes del 4T):
+#   casillas, foto de lo declarado, la 472 que no casa, «de otro periodo»; lo
+#   que no sabe (recargo) sin fichero; [110] a mano; el 21 %; el fichero solo
+#   para service_role; presentada no se recalcula; el 1T de 2027 arrastra.
+supabase/staging/sql/20261122_i01_calculo_303_prueba.sql
 
 # S01 · El esqueleto (rama conta/s01-esqueleto). VA PRIMERO: la prueba de corte
 # de la D01 (más abajo) para con los datos de staging (ux_party_role_canal) y
