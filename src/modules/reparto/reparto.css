@@ -152,6 +152,16 @@
 }
 .cx-cd-boton-pri { background: var(--cx-azul); color: var(--cx-blanco); border-color: var(--cx-azul); }
 .cx-cd-boton:disabled { opacity: 0.55; cursor: not-allowed; }
+/* R03 · Completada: UNA línea (quién · ticket), «Reimprimir» y el repartidor con «Llamar». */
+.cx-cd-hecho { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.cx-cd-hecho-texto { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--cx-verde-oscuro); }
+.cx-cd-nota { flex-basis: 100%; font-size: 12.5px; color: var(--cx-apoyo); }
+.cx-cd-error { flex-basis: 100%; margin: 4px 0 0; font-size: 12.5px; font-weight: 600; color: var(--cx-rojo); }
+/* La lista de Despacho: lo que necesita a alguien, en rojo y arriba; lo que ha salido, en gris. */
+.cx-lsd-rojo { background: var(--cx-rojo-suave); border-left: 4px solid var(--cx-rojo); }
+.cx-lsd-rojo .cx-lsd-frase { color: var(--cx-rojo); font-weight: 700; }
+.cx-lsd-gris .cx-lsd-frase { color: var(--cx-apoyo); }
+.cx-lsd-tel { font-size: 13px; font-weight: 700; color: var(--cx-texto); text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
 .cx-cd-casilla {
   width: 100%; height: 34px; border-radius: 8px; border: 1px solid var(--cx-borde-campo); background: var(--cx-blanco);
   padding: 0 10px; font-size: 13.5px; color: var(--cx-texto);

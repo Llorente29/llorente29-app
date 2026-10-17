@@ -50,6 +50,15 @@
 // puede comprobar y que habría que mantener para siempre.
 // No se toca el mapa. Y de paso: es un VALOR (el país que pone Google en la
 // dirección formateada), no una etiqueta — el encargo habla de etiquetas.
+//
+// ── 17/10: «Spain» FUERA, Y «Unit» ES «Piso/Puerta» (Julio, R03) ──────────
+// Lo de arriba cambió con Uber por HubRise: manda la dirección formateada de
+// Google («Calle X 5, 28000 Madrid, Spain, Unit: 3C») y «Spain» volvió a salir
+// en el ticket de la bolsa. Julio lo quita: no lo traduce, lo QUITA, y solo
+// cuando es un trozo entero entre comas (quitaPais). No es una etiqueta: el mapa
+// de etiquetas sigue sin tocarlo, y traduceDireccionEntrega lo deja tal cual.
+// «Unit» es como Uber llama al piso o a la puerta (un solo dato: «3C»), así
+// que se enseña como «Piso/Puerta».
 
 /**
  * Etiqueta inglesa (en minúsculas) → castellano.
@@ -65,6 +74,9 @@ export const ETIQUETAS_DIRECCION: Readonly<Record<string, string>> = Object.free
   // Las dos que manda Glovo hoy, y el motivo del encargo.
   floor: 'Piso',
   door: 'Puerta',
+
+  // Uber: «Unit: 3C» es el piso y la puerta en un solo dato (Julio, 17/10).
+  unit: 'Piso/Puerta',
 
   // Vista en producción sin dos puntos: «Doorbell 435».
   doorbell: 'Timbre',
@@ -259,5 +271,18 @@ export function quitaDireccionDuplicada<T extends string | null | undefined>(tex
  * sitios distintos, y el papel de la bolsa deja de coincidir con el móvil.
  */
 export function direccionParaMostrar<T extends string | null | undefined>(texto: T): T {
-  return traduceDireccionEntrega(quitaDireccionDuplicada(texto))
+  return traduceDireccionEntrega(quitaPais(quitaDireccionDuplicada(texto)))
+}
+
+/**
+ * Quita «Spain» cuando es un trozo entero entre comas (Uber por HubRise:
+ * «…, 28000 Madrid, Spain, Unit: 3C»). Dentro de otro trozo no se toca nada.
+ * Julio, 17/10 (R03).
+ */
+export function quitaPais<T extends string | null | undefined>(texto: T): T {
+  if (typeof texto !== 'string' || texto === '') return texto
+  const segs = texto.split(',')
+  const quedan = segs.filter(s => s.trim().toLowerCase() !== 'spain')
+  if (quedan.length === segs.length || quedan.length === 0) return texto
+  return quedan.join(',').replace(/^\s+/, '') as T
 }

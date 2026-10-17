@@ -12,6 +12,8 @@
 // Regla 8: el botón confirma o falla en pantalla, y la confirmación lleva
 // contenido. Regla 7: la lista no esconde filas; la tarjeta solo informa.
 
+import { lineaTelefono } from './entregaTicket'
+
 /** Una fila de public.pedidos_sin_direccion (los de hoy sin dirección completa). */
 export interface PedidoSinDireccion {
   sale_id: string
@@ -29,6 +31,9 @@ export interface PedidoSinDireccion {
   en_catcher: boolean
   rider_name: string | null
   rider_phone: string | null
+  /** El teléfono del cliente, para «Llamar» (Uber: con su código). */
+  customer_phone?: string | null
+  customer_phone_code?: string | null
   dispatch_error: string | null
   /** El modo de despacho del local ('auto' | 'manual' | 'off'). */
   dispatch_mode?: string | null
@@ -45,37 +50,46 @@ export interface PedidoSinDireccion {
 /** Después de «Lo reparte Uber». */
 export const DECIDIDO_UBER = 'Hecho: lo reparte Uber. No sale a Catcher.'
 
-/** La primera frase de la tarjeta y de la lista: siempre la misma. */
-export const SIN_DIRECCION_COMPLETA = 'Sin dirección completa'
-
 /** Lo mínimo del pedido para decir cómo va. Vale para la tarjeta (feed) y la lista. */
 export interface EstadoDeLaEntrega {
   /** Ya está en Catcher (tiene carrier o pedido de Catcher). */
   enCatcher: boolean
   dispatchError: string | null
   dispatchMode: string | null
+  /** false si la plataforma tampoco ha mandado el punto del mapa; null si no se sabe. */
+  hayPunto?: boolean | null
 }
 
-function motivo(error: string): string {
-  return error.replace(/^No se (despachó|pudo enviar a Catcher):\s*/i, '').trim()
+/** Ha salido (o está saliendo) con el punto del mapa: la cocina no tiene que hacer nada. */
+export const HA_SALIDO = 'Ha salido a Catcher con el punto del mapa · el repartidor llamará al cliente'
+/** No ha salido: alguien tiene que llamar al cliente. */
+export const NO_HA_SALIDO = 'No ha salido a Catcher · llama al cliente y completa la dirección'
+
+/** El motivo de dispatch_error, sin el prefijo de siempre y con mayúscula. */
+export function motivoDelFallo(error: string | null | undefined): string {
+  const m = (error ?? '').replace(/^No se (despachó|pudo enviar a Catcher):\s*/i, '').trim()
+  return m ? m.charAt(0).toUpperCase() + m.slice(1) : ''
+}
+
+/** ¿Ha salido, o va a salir solo? false = alguien tiene que hacer algo. */
+export function haSalido(e: EstadoDeLaEntrega): boolean {
+  if (e.enCatcher) return true
+  if (e.dispatchError) return false
+  if (e.hayPunto === false) return false
+  return true
 }
 
 /**
- * La frase de la tarjeta, después de «Sin dirección completa · ». Informativa:
- * la cocina no tiene nada que hacer, salvo despachar en un local que despacha
- * a mano (como hoy).
+ * La línea de la tarjeta y de la lista (Julio, 17/10: los locales van en
+ * automático, que es el caso real). Informativa si ha salido; si no, qué hay
+ * que hacer. En un local a mano (ninguno en producción) dice que se despache.
  */
-export function comoVaLaEntrega(e: EstadoDeLaEntrega): string {
-  if (e.enCatcher) return 'salió a Catcher con el punto del mapa; el repartidor llamará al cliente'
-  if (e.dispatchError) return `no ha salido a Catcher: ${motivo(e.dispatchError)}`
-  if (e.dispatchMode === 'manual') return 'este local despacha a mano: despáchalo y el repartidor llamará al cliente'
-  if (e.dispatchMode === 'off') return 'lo despacha otro sistema; el repartidor tendrá que llamar al cliente'
-  return 'sale a Catcher con el punto del mapa; el repartidor llamará al cliente'
-}
-
-/** La línea entera de la tarjeta. */
 export function avisoDeLaTarjeta(e: EstadoDeLaEntrega): string {
-  return `${SIN_DIRECCION_COMPLETA} · ${comoVaLaEntrega(e)}`
+  if (e.enCatcher) return HA_SALIDO
+  if (!haSalido(e)) return NO_HA_SALIDO
+  if (e.dispatchMode === 'manual') return 'Este local despacha a mano · despáchalo y el repartidor llamará al cliente'
+  if (e.dispatchMode === 'off') return 'Lo despacha otro sistema · el repartidor llamará al cliente'
+  return HA_SALIDO
 }
 
 const CERRADO = new Set(['closed', 'cancelled', 'canceled'])
@@ -89,22 +103,50 @@ export function puedeCompletar(p: Pick<PedidoSinDireccion, 'status' | 'direccion
 
 /** Una frase por pedido para la lista de Despacho: «G034 · Burger Norte · Glovo — …». */
 export function fraseDeLaLista(p: PedidoSinDireccion): string {
-  const quien = [p.code, p.brand, nombreDelPortal(p.channel)].filter(Boolean).join(' · ')
-  return `${quien} — ${estadoEnLaLista(p)}`
+  return `${quienEsElPedido(p)} — ${estadoEnLaLista(p)}`
+}
+
+/** «G034 · Burger Norte · Glovo». */
+export function quienEsElPedido(p: Pick<PedidoSinDireccion, 'code' | 'brand' | 'channel'>): string {
+  return [p.code, p.brand, nombreDelPortal(p.channel)].filter(Boolean).join(' · ')
+}
+
+/** Los que necesitan a alguien: arriba y en rojo (no han salido, o falta decidir quién reparte). */
+export function necesitaAAlguien(p: PedidoSinDireccion): boolean {
+  if ((p.direccion_completada ?? '').trim()) return false
+  if (CERRADO.has((p.status ?? 'open').toLowerCase())) return false
+  if (p.decidir) return true
+  return !haSalido({ enCatcher: p.en_catcher, dispatchError: p.dispatch_error, dispatchMode: p.dispatch_mode ?? null })
+}
+
+/** El orden de la lista: primero los que necesitan a alguien; dentro, el más reciente arriba. */
+export function ordenarLaLista(pedidos: PedidoSinDireccion[]): PedidoSinDireccion[] {
+  return [...pedidos].sort((a, b) =>
+    Number(necesitaAAlguien(b)) - Number(necesitaAAlguien(a)) || (b.sold_at ?? '').localeCompare(a.sold_at ?? ''))
 }
 
 function estadoEnLaLista(p: PedidoSinDireccion): string {
   const completada = (p.direccion_completada ?? '').trim()
-  if (completada) {
-    const por = (p.completada_por ?? '').trim()
-    return `completada${por ? ` por ${por}` : ''}: ${completada}`
-  }
-  if (p.decidir) return `falta decidir quién reparte este pedido de ${nombreDelPortal(p.channel)} (en el aviso rojo)`
-  if (CERRADO.has((p.status ?? 'open').toLowerCase())) return 'cerrado sin completar la dirección'
-  if (p.en_catcher && (p.rider_name ?? '').trim()) {
-    return `en Catcher con ${p.rider_name!.trim()}; el repartidor llamará al cliente`
-  }
-  return comoVaLaEntrega({ enCatcher: p.en_catcher, dispatchError: p.dispatch_error, dispatchMode: p.dispatch_mode ?? null })
+  if (completada) return `${completadaPor(p.completada_por)}: ${completada}`
+  if (p.decidir) return `Falta decidir quién reparte este pedido de ${nombreDelPortal(p.channel)} (en el aviso rojo)`
+  if (CERRADO.has((p.status ?? 'open').toLowerCase())) return 'Cerrado sin completar la dirección'
+  return avisoDeLaTarjeta({ enCatcher: p.en_catcher, dispatchError: p.dispatch_error, dispatchMode: p.dispatch_mode ?? null })
+}
+
+/** «Dirección completada por Persona de Prueba». */
+export function completadaPor(por: string | null | undefined): string {
+  const quien = (por ?? '').trim()
+  return `Dirección completada${quien ? ` por ${quien}` : ''}`
+}
+
+/** «Tel. +34 600 000 000 · código 12345678» (Uber: la centralita no conecta sin él). */
+export function telefonoDelCliente(telefono: string | null | undefined, codigo?: string | null): string | null {
+  return lineaTelefono(telefono, codigo ?? null)
+}
+
+/** El enlace tel: de un teléfono. */
+export function enlaceTel(telefono: string): string {
+  return `tel:${telefono.replace(/\s+/g, '')}`
 }
 
 /** Lo que devuelve public.fijar_direccion_entrega. */
@@ -118,6 +160,8 @@ export interface ResultadoFijar {
   ya_en_catcher: boolean
   rider_name: string | null
   rider_phone: string | null
+  /** Quién la ha escrito (la marca que queda en el pedido). */
+  por?: string | null
 }
 
 /**
@@ -150,45 +194,40 @@ export function enlaceAlMapa(lat: number | string | null, lng: number | string |
   return `https://www.google.com/maps/search/?api=1&query=${a},${b}`
 }
 
-const REIMPRIMIR = 'Reimprime el ticket de la bolsa para que la lleve.'
-
 /**
  * Después de guardar la dirección: ¿se manda a Catcher? Solo si el resolutor
  * dice Catcher, el local despacha solo y Catcher aún no lo tiene. Si ya lo
- * tiene, la dirección se le dicta al repartidor.
+ * tiene, la dirección se le dicta al repartidor (su API no deja cambiar un
+ * pedido creado): sale su nombre con «Llamar». La línea de confirmación la
+ * pone lineaDeCompletada; aquí solo lo que hay que añadir, si algo.
  */
 export function siguientePaso(r: ResultadoFijar): SiguientePaso {
-  if (r.ya_en_catcher) {
-    const nombre = (r.rider_name ?? '').trim()
-    const telefono = (r.rider_phone ?? '').trim()
-    if (nombre && telefono) {
-      return {
-        tipo: 'mensaje',
-        texto: `Guardada: «${r.direccion}». Catcher no deja cambiar un pedido ya creado: llama a ${nombre} y díctasela. ${REIMPRIMIR}`,
-        llamar: { nombre, telefono },
-      }
-    }
-    return {
-      tipo: 'mensaje',
-      texto: `Guardada: «${r.direccion}». Catcher no deja cambiar un pedido ya creado y aún no ha asignado repartidor: cuando lo asigne, sale aquí su teléfono para dictársela. ${REIMPRIMIR}`,
-    }
-  }
-  if (!r.carrier) {
-    return { tipo: 'mensaje', texto: `Guardada: «${r.direccion}», pero no se manda: ${r.reason ?? 'sin motivo'}.` }
-  }
+  const llamar = repartidor(r.rider_name, r.rider_phone)
+  if (r.ya_en_catcher) return { tipo: 'mensaje', texto: '', ...(llamar ? { llamar } : {}) }
+  if (!r.carrier) return { tipo: 'mensaje', texto: `No se manda a Catcher: ${r.reason ?? 'sin motivo'}.` }
   if (r.dispatch_mode && r.dispatch_mode !== 'auto') {
-    return {
-      tipo: 'mensaje',
-      texto: `Guardada: «${r.direccion}». Este local despacha a mano: pulsa «Despachar» en el pedido y sale con ella. ${REIMPRIMIR}`,
-    }
+    return { tipo: 'mensaje', texto: 'Este local despacha a mano: pulsa «Despachar» en el pedido y sale con ella.' }
   }
-  if (r.carrier !== 'catcher') {
-    return { tipo: 'mensaje', texto: `Guardada: «${r.direccion}». Lo reparte la flota propia: ya la tiene. ${REIMPRIMIR}` }
-  }
+  if (r.carrier !== 'catcher') return { tipo: 'mensaje', texto: 'Lo reparte la flota propia: ya la tiene.' }
   return { tipo: 'mandar' }
 }
 
-/** El texto cuando Catcher ya lo ha aceptado. */
-export function mandadoACatcher(direccion: string): string {
-  return `Guardada y mandada a Catcher con la dirección «${direccion}». ${REIMPRIMIR}`
+/** El repartidor, si Catcher ya lo ha asignado y hay a quién llamar. */
+export function repartidor(nombre: string | null | undefined, telefono: string | null | undefined): { nombre: string; telefono: string } | null {
+  const n = (nombre ?? '').trim(), t = (telefono ?? '').trim()
+  return n && t ? { nombre: n, telefono: t } : null
+}
+
+/** Lo que pasó con el ticket al reimprimirlo: cuántos trabajos, o el fallo. */
+export type Reimpresion = { trabajos: number } | { error: string } | null
+
+/**
+ * La línea de confirmación (regla 8, con contenido): «Dirección completada por
+ * Persona de Prueba · ticket reimpreso». Si no se ha podido reimprimir, lo dice.
+ */
+export function lineaDeCompletada(por: string | null | undefined, ticket: Reimpresion): string {
+  const base = completadaPor(por)
+  if (!ticket) return base
+  if ('error' in ticket) return `${base} · no se ha podido reimprimir el ticket`
+  return ticket.trabajos > 0 ? `${base} · ticket reimpreso` : `${base} · el local no tiene impresora para el ticket de la bolsa`
 }

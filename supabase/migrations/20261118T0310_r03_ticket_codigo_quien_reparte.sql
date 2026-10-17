@@ -305,6 +305,9 @@ begin
              (s.carrier_order_id is not null)       as en_catcher,
              s.rider_name,
              s.rider_phone,
+             -- Para llamar al cliente desde el aviso rojo y la lista (Uber: con su código).
+             s.customer_phone,
+             s.customer_phone_code,
              s.dispatch_error,
              v_mode                                 as dispatch_mode,
              nullif(btrim(s.delivery_address_fixed), '') as direccion_completada,
@@ -332,9 +335,9 @@ $function$;
 do $$
 declare
   f_s  text := 's\.expected_time,\s*s\.customer_note,';
-  f_sn text := 's.expected_time, s.customer_note, s.delivery_address_fixed, s.customer_phone_code, s.delivery_instructions, s.order_customer_note, s.delivery_by_reason,';
+  f_sn text := 's.expected_time, s.customer_note, s.delivery_address_fixed, s.delivery_address_fixed_by, s.customer_phone_code, s.delivery_instructions, s.order_customer_note, s.delivery_by_reason,';
   f_v  text := 'v\.expected_time,\s*v\.customer_note,';
-  f_vn text := 'v.expected_time, v.customer_note, v.delivery_address_fixed, v.customer_phone_code, v.delivery_instructions, v.order_customer_note, v.delivery_by_reason,';
+  f_vn text := 'v.expected_time, v.customer_note, v.delivery_address_fixed, v.delivery_address_fixed_by, v.customer_phone_code, v.delivery_instructions, v.order_customer_note, v.delivery_by_reason,';
   r record; v_def text; c int; v_n int := 0;
 begin
   for r in

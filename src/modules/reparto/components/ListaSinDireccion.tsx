@@ -5,10 +5,17 @@
 // oficina. Diseño para la oficina: una frase por pedido y un solo botón
 // («Completar dirección»). No esconde filas (regla 7): los ya completados
 // siguen, con quién y qué; si no hay ninguno, lo dice.
+// Orden (Julio, 17/10): primero, en rojo y con el teléfono del cliente, los
+// que necesitan a alguien (no han salido a Catcher, o falta decidir quién
+// reparte); después, en gris, los que han salido con el punto del mapa.
 //
 // Sale de public.pedidos_sin_direccion (día de servicio con el corte de 4 h).
 import { useCallback, useEffect, useState } from 'react'
-import { fraseDeLaLista, puedeCompletar, type PedidoSinDireccion } from '../lib/direccionFalta'
+import { Phone } from 'lucide-react'
+import {
+  enlaceTel, fraseDeLaLista, necesitaAAlguien, ordenarLaLista, puedeCompletar, quienEsElPedido, telefonoDelCliente,
+  type PedidoSinDireccion,
+} from '../lib/direccionFalta'
 import { pedidosSinDireccion } from '../services/direccionFaltaService'
 import CompletarDireccion from './CompletarDireccion'
 import '@/modules/conta/estilo/tokens.css'
@@ -53,15 +60,26 @@ export default function ListaSinDireccion({ locationId }: { locationId: string }
       )}
       {pedidos && pedidos.length > 0 && (
         <ul className="mt-2 divide-y divide-[var(--cx-borde)]">
-          {pedidos.map(p => (
-            <li key={p.sale_id} className="py-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3" data-testid="lista-sin-direccion-pedido">
-              <span className="text-[13px] text-text-primary flex-1">{fraseDeLaLista(p)}</span>
-              {(puedeCompletar(p) || recien.has(p.sale_id)) && (
-                <CompletarDireccion saleId={p.sale_id}
-                  onGuardada={() => { setRecien(prev => new Set(prev).add(p.sale_id)); void cargar() }} />
-              )}
-            </li>
-          ))}
+          {ordenarLaLista(pedidos).map(p => {
+            const rojo = necesitaAAlguien(p)
+            const tel = rojo ? telefonoDelCliente(p.customer_phone, p.customer_phone_code) : null
+            return (
+              <li key={p.sale_id} data-testid="lista-sin-direccion-pedido" data-rojo={rojo ? 'si' : 'no'}
+                className={`py-2 px-2 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3 ${rojo ? 'cx-lsd-rojo' : 'cx-lsd-gris'}`}>
+                {/* Recién completada aquí: la línea de «Completar dirección» ya dice quién (sin repetirla). */}
+                <span className="cx-lsd-frase text-[13px] flex-1">{recien.has(p.sale_id) ? quienEsElPedido(p) : fraseDeLaLista(p)}</span>
+                {tel && p.customer_phone && (
+                  <a href={enlaceTel(p.customer_phone)} className="cx-lsd-tel" data-testid="lista-sin-direccion-llamar">
+                    <Phone size={13} /> {tel} · Llamar
+                  </a>
+                )}
+                {(puedeCompletar(p) || recien.has(p.sale_id)) && (
+                  <CompletarDireccion saleId={p.sale_id} riderName={p.rider_name} riderPhone={p.rider_phone}
+                    onGuardada={() => { setRecien(prev => new Set(prev).add(p.sale_id)); void cargar() }} />
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>

@@ -153,6 +153,7 @@ begin
     raise exception 'R03 4b: pegar no ha dado lo esperado: %', j;
   end if;
   if j->>'direccion' <> 'Calle Inventada de Prueba, 1, 4ºB' then raise exception 'R03 4c: no ha limpiado los espacios: %', j->>'direccion'; end if;
+  if coalesce(j->>'por', '') not like 'tablet · %' then raise exception 'R03 4e: no dice quién la ha escrito: %', j->>'por'; end if;
   j := public.pedidos_sin_direccion(null, 'r03-prueba-norte-centro');
   if exists (select 1 from jsonb_array_elements(j->'pedidos') p where p->>'code' = 'GR301') then
     raise exception 'R03 4d: con la dirección pegada, GR301 sigue en el aviso.';

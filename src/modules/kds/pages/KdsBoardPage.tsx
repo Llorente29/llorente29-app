@@ -66,9 +66,9 @@ export default function KdsBoardPage() {
   return (
     <div className="space-y-3">
       {/* Alarma de reparto (sesión): banner+sonido global, fijo sobre el Shell. */}
-      <KdsAlarmOverlay locationId={resolvedLocationId} token={null} variant="inline" />
-      <AvisoDireccionFalta locationId={resolvedLocationId} token={null} variant="inline" />
-      <AvailabilityNoticeOverlay locationId={resolvedLocationId} token={null} variant="inline" />
+      <KdsAlarmOverlay locationId={resolvedLocationId} token={null} />
+      <AvisoDireccionFalta locationId={resolvedLocationId} token={null} />
+      <AvailabilityNoticeOverlay locationId={resolvedLocationId} token={null} />
 
       {/* Filtro manual de estación (sesión) */}
       {stations.length > 0 && (

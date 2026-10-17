@@ -8,19 +8,20 @@
 // escenario, de supabase/seeds/reparto/seed_r02_e2e.sql (parte R03), inventado:
 //   R03A · con dirección (piso y puerta)        → ticket con ENTREGA
 //   R03N · con dirección, indicaciones y nota   → ticket con el recuadro de notas
-//   R03B · sin calle, con punto                 → línea informativa; la oficina la completa
-//   R03C · sin calle ni punto, no ha salido     → aviso rojo con el motivo; ticket «SIN DIRECCIÓN»
-//   R03D · sin calle, con punto                 → en la tablet, solo la línea, sin botón
-//   R03E · sin calle, con punto                 → en la lista de Despacho, sin completar
+//   R03B · sin calle, con punto, ha salido      → línea informativa; la oficina la completa (una línea)
+//   R03C · sin calle ni punto, no ha salido     → aviso rojo con el motivo y el teléfono; ticket «SIN DIRECCIÓN»
+//   R03D · sin calle, con punto, ha salido      → en la tablet, solo la línea, sin botón; el aviso no tapa «Listo»
+//   R03E · sin calle, con punto, ha salido      → en la lista de Despacho, en gris, sin completar
 //   R03U · Uber con dirección y código          → tarjeta y ticket con «Tel. … · código …»
 //   R03V · Uber sin calle, punto ni cargo       → la reparte Uber, fuera de zona: ni aviso ni Catcher
 //   7B000 · Uber sin calle, punto ni cargo (R02) → lo mismo, por la regla
 //   R03T · Uber con las tres, tabla en «Plataforma» → propio (la regla por pedido manda)
 //   R03M · Uber mezclado                        → aviso «Decide quién reparte»; se decide «Uber»
 // Sin espera: un pedido sin dirección completa sale a Catcher al momento. Los
-// locales de prueba despachan a mano (en automático, el disparador llamaría a
-// la función de producción), así que aquí la línea dice «despáchalo»; el
-// «salió a Catcher» está en la prueba unitaria y que pueda salir ya, en
+// locales, en automático, que es el caso real (Julio, 17/10): la semilla los
+// pasa a «auto» al final y deja R03B, R03D y R03E como los deja catcher-dispatch
+// al salir (con un pedido de Catcher inventado). Que un pedido sin calle con
+// punto pueda salir ya lo prueba
 // supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql.
 // Capturas y fotos de los tickets en docs/reparto/capturas/r03/.
 
@@ -32,7 +33,21 @@ const NORTE_CENTRO = 'c01a0000-0000-4000-8000-0000000000a2'
 const TOKEN_CENTRO = 'r03-e2e-norte-centro'
 const TOKEN_MERCADO = 'r03-e2e-norte-mercado'
 const R03B = 'e0300000-0000-4000-8000-0000000000a2'
-const MOTIVO_R03C = 'la dirección no ha llegado y tampoco el punto del mapa: no se puede despachar'
+const MOTIVO_R03C = 'La dirección no ha llegado y tampoco el punto del mapa: no se puede despachar'
+const HA_SALIDO = 'Ha salido a Catcher con el punto del mapa · el repartidor llamará al cliente'
+const NO_HA_SALIDO = 'No ha salido a Catcher · llama al cliente y completa la dirección'
+
+/** ¿Lo que hay en el centro del elemento es él mismo (o algo suyo)? Si no, algo lo tapa. */
+async function seVeEntero(page: Page, sel: ReturnType<Page['locator']>) {
+  await sel.scrollIntoViewIfNeeded()
+  const caja = await sel.boundingBox()
+  if (!caja) return false
+  const handle = await sel.elementHandle()
+  return page.evaluate(([el, x, y]) => {
+    const arriba = document.elementFromPoint(x as number, y as number)
+    return !!arriba && (el as Element).contains(arriba)
+  }, [handle, caja.x + caja.width / 2, caja.y + caja.height / 2] as const)
+}
 
 async function rpcAnon(fn: string, args: Record<string, unknown>) {
   const r = await fetch(`${STAGING_URL}/rest/v1/rpc/${fn}`, {
@@ -76,18 +91,20 @@ async function cerrarTicket(page: Page) {
   await expect(page.getByTestId('ticket-bolsa-impreso')).toHaveCount(0)
 }
 
-test('ordenador: sin dirección completa, una línea que informa y «Completar dirección» (R03B)', async ({ page }, info) => {
+test('ordenador: sin dirección completa, ha salido a Catcher: una línea que informa y «Completar dirección» (R03B)', async ({ page }, info) => {
   const movil = info.project.name === 'movil'
   await abrirPedidos(page)
-  const b = tarjeta(page, 'R03B')
-  // Una línea informativa, sin franja roja ni casilla para pegar, y el punto del mapa.
-  await expect(b.getByTestId('aviso-sin-direccion-texto'))
-    .toHaveText('Sin dirección completa · este local despacha a mano: despáchalo y el repartidor llamará al cliente')
+  // El móvil corre después del ordenador, con el R03B ya completado: mira el R03E (igual, sin completar).
+  const b = tarjeta(page, movil ? 'R03E' : 'R03B')
+  // Una línea informativa, en automático: ha salido con el punto del mapa.
+  await expect(b.getByTestId('aviso-sin-direccion-texto')).toHaveText(HA_SALIDO)
+  await expect(b.getByTestId('aviso-sin-direccion')).toHaveAttribute('data-salido', 'si')
+  await expect(b.getByTestId('aviso-sin-direccion-llamar')).toHaveCount(0)
   await expect(b.getByRole('link', { name: 'Ver el punto del mapa' })).toBeVisible()
-  await expect(noHaSalido(page, 'R03B')).toHaveCount(0)
+  await expect(noHaSalido(page, movil ? 'R03E' : 'R03B')).toHaveCount(0)
   await expect(page.getByTestId('aviso-direccion-casilla')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Mandar a Catcher' })).toHaveCount(0)
-  await expect(page.getByText(/no la ha mandado|Falta la dirección de este pedido/)).toHaveCount(0)
+  await expect(page.getByText(/no la ha mandado|Falta la dirección de este pedido|despacha a mano/)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await b.screenshot({ path: `${DIR}/tarjeta-sin-direccion${movil ? '-movil' : ''}.png` })
   if (movil) return // escribe una vez
@@ -95,33 +112,51 @@ test('ordenador: sin dirección completa, una línea que informa y «Completar d
   await b.getByRole('button', { name: 'Completar dirección' }).click()
   await b.getByTestId('completar-direccion-casilla').fill('Calle Pegada de Prueba, 2, Piso 3, Puerta A, Portal B')
   await b.getByRole('button', { name: 'Guardar' }).click()
-  await expect(b.getByTestId('completar-direccion-resultado'))
-    .toHaveText('Guardada: «Calle Pegada de Prueba, 2, Piso 3, Puerta A, Portal B». Este local despacha a mano: pulsa «Despachar» en el pedido y sale con ella. Reimprime el ticket de la bolsa para que la lleve.')
-  await expect(b.getByTestId('direccion-completada')).toContainText('Calle Pegada de Prueba, 2, Piso 3, Puerta A, Portal B')
+  // UNA línea: quién y el ticket reimpreso (hay impresora de bolsa en Norte
+  // Centro), «Reimprimir» y el repartidor con «Llamar». Sin bloque que repita la dirección.
+  const hecho = b.getByTestId('completar-direccion-resultado')
+  await expect(hecho).toContainText(/Dirección completada por .+ · ticket reimpreso/)
+  await expect(hecho.getByRole('button', { name: 'Reimprimir' })).toBeVisible()
+  await expect(hecho.getByTestId('completar-direccion-llamar')).toHaveText('Repartidor de Prueba · Llamar')
+  await expect(hecho.getByTestId('completar-direccion-llamar')).toHaveAttribute('href', 'tel:+34600000090')
+  await expect(b.getByTestId('completar-direccion-nota')).toHaveCount(0)
+  await expect(b.getByTestId('aviso-sin-direccion')).not.toContainText('Calle Pegada de Prueba')
+  await expect(b.getByTestId('aviso-sin-direccion-texto')).toHaveCount(0)
   await b.screenshot({ path: `${DIR}/tarjeta-completada.png` })
 
-  // El ticket de la bolsa se reimprime con ella, con el piso, la puerta y el portal aparte.
+  // Al volver a cargar, la misma línea (sin «ticket reimpreso»: eso fue al guardar).
   await page.reload()
+  await expect(tarjeta(page, 'R03B').getByTestId('completar-direccion-resultado')).toContainText(/Dirección completada por \S/)
+  // El ticket de la bolsa, con ella, con el piso, la puerta y el portal aparte.
   const t = await fotoDelTicket(page, 'R03B', 'ticket-sin-calle-completada.png')
   await expect(t).toContainText('ENTREGA')
   await expect(t).toContainText('Calle Pegada de Prueba, 2')
   await expect(t).toContainText('Piso 3, Puerta A, Portal B')
 })
 
-test('ordenador: si no ha podido salir a Catcher (R03C), aviso rojo con el motivo', async ({ page }, info) => {
+test('ordenador: si no ha podido salir a Catcher (R03C), aviso rojo con el motivo y el teléfono del cliente', async ({ page }, info) => {
   const movil = info.project.name === 'movil'
   await abrirPedidos(page)
   const c = noHaSalido(page, 'R03C')
   await expect(c.getByRole('heading', { name: 'Este pedido no ha salido a Catcher' })).toBeVisible()
   await expect(c.getByTestId('aviso-motivo')).toHaveText(MOTIVO_R03C)
+  await expect(c).toContainText('Llama al cliente y completa la dirección.')
+  await expect(c.getByTestId('aviso-llamar-cliente')).toHaveText('Tel. +34600000003 · Llamar')
+  await expect(c.getByTestId('aviso-llamar-cliente')).toHaveAttribute('href', 'tel:+34600000003')
+  await expect(c.getByRole('button', { name: 'Completar dirección' })).toBeVisible()
+  await expect(c).not.toContainText(/a mano|Despach/)
   const fondo = await page.getByTestId('aviso-direccion-falta').locator('> div').evaluate(el => getComputedStyle(el).backgroundColor)
   expect(fondo).toBe('rgb(198, 40, 40)')
-  await expect(tarjeta(page, 'R03C').getByTestId('aviso-sin-direccion-texto'))
-    .toHaveText(`Sin dirección completa · no ha salido a Catcher: ${MOTIVO_R03C}`)
-  // Los que sí pueden salir no avisan en rojo.
+  // En la tarjeta: en rojo, qué hacer, y el teléfono con «Llamar».
+  const tc = tarjeta(page, 'R03C')
+  await expect(tc.getByTestId('aviso-sin-direccion-texto')).toHaveText(NO_HA_SALIDO)
+  await expect(tc.getByTestId('aviso-sin-direccion')).toHaveAttribute('data-salido', 'no')
+  await expect(tc.getByTestId('aviso-sin-direccion-llamar')).toHaveText('Tel. +34600000003 · Llamar')
+  // Los que sí han salido no avisan en rojo.
   for (const codigo of ['R03A', 'R03B', 'R03E', 'R03U', 'R03V', 'R03T']) await expect(noHaSalido(page, codigo)).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await c.screenshot({ path: `${DIR}/aviso-no-ha-salido${movil ? '-movil' : ''}.png` })
+  if (!movil) await tc.screenshot({ path: `${DIR}/tarjeta-no-ha-salido.png` })
 })
 
 test('ordenador: el ticket de la bolsa en cuatro casos (con dirección, con nota, sin dirección y Uber con código)', async ({ page }, info) => {
@@ -155,7 +190,9 @@ test('ordenador: el ticket de la bolsa en cuatro casos (con dirección, con nota
   await tarjeta(page, 'R03U').screenshot({ path: `${DIR}/tarjeta-uber-codigo.png` })
   t = await fotoDelTicket(page, 'R03U', 'ticket-uber-codigo.png')
   await expect(t).toContainText('Tel. +34900000000 · código 12345678')
-  await expect(t).toContainText('Unit: 3C')
+  await expect(t).toContainText('Piso/Puerta: 3C')
+  await expect(t).not.toContainText('Unit')
+  await expect(t).not.toContainText('Spain')
   await expect(t).toContainText('Indicaciones: Timbre 3C')
   await expect(t).toContainText('Nota del cliente: Sin cebolla')
 })
@@ -169,7 +206,7 @@ test('ordenador: Uber con las tres señales (R03T) → lo repartimos nosotros, a
   await tt.screenshot({ path: `${DIR}/tarjeta-uber-tres-senales.png` })
   const t = await fotoDelTicket(page, 'R03T', 'ticket-uber-tres-senales.png')
   await expect(t).toContainText('ENTREGA')
-  await expect(t).toContainText('Unit: 1A')
+  await expect(t).toContainText('Piso/Puerta: 1A')
 })
 
 test('ordenador: Uber mezclado (R03M) → «Decide quién reparte»; se decide «Lo reparte Uber»', async ({ page }, info) => {
@@ -217,17 +254,25 @@ test('ordenador: Uber sin calle, punto ni cargo (R03V y el 7B000) → la reparte
   expect(codigos).not.toContain('7B000')
 })
 
-test('tablet: la misma línea, sin acciones para la cocina, y el aviso rojo de lo que no ha salido', async ({ page }, info) => {
+test('tablet: la misma línea, sin acciones en la tarjeta; el aviso rojo, encima de los pedidos y sin tapar «Listo»', async ({ page }, info) => {
   const movil = info.project.name === 'movil'
   if (!movil) await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto(`/estacion?token=${TOKEN_CENTRO}`)
   const d = tarjeta(page, 'R03D')
-  await expect(d.getByTestId('aviso-sin-direccion-texto'))
-    .toHaveText('Sin dirección completa · este local despacha a mano: despáchalo y el repartidor llamará al cliente')
+  await expect(d.getByTestId('aviso-sin-direccion-texto')).toHaveText(HA_SALIDO)
   await expect(d.getByRole('link', { name: 'Ver el punto del mapa' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Completar dirección' })).toHaveCount(0)
+  await expect(d.getByRole('button', { name: 'Completar dirección' })).toHaveCount(0)
   await expect(page.getByTestId('aviso-direccion-casilla')).toHaveCount(0)
-  await expect(noHaSalido(page, 'R03C').getByTestId('aviso-motivo')).toHaveText(MOTIVO_R03C)
+  const c = noHaSalido(page, 'R03C')
+  await expect(c.getByTestId('aviso-motivo')).toHaveText(MOTIVO_R03C)
+  await expect(c.getByTestId('aviso-llamar-cliente')).toHaveText('Tel. +34600000003 · Llamar')
+  // El aviso va en su sitio, no flotando: el «Listo» de las tarjetas se ve y se puede pulsar.
+  const aviso = page.getByTestId('aviso-direccion-falta')
+  expect(await aviso.evaluate(el => getComputedStyle(el).position)).not.toBe('fixed')
+  const listo = d.getByRole('button', { name: 'Listo' })
+  await expect(listo).toBeVisible()
+  expect(await seVeEntero(page, listo)).toBe(true)
+  await page.evaluate(() => window.scrollTo(0, 0))
   await page.evaluate(() => document.fonts.ready)
   await d.screenshot({ path: `${DIR}/tarjeta-tablet${movil ? '-movil' : ''}.png` })
   await page.screenshot({ path: `${DIR}/tablet${movil ? '-movil' : ''}.png`, fullPage: false })
@@ -241,12 +286,21 @@ test('Despacho: la lista «Sin dirección completa» de hoy, una frase por pedid
   const lista = page.getByTestId('lista-sin-direccion')
   await expect(lista).toBeVisible()
   const fila = (codigo: string) => lista.getByTestId('lista-sin-direccion-pedido').filter({ hasText: `${codigo} ·` })
-  // La completada sigue (con quién y qué); la que no, con su botón; la que no ha salido, con el motivo.
-  await expect(fila('R03B')).toContainText(/completada por .+: Calle Pegada de Prueba, 2, Piso 3, Puerta A, Portal B/)
+  // Primero, en rojo y con el teléfono, lo que no ha salido; después, en gris,
+  // lo que ha salido y lo completado (con quién y qué). La lista no esconde filas.
+  await expect(fila('R03C')).toContainText(`R03C · Burger Norte · Glovo — ${NO_HA_SALIDO}`)
+  await expect(fila('R03C')).toHaveAttribute('data-rojo', 'si')
+  await expect(fila('R03C').getByTestId('lista-sin-direccion-llamar')).toHaveText('Tel. +34600000003 · Llamar')
+  await expect(fila('R03C').getByRole('button', { name: 'Completar dirección' })).toBeVisible()
+  await expect(fila('R03B')).toContainText(/Dirección completada por .+: Calle Pegada de Prueba, 2, Piso 3, Puerta A, Portal B/)
+  await expect(fila('R03B')).toHaveAttribute('data-rojo', 'no')
   await expect(fila('R03B').getByRole('button', { name: 'Completar dirección' })).toHaveCount(0)
-  await expect(fila('R03E')).toContainText('R03E · Burger Norte · Glovo — este local despacha a mano')
+  await expect(fila('R03E')).toContainText(`R03E · Burger Norte · Glovo — ${HA_SALIDO}`)
+  await expect(fila('R03E')).toHaveAttribute('data-rojo', 'no')
+  await expect(fila('R03E').getByTestId('lista-sin-direccion-llamar')).toHaveCount(0)
   await expect(fila('R03E').getByRole('button', { name: 'Completar dirección' })).toBeVisible()
-  await expect(fila('R03C')).toContainText(`no ha salido a Catcher: ${MOTIVO_R03C}`)
+  const rojos = await lista.getByTestId('lista-sin-direccion-pedido').evaluateAll(els => els.map(e => e.getAttribute('data-rojo')))
+  expect(rojos.indexOf('no')).toBeGreaterThan(rojos.lastIndexOf('si'))
   // Los que reparte Uber no son «sin dirección completa».
   await expect(fila('R03V')).toHaveCount(0)
   await expect(fila('7B000')).toHaveCount(0)

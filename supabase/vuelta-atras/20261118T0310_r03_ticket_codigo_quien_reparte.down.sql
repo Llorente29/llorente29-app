@@ -24,9 +24,9 @@ drop function if exists public.despachar_sin_calle_vencidos();
 
 do $$
 declare
-  f_s  text := 's\.expected_time, s\.customer_note, s\.delivery_address_fixed, s\.customer_phone_code, s\.delivery_instructions, s\.order_customer_note, s\.delivery_by_reason,';
+  f_s  text := 's\.expected_time, s\.customer_note, s\.delivery_address_fixed,( s\.delivery_address_fixed_by,)? s\.customer_phone_code, s\.delivery_instructions, s\.order_customer_note, s\.delivery_by_reason,';
   f_sn text := 's.expected_time, s.customer_note,';
-  f_v  text := 'v\.expected_time, v\.customer_note, v\.delivery_address_fixed, v\.customer_phone_code, v\.delivery_instructions, v\.order_customer_note, v\.delivery_by_reason,';
+  f_v  text := 'v\.expected_time, v\.customer_note, v\.delivery_address_fixed,( v\.delivery_address_fixed_by,)? v\.customer_phone_code, v\.delivery_instructions, v\.order_customer_note, v\.delivery_by_reason,';
   f_vn text := 'v.expected_time, v.customer_note,';
   r record; v_def text; c int;
 begin

@@ -135,12 +135,13 @@ export default function KdsKioskRoute() {
           <LogOut size={14} /> Desvincular
         </button>
       </header>
+      {/* R03: en su sitio, encima del tablero (flotando tapaba las comandas). */}
+      <AvisoDireccionFalta locationId={null} token={token} />
       <div className="flex-1 min-h-0">
         <KdsBoard locationId={null} token={token} />
       </div>
       {/* Alarma de reparto: banner+sonido global, sobre el tablero. */}
       <KdsAlarmOverlay locationId={null} token={token} />
-      <AvisoDireccionFalta locationId={null} token={token} />
       {/* Aviso multi-integrador: recuerda desconectar en Last/Otter tras un 86. */}
       <AvailabilityNoticeOverlay locationId={null} token={token} />
     </div>

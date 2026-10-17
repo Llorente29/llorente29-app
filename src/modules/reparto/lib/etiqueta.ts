@@ -91,7 +91,7 @@ export function etiquetaDeReparto(p: PedidoParaEtiqueta): Etiqueta | null {
   return {
     tono: 'ambar',
     texto: 'Nosotros · aún sin rider',
-    detalle: p.dispatch_error ? 'no ha salido: ' + p.dispatch_error.replace(/^No se (despachó|pudo enviar a Catcher):\s*/i, '') : null,
+    detalle: p.dispatch_error ? 'No ha salido: ' + p.dispatch_error.replace(/^No se (despachó|pudo enviar a Catcher):\s*/i, '') : null,
     acciones,
   }
 }

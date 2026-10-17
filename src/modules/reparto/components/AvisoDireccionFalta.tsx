@@ -12,15 +12,19 @@
 //
 // Sale de public.pedidos_sin_direccion (no_ha_salido, decidir). Se monta
 // junto a KdsAlarmOverlay en las cuatro pantallas (tablet, cocina-tv, Pedidos
-// y Cocina del ordenador). En la tablet va abajo y la de reparto arriba.
+// y Cocina del ordenador). Va EN SU SITIO, encima de los pedidos, nunca
+// flotando: flotando abajo tapaba el «Listo» de las tarjetas (Julio, 17/10).
+// El aviso dice qué hacer: llamar al cliente (su teléfono, con «Llamar») y
+// completar la dirección; nada de despachar a mano.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Phone } from 'lucide-react'
 import { runPollingLoop, type RetryLoopHandle } from '@/lib/retryBackoff'
 import { playAlarmSound } from '@/modules/kds/kdsUtils'
 import {
-  DECIDIDO_UBER, nombreDelPortal, siguientePaso, type PedidoSinDireccion,
+  DECIDIDO_UBER, enlaceTel, motivoDelFallo, nombreDelPortal, siguientePaso, telefonoDelCliente, type PedidoSinDireccion,
 } from '../lib/direccionFalta'
 import { decidirQuienReparte, mandarACatcher, pedidosSinDireccion } from '../services/direccionFaltaService'
+import CompletarDireccion from './CompletarDireccion'
 
 const POLL_MS = 10_000
 const IDLE_MS = 60_000
@@ -32,13 +36,11 @@ export interface AvisoDireccionFaltaProps {
   /** Local (sesión). En la tablet va null: la base lo saca del token. */
   locationId: string | null
   token?: string | null
-  /** 'fixed' (tablet y cocina-tv, flota abajo) | 'inline' (ordenador, bajo el menú). */
-  variant?: 'fixed' | 'inline'
 }
 
 interface Resultado { texto: string; error: boolean; hasta: number; pedido: PedidoSinDireccion }
 
-export default function AvisoDireccionFalta({ locationId, token = null, variant = 'fixed' }: AvisoDireccionFaltaProps) {
+export default function AvisoDireccionFalta({ locationId, token = null }: AvisoDireccionFaltaProps) {
   const [pedidos, setPedidos] = useState<PedidoSinDireccion[]>([])
   const [enviando, setEnviando] = useState<string | null>(null)
   const [resultados, setResultados] = useState<Record<string, Resultado>>({})
@@ -80,11 +82,14 @@ export default function AvisoDireccionFalta({ locationId, token = null, variant 
     return () => window.clearInterval(id)
   }, [resultados])
 
+  // Lo hecho se queda un rato a la vista aunque el pedido ya no esté en la lista (regla 8).
+  const anotar = (p: PedidoSinDireccion, t: string, error: boolean) =>
+    setResultados(prev => ({ ...prev, [p.sale_id]: { texto: t, error, hasta: Date.now() + RESULTADO_MS, pedido: p } }))
+
   async function decidir(p: PedidoSinDireccion, quien: 'nosotros' | 'uber') {
     if (enviando) return
     setEnviando(p.sale_id)
-    const poner = (t: string, error: boolean) =>
-      setResultados(prev => ({ ...prev, [p.sale_id]: { texto: t, error, hasta: Date.now() + RESULTADO_MS, pedido: p } }))
+    const poner = (t: string, error: boolean) => anotar(p, t, error)
     try {
       const r = await decidirQuienReparte(p.sale_id, quien, token)
       if (quien === 'uber') {
@@ -95,10 +100,10 @@ export default function AvisoDireccionFalta({ locationId, token = null, variant 
             await mandarACatcher(p.sale_id)
             poner('Hecho: lo repartimos nosotros. Mandado a Catcher.', false)
           } catch (e) {
-            poner(`Lo repartimos nosotros. ${e instanceof Error ? e.message : 'Catcher no lo ha cogido.'} Despáchalo a mano desde el pedido.`, true)
+            poner(`Lo repartimos nosotros, pero no ha salido a Catcher: ${e instanceof Error ? e.message : 'Catcher no lo ha cogido'}.`, true)
           }
         } else if (r.dispatch_mode && r.dispatch_mode !== 'auto') {
-          poner('Hecho: lo repartimos nosotros. Este local despacha a mano: pulsa «Despachar» en el pedido.', false)
+          poner('Hecho: lo repartimos nosotros.', false)
         } else {
           poner(`Hecho: lo repartimos nosotros, pero no sale: ${r.reason ?? 'sin motivo'}.`, true)
         }
@@ -114,13 +119,9 @@ export default function AvisoDireccionFalta({ locationId, token = null, variant 
   const resueltos = Object.values(resultados).filter(r => !pedidos.some(p => p.sale_id === r.pedido.sale_id))
   if (pedidos.length === 0 && resueltos.length === 0) return null
 
-  const wrapper = variant === 'inline'
-    ? 'relative z-30 px-2 sm:px-3 pt-2 sm:pt-3'
-    : 'fixed bottom-0 inset-x-0 z-[61] p-2 sm:p-3'
-
   return (
-    <div className={wrapper} data-testid="aviso-direccion-falta">
-      <div className="mx-auto max-w-4xl max-h-[70vh] overflow-y-auto rounded-2xl bg-[#C62828] text-white shadow-[0_10px_40px_rgba(198,40,40,0.5)] ring-2 ring-white/30">
+    <div className="relative z-30 shrink-0 px-2 sm:px-3 pt-2 sm:pt-3" data-testid="aviso-direccion-falta">
+      <div className="mx-auto max-w-4xl max-h-[45vh] overflow-y-auto rounded-2xl bg-[#C62828] text-white shadow-[0_10px_40px_rgba(198,40,40,0.5)] ring-2 ring-white/30">
         {pedidos.map(p => {
           const r = resultados[p.sale_id]
           const quien = <p className="mt-2 text-[17px] leading-snug"><b>{p.code}</b>{p.brand ? ` · ${p.brand}` : ''} · {nombreDelPortal(p.channel)}</p>
@@ -156,12 +157,20 @@ export default function AvisoDireccionFalta({ locationId, token = null, variant 
                 <AlertTriangle size={26} className="shrink-0" /> Este pedido no ha salido a Catcher
               </h2>
               {quien}
-              <p className="mt-1 text-[17px] font-bold" data-testid="aviso-motivo">
-                {(p.dispatch_error ?? '').replace(/^No se (despachó|pudo enviar a Catcher):\s*/i, '')}
-              </p>
-              <p className="mt-1 text-[16px] leading-snug">
-                Llega sin dirección completa. Despáchalo a mano desde el pedido; si hace falta, que la oficina complete la dirección.
-              </p>
+              <p className="mt-1 text-[17px] font-bold" data-testid="aviso-motivo">{motivoDelFallo(p.dispatch_error)}</p>
+              <p className="mt-1 text-[16px] leading-snug">Llama al cliente y completa la dirección.</p>
+              <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                {p.customer_phone && (
+                  <a href={enlaceTel(p.customer_phone)} data-testid="aviso-llamar-cliente"
+                    className="h-12 px-5 rounded-xl bg-white text-[#C62828] text-[18px] font-extrabold inline-flex items-center gap-2 no-underline">
+                    <Phone size={18} /> {telefonoDelCliente(p.customer_phone, p.customer_phone_code)} · Llamar
+                  </a>
+                )}
+                <div className="rounded-xl bg-white p-2">
+                  <CompletarDireccion saleId={p.sale_id} token={token} riderName={p.rider_name} riderPhone={p.rider_phone}
+                    onGuardada={(resumen, fallo) => { anotar(p, resumen, fallo); pollRef.current?.wake() }} />
+                </div>
+              </div>
             </section>
           )
         })}

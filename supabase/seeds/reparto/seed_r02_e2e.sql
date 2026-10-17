@@ -17,9 +17,22 @@
 --     segundo ámbar del local, y esa semilla se metió UNA vez, con la hora de
 --     aquel momento. A las 7 horas el feed ya no lo enseña (e2e 37202533508,
 --     04/10: «Uber no la ha mandado» no encontrado, en ordenador y móvil).
--- Inventado, sin datos de cliente. Locales en dispatch_mode 'manual': ningún
--- disparador llama a Catcher.
+-- Inventado, sin datos de cliente.
+--
+-- LOS LOCALES, EN AUTOMÁTICO, que es el caso real (Julio, 17/10: todos los de
+-- producción están en dispatch_mode 'auto'). Pero tg_auto_dispatch lleva
+-- escrita la dirección de catcher-dispatch de PRODUCCIÓN, y salta al crear un
+-- pedido propio «aceptado» o al pasarlo a «aceptado». Por eso la semilla mete
+-- los pedidos con los locales en 'manual' (el disparador no sale) y los pasa a
+-- 'auto' AL FINAL, cuando ya no inserta nada. Las pruebas de reparto no crean
+-- pedidos ni los pasan a «aceptado». Y si alguno saltara, staging no tiene el
+-- secreto catcher_dispatch_secret: producción contesta 401 sin leer ni
+-- escribir nada (catcher-dispatch, «secreto interno inválido»).
 -- ============================================================================
+update public.locations set dispatch_mode = 'manual'
+ where id in ('c01a0000-0000-4000-8000-0000000000a2', 'e0200000-0000-4000-8000-0000000000a3')
+   and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
 select set_config('folvy.reparto_tal_cual', 'on', true);
 
 insert into public.sale
@@ -72,11 +85,12 @@ delete from public.delivery_policy_suggestion where account_id = 'c01a0000-0000-
 -- de la semilla sigue igual.
 --   R03A · con dirección              → ticket con el bloque ENTREGA
 --   R03N · con dirección, indicaciones y nota → ticket con el recuadro de notas
---   R03B · sin calle, con punto       → línea «Sin dirección completa»; la completa el ordenador
---   R03C · sin calle ni punto         → no ha podido salir: aviso rojo con el motivo
---   R03D · sin calle, con punto       → la tablet: solo la línea informativa, sin botón
---   R03E · sin calle, con punto       → en la lista de Despacho, sin completar
--- (Locales de staging en «manual»: no sale nada a Catcher de verdad. El motivo
+--   R03B · sin calle, con punto       → ha salido a Catcher, con repartidor; la completa el ordenador
+--   R03C · sin calle ni punto         → no ha podido salir: aviso rojo con el motivo y el teléfono
+--   R03D · sin calle, con punto       → la tablet: ha salido, solo la línea informativa, sin botón
+--   R03E · sin calle, con punto       → en la lista de Despacho, ha salido, sin completar
+-- (Nada sale a Catcher de verdad: «ha salido» es el estado que deja
+-- catcher-dispatch, puesto a mano con un pedido de Catcher inventado. El motivo
 -- del R03C es el de resolve_dispatch en un local automático.)
 --   R03V · Uber sin calle, sin punto, sin cargo → la reparte Uber, fuera de
 --          zona: ni aviso ni Catcher; ticket como el de la plataforma
@@ -145,11 +159,23 @@ begin
         service_type = 'own_delivery', delivery_address = excluded.delivery_address, raw_tab = excluded.raw_tab,
         brand_id = excluded.brand_id, channel_id = excluded.channel_id, carrier_code = null, carrier_order_id = null, delivery_state = null, dispatch_error = null,
         delivery_address_fixed = null, delivery_address_fixed_at = null, delivery_address_fixed_by = null,
-        delivery_address_origin = null, customer_phone = excluded.customer_phone, updated_at = now();
+        delivery_address_origin = null, customer_phone = excluded.customer_phone, rider_name = null, rider_phone = null,
+        updated_at = now();
 
   update public.sale
      set dispatch_error = 'No se despachó: la dirección no ha llegado y tampoco el punto del mapa: no se puede despachar'
    where id = 'e0300000-0000-4000-8000-0000000000a3' and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
+  -- Los que tienen el punto del mapa han salido a Catcher (lo que hace
+  -- catcher-dispatch en un local automático). Pedidos de Catcher inventados; el
+  -- R03B ya con repartidor (inventado) para «Llamar».
+  update public.sale
+     set carrier_code = 'catcher', carrier_order_id = 'R03-PRUEBA-' || pos_short_code, delivery_state = 'assigned',
+         rider_name = case when pos_short_code = 'R03B' then 'Repartidor de Prueba' end,
+         rider_phone = case when pos_short_code = 'R03B' then '+34600000090' end
+   where id in ('e0300000-0000-4000-8000-0000000000a2', 'e0300000-0000-4000-8000-0000000000a4',
+                'e0300000-0000-4000-8000-0000000000a5')
+     and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
   perform set_config('folvy.reparto_tal_cual', '', true);
 
@@ -179,6 +205,11 @@ begin
      'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
      29.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 7', 'Uber Eats', 'R03M', 'R03M',
      '{"channel":"Uber Eats","service_type":"delivery","customer":{"address_1":"Calle Inventada de Prueba 7","latitude":"40.4160","longitude":"-3.6920"}}', '+34900000003');
+
+  -- Los locales, en automático (ver la cabecera): ya no se inserta nada.
+  update public.locations set dispatch_mode = 'auto'
+   where id in ('c01a0000-0000-4000-8000-0000000000a2', 'e0200000-0000-4000-8000-0000000000a3')
+     and account_id = 'c01a0000-0000-4000-8000-00000000000a';
 
   -- El modo de despacho del pedido, el de su local, como en producción (allí
   -- coinciden siempre: 135 de 135 propios de Foodint en 7 días). La tarjeta lo

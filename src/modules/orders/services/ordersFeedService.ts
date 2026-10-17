@@ -100,6 +100,8 @@ export interface OrderFeedItem {
   customer_note: string | null
   /** R03: la dirección que pegó la cocina (manda sobre delivery_address). */
   delivery_address_fixed?: string | null
+  /** Quién la completó («Completar dirección»): un nombre de la plantilla o «tablet · …». */
+  delivery_address_fixed_by?: string | null
   /** R03: código de acceso del teléfono (Uber: la centralita no conecta sin él). */
   customer_phone_code?: string | null
   /** R03: indicaciones de entrega para el repartidor. */

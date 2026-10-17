@@ -17,9 +17,9 @@ describe('partirDireccion', () => {
     expect(partirDireccion('Calle Inventada, 3, Bldg.: Torre Prueba, Floor: 2, 28000').detalles)
       .toBe('Bldg.: Torre Prueba, Piso: 2')
   })
-  it('Uber: «Unit» es el piso', () => {
+  it('Uber: «Unit» es «Piso/Puerta», y fuera el «Spain» (Julio, 17/10)', () => {
     expect(partirDireccion('Calle Inventada 46, 28000 Madrid, Spain, Unit: 1C, 28000'))
-      .toEqual({ calle: 'Calle Inventada 46, 28000 Madrid, Spain, 28000', detalles: 'Unit: 1C' })
+      .toEqual({ calle: 'Calle Inventada 46, 28000 Madrid, 28000', detalles: 'Piso/Puerta: 1C' })
   })
   it('Glovo sin calle: solo detalles', () => {
     expect(partirDireccion('Floor: 4, Door: A, 28000')).toEqual({ calle: '28000', detalles: 'Piso: 4, Puerta: A' })

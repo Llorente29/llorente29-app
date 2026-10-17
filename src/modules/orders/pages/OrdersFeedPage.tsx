@@ -32,9 +32,9 @@ export default function OrdersFeedPage() {
     <>
       {/* Alarma de reparto (banner+sonido): el equipo trabaja desde Pedidos, aquí
           es donde tiene que gritar. Misma superficie que Cocina (kds_alarms). */}
-      <KdsAlarmOverlay locationId={resolvedLocationId} token={null} variant="inline" />
-      <AvisoDireccionFalta locationId={resolvedLocationId} token={null} variant="inline" />
-      <AvailabilityNoticeOverlay locationId={resolvedLocationId} token={null} variant="inline" />
+      <KdsAlarmOverlay locationId={resolvedLocationId} token={null} />
+      <AvisoDireccionFalta locationId={resolvedLocationId} token={null} />
+      <AvailabilityNoticeOverlay locationId={resolvedLocationId} token={null} />
       <OrdersFeed locationId={resolvedLocationId} accountId={activeAccountId} />
     </>
   )

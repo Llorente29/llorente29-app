@@ -29,7 +29,7 @@ describe('la etiqueta de reparto', () => {
   })
   it('propio con dirección que no ha salido: ámbar con «Despachar» (y sin él en modo off)', () => {
     expect(etiquetaDeReparto({ ...base, dispatch_error: 'No se pudo enviar a Catcher: 500' }))
-      .toMatchObject({ tono: 'ambar', texto: 'Nosotros · aún sin rider', detalle: 'no ha salido: 500', acciones: ['despachar'] })
+      .toMatchObject({ tono: 'ambar', texto: 'Nosotros · aún sin rider', detalle: 'No ha salido: 500', acciones: ['despachar'] })
     expect(etiquetaDeReparto({ ...base, dispatch_mode: 'off' })?.acciones).toEqual([])
   })
   it('nunca rojo, en ningún estado', () => {

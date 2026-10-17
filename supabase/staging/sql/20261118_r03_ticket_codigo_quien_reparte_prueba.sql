@@ -197,15 +197,17 @@ begin
   j := public.pedidos_sin_direccion(null, 'r03-0310-prueba-norte-centro');
   select x into p from jsonb_array_elements(j->'pedidos') x where x->>'code' = 'G0310V3';
   if p is null or p->>'dispatch_mode' is distinct from 'manual' or p->>'completada_por' is distinct from 'Persona de Prueba'
-     or p->>'direccion_completada' is distinct from 'Calle Pegada de Prueba, 3' then
-    raise exception 'R03 0310 3: la lista no dice el modo ni quién la completó: %', p;
+     or p->>'direccion_completada' is distinct from 'Calle Pegada de Prueba, 3'
+     or not (p ? 'customer_phone') or not (p ? 'customer_phone_code') then
+    raise exception 'R03 0310 3: la lista no dice el modo, quién la completó o el teléfono del cliente: %', p;
   end if;
 
   j := public.orders_feed_by_token('r03-0310-prueba-norte-centro');
   select x into o from jsonb_array_elements(j->'orders') x where x->>'sale_id' = 'e0310000-0000-4000-8000-0000000000f1';
   if o is null then raise exception 'R03 0310 4a: el pedido U0310A no sale en Pedidos de la tablet.'; end if;
   if o->>'customer_phone_code' is distinct from '12345678' or o->>'delivery_instructions' is distinct from 'Timbre 2B'
-     or o->>'order_customer_note' is distinct from 'Sin cebolla' or not (o ? 'delivery_address_fixed') then
+     or o->>'order_customer_note' is distinct from 'Sin cebolla' or not (o ? 'delivery_address_fixed')
+     or not (o ? 'delivery_address_fixed_by') then
     raise exception 'R03 0310 4b: Pedidos de la tablet no trae lo nuevo: %', o - 'lineas';
   end if;
 

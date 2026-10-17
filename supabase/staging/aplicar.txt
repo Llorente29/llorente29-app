@@ -2,6 +2,9 @@
 # Staging tenía la versión anterior (con la espera de 5 minutos): se quita con
 # las tres vueltas atrás de verdad (así quedan probadas sobre datos), se prueban
 # las dos pruebas (ROLLBACK) y se aplican 0300, 0310 y 0320 de verdad.
+# 17/10 (Julio, en automático): la lista trae el teléfono del cliente,
+# fijar_direccion_entrega dice quién la escribió y Pedidos trae
+# delivery_address_fixed_by. Se rehace igual: vueltas atrás, pruebas y las tres.
 supabase/staging/sql/20261117_r03_staging_rehacer.sql
 supabase/staging/sql/20261118_r03_direccion_incompleta_prueba.sql
 supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql

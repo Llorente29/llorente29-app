@@ -323,6 +323,8 @@ begin
     'carrier',       v_carrier,
     'reason',        v_reason,
     'dispatch_mode', v_mode,
+    -- Quién la ha escrito: la pantalla lo dice («Dirección completada por …»).
+    'por',           v_por,
     -- Catcher ya tiene el pedido (salió por el punto del mapa): no se puede
     -- reenviar sin crear otro (no hay cambio ni anulación en su API). La
     -- pantalla lo dice y da el contacto del repartidor.

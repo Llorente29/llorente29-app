@@ -24,7 +24,7 @@
 // la decide `deliveryView().phase` en el servicio; aquí solo se pinta.
 
 import { useEffect, useState } from 'react'
-import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, ShoppingBag, MapPin } from 'lucide-react'
+import { ChefHat, Check, Printer, Bike, Phone, ChevronDown, ChevronUp, ShoppingBag, MapPin, AlertTriangle } from 'lucide-react'
 import { timeLevel, channelLabel, ticketCode } from '@/modules/kds/kdsUtils'
 import { allergenLabel, type AllergenCode } from '@/modules/kitchen/lib/allergens'
 import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
@@ -35,7 +35,7 @@ import TicketPreviewModal from './TicketPreviewModal'
 import { esRepartoPropio, lineaTelefono } from '@/modules/reparto/lib/entregaTicket'
 import EtiquetaReparto from '@/modules/reparto/components/EtiquetaReparto'
 import CompletarDireccion from '@/modules/reparto/components/CompletarDireccion'
-import { avisoDeLaTarjeta, enlaceAlMapa } from '@/modules/reparto/lib/direccionFalta'
+import { avisoDeLaTarjeta, enlaceAlMapa, enlaceTel, haSalido, telefonoDelCliente } from '@/modules/reparto/lib/direccionFalta'
 import {
   primaryAction, secondaryAction, childVisual, deliveryView,
   isOwnDeliveryUndispatched, dispatchOrder,
@@ -294,12 +294,16 @@ function GreenCallPill({ phone, label = true, big = false }: { phone: string; la
 
 // ── B68 §1/§2 (05/09/2026). Sin dirección: qué falta, y adónde ir. ──
 //
-// R03 · SIN DIRECCIÓN COMPLETA (Julio, 16/10, tras ver las capturas). El
-// pedido sale a Catcher como cualquier otro, con el punto del mapa; aquí solo
-// una línea informativa, sin franja que tape nada y sin acciones para la
-// cocina. Debajo, el punto del mapa (en la tablet, por su variante con token:
-// solo su local) y, si una persona la completó, la dirección. En el ordenador
-// (oficina o encargado), el botón pequeño «Completar dirección».
+// R03 · SIN DIRECCIÓN COMPLETA (Julio, 16/10 y 17/10). El pedido sale a
+// Catcher como cualquier otro, con el punto del mapa; aquí una línea:
+//   · ha salido → «Ha salido a Catcher con el punto del mapa · el repartidor
+//     llamará al cliente», informativa, sin acciones para la cocina;
+//   · no ha salido (ni calle ni punto, o Catcher lo ha rechazado) → en rojo,
+//     «No ha salido a Catcher · llama al cliente y completa la dirección», con
+//     el teléfono del cliente y «Llamar»;
+//   · completada → UNA línea, «Dirección completada por <nombre>», con
+//     «Reimprimir» y el repartidor con «Llamar» (CompletarDireccion).
+// En el ordenador (oficina o encargado), el botón pequeño «Completar dirección».
 function AvisoSinDireccion(
   { order, token = null, puedeCompletar = false, onCompletada }: { order: OrderFeedItem; token?: string | null; puedeCompletar?: boolean; onCompletada?: () => void },
 ) {
@@ -317,28 +321,46 @@ function AvisoSinDireccion(
   }, [order.sale_id, token])
 
   const completada = (order.delivery_address_fixed ?? coords?.direccion ?? '').trim()
-  const mapa = coords?.hay === true ? enlaceAlMapa(coords.lat ?? null, coords.lng ?? null) : null
   const abierto = !['closed', 'cancelled', 'canceled'].includes((order.status ?? 'open').toLowerCase())
+  const hecha = !!completada || recien
+  const estado = {
+    enCatcher: !!order.carrier_code, dispatchError: order.dispatch_error ?? null,
+    dispatchMode: order.dispatch_mode ?? null, hayPunto: coords ? coords.hay === true : null,
+  }
+  const salido = hecha || haSalido(estado)
+  const mapa = coords?.hay === true ? enlaceAlMapa(coords.lat ?? null, coords.lng ?? null) : null
+  const tel = !salido ? telefonoDelCliente(order.customer_phone, order.customer_phone_code) : null
+  // Una sola estructura: CompletarDireccion no se desmonta al guardar, así su
+  // confirmación («· ticket reimpreso») sigue a la vista (regla 8).
   return (
-    <div className="mx-4 mb-2.5 ml-5 px-3 py-2 rounded-xl border border-[#CFE4FA] bg-[#F0F7FF] text-[12.5px] leading-snug text-gray-700"
-      data-testid="aviso-sin-direccion" onClick={e => e.stopPropagation()}>
-      <div className="flex items-start gap-2">
-        <MapPin size={14} className="text-[#2563A8] shrink-0 mt-0.5" />
-        <span data-testid="aviso-sin-direccion-texto">
-          {avisoDeLaTarjeta({ enCatcher: !!order.carrier_code, dispatchError: order.dispatch_error ?? null, dispatchMode: order.dispatch_mode ?? null })}
-        </span>
-      </div>
-      {completada && (
-        <div className="mt-1 pl-[22px]" data-testid="direccion-completada"><b>Dirección completada:</b> {completada}</div>
+    <div className={`mx-4 mb-2.5 ml-5 px-3 py-2 rounded-xl border text-[12.5px] leading-snug ${
+      hecha ? 'border-default bg-card' : salido ? 'border-[#CFE4FA] bg-[#F0F7FF] text-gray-700' : 'border-danger/40 bg-danger-bg text-danger'}`}
+      data-testid="aviso-sin-direccion" data-salido={salido ? 'si' : 'no'} onClick={e => e.stopPropagation()}>
+      {!hecha && (
+        <div className="flex items-start gap-2">
+          {salido
+            ? <MapPin size={14} className="text-[#2563A8] shrink-0 mt-0.5" />
+            : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+          <span data-testid="aviso-sin-direccion-texto" className={salido ? '' : 'font-bold'}>{avisoDeLaTarjeta(estado)}</span>
+        </div>
       )}
-      {mapa && (
-        <a href={mapa} target="_blank" rel="noopener noreferrer" className="mt-1 ml-[22px] inline-block font-bold text-[#2563A8] underline">
+      {!hecha && tel && order.customer_phone && (
+        <a href={enlaceTel(order.customer_phone)} className="mt-1.5 ml-[22px] inline-flex items-center gap-1.5 rounded-full bg-danger text-white px-3 py-1 font-bold no-underline"
+          data-testid="aviso-sin-direccion-llamar">
+          <Phone size={13} /> {tel} · Llamar
+        </a>
+      )}
+      {!hecha && mapa && (
+        <a href={mapa} target="_blank" rel="noopener noreferrer" className="mt-1 ml-[22px] block font-bold text-[#2563A8] underline">
           Ver el punto del mapa
         </a>
       )}
-      {puedeCompletar && ((!completada && abierto) || recien) && (
-        <div className="mt-1.5 pl-[22px]">
-          <CompletarDireccion saleId={order.sale_id} token={token} onGuardada={() => { setRecien(true); onCompletada?.() }} />
+      {(hecha || (puedeCompletar && abierto)) && (
+        <div className={hecha ? '' : 'mt-1.5 pl-[22px]'}>
+          <CompletarDireccion saleId={order.sale_id} token={token}
+            completada={completada ? { por: order.delivery_address_fixed_by ?? null } : null}
+            riderName={order.rider_name} riderPhone={order.rider_phone}
+            onGuardada={() => { setRecien(true); onCompletada?.() }} />
         </div>
       )}
     </div>
