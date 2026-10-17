@@ -121,7 +121,15 @@ describe('Boton', () => {
     const h = html(<Boton icono="revisar" contador={12}>Para revisar</Boton>)
     expect(h).toMatch(/^<button[^>]*class="s-boton s-boton-secundario"/)
     expect(h.indexOf('<svg')).toBeLessThan(h.indexOf('Para revisar'))
-    expect(h).toContain('<span class="s-boton-contador s-cifra">12</span>')
+    expect(h).toContain('<span class="s-boton-contador s-cifra" data-tono="duda">12</span>')
+    // Lo que solo informa («Expedidas 12»), en neutro.
+    expect(html(<Boton contador={12} contadorTono="neutro">Expedidas</Boton>)).toContain('data-tono="neutro">12</span>')
+  })
+  it('BotonEnlace con aviso, apagado y su dato: punto ámbar, gris y el dato al pasar el ratón y para el lector', () => {
+    const h = html(<MemoryRouter><BotonEnlace a="/conta/x" aviso apagado titulo="Recibidas: 2 sin NIF">Recibidas</BotonEnlace></MemoryRouter>)
+    expect(h).toContain('class="s-boton s-boton-secundario s-boton-aviso s-boton-apagado"')
+    expect(h).toContain('title="Recibidas: 2 sin NIF"')
+    expect(h).toContain('aria-description="Recibidas: 2 sin NIF"')
   })
   it('BotonEnlace navega y marca la pantalla en la que se está', () => {
     const h = html(<MemoryRouter><BotonEnlace a="/conta/asientos" actual>Libro diario</BotonEnlace></MemoryRouter>)

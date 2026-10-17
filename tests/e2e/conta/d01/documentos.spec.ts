@@ -74,7 +74,7 @@ function vigilar(page: Page): string[] {
  */
 async function sinVolverAFolvy(page: Page, donde: string) {
   await expect(page.getByRole('link', { name: /Volver a Folvy/ }), `«Volver a Folvy» en ${donde}`).toHaveCount(0)
-  await expect(page.locator('.cx-barra-inferior a[href="/"], .cxm-barra-inferior a[href="/"]'), `«‹ Folvy» en la barra de ${donde}`).toHaveCount(0)
+  await expect(page.locator('.cx-barra-inferior a[href="/"], .s-barra-inferior a[href="/"]'), `«‹ Folvy» en la barra de ${donde}`).toHaveCount(0)
   const texto = await page.locator('body').innerText()
   expect(texto.split('\n').filter((l) => /folvy/i.test(l)).slice(0, 5), `«Folvy» en la página de ${donde}`).toEqual([])
 }

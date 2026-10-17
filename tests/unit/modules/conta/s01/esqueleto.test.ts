@@ -135,8 +135,26 @@ describe('el catálogo de órdenes', () => {
       ['Revisar', ['Para revisar', 'Libro diario']],
       ['Utilidades', ['Búsqueda', 'Digitalizar']],
     ])
-    expect(cintaDe('contabilidad', 'listados', NADA)).toEqual([])
     expect(cintaDe('contabilidad', null, NADA)).toEqual([])
+  })
+  it('paso 3: las acciones de Libros, en la cinta de su pestaña; Importar (Diez), solo con Diez', () => {
+    expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['IVA', 7], ['Estados', 3]])
+    expect(cintaDe('contabilidad', 'cierre', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([
+      ['Cierre', ['Ejercicios', 'Cerrar el mes', 'Regularización, cierre y apertura']],
+      ['Cuentas anuales', ['Cuentas anuales del ejercicio', 'Qué cuentas alimentan cada línea']],
+    ])
+    expect(cintaDe('contabilidad', 'importar', NADA)).toEqual([])
+    expect(cintaDe('contabilidad', 'importar', CON_DIEZ).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Pendientes de adjuntar en Diez']])
+  })
+  it('regla 31, contra AREAS_LIBROS: cada acción con pantalla está en UNA cinta, y su orden lleva a su dirección de Libros', () => {
+    const enCintas = Object.values(CINTAS).flatMap((gs) => gs.flatMap((g) => g.ordenes))
+    const conPantalla = AREAS_LIBROS.flatMap((a) => a.grupos.flatMap((g) => g.acciones)).filter((x) => !x.c05b && !['libro-diario', 'balances-pdf', 'balances-excel'].includes(x.id))
+    expect(conPantalla.length).toBe(20)   // diario 2 · mayor 3 · IVA 7 · estados 3 · cuentas anuales 2 · cierre 3
+    for (const x of conPantalla) expect(enCintas.filter((id) => id === `libros.${x.id}`), x.id).toHaveLength(1)
+    for (const x of conPantalla) {
+      const o = ordenPorId(`libros.${x.id}`)!
+      expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : ''))), x.id).toBe(`contabilidad.${o.pestana}`)
+    }
   })
   it('una orden por pestaña con pantalla, para fijarla', () => {
     expect(ordenPorId('ir.contabilidad.asientos')?.etiqueta).toBe('Contabilidad › Asientos')

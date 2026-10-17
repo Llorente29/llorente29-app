@@ -8,12 +8,18 @@
 import { useLocation } from 'react-router-dom'
 import { rutaConta } from '@/config/navegacion'
 import { Boton, BotonEnlace, Cinta, GrupoCinta } from '@/modules/conta/diseno'
+import type { DatosCinta } from '@/modules/conta/marco/nuevo/contexto'
 import { esLaActual, type Orden } from './ordenes'
 
-export function CintaDePestana({ etiqueta, grupos, oculta, alCambiarOculta, alBuscar }: {
+/** El ejercicio elegido viaja de una acción a otra (lo leen Libros y el diario). */
+const conservar = (search: string) => { const e = new URLSearchParams(search).get('ejercicio'); return e ? `?ejercicio=${encodeURIComponent(e)}` : '' }
+
+export function CintaDePestana({ etiqueta, grupos, datos, oculta, alCambiarOculta, alBuscar }: {
   /** «Acciones de Asientos». */
   etiqueta: string
   grupos: { titulo: string; ordenes: Orden[] }[]
+  /** Lo que la pantalla sabe de cada orden (useDatosEnCinta): su número escrito, su punto ámbar, su dato. */
+  datos?: DatosCinta | null
   oculta: boolean
   alCambiarOculta: (oculta: boolean) => void
   alBuscar: () => void
@@ -25,7 +31,12 @@ export function CintaDePestana({ etiqueta, grupos, oculta, alCambiarOculta, alBu
       {grupos.map((g) => (
         <GrupoCinta key={g.titulo} titulo={g.titulo}>
           {g.ordenes.map((o) => ('ruta' in o.a
-            ? <BotonEnlace key={o.id} a={rutaConta(o.a.ruta)} icono={o.icono} actual={esLaActual(o, pathname, search)}>{o.etiqueta}</BotonEnlace>
+            ? (
+              <BotonEnlace key={o.id} a={`${rutaConta(o.a.ruta)}${conservar(search)}`} icono={o.icono} actual={esLaActual(o, pathname, search)}
+                contador={datos?.[o.id]?.numero} contadorTono={datos?.[o.id]?.aviso ? 'duda' : 'neutro'} aviso={datos?.[o.id]?.aviso} apagado={datos?.[o.id]?.gris} titulo={datos?.[o.id]?.dato}>
+                {o.etiqueta}
+              </BotonEnlace>
+            )
             : <Boton key={o.id} icono={o.icono} onClick={alBuscar} aria-keyshortcuts="Control+K">{o.etiqueta}</Boton>))}
         </GrupoCinta>
       ))}

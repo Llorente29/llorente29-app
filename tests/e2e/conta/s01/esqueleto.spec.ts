@@ -125,23 +125,32 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')
   await expect(cinta(page)).toBeVisible()
+  // Todo cargado antes de medir: la empresa (su botón) y las preferencias (Favoritos ya leídos).
+  await expect(page.locator('.s-cab-empresa')).toBeVisible()
+  await abrirFavoritos(page)
+  await expect(page.getByRole('group', { name: 'Favoritos' })).toHaveAttribute('aria-busy', 'false')
+  await page.keyboard.press('Escape')
   const cajas = async () => page.locator('.s-barra a, .s-barra-inferior a, .s-pestanas a, .s-cinta a, .s-cinta button, .s-cab-empresa')
     .evaluateAll((xs) => xs.map((x) => { const r = x.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)].join(',') }))
   const antes = await cajas()
   expect(antes.length).toBeGreaterThan(8)
 
-  await nivel(page, 'Experto')
-  await expect(page.getByRole('button', { name: /nivel experto\. Tus preferencias$/ })).toBeVisible()
-  expect(await cajas()).toEqual(antes)
-  // Se guarda en la base: sigue al recargar.
-  await page.reload()
-  await expect(page.getByRole('button', { name: /nivel experto\. Tus preferencias$/ })).toBeVisible()
-  expect(await cajas()).toEqual(antes)
-  await capturar(page, 'esqueleto-nivel-experto')
+  try {
+    await nivel(page, 'Experto')
+    await expect(page.getByRole('button', { name: /nivel experto\. Tus preferencias$/ })).toBeVisible()
+    expect(await cajas()).toEqual(antes)
+    // Se guarda en la base: sigue al recargar.
+    await page.reload()
+    await expect(page.getByRole('button', { name: /nivel experto\. Tus preferencias$/ })).toBeVisible()
+    expect(await cajas()).toEqual(antes)
+    await capturar(page, 'esqueleto-nivel-experto')
 
-  await nivel(page, 'Sin experiencia')
-  expect(await cajas()).toEqual(antes)
-  await nivel(page, 'Medio')
+    await nivel(page, 'Sin experiencia')
+    expect(await cajas()).toEqual(antes)
+  } finally {
+    // Pase lo que pase, el nivel vuelve a medio: las preferencias van en la base y la siguiente prueba las lee.
+    await nivel(page, 'Medio')
+  }
   expect(await cajas()).toEqual(antes)
 })
 
@@ -152,7 +161,8 @@ async function favoritosEnOtroNavegador(browser: Browser, email: string): Promis
   await otra.goto('/conta/inicio')
   await abrirFavoritos(otra)
   const fav = otra.getByRole('group', { name: 'Favoritos' })
-  await expect(fav).toBeVisible()
+  // Leídos de la base (no lo de serie de mientras carga).
+  await expect(fav).toHaveAttribute('aria-busy', 'false')
   const lista = await fav.locator('.s-menu-fila .s-menu-item').allTextContents()
   await contexto.close()
   return lista
@@ -164,26 +174,38 @@ test('Favoritos: se fija desde el menú, se guarda en la base y sigue en otro na
   await expect(cinta(page)).toBeVisible()
   await abrirFavoritos(page)
   const fav = page.getByRole('group', { name: 'Favoritos' })
+  await expect(fav).toHaveAttribute('aria-busy', 'false')
   await expect(fav.getByText('Aún no tienes ninguno. Fija abajo lo que más uses y saldrá aquí.')).toBeVisible()
   // Lo que se puede fijar desde aquí: esta pantalla y lo de su cinta.
   await expect(fav.getByRole('button', { name: /^Contabilidad › Asientos/ })).toBeVisible()
   await fav.getByRole('button', { name: /^Expedida/ }).click()
-  // Fijar lo dice (regla 8).
-  await expect(aviso(page, 'Fijado en Favoritos: «Expedida». Lo tienes arriba, en Favoritos.')).toBeVisible()
+  try {
+    // Fijar lo dice (regla 8).
+    await expect(aviso(page, 'Fijado en Favoritos: «Expedida». Lo tienes arriba, en Favoritos.')).toBeVisible()
 
-  await page.reload()
-  await abrirFavoritos(page)
-  const tras = page.getByRole('group', { name: 'Favoritos' })
-  await expect(tras.getByRole('link', { name: 'Expedida' })).toHaveAttribute('href', '/conta/libros/diario/nuevo?tipo=expedida')
-  await capturar(page, 'esqueleto-favoritos')
+    await page.reload()
+    await abrirFavoritos(page)
+    const tras = page.getByRole('group', { name: 'Favoritos' })
+    await expect(tras).toHaveAttribute('aria-busy', 'false')
+    await expect(tras.getByRole('link', { name: 'Expedida' })).toHaveAttribute('href', '/conta/libros/diario/nuevo?tipo=expedida')
+    await capturar(page, 'esqueleto-favoritos')
 
-  // Otro navegador (otro ordenador): la misma lista, porque está en la base.
-  expect(await favoritosEnOtroNavegador(browser, CUENTA_A.email)).toEqual(['Expedida'])
+    // Otro navegador (otro ordenador): la misma lista, porque está en la base.
+    expect(await favoritosEnOtroNavegador(browser, CUENTA_A.email)).toEqual(['Expedida'])
 
-  // Quitar también lo dice; y la lista queda vacía.
-  await tras.getByRole('button', { name: 'Quitar «Expedida» de Favoritos' }).click()
-  await expect(aviso(page, 'Quitado de Favoritos: «Expedida».')).toBeVisible()
-  expect(await favoritosEnOtroNavegador(browser, CUENTA_A.email)).toEqual([])
+    // Quitar también lo dice; y la lista queda vacía.
+    await tras.getByRole('button', { name: 'Quitar «Expedida» de Favoritos' }).click()
+    await expect(aviso(page, 'Quitado de Favoritos: «Expedida».')).toBeVisible()
+    expect(await favoritosEnOtroNavegador(browser, CUENTA_A.email)).toEqual([])
+  } finally {
+    // Si algo falló a medias, «Expedida» no se queda fijado para la siguiente prueba (van en la base).
+    await page.goto('/conta/libros/diario')
+    await abrirFavoritos(page)
+    const f = page.getByRole('group', { name: 'Favoritos' })
+    await expect(f).toHaveAttribute('aria-busy', 'false')
+    const quitar = f.getByRole('button', { name: 'Quitar «Expedida» de Favoritos' })
+    if (await quitar.count()) await quitar.click()
+  }
 })
 
 test('la cinta se oculta, se recuerda y vuelve (nunca desaparece sin decir dónde está)', async ({ page }) => {

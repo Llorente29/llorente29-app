@@ -17,8 +17,10 @@ import type { Favorito, Orden } from './ordenes'
 
 const destino = (o: Orden) => ('ruta' in o.a ? rutaConta(o.a.ruta) : null)
 
-export function Favoritos({ favoritos, fijables, movil, alternar, alAbrirBuscador }: {
+export function Favoritos({ favoritos, cargando = false, fijables, movil, alternar, alAbrirBuscador }: {
   favoritos: Favorito[]
+  /** Aún se están leyendo de la base: no se dice «ninguno» de lo que no se sabe. */
+  cargando?: boolean
   /** Lo que se puede fijar desde aquí: la pantalla actual y las órdenes de su cinta. */
   fijables: Orden[]
   movil: boolean
@@ -37,10 +39,11 @@ export function Favoritos({ favoritos, fijables, movil, alternar, alAbrirBuscado
       <Boton ref={menuBoton} variante="fantasma" icono="favorito" aria-expanded={menuAbierto} aria-haspopup="true"
         aria-label={movil ? 'Favoritos' : undefined} onClick={menuAlternar}>{movil ? '' : 'Favoritos'}</Boton>
       {menuAbierto && (
-        <div className="s-menu s-menu-derecha" role="group" aria-label="Favoritos">
+        <div className="s-menu s-menu-derecha" role="group" aria-label="Favoritos" aria-busy={cargando}>
           <span className="s-menu-titulo">Favoritos</span>
-          {favoritos.length === 0 && <p className="s-menu-nota">Aún no tienes ninguno. Fija abajo lo que más uses y saldrá aquí.</p>}
-          {favoritos.map((f) => {
+          {cargando && <p className="s-menu-nota">Leyendo tus favoritos…</p>}
+          {!cargando && favoritos.length === 0 && <p className="s-menu-nota">Aún no tienes ninguno. Fija abajo lo que más uses y saldrá aquí.</p>}
+          {!cargando && favoritos.map((f) => {
             const nombre = f.orden?.etiqueta ?? f.id
             const a = f.orden && f.disponible ? destino(f.orden) : null
             return (

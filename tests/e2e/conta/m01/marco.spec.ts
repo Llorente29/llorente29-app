@@ -158,7 +158,7 @@ test('una pantalla vieja dentro del marco: Bancos, con su estilo y sus pestañas
   await capturar(page, 'pantalla-vieja')
 })
 
-test('Libros (S01): «Libros y listados» marcada en la cabecera; las áreas, en la pantalla hasta el paso 3', async ({ page }) => {
+test('Libros (S01): «Libros y listados» marcada en la cabecera; sus acciones, en la cinta', async ({ page }) => {
   test.skip(lado(page) === 'movil', 'En el móvil Libros va por niveles y pinta sus áreas')
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
@@ -167,7 +167,8 @@ test('Libros (S01): «Libros y listados» marcada en la cabecera; las áreas, en
   await expect(pestanas).toBeVisible()
   // La de la dirección, activa: si está dentro de «Más», el botón la nombra.
   await expect(pestanas.locator('[aria-current="page"], .s-pestana-activa')).toHaveText(/^Libros y listados/)
-  await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
+  await expect(page.getByRole('toolbar', { name: 'Acciones de Libros y listados' }).getByRole('link', { name: /^Balance de situación/ })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Balance de situación' })).toBeVisible({ timeout: 30_000 })
   await capturar(page, 'pestanas-libros')
 })
@@ -329,24 +330,21 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   await expect(page.getByRole('status').filter({ hasText: /^Bajado libro-diario-.+\.csv: \d+ asientos\.$/ })).toBeVisible()
 })
 
-test('Libros sin el recuadro de antes: las acciones del área en una fila y el ejercicio arriba', async ({ page }) => {
-  test.skip(lado(page) === 'movil', 'En el móvil Libros va por niveles')
+test('Libros sin el recuadro de antes (S01): las acciones en la cinta, en una fila, y el ejercicio en la cabecera', async ({ page }) => {
+  test.skip(lado(page) === 'movil', 'En el móvil la cinta se desliza de lado')
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros/balances/balance')
   await expect(page.getByRole('heading', { name: 'Balance de situación' })).toBeVisible({ timeout: 30_000 })
-  // La segunda fila de la barra de arriba (Julio, 16/10): unos 36 px, dentro de la barra, fija al bajar.
-  const fila = page.locator('.cxm-subpestanas')
-  const sub = fila.getByRole('navigation', { name: 'Acciones de Balances' })
-  await expect(sub.getByRole('link', { name: 'Balance de situación' })).toHaveAttribute('aria-current', 'page')
-  expect(Math.round((await fila.boundingBox())!.height)).toBeLessThanOrEqual(37)
-  await page.evaluate(() => window.scrollTo(0, 400))
-  expect(Math.round((await fila.boundingBox())!.y)).toBeLessThanOrEqual(80)
-  await page.evaluate(() => window.scrollTo(0, 0))
-  await capturar(page, 'libros-subpestanas')
-  await expect(sub.getByRole('link', { name: 'Pérdidas y ganancias' })).toBeVisible()
-  await expect(page.locator('.cxl-tuyos, .cxl-cabeza, .cxl-barra')).toHaveCount(0)
-  await sub.getByRole('link', { name: 'Pérdidas y ganancias' }).click()
+  // La cinta (antes, la segunda fila de la barra de arriba, Julio 16/10), debajo de la cabecera: sus 14 acciones en una o dos filas, nunca tras «⋯».
+  const cinta = page.getByRole('toolbar', { name: 'Acciones de Libros y listados' })
+  await expect(cinta.getByRole('link', { name: /^Balance de situación/ })).toHaveAttribute('aria-current', 'page')
+  const ys = await cinta.getByRole('link').evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().top)))
+  expect(new Set(ys).size).toBeLessThanOrEqual(2)
+  await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
+  await capturar(page, 'libros-cinta')
+  await expect(page.locator('.cxl-tuyos, .cxl-cabeza, .cxl-barra, .cxm-subpestanas')).toHaveCount(0)
+  await cinta.getByRole('link', { name: /^Pérdidas y ganancias/ }).click()
   await expect(page.getByRole('heading', { name: 'Pérdidas y ganancias' })).toBeVisible()
 })
 

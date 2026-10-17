@@ -8,6 +8,7 @@
 
 import { Link } from 'react-router-dom'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
+import { iniciales } from '@/modules/conta/lib/formato'
 import { Boton } from '@/modules/conta/diseno'
 import { NIVELES, NOMBRE_NIVEL, type Densidad, type Nivel, type Preferencias } from './preferencias'
 
@@ -30,7 +31,8 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar }: {
     <div className="s-desplegable" ref={menuCaja}>
       <Boton ref={menuBoton} variante="fantasma" icono="desplegar" aria-expanded={menuAbierto} aria-haspopup="true"
         aria-label={`${nombre}, nivel ${NOMBRE_NIVEL[prefs.nivel].toLowerCase()}. Tus preferencias`} onClick={menuAlternar}>
-        {movil ? NOMBRE_NIVEL[prefs.nivel] : <>{nombre} · <strong>{NOMBRE_NIVEL[prefs.nivel]}</strong></>}
+        {/* En el móvil no cabe «Nombre · Nivel»: sus iniciales; el nivel, en el menú y en el nombre del botón. */}
+        {movil ? iniciales(nombre) : <>{nombre} · <strong>{NOMBRE_NIVEL[prefs.nivel]}</strong></>}
       </Boton>
       {menuAbierto && (
         <div className="s-menu s-menu-derecha">

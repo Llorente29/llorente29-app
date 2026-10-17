@@ -10,15 +10,16 @@
 //   · una por pestaña («ir a Libros y listados»), para fijar una pantalla.
 //
 // La cinta de cada pestaña, por grupos con su nombre (maqueta 1: NUEVO ·
-// REVISAR · UTILIDADES). En el paso 2.2 solo Asientos lleva cinta; las demás
-// pestañas pintan aún su propia barra y pasan a la cinta en el paso 3, cuando
-// se mudan sus pantallas (así no sale lo mismo dos veces).
+// REVISAR · UTILIDADES). Las pestañas pasan a la cinta según se mudan sus
+// pantallas (paso 3): una pestaña sin cinta aún pinta su propia barra, y así no
+// sale lo mismo dos veces.
 //
 // «Vigilancia» y «Anular» de la maqueta no están: Vigilancia no tiene pantalla
 // todavía, y Anular es del asiento abierto (su botón está en el asiento). No
 // se pinta un botón que no lleva a nada (regla del encargo: nada vacío).
 
-import { CONTA, rutaConta } from '@/config/navegacion'
+import { CONTA, rutaConta, rutaLibros } from '@/config/navegacion'
+import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
 import type { NombreIcono } from '@/modules/conta/diseno/iconos'
 import { PRODUCTOS, pestanasVisibles, productoVisible, type Condicion, type Contexto, type IdProducto } from './productos'
 
@@ -56,6 +57,25 @@ const DE_LA_CINTA: Orden[] = [
   { id: 'asiento.digitalizar', etiqueta: 'Digitalizar', icono: 'digitalizar', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.documentos }, sinonimos: ['subir factura', 'escanear'] },
 ]
 
+/**
+ * Las acciones de Libros (C05), sacadas de AREAS_LIBROS (una sola lista): cada
+ * una a su pestaña de Contabilidad. Fuera de la cinta: el libro diario (es
+ * Asientos), PDF y Excel (van en la acción, no son entradas) y lo que aún no
+ * tiene pantalla (Registro Mercantil, C05b: nada vacío).
+ */
+const PESTANA_DE_AREA: Record<string, string> = {
+  diario: 'listados', mayor: 'listados', registro: 'listados', balances: 'listados', anuales: 'cierre', cierre: 'cierre',
+}
+const FUERA_DE_LA_CINTA = new Set(['libro-diario', 'balances-pdf', 'balances-excel'])
+const sinModulo = (absoluta: string) => absoluta.replace(new RegExp(`^/${CONTA.modulo}/`), '')
+const DE_LIBROS: Orden[] = AREAS_LIBROS.flatMap((area) => area.grupos.flatMap((g) => g.acciones
+  .filter((x) => !x.c05b && !FUERA_DE_LA_CINTA.has(x.id))
+  .map((x): Orden => ({
+    id: `libros.${x.id}`, etiqueta: x.nombre, producto: 'contabilidad',
+    pestana: x.id === 'pendientes-diez' ? 'importar' : PESTANA_DE_AREA[area.id],
+    a: { ruta: sinModulo(rutaLibros(area.id, x.id)) }, sinonimos: x.sinonimos, solo: x.id === 'pendientes-diez' ? 'diez' : undefined,
+  }))))
+
 /** Una orden por pestaña: «ir a…», para fijar una pantalla en Favoritos. */
 const DE_PESTANA: Orden[] = PRODUCTOS.flatMap((p) => p.pestanas.length > 0
   ? p.pestanas.filter((t) => t.ruta !== null).map((t): Orden => ({
@@ -64,7 +84,7 @@ const DE_PESTANA: Orden[] = PRODUCTOS.flatMap((p) => p.pestanas.length > 0
     }))
   : p.ruta !== null ? [{ id: `ir.${p.id}`, etiqueta: p.etiqueta, producto: p.id, pestana: '', a: { ruta: p.ruta } }] : [])
 
-export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_PESTANA]
+export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_LIBROS, ...DE_PESTANA]
 const POR_ID = new Map(ORDENES.map((o) => [o.id, o]))
 export const ordenPorId = (id: string): Orden | null => POR_ID.get(id) ?? null
 
@@ -74,6 +94,20 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
     { titulo: 'Nuevo', ordenes: ['asiento.expedida', 'asiento.recibida', 'asiento.tesoreria', 'asiento.general', 'asiento.predefinidos'] },
     { titulo: 'Revisar', ordenes: ['asiento.para-revisar', 'asiento.libro-diario'] },
     { titulo: 'Utilidades', ordenes: ['asiento.busqueda', 'asiento.digitalizar'] },
+  ],
+  // Paso 3: las áreas de Libros, en la cinta de su pestaña (antes, áreas y segunda fila en la pantalla).
+  'contabilidad.listados': [
+    { titulo: 'Diario', ordenes: ['libros.diario-resumido'] },
+    { titulo: 'Mayor', ordenes: ['libros.libro-mayor', 'libros.sumas-saldos', 'libros.acumulados'] },
+    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.retenciones', 'libros.formato-aeat'] },
+    { titulo: 'Estados', ordenes: ['libros.balance', 'libros.pyg', 'libros.ecpn'] },
+  ],
+  'contabilidad.cierre': [
+    { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.cierre-ejercicio'] },
+    { titulo: 'Cuentas anuales', ordenes: ['libros.cuentas-anuales', 'libros.mapeo'] },
+  ],
+  'contabilidad.importar': [
+    { titulo: 'Diez', ordenes: ['libros.pendientes-diez'] },
   ],
 }
 

@@ -309,22 +309,11 @@
 
 @media (prefers-reduced-motion: reduce) { .cxm * { transition: none !important; } }
 
-/* ── 2b · La segunda fila de la barra de arriba (SubpestanasEnBarra) ──────
-   Julio, 16/10: parte de la barra de arriba, no otro bloque. 36 px, 13 px en
-   gris, la activa en azul (sin subrayado grueso) y «Más ▾» si no cabe. Se
-   queda fija debajo de la barra al bajar, y la cabecera de las tablas, debajo
-   de las dos (--cxm-alto-arriba). */
+/* ── 2b · La altura de lo que queda fijo arriba: la cabecera del esqueleto
+   (48 px). La cabecera de las tablas se queda fija debajo (--cxm-alto-arriba).
+   La segunda fila de antes (SubpestanasEnBarra) es ahora la cinta (S01).
+   Las fichas de proveedor y de tercero usan aún .cxm-sub para su subtítulo. */
 .cxm { --cxm-alto-arriba: 48px; }
-.cxm:has(.cxm-subpestanas:not(:empty)) { --cxm-alto-arriba: 84px; }
-.cxm:has(.cxm-subpestanas:not(:empty)) .cxm-arriba { border-bottom-color: var(--cxm-fondo); }
-.cxm-subpestanas {
-  position: sticky; top: 48px; z-index: 29; height: 36px; flex-shrink: 0; padding: 0 16px;
-  background: var(--cxm-superficie); border-bottom: 1px solid var(--cxm-borde); font-family: var(--cxm-letra);
-}
-.cxm-subpestanas:empty { display: none; }
-.cxm-sub-caja { position: relative; height: 100%; }
-.cxm-sub-medida { position: absolute; visibility: hidden; pointer-events: none; display: flex; gap: 2px; white-space: nowrap; height: 0; overflow: hidden; }
-.cxm-sub-fila { display: flex; align-items: center; gap: 2px; height: 100%; }
 .cxm .cxm-sub {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: var(--cxm-radio-boton);
   background: none; color: var(--cxm-apoyo); font: inherit; font-size: 13px; white-space: nowrap; text-decoration: none; cursor: pointer;

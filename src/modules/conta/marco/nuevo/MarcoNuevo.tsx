@@ -23,7 +23,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { TeTocaHoy } from '@/modules/conta/ui/marco/TeTocaHoy'
 import { chipsDelInicio } from '@/modules/conta/marco/nuevo/teTocaHoy'
-import { MarcoContexto, type Marco } from '@/modules/conta/marco/nuevo/contexto'
+import { MarcoContexto, type DatosCinta, type Marco } from '@/modules/conta/marco/nuevo/contexto'
 import { Buscador } from '@/modules/conta/marco/nuevo/Buscador'
 import { dondeEsta, pestanasVisibles, productosVisibles } from '@/modules/conta/esqueleto/productos'
 import { alternarFavorito, cintaDe, favoritosDe, ordenPorId, type Orden } from '@/modules/conta/esqueleto/ordenes'
@@ -48,12 +48,12 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const { activa } = useEmpresas()
   const { pathname } = useLocation()
   const cuentas = useCuentasMenu()
-  const { prefs, cambiar, aviso, quitarAviso } = usePreferenciasEsqueleto(accountId, userId)
+  const { prefs, cargadas, cambiar, aviso, quitarAviso } = usePreferenciasEsqueleto(accountId, userId)
   const { ctx, error: errorCtx } = useContextoEsqueleto(accountId, activa?.id ?? null)
   const [buscando, setBuscando] = useState(false)
   const [huecoAcciones, setHuecoAcciones] = useState<HTMLDivElement | null>(null)
   const [huecoPeriodo, setHuecoPeriodo] = useState<HTMLDivElement | null>(null)
-  const [huecoSubpestanas, setHuecoSubpestanas] = useState<HTMLDivElement | null>(null)
+  const [datosCinta, setDatosCinta] = useState<DatosCinta | null>(null)
 
   const donde = dondeEsta(pathname)
   const producto = donde?.producto ?? null
@@ -86,12 +86,10 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
     densidad: prefs.densidad,
     documentoOculto: prefs.documentoOculto,
     ocultarDocumento: (documentoOculto: boolean) => cambiar({ documentoOculto }),
-    // Las áreas de Libros siguen dentro de su pantalla hasta el paso 3: la cabecera ya no las pinta.
-    pestanasArriba: false,
     huecoAcciones,
     huecoPeriodo,
-    huecoSubpestanas,
-  }), [prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, huecoSubpestanas])
+    ponerDatosCinta: setDatosCinta,
+  }), [prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo])
 
   // Lo que se puede fijar desde aquí: esta pantalla y lo de su cinta.
   const fijables: Orden[] = [
@@ -115,16 +113,14 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
         <div className="s-esq-cuerpo">
           <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} movil={movil} logoCliente={logoCuenta}
             huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)}
-            favoritos={<Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} fijables={fijables} movil={movil} alternar={fijar} alAbrirBuscador={() => setBuscando(true)} />}
+            favoritos={<Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} movil={movil} alternar={fijar} alAbrirBuscador={() => setBuscando(true)} />}
             usuario={<MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} />} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
           {producto && pestana && (
-            <CintaDePestana etiqueta={`Acciones de ${pestana.etiqueta}`} grupos={cinta} oculta={prefs.cintaOculta}
+            <CintaDePestana etiqueta={`Acciones de ${pestana.etiqueta}`} grupos={cinta} datos={datosCinta} oculta={prefs.cintaOculta}
               alCambiarOculta={(cintaOculta) => cambiar({ cintaOculta }, cintaOculta ? 'Cinta oculta: «Mostrar la cinta» la saca otra vez.' : 'La cinta vuelve a estar a la vista.')}
               alBuscar={() => setBuscando(true)} />
           )}
-          {/* La segunda fila (las acciones de un área de Libros): la llena la pantalla; vacía, no se pinta. */}
-          {!movil && <div className="cxm-subpestanas" ref={setHuecoSubpestanas} />}
           {/* La barra de acciones de la pantalla (AccionesPantalla); vacía, no se pinta. */}
           <div className="cxm-acciones" ref={setHuecoAcciones} />
           <main className="cx-principal cxm-principal">

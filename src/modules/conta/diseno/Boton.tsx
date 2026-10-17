@@ -31,42 +31,51 @@ interface Aspecto {
   /** Para aria-keyshortcuts: «Control+S», «Enter». */
   atajo?: string
   contador?: number
+  /** Ámbar si lo que cuenta pide algo («Para revisar 12»); neutro si solo informa («Expedidas 12»). */
+  contadorTono?: 'duda' | 'neutro'
 }
 
-function Contenido({ icono, tecla, contador, children }: Aspecto & { children: ReactNode }) {
+function Contenido({ icono, tecla, contador, contadorTono = 'duda', children }: Aspecto & { children: ReactNode }) {
   return (
     <>
       {icono && <Icono nombre={icono} />}
       <span className="s-boton-texto">{children}</span>
-      {contador !== undefined && <span className="s-boton-contador s-cifra">{contador}</span>}
+      {contador !== undefined && <span className="s-boton-contador s-cifra" data-tono={contadorTono}>{contador}</span>}
       {tecla && <Tecla>{tecla}</Tecla>}
     </>
   )
 }
 
 export const Boton = forwardRef<HTMLButtonElement, Aspecto & ButtonHTMLAttributes<HTMLButtonElement>>(function Boton(
-  { variante, grande, ancho, icono, tecla, atajo, contador, className, type = 'button', children, ...resto }, ref,
+  { variante, grande, ancho, icono, tecla, atajo, contador, contadorTono, className, type = 'button', children, ...resto }, ref,
 ) {
   return (
     <button ref={ref} type={type} {...resto} aria-keyshortcuts={atajo ?? resto['aria-keyshortcuts']}
       className={[clasesBoton({ variante, grande, ancho }), className].filter(Boolean).join(' ')}>
-      <Contenido icono={icono} tecla={tecla} contador={contador}>{children}</Contenido>
+      <Contenido icono={icono} tecla={tecla} contador={contador} contadorTono={contadorTono}>{children}</Contenido>
     </button>
   )
 })
 
-export function BotonEnlace({ a, actual = false, variante, grande, ancho, icono, tecla, atajo, contador, children, etiqueta }: Aspecto & {
+export function BotonEnlace({ a, actual = false, variante, grande, ancho, icono, tecla, atajo, contador, contadorTono, children, etiqueta, aviso = false, apagado = false, titulo }: Aspecto & {
   /** La dirección, ya entera (rutaConta(...)). */
   a: string
   actual?: boolean
   children: ReactNode
   /** aria-label, si el texto visible no basta. */
   etiqueta?: string
+  /** Pide algo: un punto ámbar (y su dato, en `titulo`, lo dice). */
+  aviso?: boolean
+  /** Lo que la empresa no usa: en gris, pero está (regla 7). */
+  apagado?: boolean
+  /** Su dato entero («Expedidas: 4.º · 12»), al pasar el ratón; lo que enseña un número va escrito en `contador`. */
+  titulo?: string
 }) {
+  const clases = [clasesBoton({ variante, grande, ancho }), aviso ? 's-boton-aviso' : '', apagado ? 's-boton-apagado' : ''].filter(Boolean).join(' ')
   return (
-    <Link to={a} className={clasesBoton({ variante, grande, ancho })} aria-current={actual ? 'page' : undefined}
-      aria-keyshortcuts={atajo} aria-label={etiqueta}>
-      <Contenido icono={icono} tecla={tecla} contador={contador}>{children}</Contenido>
+    <Link to={a} className={clases} aria-current={actual ? 'page' : undefined} title={titulo}
+      aria-keyshortcuts={atajo} aria-label={etiqueta} aria-description={aviso && titulo ? titulo : undefined}>
+      <Contenido icono={icono} tecla={tecla} contador={contador} contadorTono={contadorTono}>{children}</Contenido>
     </Link>
   )
 }

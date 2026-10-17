@@ -59,8 +59,8 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   await page.goto('/conta/libros/diario')
   // M01: el título lo dicen las pestañas del marco (Diario › Libro diario); el encabezado, para el lector.
   await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
-  // Desde el menú: «Libros» ya tiene su pantalla.
-  if (lado(page) === 'ordenador') await expect(page.getByRole('link', { name: 'Libros', exact: true }).first()).toBeVisible()
+  // Desde el menú (S01): el diario es Contabilidad › Asientos.
+  if (lado(page) === 'ordenador') await expect(page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('link', { name: 'Contabilidad', exact: true })).toHaveAttribute('aria-current', 'page')
   // Las vistas: solo los orígenes que hay, con cuántos (los filtros de antes).
   const vistas = page.getByRole('group', { name: 'Vistas' })
   for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Plataformas · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {

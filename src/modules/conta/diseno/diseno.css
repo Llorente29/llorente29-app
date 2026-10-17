@@ -52,6 +52,12 @@
   padding: 0 var(--s-2); border-radius: var(--s-radio-pildora);
   background: var(--s-duda-fondo); color: var(--s-duda); font-size: var(--s-t-s); line-height: 1.6;
 }
+.s-boton-contador[data-tono='neutro'] { background: var(--s-neutro-fondo); color: var(--s-tinta); }
+.s-boton-aviso::after {
+  content: ''; width: var(--s-2); height: var(--s-2); border-radius: var(--s-radio-pildora); background: var(--s-duda); flex-shrink: 0;
+}
+.s-boton-apagado:not([aria-current='page']) { color: var(--s-apoyo); }
+.cx a.s-boton-apagado:not([aria-current='page']) { color: var(--s-apoyo); }
 .s-tecla {
   font-family: var(--s-letra-cifras); font-size: var(--s-t-xs); line-height: 1;
   padding: 2px var(--s-1); border-radius: var(--s-radio-campo);
@@ -99,7 +105,7 @@
 .s-tarjeta[data-tono='ok'] { background: var(--s-ok-fondo); border-color: color-mix(in srgb, var(--s-ok) 20%, var(--s-ok-fondo)); }
 .s-tarjeta[data-tono='falta'] { background: var(--s-falta-fondo); border-color: color-mix(in srgb, var(--s-falta) 25%, var(--s-falta-fondo)); }
 .s-tarjeta-cabeza { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
-.s-tarjeta-titulos { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.s-tarjeta-titulos { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; flex: 1 1 240px; }
 .s-tarjeta-titulo { margin: 0; font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
 .s-tarjeta-apoyo { margin: 0; color: var(--s-apoyo); }
 .s-tarjeta-accion { display: flex; gap: var(--s-2); flex-shrink: 0; }
