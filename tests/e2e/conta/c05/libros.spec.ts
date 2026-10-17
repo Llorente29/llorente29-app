@@ -66,7 +66,10 @@ test('Libros en la cinta (S01): cada acción en su grupo, con su número escrito
   await expect(page.locator('.cxl-tuyos')).toHaveCount(0)
 
   // Cierre y Registro: sus dos grupos, sin lo que aún no tiene pantalla (Registro Mercantil).
-  await pestanas.getByRole('link', { name: 'Cierre y Registro' }).or(page.getByRole('navigation', { name: 'Pestañas de Contabilidad' }).getByRole('link', { name: 'Cierre y Registro' })).first().click()
+  // Con el ejercicio al lado, puede no caber y estar en «Más ▾» (Julio, respuesta 3): se abre si hace falta.
+  const cierre = pestanas.getByRole('link', { name: 'Cierre y Registro' })
+  if (!(await cierre.isVisible())) await pestanas.getByRole('button', { name: /▾$/ }).click()
+  await cierre.click()
   await expect(page).toHaveURL(/\/conta\/libros\/cierre\/ejercicios/)
   await expect(cintaDe(page, 'Cierre y Registro').getByRole('group')).toHaveCount(2)
   await expect(cintaDe(page, 'Cierre y Registro').getByText(/Depósito|Legalización|Memoria/)).toHaveCount(0)
