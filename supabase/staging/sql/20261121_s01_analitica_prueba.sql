@@ -52,12 +52,24 @@ begin
   raise notice 'S01 analítica 2: A con «Local» y «Marca» en sus % empresas · D sin ejes.', n_a_emp;
 end $$;
 
--- 3 · Como usuario de A.
+-- 3 · Como usuario de A. La empresa de B se coge ANTES, como postgres: como A,
+-- la RLS de company no la deja ver, y un insert … select de B metería 0 filas
+-- sin error (el 17/10 eso hizo que la 3c saltara aunque la política aguantaba,
+-- y que la 3d se saltara sin probar nada).
+do $$
+declare emp_b uuid;
+begin
+  select id into emp_b from public.company where account_id = 'c01b0000-0000-4000-8000-00000000000b' order by id limit 1;
+  if emp_b is null then raise exception 'PRUEBA S01 analítica 3: la cuenta B no tiene ninguna empresa.'; end if;
+  perform set_config('prueba_analitica.emp_b', emp_b::text, true);
+end $$;
 set local role authenticated;
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 do $$
-declare emp_b uuid; n int;
+declare n int;
   a constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
+  b constant uuid := 'c01b0000-0000-4000-8000-00000000000b';
+  emp_b constant uuid := current_setting('prueba_analitica.emp_b')::uuid;
   emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
 begin
   update public.conta_eje_analitico set nombre = 'Proyecto', nombre_plural = 'Proyectos' where company_id = emp and eje = 'marca';
@@ -72,18 +84,14 @@ begin
   end if;
   raise notice 'S01 analítica 3b: A no ve los ejes de B.';
   begin
-    insert into public.conta_eje_analitico (account_id, company_id, eje, nombre)
-    select 'c01b0000-0000-4000-8000-00000000000b', id, 'local', 'Intruso' from public.company where account_id = 'c01b0000-0000-4000-8000-00000000000b' limit 1;
+    insert into public.conta_eje_analitico (account_id, company_id, eje, nombre) values (b, emp_b, 'local', 'Intruso');
     raise exception 'PRUEBA S01 analítica 3c: A ha podido escribir un eje en la cuenta B.';
   exception when insufficient_privilege then raise notice 'S01 analítica 3c: A no escribe en la cuenta B (42501).';
   end;
   begin
     -- La empresa de B con la cuenta de A: la empresa no es de esa cuenta.
-    select id into emp_b from public.company where account_id = 'c01b0000-0000-4000-8000-00000000000b' limit 1;
-    if emp_b is not null then
-      insert into public.conta_eje_analitico (account_id, company_id, eje, nombre) values (a, emp_b, 'local', 'Mezclado');
-      raise exception 'PRUEBA S01 analítica 3d: entró un eje de una empresa de B con la cuenta de A.';
-    end if;
+    insert into public.conta_eje_analitico (account_id, company_id, eje, nombre) values (a, emp_b, 'local', 'Mezclado');
+    raise exception 'PRUEBA S01 analítica 3d: entró un eje de una empresa de B con la cuenta de A.';
   exception when insufficient_privilege then raise notice 'S01 analítica 3d: una empresa de otra cuenta no entra (42501).';
   end;
 end $$;
