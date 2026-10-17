@@ -25,11 +25,12 @@ import {
   type ApartadoTercero, type ContextoTercero,
 } from '@/modules/conta/terceros/contextoTercero'
 import { Aprendido, ComoSeCalcula, ConQuienHablas, LiquidacionesAnteriores, SusCuentas, TarjetaLiquidaciones } from '@/modules/conta/terceros/piezasTercero'
+import { SusTiendas } from '@/modules/conta/terceros/SusTiendas'
 import { NuevaFactura, PrepararLiquidacion, SubirLiquidacion } from '@/modules/conta/terceros/dialogosTercero'
 import {
   CobroTercero, ContabilidadTercero, ContactosTercero, DatosFiscalesTercero, DocumentosTercero, HistorialTercero, LiquidacionesTercero,
 } from '@/modules/conta/terceros/ApartadosTercero'
-import { accionPrincipal, ejemploDeFicha, filtrarTerceros, franjaArchivado, ordenarPapeles, type Papel, type Tercero } from '@/modules/conta/lib/terceros'
+import { accionPrincipal, ejemploDeFicha, filtrarTerceros, franjaArchivado, ordenarPapeles, vendePorPlataformas, type Papel, type Tercero } from '@/modules/conta/lib/terceros'
 import { useEjemploPregunta } from '@/modules/conta/marco/ejemploPregunta'
 import { cifrasPlataforma, pieTeDebe } from '@/modules/conta/lib/liquidaciones'
 import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
@@ -251,6 +252,8 @@ function MenuMas() {
   const [fallo, setFallo] = useState<string | null>(null)
   const t = ficha.tercero
   const tiene = new Set(ficha.papeles.map((p) => p.role))
+  // Regla de Julio (17/10): «Es también plataforma de reparto», solo si la cuenta vende por plataformas.
+  const vende = vendePorPlataformas(ficha.canales)
   return (
     <>
       <button type="button" className="cx-boton-sec cx-mas" aria-haspopup="menu" aria-expanded={abierto}
@@ -258,7 +261,7 @@ function MenuMas() {
       {abierto && (
         <div className="cxp-menu" role="menu">
           {t.supplierId && <Link role="menuitem" to={rutaFichaProveedor(t.supplierId)}>Abrir su ficha de proveedor</Link>}
-          {PAPELES_QUE_SE_ANADEN.filter((p) => !tiene.has(p.papel)).map((p) => (
+          {PAPELES_QUE_SE_ANADEN.filter((p) => !tiene.has(p.papel) && (p.papel !== 'platform' || vende)).map((p) => (
             <button key={p.papel} type="button" role="menuitem" onClick={async () => {
               setAbierto(false); setFallo(null)
               try {
@@ -611,7 +614,7 @@ function PantallaMovil({ ap, aviso }: { ap: ApartadoTercero; aviso: string | nul
   const { plataforma, socio } = papelesDe(ficha)
   let contenido: ReactNode
   if (ap === 'ficha') contenido = null
-  else if (ap === 'liquidaciones' && plataforma) contenido = <TarjetaLiquidaciones todas />
+  else if (ap === 'liquidaciones' && plataforma) contenido = <><SusTiendas /><TarjetaLiquidaciones todas /></>
   else if (ap === 'liquidaciones' && socio) contenido = <><ComoSeCalcula /><LiquidacionesTercero /></>
   else if (ap === 'contabilidad') contenido = <SusCuentas completa />
   else contenido = <section className="cx-tarjeta">{PANTALLA[ap]()}</section>

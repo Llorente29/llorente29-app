@@ -17,7 +17,7 @@
 // Nada se escribe aquí: la pantalla lo propone y la persona confirma fila a fila.
 
 import { parecido } from '@/modules/conta/lib/importarPlan'
-import type { Papel } from '@/modules/conta/lib/terceros'
+import { vendePorPlataformas, type Papel } from '@/modules/conta/lib/terceros'
 
 export type Tipo430 = 'plataforma' | 'socio' | 'cliente' | 'propia'
 export type Confianza430 = 'seguro' | 'probable'
@@ -54,7 +54,7 @@ export interface Tercero430 {
   codigoProveedor: string | null
 }
 
-export interface Canal430 { id: string; nombre: string; plataformaDe: string | null }
+export interface Canal430 { id: string; nombre: string; plataformaDe: string | null; slug?: string | null }
 
 export interface Propuesta430 {
   tipo: Tipo430
@@ -107,7 +107,8 @@ export function proponer430(c: Cuenta430, terceros: readonly Tercero430[], canal
 
 function proponer(c: Cuenta430, terceros: readonly Tercero430[], canales: readonly Canal430[]): Propuesta430 {
   const nombre = sinPrefijo(c.name)
-  const plat = plataformaDe(nombre)
+  // Sin canal de plataforma, «Uber» o «Glovo» es un cliente más (regla de Julio, 17/10).
+  const plat = vendePorPlataformas(canales) ? plataformaDe(nombre) : null
   const vivos = terceros.filter((t) => !t.archivado)
   const delPago = c.pagoDeProveedor ? terceros.find((t) => t.supplierId === c.pagoDeProveedor) ?? null : null
 
@@ -177,6 +178,12 @@ function proponer(c: Cuenta430, terceros: readonly Tercero430[], canales: readon
       ? `Nadie tiene su NIF (${c.nif}) ni su nombre: ficha nueva, traída del listado y por completar.`
       : 'Nadie se llama así y el listado no trae NIF: ficha nueva, por completar.',
   }
+}
+
+/** Los tipos que se pueden elegir: «Plataforma de reparto», solo si la cuenta vende por plataformas. */
+export function tiposElegibles430(canales: readonly Canal430[]): Tipo430[] {
+  const todos = Object.keys(TIPO_430) as Tipo430[]
+  return vendePorPlataformas(canales) ? todos : todos.filter((t) => t !== 'plataforma')
 }
 
 /** Lo que la persona elige con «Cambiar»: su tipo y su ficha (o ficha nueva). */

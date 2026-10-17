@@ -17,6 +17,7 @@ import { Campo, Pildoras } from '@/modules/conta/proveedor/piezas'
 import { Chip, Vacio } from '@/modules/conta/ui/piezas'
 import { useTercero, papelesDe } from '@/modules/conta/terceros/contextoTercero'
 import { ConQuienHablas, LiquidacionesAnteriores, SusCuentas, TarjetaLiquidaciones } from '@/modules/conta/terceros/piezasTercero'
+import { SusTiendas } from '@/modules/conta/terceros/SusTiendas'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 import { validarIban, normalizarIban, formatearIban } from '@/modules/conta/lib/iban'
@@ -223,6 +224,7 @@ export function LiquidacionesTercero() {
       {plataforma && porConfirmar > 0 && (
         <div className="cx-aviso" role="status">{porConfirmar === 1 ? '1 liquidación tiene' : `${porConfirmar} liquidaciones tienen`} el periodo propuesto desde sus pedidos, por confirmar. Hasta que lo confirmes no cuentan por periodo en Ventas.</div>
       )}
+      {plataforma && <SusTiendas />}
       {plataforma && <TarjetaLiquidaciones todas />}
       {socio && <LiquidacionesAnteriores todas />}
       {socio && <Aportaciones />}

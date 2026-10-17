@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { elegida, hecha, plataformaDe, proponer430, queHace, tarjetaPorRevisar, type Cuenta430, type Tercero430 } from '@/modules/conta/lib/revision430'
+import { elegida, hecha, plataformaDe, proponer430, queHace, tarjetaPorRevisar, tiposElegibles430, type Cuenta430, type Tercero430 } from '@/modules/conta/lib/revision430'
 
 const dir = join(__dirname, '../../../conta/fixtures/importar/diez')
 const csv = (f: string) => readFileSync(join(dir, f), 'utf8').trim().split('\n').slice(1).map((l) => l.split(';'))
@@ -25,10 +25,11 @@ const cuentas: Cuenta430[] = csv('clientes.csv').map(([code, nif, nombre, calle,
   id: `c-${code}`, code, name: nombre, nif: nif || null, direccion: { calle, cp, poblacion, provincia },
   pagoDeProveedor: PAGO[code] ?? null, clienteDe: null, propia: false,
 }))
+// Con su slug, como los lee el servicio (sales_channel.slug).
 const canales = [
-  { id: 'k-glovo', nombre: 'Glovo', plataformaDe: null },
-  { id: 'k-uber', nombre: 'Uber', plataformaDe: null },
-  { id: 'k-je', nombre: 'JustEat', plataformaDe: 'otra-plataforma' },
+  { id: 'k-glovo', nombre: 'Glovo', plataformaDe: null, slug: 'glovo' },
+  { id: 'k-uber', nombre: 'Uber', plataformaDe: null, slug: 'uber' },
+  { id: 'k-je', nombre: 'JustEat', plataformaDe: 'otra-plataforma', slug: 'justeat' },
 ]
 const de = (code: string) => proponer430(cuentas.find((c) => c.code === code)!, terceros, canales)
 
@@ -123,5 +124,29 @@ describe('la tarjeta de la lista vacía', () => {
     expect(tarjetaPorRevisar('clientes', 0, 'glovo', 7, 'Diez')).toBeNull()
     expect(tarjetaPorRevisar('clientes', 0, '', 0, 'Diez')).toBeNull()
     for (const f of ['todos', 'proveedores', 'archivados']) expect(tarjetaPorRevisar(f, 0, '', 7, 'Diez'), f).toBeNull()
+  })
+})
+
+// Regla de Julio (17/10): una cuenta sin canal de plataforma (la C de staging, o
+// una que solo tiene «shop», «salon» o «tpv-mostrador», los otros slugs que hay
+// en producción el 17/10) no ve «Plataforma de reparto» ni se le propone.
+describe('sin canal de plataforma, nada de plataforma', () => {
+  const sinPlataforma = [
+    { id: 'k-shop', nombre: 'Tienda', plataformaDe: null, slug: 'shop' },
+    { id: 'k-salon', nombre: 'Salón', plataformaDe: null, slug: 'salon' },
+    { id: 'k-tpv', nombre: 'Mostrador', plataformaDe: null, slug: 'tpv-mostrador' },
+  ]
+  it('«Plataforma de reparto» solo se puede elegir con un canal de plataforma', () => {
+    expect(tiposElegibles430(canales)).toEqual(['plataforma', 'socio', 'cliente', 'propia'])
+    expect(tiposElegibles430(sinPlataforma)).toEqual(['socio', 'cliente', 'propia'])
+    expect(tiposElegibles430([])).toEqual(['socio', 'cliente', 'propia'])
+  })
+  it('las mismas siete 430, sin canal de plataforma: ninguna se propone como plataforma', () => {
+    for (const c of cuentas) {
+      expect(proponer430(c, terceros, sinPlataforma).tipo).not.toBe('plataforma')
+      expect(proponer430(c, terceros, []).tipo).not.toBe('plataforma')
+    }
+    // Y con sus canales, siguen saliendo las tres de la fixture.
+    expect(cuentas.filter((c) => proponer430(c, terceros, canales).tipo === 'plataforma')).toHaveLength(3)
   })
 })
