@@ -135,7 +135,9 @@ create table if not exists public.tax_obligation (
   decided_at                   timestamptz not null default now(),
   check (origin <> 'rule' or rule_key is not null),
   check (origin = 'rule' or (reason is not null and btrim(reason) <> '')),
-  check (active = (origin <> 'removed')),
+  -- Una persona que añade, lo deja activo; que quita, inactivo. Una regla puede decir las dos cosas («Llevas el SII: no presentas el 390»).
+  check (origin <> 'removed' or not active),
+  check (origin <> 'added' or active),
   check (valid_to is null or valid_to >= valid_from),
   check (payment_mode <> 'direct_debit' or payment_treasury_account_id is not null)
 );
@@ -363,15 +365,26 @@ returns boolean language sql immutable set search_path = public as $$
     ('not_required', 'pending'))
 $$;
 
+-- Antes de escribir (antes que los CHECK): el cambio tiene que valer, y se dice cuál no.
+create or replace function public.conta_impuesto_estado_antes()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.status is distinct from old.status and not public.conta_impuesto_estado_vale(old.status, new.status) then
+    raise exception 'Una declaración no pasa de «%» a «%».', public.conta_impuesto_estado_texto(old.status), public.conta_impuesto_estado_texto(new.status)
+      using errcode = '22023';
+  end if;
+  return new;
+end $$;
+drop trigger if exists tax_return_estado_antes on public.tax_return;
+create trigger tax_return_estado_antes before update of status on public.tax_return
+  for each row execute function public.conta_impuesto_estado_antes();
+
+-- Después: cada cambio, a su registro.
 create or replace function public.conta_impuesto_estado()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare v_nombre text;
 begin
   if tg_op = 'UPDATE' and new.status is not distinct from old.status then return new; end if;
-  if tg_op = 'UPDATE' and not public.conta_impuesto_estado_vale(old.status, new.status) then
-    raise exception 'Una declaración no pasa de «%» a «%».', public.conta_impuesto_estado_texto(old.status), public.conta_impuesto_estado_texto(new.status)
-      using errcode = '22023';
-  end if;
   v_nombre := public.conta_impuesto_quien();
   insert into public.tax_return_event (tax_return_id, account_id, company_id, by_user, by_name, kind, from_status, to_status, message)
   values (new.id, new.account_id, new.company_id, auth.uid(), v_nombre, 'status',
@@ -592,7 +605,7 @@ end $$;
 
 revoke all on function public.conta_impuesto_puede_ver(uuid), public.conta_impuesto_puede_gestionar(uuid), public.conta_impuesto_quien() from public, anon;
 grant execute on function public.conta_impuesto_puede_ver(uuid), public.conta_impuesto_puede_gestionar(uuid), public.conta_impuesto_quien() to authenticated, service_role;
-revoke all on function public.conta_impuesto_espejo_tax_forms(), public.conta_impuesto_desde_tax_forms(), public.conta_impuesto_estado(),
+revoke all on function public.conta_impuesto_espejo_tax_forms(), public.conta_impuesto_desde_tax_forms(), public.conta_impuesto_estado(), public.conta_impuesto_estado_antes(),
   public.conta_impuesto_cadencia_de(uuid, text) from public, anon, authenticated;
 
 -- ── Escribir: los datos de la empresa y quién presenta ─────────────────────
