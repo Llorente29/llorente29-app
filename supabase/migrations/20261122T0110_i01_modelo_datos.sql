@@ -202,9 +202,10 @@ begin
     values (new.account_id, new.company_id, c, public.conta_impuesto_cadencia_de(new.company_id, c), false, 'removed',
             'Quitado de la lista de modelos.', v_motivo, v_quien, v_nombre);
   end loop;
-  -- Lo que entra.
+  -- Lo que entra (solo modelos que existen en tax_form; los demás no son una obligación).
   for c in select distinct x from unnest(coalesce(new.tax_forms, '{}')) x
-            where not exists (select 1 from public.tax_obligation o where o.company_id = new.company_id and o.form_code = x and o.valid_to is null and o.active) loop
+            where exists (select 1 from public.tax_form t where t.code = x)
+              and not exists (select 1 from public.tax_obligation o where o.company_id = new.company_id and o.form_code = x and o.valid_to is null and o.active) loop
     update public.tax_obligation set valid_to = current_date where company_id = new.company_id and form_code = c and valid_to is null;
     if v_primera then
       insert into public.tax_obligation (account_id, company_id, form_code, cadence, active, origin, rule_key, why, decided_by, decided_by_name)
@@ -217,9 +218,12 @@ begin
     end if;
   end loop;
   perform set_config('conta.i01_desde_columna', '', true);
-  -- La columna queda como dicen las obligaciones.
-  select f.tax_forms into new.tax_forms from public.company_tax_forms f where f.company_id = new.company_id;
-  new.tax_forms := coalesce(new.tax_forms, '{}');
+  -- La columna queda como se escribió si dice lo mismo que las obligaciones (el
+  -- mismo orden de quien la escribe); si no, como dicen las obligaciones.
+  if array(select distinct x from unnest(coalesce(new.tax_forms, '{}')) x where exists (select 1 from public.tax_form t where t.code = x) order by 1)
+     is distinct from coalesce((select f.tax_forms from public.company_tax_forms f where f.company_id = new.company_id), '{}') then
+    select coalesce(f.tax_forms, '{}') into new.tax_forms from public.company_tax_forms f where f.company_id = new.company_id;
+  end if;
   return new;
 end $$;
 

@@ -65,6 +65,18 @@ begin
     select * into r from public.tax_obligation where company_id = v_e and form_code = '115' and valid_to is null;
     if r.origin <> 'removed' or r.active then raise exception 'PRUEBA modelo 1: el 115 quitado a la antigua sale %.', r.origin; end if;
   end if;
+  -- La misma lista en otro orden se queda como se escribió (la marca de la IA
+  -- compara lo que guardó); un código que no está en tax_form no rompe el
+  -- guardado ni pasa a ser una obligación.
+  select array_agg(x order by x desc) into v_lista from unnest((select tax_forms from public.company_tax_forms where company_id = v_e)) x;
+  update public.company_tax_profile set tax_forms = v_lista where company_id = v_e;
+  if (select tax_forms from public.company_tax_profile where company_id = v_e) is distinct from v_lista then
+    raise exception 'PRUEBA modelo 1: la misma lista en otro orden no se queda como se escribió: %.', (select tax_forms from public.company_tax_profile where company_id = v_e);
+  end if;
+  update public.company_tax_profile set tax_forms = v_lista || array['ZZ9'] where company_id = v_e;
+  if exists (select 1 from public.tax_obligation where company_id = v_e and form_code = 'ZZ9') then
+    raise exception 'PRUEBA modelo 1: un código que no existe se ha vuelto una obligación.';
+  end if;
   -- Escribir en tax_obligation sale en tax_forms.
   update public.tax_obligation set valid_to = current_date where company_id = v_e and form_code = '349' and valid_to is null;
   insert into public.tax_obligation (account_id, company_id, form_code, cadence, active, origin, why, reason, decided_by_name)

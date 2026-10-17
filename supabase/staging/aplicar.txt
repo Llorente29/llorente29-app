@@ -8,7 +8,8 @@
 #   y el permiso de la asesoría solo con consentimiento.
 #   Las dos con \i dentro de su transacción y ROLLBACK: staging no cambia.
 #   Van las primeras: lo de abajo es de otros frentes y no se toca.
-#   (Otra vez tras 936521b5: el cambio de estado se valida antes que los CHECK.)
+#   (Otra vez tras 936521b5: el cambio de estado se valida antes que los CHECK;
+#   y tras el orden de tax_forms y los códigos que no están en tax_form.)
 supabase/staging/sql/20261122_i01_plazos_prueba.sql
 supabase/staging/sql/20261122_i01_modelo_datos_prueba.sql
 
