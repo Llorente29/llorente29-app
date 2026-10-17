@@ -6,7 +6,9 @@
 --   3. COMO USUARIO de A (administrador de A): sube un logo en la carpeta de A,
 --      lo lee, y apunta su ruta en su empresa. No puede subir en la carpeta de B
 --      y no ve el logo de B (que se sube antes, sin rol).
---   4. La vuelta atrás, de verdad: sin políticas y sin columna.
+--   4. La vuelta atrás, de verdad: sin políticas y sin columna; con logos, el
+--      bucket se queda.
+--   5. Y vacío, como justo después de la tanda: el bucket se va (ensayo #122).
 --
 -- Cambia: company.logo_path (columna nueva), el bucket company-logos y sus
 -- políticas en storage.objects. Todo acaba en ROLLBACK: staging no cambia.
@@ -95,7 +97,29 @@ do $$ begin
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'company' and column_name = 'logo_path') then
     raise exception 'PRUEBA S01 0120: la vuelta atrás no ha quitado las políticas o la columna.';
   end if;
+  if not exists (select 1 from storage.buckets where id = 'company-logos') then
+    raise exception 'PRUEBA S01 0120: con logos dentro, la vuelta atrás ha borrado el bucket.';
+  end if;
   raise notice 'S01 0120 4: vuelta atrás, sin políticas y sin columna (el bucket, con logos, se queda y lo dice).';
+end $$;
+
+-- 5 · El camino de justo después de la tanda: el bucket VACÍO se va, y
+-- storage.buckets queda como antes (lo que cuenta la tanda en producción,
+-- medida 7). Es el que no se probaba: el ensayo #122 lo cazó, el bucket se
+-- quedaba porque storage.protect_delete impide borrar sin
+-- storage.allow_delete_query y la vuelta atrás se tragaba el error.
+select set_config('storage.allow_delete_query', 'true', true);
+delete from storage.objects where bucket_id = 'company-logos';
+select set_config('storage.allow_delete_query', 'false', true);
+\i supabase/vuelta-atras/20261121T0120_s01_logo_empresa.down.sql
+do $$ begin
+  if exists (select 1 from storage.buckets where id = 'company-logos') then
+    raise exception 'PRUEBA S01 0120 5: vacío, la vuelta atrás no ha borrado el bucket company-logos.';
+  end if;
+  if current_setting('storage.allow_delete_query', true) is distinct from 'false' then
+    raise exception 'PRUEBA S01 0120 5: la vuelta atrás deja storage.allow_delete_query en %.', current_setting('storage.allow_delete_query', true);
+  end if;
+  raise notice 'S01 0120 5: vacío, la vuelta atrás borra el bucket y deja storage.buckets como antes.';
 end $$;
 
 rollback;
