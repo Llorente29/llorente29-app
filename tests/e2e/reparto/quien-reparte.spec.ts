@@ -85,13 +85,14 @@ test('la cocina: gris si reparte la plataforma, nada en rojo y ningún «Cambiar
   await page.goto('/orders')
 
   // E2E01 (Burger Norte · Just Eat, «propio» sin dirección): R03, ya no es un
-  // estado aparte. Sale como cualquier otro (aquí, local a mano: sin rider, con
-  // «Despachar») y la línea informativa lo dice. Sin «Pedirla al cliente» ni
+  // estado aparte. Sale como cualquier otro; este no trae ni calle ni punto del
+  // mapa, así que la línea dice que no ha salido y que hay que llamar al
+  // cliente (Julio, 17/10). Sin «Pedirla al cliente» ni
   // «Cambiar a “la reparte Just Eat”»: pasar la marca a «Plataforma» por
   // pedidos sin dirección no puede existir.
   const e2e01 = page.locator('[data-testid="tarjeta-pedido"][data-sale-id="e0200000-0000-4000-8000-0000000053a1"]')
   await expect(e2e01.getByTestId('etiqueta-reparto')).toContainText('Nosotros · aún sin rider')
-  await expect(e2e01.getByTestId('aviso-sin-direccion-texto')).toContainText('Sin dirección completa')
+  await expect(e2e01.getByTestId('aviso-sin-direccion-texto')).toHaveText('No ha salido a Catcher · llama al cliente y completa la dirección')
   await expect(page.getByRole('button', { name: /Cambiar a «la reparte/ })).toHaveCount(0)
   await expect(page.getByText('Pedirla al cliente')).toHaveCount(0)
   await expect(page.getByText(/no la ha mandado/)).toHaveCount(0)
