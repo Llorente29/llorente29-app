@@ -38,6 +38,8 @@ async function porLaRed(page: Page) {
   const envios = () => [...ASIENTOS.map((a) => ({ entry_id: a.id, ext_year: '2026', ext_series: '1', ext_number: a.doc, ext_invoice_number: a.factura, sent_at: `${a.entry_date}T22:00:00Z`,
     document_status: adjuntos.has(a.id) ? 'adjunto' : 'pendiente_diez' })),
     ...(contraEnDiez ? [{ entry_id: ID(5), ext_year: '2026', ext_series: '1', ext_number: 9904, ext_invoice_number: 'UBR-PRU-20260930-ANUL', sent_at: '2026-10-14T10:00:00Z', document_status: null }] : [])]
+  // S01: la pestaña «Importar» (y su entrada en la cinta) es de las empresas que trabajan con Diez (conta_diez_base).
+  await page.route(/\/rest\/v1\/conta_diez_base\?/, (r) => json(r, { company_id: 'empresa-de-la-prueba' }))
   await page.route(/\/rest\/v1\/external_send\?/, async (r) => {
     const pendientes = envios().filter((e, i) => e.document_status === 'pendiente_diez' && ASIENTOS[i].status !== 'anulado').length
     // Como PostgREST: el recuento va en content-range, y el navegador solo lo deja leer si se expone por CORS.
@@ -69,15 +71,13 @@ test('Pendientes de adjuntar en Diez: cuántos, el más antiguo, la referencia, 
   await page.goto('/conta/libros/diario/pendientes-diez')
   await expect(page.getByRole('heading', { name: 'Pendientes de adjuntar en Diez' })).toBeVisible({ timeout: 20_000 })
 
-  // La acción, en la barra de Libros, cuenta lo pendiente: con filas, nunca «nada pendiente» (regla 7).
-  // M01 (Julio, 16/10): en el ordenador, en la segunda fila de la barra de
-  // arriba, con el número escrito («· 3»); en el móvil, en la línea
-  // desplegable del menú del área, con su dato escrito.
-  if ((page.viewportSize()?.width ?? 1440) >= 768) {
-    await expect(page.getByRole('link', { name: /Pendientes de adjuntar en Diez/ })).toContainText('Pendientes de adjuntar en Diez · 3')
-  } else {
-    await expect(page.getByRole('button', { name: /Pendientes de adjuntar en Diez/ })).toContainText('Pendientes de adjuntar en Diez · 3 sin su PDF')
-  }
+  // La acción cuenta lo pendiente: con filas, nunca «nada pendiente» (regla 7).
+  // S01: en la cinta de Contabilidad › Importar (ordenador y móvil), con el
+  // número en su contador y el dato entero al pasar el ratón.
+  const accion = page.getByRole('toolbar', { name: 'Acciones de Importar' }).getByRole('link', { name: /Pendientes de adjuntar en Diez/ })
+  await expect(accion).toHaveAttribute('aria-current', 'page', { timeout: 20_000 })
+  await expect(accion.locator('.s-boton-contador')).toHaveText('3')
+  await expect(accion).toHaveAttribute('title', 'Pendientes de adjuntar en Diez: 3 sin su PDF')
   // Cuántos y el más antiguo (lo anulado no cuenta aquí: va aparte).
   await expect(page.getByText('3 facturas están en Diez sin su PDF. La más antigua, del 01/10/26.')).toBeVisible()
   const lista = page.getByRole('list', { name: 'Facturas en Diez sin su PDF' })

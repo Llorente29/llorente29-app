@@ -212,7 +212,8 @@ test('cuenta A: «Qué va a cada sitio» responde con sus palabras', async ({ pa
   test.skip(info.project.name === 'movil', 'Solo lee: basta un tamaño')
   await entrarComo(page, CUENTA_A.email)
   await planActivado(page)
-  await page.getByRole('link', { name: 'Qué va a cada sitio' }).click()
+  // S01: también está en la cinta de Definiciones; aquí, el de la pantalla.
+  await page.getByRole('main').getByRole('link', { name: 'Qué va a cada sitio' }).click()
   await expect(page).toHaveURL(/\/conta\/ajustes\/plan\/que-va-a-cada-sitio$/)
   await page.getByRole('searchbox', { name: '¿Dónde va…?' }).fill('¿Dónde va la luz?')
   const res = page.getByRole('list', { name: 'Dónde va cada cosa' })
