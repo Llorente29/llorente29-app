@@ -332,6 +332,9 @@ test('Despacho: la lista «Sin dirección completa» de hoy, una frase por pedid
   await expect(fila('R03E')).toHaveAttribute('data-rojo', 'no')
   await expect(fila('R03E').getByTestId('lista-sin-direccion-llamar')).toHaveCount(0)
   await expect(fila('R03E').getByRole('button', { name: 'Completar dirección' })).toBeVisible()
+  // E2E01 (Just Eat, sin calle, sin punto y sin Catcher): igual que su tarjeta, no ha salido, en rojo.
+  await expect(fila('E2E01')).toContainText(NO_HA_SALIDO)
+  await expect(fila('E2E01')).toHaveAttribute('data-rojo', 'si')
   const rojos = await lista.getByTestId('lista-sin-direccion-pedido').evaluateAll(els => els.map(e => e.getAttribute('data-rojo')))
   expect(rojos.indexOf('no')).toBeGreaterThan(rojos.lastIndexOf('si'))
   // Los que reparte Uber no son «sin dirección completa».

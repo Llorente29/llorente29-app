@@ -82,6 +82,12 @@ describe('la lista «Sin dirección completa» de Despacho', () => {
     expect(fraseDeLaLista(p)).toBe(`G301 · Burger de Prueba · Glovo — ${HA_SALIDO}`)
     expect(fraseDeLaLista(rojo)).toBe(`G302 · Burger de Prueba · Glovo — ${NO_HA_SALIDO}`)
   })
+  it('sin Catcher, sin motivo y sin punto del mapa (el E2E01 de staging): no ha salido, en rojo, como en su tarjeta', () => {
+    const sinPunto = { ...p, en_catcher: false, carrier_code: null, lat: null, lng: null }
+    expect(fraseDeLaLista(sinPunto)).toBe(`G301 · Burger de Prueba · Glovo — ${NO_HA_SALIDO}`)
+    expect(necesitaAAlguien(sinPunto)).toBe(true)
+    expect(necesitaAAlguien({ ...sinPunto, lat: 40.41, lng: -3.7 })).toBe(false)
+  })
   it('primero, aunque sea más antiguo, el que no ha salido; luego los que sí', () => {
     expect(necesitaAAlguien(rojo)).toBe(true)
     expect(necesitaAAlguien(p)).toBe(false)

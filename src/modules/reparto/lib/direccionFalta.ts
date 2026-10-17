@@ -116,7 +116,15 @@ export function necesitaAAlguien(p: PedidoSinDireccion): boolean {
   if ((p.direccion_completada ?? '').trim()) return false
   if (CERRADO.has((p.status ?? 'open').toLowerCase())) return false
   if (p.decidir) return true
-  return !haSalido({ enCatcher: p.en_catcher, dispatchError: p.dispatch_error, dispatchMode: p.dispatch_mode ?? null })
+  return !haSalido(estadoDeLaFila(p))
+}
+
+/** Lo que dice la fila de la lista: el mismo cálculo que la tarjeta, con el punto del mapa que trae la lista. */
+function estadoDeLaFila(p: PedidoSinDireccion): EstadoDeLaEntrega {
+  return {
+    enCatcher: p.en_catcher, dispatchError: p.dispatch_error, dispatchMode: p.dispatch_mode ?? null,
+    hayPunto: enlaceAlMapa(p.lat, p.lng) !== null,
+  }
 }
 
 /** El orden de la lista: primero los que necesitan a alguien; dentro, el más reciente arriba. */
@@ -130,7 +138,7 @@ function estadoEnLaLista(p: PedidoSinDireccion): string {
   if (completada) return `${completadaPor(p.completada_por)}: ${completada}`
   if (p.decidir) return `Falta decidir quién reparte este pedido de ${nombreDelPortal(p.channel)} (en el aviso rojo)`
   if (CERRADO.has((p.status ?? 'open').toLowerCase())) return 'Cerrado sin completar la dirección'
-  return avisoDeLaTarjeta({ enCatcher: p.en_catcher, dispatchError: p.dispatch_error, dispatchMode: p.dispatch_mode ?? null })
+  return avisoDeLaTarjeta(estadoDeLaFila(p))
 }
 
 /** «Dirección completada por Persona de Prueba». */
