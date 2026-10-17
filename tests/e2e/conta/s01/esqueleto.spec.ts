@@ -330,6 +330,47 @@ test('Definiciones › Analítica: apagar el local lo quita del asiento a mano; 
   expect(errores).toEqual([])
 })
 
+test('Asientos › Predefinidos: se guarda uno desde el asiento a mano, sale en la lista y al usarlo rellena el asiento', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page, errores)
+  const nombre = `Alquiler e2e ${lado(page)} ${Date.now()}`
+  // «Expedida» y «Tesorería» ponen su serie y dicen qué se apunta.
+  await page.goto('/conta/libros/diario/nuevo?tipo=expedida')
+  await expect(page.getByRole('heading', { name: 'Nueva factura expedida' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByLabel('Serie')).toHaveValue('1')
+  await page.goto('/conta/libros/diario/nuevo?tipo=tesoreria')
+  await expect(page.getByRole('heading', { name: 'Nuevo cobro o pago' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByLabel('Serie')).toHaveValue('3')
+
+  await page.goto('/conta/libros/diario/nuevo?tipo=predefinido')
+  const lista = page.getByRole('region', { name: 'Tus asientos predefinidos' })
+  await expect(lista).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByLabel('Cuenta del apunte 1')).toBeVisible({ timeout: 30_000 })
+  await page.getByLabel('Concepto', { exact: true }).fill('Alquiler del local')
+  await page.getByLabel('Cuenta del apunte 1').fill('62100000')
+  await page.getByLabel('Debe del apunte 1').fill('1200')
+  await page.getByLabel('Cuenta del apunte 2').fill('57200001')
+  await page.getByLabel('Haber del apunte 2').fill('1200')
+  const guardar = page.getByRole('region', { name: 'Guardar como predefinido' })
+  await guardar.getByLabel('Nombre del predefinido').fill(nombre)
+  await guardar.getByRole('button', { name: 'Guardar como predefinido' }).click()
+  // Regla 8: dice qué ha guardado y dónde está.
+  await expect(guardar.getByText(`Guardado como predefinido «${nombre}»: 2 apuntes, serie General, sin importes. Lo tienes en Asientos › Predefinidos.`)).toBeVisible()
+  await expect(lista.getByRole('button', { name: nombre })).toBeVisible()
+
+  // Usarlo en un asiento nuevo: concepto y cuentas puestos, los importes por escribir.
+  await page.goto('/conta/libros/diario/nuevo?tipo=predefinido')
+  await lista.getByRole('button', { name: nombre }).click()
+  await expect(lista.getByText(`Puesto «${nombre}»: 2 apuntes; escribe los 2 importes que faltan.`)).toBeVisible()
+  await expect(page.getByLabel('Concepto', { exact: true })).toHaveValue('Alquiler del local')
+  await expect(page.getByLabel('Cuenta del apunte 1')).toHaveValue('62100000')
+  await expect(page.getByLabel('Cuenta del apunte 2')).toHaveValue('57200001')
+  await expect(page.getByLabel('Debe del apunte 1')).toHaveValue('')
+  await capturar(page, 'asiento-predefinido')
+  expect(errores).toEqual([])
+})
+
 test('la cinta se oculta, se recuerda y vuelve (nunca desaparece sin decir dónde está)', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')

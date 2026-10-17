@@ -5,9 +5,13 @@
 // ve mientras se escribe y dice cuánto falta y dónde. Se guarda como borrador
 // o se guarda y se valida (entonces lleva número y huella). Un asiento nunca
 // se guarda descuadrado: la base tampoco lo deja validar.
+//
+// S01: la cinta de Asientos lo abre con ?tipo= («Expedida» → serie Ventas,
+// «Tesorería» → Banco, «Predefinidos» → elegir uno de entry_template). Y lo que
+// se escribe aquí se puede guardar como predefinido (regla 8: lo dice al guardar).
 
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaLibroDiario } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
@@ -17,8 +21,10 @@ import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid, eurosExactos } from '@/modules/conta/lib/formato'
 import { cuadreMano, problemasMano, type LineaMano } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE, SERIES, type Serie } from '@/modules/conta/lib/libro'
+import { lineasDePredefinido, predefinidoDeMano, tipoDeAsiento, type Predefinido } from '@/modules/conta/lib/tipoAsiento'
 import {
-  cuentasDeApunte, guardarAMano, leerEjercicios, localesDeLaCuenta, validar, type CuentaPlan, type EjercicioLibro, type LocalEmpresa,
+  cuentasDeApunte, guardarAMano, guardarPredefinido, leerEjercicios, leerPredefinidos, localesDeLaCuenta, validar,
+  type CuentaPlan, type EjercicioLibro, type LocalEmpresa,
 } from '@/modules/conta/services/diarioService'
 
 const vacia = (localId: string | null): LineaMano => ({ cuenta: '', debe: '', haber: '', localId, comun: false, concepto: '' })
@@ -27,6 +33,8 @@ export default function NuevoAsientoPage() {
   const { accountId, cargando, userName } = useCuentaConta()
   const { activa } = useEmpresas()
   const navegar = useNavigate()
+  const [query] = useSearchParams()
+  const def = tipoDeAsiento(query.get('tipo'))
   const [base, setBase] = useState<{ cuentas: CuentaPlan[]; locales: LocalEmpresa[]; ejercicios: EjercicioLibro[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [vuelta, setVuelta] = useState(0)
@@ -40,7 +48,10 @@ export default function NuevoAsientoPage() {
   }, [accountId, activa, cargando, vuelta])
 
   const [fecha, setFecha] = useState(hoyEnMadrid())
-  const [serie, setSerie] = useState<Serie>(4)
+  const [serie, setSerie] = useState<Serie>(def?.serie ?? 4)
+  // Desde la cinta se puede pasar de un tipo a otro sin salir de la pantalla: la serie sigue al tipo.
+  const [tipoVisto, setTipoVisto] = useState(def?.tipo ?? null)
+  if (tipoVisto !== (def?.tipo ?? null)) { setTipoVisto(def?.tipo ?? null); setSerie(def?.serie ?? 4) }
   const [concepto, setConcepto] = useState('')
   const unLocal = base && base.locales.length === 1 ? base.locales[0].id : null
   const [lineas, setLineas] = useState<LineaMano[]>([vacia(null), vacia(null)])
@@ -54,6 +65,43 @@ export default function NuevoAsientoPage() {
   const problemas = problemasMano(concepto, fecha, lineas.map((l) => ({ ...l, localId: l.localId ?? unLocal })), codigos, !!ejeLocal)
   const c = cuadreMano(lineas)
   const ejercicio = base?.ejercicios.find((e) => fecha >= e.inicio && fecha <= e.fin) ?? null
+  // Predefinidos: los de la empresa (solo con ?tipo=predefinido) y guardar el que se escribe.
+  const [predefinidos, setPredefinidos] = useState<Predefinido[] | null>(null)
+  const [falloPredef, setFalloPredef] = useState<string | null>(null)
+  const [puesto, setPuesto] = useState<string | null>(null)
+  const [vueltaPredef, setVueltaPredef] = useState(0)
+  useEffect(() => {
+    if (def?.tipo !== 'predefinido' || !accountId || !activa) return
+    let vivo = true
+    leerPredefinidos(accountId, activa.id).then((p) => { if (vivo) { setPredefinidos(p); setFalloPredef(null) } },
+      (e: unknown) => { if (vivo) setFalloPredef(e instanceof Error ? e.message : String(e)) })
+    return () => { vivo = false }
+  }, [def?.tipo, accountId, activa, vueltaPredef])
+  function usar(p: Predefinido) {
+    if (!base) return
+    const { lineas: ls, sinCuenta } = lineasDePredefinido(p, new Map(base.cuentas.map((x) => [x.id, x.code])))
+    setSerie(p.serie); setConcepto(p.concepto)
+    setLineas(ls.length >= 2 ? ls : [...ls, ...Array.from({ length: 2 - ls.length }, () => vacia(null))])
+    const faltan = ls.filter((l) => !l.debe && !l.haber).length
+    setPuesto(`Puesto «${p.nombre}»: ${ls.length} apuntes${faltan ? `; escribe ${faltan === 1 ? 'el importe que falta' : `los ${faltan} importes que faltan`}` : ''}${sinCuenta ? `. ${sinCuenta === 1 ? 'Una cuenta ya no se puede usar' : `${sinCuenta} cuentas ya no se pueden usar`}: elígela${sinCuenta === 1 ? '' : 's'} de nuevo` : ''}.`)
+  }
+  const [nombrePredef, setNombrePredef] = useState('')
+  const [conImportes, setConImportes] = useState(false)
+  const [guardadoPredef, setGuardadoPredef] = useState<string | null>(null)
+  async function guardarComoPredefinido() {
+    setGuardadoPredef(null); setFalloPredef(null)
+    if (!accountId || !activa || !base) return
+    const ls = predefinidoDeMano(lineas, new Map(base.cuentas.map((x) => [x.code, x.id])), conImportes)
+    if (!nombrePredef.trim()) { setFalloPredef('Ponle un nombre al predefinido.'); return }
+    if (!concepto.trim()) { setFalloPredef('Escribe el concepto: es el que llevará cada vez que lo uses.'); return }
+    setOcupado(true)
+    try {
+      await guardarPredefinido(accountId, activa.id, nombrePredef, serie, concepto, ls)
+      setGuardadoPredef(`Guardado como predefinido «${nombrePredef.trim()}»: ${ls.length} apuntes, serie ${NOMBRE_SERIE[serie]}${conImportes ? ', con sus importes' : ', sin importes'}. Lo tienes en Asientos › Predefinidos.`)
+      setNombrePredef(''); setVueltaPredef((v) => v + 1)
+    } catch (e) { setFalloPredef(e instanceof Error ? e.message : String(e)) }
+    finally { setOcupado(false) }
+  }
   const cambia = (i: number, p: Partial<LineaMano>) => setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
 
   async function guardar(yValidar: boolean) {
@@ -85,8 +133,9 @@ export default function NuevoAsientoPage() {
     <div className="cxd-pagina">
       <header className="cxp-cabecera cxd-cabecera">
         <div className="cxp-titulos">
-          <Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libro diario', ruta: rutaLibroDiario() }, { etiqueta: 'Nuevo asiento' }]} />
-          <h1 className="cxp-nombre">Nuevo asiento</h1>
+          <Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libro diario', ruta: rutaLibroDiario() }, { etiqueta: def?.titulo ?? 'Nuevo asiento' }]} />
+          <h1 className="cxp-nombre">{def?.titulo ?? 'Nuevo asiento'}</h1>
+          {def && <p className="cx-ayuda cxd-ayuda-tipo">{def.ayuda}</p>}
         </div>
         <div className="cxd-acciones">
           <Link to={rutaLibroDiario()} className="cx-boton-sec">Cancelar</Link>
@@ -95,6 +144,27 @@ export default function NuevoAsientoPage() {
         </div>
       </header>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+
+      {def?.tipo === 'predefinido' && (
+        <section className="cx-tarjeta" aria-label="Tus asientos predefinidos">
+          <h2 className="cx-tarjeta-titulo">Tus asientos predefinidos</h2>
+          {predefinidos === null && !falloPredef && <Hueso alto={32} />}
+          {predefinidos && predefinidos.length === 0 && (
+            <p>Aún no tienes ninguno. Escribe el asiento abajo y, al final, guárdalo como predefinido con un nombre.</p>
+          )}
+          {predefinidos && predefinidos.length > 0 && (
+            <ul className="cxd-predefinidos">
+              {predefinidos.map((p) => (
+                <li key={p.id}>
+                  <button type="button" className="cx-boton-sec" onClick={() => usar(p)} disabled={ocupado}>{p.nombre}</button>
+                  <span className="cx-ayuda">{NOMBRE_SERIE[p.serie]} · {p.lineas.length} apuntes · {p.concepto}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div role="status" aria-live="polite">{puesto && <p className="cxt-verde">{puesto}</p>}</div>
+        </section>
+      )}
 
       <section className="cx-tarjeta cxd-mano" aria-label="Datos del asiento">
         <div className="cxd-mano-cabeza">
@@ -144,6 +214,18 @@ export default function NuevoAsientoPage() {
         {intentado && problemas.length > 0 && (
           <ul className="cx-error" role="alert">{problemas.map((p) => <li key={p}>{p}</li>)}</ul>
         )}
+      </section>
+
+      <section className="cx-tarjeta" aria-label="Guardar como predefinido">
+        <h2 className="cx-tarjeta-titulo">Guardar como predefinido</h2>
+        <p className="cx-ayuda">Para un asiento que se repite (el alquiler, una cuota): guarda la serie, el concepto y los apuntes. No guarda el asiento.</p>
+        <div className="cxd-mano-cabeza">
+          <label className="cxd-campo cxd-campo-ancho">Nombre del predefinido<input className="cx-input" value={nombrePredef} onChange={(e) => setNombrePredef(e.target.value)} maxLength={80} placeholder="Ej.: Alquiler del local" /></label>
+          <label className="cxd-campo"><span><input type="checkbox" checked={conImportes} onChange={(e) => setConImportes(e.target.checked)} /> Con sus importes</span></label>
+          <button type="button" className="cx-boton-sec" onClick={() => void guardarComoPredefinido()} disabled={ocupado}>Guardar como predefinido</button>
+        </div>
+        <div role="status" aria-live="polite">{guardadoPredef && <p className="cxt-verde">{guardadoPredef}</p>}</div>
+        {falloPredef && <p className="cx-error" role="alert">{falloPredef}</p>}
       </section>
     </div>
   )

@@ -166,9 +166,60 @@ con «María José Fernández de la Vega». Contabilidad con el ejercicio sigue
 llevando a «Más ▾» la quinta (Importar o Cierre y Registro, según el ancho). La
 e2e de la B01 lo comprueba.
 
+## El enlace factura-asiento, paso 1 de 2 (inventario §11)
+
+`supplier_invoice.journal_entry_id` (y las de `channel_settlement` y
+`licensed_settlement`) no las escribe nadie: 0 de 7, 0 de 255 y 0 de 3 en
+producción el 17/10. El enlace de verdad es `journal_entry.source_type` +
+`source_id`, con su índice único para los vivos. En esta rama se deja de leerlas:
+
+- **`propuestasLibroService`**: los tres `.is('journal_entry_id', null)` (que no
+  filtraban nada) pasan a «sin asiento vivo de ese origen» —propuesto, borrador
+  o validado, en la empresa—, leído por `source_type` + `source_id` en trozos de
+  100. Los que ya lo tienen se cuentan en «ya estaban», que es lo que decía la
+  base al intentar proponerlos. «Cómo se apunta» de una factura (N23) no filtra:
+  enseña la propuesta aunque ya tenga asiento, como antes.
+- **La 0150** (`banco_facturas_recibidas_pendientes`, cambiar en caliente): misma
+  firma, mismo contrato (12 columnas, mismo nombre, tipo y orden), mismo cuerpo
+  que el vigente (md5 `f6e2f68f…`, igual en producción y en staging el 17/10)
+  salvo `journal_entry_id`, que ahora es el asiento vivo de la factura. El
+  analizador la da por **sigue** (declarada en la cabecera y con prueba).
+  Su prueba de staging, como usuario de A: nula sin asiento, ese asiento con
+  uno en borrador, nula otra vez al borrarlo, las demás facturas igual, y la
+  vuelta atrás byte a byte (md5 de antes).
+- **Paso 2, otra tanda** (destruir, con «autorizo»): quitar las tres columnas y
+  sus índices, volviendo a medir antes que siguen a 0. Y quitar la 0110 de la
+  D01 del manifiesto de staging, que nombra la columna.
+
+## `?tipo=` en el asiento a mano
+
+La cinta de Asientos abre el asiento a mano con `?tipo=` (`lib/tipoAsiento.ts`):
+
+- **Expedida** → serie Ventas, «Nueva factura expedida» y qué se apunta (430 al
+  debe; 700 y 477 al haber), hasta que llegue Facturación.
+- **Tesorería** → serie Banco, «Nuevo cobro o pago».
+- **Predefinidos** → la lista de los predefinidos de la empresa
+  (`entry_template`, del C04, que ninguna pantalla leía). Al elegir uno pone la
+  serie, el concepto y los apuntes, y dice cuántos importes faltan y si alguna
+  cuenta ya no se puede usar. **En producción hay 0** (tabla entera), así que
+  el asiento a mano lleva además **«Guardar como predefinido»** (nombre y, si se
+  quiere, con sus importes), que dice lo que ha guardado y dónde está.
+- Un `?tipo=` desconocido es el asiento de siempre (la prueba cazó que
+  `?tipo=toString` pasaba con `in`: ahora `Object.hasOwn`). Otra prueba mira que
+  cada `?tipo=` de la cinta tiene su tipo.
+
+## La prueba de la analítica medía mal la 3c (17/10)
+
+En «Aplicar SQL» saltó «A ha podido escribir un eje en la cuenta B». **La
+política aguantaba**: como usuario de A, la RLS de `company` no deja ver las
+empresas de B, así que el `insert … select` de la prueba metía **0 filas sin
+error**, y la prueba lo leía como que había entrado. La 3d tenía el mismo hueco
+al revés: con la empresa de B nula, se saltaba y salía en verde sin probar nada.
+Medido en staging dentro de un bloque deshecho: A ve 0 empresas de B, y las dos
+escrituras dan 42501. Ahora la empresa de B se coge antes, como postgres, y las
+dos escrituras van con `values`.
+
 ## Queda (paso 3)
 
 Lo de hostelería que queda en otras pantallas (Ventas, textos del diario,
-fichas), la vista
-Recibida en Contabilidad › Asientos, `?tipo=` en el asiento nuevo y el
-`journal_entry_id` (paso 1).
+fichas) y la vista Recibida en Contabilidad › Asientos.
