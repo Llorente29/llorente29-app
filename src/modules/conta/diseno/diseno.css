@@ -204,3 +204,8 @@
 /* Lo que ha pasado al pulsar (regla 8): en verde lo hecho, en rojo el fallo. */
 .s-hecho { margin: var(--s-2) 0 0; padding: var(--s-2) var(--s-3); border-radius: var(--s-radio-campo); background: var(--s-ok-fondo); color: var(--s-ok); }
 .s-fallo { margin: var(--s-2) 0 0; padding: var(--s-2) var(--s-3); border-radius: var(--s-radio-campo); background: var(--s-falta-fondo); color: var(--s-falta); }
+
+/* S01 (paso 4) · Un texto por nivel que no mueve nada: los tres en la misma celda, ocupa lo del más largo. */
+.s-por-nivel { display: inline-grid; }
+.s-por-nivel > span { grid-area: 1 / 1; visibility: hidden; }
+.s-por-nivel > span[data-actual] { visibility: visible; }

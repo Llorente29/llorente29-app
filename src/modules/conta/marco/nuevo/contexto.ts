@@ -8,7 +8,7 @@
 // Fuera del marco no hay contexto: las piezas usan lo de serie.
 
 import { createContext, useContext, useEffect, useRef } from 'react'
-import type { Densidad } from '@/modules/conta/esqueleto/preferencias'
+import type { Densidad, Nivel } from '@/modules/conta/esqueleto/preferencias'
 import type { Analitica, EjeVista } from '@/modules/conta/esqueleto/productos'
 
 export interface Marco {
@@ -38,6 +38,8 @@ export interface Marco {
   hosteleria: boolean | null
   /** S01 · Los ejes de analítica de la empresa; null mientras no se sabe o si no se pueden leer. */
   analitica: Analitica | null
+  /** S01 (paso 4) · El nivel de quien mira: cambia palabras y ayuda, nunca posiciones. */
+  nivel: Nivel
 }
 
 /** Una entrada de la cinta puesta por la pantalla: un enlace (`a`) o un botón (`alPulsar`). */
@@ -115,6 +117,12 @@ export function useEntradasEnCinta(entradas: EntradasCinta | null): void {
  * liquidaciones): sale solo si la empresa lo es. Fuera del marco nuevo, como
  * antes del S01: sale.
  */
+/** S01 (paso 4) · El nivel del usuario; fuera del marco nuevo, «medio» (los textos de siempre). */
+export function useNivel(): Nivel {
+  const marco = useContext(MarcoContexto)
+  return marco?.nivel ?? 'medio'
+}
+
 export function useHosteleria(): boolean {
   const marco = useContext(MarcoContexto)
   return marco ? marco.hosteleria === true : true

@@ -43,6 +43,8 @@ import {
   type Apuntada, type FacturaRevisar,
 } from '@/modules/conta/services/documentosService'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { PorNivel } from '@/modules/conta/textos/PorNivel'
+import { useTexto } from '@/modules/conta/textos/useTexto'
 
 const fecha = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—')
 /** R5 · 4: lo más que ocupa el papel en el móvil antes de tocarlo. */
@@ -52,6 +54,8 @@ const euro = (n: number | null) => (n === null ? '—' : eurosExactos(n))
 export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?: boolean }) {
   // S01: el local de la recepción, solo con el eje encendido (Definiciones › Analítica).
   const { local: ejeLocal } = useAnalitica()
+  // S01 (paso 4): las palabras por nivel (maqueta 5); las cajas no se mueven.
+  const tx = useTexto()
   const { invoiceId = '' } = useParams()
   const [query] = useSearchParams()
   const navegar = useNavigate()
@@ -123,7 +127,8 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   if (!fac) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando la factura">{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={40} />)}</div>
 
   const prov = fac.proveedor
-  const titulo = `${prov?.nombre ?? 'No reconozco el emisor'}${fac.numero ? ` · ${fac.numero}` : ''}`
+  const proveedor = prov?.nombre ?? 'No reconozco el emisor'
+  const titulo = fac.numero ? tx('recibida.titulo', { proveedor, numero: fac.numero }) : tx('recibida.tituloSinNumero', { proveedor })
   const yaApuntada = fac.asiento?.estado === 'validado'
   const sinProveedor = !prov
   const lectura = fac.lectura
@@ -140,10 +145,10 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   const sePuedeApuntar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha
   const botonApuntar = !yaApuntada && (enAsientos
     ? <button type="button" className="cx-boton" onClick={() => void apuntar(true)} disabled={!sePuedeApuntar} aria-keyshortcuts="Enter" data-validar-y-siguiente="">
-        {apuntando ? 'Validando…' : <>Validar y siguiente <span aria-hidden="true">⏎</span></>}
+        {apuntando ? 'Validando…' : <><PorNivel clave="recibida.validarYSiguiente" /> <span aria-hidden="true">⏎</span></>}
       </button>
     : <button type="button" className="cx-boton" onClick={() => void apuntar()} disabled={apuntando || sinProveedor || !fac.fecha}>
-        {apuntando ? 'Apuntando…' : 'Está bien · apuntar'}
+        {apuntando ? 'Apuntando…' : <PorNivel clave="recibida.apuntar" />}
       </button>)
   const paraRevisar = pos >= 0 && ids.length ? ` · ${pos + 1} de ${ids.length}${ver === 'para-mirar' ? ' para revisar' : ''}` : ''
   const migas = enAsientos
@@ -177,7 +182,7 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
           <BandaFactura fac={fac} />
 
           <section className="cxr-bloque" aria-label="Lo que he leído">
-            <h2>Lo que he leído</h2>
+            <h2><PorNivel clave="recibida.leido" /></h2>
             <div className="cxr-leido">
               <Leido etiqueta="Proveedor" valor={prov?.nombre ?? fac.propuesto?.nombre ?? 'No lo reconozco'}
                 apoyo={prov ? `${prov.nif ? `NIF ${prov.nif}` : 'sin NIF'} · ficha ✓` : `${fac.propuesto?.nif ? `NIF ${fac.propuesto.nif} · ` : ''}no está en tus proveedores`} />
@@ -311,7 +316,7 @@ function ComoSeApunta({ fac, vista, error, movil, solo }: {
   const col = columnasDelApunte(lineas)
   return (
     <section className="cxr-bloque" aria-label="Cómo se apunta">
-      <h2>Cómo se apunta</h2>
+      <h2><PorNivel clave="recibida.comoSeApunta" /></h2>
       {fac.asiento && <p style={{ margin: 0 }}>Ya tiene su asiento ({fac.asiento.estado}).</p>}
       {!fac.asiento && error && <p className="cx-error">No se ha podido preparar: {error}</p>}
       {!fac.asiento && !error && !vista && <Hueso alto={60} />}
