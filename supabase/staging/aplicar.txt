@@ -29,6 +29,7 @@ supabase/staging/sql/20261122_i01_obligaciones_prueba.sql
 #   con \i y ROLLBACK: fuera de Foodint no se guarda; Foodint guarda (con una
 #   cuenta de su id creada solo dentro de la transacción); el token de un solo
 #   uso; «solo ver» no presenta; «quitar ahora» borra el secreto del Vault.
+#   (Otra vez tras 084986dc: la cuenta de prueba se crea sin persona en la sesión.)
 supabase/staging/sql/20261122_i01_certificados_prueba.sql
 
 # S01 · El esqueleto (rama conta/s01-esqueleto). VA PRIMERO: la prueba de corte

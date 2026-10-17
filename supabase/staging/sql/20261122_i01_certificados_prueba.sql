@@ -79,7 +79,10 @@ do $$ begin
 end $$;
 reset role;
 
--- 2 · Foodint (la cuenta con su id, solo dentro de esta transacción).
+-- 2 · Foodint (la cuenta con su id, solo dentro de esta transacción). Como el
+-- servidor, sin persona en la sesión: los disparadores de una cuenta nueva
+-- (adopt_mandatory_courses) piden acceso a quien la crea si hay alguien.
+select set_config('request.jwt.claims', '', true);
 insert into public.accounts (id, name, slug) values ('51ad1792-6629-4ef7-833a-b57b09a86710', 'Prueba I01a (no es Foodint)', 'prueba-i01a-vault');
 insert into public.user_profiles (user_id, account_id, role, active, display_name) values
   ('c01a0000-0000-4000-8000-0000000000a1', '51ad1792-6629-4ef7-833a-b57b09a86710', 'admin', true, 'Administradora de prueba'),
