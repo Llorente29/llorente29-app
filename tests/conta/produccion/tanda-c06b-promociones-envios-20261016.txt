@@ -1,0 +1,28 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# C06b · Las promociones y los envíos en el asiento de ventas del día
+# (diseño aprobado por Julio, 16/10). La anterior de este fichero (0760, las
+# recibidas abiertas) ya está en el historial de producción (run #98); su
+# copia: tests/conta/produccion/tanda-c06b-recibidas-abiertas-20261016.txt.
+# La de B02 · T1 (0200), también en el historial; su copia:
+# tests/conta/produccion/tanda-b02-entrada-20261016.txt.
+#
+#   1. 0100 — añade conta_ventas_canal_cuenta, conta_envio_aclarado,
+#      conta_cargos_de_pedidos, conta_envio_aclarar y el freno al validar; y
+#      cambia, con la misma firma, conta_propuesta_ventas_unidad (la venta a
+#      precio de carta, la promoción en su 7000900x y el envío cobrado en la
+#      70500001) y conta_resumen_ventas (el descuento, el envío y el papel de
+#      cada línea). Declarado en su cabecera, con su prueba de staging.
+#   2. 0110 — DATOS de Foodint: las 4 subcuentas (70009001–70009003 y
+#      70500001, los números y nombres de Diez) y sus 6 enlaces. Solo inserta.
+#
+# Antes de la tanda, el front y conta-diez-enviar con lo de este PR (el front
+# nuevo funciona con la base de antes; la base nueva con el front de antes
+# daría líneas que el envío de antes no manda: lo para y lo dice).
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/promociones-envios.sql
+supabase/migrations/20261116T0100_c06b_promociones_envios.sql
+supabase/migrations/20261116T0110_c06b_promociones_envios_datos.sql

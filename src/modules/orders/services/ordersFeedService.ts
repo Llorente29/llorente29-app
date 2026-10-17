@@ -98,6 +98,18 @@ export interface OrderFeedItem {
   delivery_address: string | null
   expected_time: string | null
   customer_note: string | null
+  /** R03: la dirección que pegó la cocina (manda sobre delivery_address). */
+  delivery_address_fixed?: string | null
+  /** Quién la completó («Completar dirección»): un nombre de la plantilla o «tablet · …». */
+  delivery_address_fixed_by?: string | null
+  /** R03: código de acceso del teléfono (Uber: la centralita no conecta sin él). */
+  customer_phone_code?: string | null
+  /** R03: indicaciones de entrega para el repartidor. */
+  delivery_instructions?: string | null
+  /** R03: nota del cliente al pedido, aparte de las indicaciones. */
+  order_customer_note?: string | null
+  /** R03: 'fuera_de_zona' = Uber sin calle, la reparte Uber. */
+  delivery_by_reason?: string | null
   total: number
   paid: number | null
   payment_method: string | null
@@ -494,8 +506,8 @@ export function portalDeLaPlataforma(channel: string | null): { url: string; nom
 
 /** Lo que devuelve `sale_coordenadas_de_entrega`. `hay:false` trae el motivo. */
 export type CoordenadasEntrega =
-  | { hay: true; lat: number; lng: number; origen: 'delivery' | 'customer'; aproximada: true; tiene_direccion_postal: boolean }
-  | { hay: false; motivo: string }
+  | { hay: true; lat: number; lng: number; origen: 'delivery' | 'customer'; aproximada: true; tiene_direccion_postal: boolean; direccion?: string | null }
+  | { hay: false; motivo: string; direccion?: string | null }
 
 /**
  * Coordenadas de entrega de un pedido cuya plataforma no mando direccion.
@@ -504,11 +516,16 @@ export type CoordenadasEntrega =
  * tablets del pase, y esto se pregunta solo para los pedidos que lo necesitan
  * -- 26 en 30 dias, no uno por pantalla.
  */
-export async function coordenadasDeEntrega(saleId: string): Promise<CoordenadasEntrega> {
+export async function coordenadasDeEntrega(saleId: string, token?: string | null): Promise<CoordenadasEntrega> {
   requireSupabase()
-  const { data, error } = await (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
-    => Promise<{ data: unknown; error: { message: string } | null }>)(
-      'sale_coordenadas_de_entrega', { p_sale_id: saleId })
+  // R03: la tablet (token, sin sesión) por su variante, que solo enseña los
+  // pedidos de su local; la de sesión sigue cerrada a anon.
+  // .bind: `supabase.rpc` suelto pierde su `this` y revienta sin llamar a nadie.
+  const llamar = (supabase!.rpc as unknown as (fn: string, args: Record<string, unknown>)
+    => Promise<{ data: unknown; error: { message: string } | null }>).bind(supabase!)
+  const { data, error } = token
+    ? await llamar('sale_coordenadas_de_entrega_by_token', { p_device_token: token, p_sale_id: saleId })
+    : await llamar('sale_coordenadas_de_entrega', { p_sale_id: saleId })
   if (error) throw new Error(error.message)
   return data as CoordenadasEntrega
 }

@@ -15,6 +15,7 @@ import { MonitorPlay, LogOut, Loader2 } from 'lucide-react'
 import KdsBoard from './components/KdsBoard'
 import KdsAlarmOverlay from './components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from './components/AvailabilityNoticeOverlay'
+import AvisoDireccionFalta from '../reparto/components/AvisoDireccionFalta'
 import { useDeviceTokenValidation, tokenValidationMessage } from '../tablet/hooks/useDeviceTokenValidation'
 
 const TOKEN_KEY = 'kds_device_token'
@@ -134,6 +135,8 @@ export default function KdsKioskRoute() {
           <LogOut size={14} /> Desvincular
         </button>
       </header>
+      {/* R03: en su sitio, encima del tablero (flotando tapaba las comandas). */}
+      <AvisoDireccionFalta locationId={null} token={token} />
       <div className="flex-1 min-h-0">
         <KdsBoard locationId={null} token={token} />
       </div>

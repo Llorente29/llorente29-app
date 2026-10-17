@@ -85,9 +85,16 @@ describe('la trampa: «door» dentro de una nota del cliente', () => {
 })
 
 describe('lo que NO se traduce, decidido', () => {
-  it('«Spain» se queda: es un valor, y ya no llega (0 veces en los últimos 30 días)', () => {
-    // 475 de las 1.033 históricas de Foodint, ninguna en los últimos 30 días.
+  it('«Spain» no se traduce: es un valor, no una etiqueta', () => {
     expect(traduceDireccionEntrega(CON_SPAIN)).toBe(CON_SPAIN)
+  })
+
+  it('pero lo que se pinta y se imprime lo quita, solo si es un trozo entero (Julio, 17/10)', () => {
+    expect(direccionParaMostrar(CON_SPAIN)).toBe('C. de Álvarez Abellán, 4, Carabanchel, 28025 Madrid')
+    expect(direccionParaMostrar('Calle Inventada 5, 28000 Madrid, Spain, Unit: 3C'))
+      .toBe('Calle Inventada 5, 28000 Madrid, Piso/Puerta: 3C')
+    expect(direccionParaMostrar('Calle Spain 3, 28000')).toBe('Calle Spain 3, 28000')
+    expect(direccionParaMostrar('Spain')).toBe('Spain')
   })
 
   it('una dirección sin nada en inglés sale idéntica', () => {
