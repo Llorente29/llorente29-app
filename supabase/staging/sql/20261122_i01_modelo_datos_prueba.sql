@@ -30,6 +30,14 @@ set local statement_timeout = '300s';
 
 -- Antes: lo que dice hoy tax_forms de cada empresa.
 create temp table _antes on commit drop as select company_id, tax_forms from public.company_tax_profile;
+-- Y las obligaciones que ya hubiera (si la 0110 ya está aplicada en staging,
+-- esta pasada es la segunda: solo cuenta lo que escribe ella).
+create temp table _obl_antes (id uuid primary key) on commit drop;
+do $$ begin
+  if to_regclass('public.tax_obligation') is not null then
+    insert into _obl_antes select id from public.tax_obligation;
+  end if;
+end $$;
 
 \i supabase/migrations/20261122T0100_i01_plazos.sql
 \i supabase/migrations/20261122T0110_i01_modelo_datos.sql
@@ -46,12 +54,13 @@ begin
    where array(select distinct x from unnest(a.tax_forms) x where exists (select 1 from public.tax_form t where t.code = x) order by 1)
          is distinct from (select f.tax_forms from public.company_tax_forms f where f.company_id = a.company_id);
   if v_n > 0 then raise exception 'PRUEBA modelo 1: % empresas tienen en company_tax_forms otra lista que en tax_forms.', v_n; end if;
-  select count(*) into v_n from public.tax_obligation;
-  raise notice 'PRUEBA modelo 1: % modelos pasan de tax_forms a tax_obligation.', v_n;
+  select count(*) into v_n from public.tax_obligation o where not exists (select 1 from _obl_antes a where a.id = o.id);
+  raise notice 'PRUEBA modelo 1: % modelos pasan de tax_forms a tax_obligation (% ya estaban).', v_n, (select count(*) from _obl_antes);
   if exists (select 1 from public.company_tax_profile p join _antes a using (company_id) where p.tax_forms is distinct from a.tax_forms) then
     raise exception 'PRUEBA modelo 1: la migración ha cambiado tax_forms de alguna empresa.';
   end if;
-  if exists (select 1 from public.tax_obligation where origin <> 'rule' or rule_key <> 'alta_c00') then
+  if exists (select 1 from public.tax_obligation o where (o.origin <> 'rule' or o.rule_key <> 'alta_c00')
+               and not exists (select 1 from _obl_antes a where a.id = o.id)) then
     raise exception 'PRUEBA modelo 1: lo que había no ha pasado como «lo propuso el alta».';
   end if;
 

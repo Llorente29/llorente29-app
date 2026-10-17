@@ -6,10 +6,14 @@
 #   company_tax_facts, tax_return y su registro, certificados, quién presenta) y
 #   comprueba el espejo de tax_forms, las respuestas del alta, el estado como dato
 #   y el permiso de la asesoría solo con consentimiento.
-#   Las dos con \i dentro de su transacción y ROLLBACK: staging no cambia.
-#   Van las primeras: lo de abajo es de otros frentes y no se toca.
-#   (Otra vez tras 936521b5: el cambio de estado se valida antes que los CHECK;
-#   y tras el orden de tax_forms y los códigos que no están en tax_form.)
+#   Las dos pruebas, con \i dentro de su transacción y ROLLBACK.
+#   La 0100 y la 0110 se aplican DE VERDAD (solo añaden: tablas, funciones,
+#   vistas y el disparador nuevo de company_tax_profile, probados en los runs
+#   313 y 314), para que el alta del front pueda guardar sus respuestas. Las
+#   pruebas corren después: son la segunda pasada, y prueban que reaplicar no
+#   duplica nada. Van las primeras: lo de abajo es de otros frentes y no se toca.
+supabase/migrations/20261122T0100_i01_plazos.sql
+supabase/migrations/20261122T0110_i01_modelo_datos.sql
 supabase/staging/sql/20261122_i01_plazos_prueba.sql
 supabase/staging/sql/20261122_i01_modelo_datos_prueba.sql
 
