@@ -1,8 +1,8 @@
 {
- "_que": "W02 · contexto de producción de la tanda viva «relevo del secreto del despacho» (20261120T0100), medido en SOLO LECTURA el 17/10 a las 12:52 UTC (begin read only … rollback), con la consulta de analizar.mjs sql-contexto (ya con vault.create_secret / vault.update_secret como escritura en vault.secrets) y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe vault.secrets (reltuples 0: estadística sin refrescar, no el número de secretos); nada del camino del pedido; el fichero no está en el historial.",
- "medido": "2026-10-17T12:52Z",
+ "_que": "W02 · contexto de producción de la tanda viva «fin del relevo del secreto del despacho» (20261120T0200), medido en SOLO LECTURA el 17/10 a las 15:59 UTC (begin read only … rollback), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow, con la 0100 ya en el historial (real de las 15:54 UTC) y los dos secretos del relevo en Vault. Existe vault.secrets (reltuples 0: estadística sin refrescar, no el número de secretos); nada del camino del pedido; el fichero no está en el historial.",
+ "medido": "2026-10-17T15:59Z",
  "tanda": {
-  "supabase/migrations/20261120T0100_w02_secreto_despacho_relevo.sql": "87a4813f56569735c9639a00aa5c5ea3"
+  "supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql": "74779624d887a6fba86e1ff2a72637af"
  },
  "contexto": {
   "tablas": [

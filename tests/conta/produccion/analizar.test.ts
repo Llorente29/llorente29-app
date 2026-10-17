@@ -1378,12 +1378,51 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el relevo del secreto del despacho (W02, Julio, 17/10; PR #225)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el fin del relevo del secreto del despacho (W02, 0200, Julio, 17/10)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 17/10 a las 12:52 UTC para ESTE fichero (con su md5).
+  // lectura en producción el 17/10 a las 15:59 UTC para ESTE fichero (con su md5),
+  // con la 0100 ya en el historial y los dos secretos del relevo en Vault.
   const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero, AUTORIZO: borra en vault.secrets, que existe', () => {
+    expect(viva).toEqual(['supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql'])
+    expect(ctx.tablas).toEqual(['vault.secrets'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'autorizo' })
+  })
+  it('el comentario del manifiesto dice, para «autorizo», exactamente ese fichero', () => {
+    const l = readFileSync(MANIFIESTO, 'utf8').split('\n')
+    const i = l.findIndex((x) => /^#\s*autorizo:\s*$/.test(x))
+    expect(l[i + 1].replace(/^#\s*/, '').trim()).toBe('20261120T0200_w02_secreto_despacho_fin_relevo.sql')
+  })
+  it('solo borra el _anterior, y para si no hay secreto vivo', () => {
+    const sql = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '')
+    expect(sql).toMatch(/delete from vault\.secrets where name = 'catcher_dispatch_secret_anterior'/)
+    expect(sql).not.toMatch(/delete from vault\.secrets where name = 'catcher_dispatch_secret'\s*;/)
+    expect(sql).toMatch(/raise exception 'W02: no hay catcher_dispatch_secret en Vault/)
+  })
+  it('declara qué cuenta: la misma cuenta del relevo, que ve si queda el _anterior', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/w02-secreto-despacho.sql'])
+    expect(readFileSync(cuentas[0], 'utf8')).toContain("'catcher_dispatch_secret_anterior'")
+  })
+  it('sin vuelta atrás, a propósito: no hay .down.sql y el manifiesto de vuelta atrás no lista ninguno (el modo vuelta_atras para)', () => {
+    expect(existsSync('supabase/vuelta-atras/20261120T0200_w02_secreto_despacho_fin_relevo.down.sql')).toBe(false)
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([])
+    expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toMatch(/NINGUNA, a propósito/)
+    expect(readFileSync(MANIFIESTO, 'utf8')).toMatch(/SIN VUELTA ATRÁS, a propósito/)
+  })
+})
+
+describe('la tanda del relevo del secreto del despacho (W02, 0100; PR #225), ya aplicada (real de las 15:54 UTC del 17/10): su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-w02-secreto-relevo-20261017.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 17/10 a las 12:52 UTC para ESTE fichero (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-w02-secreto-relevo-20261017.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
@@ -1412,9 +1451,9 @@ describe('la tanda de AHORA (manifiesto vivo): el relevo del secreto del despach
     // Todo decrypted_secret que sale, sale dentro de left(md5(…), 12).
     expect((fuera.match(/decrypted_secret\b(?! from)/g) ?? []).length).toBe((fuera.match(/left\(md5\(decrypted_secret\), 12\)/g) ?? []).length)
   })
-  it('su vuelta atrás es un fichero, con la misma cuenta, y deja el de antes', () => {
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual(['supabase/vuelta-atras/20261120T0100_w02_secreto_despacho_relevo.down.sql'])
-    expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/w02-secreto-despacho.sql')
+  it('su vuelta atrás era un fichero, con la misma cuenta, y dejaba el de antes', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-w02-secreto-relevo-20261017.txt')).toEqual(['supabase/vuelta-atras/20261120T0100_w02_secreto_despacho_relevo.down.sql'])
+    expect(readFileSync('tests/conta/produccion/vuelta-atras-w02-secreto-relevo-20261017.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/w02-secreto-despacho.sql')
     const atras = readFileSync('supabase/vuelta-atras/20261120T0100_w02_secreto_despacho_relevo.down.sql', 'utf8')
     expect(atras).toMatch(/perform vault\.update_secret\(v_id, v_ant\)/)
     expect(atras).toMatch(/raise exception/)

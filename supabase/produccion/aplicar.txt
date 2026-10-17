@@ -3,25 +3,23 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# W02 · El relevo del secreto del despacho (Julio, 17/10; PR #225). La anterior
-# de este fichero (M01, «Esperan»: 0100) ya está en el historial de producción;
-# su copia: tests/conta/produccion/tanda-m01-esperan-20261017.txt.
+# W02 · Fin del relevo del secreto del despacho (Julio, 17/10). La anterior de
+# este fichero (W02, el relevo: 0100, real de las 15:54 UTC del 17/10) ya está
+# en el historial de producción; su copia:
+# tests/conta/produccion/tanda-w02-secreto-relevo-20261017.txt.
 #
-#   1. 0100 — guarda el secreto de ahora como catcher_dispatch_secret_anterior
-#      y pone en catcher_dispatch_secret uno nuevo, generado dentro de la base
-#      (no está en el fichero ni sale por ningún sitio). AUTORIZO: escribe en
-#      vault.secrets (analizar.mjs cuenta vault.create_secret y
-#      vault.update_secret como escritura desde el W02).
+#   1. 0200 — borra catcher_dispatch_secret_anterior de Vault. Desde aquí solo
+#      vale el secreto nuevo. AUTORIZO: borra en vault.secrets.
 #
-# ANTES, catcher-dispatch desplegado con el relevo (acepta el _anterior
-# mientras exista): va en el mismo PR. Se fusiona, se comprueba que lo
-# desplegado es lo de main, y entonces esta tanda.
+# CUÁNDO: después de que haya salido a Catcher un pedido en automático con el
+# secreto nuevo y con 15 minutos seguidos sin CATCHER_DISPATCH_SECRETO_ANTERIOR
+# en los logs de catcher-dispatch.
 #
-# DESPUÉS, en otra tanda y otro PR: la 0200 borra el _anterior, cuando los logs
-# de catcher-dispatch lleven 15 minutos sin CATCHER_DISPATCH_SECRETO_ANTERIOR.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt (solo antes de la 0200).
+# SIN VUELTA ATRÁS, a propósito: el de antes se borra y no hay a qué volver. El
+# ensayo lo dirá («la vuelta atrás no estaría completa», aviso, no para) y
+# supabase/produccion/vuelta-atras.txt no lista ningún fichero.
 #
 # autorizo:
-#   20261120T0100_w02_secreto_despacho_relevo.sql
+#   20261120T0200_w02_secreto_despacho_fin_relevo.sql
 cuenta: scripts/conta/produccion/cuentas/w02-secreto-despacho.sql
-supabase/migrations/20261120T0100_w02_secreto_despacho_relevo.sql
+supabase/migrations/20261120T0200_w02_secreto_despacho_fin_relevo.sql
