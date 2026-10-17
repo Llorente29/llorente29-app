@@ -151,6 +151,14 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
     await expect(log(page).getByText(/^Apuntad[oa]\.$/)).toHaveCount(0)
     await hastaLasCuentas(page)
 
+    // I01a: las respuestas de impuestos quedan como datos de la empresa, del alta.
+    const datos = await rest<{ fact: string; value: unknown; origin: string }[]>(s, 'GET',
+      `company_tax_facts?account_id=eq.${CUENTA_C.id}&select=fact,value,origin&order=fact`)
+    expect(datos.datos).toEqual([
+      { fact: 'pays_with_withholding', value: true, origin: 'alta' },
+      { fact: 'rents_premises_with_withholding', value: false, origin: 'alta' },
+    ])
+
     // N1b: 4 de 6, las cuentas preguntándose y el banco al final.
     await expect(carril.getByText('4 de 6')).toBeVisible()
     await expect(carril.getByText('Te lo estoy preguntando')).toBeVisible()
