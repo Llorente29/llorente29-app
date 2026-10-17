@@ -64,6 +64,25 @@
 
 ---
 
+## Decisiones del 17/10 (Julio, sobre este informe)
+
+1. **Domiciliación.** La fecha se calcula con la regla de los **3 días hábiles** de la Orden HAC/241/2025 y **se guarda en cada declaración** (`tax_return.due_date_direct_debit`, §7.2), como se propone en §6.2.
+2. **Custodia del certificado.**
+   - **Foodint empieza con el Vault de Supabase.**
+   - **El KMS externo es obligatorio antes de dar de alta a cualquier cliente nuevo**, y **lo impide el código**:
+     - mientras el almacén sea el Vault, solo se admite el certificado de la cuenta de Foodint;
+     - para cualquier otra cuenta, subir un certificado falla con un mensaje que lo explica.
+   - **Diseñado para pasar de Vault a KMS sin tocar el resto.** Una sola pieza, «almacén de certificados», con tres operaciones: guardar, abrir para usar y quitar. Hay dos implementaciones (Vault y KMS), y `tax_certificate.storage` dice en cuál está cada uno. Pasar a KMS es:
+     - añadir la implementación;
+     - cambiar el almacén por defecto;
+     - volver a subir el certificado de Foodint, o migrarlo: abrirlo con el Vault y guardarlo con el KMS, dentro de la función.
+     - Ni las declaraciones, ni los permisos, ni el registro de usos, ni la pantalla cambian.
+   - **Mientras no haya KMS, la pantalla no dice «nadie puede verlo, tampoco en Sumied».** El texto del tablero 8 sale según el almacén: con el Vault dice lo que es verdad (cifrado, solo lo usa el servidor, cada uso queda apuntado) sin esa frase.
+3. **Enlace asesoría–empresa con consentimiento: obligatorio y dentro del encargo.** Es `company_tax_presenter` con `consented_by` / `consented_at` (§7.3), más el permiso entre cuentas (RLS) que hoy no existe.
+4. **Modelo 200: hay canal directo.** Diez y ERP10 lo presentan directamente. Hay que encontrarlo en la documentación (`PresBasicaDos` u otro). **No vale** «se prepara el fichero y se sube a mano». Lo que encuentre va en §1.
+
+---
+
 ## 1. El canal técnico de la AEAT, modelo a modelo
 
 ### 1.1 Tabla
@@ -510,11 +529,9 @@ El resto de los tres tableros se puede hacer con lo descrito arriba.
 
 ## 9. Qué hace falta medir o decidir antes de construir
 
-**Decisiones de Julio:**
-1. **Regla de la domiciliación:** 3 días hábiles calculados (§6.2), en vez de «5 días antes».
-2. **Custodia:** KMS externo (AWS o Google), con su cuenta y su coste (§2.2).
-3. **Asesoría:** enlace entre cuentas (asesoría ↔ empresa cliente) con consentimiento. Es pieza nueva de permisos (§7.3).
-4. **200:** si no hay servicio directo, ¿basta «Sumied prepara el fichero y tú lo presentas en Sociedades WEB»?
+**Decisiones de Julio:** tomadas el 17/10; están en «Decisiones del 17/10», al principio. Queda abierto:
+- **cuándo y qué KMS** (AWS o Google), antes del primer cliente que no sea Foodint;
+- y **encontrar el canal directo del 200** en la documentación.
 
 **Lo que se prueba en el paso 2, en staging:**
 1. `Deno.createHttpClient` con certificado de cliente en el Edge Runtime de Supabase, contra un servidor público de pruebas de mTLS. Nunca contra la AEAT.
