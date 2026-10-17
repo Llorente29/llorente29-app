@@ -118,6 +118,9 @@
   .cxp-tabla-cabeza.cxt-fila > :nth-child(4), .cxp-tabla-fila.cxt-fila > :nth-child(4) { display: none; }
 }
 /* D01 · «Sus tiendas» (16/10): una fila por tienda, con sus tres desplegables. */
+/* Cuatro columnas no caben en los 640 px del cuerpo de edición: los desplegables
+   salían cortados («Sin marc»). Como Sus cuentas, el apartado usa el ancho entero. */
+.cxp-edicion-cuerpo:has(.cxt-tienda) { max-width: none; }
 .cxt-tiendas-resumen { margin: 0 0 4px; font-size: 14px; color: var(--cx-apoyo); }
 .cxt-tienda {
   display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)) auto; gap: 12px; align-items: center;
