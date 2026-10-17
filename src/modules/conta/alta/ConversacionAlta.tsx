@@ -56,6 +56,7 @@ import {
 } from '@/modules/conta/services/altaService'
 import { anadirActividadConIa, ponerConIa } from '@/modules/conta/services/iaService'
 import { leerReglasModelos } from '@/modules/conta/services/modelosService'
+import { guardarRespuestasDelAlta } from '@/modules/conta/services/impuestosService'
 import type { ReglaModelo } from '@/modules/conta/lib/modelos'
 import { abrirEjercicio, anadirActividad, buscarCnae, buscarIae, type OpcionCodigo } from '@/modules/conta/services/empresaDatosService'
 import { validarNifEs } from '@/modules/conta/lib/nif'
@@ -366,6 +367,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   async function terminarPaso(r: Partial<Record<ClavePregunta, string>>, id: string) {
     if (!ctx || !accountId) return
     if (paso === 'impuestos') {
+      // I01a: las respuestas se guardan como datos de la empresa (quién y cuándo), no solo como modelos.
+      await guardarRespuestasDelAlta(id, r)
       const t = territorioPorCp(ctx.cp)
       await ponerConIa(id, 'company_tax_profile', 'tax_territory', t.territorio, t.porque)
       if (t.territorio === 'peninsula_baleares') {
