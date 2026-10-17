@@ -14,10 +14,12 @@
 #   duplica nada. Van las primeras: lo de abajo es de otros frentes y no se toca.
 supabase/migrations/20261122T0100_i01_plazos.sql
 supabase/migrations/20261122T0110_i01_modelo_datos.sql
+supabase/migrations/20261122T0120_i01_obligaciones.sql
 supabase/staging/sql/20261122_i01_plazos_prueba.sql
 supabase/staging/sql/20261122_i01_modelo_datos_prueba.sql
-#   Pieza 3, obligaciones: la prueba aplica la 0120 (las reglas con nombre) con
-#   \i dentro de su transacción y ROLLBACK: regla, datos y porqué de cada
+#   Pieza 3, obligaciones: la 0120 (las reglas con nombre; solo funciones) se
+#   aplica DE VERDAD arriba, probada en el run 316, para que el alta tome los
+#   modelos de la base. Su prueba, otra vez con \i y ROLLBACK: regla, datos y porqué de cada
 #   modelo; calcular dos veces no escribe dos; quitar pide motivo y ninguna
 #   regla lo pisa; un dato cambia la regla; Canarias; el 130 de un autónomo.
 supabase/staging/sql/20261122_i01_obligaciones_prueba.sql
