@@ -2,11 +2,12 @@
 // tests/e2e/conta/m01/marco.spec.ts
 //
 // M01 · El marco nuevo (maqueta N30, decisiones de Julio sobre el F01), en la
-// cuenta A de staging-conta (todo inventado):
-//   · la barra de módulos plegada y desplegada, que se recuerda;
-//   · Impuestos apagado con «Próximamente»;
+// cuenta A de staging-conta (todo inventado). Desde el S01 el marco es el
+// esqueleto (tests/e2e/conta/s01/esqueleto.spec.ts prueba lo suyo); aquí:
+//   · la barra de productos desplegada y plegada, que se recuerda (en la base);
+//   · lo que no tiene pantalla no sale (antes, Impuestos apagado con «Próximamente»);
 //   · el «Te toca hoy» del Inicio;
-//   · la densidad, que se recuerda;
+//   · la densidad, en el menú del usuario, que se recuerda;
 //   · una pantalla vieja (Bancos) dentro del marco, con su estilo y sus pestañas;
 //   · el buscador general (Ctrl K), que es del marco y no de Libros.
 // Las capturas van a docs/conta/capturas/m01 (frente D).
@@ -39,6 +40,17 @@ async function capturar(page: Page, nombre: string, medir = true) {
 
 const menu = (page: Page) => page.getByRole('navigation', { name: 'Menú de contabilidad' })
 
+/** S01: el menú del usuario («Admin · Medio ▾»), con el nivel, la densidad y la cinta. */
+async function abrirUsuario(page: Page) {
+  await page.getByRole('button', { name: /\. Tus preferencias$/ }).click()
+}
+/** S01: la densidad se cambia en el menú del usuario, y lo dice. */
+async function cambiarDensidad(page: Page, cual: 'Cómoda' | 'Compacta') {
+  await abrirUsuario(page)
+  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: cual }).click()
+  await expect(page.getByRole('status').filter({ hasText: `Densidad: ${cual.toLowerCase()}.` })).toBeVisible()
+}
+
 /** El «Te toca hoy» ya ha contado: la franja deja de estar ocupada y ningún número dice «…». */
 async function esperarNumeros(page: Page) {
   const franja = page.getByRole('region', { name: 'Te toca hoy' })
@@ -46,7 +58,7 @@ async function esperarNumeros(page: Page) {
   await expect(franja.locator('.cxm-chip-numero', { hasText: '…' })).toHaveCount(0)
 }
 
-test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toca hoy» del Inicio', async ({ page }) => {
+test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «Te toca hoy» del Inicio', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/inicio')
@@ -68,19 +80,17 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
   if (numeros.length === 0) await expect(franja.getByText('Nada pendiente hoy')).toBeVisible()
   else await expect(franja.getByText('Nada pendiente hoy')).toHaveCount(0)
   await expect(franja.getByRole('link')).toHaveCount(numeros.length)
-  // Lo de la primera carga, para compararlo después de recargar: no se cuenta
-  // antes de saber la empresa (e2e 375 dio «0» en Libros con 6 esperando).
   const primeraCarga = await franja.locator('.cxm-chip-numero').allTextContents()
 
   if (lado(page) === 'movil') {
-    // Abajo: Inicio, Compras, Bancos, Libros y «Más».
-    await expect(menu(page).locator('.cxm-barra-item .cxm-modulo-nombre')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Libros', 'Más'])
+    // Abajo (S01): Inicio, Contabilidad, Compras y gastos, Bancos y «Más».
+    await expect(menu(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Más'])
     await expect(menu(page).getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
     await capturar(page, 'marco-plegado')
     await menu(page).getByRole('button', { name: 'Más' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
-    await expect(hoja.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Ventas', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes', 'Volver a Folvy'])
-    await expect(hoja.locator('.cxm-modulo-apagado')).toContainText('Próximamente')
+    // Lo que no tiene pantalla no sale (S01: nada vacío): ni Ventas ni Impuestos.
+    await expect(hoja.getByRole('link')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes', 'Volver a Folvy'])
     await esperarCargado(page)
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/marco-mas-movil.png` })
@@ -88,52 +98,39 @@ test('el marco: módulos plegados y desplegados, Impuestos apagado y el «Te toc
     return
   }
 
-  // Plegada (de serie): 76 px, círculos con su letra y el nombre debajo.
+  // Desplegada (de serie, S01): unos 88 px, cada producto con su nombre.
   const barra = menu(page)
-  await expect(barra.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Ventas', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes'])
-  await expect(barra.locator('.cxm-circulo').nth(1)).toHaveText('V')
-  expect(Math.round((await barra.boundingBox())!.width)).toBe(76)
+  await expect(barra.locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+  expect(Math.round((await barra.boundingBox())!.width)).toBe(88)
   await expect(barra.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
-  // Impuestos, apagado: no es un enlace que lleve a ningún sitio, y dice «Próximamente».
-  const impuestos = barra.locator('.cxm-modulo-apagado')
-  await expect(impuestos).toHaveAttribute('aria-disabled', 'true')
-  await impuestos.hover()
-  await expect(barra.getByRole('tooltip')).toHaveText('Próximamente')
-  // Al lado del botón, a su altura (no debajo, encima de la tarjeta).
-  const caja = (await impuestos.boundingBox())!, globo = (await barra.getByRole('tooltip').boundingBox())!
-  expect(globo.x).toBeGreaterThanOrEqual(caja.x + caja.width)
-  expect(Math.abs(globo.y + globo.height / 2 - (caja.y + caja.height / 2))).toBeLessThanOrEqual(2)
-  // Solo al pasar el ratón o con el foco del teclado (Julio, 16/10): fuera, no se pinta.
-  await page.mouse.move(720, 640)
-  await expect(barra.getByRole('tooltip')).toHaveCount(0)
-  await capturar(page, 'marco-plegado')
+  // Ni Impuestos ni Ventas: un producto sin pantalla no sale (antes, apagado con «Próximamente»).
+  await expect(barra.getByText('Impuestos')).toHaveCount(0)
+  await expect(page.getByText('Próximamente')).toHaveCount(0)
+  await capturar(page, 'marco-desplegado')
 
-  // Desplegada: 232 px; se recuerda al volver.
-  await barra.getByRole('button', { name: 'Desplegar el menú' }).click()
-  expect(Math.round((await barra.boundingBox())!.width)).toBe(232)
+  // Plegada: solo los iconos, con su nombre para el lector; se recuerda (en la base).
+  await barra.getByRole('button', { name: 'Plegar el menú' }).click()
+  expect(Math.round((await barra.boundingBox())!.width)).toBe(56)
+  await expect(barra.getByRole('link', { name: 'Contabilidad' })).toBeVisible()
   await page.reload()
-  await expect(menu(page).getByRole('button', { name: 'Plegar el menú' })).toBeVisible()
-  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(232)
-  // Al recargar, el navegador vuelve a donde estaba la página: arriba del todo
-  // para la foto, y con los números ya contados (no «…»).
+  await expect(menu(page).getByRole('button', { name: 'Desplegar el menú' })).toBeVisible()
+  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(56)
   await esperarNumeros(page)
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).locator('.cxm-chip-numero')).toHaveText(primeraCarga)
   await page.evaluate(() => window.scrollTo(0, 0))
-  await capturar(page, 'marco-desplegado')
-  await menu(page).getByRole('button', { name: 'Plegar el menú' }).click()
-  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(76)
+  await capturar(page, 'marco-plegado')
+  await menu(page).getByRole('button', { name: 'Desplegar el menú' }).click()
+  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(88)
 
-  // La densidad: compacta de serie; se recuerda.
-  const densidad = page.getByRole('group', { name: 'Densidad' })
-  await expect(densidad.getByRole('button', { name: 'Compacta' })).toHaveAttribute('aria-pressed', 'true')
-  await densidad.getByRole('button', { name: 'Cómoda' }).click()
+  // La densidad, en el menú del usuario (S01): compacta de serie; se recuerda.
+  await cambiarDensidad(page, 'Cómoda')
   await page.reload()
-  await expect(page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: 'Cómoda' })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'comoda')
-  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: 'Compacta' }).click()
+  await cambiarDensidad(page, 'Compacta')
+  await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'compacta')
 
   // «Volver a Folvy», en el menú del usuario (con Folvy; en el producto solo no hay).
-  await page.locator('.cxm-usuario-boton').click()
+  await abrirUsuario(page)
   await expect(page.getByRole('link', { name: 'Volver a Folvy' })).toBeVisible()
 })
 
@@ -161,17 +158,16 @@ test('una pantalla vieja dentro del marco: Bancos, con su estilo y sus pestañas
   await capturar(page, 'pantalla-vieja')
 })
 
-test('las pestañas de Libros, arriba; las que no caben, en «Más ▾»', async ({ page }) => {
+test('Libros (S01): «Libros y listados» marcada en la cabecera; las áreas, en la pantalla hasta el paso 3', async ({ page }) => {
   test.skip(lado(page) === 'movil', 'En el móvil Libros va por niveles y pinta sus áreas')
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros/balances/balance')
-  const pestanas = page.getByRole('navigation', { name: 'Pestañas de Libros' })
+  const pestanas = page.getByRole('navigation', { name: 'Pestañas de Contabilidad' })
   await expect(pestanas).toBeVisible()
   // La de la dirección, activa: si está dentro de «Más», el botón la nombra.
-  const activa = pestanas.locator('[aria-current="page"], .cxm-pestana-activa')
-  await expect(activa).toHaveText(/^Balances/)
-  await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
+  await expect(pestanas.locator('[aria-current="page"], .s-pestana-activa')).toHaveText(/^Libros y listados/)
+  await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Balance de situación' })).toBeVisible({ timeout: 30_000 })
   await capturar(page, 'pestanas-libros')
 })
@@ -181,7 +177,7 @@ test('el buscador general: Ctrl K es del marco, agrupa por tipo y abre con Intro
   vigilar(page)
   await page.goto('/conta/libros/diario')
   await expect(page.locator('.cxm .cx-principal')).toBeVisible()
-  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Buscar todo' }).click()
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Buscar', exact: true }).click()
   else await page.keyboard.press('Control+k')
   const dialogo = page.getByRole('dialog', { name: 'Buscar todo' })
   await expect(dialogo).toBeVisible()
@@ -254,7 +250,7 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   } else {
     await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toBeVisible()
   }
-  await expect(page.locator('.cxm-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
+  await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
   // Te toca hoy: lo que espera revisión, que filtra al pulsarlo.
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()
   // Vistas, filtros y exportar.
@@ -298,13 +294,13 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   await page.getByRole('button', { name: 'Desmarcar' }).click()
 
   // Cómoda: filas más altas (unas 20 por pantalla); se recuerda.
-  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: 'Cómoda' }).click()
+  await cambiarDensidad(page, 'Cómoda')
   await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'comoda')
   const altoComoda = (await lista.locator('.cxt-fila').first().boundingBox())!.height
   expect(altoComoda).toBeGreaterThan(altoCompacta + 8)
   await page.evaluate(() => window.scrollTo(0, 0))
   await capturar(page, 'libro-diario-comoda')
-  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: 'Compacta' }).click()
+  await cambiarDensidad(page, 'Compacta')
 
   // Las fechas, en dd/mm/aaaa y en español, sea cual sea el idioma del navegador (Julio, 16/10).
   const desde = page.getByRole('group', { name: 'Filtros' }).getByLabel('Desde', { exact: true })

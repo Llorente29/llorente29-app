@@ -51,8 +51,8 @@ describe('los contrastes, marca a marca', () => {
           expect(contraste(v[t], v[f]), `${t} sobre ${f}`).toBeGreaterThanOrEqual(4.5)
         }
       })
-      it('el borde de los campos: ≥ 3:1 sobre la superficie y el fondo (C06 R4, WCAG 1.4.11)', () => {
-        for (const f of ['--s-superficie', '--s-fondo']) expect(contraste(v['--s-borde-campo'], v[f])).toBeGreaterThanOrEqual(3)
+      it('el borde de los controles: ≥ 3:1 sobre la superficie y el fondo (C06 R4, WCAG 1.4.11)', () => {
+        for (const f of ['--s-superficie', '--s-fondo']) expect(contraste(v['--s-borde-control'], v[f])).toBeGreaterThanOrEqual(3)
       })
       it('la barra: su texto y el activo ≥ 4,5:1', () => {
         expect(contraste(v['--s-barra-texto'], v['--s-barra'])).toBeGreaterThanOrEqual(4.5)
@@ -63,7 +63,13 @@ describe('los contrastes, marca a marca', () => {
       })
     })
   }
-  it('la prueba puede fallar: el borde de campo de la maqueta (#DCE5F0) no llega a 3:1', () => {
+  it('cada borde en su sitio: los controles con el de control; tarjetas, tablas, cinta y botones con el decorativo', () => {
+    const css = readFileSync('src/modules/conta/diseno/diseno.css', 'utf8')
+    const regla = (sel: string) => { const i = css.indexOf(`${sel} {`); return css.slice(i, css.indexOf('}', i)) }
+    expect(regla('.s-control')).toContain('var(--s-borde-control)')
+    for (const sel of ['.s-tarjeta', '.s-tabla td', '.s-cinta', '.s-boton-secundario']) expect(regla(sel), sel).toContain('var(--s-borde-decorativo)')
+  })
+  it('la prueba puede fallar: el borde de la maqueta (#DCE5F0) no llega a 3:1, por eso solo decora', () => {
     expect(contraste('#DCE5F0', '#FFFFFF')).toBeLessThan(3)
   })
 })
@@ -71,6 +77,9 @@ describe('los contrastes, marca a marca', () => {
 describe('las marcas', () => {
   it('Sumied: la barra azul noche y los estados de las maquetas; Folvy y la de pruebas, sin tema', () => {
     expect(TEMAS_DISENO.sumied).toMatchObject({ barra: '#0B1F3B', fondo: '#F4F7FB', ok: '#0B6B58', duda: '#7A4A00', falta: '#8A1F12' })
+    // Julio, S01 respuestas 1 y 2: el control a 3:1; lo que decora, el de la maqueta; acción y apoyo, los de la identidad.
+    expect(TEMAS_DISENO.sumied).toMatchObject({ bordeControl: '#7F8FA6', bordeDecorativo: '#DCE5F0' })
+    expect(MARCAS.sumied.tema).toMatchObject({ accion: '#1E63C9', apoyo: '#4A5B73' })
     expect(variablesDeMarca(MARCAS.folvy)).toBeNull()
     expect(variablesDeMarca(MARCAS.contabilidad)).toBeNull()
   })

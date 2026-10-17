@@ -51,8 +51,8 @@ function importsDe(ts: string): string[] {
 }
 
 describe('1 · colores solo en los tokens', () => {
-  const todos = ficheros(DISENO, /\.(css|tsx?)$/).filter((f) => !/tokens\.css$|temas\.ts$/.test(f))
-  it('diseno/ tiene sus ficheros', () => { expect(todos.length).toBeGreaterThanOrEqual(10) })
+  const todos = [DISENO, ...ESQUELETO].flatMap((d) => ficheros(d, /\.(css|tsx?)$/)).filter((f) => !/tokens\.css$|temas\.ts$/.test(f))
+  it('diseno/ y esqueleto/ tienen sus ficheros', () => { expect(todos.length).toBeGreaterThanOrEqual(20) })
   for (const f of todos) it(f, () => { expect(coloresAMano(readFileSync(f, 'utf8'))).toEqual([]) })
   it('la prueba puede fallar', () => {
     expect(coloresAMano('.x { color: #0A5BF0; background: rgba(0,0,0,.1) }')).toEqual(['#0A5BF0', 'rgba('])
@@ -61,7 +61,7 @@ describe('1 · colores solo en los tokens', () => {
 })
 
 describe('2 · tamaños de letra y radios solo de los tokens', () => {
-  for (const f of ficheros(DISENO, /\.css$/).filter((x) => !/tokens\.css$/.test(x))) {
+  for (const f of [DISENO, ...ESQUELETO].flatMap((d) => ficheros(d, /\.css$/)).filter((x) => !/tokens\.css$/.test(x))) {
     it(f, () => { expect(medidasAMano(readFileSync(f, 'utf8'))).toEqual([]) })
   }
   it('la prueba puede fallar', () => {
@@ -70,7 +70,7 @@ describe('2 · tamaños de letra y radios solo de los tokens', () => {
 })
 
 describe('3 · sin tablas tipo pijama', () => {
-  const css = [...ficheros(DISENO, /\.css$/), ...ficheros('src/modules/conta/estilo', /\.css$/)]
+  const css = [DISENO, ...ESQUELETO, 'src/modules/conta/estilo'].flatMap((d) => ficheros(d, /\.css$/))
   for (const f of css) it(f, () => { expect(pijama(readFileSync(f, 'utf8'))).toEqual([]) })
   it('la prueba puede fallar', () => {
     expect(pijama('tr:nth-child(even) { background: var(--s-suave) }')).toEqual([':nth-child(even)'])

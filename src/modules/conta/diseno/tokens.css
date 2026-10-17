@@ -21,9 +21,14 @@
   --s-fondo: #EEF1F5;            /* Fondo de página */
   --s-superficie: #FFFFFF;       /* Tarjetas, cabecera, campos */
   --s-suave: #F7F9FC;            /* Cinta y fondos suaves */
-  --s-borde: #DDE3EB;            /* Tarjetas, botones, separadores */
-  --s-borde-campo: #7A8496;      /* Campos: ≥ 3:1 sobre la superficie y el fondo (C06 R4) */
-  --s-separador: color-mix(in srgb, var(--s-borde) 55%, var(--s-superficie)); /* Entre filas: fino */
+  /* Dos bordes con dos trabajos distintos (Julio, S01 respuesta 1):
+     · el de CONTROL rodea lo que hay que ver para usarlo (campos,
+       desplegables, casillas): ≥ 3:1 sobre la superficie y el fondo
+       (C06 R4, WCAG 1.4.11);
+     · el DECORATIVO solo ordena (tarjetas, separadores de tabla, la cinta,
+       el borde de los botones, que ya se reconocen por su texto). */
+  --s-borde-control: #7A8496;
+  --s-borde-decorativo: #DDE3EB;
   --s-accion: #2F5BFF;           /* Botón principal, enlaces, pestaña activa */
   --s-accion-encima: #1F45D6;    /* Acción al pasar el ratón */
   --s-accion-suave: #EAF0FF;     /* Lo seleccionado */

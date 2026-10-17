@@ -9,7 +9,7 @@
 // Fuera del marco no hay contexto: las piezas usan lo de serie.
 
 import { createContext, useContext } from 'react'
-import type { Densidad } from '@/modules/conta/marco/nuevo/preferencias'
+import type { Densidad } from '@/modules/conta/esqueleto/preferencias'
 
 export interface Marco {
   densidad: Densidad

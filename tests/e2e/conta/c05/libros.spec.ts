@@ -32,17 +32,12 @@ function vigilar(page: Page) {
 }
 
 /**
- * M01 · En el ordenador las áreas son las pestañas de arriba del marco nuevo
- * (las que no caben, en «Más ▾»); en el móvil, Libros sigue por niveles y las
- * pinta él.
+ * S01 · Las áreas las pinta Libros en su pantalla (en el ordenador y en el
+ * índice del móvil): la cabecera lleva ahora las pestañas de Contabilidad
+ * (Asientos · Libros y listados · …), y las áreas pasan a la cinta en el paso 3.
  */
 async function areaDeLibros(page: Page, nombre: string) {
-  if (lado(page) === 'movil') return page.getByRole('navigation', { name: 'Áreas de Libros' }).getByRole('link', { name: nombre, exact: true })
-  const pestanas = page.getByRole('navigation', { name: 'Pestañas de Libros' })
-  const directa = pestanas.getByRole('link', { name: nombre, exact: true })
-  if (await directa.count()) return directa
-  await pestanas.getByRole('button', { name: /▾$/ }).click()
-  return pestanas.getByRole('link', { name: nombre, exact: true })
+  return page.getByRole('navigation', { name: 'Áreas de Libros' }).getByRole('link', { name: nombre, exact: true })
 }
 
 test('Libros en tres niveles: áreas, acciones con su estado y el buscador', async ({ page }) => {
@@ -57,15 +52,9 @@ test('Libros en tres niveles: áreas, acciones con su estado y el buscador', asy
     const areas = page.getByRole('navigation', { name: 'Áreas de Libros' })
     for (const a of AREAS) await expect(areas.getByRole('link', { name: a, exact: true })).toBeVisible()
   } else {
-    // M01: arriba, en el marco; las que no caben, en «Más ▾». Todas, en su orden, y Libros no las repite.
-    const pestanas = page.getByRole('navigation', { name: 'Pestañas de Libros' })
-    const vistas = await pestanas.getByRole('link').allTextContents()
-    const mas = pestanas.getByRole('button', { name: /▾$/ })
-    if (await mas.count()) { await mas.click(); await expect(pestanas.getByRole('link')).toHaveCount(AREAS.length) }
-    expect(await pestanas.getByRole('link').allTextContents()).toEqual(AREAS)
-    expect(vistas.length).toBeGreaterThan(0)
-    if (await mas.count()) await page.keyboard.press('Escape')
-    await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
+    // S01: las seis, en su orden, en la pantalla; y arriba, «Libros y listados» marcada.
+    await expect(page.getByRole('navigation', { name: 'Áreas de Libros' }).getByRole('link')).toHaveText(AREAS)
+    await expect(page.getByRole('navigation', { name: 'Pestañas de Contabilidad' }).locator('[aria-current="page"], .s-pestana-activa')).toHaveText(/^Libros y listados/)
   }
   if (lado(page) === 'movil') {
     // En el móvil, por niveles: primero las áreas; al tocar una, sus acciones y «‹ Libros».
@@ -86,7 +75,7 @@ test('Libros en tres niveles: áreas, acciones con su estado y el buscador', asy
     const ys = await barra.getByRole('link').evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().top)))
     expect(new Set(ys).size).toBe(1)
     // El ejercicio, en la barra de arriba del marco (no en un título).
-    await expect(page.locator('.cxm-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
+    await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
     await (await areaDeLibros(page, 'Libros registro de IVA')).click()
     // El buscador: Ctrl K, «requerimiento» lleva al formato AEAT. M01: Ctrl K
     // es del marco; las opciones de Libros salen en su grupo «Opciones».

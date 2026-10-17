@@ -9,9 +9,11 @@
 // importan marcas.ts.
 //
 // Los valores de Sumied salen de las maquetas aprobadas del S01 (17/10),
-// medidos píxel a píxel. Una excepción, dicha en el PR: el borde de los CAMPOS
-// de la maqueta (#DCE5F0, 1,27:1 sobre blanco) no llega al 3:1 que pide la
-// decisión de Julio del C06 (R4, WCAG 1.4.11); aquí va uno que sí llega.
+// medidos píxel a píxel, con dos decisiones de Julio (S01, respuestas 1 y 2):
+//   · el borde de los CONTROLES es #7F8FA6 (3:1, C06 R4); el #DCE5F0 de la
+//     maqueta se queda para lo que solo decora (tarjetas y separadores);
+//   · el azul de acción y el gris de apoyo son los de la identidad del 14/10
+//     (marcas.ts: #1E63C9 y #4A5B73), no los de las maquetas.
 // Medido en tests/unit/modules/conta/s01/diseno.test.tsx.
 //
 // Sin tema (Folvy y la marca de pruebas) no se escribe nada: mandan los
@@ -24,10 +26,10 @@ export interface TemaDiseno {
   fondo: string
   /** Fondo suave: la cinta y la cabecera de la tabla. */
   suave: string
-  /** Bordes de tarjetas, botones y separadores. */
-  borde: string
-  /** Borde de los campos: ≥ 3:1 sobre blanco y sobre el fondo. */
-  bordeCampo: string
+  /** Borde de lo que hay que ver para usarlo (campos, desplegables, casillas): ≥ 3:1. */
+  bordeControl: string
+  /** Borde que solo ordena: tarjetas, separadores de tabla, cinta, botones. */
+  bordeDecorativo: string
   /** La barra de productos. */
   barra: string
   barraTexto: string
@@ -54,8 +56,8 @@ export const TEMAS_DISENO: Partial<Record<IdMarca, TemaDiseno>> = {
   sumied: {
     fondo: '#F4F7FB',
     suave: '#FBFCFE',
-    borde: '#DCE5F0',
-    bordeCampo: '#7F8FA6',
+    bordeControl: '#7F8FA6',
+    bordeDecorativo: '#DCE5F0',
     barra: '#0B1F3B',
     barraTexto: '#C9D6E8',
     barraActivo: '#172E52',
@@ -95,8 +97,8 @@ export function variablesDeMarca(m: Marca): Record<string, string> | null {
     Object.assign(v, {
       '--s-fondo': d.fondo,
       '--s-suave': d.suave,
-      '--s-borde': d.borde,
-      '--s-borde-campo': d.bordeCampo,
+      '--s-borde-control': d.bordeControl,
+      '--s-borde-decorativo': d.bordeDecorativo,
       '--s-barra': d.barra,
       '--s-barra-texto': d.barraTexto,
       '--s-barra-activo': d.barraActivo,

@@ -20,8 +20,8 @@
   --cxm-fondo: var(--s-fondo);   /* Fondo de página */
   --cxm-superficie: var(--s-superficie);
   --cxm-suave: var(--s-suave);   /* Fondo suave: barra de módulos, barra de acciones */
-  --cxm-borde: var(--s-borde);
-  --cxm-borde-campo: #CBD3DF;    /* El de N30; los campos nuevos usan --s-borde-campo (3:1) */
+  --cxm-borde: var(--s-borde-decorativo);
+  --cxm-borde-campo: #CBD3DF;    /* El de N30; los controles nuevos usan --s-borde-control (3:1) */
   --cxm-azul: var(--s-accion);   /* Acción */
   --cxm-azul-encima: var(--s-accion-encima); /* Acción, al pasar el ratón */
   --cxm-verde: var(--s-ok);      /* Lo hecho */

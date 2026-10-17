@@ -44,21 +44,18 @@ de subir:
 
 Cada regla lleva su «la prueba puede fallar».
 
-## Dos cosas de las maquetas que no van igual (para Julio)
+## Lo que de las maquetas no va igual: decidido por Julio (17/10)
 
-1. **El borde de los campos.**
-   - Maqueta: `#DCE5F0`, que da 1,27:1 sobre blanco.
-   - Tu decisión del C06 (R4) pide ≥ 3:1 (WCAG 1.4.11).
-   - Va `#7F8FA6` en Sumied (3,29:1 sobre blanco y 3,06:1 sobre el fondo).
-   - Es un solo valor en `temas.ts`: si prefieres el de la maqueta, se cambia
-     ahí, pero entonces la prueba de contraste tiene que cambiar contigo.
-2. **El azul de acción y el gris de apoyo.**
-   - Maquetas: `#0A5BF0` y `#5B6B82`.
-   - Identidad aprobada el 14/10 en `marcas.ts`: `#1E63C9` y `#4A5B73`.
-   - Todos pasan AA.
-   - He dejado los de la identidad porque son el único sitio de la marca y los
-     usan también la entrada y los correos. Si mandan las maquetas, se cambia en
-     `marcas.ts`: un valor cada uno.
+1. **Dos bordes, dos tokens.**
+   - `--s-borde-control`: rodea lo que hay que ver para usarlo (campos,
+     desplegables, casillas). En Sumied, `#7F8FA6`: 3,29:1 sobre blanco y
+     3,06:1 sobre el fondo (C06 R4, WCAG 1.4.11).
+   - `--s-borde-decorativo`: solo ordena (tarjetas, separadores de tabla, la
+     cinta y el borde de los botones, que ya se reconocen por su texto). En
+     Sumied, `#DCE5F0`, el de la maqueta.
+   - Una unitaria comprueba que cada pieza usa el suyo.
+2. **Acción y apoyo, los de la identidad del 14/10**: `#1E63C9` en los botones
+   y `#4A5B73` en el gris de apoyo. Las maquetas se equivocaron.
 
 ## Y una de herramientas
 

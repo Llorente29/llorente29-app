@@ -15,7 +15,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useMarco } from '@/modules/conta/marco/nuevo/contexto'
-import { cuantasCaben } from '@/modules/conta/marco/nuevo/modulos'
+import { cuantasCaben } from '@/modules/conta/esqueleto/productos'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { miles } from '@/modules/conta/ui/tabla/tablaDensa'
 

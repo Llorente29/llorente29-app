@@ -197,12 +197,12 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   if (lado(page) === 'ordenador') {
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     // El texto de cada entrada (sin el número de lo que hay por mirar, que va aparte).
-    // M01: los módulos del marco nuevo (Documentos va dentro de Compras; Impuestos, apagado).
-    await expect(menu.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes'])
+    // S01: los productos del esqueleto; lo que no tiene pantalla no sale (ni Impuestos ni Facturación).
+    await expect(menu.locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   } else {
     const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     await expect(barra.getByRole('link', { name: 'Inicio' })).toBeVisible()
-    await expect(barra.getByRole('link', { name: 'Libros' })).toBeVisible()
+    await expect(barra.getByRole('link', { name: 'Contabilidad' })).toBeVisible()
     await expect(barra.getByRole('button', { name: /Preguntar/ })).toHaveCount(0)
   }
   await sinFolvy(page, 'el Inicio')
@@ -214,11 +214,11 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     await barra.getByRole('button', { name: 'Más' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
-    await expect(hoja.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes'])
+    await expect(hoja.getByRole('link')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
     await sinFolvy(page, 'el menú «Más»')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/mas-movil.png` })
-    await hoja.getByRole('link', { name: 'Libros' }).click()
+    await hoja.getByRole('link', { name: 'Contabilidad' }).click()
     await expect(page).toHaveURL(/\/conta\/libros/)
     await expect(hoja).toHaveCount(0)
   }

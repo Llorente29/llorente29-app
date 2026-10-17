@@ -1,3 +1,18 @@
+# S01 · El esqueleto (rama conta/s01-esqueleto). VA PRIMERO: la prueba de corte
+# de la D01 (más abajo) para con los datos de staging (ux_party_role_canal) y
+# el workflow se detiene en el primer fallo.
+#
+#   0100: añade conta_user_pref (nivel, favoritos y lo demás de cada persona)
+#         y company.is_hospitality (la marca de hostelería de la empresa).
+#   0110: la marca de las empresas de hoy, por la actividad de su cuenta.
+#   La cuenta D de prueba, sin hostelería (la clonan los carriles).
+#   Y la prueba (ROLLBACK): la 0110 sobre datos, las políticas como usuario y
+#   las dos vueltas atrás de verdad.
+supabase/migrations/20261121T0100_s01_esqueleto.sql
+supabase/migrations/20261121T0110_s01_hosteleria_de_hoy.sql
+supabase/seeds/conta/seed_s01_cuenta_d_sin_hosteleria_staging.sql
+supabase/staging/sql/20261121_s01_esqueleto_prueba.sql
+
 # M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
 # pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)
 # con \i dentro de su transacción y acaban en ROLLBACK: staging no cambia.

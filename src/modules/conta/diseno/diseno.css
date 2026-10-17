@@ -28,7 +28,7 @@
 .s-boton:disabled, .s-boton[aria-disabled='true'] { cursor: not-allowed; opacity: 0.55; }
 .s-boton-principal { background: var(--s-accion); color: var(--s-sobre-accion); font-weight: var(--s-peso-fuerte); }
 .s-boton-principal:hover:not(:disabled) { background: var(--s-accion-encima); }
-.s-boton-secundario { background: var(--s-superficie); color: var(--s-tinta); border-color: var(--s-borde); }
+.s-boton-secundario { background: var(--s-superficie); color: var(--s-tinta); border-color: var(--s-borde-decorativo); }
 .s-boton-secundario:hover:not(:disabled) { border-color: var(--s-accion-borde); background: var(--s-accion-suave); }
 .s-boton-secundario[aria-current='page'], .s-boton-secundario[aria-pressed='true'] {
   background: var(--s-accion-suave); border-color: var(--s-accion); font-weight: var(--s-peso-fuerte);
@@ -41,6 +41,13 @@
 .s-boton-fantasma:hover:not(:disabled) { color: var(--s-tinta); }
 .s-boton-grande { min-height: calc(var(--s-alto-control) + var(--s-2)); padding: 0 var(--s-5); font-size: var(--s-t-l); }
 .s-boton-ancho { display: flex; width: 100%; }
+/* Un botón que es enlace (BotonEnlace) dentro de una pantalla vieja: «.cx a»
+   (componentes.css) pinta todos los enlaces de azul y pesa más que una clase
+   sola. Aquí, con el mismo peso, cada variante con su color. */
+.cx a.s-boton-principal { color: var(--s-sobre-accion); }
+.cx a.s-boton-secundario { color: var(--s-tinta); }
+.cx a.s-boton-fantasma { color: var(--s-apoyo); }
+.cx a.s-boton-enlace { color: var(--s-accion); }
 .s-boton-contador {
   padding: 0 var(--s-2); border-radius: var(--s-radio-pildora);
   background: var(--s-duda-fondo); color: var(--s-duda); font-size: var(--s-t-s); line-height: 1.6;
@@ -73,7 +80,7 @@
 .s-control {
   width: 100%; min-height: var(--s-alto-control); padding: 0 var(--s-3);
   font-family: var(--s-letra); font-size: var(--s-t-m); color: var(--s-tinta);
-  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-campo); border-radius: var(--s-radio-campo);
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-campo);
 }
 .s-control:focus-visible { outline: none; border-color: var(--s-accion); box-shadow: var(--s-foco); }
 .s-control[aria-invalid='true'] { border-color: var(--s-falta); }
@@ -83,7 +90,7 @@
 
 /* ── Tarjeta ────────────────────────────────────────────────────────── */
 .s-tarjeta {
-  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde); border-radius: var(--s-radio-bloque);
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
   padding: var(--s-5) var(--s-6); display: flex; flex-direction: column; gap: var(--s-4); min-width: 0;
 }
 .s-tarjeta[data-compacta='si'] { padding: 0; gap: 0; overflow: hidden; }
@@ -110,9 +117,9 @@
 .s-tabla th {
   text-align: left; padding: var(--s-3) var(--s-6); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte);
   color: var(--s-apoyo); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
-  border-bottom: var(--s-linea) solid var(--s-borde);
+  border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
 }
-.s-tabla td { padding: var(--s-3) var(--s-6); border-bottom: var(--s-linea) solid var(--s-separador); vertical-align: middle; }
+.s-tabla td { padding: var(--s-3) var(--s-6); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: middle; }
 .s-tabla tr:last-child td { border-bottom: none; }
 .s-tabla tbody tr:hover { background: var(--s-suave); }
 .s-tabla .s-tabla-cifra { text-align: right; }
@@ -121,16 +128,19 @@
 /* ── Cinta ──────────────────────────────────────────────────────────── */
 .s-cinta {
   display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-4);
-  background: var(--s-suave); border-bottom: var(--s-linea) solid var(--s-borde); font-family: var(--s-letra);
+  background: var(--s-suave); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); font-family: var(--s-letra);
 }
 .s-cinta-oculta { justify-content: flex-end; padding: 0 var(--s-4); }
 .s-cinta-grupos { display: flex; align-items: center; gap: var(--s-3); flex: 1; min-width: 0; flex-wrap: wrap; }
 .s-cinta-grupo { display: flex; align-items: center; gap: var(--s-2); }
-.s-cinta-grupo + .s-cinta-grupo { padding-left: var(--s-3); border-left: var(--s-linea) solid var(--s-borde); }
+.s-cinta-grupo + .s-cinta-grupo { padding-left: var(--s-3); border-left: var(--s-linea) solid var(--s-borde-decorativo); }
 .s-cinta-grupo-titulo {
   font-size: var(--s-t-xs); color: var(--s-apoyo); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
 }
 .s-cinta-ocultar { align-self: flex-end; }
+/* En la cinta, los botones más bajos y apretados (maqueta 1: una fila en 1440). */
+.s-cinta .s-boton { min-height: calc(var(--s-alto-control) - var(--s-1)); padding: 0 var(--s-2); gap: var(--s-1); font-size: var(--s-t-s); }
+.s-cinta-grupos { row-gap: var(--s-1); }
 @media (max-width: 767px) {
   .s-cinta-grupos { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .s-cinta-grupo { flex-shrink: 0; }
@@ -154,14 +164,14 @@
 
 /* ── La página del sistema (ajustes/sistema-diseno, fuera de producción) ── */
 .s-muestra { min-height: 100%; display: flex; flex-direction: column; }
-.s-muestra-cabeza { padding: var(--s-6) var(--s-6) var(--s-4); background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde); }
+.s-muestra-cabeza { padding: var(--s-6) var(--s-6) var(--s-4); background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
 .s-muestra-titulo { margin: 0; font-size: var(--s-t-titulo); font-weight: var(--s-peso-titulo); }
 .s-muestra-apoyo { margin: var(--s-1) 0 0; color: var(--s-apoyo); }
 .s-muestra-cuerpo { display: flex; flex-direction: column; gap: var(--s-6); padding: var(--s-6); }
 .s-muestra-rejilla { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--s-3); }
 .s-muestra-color { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--s-t-s); }
 .s-muestra-color code, .s-muestra-icono code { font-family: var(--s-letra-cifras); font-size: var(--s-t-xs); color: var(--s-apoyo); }
-.s-muestra-muestra { height: var(--s-8); border-radius: var(--s-radio-campo); border: var(--s-linea) solid var(--s-borde); }
+.s-muestra-muestra { height: var(--s-8); border-radius: var(--s-radio-campo); border: var(--s-linea) solid var(--s-borde-decorativo); }
 .s-muestra-icono { display: flex; align-items: center; gap: var(--s-2); color: var(--s-tinta); }
 .s-muestra-letra { margin: 0; }
 .s-muestra-fila { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }

@@ -16,8 +16,8 @@ import {
 
 const COLORES: { token: string; nombre: string }[] = [
   { token: '--s-tinta', nombre: 'Tinta' }, { token: '--s-apoyo', nombre: 'Apoyo' }, { token: '--s-fondo', nombre: 'Fondo' },
-  { token: '--s-superficie', nombre: 'Superficie' }, { token: '--s-suave', nombre: 'Suave' }, { token: '--s-borde', nombre: 'Borde' },
-  { token: '--s-borde-campo', nombre: 'Borde de campo' }, { token: '--s-accion', nombre: 'Acción' }, { token: '--s-accion-suave', nombre: 'Acción suave' },
+  { token: '--s-superficie', nombre: 'Superficie' }, { token: '--s-suave', nombre: 'Suave' }, { token: '--s-borde-decorativo', nombre: 'Borde decorativo' },
+  { token: '--s-borde-control', nombre: 'Borde de control (3:1)' }, { token: '--s-accion', nombre: 'Acción' }, { token: '--s-accion-suave', nombre: 'Acción suave' },
   { token: '--s-acento', nombre: 'Acento (solo fondo)' }, { token: '--s-ok-fondo', nombre: 'Seguro' }, { token: '--s-duda-fondo', nombre: 'Duda' },
   { token: '--s-falta-fondo', nombre: 'Falta' }, { token: '--s-barra', nombre: 'Barra' }, { token: '--s-barra-activo', nombre: 'Barra, activo' },
 ]

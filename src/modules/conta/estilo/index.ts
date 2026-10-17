@@ -28,3 +28,4 @@ import './marco.css'
 import './piezas.css'
 import './libroMarco.css'
 import '../diseno/diseno.css'
+import '../esqueleto/esqueleto.css' // S01 · el esqueleto (barra, cabecera, cinta)

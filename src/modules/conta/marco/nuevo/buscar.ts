@@ -12,7 +12,10 @@
 import { INDICE_AJUSTES, rutaBancos, rutaConta, rutaLibros } from '@/config/navegacion'
 import { buscar as buscarEnLibros } from '@/modules/conta/libros/navegacion'
 import { buscarEnBancos } from '@/modules/conta/bancos/navegacion'
-import { modulosVisibles } from '@/modules/conta/marco/nuevo/modulos'
+import { pestanasVisibles, productosVisibles, type Contexto } from '@/modules/conta/esqueleto/productos'
+
+/** Sin saber la empresa, lo que sale seguro: nada de hostelería, Diez ni productos con interruptor. */
+const SIN_EMPRESA: Contexto = { hosteleria: false, diez: false, interruptores: new Set() }
 
 export type TipoResultado = 'asiento' | 'factura' | 'tercero' | 'subcuenta' | 'opcion' | 'pregunta'
 
@@ -82,7 +85,7 @@ export function paraIlike(texto: string): string {
  * Ctrl K), las de Bancos (las del suyo) y las entradas de Ajustes. Sin
  * repetir dirección.
  */
-export function opciones(q: string, solo: boolean): Resultado[] {
+export function opciones(q: string, solo: boolean, ctx: Contexto = SIN_EMPRESA): Resultado[] {
   const n = normal(q)
   if (!n) return []
   const fuera: Resultado[] = []
@@ -92,9 +95,10 @@ export function opciones(q: string, solo: boolean): Resultado[] {
     vistas.add(r.ruta)
     fuera.push({ ...r, tipo: 'opcion', clave: `opcion:${r.ruta}` })
   }
-  const modulos = modulosVisibles(solo)
-  for (const m of modulos) {
-    if (m.ruta !== null && normal(m.etiqueta).includes(n)) poner({ titulo: m.etiqueta, apoyo: 'Módulo', ruta: rutaConta(m.ruta) })
+  // S01: los productos del esqueleto y sus pestañas, los que salen en esta empresa.
+  const productos = productosVisibles(ctx)
+  for (const p of productos) {
+    if (normal(p.etiqueta).includes(n)) poner({ titulo: p.etiqueta, apoyo: 'Producto', ruta: rutaConta(p.ruta!) })
   }
   // Lo más concreto antes que la pestaña que lleva al mismo sitio: «Balance de
   // situación» gana a «Balances» (las dos abren libros/balances/balance).
@@ -104,8 +108,8 @@ export function opciones(q: string, solo: boolean): Resultado[] {
     if (solo && e.hueco) continue
     if (normal(e.etiqueta).includes(n)) poner({ titulo: e.etiqueta, apoyo: `Ajustes › ${g.grupo}`, ruta: rutaConta(e.ruta) })
   }
-  for (const m of modulos) for (const p of m.pestanas) {
-    if (normal(p.etiqueta).includes(n)) poner({ titulo: p.etiqueta, apoyo: m.etiqueta, ruta: rutaConta(p.ruta) })
+  for (const p of productos) for (const t of pestanasVisibles(p, ctx)) {
+    if (normal(t.etiqueta).includes(n)) poner({ titulo: t.etiqueta, apoyo: p.etiqueta, ruta: rutaConta(t.ruta!) })
   }
   return fuera
 }
