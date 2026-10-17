@@ -86,6 +86,13 @@ begin
   if exists (select 1 from public.tax_obligation where company_id = v_e and form_code = 'ZZ9') then
     raise exception 'PRUEBA modelo 1: un código que no existe se ha vuelto una obligación.';
   end if;
+  -- «insert … on conflict do nothing» sobre el perfil (lo hace conta_ia_poner):
+  -- el «before insert» salta con la lista vacía y no puede quitar nada.
+  select count(*) into v_n from public.tax_obligation where company_id = v_e and valid_to is null and active;
+  insert into public.company_tax_profile (company_id, account_id) values (v_e, 'c01a0000-0000-4000-8000-00000000000a') on conflict (company_id) do nothing;
+  if (select count(*) from public.tax_obligation where company_id = v_e and valid_to is null and active) <> v_n then
+    raise exception 'PRUEBA modelo 1: asegurar que el perfil existe ha quitado modelos.';
+  end if;
   -- Escribir en tax_obligation sale en tax_forms.
   update public.tax_obligation set valid_to = current_date where company_id = v_e and form_code = '349' and valid_to is null;
   insert into public.tax_obligation (account_id, company_id, form_code, cadence, active, origin, why, reason, decided_by_name)

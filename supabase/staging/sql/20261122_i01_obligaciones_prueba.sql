@@ -73,7 +73,17 @@ begin
   v := public.conta_impuesto_obligaciones_calcular(v_a);
   if exists (select 1 from jsonb_array_elements(v) x0 where x0->>'hecho' <> 'igual') then raise exception 'PRUEBA obligaciones 2: la segunda vez cambia %.', v; end if;
   if (select count(*) from public.tax_obligation where company_id = v_a) <> v_n then raise exception 'PRUEBA obligaciones 2: la segunda vez escribe filas.'; end if;
-  raise notice 'PRUEBA obligaciones 2: calcular otra vez no escribe nada.';
+  -- La IA escribe en el perfil como el alta (conta_ia_poner hace antes un
+  -- «insert … on conflict do nothing»): las obligaciones no se tocan.
+  select array_agg(form_code order by form_code) into v_lista from public.tax_obligation where company_id = v_a and valid_to is null and active;
+  perform public.conta_ia_poner(v_a, 'company_tax_profile', 'vat_scheme_code', '"general"'::jsonb, 'Prueba I01a: lo normal en una sociedad.');
+  perform public.conta_ia_poner(v_a, 'company_tax_profile', 'tax_forms', to_jsonb(v_lista), 'Prueba I01a: la misma lista, como el alta.');
+  if (select array_agg(form_code order by form_code) from public.tax_obligation where company_id = v_a and valid_to is null and active) is distinct from v_lista
+     or (select count(*) from public.tax_obligation where company_id = v_a) <> v_n then
+    raise exception 'PRUEBA obligaciones 2: la IA escribiendo en el perfil cambia las obligaciones: antes %, después %.', v_lista,
+      (select array_agg(form_code order by form_code) from public.tax_obligation where company_id = v_a and valid_to is null and active);
+  end if;
+  raise notice 'PRUEBA obligaciones 2: calcular otra vez no escribe nada, y la IA escribiendo en el perfil (como el alta) tampoco: %.', v_lista;
 
   -- 3 · Quitar pide motivo, y queda.
   begin

@@ -190,12 +190,16 @@ declare
 begin
   if coalesce(current_setting('conta.i01_espejo', true), '') = 'si' then return new; end if;
   if tg_op = 'UPDATE' and new.tax_forms is not distinct from old.tax_forms then return new; end if;
+  -- Un «insert … on conflict do nothing» sobre un perfil que ya existe (lo hace
+  -- conta_ia_poner antes de cada escritura) dispara este «before insert» antes
+  -- de ver el conflicto, con la lista vacía: no es una escritura de la lista.
+  if tg_op = 'INSERT' and exists (select 1 from public.company_tax_profile where company_id = new.company_id) then return new; end if;
   v_nombre := public.conta_impuesto_quien();
   v_primera := not exists (select 1 from public.tax_obligation where company_id = new.company_id);
   perform set_config('conta.i01_desde_columna', 'si', true);
-  -- Lo que sale.
+  -- Lo que sale (solo al cambiar la lista: crear el perfil no quita nada).
   for c in select o.form_code from public.tax_obligation o
-            where o.company_id = new.company_id and o.valid_to is null and o.active
+            where tg_op = 'UPDATE' and o.company_id = new.company_id and o.valid_to is null and o.active
               and not (o.form_code = any (coalesce(new.tax_forms, '{}'))) loop
     update public.tax_obligation set valid_to = current_date where company_id = new.company_id and form_code = c and valid_to is null;
     insert into public.tax_obligation (account_id, company_id, form_code, cadence, active, origin, why, reason, decided_by, decided_by_name)
