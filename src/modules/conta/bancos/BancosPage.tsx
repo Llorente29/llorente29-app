@@ -1,10 +1,11 @@
 // src/modules/conta/bancos/BancosPage.tsx
 //
-// B01 · Bancos en tres niveles (maqueta N17Bancos). Nivel 1, el menú lateral
-// (MarcoConta). Nivel 2, las pestañas: Movimientos · Reglas · Cuentas y
-// extractos · Cierre del mes. Nivel 3, la barra de acciones agrupadas con su
-// etiqueta debajo: TUS BANCOS · TRAER MOVIMIENTOS · AUTOMÁTICO, y «Tuyos» a la
-// derecha (favoritos y Ctrl K), como Libros.
+// B01 · Bancos. Desde el paso 3 del S01 vive en el esqueleto: sus pestañas
+// (Movimientos · Reglas · Cuentas y extractos · Cierre del mes) van en la
+// cabecera, y su barra de acciones en la cinta de la pestaña: TUS BANCOS (los
+// pone esta pantalla: useEntradasEnCinta) · TRAER MOVIMIENTOS · AUTOMÁTICO ·
+// REVISAR. «Tuyos» se va: Favoritos y Ctrl K son del esqueleto, para todo.
+// El mes, en la cabecera (PeriodoEnBarra), como el ejercicio de Libros.
 //
 // El gesto único (respuesta 3, punto 2): un extracto se puede SOLTAR en
 // cualquier pantalla de Bancos; abre «Subir extracto» con él.
@@ -13,17 +14,18 @@
 // «Conectar» (llega con el contrato del agregador), ni tarjetas de crédito, ni
 // la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
 //
-// Respuesta 4: la barra va en UNA fila, con el nombre corto de cada banco; a
-// partir de cinco, tres a la vista (el de más dudas siempre) y «y N más».
+// Respuesta 4: los bancos con su nombre corto; a partir de cinco, tres a la
+// vista (el de más dudas siempre) y «y N más».
 //
 // El agente «Conciliación» (tarea 6): si hoy aún no ha pasado, la primera vez
 // que alguien abre Bancos hace la pasada del día (con las guardas de siempre).
 //
 // En el móvil (patrón M4): la portada con dos cifras, la frase verde y los
-// apartados de 56 px; cada apartado abre su pantalla con «‹ Bancos».
+// apartados de 56 px; cada apartado abre su pantalla con «‹ Bancos». Ahí el
+// esqueleto no pone ni pestañas ni cinta (productos.ts: portadaMovil).
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaBancos } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
@@ -36,9 +38,9 @@ import { bancosEnBarra, estadoBanco, mesesElegibles, nombreCorto, nombreMes, ult
 import { agenteTocaHoy, leerDatosBancos, leerHechos, pasarAgente } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { BancosCtx, type ContextoBancos } from '@/modules/conta/bancos/contexto'
-import {
-  NOMBRE_VISTA, PESTANAS_BANCOS, alternarFavorito, buscarEnBancos, leerFavoritos, pestanaDe, resolverVista, type VistaBancos,
-} from '@/modules/conta/bancos/navegacion'
+import { resolverVista, type VistaBancos } from '@/modules/conta/bancos/navegacion'
+import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
+import { useDatosEnCinta, useEntradasEnCinta, type EntradaPantalla } from '@/modules/conta/marco/nuevo/contexto'
 import { Movimientos } from '@/modules/conta/bancos/Movimientos'
 import { PortadaMovil } from '@/modules/conta/bancos/PortadaMovil'
 import { Reglas } from '@/modules/conta/bancos/Reglas'
@@ -46,9 +48,7 @@ import { CuentasYExtractos } from '@/modules/conta/bancos/CuentasYExtractos'
 import { CierreDelMes } from '@/modules/conta/bancos/CierreDelMes'
 import { SubirExtracto } from '@/modules/conta/bancos/SubirExtracto'
 import { HechoPorFolvy } from '@/modules/conta/bancos/HechoPorFolvy'
-import { HECHO_POR } from '@/modules/conta/bancos/marca'
 
-const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
 
 function contenido(v: VistaBancos): ReactNode {
   switch (v) {
@@ -63,6 +63,7 @@ function contenido(v: VistaBancos): ReactNode {
 
 export default function BancosPage() {
   const { accountId, cargando, userName } = useCuentaConta()
+  const { pathname } = useLocation()
   const { activa } = useEmpresas()
   const movil = useIsMobile()
   const params = useParams()
@@ -102,15 +103,6 @@ export default function BancosPage() {
   }, [accountId, activa, hoy])
   const [masBancos, setMasBancos] = useState(false)
 
-  const usuario = userName ?? 'yo'
-  const [favoritos, setFavoritos] = useState<VistaBancos[]>(() => leerFavoritos(usuario, almacen()))
-  const [buscando, setBuscando] = useState(false)
-  useEffect(() => {
-    const tecla = (ev: KeyboardEvent) => { if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') { ev.preventDefault(); setBuscando(true) } }
-    window.addEventListener('keydown', tecla)
-    return () => window.removeEventListener('keydown', tecla)
-  }, [])
-
   const conQuery = useCallback((ruta: string, cambios: Record<string, string> = {}) => {
     const p = new URLSearchParams(query)
     for (const [k, v] of Object.entries(cambios)) p.set(k, v)
@@ -134,118 +126,68 @@ export default function BancosPage() {
     if (f && ctx) ctx.subir(f)
   }
 
+  // La cinta: los bancos de la empresa en «Tus bancos» y lo que se sabe de las demás órdenes.
+  const dudasDe = (id: string) => datos.datos?.dudas[id] ?? 0
+  const entradas: EntradaPantalla[] = (() => {
+    if (!datos.datos) return []
+    if (bancos.length === 0) return [{ id: 'alta', etiqueta: 'Dar de alta un banco', a: conQuery(rutaBancos('cuentas')), dato: 'En Cuentas y extractos' }]
+    const { visibles, resto } = bancosEnBarra(bancos, datos.datos.dudas, banco?.id ?? null)
+    const lista: EntradaPantalla[] = visibles.map((b) => {
+      const e = estadoBanco(dudasDe(b.id), !!b.ultimoExtracto)
+      const u = ultimosIban(b.iban)
+      return {
+        id: b.id, etiqueta: nombreCorto(b), a: conQuery(pathname, { banco: b.id }), actual: b.id === banco?.id,
+        aviso: e.tono === 'ambar', numero: dudasDe(b.id) || undefined, titulo: `${b.nombre}${u ? ` · ···${u}` : ''} · ${e.texto}`,
+      }
+    })
+    if (resto.length > 0) {
+      const dudas = resto.reduce((t, b) => t + dudasDe(b.id), 0)
+      lista.push({ id: 'mas', etiqueta: `y ${resto.length} más`, alPulsar: () => setMasBancos(true), aviso: dudas > 0, titulo: `${dudas} dudas en los demás` })
+    }
+    return lista
+  })()
+  useEntradasEnCinta(datos.datos ? { bancos: entradas } : null)
+  useDatosEnCinta(datos.datos ? {
+    'bancos.subir': { dato: 'Norma 43 · Excel' },
+    'bancos.reglas': { numero: datos.datos.reglas.activas, dato: datos.datos.reglas.nuevas ? `${datos.datos.reglas.nuevas} nuevas` : undefined, aviso: datos.datos.reglas.nuevas > 0 },
+    'bancos.casados': { numero: casadosSolos, dato: `${casadosSolos} este mes, en todos` },
+  } : null)
+
   if (!accountId && !cargando) return <Vacio titulo="No hay cuenta activa." explicacion="Elige una cuenta para ver sus bancos." />
   if (datos.error) return <ErrorConReintento mensaje={datos.error} reintentar={datos.recargar} />
   if (!ctx) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando los bancos">{[0, 1, 2].map((i) => <Hueso key={i} alto={40} />)}</div>
 
-  const pestana = pestanaDe(vista)
   const dudasMes = (id: string) => ctx.datos.dudas[id] ?? 0
 
   return (
     <BancosCtx.Provider value={ctx}>
       <div className="cxl-pagina cxb-pagina" onDragOver={alArrastrar} onDragLeave={(e) => { if (e.currentTarget === e.target) setSoltando(false) }} onDrop={alSoltar}>
-        <header className="cxl-cabeza">
-          <div>
-            <span className="cxl-ante">Contabilidad</span>
-            <h1 className="cxl-titulo">Bancos</h1>
-          </div>
-          {!enPortadaMovil && (
-            <label>
-              <span className="cx-oculto">Mes</span>
-              <select className="cx-input cxb-mes" value={mes} onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
+        {movil ? (
+          <header className="cxl-cabeza">
+            <div>
+              <span className="cxl-ante">Contabilidad</span>
+              <h1 className="cxl-titulo">Bancos</h1>
+            </div>
+            {!enPortadaMovil && (
+              <select className="cx-input cxb-mes" value={mes} aria-label="Mes" onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
                 {meses.map((m) => <option key={m} value={m}>{nombreMes(m)} {m.slice(0, 4)}</option>)}
               </select>
-            </label>
-          )}
-        </header>
+            )}
+          </header>
+        ) : (
+          <>
+            <h1 className="cx-oculto">Bancos</h1>
+            <PeriodoEnBarra>
+              <select className="cx-input cxb-mes" value={mes} aria-label="Mes" onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
+                {meses.map((m) => <option key={m} value={m}>{nombreMes(m)} {m.slice(0, 4)}</option>)}
+              </select>
+            </PeriodoEnBarra>
+          </>
+        )}
 
         {enPortadaMovil ? <PortadaMovil /> : (
           <>
-            {movil ? <Link to={conQuery(rutaBancos())} className="cx-enlace">‹ Bancos</Link> : (
-              <nav className="cxl-areas" aria-label="Pestañas de Bancos">
-                {PESTANAS_BANCOS.map((p) => (
-                  <Link key={p.id} to={conQuery(rutaBancos(p.id === 'movimientos' ? undefined : p.id))} className="cxl-area" aria-current={p.id === pestana ? 'page' : undefined}>{p.nombre}</Link>
-                ))}
-              </nav>
-            )}
-
-            {!movil && (
-              <nav className="cxl-barra" aria-label="Acciones de Bancos">
-                <div className="cxl-barra-grupos">
-                  <div className="cxl-grupo" role="group" aria-label="Tus bancos">
-                    <div className="cxl-grupo-acciones">
-                      {(() => {
-                        const { visibles, resto } = bancosEnBarra(bancos, ctx.datos.dudas, banco?.id ?? null)
-                        return (
-                          <>
-                            {visibles.map((b) => {
-                              const e = estadoBanco(dudasMes(b.id), !!b.ultimoExtracto)
-                              const u = ultimosIban(b.iban)
-                              return (
-                                <button key={b.id} type="button" className="cxl-accion" aria-current={b.id === banco?.id ? 'page' : undefined} onClick={() => ctx.elegirBanco(b.id)}
-                                  title={b.nombre}>
-                                  <span className="cxl-accion-nombre">{nombreCorto(b)} <span className={`cxl-punto cxl-punto-${e.tono}`} aria-hidden="true" /></span>
-                                  <span className="cxl-accion-dato">{u ? `···${u} · ` : ''}{e.texto}</span>
-                                </button>
-                              )
-                            })}
-                            {resto.length > 0 && (
-                              <button type="button" className="cxl-accion" onClick={() => setMasBancos(true)}>
-                                <span className="cxl-accion-nombre">y {resto.length} más <span className={`cxl-punto${resto.some((b) => dudasMes(b.id) > 0) ? ' cxl-punto-ambar' : ''}`} aria-hidden="true" /></span>
-                                <span className="cxl-accion-dato">{resto.reduce((t, b) => t + dudasMes(b.id), 0)} dudas</span>
-                              </button>
-                            )}
-                          </>
-                        )
-                      })()}
-                      {bancos.length === 0 && <Link to={conQuery(rutaBancos('cuentas'))} className="cxl-accion"><span className="cxl-accion-nombre">Dar de alta un banco</span><span className="cxl-accion-dato">en Cuentas y extractos</span></Link>}
-                    </div>
-                    <span className="cxl-grupo-etiqueta">Tus bancos</span>
-                  </div>
-                  <div className="cxl-grupo" role="group" aria-label="Traer movimientos">
-                    <div className="cxl-grupo-acciones">
-                      <Link to={conQuery(rutaBancos('subir'))} className="cxl-accion" aria-current={vista === 'subir' ? 'page' : undefined}>
-                        <span className="cxl-accion-nombre">Subir extracto <span className="cxl-punto cxl-punto-verde" aria-hidden="true" /></span>
-                        <span className="cxl-accion-dato">Norma 43 · Excel</span>
-                      </Link>
-                    </div>
-                    <span className="cxl-grupo-etiqueta">Traer movimientos</span>
-                  </div>
-                  <div className="cxl-grupo" role="group" aria-label="Automático">
-                    <div className="cxl-grupo-acciones">
-                      <Link to={conQuery(rutaBancos('reglas'))} className="cxl-accion" aria-current={vista === 'reglas' ? 'page' : undefined}>
-                        <span className="cxl-accion-nombre">Reglas <span className={`cxl-punto${ctx.datos.reglas.activas ? ' cxl-punto-verde' : ''}`} aria-hidden="true" /></span>
-                        <span className="cxl-accion-dato">{ctx.datos.reglas.activas}{ctx.datos.reglas.nuevas ? ` · ${ctx.datos.reglas.nuevas} nuevas` : ''}</span>
-                      </Link>
-                      <Link to={conQuery(rutaBancos(), { ver: 'casados' })} className="cxl-accion" aria-current={vista === 'movimientos' && query.get('ver') === 'casados' ? 'page' : undefined}>
-                        <span className="cxl-accion-nombre">{HECHO_POR} <span className={`cxl-punto${casadosSolos ? ' cxl-punto-verde' : ''}`} aria-hidden="true" /></span>
-                        <span className="cxl-accion-dato">{casadosSolos} este mes, en todos</span>
-                      </Link>
-                    </div>
-                    <span className="cxl-grupo-etiqueta">Automático</span>
-                  </div>
-                </div>
-                <div className="cxl-tuyos" role="group" aria-label="Tuyos">
-                  <div className="cxl-grupo-acciones">
-                    <button type="button" className="cxl-accion" aria-pressed={favoritos.includes(vista)}
-                      onClick={() => setFavoritos(alternarFavorito(usuario, vista, almacen()))}
-                      title={favoritos.includes(vista) ? `Quitar «${NOMBRE_VISTA[vista]}» de favoritos` : `Guardar «${NOMBRE_VISTA[vista]}» en favoritos`}>
-                      <span className="cxl-accion-nombre">{favoritos.includes(vista) ? '★' : '☆'} <span className={`cxl-punto${favoritos.length ? ' cxl-punto-verde' : ''}`} aria-hidden="true" /></span>
-                      <span className="cxl-accion-dato">favoritos</span>
-                    </button>
-                    <button type="button" className="cxl-accion" onClick={() => setBuscando(true)} aria-keyshortcuts="Control+K">
-                      <span className="cxl-accion-nombre">⌕</span><span className="cxl-accion-dato">Ctrl K</span>
-                    </button>
-                  </div>
-                  <span className="cxl-grupo-etiqueta">Tuyos</span>
-                </div>
-              </nav>
-            )}
-            {!movil && favoritos.length > 0 && (
-              <div className="cx-tablas-filtros" role="group" aria-label="Tus favoritos">
-                {favoritos.map((f) => <Link key={f} to={conQuery(rutaBancos(f === 'movimientos' ? undefined : f))} className="cx-pildora" aria-pressed={f === vista}>★ {NOMBRE_VISTA[f]}</Link>)}
-              </div>
-            )}
+            {movil && <Link to={conQuery(rutaBancos())} className="cx-enlace">‹ Bancos</Link>}
             {hechos.error && <div className="cx-error" role="alert">{hechos.error}</div>}
             <div key={vista}>{contenido(vista)}</div>
           </>
@@ -273,26 +215,7 @@ export default function BancosPage() {
           </Dialogo>
         )}
         {pasando && <div className="cx-ayuda" role="status">Haciendo la pasada del día: miro los movimientos pendientes…</div>}
-        {buscando && <Buscar alCerrar={() => setBuscando(false)} alElegir={(v) => { setBuscando(false); navegar(conQuery(rutaBancos(v === 'movimientos' ? undefined : v))) }} />}
       </div>
     </BancosCtx.Provider>
-  )
-}
-
-function Buscar({ alCerrar, alElegir }: { alCerrar: () => void; alElegir: (v: VistaBancos) => void }) {
-  const [q, setQ] = useState('')
-  const r = buscarEnBancos(q)
-  return (
-    <Dialogo titulo="Buscar en Bancos" alCerrar={alCerrar}>
-      <input className="cx-input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Escribe: extracto, tarjetas, reglas, cierre…"
-        aria-label="Qué buscas" onKeyDown={(e) => { if (e.key === 'Enter' && r[0]) alElegir(r[0].vista) }} />
-      {q && r.length === 0 && <p className="cx-ayuda">No hay ninguna opción que se llame así.</p>}
-      <ul className="cxl-buscar-lista">
-        {r.map((x) => (
-          <li key={`${x.vista}:${x.nombre}`}><a href="#" onClick={(e) => { e.preventDefault(); alElegir(x.vista) }}>
-            <span>{x.nombre}</span><span className="cx-ayuda">Bancos › {x.donde}</span></a></li>
-        ))}
-      </ul>
-    </Dialogo>
   )
 }

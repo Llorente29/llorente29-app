@@ -8,31 +8,37 @@
 import { useLocation } from 'react-router-dom'
 import { rutaConta } from '@/config/navegacion'
 import { Boton, BotonEnlace, Cinta, GrupoCinta } from '@/modules/conta/diseno'
-import type { DatosCinta } from '@/modules/conta/marco/nuevo/contexto'
-import { esLaActual, type Orden } from './ordenes'
+import type { DatosCinta, EntradasCinta } from '@/modules/conta/marco/nuevo/contexto'
+import { conConsulta, esLaActual, type GrupoDeCinta } from './ordenes'
 
-/** El ejercicio elegido viaja de una acción a otra (lo leen Libros y el diario). */
-const conservar = (search: string) => { const e = new URLSearchParams(search).get('ejercicio'); return e ? `?ejercicio=${encodeURIComponent(e)}` : '' }
-
-export function CintaDePestana({ etiqueta, grupos, datos, oculta, alCambiarOculta, alBuscar }: {
+export function CintaDePestana({ etiqueta, grupos, datos, entradas, oculta, alCambiarOculta, alBuscar }: {
   /** «Acciones de Asientos». */
   etiqueta: string
-  grupos: { titulo: string; ordenes: Orden[] }[]
+  grupos: GrupoDeCinta[]
   /** Lo que la pantalla sabe de cada orden (useDatosEnCinta): su número escrito, su punto ámbar, su dato. */
   datos?: DatosCinta | null
+  /** Lo que pone la pantalla en los grupos que son suyos (useEntradasEnCinta): los bancos. */
+  entradas?: EntradasCinta | null
   oculta: boolean
   alCambiarOculta: (oculta: boolean) => void
   alBuscar: () => void
 }) {
   const { pathname, search } = useLocation()
-  if (grupos.length === 0) return null
+  // Un grupo de la pantalla sin nada que poner (aún no ha leído, o no hay) no sale.
+  const conAlgo = grupos.filter((g) => g.ordenes.length > 0 || (g.dePantalla && (entradas?.[g.dePantalla]?.length ?? 0) > 0))
+  if (conAlgo.length === 0) return null
   return (
     <Cinta etiqueta={etiqueta} oculta={oculta} alCambiarOculta={alCambiarOculta}>
-      {grupos.map((g) => (
+      {conAlgo.map((g) => (
         <GrupoCinta key={g.titulo} titulo={g.titulo}>
+          {g.dePantalla && (entradas?.[g.dePantalla] ?? []).map((e) => (e.a
+            ? (
+              <BotonEnlace key={e.id} a={e.a} actual={e.actual} aviso={e.aviso} contador={e.numero} contadorTono={e.aviso ? 'duda' : 'neutro'} titulo={e.titulo ?? e.dato}>{e.etiqueta}</BotonEnlace>
+            )
+            : <Boton key={e.id} onClick={e.alPulsar} title={e.titulo ?? e.dato}>{e.etiqueta}</Boton>))}
           {g.ordenes.map((o) => ('ruta' in o.a
             ? (
-              <BotonEnlace key={o.id} a={`${rutaConta(o.a.ruta)}${conservar(search)}`} icono={o.icono} actual={esLaActual(o, pathname, search)}
+              <BotonEnlace key={o.id} a={conConsulta(rutaConta(o.a.ruta), search)} icono={o.icono} actual={esLaActual(o, pathname, search)}
                 contador={datos?.[o.id]?.numero} contadorTono={datos?.[o.id]?.aviso ? 'duda' : 'neutro'} aviso={datos?.[o.id]?.aviso} apagado={datos?.[o.id]?.gris} titulo={datos?.[o.id]?.dato}>
                 {o.etiqueta}
               </BotonEnlace>

@@ -140,17 +140,21 @@ test('una pantalla vieja dentro del marco: Bancos, con su estilo y sus pestañas
   await page.goto('/conta/bancos')
   await expect(page.locator('.cxm .cx-principal')).toBeVisible()
   if (lado(page) === 'ordenador') {
-    // Sus pestañas las sigue pintando Bancos (hasta que el frente B la pase): arriba no se repiten.
+    // S01 · paso 3: sus pestañas, en la cabecera del esqueleto (una sola vez) y su barra, en la cinta.
     await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveCount(1)
+    await expect(page.locator('.s-cabecera').getByRole('navigation', { name: 'Pestañas de Bancos' })).toBeVisible()
+    await expect(page.getByRole('toolbar', { name: 'Acciones de Movimientos' })).toBeVisible()
+    await expect(page.locator('.cxl-areas, .cxl-barra, .cxl-tuyos')).toHaveCount(0)
     await expect(menu(page).getByRole('link', { name: 'Bancos', exact: true })).toHaveAttribute('aria-current', 'page')
     // Su estilo de hoy: las tarjetas con el radio de antes (no el de 8 px del marco).
     const tarjetas = page.locator('.cx-principal .cx-tarjeta')
     if (await tarjetas.count()) expect(await tarjetas.first().evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).not.toBe('8px')
   }
   if (lado(page) === 'movil') {
-    // En el móvil, Bancos abre su portada por niveles (PortadaMovil), sin pestañas:
-    // la pantalla de siempre, dentro del marco, con Bancos marcado abajo.
+    // En el móvil, Bancos abre su portada por niveles (PortadaMovil): el esqueleto
+    // no pone ni pestañas ni cinta (portadaMovil), y Bancos va marcado abajo.
     await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveCount(0)
+    await expect(page.getByRole('toolbar', { name: 'Acciones de Movimientos' })).toHaveCount(0)
     await expect(menu(page).getByRole('link', { name: 'Bancos' })).toHaveAttribute('aria-current', 'page')
   }
   await redQuieta(page)

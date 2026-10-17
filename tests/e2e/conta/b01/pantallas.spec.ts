@@ -82,13 +82,16 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByRole('heading', { level: 1, name: 'Bancos' })).toBeVisible()
       const pestanas = page.getByRole('navigation', { name: 'Pestañas de Bancos' })
       for (const p of ['Movimientos', 'Reglas', 'Cuentas y extractos', 'Cierre del mes']) await expect(pestanas.getByRole('link', { name: p })).toBeVisible()
-      const barra = page.getByRole('navigation', { name: 'Acciones de Bancos' })
-      for (const g of ['Tus bancos', 'Traer movimientos', 'Automático', 'Tuyos']) await expect(barra.getByRole('group', { name: g })).toBeVisible()
-      await expect(barra.getByText('Subir extracto')).toBeVisible()
+      // S01 · paso 3: las pestañas, en la cabecera del esqueleto; la barra, en la cinta de la pestaña.
+      // «Tuyos» ya no está: Favoritos y Ctrl K son del esqueleto.
+      const barra = page.getByRole('toolbar', { name: 'Acciones de Movimientos' })
+      for (const g of ['Tus bancos', 'Traer movimientos', 'Automático', 'Revisar']) await expect(barra.getByRole('group', { name: g })).toBeVisible()
+      await expect(page.getByRole('group', { name: 'Tuyos' })).toHaveCount(0)
+      await expect(barra.getByRole('link', { name: /Subir extracto/ })).toBeVisible()
       // Respuesta 4: la barra en UNA fila, con los nombres cortos; ni «Conectar» ni la barra de «Muy pronto».
-      const filas = await Promise.all(['Tus bancos', 'Traer movimientos', 'Automático', 'Tuyos'].map(async (g) => Math.round((await barra.getByRole('group', { name: g }).boundingBox())!.y)))
+      const filas = await Promise.all(['Tus bancos', 'Traer movimientos', 'Automático', 'Revisar'].map(async (g) => Math.round((await barra.getByRole('group', { name: g }).boundingBox())!.y)))
       expect(new Set(filas).size).toBe(1)
-      await expect(barra.getByRole('button', { name: /^B01 Norte/ })).toBeVisible()
+      await expect(barra.getByRole('link', { name: /^B01 Norte/ })).toHaveAttribute('aria-current', 'page')
       await expect(page.getByText('Conectar')).toHaveCount(0)
       await expect(page.locator('.cx-pregunta')).toHaveCount(0)
       // Lo que no funciona no se enseña (respuesta 3, punto 4).
@@ -123,7 +126,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // Por aclarar, y la tarjeta que nadie ha dado de alta (respuesta 3).
       await page.getByRole('button', { name: /^Por aclarar \d+$/ }).click()
       await capturar(page, 'por-aclarar')
-      await barra.getByRole('button', { name: /^B01 Mercado/ }).click()
+      await barra.getByRole('link', { name: /^B01 Mercado/ }).click()
       // B02: la tarjeta sin dar de alta la anota el motor (se pregunta una vez por tarjeta, no en cada pago).
       await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' })).toContainText('tarjeta ···1234 sin dar de alta')
       await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()

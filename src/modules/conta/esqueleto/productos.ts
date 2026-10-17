@@ -53,10 +53,11 @@ export interface Producto {
   /** Va abajo del todo en la barra (Ajustes). */
   abajo?: boolean
   /**
-   * La pantalla aún pinta sus propias pestañas (Bancos, hasta el paso 3 del
-   * S01): la cabecera no las repite.
+   * En el móvil, la pantalla va por niveles (patrón M4: portada con sus
+   * apartados y «‹ Volver»): ni la fila de pestañas ni la cinta. Bancos.
+   * En el ordenador, pestañas y cinta como todos (paso 3 del S01).
    */
-  pestanasEnLaPantalla?: boolean
+  portadaMovil?: boolean
 }
 
 /** Lo que decide qué sale: de la empresa activa y de la cuenta. */
@@ -106,7 +107,7 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], pestanasEnLaPantalla: true,
+    id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], portadaMovil: true,
     pestanas: [
       { id: 'movimientos', etiqueta: 'Movimientos', ruta: R.bancos, prefijos: [R.bancos] },
       { id: 'reglas', etiqueta: 'Reglas', ruta: `${R.bancos}/reglas`, prefijos: [`${R.bancos}/reglas`] },

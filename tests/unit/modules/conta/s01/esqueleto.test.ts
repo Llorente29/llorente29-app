@@ -15,7 +15,7 @@ import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
 import {
   INTERRUPTORES, PRODUCTOS, cuantasCaben, dondeEsta, pestanasVisibles, productosVisibles, relativa, type Contexto,
 } from '@/modules/conta/esqueleto/productos'
-import { CINTAS, ORDENES, alternarFavorito, cintaDe, esLaActual, favoritosDe, ordenPorId } from '@/modules/conta/esqueleto/ordenes'
+import { CINTAS, ORDENES, alternarFavorito, cintaDe, conConsulta, esLaActual, favoritosDe, ordenPorId } from '@/modules/conta/esqueleto/ordenes'
 import { DE_SERIE, aFila, claveDelNavegador, deFila, deNavegador } from '@/modules/conta/esqueleto/preferencias'
 import { logoDe } from '@/modules/conta/cuenta/contratoCuenta'
 
@@ -98,10 +98,11 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(c, NADA).map((t) => t.id)).toEqual(['por-revisar', 'recibidas'])
     expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.id)).toEqual(['por-revisar', 'recibidas', 'liquidaciones'])
   })
-  it('Bancos y Ajustes: las pestañas aprobadas; Bancos aún pinta las suyas', () => {
+  it('Bancos y Ajustes: las pestañas aprobadas; Bancos, en el móvil, por niveles (su portada)', () => {
     const b = PRODUCTOS.find((p) => p.id === 'bancos')!
     expect(b.pestanas.map((t) => t.etiqueta)).toEqual(['Movimientos', 'Reglas', 'Cuentas y extractos', 'Cierre del mes'])
-    expect(b.pestanasEnLaPantalla).toBe(true)
+    expect(b.portadaMovil).toBe(true)
+    expect(PRODUCTOS.filter((p) => p.portadaMovil).map((p) => p.id)).toEqual(['bancos'])
     const a = PRODUCTOS.find((p) => p.id === 'ajustes')!
     expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Empresa', 'Usuarios', 'Registro de la IA'])
     expect(pestanasVisibles(a, NADA).map((t) => t.etiqueta)).toEqual(['Empresa', 'Registro de la IA'])
@@ -155,6 +156,27 @@ describe('el catálogo de órdenes', () => {
       const o = ordenPorId(`libros.${x.id}`)!
       expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : ''))), x.id).toBe(`contabilidad.${o.pestana}`)
     }
+  })
+  it('paso 3: la barra de Bancos es la cinta de sus cuatro pestañas; «Tus bancos» lo llena la pantalla', () => {
+    for (const t of ['movimientos', 'reglas', 'cuentas', 'cierre']) {
+      expect(cintaDe('bancos', t, NADA).map((g) => [g.titulo, g.dePantalla ?? null, g.ordenes.map((o) => o.etiqueta)]), t).toEqual([
+        ['Tus bancos', 'bancos', []],
+        ['Traer movimientos', null, ['Subir extracto']],
+        ['Automático', null, ['Reglas', 'Casados solos']],
+        ['Revisar', null, ['Lo que he hecho']],
+      ])
+    }
+    // Cada orden lleva a una dirección de Bancos que el esqueleto pone en su pestaña.
+    for (const id of ['bancos.subir', 'bancos.reglas', 'bancos.casados', 'bancos.hecho']) {
+      const o = ordenPorId(id)!
+      expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : '').split('?')[0])), id).toBe(`bancos.${o.pestana}`)
+    }
+  })
+  it('lo elegido viaja por la cinta (ejercicio, mes, banco) y la consulta de la orden manda', () => {
+    expect(conConsulta('/conta/bancos/subir', '?banco=b1&mes=2026-10&ver=casados')).toBe('/conta/bancos/subir?mes=2026-10&banco=b1')
+    expect(conConsulta('/conta/libros/diario?ver=revisar', '?ejercicio=2026')).toBe('/conta/libros/diario?ver=revisar&ejercicio=2026')
+    expect(conConsulta('/conta/bancos?ver=casados', '?ver=otra')).toBe('/conta/bancos?ver=casados')
+    expect(conConsulta('/conta/bancos', '')).toBe('/conta/bancos')
   })
   it('una orden por pestaña con pantalla, para fijarla', () => {
     expect(ordenPorId('ir.contabilidad.asientos')?.etiqueta).toBe('Contabilidad › Asientos')

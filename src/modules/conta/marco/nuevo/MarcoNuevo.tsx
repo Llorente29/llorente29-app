@@ -23,7 +23,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { TeTocaHoy } from '@/modules/conta/ui/marco/TeTocaHoy'
 import { chipsDelInicio } from '@/modules/conta/marco/nuevo/teTocaHoy'
-import { MarcoContexto, type DatosCinta, type Marco } from '@/modules/conta/marco/nuevo/contexto'
+import { MarcoContexto, type DatosCinta, type EntradasCinta, type Marco } from '@/modules/conta/marco/nuevo/contexto'
 import { Buscador } from '@/modules/conta/marco/nuevo/Buscador'
 import { dondeEsta, pestanasVisibles, productosVisibles } from '@/modules/conta/esqueleto/productos'
 import { alternarFavorito, cintaDe, favoritosDe, ordenPorId, type Orden } from '@/modules/conta/esqueleto/ordenes'
@@ -54,13 +54,16 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const [huecoAcciones, setHuecoAcciones] = useState<HTMLDivElement | null>(null)
   const [huecoPeriodo, setHuecoPeriodo] = useState<HTMLDivElement | null>(null)
   const [datosCinta, setDatosCinta] = useState<DatosCinta | null>(null)
+  const [entradasCinta, setEntradasCinta] = useState<EntradasCinta | null>(null)
 
   const donde = dondeEsta(pathname)
   const producto = donde?.producto ?? null
   const productos = productosVisibles(ctx)
-  const pestanas = producto && !producto.pestanasEnLaPantalla ? pestanasVisibles(producto, ctx) : []
+  // En el móvil, un producto por niveles (Bancos) lleva su portada: ni fila de pestañas ni cinta.
+  const porNiveles = movil && !!producto?.portadaMovil
+  const pestanas = producto && !porNiveles ? pestanasVisibles(producto, ctx) : []
   const pestana = donde?.pestana ?? null
-  const cinta = producto ? cintaDe(producto.id, pestana?.id ?? null, ctx) : []
+  const cinta = producto && !porNiveles ? cintaDe(producto.id, pestana?.id ?? null, ctx) : []
 
   // Ctrl K (⌘K): del marco. En la captura, para que no llegue a Libros ni a Bancos.
   useEffect(() => {
@@ -89,6 +92,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
     huecoAcciones,
     huecoPeriodo,
     ponerDatosCinta: setDatosCinta,
+    ponerEntradasCinta: setEntradasCinta,
   }), [prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo])
 
   // Lo que se puede fijar desde aquí: esta pantalla y lo de su cinta.
@@ -117,7 +121,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
             usuario={<MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} />} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
           {producto && pestana && (
-            <CintaDePestana etiqueta={`Acciones de ${pestana.etiqueta}`} grupos={cinta} datos={datosCinta} oculta={prefs.cintaOculta}
+            <CintaDePestana etiqueta={`Acciones de ${pestana.etiqueta}`} grupos={cinta} datos={datosCinta} entradas={entradasCinta} oculta={prefs.cintaOculta}
               alCambiarOculta={(cintaOculta) => cambiar({ cintaOculta }, cintaOculta ? 'Cinta oculta: «Mostrar la cinta» la saca otra vez.' : 'La cinta vuelve a estar a la vista.')}
               alBuscar={() => setBuscando(true)} />
           )}

@@ -20,6 +20,7 @@
 
 import { CONTA, rutaConta, rutaLibros } from '@/config/navegacion'
 import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
+import { HECHO_POR, LO_HECHO } from '@/modules/conta/bancos/marca'
 import type { NombreIcono } from '@/modules/conta/diseno/iconos'
 import { PRODUCTOS, pestanasVisibles, productoVisible, type Condicion, type Contexto, type IdProducto } from './productos'
 
@@ -37,7 +38,12 @@ export interface Orden {
   solo?: Condicion
 }
 
-export interface GrupoCinta { titulo: string; ordenes: string[] }
+export interface GrupoCinta {
+  titulo: string
+  ordenes: string[]
+  /** El grupo lo llena la pantalla (useEntradasEnCinta) con lo que solo ella sabe: los bancos de la empresa. */
+  dePantalla?: string
+}
 
 const R = CONTA.rutas
 
@@ -55,6 +61,13 @@ const DE_LA_CINTA: Orden[] = [
   // · UTILIDADES
   { id: 'asiento.busqueda', etiqueta: 'Búsqueda', icono: 'buscar', producto: 'contabilidad', pestana: 'asientos', a: { accion: 'buscar' }, sinonimos: ['buscar'] },
   { id: 'asiento.digitalizar', etiqueta: 'Digitalizar', icono: 'digitalizar', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.documentos }, sinonimos: ['subir factura', 'escanear'] },
+
+  // Bancos (paso 3; antes, la barra de B01 en la pantalla). «Tus bancos» los
+  // pone la pantalla: son los de la empresa (dePantalla en CINTAS).
+  { id: 'bancos.subir', etiqueta: 'Subir extracto', icono: 'subir', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/subir` }, sinonimos: ['extracto', 'norma 43', 'n43', 'excel', 'importar movimientos'] },
+  { id: 'bancos.reglas', etiqueta: 'Reglas', icono: 'ia', producto: 'bancos', pestana: 'reglas', a: { ruta: `${R.bancos}/reglas` }, sinonimos: ['aprender', 'siempre', 'concepto'] },
+  { id: 'bancos.casados', etiqueta: HECHO_POR, icono: 'ok', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}?ver=casados` }, sinonimos: ['casado solo', 'automatico', 'deshacer'] },
+  { id: 'bancos.hecho', etiqueta: LO_HECHO, icono: 'revisar', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/hecho` }, sinonimos: ['hecho', 'registro', 'deshacer'] },
 ]
 
 /**
@@ -88,6 +101,13 @@ export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_LIBROS, ...DE_PESTANA]
 const POR_ID = new Map(ORDENES.map((o) => [o.id, o]))
 export const ordenPorId = (id: string): Orden | null => POR_ID.get(id) ?? null
 
+const CINTA_BANCOS: GrupoCinta[] = [
+  { titulo: 'Tus bancos', ordenes: [], dePantalla: 'bancos' },
+  { titulo: 'Traer movimientos', ordenes: ['bancos.subir'] },
+  { titulo: 'Automático', ordenes: ['bancos.reglas', 'bancos.casados'] },
+  { titulo: 'Revisar', ordenes: ['bancos.hecho'] },
+]
+
 /** La cinta de cada pestaña ('producto.pestaña'). Sin entrada, la pestaña no lleva cinta. */
 export const CINTAS: Record<string, GrupoCinta[]> = {
   'contabilidad.asientos': [
@@ -109,6 +129,11 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   'contabilidad.importar': [
     { titulo: 'Diez', ordenes: ['libros.pendientes-diez'] },
   ],
+  // Paso 3: la barra de Bancos (B01), la misma en sus cuatro pestañas.
+  'bancos.movimientos': CINTA_BANCOS,
+  'bancos.reglas': CINTA_BANCOS,
+  'bancos.cuentas': CINTA_BANCOS,
+  'bancos.cierre': CINTA_BANCOS,
 }
 
 /** ¿Se puede usar esta orden en esta empresa? (su producto sale, y su pestaña, y lo que pida). */
@@ -120,11 +145,12 @@ export function ordenDisponible(o: Orden, ctx: Contexto): boolean {
 }
 
 /** La cinta de una pestaña, con lo que no se puede usar aquí ya quitado; los grupos vacíos, fuera. */
-export function cintaDe(producto: IdProducto, pestana: string | null, ctx: Contexto): { titulo: string; ordenes: Orden[] }[] {
+export interface GrupoDeCinta { titulo: string; ordenes: Orden[]; dePantalla?: string }
+export function cintaDe(producto: IdProducto, pestana: string | null, ctx: Contexto): GrupoDeCinta[] {
   if (!pestana) return []
   return (CINTAS[`${producto}.${pestana}`] ?? [])
-    .map((g) => ({ titulo: g.titulo, ordenes: g.ordenes.map(ordenPorId).filter((o): o is Orden => !!o && ordenDisponible(o, ctx)) }))
-    .filter((g) => g.ordenes.length > 0)
+    .map((g) => ({ titulo: g.titulo, ordenes: g.ordenes.map(ordenPorId).filter((o): o is Orden => !!o && ordenDisponible(o, ctx)), dePantalla: g.dePantalla }))
+    .filter((g) => g.ordenes.length > 0 || !!g.dePantalla)
 }
 
 export interface Favorito { id: string; orden: Orden | null; disponible: boolean }
@@ -157,4 +183,18 @@ export function esLaActual(o: Orden, pathname: string, search: string): boolean 
   for (const [k, v] of pide) if (aqui.get(k) !== v) return false
   // Sin consulta, solo si la dirección tampoco pide una vista («Libro diario» no es «Para revisar»).
   return pide.toString() !== '' || !aqui.has('ver')
+}
+
+/**
+ * Lo elegido viaja de una acción a otra: el ejercicio (Libros y el diario), el
+ * mes y el banco (Bancos). La consulta de la orden manda sobre lo que viaja.
+ */
+const VIAJAN = ['ejercicio', 'mes', 'banco']
+export function conConsulta(ruta: string, search: string): string {
+  const [camino, propia = ''] = ruta.split('?')
+  const aqui = new URLSearchParams(search)
+  const q = new URLSearchParams(propia)
+  for (const k of VIAJAN) { const v = aqui.get(k); if (v && !q.has(k)) q.set(k, v) }
+  const t = q.toString()
+  return t ? `${camino}?${t}` : camino
 }
