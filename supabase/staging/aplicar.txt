@@ -1,16 +1,9 @@
-# R03 · La dirección que no llega, sin espera (Julio, 16/10, tras ver las capturas).
-# Staging tenía la versión anterior (con la espera de 5 minutos): se quita con
-# las tres vueltas atrás de verdad (así quedan probadas sobre datos), se prueban
-# las dos pruebas (ROLLBACK) y se aplican 0300, 0310 y 0320 de verdad.
-# 17/10 (Julio, en automático): la lista trae el teléfono del cliente,
-# fijar_direccion_entrega dice quién la escribió y Pedidos trae
-# delivery_address_fixed_by. Se rehace igual: vueltas atrás, pruebas y las tres.
-supabase/staging/sql/20261117_r03_staging_rehacer.sql
-supabase/staging/sql/20261118_r03_direccion_incompleta_prueba.sql
-supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
-supabase/migrations/20261118T0300_r03_direccion_incompleta.sql
-supabase/migrations/20261118T0310_r03_ticket_codigo_quien_reparte.sql
-supabase/migrations/20261118T0320_r03_entrega_datos.sql
+# R03 · La dirección que no llega. Staging tiene el R03 al día desde el run
+# 39001277072 (17/10, 04:06 UTC: las tres vueltas atrás de la versión anterior,
+# las dos pruebas y la 0300, la 0310 y la 0320 de verdad); desde entonces la 0310
+# solo cambió un comentario de su cabecera. Aquí, las tres vueltas atrás que van
+# a producción, de verdad, en orden y sobre datos, con ROLLBACK: staging no cambia.
+supabase/staging/sql/20261118_r03_vuelta_atras_prueba.sql
 
 # C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
 # prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:

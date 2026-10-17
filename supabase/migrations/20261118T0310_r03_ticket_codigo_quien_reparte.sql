@@ -6,6 +6,9 @@
 -- cambia: public.orders_feed · prueba: supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
 -- cambia: public.orders_feed_by_token · prueba: supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
 -- cambia: public.order_for_print · prueba: supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
+-- cambia: public.sale · prueba: supabase/staging/sql/20261118_r03_ticket_codigo_quien_reparte_prueba.sql
+--   (pone en sale los disparadores trg_sale_entrega_desde_raw y trg_sale_tipo_uber_quien_reparte;
+--    la prueba los ejercita: 0a–0g, 1a–1c y 7d–7e)
 --
 -- Va DETRÁS de la 0300 (que crea pedidos_sin_direccion y las columnas de la
 -- dirección pegada).
