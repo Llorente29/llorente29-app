@@ -38,6 +38,7 @@ import {
   anadirPapel, archivarTercero, asegurarCuentaLiquidacion, deshacerFusion, fusionarTerceros, fusionesDe, listarTercerosBase, type Fusion,
 } from '@/modules/conta/services/tercerosService'
 import { MARCA } from '../cuenta/marca'
+import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 const CADA: Record<string, string> = { weekly: 'Liquida cada semana', fortnightly: 'Liquida cada 15 días', monthly: 'Liquida cada mes' }
 
@@ -234,6 +235,7 @@ function FranjaFusiones() {
   )
 }
 
+// S01: plataforma y socio de marca solo con hostelería (Ajustes › Empresa).
 const PAPELES_QUE_SE_ANADEN: { papel: 'customer' | 'platform' | 'brand_partner'; texto: string }[] = [
   { papel: 'customer', texto: 'Añadir papel de cliente' },
   { papel: 'platform', texto: 'Es también plataforma de reparto' },
@@ -251,6 +253,7 @@ function MenuMas() {
   const [fallo, setFallo] = useState<string | null>(null)
   const t = ficha.tercero
   const tiene = new Set(ficha.papeles.map((p) => p.role))
+  const hosteleria = useHosteleria()
   return (
     <>
       <button type="button" className="cx-boton-sec cx-mas" aria-haspopup="menu" aria-expanded={abierto}
@@ -258,7 +261,7 @@ function MenuMas() {
       {abierto && (
         <div className="cxp-menu" role="menu">
           {t.supplierId && <Link role="menuitem" to={rutaFichaProveedor(t.supplierId)}>Abrir su ficha de proveedor</Link>}
-          {PAPELES_QUE_SE_ANADEN.filter((p) => !tiene.has(p.papel)).map((p) => (
+          {PAPELES_QUE_SE_ANADEN.filter((p) => !tiene.has(p.papel) && (hosteleria || p.papel === 'customer')).map((p) => (
             <button key={p.papel} type="button" role="menuitem" onClick={async () => {
               setAbierto(false); setFallo(null)
               try {

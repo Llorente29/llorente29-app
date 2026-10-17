@@ -60,7 +60,7 @@ import { AccionesPantalla, BotonAccion } from '@/modules/conta/ui/marco/Acciones
 import { TablaDensa, type ColumnaDensa } from '@/modules/conta/ui/tabla/TablaDensa'
 import { borrarVista, cumpleFiltros, guardarVista, leerVistas, miles, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
 import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
-import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { useAnalitica, useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import type { EjeVista } from '@/modules/conta/esqueleto/productos'
 
 const almacen = (): Storage | null => { try { return window.localStorage } catch { return null } }
@@ -149,6 +149,8 @@ export default function LibroDiarioPage() {
   const ejes = { local: !!analitica.local, marca: !!analitica.marca }
   const { activa } = useEmpresas()
   const movil = useIsMobile()
+  // S01: sin hostelería, los textos no hablan de plataformas ni de liquidaciones.
+  const hosteleria = useHosteleria()
   const navegar = useNavigate()
   const [params, setParams] = useSearchParams()
   const [vuelta, setVuelta] = useState(0)
@@ -462,9 +464,9 @@ export default function LibroDiarioPage() {
                 claseFila={(a) => (a.estado === 'anulado' ? 'cxd-anulado' : undefined)}
                 tarjeta={(a) => <TarjetaAsiento a={a} diez={diezDe(a)} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />}
                 vacio={enEsperan
-                  ? <Vacio titulo="Nada esperando." explicacion="Aquí sale lo que todavía no se puede validar o enviar, con su motivo: un mes cerrado, un envío por aclarar, una plataforma sin su factura medida en Diez…" />
+                  ? <Vacio titulo="Nada esperando." explicacion={`Aquí sale lo que todavía no se puede validar o enviar, con su motivo: un mes cerrado, un envío por aclarar${hosteleria ? ', una plataforma sin su factura medida en Diez' : ''}…`} />
                   : filtro === 'revisar' && !soloSinDiez
-                  ? <Vacio titulo="Nada que revisar." explicacion="Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ventas, facturas, liquidaciones y nóminas." />
+                  ? <Vacio titulo="Nada que revisar." explicacion={`Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ${hosteleria ? 'ventas, facturas, liquidaciones y nóminas' : 'ventas, facturas y nóminas'}.`} />
                   : datos.asientos.length === 0
                     ? <Vacio titulo="Aún no hay asientos en este ejercicio." explicacion="Pulsa «Proponer lo pendiente» y los preparo con su porqué; o haz uno a mano con «+ Nuevo asiento»." />
                     : <Vacio titulo="Ningún asiento con lo que hay puesto." explicacion="Prueba con «Todos» o quita los filtros: el libro tiene más." />}
