@@ -36,7 +36,7 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 // @ts-expect-error — módulo .mjs sin tipos
-import { ambiguosEnPlpgsql, analizarFichero, columnasConocidas, clasificar, creadosPorLaTanda, decidir, informe, ordenEnElFichero, sentencias } from '../../../scripts/conta/produccion/analizar.mjs'
+import { ambiguosEnPlpgsql, analizarFichero, columnasConocidas, clasificar, creadosPorLaTanda, decidir, informe, ordenEnElFichero, sentencias, veredicto } from '../../../scripts/conta/produccion/analizar.mjs'
 
 type Op = { accion: string; tipo: string; objeto: string; detalle: string }
 type Existentes = { tablas: string[]; funciones: string[] }
@@ -1294,12 +1294,12 @@ describe('la tanda del corte por fecha de las liquidaciones (D01, 0100 y 0110 de
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): «Esperan», los motivos para validar en un solo sitio (M01, Julio, 16/10)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda de «Esperan», los motivos para validar en un solo sitio (M01, Julio, 16/10), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-m01-esperan-20261017.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 16/10 a las 19:49 UTC para ESTE fichero (con su md5).
-  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-m01-esperan-20261017.json', 'utf8')).contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
   const PRUEBA = 'supabase/staging/sql/20261117_m01_motivos_para_validar_prueba.sql'
@@ -1343,11 +1343,81 @@ describe('la tanda de AHORA (manifiesto vivo): «Esperan», los motivos para val
     expect(readFileSync(cuentas[0], 'utf8')).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
   it('su vuelta atrás es un fichero, con la misma cuenta, y su prueba de staging la ejecuta de verdad', () => {
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual(['supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql'])
-    expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql')
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-m01-esperan-20261017.txt')).toEqual(['supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql'])
+    expect(readFileSync('tests/conta/produccion/vuelta-atras-m01-esperan-20261017.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql')
     const p = readFileSync('supabase/staging/sql/20261117_m01_motivos_para_validar_vuelta_atras_prueba.sql', 'utf8')
     expect(p).toContain('\\i supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql')
     expect(p).toMatch(/rollback;\s*$/)
+  })
+})
+
+describe('W02 · un secreto de Vault se escribe llamando a una función: vault.create_secret y vault.update_secret cuentan como escritura en vault.secrets', () => {
+  // Con el analizador de antes (hasta el W02, 17/10) estas tres salían «sigue»:
+  // ninguna orden de insert ni update, solo llamadas. Y cambian el secreto vivo.
+  const existe = (o: { objeto: string }) => o.objeto === 'vault.secrets'
+  const casos = [
+    `do $$ declare v uuid; begin select id into v from vault.secrets where name = 'x'; perform vault.update_secret(v, 'nuevo'); end $$;`,
+    `do $$ begin perform vault.create_secret('valor', 'x_anterior', 'el de antes'); end $$;`,
+    `select vault.update_secret('00000000-0000-0000-0000-000000000000', 'nuevo');`,
+  ]
+  it('cada una, una escritura en vault.secrets', () => {
+    for (const c of casos) {
+      const ops = analizarFichero('caso.sql', c)
+      expect(ops.some((o) => o.accion === 'cambia_datos' && o.tipo === 'tabla' && o.objeto === 'vault.secrets'), c).toBe(true)
+    }
+  })
+  it('y, como vault.secrets existe, piden «autorizo»', () => {
+    for (const c of casos) {
+      const ops = analizarFichero('caso.sql', c)
+      expect(veredicto(ops, { existe }).estado, c).toBe('autorizo')
+    }
+  })
+  it('leer un secreto (vault.decrypted_secrets) no es escribir', () => {
+    const ops = analizarFichero('caso.sql', `select decrypted_secret from vault.decrypted_secrets where name = 'x';`)
+    expect(ops.filter((o) => o.objeto === 'vault.secrets')).toEqual([])
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): el relevo del secreto del despacho (W02, Julio, 17/10; PR #225)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 17/10 a las 12:52 UTC para ESTE fichero (con su md5).
+  const ctx = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero, AUTORIZO: escribe en vault.secrets, que existe', () => {
+    expect(viva).toEqual(['supabase/migrations/20261120T0100_w02_secreto_despacho_relevo.sql'])
+    expect(ctx.tablas).toEqual(['vault.secrets'])
+    expect(r.ficheros).toEqual({ [viva[0]]: 'autorizo' })
+  })
+  it('el comentario del manifiesto dice, para «autorizo», exactamente ese fichero', () => {
+    const l = readFileSync(MANIFIESTO, 'utf8').split('\n')
+    const i = l.findIndex((x) => /^#\s*autorizo:\s*$/.test(x))
+    expect(l[i + 1].replace(/^#\s*/, '').trim()).toBe('20261120T0100_w02_secreto_despacho_relevo.sql')
+  })
+  it('el secreto nuevo se genera dentro de la base: el fichero no lleva ningún valor', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    expect(sql).toMatch(/vault\.update_secret\(v_id, encode\(extensions\.gen_random_bytes\(32\), 'hex'\)\)/)
+    expect(sql).not.toMatch(/fv_c[A-Za-z0-9_]{8,}/)
+    expect(sql).not.toMatch(/'[0-9a-f]{32,}'/)
+  })
+  it('declara qué cuenta; la cuenta existe, solo lee y no saca valores, solo huellas cortas', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/w02-secreto-despacho.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    // Todo decrypted_secret que sale, sale dentro de left(md5(…), 12).
+    expect((fuera.match(/decrypted_secret\b(?! from)/g) ?? []).length).toBe((fuera.match(/left\(md5\(decrypted_secret\), 12\)/g) ?? []).length)
+  })
+  it('su vuelta atrás es un fichero, con la misma cuenta, y deja el de antes', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual(['supabase/vuelta-atras/20261120T0100_w02_secreto_despacho_relevo.down.sql'])
+    expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/w02-secreto-despacho.sql')
+    const atras = readFileSync('supabase/vuelta-atras/20261120T0100_w02_secreto_despacho_relevo.down.sql', 'utf8')
+    expect(atras).toMatch(/perform vault\.update_secret\(v_id, v_ant\)/)
+    expect(atras).toMatch(/raise exception/)
   })
 })
 
