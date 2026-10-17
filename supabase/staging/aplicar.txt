@@ -16,6 +16,11 @@ supabase/migrations/20261122T0100_i01_plazos.sql
 supabase/migrations/20261122T0110_i01_modelo_datos.sql
 supabase/staging/sql/20261122_i01_plazos_prueba.sql
 supabase/staging/sql/20261122_i01_modelo_datos_prueba.sql
+#   Pieza 3, obligaciones: la prueba aplica la 0120 (las reglas con nombre) con
+#   \i dentro de su transacción y ROLLBACK: regla, datos y porqué de cada
+#   modelo; calcular dos veces no escribe dos; quitar pide motivo y ninguna
+#   regla lo pisa; un dato cambia la regla; Canarias; el 130 de un autónomo.
+supabase/staging/sql/20261122_i01_obligaciones_prueba.sql
 
 # M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
 # pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)
