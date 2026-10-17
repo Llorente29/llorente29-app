@@ -6,7 +6,8 @@
 -- tienen que tener la huella de antes y las dos nuevas no existir. SOLO LEE.
 --
 -- Huellas de antes, medidas en producción en solo lectura el 16/10 a las 19:49
--- UTC (con la tanda de C ya aplicada): journal_entry_validar 798e4c43… (la de
+-- UTC y otra vez el 17/10 a las 05:40 UTC, iguales (con la tanda de C ya
+-- aplicada): journal_entry_validar 798e4c43… (la de
 -- 20261113T0100_c06b_centimo_iva) y tg_journal_entry_envio_por_aclarar
 -- 7a2549b0… (la de 20261116T0100_c06b_promociones_envios). Son las que copia,
 -- tal cual, la vuelta atrás.

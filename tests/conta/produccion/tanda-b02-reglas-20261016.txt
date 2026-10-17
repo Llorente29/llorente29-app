@@ -1,0 +1,27 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# B02 · T3 «las reglas de Foodint, corregidas» (rama conta/b02-conciliacion).
+# Orden acordado: T1 (aplicada, run real sobre d8c07c77) → fusionar el #209
+# (hecho) → T2 (aplicada, run real sobre d0d9a74c, 16/10 13:23) → T3 (0210).
+# La anterior de este fichero (B02 · T2, 0201) ya está en el historial de
+# producción; su copia: tests/conta/produccion/tanda-b02-relleno-20261016.txt.
+#
+#   1. 0210 — corrige por su id las cuatro reglas de Foodint (Julio, 15/10):
+#      UBER ONE → 62900000 y SHELL BARAJAS → 62800000, encendidas; las
+#      recargas → 40700001 (creada por la tanda E05 de A), encendida y con su
+#      condición «CATCHER DISCO» → «CATCHER», sin importe; LIQ OP TRANSFEREN,
+#      apagada. Encendidas proponen y ninguna casa sola (confirmaciones a 0).
+#      Es un UPDATE sobre filas que existen: el analizador pide «autorizo» con
+#      su nombre entero. ANTES de escribir PARA si falta la 40700001, si una
+#      regla no está como se midió (estado, cuenta o condición) o si alguna ha
+#      casado algo; lo de antes queda en el registro de cada regla, y de ahí lo
+#      devuelve la vuelta atrás. No escribe ningún asiento (contabilidad
+#      cerrada a 30/09/2026).
+#
+# No toca el camino del pedido.
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-b02-reglas-20261016.txt.
+cuenta: scripts/conta/produccion/cuentas/b02-reglas.sql
+supabase/migrations/20261101T0210_b02_reglas_foodint.sql

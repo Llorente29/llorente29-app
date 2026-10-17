@@ -16,6 +16,9 @@
 #      motivo de la misma función). Declarado en su cabecera, con su prueba de
 #      staging. No toca ninguna tabla ni ningún asiento.
 #
+# ORDEN (Julio, 17/10): va ANTES que la 0220 de B (B02 · T4, rama
+# conta/b02-espera-extracto), que espera a que esta esté en el historial.
+#
 # VA DESPUÉS DE LA DE C, y se escribe sobre ella: las dos funciones que cambia
 # están en producción con la huella de la que parte (798e4c43… y 7a2549b0…,
 # medidas el 16/10 a las 19:49 UTC en solo lectura).

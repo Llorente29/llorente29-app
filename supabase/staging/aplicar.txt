@@ -4,7 +4,20 @@
 #   1. Los motivos: cinco casos validados como usuario con la validación de
 #      antes y con la nueva, el mismo texto, y «Esperan» da lo que pararía.
 #   2. La vuelta atrás, ejecutada de verdad: todo vuelve a la huella de antes.
-# La anterior de este fichero (la prueba de promociones y envíos de C) ya pasó;
-# su tanda está en producción desde el 16/10 a las 21:29.
+# Van las primeras: lo de D01 de abajo puede fallar por datos de otro frente
+# y no debe parar estas. La prueba de promociones y envíos de C ya pasó; su
+# tanda está en producción desde el 16/10 a las 21:29.
 supabase/staging/sql/20261117_m01_motivos_para_validar_prueba.sql
 supabase/staging/sql/20261117_m01_motivos_para_validar_vuelta_atras_prueba.sql
+
+# D01 · El corte por fecha de las liquidaciones por correo (rama conta/d01-corte-liquidaciones).
+#   0100: el corte (de referencia antes de la fecha de Bancos; la que cruza, real).
+#   0110: los datos de Foodint; en staging no hace nada (Foodint no está).
+#   Y su prueba (ROLLBACK): antes, cruzando, varias semanas antes y cruzando, solapes.
+#   Y la tanda y las dos vueltas atrás, de verdad sobre datos de la cuenta A (ROLLBACK).
+#   Y la semilla de la e2e de Libros: una de referencia en A (22–28/12/2025, depósito 02/01/2026).
+supabase/migrations/20261115T0100_d01_liquidaciones_corte.sql
+supabase/migrations/20261115T0110_d01_liquidaciones_referencia_foodint.sql
+supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
+supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
+supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql

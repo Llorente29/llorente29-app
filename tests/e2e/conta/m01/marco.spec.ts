@@ -14,6 +14,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapanSinPregunta } from '../solapes'
+import { redQuieta } from '../red'
 
 const DIR = 'docs/conta/capturas/m01'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -155,7 +156,7 @@ test('una pantalla vieja dentro del marco: Bancos, con su estilo y sus pestañas
     await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveCount(0)
     await expect(menu(page).getByRole('link', { name: 'Bancos' })).toHaveAttribute('aria-current', 'page')
   }
-  await page.waitForLoadState('networkidle')
+  await redQuieta(page)
   await expect(page.getByRole('alert')).toHaveCount(0)
   await capturar(page, 'pantalla-vieja')
 })

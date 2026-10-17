@@ -11,13 +11,13 @@
 // Lo que escribe (la hora de cierre) se hace en UN tamaño y se deja como estaba.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, CUENTA_B, entrarComo, pedirSesion } from '../sesion'
+import { CUENTA_A, CUENTA_B, entrarComo, pedirSesion, enCarril } from '../sesion'
 import { rest } from '../api'
 import { loQueTapanSinPregunta } from '../solapes'
 
 const DIR = 'docs/conta/capturas/cierre'
-const ASIENTO_04 = 'fc7df35a-c53c-460e-907a-ebea3d7fef8b'
-const EMPRESA_A = '3b34403a-a7d6-4a48-a8d7-737e8cababdc'
+const ASIENTO_04 = enCarril('fc7df35a-c53c-460e-907a-ebea3d7fef8b')
+const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 async function capturar(page: Page, nombre: string) {

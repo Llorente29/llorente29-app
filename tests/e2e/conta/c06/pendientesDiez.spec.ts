@@ -15,12 +15,12 @@
 
 import { mkdirSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { loQueTapanSinPregunta } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c06b'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
-const ID = (n: number) => `c06b7000-0000-4000-8000-00000000000${n}`
+const ID = (n: number) => enCarril(`c06b7000-0000-4000-8000-00000000000${n}`)
 const PDF = Buffer.from('%PDF-1.3\n% C06b prueba inventada\n%%EOF\n')
 
 const ASIENTOS = [

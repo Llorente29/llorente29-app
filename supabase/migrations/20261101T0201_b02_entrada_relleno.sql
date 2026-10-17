@@ -8,7 +8,9 @@
 -- primera parte y la contraparte la segunda, limpia (_bank_contraparte_limpia).
 -- Solo los de extractos «csv:bbva» y solo los que aún no la tienen. Tabla
 -- entera a propósito (regla 9): el formato es del banco, no de la cuenta.
--- En producción, medido el 15/10 en solo lectura: los 47 de ···6536.
+-- En producción, medido el 16/10 en solo lectura: 108, los tres Excel de BBVA
+-- de Foodint (···6536 47, ···0133 37, ···4525 24), todos con « · » y ninguno
+-- con tipo ni contraparte. Solo toca esas dos columnas: ningún asiento.
 --
 -- Al final COMPRUEBA que no queda ninguno de esos sin tipo y, si queda, PARA.
 -- Vuelta atrás: supabase/vuelta-atras/20261101T0201_b02_entrada_relleno.down.sql

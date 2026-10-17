@@ -270,3 +270,51 @@ export function textoBloque(seleccion: readonly string[], preseleccionados: read
     seguros,
   }
 }
+
+// ── De dónde parte el cuadre (regla de Julio, 16/10) ───────────────────────
+// Si los bancos tienen fecha de corte (antes de ella la contabilidad está
+// cerrada y casi sin conciliar), el cuadre NO parte del saldo contable a la
+// víspera del corte: parte del saldo del EXTRACTO ese día, y le suma lo que
+// la contabilidad ha movido en la cuenta desde el corte. Y lo dice.
+
+export interface ExtractoSaldos { desde: string; hasta: string; saldoInicialCent: number | null; saldoFinalCent: number | null }
+
+export interface PuntoDePartida {
+  /** «En contabilidad» para el cuadre. */
+  libroCent: number | null
+  /** Lo que la pantalla dice debajo; null si no hay corte (se parte del contable, como siempre). */
+  apertura: { fecha: string; bancoCent: number | null; contableCent: number; frase: string } | null
+}
+
+const dia = (iso: string, d: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + d * 86400000).toISOString().slice(0, 10)
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+/** El saldo del banco al cierre de `fecha`: el inicial del extracto que empieza al día siguiente, o el final del que acaba ese día. */
+export function saldoDelExtractoA(extractos: readonly ExtractoSaldos[], fecha: string): number | null {
+  const empieza = extractos.find((e) => e.desde === dia(fecha, 1) && e.saldoInicialCent !== null)
+  if (empieza) return empieza.saldoInicialCent
+  const acaba = extractos.find((e) => e.hasta === fecha && e.saldoFinalCent !== null)
+  return acaba ? acaba.saldoFinalCent : null
+}
+
+/**
+ * `libroAntesCent`: la 572 a la víspera del corte; `libroAhoraCent`: a la fecha del cuadre.
+ * Sin corte (o con el cuadre antes del corte), el contable de siempre.
+ */
+export function puntoDePartida(corte: string | null, hasta: string, extractos: readonly ExtractoSaldos[], libroAntesCent: number | null, libroAhoraCent: number | null): PuntoDePartida {
+  if (!corte || libroAhoraCent === null || libroAntesCent === null || hasta < corte) return { libroCent: libroAhoraCent, apertura: null }
+  const vispera = dia(corte, -1)
+  const bancoCent = saldoDelExtractoA(extractos, vispera)
+  const e = (c: number) => `${(c / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+  if (bancoCent === null) {
+    return { libroCent: libroAhoraCent, apertura: { fecha: vispera, bancoCent: null, contableCent: libroAntesCent,
+      frase: `No tengo el saldo del extracto a ${ddmm(vispera)}: parto del contable (${e(libroAntesCent)}). Sube el extracto que empieza el ${ddmm(corte)}.` } }
+  }
+  return {
+    libroCent: bancoCent + (libroAhoraCent - libroAntesCent),
+    apertura: { fecha: vispera, bancoCent, contableCent: libroAntesCent,
+      frase: bancoCent === libroAntesCent
+        ? `Parto del saldo del extracto a ${ddmm(vispera)} (${e(bancoCent)}), que coincide con el contable.`
+        : `Parto del saldo del extracto a ${ddmm(vispera)} (${e(bancoCent)}), no del contable (${e(libroAntesCent)}): hasta esa fecha la contabilidad está cerrada y casi sin conciliar.` },
+  }
+}

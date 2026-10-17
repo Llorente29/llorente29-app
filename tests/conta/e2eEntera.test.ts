@@ -25,4 +25,15 @@ describe('la suite entera del commit', () => {
     expect(enteraEnVerde([run(6, 'entera', null)], SHA).porque).toMatch(/sin acabar \(run 6\)/)
     expect(enteraEnVerde([], SHA).porque).toMatch(/no hay ninguna suite entera/)
   })
+  // W02 (1c): la entera va en 4 trozos; si uno falla se puede relanzar ESE
+  // trozo para diagnosticar, pero ese verde es un reintento y no vale.
+  it('una entera en verde en el segundo intento (un trozo relanzado) NO vale, y lo dice', () => {
+    const v = enteraEnVerde([{ ...run(7, 'entera', 'success'), run_attempt: 2 }], SHA)
+    expect(v.ok).toBe(false)
+    expect(v.porque).toMatch(/intento 2 \(run 7\).*diagnosticar/)
+  })
+  it('la del primer intento, sí (y un run sin run_attempt, el de antes, cuenta como primero)', () => {
+    expect(enteraEnVerde([{ ...run(8, 'entera', 'success'), run_attempt: 1 }], SHA)).toMatchObject({ ok: true, run: { id: 8 } })
+    expect(enteraEnVerde([run(9, 'entera', 'success')], SHA).ok).toBe(true)
+  })
 })
