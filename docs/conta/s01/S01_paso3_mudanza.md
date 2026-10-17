@@ -251,23 +251,45 @@ otro marco, como dice el inventario §6: la factura es una sola.
 - La unitaria del catálogo ya solo deja fuera de su producto a «Digitalizar»
   (subir un papel vive en Compras y gastos).
 
-**Lo que no está como en la maqueta, y lo digo antes de cambiarlo (regla 5):**
+**Las tres cosas de la maqueta 3, decididas por Julio (17/10) y hechas:**
 
-1. **«No es una factura»**: no hay en la base ningún estado ni función que
-   marque un documento como «no es una factura» (ni en `supplier_invoice` ni
-   en `document_inbox`). En su sitio está «Otra cosa», el diálogo que ya
-   había (corregir en Compras o elegir otro proveedor). Hacerlo bien pide base
-   nueva: ¿un estado `descartada` con su motivo, que la saque de «para
-   revisar» y deje rastro? Espero a Julio.
-2. **«Lo que he leído» con campos que se escriben**: en la maqueta son
-   cuadros editables (proveedor, NIF, número, fecha, local, cuenta de gasto,
-   forma de pago, vence, cuenta de pago). Hoy es lectura, y lo que está mal se
-   corrige en Compras (lo dice «Otra cosa»). Hacerlos editables cambia cómo se
-   aprueba una factura y no lo toco sin decisión.
-3. **«Lo que he comprobado»** en verde y **«Ver el asiento»** plegable: la
-   página enseña lo mismo con sus piezas de hoy (los avisos en «Lo que he
-   leído» y «Cómo se apunta» con la propuesta de verdad), no con esa forma.
+1. **«No es una factura»** (0160): un estado `descartada` con su motivo, quién
+   y cuándo; sale de «para revisar» y se deshace. Nada se borra.
+   - En la base: las columnas del descarte (`discarded_at`, `discarded_by`,
+     `discarded_by_name`, `discard_reason`, `status_before_discard`), el CHECK de
+     `status` ampliado (solo añade `descartada`) y una restricción: descartada ⇔
+     con fecha, motivo y estado de antes.
+   - `conta_factura_descartar` y `conta_factura_recuperar`, con el permiso de
+     tocar la factura (ser de la cuenta). Cada una deja su línea en
+     `document_activity` («descartada»; «deshecha» con `undo_of`). No se descarta
+     una pagada, una con asiento vivo o con un pago casado en Bancos.
+   - **Las repetidas**: `tg_supplier_invoice_no_repetida` trata la descartada
+     como la anulada (cambiar en caliente, cuerpo de producción md5 a69d2408…).
+     Si no, una descartada («es un presupuesto») habría bloqueado a la factura
+     buena con el mismo número y total; y recuperar una descartada con otra igual
+     viva habría metido una repetida sin decir nada. Ahora para (23505).
+   - **N22** (`conta_documentos_recibidos`, md5 ea1dd614…): la descartada sale
+     con su estado y «No es una factura: <motivo> (quién, fecha).». No se
+     esconde (regla 7): está en «Todas».
+   - Todo lo que lee por estados concretos (propuestas del libro, pendientes de
+     Bancos, «le debes») la deja fuera sin tocarlo. En la ficha del proveedor y
+     en las facturas de Compras sale como «No es una factura».
+   - En la pantalla: «No es una factura» arriba (Asientos) o abajo (Compras y
+     gastos), y en «Otra cosa» en el móvil. Se elige o se escribe el motivo;
+     sin motivo no se descarta. Descartada, lo dice arriba con quién y cuándo, y
+     «Deshacer: sí es una factura».
+   - La prueba de staging, como usuario de A: descartar, N22, Bancos, dos veces,
+     la buena repetida, recuperar con la otra viva (para) y sin ella, B, con
+     asiento, sin motivo y la vuelta atrás (para con una descartada; sin
+     ninguna, las dos funciones byte a byte como en producción).
+2. **«Lo que he leído»**: de lectura, con **«Corregir en Compras»** al lado del
+   título y «No es de este proveedor». Editable, con recálculo del asiento, va
+   en un encargo propio justo después del S01.
+3. **«Lo que he comprobado»**: el bloque verde, una línea por comprobación de la
+   lectura (✓), y en ámbar las que no cuadran (no se esconden), más «No está
+   repetida». **«Ver el asiento»** se pliega: abierto de serie, plegado para
+   quien no tiene experiencia (lo que se ofrece, no dónde está).
 
 ## Queda (paso 3)
 
-Nada más del inventario: lo de arriba (1–3) espera decisión.
+Nada más del inventario.

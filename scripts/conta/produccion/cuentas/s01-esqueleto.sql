@@ -1,6 +1,6 @@
 -- scripts/conta/produccion/cuentas/s01-esqueleto.sql
 --
--- S01 · LO QUE CUENTA LA TANDA DEL ESQUELETO (0100–0150), antes y después.
+-- S01 · LO QUE CUENTA LA TANDA DEL ESQUELETO (0100–0160), antes y después.
 -- SOLO LEE. Recuentos de Foodint (regla 9) y huellas cortas de las dos
 -- funciones que cambian en caliente; ningún nombre ni importe.
 -- Lo que crea la propia tanda ANTES no existe: Postgres resuelve las tablas y
@@ -27,5 +27,14 @@ select clave, valor from (
     coalesce((select left(md5(pg_get_functiondef(to_regprocedure('public.conta_motivos_para_validar(uuid)'))), 8)), 'no existe') union all
   select 10, 'huella corta de banco_facturas_recibidas_pendientes(uuid, date)',
     coalesce((select left(md5(pg_get_functiondef(to_regprocedure('public.banco_facturas_recibidas_pendientes(uuid, date)'))), 8)), 'no existe') union all
-  select 11, 'asientos de Foodint (todos)', (select count(*) from public.journal_entry where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710')::text
+  select 11, 'asientos de Foodint (todos)', (select count(*) from public.journal_entry where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710')::text union all
+  select 12, 'facturas recibidas de Foodint por estado',
+    (select coalesce(string_agg(status || ' ' || n, ' · ' order by status), 'ninguna') from (select status, count(*) n from public.supplier_invoice
+       where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' group by status) x) union all
+  select 13, 'columnas del descarte en supplier_invoice',
+    (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'supplier_invoice' and column_name in ('discarded_at', 'discarded_by', 'discarded_by_name', 'discard_reason', 'status_before_discard'))::text union all
+  select 14, 'huella corta de conta_documentos_recibidos(uuid, date, date)',
+    coalesce((select left(md5(pg_get_functiondef(to_regprocedure('public.conta_documentos_recibidos(uuid, date, date)'))), 8)), 'no existe') union all
+  select 15, 'huella corta de tg_supplier_invoice_no_repetida()',
+    coalesce((select left(md5(pg_get_functiondef(to_regprocedure('public.tg_supplier_invoice_no_repetida()'))), 8)), 'no existe')
 ) t order by o;

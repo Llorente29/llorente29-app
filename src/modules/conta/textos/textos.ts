@@ -27,7 +27,7 @@ export const TEXTOS = {
   'recibida.apuntar': t('Está bien, guardar', 'Está bien · apuntar', 'Validar'),
   'recibida.validarYSiguiente': t('Está bien, guardar y siguiente', 'Validar y siguiente', 'Validar y siguiente'),
   'recibida.leido': t('Lo que pone la factura', 'Lo que he leído', 'Lectura'),
-  'recibida.comoSeApunta': t('Cómo lo guardo en tu contabilidad', 'Cómo se apunta', 'Asiento propuesto'),
+  'recibida.verAsiento': t('Ver cómo lo guardo en tu contabilidad', 'Ver el asiento', 'Asiento propuesto'),
 
   // ── Inicio como bandeja ──
   'inicio.banco': t('Tienes en el banco', 'En el banco', 'Bancos (572)'),

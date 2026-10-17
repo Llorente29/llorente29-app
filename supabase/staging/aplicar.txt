@@ -30,6 +30,11 @@ supabase/staging/sql/20261121_s01_analitica_prueba.sql
 #   asiento vivo, y la vuelta atrás byte a byte.
 supabase/migrations/20261121T0150_s01_recibidas_asiento_por_origen.sql
 supabase/staging/sql/20261121_s01_recibidas_asiento_prueba.sql
+#   0160 («No es una factura»): el estado «descartada» con su motivo, quién y
+#   cuándo, que se deshace; N22 la enseña como descartada; repetidas la trata
+#   como anulada. De verdad, y su prueba (ROLLBACK) como usuario de A.
+supabase/migrations/20261121T0160_s01_factura_descartada.sql
+supabase/staging/sql/20261121_s01_factura_descartada_prueba.sql
 
 # M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
 # pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)

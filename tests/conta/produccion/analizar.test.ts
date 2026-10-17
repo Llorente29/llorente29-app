@@ -1387,9 +1387,9 @@ describe('la tanda de AHORA (manifiesto vivo): el esqueleto de Sumied (S01, 0100
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
-  it('seis ficheros, en orden; cinco siguen y la 0110 (update de company) pide «autorizo»', () => {
-    expect(viva.map((f) => f.replace(/^.*\//, '').slice(0, 13))).toEqual(['20261121T0100', '20261121T0110', '20261121T0120', '20261121T0130', '20261121T0140', '20261121T0150'])
-    expect(Object.values(r.ficheros)).toEqual(['sigue', 'autorizo', 'sigue', 'sigue', 'sigue', 'sigue'])
+  it('siete ficheros, en orden; seis siguen y la 0110 (update de company) pide «autorizo»', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, '').slice(0, 13))).toEqual(['20261121T0100', '20261121T0110', '20261121T0120', '20261121T0130', '20261121T0140', '20261121T0150', '20261121T0160'])
+    expect(Object.values(r.ficheros)).toEqual(['sigue', 'autorizo', 'sigue', 'sigue', 'sigue', 'sigue', 'sigue'])
     expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
   })
   it('la 0140 y la 0150 cambian en caliente, declaradas en su cabecera con su prueba de staging, que existe y nombra la función', () => {
@@ -1409,11 +1409,11 @@ describe('la tanda de AHORA (manifiesto vivo): el esqueleto de Sumied (S01, 0100
     expect(fuera).not.toMatch(/\b(from|join)\s+(public\.)?(conta_user_pref|conta_eje_analitico)\b/i)
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
-  it('su vuelta atrás: los seis .down.sql en orden inverso, con la misma cuenta; los que borran datos de personas paran antes', () => {
+  it('su vuelta atrás: los siete .down.sql en orden inverso, con la misma cuenta; los que borran datos de personas paran antes', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/s01-esqueleto.sql')
-    for (const f of [atras[2], atras[3], atras[5]]) expect(readFileSync(f, 'utf8'), f).toMatch(/raise exception 'S01 01[023]0 vuelta atrás/)
+    for (const f of [atras[0], atras[3], atras[4], atras[6]]) expect(readFileSync(f, 'utf8'), f).toMatch(/raise exception 'S01 01[0236]0 vuelta atrás/)
   })
 })
 

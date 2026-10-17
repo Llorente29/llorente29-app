@@ -1,11 +1,13 @@
 # Vuelta atrás de la tanda del S01 (modo «vuelta_atras»), en orden inverso.
 # ANTES, el front tiene que volver al de antes del S01: el del S01 lee lo que
 # esto quita. Cada fichero PARA, sin tocar nada, si ya hay algo que se perdería
-# (preferencias guardadas, un logo puesto, un eje cambiado por una persona); la
-# 0140 y la 0150 dejan las funciones byte a byte como estaban en producción.
+# (preferencias guardadas, un logo puesto, un eje cambiado por una persona, una
+# factura descartada); la 0140, la 0150 y la 0160 dejan las funciones byte a
+# byte como estaban en producción.
 # La anterior de este fichero (W02, sin vuelta atrás a propósito):
 # tests/conta/produccion/vuelta-atras-w02-secreto-despacho-20261017.txt.
 cuenta: scripts/conta/produccion/cuentas/s01-esqueleto.sql
+supabase/vuelta-atras/20261121T0160_s01_factura_descartada.down.sql
 supabase/vuelta-atras/20261121T0150_s01_recibidas_asiento_por_origen.down.sql
 supabase/vuelta-atras/20261121T0140_s01_regla5_eje_local.down.sql
 supabase/vuelta-atras/20261121T0130_s01_ejes_analiticos.down.sql

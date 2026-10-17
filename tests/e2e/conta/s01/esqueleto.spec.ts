@@ -482,6 +482,46 @@ test('Ctrl K es la paleta de órdenes: «cobro» abre Tesorería y «mayor 57200
   expect(errores).toEqual([])
 })
 
+test('Recibida (maqueta 3): «Lo que he comprobado», corregir en Compras, y «No es una factura» con su motivo, que se deshace', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page, errores)
+  // La de la semilla de la D01 (en revisión, sin asiento: la e2e de Documentos la abre y no la apunta).
+  await page.goto('/conta/documentos?ver=para-mirar&mes=2026-10')
+  await page.locator('tr, article', { hasText: 'Mayorista Prueba Alfa' }).getByRole('button', { name: /^Mirar/ }).click()
+  await expect(page).toHaveURL(/\/documentos\/recibidas\/[0-9a-f-]{36}/, { timeout: 30_000 })
+  const id = page.url().match(/recibidas\/([0-9a-f-]{36})/)![1]
+  await page.goto(`/conta/libros/diario/recibidas/${id}?ver=para-mirar`)
+  await expect(page.getByRole('region', { name: 'Lo que he comprobado' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('region', { name: 'Lo que he comprobado' }).locator('li').first()).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Lo que he leído' }).getByRole('link', { name: 'Corregir en Compras' })).toHaveAttribute('href', '/conta/compras')
+  // «Ver el asiento», plegable y abierto de serie (nivel medio).
+  await expect(page.locator('.cxr-plegable')).toHaveAttribute('open', '')
+
+  // «No es una factura»: con su motivo.
+  const abrir = lado(page) === 'ordenador'
+    ? () => page.getByRole('button', { name: 'No es una factura' }).click()
+    : async () => { await page.getByRole('button', { name: 'Otra cosa' }).click(); await page.getByRole('button', { name: /dímelo y la saco/ }).click() }
+  await abrir()
+  const dialogo = page.getByRole('dialog', { name: 'No es una factura' })
+  await expect(dialogo.getByRole('button', { name: 'Descartar' })).toBeDisabled()
+  await dialogo.getByRole('button', { name: 'Es un presupuesto' }).click()
+  await dialogo.getByRole('button', { name: 'Descartar' }).click()
+  // Regla 8: lo dice (en la siguiente, si la hay; si no, aquí).
+  await expect(page.getByRole('status').getByText(/^Descartada: «Es un presupuesto»\. No es una factura y sale de «para revisar»/)).toBeVisible({ timeout: 30_000 })
+
+  // La misma factura: dice qué es, quién y cuándo, y se deshace.
+  await page.goto(`/conta/libros/diario/recibidas/${id}?ver=todas`)
+  const descartada = page.getByRole('region', { name: 'No es una factura' })
+  await expect(descartada).toContainText('No es una factura: Es un presupuesto.', { timeout: 30_000 })
+  await expect(descartada).toContainText(/La descartó .+ el \d{2}\/\d{2}\/\d{4}/)
+  await capturar(page, 'recibida-descartada')
+  await descartada.getByRole('button', { name: 'Deshacer: sí es una factura' }).click()
+  await expect(page.getByRole('status').getByText(/^Recuperada: es una factura y vuelve a «(en revisión|aprobada|con diferencias|borrador)»\./)).toBeVisible({ timeout: 30_000 })
+  await expect(descartada).toHaveCount(0)
+  expect(errores).toEqual([])
+})
+
 test('la cinta se oculta, se recuerda y vuelve (nunca desaparece sin decir dónde está)', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')

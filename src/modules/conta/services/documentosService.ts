@@ -16,7 +16,7 @@
 //     manda ella desde el suyo (mailto) mientras no haya dominio de correo.
 
 import { supabase } from '@/lib/supabase'
-import { rpc, tabla, hayBase } from '@/modules/conta/services/bd'
+import { rpc, tabla, hayBase, mensaje } from '@/modules/conta/services/bd'
 import { validar } from '@/modules/conta/services/diarioService'
 import { enviarADiez, urlDocumento } from '@/modules/conta/services/conDiezService'
 import { proponerFactura, verPropuestaFactura } from '@/modules/conta/services/propuestasLibroService'
@@ -274,4 +274,33 @@ export async function urlDeLlegada(inboxId: string): Promise<string | null> {
   const { data, error } = await tabla('document_inbox').select('file_path').eq('id', inboxId).maybeSingle()
   if (error) throw new Error(`No se ha podido abrir el documento: ${error.message}`)
   return getReceiptFileUrl((data as Fila | null)?.file_path as string | null)
+}
+
+// ── S01 (0160) · «No es una factura» ───────────────────────────────────────
+// Nombres de la base entre comillas (regla 40): conta_factura_descartar,
+// conta_factura_recuperar y supplier_invoice.discard_reason, discarded_by_name,
+// discarded_at (la 0160 del S01).
+
+export interface Descarte { motivo: string; quien: string | null; cuando: string }
+
+/** Por qué no es una factura, quién y cuándo. Null si no está descartada (o la base aún no tiene la 0160). */
+export async function leerDescarte(invoiceId: string): Promise<Descarte | null> {
+  const { data, error } = await tabla('supplier_invoice').select('discard_reason, discarded_by_name, discarded_at').eq('id', invoiceId).maybeSingle()
+  if (error) {
+    if (error.code === '42703' || error.code === 'PGRST204' || /discard/.test(error.message)) return null
+    throw new Error(mensaje('No se ha podido leer por qué no es una factura', error))
+  }
+  const f = data as { discard_reason: string | null; discarded_by_name: string | null; discarded_at: string | null } | null
+  return f?.discard_reason && f.discarded_at ? { motivo: f.discard_reason, quien: f.discarded_by_name, cuando: f.discarded_at } : null
+}
+
+/** La deja descartada con su motivo; se deshace con recuperarFactura. */
+export async function descartarFactura(invoiceId: string, motivo: string, quien: string | null): Promise<void> {
+  await rpc('conta_factura_descartar', { p_invoice: invoiceId, p_motivo: motivo, p_quien_nombre: quien })
+}
+
+/** Deshace «No es una factura»: vuelve al estado de antes. Devuelve ese estado. */
+export async function recuperarFactura(invoiceId: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ estado: string }>('conta_factura_recuperar', { p_invoice: invoiceId, p_quien_nombre: quien })
+  return r.estado
 }

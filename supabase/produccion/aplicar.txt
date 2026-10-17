@@ -23,8 +23,13 @@
 #   6. 0150 — CAMBIA en caliente banco_facturas_recibidas_pendientes (misma
 #      firma y contrato): el asiento de la factura por su origen. Parte del
 #      cuerpo de producción (md5 f6e2f68f…). Declarado, con su prueba.
+#   7. 0160 — «No es una factura» (decisión 1 de Julio, 17/10): AÑADE las
+#      columnas del descarte (nulas) y conta_factura_descartar/recuperar; CAMBIA
+#      en caliente el CHECK de status de supplier_invoice (solo amplía, con
+#      'descartada'), tg_supplier_invoice_no_repetida (md5 a69d2408…) y
+#      conta_documentos_recibidos (md5 ea1dd614…). Declarado, con su prueba.
 #
-# Ninguna toca el camino del pedido (analizador contra producción, 17/10: cinco
+# Ninguna toca el camino del pedido (analizador contra producción, 17/10: seis
 # «sigue» y la 0110 «autorizo»).
 #
 # ORDEN: la tanda ANTES de fusionar el #226. El front del S01 lee lo que crea; el
@@ -39,3 +44,4 @@ supabase/migrations/20261121T0120_s01_logo_empresa.sql
 supabase/migrations/20261121T0130_s01_ejes_analiticos.sql
 supabase/migrations/20261121T0140_s01_regla5_eje_local.sql
 supabase/migrations/20261121T0150_s01_recibidas_asiento_por_origen.sql
+supabase/migrations/20261121T0160_s01_factura_descartada.sql

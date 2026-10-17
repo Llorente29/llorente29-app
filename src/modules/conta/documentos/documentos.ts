@@ -20,7 +20,8 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
  * llevó el programa anterior: sale (en «Todas») enlazada con su asiento traído
  * de Diez si casa, y nunca se apunta otra vez.
  */
-export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez'
+/** S01 (0160) · 'descartada': «No es una factura», con su motivo; sale en «Todas» y se deshace. */
+export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada'
 export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -212,7 +213,7 @@ export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
 export function punto(f: FilaDocumento): 'verde' | 'ambar' | 'gris' | 'rojo' {
   if (f.estado === 'apuntada') return 'verde'
   if (f.estado === 'en_diez') return f.diez ? 'verde' : 'gris'
-  if (f.estado === 'repetida') return 'gris'
+  if (f.estado === 'repetida' || f.estado === 'descartada') return 'gris'
   if (f.confianza === 'duda' || f.tipo === 'llegada') return 'gris'
   return 'ambar'
 }

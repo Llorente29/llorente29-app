@@ -27,7 +27,8 @@ describe('S01 · El diccionario de textos por nivel', () => {
   it('medio es el texto de siempre (lo que ya conocían quienes estaban)', () => {
     expect(TEXTOS['recibida.apuntar'].medio).toBe('Está bien · apuntar')
     expect(TEXTOS['recibida.leido'].medio).toBe('Lo que he leído')
-    expect(TEXTOS['recibida.comoSeApunta'].medio).toBe('Cómo se apunta')
+    // Maqueta 3: «Ver el asiento», plegable, en vez de «Cómo se apunta» (el bloque se sigue llamando así para el lector).
+    expect(TEXTOS['recibida.verAsiento'].medio).toBe('Ver el asiento')
     expect(TEXTOS['inicio.banco'].medio).toBe('En el banco')
     expect(TEXTOS['inicio.pendiente'].medio).toBe('Solo necesito que me digas esto')
   })
