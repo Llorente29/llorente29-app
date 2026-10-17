@@ -1,0 +1,167 @@
+name: I01 · Prueba mTLS en una función de staging-conta
+
+# QUÉ HACE (I01, 17/10)
+# Decide la arquitectura de la presentación de impuestos: ¿una edge function de
+# Supabase puede abrir una conexión con certificado de cliente (mTLS) con
+# Deno.createHttpClient({ cert, key })?
+#
+# En un solo run, y SOLO en staging-conta (oseymswjlzplqoxrfjzi):
+#   1. baja el certificado de cliente PÚBLICO de prueba de badssl.com (no está
+#      en el repositorio) y lo enmascara en el log;
+#   2. lo pone como secretos de la función (base64) con un token de un solo run;
+#   3. despliega scripts/conta/i01/prueba-mtls (copiada a supabase/functions/
+#      solo dentro del runner);
+#   4. la llama en tres modos: con certificado, sin él y con la clave alterada;
+#      la función solo puede llamar a https://client.badssl.com/;
+#   5. espera a que lleguen los logs de la función y busca en ellos fragmentos
+#      del certificado y de la clave (solo cuenta; no imprime nada);
+#   6. pase lo que pase, BORRA la función y los secretos, y comprueba que no
+#      quedan.
+# Nada de la AEAT. Salida: estados, títulos de página y recuentos.
+#
+# CUÁNDO: un push a conta/i01-prueba-mtls cuyo mensaje EMPIECE por «[prueba-mtls]».
+
+on:
+  push:
+    branches: ['conta/i01-prueba-mtls']
+
+concurrency:
+  group: prueba-mtls-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prueba:
+    if: startsWith(github.event.head_commit.message, '[prueba-mtls]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+      FN: prueba-mtls
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guardas · staging y no producción
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${TOKEN:-}" ] || { echo "::error::Falta SUPABASE_ACCESS_TOKEN."; exit 1; }
+          [ "$REF" != "$PROD_REF" ] || { echo "::error::El ref es el de producción. Abortado."; exit 1; }
+          grep -q "const DESTINO = 'https://client.badssl.com/'" scripts/conta/i01/prueba-mtls/index.ts || { echo "::error::La función no apunta a client.badssl.com."; exit 1; }
+          ! grep -qiE 'agenciatributaria|aeat' scripts/conta/i01/prueba-mtls/index.ts || { echo "::error::La función menciona la AEAT."; exit 1; }
+
+      - name: Certificado de prueba de badssl.com (fuera del repositorio, enmascarado)
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/c"; mkdir -p "$D"; cd "$D"
+          curl -fsS --max-time 30 https://badssl.com/certs/badssl.com-client.pem -o cliente.pem
+          # El PEM de badssl.com trae el certificado y la clave (cifrada con «badssl.com»).
+          openssl x509 -in cliente.pem -out cert.pem
+          openssl pkey -in cliente.pem -passin pass:badssl.com -out key.pem
+          for f in cert.pem key.pem; do
+            grep -v -- '-----' "$f" | while read -r l; do [ -n "$l" ] && echo "::add-mask::$l"; done
+          done
+          CERT_B64=$(base64 -w0 cert.pem); KEY_B64=$(base64 -w0 key.pem)
+          echo "::add-mask::$CERT_B64"; echo "::add-mask::$KEY_B64"
+          TOK=$(openssl rand -hex 24); echo "::add-mask::$TOK"
+          printf '%s' "$CERT_B64" > cert.b64; printf '%s' "$KEY_B64" > key.b64; printf '%s' "$TOK" > token
+          # Fragmentos para buscar en los logs (no se imprimen): tres del cuerpo de
+          # cada PEM, de 24 caracteres, y los mismos en base64 completo.
+          { grep -v -- '-----' cert.pem | sed -n '2p;6p;10p' | cut -c5-28
+            grep -v -- '-----' key.pem  | sed -n '2p;8p;14p' | cut -c5-28
+            cut -c101-124 cert.b64; echo; cut -c101-124 key.b64; echo; } | grep -v '^$' > fragmentos
+          echo "Fragmentos a buscar: $(wc -l < fragmentos)"
+          {
+            echo "## Certificado de prueba (badssl.com)"; echo
+            echo "- válido hasta: $(openssl x509 -in cert.pem -noout -enddate | cut -d= -f2)"
+            echo "- sujeto: $(openssl x509 -in cert.pem -noout -subject | sed 's/^subject=//')"
+            echo "- clave: $(head -1 key.pem)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Secretos y despliegue en staging-conta
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/c"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$D/desde"
+          supabase secrets set --project-ref "$REF" \
+            "PRUEBA_MTLS_CERT_B64=$(cat "$D/cert.b64")" \
+            "PRUEBA_MTLS_KEY_B64=$(cat "$D/key.b64")" \
+            "PRUEBA_MTLS_TOKEN=$(cat "$D/token")" > /dev/null
+          mkdir -p "supabase/functions/$FN"
+          cp scripts/conta/i01/prueba-mtls/index.ts "supabase/functions/$FN/index.ts"
+          supabase functions deploy "$FN" --project-ref "$REF" --no-verify-jwt
+          echo "Desplegada $FN en staging-conta."
+
+      - name: Las tres llamadas
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/c"
+          { echo; echo "## Llamadas a la función (destino: client.badssl.com)"; echo
+            echo "| modo | ok | status | título de la página / error | ¿el error traía material? | ms |"; echo "|---|---|---|---|---|---|"; } >> "$GITHUB_STEP_SUMMARY"
+          sleep 5
+          for modo in con sin clave_rota con; do
+            R=$(curl -sS --max-time 60 -H "x-prueba-mtls: $(cat "$D/token")" "https://$REF.supabase.co/functions/v1/$FN?modo=$modo" || echo '{"ok":false,"error":"curl"}')
+            printf '%s\n' "$R" >> "$D/respuestas"
+            echo "$R" | jq -r --arg m "$modo" '"| \($m) | \(.ok) | \(.status // "—") | \(.titulo // ((.error // "") + ": " + (.mensaje // ""))) | \(.mensaje_traia_material // "—") | \(.ms // "—") |"' >> "$GITHUB_STEP_SUMMARY"
+          done
+          N=0; while read -r f; do c=$(grep -cF -- "$f" "$D/respuestas" || true); N=$((N+c)); done < "$D/fragmentos"
+          echo "- fragmentos del certificado o de la clave en las respuestas: **$N**" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Logs de la función (se buscan fragmentos; no se imprimen)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/c"
+          DESDE=$(cat "$D/desde")
+          echo "Esperando a que lleguen los logs (120 s)…"; sleep 120
+          HASTA=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          q() { curl -sS --max-time 60 -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                  "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
+                  --data-urlencode "sql=$1" --data-urlencode "iso_timestamp_start=$DESDE" --data-urlencode "iso_timestamp_end=$HASTA"; }
+          : > "$D/logs"
+          for sql in \
+            "select timestamp, event_message, metadata from function_logs limit 1000" \
+            "select timestamp, event_message from function_logs limit 1000" \
+            "select timestamp, event_message, metadata from function_edge_logs limit 1000" \
+            "select timestamp, event_message from function_edge_logs limit 1000"; do
+            R=$(q "$sql" || echo '{}')
+            filas=$(echo "$R" | jq '(.result // []) | length' 2>/dev/null || echo "?")
+            err=$(echo "$R" | jq -r '.error // empty | tostring' 2>/dev/null | cut -c1-120 || true)
+            echo "- \`${sql%% limit*}\`: $filas filas ${err:+(error: $err)}" >> "$D/resumen_logs"
+            printf '%s\n' "$R" >> "$D/logs"
+          done
+          N=0; while read -r f; do c=$(grep -cF -- "$f" "$D/logs" || true); N=$((N+c)); done < "$D/fragmentos"
+          PEM=$(grep -cE 'BEGIN (CERTIFICATE|PRIVATE KEY|RSA PRIVATE KEY)' "$D/logs" || true)
+          PRUEBA=$(grep -c '\\"prueba\\":\\"mtls\\"\|"prueba":"mtls"' "$D/logs" || true)
+          { echo; echo "## Logs de la función en staging (desde $DESDE hasta $HASTA)"; echo
+            cat "$D/resumen_logs"
+            echo "- líneas con nuestro log («prueba: mtls»): **$PRUEBA**"
+            echo "- fragmentos del certificado o de la clave: **$N**"
+            echo "- cabeceras PEM («BEGIN CERTIFICATE / PRIVATE KEY»): **$PEM**"; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Borrar la función y los secretos (pase lo que pase)
+        if: always()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -uo pipefail
+          supabase functions delete "$FN" --project-ref "$REF" || true
+          supabase secrets unset --project-ref "$REF" PRUEBA_MTLS_CERT_B64 PRUEBA_MTLS_KEY_B64 PRUEBA_MTLS_TOKEN || true
+          FUN=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/functions" | jq --arg s "$FN" '[.[] | select(.slug==$s)] | length')
+          SEC=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" | jq '[.[] | select(.name | startswith("PRUEBA_MTLS"))] | length')
+          rm -rf "$RUNNER_TEMP/c" "supabase/functions/$FN"
+          { echo; echo "## Limpieza"; echo
+            echo "- función \`$FN\` en staging después de borrar: **$FUN**"
+            echo "- secretos \`PRUEBA_MTLS_*\` después de borrar: **$SEC**"; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$FUN" = "0" ] && [ "$SEC" = "0" ] || { echo "::error::Quedan restos en staging: función $FUN, secretos $SEC."; exit 1; }
