@@ -135,7 +135,8 @@ async function pulsarTodo(page: Page, cuenta: string, ruta: string) {
   let pulsados = 0
   for (const c of candidatos) {
     if (NO_PULSAR.test(c.nombre)) { apuntar({ cuenta, ruta, tipo: 'no pulsado (escribiría)', detalle: `${c.tipo} «${c.nombre}»` }); continue }
-    if (pulsados >= 10) { apuntar({ cuenta, ruta, tipo: 'no pulsado (tope)', detalle: `${c.tipo} «${c.nombre}»` }); continue }
+    if (/^Más acciones de /.test(c.nombre) && pulsados > 0 && candidatos.some((x) => x !== c && x.nombre.startsWith('Más acciones de ') && candidatos.indexOf(x) < candidatos.indexOf(c))) continue
+    if (pulsados >= 10) continue
     pulsados++
     if (page.url() !== origen) { await page.goto(origen); await cargada(page) }
     const el = page.locator(`main, [role=toolbar]`).getByRole(c.tipo === 'enlace' ? 'link' : 'button', { name: c.nombre, exact: true }).first()
@@ -176,12 +177,16 @@ async function pulsarTodo(page: Page, cuenta: string, ruta: string) {
 test.skip(process.env.GITHUB_EVENT_NAME === 'push', 'la auditoría se lanza a mano')
 
 const CUENTAS = [{ letra: 'A', email: CUENTA_A.email }, { letra: 'B', email: CUENTA_B.email }]
+// Segunda vuelta (18/10): el log de Actions solo da las últimas 5.000 líneas y
+// se perdieron los clics de las 15 primeras de A en ordenador. Solo esas.
+const SEGUNDA = new Set(['ajustes/plan', 'bancos', 'bancos/cierre', 'bancos/cuentas', 'bancos/reglas', 'clientes-y-proveedores', 'clientes-y-proveedores?ver=clientes', 'compras', 'compras/liquidacion/nueva', 'documentos', 'inicio', 'libros/cierre/ejercicios', 'libros/diario', 'libros/diario/pendientes-diez', 'libros/mayor/libro-mayor'])
 
 for (const cuenta of CUENTAS) {
   test.describe(`cuenta ${cuenta.letra}`, () => {
     for (const { ruta, de } of pantallas()) {
       test(`${cuenta.letra} · /conta/${ruta}`, async ({ page }) => {
         test.setTimeout(150_000)
+        test.skip(cuenta.letra !== 'A' || lado(page) !== 'ordenador' || !SEGUNDA.has(ruta), 'segunda vuelta: solo las 15 de A en ordenador')
         const errores: string[] = []
         const red: string[] = []
         page.on('pageerror', (e) => errores.push(e.message.slice(0, 160)))
@@ -205,6 +210,7 @@ for (const cuenta of CUENTAS) {
 // La barra y la cabecera, por separado: cada entrada de la barra (ancho,
 // líneas, contador) y el logo (cuántas veces sale y cuál).
 test('A · la barra, la cabecera y el logo', async ({ page }) => {
+  test.skip(true, 'segunda vuelta')
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/inicio')
   await cargada(page)
