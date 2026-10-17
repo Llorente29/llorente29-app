@@ -3,49 +3,51 @@
  * M01 · El marco nuevo (maqueta N30, aprobada por Julio el 15/10). Sus tokens
  * viven en `.cxm` y SOLO los usan el marco y las piezas nuevas (decisión de
  * Julio, F01 respuesta 2): las pantallas de hoy se quedan con los suyos
- * (tokens.css) hasta que su sesión las pase. Estos valores son el tema de
- * Folvy; Sumied pone encima su letra y su azul (src/marca/tema.ts).
+ * (tokens.css) hasta que su sesión las pase. Desde el S01 sus tokens son
+ * alias de los del sistema de diseño (diseno/tokens.css): una marca con tema
+ * (Sumied) los cambia allí, desde src/marca/tema.ts.
  *
  * Sin negro puro, sin degradados y sin sombras grandes. Radios: 6 px en
  * botones, 5 px en campos y 8 px en bloques.
  */
 
 .cxm {
-  /* ── Colores (N30) ─────────────────────────────────────────────────── */
-  --cxm-texto: #0E1A2B;
-  --cxm-apoyo: #5B6678;
-  --cxm-fondo: #EEF1F5;          /* Fondo de página */
-  --cxm-superficie: #FFFFFF;
-  --cxm-suave: #F7F9FC;          /* Fondo suave: barra de módulos, barra de acciones */
-  --cxm-borde: #DDE3EB;
-  --cxm-borde-campo: #CBD3DF;
-  --cxm-azul: #2F5BFF;           /* Acción */
-  --cxm-azul-encima: #1F45D6;    /* Acción, al pasar el ratón */
-  --cxm-verde: #0B7A55;          /* Lo hecho */
-  --cxm-verde-fondo: #E3FBF2;
-  --cxm-ambar: #7A4A00;          /* Lo pendiente */
-  --cxm-ambar-fondo: #FFE7B8;
-  --cxm-propuesto: #EEF3FF;      /* Lo propuesto por la máquina */
-  --cxm-propuesto-borde: #B9C9FF;
-  --cxm-documento: #E9EDF3;      /* Fondo del panel del documento */
-  --cxm-rojo: #A3201A;
-  --cxm-velo: rgba(14, 26, 43, 0.32);
-  --cxm-sombra: 0 4px 14px rgba(14, 26, 43, 0.08); /* Solo los desplegables: pequeña */
+  /* ── Colores (N30). Desde el S01, alias del sistema de diseño
+     (diseno/tokens.css): los valores de serie son los mismos, y una marca
+     con tema los cambia allí, no aquí. ───────────────────────────────── */
+  --cxm-texto: var(--s-tinta);
+  --cxm-apoyo: var(--s-apoyo);
+  --cxm-fondo: var(--s-fondo);   /* Fondo de página */
+  --cxm-superficie: var(--s-superficie);
+  --cxm-suave: var(--s-suave);   /* Fondo suave: barra de módulos, barra de acciones */
+  --cxm-borde: var(--s-borde-decorativo);
+  --cxm-borde-campo: #CBD3DF;    /* El de N30; los controles nuevos usan --s-borde-control (3:1) */
+  --cxm-azul: var(--s-accion);   /* Acción */
+  --cxm-azul-encima: var(--s-accion-encima); /* Acción, al pasar el ratón */
+  --cxm-verde: var(--s-ok);      /* Lo hecho */
+  --cxm-verde-fondo: var(--s-ok-fondo);
+  --cxm-ambar: var(--s-duda);    /* Lo pendiente */
+  --cxm-ambar-fondo: var(--s-duda-fondo);
+  --cxm-propuesto: var(--s-propuesto); /* Lo propuesto por la máquina */
+  --cxm-propuesto-borde: var(--s-propuesto-borde);
+  --cxm-documento: var(--s-documento); /* Fondo del panel del documento */
+  --cxm-rojo: var(--s-falta);
+  --cxm-velo: var(--s-velo);
+  --cxm-sombra: var(--s-sombra); /* Solo los desplegables: pequeña */
 
   /* ── Letra ──────────────────────────────────────────────────────────── */
-  --cxm-letra: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
-  --cxm-letra-cifras: 'Geist Mono Variable', 'Geist Mono', 'SF Mono', Menlo, monospace;
+  --cxm-letra: var(--s-letra);
+  --cxm-letra-cifras: var(--s-letra-cifras);
 
   /* ── Formas ─────────────────────────────────────────────────────────── */
-  --cxm-radio-boton: 6px;
-  --cxm-radio-campo: 5px;
-  --cxm-radio-bloque: 8px;
+  --cxm-radio-boton: var(--s-radio-boton);
+  --cxm-radio-campo: var(--s-radio-campo);
+  --cxm-radio-bloque: var(--s-radio-bloque);
 
   /* ── Densidad (las piezas comunes leen estas dos) ───────────────────── */
-  --cxm-fila: 28px;              /* Compacta: unas 30 filas por pantalla */
-  --cxm-hueco: 8px;
+  --cxm-fila: var(--s-fila);     /* Compacta: unas 30 filas por pantalla */
+  --cxm-hueco: var(--s-hueco);
 }
-.cxm[data-densidad='comoda'] { --cxm-fila: 40px; --cxm-hueco: 12px; }
 
 /* El marco: los módulos y el cuerpo. Sin el degradado de las pantallas de hoy. */
 .cx.cxm {
@@ -307,22 +309,11 @@
 
 @media (prefers-reduced-motion: reduce) { .cxm * { transition: none !important; } }
 
-/* ── 2b · La segunda fila de la barra de arriba (SubpestanasEnBarra) ──────
-   Julio, 16/10: parte de la barra de arriba, no otro bloque. 36 px, 13 px en
-   gris, la activa en azul (sin subrayado grueso) y «Más ▾» si no cabe. Se
-   queda fija debajo de la barra al bajar, y la cabecera de las tablas, debajo
-   de las dos (--cxm-alto-arriba). */
+/* ── 2b · La altura de lo que queda fijo arriba: la cabecera del esqueleto
+   (48 px). La cabecera de las tablas se queda fija debajo (--cxm-alto-arriba).
+   La segunda fila de antes (SubpestanasEnBarra) es ahora la cinta (S01).
+   Las fichas de proveedor y de tercero usan aún .cxm-sub para su subtítulo. */
 .cxm { --cxm-alto-arriba: 48px; }
-.cxm:has(.cxm-subpestanas:not(:empty)) { --cxm-alto-arriba: 84px; }
-.cxm:has(.cxm-subpestanas:not(:empty)) .cxm-arriba { border-bottom-color: var(--cxm-fondo); }
-.cxm-subpestanas {
-  position: sticky; top: 48px; z-index: 29; height: 36px; flex-shrink: 0; padding: 0 16px;
-  background: var(--cxm-superficie); border-bottom: 1px solid var(--cxm-borde); font-family: var(--cxm-letra);
-}
-.cxm-subpestanas:empty { display: none; }
-.cxm-sub-caja { position: relative; height: 100%; }
-.cxm-sub-medida { position: absolute; visibility: hidden; pointer-events: none; display: flex; gap: 2px; white-space: nowrap; height: 0; overflow: hidden; }
-.cxm-sub-fila { display: flex; align-items: center; gap: 2px; height: 100%; }
 .cxm .cxm-sub {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: var(--cxm-radio-boton);
   background: none; color: var(--cxm-apoyo); font: inherit; font-size: 13px; white-space: nowrap; text-decoration: none; cursor: pointer;

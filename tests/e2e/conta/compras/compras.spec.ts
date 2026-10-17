@@ -54,7 +54,10 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/compras')
-  await expect(page.getByRole('heading', { level: 1, name: 'Compras' })).toBeVisible()
+  // S01 · paso 3: Compras y gastos › Por revisar. El título lo dice la cabecera del esqueleto.
+  await expect(page.getByRole('heading', { level: 1, name: 'Compras y gastos · Por revisar' })).toHaveCount(1)
+  // Las pestañas, en la cabecera (en el móvil, en su fila debajo).
+  await expect(page.getByRole('navigation', { name: 'Pestañas de Compras y gastos' }).getByRole('link', { name: 'Por revisar' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Qué tienes que mirar' })).toBeVisible()
   // Una fila por decisión. Lo que le falta a la ficha, todo junto:
   const ficha = page.locator('.cxc-cosa', { hasText: /^A Verduras del Huerto Prueba, S\.L\. le faltan/ })
@@ -86,19 +89,21 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await expect(buscar.getByRole('option', { name: /Carnes Prueba del Valle/ })).toBeVisible()
   await buscar.getByRole('button', { name: 'Cancelar' }).click()
   await expect(buscar).toBeHidden()
-  // El número del menú cuenta filas, como la cabecera (en ordenador; en el móvil el menú va plegado).
+  // S01: lo que hay por mirar de todos los productos va debajo de Inicio («N por
+  // revisar»), y la cuenta de Compras está dentro (en ordenador; en el móvil el
+  // menú va abajo). El número no cambia el nombre del enlace: va como su descripción.
   if (lado(page) === 'ordenador') {
     const filas = await page.locator('.cxc-mirar > .cxc-cosa').count()
-    // M01: en el globo ámbar del círculo (la barra va plegada de serie).
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
-    await expect(menu.locator('.cxm-modulo', { hasText: 'Compras' }).locator('.cxm-globo')).toHaveText(String(filas))
-    // El número no cambia el nombre del enlace: va como su descripción (e2e 172).
-    const enlace = menu.getByRole('link', { name: 'Compras', exact: true })
-    await expect(enlace).toBeVisible()
-    await expect(enlace).toHaveAccessibleDescription(`${filas} por mirar`)
-    // «Ventas» en el menú, delante de Compras, como N30 (V C B L I P A).
-    const nombres = await menu.locator('.cxm-modulo-nombre').allTextContents()
-    expect(nombres.indexOf('Compras')).toBe(nombres.indexOf('Ventas') + 1)
+    await expect(menu.getByRole('link', { name: 'Compras y gastos', exact: true })).toHaveAttribute('aria-current', 'page')
+    if (filas > 0) {
+      const inicio = menu.getByRole('link', { name: 'Inicio', exact: true })
+      await expect(inicio).toHaveAccessibleDescription(/^\d+ por revisar$/)
+      const total = Number((await inicio.locator('.s-barra-destacado').textContent())!.split(' ')[0])
+      expect(total).toBeGreaterThanOrEqual(filas)
+    }
+    // Ventas ya no está: la sustituye Facturación (S01), que sale cuando tenga pantalla.
+    await expect(menu.locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()
@@ -106,7 +111,8 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await capturar(page, 'compras')
 
   // Subir una factura: el diálogo, sin subir nada.
-  await page.getByRole('button', { name: 'Subir una factura' }).click()
+  // «Subir factura» está en la cinta (paso 3): abre el mismo diálogo.
+  await page.getByRole('toolbar', { name: 'Acciones de Por revisar' }).getByRole('link', { name: /Subir factura/ }).click()
   const dialogo = page.getByRole('dialog', { name: 'Subir una factura' })
   await expect(dialogo.getByLabel('La factura (foto o PDF)')).toBeVisible()
   await capturar(page, 'subir-factura', 'dialogo')

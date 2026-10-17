@@ -82,7 +82,7 @@ export function DatosFiscalesTercero() {
         {(p) => <input {...p} className="cx-input" value={nombre} disabled={conProveedor} onChange={(e) => setNombre(e.target.value)} />}
       </Campo>
       <Campo campo="razon" etiqueta="Razón social">
-        {(p) => <input {...p} className="cx-input" value={d.legalName ?? ''} onChange={(e) => pon('legalName', e.target.value || null)} placeholder="Plataforma Norte Spain, S.L." />}
+        {(p) => <input {...p} className="cx-input" value={d.legalName ?? ''} onChange={(e) => pon('legalName', e.target.value || null)} placeholder="Ej.: Distribuciones Norte, S.L." />}
       </Campo>
       <Pildoras campo="tipo-nif" etiqueta="Tipo de identificación" elegidas={d.taxIdType ? [d.taxIdType] : []}
         opciones={[{ valor: 'nif_es', texto: 'NIF español' }, { valor: 'vat_eu', texto: 'NIF-IVA de la UE' }, { valor: 'foreign', texto: 'Pasaporte u otro' }]}

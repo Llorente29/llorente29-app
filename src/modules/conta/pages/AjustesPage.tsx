@@ -27,6 +27,9 @@ import { ApartadoCorte } from '@/modules/conta/empresa/ApartadoCorte'
 import { ApartadoCierreDelDia } from '@/modules/conta/empresa/ApartadoCierreDelDia'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
+import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
+import { ApartadoLogo } from '@/modules/conta/empresa/ApartadoLogo'
+import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
   return (
@@ -39,6 +42,7 @@ function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
 
 function Entrada({ id }: { id: string }) {
   const { datos, plan, quien, movil, hoy } = useAjustes()
+  const hosteleria = useHosteleria()
   // C02c: lo que ha hecho «Deshacer entero» del plan traído, en una frase (el botón desaparece al recargar).
   const [aviso, setAviso] = useState<string | null>(null)
   const e = entradaAjustes(id)!
@@ -63,7 +67,13 @@ function Entrada({ id }: { id: string }) {
           <Sugerencias sugerencias={d.ia.sugerencias} alCambiar={datos.recargar} />
           <div className={movil ? 'cx-columna' : 'cx-rejilla-2'}>
             <QuienEres {...p} />
-            <Actividades {...p} />
+            <div className="cx-columna">
+              <Actividades {...p} />
+              {/* S01: la marca de hostelería de la empresa, al lado de lo que hace. */}
+              <ApartadoHosteleria {...p} />
+              {/* S01: el logo de la empresa, el de la cabecera. */}
+              <ApartadoLogo {...p} />
+            </div>
           </div>
         </>
       )
@@ -77,7 +87,8 @@ function Entrada({ id }: { id: string }) {
         </>
       )
     case 'socios': return <>{cabeza}<Socios {...p} /></>
-    case 'ejercicio': return <>{cabeza}<EjercicioMeses {...p} /><ApartadoCorte quien={quien} movil={movil} alCambiar={datos.recargar} /><ApartadoCierreDelDia quien={quien} movil={movil} /></>
+    // La hora de cierre del día es de pedidos: solo en una empresa de hostelería (inventario del S01, §3).
+    case 'ejercicio': return <>{cabeza}<EjercicioMeses {...p} /><ApartadoCorte quien={quien} movil={movil} alCambiar={datos.recargar} />{hosteleria && <ApartadoCierreDelDia quien={quien} movil={movil} />}</>
     case 'folvy':
       return (
         <>

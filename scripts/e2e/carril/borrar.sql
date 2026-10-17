@@ -4,7 +4,7 @@
 -- ----------------------------------------------------------------------------
 -- Qué es «del carril»: sus cuentas (las de la plantilla con el id del carril,
 -- más las que hayan creado sus usuarios durante la prueba: el recorrido del
--- C06 da de alta cuentas nuevas), sus siete usuarios, y todo lo que cuelga de
+-- C06 da de alta cuentas nuevas), sus usuarios, y todo lo que cuelga de
 -- ellos por clave ajena, hasta el final. Se borra sin disparadores (como se
 -- copió): un asiento validado del carril también se va.
 --
@@ -82,7 +82,7 @@ begin
     end if;
   end loop;
   if exists (select 1 from _copia where tabla = 'auth.users'::regclass)
-     and (select count(*) from auth.users where id in (select id from _plantilla_usuarios)) <> 7 then
+     and (select count(*) from auth.users where id in (select id from _plantilla_usuarios)) <> (select count(*) from _plantilla_usuarios) then
     raise exception 'Carril %: la plantilla no está entera antes de borrar. No se borra nada.', n;
   end if;
 
@@ -95,7 +95,7 @@ begin
   if total > 400000 then
     raise exception 'Carril %: iba a borrar % filas, más de lo que puede ser un carril. No se borra nada.', n, total;
   end if;
-  if (select count(*) from auth.users where id in (select id from _plantilla_usuarios)) <> 7 then
+  if (select count(*) from auth.users where id in (select id from _plantilla_usuarios)) <> (select count(*) from _plantilla_usuarios) then
     raise exception 'Carril %: después de borrar falta algún usuario de la plantilla. Se deshace.', n;
   end if;
 end $$;

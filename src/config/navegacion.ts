@@ -216,6 +216,10 @@ export const CONTA = {
     documentos: 'documentos',
     /** D01 · Revisar una factura recibida (N23). */
     revisarFactura: 'documentos/recibidas/:invoiceId',
+    /** S01 · La misma factura recibida vista desde Contabilidad › Asientos (maqueta 3): la primera para revisar… */
+    recibidasEnAsientos: 'libros/diario/recibidas',
+    /** …y una en concreto. Mismo componente que revisarFactura, con el marco de Asientos. */
+    recibidaEnAsientos: 'libros/diario/recibidas/:invoiceId',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
@@ -224,6 +228,10 @@ export const CONTA = {
     bancosPestana: 'bancos/:pestana',
     /** M01 · La muestra de las tres piezas comunes, con datos inventados. Solo fuera de producción (module.tsx). */
     muestraPiezas: 'ajustes/muestra-piezas',
+    /** S01 · El sistema de diseño: tokens y componentes, con datos inventados. Solo fuera de producción (module.tsx). */
+    sistemaDiseno: 'ajustes/sistema-diseno',
+    /** S01 · Contabilidad › Definiciones › Analítica: los ejes de la empresa (conta_eje_analitico). */
+    analitica: 'ajustes/analitica',
   },
 } as const
 
@@ -399,6 +407,9 @@ export const rutaDocumentos = (ver?: string, mes?: string): string => {
 }
 /** D01 · N23. */
 export const rutaRevisarFactura = (invoiceId: string): string => rutaConta(CONTA.rutas.revisarFactura, { invoiceId })
+/** S01 · La factura recibida desde Contabilidad › Asientos (sin id: la primera para revisar). */
+export const rutaRecibidaEnAsientos = (invoiceId?: string): string =>
+  invoiceId ? rutaConta(CONTA.rutas.recibidaEnAsientos, { invoiceId }) : rutaConta(CONTA.rutas.recibidasEnAsientos)
 /** E05 · Una quincena de Catcher. */
 export const rutaLoteCatcher = (loteId: string): string => rutaConta(CONTA.rutas.loteCatcher, { loteId })
 /** Bancos (B01): sin pestaña, Movimientos. */

@@ -38,8 +38,8 @@ const manifiesto = (lineas: string[], oblig = 'si') => {
 }
 
 describe('manifiesto.sh · «sin-vuelta-atras:» y «esperado:», con sus cerrojos', () => {
-  it('el manifiesto vivo de la 0200 se lee: un fichero, declarado, con su motivo y lo esperado', () => {
-    const r = manifiesto(readFileSync('supabase/produccion/aplicar.txt', 'utf8').split('\n'))
+  it('el manifiesto de la 0200 (su copia, ya aplicada) se lee: un fichero, declarado, con su motivo y lo esperado', () => {
+    const r = manifiesto(readFileSync('tests/conta/produccion/tanda-w02-secreto-despacho-20261017.txt', 'utf8').split('\n'))
     expect(r.rc).toBe(0)
     expect(r.tanda).toBe(`${F0200}\n`)
     expect(r.sv.split('\t')[0]).toBe(F0200)

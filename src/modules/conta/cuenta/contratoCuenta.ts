@@ -17,6 +17,8 @@
 //      leída de la cuenta que ya carga la plataforma (useFeatureGate). Una
 //      cuenta así no tiene a dónde «volver»: no hay resto de la aplicación.
 //      La marca con que se enseña la pantalla va aparte, en cuenta/marca.ts.
+//   5. El logo de la cuenta (S01, la cabecera) → `accounts.logo_url`, de la
+//      misma cuenta ya cargada. Solo lectura.
 //
 // Nada de Cocina (recetas, artículos, albaranes, ventas) entra en el módulo
 // por aquí ni por ningún otro sitio. Si mañana se vende solo, se reimplementa
@@ -46,6 +48,21 @@ export interface CuentaConta {
    * `accounts.product_brand is not null`.
    */
   soloContabilidad: boolean
+  /**
+   * S01 · El logo de la cuenta (accounts.logo_url), para la cabecera, al lado
+   * del nombre de la empresa. Solo si la cuenta que carga la plataforma es la
+   * activa: con dos cuentas no se enseña el logo de la otra.
+   */
+  logoCuenta: string | null
+}
+
+/**
+ * El logo de la cuenta, si es la activa. `select *` de la plataforma trae
+ * accounts.logo_url aunque su tipo (src/platform/types.ts) no lo nombre. Pura.
+ */
+export function logoDe(cuenta: { id?: unknown; logo_url?: unknown } | null | undefined, activa: string | null): string | null {
+  if (!cuenta || cuenta.id !== activa) return null
+  return typeof cuenta.logo_url === 'string' && cuenta.logo_url.trim() !== '' ? cuenta.logo_url : null
 }
 
 /** ¿Es una cuenta solo de contabilidad? La marca la tienen solo las que se dieron de alta así (C06). Pura. */
@@ -64,6 +81,7 @@ export function useCuentaConta(): CuentaConta {
     userName: userProfile?.displayName ?? null,
     esAdmin: userProfile?.role === 'admin',
     soloContabilidad: esCuentaSoloContabilidad(account),
+    logoCuenta: logoDe(account, activeAccountId),
   }
 }
 

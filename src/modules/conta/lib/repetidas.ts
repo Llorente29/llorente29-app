@@ -80,13 +80,13 @@ const FECHA = /^\d{4}-\d{2}-\d{2}/
 
 /**
  * Las repetidas de UN proveedor: id → con cuál coincide y a qué nivel. Las
- * anuladas no cuentan ni como original ni como repetida. Primero el número;
+ * anuladas y las descartadas («No es una factura», S01) no cuentan ni como original ni como repetida. Primero el número;
  * solo si no casa por número se mira la fecha.
  */
 export function detectarRepetidas(facturas: readonly FacturaParaRepetida[]): Map<string, Repetida> {
   const res = new Map<string, Repetida>()
   const vivas = facturas
-    .filter((f) => f.status !== 'anulada')
+    .filter((f) => f.status !== 'anulada' && f.status !== 'descartada')
     .slice()
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
   const porNumero = new Map<string, FacturaParaRepetida>()

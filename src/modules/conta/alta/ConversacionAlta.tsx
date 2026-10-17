@@ -40,19 +40,19 @@ import {
   PASOS, modelosDeRespuestas, pasoSiguiente, preguntaActual, territorioPorCp, textoDuda, todasLasPreguntas,
   type ClavePregunta, type ContextoAlta, type PasoAlta, type Pregunta,
 } from '@/modules/conta/alta/guion'
-import { gruposDe, proponer, type PropuestaActividad } from '@/modules/conta/alta/actividades'
+import { esHosteleriaPorCodigos, esHosteleriaPorGrupos, gruposDe, proponer, type PropuestaActividad } from '@/modules/conta/alta/actividades'
 import {
   TOTAL_PUNTOS, cuantosHechos, loQueLlevamos, puntoQuePide, respuestasParaVolver, sePuedeVolver,
   type ClavePunto, type Punto,
 } from '@/modules/conta/alta/llevamos'
 import { entender } from '@/modules/conta/alta/entender'
 import {
-  fraseActividadAMano, fraseActividades, fraseAlquiler, fraseCuentas, fraseDireccion, fraseDuda, fraseModelos, fraseNif,
+  fraseActividadAMano, fraseActividades, fraseAlquiler, fraseHosteleria, fraseCuentas, fraseDireccion, fraseDuda, fraseModelos, fraseNif,
   fraseNombre, frasePeriodo, fraseRetenido70, fraseRetiene, fraseSinNif, type Frase,
 } from '@/modules/conta/alta/frases'
 import {
   anadirBanco, apuntarDuda, buscarParaGrupos, crearEmpresa, ponerDireccion, ponerEnPerfil, ponerNombre, ponerPaso,
-  quitarActividadesDelAlta, terminarAlta, type DireccionAlta,
+  ponerHosteleriaDelAlta, quitarActividadesDelAlta, terminarAlta, type DireccionAlta,
 } from '@/modules/conta/services/altaService'
 import { anadirActividadConIa, ponerConIa } from '@/modules/conta/services/iaService'
 import { leerReglasModelos } from '@/modules/conta/services/modelosService'
@@ -393,7 +393,12 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
         })
       }
       const iva = await ponerIvaVentas(companyId, elegidas.map((x) => ({ iaeCode: x.iae?.code ?? null, cnaeCode: x.cnae?.code ?? null })))
-      apuntado(fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva))
+      // S01: la marca de hostelería, por lo que hace (se cambia en Ajustes › Empresa).
+      // Va en la MISMA frase que las actividades: la pregunta siguiente se pega
+      // a la última frase apuntada, y tiene que seguir en la burbuja del «Entendido».
+      const hosteleria = esHosteleriaPorGrupos(elegidas.map((x) => x.clave)) || elegidas.some((x) => esHosteleriaPorCodigos(x.iae?.code ?? null, x.cnae?.code ?? null))
+      await ponerHosteleriaDelAlta(accountId!, companyId, hosteleria)
+      apuntado([...fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva), { t: ' ' }, ...fraseHosteleria(hosteleria)])
       setPropuestas(null)
       await avanzar('impuestos')
     })
@@ -411,7 +416,9 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       })
       const iva = await ponerIvaVentas(companyId, [{ iaeCode: a.iae?.code ?? null, cnaeCode: a.cnae?.code ?? null }])
       setAMano(false)
-      apuntado(fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva))
+      const hosteleria = esHosteleriaPorCodigos(a.iae?.code ?? null, a.cnae?.code ?? null)
+      await ponerHosteleriaDelAlta(accountId!, companyId, hosteleria)
+      apuntado([...fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva), { t: ' ' }, ...fraseHosteleria(hosteleria)])
       await avanzar('impuestos')
     })
   }

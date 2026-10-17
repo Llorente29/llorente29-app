@@ -17,6 +17,7 @@ import { MarcoNuevo } from '@/modules/conta/marco/nuevo/MarcoNuevo'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
+import AnaliticaPage from '@/modules/conta/analitica/AnaliticaPage'
 import MayorPage from '@/modules/conta/pages/MayorPage'
 import AlMayor from '@/modules/conta/plan/AlMayor'
 import QueVaACadaSitioPage from '@/modules/conta/pages/QueVaACadaSitioPage'
@@ -27,6 +28,7 @@ import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 import LibrosPage from '@/modules/conta/libros/LibrosPage'
 import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
+import RecibidasEnAsientos from '@/modules/conta/documentos/RecibidasEnAsientos'
 import LoteCatcherPage from '@/modules/conta/documentos/LoteCatcherPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
@@ -40,6 +42,7 @@ import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
 import { Portada } from '@/modules/conta/marco/Portada'
 import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
 import MuestraPiezasPage from '@/modules/conta/muestra/MuestraPiezasPage'
+import SistemaDisenoPage from '@/modules/conta/muestra/SistemaDisenoPage'
 import { baseDeDatos } from '@/services/versionApp'
 
 // C06b (respuesta 6 de Julio, tarea 2): la barra «Pregunta o pide algo» solo
@@ -76,6 +79,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.tablas, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.tabla, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.plan, element: enMarco(<PlanContablePage />, '¿Dónde va el alquiler?') },
+    { path: CONTA.rutas.analitica, element: enMarco(<AnaliticaPage />, '¿Puedo llamar «Proyecto» a la marca?') },
     { path: CONTA.rutas.planSitio, element: enMarco(<QueVaACadaSitioPage />, '¿Dónde va el alquiler?') },
     { path: CONTA.rutas.planCuenta, element: <AlMayor /> },
     // Una cuenta del plan (respuesta 5): su Mayor, o «Sumas y saldos» si tiene hijas.
@@ -109,9 +113,14 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
+    // S01 · La factura recibida desde Contabilidad › Asientos (maqueta 3): el mismo componente que N23.
+    { path: CONTA.rutas.recibidasEnAsientos, element: enMarco(<RecibidasEnAsientos />, '¿A qué cuenta va esta factura?', true) },
+    { path: CONTA.rutas.recibidaEnAsientos, element: enMarco(<RevisarFacturaPage enAsientos />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
     // M01 · La muestra de las piezas comunes (datos inventados): solo fuera de producción.
     ...(baseDeDatos().tipo === 'produccion' ? [] : [{ path: CONTA.rutas.muestraPiezas, element: enMarco(<MuestraPiezasPage />, '') }]),
+    // S01 · La página del sistema de diseño (datos inventados): solo fuera de producción.
+    ...(baseDeDatos().tipo === 'produccion' ? [] : [{ path: CONTA.rutas.sistemaDiseno, element: enMarco(<SistemaDisenoPage />, '') }]),
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },

@@ -9,10 +9,14 @@
 // la base (asientos, facturas, terceros y subcuentas) lo trae
 // services/buscadorService.ts y entra con los mismos tipos.
 
-import { INDICE_AJUSTES, rutaBancos, rutaConta, rutaLibros } from '@/config/navegacion'
+import { INDICE_AJUSTES, rutaBancos, rutaConta, rutaLibros, rutaMayor } from '@/config/navegacion'
 import { buscar as buscarEnLibros } from '@/modules/conta/libros/navegacion'
 import { buscarEnBancos } from '@/modules/conta/bancos/navegacion'
-import { modulosVisibles } from '@/modules/conta/marco/nuevo/modulos'
+import { pestanasVisibles, productosVisibles, type Contexto } from '@/modules/conta/esqueleto/productos'
+import { ORDENES, ordenDisponible } from '@/modules/conta/esqueleto/ordenes'
+
+/** Sin saber la empresa, lo que sale seguro: nada de hostelería, Diez ni productos con interruptor. */
+const SIN_EMPRESA: Contexto = { hosteleria: false, diez: false, interruptores: new Set() }
 
 export type TipoResultado = 'asiento' | 'factura' | 'tercero' | 'subcuenta' | 'opcion' | 'pregunta'
 
@@ -82,7 +86,7 @@ export function paraIlike(texto: string): string {
  * Ctrl K), las de Bancos (las del suyo) y las entradas de Ajustes. Sin
  * repetir dirección.
  */
-export function opciones(q: string, solo: boolean): Resultado[] {
+export function opciones(q: string, solo: boolean, ctx: Contexto = SIN_EMPRESA): Resultado[] {
   const n = normal(q)
   if (!n) return []
   const fuera: Resultado[] = []
@@ -92,22 +96,43 @@ export function opciones(q: string, solo: boolean): Resultado[] {
     vistas.add(r.ruta)
     fuera.push({ ...r, tipo: 'opcion', clave: `opcion:${r.ruta}` })
   }
-  const modulos = modulosVisibles(solo)
-  for (const m of modulos) {
-    if (m.ruta !== null && normal(m.etiqueta).includes(n)) poner({ titulo: m.etiqueta, apoyo: 'Módulo', ruta: rutaConta(m.ruta) })
+  // S01 (paso 4): «mayor 43000012» abre el mayor de esa subcuenta.
+  const mayor = atajoMayor(q)
+  if (mayor) poner(mayor)
+  // S01: los productos del esqueleto y sus pestañas, los que salen en esta empresa.
+  const productos = productosVisibles(ctx)
+  for (const p of productos) {
+    if (normal(p.etiqueta).includes(n)) poner({ titulo: p.etiqueta, apoyo: 'Producto', ruta: rutaConta(p.ruta!) })
   }
   // Lo más concreto antes que la pestaña que lleva al mismo sitio: «Balance de
   // situación» gana a «Balances» (las dos abren libros/balances/balance).
-  for (const x of buscarEnLibros(q)) poner({ titulo: x.accion.nombre, apoyo: `Libros › ${x.area.nombre}`, ruta: rutaLibros(x.area.id, x.accion.id) })
+  for (const x of buscarEnLibros(q)) if (x.accion.id !== 'pendientes-diez' || ctx.diez) poner({ titulo: x.accion.nombre, apoyo: `Libros › ${x.area.nombre}`, ruta: rutaLibros(x.area.id, x.accion.id) })
   for (const b of buscarEnBancos(q)) poner({ titulo: b.nombre, apoyo: `Bancos › ${b.donde}`, ruta: rutaBancos(b.vista === 'movimientos' ? undefined : b.vista) })
   for (const g of INDICE_AJUSTES) for (const e of g.entradas) {
     if (solo && e.hueco) continue
     if (normal(e.etiqueta).includes(n)) poner({ titulo: e.etiqueta, apoyo: `Ajustes › ${g.grupo}`, ruta: rutaConta(e.ruta) })
   }
-  for (const m of modulos) for (const p of m.pestanas) {
-    if (normal(p.etiqueta).includes(n)) poner({ titulo: p.etiqueta, apoyo: m.etiqueta, ruta: rutaConta(p.ruta) })
+  for (const p of productos) for (const t of pestanasVisibles(p, ctx)) {
+    if (normal(t.etiqueta).includes(n)) poner({ titulo: t.etiqueta, apoyo: p.etiqueta, ruta: rutaConta(t.ruta!) })
+  }
+  // S01 (paso 4): el catálogo de órdenes, el mismo de la cinta y Favoritos, por su
+  // nombre o sus sinónimos («cobro» → Tesorería). Solo las que salen en esta empresa,
+  // y al final: si una pestaña ya lleva al mismo sitio, se queda el nombre de la pestaña.
+  for (const o of ORDENES) {
+    if (!('ruta' in o.a) || !ordenDisponible(o, ctx)) continue
+    if (!normal(o.etiqueta).includes(n) && !(o.sinonimos ?? []).some((x) => normal(x).includes(n))) continue
+    const prod = productos.find((p) => p.id === o.producto)
+    const pest = prod ? pestanasVisibles(prod, ctx).find((t) => t.id === o.pestana) : undefined
+    if (!prod) continue
+    poner({ titulo: o.etiqueta, apoyo: pest ? `${prod.etiqueta} › ${pest.etiqueta}` : prod.etiqueta, ruta: rutaConta(o.a.ruta) })
   }
   return fuera
+}
+
+/** «mayor 43000012» (o «mayor de la 572»): el mayor de esa subcuenta o cuenta. */
+export function atajoMayor(q: string): Omit<Resultado, 'clave' | 'tipo'> | null {
+  const m = /^mayor\s+(?:de\s+(?:la\s+)?)?(\d{3,12})$/.exec(normal(q))
+  return m ? { titulo: `Mayor de la ${m[1]}`, apoyo: 'Contabilidad › Libros y listados', ruta: rutaMayor(m[1]) } : null
 }
 
 /** La pregunta a la IA: lo que hacía la barra «Pregunta o pide algo». */
