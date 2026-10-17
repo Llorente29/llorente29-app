@@ -416,10 +416,11 @@ test('la muestra de las piezas: tabla densa, formulario por bloques y panel del 
   await form.scrollIntoViewIfNeeded()
   await capturar(page, 'piezas-formulario', false)
   const ancho = (await form.boundingBox())!.width
-  await doc.getByRole('button', { name: 'Ocultar ›' }).click()
+  await guardandoPreferencias(page, () => doc.getByRole('button', { name: 'Ocultar ›' }).click())
   await expect(doc.getByRole('button', { name: '‹ Documento' })).toBeVisible()
   expect((await form.boundingBox())!.width).toBeGreaterThan(ancho + 300)
   await page.reload()
   await expect(page.getByRole('complementary', { name: 'Documento' }).getByRole('button', { name: '‹ Documento' })).toBeVisible()
-  await page.getByRole('button', { name: '‹ Documento' }).click()
+  // Se deja como estaba (las preferencias van en la base y la siguiente prueba las lee).
+  await guardandoPreferencias(page, () => page.getByRole('button', { name: '‹ Documento' }).click())
 })

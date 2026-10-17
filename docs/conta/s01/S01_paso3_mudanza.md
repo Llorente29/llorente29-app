@@ -65,6 +65,13 @@ El inventario es el del paso 1 (`S01_paso1_comprobaciones.md`, §2).
   cada vista lo dice la línea de debajo («3 terceros en «Plataformas»»).
 - «Nuevo cliente», en la cinta (abre el mismo diálogo con `?nuevo`).
 
+### La cinta: el título de cada grupo, debajo (Julio, 17/10)
+
+Medido a 1440 px: con el título al lado de sus botones, Bancos pedía ~1.365 px
+(hay 1.210) y Libros y listados, tres filas. Julio eligió el título **debajo**
+de sus botones, como en las barras de la N17 y la N22: Bancos cabe en una fila
+(lo pedía la B01) y Libros y listados, en dos. La cinta mide 61 px por fila.
+
 ### La cabecera, medida
 
 A 1440 px y con un periodo al lado (el mes de Bancos, el ejercicio de Libros)

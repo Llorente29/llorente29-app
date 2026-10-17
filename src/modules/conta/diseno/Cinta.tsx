@@ -36,9 +36,11 @@ export function Cinta({ etiqueta, oculta, alCambiarOculta, children }: {
 export function GrupoCinta({ titulo, children }: { titulo: string; children: ReactNode }) {
   const id = useId()
   return (
+    // El título, debajo de sus botones (Julio, 17/10: así Bancos cabe en una fila a
+    // 1440 px, como las barras de la N17 y la N22). El grupo se llama por él.
     <div className="s-cinta-grupo" role="group" aria-labelledby={id}>
+      <div className="s-cinta-grupo-botones">{children}</div>
       <span id={id} className="s-cinta-grupo-titulo">{titulo}</span>
-      {children}
     </div>
   )
 }

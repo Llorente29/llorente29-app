@@ -56,7 +56,8 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await page.goto('/conta/compras')
   // S01 · paso 3: Compras y gastos › Por revisar. El título lo dice la cabecera del esqueleto.
   await expect(page.getByRole('heading', { level: 1, name: 'Compras y gastos · Por revisar' })).toHaveCount(1)
-  await expect(page.locator('.s-cabecera').getByRole('link', { name: 'Por revisar' })).toHaveAttribute('aria-current', 'page')
+  // Las pestañas, en la cabecera (en el móvil, en su fila debajo).
+  await expect(page.getByRole('navigation', { name: 'Pestañas de Compras y gastos' }).getByRole('link', { name: 'Por revisar' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Qué tienes que mirar' })).toBeVisible()
   // Una fila por decisión. Lo que le falta a la ficha, todo junto:
   const ficha = page.locator('.cxc-cosa', { hasText: /^A Verduras del Huerto Prueba, S\.L\. le faltan/ })

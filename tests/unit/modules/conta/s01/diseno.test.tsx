@@ -230,7 +230,8 @@ describe('Tarjeta y Cinta', () => {
   it('la cinta: barra de herramientas con sus grupos nombrados, y «Ocultar»', () => {
     const h = html(<Cinta etiqueta="Acciones de Asientos" oculta={false} alCambiarOculta={() => {}}><GrupoCinta titulo="Nuevo"><Boton>Expedida</Boton></GrupoCinta></Cinta>)
     expect(h).toContain('role="toolbar" aria-label="Acciones de Asientos"')
-    expect(h).toMatch(/role="group" aria-labelledby="([^"]+)"><span id="\1" class="s-cinta-grupo-titulo">Nuevo<\/span>/)
+    // El título, debajo de los botones del grupo (Julio, 17/10), y el grupo se llama por él.
+    expect(h).toMatch(/role="group" aria-labelledby="([^"]+)"><div class="s-cinta-grupo-botones">.*Expedida.*<\/div><span id="\1" class="s-cinta-grupo-titulo">Nuevo<\/span>/)
     expect(h).toContain('aria-expanded="true"')
   })
   it('oculta, no desaparece: queda «Mostrar la cinta» (regla 7)', () => {

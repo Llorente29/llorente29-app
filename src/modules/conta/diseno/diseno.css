@@ -137,19 +137,23 @@
   background: var(--s-suave); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); font-family: var(--s-letra);
 }
 .s-cinta-oculta { justify-content: flex-end; padding: 0 var(--s-4); }
-.s-cinta-grupos { display: flex; align-items: center; gap: var(--s-3); flex: 1; min-width: 0; flex-wrap: wrap; }
-.s-cinta-grupo { display: flex; align-items: center; gap: var(--s-2); }
-.s-cinta-grupo + .s-cinta-grupo { padding-left: var(--s-3); border-left: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-cinta-grupos { display: flex; align-items: center; gap: var(--s-2); flex: 1; min-width: 0; flex-wrap: wrap; }
+/* El título de cada grupo, debajo de sus botones (Julio, 17/10). */
+.s-cinta-grupo { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.s-cinta-grupo-botones { display: flex; align-items: center; gap: var(--s-1); }
+.s-cinta-grupo + .s-cinta-grupo { padding-left: var(--s-2); border-left: var(--s-linea) solid var(--s-borde-decorativo); }
 .s-cinta-grupo-titulo {
   font-size: var(--s-t-xs); color: var(--s-apoyo); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
+  padding-left: var(--s-2); line-height: 1.2;
 }
 .s-cinta-ocultar { align-self: flex-end; }
 /* En la cinta, los botones más bajos y apretados (maqueta 1: una fila en 1440). */
-.s-cinta .s-boton { min-height: calc(var(--s-alto-control) - var(--s-1)); padding: 0 var(--s-2); gap: var(--s-1); font-size: var(--s-t-s); }
+.s-cinta .s-boton { min-height: calc(var(--s-alto-control) - var(--s-1)); padding: 0 6px; gap: var(--s-1); font-size: var(--s-t-s); }
 .s-cinta-grupos { row-gap: var(--s-1); }
 @media (max-width: 767px) {
   .s-cinta-grupos { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .s-cinta-grupo { flex-shrink: 0; }
+  .s-cinta-grupo-botones { flex-wrap: nowrap; }
 }
 
 /* ── Diálogo ────────────────────────────────────────────────────────── */
