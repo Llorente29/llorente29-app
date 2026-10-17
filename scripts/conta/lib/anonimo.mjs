@@ -38,13 +38,16 @@ export function anonimizar(agente, hallazgos) {
 /** El informe en Markdown: cuántos de cada, y una línea por hallazgo sin detalle. */
 export function informeAnonimo(titulo, filas, { donde, hoy, mirado }) {
   const rojos = filas.filter((f) => f.nivel === 'rojo')
-  const ambar = filas.filter((f) => f.nivel !== 'rojo')
+  // «sabido» (#176): apuntado y pendiente de construir; se cuenta aparte, no como ámbar.
+  const sabidos = filas.filter((f) => f.nivel === 'sabido')
+  const ambar = filas.filter((f) => f.nivel !== 'rojo' && f.nivel !== 'sabido')
   const l = [`## ${titulo} · ${donde} · ${hoy}`, '', mirado, '',
     '_Resumen sin nombres ni conceptos (repositorio público): el detalle de cada hallazgo se ve en la app._', '']
   l.push(rojos.length ? `**${rojos.length} en rojo**${ambar.length ? `, ${ambar.length} en ámbar` : ''}.` : ambar.length ? `En verde; ${ambar.length} en ámbar (esperan a una persona).` : '**En verde.**')
+  if (sabidos.length) l.push('', `Ya sabido: ${sabidos.length} (pendiente de construir; no abre aviso).`)
   if (filas.length) {
     l.push('', '| Agente | Nivel | Tipo | Cuenta | Norma |', '|---|---|---|---|---|')
-    for (const f of [...rojos, ...ambar]) l.push(`| ${f.agente} | ${f.nivel} | ${f.tipo} | ${f.cuenta ?? '—'} | ${f.norma ?? '—'} |`)
+    for (const f of [...rojos, ...ambar, ...sabidos]) l.push(`| ${f.agente} | ${f.nivel} | ${f.tipo} | ${f.cuenta ?? '—'} | ${f.norma ?? '—'} |`)
   }
   return l.join('\n') + '\n'
 }
