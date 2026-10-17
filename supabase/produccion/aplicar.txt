@@ -3,31 +3,25 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# M01 · «Esperan» (Julio, 16/10, decisión 1: opción A). La anterior de este
-# fichero (R03, la dirección que no llega: 0300, 0310 y 0320) ya está en el
-# historial de producción; su copia: tests/conta/produccion/tanda-r03-direccion-20261017.txt.
-# La de antes (C06b, promociones y envíos), también; su copia:
-# tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt.
+# W02 · El relevo del secreto del despacho (Julio, 17/10; PR #225). La anterior
+# de este fichero (M01, «Esperan»: 0100) ya está en el historial de producción;
+# su copia: tests/conta/produccion/tanda-m01-esperan-20261017.txt.
 #
-#   1. 0100 — añade conta_motivos_para_validar (todo lo que haría que un
-#      asiento no se valide, por orden y con el mismo texto con el que hoy lo
-#      para) y conta_esperan (lo propuesto que pararía, con su motivo); y
-#      cambia, con la misma firma, journal_entry_validar (para con el primer
-#      motivo) y tg_journal_entry_envio_por_aclarar (el freno de C lee su
-#      motivo de la misma función). Declarado en su cabecera, con su prueba de
-#      staging. No toca ninguna tabla ni ningún asiento.
+#   1. 0100 — guarda el secreto de ahora como catcher_dispatch_secret_anterior
+#      y pone en catcher_dispatch_secret uno nuevo, generado dentro de la base
+#      (no está en el fichero ni sale por ningún sitio). AUTORIZO: escribe en
+#      vault.secrets (analizar.mjs cuenta vault.create_secret y
+#      vault.update_secret como escritura desde el W02).
 #
-# ORDEN (Julio, 17/10): va ANTES que la 0220 de B (B02 · T4, rama
-# conta/b02-espera-extracto), que espera a que esta esté en el historial.
+# ANTES, catcher-dispatch desplegado con el relevo (acepta el _anterior
+# mientras exista): va en el mismo PR. Se fusiona, se comprueba que lo
+# desplegado es lo de main, y entonces esta tanda.
 #
-# VA DESPUÉS DE LA DE C, y se escribe sobre ella: las dos funciones que cambia
-# están en producción con la huella de la que parte (798e4c43… y 7a2549b0…,
-# medidas el 16/10 a las 19:49 UTC en solo lectura).
+# DESPUÉS, en otra tanda y otro PR: la 0200 borra el _anterior, cuando los logs
+# de catcher-dispatch lleven 15 minutos sin CATCHER_DISPATCH_SECRETO_ANTERIOR.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt (solo antes de la 0200).
 #
-# Antes o después del front, da igual: la base nueva para con los mismos
-# textos que la de antes, así que el front de antes valida igual; y el front
-# nuevo, con la base de antes, dice que no puede leer lo que espera y cuenta
-# todo lo propuesto como «para revisar», como hoy.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql
-supabase/migrations/20261117T0100_m01_motivos_para_validar.sql
+# autorizo:
+#   20261120T0100_w02_secreto_despacho_relevo.sql
+cuenta: scripts/conta/produccion/cuentas/w02-secreto-despacho.sql
+supabase/migrations/20261120T0100_w02_secreto_despacho_relevo.sql

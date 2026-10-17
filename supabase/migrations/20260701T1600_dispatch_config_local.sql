@@ -1,3 +1,6 @@
+-- W02 (17/10): el secreto que iba aquí escrito se ha quitado del fichero. Ya no
+-- valía (producción lo lee de Vault desde julio y tiene otro valor; medido
+-- por su huella el 17/10). Este fichero es historia: no se vuelve a aplicar.
 -- supabase/migrations/20260701T1600_dispatch_config_local.sql
 --
 -- SELECTOR DE ENVÍO POR LOCAL (auto/manual + broker) + despacho ampliado.
@@ -37,7 +40,7 @@ as $function$
 declare
   v_mode   text;
   v_broker text;
-  v_secret text := 'fv_catdisp_tnrMMcaI8gALFCitfvzPGsaHgQa3A83w';
+  v_secret text := '<retirado: vive en Vault (catcher_dispatch_secret)>';
   v_url    text := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/catcher-dispatch';
 begin
   -- Sólo reparto propio, al aceptar, sin despacho previo, y con transición real

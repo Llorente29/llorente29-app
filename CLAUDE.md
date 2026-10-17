@@ -151,6 +151,13 @@ del camino y se dijera antes. Acababa a las 00:30 porque en 30 días (26/08–
 24/09) el pedido más tardío entró a las 23:59 y 0 de 30 días tuvieron alguno
 después de las 00:15.
 
+### El nombre de una migración
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> W02 (17/10).
+
+El nombre de una migración es el siguiente por encima del más alto que ya existe, no la fecha de hoy. El orden en que se aplican lo decide `supabase/produccion/aplicar.txt`.
+
 ### Una fusión está hecha cuando VERCEL dice READY en producción
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,

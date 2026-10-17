@@ -1,11 +1,6 @@
-# Vuelta atrás de la tanda de «Esperan» (modo «vuelta_atras»): las dos
-# funciones que cambia vuelven, copiadas tal cual, a la huella de antes
-# (journal_entry_validar a la de 20261113T0100_c06b_centimo_iva y
-# tg_journal_entry_envio_por_aclarar a la de 20261116T0100_c06b_promociones_envios),
-# y fuera las dos nuevas. No toca ninguna tabla ni ningún asiento.
-# Si hay que deshacer TAMBIÉN la de C (promociones y envíos), primero esta y
-# después la de C: la validación nueva llama a conta_cargos_de_pedidos, de la
-# 0100 de C. La vuelta atrás de C: tests/conta/produccion/vuelta-atras-c06b-promociones-envios-20261016.txt.
-# La anterior de este fichero (R03): tests/conta/produccion/vuelta-atras-r03-direccion-20261017.txt.
-cuenta: scripts/conta/produccion/cuentas/m01-esperan.sql
-supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql
+# Vuelta atrás de la tanda del relevo del secreto del despacho (modo
+# «vuelta_atras»): catcher_dispatch_secret vuelve a ser el de antes (el
+# _anterior) y el _anterior se borra. Solo vale ANTES de la 0200.
+# La anterior de este fichero (M01): tests/conta/produccion/vuelta-atras-m01-esperan-20261017.txt.
+cuenta: scripts/conta/produccion/cuentas/w02-secreto-despacho.sql
+supabase/vuelta-atras/20261120T0100_w02_secreto_despacho_relevo.down.sql
