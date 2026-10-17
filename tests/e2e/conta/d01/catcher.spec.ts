@@ -20,7 +20,7 @@
 // solo, el caso real en «Por aclarar».
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { EMPRESA, PEDIDOS, quincenaInventada } from '../../../conta/e05/ejemplo'
 import { madridAUtc } from '../../../../src/modules/conta/lib/catcherQuincena'
@@ -67,7 +67,7 @@ function pedidosDeLaApp() {
     const k = `${codigo}|${momento}`
     if (vistos.has(k) && /commission/.test(tipo)) continue
     vistos.set(k, {
-      id: `e05e0000-0000-4000-8000-${String(++i).padStart(12, '0')}`, codigo, momento, localId: null, marcaId: null, canalId: null,
+      id: enCarril(`e05e0000-0000-4000-8000-${String(++i).padStart(12, '0')}`), codigo, momento, localId: null, marcaId: null, canalId: null,
       estado: estado === 'canceled' ? 'canceled' : 'delivered', precio: /commission/.test(tipo) ? 0 : base,
     })
   }

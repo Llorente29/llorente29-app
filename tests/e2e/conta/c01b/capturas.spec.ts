@@ -15,12 +15,12 @@
 // respuesta 1 del C01b la cambia para todas las cuentas.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CARNES_SUR, CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo } from '../sesion'
+import { CARNES_SUR, CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo, enCarril } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c01b'
-const MERCADOS_NORTE = 'c1b0a000-0000-4000-8000-0000000000a6'
-const PANADERIA_LUNA = 'c01a0000-0000-4000-8000-0000000000a5'
+const MERCADOS_NORTE = enCarril('c1b0a000-0000-4000-8000-0000000000a6')
+const PANADERIA_LUNA = enCarril('c01a0000-0000-4000-8000-0000000000a5')
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // Lo que flota encima: en el ordenador, la barra «Pregunta o pide algo»; en el
