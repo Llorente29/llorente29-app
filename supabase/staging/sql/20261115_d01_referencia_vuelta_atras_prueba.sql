@@ -43,8 +43,17 @@ begin
   delete from public.bank_settings where company_id = v_e;
   if public._conta_corte(v_e) >= date '2026-07-27' then raise exception 'PRUEBA D01 referencia · 0: sin Bancos, el corte de A (%) no deja crear facturas de agosto.', public._conta_corte(v_e); end if;
   select id into v_canal from public.sales_channel where account_id = v_acc and slug = 'uber';
-  insert into public.party (account_id, name, created_by_name) values (v_acc, 'Plataforma inventada (prueba referencia)', 'Prueba D01 referencia') returning id into v_party;
-  insert into public.party_role (account_id, party_id, role, channel_id, commission_account_code) values (v_acc, v_party, 'platform', v_canal, '62300001');
+  -- Un canal tiene una sola plataforma (ux_party_role_canal). Si el Uber de A
+  -- ya la tiene (la de seed_d01_tiendas_staging.sql, 17/10), se usa esa, con
+  -- la cuenta de comisión que pide la prueba; si no, una inventada.
+  select pr.party_id into v_party from public.party_role pr
+   where pr.account_id = v_acc and pr.role = 'platform' and pr.channel_id = v_canal;
+  if v_party is null then
+    insert into public.party (account_id, name, created_by_name) values (v_acc, 'Plataforma inventada (prueba referencia)', 'Prueba D01 referencia') returning id into v_party;
+    insert into public.party_role (account_id, party_id, role, channel_id, commission_account_code) values (v_acc, v_party, 'platform', v_canal, '62300001');
+  else
+    update public.party_role set commission_account_code = '62300001' where account_id = v_acc and party_id = v_party and role = 'platform';
+  end if;
   insert into public.supplier (account_id, name, legal_name, tax_id, is_active, created_by_name)
   values (v_acc, 'Plataforma inventada referencia', 'Plataforma Inventada Referencia SL', 'B00000099', true, 'Prueba D01 referencia') returning id into v_sup;
   update public.party_role set party_id = v_party where account_id = v_acc and supplier_id = v_sup and role = 'supplier';
