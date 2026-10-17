@@ -235,7 +235,8 @@ test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esque
   const errores: string[] = []
   await entrarComo(page, CUENTA_D.email)
   vigilar(page, errores)
-  await page.goto('/conta/ajustes')
+  // La entrada «Empresa» directamente: en el móvil, /conta/ajustes es la lista de entradas.
+  await page.goto('/conta/ajustes/empresa')
   const marca = page.getByRole('group', { name: '¿Es un negocio de hostelería?' })
   await expect(page.getByTestId('es-hosteleria')).toHaveText('No', { timeout: 30_000 })
   try {
@@ -249,7 +250,7 @@ test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esque
     await expect(pestanas(page, 'Compras y gastos').getByRole('link')).toHaveText(['Por revisar', 'Facturas recibidas', 'Liquidaciones'])
   } finally {
     // Pase lo que pase, D vuelve a no ser de hostelería (las demás pruebas lo cuentan).
-    await page.goto('/conta/ajustes')
+    await page.goto('/conta/ajustes/empresa')
     await expect(page.getByTestId('es-hosteleria')).not.toHaveText('', { timeout: 30_000 })
     if ((await page.getByTestId('es-hosteleria').textContent()) !== 'No') {
       await marca.getByRole('button', { name: 'No', exact: true }).click()
