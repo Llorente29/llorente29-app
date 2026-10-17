@@ -1,3 +1,6 @@
+-- W02 (17/10): el secreto que iba aquí escrito se ha quitado del fichero. Ya no
+-- valía (producción lo lee de Vault desde julio y tiene otro valor; medido
+-- por su huella el 17/10). Este fichero es historia: no se vuelve a aplicar.
 create or replace function tg_auto_dispatch_catcher()
 returns trigger
 language plpgsql
@@ -13,7 +16,7 @@ begin
       url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/catcher-dispatch',
       headers := jsonb_build_object(
         'Content-Type',                'application/json',
-        'x-catcher-dispatch-secret',   'fv_catdisp_tnrMMcaI8gALFCitfvzPGsaHgQa3A83w'
+        'x-catcher-dispatch-secret',   '<retirado: vive en Vault (catcher_dispatch_secret)>'
       ),
       body    := jsonb_build_object(
         'sale_id',  new.id,

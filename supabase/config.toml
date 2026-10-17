@@ -147,3 +147,10 @@ verify_jwt = true
 # minuto (public.conta_contrasena_de_marca, solo service_role).
 [functions.conta-contrasena]
 verify_jwt = false
+
+# (17/10) W02 · futbol-partidos: los partidos de football-data.org para la
+# predicción de personal. Antes el front llamaba con el token escrito en el
+# bundle; ahora el token es el secreto FOOTBALL_DATA_TOKEN de esta función y
+# solo la llama alguien con sesión: verify_jwt = true.
+[functions.futbol-partidos]
+verify_jwt = true

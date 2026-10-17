@@ -1,6 +1,9 @@
 // ─── Enriquecimiento de datos de ventas ──────────────────────────────────────
 // 1. Meteorología: Open-Meteo API (gratuita, sin clave)
-// 2. Eventos deportivos: partidos del Real Madrid y otros relevantes en Madrid
+// 2. Eventos deportivos: partidos del Real Madrid y otros relevantes en Madrid,
+//    vía la función futbol-partidos (el token de football-data.org vive allí)
+
+import { supabase } from '../lib/supabase'
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 export interface DayEnrichment {
@@ -86,10 +89,8 @@ export async function fetchWeatherHistory(
 }
 
 // ─── EVENTOS DEPORTIVOS ────────────────────────────────────────────────────────
-// Usamos la API pública de football-data.org (gratuita, sin clave para LaLiga/Champions)
-// Fallback: lista hardcoded de clásicos/derbis conocidos + fetch dinámico
-
-const REAL_MADRID_ID = 86  // football-data.org team ID
+// Los partidos del Real Madrid de football-data.org, a través de la función
+// futbol-partidos (el token vive allí, no aquí).
 
 export async function fetchSportEvents(
   startDate: string,
@@ -98,51 +99,45 @@ export async function fetchSportEvents(
   const events: Record<string, SportEvent> = {}
 
   try {
-    // Intentar obtener partidos del Real Madrid desde football-data.org
-    // API key gratuita limitada — usamos endpoint público
-    const competitions = ['PD', 'CL', 'CDR']  // LaLiga, Champions, Copa del Rey
-    
-    for (const comp of competitions) {
-      try {
-        const url = `https://api.football-data.org/v4/teams/${REAL_MADRID_ID}/matches?dateFrom=${startDate}&dateTo=${endDate}&competitions=${comp}`
-        const res = await fetch(url, {
-          headers: { 'X-Auth-Token': '1a97df6f68c44e8fbe3bd280be6d9f26' }
-        })
-        if (!res.ok) continue
-        const data = await res.json()
-        const matches = data.matches || []
+    // Los partidos los trae la función futbol-partidos: el token de
+    // football-data.org no vive en el front (W02, 17/10).
+    if (!supabase) return events
+    const { data, error } = await supabase.functions.invoke('futbol-partidos', {
+      body: { dateFrom: startDate, dateTo: endDate },
+    })
+    if (error || !data?.ok) return events
+    const matches = (data.matches ?? []) as { competition: string; utcDate: string; home: string; away: string; stage: string | null }[]
 
-        matches.forEach((m: any) => {
-          const date = m.utcDate?.slice(0, 10)
-          if (!date) return
-          const home = m.homeTeam?.name || ''
-          const away = m.awayTeam?.name || ''
-          const isRM  = home.includes('Real Madrid') || away.includes('Real Madrid')
-          if (!isRM) return
+    for (const m of matches) {
+      const comp = m.competition
+      const date = m.utcDate?.slice(0, 10)
+      if (!date) continue
+      const home = m.home || ''
+      const away = m.away || ''
+      const isRM  = home.includes('Real Madrid') || away.includes('Real Madrid')
+      if (!isRM) continue
 
-          const isElClasico = (home.includes('Barcelona') || away.includes('Barcelona'))
-          const isDerbi     = (home.includes('Atlético') || away.includes('Atlético') || home.includes('Atletico') || away.includes('Atletico'))
-          const isChampions = comp === 'CL'
-          const isKnockout  = ['ROUND_OF_16','QUARTER_FINAL','SEMI_FINAL','FINAL'].includes(m.stage)
+      const isElClasico = (home.includes('Barcelona') || away.includes('Barcelona'))
+      const isDerbi     = (home.includes('Atlético') || away.includes('Atlético') || home.includes('Atletico') || away.includes('Atletico'))
+      const isChampions = comp === 'CL'
+      const isKnockout  = ['ROUND_OF_16','QUARTER_FINAL','SEMI_FINAL','FINAL'].includes(m.stage ?? '')
 
-          let coef = COEF.REAL_MADRID_AWAY
-          if (isElClasico)              coef = COEF.CLASICO
-          else if (isDerbi)             coef = COEF.DERBI
-          else if (isChampions && isKnockout) coef = COEF.CHAMPIONS_ELIM
-          else if (isChampions)         coef = COEF.CHAMPIONS_FINAL
-          else if (home.includes('Real Madrid')) coef = COEF.REAL_MADRID_HOME
+      let coef = COEF.REAL_MADRID_AWAY
+      if (isElClasico)              coef = COEF.CLASICO
+      else if (isDerbi)             coef = COEF.DERBI
+      else if (isChampions && isKnockout) coef = COEF.CHAMPIONS_ELIM
+      else if (isChampions)         coef = COEF.CHAMPIONS_FINAL
+      else if (home.includes('Real Madrid')) coef = COEF.REAL_MADRID_HOME
 
-          const compLabel = isElClasico ? 'Clásico' : isDerbi ? 'Derbi' : isChampions ? 'Champions' : 'LaLiga'
-          events[date] = {
-            competition: compLabel, home, away,
-            isRealMadrid: true, isElClasico, isDerbi, isChampions,
-            importance: (isElClasico || isDerbi || (isChampions && isKnockout)) ? 'alta' : 'media',
-            coeficient: coef
-          }
-        })
-      } catch { continue }
+      const compLabel = isElClasico ? 'Clásico' : isDerbi ? 'Derbi' : isChampions ? 'Champions' : 'LaLiga'
+      events[date] = {
+        competition: compLabel, home, away,
+        isRealMadrid: true, isElClasico, isDerbi, isChampions,
+        importance: (isElClasico || isDerbi || (isChampions && isKnockout)) ? 'alta' : 'media',
+        coeficient: coef
+      }
     }
-  } catch { /* silencio — usamos solo datos hardcoded si falla */ }
+  } catch { /* silencio — sin partidos si falla, como antes */ }
 
   return events
 }

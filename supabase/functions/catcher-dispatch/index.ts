@@ -429,7 +429,20 @@ Deno.serve(async (req: Request) => {
   if (isInternal) {
     const gotSecret = req.headers.get("x-catcher-dispatch-secret");
     const { data: expectedSecret, error: intSecErr } = await sb.rpc("internal_secret", { p_name: "catcher_dispatch_secret" });
-    if (intSecErr || !expectedSecret || gotSecret !== expectedSecret) {
+    let secretoBueno = !intSecErr && !!expectedSecret && gotSecret === expectedSecret;
+    // EL RELEVO (W02, 17/10). Al cambiar el secreto, un pedido cuyo disparador
+    // leyó el de antes puede llegar aquí después del cambio (pg_net manda la
+    // llamada al confirmar). Mientras exista catcher_dispatch_secret_anterior
+    // en Vault, también vale; lo crea y lo borra la tanda del relevo
+    // (20261120T0100 / 0200). Sin él, esto no cambia nada.
+    if (!secretoBueno && gotSecret) {
+      const { data: anterior } = await sb.rpc("internal_secret", { p_name: "catcher_dispatch_secret_anterior" });
+      if (anterior && gotSecret === anterior) {
+        secretoBueno = true;
+        console.log("CATCHER_DISPATCH_SECRETO_ANTERIOR", { saleId: body.sale_id ?? null });
+      }
+    }
+    if (!secretoBueno) {
       // A PROPÓSITO no escribe dispatch_error, aunque sea una salida sin llegar
       // a Catcher: es la frontera de autenticación y aún no se ha comprobado
       // quién llama. Dejar que un no autenticado escriba texto en cualquier
