@@ -3,21 +3,24 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# S01d · Lo que falla del S01 que necesita base (rama conta/s01d-tanda, PR 2
-# del S01b). La anterior de este fichero (I01a, impuestos por dentro:
-# 0100–0150) ya está aplicada en producción; su copia:
-# tests/conta/produccion/tanda-i01a-impuestos-20261018.txt.
-# Orden con la I01b del frente C (Julio, 18/10): esta va primero; la I01b
-# numera por encima de la 0170.
+# I01b · El asiento de liquidación del 303 y su pago (rama
+# conta/i01b-pantallas-impuestos). La anterior de este fichero (S01d: 0160 y
+# 0170) ya está aplicada en producción; su copia:
+# tests/conta/produccion/tanda-s01d-tanda-20261018.txt. Esta numera por encima
+# de la 0170 (Julio, 18/10).
 #
-#   1. 0160 — CAMBIA en caliente journal_entry_document: su CHECK de kind solo
-#      AMPLÍA ('factura_expedida'). Declarado, con su prueba de staging. AÑADE
-#      conta_documento_expedida_guardar (el PDF de la expedida a mano).
-#   2. 0170 — AÑADE bank_cuenta_nueva: un banco que aún no está en el plan, con
-#      su subcuenta 572 (salir del círculo de «Dar de alta un banco»).
+#   1. 0180 — AÑADE conta_impuesto_euros, conta_impuesto_303_contabilizar,
+#      conta_impuesto_cargos_posibles y conta_impuesto_casar_cargo, y dos
+#      disparadores con WHEN (bank_match deshecho; asiento de liquidación
+#      anulado). CAMBIA en caliente, declarado con su prueba de staging:
+#      conta_motivos_para_validar (la misma salvo la excepción de la
+#      liquidación de un 303), conta_impuesto_estado_vale (las vueltas atrás),
+#      bank_match_item (columna nueva que admite nulos y su CHECK, que solo
+#      amplía), bank_match y journal_entry (su disparador nuevo).
 #
-# Ninguna toca el camino del pedido. No hay funciones que desplegar a mano.
+# No toca el camino del pedido. No contabiliza nada: lo hace la persona desde
+# la pantalla, después. No hay funciones que desplegar a mano (conta-hacienda
+# va con la fusión).
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/s01d-tanda.sql
-supabase/migrations/20261122T0160_s01d_documento_expedida.sql
-supabase/migrations/20261122T0170_s01d_banco_nuevo.sql
+cuenta: scripts/conta/produccion/cuentas/i01b-asiento-303.sql
+supabase/migrations/20261122T0180_i01b_asiento_303.sql

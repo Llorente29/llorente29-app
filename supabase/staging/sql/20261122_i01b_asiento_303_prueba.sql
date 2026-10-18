@@ -241,6 +241,14 @@ begin
      or not exists (select 1 from public.tax_return_event where tax_return_id = v_r and message like 'Se deshizo el casado del pago en Bancos: PRUEBA I01b%') then
     raise exception 'PRUEBA asiento 303 · 4: deshacer deja «%».', r.status;
   end if;
+  -- Lo que la 0180 cambia en caliente, nombrado: el disparador de public.bank_match
+  -- despierta con el casado deshecho, y public.conta_impuesto_estado_vale deja
+  -- volver atrás de «Pagado» a «Contabilizado» y no a «Borrador».
+  if (select status from public.bank_match where id = (select val::uuid from _p where k = 'casado')) <> 'deshecho'
+     or not public.conta_impuesto_estado_vale('paid', 'booked') or not public.conta_impuesto_estado_vale('booked', 'filed')
+     or public.conta_impuesto_estado_vale('paid', 'draft') then
+    raise exception 'PRUEBA asiento 303 · 4: bank_match o conta_impuesto_estado_vale no son los de la 0180.';
+  end if;
   raise notice 'PRUEBA asiento 303 · 4: deshecho, vuelve a «%».', public.conta_impuesto_estado_texto(r.status);
 end $$;
 
