@@ -18,6 +18,8 @@ create table public.vat_book_entry (id uuid primary key default gen_random_uuid(
   withholding_rate numeric, withholding_amount numeric, activity_code text, activity_type text, activity_iae text, corrects_ref text,
   source_type text not null, source_id uuid, voided_at timestamptz, voided_by_entry_id uuid, created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(), updated_by_name text);
+-- Como en producción (medido el 18/10, después del 23505 del primer ensayo): una fila del libro por línea del diario.
+create unique index uq_vat_book_entry_linea on public.vat_book_entry (line_id) where line_id is not null;
 -- Empresa E, cuentas 477, 472, 430, 400, 700, 600.
 insert into public.company values ('e0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001');
 insert into public.company_account values
@@ -52,3 +54,10 @@ select pg_temp.a('10000000-0000-4000-8000-000000000005', '2026-06-30', '2', '3')
 select pg_temp.l('20000000-0000-4000-8000-000000000014', '10000000-0000-4000-8000-000000000005', 1, '600', 200, 0),
        pg_temp.l('20000000-0000-4000-8000-000000000015', '10000000-0000-4000-8000-000000000005', 2, '472', 31, 0),
        pg_temp.l('20000000-0000-4000-8000-000000000016', '10000000-0000-4000-8000-000000000005', 3, '400', 0, 231);
+-- Compra 2T con dos tipos y UNA 472 POR TIPO (serie 2, doc 4: 100 al 10 % + 100 al 21 %), como 240
+-- asientos reales de la serie 2: cada tramo se casa con la línea de su importe.
+select pg_temp.a('10000000-0000-4000-8000-000000000006', '2026-06-30', '2', '4');
+select pg_temp.l('20000000-0000-4000-8000-000000000017', '10000000-0000-4000-8000-000000000006', 1, '600', 200, 0),
+       pg_temp.l('20000000-0000-4000-8000-000000000018', '10000000-0000-4000-8000-000000000006', 2, '472', 21, 0),
+       pg_temp.l('20000000-0000-4000-8000-000000000019', '10000000-0000-4000-8000-000000000006', 3, '472', 10, 0),
+       pg_temp.l('20000000-0000-4000-8000-000000000020', '10000000-0000-4000-8000-000000000006', 4, '400', 0, 231);
