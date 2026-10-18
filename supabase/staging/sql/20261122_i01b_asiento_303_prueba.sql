@@ -137,13 +137,11 @@ reset role;
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 set local role service_role;
 do $$
-declare v_u constant uuid := 'c01a0000-0000-4000-8000-0000000000a1'; k text; n int := 0;
+declare v_u constant uuid := 'c01a0000-0000-4000-8000-0000000000a1'; v_k text; n int := 0;
 begin
-  foreach k in array array['pagar', 'compensar', 'otra'] loop
+  foreach v_k in array array['pagar', 'compensar', 'otra'] loop
     n := n + 1;
-    if (select val from _p where _p.k = k) is not null then
-      perform public.conta_impuesto_fuera((select val::uuid from _p where _p.k = k), v_u, 'PRUEBAI01BCSV00' || n, false, null, null, null);
-    end if;
+    perform public.conta_impuesto_fuera((select val::uuid from _p where _p.k = v_k), v_u, 'PRUEBAI01BCSV00' || n, false, null, null, null);
   end loop;
 end $$;
 
