@@ -1,0 +1,272 @@
+{
+  "que_es": "I01a · Festivos que mueven los plazos de Hacienda, sacados del BOE por scripts/conta/i01/festivos.mjs. ES: fiestas nacionales del art. 45.1 del RD 2001/1983 (las que la tabla marca * o **). ES-MD: la columna de la Comunidad de Madrid.",
+  "resoluciones": [
+    {
+      "anio": 2026,
+      "clave": "boe-fiestas-laborales-2026",
+      "id": "BOE-A-2025-21667",
+      "nombre": "Resolución de 17 de octubre de 2025, de la Dirección General de Trabajo, por la que se publica la relación de fiestas laborales para el año 2026.",
+      "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2025-21667",
+      "sha256": "f85e22b21de215dafdc2491eab6a535b0c92e744c8d2ae79d3d4c0532c9770e0",
+      "descargado": "2026-10-17T20:34:06.235Z",
+      "provisional": null
+    },
+    {
+      "anio": 2027,
+      "clave": "boe-fiestas-laborales-2027",
+      "id": "BOE-A-2026-21254",
+      "nombre": "Resolución de 8 de octubre de 2026, de la Dirección General de Trabajo, por la que se publica relación de fiestas laborales para el año 2027.",
+      "url": "https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-21254",
+      "sha256": "2e8c47e795d370466bdfe4372d5a6789a1dcd906b68218da8d1b5569a992eb48",
+      "descargado": "2026-10-17T20:34:07.094Z",
+      "provisional": "Publicado el BOE (BOE-A-2026-21254); falta cotejarlo con el calendario de la Comunidad de Madrid en el BOCM."
+    }
+  ],
+  "festivos": [
+    {
+      "fecha": "2026-01-01",
+      "ambito": "ES",
+      "nombre": "Año Nuevo"
+    },
+    {
+      "fecha": "2026-01-01",
+      "ambito": "ES-MD",
+      "nombre": "Año Nuevo"
+    },
+    {
+      "fecha": "2026-01-06",
+      "ambito": "ES",
+      "nombre": "Epifanía del Señor"
+    },
+    {
+      "fecha": "2026-01-06",
+      "ambito": "ES-MD",
+      "nombre": "Epifanía del Señor"
+    },
+    {
+      "fecha": "2026-03-19",
+      "ambito": "ES",
+      "nombre": "San José"
+    },
+    {
+      "fecha": "2026-04-02",
+      "ambito": "ES",
+      "nombre": "Jueves Santo"
+    },
+    {
+      "fecha": "2026-04-02",
+      "ambito": "ES-MD",
+      "nombre": "Jueves Santo"
+    },
+    {
+      "fecha": "2026-04-03",
+      "ambito": "ES",
+      "nombre": "Viernes Santo"
+    },
+    {
+      "fecha": "2026-04-03",
+      "ambito": "ES-MD",
+      "nombre": "Viernes Santo"
+    },
+    {
+      "fecha": "2026-05-01",
+      "ambito": "ES",
+      "nombre": "Fiesta del Trabajo"
+    },
+    {
+      "fecha": "2026-05-01",
+      "ambito": "ES-MD",
+      "nombre": "Fiesta del Trabajo"
+    },
+    {
+      "fecha": "2026-05-02",
+      "ambito": "ES-MD",
+      "nombre": "Fiesta de la Comunidad de Madrid"
+    },
+    {
+      "fecha": "2026-07-25",
+      "ambito": "ES",
+      "nombre": "Santiago Apóstol/Día Nacional de Galicia"
+    },
+    {
+      "fecha": "2026-08-15",
+      "ambito": "ES",
+      "nombre": "Asunción de la Virgen"
+    },
+    {
+      "fecha": "2026-08-15",
+      "ambito": "ES-MD",
+      "nombre": "Asunción de la Virgen"
+    },
+    {
+      "fecha": "2026-10-12",
+      "ambito": "ES",
+      "nombre": "Fiesta Nacional de España"
+    },
+    {
+      "fecha": "2026-10-12",
+      "ambito": "ES-MD",
+      "nombre": "Fiesta Nacional de España"
+    },
+    {
+      "fecha": "2026-11-02",
+      "ambito": "ES",
+      "nombre": "Día siguiente a Todos los Santos"
+    },
+    {
+      "fecha": "2026-11-02",
+      "ambito": "ES-MD",
+      "nombre": "Día siguiente a Todos los Santos"
+    },
+    {
+      "fecha": "2026-12-07",
+      "ambito": "ES",
+      "nombre": "Lunes siguiente al Día de la Constitución Española"
+    },
+    {
+      "fecha": "2026-12-07",
+      "ambito": "ES-MD",
+      "nombre": "Lunes siguiente al Día de la Constitución Española"
+    },
+    {
+      "fecha": "2026-12-08",
+      "ambito": "ES",
+      "nombre": "Inmaculada Concepción"
+    },
+    {
+      "fecha": "2026-12-08",
+      "ambito": "ES-MD",
+      "nombre": "Inmaculada Concepción"
+    },
+    {
+      "fecha": "2026-12-25",
+      "ambito": "ES",
+      "nombre": "Natividad del Señor"
+    },
+    {
+      "fecha": "2026-12-25",
+      "ambito": "ES-MD",
+      "nombre": "Natividad del Señor"
+    },
+    {
+      "fecha": "2027-01-01",
+      "ambito": "ES",
+      "nombre": "Año Nuevo"
+    },
+    {
+      "fecha": "2027-01-01",
+      "ambito": "ES-MD",
+      "nombre": "Año Nuevo"
+    },
+    {
+      "fecha": "2027-01-06",
+      "ambito": "ES",
+      "nombre": "Epifanía del Señor"
+    },
+    {
+      "fecha": "2027-01-06",
+      "ambito": "ES-MD",
+      "nombre": "Epifanía del Señor"
+    },
+    {
+      "fecha": "2027-03-19",
+      "ambito": "ES",
+      "nombre": "San José"
+    },
+    {
+      "fecha": "2027-03-19",
+      "ambito": "ES-MD",
+      "nombre": "San José"
+    },
+    {
+      "fecha": "2027-03-25",
+      "ambito": "ES",
+      "nombre": "Jueves Santo"
+    },
+    {
+      "fecha": "2027-03-25",
+      "ambito": "ES-MD",
+      "nombre": "Jueves Santo"
+    },
+    {
+      "fecha": "2027-03-26",
+      "ambito": "ES",
+      "nombre": "Viernes Santo"
+    },
+    {
+      "fecha": "2027-03-26",
+      "ambito": "ES-MD",
+      "nombre": "Viernes Santo"
+    },
+    {
+      "fecha": "2027-05-01",
+      "ambito": "ES",
+      "nombre": "Fiesta del Trabajo"
+    },
+    {
+      "fecha": "2027-05-01",
+      "ambito": "ES-MD",
+      "nombre": "Fiesta del Trabajo"
+    },
+    {
+      "fecha": "2027-08-16",
+      "ambito": "ES",
+      "nombre": "Lunes siguiente a asunción de la Virgen"
+    },
+    {
+      "fecha": "2027-08-16",
+      "ambito": "ES-MD",
+      "nombre": "Lunes siguiente a asunción de la Virgen"
+    },
+    {
+      "fecha": "2027-10-12",
+      "ambito": "ES",
+      "nombre": "Fiesta Nacional de España"
+    },
+    {
+      "fecha": "2027-10-12",
+      "ambito": "ES-MD",
+      "nombre": "Fiesta Nacional de España"
+    },
+    {
+      "fecha": "2027-11-01",
+      "ambito": "ES",
+      "nombre": "Todos los Santos"
+    },
+    {
+      "fecha": "2027-11-01",
+      "ambito": "ES-MD",
+      "nombre": "Todos los Santos"
+    },
+    {
+      "fecha": "2027-12-06",
+      "ambito": "ES",
+      "nombre": "Día de la Constitución Española"
+    },
+    {
+      "fecha": "2027-12-06",
+      "ambito": "ES-MD",
+      "nombre": "Día de la Constitución Española"
+    },
+    {
+      "fecha": "2027-12-08",
+      "ambito": "ES",
+      "nombre": "Inmaculada Concepción"
+    },
+    {
+      "fecha": "2027-12-08",
+      "ambito": "ES-MD",
+      "nombre": "Inmaculada Concepción"
+    },
+    {
+      "fecha": "2027-12-25",
+      "ambito": "ES",
+      "nombre": "Natividad del Señor"
+    },
+    {
+      "fecha": "2027-12-25",
+      "ambito": "ES-MD",
+      "nombre": "Natividad del Señor"
+    }
+  ]
+}

@@ -1,3 +1,55 @@
+# I01a · Impuestos por dentro (rama conta/i01a-impuestos-por-dentro).
+#   Pieza 1, plazos: la prueba aplica la 20261122T0100 (festivos del BOE 2026 y
+#   2027, reglas de plazo y conta_impuesto_plazo) y comprueba, como usuario, las
+#   14 fechas de domiciliación del calendario oficial de la AEAT de 2026.
+#   Pieza 2, modelo de datos: la prueba aplica la 0100 y la 0110 (tax_obligation,
+#   company_tax_facts, tax_return y su registro, certificados, quién presenta) y
+#   comprueba el espejo de tax_forms, las respuestas del alta, el estado como dato
+#   y el permiso de la asesoría solo con consentimiento.
+#   Las dos pruebas, con \i dentro de su transacción y ROLLBACK.
+#   La 0100 y la 0110 se aplican DE VERDAD (solo añaden: tablas, funciones,
+#   vistas y el disparador nuevo de company_tax_profile, probados en los runs
+#   313 y 314), para que el alta del front pueda guardar sus respuestas. Las
+#   pruebas corren después: son la segunda pasada, y prueban que reaplicar no
+#   duplica nada. Van las primeras: lo de abajo es de otros frentes y no se toca.
+supabase/migrations/20261122T0100_i01_plazos.sql
+supabase/migrations/20261122T0110_i01_modelo_datos.sql
+supabase/migrations/20261122T0120_i01_obligaciones.sql
+supabase/staging/sql/20261122_i01_plazos_prueba.sql
+supabase/staging/sql/20261122_i01_modelo_datos_prueba.sql
+#   Pieza 3, obligaciones: la 0120 (las reglas con nombre; solo funciones) se
+#   aplica DE VERDAD arriba, probada en el run 316, para que el alta tome los
+#   modelos de la base. Su prueba, otra vez con \i y ROLLBACK: regla, datos y porqué de cada
+#   modelo; calcular dos veces no escribe dos; quitar pide motivo y ninguna
+#   regla lo pisa; un dato cambia la regla; Canarias; el 130 de un autónomo;
+#   y las reglas no se pueden llamar como usuario (otra vez tras 032068bf);
+#   y la IA escribiendo en el perfil no da de baja los modelos (tras ad8ccdd8).
+supabase/staging/sql/20261122_i01_obligaciones_prueba.sql
+#   Pieza 4, certificados: la prueba aplica la 0130 (el almacén con el Vault)
+#   con \i y ROLLBACK: fuera de Foodint no se guarda; Foodint guarda (con una
+#   cuenta de su id creada solo dentro de la transacción); el token de un solo
+#   uso; «solo ver» no presenta; «quitar ahora» borra el secreto del Vault.
+#   (Otra vez tras 084986dc: la cuenta de prueba se crea sin persona en la sesión.)
+supabase/staging/sql/20261122_i01_certificados_prueba.sql
+#   Pieza 5, el 303: la prueba aplica la 0130 y la 0140 (el cálculo desde el
+#   libro de IVA, sus comprobaciones y lo que pide el fichero) con \i y
+#   ROLLBACK, contra el libro de verdad de la empresa A (3 apuntes del 4T):
+#   casillas, foto de lo declarado, la 472 que no casa, «de otro periodo»; lo
+#   que no sabe (recargo) sin fichero; [110] a mano; el 21 %; el fichero solo
+#   para service_role; presentada no se recalcula; el 1T de 2027 arrastra.
+supabase/staging/sql/20261122_i01_calculo_303_prueba.sql
+#   Pieza 6, presentar: la prueba aplica la 0130 a la 0150 con \i y ROLLBACK,
+#   contra el 4T de verdad de la empresa A y un certificado de mentira creado
+#   dentro: revisar (y dar por bueno un aviso con motivo), preparar solo con el
+#   token de esa persona para esa declaración, «Presentado» solo con su uso
+#   del certificado, el justificante en su carpeta y uno, «ya lo presenté
+#   fuera» sin comprobar, y las de servicio no se llaman como persona.
+supabase/staging/sql/20261122_i01_presentar_prueba.sql
+#   La vuelta atrás de la tanda de producción del I01a (0150 a 0100), con \i y
+#   ROLLBACK: hacia delante, atrás (no queda nada de la tanda y tax_forms de
+#   cada empresa sigue igual) y otra vez hacia delante.
+supabase/staging/sql/20261122_i01_vuelta_atras_prueba.sql
+
 # S01 · El esqueleto (rama conta/s01-esqueleto). VA PRIMERO: la prueba de corte
 # de la D01 (más abajo) para con los datos de staging (ux_party_role_canal) y
 # el workflow se detiene en el primer fallo.

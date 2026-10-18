@@ -1,16 +1,18 @@
-# Vuelta atrás de la tanda del S01 (modo «vuelta_atras»), en orden inverso.
-# ANTES, el front tiene que volver al de antes del S01: el del S01 lee lo que
-# esto quita. Cada fichero PARA, sin tocar nada, si ya hay algo que se perdería
-# (preferencias guardadas, un logo puesto, un eje cambiado por una persona, una
-# factura descartada); la 0140, la 0150 y la 0160 dejan las funciones byte a
-# byte como estaban en producción.
-# La anterior de este fichero (W02, sin vuelta atrás a propósito):
-# tests/conta/produccion/vuelta-atras-w02-secreto-despacho-20261017.txt.
-cuenta: scripts/conta/produccion/cuentas/s01-esqueleto.sql
-supabase/vuelta-atras/20261121T0160_s01_factura_descartada.down.sql
-supabase/vuelta-atras/20261121T0150_s01_recibidas_asiento_por_origen.down.sql
-supabase/vuelta-atras/20261121T0140_s01_regla5_eje_local.down.sql
-supabase/vuelta-atras/20261121T0130_s01_ejes_analiticos.down.sql
-supabase/vuelta-atras/20261121T0120_s01_logo_empresa.down.sql
-supabase/vuelta-atras/20261121T0110_s01_hosteleria_de_hoy.down.sql
-supabase/vuelta-atras/20261121T0100_s01_esqueleto.down.sql
+# Vuelta atrás de la tanda del I01a (modo «vuelta_atras»), en orden inverso.
+# ANTES, el front tiene que volver al de antes del I01a (el alta del I01a llama
+# a funciones que esto quita) y conta-certificado y conta-hacienda tienen que
+# dejar de estar desplegadas. Cada fichero PARA, sin tocar nada, si ya hay algo
+# que se perdería: declaraciones revisadas, presentadas o calculadas,
+# certificados guardados (su secreto quedaría en el Vault), respuestas del alta
+# o modelos decididos por una persona. company_tax_profile.tax_forms se queda
+# como está.
+# Ensayada en staging: supabase/staging/sql/20261122_i01_vuelta_atras_prueba.sql.
+# La anterior de este fichero (S01):
+# tests/conta/produccion/vuelta-atras-s01-esqueleto-20261017.txt.
+cuenta: scripts/conta/produccion/cuentas/i01a-impuestos.sql
+supabase/vuelta-atras/20261122T0150_i01_presentar.down.sql
+supabase/vuelta-atras/20261122T0140_i01_calculo_303.down.sql
+supabase/vuelta-atras/20261122T0130_i01_certificados.down.sql
+supabase/vuelta-atras/20261122T0120_i01_obligaciones.down.sql
+supabase/vuelta-atras/20261122T0110_i01_modelo_datos.down.sql
+supabase/vuelta-atras/20261122T0100_i01_plazos.down.sql

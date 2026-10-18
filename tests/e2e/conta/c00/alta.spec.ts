@@ -153,6 +153,26 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
     await expect(log(page).getByText(/^Apuntad[oa]\.$/)).toHaveCount(0)
     await hastaLasCuentas(page)
 
+    // I01a: las respuestas de impuestos quedan como datos de la empresa, del alta.
+    const datos = await rest<{ fact: string; value: unknown; origin: string }[]>(s, 'GET',
+      `company_tax_facts?account_id=eq.${CUENTA_C.id}&select=fact,value,origin&order=fact`)
+    expect(datos.datos).toEqual([
+      { fact: 'pays_with_withholding', value: true, origin: 'alta' },
+      { fact: 'rents_premises_with_withholding', value: false, origin: 'alta' },
+    ])
+    // Y los modelos salen de las reglas de la base, cada uno con la suya.
+    const modelos = await rest<{ form_code: string; rule_key: string }[]>(s, 'GET',
+      `tax_obligation?account_id=eq.${CUENTA_C.id}&valid_to=is.null&active=is.true&select=form_code,rule_key&order=form_code`)
+    expect(modelos.datos).toEqual([
+      { form_code: '111', rule_key: 'ret_111' },
+      { form_code: '190', rule_key: 'anual_de_111' },
+      { form_code: '200', rule_key: 'is_200' },
+      { form_code: '202', rule_key: 'is_202' },
+      { form_code: '303', rule_key: 'iva_303' },
+      { form_code: '347', rule_key: 'defecto_347' },
+      { form_code: '390', rule_key: 'anual_de_303' },
+    ])
+
     // N1b: 4 de 6, las cuentas preguntándose y el banco al final.
     await expect(carril.getByText('4 de 6')).toBeVisible()
     await expect(carril.getByText('Te lo estoy preguntando')).toBeVisible()
