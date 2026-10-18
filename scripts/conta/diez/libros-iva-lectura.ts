@@ -186,9 +186,11 @@ async function main() {
       const q = Math.floor(v / 10000) === 2026 ? trimestre(v) : 0
       porQ.set(q, (porQ.get(q) ?? 0) + cuotaFactura(f))
     }
-    const k = nombreCampo(campo)
-    sale(`recibidas.por_${k}.sin_fecha`, sinFecha)
-    for (const [q, cuota] of [...porQ].sort((a, b) => a[0] - b[0])) sale(`recibidas.por_${k}.${q === 0 ? 'otro_anio' : `${q}t`}.huella_cuotas`, huella(String(cuota)))
+    // Claves cortas: la puerta de salida no deja pasar más de 48 caracteres
+    // (run 39118625192: las de la fecha de introducción se quedaron fuera).
+    const k = ({ FechaIntroduccionFactura: 'f_intro', FechaFactura: 'f_factura', FechaOperacion: 'f_operacion' } as Record<string, string>)[campo]
+    sale(`recibidas.${k}.sin_fecha`, sinFecha)
+    for (const [q, cuota] of [...porQ].sort((a, b) => a[0] - b[0])) sale(`recibidas.${k}.${q === 0 ? 'otro_anio' : `${q}t`}.huella`, huella(String(cuota)))
   }
   if (process.env.SUMIED_JSON) cruzar(unicas, JSON.parse(readFileSync(process.env.SUMIED_JSON, 'utf8')) as AsientoSumied[])
   sale('peticiones', c.metrica.peticiones)
