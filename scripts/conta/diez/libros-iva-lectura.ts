@@ -36,6 +36,15 @@ const MESES = ['202601', '202602', '202603', '202604', '202605', '202606', '2026
 
 /** Lo que trae una página del listado de Diez ($top del cliente). */
 const PAGINA = 200
+/** El número de documento más alto que se pide al trocear un día (en 2026 Foodint va por el 3.100). */
+const DOCUMENTO_MAX = 9999
+const TRAMO = 150
+/** Los tramos [desde, hasta] de documento, de 1 a max, de n en n. */
+export function tramosDocumento(max: number, n: number): [number, number][] {
+  const out: [number, number][] = []
+  for (let a = 1; a <= max; a += n) out.push([a, Math.min(a + n - 1, max)])
+  return out
+}
 /** Los días AAAAMMDD de un mes AAAAMM a otro, ambos incluidos. */
 export function diasEntre(desde: string, hasta: string): number[] {
   const out: number[] = []
@@ -90,16 +99,27 @@ async function main() {
   // día cabe en una página (TAM_PAGINA): sin pasar de página, no se repite ni
   // se salta nada. Si un día llenara la página, se dice.
   const filas: Factura[] = []
-  let dias = 0, sinContestar = 0, diasLlenos = 0
+  let dias = 0, sinContestar = 0, diasLlenos = 0, tramosLlenos = 0
   for (const d of diasEntre(MESES[0], MESES[MESES.length - 1])) {
     try {
-      const del = await c.todas<Factura>(`/api/facturas?$filter=${encodeURIComponent(`Fecha ge ${d} and Fecha le ${d}`)}`)
-      if (del.length >= PAGINA) diasLlenos++
+      let del = await c.todas<Factura>(`/api/facturas?$filter=${encodeURIComponent(`Fecha ge ${d} and Fecha le ${d}`)}`)
+      if (del.length >= PAGINA) {
+        // Run 39117078574: un día del 3T llenó la página y repitió 134 en lugar
+        // de otras 134. Ese día se vuelve a pedir en tramos de documento, cada
+        // uno en una página.
+        diasLlenos++
+        del = []
+        for (const [a, b] of tramosDocumento(DOCUMENTO_MAX, TRAMO)) {
+          const t = await c.todas<Factura>(`/api/facturas?$filter=${encodeURIComponent(`Fecha ge ${d} and Fecha le ${d} and Documento ge ${a} and Documento le ${b}`)}`)
+          if (t.length >= PAGINA) tramosLlenos++
+          del.push(...t)
+        }
+      }
       filas.push(...del); dias++
     } catch { sinContestar++; sale(`dia_sin_contestar.${d}`, 1) }
   }
   seccion('lectura')
-  sale('dias_leidos', dias); sale('dias_sin_contestar', sinContestar); sale('dias_con_la_pagina_llena', diasLlenos); sale('filas', filas.length)
+  sale('dias_leidos', dias); sale('dias_sin_contestar', sinContestar); sale('dias_con_la_pagina_llena', diasLlenos); sale('tramos_de_documento_llenos', tramosLlenos); sale('filas', filas.length)
 
   // Repetidas en el listado: ¿la misma o distinta?
   const porClave = new Map<string, Factura[]>()

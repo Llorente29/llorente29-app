@@ -62,3 +62,14 @@ describe('libros de IVA de Diez · día a día', () => {
     expect(new Set(d).size).toBe(273)
   })
 })
+
+import { tramosDocumento } from '../../../scripts/conta/diez/libros-iva-lectura'
+describe('libros de IVA de Diez · un día lleno, en tramos de documento', () => {
+  it('cubre del 1 al máximo sin huecos ni solapes', () => {
+    const t = tramosDocumento(9999, 150)
+    expect(t[0]).toEqual([1, 150])
+    expect(t.at(-1)).toEqual([9901, 9999])
+    for (let i = 1; i < t.length; i++) expect(t[i][0]).toBe(t[i - 1][1] + 1)
+    expect(t.length).toBe(67)
+  })
+})
