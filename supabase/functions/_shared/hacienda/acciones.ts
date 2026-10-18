@@ -262,3 +262,21 @@ export async function yaPresentadoFuera(d: Dependencias, a: {
     mensaje: hecho.mensaje + (pdf.ok ? ' Justificante guardado.' : ' Hacienda no nos da el justificante desde aquí: súbelo en PDF.'),
   }
 }
+
+/**
+ * I01b · Después de «Presentado» (desde Sumied o fuera): el asiento de
+ * liquidación, con la sesión de la persona (journal_entry_validar pide un
+ * administrador o encargado de la empresa). Si no se puede, la presentación
+ * NO se deshace: queda «Presentado» y se dice por qué no se ha contabilizado,
+ * para que lo haga quien pueda desde la declaración.
+ */
+export async function contabilizarTrasPresentar(persona: ClienteBase, declaracion: string): Promise<{ ok: boolean; mensaje: string }> {
+  try {
+    const { data, error } = await persona.rpc('conta_impuesto_303_contabilizar', { p_return: declaracion })
+    if (error) return { ok: false, mensaje: `Queda «Presentado» sin contabilizar: ${error.message}` }
+    const m = (data as { mensaje?: unknown } | null)?.mensaje
+    return { ok: true, mensaje: typeof m === 'string' ? m : 'Contabilizado.' }
+  } catch {
+    return { ok: false, mensaje: 'Queda «Presentado» sin contabilizar: no se ha podido hablar con la base. Contabilízalo desde la declaración.' }
+  }
+}

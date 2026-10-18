@@ -103,7 +103,14 @@ select json_build_object(
     join public.company_account a on a.id = l.company_account_id
     left join public.tax_rate t on t.id = l.tax_rate_id
     cross join lateral (select case
-       when (a.template_code like '472%' or a.template_code like '477%') and l.tax_rate_id is null then 'apunte de IVA sin base, tipo ni libro'
+       -- I01b (0160): como en conta_motivos_para_validar, la liquidación de un 303
+       -- (o su contraasiento) salda la 477 y la 472 sin tipo ni libro.
+       when (a.template_code like '472%' or a.template_code like '477%') and l.tax_rate_id is null
+            and not exists (select 1 from public.journal_entry o
+                              join public.tax_return tr on tr.id = o.source_id and tr.company_id = o.company_id and tr.account_id = o.account_id
+                             where o.id = case when e.source_type = 'reversal' then e.reverses_entry_id else e.id end
+                               and o.company_id = e.company_id and o.source_type = 'vat_settlement' and tr.form_code = '303')
+         then 'apunte de IVA sin base, tipo ni libro'
        when l.tax_rate_id is not null and (l.tax_base is null or l.vat_book is null) then 'IVA sin base o sin libro registro'
        when l.tax_rate_id is not null and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > greatest(1, floor(l.tax_documents / 2.0)) / 100
          then format('cuota %s y base %s × %s %% = %s', l.debit + l.credit, l.tax_base, t.rate, round(l.tax_base * t.rate / 100, 2))

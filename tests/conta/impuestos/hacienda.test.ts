@@ -13,7 +13,7 @@ import { HaciendaDoble } from '../../../supabase/functions/_shared/hacienda/dobl
 import {
   CERRADA, comprobarPuerta, HaciendaCerrada, leerConsulta, leerPresentacion, PuertaCerrada, RespuestaRara,
 } from '../../../supabase/functions/_shared/hacienda/puerta'
-import { type Dependencias, presentar303, probar, yaPresentadoFuera } from '../../../supabase/functions/_shared/hacienda/acciones'
+import { contabilizarTrasPresentar, type Dependencias, presentar303, probar, yaPresentadoFuera } from '../../../supabase/functions/_shared/hacienda/acciones'
 
 const CUENTA = 'c0000000-0000-4000-8000-00000000000a'
 const DECL = 'd0000000-0000-4000-8000-0000000000d1'
@@ -320,5 +320,34 @@ describe('quién firma (FIRNIF, FIRNOMBRE)', () => {
     const e = entorno()
     e.d.almacen.abrir = () => Promise.reject(new AlmacenNoDeja('Esa confirmación ya se usó. Vuelve a pulsar y confirmar.', '42501'))
     expect(await probar(e.d, { usuario: 'u-1', confirmacion: CONF })).toEqual({ ok: false, motivo: 'no_deja', mensaje: 'Esa confirmación ya se usó. Vuelve a pulsar y confirmar.' })
+  })
+})
+
+describe('I01b · contabilizar después de presentar', () => {
+  const persona = (r: { data?: unknown; error?: { message: string } | null; lanza?: boolean }): ClienteBase & { llamadas: unknown[] } => {
+    const llamadas: unknown[] = []
+    return {
+      llamadas,
+      rpc(fn, params) {
+        llamadas.push([fn, params])
+        if (r.lanza) return Promise.reject(new Error('red'))
+        return Promise.resolve({ data: r.data ?? null, error: r.error ?? null })
+      },
+    }
+  }
+  it('llama a contabilizar con la declaración y devuelve su mensaje', async () => {
+    const p = persona({ data: { ok: true, mensaje: 'Contabilizado: asiento 4/12 del 30/09/2026, 477 contra 472 y 6.360,00 € a la 4750.' } })
+    const r = await contabilizarTrasPresentar(p, 'd-1')
+    expect(p.llamadas).toEqual([['conta_impuesto_303_contabilizar', { p_return: 'd-1' }]])
+    expect(r).toEqual({ ok: true, mensaje: 'Contabilizado: asiento 4/12 del 30/09/2026, 477 contra 472 y 6.360,00 € a la 4750.' })
+  })
+  it('si la base no deja, queda presentado y dice por qué', async () => {
+    const r = await contabilizarTrasPresentar(persona({ error: { message: 'El asiento de liquidación lo hace un administrador o un encargado de la empresa.' } }), 'd-1')
+    expect(r.ok).toBe(false)
+    expect(r.mensaje).toBe('Queda «Presentado» sin contabilizar: El asiento de liquidación lo hace un administrador o un encargado de la empresa.')
+  })
+  it('si la red falla, no lanza: lo dice', async () => {
+    const r = await contabilizarTrasPresentar(persona({ lanza: true }), 'd-1')
+    expect(r).toEqual({ ok: false, mensaje: 'Queda «Presentado» sin contabilizar: no se ha podido hablar con la base. Contabilízalo desde la declaración.' })
   })
 })

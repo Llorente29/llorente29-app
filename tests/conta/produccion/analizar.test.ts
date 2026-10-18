@@ -357,8 +357,11 @@ describe('la tanda del C04 R4 (ya aplicada: las cuatro en el historial de produc
     // C06b (#178): el agente del plan lee import_run, que la lectura de Diez (C04b) ya da a conta_lectura.
     const diez = readFileSync('supabase/migrations/20261019T0120_diez_lectura.sql', 'utf8')
     if (/grant select on table public\.import_run\b/.test(diez)) tablas.add('import_run')
+    // I01b (0160): el agente del libro lee tax_return (la liquidación del 303), que la 0110 del I01a ya da a conta_lectura.
+    const i01 = readFileSync('supabase/migrations/20261122T0110_i01_modelo_datos.sql', 'utf8')
+    if (/grant select on table [^;]*public\.tax_return,[^;]* to conta_lectura;/.test(i01)) tablas.add('tax_return')
     const funciones = new Set([...`${lectura}\n${cierre}`.matchAll(/grant execute on function public\.([a-z_]+)\(/g)].map((m) => m[1]))
-    expect(nombrados.size).toBe(43) // 42 + import_run (C06b, #178)
+    expect(nombrados.size).toBe(44) // 42 + import_run (C06b, #178) + tax_return (I01b)
     expect([...nombrados].filter((n) => !tablas.has(n) && !funciones.has(n))).toEqual([])
     expect([...tablas, ...funciones].filter((n) => !nombrados.has(n))).toEqual([])
   })

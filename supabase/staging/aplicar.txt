@@ -1,3 +1,17 @@
+# I01b · Las pantallas de Impuestos y el asiento del 303 (rama conta/i01b-pantallas-impuestos).
+#   Pieza 6, el asiento de liquidación: la prueba aplica la 0100 a la 0160 con
+#   \i y ROLLBACK (y la M01 y la 0140 del S01, si staging no las tiene),
+#   contra los 303 de 2026 de la empresa A: la validación sigue pidiendo tipo
+#   a los demás asientos; contabilizar (477 contra 472, el resultado a la 4750,
+#   validado, «Contabilizado», una sola vez, la cuenta B no); casar el cargo
+#   (un movimiento de prueba creado dentro) → «Pagado» y bank_match_item con
+#   su declaración; deshacer el casado y anular la liquidación devuelven la
+#   declaración; con el mes cerrado va al primer día abierto; y una [68] para.
+supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
+#   Su vuelta atrás: hacia delante, atrás (las tres huellas como antes y nada
+#   de la 0160) y otra vez hacia delante.
+supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
+
 # I01a · Impuestos por dentro (rama conta/i01a-impuestos-por-dentro).
 #   Pieza 1, plazos: la prueba aplica la 20261122T0100 (festivos del BOE 2026 y
 #   2027, reglas de plazo y conta_impuesto_plazo) y comprueba, como usuario, las

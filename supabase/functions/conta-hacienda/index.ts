@@ -29,7 +29,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { AlmacenVault } from "../_shared/certificados/almacen.ts";
 import { HaciendaDoble } from "../_shared/hacienda/doble.ts";
 import { comprobarPuerta, type Hacienda, HaciendaAeat, HaciendaCerrada, PuertaCerrada } from "../_shared/hacienda/puerta.ts";
-import { type Dependencias, presentar303, probar, type Salida, yaPresentadoFuera } from "../_shared/hacienda/acciones.ts";
+import { contabilizarTrasPresentar, type Dependencias, presentar303, probar, type Salida, yaPresentadoFuera } from "../_shared/hacienda/acciones.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -135,6 +135,12 @@ Deno.serve(async (req) => {
   } catch {
     console.log(JSON.stringify({ hacienda: accion, entorno: hacienda.entorno, resultado: "fallo" }));
     return json({ ok: false, motivo: "fallo", mensaje: "No se ha podido terminar. Mira el registro de la declaración antes de repetir." }, 500);
+  }
+  // I01b: presentada (aquí o fuera), el asiento de liquidación con la sesión de la persona.
+  // Si no sale, la presentación se queda como está y la pantalla dice por qué.
+  if (salida.ok && (accion === "presentar_303" || accion === "ya_presentado_fuera")) {
+    const contabilizado = await contabilizarTrasPresentar(comoPersona, String(cuerpo.declaracion));
+    salida = { ...salida, contabilizado, mensaje: `${salida.mensaje} ${contabilizado.mensaje}` };
   }
   console.log(JSON.stringify({ hacienda: accion, entorno: hacienda.entorno, resultado: salida.ok ? "ok" : salida.motivo }));
   return json(salida, salida.ok ? 200 : 422);
