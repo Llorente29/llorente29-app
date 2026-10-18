@@ -47,15 +47,17 @@ do $$
 declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v_e   constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
-  v_ej uuid; v_val uuid; v_bor uuid; v_otro uuid;
+  v_ej uuid; v_val uuid; v_bor uuid; v_otro uuid; v_num int;
 begin
   select fiscal_year_id into v_ej from public.journal_entry where company_id = v_e and fiscal_year_id is not null limit 1;
-  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, created_by_name)
-  values (v_acc, v_e, v_ej, 1, '2026-10-15', 'Factura expedida Prueba S01d', 'manual', 'validado', 'Prueba S01d') returning id into v_val;
+  -- Validado lleva número (journal_entry_numero_al_validar): uno libre, muy por encima de los de la semilla.
+  select coalesce(max(number), 0) + 1000 into v_num from public.journal_entry where company_id = v_e;
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, number, entry_date, concept, source_type, status, created_by_name)
+  values (v_acc, v_e, v_ej, 1, v_num, '2026-10-15', 'Factura expedida Prueba S01d', 'manual', 'validado', 'Prueba S01d') returning id into v_val;
   insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, created_by_name)
   values (v_acc, v_e, v_ej, 1, '2026-10-16', 'Factura expedida Prueba S01d (borrador)', 'manual', 'borrador', 'Prueba S01d') returning id into v_bor;
-  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, created_by_name)
-  values (v_acc, v_e, v_ej, 3, '2026-10-16', 'Cobro Prueba S01d', 'manual', 'validado', 'Prueba S01d') returning id into v_otro;
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, number, entry_date, concept, source_type, status, created_by_name)
+  values (v_acc, v_e, v_ej, 3, v_num + 1, '2026-10-16', 'Cobro Prueba S01d', 'manual', 'validado', 'Prueba S01d') returning id into v_otro;
   perform set_config('prueba.val', v_val::text, true);
   perform set_config('prueba.bor', v_bor::text, true);
   perform set_config('prueba.otro', v_otro::text, true);

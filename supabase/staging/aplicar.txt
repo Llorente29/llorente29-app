@@ -3,12 +3,11 @@
 #   'factura_expedida' y conta_documento_expedida_guardar) y la 0170
 #   (bank_cuenta_nueva) se aplican DE VERDAD: solo amplían un CHECK y añaden
 #   dos funciones, y el front nuevo (el PDF de la expedida, el banco nuevo) las
-#   necesita para su e2e. Después, sus dos pruebas, con \i dentro de su
-#   transacción y ROLLBACK: como usuario de A y de B, y la vuelta atrás de
-#   verdad (y otra vez delante). Van las primeras: lo de abajo es de otros
-#   frentes y no se toca.
-supabase/migrations/20261122T0160_s01d_documento_expedida.sql
-supabase/migrations/20261122T0170_s01d_banco_nuevo.sql
+#   necesita para su e2e. Ya están aplicadas (run 334, 18/10 09:49: las dos
+#   OK) y no se vuelven a pasar (create function no se repite). Quedan sus dos
+#   pruebas, con \i dentro de su transacción y ROLLBACK: como usuario de A y
+#   de B, y la vuelta atrás de verdad (y otra vez delante). Van las primeras:
+#   lo de abajo es de otros frentes y no se toca.
 supabase/staging/sql/20261122_s01d_documento_expedida_prueba.sql
 supabase/staging/sql/20261122_s01d_banco_nuevo_prueba.sql
 #
