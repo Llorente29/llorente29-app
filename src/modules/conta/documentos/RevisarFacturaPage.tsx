@@ -51,6 +51,7 @@ import {
 import { useAnalitica, useNivel } from '@/modules/conta/marco/nuevo/contexto'
 import { PorNivel } from '@/modules/conta/textos/PorNivel'
 import { useTexto } from '@/modules/conta/textos/useTexto'
+import { apoyoProveedor, comprobacionesSinContradecir, cuentaDeSusFacturas, textoSinPapel } from '@/modules/conta/documentos/RevisarFacturaPage.textos'
 
 const fecha = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—')
 /** R5 · 4: lo más que ocupa el papel en el móvil antes de tocarlo. */
@@ -87,7 +88,8 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   const ir = (id: string, aviso?: string) => navegar(enAsientos ? `${rutaRecibidaEnAsientos(id)}?ver=${ver}` : `${rutaRevisarFactura(id)}?ver=${ver}&mes=${mes ?? ''}`, aviso ? { state: { aviso } } : undefined)
 
   // La clave lleva la ruta: sin ella no se vuelve a leer cuando llega la factura (y se quedaba sin papel).
-  const papel = useLeer(fac ? () => urlDelPapel(fac) : null, `${invoiceId}:papel:${fac?.llegada?.ruta ?? fac?.papel ?? ''}`)
+  // S01e: envuelto, para distinguir «aún leyendo» (null) de «no hay fichero» ({ url: null }).
+  const papel = useLeer(fac ? async () => ({ url: await urlDelPapel(fac) }) : null, `${invoiceId}:papel:${fac?.llegada?.ruta ?? fac?.papel ?? ''}`)
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo:${vuelta}`)
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!) : null,
     `${invoiceId}:${fac?.estado}:${fac?.proveedor?.id}:${vuelta}`)
@@ -167,6 +169,8 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   const sinProveedor = !prov
   const lectura = fac.lectura
   const avisos = (lectura?.comprobaciones ?? []).filter((c) => !c.ok)
+  // S01e: el NIF que trae la factura (lo leído o lo propuesto), aparte del de su ficha.
+  const nifDeLaFactura = lectura?.factura?.proveedor?.nif ?? fac.propuesto?.nif ?? null
   const vence = vencimientoAEnsenar(fac.vence, fac.fecha, plazo.datos ?? null)
 
   const navegacion = ids.length > 1 && pos >= 0 && (
@@ -179,7 +183,7 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   const sePuedeApuntar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha
   const botonApuntar = !yaApuntada && (enAsientos
     ? <button type="button" className="cx-boton" onClick={() => void apuntar(true)} disabled={!sePuedeApuntar} aria-keyshortcuts="Enter" data-validar-y-siguiente="">
-        {apuntando ? 'Validando…' : <><PorNivel clave="recibida.validarYSiguiente" /> <span aria-hidden="true">⏎</span></>}
+        {apuntando ? 'Validando…' : <><PorNivel clave="recibida.validarYSiguiente" />{!movil && <> <span aria-hidden="true">⏎</span></>}</>}
       </button>
     : <button type="button" className="cx-boton" onClick={() => void apuntar()} disabled={apuntando || sinProveedor || !fac.fecha}>
         {apuntando ? 'Apuntando…' : <PorNivel clave="recibida.apuntar" />}
@@ -222,7 +226,7 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
       )}
 
       <div className="cxr-revisar">
-        <Papel fac={fac} url={papel.datos ?? null} error={papel.error} solo={producto.solo} movil={movil} />
+        <Papel fac={fac} url={papel.datos?.url ?? null} leyendo={!papel.datos && !papel.error} error={papel.error} solo={producto.solo} movil={movil} />
 
         <div className="cxr-lado">
           <BandaFactura fac={fac} />
@@ -238,7 +242,7 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
             </div>
             <div className="cxr-leido">
               <Leido etiqueta="Proveedor" valor={prov?.nombre ?? fac.propuesto?.nombre ?? 'No lo reconozco'}
-                apoyo={prov ? `${prov.nif ? `NIF ${prov.nif}` : 'sin NIF'} · ficha ✓` : `${fac.propuesto?.nif ? `NIF ${fac.propuesto.nif} · ` : ''}no está en tus proveedores`} />
+                apoyo={prov ? apoyoProveedor(prov.nif, nifDeLaFactura) : `${nifDeLaFactura ? `NIF ${nifDeLaFactura} · ` : ''}no está en tus proveedores`} />
               <Leido etiqueta="Factura" valor={`${fac.numero ?? 'sin número'} · ${fecha(fac.fecha)}`} apoyo={fac.no_repetida ? 'no está repetida (lo confirmaste)' : 'no hay otra con su número y su total'} />
               {fac.tipos.map((t) => <Leido key={`b${t.tipo}`} etiqueta={`Base al ${porcentaje(t.tipo)}`} valor={euro(t.base)} />)}
               {fac.tipos.map((t) => <Leido key={`c${t.tipo}`} etiqueta={`IVA ${porcentaje(t.tipo)}`} valor={euro(t.cuota)} />)}
@@ -250,13 +254,12 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
               <Leido etiqueta="Total" valor={euro(fac.total)} apoyo={avisos.some((a) => a.id === 'total' || a.id === 'suma') ? 'no cuadra con sus bases' : 'cuadra con sus bases'} aviso={avisos.some((a) => a.id === 'total' || a.id === 'suma')} />
               {ejeLocal && fac.recepcion && <Leido etiqueta={ejeLocal.nombre} valor={fac.recepcion.local ?? '—'} apoyo={`de la recepción del ${fecha(fac.recepcion.fecha).slice(0, 5)}`} />}
               <Leido etiqueta="Vence" valor={vence.valor} apoyo={vence.apoyo} aviso={vence.aviso} />
-              {prov && <Leido etiqueta="Sus facturas se apuntan en" valor={prov.gasto ? `${prov.gasto.nombre} · ${prov.gasto.cuenta}` : 'sin decidir'}
-                apoyo={prov.gasto?.origen ?? 'aún no hay nada aprendido'} />}
+              {prov && <Leido etiqueta="Cuenta de sus facturas" {...cuentaDeSusFacturas(prov.gasto)} />}
               {prov?.facturacion && <Leido etiqueta="Facturación" valor={prov.facturacion.nombre} apoyo={prov.facturacion.email} />}
             </div>
           </section>
 
-          <Comprobado fac={fac} />
+          <Comprobado fac={fac} hayNif={!!(prov?.nif || nifDeLaFactura)} />
 
           {sinProveedor && <DecirProveedor accountId={accountId} invoiceId={fac.id} alGuardar={() => setVuelta((v) => v + 1)} />}
 
@@ -334,8 +337,8 @@ function NoEsFactura({ alCerrar, alDescartar, fallo }: { alCerrar: () => void; a
  * ✓ lo que cuadra y en ámbar lo que no (no se esconde: regla 7). Verde si todo
  * cuadra. Sin lectura del papel (hecha a mano), lo dice.
  */
-function Comprobado({ fac }: { fac: FacturaRevisar }) {
-  const com = fac.lectura?.comprobaciones ?? []
+function Comprobado({ fac, hayNif }: { fac: FacturaRevisar; hayNif: boolean }) {
+  const com = comprobacionesSinContradecir(fac.lectura?.comprobaciones ?? [], hayNif)
   const todo = com.length > 0 && com.every((c) => c.ok)
   const lineas = [
     ...com.map((c) => ({ id: c.id, ok: c.ok, texto: c.texto })),
@@ -361,7 +364,7 @@ function Leido({ etiqueta, valor, apoyo, aviso }: { etiqueta: string; valor: str
   )
 }
 
-function Papel({ fac, url, error, solo, movil }: { fac: FacturaRevisar; url: string | null; error: string | null; solo: boolean; movil: boolean }) {
+function Papel({ fac, url, leyendo, error, solo, movil }: { fac: FacturaRevisar; url: string | null; leyendo: boolean; error: string | null; solo: boolean; movil: boolean }) {
   const l = fac.llegada
   const esFoto = /^image\//.test(l?.tipo ?? '') || /\.(jpe?g|png|webp)$/i.test(l?.archivo ?? fac.papel ?? '')
   // R5 · 4: en el móvil, recortado a lo escrito (como mucho 280 px) y entero al tocarlo.
@@ -378,8 +381,11 @@ function Papel({ fac, url, error, solo, movil }: { fac: FacturaRevisar; url: str
         {url && <a href={url} target="_blank" rel="noopener noreferrer" className="cx-enlace">Abrir</a>}
       </div>
       <div className="cxr-papel-hoja">
-        {error && <p className="cx-error">No se ha podido abrir el papel: {error}</p>}
-        {!error && !url && <p className="cx-ayuda">{sinPapel ? 'Sin papel: apuntada a mano.' : 'Esta factura no tiene papel guardado.'}</p>}
+        {/* S01e: una sola cosa: si se sabe su nombre y no está el fichero, se dice así (no «no tiene papel» bajo su nombre). */}
+        {leyendo && !sinPapel && <Hueso alto={120} />}
+        {error && <p className="cx-error">{textoSinPapel({ archivo: l?.archivo ?? null, aMano: false, error })}</p>}
+        {!error && !url && !leyendo && <p className="cx-ayuda">{textoSinPapel({ archivo: l?.archivo ?? null, aMano: sinPapel, error: null })}</p>}
+        {!error && !url && leyendo && sinPapel && <p className="cx-ayuda">{textoSinPapel({ archivo: null, aMano: true, error: null })}</p>}
         {url && (
           // Tocar el papel también lo abre o lo recoge (el botón de debajo es lo mismo, para el teclado y el lector).
           <div className={`cxr-papel-recorte${recorte !== null ? ' cxr-papel-recortado' : ''}`} style={recorte !== null ? { maxHeight: recorte } : undefined}

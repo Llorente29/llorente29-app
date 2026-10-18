@@ -10,7 +10,7 @@
 import { test, type Page } from '@playwright/test'
 import { CUENTA_A, CUENTA_B, entrarComo } from '../sesion'
 
-const FASE = 'antes'
+const FASE = 'despues'
 const DIR = 'docs/conta/capturas/s01e'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 

@@ -140,13 +140,14 @@ export interface LineaIva { etiqueta: string; importe: string; nota?: string }
  * hay en el libro, y la nota dice por qué. Lo de abajo es siempre la cifra
  * de la tarjeta (ventas − compras).
  */
-export function lineasIva(repercutido: number, soportado: number, formato: (n: number) => string): LineaIva[] {
+export function lineasIva(repercutido: number, soportado: number, formato: (n: number) => string, impuesto = 'IVA'): LineaIva[] {
+  // S01e: `impuesto` es IVA, IGIC (Canarias) o IPSI (lib/impuestoIndirecto).
   const resultado = Math.round((repercutido - soportado) * 100) / 100
   return [
-    { etiqueta: 'IVA de tus ventas', importe: formato(repercutido) },
+    { etiqueta: `${impuesto} de tus ventas`, importe: formato(repercutido) },
     soportado < 0
-      ? { etiqueta: 'IVA de tus compras', importe: formato(soportado), nota: '(más abonos que facturas)' }
-      : { etiqueta: 'IVA de tus compras', importe: formato(soportado) },
+      ? { etiqueta: `${impuesto} de tus compras`, importe: formato(soportado), nota: '(más abonos que facturas)' }
+      : { etiqueta: `${impuesto} de tus compras`, importe: formato(soportado) },
     { etiqueta: resultado < 0 ? 'A devolver' : 'A pagar', importe: formato(Math.abs(resultado)) },
   ]
 }

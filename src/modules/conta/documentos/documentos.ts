@@ -236,7 +236,8 @@ export const diaMes = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.
 export interface EntradaBarra { id: string; nombre: string; dato: string; tono: 'verde' | 'ambar' | 'gris' }
 export function barra(d: DatosDocumentos, o: { solo: boolean; producto: string | null }): { etiqueta: string; entradas: EntradaBarra[] }[] {
   const c = d.cifras
-  const traer: EntradaBarra[] = [{ id: 'subir', nombre: 'Subir', dato: 'PDF · foto · varios', tono: 'verde' }]
+  // S01e: «Subir varias a la vez» (en lote), para no confundirlo con «Subir una factura» de Por revisar.
+  const traer: EntradaBarra[] = [{ id: 'subir', nombre: 'Subir varias a la vez', dato: 'PDF o foto', tono: 'verde' }]
   if (d.correo.activo && d.correo.direccion) traer.push({ id: 'correo', nombre: 'Por correo', dato: d.correo.direccion.replace(/@.*/, '@…'), tono: 'verde' })
   if (d.recibe_mercancia && !o.solo) traer.push({ id: 'cocina', nombre: 'De Cocina', dato: 'recepciones', tono: 'verde' })
   const esperadas: EntradaBarra[] = [{
@@ -245,7 +246,7 @@ export function barra(d: DatosDocumentos, o: { solo: boolean; producto: string |
     tono: c.esperadas_no_llegadas ? 'ambar' : 'gris',
   }]
   const leidas: EntradaBarra[] = [{ id: 'hecho', nombre: textos(o.producto).hecho, dato: `${plural(c.apuntadas_solas, 'apuntada sola', 'apuntadas solas')}`, tono: c.apuntadas_solas ? 'verde' : 'gris' }]
-  return [{ etiqueta: 'Traer', entradas: traer }, { etiqueta: 'Esperadas', entradas: esperadas }, { etiqueta: 'Leídas', entradas: leidas }]
+  return [{ etiqueta: 'Cómo llegan', entradas: traer }, { etiqueta: 'Las que faltan', entradas: esperadas }, { etiqueta: 'Apuntadas solas', entradas: leidas }]
 }
 
 /** Lo que cambia con el producto: con nombre («Folvy») o, vendido solo, en primera persona y sin él. */
@@ -315,7 +316,7 @@ export function vencimientoAEnsenar(vence: string | null, fecha: string | null, 
  * (Cegid aún no ha activado su almacén): no se promete que irá «con su PDF».
  */
 export const lineaDiez = (solo = false): string =>
-  `Se apunta ${solo ? 'aquí' : `en ${MARCA.nombre}`} · a Diez irá cuando Cegid active los documentos`
+  `Se apunta ${solo ? 'aquí' : `en ${MARCA.nombre}`} · a Diez irá sin el PDF, porque Diez aún no guarda documentos`
 
 /** R5 · 5 · El tono de la banda de N23: verde solo si ya está apuntada; si no, ámbar, como su fila en la bandeja. */
 export const tonoDeLaFactura = (asiento: { estado: string } | null): 'verde' | 'ambar' => (asiento?.estado === 'validado' ? 'verde' : 'ambar')

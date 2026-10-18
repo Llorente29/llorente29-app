@@ -48,7 +48,10 @@ test('A · el asiento de ventas del día dice sus no confirmados, y «Ver» los 
 test('A · el libro dice cuándo se cierra hoy, como información', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')
-  const nota = page.getByRole('note').filter({ hasText: 'Hoy se cierra mañana a las 2:00. Sus ventas se proponen entonces.' })
+  const nota = page.getByRole('note').filter({ hasText: /el de hoy|El día de hoy/ })
+  // Con fechas, en la hora de Madrid: «El día de hoy (18/10) se cierra a las 2:00 del 19/10…» (S01e).
+  await expect(nota).toHaveText(/de hoy \(\d\d\/\d\d\) se cierra a las 2:00 del \d\d\/\d\d\. Sus ventas se proponen (entonces|al cerrarse)\./)
+  await expect(nota).not.toHaveText(/Hoy se cierra mañana/)
   await expect(nota).toBeVisible()
   // Información, no aviso: no es ámbar ni una alerta.
   await expect(nota).not.toHaveClass(/ambar|franja/)

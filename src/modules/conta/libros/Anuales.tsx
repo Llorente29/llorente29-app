@@ -25,7 +25,7 @@ import {
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import type { EjercicioLibros } from '@/modules/conta/services/librosService'
 import {
-  aSaldoCuenta, cambiarMapeo, elegirModelo, historialMapeo, leerLineas, leerMapeo, planDeEmpresa, saldosCuentas, volverAlEstandar,
+  aSaldoCuenta, cambiarMapeo, elegirModelo, historialMapeo, leerLineas, leerMapeo, nombresPgc, planDeEmpresa, saldosCuentas, volverAlEstandar,
 } from '@/modules/conta/services/librosService'
 import { MARCA } from '../cuenta/marca'
 
@@ -98,7 +98,7 @@ export function CuentasAnuales() {
                 <tr><td>Plantilla media</td><td className="cxl-der" data-titulo={L.ejercicio.code}>{d.datos.actual.plantillaMedia}</td>{d.datos.anterior && <td className="cxl-der" data-titulo={L.anterior?.code}>{d.datos.anterior.plantillaMedia}</td>}<td className="cxl-der" data-titulo="Abreviado / pymes">50</td><td className="cxl-der" data-titulo="PyG abreviada">250</td></tr>
               </tbody>
             </table>
-            <p className="cxl-pie">LSC art. 257.1 (balance y ECPN abreviados, y RD 1515/2007 art. 2.1 para pymes) y art. 258.1 (PyG abreviada). Hace falta cumplir dos de los tres límites dos ejercicios seguidos; en el primero, basta ese. Las cifras son las de hoy: al cierre se recalculan. {L.ejercicio.plantillaMedia === 0 && <>La plantilla media está a 0: ponla en <Link to={rutaLibros('cierre', 'ejercicios')}>Ejercicios</Link>.</>}</p>
+            <p className="cxl-pie">LSC art. 257.1 (balance y ECPN abreviados, y RD 1515/2007 art. 2.1 para pymes) y art. 258.1 (PyG abreviada). {d.datos.anterior ? `Hace falta cumplir dos de los tres límites dos ejercicios seguidos: se miran ${L.ejercicio.code} y ${L.anterior!.code}.` : 'Hace falta cumplir dos de los tres límites dos ejercicios seguidos; como no hay un ejercicio anterior con el que comparar, basta este.'} Las cifras son las de hoy: al cierre se recalculan. {L.ejercicio.plantillaMedia === 0 && <>La plantilla media está a 0: ponla en <Link to={rutaLibros('cierre', 'ejercicios')}>Ejercicios</Link>.</>}</p>
           </div>
           <div className="cx-tarjeta">
             <h3 className="cxl-subtitulo">Modelo de {L.ejercicio.code}{elegido ? `: ${NOMBRE_MODELO[elegido].toLowerCase()}` : ' (sin elegir: se usa el propuesto)'}</h3>
@@ -120,7 +120,8 @@ export function CuentasAnuales() {
               <li><Link to={rutaLibros('balances', 'pyg')}>Pérdidas y ganancias</Link>{prop.pygAbreviada && prop.modelo === 'normal' ? ' (puede ser abreviada)' : ''}</li>
               <li><Link to={rutaLibros('balances', 'ecpn')}>Cambios en el patrimonio neto</Link></li>
               <li><Link to={rutaLibros('anuales', 'mapeo')}>Qué cuentas alimentan cada línea</Link></li>
-              <li>Memoria: próximamente.</li>
+              {/* S01e: lo que hay y lo que no, sin prometer fechas. */}
+              <li>Memoria: aún no se prepara aquí. Lo que ya está apuntado para ella (como «Otros resultados») sale en la barra de cada estado; el texto lo redacta tu asesoría.</li>
             </ul>
           </div>
         </>
@@ -131,7 +132,12 @@ export function CuentasAnuales() {
 
 // ── Mapeo ───────────────────────────────────────────────────────────────────
 
-type Accion = { tipo: 'cambiar' | 'fuera'; prefijo: string; porSigno: 'deudor' | 'acreedor' | null; desde: string | null } | null
+// S01e: una sola acción por cuenta. El diálogo ofrece cambiarla de línea,
+// dejarla fuera o (si el cambio es tuyo) volver al estándar: antes cada píldora
+// repetía «cambiar · dejar fuera» y el código iba sin nombre.
+type Accion = { prefijo: string; nombre: string | null; porSigno: 'deudor' | 'acreedor' | null; desde: string | null; propio: boolean } | null
+const FUERA = '__fuera'
+const textoSigno = (s: 'deudor' | 'acreedor' | null) => (s === 'deudor' ? 'si su saldo es deudor' : s === 'acreedor' ? 'si su saldo es acreedor' : null)
 
 export function Mapeo() {
   const L = useLibros()
@@ -143,7 +149,9 @@ export function Mapeo() {
     const plan = await planDeEmpresa(L.accountId, L.companyId)
     const modelo: Modelo = L.ejercicio.modelo?.elegido ?? (plan === 'pymes' ? 'pymes' : 'abreviado')
     const [lineas, mapeo, saldos] = await Promise.all([leerLineas(modelo, estado), leerMapeo(L.companyId, modelo, estado), saldosCuentas(L.companyId, L.ejercicio.inicio, L.ejercicio.fin)])
-    return { modelo, lineas, mapeo, saldos }
+    // El nombre de cada código del mapeo, del cuadro de cuentas (si no se puede leer, el código va solo).
+    const nombres = await nombresPgc(plan, [...mapeo.serie, ...mapeo.propio].map((m) => m.prefix)).catch(() => new Map<string, string>())
+    return { modelo, lineas, mapeo, saldos, nombres }
   }, `${L.companyId}:${L.ejercicio.id}:${estado}:${L.vuelta}`)
   const h = useLeer(verHistorial ? () => historialMapeo(L.accountId, L.companyId) : null, `${L.companyId}:${verHistorial}:${L.vuelta}`)
 
@@ -157,12 +165,15 @@ export function Mapeo() {
     return { r, porLinea, fuera, propios: new Set(d.datos.mapeo.propio.map((m) => `${m.prefix}|${m.byBalance ?? ''}`)) }
   }, [d.datos, estado])
   const textoLinea = (code: string | null) => (code ? d.datos?.lineas.find((l) => l.code === code)?.text ?? code : 'fuera del modelo')
+  /** «624 · Transportes»: el código con su nombre del cuadro de cuentas, o de la cuenta de la empresa. */
+  const nombreDe = (prefijo: string | null): string | null => (prefijo ? d.datos?.nombres.get(prefijo) ?? d.datos?.saldos.find((x) => x.code === prefijo)?.name ?? null : null)
+  const conNombre = (prefijo: string | null) => (prefijo ? `${prefijo}${nombreDe(prefijo) ? ` · ${nombreDe(prefijo)}` : ''}` : 'todas')
 
   async function alEstandar(prefijo: string | null) {
     if (!d.datos) return
     try {
       const r = await volverAlEstandar(L.companyId, d.datos.modelo, estado, prefijo)
-      setHecho(r.vueltas ? (prefijo ? `La ${prefijo} vuelve a su línea de serie (${r.quien}).` : `${r.vueltas} cambios tuyos deshechos: todo vuelve al estándar (${r.quien}).`) : 'No había nada que deshacer: ya estaba como el estándar.')
+      setHecho(r.vueltas ? (prefijo ? `La ${conNombre(prefijo)} vuelve a su línea de serie (${r.quien}).` : `${r.vueltas} cambios tuyos deshechos: todo vuelve al estándar (${r.quien}).`) : 'No había nada que deshacer: ya estaba como el estándar.')
       L.recargar()
     } catch (e) { setHecho(e instanceof Error ? e.message : 'No se ha podido.') }
   }
@@ -182,7 +193,7 @@ export function Mapeo() {
         </div>
       </div>
       <Guardado texto={hecho} />
-      {d.datos && <p className="cxl-apoyo">Modelo {NOMBRE_MODELO[d.datos.modelo].toLowerCase()}. De serie, cada cuenta va donde dice el PGC (texto consolidado del BOE). Un cambio tuyo vale para esta empresa y queda en el historial.</p>}
+      {d.datos && <p className="cxl-apoyo">Modelo {NOMBRE_MODELO[d.datos.modelo].toLowerCase()}. De serie, cada cuenta va donde dice el Plan General de Contabilidad. Toca una cuenta para cambiarla de línea, dejarla fuera o devolverla a su sitio de serie: un cambio tuyo vale para esta empresa y queda en el historial.</p>}
 
       {verHistorial && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
@@ -193,7 +204,7 @@ export function Mapeo() {
           {h.datos && h.datos.length > 0 && (
             <table className="cxl-tabla cxl-apilada" aria-label="Historial del mapeo">
               <thead><tr><th>Cuándo</th><th>Quién</th><th>Cuenta</th><th>Qué</th><th>Motivo</th></tr></thead>
-              <tbody>{h.datos.map((x, i) => <tr key={i}><td>{ddmm(x.cuando.slice(0, 10))}</td><td data-titulo="Quién">{x.quien ?? '—'}</td><td data-titulo="Cuenta">{x.prefijo ?? 'todas'}</td>
+              <tbody>{h.datos.map((x, i) => <tr key={i}><td>{ddmm(x.cuando.slice(0, 10))}</td><td data-titulo="Quién">{x.quien ?? '—'}</td><td data-titulo="Cuenta">{conNombre(x.prefijo)}</td>
                 <td data-titulo="Qué">{x.accion === 'estandar' ? `vuelve al estándar (estaba en ${x.de ?? '—'})` : x.accion === 'deja_fuera' ? `fuera del modelo (estaba en ${x.de ?? '—'})` : `de ${x.de ?? '—'} a ${x.a}`} · {x.estado} {x.modelo}</td><td data-titulo="Motivo">{x.motivo ?? ''}</td></tr>)}</tbody>
             </table>
           )}
@@ -206,12 +217,12 @@ export function Mapeo() {
           <h3 className="cxl-subtitulo">Por revisar</h3>
           <ul className="cxl-lista-estado">
             {calc.r.sinSitio.map((s) => (
-              <li key={s.code}><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /> <Link to={rutaMayor(s.code)}>{s.code} {s.name}</Link> · {eurosExactos(s.saldo)} · <strong>sin sitio en el modelo</strong>
-                {' '}<button type="button" className="cx-enlace" onClick={() => setAccion({ tipo: 'cambiar', prefijo: s.templateCode ?? s.code, porSigno: null, desde: null })}>Colocar</button></li>
+              <li key={s.code}><span><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /> <Link to={rutaMayor(s.code)}>{s.code} {s.name}</Link> · {eurosExactos(s.saldo)} · <strong>sin sitio en el modelo</strong></span>
+                <button type="button" className="cx-boton-sec" onClick={() => setAccion({ prefijo: s.templateCode ?? s.code, nombre: nombreDe(s.templateCode ?? s.code) ?? s.name, porSigno: null, desde: null, propio: false })}>Colocar</button></li>
             ))}
             {calc.r.porDefecto.map((c) => (
-              <li key={c.code}><span className="cxl-punto cxl-punto-ambar" aria-hidden="true" /> <Link to={rutaMayor(c.code)}>{c.code} {c.name}</Link> · {eurosExactos(c.importe)} · colocada por defecto
-                {' '}<button type="button" className="cx-enlace" onClick={() => setAccion({ tipo: 'cambiar', prefijo: c.templateCode ?? c.code, porSigno: null, desde: null })}>Completar</button></li>
+              <li key={c.code}><span><span className="cxl-punto cxl-punto-ambar" aria-hidden="true" /> <Link to={rutaMayor(c.code)}>{c.code} {c.name}</Link> · {eurosExactos(c.importe)} · colocada por defecto</span>
+                <button type="button" className="cx-boton-sec" onClick={() => setAccion({ prefijo: c.templateCode ?? c.code, nombre: nombreDe(c.templateCode ?? c.code) ?? c.name, porSigno: null, desde: null, propio: false })}>Completar</button></li>
             ))}
           </ul>
         </div>
@@ -219,7 +230,7 @@ export function Mapeo() {
       {calc && calc.fuera.length > 0 && (
         <div className="cx-tarjeta">
           <h3 className="cxl-subtitulo">Fuera del modelo (por decisión tuya)</h3>
-          <ul>{calc.fuera.map((m) => <li key={`${m.prefix}${m.byBalance ?? ''}`}>{m.prefix}{m.byBalance ? ` (saldo ${m.byBalance})` : ''}{m.note ? ` · ${m.note}` : ''} <button type="button" className="cx-enlace" onClick={() => void alEstandar(m.prefix)}>Volver al estándar</button></li>)}</ul>
+          <ul>{calc.fuera.map((m) => <li key={`${m.prefix}${m.byBalance ?? ''}`}>{conNombre(m.prefix)}{m.byBalance ? ` (${textoSigno(m.byBalance)})` : ''}{m.note ? ` · ${m.note}` : ''} <button type="button" className="cx-enlace" onClick={() => void alEstandar(m.prefix)}>Volver al estándar</button></li>)}</ul>
           <p className="cxl-pie">Una cuenta fuera con saldo deja de salir en los estados: el agente lo vigila cada noche.</p>
         </div>
       )}
@@ -233,17 +244,23 @@ export function Mapeo() {
                 return (
                   <tr key={l.code} title={l.legalRef}>
                     <td className={`cxl-n${Math.min(l.level, 4)}`}>{l.text}{l.toCreate && <> <Chip tono="ambar">a crear</Chip></>}</td>
-                    <td>{ms.map((m) => {
+                    <td>{ms.length > 0 && <ul className="cxl-mapeo-cuentas">{ms.map((m) => {
                       const propio = calc.propios.has(`${m.prefix}|${m.byBalance ?? ''}`)
+                      const nombre = nombreDe(m.prefix)
+                      const signo = textoSigno(m.byBalance)
                       return (
-                        <span key={`${m.prefix}${m.byBalance ?? ''}`} className="cx-pildora cxl-mapeo-cuenta">
-                          {m.sign === 'resta' ? '−' : ''}{m.prefix}{m.byBalance ? (m.byBalance === 'deudor' ? ' (D)' : ' (H)') : ''}{propio ? ' · tuyo' : m.origin === 'defecto' ? ' · por defecto' : ''}
-                          {' '}<button type="button" className="cx-enlace" aria-label={`Cambiar la ${m.prefix} de línea`} onClick={() => setAccion({ tipo: 'cambiar', prefijo: m.prefix, porSigno: m.byBalance, desde: l.code })}>cambiar</button>
-                          {' '}<button type="button" className="cx-enlace" aria-label={`Dejar fuera la ${m.prefix}`} onClick={() => setAccion({ tipo: 'fuera', prefijo: m.prefix, porSigno: m.byBalance, desde: l.code })}>dejar fuera</button>
-                          {propio && <>{' '}<button type="button" className="cx-enlace" onClick={() => void alEstandar(m.prefix)}>estándar</button></>}
-                        </span>
+                        <li key={`${m.prefix}${m.byBalance ?? ''}`}>
+                          <button type="button" className="cxl-mapeo-cuenta" aria-label={`Cambiar la ${m.prefix}${nombre ? ` (${nombre})` : ''}`}
+                            onClick={() => setAccion({ prefijo: m.prefix, nombre, porSigno: m.byBalance, desde: l.code, propio })}>
+                            <span className="cxl-mapeo-codigo">{m.sign === 'resta' ? '−' : ''}{m.prefix}</span>
+                            {nombre && <span>{nombre}</span>}
+                            {signo && <span className="cxl-mapeo-marca">{signo}</span>}
+                            {m.sign === 'resta' && <span className="cxl-mapeo-marca">resta</span>}
+                            {propio ? <span className="cxl-mapeo-marca">· tuyo</span> : m.origin === 'defecto' ? <span className="cxl-mapeo-marca">· por defecto</span> : null}
+                          </button>
+                        </li>
                       )
-                    })}</td>
+                    })}</ul>}</td>
                     <td className="cxl-der" data-titulo="Importe">{l.oculta ? '—' : eurosExactos(l.importe)}</td>
                   </tr>
                 )
@@ -254,12 +271,14 @@ export function Mapeo() {
       )}
       {accion && d.datos && (
         <CambiarLinea accion={accion} lineas={d.datos.lineas} textoLinea={textoLinea} alCerrar={() => setAccion(null)}
+          alEstandar={async () => { setAccion(null); await alEstandar(accion.prefijo) }}
           guardar={async (linea, motivo) => {
             const r = await cambiarMapeo(L.companyId, d.datos!.modelo, estado, accion.prefijo, linea, accion.porSigno, motivo)
             setAccion(null)
+            const cuenta = `${accion.prefijo}${accion.nombre ? ` (${accion.nombre})` : ''}`
             setHecho(linea === null
-              ? `La ${accion.prefijo} queda fuera del modelo (estaba en «${textoLinea(r.de)}»). Con saldo, el agente lo avisará. Lo hizo ${r.quien}.`
-              : `La ${accion.prefijo} pasa de «${textoLinea(r.de)}» a «${textoLinea(r.a)}». Ya sale así en el ${estado === 'pyg' ? 'resultado' : 'balance'}. Lo hizo ${r.quien}.`)
+              ? `La ${cuenta} queda fuera del modelo (estaba en «${textoLinea(r.de)}»). Con saldo, el agente lo avisará. Lo hizo ${r.quien}.`
+              : `La ${cuenta} pasa de «${textoLinea(r.de)}» a «${textoLinea(r.a)}». Ya sale así en el ${estado === 'pyg' ? 'resultado' : 'balance'}. Lo hizo ${r.quien}.`)
             L.recargar()
           }} />
       )}
@@ -267,34 +286,36 @@ export function Mapeo() {
   )
 }
 
-function CambiarLinea({ accion, lineas, textoLinea, alCerrar, guardar }: {
-  accion: NonNullable<Accion>; lineas: LineaModelo[]; textoLinea: (c: string | null) => string; alCerrar: () => void; guardar: (linea: string | null, motivo: string | null) => Promise<void>
+function CambiarLinea({ accion, lineas, textoLinea, alCerrar, alEstandar, guardar }: {
+  accion: NonNullable<Accion>; lineas: LineaModelo[]; textoLinea: (c: string | null) => string; alCerrar: () => void
+  alEstandar: () => Promise<void>; guardar: (linea: string | null, motivo: string | null) => Promise<void>
 }) {
   const [linea, setLinea] = useState(accion.desde ?? '')
   const [motivo, setMotivo] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
-  const fuera = accion.tipo === 'fuera'
+  const fuera = linea === FUERA
+  const cuenta = `${accion.prefijo}${accion.nombre ? ` · ${accion.nombre}` : ''}`
   async function ok() {
-    if (!fuera && !linea) { setError('Elige la línea.'); return }
+    if (!linea) { setError('Elige la línea.'); return }
     if (fuera && !motivo.trim()) { setError('Di por qué la dejas fuera: queda en el historial.'); return }
     setOcupado(true); setError(null)
     try { await guardar(fuera ? null : linea, motivo.trim() || null) } catch (e) { setError(e instanceof Error ? e.message : 'No se ha podido.') } finally { setOcupado(false) }
   }
   return (
-    <Dialogo titulo={fuera ? `Dejar fuera la ${accion.prefijo}` : `¿A qué línea va la ${accion.prefijo}?`} alCerrar={alCerrar}>
-      {accion.desde && <p className="cxl-apoyo">Ahora está en «{textoLinea(accion.desde)}».</p>}
-      {!fuera && (
-        <label>Línea<select className="cx-input" value={linea} onChange={(e) => setLinea(e.target.value)}>
-          <option value="">Elige…</option>
-          {lineas.filter((l) => !l.isTotal).map((l) => <option key={l.code} value={l.code}>{'  '.repeat(Math.max(0, l.level - 1))}{l.text}</option>)}
-        </select></label>
-      )}
+    <Dialogo titulo={`¿Dónde va la ${cuenta}?`} alCerrar={alCerrar}>
+      {accion.desde && <p className="cxl-apoyo">Ahora está en «{textoLinea(accion.desde)}»{textoSigno(accion.porSigno) ? `, ${textoSigno(accion.porSigno)}` : ''}.</p>}
+      <label>Línea<select className="cx-input" value={linea} onChange={(e) => setLinea(e.target.value)}>
+        <option value="">Elige…</option>
+        {lineas.filter((l) => !l.isTotal).map((l) => <option key={l.code} value={l.code}>{'  '.repeat(Math.max(0, l.level - 1))}{l.text}</option>)}
+        <option value={FUERA}>Fuera del modelo (no sale en ninguna línea)</option>
+      </select></label>
       <label>Motivo{fuera ? '' : ' (opcional)'}<input className="cx-input" value={motivo} onChange={(e) => setMotivo(e.target.value)} /></label>
       {fuera && <p className="cxl-apoyo">Una cuenta fuera no sale en ninguna línea. Si tiene saldo, el balance deja de reflejarlo: úsalo solo para cuentas que no deben presentarse.</p>}
       {error && <p className="cxl-sin-sitio" role="alert">{error}</p>}
       <div className="cxl-herramientas">
         <button type="button" className="cx-boton" onClick={() => void ok()} disabled={ocupado}>{ocupado ? 'Guardando…' : fuera ? 'Dejar fuera' : 'Cambiar'}</button>
+        {accion.propio && <button type="button" className="cx-boton-sec" onClick={() => void alEstandar()} disabled={ocupado}>Volver al estándar</button>}
         <button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button>
       </div>
     </Dialogo>
@@ -303,10 +324,11 @@ function CambiarLinea({ accion, lineas, textoLinea, alCerrar, guardar }: {
 
 // ── Lo del C05b ─────────────────────────────────────────────────────────────
 
+// S01e: lo que hay y lo que no, sin prometer («Próximamente» no decía nada).
 const C05B = {
-  memoria: { titulo: 'Memoria y certificación', texto: 'La memoria (con lo que la IA ya ha apuntado, como «Otros resultados») y la certificación de aprobación de cuentas.' },
-  legalizacion: { titulo: 'Legalización de libros', texto: 'El diario y el de inventarios y cuentas anuales en el formato del Registro Mercantil (Legalia), con su huella.' },
-  deposito: { titulo: 'Depósito de cuentas', texto: 'Los modelos del Registro (Orden JUS/616/2022) casilla a casilla, cruzados con cada línea del balance y de la PyG.' },
+  memoria: { titulo: 'Memoria y certificación', texto: 'La memoria y la certificación de aprobación de cuentas no se preparan aquí: las redacta tu asesoría. Lo que ya está apuntado para la memoria (como «Otros resultados») sale en la barra de cada estado.' },
+  legalizacion: { titulo: 'Legalización de libros', texto: 'Los libros en el formato del Registro Mercantil (Legalia) no se generan aquí. El diario, el mayor y los balances sí se bajan en PDF y Excel.' },
+  deposito: { titulo: 'Depósito de cuentas', texto: 'Los modelos oficiales del depósito no se rellenan aquí. El balance, la cuenta de pérdidas y ganancias y el patrimonio neto, con los modelos oficiales del Plan General, sí.' },
 } as const
 
 export function PendienteC05b({ que }: { que: keyof typeof C05B }) {
@@ -314,7 +336,7 @@ export function PendienteC05b({ que }: { que: keyof typeof C05B }) {
   return (
     <section className="cxl-pagina" aria-label={x.titulo}>
       <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cuentas anuales y Registro' }]} /><h2>{x.titulo}</h2></div></div>
-      <div className="cx-tarjeta cxl-c05b"><Vacio titulo="Próximamente." explicacion={`${x.texto} Mientras tanto, el balance y la PyG ya salen en PDF y Excel desde Balances.`} accion={<Link to={rutaLibros('balances', 'balance')} className="cx-boton-sec">Ir a Balances</Link>} /></div>
+      <div className="cx-tarjeta cxl-c05b"><Vacio titulo="Esto aún no se hace aquí." explicacion={x.texto} accion={<Link to={rutaLibros('balances', 'balance')} className="cx-boton-sec">Ir a Balances</Link>} /></div>
     </section>
   )
 }

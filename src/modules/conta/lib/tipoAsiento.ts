@@ -23,7 +23,7 @@ export const TIPOS_ASIENTO: Record<TipoAsiento, DefTipoAsiento> = {
     ayuda: 'Un cobro o un pago que no ha llegado por el banco: la cuenta del banco o la caja (572, 570) contra el cliente, el proveedor o el gasto.',
   },
   predefinido: {
-    tipo: 'predefinido', serie: 4, titulo: 'Nuevo asiento predefinido',
+    tipo: 'predefinido', serie: 4, titulo: 'Usar un asiento predefinido',
     ayuda: 'Elige uno de tus asientos predefinidos: pone la serie, el concepto y los apuntes. Los importes que no son fijos los escribes tú.',
   },
 }

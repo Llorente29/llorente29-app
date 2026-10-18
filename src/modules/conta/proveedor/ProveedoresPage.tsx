@@ -15,7 +15,8 @@
 // Archivar/Recuperar sin entrar en la ficha. Archivar pregunta antes, como en
 // la ficha; las dos confirman con contenido (regla 8).
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useMenuFila } from '@/modules/conta/proveedor/useMenuFila'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import '@/modules/conta/estilo'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
@@ -242,24 +243,17 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
 
 /** «···» de una fila: Abrir, Subir factura, Archivar o Recuperar. */
 function MenuFila({ ficha: f, alArchivar, alRecuperar }: { ficha: FichaProveedor; alArchivar: () => void; alRecuperar: () => void }) {
-  const [abierto, setAbierto] = useState(false)
-  const caja = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!abierto) return
-    const fuera = (e: MouseEvent) => { if (!caja.current?.contains(e.target as Node)) setAbierto(false) }
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false) }
-    document.addEventListener('mousedown', fuera)
-    document.addEventListener('keydown', esc)
-    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', esc) }
-  }, [abierto])
+  // S01e: debajo de su fila sin taparla (o encima si no cabe), y se cierra al salir.
+  const { abierto, arriba, caja, alternar, cerrar, alSalir, alEntrar } = useMenuFila()
+  const setAbierto = (v: boolean) => { if (!v) cerrar() }
   return (
-    <div className="cxp-tabla-mas" ref={caja}>
+    <div className="cxp-tabla-mas" ref={caja} onMouseLeave={alSalir} onMouseEnter={alEntrar}>
       <button type="button" className="cx-boton-sec cx-mas" aria-haspopup="menu" aria-expanded={abierto}
-        aria-label={`Más acciones de ${f.name}`} onClick={() => setAbierto((v) => !v)}>···</button>
+        aria-label={`Más acciones de ${f.name}`} onClick={alternar}>···</button>
       {abierto && (
-        <div className="cxp-menu" role="menu" aria-label={`Acciones de ${f.name}`}>
+        <div className={arriba ? 'cxp-menu cxp-menu-arriba' : 'cxp-menu'} role="menu" aria-label={`Acciones de ${f.name}`}>
           <Link role="menuitem" to={rutaFichaProveedor(f.id)}>Abrir</Link>
-          {!f.archivedAt && <Link role="menuitem" to={rutaSubirFacturaProveedor(f.id)}>Subir factura</Link>}
+          {!f.archivedAt && <Link role="menuitem" to={rutaSubirFacturaProveedor(f.id)}>Subir una factura</Link>}
           {f.archivedAt
             ? <button type="button" role="menuitem" onClick={() => { setAbierto(false); alRecuperar() }}>Recuperar proveedor</button>
             : <button type="button" role="menuitem" onClick={() => { setAbierto(false); alArchivar() }}>Archivar proveedor</button>}

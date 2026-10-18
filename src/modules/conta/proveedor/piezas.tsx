@@ -104,8 +104,11 @@ export function SeGuarda({ texto, ocupado }: { texto: string | null; ocupado?: b
   )
 }
 
-/** Una ventana encima de la ficha. Escape y el fondo la cierran; el foco vuelve adonde estaba. */
-export function Dialogo({ titulo, children, alCerrar }: { titulo: string; children: ReactNode; alCerrar: () => void }) {
+/**
+ * Una ventana encima de la ficha. Escape y el fondo la cierran; el foco vuelve adonde estaba.
+ * Con `cerrable`, además una ✕ visible arriba a la derecha (en el móvil no hay Escape ni fondo a la vista).
+ */
+export function Dialogo({ titulo, children, alCerrar, cerrable = false }: { titulo: string; children: ReactNode; alCerrar: () => void; cerrable?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const cerrar = useRef(alCerrar)
   useEffect(() => { cerrar.current = alCerrar }, [alCerrar])
@@ -118,9 +121,11 @@ export function Dialogo({ titulo, children, alCerrar }: { titulo: string; childr
   }, [])
   return (
     <div className="cxp-velo cx" onMouseDown={(e) => { if (e.target === e.currentTarget) alCerrar() }}>
-      <div className="cxp-dialogo" role="dialog" aria-modal="true" aria-label={titulo} ref={ref}>
+      <div className={cerrable ? 'cxp-dialogo cxp-dialogo-cerrable' : 'cxp-dialogo'} role="dialog" aria-modal="true" aria-label={titulo} ref={ref}>
         <h2>{titulo}</h2>
         {children}
+        {/* Al final del árbol para que el foco inicial siga yendo al primer campo; se pinta arriba. */}
+        {cerrable && <button type="button" className="cxp-cerrar" aria-label="Cerrar" title="Cerrar (Esc)" onClick={alCerrar}>✕</button>}
       </div>
     </div>
   )

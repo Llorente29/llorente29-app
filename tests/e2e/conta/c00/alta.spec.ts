@@ -505,7 +505,7 @@ test('cuenta A: otra empresa en la ventana, con píldoras; cerrar guarda; y lo q
     await expect(page.getByRole('heading', { level: 2, name: 'Lo que ha hecho Folvy' })).toBeVisible()
     // Primero que haya cargado: un «no está» mirado con el esqueleto delante siempre se cumple.
     await expect(registro.getByText('Deshecho por Admin Norte').first()).toBeVisible()
-    await expect(registro.getByText('Puso el tipo de empresa: Sociedades de responsabilidad limitada')).toBeVisible()
+    await expect(registro.getByText('Puso el tipo de empresa: Sociedad de responsabilidad limitada')).toBeVisible()
     await page.goto('/conta/ajustes')
     await expect(page.getByText(nombre).first()).toBeVisible()
     await expect(page.getByRole('heading', { level: 2, name: 'Tu empresa' })).toBeVisible()

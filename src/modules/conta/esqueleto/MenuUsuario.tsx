@@ -1,6 +1,8 @@
 // src/modules/conta/esqueleto/MenuUsuario.tsx
 //
-// S01 · El usuario y su nivel, a la derecha de la cabecera («Julio · Medio ▾»).
+// S01 · El usuario y su nivel, a la derecha de la cabecera: el nombre y,
+// debajo, «Nivel medio» (S01e: antes «Julio · Medio», con el punto colgando
+// si el nombre se cortaba y «Medio» suelto, sin decir de qué).
 // Dentro, lo que es de cada persona y se guarda en la base: el nivel (cambia
 // palabras, ayuda y lo que se ofrece de serie; nunca dónde está cada cosa),
 // la densidad (antes un interruptor suelto en la barra) y la cinta. Y, si no
@@ -10,7 +12,7 @@ import { Link } from 'react-router-dom'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { iniciales } from '@/modules/conta/lib/formato'
 import { Boton, Icono } from '@/modules/conta/diseno'
-import { NIVELES, NOMBRE_NIVEL, type Densidad, type Nivel, type Preferencias } from './preferencias'
+import { NIVELES, NOMBRE_NIVEL, fraseNivel, type Densidad, type Nivel, type Preferencias } from './preferencias'
 
 const AYUDA_NIVEL: Record<Nivel, string> = {
   sin_experiencia: 'Te lo explico con palabras de todos los días.',
@@ -35,18 +37,21 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar, enCajon = fal
         <button ref={menuBoton} type="button" className="s-barra-item" aria-expanded={menuAbierto} aria-haspopup="true"
           aria-label={`${nombre}, nivel ${NOMBRE_NIVEL[prefs.nivel].toLowerCase()}. Tus preferencias`} onClick={menuAlternar}>
           <span className="s-cajon-iniciales" aria-hidden="true">{iniciales(nombre)}</span>
-          <span className="s-barra-nombre">{nombre} · {NOMBRE_NIVEL[prefs.nivel]}</span>
+          <span className="s-barra-nombre">{nombre} · {fraseNivel(prefs.nivel).toLowerCase()}</span>
           <Icono nombre="desplegar" />
         </button>
       )}
       {!enCajon && <Boton ref={menuBoton} variante="fantasma" icono="desplegar" aria-expanded={menuAbierto} aria-haspopup="true"
         aria-label={`${nombre}, nivel ${NOMBRE_NIVEL[prefs.nivel].toLowerCase()}. Tus preferencias`} onClick={menuAlternar}>
-        {/* En el móvil no cabe «Nombre · Nivel»: sus iniciales; el nivel, en el menú y en el nombre del botón. */}
+        {/* En el móvil no cabe el nombre y el nivel: sus iniciales; el nivel, en el menú y en el nombre del botón. */}
         {/* El nivel ocupa siempre lo del más largo: cambiarlo no mueve nada (ni manda una pestaña a «Más»). */}
         {movil ? iniciales(nombre) : (
-          <><span className="s-usuario-nombre" title={nombre}>{nombre}</span> · <strong className="s-usuario-nivel">
-            {NIVELES.map((n) => <span key={n} aria-hidden={n !== prefs.nivel} data-actual={n === prefs.nivel || undefined}>{NOMBRE_NIVEL[n]}</span>)}
-          </strong></>
+          <span className="s-usuario">
+            <span className="s-usuario-nombre" title={nombre}>{nombre}</span>
+            <span className="s-usuario-nivel">
+              {NIVELES.map((n) => <span key={n} aria-hidden={n !== prefs.nivel} data-actual={n === prefs.nivel || undefined}>{fraseNivel(n)}</span>)}
+            </span>
+          </span>
         )}
       </Boton>}
       {menuAbierto && (

@@ -139,7 +139,8 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
   const nombreLocal = useMemo(() => new Map(locales.map((l) => [l.id, l.name])), [locales])
 
   return (
-    <Dialogo titulo="Subir una factura" alCerrar={alCerrar}>
+    // S01e: con su ✕ y su «Cancelar» a la vista (en el móvil no se veía cómo salir); Escape también cierra.
+    <Dialogo titulo="Subir una factura" alCerrar={alCerrar} cerrable>
       <div className="cxc-pasos">
         {paso.que === 'elegir' && (
           <>
@@ -149,6 +150,7 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
               <input type="file" accept="image/*,application/pdf" multiple className="cx-input"
                 onChange={(e) => leer(Array.from(e.target.files ?? []))} />
             </label>
+            <div className="cx-pie"><button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button></div>
           </>
         )}
         {paso.que === 'leyendo' && <p role="status" style={{ margin: 0 }}>Leyendo el papel…</p>}

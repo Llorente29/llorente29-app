@@ -2,6 +2,8 @@
 
 .cxc { display: flex; flex-direction: column; gap: 18px; }
 .cxc-entra { margin: 0; font-size: 15px; color: var(--cx-apoyo); }
+/* S01e: la frase de entrada y «Subir una factura», a la vista aunque la cinta esté plegada. */
+.cxc-entra-fila { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .cxc-cuenta { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 8px;
   border-radius: 999px; background: var(--cx-ambar-suave); color: var(--cx-ambar); font-size: 13px; font-weight: 700; margin-left: 8px; }
 .cxc-cuenta-cero { background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }

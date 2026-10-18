@@ -15,6 +15,8 @@
 export type Nivel = 'sin_experiencia' | 'medio' | 'experto'
 export const NIVELES: readonly Nivel[] = ['sin_experiencia', 'medio', 'experto']
 export const NOMBRE_NIVEL: Record<Nivel, string> = { sin_experiencia: 'Sin experiencia', medio: 'Medio', experto: 'Experto' }
+/** S01e · «Nivel medio»: el nivel diciendo lo que es, no «Medio» suelto (botón del usuario). */
+export const fraseNivel = (n: Nivel): string => `Nivel ${NOMBRE_NIVEL[n].toLowerCase()}`
 
 export type Densidad = 'compacta' | 'comoda'
 

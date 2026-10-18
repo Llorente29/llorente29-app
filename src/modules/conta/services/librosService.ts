@@ -144,11 +144,12 @@ export async function elegirModelo(accountId: string, companyId: string, fiscalY
 }
 
 /** Propone los tres asientos del cierre (como cualquier propuesta) y los enlaza al ejercicio. */
-export async function prepararCierreEnBase(companyId: string, fiscalYearId: string, asientos: (AsientoCierre | null)[], quien: string | null, regularizacionEnlazada: string | null = null): Promise<{ ids: (string | null)[] }> {
+export async function prepararCierreEnBase(companyId: string, fiscalYearId: string, asientos: (AsientoCierre | null)[], quien: string | null, regularizacionEnlazada: string | null = null, cierreEnlazado: string | null = null): Promise<{ ids: (string | null)[] }> {
   const ids: (string | null)[] = []
   for (const [i, a] of asientos.entries()) {
     // Sin regularización nueva, se mantiene la ya enlazada (al reabrir se queda): enlazar con null la soltaría.
-    if (!a) { ids.push(i === 0 ? regularizacionEnlazada : null); continue }
+    // S01e: igual con el cierre cuando solo se añade la apertura (el ejercicio siguiente llegó después).
+    if (!a) { ids.push(i === 0 ? regularizacionEnlazada : i === 1 ? cierreEnlazado : null); continue }
     const r = await rpc<{ id: string }>('journal_entry_proponer', {
       p_company: companyId,
       p_entry: { fecha: a.fecha, source_type: a.sourceType, series: a.serie, concepto: a.concepto, confianza: 'seguro', porque: `Preparado por ${MARCA.nombre}: ${a.tipo} del ejercicio (PGC, quinta parte, cuenta 129 y normas de cierre).`,
@@ -390,6 +391,18 @@ export async function cuentasDeSuplidos(accountId: string, companyId: string): P
   const m = new Map<string, string>()
   for (const f of (data ?? []) as Fila[]) { const ca = f.company_account as Fila | null; if (ca) m.set(String(ca.code), String(ca.name)) }
   return [...m.entries()].map(([code, name]) => ({ code, name })).sort((a, b) => a.code.localeCompare(b.code))
+}
+
+/**
+ * S01e · El nombre del cuadro de cuentas (PGC) de unos códigos o prefijos
+ * («624» → «Transportes»). Catálogo global, sin account_id, leído a propósito.
+ */
+export async function nombresPgc(plan: 'pymes' | 'general', codigos: string[]): Promise<Map<string, string>> {
+  const unicos = [...new Set(codigos)].filter(Boolean)
+  if (!unicos.length) return new Map()
+  const { data, error } = await tabla('pgc_account').select('code, name').eq('plan', plan).is('valid_to', null).in('code', unicos)
+  if (error) throw new Error(mensaje('No se han podido leer los nombres del cuadro de cuentas', error))
+  return new Map(((data ?? []) as Fila[]).map((f) => [String(f.code), String(f.name)]))
 }
 
 /** La cuenta de apunte de la 129 (Resultado del ejercicio) de la empresa, si la tiene. */

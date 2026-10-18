@@ -5,6 +5,7 @@
 // base de datos.
 
 import { MARCA } from '../cuenta/marca'
+import { formaEnSingular } from '../ajustes/formaJuridica'
 
 /** De dónde sale un dato que no escribió una persona (ai_data_origin). */
 export interface Origen {
@@ -115,7 +116,9 @@ export function queHizo(r: Registro): string {
   const vacio = r.before === null || r.before === undefined || r.before === '' || (Array.isArray(r.before) && r.before.length === 0)
   const cambio = !vacio && !mismoValor(r.before, r.after)
   const verbo = r.source === 'import' ? 'Trajo de tu cuenta' : cambio ? 'Cambió' : 'Puso'
-  return `${verbo} ${campo}: ${r.afterName ?? valorEnPalabras(r.field, r.after)}`
+  // El tipo de empresa, en singular (S01e): «Sociedad de responsabilidad limitada».
+  const nombre = r.field === 'legal_form_code' && typeof r.after === 'string' ? formaEnSingular(r.after, r.afterName) : r.afterName
+  return `${verbo} ${campo}: ${nombre ?? valorEnPalabras(r.field, r.after)}`
 }
 
 /** Si se puede deshacer y, si no, por qué. */

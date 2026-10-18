@@ -72,8 +72,9 @@ export default function ComprasPage() {
 
   const hecho = (frase: string) => { setAviso(frase); setVuelta((v) => v + 1); refrescarCuentasMenu() }
 
-  // S01 · paso 3: el título lo dice la cabecera del esqueleto (Compras y gastos › Por revisar)
-  // y «Subir factura» está en la cinta.
+  // S01 · paso 3: el título lo dice la cabecera del esqueleto (Compras y gastos › Por revisar).
+  // «Subir una factura» está en la cinta y, S01e, también aquí arriba: con la cinta plegada
+  // tiene que haber una forma de subir a la vista, no solo la zona de arrastrar de abajo.
   const cabecera = <h1 className="cx-oculto">Compras y gastos · Por revisar</h1>
 
   if (error) return <div className="cxc">{cabecera}<ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
@@ -84,7 +85,10 @@ export default function ComprasPage() {
   return (
     <div className="cxc">
       {cabecera}
-      <p className="cxc-entra">{hosteleria ? 'Lo que llega con el género ya entra solo desde el local. ' : ''}Aquí sólo ves lo que necesita que alguien decida.</p>
+      <div className="cxc-entra-fila">
+        <p className="cxc-entra">{hosteleria ? 'Lo que llega con el género ya entra solo desde el local. ' : ''}Aquí sólo ves lo que necesita que alguien decida.</p>
+        <button type="button" className="cx-boton" onClick={() => setSubir({})}>Subir una factura</button>
+      </div>
       <Guardado texto={aviso} />
 
       <Tarjeta titulo="Qué tienes que mirar" accion={<span className={n === 0 ? 'cxc-cuenta cxc-cuenta-cero' : 'cxc-cuenta'} aria-label={`${n} por decidir`}>{n}</span>}>

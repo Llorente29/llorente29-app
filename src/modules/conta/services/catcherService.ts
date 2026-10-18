@@ -204,6 +204,23 @@ const deFila = (r: FilaLote, cuenta: Cuenta): LoteFila => ({
 })
 const COLUMNAS_LOTE = 'id, label, period_from, period_to, invoice_count, grand_total, crossed_at, cross_summary, payment_entry_id, created_at, created_by_name'
 
+/**
+ * S01e · ¿Trabaja la empresa con Catcher? Sí si tiene algo suyo puesto: sus tiendas
+ * (supplier_batch_store), su tarifa (supplier_rate) o alguna quincena ya subida
+ * (supplier_batch). Sin nada de eso, la tarjeta de la quincena no se enseña: no
+ * esconde ninguna fila, porque no hay ninguna (regla 7). Siempre por cuenta y empresa (regla 9).
+ */
+export async function usaCatcher(accountId: string, companyId: string): Promise<boolean> {
+  hayBase()
+  const hay = async (t: 'supplier_batch_store' | 'supplier_rate' | 'supplier_batch', que: string) => {
+    const { data, error } = await tabla(t).select('id').eq('account_id', accountId).eq('company_id', companyId).eq('provider', 'catcher').limit(1)
+    if (error) throw new Error(`No se ha podido saber si trabajas con Catcher (${que}): ${error.message}`)
+    return (data ?? []).length > 0
+  }
+  const [tiendas, tarifa, lotes] = await Promise.all([hay('supplier_batch_store', 'las tiendas'), hay('supplier_rate', 'la tarifa'), hay('supplier_batch', 'las quincenas')])
+  return tiendas || tarifa || lotes
+}
+
 /** Las quincenas de Catcher subidas por la empresa, la más reciente primero. */
 export async function leerLotes(accountId: string, companyId: string): Promise<LoteFila[]> {
   hayBase()

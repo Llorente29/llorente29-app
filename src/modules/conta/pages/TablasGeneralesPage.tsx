@@ -16,14 +16,14 @@ import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/pi
 import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/MarcoAjustes'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
-import { TABLAS_GENERALES, agruparConceptos, definicion, type DefinicionTabla } from '@/modules/conta/tablas/registro'
+import { TABLAS_GENERALES, cuantosConceptos, definicion, type DefinicionTabla } from '@/modules/conta/tablas/registro'
 import { useTablasGenerales } from '@/modules/conta/tablas/useTablasGenerales'
 import { TablaGeneral } from '@/modules/conta/tablas/TablaGeneral'
 import type { FilasPorTabla } from '@/modules/conta/services/tablasService'
 
-/** Cuántos conceptos tiene cada tabla (las vigencias de lo mismo cuentan una vez). */
+/** Cuántos conceptos tiene cada tabla: la misma cuenta que el índice de Ajustes (cuantosConceptos). */
 function cuantos(def: DefinicionTabla, filas: FilasPorTabla, hoy: string): number {
-  return agruparConceptos(filas[def.id] ?? [], def.conVigencia, hoy).length
+  return cuantosConceptos(def, filas[def.id] ?? [], hoy)
 }
 
 export default function TablasGeneralesPage() {
@@ -41,9 +41,8 @@ function Tablas() {
   if (tabla !== undefined && !elegida) return <Navigate to={rutaTablasGenerales()} replace />
   const def = elegida ?? (movil ? null : TABLAS_GENERALES[0])
 
-  const cabecera = movil ? (!def && <CabeceraEntradaMovil titulo="Tablas generales" />) : (
-    <div className="cx-ajustes-panel-cabeza"><h2 className="cx-ajustes-panel-titulo">Tablas generales</h2></div>
-  )
+  // S01e: en el ordenador el título «Tablas generales» lo pone el marco (Definiciones), una vez.
+  const cabecera = movil ? (!def && <CabeceraEntradaMovil titulo="Tablas generales" antetitulo="Definiciones" atras={null} />) : null
 
   // Solo esqueleto si aún no hay empresa: si ya la hay, una recarga de la
   // cuenta (al llegar la sesión, accountsLoading parpadea) no desmonta la
@@ -113,6 +112,8 @@ function Tablas() {
   return (
     <>
       {cabecera}
+      {/* S01e: la caja mide el sitio que queda; estrecha, el menú de tablas pasa arriba y la tabla se lleva el ancho. */}
+      <div className="cx-tablas-caja">
       <div className="cx-tablas">
         <nav aria-label="Tablas" className="cx-tarjeta cx-tablas-menu">
           {TABLAS_GENERALES.map((d) => (
@@ -123,6 +124,7 @@ function Tablas() {
           ))}
         </nav>
         {contenido}
+      </div>
       </div>
     </>
   )

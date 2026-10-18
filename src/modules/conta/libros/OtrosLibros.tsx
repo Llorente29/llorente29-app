@@ -6,6 +6,7 @@
 //     cuando su anotación lleva «bien de inversión»).
 //   · Retenciones: lo retenido por modelo (111, 115…) y trimestre, con sus
 //     apuntes. Es lo que luego declara el modelo; aquí no se presenta nada.
+//     S01e: no es IVA; va en su propio grupo del menú, con periodo y salida.
 //   · Suplidos: el mayor de las cuentas que la empresa marcó como suplidos
 //     (C03). Sin cuentas marcadas, lo dice y explica dónde se marcan.
 
@@ -17,9 +18,11 @@ import { ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/pi
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { extracto } from '@/modules/conta/lib/extractos'
 import { trimestre } from '@/modules/conta/lib/libroRegistro'
-import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
-import { excelTabla } from '@/modules/conta/libros/exportar'
+import { periodosDelEjercicio, useLeer, useLibros } from '@/modules/conta/libros/contexto'
+import { excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
+import { cuantas } from '@/modules/conta/lib/plural'
 import { altaBien, cuentasDeSuplidos, leerBienes, movimientos, retenciones, type BienInversion } from '@/modules/conta/services/librosService'
+import { useImpuestoEmpresa } from '@/modules/conta/hooks/useImpuestoEmpresa'
 
 const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
 const c = (n: number) => Math.round(n * 100)
@@ -28,26 +31,30 @@ const c = (n: number) => Math.round(n * 100)
 
 export function BienesInversion() {
   const L = useLibros()
+  // S01e: en Canarias, IGIC (y sin las citas de la ley del IVA, que no son las suyas).
+  const imp = useImpuestoEmpresa(L.accountId, L.companyId)
   const [alta, setAlta] = useState(false)
   const [hecho, setHecho] = useState<string | null>(null)
   const d = useLeer(() => leerBienes(L.accountId, L.companyId), `${L.companyId}:${L.vuelta}`)
   if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
   const exportar = () => {
     const filas = (d.datos ?? []).map((b) => [b.descripcion, b.tipo, ddmm(b.alta), b.inicioUso ? ddmm(b.inicioUso) : '', b.valor, b.base, b.tipoIva, b.cuota, b.deducible, b.baja ? ddmm(b.baja) : ''])
-    const ok = excelTabla(`Bienes de inversión ${L.ejercicio.code}.xlsx`, 'Bienes de inversión', ['Bien', 'Tipo', 'Alta', 'Inicio de uso', 'Valor', 'Base', '% IVA', 'Cuota', '% deducible', 'Baja'], filas)
+    const ok = excelTabla(`Bienes de inversión ${L.ejercicio.code}.xlsx`, 'Bienes de inversión', ['Bien', 'Tipo', 'Alta', 'Inicio de uso', 'Valor', 'Base', imp.columnaTipo, 'Cuota', '% deducible', 'Baja'], filas)
     setHecho(ok ? `Bajado: Bienes de inversión ${L.ejercicio.code}.xlsx, ${filas.length} bienes.` : 'No había nada que bajar: aún no hay bienes de inversión.')
   }
   return (
     <section className="cxl-pagina" aria-label="Bienes de inversión">
       <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libros registro de IVA' }]} /><h2>Bienes de inversión</h2></div>
+        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: imp.libros }]} /><h2>Bienes de inversión</h2></div>
         <div className="cxl-herramientas">
           <button type="button" className="cx-boton" onClick={() => setAlta(true)}>Dar de alta un bien</button>
           <button type="button" className="cx-boton-sec" onClick={exportar} disabled={!d.datos}>Excel</button>
         </div>
       </div>
       <Guardado texto={hecho} />
-      <p className="cxl-apoyo">Bienes cuyo IVA se regulariza durante 5 años (muebles) o 10 (inmuebles) si cambia la prorrata (arts. 107–110 LIVA; libro del art. 65 RIVA). Solo los que superan 3.005,06 € (art. 108 LIVA).</p>
+      <p className="cxl-apoyo">{imp.ley
+        ? 'Bienes cuyo IVA se regulariza durante 5 años (muebles) o 10 (inmuebles) si cambia la prorrata (arts. 107–110 LIVA; libro del art. 65 RIVA). Solo los que superan 3.005,06 € (art. 108 LIVA).'
+        : `Bienes cuyo ${imp.nombre} se regulariza durante varios años si cambia la prorrata. ${imp.avisoLey}`}</p>
       {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
       {d.datos && !d.datos.length && <div className="cx-tarjeta"><Vacio titulo="Aún no hay bienes de inversión." explicacion="Al dar de alta uno queda en este libro y en la hoja BIENES-INVERSIÓN del formato AEAT." /></div>}
       {d.datos && d.datos.length > 0 && (
@@ -108,9 +115,21 @@ function AltaBien({ alCerrar, alGuardar }: { alCerrar: () => void; alGuardar: (t
 
 // ── Retenciones ─────────────────────────────────────────────────────────────
 
+/** S01e: qué es cada modelo, en llano (antes salía el número solo). */
+const MODELOS_RETENCION: Record<string, string> = {
+  '111': 'trabajadores y profesionales', '115': 'alquileres', '123': 'intereses y dividendos', '216': 'no residentes',
+}
+const nombreModelo = (m: string): string => (MODELOS_RETENCION[m] ? `${m} · ${MODELOS_RETENCION[m]}` : m)
+
 export function Retenciones() {
   const L = useLibros()
-  const d = useLeer(() => retenciones(L.accountId, L.companyId, L.ejercicio.inicio, L.ejercicio.fin), `${L.companyId}:${L.ejercicio.id}:${L.vuelta}`)
+  // S01e: con periodo y salida, como los demás libros.
+  const ps = periodosDelEjercicio(L.ejercicio.inicio, L.ejercicio.fin)
+  const hoy = new Date().toISOString().slice(0, 10)
+  const [periodo, setPeriodo] = useState(() => (ps.find((p) => p.id !== 'año' && p.desde <= hoy && hoy <= p.hasta) ?? ps[ps.length - 1]).id)
+  const p = ps.find((x) => x.id === periodo) ?? ps[ps.length - 1]
+  const [hecho, setHecho] = useState<string | null>(null)
+  const d = useLeer(() => retenciones(L.accountId, L.companyId, p.desde, p.hasta), `${L.companyId}:${p.desde}:${p.hasta}:${L.vuelta}`)
   const grupos = useMemo(() => {
     const m = new Map<string, { modelo: string; t: string; base: number; importe: number; apuntes: number }>()
     for (const r of d.datos ?? []) {
@@ -121,22 +140,43 @@ export function Retenciones() {
     }
     return [...m.values()].sort((a, b) => a.modelo.localeCompare(b.modelo) || a.t.localeCompare(b.t))
   }, [d.datos])
+  const exportar = (como: 'pdf' | 'excel') => {
+    const filas: FilaTabla[] = (d.datos ?? []).map((r) => [ddmm(r.fecha), nombreModelo(r.modelo), r.cuenta, r.concepto, r.base, r.importe])
+    const cab = ['Fecha', 'Modelo', 'Cuenta', 'Concepto', 'Base', 'Retenido']
+    const nombre = `Retenciones ${L.ejercicio.code} ${p.nombre}`
+    const ok = como === 'pdf'
+      ? pdfTabla(`${nombre}.pdf`, 'Retenciones', `${p.nombre} · ${ddmm(p.desde)} a ${ddmm(p.hasta)}`, cab, filas)
+      : excelTabla(`${nombre}.xlsx`, 'Retenciones', cab, filas)
+    const total = (d.datos ?? []).reduce((a, r) => a + c(r.importe), 0) / 100
+    setHecho(ok ? `Bajado: ${nombre}.${como === 'pdf' ? 'pdf' : 'xlsx'}, ${cuantas(filas.length, 'apunte', 'apuntes')}; retenido ${eurosExactos(total)}.` : `No había nada que bajar: sin retenciones en ${p.nombre === 'Todo el ejercicio' ? L.ejercicio.code : p.nombre}.`)
+  }
   if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
   return (
     <section className="cxl-pagina" aria-label="Retenciones">
-      <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libros registro de IVA' }]} /><h2>Retenciones</h2></div></div>
+      <div className="cxl-seccion">
+        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Retenciones' }]} /><h2>Retenciones</h2></div>
+        <div className="cxl-herramientas">
+          <label><span className="cx-oculto">Periodo</span>
+            <select className="cx-input" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>{ps.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
+          </label>
+          <button type="button" className="cx-boton-sec" onClick={() => exportar('pdf')} disabled={!d.datos}>Exportar PDF</button>
+          <button type="button" className="cx-boton-sec" onClick={() => exportar('excel')} disabled={!d.datos}>Excel</button>
+        </div>
+      </div>
+      <Guardado texto={hecho} />
+      <p className="cxl-apoyo">Lo retenido a otros (nóminas, profesionales, alquileres) que luego se ingresa con el modelo 111 o el 115. Son retenciones de IRPF, no IVA. Aquí no se presenta nada.</p>
       {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
-      {d.datos && !d.datos.length && <div className="cx-tarjeta"><Vacio titulo={`Sin retenciones en ${L.ejercicio.code}.`} explicacion="Salen aquí los apuntes con retención (alquiler, profesionales, nóminas) en cuanto se validen sus asientos." /></div>}
+      {d.datos && !d.datos.length && <div className="cx-tarjeta"><Vacio titulo={`Sin retenciones en ${p.nombre === 'Todo el ejercicio' ? L.ejercicio.code : p.nombre}.`} explicacion="Salen aquí los apuntes con retención (alquiler, profesionales, nóminas) en cuanto se validen sus asientos." /></div>}
       {grupos.length > 0 && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
           <table className="cxl-tabla cxl-apilada" aria-label="Retenciones por modelo y trimestre">
             <thead><tr><th>Modelo</th><th>Trimestre</th><th className="cxl-der">Apuntes</th><th className="cxl-der">Base</th><th className="cxl-der">Retenido</th></tr></thead>
-            <tbody>{grupos.map((g) => <tr key={`${g.modelo}${g.t}`}><td data-titulo="Modelo">{g.modelo}</td><td data-titulo="Trimestre">{g.t}</td><td className="cxl-der" data-titulo="Apuntes">{g.apuntes}</td><td className="cxl-der" data-titulo="Base">{eurosExactos(g.base)}</td><td className="cxl-der" data-titulo="Retenido">{eurosExactos(g.importe)}</td></tr>)}</tbody>
+            <tbody>{grupos.map((g) => <tr key={`${g.modelo}${g.t}`}><td data-titulo="Modelo">{nombreModelo(g.modelo)}</td><td data-titulo="Trimestre">{g.t}</td><td className="cxl-der" data-titulo="Apuntes">{g.apuntes}</td><td className="cxl-der" data-titulo="Base">{eurosExactos(g.base)}</td><td className="cxl-der" data-titulo="Retenido">{eurosExactos(g.importe)}</td></tr>)}</tbody>
           </table>
           <h3 className="cxl-subtitulo">Apuntes</h3>
           <table className="cxl-tabla cxl-apilada" aria-label="Apuntes con retención">
             <thead><tr><th>Fecha</th><th>Modelo</th><th>Concepto</th><th className="cxl-der">Base</th><th className="cxl-der">Retenido</th></tr></thead>
-            <tbody>{d.datos!.map((r, i) => <tr key={`${r.entryId}${i}`}><td><Link to={rutaAsiento(r.entryId)}>{ddmm(r.fecha)}</Link></td><td data-titulo="Modelo">{r.modelo}</td>
+            <tbody>{d.datos!.map((r, i) => <tr key={`${r.entryId}${i}`}><td><Link to={rutaAsiento(r.entryId)}>{ddmm(r.fecha)}</Link></td><td data-titulo="Modelo">{nombreModelo(r.modelo)}</td>
               <td>{r.terceroId ? <Link to={rutaFichaTercero(r.terceroId)}>{r.concepto}</Link> : r.concepto}</td><td className="cxl-der" data-titulo="Base">{eurosExactos(r.base)}</td><td className="cxl-der" data-titulo="Retenido">{eurosExactos(r.importe)}</td></tr>)}</tbody>
           </table>
         </div>
@@ -149,6 +189,7 @@ export function Retenciones() {
 
 export function Suplidos() {
   const L = useLibros()
+  const imp = useImpuestoEmpresa(L.accountId, L.companyId)
   const d = useLeer(async () => {
     const cuentas = await cuentasDeSuplidos(L.accountId, L.companyId)
     const ms = (await Promise.all(cuentas.map((x) => movimientos(L.accountId, L.companyId, L.ejercicio.inicio, L.ejercicio.fin, x.code)))).flat()
@@ -157,8 +198,10 @@ export function Suplidos() {
   if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
   return (
     <section className="cxl-pagina" aria-label="Suplidos">
-      <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libros registro de IVA' }]} /><h2>Suplidos</h2></div></div>
-      <p className="cxl-apoyo">Lo que se paga en nombre de un cliente y se le repercute sin IVA (art. 78.Tres.3.º LIVA). No es ingreso ni gasto: va a una cuenta de tercero y no entra en el libro de expedidas.</p>
+      <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: imp.libros }]} /><h2>Suplidos</h2></div></div>
+      <p className="cxl-apoyo">{imp.ley
+        ? 'Lo que se paga en nombre de un cliente y se le repercute sin IVA (art. 78.Tres.3.º LIVA). No es ingreso ni gasto: va a una cuenta de tercero y no entra en el libro de expedidas.'
+        : `Lo que se paga en nombre de un cliente y se le repercute sin ${imp.nombre}. No es ingreso ni gasto: va a una cuenta de tercero y no entra en el libro de expedidas. ${imp.avisoLey}`}</p>
       {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
       {d.datos && !d.datos.cuentas.length && <div className="cx-tarjeta"><Vacio titulo="No hay cuentas de suplidos." explicacion="Se marcan en la ficha del tercero (cuenta con papel «suplidos») o en el plan contable." accion={<Link to={rutaPlan()} className="cx-boton-sec">Ir al plan</Link>} /></div>}
       {d.datos?.cuentas.map((cu) => {

@@ -36,6 +36,7 @@ import { claseDeFichero, motivoExpedida, tamano, textoAdjunta } from '@/modules/
 import { useFicheroElegido } from '@/modules/conta/libro/ficheroElegido'
 import { ElegirExpedida, PapelExpedida } from '@/modules/conta/libro/FacturaExpedida'
 import { useIsMobile } from '@/shell/useIsMobile'
+import { TextoConImpuesto } from '@/modules/conta/ui/TextoConImpuesto'
 
 const vacia = (localId: string | null): LineaMano => ({ cuenta: '', debe: '', haber: '', localId, comun: false, concepto: '' })
 
@@ -169,7 +170,8 @@ export default function NuevoAsientoPage() {
         <div className="cxp-titulos">
           <Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libro diario', ruta: rutaLibroDiario() }, { etiqueta: def?.titulo ?? 'Nuevo asiento' }]} />
           <h1 className="cxp-nombre">{def?.titulo ?? 'Nuevo asiento'}</h1>
-          {def && <p className="cx-ayuda cxd-ayuda-tipo">{def.ayuda}</p>}
+          {/* S01e: en Canarias, «IGIC repercutido», no «IVA». */}
+          {def && <p className="cx-ayuda cxd-ayuda-tipo"><TextoConImpuesto texto={def.ayuda} /></p>}
         </div>
         <div className="cxd-acciones">
           <Link to={rutaLibroDiario()} className="cx-boton-sec">Cancelar</Link>

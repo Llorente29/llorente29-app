@@ -13,7 +13,7 @@
 
 import { useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
-import { ENTRADA_DE_APARTADO, entradaAjustes, rutaAjustes } from '@/config/navegacion'
+import { ENTRADA_DE_APARTADO, entradaAjustes, rutaAjustes, rutaTablasGenerales } from '@/config/navegacion'
 import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/MarcoAjustes'
 import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
@@ -93,7 +93,7 @@ function Entrada({ id }: { id: string }) {
       return (
         <>
           {cabeza}
-          <RegistroIA registro={d.ia.registro} alCambiar={datos.recargar} movil={movil} />
+          <RegistroIA registro={d.ia.registro} alCambiar={datos.recargar} movil={movil} enElPlan={plan.datos?.registro.length ?? 0} />
           {aviso && <Resultado hecho={aviso} fallo={null} />}
           <RegistroPlan registro={plan.datos?.registro ?? []} accion={(r) => (r.que === 'importado' && plan.datos?.importacion
             ? <DeshacerTraido importacion={plan.datos.importacion} alDeshacer={(f) => { setAviso(f); plan.recargar() }} /> : null)} />
@@ -108,6 +108,8 @@ export default function AjustesPage() {
   // Las direcciones viejas de «Tu empresa» en el móvil (ajustes/empresa/:apartado) van a su entrada.
   if (apartado !== undefined) return <Navigate to={rutaAjustes(ENTRADA_DE_APARTADO[apartado] ?? 'empresa')} replace />
   if (entrada !== undefined && !entradaAjustes(entrada)) return <Navigate to={rutaAjustes()} replace />
+  // S01e: la dirección vieja de «Numeración» va a su tabla, donde se crean las series.
+  if (entrada === 'numeracion') return <Navigate to={rutaTablasGenerales('numeracion')} replace />
   return (
     <MarcoAjustes entrada={entrada ?? null}>
       <Entrada id={entrada ?? 'empresa'} />

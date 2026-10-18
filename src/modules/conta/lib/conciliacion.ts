@@ -648,7 +648,7 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   // ── 11 · Comisiones del banco ────────────────────────────────────────────
   if (!entra && (m.conceptoComun === '17' || /COMISI[OÓ]N|COMIS\.|MANTENIMIENTO/i.test(m.concepto))) {
     return { ...b, confianza: 'probable', origen: 'banco', que: `Comisión del banco`,
-      porque: `El banco lo da como ${m.conceptoComun === '17' ? '«intereses, comisiones, gastos» (concepto 17)' : 'comisión'}: ${nombreCuenta(ctx, ctx.cuentas626)}.`,
+      porque: `El banco lo da como ${m.conceptoComun === '17' ? '«intereses, comisiones, gastos»' : 'comisión'}: ${nombreCuenta(ctx, ctx.cuentas626)}.`,
       destino: { tipo: 'cuenta', concepto: limpiarConcepto(m.concepto) || 'Comisión del banco', lineas: [{ cuenta: ctx.cuentas626, importe: euros(-imp) }] } }
   }
 

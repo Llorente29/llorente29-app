@@ -101,3 +101,23 @@
 .cxm .cxd-linea-libro .cxd-sale-tarea, .cxm .cxd-tarjeta .cxd-sale-tarea { color: var(--cxm-azul); }
 .cxm .cxd-espera { margin: 0 0 8px; padding: 6px 10px; border-radius: var(--cxm-radio-campo); background: var(--cxm-ambar-fondo); color: var(--cxm-texto); font-size: 13px; }
 .cxm .cxd-tarea-diez { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; font-size: 13px; }
+
+/* S01e · A 1440 el concepto se cortaba con «…» y sitio a los lados: no cede
+   por debajo de 96 px (antes, 40) y las columnas fijas son más justas (en la página). */
+.cxm .cxd-en-marco .cxd-linea-libro .cxd-concepto-titulo { min-width: 96px; }
+
+/* S01e · Móvil: las vistas en UNA fila que se desliza de lado (antes, una por
+   línea llenando la pantalla) y «Exportar» aparte, abajo del todo, para que la
+   lista se vea sin bajar. La barra se deshace para poder mover Exportar. */
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-barra { display: contents; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vistas {
+  flex: none; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  padding-bottom: 2px; -webkit-overflow-scrolling: touch;
+}
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vistas::-webkit-scrollbar { display: none; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vistas > * { flex: none; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vista { height: 36px; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vista-hecho { white-space: nowrap; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-exportar,
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-aviso { order: 2; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-exportar { flex-wrap: wrap; }

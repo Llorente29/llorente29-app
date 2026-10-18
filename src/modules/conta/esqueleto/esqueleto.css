@@ -75,6 +75,9 @@
   font-size: var(--s-t-m);
 }
 .s-cab-izquierda, .s-cab-derecha { display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
+/* S01e: la empresa, entera mientras quepa; solo si la ventana no da, se corta con «…» (y el nombre entero al pasar el ratón). */
+.s-cab-izquierda { flex-shrink: 1; min-width: 0; }
+.s-cab-periodo { flex-shrink: 0; }
 .s-cab-centro { flex: 1; min-width: 0; display: flex; align-items: stretch; }
 .s-cab-logotipo { display: flex; align-items: center; padding-right: var(--s-3); border-right: var(--s-linea) solid var(--s-borde-decorativo); height: 60%; }
 .s-cab-cliente { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
@@ -84,13 +87,14 @@
   background: var(--s-neutro-fondo); color: var(--s-tinta); font-weight: var(--s-peso-titulo); font-size: var(--s-t-s);
 }
 .s-cab-empresa {
-  display: inline-flex; align-items: center; gap: var(--s-1); max-width: 160px;
+  display: inline-flex; align-items: center; gap: var(--s-1); max-width: 300px; min-width: 0;
   background: none; border: 0; padding: var(--s-1) var(--s-2); border-radius: var(--s-radio-boton);
   font: inherit; font-weight: var(--s-peso-fuerte); color: var(--s-tinta); cursor: pointer; text-decoration: none;
 }
 .s-cab-empresa:hover { background: var(--s-suave); }
 .s-cab-empresa:focus-visible { outline: none; box-shadow: var(--s-foco); }
-.s-cab-empresa-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-cab-empresa-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-cab-empresa .s-icono { flex-shrink: 0; }
 .s-cab-periodo { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .s-cab-periodo:empty { display: none; }
 .cxm-es-movil .s-cab-periodo > * { display: flex; min-width: 0; max-width: 100%; }
@@ -99,6 +103,7 @@
 /* Pestañas del producto: la activa en negrita y subrayada (maqueta 1). */
 .s-pestanas-caja { position: relative; flex: 1; min-width: 0; display: flex; }
 .s-pestanas-medida { position: absolute; visibility: hidden; pointer-events: none; display: flex; gap: var(--s-1); white-space: nowrap; height: 0; overflow: hidden; }
+.s-pestanas-medida > * { flex-shrink: 0; }
 .s-pestanas { display: flex; align-items: stretch; gap: var(--s-1); min-width: 0; }
 .s-pestana {
   display: inline-flex; align-items: center; padding: 0 var(--s-2); white-space: nowrap;
@@ -156,6 +161,25 @@
 
 /* ── El móvil ────────────────────────────────────────────────────────── */
 .s-pestanas-movil { display: flex; overflow-x: auto; scrollbar-width: none; background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); min-height: var(--s-alto-control); }
+
+/* S01e · Una fila que se desliza (deslizable.ts) dice con un degradado en el
+   borde que hay más por ese lado. La cinta: «Ocultar» se queda pegado a la
+   derecha, a la vista, y su sombra hace de degradado. */
+.s-cinta-marco { display: contents; }
+.s-pestanas-movil[data-mas-derecha] { -webkit-mask-image: linear-gradient(to left, transparent, black var(--s-8)); mask-image: linear-gradient(to left, transparent, black var(--s-8)); }
+.s-pestanas-movil[data-mas-izquierda] { -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8)); mask-image: linear-gradient(to right, transparent, black var(--s-8)); }
+.s-pestanas-movil[data-mas-izquierda][data-mas-derecha] {
+  -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
+  mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
+}
+@media (max-width: 767px) {
+  .s-esqueleto .s-cinta-grupos[data-mas-izquierda] { -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8)); mask-image: linear-gradient(to right, transparent, black var(--s-8)); }
+  .s-esqueleto .s-cinta-ocultar { position: sticky; right: 0; z-index: 1; align-self: stretch; flex-shrink: 0; background: var(--s-suave); }
+  .s-esqueleto .s-cinta-grupos[data-mas-derecha] .s-cinta-ocultar::before {
+    content: ''; position: absolute; top: 0; bottom: 0; right: 100%; width: var(--s-8); pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--s-suave));
+  }
+}
 @media (max-width: 767px) {
   /* Nada de la cabecera puede ensanchar la página (los menús del móvil son fijos: no se recortan). */
   .s-cabecera { gap: var(--s-2); padding: 0 var(--s-3); overflow: hidden; max-width: 100vw; }
@@ -170,9 +194,13 @@
    (WCAG 2.4.11, foco no tapado). */
 html:has(.s-cabecera) { scroll-padding-top: 56px; }   /* 48 de la cabecera + 8: los tokens viven en .cx, no en html */
 
+/* El usuario en la cabecera: el nombre y, debajo, «Nivel medio» (S01e: sin
+   punto colgando ni el nivel suelto). */
+.s-usuario { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; line-height: 1.15; text-align: left; }
+.s-usuario-nombre { color: var(--s-tinta); font-weight: var(--s-peso-fuerte); }
 /* El nivel en el botón del usuario: los tres en la misma celda, solo se ve el
-   actual. El botón mide siempre lo del más largo («Sin experiencia»). */
-.s-usuario-nivel { display: inline-grid; }
+   actual. El botón mide siempre lo del más largo («Nivel sin experiencia»). */
+.s-usuario-nivel { display: inline-grid; font-size: var(--s-t-xs); color: var(--s-apoyo); font-weight: var(--s-peso-normal); }
 .s-usuario-nivel > span { grid-area: 1 / 1; visibility: hidden; }
 .s-usuario-nivel > span[data-actual] { visibility: visible; }
 
@@ -181,7 +209,7 @@ html:has(.s-cabecera) { scroll-padding-top: 56px; }   /* 48 de la cabecera + 8: 
 
 /* El nombre en el botón del usuario: un nombre largo se corta con «…» (entero al
    pasar el ratón; el botón lo dice entero al lector). */
-.s-usuario-nombre { display: inline-block; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.s-usuario-nombre { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
 /* S01d · En el móvil, debajo de la cabecera, una fila con la empresa ENTERA
    (con su cambio de empresa) y el ejercicio y el mes de la pantalla que los
