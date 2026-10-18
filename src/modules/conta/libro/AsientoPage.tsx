@@ -10,6 +10,10 @@
 //
 // Validar, Descartar y Anular dicen lo que han hecho con su contenido (regla 8).
 // Lo validado no se toca: se anula con un contraasiento enlazado.
+//
+// S01d: una expedida a mano (serie 1) lleva la tarjeta «Factura» en vez de
+// «Documento»: su PDF al lado, o «Adjuntar el PDF» si está validada y aún no
+// lo tiene. Una vez adjunta no se cambia.
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -32,6 +36,9 @@ import { estadoDiez, motivoSinPatron, numerosFolvyDiez, type ConDiez } from '@/m
 import { anularConDiez, leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 import { noSeValida } from '@/modules/conta/lib/validarConPdf'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { TarjetaExpedida } from '@/modules/conta/libro/FacturaExpedida'
+import { esExpedidaAMano } from '@/modules/conta/lib/expedidaPdf'
+import { useIsMobile } from '@/shell/useIsMobile'
 
 interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
 
@@ -66,9 +73,11 @@ export default function AsientoPage() {
   const error = r.clave === clave ? r.error : null
   const recargar = () => setVuelta((v) => v + 1)
 
-  const llegada = useLocation().state as { aviso?: string } | null
+  // S01d: desde «Nueva factura expedida», si el PDF no se pudo adjuntar, llega por qué (falloPdf).
+  const llegada = useLocation().state as { aviso?: string; falloPdf?: string } | null
   const [hecho, setHecho] = useState<string | null>(llegada?.aviso ?? null)
-  const [fallo, setFallo] = useState<string | null>(null)
+  const [fallo, setFallo] = useState<string | null>(llegada?.falloPdf ?? null)
+  const movil = useIsMobile()
   const [ocupado, setOcupado] = useState(false)
   const [cambiando, setCambiando] = useState<number | null>(null)
   const [dialogo, setDialogo] = useState<'descartar' | 'anular' | null>(null)
@@ -224,6 +233,10 @@ export default function AsientoPage() {
           {datos.conDiez && diez && (
             <TarjetaDiez a={a} d={datos.conDiez} e={diez} quien={userName}
               alHacer={(t) => { setFallo(null); setHecho(t); recargar() }} alFallar={(t) => { setHecho(null); setFallo(t) }} />
+          )}
+          {esExpedidaAMano(a) && accountId && (
+            <TarjetaExpedida a={a} accountId={accountId} quien={userName} movil={movil}
+              alHacer={(t) => { setFallo(null); setHecho(t) }} alFallar={(t) => { setHecho(null); setFallo(t) }} />
           )}
           <section className="cx-tarjeta" aria-label="Documento">
             <h2 className="cx-tarjeta-titulo">Documento</h2>
