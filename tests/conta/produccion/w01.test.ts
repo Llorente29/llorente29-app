@@ -517,10 +517,11 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con los ficheros medidos, da el estado de cada uno y los «autorizo» (I01b: la 0180 sigue; ningún «autorizo»)', () => {
+  it('con los ficheros medidos, da el estado de cada uno y los «autorizo» (I01b: la 0180 a la 0220 siguen; ningún «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261122T0180_i01b_asiento_303.sql: sigue')
+    for (const f of ['20261122T0180_i01b_asiento_303', '20261122T0190_i01b_calendario', '20261122T0200_i01b_declaracion',
+      '20261122T0210_i01b_presentados', '20261122T0220_i01b_certificados']) expect(r.out).toContain(`${f}.sql: sigue`)
     expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {

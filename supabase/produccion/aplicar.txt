@@ -3,7 +3,7 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01b · El asiento de liquidación del 303 y su pago (rama
+# I01b · Las pantallas de Impuestos y el asiento de liquidación del 303 (rama
 # conta/i01b-pantallas-impuestos). La anterior de este fichero (S01d: 0160 y
 # 0170) ya está aplicada en producción; su copia:
 # tests/conta/produccion/tanda-s01d-tanda-20261018.txt. Esta numera por encima
@@ -17,10 +17,23 @@
 #      liquidación de un 303), conta_impuesto_estado_vale (las vueltas atrás),
 #      bank_match_item (columna nueva que admite nulos y su CHECK, que solo
 #      amplía), bank_match y journal_entry (su disparador nuevo).
+#   2. 0190 — AÑADE el calendario (conta_impuesto_calendario y sus dos piezas
+#      de dentro, que solo puede llamar el servidor).
+#   3. 0200 — AÑADE el IVA de un periodo (conta_impuesto_declaracion_ver) y
+#      cómo se paga (conta_impuesto_pago_poner).
+#   4. 0210 — AÑADE Presentados (conta_impuesto_presentados).
+#   5. 0220 — AÑADE Certificados y accesos (conta_impuesto_certificados_ver y
+#      conta_impuesto_certificado_presenta).
+#   Las cuatro últimas solo añaden funciones; las pantallas las necesitan, y
+#   por eso van antes de fusionar.
 #
 # No toca el camino del pedido. No contabiliza nada: lo hace la persona desde
-# la pantalla, después. No hay funciones que desplegar a mano (conta-hacienda
-# va con la fusión).
+# la pantalla, después. conta-hacienda se despliega con la fusión (PR, «Funciones
+# a desplegar a mano»).
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
 cuenta: scripts/conta/produccion/cuentas/i01b-asiento-303.sql
 supabase/migrations/20261122T0180_i01b_asiento_303.sql
+supabase/migrations/20261122T0190_i01b_calendario.sql
+supabase/migrations/20261122T0200_i01b_declaracion.sql
+supabase/migrations/20261122T0210_i01b_presentados.sql
+supabase/migrations/20261122T0220_i01b_certificados.sql

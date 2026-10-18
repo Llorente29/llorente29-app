@@ -1382,21 +1382,22 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el asiento de liquidación del 303 y su pago (I01b, 0180)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el asiento del 303 y las pantallas de Impuestos (I01b, 0180–0220)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 18/10 a las 11:16 UTC para ESTE fichero (con su md5).
+  // lectura en producción el 18/10 a las 12:34 UTC para ESTOS ficheros (con sus md5).
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
 
-  it('un fichero, el medido; sigue (no pide «autorizo») y no toca el camino del pedido', () => {
-    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261122T0180_i01b_asiento_303.sql'])
+  it('cinco ficheros, los medidos; todos siguen (ninguno pide «autorizo») y no tocan el camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261122T0180_i01b_asiento_303.sql', '20261122T0190_i01b_calendario.sql',
+      '20261122T0200_i01b_declaracion.sql', '20261122T0210_i01b_presentados.sql', '20261122T0220_i01b_certificados.sql'])
     expect(Object.keys(medida.tanda)).toEqual(viva)
     for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
-    expect(Object.values(r.ficheros)).toEqual(['sigue'])
+    expect(Object.values(r.ficheros)).toEqual(['sigue', 'sigue', 'sigue', 'sigue', 'sigue'])
     expect(ctx.tablas).toEqual(['public.bank_match', 'public.bank_match_item', 'public.journal_entry'])
     expect(ctx.funciones).toEqual(['public.conta_impuesto_estado_vale(text,text)', 'public.conta_motivos_para_validar(uuid)'])
     expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
@@ -1419,14 +1420,21 @@ describe('la tanda de AHORA (manifiesto vivo): el asiento de liquidación del 30
     expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
-  it('su vuelta atrás: el .down.sql, con la misma cuenta; para si ya hay liquidaciones o pagos casados, y la ensaya staging', () => {
+  it('su vuelta atrás: los cinco .down.sql en orden inverso, con la misma cuenta; la 0180 para si ya hay liquidaciones o pagos casados; cada una la ensaya staging', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
-    expect(atras).toEqual(['supabase/vuelta-atras/20261122T0180_i01b_asiento_303.down.sql'])
+    expect(atras).toEqual([...viva].reverse().map((f) => f.replace('supabase/migrations/', 'supabase/vuelta-atras/').replace(/\.sql$/, '.down.sql')))
     expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/i01b-asiento-303.sql')
-    expect(readFileSync(atras[0], 'utf8')).toMatch(/raise exception 'I01b 0180 vuelta atrás/)
-    const prueba = readFileSync('supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql', 'utf8')
-    expect(prueba).toContain(`\\i ${atras[0]}`)
-    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(readFileSync(atras[4], 'utf8')).toMatch(/raise exception 'I01b 0180 vuelta atrás/)
+    const pruebas: Record<string, string> = {
+      '0180': 'supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql', '0190': 'supabase/staging/sql/20261122_i01b_calendario_prueba.sql',
+      '0200': 'supabase/staging/sql/20261122_i01b_declaracion_prueba.sql', '0210': 'supabase/staging/sql/20261122_i01b_presentados_prueba.sql',
+      '0220': 'supabase/staging/sql/20261122_i01b_certificados_prueba.sql',
+    }
+    for (const [i, f] of viva.entries()) {
+      const prueba = readFileSync(pruebas[f.slice(f.indexOf('T') + 1, f.indexOf('T') + 5)], 'utf8')
+      expect(prueba, f).toContain(`\\i ${f}`)
+      expect(prueba, f).toContain(`\\i ${atras[atras.length - 1 - i]}`)
+    }
   })
 })
 
