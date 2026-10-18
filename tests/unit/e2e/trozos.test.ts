@@ -37,7 +37,11 @@ describe('la entera en trozos', () => {
     // 18/10 (S01d): la suite ha crecido (s01c, s01d). La entera de 4 carriles
     // del 18/10 (run 39109156060) midió sus trozos en 8,7, 9,3 y 11,3 min; el
     // reparto estimado da 10,3. El techo pasa a 11 min, con esa medida.
-    expect(Math.max(...seg) / 60).toBeLessThan(11)
+    // 18/10 (I01b): s01/esqueleto, s01d/flujos e i01b/impuestos, medidos ya (esqueleto
+    // solo, 286 s), contaban como la mediana (39 s). La entera de 2 trozos de ese día
+    // (run 39153669213) tardó 25,6 y 18,7 min en sus pruebas: 44,3 min, unos 11,1 por
+    // trozo de 4; el reparto estimado da 11,7. El techo pasa a 12 min, con esa medida.
+    expect(Math.max(...seg) / 60).toBeLessThan(12)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {
