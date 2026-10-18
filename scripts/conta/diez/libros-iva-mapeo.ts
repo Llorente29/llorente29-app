@@ -125,6 +125,14 @@ export type FilaLibro = {
   base: number; tipo: number; cuota: number
   retencion_tipo: number | null; retencion: number | null
   tramo: number
+  /** Lo que dice Diez en Pais y TipoOperacion, en corto ([a-z0-9_], 12 como mucho); sin nada, no va. Para medir las autoliquidadas (18/10). */
+  pais_diez?: string; tipo_operacion?: string
+}
+
+/** Un campo de Diez en corto, para medirlo como clave: minúsculas, [a-z0-9_], 12 como mucho; vacío → undefined. */
+export function enCorto(x: unknown): string | undefined {
+  const t = String(x ?? '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 12)
+  return t === '' ? undefined : t
 }
 
 /** El país de un NIF: solo si empieza por dos letras de otro país. */
@@ -157,5 +165,7 @@ export function filasDeFactura(f: Record<string, unknown>, fechaRecibida: FechaR
     retencion_tipo: i === 0 && ret !== 0 ? Number(f.PorcentajeRetencion ?? 0) : null,
     retencion: i === 0 && ret !== 0 ? ret : null,
     tramo: i + 1,
+    ...(enCorto(f.Pais) !== undefined ? { pais_diez: enCorto(f.Pais) } : {}),
+    ...(enCorto(f.TipoOperacion) !== undefined ? { tipo_operacion: enCorto(f.TipoOperacion) } : {}),
   }))
 }
