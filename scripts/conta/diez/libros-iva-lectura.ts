@@ -28,6 +28,7 @@
 //   DIEZ_LECTURA='{…}' npx tsx scripts/conta/diez/libros-iva-lectura.ts
 
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { ClienteDiez, type AlmacenToken, type Factura } from '../../../supabase/functions/_shared/diezCliente.ts'
 
 const BD = 'C0008'
@@ -132,7 +133,61 @@ async function main() {
       sale(`${p}.huella_bases`, huella(String(base)))
     }
   }
+  if (process.env.SUMIED_JSON) cruzar(unicas, JSON.parse(readFileSync(process.env.SUMIED_JSON, 'utf8')) as AsientoSumied[])
   sale('peticiones', c.metrica.peticiones)
+}
+
+/** Un asiento traído de Diez en Sumied, con su IVA (céntimos): lo vuelca el workflow con conta_lectura. */
+export type AsientoSumied = { e: string; s: string; n: number; f: string; c477: number; c472: number }
+
+/** La cuota de una factura de Diez, en céntimos (todos sus tramos). */
+export const cuotaFactura = (f: Record<string, unknown>) => tramos(f).reduce((t, x) => t + x.cuota, 0)
+
+/**
+ * El cruce, factura a factura, por (ejercicio, serie, documento): la cuota de
+ * Diez contra la 477 (expedidas) o la 472 (recibidas) de su asiento en Sumied.
+ * Lo que no casa sale por su NÚMERO DE DOCUMENTO (un número interno de Diez,
+ * no un dato de nadie): el detalle se mira luego en Sumied, solo leyendo.
+ */
+export function cruce(facturas: Record<string, unknown>[], asientos: AsientoSumied[]) {
+  const porClave = new Map(asientos.map((a) => [`${a.e}/${a.s}/${a.n}`, a]))
+  const usadas = new Set<string>()
+  type Grupo = { casan: number; distinta: number[]; mismaEnValorAbsoluto: number; sinAsiento: number[]; asientoSinFactura: number[] }
+  const g = new Map<string, Grupo>()
+  const de = (k: string) => { if (!g.has(k)) g.set(k, { casan: 0, distinta: [], mismaEnValorAbsoluto: 0, sinAsiento: [], asientoSinFactura: [] }); return g.get(k)! }
+  for (const f of facturas) {
+    const lib = String(f.Serie) === '1' ? 'expedidas' : String(f.Serie) === '2' ? 'recibidas' : 'otras'
+    const k = `${f.Ejercicio}/${f.Serie}/${f.Documento}`
+    const x = de(`${lib}.${trimestre(f.Fecha)}t`)
+    const a = porClave.get(k)
+    if (!a) { x.sinAsiento.push(Number(f.Documento)); continue }
+    usadas.add(k)
+    const enSumied = lib === 'recibidas' ? a.c472 : a.c477
+    const cuota = cuotaFactura(f)
+    if (cuota === enSumied) x.casan++
+    else { x.distinta.push(Number(f.Documento)); if (Math.abs(cuota) === Math.abs(enSumied)) x.mismaEnValorAbsoluto++ }
+  }
+  for (const a of asientos) {
+    if (usadas.has(`${a.e}/${a.s}/${a.n}`) || (a.c477 === 0 && a.c472 === 0)) continue
+    const lib = a.s === '1' ? 'expedidas' : a.s === '2' ? 'recibidas' : `serie${a.s}`
+    de(`${lib}.${trimestre(a.f)}t`).asientoSinFactura.push(a.n)
+  }
+  return g
+}
+
+const MAX_LISTA = 40
+function cruzar(facturas: Record<string, unknown>[], asientos: AsientoSumied[]) {
+  seccion('cruce_con_sumied')
+  sale('asientos_sumied', asientos.length)
+  for (const [k, x] of [...cruce(facturas, asientos)].sort()) {
+    sale(`${k}.casan`, x.casan)
+    sale(`${k}.cuota_distinta`, x.distinta.length)
+    sale(`${k}.distinta_solo_de_signo`, x.mismaEnValorAbsoluto)
+    sale(`${k}.factura_sin_asiento`, x.sinAsiento.length)
+    sale(`${k}.asiento_con_iva_sin_factura`, x.asientoSinFactura.length)
+    const lista = (nombre: string, ns: number[]) => ns.sort((a, b) => a - b).slice(0, MAX_LISTA).forEach((n, i) => sale(`${k}.${nombre}.${String(i + 1).padStart(2, '0')}`, n))
+    lista('doc_cuota_distinta', x.distinta); lista('doc_sin_asiento', x.sinAsiento); lista('doc_asiento_sin_factura', x.asientoSinFactura)
+  }
 }
 
 // Solo corre como programa (la prueba importa las funciones puras).

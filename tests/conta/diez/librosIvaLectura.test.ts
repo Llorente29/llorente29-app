@@ -22,3 +22,30 @@ describe('libros de IVA de Diez · lectura', () => {
     expect(huella('985747')).toMatch(/^[0-9a-f]{16}$/)
   })
 })
+
+import { cruce } from '../../../scripts/conta/diez/libros-iva-lectura'
+describe('libros de IVA de Diez · el cruce con Sumied', () => {
+  const asientos = [
+    { e: '2026', s: '1', n: 10, f: '20260115', c477: 1000, c472: 0 },
+    { e: '2026', s: '1', n: 11, f: '20260116', c477: 500, c472: 0 },
+    { e: '2026', s: '2', n: 20, f: '20260801', c477: 0, c472: 2100 },
+    { e: '2026', s: '2', n: 21, f: '20260802', c477: 0, c472: 900 },
+    { e: '2026', s: '4', n: 30, f: '20260930', c477: 0, c472: 0 },
+  ]
+  const facturas = [
+    { Ejercicio: '2026', Serie: '1', Documento: 10, Fecha: 20260115, BaseImponible1: 100, PorcentajeIVA1: 10, CuotaIVA1: 10 },
+    { Ejercicio: '2026', Serie: '1', Documento: 11, Fecha: 20260116, BaseImponible1: 40, PorcentajeIVA1: 10, CuotaIVA1: 4 },
+    { Ejercicio: '2026', Serie: '2', Documento: 20, Fecha: 20260801, BaseImponible1: -100, PorcentajeIVA1: 21, CuotaIVA1: -21 },
+    { Ejercicio: '2026', Serie: '2', Documento: 99, Fecha: 20260803, BaseImponible1: 10, PorcentajeIVA1: 21, CuotaIVA1: 2.1 },
+  ]
+  const g = cruce(facturas, asientos)
+  it('casa por ejercicio, serie y documento, y compara la cuota con la 477 o la 472', () => {
+    expect(g.get('expedidas.1t')).toEqual({ casan: 1, distinta: [11], mismaEnValorAbsoluto: 0, sinAsiento: [], asientoSinFactura: [] })
+  })
+  it('separa lo que solo cambia de signo, la factura sin asiento y el asiento con IVA sin factura', () => {
+    expect(g.get('recibidas.3t')).toEqual({ casan: 0, distinta: [20], mismaEnValorAbsoluto: 1, sinAsiento: [99], asientoSinFactura: [21] })
+  })
+  it('un asiento sin IVA no cuenta como «sin factura»', () => {
+    expect([...g.keys()].some((k) => k.startsWith('serie4'))).toBe(false)
+  })
+})
