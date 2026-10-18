@@ -43,6 +43,7 @@ import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
 import { PanelMovimiento } from '@/modules/conta/bancos/PanelMovimiento'
+import { PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 
 const VISIBLES = 60
 const euros = (c: number) => eurosExactos(c / 100)
@@ -109,7 +110,7 @@ export function Movimientos() {
   const grupos = useMemo(() => dias.flatMap((d) => d.grupos), [dias])
 
   if (!banco) {
-    return <div className="cx-tarjeta"><p>No hay ningún banco dado de alta. <Link to={rutaBancos('cuentas')} className="cx-enlace">Dalo de alta en Cuentas y extractos</Link> y sube su extracto.</p></div>
+    return <div className="cx-tarjeta"><p>No hay ningún banco dado de alta. <Link to={`${rutaBancos('cuentas')}?${PARAM_NUEVO}=${VALOR_NUEVO}`} className="cx-enlace">Dalo de alta</Link> y sube su extracto.</p></div>
   }
   if (lectura.error) return <ErrorConReintento mensaje={lectura.error} reintentar={lectura.recargar} />
   if (!lectura.datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando los movimientos">{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={44} />)}</div>
