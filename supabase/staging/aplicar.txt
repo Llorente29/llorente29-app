@@ -1,3 +1,71 @@
+# I01b · Las pantallas de Impuestos y el asiento del 303 (rama conta/i01b-pantallas-impuestos).
+#   Pieza 6, el asiento de liquidación: la prueba aplica la 0100 a la 0180 (la 0160 y la 0170 del S01d ya están) con
+#   \i y ROLLBACK (y la M01 y la 0140 del S01, si staging no las tiene),
+#   contra los 303 de 2026 de la empresa A: la validación sigue pidiendo tipo
+#   a los demás asientos; contabilizar (477 contra 472, el resultado a la 4750,
+#   validado, «Contabilizado», una sola vez, la cuenta B no); casar el cargo
+#   (un movimiento de prueba creado dentro) → «Pagado» y bank_match_item con
+#   su declaración; deshacer el casado y anular la liquidación devuelven la
+#   declaración; con el mes cerrado va al primer día abierto; y una [68] para.
+#   Antes de nada, la conta_motivos_para_validar huérfana que deja la 0180 de
+#   verdad del run anterior (abajo): con ella, las pruebas creen que la M01
+#   está y no la cargan (run 345). La misma limpieza va otra vez detrás de la 0180.
+supabase/staging/sql/20261122_i01b_sin_m01_en_staging.sql
+supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
+#   Su vuelta atrás: hacia delante, atrás (las tres huellas como antes y nada
+#   de la 0180) y otra vez hacia delante.
+supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
+#   Para las pantallas en staging, lo que falta del I01a DE VERDAD: la 0120
+#   (obligaciones), 0130 (certificados, solo funciones y la tabla de
+#   confirmaciones), 0140 (el cálculo del 303) y 0150 (presentar). Solo
+#   añaden y se pueden volver a pasar (create or replace, if not exists, la
+#   política con su drop). La 0100 y la 0110 ya estaban (runs 313 y 314). El
+#   run 338 lo enseñó: sin la 0140, el calendario no podía calcular nada.
+supabase/migrations/20261122T0120_i01_obligaciones.sql
+supabase/migrations/20261122T0130_i01_certificados.sql
+supabase/migrations/20261122T0140_i01_calculo_303.sql
+supabase/migrations/20261122T0150_i01_presentar.sql
+#   La 0180 (el asiento de liquidación y casar el cargo) DE VERDAD desde el
+#   18/10 (decisión del frente, con permiso de Julio: «elige lo mejor para el
+#   desarrollo»): sin ella la e2e no puede contabilizar ni casar, y presentar
+#   con el doble acabaría en «sin contabilizar». Cambia en caliente, pero solo
+#   para lo suyo: la excepción de conta_motivos_para_validar es solo para la
+#   liquidación de un 303; el CHECK y la columna nueva de bank_match_item
+#   solo amplían; los dos disparadores solo despiertan al deshacer un casado o
+#   anular una liquidación. Se puede volver a pasar. Su prueba (arriba) y su
+#   vuelta atrás la vuelven a cargar dentro de su transacción. La vuelta atrás
+#   del I01a deshace antes el I01b.
+supabase/migrations/20261122T0180_i01b_asiento_303.sql
+#   Y justo después, solo en staging: la 0180 deja conta_motivos_para_validar
+#   sin la M01 (que aquí no está de verdad) y la prueba de la M01 choca con ella
+#   (run 344). Se quita si nadie la llama; el resto de la 0180 se queda.
+supabase/staging/sql/20261122_i01b_sin_m01_en_staging.sql
+#   P1, el calendario: la 0190 se aplica DE VERDAD (solo añade tres funciones
+#   que leen; la pantalla de Impuestos la necesita en staging) y después su
+#   prueba: como A y como B, y su vuelta atrás dentro (y otra vez delante).
+supabase/migrations/20261122T0190_i01b_calendario.sql
+supabase/staging/sql/20261122_i01b_calendario_prueba.sql
+#   P2, el IVA de un periodo: la 0200 DE VERDAD (solo añade dos funciones: la
+#   que lee para la pantalla y la que guarda cómo se paga) y su prueba: como A
+#   y como B, el pago, y su vuelta atrás dentro (y otra vez delante).
+supabase/migrations/20261122T0200_i01b_declaracion.sql
+supabase/staging/sql/20261122_i01b_declaracion_prueba.sql
+#   P3, presentados: la 0210 DE VERDAD (solo añade una función que lee) y su
+#   prueba: el 3T de A para apuntar, apuntado fuera, B no lo ve, y su vuelta atrás.
+supabase/migrations/20261122T0210_i01b_presentados.sql
+supabase/staging/sql/20261122_i01b_presentados_prueba.sql
+#   P4, certificados: la 0220 DE VERDAD (solo añade dos funciones) y su prueba
+#   con fichas de mentira: A no sube (con el porqué de la base), presenta con
+#   el suyo y no con el de B, B no ve, y su vuelta atrás.
+supabase/migrations/20261122T0220_i01b_certificados.sql
+supabase/staging/sql/20261122_i01b_certificados_prueba.sql
+#   P4b, invitar a la asesoría: la 0230 DE VERDAD (añade una tabla y funciones)
+#   y su prueba: invitar con sus límites, aceptar con cuenta (vincula) y sin
+#   ella (espera el alta de la plataforma), cancelar, el tope de 30 días y su
+#   vuelta atrás (para si hay invitaciones).
+supabase/migrations/20261122T0230_i01b_asesoria.sql
+supabase/staging/sql/20261122_i01b_asesoria_prueba.sql
+
 # S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
 #   La 0160 (el CHECK de journal_entry_document.kind amplía con
 #   'factura_expedida' y conta_documento_expedida_guardar) y la 0170

@@ -37,6 +37,9 @@ import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
+import ImpuestosPage from '@/modules/conta/impuestos/ImpuestosPage'
+import IvaPeriodoPage from '@/modules/conta/impuestos/IvaPeriodoPage'
+import AceptarAsesoriaPage from '@/modules/conta/impuestos/AceptarAsesoriaPage'
 import InicioPage from '@/modules/conta/inicio/InicioPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
 import { Portada } from '@/modules/conta/marco/Portada'
@@ -103,6 +106,12 @@ export const contaModule: ModuleDefinition = {
     // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
     { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
+    // I01b · Impuestos (tableros 8, 9 y 10): el calendario, sus pestañas y el IVA de un periodo.
+    { path: CONTA.rutas.impuestos, element: enMarco(<ImpuestosPage />, '¿Cuánto IVA pago este trimestre?') },
+    { path: CONTA.rutas.impuestosPestana, element: enMarco(<ImpuestosPage />, '¿Cuánto IVA pago este trimestre?') },
+    { path: CONTA.rutas.impuestoIva, element: enMarco(<IvaPeriodoPage />, '¿Por qué pago más que el trimestre pasado?') },
+    // I01b · Aceptar la invitación de una empresa (con sesión; sin ella, la misma página en AuthRouter).
+    { path: CONTA.rutas.aceptarAsesoria, element: <AceptarAsesoriaPage /> },
     // Compras (encargo de compras, N18 y N19).
     { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },

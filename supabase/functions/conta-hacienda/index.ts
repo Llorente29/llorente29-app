@@ -7,6 +7,8 @@
 //   · «probar»               { confirmacion }                    Probar con Hacienda.
 //   · «presentar_303»        { declaracion, confirmacion }        Presentar el 303.
 //   · «ya_presentado_fuera»  { declaracion, csv, confirmacion? }  Ya lo presenté fuera.
+//   · «puerta»               {}                                   I01b: ¿está abierta? (no llama a Hacienda).
+//   · «fichero_303»          { declaracion }                      I01b: el fichero oficial (no llama a Hacienda).
 // La confirmación es el token de un solo uso que da conta_cert_confirmar a
 // quien «puede presentar», al confirmar ESA acción.
 //
@@ -28,8 +30,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { AlmacenVault } from "../_shared/certificados/almacen.ts";
 import { HaciendaDoble } from "../_shared/hacienda/doble.ts";
-import { comprobarPuerta, type Hacienda, HaciendaAeat, HaciendaCerrada, PuertaCerrada } from "../_shared/hacienda/puerta.ts";
-import { type Dependencias, presentar303, probar, type Salida, yaPresentadoFuera } from "../_shared/hacienda/acciones.ts";
+import { CERRADA, comprobarPuerta, type Hacienda, HaciendaAeat, HaciendaCerrada, PuertaCerrada } from "../_shared/hacienda/puerta.ts";
+import { contabilizarTrasPresentar, type Dependencias, fichero303, presentar303, probar, type Salida, yaPresentadoFuera } from "../_shared/hacienda/acciones.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -80,6 +82,19 @@ Deno.serve(async (req) => {
     return json({ ok: false, mensaje: "No ha llegado qué hay que hacer." }, 400);
   }
   const accion = typeof cuerpo.accion === "string" ? cuerpo.accion : "";
+  const programa = { version: "0001", nifDesarrollo: Deno.env.get("CONTA_NIF_DESARROLLO") ?? "" };
+
+  // I01b · El fichero oficial: no llama a Hacienda ni abre el certificado, así que no pasa por la puerta.
+  if (accion === "fichero_303") {
+    const declaracion = uuid(cuerpo.declaracion);
+    if (!declaracion) return json({ ok: false, mensaje: "Falta la declaración." }, 400);
+    const servicio = createClient(SUPABASE_URL, SERVICIO);
+    const { data: r } = await servicio.from("tax_return").select("company_id, form_code").eq("id", declaracion).maybeSingle();
+    if (!r || r.form_code !== "303") return json({ ok: false, mensaje: "Esa declaración no está." }, 404);
+    const salida = await fichero303(servicio, programa, { usuario, declaracion, empresa: r.company_id });
+    console.log(JSON.stringify({ hacienda: accion, resultado: salida.ok ? "ok" : salida.motivo }));
+    return json(salida, salida.ok ? 200 : 422);
+  }
 
   let hacienda: Hacienda;
   try {
@@ -90,6 +105,15 @@ Deno.serve(async (req) => {
     return json({ ok: false, motivo: "cerrada", mensaje }, 503);
   }
 
+  // I01b · ¿Está abierta? Para que el botón diga por qué no presenta todavía, antes de pulsarlo.
+  if (accion === "puerta") {
+    return json({
+      ok: true, entorno: hacienda.entorno, abierta: hacienda.entorno !== "cerrada",
+      mensaje: hacienda.entorno === "cerrada" ? CERRADA
+        : hacienda.entorno === "doble" ? "Estás en pruebas: Sumied habla con un Hacienda de mentira. No llega nada a Hacienda." : "",
+    });
+  }
+
   const servicio = createClient(SUPABASE_URL, SERVICIO);
   const d: Dependencias = {
     base: servicio,
@@ -97,7 +121,7 @@ Deno.serve(async (req) => {
     hacienda,
     forge,
     sha256,
-    programa: { version: "0001", nifDesarrollo: Deno.env.get("CONTA_NIF_DESARROLLO") ?? "" },
+    programa,
     async guardarPdf(ruta, pdf) {
       const { error } = await servicio.storage.from("conta-documentos").upload(ruta, pdf, { contentType: "application/pdf", upsert: false });
       // Con la huella en el nombre, «ya existe» es el mismo PDF: no se pisa.
@@ -135,6 +159,12 @@ Deno.serve(async (req) => {
   } catch {
     console.log(JSON.stringify({ hacienda: accion, entorno: hacienda.entorno, resultado: "fallo" }));
     return json({ ok: false, motivo: "fallo", mensaje: "No se ha podido terminar. Mira el registro de la declaración antes de repetir." }, 500);
+  }
+  // I01b: presentada (aquí o fuera), el asiento de liquidación con la sesión de la persona.
+  // Si no sale, la presentación se queda como está y la pantalla dice por qué.
+  if (salida.ok && (accion === "presentar_303" || accion === "ya_presentado_fuera")) {
+    const contabilizado = await contabilizarTrasPresentar(comoPersona, String(cuerpo.declaracion));
+    salida = { ...salida, contabilizado, mensaje: `${salida.mensaje} ${contabilizado.mensaje}` };
   }
   console.log(JSON.stringify({ hacienda: accion, entorno: hacienda.entorno, resultado: salida.ok ? "ok" : salida.motivo }));
   return json(salida, salida.ok ? 200 : 422);

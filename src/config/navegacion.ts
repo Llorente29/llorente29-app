@@ -232,6 +232,14 @@ export const CONTA = {
     sistemaDiseno: 'ajustes/sistema-diseno',
     /** S01 · Contabilidad › Definiciones › Analítica: los ejes de la empresa (conta_eje_analitico). */
     analitica: 'ajustes/analitica',
+    /** I01b · Impuestos › Calendario (tablero 8). */
+    impuestos: 'impuestos',
+    /** I01b · Una pestaña de Impuestos: presentados, sociedades, certificados. */
+    impuestosPestana: 'impuestos/:pestana',
+    /** I01b · El IVA de un periodo (tablero 9): impuestos/iva/2026/3T. */
+    impuestoIva: 'impuestos/iva/:ejercicio/:periodo',
+    /** I01b · Aceptar la invitación de una empresa a su asesoría (también sin sesión: AuthRouter). */
+    aceptarAsesoria: 'asesoria',
   },
 } as const
 
@@ -419,6 +427,10 @@ export const rutaLoteCatcher = (loteId: string): string => rutaConta(CONTA.rutas
 /** Bancos (B01): sin pestaña, Movimientos. */
 export const rutaBancos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.bancosPestana, { pestana }) : rutaConta(CONTA.rutas.bancos))
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
+/** I01b · Impuestos: el calendario, o una de sus pestañas (presentados, sociedades, certificados). */
+export const rutaImpuestos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.impuestosPestana, { pestana }) : rutaConta(CONTA.rutas.impuestos))
+/** I01b · El IVA de un periodo: el 303 del 3T de 2026 → /conta/impuestos/iva/2026/3T. */
+export const rutaIvaPeriodo = (ejercicio: number, periodo: string): string => rutaConta(CONTA.rutas.impuestoIva, { ejercicio: String(ejercicio), periodo })
 /** Subir los documentos de la liquidación de un proveedor, en un local y un mes ('YYYY-MM-01'). */
 export const rutaLiquidacionNueva = (proveedor: string, local: string | null, mes: string): string => {
   const q = new URLSearchParams({ proveedor, mes })

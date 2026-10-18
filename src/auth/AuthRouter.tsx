@@ -7,6 +7,7 @@
 //   - Sesión 7: Paso 1 — /login.
 //   - Sesión 7: Paso 3 — /welcome.
 //   - Sesión 9: Paso 5 (D3) — /reset-password.
+//   - I01b (18/10): /conta/asesoria, aceptar la invitación a una asesoría.
 //   - Sesión 9: /reset-password/confirm MOVIDO a App.tsx 1-bis (Opción 1.a).
 //     Razón: la ruta debe ser accesible también con sesión activa (caso
 //     "user logueado pulsa reset"). AuthRouter solo se monta cuando
@@ -20,6 +21,7 @@ import AccesoTrabajadorPage from '../pages/AccesoTrabajadorPage'
 import { isPairedEstacion } from '../native/print/printWorker'
 import { CON_MARCA } from '../marca/marca'
 import EntrarMarca from '../marca/EntrarMarca'
+import AceptarAsesoriaPage from '../modules/conta/impuestos/AceptarAsesoriaPage'
 
 export default function AuthRouter() {
   // PERSISTENCIA DE ESTACIÓN (tablet de cocina): si esta app nativa ya está
@@ -38,6 +40,8 @@ export default function AuthRouter() {
       <Route path="/welcome" element={<WelcomePage />} />
       <Route path="/reset-password" element={CON_MARCA ? <EntrarMarca modoInicial="olvido" /> : <ResetPasswordPage />} />
       <Route path="/acceso" element={<AccesoTrabajadorPage />} />
+      {/* I01b: aceptar la invitación de una empresa a su asesoría, sin sesión (el enlace del correo). */}
+      <Route path="/conta/asesoria" element={<AceptarAsesoriaPage />} />
       {/* Fallback: cualquier URL desconocida pre-sesión → login.
           /reset-password/confirm NO está aquí: vive en App.tsx 1-bis para
           ser accesible con o sin sesión activa. */}

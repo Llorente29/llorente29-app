@@ -1,0 +1,23 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# S01d · Lo que falla del S01 que necesita base (rama conta/s01d-tanda, PR 2
+# del S01b). La anterior de este fichero (I01a, impuestos por dentro:
+# 0100–0150) ya está aplicada en producción; su copia:
+# tests/conta/produccion/tanda-i01a-impuestos-20261018.txt.
+# Orden con la I01b del frente C (Julio, 18/10): esta va primero; la I01b
+# numera por encima de la 0170.
+#
+#   1. 0160 — CAMBIA en caliente journal_entry_document: su CHECK de kind solo
+#      AMPLÍA ('factura_expedida'). Declarado, con su prueba de staging. AÑADE
+#      conta_documento_expedida_guardar (el PDF de la expedida a mano).
+#   2. 0170 — AÑADE bank_cuenta_nueva: un banco que aún no está en el plan, con
+#      su subcuenta 572 (salir del círculo de «Dar de alta un banco»).
+#
+# Ninguna toca el camino del pedido. No hay funciones que desplegar a mano.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/s01d-tanda.sql
+supabase/migrations/20261122T0160_s01d_documento_expedida.sql
+supabase/migrations/20261122T0170_s01d_banco_nuevo.sql

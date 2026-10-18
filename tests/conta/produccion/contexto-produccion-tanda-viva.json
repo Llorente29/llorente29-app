@@ -1,17 +1,28 @@
 {
- "_que": "S01d · contexto de producción de la tanda viva (20261122T0160–0170), medido en SOLO LECTURA el 18/10 a las 09:25 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que nombra la tanda solo existe journal_entry_document (56 filas: se le amplía el CHECK de kind); ninguna de las dos funciones existe; nada del camino del pedido; ninguno de los dos en el historial.",
- "medido": "2026-10-18T09:25Z",
+ "_que": "I01b · contexto de producción de la tanda viva (20261122T0180–0230), medido en SOLO LECTURA el 18/10 a las 14:46 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. No existe tax_advisor_invitation. Existen bank_match y bank_match_item (0 filas estimadas por reltuples; 7 casados de verdad en Foodint) y journal_entry (14.955 estimadas); de las 26 funciones que nombra la tanda solo existen conta_impuesto_estado_vale y conta_motivos_para_validar, con las huellas de las que la 0180 parte (61ec32bf… de la 0110 y bac135c4… de la 0140 del S01); nada del camino del pedido; ninguna en el historial.",
+ "medido": "2026-10-18T14:46Z",
  "tanda": {
-  "supabase/migrations/20261122T0160_s01d_documento_expedida.sql": "99cf07c5d6269e51b0118ed57e95aa7f",
-  "supabase/migrations/20261122T0170_s01d_banco_nuevo.sql": "e812161e4678d13f2b626c53fab3eccf"
+  "supabase/migrations/20261122T0180_i01b_asiento_303.sql": "77b158bf26c5ca3f01efad1d03072d92",
+  "supabase/migrations/20261122T0190_i01b_calendario.sql": "d7c3d31eff17d9a2f71fbacbd4f79fba",
+  "supabase/migrations/20261122T0200_i01b_declaracion.sql": "60830b978687d717ab011a1f4e0905a6",
+  "supabase/migrations/20261122T0210_i01b_presentados.sql": "130bf40d1e5c5c0fff08750b93dc7b24",
+  "supabase/migrations/20261122T0220_i01b_certificados.sql": "97503a39e5cf104d5d0580d8150776bc",
+  "supabase/migrations/20261122T0230_i01b_asesoria.sql": "f63f92a37bf17772cba87a6023b1a1d7"
  },
  "contexto": {
   "tablas": [
-   "public.journal_entry_document"
+   "public.bank_match",
+   "public.bank_match_item",
+   "public.journal_entry"
   ],
-  "funciones": [],
+  "funciones": [
+   "public.conta_impuesto_estado_vale(text,text)",
+   "public.conta_motivos_para_validar(uuid)"
+  ],
   "filas": {
-   "public.journal_entry_document": 56
+   "public.bank_match": 0,
+   "public.bank_match_item": 0,
+   "public.journal_entry": 14955
   },
   "otras": {},
   "camino": {
