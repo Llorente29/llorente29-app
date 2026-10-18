@@ -34,11 +34,13 @@
 .cxm .cxd-resumen-cifra { font-family: var(--cxm-letra-cifras); font-size: 13px; font-weight: 600; color: var(--cxm-texto); }
 .cxm .cxd-resumen-apoyo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
 
-/* La fila: todo en UNA línea; los chips enteros y «de dónde sale» con «…» en lo que quede. */
+/* La fila: todo en UNA línea; los chips enteros y «de dónde sale» con «…» en lo que quede.
+   S01c: el concepto cede hasta 40 px (entero en su title): con la barra de 220 px
+   la columna mide unos 294 px a 1440 y dos chips largos no cabían con 60. */
 .cxm .cxd-en-marco .cxt-tabla td { font-size: 13px; }
 .cxm .cxd-linea-libro { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
 .cxm .cxd-en-marco .cxd-linea-libro .cxd-concepto-titulo {
-  display: block; flex: 0 1 auto; min-width: 60px; font-size: 13px; line-height: 18px; color: var(--cxm-texto);
+  display: block; flex: 0 1 auto; min-width: 40px; font-size: 13px; line-height: 18px; color: var(--cxm-texto);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset;
 }
 .cxm .cxd-en-marco .cx-chip { flex: none; padding: 0 7px; font-size: 11px; line-height: 17px; white-space: nowrap; }

@@ -165,10 +165,13 @@ test('una pantalla vieja dentro del marco: Bancos, con su estilo y sus pestañas
   }
   if (lado(page) === 'movil') {
     // En el móvil, Bancos abre su portada por niveles (PortadaMovil): el esqueleto
-    // no pone ni pestañas ni cinta (portadaMovil), y Bancos va marcado abajo.
+    // no pone ni pestañas ni cinta (portadaMovil), y Bancos va marcado en el cajón (S01c).
     await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveCount(0)
     await expect(page.getByRole('toolbar', { name: 'Acciones de Movimientos' })).toHaveCount(0)
-    await expect(menu(page).getByRole('link', { name: 'Bancos' })).toHaveAttribute('aria-current', 'page')
+    await page.getByRole('button', { name: 'Abrir el menú' }).click()
+    await expect(menu(page).getByRole('link', { name: /^Bancos/ })).toHaveAttribute('aria-current', 'page')
+    await page.getByRole('button', { name: 'Cerrar el menú' }).click()
+    await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
   }
   await redQuieta(page)
   await expect(page.getByRole('alert')).toHaveCount(0)
