@@ -8,6 +8,10 @@
 //     lenguaje normal;
 //   · lo que se dice al guardar y al fallar (regla 8: con contenido).
 //
+// S01e (Julio, 18/10: «Foodint necesita su analítica por local»): pide el
+// local, con «Común» como una opción más. Sin elegir no se guarda; en una
+// empresa sin el eje de local no se pregunta y queda común, como antes.
+//
 // La cuota se calcula igual que el asiento (cuotaIva de lib/libro): si la
 // persona la cambia, se guarda la suya y se avisa de que el asiento propuesto
 // saldrá con base × tipo y dirá la diferencia con el total.
@@ -15,6 +19,9 @@
 import { cent, cuotaIva, deCent } from '@/modules/conta/lib/libro'
 import { leerImporte } from '@/modules/conta/lib/lectorCsvBanco'
 import { eurosExactos, porcentaje } from '@/modules/conta/lib/formato'
+
+/** El valor del selector de local que significa «Común» (de todos los locales; el informe lo reparte). */
+export const LOCAL_COMUN = 'comun'
 
 /** Los tipos que se ofrecen si la base no da los suyos (los de IVA vigentes en España, y sin IVA). */
 export const TIPOS_DE_SERIE: readonly number[] = [21, 10, 4, 0]
@@ -30,6 +37,8 @@ export interface BorradorRecibida {
   tipo: string
   /** '' = la calculada. */
   cuota: string
+  /** El local: su id, LOCAL_COMUN, o '' sin elegir. */
+  local: string
 }
 
 /** Lo que se guarda, ya comprobado. */
@@ -41,9 +50,11 @@ export interface RecibidaComprobada {
   tipo: number
   cuota: number
   total: number
+  /** El local de la factura; null = común. */
+  localId: string | null
 }
 
-export type CampoRecibida = 'proveedor' | 'numero' | 'fecha' | 'base' | 'tipo' | 'cuota'
+export type CampoRecibida = 'proveedor' | 'numero' | 'fecha' | 'local' | 'base' | 'tipo' | 'cuota'
 
 export interface Comprobacion {
   errores: Partial<Record<CampoRecibida, string>>
@@ -85,8 +96,12 @@ function fechaValida(iso: string): boolean {
 
 const fechaEs = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 
-/** Comprueba lo escrito. `tipos` son los que se ofrecen; `hoy`, AAAA-MM-DD en Madrid. */
-export function comprobarRecibida(b: BorradorRecibida, tipos: readonly number[], hoy: string): Comprobacion {
+/**
+ * Comprueba lo escrito. `tipos` son los que se ofrecen; `hoy`, AAAA-MM-DD en
+ * Madrid; `conLocal`, si la empresa lleva el eje de local (entonces hay que
+ * elegirlo, y «Común» vale).
+ */
+export function comprobarRecibida(b: BorradorRecibida, tipos: readonly number[], hoy: string, conLocal: boolean): Comprobacion {
   const errores: Partial<Record<CampoRecibida, string>> = {}
   if (!b.proveedorId) errores.proveedor = 'Elige el proveedor. Si no está, dalo de alta primero.'
   const numero = b.numero.trim()
@@ -95,6 +110,8 @@ export function comprobarRecibida(b: BorradorRecibida, tipos: readonly number[],
   if (!b.fecha) errores.fecha = 'Pon la fecha de expedición de la factura.'
   else if (!fechaValida(b.fecha)) errores.fecha = 'Esa fecha no existe: escríbela como dd/mm/aaaa.'
   else if (b.fecha > hoy) errores.fecha = `La fecha es posterior a hoy (${fechaEs(hoy)}): una factura recibida no puede ser del futuro.`
+  if (conLocal && !b.local) errores.local = 'Elige el local de la factura, o «Común» si es de todos.'
+  const localId = !conLocal || !b.local || b.local === LOCAL_COMUN ? null : b.local
 
   const base = leerImporteEs(b.base)
   if (b.base.trim() === '') errores.base = 'Escribe la base imponible.'
@@ -123,7 +140,7 @@ export function comprobarRecibida(b: BorradorRecibida, tipos: readonly number[],
   }
 
   if (Object.keys(errores).length > 0 || base === null || tipo === null || cuota === null) return { errores, aviso, datos: null }
-  return { errores, aviso, datos: { proveedorId: b.proveedorId, numero, fecha: b.fecha, base, tipo, cuota, total: totalDe(base, cuota) } }
+  return { errores, aviso, datos: { proveedorId: b.proveedorId, numero, fecha: b.fecha, base, tipo, cuota, total: totalDe(base, cuota), localId } }
 }
 
 /** Regla 8: lo que se dice al guardar, con contenido. */

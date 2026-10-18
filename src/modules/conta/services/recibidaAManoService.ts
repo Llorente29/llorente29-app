@@ -16,6 +16,9 @@
 // apunta» (verPropuestaFactura) solo ve 'en_revision' y 'aprobada'. Un
 // borrador saldría en Asientos sin poder apuntarse («la factura está borrador»).
 //
+// El local va en supplier_invoice.location_id: null es común, como lo lee el
+// asiento propuesto («la factura no dice de qué local es: queda común»).
+//
 // Nombres de la base entre comillas (regla 40): supplier_invoice (account_id,
 // company_id, supplier_id, location_id, doc_kind, invoice_number,
 // invoice_date, status, source, tax_base_total, tax_total, grand_total,
@@ -59,7 +62,7 @@ export async function guardarRecibidaAMano(g: GuardarRecibida): Promise<{ id: st
     account_id: g.accountId,
     company_id: g.companyId,
     supplier_id: d.proveedorId,
-    location_id: null,
+    location_id: d.localId,
     doc_kind: 'invoice',
     invoice_number: d.numero,
     invoice_date: d.fecha,

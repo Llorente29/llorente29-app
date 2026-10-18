@@ -115,7 +115,7 @@ async function borrarRecibida(s: Sesion, numero: string) {
   }
 }
 
-test('S01d · recibida a mano (cuenta A): sin base no guarda; con base calcula cuota y total, guarda y la abre para revisar, sin papel', async ({ page }) => {
+test('S01d · recibida a mano (cuenta A): sin base ni local no guarda; con base calcula cuota y total, con su local, guarda y la abre para revisar, sin papel', async ({ page }) => {
   const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   const numero = `PS01D-${lado(page)}-${Date.now()}`
@@ -132,9 +132,17 @@ test('S01d · recibida a mano (cuenta A): sin base no guarda; con base calcula c
     // La fecha de expedición viene puesta (hoy); el tipo, el 21 %.
     await page.getByLabel('Tipo de IVA').selectOption('21')
 
-    // Sin base: no guarda y dice qué falta, debajo del campo.
+    // Sin base ni local: no guarda y dice qué falta, debajo del campo.
+    // S01e: A lleva el eje de local, así que se pide, con «Común» como una opción más.
     await page.getByRole('button', { name: 'Guardar y revisarla' }).click()
     await expect(page.getByText('Escribe la base imponible.')).toBeVisible()
+    await expect(page.getByText('Elige el local de la factura, o «Común» si es de todos.')).toBeVisible()
+    const local = page.getByLabel('Local', { exact: true })
+    const locales = await local.locator('option').evaluateAll((os) => os.map((o) => ({ v: (o as HTMLOptionElement).value, t: o.textContent ?? '' })))
+    expect(locales.at(-1)).toEqual({ v: 'comun', t: 'Común (se reparte)' })
+    const unLocal = locales.find((o) => o.v !== '' && o.v !== 'comun')
+    expect(unLocal, 'la cuenta A tiene algún local').toBeTruthy()
+    await local.selectOption(unLocal!.v)
     await expect(page.getByText('Falta algo: lo tienes debajo de cada campo en rojo.')).toBeVisible()
     await expect(page).toHaveURL(/\/conta\/libros\/diario\/recibidas\?nueva=a-mano$/)
 
@@ -155,10 +163,10 @@ test('S01d · recibida a mano (cuenta A): sin base no guarda; con base calcula c
 
     // En la base: para revisar, a mano, con sus importes y UNA línea (de ella sale el asiento).
     const id = new RegExp(`/recibidas/(${UUID})\\?`).exec(page.url())![1]
-    const fac = await rest<{ status: string; source: string; tax_base_total: number; tax_total: number; grand_total: number }[]>(s, 'GET',
-      `supplier_invoice?select=status,source,tax_base_total,tax_total,grand_total&id=eq.${id}`)
-    expect(fac.datos.map((f) => [f.status, f.source, Number(f.tax_base_total), Number(f.tax_total), Number(f.grand_total)]))
-      .toEqual([['en_revision', 'manual', 100, 21, 121]])
+    const fac = await rest<{ status: string; source: string; tax_base_total: number; tax_total: number; grand_total: number; location_id: string | null }[]>(s, 'GET',
+      `supplier_invoice?select=status,source,tax_base_total,tax_total,grand_total,location_id&id=eq.${id}`)
+    expect(fac.datos.map((f) => [f.status, f.source, Number(f.tax_base_total), Number(f.tax_total), Number(f.grand_total), f.location_id]))
+      .toEqual([['en_revision', 'manual', 100, 21, 121, unLocal!.v]])
     const lineas = await rest<{ line_amount: number; vat_pct: number }[]>(s, 'GET', `supplier_invoice_line?select=line_amount,vat_pct&supplier_invoice_id=eq.${id}`)
     expect(lineas.datos.map((l) => [Number(l.line_amount), Number(l.vat_pct)])).toEqual([[100, 21]])
   } finally {
