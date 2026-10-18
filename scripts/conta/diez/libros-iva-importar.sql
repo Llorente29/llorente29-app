@@ -201,6 +201,34 @@ begin
                when '37' then v.book = 'received' and v.reverse_charge and v.counterpart_country is not null
                else false end) x;
   insert into salida (clave, valor) values ('testigo.casillas', v_test), ('testigo.casillas_que_no_casan', v_test_mal);
+  -- Cuál no casa, por su nombre (fechas y casilla; ningún importe): el ensayo
+  -- del 18/10 dijo «1 no casa» y no se podía saber cuál sin otra vuelta.
+  insert into salida (clave, valor)
+  select 'testigo.no_casa.' || to_char(t.desde, 'YYYYMMDD') || '_' || to_char(t.hasta, 'MMDD') || '.c' || t.casilla, 1
+    from carga_testigo t
+    cross join lateral (
+      select coalesce(sum(round(v.tax_amount * 100)), 0)::bigint cent
+        from public.vat_book_entry v
+       where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null
+         and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date) else coalesce(v.received_date, v.issue_date) end
+             between t.desde and t.hasta
+         and case t.casilla
+               when '06' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
+               when '29' then v.book = 'received' and not v.reverse_charge and not v.investment_good
+               when '37' then v.book = 'received' and v.reverse_charge and v.counterpart_country is not null
+               else false end) x
+   where t.huella <> left(md5(x.cent::text), 16)
+   order by t.desde, t.casilla;
+  -- Las autoliquidadas (asiento con 477 y 472) y cuántas van sin país: sin
+  -- país no entran en la [37] (intracomunitarias) del testigo.
+  insert into salida (clave, valor)
+  select 'recibidas.autoliquidadas', count(*) from public.vat_book_entry v
+   where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null and v.book = 'received' and v.reverse_charge
+     and v.source_type = 'migrated'
+  union all
+  select 'recibidas.autoliquidadas_sin_pais', count(*) from public.vat_book_entry v
+   where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null and v.book = 'received' and v.reverse_charge
+     and v.source_type = 'migrated' and v.counterpart_country is null;
   if v_test = 0 then insert into salida (clave, valor) values ('testigo.falta', 1); end if;
 
   v_verde := v_rech = 0 and v_falta = 0 and v_test > 0 and v_test_mal = 0;
