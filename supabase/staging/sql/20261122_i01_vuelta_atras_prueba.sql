@@ -12,6 +12,7 @@
 --   3. Otra vez hacia delante: se puede volver a aplicar.
 -- Lo que hace parar a cada vuelta atrás (lo que decidió una persona) no se
 -- ensaya aquí: un raise para el workflow. Está escrito en cada .down.sql.
+-- sin usuario: la tanda y su vuelta atrás las aplica el workflow como postgres, y así se prueban aquí.
 
 begin;
 do $$ begin
