@@ -147,7 +147,10 @@ declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; v_r uuid; v
 begin
   select id into v_r from public.tax_return where company_id = v_a and form_code = '303' and fiscal_year = 2026 and period = '4T';
   insert into public.tax_return_box (tax_return_id, account_id, company_id, box, value, origin, manual_reason)
-  values (v_r, 'c01a0000-0000-4000-8000-00000000000a', v_a, '110', 20, 'manual', 'PRUEBA I01a: lo que dijo el asesor del 303 de antes.');
+  values (v_r, 'c01a0000-0000-4000-8000-00000000000a', v_a, '110', 20, 'manual', 'PRUEBA I01a: lo que dijo el asesor del 303 de antes.')
+  -- La calculada ya está (0): la persona la sustituye, con su motivo (así lo hará la pantalla del I01b).
+  on conflict (tax_return_id, box) do update set value = excluded.value, value_text = null, origin = 'manual',
+                                                 manual_reason = excluded.manual_reason, source = '{}';
   select entry_id into v_e from public.vat_book_entry where company_id = v_a and book = 'issued' limit 1;
   insert into public.vat_book_entry (account_id, company_id, entry_id, book, invoice_type, number, issue_date, counterpart_name, qualification,
                                      tax_base, tax_rate, tax_amount, surcharge_rate, surcharge_amount, source_type)
