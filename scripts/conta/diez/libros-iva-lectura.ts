@@ -30,46 +30,17 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { ClienteDiez, type AlmacenToken, type Factura } from '../../../supabase/functions/_shared/diezCliente.ts'
+import { cent, cuotaFactura, diasEntre, leerFacturas, tramos, tramosDocumento, trimestre } from './libros-iva-mapeo.ts'
+
+// Las piezas puras viven en libros-iva-mapeo.ts (las usa también el importador).
+export { cent, cuotaFactura, diasEntre, tramos, tramosDocumento, trimestre }
 
 const BD = 'C0008'
 const MESES = ['202601', '202602', '202603', '202604', '202605', '202606', '202607', '202608', '202609']
 
-/** Lo que trae una página del listado de Diez ($top del cliente). */
-const PAGINA = 200
-/** El número de documento más alto que se pide al trocear un día (en 2026 Foodint va por el 3.100). */
-const DOCUMENTO_MAX = 9999
-const TRAMO = 150
-/** Los tramos [desde, hasta] de documento, de 1 a max, de n en n. */
-export function tramosDocumento(max: number, n: number): [number, number][] {
-  const out: [number, number][] = []
-  for (let a = 1; a <= max; a += n) out.push([a, Math.min(a + n - 1, max)])
-  return out
-}
-/** Los días AAAAMMDD de un mes AAAAMM a otro, ambos incluidos. */
-export function diasEntre(desde: string, hasta: string): number[] {
-  const out: number[] = []
-  const d = new Date(Date.UTC(Number(desde.slice(0, 4)), Number(desde.slice(4, 6)) - 1, 1))
-  const fin = new Date(Date.UTC(Number(hasta.slice(0, 4)), Number(hasta.slice(4, 6)), 0))
-  for (; d <= fin; d.setUTCDate(d.getUTCDate() + 1)) out.push(d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate())
-  return out
-}
 /** Una huella publicable (16 cifras hexadecimales). */
 export const huella = (f: string) => createHash('md5').update(f).digest('hex').slice(0, 16)
-/** Los céntimos de un importe de Diez (double), redondeados. */
-export const cent = (x: unknown) => Math.round(Number(x ?? 0) * 100)
-/** El trimestre (1–4) de una fecha AAAAMMDD. */
-export const trimestre = (aaaammdd: unknown) => Math.floor((Math.floor(Number(aaaammdd) / 100) % 100 - 1) / 3) + 1
-/** Los tramos de IVA de una factura: hasta 8 (BaseImponibleN, PorcentajeIVAN, CuotaIVAN). */
-export function tramos(f: Record<string, unknown>) {
-  const t: { base: number; tipo: number; cuota: number }[] = []
-  for (let n = 1; n <= 8; n++) {
-    const base = cent(f[`BaseImponible${n}`]), cuota = cent(f[`CuotaIVA${n}`]), tipo = Number(f[`PorcentajeIVA${n}`] ?? 0)
-    if (base !== 0 || cuota !== 0) t.push({ base, tipo, cuota })
-  }
-  return t
-}
 const libro = (f: Factura) => (String(f.Serie) === '1' ? 'expedidas' : String(f.Serie) === '2' ? 'recibidas' : 'otras')
-const clave = (f: Factura) => `${f.Ejercicio}/${f.Serie}/${f.Documento}`
 const nombreCampo = (k: string) => k.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40)
 
 const sale = (k: string, v: number | string) => process.stdout.write(`@@ ${k} ${v}\n`)
@@ -93,45 +64,14 @@ async function main() {
   }
   sale('entra_c0008', 1)
 
-  // Día a día (run 39116056722): leído por meses, el listado de Diez pagina
-  // con $top/$skip sin orden fijo y devolvió 431 facturas repetidas en lugar
-  // de 431 que se saltó (198 + 160 + 73, justo los «asientos sin factura»). Un
-  // día cabe en una página (TAM_PAGINA): sin pasar de página, no se repite ni
-  // se salta nada. Si un día llenara la página, se dice.
-  const filas: Factura[] = []
-  let dias = 0, sinContestar = 0, diasLlenos = 0, tramosLlenos = 0
-  for (const d of diasEntre(MESES[0], MESES[MESES.length - 1])) {
-    try {
-      let del = await c.todas<Factura>(`/api/facturas?$filter=${encodeURIComponent(`Fecha ge ${d} and Fecha le ${d}`)}`)
-      if (del.length >= PAGINA) {
-        // Run 39117078574: un día del 3T llenó la página y repitió 134 en lugar
-        // de otras 134. Ese día se vuelve a pedir en tramos de documento, cada
-        // uno en una página.
-        diasLlenos++
-        del = []
-        for (const [a, b] of tramosDocumento(DOCUMENTO_MAX, TRAMO)) {
-          const t = await c.todas<Factura>(`/api/facturas?$filter=${encodeURIComponent(`Fecha ge ${d} and Fecha le ${d} and Documento ge ${a} and Documento le ${b}`)}`)
-          if (t.length >= PAGINA) tramosLlenos++
-          del.push(...t)
-        }
-      }
-      filas.push(...del); dias++
-    } catch { sinContestar++; sale(`dia_sin_contestar.${d}`, 1) }
-  }
+  // Día a día, y el día que llena la página en tramos de documento
+  // (libros-iva-mapeo.ts: runs 39116056722 y 39117078574).
+  const l = await leerFacturas(c, MESES[0], MESES[MESES.length - 1])
+  for (const d of l.sinContestar) sale(`dia_sin_contestar.${d}`, 1)
   seccion('lectura')
-  sale('dias_leidos', dias); sale('dias_sin_contestar', sinContestar); sale('dias_con_la_pagina_llena', diasLlenos); sale('tramos_de_documento_llenos', tramosLlenos); sale('filas', filas.length)
-
-  // Repetidas en el listado: ¿la misma o distinta?
-  const porClave = new Map<string, Factura[]>()
-  for (const f of filas) porClave.set(clave(f), [...(porClave.get(clave(f)) ?? []), f])
-  let repetidas = 0, repetidasDistintas = 0
-  for (const fs of porClave.values()) {
-    if (fs.length < 2) continue
-    repetidas++
-    if (new Set(fs.map((f) => JSON.stringify(f))).size > 1) repetidasDistintas++
-  }
-  const unicas = [...porClave.values()].map((fs) => fs[0])
-  sale('facturas_distintas', unicas.length); sale('claves_repetidas', repetidas); sale('claves_repetidas_con_contenido_distinto', repetidasDistintas)
+  sale('dias_leidos', l.dias); sale('dias_sin_contestar', l.sinContestar.length); sale('dias_con_la_pagina_llena', l.diasLlenos); sale('tramos_de_documento_llenos', l.tramosLlenos); sale('filas', l.filas)
+  const unicas = l.facturas
+  sale('facturas_distintas', unicas.length); sale('claves_repetidas', l.repetidas); sale('claves_repetidas_con_contenido_distinto', l.repetidasDistintas)
 
   // Los nombres de los campos (no sus valores).
   seccion('campos')
@@ -198,9 +138,6 @@ async function main() {
 
 /** Un asiento traído de Diez en Sumied, con su IVA (céntimos): lo vuelca el workflow con conta_lectura. */
 export type AsientoSumied = { e: string; s: string; n: number; f: string; c477: number; c472: number }
-
-/** La cuota de una factura de Diez, en céntimos (todos sus tramos). */
-export const cuotaFactura = (f: Record<string, unknown>) => tramos(f).reduce((t, x) => t + x.cuota, 0)
 
 /**
  * El cruce, factura a factura, por (ejercicio, serie, documento): la cuota de

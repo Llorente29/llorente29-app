@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# tests/conta/diez/libro-iva-local/ejecutar.sh
+#
+# I01b · El importador de los libros de IVA de Diez (libros-iva-importar.sql),
+# ENTERO, contra un Postgres local con el esquema mínimo (esquema.sql: los
+# nombres de columna medidos en producción el 18/10) y datos inventados. Los
+# cinco caminos: ensayo (verde, nada escrito), real (escribe), real otra vez
+# (no duplica), testigo que no casa (rojo, deshecho, código ≠ 0) y una cuota
+# cambiada (rechazo, rojo, nada escrito). No toca staging ni producción.
+#
+#   PGHOST=/ruta/al/socket PGPORT=54329 PGUSER=postgres bash tests/conta/diez/libro-iva-local/ejecutar.sh
+set -euo pipefail
+cd "$(dirname "$0")"
+I=../../../../scripts/conta/diez/libros-iva-importar.sql
+nueva() { psql -d postgres -qc "drop database if exists $1" -c "create database $1" >/dev/null; psql -d "$1" -q -v ON_ERROR_STOP=1 -f esquema.sql >/dev/null; }
+corre() { psql -d "$1" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=terse -v empresa=e0000000-0000-4000-8000-000000000001 -v modo="$2" -v desde=2026-01-01 -v hasta=2026-06-30 -f "$I" 2>&1; }
+falla() { echo "MAL: $1"; exit 1; }
+
+nueva libro_a
+o=$(corre libro_a ensayo) || falla "el ensayo sale en rojo"
+grep -q '@@ verde 1' <<<"$o" && grep -q '@@ ensayo_nada_escrito 1' <<<"$o" || falla "ensayo: $o"
+o=$(corre libro_a real) || falla "el real sale en rojo"
+grep -q '@@ filas_traidas_despues 6' <<<"$o" || falla "real: $o"
+o=$(corre libro_a real) || falla "el segundo real sale en rojo"
+grep -q '@@ filas_escritas 0' <<<"$o" && grep -q '@@ facturas_que_ya_estaban 5' <<<"$o" || falla "segundo real: $o"
+
+t=$(mktemp -d); cp libro.jsonl "$t/"; sed 's/,29,.*/,29,0000000000000000/' testigo-303.csv > "$t/testigo-303.csv"
+nueva libro_b
+o=$(cd "$t" && psql -d libro_b -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=terse -v empresa=e0000000-0000-4000-8000-000000000001 -v modo=real -v desde=2026-01-01 -v hasta=2026-06-30 -f "$OLDPWD/$I" 2>&1) && falla "testigo que no casa: salió en verde"
+grep -q '@@ real_en_rojo_deshecho 1' <<<"$o" && grep -q '@@ filas_traidas_despues 0' <<<"$o" || falla "testigo que no casa: $o"
+sed 's/"cuota": 10500/"cuota": 10400/' libro.jsonl > "$t/libro.jsonl"; cp testigo-303.csv "$t/"
+o=$(cd "$t" && psql -d libro_b -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=terse -v empresa=e0000000-0000-4000-8000-000000000001 -v modo=real -v desde=2026-01-01 -v hasta=2026-06-30 -f "$OLDPWD/$I" 2>&1) && falla "cuota cambiada: salió en verde"
+grep -q '@@ facturas_con_cuota_distinta_de_su_asiento 1' <<<"$o" && grep -q '@@ filas_traidas_despues 0' <<<"$o" || falla "cuota cambiada: $o"
+rm -rf "$t"
+echo "BIEN: los cinco caminos (ensayo, real, real otra vez, testigo que no casa, cuota cambiada)."
