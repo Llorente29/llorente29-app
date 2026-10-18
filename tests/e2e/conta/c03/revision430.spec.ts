@@ -136,7 +136,7 @@ test('una 430 con enlace de pago y sin papel sale en la revisión y, al confirma
     expect(cliente.datos, 'la 43000001 es su cuenta de cliente').toHaveLength(1)
 
     // Y sale en «Plataformas».
-    await expect(filtroPlataformas).toHaveText(new RegExp(`^${antes + 1} terceros? en «Plataformas»`))
+    await expect(filtroPlataformas).toHaveText(new RegExp(`^${antes + 1} contactos? en «Plataformas»`))
     await expect(page.getByRole('link', { name: /GLOVOAPP SPAIN PLATFORM/ })).toBeVisible()
 
     // Respuesta 4 · 6: «Archivarlo (histórico)» archiva de verdad. Como en
