@@ -40,11 +40,14 @@ select set_config('libro.empresa', :'empresa', true), set_config('libro.desde', 
 
 create temp table carga_linea (j jsonb) on commit drop;
 create temp table carga_testigo (desde date, hasta date, casilla text, huella text) on commit drop;
+-- Las autoliquidadas, clasificadas por lo que declaró la gestoría (autoliquidadas-foodint.csv).
+create temp table carga_autoliq (ejercicio text, serie text, documento text, tipo text check (tipo in ('intracomunitaria', 'otra_isp'))) on commit drop;
 create temp table salida (n serial, clave text, valor text) on commit drop;
 -- JSON Lines: un objeto por línea; con un delimitador y una comilla que no
 -- salen nunca, COPY no toca ni comillas ni barras.
 \copy carga_linea from 'libro.jsonl' with (format csv, delimiter e'\x02', quote e'\x01')
 \copy carga_testigo from 'testigo-303.csv' with (format csv)
+\copy carga_autoliq from 'autoliquidadas.csv' with (format csv)
 
 do $$
 declare
@@ -130,6 +133,23 @@ begin
   insert into salida (clave, valor) values ('facturas_con_cuota_distinta_de_su_asiento', v_mal);
   v_rech := v_rech + v_mal;
 
+  -- Las autoliquidadas (asiento con 477 y 472), cada una con su tipo de la
+  -- lista. Una que no esté en la lista PARA (no se adivina: Julio, 18/10). El
+  -- prefijo del NIF solo comprueba: si contradice la lista, se dice.
+  create temp table autoliq on commit drop as
+  select a.entry_id, l.tipo
+    from asiento_iva a join public.journal_entry je on je.id = a.entry_id
+    left join carga_autoliq l on l.ejercicio = je.external_year and l.serie = je.external_series and l.documento = je.external_number
+   where a.s = '2' and a.c477 <> 0 and a.c472 <> 0;
+  select count(*) into v_n from autoliq where tipo is null;
+  insert into salida (clave, valor) values ('autoliquidadas_fuera_de_la_lista', v_n);
+  v_rech := v_rech + v_n;
+  insert into salida (clave, valor)
+  select 'autoliquidadas.' || tipo, count(*) from autoliq where tipo is not null group by tipo order by tipo;
+  select count(distinct f.entry_id) into v_n from fila f join autoliq x on x.entry_id = f.entry_id
+   where f.pais is not null and (x.tipo = 'intracomunitaria') <> (f.pais = any (array['AT','BE','BG','CY','CZ','DE','DK','EE','EL','GR','FI','FR','HR','HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK']));
+  insert into salida (clave, valor) values ('autoliquidadas.prefijo_contradice_la_lista', v_n);
+
   -- Ya estaban (idempotente): el asiento que tiene libro no se toca.
   select count(distinct f.entry_id) into v_n from fila f where exists (select 1 from public.vat_book_entry v where v.entry_id = f.entry_id);
   insert into salida (clave, valor) values ('facturas_que_ya_estaban', v_n);
@@ -145,7 +165,7 @@ begin
            f.libro, f.tipo_factura, f.s, f.numero, 1,
            coalesce(f.fecha_factura, a.entry_date), f.fecha_operacion, f.fecha_recibida, null, f.nif,
            case when f.pais is not null then '02' end, f.pais, f.nombre,
-           case when f.libro = 'received' and a.c477 <> 0 and f.pais is not null then '09' else '01' end,
+           case when f.libro = 'received' and (select x.tipo from autoliq x where x.entry_id = f.entry_id) = 'intracomunitaria' then '09' else '01' end,
            case when f.libro = 'not_subject' then null when f.libro = 'received' and a.c477 <> 0 then 'S2' else 'S1' end,
            null, f.base / 100.0, f.tipo, f.cuota / 100.0, (f.base + f.cuota) / 100.0,
            case when f.libro = 'received' then f.cuota / 100.0 end, false,
@@ -199,7 +219,7 @@ begin
          and case t.casilla
                when '06' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
                when '29' then v.book = 'received' and not v.reverse_charge and not v.investment_good
-               when '37' then v.book = 'received' and v.reverse_charge and v.counterpart_country is not null
+               when '37' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
                else false end) x;
   insert into salida (clave, valor) values ('testigo.casillas', v_test), ('testigo.casillas_que_no_casan', v_test_mal);
   -- Cuál no casa, por su nombre (fechas y casilla; ningún importe): el ensayo
@@ -216,7 +236,7 @@ begin
          and case t.casilla
                when '06' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
                when '29' then v.book = 'received' and not v.reverse_charge and not v.investment_good
-               when '37' then v.book = 'received' and v.reverse_charge and v.counterpart_country is not null
+               when '37' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
                else false end) x
    where t.huella <> left(md5(x.cent::text), 16)
    order by t.desde, t.casilla;

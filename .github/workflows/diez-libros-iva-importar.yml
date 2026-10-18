@@ -148,6 +148,7 @@ jobs:
           set -euo pipefail
           npx --yes tsx@4.19.2 scripts/conta/diez/libros-iva-preparar.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
           grep -v '^#' scripts/conta/diez/testigo-303-foodint.csv > /tmp/carga/testigo-303.csv
+          grep -v '^#' scripts/conta/diez/autoliquidadas-foodint.csv > /tmp/carga/autoliquidadas.csv
       - name: Paso 2 · escribir, medir contra el testigo y decidir (una transacción)
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
