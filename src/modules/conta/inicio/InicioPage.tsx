@@ -332,7 +332,7 @@ function Impuestos({ companyId }: { companyId: string }) {
         <Link key={a.clave} to={a.a} className="cxi-impuesto">
           <span className="cxi-impuesto-modelo">{a.modelo ?? 'cert.'}</span>
           <span className="cxi-duda-texto">
-            <span className="cxi-duda-titulo">{a.titulo}</span>
+            <span className="cxi-duda-titulo" title={a.titulo}>{a.titulo}</span>
             <span className={`cxi-duda-apoyo${a.tono !== 'neutro' ? ' cxt-ambar' : ''}`}>{a.apoyo}</span>
           </span>
         </Link>

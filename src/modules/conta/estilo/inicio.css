@@ -153,3 +153,10 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
 .cxi-cifras-cabeza { display: flex; justify-content: flex-end; margin: 0 0 -6px; }
 .cxi-impuesto { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
 .cxi-impuesto-modelo { font-family: var(--cx-letra-cifras); font-weight: 600; min-width: 36px; }
+/* I01b (18/10): el título del aviso cambia con el nivel («Retenciones de nóminas y profesionales
+ * · 3.er trimestre» / «111 · 3T»), y el nivel cambia palabras, no cajas (S01): dos líneas
+ * reservadas siempre, y lo que no quepa se corta (el texto entero va en «title»). */
+.cxi-impuesto .cxi-duda-titulo {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  line-height: 1.35; min-height: 2.7em;
+}
