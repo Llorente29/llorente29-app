@@ -84,6 +84,41 @@ begin
      and je.entry_date between v_desde and v_hasta
    group by je.id, je.entry_date, je.external_series;
 
+  -- La línea de IVA de cada tramo (una fila del libro por línea del diario: el
+  -- índice único uq_vat_book_entry_linea). Diez trae una línea de 472 por tipo
+  -- en unas recibidas y una sola en otras (medido el 18/10: 240 de 2.852
+  -- asientos de la serie 2 con más de una 472; ninguno con más de una 477). Se
+  -- casa cada tramo con la línea de su lado (477 las expedidas, 472 las
+  -- recibidas) y de su mismo importe; si no casa ninguna y el asiento tiene una
+  -- sola línea de ese lado, se la queda el primer tramo; los demás, sin línea.
+  -- (Ensayo del 18/10: el primer ensayo de verdad paró con 23505 porque todos
+  -- los tramos cogían la primera línea del asiento.)
+  create temp table linea_iva on commit drop as
+  select je.id entry_id, jl.id line_id, jl.position,
+         case when ca.template_code like '477%' then 'issued' else 'received' end lado,
+         round(case when ca.template_code like '477%' then jl.credit - jl.debit else jl.debit - jl.credit end * 100)::bigint cent
+    from public.journal_entry je
+    join public.journal_line jl on jl.entry_id = je.id
+    join public.company_account ca on ca.id = jl.company_account_id
+   where je.account_id = v_cuenta and je.company_id = c and je.source_type = 'migrated' and je.external_program = 'diez'
+     and je.entry_date between v_desde and v_hasta and (ca.template_code like '477%' or ca.template_code like '472%');
+  create temp table tramo_linea on commit drop as
+  with t as (select f.entry_id, f.tramo, f.libro, f.cuota, row_number() over (partition by f.entry_id, f.libro, f.cuota order by f.tramo) k
+               from fila f where f.entry_id is not null and f.libro in ('issued', 'received')),
+       l as (select x.*, row_number() over (partition by x.entry_id, x.lado, x.cent order by x.position) k from linea_iva x)
+  select t.entry_id, t.tramo, l.line_id from t join l on l.entry_id = t.entry_id and l.lado = t.libro and l.cent = t.cuota and l.k = t.k;
+  insert into tramo_linea (entry_id, tramo, line_id)
+  select distinct on (f.entry_id) f.entry_id, f.tramo, l.line_id
+    from fila f join linea_iva l on l.entry_id = f.entry_id and l.lado = f.libro
+   where f.libro in ('issued', 'received')
+     and not exists (select 1 from tramo_linea x where x.entry_id = f.entry_id and x.tramo = f.tramo)
+     and not exists (select 1 from tramo_linea x where x.line_id = l.line_id)
+     and (select count(*) from linea_iva y where y.entry_id = f.entry_id and y.lado = f.libro) = 1
+   order by f.entry_id, f.tramo;
+  select count(*) into v_n from fila f where f.entry_id is not null and f.libro in ('issued', 'received')
+     and not exists (select 1 from tramo_linea x where x.entry_id = f.entry_id and x.tramo = f.tramo);
+  insert into salida (clave, valor) values ('tramos_sin_linea_propia', v_n);
+
   -- Rechazos: sin asiento, o la cuota de la factura no es la de su asiento.
   select count(distinct (e, s, n)) into v_rech from fila where entry_id is null;
   insert into salida (clave, valor) values ('facturas_sin_asiento', v_rech);
@@ -105,7 +140,7 @@ begin
       operation_key, qualification, exempt_cause, tax_base, tax_rate, tax_amount, total, deductible_amount, deductible_later,
       reverse_charge, investment_good, withholding_rate, withholding_amount, source_type, source_id, updated_by_name)
     select v_cuenta, c, f.entry_id,
-           case when f.libro = 'issued' then a.linea477 when f.libro = 'received' then a.linea472 end,
+           (select x.line_id from tramo_linea x where x.entry_id = f.entry_id and x.tramo = f.tramo),
            f.libro, f.tipo_factura, f.s, f.numero, 1,
            coalesce(f.fecha_factura, a.entry_date), f.fecha_operacion, f.fecha_recibida, null, f.nif,
            case when f.pais is not null then '02' end, f.pais, f.nombre,
