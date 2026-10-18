@@ -155,3 +155,28 @@ export function leerP12(forge: Forge, p12: Uint8Array, contrasena: string, ahora
     material: { cert, key },
   }
 }
+
+/** Quien firma una presentación (FIRNIF y FIRNOMBRE): el titular del certificado, leído de su PEM. */
+export interface Firmante {
+  nif: string
+  nombre: string
+  /** El NIF de la entidad, si el certificado es de representante. */
+  nifEntidad: string | null
+}
+
+/**
+ * El firmante del primer certificado del PEM (el del titular: leerP12 lo pone
+ * primero). La persona es el titular: su NIF va en el serialNumber; si es de
+ * representante, la entidad va aparte.
+ */
+export function firmanteDelPem(forge: Forge, pem: string): Firmante {
+  const c = forge.pki.certificateFromPem(pem)
+  const s = c.subject
+  const nifPersona = nifDelCertificado(campo({ type: '2.5.4.5' }, s), null)
+  const nifEntidad = nifDelCertificado(null, campo({ type: '2.5.4.97' }, s))
+  const nombre = [campo({ type: '2.5.4.42' }, s), campo({ type: '2.5.4.4' }, s)].filter(Boolean).join(' ') ||
+    campo({ name: 'commonName' }, s) || ''
+  const nif = nifPersona ?? nifEntidad
+  if (!nif || !nombre) throw new CertificadoNoVale('ilegible', 'El certificado no dice de quién es (NIF y nombre): con él no se puede presentar.')
+  return { nif, nombre, nifEntidad }
+}

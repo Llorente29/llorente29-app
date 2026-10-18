@@ -155,3 +155,10 @@ verify_jwt = false
 # cuenta. Ni el .p12 ni su contraseña se guardan, ni sale nada al registro.
 [functions.conta-certificado]
 verify_jwt = true
+
+# (18/10) conta-hacienda · I01a pieza 6. Las llamadas a Hacienda (probar,
+# presentar el 303, «ya lo presenté fuera»), todas por la puerta de
+# _shared/hacienda/puerta.ts, que está CERRADA si no se pone CONTA_HACIENDA
+# (y su autorización) a mano. verify_jwt = true: la persona sale de su sesión.
+[functions.conta-hacienda]
+verify_jwt = true

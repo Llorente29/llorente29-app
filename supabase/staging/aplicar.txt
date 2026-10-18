@@ -38,6 +38,13 @@ supabase/staging/sql/20261122_i01_certificados_prueba.sql
 #   que no sabe (recargo) sin fichero; [110] a mano; el 21 %; el fichero solo
 #   para service_role; presentada no se recalcula; el 1T de 2027 arrastra.
 supabase/staging/sql/20261122_i01_calculo_303_prueba.sql
+#   Pieza 6, presentar: la prueba aplica la 0130 a la 0150 con \i y ROLLBACK,
+#   contra el 4T de verdad de la empresa A y un certificado de mentira creado
+#   dentro: revisar (y dar por bueno un aviso con motivo), preparar solo con el
+#   token de esa persona para esa declaración, «Presentado» solo con su uso
+#   del certificado, el justificante en su carpeta y uno, «ya lo presenté
+#   fuera» sin comprobar, y las de servicio no se llaman como persona.
+supabase/staging/sql/20261122_i01_presentar_prueba.sql
 
 # S01 · El esqueleto (rama conta/s01-esqueleto). VA PRIMERO: la prueba de corte
 # de la D01 (más abajo) para con los datos de staging (ux_party_role_canal) y
