@@ -64,6 +64,7 @@ begin
          (j->>'fecha_recibida')::date fecha_recibida, j->>'nif' nif, j->>'pais' pais, j->>'nombre' nombre,
          (j->>'base')::bigint base, (j->>'tipo')::numeric tipo, (j->>'cuota')::bigint cuota,
          (j->>'retencion_tipo')::numeric retencion_tipo, (j->>'retencion')::bigint retencion,
+         j->>'pais_diez' pais_diez, j->>'tipo_operacion' tipo_operacion,
          je.id entry_id
     from carga_linea
     left join public.journal_entry je
@@ -229,6 +230,22 @@ begin
   select 'recibidas.autoliquidadas_sin_pais', count(*) from public.vat_book_entry v
    where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null and v.book = 'received' and v.reverse_charge
      and v.source_type = 'migrated' and v.counterpart_country is null;
+  -- Qué dicen Pais y TipoOperacion de Diez en las autoliquidadas, por trimestre
+  -- y con o sin prefijo de país en el NIF (18/10: la [37] del 1T no casa
+  -- porque 6 de 16 van sin prefijo; el 3T mezcla intracomunitarias, [11]/[37],
+  -- y otras con inversión del sujeto pasivo, [13]). Valores en corto, ningún
+  -- NIF ni importe.
+  insert into salida (clave, valor)
+  select 'autoliq.' || z.trim_ || '.' || z.pref || '.' || z.kk, count(*)
+    from (select distinct f.entry_id, f.tramo,
+                 extract(quarter from a.entry_date)::int || 't' trim_,
+                 case when f.pais is null then 'sin_prefijo' else 'con_prefijo' end pref,
+                 x.kk
+            from fila f join asiento_iva a on a.entry_id = f.entry_id
+            cross join lateral (values ('pais.' || coalesce(f.pais_diez, 'vacio')), ('tipo_op.' || coalesce(f.tipo_operacion, 'vacio'))) x(kk)
+           where f.libro = 'received' and a.c477 <> 0 and f.tramo = 1) z
+   group by z.trim_, z.pref, z.kk
+   order by z.trim_, z.pref, z.kk;
   if v_test = 0 then insert into salida (clave, valor) values ('testigo.falta', 1); end if;
 
   v_verde := v_rech = 0 and v_falta = 0 and v_test > 0 and v_test_mal = 0;

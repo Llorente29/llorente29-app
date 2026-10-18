@@ -19,7 +19,8 @@ falla() { echo "MAL: $1"; exit 1; }
 nueva libro_a
 o=$(corre libro_a ensayo) || falla "el ensayo sale en rojo"
 grep -q '@@ verde 1' <<<"$o" && grep -q '@@ ensayo_nada_escrito 1' <<<"$o" && ! grep -q '@@ testigo.no_casa' <<<"$o" \
-  && grep -q '@@ recibidas.autoliquidadas 1' <<<"$o" && grep -q '@@ recibidas.autoliquidadas_sin_pais 0' <<<"$o" || falla "ensayo: $o"
+  && grep -q '@@ recibidas.autoliquidadas 1' <<<"$o" && grep -q '@@ recibidas.autoliquidadas_sin_pais 0' <<<"$o" \
+  && grep -q '@@ autoliq.1t.con_prefijo.pais.alemania 1' <<<"$o" && grep -q '@@ autoliq.1t.con_prefijo.tipo_op.vacio 1' <<<"$o" || falla "ensayo: $o"
 o=$(corre libro_a real) || falla "el real sale en rojo"
 grep -q '@@ filas_traidas_despues 8' <<<"$o" && grep -q '@@ tramos_sin_linea_propia 1' <<<"$o" || falla "real: $o"
 # Una fila del libro por línea del diario; y el doc 4 (una 472 por tipo): cada tramo, la línea de su importe.
