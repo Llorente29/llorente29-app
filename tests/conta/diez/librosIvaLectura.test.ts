@@ -49,3 +49,16 @@ describe('libros de IVA de Diez · el cruce con Sumied', () => {
     expect([...g.keys()].some((k) => k.startsWith('serie4'))).toBe(false)
   })
 })
+
+import { diasEntre } from '../../../scripts/conta/diez/libros-iva-lectura'
+describe('libros de IVA de Diez · día a día', () => {
+  it('de enero a septiembre de 2026 son 273 días, del 1/1 al 30/9, con los febreros y los fines de mes bien', () => {
+    const d = diasEntre('202601', '202609')
+    expect(d.length).toBe(273)
+    expect(d[0]).toBe(20260101)
+    expect(d.at(-1)).toBe(20260930)
+    expect(d).toContain(20260228)
+    expect(d).not.toContain(20260229)
+    expect(new Set(d).size).toBe(273)
+  })
+})

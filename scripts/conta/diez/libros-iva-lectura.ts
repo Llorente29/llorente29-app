@@ -34,6 +34,16 @@ import { ClienteDiez, type AlmacenToken, type Factura } from '../../../supabase/
 const BD = 'C0008'
 const MESES = ['202601', '202602', '202603', '202604', '202605', '202606', '202607', '202608', '202609']
 
+/** Lo que trae una página del listado de Diez ($top del cliente). */
+const PAGINA = 200
+/** Los días AAAAMMDD de un mes AAAAMM a otro, ambos incluidos. */
+export function diasEntre(desde: string, hasta: string): number[] {
+  const out: number[] = []
+  const d = new Date(Date.UTC(Number(desde.slice(0, 4)), Number(desde.slice(4, 6)) - 1, 1))
+  const fin = new Date(Date.UTC(Number(hasta.slice(0, 4)), Number(hasta.slice(4, 6)), 0))
+  for (; d <= fin; d.setUTCDate(d.getUTCDate() + 1)) out.push(d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate())
+  return out
+}
 /** Una huella publicable (16 cifras hexadecimales). */
 export const huella = (f: string) => createHash('md5').update(f).digest('hex').slice(0, 16)
 /** Los céntimos de un importe de Diez (double), redondeados. */
@@ -74,13 +84,22 @@ async function main() {
   }
   sale('entra_c0008', 1)
 
+  // Día a día (run 39116056722): leído por meses, el listado de Diez pagina
+  // con $top/$skip sin orden fijo y devolvió 431 facturas repetidas en lugar
+  // de 431 que se saltó (198 + 160 + 73, justo los «asientos sin factura»). Un
+  // día cabe en una página (TAM_PAGINA): sin pasar de página, no se repite ni
+  // se salta nada. Si un día llenara la página, se dice.
   const filas: Factura[] = []
-  let leidos = 0, sinContestar = 0
-  for (const m of MESES) {
-    try { filas.push(...(await c.facturasDelMes(m))); leidos++ } catch { sinContestar++; sale(`mes_sin_contestar.${m}`, 1) }
+  let dias = 0, sinContestar = 0, diasLlenos = 0
+  for (const d of diasEntre(MESES[0], MESES[MESES.length - 1])) {
+    try {
+      const del = await c.todas<Factura>(`/api/facturas?$filter=${encodeURIComponent(`Fecha ge ${d} and Fecha le ${d}`)}`)
+      if (del.length >= PAGINA) diasLlenos++
+      filas.push(...del); dias++
+    } catch { sinContestar++; sale(`dia_sin_contestar.${d}`, 1) }
   }
   seccion('lectura')
-  sale('meses_leidos', leidos); sale('meses_sin_contestar', sinContestar); sale('filas', filas.length)
+  sale('dias_leidos', dias); sale('dias_sin_contestar', sinContestar); sale('dias_con_la_pagina_llena', diasLlenos); sale('filas', filas.length)
 
   // Repetidas en el listado: ¿la misma o distinta?
   const porClave = new Map<string, Factura[]>()
