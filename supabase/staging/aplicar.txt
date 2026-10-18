@@ -7,6 +7,10 @@
 #   (un movimiento de prueba creado dentro) → «Pagado» y bank_match_item con
 #   su declaración; deshacer el casado y anular la liquidación devuelven la
 #   declaración; con el mes cerrado va al primer día abierto; y una [68] para.
+#   Antes de nada, la conta_motivos_para_validar huérfana que deja la 0180 de
+#   verdad del run anterior (abajo): con ella, las pruebas creen que la M01
+#   está y no la cargan (run 345). La misma limpieza va otra vez detrás de la 0180.
+supabase/staging/sql/20261122_i01b_sin_m01_en_staging.sql
 supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
 #   Su vuelta atrás: hacia delante, atrás (las tres huellas como antes y nada
 #   de la 0180) y otra vez hacia delante.
