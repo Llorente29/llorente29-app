@@ -75,6 +75,14 @@ supabase/staging/sql/20261122_i01b_asesoria_prueba.sql
 #   arrastra 7.519,61; un aviso sin mirar para el fichero; y su vuelta atrás.
 supabase/migrations/20261122T0240_i01b_303_no_inventa.sql
 supabase/staging/sql/20261122_i01b_303_no_inventa_prueba.sql
+#   El 349 lo proponen las operaciones con la UE (rama conta/i01b-349-por-operaciones):
+#   la 0250 DE VERDAD (cambia en caliente conta_impuesto_reglas, misma firma, y
+#   añade conta_paises_ue) y su prueba: sin operaciones no sale; una compra
+#   intracomunitaria lo propone y calcular lo escribe; quitado con motivo no se
+#   pisa; venta E5 y «no estoy en el ROI»; lo de más de 12 meses no cuenta; y su
+#   vuelta atrás.
+supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
+supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
 
 # S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
 #   La 0160 (el CHECK de journal_entry_document.kind amplía con
