@@ -129,6 +129,8 @@ describe('en el calendario, «No se puede calcular» en vez de una cifra', () =>
     } as FilaCalendario
     const v = vistaDeFila(f)
     expect(v.chip).toEqual({ tono: 'falta', texto: 'No se puede calcular' })
-    expect([v.aviso, v.textoAccion, v.ambar]).toEqual([TITULO_VACIO, 'Ver el aviso', true])
+    // En el calendario, en corto: el porqué entero está en la declaración, a un clic.
+    expect([v.aviso, v.textoAccion, v.ambar]).toEqual(['Falta el libro de IVA del periodo.', 'Ver el aviso', true])
+    expect(vistaDeFila({ ...f, declaracion: { ...f.declaracion!, aviso: TITULO_110 } }).aviso).toBe('Falta lo que quedaba por compensar de antes, la casilla [110].')
   })
 })
