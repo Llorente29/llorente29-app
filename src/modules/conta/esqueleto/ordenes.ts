@@ -181,6 +181,8 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   // I01b · Impuestos: lo de la cabecera del tablero 8 («Ya presenté uno fuera», «Revisar y
   // presentar los de octubre»), que depende del mes y de lo que haya: lo pone la pantalla.
   'impuestos.calendario': [{ titulo: 'Presentar', ordenes: [], dePantalla: 'impuestos' }],
+  // El tablero 10: «+ Añadir un certificado», solo para un administrador (lo pone la pantalla).
+  'impuestos.certificados': [{ titulo: 'Certificado', ordenes: [], dePantalla: 'certificados' }],
 }
 
 /** ¿Se puede usar esta orden en esta empresa? (su producto sale, y su pestaña, y lo que pida). */

@@ -134,14 +134,14 @@ export const PRODUCTOS: Producto[] = [
   },
   { id: 'laboral', etiqueta: 'Laboral', icono: 'laboral', ruta: null, prefijos: [], interruptor: 'conta_laboral', pestanas: [] },
   // I01b · Impuestos (tableros 8, 9 y 10), con su interruptor por cuenta. El IVA de un
-  // periodo (impuestos/iva/…) cuelga del Calendario. Certificados, cuando tenga pantalla.
+  // periodo (impuestos/iva/…) cuelga del Calendario.
   {
     id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: R.impuestos, prefijos: [], interruptor: 'conta_impuestos',
     pestanas: [
       { id: 'calendario', etiqueta: 'Calendario', ruta: R.impuestos, prefijos: [R.impuestos] },
       { id: 'presentados', etiqueta: 'Presentados', ruta: `${R.impuestos}/presentados`, prefijos: [`${R.impuestos}/presentados`] },
       { id: 'sociedades', etiqueta: 'Impuesto de sociedades', ruta: `${R.impuestos}/sociedades`, prefijos: [`${R.impuestos}/sociedades`] },
-      { id: 'certificados', etiqueta: 'Certificados y accesos', ruta: null, prefijos: [`${R.impuestos}/certificados`] },
+      { id: 'certificados', etiqueta: 'Certificados y accesos', ruta: `${R.impuestos}/certificados`, prefijos: [`${R.impuestos}/certificados`] },
     ],
   },
   {

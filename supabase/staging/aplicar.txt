@@ -35,6 +35,11 @@ supabase/staging/sql/20261122_i01b_declaracion_prueba.sql
 #   prueba: el 3T de A para apuntar, apuntado fuera, B no lo ve, y su vuelta atrás.
 supabase/migrations/20261122T0210_i01b_presentados.sql
 supabase/staging/sql/20261122_i01b_presentados_prueba.sql
+#   P4, certificados: la 0220 DE VERDAD (solo añade dos funciones) y su prueba
+#   con fichas de mentira: A no sube (con el porqué de la base), presenta con
+#   el suyo y no con el de B, B no ve, y su vuelta atrás.
+supabase/migrations/20261122T0220_i01b_certificados.sql
+supabase/staging/sql/20261122_i01b_certificados_prueba.sql
 
 # S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
 #   La 0160 (el CHECK de journal_entry_document.kind amplía con

@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { hayBase, rpc } from '@/modules/conta/services/bd'
 import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
+import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
 
 /** Las preguntas del paso «impuestos» del alta que deciden modelos. */
 const CLAVES_DEL_ALTA = ['retiene', 'alquiler', 'retenido70'] as const
@@ -183,4 +184,53 @@ export async function subirJustificante(p: { declaracion: string; cuenta: string
   if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`No se ha podido subir el PDF: ${sub.error.message}`)
   const r = await rpc<{ mensaje: string }>('conta_impuesto_justificante_guardar', { p_return: p.declaracion, p_ruta: ruta, p_huella: huella, p_tamano: bytes.length })
   return r.mensaje
+}
+
+// ── P4 · Certificados y accesos ─────────────────────────────────────────────
+
+/** Lo que pinta Certificados y accesos (conta_impuesto_certificados_ver). */
+export function leerCertificados(companyId: string): Promise<CertificadosVer> {
+  return rpc<CertificadosVer>('conta_impuesto_certificados_ver', { p_company: companyId })
+}
+
+/**
+ * Subir un certificado (.p12 / .pfx) con su contraseña a conta-certificado, que
+ * lo abre en memoria y lo guarda en el almacén. Ni el fichero ni la contraseña
+ * se guardan en el navegador ni en la base. Nunca lanza: devuelve el mensaje.
+ */
+export async function subirCertificado(cuentaId: string, fichero: File, contrasena: string): Promise<{ ok: boolean; mensaje: string; id?: string }> {
+  hayBase()
+  const bytes = new Uint8Array(await fichero.arrayBuffer())
+  let bin = ''
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+  const { data, error } = await supabase!.functions.invoke('conta-certificado', { body: { cuenta_id: cuentaId, p12_base64: btoa(bin), contrasena } })
+  if (!error && data && typeof data === 'object' && 'ok' in data) return data as { ok: boolean; mensaje: string; id?: string }
+  const ctx = (error as { context?: Response } | null)?.context
+  if (ctx && typeof ctx.json === 'function') {
+    const c = await ctx.clone().json().catch(() => null) as { mensaje?: string } | null
+    if (c?.mensaje) return { ok: false, mensaje: c.mensaje }
+    return { ok: false, mensaje: `La subida del certificado ha contestado ${ctx.status}. No se ha guardado nada.` }
+  }
+  return { ok: false, mensaje: 'No se ha podido hablar con la subida del certificado. No se ha guardado nada.' }
+}
+
+/** La empresa presenta con este certificado. */
+export function certificadoPresenta(companyId: string, certificado: string): Promise<{ mensaje: string }> {
+  return rpc('conta_impuesto_certificado_presenta', { p_company: companyId, p_certificate: certificado })
+}
+
+/** «Quitar el certificado ahora»: se borra del almacén al instante; el registro de usos se queda. */
+export function quitarCertificado(certificado: string): Promise<string> {
+  return rpc<string>('conta_cert_quitar', { p_certificate: certificado })
+}
+
+/** «Puede presentar» (file), «solo ver» (view) o nada (null). */
+export function permisoCertificado(certificado: string, persona: string, permiso: 'file' | 'view' | null): Promise<string> {
+  return rpc<string>('conta_cert_permiso', { p_certificate: certificado, p_user: persona, p_permission: permiso })
+}
+
+/** «Probar con Hacienda»: un token de un solo uso y la consulta (no presenta nada). */
+export async function probarCertificado(certificado: string): Promise<SalidaHacienda> {
+  const token = await confirmarCertificado(certificado, 'test')
+  return hacienda('probar', { confirmacion: token })
 }

@@ -99,3 +99,27 @@
 .s-impuestos-subir { cursor: pointer; }
 .s-impuestos-subir-texto { color: var(--s-accion); text-decoration: underline; }
 .s-impuestos-subir:focus-within .s-impuestos-subir-texto { outline: 2px solid var(--s-foco); outline-offset: 2px; }
+
+/* ── Certificados y accesos (tablero 10) ───────────────────────────────── */
+.s-impuestos-opciones { display: flex; flex-direction: column; }
+.s-impuestos-opcion {
+  display: grid; grid-template-columns: var(--s-5) minmax(0, 1fr); gap: var(--s-3); padding: var(--s-4) var(--s-6);
+  border-top: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-impuestos-opcion[data-elegida='si'] { background: var(--s-ok-fondo); }
+.s-impuestos-radio {
+  width: var(--s-4); height: var(--s-4); margin-top: 2px; border-radius: var(--s-radio-pildora);
+  border: 2px solid var(--s-borde-control); background: var(--s-superficie);
+}
+.s-impuestos-radio[aria-checked='true'] { border-color: var(--s-accion); box-shadow: inset 0 0 0 3px var(--s-superficie); background: var(--s-accion); }
+.s-impuestos-opcion-cuerpo { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.s-impuestos-opcion-cabeza { display: flex; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; align-items: baseline; }
+.s-impuestos-certificado { display: flex; flex-direction: column; gap: var(--s-1); }
+.s-impuestos-chips { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.s-impuestos-ok { color: var(--s-ok); }
+
+.s-impuestos-custodia { background: var(--s-oscuro); border-color: var(--s-oscuro); color: var(--s-superficie); gap: var(--s-3); }
+.s-impuestos-custodia .s-tarjeta-titulo { color: var(--s-superficie); }
+.s-impuestos-custodia p { margin: 0; }
+.s-impuestos-custodia .s-boton { background: transparent; color: var(--s-superficie); border-color: var(--s-superficie); }
+.s-impuestos-custodia-nota { font-size: var(--s-t-s); opacity: 0.85; }
