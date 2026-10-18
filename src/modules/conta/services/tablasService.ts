@@ -88,6 +88,15 @@ export async function cargarTablasGenerales(accountId: string, companyId: string
   return salida
 }
 
+/**
+ * Una sola tabla, sin los cambios a las de serie (S01e: la cifra de
+ * «Numeración» en el índice de Ajustes, sin leer las nueve).
+ */
+export async function cargarTabla(companyId: string, def: DefinicionTabla): Promise<FilaGeneral[]> {
+  const partes = await Promise.all(def.tablasBd.map(async (t) => (await leer(def, t, companyId)).map((f) => aFilaGeneral(t, f, new Map()))))
+  return partes.flat()
+}
+
 const numeros = (v: unknown): number[] => (Array.isArray(v) ? v.map(Number).filter((n) => !Number.isNaN(n)) : [])
 const numero = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
 const texto = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null)

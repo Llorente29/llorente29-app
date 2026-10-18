@@ -374,7 +374,9 @@ export function pasosCierre(f: FuenteCierre): PasoCierre[] {
   paso(f.socios, 'Liquidaciones del socio de marca')
   paso(f.nominas, 'Nóminas')
   r.push({ texto: f.pendientes === 0 ? 'Nada esperando revisión' : `${f.pendientes} ${f.pendientes === 1 ? 'asiento espera' : 'asientos esperan'} revisión`, hecho: f.pendientes === 0 })
-  r.push({ texto: f.cerrado ? 'Mes cerrado' : 'Cerrar el mes', hecho: f.cerrado })
+  // S01e: un mes cerrado con asientos sin validar dentro no sale «✓»: lo dice.
+  r.push({ texto: !f.cerrado ? 'Cerrar el mes' : f.pendientes === 0 ? 'Mes cerrado'
+    : `Mes cerrado, pero con ${f.pendientes} ${f.pendientes === 1 ? 'asiento' : 'asientos'} sin validar dentro`, hecho: f.cerrado && f.pendientes === 0 })
   return r
 }
 

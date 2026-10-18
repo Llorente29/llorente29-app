@@ -271,7 +271,7 @@ test('cliente normal: sin facturas, lo dice; archivar y recuperar', async ({ pag
   }
 })
 
-test('alta de cliente con el NIF de un proveedor: un solo tercero con los dos papeles', async ({ page }, info) => {
+test('alta de cliente con el NIF de un proveedor: una sola ficha con los dos papeles', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
   const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
@@ -287,7 +287,7 @@ test('alta de cliente con el NIF de un proveedor: un solo tercero con los dos pa
     // Regla 1: un NIF, un tercero.
     await expect(page.getByText(`Es el mismo que tu proveedor ${nombre}: añadirle el papel de cliente.`)).toBeVisible()
     await page.getByRole('button', { name: 'Añadirle el papel de cliente' }).click()
-    await expect(page.getByText(`${nombre} ya es también cliente: un solo tercero con los dos papeles.`)).toBeVisible()
+    await expect(page.getByText(`${nombre} ya es también cliente: una sola ficha con los dos papeles.`)).toBeVisible()
     await expect(page).toHaveURL(/\/conta\/clientes-y-proveedores\/[0-9a-f-]+\/datos-fiscales$/)
     const roles = await rest<{ role: string }[]>(s, 'GET', `party_role?select=role,party!inner(name)&account_id=eq.${CUENTA_A.id}&party.name=eq.${encodeURIComponent(nombre)}&order=role`)
     expect(roles.datos.map((r) => r.role)).toEqual(['customer', 'supplier'])

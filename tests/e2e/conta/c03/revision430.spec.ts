@@ -95,7 +95,7 @@ test('una 430 con enlace de pago y sin papel sale en la revisión y, al confirma
     await expect(page.getByRole('heading', { level: 1, name: 'Contactos' })).toHaveCount(1)
     await expect(page.getByRole('link', { name: /GLOVOAPP SPAIN PLATFORM/ })).toHaveCount(0)
     // S01 · paso 3: los papeles son pestañas (sin número); cuántos hay lo dice la línea de debajo de la lista.
-    const filtroPlataformas = page.locator('p.cx-ayuda', { hasText: /^\d+ terceros? en «Plataformas»/ })
+    const filtroPlataformas = page.locator('p.cx-ayuda', { hasText: /^\d+ contactos? en «Plataformas»/ })
     await expect(filtroPlataformas).toBeVisible()
     const antes = Number((await filtroPlataformas.textContent())!.match(/^(\d+)/)![1])
     const tarjeta = page.getByRole('status').filter({ hasText: /^Tienes 7 cuentas de clientes traídas de Diez por revisar/ })
@@ -136,7 +136,7 @@ test('una 430 con enlace de pago y sin papel sale en la revisión y, al confirma
     expect(cliente.datos, 'la 43000001 es su cuenta de cliente').toHaveLength(1)
 
     // Y sale en «Plataformas».
-    await expect(filtroPlataformas).toHaveText(new RegExp(`^${antes + 1} terceros? en «Plataformas»`))
+    await expect(filtroPlataformas).toHaveText(new RegExp(`^${antes + 1} contactos? en «Plataformas»`))
     await expect(page.getByRole('link', { name: /GLOVOAPP SPAIN PLATFORM/ })).toBeVisible()
 
     // Respuesta 4 · 6: «Archivarlo (histórico)» archiva de verdad. Como en

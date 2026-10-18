@@ -141,7 +141,7 @@ describe('el catálogo de órdenes', () => {
     expect(cintaDe('contabilidad', null, NADA)).toEqual([])
   })
   it('paso 3: las acciones de Libros, en la cinta de su pestaña; Importar (Diez), solo con Diez', () => {
-    expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['Estados', 3], ['IVA', 7]])
+    expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['Estados', 3], ['IVA', 6], ['Retenciones', 1]])
     expect(cintaDe('contabilidad', 'cierre', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([
       ['Cierre', ['Ejercicios', 'Cerrar el mes', 'Regularización, cierre y apertura']],
       ['Cuentas anuales', ['Cuentas anuales del ejercicio', 'Qué cuentas alimentan cada línea']],
@@ -174,12 +174,13 @@ describe('el catálogo de órdenes', () => {
       expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : '').split('?')[0])), id).toBe(`bancos.${o.pestana}`)
     }
   })
-  it('paso 3: Compras y gastos · «Subir factura» en Por revisar; la barra de la N22 en Facturas recibidas, puesta por la pantalla', () => {
-    expect(cintaDe('compras', 'por-revisar', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([['Nuevo', ['Subir factura']]])
+  it('paso 3: Compras y gastos · «Subir una factura» en Por revisar; la barra de la N22 en Facturas recibidas, puesta por la pantalla', () => {
+    // S01e: «Subir una factura» (de una en una) no se confunde con «Subir varias a la vez» de Facturas recibidas.
+    expect(cintaDe('compras', 'por-revisar', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([['Nuevo', ['Subir una factura']]])
     const subir = ordenPorId('compras.subir')!
     expect('ruta' in subir.a && subir.a.ruta).toBe('compras?subir=')
     expect(de(rutaConta('compras'))).toBe('compras.por-revisar')
-    expect(cintaDe('compras', 'recibidas', NADA).map((g) => [g.titulo, g.dePantalla])).toEqual([['Traer', 'traer'], ['Esperadas', 'esperadas'], ['Leídas', 'leidas']])
+    expect(cintaDe('compras', 'recibidas', NADA).map((g) => [g.titulo, g.dePantalla])).toEqual([['Cómo llegan', 'traer'], ['Las que faltan', 'esperadas'], ['Apuntadas solas', 'leidas']])
     // Liquidaciones no lleva cinta, y en una empresa sin hostelería ni sale la pestaña.
     expect(cintaDe('compras', 'liquidaciones', HOSTELERIA)).toEqual([])
   })

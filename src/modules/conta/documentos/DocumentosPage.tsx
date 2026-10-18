@@ -36,11 +36,13 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
 import { leerDocumentos, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
 import { QuincenaCatcher } from '@/modules/conta/documentos/QuincenaCatcher'
+import { usaCatcher } from '@/modules/conta/services/catcherService'
 import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
 import { useEntradasEnCinta, useHosteleria, type EntradaPantalla, type EntradasCinta } from '@/modules/conta/marco/nuevo/contexto'
+import { mesCorto } from '@/modules/conta/lib/bancosVista'
 
 /** El grupo de la cinta (esqueleto/ordenes.ts, dePantalla) de cada grupo de la barra de la N22. */
-const GRUPO_CINTA: Record<string, string> = { Traer: 'traer', Esperadas: 'esperadas', 'Leídas': 'leidas' }
+const GRUPO_CINTA: Record<string, string> = { 'Cómo llegan': 'traer', 'Las que faltan': 'esperadas', 'Apuntadas solas': 'leidas' }
 
 const ACEPTA = 'application/pdf,image/jpeg,image/png,image/webp'
 
@@ -59,6 +61,8 @@ export default function DocumentosPage() {
   const [vuelta, setVuelta] = useState(0)
   const { desde, hasta } = limites(mes)
   const datos = useLeer(activa ? () => leerDocumentos(activa.id, desde, hasta) : null, `${activa?.id}:${mes}:${vuelta}`)
+  // S01e: la tarjeta de Catcher, solo en la empresa que trabaja con Catcher (sus tiendas, su tarifa o sus quincenas).
+  const conCatcher = useLeer(accountId && activa ? () => usaCatcher(accountId, activa.id) : null, `${accountId}:${activa?.id}`)
 
   const ficheros = useRef<HTMLInputElement>(null)
   const camara = useRef<HTMLInputElement>(null)
@@ -99,7 +103,7 @@ export default function DocumentosPage() {
     } catch (e) { setFallo(e instanceof Error ? e.message : String(e)) }
   }
 
-  // S01 · paso 3: la barra de la N22 (TRAER · ESPERADAS · LEÍDAS) va en la cinta
+  // S01 · paso 3: la barra de la N22 (Cómo llegan · Las que faltan · Apuntadas solas) va en la cinta
   // de Compras y gastos › Facturas recibidas. Depende de la empresa (el correo,
   // Cocina): la pone esta pantalla. Con sus números escritos y su punto ámbar.
   const hosteleria = useHosteleria()
@@ -134,14 +138,15 @@ export default function DocumentosPage() {
   return (
     <div className="cxl-pagina">
       {/* S01 · paso 3: Compras y gastos › Facturas recibidas. El título y las pestañas, en la
-          cabecera del esqueleto; el mes, al lado (PeriodoEnBarra), como el de Bancos. */}
+          cabecera del esqueleto; el mes, al lado (PeriodoEnBarra), como el de Bancos.
+          S01e: el mes se escribe igual en todas las pantallas («Oct 2026», mesCorto). */}
       <h1 className="cx-oculto">Facturas recibidas</h1>
       {movil
         ? <label className="cxr-mes-movil"><select className={movil ? 'cx-input' : 'cxm-select'} aria-label="Mes" value={mes} onChange={(e) => cambiar({ mes: e.target.value })}>
-            {listaMeses.map((m) => <option key={m.valor} value={m.valor}>{m.nombre}</option>)}
+            {listaMeses.map((m) => <option key={m.valor} value={m.valor}>{mesCorto(m.valor)}</option>)}
           </select></label>
         : <PeriodoEnBarra><select className={movil ? 'cx-input' : 'cxm-select'} aria-label="Mes" value={mes} onChange={(e) => cambiar({ mes: e.target.value })}>
-            {listaMeses.map((m) => <option key={m.valor} value={m.valor}>{m.nombre}</option>)}
+            {listaMeses.map((m) => <option key={m.valor} value={m.valor}>{mesCorto(m.valor)}</option>)}
           </select></PeriodoEnBarra>}
 
       {inputs}
@@ -152,14 +157,15 @@ export default function DocumentosPage() {
         <>
           <div className="cxr-seccion">
             <div>
-              <Migas migas={[{ etiqueta: 'Documentos' }, { etiqueta: 'Facturas recibidas' }]} />
+              {/* S01e: la miga dice dónde estás (Compras y gastos › Facturas recibidas) y acaba en lo que dice el título. */}
+              <Migas migas={[{ etiqueta: 'Compras y gastos', ruta: rutaCompras() }, { etiqueta: 'Facturas recibidas', ruta: `?ver=todas&mes=${mes}` }, { etiqueta: VERES.find((v) => v.id === ver)!.nombre }]} />
               <h2>{VERES.find((v) => v.id === ver)!.nombre}</h2>
             </div>
             <div className="cxr-herramientas">
               <div className="cxl-segmento" role="group" aria-label="Qué facturas ver">
                 {VERES.map((v) => <button key={v.id} type="button" aria-pressed={v.id === ver} onClick={() => cambiar({ ver: v.id })}>{v.nombre}</button>)}
               </div>
-              {!movil && <button type="button" className="cx-boton" onClick={() => ficheros.current?.click()} disabled={!!subiendo}>Subir facturas</button>}
+              {!movil && <button type="button" className="cx-boton" onClick={() => ficheros.current?.click()} disabled={!!subiendo}>Subir varias a la vez</button>}
             </div>
           </div>
 
@@ -178,7 +184,8 @@ export default function DocumentosPage() {
 
           <Banda d={d} alPedir={() => setPidiendo(true)} />
           <Cifras d={d} ver={ver} solo={producto.solo} alVer={(v) => cambiar({ ver: v })} alPedir={() => setPidiendo(true)} />
-          {accountId && hosteleria && <QuincenaCatcher accountId={accountId} companyId={activa.id} quien={userName} />}
+          {accountId && hosteleria && conCatcher.datos === true && <QuincenaCatcher accountId={accountId} companyId={activa.id} quien={userName} />}
+          {hosteleria && conCatcher.error && <div className="cx-error" role="alert">{conCatcher.error}</div>}
           <Lista d={d} ver={ver} movil={movil} solo={producto.solo} entendidoTitulo={t.entendido} pie={t.repetida} alIr={irA} alVerTodas={() => cambiar({ ver: 'todas' })} />
         </>
       )}

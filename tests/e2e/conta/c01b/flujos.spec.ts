@@ -323,7 +323,7 @@ test.describe('cuenta A', () => {
       await expect(page.getByRole('link', { name: new RegExp(nombre) })).toHaveCount(0)
       await page.getByRole('button', { name: 'Archivados' }).click()
       await page.getByRole('button', { name: `Más acciones de ${nombre}` }).click()
-      await expect(page.getByRole('menuitem', { name: 'Subir factura' })).toHaveCount(0)
+      await expect(page.getByRole('menuitem', { name: 'Subir una factura' })).toHaveCount(0)
       await page.getByRole('menuitem', { name: 'Recuperar proveedor' }).click()
       await expect(page.getByText(`${nombre} recuperado: vuelve a salir en la lista de proveedores.`)).toBeVisible()
       await page.getByRole('button', { name: 'En uso' }).click()

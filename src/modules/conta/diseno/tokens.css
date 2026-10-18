@@ -60,7 +60,9 @@
 
   /* ── Letra ──────────────────────────────────────────────────────────── */
   --s-letra: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
-  --s-letra-cifras: 'Geist Mono Variable', 'Geist Mono', 'SF Mono', Menlo, monospace;
+  /* S01e: los importes, en la letra de la app con cifras tabulares, no en letra
+     de máquina de escribir (como R5b en Documentos). Las tabulares las pone la raíz. */
+  --s-letra-cifras: var(--s-letra);
   --s-t-xs: 12px;                /* Cabeceras de tabla, grupos de la cinta */
   --s-t-s: 13px;                 /* Apoyo, chips */
   --s-t-m: 14px;                 /* Texto, botones, campos */

@@ -37,12 +37,20 @@ test('cuenta A: el árbol, «qué se apunta aquí», buscar, añadir y deshacer,
   await entrarComo(page, CUENTA_A.email)
   await planActivado(page)
 
-  // El índice dice la cifra real (D2), no la de la maqueta.
+  // El índice dice la cifra real (D2), no la de la maqueta. S01e: el índice está en Ajustes; el plan
+  // es Contabilidad › Definiciones y no lo lleva al lado (la miga, el título y el menú dicen lo mismo).
+  await page.goto('/conta/ajustes')
   const indice = page.getByRole('navigation', { name: 'Ajustes' })
-  await expect(indice.getByRole('link', { name: /^Plan contable\s*Pymes · 8 dígitos · \d+ cuentas$/ })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByText('Plan de pymes · subcuentas de 8 dígitos · la longitud queda fija con el primer asiento')).toBeVisible()
+  await expect(indice.getByRole('link', { name: /^Plan contable\s*Pymes · 8 dígitos · \d+ cuentas$/ })).toHaveAttribute('href', '/conta/ajustes/plan')
   // Nada de Cocina en los Ajustes de contabilidad.
   for (const cocina of ['Quién reparte', 'Locales', 'Marcas']) await expect(indice.getByText(cocina)).toHaveCount(0)
+  await indice.getByRole('link', { name: /^Plan contable/ }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Plan contable' })).toBeVisible()
+  // El título sale UNA vez, y encima dice dónde estás.
+  await expect(page.getByRole('heading', { name: 'Plan contable', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('main').locator('.cx-antetitulo').first()).toHaveText('Definiciones')
+  await expect(page.getByRole('navigation', { name: 'Ajustes' })).toHaveCount(0)
+  await expect(page.getByText('Plan de pymes · subcuentas de 8 dígitos · la longitud queda fija con el primer asiento')).toBeVisible()
 
   // Respuesta 5: el árbol. Con «Las que usas», el grupo 4 abierto hasta el nivel
   // de cuenta, y abiertas las que tienen subcuentas o enlaces (400, 410, 472).
@@ -230,6 +238,8 @@ test('cuenta A: el índice de Ajustes (N6), con «aún no» donde aún no hay pa
   for (const g of ['Empresa', 'Contabilidad', 'Acceso y avisos']) await expect(indice.getByRole('heading', { name: g })).toBeVisible()
   await expect(indice.getByRole('link', { name: /^Certificados y accesos\s*Aún no$/ })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('Aún no.')).toBeVisible()
+  // S01e: Numeración ya no dice «aún no»: cuenta las series como su tabla, y lleva a ella.
+  await expect(indice.getByRole('link', { name: /^Numeración\s*(Ninguna serie todavía|1 serie|\d+ series)$/ })).toHaveAttribute('href', '/conta/ajustes/tablas/numeracion')
   // Con sus líneas de resumen ya cargadas (como N6), no el esqueleto.
   await expect(indice.getByRole('link', { name: /^Plan contable\s*Pymes · 8 dígitos · \d+ cuentas$/ })).toBeVisible()
   await expect(indice.getByRole('link', { name: /^Ejercicio\s*\d{4} · / })).toBeVisible()

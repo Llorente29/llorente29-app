@@ -28,7 +28,6 @@ function Contenido() {
     ? <CabeceraEntradaMovil titulo="Qué va a cada sitio" antetitulo="Plan contable" atras={rutaPlan()} />
     : (
       <div className="cx-ajustes-panel-cabeza">
-        <h2 className="cx-ajustes-panel-titulo">Qué va a cada sitio</h2>
         <p className="cx-ayuda" style={{ margin: 0 }}>Pregunta con tus palabras: «alquiler», «luz», «Glovo». <Link to={rutaPlan()} className="cx-enlace">Volver al plan</Link></p>
       </div>
     )
@@ -62,5 +61,5 @@ function Contenido() {
 }
 
 export default function QueVaACadaSitioPage() {
-  return <MarcoAjustes entrada="plan"><Contenido /></MarcoAjustes>
+  return <MarcoAjustes entrada="plan" titulo="Qué va a cada sitio"><Contenido /></MarcoAjustes>
 }

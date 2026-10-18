@@ -50,6 +50,7 @@ import { PasosDiez } from '@/modules/conta/diez/PasosDiez'
 import { usePasosDiez } from '@/modules/conta/diez/usePasosDiez'
 import { verTarjetaDiez } from '@/modules/conta/lib/pasosDiez'
 import { leerCierres } from '@/modules/conta/services/diarioService'
+import { useImpuestoEmpresa } from '@/modules/conta/hooks/useImpuestoEmpresa'
 
 type Carga<T> = { estado: 'cargando' } | { estado: 'listo'; v: T } | { estado: 'fallo'; texto: string }
 
@@ -162,6 +163,9 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
   const [iva] = useCarga(() => ivaDelTrimestre(accountId, companyId, mes, hoy), `${accountId}|${companyId}|${mes}|${hoy}`)
   const [pago] = useCarga(() => proximoPago(accountId, hoy), `${accountId}|${hoy}`)
   const [ivaMeses] = useCarga(() => ivaPorMes(accountId, companyId, mes, hoy), `${accountId}|${companyId}|${mes}|${hoy}|ivas`)
+  // S01e: en Canarias es IGIC (y en Ceuta y Melilla, IPSI), no IVA.
+  const imp = useImpuestoEmpresa(accountId, companyId)
+  const lineasIvaDe = (v: { repercutido: number; soportado: number }) => lineasIva(v.repercutido, v.soportado, eurosExactos, imp.nombre)
   // S01 (paso 4): las gráficas, a un clic. De serie, solo las cifras.
   const [graficas, setGraficas] = useState(false)
 
@@ -191,7 +195,7 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
       <Cifra etiqueta="Debes" clave="inicio.debes" valor={ult ? euros(ult.debes) : '—'} ruta={rutaTerceros('proveedores')}
         apoyo={pago.estado === 'listo' ? frasePago(pago.v, hoy, diaMes) ?? 'proveedores y acreedores' : 'proveedores y acreedores'}
         tono={pago.estado === 'listo' && pago.v !== null && pago.v < hoy ? 'ambar' : undefined} barras={b(serie('debes'))} />
-      <Cifra etiqueta="IVA del trimestre" clave="inicio.iva" valor={iva.estado === 'listo' ? euros(iva.v.aPagar) : iva.estado === 'fallo' ? '—' : '…'}
+      <Cifra etiqueta={`${imp.nombre} del trimestre`} clave="inicio.iva" datos={{ impuesto: imp.nombre }} valor={iva.estado === 'listo' ? euros(iva.v.aPagar) : iva.estado === 'fallo' ? '—' : '…'}
         ruta={rutaLibros('registro', 'expedidas')}
         apoyo={iva.estado === 'listo' ? textoIva(iva.v.trimestre, lineasIvaDe(iva.v)) : iva.estado === 'fallo' ? iva.texto : ' '}
         apoyoNodo={iva.estado === 'listo' ? (
@@ -209,13 +213,12 @@ function Cifras({ accountId, companyId, mes, hoy }: { accountId: string; company
   )
 }
 
-/** M01 · Las tres líneas del IVA del trimestre, con los importes en euros con sus céntimos. */
-const lineasIvaDe = (v: { repercutido: number; soportado: number }) => lineasIva(v.repercutido, v.soportado, eurosExactos)
-
-function Cifra({ etiqueta, clave, valor, apoyo, apoyoNodo, tono, barras: bs, ruta, ia = false }: {
+function Cifra({ etiqueta, clave, datos, valor, apoyo, apoyoNodo, tono, barras: bs, ruta, ia = false }: {
   etiqueta: string
   /** S01: la etiqueta por nivel (la del lector, `etiqueta`, es la de siempre). */
   clave: 'inicio.banco' | 'inicio.teDeben' | 'inicio.debes' | 'inicio.iva'
+  /** Los huecos de la etiqueta por nivel ({impuesto}). */
+  datos?: Readonly<Record<string, string>>
   valor: string; apoyo: string; tono?: 'verde' | 'ambar'; barras: { alto: number; ultima: boolean }[]; ruta: string; ia?: boolean
   /** Lo mismo que `apoyo`, pintado (con cifras en mono); el lector oye `apoyo`. */
   apoyoNodo?: ReactNode
@@ -223,7 +226,7 @@ function Cifra({ etiqueta, clave, valor, apoyo, apoyoNodo, tono, barras: bs, rut
   return (
     <Link to={ruta} className="cxi-cifra" aria-label={`${etiqueta}: ${valor}. ${apoyo}`}>
       <span className="cxi-cifra-texto">
-        <span className="cxi-cifra-etiqueta"><PorNivel clave={clave} /></span>
+        <span className="cxi-cifra-etiqueta"><PorNivel clave={clave} datos={datos} /></span>
         <span className="cxi-cifra-valor">{valor}</span>
         <span className={`cxi-cifra-apoyo${tono ? ` cxi-cifra-apoyo-${tono}` : ''}`}>{apoyoNodo ?? apoyo}</span>
       </span>

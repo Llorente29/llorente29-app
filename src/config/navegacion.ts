@@ -323,7 +323,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     entradas: [
       { id: 'plan', etiqueta: 'Plan contable', ruta: 'ajustes/plan' },
       { id: 'tablas', etiqueta: 'Tablas generales', ruta: 'ajustes/tablas' },
-      { id: 'numeracion', etiqueta: 'Numeración', ruta: 'ajustes/numeracion', hueco: 'Las series de tus facturas llegan con las facturas que emites.' },
+      // S01e: las series ya se crean en Tablas generales › Numeración de facturas: la entrada lleva allí y cuenta las que hay.
+      { id: 'numeracion', etiqueta: 'Numeración', ruta: 'ajustes/tablas/numeracion' },
       { id: 'certificados', etiqueta: 'Certificados y accesos', ruta: 'ajustes/certificados', hueco: 'El certificado digital y los accesos a la sede de Hacienda llegan con la presentación de impuestos.' },
     ],
   },

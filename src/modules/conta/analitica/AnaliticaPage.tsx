@@ -18,6 +18,8 @@ import { Boton, Campo, Chip, Tarjeta, Texto } from '@/modules/conta/diseno'
 import { guardarEje, leerEjes, type FilaEje, type IdEje } from '@/modules/conta/services/esqueletoService'
 import { refrescarContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
 import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
+import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/MarcoAjustes'
+import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
 
 const EJES: { eje: IdEje; deSerie: string; plural: string; queGuarda: string; donde: string }[] = [
   { eje: 'local', deSerie: 'Local', plural: 'Locales', queGuarda: 'el local de cada apunte',
@@ -25,7 +27,14 @@ const EJES: { eje: IdEje; deSerie: string; plural: string; queGuarda: string; do
   { eje: 'marca', deSerie: 'Marca', plural: 'Marcas', queGuarda: 'la marca de cada apunte', donde: 'el Mayor y el libro diario' },
 ]
 
+// S01e: dentro del marco, como el plan y las tablas: «Definiciones» encima y
+// «Analítica» de título, a la vista (antes solo para lectores de pantalla).
 export default function AnaliticaPage() {
+  return <MarcoAjustes entrada="analitica"><Analitica /></MarcoAjustes>
+}
+
+function Analitica() {
+  const { movil } = useAjustes()
   const { accountId } = useCuentaConta()
   const { activa } = useEmpresas()
   const [filas, setFilas] = useState<FilaEje[] | null | undefined>(undefined)
@@ -44,10 +53,10 @@ export default function AnaliticaPage() {
   if (!activa) return <Vacio titulo="Aún no hay ninguna empresa." explicacion="Da de alta tu empresa y aquí decides su analítica." />
   return (
     <div className="s-pantalla">
-      <h1 className="cx-oculto">Analítica</h1>
+      {movil && <CabeceraEntradaMovil titulo="Analítica" antetitulo="Definiciones" atras={null} />}
       <p className="s-apoyo">
         Los apuntes pueden llevar el local y la marca. Aquí decides si en {activa.nombre} se piden y se enseñan, y cómo se llaman.
-        Apagar un eje no borra nada: lo guardado se queda y vuelve a salir si lo enciendes.
+        Apagar uno de los dos no borra nada: lo guardado se queda y vuelve a salir si lo enciendes.
       </p>
       {error && <ErrorConReintento mensaje={error} reintentar={recargar} />}
       {!error && filas === undefined && <TarjetaCargando />}

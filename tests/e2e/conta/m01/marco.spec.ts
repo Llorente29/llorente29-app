@@ -51,7 +51,7 @@ async function guardandoPreferencias(page: Page, hacer: () => Promise<unknown>) 
   expect((await guardado).ok()).toBe(true)
 }
 
-/** S01: el menú del usuario («Admin · Medio ▾»), con el nivel, la densidad y la cinta. */
+/** S01: el menú del usuario («Admin», y debajo «Nivel medio»), con el nivel, la densidad y la cinta. */
 async function abrirUsuario(page: Page) {
   // S01d: en el móvil, el usuario va en el cajón del menú.
   if ((page.viewportSize()?.width ?? 1440) < 768 && await page.getByRole('dialog', { name: 'Menú' }).count() === 0) {

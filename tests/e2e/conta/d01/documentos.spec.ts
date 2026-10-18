@@ -132,12 +132,19 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await expect(alfa).toContainText(/· 60000000/)
   await expect(alfa.getByRole('button')).toHaveCount(1)
   await expect(page.locator('tr, article', { hasText: 'Suministros Eléctricos Prueba Norte' })).toHaveCount(1)
-  // La barra de la N22, en la cinta de la pestaña (paso 3): TRAER · ESPERADAS · LEÍDAS.
+  // La barra de la N22, en la cinta de la pestaña (paso 3). S01e: con rótulos en palabras normales.
   if (lado(page) === 'ordenador') {
     const cinta = page.getByRole('toolbar', { name: 'Acciones de Facturas recibidas' })
-    for (const g of ['Traer', 'Esperadas', 'Leídas']) await expect(cinta.getByRole('group', { name: g })).toBeVisible()
-    await expect(cinta.getByRole('button', { name: /^Subir/ })).toBeVisible()
+    for (const g of ['Cómo llegan', 'Las que faltan', 'Apuntadas solas']) await expect(cinta.getByRole('group', { name: g })).toBeVisible()
+    await expect(cinta.getByRole('button', { name: /^Subir varias a la vez/ })).toBeVisible()
+    // S01e: el botón de la página dice lo mismo; «Subir una factura» es otra cosa (Por revisar).
+    await expect(page.locator('.cxr-herramientas').getByRole('button', { name: 'Subir varias a la vez' })).toBeVisible()
   }
+  // S01e: el mes se escribe igual que en Bancos («Oct 2026»).
+  await expect(page.getByRole('combobox', { name: 'Mes' }).locator('option:checked')).toHaveText('Oct 2026')
+  // S01e: la miga acaba en lo que dice el título.
+  await expect(page.locator('.cxr-seccion').getByRole('navigation', { name: 'Estás en' })).toHaveText(/^Compras y gastos›Facturas recibidas›Para mirar$/)
+  await expect(page.locator('.cxr-seccion h2')).toHaveText('Para mirar')
   await capturar(page, 'n22-para-mirar-a')
 
   // «Por aclarar»: la que no tiene emisor reconocido, con «Decirlo yo».
@@ -181,7 +188,7 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
       expect(await c.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && getComputedStyle(el).textOverflow !== 'ellipsis')).toBe(true)
       await expect(c).toContainText(/· \d{8}/)
     }
-    await expect(comoN23).toContainText('a Diez irá cuando Cegid active los documentos')
+    await expect(comoN23).toContainText('a Diez irá sin el PDF, porque Diez aún no guarda documentos')
     await expect(comoN23).toContainText('Gasto e IVA')
     await expect(comoN23).toContainText('A pagar')
   }

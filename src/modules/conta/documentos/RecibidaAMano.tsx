@@ -4,6 +4,8 @@
 // hoy toda recibida empezaba por un fichero (subirla, el correo, Compras con
 // su lectura). Aquí se escribe: proveedor, número, fecha de expedición, base,
 // tipo de IVA, cuota (calculada, se puede cambiar) y total (base + cuota).
+// S01e: y el local (Julio, 18/10: «Foodint necesita su analítica por local»),
+// con «Común» como una opción más; sin el eje de local no se pregunta.
 //
 // Al guardar: una factura «para revisar» de la empresa activa, sin papel, con
 // una línea (la base a su tipo: de las líneas sale el asiento), y se abre en
@@ -23,17 +25,19 @@ import { rutaLibroDiario, rutaRecibidaEnAsientos, rutaTerceros } from '@/config/
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { Boton, Campo, Fecha, Importe, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import { Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { eurosExactos, hoyEnMadrid, porcentaje } from '@/modules/conta/lib/formato'
-import { comprobarRecibida, cuotaDe, leerImporteEs, textoGuardada, totalDe, type BorradorRecibida } from '@/modules/conta/lib/recibidaAMano'
+import { LOCAL_COMUN, comprobarRecibida, cuotaDe, leerImporteEs, textoGuardada, totalDe, type BorradorRecibida } from '@/modules/conta/lib/recibidaAMano'
+import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { proveedoresDeLaCuenta } from '@/modules/conta/services/documentosService'
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 
 const GUARDADO = 'conta.recibidaAMano.borrador'
-const VACIO: BorradorRecibida = { proveedorId: '', numero: '', fecha: '', base: '', tipo: '', cuota: '' }
+const VACIO: BorradorRecibida = { proveedorId: '', numero: '', fecha: '', base: '', tipo: '', cuota: '', local: '' }
 
 /** Lo escrito antes de ir a dar de alta un proveedor (solo esta pestaña; si el navegador no deja, se empieza en blanco). */
 function leerGuardado(): { b: BorradorRecibida; cuotaTocada: boolean } | null {
@@ -57,6 +61,8 @@ export default function RecibidaAMano() {
 
   const proveedores = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores-a-mano`)
   const tipos = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva-recibida`)
+  const { local: ejeLocal } = useAnalitica()
+  const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:locales-a-mano`)
 
   const [inicial] = useState(() => leerGuardado())
   const [b, setB] = useState<BorradorRecibida>(() => inicial?.b ?? { ...VACIO, fecha: hoy })
@@ -77,7 +83,7 @@ export default function RecibidaAMano() {
   const cuotaVista = cuotaTocada ? b.cuota : calculada !== null ? eurosExactos(calculada).replace(/\s€$/, '') : ''
   const cuota = cuotaTocada ? leerImporteEs(b.cuota) : calculada
   const total = base !== null && cuota !== null ? totalDe(base, cuota) : null
-  const comprobacion = comprobarRecibida({ ...b, tipo: tipoElegido, cuota: cuotaEscrita }, listaTipos, hoy)
+  const comprobacion = comprobarRecibida({ ...b, tipo: tipoElegido, cuota: cuotaEscrita }, listaTipos, hoy, !!ejeLocal)
   const err = intentado ? comprobacion.errores : {}
 
   const nombreProveedor = (proveedores.datos ?? []).find((p) => p.id === b.proveedorId)?.nombre ?? 'el proveedor'
@@ -110,11 +116,18 @@ export default function RecibidaAMano() {
 
   if (proveedores.error) return <ErrorConReintento mensaje={proveedores.error} reintentar={proveedores.recargar} />
   if (tipos.error) return <ErrorConReintento mensaje={tipos.error} reintentar={tipos.recargar} />
-  if (!proveedores.datos || !tipos.datos) return <TarjetaCargando />
+  if (ejeLocal && locales.error) return <ErrorConReintento mensaje={locales.error} reintentar={locales.recargar} />
+  if (!proveedores.datos || !tipos.datos || (ejeLocal && !locales.datos)) return <TarjetaCargando />
 
   const opcionesProveedor = [
     { valor: '', texto: proveedores.datos.length ? 'Elige el proveedor…' : 'No tienes proveedores dados de alta' },
     ...proveedores.datos.map((p) => ({ valor: p.id, texto: `${p.nombre}${p.nif ? ` · ${p.nif}` : ''}` })),
+  ]
+  const nombreEje = ejeLocal?.nombre ?? 'Local'
+  const opcionesLocal = [
+    { valor: '', texto: `Elige el ${nombreEje.toLowerCase()}…` },
+    ...(locales.datos ?? []).map((l) => ({ valor: l.id, texto: l.nombre })),
+    { valor: LOCAL_COMUN, texto: 'Común (se reparte)' },
   ]
   const opcionesTipo = listaTipos.map((t) => ({ valor: String(t), texto: t === 0 ? 'Sin IVA (0 %)' : porcentaje(t) }))
   const altaProveedor = `${rutaTerceros()}?nuevo=proveedor`
@@ -145,6 +158,14 @@ export default function RecibidaAMano() {
           </div>
           {/* Con error del proveedor, el enlace de alta sigue a mano: el error tapa la ayuda del campo. */}
           {err.proveedor && <p className="s-apoyo"><Link to={altaProveedor} className="cx-enlace">+ Dar de alta un proveedor</Link></p>}
+
+          {ejeLocal && (
+            <div className="s-fila-campos">
+              <Campo etiqueta={nombreEje} error={err.local} ayuda="«Común» si es de todos: el informe por local lo reparte.">
+                {(p) => <Selector {...p} valor={b.local} alCambiar={(v) => cambiar({ local: v })} opciones={opcionesLocal} />}
+              </Campo>
+            </div>
+          )}
 
           <div className="s-fila-campos">
             <Campo etiqueta="Base imponible (€)" error={err.base}>

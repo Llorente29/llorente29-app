@@ -247,15 +247,18 @@ describe('Tarjeta y Cinta', () => {
 describe('el botón del usuario mide lo mismo en los tres niveles (el nivel no mueve nada)', () => {
   it('lleva los tres nombres en la misma celda; solo el actual se ve y se lee', async () => {
     const { MenuUsuario } = await import('@/modules/conta/esqueleto/MenuUsuario')
-    const { DE_SERIE, NIVELES, NOMBRE_NIVEL } = await import('@/modules/conta/esqueleto/preferencias')
+    const { DE_SERIE, NIVELES, fraseNivel } = await import('@/modules/conta/esqueleto/preferencias')
     for (const nivel of NIVELES) {
       const html = renderToStaticMarkup(
         <MemoryRouter><MenuUsuario nombre="Julio" prefs={{ ...DE_SERIE, nivel }} solo={false} movil={false} cambiar={() => {}} /></MemoryRouter>,
       )
-      const celda = html.match(/<strong class="s-usuario-nivel">(.*?)<\/strong>/)![1]
-      for (const n of NIVELES) expect(celda).toContain(`>${NOMBRE_NIVEL[n]}<`)
+      // S01e: «Nivel medio» debajo del nombre, sin «Julio · Medio» (ni punto colgando ni el nivel suelto).
+      const celda = html.match(/<span class="s-usuario-nivel">((?:<span[^>]*>[^<]*<\/span>)+)<\/span>/)![1]
+      for (const n of NIVELES) expect(celda).toContain(`>${fraseNivel(n)}<`)
       expect(celda.match(/data-actual="true"/g)).toHaveLength(1)
-      expect(celda).toContain(`aria-hidden="false" data-actual="true">${NOMBRE_NIVEL[nivel]}<`)
+      expect(celda).toContain(`aria-hidden="false" data-actual="true">${fraseNivel(nivel)}<`)
+      expect(html).not.toContain(' · ')
+      expect(html).toContain(`aria-label="Julio, nivel ${nivel === 'sin_experiencia' ? 'sin experiencia' : nivel}. Tus preferencias"`)
     }
     const css = readFileSync('src/modules/conta/esqueleto/esqueleto.css', 'utf8')
     expect(css).toMatch(/\.s-usuario-nivel > span \{ grid-area: 1 \/ 1; visibility: hidden; \}/)

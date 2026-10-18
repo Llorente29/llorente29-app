@@ -72,7 +72,7 @@ const DE_LA_CINTA: Orden[] = [
   { id: 'bancos.casados', etiqueta: HECHO_POR, icono: 'ok', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}?ver=casados` }, sinonimos: ['casado solo', 'automatico', 'deshacer'] },
   // Compras y gastos (paso 3). «Por revisar» (N18) sube con su diálogo
   // (?subir); Facturas recibidas (N22) pone sus grupos desde la pantalla.
-  { id: 'compras.subir', etiqueta: 'Subir factura', icono: 'subir', producto: 'compras', pestana: 'por-revisar', a: { ruta: `${R.compras}?subir=` }, sinonimos: ['subir factura', 'factura de proveedor', 'albaran'] },
+  { id: 'compras.subir', etiqueta: 'Subir una factura', icono: 'subir', producto: 'compras', pestana: 'por-revisar', a: { ruta: `${R.compras}?subir=` }, sinonimos: ['subir factura', 'factura de proveedor', 'albaran'] },
   // Contactos (paso 3): «Nuevo cliente», con el diálogo de siempre (?nuevo).
   { id: 'contactos.nuevo', etiqueta: 'Nuevo cliente', icono: 'nuevo', producto: 'contactos', pestana: 'todos', a: { ruta: `${R.terceros}?nuevo=` }, sinonimos: ['alta cliente', 'nuevo contacto', 'crear cliente'] },
   // S01d: y «Nuevo proveedor», con el alta de Proveedores (?nuevo=proveedor).
@@ -146,7 +146,9 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
     // Estados antes que IVA (medido a 1440 px con sus números): IVA, con siete
     // libros, va solo en la segunda fila y la cinta ocupa dos, no tres.
     { titulo: 'Estados', ordenes: ['libros.balance', 'libros.pyg', 'libros.ecpn'] },
-    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.retenciones', 'libros.formato-aeat'] },
+    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.formato-aeat'] },
+    // S01e: el 111 y el 115 son retenciones de IRPF, no IVA: su propio grupo.
+    { titulo: 'Retenciones', ordenes: ['libros.retenciones'] },
   ],
   'contabilidad.cierre': [
     { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.cierre-ejercicio'] },
@@ -166,10 +168,11 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   'compras.por-revisar': [
     { titulo: 'Nuevo', ordenes: ['compras.subir'] },
   ],
+  // S01e: los rótulos en palabras normales (antes TRAER · ESPERADAS · LEÍDAS, no se entendían).
   'compras.recibidas': [
-    { titulo: 'Traer', ordenes: [], dePantalla: 'traer' },
-    { titulo: 'Esperadas', ordenes: [], dePantalla: 'esperadas' },
-    { titulo: 'Leídas', ordenes: [], dePantalla: 'leidas' },
+    { titulo: 'Cómo llegan', ordenes: [], dePantalla: 'traer' },
+    { titulo: 'Las que faltan', ordenes: [], dePantalla: 'esperadas' },
+    { titulo: 'Apuntadas solas', ordenes: [], dePantalla: 'leidas' },
   ],
   // Paso 3: Contactos, la misma en todas sus pestañas.
   ...Object.fromEntries(['todos', 'clientes', 'proveedores', 'plataformas', 'socios'].map((t) => [`contactos.${t}`, [{ titulo: 'Nuevo', ordenes: ['contactos.nuevo', 'contactos.nuevo-proveedor'] }]])),

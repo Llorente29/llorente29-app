@@ -110,7 +110,7 @@ export function opciones(q: string, solo: boolean, ctx: Contexto = SIN_EMPRESA):
   for (const b of buscarEnBancos(q)) poner({ titulo: b.nombre, apoyo: `Bancos › ${b.donde}`, ruta: rutaBancos(b.vista === 'movimientos' ? undefined : b.vista) })
   for (const g of INDICE_AJUSTES) for (const e of g.entradas) {
     if (solo && e.hueco) continue
-    if (normal(e.etiqueta).includes(n)) poner({ titulo: e.etiqueta, apoyo: `Ajustes › ${g.grupo}`, ruta: rutaConta(e.ruta) })
+    if (normal(e.etiqueta).includes(n)) poner({ titulo: e.etiqueta, apoyo: /^ajustes\/(plan|tablas|analitica)/.test(e.ruta) ? 'Contabilidad › Definiciones' : `Ajustes › ${g.grupo}`, ruta: rutaConta(e.ruta) })
   }
   for (const p of productos) for (const t of pestanasVisibles(p, ctx)) {
     if (normal(t.etiqueta).includes(n)) poner({ titulo: t.etiqueta, apoyo: p.etiqueta, ruta: rutaConta(t.ruta!) })

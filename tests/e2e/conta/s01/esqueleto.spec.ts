@@ -124,9 +124,9 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
     await expect(barra(page).getByRole('link', { name: 'Contabilidad' })).toHaveAttribute('aria-current', 'page')
   } else {
     // S01c: el cajón, con todos los productos (y «Volver a Folvy»: A no es el producto solo).
-    // S01d: y, sobre Ajustes, Favoritos y el usuario («<nombre> · <nivel>»).
+    // S01d: y, sobre Ajustes, Favoritos y el usuario («<nombre> · nivel <nivel>»).
     await abrirCajon(page)
-    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', / · (Sin experiencia|Medio|Experto)$/, 'Ajustes', 'Volver a Folvy'])
+    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', / · nivel (sin experiencia|medio|experto)$/, 'Ajustes', 'Volver a Folvy'])
     await expect(barra(page).getByRole('link', { name: 'Contabilidad' })).toHaveAttribute('aria-current', 'page')
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)

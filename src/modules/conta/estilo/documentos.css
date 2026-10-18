@@ -58,6 +58,9 @@
 .cxr-revisar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .cxr-papel { display: flex; flex-direction: column; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); overflow: hidden; }
 .cxr-papel-cabeza { display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px; font-size: 13px; color: var(--cx-apoyo); border-bottom: 1px solid var(--cx-linea); }
+/* S01e: un nombre de fichero largo, sin espacios, parte en vez de ensanchar la página. */
+.cxr-papel-cabeza > span { min-width: 0; overflow-wrap: anywhere; }
+.cxr-leido-valor { min-width: 0; overflow-wrap: anywhere; }
 .cxr-papel-hoja { background: var(--cx-fondo); padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 640px; }
 .cxr-papel-lienzo { max-width: 100%; height: auto; background: var(--cx-blanco); box-shadow: var(--cx-sombra-menu); }
 .cxr-papel-hoja img { max-width: 100%; height: auto; box-shadow: var(--cx-sombra-menu); }
@@ -134,6 +137,11 @@
     background: var(--cx-fondo);
   }
   .cxr-pulgar > * { flex: 1; height: 52px; font-size: 16px; }
+  /* S01e: «Validar y siguiente» no cabía en su mitad (min-width de su texto) y
+     la página se iba de lado (417 px en 390) llevándose la barra de abajo: los
+     botones ceden y, si hace falta, parten en dos líneas; el principal, más ancho. */
+  .cxr-pulgar > * { flex: 1 1 0; min-width: 0; white-space: normal; line-height: 1.2; padding-left: 10px; padding-right: 10px; }
+  .cxr-pulgar > .cx-boton { flex-grow: 2; }
   .cxr-subir-movil { display: flex; gap: 10px; }
   .cxr-subir-movil > * { flex: 1; height: 52px; font-size: 16px; }
 }

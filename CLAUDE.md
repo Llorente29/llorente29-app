@@ -151,6 +151,18 @@ del camino y se dijera antes. Acababa a las 00:30 porque en 30 días (26/08–
 24/09) el pedido más tardío entró a las 23:59 y 0 de 30 días tuvieron alguno
 después de las 00:15.
 
+### Una tanda se ensaya y se aplica desde su rama, antes de fusionar
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> S01d (18/10).
+
+El ensayo y el real de una tanda se lanzan **desde la rama del PR, antes de
+fusionarlo**, no desde `main` después. Así, cuando el front llega a producción
+con la fusión, lo que lee ya está en la base.
+
+*(18/10. La tanda del S01d —0160 y 0170— se aplicó desde `conta/s01d-tanda`,
+con el ensayo y el real en verde, y #236 se fusionó después.)*
+
 ### El nombre de una migración
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,

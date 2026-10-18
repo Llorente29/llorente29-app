@@ -90,9 +90,9 @@ test('cambiar de empresa, rechazar una sugerencia y cambiar un dato que puso la 
     const tipo = page.locator('.cx-dato').filter({ has: page.getByText('Tipo', { exact: true }) })
     await expect(tipo.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toBeVisible()
     await page.getByRole('button', { name: 'Cambiar quién eres' }).click()
-    await page.getByLabel('Tipo', { exact: true }).selectOption({ label: 'Sociedades anónimas' }) // no «Tipo de vía»
+    await page.getByLabel('Tipo', { exact: true }).selectOption({ label: 'Sociedad anónima' }) // no «Tipo de vía»
     await page.getByRole('button', { name: 'Guardar' }).click()
-    await expect(tipo.getByText('Sociedades anónimas')).toBeVisible()
+    await expect(tipo.getByText('Sociedad anónima')).toBeVisible()
     await expect(tipo.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toHaveCount(0)
 
     // Y de vuelta a la de siempre.

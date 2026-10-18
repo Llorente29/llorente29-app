@@ -51,8 +51,10 @@ test('Libros en la cinta (S01): cada acción en su grupo, con su número escrito
   await expect(cinta.getByRole('group', { name: 'Mayor' }).getByRole('link')).toHaveText(['Libro mayor', 'Sumas y saldos', 'Acumulados'])
   await expect(cinta.getByRole('group', { name: 'Estados' }).getByRole('link')).toHaveText(['Balance de situación', 'Pérdidas y ganancias', 'Cambios en el patrimonio neto'])
   await expect(cinta.getByRole('link', { name: /^Libro mayor/ })).toHaveAttribute('aria-current', 'page')
-  // Ninguna se esconde (regla 7): las siete del IVA, aunque la empresa no use alguna (en gris).
-  await expect(cinta.getByRole('group', { name: 'IVA' }).getByRole('link')).toHaveCount(7)
+  // Ninguna se esconde (regla 7): las seis del IVA, aunque la empresa no use alguna (en gris).
+  // S01e: Retenciones (111, 115) no es IVA: va en su propio grupo.
+  await expect(cinta.getByRole('group', { name: 'IVA' }).getByRole('link')).toHaveCount(6)
+  await expect(cinta.getByRole('group', { name: 'Retenciones' }).getByRole('link')).toHaveText([/^Retenciones/])
   // Julio, 16/10: lo que enseña un número lo lleva escrito («Expedidas 12»), nunca solo al pasar el ratón.
   const expedidas = cinta.getByRole('link', { name: /^Expedidas/ })
   await expect(expedidas).toHaveAttribute('title', /^Expedidas: /)
@@ -126,7 +128,7 @@ test('Expedidas: el resumen de tiques es F4 con su rango, y el libro cuadra con 
   vigilar(page)
   await page.goto('/conta/libros/registro/expedidas')
   await expect(page.getByRole('heading', { name: 'Facturas expedidas' })).toBeVisible()
-  await expect(page.getByText('F4 · resumen · art. 63.4 · T1-000101–T1-000105 · 5 tiques')).toBeVisible()
+  await expect(page.getByText('F4 · resumen de tiques · T1-000101–T1-000105 · 5 tiques')).toBeVisible()
   await expect(page.getByRole('group', { name: 'Cifras del libro' })).toContainText('✓ Cuadra')
   // «1 anotación.», no «1 anotaciones.» (lo enseñó la captura del e2e 153).
   await expect(page.getByText(/^(1 anotación|(?:0|[2-9]|\d{2,}) anotaciones)\.$/)).toBeVisible()
@@ -163,7 +165,8 @@ test('Qué cuentas alimentan cada línea: el cambio propio y su historial', asyn
   vigilar(page)
   await page.goto('/conta/libros/anuales/mapeo')
   await page.getByRole('button', { name: 'Pérdidas y ganancias' }).click()
-  await expect(page.getByText('624 · tuyo')).toBeVisible()
+  // S01e: cada cuenta es un botón con su código, su nombre y «· tuyo» si el cambio es de la empresa.
+  await expect(page.getByRole('button', { name: /^Cambiar la 624\b/ }).filter({ hasText: '· tuyo' })).toHaveCount(1)
   await page.getByRole('button', { name: 'Historial' }).click()
   await expect(page.getByRole('table', { name: 'Historial del mapeo' })).toContainText('El transporte que pagamos es el de la mercancía comprada')
   await capturar(page, 'mapeo')
@@ -180,9 +183,10 @@ test('Cuentas anuales: el modelo que toca, con sus cifras y su cita', async ({ p
   const texto = (await toca.locator(':scope > div').nth(1).boundingBox())!
   expect(texto.width).toBeGreaterThan(caja.width * 0.6)
   await expect(page.getByRole('table', { name: 'Cifras con las que se decide' })).toBeVisible()
-  // Ningún código de encargo a la vista: lo que aún no está dice «Próximamente».
+  // Ningún código de encargo a la vista. S01e: lo que aún no está lo dice sin prometer.
   await expect(page.locator('body')).not.toContainText(/\bC0\d[a-z]?\b/)
-  await expect(page.getByText('Memoria: próximamente.')).toBeVisible()
+  await expect(page.getByText(/^Memoria: aún no se prepara aquí\./)).toBeVisible()
+  await expect(page.locator('body')).not.toContainText(/próximamente/i)
   await capturar(page, 'cuentas-anuales')
 })
 
