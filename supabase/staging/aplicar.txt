@@ -11,6 +11,16 @@ supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
 #   Su vuelta atrás: hacia delante, atrás (las tres huellas como antes y nada
 #   de la 0180) y otra vez hacia delante.
 supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
+#   Para las pantallas en staging, lo que falta del I01a DE VERDAD: la 0120
+#   (obligaciones), 0130 (certificados, solo funciones y la tabla de
+#   confirmaciones), 0140 (el cálculo del 303) y 0150 (presentar). Solo
+#   añaden y se pueden volver a pasar (create or replace, if not exists, la
+#   política con su drop). La 0100 y la 0110 ya estaban (runs 313 y 314). El
+#   run 338 lo enseñó: sin la 0140, el calendario no podía calcular nada.
+supabase/migrations/20261122T0120_i01_obligaciones.sql
+supabase/migrations/20261122T0130_i01_certificados.sql
+supabase/migrations/20261122T0140_i01_calculo_303.sql
+supabase/migrations/20261122T0150_i01_presentar.sql
 #   P1, el calendario: la 0190 se aplica DE VERDAD (solo añade tres funciones
 #   que leen; la pantalla de Impuestos la necesita en staging) y después su
 #   prueba: como A y como B, y su vuelta atrás dentro (y otra vez delante).
