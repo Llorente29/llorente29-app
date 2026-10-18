@@ -395,7 +395,7 @@ create or replace function public.conta_impuesto_casar_cargo(p_return uuid, p_mo
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   r public.tax_return; m public.bank_movement; v_cta text; v_casado jsonb; v_match uuid; v_entry uuid; v_aviso text; v_estado text;
-  v_nombre text := public.conta_impuesto_quien();
+  v_esperado numeric; v_nombre text := public.conta_impuesto_quien();
 begin
   select * into r from public.tax_return where id = p_return for update;
   if r.id is null then raise exception 'Esa declaración no está.' using errcode = 'P0002'; end if;
@@ -412,7 +412,9 @@ begin
   if m.id is null or m.company_id <> r.company_id or m.account_id <> r.account_id then
     raise exception 'Ese movimiento no es de la empresa de la declaración.' using errcode = '42501';
   end if;
-  if m.amount <> case when r.result_kind = 'to_pay' then -r.amount else r.amount end then
+  -- (El IF de PL/pgSQL corta en el primer THEN: el CASE, fuera.)
+  v_esperado := case when r.result_kind = 'to_pay' then -r.amount else r.amount end;
+  if m.amount <> v_esperado then
     raise exception 'El movimiento es de % y la declaración, de % %.', public.conta_impuesto_euros(m.amount), public.conta_impuesto_euros(r.amount),
       case when r.result_kind = 'to_pay' then 'a pagar' else 'a devolver' end using errcode = '22023';
   end if;

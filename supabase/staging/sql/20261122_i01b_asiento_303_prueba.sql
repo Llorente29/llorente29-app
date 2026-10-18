@@ -261,7 +261,7 @@ begin
   else
     select * into e from public.journal_entry where id = r.liquidation_entry_id;
     if e.status <> 'validado' or e.entry_date <= v_hasta or v->>'mensaje' not like '%Con fecha%no se puede apuntar%'
-       or r.status <> case when r.result_kind = 'to_offset' then 'offset' else 'booked' end then
+       or r.status <> (array['booked', 'offset'])[(r.result_kind = 'to_offset')::int + 1] then
       raise exception 'PRUEBA asiento 303 · 6: con el mes cerrado queda «%», asiento del % (fin %): %.', r.status, e.entry_date, v_hasta, v;
     end if;
   end if;
