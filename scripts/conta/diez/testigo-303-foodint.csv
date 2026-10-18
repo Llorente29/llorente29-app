@@ -1,0 +1,9 @@
+# testigo-303-foodint.csv · I01b · las casillas de los 303 de Foodint presentados en 2026, por HUELLA
+# (md5 de los céntimos, 16 cifras; los importes no van al repositorio). desde,hasta,casilla,huella.
+# La [29] va por semestre: el asesor dedujo en el 2T parte de las compras del 1T, y Diez no guarda cuáles
+# (lectura 6, run 39120406840: ninguna fecha de Diez reproduce el reparto; el semestre casa al céntimo).
+2026-01-01,2026-03-31,06,4025446178cdbd87
+2026-01-01,2026-03-31,37,ffd2257b586a72d1
+2026-04-01,2026-06-30,06,a05563e947f5e35a
+2026-04-01,2026-06-30,37,cfcd208495d565ef
+2026-01-01,2026-06-30,29,18ed67e3a3ff72d2

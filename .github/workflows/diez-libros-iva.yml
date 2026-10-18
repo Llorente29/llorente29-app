@@ -1,0 +1,96 @@
+name: Diez · libros de IVA de Foodint (solo lectura)
+
+# QUÉ HACE (I01b, 18/10)
+# Mide, solo con GET, las facturas de 2026 de C0008 en Diez (sus libros
+# registro de IVA), que la importación del histórico no trajo
+# (scripts/conta/diez/libros-iva-lectura.ts). El cliente de Diez se crea con
+# escribir: false.
+#
+# QUÉ SALE: solo «@@ clave número|huella», por scripts/conta/salida-segura.mjs:
+# ni números de factura, ni NIF, ni nombres, ni importes. Las sumas, como
+# huella, para compararlas fuera con el diario de Sumied. Y el cruce factura
+# a factura con los asientos traídos de Sumied (volcados con conta_lectura,
+# sesión de solo lectura): lo que no casa sale por su número de documento.
+#
+# CUÁNDO: al empujar a la rama del encargo un commit cuyo mensaje EMPIECE por
+# «[libros-iva-lectura]».
+
+on:
+  push:
+    branches: ['conta/i01b-diez-libros-iva']
+
+concurrency:
+  group: diez-lectura
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  lectura:
+    if: startsWith(github.event.head_commit.message, '[libros-iva-lectura]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROD_REF: xzmpnchlguibclvxyynt
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      PSQL: /usr/lib/postgresql/17/bin/psql
+      PGAPPNAME: gha-diez-libros-iva-${{ github.run_id }}
+      PGOPTIONS: '-c default_transaction_read_only=on'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # El lado de Sumied del cruce: como el vigía de producción, con
+      # conta_lectura, sesión de solo lectura, y solo producción.
+      - name: Guarda 1 y 2 · producción, y no con el usuario de escritura
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          usuario = (u.username or "").split(".")[0]
+          if usuario != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura. Abortado sin conectar.")
+              raise SystemExit(1)
+          PY
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "La URL es de producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Volcar los asientos traídos de Foodint (solo lectura)
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select current_setting('transaction_read_only')")
+          [ "$r" = "on" ] || { echo "::error::La sesión no es de solo lectura. Abortado."; exit 1; }
+          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v foodint="$FOODINT" -f scripts/conta/diez/libros-iva-sumied.sql > "$RUNNER_TEMP/sumied.json"
+          jq -r '"@@ asientos_volcados \(length)"' "$RUNNER_TEMP/sumied.json" | node scripts/conta/salida-segura.mjs
+      - name: Enmascarar el secreto
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA. No se lee nada."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+      - name: Medir en C0008 (solo GET)
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          export SUMIED_JSON="$RUNNER_TEMP/sumied.json"
+          npx --yes tsx@4.19.2 scripts/conta/diez/libros-iva-lectura.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
