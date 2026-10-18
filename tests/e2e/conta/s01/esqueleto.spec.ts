@@ -124,8 +124,9 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
     await expect(barra(page).getByRole('link', { name: 'Contabilidad' })).toHaveAttribute('aria-current', 'page')
   } else {
     // S01c: el cajón, con todos los productos (y «Volver a Folvy»: A no es el producto solo).
+    // S01d: y, sobre Ajustes, Favoritos y el usuario («<nombre> · <nivel>»).
     await abrirCajon(page)
-    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes', 'Volver a Folvy'])
+    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', / · (Sin experiencia|Medio|Experto)$/, 'Ajustes', 'Volver a Folvy'])
     await expect(barra(page).getByRole('link', { name: 'Contabilidad' })).toHaveAttribute('aria-current', 'page')
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
@@ -206,7 +207,13 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
     expect(await cajas()).toEqual(antes)
     // Se guarda en la base: sigue al recargar.
     await page.reload()
+    await enElCajon(page)
     await expect(page.getByRole('button', { name: /nivel experto\. Tus preferencias$/ })).toBeVisible()
+    // S01d: en el móvil se mira en el cajón y se cierra, como cuando se midió «antes».
+    if (lado(page) === 'movil') {
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
+    }
     expect(await cajas()).toEqual(antes)
     await capturar(page, 'esqueleto-nivel-experto')
 
