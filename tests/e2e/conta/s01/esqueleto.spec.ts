@@ -226,15 +226,17 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
   expect(await cajas()).toEqual(antes)
 })
 
-test('Inicio como bandeja: impuestos con sus dos plazos, las gráficas a un clic y el nivel cambia palabras, no cajas', async ({ page }) => {
+test('Inicio como bandeja: impuestos con el plazo que toca, las gráficas a un clic y el nivel cambia palabras, no cajas', async ({ page }) => {
   const errores: string[] = []
   await entrarComo(page, CUENTA_A.email)
   vigilar(page, errores)
   await page.goto('/conta/inicio')
-  // Los impuestos que vienen: o sus modelos con los dos plazos, o que no toca nada, o que aún no los sabe.
+  // Los impuestos que vienen: o sus modelos con el plazo que toca, o que no toca nada, o que aún no los sabe.
+  // I01b (P5, 18/10): salen de conta_impuesto_calendario y dan UN plazo, el que toca —el de
+  // domiciliar si está domiciliado— (encargo I01b), no los dos como antes.
   const impuestos = page.getByRole('region', { name: 'Impuestos que vienen' })
   await expect(impuestos).toBeVisible({ timeout: 30_000 })
-  await expect(impuestos.getByText(/Si lo domicilias, hasta el|Domiciliar ya no se puede|domiciliando el pago, hasta el|No se paga: es informativo|no toca presentar nada|Aún no sé qué modelos presentas/).first()).toBeVisible({ timeout: 30_000 })
+  await expect(impuestos.getByText(/Presentarlo hasta el|Domiciliado: presentarlo hasta el|Se pasó el plazo: era hasta el|no toca presentar nada|Aún no sé qué modelos presentas/).first()).toBeVisible({ timeout: 30_000 })
   // Las gráficas, a un clic: de serie no están.
   await expect(page.locator('.cxi-barras')).toHaveCount(0)
   await page.getByRole('button', { name: 'Ver la evolución' }).click()

@@ -60,6 +60,16 @@ test.beforeAll(async () => {
     .catch(() => api(a, 'POST', 'rpc/conta_impuesto_303_calcular', { p_company: empresa, p_year: 2026, p_period: '3T' }))
 })
 
+// Al acabar, Impuestos se vuelve a apagar en el carril: los ficheros que corren después en el
+// mismo carril (el esqueleto del S01 cuenta las entradas de la barra) ven la cuenta como estaba.
+// (18/10, la e2e entera: sin esto, «Impuestos» les salía en la barra.)
+test.afterAll(async () => {
+  const plataforma = await pedirSesion(PLATAFORMA)
+  await api(plataforma, 'POST', 'feature_flags?on_conflict=account_id,feature_key',
+    { account_id: CUENTA_A.id, feature_key: 'conta_impuestos', enabled: false, source: 'manual_grant', grant_reason: 'e2e I01b (carril): se apaga al acabar' },
+    'resolution=merge-duplicates,return=minimal')
+})
+
 function vigilar(page: Page): string[] {
   const errores: string[] = []
   page.on('pageerror', (e) => errores.push(e.message))
