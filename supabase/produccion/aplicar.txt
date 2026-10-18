@@ -3,45 +3,52 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# S01 · El esqueleto de Sumied (rama conta/s01-esqueleto, PR #226). La anterior
-# de este fichero (W02, fin del relevo del secreto del despacho: 0200) ya está
-# en el historial de producción; su copia:
-# tests/conta/produccion/tanda-w02-secreto-despacho-20261017.txt.
+# I01a · Impuestos por dentro, sin pantallas (rama conta/i01a-impuestos-por-dentro,
+# PR #232). La anterior de este fichero (S01, el esqueleto: 0100–0160) ya está
+# aplicada en producción; su copia:
+# tests/conta/produccion/tanda-s01-esqueleto-20261017.txt.
 #
-#   1. 0100 — AÑADE conta_user_pref (el nivel, los favoritos y lo demás de
-#      cada persona; RLS: cada uno su fila) y company.is_hospitality (nula).
-#   2. 0110 — la marca de hostelería de las empresas de hoy, por la actividad
-#      de su cuenta. AUTORIZO: es un update de company (en producción, la única
-#      empresa de Foodint).
-#   3. 0120 — AÑADE company.logo_path (nula) y el bucket privado company-logos
-#      con sus cuatro políticas.
-#   4. 0130 — AÑADE conta_eje_analitico (los ejes local y marca de cada empresa,
-#      RLS) y los siembra: local y marca encendidos donde hay locales y marcas.
-#   5. 0140 — CAMBIA en caliente conta_motivos_para_validar (misma firma): el
-#      local solo se pide con el eje «local» encendido. Parte del cuerpo de
-#      producción (la M01, md5 66965ffa…). Declarado, con su prueba de staging.
-#   6. 0150 — CAMBIA en caliente banco_facturas_recibidas_pendientes (misma
-#      firma y contrato): el asiento de la factura por su origen. Parte del
-#      cuerpo de producción (md5 f6e2f68f…). Declarado, con su prueba.
-#   7. 0160 — «No es una factura» (decisión 1 de Julio, 17/10): AÑADE las
-#      columnas del descarte (nulas) y conta_factura_descartar/recuperar; CAMBIA
-#      en caliente el CHECK de status de supplier_invoice (solo amplía, con
-#      'descartada'), tg_supplier_invoice_no_repetida (md5 a69d2408…) y
-#      conta_documentos_recibidos (md5 ea1dd614…). Declarado, con su prueba.
+#   1. 0100 — AÑADE los festivos del BOE de 2026 y 2027 (tax_holiday_year,
+#      tax_holiday), las reglas de plazo (tax_form_deadline) y
+#      conta_impuesto_plazo; y sus dos fuentes en official_source (no estaban).
+#   2. 0110 — AÑADE el modelo de datos de impuestos: company_tax_facts,
+#      tax_obligation, tax_return y sus casillas, líneas, comprobaciones y
+#      registro, la ficha del certificado, quién presenta, RLS de lectura y la
+#      vista company_tax_forms. CAMBIA en caliente company_tax_profile: le pone
+#      un disparador nuevo sobre tax_forms (la columna queda como copia de
+#      tax_obligation). Declarado, con su prueba de staging. Copia los 9 modelos
+#      de Foodint a tax_obligation sin tocar la columna.
+#   3. 0120 — AÑADE las obligaciones por defecto con regla con nombre (solo
+#      funciones).
+#   4. 0130 — AÑADE el almacén de certificados: el token de un solo uso y las
+#      funciones de guardar, abrir, quitar y permisos. AUTORIZO: el analizador
+#      la cuenta como escritura en vault.secrets porque conta_cert_guardar
+#      llama a vault.create_secret. Al aplicarla no se guarda ningún secreto
+#      (la cuenta lo mide: los secretos del Vault, los mismos antes y después);
+#      con el Vault, guardar solo se admite para Foodint.
+#   5. 0140 — AÑADE el cálculo del 303 y lo que pide su fichero (funciones), y
+#      amplía el CHECK de tax_return_check (de la 0110 de esta misma tanda).
+#   6. 0150 — AÑADE revisar, presentar, «ya lo presenté fuera» y el justificante
+#      (funciones).
 #
-# Ninguna toca el camino del pedido (analizador contra producción, 17/10: seis
-# «sigue» y la 0110 «autorizo»).
+# Ninguna toca el camino del pedido (analizador contra producción, 18/10, 06:40
+# UTC: cinco «sigue» y la 0130 «autorizo»).
 #
-# ORDEN: la tanda ANTES de fusionar el #226. El front del S01 lee lo que crea; el
-# de antes no lee nada de esto, así que la base nueva con el front viejo no
-# cambia nada que se vea (la 0140, con el eje «local» encendido en Foodint,
-# valida igual que antes).
+# autorizo:
+# 20261122T0130_i01_certificados.sql
+#
+# ORDEN: la tanda ANTES de fusionar el #232. El front del I01a (el alta) llama a
+# conta_impuesto_datos_del_alta y conta_impuesto_obligaciones_calcular; el de
+# antes no lee nada de esto, así que la base nueva con el front viejo no cambia
+# nada que se vea (tax_forms sigue igual).
+# Funciones a desplegar a mano DESPUÉS de la tanda: conta-certificado y
+# conta-hacienda (la puerta de Hacienda queda cerrada: sin CONTA_HACIENDA no
+# llama a nadie).
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/s01-esqueleto.sql
-supabase/migrations/20261121T0100_s01_esqueleto.sql
-supabase/migrations/20261121T0110_s01_hosteleria_de_hoy.sql
-supabase/migrations/20261121T0120_s01_logo_empresa.sql
-supabase/migrations/20261121T0130_s01_ejes_analiticos.sql
-supabase/migrations/20261121T0140_s01_regla5_eje_local.sql
-supabase/migrations/20261121T0150_s01_recibidas_asiento_por_origen.sql
-supabase/migrations/20261121T0160_s01_factura_descartada.sql
+cuenta: scripts/conta/produccion/cuentas/i01a-impuestos.sql
+supabase/migrations/20261122T0100_i01_plazos.sql
+supabase/migrations/20261122T0110_i01_modelo_datos.sql
+supabase/migrations/20261122T0120_i01_obligaciones.sql
+supabase/migrations/20261122T0130_i01_certificados.sql
+supabase/migrations/20261122T0140_i01_calculo_303.sql
+supabase/migrations/20261122T0150_i01_presentar.sql

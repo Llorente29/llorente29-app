@@ -45,6 +45,10 @@ supabase/staging/sql/20261122_i01_calculo_303_prueba.sql
 #   del certificado, el justificante en su carpeta y uno, «ya lo presenté
 #   fuera» sin comprobar, y las de servicio no se llaman como persona.
 supabase/staging/sql/20261122_i01_presentar_prueba.sql
+#   La vuelta atrás de la tanda de producción del I01a (0150 a 0100), con \i y
+#   ROLLBACK: hacia delante, atrás (no queda nada de la tanda y tax_forms de
+#   cada empresa sigue igual) y otra vez hacia delante.
+supabase/staging/sql/20261122_i01_vuelta_atras_prueba.sql
 
 # S01 · El esqueleto (rama conta/s01-esqueleto). VA PRIMERO: la prueba de corte
 # de la D01 (más abajo) para con los datos de staging (ux_party_role_canal) y
