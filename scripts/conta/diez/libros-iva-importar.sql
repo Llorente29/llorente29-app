@@ -40,11 +40,14 @@ select set_config('libro.empresa', :'empresa', true), set_config('libro.desde', 
 
 create temp table carga_linea (j jsonb) on commit drop;
 create temp table carga_testigo (desde date, hasta date, casilla text, huella text) on commit drop;
+-- Las autoliquidadas, clasificadas por lo que declaró la gestoría (autoliquidadas-foodint.csv).
+create temp table carga_autoliq (ejercicio text, serie text, documento text, tipo text check (tipo in ('intracomunitaria', 'otra_isp'))) on commit drop;
 create temp table salida (n serial, clave text, valor text) on commit drop;
 -- JSON Lines: un objeto por línea; con un delimitador y una comilla que no
 -- salen nunca, COPY no toca ni comillas ni barras.
 \copy carga_linea from 'libro.jsonl' with (format csv, delimiter e'\x02', quote e'\x01')
 \copy carga_testigo from 'testigo-303.csv' with (format csv)
+\copy carga_autoliq from 'autoliquidadas.csv' with (format csv)
 
 do $$
 declare
@@ -64,6 +67,7 @@ begin
          (j->>'fecha_recibida')::date fecha_recibida, j->>'nif' nif, j->>'pais' pais, j->>'nombre' nombre,
          (j->>'base')::bigint base, (j->>'tipo')::numeric tipo, (j->>'cuota')::bigint cuota,
          (j->>'retencion_tipo')::numeric retencion_tipo, (j->>'retencion')::bigint retencion,
+         j->>'pais_diez' pais_diez, j->>'tipo_operacion' tipo_operacion,
          je.id entry_id
     from carga_linea
     left join public.journal_entry je
@@ -84,6 +88,41 @@ begin
      and je.entry_date between v_desde and v_hasta
    group by je.id, je.entry_date, je.external_series;
 
+  -- La línea de IVA de cada tramo (una fila del libro por línea del diario: el
+  -- índice único uq_vat_book_entry_linea). Diez trae una línea de 472 por tipo
+  -- en unas recibidas y una sola en otras (medido el 18/10: 240 de 2.852
+  -- asientos de la serie 2 con más de una 472; ninguno con más de una 477). Se
+  -- casa cada tramo con la línea de su lado (477 las expedidas, 472 las
+  -- recibidas) y de su mismo importe; si no casa ninguna y el asiento tiene una
+  -- sola línea de ese lado, se la queda el primer tramo; los demás, sin línea.
+  -- (Ensayo del 18/10: el primer ensayo de verdad paró con 23505 porque todos
+  -- los tramos cogían la primera línea del asiento.)
+  create temp table linea_iva on commit drop as
+  select je.id entry_id, jl.id line_id, jl.position,
+         case when ca.template_code like '477%' then 'issued' else 'received' end lado,
+         round(case when ca.template_code like '477%' then jl.credit - jl.debit else jl.debit - jl.credit end * 100)::bigint cent
+    from public.journal_entry je
+    join public.journal_line jl on jl.entry_id = je.id
+    join public.company_account ca on ca.id = jl.company_account_id
+   where je.account_id = v_cuenta and je.company_id = c and je.source_type = 'migrated' and je.external_program = 'diez'
+     and je.entry_date between v_desde and v_hasta and (ca.template_code like '477%' or ca.template_code like '472%');
+  create temp table tramo_linea on commit drop as
+  with t as (select f.entry_id, f.tramo, f.libro, f.cuota, row_number() over (partition by f.entry_id, f.libro, f.cuota order by f.tramo) k
+               from fila f where f.entry_id is not null and f.libro in ('issued', 'received')),
+       l as (select x.*, row_number() over (partition by x.entry_id, x.lado, x.cent order by x.position) k from linea_iva x)
+  select t.entry_id, t.tramo, l.line_id from t join l on l.entry_id = t.entry_id and l.lado = t.libro and l.cent = t.cuota and l.k = t.k;
+  insert into tramo_linea (entry_id, tramo, line_id)
+  select distinct on (f.entry_id) f.entry_id, f.tramo, l.line_id
+    from fila f join linea_iva l on l.entry_id = f.entry_id and l.lado = f.libro
+   where f.libro in ('issued', 'received')
+     and not exists (select 1 from tramo_linea x where x.entry_id = f.entry_id and x.tramo = f.tramo)
+     and not exists (select 1 from tramo_linea x where x.line_id = l.line_id)
+     and (select count(*) from linea_iva y where y.entry_id = f.entry_id and y.lado = f.libro) = 1
+   order by f.entry_id, f.tramo;
+  select count(*) into v_n from fila f where f.entry_id is not null and f.libro in ('issued', 'received')
+     and not exists (select 1 from tramo_linea x where x.entry_id = f.entry_id and x.tramo = f.tramo);
+  insert into salida (clave, valor) values ('tramos_sin_linea_propia', v_n);
+
   -- Rechazos: sin asiento, o la cuota de la factura no es la de su asiento.
   select count(distinct (e, s, n)) into v_rech from fila where entry_id is null;
   insert into salida (clave, valor) values ('facturas_sin_asiento', v_rech);
@@ -93,6 +132,23 @@ begin
    where x.cuota <> case when x.s = '1' then a.c477 else a.c472 end;
   insert into salida (clave, valor) values ('facturas_con_cuota_distinta_de_su_asiento', v_mal);
   v_rech := v_rech + v_mal;
+
+  -- Las autoliquidadas (asiento con 477 y 472), cada una con su tipo de la
+  -- lista. Una que no esté en la lista PARA (no se adivina: Julio, 18/10). El
+  -- prefijo del NIF solo comprueba: si contradice la lista, se dice.
+  create temp table autoliq on commit drop as
+  select a.entry_id, l.tipo
+    from asiento_iva a join public.journal_entry je on je.id = a.entry_id
+    left join carga_autoliq l on l.ejercicio = je.external_year and l.serie = je.external_series and l.documento = je.external_number
+   where a.s = '2' and a.c477 <> 0 and a.c472 <> 0;
+  select count(*) into v_n from autoliq where tipo is null;
+  insert into salida (clave, valor) values ('autoliquidadas_fuera_de_la_lista', v_n);
+  v_rech := v_rech + v_n;
+  insert into salida (clave, valor)
+  select 'autoliquidadas.' || tipo, count(*) from autoliq where tipo is not null group by tipo order by tipo;
+  select count(distinct f.entry_id) into v_n from fila f join autoliq x on x.entry_id = f.entry_id
+   where f.pais is not null and (x.tipo = 'intracomunitaria') <> (f.pais = any (array['AT','BE','BG','CY','CZ','DE','DK','EE','EL','GR','FI','FR','HR','HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK']));
+  insert into salida (clave, valor) values ('autoliquidadas.prefijo_contradice_la_lista', v_n);
 
   -- Ya estaban (idempotente): el asiento que tiene libro no se toca.
   select count(distinct f.entry_id) into v_n from fila f where exists (select 1 from public.vat_book_entry v where v.entry_id = f.entry_id);
@@ -105,11 +161,11 @@ begin
       operation_key, qualification, exempt_cause, tax_base, tax_rate, tax_amount, total, deductible_amount, deductible_later,
       reverse_charge, investment_good, withholding_rate, withholding_amount, source_type, source_id, updated_by_name)
     select v_cuenta, c, f.entry_id,
-           case when f.libro = 'issued' then a.linea477 when f.libro = 'received' then a.linea472 end,
+           (select x.line_id from tramo_linea x where x.entry_id = f.entry_id and x.tramo = f.tramo),
            f.libro, f.tipo_factura, f.s, f.numero, 1,
            coalesce(f.fecha_factura, a.entry_date), f.fecha_operacion, f.fecha_recibida, null, f.nif,
            case when f.pais is not null then '02' end, f.pais, f.nombre,
-           case when f.libro = 'received' and a.c477 <> 0 and f.pais is not null then '09' else '01' end,
+           case when f.libro = 'received' and (select x.tipo from autoliq x where x.entry_id = f.entry_id) = 'intracomunitaria' then '09' else '01' end,
            case when f.libro = 'not_subject' then null when f.libro = 'received' and a.c477 <> 0 then 'S2' else 'S1' end,
            null, f.base / 100.0, f.tipo, f.cuota / 100.0, (f.base + f.cuota) / 100.0,
            case when f.libro = 'received' then f.cuota / 100.0 end, false,
@@ -163,9 +219,53 @@ begin
          and case t.casilla
                when '06' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
                when '29' then v.book = 'received' and not v.reverse_charge and not v.investment_good
-               when '37' then v.book = 'received' and v.reverse_charge and v.counterpart_country is not null
+               when '37' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
                else false end) x;
   insert into salida (clave, valor) values ('testigo.casillas', v_test), ('testigo.casillas_que_no_casan', v_test_mal);
+  -- Cuál no casa, por su nombre (fechas y casilla; ningún importe): el ensayo
+  -- del 18/10 dijo «1 no casa» y no se podía saber cuál sin otra vuelta.
+  insert into salida (clave, valor)
+  select 'testigo.no_casa.' || to_char(t.desde, 'YYYYMMDD') || '_' || to_char(t.hasta, 'MMDD') || '.c' || t.casilla, 1
+    from carga_testigo t
+    cross join lateral (
+      select coalesce(sum(round(v.tax_amount * 100)), 0)::bigint cent
+        from public.vat_book_entry v
+       where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null
+         and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date) else coalesce(v.received_date, v.issue_date) end
+             between t.desde and t.hasta
+         and case t.casilla
+               when '06' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
+               when '29' then v.book = 'received' and not v.reverse_charge and not v.investment_good
+               when '37' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
+               else false end) x
+   where t.huella <> left(md5(x.cent::text), 16)
+   order by t.desde, t.casilla;
+  -- Las autoliquidadas (asiento con 477 y 472) y cuántas van sin país: sin
+  -- país no entran en la [37] (intracomunitarias) del testigo.
+  insert into salida (clave, valor)
+  select 'recibidas.autoliquidadas', count(*) from public.vat_book_entry v
+   where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null and v.book = 'received' and v.reverse_charge
+     and v.source_type = 'migrated'
+  union all
+  select 'recibidas.autoliquidadas_sin_pais', count(*) from public.vat_book_entry v
+   where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null and v.book = 'received' and v.reverse_charge
+     and v.source_type = 'migrated' and v.counterpart_country is null;
+  -- Qué dicen Pais y TipoOperacion de Diez en las autoliquidadas, por trimestre
+  -- y con o sin prefijo de país en el NIF (18/10: la [37] del 1T no casa
+  -- porque 6 de 16 van sin prefijo; el 3T mezcla intracomunitarias, [11]/[37],
+  -- y otras con inversión del sujeto pasivo, [13]). Valores en corto, ningún
+  -- NIF ni importe.
+  insert into salida (clave, valor)
+  select 'autoliq.' || z.trim_ || '.' || z.pref || '.' || z.kk, count(*)
+    from (select distinct f.entry_id, f.tramo,
+                 extract(quarter from a.entry_date)::int || 't' trim_,
+                 case when f.pais is null then 'sin_prefijo' else 'con_prefijo' end pref,
+                 x.kk
+            from fila f join asiento_iva a on a.entry_id = f.entry_id
+            cross join lateral (values ('pais.' || coalesce(f.pais_diez, 'vacio')), ('tipo_op.' || coalesce(f.tipo_operacion, 'vacio'))) x(kk)
+           where f.libro = 'received' and a.c477 <> 0 and f.tramo = 1) z
+   group by z.trim_, z.pref, z.kk
+   order by z.trim_, z.pref, z.kk;
   if v_test = 0 then insert into salida (clave, valor) values ('testigo.falta', 1); end if;
 
   v_verde := v_rech = 0 and v_falta = 0 and v_test > 0 and v_test_mal = 0;
