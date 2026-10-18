@@ -52,7 +52,9 @@ const tercero = (o: Partial<DeclaracionVer> = {}, r: Partial<NonNullable<Declara
 
 describe('sin el libro de IVA no hay resultado, y se dice', () => {
   it('«No se puede calcular todavía» con los dos porqués, en vez de 0,00 € sin actividad', () => {
-    expect(noSeCalcula(tercero())).toEqual({ titulo: 'No se puede calcular todavía', porque: [TITULO_VACIO, TITULO_110] })
+    // En corto: el porqué entero está justo debajo, en «Lo que ha comprobado Sumied».
+    expect(noSeCalcula(tercero())).toEqual({ titulo: 'No se puede calcular todavía',
+      porque: ['Falta el libro de IVA del periodo.', 'Falta lo que quedaba por compensar de antes, la casilla [110].'] })
     expect(libroVacio(tercero())).toBe(true)
     expect(deDondeSale(tercero())).toEqual([])
   })
