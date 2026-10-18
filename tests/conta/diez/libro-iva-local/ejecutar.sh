@@ -18,7 +18,8 @@ falla() { echo "MAL: $1"; exit 1; }
 
 nueva libro_a
 o=$(corre libro_a ensayo) || falla "el ensayo sale en rojo"
-grep -q '@@ verde 1' <<<"$o" && grep -q '@@ ensayo_nada_escrito 1' <<<"$o" || falla "ensayo: $o"
+grep -q '@@ verde 1' <<<"$o" && grep -q '@@ ensayo_nada_escrito 1' <<<"$o" && ! grep -q '@@ testigo.no_casa' <<<"$o" \
+  && grep -q '@@ recibidas.autoliquidadas 1' <<<"$o" && grep -q '@@ recibidas.autoliquidadas_sin_pais 0' <<<"$o" || falla "ensayo: $o"
 o=$(corre libro_a real) || falla "el real sale en rojo"
 grep -q '@@ filas_traidas_despues 8' <<<"$o" && grep -q '@@ tramos_sin_linea_propia 1' <<<"$o" || falla "real: $o"
 # Una fila del libro por línea del diario; y el doc 4 (una 472 por tipo): cada tramo, la línea de su importe.
@@ -31,6 +32,8 @@ t=$(mktemp -d); cp libro.jsonl "$t/"; sed 's/,29,.*/,29,0000000000000000/' testi
 nueva libro_b
 o=$(cd "$t" && psql -d libro_b -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=terse -v empresa=e0000000-0000-4000-8000-000000000001 -v modo=real -v desde=2026-01-01 -v hasta=2026-06-30 -f "$OLDPWD/$I" 2>&1) && falla "testigo que no casa: salió en verde"
 grep -q '@@ real_en_rojo_deshecho 1' <<<"$o" && grep -q '@@ filas_traidas_despues 0' <<<"$o" || falla "testigo que no casa: $o"
+# Y dice cuál no casa (fechas y casilla, ningún importe).
+grep -q '@@ testigo.no_casa.20260101_0630.c29 1' <<<"$o" && [ "$(grep -c '@@ testigo.no_casa' <<<"$o")" = 1 ] || falla "testigo que no casa: no dice cuál: $o"
 sed 's/"cuota": 10500/"cuota": 10400/' libro.jsonl > "$t/libro.jsonl"; cp testigo-303.csv "$t/"
 o=$(cd "$t" && psql -d libro_b -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=terse -v empresa=e0000000-0000-4000-8000-000000000001 -v modo=real -v desde=2026-01-01 -v hasta=2026-06-30 -f "$OLDPWD/$I" 2>&1) && falla "cuota cambiada: salió en verde"
 grep -q '@@ facturas_con_cuota_distinta_de_su_asiento 1' <<<"$o" && grep -q '@@ filas_traidas_despues 0' <<<"$o" || falla "cuota cambiada: $o"
