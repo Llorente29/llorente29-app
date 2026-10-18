@@ -115,6 +115,9 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
   expect(Math.round((await barra.boundingBox())!.width)).toBe(220)
   // Cada nombre en una sola línea (S01b: «Compras y gastos» se partía).
   for (const alto of await barra.locator('.s-barra-item').evaluateAll((xs) => xs.map((x) => x.getBoundingClientRect().height))) expect(alto).toBeLessThanOrEqual(48)
+  // …y entero, sin «…», con su chip al lado (S01c: «Compras y gas…» con el chip 23).
+  const cortados = await barra.locator('.s-barra-nombre').evaluateAll((xs) => xs.filter((x) => x.scrollWidth > x.clientWidth).map((x) => x.textContent))
+  expect(cortados, 'nombres cortados en la barra desplegada').toEqual([])
   await expect(barra.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
   // Ni Impuestos ni Ventas: un producto sin pantalla no sale (antes, apagado con «Próximamente»).
   await expect(barra.getByText('Impuestos')).toHaveCount(0)
