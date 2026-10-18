@@ -182,34 +182,37 @@ export default function NuevoAsientoPage() {
       <section className="cx-tarjeta" aria-label="Apuntes">
         <datalist id="cuentas-de-apunte">{base.cuentas.map((c) => <option key={c.id} value={c.code}>{c.nombre}</option>)}</datalist>
         <div className={`cxd-mano-linea cxd-linea-cabeza${ejeLocal ? '' : ' cxd-mano-sin-local'}`} aria-hidden="true"><span>Cuenta</span>{ejeLocal && <span>{ejeLocal.nombre}</span>}<span className="cxd-der">Debe</span><span className="cxd-der">Haber</span><span>Concepto</span><span /></div>
+        {/* Móvil: no hay fila de cabecera; cada campo lleva su etiqueta visible (cxd-mano-etiqueta, aria-hidden: el nombre accesible es el aria-label «Debe del apunte 1»). */}
         {lineas.map((l, i) => {
           const cta = base.cuentas.find((x) => x.code === l.cuenta.trim())
           return (
             <div key={i} className={`cxd-mano-linea${ejeLocal ? '' : ' cxd-mano-sin-local'}`}>
-              <label><span className="cx-oculto">Cuenta del apunte {i + 1}</span>
-                <input className="cx-input" list="cuentas-de-apunte" value={l.cuenta} onChange={(e) => cambia(i, { cuenta: buscarCodigo(e.target.value, base.cuentas) })} placeholder="Nombre o código" />
+              <label><span className="cxd-mano-etiqueta" aria-hidden="true">Cuenta</span>
+                <input className="cx-input" aria-label={`Cuenta del apunte ${i + 1}`} list="cuentas-de-apunte" value={l.cuenta} onChange={(e) => cambia(i, { cuenta: buscarCodigo(e.target.value, base.cuentas) })} placeholder="Nombre o código" />
                 <span className="cx-ayuda">{cta ? cta.nombre : ' '}</span></label>
               {ejeLocal && (
-                <label><span className="cx-oculto">{ejeLocal.nombre} del apunte {i + 1}</span>
-                  <select className="cx-input" value={l.comun ? 'comun' : l.localId ?? unLocal ?? ''} onChange={(e) => cambia(i, e.target.value === 'comun' ? { comun: true, localId: null } : { comun: false, localId: e.target.value || null })}>
+                <label><span className="cxd-mano-etiqueta" aria-hidden="true">{ejeLocal.nombre}</span>
+                  <select className="cx-input" aria-label={`${ejeLocal.nombre} del apunte ${i + 1}`} value={l.comun ? 'comun' : l.localId ?? unLocal ?? ''} onChange={(e) => cambia(i, e.target.value === 'comun' ? { comun: true, localId: null } : { comun: false, localId: e.target.value || null })}>
                     <option value="">Elige el {ejeLocal.nombre.toLowerCase()}</option>
                     {base.locales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
                     <option value="comun">Común (se reparte)</option>
                   </select></label>
               )}
-              <label><span className="cx-oculto">Debe del apunte {i + 1}</span><input className="cx-input cxd-der" inputMode="decimal" value={l.debe} onChange={(e) => cambia(i, { debe: e.target.value })} /></label>
-              <label><span className="cx-oculto">Haber del apunte {i + 1}</span><input className="cx-input cxd-der" inputMode="decimal" value={l.haber} onChange={(e) => cambia(i, { haber: e.target.value })} /></label>
-              <label><span className="cx-oculto">Concepto del apunte {i + 1}</span><input className="cx-input" value={l.concepto} onChange={(e) => cambia(i, { concepto: e.target.value })} /></label>
+              <label><span className="cxd-mano-etiqueta cxd-der" aria-hidden="true">Debe</span><input className="cx-input cxd-der" aria-label={`Debe del apunte ${i + 1}`} inputMode="decimal" value={l.debe} onChange={(e) => cambia(i, { debe: e.target.value })} /></label>
+              <label><span className="cxd-mano-etiqueta cxd-der" aria-hidden="true">Haber</span><input className="cx-input cxd-der" aria-label={`Haber del apunte ${i + 1}`} inputMode="decimal" value={l.haber} onChange={(e) => cambia(i, { haber: e.target.value })} /></label>
+              <label><span className="cxd-mano-etiqueta" aria-hidden="true">Concepto</span><input className="cx-input" aria-label={`Concepto del apunte ${i + 1}`} value={l.concepto} onChange={(e) => cambia(i, { concepto: e.target.value })} /></label>
               <button type="button" className="cx-enlace" aria-label={`Quitar el apunte ${i + 1}`} onClick={() => setLineas((ls) => ls.filter((_, j) => j !== i))} disabled={lineas.length <= 2}>Quitar</button>
             </div>
           )
         })}
         <button type="button" className="cx-enlace" onClick={() => setLineas((ls) => [...ls, vacia(null)])}>+ Añadir apunte</button>
-        <div className="cxd-cuadre" role="status" aria-live="polite">
-          <strong>{c.cuadra ? 'Cuadra' : 'No cuadra'}</strong>
+        {/* Un solo estado (cuadre().estado): sin importes, «Faltan importes» neutro; descuadrado, cuánto y dónde
+            en ámbar, una vez; cuadrado, en verde con su ✓ y la diferencia a cero. El pie no se contradice. */}
+        <div className={`cxd-cuadre cxd-mano-cuadre cxd-cuadre-${c.estado}`} role="status" aria-live="polite">
+          <strong className={c.estado === 'cuadra' ? 'cxt-verde' : c.estado === 'descuadre' ? 'cxt-ambar' : 'cxd-cuadre-neutro'}>{c.texto}</strong>
           <span className="cxd-importe">Debe {eurosExactos(c.debe)}</span>
           <span className="cxd-importe">Haber {eurosExactos(c.haber)}</span>
-          <span className={c.cuadra ? 'cxt-verde' : 'cxt-ambar'}>{c.cuadra ? '✓ 0,00 €' : c.texto}</span>
+          {c.estado === 'cuadra' && <span className="cxt-verde">✓ 0,00 €</span>}
         </div>
         {intentado && problemas.length > 0 && (
           <ul className="cx-error" role="alert">{problemas.map((p) => <li key={p}>{p}</li>)}</ul>
@@ -219,9 +222,9 @@ export default function NuevoAsientoPage() {
       <section className="cx-tarjeta" aria-label="Guardar como predefinido">
         <h2 className="cx-tarjeta-titulo">Guardar como predefinido</h2>
         <p className="cx-ayuda">Para un asiento que se repite (el alquiler, una cuota): guarda la serie, el concepto y los apuntes. No guarda el asiento.</p>
-        <div className="cxd-mano-cabeza">
-          <label className="cxd-campo cxd-campo-ancho">Nombre del predefinido<input className="cx-input" value={nombrePredef} onChange={(e) => setNombrePredef(e.target.value)} maxLength={80} placeholder="Ej.: Alquiler del local" /></label>
-          <label className="cxd-campo"><span><input type="checkbox" checked={conImportes} onChange={(e) => setConImportes(e.target.checked)} /> Con sus importes</span></label>
+        <div className="cxd-predef-fila">
+          <label className="cxd-campo cxd-predef-nombre">Nombre del predefinido<input className="cx-input" value={nombrePredef} onChange={(e) => setNombrePredef(e.target.value)} maxLength={80} placeholder="Ej.: Alquiler del local" /></label>
+          <label className="cxd-predef-importes"><input type="checkbox" checked={conImportes} onChange={(e) => setConImportes(e.target.checked)} /> Con sus importes</label>
           <button type="button" className="cx-boton-sec" onClick={() => void guardarComoPredefinido()} disabled={ocupado}>Guardar como predefinido</button>
         </div>
         <div role="status" aria-live="polite">{guardadoPredef && <p className="cxt-verde">{guardadoPredef}</p>}</div>

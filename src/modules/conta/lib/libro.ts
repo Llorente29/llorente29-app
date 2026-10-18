@@ -102,16 +102,27 @@ export function baseDeTotal(total: number, tipo: number): { base: number; cuota:
 
 // ── Regla 1 · cuadra ────────────────────────────────────────────────────────
 
-export interface Cuadre { cuadra: boolean; debe: number; haber: number; diferencia: number; texto: string }
+/**
+ * El estado del cuadre, una sola fuente para lo que dice el pie (S01c):
+ *   · 'vacio'     — no hay importes (todo a cero): «Faltan importes», neutro;
+ *   · 'descuadre' — Debe ≠ Haber: «No cuadra: faltan X € en el Haber/Debe»;
+ *   · 'cuadra'    — Debe = Haber y > 0: «Cuadra · N €».
+ */
+export type EstadoCuadre = 'vacio' | 'descuadre' | 'cuadra'
+
+export interface Cuadre { estado: EstadoCuadre; cuadra: boolean; debe: number; haber: number; diferencia: number; texto: string }
 
 export function cuadre(lineas: readonly Pick<LineaAsiento, 'debe' | 'haber'>[]): Cuadre {
   const d = lineas.reduce((t, l) => t + cent(l.debe), 0)
   const h = lineas.reduce((t, l) => t + cent(l.haber), 0)
   const dif = d - h
-  const texto = dif === 0
+  const estado: EstadoCuadre = dif !== 0 ? 'descuadre' : d > 0 ? 'cuadra' : 'vacio'
+  const texto = estado === 'cuadra'
     ? `Cuadra · ${eurosExactos(deCent(d))}`
-    : `No cuadra: faltan ${eurosExactos(deCent(Math.abs(dif)))} en el ${dif > 0 ? 'Haber' : 'Debe'}`
-  return { cuadra: dif === 0 && d > 0, debe: deCent(d), haber: deCent(h), diferencia: deCent(dif), texto }
+    : estado === 'descuadre'
+      ? `No cuadra: faltan ${eurosExactos(deCent(Math.abs(dif)))} en el ${dif > 0 ? 'Haber' : 'Debe'}`
+      : 'Faltan importes'
+  return { estado, cuadra: estado === 'cuadra', debe: deCent(d), haber: deCent(h), diferencia: deCent(dif), texto }
 }
 
 // ── Lo que la base no dejaría validar, dicho antes ──────────────────────────

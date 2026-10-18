@@ -90,12 +90,12 @@ export function CuentasAnuales() {
             <div>{prop.frase}</div>
           </section>
           <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-            <table className="cxl-tabla" aria-label="Cifras con las que se decide">
+            <table className="cxl-tabla cxl-apilada" aria-label="Cifras con las que se decide">
               <thead><tr><th>Límite (dos de tres)</th><th className="cxl-der">{L.ejercicio.code}</th>{d.datos.anterior && <th className="cxl-der">{L.anterior!.code}</th>}<th className="cxl-der">Abreviado / pymes</th><th className="cxl-der">PyG abreviada</th></tr></thead>
               <tbody>
-                <tr><td>Activo</td><td className="cxl-der">{eurosExactos(d.datos.actual.activo)}</td>{d.datos.anterior && <td className="cxl-der">{eurosExactos(d.datos.anterior.activo)}</td>}<td className="cxl-der">4.000.000 €</td><td className="cxl-der">11.400.000 €</td></tr>
-                <tr><td>Cifra de negocios</td><td className="cxl-der">{eurosExactos(d.datos.actual.cifraNegocios)}</td>{d.datos.anterior && <td className="cxl-der">{eurosExactos(d.datos.anterior.cifraNegocios)}</td>}<td className="cxl-der">8.000.000 €</td><td className="cxl-der">22.800.000 €</td></tr>
-                <tr><td>Plantilla media</td><td className="cxl-der">{d.datos.actual.plantillaMedia}</td>{d.datos.anterior && <td className="cxl-der">{d.datos.anterior.plantillaMedia}</td>}<td className="cxl-der">50</td><td className="cxl-der">250</td></tr>
+                <tr><td>Activo</td><td className="cxl-der" data-titulo={L.ejercicio.code}>{eurosExactos(d.datos.actual.activo)}</td>{d.datos.anterior && <td className="cxl-der" data-titulo={L.anterior?.code}>{eurosExactos(d.datos.anterior.activo)}</td>}<td className="cxl-der" data-titulo="Abreviado / pymes">4.000.000 €</td><td className="cxl-der" data-titulo="PyG abreviada">11.400.000 €</td></tr>
+                <tr><td>Cifra de negocios</td><td className="cxl-der" data-titulo={L.ejercicio.code}>{eurosExactos(d.datos.actual.cifraNegocios)}</td>{d.datos.anterior && <td className="cxl-der" data-titulo={L.anterior?.code}>{eurosExactos(d.datos.anterior.cifraNegocios)}</td>}<td className="cxl-der" data-titulo="Abreviado / pymes">8.000.000 €</td><td className="cxl-der" data-titulo="PyG abreviada">22.800.000 €</td></tr>
+                <tr><td>Plantilla media</td><td className="cxl-der" data-titulo={L.ejercicio.code}>{d.datos.actual.plantillaMedia}</td>{d.datos.anterior && <td className="cxl-der" data-titulo={L.anterior?.code}>{d.datos.anterior.plantillaMedia}</td>}<td className="cxl-der" data-titulo="Abreviado / pymes">50</td><td className="cxl-der" data-titulo="PyG abreviada">250</td></tr>
               </tbody>
             </table>
             <p className="cxl-pie">LSC art. 257.1 (balance y ECPN abreviados, y RD 1515/2007 art. 2.1 para pymes) y art. 258.1 (PyG abreviada). Hace falta cumplir dos de los tres límites dos ejercicios seguidos; en el primero, basta ese. Las cifras son las de hoy: al cierre se recalculan. {L.ejercicio.plantillaMedia === 0 && <>La plantilla media está a 0: ponla en <Link to={rutaLibros('cierre', 'ejercicios')}>Ejercicios</Link>.</>}</p>
@@ -191,10 +191,10 @@ export function Mapeo() {
           {!h.datos && !h.error && <Hueso alto={32} />}
           {h.datos && !h.datos.length && <p className="cxl-pie">Sin cambios: todo está como el estándar.</p>}
           {h.datos && h.datos.length > 0 && (
-            <table className="cxl-tabla" aria-label="Historial del mapeo">
+            <table className="cxl-tabla cxl-apilada" aria-label="Historial del mapeo">
               <thead><tr><th>Cuándo</th><th>Quién</th><th>Cuenta</th><th>Qué</th><th>Motivo</th></tr></thead>
-              <tbody>{h.datos.map((x, i) => <tr key={i}><td>{ddmm(x.cuando.slice(0, 10))}</td><td>{x.quien ?? '—'}</td><td>{x.prefijo ?? 'todas'}</td>
-                <td>{x.accion === 'estandar' ? `vuelve al estándar (estaba en ${x.de ?? '—'})` : x.accion === 'deja_fuera' ? `fuera del modelo (estaba en ${x.de ?? '—'})` : `de ${x.de ?? '—'} a ${x.a}`} · {x.estado} {x.modelo}</td><td>{x.motivo ?? ''}</td></tr>)}</tbody>
+              <tbody>{h.datos.map((x, i) => <tr key={i}><td>{ddmm(x.cuando.slice(0, 10))}</td><td data-titulo="Quién">{x.quien ?? '—'}</td><td data-titulo="Cuenta">{x.prefijo ?? 'todas'}</td>
+                <td data-titulo="Qué">{x.accion === 'estandar' ? `vuelve al estándar (estaba en ${x.de ?? '—'})` : x.accion === 'deja_fuera' ? `fuera del modelo (estaba en ${x.de ?? '—'})` : `de ${x.de ?? '—'} a ${x.a}`} · {x.estado} {x.modelo}</td><td data-titulo="Motivo">{x.motivo ?? ''}</td></tr>)}</tbody>
             </table>
           )}
         </div>
@@ -225,7 +225,7 @@ export function Mapeo() {
       )}
       {calc && d.datos && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <table className="cxl-tabla" aria-label="Líneas y sus cuentas">
+          <table className="cxl-tabla cxl-apilada" aria-label="Líneas y sus cuentas">
             <thead><tr><th>Línea</th><th>Cuentas que la alimentan</th><th className="cxl-der">Importe</th></tr></thead>
             <tbody>
               {calc.r.lineas.filter((l) => !l.isTotal).map((l) => {
@@ -244,7 +244,7 @@ export function Mapeo() {
                         </span>
                       )
                     })}</td>
-                    <td className="cxl-der">{l.oculta ? '—' : eurosExactos(l.importe)}</td>
+                    <td className="cxl-der" data-titulo="Importe">{l.oculta ? '—' : eurosExactos(l.importe)}</td>
                   </tr>
                 )
               })}

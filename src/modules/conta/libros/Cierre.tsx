@@ -47,16 +47,16 @@ export function Ejercicios() {
         <div className="cxl-herramientas"><Link to={rutaTuEmpresa()} className="cx-boton-sec">Abrir un ejercicio o cambiar su plantilla</Link></div>
       </div>
       <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-        <table className="cxl-tabla" aria-label="Ejercicios de la empresa">
+        <table className="cxl-tabla cxl-apilada" aria-label="Ejercicios de la empresa">
           <thead><tr><th>Ejercicio</th><th>Fechas</th><th>Estado</th><th>Modelo</th><th className="cxl-der">Plantilla media</th><th /></tr></thead>
           <tbody>{L.ejercicios.map((e) => {
             const s = estadoEjercicio(e)
             return (
               <tr key={e.id}><td><strong>{e.code}</strong>{e.id === L.ejercicio.id && <> <Chip tono="azul">el que miras</Chip></>}</td>
-                <td>{ddmm(e.inicio)} – {ddmm(e.fin)}</td>
-                <td><Chip tono={s.tono}>{s.texto}</Chip>{e.traidoHasta ? <span className="cxl-apoyo"> · traído hasta {ddmm(e.traidoHasta)}</span> : null}{e.cierre && e.cierre.reaperturas > 0 ? <span className="cxl-apoyo"> · reabierto {e.cierre.reaperturas} {e.cierre.reaperturas === 1 ? 'vez' : 'veces'}</span> : null}</td>
-                <td>{e.modelo ? e.modelo.elegido : <span className="cxl-apoyo">sin elegir</span>}</td>
-                <td className="cxl-der">{e.plantillaMedia}</td>
+                <td data-titulo="Fechas">{ddmm(e.inicio)} – {ddmm(e.fin)}</td>
+                <td data-titulo="Estado"><Chip tono={s.tono}>{s.texto}</Chip>{e.traidoHasta ? <span className="cxl-apoyo"> · traído hasta {ddmm(e.traidoHasta)}</span> : null}{e.cierre && e.cierre.reaperturas > 0 ? <span className="cxl-apoyo"> · reabierto {e.cierre.reaperturas} {e.cierre.reaperturas === 1 ? 'vez' : 'veces'}</span> : null}</td>
+                <td data-titulo="Modelo">{e.modelo ? e.modelo.elegido : <span className="cxl-apoyo">sin elegir</span>}</td>
+                <td className="cxl-der" data-titulo="Plantilla media">{e.plantillaMedia}</td>
                 <td>{e.origen !== 'migrated' && <Link to={rutaLibros('cierre', 'cierre-ejercicio')} className="cx-enlace">{e.estado === 'closed' ? 'Ver el cierre' : 'Cerrar'}</Link>}</td></tr>
             )
           })}</tbody>
@@ -260,9 +260,9 @@ function ResumenAsiento({ a }: { a: AsientoCierre }) {
   return (
     <details>
       <summary>{a.concepto} · {ddmm(a.fecha)} · {a.apuntes.length} apuntes · {eurosExactos(s.debe)} {s.cuadra ? '✓ cuadra' : '✗ no cuadra'}</summary>
-      <table className="cxl-tabla" aria-label={a.concepto}>
+      <table className="cxl-tabla cxl-apilada" aria-label={a.concepto}>
         <thead><tr><th>Cuenta</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th></tr></thead>
-        <tbody>{a.apuntes.map((p, i) => <tr key={i}><td>{p.cuenta}</td><td className="cxl-der">{p.debe ? eurosExactos(p.debe) : ''}</td><td className="cxl-der">{p.haber ? eurosExactos(p.haber) : ''}</td></tr>)}</tbody>
+        <tbody>{a.apuntes.map((p, i) => <tr key={i}><td>{p.cuenta}</td><td className="cxl-der" data-titulo="Debe">{p.debe ? eurosExactos(p.debe) : ''}</td><td className="cxl-der" data-titulo="Haber">{p.haber ? eurosExactos(p.haber) : ''}</td></tr>)}</tbody>
       </table>
     </details>
   )

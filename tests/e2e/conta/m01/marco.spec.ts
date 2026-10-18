@@ -94,25 +94,27 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
   const primeraCarga = await franja.locator('.cxm-chip-numero').allTextContents()
 
   if (lado(page) === 'movil') {
-    // Abajo (S01): Inicio, Contabilidad, Compras y gastos, Bancos y «Más».
-    await expect(menu(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Más'])
-    await expect(menu(page).getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
+    // S01c: el botón de menú de la cabecera abre el cajón con todos los productos.
     await capturar(page, 'marco-plegado')
-    await menu(page).getByRole('button', { name: 'Más' }).click()
+    await page.getByRole('button', { name: 'Abrir el menú' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
     // Lo que no tiene pantalla no sale (S01: nada vacío): ni Ventas ni Impuestos.
-    await expect(hoja.getByRole('link')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes', 'Volver a Folvy'])
+    await expect(hoja.getByRole('link')).toHaveText([/^Inicio/, /^Contabilidad/, /^Compras y gastos/, /^Bancos/, /^Contactos/, /^Ajustes/, 'Volver a Folvy'])
+    await expect(menu(page).getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
     await esperarCargado(page)
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/marco-mas-movil.png` })
-    await hoja.getByRole('button', { name: 'Cerrar' }).click()
+    await hoja.getByRole('button', { name: 'Cerrar el menú' }).click()
+    await expect(hoja).toHaveCount(0)
     return
   }
 
-  // Desplegada (de serie, S01): unos 88 px, cada producto con su nombre.
+  // Desplegada (de serie, S01c): 220 px, cada producto con su nombre en una línea.
   const barra = menu(page)
-  await expect(barra.locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
-  expect(Math.round((await barra.boundingBox())!.width)).toBe(88)
+  await expect(barra.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+  expect(Math.round((await barra.boundingBox())!.width)).toBe(220)
+  // Cada nombre en una sola línea (S01b: «Compras y gastos» se partía).
+  for (const alto of await barra.locator('.s-barra-item').evaluateAll((xs) => xs.map((x) => x.getBoundingClientRect().height))) expect(alto).toBeLessThanOrEqual(48)
   await expect(barra.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
   // Ni Impuestos ni Ventas: un producto sin pantalla no sale (antes, apagado con «Próximamente»).
   await expect(barra.getByText('Impuestos')).toHaveCount(0)
@@ -121,17 +123,17 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
 
   // Plegada: solo los iconos, con su nombre para el lector; se recuerda (en la base).
   await guardandoPreferencias(page, () => barra.getByRole('button', { name: 'Plegar el menú' }).click())
-  expect(Math.round((await barra.boundingBox())!.width)).toBe(56)
+  expect(Math.round((await barra.boundingBox())!.width)).toBe(64)
   await expect(barra.getByRole('link', { name: 'Contabilidad' })).toBeVisible()
   await page.reload()
   await expect(menu(page).getByRole('button', { name: 'Desplegar el menú' })).toBeVisible()
-  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(56)
+  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(64)
   await esperarNumeros(page)
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).locator('.cxm-chip-numero')).toHaveText(primeraCarga)
   await page.evaluate(() => window.scrollTo(0, 0))
   await capturar(page, 'marco-plegado')
   await guardandoPreferencias(page, () => menu(page).getByRole('button', { name: 'Desplegar el menú' }).click())
-  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(88)
+  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(220)
 
   // La densidad, en el menú del usuario (S01): compacta de serie; se recuerda.
   await guardandoPreferencias(page, () => cambiarDensidad(page, 'Cómoda'))

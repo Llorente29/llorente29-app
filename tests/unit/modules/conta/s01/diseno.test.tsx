@@ -57,6 +57,8 @@ describe('los contrastes, marca a marca', () => {
       it('la barra: su texto y el activo ≥ 4,5:1', () => {
         expect(contraste(v['--s-barra-texto'], v['--s-barra'])).toBeGreaterThanOrEqual(4.5)
         expect(contraste(v['--s-barra-activo-texto'], v['--s-barra-activo'])).toBeGreaterThanOrEqual(4.5)
+        // S01c: el número del chip de la barra, sobre su fondo.
+        expect(contraste(v['--s-barra-destacado-texto'], v['--s-barra-destacado'])).toBeGreaterThanOrEqual(4.5)
       })
       it('texto blanco en el botón principal ≥ 4,5:1', () => {
         expect(contraste(v['--s-sobre-accion'], v['--s-accion'])).toBeGreaterThanOrEqual(4.5)
