@@ -205,14 +205,14 @@ begin
   -- Solo aquí, dentro de la transacción: el 4T sin errores y con un aviso.
   update public.tax_return_check set result = 'ok' where tax_return_id = v_r and result = 'error';
   update public.tax_return set result_kind = 'zero', amount = 0 where id = v_r and result_kind is null;
-  update public.tax_return_check set result = 'warning', accepted_at = null where tax_return_id = v_r and check_key = 'out_of_period' returning id into v_k;
+  update public.tax_return_check set result = 'warning', accepted_at = null, accepted_by = null, accepted_by_name = null, accepted_reason = null where tax_return_id = v_r and check_key = 'out_of_period' returning id into v_k;
   update public.tax_return_check set result = 'ok' where tax_return_id = v_r and result = 'warning' and id <> v_k;
   begin
     perform public.conta_impuesto_303_fichero(v_r);
     raise exception 'PRUEBA no inventa · 6: sale el fichero con un aviso sin mirar.';
   exception when invalid_parameter_value then raise notice 'PRUEBA no inventa · 6: %', sqlerrm;
   end;
-  update public.tax_return_check set accepted_at = now(), accepted_by_name = 'Prueba', accepted_reason = 'prueba' where id = v_k;
+  update public.tax_return_check set accepted_at = now(), accepted_by = 'c01a0000-0000-4000-8000-0000000000a1', accepted_by_name = 'Prueba', accepted_reason = 'prueba' where id = v_k;
   perform public.conta_impuesto_303_fichero(v_r);
   raise notice 'PRUEBA no inventa · 6: dado por bueno, el fichero sale.';
 end $$;

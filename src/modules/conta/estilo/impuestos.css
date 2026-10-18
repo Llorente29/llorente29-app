@@ -19,6 +19,10 @@
 .s-tabla.s-impuestos-tabla td { vertical-align: top; }
 /* Ancho en %, no mínimo en px: un mínimo empujaba la tabla fuera de su tarjeta (18/10). */
 .s-tabla.s-impuestos-calendario th:first-child { width: 34%; }
+/* El chip y el aviso se parten dentro de su celda: «No se puede calcular» con su porqué largo
+   sacaba la tabla 11 px de la tarjeta en ordenador (e2e 612, 18/10). La acción sigue entera. */
+.s-tabla.s-impuestos-calendario .s-chip { white-space: normal; }
+.s-tabla.s-impuestos-calendario td:not(.s-impuestos-accion) { overflow-wrap: anywhere; }
 .s-tabla.s-impuestos-tabla tr[data-ambar='si'] td { background: var(--s-duda-fondo); }
 .s-impuestos-nombre { font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
 .cx a.s-impuestos-nombre { color: var(--s-accion); text-decoration: underline; }
