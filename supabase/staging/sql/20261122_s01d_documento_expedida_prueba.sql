@@ -40,28 +40,44 @@ do $$ begin
   raise notice 'PRUEBA S01d 0160 · 2: kind admite resumen_ventas, factura_recibida y factura_expedida.';
 end $$;
 
--- Una expedida a mano de A, validada, otra en borrador y un cobro validado
--- (preparados sin rol: lo que se prueba es la función, no el validar; los
--- disparadores de journal_entry son de cambio y borrado, no de alta).
+-- Una expedida a mano de A, validada, otra en borrador y un cobro validado.
+-- Como la app: borrador con sus apuntes cuadrados y journal_entry_validar
+-- (el número y la huella los pone la base; no se fabrican). Como usuario de A.
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
 do $$
 declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v_e   constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
-  v_ej uuid; v_val uuid; v_bor uuid; v_otro uuid; v_num int;
+  v_loc constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
+  v_y uuid; c572 uuid; c700 uuid; v_val uuid; v_bor uuid; v_otro uuid; v_r jsonb;
 begin
-  select fiscal_year_id into v_ej from public.journal_entry where company_id = v_e and fiscal_year_id is not null limit 1;
-  -- Validado lleva número (journal_entry_numero_al_validar): uno libre, muy por encima de los de la semilla.
-  select coalesce(max(number), 0) + 1000 into v_num from public.journal_entry where company_id = v_e;
-  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, number, entry_date, concept, source_type, status, created_by_name)
-  values (v_acc, v_e, v_ej, 1, v_num, '2026-10-15', 'Factura expedida Prueba S01d', 'manual', 'validado', 'Prueba S01d') returning id into v_val;
-  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, created_by_name)
-  values (v_acc, v_e, v_ej, 1, '2026-10-16', 'Factura expedida Prueba S01d (borrador)', 'manual', 'borrador', 'Prueba S01d') returning id into v_bor;
-  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, number, entry_date, concept, source_type, status, created_by_name)
-  values (v_acc, v_e, v_ej, 3, v_num + 1, '2026-10-16', 'Cobro Prueba S01d', 'manual', 'validado', 'Prueba S01d') returning id into v_otro;
+  select id into v_y from public.fiscal_year where company_id = v_e and code = '2026';
+  select id into c572 from public.company_account where company_id = v_e and code = '57200001';
+  select id into c700 from public.company_account where company_id = v_e and code = '70000000';
+  if v_y is null or c572 is null or c700 is null then
+    raise exception 'PRUEBA S01d 0160: faltan el ejercicio 2026 o las cuentas 57200001 y 70000000 de la empresa de A en staging.';
+  end if;
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
+  values (v_acc, v_e, v_y, 1, '2026-10-15', 'Factura expedida Prueba S01d', 'manual') returning id into v_val;
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
+  values (v_acc, v_e, v_y, 1, '2026-10-16', 'Factura expedida Prueba S01d (borrador)', 'manual') returning id into v_bor;
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
+  values (v_acc, v_e, v_y, 3, '2026-10-16', 'Cobro Prueba S01d', 'manual') returning id into v_otro;
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id)
+  values (v_acc, v_e, v_val, 1, c572, 100, 0, v_loc), (v_acc, v_e, v_val, 2, c700, 0, 100, v_loc),
+         (v_acc, v_e, v_bor, 1, c572, 50, 0, v_loc), (v_acc, v_e, v_bor, 2, c700, 0, 50, v_loc),
+         (v_acc, v_e, v_otro, 1, c572, 30, 0, v_loc), (v_acc, v_e, v_otro, 2, c700, 0, 30, v_loc);
+  v_r := public.journal_entry_validar(v_val);
+  v_r := public.journal_entry_validar(v_otro);
+  if (select status from public.journal_entry where id = v_val) <> 'validado' or (select status from public.journal_entry where id = v_otro) <> 'validado' then
+    raise exception 'PRUEBA S01d 0160: los asientos de la prueba no han quedado validados.';
+  end if;
   perform set_config('prueba.val', v_val::text, true);
   perform set_config('prueba.bor', v_bor::text, true);
   perform set_config('prueba.otro', v_otro::text, true);
 end $$;
+reset role;
 
 -- 3 · Como A.
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
