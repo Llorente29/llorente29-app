@@ -90,6 +90,10 @@ test('Calendario (tablero 8): Impuestos en la barra, la tabla del plazo y por qu
   await ir(page, 'impuestos')
   await expect(page.getByText(/IVA del (3\.er )?trimestre/).first()).toBeVisible()
   await expect(page.getByText('Por qué te salen estos').first()).toBeVisible()
+  // La tabla cabe en su tarjeta (el 18/10 la columna «Impuesto» con un mínimo en px la sacaba y
+  // cortaba «Ver el aviso»; la página no se salía, así que sinDesbordar no lo veía).
+  const sobraTabla = await page.locator('.s-impuestos-tabla').first().evaluate((t) => t.scrollWidth - (t.parentElement?.clientWidth ?? t.scrollWidth))
+  expect(sobraTabla, `la tabla del calendario se sale ${sobraTabla} px de su tarjeta`).toBeLessThanOrEqual(1)
   await sinDesbordar(page, 'Calendario')
   await foto(page, 'calendario')
   expect(errores).toEqual([])

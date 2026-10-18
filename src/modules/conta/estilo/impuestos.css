@@ -17,7 +17,8 @@
 
 /* Con .s-tabla delante: el sistema (diseno.css) se carga después y, a la par, ganaría él. */
 .s-tabla.s-impuestos-tabla td { vertical-align: top; }
-.s-tabla.s-impuestos-tabla td:first-child { min-width: 220px; }
+/* Ancho en %, no mínimo en px: un mínimo empujaba la tabla fuera de su tarjeta (18/10). */
+.s-tabla.s-impuestos-calendario th:first-child { width: 34%; }
 .s-tabla.s-impuestos-tabla tr[data-ambar='si'] td { background: var(--s-duda-fondo); }
 .s-impuestos-nombre { font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
 .cx a.s-impuestos-nombre { color: var(--s-accion); text-decoration: underline; }
@@ -51,7 +52,7 @@
   .s-tabla.s-impuestos-tabla, .s-tabla.s-impuestos-tabla tbody, .s-tabla.s-impuestos-tabla tr, .s-tabla.s-impuestos-tabla td { display: block; width: 100%; }
   .s-tabla.s-impuestos-tabla tr { padding: var(--s-3) var(--s-4); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
   .s-tabla.s-impuestos-tabla tr[data-ambar='si'] { background: var(--s-duda-fondo); }
-  .s-tabla.s-impuestos-tabla td, .s-tabla.s-impuestos-tabla td.s-tabla-cifra { padding: var(--s-1) 0; border-bottom: none; text-align: left; white-space: normal; min-width: 0; }
+  .s-tabla.s-impuestos-tabla td, .s-tabla.s-impuestos-tabla td.s-tabla-cifra { padding: var(--s-1) 0; border-bottom: none; text-align: left; white-space: normal; }
   .s-tabla.s-impuestos-tabla td::before {
     content: attr(data-titulo); display: block; font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo);
     text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);

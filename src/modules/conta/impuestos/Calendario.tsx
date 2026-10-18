@@ -88,7 +88,7 @@ function TablaDelMes({ datos, nivel }: { datos: DatosCalendario; nivel: ReturnTy
       {datos.filas.length === 0
         ? <p className="s-apoyo s-impuestos-vacio">No hay ningún plazo cerca. Lo siguiente sale abajo.</p>
         : (
-          <table className="s-tabla s-impuestos-tabla">
+          <table className="s-tabla s-impuestos-tabla s-impuestos-calendario">
             <thead>
               <tr><th scope="col">Impuesto</th><th scope="col" className="s-tabla-cifra">Resultado</th><th scope="col">En qué punto está</th><th scope="col"><span className="cx-oculto">Qué hacer</span></th></tr>
             </thead>
