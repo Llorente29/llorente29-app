@@ -7,7 +7,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc } from '@/modules/conta/services/bd'
-import type { Calendario } from '@/modules/conta/impuestos/calendario'
+import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
 
 /** Las preguntas del paso «impuestos» del alta que deciden modelos. */
@@ -140,4 +140,47 @@ export async function leerPuerta(): Promise<Puerta> {
   const r = await hacienda('puerta')
   if (r.ok) return { abierta: r.abierta === true, entorno: (r.entorno as Puerta['entorno']) ?? 'desconocido', mensaje: r.mensaje }
   return { abierta: false, entorno: 'cerrada', mensaje: r.mensaje }
+}
+
+export interface Presentado {
+  id: string; cuenta: string; modelo: string; nombre: string; cadencia: Cadencia; ejercicio: number; periodo: string
+  estado: Estado
+  estado_texto: string; resultado: string | null; importe: number | null
+  presentada: string | null; presentada_por: string | null; por: 'sumied' | 'outside' | null; plazo: string
+  csv: string | null; justificante: string | null; justificante_pdf: string | null; contabilizada: boolean; casada: boolean; comprobada: boolean
+}
+export interface ParaApuntar { ejercicio: number; periodo: string; presentacion: string; declaracion: string | null; estado: string | null; resultado: string | null; importe: number | null }
+export interface Presentados { puede_gestionar: boolean; presentados: Presentado[]; para_apuntar: ParaApuntar[] }
+
+/** Impuestos › Presentados (conta_impuesto_presentados). */
+export function leerPresentados(companyId: string): Promise<Presentados> {
+  return rpc<Presentados>('conta_impuesto_presentados', { p_company: companyId })
+}
+
+const DOCUMENTOS = 'conta-documentos'
+
+/** Un enlace de 5 minutos al justificante en PDF. */
+export async function enlaceJustificante(ruta: string): Promise<string> {
+  hayBase()
+  const { data, error } = await supabase!.storage.from(DOCUMENTOS).createSignedUrl(ruta, 300)
+  if (error || !data?.signedUrl) throw new Error(`No se ha podido abrir el justificante: ${error?.message ?? 'sin enlace'}`)
+  return data.signedUrl
+}
+
+/**
+ * Subir el justificante en PDF de una declaración presentada: a
+ * <cuenta>/impuestos/<declaración>/<huella>.pdf, y la base comprueba que es ese
+ * fichero (tamaño y tipo) antes de enlazarlo. Uno por declaración: no se cambia.
+ */
+export async function subirJustificante(p: { declaracion: string; cuenta: string; fichero: File }): Promise<string> {
+  hayBase()
+  if (p.fichero.type && p.fichero.type !== 'application/pdf') throw new Error('El justificante tiene que ser un PDF.')
+  const bytes = new Uint8Array(await p.fichero.arrayBuffer())
+  if (bytes.length > 10 * 1024 * 1024) throw new Error('Ese PDF pasa de 10 MB: no parece un justificante.')
+  const huella = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource))).map((b) => b.toString(16).padStart(2, '0')).join('')
+  const ruta = `${p.cuenta}/impuestos/${p.declaracion}/${huella}.pdf`
+  const sub = await supabase!.storage.from(DOCUMENTOS).upload(ruta, new Blob([bytes as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })
+  if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`No se ha podido subir el PDF: ${sub.error.message}`)
+  const r = await rpc<{ mensaje: string }>('conta_impuesto_justificante_guardar', { p_return: p.declaracion, p_ruta: ruta, p_huella: huella, p_tamano: bytes.length })
+  return r.mensaje
 }

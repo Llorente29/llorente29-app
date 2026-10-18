@@ -21,7 +21,7 @@
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { rutaIvaPeriodo } from '@/config/navegacion'
+import { rutaImpuestos, rutaIvaPeriodo } from '@/config/navegacion'
 import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, TarjetaCifra, Texto } from '@/modules/conta/diseno'
 import { useEntradasEnCinta, useNivel } from '@/modules/conta/marco/nuevo/contexto'
 import { anadirImpuesto } from '@/modules/conta/services/impuestosService'
@@ -39,9 +39,13 @@ export function Calendario({ companyId }: { companyId: string }) {
   // La cinta: «Revisar y presentar los de octubre» lleva a la primera que pide algo.
   const primera = datos?.filas.find((f) => f.se_calcula && vistaDeFila(f).accion && vistaDeFila(f).accion !== 'ver')
   const mes = datos ? mesDeVentana(datos) : null
-  useEntradasEnCinta(useMemo(() => (primera && mes ? {
-    impuestos: [{ id: 'impuestos.revisar-mes', etiqueta: `Revisar y presentar los de ${mes}`, a: rutaIvaPeriodo(primera.ejercicio, primera.periodo) }],
-  } : null), [primera, mes]))
+  const gestiona = datos?.puede_gestionar ?? false
+  useEntradasEnCinta(useMemo(() => ({
+    impuestos: [
+      ...(gestiona ? [{ id: 'impuestos.fuera', etiqueta: 'Ya presenté uno fuera · pegar CSV', a: `${rutaImpuestos('presentados')}?fuera=1` }] : []),
+      ...(primera && mes ? [{ id: 'impuestos.revisar-mes', etiqueta: `Revisar y presentar los de ${mes}`, a: rutaIvaPeriodo(primera.ejercicio, primera.periodo) }] : []),
+    ],
+  }), [primera, mes, gestiona]))
 
   return (
     <div className="s-pantalla s-impuestos">

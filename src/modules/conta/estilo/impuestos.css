@@ -93,3 +93,9 @@
 .s-impuestos-nota { font-size: var(--s-t-s); }
 .s-impuestos-raya { border: none; border-top: var(--s-linea) solid var(--s-borde-decorativo); margin: 0; width: 100%; }
 .s-impuestos-pago { display: flex; gap: var(--s-2); align-items: flex-end; flex-wrap: wrap; }
+
+/* ── Presentados ───────────────────────────────────────────────────────── */
+.s-impuestos-csv { font-variant-numeric: tabular-nums; letter-spacing: var(--s-espaciado-mayus); word-break: break-all; }
+.s-impuestos-subir { cursor: pointer; }
+.s-impuestos-subir-texto { color: var(--s-accion); text-decoration: underline; }
+.s-impuestos-subir:focus-within .s-impuestos-subir-texto { outline: 2px solid var(--s-foco); outline-offset: 2px; }

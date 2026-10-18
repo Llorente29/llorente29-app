@@ -11,6 +11,7 @@ import { useParams } from 'react-router-dom'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Tarjeta } from '@/modules/conta/diseno'
 import { Calendario } from './Calendario'
+import { Presentados } from './Presentados'
 import { Sociedades } from './Sociedades'
 
 export default function ImpuestosPage() {
@@ -27,5 +28,6 @@ export default function ImpuestosPage() {
     )
   }
   if (pestana === 'sociedades') return <Sociedades companyId={activa.id} />
+  if (pestana === 'presentados') return <Presentados companyId={activa.id} />
   return <Calendario companyId={activa.id} />
 }

@@ -85,11 +85,12 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
   })
-  it('Impuestos: Calendario e Impuesto de sociedades; Presentados y Certificados, cuando tengan pantalla; el IVA de un periodo, del Calendario', () => {
+  it('Impuestos: Calendario, Presentados e Impuesto de sociedades; Certificados, cuando tenga pantalla; el IVA de un periodo, del Calendario', () => {
     const i = PRODUCTOS.find((p) => p.id === 'impuestos')!
     expect(i.pestanas.map((t) => t.etiqueta)).toEqual(['Calendario', 'Presentados', 'Impuesto de sociedades', 'Certificados y accesos'])
     expect(de('/conta/impuestos/iva/2026/3T')).toBe('impuestos.calendario')
     expect(de('/conta/impuestos/sociedades')).toBe('impuestos.sociedades')
+    expect(pestanasVisibles(i, NADA).map((t) => t.id)).toEqual(['calendario', 'presentados', 'sociedades'])
   })
   it('con pantalla, el interruptor decide (la prueba puede fallar)', () => {
     const conPantalla = PRODUCTOS.map((p) => (p.id === 'facturacion' ? { ...p, ruta: 'facturacion' } : p))

@@ -31,6 +31,10 @@ supabase/staging/sql/20261122_i01b_calendario_prueba.sql
 #   y como B, el pago, y su vuelta atrás dentro (y otra vez delante).
 supabase/migrations/20261122T0200_i01b_declaracion.sql
 supabase/staging/sql/20261122_i01b_declaracion_prueba.sql
+#   P3, presentados: la 0210 DE VERDAD (solo añade una función que lee) y su
+#   prueba: el 3T de A para apuntar, apuntado fuera, B no lo ve, y su vuelta atrás.
+supabase/migrations/20261122T0210_i01b_presentados.sql
+supabase/staging/sql/20261122_i01b_presentados_prueba.sql
 
 # S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
 #   La 0160 (el CHECK de journal_entry_document.kind amplía con
