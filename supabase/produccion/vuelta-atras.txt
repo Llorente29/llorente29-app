@@ -1,18 +1,14 @@
-# Vuelta atrás de la tanda del I01a (modo «vuelta_atras»), en orden inverso.
-# ANTES, el front tiene que volver al de antes del I01a (el alta del I01a llama
-# a funciones que esto quita) y conta-certificado y conta-hacienda tienen que
-# dejar de estar desplegadas. Cada fichero PARA, sin tocar nada, si ya hay algo
-# que se perdería: declaraciones revisadas, presentadas o calculadas,
-# certificados guardados (su secreto quedaría en el Vault), respuestas del alta
-# o modelos decididos por una persona. company_tax_profile.tax_forms se queda
-# como está.
-# Ensayada en staging: supabase/staging/sql/20261122_i01_vuelta_atras_prueba.sql.
-# La anterior de este fichero (S01):
-# tests/conta/produccion/vuelta-atras-s01-esqueleto-20261017.txt.
-cuenta: scripts/conta/produccion/cuentas/i01a-impuestos.sql
-supabase/vuelta-atras/20261122T0150_i01_presentar.down.sql
-supabase/vuelta-atras/20261122T0140_i01_calculo_303.down.sql
-supabase/vuelta-atras/20261122T0130_i01_certificados.down.sql
-supabase/vuelta-atras/20261122T0120_i01_obligaciones.down.sql
-supabase/vuelta-atras/20261122T0110_i01_modelo_datos.down.sql
-supabase/vuelta-atras/20261122T0100_i01_plazos.down.sql
+# Vuelta atrás de la tanda del S01d (modo «vuelta_atras»), en orden inverso.
+# ANTES, el front tiene que volver al de antes del S01d (la expedida y Bancos
+# llaman a las dos funciones que esto quita).
+# · 0170: quita bank_cuenta_nueva. Los bancos dados de alta con ella y sus
+#   subcuentas 572 se quedan: son datos de la empresa.
+# · 0160: PARA, sin tocar nada, si ya hay algún PDF de expedida enlazado; si
+#   no, quita la función y deja el CHECK de kind como estaba.
+# Ensayadas en staging: supabase/staging/sql/20261122_s01d_documento_expedida_prueba.sql
+# y supabase/staging/sql/20261122_s01d_banco_nuevo_prueba.sql.
+# La anterior de este fichero (I01a):
+# tests/conta/produccion/vuelta-atras-i01a-impuestos-20261018.txt.
+cuenta: scripts/conta/produccion/cuentas/s01d-tanda.sql
+supabase/vuelta-atras/20261122T0170_s01d_banco_nuevo.down.sql
+supabase/vuelta-atras/20261122T0160_s01d_documento_expedida.down.sql

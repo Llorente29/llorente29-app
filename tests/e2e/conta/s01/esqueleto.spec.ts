@@ -40,8 +40,12 @@ const pestanas = (page: Page, producto: string) => page.getByRole('navigation', 
 const cinta = (page: Page) => page.getByRole('toolbar', { name: 'Acciones de Asientos' })
 const aviso = (page: Page, texto: string | RegExp) => page.getByRole('status').filter({ hasText: texto })
 
-async function abrirUsuario(page: Page) { await page.getByRole('button', { name: /\. Tus preferencias$/ }).click() }
-async function abrirFavoritos(page: Page) { await page.getByRole('button', { name: 'Favoritos' }).click() }
+/** S01d: en el móvil, Favoritos y el usuario van en el cajón del menú. */
+async function enElCajon(page: Page) {
+  if (lado(page) === 'movil' && await page.getByRole('dialog', { name: 'Menú' }).count() === 0) await abrirCajon(page)
+}
+async function abrirUsuario(page: Page) { await enElCajon(page); await page.getByRole('button', { name: /\. Tus preferencias$/ }).click() }
+async function abrirFavoritos(page: Page) { await enElCajon(page); await page.getByRole('button', { name: 'Favoritos' }).click() }
 async function nivel(page: Page, cual: 'Sin experiencia' | 'Medio' | 'Experto') {
   await abrirUsuario(page)
   await page.getByRole('group', { name: 'Tu nivel' }).getByRole('button', { name: new RegExp(`^${cual}`) }).click()
@@ -65,12 +69,31 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
   }).map((x) => x.textContent), caja.y + caja.height)
   expect(fuera).toEqual([])
 
-  // Buscar · Ctrl K y Favoritos, en la cabecera.
-  if (lado(page) === 'ordenador') await expect(cabecera.getByRole('button', { name: 'Buscar', exact: true })).toHaveAttribute('aria-keyshortcuts', 'Control+K')
-  await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toBeVisible()
-  // Solo la estrella (Julio, 17/10): sin texto a la vista; «Favoritos» al pasar el ratón y para el lector.
-  await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveText('')
-  await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveAttribute('title', 'Favoritos')
+  // Buscar · Ctrl K y Favoritos, en la cabecera del ordenador.
+  if (lado(page) === 'ordenador') {
+    await expect(cabecera.getByRole('button', { name: 'Buscar', exact: true })).toHaveAttribute('aria-keyshortcuts', 'Control+K')
+    await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toBeVisible()
+    // Solo la estrella (Julio, 17/10): sin texto a la vista; «Favoritos» al pasar el ratón y para el lector.
+    await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveText('')
+    await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveAttribute('title', 'Favoritos')
+  } else {
+    // S01d (Julio, 18/10): en el móvil la cabecera es menú, logo y Buscar, y nada más.
+    await expect(cabecera.locator('a:visible, button:visible')).toHaveCount(3)
+    await expect(cabecera.getByRole('button', { name: 'Abrir el menú' })).toBeVisible()
+    await expect(cabecera.getByRole('link', { name: 'Inicio' })).toBeVisible()
+    await expect(cabecera.getByRole('button', { name: 'Buscar', exact: true })).toBeVisible()
+    // La empresa, ENTERA (sin «…») en la fila de debajo, con su cambio de empresa.
+    const empresa = page.locator('.s-cab-fila-movil .s-cab-empresa-nombre')
+    await expect(empresa).toBeVisible()
+    expect(await empresa.evaluate((e) => e.scrollWidth <= e.clientWidth && getComputedStyle(e).textOverflow !== 'ellipsis' || getComputedStyle(e).whiteSpace === 'normal')).toBe(true)
+    await expect(page.locator('.s-cab-fila-movil').getByRole('button', { name: /Cambiar de empresa$/ })).toBeVisible()
+    // Favoritos y el usuario, en el cajón.
+    await abrirCajon(page)
+    const cajon = page.getByRole('dialog', { name: 'Menú' })
+    await expect(cajon.getByRole('button', { name: 'Favoritos' })).toBeVisible()
+    await expect(cajon.getByRole('button', { name: /\. Tus preferencias$/ })).toBeVisible()
+    await page.getByRole('button', { name: 'Cerrar el menú' }).click()
+  }
 
   // Las pestañas de Contabilidad, con Asientos marcada.
   const tabs = pestanas(page, 'Contabilidad')

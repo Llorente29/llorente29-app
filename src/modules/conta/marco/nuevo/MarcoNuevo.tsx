@@ -106,6 +106,13 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
     cambiar({ favoritos: alternarFavorito(prefs.favoritos, id) }, ya ? `Quitado de Favoritos: «${etiqueta}».` : `Fijado en Favoritos: «${etiqueta}». Lo tienes arriba, en Favoritos.`)
   }
 
+  // Favoritos y el usuario: en la cabecera del ordenador; en el móvil, en el cajón (S01d).
+  const favoritos = (enCajon: boolean) => (
+    <Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} alternar={fijar}
+      alAbrirBuscador={() => { setCajon(false); setBuscando(true) }} enCajon={enCajon} />
+  )
+  const usuario = (enCajon: boolean) => <MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} enCajon={enCajon} />
+
   const clases = ['cx', 'cxm', 's-esqueleto', solo ? 'cx-solo' : null, movil ? 'cxm-es-movil' : null].filter(Boolean).join(' ')
   const avisoVisible = aviso ?? (errorCtx ? { texto: `${errorCtx}. Mientras, no sale lo que depende de la empresa (hostelería, Diez).`, tono: 'falta' as const } : null)
   return (
@@ -118,8 +125,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
         <div className="s-esq-cuerpo">
           <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
             huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)} abrirMenu={() => setCajon(true)} menuAbierto={cajon}
-            favoritos={<Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} alternar={fijar} alAbrirBuscador={() => setBuscando(true)} />}
-            usuario={<MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} />} />
+            favoritos={favoritos(false)} usuario={usuario(false)} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
           {producto && pestana && (
             <CintaDePestana etiqueta={`Acciones de ${pestana.etiqueta}`} grupos={cinta} datos={datosCinta} entradas={entradasCinta} oculta={prefs.cintaOculta}
@@ -133,7 +139,8 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
             {children}
           </main>
         </div>
-        {movil && cajon && <CajonProductos productos={productos} activo={producto?.id ?? null} pendientes={pendientes} solo={solo} cerrar={cerrarCajon} />}
+        {movil && cajon && <CajonProductos productos={productos} activo={producto?.id ?? null} pendientes={pendientes} solo={solo} cerrar={cerrarCajon}
+          tuyo={<>{favoritos(true)}{usuario(true)}</>} />}
         {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={!solo && !sinPregunta} ctx={ctxListo ? ctx : undefined} />}
       </div>
     </MarcoContexto.Provider>

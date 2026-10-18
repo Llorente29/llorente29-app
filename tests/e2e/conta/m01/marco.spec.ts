@@ -53,6 +53,10 @@ async function guardandoPreferencias(page: Page, hacer: () => Promise<unknown>) 
 
 /** S01: el menú del usuario («Admin · Medio ▾»), con el nivel, la densidad y la cinta. */
 async function abrirUsuario(page: Page) {
+  // S01d: en el móvil, el usuario va en el cajón del menú.
+  if ((page.viewportSize()?.width ?? 1440) < 768 && await page.getByRole('dialog', { name: 'Menú' }).count() === 0) {
+    await page.getByRole('button', { name: 'Abrir el menú' }).click()
+  }
   await page.getByRole('button', { name: /\. Tus preferencias$/ }).click()
 }
 /** S01: la densidad se cambia en el menú del usuario, y lo dice. */
@@ -60,6 +64,7 @@ async function cambiarDensidad(page: Page, cual: 'Cómoda' | 'Compacta') {
   await abrirUsuario(page)
   await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: cual }).click()
   await expect(page.getByRole('status').filter({ hasText: `Densidad: ${cual.toLowerCase()}.` })).toBeVisible()
+  if (await page.getByRole('dialog', { name: 'Menú' }).count()) await page.getByRole('button', { name: 'Cerrar el menú' }).click()
 }
 
 /** El «Te toca hoy» ya ha contado: la franja deja de estar ocupada y ningún número dice «…». */

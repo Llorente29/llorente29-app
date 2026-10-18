@@ -3,52 +3,21 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01a · Impuestos por dentro, sin pantallas (rama conta/i01a-impuestos-por-dentro,
-# PR #232). La anterior de este fichero (S01, el esqueleto: 0100–0160) ya está
-# aplicada en producción; su copia:
-# tests/conta/produccion/tanda-s01-esqueleto-20261017.txt.
+# S01d · Lo que falla del S01 que necesita base (rama conta/s01d-tanda, PR 2
+# del S01b). La anterior de este fichero (I01a, impuestos por dentro:
+# 0100–0150) ya está aplicada en producción; su copia:
+# tests/conta/produccion/tanda-i01a-impuestos-20261018.txt.
+# Orden con la I01b del frente C (Julio, 18/10): esta va primero; la I01b
+# numera por encima de la 0170.
 #
-#   1. 0100 — AÑADE los festivos del BOE de 2026 y 2027 (tax_holiday_year,
-#      tax_holiday), las reglas de plazo (tax_form_deadline) y
-#      conta_impuesto_plazo; y sus dos fuentes en official_source (no estaban).
-#   2. 0110 — AÑADE el modelo de datos de impuestos: company_tax_facts,
-#      tax_obligation, tax_return y sus casillas, líneas, comprobaciones y
-#      registro, la ficha del certificado, quién presenta, RLS de lectura y la
-#      vista company_tax_forms. CAMBIA en caliente company_tax_profile: le pone
-#      un disparador nuevo sobre tax_forms (la columna queda como copia de
-#      tax_obligation). Declarado, con su prueba de staging. Copia los 9 modelos
-#      de Foodint a tax_obligation sin tocar la columna.
-#   3. 0120 — AÑADE las obligaciones por defecto con regla con nombre (solo
-#      funciones).
-#   4. 0130 — AÑADE el almacén de certificados: el token de un solo uso y las
-#      funciones de guardar, abrir, quitar y permisos. AUTORIZO: el analizador
-#      la cuenta como escritura en vault.secrets porque conta_cert_guardar
-#      llama a vault.create_secret. Al aplicarla no se guarda ningún secreto
-#      (la cuenta lo mide: los secretos del Vault, los mismos antes y después);
-#      con el Vault, guardar solo se admite para Foodint.
-#   5. 0140 — AÑADE el cálculo del 303 y lo que pide su fichero (funciones), y
-#      amplía el CHECK de tax_return_check (de la 0110 de esta misma tanda).
-#   6. 0150 — AÑADE revisar, presentar, «ya lo presenté fuera» y el justificante
-#      (funciones).
+#   1. 0160 — CAMBIA en caliente journal_entry_document: su CHECK de kind solo
+#      AMPLÍA ('factura_expedida'). Declarado, con su prueba de staging. AÑADE
+#      conta_documento_expedida_guardar (el PDF de la expedida a mano).
+#   2. 0170 — AÑADE bank_cuenta_nueva: un banco que aún no está en el plan, con
+#      su subcuenta 572 (salir del círculo de «Dar de alta un banco»).
 #
-# Ninguna toca el camino del pedido (analizador contra producción, 18/10, 06:40
-# UTC: cinco «sigue» y la 0130 «autorizo»).
-#
-# autorizo:
-# 20261122T0130_i01_certificados.sql
-#
-# ORDEN: la tanda ANTES de fusionar el #232. El front del I01a (el alta) llama a
-# conta_impuesto_datos_del_alta y conta_impuesto_obligaciones_calcular; el de
-# antes no lee nada de esto, así que la base nueva con el front viejo no cambia
-# nada que se vea (tax_forms sigue igual).
-# Funciones a desplegar a mano DESPUÉS de la tanda: conta-certificado y
-# conta-hacienda (la puerta de Hacienda queda cerrada: sin CONTA_HACIENDA no
-# llama a nadie).
+# Ninguna toca el camino del pedido. No hay funciones que desplegar a mano.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/i01a-impuestos.sql
-supabase/migrations/20261122T0100_i01_plazos.sql
-supabase/migrations/20261122T0110_i01_modelo_datos.sql
-supabase/migrations/20261122T0120_i01_obligaciones.sql
-supabase/migrations/20261122T0130_i01_certificados.sql
-supabase/migrations/20261122T0140_i01_calculo_303.sql
-supabase/migrations/20261122T0150_i01_presentar.sql
+cuenta: scripts/conta/produccion/cuentas/s01d-tanda.sql
+supabase/migrations/20261122T0160_s01d_documento_expedida.sql
+supabase/migrations/20261122T0170_s01d_banco_nuevo.sql

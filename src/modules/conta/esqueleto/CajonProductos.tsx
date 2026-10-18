@@ -4,22 +4,25 @@
 // izquierda al pulsar el botón de menú de la cabecera (encargo S01b, 18/10;
 // sustituye a la barra de abajo con «Más»): los mismos productos que la barra
 // del ordenador, con su icono, su nombre y su chip; Ajustes abajo, separado; y
-// «Volver a Folvy» si no es el producto vendido solo. Se cierra con «Cerrar»,
+// «Volver a Folvy» si no es el producto vendido solo. S01d: también Favoritos
+// y el usuario (en el móvil no están en la cabecera). Se cierra con «Cerrar»,
 // con Escape, tocando fuera o al elegir. El logo no se repite aquí: ya sale en
 // la cabecera (una sola vez, Julio).
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icono } from '@/modules/conta/diseno'
 import { ItemBarra } from './BarraProductos'
 import type { IdProducto, Producto } from './productos'
 
-export function CajonProductos({ productos, activo, pendientes, solo, cerrar }: {
+export function CajonProductos({ productos, activo, pendientes, solo, cerrar, tuyo }: {
   productos: Producto[]
   activo: string | null
   pendientes: Partial<Record<IdProducto, number | null>>
   solo: boolean
   cerrar: () => void
+  /** S01d · Favoritos y el usuario, en su variante de cajón. */
+  tuyo?: ReactNode
 }) {
   const caja = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -38,6 +41,7 @@ export function CajonProductos({ productos, activo, pendientes, solo, cerrar }: 
           <ul className="s-barra-lista">
             {arriba.map((p) => <ItemBarra key={p.id} p={p} activo={activo === p.id} pendientes={pendientes[p.id]} alPulsar={cerrar} />)}
           </ul>
+          {tuyo && <div className="s-cajon-tuyo">{tuyo}</div>}
           <div className="s-barra-pie">
             <ul className="s-barra-lista">
               {abajo.map((p) => <ItemBarra key={p.id} p={p} activo={activo === p.id} pendientes={pendientes[p.id]} alPulsar={cerrar} />)}
