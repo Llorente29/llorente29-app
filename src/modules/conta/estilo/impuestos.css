@@ -123,3 +123,9 @@
 .s-impuestos-custodia p { margin: 0; }
 .s-impuestos-custodia .s-boton { background: transparent; color: var(--s-superficie); border-color: var(--s-superficie); }
 .s-impuestos-custodia-nota { font-size: var(--s-t-s); opacity: 0.85; }
+.s-impuestos-invitacion { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; margin-top: var(--s-1); }
+
+/* ── Aceptar la invitación (página sin marco) ──────────────────────────── */
+.s-aceptar { min-height: 100vh; background: var(--s-fondo); font-family: var(--s-letra); color: var(--s-tinta); }
+.s-aceptar-cuerpo { margin: 0 auto; padding: var(--s-8) var(--s-4); max-width: 640px; }
+.s-aceptar-cuerpo p { margin: 0; }

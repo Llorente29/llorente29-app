@@ -5,7 +5,8 @@
 //   · «Quién presenta los impuestos de esta empresa»: la propia empresa, con
 //     su certificado (la ficha, si funciona, quién puede presentar y quién
 //     solo ver, «Permisos»), o «Mi asesoría, con su certificado» («Invitar a
-//     mi asesoría»: la pieza 4b).
+//     mi asesoría», la pieza 4b: la invitación vincula; si la asesoría aún no
+//     tiene Sumied, su alta la da la plataforma).
 //   · «Cada vez que se ha usado»: cuándo, quién, qué y el resultado.
 //   · A la derecha, «Cómo guardamos tu certificado» con el texto de custodia
 //     de su almacén (con el Vault NO dice «nadie puede verlo»), «Probar con
@@ -17,11 +18,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { rutaImpuestos } from '@/config/navegacion'
-import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta } from '@/modules/conta/diseno'
+import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import { useEntradasEnCinta } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMesCorto } from '@/modules/conta/lib/formato'
 import {
-  certificadoPresenta, enlaceJustificante, leerCertificados, permisoCertificado, probarCertificado, quitarCertificado, subirCertificado,
+  asesoria, cancelarInvitacion, certificadoPresenta, enlaceJustificante, invitacionDeEmpresa, leerCertificados, permisoCertificado, probarCertificado,
+  quitarCertificado, retirarAsesoria, subirCertificado, type InvitacionViva,
 } from '@/modules/conta/services/impuestosService'
 import { chipsCertificado, lineaAsesoria, lineaCertificado, resultadoUso, textoUso, type Certificado, type CertificadosVer } from './certificados'
 
@@ -123,8 +125,10 @@ function QuienPresenta({ d, companyId, hacer, alPermisos, alSubir }: {
           <div className="s-impuestos-opcion-cuerpo">
             <div className="s-impuestos-opcion-cabeza">
               <strong>Mi asesoría, con su certificado</strong>
+              {d.es_admin && <AccionAsesoria d={d} companyId={companyId} hacer={hacer} />}
             </div>
             <p className="s-apoyo">{lineaAsesoria(d.presentador)}</p>
+            <InvitacionEnCurso companyId={companyId} hacer={hacer} esAdmin={d.es_admin} />
           </div>
         </div>
       </div>
@@ -243,6 +247,75 @@ function DialogoPermisos({ c, d, alCerrar, hacer }: { c: Certificado; d: Certifi
           }} />}
         </Campo>
       ))}
+    </Dialogo>
+  )
+}
+
+// ── P4b · Invitar a mi asesoría ─────────────────────────────────────────────
+
+/** El enlace de la derecha: «Invitar a mi asesoría», o «Retirar el permiso» si ya presenta ella. */
+function AccionAsesoria({ d, companyId, hacer }: { d: CertificadosVer; companyId: string; hacer: Hacer }) {
+  const [invitar, setInvitar] = useState(false)
+  const vinculada = d.presentador.modo === 'advisor' && !d.presentador.retirada_el
+  return (
+    <>
+      {vinculada
+        ? <Boton variante="enlace" onClick={() => void hacer(() => retirarAsesoria(companyId))}>Retirar el permiso</Boton>
+        : <Boton variante="enlace" onClick={() => setInvitar(true)}>Invitar a mi asesoría</Boton>}
+      {invitar && <DialogoInvitar companyId={companyId} alCerrar={() => setInvitar(false)} hacer={hacer} />}
+    </>
+  )
+}
+
+/** La invitación viva: a quién, hasta cuándo, y volver a mandarla o cancelarla. */
+function InvitacionEnCurso({ companyId, hacer, esAdmin }: { companyId: string; hacer: Hacer; esAdmin: boolean }) {
+  const [inv, setInv] = useState<InvitacionViva | null>(null)
+  const [vuelta, setVuelta] = useState(0)
+  useEffect(() => {
+    let vivo = true
+    invitacionDeEmpresa(companyId).then((x) => { if (vivo) setInv(x) }, () => { if (vivo) setInv(null) })
+    return () => { vivo = false }
+  }, [companyId, vuelta])
+  if (!inv) return null
+  const hacerY = (f: () => Promise<string>) => hacer(f).then(() => setVuelta((v) => v + 1))
+  return (
+    <div className="s-impuestos-invitacion" role="status">
+      <Chip tono={inv.estado === 'pending' ? 'duda' : 'accion'}>
+        {inv.estado === 'pending' ? `Invitación mandada a ${inv.correo} · caduca el ${diaMesCorto(inv.expira)}` : `${inv.asesoria} aceptó · espera que Sumied dé de alta su cuenta`}
+      </Chip>
+      {esAdmin && inv.estado === 'pending' && (
+        <Boton variante="enlace" onClick={() => void hacerY(async () => {
+          const r = await asesoria('invitar', { empresa: companyId, correo: inv.correo, nombre: inv.asesoria, base: inv.base })
+          if (!r.ok) throw new Error(r.mensaje)
+          return `${r.mensaje}${r.enlace && !r.enviado ? ` ${String(r.enlace)}` : ''}`
+        })}>Volver a mandarla</Boton>
+      )}
+      {esAdmin && <Boton variante="enlace" onClick={() => void hacerY(() => cancelarInvitacion(inv.id))}>Cancelar la invitación</Boton>}
+    </div>
+  )
+}
+
+function DialogoInvitar({ companyId, alCerrar, hacer }: { companyId: string; alCerrar: () => void; hacer: Hacer }) {
+  const [correo, setCorreo] = useState('')
+  const [nombre, setNombre] = useState('')
+  const [base, setBase] = useState<'social_collaborator' | 'power_of_attorney'>('social_collaborator')
+  const valido = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo.trim()) && nombre.trim().length >= 2
+  const enviar = () => hacer(async () => {
+    alCerrar()
+    const r = await asesoria('invitar', { empresa: companyId, correo: correo.trim(), nombre: nombre.trim(), base })
+    if (!r.ok) throw new Error(r.mensaje)
+    return `${r.mensaje}${r.enlace && !r.enviado ? ` ${String(r.enlace)}` : ''}`
+  })
+  return (
+    <Dialogo titulo="Invitar a mi asesoría" alCerrar={alCerrar}
+      explicacion="Le llega un correo con un enlace (caduca a los 7 días). Al aceptar, verá y gestionará los impuestos de esta empresa con tu permiso, que queda apuntado con tu nombre. Lo puedes retirar cuando quieras. Si aún no usa Sumied, Sumied le da de alta antes."
+      acciones={<><Boton onClick={alCerrar}>Cancelar</Boton><Boton variante="principal" disabled={!valido} onClick={enviar}>Mandar la invitación</Boton></>}>
+      <Campo etiqueta="Nombre de la asesoría">{(p) => <Texto {...p} valor={nombre} alCambiar={setNombre} placeholder="Ej.: Asesoría Gómez" />}</Campo>
+      <Campo etiqueta="Su correo">{(p) => <Texto {...p} valor={correo} alCambiar={setCorreo} type="email" autoComplete="off" />}</Campo>
+      <Campo etiqueta="Cómo presenta ante Hacienda">
+        {(p) => <Selector {...p} valor={base} alCambiar={(v) => setBase(v as typeof base)}
+          opciones={[{ valor: 'social_collaborator', texto: 'Como colaboradora social' }, { valor: 'power_of_attorney', texto: 'Con un poder de la empresa en Hacienda' }]} />}
+      </Campo>
     </Dialogo>
   )
 }

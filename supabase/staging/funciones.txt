@@ -3,3 +3,7 @@
 # «fichero_303», el fichero oficial), y el asiento de liquidación al presentar.
 # En staging habla con el doble (CONTA_HACIENDA=doble): nada llega a Hacienda.
 conta-hacienda
+# I01b · P4b: conta-asesoria (invitar a la asesoría, ver, aceptar y aprobar) y
+# send-email con la plantilla nueva invitacion_asesoria (las demás, igual).
+conta-asesoria
+send-email

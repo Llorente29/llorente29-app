@@ -234,3 +234,41 @@ export async function probarCertificado(certificado: string): Promise<SalidaHaci
   const token = await confirmarCertificado(certificado, 'test')
   return hacienda('probar', { confirmacion: token })
 }
+
+// ── P4b · Invitar a mi asesoría ─────────────────────────────────────────────
+
+export interface InvitacionViva {
+  id: string; estado: 'pending' | 'waiting_approval'; correo: string; asesoria: string; base: 'social_collaborator' | 'power_of_attorney'
+  invita: string; creada: string; expira: string; envios: number; ultimo_envio: string
+}
+
+/** La invitación viva de la empresa, si la hay (conta_asesoria_de_empresa). */
+export function invitacionDeEmpresa(companyId: string): Promise<InvitacionViva | null> {
+  return rpc<InvitacionViva | null>('conta_asesoria_de_empresa', { p_company: companyId })
+}
+
+/** Cancelar la invitación: su enlace deja de valer. */
+export function cancelarInvitacion(id: string): Promise<string> {
+  return rpc<string>('conta_asesoria_cancelar', { p_invitation: id })
+}
+
+/** Retirar el permiso de la asesoría: deja de ver y gestionar en el acto. */
+export async function retirarAsesoria(companyId: string): Promise<string> {
+  await rpc('conta_impuesto_presentador_retirar', { p_company: companyId })
+  return 'Retirado el permiso de la asesoría: desde ahora no ve ni gestiona los impuestos de esta empresa.'
+}
+
+/** Llama a conta-asesoria. Nunca lanza: si contesta con un error, su cuerpo dice por qué. */
+export async function asesoria(accion: 'invitar' | 'ver' | 'aceptar' | 'aprobar', cuerpo: Record<string, unknown>): Promise<{ ok: boolean; mensaje: string; [k: string]: unknown }> {
+  hayBase()
+  const { data, error } = await supabase!.functions.invoke('conta-asesoria', { body: { accion, ...cuerpo } })
+  if (!error && data && typeof data === 'object') return data as { ok: boolean; mensaje: string }
+  const ctx = (error as { context?: Response } | null)?.context
+  if (ctx && typeof ctx.json === 'function') {
+    const c = await ctx.clone().json().catch(() => null) as { mensaje?: string } | null
+    if (c?.mensaje) return { ...c, ok: false, mensaje: c.mensaje }
+    if (ctx.status === 404) return { ok: false, mensaje: 'La invitación de asesorías aún no está publicada en este entorno.' }
+    return { ok: false, mensaje: `La invitación ha contestado ${ctx.status}. No se ha cambiado nada.` }
+  }
+  return { ok: false, mensaje: 'No se ha podido hablar con la invitación. No se ha cambiado nada.' }
+}

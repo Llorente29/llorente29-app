@@ -1,6 +1,6 @@
 -- scripts/conta/produccion/cuentas/i01b-asiento-303.sql
 --
--- I01b · LO QUE CUENTA LA TANDA DE IMPUESTOS (0180–0220), antes y después.
+-- I01b · LO QUE CUENTA LA TANDA DE IMPUESTOS (0180–0230), antes y después.
 -- SOLO LEE. Recuentos de Foodint (regla 9) y huellas de definiciones; ningún
 -- nombre, NIF, CSV ni importe.
 --
@@ -9,7 +9,8 @@
 -- bank_match_item, otra huella (amplía); conta_motivos_para_validar, otra
 -- huella (la excepción de la liquidación); las tres funciones nuevas y los dos
 -- disparadores, de 0 a 3 y de 0 a 2; las funciones de las pantallas (0190 a
--- 0220), de 0 a 8. Y lo de Foodint, IGUAL antes y después:
+-- 0220), de 0 a 8; la tabla de invitaciones a asesorías (0230), de «no existe» a
+-- «existe». Y lo de Foodint, IGUAL antes y después:
 -- sus asientos, sus casados, sus declaraciones por estado y sus asientos de
 -- liquidación (la tanda no contabiliza nada: lo hace la persona, después).
 select clave, valor from (
@@ -41,6 +42,8 @@ select clave, valor from (
     (select count(*) filter (where p.mode = 'company') || ' / ' || count(*) filter (where p.mode = 'advisor') || ' / ' ||
             ((select count(*) from public.company c where c.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710') - count(*))
        from public.company_tax_presenter p where p.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710') union all
+  select 13, 'tabla de invitaciones a asesorías (tax_advisor_invitation)',
+    case when to_regclass('public.tax_advisor_invitation') is null then 'no existe' else 'existe' end union all
   select 7, 'asientos de Foodint (todos)',
     (select count(*) from public.journal_entry where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710')::text union all
   select 8, 'asientos de liquidación de Foodint (vat_settlement)',

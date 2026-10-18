@@ -1,12 +1,13 @@
 {
- "_que": "I01b · contexto de producción de la tanda viva (20261122T0180–0220), medido en SOLO LECTURA el 18/10 a las 12:34 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen bank_match y bank_match_item (0 filas estimadas por reltuples; 7 casados de verdad en Foodint) y journal_entry (14.955 estimadas); de las 16 funciones que nombra la tanda solo existen conta_impuesto_estado_vale y conta_motivos_para_validar, con las huellas de las que la 0180 parte (61ec32bf… de la 0110 y bac135c4… de la 0140 del S01); nada del camino del pedido; ninguna en el historial.",
- "medido": "2026-10-18T12:34Z",
+ "_que": "I01b · contexto de producción de la tanda viva (20261122T0180–0230), medido en SOLO LECTURA el 18/10 a las 14:46 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. No existe tax_advisor_invitation. Existen bank_match y bank_match_item (0 filas estimadas por reltuples; 7 casados de verdad en Foodint) y journal_entry (14.955 estimadas); de las 26 funciones que nombra la tanda solo existen conta_impuesto_estado_vale y conta_motivos_para_validar, con las huellas de las que la 0180 parte (61ec32bf… de la 0110 y bac135c4… de la 0140 del S01); nada del camino del pedido; ninguna en el historial.",
+ "medido": "2026-10-18T14:46Z",
  "tanda": {
   "supabase/migrations/20261122T0180_i01b_asiento_303.sql": "77b158bf26c5ca3f01efad1d03072d92",
   "supabase/migrations/20261122T0190_i01b_calendario.sql": "d7c3d31eff17d9a2f71fbacbd4f79fba",
   "supabase/migrations/20261122T0200_i01b_declaracion.sql": "60830b978687d717ab011a1f4e0905a6",
   "supabase/migrations/20261122T0210_i01b_presentados.sql": "130bf40d1e5c5c0fff08750b93dc7b24",
-  "supabase/migrations/20261122T0220_i01b_certificados.sql": "97503a39e5cf104d5d0580d8150776bc"
+  "supabase/migrations/20261122T0220_i01b_certificados.sql": "97503a39e5cf104d5d0580d8150776bc",
+  "supabase/migrations/20261122T0230_i01b_asesoria.sql": "f63f92a37bf17772cba87a6023b1a1d7"
  },
  "contexto": {
   "tablas": [

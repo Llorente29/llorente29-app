@@ -238,6 +238,8 @@ export const CONTA = {
     impuestosPestana: 'impuestos/:pestana',
     /** I01b · El IVA de un periodo (tablero 9): impuestos/iva/2026/3T. */
     impuestoIva: 'impuestos/iva/:ejercicio/:periodo',
+    /** I01b · Aceptar la invitación de una empresa a su asesoría (también sin sesión: AuthRouter). */
+    aceptarAsesoria: 'asesoria',
   },
 } as const
 

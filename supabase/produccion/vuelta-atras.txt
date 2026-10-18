@@ -1,6 +1,8 @@
 # Vuelta atrás de la tanda del I01b (modo «vuelta_atras»), en orden inverso.
 # ANTES, el front tiene que volver al de antes del I01b (las pantallas de
 # Impuestos llaman a las funciones que esto quita).
+# · 0230: PARA si ya hay alguna invitación (el registro de quién dio permiso);
+#   si no, quita la tabla y sus funciones. Las asesorías vinculadas se quedan.
 # · 0220, 0210, 0200 y 0190: quitan sus funciones (solo leen, salvo el pago y
 #   quién presenta, que se quedan como estén: son decisiones de la empresa).
 # · 0180: PARA, sin tocar nada, si ya hay algún asiento de liquidación de una
@@ -15,6 +17,7 @@
 # La anterior de este fichero (S01d):
 # tests/conta/produccion/vuelta-atras-s01d-tanda-20261018.txt.
 cuenta: scripts/conta/produccion/cuentas/i01b-asiento-303.sql
+supabase/vuelta-atras/20261122T0230_i01b_asesoria.down.sql
 supabase/vuelta-atras/20261122T0220_i01b_certificados.down.sql
 supabase/vuelta-atras/20261122T0210_i01b_presentados.down.sql
 supabase/vuelta-atras/20261122T0200_i01b_declaracion.down.sql

@@ -162,3 +162,11 @@ verify_jwt = true
 # (y su autorización) a mano. verify_jwt = true: la persona sale de su sesión.
 [functions.conta-hacienda]
 verify_jwt = true
+
+# (18/10) I01b · conta-asesoria: «Invitar a mi asesoría». verify_jwt = FALSE,
+# deliberado: «ver» y «aceptar» las pide quien aún no tiene sesión (abre el
+# enlace del correo). Su frontera es el token del enlace (la base guarda solo
+# su huella) y que aceptar solo vincula la cuenta de ESE correo o espera a la
+# plataforma. «invitar» y «aprobar» miran la sesión dentro.
+[functions.conta-asesoria]
+verify_jwt = false

@@ -45,6 +45,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
+    // La página de aceptar una invitación a la asesoría no es de ningún producto (va sin marco).
+    aceptarAsesoria: null,
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
     ventas: null,
   }

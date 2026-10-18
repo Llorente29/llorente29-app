@@ -23,6 +23,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-
 import { Building2, ChevronDown } from 'lucide-react'
 import AdminHomePage from './pages/AdminHomePage'
 import NuevaCuentaPage from './pages/NuevaCuentaPage'
+import AsesoriasPendientesPage from './pages/AsesoriasPendientesPage'
 import NuevaCuentaContaPage from './pages/NuevaCuentaContaPage'
 import CuentasListPage from './pages/CuentasListPage'
 import CuentaDetallePage from './pages/CuentaDetallePage'
@@ -44,6 +45,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Inicio', to: '/_admin/inicio', matchPrefix: '/_admin/inicio' },
   { label: 'Cuentas', to: '/_admin/cuentas', matchPrefix: '/_admin/cuentas' },
+  // I01b · Las asesorías que han aceptado la invitación de una empresa y esperan su alta.
+  { label: 'Asesorías', to: '/_admin/asesorias', matchPrefix: '/_admin/asesorias' },
   { label: 'Auditoría', to: '/_admin/auditoria', matchPrefix: '/_admin/auditoria' },
   { label: 'Staff', to: '/_admin/staff', matchPrefix: '/_admin/staff' },
   { label: 'Métricas', to: '/_admin/metricas', matchPrefix: '/_admin/metricas' },
@@ -214,6 +217,7 @@ export default function AdminShell() {
           {/* C06 · Alta de una cuenta solo de contabilidad (sin Cocina). */}
           <Route path="/_admin/cuentas/nueva-contabilidad" element={<NuevaCuentaContaPage />} />
           <Route path="/_admin/cuentas/:accountId" element={<CuentaDetallePage />} />
+          <Route path="/_admin/asesorias" element={<AsesoriasPendientesPage />} />
           <Route path="/_admin/auditoria" element={<AuditoriaPage />} />
           <Route path="/_admin/staff" element={<StaffPage />} />
           <Route path="/_admin/metricas" element={<MetricasPage />} />

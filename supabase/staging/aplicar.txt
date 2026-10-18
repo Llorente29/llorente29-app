@@ -51,6 +51,12 @@ supabase/staging/sql/20261122_i01b_presentados_prueba.sql
 #   el suyo y no con el de B, B no ve, y su vuelta atrás.
 supabase/migrations/20261122T0220_i01b_certificados.sql
 supabase/staging/sql/20261122_i01b_certificados_prueba.sql
+#   P4b, invitar a la asesoría: la 0230 DE VERDAD (añade una tabla y funciones)
+#   y su prueba: invitar con sus límites, aceptar con cuenta (vincula) y sin
+#   ella (espera el alta de la plataforma), cancelar, el tope de 30 días y su
+#   vuelta atrás (para si hay invitaciones).
+supabase/migrations/20261122T0230_i01b_asesoria.sql
+supabase/staging/sql/20261122_i01b_asesoria_prueba.sql
 
 # S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
 #   La 0160 (el CHECK de journal_entry_document.kind amplía con
