@@ -172,6 +172,24 @@ async function main() {
       sale(`${p}.huella_bases`, huella(String(base)))
     }
   }
+  // ¿En qué trimestre se dedujo cada recibida? Por la fecha del asiento, la
+  // 472 del 1T es 19.349,75 y el 303 dedujo 18.012,96 (y el 2T, al revés):
+  // la cuota de las recibidas por trimestre de otras fechas, como huella, para
+  // compararla fuera con las casillas [29]+[37] declaradas.
+  seccion('recibidas_por_otras_fechas')
+  for (const campo of ['FechaIntroduccionFactura', 'FechaFactura', 'FechaOperacion']) {
+    const porQ = new Map<number, number>()
+    let sinFecha = 0
+    for (const f of unicas.filter((x) => String(x.Serie) === '2')) {
+      const v = Number((f as Record<string, unknown>)[campo] ?? 0)
+      if (!v) { sinFecha++; continue }
+      const q = Math.floor(v / 10000) === 2026 ? trimestre(v) : 0
+      porQ.set(q, (porQ.get(q) ?? 0) + cuotaFactura(f))
+    }
+    const k = nombreCampo(campo)
+    sale(`recibidas.por_${k}.sin_fecha`, sinFecha)
+    for (const [q, cuota] of [...porQ].sort((a, b) => a[0] - b[0])) sale(`recibidas.por_${k}.${q === 0 ? 'otro_anio' : `${q}t`}.huella_cuotas`, huella(String(cuota)))
+  }
   if (process.env.SUMIED_JSON) cruzar(unicas, JSON.parse(readFileSync(process.env.SUMIED_JSON, 'utf8')) as AsientoSumied[])
   sale('peticiones', c.metrica.peticiones)
 }
