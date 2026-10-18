@@ -20,6 +20,8 @@
 //                   Sin respuesta: NO se sabe si llegó, y se dice así;
 //                6. con CSV: «Presentado», y el justificante (urlPdf) a
 //                   conta-documentos. Si el PDF no sale, se pide subirlo.
+//   fichero    I01b · «Descargar el fichero oficial»: generado y comprobado,
+//              sin llamar a Hacienda (funciona con la puerta cerrada).
 //   fuera      «Ya lo presenté fuera»: con el CSV. Con certificado, se
 //              comprueba con la consulta (ese CSV, ese NIF, ese modelo y
 //              periodo) y se trae el PDF por la URL del CSV; si no responde,
@@ -278,5 +280,43 @@ export async function contabilizarTrasPresentar(persona: ClienteBase, declaracio
     return { ok: true, mensaje: typeof m === 'string' ? m : 'Contabilizado.' }
   } catch {
     return { ok: false, mensaje: 'Queda «Presentado» sin contabilizar: no se ha podido hablar con la base. Contabilízalo desde la declaración.' }
+  }
+}
+
+/**
+ * I01b · «Descargar el fichero oficial» (tablero 9): el fichero del 303 tal
+ * como se presentaría, para presentarlo fuera o mirarlo. No llama a Hacienda
+ * ni abre el certificado: funciona con la puerta cerrada. La base dice si la
+ * persona puede (conta_impuesto_gestiona) y da los datos; el fichero se genera
+ * y se comprueba contra el diseño de registro, y si no vale se dice qué falla.
+ */
+export async function fichero303(base: ClienteBase, programa: Dependencias['programa'], a: {
+  usuario: string; declaracion: string
+  /** De la declaración: lo lee la función con la clave de servicio. */
+  empresa: string
+}): Promise<Salida> {
+  try {
+    const puede = await rpc<boolean>(base, 'conta_impuesto_gestiona', { p_user: a.usuario, p_company: a.empresa })
+    if (puede !== true) return { ok: false, motivo: 'no_deja', mensaje: 'No puedes bajar el fichero de los impuestos de esta empresa.' }
+    const datos = await rpc<Omit<DatosFichero, 'declaracion' | 'cuenta'>>(base, 'conta_impuesto_303_fichero', { p_return: a.declaracion })
+    const d303: Datos303 = {
+      ejercicio: datos.ejercicio, periodo: datos.periodo, nif: datos.nif, nombre: datos.nombre, tipo: datos.tipo, redeme: datos.redeme,
+      sii: datos.sii, casillas: datos.casillas, iban: datos.iban, sinActividad: datos.sin_actividad, programa,
+    }
+    let fichero: string
+    try {
+      fichero = generar303(d303)
+    } catch (e) {
+      const fallos = e instanceof FicheroNoVale ? e.fallos : ['No se ha podido generar el fichero.']
+      return { ok: false, motivo: 'fichero', mensaje: `El fichero no cumple el diseño de Hacienda: ${fallos.join(' ')}`, fallos }
+    }
+    const comprobado = comprobar303(fichero, d303)
+    if (!comprobado.ok) {
+      return { ok: false, motivo: 'fichero', mensaje: `El fichero no cumple el diseño de Hacienda: ${comprobado.fallos.join(' ')}`, fallos: comprobado.fallos }
+    }
+    return { ok: true, fichero, nombre: `303_${datos.ejercicio}_${datos.periodo}.txt`, mensaje: `El fichero del 303 del ${datos.periodo}/${datos.ejercicio}, comprobado contra el diseño de Hacienda.` }
+  } catch (e) {
+    const f = porQueFalla(e)
+    return { ok: false, motivo: f.motivo, mensaje: f.mensaje }
   }
 }

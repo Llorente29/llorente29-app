@@ -16,6 +16,11 @@ supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
 #   prueba: como A y como B, y su vuelta atrás dentro (y otra vez delante).
 supabase/migrations/20261122T0190_i01b_calendario.sql
 supabase/staging/sql/20261122_i01b_calendario_prueba.sql
+#   P2, el IVA de un periodo: la 0200 DE VERDAD (solo añade dos funciones: la
+#   que lee para la pantalla y la que guarda cómo se paga) y su prueba: como A
+#   y como B, el pago, y su vuelta atrás dentro (y otra vez delante).
+supabase/migrations/20261122T0200_i01b_declaracion.sql
+supabase/staging/sql/20261122_i01b_declaracion_prueba.sql
 
 # S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
 #   La 0160 (el CHECK de journal_entry_document.kind amplía con
