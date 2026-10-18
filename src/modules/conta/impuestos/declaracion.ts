@@ -204,10 +204,10 @@ export function botonPresentar(d: DeclaracionVer, puerta: Puerta | null): Boton 
   const errores = d.comprobaciones.filter((c) => c.resultado === 'error').length
   if (errores > 0) return no(`Tiene ${errores === 1 ? 'una cosa' : `${errores} cosas`} que Sumied todavía no sabe declarar: mírala abajo. Mientras, preséntalo fuera.`)
   const avisos = d.comprobaciones.filter((c) => c.resultado === 'warning' && !c.aceptada_el).length
-  if (avisos > 0) return no(`Antes, mira ${avisos === 1 ? 'el aviso' : `los ${avisos} avisos`} de abajo y dalos por buenos si lo están.`)
+  if (avisos > 0) return no(`Antes, mira ${avisos === 1 ? 'el aviso' : `los ${avisos} avisos`} de «Lo que ha comprobado Sumied» (en el Resumen) y dalos por buenos si lo están.`)
   const ce = d.presentador.certificado
-  if (!ce || ce.estado === 'removed') return no('Aún no hay certificado para presentar: súbelo en «Certificados y accesos».')
-  if (ce.estado === 'expired' || ce.caduca <= d.hoy) return no(`El certificado caducó el ${diaMesCorto(ce.caduca)}: sube uno nuevo en «Certificados y accesos».`)
+  if (!ce || ce.estado === 'removed') return no('Aún no hay certificado para presentar: súbelo en Impuestos › Certificados.')
+  if (ce.estado === 'expired' || ce.caduca <= d.hoy) return no(`El certificado caducó el ${diaMesCorto(ce.caduca)}: sube uno nuevo en Impuestos › Certificados.`)
   if (!d.presentador.puedo_presentar) return no('No tienes permiso para presentar con este certificado: pídeselo a quien lo subió.')
   if (!puerta) return no('Comprobando la conexión con Hacienda…')
   if (!puerta.abierta) return no(`${puerta.mensaje} Mientras, puedes descargar el fichero oficial, presentarlo tú en la sede de Hacienda y luego apuntarlo con «Ya lo presenté fuera».`)

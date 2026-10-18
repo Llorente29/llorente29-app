@@ -15,8 +15,10 @@
 .s-impuestos-columnas { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s-4); align-items: start; }
 .s-impuestos-principal, .s-impuestos-lado { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 
-.s-impuestos-tabla td { vertical-align: top; }
-.s-impuestos-tabla tr[data-ambar='si'] td { background: var(--s-duda-fondo); }
+/* Con .s-tabla delante: el sistema (diseno.css) se carga después y, a la par, ganaría él. */
+.s-tabla.s-impuestos-tabla td { vertical-align: top; }
+.s-tabla.s-impuestos-tabla td:first-child { min-width: 220px; }
+.s-tabla.s-impuestos-tabla tr[data-ambar='si'] td { background: var(--s-duda-fondo); }
 .s-impuestos-nombre { font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
 .cx a.s-impuestos-nombre { color: var(--s-accion); text-decoration: underline; }
 .s-impuestos-aviso { display: block; margin-top: var(--s-1); font-size: var(--s-t-s); color: var(--s-duda); }
@@ -35,6 +37,7 @@
 .s-impuestos-siguiente-nota { font-size: var(--s-t-s); color: var(--s-apoyo); text-align: right; }
 
 .s-impuestos-porque { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-impuestos-porque.s-impuestos-vacio { padding: var(--s-4) var(--s-6) var(--s-5); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
 
 @media (max-width: 1099px) {
   .s-impuestos-columnas { grid-template-columns: minmax(0, 1fr); }
@@ -44,17 +47,17 @@
   .s-impuestos-siguiente li { grid-template-columns: minmax(0, 1fr); gap: 0; }
   .s-impuestos-siguiente-nota { text-align: left; }
   /* La tabla, en bloques: cada dato con el título de su columna delante. */
-  .s-impuestos-tabla thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .s-impuestos-tabla, .s-impuestos-tabla tbody, .s-impuestos-tabla tr, .s-impuestos-tabla td { display: block; width: 100%; }
-  .s-impuestos-tabla tr { padding: var(--s-3) var(--s-4); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
-  .s-impuestos-tabla tr[data-ambar='si'] { background: var(--s-duda-fondo); }
-  .s-impuestos-tabla td { padding: var(--s-1) 0; border-bottom: none; text-align: left; white-space: normal; }
-  .s-impuestos-tabla td::before {
+  .s-tabla.s-impuestos-tabla thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .s-tabla.s-impuestos-tabla, .s-tabla.s-impuestos-tabla tbody, .s-tabla.s-impuestos-tabla tr, .s-tabla.s-impuestos-tabla td { display: block; width: 100%; }
+  .s-tabla.s-impuestos-tabla tr { padding: var(--s-3) var(--s-4); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+  .s-tabla.s-impuestos-tabla tr[data-ambar='si'] { background: var(--s-duda-fondo); }
+  .s-tabla.s-impuestos-tabla td, .s-tabla.s-impuestos-tabla td.s-tabla-cifra { padding: var(--s-1) 0; border-bottom: none; text-align: left; white-space: normal; min-width: 0; }
+  .s-tabla.s-impuestos-tabla td::before {
     content: attr(data-titulo); display: block; font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo);
     text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
   }
-  .s-impuestos-tabla td.s-impuestos-accion::before { content: none; }
-  .s-impuestos-tabla td:empty { display: none; }
+  .s-tabla.s-impuestos-tabla td.s-impuestos-accion::before { content: none; }
+  .s-tabla.s-impuestos-tabla td:empty { display: none; }
 }
 
 /* ── El IVA de un periodo (tablero 9) ──────────────────────────────────── */
@@ -118,10 +121,10 @@
 .s-impuestos-chips { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .s-impuestos-ok { color: var(--s-ok); }
 
-.s-impuestos-custodia { background: var(--s-oscuro); border-color: var(--s-oscuro); color: var(--s-superficie); gap: var(--s-3); }
-.s-impuestos-custodia .s-tarjeta-titulo { color: var(--s-superficie); }
+.s-tarjeta.s-impuestos-custodia { background: var(--s-oscuro); border-color: var(--s-oscuro); color: var(--s-superficie); gap: var(--s-3); }
+.s-tarjeta.s-impuestos-custodia .s-tarjeta-titulo { color: var(--s-superficie); }
 .s-impuestos-custodia p { margin: 0; }
-.s-impuestos-custodia .s-boton { background: transparent; color: var(--s-superficie); border-color: var(--s-superficie); }
+.s-tarjeta.s-impuestos-custodia .s-boton { background: transparent; color: var(--s-superficie); border-color: var(--s-superficie); }
 .s-impuestos-custodia-nota { font-size: var(--s-t-s); opacity: 0.85; }
 .s-impuestos-invitacion { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; margin-top: var(--s-1); }
 

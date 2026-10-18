@@ -101,7 +101,7 @@ describe('el botón de presentar: nunca calla por qué no presenta', () => {
     expect(botonPresentar(base({ declaracion: null }), DOBLE).porque).toBe('Primero hay que calcularlo con tus libros.')
     expect(botonPresentar(base({ comprobaciones: [{ ...ok('book_vs_303'), resultado: 'error' }] }), DOBLE).porque).toContain('Sumied todavía no sabe declarar')
     expect(botonPresentar(base({ comprobaciones: [{ ...ok('out_of_period'), resultado: 'warning' }] }), DOBLE).porque).toContain('el aviso')
-    expect(botonPresentar(base({ presentador: { ...base().presentador, certificado: null } }), DOBLE).porque).toContain('Certificados y accesos')
+    expect(botonPresentar(base({ presentador: { ...base().presentador, certificado: null } }), DOBLE).porque).toContain('Impuestos › Certificados')
     expect(botonPresentar(base({ presentador: { ...base().presentador, puedo_presentar: false } }), DOBLE).porque).toContain('No tienes permiso')
     expect(botonPresentar(base({ puede_gestionar: false }), DOBLE).activo).toBe(false)
     expect(botonPresentar(base(), null).porque).toBe('Comprobando la conexión con Hacienda…')

@@ -135,6 +135,12 @@ test('Certificados y accesos (tablero 10), y el diálogo de «Invitar a mi aseso
   await entrarComo(page, CUENTA_A.email)
   await ir(page, 'impuestos/certificados')
   await expect(page.getByText('Quién presenta').first()).toBeVisible()
+  // La custodia es una tarjeta oscura con letra clara. El 18/10 salió blanca sobre blanca
+  // (el sistema se cargaba después y le quitaba el fondo): «visible» no lo ve; los colores, sí.
+  const colores = await page.locator('.s-impuestos-custodia').evaluate((e) => {
+    const c = getComputedStyle(e); return { fondo: c.backgroundColor, letra: c.color }
+  })
+  expect(colores.fondo, 'la custodia tiene la letra del mismo color que su fondo').not.toBe(colores.letra)
   await sinDesbordar(page, 'Certificados')
   await foto(page, 'certificados')
   const invitar = page.getByRole('button', { name: 'Invitar a mi asesoría' })

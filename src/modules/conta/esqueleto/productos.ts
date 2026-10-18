@@ -141,7 +141,7 @@ export const PRODUCTOS: Producto[] = [
       { id: 'calendario', etiqueta: 'Calendario', ruta: R.impuestos, prefijos: [R.impuestos] },
       { id: 'presentados', etiqueta: 'Presentados', ruta: `${R.impuestos}/presentados`, prefijos: [`${R.impuestos}/presentados`] },
       { id: 'sociedades', etiqueta: 'Impuesto de sociedades', ruta: `${R.impuestos}/sociedades`, prefijos: [`${R.impuestos}/sociedades`] },
-      { id: 'certificados', etiqueta: 'Certificados y accesos', ruta: `${R.impuestos}/certificados`, prefijos: [`${R.impuestos}/certificados`] },
+      { id: 'certificados', etiqueta: 'Certificados', ruta: `${R.impuestos}/certificados`, prefijos: [`${R.impuestos}/certificados`] },
     ],
   },
   {
