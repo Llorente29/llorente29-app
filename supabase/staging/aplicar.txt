@@ -32,6 +32,10 @@ supabase/migrations/20261122T0150_i01_presentar.sql
 #   vuelta atrás la vuelven a cargar dentro de su transacción. La vuelta atrás
 #   del I01a deshace antes el I01b.
 supabase/migrations/20261122T0180_i01b_asiento_303.sql
+#   Y justo después, solo en staging: la 0180 deja conta_motivos_para_validar
+#   sin la M01 (que aquí no está de verdad) y la prueba de la M01 choca con ella
+#   (run 344). Se quita si nadie la llama; el resto de la 0180 se queda.
+supabase/staging/sql/20261122_i01b_sin_m01_en_staging.sql
 #   P1, el calendario: la 0190 se aplica DE VERDAD (solo añade tres funciones
 #   que leen; la pantalla de Impuestos la necesita en staging) y después su
 #   prueba: como A y como B, y su vuelta atrás dentro (y otra vez delante).
