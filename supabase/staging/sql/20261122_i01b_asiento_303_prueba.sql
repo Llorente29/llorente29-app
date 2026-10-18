@@ -63,8 +63,32 @@ create temporary table _p (k text primary key, val text) on commit drop;
 grant all on _p to authenticated, service_role;
 
 -- ── 0 · Los 303 de A, calculados ────────────────────────────────────────────
+-- En staging ningún 303 de A en 2026 sale a pagar (run 330: 1T, 2T y 3T sin
+-- actividad; 4T a compensar 102,66). Para el camino del pago, una venta del
+-- 3T apuntada y validada aquí dentro por su camino de siempre (el libro de IVA
+-- lo llena el disparador al validar), con el tipo que ya usa A en su libro.
 select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
 set local role authenticated;
+do $$
+declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; v_tipo uuid; v jsonb;
+begin
+  select jl.tax_rate_id into v_tipo from public.journal_line jl join public.journal_entry je on je.id = jl.entry_id
+   where je.company_id = v_a and jl.vat_book = 'issued' and jl.tax_rate_id is not null limit 1;
+  if v_tipo is null or (select rate from public.tax_rate where id = v_tipo) <> 10 then
+    raise exception 'PRUEBA asiento 303 · 0: A no tiene en su libro el tipo del 10 %% con que se apunta la venta de prueba.';
+  end if;
+  v := public.journal_entry_proponer(v_a,
+    jsonb_build_object('fecha', '2026-08-31', 'series', 1, 'concepto', 'PRUEBA I01b venta del 3T', 'source_type', 'manual', 'documento', 'PRUEBA-I01B-1'),
+    jsonb_build_array(
+      jsonb_build_object('cuenta', '43000000', 'debe', 1100, 'haber', 0, 'comun', true),
+      jsonb_build_object('cuenta', '70000000', 'debe', 0, 'haber', 1000, 'comun', true),
+      jsonb_build_object('cuenta', '47700010', 'debe', 0, 'haber', 100, 'comun', true,
+                         'iva', jsonb_build_object('tipo_id', v_tipo, 'base', 1000, 'libro', 'issued', 'facturas', 1))));
+  perform public.journal_entry_validar((v->>'id')::uuid);
+  if not exists (select 1 from public.vat_book_entry where entry_id = (v->>'id')::uuid and book = 'issued' and tax_amount = 100) then
+    raise exception 'PRUEBA asiento 303 · 0: la venta de prueba no ha entrado en el libro de IVA.';
+  end if;
+end $$;
 do $$
 declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; p text; v jsonb; v_pagar uuid; v_otras uuid[] := '{}';
 begin
