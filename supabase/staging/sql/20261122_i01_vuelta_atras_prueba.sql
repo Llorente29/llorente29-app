@@ -107,6 +107,28 @@ do $$ begin
 end $$;
 
 -- ── 2 · Vuelta atrás ────────────────────────────────────────────────────────
+-- Con el I01b vivo en staging (desde el 18/10, la 0180 a la 0220), primero se
+-- deshace el I01b, como se haría en producción: bank_match_item.tax_return_id
+-- apunta a tax_return y, sin eso, la 0110 no puede quitar la tabla. Si staging
+-- ya tiene liquidaciones o pagos casados con una declaración, la vuelta atrás
+-- de la 0180 para (como debe) y la del I01a no se puede ensayar: se dice y se
+-- acaba aquí, sin tocar nada.
+select to_regprocedure('public.conta_impuesto_303_contabilizar(uuid)') is not null as hay_i01b \gset
+\if :hay_i01b
+select exists (select 1 from public.journal_entry e where e.source_type = 'vat_settlement' and exists (select 1 from public.tax_return r where r.id = e.source_id))
+    or exists (select 1 from public.bank_match_item where tax_return_id is not null) as i01b_con_datos \gset
+\if :i01b_con_datos
+\echo '>>> PRUEBA vuelta atrás I01a: staging tiene liquidaciones del I01b; la vuelta atrás de la 0180 para, como debe, y la del I01a no se ensaya. ROLLBACK: no queda nada.'
+rollback;
+\q
+\endif
+\echo '>>> PRUEBA vuelta atrás I01a: primero se deshace el I01b (0220 a 0180).'
+\i supabase/vuelta-atras/20261122T0220_i01b_certificados.down.sql
+\i supabase/vuelta-atras/20261122T0210_i01b_presentados.down.sql
+\i supabase/vuelta-atras/20261122T0200_i01b_declaracion.down.sql
+\i supabase/vuelta-atras/20261122T0190_i01b_calendario.down.sql
+\i supabase/vuelta-atras/20261122T0180_i01b_asiento_303.down.sql
+\endif
 \i supabase/vuelta-atras/20261122T0150_i01_presentar.down.sql
 \i supabase/vuelta-atras/20261122T0140_i01_calculo_303.down.sql
 \i supabase/vuelta-atras/20261122T0130_i01_certificados.down.sql

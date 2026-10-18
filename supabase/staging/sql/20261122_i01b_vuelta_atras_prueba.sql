@@ -45,6 +45,22 @@ select to_regclass('public.conta_eje_analitico') is null as falta_s01_0130 \gset
 \i supabase/migrations/20261121T0140_s01_regla5_eje_local.sql
 
 
+-- Con la 0180 viva en staging (desde el 18/10), las huellas de «antes» se toman
+-- sin ella: primero se deshace aquí dentro. Si staging ya tiene liquidaciones o
+-- pagos casados con una declaración, la vuelta atrás para (como debe): se dice
+-- y se acaba, sin tocar nada.
+select to_regprocedure('public.conta_impuesto_303_contabilizar(uuid)') is not null as viva_0180 \gset
+\if :viva_0180
+select exists (select 1 from public.journal_entry e where e.source_type = 'vat_settlement' and exists (select 1 from public.tax_return r where r.id = e.source_id))
+    or exists (select 1 from public.bank_match_item where tax_return_id is not null) as con_datos_0180 \gset
+\if :con_datos_0180
+\echo '>>> PRUEBA vuelta atrás I01b: staging tiene liquidaciones o pagos casados; la vuelta atrás de la 0180 para, como debe. No se ensaya. ROLLBACK: no queda nada.'
+rollback;
+\q
+\endif
+\echo '>>> PRUEBA vuelta atrás I01b: la 0180 está viva en staging; se deshace aquí dentro para tomar las huellas de antes.'
+\i supabase/vuelta-atras/20261122T0180_i01b_asiento_303.down.sql
+\endif
 create temporary table _h (k text primary key, antes text, despues text) on commit drop;
 insert into _h (k, antes) values
   ('motivos', md5(pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure))),

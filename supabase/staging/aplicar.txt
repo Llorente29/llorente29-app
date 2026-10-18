@@ -21,6 +21,17 @@ supabase/migrations/20261122T0120_i01_obligaciones.sql
 supabase/migrations/20261122T0130_i01_certificados.sql
 supabase/migrations/20261122T0140_i01_calculo_303.sql
 supabase/migrations/20261122T0150_i01_presentar.sql
+#   La 0180 (el asiento de liquidación y casar el cargo) DE VERDAD desde el
+#   18/10 (decisión del frente, con permiso de Julio: «elige lo mejor para el
+#   desarrollo»): sin ella la e2e no puede contabilizar ni casar, y presentar
+#   con el doble acabaría en «sin contabilizar». Cambia en caliente, pero solo
+#   para lo suyo: la excepción de conta_motivos_para_validar es solo para la
+#   liquidación de un 303; el CHECK y la columna nueva de bank_match_item
+#   solo amplían; los dos disparadores solo despiertan al deshacer un casado o
+#   anular una liquidación. Se puede volver a pasar. Su prueba (arriba) y su
+#   vuelta atrás la vuelven a cargar dentro de su transacción. La vuelta atrás
+#   del I01a deshace antes el I01b.
+supabase/migrations/20261122T0180_i01b_asiento_303.sql
 #   P1, el calendario: la 0190 se aplica DE VERDAD (solo añade tres funciones
 #   que leen; la pantalla de Impuestos la necesita en staging) y después su
 #   prueba: como A y como B, y su vuelta atrás dentro (y otra vez delante).
