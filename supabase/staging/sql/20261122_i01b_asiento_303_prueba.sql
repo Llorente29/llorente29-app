@@ -18,9 +18,10 @@
 --      del pago validado (4750 contra el banco). Uno por otro importe, no.
 --   4. Deshacer el casado en Bancos: vuelve a «Contabilizado», sin casado.
 --   5. Anular el asiento de liquidación: vuelve a «Presentado» (su
---      contraasiento se valida); se contabiliza otra vez.
---   6. Con el mes del fin del periodo cerrado, la liquidación va al primer
---      día abierto y lo dice; si sale a compensar, «A compensar».
+--      contraasiento se valida). Con el mes del fin del periodo cerrado, se
+--      contabiliza otra vez al primer día abierto, y lo dice.
+--   6. El 4T, a compensar: 477 y 472 por sus casillas, el resultado al debe
+--      de la 4700, y «A compensar» (pasando por «Contabilizado»).
 --   7. Una casilla que el asiento no sabe llevar ([68]): no se contabiliza y
 --      dice cuál.
 
@@ -78,7 +79,8 @@ begin
     raise exception 'PRUEBA asiento 303 · 0: A no tiene en su libro el tipo del 10 %% con que se apunta la venta de prueba.';
   end if;
   v := public.journal_entry_proponer(v_a,
-    jsonb_build_object('fecha', '2026-08-31', 'series', 1, 'concepto', 'PRUEBA I01b venta del 3T', 'source_type', 'manual', 'documento', 'PRUEBA-I01B-1'),
+    jsonb_build_object('fecha', '2026-08-31', 'series', 1, 'concepto', 'PRUEBA I01b venta del 3T', 'source_type', 'manual', 'documento', 'PRUEBA-I01B-1',
+                       'confianza', 'seguro', 'porque', 'PRUEBA I01b: la venta del 3T que hace salir el 303 a pagar'),
     jsonb_build_array(
       jsonb_build_object('cuenta', '43000000', 'debe', 1100, 'haber', 0, 'comun', true),
       jsonb_build_object('cuenta', '70000000', 'debe', 0, 'haber', 1000, 'comun', true),
@@ -90,16 +92,19 @@ begin
   end if;
 end $$;
 do $$
-declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; p text; v jsonb; v_pagar uuid; v_otras uuid[] := '{}';
+declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; p text; v jsonb; v_pagar uuid; v_compensar uuid; v_otra uuid;
 begin
   foreach p in array array['1T', '2T', '3T', '4T'] loop
     v := public.conta_impuesto_303_calcular(v_a, 2026, p);
     raise notice 'PRUEBA asiento 303 · 0: % sale %, %.', p, v->>'resultado', v->>'importe';
     if v_pagar is null and v->>'resultado' = 'to_pay' then v_pagar := (v->>'declaracion')::uuid;
-    else v_otras := v_otras || (v->>'declaracion')::uuid; end if;
+    elsif v_compensar is null and v->>'resultado' = 'to_offset' then v_compensar := (v->>'declaracion')::uuid;
+    elsif v_otra is null then v_otra := (v->>'declaracion')::uuid; end if;
   end loop;
-  if v_pagar is null then raise exception 'PRUEBA asiento 303 · 0: ningún 303 de A en 2026 sale a pagar: la prueba del pago no tiene con qué.'; end if;
-  insert into _p values ('pagar', v_pagar::text), ('otra1', v_otras[1]::text), ('otra2', v_otras[2]::text);
+  if v_pagar is null or v_compensar is null or v_otra is null then
+    raise exception 'PRUEBA asiento 303 · 0: hace falta un 303 a pagar, uno a compensar y otro (a pagar %, a compensar %, otro %).', v_pagar, v_compensar, v_otra;
+  end if;
+  insert into _p values ('pagar', v_pagar::text), ('compensar', v_compensar::text), ('otra', v_otra::text);
 end $$;
 
 -- ── 1 · La validación sigue pidiendo tipo a los demás ──────────────────────
@@ -109,7 +114,8 @@ begin
   foreach v_m in array array['manual', 'vat_settlement'] loop
     v := public.journal_entry_proponer(v_a,
       jsonb_build_object('fecha', '2026-11-30', 'series', 4, 'concepto', 'PRUEBA I01b sin tipo', 'source_type', v_m,
-                         'source_id', case when v_m = 'vat_settlement' then gen_random_uuid() end),
+                         'source_id', case when v_m = 'vat_settlement' then gen_random_uuid() end,
+                         'confianza', 'seguro', 'porque', 'PRUEBA I01b: 477 sin tipo'),
       '[{"cuenta":"47700000","debe":10,"haber":0,"comun":true},{"cuenta":"47500000","debe":0,"haber":10,"comun":true}]'::jsonb);
     v_e := (v->>'id')::uuid;
     if not exists (select 1 from public.conta_motivos_para_validar(v_e) m where m.codigo = 'apuntes' and m.motivo like '%un apunte de IVA lleva base, tipo y libro registro%') then
@@ -133,7 +139,7 @@ set local role service_role;
 do $$
 declare v_u constant uuid := 'c01a0000-0000-4000-8000-0000000000a1'; k text; n int := 0;
 begin
-  foreach k in array array['pagar', 'otra1', 'otra2'] loop
+  foreach k in array array['pagar', 'compensar', 'otra'] loop
     n := n + 1;
     if (select val from _p where _p.k = k) is not null then
       perform public.conta_impuesto_fuera((select val::uuid from _p where _p.k = k), v_u, 'PRUEBAI01BCSV00' || n, false, null, null, null);
@@ -240,7 +246,7 @@ begin
   raise notice 'PRUEBA asiento 303 · 4: deshecho, vuelve a «%».', public.conta_impuesto_estado_texto(r.status);
 end $$;
 
--- ── 5 · Anular la liquidación ───────────────────────────────────────────────
+-- ── 5 · Anular la liquidación; con su mes cerrado, al primer día abierto ────
 do $$
 declare v_r uuid := (select val::uuid from _p where k = 'pagar'); v_e uuid := (select val::uuid from _p where k = 'liquidacion'); v jsonb; r public.tax_return;
 begin
@@ -250,21 +256,13 @@ begin
      or (select status from public.journal_entry where id = (v->>'contraasiento')::uuid) <> 'validado' then
     raise exception 'PRUEBA asiento 303 · 5: anular deja «%», %.', r.status, v;
   end if;
-  v := public.conta_impuesto_303_contabilizar(v_r);
-  select * into r from public.tax_return where id = v_r;
-  if r.status <> 'booked' or r.liquidation_entry_id is null or r.liquidation_entry_id = v_e then
-    raise exception 'PRUEBA asiento 303 · 5: no se vuelve a contabilizar: %.', v;
-  end if;
-  raise notice 'PRUEBA asiento 303 · 5: anulada y vuelta a contabilizar: «%»', v->>'mensaje';
+  raise notice 'PRUEBA asiento 303 · 5: anulada, vuelve a «%».', public.conta_impuesto_estado_texto(r.status);
 end $$;
-
--- ── 6 · Mes cerrado; a compensar ────────────────────────────────────────────
 reset role;
 do $$
-declare v_r uuid := (select val::uuid from _p where k = 'otra1'); r public.tax_return; v_hasta date;
+declare r public.tax_return; v_hasta date;
 begin
-  if v_r is null then raise notice 'PRUEBA asiento 303 · 6: no hay otro 303.'; return; end if;
-  select * into r from public.tax_return where id = v_r;
+  select * into r from public.tax_return where id = (select val::uuid from _p where k = 'pagar');
   select hasta into v_hasta from public.conta_impuesto_periodo_fechas(r.fiscal_year, r.period);
   insert into public.fiscal_period_lock (account_id, company_id, fiscal_year_id, month, kind)
   select r.account_id, r.company_id, y.id, date_trunc('month', v_hasta)::date, 'manual'
@@ -272,30 +270,48 @@ begin
 end $$;
 set local role authenticated;
 do $$
-declare v_r uuid := (select val::uuid from _p where k = 'otra1'); v jsonb; r public.tax_return; e public.journal_entry; v_hasta date;
+declare v_r uuid := (select val::uuid from _p where k = 'pagar'); v_viejo uuid := (select val::uuid from _p where k = 'liquidacion');
+        v jsonb; r public.tax_return; e public.journal_entry; v_hasta date;
 begin
-  if v_r is null then return; end if;
   v := public.conta_impuesto_303_contabilizar(v_r);
   select * into r from public.tax_return where id = v_r;
+  select * into e from public.journal_entry where id = r.liquidation_entry_id;
   select hasta into v_hasta from public.conta_impuesto_periodo_fechas(r.fiscal_year, r.period);
-  if r.liquidation_entry_id is null then
-    if r.status <> 'booked' or v->>'mensaje' not like 'Contabilizado. Este 303 no tiene IVA que saldar%' then
-      raise exception 'PRUEBA asiento 303 · 6: sin asiento y queda «%»: %.', r.status, v;
-    end if;
-  else
-    select * into e from public.journal_entry where id = r.liquidation_entry_id;
-    if e.status <> 'validado' or e.entry_date <= v_hasta or v->>'mensaje' not like '%Con fecha%no se puede apuntar%'
-       or r.status <> (array['booked', 'offset'])[(r.result_kind = 'to_offset')::int + 1] then
-      raise exception 'PRUEBA asiento 303 · 6: con el mes cerrado queda «%», asiento del % (fin %): %.', r.status, e.entry_date, v_hasta, v;
-    end if;
+  if r.status <> 'booked' or e.id is null or e.id = v_viejo or e.status <> 'validado'
+     or e.entry_date <> public.conta_primer_dia_abierto(r.company_id, v_hasta + 1)
+     or v->>'mensaje' not like '%Con fecha ' || to_char(e.entry_date, 'DD/MM/YYYY') || ': el ' || to_char(v_hasta, 'DD/MM/YYYY') || ' no se puede apuntar%' then
+    raise exception 'PRUEBA asiento 303 · 5: con el mes cerrado queda «%», asiento del % (fin %): %.', r.status, e.entry_date, v_hasta, v;
   end if;
-  raise notice 'PRUEBA asiento 303 · 6: % (%): «%»', r.period, public.conta_impuesto_estado_texto(r.status), v->>'mensaje';
+  raise notice 'PRUEBA asiento 303 · 5: «%»', v->>'mensaje';
+end $$;
+
+-- ── 6 · A compensar ─────────────────────────────────────────────────────────
+do $$
+declare v_r uuid := (select val::uuid from _p where k = 'compensar'); v jsonb; r public.tax_return; e public.journal_entry;
+        v27 numeric; v45 numeric; v71 numeric; d477 numeric; h472 numeric; d4700 numeric; v_debe numeric; v_haber numeric;
+begin
+  v := public.conta_impuesto_303_contabilizar(v_r);
+  select * into r from public.tax_return where id = v_r;
+  select * into e from public.journal_entry where id = r.liquidation_entry_id;
+  select max(value) filter (where box = '27'), max(value) filter (where box = '45'), max(value) filter (where box = '71')
+    into v27, v45, v71 from public.tax_return_box where tax_return_id = v_r;
+  select sum(l.debit - l.credit) filter (where ca.template_code like '477%'), sum(l.credit - l.debit) filter (where ca.template_code like '472%'),
+         sum(l.debit - l.credit) filter (where ca.template_code = '4700'), sum(l.debit), sum(l.credit)
+    into d477, h472, d4700, v_debe, v_haber
+    from public.journal_line l join public.company_account ca on ca.id = l.company_account_id where l.entry_id = e.id;
+  if r.status <> 'offset' or e.status <> 'validado' or v_debe <> v_haber or v71 >= 0
+     or coalesce(d477, 0) <> v27 or coalesce(h472, 0) <> v45 or coalesce(d4700, 0) <> -v71
+     or not exists (select 1 from public.tax_return_event where tax_return_id = v_r and kind = 'status' and to_status = 'booked') then
+    raise exception 'PRUEBA asiento 303 · 6: queda «%», 477 % de %, 472 % de %, 4700 % de %, Debe % Haber %.',
+      r.status, d477, v27, h472, v45, d4700, v71, v_debe, v_haber;
+  end if;
+  raise notice 'PRUEBA asiento 303 · 6: % «%»: «%»', r.period, public.conta_impuesto_estado_texto(r.status), v->>'mensaje';
 end $$;
 
 -- ── 7 · Una casilla que no sabe llevar ──────────────────────────────────────
 reset role;
 do $$
-declare v_r uuid := (select val::uuid from _p where k = 'otra2');
+declare v_r uuid := (select val::uuid from _p where k = 'otra');
 begin
   if v_r is null then return; end if;
   insert into public.tax_return_box (tax_return_id, account_id, company_id, box, value, origin, manual_reason)
@@ -304,7 +320,7 @@ begin
 end $$;
 set local role authenticated;
 do $$
-declare v_r uuid := (select val::uuid from _p where k = 'otra2');
+declare v_r uuid := (select val::uuid from _p where k = 'otra');
 begin
   if v_r is null then raise notice 'PRUEBA asiento 303 · 7: no hay un tercer 303.'; return; end if;
   perform public.conta_impuesto_303_contabilizar(v_r);
