@@ -54,6 +54,9 @@ begin
   if (c->'presentados'->>'ano')::int <> 2026 or (c->'presentados'->>'presentados')::int > (c->'presentados'->>'vencidos')::int then
     raise exception 'PRUEBA calendario · 1: los presentados salen %.', c->'presentados';
   end if;
+  if jsonb_typeof(c->'pagos_sin_llegar') <> 'array' or not (c ? 'certificado') then
+    raise exception 'PRUEBA calendario · 1: faltan los avisos de Inicio (certificado, pagos sin llegar).';
+  end if;
   raise notice 'PRUEBA calendario · 1: % filas en octubre, % plazos después, presentados %.',
     jsonb_array_length(c->'filas'), jsonb_array_length(c->'siguiente'), c->'presentados';
 end $$;

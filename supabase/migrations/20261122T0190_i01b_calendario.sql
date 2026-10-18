@@ -12,7 +12,10 @@
 --         (estado, resultado, avisos y si cuadra) y cómo se paga;
 --       · lo siguiente: los plazos de después de la ventana;
 --       · los presentados del año;
---       · por qué le sale cada modelo y los que no le salen.
+--       · por qué le sale cada modelo y los que no le salen;
+--       · para los avisos de Inicio: el certificado con que presenta (su
+--         caducidad) y lo presentado a pagar cuyo cargo no ha llegado al banco
+--         dos días después del plazo.
 --     No escribe nada. Lo ve quien puede ver los impuestos de la empresa
 --     (conta_impuesto_puede_ver: su cuenta, o su asesoría con consentimiento).
 --
@@ -150,6 +153,17 @@ begin
 
   return jsonb_build_object(
     'hoy', v_hoy, 'ventana', v_ventana, 'desde', v_desde,
+    -- Para los avisos de Inicio: el certificado con que presenta la empresa (su caducidad)…
+    'certificado', (select jsonb_build_object('titular', t.subject_name, 'caduca', t.valid_to)
+                      from public.company_tax_presenter pr join public.tax_certificate t on t.id = pr.certificate_id
+                     where pr.company_id = p_company and pr.mode = 'company' and t.status <> 'removed'),
+    -- …y lo presentado a pagar cuyo cargo no ha llegado al banco dos días después del plazo (respuesta 5 de Julio).
+    'pagos_sin_llegar', (select coalesce(jsonb_agg(jsonb_build_object('declaracion', r.id, 'modelo', r.form_code, 'ejercicio', r.fiscal_year,
+                                                                      'periodo', r.period, 'importe', r.amount, 'plazo', r.due_date,
+                                                                      'domicilia', r.payment_mode = 'direct_debit') order by r.due_date), '[]')
+                           from public.tax_return r
+                          where r.company_id = p_company and r.status in ('filed', 'booked') and r.result_kind = 'to_pay'
+                            and r.bank_match_id is null and r.due_date < v_hoy - 2 and r.due_date > v_hoy - 400),
     'puede_gestionar', public.conta_impuesto_puede_gestionar(p_company),
     'filas', v_filas, 'siguiente', v_siguiente, 'presentados', v_pres,
     'modelos', v_reglas, 'no_presenta', v_no,

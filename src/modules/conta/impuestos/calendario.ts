@@ -68,6 +68,10 @@ export interface Calendario {
   modelos: ModeloLista[]
   no_presenta: ModeloLista[]
   se_pueden_anadir: { modelo: string; nombre: string }[]
+  /** El certificado con que presenta la empresa (para el aviso de caducidad de Inicio). */
+  certificado: { titular: string; caduca: string } | null
+  /** Lo presentado a pagar cuyo cargo no ha llegado al banco dos días después del plazo. */
+  pagos_sin_llegar: { declaracion: string; modelo: string; ejercicio: number; periodo: string; importe: number; plazo: string; domicilia: boolean }[]
 }
 
 // ── Palabras ────────────────────────────────────────────────────────────────

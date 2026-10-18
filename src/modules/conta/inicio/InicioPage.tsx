@@ -30,16 +30,19 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaCompras, rutaLibroDiario, rutaLibros, rutaMayor, rutaNuevoAsiento, rutaRecibidaEnAsientos, rutaTerceros } from '@/config/navegacion'
+import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaMayor, rutaNuevoAsiento, rutaRecibidaEnAsientos, rutaTerceros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu, refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { cargarIa, responderSugerencia } from '@/modules/conta/services/iaService'
 import { hechoAlAceptar, type Sugerencia } from '@/modules/conta/ia/tipos'
 import { subcuentasSinNombre } from '@/modules/conta/services/pasosDiezService'
-import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, perfilFiscal, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
-import { avisosDeImpuestos, frasePlazo, type PerfilFiscal } from '@/modules/conta/lib/plazosImpuestos'
+import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
+import { avisosInicio } from '@/modules/conta/impuestos/avisosInicio'
+import type { Calendario } from '@/modules/conta/impuestos/calendario'
+import { leerCalendario } from '@/modules/conta/services/impuestosService'
 import { PorNivel } from '@/modules/conta/textos/PorNivel'
+import { useNivel } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMes, euros, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
   barras, cambio, diaDeHoy, dudas, frasePago, lineasIva, textoIva, horaEnMadrid, mesYAnio, mesesHasta, primerNombre, resumenDudas, saludo, type PuntoMes,
@@ -97,7 +100,7 @@ export default function InicioPage() {
       <div className="cxi-cuerpo">
         <Dudas accountId={accountId} companyId={activa.id} />
         <div className="cxi-columna">
-          <Impuestos companyId={activa.id} hoy={hoy} />
+          <Impuestos companyId={activa.id} />
           <HechoYo companyId={activa.id} hoy={hoy} />
           <Cierre accountId={accountId} companyId={activa.id} mes={mesAnterior(mesActual)} />
         </div>
@@ -298,42 +301,42 @@ function Dudas({ accountId, companyId }: { accountId: string; companyId: string 
   )
 }
 
-// ── Los impuestos que vienen (S01, paso 4) ─────────────────────────────────
+// ── Los impuestos que vienen (S01, paso 4; I01b, punto 7) ──────────────────
 
 /**
- * Lo que toca presentar a Hacienda, con sus dos plazos: domiciliando el pago,
- * hasta el 15 (en enero, el 25 de lo que acaba el 30); si no, hasta el 20. De
- * los modelos de la empresa (los del alta). Pasado el día de domiciliar, lo dice
- * en ámbar: aún se puede presentar, pero ya no domiciliado.
+ * I01b · De conta_impuesto_calendario (los festivos de verdad y lo ya
+ * presentado): el plazo que toca de cada modelo sin presentar en los próximos
+ * 15 días (el de domiciliar si se domicilia), el certificado solo si caduca en
+ * 30 días o en 7, y el cargo de lo presentado que no ha llegado al banco
+ * (impuestos/avisosInicio.ts). Cada aviso lleva a su sitio.
  */
-function Impuestos({ companyId, hoy }: { companyId: string; hoy: string }) {
-  const [p, reintentar] = useCarga<PerfilFiscal | null>(() => perfilFiscal(companyId), `${companyId}|perfil`)
-  const avisos = p.estado === 'listo' && p.v ? avisosDeImpuestos(p.v, hoy) : []
+function Impuestos({ companyId }: { companyId: string }) {
+  const nivel = useNivel()
+  const [c, reintentar] = useCarga<Calendario>(() => leerCalendario(companyId), `${companyId}|calendario`)
+  const avisos = c.estado === 'listo' ? avisosInicio(c.v, nivel) : []
   return (
     <section className="cxi-seccion" aria-labelledby="cxi-impuestos">
       <div className="cxi-seccion-cabeza">
         <h2 id="cxi-impuestos" className="cxi-seccion-titulo" style={{ fontSize: 18 }}><PorNivel clave="inicio.impuestos" /></h2>
-        {p.estado === 'listo' && p.v && <span className="cxi-seccion-apoyo">{avisos.length ? `${avisos.length} ${avisos.length === 1 ? 'modelo' : 'modelos'}` : 'nada en 15 días'}</span>}
+        {c.estado === 'listo' && <span className="cxi-seccion-apoyo">{avisos.length ? `${avisos.length} ${avisos.length === 1 ? 'aviso' : 'avisos'}` : 'nada en 15 días'}</span>}
       </div>
-      {p.estado === 'cargando' && <Hueso ancho={200} />}
-      {p.estado === 'fallo' && <ErrorConReintento mensaje={p.texto} reintentar={reintentar} />}
-      {p.estado === 'listo' && !p.v && (
+      {c.estado === 'cargando' && <Hueso ancho={200} />}
+      {c.estado === 'fallo' && <ErrorConReintento mensaje={c.texto} reintentar={reintentar} />}
+      {c.estado === 'listo' && c.v.modelos.length === 0 && (
         <p className="cxi-nada">Aún no sé qué modelos presentas: se deciden con tu empresa. <Link to={rutaApartadoEmpresa('impuestos')}>Decírmelo</Link></p>
       )}
-      {p.estado === 'listo' && p.v && avisos.length === 0 && <p className="cxi-nada">En los próximos 15 días no toca presentar nada.</p>}
-      {avisos.map((a) => {
-        const tarde = a.domiciliado !== null && hoy > a.domiciliado
-        return (
-          <div key={`${a.modelo}:${a.hasta}`} className="cxi-impuesto">
-            <span className="cxi-impuesto-modelo">{a.modelo}</span>
-            <span className="cxi-duda-texto">
-              <span className="cxi-duda-titulo">{a.que}</span>
-              <span className={`cxi-duda-apoyo${tarde ? ' cxt-ambar' : ''}`}>{frasePlazo(a, hoy)}</span>
-            </span>
-          </div>
-        )
-      })}
-      {avisos.length > 0 && <p className="cx-ayuda" style={{ margin: 0 }}>Si el último día cae en fin de semana, cuento el lunes; los festivos aún no los cuento.</p>}
+      {c.estado === 'listo' && c.v.modelos.length > 0 && avisos.length === 0 && (
+        <p className="cxi-nada">En los próximos 15 días no toca presentar nada. <Link to={rutaImpuestos()}>Ver el calendario</Link></p>
+      )}
+      {avisos.map((a) => (
+        <Link key={a.clave} to={a.a} className="cxi-impuesto">
+          <span className="cxi-impuesto-modelo">{a.modelo ?? 'cert.'}</span>
+          <span className="cxi-duda-texto">
+            <span className="cxi-duda-titulo">{a.titulo}</span>
+            <span className={`cxi-duda-apoyo${a.tono !== 'neutro' ? ' cxt-ambar' : ''}`}>{a.apoyo}</span>
+          </span>
+        </Link>
+      ))}
     </section>
   )
 }

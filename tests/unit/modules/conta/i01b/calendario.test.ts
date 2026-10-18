@@ -27,7 +27,7 @@ const OCTUBRE = [fila('111', 'quarterly', '3T'), fila('115', 'quarterly', '3T'),
 const cal = (filas: FilaCalendario[], o: Partial<Calendario> = {}): Calendario => ({
   hoy: '2026-10-18', ventana: '2026-10-01', desde: '2026-10-18', puede_gestionar: true, filas, siguiente: [],
   presentados: { ano: 2026, desde: '2026-10-18', vencidos: 0, presentados: 0, en_plazo: 0, contabilizados: 0 },
-  modelos: [], no_presenta: [], se_pueden_anadir: [], ...o,
+  modelos: [], no_presenta: [], se_pueden_anadir: [], certificado: null, pagos_sin_llegar: [], ...o,
 })
 
 describe('las palabras: cambian con el nivel, no el sitio', () => {
