@@ -99,11 +99,11 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
     if (filas > 0) {
       const inicio = menu.getByRole('link', { name: 'Inicio', exact: true })
       await expect(inicio).toHaveAccessibleDescription(/^\d+ por revisar$/)
-      const total = Number((await inicio.locator('.s-barra-destacado').textContent())!.split(' ')[0])
+      const total = Number((await inicio.locator('.s-barra-chip').textContent())!.trim())
       expect(total).toBeGreaterThanOrEqual(filas)
     }
     // Ventas ya no está: la sustituye Facturación (S01), que sale cuando tenga pantalla.
-    await expect(menu.locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await expect(menu.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()

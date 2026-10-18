@@ -234,27 +234,24 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     // El texto de cada entrada (sin el número de lo que hay por mirar, que va aparte).
     // S01: los productos del esqueleto; lo que no tiene pantalla no sale (ni Impuestos ni Facturación).
-    await expect(menu.locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await expect(menu.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   } else {
-    const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
-    await expect(barra.getByRole('link', { name: 'Inicio' })).toBeVisible()
-    await expect(barra.getByRole('link', { name: 'Contabilidad' })).toBeVisible()
-    await expect(barra.getByRole('button', { name: /Preguntar/ })).toHaveCount(0)
+    // S01c: en el móvil, el menú es un cajón que abre «Abrir el menú» de la cabecera.
+    await expect(page.getByRole('button', { name: /Preguntar/ })).toHaveCount(0)
   }
   await sinFolvy(page, 'el Inicio')
   await capturar(page, 'inicio')
 
-  // C06, respuesta 2: en el móvil, «Más» abre el menú entero con lo que
-  // funciona (la barra solo tiene sitio para Inicio y Ajustes hoy).
+  // C06, respuesta 2 (S01c: ya no es «Más» abajo, es el cajón): en el móvil,
+  // el menú entero con lo que funciona y sin «Volver a Folvy» (producto solo).
   if (lado(page) === 'movil') {
-    const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
-    await barra.getByRole('button', { name: 'Más' }).click()
+    await page.getByRole('button', { name: 'Abrir el menú' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
-    await expect(hoja.getByRole('link')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
-    await sinFolvy(page, 'el menú «Más»')
+    await expect(hoja.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await sinFolvy(page, 'el menú')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/mas-movil.png` })
-    await hoja.getByRole('link', { name: 'Contabilidad' }).click()
+    await hoja.getByRole('link', { name: /^Contabilidad/ }).click()
     await expect(page).toHaveURL(/\/conta\/libros/)
     await expect(hoja).toHaveCount(0)
   }

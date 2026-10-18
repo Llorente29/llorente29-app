@@ -167,6 +167,8 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
     const fila = (c: ConceptoConUso) => {
       const abiertaEsta = abierta === c.fila.id
       const cifra = def.columnas[0]?.valor(c.fila, ctx)
+      // Lo largo (un IBAN) va en su línea, debajo del nombre: al lado no cabe.
+      const debajo = Boolean(cifra && def.columnas[0].cifra && def.columnas[0].lineaPropiaEnMovil)
       return (
         <div key={c.fila.id} className={abiertaEsta ? 'cx-tablas-movil-abierta' : undefined}>
           <button type="button" className="cx-lista-fila" aria-expanded={abiertaEsta} aria-controls={`det-${c.fila.id}`}
@@ -174,9 +176,10 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
             <Inicial texto={def.inicial(c.fila)} tono={def.tono?.(c.fila)} />
             <span className="cx-lista-fila-texto">
               <span className="cx-lista-fila-titulo">{def.tituloFila(c.fila)}</span>
+              {debajo && <span className="cx-cifra cx-lista-fila-linea">{cifra}</span>}
               <span className="cx-lista-fila-apoyo">{abiertaEsta ? def.apoyoFila(c.fila) ?? c.uso.donde : etiquetaMovil(c, def, ctx.hoy)}</span>
             </span>
-            {cifra && def.columnas[0].cifra && <span className="cx-cifra" style={{ fontSize: 17 }}>{cifra}</span>}
+            {cifra && def.columnas[0].cifra && !debajo && <span className="cx-cifra" style={{ fontSize: 17 }}>{cifra}</span>}
             {!abiertaEsta && <span className="cx-flecha" aria-hidden="true">›</span>}
           </button>
           {abiertaEsta && <div id={`det-${c.fila.id}`}>{detalle(c)}</div>}

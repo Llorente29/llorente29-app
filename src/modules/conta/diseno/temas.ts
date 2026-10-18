@@ -35,8 +35,9 @@ export interface TemaDiseno {
   barraTexto: string
   barraActivo: string
   barraActivoTexto: string
-  /** «7 por revisar» debajo de Inicio. */
+  /** El chip de lo que pide una decisión en la barra (S01c): su fondo y su número. */
   barraDestacado: string
+  barraDestacadoTexto: string
   /** Fondo de la píldora neutra. */
   neutroFondo: string
   /** Lo seguro / hecho. */
@@ -63,6 +64,8 @@ export const TEMAS_DISENO: Partial<Record<IdMarca, TemaDiseno>> = {
     barraActivo: '#172E52',
     barraActivoTexto: '#FFFFFF',
     barraDestacado: '#00D1B2',
+    // El turquesa, solo de fondo y con texto oscuro encima (identidad del 14/10).
+    barraDestacadoTexto: '#0B1F3B',
     neutroFondo: '#EAF2F8',
     ok: '#0B6B58',
     okFondo: '#E3F8F3',
@@ -104,6 +107,7 @@ export function variablesDeMarca(m: Marca): Record<string, string> | null {
       '--s-barra-activo': d.barraActivo,
       '--s-barra-activo-texto': d.barraActivoTexto,
       '--s-barra-destacado': d.barraDestacado,
+      '--s-barra-destacado-texto': d.barraDestacadoTexto,
       '--s-neutro-fondo': d.neutroFondo,
       '--s-ok': d.ok,
       '--s-ok-fondo': d.okFondo,

@@ -49,8 +49,16 @@ export interface Marca {
   inicial: string
   /** Color del logo cuadrado. */
   colorLogo: string
-  /** El isotipo dibujado (SVG, ruta del sitio). Null: el cuadrado con la inicial. */
+  /** El símbolo dibujado (SVG, ruta del sitio). Null: el cuadrado con la inicial. */
   logo: string | null
+  /**
+   * S01c (identidad del 14/10): el logo horizontal, símbolo y nombre en un solo
+   * fichero, para fondo claro (la cabecera del móvil). Null: el símbolo y el
+   * nombre escrito.
+   */
+  logoHorizontal: string | null
+  /** El mismo en blanco, para fondo oscuro (la barra de productos). */
+  logoHorizontalBlanco: string | null
   /** Colores y letra propios. Null: el estilo nuevo tal cual (azul #2F5BFF, Geist). */
   tema: TemaMarca | null
   /** Dominios por los que se entra con esta marca. Vacío: aún no tiene. */
@@ -102,6 +110,8 @@ export const MARCAS: Record<IdMarca, Marca> = {
     inicial: 'F',
     colorLogo: '#15171A',
     logo: null,
+    logoHorizontal: null,
+    logoHorizontalBlanco: null,
     tema: null,
     dominios: ['app.folvy.app', 'foodint.folvy.app', 'folvy-app.vercel.app'],
     direccionVisible: 'app.folvy.app',
@@ -133,6 +143,8 @@ export const MARCAS: Record<IdMarca, Marca> = {
     inicial: 'C',
     colorLogo: '#2F5BFF',
     logo: null,
+    logoHorizontal: null,
+    logoHorizontalBlanco: null,
     tema: null,
     dominios: [],
     direccionVisible: null,
@@ -179,7 +191,10 @@ export const MARCAS: Record<IdMarca, Marca> = {
     nombre: 'Sumied',
     inicial: 'S',
     colorLogo: '#0B1F3B',
-    logo: '/marcas/sumied/isotipo.svg',
+    // Los ficheros de la identidad del 14/10 (S01c, 18/10).
+    logo: '/marcas/sumied/sumied-simbolo.svg',
+    logoHorizontal: '/marcas/sumied/sumied-logo-horizontal.svg',
+    logoHorizontalBlanco: '/marcas/sumied/sumied-logo-horizontal-blanco.svg',
     tema: {
       tinta: '#0B1F3B',
       apoyo: '#4A5B73',

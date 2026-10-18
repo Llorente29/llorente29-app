@@ -37,7 +37,7 @@ import { useCuentasMenu, refrescarCuentasMenu } from '@/modules/conta/marco/useC
 import { cargarIa, responderSugerencia } from '@/modules/conta/services/iaService'
 import { hechoAlAceptar, type Sugerencia } from '@/modules/conta/ia/tipos'
 import { subcuentasSinNombre } from '@/modules/conta/services/pasosDiezService'
-import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, perfilFiscal, proximoPago, puntosDeSaldo, recibidasParaRevisar, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
+import { ayerEnMadrid, cierreDelMes, hechoDesdeAyer, ivaDelTrimestre, ivaPorMes, perfilFiscal, proximoPago, puntosDeSaldo, type HechoDesdeAyer } from '@/modules/conta/services/inicioService'
 import { avisosDeImpuestos, frasePlazo, type PerfilFiscal } from '@/modules/conta/lib/plazosImpuestos'
 import { PorNivel } from '@/modules/conta/textos/PorNivel'
 import { diaMes, euros, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -242,12 +242,11 @@ function Dudas({ accountId, companyId }: { accountId: string; companyId: string 
   const cuentas = useCuentasMenu()
   const [sinNombre] = useCarga<number>(() => subcuentasSinNombre(accountId, companyId), `${accountId}|${companyId}`)
   const [ia, recargar] = useCarga<Sugerencia[]>(() => cargarIa(companyId).then((r) => r.sugerencias), companyId)
-  const [recibidas] = useCarga<number>(() => recibidasParaRevisar(companyId, hoyEnMadrid()), `${companyId}|recibidas`)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const sugerencias = ia.estado === 'listo' ? ia.v : []
-  const lista = dudas(sugerencias, cuentas.compras ?? 0, cuentas.libros ?? 0, sinNombre.estado === 'listo' ? sinNombre.v : 0, recibidas.estado === 'listo' ? recibidas.v : 0)
+  const lista = dudas(sugerencias, cuentas.compras ?? 0, cuentas.libros ?? 0, sinNombre.estado === 'listo' ? sinNombre.v : 0, cuentas.recibidas ?? 0)
 
   async function responder(s: Sugerencia, acepta: boolean) {
     setOcupado(true); setHecho(null); setFallo(null)

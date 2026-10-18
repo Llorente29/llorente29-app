@@ -39,7 +39,7 @@ import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { eurosExactos, hoyEnMadrid, porcentaje } from '@/modules/conta/lib/formato'
 import {
-  VERES, ventanaParaRevisar, columnasDelApunte, comoLlego, filtrar, limites, lineaDiez, productoDeDocumentos, tonoDeLaFactura, vencimientoAEnsenar, verDe,
+  VERES, ventanaParaRevisar, columnasDelApunte, facturasEnOrden, comoLlego, limites, lineaDiez, productoDeDocumentos, tonoDeLaFactura, vencimientoAEnsenar, verDe,
 } from '@/modules/conta/documentos/documentos'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { MARCA } from '@/modules/conta/cuenta/marca'
@@ -80,7 +80,7 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   const lista = useLeer(fac?.company_id && (mes || enAsientos) ? async () => {
     const { desde, hasta } = enAsientos ? ventanaParaRevisar(hoyEnMadrid()) : limites(mes!)
     const d = await leerDocumentos(fac.company_id!, desde, hasta)
-    return filtrar(d.filas, ver).filter((x) => x.tipo === 'factura').map((x) => x.id)
+    return facturasEnOrden(d.filas, ver)
   } : null, `${fac?.company_id}:${mes}:${ver}:${vuelta}`)
   const ids = lista.datos ?? []
   const pos = ids.indexOf(invoiceId)

@@ -34,10 +34,10 @@ async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
-  // Nada flotante tapa contenido (respuesta 4). En el ordenador Bancos no tiene
-  // ninguna pieza flotante (sin la barra de «Muy pronto»): se comprueba que no esté.
-  if (await page.locator(FLOTANTES_CONTA.join(', ')).count() === 0) expect(lado(page)).toBe('ordenador')
-  else expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+  // Nada flotante tapa contenido (respuesta 4). Desde el S01c no flota nada ni
+  // en el ordenador (sin la barra de «Muy pronto») ni en el móvil (el menú es un
+  // cajón); si alguna pantalla vuelve a pintar una pieza flotante, se mide.
+  if (await page.locator(FLOTANTES_CONTA.join(', ')).count() > 0) expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 }
 
 /** Un importe cortado con «…» esconde lo que la pantalla existe para enseñar (respuesta 4: el cierre en el móvil decía «44.237,8…»). */

@@ -92,6 +92,18 @@ export function filtrar(filas: readonly FilaDocumento[], ver: Ver): FilaDocument
   return filas.filter((f) => ESTADO_DE[ver].includes(f.estado))
 }
 
+/**
+ * S01c · Las facturas de una vista, en el orden en que se recorren una a una
+ * (la última que llegó primero). La base ordena solo por la llegada, y con
+ * empates el orden cambia entre dos lecturas: la que abre «Recibida» y la que
+ * cuenta «1 de N» no eran la misma. El id desempata, igual en los dos sitios.
+ */
+export function facturasEnOrden(filas: readonly FilaDocumento[], ver: Ver): string[] {
+  return filtrar(filas, ver).filter((x) => x.tipo === 'factura')
+    .sort((a, b) => (a.llego === b.llego ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.llego < b.llego ? 1 : -1))
+    .map((x) => x.id)
+}
+
 const n = (x: number) => new Intl.NumberFormat('es-ES').format(x)
 const plural = (k: number, uno: string, varios: string) => `${n(k)} ${k === 1 ? uno : varios}`
 

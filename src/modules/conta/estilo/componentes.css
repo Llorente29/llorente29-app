@@ -331,6 +331,11 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 .cx-mas { width: 46px; height: 46px; padding: 0; font-size: 26px; flex-shrink: 0; }
 .cx .cx-lista > div + div { border-top: 1px solid var(--cx-linea); }
 .cx-lista-fila .cx-cifra { white-space: nowrap; flex-shrink: 0; }
+/* Lo largo (un IBAN) en su propia línea, debajo del nombre: parte por sus grupos de
+   cuatro y, si aún no cabe, por donde haga falta. Nada sale de la tarjeta (S01b, 390 px). */
+.cx-lista-fila .cx-lista-fila-linea { white-space: normal; overflow-wrap: anywhere; font-weight: 400; font-size: 14px; }
+.cx-lista-fila-titulo { overflow-wrap: break-word; }
+.cx-lista-fila .cx-flecha { flex-shrink: 0; }
 .cx-rejilla-fila .cx-cifra, .cx-rejilla-fila .cx-chip { white-space: nowrap; }
 
 /* ── Tu empresa (maquetas N2Empresa y M2Empresa) ──────────────────── */

@@ -2,17 +2,20 @@
 //
 // S01 · La cabecera: UNA fila de 48 px (Julio, respuesta 3 del 17/10; la
 // maqueta 1 con dos filas no vale):
-//   logotipo de la marca · logo y nombre del cliente con el cambio de empresa ·
-//   ejercicio y mes (solo en las pantallas que lo leen) · pestañas del producto
-//   (las que no caben, en «Más ▾») · «Buscar · Ctrl K» · Favoritos · usuario y
-//   su nivel.
-// En el móvil: la empresa, Buscar, Favoritos y el usuario; las pestañas, en
-// una fila que se desliza debajo.
+//   logo y nombre del cliente con el cambio de empresa · ejercicio y mes (solo
+//   en las pantallas que lo leen) · pestañas del producto (las que no caben,
+//   en «Más ▾») · «Buscar · Ctrl K» · Favoritos · usuario y su nivel.
+// S01c (18/10): el logo de la marca sale UNA vez: en el ordenador, arriba de
+// la barra de productos (no aquí); en el móvil, aquí, con el botón que abre el
+// cajón de productos. Y en el móvil el ejercicio y el mes van en su propia
+// fila, debajo: al lado del nombre de la empresa se montaban encima.
+// En el móvil: menú, logo, la empresa, Buscar, Favoritos y el usuario; las
+// pestañas, en una fila que se desliza debajo.
 
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { rutaAltaEmpresa, rutaConta } from '@/config/navegacion'
-import { LogoMarca } from '@/marca/PiezasMarca'
+import { LogoHorizontal } from '@/marca/PiezasMarca'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { Boton, Icono } from '@/modules/conta/diseno'
@@ -124,7 +127,7 @@ function Cliente({ logo, movil }: { logo: string | null; movil: boolean }) {
   )
 }
 
-export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente, huecoPeriodo, abrirBuscador, favoritos, usuario }: {
+export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente, huecoPeriodo, abrirBuscador, favoritos, usuario, abrirMenu, menuAbierto }: {
   producto: Producto | null
   /** Las pestañas que salen en la cabecera (vacío: ninguna). */
   pestanas: Pestana[]
@@ -135,15 +138,23 @@ export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente
   abrirBuscador: () => void
   favoritos: ReactNode
   usuario: ReactNode
+  /** En el móvil: abre el cajón de productos. */
+  abrirMenu?: () => void
+  menuAbierto?: boolean
 }) {
   return (
     <>
       <header className="s-cabecera">
         <div className="s-cab-izquierda">
-          {!movil && <Link to={rutaConta('inicio')} className="s-cab-logotipo" aria-label="Inicio"><LogoMarca lado={20} /></Link>}
+          {movil && (
+            <>
+              <Boton variante="fantasma" className="s-cab-menu" icono="menu" aria-label="Abrir el menú" aria-haspopup="dialog" aria-expanded={!!menuAbierto} onClick={abrirMenu}>{''}</Boton>
+              <Link to={rutaConta('inicio')} className="s-cab-logotipo" aria-label="Inicio"><LogoHorizontal alto={18} /></Link>
+            </>
+          )}
           <Cliente logo={logoCliente} movil={movil} />
-          {/* El ejercicio y el mes: lo pone la pantalla que lo lee (PeriodoEnBarra); vacío, no sale. */}
-          <div className="s-cab-periodo" ref={huecoPeriodo} />
+          {/* El ejercicio y el mes: lo pone la pantalla que lo lee (PeriodoEnBarra); vacío, no sale. En el móvil, en su fila. */}
+          {!movil && <div className="s-cab-periodo" ref={huecoPeriodo} />}
         </div>
         <div className="s-cab-centro">
           {!movil && producto && pestanas.length > 0 && <Pestanas key={producto.id} producto={producto} pestanas={pestanas} activa={pestanaActiva} />}
@@ -155,6 +166,7 @@ export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente
           {usuario}
         </div>
       </header>
+      {movil && <div className="s-cab-periodo s-cab-periodo-movil" ref={huecoPeriodo} />}
       {movil && producto && pestanas.length > 1 && <PestanasMovil producto={producto} pestanas={pestanas} activa={pestanaActiva} />}
     </>
   )
