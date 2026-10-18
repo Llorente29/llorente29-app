@@ -177,16 +177,13 @@ async function pulsarTodo(page: Page, cuenta: string, ruta: string) {
 test.skip(process.env.GITHUB_EVENT_NAME === 'push', 'la auditoría se lanza a mano')
 
 const CUENTAS = [{ letra: 'A', email: CUENTA_A.email }, { letra: 'B', email: CUENTA_B.email }]
-// Segunda vuelta (18/10): el log de Actions solo da las últimas 5.000 líneas y
-// se perdieron los clics de las 15 primeras de A en ordenador. Solo esas.
-const SEGUNDA = new Set(['ajustes/plan', 'bancos', 'bancos/cierre', 'bancos/cuentas', 'bancos/reglas', 'clientes-y-proveedores', 'clientes-y-proveedores?ver=clientes', 'compras', 'compras/liquidacion/nueva', 'documentos', 'inicio', 'libros/cierre/ejercicios', 'libros/diario', 'libros/diario/pendientes-diez', 'libros/mayor/libro-mayor'])
 
 for (const cuenta of CUENTAS) {
   test.describe(`cuenta ${cuenta.letra}`, () => {
     for (const { ruta, de } of pantallas()) {
       test(`${cuenta.letra} · /conta/${ruta}`, async ({ page }) => {
         test.setTimeout(150_000)
-        test.skip(cuenta.letra !== 'A' || lado(page) !== 'ordenador' || !SEGUNDA.has(ruta), 'segunda vuelta: solo las 15 de A en ordenador')
+        test.skip(true, 'tercera vuelta: solo Sumied (la primera y la segunda ya están hechas)')
         const errores: string[] = []
         const red: string[] = []
         page.on('pageerror', (e) => errores.push(e.message.slice(0, 160)))
@@ -232,3 +229,28 @@ test('A · la barra, la cabecera y el logo', async ({ page }) => {
   apuntar({ cuenta: 'A', lado: lado(page), ruta: 'inicio', tipo: 'barra', detalle: JSON.stringify(datos) })
   await page.screenshot({ path: `${DIR}/A-barra-${lado(page)}.jpg`, type: 'jpeg', quality: 70 })
 })
+
+// Tercera vuelta (18/10): con la marca Sumied, la que ve producción. Las
+// capturas de arriba salen con Folvy (staging construye con Folvy si no se
+// pide ?marca=sumied). Las pantallas donde se ven el logo, la barra y los colores.
+const CON_SUMIED = ['inicio', 'libros/diario', 'libros/diario/nuevo?tipo=expedida', 'documentos', 'compras', 'bancos', 'ajustes']
+for (const ruta of CON_SUMIED) {
+  test(`Sumied · A · /conta/${ruta}`, async ({ page }) => {
+    await entrarComo(page, CUENTA_A.email)
+    await page.goto(`/conta/${ruta}${ruta.includes('?') ? '&' : '?'}marca=sumied`)
+    await cargada(page)
+    for (const h of await mirar(page)) apuntar({ cuenta: 'A', lado: lado(page), ruta: `sumied ${ruta}`, ...h })
+    const colores = await page.evaluate(() => {
+      const css = (sel: string, prop: string) => { const el = document.querySelector(sel); return el ? getComputedStyle(el).getPropertyValue(prop) : null }
+      const raiz = getComputedStyle(document.documentElement)
+      return {
+        accion: raiz.getPropertyValue('--s-accion').trim(), apoyo: raiz.getPropertyValue('--s-apoyo').trim(),
+        bordeControl: raiz.getPropertyValue('--s-borde-control').trim(), bordeDecorativo: raiz.getPropertyValue('--s-borde-decorativo').trim(),
+        fuente: getComputedStyle(document.body).fontFamily, barra: css('nav[aria-label="Menú de contabilidad"]', 'background-color'),
+        logos: Array.from(document.querySelectorAll('img')).filter((i) => i.getBoundingClientRect().width > 0).map((i) => `${i.getAttribute('src')} ${Math.round(i.getBoundingClientRect().width)}x${Math.round(i.getBoundingClientRect().height)} en ${i.closest('nav,header,aside')?.getAttribute('aria-label') ?? i.closest('nav,header,aside')?.tagName ?? 'otro'}`),
+      }
+    })
+    apuntar({ cuenta: 'A', lado: lado(page), ruta: `sumied ${ruta}`, tipo: 'marca', detalle: JSON.stringify(colores) })
+    await page.screenshot({ path: `${DIR}/sumied-A-${slug(ruta)}-${lado(page)}.jpg`, type: 'jpeg', quality: 70 })
+  })
+}
