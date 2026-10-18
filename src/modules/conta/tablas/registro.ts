@@ -64,6 +64,12 @@ export interface Columna {
   apoyo?: boolean
   /** Ancho en la rejilla de ordenador. */
   ancho: string
+  /**
+   * En el móvil va en su propia línea, debajo del nombre, y puede partirse:
+   * al lado del nombre no cabe (el IBAN se salía de la tarjeta y se pintaba
+   * encima del nombre; auditoría S01b a 390 px).
+   */
+  lineaPropiaEnMovil?: boolean
 }
 
 export interface DatoDetalle {
@@ -482,7 +488,7 @@ const BANCOS: DefinicionTabla = {
   tituloFila: (f) => txt(d(f, 'name')),
   apoyoFila: (f) => CAJA[txt(d(f, 'kind'))] ?? null,
   columnas: [
-    { id: 'iban', etiqueta: 'IBAN', cifra: true, apoyo: true, ancho: '260px', valor: (f) => (d(f, 'iban') ? formatearIban(txt(d(f, 'iban'))) : '—') },
+    { id: 'iban', etiqueta: 'IBAN', cifra: true, apoyo: true, ancho: '260px', lineaPropiaEnMovil: true, valor: (f) => (d(f, 'iban') ? formatearIban(txt(d(f, 'iban'))) : '—') },
   ],
   detalle: [
     { etiqueta: 'Tipo', valor: (f) => CAJA[txt(d(f, 'kind'))] ?? null },

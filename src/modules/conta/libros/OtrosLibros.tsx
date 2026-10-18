@@ -52,15 +52,15 @@ export function BienesInversion() {
       {d.datos && !d.datos.length && <div className="cx-tarjeta"><Vacio titulo="Aún no hay bienes de inversión." explicacion="Al dar de alta uno queda en este libro y en la hoja BIENES-INVERSIÓN del formato AEAT." /></div>}
       {d.datos && d.datos.length > 0 && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <table className="cxl-tabla" aria-label="Bienes de inversión">
+          <table className="cxl-tabla cxl-apilada" aria-label="Bienes de inversión">
             <thead><tr><th>Bien</th><th>Alta</th><th>Inicio de uso</th><th className="cxl-der">Base</th><th className="cxl-der">Cuota</th><th className="cxl-der">Deducible</th><th>Regulariza hasta</th></tr></thead>
             <tbody>{d.datos.map((b) => {
               const anios = b.tipo === 'inmueble' ? 10 : 5
               const inicio = Number((b.inicioUso ?? b.alta).slice(0, 4))
               return (
                 <tr key={b.id} className={b.baja ? 'cxl-anulada' : undefined}><td>{b.descripcion}<br /><span className="cxl-apoyo">{b.tipo}{b.baja ? ` · baja el ${ddmm(b.baja)}` : ''}</span></td>
-                  <td>{ddmm(b.alta)}</td><td>{b.inicioUso ? ddmm(b.inicioUso) : '—'}</td><td className="cxl-der">{eurosExactos(b.base)}</td>
-                  <td className="cxl-der">{eurosExactos(b.cuota)}{b.tipoIva !== null ? ` (${b.tipoIva} %)` : ''}</td><td className="cxl-der">{b.deducible} %</td><td>{inicio + anios - 1}</td></tr>
+                  <td data-titulo="Alta">{ddmm(b.alta)}</td><td data-titulo="Inicio de uso">{b.inicioUso ? ddmm(b.inicioUso) : '—'}</td><td className="cxl-der" data-titulo="Base">{eurosExactos(b.base)}</td>
+                  <td className="cxl-der" data-titulo="Cuota">{eurosExactos(b.cuota)}{b.tipoIva !== null ? ` (${b.tipoIva} %)` : ''}</td><td className="cxl-der" data-titulo="Deducible">{b.deducible} %</td><td data-titulo="Regulariza hasta">{inicio + anios - 1}</td></tr>
               )
             })}</tbody>
           </table>
@@ -129,15 +129,15 @@ export function Retenciones() {
       {d.datos && !d.datos.length && <div className="cx-tarjeta"><Vacio titulo={`Sin retenciones en ${L.ejercicio.code}.`} explicacion="Salen aquí los apuntes con retención (alquiler, profesionales, nóminas) en cuanto se validen sus asientos." /></div>}
       {grupos.length > 0 && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <table className="cxl-tabla" aria-label="Retenciones por modelo y trimestre">
+          <table className="cxl-tabla cxl-apilada" aria-label="Retenciones por modelo y trimestre">
             <thead><tr><th>Modelo</th><th>Trimestre</th><th className="cxl-der">Apuntes</th><th className="cxl-der">Base</th><th className="cxl-der">Retenido</th></tr></thead>
-            <tbody>{grupos.map((g) => <tr key={`${g.modelo}${g.t}`}><td>{g.modelo}</td><td>{g.t}</td><td className="cxl-der">{g.apuntes}</td><td className="cxl-der">{eurosExactos(g.base)}</td><td className="cxl-der">{eurosExactos(g.importe)}</td></tr>)}</tbody>
+            <tbody>{grupos.map((g) => <tr key={`${g.modelo}${g.t}`}><td data-titulo="Modelo">{g.modelo}</td><td data-titulo="Trimestre">{g.t}</td><td className="cxl-der" data-titulo="Apuntes">{g.apuntes}</td><td className="cxl-der" data-titulo="Base">{eurosExactos(g.base)}</td><td className="cxl-der" data-titulo="Retenido">{eurosExactos(g.importe)}</td></tr>)}</tbody>
           </table>
           <h3 className="cxl-subtitulo">Apuntes</h3>
-          <table className="cxl-tabla" aria-label="Apuntes con retención">
+          <table className="cxl-tabla cxl-apilada" aria-label="Apuntes con retención">
             <thead><tr><th>Fecha</th><th>Modelo</th><th>Concepto</th><th className="cxl-der">Base</th><th className="cxl-der">Retenido</th></tr></thead>
-            <tbody>{d.datos!.map((r, i) => <tr key={`${r.entryId}${i}`}><td><Link to={rutaAsiento(r.entryId)}>{ddmm(r.fecha)}</Link></td><td>{r.modelo}</td>
-              <td>{r.terceroId ? <Link to={rutaFichaTercero(r.terceroId)}>{r.concepto}</Link> : r.concepto}</td><td className="cxl-der">{eurosExactos(r.base)}</td><td className="cxl-der">{eurosExactos(r.importe)}</td></tr>)}</tbody>
+            <tbody>{d.datos!.map((r, i) => <tr key={`${r.entryId}${i}`}><td><Link to={rutaAsiento(r.entryId)}>{ddmm(r.fecha)}</Link></td><td data-titulo="Modelo">{r.modelo}</td>
+              <td>{r.terceroId ? <Link to={rutaFichaTercero(r.terceroId)}>{r.concepto}</Link> : r.concepto}</td><td className="cxl-der" data-titulo="Base">{eurosExactos(r.base)}</td><td className="cxl-der" data-titulo="Retenido">{eurosExactos(r.importe)}</td></tr>)}</tbody>
           </table>
         </div>
       )}
@@ -167,9 +167,9 @@ export function Suplidos() {
           <div key={cu.code} className="cx-tarjeta" style={{ overflowX: 'auto' }}>
             <h3 className="cxl-subtitulo">{cu.code} · {cu.name} <Link to={`${rutaLibros('mayor', 'libro-mayor')}?cuenta=${cu.code}`} className="cx-enlace">Mayor</Link></h3>
             {!x.filas.length ? <p className="cxl-pie">Sin movimientos en {L.ejercicio.code}.</p> : (
-              <table className="cxl-tabla" aria-label={`Suplidos en la ${cu.code}`}>
+              <table className="cxl-tabla cxl-apilada" aria-label={`Suplidos en la ${cu.code}`}>
                 <thead><tr><th>Fecha</th><th>Concepto</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th><th className="cxl-der">Saldo</th></tr></thead>
-                <tbody>{x.filas.map((m, i) => <tr key={`${m.entryId}${i}`}><td><Link to={rutaAsiento(m.entryId)}>{ddmm(m.fecha)}</Link></td><td>{m.concepto}</td><td className="cxl-der">{m.debe ? eurosExactos(m.debe) : ''}</td><td className="cxl-der">{m.haber ? eurosExactos(m.haber) : ''}</td><td className="cxl-der">{eurosExactos(m.saldo)}</td></tr>)}</tbody>
+                <tbody>{x.filas.map((m, i) => <tr key={`${m.entryId}${i}`}><td><Link to={rutaAsiento(m.entryId)}>{ddmm(m.fecha)}</Link></td><td>{m.concepto}</td><td className="cxl-der" data-titulo="Debe">{m.debe ? eurosExactos(m.debe) : ''}</td><td className="cxl-der" data-titulo="Haber">{m.haber ? eurosExactos(m.haber) : ''}</td><td className="cxl-der" data-titulo="Saldo">{eurosExactos(m.saldo)}</td></tr>)}</tbody>
               </table>
             )}
           </div>

@@ -61,16 +61,16 @@ export function DiarioResumido() {
         const cuadra = c(m.debe) === c(m.haber)
         return (
           <div key={m.mes} className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-            <table className="cxl-tabla" aria-label={`Diario resumido de ${nombreMes(m.mes)}`}>
+            <table className="cxl-tabla cxl-apilada" aria-label={`Diario resumido de ${nombreMes(m.mes)}`}>
               <caption className="cxl-subtitulo">{nombreMes(m.mes)} · {m.asientos} {m.asientos === 1 ? 'asiento' : 'asientos'}</caption>
               <thead><tr><th>Cuenta</th><th>Nombre</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th></tr></thead>
               <tbody>
                 {m.filas.map((f) => (
                   <tr key={f.cuenta}><td>{nivel ? f.cuenta : <Link to={rutaMayor(f.cuenta)}>{f.cuenta}</Link>}</td><td>{f.nombre}</td>
-                    <td className="cxl-der">{f.debe ? eurosExactos(f.debe) : ''}</td><td className="cxl-der">{f.haber ? eurosExactos(f.haber) : ''}</td></tr>
+                    <td className="cxl-der" data-titulo="Debe">{f.debe ? eurosExactos(f.debe) : ''}</td><td className="cxl-der" data-titulo="Haber">{f.haber ? eurosExactos(f.haber) : ''}</td></tr>
                 ))}
               </tbody>
-              <tfoot><tr><td colSpan={2} className="cxl-total">Total del mes</td><td className="cxl-der cxl-total">{eurosExactos(m.debe)}</td><td className="cxl-der cxl-total">{eurosExactos(m.haber)}</td></tr></tfoot>
+              <tfoot><tr><td colSpan={2} className="cxl-total">Total del mes</td><td className="cxl-der cxl-total" data-titulo="Debe">{eurosExactos(m.debe)}</td><td className="cxl-der cxl-total" data-titulo="Haber">{eurosExactos(m.haber)}</td></tr></tfoot>
             </table>
             <p className={cuadra ? 'cxl-pie' : 'cxl-sin-sitio'} role="status">{cuadra ? `Cuadra: Debe = Haber · ✓ ${eurosExactos(m.debe)}` : `No cuadra: ${eurosExactos(Math.abs(m.debe - m.haber))} de diferencia entre Debe y Haber. Un asiento validado siempre cuadra: avisa, es un fallo.`}</p>
           </div>

@@ -31,6 +31,11 @@ async function capturar(page: Page, nombre: string) {
 }
 
 const barra = (page: Page) => page.getByRole('navigation', { name: 'Menú de contabilidad' })
+/** S01c: en el móvil los productos van en un cajón que abre el botón de menú de la cabecera. */
+async function abrirCajon(page: Page) {
+  await page.getByRole('button', { name: 'Abrir el menú' }).click()
+  await expect(page.getByRole('dialog', { name: 'Menú' })).toBeVisible()
+}
 const pestanas = (page: Page, producto: string) => page.getByRole('navigation', { name: `Pestañas de ${producto}` })
 const cinta = (page: Page) => page.getByRole('toolbar', { name: 'Acciones de Asientos' })
 const aviso = (page: Page, texto: string | RegExp) => page.getByRole('status').filter({ hasText: texto })
@@ -92,10 +97,15 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
 
   // La barra de productos: lo que tiene pantalla, con Contabilidad marcada.
   if (lado(page) === 'ordenador') {
-    await expect(barra(page).locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
     await expect(barra(page).getByRole('link', { name: 'Contabilidad' })).toHaveAttribute('aria-current', 'page')
   } else {
-    await expect(barra(page).locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Más'])
+    // S01c: el cajón, con todos los productos (y «Volver a Folvy»: A no es el producto solo).
+    await abrirCajon(page)
+    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes', 'Volver a Folvy'])
+    await expect(barra(page).getByRole('link', { name: 'Contabilidad' })).toHaveAttribute('aria-current', 'page')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
   }
 
   // Compras y gastos en una empresa de hostelería: con Liquidaciones.
@@ -113,9 +123,9 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await page.goto('/conta/compras')
   const tabs = pestanas(page, 'Compras y gastos')
   await expect(tabs.getByRole('link')).toHaveText(['Por revisar', 'Facturas recibidas'])
-  await expect(page.locator('.s-cabecera, .s-barra, .s-barra-inferior, .s-cinta').getByText(/Liquidaci|plataforma|Catcher|socio/i)).toHaveCount(0)
+  await expect(page.locator('.s-cabecera, .s-barra, .s-cinta').getByText(/Liquidaci|plataforma|Catcher|socio/i)).toHaveCount(0)
   // La misma barra que A: el esqueleto es uno; lo que cambia es lo de hostelería.
-  if (lado(page) === 'ordenador') await expect(barra(page).locator('.s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+  if (lado(page) === 'ordenador') await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   // Ni por la dirección: una liquidación no marca ninguna pestaña.
   await page.goto('/conta/compras/liquidacion/nueva')
   await expect(pestanas(page, 'Compras y gastos').locator('[aria-current="page"]')).toHaveCount(0)
@@ -149,7 +159,7 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
   await abrirFavoritos(page)
   await expect(page.getByRole('group', { name: 'Favoritos' })).toHaveAttribute('aria-busy', 'false')
   await page.keyboard.press('Escape')
-  const medir = async () => page.locator('.s-barra a, .s-barra-inferior a, .s-pestanas a, .s-cinta a, .s-cinta button, .s-cab-empresa, .s-cab-derecha button')
+  const medir = async () => page.locator('.s-barra a, .s-pestanas a, .s-cinta a, .s-cinta button, .s-cab-empresa, .s-cab-derecha button')
     .evaluateAll((xs) => xs.map((x) => { const r = x.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)].join(',') }))
   // Se mide con la pantalla quieta: lo que llega de la base después (lo que hay
   // por revisar bajo Inicio, el ejercicio de Libros en la cabecera) mueve cosas,
@@ -541,8 +551,10 @@ test('Sumied: la barra azul noche, la cabecera de 48 px y la cinta, como la maqu
   await page.goto('/conta/libros/diario?marca=sumied')
   await expect(page.locator('.s-cabecera')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
-  const fondoBarra = await page.locator(lado(page) === 'ordenador' ? '.s-barra' : '.s-barra-inferior').evaluate((el) => getComputedStyle(el).backgroundColor)
+  if (lado(page) === 'movil') await abrirCajon(page)
+  const fondoBarra = await page.locator(lado(page) === 'ordenador' ? '.s-barra' : '.s-cajon').evaluate((el) => getComputedStyle(el).backgroundColor)
   expect(fondoBarra).toBe('rgb(11, 31, 59)')
+  if (lado(page) === 'movil') await page.keyboard.press('Escape')
   expect(Math.round((await page.locator('.s-cabecera').boundingBox())!.height)).toBe(48)
   await expect(page.locator('.s-cabecera')).toHaveCSS('font-family', /Inter Variable/)
   await capturar(page, 'esqueleto-sumied')

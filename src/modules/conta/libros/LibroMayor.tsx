@@ -101,22 +101,22 @@ export function LibroMayor() {
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
           <h3 className="cxl-subtitulo">{cuenta} · {nombreCuenta} {cuenta.length >= 4 && <Link to={rutaMayor(cuenta)} className="cx-enlace">Ficha de la cuenta</Link>}</h3>
           {filtrosTexto && <p className="cxl-apoyo">Filtrado: {filtrosTexto}. El saldo inicial está filtrado igual.</p>}
-          <table className="cxl-tabla" aria-label={`Mayor de la ${cuenta}`}>
+          <table className="cxl-tabla cxl-apilada" aria-label={`Mayor de la ${cuenta}`}>
             <thead><tr><th>Fecha</th><th>Asiento</th>{cuenta.length < 4 && <th>Cuenta</th>}<th>Concepto</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th><th className="cxl-der">Saldo</th></tr></thead>
             <tbody>
-              <tr><td>{ddmm(desde)}</td><td />{cuenta.length < 4 && <td />}<td><em>Saldo inicial</em>{desde === L.ejercicio.inicio ? ' (apertura)' : ''}</td><td /><td /><td className="cxl-der">{textoSaldo(x.inicial)}</td></tr>
+              <tr><td>{ddmm(desde)}</td><td />{cuenta.length < 4 && <td />}<td><em>Saldo inicial</em>{desde === L.ejercicio.inicio ? ' (apertura)' : ''}</td><td /><td /><td className="cxl-der" data-titulo="Saldo">{textoSaldo(x.inicial)}</td></tr>
               {x.filas.map((m, i) => (
                 <tr key={`${m.entryId}-${i}`}>
                   <td>{ddmm(m.fecha)}</td>
                   <td><Link to={rutaAsiento(m.entryId)}>{m.numero === null ? 'Sin nº' : `${SERIES[m.serie] ?? m.serie} ${m.numero}`}</Link></td>
-                  {cuenta.length < 4 && <td>{m.cuenta}</td>}
+                  {cuenta.length < 4 && <td data-titulo="Cuenta">{m.cuenta}</td>}
                   <td>{m.concepto}</td>
-                  <td className="cxl-der">{m.debe ? eurosExactos(m.debe) : ''}</td><td className="cxl-der">{m.haber ? eurosExactos(m.haber) : ''}</td>
-                  <td className="cxl-der">{textoSaldo(m.saldo)}</td>
+                  <td className="cxl-der" data-titulo="Debe">{m.debe ? eurosExactos(m.debe) : ''}</td><td className="cxl-der" data-titulo="Haber">{m.haber ? eurosExactos(m.haber) : ''}</td>
+                  <td className="cxl-der" data-titulo="Saldo">{textoSaldo(m.saldo)}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={cuenta.length < 4 ? 4 : 3} className="cxl-total">Sumas del periodo</td><td className="cxl-der cxl-total">{eurosExactos(x.debe)}</td><td className="cxl-der cxl-total">{eurosExactos(x.haber)}</td><td className="cxl-der cxl-total">{textoSaldo(x.final)}</td></tr></tfoot>
+            <tfoot><tr><td colSpan={cuenta.length < 4 ? 4 : 3} className="cxl-total">Sumas del periodo</td><td className="cxl-der cxl-total" data-titulo="Debe">{eurosExactos(x.debe)}</td><td className="cxl-der cxl-total" data-titulo="Haber">{eurosExactos(x.haber)}</td><td className="cxl-der cxl-total" data-titulo="Saldo">{textoSaldo(x.final)}</td></tr></tfoot>
           </table>
           {!x.filas.length && <p className="cxl-pie">Sin apuntes entre el {ddmm(desde)} y el {ddmm(hasta)}: el saldo es el inicial.</p>}
         </div>

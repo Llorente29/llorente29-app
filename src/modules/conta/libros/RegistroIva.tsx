@@ -146,7 +146,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
           <p className="cxl-apoyo" role="status">{hayFiltro ? `${vistas.filas.length} de ${anotaciones(vistas.total)} con los filtros puestos.` : `${anotaciones(vistas.total)}.`}</p>
           {porNif ? <TablaPorNif filas={vistas.filas} /> : (
-            <table className="cxl-tabla" aria-label={TITULO[libro]}>
+            <table className="cxl-tabla cxl-apilada" aria-label={TITULO[libro]}>
               <thead><tr><th>Fecha</th><th>Factura</th><th>{libro === 'issued' ? 'Destinatario' : 'Expedidor'}</th><th className="cxl-der">Base</th><th className="cxl-der">% IVA</th><th className="cxl-der">Cuota</th><th className="cxl-der">Total</th><th /></tr></thead>
               <tbody>
                 {vistas.filas.map((a) => {
@@ -155,9 +155,9 @@ export function RegistroIva({ libro }: { libro: Vista }) {
                     <tr key={a.id} className={a.voidedAt ? 'cxl-anulada' : undefined}>
                       <td>{ddmm(a.issueDate)}</td>
                       <td><Link to={rutaAsiento(a.entryId)}>{[a.series, a.number].filter(Boolean).join('-') || 'sin número'}</Link><br /><span className="cxl-apoyo">{etiquetaTipo(a)}</span>{a.voidedAt && <> <Chip>anulada</Chip></>}</td>
-                      <td>{a.counterpartName ?? '—'}{a.counterpartTaxId && <><br /><span className="cxl-apoyo">{a.counterpartTaxId}</span></>}</td>
-                      <td className="cxl-der">{eurosExactos(a.taxBase)}</td><td className="cxl-der">{a.taxRate === null ? '—' : `${a.taxRate} %`}</td>
-                      <td className="cxl-der">{eurosExactos(a.taxAmount)}</td><td className="cxl-der">{a.total === null ? '—' : eurosExactos(a.total)}</td>
+                      <td data-titulo={libro === 'issued' ? 'Destinatario' : 'Expedidor'}>{a.counterpartName ?? '—'}{a.counterpartTaxId && <><br /><span className="cxl-apoyo">{a.counterpartTaxId}</span></>}</td>
+                      <td className="cxl-der" data-titulo="Base">{eurosExactos(a.taxBase)}</td><td className="cxl-der" data-titulo="% IVA">{a.taxRate === null ? '—' : `${a.taxRate} %`}</td>
+                      <td className="cxl-der" data-titulo="Cuota">{eurosExactos(a.taxAmount)}</td><td className="cxl-der" data-titulo="Total">{a.total === null ? '—' : eurosExactos(a.total)}</td>
                       <td>{falta.length > 0 && !a.voidedAt && <button type="button" className="cxl-defecto" title={`Falta: ${falta.join(', ')}`} onClick={() => setCompletando(a)}>Falta {falta[0]} · Completar</button>}</td>
                     </tr>
                   )
@@ -175,11 +175,11 @@ export function RegistroIva({ libro }: { libro: Vista }) {
 function TablaPorNif({ filas }: { filas: AnotacionLibro[] }) {
   const g = agruparPorNif(filas)
   return (
-    <table className="cxl-tabla" aria-label="Agrupado por NIF">
+    <table className="cxl-tabla cxl-apilada" aria-label="Agrupado por NIF">
       <thead><tr><th>NIF</th><th>Nombre</th><th className="cxl-der">Facturas</th><th className="cxl-der">Base</th><th className="cxl-der">Cuota</th><th className="cxl-der">Total</th><th /></tr></thead>
       <tbody>{g.map((x) => (
-        <tr key={x.nif ?? '—'}><td>{x.nif ?? 'sin NIF (simplificadas)'}</td><td>{x.nombre ?? '—'}</td><td className="cxl-der">{x.anotaciones}</td>
-          <td className="cxl-der">{eurosExactos(x.base)}</td><td className="cxl-der">{eurosExactos(x.cuota)}</td><td className="cxl-der">{eurosExactos(x.total)}</td>
+        <tr key={x.nif ?? '—'}><td>{x.nif ?? 'sin NIF (simplificadas)'}</td><td>{x.nombre ?? '—'}</td><td className="cxl-der" data-titulo="Facturas">{x.anotaciones}</td>
+          <td className="cxl-der" data-titulo="Base">{eurosExactos(x.base)}</td><td className="cxl-der" data-titulo="Cuota">{eurosExactos(x.cuota)}</td><td className="cxl-der" data-titulo="Total">{eurosExactos(x.total)}</td>
           <td>{x.nif && Math.abs(x.total) > UMBRAL_347 && <Chip tono="azul">347</Chip>}</td></tr>
       ))}</tbody>
     </table>

@@ -3,8 +3,8 @@
 // El marco de contabilidad. Desde el S01 es el ESQUELETO (encargo S01 y
 // respuestas de Julio del 17/10): la barra de productos a la izquierda, la
 // cabecera de una fila de 48 px, la cinta de la pestaña debajo y la pantalla.
-// En el móvil, los productos van abajo y las pestañas en una fila que se
-// desliza. Las piezas están en src/modules/conta/esqueleto; aquí se juntan.
+// En el móvil, los productos van en un cajón que abre el botón de menú de la
+// cabecera (S01c) y las pestañas en una fila que se desliza. Las piezas están en src/modules/conta/esqueleto; aquí se juntan.
 //
 // Envuelve las pantallas que ya existen SIN tocarlas: se ven dentro con su
 // estilo de hoy hasta que el paso 3 las mude. Lo que ya les daba el M01 se
@@ -14,7 +14,7 @@
 // Ctrl K es del marco: se escucha ANTES que las pantallas (en la captura) y
 // no les llega. Sus botones de buscar siguen funcionando con el ratón.
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -29,17 +29,12 @@ import { dondeEsta, pestanasVisibles, productosVisibles } from '@/modules/conta/
 import { alternarFavorito, cintaDe, favoritosDe, ordenPorId, type Orden } from '@/modules/conta/esqueleto/ordenes'
 import { usePreferenciasEsqueleto, useContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
 import { BarraProductos } from '@/modules/conta/esqueleto/BarraProductos'
-import { BarraInferior } from '@/modules/conta/esqueleto/BarraInferior'
+import { CajonProductos } from '@/modules/conta/esqueleto/CajonProductos'
+import { cuentasDeLaBarra } from '@/modules/conta/esqueleto/cuentasBarra'
 import { Cabecera } from '@/modules/conta/esqueleto/Cabecera'
 import { CintaDePestana } from '@/modules/conta/esqueleto/CintaDePestana'
 import { Favoritos } from '@/modules/conta/esqueleto/Favoritos'
 import { MenuUsuario } from '@/modules/conta/esqueleto/MenuUsuario'
-
-/** Lo que hay por revisar de todos los productos; null si no se ha podido contar nada. */
-function pendientesDe(cuentas: Record<string, number | null | undefined>): number | null {
-  const ns = Object.values(cuentas).filter((n): n is number => typeof n === 'number')
-  return ns.length === 0 ? null : ns.reduce((s, n) => s + n, 0)
-}
 
 export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactNode; sinPregunta?: boolean }) {
   const movil = useIsMobile()
@@ -51,6 +46,8 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const { prefs, cargadas, cambiar, aviso, quitarAviso } = usePreferenciasEsqueleto(accountId, userId)
   const { ctx, error: errorCtx, listo: ctxListo } = useContextoEsqueleto(accountId, activa?.id ?? null)
   const [buscando, setBuscando] = useState(false)
+  const [cajon, setCajon] = useState(false)
+  const cerrarCajon = useCallback(() => setCajon(false), [])
   const [huecoAcciones, setHuecoAcciones] = useState<HTMLDivElement | null>(null)
   const [huecoPeriodo, setHuecoPeriodo] = useState<HTMLDivElement | null>(null)
   const [datosCinta, setDatosCinta] = useState<DatosCinta | null>(null)
@@ -64,6 +61,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const pestanas = producto && !porNiveles ? pestanasVisibles(producto, ctx) : []
   const pestana = donde?.pestana ?? null
   const cinta = producto && !porNiveles ? cintaDe(producto.id, pestana?.id ?? null, ctx) : []
+  const pendientes = cuentasDeLaBarra(cuentas)
 
   // Ctrl K (⌘K): del marco. En la captura, para que no llegue a Libros ni a Bancos.
   useEffect(() => {
@@ -114,12 +112,12 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
     <MarcoContexto.Provider value={marco}>
       <div className={clases} data-densidad={prefs.densidad}>
         {!movil && (
-          <BarraProductos productos={productos} activo={producto?.id ?? null} pendientes={pendientesDe(cuentas)}
+          <BarraProductos productos={productos} activo={producto?.id ?? null} pendientes={pendientes}
             desplegada={prefs.barraDesplegada} alternar={() => cambiar({ barraDesplegada: !prefs.barraDesplegada })} />
         )}
         <div className="s-esq-cuerpo">
           <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
-            huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)}
+            huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)} abrirMenu={() => setCajon(true)} menuAbierto={cajon}
             favoritos={<Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} alternar={fijar} alAbrirBuscador={() => setBuscando(true)} />}
             usuario={<MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} />} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
@@ -135,7 +133,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
             {children}
           </main>
         </div>
-        {movil && <BarraInferior productos={productos} activo={producto?.id ?? null} solo={solo} />}
+        {movil && cajon && <CajonProductos productos={productos} activo={producto?.id ?? null} pendientes={pendientes} solo={solo} cerrar={cerrarCajon} />}
         {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={!solo && !sinPregunta} ctx={ctxListo ? ctx : undefined} />}
       </div>
     </MarcoContexto.Provider>

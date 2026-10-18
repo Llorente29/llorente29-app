@@ -127,10 +127,24 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
 .cxd-campo { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
 .cxd-dialogo-acciones { display: flex; justify-content: flex-end; gap: 10px; }
 .cxd-mano-cabeza { display: grid; grid-template-columns: 180px 180px minmax(0, 1fr); gap: 14px; }
-.cxd-mano-linea { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 120px 120px minmax(0, 1fr) 60px; gap: 10px; align-items: start; padding: 8px 0; }
+/* S01c: la cabecera y las líneas comparten plantilla (cada rótulo encima de su
+   columna); Debe y Haber crecen con la pantalla, sin bajar de 120px. */
+.cxd-mano-linea { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) minmax(0, 1fr) 60px; gap: 10px; align-items: start; padding: 8px 0; }
 .cxd-mano-linea label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxd-mano-linea .cxd-der.cx-input { font-family: var(--cx-letra-cifras); }
 /* S01: sin el eje «local» (Definiciones › Analítica), sin su columna. */
-.cxd-mano-linea.cxd-mano-sin-local { grid-template-columns: minmax(0, 1.4fr) 120px 120px minmax(0, 1fr) 60px; }
+.cxd-mano-linea.cxd-mano-sin-local { grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) minmax(0, 1fr) 60px; }
+/* La etiqueta de cada campo dentro de la línea: solo en móvil, donde no hay fila de cabecera. */
+.cxd-mano-etiqueta { display: none; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; }
+/* El pie del asiento a mano: sin importes, neutro (ni ámbar ni verde). */
+.cxd-cuadre-neutro { color: var(--cx-apoyo); }
+/* S01c · «Guardar como predefinido»: su propia fila (nombre que crece, casilla
+   centrada con el campo, botón a su ancho al final). */
+.cxd-predef-fila { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.cxd-predef-nombre { flex: 1 1 280px; min-width: 280px; }
+.cxd-predef-importes { display: inline-flex; align-items: center; gap: 8px; height: 48px; font-size: 14px; white-space: nowrap; cursor: pointer; }
+.cxd-predef-importes input { margin: 0; width: 18px; height: 18px; }
+.cxd-predef-fila > button { flex: 0 0 auto; margin-left: auto; }
 
 @media (max-width: 1100px) {
   .cxd-cuerpo { grid-template-columns: minmax(0, 1fr); }
@@ -166,7 +180,18 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
   .cxd-cuadre { grid-template-columns: 1fr 1fr; }
   .cxd-mano-cabeza { grid-template-columns: 1fr 1fr; }
   .cxd-mano-cabeza .cxd-campo-ancho { grid-column: 1 / -1; }
-  .cxd-mano-linea { grid-template-columns: 1fr 1fr; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+  .cxd-mano-linea, .cxd-mano-linea.cxd-mano-sin-local { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 12px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+  /* Cuenta y local a lo ancho (que «Nombre o código» quepa); Debe y Haber juntos; concepto a lo ancho; «Quitar» al final. */
+  .cxd-mano-linea > label:first-child { grid-column: 1 / -1; }
+  .cxd-mano-linea:not(.cxd-mano-sin-local) > label:nth-child(2) { grid-column: 1 / -1; }
+  .cxd-mano-linea > label:nth-last-child(2) { grid-column: 1 / -1; }
+  .cxd-mano-linea > button:last-child { grid-column: 1 / -1; justify-self: end; }
+  .cxd-mano-etiqueta { display: block; }
+  .cxd-mano-cuadre > strong { grid-column: 1 / -1; }
+  .cxd-predef-fila { flex-direction: column; align-items: stretch; gap: 12px; }
+  .cxd-predef-nombre { flex: 0 0 auto; min-width: 0; }
+  .cxd-predef-importes { height: auto; white-space: normal; }
+  .cxd-predef-fila > button { width: 100%; margin-left: 0; }
 }
 
 .cxd-detalle-cuentas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }

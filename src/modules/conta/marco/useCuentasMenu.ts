@@ -9,6 +9,9 @@
 //   · Libros: los asientos propuestos que esperan que alguien los valide.
 //   · Bancos (B01): los movimientos para confirmar y por aclarar (los mismos
 //     que cuentan las cifras de Movimientos; lo casado solo no pide nada).
+//   · Recibidas (S01c, 18/10): las facturas recibidas para revisar de los
+//     últimos 12 meses, las mismas que el Inicio («N facturas recibidas para
+//     revisar»): la barra y el Inicio cuentan lo mismo (Julio).
 // Es un aviso que interrumpe (el badge del menú, regla 7): cuenta lo que pide
 // una decisión, y si no hay nada no se pinta.
 //
@@ -31,6 +34,8 @@ import { cargarMirar } from '@/modules/conta/services/comprasService'
 import { acuerdosSinSocio, listarTercerosBase } from '@/modules/conta/services/tercerosService'
 import { cargarRevision430 } from '@/modules/conta/services/revision430Service'
 import { leerEsperan } from '@/modules/conta/services/esperanService'
+import { recibidasParaRevisar } from '@/modules/conta/services/inicioService'
+import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 
 export type CuentasMenu = Partial<Record<string, number | null>>
 
@@ -47,7 +52,7 @@ export function refrescarCuentasMenu(): void {
 const seguro = (p: Promise<number>): Promise<number | null> => p.catch((e: unknown) => { console.error('[menú] no se pudo contar', e); return null })
 
 async function contar(accountId: string, companyId: string | null): Promise<CuentasMenu> {
-  const [compras, terceros, libros, bancos] = await Promise.all([
+  const [compras, terceros, libros, bancos, recibidas] = await Promise.all([
     seguro(cargarMirar(accountId).then((m) => agruparAMirar(m).length)),
     seguro((async () => {
       const acuerdos = (await acuerdosSinSocio(accountId)).length
@@ -74,8 +79,9 @@ async function contar(accountId: string, companyId: string | null): Promise<Cuen
       ? tabla('bank_movement').select('id', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido'])
           .then(({ count, error }: { count: number | null; error: { message: string } | null }) => { if (error) throw new Error(error.message); return count ?? 0 })
       : Promise.resolve(0)),
+    seguro(companyId ? recibidasParaRevisar(companyId, hoyEnMadrid()) : Promise.resolve(0)),
   ])
-  return { compras, terceros, libros, bancos }
+  return { compras, terceros, libros, bancos, recibidas }
 }
 
 export function useCuentasMenu(): CuentasMenu {

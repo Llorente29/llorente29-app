@@ -56,6 +56,7 @@
   --s-barra-activo: #FFFFFF;
   --s-barra-activo-texto: #0E1A2B;
   --s-barra-destacado: #2F5BFF;
+  --s-barra-destacado-texto: #FFFFFF; /* El número del chip, encima del destacado (S01c) */
 
   /* ── Letra ──────────────────────────────────────────────────────────── */
   --s-letra: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
@@ -96,7 +97,8 @@
   /* ── Medidas del esqueleto ──────────────────────────────────────────── */
   --s-alto-control: 32px;        /* Botones y campos */
   --s-alto-cabecera: 48px;
-  --s-ancho-barra: 88px;
+  --s-ancho-barra: 220px;        /* S01c: desplegada, icono y nombre en una línea */
+  --s-ancho-barra-plegada: 64px; /* S01c: solo los iconos */
   --s-icono: 16px;
   --s-icono-trazo: 1.75;
 
