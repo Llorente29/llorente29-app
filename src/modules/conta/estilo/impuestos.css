@@ -1,0 +1,58 @@
+/* src/modules/conta/estilo/impuestos.css
+ *
+ * I01b · Impuestos (tableros 8, 9 y 10). Solo tokens del sistema (--s-*).
+ * Los importes, en Inter y con cifras tabulares (encargo, «Diseño»: no en letra
+ * de máquina). En el móvil la tabla se hace bloques y cada dato lleva delante
+ * el título de su columna: no se pierden.
+ */
+
+.s-impuestos { max-width: 1320px; }
+.s-impuestos .s-cifra, .s-impuestos .s-tarjeta-cifra-valor { font-family: var(--s-letra); font-variant-numeric: tabular-nums; }
+
+.s-impuestos-cifras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.s-impuestos-cifra-apoyo { display: block; margin-top: var(--s-1); font-size: var(--s-t-s); font-weight: var(--s-peso-normal); color: var(--s-apoyo); }
+
+.s-impuestos-columnas { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s-4); align-items: start; }
+.s-impuestos-principal, .s-impuestos-lado { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+
+.s-impuestos-tabla td { vertical-align: top; }
+.s-impuestos-tabla tr[data-ambar='si'] td { background: var(--s-duda-fondo); }
+.s-impuestos-nombre { font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.cx a.s-impuestos-nombre { color: var(--s-accion); text-decoration: underline; }
+.s-impuestos-aviso { display: block; margin-top: var(--s-1); font-size: var(--s-t-s); color: var(--s-duda); }
+.s-impuestos-accion { text-align: right; white-space: nowrap; }
+.s-impuestos-vacio { padding: var(--s-4) var(--s-6); }
+.s-impuestos-hecho { margin: 0; color: var(--s-ok); }
+
+.s-impuestos-siguiente { padding: var(--s-4) var(--s-6) var(--s-5); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-impuestos-subtitulo {
+  margin: 0 0 var(--s-2); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo);
+  text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
+}
+.s-impuestos-siguiente ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-impuestos-siguiente li { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: var(--s-3); align-items: baseline; }
+.s-impuestos-siguiente-cuando { color: var(--s-apoyo); }
+.s-impuestos-siguiente-nota { font-size: var(--s-t-s); color: var(--s-apoyo); text-align: right; }
+
+.s-impuestos-porque { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+
+@media (max-width: 1099px) {
+  .s-impuestos-columnas { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .s-impuestos-cifras { grid-template-columns: minmax(0, 1fr); }
+  .s-impuestos-siguiente li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .s-impuestos-siguiente-nota { text-align: left; }
+  /* La tabla, en bloques: cada dato con el título de su columna delante. */
+  .s-impuestos-tabla thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .s-impuestos-tabla, .s-impuestos-tabla tbody, .s-impuestos-tabla tr, .s-impuestos-tabla td { display: block; width: 100%; }
+  .s-impuestos-tabla tr { padding: var(--s-3) var(--s-4); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+  .s-impuestos-tabla tr[data-ambar='si'] { background: var(--s-duda-fondo); }
+  .s-impuestos-tabla td { padding: var(--s-1) 0; border-bottom: none; text-align: left; white-space: normal; }
+  .s-impuestos-tabla td::before {
+    content: attr(data-titulo); display: block; font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo);
+    text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
+  }
+  .s-impuestos-tabla td.s-impuestos-accion::before { content: none; }
+  .s-impuestos-tabla td:empty { display: none; }
+}

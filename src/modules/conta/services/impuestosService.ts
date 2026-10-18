@@ -6,6 +6,7 @@
 // modelos que salen de las reglas de la base.
 
 import { rpc } from '@/modules/conta/services/bd'
+import type { Calendario } from '@/modules/conta/impuestos/calendario'
 
 /** Las preguntas del paso «impuestos» del alta que deciden modelos. */
 const CLAVES_DEL_ALTA = ['retiene', 'alquiler', 'retenido70'] as const
@@ -48,4 +49,25 @@ export async function calcularObligaciones(companyId: string): Promise<{ modelos
       ? presenta.map((f) => `${f.modelo}: ${f.por_que}`).join(' ')
       : 'Con lo que me has dicho, no presentas ningún modelo de los que conozco.',
   }
+}
+
+// ── I01b · Las pantallas de Impuestos ──────────────────────────────────────
+
+
+/** Lo que pinta Impuestos › Calendario (conta_impuesto_calendario). */
+export function leerCalendario(companyId: string, hoy?: string): Promise<Calendario> {
+  return rpc<Calendario>('conta_impuesto_calendario', { p_company: companyId, ...(hoy ? { p_hoy: hoy } : {}) })
+}
+
+/** «+ Añadir otro impuesto»: con su motivo, queda quién y cuándo (conta_impuesto_obligacion_decidir). */
+export function anadirImpuesto(companyId: string, modelo: string, motivo: string): Promise<string> {
+  return rpc<string>('conta_impuesto_obligacion_decidir', { p_company: companyId, p_form: modelo, p_presenta: true, p_motivo: motivo })
+}
+
+/** Lo que devuelve conta_impuesto_303_calcular. */
+export interface Calculo303 { declaracion: string; desde: string; hasta: string; apuntes: number; resultado: string; importe: number }
+
+/** Calcula (o recalcula) el borrador del 303 de un periodo desde el libro de IVA. */
+export function calcular303(companyId: string, ejercicio: number, periodo: string): Promise<Calculo303> {
+  return rpc<Calculo303>('conta_impuesto_303_calcular', { p_company: companyId, p_year: ejercicio, p_period: periodo })
 }

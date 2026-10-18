@@ -44,6 +44,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     compras: 'compras.por-revisar', documentos: 'compras.recibidas', revisarFactura: 'compras.recibidas', recibidasEnAsientos: 'contabilidad.asientos', recibidaEnAsientos: 'contabilidad.asientos',
     liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
+    impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
     ventas: null,
   }
@@ -78,10 +79,17 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(PRODUCTOS.map((p) => p.etiqueta)).toEqual(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Laboral', 'Impuestos', 'Contactos', 'Ajustes'])
     expect(PRODUCTOS.filter((p) => p.abajo).map((p) => p.id)).toEqual(['ajustes'])
   })
-  it('Facturación, Laboral e Impuestos no salen: sin pantalla, ni con el interruptor encendido', () => {
+  it('Facturación y Laboral no salen: sin pantalla, ni con el interruptor encendido; Impuestos (I01b), solo con el suyo', () => {
     const todo: Contexto = { ...NADA, interruptores: new Set(INTERRUPTORES) }
     expect(productosVisibles(NADA).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'compras', 'bancos', 'contactos', 'ajustes'])
-    expect(productosVisibles(todo).map((p) => p.id)).toEqual(productosVisibles(NADA).map((p) => p.id))
+    expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
+    expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
+  })
+  it('Impuestos: Calendario e Impuesto de sociedades; Presentados y Certificados, cuando tengan pantalla; el IVA de un periodo, del Calendario', () => {
+    const i = PRODUCTOS.find((p) => p.id === 'impuestos')!
+    expect(i.pestanas.map((t) => t.etiqueta)).toEqual(['Calendario', 'Presentados', 'Impuesto de sociedades', 'Certificados y accesos'])
+    expect(de('/conta/impuestos/iva/2026/3T')).toBe('impuestos.calendario')
+    expect(de('/conta/impuestos/sociedades')).toBe('impuestos.sociedades')
   })
   it('con pantalla, el interruptor decide (la prueba puede fallar)', () => {
     const conPantalla = PRODUCTOS.map((p) => (p.id === 'facturacion' ? { ...p, ruta: 'facturacion' } : p))
