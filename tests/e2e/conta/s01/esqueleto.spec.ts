@@ -109,7 +109,7 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
 
   // La cinta de la maqueta 1: NUEVO · REVISAR · UTILIDADES.
   const c = cinta(page)
-  await expect(c.getByRole('group', { name: 'Nuevo' }).getByRole('link')).toHaveText(['Expedida', 'Recibida', 'Tesorería', 'General', 'Predefinidos'])
+  await expect(c.getByRole('group', { name: 'Nuevo' }).getByRole('link')).toHaveText(['Expedida', 'Recibida', 'Recibida a mano', 'Tesorería', 'General', 'Predefinidos'])
   await expect(c.getByRole('group', { name: 'Revisar' }).getByRole('link')).toHaveText(['Para revisar', 'Libro diario'])
   await expect(c.getByRole('group', { name: 'Utilidades' }).getByRole('button', { name: 'Búsqueda' })).toBeVisible()
   await expect(c.getByRole('link', { name: 'Libro diario' })).toHaveAttribute('aria-current', 'page')

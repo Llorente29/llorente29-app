@@ -410,6 +410,9 @@ export const rutaRevisarFactura = (invoiceId: string): string => rutaConta(CONTA
 /** S01 · La factura recibida desde Contabilidad › Asientos (sin id: la primera para revisar). */
 export const rutaRecibidaEnAsientos = (invoiceId?: string): string =>
   invoiceId ? rutaConta(CONTA.rutas.recibidaEnAsientos, { invoiceId }) : rutaConta(CONTA.rutas.recibidasEnAsientos)
+/** S01d · «Nueva recibida a mano»: la misma dirección de Recibidas, con ?nueva=a-mano (no salta a la primera para revisar). */
+export const CONSULTA_RECIBIDA_A_MANO = 'nueva=a-mano'
+export const rutaRecibidaAMano = (): string => `${rutaConta(CONTA.rutas.recibidasEnAsientos)}?${CONSULTA_RECIBIDA_A_MANO}`
 /** E05 · Una quincena de Catcher. */
 export const rutaLoteCatcher = (loteId: string): string => rutaConta(CONTA.rutas.loteCatcher, { loteId })
 /** Bancos (B01): sin pestaña, Movimientos. */

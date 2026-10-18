@@ -24,6 +24,8 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { Campo, Dialogo } from '@/modules/conta/proveedor/piezas'
+import { NuevoProveedorDialogo } from '@/modules/conta/proveedor/NuevoProveedorDialogo'
+import { fraseAltaProveedor } from '@/modules/conta/lib/altaProveedor'
 import { Chip, ErrorConReintento, Guardado, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
 import {
   FILTROS_TERCEROS, cuentaPorFiltro, filtrarTerceros, filtrosVisibles, mismoNif, ordenarPapeles, rutaDeTercero, type FiltroTerceros, type Papel,
@@ -92,12 +94,14 @@ export default function TercerosPage() {
   const [busca, setBusca] = useState('')
   const [vuelta, setVuelta] = useState(0)
   // S01 · paso 3: «Nuevo cliente» está en la cinta (?nuevo), también estando ya aquí.
-  const [nuevo, setNuevo] = useState(false)
-  const pideNuevo = params.get('nuevo') !== null
+  // S01d: y «Nuevo proveedor» (?nuevo=proveedor), con el alta de Proveedores.
+  const [nuevo, setNuevo] = useState<'cliente' | 'proveedor' | null>(null)
+  const pide = params.get('nuevo')
+  const pideNuevo = pide === null ? null : pide === 'proveedor' ? 'proveedor' : 'cliente'
   const hosteleria = useHosteleria()
   // Los papeles que ya son pestaña de la cabecera (productos.ts): Plataformas y Socios, solo con hostelería.
   const PAPELES_EN_PESTANA = new Set<string>(hosteleria ? ['todos', 'clientes', 'proveedores', 'plataformas', 'socios'] : ['todos', 'clientes', 'proveedores'])
-  if (pideNuevo && !nuevo) setNuevo(true)
+  if (pideNuevo && nuevo !== pideNuevo) setNuevo(pideNuevo)
   useEffect(() => { if (pideNuevo) setParams((p) => { p.delete('nuevo'); return p }, { replace: true }) }, [pideNuevo, setParams])
   // Lo que viene hecho de la ficha (archivar): se dice aquí, con su contenido (regla 8).
   const llegada = useLocation().state as { aviso?: string } | null
@@ -117,6 +121,13 @@ export default function TercerosPage() {
   const cuantos = useMemo(() => (filas ? cuentaPorFiltro(filas) : null), [filas])
   const tarjeta = filas ? tarjetaPorRevisar(filtro, visibles.length, busca, pendientes430, revision?.programa ?? null) : null
   const recargar = () => setVuelta((v) => v + 1)
+  // El NIF repetido del alta de proveedor: el de otro proveedor para; el de un cliente u otro papel
+  // se avisa (la base le añade el papel de proveedor a ese mismo tercero: un NIF, un tercero).
+  const proveedoresYa = useMemo(() => (filas ?? []).filter((t) => t.papeles.includes('supplier')).map((t) => ({ name: t.nombre, taxId: t.nif })), [filas])
+  const notaNifProveedor = useMemo(() => (nif: string) => {
+    const m = mismoNif(filas ?? [], normalizarNif(nif), 'supplier')
+    return m && !m.yaLoEs ? `Ese NIF es de ${m.tercero.nombre}: al crearlo le añado el papel de proveedor (un solo tercero con los dos papeles).` : null
+  }, [filas])
 
   async function cambiarArchivo(t: TerceroLista, archivarlo: boolean) {
     setFallo(null); setHecho(null)
@@ -132,7 +143,7 @@ export default function TercerosPage() {
   return (
     <div className="cxt-pagina">
       {/* S01 · paso 3: Contactos. El título y los papeles (Todos · Clientes · Proveedores…) son
-          la cabecera y sus pestañas; «Nuevo cliente», la cinta. */}
+          la cabecera y sus pestañas; «Nuevo cliente» y «Nuevo proveedor» (S01d), la cinta. */}
       <h1 className="cx-oculto">Contactos</h1>
       <p className="cx-ayuda cxt-entra">Con quién trabajas, qué papel tiene cada uno y quién debe a quién.</p>
       <Guardado texto={hecho} />
@@ -177,7 +188,14 @@ export default function TercerosPage() {
             ? <Vacio titulo={`Nadie coincide con «${busca.trim()}».`} explicacion="Prueba con otra parte del nombre o con su NIF." />
             : filtro === 'archivados'
               ? <Vacio titulo="No hay nadie archivado." explicacion="Lo que archives sale aquí, con su histórico, y se recupera con un clic." />
-              : <Vacio titulo="Aún no hay nadie aquí." explicacion="Los proveedores llegan con sus albaranes; los clientes, con «Nuevo cliente»; las plataformas y los socios, añadiéndoles el papel en su ficha." />}
+              : <Vacio titulo="Aún no hay nadie aquí."
+                  explicacion="Da de alta a tus proveedores y clientes desde aquí (los proveedores de Cocina también llegan solos con sus albaranes); las plataformas y los socios, añadiéndoles el papel en su ficha."
+                  accion={(
+                    <div className="cx-pie">
+                      <button type="button" className="cx-boton-sec" onClick={() => setNuevo('cliente')}>Nuevo cliente</button>
+                      <button type="button" className="cx-boton" onClick={() => setNuevo('proveedor')}>Nuevo proveedor</button>
+                    </div>
+                  )} />}
         </div>
       )}
       {visibles.length > 0 && (
@@ -235,7 +253,19 @@ export default function TercerosPage() {
           </div>
         </Dialogo>
       )}
-      {nuevo && accountId && <NuevoCliente accountId={accountId} terceros={filas ?? []} alCerrar={() => setNuevo(false)} />}
+      {nuevo === 'cliente' && accountId && <NuevoCliente accountId={accountId} terceros={filas ?? []} alCerrar={() => setNuevo(null)} />}
+      {nuevo === 'proveedor' && accountId && (
+        // S01d: se queda en la lista, lo dice con su nombre (regla 8) y lo enseña buscándolo.
+        <NuevoProveedorDialogo accountId={accountId} otros={proveedoresYa} notaNif={notaNifProveedor} textoCrear="Dar de alta"
+          alCerrar={() => setNuevo(null)}
+          alCrear={(p) => {
+            setNuevo(null); setFallo(null)
+            setHecho(fraseAltaProveedor(p.name))
+            if (filtro !== 'todos' && filtro !== 'proveedores') setParams({}, { replace: true })
+            setBusca(p.taxId ?? p.name)
+            recargar()
+          }} />
+      )}
     </div>
   )
 }

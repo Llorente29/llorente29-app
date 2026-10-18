@@ -134,7 +134,7 @@ describe('el catálogo de órdenes', () => {
   it('la cinta de Asientos, la de la maqueta 1: NUEVO · REVISAR · UTILIDADES', () => {
     const c = cintaDe('contabilidad', 'asientos', NADA)
     expect(c.map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([
-      ['Nuevo', ['Expedida', 'Recibida', 'Tesorería', 'General', 'Predefinidos']],
+      ['Nuevo', ['Expedida', 'Recibida', 'Recibida a mano', 'Tesorería', 'General', 'Predefinidos']],
       ['Revisar', ['Para revisar', 'Libro diario']],
       ['Utilidades', ['Búsqueda', 'Digitalizar']],
     ])
@@ -197,7 +197,7 @@ describe('el catálogo de órdenes', () => {
     // Lo de otros productos con ?ver no cambia (Bancos «Casados solos», el diario «Para revisar»).
     expect(en('/conta/bancos', '?ver=casados')).toBe('movimientos')
     expect(en('/conta/libros/diario', '?ver=revisar')).toBe('asientos')
-    expect(cintaDe('contactos', 'clientes', NADA).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Nuevo cliente']])
+    expect(cintaDe('contactos', 'clientes', NADA).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Nuevo cliente', 'Nuevo proveedor']])
   })
   it('lo elegido viaja por la cinta (ejercicio, mes, banco) y la consulta de la orden manda', () => {
     expect(conConsulta('/conta/bancos/subir', '?banco=b1&mes=2026-10&ver=casados')).toBe('/conta/bancos/subir?mes=2026-10&banco=b1')
