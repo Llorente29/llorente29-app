@@ -297,6 +297,34 @@ test('alta de cliente con el NIF de un proveedor: un solo tercero con los dos pa
   }
 })
 
+// S01d: «Nuevo proveedor» desde Contactos (la cinta, ?nuevo=proveedor): se queda en la lista,
+// lo dice con su nombre (regla 8) y lo enseña buscándolo por su NIF.
+test('S01d · alta de proveedor desde Contactos: lo confirma y sale en la lista', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
+  const s = await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  const nombre = `Proveedor S01d e2e ${Date.now()}`
+  const nif = cifInventado()
+  try {
+    await page.goto('/conta/clientes-y-proveedores')
+    await page.getByRole('toolbar', { name: 'Acciones de Todos' }).getByRole('link', { name: /Nuevo proveedor/ }).click()
+    const dialogo = page.getByRole('dialog', { name: 'Nuevo proveedor' })
+    await dialogo.getByLabel('Nombre con el que lo conocéis').fill(nombre)
+    await dialogo.getByLabel('NIF (opcional)').fill(nif)
+    await dialogo.getByRole('button', { name: 'Dar de alta' }).click()
+    await expect(page.getByText(`Proveedor ${nombre} dado de alta. Ya puedes subir sus facturas.`)).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Nuevo proveedor' })).toHaveCount(0)
+    await expect(page.getByLabel('Buscar por nombre o NIF')).toHaveValue(nif)
+    await expect(page.getByRole('link', { name: new RegExp(nombre) })).toBeVisible()
+    const roles = await rest<{ role: string }[]>(s, 'GET', `party_role?select=role,party!inner(name)&account_id=eq.${CUENTA_A.id}&party.name=eq.${encodeURIComponent(nombre)}`)
+    expect(roles.datos.map((r) => r.role)).toEqual(['supplier'])
+  } finally {
+    const p = await rest<{ id: string }[]>(s, 'GET', `supplier?select=id&account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
+    for (const x of p.datos ?? []) await borrarProveedor(s, x.id)
+    await rest(s, 'DELETE', `party?account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
+  }
+})
+
 test('RLS: la cuenta B no ve los terceros de A', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Solo API')
   const b = await entrarComo(page, CUENTA_B.email)

@@ -9,7 +9,7 @@
 import { Link } from 'react-router-dom'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { iniciales } from '@/modules/conta/lib/formato'
-import { Boton } from '@/modules/conta/diseno'
+import { Boton, Icono } from '@/modules/conta/diseno'
 import { NIVELES, NOMBRE_NIVEL, type Densidad, type Nivel, type Preferencias } from './preferencias'
 
 const AYUDA_NIVEL: Record<Nivel, string> = {
@@ -18,18 +18,28 @@ const AYUDA_NIVEL: Record<Nivel, string> = {
   experto: 'Con cuentas, claves y referencias a la norma.',
 }
 
-export function MenuUsuario({ nombre, prefs, solo, movil, cambiar }: {
+export function MenuUsuario({ nombre, prefs, solo, movil, cambiar, enCajon = false }: {
   nombre: string
   prefs: Preferencias
   solo: boolean
   movil: boolean
   cambiar: (c: Partial<Preferencias>, dicho: string) => void
+  /** S01d · En el móvil va en el cajón del menú: una fila «Nombre · Nivel», y el menú se abre debajo. */
+  enCajon?: boolean
 }) {
   const { abierto: menuAbierto, setAbierto: menuSetAbierto, alternar: menuAlternar, caja: menuCaja, boton: menuBoton } = useDesplegable()
   const elegir = (c: Partial<Preferencias>, dicho: string) => { cambiar(c, dicho); menuSetAbierto(false) }
   return (
     <div className="s-desplegable" ref={menuCaja}>
-      <Boton ref={menuBoton} variante="fantasma" icono="desplegar" aria-expanded={menuAbierto} aria-haspopup="true"
+      {enCajon && (
+        <button ref={menuBoton} type="button" className="s-barra-item" aria-expanded={menuAbierto} aria-haspopup="true"
+          aria-label={`${nombre}, nivel ${NOMBRE_NIVEL[prefs.nivel].toLowerCase()}. Tus preferencias`} onClick={menuAlternar}>
+          <span className="s-cajon-iniciales" aria-hidden="true">{iniciales(nombre)}</span>
+          <span className="s-barra-nombre">{nombre} · {NOMBRE_NIVEL[prefs.nivel]}</span>
+          <Icono nombre="desplegar" />
+        </button>
+      )}
+      {!enCajon && <Boton ref={menuBoton} variante="fantasma" icono="desplegar" aria-expanded={menuAbierto} aria-haspopup="true"
         aria-label={`${nombre}, nivel ${NOMBRE_NIVEL[prefs.nivel].toLowerCase()}. Tus preferencias`} onClick={menuAlternar}>
         {/* En el móvil no cabe «Nombre · Nivel»: sus iniciales; el nivel, en el menú y en el nombre del botón. */}
         {/* El nivel ocupa siempre lo del más largo: cambiarlo no mueve nada (ni manda una pestaña a «Más»). */}
@@ -38,7 +48,7 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar }: {
             {NIVELES.map((n) => <span key={n} aria-hidden={n !== prefs.nivel} data-actual={n === prefs.nivel || undefined}>{NOMBRE_NIVEL[n]}</span>)}
           </strong></>
         )}
-      </Boton>
+      </Boton>}
       {menuAbierto && (
         <div className="s-menu s-menu-derecha">
           <div role="group" aria-label="Tu nivel">
@@ -63,7 +73,8 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar }: {
             onClick={() => elegir({ cintaOculta: !prefs.cintaOculta }, prefs.cintaOculta ? 'La cinta vuelve a estar a la vista.' : 'Cinta oculta: «Mostrar la cinta» la saca otra vez.')}>
             {prefs.cintaOculta ? 'Mostrar la cinta' : 'Ocultar la cinta'}
           </button>
-          {!solo && (
+          {/* En el cajón, «Volver a Folvy» ya es una fila del propio cajón: no se repite. */}
+          {!solo && !enCajon && (
             <>
               <div className="s-menu-separador" />
               <Link to="/" className="s-menu-item">Volver a Folvy</Link>

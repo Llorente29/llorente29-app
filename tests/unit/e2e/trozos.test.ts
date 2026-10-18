@@ -34,7 +34,10 @@ describe('la entera en trozos', () => {
     const media = seg.reduce((a, b) => a + b, 0) / 4
     expect(Math.max(...seg)).toBeLessThanOrEqual(media * 1.1)
     // Medido el 16/10: 33,3 min con 1 worker; en 4 trozos, unos 8,4 cada uno.
-    expect(Math.max(...seg) / 60).toBeLessThan(9.5)
+    // 18/10 (S01d): la suite ha crecido (s01c, s01d). La entera de 4 carriles
+    // del 18/10 (run 39109156060) midió sus trozos en 8,7, 9,3 y 11,3 min; el
+    // reparto estimado da 10,3. El techo pasa a 11 min, con esa medida.
+    expect(Math.max(...seg) / 60).toBeLessThan(11)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {

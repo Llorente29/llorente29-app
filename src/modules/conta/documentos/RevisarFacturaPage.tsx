@@ -242,6 +242,9 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
               <Leido etiqueta="Factura" valor={`${fac.numero ?? 'sin número'} · ${fecha(fac.fecha)}`} apoyo={fac.no_repetida ? 'no está repetida (lo confirmaste)' : 'no hay otra con su número y su total'} />
               {fac.tipos.map((t) => <Leido key={`b${t.tipo}`} etiqueta={`Base al ${porcentaje(t.tipo)}`} valor={euro(t.base)} />)}
               {fac.tipos.map((t) => <Leido key={`c${t.tipo}`} etiqueta={`IVA ${porcentaje(t.tipo)}`} valor={euro(t.cuota)} />)}
+              {/* S01d: sin cuadro de impuestos (la escrita a mano no lo tiene), la base y la cuota de la factura, con el tipo de su línea. */}
+              {fac.tipos.length === 0 && fac.base !== null && <Leido etiqueta={`Base${fac.lineas.length === 1 && fac.lineas[0].iva !== null ? ` al ${porcentaje(fac.lineas[0].iva)}` : ''}`} valor={euro(fac.base)} />}
+              {fac.tipos.length === 0 && fac.cuota !== null && <Leido etiqueta={`IVA${fac.lineas.length === 1 && fac.lineas[0].iva !== null ? ` ${porcentaje(fac.lineas[0].iva)}` : ''}`} valor={euro(fac.cuota)} />}
               {!!fac.recargo && <Leido etiqueta="Recargo de equivalencia" valor={euro(fac.recargo)} />}
               {!!fac.retencion && <Leido etiqueta="Retención" valor={euro(-Math.abs(fac.retencion))} />}
               <Leido etiqueta="Total" valor={euro(fac.total)} apoyo={avisos.some((a) => a.id === 'total' || a.id === 'suma') ? 'no cuadra con sus bases' : 'cuadra con sus bases'} aviso={avisos.some((a) => a.id === 'total' || a.id === 'suma')} />
@@ -365,16 +368,18 @@ function Papel({ fac, url, error, solo, movil }: { fac: FacturaRevisar; url: str
   const [entero, setEntero] = useState(false)
   const [tinta, setTinta] = useState<number | null>(null)
   const recorte = movil && !entero ? Math.min(PAPEL_MOVIL_MAX, tinta ? Math.max(120, Math.ceil(tinta) + 12) : PAPEL_MOVIL_MAX) : null
+  // S01d: sin llegada ni papel guardado, la factura se escribió a mano.
+  const sinPapel = !l && !fac.papel
   const cuando = l?.cuando ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(l.cuando)) : null
   return (
     <section className="cxr-papel" aria-label="La factura tal como llegó">
       <div className="cxr-papel-cabeza">
-        <span>{l?.archivo ?? 'Factura'} · {comoLlego(l?.canal ?? fac.canal, l?.tipo, solo)}{l?.a ? ` a ${l.a.replace(/@.*/, '@')}` : ''}{cuando ? ` · ${cuando}` : ''}</span>
+        <span>{l?.archivo ?? (sinPapel ? 'Sin papel' : 'Factura')} · {comoLlego(l?.canal ?? fac.canal ?? (sinPapel ? 'a_mano' : null), l?.tipo, solo)}{l?.a ? ` a ${l.a.replace(/@.*/, '@')}` : ''}{cuando ? ` · ${cuando}` : ''}</span>
         {url && <a href={url} target="_blank" rel="noopener noreferrer" className="cx-enlace">Abrir</a>}
       </div>
       <div className="cxr-papel-hoja">
         {error && <p className="cx-error">No se ha podido abrir el papel: {error}</p>}
-        {!error && !url && <p className="cx-ayuda">Esta factura no tiene papel guardado.</p>}
+        {!error && !url && <p className="cx-ayuda">{sinPapel ? 'Sin papel: apuntada a mano.' : 'Esta factura no tiene papel guardado.'}</p>}
         {url && (
           // Tocar el papel también lo abre o lo recoge (el botón de debajo es lo mismo, para el teclado y el lector).
           <div className={`cxr-papel-recorte${recorte !== null ? ' cxr-papel-recortado' : ''}`} style={recorte !== null ? { maxHeight: recorte } : undefined}

@@ -243,6 +243,18 @@ export async function cuentasPorDarDeAlta(companyId: string): Promise<{ codigo: 
 export const altaCuenta = (companyId: string, c: { nombre: string; iban: string; codigo: string; localId: string | null; comun: boolean }) =>
   rpc<string>('bank_cuenta_alta', { p_company: companyId, p_kind: 'bank', p_nombre: c.nombre, p_iban: c.iban, p_cuenta_contable: c.codigo, p_local: c.localId, p_comun: c.comun })
 
+export interface BancoNuevoHecho { banco: string; cuenta: string | null; cuentaId: string | null; porque: string }
+
+/**
+ * S01d · Un banco (o una tarjeta) que aún no está en el plan: la base le crea
+ * la subcuenta 572 siguiente («Bancos · <nombre>») y lo enlaza; sin plan
+ * activado, el banco solo, y `porque` lo dice.
+ */
+export async function altaBancoNuevo(companyId: string, b: { tipo: 'bank' | 'card'; nombre: string; iban: string | null; localId: string | null; comun: boolean }, quien: string | null): Promise<BancoNuevoHecho> {
+  const r = await rpc<Fila>('bank_cuenta_nueva', { p_company: companyId, p_kind: b.tipo, p_nombre: b.nombre, p_iban: b.iban, p_local: b.localId, p_comun: b.comun, p_quien_nombre: quien })
+  return { banco: String(r.banco), cuenta: s(r.cuenta), cuentaId: s(r.cuenta_id), porque: String(r.porque ?? '') }
+}
+
 /** La foto del ticket: al bucket privado, en la carpeta del movimiento, y apuntada en él. */
 export async function subirTicket(accountId: string, movimientoId: string, f: File): Promise<void> {
   if (!supabase) throw new Error('No hay conexión con la base de datos.')
