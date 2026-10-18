@@ -1,4 +1,4 @@
--- supabase/migrations/20261122T0160_i01b_asiento_303.sql
+-- supabase/migrations/20261122T0180_i01b_asiento_303.sql
 -- cambia: public.conta_motivos_para_validar · prueba: supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
 -- cambia: public.conta_impuesto_estado_vale · prueba: supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
 -- cambia: public.bank_match_item · prueba: supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
@@ -49,7 +49,7 @@
 --   · bank_match y journal_entry: un disparador nuevo cada una, con WHEN: solo
 --     despierta al deshacer un casado o al anular un asiento de liquidación.
 --
--- Vuelta atrás: supabase/vuelta-atras/20261122T0160_i01b_asiento_303.down.sql
+-- Vuelta atrás: supabase/vuelta-atras/20261122T0180_i01b_asiento_303.down.sql
 
 -- ── 1 · Las vueltas atrás de una declaración ───────────────────────────────
 create or replace function public.conta_impuesto_estado_vale(p_de text, p_a text)
@@ -61,7 +61,7 @@ returns boolean language sql immutable set search_path = public as $$
     ('filed', 'booked'), ('filed', 'paid'), ('filed', 'offset'), ('filed', 'refunded'),
     ('booked', 'paid'), ('booked', 'offset'), ('booked', 'refunded'),
     ('not_required', 'pending'),
-    -- I01b (0160): deshacer el pago en Bancos, o anular el asiento de liquidación.
+    -- I01b (0180): deshacer el pago en Bancos, o anular el asiento de liquidación.
     ('paid', 'booked'), ('paid', 'filed'), ('refunded', 'booked'), ('refunded', 'filed'),
     ('booked', 'filed'), ('offset', 'filed'))
 $$;
@@ -147,7 +147,7 @@ begin
                     and exists (select 1 from public.fiscal_year a
                                  where a.id = c.fiscal_year_id and a.ends_on + 1 = oy.starts_on)))));
 
-    -- I01b (0160): el asiento de liquidación de un 303 (o su contraasiento)
+    -- I01b (0180): el asiento de liquidación de un 303 (o su contraasiento)
     -- salda la 477 y la 472 del periodo: sus apuntes no llevan tipo ni libro
     -- registro. Solo si su origen es una declaración 303 de su misma empresa.
     v_liquidacion := exists (

@@ -1,6 +1,6 @@
--- supabase/vuelta-atras/20261122T0160_i01b_asiento_303.down.sql
+-- supabase/vuelta-atras/20261122T0180_i01b_asiento_303.down.sql
 --
--- Vuelta atrás de 20261122T0160_i01b_asiento_303. ANTES, el front de
+-- Vuelta atrás de 20261122T0180_i01b_asiento_303. ANTES, el front de
 -- Impuestos y conta-hacienda tienen que dejar de llamar a contabilizar y a
 -- casar el cargo.
 -- PARA, sin tocar nada, si ya hay un asiento de liquidación de una
@@ -17,7 +17,7 @@ begin
     execute 'select count(*) from public.bank_match_item where tax_return_id is not null' into m;
   end if;
   if n > 0 or coalesce(m, 0) > 0 then
-    raise exception 'I01b 0160 vuelta atrás: hay % asientos de liquidación de declaraciones y % pagos casados con una declaración. No se toca nada.', n, coalesce(m, 0);
+    raise exception 'I01b 0180 vuelta atrás: hay % asientos de liquidación de declaraciones y % pagos casados con una declaración. No se toca nada.', n, coalesce(m, 0);
   end if;
 end $$;
 

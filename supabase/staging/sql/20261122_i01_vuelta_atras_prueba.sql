@@ -10,6 +10,8 @@
 --      fuentes del BOE; y tax_forms de cada empresa sigue igual (la lista de
 --      modelos no se pierde).
 --   3. Otra vez hacia delante: se puede volver a aplicar.
+-- sin usuario: la vuelta atrás no la ejecuta nadie desde la app; la aplica el
+-- workflow de producción como dueño (S01d: faltaba esta línea y antes-de-subir paraba).
 -- Lo que hace parar a cada vuelta atrás (lo que decidió una persona) no se
 -- ensaya aquí: un raise para el workflow. Está escrito en cada .down.sql.
 -- sin usuario: la tanda y su vuelta atrás las aplica el workflow como postgres, y así se prueban aquí.

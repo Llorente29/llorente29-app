@@ -1,5 +1,5 @@
 # I01b · Las pantallas de Impuestos y el asiento del 303 (rama conta/i01b-pantallas-impuestos).
-#   Pieza 6, el asiento de liquidación: la prueba aplica la 0100 a la 0160 con
+#   Pieza 6, el asiento de liquidación: la prueba aplica la 0100 a la 0180 (la 0160 y la 0170 del S01d ya están) con
 #   \i y ROLLBACK (y la M01 y la 0140 del S01, si staging no las tiene),
 #   contra los 303 de 2026 de la empresa A: la validación sigue pidiendo tipo
 #   a los demás asientos; contabilizar (477 contra 472, el resultado a la 4750,
@@ -9,9 +9,22 @@
 #   declaración; con el mes cerrado va al primer día abierto; y una [68] para.
 supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
 #   Su vuelta atrás: hacia delante, atrás (las tres huellas como antes y nada
-#   de la 0160) y otra vez hacia delante.
+#   de la 0180) y otra vez hacia delante.
 supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
 
+# S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
+#   La 0160 (el CHECK de journal_entry_document.kind amplía con
+#   'factura_expedida' y conta_documento_expedida_guardar) y la 0170
+#   (bank_cuenta_nueva) se aplican DE VERDAD: solo amplían un CHECK y añaden
+#   dos funciones, y el front nuevo (el PDF de la expedida, el banco nuevo) las
+#   necesita para su e2e. Ya están aplicadas (run 334, 18/10 09:49: las dos
+#   OK) y no se vuelven a pasar (create function no se repite). Quedan sus dos
+#   pruebas, con \i dentro de su transacción y ROLLBACK: como usuario de A y
+#   de B, y la vuelta atrás de verdad (y otra vez delante). Van las primeras:
+#   lo de abajo es de otros frentes y no se toca.
+supabase/staging/sql/20261122_s01d_documento_expedida_prueba.sql
+supabase/staging/sql/20261122_s01d_banco_nuevo_prueba.sql
+#
 # I01a · Impuestos por dentro (rama conta/i01a-impuestos-por-dentro).
 #   Pieza 1, plazos: la prueba aplica la 20261122T0100 (festivos del BOE 2026 y
 #   2027, reglas de plazo y conta_impuesto_plazo) y comprueba, como usuario, las

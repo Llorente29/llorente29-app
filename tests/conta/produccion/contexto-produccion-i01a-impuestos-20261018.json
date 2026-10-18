@@ -1,0 +1,32 @@
+{
+ "_que": "I01a · contexto de producción de la tanda viva «Impuestos por dentro» (20261122T0100–0150), medido en SOLO LECTURA el 18/10 a las 06:40 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que nombra la tanda solo existen company_tax_profile (le añade un disparador), official_source (le añade sus dos fuentes del BOE) y vault.secrets (solo nombrado dentro de las funciones de certificados); ninguna función existe; nada del camino del pedido; ninguno de los seis en el historial.",
+ "medido": "2026-10-18T06:40Z",
+ "tanda": {
+  "supabase/migrations/20261122T0100_i01_plazos.sql": "4ac2e6ac2aa69fb765d56d1b811e3836",
+  "supabase/migrations/20261122T0110_i01_modelo_datos.sql": "48616bb8436374c69343c2e2635997b3",
+  "supabase/migrations/20261122T0120_i01_obligaciones.sql": "adcda63af36571fdfd14cfc8b7254bce",
+  "supabase/migrations/20261122T0130_i01_certificados.sql": "1e838e1ce78b75541dd91a04fa947097",
+  "supabase/migrations/20261122T0140_i01_calculo_303.sql": "cc8b75b5cda81eebda51f13106b2052b",
+  "supabase/migrations/20261122T0150_i01_presentar.sql": "5a1dd986031bc31b5b4455d904cdc68b"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_tax_profile",
+   "public.official_source",
+   "vault.secrets"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.company_tax_profile": 0,
+   "public.official_source": 0,
+   "vault.secrets": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

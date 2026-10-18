@@ -1,12 +1,12 @@
 -- supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
 --
--- SOLO STAGING. La vuelta atrás de 20261122T0160_i01b_asiento_303, con \i
+-- SOLO STAGING. La vuelta atrás de 20261122T0180_i01b_asiento_303, con \i
 -- dentro de la transacción y ROLLBACK: staging no cambia.
 --   1. Hacia delante hasta la 0150, y la huella de conta_motivos_para_validar,
 --      conta_impuesto_estado_vale y el CHECK de bank_match_item.
---   2. La 0160 y su vuelta atrás: no queda nada suyo (funciones, disparadores,
+--   2. La 0180 y su vuelta atrás: no queda nada suyo (funciones, disparadores,
 --      columna, índice) y las tres huellas son las de antes.
---   3. Otra vez la 0160: se puede volver a aplicar.
+--   3. Otra vez la 0180: se puede volver a aplicar.
 -- Lo que hace parar a la vuelta atrás (un asiento de liquidación o un pago
 -- casado con una declaración) no se ensaya aquí: un raise para el workflow.
 -- sin usuario: la tanda y su vuelta atrás las aplica el workflow como postgres, y así se prueban aquí.
@@ -26,7 +26,7 @@ set local statement_timeout = '300s';
 \i supabase/migrations/20261122T0140_i01_calculo_303.sql
 \i supabase/migrations/20261122T0150_i01_presentar.sql
 
--- Lo que staging no tiene y la 0160 cambia (como en la prueba del S01): la
+-- Lo que staging no tiene y la 0180 cambia (como en la prueba del S01): la
 -- tanda de C, la M01 y la 0140 del S01, dentro de la transacción si faltan.
 select not exists (select 1 from pg_proc where proname = 'tg_journal_entry_envio_por_aclarar' and pronamespace = 'public'::regnamespace) as falta_c06b \gset
 \if :falta_c06b
@@ -51,15 +51,15 @@ insert into _h (k, antes) values
   ('estado_vale', md5(pg_get_functiondef('public.conta_impuesto_estado_vale(text,text)'::regprocedure))),
   ('check', (select md5(pg_get_constraintdef(oid)) from pg_constraint where conname = 'bank_match_item_uno' and conrelid = 'public.bank_match_item'::regclass));
 
-\i supabase/migrations/20261122T0160_i01b_asiento_303.sql
+\i supabase/migrations/20261122T0180_i01b_asiento_303.sql
 do $$ begin
   if to_regprocedure('public.conta_impuesto_303_contabilizar(uuid)') is null
      or (select md5(pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure))) = (select antes from _h where k = 'motivos') then
-    raise exception 'PRUEBA vuelta atrás I01b: la 0160 no se ha aplicado.';
+    raise exception 'PRUEBA vuelta atrás I01b: la 0180 no se ha aplicado.';
   end if;
 end $$;
 
-\i supabase/vuelta-atras/20261122T0160_i01b_asiento_303.down.sql
+\i supabase/vuelta-atras/20261122T0180_i01b_asiento_303.down.sql
 update _h set despues = case k
   when 'motivos' then md5(pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure))
   when 'estado_vale' then md5(pg_get_functiondef('public.conta_impuesto_estado_vale(text,text)'::regprocedure))
@@ -78,12 +78,12 @@ begin
      or exists (select 1 from pg_trigger where tgname in ('bank_match_deshecho_impuesto', 'journal_entry_liquidacion_anulada'))
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'bank_match_item' and column_name = 'tax_return_id')
      or to_regclass('public.bank_match_item_impuesto') is not null then
-    raise exception 'PRUEBA vuelta atrás I01b: queda algo de la 0160.';
+    raise exception 'PRUEBA vuelta atrás I01b: queda algo de la 0180.';
   end if;
-  raise notice 'PRUEBA vuelta atrás I01b: fuera la 0160; las tres huellas, como antes.';
+  raise notice 'PRUEBA vuelta atrás I01b: fuera la 0180; las tres huellas, como antes.';
 end $$;
 
-\i supabase/migrations/20261122T0160_i01b_asiento_303.sql
+\i supabase/migrations/20261122T0180_i01b_asiento_303.sql
 do $$ begin
   if to_regprocedure('public.conta_impuesto_303_contabilizar(uuid)') is null then
     raise exception 'PRUEBA vuelta atrás I01b: no se vuelve a aplicar.';

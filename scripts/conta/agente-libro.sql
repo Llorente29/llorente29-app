@@ -103,7 +103,7 @@ select json_build_object(
     join public.company_account a on a.id = l.company_account_id
     left join public.tax_rate t on t.id = l.tax_rate_id
     cross join lateral (select case
-       -- I01b (0160): como en conta_motivos_para_validar, la liquidación de un 303
+       -- I01b (0180): como en conta_motivos_para_validar, la liquidación de un 303
        -- (o su contraasiento) salda la 477 y la 472 sin tipo ni libro.
        when (a.template_code like '472%' or a.template_code like '477%') and l.tax_rate_id is null
             and not exists (select 1 from public.journal_entry o

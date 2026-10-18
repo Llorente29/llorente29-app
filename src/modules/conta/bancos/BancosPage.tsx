@@ -48,6 +48,7 @@ import { CuentasYExtractos } from '@/modules/conta/bancos/CuentasYExtractos'
 import { CierreDelMes } from '@/modules/conta/bancos/CierreDelMes'
 import { SubirExtracto } from '@/modules/conta/bancos/SubirExtracto'
 import { HechoPorFolvy } from '@/modules/conta/bancos/HechoPorFolvy'
+import { PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 
 
 function contenido(v: VistaBancos): ReactNode {
@@ -130,7 +131,7 @@ export default function BancosPage() {
   const dudasDe = (id: string) => datos.datos?.dudas[id] ?? 0
   const entradas: EntradaPantalla[] = (() => {
     if (!datos.datos) return []
-    if (bancos.length === 0) return [{ id: 'alta', etiqueta: 'Dar de alta un banco', a: conQuery(rutaBancos('cuentas')), dato: 'En Cuentas y extractos' }]
+    if (bancos.length === 0) return [{ id: 'alta', etiqueta: 'Dar de alta un banco', a: conQuery(rutaBancos('cuentas'), { [PARAM_NUEVO]: VALOR_NUEVO }), dato: 'En Cuentas y extractos' }]
     const { visibles, resto } = bancosEnBarra(bancos, datos.datos.dudas, banco?.id ?? null)
     const lista: EntradaPantalla[] = visibles.map((b) => {
       const e = estadoBanco(dudasDe(b.id), !!b.ultimoExtracto)

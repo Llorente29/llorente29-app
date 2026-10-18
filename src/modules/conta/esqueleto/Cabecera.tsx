@@ -7,9 +7,10 @@
 //   en «Más ▾») · «Buscar · Ctrl K» · Favoritos · usuario y su nivel.
 // S01c (18/10): el logo de la marca sale UNA vez: en el ordenador, arriba de
 // la barra de productos (no aquí); en el móvil, aquí, con el botón que abre el
-// cajón de productos. Y en el móvil el ejercicio y el mes van en su propia
-// fila, debajo: al lado del nombre de la empresa se montaban encima.
-// En el móvil: menú, logo, la empresa, Buscar, Favoritos y el usuario; las
+// cajón de productos.
+// S01d (Julio, 18/10): en el móvil la cabecera es solo menú, logo y Buscar. La
+// empresa va ENTERA en la fila de debajo, con el ejercicio y el mes de la
+// pantalla que los lea; Favoritos y el usuario, en el cajón del menú. Las
 // pestañas, en una fila que se desliza debajo.
 
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefCallback } from 'react'
@@ -136,6 +137,7 @@ export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente
   logoCliente: string | null
   huecoPeriodo: RefCallback<HTMLDivElement>
   abrirBuscador: () => void
+  /** Favoritos y el usuario: en el ordenador, aquí; en el móvil van en el cajón (S01d). */
   favoritos: ReactNode
   usuario: ReactNode
   /** En el móvil: abre el cajón de productos. */
@@ -152,7 +154,7 @@ export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente
               <Link to={rutaConta('inicio')} className="s-cab-logotipo" aria-label="Inicio"><LogoHorizontal alto={18} /></Link>
             </>
           )}
-          <Cliente logo={logoCliente} movil={movil} />
+          {!movil && <Cliente logo={logoCliente} movil={false} />}
           {/* El ejercicio y el mes: lo pone la pantalla que lo lee (PeriodoEnBarra); vacío, no sale. En el móvil, en su fila. */}
           {!movil && <div className="s-cab-periodo" ref={huecoPeriodo} />}
         </div>
@@ -162,11 +164,16 @@ export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente
         <div className="s-cab-derecha">
           <Boton variante="fantasma" className="s-cab-buscar" icono="buscar" tecla={movil ? undefined : 'Ctrl K'} atajo="Control+K"
             aria-label={movil ? 'Buscar' : undefined} onClick={abrirBuscador}>{movil ? '' : 'Buscar'}</Boton>
-          {favoritos}
-          {usuario}
+          {!movil && favoritos}
+          {!movil && usuario}
         </div>
       </header>
-      {movil && <div className="s-cab-periodo s-cab-periodo-movil" ref={huecoPeriodo} />}
+      {movil && (
+        <div className="s-cab-fila-movil">
+          <Cliente logo={logoCliente} movil />
+          <div className="s-cab-periodo s-cab-periodo-movil" ref={huecoPeriodo} />
+        </div>
+      )}
       {movil && producto && pestanas.length > 1 && <PestanasMovil producto={producto} pestanas={pestanas} activa={pestanaActiva} />}
     </>
   )

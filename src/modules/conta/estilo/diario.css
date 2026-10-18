@@ -207,3 +207,23 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
 .cxd-ayuda-tipo { margin: 4px 0 0; max-width: 72ch; }
 .cxd-predefinidos { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .cxd-predefinidos li { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+
+/* S01d · La factura expedida: su PDF al lado del asiento a mano (formulario a
+   la izquierda, papel a la derecha) y en la tarjeta «Factura» del asiento. Por
+   debajo de 1100 px, el papel baja debajo del formulario y se puede recoger. */
+.cxd-expedida-con-papel { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); gap: 14px; align-items: start; }
+.cxd-expedida-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxd-expedida-con-papel > .cxd-expedida-papel { position: sticky; top: 14px; }
+.cxd-expedida { display: flex; flex-direction: column; gap: 8px; }
+.cxd-expedida-elegir { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cxd-expedida-boton { cursor: pointer; display: inline-flex; align-items: center; }
+.cxd-expedida-elegir input:focus-visible + .cxd-expedida-boton { outline: 3px solid var(--cx-azul); outline-offset: 2px; }
+.cxd-expedida-elegir input:disabled + .cxd-expedida-boton { opacity: .5; cursor: default; }
+.cxd-expedida-elegido { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cxd-expedida-nombre { min-width: 0; overflow-wrap: anywhere; }
+.cxd-expedida-hoja { min-height: 0; padding: 10px; }
+.cxd-expedida-recoger { align-self: flex-start; margin: 8px 14px 0; }
+@media (max-width: 1100px) {
+  .cxd-expedida-con-papel { grid-template-columns: minmax(0, 1fr); }
+  .cxd-expedida-con-papel > .cxd-expedida-papel { position: static; }
+}

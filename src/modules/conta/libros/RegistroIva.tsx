@@ -20,7 +20,7 @@
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { rutaAsiento, rutaLibros } from '@/config/navegacion'
+import { rutaAsiento, rutaLibros, rutaRecibidaAMano } from '@/config/navegacion'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
@@ -105,6 +105,8 @@ export function RegistroIva({ libro }: { libro: Vista }) {
           <button type="button" className="cx-boton-sec" onClick={() => exportar('pdf')} disabled={!vistas}>Exportar PDF</button>
           <button type="button" className="cx-boton-sec" onClick={() => exportar('excel')} disabled={!vistas}>Excel</button>
           <Link to={rutaLibros('registro', 'formato-aeat')} className="cx-boton-sec">Formato AEAT</Link>
+          {/* S01d: una recibida sin fichero se da de alta a mano; sale aquí cuando se apunta. */}
+          {libro === 'received' && <Link to={rutaRecibidaAMano()} className="cx-boton">+ Nueva recibida a mano</Link>}
         </div>
       </div>
       <Guardado texto={hecho} />

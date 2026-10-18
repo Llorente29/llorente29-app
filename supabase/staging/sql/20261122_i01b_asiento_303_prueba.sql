@@ -1,6 +1,6 @@
 -- supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261122T0160_i01b_asiento_303 (con la 0100 a la
+-- SOLO STAGING. Prueba de 20261122T0180_i01b_asiento_303 (con la 0100 a la
 -- 0150 delante), con \i dentro de la transacción y ROLLBACK: staging no cambia.
 -- Contra los 303 de 2026 de la empresa de prueba A, calculados de su libro de
 -- IVA aquí dentro. El cargo del banco es un movimiento de prueba creado aquí
@@ -40,7 +40,7 @@ set local statement_timeout = '300s';
 \i supabase/migrations/20261122T0140_i01_calculo_303.sql
 \i supabase/migrations/20261122T0150_i01_presentar.sql
 
--- Lo que staging no tiene y la 0160 cambia (como en la prueba del S01): la
+-- Lo que staging no tiene y la 0180 cambia (como en la prueba del S01): la
 -- tanda de C, la M01 y la 0140 del S01, dentro de la transacción si faltan.
 select not exists (select 1 from pg_proc where proname = 'tg_journal_entry_envio_por_aclarar' and pronamespace = 'public'::regnamespace) as falta_c06b \gset
 \if :falta_c06b
@@ -58,7 +58,7 @@ select to_regclass('public.conta_eje_analitico') is null as falta_s01_0130 \gset
 \endif
 \i supabase/migrations/20261121T0140_s01_regla5_eje_local.sql
 
-\i supabase/migrations/20261122T0160_i01b_asiento_303.sql
+\i supabase/migrations/20261122T0180_i01b_asiento_303.sql
 
 create temporary table _p (k text primary key, val text) on commit drop;
 grant all on _p to authenticated, service_role;

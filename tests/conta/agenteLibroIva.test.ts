@@ -21,8 +21,8 @@ const ultimaValidar = () => readdirSync(MIG).filter((f) => /^\d{8}T\d{4}_.*\.sql
 describe('la regla del IVA: la base y el agente «libro», iguales', () => {
   it('la última regla de validar es la de los motivos (con la tolerancia del céntimo), y su tolerancia se lee', () => {
     // S01 (0140): la regla 5 solo pide el local con el eje encendido; la del IVA, igual que en la M01.
-    // I01b (0160): la liquidación del 303 no pide tipo a la 477 y la 472; la tolerancia, igual.
-    expect(ultimaValidar()).toBe('20261122T0160_i01b_asiento_303.sql')
+    // I01b (0180): la liquidación del 303 no pide tipo a la 477 y la 472; la tolerancia, igual.
+    expect(ultimaValidar()).toBe('20261122T0180_i01b_asiento_303.sql')
     expect(tolerancia(readFileSync(`${MIG}/${ultimaValidar()}`, 'utf8'))).toBe('greatest(1, floor(l.tax_documents / 2.0)) / 100')
   })
   it('el agente usa exactamente la misma tolerancia que la base', () => {
@@ -33,7 +33,7 @@ describe('la regla del IVA: la base y el agente «libro», iguales', () => {
 })
 
 describe('la liquidación del 303: la base y el agente «libro», con la misma excepción', () => {
-  const base = readFileSync(`${MIG}/20261122T0160_i01b_asiento_303.sql`, 'utf8')
+  const base = readFileSync(`${MIG}/20261122T0180_i01b_asiento_303.sql`, 'utf8')
   const agente = readFileSync('scripts/conta/agente-libro.sql', 'utf8')
   it('las dos se libran solo con origen una declaración 303 de la misma empresa (o su contraasiento)', () => {
     for (const sql of [base, agente]) {
