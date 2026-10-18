@@ -24,6 +24,10 @@ test('cuenta B (Canarias, sin interruptor ni Cocina): impuestos con el IGIC arri
   test.skip(info.project.name === 'movil', 'El reparto es el mismo; el móvil se mira con A')
   await abrirTablas(page, CUENTA_B.email, 'impuestos')
   await expect(page.getByRole('heading', { name: 'Tablas generales', exact: true })).toBeVisible()
+  // S01e: Contabilidad › Definiciones: el título una vez, «Definiciones» encima y sin el índice de Ajustes al lado.
+  await expect(page.getByRole('heading', { name: 'Tablas generales', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('main').locator('.cx-antetitulo').first()).toHaveText('Definiciones')
+  await expect(page.getByRole('navigation', { name: 'Ajustes' })).toHaveCount(0)
   await expect(page.getByRole('main').getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
 
   // Abre con TODAS (D5): «Todos» pulsado, y las dos separaciones a la vista.

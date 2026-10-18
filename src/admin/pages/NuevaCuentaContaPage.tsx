@@ -9,9 +9,14 @@
 // Regla 8: el botón confirma con contenido o falla en pantalla. Si la
 // invitación no sale (la marca de pruebas aún no tiene remitente), lo dice con
 // su porqué y, fuera de producción, enseña el enlace para probar la entrada.
+//
+// I01b · El alta de una asesoría invitada por una empresa (Asesorías, en este
+// portal) llega aquí rellena (?asesoria=<invitación>&empresa=&correo=&motivo=).
+// Creada la cuenta, se vincula a la empresa que la invitó (conta-asesoria,
+// «aprobar»), y se dice.
 
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { MARCAS } from '@/marca/marca'
 
@@ -27,12 +32,15 @@ type Estado =
 
 export default function NuevaCuentaContaPage() {
   const navigate = useNavigate()
-  const [empresa, setEmpresa] = useState('')
-  const [correo, setCorreo] = useState('')
+  const [busqueda] = useSearchParams()
+  const invitacion = busqueda.get('asesoria')
+  const [empresa, setEmpresa] = useState(busqueda.get('empresa') ?? '')
+  const [correo, setCorreo] = useState(busqueda.get('correo') ?? '')
   const [nombre, setNombre] = useState('')
-  const [marca, setMarca] = useState<string>(MARCAS_SOLAS[0]?.id ?? '')
-  const [motivo, setMotivo] = useState('')
+  const [marca, setMarca] = useState<string>(MARCAS_SOLAS.find((m) => m.id === 'sumied')?.id ?? MARCAS_SOLAS[0]?.id ?? '')
+  const [motivo, setMotivo] = useState(busqueda.get('motivo') ?? '')
   const [estado, setEstado] = useState<Estado>({ que: 'quieto' })
+  const [vinculo, setVinculo] = useState<{ ok: boolean; texto: string } | null>(null)
 
   async function crear() {
     if (!supabase) { setEstado({ que: 'fallo', texto: 'No hay conexión con la base.' }); return }
@@ -48,6 +56,15 @@ export default function NuevaCuentaContaPage() {
       return
     }
     setEstado({ que: 'hecho', r: data as Resultado, correo: correo.trim(), empresa: empresa.trim() })
+    // I01b · Una asesoría invitada: se vincula a la empresa que la invitó.
+    if (invitacion) {
+      const { data: v, error: ve } = await supabase.functions.invoke('conta-asesoria', {
+        body: { accion: 'aprobar', invitacion, cuenta: (data as Resultado).account_id },
+      })
+      let texto = (v as { mensaje?: string } | null)?.mensaje ?? ''
+      if (ve) { try { const b = await (ve as { context?: Response }).context?.json(); texto = String(b?.mensaje ?? ve.message) } catch { texto = ve.message } }
+      setVinculo({ ok: !ve, texto: ve ? `La cuenta está creada, pero NO se ha vinculado a la empresa: ${texto}` : texto })
+    }
   }
 
   if (estado.que === 'hecho') {
@@ -71,6 +88,7 @@ export default function NuevaCuentaContaPage() {
             </>
           )}
         </div>
+        {vinculo && <p className="text-sm mb-4" role="status" style={{ color: vinculo.ok ? '#2F6B2F' : '#A12626' }}>{vinculo.ok ? '✓ ' : '⚠ '}{vinculo.texto}</p>}
         <div className="flex gap-2">
           <button type="button" onClick={() => navigate(`/_admin/cuentas/${r.account_id}`)} className="px-4 py-2 rounded-md text-sm font-medium" style={{ background: 'var(--color-terracota)', color: '#fff' }}>Ver la cuenta</button>
           <button type="button" onClick={() => { setEstado({ que: 'quieto' }); setEmpresa(''); setCorreo(''); setNombre(''); setMotivo('') }} className="px-4 py-2 rounded-md text-sm font-medium" style={{ border: '1px solid var(--color-border, #ddd)' }}>Crear otra</button>

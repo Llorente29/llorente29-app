@@ -9,6 +9,11 @@
 // S01: la cinta de Asientos lo abre con ?tipo= («Expedida» → serie Ventas,
 // «Tesorería» → Banco, «Predefinidos» → elegir uno de entry_template). Y lo que
 // se escribe aquí se puede guardar como predefinido (regla 8: lo dice al guardar).
+//
+// S01d: en una expedida se elige su PDF (o una foto) y se ve al lado mientras
+// se escribe; al «Guardar y validar» se sube y se enlaza al asiento validado.
+// Si eso falla, el asiento queda guardado y validado igual, y la pantalla del
+// asiento lo dice con el motivo y deja volver a adjuntarla.
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -26,6 +31,12 @@ import {
   cuentasDeApunte, guardarAMano, guardarPredefinido, leerEjercicios, leerPredefinidos, localesDeLaCuenta, validar,
   type CuentaPlan, type EjercicioLibro, type LocalEmpresa,
 } from '@/modules/conta/services/diarioService'
+import { guardarExpedidaPdf } from '@/modules/conta/services/documentosService'
+import { claseDeFichero, motivoExpedida, tamano, textoAdjunta } from '@/modules/conta/lib/expedidaPdf'
+import { useFicheroElegido } from '@/modules/conta/libro/ficheroElegido'
+import { ElegirExpedida, PapelExpedida } from '@/modules/conta/libro/FacturaExpedida'
+import { useIsMobile } from '@/shell/useIsMobile'
+import { TextoConImpuesto } from '@/modules/conta/ui/TextoConImpuesto'
 
 const vacia = (localId: string | null): LineaMano => ({ cuenta: '', debe: '', haber: '', localId, comun: false, concepto: '' })
 
@@ -58,6 +69,11 @@ export default function NuevoAsientoPage() {
   const [intentado, setIntentado] = useState(false)
   const [fallo, setFallo] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
+  // S01d: el PDF de la expedida, elegido antes de guardar para verlo al lado.
+  const esExpedida = def?.tipo === 'expedida'
+  const [pdf, elegirPdf] = useFicheroElegido()
+  const [adjuntando, setAdjuntando] = useState(false)
+  const movil = useIsMobile()
 
   const codigos = useMemo(() => new Set((base?.cuentas ?? []).map((c) => c.code)), [base])
   // S01: con el eje «local» apagado (Definiciones › Analítica), ni la columna ni el aviso; los apuntes van sin local.
@@ -112,18 +128,37 @@ export default function NuevoAsientoPage() {
     setOcupado(true)
     try {
       const id = await guardarAMano(accountId, activa.id, ejercicio.id, serie, fecha, concepto, lineas.map((l) => (ejeLocal ? { ...l, localId: l.localId ?? unLocal } : { ...l, localId: null, comun: false })), base.cuentas, userName)
+      // S01d: la factura solo se adjunta a una expedida (serie Ventas) validada.
+      const conPdf = esExpedida && pdf ? pdf.fichero : null
+      const sinAdjuntar = conPdf ? ` La factura (${conPdf.name}) no se ha adjuntado: se adjunta con el asiento validado.` : ''
       if (yValidar) {
+        let v: Awaited<ReturnType<typeof validar>>
         try {
-          const v = await validar(id, userName)
-          navegar(rutaAsiento(id), { replace: true, state: { aviso: `Validado: ${NOMBRE_SERIE[v.serie as Serie]} nº ${v.numero}.` } })
+          v = await validar(id, userName)
         } catch (e) {
-          navegar(rutaAsiento(id), { replace: true, state: { aviso: `Guardado como borrador, pero no se ha validado: ${e instanceof Error ? e.message : ''}` } })
+          navegar(rutaAsiento(id), { replace: true, state: { aviso: `Guardado como borrador, pero no se ha validado: ${e instanceof Error ? e.message : ''}${sinAdjuntar}` } })
+          return
+        }
+        if (!conPdf) { navegar(rutaAsiento(id), { replace: true, state: { aviso: `Validado: ${NOMBRE_SERIE[v.serie as Serie]} nº ${v.numero}.` } }); return }
+        const validado = `Guardado y validado: ${NOMBRE_SERIE[v.serie as Serie]} nº ${v.numero}.`
+        if (serie !== 1) {
+          navegar(rutaAsiento(id), { replace: true, state: { aviso: validado,
+            falloPdf: `La factura (${conPdf.name}) no se ha adjuntado: solo la lleva una expedida de la serie ${NOMBRE_SERIE[1]}, y este asiento es de ${NOMBRE_SERIE[serie]}.` } })
+          return
+        }
+        setAdjuntando(true)
+        try {
+          const r = await guardarExpedidaPdf(accountId, id, conPdf, userName)
+          navegar(rutaAsiento(id), { replace: true, state: { aviso: `${validado} ${textoAdjunta(r.nombre, r.yaEstaba)}` } })
+        } catch (e) {
+          navegar(rutaAsiento(id), { replace: true, state: { aviso: validado,
+            falloPdf: `La factura (${conPdf.name}) no se ha adjuntado: ${motivoExpedida(e instanceof Error ? e.message : String(e))}. El asiento está guardado y validado: adjúntala en la tarjeta «Factura», con «Adjuntar el PDF».` } })
         }
       } else {
-        navegar(rutaAsiento(id), { replace: true, state: { aviso: 'Guardado como borrador: sale en «Para revisar» hasta que lo valides.' } })
+        navegar(rutaAsiento(id), { replace: true, state: { aviso: `Guardado como borrador: sale en «Para revisar» hasta que lo valides.${sinAdjuntar}` } })
       }
     } catch (e) { setFallo(e instanceof Error ? e.message : 'No se ha guardado.') }
-    finally { setOcupado(false) }
+    finally { setOcupado(false); setAdjuntando(false) }
   }
 
   if (error) return <ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} />
@@ -135,12 +170,14 @@ export default function NuevoAsientoPage() {
         <div className="cxp-titulos">
           <Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libro diario', ruta: rutaLibroDiario() }, { etiqueta: def?.titulo ?? 'Nuevo asiento' }]} />
           <h1 className="cxp-nombre">{def?.titulo ?? 'Nuevo asiento'}</h1>
-          {def && <p className="cx-ayuda cxd-ayuda-tipo">{def.ayuda}</p>}
+          {/* S01e: en Canarias, «IGIC repercutido», no «IVA». */}
+          {def && <p className="cx-ayuda cxd-ayuda-tipo"><TextoConImpuesto texto={def.ayuda} /></p>}
         </div>
         <div className="cxd-acciones">
           <Link to={rutaLibroDiario()} className="cx-boton-sec">Cancelar</Link>
+          {esExpedida && pdf && <span className="cx-ayuda">El PDF se adjunta al validar</span>}
           <button type="button" className="cx-boton-sec" onClick={() => guardar(false)} disabled={ocupado}>Guardar borrador</button>
-          <button type="button" className="cx-boton" onClick={() => guardar(true)} disabled={ocupado}>{ocupado ? 'Guardando…' : 'Guardar y validar'}</button>
+          <button type="button" className="cx-boton" onClick={() => guardar(true)} disabled={ocupado}>{adjuntando ? 'Adjuntando la factura…' : ocupado ? 'Guardando…' : 'Guardar y validar'}</button>
         </div>
       </header>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
@@ -163,6 +200,27 @@ export default function NuevoAsientoPage() {
             </ul>
           )}
           <div role="status" aria-live="polite">{puesto && <p className="cxt-verde">{puesto}</p>}</div>
+        </section>
+      )}
+
+      <div className={esExpedida && pdf ? 'cxd-expedida-con-papel' : 'cxd-expedida-form'}>
+      <div className="cxd-expedida-form">
+      {esExpedida && (
+        <section className="cx-tarjeta cxd-expedida" aria-label="Factura">
+          <h2 className="cx-tarjeta-titulo">Factura</h2>
+          {!pdf && (
+            <>
+              <p className="cx-ayuda">Adjunta su PDF y lo tienes al lado mientras copias los datos. Se guarda con el asiento al «Guardar y validar»; una vez adjunta no se cambia.</p>
+              <ElegirExpedida etiqueta="Adjuntar el PDF de la factura" alElegir={elegirPdf} deshabilitado={ocupado} />
+            </>
+          )}
+          {pdf && (
+            <div className="cxd-expedida-elegido">
+              <span><strong className="cxd-expedida-nombre">{pdf.fichero.name}</strong> · {tamano(pdf.fichero.size)}{claseDeFichero(pdf.fichero.name, pdf.fichero.type) !== 'pdf' ? ' · foto: se convierte a PDF' : ''}</span>
+              <button type="button" className="cx-enlace" onClick={() => elegirPdf(null)} disabled={ocupado}>Quitar</button>
+              <span className="cx-ayuda">Se adjunta al pulsar «Guardar y validar». Con «Guardar borrador» no se adjunta: el PDF se adjunta al validar.{serie !== 1 ? ` Ojo: solo la lleva la serie ${NOMBRE_SERIE[1]}, y has elegido ${NOMBRE_SERIE[serie]}.` : ''}</span>
+            </div>
+          )}
         </section>
       )}
 
@@ -230,6 +288,12 @@ export default function NuevoAsientoPage() {
         <div role="status" aria-live="polite">{guardadoPredef && <p className="cxt-verde">{guardadoPredef}</p>}</div>
         {falloPredef && <p className="cx-error" role="alert">{falloPredef}</p>}
       </section>
+      </div>
+      {esExpedida && pdf && (
+        <PapelExpedida titulo={`${pdf.fichero.name} · aún sin adjuntar`} url={pdf.url} movil={movil}
+          esFoto={claseDeFichero(pdf.fichero.name, pdf.fichero.type) !== 'pdf'} />
+      )}
+      </div>
     </div>
   )
 }

@@ -1,5 +1,5 @@
 {
- "_": "Segundos de cada fichero (los dos tamaños) en la entera del run 38882161539 (16/10, B, 33,3 min, 1 worker). Los usa scripts/e2e/trozos.mjs para repartir la entera en trozos parecidos. Un fichero que no está aquí cuenta como la mediana. Se rehace con: node scripts/e2e/inflacion.mjs <informe json de playwright> --tiempos. Tres añadidos el 17/10 (S01) con la misma vara, la suma de las duraciones de cada prueba en los dos tamaños, leída de los registros de la entera 39022025121 (M01, cf02e51f): conta/c06/promociones (4 pruebas), conta/d01/referencia (2) y reparto/direccion-falta (14).",
+ "_": "Segundos de cada fichero (los dos tamaños) en la entera del run 38882161539 (16/10, B, 33,3 min, 1 worker). Los usa scripts/e2e/trozos.mjs para repartir la entera en trozos parecidos. Un fichero que no está aquí cuenta como la mediana. Se rehace con: node scripts/e2e/inflacion.mjs <informe json de playwright> --tiempos. Tres añadidos el 17/10 (S01) con la misma vara, la suma de las duraciones de cada prueba en los dos tamaños, leída de los registros de la entera 39022025121 (M01, cf02e51f): conta/c06/promociones (4 pruebas), conta/d01/referencia (2) y reparto/direccion-falta (14). S01d (18/10): s01c/capturas 153 s y s01d/capturas 113 s, el paso «Pruebas (ordenador y móvil)» de su run solo (564 y 577); s01/diseno, s01/esqueleto y s01d/flujos aún sin medir, cuentan como la mediana.",
  "conta/b01/conciliar.spec.ts": 61.4,
  "conta/b01/motor.spec.ts": 11.3,
  "conta/b01/pantallas.spec.ts": 64.0,
@@ -39,5 +39,7 @@
  "conta/m01/marco.spec.ts": 45.9,
  "conta/rls.spec.ts": 4.0,
  "reparto/direccion-falta.spec.ts": 59.6,
- "reparto/quien-reparte.spec.ts": 31.4
+ "reparto/quien-reparte.spec.ts": 31.4,
+ "conta/s01c/capturas.spec.ts": 153,
+ "conta/s01d/capturas.spec.ts": 113
 }

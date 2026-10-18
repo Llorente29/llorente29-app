@@ -36,7 +36,8 @@ describe('navegación del módulo de contabilidad', () => {
     expect(entradasVisibles(BARRA_CONTA.izquierda, true).map((e) => e.id)).toEqual(['inicio'])
     expect(entradasVisibles(BARRA_CONTA.izquierda).map((e) => e.id)).toEqual([])
     expect(indiceAjustes(true).flatMap((g) => g.entradas).some((e) => e.hueco)).toBe(false)
-    expect(indiceAjustes().flatMap((g) => g.entradas).filter((e) => e.hueco).map((e) => e.id)).toEqual(['numeracion', 'certificados', 'personas', 'avisos'])
+    // S01e: Numeración ya tiene pantalla (Tablas generales › Numeración de facturas): no dice «aún no».
+    expect(indiceAjustes().flatMap((g) => g.entradas).filter((e) => e.hueco).map((e) => e.id)).toEqual(['certificados', 'personas', 'avisos'])
     // La entrada activa se encuentra aunque solo se pinte en el producto vendido solo.
     expect(entradaActiva('/conta/inicio', MENU_CONTA.flat())).toBe('inicio')
   })

@@ -40,8 +40,12 @@ const pestanas = (page: Page, producto: string) => page.getByRole('navigation', 
 const cinta = (page: Page) => page.getByRole('toolbar', { name: 'Acciones de Asientos' })
 const aviso = (page: Page, texto: string | RegExp) => page.getByRole('status').filter({ hasText: texto })
 
-async function abrirUsuario(page: Page) { await page.getByRole('button', { name: /\. Tus preferencias$/ }).click() }
-async function abrirFavoritos(page: Page) { await page.getByRole('button', { name: 'Favoritos' }).click() }
+/** S01d: en el móvil, Favoritos y el usuario van en el cajón del menú. */
+async function enElCajon(page: Page) {
+  if (lado(page) === 'movil' && await page.getByRole('dialog', { name: 'Menú' }).count() === 0) await abrirCajon(page)
+}
+async function abrirUsuario(page: Page) { await enElCajon(page); await page.getByRole('button', { name: /\. Tus preferencias$/ }).click() }
+async function abrirFavoritos(page: Page) { await enElCajon(page); await page.getByRole('button', { name: 'Favoritos' }).click() }
 async function nivel(page: Page, cual: 'Sin experiencia' | 'Medio' | 'Experto') {
   await abrirUsuario(page)
   await page.getByRole('group', { name: 'Tu nivel' }).getByRole('button', { name: new RegExp(`^${cual}`) }).click()
@@ -65,12 +69,31 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
   }).map((x) => x.textContent), caja.y + caja.height)
   expect(fuera).toEqual([])
 
-  // Buscar · Ctrl K y Favoritos, en la cabecera.
-  if (lado(page) === 'ordenador') await expect(cabecera.getByRole('button', { name: 'Buscar', exact: true })).toHaveAttribute('aria-keyshortcuts', 'Control+K')
-  await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toBeVisible()
-  // Solo la estrella (Julio, 17/10): sin texto a la vista; «Favoritos» al pasar el ratón y para el lector.
-  await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveText('')
-  await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveAttribute('title', 'Favoritos')
+  // Buscar · Ctrl K y Favoritos, en la cabecera del ordenador.
+  if (lado(page) === 'ordenador') {
+    await expect(cabecera.getByRole('button', { name: 'Buscar', exact: true })).toHaveAttribute('aria-keyshortcuts', 'Control+K')
+    await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toBeVisible()
+    // Solo la estrella (Julio, 17/10): sin texto a la vista; «Favoritos» al pasar el ratón y para el lector.
+    await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveText('')
+    await expect(cabecera.getByRole('button', { name: 'Favoritos' })).toHaveAttribute('title', 'Favoritos')
+  } else {
+    // S01d (Julio, 18/10): en el móvil la cabecera es menú, logo y Buscar, y nada más.
+    await expect(cabecera.locator('a:visible, button:visible')).toHaveCount(3)
+    await expect(cabecera.getByRole('button', { name: 'Abrir el menú' })).toBeVisible()
+    await expect(cabecera.getByRole('link', { name: 'Inicio' })).toBeVisible()
+    await expect(cabecera.getByRole('button', { name: 'Buscar', exact: true })).toBeVisible()
+    // La empresa, ENTERA (sin «…») en la fila de debajo, con su cambio de empresa.
+    const empresa = page.locator('.s-cab-fila-movil .s-cab-empresa-nombre')
+    await expect(empresa).toBeVisible()
+    expect(await empresa.evaluate((e) => e.scrollWidth <= e.clientWidth && getComputedStyle(e).textOverflow !== 'ellipsis' || getComputedStyle(e).whiteSpace === 'normal')).toBe(true)
+    await expect(page.locator('.s-cab-fila-movil').getByRole('button', { name: /Cambiar de empresa$/ })).toBeVisible()
+    // Favoritos y el usuario, en el cajón.
+    await abrirCajon(page)
+    const cajon = page.getByRole('dialog', { name: 'Menú' })
+    await expect(cajon.getByRole('button', { name: 'Favoritos' })).toBeVisible()
+    await expect(cajon.getByRole('button', { name: /\. Tus preferencias$/ })).toBeVisible()
+    await page.getByRole('button', { name: 'Cerrar el menú' }).click()
+  }
 
   // Las pestañas de Contabilidad, con Asientos marcada.
   const tabs = pestanas(page, 'Contabilidad')
@@ -86,7 +109,7 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
 
   // La cinta de la maqueta 1: NUEVO · REVISAR · UTILIDADES.
   const c = cinta(page)
-  await expect(c.getByRole('group', { name: 'Nuevo' }).getByRole('link')).toHaveText(['Expedida', 'Recibida', 'Tesorería', 'General', 'Predefinidos'])
+  await expect(c.getByRole('group', { name: 'Nuevo' }).getByRole('link')).toHaveText(['Expedida', 'Recibida', 'Recibida a mano', 'Tesorería', 'General', 'Predefinidos'])
   await expect(c.getByRole('group', { name: 'Revisar' }).getByRole('link')).toHaveText(['Para revisar', 'Libro diario'])
   await expect(c.getByRole('group', { name: 'Utilidades' }).getByRole('button', { name: 'Búsqueda' })).toBeVisible()
   await expect(c.getByRole('link', { name: 'Libro diario' })).toHaveAttribute('aria-current', 'page')
@@ -101,8 +124,9 @@ test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pesta�
     await expect(barra(page).getByRole('link', { name: 'Contabilidad' })).toHaveAttribute('aria-current', 'page')
   } else {
     // S01c: el cajón, con todos los productos (y «Volver a Folvy»: A no es el producto solo).
+    // S01d: y, sobre Ajustes, Favoritos y el usuario («<nombre> · nivel <nivel>»).
     await abrirCajon(page)
-    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes', 'Volver a Folvy'])
+    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', / · nivel (sin experiencia|medio|experto)$/, 'Ajustes', 'Volver a Folvy'])
     await expect(barra(page).getByRole('link', { name: 'Contabilidad' })).toHaveAttribute('aria-current', 'page')
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
@@ -183,7 +207,13 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
     expect(await cajas()).toEqual(antes)
     // Se guarda en la base: sigue al recargar.
     await page.reload()
+    await enElCajon(page)
     await expect(page.getByRole('button', { name: /nivel experto\. Tus preferencias$/ })).toBeVisible()
+    // S01d: en el móvil se mira en el cajón y se cierra, como cuando se midió «antes».
+    if (lado(page) === 'movil') {
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
+    }
     expect(await cajas()).toEqual(antes)
     await capturar(page, 'esqueleto-nivel-experto')
 
@@ -196,15 +226,17 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
   expect(await cajas()).toEqual(antes)
 })
 
-test('Inicio como bandeja: impuestos con sus dos plazos, las gráficas a un clic y el nivel cambia palabras, no cajas', async ({ page }) => {
+test('Inicio como bandeja: impuestos con el plazo que toca, las gráficas a un clic y el nivel cambia palabras, no cajas', async ({ page }) => {
   const errores: string[] = []
   await entrarComo(page, CUENTA_A.email)
   vigilar(page, errores)
   await page.goto('/conta/inicio')
-  // Los impuestos que vienen: o sus modelos con los dos plazos, o que no toca nada, o que aún no los sabe.
+  // Los impuestos que vienen: o sus modelos con el plazo que toca, o que no toca nada, o que aún no los sabe.
+  // I01b (P5, 18/10): salen de conta_impuesto_calendario y dan UN plazo, el que toca —el de
+  // domiciliar si está domiciliado— (encargo I01b), no los dos como antes.
   const impuestos = page.getByRole('region', { name: 'Impuestos que vienen' })
   await expect(impuestos).toBeVisible({ timeout: 30_000 })
-  await expect(impuestos.getByText(/Si lo domicilias, hasta el|Domiciliar ya no se puede|domiciliando el pago, hasta el|No se paga: es informativo|no toca presentar nada|Aún no sé qué modelos presentas/).first()).toBeVisible({ timeout: 30_000 })
+  await expect(impuestos.getByText(/Presentarlo hasta el|Domiciliado: presentarlo hasta el|Se pasó el plazo: era hasta el|no toca presentar nada|Aún no sé qué modelos presentas/).first()).toBeVisible({ timeout: 30_000 })
   // Las gráficas, a un clic: de serie no están.
   await expect(page.locator('.cxi-barras')).toHaveCount(0)
   await page.getByRole('button', { name: 'Ver la evolución' }).click()

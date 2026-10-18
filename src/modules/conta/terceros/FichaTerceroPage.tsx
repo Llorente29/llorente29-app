@@ -85,7 +85,7 @@ function Ficha({ partyId }: { partyId: string }) {
   else if (uso.estado === 'no-existe' || !ctx) {
     cuerpo = (
       <div className="cx-tarjeta">
-        <Vacio titulo="Ese tercero no existe o no es de esta cuenta."
+        <Vacio titulo="Ese contacto no existe o no es de esta cuenta."
           explicacion="Puede que estés en otra cuenta."
           accion={<Link className="cx-boton-sec" to={rutaTerceros()}>Ver clientes y proveedores</Link>} />
       </div>
@@ -269,7 +269,7 @@ function MenuMas() {
                 const cuenta = p.papel === 'brand_partner' && companyId ? await asegurarCuentaLiquidacion(companyId, t.id, t.nombre, userName) : null
                 avisar(p.papel === 'platform'
                   ? `${t.nombre} es ahora también plataforma. Dime su canal de venta en «Cobro» para enlazar sus liquidaciones${r.liquidaciones_enlazadas ? ` (ya van ${r.liquidaciones_enlazadas})` : ''}.`
-                  : `${t.nombre} tiene ahora también el papel de ${p.papel === 'customer' ? 'cliente' : 'socio de marca'}: un solo tercero, con todos sus papeles.${cuenta?.nueva ? ` Lo que cobres por su cuenta irá a la ${cuenta.code} «Liquidación pendiente con ${t.nombre}».` : ''}`)
+                  : `${t.nombre} tiene ahora también el papel de ${p.papel === 'customer' ? 'cliente' : 'socio de marca'}: una sola ficha, con todos sus papeles.${cuenta?.nueva ? ` Lo que cobres por su cuenta irá a la ${cuenta.code} «Liquidación pendiente con ${t.nombre}».` : ''}`)
                 recargar()
                 if (p.papel !== 'customer') navigate(rutaApartado('cobro'))
               } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo añadir.') }

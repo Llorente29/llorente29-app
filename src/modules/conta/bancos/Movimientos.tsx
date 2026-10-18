@@ -43,6 +43,8 @@ import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
 import { PanelMovimiento } from '@/modules/conta/bancos/PanelMovimiento'
+import { PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
+import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
 const VISIBLES = 60
 const euros = (c: number) => eurosExactos(c / 100)
@@ -109,7 +111,7 @@ export function Movimientos() {
   const grupos = useMemo(() => dias.flatMap((d) => d.grupos), [dias])
 
   if (!banco) {
-    return <div className="cx-tarjeta"><p>No hay ningún banco dado de alta. <Link to={rutaBancos('cuentas')} className="cx-enlace">Dalo de alta en Cuentas y extractos</Link> y sube su extracto.</p></div>
+    return <div className="cx-tarjeta"><p>No hay ningún banco dado de alta. <Link to={`${rutaBancos('cuentas')}?${PARAM_NUEVO}=${VALOR_NUEVO}`} className="cx-enlace">Dalo de alta</Link> y sube su extracto.</p></div>
   }
   if (lectura.error) return <ErrorConReintento mensaje={lectura.error} reintentar={lectura.recargar} />
   if (!lectura.datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando los movimientos">{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={44} />)}</div>
@@ -220,6 +222,8 @@ export function Movimientos() {
   const seleccionables = seleccion.filter((id) => porId.has(id) && confirmable(porId.get(id)!))
   const bloque = textoBloque(seleccionables, cuadre.preseleccionados)
   const elegidoM = elegido ? porId.get(elegido) ?? null : null
+  // S01e: lo que queda por decidir en este banco, de todos los meses (la misma cuenta que la cinta: datos.dudas).
+  const pendientesBanco = ctx.datos.dudas[banco.id] ?? 0
   const total = cuadre.cuenta.casados + cuadre.cuenta.confirmar + cuadre.cuenta.aclarar
   const ancho = (n: number) => `${total ? (n / total) * 100 : 0}%`
   const panel = elegidoM && (
@@ -295,7 +299,8 @@ export function Movimientos() {
           <strong data-testid="frase">{cuadre.frase}</strong>
           {lectura.datos.pasada && (
             <span className="cxb-pasada" data-testid="pasada-agente">
-              Mi última pasada por todos tus bancos, {cuandoPasada(lectura.datos.pasada.cuando, ctx.hoy)} ({lectura.datos.pasada.disparo === 'extracto' ? 'al subir un extracto' : 'la del día'}): {lectura.datos.pasada.resumen}
+              {/* S01e: la pasada cuenta todos los bancos y todos los meses; se dice, para que no choque con la lista de este banco y mes. */}
+              Mi última pasada por todos tus bancos y todos los meses, {cuandoPasada(lectura.datos.pasada.cuando, ctx.hoy)} ({lectura.datos.pasada.disparo === 'extracto' ? 'al subir un extracto' : 'la del día'}): {lectura.datos.pasada.resumen}
             </span>
           )}
           <span>Nada pasa a contabilidad sin que esté seguro o lo confirmes tú, y todo lo que hago solo se deshace.</span>
@@ -330,7 +335,7 @@ export function Movimientos() {
 
       <div className={`cxn-cuerpo${panel && !movil ? ' cxn-con-panel' : ''}`}>
         {bandeja === 'casados' ? (
-          <CasadosSolos movs={vistos} ocupado={ocupado} alAbrir={(m) => setElegido(m.id)} alDeshacer={deshacer}
+          <CasadosSolos movs={vistos} donde={`de ${nombreMes(mes).toLowerCase()} en ${banco.nombre}`} ocupado={ocupado} alAbrir={(m) => setElegido(m.id)} alDeshacer={deshacer}
             alVerAsiento={(m) => m.casado?.asientoId && navegar(rutaAsiento(m.casado.asientoId))} />
         ) : (
           <div className="cx-tarjeta cxn-lista" role="grid" tabIndex={0} aria-label={`Movimientos de ${nombreMes(mes).toLowerCase()} de ${banco.nombre}`}
@@ -351,7 +356,7 @@ export function Movimientos() {
             ))}
             {vistos.length === 0 && (
               <p className="cxb-vacio">{movs.length === 0
-                ? `No hay movimientos de ${nombreMes(mes).toLowerCase()} en ${banco.nombre}. Suelta aquí su extracto o usa «Subir extracto».`
+                ? `No hay movimientos de ${nombreMes(mes).toLowerCase()} en ${banco.nombre}.${pendientesBanco ? ` En este banco quedan ${pendientesBanco} por decidir de otros meses: cambia el mes arriba.` : ''} Si te falta el extracto, suéltalo aquí o usa «Subir extracto».`
                 : busca ? `Nada coincide con «${busca}».` : bandeja === 'confirmar' ? 'No te queda nada por confirmar.' : 'No te queda nada por aclarar.'}</p>
             )}
             <div className="cxb-pie">
@@ -421,11 +426,12 @@ function FilaMovimiento({ g, movil, enfocada, elegida, ocupado, marcadas, marcab
 }
 
 /** «Casados solos»: cada línea dice de qué movimiento habla, con qué se casó y por qué; se abre y se deshace desde ella. */
-function CasadosSolos({ movs, ocupado, alAbrir, alDeshacer, alVerAsiento }: {
-  movs: readonly MovimientoBanco[]; ocupado: string | null
+function CasadosSolos({ movs, donde, ocupado, alAbrir, alDeshacer, alVerAsiento }: {
+  movs: readonly MovimientoBanco[]; donde: string; ocupado: string | null
   alAbrir: (m: MovimientoBanco) => void; alDeshacer: (m: MovimientoBanco) => void; alVerAsiento: (m: MovimientoBanco) => void
 }) {
-  if (!movs.length) return <div className="cx-tarjeta"><p className="cxb-vacio">Este mes no he casado nada solo.</p></div>
+  // S01e: dice de qué banco y mes habla («Lo que he hecho» cuenta todos los bancos, por el día en que lo hice).
+  if (!movs.length) return <div className="cx-tarjeta"><p className="cxb-vacio">Ningún movimiento {donde} está casado solo. Lo de todos tus bancos, en «{LO_HECHO}».</p></div>
   return (
     <div className="cx-tarjeta cxn-casados" role="list" aria-label="Casados solos">
       {movs.map((m) => (

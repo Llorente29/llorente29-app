@@ -10,6 +10,7 @@
 .s-raiz {
   font-family: var(--s-letra); font-size: var(--s-t-m); line-height: var(--s-interlinea);
   color: var(--s-tinta); background: var(--s-fondo);
+  font-variant-numeric: tabular-nums; /* S01e: cifras tabulares en todo lo del sistema */
 }
 .s-cifra { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; white-space: nowrap; }
 .s-cifra-fuerte { font-weight: var(--s-peso-fuerte); }

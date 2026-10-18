@@ -10,6 +10,10 @@
 //
 // Validar, Descartar y Anular dicen lo que han hecho con su contenido (regla 8).
 // Lo validado no se toca: se anula con un contraasiento enlazado.
+//
+// S01d: una expedida a mano (serie 1) lleva la tarjeta «Factura» en vez de
+// «Documento»: su PDF al lado, o «Adjuntar el PDF» si está validada y aún no
+// lo tiene. Una vez adjunta no se cambia.
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -26,12 +30,16 @@ import {
   cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
 } from '@/modules/conta/services/diarioService'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
+import { nombresDeCuentas, palabrasLlanas } from '@/modules/conta/libro/palabrasLlanas'
 import { MARCA } from '../cuenta/marca'
 import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
 import { estadoDiez, motivoSinPatron, numerosFolvyDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
 import { noSeValida } from '@/modules/conta/lib/validarConPdf'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { TarjetaExpedida } from '@/modules/conta/libro/FacturaExpedida'
+import { esExpedidaAMano } from '@/modules/conta/lib/expedidaPdf'
+import { useIsMobile } from '@/shell/useIsMobile'
 
 interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
 
@@ -66,9 +74,11 @@ export default function AsientoPage() {
   const error = r.clave === clave ? r.error : null
   const recargar = () => setVuelta((v) => v + 1)
 
-  const llegada = useLocation().state as { aviso?: string } | null
+  // S01d: desde «Nueva factura expedida», si el PDF no se pudo adjuntar, llega por qué (falloPdf).
+  const llegada = useLocation().state as { aviso?: string; falloPdf?: string } | null
   const [hecho, setHecho] = useState<string | null>(llegada?.aviso ?? null)
-  const [fallo, setFallo] = useState<string | null>(null)
+  const [fallo, setFallo] = useState<string | null>(llegada?.falloPdf ?? null)
+  const movil = useIsMobile()
   const [ocupado, setOcupado] = useState(false)
   const [cambiando, setCambiando] = useState<number | null>(null)
   const [dialogo, setDialogo] = useState<'descartar' | 'anular' | null>(null)
@@ -126,6 +136,9 @@ export default function AsientoPage() {
   const dosNumeros = numerosFolvyDiez(a, datos.conDiez)
   // 15/10: una plataforma sin patrón en Diez (Glovo) no ofrece «Validar y enviar»: validar no se deshace.
   const sinPatron = datos.conDiez ? motivoSinPatron(datos.conDiez.canal) : null
+  // S01e: el porqué en palabras normales, con el nombre junto a cada cuenta.
+  const nombres = nombresDeCuentas([...a.apuntes, ...datos.cuentas.map((x) => ({ cuenta: x.code, nombreCuenta: x.nombre }))])
+  const llano = (t: string) => palabrasLlanas(t, nombres)
   const migaFinal = editable ? 'Para revisar' : a.numero ? `${NOMBRE_SERIE[a.serie]} nº ${a.numero.toLocaleString('es-ES')}` : 'Asiento'
   return (
     <div className="cxd-pagina">
@@ -211,11 +224,11 @@ export default function AsientoPage() {
           {a.razones.length > 0 || a.porque ? (
             <section className="cxd-ia" aria-label="Por qué lo propongo así">
               <h2 className="cxd-ia-titulo"><span className="cx-marca-ia" aria-hidden="true">IA</span> Por qué lo propongo así</h2>
-              {a.porque && <p className="cxd-ia-apoyo">{a.porque}</p>}
+              {a.porque && <p className="cxd-ia-apoyo">{llano(a.porque)}</p>}
               {a.razones.map((x, i) => (
                 <div key={i} className="cxd-ia-fila"><div>
-                  <span className="cxd-ia-hecho">{x.decision}</span>
-                  <span className="cxd-ia-apoyo">{x.porque}{x.cita ? ` · ${x.cita}` : ''}</span>
+                  <span className="cxd-ia-hecho">{llano(x.decision)}</span>
+                  <span className="cxd-ia-apoyo">{llano(x.porque)}{x.cita ? ` · ${x.cita}` : ''}</span>
                 </div></div>
               ))}
               {editable && <p className="cxd-ia-apoyo">Si me corriges, aprendo para la siguiente del mismo origen.</p>}
@@ -224,6 +237,10 @@ export default function AsientoPage() {
           {datos.conDiez && diez && (
             <TarjetaDiez a={a} d={datos.conDiez} e={diez} quien={userName}
               alHacer={(t) => { setFallo(null); setHecho(t); recargar() }} alFallar={(t) => { setHecho(null); setFallo(t) }} />
+          )}
+          {esExpedidaAMano(a) && accountId && (
+            <TarjetaExpedida a={a} accountId={accountId} quien={userName} movil={movil}
+              alHacer={(t) => { setFallo(null); setHecho(t) }} alFallar={(t) => { setHecho(null); setFallo(t) }} />
           )}
           <section className="cx-tarjeta" aria-label="Documento">
             <h2 className="cx-tarjeta-titulo">Documento</h2>
@@ -304,7 +321,8 @@ function DetalleContable({ a, companyId }: { a: AsientoDiario; companyId: string
       <dt>Orden en la cadena</dt><dd>{a.cadena ?? '—'}</dd>
       <dt>Huella</dt><dd className="cxd-codigo" title={a.huella ?? undefined}>{corta(a.huella)}</dd>
       <dt>Huella anterior</dt><dd className="cxd-codigo" title={a.huellaAnterior ?? undefined}>{a.cadena === 1 ? 'es el primero' : corta(a.huellaAnterior)}</dd>
-      <dt>Origen</dt><dd>{a.origen}{a.origenId ? ` · ${a.origenId.slice(0, 8)}` : ''}</dd>
+      {/* S01e: de dónde sale, en palabras (antes, el nombre interno: «supplier_invoice»). */}
+      <dt>Origen</dt><dd>{deDondeSale(a)}{a.origenId ? ` · ${a.origenId.slice(0, 8)}` : ''}</dd>
       <dt>Cuentas (título del PGC)</dt>
       <dd><ul className="cxd-detalle-cuentas">{[...new Map(a.apuntes.map((l) => [l.cuenta, l])).values()].map((l) => (
         <li key={l.cuenta}><span className="cxd-codigo">{l.cuenta}</span> {l.tituloOficial ?? l.nombreCuenta}</li>

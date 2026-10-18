@@ -3,52 +3,41 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01a · Impuestos por dentro, sin pantallas (rama conta/i01a-impuestos-por-dentro,
-# PR #232). La anterior de este fichero (S01, el esqueleto: 0100–0160) ya está
-# aplicada en producción; su copia:
-# tests/conta/produccion/tanda-s01-esqueleto-20261017.txt.
+# I01b · Las pantallas de Impuestos y el asiento de liquidación del 303 (rama
+# conta/i01b-pantallas-impuestos). La anterior de este fichero (S01d: 0160 y
+# 0170) ya está aplicada en producción; su copia:
+# tests/conta/produccion/tanda-s01d-tanda-20261018.txt. Esta numera por encima
+# de la 0170 (Julio, 18/10).
 #
-#   1. 0100 — AÑADE los festivos del BOE de 2026 y 2027 (tax_holiday_year,
-#      tax_holiday), las reglas de plazo (tax_form_deadline) y
-#      conta_impuesto_plazo; y sus dos fuentes en official_source (no estaban).
-#   2. 0110 — AÑADE el modelo de datos de impuestos: company_tax_facts,
-#      tax_obligation, tax_return y sus casillas, líneas, comprobaciones y
-#      registro, la ficha del certificado, quién presenta, RLS de lectura y la
-#      vista company_tax_forms. CAMBIA en caliente company_tax_profile: le pone
-#      un disparador nuevo sobre tax_forms (la columna queda como copia de
-#      tax_obligation). Declarado, con su prueba de staging. Copia los 9 modelos
-#      de Foodint a tax_obligation sin tocar la columna.
-#   3. 0120 — AÑADE las obligaciones por defecto con regla con nombre (solo
-#      funciones).
-#   4. 0130 — AÑADE el almacén de certificados: el token de un solo uso y las
-#      funciones de guardar, abrir, quitar y permisos. AUTORIZO: el analizador
-#      la cuenta como escritura en vault.secrets porque conta_cert_guardar
-#      llama a vault.create_secret. Al aplicarla no se guarda ningún secreto
-#      (la cuenta lo mide: los secretos del Vault, los mismos antes y después);
-#      con el Vault, guardar solo se admite para Foodint.
-#   5. 0140 — AÑADE el cálculo del 303 y lo que pide su fichero (funciones), y
-#      amplía el CHECK de tax_return_check (de la 0110 de esta misma tanda).
-#   6. 0150 — AÑADE revisar, presentar, «ya lo presenté fuera» y el justificante
-#      (funciones).
+#   1. 0180 — AÑADE conta_impuesto_euros, conta_impuesto_303_contabilizar,
+#      conta_impuesto_cargos_posibles y conta_impuesto_casar_cargo, y dos
+#      disparadores con WHEN (bank_match deshecho; asiento de liquidación
+#      anulado). CAMBIA en caliente, declarado con su prueba de staging:
+#      conta_motivos_para_validar (la misma salvo la excepción de la
+#      liquidación de un 303), conta_impuesto_estado_vale (las vueltas atrás),
+#      bank_match_item (columna nueva que admite nulos y su CHECK, que solo
+#      amplía), bank_match y journal_entry (su disparador nuevo).
+#   2. 0190 — AÑADE el calendario (conta_impuesto_calendario y sus dos piezas
+#      de dentro, que solo puede llamar el servidor).
+#   3. 0200 — AÑADE el IVA de un periodo (conta_impuesto_declaracion_ver) y
+#      cómo se paga (conta_impuesto_pago_poner).
+#   4. 0210 — AÑADE Presentados (conta_impuesto_presentados).
+#   5. 0220 — AÑADE Certificados y accesos (conta_impuesto_certificados_ver y
+#      conta_impuesto_certificado_presenta).
+#   6. 0230 — AÑADE «Invitar a mi asesoría»: la tabla tax_advisor_invitation
+#      (con su RLS: la lee un administrador de la cuenta; solo escriben las
+#      funciones) y sus funciones. Vincula; no crea cuentas.
+#   Las cinco últimas solo añaden; las pantallas las necesitan, y por eso van
+#   antes de fusionar.
 #
-# Ninguna toca el camino del pedido (analizador contra producción, 18/10, 06:40
-# UTC: cinco «sigue» y la 0130 «autorizo»).
-#
-# autorizo:
-# 20261122T0130_i01_certificados.sql
-#
-# ORDEN: la tanda ANTES de fusionar el #232. El front del I01a (el alta) llama a
-# conta_impuesto_datos_del_alta y conta_impuesto_obligaciones_calcular; el de
-# antes no lee nada de esto, así que la base nueva con el front viejo no cambia
-# nada que se vea (tax_forms sigue igual).
-# Funciones a desplegar a mano DESPUÉS de la tanda: conta-certificado y
-# conta-hacienda (la puerta de Hacienda queda cerrada: sin CONTA_HACIENDA no
-# llama a nadie).
+# No toca el camino del pedido. No contabiliza nada: lo hace la persona desde
+# la pantalla, después. conta-hacienda, conta-asesoria y send-email se despliegan con la fusión
+# (PR, «Funciones a desplegar a mano»).
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/i01a-impuestos.sql
-supabase/migrations/20261122T0100_i01_plazos.sql
-supabase/migrations/20261122T0110_i01_modelo_datos.sql
-supabase/migrations/20261122T0120_i01_obligaciones.sql
-supabase/migrations/20261122T0130_i01_certificados.sql
-supabase/migrations/20261122T0140_i01_calculo_303.sql
-supabase/migrations/20261122T0150_i01_presentar.sql
+cuenta: scripts/conta/produccion/cuentas/i01b-asiento-303.sql
+supabase/migrations/20261122T0180_i01b_asiento_303.sql
+supabase/migrations/20261122T0190_i01b_calendario.sql
+supabase/migrations/20261122T0200_i01b_declaracion.sql
+supabase/migrations/20261122T0210_i01b_presentados.sql
+supabase/migrations/20261122T0220_i01b_certificados.sql
+supabase/migrations/20261122T0230_i01b_asesoria.sql

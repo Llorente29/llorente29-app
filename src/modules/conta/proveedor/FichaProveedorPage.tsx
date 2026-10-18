@@ -165,7 +165,7 @@ function Cabecera() {
       </div>
       <div className="cxp-acciones">
         <Link className="cx-boton-sec" to={rutaApartado('datos-fiscales')}>Editar</Link>
-        <Link className="cx-boton" to={rutaSubirFacturaProveedor(f.id)}>Subir factura</Link>
+        <Link className="cx-boton" to={rutaSubirFacturaProveedor(f.id)}>Subir una factura</Link>
         <MenuMas />
       </div>
     </header>

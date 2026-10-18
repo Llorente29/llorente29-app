@@ -1,18 +1,25 @@
-# Vuelta atrás de la tanda del I01a (modo «vuelta_atras»), en orden inverso.
-# ANTES, el front tiene que volver al de antes del I01a (el alta del I01a llama
-# a funciones que esto quita) y conta-certificado y conta-hacienda tienen que
-# dejar de estar desplegadas. Cada fichero PARA, sin tocar nada, si ya hay algo
-# que se perdería: declaraciones revisadas, presentadas o calculadas,
-# certificados guardados (su secreto quedaría en el Vault), respuestas del alta
-# o modelos decididos por una persona. company_tax_profile.tax_forms se queda
-# como está.
-# Ensayada en staging: supabase/staging/sql/20261122_i01_vuelta_atras_prueba.sql.
-# La anterior de este fichero (S01):
-# tests/conta/produccion/vuelta-atras-s01-esqueleto-20261017.txt.
-cuenta: scripts/conta/produccion/cuentas/i01a-impuestos.sql
-supabase/vuelta-atras/20261122T0150_i01_presentar.down.sql
-supabase/vuelta-atras/20261122T0140_i01_calculo_303.down.sql
-supabase/vuelta-atras/20261122T0130_i01_certificados.down.sql
-supabase/vuelta-atras/20261122T0120_i01_obligaciones.down.sql
-supabase/vuelta-atras/20261122T0110_i01_modelo_datos.down.sql
-supabase/vuelta-atras/20261122T0100_i01_plazos.down.sql
+# Vuelta atrás de la tanda del I01b (modo «vuelta_atras»), en orden inverso.
+# ANTES, el front tiene que volver al de antes del I01b (las pantallas de
+# Impuestos llaman a las funciones que esto quita).
+# · 0230: PARA si ya hay alguna invitación (el registro de quién dio permiso);
+#   si no, quita la tabla y sus funciones. Las asesorías vinculadas se quedan.
+# · 0220, 0210, 0200 y 0190: quitan sus funciones (solo leen, salvo el pago y
+#   quién presenta, que se quedan como estén: son decisiones de la empresa).
+# · 0180: PARA, sin tocar nada, si ya hay algún asiento de liquidación de una
+#   declaración o algún pago casado con una declaración; si no, quita los
+#   disparadores y las funciones nuevas, devuelve el CHECK y quita la columna
+#   de bank_match_item, y deja conta_impuesto_estado_vale y
+#   conta_motivos_para_validar como estaban.
+# Ensayadas en staging: supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
+# (la 0180) y la prueba de cada una (20261122_i01b_calendario_prueba.sql,
+# _declaracion_, _presentados_ y _certificados_), que las aplica, las deshace y
+# las vuelve a aplicar.
+# La anterior de este fichero (S01d):
+# tests/conta/produccion/vuelta-atras-s01d-tanda-20261018.txt.
+cuenta: scripts/conta/produccion/cuentas/i01b-asiento-303.sql
+supabase/vuelta-atras/20261122T0230_i01b_asesoria.down.sql
+supabase/vuelta-atras/20261122T0220_i01b_certificados.down.sql
+supabase/vuelta-atras/20261122T0210_i01b_presentados.down.sql
+supabase/vuelta-atras/20261122T0200_i01b_declaracion.down.sql
+supabase/vuelta-atras/20261122T0190_i01b_calendario.down.sql
+supabase/vuelta-atras/20261122T0180_i01b_asiento_303.down.sql

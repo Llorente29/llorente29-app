@@ -18,7 +18,7 @@
 // todavía, y Anular es del asiento abierto (su botón está en el asiento). No
 // se pinta un botón que no lleva a nada (regla del encargo: nada vacío).
 
-import { CONTA, rutaConta, rutaLibros } from '@/config/navegacion'
+import { CONSULTA_RECIBIDA_A_MANO, CONTA, rutaConta, rutaLibros } from '@/config/navegacion'
 import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
 import { TABLAS_GENERALES } from '@/modules/conta/tablas/registro'
 import { HECHO_POR, LO_HECHO } from '@/modules/conta/bancos/marca'
@@ -53,6 +53,8 @@ const DE_LA_CINTA: Orden[] = [
   // (expedida, tesorería, predefinidos) abre el asiento a mano con su tipo.
   { id: 'asiento.expedida', etiqueta: 'Expedida', icono: 'expedida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=expedida` }, sinonimos: ['nueva expedida', 'factura emitida'] },
   { id: 'asiento.recibida', etiqueta: 'Recibida', icono: 'recibida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.recibidasEnAsientos }, sinonimos: ['nueva recibida', 'factura recibida', 'factura de proveedor'] },
+  // S01d: la recibida sin papel, escrita a mano (proveedor, número, fecha, base e IVA).
+  { id: 'asiento.recibida-a-mano', etiqueta: 'Recibida a mano', icono: 'nuevo', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.recibidasEnAsientos}?${CONSULTA_RECIBIDA_A_MANO}` }, sinonimos: ['nueva recibida a mano', 'factura sin papel', 'dar de alta una factura'] },
   { id: 'asiento.tesoreria', etiqueta: 'Tesorería', icono: 'tesoreria', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=tesoreria` }, sinonimos: ['cobro', 'pago'] },
   { id: 'asiento.general', etiqueta: 'General', icono: 'general', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.nuevoAsiento }, sinonimos: ['nuevo asiento', 'asiento a mano'] },
   { id: 'asiento.predefinidos', etiqueta: 'Predefinidos', icono: 'predefinidos', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=predefinido` }, sinonimos: ['plantilla', 'asiento tipo'] },
@@ -70,9 +72,11 @@ const DE_LA_CINTA: Orden[] = [
   { id: 'bancos.casados', etiqueta: HECHO_POR, icono: 'ok', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}?ver=casados` }, sinonimos: ['casado solo', 'automatico', 'deshacer'] },
   // Compras y gastos (paso 3). «Por revisar» (N18) sube con su diálogo
   // (?subir); Facturas recibidas (N22) pone sus grupos desde la pantalla.
-  { id: 'compras.subir', etiqueta: 'Subir factura', icono: 'subir', producto: 'compras', pestana: 'por-revisar', a: { ruta: `${R.compras}?subir=` }, sinonimos: ['subir factura', 'factura de proveedor', 'albaran'] },
+  { id: 'compras.subir', etiqueta: 'Subir una factura', icono: 'subir', producto: 'compras', pestana: 'por-revisar', a: { ruta: `${R.compras}?subir=` }, sinonimos: ['subir factura', 'factura de proveedor', 'albaran'] },
   // Contactos (paso 3): «Nuevo cliente», con el diálogo de siempre (?nuevo).
   { id: 'contactos.nuevo', etiqueta: 'Nuevo cliente', icono: 'nuevo', producto: 'contactos', pestana: 'todos', a: { ruta: `${R.terceros}?nuevo=` }, sinonimos: ['alta cliente', 'nuevo contacto', 'crear cliente'] },
+  // S01d: y «Nuevo proveedor», con el alta de Proveedores (?nuevo=proveedor).
+  { id: 'contactos.nuevo-proveedor', etiqueta: 'Nuevo proveedor', icono: 'nuevo', producto: 'contactos', pestana: 'todos', a: { ruta: `${R.terceros}?nuevo=proveedor` }, sinonimos: ['alta proveedor', 'crear proveedor', 'dar de alta un proveedor'] },
   { id: 'bancos.hecho', etiqueta: LO_HECHO, icono: 'revisar', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/hecho` }, sinonimos: ['hecho', 'registro', 'deshacer'] },
 ]
 
@@ -131,7 +135,7 @@ const CINTA_BANCOS: GrupoCinta[] = [
 /** La cinta de cada pestaña ('producto.pestaña'). Sin entrada, la pestaña no lleva cinta. */
 export const CINTAS: Record<string, GrupoCinta[]> = {
   'contabilidad.asientos': [
-    { titulo: 'Nuevo', ordenes: ['asiento.expedida', 'asiento.recibida', 'asiento.tesoreria', 'asiento.general', 'asiento.predefinidos'] },
+    { titulo: 'Nuevo', ordenes: ['asiento.expedida', 'asiento.recibida', 'asiento.recibida-a-mano', 'asiento.tesoreria', 'asiento.general', 'asiento.predefinidos'] },
     { titulo: 'Revisar', ordenes: ['asiento.para-revisar', 'asiento.libro-diario'] },
     { titulo: 'Utilidades', ordenes: ['asiento.busqueda', 'asiento.digitalizar'] },
   ],
@@ -142,7 +146,9 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
     // Estados antes que IVA (medido a 1440 px con sus números): IVA, con siete
     // libros, va solo en la segunda fila y la cinta ocupa dos, no tres.
     { titulo: 'Estados', ordenes: ['libros.balance', 'libros.pyg', 'libros.ecpn'] },
-    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.retenciones', 'libros.formato-aeat'] },
+    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.formato-aeat'] },
+    // S01e: el 111 y el 115 son retenciones de IRPF, no IVA: su propio grupo.
+    { titulo: 'Retenciones', ordenes: ['libros.retenciones'] },
   ],
   'contabilidad.cierre': [
     { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.cierre-ejercicio'] },
@@ -162,18 +168,24 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   'compras.por-revisar': [
     { titulo: 'Nuevo', ordenes: ['compras.subir'] },
   ],
+  // S01e: los rótulos en palabras normales (antes TRAER · ESPERADAS · LEÍDAS, no se entendían).
   'compras.recibidas': [
-    { titulo: 'Traer', ordenes: [], dePantalla: 'traer' },
-    { titulo: 'Esperadas', ordenes: [], dePantalla: 'esperadas' },
-    { titulo: 'Leídas', ordenes: [], dePantalla: 'leidas' },
+    { titulo: 'Cómo llegan', ordenes: [], dePantalla: 'traer' },
+    { titulo: 'Las que faltan', ordenes: [], dePantalla: 'esperadas' },
+    { titulo: 'Apuntadas solas', ordenes: [], dePantalla: 'leidas' },
   ],
   // Paso 3: Contactos, la misma en todas sus pestañas.
-  ...Object.fromEntries(['todos', 'clientes', 'proveedores', 'plataformas', 'socios'].map((t) => [`contactos.${t}`, [{ titulo: 'Nuevo', ordenes: ['contactos.nuevo'] }]])),
+  ...Object.fromEntries(['todos', 'clientes', 'proveedores', 'plataformas', 'socios'].map((t) => [`contactos.${t}`, [{ titulo: 'Nuevo', ordenes: ['contactos.nuevo', 'contactos.nuevo-proveedor'] }]])),
   // Paso 3: la barra de Bancos (B01), la misma en sus cuatro pestañas.
   'bancos.movimientos': CINTA_BANCOS,
   'bancos.reglas': CINTA_BANCOS,
   'bancos.cuentas': CINTA_BANCOS,
   'bancos.cierre': CINTA_BANCOS,
+  // I01b · Impuestos: lo de la cabecera del tablero 8 («Ya presenté uno fuera», «Revisar y
+  // presentar los de octubre»), que depende del mes y de lo que haya: lo pone la pantalla.
+  'impuestos.calendario': [{ titulo: 'Presentar', ordenes: [], dePantalla: 'impuestos' }],
+  // El tablero 10: «+ Añadir un certificado», solo para un administrador (lo pone la pantalla).
+  'impuestos.certificados': [{ titulo: 'Certificado', ordenes: [], dePantalla: 'certificados' }],
 }
 
 /** ¿Se puede usar esta orden en esta empresa? (su producto sale, y su pestaña, y lo que pida). */

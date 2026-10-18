@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
 
 const DISENO = 'src/modules/conta/diseno'
 /** Las carpetas del esqueleto: según se creen, entran aquí. */
-const ESQUELETO = ['src/modules/conta/esqueleto']
+const ESQUELETO = ['src/modules/conta/esqueleto', 'src/modules/conta/impuestos']
 
 function ficheros(dir: string, ext: RegExp): string[] {
   if (!existsSync(dir)) return []

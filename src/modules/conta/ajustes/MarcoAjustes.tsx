@@ -11,7 +11,8 @@
 // cada entrada sale de ahí.
 
 import { useEffect, type ReactNode } from 'react'
-import { CtxAjustes as Ctx, resumenEntrada, type ContextoAjustes } from '@/modules/conta/ajustes/contextoAjustes'
+import { CtxAjustes as Ctx, TITULO_DEFINICION, esDefinicion, resumenEntrada, type ContextoAjustes } from '@/modules/conta/ajustes/contextoAjustes'
+import { useSeries } from '@/modules/conta/ajustes/useSeries'
 import { Link } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { indiceAjustes, rutaAltaEmpresa, rutaAjustes, rutaConta } from '@/config/navegacion'
@@ -44,7 +45,7 @@ function AvisoAltaAMedias({ e }: { e: EmpresaResumen }) {
   )
 }
 
-function Indice({ actual, d, plan, hoy, lista }: { actual: string | null; d: DatosEmpresa | null; plan: DatosPlan | null; hoy: string; lista: boolean }) {
+function Indice({ actual, d, plan, hoy, lista, series }: { actual: string | null; d: DatosEmpresa | null; plan: DatosPlan | null; hoy: string; lista: boolean; series: number | null }) {
   // C06: en el producto vendido solo, el índice no enseña lo que dice «aún no».
   const solo = useProductoSolo()
   return (
@@ -57,7 +58,7 @@ function Indice({ actual, d, plan, hoy, lista }: { actual: string | null; d: Dat
               <Link key={e.id} to={rutaConta(e.ruta)} className={lista ? 'cx-lista-fila' : 'cx-ajustes-enlace'} aria-current={actual === e.id ? 'page' : undefined}>
                 <span className="cx-lista-fila-texto">
                   <span className={lista ? 'cx-lista-fila-titulo' : 'cx-ajustes-enlace-titulo'}>{e.etiqueta}</span>
-                  <span className={lista ? 'cx-lista-fila-apoyo' : 'cx-ajustes-enlace-apoyo'}>{resumenEntrada(e, d, plan, hoy)}</span>
+                  <span className={lista ? 'cx-lista-fila-apoyo' : 'cx-ajustes-enlace-apoyo'}>{resumenEntrada(e, d, plan, hoy, series)}</span>
                 </span>
                 {lista && <span className="cx-flecha" aria-hidden="true">›</span>}
               </Link>
@@ -69,11 +70,15 @@ function Indice({ actual, d, plan, hoy, lista }: { actual: string | null; d: Dat
   )
 }
 
-/** Cabecera de una entrada en el móvil: «atrás» al índice y su título. */
-export function CabeceraEntradaMovil({ titulo, atras = rutaAjustes(), antetitulo = 'Ajustes', derecha }: { titulo: string; atras?: string; antetitulo?: string; derecha?: ReactNode }) {
+/**
+ * Cabecera de una entrada en el móvil: «atrás» al índice y su título. Con
+ * `atras` null, sin «atrás»: la portada de una pestaña (Definiciones) no
+ * vuelve a ningún sitio, se cambia de pestaña arriba.
+ */
+export function CabeceraEntradaMovil({ titulo, atras = rutaAjustes(), antetitulo = 'Ajustes', derecha }: { titulo: string; atras?: string | null; antetitulo?: string; derecha?: ReactNode }) {
   return (
     <header className="cx-cabecera cx-tablas-cabecera-movil">
-      <Link to={atras} className="cx-boton-sec cx-atras" aria-label={`Volver a ${antetitulo.toLowerCase()}`}>‹</Link>
+      {atras !== null && <Link to={atras} className="cx-boton-sec cx-atras" aria-label={`Volver a ${antetitulo.toLowerCase()}`}>‹</Link>}
       <div className="cx-cabecera-titulos" style={{ flexGrow: 1 }}>
         <span className="cx-antetitulo">{antetitulo}</span>
         <h1 className="cx-titulo">{titulo}</h1>
@@ -86,21 +91,28 @@ export function CabeceraEntradaMovil({ titulo, atras = rutaAjustes(), antetitulo
 /**
  * El marco. `entrada` = la que está abierta (null: en el ordenador, «Tu
  * empresa»; en el móvil, el índice). `children` es el contenido de la entrada.
+ *
+ * S01e: el plan, las tablas y la analítica son Contabilidad › Definiciones.
+ * Con ellas, el título dice dónde estás («Definiciones» encima y la pantalla
+ * debajo, una sola vez) y no sale el índice de Ajustes: el menú de Definiciones
+ * es su cinta de arriba. `titulo` cambia el de la pantalla («Qué va a cada sitio»).
  */
-export function MarcoAjustes({ entrada, children }: { entrada: string | null; children: ReactNode }) {
+export function MarcoAjustes({ entrada, children, titulo }: { entrada: string | null; children: ReactNode; titulo?: string }) {
   const movil = useIsMobile()
   const { accountId, userId, esAdmin } = useCuentaConta()
   const { cargando, error, activa, recargar, empresas } = useEmpresas()
   const datos = useDatosEmpresa(accountId, activa?.id ?? null, esAdmin)
   const plan = usePlan(accountId, activa?.id ?? null)
   const hoy = hoyEnMadrid()
+  const definicion = esDefinicion(entrada)
+  const series = useSeries(definicion ? null : activa?.id ?? null, hoy)
   // Al volver del alta la lista de empresas puede ser la de antes: se relee.
   useEffect(() => { recargar() }, [recargar])
 
   const d = datos.datos
   const aMedias = empresas.find((e) => !e.completa) ?? null
   const actual = entrada ?? (movil ? null : 'empresa')
-  const cabecera = (!movil || entrada === null) && (
+  const cabecera = definicion ? (!movil && <Cabecera antetitulo="Definiciones" titulo={titulo ?? TITULO_DEFINICION[entrada ?? '']} />) : (!movil || entrada === null) && (
     <>
       <Cabecera antetitulo={CON_MARCA ? MARCA.nombre : 'Folvy Conta'} titulo="Ajustes" derecha={d && !movil ? <EtiquetaListo d={d} hoy={hoy} /> : undefined} />
       {aMedias && <AvisoAltaAMedias e={aMedias} />}
@@ -133,7 +145,7 @@ export function MarcoAjustes({ entrada, children }: { entrada: string | null; ch
         {/* M01: la empresa se cambia arriba, en la barra del marco (también en el móvil): aquí ya no se repite. */}
         {d && <EtiquetaListo d={d} hoy={hoy} />}
         {d && <Sugerencias sugerencias={d.ia.sugerencias} alCambiar={datos.recargar} />}
-        <Indice actual={null} d={d} plan={plan.datos} hoy={hoy} lista />
+        <Indice actual={null} d={d} plan={plan.datos} hoy={hoy} lista series={series} />
       </Ctx.Provider>
     )
   }
@@ -147,7 +159,7 @@ export function MarcoAjustes({ entrada, children }: { entrada: string | null; ch
     <Ctx.Provider value={valor}>
       {cabecera}
       <div className={movil ? 'cx-ajustes-movil' : 'cx-ajustes'}>
-        {!movil && <Indice actual={actual} d={d} plan={plan.datos} hoy={hoy} lista={false} />}
+        {!movil && !definicion && <Indice actual={actual} d={d} plan={plan.datos} hoy={hoy} lista={false} series={series} />}
         <div className={movil ? 'cx-ajustes-movil' : 'cx-ajustes-panel'}>{children}</div>
       </div>
     </Ctx.Provider>

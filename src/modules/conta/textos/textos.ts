@@ -33,7 +33,8 @@ export const TEXTOS = {
   'inicio.banco': t('Tienes en el banco', 'En el banco', 'Bancos (572)'),
   'inicio.teDeben': t('Te deben tus clientes', 'Te deben', 'Clientes (43, 44)'),
   'inicio.debes': t('Debes a proveedores', 'Debes', 'Proveedores (40, 41)'),
-  'inicio.iva': t('IVA de este trimestre', 'IVA del trimestre', 'IVA (477 − 472)'),
+  // S01e: {impuesto} es IVA, IGIC (Canarias) o IPSI (Ceuta y Melilla).
+  'inicio.iva': t('{impuesto} de este trimestre', '{impuesto} del trimestre', '{impuesto} (477 − 472)'),
   'inicio.pendiente': t('Solo necesito que me digas esto', 'Solo necesito que me digas esto', 'Pendiente de ti'),
   'inicio.impuestos': t('Lo que toca presentar a Hacienda', 'Impuestos que vienen', 'Calendario fiscal'),
   'inicio.verGraficas': t('Ver cómo ha ido cada mes', 'Ver la evolución', 'Ver los seis meses'),

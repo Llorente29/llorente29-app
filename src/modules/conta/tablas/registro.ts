@@ -651,6 +651,20 @@ export function agruparConceptos(filas: FilaGeneral[], conVigencia: boolean, hoy
   })
 }
 
+/**
+ * Cuántos conceptos tiene una tabla (las vigencias de lo mismo cuentan una
+ * vez). La MISMA cuenta para la cifra del menú de las tablas y para la línea
+ * de «Numeración» del índice de Ajustes (S01e: no decir «aún no» con series).
+ */
+export function cuantosConceptos(def: DefinicionTabla, filas: FilaGeneral[], hoy: string): number {
+  return agruparConceptos(filas, def.conVigencia, hoy).length
+}
+
+/** La línea de «Numeración» en el índice de Ajustes: «2 series», o que aún no hay. */
+export function resumenSeries(n: number): string {
+  return n === 0 ? 'Ninguna serie todavía' : `${n} ${n === 1 ? 'serie' : 'series'}`
+}
+
 /** «Desde 01/09/2012», «Hasta 31/12/2024», «Del 01/10/2024 al 31/12/2024». */
 export function textoVigencia(f: FilaGeneral, hoy: string): string {
   const fecha = (iso: string) => { const [y, m, dd] = iso.split('-'); return `${dd}/${m}/${y}` }

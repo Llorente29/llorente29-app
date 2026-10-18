@@ -44,6 +44,9 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     compras: 'compras.por-revisar', documentos: 'compras.recibidas', revisarFactura: 'compras.recibidas', recibidasEnAsientos: 'contabilidad.asientos', recibidaEnAsientos: 'contabilidad.asientos',
     liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
+    impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
+    // La página de aceptar una invitación a la asesoría no es de ningún producto (va sin marco).
+    aceptarAsesoria: null,
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
     ventas: null,
   }
@@ -78,10 +81,20 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(PRODUCTOS.map((p) => p.etiqueta)).toEqual(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Laboral', 'Impuestos', 'Contactos', 'Ajustes'])
     expect(PRODUCTOS.filter((p) => p.abajo).map((p) => p.id)).toEqual(['ajustes'])
   })
-  it('Facturación, Laboral e Impuestos no salen: sin pantalla, ni con el interruptor encendido', () => {
+  it('Facturación y Laboral no salen: sin pantalla, ni con el interruptor encendido; Impuestos (I01b), solo con el suyo', () => {
     const todo: Contexto = { ...NADA, interruptores: new Set(INTERRUPTORES) }
     expect(productosVisibles(NADA).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'compras', 'bancos', 'contactos', 'ajustes'])
-    expect(productosVisibles(todo).map((p) => p.id)).toEqual(productosVisibles(NADA).map((p) => p.id))
+    expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
+    expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
+  })
+  // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y
+  // pisaba «Buscar»; la pestaña se llama «Certificados» y los mensajes dicen «Impuestos › Certificados».
+  it('Impuestos: Calendario, Presentados, Impuesto de sociedades y Certificados; el IVA de un periodo, del Calendario', () => {
+    const i = PRODUCTOS.find((p) => p.id === 'impuestos')!
+    expect(i.pestanas.map((t) => t.etiqueta)).toEqual(['Calendario', 'Presentados', 'Impuesto de sociedades', 'Certificados'])
+    expect(de('/conta/impuestos/iva/2026/3T')).toBe('impuestos.calendario')
+    expect(de('/conta/impuestos/sociedades')).toBe('impuestos.sociedades')
+    expect(pestanasVisibles(i, NADA).map((t) => t.id)).toEqual(['calendario', 'presentados', 'sociedades', 'certificados'])
   })
   it('con pantalla, el interruptor decide (la prueba puede fallar)', () => {
     const conPantalla = PRODUCTOS.map((p) => (p.id === 'facturacion' ? { ...p, ruta: 'facturacion' } : p))
@@ -134,14 +147,14 @@ describe('el catálogo de órdenes', () => {
   it('la cinta de Asientos, la de la maqueta 1: NUEVO · REVISAR · UTILIDADES', () => {
     const c = cintaDe('contabilidad', 'asientos', NADA)
     expect(c.map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([
-      ['Nuevo', ['Expedida', 'Recibida', 'Tesorería', 'General', 'Predefinidos']],
+      ['Nuevo', ['Expedida', 'Recibida', 'Recibida a mano', 'Tesorería', 'General', 'Predefinidos']],
       ['Revisar', ['Para revisar', 'Libro diario']],
       ['Utilidades', ['Búsqueda', 'Digitalizar']],
     ])
     expect(cintaDe('contabilidad', null, NADA)).toEqual([])
   })
   it('paso 3: las acciones de Libros, en la cinta de su pestaña; Importar (Diez), solo con Diez', () => {
-    expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['Estados', 3], ['IVA', 7]])
+    expect(cintaDe('contabilidad', 'listados', NADA).map((g) => [g.titulo, g.ordenes.length])).toEqual([['Diario', 1], ['Mayor', 3], ['Estados', 3], ['IVA', 6], ['Retenciones', 1]])
     expect(cintaDe('contabilidad', 'cierre', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([
       ['Cierre', ['Ejercicios', 'Cerrar el mes', 'Regularización, cierre y apertura']],
       ['Cuentas anuales', ['Cuentas anuales del ejercicio', 'Qué cuentas alimentan cada línea']],
@@ -174,12 +187,13 @@ describe('el catálogo de órdenes', () => {
       expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : '').split('?')[0])), id).toBe(`bancos.${o.pestana}`)
     }
   })
-  it('paso 3: Compras y gastos · «Subir factura» en Por revisar; la barra de la N22 en Facturas recibidas, puesta por la pantalla', () => {
-    expect(cintaDe('compras', 'por-revisar', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([['Nuevo', ['Subir factura']]])
+  it('paso 3: Compras y gastos · «Subir una factura» en Por revisar; la barra de la N22 en Facturas recibidas, puesta por la pantalla', () => {
+    // S01e: «Subir una factura» (de una en una) no se confunde con «Subir varias a la vez» de Facturas recibidas.
+    expect(cintaDe('compras', 'por-revisar', NADA).map((g) => [g.titulo, g.ordenes.map((o) => o.etiqueta)])).toEqual([['Nuevo', ['Subir una factura']]])
     const subir = ordenPorId('compras.subir')!
     expect('ruta' in subir.a && subir.a.ruta).toBe('compras?subir=')
     expect(de(rutaConta('compras'))).toBe('compras.por-revisar')
-    expect(cintaDe('compras', 'recibidas', NADA).map((g) => [g.titulo, g.dePantalla])).toEqual([['Traer', 'traer'], ['Esperadas', 'esperadas'], ['Leídas', 'leidas']])
+    expect(cintaDe('compras', 'recibidas', NADA).map((g) => [g.titulo, g.dePantalla])).toEqual([['Cómo llegan', 'traer'], ['Las que faltan', 'esperadas'], ['Apuntadas solas', 'leidas']])
     // Liquidaciones no lleva cinta, y en una empresa sin hostelería ni sale la pestaña.
     expect(cintaDe('compras', 'liquidaciones', HOSTELERIA)).toEqual([])
   })
@@ -197,7 +211,7 @@ describe('el catálogo de órdenes', () => {
     // Lo de otros productos con ?ver no cambia (Bancos «Casados solos», el diario «Para revisar»).
     expect(en('/conta/bancos', '?ver=casados')).toBe('movimientos')
     expect(en('/conta/libros/diario', '?ver=revisar')).toBe('asientos')
-    expect(cintaDe('contactos', 'clientes', NADA).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Nuevo cliente']])
+    expect(cintaDe('contactos', 'clientes', NADA).map((g) => g.ordenes.map((o) => o.etiqueta))).toEqual([['Nuevo cliente', 'Nuevo proveedor']])
   })
   it('lo elegido viaja por la cinta (ejercicio, mes, banco) y la consulta de la orden manda', () => {
     expect(conConsulta('/conta/bancos/subir', '?banco=b1&mes=2026-10&ver=casados')).toBe('/conta/bancos/subir?mes=2026-10&banco=b1')

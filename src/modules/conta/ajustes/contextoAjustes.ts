@@ -11,6 +11,7 @@ import { APARTADOS, type Quien } from '@/modules/conta/empresa/apartados'
 import { ejercicioActual, mesesConEstado, resumenMeses, type DatosEmpresa } from '@/modules/conta/empresa/datosEmpresa'
 import { resumenPlan } from '@/modules/conta/lib/planVista'
 import type { DatosPlan } from '@/modules/conta/services/planService'
+import { resumenSeries } from '@/modules/conta/tablas/registro'
 
 export interface ContextoAjustes {
   datos: EstadoDatosEmpresa
@@ -29,9 +30,23 @@ export function useAjustes(): ContextoAjustes {
 
 const resumen = (apartado: string, d: DatosEmpresa, hoy: string) => APARTADOS.find((a) => a.id === apartado)?.resumen(d, hoy) ?? ''
 
-/** La línea de debajo de cada entrada del índice («Pymes · 8 dígitos · 615 cuentas»). */
-export function resumenEntrada(e: EntradaAjustes, d: DatosEmpresa | null, plan: DatosPlan | null, hoy: string): string {
+/**
+ * S01e · El plan, las tablas y la analítica son Contabilidad › Definiciones
+ * (la barra de arriba lo dice así): su pantalla se titula como tal, sin el
+ * índice de Ajustes al lado. Su título, el que sale una sola vez.
+ */
+export const TITULO_DEFINICION: Readonly<Record<string, string>> = {
+  plan: 'Plan contable', tablas: 'Tablas generales', analitica: 'Analítica',
+}
+export const esDefinicion = (entrada: string | null): boolean => entrada !== null && entrada in TITULO_DEFINICION
+
+/**
+ * La línea de debajo de cada entrada del índice («Pymes · 8 dígitos · 615 cuentas»).
+ * `series`: cuántas series de facturas hay, contadas como en su tabla (null: aún no se sabe).
+ */
+export function resumenEntrada(e: EntradaAjustes, d: DatosEmpresa | null, plan: DatosPlan | null, hoy: string, series: number | null = null): string {
   if (e.hueco) return 'Aún no'
+  if (e.id === 'numeracion') return series === null ? '' : resumenSeries(series)
   if (!d) return ''
   switch (e.id) {
     case 'empresa': return resumen('quien-eres', d, hoy)

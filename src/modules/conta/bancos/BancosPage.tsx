@@ -38,7 +38,7 @@ import { bancosEnBarra, estadoBanco, mesCorto, mesesElegibles, nombreCorto, nomb
 import { agenteTocaHoy, leerDatosBancos, leerHechos, pasarAgente } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { BancosCtx, type ContextoBancos } from '@/modules/conta/bancos/contexto'
-import { resolverVista, type VistaBancos } from '@/modules/conta/bancos/navegacion'
+import { bancoInicial, mesInicial, resolverVista, type VistaBancos } from '@/modules/conta/bancos/navegacion'
 import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
 import { useDatosEnCinta, useEntradasEnCinta, type EntradaPantalla } from '@/modules/conta/marco/nuevo/contexto'
 import { Movimientos } from '@/modules/conta/bancos/Movimientos'
@@ -48,6 +48,7 @@ import { CuentasYExtractos } from '@/modules/conta/bancos/CuentasYExtractos'
 import { CierreDelMes } from '@/modules/conta/bancos/CierreDelMes'
 import { SubirExtracto } from '@/modules/conta/bancos/SubirExtracto'
 import { HechoPorFolvy } from '@/modules/conta/bancos/HechoPorFolvy'
+import { PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 
 
 function contenido(v: VistaBancos): ReactNode {
@@ -79,9 +80,10 @@ export default function BancosPage() {
   const ambito = `${accountId}:${activa?.id}`
   const datos = useLeerConservando(accountId && activa ? () => leerDatosBancos(accountId, activa.id) : null, ambito, String(vuelta))
   const meses = useMemo(() => mesesElegibles(datos.datos?.primerMovimiento ?? null, hoy), [datos.datos, hoy])
-  const mes = meses.includes(query.get('mes') ?? '') ? query.get('mes')! : meses[0] ?? hoy.slice(0, 7)
   const bancos = datos.datos?.bancos ?? []
-  const banco = bancos.find((b) => b.id === query.get('banco')) ?? bancos[0] ?? null
+  // S01e: sin ?banco ni ?mes, se abre donde hay movimientos (el banco y el mes de su último extracto).
+  const banco = bancos.find((b) => b.id === query.get('banco')) ?? bancoInicial(bancos, datos.datos?.dudas ?? {})
+  const mes = meses.includes(query.get('mes') ?? '') ? query.get('mes')! : mesInicial(meses, banco, hoy)
   const hechos = useLeerConservando(accountId && activa ? () => leerHechos(accountId, activa.id, mes) : null, ambito, `${mes}:${vuelta}`)
   // Lo casado solo que sigue vivo: lo deshecho ya no es «hecho por Folvy».
   const casadosSolos = (hechos.datos ?? []).filter((h) => h.porQuien === 'folvy' && h.accion === 'casado' && h.casadoVivo).length
@@ -130,7 +132,7 @@ export default function BancosPage() {
   const dudasDe = (id: string) => datos.datos?.dudas[id] ?? 0
   const entradas: EntradaPantalla[] = (() => {
     if (!datos.datos) return []
-    if (bancos.length === 0) return [{ id: 'alta', etiqueta: 'Dar de alta un banco', a: conQuery(rutaBancos('cuentas')), dato: 'En Cuentas y extractos' }]
+    if (bancos.length === 0) return [{ id: 'alta', etiqueta: 'Dar de alta un banco', a: conQuery(rutaBancos('cuentas'), { [PARAM_NUEVO]: VALOR_NUEVO }), dato: 'En Cuentas y extractos' }]
     const { visibles, resto } = bancosEnBarra(bancos, datos.datos.dudas, banco?.id ?? null)
     const lista: EntradaPantalla[] = visibles.map((b) => {
       const e = estadoBanco(dudasDe(b.id), !!b.ultimoExtracto)
@@ -150,7 +152,8 @@ export default function BancosPage() {
   useDatosEnCinta(datos.datos ? {
     'bancos.subir': { dato: 'Norma 43 · Excel' },
     'bancos.reglas': { numero: datos.datos.reglas.activas, dato: datos.datos.reglas.nuevas ? `${datos.datos.reglas.nuevas} nuevas` : undefined, aviso: datos.datos.reglas.nuevas > 0 },
-    'bancos.casados': { numero: casadosSolos, dato: `${casadosSolos} este mes, en todos` },
+    // S01e: dice qué cuenta (el mes elegido, todos los bancos), como la banda de «Lo que he hecho».
+    'bancos.casados': { numero: casadosSolos, dato: `${casadosSolos} en ${nombreMes(mes).toLowerCase()}, en todos tus bancos` },
   } : null)
 
   if (!accountId && !cargando) return <Vacio titulo="No hay cuenta activa." explicacion="Elige una cuenta para ver sus bancos." />
@@ -170,7 +173,8 @@ export default function BancosPage() {
             </div>
             {!enPortadaMovil && (
               <select className="cx-input cxb-mes" value={mes} aria-label="Mes" onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
-                {meses.map((m) => <option key={m} value={m}>{nombreMes(m)} {m.slice(0, 4)}</option>)}
+                {/* S01e: el mes, escrito igual que en el ordenador y en Facturas recibidas. */}
+                {meses.map((m) => <option key={m} value={m}>{mesCorto(m)}</option>)}
               </select>
             )}
           </header>

@@ -63,6 +63,11 @@ export interface Producto {
    * En el ordenador, pestañas y cinta como todos (paso 3 del S01).
    */
   portadaMovil?: boolean
+  /**
+   * S01e · Alguna de sus pantallas pone el ejercicio o el mes en la cabecera
+   * (PeriodoEnBarra): los px que se le guardan siempre, esté o no, con su hueco.
+   */
+  periodo?: number
 }
 
 /** Lo que decide qué sale: de la empresa activa y de la cuenta. */
@@ -89,7 +94,7 @@ const R = CONTA.rutas
 export const PRODUCTOS: Producto[] = [
   { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: R.inicio, prefijos: [R.inicio], pestanas: [] },
   {
-    id: 'contabilidad', etiqueta: 'Contabilidad', icono: 'contabilidad', ruta: R.libroDiario, prefijos: [],
+    id: 'contabilidad', etiqueta: 'Contabilidad', icono: 'contabilidad', ruta: R.libroDiario, prefijos: [], periodo: 210,   // «Ejercicio 2025 · cerrado»
     pestanas: [
       { id: 'asientos', etiqueta: 'Asientos', ruta: R.libroDiario, prefijos: [R.libroDiario] },
       {
@@ -114,7 +119,7 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    id: 'compras', etiqueta: 'Compras y gastos', icono: 'compras', ruta: R.compras, prefijos: [],
+    id: 'compras', etiqueta: 'Compras y gastos', icono: 'compras', ruta: R.compras, prefijos: [], periodo: 100,   // «Oct 2026»
     pestanas: [
       { id: 'por-revisar', etiqueta: 'Por revisar', ruta: R.compras, prefijos: [R.compras] },
       { id: 'recibidas', etiqueta: 'Facturas recibidas', ruta: R.documentos, prefijos: [R.documentos] },
@@ -124,7 +129,7 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], portadaMovil: true,
+    id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], portadaMovil: true, periodo: 100,
     pestanas: [
       { id: 'movimientos', etiqueta: 'Movimientos', ruta: R.bancos, prefijos: [R.bancos] },
       { id: 'reglas', etiqueta: 'Reglas', ruta: `${R.bancos}/reglas`, prefijos: [`${R.bancos}/reglas`] },
@@ -133,7 +138,17 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   { id: 'laboral', etiqueta: 'Laboral', icono: 'laboral', ruta: null, prefijos: [], interruptor: 'conta_laboral', pestanas: [] },
-  { id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: null, prefijos: [], interruptor: 'conta_impuestos', pestanas: [] },
+  // I01b · Impuestos (tableros 8, 9 y 10), con su interruptor por cuenta. El IVA de un
+  // periodo (impuestos/iva/…) cuelga del Calendario.
+  {
+    id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: R.impuestos, prefijos: [], interruptor: 'conta_impuestos',
+    pestanas: [
+      { id: 'calendario', etiqueta: 'Calendario', ruta: R.impuestos, prefijos: [R.impuestos] },
+      { id: 'presentados', etiqueta: 'Presentados', ruta: `${R.impuestos}/presentados`, prefijos: [`${R.impuestos}/presentados`] },
+      { id: 'sociedades', etiqueta: 'Impuesto de sociedades', ruta: `${R.impuestos}/sociedades`, prefijos: [`${R.impuestos}/sociedades`] },
+      { id: 'certificados', etiqueta: 'Certificados', ruta: `${R.impuestos}/certificados`, prefijos: [`${R.impuestos}/certificados`] },
+    ],
+  },
   {
     id: 'contactos', etiqueta: 'Contactos', icono: 'contactos', ruta: R.terceros, prefijos: [],
     pestanas: [
@@ -219,15 +234,33 @@ export const TODOS_LOS_PREFIJOS = PRODUCTOS.flatMap(prefijosDe)
 /**
  * Cuántas pestañas caben en el ancho que hay; el resto va a «Más ▾». Si caben
  * todas, todas (sin «Más»); si no, se reserva el sitio de «Más».
+ *
+ * S01e · `anchosActiva[i]`: lo que mide el botón de «Más» si la pestaña i va
+ * dentro y es la activa («Cierre y Registro ▾»). Se reserva el de la más ancha
+ * de las que irían dentro: así la activa no lo ensancha ni pisa «Buscar», y
+ * cuántas caben no depende de en qué pestaña se esté.
  */
-export function cuantasCaben(anchos: number[], disponible: number, anchoMas: number, hueco = 0): number {
+export function cuantasCaben(anchos: number[], disponible: number, anchoMas: number, hueco = 0, anchosActiva: number[] = []): number {
   const total = anchos.reduce((s, a, i) => s + a + (i ? hueco : 0), 0)
   if (total <= disponible) return anchos.length
-  let usado = anchoMas
+  // De atrás adelante: con más pestañas fuera, el botón de «Más» puede tener que ser más ancho.
+  const masDesde: number[] = new Array(anchos.length + 1).fill(anchoMas)
+  for (let i = anchos.length - 1; i >= 0; i--) masDesde[i] = Math.max(masDesde[i + 1], anchosActiva[i] ?? 0)
+  let caben = 0
+  let usado = 0
   for (let i = 0; i < anchos.length; i++) {
-    const siguiente = usado + hueco + anchos[i]
-    if (siguiente > disponible) return i
-    usado = siguiente
+    usado += anchos[i] + hueco
+    if (usado + masDesde[i + 1] <= disponible) caben = i + 1
   }
-  return anchos.length
+  return caben
+}
+
+/**
+ * S01e · El ancho para las pestañas: el que hay, menos lo que le falta al hueco
+ * del ejercicio y el mes para llegar a su reserva. En un producto que lo lleva
+ * en unas pantallas y en otras no (Contabilidad), las pestañas caben igual en
+ * todas y «Más ▾» no cambia de sitio.
+ */
+export function anchoParaPestanas(hay: number, periodo: number, reserva: number): number {
+  return Math.max(0, hay - Math.max(0, reserva - periodo))
 }

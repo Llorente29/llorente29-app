@@ -48,6 +48,8 @@ import { fijarCorte, primeraVenta } from '@/modules/conta/services/corteService'
 import { corteDesdeRespuesta, rangoAProponer } from '@/modules/conta/lib/proponer'
 import { textoDiaEnCurso, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
+import { paraRevisar, sinValidarDelMes } from '@/modules/conta/libro/paraRevisar'
+import { nombresDeCuentas, palabrasLlanas } from '@/modules/conta/libro/palabrasLlanas'
 import { MARCA } from '../cuenta/marca'
 import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, motivoSinPatron, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
@@ -202,15 +204,19 @@ export default function LibroDiarioPage() {
     const d = datos?.conDiez.get(a.id)
     return d ? porQueNoLlegaADiez(a, d, localDelAsiento(a.apuntes), grupoDe) : null
   }
+  // S01e: los motivos en palabras normales, con el nombre junto a cada cuenta («57200001 (Banco)»).
+  const nombres = useMemo(() => nombresDeCuentas(datos ? datos.asientos.flatMap((a) => a.apuntes) : []), [datos])
+  const llano = (t: string | null | undefined): string | null => (t ? palabrasLlanas(t, nombres) : null)
   const motivoEspera = (a: AsientoDiario): string | null => {
-    if (a.estado === 'propuesto' || a.estado === 'borrador') return primerMotivo(datos?.esperan.get(a.id))
+    if (a.estado === 'propuesto' || a.estado === 'borrador') return llano(primerMotivo(datos?.esperan.get(a.id)))
     const n = noDiez(a)
-    return n?.tipo === 'espera' ? n.motivo : null
+    return n?.tipo === 'espera' ? llano(n.motivo) : null
   }
   const tareaDiez = (a: AsientoDiario): Extract<NoLlegaADiez, { tipo: 'tarea' }> | null => { const n = noDiez(a); return n?.tipo === 'tarea' ? n : null }
   const esperanTodos = datos ? datos.asientos.filter((a) => motivoEspera(a) !== null) : []
   const porEnviar = datos ? datos.asientos.filter((a) => tareaDiez(a) !== null).length : 0
-  const revisables = datos ? datos.asientos.filter((a) => a.estado === 'propuesto' && !motivoEspera(a)).length : 0
+  // S01e: la misma regla que la lista «Para revisar» (propuestos Y borradores que no esperan).
+  const revisables = datos ? paraRevisar(datos.asientos, motivoEspera).length : 0
   const enEsperan = vista === 'esperan'
 
   // Sin memo: filtrar unos miles de asientos es nada, y así no se queda viejo.
@@ -218,7 +224,7 @@ export default function LibroDiarioPage() {
     const diez = (a: AsientoDiario) => numeroEnDiez(a, datos.conDiez.get(a.id))
     const base = enEsperan ? filtrar(datos.asientos, 'todos').filter((a) => motivoEspera(a) !== null)
       // «Para revisar» es lo que se puede revisar: lo que espera va en «Esperan».
-      : filtro === 'revisar' ? filtrar(datos.asientos, filtro).filter((a) => !motivoEspera(a))
+      : filtro === 'revisar' ? paraRevisar(datos.asientos, motivoEspera)
         : filtrar(datos.asientos, filtro)
     return base.filter((a) => (!soloSinDiez || tareaDiez(a) !== null) && cumpleFiltros(campos, filtros, {
       fecha: a.fecha,
@@ -322,11 +328,16 @@ export default function LibroDiarioPage() {
   if (!accountId && !cargando) return <Vacio titulo="No hay cuenta activa." explicacion="Elige una cuenta para ver su libro." />
 
   const mesCerrado = c?.mes.cerrado ? c.mes : null
+  // S01e: un mes cerrado no se da por terminado si dentro hay algo sin validar.
+  const sinValidarMes = datos ? sinValidarDelMes(datos.asientos, datos.mes) : 0
+  const sinValidarTexto = sinValidarMes ? `${sinValidarMes} ${sinValidarMes === 1 ? 'asiento' : 'asientos'} sin validar dentro` : ''
+  // S01e: las columnas fijas, a lo que de verdad ocupan («General 1.287», «12.345,67 €»,
+  // «Hecho por Folvy»): lo que sobra va al concepto, que antes se cortaba con sitio al lado.
   const columnas: ColumnaDensa<AsientoDiario>[] = datos ? [
-    { id: 'fecha', titulo: 'Fecha', ancho: '64px', celda: (a) => <span className="cxd-fecha">{diaMesCorto(a.fecha)}</span>, exportar: (a) => a.fecha },
-    { id: 'numero', titulo: 'Nº', ancho: '118px', celda: (a) => <span className="cxd-num">{numeroVisible(a)}</span>, exportar: (a) => numeroVisible(a), pesoPdf: 1.3 },
+    { id: 'fecha', titulo: 'Fecha', ancho: '56px', celda: (a) => <span className="cxd-fecha">{diaMesCorto(a.fecha)}</span>, exportar: (a) => a.fecha },
+    { id: 'numero', titulo: 'Nº', ancho: '104px', celda: (a) => <span className="cxd-num">{numeroVisible(a)}</span>, exportar: (a) => numeroVisible(a), pesoPdf: 1.3 },
     {
-      id: 'diez', titulo: 'Diez', ancho: '76px', cifra: true,
+      id: 'diez', titulo: 'Diez', ancho: '68px', cifra: true,
       celda: (a) => { const n = numeroEnDiez(a, datos.conDiez.get(a.id)); return <span className="cxd-diez" title={n.explicacion}>{n.texto}<span className="cx-oculto"> ({n.explicacion})</span></span> },
       exportar: (a) => numeroEnDiez(a, datos.conDiez.get(a.id)).valor,
     },
@@ -345,8 +356,8 @@ export default function LibroDiarioPage() {
       },
       exportar: (a) => `${a.concepto} · ${motivoEspera(a) ?? tareaDiez(a)?.texto ?? deDondeSale(a)}`,
     },
-    { id: 'importe', titulo: 'Importe', ancho: '116px', cifra: true, celda: (a) => <span className="cxd-importe">{eurosExactos(importe(a))}</span>, exportar: (a) => importe(a) },
-    { id: 'estado', titulo: 'Estado', ancho: '128px', celda: (a) => { const e = estadoDe(a); return <TonoChip tono={e.tono}>{e.texto}</TonoChip> }, exportar: (a) => estadoDe(a).texto },
+    { id: 'importe', titulo: 'Importe', ancho: '108px', cifra: true, celda: (a) => <span className="cxd-importe">{eurosExactos(importe(a))}</span>, exportar: (a) => importe(a) },
+    { id: 'estado', titulo: 'Estado', ancho: '116px', celda: (a) => { const e = estadoDe(a); return <TonoChip tono={e.tono}>{e.texto}</TonoChip> }, exportar: (a) => estadoDe(a).texto },
     { id: 'abrir', titulo: '', ancho: '24px', celda: (a) => <span className="cxd-flecha" aria-hidden="true">{abierto === a.id ? '▾' : '▸'}</span> },
   ] : []
 
@@ -408,7 +419,7 @@ export default function LibroDiarioPage() {
           {/* El mes, en una línea: las cifras de N11, en pequeño (lo que espera revisión va en «Te toca hoy»). */}
           <dl className="cxd-resumen" aria-label={`Cómo va ${nombreMes(datos.mes)}`}>
             <div><dt>Asientos en {nombreMes(datos.mes)}</dt><dd className="cxd-resumen-cifra">{miles(c.asientosMes)}</dd><dd className="cxd-resumen-apoyo">{c.apoyoAsientos}</dd></div>
-            <div><dt>{capital(nombreMes(datos.mes))}</dt><dd className="cxd-resumen-cifra">{c.mes.texto}</dd><dd className={c.mes.cerrado ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo cxt-verde'}>{c.mes.apoyo}</dd></div>
+            <div><dt>{capital(nombreMes(datos.mes))}</dt><dd className="cxd-resumen-cifra">{c.mes.texto}</dd><dd className={c.mes.cerrado ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo cxt-verde'}>{c.mes.cerrado && sinValidarTexto ? `${c.mes.apoyo} · ${sinValidarTexto}` : c.mes.apoyo}</dd></div>
             <div><dt>Resultado de {nombreMes(datos.mes)}</dt>
               <dd className="cxd-resumen-cifra">{c.resultado === null ? '—' : `${c.resultado >= 0 ? '+' : ''}${euros(c.resultado)}`}</dd>
               <dd className={datos.resultadoError ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo'}>{datos.resultadoError ? `No se ha podido calcular: ${datos.resultadoError}` : c.apoyoResultado}</dd></div>
@@ -416,7 +427,7 @@ export default function LibroDiarioPage() {
 
           {mesCerrado && (
             <div className="cx-tarjeta cxd-franja" role="status">
-              <span><strong>{capital(nombreMes(datos.mes))} está {mesCerrado.texto.toLowerCase()}</strong> · {mesCerrado.apoyo}. Lo que propongo cae en el primer día abierto.</span>
+              <span><strong>{capital(nombreMes(datos.mes))} está {mesCerrado.texto.toLowerCase()}</strong> · {mesCerrado.apoyo}{sinValidarTexto ? `, pero con ${sinValidarTexto}` : ''}. Lo que propongo cae en el primer día abierto.</span>
               {mesCerrado.cerrado && mesCerrado.tipo !== 'migrated' && <button type="button" className="cx-boton-sec" onClick={() => setDesbloqueo(true)}>Pedir desbloqueo</button>}
             </div>
           )}
@@ -480,7 +491,7 @@ export default function LibroDiarioPage() {
                   ? <p className="cxd-ia-apoyo">Aún nada este ejercicio. Cuando proponga o asiente algo, sale aquí con su porqué.</p>
                   : hechos.map((h) => (
                     <div key={h.asientoId} className="cxd-ia-fila">
-                      <div><Link to={rutaAsiento(h.asientoId)} className="cxd-ia-hecho">{h.titulo}</Link><span className="cxd-ia-apoyo">{h.apoyo}</span></div>
+                      <div><Link to={rutaAsiento(h.asientoId)} className="cxd-ia-hecho">{h.titulo}</Link><span className="cxd-ia-apoyo">{llano(h.apoyo)}</span></div>
                       {h.deshacer && <button type="button" className="cx-enlace" onClick={() => deshacer(h.asientoId)}>Deshacer</button>}
                     </div>
                   ))}
@@ -651,7 +662,7 @@ function SinPropuesta({ x }: { x: ResultadoProponer['sinPropuesta'][number] }) {
   const n = x.pedidos?.length ?? 0
   return (
     <li>
-      <strong>{x.que}</strong> · {x.porque}
+      <strong>{x.que}</strong> · {palabrasLlanas(x.porque)}
       {n > 0 && <> <button type="button" className="cx-enlace" aria-expanded={ver} onClick={() => setVer((v) => !v)}>{ver ? 'Ocultar' : n === 1 ? 'Ver el pedido' : `Ver los ${n} pedidos`}</button></>}
       {ver && x.pedidos && (
         <ul className="cxd-sin-pedidos">

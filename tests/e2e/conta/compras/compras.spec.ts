@@ -111,12 +111,21 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await capturar(page, 'compras')
 
   // Subir una factura: el diálogo, sin subir nada.
-  // «Subir factura» está en la cinta (paso 3): abre el mismo diálogo.
-  await page.getByRole('toolbar', { name: 'Acciones de Por revisar' }).getByRole('link', { name: /Subir factura/ }).click()
+  // «Subir una factura» está en la cinta (paso 3): abre el mismo diálogo.
+  await page.getByRole('toolbar', { name: 'Acciones de Por revisar' }).getByRole('link', { name: /Subir una factura/ }).click()
   const dialogo = page.getByRole('dialog', { name: 'Subir una factura' })
   await expect(dialogo.getByLabel('La factura (foto o PDF)')).toBeVisible()
   await capturar(page, 'subir-factura', 'dialogo')
   await dialogo.getByLabel('La factura (foto o PDF)').press('Escape')
+  await expect(dialogo).toBeHidden()
+  // S01e: también desde la página, a la vista aunque la cinta esté plegada; y la ✕ y
+  // «Cancelar» cierran (en el móvil no hay Escape).
+  await page.locator('.cxc-entra-fila').getByRole('button', { name: 'Subir una factura' }).click()
+  await expect(dialogo.getByRole('button', { name: 'Cerrar' })).toBeVisible()
+  await dialogo.getByRole('button', { name: 'Cerrar' }).click()
+  await expect(dialogo).toBeHidden()
+  await page.locator('.cxc-entra-fila').getByRole('button', { name: 'Subir una factura' }).click()
+  await dialogo.getByRole('button', { name: 'Cancelar' }).click()
   await expect(dialogo).toBeHidden()
 })
 

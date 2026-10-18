@@ -7,6 +7,8 @@
 // débito (respuesta 3: los 4 últimos dígitos, quién la lleva y su local; el
 // número entero no se guarda nunca) y sus extractos con el cuadre.
 // Abajo, las cuentas 572 del plan que aún no son un banco de Folvy.
+// Arriba, siempre, «+ Nuevo banco o tarjeta» (S01d): un banco que aún no está
+// en el plan, con su subcuenta 572 nueva. Llegar con ?nuevo=banco lo abre.
 //
 // Sin tarjetas de crédito: ninguna empresa las usa (respuesta 3, punto 4).
 
@@ -24,6 +26,8 @@ import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { DialogoBancoNuevo } from '@/modules/conta/bancos/DialogoBancoNuevo'
+import { ACCION_NUEVO, PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 
 type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
 const COMUN = 'comun'
@@ -31,10 +35,18 @@ const COMUN = 'comun'
 export function CuentasYExtractos() {
   const { companyId, datos, vuelta, recargar } = useBancos()
   const { local: ejeLocal } = useAnalitica()
-  const [query] = useSearchParams()
+  const [query, setQuery] = useSearchParams()
   const [aviso, setAviso] = useState<Aviso>(null)
   const porDar = useLeer(() => cuentasPorDarDeAlta(companyId), `${companyId}:${vuelta}`)
   const [alta, setAlta] = useState<{ codigo: string; nombre: string; iban: string } | null>(null)
+  // Los enlaces de «no hay ningún banco» llegan con ?nuevo=banco: el diálogo, ya abierto.
+  // (Se deriva de la dirección, no se copia: también vale si ya estabas en esta pestaña.)
+  const [abierto, setNuevo] = useState(false)
+  const nuevo = abierto || query.get(PARAM_NUEVO) === VALOR_NUEVO
+  const cerrarNuevo = () => {
+    setNuevo(false)
+    if (query.has(PARAM_NUEVO)) { const p = new URLSearchParams(query); p.delete(PARAM_NUEVO); setQuery(p, { replace: true }) }
+  }
 
   const hacer = async (f: () => Promise<string>) => {
     setAviso(null)
@@ -43,9 +55,16 @@ export function CuentasYExtractos() {
 
   return (
     <section className="cxb-seccion" aria-labelledby="cxb-cuentas-titulo">
-      <div className="cxl-seccion"><div><h2 id="cxb-cuentas-titulo">Cuentas y extractos</h2><p className="cx-ayuda">Tus cuentas del banco, sus tarjetas de débito y lo que se ha subido de cada una.</p></div></div>
+      <div className="cxl-seccion">
+        <div><h2 id="cxb-cuentas-titulo">Cuentas y extractos</h2><p className="cx-ayuda">Tus cuentas del banco, sus tarjetas de débito y lo que se ha subido de cada una.</p></div>
+        <button type="button" className="cx-boton" onClick={() => { setAviso(null); setNuevo(true) }}>{ACCION_NUEVO}</button>
+      </div>
       {aviso && <div className={aviso.tipo === 'ok' ? 'cx-guardado' : 'cx-error'} role={aviso.tipo === 'ok' ? 'status' : 'alert'}>{aviso.texto}</div>}
-      {datos.bancos.length === 0 && <div className="cx-tarjeta"><p>Aún no hay ningún banco. Da de alta una de las cuentas de abajo o sube su primer extracto, que trae el IBAN.</p></div>}
+      {datos.bancos.length === 0 && (
+        <div className="cx-tarjeta">
+          <p>Aún no hay ningún banco. Dalo de alta con «{ACCION_NUEVO}»{(porDar.datos?.length ?? 0) > 0 ? ', o desde una de las cuentas del plan de abajo' : ''}. También puedes subir su primer extracto: trae el IBAN y te ofrezco darlo de alta con él.</p>
+        </div>
+      )}
       {datos.bancos.map((b) => (
         <TarjetaBanco key={b.id} b={b} extractos={datos.extractos.filter((e) => e.cuentaId === b.id)} hacer={hacer}
           prellenar={query.get('banco') === b.id ? query.get('tarjeta') : null} />
@@ -54,7 +73,11 @@ export function CuentasYExtractos() {
       <div className="cx-tarjeta cxb-lista" aria-label="Cuentas por dar de alta">
         <h3 className="cxl-subtitulo">Cuentas del plan que aún no son un banco</h3>
         {porDar.error && <div className="cx-error" role="alert">{porDar.error}</div>}
-        {porDar.datos?.length === 0 && <p className="cx-ayuda">Ninguna: cada cuenta de bancos del plan tiene su banco aquí.</p>}
+        {porDar.datos?.length === 0 && (
+          <p className="cx-ayuda">{datos.bancos.length === 0
+            ? `El plan no tiene ninguna cuenta de bancos esperando. Para dar de alta el tuyo, «${ACCION_NUEVO}»: le creo su subcuenta 572.`
+            : `Ninguna: cada cuenta de bancos del plan ya tiene su banco aquí. Para uno que aún no está en el plan, «${ACCION_NUEVO}».`}</p>
+        )}
         {(porDar.datos ?? []).map((c) => (
           <div key={c.codigo} className="cxb-lista-fila">
             <span className="cxb-lista-texto"><strong>{nombreConCodigo(c.nombre, c.codigo)}</strong>{c.ibanEnNombre && <span className="cx-ayuda">El nombre trae un IBAN: {ibanLegible(c.ibanEnNombre)}</span>}</span>
@@ -66,6 +89,9 @@ export function CuentasYExtractos() {
         await altaCuenta(companyId, c); setAlta(null)
         return `Dada de alta: ${nombreConCodigo(c.nombre, c.codigo)}${!ejeLocal ? '' : c.comun ? ', común a todos los locales' : `, del local ${datos.locales.find((l) => l.id === c.localId)?.nombre ?? ''}`}. Ya puedes subir su extracto.`
       })} />}
+      {nuevo && <DialogoBancoNuevo alCerrar={cerrarNuevo} alCrear={(_, texto) => {
+        cerrarNuevo(); setAviso({ tipo: 'ok', texto: `${texto} Ya puedes subir su extracto.` }); refrescarCuentasMenu(); recargar()
+      }} />}
     </section>
   )
 }

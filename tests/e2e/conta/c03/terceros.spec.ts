@@ -271,7 +271,7 @@ test('cliente normal: sin facturas, lo dice; archivar y recuperar', async ({ pag
   }
 })
 
-test('alta de cliente con el NIF de un proveedor: un solo tercero con los dos papeles', async ({ page }, info) => {
+test('alta de cliente con el NIF de un proveedor: una sola ficha con los dos papeles', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
   const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
@@ -287,12 +287,40 @@ test('alta de cliente con el NIF de un proveedor: un solo tercero con los dos pa
     // Regla 1: un NIF, un tercero.
     await expect(page.getByText(`Es el mismo que tu proveedor ${nombre}: añadirle el papel de cliente.`)).toBeVisible()
     await page.getByRole('button', { name: 'Añadirle el papel de cliente' }).click()
-    await expect(page.getByText(`${nombre} ya es también cliente: un solo tercero con los dos papeles.`)).toBeVisible()
+    await expect(page.getByText(`${nombre} ya es también cliente: una sola ficha con los dos papeles.`)).toBeVisible()
     await expect(page).toHaveURL(/\/conta\/clientes-y-proveedores\/[0-9a-f-]+\/datos-fiscales$/)
     const roles = await rest<{ role: string }[]>(s, 'GET', `party_role?select=role,party!inner(name)&account_id=eq.${CUENTA_A.id}&party.name=eq.${encodeURIComponent(nombre)}&order=role`)
     expect(roles.datos.map((r) => r.role)).toEqual(['customer', 'supplier'])
   } finally {
     await borrarProveedor(s, p.datos[0].id)
+    await rest(s, 'DELETE', `party?account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
+  }
+})
+
+// S01d: «Nuevo proveedor» desde Contactos (la cinta, ?nuevo=proveedor): se queda en la lista,
+// lo dice con su nombre (regla 8) y lo enseña buscándolo por su NIF.
+test('S01d · alta de proveedor desde Contactos: lo confirma y sale en la lista', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
+  const s = await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  const nombre = `Proveedor S01d e2e ${Date.now()}`
+  const nif = cifInventado()
+  try {
+    await page.goto('/conta/clientes-y-proveedores')
+    await page.getByRole('toolbar', { name: 'Acciones de Todos' }).getByRole('link', { name: /Nuevo proveedor/ }).click()
+    const dialogo = page.getByRole('dialog', { name: 'Nuevo proveedor' })
+    await dialogo.getByLabel('Nombre con el que lo conocéis').fill(nombre)
+    await dialogo.getByLabel('NIF (opcional)').fill(nif)
+    await dialogo.getByRole('button', { name: 'Dar de alta' }).click()
+    await expect(page.getByText(`Proveedor ${nombre} dado de alta. Ya puedes subir sus facturas.`)).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Nuevo proveedor' })).toHaveCount(0)
+    await expect(page.getByLabel('Buscar por nombre o NIF')).toHaveValue(nif)
+    await expect(page.getByRole('link', { name: new RegExp(nombre) })).toBeVisible()
+    const roles = await rest<{ role: string }[]>(s, 'GET', `party_role?select=role,party!inner(name)&account_id=eq.${CUENTA_A.id}&party.name=eq.${encodeURIComponent(nombre)}`)
+    expect(roles.datos.map((r) => r.role)).toEqual(['supplier'])
+  } finally {
+    const p = await rest<{ id: string }[]>(s, 'GET', `supplier?select=id&account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
+    for (const x of p.datos ?? []) await borrarProveedor(s, x.id)
     await rest(s, 'DELETE', `party?account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
   }
 })

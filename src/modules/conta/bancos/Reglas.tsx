@@ -63,14 +63,20 @@ export function Reglas() {
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [contiene, setContiene] = useState('')
-  const [q, setQ] = useState('')
-  const [cuenta, setCuenta] = useState('')
+  // S01e: un solo campo «Va a» (antes, «Busca a qué va» y «Va a» para lo mismo): se escribe y se elige de la lista.
+  const [vaA, setVaA] = useState('')
   const [corrigiendo, setCorrigiendo] = useState<{ id: string; contiene: string; cuenta: string } | null>(null)
   const [borrando, setBorrando] = useState<string | null>(null)
   const nombre = (c: string) => `${datos.nombres[c] ?? c} · ${c}`
-  const opciones = (filtro: string) => Object.keys(datos.nombres).filter((c) => c.length >= 8 && !c.startsWith('572')).sort()
-    .filter((c) => !filtro.trim() || normal(`${datos.nombres[c]} ${c}`).includes(normal(filtro.trim()))).slice(0, 60)
-  const cuentas = useMemo(() => opciones(q), [datos.nombres, q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const opciones = (filtro: string, max = 60) => Object.keys(datos.nombres).filter((c) => c.length >= 8 && !c.startsWith('572')).sort()
+    .filter((c) => !filtro.trim() || normal(`${datos.nombres[c]} ${c}`).includes(normal(filtro.trim()))).slice(0, max)
+  const todas = useMemo(() => opciones('', Infinity), [datos.nombres]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Lo escrito vale si es una de la lista («Luz y agua · 62800000») o su número exacto.
+  const cuenta = useMemo(() => {
+    const t = vaA.trim()
+    return todas.find((c) => nombre(c) === t || c === t) ?? ''
+  }, [vaA, todas]) // eslint-disable-line react-hooks/exhaustive-deps
+  const sugeridas = useMemo(() => opciones(vaA), [datos.nombres, vaA]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const con = async (id: string, f: () => Promise<string>) => {
     setOcupado(id); setAviso(null)
@@ -84,6 +90,10 @@ export function Reglas() {
   const vivas = reglas.datos.filter((r) => r.estado !== 'rechazada')
   const yaHay = new Set(reglas.datos.map((r) => normal(r.contiene)))
   const nuevas = (base.datos?.propongo ?? []).filter((p) => !yaHay.has(normal(p.contiene)))
+  // S01e: las que ya están guardadas como propuesta (salen en «Tus reglas» con Guardar / No) cuentan igual
+  // que en la cinta («N nuevas»): el aviso habla de reglas que existen, con la misma cuenta a los dos lados.
+  const propuestasGuardadas = reglas.datos.filter((r) => r.estado === 'propuesta').length
+  const porDecidir = nuevas.length + propuestasGuardadas
   const noPropongo = (base.datos?.noPropongo ?? []).filter((p) => !yaHay.has(normal(p.contiene)))
   const examen = (r: { contiene: string; signo?: 1 | -1 | null }) => (base.datos ? examinarRegla(r, base.datos.movs, base.datos.casados) : null)
   const textoNuevo = contiene.trim().toUpperCase()
@@ -97,7 +107,7 @@ export function Reglas() {
       <div className="cxb-banda" role="note">
         <span className="cx-ia-punto" aria-hidden="true" />
         <div className="cxb-banda-texto">
-          <strong>{base.datos ? (nuevas.length ? `Te propongo ${veces(nuevas.length, 'regla nueva', 'reglas nuevas')}: lo has hecho igual al menos 3 veces.` : 'No tengo reglas nuevas que proponerte.') : 'Mirando lo que se repite…'}</strong>
+          <strong>{base.datos ? (porDecidir ? `Te propongo ${veces(porDecidir, 'regla nueva', 'reglas nuevas')}: lo has hecho igual al menos 3 veces.${propuestasGuardadas ? ` ${propuestasGuardadas === 1 ? 'Una está' : `${propuestasGuardadas} están`} en «Tus reglas», esperando a que digas sí o no.` : ''}` : 'No tengo reglas nuevas que proponerte.') : 'Mirando lo que se repite…'}</strong>
           <span>Guardarla no cambia nada de lo ya hecho: solo propone igual la próxima vez, con su porqué.</span>
         </div>
       </div>
@@ -204,22 +214,22 @@ export function Reglas() {
         if (!textoNuevo || !cuenta || exNueva?.generica) return
         con('nueva', async () => {
           await guardarRegla(companyId, { palabras: `Cuando el concepto tenga «${textoNuevo}» → ${nombre(cuenta)}`, contiene: textoNuevo, cuenta, origen: 'persona' })
-          setContiene(''); setCuenta(''); setQ('')
+          setContiene(''); setVaA('')
           return `Guardada: cuando el concepto tenga «${textoNuevo}» → ${nombre(cuenta)}.${exNueva?.cambiaria ? ` ${veces(exNueva.cambiaria, 'pendiente pasa', 'pendientes pasan')} a propuesta.` : ''}`
         })
       }}>
         <h3 className="cxl-subtitulo">Regla nueva</h3>
         <div className="cx-formulario-fila">
           <label className="cx-campo"><span>Cuando el concepto tenga</span><input className="cx-input" value={contiene} onChange={(e) => setContiene(e.target.value)} placeholder="Ej.: PLENITUDE" /></label>
-          <label className="cx-campo"><span>Busca a qué va</span><input className="cx-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Escribe: luz, alquiler, 628…" /></label>
+          <label className="cx-campo"><span>Va a</span>
+            <input className="cx-input" list="cxb-reglas-cuentas" value={vaA} onChange={(e) => setVaA(e.target.value)} placeholder="Escribe: luz, alquiler, 628… y elige" autoComplete="off" />
+          </label>
+          <datalist id="cxb-reglas-cuentas">{sugeridas.map((c) => <option key={c} value={nombre(c)} />)}</datalist>
         </div>
-        <label className="cx-campo"><span>Va a</span>
-          <select className="cx-input" value={cuenta} onChange={(e) => setCuenta(e.target.value)}>
-            <option value="">Elige…</option>
-            {cuentas.map((c) => <option key={c} value={c}>{nombre(c)}</option>)}
-          </select>
-        </label>
-        {exNueva && (exNueva.generica ? <p className="cxb-ambar">No la guardo así: {exNueva.generica}</p> : <EnQueSeBasa ex={exNueva} guardada={false} id="nueva" />)}
+        {vaA.trim() && !cuenta && <p className="cx-ayuda" style={{ margin: 0 }}>{sugeridas.length ? 'Elige una de la lista.' : 'No hay ninguna cuenta que se llame así.'}</p>}
+        {cuenta && <p className="cx-ayuda" style={{ margin: 0 }}>Irá a {nombre(cuenta)}.</p>}
+        {/* S01e: lo que se diga de la regla nueva, solo si toca algo que existe (movimientos con ese texto). */}
+        {exNueva && (exNueva.generica ? <p className="cxb-ambar">No la guardo así: {exNueva.generica}</p> : exNueva.ejemplos.length > 0 && <EnQueSeBasa ex={exNueva} guardada={false} id="nueva" />)}
         <div className="cx-pie"><button type="submit" className="cx-boton" disabled={!textoNuevo || !cuenta || !!ocupado || !!exNueva?.generica}>{ocupado === 'nueva' ? 'Guardando…' : 'Guardar la regla'}</button></div>
       </form>
     </section>

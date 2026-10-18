@@ -26,6 +26,9 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4173',
     locale: 'es-ES',
     timezoneId: 'Europe/Madrid',
+    // S01e: `locale` no llega al selector nativo de fecha de Chromium, que
+    // pintaba «10/18/2026»: ese lo decide el idioma del navegador.
+    launchOptions: { args: ['--lang=es-ES'], env: { ...process.env, LANG: 'es_ES.UTF-8', LANGUAGE: 'es_ES:es' } },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

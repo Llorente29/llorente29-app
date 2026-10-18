@@ -16,6 +16,8 @@
   border: 1px solid var(--cx-ia-borde); border-radius: var(--cx-radio-bloque); color: var(--cx-ia-apoyo); font-size: 14px;
 }
 .cxb-banda-ambar { background: var(--cx-ambar-suave); border-color: var(--cx-ambar-suave); color: var(--cx-ambar); }
+/* S01e: en un aviso ámbar el punto es ámbar, no el verde de «todo bien». */
+.cxb-banda-ambar .cx-ia-punto { background: var(--cx-ambar); }
 .cxb-banda-texto { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
 .cxb-banda-texto strong { color: var(--cx-texto); font-size: 15px; }
 .cxb-banda .cx-boton-sec { flex: none; }

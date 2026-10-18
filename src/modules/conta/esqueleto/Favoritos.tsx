@@ -17,7 +17,7 @@ import type { Favorito, Orden } from './ordenes'
 
 const destino = (o: Orden) => ('ruta' in o.a ? rutaConta(o.a.ruta) : null)
 
-export function Favoritos({ favoritos, cargando = false, fijables, alternar, alAbrirBuscador }: {
+export function Favoritos({ favoritos, cargando = false, fijables, alternar, alAbrirBuscador, enCajon = false }: {
   favoritos: Favorito[]
   /** Aún se están leyendo de la base: no se dice «ninguno» de lo que no se sabe. */
   cargando?: boolean
@@ -26,6 +26,8 @@ export function Favoritos({ favoritos, cargando = false, fijables, alternar, alA
   /** Fija o quita (y lo dice quien lo llama). */
   alternar: (o: { id: string; etiqueta: string }) => void
   alAbrirBuscador: () => void
+  /** S01d · En el móvil va en el cajón del menú: una fila con su nombre, y el menú se abre debajo. */
+  enCajon?: boolean
 }) {
   const { abierto: menuAbierto, setAbierto: menuSetAbierto, alternar: menuAlternar, caja: menuCaja, boton: menuBoton } = useDesplegable()
   const fijados = new Set(favoritos.map((f) => f.id))
@@ -37,8 +39,12 @@ export function Favoritos({ favoritos, cargando = false, fijables, alternar, alA
     <div className="s-desplegable" ref={menuCaja}>
       {/* Solo la estrella, en todas las pantallas (Julio, 17/10): así caben las cuatro
           pestañas de Bancos a 1440 px. Al pasar el ratón y para el lector dice «Favoritos». */}
-      <Boton ref={menuBoton} variante="fantasma" icono="favorito" aria-expanded={menuAbierto} aria-haspopup="true"
-        aria-label="Favoritos" title="Favoritos" onClick={menuAlternar}>{''}</Boton>
+      {enCajon
+        ? <button ref={menuBoton} type="button" className="s-barra-item" aria-expanded={menuAbierto} aria-haspopup="true" onClick={menuAlternar}>
+            <Icono nombre="favorito" grande /><span className="s-barra-nombre">Favoritos</span>
+          </button>
+        : <Boton ref={menuBoton} variante="fantasma" icono="favorito" aria-expanded={menuAbierto} aria-haspopup="true"
+            aria-label="Favoritos" title="Favoritos" onClick={menuAlternar}>{''}</Boton>}
       {menuAbierto && (
         <div className="s-menu s-menu-derecha" role="group" aria-label="Favoritos" aria-busy={cargando}>
           <span className="s-menu-titulo">Favoritos</span>

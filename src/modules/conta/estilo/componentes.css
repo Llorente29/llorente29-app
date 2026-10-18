@@ -19,6 +19,8 @@
   font-size: 15px;
   line-height: 1.35;
   -webkit-font-smoothing: antialiased;
+  /* S01e: cifras tabulares en todo el módulo: los importes se alinean en columna. */
+  font-variant-numeric: tabular-nums;
 }
 .cx *, .cx *::before, .cx *::after { box-sizing: border-box; }
 .cx a { color: var(--cx-azul); }
@@ -290,19 +292,24 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 .cx-tablas-barra { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .cx-tablas-filtros { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cx-tablas-filtros .cx-pildora { font-size: 14px; padding: 0 16px; }
+/* S01e: la cifra de una píldora («3 · Existencias 30») separada del nombre: en flex el espacio se pierde. */
+.cx-tablas-filtros .cx-pildora { gap: 6px; }
 .cx .cx-buscar { height: 44px; width: 220px; font-size: 15px; padding: 0 14px; }
 .cx-rejilla { display: flex; flex-direction: column; }
-.cx-rejilla-fila { display: grid; align-items: center; gap: 0; padding: 9px 12px; border-top: 1px solid var(--cx-linea); font-size: 14px; }
+.cx-rejilla-fila { display: grid; align-items: center; column-gap: 16px; padding: 9px 12px; border-top: 1px solid var(--cx-linea); font-size: 14px; }
 .cx-rejilla-cabeza {
-  display: grid; gap: 0; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px;
+  display: grid; column-gap: 16px; padding: 6px 12px; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); letter-spacing: 0.3px;
 }
-.cx-rejilla-titulo { display: flex; align-items: center; gap: 12px; min-width: 0; padding-right: 12px; }
+/* S01e: aire entre columnas (antes «600000002 proveedores», «DíasDónde lo usas»), y una palabra
+   larga que no cabe se parte dentro de su columna en vez de pisar la de al lado. */
+.cx-rejilla-fila > *, .cx-rejilla-cabeza > * { min-width: 0; overflow-wrap: break-word; }
+.cx-rejilla-titulo { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .cx-rejilla-titulo .cx-inicial { width: 34px; height: 34px; border-radius: 11px; font-size: 13px; }
 .cx-rejilla-cifra { text-align: right; }
 .cx-rejilla-fila > .cx-rejilla-cifra { font-size: 15px; }
 .cx-rejilla-apoyo { color: var(--cx-apoyo); }
 .cx-rejilla-fila > .cx-rejilla-apoyo.cx-cifra { font-weight: 400; font-size: 14px; }
-.cx-rejilla-vigente { padding-left: 24px; }
+.cx-rejilla-vigente { padding-left: 8px; }
 .cx-rejilla-abierta { border: 2px solid var(--cx-azul); border-radius: 18px; margin: 4px 0; overflow: hidden; }
 .cx-rejilla-abierta .cx-rejilla-fila { background: var(--cx-azul-suave); border-top: none; padding: 9px 10px; }
 .cx-tablas-grupo {
@@ -327,6 +334,15 @@ textarea.cx-input { height: auto; min-height: 88px; padding: 12px 16px; resize: 
 .cx-tablas-movil-abierta .cx-tablas-col:first-child .cx-seccion-titulo { display: none; }
 .cx-tablas-movil-abierta .cx-tablas-col:first-child .cx-dato:first-of-type { border-top: none; }
 .cx-tablas-cabecera-movil { align-items: center; flex-wrap: nowrap; }
+/* S01e: con poco sitio (el menú de módulos abierto, una ventana de 1280), el menú de las
+   tablas pasa arriba en filas y la tabla se lleva todo el ancho: sus columnas no se aprietan
+   hasta dejar el nombre en una palabra por línea. Se mide la caja, no la ventana. */
+.cx-tablas-caja { container-type: inline-size; }
+@container (max-width: 1199px) {
+  .cx-tablas { flex-direction: column; align-items: stretch; }
+  .cx-tablas-menu { width: auto; flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 8px; }
+  .cx-tablas-enlace { min-height: 40px; gap: 8px; }
+}
 .cx-atras { width: 46px; height: 46px; padding: 0; font-size: 24px; flex-shrink: 0; }
 .cx-mas { width: 46px; height: 46px; padding: 0; font-size: 26px; flex-shrink: 0; }
 .cx .cx-lista > div + div { border-top: 1px solid var(--cx-linea); }
@@ -654,8 +670,13 @@ button.cx-llevamos-fila:hover { background: var(--cx-azul-suave); }
 .cx .cx-ajustes-enlace[aria-current='page'] { background: var(--cx-azul-suave); color: var(--cx-azul); }
 .cx-ajustes-enlace-titulo { font-size: 15px; font-weight: 500; }
 .cx .cx-ajustes-enlace[aria-current='page'] .cx-ajustes-enlace-titulo { font-weight: 600; }
-.cx-ajustes-enlace-apoyo { font-size: 13px; color: var(--cx-apoyo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+/* S01e: la línea de resumen se lee entera (antes se cortaba con «…» a 1440). */
+.cx-ajustes-enlace-apoyo { font-size: 13px; color: var(--cx-apoyo); overflow-wrap: break-word; }
 .cx-ajustes-panel { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+/* S01e: en Ajustes el rótulo de un dato no se parte en dos líneas por un valor largo
+   («Tipo de empresa» · «Sociedad de responsabilidad limitada»): el que se parte es el valor. */
+.cx-ajustes-panel .cx-dato-etiqueta, .cx-ajustes-movil .cx-dato-etiqueta { flex-shrink: 0; max-width: 55%; }
+.cx-ajustes-panel .cx-dato-valor, .cx-ajustes-movil .cx-dato-valor { min-width: 0; overflow-wrap: break-word; }
 /* Móvil: los envoltorios del marco de Ajustes están (para que el contenido no se desmonte al cambiar de tamaño) pero no pintan. */
 .cx-ajustes-movil { display: contents; }
 .cx-ajustes-panel-cabeza { display: flex; flex-direction: column; gap: 4px; }

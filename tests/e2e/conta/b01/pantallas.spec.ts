@@ -116,7 +116,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
       await expect(page.locator('.cxn-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
       await expect(page.locator('.cxn-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
-      await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
+      await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos y todos los meses, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
       // Con la apertura de la semilla, lo que falta por casar es exactamente lo que queda sin casar.
       await expect(page.getByTestId('cuadre')).toContainText('2.175,50 €')
       await expect(page.getByTestId('cuadre')).toContainText('son justo los movimientos sin casar')

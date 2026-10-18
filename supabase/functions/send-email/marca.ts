@@ -194,7 +194,35 @@ export function contrasenaCambiada(m: Marca, data: Record<string, unknown>): Cor
   };
 }
 
+/**
+ * I01b · Una empresa invita a su asesoría a llevar sus impuestos.
+ * data: { asesoria, empresa, invita, base ('social_collaborator' | 'power_of_attorney'), enlace, caduca ('dd/mm') }
+ */
+export function invitacionAsesoria(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
+  const empresa = String(data.empresa ?? '').trim() || 'una empresa';
+  const invita = String(data.invita ?? '').trim();
+  const asesoria = String(data.asesoria ?? '').trim();
+  const url = urlSegura(data.enlace);
+  const caduca = String(data.caduca ?? '').trim();
+  const como = data.base === 'power_of_attorney' ? 'con el poder que tiene en Hacienda' : 'como colaboradora social';
+  const quien = invita ? `${esc(invita)}, de <strong>${esc(empresa)}</strong>,` : `<strong>${esc(empresa)}</strong>`;
+  const frase = `${quien} te invita a llevar sus impuestos en ${esc(m.nombre)}${asesoria ? ` como ${esc(asesoria)}` : ''}, ${como}. Verás su calendario de impuestos, sus declaraciones y sus libros de IVA.`;
+  const despues = 'Si ya usas Sumied con este correo, al aceptar la verás en Impuestos. Si no, aceptas y te damos de alta: te llegará otro correo para poner tu contraseña.';
+  const cuerpo = `${h1('Te invitan a llevar sus impuestos', c)}${p('Hola.', c)}${p(frase, c)}${p(esc(despues), c)}
+    ${url ? boton(url, 'Ver la invitación', c) : p('<em>El enlace no está disponible. Pide a la empresa que te mande otra.</em>', c)}
+    ${nota(`${caduca ? `La invitación caduca el ${esc(caduca)}. ` : ''}Si el botón no funciona, copia esta dirección en tu navegador:<br /><span style="color:${c.tinta};word-break:break-all;">${url}</span>`, c)}`;
+  const texto = `Hola.\n\n${invita ? `${invita}, de ${empresa},` : empresa} te invita a llevar sus impuestos en ${m.nombre}${asesoria ? ` como ${asesoria}` : ''}, ${como}.\n\n` +
+    `${despues}\n\nVer la invitación: ${url || '(enlace no disponible)'}\n\n${caduca ? `La invitación caduca el ${caduca}.\n\n` : ''}${m.nombre}`;
+  return {
+    subject: `${m.nombre} · ${empresa} te invita a llevar sus impuestos`,
+    html: marco(m, 'Te invitan a llevar sus impuestos', cuerpo, `Te llega porque ${empresa} ha escrito este correo como el de su asesoría. Si no es así, no hagas nada: sin aceptar, no pasa nada.`),
+    text: texto,
+  };
+}
+
 export const PLANTILLAS_MARCA: Record<string, (m: Marca, d: Record<string, unknown>) => CorreoMarca> = {
+  invitacion_asesoria: invitacionAsesoria,
   invitacion_conta: invitacion,
   contrasena_conta: contrasena,
   contrasena_cambiada_conta: contrasenaCambiada,

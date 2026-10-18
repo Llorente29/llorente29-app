@@ -57,7 +57,9 @@
 
   /* ── Letra ──────────────────────────────────────────────────────────── */
   --cx-letra: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
-  --cx-letra-cifras: 'Geist Mono Variable', 'Geist Mono', 'SF Mono', Menlo, monospace;
+  /* S01e: los importes, en la letra de la app con cifras tabulares, no en letra
+     de máquina de escribir (como R5b en Documentos). Las tabulares las pone la raíz. */
+  --cx-letra-cifras: var(--cx-letra);
 
   /* ── Formas ─────────────────────────────────────────────────────────── */
   --cx-radio-tarjeta: 24px;

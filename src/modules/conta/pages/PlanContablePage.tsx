@@ -421,7 +421,7 @@ function Contenido() {
   const arriba = nodoMovil?.padre && arbol?.nodos.get(nodoMovil.padre)
   const cabezaMovil = (derecha?: ReactNode) => nodoMovil
     ? <CabeceraEntradaMovil titulo={`${nodoMovil.numero} · ${nodoMovil.titulo}`} antetitulo="Plan contable" atras={arriba && arriba.tipo !== 'grupo' ? rutaNivel(arriba) : rutaPlan()} />
-    : <CabeceraEntradaMovil titulo="Plan contable" derecha={derecha} />
+    : <CabeceraEntradaMovil titulo="Plan contable" antetitulo="Definiciones" atras={null} derecha={derecha} />
   if (plan.cargando) return <>{movil && cabezaMovil()}<TarjetaCargando /></>
   if (plan.error || !p || !arbol) return <>{movil && cabezaMovil()}<ErrorConReintento mensaje={plan.error ?? 'No se ha podido leer.'} reintentar={plan.recargar} /></>
 
@@ -433,10 +433,8 @@ function Contenido() {
   )
   const cabeza = movil ? cabezaMovil(p.activo ? <button type="button" className="cx-boton cx-mas" onClick={() => setAnadiendo(true)} aria-label="Añadir subcuenta">+</button> : undefined) : (
     <div className="cx-ajustes-panel-cabeza cx-plan-cabeza">
-      <div>
-        <h2 className="cx-ajustes-panel-titulo">Plan contable</h2>
-        <p className="cx-ayuda" style={{ margin: 0 }}>{lineaDelPlan(p)}</p>
-      </div>
+      {/* S01e: el título «Plan contable» ya está arriba (el marco), una sola vez. */}
+      <p className="cx-ayuda" style={{ margin: 0 }}>{lineaDelPlan(p)}</p>
       {botones}
     </div>
   )
