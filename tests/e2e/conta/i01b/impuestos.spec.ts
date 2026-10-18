@@ -16,6 +16,8 @@
 //     plataforma del carril (feature_flags solo lo escribe la plataforma);
 //   · como el administrador de A: sus obligaciones y el 303 del 3T calculado,
 //     lo mismo que hace la pantalla. El nivel no se toca (el de siempre, medio).
+// El 3T de A tiene en staging el libro de IVA vacío y la 472 con IVA: la pantalla
+// tiene que decir «No se puede calcular todavía» (0240), no un cero.
 // No presenta nada ni llama a Hacienda: la puerta de staging está cerrada, y
 // la pantalla lo dice (eso se comprueba).
 
@@ -125,8 +127,22 @@ test('IVA del trimestre (tablero 9): Resumen, Modelo oficial y la puerta cerrada
   await ir(page, 'impuestos/iva/2026/3T')
   await expect(page.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.locator('#presentar-titulo')).toBeVisible()
+  // 0240: el 3T de A en staging tiene el libro de IVA vacío y la 472 con IVA. No se pinta un
+  // 0,00 € «sin actividad»: «No se puede calcular todavía», el porqué, y la [110] para escribirla.
+  await expect(page.getByText('No se puede calcular todavía').first()).toBeVisible()
+  await expect(page.getByText(/Sin el libro, Sumied no calcula el 303/).first()).toBeVisible()
+  await expect(page.getByText('sin actividad')).toHaveCount(0)
+  await expect(page.getByLabel(/casilla \[110\]/)).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Descargar el fichero oficial' })).toBeDisabled()
   await sinDesbordar(page, 'IVA · Resumen')
   await foto(page, 'iva-resumen')
+  // «Ya lo presenté fuera» pide las casillas del justificante (no se manda nada).
+  await page.getByRole('button', { name: /Ya lo presenté fuera/ }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByLabel(/\[71\] Resultado de la liquidación/)).toBeVisible()
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: `${DIR}/fuera-justificante-${lado(page)}.jpg`, type: 'jpeg', quality: 75 })
+  await page.getByRole('button', { name: 'Cancelar' }).click()
   await page.getByRole('tab', { name: 'Modelo oficial (casillas)' }).click()
   await page.waitForTimeout(300)
   await sinDesbordar(page, 'IVA · Modelo oficial')

@@ -14,19 +14,21 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { rutaImpuestos, rutaLibros } from '@/config/navegacion'
-import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
+import { Boton, Campo, Chip, Dialogo, Importe, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
+import { importeDeTexto, textoDeImporte } from '@/modules/conta/diseno/valores'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useNivel } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import {
   aceptarAviso, calcular303, cargosPosibles, casarCargo, confirmarCertificado, contabilizar303, hacienda, leerDeclaracion, leerPuerta,
-  ponerPago, revisarDeclaracion, type CargoPosible,
+  ponerCasillas, ponerPago, revisarDeclaracion, type CargoPosible,
 } from '@/modules/conta/services/impuestosService'
 import { CASILLAS_303 } from './casillas303'
 import { textoResultado, type Resultado } from './calendario'
 import {
-  botonPresentar, comparacion, deDondeSale, lineaPlazos, migaIva, pasos, sePuedeDomiciliar, siguientePaso, textoConfirmar, textoPago,
-  tituloIva, vistaComprobacion, type DeclaracionVer, type Puerta,
+  CASILLAS_JUSTIFICANTE, botonPresentar, comparacion, cuadranCasillas, deDondeSale, fraseCalculo, lineaPlazos, migaIva, noSeCalcula, pasos,
+  pideJustificante, pideLa110, porQueNoFichero, sePuedeDomiciliar, siguientePaso, textoConfirmar, textoPago, tituloIva, vistaComprobacion,
+  type CasillaJustificante, type DeclaracionVer, type Puerta,
 } from './declaracion'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -99,7 +101,7 @@ export default function IvaPeriodoPage() {
               <Tarjeta titulo="Aún no está calculado" accion={datos.puede_gestionar
                 ? <Boton variante="principal" onClick={() => hacer(async () => {
                   const r = await calcular303(activa.id, ejercicio, periodo)
-                  return `Calculado con ${r.apuntes} apuntes del libro de IVA: ${eurosExactos(r.importe)} ${textoResultado(r.resultado as Resultado)}.`
+                  return fraseCalculo({ ...r, resultado: r.resultado as Resultado | null })
                 })}>Calcular con mis libros</Boton> : null}>
                 <p className="s-apoyo">Sumied lo calcula con el libro de IVA del {diaMesCorto(datos.desde)} al {diaMesCorto(datos.hasta)} y lo cuadra con la contabilidad.</p>
               </Tarjeta>
@@ -122,27 +124,37 @@ function Resumen({ d, hacer, companyId }: { d: DeclaracionVer; hacer: Hacer; com
   const r = d.declaracion!
   const lineas = deDondeSale(d)
   const editable = d.puede_gestionar && ['draft', 'reviewed'].includes(r.estado)
+  const sinCalculo = noSeCalcula(d)
   return (
     <>
-      <Tarjeta>
-        <div className="s-impuestos-resultado">
-          <span className="s-apoyo">Resultado</span>
-          <span><span className="s-cifra s-impuestos-grande">{eurosExactos(r.importe ?? 0)}</span> <span className="s-impuestos-resultado-que">{textoResultado(r.resultado)}</span></span>
-          <span className="s-apoyo">{comparacion(d)}</span>
-        </div>
+      <Tarjeta tono={sinCalculo ? 'falta' : undefined}>
+        {sinCalculo ? (
+          // Sin resultado no hay cifra: un 0,00 € aquí diría «sin actividad» sin saberlo.
+          <div className="s-impuestos-resultado" data-sin-calculo="si">
+            <span className="s-apoyo">Resultado</span>
+            <span className="s-impuestos-nombre">{sinCalculo.titulo}</span>
+            {sinCalculo.porque.map((t) => <span key={t} className="s-apoyo">{t}</span>)}
+          </div>
+        ) : (
+          <div className="s-impuestos-resultado">
+            <span className="s-apoyo">Resultado</span>
+            <span><span className="s-cifra s-impuestos-grande">{eurosExactos(r.importe ?? 0)}</span> <span className="s-impuestos-resultado-que">{textoResultado(r.resultado)}</span></span>
+            <span className="s-apoyo">{comparacion(d)}</span>
+          </div>
+        )}
         {editable && (
           <div className="s-impuestos-fila-botones">
-            {r.estado === 'draft' && d.comprobaciones.every((c) => c.resultado !== 'error') && (
+            {r.estado === 'draft' && r.resultado !== null && d.comprobaciones.every((c) => c.resultado !== 'error') && (
               <Boton onClick={() => hacer(async () => { await revisarDeclaracion(r.id); return 'Revisado. Ya se puede presentar.' })}>Lo he revisado</Boton>
             )}
             <Boton variante="enlace" onClick={() => hacer(async () => {
               const x = await calcular303(companyId, d.ejercicio, d.periodo)
-              return `Vuelto a calcular con ${x.apuntes} apuntes: ${eurosExactos(x.importe)} ${textoResultado(x.resultado as Resultado)}.${r.estado === 'reviewed' ? ' Vuelve a estar en borrador: revísalo otra vez.' : ''}`
+              return `${fraseCalculo({ ...x, resultado: x.resultado as Resultado | null }, 'Vuelto a calcular')}${r.estado === 'reviewed' ? ' Vuelve a estar en borrador: revísalo otra vez.' : ''}`
             })}>Volver a calcular con lo que hay ahora en los libros</Boton>
           </div>
         )}
       </Tarjeta>
-      <Tarjeta compacta titulo="De dónde sale">
+      {lineas.length > 0 && <Tarjeta compacta titulo="De dónde sale">
         <table className="s-tabla s-impuestos-tabla s-impuestos-origen">
           <thead className="cx-oculto"><tr><th scope="col">Qué</th><th scope="col">Libro</th><th scope="col">Importe</th></tr></thead>
           <tbody>
@@ -157,10 +169,10 @@ function Resumen({ d, hacer, companyId }: { d: DeclaracionVer; hacer: Hacer; com
             ))}
           </tbody>
         </table>
-      </Tarjeta>
+      </Tarjeta>}
       <Tarjeta titulo="Lo que ha comprobado Sumied">
         <ul className="s-impuestos-comprobado">
-          {d.comprobaciones.map((c) => <Comprobado key={c.id} c={c} editable={editable} hacer={hacer} />)}
+          {d.comprobaciones.map((c) => <Comprobado key={c.id} c={c} declaracion={r.id} editable={editable} hacer={hacer} />)}
         </ul>
       </Tarjeta>
       {d.registro.length > 0 && (
@@ -177,10 +189,12 @@ function Resumen({ d, hacer, companyId }: { d: DeclaracionVer; hacer: Hacer; com
   )
 }
 
-function Comprobado({ c, editable, hacer }: { c: DeclaracionVer['comprobaciones'][number]; editable: boolean; hacer: Hacer }) {
+function Comprobado({ c, declaracion, editable, hacer }: { c: DeclaracionVer['comprobaciones'][number]; declaracion: string; editable: boolean; hacer: Hacer }) {
   const v = vistaComprobacion(c)
   const [abierto, setAbierto] = useState(false)
   const [motivo, setMotivo] = useState('')
+  const [c110, setC110] = useState('')
+  const n110 = importeDeTexto(c110)
   return (
     <li data-marca={v.marca}>
       <span className="s-impuestos-marca" aria-hidden="true">{v.marca}</span>
@@ -196,6 +210,20 @@ function Comprobado({ c, editable, hacer }: { c: DeclaracionVer['comprobaciones'
               await aceptarAviso(c.id, motivo.trim()); setAbierto(false)
               return `Aviso dado por bueno: «${c.titulo}». Queda apuntado con tu nombre y el motivo.`
             })}>Dar por bueno</Boton>
+          </span>
+        )}
+        {pideLa110(c) && editable && (
+          // La [110] no se da por 0: se escribe, aunque sea 0 (0240).
+          <span className="s-impuestos-aceptar">
+            <Campo etiqueta="Lo que te quedaba por compensar de antes, casilla [110] (€)"
+              error={c110 && n110 === null ? 'Escribe un importe, como 3.796,17 (o 0 si no quedaba nada).' : c110 && n110 !== null && n110 < 0 ? 'No puede ser negativo: son cuotas a compensar.' : null}>
+              {(p) => <Importe {...p} valor={c110} alCambiar={setC110} placeholder="0,00" />}
+            </Campo>
+            <Boton variante="principal" disabled={n110 === null || n110 < 0} onClick={() => hacer(async () => {
+              const s = await ponerCasillas(declaracion, { '110': n110 }, 'Lo que quedaba por compensar de antes, escrito a mano')
+              setC110('')
+              return s.mensaje
+            })}>Guardar la [110]</Boton>
           </span>
         )}
       </span>
@@ -286,7 +314,12 @@ function PanelPresentar({ d, puerta, hacer }: { d: DeclaracionVer; puerta: Puert
           {boton.porque && <p className={boton.activo ? 's-apoyo' : 's-impuestos-porque-no'} role="note">{boton.porque}</p>}
           <p className="s-apoyo s-impuestos-nota">Hacienda revisa el modelo al recibirlo. Si encuentra un error, no se presenta nada y te dice qué falla.</p>
           <hr className="s-impuestos-raya" />
-          {r && r.estado !== 'pending' && <Boton variante="enlace" onClick={bajar}>Descargar el fichero oficial</Boton>}
+          {r && r.estado !== 'pending' && (
+            <>
+              <Boton variante="enlace" disabled={porQueNoFichero(d) !== null} onClick={bajar}>Descargar el fichero oficial</Boton>
+              {porQueNoFichero(d) && <p className="s-apoyo" role="note">{porQueNoFichero(d)}</p>}
+            </>
+          )}
           {r && d.puede_gestionar && <Boton variante="enlace" onClick={() => setFuera(true)}>Ya lo presenté fuera · pegar CSV</Boton>}
         </>
       )}
@@ -380,6 +413,16 @@ function Presentado({ d, paso, hacer }: { d: DeclaracionVer; paso: ReturnType<ty
   )
 }
 
+/** Lo que es cada casilla del justificante, en palabras (las del modelo, cortas). */
+const ETIQUETA_JUSTIFICANTE: Record<CasillaJustificante, string> = {
+  '27': 'IVA devengado, total',
+  '45': 'IVA a deducir, total',
+  '110': 'Cuotas a compensar de periodos anteriores',
+  '78': 'Cuotas a compensar aplicadas en este periodo',
+  '87': 'Cuotas a compensar pendientes para después',
+  '71': 'Resultado de la liquidación',
+}
+
 function DialogoFuera({ d, puerta, alCerrar, hacer }: { d: DeclaracionVer; puerta: Puerta | null; alCerrar: () => void; hacer: Hacer }) {
   const r = d.declaracion!
   const [csv, setCsv] = useState('')
@@ -387,21 +430,48 @@ function DialogoFuera({ d, puerta, alCerrar, hacer }: { d: DeclaracionVer; puert
   const valido = /^[A-Z0-9]{16}$/.test(limpio)
   const ce = d.presentador.certificado
   const comprobable = !!puerta?.abierta && !!ce && d.presentador.puedo_presentar
+  // Si Sumied no ha podido calcularlo, lo que queda como presentado son las casillas del justificante.
+  const pide = pideJustificante(d)
+  const [cas, setCas] = useState<Record<CasillaJustificante, string>>(() => {
+    const ya = (k: string) => d.casillas.find((x) => x.casilla === k && x.origen === 'manual')?.valor
+    return Object.fromEntries(CASILLAS_JUSTIFICANTE.map((k) => { const n = ya(k); return [k, n === undefined || n === null ? '' : textoDeImporte(n)] })) as Record<CasillaJustificante, string>
+  })
+  const valores = Object.fromEntries(CASILLAS_JUSTIFICANTE.map((k) => [k, importeDeTexto(cas[k])])) as Record<CasillaJustificante, number | null>
+  const cuadra = pide ? cuadranCasillas(valores) : null
+  const tocadas = CASILLAS_JUSTIFICANTE.some((k) => cas[k] !== '')
+  const listo = valido && (!pide || cuadra === null)
   const apuntar = (comprobar: boolean) => hacer(async () => {
     alCerrar()
+    let antes = ''
+    if (pide) {
+      const c = await ponerCasillas(r.id, valores, 'Casillas del justificante de Hacienda (presentado fuera de Sumied)')
+      antes = `${c.mensaje} `
+    }
     const confirmacion = comprobar && ce ? await confirmarCertificado(ce.id, 'query', r.id) : null
     const s = await hacienda('ya_presentado_fuera', { declaracion: r.id, csv: limpio, confirmacion })
-    if (!s.ok) throw new Error(s.mensaje)
-    return s.mensaje
+    if (!s.ok) throw new Error(`${antes}No se ha apuntado como presentado: ${s.mensaje}`)
+    return `${antes}${s.mensaje}`
   })
   return (
     <Dialogo titulo="Ya lo presenté fuera" alCerrar={alCerrar}
-      explicacion="Pega el CSV del justificante que te dio Hacienda (16 letras y números). Queda apuntado como presentado, y Sumied hace el asiento de liquidación."
+      explicacion={pide
+        ? 'Sumied no ha podido calcular este 303, así que lo que queda como presentado es lo que dice tu justificante: copia sus casillas y pega el CSV (16 letras y números). Sumied hace el asiento de liquidación con esas cifras.'
+        : 'Pega el CSV del justificante que te dio Hacienda (16 letras y números). Queda apuntado como presentado, y Sumied hace el asiento de liquidación.'}
       acciones={<>
         <Boton onClick={alCerrar}>Cancelar</Boton>
-        {comprobable && <Boton disabled={!valido} onClick={() => apuntar(true)}>Comprobarlo con Hacienda y apuntar</Boton>}
-        <Boton variante="principal" disabled={!valido} onClick={() => apuntar(false)}>{comprobable ? 'Apuntar sin comprobar' : 'Apuntar'}</Boton>
+        {comprobable && <Boton disabled={!listo} onClick={() => apuntar(true)}>Comprobarlo con Hacienda y apuntar</Boton>}
+        <Boton variante="principal" disabled={!listo} onClick={() => apuntar(false)}>{comprobable ? 'Apuntar sin comprobar' : 'Apuntar'}</Boton>
       </>}>
+      {pide && (
+        <div className="s-impuestos-justificante">
+          {CASILLAS_JUSTIFICANTE.map((k) => (
+            <Campo key={k} etiqueta={`[${k}] ${ETIQUETA_JUSTIFICANTE[k]} (€)`} error={cas[k] && valores[k] === null ? 'Escribe un importe, como −3.723,44.' : null}>
+              {(p) => <Importe {...p} valor={cas[k]} alCambiar={(t) => setCas((x) => ({ ...x, [k]: t }))} placeholder="0,00" />}
+            </Campo>
+          ))}
+          {tocadas && cuadra && <p className="s-impuestos-porque-no" role="note">{cuadra}</p>}
+        </div>
+      )}
       <Campo etiqueta="CSV del justificante" error={csv && !valido ? 'Son 16 letras y números, como aparecen en el justificante.' : null}
         ayuda={comprobable ? null : 'Sin la conexión con Hacienda abierta, se apunta sin comprobar y se dice así.'}>
         {(p) => <Texto {...p} valor={csv} alCambiar={setCsv} autoComplete="off" />}

@@ -173,6 +173,10 @@ export function vistaDeFila(f: FilaCalendario): VistaFila {
   if (d.estado === 'pending') return v({ tono: fuera ? 'falta' : 'neutro', texto: `${pre}Por calcular` }, 'calcular')
   if (d.estado === 'draft' || d.estado === 'reviewed') {
     const base = d.estado === 'draft' ? 'Borrador' : 'Revisado'
+    // Sin resultado (sin el libro de IVA, o sin lo que quedaba de antes): no se pinta un cero (0240).
+    if (d.errores > 0 && d.resultado === null) {
+      return v({ tono: 'falta', texto: `${pre}No se puede calcular` }, 'aviso', { aviso: d.aviso, ambar: true })
+    }
     if (d.errores > 0) {
       const t = `${d.errores} ${d.errores === 1 ? 'cosa' : 'cosas'} que Sumied no sabe`
       return v({ tono: 'falta', texto: `${pre}${base} · ${t}` }, 'revisar', { aviso: d.aviso, ambar: true })

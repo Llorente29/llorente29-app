@@ -517,20 +517,29 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con los ficheros medidos, da el estado de cada uno y los «autorizo» (I01b: la 0180 a la 0230 siguen; ningún «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (I01b, el 303 que no inventa: la 0240 sigue; ningún «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    for (const f of ['20261122T0180_i01b_asiento_303', '20261122T0190_i01b_calendario', '20261122T0200_i01b_declaracion',
-      '20261122T0210_i01b_presentados', '20261122T0220_i01b_certificados', '20261122T0230_i01b_asesoria']) expect(r.out).toContain(`${f}.sql: sigue`)
+    expect(r.out).toContain('20261122T0240_i01b_303_no_inventa.sql: sigue')
     expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261122T0180_i01b_asiento_303.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261122T0240_i01b_303_no_inventa.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261122T0180_i01b_asiento_303.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261122T0240_i01b_303_no_inventa.sql ha cambiado desde la medida')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del I01b (0180–0230, su copia, aplicada el 18/10), con su contexto medido', () => {
+  it('las seis siguen; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01b-asiento-303-20261018.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01b-asiento-303-20261018.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    for (const f of ['20261122T0180_i01b_asiento_303', '20261122T0190_i01b_calendario', '20261122T0200_i01b_declaracion',
+      '20261122T0210_i01b_presentados', '20261122T0220_i01b_certificados', '20261122T0230_i01b_asesoria']) expect(out).toContain(`${f}.sql: sigue`)
+    expect(out).toContain('autorizo: (ninguno)')
   })
 })
 
