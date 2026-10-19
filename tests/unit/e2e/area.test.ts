@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { existsSync } from 'node:fs'
-import { pruebasDelPush, COMUN, carpetasConta } from '../../../scripts/e2e/area.mjs'
+import { pruebasDelPush, pruebasDeLaZona, COMUN, CORTA, carpetasConta } from '../../../scripts/e2e/area.mjs'
 
 // Ramas reales que disparan la e2e por push (conta/** y reparto-**), una por familia.
 const RAMAS = {
@@ -23,7 +23,31 @@ const RAMAS = {
 
 describe('la e2e de un push corre solo su área', () => {
   it('cada familia de rama, a su carpeta', () => {
-    for (const [rama, esperado] of Object.entries(RAMAS)) expect(pruebasDelPush(rama), rama).toEqual(esperado)
+    for (const [rama, esperado] of Object.entries(RAMAS)) expect(pruebasDeLaZona(rama), rama).toEqual(esperado)
+  })
+
+  // Julio, 19/10: en cada PR, la zona Y la corta de pedidos, cocina y reparto.
+  it('cada push lleva además la corta de pedidos, cocina y reparto, sin repetir', () => {
+    for (const [rama, esperado] of Object.entries(RAMAS)) {
+      const p = pruebasDelPush(rama)
+      expect(p.slice(0, esperado.length), rama).toEqual(esperado)
+      for (const f of CORTA) expect(p.some((x) => x === f || f.startsWith(`${x}/`)), `${rama}: ${f}`).toBe(true)
+      expect(new Set(p).size, rama).toBe(p.length)
+    }
+    // reparto-** ya corre su carpeta entera: la corta no se repite.
+    expect(pruebasDelPush('reparto-r04-x')).toEqual(['tests/e2e/reparto'])
+  })
+
+  it('la corta existe y está medida en tiempos.json (91 s en los dos tamaños)', async () => {
+    const t = (await import('../../e2e/tiempos.json')).default as Record<string, number>
+    let s = 0
+    for (const f of CORTA) {
+      expect(existsSync(f), f).toBe(true)
+      const k = f.replace('tests/e2e/', '')
+      expect(t[k], k).toBeGreaterThan(0)
+      s += t[k]
+    }
+    expect(Math.round(s)).toBe(91)
   })
 
   it('nunca vacío (vacío sería la suite entera), y todo lo que nombra existe', () => {
@@ -35,7 +59,7 @@ describe('la e2e de un push corre solo su área', () => {
   })
 
   it('conta/c00: su carpeta ya lleva el marco, no se repite', () => {
-    expect(pruebasDelPush('conta/c00-alta')).toEqual(['tests/e2e/conta/c00', 'tests/e2e/conta/rls.spec.ts'])
+    expect(pruebasDeLaZona('conta/c00-alta')).toEqual(['tests/e2e/conta/c00', 'tests/e2e/conta/rls.spec.ts'])
   })
 
   it('la carpeta más larga que casa: c02c antes que c02', () => {

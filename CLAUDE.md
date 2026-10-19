@@ -303,6 +303,27 @@ dice «ninguna», falta alguien. La #181 tocó `_shared/diezCliente.ts`:
 *(14/10. La #181 se fusionó con «[skip ci]» en el mensaje: no corrió el
 despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 
+### Qué pruebas lleva cada PR
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> 19/10.
+
+- **En cada PR:** `npm run build`, las unitarias, la e2e de la zona que toca y
+  la **e2e corta de pedidos, cocina y reparto**. Las dos e2e van solas en cada
+  push (`scripts/e2e/area.mjs`: la zona y `CORTA`).
+- **La corta** es `reparto/direccion-falta` (Pedidos en el ordenador, el
+  Despacho, el ticket de la bolsa, la tablet de cocina y el permiso por local)
+  y `reparto/quien-reparte` (la etiqueta de reparto en cocina y que una cuenta
+  no toca lo de otra): 13 pruebas, **91 s** de pruebas en los dos tamaños
+  (`tests/e2e/tiempos.json`). No cubre crear un pedido y llevarlo por todos sus
+  estados en cocina: no hay e2e de eso.
+- **La entera ya no va en cada PR.** Corre **cada noche sobre `main`**
+  (`e2e-staging-conta.yml`, 03:10 UTC) y, si no sale en verde, abre la
+  incidencia «e2e de la noche en rojo». Antes de fusionar, a mano, **solo si
+  el PR toca lo común**: la barra, la cabecera, el marco o el esqueleto.
+- **Las tandas no cambian:** análisis, prueba en staging, ensayo y real desde
+  la rama, antes de fusionar.
+
 ### Un e2e lo cancela solo un commit más nuevo de su rama
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,

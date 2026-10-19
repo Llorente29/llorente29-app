@@ -17,10 +17,35 @@
 //   · reparto-**: tests/e2e/reparto;
 //   · cualquier otra (conta/w02-…, de herramientas): solo el juego común.
 // Nunca vacío: vacío sería la suite entera.
+//
+// Y SIEMPRE la CORTA de pedidos, cocina y reparto (Julio, 19/10): «en cada PR,
+// la e2e de la zona que toques y una e2e corta de pedidos, cocina y reparto».
+// La entera ya no va en cada PR: corre cada noche sobre main
+// (e2e-staging-conta.yml, «schedule») y antes de fusionar solo si el PR toca
+// lo común (barra, cabecera, marco o el esqueleto).
 
 import { existsSync, readdirSync } from 'node:fs'
 
 export const COMUN = ['tests/e2e/conta/c00/marco.spec.ts', 'tests/e2e/conta/rls.spec.ts']
+
+/**
+ * La e2e CORTA de pedidos, cocina y reparto (Julio, 19/10). Lo que cubre, hoy:
+ *   · direccion-falta: Pedidos en el ordenador (/orders y el Despacho), el
+ *     ticket de la bolsa, la tablet de cocina (/estacion, con «Listo») y el
+ *     permiso por local entre tablets: 9 pruebas, 59,6 s;
+ *   · quien-reparte: «Quién reparte» y la etiqueta de reparto en la cocina, y
+ *     que la cuenta B no ve ni toca lo de A: 4 pruebas, 31,4 s.
+ * 91 s de pruebas en los dos tamaños (tests/e2e/tiempos.json, la misma vara
+ * que la entera). Lo que NO cubre, porque no hay e2e de ello: crear un pedido
+ * y llevarlo por todos sus estados en cocina.
+ */
+export const CORTA = ['tests/e2e/reparto/direccion-falta.spec.ts', 'tests/e2e/reparto/quien-reparte.spec.ts']
+
+/** Las de la zona y la corta, sin repetir (una carpeta ya incluye sus ficheros). */
+export function conLaCorta(pruebas) {
+  const dentro = (f) => pruebas.some((p) => f === p || f.startsWith(`${p.replace(/\/$/, '')}/`))
+  return [...pruebas, ...CORTA.filter((f) => !dentro(f))]
+}
 
 /** Las carpetas de tests/e2e/conta (b01, c02c, cierre…). */
 export function carpetasConta(dir = 'tests/e2e/conta') {
@@ -29,6 +54,11 @@ export function carpetasConta(dir = 'tests/e2e/conta') {
 }
 
 export function pruebasDelPush(rama, carpetas = carpetasConta()) {
+  return conLaCorta(pruebasDeLaZona(rama, carpetas))
+}
+
+/** Solo las de la zona de la rama (sin la corta). */
+export function pruebasDeLaZona(rama, carpetas = carpetasConta()) {
   const r = String(rama ?? '')
   // Sin repetir: conta/c00 ya lleva marco.spec.ts dentro.
   const con = (c) => [`tests/e2e/conta/${c}`, ...COMUN.filter((f) => !f.startsWith(`tests/e2e/conta/${c}/`))]
