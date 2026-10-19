@@ -224,3 +224,17 @@ supabase/seeds/conta/seed_c06_sola_ejercicio_staging.sql
 #   la pisaba: staging se quedaba con la regla vieja y el calendario nuevo.
 supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
 supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
+
+# P01 · Impuestos de tus clientes (rama conta/p01-despacho).
+#   La 0100 DE VERDAD: solo añade (dos columnas que admiten nulos en accounts,
+#   tax_client_assignee y las funciones conta_despacho_*); se puede volver a
+#   pasar. La asesoría de demo: Asesoría de Prueba Centro, 3 personas, 4
+#   certificados de mentira y 10 clientes inventados (8 con permiso); si ya
+#   está, solo pone al día la caducidad de los certificados. Y su prueba, con
+#   ROLLBACK: cifras y filtros del 3T a 13/10, certificado por persona,
+#   responsable, RLS de la clienta, de otra cuenta y de la asesoría, «Soy una
+#   asesoría», retirar el permiso y la vuelta atrás.
+#   Va detrás de la 0250: no toca nada de lo de arriba.
+supabase/migrations/20261123T0100_p01_despacho.sql
+supabase/seeds/conta/seed_p01_despacho_staging.sql
+supabase/staging/sql/20261123_p01_despacho_prueba.sql
