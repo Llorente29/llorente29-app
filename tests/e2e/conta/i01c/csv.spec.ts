@@ -46,7 +46,8 @@ const SEDE = JUSTIFICANTES_SEDE as Record<string, J>
 /** Los tres originales, de 2023, en el periodo de cada lado (mismos importes que los de la fixture). */
 const originales = (n: 1 | 2): (J & { sede: true })[] => ['111-1T-2026', '115-1T-2026', '202-1P-2026'].map((k, i) => ({
   ...SEDE[k], sede: true as const, ejercicio: 2023, periodo: SEDE[k].modelo === '202' ? `${n}P` : `${n}T`,
-  presentada: `20-0${3 + n * 3}-2023 10:0${i}:00`, csv: `PRUEBS${n}${SEDE[k].modelo}SEDE2023`.slice(0, 16), justificante: `99${n}${SEDE[k].modelo}00002023`,
+  // Presentados el 20 del mes siguiente a su periodo (la base no casa uno presentado antes de que acabe).
+  presentada: `20-${SEDE[k].modelo === '202' ? (n === 1 ? '04' : '10') : `0${1 + n * 3}`}-2023 10:0${i}:00`, csv: `PRUEBS${n}${SEDE[k].modelo}SEDE2023`.slice(0, 16), justificante: `99${n}${SEDE[k].modelo}00002023`,
 }))
 const con = (k: string, c: Partial<J>): J => ({ ...BASE[k], ...c })
 
@@ -291,6 +292,9 @@ test('Ordenador: Hacienda lo da y Sumied aún no lo lee: «Escribirlo a mano» y
   // Lo que se leyó de la presentación, ya puesto.
   await expect(dialogo.getByLabel('CSV')).toHaveValue(j.csv)
   await expect(dialogo.getByLabel('Número de justificante')).toHaveValue(j.justificante)
+  // Sin el impreso no hay ejercicio ni periodo: se escriben, como haría quien lo tiene delante.
+  await dialogo.getByLabel('Ejercicio').fill(String(j.ejercicio))
+  await dialogo.getByLabel('Periodo').selectOption(j.periodo)
   await dialogo.getByLabel('Resultado [30]').fill('1.702,50')
   await dialogo.getByLabel('Casillas').fill('28 1.702,50\n30 1.702,50')
   await page.screenshot({ path: `${DIR}/csv-a-mano-${lado(page)}.jpg`, type: 'jpeg', quality: 75 })
