@@ -85,7 +85,37 @@ describe('las palabras de la ficha y de Presentados', async () => {
   })
   it('el de otro NIF, en palabras de oficina: «es de otra empresa»', () => {
     expect(motivoEnPalabras('Es de otro NIF (B12345674), no del de Taberna de Prueba Norte, S.L. (B28000016): no se guarda.'))
-      .toBe('Ese justificante es de otra empresa. Es de otro NIF (B12345674), no del de Taberna de Prueba Norte, S.L. (B28000016): no se guarda.')
+      .toBe('Ese justificante es de otra empresa (NIF B12345674).')
     expect(motivoEnPalabras('El ejercicio «1999» no es un año que pueda estar presentado.')).toBe('El ejercicio «1999» no es un año que pueda estar presentado.')
+  })
+})
+
+describe('por qué no se lee, en una frase (Julio, 19/10)', async () => {
+  const { fraseNoSeLee, fraseDeHacienda } = await import('@/modules/conta/impuestos/justificantes')
+  it('traído de Hacienda y de un modelo que Sumied aún no lee: lo dice con su número', () => {
+    expect(fraseNoSeLee({ motivo: 'No se encuentra el ejercicio ni el periodo.', causa: 'faltan_datos', parcial: { modelo: '111' } }, true))
+      .toBe('Traído de Hacienda, pero Sumied aún no lee el modelo 111. Puedes escribir las cifras a mano.')
+    expect(fraseNoSeLee({ motivo: '…', causa: 'modelo_ajeno', parcial: { modelo: '390' } }, true))
+      .toBe('Traído de Hacienda, pero Sumied aún no lee el modelo 390. Puedes escribir las cifras a mano.')
+  })
+  it('sin CSV en el PDF, da igual por qué: que lo pegue', async () => {
+    for (const b of [sinTextoPdf(), otroDocumentoPdf()]) {
+      const l = leerJustificante(await paginas(b))
+      if (l.ok) throw new Error('se ha leído')
+      expect(fraseNoSeLee(l, false)).toBe('No encontramos el CSV en este PDF. Pégalo a mano.')
+    }
+  })
+  it('lo que no es un PDF dice lo suyo, y nada se encadena', () => {
+    expect(fraseNoSeLee({ motivo: 'Pasa de 10 MB: no parece un justificante.', causa: 'no_pdf', parcial: {} }, false)).toBe('Pasa de 10 MB: no parece un justificante.')
+  })
+  it('lo que contesta Hacienda, una frase por motivo', () => {
+    const f = (motivo: string, mensaje = 'texto de la función') => fraseDeHacienda({ motivo, mensaje })
+    expect(f('formato')).toBe('Ese CSV no tiene la forma de los de Hacienda: son 16 letras y números.')
+    expect(f('no_encontrado')).toBe('Hacienda no tiene ningún justificante con ese CSV: revísalo letra a letra.')
+    expect(f('no_responde')).toBe('Hacienda no responde ahora mismo: vuelve a intentarlo en un rato.')
+    expect(f('ya_estaba', 'Ese justificante ya está en Presentados: el 303 del 2T/2026. No hace falta traerlo otra vez.'))
+      .toBe('Ese justificante ya está en Presentados: el 303 del 2T/2026.')
+    // Ninguna frase lleva dos puntos finales: una sola frase cada una.
+    for (const m of ['formato', 'no_encontrado', 'no_responde']) expect(f(m).split('. ').length).toBe(1)
   })
 })

@@ -45,9 +45,17 @@ export interface Justificante {
   resultado: { casilla: string | null; importe: number } | null
 }
 
+/**
+ * Por qué no se lee, para decirlo en una frase (impuestos/justificantes.ts,
+ * fraseNoSeLee): no es un PDF, no tiene texto, es de un modelo que Sumied aún
+ * no lee, no parece un justificante, o es de un modelo que sí lee y le falta
+ * algo (datos de la presentación o las casillas).
+ */
+export type CausaLectura = 'no_pdf' | 'sin_texto' | 'modelo_ajeno' | 'no_es_justificante' | 'faltan_datos' | 'sin_casillas'
+
 export type Lectura =
   | { ok: true; datos: Justificante; avisos: string[] }
-  | { ok: false; motivo: string; parcial: Partial<Justificante> }
+  | { ok: false; motivo: string; parcial: Partial<Justificante>; causa?: CausaLectura }
 
 /** Los modelos que se leen, con la casilla del resultado (el 202 va por rótulo). */
 export const MODELOS_JUSTIFICANTE: Record<string, { nombre: string; resultado: string | null }> = {
@@ -195,7 +203,7 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
   const faltan: string[] = []
   if (!parcial.modelo) faltan.push('el modelo')
   else if (!(parcial.modelo in MODELOS_JUSTIFICANTE)) {
-    return { ok: false, motivo: `Es un justificante del modelo ${parcial.modelo}, y Sumied de momento lee el 303, el 111, el 115 y el 202.`, parcial }
+    return { ok: false, causa: 'modelo_ajeno', motivo: `Es un justificante del modelo ${parcial.modelo}, y Sumied de momento lee el 303, el 111, el 115 y el 202.`, parcial }
   }
   if (!parcial.ejercicio) faltan.push('el ejercicio')
   if (!parcial.periodo) faltan.push('el periodo')
@@ -206,6 +214,7 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
     const sinTexto = porPagina.every((p) => p.length === 0)
     return {
       ok: false, parcial,
+      causa: sinTexto ? 'sin_texto' : !parcial.modelo ? 'no_es_justificante' : 'faltan_datos',
       motivo: sinTexto
         ? 'El PDF no tiene texto (parece escaneado o una foto): Sumied solo lee el justificante que descarga la Sede.'
         : impresoImagen
@@ -218,7 +227,7 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
   const casillas = impresoImagen ? {} : casillasDe(resto, parcial.modelo!, avisos)
   // El 202 se guarda con su resultado aunque el impreso sea imagen; los demás necesitan sus casillas.
   if (!Object.keys(casillas).length && !(es202 && nrc !== null)) {
-    return { ok: false, parcial: { ...parcial, casillas }, motivo: 'Se lee la presentación, pero no las casillas del impreso: escríbelas a mano.' }
+    return { ok: false, causa: 'sin_casillas', parcial: { ...parcial, casillas }, motivo: 'Se lee la presentación, pero no las casillas del impreso: escríbelas a mano.' }
   }
   const cfg = MODELOS_JUSTIFICANTE[parcial.modelo!]
   const deCasilla = cfg.resultado

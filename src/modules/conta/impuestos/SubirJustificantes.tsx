@@ -18,7 +18,7 @@ import { eurosExactos } from '@/modules/conta/lib/formato'
 import type { Lectura } from '@/modules/conta/lib/justificanteAeat'
 import { apuntarJustificante, leerJustificantePdf, repasarJustificantes, traerJustificanteCsv } from '@/modules/conta/services/impuestosService'
 import {
-  casillaResultado, casillasEscritas, chipDe, datosDe, lineaDe, pideDevolucion, resumenGuardado, tituloDe, type DatosJustificante, type Mirado,
+  casillaResultado, casillasEscritas, chipDe, datosDe, fraseDeHacienda, fraseNoSeLee, lineaDe, pideDevolucion, resumenGuardado, tituloDe, type DatosJustificante, type Mirado,
 } from './justificantes'
 
 interface Fila {
@@ -67,15 +67,17 @@ export function SubirJustificantes({ companyId, alCerrar, alGuardar }: { company
     for (const f of fs.filter((x) => x.lectura === null)) {
       const lectura = await leerJustificantePdf(f.fichero)
       let cambio: Partial<Fila> = { lectura, datos: lectura.ok ? datosDe(lectura.datos) : null }
-      // Un reimpreso («Microsoft Print to PDF») no se lee, pero conserva el CSV: se trae el original de Hacienda.
-      const csv = !lectura.ok ? lectura.csvVisto?.csv : null
-      if (csv && !lectura.ok) {
-        const t = await traerJustificanteCsv(companyId, csv)
-        const l2 = t.ok ? await leerJustificantePdf(t.pdf, `${csv}.pdf`) : null
-        if (t.ok && l2?.ok) {
+      if (!lectura.ok) {
+        // No se lee (un reimpreso de Diez, o un modelo que Sumied aún no lee): si se ve su CSV, se trae el
+        // original de Hacienda. Lo que no salga se dice en UNA frase (fraseNoSeLee, fraseDeHacienda).
+        const csv = lectura.causa === 'no_pdf' ? null : lectura.csvVisto?.csv
+        const t = csv ? await traerJustificanteCsv(companyId, csv) : null
+        const l2 = t?.ok ? await leerJustificantePdf(t.pdf, `${csv}.pdf`) : null
+        if (t?.ok && l2?.ok) {
           cambio = { lectura: l2, datos: datosDe(l2.datos, null, false, true), traido: true, fichero: new File([t.pdf], f.fichero.name.replace(/\.pdf$/i, '') + '-original.pdf', { type: 'application/pdf' }) }
         } else {
-          cambio = { lectura: { ok: false, parcial: lectura.parcial, motivo: `${lectura.motivo} Su CSV se ve, pero ${t.ok ? `el original de Hacienda tampoco se lee: ${l2 && !l2.ok ? l2.motivo : ''}` : `al traer el original: ${t.mensaje}`}` }, datos: null }
+          const frase = t && !t.ok ? fraseDeHacienda(t) : l2 && !l2.ok ? fraseNoSeLee(l2, true) : fraseNoSeLee(lectura, false)
+          cambio = { lectura: { ok: false, parcial: (l2 && !l2.ok ? l2.parcial : null) ?? lectura.parcial, causa: (l2 && !l2.ok ? l2.causa : null) ?? lectura.causa, motivo: frase }, datos: null }
         }
       }
       fs = fs.map((x) => (x.clave === f.clave ? { ...x, ...cambio } : x))
@@ -225,7 +227,7 @@ function DialogoAMano({ f, alCerrar, alGuardar }: { f: Fila; alCerrar: () => voi
   const leido = typeof p.resultado === 'number' ? p.resultado : p.resultado?.importe ?? null
   const [resultado, setResultado] = useState(leido !== null ? textoDeImporte(leido) : '')
   const [casillas, setCasillas] = useState('')
-  const [motivo, setMotivo] = useState(f.lectura && !f.lectura.ok ? `El PDF no se pudo leer: ${f.lectura.motivo}` : 'Escrito a mano del justificante')
+  const [motivo, setMotivo] = useState(f.lectura && !f.lectura.ok ? 'El PDF no se pudo leer' : 'Escrito a mano del justificante')
   const [fallo, setFallo] = useState<string | null>(null)
   const periodos = PERIODOS[modelo]
   const guardar = () => {

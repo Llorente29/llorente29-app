@@ -197,12 +197,12 @@ test('Ordenador: no está, de otra empresa, y un reimpreso subido en PDF', async
 
   // Hacienda no lo tiene.
   await traer(page, ORDENADOR.noEsta)
-  await expect(page.getByRole('alert')).toHaveText('Hacienda no tiene ningún justificante con ese CSV. Revísalo letra a letra con el del PDF. No se ha guardado nada.', { timeout: 30_000 })
+  await expect(page.getByRole('alert')).toHaveText('Hacienda no tiene ningún justificante con ese CSV: revísalo letra a letra.', { timeout: 30_000 })
   await foto(page, 'csv-no-esta')
 
   // De otra empresa: se trae, se mira y no se guarda.
   await traer(page, ORDENADOR.otra.csv)
-  await expect(page.getByRole('alert')).toHaveText(/^Ese justificante es de otra empresa\. Es de otro NIF \(B12345674\), no del de .* \(B28000016\): no se guarda\.$/, { timeout: 30_000 })
+  await expect(page.getByRole('alert')).toHaveText('Ese justificante es de otra empresa (NIF B12345674).', { timeout: 30_000 })
   await foto(page, 'csv-otra-empresa')
   const otra = await api(sesionA, 'GET', `tax_return?company_id=eq.${empresa}&aeat_csv=eq.${ORDENADOR.otra.csv}&select=id`) as unknown[]
   expect(otra, 'el de otra empresa ha dejado algo').toEqual([])

@@ -7,7 +7,8 @@
 // reimpreso de Diez, que no se lee), se saca su CSV y se hace lo mismo.
 //
 // Nada se guarda hasta «Guardar en Presentados». En los errores (formato,
-// Hacienda no lo tiene, no responde, es de otra empresa) tampoco, y se dice.
+// Hacienda no lo tiene, no responde, es de otra empresa, Sumied aún no lee ese
+// modelo) tampoco, y se dice en una frase (justificantes.ts).
 // El formato se comprueba aquí ANTES de llamar: la AEAT tiene un tope diario
 // de intentos fallidos.
 
@@ -16,7 +17,7 @@ import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
 import { csvValido, limpiarCsv, tituloJustificante, type Justificante } from '@/modules/conta/lib/justificanteAeat'
 import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { apuntarJustificante, leerJustificantePdf, repasarJustificantes, traerJustificanteCsv } from '@/modules/conta/services/impuestosService'
-import { datosDe, motivoEnPalabras, pideDevolucion, resultadoEnPalabras, type Mirado } from './justificantes'
+import { datosDe, fraseDeHacienda, fraseNoSeLee, motivoEnPalabras, pideDevolucion, resultadoEnPalabras, type Mirado } from './justificantes'
 
 type Paso =
   | { que: 'pegar' }
@@ -37,15 +38,15 @@ export function TraerPorCsv({ companyId, alCerrar, alGuardar }: {
   useEffect(() => { campo.current?.focus() }, [])
 
   const traer = async (c: string) => {
-    if (!csvValido(c)) { setPaso({ que: 'error', mensaje: 'Ese CSV no tiene la forma de los de Hacienda: son 16 letras y números, como aparecen arriba en el justificante. No se ha preguntado a Hacienda.' }); return }
+    if (!csvValido(c)) { setPaso({ que: 'error', mensaje: fraseDeHacienda({ motivo: 'formato', mensaje: '' }) }); return }
     setCsv(c)
     setPaso({ que: 'trayendo' })
     const t = await traerJustificanteCsv(companyId, c)
-    if (!t.ok) { setPaso({ que: 'error', mensaje: t.mensaje }); return }
+    if (!t.ok) { setPaso({ que: 'error', mensaje: fraseDeHacienda(t) }); return }
     const l = await leerJustificantePdf(t.pdf, `${c}.pdf`)
-    if (!l.ok) { setPaso({ que: 'error', mensaje: `Hacienda ha dado el justificante, pero Sumied no lo lee: ${l.motivo} No se ha guardado nada.` }); return }
+    if (!l.ok) { setPaso({ que: 'error', mensaje: fraseNoSeLee(l, true) }); return }
     const [m] = await repasarJustificantes(companyId, [datosDe(l.datos, null, false, true)]).catch((e: unknown) => [{ i: 0, estado: 'error', motivo: e instanceof Error ? e.message : String(e), declaracion: null } as Mirado])
-    if (m.estado === 'error') { setPaso({ que: 'error', mensaje: `${motivoEnPalabras(m.motivo)}${/no se guarda\.?$/i.test(m.motivo ?? '') ? '' : ' No se ha guardado nada.'}` }); return }
+    if (m.estado === 'error') { setPaso({ que: 'error', mensaje: motivoEnPalabras(m.motivo) }); return }
     setPaso({ que: 'ficha', j: l.datos, pdf: t.pdf, mirado: m })
   }
 
@@ -55,7 +56,7 @@ export function TraerPorCsv({ companyId, alCerrar, alGuardar }: {
     const visto = l.csvVisto ?? { csv: null, candidatos: [] }
     if (visto.csv) { await traer(visto.csv); return }
     if (visto.candidatos.length > 1) { setPaso({ que: 'elegir', candidatos: visto.candidatos }); return }
-    setPaso({ que: 'error', mensaje: `En «${f.name}» no se ve ningún CSV. Pégalo a mano: está arriba en la primera página del justificante. No se ha guardado nada.` })
+    setPaso({ que: 'error', mensaje: l.ok || l.causa !== 'no_pdf' ? fraseNoSeLee({ motivo: '', parcial: {} }, false) : l.motivo })
   }
 
   const guardar = async (j: Justificante, pdf: Blob, mirado: Mirado, devolucion: boolean) => {
