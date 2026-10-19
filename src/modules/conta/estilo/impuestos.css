@@ -18,10 +18,23 @@
 /* Con .s-tabla delante: el sistema (diseno.css) se carga después y, a la par, ganaría él. */
 .s-tabla.s-impuestos-tabla td { vertical-align: top; }
 /* Ancho en %, no mínimo en px: un mínimo empujaba la tabla fuera de su tarjeta (18/10). */
-.s-tabla.s-impuestos-calendario th:first-child { width: 40%; }
+/* Anchos fijos por columna en el ordenador (cotejo con el tablero 8, 19/10): con el reparto automático la tabla
+   daba a «Impuesto» lo mínimo de su contenido y partía las palabras («Retencione s»); el % no mandaba. Con
+   table-layout fixed mandan estos, y nada se sale: cada celda parte dentro de su ancho. En el móvil, bloques. */
+@media (min-width: 768px) {
+  .s-tabla.s-impuestos-calendario { table-layout: fixed; }
+  .s-tabla.s-impuestos-calendario th:nth-child(1) { width: 36%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(2) { width: 15%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(3) { width: 30%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(4) { width: 19%; }
+  .s-tabla.s-impuestos-calendario th, .s-tabla.s-impuestos-calendario td { padding-left: var(--s-3); padding-right: var(--s-3); }
+  .s-tabla.s-impuestos-calendario th:first-child, .s-tabla.s-impuestos-calendario td:first-child { padding-left: var(--s-6); }
+  /* Un chip largo («Borrador · 2 cosas que Sumied no sabe») parte en su celda antes que sacar la tabla. */
+  .s-tabla.s-impuestos-calendario .s-chip { white-space: normal; }
+}
 /* El aviso se parte dentro de su celda (e2e 612, 18/10: sacaba la tabla 11 px de la tarjeta); el chip no, y
    el aviso del calendario va en corto (porQueNoSeCalcula). La acción sigue entera. */
-.s-tabla.s-impuestos-calendario td:not(.s-impuestos-accion) { overflow-wrap: anywhere; }
+.s-tabla.s-impuestos-calendario td:not(.s-impuestos-accion) { overflow-wrap: break-word; }
 .s-tabla.s-impuestos-tabla tr[data-ambar='si'] td { background: var(--s-duda-fondo); }
 .s-impuestos-nombre { font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
 .cx a.s-impuestos-nombre { color: var(--s-accion); text-decoration: underline; }
