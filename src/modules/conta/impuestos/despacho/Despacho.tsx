@@ -22,14 +22,14 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Boton, Chip, Dialogo, Selector, Tarjeta, TarjetaCifra } from '@/modules/conta/diseno'
-import { rutaClienteImpuestos } from '@/config/navegacion'
+import { rutaAjustes, rutaClienteImpuestos } from '@/config/navegacion'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { baseDeDatos } from '@/services/versionApp'
 import { confirmarCertificado, hacienda, leerPuerta } from '@/modules/conta/services/impuestosService'
-import { leerEquipo, leerTrimestre, ponerResponsable } from '@/modules/conta/services/despachoService'
+import { enviarResumen, leerEquipo, leerSoyAsesoria, leerTrimestre, ponerResponsable } from '@/modules/conta/services/despachoService'
 import type { Puerta } from '@/modules/conta/impuestos/declaracion'
 import {
-  SIN_FILTROS, chipDeCertificado, chipDeModelo, filtrar, hayFiltros, hoyDeLaPantalla, lineaDelTrimestre, loteDe, modelosDelTrimestre,
+  SIN_FILTROS, chipDeCertificado, chipDeModelo, filtrar, hayFiltros, hoyDeLaPantalla, lineaDelTrimestre, loteDe, modelosDelTrimestre, nombreTrimestre,
   porQueNoPresenta, resumenLote, textoPresentar, tipoDeCliente, trimestreDe, trimestresParaElegir,
   type ClienteDespacho, type EnLote, type Filtros, type PersonaEquipo, type TrimestreDespacho,
 } from './despacho'
@@ -222,12 +222,11 @@ export function Despacho({ accountId }: { accountId: string }) {
             setResponsableDe(null); setAviso({ tono: 'ok', texto: s.mensaje }); cargar()
           }} />
       )}
-      {resumen && (
-        <Dialogo titulo="Enviar el resumen a los clientes" alCerrar={() => setResumen(false)}
-          acciones={<Boton variante="principal" onClick={() => setResumen(false)}>Entendido</Boton>}>
-          <p>El envío está preparado y <strong>cerrado</strong>: lo abre Julio cuando dé el visto bueno, y el primero será un correo de prueba.</p>
-          <p className="s-apoyo">No se ha mandado nada. Cuando se abra, cada cliente elegido recibirá el resumen de su trimestre desde impuestos@sumied.com, y sus respuestas llegarán al correo de tu asesoría.</p>
-        </Dialogo>
+      {resumen && accountId && (
+        <EnviarResumen accountId={accountId} trimestre={trimestre} hoy={forzado ? hoy : undefined}
+          elegidos={clientes.filter((c) => elegidos.has(c.empresa))} puede={datos?.puede_gestionar ?? false}
+          alCerrar={() => setResumen(false)}
+          alTerminar={(a) => { setResumen(false); setAviso(a) }} />
       )}
     </div>
   )
@@ -413,6 +412,55 @@ function ConfirmarPresentar({ lote, puerta, puedeGestionar, alCerrar, alTerminar
         <p className="s-despacho-confirmar-nota">Y {lote.sinRevisar} {lote.sinRevisar === 1 ? 'modelo elegido no está revisado' : 'modelos elegidos no están revisados'}: solo se presenta lo revisado.</p>
       )}
       {motivo && <p className="s-despacho-motivo" role="alert">{motivo}</p>}
+    </Dialogo>
+  )
+}
+
+/**
+ * «Enviar resumen a los clientes»: a la administración de cada cliente elegido,
+ * desde la marca y con el «responder a» de la asesoría. Cerrado hasta que Julio
+ * lo abra: entonces lo dice el servidor y aquí se enseña tal cual (regla 8).
+ */
+function EnviarResumen({ accountId, trimestre, hoy, elegidos, puede, alCerrar, alTerminar }: {
+  accountId: string; trimestre: { ejercicio: number; periodo: string }; hoy?: string
+  elegidos: ClienteDespacho[]; puede: boolean
+  alCerrar: () => void; alTerminar: (a: Aviso) => void
+}) {
+  // undefined: mirando; null: no tiene; texto: el correo al que responden los clientes.
+  const [correo, setCorreo] = useState<string | null | undefined>(undefined)
+  const [enviando, setEnviando] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    leerSoyAsesoria(accountId).then((s) => { if (vivo) setCorreo(s.correo_respuesta) }).catch(() => { if (vivo) setCorreo(null) })
+    return () => { vivo = false }
+  }, [accountId])
+  const n = elegidos.length
+  const motivo = !puede ? 'Solo la administración o una encargada de la asesoría manda el resumen.'
+    : correo === null ? 'Antes de mandarlo, pon el correo al que te responden tus clientes.' : null
+  const enviar = async () => {
+    setEnviando(true)
+    const r = await enviarResumen(accountId, trimestre.ejercicio, trimestre.periodo, elegidos.map((c) => c.empresa), hoy)
+    setEnviando(false)
+    alTerminar({ tono: r.ok ? 'ok' : 'falta', texto: r.mensaje })
+  }
+  return (
+    <Dialogo titulo="Enviar el resumen a los clientes" alCerrar={enviando ? () => undefined : alCerrar}
+      explicacion={`Cada cliente recibe el resumen de su ${nombreTrimestre(trimestre.ejercicio, trimestre.periodo)}: cómo va cada impuesto, su importe y su plazo.`}
+      acciones={<>
+        <Boton variante="secundario" onClick={alCerrar} disabled={enviando}>Volver</Boton>
+        <Boton variante="principal" onClick={enviar} disabled={!!motivo || correo === undefined || enviando}>
+          {enviando ? 'Enviando…' : `Enviar a ${n} ${n === 1 ? 'cliente' : 'clientes'}`}
+        </Boton>
+      </>}>
+      <ul className="s-despacho-confirmar" aria-label="A quién se manda">
+        {elegidos.map((c) => <li key={c.empresa}><span>{c.razon_social ?? c.nombre}</span><span className="s-apoyo">a su administración</span></li>)}
+      </ul>
+      {correo && <p className="s-despacho-confirmar-nota">Si responden, les llega a <strong>{correo}</strong>.</p>}
+      {motivo && (
+        <p className="s-despacho-motivo" role="alert">
+          {motivo}{correo === null && puede && <> <Link to={rutaAjustes('impuestos')}>Ponerlo en Ajustes › Tus impuestos</Link>.</>}
+        </p>
+      )}
     </Dialogo>
   )
 }

@@ -132,10 +132,19 @@ test('3 y 4 · Dos clientes elegidos, la barra de lotes y la confirmación con l
   await page.waitForTimeout(300)
   await foto(page, '4-confirmar-puerta-cerrada', false)
   await dialogo.getByRole('button', { name: 'Volver' }).click()
-  // El resumen a los clientes: preparado y cerrado, y lo dice.
+  // El resumen a los clientes: a su administración, con el «responder a» de la
+  // asesoría. En staging el freno de send-email lo tiene cerrado: se pide de
+  // verdad, el servidor lo para y la pantalla lo dice (regla 8).
   await barra.getByRole('button', { name: 'Enviar resumen a los clientes' }).click()
-  await expect(page.getByRole('dialog', { name: 'Enviar el resumen a los clientes' }).getByText('No se ha mandado nada', { exact: false })).toBeVisible()
-  await page.getByRole('button', { name: 'Entendido' }).click()
+  const envio = page.getByRole('dialog', { name: 'Enviar el resumen a los clientes' })
+  await expect(envio.getByRole('list', { name: 'A quién se manda' }).getByRole('listitem')).toHaveCount(2)
+  await expect(envio.getByText(/^Si responden, les llega a .+@/)).toBeVisible()
+  if (!esMovil(page)) {
+    await envio.getByRole('button', { name: 'Enviar a 2 clientes' }).click()
+    await expect(page.locator('.s-despacho-aviso')).toContainText(/cerrados hasta que Julio los abra\. No se ha mandado nada\./, { timeout: 30_000 })
+  } else {
+    await envio.getByRole('button', { name: 'Volver' }).click()
+  }
   expect(errores).toEqual([])
 })
 
