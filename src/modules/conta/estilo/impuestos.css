@@ -319,5 +319,10 @@
 /* Las casillas de la ficha: tres columnas («Qué es» en medio) con el relleno del sistema (24 px por lado)
    no caben en el móvil (e2e 661: la página se salía 14 px). Más juntas, y la tabla a lo ancho de la ficha. */
 .s-trimestre-ficha .s-tabla.s-justificantes-dif-tabla { width: 100%; min-width: 0; }
-.s-trimestre-ficha .s-tabla th, .s-trimestre-ficha .s-tabla td { padding: var(--s-2) var(--s-3); overflow-wrap: anywhere; }
-.s-trimestre-ficha .s-tabla .s-tabla-cifra { white-space: nowrap; }
+.s-trimestre-ficha .s-tabla th, .s-trimestre-ficha .s-tabla td { padding: var(--s-2) var(--s-3); }
+/* Solo «Qué es» se parte; la casilla, la cabecera y el importe, enteros (la captura del móvil partía «[27]» y «CASILLA» letra a letra). */
+.s-trimestre-ficha .s-tabla td:nth-child(2) { overflow-wrap: anywhere; }
+.s-trimestre-ficha .s-tabla th, .s-trimestre-ficha .s-tabla td:first-child, .s-trimestre-ficha .s-tabla .s-tabla-cifra { white-space: nowrap; }
+@media (max-width: 767px) {
+  .s-trimestre-ficha .s-tabla th, .s-trimestre-ficha .s-tabla td { padding: var(--s-2) var(--s-1); }
+}
