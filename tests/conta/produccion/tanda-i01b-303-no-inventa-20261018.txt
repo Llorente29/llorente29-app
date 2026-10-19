@@ -1,0 +1,25 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# I01b · El 303 no se inventa lo que no sabe (rama conta/i01b-303-no-inventa).
+# La anterior de este fichero (I01b: 0180 a 0230) ya está aplicada en
+# producción; su copia: tests/conta/produccion/tanda-i01b-asiento-303-20261018.txt.
+#
+#   1. 0240 — CAMBIA en caliente, declarado con su prueba de staging (misma
+#      firma): conta_impuesto_303_calcular (con el libro de IVA vacío y el
+#      diario con IVA no hay resultado ni casillas calculadas: error; la [110]
+#      sale del 303 inmediatamente anterior presentado o la escribe una
+#      persona, si no, error; las casillas a mano mandan),
+#      conta_impuesto_303_fichero (tampoco con un aviso sin dar por bueno) y
+#      conta_impuesto_fuera (con algo en error, solo con las casillas del
+#      justificante escritas). AÑADE conta_impuesto_casillas_poner.
+#
+# No toca el camino del pedido ni ninguna tabla. No recalcula nada: lo que
+# está calculado se queda como está hasta que alguien pulse «Volver a
+# calcular» (el 3T de Foodint, hoy «0,00 € · sin actividad», pasará a «No se
+# puede calcular» al recalcularlo sin el libro). Ninguna función que desplegar.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/i01b-303-no-inventa.sql
+supabase/migrations/20261122T0240_i01b_303_no_inventa.sql

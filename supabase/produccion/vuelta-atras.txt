@@ -1,12 +1,9 @@
-# Vuelta atrás de la tanda del 303 que no inventa (modo «vuelta_atras»).
-# ANTES, el front tiene que volver al de antes (la pantalla llama a
-# conta_impuesto_casillas_poner, que esto quita).
-# · 0240: quita conta_impuesto_casillas_poner y devuelve el cálculo y el
-#   fichero a la 0140 y «fuera» a la 0150, copiadas byte a byte. Las casillas
-#   escritas a mano se quedan (son de la persona, con su motivo).
-# Ensayada en staging: supabase/staging/sql/20261122_i01b_303_no_inventa_prueba.sql
+# Vuelta atrás de la tanda del 349 por operaciones (modo «vuelta_atras»).
+# · 0250: conta_impuesto_reglas vuelve a la de la 0120 (copiada byte a byte) y
+#   se quita conta_paises_ue. Las obligaciones del 349 ya escritas se quedan.
+# Ensayada en staging: supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
 # (la aplica, la deshace y la vuelve a aplicar).
-# La anterior de este fichero (I01b):
-# tests/conta/produccion/vuelta-atras-i01b-asiento-303-20261018.txt.
-cuenta: scripts/conta/produccion/cuentas/i01b-303-no-inventa.sql
-supabase/vuelta-atras/20261122T0240_i01b_303_no_inventa.down.sql
+# La anterior de este fichero (el 303 que no inventa):
+# tests/conta/produccion/vuelta-atras-i01b-303-no-inventa-20261018.txt.
+cuenta: scripts/conta/produccion/cuentas/i01b-349-por-operaciones.sql
+supabase/vuelta-atras/20261122T0250_i01b_349_por_operaciones.down.sql

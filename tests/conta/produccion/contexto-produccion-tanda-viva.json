@@ -1,15 +1,14 @@
 {
- "_que": "I01b · el 303 no inventa · contexto de producción de la tanda viva (20261122T0240), medido en SOLO LECTURA el 18/10 a las 20:38 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las tres funciones que cambia en caliente (calcular, fichero, fuera), con una sola firma cada una; no existe conta_impuesto_casillas_poner; ninguna tabla; nada del camino del pedido; nada en el historial.",
- "medido": "2026-10-18T20:38Z",
+ "_que": "I01b · el 349 por operaciones con la UE · contexto de producción de la tanda viva (20261122T0250), medido en SOLO LECTURA el 19/10, después de la 0240, con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen conta_impuesto_reglas y conta_impuesto_calendario (una sola firma cada una; las mismas huellas que en staging: reglas c327986c…, calendario ff7dbd56…, el de la 0190); no existe conta_paises_ue; ninguna tabla; nada del camino del pedido; nada en el historial.",
+ "medido": "2026-10-19T07:29Z",
  "tanda": {
-  "supabase/migrations/20261122T0240_i01b_303_no_inventa.sql": "27b502b57b785d0b6d1d1111e2f1d9e6"
+  "supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql": "29322e9615475e939b48926720e2867c"
  },
  "contexto": {
   "tablas": [],
   "funciones": [
-   "public.conta_impuesto_303_calcular(uuid,int,text)",
-   "public.conta_impuesto_303_fichero(uuid)",
-   "public.conta_impuesto_fuera(uuid,uuid,text,boolean,text,timestamptz,uuid)"
+   "public.conta_impuesto_calendario(uuid,date)",
+   "public.conta_impuesto_reglas(uuid)"
   ],
   "filas": {},
   "otras": {},

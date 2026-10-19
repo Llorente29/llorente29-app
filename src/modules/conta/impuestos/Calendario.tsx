@@ -8,8 +8,10 @@
 //     por fila; los avisos en ámbar en la fila. Lo que se pasó de plazo sin
 //     presentar, también, arriba de todo.
 //   · «Lo siguiente»: los plazos de los meses de después.
-//   · A la derecha, «Por qué te salen estos», con «+ Añadir otro impuesto»
-//     (pide motivo; queda quién y cuándo).
+//   · A la derecha, «Por qué te salen estos», con los nombres cortos de la
+//     maqueta («Retenciones (111)», «Sociedades (200 y 202)»), lo que no le
+//     sale («No te sale el 349: …») y «+ Añadir otro impuesto» (pide motivo;
+//     queda quién y cuándo).
 // Todos los modelos de la empresa salen con sus fechas; los que aún no se
 // calculan aquí lo dicen (regla 7: el umbral ordena, no esconde).
 //
@@ -27,7 +29,7 @@ import { useEntradasEnCinta, useNivel } from '@/modules/conta/marco/nuevo/contex
 import { anadirImpuesto } from '@/modules/conta/services/impuestosService'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import {
-  cifraPago, cifraPlazo, cifraPresentados, lineaDeFila, loSiguiente, mesDeVentana, nombreDeFila, nombreDeOficina, textoResultado,
+  cifraPago, cifraPlazo, cifraPresentados, lineaDeFila, loSiguiente, mesDeVentana, nombreDeFila, nombreDeOficina, noTeSale, porQueEnCorto, textoResultado,
   tituloVentana, vistaDeFila, type Calendario as DatosCalendario, type FilaCalendario,
 } from './calendario'
 import { useCalendario } from './useCalendario'
@@ -149,15 +151,15 @@ function PorQue({ datos, companyId, alCambiar }: { datos: DatosCalendario; compa
   return (
     <Tarjeta titulo="Por qué te salen estos" apoyo="Salen solos con los datos de la empresa. No hay que configurar nada.">
       <ul className="s-impuestos-porque">
-        {datos.modelos.map((m) => (
-          <li key={m.modelo}>
-            <strong>{nombreDeOficina(m.modelo, m.cadencia, m.nombre)} ({m.modelo})</strong> · {m.por_que}
+        {porQueEnCorto(datos.modelos).map((l) => (
+          <li key={l.clave}>
+            <strong>{l.titulo}</strong> · {l.porque}
           </li>
         ))}
       </ul>
       {datos.no_presenta.length > 0 && (
         <ul className="s-impuestos-porque s-apoyo">
-          {datos.no_presenta.map((m) => <li key={m.modelo}>No te sale el {m.modelo}: {m.por_que}</li>)}
+          {noTeSale(datos.no_presenta).map((l) => <li key={l.clave}>{l.texto}</li>)}
         </ul>
       )}
       {hecho && <p className="s-impuestos-hecho" role="status">{hecho}</p>}
