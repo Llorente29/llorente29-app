@@ -46,7 +46,9 @@ insert into _p values ('ficha', jsonb_build_object(
 
 -- 1 · Con el Vault, solo Foodint.
 do $$
-declare v_err text; v_secretos int := (select count(*) from vault.secrets);
+-- Antes y después, contados (no «ninguna»): staging es compartido, y la semilla de demo
+-- del P01 (19/10) trae sus certificados inventados. Lo que se mide es que ESTA llamada no deja nada.
+declare v_err text; v_secretos int := (select count(*) from vault.secrets); v_fichas int := (select count(*) from public.tax_certificate);
 begin
   begin
     perform public.conta_cert_guardar('c01a0000-0000-4000-8000-0000000000a1', 'c01a0000-0000-4000-8000-00000000000a',
@@ -57,7 +59,7 @@ begin
   if v_err <> 'Todavía no se pueden guardar certificados en esta cuenta: falta el almacén con clave externa (KMS), y hasta que esté solo se admite la cuenta de Foodint. No se ha guardado nada.' then
     raise exception 'PRUEBA certificados 1: el mensaje es «%».', v_err;
   end if;
-  if (select count(*) from vault.secrets) <> v_secretos or exists (select 1 from public.tax_certificate) then
+  if (select count(*) from vault.secrets) <> v_secretos or (select count(*) from public.tax_certificate) <> v_fichas then
     raise exception 'PRUEBA certificados 1: sin guardar, ha quedado un secreto o una ficha.';
   end if;
   raise notice 'PRUEBA certificados 1: fuera de Foodint no se guarda nada: «%».', v_err;
