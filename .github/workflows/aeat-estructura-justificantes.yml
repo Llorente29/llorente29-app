@@ -1,0 +1,81 @@
+# .github/workflows/aeat-estructura-justificantes.yml
+#
+# I01c · La ESTRUCTURA de los justificantes originales del 111, el 115 y el 202
+# (19/10). Julio lo autorizó: «con un workflow de solo consulta, trae de
+# Hacienda el original de uno de cada modelo y saca solo la estructura:
+# rótulos, orden y posiciones, nunca valores, CSV ni NIF. Al terminar se borra.»
+#
+# Qué hace:
+#   1. Lee TRES CSV (uno del 111, uno del 115 y uno del 202 de Foodint) del
+#      secreto temporal AEAT_CSV_ESTRUCTURA, que pone Julio y quita al acabar.
+#      Los CSV no pasan por ningún otro sitio: ni el repositorio, ni las
+#      entradas del run, ni el registro (se enmascaran uno a uno).
+#   2. Por cada CSV, comprueba el formato (sin forma, no se llama) y hace UNA
+#      petición GET, sin certificado, a la dirección de cotejo por CSV de
+#      producción (VisualizaSc). Sin reintentos ni redirecciones: tres
+#      peticiones a Hacienda en total por ejecución.
+#   3. Dice cómo es cada línea del PDF, por la puerta de salida («@@»,
+#      salida-segura): la clase de cada palabra y su posición. Un rótulo
+#      conocido sale por su nombre fijo, escrito en el script; un dato, por su
+#      forma (importe, año, NIF, CSV…); cualquier otra palabra, «pal». Ni un
+#      valor, ni el CSV, ni el NIF, ni un nombre.
+#   4. Borra lo descargado (el PDF vive en memoria: no se escribe en disco).
+#
+# Qué NO hace: presentar, consultar con certificado, leer ni escribir en
+# producción ni en staging.
+#
+# Cerrojos: corre solo en la rama conta/i01c-aeat-estructura, solo al cambiar
+# este fichero o su script, y solo si el secreto existe. Sin el secreto, no
+# llama a nadie: lo dice y termina.
+
+name: 'Hacienda · estructura de los justificantes (solo lectura)'
+
+on:
+  push:
+    branches: ['conta/i01c-aeat-estructura']
+    paths:
+      - '.github/workflows/aeat-estructura-justificantes.yml'
+      - 'scripts/conta/hacienda/estructura-justificantes.ts'
+
+concurrency:
+  group: aeat-estructura-justificantes
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  estructura:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Guarda · el secreto con los tres CSV (sin él, no se llama a nadie)
+        id: guarda
+        env:
+          CSV_ESTRUCTURA: ${{ secrets.AEAT_CSV_ESTRUCTURA }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CSV_ESTRUCTURA:-}" ]; then
+            echo "Falta el secreto AEAT_CSV_ESTRUCTURA: no se llama a Hacienda." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "hay=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          for c in $CSV_ESTRUCTURA; do echo "::add-mask::$c"; echo "::add-mask::${c^^}"; done
+          echo "hay=1" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.guarda.outputs.hay == '1'
+      - uses: actions/setup-node@v4
+        if: steps.guarda.outputs.hay == '1'
+        with:
+          node-version: '22'
+      - name: Instalar el lector (pdfjs)
+        if: steps.guarda.outputs.hay == '1'
+        run: npm ci --ignore-scripts --no-audit --no-fund >/dev/null 2>&1
+      - name: Tres peticiones a Hacienda, una por CSV (solo «@@» sale)
+        if: steps.guarda.outputs.hay == '1'
+        env:
+          CSV_ESTRUCTURA: ${{ secrets.AEAT_CSV_ESTRUCTURA }}
+        run: |
+          set -euo pipefail
+          npx --yes tsx@4.19.2 scripts/conta/hacienda/estructura-justificantes.ts 2>&1 \
+            | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
