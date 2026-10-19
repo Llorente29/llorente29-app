@@ -9,10 +9,12 @@
 // de presentar dice por qué no presenta todavía; no falla sin decir nada. Y lo
 // mismo con cada cosa que lo impide: sin calcular, con algo que Sumied no sabe,
 // con un aviso sin dar por bueno, sin certificado o sin permiso para usarlo.
+// Y lo que no se sabe no se pinta como un cero (0240): sin el libro de IVA, o
+// sin lo que quedaba por compensar de antes, «No se puede calcular todavía».
 
 import type { Nivel } from '@/modules/conta/esqueleto/preferencias'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
-import { periodoEnPalabras, textoResultado, type Cadencia, type Estado, type Resultado } from './calendario'
+import { periodoEnPalabras, porQueNoSeCalcula, textoResultado, type Cadencia, type Estado, type Resultado } from './calendario'
 
 export interface Comprobacion {
   id: string
@@ -96,7 +98,8 @@ const ORDEN: Record<Estado, number> = { pending: 0, draft: 1, reviewed: 2, filed
 /** Calculado · Revisado · Presentar · Contabilizar · Pagado, con lo hecho en verde y lo que toca marcado. */
 export function pasos(d: DeclaracionVer): Paso[] {
   const r = d.declaracion
-  const n = r ? ORDEN[r.estado] : 0
+  // Sin resultado (falta el libro o lo de antes), «Calcular» no está hecho: es lo que toca.
+  const n = !r ? 0 : r.resultado === null && (r.estado === 'draft' || r.estado === 'reviewed') ? 0 : ORDEN[r.estado]
   const quinto = !r || ['to_pay', 'to_refund', 'to_offset'].includes(r.resultado ?? '')
   const ultimo = r?.estado === 'offset' || r?.resultado === 'to_offset' ? ['A compensar', 'A compensar']
     : r?.resultado === 'to_refund' ? ['Devolver', 'Devuelto'] : ['Pagar', 'Pagado']
@@ -157,7 +160,7 @@ export interface LineaOrigen { titulo: string; detalle: string; libro: 'expedida
 /** Las líneas de «De dónde sale»: lo cobrado, lo pagado, lo compensado de antes y el resultado. */
 export function deDondeSale(d: DeclaracionVer): LineaOrigen[] {
   const r = d.declaracion
-  if (!r) return []
+  if (!r || r.resultado === null) return []
   const tramos = ([['01', 4], ['04', 10], ['07', 21]] as const).filter(([k]) => v(d, k) !== 0)
     .map(([k, t]) => `${pct(t)}: base ${eurosExactos(v(d, k))}`)
   const corr = v(d, '29'), inv = v(d, '31')
@@ -170,6 +173,62 @@ export function deDondeSale(d: DeclaracionVer): LineaOrigen[] {
   if (v(d, '78') !== 0) lineas.push({ titulo: 'Lo que te quedaba por compensar de antes', detalle: `quedaban ${eurosExactos(v(d, '110'))}`, libro: null, apuntes: null, importe: -v(d, '78') })
   lineas.push({ titulo: mayuscula(textoResultado(r.resultado) || 'resultado'), detalle: '', libro: null, apuntes: null, importe: Math.abs(v(d, '71')), fuerte: true })
   return lineas
+}
+
+// ── Cuando no se puede calcular ─────────────────────────────────────────────
+
+/** Las comprobaciones en rojo que importan (el formato del fichero no: se rehace al bajarlo). */
+const enRojo = (d: DeclaracionVer) => d.comprobaciones.filter((c) => c.resultado === 'error' && c.clave !== 'file_layout')
+
+/** ¿El libro de IVA del periodo está vacío con el diario lleno? (motivo «libro_vacio» de book_vs_303) */
+export function libroVacio(d: DeclaracionVer): boolean {
+  const k = d.comprobaciones.find((c) => c.clave === 'book_vs_303' && c.resultado === 'error')
+  const no = k?.detalle?.no_sabe
+  return Array.isArray(no) && no.some((x) => (x as { motivo?: string })?.motivo === 'libro_vacio')
+}
+
+/** La [110] se pide: no hay un 303 anterior presentado en Sumied y nadie la ha escrito. */
+export const pideLa110 = (c: Comprobacion): boolean => c.clave === 'previous_offset' && c.resultado === 'error'
+
+/**
+ * Sin resultado, la pantalla no enseña un 0: dice «No se puede calcular todavía» y por qué,
+ * con lo que hay que hacer. null si hay resultado.
+ */
+export function noSeCalcula(d: DeclaracionVer): { titulo: string; porque: string[] } | null {
+  const r = d.declaracion
+  if (!r || r.resultado !== null || !['draft', 'reviewed'].includes(r.estado)) return null
+  // En corto: el porqué entero va justo debajo, en «Lo que ha comprobado Sumied» (en el móvil salía dos veces seguidas).
+  const porque = enRojo(d).filter((c) => c.clave === 'book_vs_303' || c.clave === 'previous_offset').map((c) => porQueNoSeCalcula(c.titulo) ?? c.titulo)
+  return { titulo: 'No se puede calcular todavía', porque: porque.length ? porque : ['Falta algo para calcularlo: mira «Lo que ha comprobado Sumied».'] }
+}
+
+/** Las casillas del justificante que pide «Ya lo presenté fuera» cuando Sumied no ha podido calcularlo. */
+export const CASILLAS_JUSTIFICANTE = ['27', '45', '110', '78', '87', '71'] as const
+export type CasillaJustificante = (typeof CASILLAS_JUSTIFICANTE)[number]
+
+/** «Ya lo presenté fuera» necesita las casillas del justificante: hay algo en rojo. */
+export const pideJustificante = (d: DeclaracionVer): boolean => enRojo(d).length > 0
+
+const cent = (n: number) => Math.round(n * 100)
+
+/**
+ * Las casillas del justificante, antes de mandarlas: que están todas, que las
+ * de compensar no son negativas y que cuadran como en el modelo
+ * ([27] − [45] − [78] = [71]; [110] − [78] = [87]). null si están bien.
+ */
+export function cuadranCasillas(v: Partial<Record<CasillaJustificante, number | null>>): string | null {
+  const faltan = CASILLAS_JUSTIFICANTE.filter((k) => v[k] === null || v[k] === undefined)
+  if (faltan.length) return `Faltan ${faltan.map((k) => `[${k}]`).join(', ')}: están en el justificante (si una sale en blanco, escribe 0).`
+  const x = v as Record<CasillaJustificante, number>
+  const negativa = (['110', '78', '87'] as const).find((k) => x[k] < 0)
+  if (negativa) return `La [${negativa}] no puede ser negativa: son cuotas a compensar.`
+  if (cent(x['27']) - cent(x['45']) - cent(x['78']) !== cent(x['71'])) {
+    return `No cuadran: [27] − [45] − [78] da ${eurosExactos(x['27'] - x['45'] - x['78'])}, y la [71] dice ${eurosExactos(x['71'])}. Mira el justificante otra vez.`
+  }
+  if (cent(x['110']) - cent(x['78']) !== cent(x['87'])) {
+    return `No cuadran: [110] − [78] da ${eurosExactos(x['110'] - x['78'])}, y la [87] dice ${eurosExactos(x['87'])}. Mira el justificante otra vez.`
+  }
+  return null
 }
 
 // ── Lo que ha comprobado Sumied ─────────────────────────────────────────────
@@ -201,6 +260,8 @@ export function botonPresentar(d: DeclaracionVer, puerta: Puerta | null): Boton 
     return { activo: false, texto: r.por === 'outside' ? 'Presentado fuera' : 'Presentado', porque: null }
   }
   if (!d.puede_gestionar) return no('Solo un administrador o un encargado de la empresa, o su asesoría con su consentimiento, presenta sus impuestos.')
+  if (libroVacio(d)) return no('Sin el libro de IVA del periodo, Sumied no lo calcula: tráelo a Libros y vuelve a calcular. Si ya lo presentó tu asesoría, apúntalo con «Ya lo presenté fuera» y las casillas del justificante.')
+  if (d.comprobaciones.some(pideLa110)) return no('Falta lo que te quedaba por compensar de antes: escríbelo en la casilla [110], en «Lo que ha comprobado Sumied», aunque sea 0.')
   const errores = d.comprobaciones.filter((c) => c.resultado === 'error').length
   if (errores > 0) return no(`Tiene ${errores === 1 ? 'una cosa' : `${errores} cosas`} que Sumied todavía no sabe declarar: mírala abajo. Mientras, preséntalo fuera.`)
   const avisos = d.comprobaciones.filter((c) => c.resultado === 'warning' && !c.aceptada_el).length
@@ -212,6 +273,24 @@ export function botonPresentar(d: DeclaracionVer, puerta: Puerta | null): Boton 
   if (!puerta) return no('Comprobando la conexión con Hacienda…')
   if (!puerta.abierta) return no(`${puerta.mensaje} Mientras, puedes descargar el fichero oficial, presentarlo tú en la sede de Hacienda y luego apuntarlo con «Ya lo presenté fuera».`)
   return { activo: true, texto, porque: puerta.entorno === 'doble' ? puerta.mensaje : null }
+}
+
+/** «Descargar el fichero oficial»: por qué no sale todavía (la base tampoco lo prepara), o null si sale. */
+export function porQueNoFichero(d: DeclaracionVer): string | null {
+  const r = d.declaracion
+  if (!r || r.estado === 'pending') return 'El fichero oficial sale cuando esté calculado.'
+  if (enRojo(d).length > 0 || r.resultado === null) return 'El fichero oficial sale cuando no quede nada en rojo en «Lo que ha comprobado Sumied».'
+  const avisos = d.comprobaciones.filter((c) => c.resultado === 'warning' && !c.aceptada_el).length
+  if (avisos > 0) return `El fichero oficial sale cuando des por ${avisos === 1 ? 'bueno el aviso' : `buenos los ${avisos} avisos`} de «Lo que ha comprobado Sumied».`
+  return null
+}
+
+/** Lo que dice el botón de calcular (o volver a calcular) al acabar: con resultado, o por qué no lo hay. */
+export function fraseCalculo(c: { apuntes: number; resultado: Resultado | null; importe: number | null; sabido?: boolean }, de = 'Calculado'): string {
+  if (c.resultado === null || c.importe === null || c.sabido === false) {
+    return `${de} con ${c.apuntes} apuntes del libro de IVA, pero todavía no se puede saber el resultado: mira por qué en «Lo que ha comprobado Sumied».`
+  }
+  return `${de} con ${c.apuntes} apuntes del libro de IVA: ${eurosExactos(c.importe)} ${textoResultado(c.resultado)}.`
 }
 
 /** La frase del pago, para el panel y para la confirmación. */

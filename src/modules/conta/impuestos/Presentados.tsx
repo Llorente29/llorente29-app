@@ -15,9 +15,10 @@ import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, Texto } from '@/modules
 import { useNivel } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import {
-  calcular303, enlaceJustificante, hacienda, leerPresentados, subirJustificante, type Presentado, type Presentados as Datos,
+  calcular303, enlaceJustificante, hacienda, leerDeclaracion, leerPresentados, subirJustificante, type Presentado, type Presentados as Datos,
 } from '@/modules/conta/services/impuestosService'
 import { nombreDeFila, periodoEnPalabras, textoResultado, type Resultado } from './calendario'
+import { fraseCalculo, pideJustificante } from './declaracion'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -122,7 +123,8 @@ function DialogoFuera({ datos, companyId, alCerrar, hacer }: {
 }) {
   const opciones = datos.para_apuntar.map((x) => ({
     valor: `${x.ejercicio}/${x.periodo}`,
-    texto: `IVA del ${periodoEnPalabras(x.periodo)} de ${x.ejercicio} · ${x.declaracion && x.importe !== null && x.estado !== 'pending' ? `calculado: ${eurosExactos(x.importe)} ${textoResultado(x.resultado as Resultado | null)}` : 'sin calcular'}`,
+    texto: `IVA del ${periodoEnPalabras(x.periodo)} de ${x.ejercicio} · ${x.declaracion && x.importe !== null && x.estado !== 'pending' ? `calculado: ${eurosExactos(x.importe)} ${textoResultado(x.resultado as Resultado | null)}`
+      : x.declaracion && x.estado !== 'pending' && x.estado !== null ? 'no se puede calcular todavía' : 'sin calcular'}`,
   }))
   const [elegido, setElegido] = useState(opciones[0]?.valor ?? '')
   const [csv, setCsv] = useState('')
@@ -137,7 +139,12 @@ function DialogoFuera({ datos, companyId, alCerrar, hacer }: {
     if (!id || x.estado === 'pending' || x.estado === null) {
       const c = await calcular303(companyId, x.ejercicio, x.periodo)
       id = c.declaracion
-      antes = `Calculado con ${c.apuntes} apuntes: ${eurosExactos(c.importe)} ${textoResultado(c.resultado as Resultado)}. `
+      antes = `${fraseCalculo({ ...c, resultado: c.resultado as Resultado | null })} `
+    }
+    // Si Sumied no ha podido calcularlo, lo presentado son las casillas del justificante: se escriben en su página (0240).
+    const d = await leerDeclaracion(companyId, x.ejercicio, x.periodo)
+    if (pideJustificante(d)) {
+      throw new Error(`${antes}No se ha apuntado: Sumied no ha podido calcular el IVA del ${periodoEnPalabras(x.periodo)} de ${x.ejercicio}, así que hay que copiar las casillas del justificante. Ábrelo (Impuestos › IVA del ${periodoEnPalabras(x.periodo)}) y usa allí «Ya lo presenté fuera».`)
     }
     const s = await hacienda('ya_presentado_fuera', { declaracion: id, csv: limpio })
     if (!s.ok) throw new Error(`${antes}No se ha apuntado: ${s.mensaje}`)

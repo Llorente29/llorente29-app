@@ -158,6 +158,18 @@ const ACCION: Record<Exclude<Accion, null>, string> = {
   calcular: 'Calcular', revisar: 'Revisar', aviso: 'Ver el aviso', presentar: 'Presentar', contabilizar: 'Contabilizar', pago: 'Casar el pago', ver: 'Ver',
 }
 
+/**
+ * En el calendario, por qué no se calcula en una frase corta: el porqué entero
+ * (con lo que suman la 477 y la 472) está en la declaración, a un clic. El
+ * 18/10 el porqué entero estiraba la fila del 303 en el ordenador.
+ */
+export function porQueNoSeCalcula(aviso: string | null): string | null {
+  if (!aviso) return null
+  if (aviso.startsWith('El libro de IVA de este periodo')) return 'Falta el libro de IVA del periodo.'
+  if (aviso.startsWith('No sé lo que te quedó por compensar')) return 'Falta lo que quedaba por compensar de antes, la casilla [110].'
+  return aviso
+}
+
 export function vistaDeFila(f: FilaCalendario): VistaFila {
   const d = f.declaracion
   const fuera = f.atrasado && (!d || ['pending', 'draft', 'reviewed'].includes(d.estado))
@@ -173,6 +185,10 @@ export function vistaDeFila(f: FilaCalendario): VistaFila {
   if (d.estado === 'pending') return v({ tono: fuera ? 'falta' : 'neutro', texto: `${pre}Por calcular` }, 'calcular')
   if (d.estado === 'draft' || d.estado === 'reviewed') {
     const base = d.estado === 'draft' ? 'Borrador' : 'Revisado'
+    // Sin resultado (sin el libro de IVA, o sin lo que quedaba de antes): no se pinta un cero (0240).
+    if (d.errores > 0 && d.resultado === null) {
+      return v({ tono: 'falta', texto: `${pre}No se puede calcular` }, 'aviso', { aviso: porQueNoSeCalcula(d.aviso), ambar: true })
+    }
     if (d.errores > 0) {
       const t = `${d.errores} ${d.errores === 1 ? 'cosa' : 'cosas'} que Sumied no sabe`
       return v({ tono: 'falta', texto: `${pre}${base} · ${t}` }, 'revisar', { aviso: d.aviso, ambar: true })

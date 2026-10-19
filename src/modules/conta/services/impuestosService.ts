@@ -68,13 +68,22 @@ export function anadirImpuesto(companyId: string, modelo: string, motivo: string
 }
 
 /** Lo que devuelve conta_impuesto_303_calcular. */
-export interface Calculo303 { declaracion: string; desde: string; hasta: string; apuntes: number; resultado: string; importe: number }
+/** Sin libro de IVA (o sin saber la [110] cuando sale a pagar), `sabido` es false y no hay resultado ni importe. */
+export interface Calculo303 { declaracion: string; desde: string; hasta: string; apuntes: number; resultado: string | null; importe: number | null; sabido: boolean }
 
 /** Calcula (o recalcula) el borrador del 303 de un periodo desde el libro de IVA. */
 export function calcular303(companyId: string, ejercicio: number, periodo: string): Promise<Calculo303> {
   return rpc<Calculo303>('conta_impuesto_303_calcular', { p_company: companyId, p_year: ejercicio, p_period: periodo })
 }
 
+/**
+ * Escribe a mano casillas del 303 (la [110] de antes, o las del justificante de
+ * lo presentado fuera), con el motivo; null quita la que se puso. La base
+ * comprueba que cuadran y vuelve a calcular.
+ */
+export function ponerCasillas(declaracion: string, casillas: Record<string, number | null>, motivo: string): Promise<{ ok: boolean; mensaje: string; calculo: Calculo303 }> {
+  return rpc('conta_impuesto_casillas_poner', { p_return: declaracion, p_casillas: casillas, p_motivo: motivo })
+}
 
 /** Lo que pinta el IVA de un periodo (conta_impuesto_declaracion_ver). */
 export function leerDeclaracion(companyId: string, ejercicio: number, periodo: string): Promise<DeclaracionVer> {

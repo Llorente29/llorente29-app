@@ -65,6 +65,16 @@ supabase/staging/sql/20261122_i01b_certificados_prueba.sql
 #   vuelta atrás (para si hay invitaciones).
 supabase/migrations/20261122T0230_i01b_asesoria.sql
 supabase/staging/sql/20261122_i01b_asesoria_prueba.sql
+#   El 303 no se inventa lo que no sabe (rama conta/i01b-303-no-inventa): la
+#   0240 DE VERDAD, al final del bloque para que mande sobre la 0140 que se
+#   vuelve a pasar arriba (cambia en caliente el cálculo, el fichero y «fuera»,
+#   misma firma, y añade casillas_poner). Su prueba: el 3T de A con el libro
+#   vacío y la 472 llena sale sin resultado; no se revisa, ni sale el fichero,
+#   ni se apunta fuera; las casillas del justificante con los totales de la
+#   gestoría dan 3.723,44 a compensar y entonces sí se apunta fuera; el 4T
+#   arrastra 7.519,61; un aviso sin mirar para el fichero; y su vuelta atrás.
+supabase/migrations/20261122T0240_i01b_303_no_inventa.sql
+supabase/staging/sql/20261122_i01b_303_no_inventa_prueba.sql
 
 # S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
 #   La 0160 (el CHECK de journal_entry_document.kind amplía con

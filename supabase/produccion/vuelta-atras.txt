@@ -1,25 +1,12 @@
-# Vuelta atrás de la tanda del I01b (modo «vuelta_atras»), en orden inverso.
-# ANTES, el front tiene que volver al de antes del I01b (las pantallas de
-# Impuestos llaman a las funciones que esto quita).
-# · 0230: PARA si ya hay alguna invitación (el registro de quién dio permiso);
-#   si no, quita la tabla y sus funciones. Las asesorías vinculadas se quedan.
-# · 0220, 0210, 0200 y 0190: quitan sus funciones (solo leen, salvo el pago y
-#   quién presenta, que se quedan como estén: son decisiones de la empresa).
-# · 0180: PARA, sin tocar nada, si ya hay algún asiento de liquidación de una
-#   declaración o algún pago casado con una declaración; si no, quita los
-#   disparadores y las funciones nuevas, devuelve el CHECK y quita la columna
-#   de bank_match_item, y deja conta_impuesto_estado_vale y
-#   conta_motivos_para_validar como estaban.
-# Ensayadas en staging: supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
-# (la 0180) y la prueba de cada una (20261122_i01b_calendario_prueba.sql,
-# _declaracion_, _presentados_ y _certificados_), que las aplica, las deshace y
-# las vuelve a aplicar.
-# La anterior de este fichero (S01d):
-# tests/conta/produccion/vuelta-atras-s01d-tanda-20261018.txt.
-cuenta: scripts/conta/produccion/cuentas/i01b-asiento-303.sql
-supabase/vuelta-atras/20261122T0230_i01b_asesoria.down.sql
-supabase/vuelta-atras/20261122T0220_i01b_certificados.down.sql
-supabase/vuelta-atras/20261122T0210_i01b_presentados.down.sql
-supabase/vuelta-atras/20261122T0200_i01b_declaracion.down.sql
-supabase/vuelta-atras/20261122T0190_i01b_calendario.down.sql
-supabase/vuelta-atras/20261122T0180_i01b_asiento_303.down.sql
+# Vuelta atrás de la tanda del 303 que no inventa (modo «vuelta_atras»).
+# ANTES, el front tiene que volver al de antes (la pantalla llama a
+# conta_impuesto_casillas_poner, que esto quita).
+# · 0240: quita conta_impuesto_casillas_poner y devuelve el cálculo y el
+#   fichero a la 0140 y «fuera» a la 0150, copiadas byte a byte. Las casillas
+#   escritas a mano se quedan (son de la persona, con su motivo).
+# Ensayada en staging: supabase/staging/sql/20261122_i01b_303_no_inventa_prueba.sql
+# (la aplica, la deshace y la vuelve a aplicar).
+# La anterior de este fichero (I01b):
+# tests/conta/produccion/vuelta-atras-i01b-asiento-303-20261018.txt.
+cuenta: scripts/conta/produccion/cuentas/i01b-303-no-inventa.sql
+supabase/vuelta-atras/20261122T0240_i01b_303_no_inventa.down.sql
