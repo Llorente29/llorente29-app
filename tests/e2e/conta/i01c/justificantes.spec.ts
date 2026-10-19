@@ -22,7 +22,7 @@
 // el mensaje con contenido → otra vez el mismo: «Ya estaba» → el 4T en Modelo
 // oficial, «Del justificante de Hacienda».
 
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { CARRIL, CUENTA_A, STAGING_URL, anonKey, correoDePrueba, entrarComo, pedirSesion, type Sesion } from '../sesion'
 // @ts-expect-error: módulo .mjs de las fixtures, sin tipos
 import { JUSTIFICANTES_A, justificantePdf, otroDocumentoPdf, sinTextoPdf } from '../../../conta/fixtures/justificantes/pdfJustificante.mjs'
@@ -110,6 +110,14 @@ async function sinDesbordar(page: Page, donde: string) {
   const sobra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(sobra, `${donde}: la página se sale ${sobra} px por la derecha`).toBeLessThanOrEqual(1)
 }
+// La tarjeta recorta lo que se sale, así que la página no desborda aunque un botón
+// quede cortado: se mira el botón contra el ancho de la pantalla.
+async function dentroDeLaPantalla(page: Page, boton: Locator, donde: string) {
+  const caja = await boton.boundingBox()
+  const ancho = page.viewportSize()?.width ?? 0
+  expect(caja, `${donde}: no se ve`).not.toBeNull()
+  expect(Math.round((caja?.x ?? 0) + (caja?.width ?? 0)), `${donde}: se sale por la derecha`).toBeLessThanOrEqual(ancho)
+}
 const pdf = (nombre: string, bytes: ArrayBuffer) => ({ name: nombre, mimeType: 'application/pdf', buffer: Buffer.from(bytes) })
 
 test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Presentados con lo subido', async ({ page }) => {
@@ -136,7 +144,7 @@ test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Present
   await expect(tabla.getByText('No se pudo leer', { exact: true })).toHaveCount(2)
   const p303 = lista[0]
   await expect(tabla.getByText(`IVA del trimestre · ${p303.periodo} ${p303.ejercicio}`)).toBeVisible()
-  await expect(tabla.getByText(`modelo 303 · −1.761,96 € a compensar · presentado el ${p303.presentada.slice(0, 10).replace(/-/g, '/')}`)).toBeVisible()
+  await expect(tabla.getByText(`modelo 303 · 1.761,96 € a compensar · presentado el ${p303.presentada.slice(0, 10).replace(/-/g, '/')}`)).toBeVisible()
   await expect(tabla.getByText(/^Pago a cuenta de sociedades · \d\.(er|º) pago \d{4}$/)).toBeVisible()
   await expect(tabla.getByText('modelo 202 · 960,00 € a ingresar', { exact: false })).toBeVisible()
   await expect(tabla.getByText('El PDF no tiene texto (parece escaneado o una foto): Sumied solo lee el justificante que descarga la Sede.')).toBeVisible()
@@ -154,7 +162,8 @@ test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Present
   await tabla.locator('tr', { hasText: 'escaneado.pdf' }).getByRole('button', { name: 'Escribirlo a mano' }).click()
   const dialogo = page.getByRole('dialog', { name: 'Escribirlo a mano' })
   await expect(dialogo.getByLabel('Por qué a mano')).toHaveValue(/^El PDF no se pudo leer: El PDF no tiene texto/)
-  await foto(page, 'subir-a-mano')
+  // El diálogo es fijo: se fotografía la pantalla, no la página entera (que lo parte).
+  await page.screenshot({ path: `${DIR}/subir-a-mano-${lado(page)}.jpg`, type: 'jpeg', quality: 75 })
   await dialogo.getByRole('button', { name: 'Cancelar' }).click()
 
   await page.getByRole('button', { name: `Confirmar y guardar ${n}` }).click()
@@ -164,6 +173,7 @@ test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Present
   for (const j of lista) await expect(page.getByText(j.csv)).toBeVisible()
   await expect(page.getByRole('row', { name: new RegExp(p303.csv) }).getByRole('button', { name: 'PDF ↗' })).toBeVisible()
   await sinDesbordar(page, 'Presentados con lo subido')
+  await dentroDeLaPantalla(page, page.getByRole('button', { name: 'Subir justificantes' }), 'Presentados · «Subir justificantes»')
   await foto(page, 'presentados-subidos')
 
   // Otra vez el mismo: «Ya estaba», y nada que guardar.

@@ -53,15 +53,15 @@ export function chipDe(m: Pick<Mirado, 'estado'> | null): { tono: TonoChip; text
 }
 
 /**
- * La línea de debajo del título: «303 · −1.761,96 € a compensar · presentado
- * el 20/10/2025». El importe, con su signo de oficina: a compensar o a devolver
- * van en negativo, como en el justificante.
+ * La línea de debajo del título: «303 · 1.761,96 € a compensar · presentado
+ * el 20/10/2025». El importe sin signo y la palabra que dice hacia dónde va,
+ * igual que en Presentados: el signo ya lo dice «a compensar» o «a devolver».
  */
 export function lineaDe(d: Pick<DatosJustificante, 'modelo' | 'presentada' | 'resultado'>, devolucion = false): string {
   const partes = [`modelo ${d.modelo}`]
   if (d.resultado !== null && d.resultado !== undefined) {
     const que = d.resultado > 0 ? 'a ingresar' : d.resultado === 0 ? 'sale a cero' : devolucion ? 'a devolver' : 'a compensar'
-    partes.push(`${eurosExactos(d.resultado)} ${que}`)
+    partes.push(`${eurosExactos(Math.abs(d.resultado))} ${que}`)
   } else partes.push('resultado sin leer')
   if (d.presentada) partes.push(`presentado el ${fechaLarga(d.presentada.slice(0, 10))}`)
   return partes.join(' · ')

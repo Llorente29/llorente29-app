@@ -190,3 +190,20 @@
   .s-justificantes-pie .s-apoyo { margin-right: 0; }
 }
 .s-impuestos-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); justify-content: flex-end; }
+@media (max-width: 767px) {
+  /* En el móvil los botones de la cabecera bajan a su fila y se reparten en ella:
+     la caja de la acción de la tarjeta no encoge, y sin esto se salían por la derecha. */
+  .s-tarjeta-accion:has(> .s-impuestos-acciones) { flex: 1 1 100%; min-width: 0; }
+  .s-impuestos-acciones { justify-content: flex-start; }
+  /* Las diferencias del repaso siguen siendo una tabla de tres columnas (caben):
+     la regla de arriba apila las celdas de la tabla de fuera, y también alcanzaba a esta. */
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla { display: table; width: 100%; min-width: 0; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla thead { position: static; width: auto; height: auto; overflow: visible; clip: auto; display: table-header-group; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla tbody { display: table-row-group; width: auto; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla tr { display: table-row; width: auto; padding: 0; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla th,
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td { display: table-cell; width: auto; padding: var(--s-1) var(--s-2); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td.s-tabla-cifra,
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla th.s-tabla-cifra { text-align: right; white-space: nowrap; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td::before { content: none; }
+}
