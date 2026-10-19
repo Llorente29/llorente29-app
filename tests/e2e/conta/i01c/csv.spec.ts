@@ -275,7 +275,11 @@ test('Los originales del 111, el 115 y el 202, con la forma que da Hacienda', as
     await expect(ficha.getByText(new RegExp(`^${titulos[j.modelo]} · `))).toBeVisible({ timeout: 30_000 })
     await expect(ficha.locator('[data-prueba="resultado"] .s-cifra')).toHaveText(resultados[j.modelo])
     await expect(ficha.getByText(`${Object.keys(j.casillas).length} casillas del impreso`)).toBeVisible()
-    if (j.modelo === '111') { await sinDesbordar(page, 'Ficha del original del 111'); await foto(page, 'csv-original-111') }
+    if (j.modelo === '111') {
+      // Los perceptores son personas, no euros.
+      await expect(ficha.getByText('3 personas', { exact: true })).toBeVisible()
+      await sinDesbordar(page, 'Ficha del original del 111'); await foto(page, 'csv-original-111')
+    }
     await page.getByRole('button', { name: 'Guardar en Presentados' }).click()
     await expect(page.getByRole('row', { name: new RegExp(j.csv) }).getByText('fuera · traído de Hacienda por su CSV')).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Ya presenté uno fuera · pegar CSV' }).click()

@@ -18,7 +18,7 @@
 import { describe, expect, it } from 'vitest'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { celdasPdf, type PdfJs } from '@/modules/conta/lib/celdasPdf'
-import { leerJustificante, lineas } from '@/modules/conta/lib/justificanteAeat'
+import { esCasillaDePersonas, leerJustificante, lineas } from '@/modules/conta/lib/justificanteAeat'
 // @ts-expect-error: módulo .mjs de las fixtures, sin tipos
 import { JUSTIFICANTES_SEDE, justificantePdf } from '../../../../conta/fixtures/justificantes/pdfJustificante.mjs'
 
@@ -88,5 +88,9 @@ describe('el lector con los originales del 111, el 115 y el 202', () => {
   it('el resultado: [30] en el 111, [05] en el 115 y lo ingresado (la línea del NRC) en el 202', async () => {
     const r = await Promise.all(Object.values(SEDE).map(async (j) => { const l = leerJustificante(await paginas(j)); return l.ok ? l.datos.resultado : null }))
     expect(r).toEqual([{ casilla: '30', importe: 1702.5 }, { casilla: '05', importe: 855 }, { casilla: null, importe: 1080 }])
+  })
+  it('las casillas de perceptores son personas, no euros: [01] y [07] del 111, [01] del 115', () => {
+    expect([esCasillaDePersonas('111', '01'), esCasillaDePersonas('111', '07'), esCasillaDePersonas('115', '01')]).toEqual([true, true, true])
+    expect([esCasillaDePersonas('111', '02'), esCasillaDePersonas('115', '02'), esCasillaDePersonas('303', '01')]).toEqual([false, false, false])
   })
 })

@@ -79,6 +79,9 @@ const ENTERAS: Record<string, ReadonlySet<string>> = {
   '115': new Set(['01']),
 }
 
+/** Si una casilla cuenta personas (perceptores), no euros: «3», no «3,00 €». */
+export const esCasillaDePersonas = (modelo: string, caja: string): boolean => ENTERAS[modelo]?.has(caja) ?? false
+
 const sinAcentos = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
 const IMPORTE = /^-?\d{1,3}(?:\.\d{3})*,\d{2}$|^-?\d+,\d{2}$/
 const CASILLA = /^\[?(\d{2,3})\]?$/

@@ -15,7 +15,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
-import { csvValido, limpiarCsv, tituloJustificante, type Justificante } from '@/modules/conta/lib/justificanteAeat'
+import { csvValido, esCasillaDePersonas, limpiarCsv, tituloJustificante, type Justificante } from '@/modules/conta/lib/justificanteAeat'
 import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { apuntarJustificante, leerJustificantePdf, repasarJustificantes, traerJustificanteCsv } from '@/modules/conta/services/impuestosService'
 import { datosDe, fraseDeHacienda, fraseNoSeLee, motivoEnPalabras, pideDevolucion, resultadoEnPalabras, type DatosJustificante, type Mirado } from './justificantes'
@@ -172,7 +172,7 @@ function Ficha({ j, pdf, mirado, guardando, alGuardar, alCancelar }: {
             <table className="s-tabla s-justificantes-dif-tabla">
               <thead><tr><th scope="col">Casilla</th><th scope="col" className="s-tabla-cifra">Importe</th></tr></thead>
               <tbody>{casillas.map(([k, v]) => (
-                <tr key={k}><td><span className="s-impuestos-casilla">[{k}]</span></td><td className="s-tabla-cifra">{eurosExactos(v)}</td></tr>
+                <tr key={k}><td><span className="s-impuestos-casilla">[{k}]</span></td><td className="s-tabla-cifra">{esCasillaDePersonas(j.modelo, k) ? `${v} ${v === 1 ? 'persona' : 'personas'}` : eurosExactos(v)}</td></tr>
               ))}</tbody>
             </table>
           </details>
