@@ -245,3 +245,13 @@ supabase/staging/sql/20261122_i01c_justificantes_prueba.sql
 #   compensado, el de otro NIF fuera, y la vuelta atrás.
 supabase/migrations/20261122T0270_i01c_csv.sql
 supabase/staging/sql/20261122_i01c_csv_prueba.sql
+
+# I01c · Pieza 3, la parte que ordena (rama conta/i01c-trimestre).
+#   La 0280 DE VERDAD (solo añade: conta_impuesto_trimestre, la tira del
+#   trimestre y la cartera de cuotas a compensar del 303, y si el borrador está
+#   desfasado), para la e2e de Impuestos › Trimestre. Y su prueba, con \i y
+#   ROLLBACK: el borrador del 3T calculado antes del 2T, desfasado; la cartera
+#   2.309,27 + 2.134,18 − 647,28 = 3.796,17; vuelto a calcular, trae la [110];
+#   la tira; otra cuenta no lo ve; y la vuelta atrás.
+supabase/migrations/20261122T0280_i01c_trimestre.sql
+supabase/staging/sql/20261122_i01c_trimestre_prueba.sql
