@@ -286,7 +286,14 @@ begin
   raise notice 'Semilla P01 OK: la asesoría de demo con 3 personas, 4 certificados y 10 clientes (8 con permiso).';
 end $$;
 
--- ── Lo que depende de «hoy»: la caducidad de los certificados ───────────────
+-- ── Lo que se repasa en cada pasada ────────────────────────────────────────
+-- El interruptor de Impuestos de la asesoría (sin él no ve la pestaña).
+insert into public.feature_flags (account_id, feature_key, enabled, source, grant_reason)
+select pg_temp.p01_id('a0'), 'conta_impuestos', true, 'manual_grant', 'P01: asesoría de demo (solo staging).'
+ where exists (select 1 from public.accounts where id = pg_temp.p01_id('a0'))
+   and not exists (select 1 from public.feature_flags where account_id = pg_temp.p01_id('a0') and feature_key = 'conta_impuestos');
+
+-- La caducidad de los certificados, que depende de «hoy».
 update public.tax_certificate set valid_to = now() + interval '6 days', status = 'active' where id = pg_temp.p01_id('ce2');
 update public.tax_certificate set valid_to = now() - interval '10 days', status = 'expired' where id = pg_temp.p01_id('ce3');
 update public.tax_certificate set valid_to = now() - interval '3 days', status = 'expired' where id = pg_temp.p01_id('ce4');
