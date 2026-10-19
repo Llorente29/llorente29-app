@@ -113,7 +113,15 @@ const foto = (page: Page, nombre: string) =>
   page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.jpg`, type: 'jpeg', quality: 75, fullPage: true })
 async function sinDesbordar(page: Page, donde: string) {
   const sobra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
-  expect(sobra, `${donde}: la página se sale ${sobra} px por la derecha`).toBeLessThanOrEqual(1)
+  // Si se sale, quién: los elementos más hondos cuyo borde derecho pasa del ancho (e2e 660: 14 px en el móvil).
+  const quien = sobra > 1 ? await page.evaluate(() => {
+    const ancho = document.documentElement.clientWidth
+    return [...document.querySelectorAll('body *')]
+      .filter((e) => e.getBoundingClientRect().right > ancho + 1 && ![...e.children].some((h) => h.getBoundingClientRect().right > ancho + 1))
+      .slice(0, 6)
+      .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join('.')} → ${Math.round(e.getBoundingClientRect().right - ancho)} px «${(e.textContent ?? '').trim().slice(0, 40)}»`)
+  }) : []
+  expect(sobra, `${donde}: la página se sale ${sobra} px por la derecha: ${quien.join(' | ')}`).toBeLessThanOrEqual(1)
 }
 const fila = (page: Page, texto: string) => page.locator('[data-prueba="cartera"] tr').filter({ hasText: texto })
 
