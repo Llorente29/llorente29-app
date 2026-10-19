@@ -52,11 +52,12 @@ export type Cerrojo = { abierto: true } | { abierto: false; motivo: string };
  * send-email: una lista separada por comas, cada entrada
  *   · `plantilla`          abierta a cualquiera, o
  *   · `plantilla:correo`   abierta solo a ese destinatario (el de prueba).
- * Vacío o sin poner = todo cerrado. Sin marca (Folvy) no se frena nada: lo que
- * ya sale sigue saliendo igual.
+ * Vacío o sin poner = todo cerrado. Folvy no se frena nunca, la pida quien
+ * llama sin marca o con `marca: 'folvy'` (conta-asesoria la pone así para las
+ * cuentas sin marca propia): lo que ya sale sigue saliendo igual.
  */
 export function cerrojoMarca(marca: Marca | null, plantilla: string, destino: string, abiertos: string | undefined | null): Cerrojo {
-  if (!marca) return { abierto: true };
+  if (!marca || marca.id === 'folvy') return { abierto: true };
   const para = destino.trim().toLowerCase();
   const entradas = String(abiertos ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
   for (const e of entradas) {

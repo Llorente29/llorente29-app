@@ -34,6 +34,12 @@ describe('P01 · el freno por tipo', () => {
   it('sin marca (Folvy) no se frena nada', () => {
     expect(cerrojoMarca(null, 'welcome', 'a@b.test', undefined)).toEqual({ abierto: true })
   })
+  it('Folvy pedida por su nombre tampoco: la invitación a la asesoría de una cuenta sin marca sigue saliendo', () => {
+    // conta-asesoria pide marca: 'folvy' para las cuentas sin marca propia (marcaDeCuenta).
+    const r = remitenteDe('folvy')
+    expect(r.ok && r.marca?.id).toBe('folvy')
+    expect(cerrojoMarca(MARCAS.folvy, 'invitacion_asesoria', 'asesoria@x.test', undefined)).toEqual({ abierto: true })
+  })
   it('con marca, sin nada abierto, todo cerrado y dice por qué', () => {
     for (const abiertos of [undefined, null, '', '  ']) {
       const c = cerrojoMarca(s, 'resumen_trimestre', 'cliente@x.test', abiertos)
