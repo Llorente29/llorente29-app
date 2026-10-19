@@ -223,6 +223,44 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
   }
 })
 
+// P01 (Julio, 19/10): solo con la marca Sumied, «¿Llevas los impuestos de
+// otras empresas?». Con «Sí», la cuenta queda como asesoría y al terminar el
+// alta entra en «Impuestos de tus clientes». Al acabar se desmarca (C vive sin
+// empresa y sin ser asesoría).
+test('cuenta C con Sumied: «¿Llevas los impuestos de otras empresas?» → asesoría, y al terminar, «Impuestos de tus clientes»', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Escribe: basta un tamaño')
+  const s = await entrarComo(page, CUENTA_C.email)
+  await borrarEmpresas(s, CUENTA_C.id, true)
+  const desmarcar = () => rest(s, 'POST', 'rpc/conta_despacho_marcar', { p_account: CUENTA_C.id, p_es: false })
+  await desmarcar()
+  try {
+    await page.goto('/conta/alta?marca=sumied')
+    await hastaLaActividad(page, `Alta e2e Sumied ${Date.now()}`)
+    await decir(page, 'somos dark kitchen, solo reparto de comida a domicilio por plataformas')
+    await page.getByRole('button', { name: 'Añadir las marcadas' }).click()
+    await page.getByRole('button', { name: 'Sí, cada tres meses' }).click()
+    await page.getByRole('button', { name: 'Sí', exact: true }).click()
+    await expect(log(page).getByText('¿Pagas el alquiler de un local con retención?')).toBeVisible()
+    await page.getByRole('button', { name: 'No', exact: true }).click()
+    await expect(log(page).getByText('¿Llevas los impuestos de otras empresas?')).toBeVisible()
+    await page.getByRole('button', { name: 'Sí, soy una asesoría' }).click()
+    await expect(log(page).getByText('Entendido: llevas los impuestos de otras empresas. Al terminar te llevo a «Impuestos de tus clientes».')).toBeVisible()
+    // Queda escrito en la cuenta, no solo en la pantalla.
+    const soy = await rest<{ asesoria: boolean }>(s, 'POST', 'rpc/conta_despacho_soy', { p_account: CUENTA_C.id })
+    expect(soy.datos?.asesoria).toBe(true)
+    await expect(log(page).getByText(PREGUNTA_CUENTAS)).toBeVisible()
+    await page.getByRole('button', { name: 'El de pymes, el normal' }).click()
+    await page.getByRole('button', { name: 'Empiezo de cero' }).click()
+    await expect(log(page).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
+    await decir(page, 'ni idea')
+    await expect(page).toHaveURL(/\/conta\/impuestos\/clientes/, { timeout: 45_000 })
+    await expect(page.getByRole('heading', { level: 1, name: 'Impuestos de tus clientes' })).toBeVisible()
+  } finally {
+    await desmarcar()
+    await borrarEmpresas(s, CUENTA_C.id, true)
+  }
+})
+
 test.describe('cuenta C: salir, atrás y cerrar no pierden nada', () => {
   test.beforeEach(({ browserName }, info) => { void browserName; test.skip(info.project.name === 'movil', 'Basta un tamaño') })
 

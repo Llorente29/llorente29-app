@@ -533,6 +533,15 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de Impuestos de tus clientes (P01, 0100, su copia), con su contexto medido', () => {
+  it('la 0100 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-p01-despacho-20261019.json',
+      '--manifiesto=tests/conta/produccion/tanda-p01-despacho-20261019.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261123T0100_p01_despacho.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8 sobre la tanda del justificante por CSV (0270, su copia), con su contexto medido', () => {
   it('la 0270 sigue; ningún «autorizo»', () => {
     const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01c-csv-20261019.json',

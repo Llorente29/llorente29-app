@@ -4,8 +4,8 @@
 # ensayo en verde del mismo commit, en REAL.
 #
 # I01c · El trimestre (rama conta/i01c-trimestre).
-# Va DESPUÉS de la del justificante por CSV (0270, PR #249, aplicada): su copia,
-# tests/conta/produccion/tanda-i01c-csv-20261019.txt.
+# Va DESPUÉS de la de Impuestos de tus clientes (0100 de P01, PR #248, aplicada): su copia,
+# tests/conta/produccion/tanda-p01-despacho-20261019.txt.
 #
 #   1. 0280 — AÑADE conta_impuesto_trimestre (lo que pinta Impuestos ›
 #      Trimestre: la tira de modelos y la cartera del 303; solo lee). CAMBIA en

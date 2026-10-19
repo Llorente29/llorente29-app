@@ -242,6 +242,8 @@ export const CONTA = {
     impuestoTrimestre: 'impuestos/trimestre/:ejercicio/:trimestre',
     /** I01c · El trimestre de una empresa por la ruta (la vista de despacho de P abre el de un cliente). */
     impuestoTrimestreEmpresa: 'impuestos/empresa/:empresa/trimestre/:ejercicio/:trimestre',
+    /** P01 · El trimestre de un cliente de la asesoría: impuestos/clientes/<empresa>. */
+    impuestosCliente: 'impuestos/clientes/:empresa',
     /** I01b · Aceptar la invitación de una empresa a su asesoría (también sin sesión: AuthRouter). */
     aceptarAsesoria: 'asesoria',
   },
@@ -434,6 +436,8 @@ export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.
 /** I01b · Impuestos: el calendario, o una de sus pestañas (presentados, sociedades, certificados). */
 export const rutaImpuestos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.impuestosPestana, { pestana }) : rutaConta(CONTA.rutas.impuestos))
 /** I01b · El IVA de un periodo: el 303 del 3T de 2026 → /conta/impuestos/iva/2026/3T. */
+/** P01 · El trimestre de un cliente, para su asesoría (hoy, su calendario). */
+export const rutaClienteImpuestos = (empresa: string): string => rutaConta(CONTA.rutas.impuestosCliente, { empresa })
 export const rutaIvaPeriodo = (ejercicio: number, periodo: string): string => rutaConta(CONTA.rutas.impuestoIva, { ejercicio: String(ejercicio), periodo })
 /**
  * I01c · El trimestre: el 3T de 2026 → /conta/impuestos/trimestre/2026/3T. Con

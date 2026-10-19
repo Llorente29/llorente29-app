@@ -209,10 +209,12 @@ export const MARCAS: Record<IdMarca, Marca> = {
     soloContabilidad: true,
     favicon: '/marcas/sumied/favicon.svg',
     manifiesto: '/marcas/sumied/manifest.json',
-    // Null hasta que Julio dé de alta sumied.com en Resend (pasos en el informe
-    // del C06b): con null, el correo no sale y la pantalla lo dice (regla 8).
-    // Después: 'Sumied <no-reply@sumied.com>'.
-    remitente: null,
+    // P01 (19/10): sumied.com verificado en Resend (Julio). Que haya remitente
+    // NO abre ningún correo: send-email los tiene todos cerrados por tipo hasta
+    // que Julio los abra (CORREO_MARCA_ABIERTOS, marca.ts · cerrojoMarca).
+    // Sin «responder a» de la marca: las respuestas van a quien manda cada
+    // correo (el de la asesoría, en el resumen del trimestre).
+    remitente: 'Sumied <impuestos@sumied.com>',
     responderA: null,
     // Null hasta que entrada.sumied.com reciba correo (su MX en Resend).
     dominioEntradaCorreo: null,
