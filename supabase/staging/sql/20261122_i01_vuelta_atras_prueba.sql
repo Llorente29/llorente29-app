@@ -113,6 +113,21 @@ end $$;
 -- ya tiene liquidaciones o pagos casados con una declaración, la vuelta atrás
 -- de la 0180 para (como debe) y la del I01a no se puede ensayar: se dice y se
 -- acaba aquí, sin tocar nada.
+-- Lo mismo con los datos que paran la vuelta atrás del I01a (las guardas de la
+-- 0110, la 0130, la 0140 y la 0150): de TABLA ENTERA a propósito, porque así son
+-- esas guardas (en producción protegen las declaraciones de todas las cuentas).
+-- Desde el 19/10 la semilla de demo del P01 trae declaraciones revisadas y
+-- presentadas, certificados y presentadores de su asesoría de prueba: con ellos
+-- la vuelta atrás para, como debe, y no se ensaya. Se dice y se acaba aquí.
+select exists (select 1 from public.tax_return where status not in ('pending', 'draft', 'not_required') or calculated_at is not null)
+    or exists (select 1 from public.tax_certificate) or exists (select 1 from public.company_tax_presenter)
+    or exists (select 1 from public.company_tax_facts)
+    or exists (select 1 from public.tax_obligation where origin <> 'rule' or decided_by is not null) as i01a_con_datos \gset
+\if :i01a_con_datos
+\echo '>>> PRUEBA vuelta atrás I01a: staging tiene declaraciones, certificados, presentadores o respuestas del alta (la semilla de demo del P01); la vuelta atrás del I01a para, como debe, y no se ensaya. ROLLBACK: no queda nada.'
+rollback;
+\q
+\endif
 select to_regprocedure('public.conta_impuesto_303_contabilizar(uuid)') is not null as hay_i01b \gset
 \if :hay_i01b
 select exists (select 1 from public.journal_entry e where e.source_type = 'vat_settlement' and exists (select 1 from public.tax_return r where r.id = e.source_id))
