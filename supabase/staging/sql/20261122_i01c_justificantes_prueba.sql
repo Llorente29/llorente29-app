@@ -21,7 +21,8 @@
 --      2.061,96) y después su justificante: las diferencias casilla a casilla,
 --      la [110] igual; nunca dos declaraciones del mismo periodo.
 --   6. A mano (el PDF no se pudo leer): sin motivo no; con motivo, casillas
---      «manual» con su motivo.
+--      «manual» con su motivo. 6b: el 202 con el impreso en imagen, con su
+--      importe (la línea del NRC) y sin casillas; un 111 sin casillas, no.
 --   7. La vuelta atrás (el CHECK de antes; las funciones fuera) y otra vez
 --      hacia delante.
 
@@ -177,6 +178,24 @@ begin
     raise exception 'PRUEBA JUSTIFICANTES · 6: a mano queda %.', to_jsonb(r);
   end if;
   raise notice 'PRUEBA JUSTIFICANTES · 6: %', v->>'mensaje';
+end $$;
+
+-- ── 6b · El 202 con el impreso en imagen: su importe (la línea del NRC) y sin casillas; los demás, no ──
+do $$
+declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; v jsonb; w jsonb; r public.tax_return;
+begin
+  w := public.conta_impuesto_justificantes_repasar(v_a, jsonb_build_array(
+    '{"modelo":"111","ejercicio":2025,"periodo":"3T","presentada":"2025-10-20T11:05:12","csv":"PRUEBA111T3CCCCC","nif":"B28000016","resultado":1702.5,"casillas":{}}'::jsonb));
+  if w->0->>'motivo' <> 'Faltan las casillas.' then raise exception 'PRUEBA JUSTIFICANTES · 6b: un 111 sin casillas sale %.', w; end if;
+  v := public.conta_impuesto_justificante_apuntar(v_a,
+    '{"modelo":"202","ejercicio":2025,"periodo":"3P","presentada":"2025-12-19T10:40:00","csv":"PRUEBA2023PEEEEE","justificante":"9992020000003","nif":"B28000016","resultado":960,"casillas":{}}');
+  select * into r from public.tax_return where id = (v->>'declaracion')::uuid;
+  if r.status <> 'filed' or r.result_kind <> 'to_pay' or r.amount <> 960 or r.cadence <> 'instalments_202'
+     or exists (select 1 from public.tax_return_box where tax_return_id = r.id)
+     or v->>'mensaje' <> 'Apuntado el 202 del 3P/2025 como presentado fuera, con su importe y sin casillas (el impreso era imagen).' then
+    raise exception 'PRUEBA JUSTIFICANTES · 6b: el 202 queda % · %', to_jsonb(r), v;
+  end if;
+  raise notice 'PRUEBA JUSTIFICANTES · 6b: %', v->>'mensaje';
 end $$;
 reset role;
 

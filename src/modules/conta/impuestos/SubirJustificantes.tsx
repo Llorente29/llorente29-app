@@ -13,7 +13,7 @@
 // En el móvil la lista va en tarjetas (la tabla de impuestos.css).
 
 import { useRef, useState } from 'react'
-import { Boton, Campo, Chip, Dialogo, Fecha, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
+import { Boton, Campo, Chip, Dialogo, Fecha, Selector, Tarjeta, Texto, textoDeImporte } from '@/modules/conta/diseno'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import type { Lectura } from '@/modules/conta/lib/justificanteAeat'
 import { apuntarJustificante, leerJustificantePdf, repasarJustificantes } from '@/modules/conta/services/impuestosService'
@@ -206,7 +206,9 @@ function DialogoAMano({ f, alCerrar, alGuardar }: { f: Fila; alCerrar: () => voi
   const [fecha, setFecha] = useState(p.presentada?.slice(0, 10) ?? '')
   const [csv, setCsv] = useState(p.csv ?? '')
   const [numero, setNumero] = useState(p.justificante ?? '')
-  const [resultado, setResultado] = useState('')
+  // El importe ya leído (la línea del NRC del 202, aunque el impreso sea imagen), con coma decimal.
+  const leido = typeof p.resultado === 'number' ? p.resultado : p.resultado?.importe ?? null
+  const [resultado, setResultado] = useState(leido !== null ? textoDeImporte(leido) : '')
   const [casillas, setCasillas] = useState('')
   const [motivo, setMotivo] = useState(f.lectura && !f.lectura.ok ? `El PDF no se pudo leer: ${f.lectura.motivo}` : 'Escrito a mano del justificante')
   const [fallo, setFallo] = useState<string | null>(null)

@@ -14,11 +14,14 @@
 //     seguida directamente de la siguiente, y no tiene importe.
 //
 // Lo que no se lee no se rellena: falta y se dice. El resultado sale de la
-// casilla del modelo (303 → [71], 111 → [30], 115 → [05]); en el 202, cuyo
-// número de casilla ha cambiado con los años, se busca la línea «A ingresar».
-// Si no aparece, el resultado queda sin leer y la pantalla lo pide a mano.
+// casilla del modelo (303 → [71], 111 → [30], 115 → [05]). En el 202, de la
+// línea fija de la primera página «NRC: … IMPORTE: n,nn» (lo ingresado; Julio,
+// 19/10), porque sus páginas del impreso pueden ser imagen, sin texto. Sin esa
+// línea (sale a cero o a devolver) queda sin leer y la pantalla lo pide a mano.
+// El NRC no se lee ni se guarda en ningún sitio: solo el importe de su línea.
 
 import type { PaginaPdf } from '@/modules/conta/lib/lectorDiez'
+import { eurosExactos } from '@/modules/conta/lib/formato'
 
 export interface Justificante {
   modelo: string
@@ -31,8 +34,11 @@ export interface Justificante {
   /** NIF del declarante, sin espacios ni guiones. */
   nif: string
   casillas: Record<string, number>
-  /** La casilla del resultado y su importe, si se ha leído. */
-  resultado: { casilla: string; importe: number } | null
+  /**
+   * El resultado y de dónde sale: su casilla del impreso, o (casilla null) la
+   * línea «NRC: … IMPORTE:» de la primera página, que es lo ingresado.
+   */
+  resultado: { casilla: string | null; importe: number } | null
 }
 
 export type Lectura =
@@ -137,11 +143,23 @@ function resultadoPorRotulo(ls: Linea[], casillas: Record<string, number>): { ca
   return null
 }
 
+/** El importe de la línea «NRC: … IMPORTE: n,nn» de la primera página. Del NRC, nada. */
+function importeNrc(primera: Linea[]): number | null {
+  for (const l of primera) {
+    if (!/\bNRC\b/i.test(l.texto)) continue
+    const m = /IMPORTE:?\s*(-?\d{1,3}(?:\.\d{3})*,\d{2}|-?\d+,\d{2})/i.exec(l.texto)
+    if (m) return importeDe(m[1])
+  }
+  return null
+}
+
 export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
   const avisos: string[] = []
   const porPagina = paginas.map(lineas)
   const primera = porPagina[0] ?? []
-  const resto = porPagina.length > 1 ? porPagina.slice(1).flat() : primera
+  // Las páginas del impreso pueden ser imagen (el 202): entonces lo que haya, de la primera.
+  const impresoImagen = porPagina.length > 1 && porPagina.slice(1).every((p) => p.length === 0)
+  const resto = porPagina.length > 1 && !impresoImagen ? porPagina.slice(1).flat() : primera
   const texto1 = sinAcentos(primera.map((l) => l.texto).join('\n'))
   const textoTodo = sinAcentos(porPagina.flat().map((l) => l.texto).join('\n'))
   const textoResto = sinAcentos(resto.map((l) => l.texto).join('\n'))
@@ -163,6 +181,8 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
   if (ej) parcial.ejercicio = Number(ej)
   const per = /Periodo:?\s*([1-4]T|0[1-9]|1[0-2]|0A|[1-3]P)\b/i.exec(textoResto)?.[1] ?? /Periodo:?\s*([1-4]T|0[1-9]|1[0-2]|0A|[1-3]P)\b/i.exec(textoTodo)?.[1]
   if (per) parcial.periodo = per.toUpperCase()
+  const nrc = importeNrc(primera)
+  if (nrc !== null) parcial.resultado = { casilla: null, importe: nrc }
 
   const faltan: string[] = []
   if (!parcial.modelo) faltan.push('el modelo')
@@ -180,19 +200,31 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
       ok: false, parcial,
       motivo: sinTexto
         ? 'El PDF no tiene texto (parece escaneado o una foto): Sumied solo lee el justificante que descarga la Sede.'
-        : `No se encuentra ${faltan.join(', ').replace(/, ([^,]*)$/, ' ni $1')}. ¿Es el justificante de presentación de la Sede?`,
+        : impresoImagen
+          ? `Las páginas del impreso son imagen: se lee la presentación${nrc !== null ? ' y el importe' : ''}, pero no ${faltan.join(', ').replace(/, ([^,]*)$/, ' ni $1')}. Complétalo a mano.`
+          : `No se encuentra ${faltan.join(', ').replace(/, ([^,]*)$/, ' ni $1')}. ¿Es el justificante de presentación de la Sede?`,
     }
   }
 
-  const casillas = casillasDe(resto, parcial.modelo!, avisos)
-  if (!Object.keys(casillas).length) {
+  const es202 = parcial.modelo === '202'
+  const casillas = impresoImagen ? {} : casillasDe(resto, parcial.modelo!, avisos)
+  // El 202 se guarda con su resultado aunque el impreso sea imagen; los demás necesitan sus casillas.
+  if (!Object.keys(casillas).length && !(es202 && nrc !== null)) {
     return { ok: false, parcial: { ...parcial, casillas }, motivo: 'Se lee la presentación, pero no las casillas del impreso: escríbelas a mano.' }
   }
   const cfg = MODELOS_JUSTIFICANTE[parcial.modelo!]
-  const resultado = cfg.resultado
+  const deCasilla = cfg.resultado
     ? (cfg.resultado in casillas ? { casilla: cfg.resultado, importe: casillas[cfg.resultado] } : null)
     : resultadoPorRotulo(resto, casillas)
-  if (!resultado) avisos.push(`No se encuentra el resultado${cfg.resultado ? ` (casilla [${cfg.resultado}])` : ' («A ingresar»)'}: escríbelo antes de guardar.`)
+  // En el 202 manda la línea del NRC; en los demás, la casilla, y el NRC la comprueba.
+  const resultado = es202 ? (nrc !== null ? { casilla: null, importe: nrc } : deCasilla) : deCasilla ?? (nrc !== null ? { casilla: null, importe: nrc } : null)
+  if (nrc !== null && deCasilla && Math.abs(deCasilla.importe - nrc) >= 0.005) {
+    avisos.push(`El importe ingresado (${eurosExactos(nrc)}) no es el de la casilla [${deCasilla.casilla}] (${eurosExactos(deCasilla.importe)}): mira el justificante.`)
+  }
+  if (!resultado) {
+    avisos.push(es202 ? 'No se encuentra el importe ingresado (la línea del NRC): si salió a cero o a devolver, escríbelo antes de guardar.'
+      : `No se encuentra el resultado (casilla [${cfg.resultado}]): escríbelo antes de guardar.`)
+  }
   return { ok: true, avisos, datos: { ...(parcial as Justificante), casillas, resultado } }
 }
 

@@ -109,7 +109,8 @@ begin
   if v_kind = 'to_refund' and v_per not in ('4T', '12') then
     return v_base || jsonb_build_object('estado', 'error', 'motivo', 'La devolución se pide en el último periodo del año; antes, sale a compensar.');
   end if;
-  if coalesce(jsonb_typeof(p_datos->'casillas'), '') <> 'object' or p_datos->'casillas' = '{}'::jsonb then
+  -- Sin casillas, solo el 202: sus páginas del impreso pueden ser imagen, y su resultado es lo ingresado (la línea del NRC).
+  if coalesce(jsonb_typeof(p_datos->'casillas'), '') <> 'object' or (p_datos->'casillas' = '{}'::jsonb and v_mod <> '202') then
     return v_base || jsonb_build_object('estado', 'error', 'motivo', 'Faltan las casillas.');
   end if;
   for v_k, v_v in select * from jsonb_each(p_datos->'casillas') loop
@@ -265,8 +266,9 @@ begin
                              'csv_cola', right(upper(p_datos->>'csv'), 4), 'diferencias', coalesce(m->'diferencias', '[]'),
                              'casillas', (select count(*) from jsonb_object_keys(v_casillas))));
   return m || jsonb_build_object('ok', true, 'declaracion', r.id, 'cuenta', r.account_id,
-    'mensaje', 'Apuntado el ' || v_mod || ' del ' || v_per || '/' || v_ej || ' como presentado fuera, con ' ||
-               (select count(*) from jsonb_object_keys(v_casillas)) || ' casillas' ||
+    'mensaje', 'Apuntado el ' || v_mod || ' del ' || v_per || '/' || v_ej || ' como presentado fuera, ' ||
+               case when v_casillas = '{}'::jsonb then 'con su importe y sin casillas (el impreso era imagen)'
+                    else 'con ' || (select count(*) from jsonb_object_keys(v_casillas)) || ' casillas' end ||
                case when jsonb_array_length(coalesce(m->'diferencias', '[]')) > 0
                     then ' (' || jsonb_array_length(m->'diferencias') || ' distintas de lo calculado)' else '' end || '.');
 end $$;

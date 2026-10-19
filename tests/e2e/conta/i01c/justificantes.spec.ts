@@ -6,10 +6,10 @@
 // (tests/conta/fixtures/justificantes/pdfJustificante.mjs), generados aquí: ni
 // un PDF real en el repositorio, en staging ni en las capturas.
 //
-// El ordenador y el móvil corren a la vez en el mismo carril: cada uno con su
-// año (el ordenador, 2025; el móvil, los mismos datos en 2024), para que cada
-// uno tenga su repaso y sus diferencias sin pisarse. Y nunca 2026: el 3T de
-// 2026 de A es el de la e2e del I01b («No se puede calcular todavía»).
+// El ordenador y el móvil corren a la vez en el mismo carril: cada uno con sus
+// periodos (el ordenador, el 3T y el 4T de 2025; el móvil, el 1T de 2026),
+// para que cada uno tenga su repaso y sus diferencias sin pisarse. Nunca el 2T
+// ni el 3T de 2026: el 3T de A es el de la e2e del I01b, y su [110] sale del 2T.
 //
 // Lo que prepara, SOLO DENTRO DE SU CARRIL, como el administrador de A (lo que
 // haría la pantalla): Impuestos encendido (como la plataforma del carril) y el
@@ -32,19 +32,30 @@ test.skip(CARRIL === null, 'Subir justificantes necesita su carril: escribe decl
 const DIR = 'docs/conta/capturas/i01c'
 const PLATAFORMA = correoDePrueba('c06.plataforma@c06-prueba.test')
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
-const anoDe = (page: Page) => (lado(page) === 'movil' ? 2024 : 2025)
 
 type J = { modelo: string; ejercicio: number; periodo: string; presentada: string; csv: string; justificante: string; casillas: Record<string, number> }
+const BASE = JUSTIFICANTES_A as Record<string, J>
+const con = (k: string, c: Partial<J>): J => ({ ...BASE[k], ...c })
 
-/** Los justificantes de 2025, llevados a otro año (fechas, CSV y número cambian con él). */
-function delAno(ano: number): Record<string, J> {
-  const d = ano - 2025
-  return Object.fromEntries(Object.entries(JUSTIFICANTES_A as Record<string, J>).map(([k, j]) => {
-    const [f, h] = j.presentada.split(' ')
-    const [dd, mm, aa] = f.split('-')
-    return [k, { ...j, ejercicio: j.ejercicio + d, presentada: `${dd}-${mm}-${Number(aa) + d} ${h}`,
-      csv: j.csv.replace('2025', String(ano)).replace(/^PRUEBA/, d ? 'PRUEBB' : 'PRUEBA'), justificante: j.justificante.replace(/^999/, d ? '998' : '999') }]
-  }))
+/**
+ * Lo de cada lado. Sumied solo calcula un 303 cuyo plazo tiene festivos
+ * cargados (2026 y 2027): el ordenador, el 4T de 2025 (vence en enero de 2026);
+ * el móvil, el 1T de 2026. Nunca el 2T ni el 3T de 2026: la [110] del 3T de A
+ * sale del 2T, y la e2e del I01b la quiere sin saber.
+ */
+interface Lado { calcular: { ano: number; periodo: string }; lista: J[]; objetivo: J; casilla87: string }
+function deLado(l: 'ordenador' | 'movil'): Lado {
+  if (l === 'ordenador') {
+    const lista = ['303-3T-2025', '303-4T-2025', '111-3T-2025', '115-3T-2025', '202-3P-2025'].map((k) => BASE[k])
+    return { calcular: { ano: 2025, periodo: '4T' }, lista, objetivo: lista[1], casilla87: '1.631,96 €' }
+  }
+  const lista = [
+    con('303-3T-2025', { ejercicio: 2026, periodo: '1T', presentada: '20-04-2026 11:02:41', csv: 'PRUEBB1T2026AAAA', justificante: '9983030000001' }),
+    con('111-3T-2025', { ejercicio: 2026, periodo: '1T', presentada: '20-04-2026 11:05:12', csv: 'PRUEBB111T1CCCCC', justificante: '9981110000001' }),
+    con('115-3T-2025', { ejercicio: 2026, periodo: '1T', presentada: '20-04-2026 11:06:30', csv: 'PRUEBB115T1DDDDD', justificante: '9981150000001' }),
+    con('202-3P-2025', { ejercicio: 2026, periodo: '1P', presentada: '20-04-2026 10:40:00', csv: 'PRUEBB2021PEEEEE', justificante: '9982020000001' }),
+  ]
+  return { calcular: { ano: 2026, periodo: '1T' }, lista, objetivo: lista[0], casilla87: '300,00 €' }
 }
 
 async function api(s: Sesion, metodo: 'GET' | 'POST', ruta: string, cuerpo?: unknown, prefer = 'return=representation') {
@@ -103,11 +114,12 @@ const pdf = (nombre: string, bytes: ArrayBuffer) => ({ name: nombre, mimeType: '
 
 test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Presentados con lo subido', async ({ page }) => {
   const errores = vigilar(page)
-  const ano = anoDe(page)
-  const js = delAno(ano)
-  // El 4T de este año, calculado por Sumied con casillas escritas a mano (sin libro de IVA ese año).
+  const { calcular, lista, objetivo, casilla87 } = deLado(lado(page))
+  const n = lista.length
+  const nombre = (j: J) => `${j.modelo}-${j.periodo}-${j.ejercicio}.pdf`
+  // El 303 objetivo, calculado por Sumied con casillas escritas a mano (sin libro de IVA en ese periodo).
   const a = await pedirSesion(CUENTA_A.email)
-  const c = await api(a, 'POST', 'rpc/conta_impuesto_303_calcular', { p_company: empresa, p_year: ano, p_period: '4T' }) as { declaracion: string }
+  const c = await api(a, 'POST', 'rpc/conta_impuesto_303_calcular', { p_company: empresa, p_year: calcular.ano, p_period: calcular.periodo }) as { declaracion: string }
   await api(a, 'POST', 'rpc/conta_impuesto_casillas_poner', { p_return: c.declaracion, p_casillas: { '27': 5900, '45': 5400, '110': 2000 }, p_motivo: 'e2e I01c: lo que habría calculado Sumied' })
 
   await entrarComo(page, CUENTA_A.email)
@@ -117,26 +129,26 @@ test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Present
   await foto(page, 'subir-zona')
 
   await page.getByLabel('Elegir los justificantes en PDF').setInputFiles([
-    pdf(`303-3T-${ano}.pdf`, justificantePdf(js['303-3T-2025'])), pdf(`303-4T-${ano}.pdf`, justificantePdf(js['303-4T-2025'])),
-    pdf(`111-3T-${ano}.pdf`, justificantePdf(js['111-3T-2025'])), pdf(`115-3T-${ano}.pdf`, justificantePdf(js['115-3T-2025'])),
-    pdf(`202-3P-${ano}.pdf`, justificantePdf(js['202-3P-2025'])), pdf('factura-proveedor.pdf', otroDocumentoPdf()), pdf('escaneado.pdf', sinTextoPdf()),
+    ...lista.map((j) => pdf(nombre(j), justificantePdf(j))), pdf('factura-proveedor.pdf', otroDocumentoPdf()), pdf('escaneado.pdf', sinTextoPdf()),
   ])
   const tabla = page.locator('.s-justificantes-tabla')
-  await expect(tabla.getByText('Leído', { exact: true })).toHaveCount(5, { timeout: 30_000 })
+  await expect(tabla.getByText('Leído', { exact: true })).toHaveCount(n, { timeout: 30_000 })
   await expect(tabla.getByText('No se pudo leer', { exact: true })).toHaveCount(2)
-  await expect(tabla.getByText(`IVA del trimestre · 3T ${ano}`)).toBeVisible()
-  await expect(tabla.getByText(`modelo 303 · −1.761,96 € a compensar · presentado el 20/10/${ano}`)).toBeVisible()
-  await expect(tabla.getByText(`Pago a cuenta de sociedades · 3.er pago ${ano}`)).toBeVisible()
+  const p303 = lista[0]
+  await expect(tabla.getByText(`IVA del trimestre · ${p303.periodo} ${p303.ejercicio}`)).toBeVisible()
+  await expect(tabla.getByText(`modelo 303 · −1.761,96 € a compensar · presentado el ${p303.presentada.slice(0, 10).replace(/-/g, '/')}`)).toBeVisible()
+  await expect(tabla.getByText(/^Pago a cuenta de sociedades · \d\.(er|º) pago \d{4}$/)).toBeVisible()
+  await expect(tabla.getByText('modelo 202 · 960,00 € a ingresar', { exact: false })).toBeVisible()
   await expect(tabla.getByText('El PDF no tiene texto (parece escaneado o una foto): Sumied solo lee el justificante que descarga la Sede.')).toBeVisible()
   await expect(tabla.getByText(/^No se encuentra el modelo/)).toBeVisible()
-  // El 4T: Sumied lo había calculado, y dice qué casillas no coinciden.
-  await expect(tabla.getByText(/casillas distintas de lo que calculó Sumied/)).toBeVisible()
-  await expect(tabla.getByText(/^Sumied lo había calculado y \d+ casillas no coinciden\.$/)).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Confirmar y guardar 5' })).toBeEnabled()
+  // El objetivo: Sumied lo había calculado, y dice qué casillas no coinciden.
+  const filaObjetivo = tabla.locator('tr', { hasText: `IVA del trimestre · ${objetivo.periodo} ${objetivo.ejercicio}` })
+  await expect(filaObjetivo.getByText(/casillas distintas de lo que calculó Sumied/)).toBeVisible()
+  await expect(filaObjetivo.getByText(/^Sumied lo había calculado y \d+ casillas no coinciden\.$/)).toBeVisible()
+  await expect(page.getByRole('button', { name: `Confirmar y guardar ${n}` })).toBeEnabled()
   await sinDesbordar(page, 'Subir justificantes · repaso')
   await foto(page, 'subir-repaso')
-  // Las diferencias, de cerca.
-  await tabla.locator('tr', { hasText: `IVA del trimestre · 4T ${ano}` }).screenshot({ path: `${DIR}/subir-diferencias-${lado(page)}.jpg`, type: 'jpeg', quality: 75 })
+  await filaObjetivo.screenshot({ path: `${DIR}/subir-diferencias-${lado(page)}.jpg`, type: 'jpeg', quality: 75 })
 
   // El que no se pudo leer: escribirlo a mano (se abre, se ve y se cancela).
   await tabla.locator('tr', { hasText: 'escaneado.pdf' }).getByRole('button', { name: 'Escribirlo a mano' }).click()
@@ -145,27 +157,27 @@ test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Present
   await foto(page, 'subir-a-mano')
   await dialogo.getByRole('button', { name: 'Cancelar' }).click()
 
-  await page.getByRole('button', { name: 'Confirmar y guardar 5' }).click()
+  await page.getByRole('button', { name: `Confirmar y guardar ${n}` }).click()
   const hecho = page.locator('.s-impuestos-hecho, .s-impuestos-fallo').first()
-  await expect(hecho).toHaveText(new RegExp(`^Guardados 5 justificantes: IVA del trimestre · 3T ${ano}, IVA del trimestre · 4T ${ano}, Retenciones · 3T ${ano}, Alquiler · 3T ${ano}, Pago a cuenta de sociedades · 3\\.er pago ${ano}\\. Otros 2 no se han guardado`), { timeout: 60_000 })
+  await expect(hecho).toHaveText(new RegExp(`^Guardados ${n} justificantes: .* Otros 2 no se han guardado: no se pudieron leer o ya estaban\\.$`), { timeout: 60_000 })
   // Presentados, con lo subido: el CSV y su PDF.
-  for (const k of ['303-3T-2025', '303-4T-2025', '111-3T-2025', '115-3T-2025', '202-3P-2025']) await expect(page.getByText(js[k].csv)).toBeVisible()
-  await expect(page.getByRole('row', { name: new RegExp(js['303-3T-2025'].csv) }).getByRole('button', { name: 'PDF ↗' })).toBeVisible()
+  for (const j of lista) await expect(page.getByText(j.csv)).toBeVisible()
+  await expect(page.getByRole('row', { name: new RegExp(p303.csv) }).getByRole('button', { name: 'PDF ↗' })).toBeVisible()
   await sinDesbordar(page, 'Presentados con lo subido')
   await foto(page, 'presentados-subidos')
 
   // Otra vez el mismo: «Ya estaba», y nada que guardar.
   await page.getByRole('button', { name: 'Subir justificantes' }).click()
-  await page.getByLabel('Elegir los justificantes en PDF').setInputFiles([pdf(`303-3T-${ano}.pdf`, justificantePdf(js['303-3T-2025']))])
+  await page.getByLabel('Elegir los justificantes en PDF').setInputFiles([pdf(nombre(p303), justificantePdf(p303))])
   await expect(page.locator('.s-justificantes-tabla').getByText('Ya estaba', { exact: true })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText('Nada que guardar todavía.')).toBeVisible()
 
-  // El 4T en el Modelo oficial: las casillas del justificante, y dicho.
-  await ir(page, `impuestos/iva/${ano}/4T`)
+  // El objetivo en el Modelo oficial: las casillas del justificante, y dicho.
+  await ir(page, `impuestos/iva/${objetivo.ejercicio}/${objetivo.periodo}`)
   await page.getByRole('tab', { name: /Modelo oficial/ }).click()
   await expect(page.getByText('Del justificante de Hacienda').first()).toBeVisible()
-  await expect(page.getByText('1.631,96 €').first()).toBeVisible()
-  await sinDesbordar(page, 'IVA del 4T subido · Modelo oficial')
+  await expect(page.getByText(casilla87).first()).toBeVisible()
+  await sinDesbordar(page, 'IVA subido · Modelo oficial')
   await foto(page, 'iva-subido-casillas')
   expect(errores, errores.join('\n')).toEqual([])
 })

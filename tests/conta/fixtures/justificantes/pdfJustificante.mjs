@@ -73,6 +73,9 @@ const FILAS = {
   ],
 }
 
+/** Un NRC inventado (22 caracteres): el lector no lo lee, y la prueba comprueba que no sale en nada de lo leído. */
+export const NRC_INVENTADO = 'PRUEBA0NRC0000000000ZZ'
+
 const TITULOS = {
   '303': 'Impuesto sobre el Valor Añadido · Autoliquidación',
   '111': 'Retenciones e ingresos a cuenta · Rendimientos del trabajo y actividades económicas',
@@ -84,6 +87,11 @@ const TITULOS = {
  * Un justificante inventado.
  * j = { modelo, ejercicio, periodo, nif, nombre, presentada: 'dd-mm-aaaa hh:mm:ss', csv, justificante, casillas: { '27': 1234.5, … } }
  * opciones.sinImpreso: solo la primera página (para «no se leen las casillas»).
+ * opciones.impresoImagen: la segunda página sin texto, como un 202 real.
+ * opciones.declaranteEnPrimera: la primera página con NIF, ejercicio y periodo.
+ * opciones.sinNrc: sin la línea «NRC: … IMPORTE:» (sale a cero o a devolver).
+ * opciones.nrcImporte: otro importe en la línea del NRC (para que no case con la casilla).
+ * La línea del NRC va cuando hay algo que ingresar, con un NRC INVENTADO.
  */
 export function justificantePdf(j, opciones = {}) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
@@ -101,8 +109,16 @@ export function justificantePdf(j, opciones = {}) {
   doc.text(`Número de justificante: ${j.justificante}`, 60, 240)
   // El presentador (la gestoría): otro NIF, que el lector no puede tomar por el de la empresa.
   doc.text('Presentador: 00000000T GESTORIA INVENTADA DE PRUEBA', 60, 265)
-  doc.text(`Declarante: ${j.nombre}`, 60, 290)
+  doc.text(`Declarante: ${opciones.declaranteEnPrimera ? `${j.nif} ` : ''}${j.nombre}`, 60, 290)
+  if (opciones.declaranteEnPrimera) doc.text(`Ejercicio: ${j.ejercicio}   Periodo: ${j.periodo}`, 60, 315)
+  const resultado = opciones.nrcImporte ?? j.casillas[{ '303': '71', '111': '30', '115': '05', '202': '05' }[j.modelo]]
+  if (!opciones.sinNrc && resultado > 0) doc.text(`NRC: ${NRC_INVENTADO}   IMPORTE: ${es(resultado)}`, 60, 340)
   if (opciones.sinImpreso) return doc.output('arraybuffer')
+  if (opciones.impresoImagen) {
+    doc.addPage()
+    doc.rect(40, 40, 515, 760)
+    return doc.output('arraybuffer')
+  }
 
   // ── Página 2: el impreso ──
   doc.addPage()

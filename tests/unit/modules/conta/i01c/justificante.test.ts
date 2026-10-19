@@ -15,7 +15,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { celdasPdf, type PdfJs } from '@/modules/conta/lib/celdasPdf'
 import { importeDe, leerJustificante, tituloJustificante } from '@/modules/conta/lib/justificanteAeat'
 // @ts-expect-error: módulo .mjs de las fixtures, sin tipos
-import { JUSTIFICANTES_A, justificantePdf, otroDocumentoPdf, sinTextoPdf } from '../../../../conta/fixtures/justificantes/pdfJustificante.mjs'
+import { JUSTIFICANTES_A, NRC_INVENTADO, justificantePdf, otroDocumentoPdf, sinTextoPdf } from '../../../../conta/fixtures/justificantes/pdfJustificante.mjs'
 
 const PDFJS = pdfjs as unknown as PdfJs
 type J = { modelo: string; ejercicio: number; periodo: string; nif: string; presentada: string; csv: string; justificante: string; casillas: Record<string, number> }
@@ -39,9 +39,9 @@ describe('los justificantes inventados de la empresa A, uno a uno', () => {
       expect(l.avisos).toEqual([])
     })
   }
-  it('el resultado de cada uno sale de su casilla: [71] del 303, [30] del 111, [05] del 115 y «A ingresar» del 202', async () => {
+  it('el resultado de cada uno sale de su casilla: [71] del 303, [30] del 111, [05] del 115; el del 202, de la línea del NRC', async () => {
     const r = await Promise.all(Object.values(TODOS).map(async (j) => { const l = await leer(justificantePdf(j)); return l.ok ? `${j.modelo}:${l.datos.resultado?.casilla}=${l.datos.resultado?.importe}` : 'no' }))
-    expect(r).toEqual(['303:71=-1761.96', '303:71=0', '111:30=1702.5', '115:05=855', '202:05=960'])
+    expect(r).toEqual(['303:71=-1761.96', '303:71=0', '111:30=1702.5', '115:05=855', '202:null=960'])
   })
 })
 
@@ -64,6 +64,46 @@ describe('las trampas', () => {
   it('el teléfono y el número de página del impreso no son casillas', async () => {
     const l = await leer(justificantePdf(TODOS['115-3T-2025']))
     expect(l.ok && Object.keys(l.datos.casillas).sort()).toEqual(['01', '02', '03', '05'])
+  })
+})
+
+describe('el 202: lo ingresado, de la línea «NRC: … IMPORTE:» de la primera página (Julio, 19/10)', () => {
+  const j202 = () => TODOS['202-3P-2025']
+  it('con el impreso en texto: el resultado es el del NRC, y casa con el «A ingresar»', async () => {
+    const l = await leer(justificantePdf(j202()))
+    expect(l.ok && l.datos.resultado).toEqual({ casilla: null, importe: 960 })
+    expect(l.ok && l.avisos).toEqual([])
+  })
+  it('con el impreso en imagen y el declarante en la primera página: se guarda con su importe y sin casillas', async () => {
+    const l = await leer(justificantePdf(j202(), { impresoImagen: true, declaranteEnPrimera: true }))
+    if (!l.ok) throw new Error(l.motivo)
+    expect(l.datos).toMatchObject({ modelo: '202', ejercicio: 2025, periodo: '3P', nif: 'B28000016', csv: 'PRUEBA2023PEEEEE', casillas: {}, resultado: { casilla: null, importe: 960 } })
+  })
+  it('con el impreso en imagen y sin el declarante: se lee la presentación y el importe, y lo que falta se completa a mano', async () => {
+    const l = await leer(justificantePdf(j202(), { impresoImagen: true }))
+    expect(!l.ok && l.motivo).toBe('Las páginas del impreso son imagen: se lee la presentación y el importe, pero no el ejercicio, el periodo ni el NIF del declarante. Complétalo a mano.')
+    expect(!l.ok && l.parcial).toMatchObject({ modelo: '202', csv: 'PRUEBA2023PEEEEE', resultado: { casilla: null, importe: 960 } })
+  })
+  it('sin la línea del NRC (sale a cero o a devolver): el importe se pide a mano', async () => {
+    const l = await leer(justificantePdf(j202(), { sinNrc: true, impresoImagen: true, declaranteEnPrimera: true }))
+    expect(l.ok).toBe(false)
+    const m = await leer(justificantePdf(j202(), { sinNrc: true }))
+    expect(m.ok && m.datos.resultado).toEqual({ casilla: '05', importe: 960 })
+  })
+  it('el NRC no sale en NADA de lo leído (ni en los datos, ni en los avisos, ni en el motivo)', async () => {
+    const todos = await Promise.all([
+      leer(justificantePdf(j202())), leer(justificantePdf(j202(), { impresoImagen: true })), leer(justificantePdf(TODOS['111-3T-2025'])),
+      leer(justificantePdf({ ...TODOS['111-3T-2025'], casillas: { ...TODOS['111-3T-2025'].casillas, '30': 1000 } })),
+    ])
+    for (const l of todos) expect(JSON.stringify(l)).not.toContain(NRC_INVENTADO)
+    // Y la trampa estaba: el NRC sí va en el PDF.
+    const paginas = await celdasPdf(PDFJS, justificantePdf(j202()))
+    expect(paginas[0].celdas.map((c) => c.texto).join(' ')).toContain(NRC_INVENTADO)
+  })
+  it('en los demás, el NRC comprueba la casilla: si no casan, se dice, y manda la casilla', async () => {
+    const l = await leer(justificantePdf(TODOS['111-3T-2025'], { nrcImporte: 999 }))
+    expect(l.ok && l.datos.resultado).toEqual({ casilla: '30', importe: 1702.5 })
+    expect(l.ok && l.avisos).toEqual(['El importe ingresado (999,00 €) no es el de la casilla [30] (1.702,50 €): mira el justificante.'])
   })
 })
 
