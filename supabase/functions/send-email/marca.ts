@@ -271,7 +271,8 @@ export function invitacionAsesoria(m: Marca, data: Record<string, unknown>): Cor
 }
 
 /**
- * P01 · El resumen del trimestre que una asesoría manda a cada cliente.
+ * P01 · El resumen del trimestre que una asesoría manda a cada cliente: en
+ * palabras del cliente, sin las tareas de la asesoría.
  * Responder a este correo le llega a la asesoría (send-email pone su
  * «responder a», que solo admite por la vía interna: conta-asesoria).
  * data: los DatosResumen de _shared/resumenTrimestre.ts, ya en texto.
@@ -287,8 +288,9 @@ export function resumenTrimestre(m: Marca, data: Record<string, unknown>): Corre
   });
   const aIngresar = data.aIngresar ? String(data.aIngresar) : null;
   const aCompensar = data.aCompensar ? String(data.aCompensar) : null;
-  const siguiente = data.siguiente ? String(data.siguiente) : null;
   const titulo = `Tus impuestos del ${trimestre}`;
+  // Sin punto doble cuando el nombre ya acaba en punto («…, S.L.»).
+  const fin = (t: string) => (/[.!?]$/.test(t) ? t : `${t}.`);
   const celda = (t: string, alinear = 'left', fuerte = false) =>
     `<td style="padding:10px 8px;border-top:1px solid ${BORDE};font-size:14px;line-height:1.4;text-align:${alinear};color:${c.tinta};${fuerte ? 'font-weight:600;' : ''}">${esc(t)}</td>`;
   const cab = (t: string, alinear = 'left') =>
@@ -301,20 +303,20 @@ export function resumenTrimestre(m: Marca, data: Record<string, unknown>): Corre
   const totales = [aIngresar ? `A ingresar en total: <strong>${esc(aIngresar)}</strong>.` : '', aCompensar ? `A compensar en los próximos trimestres: <strong>${esc(aCompensar)}</strong>.` : '']
     .filter(Boolean).join(' ');
   const cuerpo = `${h1(titulo, c)}${p('Hola.', c)}
-    ${p(`Te escribimos desde <strong>${esc(asesoria)}</strong> con cómo van los impuestos de ${cliente ? `<strong>${esc(cliente)}</strong>` : 'tu empresa'} este trimestre.`, c)}
+    ${p(`Te escribimos desde <strong>${esc(asesoria)}</strong> con cómo van los impuestos de ${cliente ? `<strong>${esc(cliente)}</strong>` : 'tu empresa'} en el ${esc(trimestre)}.`, c)}
     ${tabla}
     ${totales ? p(totales, c) : ''}
-    ${siguiente ? p(`Lo siguiente: ${esc(siguiente)}.`, c) : ''}
-    ${nota(`Si tienes alguna duda, responde a este correo: le llega a ${esc(asesoria)}.`, c)}`;
-  const texto = `Hola.\n\nTe escribimos desde ${asesoria} con cómo van los impuestos de ${cliente || 'tu empresa'} este trimestre (${trimestre}).\n\n` +
+    ${nota(esc(fin(`Si tienes alguna duda, responde a este correo: le llega a ${asesoria}`)), c)}`;
+  const linea = (x: { modelo: string; estado: string; importe: string; plazo: string }) =>
+    `- ${x.modelo}: ${[x.estado, x.importe !== '—' ? x.importe : '', x.plazo !== '—' ? `Plazo: ${x.plazo}` : ''].filter(Boolean).join('. ')}.`;
+  const texto = `Hola.\n\nTe escribimos desde ${asesoria} con cómo van los impuestos de ${cliente || 'tu empresa'} en el ${trimestre}.\n\n` +
     (filas.length === 0 ? 'Este trimestre no tienes ningún impuesto que presentar.\n\n'
-      : filas.map((f) => `· ${f.modelo}: ${f.estado}. ${f.importe}${f.plazo !== '—' ? `. Plazo: ${f.plazo}` : ''}.`).join('\n') + '\n\n') +
+      : filas.map(linea).join('\n') + '\n\n') +
     (aIngresar ? `A ingresar en total: ${aIngresar}.\n` : '') + (aCompensar ? `A compensar en los próximos trimestres: ${aCompensar}.\n` : '') +
-    (siguiente ? `\nLo siguiente: ${siguiente}.\n` : '') +
-    `\nSi tienes alguna duda, responde a este correo: le llega a ${asesoria}.\n\n${m.nombre}`;
+    `\n${fin(`Si tienes alguna duda, responde a este correo: le llega a ${asesoria}`)}\n\n${m.nombre}`;
   return {
     subject: `${titulo}${cliente ? ` · ${cliente}` : ''}`,
-    html: marco(m, titulo, cuerpo, `Te llega porque ${asesoria} lleva los impuestos de ${cliente || 'tu empresa'} en ${m.nombre}.`),
+    html: marco(m, titulo, cuerpo, `Te llega porque ${asesoria} lleva los impuestos de ${cliente || 'tu empresa'} en ${m.nombre}.`.replace(/\.\. /g, '. ')),
     text: texto,
   };
 }

@@ -38,7 +38,14 @@ describe('P01 · lo que recibe cada cliente', () => {
     }
     expect(d.aIngresar).toBe('4.902,10 €')
     expect(d.aCompensar).toBeNull()
-    expect(d.siguiente).toBe('Presentar 3 modelos')
+    // Sin la tarea de la asesoría («Presentar 3 modelos»): no es cosa del cliente.
+    expect(JSON.stringify(d)).not.toContain('Presentar 3 modelos')
+  })
+  it('Ana: lo domiciliado dice que se carga en su cuenta; lo que falta por calcular, así', () => {
+    const d = resumen('Ana Prueba Gómez')
+    expect(d.filas[0]).toMatchObject({ modelo: '303 · IVA', estado: 'Lo estamos revisando', plazo: '15/10' })
+    expect(d.filas[0].importe).toMatch(/ € a ingresar · se carga en tu cuenta$/)
+    expect(d.filas[1]).toMatchObject({ modelo: '130 · Pago a cuenta del IRPF', estado: 'Pendiente de calcular', importe: '—' })
   })
   it('Importaciones: los mensuales con su mes, presentados y sin plazo; lo compensado, aparte', () => {
     const d = resumen('Importaciones de Prueba Levante')
@@ -51,7 +58,7 @@ describe('P01 · lo que recibe cada cliente', () => {
   it('Hostal: lo que aún se revisa se dice así, y el 202 con su pago', () => {
     const d = resumen('Hostal de Prueba Mayor')
     expect(d.filas[0]).toMatchObject({ modelo: '303 · IVA', estado: 'Lo estamos revisando', importe: '3.723,44 € a compensar' })
-    expect(d.filas.some((f) => f.modelo === '202 · Pago fraccionado del Impuesto sobre Sociedades (2.º pago)' || /^202 · .*\(2\.º pago\)$/.test(f.modelo))).toBe(true)
+    expect(d.filas.find((f) => f.modelo.startsWith('202'))).toMatchObject({ modelo: '202 · Pago fraccionado de Sociedades (2.º pago)', estado: 'Pendiente de calcular' })
   })
   it('todos los clientes de staging dan un resumen con filas y sin «undefined» ni «NaN»', () => {
     for (const c of T.clientes) {
@@ -64,7 +71,7 @@ describe('P01 · lo que recibe cada cliente', () => {
     expect(euros(4902.1)).toBe('4.902,10 €')
     expect(euros(-3723.44)).toBe('3.723,44 €')
     expect(nombreDelTrimestre(2026, '4T')).toBe('4.º trimestre 2026')
-    expect(importeParaElCliente({ modelo: '303', nombre: 'IVA', periodo: '3T', cadencia: 'quarterly', estado: 'presentado', resultado: 'zero', importe: 0, plazo_suyo: null, presentada: null })).toBe('Sin importe')
+    expect(importeParaElCliente({ modelo: '303', nombre: 'IVA', periodo: '3T', cadencia: 'quarterly', estado: 'presentado', resultado: 'zero', importe: 0, plazo_suyo: null, presentada: null })).toBe('Sale a cero')
   })
 })
 
@@ -77,7 +84,16 @@ describe('P01 · la plantilla resumen_trimestre', () => {
     expect(c.html).not.toContain('<b>Ruiz</b>')
     expect(c.html).toContain('4.902,10 €')
     expect(c.text).toContain('A ingresar en total: 4.902,10 €.')
-    expect(c.text).toContain('responde a este correo: le llega a Asesoría de Prueba Centro, S.L.')
+    expect(c.text).toContain('responde a este correo: le llega a Asesoría de Prueba Centro, S.L.\n')
+    expect(c.text).not.toContain('S.L..')
+    expect(c.text).toContain('en el 3.er trimestre 2026.')
+    expect(c.text).toMatch(/^- 303 · IVA: Revisado; lo presentamos en plazo\. [\d.,]+ € a ingresar\. Plazo: 20\/10\.$/m)
+    expect(c.html).not.toContain('Lo siguiente')
+  })
+  it('lo que aún no tiene importe no deja un «—» suelto en el texto', () => {
+    const c = PLANTILLAS_MARCA.resumen_trimestre(MARCAS.sumied, resumen('Ana Prueba Gómez') as never)
+    expect(c.text).toContain('- 130 · Pago a cuenta del IRPF: Pendiente de calcular. Plazo: 20/10.')
+    expect(c.text).not.toContain('—')
   })
 })
 

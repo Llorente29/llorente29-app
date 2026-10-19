@@ -18,6 +18,8 @@ export interface ModeloDelTrimestre {
   importe: number | null
   plazo_suyo: string | null
   presentada: string | null
+  /** Domiciliado en el banco: Hacienda lo carga en su cuenta. */
+  domicilia?: boolean | null
 }
 
 /** Lo que trae conta_despacho_trimestre de cada cliente (solo lo que usa el resumen). */
@@ -28,7 +30,6 @@ export interface ClienteDelTrimestre {
   modelos: ModeloDelTrimestre[]
   a_ingresar: number | null
   a_compensar: number | null
-  siguiente_paso: string | null
 }
 
 /** Una fila del correo: todo ya en texto, para que la plantilla solo escape y pinte. */
@@ -47,7 +48,6 @@ export interface DatosResumen {
   filas: FilaResumen[]
   aIngresar: string | null
   aCompensar: string | null
-  siguiente: string | null
 }
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -87,24 +87,28 @@ export function estadoParaElCliente(m: ModeloDelTrimestre): string {
       return f && f !== '—' ? `Presentado el ${f}` : 'Presentado'
     }
     case 'listo': return 'Revisado; lo presentamos en plazo'
-    case 'por_calcular': return 'Aún sin calcular'
+    case 'por_calcular': return 'Pendiente de calcular'
     default: return 'Lo estamos revisando'
   }
 }
 
-/** El importe con lo que significa: a ingresar, a compensar, a devolver o sin importe. */
+/** El importe con lo que significa: a ingresar (y si se carga solo), a compensar, a devolver o a cero. */
 export function importeParaElCliente(m: ModeloDelTrimestre): string {
   if (m.importe === null || m.importe === undefined || m.resultado === null) return '—'
   switch (m.resultado) {
-    case 'to_pay': return `${euros(m.importe)} a ingresar`
+    case 'to_pay': return m.domicilia ? `${euros(m.importe)} a ingresar · se carga en tu cuenta` : `${euros(m.importe)} a ingresar`
     case 'to_offset': return `${euros(m.importe)} a compensar`
     case 'to_refund': return `${euros(m.importe)} a devolver`
-    case 'zero': return 'Sin importe'
+    case 'zero': return 'Sale a cero'
     default: return euros(m.importe)
   }
 }
 
-/** Los datos del correo de UN cliente. */
+/**
+ * Los datos del correo de UN cliente. No lleva el «siguiente paso» de la
+ * pantalla: es la tarea de la asesoría («Presentar 3 modelos», «Renovar el
+ * certificado»), no la del cliente.
+ */
 export function datosDelResumen(asesoria: string, ejercicio: number, periodo: string, c: ClienteDelTrimestre): DatosResumen {
   return {
     asesoria,
@@ -118,7 +122,6 @@ export function datosDelResumen(asesoria: string, ejercicio: number, periodo: st
     })),
     aIngresar: c.a_ingresar !== null && c.a_ingresar !== undefined && c.a_ingresar > 0 ? euros(c.a_ingresar) : null,
     aCompensar: c.a_compensar !== null && c.a_compensar !== undefined && c.a_compensar > 0 ? euros(c.a_compensar) : null,
-    siguiente: (c.siguiente_paso ?? '').trim() || null,
   }
 }
 
