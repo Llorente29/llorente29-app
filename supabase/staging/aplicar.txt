@@ -224,3 +224,14 @@ supabase/seeds/conta/seed_c06_sola_ejercicio_staging.sql
 #   la pisaba: staging se quedaba con la regla vieja y el calendario nuevo.
 supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
 supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
+
+# I01c · P1 · Subir justificantes de Hacienda (rama conta/i01c-justificantes).
+#   La 0260 DE VERDAD (amplía el CHECK de tax_return_box.origin con
+#   'justificante' y añade tres funciones; probada en el run 354), para la e2e
+#   de «Subir justificantes». Y su prueba, con \i y ROLLBACK: el NIF
+#   de otra empresa; el repaso (dos veces, antes de acabar el periodo,
+#   negativo); apuntar el 303 del 3T de 2025 con el plazo sin festivos dicho;
+#   ya estaba y otro CSV; el 4T calculado con la [110] del 3T subido y sus
+#   diferencias; a mano con motivo; y la vuelta atrás.
+supabase/migrations/20261122T0260_i01c_justificantes.sql
+supabase/staging/sql/20261122_i01c_justificantes_prueba.sql

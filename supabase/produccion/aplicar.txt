@@ -3,17 +3,18 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01b · El 349 lo proponen las operaciones con la UE (rama
-# conta/i01b-349-por-operaciones). Va DESPUÉS de la del 303 que no inventa
-# (0240, PR #240): su copia, tests/conta/produccion/tanda-i01b-303-no-inventa-20261018.txt.
+# I01c · P1 · Subir justificantes de Hacienda (rama conta/i01c-justificantes).
+# Va DESPUÉS de la del 349 por operaciones (0250, PR #244, aplicada): su copia,
+# tests/conta/produccion/tanda-i01b-349-por-operaciones-20261019.txt.
 #
-#   1. 0250 — CAMBIA en caliente, declarado con su prueba de staging (misma
-#      firma): conta_impuesto_reglas (el 349 lo proponen las compras o ventas
-#      intracomunitarias del libro de IVA de los últimos 12 meses, o el ROI).
-#      AÑADE conta_paises_ue.
+#   1. 0260 — CAMBIA en caliente, declarado con su prueba de staging:
+#      tax_return_box (el CHECK de origin AMPLÍA con 'justificante'; las 11
+#      filas de hoy son 'calculated' o 'manual' y caben). AÑADE
+#      conta_impuesto_justificante_mirar, conta_impuesto_justificantes_repasar
+#      y conta_impuesto_justificante_apuntar.
 #
-# No toca el camino del pedido ni ninguna tabla. No recalcula nada: las
-# obligaciones cambian cuando alguien las recalcula. Ninguna función que desplegar.
+# No toca el camino del pedido. No escribe ninguna declaración: las escribe
+# Julio al subir los justificantes. Ninguna función que desplegar.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/i01b-349-por-operaciones.sql
-supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
+cuenta: scripts/conta/produccion/cuentas/i01c-justificantes.sql
+supabase/migrations/20261122T0260_i01c_justificantes.sql

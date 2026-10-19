@@ -10,6 +10,8 @@ import { hayBase, rpc } from '@/modules/conta/services/bd'
 import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
 import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
+import type { DatosJustificante, Mirado } from '@/modules/conta/impuestos/justificantes'
+import type { Lectura } from '@/modules/conta/lib/justificanteAeat'
 
 /** Las preguntas del paso «impuestos» del alta que deciden modelos. */
 const CLAVES_DEL_ALTA = ['retiene', 'alquiler', 'retenido70'] as const
@@ -193,6 +195,45 @@ export async function subirJustificante(p: { declaracion: string; cuenta: string
   if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`No se ha podido subir el PDF: ${sub.error.message}`)
   const r = await rpc<{ mensaje: string }>('conta_impuesto_justificante_guardar', { p_return: p.declaracion, p_ruta: ruta, p_huella: huella, p_tamano: bytes.length })
   return r.mensaje
+}
+
+// ── I01c · P1 · Subir justificantes de Hacienda ─────────────────────────────
+
+/** Lee un justificante de la Sede en el navegador (pdfjs + celdasPdf + justificanteAeat). Nunca lanza. */
+export async function leerJustificantePdf(fichero: File): Promise<Lectura> {
+  if (fichero.type && fichero.type !== 'application/pdf' && !/\.pdf$/i.test(fichero.name)) {
+    return { ok: false, motivo: 'No es un PDF: el justificante de la Sede se descarga en PDF.', parcial: {} }
+  }
+  if (fichero.size > 10 * 1024 * 1024) return { ok: false, motivo: 'Pasa de 10 MB: no parece un justificante.', parcial: {} }
+  try {
+    const [{ pdfjs }, { celdasPdf }, { leerJustificante }] = await Promise.all([
+      import('@/modules/conta/plan/leerFicheros'), import('@/modules/conta/lib/celdasPdf'), import('@/modules/conta/lib/justificanteAeat'),
+    ])
+    return leerJustificante(await celdasPdf(await pdfjs(), await fichero.arrayBuffer()))
+  } catch (e) {
+    return { ok: false, motivo: `No se ha podido abrir como PDF (${e instanceof Error ? e.message : String(e)}).`, parcial: {} }
+  }
+}
+
+/** La pantalla de repaso: cada justificante mirado por la base. No escribe nada. */
+export function repasarJustificantes(companyId: string, lista: DatosJustificante[]): Promise<Mirado[]> {
+  return rpc<Mirado[]>('conta_impuesto_justificantes_repasar', { p_company: companyId, p_lista: lista })
+}
+
+/**
+ * Apunta un justificante (crea o completa la declaración, presentada fuera) y
+ * guarda su PDF en la carpeta de la declaración. Devuelve lo que ha pasado, en
+ * palabras; si el PDF no llega, la declaración queda apuntada y se dice.
+ */
+export async function apuntarJustificante(companyId: string, datos: DatosJustificante, fichero: File | null): Promise<string> {
+  const r = await rpc<Mirado & { ok: boolean; mensaje: string; cuenta: string }>('conta_impuesto_justificante_apuntar', { p_company: companyId, p_datos: datos })
+  if (!fichero || !r.declaracion || (r.estado === 'ya_estaba' && !r.falta_pdf)) return r.mensaje
+  try {
+    await subirJustificante({ declaracion: r.declaracion, cuenta: r.cuenta, fichero })
+    return r.mensaje
+  } catch (e) {
+    return `${r.mensaje} El PDF no se ha guardado (${e instanceof Error ? e.message : String(e)}): súbelo desde la lista.`
+  }
 }
 
 // ── P4 · Certificados y accesos ─────────────────────────────────────────────
