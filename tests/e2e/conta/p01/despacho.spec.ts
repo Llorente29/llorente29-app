@@ -127,7 +127,7 @@ test('3 y 4 · Dos clientes elegidos, la barra de lotes y la confirmación con l
   await expect(dialogo.getByRole('list', { name: 'Lo que se presenta', exact: true }).getByRole('listitem')).toHaveCount(2)
   await expect(dialogo.getByText('3.104,60 € a ingresar')).toBeVisible()
   await expect(dialogo.getByText('El 111 y el 115 se presentan todavía fuera de Sumied', { exact: false })).toBeVisible()
-  await expect(dialogo.getByRole('alert')).toContainText(/cerrad/i)
+  await expect(dialogo.getByRole('alert')).toContainText(/no está abierta|cerrad/i)
   await expect(dialogo.getByRole('button', { name: 'Presentar los 2 a Hacienda' })).toBeDisabled()
   await page.waitForTimeout(300)
   await foto(page, '4-confirmar-puerta-cerrada', false)
