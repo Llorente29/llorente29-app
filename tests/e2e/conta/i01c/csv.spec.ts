@@ -17,17 +17,22 @@
 //     no se guarda nada; y un REIMPRESO subido en PDF: se saca su CSV, se trae
 //     el original y se guarda;
 //   · móvil: un 303 que sale a 0,00 € porque compensó con trimestres
-//     anteriores: «0,00 €» y debajo lo compensado, en la ficha y en Presentados.
+//     anteriores: «0,00 €» y debajo lo compensado, en la ficha y en Presentados;
+//   · los ORIGINALES del 111, el 115 y el 202 con la forma que da Hacienda
+//     (medida el 19/10: el valor no va pegado a su rótulo), en los dos lados;
+//   · ordenador: uno que Hacienda da y Sumied aún no lee: lo dice en una frase,
+//     «Escribirlo a mano» y se guarda con ese PDF.
 //
 // Periodos que no pisa nadie: justificantes.spec.ts usa los 303 del 3T y 4T de
 // 2025 y del 1T de 2026, y sus 111, 115 y 202; la e2e del I01b, el 2T y el 3T
 // de 2026. Aquí: el 111 y el 115 del 4T de 2025 (ordenador) y el 303 del 4T de
-// 2024 y el 111 del 2T de 2026 (móvil).
+// 2024 y el 111 del 2T de 2026 (móvil). Los originales y el escrito a mano, de
+// 2023: el 1T y el 1P en ordenador, el 2T y el 2P en móvil, el 4T a mano.
 
 import { test, expect, type Page } from '@playwright/test'
 import { CARRIL, CUENTA_A, STAGING_URL, anonKey, correoDePrueba, entrarComo, pedirSesion, type Sesion } from '../sesion'
 // @ts-expect-error: módulo .mjs de las fixtures, sin tipos
-import { JUSTIFICANTES_A, justificantePdf } from '../../../conta/fixtures/justificantes/pdfJustificante.mjs'
+import { JUSTIFICANTES_A, JUSTIFICANTES_SEDE, justificantePdf } from '../../../conta/fixtures/justificantes/pdfJustificante.mjs'
 
 test.skip(CARRIL === null, 'Traer por CSV necesita su carril: escribe declaraciones de la empresa A.')
 
@@ -37,6 +42,12 @@ const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movi
 
 type J = { modelo: string; ejercicio: number; periodo: string; presentada: string; csv: string; justificante: string; nif?: string; casillas: Record<string, number> }
 const BASE = JUSTIFICANTES_A as Record<string, J>
+const SEDE = JUSTIFICANTES_SEDE as Record<string, J>
+/** Los tres originales, de 2023, en el periodo de cada lado (mismos importes que los de la fixture). */
+const originales = (n: 1 | 2): (J & { sede: true })[] => ['111-1T-2026', '115-1T-2026', '202-1P-2026'].map((k, i) => ({
+  ...SEDE[k], sede: true as const, ejercicio: 2023, periodo: SEDE[k].modelo === '202' ? `${n}P` : `${n}T`,
+  presentada: `20-0${3 + n * 3}-2023 10:0${i}:00`, csv: `PRUEBS${n}${SEDE[k].modelo}SEDE2023`.slice(0, 16), justificante: `99${n}${SEDE[k].modelo}00002023`,
+}))
 const con = (k: string, c: Partial<J>): J => ({ ...BASE[k], ...c })
 
 const ORDENADOR = {
@@ -45,23 +56,27 @@ const ORDENADOR = {
   // El de otra empresa: otro NIF en el impreso.
   otra: con('111-3T-2025', { periodo: '2T', presentada: '20-07-2025 10:05:12', csv: 'PRUEBCOTRAEMPRES', justificante: '9971110000002', nif: 'B12345674' }),
   noEsta: 'PRUEBCNOESTAAQUI',
+  // Uno que Hacienda da y Sumied aún no lee: el 111 sin su impreso (solo la presentación).
+  aMano: { ...con('111-3T-2025', { ejercicio: 2023, periodo: '4T', presentada: '20-01-2024 10:05:12', csv: 'PRUEBC111AMANO23', justificante: '9971110002023' }), sinImpreso: true as const },
+  originales: originales(1),
 }
 const MOVIL = {
   // El 303 que sale a cero porque compensó 647,28 € de trimestres anteriores.
   compensado: con('303-4T-2025', { ejercicio: 2024, periodo: '4T', presentada: '30-01-2025 09:15:07', csv: 'PRUEBD4T2024BBBB', justificante: '9963030000004',
     casillas: { ...BASE['303-4T-2025'].casillas, '46': 647.28, '64': 647.28, '66': 647.28, '110': 2000, '78': 647.28, '87': 1352.72, '69': 0, '71': 0 } }),
   pegado: con('111-3T-2025', { ejercicio: 2026, periodo: '2T', presentada: '20-07-2026 10:05:12', csv: 'PRUEBD111T2CCCCC', justificante: '9961110000002' }),
+  originales: originales(2),
 }
 
 let empresa = ''
 let sesionA: Sesion
 
 /** Deja un PDF inventado donde lo busca el doble de conta-justificante-csv (si ya estaba, igual: es el mismo). */
-async function alDoble(s: Sesion, j: J) {
+async function alDoble(s: Sesion, j: J & { sede?: true; sinImpreso?: true }) {
   const r = await fetch(`${STAGING_URL}/storage/v1/object/conta-documentos/${CUENTA_A.id}/doble-aeat/${j.csv}.pdf`, {
     method: 'POST',
     headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/pdf' },
-    body: Buffer.from(justificantePdf(j)),
+    body: Buffer.from(justificantePdf(j, { sede: j.sede, sinImpreso: j.sinImpreso })),
   })
   if (!r.ok && r.status !== 409 && !/exists|Duplicate/i.test(await r.text())) throw new Error(`No se ha podido dejar el PDF en el doble: HTTP ${r.status}`)
 }
@@ -86,7 +101,7 @@ test.beforeAll(async () => {
   const empresas = await api(sesionA, 'GET', `company?account_id=eq.${CUENTA_A.id}&select=id&order=created_at&limit=1`) as { id: string }[]
   expect(empresas.length, 'la cuenta A del carril no tiene empresa').toBe(1)
   empresa = empresas[0].id
-  for (const j of [ORDENADOR.pegado, ORDENADOR.reimpreso, ORDENADOR.otra, MOVIL.compensado, MOVIL.pegado]) await alDoble(sesionA, j)
+  for (const j of [ORDENADOR.pegado, ORDENADOR.reimpreso, ORDENADOR.otra, ORDENADOR.aMano, MOVIL.compensado, MOVIL.pegado, ...ORDENADOR.originales, ...MOVIL.originales]) await alDoble(sesionA, j)
 })
 
 test.afterAll(async () => {
@@ -237,5 +252,55 @@ test('Móvil: un 303 a cero que compensó con trimestres anteriores', async ({ p
   await expect(fila.getByText('647,28 € compensado con trimestres anteriores')).toBeVisible({ timeout: 30_000 })
   await sinDesbordar(page, 'Presentados con el 303 compensado')
   await foto(page, 'presentados-compensado')
+  expect(errores).toEqual([])
+})
+
+test('Los originales del 111, el 115 y el 202, con la forma que da Hacienda', async ({ page }) => {
+  const errores = vigilar(page)
+  const lista = lado(page) === 'ordenador' ? ORDENADOR.originales : MOVIL.originales
+  await entrarComo(page, CUENTA_A.email)
+  await ir(page, 'impuestos/presentados?fuera=1')
+  const ficha = page.locator('[data-prueba="ficha-traida"]')
+  const titulos: Record<string, string> = { '111': 'Retenciones', '115': 'Alquiler', '202': 'Pago a cuenta de sociedades' }
+  const resultados: Record<string, string> = { '111': '1.702,50 €', '115': '855,00 €', '202': '1.080,00 €' }
+  for (const j of lista) {
+    await traer(page, j.csv)
+    await expect(ficha.getByText(new RegExp(`^${titulos[j.modelo]} · `))).toBeVisible({ timeout: 30_000 })
+    await expect(ficha.locator('[data-prueba="resultado"] .s-cifra')).toHaveText(resultados[j.modelo])
+    await expect(ficha.getByText(`${Object.keys(j.casillas).length} casillas del impreso`)).toBeVisible()
+    if (j.modelo === '111') { await sinDesbordar(page, 'Ficha del original del 111'); await foto(page, 'csv-original-111') }
+    await page.getByRole('button', { name: 'Guardar en Presentados' }).click()
+    await expect(page.getByRole('row', { name: new RegExp(j.csv) }).getByText('fuera · traído de Hacienda por su CSV')).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: 'Ya presenté uno fuera · pegar CSV' }).click()
+  }
+  expect(errores).toEqual([])
+})
+
+test('Ordenador: Hacienda lo da y Sumied aún no lo lee: «Escribirlo a mano» y se guarda con su PDF', async ({ page }) => {
+  test.skip(lado(page) !== 'ordenador', 'El escrito a mano, en ordenador.')
+  const errores = vigilar(page)
+  const j = ORDENADOR.aMano
+  await entrarComo(page, CUENTA_A.email)
+  await ir(page, 'impuestos/presentados?fuera=1')
+  await traer(page, j.csv)
+  // Una frase, sin encadenar motivos.
+  await expect(page.getByRole('alert')).toHaveText('Traído de Hacienda, pero Sumied aún no lee el modelo 111. Puedes escribir las cifras a mano.', { timeout: 30_000 })
+  await foto(page, 'csv-a-mano-frase')
+  await page.getByRole('button', { name: 'Escribirlo a mano' }).click()
+  const dialogo = page.getByRole('dialog', { name: 'Escribirlo a mano' })
+  // Lo que se leyó de la presentación, ya puesto.
+  await expect(dialogo.getByLabel('CSV')).toHaveValue(j.csv)
+  await expect(dialogo.getByLabel('Número de justificante')).toHaveValue(j.justificante)
+  await dialogo.getByLabel('Resultado [30]').fill('1.702,50')
+  await dialogo.getByLabel('Casillas').fill('28 1.702,50\n30 1.702,50')
+  await page.screenshot({ path: `${DIR}/csv-a-mano-${lado(page)}.jpg`, type: 'jpeg', quality: 75 })
+  await dialogo.getByRole('button', { name: 'Guardar en Presentados' }).click()
+  const fila = page.getByRole('row', { name: new RegExp(j.csv) })
+  await expect(fila).toBeVisible({ timeout: 30_000 })
+  // Escrito a mano: con su PDF, y sin la marca de «traído de Hacienda» (las cifras no están comprobadas).
+  await expect(fila.getByRole('button', { name: 'PDF ↗' })).toBeVisible()
+  await expect(fila.getByText('fuera · traído de Hacienda por su CSV')).toHaveCount(0)
+  const guardada = await api(sesionA, 'GET', `tax_return?company_id=eq.${empresa}&aeat_csv=eq.${j.csv}&select=receipt_source,amount`) as { receipt_source: string | null; amount: number }[]
+  expect(guardada.map((x) => [x.receipt_source === 'aeat_csv', Number(x.amount)])).toEqual([[false, 1702.5]])
   expect(errores).toEqual([])
 })

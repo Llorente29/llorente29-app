@@ -13,6 +13,14 @@
 //     su importe («04 158.269,64 05 10,00 06 15.827,03»). Una casilla vacía va
 //     seguida directamente de la siguiente, y no tiene importe.
 //
+// Los ORIGINALES que da Hacienda por su CSV del 111, el 115 y el 202 no ponen
+// el valor pegado a su rótulo (estructura medida el 19/10, run 39296209103:
+// clases y posiciones, sin un valor): «Ejercicio · 2026», o el valor en la línea
+// de debajo; y el 115 numera sus casillas «1»…«5». Si la búsqueda de siempre no
+// los encuentra, se buscan por posición (valorPorRotulo) y las casillas se leen
+// por debajo de esa cabecera (filasVisuales). El 303, que sí los pone seguidos,
+// va por el camino de siempre.
+//
 // Lo que no se lee no se rellena: falta y se dice. El resultado sale de la
 // casilla del modelo (303 → [71], 111 → [30], 115 → [05]). En el 202, de la
 // línea fija de la primera página «NRC: … IMPORTE: n,nn» (lo ingresado; Julio,
@@ -74,6 +82,8 @@ const ENTERAS: Record<string, ReadonlySet<string>> = {
 const sinAcentos = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
 const IMPORTE = /^-?\d{1,3}(?:\.\d{3})*,\d{2}$|^-?\d+,\d{2}$/
 const CASILLA = /^\[?(\d{2,3})\]?$/
+const CASILLA_UNA_CIFRA = /^\[?(\d{1,3})\]?$/
+const PERIODO = /^([1-4]T|0[1-9]|1[0-2]|0A|[1-3]P)$/i
 const NIF = /\b([ABCDEFGHJNPQRSUVW]\d{7}[0-9A-J]|\d{8}[A-Z]|[XYZ]\d{7}[A-Z])\b/
 
 /** «1.234,56» → 1234.56; «-2.134,18» → −2134.18. */
@@ -106,16 +116,18 @@ export function lineas(p: PaginaPdf): Linea[] {
  * Las casillas de las líneas del impreso: un número de 2 o 3 cifras seguido de
  * un importe es esa casilla con ese importe. Un número seguido de otro número
  * de casilla es una casilla vacía. Las de personas aceptan un entero.
+ * unaCifra: el original del 115 numera sus casillas «1»…«5» (sin el cero): se
+ * aceptan y se guardan como «01»…«05».
  */
-export function casillasDe(ls: Linea[], modelo: string, avisos: string[]): Record<string, number> {
+export function casillasDe(ls: Linea[], modelo: string, avisos: string[], unaCifra = false): Record<string, number> {
   const enteras = ENTERAS[modelo] ?? new Set<string>()
   const out: Record<string, number> = {}
   for (const l of ls) {
     const t = l.tokens
     for (let i = 0; i < t.length - 1; i++) {
-      const m = CASILLA.exec(t[i].texto)
+      const m = (unaCifra ? CASILLA_UNA_CIFRA : CASILLA).exec(t[i].texto)
       if (!m) continue
-      const caja = m[1]
+      const caja = m[1].padStart(2, '0')
       const sig = t[i + 1].texto
       let valor: number | null = null
       if (IMPORTE.test(sig)) valor = importeDe(sig)
@@ -140,6 +152,48 @@ function esCasillaSiguiente(caja: string, sig: string, despues: string | undefin
   if (n <= Number(caja)) return false
   const d = despues ? CASILLA.exec(despues) : null
   return !despues || (d !== null && n < Number(d[1]))
+}
+
+/**
+ * El valor de un rótulo del impreso por su POSICIÓN, como vienen los
+ * originales del 111, el 115 y el 202 (estructura medida el 19/10, run
+ * 39296209103: clases y posiciones, sin un valor, CSV ni NIF):
+ *   · 115 y 202: «Ejercicio · 2026» en la misma línea, con un signo en medio;
+ *   · 111: «Ejercicio · Período ·» en una línea y «2026 1T» en la de debajo,
+ *     a 4 puntos, cada valor a la derecha de su rótulo.
+ * Devuelve el primero que casa, con la página y la altura del rótulo.
+ */
+export function valorPorRotulo(paginas: Linea[][], rotulo: RegExp, valor: RegExp): { texto: string; pagina: number; y: number } | null {
+  const limpio = (t: string) => t.replace(/^[[(«"']+|[\])».,;:"']+$/g, '')
+  const esSigno = (t: string) => limpio(t) === '' || /^[·.…:=\-–—/]+$/.test(t)
+  for (const [p, ls] of paginas.entries()) {
+    for (const [i, l] of ls.entries()) {
+      for (const [k, t] of l.tokens.entries()) {
+        if (!rotulo.test(sinAcentos(t.texto))) continue
+        let j = k + 1
+        while (j < l.tokens.length && esSigno(l.tokens[j].texto)) j++
+        if (j < l.tokens.length && valor.test(limpio(l.tokens[j].texto))) return { texto: limpio(l.tokens[j].texto), pagina: p, y: l.y }
+        for (let d = i + 1; d < ls.length && l.y - ls[d].y <= 8; d++) {
+          const c = ls[d].tokens.filter((x) => x.x >= t.x - 20 && valor.test(limpio(x.texto))).sort((a, b) => a.x - b.x)[0]
+          if (c) return { texto: limpio(c.texto), pagina: p, y: l.y }
+        }
+      }
+    }
+  }
+  return null
+}
+
+/** Las líneas a 4 puntos o menos de la primera de su grupo, juntas en una fila (el 115 pone el importe 3 puntos por debajo de su casilla). */
+export function filasVisuales(ls: Linea[]): Linea[] {
+  const out: Linea[] = []
+  for (const l of ls) {
+    const f = out[out.length - 1]
+    if (f && f.y - l.y <= 4) {
+      f.tokens = [...f.tokens, ...l.tokens].sort((a, b) => a.x - b.x)
+      f.texto = f.tokens.map((t) => t.texto).join(' ')
+    } else out.push({ ...l, tokens: [...l.tokens] })
+  }
+  return out
 }
 
 /** El resultado del 202: la última casilla con importe en la línea «A ingresar» (o «Resultado»). */
@@ -171,7 +225,8 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
   const primera = porPagina[0] ?? []
   // Las páginas del impreso pueden ser imagen (el 202): entonces lo que haya, de la primera.
   const impresoImagen = porPagina.length > 1 && porPagina.slice(1).every((p) => p.length === 0)
-  const resto = porPagina.length > 1 && !impresoImagen ? porPagina.slice(1).flat() : primera
+  const restoPaginas = porPagina.length > 1 && !impresoImagen ? porPagina.slice(1) : [primera]
+  const resto = restoPaginas.flat()
   const texto1 = sinAcentos(primera.map((l) => l.texto).join('\n'))
   const textoTodo = sinAcentos(porPagina.flat().map((l) => l.texto).join('\n'))
   const textoResto = sinAcentos(resto.map((l) => l.texto).join('\n'))
@@ -188,14 +243,28 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
   const exp = /Expediente(?:\s*\/\s*Referencia)?(?:\s*\([^)]*\))?:?\s*([A-Z0-9][A-Z0-9-]{5,})/i.exec(texto1)?.[1]
   parcial.expediente = exp ?? null
   const pres = /Presentador:?\s*([A-Z0-9]{9})\s+([^\n]+)/i.exec(texto1)
-  parcial.presentador = pres ? { nif: pres[1].toUpperCase(), nombre: pres[2].trim().replace(/\s+/g, ' ') } : null
+  // En el original del 111, el 115 y el 202 el nombre va en la línea de debajo, tras su rótulo.
+  parcial.presentador = pres
+    ? { nif: pres[1].toUpperCase(), nombre: pres[2].replace(/^\s*Apellidos y nombre\s*(?:\/|o)?\s*Razon social:?\s*/i, '').trim().replace(/\s+/g, ' ') }
+    : null
   // El NIF del declarante: del impreso, y nunca de la línea del presentador (la gestoría).
   const nif = NIF.exec(resto.map((l) => sinAcentos(l.texto)).filter((t) => !/presentador|colaborador|representante/i.test(t)).join('\n')
     .replace(/(?<=[A-Z0-9])[-.](?=[A-Z0-9])/g, ''))?.[1]
   if (nif) parcial.nif = nif
-  const ej = /Ejercicio:?\s*(\d{4})\b/i.exec(textoResto)?.[1] ?? /Ejercicio:?\s*(\d{4})\b/i.exec(textoTodo)?.[1]
+  let ej = /Ejercicio:?\s*(\d{4})\b/i.exec(textoResto)?.[1] ?? /Ejercicio:?\s*(\d{4})\b/i.exec(textoTodo)?.[1]
+  let per = /Periodo:?\s*([1-4]T|0[1-9]|1[0-2]|0A|[1-3]P)\b/i.exec(textoResto)?.[1] ?? /Periodo:?\s*([1-4]T|0[1-9]|1[0-2]|0A|[1-3]P)\b/i.exec(textoTodo)?.[1]
+  // Si no van seguidos (los originales del 111, el 115 y el 202), por su posición. Y entonces
+  // las casillas se leen por debajo de esa cabecera (encima hay una tira de cifras).
+  let cabecera: { pagina: number; y: number } | null = null
+  if (!ej) {
+    const v = valorPorRotulo(restoPaginas, /^ejercicio:?$/i, /^\d{4}$/)
+    if (v) { ej = v.texto; cabecera = v }
+  }
+  if (!per) {
+    const v = valorPorRotulo(restoPaginas, /^periodo:?$/i, PERIODO)
+    if (v) { per = v.texto; cabecera = cabecera ?? v }
+  }
   if (ej) parcial.ejercicio = Number(ej)
-  const per = /Periodo:?\s*([1-4]T|0[1-9]|1[0-2]|0A|[1-3]P)\b/i.exec(textoResto)?.[1] ?? /Periodo:?\s*([1-4]T|0[1-9]|1[0-2]|0A|[1-3]P)\b/i.exec(textoTodo)?.[1]
   if (per) parcial.periodo = per.toUpperCase()
   const nrc = importeNrc(primera)
   if (nrc !== null) parcial.resultado = { casilla: null, importe: nrc }
@@ -224,7 +293,12 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
   }
 
   const es202 = parcial.modelo === '202'
-  const casillas = impresoImagen ? {} : casillasDe(resto, parcial.modelo!, avisos)
+  const debajo = cabecera
+    ? restoPaginas.flatMap((p, i) => (i < cabecera!.pagina ? [] : i === cabecera!.pagina ? p.filter((l) => l.y < cabecera!.y) : p))
+    : null
+  const casillas = impresoImagen ? {}
+    : debajo ? casillasDe(filasVisuales(debajo), parcial.modelo!, avisos, parcial.modelo === '115')
+    : casillasDe(resto, parcial.modelo!, avisos)
   // El 202 se guarda con su resultado aunque el impreso sea imagen; los demás necesitan sus casillas.
   if (!Object.keys(casillas).length && !(es202 && nrc !== null)) {
     return { ok: false, causa: 'sin_casillas', parcial: { ...parcial, casillas }, motivo: 'Se lee la presentación, pero no las casillas del impreso: escríbelas a mano.' }

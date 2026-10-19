@@ -15,7 +15,7 @@
 import { useRef, useState } from 'react'
 import { Boton, Campo, Chip, Dialogo, Fecha, Selector, Tarjeta, Texto, textoDeImporte } from '@/modules/conta/diseno'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import type { Lectura } from '@/modules/conta/lib/justificanteAeat'
+import type { Justificante, Lectura } from '@/modules/conta/lib/justificanteAeat'
 import { apuntarJustificante, leerJustificantePdf, repasarJustificantes, traerJustificanteCsv } from '@/modules/conta/services/impuestosService'
 import {
   casillaResultado, casillasEscritas, chipDe, datosDe, fraseDeHacienda, fraseNoSeLee, lineaDe, pideDevolucion, resumenGuardado, tituloDe, type DatosJustificante, type Mirado,
@@ -141,7 +141,8 @@ export function SubirJustificantes({ companyId, alCerrar, alGuardar }: { company
         </>
       )}
       {aMano && (
-        <DialogoAMano f={aMano} alCerrar={() => setAMano(null)}
+        <DialogoAMano nombre={aMano.fichero.name} leido={aMano.lectura && !aMano.lectura.ok ? aMano.lectura.parcial : aMano.datos} noSeLeyo={!!aMano.lectura && !aMano.lectura.ok}
+          alCerrar={() => setAMano(null)}
           alGuardar={(datos) => { const k = aMano.clave; setAMano(null); cambiar(k, { datos }, true) }} />
       )}
     </Tarjeta>
@@ -215,8 +216,15 @@ function FilaRepaso({ f, cambiar, aMano, quitar }: { f: Fila; cambiar: (k: strin
 const MODELOS = [{ valor: '303', texto: 'IVA (303)' }, { valor: '111', texto: 'Retenciones (111)' }, { valor: '115', texto: 'Alquiler (115)' }, { valor: '202', texto: 'Pago a cuenta de sociedades (202)' }]
 const PERIODOS: Record<string, string[]> = { '303': ['1T', '2T', '3T', '4T'], '111': ['1T', '2T', '3T', '4T'], '115': ['1T', '2T', '3T', '4T'], '202': ['1P', '2P', '3P'] }
 
-function DialogoAMano({ f, alCerrar, alGuardar }: { f: Fila; alCerrar: () => void; alGuardar: (d: DatosJustificante) => void }) {
-  const p = f.lectura && !f.lectura.ok ? f.lectura.parcial : f.datos ?? {}
+/**
+ * «Escribirlo a mano»: los datos del justificante copiados a mano, para un PDF
+ * que Sumied no ha podido leer. Lo usan «Subir justificantes» y «Pegar CSV»
+ * (TraerPorCsv): nombre es el del PDF, leido lo que se leyó (lo prerrellena).
+ */
+export function DialogoAMano({ nombre, leido: lo, noSeLeyo, accion = 'Repasar', alCerrar, alGuardar }: {
+  nombre: string; leido: Partial<Justificante> | DatosJustificante | null; noSeLeyo: boolean; accion?: string; alCerrar: () => void; alGuardar: (d: DatosJustificante) => void
+}) {
+  const p = lo ?? {}
   const [modelo, setModelo] = useState(p.modelo && PERIODOS[p.modelo] ? p.modelo : '303')
   const [ejercicio, setEjercicio] = useState(String(p.ejercicio ?? new Date().getFullYear()))
   const [periodo, setPeriodo] = useState(p.periodo ?? '1T')
@@ -227,7 +235,7 @@ function DialogoAMano({ f, alCerrar, alGuardar }: { f: Fila; alCerrar: () => voi
   const leido = typeof p.resultado === 'number' ? p.resultado : p.resultado?.importe ?? null
   const [resultado, setResultado] = useState(leido !== null ? textoDeImporte(leido) : '')
   const [casillas, setCasillas] = useState('')
-  const [motivo, setMotivo] = useState(f.lectura && !f.lectura.ok ? 'El PDF no se pudo leer' : 'Escrito a mano del justificante')
+  const [motivo, setMotivo] = useState(noSeLeyo ? 'El PDF no se pudo leer' : 'Escrito a mano del justificante')
   const [fallo, setFallo] = useState<string | null>(null)
   const periodos = PERIODOS[modelo]
   const guardar = () => {
@@ -246,8 +254,8 @@ function DialogoAMano({ f, alCerrar, alGuardar }: { f: Fila; alCerrar: () => voi
   }
   return (
     <Dialogo titulo="Escribirlo a mano" alCerrar={alCerrar}
-      explicacion={`«${f.fichero.name}»: copia los datos del justificante. Queda apuntado que se escribió a mano, con tu nombre y el motivo.`}
-      acciones={<><Boton onClick={alCerrar}>Cancelar</Boton><Boton variante="principal" onClick={guardar}>Repasar</Boton></>}>
+      explicacion={`«${nombre}»: copia los datos del justificante. Queda apuntado que se escribió a mano, con tu nombre y el motivo.`}
+      acciones={<><Boton onClick={alCerrar}>Cancelar</Boton><Boton variante="principal" onClick={guardar}>{accion}</Boton></>}>
       {fallo && <p className="s-impuestos-fallo" role="alert">{fallo}</p>}
       <div className="s-justificantes-mano-grid">
         <Campo etiqueta="Impuesto">{(q) => <Selector {...q} valor={modelo} alCambiar={(v) => { setModelo(v); setPeriodo(PERIODOS[v][0]) }} opciones={MODELOS} />}</Campo>

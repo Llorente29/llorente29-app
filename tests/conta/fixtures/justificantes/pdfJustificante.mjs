@@ -95,10 +95,14 @@ const TITULOS = {
  *   rótulos y el impreso, dibujo (aquí, rayas); como texto, solo los valores,
  *   sin «Modelo», «Ejercicio», «Período» ni números de casilla. El CSV se
  *   conserva: en la primera página y al pie de la segunda.
+ * opciones.sede: el ORIGINAL que da Hacienda por su CSV del 111, el 115 y el
+ *   202, con la estructura medida el 19/10 (run 39296209103: rótulos, orden y
+ *   posiciones, sin un valor; ver sedePdf).
  * La línea del NRC va cuando hay algo que ingresar, con un NRC INVENTADO.
  */
 export function justificantePdf(j, opciones = {}) {
   if (opciones.reimpreso) return reimpresoPdf(j)
+  if (opciones.sede) return sedePdf(j)
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const [fecha, hora] = j.presentada.split(' ')
   // ── Página 1: la presentación ──
@@ -193,6 +197,131 @@ function reimpresoPdf(j) {
   return doc.output('arraybuffer')
 }
 
+/**
+ * El original de Hacienda del 111, el 115 y el 202, como lo da la consulta por
+ * CSV. La estructura es la medida el 19/10 (run 39296209103): de cada línea, la
+ * clase de cada palabra y su posición, nunca su valor. Las posiciones de aquí
+ * son esas (x e y del PDF, con el origen abajo); los valores, los inventados de
+ * la empresa A. Lo que el lector tiene que coger:
+ *   · página 1: la presentación (igual en los tres) y, en el 202, la línea
+ *     «NRC: … IMPORTE: …», lo ingresado;
+ *   · 111: «Ejercicio · Período ·» en una línea y «2025 3T» 4 puntos más abajo;
+ *     cada fila, «01 3 02 14.250,00 03 1.567,50»; el total, «03 + 06 + … = 28
+ *     importe»; el resultado, «( 28 - 29 ) 30 importe»;
+ *   · 115: «Ejercicio · 2025» en la misma línea; las casillas, con UNA cifra
+ *     («1»…«5») en una columna y su importe en otra, a veces 3 puntos más abajo;
+ *   · 202: «Ejercicio · 2025» en la misma línea y «01 importe» por fila.
+ * Y las trampas de verdad: encima de la cabecera, una tira de cifras sueltas
+ * («10 1 2 3…»); el nombre del presentador, en la línea de debajo de su NIF.
+ */
+function sedePdf(j) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const t = (texto, x, y) => doc.text(String(texto), x, 842 - y)
+  const [fecha, hora] = j.presentada.split(' ')
+  const v = (caja) => (j.casillas[caja] === undefined ? null : es(j.casillas[caja]))
+  const pie = () => {
+    doc.setFontSize(7)
+    t('La autenticidad de este documento puede ser comprobada mediante el Código Seguro', 163, 20)
+    t(String(doc.getNumberOfPages()), 562, 16)
+    t(`de Verificación ${j.csv} en https://sede.agenciatributaria.gob.es`, 176, 10)
+  }
+  // ── Página 1: la presentación ──
+  doc.setFontSize(11)
+  t('Justificante de la presentación de la declaración', 159, 771)
+  t(`Modelo ${j.modelo}`, 304, 731)
+  t('Registro', 42, 701)
+  t('Presentación realizada el:', 62, 683); t(`${fecha} a las ${hora}`, 185, 683)
+  t('Expediente/Referencia (nº registro asignado):', 62, 663); t(`2026PRUEBA${j.modelo}${j.periodo}`, 278, 663)
+  t('Código Seguro de Verificación:', 62, 643); t(j.csv, 211, 643)
+  t('Número de justificante:', 62, 623); t(j.justificante, 173, 623)
+  t('Forma de', 62, 603); t('presentación por Internet', 134, 603)
+  t('Presentador', 42, 571)
+  t('NIF Presentador:', 62, 553); t('00000000T', 143, 553)
+  t('Apellidos y nombre / Razón social:', 62, 533); t('GESTORIA INVENTADA DE PRUEBA', 229, 533)
+  t('En calidad de:', 62, 513); t('Colaborador', 130, 513)
+  if (j.modelo === '202') {
+    t('Ingresar', 42, 488)
+    t(`NRC: ${NRC_INVENTADO} IMPORTE: ${es(j.casillas['03'] ?? 0)}`, 42, 475)
+  } else t('Domiciliación del importe a ingresar', 42, 488)
+  pie()
+
+  // ── Página 2: el impreso ──
+  doc.addPage()
+  doc.setFontSize(8)
+  t(`Modelo ${j.modelo}`, j.modelo === '111' ? 532 : j.modelo === '115' ? 522 : 533, 786)
+  t('Agencia Tributaria', 109, 795)
+  // La trampa: la tira de cifras sueltas de la cabecera (una casilla «10» seguida de «1» no es nada).
+  t('Código de barras', 28, 781); t('10', 73, 781); [1, 2, 3, 4, 5, 6, 7].forEach((n, i) => t(n, 106 + i * 4, 781))
+  if (j.modelo === '111') {
+    t('1', 363, 726); t('Ejercicio', 373, 726); t('.', 407, 726); t('Período .', 488, 726)
+    t(j.ejercicio, 423, 722); t(j.periodo, 540, 722)
+    t('Devengo', 353, 714)
+    t('Declarante', 35, 660)
+    t(`Número de justificante: ${j.justificante}`, 372, 657)
+    t('NIF', 50, 637); t('Apellidos y nombre o razón social', 165, 637)
+    t(j.nif, 67, 627); t(j.nombre, 169, 627)
+    const filas = [['Rendimientos dinerarios .', ['01', '02', '03'], 581], ['Rendimientos en especie .', ['04', '05', '06'], 558],
+      ['Actividades dinerarios .', ['07', '08', '09'], 522], ['Actividades en especie .', ['10', '11', '12'], 498],
+      ['Premios dinerarios .', ['13', '14', '15'], 450], ['Premios en especie .', ['16', '17', '18'], 426],
+      ['Ganancias dinerarias .', ['19', '20', '21'], 378], ['Ganancias en especie .', ['22', '23', '24'], 354],
+      ['Contraprestaciones dinerarias o en especie .', ['25', '26', '27'], 307]]
+    for (const [rotulo, [a, b, c], y] of filas) {
+      t('Nº de perceptores / Importe de las percepciones / Importe de las retenciones', 280, y + 12)
+      t(rotulo, 65, y)
+      t(a, 264, y); if (j.casillas[a] !== undefined) t(j.casillas[a], 326, y)
+      t(b, 347, y); if (v(b)) t(v(b), 405, y)
+      t(c, 461, y); if (v(c)) t(v(c), 533, y)
+    }
+    t('Total liquidación:', 50, 276)
+    t('Suma de retenciones e ingresos a cuenta :', 130, 271)
+    t('03 + 06 + 09 + 12 + 15 + 18 + 21 + 24 + 27 = 28', 259, 271); if (v('28')) t(v('28'), 534, 271)
+    t('A deducir (exclusivamente en caso de autoliquidación complementaria) :', 121, 259)
+    t('Resultados a ingresar de anteriores autoliquidaciones por el mismo concepto, ejercicio y periodo :', 130, 247); t('29', 461, 247)
+    t('Resultado a ingresar ( 28 - 29 ) :', 130, 223); t('30', 461, 223); if (v('30')) t(v('30'), 535, 223)
+    t('Importe del ingreso ( I )', 63, 163); if (v('30')) t(v('30'), 259, 163)
+    t('Casilla 30 :', 63, 154)
+  } else if (j.modelo === '115') {
+    t('Ejercicio .', 411, 668); t(j.ejercicio, 495, 668)
+    t('Período .', 411, 641); t(j.periodo, 491, 641)
+    t('Devengo 2', 384, 637)
+    t(`Número justificante: ${j.justificante}`, 391, 590)
+    t('Identificación (1) NIF', 34, 547); t('Apellidos y nombre o razón social', 177, 547)
+    t(j.nif, 51, 533); t(j.nombre, 180, 533)
+    t('Retenciones e ingresos a cuenta', 50, 445)
+    t('Nº de perceptores .', 58, 425); t('1', 408, 425); if (j.casillas['01'] !== undefined) t(j.casillas['01'], 531, 425)
+    t('2', 407, 398); if (v('02')) t(v('02'), 501, 398)
+    t('Base de las retenciones e ingresos a cuenta .', 58, 395)
+    t('Retenciones e ingresos a cuenta .', 58, 370); t('3', 408, 370)
+    if (v('03')) t(v('03'), 501, 367)
+    t('Liquidación 3 A deducir (exclusivamente en caso de declaración complementaria):', 36, 348)
+    t('4', 406, 341)
+    t('Resultados a ingresar de la anterior o anteriores declaraciones del mismo ejercicio y período', 58, 338)
+    t('Resultado a ingresar ( 3 - 4 ) .', 58, 313); t('5', 407, 313); if (v('05')) t(v('05'), 501, 313)
+    t('Importe: €', 322, 168); if (v('05')) t(v('05'), 502, 168)
+  } else {
+    t('Número justificante:', 348, 725); t(j.justificante, 420, 725)
+    t('Identificación 1', 42, 712); t('Devengo 2', 359, 712)
+    t('NIF', 34, 696); t('Apellidos y nombre o razón social', 141, 696); t('Ejercicio .', 361, 696); t(j.ejercicio, 488, 696)
+    t(j.nif, 33, 684); t(j.nombre, 139, 684)
+    t('Período .', 361, 679); t(j.periodo, 520, 679)
+    t('Tipo: 1P, 2P y anual', 350, 668)
+    t('Liquidación 3', 43, 322)
+    t('Base del pago fraccionado .', 37, 266); t('01', 465, 266); if (v('01')) t(v('01'), 529, 266)
+    t('Resultado de la declaración anterior (complementaria) .', 37, 254); t('02', 465, 254)
+    t('A ingresar .', 37, 242); t('03', 465, 242); if (v('03')) t(v('03'), 537, 242)
+  }
+  pie()
+  if (j.modelo === '202') {
+    doc.addPage()
+    doc.setFontSize(8)
+    t('Bonificaciones del periodo total .', 35, 522); t('20', 464, 522)
+    t('Retenciones e ingresos a cuenta del periodo total .', 35, 510); t('21', 464, 510)
+    t('Pagos fraccionados anteriores del periodo en curso total .', 35, 487); t('22', 464, 487)
+    pie()
+  }
+  return doc.output('arraybuffer')
+}
+
 /** Un PDF que no es un justificante: una factura cualquiera. */
 export function otroDocumentoPdf() {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
@@ -229,4 +358,18 @@ export const JUSTIFICANTES_A = {
     casillas: { '01': 1, '02': 4500, '03': 855, '05': 855 } },
   '202-3P-2025': { ...EMPRESA_A, modelo: '202', ejercicio: 2025, periodo: '3P', presentada: '19-12-2025 10:40:00', csv: 'PRUEBA2023PEEEEE', justificante: '9992020000003',
     casillas: { '01': 12000, '02': 18, '03': 2160, '04': 1200, '05': 960 } },
+}
+
+/**
+ * Los originales de Hacienda inventados del 111, el 115 y el 202 (opciones.sede),
+ * de la empresa A. El 202 con la numeración del original: [01] base, [03] a
+ * ingresar (lo de la línea del NRC).
+ */
+export const JUSTIFICANTES_SEDE = {
+  '111-1T-2026': { ...EMPRESA_A, modelo: '111', ejercicio: 2026, periodo: '1T', presentada: '20-04-2026 10:05:12', csv: 'PRUEBASEDE111AAA', justificante: '9991110000101',
+    casillas: { '01': 3, '02': 14250, '03': 1567.5, '07': 1, '08': 900, '09': 135, '28': 1702.5, '30': 1702.5 } },
+  '115-1T-2026': { ...EMPRESA_A, modelo: '115', ejercicio: 2026, periodo: '1T', presentada: '20-04-2026 10:06:30', csv: 'PRUEBASEDE115BBB', justificante: '9991150000101',
+    casillas: { '01': 1, '02': 4500, '03': 855, '05': 855 } },
+  '202-1P-2026': { ...EMPRESA_A, modelo: '202', ejercicio: 2026, periodo: '1P', presentada: '20-04-2026 10:40:00', csv: 'PRUEBASEDE202CCC', justificante: '9992020000101',
+    casillas: { '01': 6000, '03': 1080 } },
 }

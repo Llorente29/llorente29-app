@@ -10,20 +10,24 @@
 // Hacienda no lo tiene, no responde, es de otra empresa, Sumied aún no lee ese
 // modelo) tampoco, y se dice en una frase (justificantes.ts).
 // El formato se comprueba aquí ANTES de llamar: la AEAT tiene un tope diario
-// de intentos fallidos.
+// de intentos fallidos. Si Hacienda lo da y Sumied aún no lo lee, «Escribirlo a
+// mano» (el mismo diálogo de «Subir justificantes») lo guarda con ese PDF.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
 import { csvValido, limpiarCsv, tituloJustificante, type Justificante } from '@/modules/conta/lib/justificanteAeat'
 import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { apuntarJustificante, leerJustificantePdf, repasarJustificantes, traerJustificanteCsv } from '@/modules/conta/services/impuestosService'
-import { datosDe, fraseDeHacienda, fraseNoSeLee, motivoEnPalabras, pideDevolucion, resultadoEnPalabras, type Mirado } from './justificantes'
+import { datosDe, fraseDeHacienda, fraseNoSeLee, motivoEnPalabras, pideDevolucion, resultadoEnPalabras, type DatosJustificante, type Mirado } from './justificantes'
+import { DialogoAMano } from './SubirJustificantes'
 
 type Paso =
   | { que: 'pegar' }
   | { que: 'trayendo' }
   | { que: 'elegir'; candidatos: string[] }
-  | { que: 'error'; mensaje: string }
+  // Con pdf: Hacienda lo dio (o se subió) pero Sumied no lo lee: se puede escribir a mano y guardar con ese PDF.
+  | { que: 'error'; mensaje: string; pdf?: Blob; nombre?: string; leido?: Partial<Justificante> }
+  | { que: 'apuntando' }
   | { que: 'ficha'; j: Justificante; pdf: Blob; mirado: Mirado }
   | { que: 'guardando'; j: Justificante; pdf: Blob; mirado: Mirado }
 
@@ -44,7 +48,7 @@ export function TraerPorCsv({ companyId, alCerrar, alGuardar }: {
     const t = await traerJustificanteCsv(companyId, c)
     if (!t.ok) { setPaso({ que: 'error', mensaje: fraseDeHacienda(t) }); return }
     const l = await leerJustificantePdf(t.pdf, `${c}.pdf`)
-    if (!l.ok) { setPaso({ que: 'error', mensaje: fraseNoSeLee(l, true) }); return }
+    if (!l.ok) { setPaso({ que: 'error', mensaje: fraseNoSeLee(l, true), pdf: t.pdf, nombre: `${c}.pdf`, leido: { ...l.parcial, csv: l.parcial.csv ?? c } }); return }
     const [m] = await repasarJustificantes(companyId, [datosDe(l.datos, null, false, true)]).catch((e: unknown) => [{ i: 0, estado: 'error', motivo: e instanceof Error ? e.message : String(e), declaracion: null } as Mirado])
     if (m.estado === 'error') { setPaso({ que: 'error', mensaje: motivoEnPalabras(m.motivo) }); return }
     setPaso({ que: 'ficha', j: l.datos, pdf: t.pdf, mirado: m })
@@ -68,7 +72,22 @@ export function TraerPorCsv({ companyId, alCerrar, alGuardar }: {
     }
   }
 
-  const ocupado = paso.que === 'trayendo' || paso.que === 'guardando'
+  // «Escribirlo a mano»: se repasa con la base (otra empresa, ya estaba) y se guarda con el PDF de Hacienda.
+  // Sin la marca de «traído de Hacienda»: las cifras las ha escrito una persona, no están comprobadas.
+  const [aMano, setAMano] = useState<{ pdf: Blob; nombre: string; leido: Partial<Justificante> } | null>(null)
+  const guardarAMano = async (d: DatosJustificante, pdf: Blob) => {
+    setAMano(null)
+    setPaso({ que: 'apuntando' })
+    try {
+      const [m] = await repasarJustificantes(companyId, [d])
+      if (m?.estado === 'error') { setPaso({ que: 'error', mensaje: motivoEnPalabras(m.motivo) }); return }
+      alGuardar(await apuntarJustificante(companyId, d, pdf), true)
+    } catch (e) {
+      setPaso({ que: 'error', mensaje: `No se ha guardado: ${e instanceof Error ? e.message : String(e)}` })
+    }
+  }
+
+  const ocupado = paso.que === 'trayendo' || paso.que === 'guardando' || paso.que === 'apuntando'
   return (
     <Tarjeta titulo="Ya lo presenté fuera" apoyo="Pega el CSV del justificante y Sumied lo trae de Hacienda: el original, con todas sus casillas. Lo revisas y lo guardas."
       accion={<Boton variante="enlace" onClick={alCerrar}>Cerrar</Boton>}>
@@ -93,7 +112,17 @@ export function TraerPorCsv({ companyId, alCerrar, alGuardar }: {
       {paso.que === 'trayendo' && (
         <p className="s-csv-trayendo" role="status" aria-live="polite"><span className="s-csv-rueda" aria-hidden="true" />Trayendo el justificante de Hacienda…</p>
       )}
+      {paso.que === 'apuntando' && (
+        <p className="s-csv-trayendo" role="status" aria-live="polite"><span className="s-csv-rueda" aria-hidden="true" />Guardando en Presentados…</p>
+      )}
       {paso.que === 'error' && <p className="s-impuestos-fallo s-csv-error" role="alert">{paso.mensaje}</p>}
+      {paso.que === 'error' && paso.pdf && (
+        <Boton variante="enlace" onClick={() => setAMano({ pdf: paso.pdf!, nombre: paso.nombre ?? 'justificante.pdf', leido: paso.leido ?? {} })}>Escribirlo a mano</Boton>
+      )}
+      {aMano && (
+        <DialogoAMano nombre={aMano.nombre} leido={aMano.leido} noSeLeyo accion="Guardar en Presentados" alCerrar={() => setAMano(null)}
+          alGuardar={(d) => void guardarAMano(d, aMano.pdf)} />
+      )}
       {paso.que === 'elegir' && (
         <div className="s-csv-elegir" role="group" aria-label="Elige el CSV">
           <p className="s-apoyo">En ese PDF hay {paso.candidatos.length} códigos que pueden ser el CSV. ¿Cuál es el de arriba en la primera página?</p>
