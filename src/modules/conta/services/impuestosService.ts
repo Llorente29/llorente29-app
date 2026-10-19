@@ -209,9 +209,9 @@ export async function subirJustificante(p: { declaracion: string; cuenta: string
 export async function leerJustificantePdf(fichero: File | Blob, nombre = 'el PDF'): Promise<Lectura & { csvVisto?: { csv: string | null; candidatos: string[] } }> {
   const n = fichero instanceof File ? fichero.name : nombre
   if (fichero.type && fichero.type !== 'application/pdf' && !/\.pdf$/i.test(n)) {
-    return { ok: false, motivo: 'No es un PDF: el justificante de la Sede se descarga en PDF.', parcial: {} }
+    return { ok: false, causa: 'no_pdf', motivo: 'No es un PDF: el justificante de la Sede se descarga en PDF.', parcial: {} }
   }
-  if (fichero.size > 10 * 1024 * 1024) return { ok: false, motivo: 'Pasa de 10 MB: no parece un justificante.', parcial: {} }
+  if (fichero.size > 10 * 1024 * 1024) return { ok: false, causa: 'no_pdf', motivo: 'Pasa de 10 MB: no parece un justificante.', parcial: {} }
   try {
     const [{ pdfjs }, { celdasPdf }, { leerJustificante, csvDelPdf }] = await Promise.all([
       import('@/modules/conta/plan/leerFicheros'), import('@/modules/conta/lib/celdasPdf'), import('@/modules/conta/lib/justificanteAeat'),
@@ -219,7 +219,7 @@ export async function leerJustificantePdf(fichero: File | Blob, nombre = 'el PDF
     const paginas = await celdasPdf(await pdfjs(), await fichero.arrayBuffer())
     return { ...leerJustificante(paginas), csvVisto: csvDelPdf(paginas) }
   } catch (e) {
-    return { ok: false, motivo: `No se ha podido abrir como PDF (${e instanceof Error ? e.message : String(e)}).`, parcial: {} }
+    return { ok: false, causa: 'no_pdf', motivo: `No se ha podido abrir como PDF (${e instanceof Error ? e.message : String(e)}).`, parcial: {} }
   }
 }
 

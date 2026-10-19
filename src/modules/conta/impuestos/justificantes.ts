@@ -5,7 +5,7 @@
 // escritas a mano cuando el PDF no se pudo leer.
 
 import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
-import { MODELOS_JUSTIFICANTE, tituloJustificante, type Justificante } from '@/modules/conta/lib/justificanteAeat'
+import { MODELOS_JUSTIFICANTE, tituloJustificante, type CausaLectura, type Justificante } from '@/modules/conta/lib/justificanteAeat'
 import type { TonoChip } from '@/modules/conta/diseno'
 
 /** Lo que dice la base de cada justificante (conta_impuesto_justificantes_repasar). */
@@ -52,11 +52,45 @@ export function datosDe(j: Justificante, resultadoAMano: number | null = null, d
 
 /**
  * Lo que dice la base de un justificante que no se puede guardar, en palabras
- * de oficina: el de otro NIF es «de otra empresa».
+ * de oficina y en una frase: el de otro NIF es «de otra empresa».
  */
 export function motivoEnPalabras(motivo: string | null | undefined): string {
   const m = motivo ?? 'No se puede guardar.'
-  return /^Es de otro NIF/.test(m) ? `Ese justificante es de otra empresa. ${m}` : m
+  const otro = /^Es de otro NIF(?: \(([^)]+)\))?/.exec(m)
+  return otro ? `Ese justificante es de otra empresa${otro[1] ? ` (NIF ${otro[1]})` : ''}.` : m
+}
+
+/**
+ * Por qué no se ha leído un PDF, en UNA frase de oficina y sin encadenar
+ * motivos (Julio, 19/10):
+ *   · si se trajo de Hacienda y Sumied aún no sabe leerlo: «Traído de Hacienda,
+ *     pero Sumied aún no lee el modelo 111. Puedes escribir las cifras a mano.»;
+ *   · si el PDF no deja ver su CSV: «No encontramos el CSV en este PDF. Pégalo
+ *     a mano.»;
+ *   · si no es un PDF, su motivo (no es un PDF, pasa de 10 MB, no se abre).
+ */
+export function fraseNoSeLee(l: { motivo: string; causa?: CausaLectura; parcial: { modelo?: string } }, traido: boolean): string {
+  if (l.causa === 'no_pdf') return l.motivo
+  if (!traido) return 'No encontramos el CSV en este PDF. Pégalo a mano.'
+  const modelo = l.parcial.modelo
+  return modelo
+    ? `Traído de Hacienda, pero Sumied aún no lee el modelo ${modelo}. Puedes escribir las cifras a mano.`
+    : 'Traído de Hacienda, pero Sumied no reconoce su modelo. Puedes escribir las cifras a mano.'
+}
+
+/**
+ * Lo que contestó Hacienda (conta-justificante-csv) cuando no dio el
+ * justificante, en una frase. Se dice desde aquí por su motivo, no con el texto
+ * de la función, para que sea la misma frase en «Subir» y en «Pegar CSV».
+ */
+export function fraseDeHacienda(t: { motivo: string; mensaje: string }): string {
+  switch (t.motivo) {
+    case 'formato': return 'Ese CSV no tiene la forma de los de Hacienda: son 16 letras y números.'
+    case 'no_encontrado': return 'Hacienda no tiene ningún justificante con ese CSV: revísalo letra a letra.'
+    case 'no_responde': return 'Hacienda no responde ahora mismo: vuelve a intentarlo en un rato.'
+    case 'ya_estaba': return t.mensaje.replace(/\s*No hace falta traerlo otra vez\.\s*$/, '')
+    default: return t.mensaje
+  }
 }
 
 /** El chip de cada fila: Leído, Ya estaba o No se pudo leer. */

@@ -147,8 +147,8 @@ test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Present
   await expect(tabla.getByText(`modelo 303 · 1.761,96 € a compensar · presentado el ${p303.presentada.slice(0, 10).replace(/-/g, '/')}`)).toBeVisible()
   await expect(tabla.getByText(/^Pago a cuenta de sociedades · \d\.(er|º) pago \d{4}$/)).toBeVisible()
   await expect(tabla.getByText('modelo 202 · 960,00 € a ingresar', { exact: false })).toBeVisible()
-  await expect(tabla.getByText('El PDF no tiene texto (parece escaneado o una foto): Sumied solo lee el justificante que descarga la Sede.')).toBeVisible()
-  await expect(tabla.getByText(/^No se encuentra el modelo/)).toBeVisible()
+  // El escaneado y la factura: ninguno deja ver un CSV. Una frase, la misma, sin encadenar motivos.
+  await expect(tabla.getByText('No encontramos el CSV en este PDF. Pégalo a mano.', { exact: true })).toHaveCount(2)
   // El objetivo: Sumied lo había calculado, y dice qué casillas no coinciden.
   const filaObjetivo = tabla.locator('tr', { hasText: `IVA del trimestre · ${objetivo.periodo} ${objetivo.ejercicio}` })
   await expect(filaObjetivo.getByText(/casillas distintas de lo que calculó Sumied/)).toBeVisible()
@@ -161,7 +161,7 @@ test('Subir justificantes: leer, repasar con sus diferencias, guardar, y Present
   // El que no se pudo leer: escribirlo a mano (se abre, se ve y se cancela).
   await tabla.locator('tr', { hasText: 'escaneado.pdf' }).getByRole('button', { name: 'Escribirlo a mano' }).click()
   const dialogo = page.getByRole('dialog', { name: 'Escribirlo a mano' })
-  await expect(dialogo.getByLabel('Por qué a mano')).toHaveValue(/^El PDF no se pudo leer: El PDF no tiene texto/)
+  await expect(dialogo.getByLabel('Por qué a mano')).toHaveValue('El PDF no se pudo leer')
   // El diálogo es fijo: se fotografía la pantalla, no la página entera (que lo parte).
   await page.screenshot({ path: `${DIR}/subir-a-mano-${lado(page)}.jpg`, type: 'jpeg', quality: 75 })
   await dialogo.getByRole('button', { name: 'Cancelar' }).click()
