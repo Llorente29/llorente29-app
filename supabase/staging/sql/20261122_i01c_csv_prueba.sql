@@ -61,7 +61,7 @@ begin
      or r.presenter_name is distinct from 'GESTORIA INVENTADA DE PRUEBA' or r.receipt_source is distinct from 'aeat_csv' or r.status <> 'filed' then
     raise exception 'PRUEBA CSV · 1: el 3T traído se guarda como % / % / % / % / %.', r.aeat_expediente, r.presenter_tax_id, r.presenter_name, r.receipt_source, r.status;
   end if;
-  select * into e from public.tax_return_event where tax_return_id = r.id and kind = 'note' order by created_at desc limit 1;
+  select * into e from public.tax_return_event where tax_return_id = r.id and kind = 'note' order by at desc limit 1;
   if e.message not like 'Presentado fuera de Sumied: justificante traído de Hacienda por su CSV nº 9993030000003.' or e.detail->>'origen' <> 'justificante_aeat_csv' then
     raise exception 'PRUEBA CSV · 1: el evento dice «%» (%).', e.message, e.detail->>'origen';
   end if;
