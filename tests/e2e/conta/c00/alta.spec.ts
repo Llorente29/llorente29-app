@@ -254,7 +254,7 @@ test('cuenta C con Sumied: «¿Llevas los impuestos de otras empresas?» → ase
     await expect(log(page).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
     await decir(page, 'ni idea')
     await expect(page).toHaveURL(/\/conta\/impuestos\/clientes/, { timeout: 45_000 })
-    await expect(page.getByRole('heading', { name: 'Impuestos de tus clientes' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: 'Impuestos de tus clientes' })).toBeVisible()
   } finally {
     await desmarcar()
     await borrarEmpresas(s, CUENTA_C.id, true)
