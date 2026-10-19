@@ -58,8 +58,10 @@ async function crearEmpresa(s: Sesion, l: string): Promise<{ id: string; nif: st
   })
   await api(s, 'POST', 'company_tax_profile', { account_id: CUENTA_A.id, company_id: c.id, tax_territory: 'peninsula_baleares', tax_forms: ['303', '111', '115'] })
   await api(s, 'POST', 'rpc/conta_impuesto_obligaciones_calcular', { p_company: c.id })
-  // El 111 y el 115 los decide una persona (la empresa no tiene nóminas ni alquiler en el carril).
-  for (const m of ['111', '115']) {
+  // Lo que la regla no ponga (de los cuatro de la tira) lo decide una persona; lo que ya está, no
+  // se vuelve a decidir: «El 111 ya está en la lista» (e2e 658, las respuestas del alta ya lo traen).
+  const hay = (await api<{ form_code: string }[]>(s, 'GET', `tax_obligation?company_id=eq.${c.id}&valid_to=is.null&active=is.true&select=form_code`)).map((o) => o.form_code)
+  for (const m of ['303', '111', '115', '202'].filter((x) => !hay.includes(x))) {
     await api(s, 'POST', 'rpc/conta_impuesto_obligacion_decidir', { p_company: c.id, p_form: m, p_presenta: true, p_motivo: 'Prueba e2e del trimestre.' })
   }
   return { id: c.id, nif }
