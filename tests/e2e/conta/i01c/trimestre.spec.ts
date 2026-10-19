@@ -5,7 +5,7 @@
 // inventadas con la forma del caso del 19/10.
 //
 // Lo que se mira:
-//   · la pestaña «Trimestre» abre el último trimestre acabado;
+//   · la pestaña «Trimestre» abre el último trimestre acabado (en la misma prueba);
 //   · la tira del trimestre con el selector 1T…4T y, por modelo (303, 111,
 //     115 y 202), su estado, importe y fecha; el 202 del 2T dice «No toca»;
 //   · la cartera del 303, sacada de los 303 presentados: 1.500,00 pendientes,
@@ -130,18 +130,7 @@ async function sinDesbordar(page: Page, donde: string) {
 }
 const fila = (page: Page, texto: string) => page.locator('[data-prueba="cartera"] tr').filter({ hasText: texto })
 
-test('La pestaña Trimestre abre el último trimestre acabado', async ({ page }) => {
-  const errores = vigilar(page)
-  await entrarComo(page, CUENTA_A.email)
-  await ir(page, 'impuestos/calendario')
-  await page.getByRole('link', { name: 'Trimestre', exact: true }).first().click()
-  await expect(page).toHaveURL(/\/conta\/impuestos\/trimestre\/\d{4}\/[1-4]T/)
-  await expect(page.getByRole('heading', { name: /^El trimestre/ })).toBeVisible()
-  await expect(page.locator('[data-prueba="cartera"]')).toBeVisible({ timeout: 20_000 })
-  expect(errores).toEqual([])
-})
-
-test('Trimestre de una empresa por la ruta: la tira, la cartera de los 303 presentados y el borrador puesto al día', async ({ page }) => {
+test('La pestaña Trimestre abre el último acabado; y el de una empresa por la ruta: la tira, la cartera de los 303 presentados y el borrador puesto al día', async ({ page }) => {
   const errores = vigilar(page)
   const l = lado(page)
   const s = await pedirSesion(CUENTA_A.email)
@@ -158,6 +147,13 @@ test('Trimestre de una empresa por la ruta: la tira, la cartera de los 303 prese
     expect(antes.cartera.desfasada, 'el borrador del 3T tendría que estar desfasado antes de abrir la pantalla').toBe(true)
 
     await entrarComo(page, CUENTA_A.email)
+    // La pestaña, sin año ni trimestre: el último acabado. (Va en la misma prueba: una entrada menos,
+    // y la entera no pasa de su techo de 12 min por trozo, tests/unit/e2e/trozos.test.ts.)
+    await ir(page, 'impuestos/calendario')
+    await page.getByRole('link', { name: 'Trimestre', exact: true }).first().click()
+    await expect(page).toHaveURL(/\/conta\/impuestos\/trimestre\/\d{4}\/[1-4]T/)
+    await expect(page.locator('[data-prueba="cartera"]')).toBeVisible({ timeout: 20_000 })
+
     await ir(page, `impuestos/empresa/${e.id}/trimestre/2026/3T`)
     await expect(page.getByRole('heading', { name: `El trimestre · Trimestre e2e ${l}, S.L.` })).toBeVisible()
 
