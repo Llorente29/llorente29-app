@@ -18,11 +18,23 @@
 /* Con .s-tabla delante: el sistema (diseno.css) se carga después y, a la par, ganaría él. */
 .s-tabla.s-impuestos-tabla td { vertical-align: top; }
 /* Ancho en %, no mínimo en px: un mínimo empujaba la tabla fuera de su tarjeta (18/10). */
-.s-tabla.s-impuestos-calendario th:first-child { width: 34%; }
-/* El chip y el aviso se parten dentro de su celda: «No se puede calcular» con su porqué largo
-   sacaba la tabla 11 px de la tarjeta en ordenador (e2e 612, 18/10). La acción sigue entera. */
-.s-tabla.s-impuestos-calendario .s-chip { white-space: normal; }
-.s-tabla.s-impuestos-calendario td:not(.s-impuestos-accion) { overflow-wrap: anywhere; }
+/* Anchos fijos por columna en el ordenador (cotejo con el tablero 8, 19/10): con el reparto automático la tabla
+   daba a «Impuesto» lo mínimo de su contenido y partía las palabras («Retencione s»); el % no mandaba. Con
+   table-layout fixed mandan estos, y nada se sale: cada celda parte dentro de su ancho. En el móvil, bloques. */
+@media (min-width: 768px) {
+  .s-tabla.s-impuestos-calendario { table-layout: fixed; }
+  .s-tabla.s-impuestos-calendario th:nth-child(1) { width: 36%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(2) { width: 15%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(3) { width: 30%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(4) { width: 19%; }
+  .s-tabla.s-impuestos-calendario th, .s-tabla.s-impuestos-calendario td { padding-left: var(--s-3); padding-right: var(--s-3); }
+  .s-tabla.s-impuestos-calendario th:first-child, .s-tabla.s-impuestos-calendario td:first-child { padding-left: var(--s-6); }
+  /* Un chip largo («Borrador · 2 cosas que Sumied no sabe») parte en su celda antes que sacar la tabla. */
+  .s-tabla.s-impuestos-calendario .s-chip { white-space: normal; }
+}
+/* El aviso se parte dentro de su celda (e2e 612, 18/10: sacaba la tabla 11 px de la tarjeta); el chip no, y
+   el aviso del calendario va en corto (porQueNoSeCalcula). La acción sigue entera. */
+.s-tabla.s-impuestos-calendario td:not(.s-impuestos-accion) { overflow-wrap: break-word; }
 .s-tabla.s-impuestos-tabla tr[data-ambar='si'] td { background: var(--s-duda-fondo); }
 .s-impuestos-nombre { font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
 .cx a.s-impuestos-nombre { color: var(--s-accion); text-decoration: underline; }
@@ -68,6 +80,12 @@
 /* ── El IVA de un periodo (tablero 9) ──────────────────────────────────── */
 .s-impuestos-migas { font-size: var(--s-t-s); color: var(--s-apoyo); }
 .s-impuestos-cabeza { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+/* En el ordenador, los pasos en la fila del título, a la derecha (tablero 9): el título parte su línea, no los empuja abajo. */
+@media (min-width: 1024px) {
+  .s-impuestos-cabeza { flex-wrap: nowrap; }
+  .s-impuestos-cabeza .s-impuestos-titulo { flex: 1 1 auto; }
+  .s-impuestos-cabeza .s-impuestos-pasos { flex: none; flex-wrap: nowrap; }
+}
 .s-impuestos-titulo { margin: 0; font-size: var(--s-t-titulo); font-weight: var(--s-peso-titulo); color: var(--s-tinta); min-width: 0; }
 .s-impuestos-titulo-apoyo { font-size: var(--s-t-m); font-weight: var(--s-peso-normal); color: var(--s-apoyo); }
 .s-impuestos-pasos { list-style: none; margin: 0; padding: 0; display: flex; gap: var(--s-2); flex-wrap: wrap; }
@@ -94,9 +112,10 @@
 .s-impuestos-registro summary { cursor: pointer; color: var(--s-apoyo); }
 .s-impuestos-registro ul { margin: var(--s-2) 0 0; padding-left: var(--s-4); display: flex; flex-direction: column; gap: var(--s-1); }
 
-.s-impuestos-panel { border: 2px solid var(--s-accion); gap: var(--s-3); }
+/* Con .s-tarjeta delante: el sistema se carga después y le quitaba el borde (cotejo con el tablero 9, 18/10). */
+.s-tarjeta.s-impuestos-panel { border: 2px solid var(--s-accion); gap: var(--s-3); }
 .s-impuestos-panel-bloque { display: flex; flex-direction: column; gap: 2px; }
-.s-impuestos-lista { margin: var(--s-1) 0 0; padding-left: var(--s-4); }
+.s-impuestos-lista { margin: var(--s-1) 0 0; padding-left: var(--s-4); list-style: disc; }
 .s-impuestos-porque-no { margin: 0; font-size: var(--s-t-s); color: var(--s-duda); }
 .s-impuestos-nota { font-size: var(--s-t-s); }
 .s-impuestos-raya { border: none; border-top: var(--s-linea) solid var(--s-borde-decorativo); margin: 0; width: 100%; }

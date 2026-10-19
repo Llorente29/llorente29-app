@@ -1,6 +1,6 @@
 // I01b · Libros de IVA de Diez → libro de IVA de Sumied: el mapeo y la lectura sin repetir ni saltar.
 import { describe, expect, it } from 'vitest'
-import { filasDeFactura, leerFacturas, paisDe, PAGINA } from '../../../scripts/conta/diez/libros-iva-mapeo'
+import { enCorto, filasDeFactura, leerFacturas, paisDe, PAGINA } from '../../../scripts/conta/diez/libros-iva-mapeo'
 
 const base = { Ejercicio: '2026', Documento: 7, Fecha: 20260320, FechaFactura: 20260318, FechaIntroduccionFactura: 20260405, NumeroFactura: ' A-1 ', CifCliente: 'B00000000', NombreCliente: 'PROVEEDOR DE PRUEBA', TipoFactura: 1 }
 
@@ -76,5 +76,19 @@ describe('leerFacturas', () => {
     const roto = { todas: async <T,>(ruta: string): Promise<T[]> => (ruta.includes('20260105') ? Promise.reject(new Error('500')) : c.todas<T>(ruta)) }
     const l = await leerFacturas(roto, '202601', '202601')
     expect(l.sinContestar).toEqual([20260105])
+  })
+})
+
+describe('enCorto: Pais y TipoOperacion de Diez, para medirlos como clave (18/10)', () => {
+  it('minúsculas, sin tildes, [a-z0-9_] y 12 como mucho; vacío no va', () => {
+    expect([enCorto('Irlanda'), enCorto('ESTADOS UNIDOS'), enCorto('Alemaña del Sur y más'), enCorto(3), enCorto(0), enCorto(''), enCorto(null), enCorto('  ')])
+      .toEqual(['irlanda', 'estados_unid', 'alemana_del_', '3', '0', undefined, undefined, undefined])
+  })
+  it('en la fila del libro solo si Diez lo trae', () => {
+    const base = { Ejercicio: 2026, Serie: '2', Documento: 7, Fecha: 20260115, BaseImponible1: 100, PorcentajeIVA1: 21, CuotaIVA1: 21 }
+    const [sin] = filasDeFactura(base, 'asiento')
+    expect('pais_diez' in sin || 'tipo_operacion' in sin).toBe(false)
+    const [con] = filasDeFactura({ ...base, Pais: 'Irlanda', TipoOperacion: 2 }, 'asiento')
+    expect([con.pais_diez, con.tipo_operacion]).toEqual(['irlanda', '2'])
   })
 })

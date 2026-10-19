@@ -14,7 +14,7 @@
 
 import type { Nivel } from '@/modules/conta/esqueleto/preferencias'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
-import { periodoEnPalabras, textoResultado, type Cadencia, type Estado, type Resultado } from './calendario'
+import { periodoEnPalabras, porQueNoSeCalcula, textoResultado, type Cadencia, type Estado, type Resultado } from './calendario'
 
 export interface Comprobacion {
   id: string
@@ -197,7 +197,8 @@ export const pideLa110 = (c: Comprobacion): boolean => c.clave === 'previous_off
 export function noSeCalcula(d: DeclaracionVer): { titulo: string; porque: string[] } | null {
   const r = d.declaracion
   if (!r || r.resultado !== null || !['draft', 'reviewed'].includes(r.estado)) return null
-  const porque = enRojo(d).filter((c) => c.clave === 'book_vs_303' || c.clave === 'previous_offset').map((c) => c.titulo)
+  // En corto: el porqué entero va justo debajo, en «Lo que ha comprobado Sumied» (en el móvil salía dos veces seguidas).
+  const porque = enRojo(d).filter((c) => c.clave === 'book_vs_303' || c.clave === 'previous_offset').map((c) => porQueNoSeCalcula(c.titulo) ?? c.titulo)
   return { titulo: 'No se puede calcular todavía', porque: porque.length ? porque : ['Falta algo para calcularlo: mira «Lo que ha comprobado Sumied».'] }
 }
 
