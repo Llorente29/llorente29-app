@@ -22,7 +22,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Boton, Chip, Dialogo, Selector, Tarjeta, TarjetaCifra } from '@/modules/conta/diseno'
-import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { rutaClienteImpuestos } from '@/config/navegacion'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { baseDeDatos } from '@/services/versionApp'
@@ -37,8 +36,7 @@ import {
 
 type Aviso = { tono: 'ok' | 'falta'; texto: string } | null
 
-export function Despacho() {
-  const { accountId } = useCuentaConta()
+export function Despacho({ accountId }: { accountId: string }) {
   const { search } = useLocation()
   // «Hoy»: el de verdad; `?hoy=` solo contra una base de pruebas (demo y capturas).
   const { hoy, forzado } = useMemo(() => hoyDeLaPantalla(search, baseDeDatos().tipo !== 'pruebas'), [search])
@@ -117,8 +115,6 @@ export function Despacho() {
       : { tono: 'falta', texto: `Descargados ${bien} de ${lista.length}. No se han podido: ${fallos.join(' · ')}` })
   }
 
-  if (!accountId) return null
-
   return (
     <div className="s-pantalla s-despacho">
       <header className="s-despacho-cabecera">
@@ -167,7 +163,6 @@ export function Despacho() {
             <Filtro activo={filtros.listos} alPulsar={() => setFiltros((f) => ({ ...f, listos: !f.listos }))}>Listos para presentar · {r.filtros.listos}</Filtro>
             <Filtro activo={filtros.sinCertificado} alPulsar={() => setFiltros((f) => ({ ...f, sinCertificado: !f.sinCertificado }))}>Sin certificado o sin permiso · {r.filtros.sin_certificado}</Filtro>
             <label className="s-despacho-filtro-lista">
-              <span className="cx-oculto">Responsable</span>
               <select aria-label="Responsable" className="s-despacho-filtro" data-activo={filtros.responsable !== null ? 'si' : undefined}
                 value={filtros.responsable ?? ''} onChange={(e) => setFiltros((f) => ({ ...f, responsable: e.target.value || null }))}>
                 <option value="">Responsable: todos</option>
@@ -176,7 +171,6 @@ export function Despacho() {
               </select>
             </label>
             <label className="s-despacho-filtro-lista">
-              <span className="cx-oculto">Modelo</span>
               <select aria-label="Modelo" className="s-despacho-filtro" data-activo={filtros.modelo !== null ? 'si' : undefined}
                 value={filtros.modelo ?? ''} onChange={(e) => setFiltros((f) => ({ ...f, modelo: e.target.value || null }))}>
                 <option value="">Modelo: todos</option>

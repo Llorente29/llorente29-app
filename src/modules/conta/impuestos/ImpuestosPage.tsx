@@ -9,6 +9,7 @@
 
 import { useParams } from 'react-router-dom'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { Tarjeta } from '@/modules/conta/diseno'
 import { Calendario } from './Calendario'
 import { Certificados } from './Certificados'
@@ -19,8 +20,9 @@ import { Despacho } from './despacho/Despacho'
 export default function ImpuestosPage() {
   const { pestana } = useParams<{ pestana?: string }>()
   const { activa } = useEmpresas()
+  const { accountId } = useCuentaConta()
   // P01 · Los impuestos de los clientes de una asesoría: no dependen de su propia empresa.
-  if (pestana === 'clientes') return <Despacho />
+  if (pestana === 'clientes') return accountId ? <Despacho accountId={accountId} /> : null
   if (!activa) {
     return (
       <div className="s-pantalla">

@@ -29,7 +29,9 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { rutaTuEmpresa } from '@/config/navegacion'
+import { rutaImpuestos, rutaTuEmpresa } from '@/config/navegacion'
+import { leerSoyAsesoria, marcarAsesoria } from '@/modules/conta/services/despachoService'
+import { refrescarContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
 import { useCuentaConta, leerDatosDeLaCuenta, type DatosDeLaCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDatosEmpresa } from '@/modules/conta/empresa/useDatosEmpresa'
@@ -48,7 +50,7 @@ import {
 import { entender } from '@/modules/conta/alta/entender'
 import {
   fraseActividadAMano, fraseActividades, fraseAlquiler, fraseHosteleria, fraseCuentas, fraseDireccion, fraseDuda, fraseModelos, fraseNif,
-  fraseNombre, frasePeriodo, fraseRetenido70, fraseRetiene, fraseSinNif, type Frase,
+  fraseAsesoria, fraseNombre, frasePeriodo, fraseRetenido70, fraseRetiene, fraseSinNif, type Frase,
 } from '@/modules/conta/alta/frases'
 import {
   anadirBanco, apuntarDuda, buscarParaGrupos, crearEmpresa, ponerDireccion, ponerEnPerfil, ponerNombre, ponerPaso,
@@ -144,6 +146,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const ctx: ContextoAlta | null = cuenta ? {
     cuenta, tipo: d?.empresa.entityKind ?? null, cp: d?.empresa.fiscalPostalCode ?? null,
     clases: (d?.actividades ?? []).filter((a) => a.endedOn === null).map((a) => a.kind), respuestas: vistas, hoy,
+    marca: MARCA.id,
   } : null
   const pregunta = ctx && !propuestas && !aMano ? preguntaActual(paso, ctx) : null
 
@@ -328,9 +331,24 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           setPasoLocal('hecho')
           elegir(id!)
           recargarEmpresas()
+          // P01 · Una asesoría entra directamente en «Impuestos de tus clientes».
+          if (MARCA.id === 'sumied' && (await leerSoyAsesoria(accountId).catch(() => null))?.asesoria) {
+            refrescarContextoEsqueleto()
+            navigate(rutaImpuestos('clientes'))
+            return
+          }
           decir('folvy', <>Listo: <b>{d?.empresa.legalName ?? 'tu empresa'}</b> está montada. {planHecho ? `${planHecho} ` : ''}{noLoSe ? 'El banco lo pones cuando quieras en «Tablas generales». ' : 'Apuntado el banco como cuenta principal. '}Todo lo que he puesto lleva la marca «IA» y su porqué, y lo puedes cambiar o deshacer en <Link to={rutaTuEmpresa()}>Tu empresa</Link>.</>)
           datos.recargar()
           return
+        }
+        case 'asesoria': {
+          // P01 · Con «Sí», la cuenta queda como asesoría (conta_despacho_marcar). «No» y «No lo sé» no tocan nada.
+          if (valor === 'si' && !noLoSe) {
+            await marcarAsesoria(accountId, true)
+            refrescarContextoEsqueleto()
+            apuntado(fraseAsesoria(true))
+          } else apuntado(fraseAsesoria(false))
+          break
         }
         default: {
           // retiene, alquiler, retenido70: se guardan al terminar el paso, como modelos.

@@ -8,7 +8,9 @@
  * barra de lotes fija abajo.
  */
 
-.s-despacho { max-width: 1440px; padding-bottom: 96px; }
+/* min-width 0: dentro del marco la pantalla es un hijo flexible; sin esto, la fila de filtros del móvil la ensanchaba (413 px). */
+.s-pantalla.s-despacho, .s-despacho { flex: 1 1 auto; width: 100%; max-width: 1440px; min-width: 0; padding-bottom: 96px; }
+.s-despacho > * { min-width: 0; }
 .s-despacho .s-tarjeta-cifra-valor, .s-despacho-cifra { font-family: var(--s-letra); font-variant-numeric: tabular-nums; }
 
 .s-despacho-cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-4); flex-wrap: wrap; margin-bottom: var(--s-4); }
@@ -28,7 +30,7 @@
 .s-despacho-cifras { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s-3); margin-bottom: var(--s-4); }
 .s-despacho-atrasados { margin: calc(-1 * var(--s-2)) 0 var(--s-3); color: var(--s-falta); font-size: var(--s-t-s); }
 
-.s-despacho-filtros { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.s-despacho-filtros { position: relative; display: flex; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
 .s-despacho-filtro {
   font: inherit; font-size: var(--s-t-s); color: var(--s-tinta); background: var(--s-superficie);
   border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-pildora);
@@ -47,11 +49,12 @@ select.s-despacho-filtro { appearance: none; padding-right: var(--s-6);
 .s-tabla.s-despacho-tabla .s-despacho-col-elegir { width: 44px; padding-left: var(--s-4); }
 .s-tabla.s-despacho-tabla th:nth-child(2) { width: 20%; }
 .s-tabla.s-despacho-tabla th:nth-child(3) { width: 31%; }
-.s-tabla.s-despacho-tabla th:nth-child(4), .s-tabla.s-despacho-tabla th:nth-child(5) { width: 9%; }
-.s-tabla.s-despacho-tabla th:nth-child(6) { width: 11%; }
+.s-tabla.s-despacho-tabla th:nth-child(4), .s-tabla.s-despacho-tabla th:nth-child(5) { width: 10%; }
+.s-tabla.s-despacho-tabla th:nth-child(6) { width: 12%; }
+.s-tabla.s-despacho-tabla th { white-space: normal; overflow-wrap: normal; word-break: normal; hyphens: none; }
 .s-tabla.s-despacho-tabla tr[data-elegido='si'] td { background: var(--s-accion-suave); }
 .s-despacho-cifra { text-align: right; white-space: nowrap; }
-.s-despacho-cliente { display: block; font-weight: var(--s-peso-titulo); color: var(--s-tinta); text-decoration: none; }
+.cx .s-despacho-cliente, .s-despacho-cliente { display: block; font-weight: var(--s-peso-titulo); color: var(--s-tinta); text-decoration: none; }
 .s-despacho-cliente:hover, .s-despacho-cliente:focus-visible { color: var(--s-accion); text-decoration: underline; }
 .s-despacho-tipo { display: block; margin-top: 2px; font-size: var(--s-t-s); color: var(--s-apoyo); }
 .s-despacho-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -101,10 +104,10 @@ select.s-despacho-filtro { appearance: none; padding-right: var(--s-6);
   .s-despacho-titulo { font-size: 22px; }
   .s-despacho-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* Los filtros se deslizan de lado, sin partirse. */
-  .s-despacho-filtros { flex-wrap: nowrap; overflow-x: auto; margin-left: calc(-1 * var(--s-4)); margin-right: calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-1); scrollbar-width: none; }
+  .s-despacho-filtros { flex-wrap: nowrap; overflow-x: auto; max-width: 100vw; box-sizing: border-box; margin-left: calc(-1 * var(--s-4)); margin-right: calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-1); scrollbar-width: none; }
   .s-despacho-filtros::-webkit-scrollbar { display: none; }
   .s-despacho-filtros > * { flex: none; }
-  .s-despacho-lista { background: none; border: 0; box-shadow: none; }
+  .s-tarjeta.s-despacho-lista { background: none; border: 0; box-shadow: none; overflow: visible; }
   .s-tabla.s-despacho-tabla { display: none; }
   .s-despacho-tarjetas { display: flex; flex-direction: column; gap: var(--s-3); }
   .s-despacho-tarjeta {

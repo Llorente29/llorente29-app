@@ -124,7 +124,7 @@ test('3 y 4 · Dos clientes elegidos, la barra de lotes y la confirmación con l
   await barra.getByRole('button', { name: 'Presentar los 2 a Hacienda' }).click()
   const dialogo = page.getByRole('dialog', { name: 'Presentar a Hacienda' })
   await expect(dialogo).toBeVisible()
-  await expect(dialogo.getByRole('list', { name: 'Lo que se presenta' }).getByRole('listitem')).toHaveCount(2)
+  await expect(dialogo.getByRole('list', { name: 'Lo que se presenta', exact: true }).getByRole('listitem')).toHaveCount(2)
   await expect(dialogo.getByText('3.104,60 € a ingresar')).toBeVisible()
   await expect(dialogo.getByText('El 111 y el 115 se presentan todavía fuera de Sumied', { exact: false })).toBeVisible()
   await expect(dialogo.getByRole('alert')).toContainText(/cerrad/i)
@@ -152,11 +152,11 @@ test('5 · Asignar responsable: las personas de la asesoría, y dice qué ha pas
   // Guardar escribe: solo en el ordenador (el móvil corre a la vez en el mismo carril), y se deja como estaba.
   if (!esMovil(page)) {
     await dialogo.getByRole('button', { name: 'Guardar' }).click()
-    await expect(page.getByRole('status')).toContainText('Jorge Sanz lleva ahora Panadería de Prueba Norte.')
+    await expect(page.locator('.s-despacho-aviso')).toContainText('Jorge Sanz lleva ahora Panadería de Prueba Norte.')
     await lista(page).getByRole('button', { name: /Responsable de Panadería de Prueba Norte: Jorge Sanz/ }).click()
     await page.getByRole('dialog').getByLabel('Sin responsable').check()
     await page.getByRole('dialog').getByRole('button', { name: 'Guardar' }).click()
-    await expect(page.getByRole('status')).toContainText('Panadería de Prueba Norte se queda sin responsable.')
+    await expect(page.locator('.s-despacho-aviso')).toContainText('Panadería de Prueba Norte se queda sin responsable.')
   } else {
     await dialogo.getByRole('button', { name: 'Cancelar' }).click()
   }
