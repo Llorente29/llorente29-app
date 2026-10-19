@@ -1,9 +1,10 @@
-# Vuelta atrás de la tanda del 349 por operaciones (modo «vuelta_atras»).
-# · 0250: conta_impuesto_reglas vuelve a la de la 0120 (copiada byte a byte) y
-#   se quita conta_paises_ue. Las obligaciones del 349 ya escritas se quedan.
-# Ensayada en staging: supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
+# Vuelta atrás de la tanda de los justificantes (modo «vuelta_atras»).
+# · 0260: fuera las tres funciones; el CHECK de tax_return_box.origin, el de
+#   la 0110. Si ya hay casillas con origen 'justificante', el CHECK de antes
+#   no entra y la vuelta atrás para entera: no se borran solas.
+# Ensayada en staging: supabase/staging/sql/20261122_i01c_justificantes_prueba.sql
 # (la aplica, la deshace y la vuelve a aplicar).
-# La anterior de este fichero (el 303 que no inventa):
-# tests/conta/produccion/vuelta-atras-i01b-303-no-inventa-20261018.txt.
-cuenta: scripts/conta/produccion/cuentas/i01b-349-por-operaciones.sql
-supabase/vuelta-atras/20261122T0250_i01b_349_por_operaciones.down.sql
+# La anterior de este fichero (el 349 por operaciones):
+# tests/conta/produccion/vuelta-atras-i01b-349-por-operaciones-20261019.txt.
+cuenta: scripts/conta/produccion/cuentas/i01c-justificantes.sql
+supabase/vuelta-atras/20261122T0260_i01c_justificantes.down.sql
