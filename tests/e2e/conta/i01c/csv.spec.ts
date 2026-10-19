@@ -165,7 +165,9 @@ test('Pegar el CSV: trae el original de Hacienda, la ficha con el PDF al lado, y
   await expect(ficha.getByText(j.csv)).toBeVisible()
   await expect(ficha.getByText(`2026PRUEBA111${j.periodo}`)).toBeVisible()
   await expect(ficha.getByText('GESTORIA INVENTADA DE PRUEBA (00000000T)')).toBeVisible()
-  await expect(ficha.getByText('1.702,50 €')).toBeVisible()
+  // En el resultado (el importe sale también en sus casillas [28] y [30]).
+  await expect(ficha.locator('[data-prueba="resultado"] .s-cifra')).toHaveText('1.702,50 €')
+  await expect(ficha.locator('[data-prueba="resultado"]')).toContainText('a ingresar')
   await expect(ficha.getByText(`${Object.keys(j.casillas).length} casillas del impreso`)).toBeVisible()
   await expect(ficha.locator('iframe.s-csv-pdf-visor')).toBeVisible()
   await sinDesbordar(page, 'Ficha traída')
