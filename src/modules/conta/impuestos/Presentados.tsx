@@ -4,6 +4,10 @@
 // el CSV (encargo, punto 4). Lo presentado fuera también, y dice si se
 // comprobó con Hacienda. Si falta el PDF del justificante, se sube aquí.
 //
+// «Subir justificantes» (I01c · P1, también con ?subir=1): se arrastran los PDF
+// de la Sede, Sumied los lee, se repasan y se guardan como presentados fuera,
+// con sus casillas (SubirJustificantes.tsx).
+//
 // «Ya presenté uno fuera · pegar CSV» (la cinta del calendario trae aquí con
 // ?fuera=1): se elige el periodo del 303, se calcula si aún no lo está (así
 // queda qué se presentó) y se apunta con su CSV. Con la puerta cerrada, sin
@@ -19,6 +23,7 @@ import {
 } from '@/modules/conta/services/impuestosService'
 import { nombreDeFila, periodoEnPalabras, textoResultado, type Resultado } from './calendario'
 import { fraseCalculo, pideJustificante } from './declaracion'
+import { SubirJustificantes } from './SubirJustificantes'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -32,6 +37,8 @@ export function Presentados({ companyId }: { companyId: string }) {
   const recargar = useCallback(() => setVuelta((v) => v + 1), [])
   const fuera = busqueda.get('fuera') === '1'
   const cerrarFuera = () => { const b = new URLSearchParams(busqueda); b.delete('fuera'); setBusqueda(b, { replace: true }) }
+  const subir = busqueda.get('subir') === '1'
+  const abrirSubir = (si: boolean) => { const b = new URLSearchParams(busqueda); if (si) b.set('subir', '1'); else b.delete('subir'); setBusqueda(b, { replace: true }) }
 
   useEffect(() => {
     let vivo = true
@@ -55,11 +62,20 @@ export function Presentados({ companyId }: { companyId: string }) {
         </Tarjeta>
       )}
       {!error && !datos && <Tarjeta titulo="Leyendo tus impuestos…"><p className="s-apoyo">Un momento.</p></Tarjeta>}
+      {!error && datos && subir && datos.puede_gestionar && (
+        <SubirJustificantes companyId={companyId} alCerrar={() => abrirSubir(false)}
+          alGuardar={(texto, ok) => { abrirSubir(false); setHecho({ tono: ok ? 'ok' : 'falta', texto }); recargar() }} />
+      )}
       {!error && datos && (
         <Tarjeta compacta titulo="Presentados" apoyo="Lo presentado desde Sumied y lo que presentaste fuera, con su justificante y su CSV."
-          accion={datos.puede_gestionar ? <Boton onClick={() => setBusqueda({ fuera: '1' })}>Ya presenté uno fuera · pegar CSV</Boton> : null}>
+          accion={datos.puede_gestionar ? (
+            <div className="s-impuestos-acciones">
+              <Boton onClick={() => setBusqueda({ fuera: '1' })}>Ya presenté uno fuera · pegar CSV</Boton>
+              {!subir && <Boton variante="principal" onClick={() => abrirSubir(true)}>Subir justificantes</Boton>}
+            </div>
+          ) : null}>
           {datos.presentados.length === 0
-            ? <p className="s-apoyo s-impuestos-vacio">Aún no hay ninguno presentado en Sumied. Si ya presentaste alguno fuera, apúntalo con «Ya presenté uno fuera».</p>
+            ? <p className="s-apoyo s-impuestos-vacio">Aún no hay ninguno presentado en Sumied. Si los presentó tu asesoría, sube sus justificantes en PDF con «Subir justificantes»: Sumied los lee solo.</p>
             : (
               <table className="s-tabla s-impuestos-tabla">
                 <thead>
