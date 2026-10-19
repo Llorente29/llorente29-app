@@ -47,7 +47,7 @@ const SEDE = JUSTIFICANTES_SEDE as Record<string, J>
 const originales = (n: 1 | 2): (J & { sede: true })[] => ['111-1T-2026', '115-1T-2026', '202-1P-2026'].map((k, i) => ({
   ...SEDE[k], sede: true as const, ejercicio: 2023, periodo: SEDE[k].modelo === '202' ? `${n}P` : `${n}T`,
   // Presentados el 20 del mes siguiente a su periodo (la base no casa uno presentado antes de que acabe).
-  presentada: `20-${SEDE[k].modelo === '202' ? (n === 1 ? '04' : '10') : `0${1 + n * 3}`}-2023 10:0${i}:00`, csv: `PRUEBS${n}${SEDE[k].modelo}SEDE2023`.slice(0, 16), justificante: `99${n}${SEDE[k].modelo}00002023`,
+  presentada: `20-${SEDE[k].modelo === '202' ? (n === 1 ? '04' : '10') : `0${1 + n * 3}`}-2023 10:0${i}:00`, csv: `PRUEBT${n}${SEDE[k].modelo}SEDE2023`.slice(0, 16), justificante: `99${n}${SEDE[k].modelo}00002023`,
 }))
 const con = (k: string, c: Partial<J>): J => ({ ...BASE[k], ...c })
 
@@ -72,7 +72,13 @@ const MOVIL = {
 let empresa = ''
 let sesionA: Sesion
 
-/** Deja un PDF inventado donde lo busca el doble de conta-justificante-csv (si ya estaba, igual: es el mismo). */
+/**
+ * Deja un PDF inventado donde lo busca el doble de conta-justificante-csv. Si ya
+ * estaba, se queda el que había: conta-documentos no deja reescribir ni borrar
+ * (bien hecho), y el almacén del carril sobrevive entre runs. Por eso, si
+ * cambian los datos de un justificante de esta prueba, cambia también su CSV
+ * (e2e 652: el 202 del 2P seguía con la fecha del run anterior).
+ */
 async function alDoble(s: Sesion, j: J & { sede?: true; sinImpreso?: true }) {
   const r = await fetch(`${STAGING_URL}/storage/v1/object/conta-documentos/${CUENTA_A.id}/doble-aeat/${j.csv}.pdf`, {
     method: 'POST',
