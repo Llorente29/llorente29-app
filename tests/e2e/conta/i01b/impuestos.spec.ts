@@ -102,6 +102,11 @@ test('Calendario (tablero 8): Impuestos en la barra, la tabla del plazo y por qu
   await ir(page, 'impuestos')
   await expect(page.getByText(/IVA del (3\.er )?trimestre/).first()).toBeVisible()
   await expect(page.getByText('Por qué te salen estos').first()).toBeVisible()
+  // Los nombres cortos del tablero 8, y lo que no le sale con su porqué (0250: A no tiene
+  // operaciones con la UE ni dijo nada del ROI).
+  await expect(page.getByText('Sociedades (200 y 202)').first()).toBeVisible()
+  await expect(page.getByText('Retenciones (111)').first()).toBeVisible()
+  await expect(page.getByText('No te sale el 349: no tienes compras ni ventas con empresas de la UE en los últimos 12 meses.').first()).toBeVisible()
   // La tabla cabe en su tarjeta (el 18/10 la columna «Impuesto» con un mínimo en px la sacaba y
   // cortaba «Ver el aviso»; la página no se salía, así que sinDesbordar no lo veía).
   const sobraTabla = await page.locator('.s-impuestos-tabla').first().evaluate((t) => t.scrollWidth - (t.parentElement?.clientWidth ?? t.scrollWidth))

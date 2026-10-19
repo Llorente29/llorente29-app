@@ -1,0 +1,23 @@
+{
+ "_que": "I01b · el 303 no inventa · contexto de producción de la tanda viva (20261122T0240), medido en SOLO LECTURA el 18/10 a las 20:38 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las tres funciones que cambia en caliente (calcular, fichero, fuera), con una sola firma cada una; no existe conta_impuesto_casillas_poner; ninguna tabla; nada del camino del pedido; nada en el historial.",
+ "medido": "2026-10-18T20:38Z",
+ "tanda": {
+  "supabase/migrations/20261122T0240_i01b_303_no_inventa.sql": "27b502b57b785d0b6d1d1111e2f1d9e6"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_impuesto_303_calcular(uuid,int,text)",
+   "public.conta_impuesto_303_fichero(uuid)",
+   "public.conta_impuesto_fuera(uuid,uuid,text,boolean,text,timestamptz,uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

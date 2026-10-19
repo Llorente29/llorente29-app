@@ -1382,12 +1382,65 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el 303 no se inventa lo que no sabe (I01b, 0240)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el 349 por operaciones con la UE (I01b, 0250)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 18/10 a las 20:38 UTC para ESTE fichero (con su md5).
+  // lectura en producción el 19/10, después de la 0240, para ESTE fichero (con su md5).
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero, el medido; sigue (no pide «autorizo») y no toca el camino del pedido ni ninguna tabla', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261122T0250_i01b_349_por_operaciones.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
+    expect(Object.values(r.ficheros)).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual([])
+    expect(ctx.funciones).toEqual(['public.conta_impuesto_calendario(uuid,date)', 'public.conta_impuesto_reglas(uuid)'])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente está en la cabecera, con su prueba de staging, que existe y lo nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab.map((l) => l.replace(/^-- cambia: (\S+).*$/, '$1'))).toEqual(['public.conta_impuesto_reglas', 'public.conta_impuesto_calendario'])
+    for (const l of cab) {
+      const prueba = readFileSync(l.replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
+      expect(prueba).toMatch(new RegExp(`\\b${l.replace(/^-- cambia: public\.(\S+).*$/, '$1')}\\b`))
+    }
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01b-349-por-operaciones.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás devuelve la regla de la 0120 y el calendario de la 0190 BYTE A BYTE, y la ensaya staging', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261122T0250_i01b_349_por_operaciones.down.sql'])
+    const down = readFileSync(atras[0], 'utf8')
+    const c20 = readFileSync('supabase/migrations/20261122T0120_i01_obligaciones.sql', 'utf8')
+    const a = c20.indexOf('create or replace function public.conta_impuesto_reglas')
+    expect(down).toContain(c20.slice(a, c20.indexOf('comment on function public.conta_impuesto_reglas(uuid)', a)).trimEnd())
+    const c19 = readFileSync('supabase/migrations/20261122T0190_i01b_calendario.sql', 'utf8')
+    const b = c19.indexOf('create or replace function public.conta_impuesto_calendario')
+    expect(down).toContain(c19.slice(b, c19.indexOf('comment on function public.conta_impuesto_calendario(uuid, date)', b)).trimEnd())
+    expect(down).toContain('drop function if exists public.conta_paises_ue();')
+    const prueba = readFileSync('supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${atras[0]}`)
+  })
+})
+
+describe('la tanda del 303 que no inventa (0240, PR #240): su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01b-303-no-inventa-20261018.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 18/10 a las 20:38 UTC para ESTE fichero (con su md5).
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01b-303-no-inventa-20261018.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1421,9 +1474,9 @@ describe('la tanda de AHORA (manifiesto vivo): el 303 no se inventa lo que no sa
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
   it('su vuelta atrás: el .down.sql, con la misma cuenta, devuelve las tres BYTE A BYTE de la 0140 y la 0150; la ensaya staging', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01b-303-no-inventa-20261018.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261122T0240_i01b_303_no_inventa.down.sql'])
-    expect(readFileSync('supabase/produccion/vuelta-atras.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/i01b-303-no-inventa.sql')
+    expect(readFileSync('tests/conta/produccion/vuelta-atras-i01b-303-no-inventa-20261018.txt', 'utf8')).toContain('cuenta: scripts/conta/produccion/cuentas/i01b-303-no-inventa.sql')
     const down = readFileSync(atras[0], 'utf8')
     const trozo = (t: string, desde: string, hasta: string) => { const a = t.indexOf(desde); return t.slice(a, t.indexOf(hasta, a)).trimEnd() }
     const c40 = readFileSync('supabase/migrations/20261122T0140_i01_calculo_303.sql', 'utf8')

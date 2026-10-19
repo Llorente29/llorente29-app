@@ -211,3 +211,16 @@ supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql
 #   cerrar el mes anterior (M01). Solo añade; si ya está, no hace nada.
 supabase/seeds/conta/seed_c06_recorrido_staging.sql
 supabase/seeds/conta/seed_c06_sola_ejercicio_staging.sql
+
+# I01b · El 349 lo proponen las operaciones con la UE (rama conta/i01b-349-por-operaciones).
+#   La 0250 DE VERDAD (cambia en caliente conta_impuesto_reglas y
+#   conta_impuesto_calendario, misma firma, y añade conta_paises_ue) y su
+#   prueba: sin operaciones no le sale, y lo dice («No te sale el 349» en el
+#   calendario); una compra intracomunitaria lo propone y calcular lo escribe;
+#   quitado con motivo no se pisa; venta E5 y «no estoy en el ROI»; lo de más de
+#   12 meses no cuenta; y su vuelta atrás.
+#   VA LA ÚLTIMA: el bloque del I01a vuelve a aplicar la 0120, que trae la regla
+#   de antes. Puesta antes de él (runs 351 y 352), la 0250 se aplicaba y la 0120
+#   la pisaba: staging se quedaba con la regla vieja y el calendario nuevo.
+supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
+supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
