@@ -42,10 +42,11 @@ async function api<T = unknown>(s: Sesion, metodo: 'GET' | 'POST' | 'DELETE', ru
 /** Los dos 303 presentados, inventados (las casillas cuadran entre sí). */
 const presentado = (nif: string, l: 'ordenador' | 'movil', periodo: '1T' | '2T') => {
   const s = l === 'ordenador' ? 'O' : 'M'
+  const nombre = `TRIMESTRE E2E ${l.toUpperCase()}, S.L.`
   return periodo === '1T'
-    ? { modelo: '303', ejercicio: 2026, periodo, presentada: '20-04-2026 10:06:28', csv: `PRUEBTRIM${s}1T2026`.slice(0, 16), justificante: `99830${s === 'O' ? 1 : 2}0002601`, nif,
+    ? { modelo: '303', ejercicio: 2026, periodo, presentada: '20-04-2026 10:06:28', csv: `PRUEBTRIM${s}1T2026`.slice(0, 16), justificante: `99830${s === 'O' ? 1 : 2}0002601`, nif, nombre,
         resultado: -1200.5, casillas: { '27': 5000, '45': 6200.5, '46': -1200.5, '64': -1200.5, '65': 100, '66': -1200.5, '110': 1500, '78': 0, '87': 1500, '69': -1200.5, '71': -1200.5 } }
-    : { modelo: '303', ejercicio: 2026, periodo, presentada: '20-07-2026 10:51:15', csv: `PRUEBTRIM${s}2T2026`.slice(0, 16), justificante: `99830${s === 'O' ? 1 : 2}0002602`, nif,
+    : { modelo: '303', ejercicio: 2026, periodo, presentada: '20-07-2026 10:51:15', csv: `PRUEBTRIM${s}2T2026`.slice(0, 16), justificante: `99830${s === 'O' ? 1 : 2}0002602`, nif, nombre,
         resultado: 0, casillas: { '27': 8000, '45': 7599.75, '46': 400.25, '64': 400.25, '65': 100, '66': 400.25, '110': 2700.5, '78': 400.25, '87': 2300.25, '69': 0, '71': 0 } }
 }
 const iso = (dmy: string) => { const [f, h] = dmy.split(' '); const [d, m, y] = f.split('-'); return `${y}-${m}-${d}T${h}` }
