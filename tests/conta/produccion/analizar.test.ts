@@ -1386,7 +1386,7 @@ describe('la tanda de AHORA (manifiesto vivo): el 349 por operaciones con la UE 
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 18/10 para ESTE fichero (con su md5).
+  // lectura en producción el 19/10, después de la 0240, para ESTE fichero (con su md5).
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
@@ -1398,15 +1398,17 @@ describe('la tanda de AHORA (manifiesto vivo): el 349 por operaciones con la UE 
     for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
     expect(Object.values(r.ficheros)).toEqual(['sigue'])
     expect(ctx.tablas).toEqual([])
-    expect(ctx.funciones).toEqual(['public.conta_impuesto_reglas(uuid)'])
+    expect(ctx.funciones).toEqual(['public.conta_impuesto_calendario(uuid,date)', 'public.conta_impuesto_reglas(uuid)'])
     expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
     expect(ctx.registro).toEqual([])
   })
   it('lo que cambia en caliente está en la cabecera, con su prueba de staging, que existe y lo nombra', () => {
     const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
-    expect(cab.map((l) => l.replace(/^-- cambia: (\S+).*$/, '$1'))).toEqual(['public.conta_impuesto_reglas'])
-    const prueba = readFileSync(cab[0].replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
-    expect(prueba).toMatch(/\bconta_impuesto_reglas\b/)
+    expect(cab.map((l) => l.replace(/^-- cambia: (\S+).*$/, '$1'))).toEqual(['public.conta_impuesto_reglas', 'public.conta_impuesto_calendario'])
+    for (const l of cab) {
+      const prueba = readFileSync(l.replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
+      expect(prueba).toMatch(new RegExp(`\\b${l.replace(/^-- cambia: public\.(\S+).*$/, '$1')}\\b`))
+    }
   })
   it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
     const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
@@ -1416,13 +1418,16 @@ describe('la tanda de AHORA (manifiesto vivo): el 349 por operaciones con la UE 
     expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
-  it('su vuelta atrás devuelve la regla de la 0120 BYTE A BYTE, y la ensaya staging', () => {
+  it('su vuelta atrás devuelve la regla de la 0120 y el calendario de la 0190 BYTE A BYTE, y la ensaya staging', () => {
     const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261122T0250_i01b_349_por_operaciones.down.sql'])
     const down = readFileSync(atras[0], 'utf8')
     const c20 = readFileSync('supabase/migrations/20261122T0120_i01_obligaciones.sql', 'utf8')
     const a = c20.indexOf('create or replace function public.conta_impuesto_reglas')
     expect(down).toContain(c20.slice(a, c20.indexOf('comment on function public.conta_impuesto_reglas(uuid)', a)).trimEnd())
+    const c19 = readFileSync('supabase/migrations/20261122T0190_i01b_calendario.sql', 'utf8')
+    const b = c19.indexOf('create or replace function public.conta_impuesto_calendario')
+    expect(down).toContain(c19.slice(b, c19.indexOf('comment on function public.conta_impuesto_calendario(uuid, date)', b)).trimEnd())
     expect(down).toContain('drop function if exists public.conta_paises_ue();')
     const prueba = readFileSync('supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql', 'utf8')
     expect(prueba).toContain(`\\i ${viva[0]}`)

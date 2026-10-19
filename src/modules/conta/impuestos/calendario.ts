@@ -99,6 +99,61 @@ export function nombreDeOficina(modelo: string, cadencia: Cadencia | undefined, 
   return NOMBRES[modelo] ?? nombreCatalogo
 }
 
+// ── «Por qué te salen estos», en corto (tablero 8) ─────────────────────────
+
+/** El nombre corto de la maqueta: «IVA (303)», «Retenciones (111)», «Sociedades (200 y 202)». */
+const CORTOS: Record<string, string> = {
+  '303': 'IVA', '130': 'IRPF', '111': 'Retenciones', '115': 'Alquiler', '200': 'Sociedades', '202': 'Sociedades',
+  '347': 'Terceros', '349': 'Operaciones con la UE', '390': 'Resumen del IVA', '190': 'Resumen de retenciones', '180': 'Resumen del alquiler',
+}
+/** El orden de la maqueta; lo que no está, detrás, por número. */
+const ORDEN_PORQUE = ['303', '130', '111', '115', '200', '202', '347', '349', '390', '190', '180']
+
+/** «Vendes con IVA…» → «vendes con IVA…»; «IVA…» se queda como está. */
+const minuscula = (s: string) => (/^\p{Lu}\p{Ll}/u.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s)
+
+/** Varios porqués en uno: si empiezan igual («Eres una sociedad: …»), el principio una vez. */
+function juntarPorques(porques: string[]): string {
+  const distintos = [...new Set(porques)]
+  if (distintos.length === 1) return distintos[0]
+  const cabezas = distintos.map((p) => p.split(': ')[0])
+  if (cabezas.every((c) => c === cabezas[0]) && distintos.every((p) => p.includes(': '))) {
+    const colas = distintos.map((p) => p.slice(cabezas[0].length + 2).replace(/\.$/, ''))
+    return `${cabezas[0]}: ${colas.join('; ')}.`
+  }
+  return distintos.join(' ')
+}
+
+export interface LineaPorQue { clave: string; titulo: string; porque: string }
+
+/**
+ * Los modelos que le salen, con el nombre corto de la maqueta y el porqué en
+ * minúscula detrás del «·»: «Retenciones (111) · tienes 6 personas en nómina».
+ * Los que comparten nombre van en una línea: «Sociedades (200 y 202)».
+ */
+export function porQueEnCorto(modelos: ModeloLista[]): LineaPorQue[] {
+  const pos = (m: string) => { const i = ORDEN_PORQUE.indexOf(m); return i < 0 ? ORDEN_PORQUE.length : i }
+  const orden = [...modelos].sort((a, b) => pos(a.modelo) - pos(b.modelo) || a.modelo.localeCompare(b.modelo))
+  const grupos: { nombre: string; modelos: ModeloLista[] }[] = []
+  for (const m of orden) {
+    const nombre = CORTOS[m.modelo] ?? nombreDeOficina(m.modelo, m.cadencia, m.nombre)
+    const g = grupos.find((x) => x.nombre === nombre)
+    if (g) g.modelos.push(m)
+    else grupos.push({ nombre, modelos: [m] })
+  }
+  return grupos.map((g) => {
+    const cods = g.modelos.map((m) => m.modelo)
+    const lista = cods.length === 1 ? cods[0] : `${cods.slice(0, -1).join(', ')} y ${cods[cods.length - 1]}`
+    return { clave: cods.join('-'), titulo: `${g.nombre} (${lista})`, porque: minuscula(juntarPorques(g.modelos.map((m) => m.por_que))) }
+  })
+}
+
+/** «No te sale el 349: no tienes compras ni ventas con empresas de la UE en los últimos 12 meses.» */
+export function noTeSale(modelos: ModeloLista[]): { clave: string; texto: string }[] {
+  return [...modelos].sort((a, b) => a.modelo.localeCompare(b.modelo))
+    .map((m) => ({ clave: m.modelo, texto: `No te sale el ${m.modelo}: ${minuscula(m.por_que)}` }))
+}
+
 /** «3.er trimestre», «octubre», «2.º pago», «del año». */
 export function periodoEnPalabras(periodo: string): string {
   const t = /^([1-4])T$/.exec(periodo)

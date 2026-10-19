@@ -2,19 +2,22 @@
 --
 -- SOLO STAGING. Prueba de 20261122T0250_i01b_349_por_operaciones, con \i
 -- dentro de la transacción y ROLLBACK: staging no cambia. Nombra lo que cambia
--- en caliente: public.conta_impuesto_reglas; y lo nuevo, public.conta_paises_ue.
+-- en caliente: public.conta_impuesto_reglas y public.conta_impuesto_calendario;
+-- y lo nuevo, public.conta_paises_ue.
 --
 -- Con la empresa A (sin respuesta del ROI y, en staging, sin operaciones con
 -- la UE: si eso cambia, la prueba lo dice y para):
---   1. Sin operaciones con la UE ni ROI: no sale el 349.
+--   1. Sin operaciones con la UE ni ROI: el 349 no le sale, y se dice: la
+--      regla da su fila inactiva con el porqué, calcular no escribe nada y el
+--      calendario la pinta en «no_presenta» («No te sale el 349: …»).
 --   2. Una compra intracomunitaria en el libro (clave 09): sale, activo, con
 --      «1 compra a empresas de la UE»; y calcular lo escribe como regla.
 --   3. Quitarlo con motivo: queda quitado, y recalcular no lo pisa.
 --   4. Una venta intracomunitaria (exenta E5) y «no estoy en el ROI»: cuenta
 --      las dos y pide confirmarlo con el asesor.
 --   5. Una compra de hace más de 12 meses no cuenta.
---   6. Su vuelta atrás (la regla de la 0120: con ops y sin ROI, no sale) y
---      otra vez hacia delante.
+--   6. Su vuelta atrás (la regla de la 0120: con ops y sin ROI, no sale; el
+--      calendario de la 0190, con su md5) y otra vez hacia delante.
 
 begin;
 do $$ begin
@@ -39,12 +42,36 @@ begin
               and (v.operation_key = '09' or v.exempt_cause = 'E5' or v.counterpart_country = any (public.conta_paises_ue()))) then
     raise exception 'PRUEBA 349 · 1: A ya tiene operaciones con la UE en staging: esta prueba ya no mide lo que cree.';
   end if;
-  if exists (select 1 from public.conta_impuesto_reglas(v_a) where form_code = '349') then
-    raise exception 'PRUEBA 349 · 1: sin operaciones con la UE ni ROI sale el 349.';
+  if exists (select 1 from public.tax_obligation where company_id = v_a and form_code = '349' and valid_to is null) then
+    raise exception 'PRUEBA 349 · 1: A ya tiene el 349 escrito en staging: esta prueba ya no mide lo que cree.';
+  end if;
+  if not exists (select 1 from public.conta_impuesto_reglas(v_a) where form_code = '349' and not active and rule_key = 'roi_349'
+                    and why = 'No tienes compras ni ventas con empresas de la UE en los últimos 12 meses.') then
+    raise exception 'PRUEBA 349 · 1: sin operaciones con la UE ni ROI, la regla no dice que no sale (%).',
+      (select jsonb_agg(to_jsonb(r)) from public.conta_impuesto_reglas(v_a) r where r.form_code = '349');
   end if;
   insert into _p values ('entry', (select id::text from public.journal_entry where company_id = v_a order by entry_date desc, id limit 1));
-  raise notice 'PRUEBA 349 · 1: sin operaciones con la UE ni ROI, no sale.';
+  raise notice 'PRUEBA 349 · 1: sin operaciones con la UE ni ROI, no sale, y la regla dice por qué.';
 end $$;
+select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; v jsonb; k jsonb;
+begin
+  v := public.conta_impuesto_obligaciones_calcular(v_a);
+  if (select x->>'hecho' from jsonb_array_elements(v) x where x->>'modelo' = '349') is distinct from 'no_toca'
+     or exists (select 1 from public.tax_obligation where company_id = v_a and form_code = '349' and valid_to is null) then
+    raise exception 'PRUEBA 349 · 1: calcular escribe un 349 que no sale (%).', v;
+  end if;
+  k := public.conta_impuesto_calendario(v_a);
+  if not exists (select 1 from jsonb_array_elements(k->'no_presenta') x
+                  where x->>'modelo' = '349' and x->>'por_que' = 'No tienes compras ni ventas con empresas de la UE en los últimos 12 meses.')
+     or exists (select 1 from jsonb_array_elements(k->'modelos') x where x->>'modelo' = '349') then
+    raise exception 'PRUEBA 349 · 1: el calendario no dice «No te sale el 349» (no_presenta: %).', k->'no_presenta';
+  end if;
+  raise notice 'PRUEBA 349 · 1: calcular no escribe nada y el calendario lo pinta: %', k->'no_presenta';
+end $$;
+reset role;
 
 -- ── 2 · Una compra intracomunitaria: sale, y calcular la escribe ────────────
 do $$
@@ -138,10 +165,15 @@ begin
   if exists (select 1 from public.conta_impuesto_reglas(v_a) where form_code = '349') then
     raise exception 'PRUEBA 349 · 6: después de la vuelta atrás, el 349 sigue saliendo por operaciones (la regla de la 0120 solo mira el ROI).';
   end if;
+  -- Las dos, byte a byte las de antes (medidas en staging y en producción el 19/10).
+  if (select md5(prosrc) from pg_proc where oid = 'public.conta_impuesto_calendario(uuid,date)'::regprocedure) <> 'ff7dbd56eb80d04833821665c0e012c1'
+     or (select md5(prosrc) from pg_proc where oid = 'public.conta_impuesto_reglas(uuid)'::regprocedure) <> 'c327986c6c692e35680e88e04c562f6c' then
+    raise exception 'PRUEBA 349 · 6: la vuelta atrás no deja el calendario de la 0190 y la regla de la 0120 tal cual.';
+  end if;
   if position('compras_ue_12_meses' in pg_get_functiondef('public.conta_impuesto_reglas(uuid)'::regprocedure)) > 0 then
     raise exception 'PRUEBA 349 · 6: la vuelta atrás no devuelve la regla de la 0120.';
   end if;
-  raise notice 'PRUEBA 349 · 6: vuelta atrás hecha: la regla de la 0120 y sin conta_paises_ue.';
+  raise notice 'PRUEBA 349 · 6: vuelta atrás hecha: la regla de la 0120, el calendario de la 0190 y sin conta_paises_ue.';
 end $$;
 \i supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
 do $$ begin
