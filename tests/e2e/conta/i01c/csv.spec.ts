@@ -148,16 +148,17 @@ test('Pegar el CSV: trae el original de Hacienda, la ficha con el PDF al lado, y
   expect(llamadas.v, 'un CSV sin forma ha llamado a la función').toBe(0)
 
   // Mientras trae, el indicador (la respuesta se retiene un momento para verlo).
-  await page.route('**/functions/v1/conta-justificante-csv', async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); await r.continue() })
+  await page.route('**/functions/v1/conta-justificante-csv', async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); await r.continue().catch(() => {}) })
   await campo(page).fill(j.csv.toLowerCase().replace(/(.{4})/g, '$1 '))
   await page.getByRole('button', { name: 'Traer de Hacienda' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Trayendo el justificante de Hacienda…' })).toBeVisible()
   await foto(page, 'csv-trayendo')
-  await page.unroute('**/functions/v1/conta-justificante-csv')
 
-  // La ficha, rellena, con el PDF al lado.
+  // La ficha, rellena, con el PDF al lado. (La retención se quita cuando ya ha llegado: quitarla
+  // con la petición retenida la daba por atendida y la respuesta no llegaba; e2e 641.)
   const ficha = page.locator('[data-prueba="ficha-traida"]')
   await expect(ficha).toBeVisible({ timeout: 30_000 })
+  await page.unroute('**/functions/v1/conta-justificante-csv')
   await expect(ficha.getByText('Traído de Hacienda')).toBeVisible()
   await expect(ficha.getByText(`Retenciones · ${j.periodo} ${j.ejercicio}`)).toBeVisible()
   await expect(ficha.getByText(j.justificante)).toBeVisible()
@@ -226,7 +227,7 @@ test('Móvil: un 303 a cero que compensó con trimestres anteriores', async ({ p
   await traer(page, j.csv)
   const ficha = page.locator('[data-prueba="ficha-traida"]')
   await expect(ficha.getByText('647,28 € compensado con trimestres anteriores')).toBeVisible({ timeout: 30_000 })
-  await expect(ficha.getByText('0,00 €', { exact: true })).toBeVisible()
+  await expect(ficha.locator('[data-prueba="resultado"] .s-cifra')).toHaveText('0,00 €')
   await sinDesbordar(page, 'Ficha del 303 compensado')
   await foto(page, 'csv-compensado')
   await page.getByRole('button', { name: 'Guardar en Presentados' }).click()

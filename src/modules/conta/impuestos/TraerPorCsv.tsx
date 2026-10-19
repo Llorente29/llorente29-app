@@ -134,7 +134,7 @@ function Ficha({ j, pdf, mirado, guardando, alGuardar, alCancelar }: {
           <dt>CSV</dt><dd className="s-impuestos-csv">{j.csv}</dd>
           <dt>Expediente</dt><dd>{j.expediente ?? '—'}</dd>
           <dt>Presentador</dt><dd>{j.presentador ? `${j.presentador.nombre} (${j.presentador.nif})` : '—'}</dd>
-          <dt>Resultado</dt><dd><span className="s-cifra">{res.importe}</span> · {res.que}{res.compensado && <span className="s-csv-compensado">{res.compensado}</span>}</dd>
+          <dt>Resultado</dt><dd data-prueba="resultado"><span className="s-cifra">{res.importe}</span> · {res.que}{res.compensado && <span className="s-csv-compensado">{res.compensado}</span>}</dd>
         </dl>
         {casillas.length > 0 && (
           <details className="s-csv-casillas" open>
