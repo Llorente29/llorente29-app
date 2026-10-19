@@ -18,6 +18,7 @@ import { ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/pi
 import { CabeceraEntradaMovil, MarcoAjustes } from '@/modules/conta/ajustes/MarcoAjustes'
 import { useAjustes } from '@/modules/conta/ajustes/contextoAjustes'
 import { DetalleContable, QuienEres, TusImpuestos } from '@/modules/conta/empresa/ApartadosEmpresa'
+import { ApartadoAsesoria } from '@/modules/conta/empresa/ApartadoAsesoria'
 import { Actividades, EjercicioMeses, Socios } from '@/modules/conta/empresa/ApartadosActividad'
 import { RegistroIA, Sugerencias } from '@/modules/conta/ia/PiezasIA'
 import { ParaPresentar } from '@/modules/conta/empresa/ApartadoPresentar'
@@ -82,6 +83,8 @@ function Entrada({ id }: { id: string }) {
         <>
           {cabeza}
           <TusImpuestos {...p} />
+          {/* P01 · La marca de la CUENTA: con ella sale Impuestos › Tus clientes. */}
+          <ApartadoAsesoria quien={quien} movil={movil} />
           <ParaPresentar d={d} movil={movil} hoy={hoy} />
           <DetalleContable {...p} planActivo={plan.datos?.activo ?? false} />
         </>
