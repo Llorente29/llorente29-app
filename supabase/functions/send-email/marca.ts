@@ -20,7 +20,14 @@ export type Remitente =
   | { ok: true; from: string; replyTo: string | null; marca: Marca | null }
   | { ok: false; motivo: string };
 
-export function remitenteDe(marca: unknown): Remitente {
+const CORREO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/**
+ * Quién manda el correo. Con marca, `responderA` (P01) pone el «responder a» de
+ * ESTE envío —el correo de la asesoría que manda el resumen—; si no vale, se
+ * dice y no se manda. Sin marca no se usa: Folvy sigue exactamente igual.
+ */
+export function remitenteDe(marca: unknown, responderA?: unknown): Remitente {
   if (marca === undefined || marca === null || marca === '') {
     return { ok: true, from: REMITENTE_FOLVY.from, replyTo: REMITENTE_FOLVY.replyTo, marca: null };
   }
@@ -29,7 +36,43 @@ export function remitenteDe(marca: unknown): Remitente {
   if (!m.remitente) {
     return { ok: false, motivo: `La marca «${m.nombre}» aún no tiene remitente: su dominio no está verificado en Resend. No se manda desde otra dirección.` };
   }
+  if (responderA !== undefined && responderA !== null && responderA !== '') {
+    const r = String(responderA).trim().toLowerCase();
+    if (!CORREO.test(r) || /[\r\n,;<>]/.test(r)) return { ok: false, motivo: `El correo para las respuestas no vale: ${String(responderA).slice(0, 80)}` };
+    return { ok: true, from: m.remitente, replyTo: r, marca: m };
+  }
   return { ok: true, from: m.remitente, replyTo: m.responderA, marca: m };
+}
+
+export type Cerrojo = { abierto: true } | { abierto: false; motivo: string };
+
+/**
+ * P01 · EL FRENO DE LOS CORREOS CON MARCA, por tipo (decisión de Julio, 19/10).
+ * Todos cerrados salvo lo que Julio abra en el secreto CORREO_MARCA_ABIERTOS de
+ * send-email: una lista separada por comas, cada entrada
+ *   · `plantilla`          abierta a cualquiera, o
+ *   · `plantilla:correo`   abierta solo a ese destinatario (el de prueba).
+ * Vacío o sin poner = todo cerrado. Sin marca (Folvy) no se frena nada: lo que
+ * ya sale sigue saliendo igual.
+ */
+export function cerrojoMarca(marca: Marca | null, plantilla: string, destino: string, abiertos: string | undefined | null): Cerrojo {
+  if (!marca) return { abierto: true };
+  const para = destino.trim().toLowerCase();
+  const entradas = String(abiertos ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+  for (const e of entradas) {
+    const i = e.indexOf(':');
+    const tipo = i < 0 ? e : e.slice(0, i);
+    const solo = i < 0 ? null : e.slice(i + 1).trim();
+    if (tipo !== plantilla.toLowerCase()) continue;
+    if (solo === null || solo === para) return { abierto: true };
+  }
+  const soloA = entradas.filter((e) => e.startsWith(plantilla.toLowerCase() + ':')).length > 0;
+  return {
+    abierto: false,
+    motivo: soloA
+      ? `Los correos «${plantilla}» de ${marca.nombre} solo están abiertos para la prueba, no para ${para}. No se ha mandado nada.`
+      : `Los correos «${plantilla}» de ${marca.nombre} están cerrados hasta que Julio los abra. No se ha mandado nada.`,
+  };
 }
 
 /**
