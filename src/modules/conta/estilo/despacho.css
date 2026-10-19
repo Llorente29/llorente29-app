@@ -1,0 +1,128 @@
+/* src/modules/conta/estilo/despacho.css
+ *
+ * P01 · «Impuestos de tus clientes» (maqueta_despacho.png). Solo tokens del
+ * sistema (--s-*): con Sumied son la identidad del 14/10 (acción #1E63C9,
+ * apoyo #4A5B73, bordes de campo #7F8FA6, separadores #DCE5F0, Inter).
+ * Ordenador: tabla de anchos fijos (nada se parte ni se corta a 1440 px).
+ * Móvil (≤ 767 px): cada cliente en una tarjeta, filtros deslizables y la
+ * barra de lotes fija abajo.
+ */
+
+.s-despacho { max-width: 1440px; padding-bottom: 96px; }
+.s-despacho .s-tarjeta-cifra-valor, .s-despacho-cifra { font-family: var(--s-letra); font-variant-numeric: tabular-nums; }
+
+.s-despacho-cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s-4); flex-wrap: wrap; margin-bottom: var(--s-4); }
+.s-despacho-titulo { margin: 0; font-size: 28px; line-height: 1.2; font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-despacho-linea { margin: var(--s-1) 0 0; }
+.s-despacho-acciones { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.s-despacho-trimestre .s-control { min-width: 190px; }
+
+.s-despacho-aviso {
+  display: flex; justify-content: space-between; gap: var(--s-3); align-items: baseline; margin: 0 0 var(--s-4);
+  padding: var(--s-3) var(--s-4); border-radius: var(--s-radio-bloque); font-size: var(--s-t-m);
+  background: var(--s-ok-fondo); color: var(--s-ok);
+}
+.s-despacho-aviso[data-tono='falta'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.s-despacho-cerrar { border: 0; background: none; font: inherit; font-size: var(--s-t-l); color: inherit; cursor: pointer; padding: 0 var(--s-1); }
+
+.s-despacho-cifras { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s-3); margin-bottom: var(--s-4); }
+.s-despacho-atrasados { margin: calc(-1 * var(--s-2)) 0 var(--s-3); color: var(--s-falta); font-size: var(--s-t-s); }
+
+.s-despacho-filtros { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.s-despacho-filtro {
+  font: inherit; font-size: var(--s-t-s); color: var(--s-tinta); background: var(--s-superficie);
+  border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-pildora);
+  padding: 6px var(--s-3); cursor: pointer; white-space: nowrap; min-height: 32px;
+}
+.s-despacho-filtro[aria-pressed='true'], .s-despacho-filtro[data-activo='si'] { background: var(--s-tinta); border-color: var(--s-tinta); color: var(--s-superficie); }
+.s-despacho-filtro:focus-visible { outline: 2px solid var(--s-accion); outline-offset: 2px; }
+select.s-despacho-filtro { appearance: none; padding-right: var(--s-6);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 10px) 50%; background-size: 4px 4px; background-repeat: no-repeat; }
+
+.s-despacho-lista { padding: 0; overflow: hidden; }
+.s-tabla.s-despacho-tabla { table-layout: fixed; width: 100%; }
+.s-tabla.s-despacho-tabla th { text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); font-size: var(--s-t-xs); color: var(--s-apoyo); }
+.s-tabla.s-despacho-tabla th, .s-tabla.s-despacho-tabla td { padding: var(--s-3); vertical-align: top; overflow-wrap: break-word; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-tabla.s-despacho-tabla .s-despacho-col-elegir { width: 44px; padding-left: var(--s-4); }
+.s-tabla.s-despacho-tabla th:nth-child(2) { width: 20%; }
+.s-tabla.s-despacho-tabla th:nth-child(3) { width: 31%; }
+.s-tabla.s-despacho-tabla th:nth-child(4), .s-tabla.s-despacho-tabla th:nth-child(5) { width: 9%; }
+.s-tabla.s-despacho-tabla th:nth-child(6) { width: 11%; }
+.s-tabla.s-despacho-tabla tr[data-elegido='si'] td { background: var(--s-accion-suave); }
+.s-despacho-cifra { text-align: right; white-space: nowrap; }
+.s-despacho-cliente { display: block; font-weight: var(--s-peso-titulo); color: var(--s-tinta); text-decoration: none; }
+.s-despacho-cliente:hover, .s-despacho-cliente:focus-visible { color: var(--s-accion); text-decoration: underline; }
+.s-despacho-tipo { display: block; margin-top: 2px; font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-despacho-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.s-despacho-chips .s-chip { white-space: nowrap; }
+.s-despacho-paso { color: var(--s-tinta); }
+.s-despacho-responsable {
+  display: inline-flex; align-items: center; gap: var(--s-2); border: 0; background: none; padding: 2px 0;
+  font: inherit; color: var(--s-tinta); cursor: pointer; text-align: left;
+}
+.s-despacho-responsable:hover .s-despacho-sin, .s-despacho-responsable:focus-visible { color: var(--s-accion); text-decoration: underline; }
+.s-despacho-iniciales {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 50%;
+  background: var(--s-accion-suave); color: var(--s-accion); font-size: 11px; font-weight: var(--s-peso-titulo);
+}
+.s-despacho-sin { color: var(--s-accion); }
+.s-despacho-pie { margin: 0; padding: var(--s-3) var(--s-4); font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-despacho-enlace { border: 0; background: none; padding: 0; font: inherit; color: var(--s-accion); text-decoration: underline; cursor: pointer; }
+.s-despacho-ninguno, .s-despacho-vacio { padding: var(--s-6); color: var(--s-apoyo); }
+.s-despacho-tarjetas { display: none; list-style: none; margin: 0; padding: 0; }
+
+/* La barra de lotes: oscura, fija abajo, dentro del ancho de la pantalla. */
+.s-despacho-lote {
+  position: sticky; bottom: var(--s-4); z-index: 5; margin-top: var(--s-4);
+  display: flex; justify-content: space-between; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  padding: var(--s-3) var(--s-4); border-radius: var(--s-radio-bloque);
+  background: var(--s-tinta); color: var(--s-superficie); box-shadow: var(--s-sombra);
+}
+.s-despacho-lote-resumen { margin: 0; font-size: var(--s-t-m); }
+.s-despacho-lote-acciones { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; }
+.s-despacho-lote-quitar { border: 0; background: none; font: inherit; font-size: var(--s-t-s); color: var(--s-superficie); text-decoration: underline; cursor: pointer; }
+
+.s-despacho-confirmar { list-style: none; margin: var(--s-2) 0 var(--s-3); padding: 0; border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-despacho-confirmar li { display: flex; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-despacho-confirmar-fuera li { color: var(--s-apoyo); }
+.s-despacho-confirmar-nota { margin: var(--s-2) 0; font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-despacho-motivo { margin: var(--s-3) 0 0; padding: var(--s-3); border-radius: var(--s-radio-campo); background: var(--s-duda-fondo); color: var(--s-duda); }
+.s-despacho-equipo { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-despacho-persona { display: flex; align-items: center; gap: var(--s-2); min-height: 36px; cursor: pointer; }
+.s-despacho-volver { margin: 0 0 var(--s-3); }
+.s-despacho-volver a { color: var(--s-accion); }
+
+@media (max-width: 1099px) {
+  .s-despacho-cifras { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 767px) {
+  .s-despacho-titulo { font-size: 22px; }
+  .s-despacho-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Los filtros se deslizan de lado, sin partirse. */
+  .s-despacho-filtros { flex-wrap: nowrap; overflow-x: auto; margin-left: calc(-1 * var(--s-4)); margin-right: calc(-1 * var(--s-4)); padding: 0 var(--s-4) var(--s-1); scrollbar-width: none; }
+  .s-despacho-filtros::-webkit-scrollbar { display: none; }
+  .s-despacho-filtros > * { flex: none; }
+  .s-despacho-lista { background: none; border: 0; box-shadow: none; }
+  .s-tabla.s-despacho-tabla { display: none; }
+  .s-despacho-tarjetas { display: flex; flex-direction: column; gap: var(--s-3); }
+  .s-despacho-tarjeta {
+    display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4);
+    background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+  }
+  .s-despacho-tarjeta[data-elegido='si'] { border-color: var(--s-accion); background: var(--s-accion-suave); }
+  .s-despacho-tarjeta-cabeza { display: flex; gap: var(--s-3); align-items: flex-start; }
+  .s-despacho-tarjeta-cabeza input { margin-top: 3px; width: 20px; height: 20px; flex: none; }
+  .s-despacho-datos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin: 0; }
+  .s-despacho-datos dt { font-size: var(--s-t-xs); color: var(--s-apoyo); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); }
+  .s-despacho-datos dd { margin: 2px 0 0; }
+  .s-despacho-datos .s-despacho-cifra { text-align: left; }
+  .s-despacho-paso { margin: 0; }
+  .s-despacho-pie { padding: var(--s-3) 0; }
+  /* La barra de lotes, fija abajo y a todo el ancho. */
+  .s-despacho-lote { position: fixed; left: 0; right: 0; bottom: 0; margin: 0; border-radius: 0; padding: var(--s-3) var(--s-4) calc(var(--s-3) + env(safe-area-inset-bottom, 0px)); }
+  .s-despacho-lote-acciones { width: 100%; }
+  .s-despacho-lote-acciones .s-boton { flex: 1 1 auto; justify-content: center; }
+  .s-despacho-lote-acciones .s-boton:last-child { flex-basis: 100%; }
+}

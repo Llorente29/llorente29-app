@@ -14,10 +14,13 @@ import { Calendario } from './Calendario'
 import { Certificados } from './Certificados'
 import { Presentados } from './Presentados'
 import { Sociedades } from './Sociedades'
+import { Despacho } from './despacho/Despacho'
 
 export default function ImpuestosPage() {
   const { pestana } = useParams<{ pestana?: string }>()
   const { activa } = useEmpresas()
+  // P01 · Los impuestos de los clientes de una asesoría: no dependen de su propia empresa.
+  if (pestana === 'clientes') return <Despacho />
   if (!activa) {
     return (
       <div className="s-pantalla">

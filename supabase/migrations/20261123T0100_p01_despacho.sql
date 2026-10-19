@@ -249,7 +249,7 @@ begin
   ),
   f0 as (
     select b.*, coalesce(b.due_date, pl.presentacion) as plazo, coalesce(b.due_date_direct_debit, pl.domiciliacion) as plazo_dom,
-           coalesce(b.payment_mode, nullif(b.pago_obl, 'none')) = 'direct_debit' as domicilia,
+           coalesce(coalesce(b.payment_mode, nullif(b.pago_obl, 'none')) = 'direct_debit', false) as domicilia,
            coalesce(b.status, 'pending') in ('filed', 'booked', 'paid', 'offset', 'refunded') as presentado,
            coalesce(b.status, 'pending') = 'not_required' as no_hace_falta,
            (select count(*) from public.tax_return_check k where k.tax_return_id = b.rid and k.result = 'error') as errores,
@@ -371,7 +371,7 @@ begin
                'usuario', c.resp_id, 'nombre', public.conta_impuesto_nombre_de_en(c.resp_id, p_account),
                'activa', exists (select 1 from public.user_profiles u where u.user_id = c.resp_id and u.account_id = p_account and u.active)) end,
            'certificado', jsonb_build_object('id', c.cert, 'estado', c.cert_estado, 'titular', c.cert_titular, 'caduca', c.cert_caduca,
-               'dias', case when c.cert_caduca is null then null else ((c.cert_caduca at time zone 'Europe/Madrid')::date - v_hoy) end),
+               'dias', case when c.cert_caduca is null then null else ((c.cert_caduca at time zone 'Europe/Madrid')::date - (now() at time zone 'Europe/Madrid')::date) end),
            'listos', c.n_listos, 'listos_303', c.n_listos_303, 'con_avisos', c.n_avisos > 0, 'urgentes', c.n_urgentes,
            'pendiente', c.pendiente, 'siguiente_paso', c.siguiente_paso, 'orden', c.orden)
          order by c.orden, c.nombre), '[]')
