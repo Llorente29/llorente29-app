@@ -7,6 +7,10 @@ conta-hacienda
 # send-email con la plantilla nueva invitacion_asesoria (las demás, igual).
 conta-asesoria
 send-email
+# P01 · las mismas dos: conta-asesoria con la acción «resumen» (el resumen del
+# trimestre a los clientes, con el «responder a» de la asesoría) y send-email con
+# la plantilla resumen_trimestre, cerrada por el freno con cualquier marca. En
+# staging CORREO_MARCA_ABIERTOS no está: todo cerrado, y la e2e lo comprueba.
 # I01c · P1 definitiva: conta-justificante-csv, el justificante por su CSV. Fuera
 # de producción usa SIEMPRE el doble (el PDF inventado que la e2e deja en
 # <cuenta>/doble-aeat/<CSV>.pdf): staging no llama nunca a Hacienda.
