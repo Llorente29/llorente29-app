@@ -3,19 +3,19 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01c · P1 definitiva · El justificante por CSV (rama conta/i01c-csv).
-# Va DESPUÉS de la de los justificantes (0260, PR #247, aplicada): su copia,
-# tests/conta/produccion/tanda-i01c-justificantes-20261019.txt.
+# P01 · Impuestos de tus clientes (rama conta/p01-despacho, PR #248).
+# Va DESPUÉS de la del justificante por CSV (0270, PR #249, aplicada): su copia,
+# tests/conta/produccion/tanda-i01c-csv-20261019.txt.
 #
-#   1. 0270 — AÑADE a tax_return cuatro columnas que admiten nulos
-#      (aeat_expediente, presenter_tax_id, presenter_name y receipt_source,
-#      con su CHECK). CAMBIA en caliente, declarado con su prueba de staging:
-#      conta_impuesto_justificante_apuntar (los guarda) y
-#      conta_impuesto_presentados (da lo traído, el expediente, el presentador
-#      y lo compensado del 303), las dos con la misma firma.
+#   1. 0100 — SOLO AÑADE: en accounts, tax_advisor_since y tax_advisor_by
+#      (admiten nulos); la tabla tax_client_assignee con su RLS; y ocho
+#      funciones nuevas (conta_despacho_* y conta_impuesto_nombre_de_en). No
+#      cambia ninguna función que exista ni escribe ninguna fila: ninguna cuenta
+#      queda marcada como asesoría.
 #
-# No toca el camino del pedido. No escribe ninguna declaración. Lleva una
-# función nueva que desplegar a mano: conta-justificante-csv (la autoriza Julio).
+# No toca el camino del pedido. No escribe ninguna declaración. Funciones que
+# desplegar a mano DESPUÉS de la tanda, con el sí de Julio: send-email,
+# conta-asesoria, conta-contrasena y conta-crear-cuenta.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/i01c-csv.sql
-supabase/migrations/20261122T0270_i01c_csv.sql
+cuenta: scripts/conta/produccion/cuentas/p01-despacho.sql
+supabase/migrations/20261123T0100_p01_despacho.sql

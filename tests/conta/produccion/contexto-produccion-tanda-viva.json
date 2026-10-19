@@ -1,19 +1,16 @@
 {
- "_que": "I01c · P1 definitiva · el justificante por CSV · contexto de producción de la tanda viva (20261122T0270), medido en SOLO LECTURA el 19/10 a las 13:43 UTC, después de la 0260, con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen tax_return (2 filas contadas; ninguna de las cuatro columnas de la 0270) y las dos funciones con la misma firma (la de la 0260 y la de la 0210); nada del camino del pedido; nada en el historial.",
- "medido": "2026-10-19T13:43Z",
+ "_que": "P01 · Impuestos de tus clientes · contexto de producción de la tanda viva (20261123T0100), medido en SOLO LECTURA el 19/10 a las 17:08 UTC, después de la 0270, con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe accounts (2 filas contadas; ninguna de las dos columnas de la 0100); no existen tax_client_assignee ni ninguna de las ocho funciones; nada del camino del pedido; nada en el historial.",
+ "medido": "2026-10-19T17:08Z",
  "tanda": {
-  "supabase/migrations/20261122T0270_i01c_csv.sql": "c4e179ade55dcb99ce522652ee995a54"
+  "supabase/migrations/20261123T0100_p01_despacho.sql": "7b1165e9398fc4226c361f72e331381a"
  },
  "contexto": {
   "tablas": [
-   "public.tax_return"
+   "public.accounts"
   ],
-  "funciones": [
-   "public.conta_impuesto_justificante_apuntar(uuid,jsonb)",
-   "public.conta_impuesto_presentados(uuid)"
-  ],
+  "funciones": [],
   "filas": {
-   "public.tax_return": 0
+   "public.accounts": 2
   },
   "otras": {},
   "camino": {

@@ -53,7 +53,7 @@ begin
     raise exception 'Carril %: ya tiene datos. Antes, borrar.sql.', n;
   end if;
   if (select count(*) from auth.users where id in (select id from _plantilla_usuarios)) <> (select count(*) from _plantilla_usuarios) then
-    raise exception 'Carril %: faltan usuarios de la plantilla (hay % de %). ¿Están las semillas C00, C01, C06 y S01?', n,
+    raise exception 'Carril %: faltan usuarios de la plantilla (hay % de %). ¿Están las semillas C00, C01, C06, S01 y P01?', n,
       (select count(*) from auth.users where id in (select id from _plantilla_usuarios)), (select count(*) from _plantilla_usuarios);
   end if;
 
@@ -160,7 +160,13 @@ begin
         when c.atttypid = 'json'::regtype then format('pg_temp.mt(%s::text)::json', v)
         when c.atttypid = 'text[]'::regtype then format('case when %s is null then null else coalesce((select array_agg(pg_temp.mt(e) order by o) from unnest(%s) with ordinality u(e, o)), ''{}''::text[]) end', v, v)
         else v end;
-      if c.unico is not null then v := format('case when %s is null or not (%s) then %s else %s || %L end', v, c.unico, v, v, '-c' || n); end if;
+      -- P01 (19/10): una huella (64 hex, con su CHECK: la de un certificado, el
+      -- token de una invitación) no admite «-cN»: pasa a ser la huella de sí
+      -- misma con «-cN». Sigue siendo única por carril y cumple su CHECK.
+      if c.unico is not null then
+        v := format('case when %1$s is null or not (%2$s) then %1$s when %1$s ~ ''^[0-9a-f]{64}$'' then encode(extensions.digest(%1$s || %3$L, ''sha256''), ''hex'') else %1$s || %3$L end',
+                    v, c.unico, '-c' || n);
+      end if;
       -- Un usuario del carril nace sin enlaces pendientes: los tokens de
       -- confirmar, recuperar o cambiar el correo son únicos y no son suyos.
       if cp.tabla = 'auth.users'::regclass and c.attname::text like '%token%' and c.atttypid in ('text'::regtype, 'varchar'::regtype) then
