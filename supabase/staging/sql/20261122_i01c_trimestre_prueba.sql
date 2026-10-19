@@ -7,7 +7,7 @@
 -- Con la empresa A (Taberna de Prueba Norte, NIF inventado B28000016) y
 -- cifras INVENTADAS que reproducen la cartera de Foodint del 19/10 (pendiente
 -- de antes 2.309,27; el 1T sale a compensar 2.134,18; el 2T aplica 647,28; la
--- [110] del 3T, 3.796,17), en 2025:
+-- [110] del 3T, 3.796,17), en 2026 (los festivos cargados son los de 2026 y 2027):
 --   1. El borrador del 303 del 3T, calculado ANTES de apuntar el 1T y el 2T
 --      (como el de Foodint, a las 07:07): sin [110].
 --   2. Se apuntan el 1T y el 2T por su justificante. El trimestre dice que el
@@ -33,9 +33,9 @@ set local statement_timeout = '120s';
 create temporary table _p (k text primary key, val text) on commit drop;
 grant all on _p to authenticated;
 insert into _p values
-  ('1T', '{"modelo":"303","ejercicio":2025,"periodo":"1T","presentada":"2025-04-20T10:06:28","csv":"PRUEBATRIM1T2025","justificante":"9993030002501","nif":"B28000016","resultado":-2134.18,
+  ('1T', '{"modelo":"303","ejercicio":2026,"periodo":"1T","presentada":"2026-04-20T10:06:28","csv":"PRUEBATRIM1T2026","justificante":"9993030002501","nif":"B28000016","resultado":-2134.18,
            "casillas":{"27":5000,"45":7134.18,"46":-2134.18,"64":-2134.18,"65":100,"66":-2134.18,"110":2309.27,"78":0,"87":2309.27,"69":-2134.18,"71":-2134.18}}'),
-  ('2T', '{"modelo":"303","ejercicio":2025,"periodo":"2T","presentada":"2025-07-20T10:51:15","csv":"PRUEBATRIM2T2025","justificante":"9993030002502","nif":"B28000016","resultado":0,
+  ('2T', '{"modelo":"303","ejercicio":2026,"periodo":"2T","presentada":"2026-07-20T10:51:15","csv":"PRUEBATRIM2T2026","justificante":"9993030002502","nif":"B28000016","resultado":0,
            "casillas":{"27":8000,"45":7352.72,"46":647.28,"64":647.28,"65":100,"66":647.28,"110":4443.45,"78":647.28,"87":3796.17,"69":0,"71":0}}');
 
 do $$
@@ -44,8 +44,8 @@ begin
   if (select tax_id from public.company where id = v_a) <> 'B28000016' then
     raise exception 'PRUEBA TRIMESTRE: la empresa A ya no tiene el NIF inventado B28000016: esta prueba ya no mide lo que cree.';
   end if;
-  if exists (select 1 from public.tax_return where company_id = v_a and fiscal_year = 2025) then
-    raise exception 'PRUEBA TRIMESTRE: A ya tiene declaraciones de 2025 en staging: esta prueba ya no mide lo que cree.';
+  if exists (select 1 from public.tax_return where company_id = v_a and fiscal_year = 2026) then
+    raise exception 'PRUEBA TRIMESTRE: A ya tiene declaraciones de 2026 en staging: esta prueba ya no mide lo que cree.';
   end if;
 end $$;
 
@@ -56,16 +56,16 @@ set local role authenticated;
 do $$
 declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; t jsonb; c jsonb;
 begin
-  perform public.conta_impuesto_303_calcular(v_a, 2025, '3T');
-  t := public.conta_impuesto_trimestre(v_a, 2025, 3);
+  perform public.conta_impuesto_303_calcular(v_a, 2026, '3T');
+  t := public.conta_impuesto_trimestre(v_a, 2026, 3);
   if (t->'cartera'->>'desfasada')::boolean or t->'cartera'->'esperada_110' <> 'null'::jsonb then
     raise exception 'PRUEBA TRIMESTRE · 1: sin el 2T presentado no hay [110] que esperar, y da %.', t->'cartera';
   end if;
   perform public.conta_impuesto_justificante_apuntar(v_a, (select val::jsonb from _p where k = '1T'));
   perform public.conta_impuesto_justificante_apuntar(v_a, (select val::jsonb from _p where k = '2T'));
-  t := public.conta_impuesto_trimestre(v_a, 2025, 3);
+  t := public.conta_impuesto_trimestre(v_a, 2026, 3);
   c := t->'cartera';
-  if (c->>'desfasada')::boolean is not true or (c->'esperada_110'->>'importe')::numeric <> 3796.17 or c->'esperada_110'->>'de' <> '2T/2025'
+  if (c->>'desfasada')::boolean is not true or (c->'esperada_110'->>'importe')::numeric <> 3796.17 or c->'esperada_110'->>'de' <> '2T/2026'
      or c->'borrador'->>'estado' <> 'draft' then
     raise exception 'PRUEBA TRIMESTRE · 2: el 3T tendría que estar desfasado y esperar 3.796,17 del 2T; da %.', c;
   end if;
@@ -76,10 +76,10 @@ end $$;
 do $$
 declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; c jsonb; f1 jsonb; f2 jsonb;
 begin
-  c := public.conta_impuesto_trimestre(v_a, 2025, 3)->'cartera';
+  c := public.conta_impuesto_trimestre(v_a, 2026, 3)->'cartera';
   select x into f1 from jsonb_array_elements(c->'filas') x where x->>'periodo' = '1T';
   select x into f2 from jsonb_array_elements(c->'filas') x where x->>'periodo' = '2T';
-  if (c->'pendiente_al_empezar'->>'importe')::numeric <> 2309.27 or c->'pendiente_al_empezar'->>'de' <> '1T/2025' then
+  if (c->'pendiente_al_empezar'->>'importe')::numeric <> 2309.27 or c->'pendiente_al_empezar'->>'de' <> '1T/2026' then
     raise exception 'PRUEBA TRIMESTRE · 3: lo pendiente al empezar el año da %.', c->'pendiente_al_empezar';
   end if;
   if (f1->>'presentada')::boolean is not true or f1->>'resultado' <> 'to_offset' or (f1->>'importe')::numeric <> 2134.18
@@ -98,8 +98,8 @@ end $$;
 do $$
 declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; c jsonb; f3 jsonb;
 begin
-  perform public.conta_impuesto_303_calcular(v_a, 2025, '3T');
-  c := public.conta_impuesto_trimestre(v_a, 2025, 3)->'cartera';
+  perform public.conta_impuesto_303_calcular(v_a, 2026, '3T');
+  c := public.conta_impuesto_trimestre(v_a, 2026, 3)->'cartera';
   select x into f3 from jsonb_array_elements(c->'filas') x where x->>'periodo' = '3T';
   if (c->>'desfasada')::boolean or (c->'borrador'->>'c110')::numeric <> 3796.17 or (f3->>'c110')::numeric <> 3796.17 or (f3->>'c87')::numeric <> 3796.17 then
     raise exception 'PRUEBA TRIMESTRE · 4: vuelto a calcular, el 3T da % (borrador %).', f3, c->'borrador';
@@ -111,7 +111,7 @@ end $$;
 do $$
 declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc'; t jsonb; m text; m2 jsonb;
 begin
-  t := public.conta_impuesto_trimestre(v_a, 2025, 3);
+  t := public.conta_impuesto_trimestre(v_a, 2026, 3);
   select string_agg(x->>'modelo' || ':' || coalesce(x->>'periodo', '—'), ' ' order by o) into m
     from jsonb_array_elements(t->'modelos') with ordinality e(x, o);
   if m <> '303:3T 111:3T 115:3T 202:2P' then
@@ -122,12 +122,12 @@ begin
      or (select x->>'presentacion' from jsonb_array_elements(t->'modelos') x where x->>'modelo' = '202') is null then
     raise exception 'PRUEBA TRIMESTRE · 5: la tira del 3T da %.', t->'modelos';
   end if;
-  select x into m2 from jsonb_array_elements(public.conta_impuesto_trimestre(v_a, 2025, 2)->'modelos') x where x->>'modelo' = '202';
+  select x into m2 from jsonb_array_elements(public.conta_impuesto_trimestre(v_a, 2026, 2)->'modelos') x where x->>'modelo' = '202';
   if (m2->>'no_toca')::boolean is not true or m2->>'periodo' is not null then
     raise exception 'PRUEBA TRIMESTRE · 5: en el 2T, el 202 da %.', m2;
   end if;
   -- El 2T presentado: con su justificante y sus casillas.
-  if (select jsonb_array_length(x->'declaracion'->'casillas') from jsonb_array_elements(public.conta_impuesto_trimestre(v_a, 2025, 2)->'modelos') x where x->>'modelo' = '303') < 5 then
+  if (select jsonb_array_length(x->'declaracion'->'casillas') from jsonb_array_elements(public.conta_impuesto_trimestre(v_a, 2026, 2)->'modelos') x where x->>'modelo' = '303') < 5 then
     raise exception 'PRUEBA TRIMESTRE · 5: el 303 del 2T no trae sus casillas.';
   end if;
   raise notice 'PRUEBA TRIMESTRE · 5: la tira del 3T es 303, 111, 115 y 202 (2P); en el 2T, el 202 no toca.';
@@ -138,13 +138,13 @@ do $$
 declare v_a constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
 begin
   begin
-    perform public.conta_impuesto_trimestre(v_a, 2025, 5);
+    perform public.conta_impuesto_trimestre(v_a, 2026, 5);
     raise exception 'PRUEBA TRIMESTRE · 6: acepta el trimestre 5.';
   exception when sqlstate '22023' then null;
   end;
   perform set_config('request.jwt.claims', '{"sub":"c01b0000-0000-4000-8000-0000000000b1","role":"authenticated"}', true);
   begin
-    perform public.conta_impuesto_trimestre(v_a, 2025, 3);
+    perform public.conta_impuesto_trimestre(v_a, 2026, 3);
     raise exception 'PRUEBA TRIMESTRE · 6: otra cuenta ve el trimestre de A.';
   exception when sqlstate '42501' then null;
   end;
