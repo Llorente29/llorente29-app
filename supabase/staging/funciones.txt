@@ -7,3 +7,7 @@ conta-hacienda
 # send-email con la plantilla nueva invitacion_asesoria (las demás, igual).
 conta-asesoria
 send-email
+# I01c · P1 definitiva: conta-justificante-csv, el justificante por su CSV. Fuera
+# de producción usa SIEMPRE el doble (el PDF inventado que la e2e deja en
+# <cuenta>/doble-aeat/<CSV>.pdf): staging no llama nunca a Hacienda.
+conta-justificante-csv

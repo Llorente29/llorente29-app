@@ -1,10 +1,10 @@
-# Vuelta atrás de la tanda de los justificantes (modo «vuelta_atras»).
-# · 0260: fuera las tres funciones; el CHECK de tax_return_box.origin, el de
-#   la 0110. Si ya hay casillas con origen 'justificante', el CHECK de antes
-#   no entra y la vuelta atrás para entera: no se borran solas.
-# Ensayada en staging: supabase/staging/sql/20261122_i01c_justificantes_prueba.sql
-# (la aplica, la deshace y la vuelve a aplicar).
-# La anterior de este fichero (el 349 por operaciones):
-# tests/conta/produccion/vuelta-atras-i01b-349-por-operaciones-20261019.txt.
-cuenta: scripts/conta/produccion/cuentas/i01c-justificantes.sql
-supabase/vuelta-atras/20261122T0260_i01c_justificantes.down.sql
+# Vuelta atrás de la tanda viva (supabase/produccion/aplicar.txt): la aplica el
+# workflow si la comprobación de después falla, en orden inverso.
+#
+# I01c · P1 definitiva · 0270: devuelve conta_impuesto_justificante_apuntar (la
+# de la 0260) y conta_impuesto_presentados (la de la 0210) byte a byte, y quita
+# las cuatro columnas. La ensaya staging (20261122_i01c_csv_prueba.sql, paso 4).
+# La anterior de este fichero (los justificantes, 0260):
+# tests/conta/produccion/vuelta-atras-i01c-justificantes-20261019.txt.
+cuenta: scripts/conta/produccion/cuentas/i01c-csv.sql
+supabase/vuelta-atras/20261122T0270_i01c_csv.down.sql

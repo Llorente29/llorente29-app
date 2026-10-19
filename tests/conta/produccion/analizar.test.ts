@@ -1382,12 +1382,69 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): subir justificantes de Hacienda (I01c, 0260)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el justificante por CSV (I01c, 0270)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 19/10 a las 10:28 UTC, después de la 0250, para ESTE fichero (con su md5).
+  // lectura en producción el 19/10 a las 13:43 UTC, después de la 0260, para ESTE fichero (con su md5).
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero, el medido; sigue (no pide «autorizo») y no toca el camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261122T0270_i01c_csv.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
+    expect(Object.values(r.ficheros)).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual(['public.tax_return'])
+    expect(ctx.funciones).toEqual(['public.conta_impuesto_justificante_apuntar(uuid,jsonb)', 'public.conta_impuesto_presentados(uuid)'])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente (las dos funciones, misma firma) está en la cabecera, con su prueba de staging, que existe y lo nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab.map((l) => l.replace(/^-- cambia: (\S+).*$/, '$1'))).toEqual(['public.conta_impuesto_justificante_apuntar', 'public.conta_impuesto_presentados'])
+    for (const l of cab) {
+      const prueba = readFileSync(l.replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
+      expect(prueba).toMatch(new RegExp(`\\b${l.replace(/^-- cambia: public\.(\S+).*$/, '$1')}\\b`))
+    }
+    // Las columnas, nuevas y que admiten nulos.
+    for (const c of ['aeat_expediente', 'presenter_tax_id', 'presenter_name', 'receipt_source']) {
+      expect(readFileSync(viva[0], 'utf8')).toContain(`alter table public.tax_return add column if not exists ${c} text`)
+    }
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01c-csv.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás devuelve apuntar (0260) y presentados (0210) BYTE A BYTE y quita las columnas, y la ensaya staging', () => {
+    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261122T0270_i01c_csv.down.sql'])
+    const down = readFileSync(atras[0], 'utf8')
+    const c26 = readFileSync('supabase/migrations/20261122T0260_i01c_justificantes.sql', 'utf8')
+    const a = c26.indexOf('create or replace function public.conta_impuesto_justificante_apuntar')
+    expect(down).toContain(c26.slice(a, c26.indexOf('comment on function public.conta_impuesto_justificante_apuntar(uuid, jsonb)', a)).trimEnd())
+    const c21 = readFileSync('supabase/migrations/20261122T0210_i01b_presentados.sql', 'utf8')
+    const b = c21.indexOf('create or replace function public.conta_impuesto_presentados')
+    expect(down).toContain(c21.slice(b, c21.indexOf('comment on function public.conta_impuesto_presentados(uuid)', b)).trimEnd())
+    for (const c of ['aeat_expediente', 'presenter_tax_id', 'presenter_name', 'receipt_source']) expect(down).toContain(`alter table public.tax_return drop column if exists ${c};`)
+    const prueba = readFileSync('supabase/staging/sql/20261122_i01c_csv_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${atras[0]}`)
+  })
+})
+
+describe('la tanda de los justificantes (0260, PR #247), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01c-justificantes-20261019.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 19/10 a las 10:28 UTC, después de la 0250, para ESTE fichero (con su md5).
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01c-justificantes-20261019.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1419,7 +1476,7 @@ describe('la tanda de AHORA (manifiesto vivo): subir justificantes de Hacienda (
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
   it('su vuelta atrás quita las tres funciones y devuelve el CHECK de la 0110, y la ensaya staging', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01c-justificantes-20261019.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261122T0260_i01c_justificantes.down.sql'])
     const down = readFileSync(atras[0], 'utf8')
     for (const f of ['conta_impuesto_justificante_apuntar', 'conta_impuesto_justificantes_repasar', 'conta_impuesto_justificante_mirar']) expect(down).toContain(`drop function if exists public.${f}(uuid, jsonb);`)
