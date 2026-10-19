@@ -235,3 +235,13 @@ supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
 #   diferencias; a mano con motivo; y la vuelta atrás.
 supabase/migrations/20261122T0260_i01c_justificantes.sql
 supabase/staging/sql/20261122_i01c_justificantes_prueba.sql
+
+# I01c · P1 definitiva · El justificante por CSV (rama conta/i01c-csv).
+#   La 0270 DE VERDAD (cuatro columnas nuevas en tax_return: expediente,
+#   presentador y de dónde salió el PDF; apuntar los guarda y Presentados da lo
+#   traído y lo compensado del 303), para la e2e de «Ya lo presenté fuera ·
+#   pegar CSV» con el doble de conta-justificante-csv. Y su prueba, con \i y
+#   ROLLBACK: el 3T traído por CSV (comprobado), el 4T subido con 430,00
+#   compensado, el de otro NIF fuera, y la vuelta atrás.
+supabase/migrations/20261122T0270_i01c_csv.sql
+supabase/staging/sql/20261122_i01c_csv_prueba.sql

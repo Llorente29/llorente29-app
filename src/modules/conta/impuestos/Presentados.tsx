@@ -9,21 +9,24 @@
 // con sus casillas (SubirJustificantes.tsx).
 //
 // «Ya presenté uno fuera · pegar CSV» (la cinta del calendario trae aquí con
-// ?fuera=1): se elige el periodo del 303, se calcula si aún no lo está (así
-// queda qué se presentó) y se apunta con su CSV. Con la puerta cerrada, sin
-// comprobar, y se dice.
+// ?fuera=1): se pega el CSV y Sumied trae de Hacienda el justificante original,
+// lo lee y enseña la ficha con el PDF al lado; o se sube un PDF (también un
+// reimpreso) y se saca su CSV (TraerPorCsv.tsx, I01c · P1 definitiva). No pasa
+// por la puerta de presentar, que sigue cerrada.
+//
+// Un 303 que sale a 0,00 € porque se compensó con trimestres anteriores lo
+// dice debajo: «647,28 € compensado con trimestres anteriores» (Julio, 19/10).
 
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
+import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
 import { useNivel } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
-import {
-  calcular303, enlaceJustificante, hacienda, leerDeclaracion, leerPresentados, subirJustificante, type Presentado, type Presentados as Datos,
-} from '@/modules/conta/services/impuestosService'
+import { enlaceJustificante, leerPresentados, subirJustificante, type Presentado, type Presentados as Datos } from '@/modules/conta/services/impuestosService'
 import { nombreDeFila, periodoEnPalabras, textoResultado, type Resultado } from './calendario'
-import { fraseCalculo, pideJustificante } from './declaracion'
+import { compensadoEnPalabras } from './justificantes'
 import { SubirJustificantes } from './SubirJustificantes'
+import { TraerPorCsv } from './TraerPorCsv'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -62,6 +65,10 @@ export function Presentados({ companyId }: { companyId: string }) {
         </Tarjeta>
       )}
       {!error && !datos && <Tarjeta titulo="Leyendo tus impuestos…"><p className="s-apoyo">Un momento.</p></Tarjeta>}
+      {!error && datos && fuera && datos.puede_gestionar && (
+        <TraerPorCsv companyId={companyId} alCerrar={cerrarFuera}
+          alGuardar={(texto, ok) => { cerrarFuera(); setHecho({ tono: ok ? 'ok' : 'falta', texto }); recargar() }} />
+      )}
       {!error && datos && subir && datos.puede_gestionar && (
         <SubirJustificantes companyId={companyId} alCerrar={() => abrirSubir(false)}
           alGuardar={(texto, ok) => { abrirSubir(false); setHecho({ tono: ok ? 'ok' : 'falta', texto }); recargar() }} />
@@ -70,7 +77,7 @@ export function Presentados({ companyId }: { companyId: string }) {
         <Tarjeta compacta titulo="Presentados" apoyo="Lo presentado desde Sumied y lo que presentaste fuera, con su justificante y su CSV."
           accion={datos.puede_gestionar ? (
             <div className="s-impuestos-acciones">
-              <Boton onClick={() => setBusqueda({ fuera: '1' })}>Ya presenté uno fuera · pegar CSV</Boton>
+              {!fuera && <Boton onClick={() => setBusqueda({ fuera: '1' })}>Ya presenté uno fuera · pegar CSV</Boton>}
               {!subir && <Boton variante="principal" onClick={() => abrirSubir(true)}>Subir justificantes</Boton>}
             </div>
           ) : null}>
@@ -88,7 +95,7 @@ export function Presentados({ companyId }: { companyId: string }) {
             )}
         </Tarjeta>
       )}
-      {fuera && datos && <DialogoFuera datos={datos} companyId={companyId} alCerrar={cerrarFuera} hacer={hacer} />}
+
     </div>
   )
 }
@@ -103,11 +110,11 @@ function Fila({ p, nivel, puede, hacer }: { p: Presentado; nivel: ReturnType<typ
       </td>
       <td data-titulo="Presentado">
         {p.presentada ? `${diaMesCorto(p.presentada)}/${p.presentada.slice(0, 4)}` : '—'}{p.presentada_por ? ` · ${p.presentada_por}` : ''}
-        <span className="s-tabla-apoyo">{p.por === 'outside' ? `fuera · ${p.comprobada ? 'comprobado con Hacienda' : 'sin comprobar con Hacienda'}` : 'desde Sumied'}</span>
+        <span className="s-tabla-apoyo">{p.por === 'outside' ? `fuera · ${p.traido ? 'traído de Hacienda por su CSV' : p.comprobada ? 'comprobado con Hacienda' : 'sin comprobar con Hacienda'}` : 'desde Sumied'}</span>
       </td>
       <td data-titulo="Resultado" className="s-tabla-cifra">
         {p.importe !== null ? <span className="s-cifra">{eurosExactos(p.importe)}</span> : '—'}
-        <span className="s-tabla-apoyo">{textoResultado(p.resultado as Resultado | null)}</span>
+        <span className="s-tabla-apoyo">{compensadoEnPalabras(p) ?? textoResultado(p.resultado as Resultado | null)}</span>
       </td>
       <td data-titulo="CSV"><span className="s-impuestos-csv">{p.csv ?? '—'}</span></td>
       <td data-titulo="Justificante">
@@ -131,56 +138,5 @@ function SubirPdf({ p, hacer }: { p: Presentado; hacer: (f: () => Promise<string
         if (f) void hacer(() => subirJustificante({ declaracion: p.id, cuenta: p.cuenta, fichero: f }))
       }} />
     </label>
-  )
-}
-
-function DialogoFuera({ datos, companyId, alCerrar, hacer }: {
-  datos: Datos; companyId: string; alCerrar: () => void; hacer: (f: () => Promise<string>) => Promise<void>
-}) {
-  const opciones = datos.para_apuntar.map((x) => ({
-    valor: `${x.ejercicio}/${x.periodo}`,
-    texto: `IVA del ${periodoEnPalabras(x.periodo)} de ${x.ejercicio} · ${x.declaracion && x.importe !== null && x.estado !== 'pending' ? `calculado: ${eurosExactos(x.importe)} ${textoResultado(x.resultado as Resultado | null)}`
-      : x.declaracion && x.estado !== 'pending' && x.estado !== null ? 'no se puede calcular todavía' : 'sin calcular'}`,
-  }))
-  const [elegido, setElegido] = useState(opciones[0]?.valor ?? '')
-  const [csv, setCsv] = useState('')
-  const limpio = csv.replace(/\s/g, '').toUpperCase()
-  const valido = /^[A-Z0-9]{16}$/.test(limpio)
-  const apuntar = () => hacer(async () => {
-    alCerrar()
-    const x = datos.para_apuntar.find((y) => `${y.ejercicio}/${y.periodo}` === elegido)
-    if (!x) throw new Error('Elige el periodo.')
-    let id = x.declaracion
-    let antes = ''
-    if (!id || x.estado === 'pending' || x.estado === null) {
-      const c = await calcular303(companyId, x.ejercicio, x.periodo)
-      id = c.declaracion
-      antes = `${fraseCalculo({ ...c, resultado: c.resultado as Resultado | null })} `
-    }
-    // Si Sumied no ha podido calcularlo, lo presentado son las casillas del justificante: se escriben en su página (0240).
-    const d = await leerDeclaracion(companyId, x.ejercicio, x.periodo)
-    if (pideJustificante(d)) {
-      throw new Error(`${antes}No se ha apuntado: Sumied no ha podido calcular el IVA del ${periodoEnPalabras(x.periodo)} de ${x.ejercicio}, así que hay que copiar las casillas del justificante. Ábrelo (Impuestos › IVA del ${periodoEnPalabras(x.periodo)}) y usa allí «Ya lo presenté fuera».`)
-    }
-    const s = await hacienda('ya_presentado_fuera', { declaracion: id, csv: limpio })
-    if (!s.ok) throw new Error(`${antes}No se ha apuntado: ${s.mensaje}`)
-    return `${antes}${s.mensaje}`
-  })
-  if (opciones.length === 0) {
-    return (
-      <Dialogo titulo="Ya presenté uno fuera" alCerrar={alCerrar} acciones={<Boton onClick={alCerrar}>Entendido</Boton>}
-        explicacion="No hay ningún IVA trimestral de este año ni del pasado sin presentar en Sumied. Los demás modelos se apuntarán aquí cuando Sumied los calcule." />
-    )
-  }
-  return (
-    <Dialogo titulo="Ya presenté uno fuera" alCerrar={alCerrar}
-      explicacion="Elige el periodo y pega el CSV del justificante (16 letras y números). Si aún no está calculado, Sumied lo calcula con tus libros para que quede qué se presentó, y hace el asiento de liquidación."
-      acciones={<><Boton onClick={alCerrar}>Cancelar</Boton><Boton variante="principal" disabled={!valido || !elegido} onClick={apuntar}>Apuntar</Boton></>}>
-      <Campo etiqueta="Qué presentaste">{(p) => <Selector {...p} valor={elegido} alCambiar={setElegido} opciones={opciones} />}</Campo>
-      <Campo etiqueta="CSV del justificante" error={csv && !valido ? 'Son 16 letras y números, como aparecen en el justificante.' : null}
-        ayuda="Mientras la conexión con Hacienda no esté abierta, se apunta sin comprobar y se dice así.">
-        {(p) => <Texto {...p} valor={csv} alCambiar={setCsv} autoComplete="off" />}
-      </Campo>
-    </Dialogo>
   )
 }

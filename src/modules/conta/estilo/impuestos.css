@@ -207,3 +207,44 @@
   .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla th.s-tabla-cifra { text-align: right; white-space: nowrap; }
   .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td::before { content: none; }
 }
+
+/* ── I01c · Ya lo presenté fuera · pegar CSV (TraerPorCsv.tsx) ─────────────── */
+.s-csv-traer { display: grid; gap: var(--s-2); margin-bottom: var(--s-4); }
+.s-csv-etiqueta { font-weight: 600; color: var(--s-tinta); }
+.s-csv-fila { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: stretch; }
+.s-control.s-csv-campo {
+  flex: 1 1 320px; min-width: 0; min-height: 52px; padding: var(--s-2) var(--s-4);
+  font-size: 1.375rem; letter-spacing: 0.08em; text-transform: uppercase; font-variant-numeric: tabular-nums;
+}
+.s-csv-fila .s-boton { min-height: 52px; padding-inline: var(--s-6); }
+.s-csv-nota { margin: 0; }
+.s-csv-pdf { display: inline-flex; flex-wrap: wrap; gap: var(--s-1); align-items: baseline; cursor: pointer; color: var(--s-apoyo); width: fit-content; }
+.s-csv-pdf-enlace { color: var(--s-accion); text-decoration: underline; }
+.s-csv-pdf:focus-within { outline: 2px solid var(--s-accion); outline-offset: 2px; }
+.s-csv-trayendo { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-3) 0; color: var(--s-tinta); font-weight: 600; }
+.s-csv-rueda {
+  width: 20px; height: 20px; flex: none; border-radius: 50%;
+  border: 3px solid var(--s-borde-decorativo); border-top-color: var(--s-accion); animation: s-csv-gira 0.8s linear infinite;
+}
+@keyframes s-csv-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .s-csv-rueda { animation-duration: 2.4s; } }
+.s-csv-error { margin: var(--s-3) 0; }
+.s-csv-elegir { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin: var(--s-3) 0; }
+.s-csv-elegir .s-apoyo { flex: 1 1 100%; margin: 0; }
+.s-csv-ficha { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: var(--s-5); align-items: start; margin-top: var(--s-2); }
+.s-csv-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; justify-content: space-between; margin-bottom: var(--s-3); }
+.s-csv-titulo { margin: 0; font-size: 1.125rem; color: var(--s-tinta); }
+.s-csv-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
+.s-csv-dl dt { color: var(--s-apoyo); }
+.s-csv-dl dd { margin: 0; color: var(--s-tinta); overflow-wrap: anywhere; }
+.s-csv-compensado { display: block; color: var(--s-apoyo); font-size: var(--s-t-sm, 0.875rem); }
+.s-csv-casillas summary { cursor: pointer; font-weight: 600; color: var(--s-tinta); }
+.s-csv-devolucion { border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); padding: var(--s-3); margin: var(--s-3) 0; display: grid; gap: var(--s-2); }
+.s-csv-acciones { display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: flex-end; margin-top: var(--s-4); }
+.s-csv-pdf-visor { width: 100%; height: 720px; border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-suave); }
+@media (max-width: 767px) {
+  .s-csv-ficha { grid-template-columns: minmax(0, 1fr); }
+  .s-csv-fila .s-boton { flex: 1 1 100%; }
+  .s-csv-pdf-visor { height: 70vh; }
+  .s-csv-acciones { flex-direction: column-reverse; align-items: stretch; }
+}

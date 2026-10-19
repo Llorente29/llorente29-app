@@ -1,16 +1,19 @@
 {
- "_que": "I01c · P1 · subir justificantes · contexto de producción de la tanda viva (20261122T0260), medido en SOLO LECTURA el 19/10 a las 10:28 UTC, después de la 0250, con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe tax_return_box (11 filas; ninguna con un origen fuera de 'calculated' y 'manual'; el CHECK, el de la 0110); no existe ninguna de las tres funciones; nada del camino del pedido; nada en el historial.",
- "medido": "2026-10-19T10:28Z",
+ "_que": "I01c · P1 definitiva · el justificante por CSV · contexto de producción de la tanda viva (20261122T0270), medido en SOLO LECTURA el 19/10 a las 13:43 UTC, después de la 0260, con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen tax_return (2 filas contadas; ninguna de las cuatro columnas de la 0270) y las dos funciones con la misma firma (la de la 0260 y la de la 0210); nada del camino del pedido; nada en el historial.",
+ "medido": "2026-10-19T13:43Z",
  "tanda": {
-  "supabase/migrations/20261122T0260_i01c_justificantes.sql": "60f49993088b15fc494b53969932f078"
+  "supabase/migrations/20261122T0270_i01c_csv.sql": "c4e179ade55dcb99ce522652ee995a54"
  },
  "contexto": {
   "tablas": [
-   "public.tax_return_box"
+   "public.tax_return"
   ],
-  "funciones": [],
+  "funciones": [
+   "public.conta_impuesto_justificante_apuntar(uuid,jsonb)",
+   "public.conta_impuesto_presentados(uuid)"
+  ],
   "filas": {
-   "public.tax_return_box": 11
+   "public.tax_return": 0
   },
   "otras": {},
   "camino": {

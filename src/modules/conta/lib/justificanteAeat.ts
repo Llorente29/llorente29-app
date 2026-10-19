@@ -33,6 +33,10 @@ export interface Justificante {
   justificante: string | null
   /** NIF del declarante, sin espacios ni guiones. */
   nif: string
+  /** «Expediente/Referencia (nº registro asignado)» de la primera página, si lo trae. */
+  expediente?: string | null
+  /** El presentador (la gestoría o quien lo presentó): su NIF y su nombre, si los trae. */
+  presentador?: { nif: string; nombre: string } | null
   casillas: Record<string, number>
   /**
    * El resultado y de dónde sale: su casilla del impreso, o (casilla null) la
@@ -173,6 +177,10 @@ export function leerJustificante(paginas: readonly PaginaPdf[]): Lectura {
   if (csv) parcial.csv = csv.toUpperCase()
   const just = /Numero(?: de)? justificante:?\s*(\d{10,16})\b/i.exec(textoTodo)?.[1]
   parcial.justificante = just ?? null
+  const exp = /Expediente(?:\s*\/\s*Referencia)?(?:\s*\([^)]*\))?:?\s*([A-Z0-9][A-Z0-9-]{5,})/i.exec(texto1)?.[1]
+  parcial.expediente = exp ?? null
+  const pres = /Presentador:?\s*([A-Z0-9]{9})\s+([^\n]+)/i.exec(texto1)
+  parcial.presentador = pres ? { nif: pres[1].toUpperCase(), nombre: pres[2].trim().replace(/\s+/g, ' ') } : null
   // El NIF del declarante: del impreso, y nunca de la línea del presentador (la gestoría).
   const nif = NIF.exec(resto.map((l) => sinAcentos(l.texto)).filter((t) => !/presentador|colaborador|representante/i.test(t)).join('\n')
     .replace(/(?<=[A-Z0-9])[-.](?=[A-Z0-9])/g, ''))?.[1]
@@ -234,3 +242,33 @@ export function tituloJustificante(j: Pick<Justificante, 'modelo' | 'ejercicio' 
   const p = /^[1-3]P$/.test(j.periodo) ? `${j.periodo[0]}.${j.periodo[0] === '2' ? 'º' : 'er'} pago` : j.periodo
   return `${n} · ${p} ${j.ejercicio}`
 }
+
+/**
+ * El CSV de un PDF, también de un justificante REIMPRESO («Microsoft Print to
+ * PDF»: el impreso queda como dibujo y como texto solo los valores, pero el CSV
+ * se conserva). Primero, el del rótulo «Código Seguro de Verificación»; si no
+ * hay rótulo, los códigos de 16 letras y cifras (con alguna de cada), y el que
+ * más se repite: el CSV va en la primera página y al pie de cada página del
+ * impreso. Si empatan varios, se devuelven todos y se elige a mano.
+ */
+export function csvDelPdf(paginas: readonly PaginaPdf[]): { csv: string | null; candidatos: string[] } {
+  const ls = paginas.flatMap(lineas)
+  const todo = sinAcentos(ls.map((l) => l.texto).join('\n'))
+  const rotulado = /Codigo Seguro de Verificacion:?\s*([A-Z0-9]{16})\b/i.exec(todo)?.[1]
+  if (rotulado) return { csv: rotulado.toUpperCase(), candidatos: [rotulado.toUpperCase()] }
+  const cuenta = new Map<string, number>()
+  for (const t of todo.split(/[\s:;,()]+/)) {
+    const u = t.toUpperCase()
+    if (/^[A-Z0-9]{16}$/.test(u) && /[A-Z]/.test(u) && /\d/.test(u)) cuenta.set(u, (cuenta.get(u) ?? 0) + 1)
+  }
+  if (!cuenta.size) return { csv: null, candidatos: [] }
+  const max = Math.max(...cuenta.values())
+  const mejores = [...cuenta].filter(([, n]) => n === max).map(([k]) => k).sort()
+  return { csv: mejores.length === 1 ? mejores[0] : null, candidatos: mejores }
+}
+
+/** Un CSV de Hacienda: 16 letras y cifras. Se limpia antes de comprobarlo (espacios, minúsculas). */
+export function limpiarCsv(t: string): string {
+  return t.replace(/[\s-]/g, '').toUpperCase()
+}
+export const csvValido = (t: string): boolean => /^[A-Z0-9]{16}$/.test(limpiarCsv(t))
