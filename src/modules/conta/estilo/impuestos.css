@@ -316,3 +316,8 @@
   .s-trimestre-ficha { padding: var(--s-4); }
   .s-trimestre-cartera { padding: var(--s-4); }
 }
+/* Las casillas de la ficha: tres columnas («Qué es» en medio) con el relleno del sistema (24 px por lado)
+   no caben en el móvil (e2e 661: la página se salía 14 px). Más juntas, y la tabla a lo ancho de la ficha. */
+.s-trimestre-ficha .s-tabla.s-justificantes-dif-tabla { width: 100%; min-width: 0; }
+.s-trimestre-ficha .s-tabla th, .s-trimestre-ficha .s-tabla td { padding: var(--s-2) var(--s-3); overflow-wrap: anywhere; }
+.s-trimestre-ficha .s-tabla .s-tabla-cifra { white-space: nowrap; }

@@ -116,8 +116,13 @@ async function sinDesbordar(page: Page, donde: string) {
   // Si se sale, quién: los elementos más hondos cuyo borde derecho pasa del ancho (e2e 660: 14 px en el móvil).
   const quien = sobra > 1 ? await page.evaluate(() => {
     const ancho = document.documentElement.clientWidth
+    // Lo que vive dentro de algo que se desliza de lado (las pestañas, la tira) no saca la página.
+    const enDeslizable = (e: Element) => {
+      for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) if (/(auto|scroll|hidden)/.test(getComputedStyle(p).overflowX)) return true
+      return false
+    }
     return [...document.querySelectorAll('body *')]
-      .filter((e) => e.getBoundingClientRect().right > ancho + 1 && ![...e.children].some((h) => h.getBoundingClientRect().right > ancho + 1))
+      .filter((e) => e.getBoundingClientRect().right > ancho + 1 && !enDeslizable(e) && ![...e.children].some((h) => h.getBoundingClientRect().right > ancho + 1))
       .slice(0, 6)
       .map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join('.')} → ${Math.round(e.getBoundingClientRect().right - ancho)} px «${(e.textContent ?? '').trim().slice(0, 40)}»`)
   }) : []
