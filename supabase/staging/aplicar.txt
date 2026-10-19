@@ -251,7 +251,7 @@ supabase/staging/sql/20261122_i01c_csv_prueba.sql
 #   trimestre y la cartera de cuotas a compensar del 303, y si el borrador está
 #   desfasado), para la e2e de Impuestos › Trimestre. Y su prueba, con \i y
 #   ROLLBACK: el borrador del 3T calculado antes del 2T, desfasado; la cartera
-#   2.309,27 + 2.134,18 − 647,28 = 3.796,17; vuelto a calcular, trae la [110];
+#   1.500,00 + 1.200,50 − 400,25 = 2.300,25; vuelto a calcular, trae la [110];
 #   la tira; otra cuenta no lo ve; y la vuelta atrás. En 2026: con 2025 paró
 #   (run 369) porque no hay festivos de 2025 para el plazo.
 supabase/migrations/20261122T0280_i01c_trimestre.sql

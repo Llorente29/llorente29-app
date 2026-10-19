@@ -45,6 +45,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
+    // I01c (19/10): el trimestre, también el de una empresa por la ruta (la vista de despacho).
+    impuestoTrimestre: 'impuestos.trimestre', impuestoTrimestreEmpresa: 'impuestos.trimestre',
     // La página de aceptar una invitación a la asesoría no es de ningún producto (va sin marco).
     aceptarAsesoria: null,
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
@@ -89,12 +91,16 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
   })
   // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y
   // pisaba «Buscar»; la pestaña se llama «Certificados» y los mensajes dicen «Impuestos › Certificados».
-  it('Impuestos: Calendario, Presentados, Impuesto de sociedades y Certificados; el IVA de un periodo, del Calendario', () => {
+  // I01c (19/10): «Trimestre» detrás del Calendario (maqueta_303_v2).
+  it('Impuestos: Calendario, Trimestre, Presentados, Impuesto de sociedades y Certificados; el IVA de un periodo, del Calendario', () => {
     const i = PRODUCTOS.find((p) => p.id === 'impuestos')!
-    expect(i.pestanas.map((t) => t.etiqueta)).toEqual(['Calendario', 'Presentados', 'Impuesto de sociedades', 'Certificados'])
+    expect(i.pestanas.map((t) => t.etiqueta)).toEqual(['Calendario', 'Trimestre', 'Presentados', 'Impuesto de sociedades', 'Certificados'])
+    expect(de('/conta/impuestos/trimestre')).toBe('impuestos.trimestre')
+    expect(de('/conta/impuestos/trimestre/2026/3T')).toBe('impuestos.trimestre')
+    expect(de('/conta/impuestos/empresa/0b0b/trimestre/2026/3T')).toBe('impuestos.trimestre')
     expect(de('/conta/impuestos/iva/2026/3T')).toBe('impuestos.calendario')
     expect(de('/conta/impuestos/sociedades')).toBe('impuestos.sociedades')
-    expect(pestanasVisibles(i, NADA).map((t) => t.id)).toEqual(['calendario', 'presentados', 'sociedades', 'certificados'])
+    expect(pestanasVisibles(i, NADA).map((t) => t.id)).toEqual(['calendario', 'trimestre', 'presentados', 'sociedades', 'certificados'])
   })
   it('con pantalla, el interruptor decide (la prueba puede fallar)', () => {
     const conPantalla = PRODUCTOS.map((p) => (p.id === 'facturacion' ? { ...p, ruta: 'facturacion' } : p))
