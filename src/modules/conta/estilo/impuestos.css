@@ -161,3 +161,49 @@
 .s-impuestos-justificante { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2) var(--s-3); margin-bottom: var(--s-3); }
 .s-impuestos-justificante > .s-impuestos-porque-no { grid-column: 1 / -1; }
 @media (max-width: 767px) { .s-impuestos-justificante { grid-template-columns: minmax(0, 1fr); } }
+
+/* I01c · P1 · Subir justificantes: la zona grande, el repaso y sus diferencias. */
+.s-justificantes-zona {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-1);
+  min-height: 160px; padding: var(--s-6) var(--s-4); margin-bottom: var(--s-4);
+  border: 2px dashed var(--s-borde-control); border-radius: var(--s-radio-bloque); background: var(--s-suave);
+  text-align: center; cursor: pointer;
+}
+.s-justificantes-zona-sobre, .s-justificantes-zona:hover { border-color: var(--s-accion); }
+.s-justificantes-zona:focus-within { outline: 2px solid var(--s-accion); outline-offset: 2px; }
+.s-justificantes-zona-titulo { font-size: 1.0625rem; font-weight: 600; color: var(--s-tinta); }
+.s-justificantes-motivo { display: block; margin-top: var(--s-1); color: var(--s-tinta); }
+.s-justificantes-mal .s-justificantes-motivo { color: var(--s-falta); }
+.s-justificantes-fichero { overflow-wrap: anywhere; }
+.s-justificantes-mano { max-width: 260px; margin-top: var(--s-2); }
+.s-justificantes-dif { margin-top: var(--s-2); }
+.s-justificantes-dif summary { cursor: pointer; color: var(--s-duda); font-weight: 600; }
+.s-tabla.s-justificantes-dif-tabla { width: auto; min-width: 280px; margin-top: var(--s-1); }
+.s-justificantes-pie { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-3); margin-top: var(--s-4); }
+.s-justificantes-pie .s-apoyo { margin-right: auto; }
+.s-justificantes-mano-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+.s-justificantes-casillas { width: 100%; font-variant-numeric: tabular-nums; resize: vertical; }
+@media (max-width: 767px) {
+  .s-justificantes-zona { min-height: 120px; }
+  .s-justificantes-mano-grid { grid-template-columns: minmax(0, 1fr); }
+  .s-justificantes-pie { flex-direction: column; align-items: stretch; }
+  .s-justificantes-pie .s-apoyo { margin-right: 0; }
+}
+.s-impuestos-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); justify-content: flex-end; }
+@media (max-width: 767px) {
+  /* En el móvil los botones de la cabecera bajan a su fila y se reparten en ella:
+     la caja de la acción de la tarjeta no encoge, y sin esto se salían por la derecha. */
+  .s-tarjeta-accion:has(> .s-impuestos-acciones) { flex: 1 1 100%; min-width: 0; }
+  .s-impuestos-acciones { justify-content: flex-start; }
+  /* Las diferencias del repaso siguen siendo una tabla de tres columnas (caben):
+     la regla de arriba apila las celdas de la tabla de fuera, y también alcanzaba a esta. */
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla { display: table; width: 100%; min-width: 0; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla thead { position: static; width: auto; height: auto; overflow: visible; clip: auto; display: table-header-group; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla tbody { display: table-row-group; width: auto; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla tr { display: table-row; width: auto; padding: 0; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla th,
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td { display: table-cell; width: auto; padding: var(--s-1) var(--s-2); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td.s-tabla-cifra,
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla th.s-tabla-cifra { text-align: right; white-space: nowrap; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td::before { content: none; }
+}

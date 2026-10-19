@@ -225,6 +225,17 @@ supabase/seeds/conta/seed_c06_sola_ejercicio_staging.sql
 supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
 supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
 
+# I01c · P1 · Subir justificantes de Hacienda (rama conta/i01c-justificantes).
+#   La 0260 DE VERDAD (amplía el CHECK de tax_return_box.origin con
+#   'justificante' y añade tres funciones; probada en el run 354), para la e2e
+#   de «Subir justificantes». Y su prueba, con \i y ROLLBACK: el NIF
+#   de otra empresa; el repaso (dos veces, antes de acabar el periodo,
+#   negativo); apuntar el 303 del 3T de 2025 con el plazo sin festivos dicho;
+#   ya estaba y otro CSV; el 4T calculado con la [110] del 3T subido y sus
+#   diferencias; a mano con motivo; y la vuelta atrás.
+supabase/migrations/20261122T0260_i01c_justificantes.sql
+supabase/staging/sql/20261122_i01c_justificantes_prueba.sql
+
 # P01 · Impuestos de tus clientes (rama conta/p01-despacho).
 #   La 0100 DE VERDAD: solo añade (dos columnas que admiten nulos en accounts,
 #   tax_client_assignee y las funciones conta_despacho_*); se puede volver a
@@ -234,7 +245,7 @@ supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
 #   ROLLBACK: cifras y filtros del 3T a 13/10, certificado por persona,
 #   responsable, RLS de la clienta, de otra cuenta y de la asesoría, «Soy una
 #   asesoría», retirar el permiso y la vuelta atrás.
-#   Va detrás de la 0250: no toca nada de lo de arriba.
+#   Va detrás de la 0260: no toca nada de lo de arriba.
 supabase/migrations/20261123T0100_p01_despacho.sql
 supabase/seeds/conta/seed_p01_despacho_staging.sql
 supabase/staging/sql/20261123_p01_despacho_prueba.sql

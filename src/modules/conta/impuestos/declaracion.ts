@@ -47,7 +47,7 @@ export interface DeclaracionVer {
     csv: string | null; justificante: string | null; justificante_pdf: string | null
     liquidacion: string | null; pago_asiento: string | null; casado: string | null
   }
-  casillas: { casilla: string; valor: number | null; texto: string | null; origen: 'calculated' | 'manual'; motivo: string | null }[]
+  casillas: { casilla: string; valor: number | null; texto: string | null; origen: 'calculated' | 'manual' | 'justificante'; motivo: string | null }[]
   comprobaciones: Comprobacion[]
   libros: Record<string, number>
   anterior: null | { ejercicio: number; periodo: string; estado: Estado; resultado: Resultado | null; importe: number | null; c27: number | null; c45: number | null }
