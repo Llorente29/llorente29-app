@@ -57,7 +57,9 @@ begin
   if v_err <> 'Todavía no se pueden guardar certificados en esta cuenta: falta el almacén con clave externa (KMS), y hasta que esté solo se admite la cuenta de Foodint. No se ha guardado nada.' then
     raise exception 'PRUEBA certificados 1: el mensaje es «%».', v_err;
   end if;
-  if (select count(*) from vault.secrets) <> v_secretos or exists (select 1 from public.tax_certificate) then
+  -- Regla 9: las fichas de ESTA cuenta (staging es compartido; la semilla de demo del P01 trae las suyas).
+  if (select count(*) from vault.secrets) <> v_secretos
+     or exists (select 1 from public.tax_certificate where owner_account_id = 'c01a0000-0000-4000-8000-00000000000a') then
     raise exception 'PRUEBA certificados 1: sin guardar, ha quedado un secreto o una ficha.';
   end if;
   raise notice 'PRUEBA certificados 1: fuera de Foodint no se guarda nada: «%».', v_err;
