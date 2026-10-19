@@ -16,7 +16,7 @@ import { useRef, useState } from 'react'
 import { Boton, Campo, Chip, Dialogo, Fecha, Selector, Tarjeta, Texto, textoDeImporte } from '@/modules/conta/diseno'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import type { Lectura } from '@/modules/conta/lib/justificanteAeat'
-import { apuntarJustificante, leerJustificantePdf, repasarJustificantes } from '@/modules/conta/services/impuestosService'
+import { apuntarJustificante, leerJustificantePdf, repasarJustificantes, traerJustificanteCsv } from '@/modules/conta/services/impuestosService'
 import {
   casillaResultado, casillasEscritas, chipDe, datosDe, lineaDe, pideDevolucion, resumenGuardado, tituloDe, type DatosJustificante, type Mirado,
 } from './justificantes'
@@ -25,6 +25,8 @@ interface Fila {
   clave: string
   fichero: File
   lectura: Lectura | null // null: leyendo
+  /** El PDF no se leía (un reimpreso) y se trajo el original de Hacienda por su CSV: fichero es ya el original. */
+  traido?: boolean
   datos: DatosJustificante | null
   mirado: Mirado | null
   resultadoMano: string
@@ -64,7 +66,19 @@ export function SubirJustificantes({ companyId, alCerrar, alGuardar }: { company
     setFilas(fs)
     for (const f of fs.filter((x) => x.lectura === null)) {
       const lectura = await leerJustificantePdf(f.fichero)
-      fs = fs.map((x) => (x.clave === f.clave ? { ...x, lectura, datos: lectura.ok ? datosDe(lectura.datos) : null } : x))
+      let cambio: Partial<Fila> = { lectura, datos: lectura.ok ? datosDe(lectura.datos) : null }
+      // Un reimpreso («Microsoft Print to PDF») no se lee, pero conserva el CSV: se trae el original de Hacienda.
+      const csv = !lectura.ok ? lectura.csvVisto?.csv : null
+      if (csv && !lectura.ok) {
+        const t = await traerJustificanteCsv(companyId, csv)
+        const l2 = t.ok ? await leerJustificantePdf(t.pdf, `${csv}.pdf`) : null
+        if (t.ok && l2?.ok) {
+          cambio = { lectura: l2, datos: datosDe(l2.datos, null, false, true), traido: true, fichero: new File([t.pdf], f.fichero.name.replace(/\.pdf$/i, '') + '-original.pdf', { type: 'application/pdf' }) }
+        } else {
+          cambio = { lectura: { ok: false, parcial: lectura.parcial, motivo: `${lectura.motivo} Su CSV se ve, pero ${t.ok ? `el original de Hacienda tampoco se lee: ${l2 && !l2.ok ? l2.motivo : ''}` : `al traer el original: ${t.mensaje}`}` }, datos: null }
+        }
+      }
+      fs = fs.map((x) => (x.clave === f.clave ? { ...x, ...cambio } : x))
       setFilas(fs)
     }
     await repasar(fs)
@@ -141,7 +155,8 @@ function FilaRepaso({ f, cambiar, aMano, quitar }: { f: Fila; cambiar: (k: strin
   }
   const d = f.datos
   const leidoMal = !d || f.mirado?.estado === 'error'
-  const chip = d && !f.mirado ? { tono: 'neutro' as const, texto: 'Repasando…' } : chipDe(d ? f.mirado : null)
+  const base = d && !f.mirado ? { tono: 'neutro' as const, texto: 'Repasando…' } : chipDe(d ? f.mirado : null)
+  const chip = f.traido && base.texto === 'Leído' ? { ...base, texto: 'Traído de Hacienda' } : base
   const sinResultado = !!d && f.lectura.ok && !f.lectura.datos.resultado && !d.a_mano
   const motivo = !d ? (f.lectura.ok ? null : f.lectura.motivo) : f.mirado?.motivo
   const dif = f.mirado?.diferencias ?? []

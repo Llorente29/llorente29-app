@@ -3,18 +3,19 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01c · P1 · Subir justificantes de Hacienda (rama conta/i01c-justificantes).
-# Va DESPUÉS de la del 349 por operaciones (0250, PR #244, aplicada): su copia,
-# tests/conta/produccion/tanda-i01b-349-por-operaciones-20261019.txt.
+# I01c · P1 definitiva · El justificante por CSV (rama conta/i01c-csv).
+# Va DESPUÉS de la de los justificantes (0260, PR #247, aplicada): su copia,
+# tests/conta/produccion/tanda-i01c-justificantes-20261019.txt.
 #
-#   1. 0260 — CAMBIA en caliente, declarado con su prueba de staging:
-#      tax_return_box (el CHECK de origin AMPLÍA con 'justificante'; las 11
-#      filas de hoy son 'calculated' o 'manual' y caben). AÑADE
-#      conta_impuesto_justificante_mirar, conta_impuesto_justificantes_repasar
-#      y conta_impuesto_justificante_apuntar.
+#   1. 0270 — AÑADE a tax_return cuatro columnas que admiten nulos
+#      (aeat_expediente, presenter_tax_id, presenter_name y receipt_source,
+#      con su CHECK). CAMBIA en caliente, declarado con su prueba de staging:
+#      conta_impuesto_justificante_apuntar (los guarda) y
+#      conta_impuesto_presentados (da lo traído, el expediente, el presentador
+#      y lo compensado del 303), las dos con la misma firma.
 #
-# No toca el camino del pedido. No escribe ninguna declaración: las escribe
-# Julio al subir los justificantes. Ninguna función que desplegar.
+# No toca el camino del pedido. No escribe ninguna declaración. Lleva una
+# función nueva que desplegar a mano: conta-justificante-csv (la autoriza Julio).
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/i01c-justificantes.sql
-supabase/migrations/20261122T0260_i01c_justificantes.sql
+cuenta: scripts/conta/produccion/cuentas/i01c-csv.sql
+supabase/migrations/20261122T0270_i01c_csv.sql

@@ -91,9 +91,14 @@ const TITULOS = {
  * opciones.declaranteEnPrimera: la primera página con NIF, ejercicio y periodo.
  * opciones.sinNrc: sin la línea «NRC: … IMPORTE:» (sale a cero o a devolver).
  * opciones.nrcImporte: otro importe en la línea del NRC (para que no case con la casilla).
+ * opciones.reimpreso: como lo deja «Microsoft Print to PDF» (I01c, 19/10): los
+ *   rótulos y el impreso, dibujo (aquí, rayas); como texto, solo los valores,
+ *   sin «Modelo», «Ejercicio», «Período» ni números de casilla. El CSV se
+ *   conserva: en la primera página y al pie de la segunda.
  * La línea del NRC va cuando hay algo que ingresar, con un NRC INVENTADO.
  */
 export function justificantePdf(j, opciones = {}) {
+  if (opciones.reimpreso) return reimpresoPdf(j)
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const [fecha, hora] = j.presentada.split(' ')
   // ── Página 1: la presentación ──
@@ -158,6 +163,33 @@ export function justificantePdf(j, opciones = {}) {
   doc.text(`La autenticidad de este documento puede ser comprobada mediante el Código Seguro`, 150, 800)
   doc.text(`de Verificación ${j.csv} en https://sede.agenciatributaria.gob.es`, 150, 810)
   doc.text('2', 560, 815)
+  return doc.output('arraybuffer')
+}
+
+/** El reimpreso: solo valores como texto (ver justificantePdf, opciones.reimpreso). */
+function reimpresoPdf(j) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const [fecha, hora] = j.presentada.split(' ')
+  const dibujo = (y) => { doc.setDrawColor(180); doc.line(60, y + 3, 250, y + 3) }
+  doc.setFontSize(11)
+  ;[[fecha + ' ' + hora, 165], ['2026PRUEBA' + j.modelo + j.periodo, 190], [j.csv, 215], [j.justificante, 240], ['00000000T GESTORIA INVENTADA DE PRUEBA', 265]]
+    .forEach(([v, y]) => { dibujo(y); doc.text(v, 260, y) })
+  doc.addPage()
+  doc.rect(40, 40, 515, 760)
+  doc.setFontSize(9)
+  doc.text(String(j.ejercicio), 460, 120)
+  doc.text(j.periodo, 545, 120)
+  doc.text(j.nif, 40, 155)
+  let y = 250
+  for (const [, cajas] of FILAS[j.modelo] ?? []) {
+    cajas.forEach((caja, i) => {
+      const v = caja ? j.casillas[caja] : undefined
+      if (v !== undefined && v !== null) doc.text(es(v), [395, 460, 560][i], y, { align: 'right' })
+    })
+    y += 18
+  }
+  doc.setFontSize(7)
+  doc.text(j.csv, 300, 810)
   return doc.output('arraybuffer')
 }
 
