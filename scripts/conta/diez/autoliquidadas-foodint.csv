@@ -8,4 +8,23 @@
 #     del testigo (medido el 18/10 en producción, solo lectura). Es la única autoliquidada del 1T y del 2T.
 #   · 3T (asientos 3129 a 3143): entran cuando esté PRESENTADO el 303 del 3T (plazo 20/10), sacadas del presentado y
 #     no del borrador. Hasta entonces la importación para en ellas, y no se lanza el ensayo.
+#   · 3T, sacadas del 303 del 3T PRESENTADO (20/10, subido con su justificante; medido en producción, solo lectura): de
+#     los 15 repartos posibles entre [10]/[11] y [12]/[13], solo UNO casa a la vez base y cuota, al céntimo, con las dos
+#     parejas del presentado (por cuota sola casaban 25). Ese es el que va: 5 intracomunitarias y 10 otra_isp. Las 15
+#     suman entre las dos parejas la base y la cuota del presentado (lo dice el testigo del ensayo).
 2026,2,1421,intracomunitaria
+2026,2,3129,otra_isp
+2026,2,3130,otra_isp
+2026,2,3131,otra_isp
+2026,2,3132,intracomunitaria
+2026,2,3133,intracomunitaria
+2026,2,3134,otra_isp
+2026,2,3135,otra_isp
+2026,2,3136,otra_isp
+2026,2,3137,otra_isp
+2026,2,3138,otra_isp
+2026,2,3139,otra_isp
+2026,2,3140,intracomunitaria
+2026,2,3141,otra_isp
+2026,2,3142,intracomunitaria
+2026,2,3143,intracomunitaria
