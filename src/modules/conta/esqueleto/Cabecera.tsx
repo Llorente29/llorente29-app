@@ -24,7 +24,6 @@ import { iniciales } from '@/modules/conta/lib/formato'
 import { anchoParaPestanas, cuantasCaben, type Pestana, type Producto } from './productos'
 import { conConsulta } from './ordenes'
 import { useDeslizable } from './deslizable'
-import type { Contador, Contadores } from './contadores'
 
 /** La dirección de una pestaña, llevándose lo elegido: el ejercicio (Libros), el mes y el banco (Bancos). */
 function useRutaPestana() {
@@ -32,37 +31,17 @@ function useRutaPestana() {
   return (t: Pestana) => conConsulta(rutaConta(t.ruta!), search)
 }
 
-/**
- * I01c (Julio, 20/10) · Lo de dentro de una pestaña, en todos los módulos: su
- * icono, su nombre y, si cuenta algo, su contador (rojo lo que vence). El
- * contador lleva su texto para el lector de pantalla y de título.
- */
-function ContenidoPestana({ t, contador, extra = '' }: { t: Pestana; contador?: Contador; extra?: string }) {
-  return (
-    <>
-      {t.icono && <Icono nombre={t.icono} />}
-      <span className="s-pestana-nombre">{t.etiqueta}{extra}</span>
-      {contador && (
-        <span className="s-pestana-contador" data-tono={contador.tono} title={contador.texto}>
-          <span aria-hidden="true">{contador.n}</span><span className="cx-oculto">{` · ${contador.texto}`}</span>
-        </span>
-      )}
-    </>
-  )
-}
-
 const HUECO = 4
 /** El hueco de la cabecera entre el cliente y el ejercicio (gap de .s-cab-izquierda). */
 const HUECO_CAB = 8
 
-function Pestanas({ producto, pestanas, activa, periodo, contadores }: { producto: Producto; pestanas: Pestana[]; activa: string | null; periodo: HTMLDivElement | null; contadores: Contadores }) {
+function Pestanas({ producto, pestanas, activa, periodo }: { producto: Producto; pestanas: Pestana[]; activa: string | null; periodo: HTMLDivElement | null }) {
   const ruta = useRutaPestana()
   const caja = useRef<HTMLDivElement | null>(null)
   const medida = useRef<HTMLDivElement | null>(null)
   const [caben, setCaben] = useState(pestanas.length)
   const { abierto: masAbierto, alternar: masAlternar, caja: masCaja, boton: masBoton } = useDesplegable()
-  // Con los contadores cambia el ancho: se vuelve a medir.
-  const claves = pestanas.map((t) => `${t.id}:${contadores[t.id]?.n ?? ''}`).join(',')
+  const claves = pestanas.map((t) => t.id).join(',')
   const n = pestanas.length
   // S01e · El sitio del ejercicio o el mes se guarda esté o no: «Más ▾» no cambia de sitio entre pantallas.
   const reserva = producto.periodo ?? 0
@@ -92,14 +71,14 @@ function Pestanas({ producto, pestanas, activa, periodo, contadores }: { product
   const resto = pestanas.slice(caben)
   const enResto = resto.find((t) => t.id === activa)
   const enlace = (t: Pestana, clase: string) => (
-    <Link key={t.id} to={ruta(t)} className={clase} aria-current={t.id === activa ? 'page' : undefined}><ContenidoPestana t={t} contador={contadores[t.id]} /></Link>
+    <Link key={t.id} to={ruta(t)} className={clase} aria-current={t.id === activa ? 'page' : undefined}>{t.etiqueta}</Link>
   )
   return (
     <div className="s-pestanas-caja" ref={caja}>
       <div className="s-pestanas-medida" ref={medida} aria-hidden="true">
-        {pestanas.map((t) => <span key={t.id} className="s-pestana s-pestana-activa"><ContenidoPestana t={t} contador={contadores[t.id]} /></span>)}
+        {pestanas.map((t) => <span key={t.id} className="s-pestana s-pestana-activa">{t.etiqueta}</span>)}
         <span className="s-pestana s-pestana-activa">Más ▾</span>
-        {pestanas.map((t) => <span key={`${t.id}-mas`} className="s-pestana s-pestana-activa"><ContenidoPestana t={t} contador={contadores[t.id]} extra=" ▾" /></span>)}
+        {pestanas.map((t) => <span key={`${t.id}-mas`} className="s-pestana s-pestana-activa">{`${t.etiqueta} ▾`}</span>)}
       </div>
       <nav className="s-pestanas" aria-label={`Pestañas de ${producto.etiqueta}`}>
         {vistas.map((t) => enlace(t, 's-pestana'))}
@@ -107,7 +86,7 @@ function Pestanas({ producto, pestanas, activa, periodo, contadores }: { product
           <div className="s-desplegable" ref={masCaja}>
             <button type="button" ref={masBoton} className={enResto ? 's-pestana s-pestana-activa' : 's-pestana'}
               aria-expanded={masAbierto} aria-haspopup="true" onClick={masAlternar}>
-              {enResto ? <ContenidoPestana t={enResto} contador={contadores[enResto.id]} extra=" ▾" /> : 'Más ▾'}
+              {enResto ? `${enResto.etiqueta} ▾` : 'Más ▾'}
             </button>
             {masAbierto && <div className="s-menu s-menu-derecha">{resto.map((t) => enlace(t, 's-menu-item'))}</div>}
           </div>
@@ -117,14 +96,14 @@ function Pestanas({ producto, pestanas, activa, periodo, contadores }: { product
   )
 }
 
-export function PestanasMovil({ producto, pestanas, activa, contadores = {} }: { producto: Producto; pestanas: Pestana[]; activa: string | null; contadores?: Contadores }) {
+export function PestanasMovil({ producto, pestanas, activa }: { producto: Producto; pestanas: Pestana[]; activa: string | null }) {
   const ruta = useRutaPestana()
   // S01e · Se desliza hasta la activa y dice con un degradado que hay más.
   const fila = useDeslizable<HTMLElement>(`${producto.id}:${activa ?? ''}`)
   return (
     <nav ref={fila} className="s-pestanas s-pestanas-movil" aria-label={`Pestañas de ${producto.etiqueta}`}>
       {pestanas.map((t) => (
-        <Link key={t.id} to={ruta(t)} className="s-pestana" aria-current={t.id === activa ? 'page' : undefined}><ContenidoPestana t={t} contador={contadores[t.id]} /></Link>
+        <Link key={t.id} to={ruta(t)} className="s-pestana" aria-current={t.id === activa ? 'page' : undefined}>{t.etiqueta}</Link>
       ))}
     </nav>
   )
@@ -169,12 +148,10 @@ function Cliente({ logo, movil }: { logo: string | null; movil: boolean }) {
   )
 }
 
-export function Cabecera({ producto, pestanas, pestanaActiva, contadores = {}, movil, logoCliente, huecoPeriodo, abrirBuscador, favoritos, usuario, abrirMenu, menuAbierto }: {
+export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente, huecoPeriodo, abrirBuscador, favoritos, usuario, abrirMenu, menuAbierto }: {
   producto: Producto | null
   /** Las pestañas que salen en la cabecera (vacío: ninguna). */
   pestanas: Pestana[]
-  /** I01c · Lo que cuenta cada pestaña (useContadores); sin nada, ninguna lleva número. */
-  contadores?: Contadores
   pestanaActiva: string | null
   movil: boolean
   logoCliente: string | null
@@ -205,7 +182,7 @@ export function Cabecera({ producto, pestanas, pestanaActiva, contadores = {}, m
           {!movil && <div className="s-cab-periodo" ref={refPeriodo} />}
         </div>
         <div className="s-cab-centro">
-          {!movil && producto && pestanas.length > 0 && <Pestanas key={producto.id} producto={producto} pestanas={pestanas} activa={pestanaActiva} periodo={periodo} contadores={contadores} />}
+          {!movil && producto && pestanas.length > 0 && <Pestanas key={producto.id} producto={producto} pestanas={pestanas} activa={pestanaActiva} periodo={periodo} />}
         </div>
         <div className="s-cab-derecha">
           <Boton variante="fantasma" className="s-cab-buscar" icono="buscar" tecla={movil ? undefined : 'Ctrl K'} atajo="Control+K"
@@ -220,7 +197,7 @@ export function Cabecera({ producto, pestanas, pestanaActiva, contadores = {}, m
           <div className="s-cab-periodo s-cab-periodo-movil" ref={refPeriodo} />
         </div>
       )}
-      {movil && producto && pestanas.length > 1 && <PestanasMovil producto={producto} pestanas={pestanas} activa={pestanaActiva} contadores={contadores} />}
+      {movil && producto && pestanas.length > 1 && <PestanasMovil producto={producto} pestanas={pestanas} activa={pestanaActiva} />}
     </>
   )
 }

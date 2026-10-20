@@ -170,8 +170,6 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(tira.getByRole('button').nth(3)).toContainText('Sociedades · 202')
     await expect(tira.getByRole('button').nth(1)).toContainText('Hasta el 20/10')
     await expect(page.getByRole('radio', { name: '3T' })).toHaveAttribute('aria-checked', 'true')
-    // Las pestañas del marco, con su icono (pieza común).
-    await expect(page.locator('.s-pestanas .s-pestana .s-icono').first()).toBeVisible()
     // La cartera sale con el 303 elegido (el primero), en su ficha.
     await expect(page.locator('[data-prueba="ficha-modelo"] [data-prueba="cartera"]')).toBeVisible()
 

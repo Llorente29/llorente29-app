@@ -100,34 +100,23 @@
 .cxm-es-movil .s-cab-periodo > * { display: flex; min-width: 0; max-width: 100%; }
 .cxm.cxm-es-movil .s-cab-periodo .cxm-select { max-width: 132px; min-width: 0; }
 
-/* Pestañas del producto (I01c, Julio, 20/10, maqueta_303_v2; común a todos los
-   módulos): icono y nombre, letra un punto mayor, la activa en azul (texto y
-   subrayado) y, si cuenta algo, su contador: rojo lo que vence, gris lo demás. */
+/* Pestañas del producto: la activa en negrita y subrayada (maqueta 1). */
 .s-pestanas-caja { position: relative; flex: 1; min-width: 0; display: flex; }
 .s-pestanas-medida { position: absolute; visibility: hidden; pointer-events: none; display: flex; gap: var(--s-1); white-space: nowrap; height: 0; overflow: hidden; }
 .s-pestanas-medida > * { flex-shrink: 0; }
 .s-pestanas { display: flex; align-items: stretch; gap: var(--s-1); min-width: 0; }
 .s-pestana {
-  display: inline-flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-3); white-space: nowrap;
-  color: var(--s-apoyo); text-decoration: none; background: none; border: 0; font: inherit; font-size: var(--s-t-l); cursor: pointer;
+  display: inline-flex; align-items: center; padding: 0 var(--s-2); white-space: nowrap;
+  color: var(--s-apoyo); text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer;
   border-bottom: 2px solid transparent;
 }
-.s-pestana .s-icono { flex-shrink: 0; }
 .s-pestana:hover { color: var(--s-tinta); }
-.s-pestana[aria-current='page'], .s-pestana-activa { color: var(--s-accion); font-weight: var(--s-peso-fuerte); border-bottom-color: var(--s-accion); }
-.s-pestana-contador {
-  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px;
-  border-radius: var(--s-radio-pildora); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); font-variant-numeric: tabular-nums;
-  background: var(--s-neutro-fondo); color: var(--s-tinta);
-}
-.s-pestana-contador[data-tono='falta'] { background: var(--s-falta-fondo); color: var(--s-falta); }
-.s-menu-item .s-pestana-nombre { flex: 1; }
-.s-menu-item .s-pestana-contador { margin-left: var(--s-2); }
+.s-pestana[aria-current='page'], .s-pestana-activa { color: var(--s-tinta); font-weight: var(--s-peso-fuerte); border-bottom-color: var(--s-accion); }
 .s-pestana:focus-visible { outline: none; box-shadow: inset var(--s-foco); }
 
 /* Los enlaces del esqueleto dentro de «.cx a» (componentes.css, azul): con el mismo peso, su color. */
 .cx a.s-pestana { color: var(--s-apoyo); }
-.cx a.s-pestana[aria-current='page'] { color: var(--s-accion); }
+.cx a.s-pestana[aria-current='page'] { color: var(--s-tinta); }
 .cx a.s-menu-item { color: var(--s-tinta); }
 .cx a.s-cab-empresa, .cx a.s-cab-logotipo { color: var(--s-tinta); }
 
