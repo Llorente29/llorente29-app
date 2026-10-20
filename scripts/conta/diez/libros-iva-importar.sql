@@ -3,10 +3,11 @@
 -- I01b · Los libros de IVA de Diez · paso 2: ESCRIBIR, MEDIR y decidir. Todo
 -- en UNA transacción, con el molde de importar.sql (el histórico, C04b):
 --   1. carga libro.jsonl (las filas que dejó libros-iva-preparar.ts, una por
---      tramo de IVA) y testigo-303.csv (las casillas de los 303 presentados,
---      por HUELLA: md5 de los céntimos, 16 cifras; desde, hasta, casilla, huella:
---      una casilla puede ir por semestre si la declaración repartió distinto de
---      lo que guarda Diez, y así lo dice el fichero del testigo);
+--      tramo de IVA). El TESTIGO no es un fichero (I01c · pieza 2, 19/10): son
+--      las casillas de los 303 PRESENTADOS que Julio subió con su justificante
+--      (tax_return_box con origen «justificante»), leídas aquí mismo, dentro de
+--      la transacción. Cada trimestre del periodo tiene que tener el suyo;
+--      si falta uno, no se escribe nada y se dice cuál;
 --   2. cada factura, con su asiento traído de Diez de la empresa (ejercicio,
 --      serie, documento). Rechazo si no lo tiene, o si la cuota de la factura
 --      no es la 477 (expedidas) o la 472 (recibidas) de su asiento al céntimo;
@@ -16,8 +17,9 @@
 --      y 472) va como inversión del sujeto pasivo (S2), y con su país;
 --   5. mide: cobertura (ningún asiento traído con IVA del periodo sin su
 --      libro), las expedidas de cada trimestre contra la 477 del diario, las
---      recibidas de todo el periodo contra la 472, y cada casilla del testigo
---      contra el libro;
+--      recibidas de todo el periodo contra la 472, y las casillas de los 303
+--      presentados contra el libro, al céntimo. Las CUOTAS deciden; las bases se
+--      miden y se dicen, pero no paran (ver «El testigo», abajo);
 --   6. ENSAYO: rollback, y comprueba que no queda nada escrito. REAL: commit
 --      solo si está en verde; si no, rollback y en rojo.
 --
@@ -39,14 +41,12 @@ set local lock_timeout = '5s';
 select set_config('libro.empresa', :'empresa', true), set_config('libro.desde', :'desde', true), set_config('libro.hasta', :'hasta', true) \g /dev/null
 
 create temp table carga_linea (j jsonb) on commit drop;
-create temp table carga_testigo (desde date, hasta date, casilla text, huella text) on commit drop;
 -- Las autoliquidadas, clasificadas por lo que declaró la gestoría (autoliquidadas-foodint.csv).
 create temp table carga_autoliq (ejercicio text, serie text, documento text, tipo text check (tipo in ('intracomunitaria', 'otra_isp'))) on commit drop;
 create temp table salida (n serial, clave text, valor text) on commit drop;
 -- JSON Lines: un objeto por línea; con un delimitador y una comilla que no
 -- salen nunca, COPY no toca ni comillas ni barras.
 \copy carga_linea from 'libro.jsonl' with (format csv, delimiter e'\x02', quote e'\x01')
-\copy carga_testigo from 'testigo-303.csv' with (format csv)
 \copy carga_autoliq from 'autoliquidadas.csv' with (format csv)
 
 do $$
@@ -144,6 +144,13 @@ begin
   select count(*) into v_n from autoliq where tipo is null;
   insert into salida (clave, valor) values ('autoliquidadas_fuera_de_la_lista', v_n);
   v_rech := v_rech + v_n;
+  -- Y CUÁLES (Julio, 19/10: «para y dime cuáles»): el número de su asiento de
+  -- Diez, que es lo que lleva la lista. Ni NIF ni importe.
+  insert into salida (clave, valor)
+  select 'autoliquidada_fuera_de_la_lista.' || je.external_year || '_s' || je.external_series, je.external_number
+    from autoliq x join public.journal_entry je on je.id = x.entry_id
+   where x.tipo is null
+   order by je.external_year, je.external_series, length(je.external_number), je.external_number;
   insert into salida (clave, valor)
   select 'autoliquidadas.' || tipo, count(*) from autoliq where tipo is not null group by tipo order by tipo;
   select count(distinct f.entry_id) into v_n from fila f join autoliq x on x.entry_id = f.entry_id
@@ -153,6 +160,27 @@ begin
   -- Ya estaban (idempotente): el asiento que tiene libro no se toca.
   select count(distinct f.entry_id) into v_n from fila f where exists (select 1 from public.vat_book_entry v where v.entry_id = f.entry_id);
   insert into salida (clave, valor) values ('facturas_que_ya_estaban', v_n);
+
+  -- El testigo existe: cada trimestre del periodo, con su 303 PRESENTADO y las
+  -- casillas de su justificante (pieza 1 del I01c). Si falta uno, no se escribe
+  -- nada: sin testigo no hay con qué comprobar lo que se trae.
+  create temp table trimestre on commit drop as
+  select d::date desde, (d + interval '3 months - 1 day')::date hasta, extract(quarter from d)::int t
+    from generate_series(v_desde, v_hasta, interval '3 months') d;
+  create temp table presentado on commit drop as
+  select tq.t, r.id return_id
+    from trimestre tq
+    left join lateral (
+      select r.id from public.tax_return r
+       where r.account_id = v_cuenta and r.company_id = c and r.form_code = '303'
+         and r.fiscal_year = extract(year from tq.desde)::int and r.period = tq.t || 'T'
+         and r.status in ('filed', 'booked', 'paid', 'offset', 'refunded')
+         and exists (select 1 from public.tax_return_box b where b.tax_return_id = r.id and b.origin = 'justificante')
+       order by r.sequence desc nulls last limit 1) r on true;
+  insert into salida (clave, valor)
+  select 'testigo.falta_el_303_presentado_del_' || t || 't', 1 from presentado where return_id is null order by t;
+  select count(*) into v_n from presentado where return_id is null;
+  if v_n > 0 then v_rech := v_rech + v_n; end if;
 
   -- Escribir: una fila por tramo, solo si no hay rechazos (nada a medias).
   if v_rech = 0 then
@@ -205,41 +233,96 @@ begin
   insert into salida (clave, valor) values ('recibidas.cuadran_con_la_472', v_n);
   if v_n = 0 then v_rech := v_rech + 1; end if;
 
-  -- El testigo: cada casilla de los 303 presentados, contra el libro, por huella.
-  --   06: cuota de las expedidas al 10 % · 29: cuota de las recibidas interiores
-  --   corrientes · 37: cuota de las adquisiciones intracomunitarias.
-  select count(*), count(*) filter (where t.huella <> left(md5(x.cent::text), 16)) into v_test, v_test_mal
-    from carga_testigo t
-    cross join lateral (
-      select coalesce(sum(round(v.tax_amount * 100)), 0)::bigint cent
-        from public.vat_book_entry v
-       where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null
-         and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date) else coalesce(v.received_date, v.issue_date) end
-             between t.desde and t.hasta
-         and case t.casilla
-               when '06' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
-               when '29' then v.book = 'received' and not v.reverse_charge and not v.investment_good
-               when '37' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
-               else false end) x;
-  insert into salida (clave, valor) values ('testigo.casillas', v_test), ('testigo.casillas_que_no_casan', v_test_mal);
-  -- Cuál no casa, por su nombre (fechas y casilla; ningún importe): el ensayo
-  -- del 18/10 dijo «1 no casa» y no se podía saber cuál sin otra vuelta.
-  insert into salida (clave, valor)
-  select 'testigo.no_casa.' || to_char(t.desde, 'YYYYMMDD') || '_' || to_char(t.hasta, 'MMDD') || '.c' || t.casilla, 1
-    from carga_testigo t
-    cross join lateral (
-      select coalesce(sum(round(v.tax_amount * 100)), 0)::bigint cent
-        from public.vat_book_entry v
-       where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null
-         and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date) else coalesce(v.received_date, v.issue_date) end
-             between t.desde and t.hasta
-         and case t.casilla
-               when '06' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
-               when '29' then v.book = 'received' and not v.reverse_charge and not v.investment_good
-               when '37' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
-               else false end) x
-   where t.huella <> left(md5(x.cent::text), 16)
-   order by t.desde, t.casilla;
+  -- El testigo: las casillas de los 303 PRESENTADOS del periodo (subidos con su
+  -- justificante, pieza 1 del I01c), contra el libro, al céntimo. Regla 9: de
+  -- la cuenta y la empresa. Una casilla vacía en el impreso es un cero.
+  --   [01]/[03] 4 %, [04]/[06] 10 %, [07]/[09] 21 %: expedidas, por tipo.
+  --   [10]/[11] y [36]/[37]: adquisiciones intracomunitarias (autoliquidadas
+  --     con clave 09), devengado y deducible.
+  --   [12]/[13]: otras con inversión del sujeto pasivo (devengado).
+  --   [28]/[29]: recibidas interiores corrientes, más lo deducible de las otras
+  --     con inversión. ACUMULADAS en todo el periodo: la gestoría dedujo en el
+  --     2T parte de las compras del 1T y Diez no guarda cuáles (lectura 6, run
+  --     39120406840: el semestre casa al céntimo, cada trimestre no).
+  -- Las CUOTAS deciden el verde; las bases se miden y se dicen, y no paran
+  -- (una base puede repartir lo exento o lo no sujeto distinto que el libro).
+  create temp table regla (casilla text, cuota boolean, acumulada boolean) on commit drop;
+  insert into regla values
+    ('01', false, false), ('03', true, false), ('04', false, false), ('06', true, false), ('07', false, false), ('09', true, false),
+    ('10', false, false), ('11', true, false), ('12', false, false), ('13', true, false),
+    ('28', false, true), ('29', true, true), ('36', false, false), ('37', true, false);
+  -- Cada comprobación: un trimestre (o el periodo entero, las acumuladas) y una casilla.
+  create temp table testigo on commit drop as
+  with ambito as (
+    select g.casilla, g.cuota, tq.t etiqueta_t, tq.desde, tq.hasta, array[tq.t] ts from regla g cross join trimestre tq where not g.acumulada
+    union all
+    select g.casilla, g.cuota, null, v_desde, v_hasta, (select array_agg(t order by t) from trimestre) from regla g where g.acumulada)
+  select a.casilla, a.cuota, a.desde, a.hasta,
+         case when a.etiqueta_t is not null then a.etiqueta_t || 't'
+              else (select string_agg(x || 't', '_' order by x) from unnest(a.ts) x) end ambito,
+         (select coalesce(sum(round(b.value * 100)), 0)::bigint from presentado p join public.tax_return_box b on b.tax_return_id = p.return_id
+           where p.t = any (a.ts) and b.box = a.casilla and b.value is not null) presentado,
+         (select coalesce(sum(round(case when a.cuota then v.tax_amount else v.tax_base end * 100)), 0)::bigint
+            from public.vat_book_entry v
+           where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null
+             and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date) else coalesce(v.received_date, v.issue_date) end
+                 between a.desde and a.hasta
+             and case a.casilla
+                   when '01' then v.book = 'issued' and v.tax_rate = 4 and not v.reverse_charge
+                   when '03' then v.book = 'issued' and v.tax_rate = 4 and not v.reverse_charge
+                   when '04' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
+                   when '06' then v.book = 'issued' and v.tax_rate = 10 and not v.reverse_charge
+                   when '07' then v.book = 'issued' and v.tax_rate = 21 and not v.reverse_charge
+                   when '09' then v.book = 'issued' and v.tax_rate = 21 and not v.reverse_charge
+                   when '10' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
+                   when '11' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
+                   when '12' then v.book = 'received' and v.reverse_charge and v.operation_key <> '09'
+                   when '13' then v.book = 'received' and v.reverse_charge and v.operation_key <> '09'
+                   when '28' then v.book = 'received' and not v.investment_good and (not v.reverse_charge or v.operation_key <> '09')
+                   when '29' then v.book = 'received' and not v.investment_good and (not v.reverse_charge or v.operation_key <> '09')
+                   when '36' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
+                   when '37' then v.book = 'received' and v.reverse_charge and v.operation_key = '09'
+                   else false end) libro
+    from ambito a;
+  -- Solo las que dicen algo: con importe en el impreso o en el libro.
+  delete from testigo where presentado = 0 and libro = 0;
+  -- 20/10 · Sin libro no hay nada que medir. El ensayo #6 paró antes de
+  -- escribir (15 autoliquidadas fuera de la lista: v_rech > 0) y el testigo
+  -- comparó los 303 con un libro VACÍO: «9 de 9 no casan», que se leyó como un
+  -- error de método. Ahora lo dice tal cual y no mide.
+  select count(*) into v_n from public.vat_book_entry v
+   where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null and v.source_type = 'migrated'
+     and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date) else coalesce(v.received_date, v.issue_date) end
+         between v_desde and v_hasta;
+  if v_n = 0 then
+    insert into salida (clave, valor) values ('testigo.no_se_mide_sin_libro', 1);
+    v_test := 0; v_test_mal := 0;
+  else
+    select count(*) filter (where cuota), count(*) filter (where cuota and presentado <> libro) into v_test, v_test_mal from testigo;
+    insert into salida (clave, valor) values ('testigo.cuotas', v_test), ('testigo.cuotas_que_no_casan', v_test_mal);
+    -- Cuál, por su nombre (trimestre y casilla; ningún importe).
+    insert into salida (clave, valor)
+    select case when cuota then 'testigo.' else 'testigo_base.' end || ambito || '.c' || casilla || '.casa', (presentado = libro)::int
+      from testigo order by not cuota, desde, hasta, casilla;
+    insert into salida (clave, valor)
+    select 'testigo.bases_que_no_casan', count(*) from testigo where not cuota and presentado <> libro;
+    -- Y de las que no casan, la CLASE de la diferencia, sin importes (Julio, 20/10):
+    --   .signo  1 igual, −1 opuesto, 0 uno de los dos es cero;
+    --   .razon  libro/303 en por ciento, redondeado (100 = ×1, −100 = ×−1,
+    --           0 = ×0, 200 = ×2); sin 303 en la casilla, .sin_303 1.
+    insert into salida (clave, valor)
+    select k, v from (
+      select desde, hasta, casilla, cuota, 1 o, case when cuota then 'testigo.' else 'testigo_base.' end || ambito || '.c' || casilla || '.signo' k,
+             (sign(libro) * sign(presentado))::text v
+        from testigo where presentado <> libro
+      union all
+      select desde, hasta, casilla, cuota, 2, case when cuota then 'testigo.' else 'testigo_base.' end || ambito || '.c' || casilla
+                  || case when presentado = 0 then '.sin_303' else '.razon' end,
+             case when presentado = 0 then '1' else greatest(-999999, least(999999, round(100.0 * libro / presentado)))::bigint::text end
+        from testigo where presentado <> libro) x
+     order by not cuota, desde, hasta, casilla, o;
+  end if;
+
   -- Las autoliquidadas (asiento con 477 y 472) y cuántas van sin país: sin
   -- país no entran en la [37] (intracomunitarias) del testigo.
   insert into salida (clave, valor)
@@ -266,7 +349,7 @@ begin
            where f.libro = 'received' and a.c477 <> 0 and f.tramo = 1) z
    group by z.trim_, z.pref, z.kk
    order by z.trim_, z.pref, z.kk;
-  if v_test = 0 then insert into salida (clave, valor) values ('testigo.falta', 1); end if;
+  if v_test = 0 then insert into salida (clave, valor) values ('testigo.sin_cuotas', 1); end if;
 
   v_verde := v_rech = 0 and v_falta = 0 and v_test > 0 and v_test_mal = 0;
   insert into salida (clave, valor) values ('verde', v_verde::int);

@@ -72,10 +72,62 @@ describe('leerFacturas', () => {
     expect(new Set(l.facturas.map((f) => f.Documento)).size).toBe(253)
     expect(l.repetidas).toBe(0)
   })
-  it('un día que no contesta se dice', async () => {
+  const sinEsperar = () => { const pausas: number[] = []; return { pausas, espera: async (ms: number) => { pausas.push(ms) } } }
+  it('un día que no contesta nunca se reintenta al final, con pausa, y se dice', async () => {
     const roto = { todas: async <T,>(ruta: string): Promise<T[]> => (ruta.includes('20260105') ? Promise.reject(new Error('500')) : c.todas<T>(ruta)) }
-    const l = await leerFacturas(roto, '202601', '202601')
+    const e = sinEsperar()
+    const l = await leerFacturas(roto, '202601', '202601', { espera: e.espera })
     expect(l.sinContestar).toEqual([20260105])
+    expect(l.recuperados).toBe(0)
+    expect(e.pausas).toEqual([30_000, 60_000, 90_000])
+    expect(l.dias).toBe(30)
+  })
+  it('el ensayo #5 (20/10): los días que no contestan a la primera se recuperan al final, solo ellos', async () => {
+    // El 3 (el día lleno) y el 2 fallan dos veces; los demás contestan siempre.
+    const fallos = new Map([[20260102, 2], [20260103, 2]])
+    const pedidas: number[] = []
+    const lento = {
+      todas: async <T,>(ruta: string): Promise<T[]> => {
+        const d = Number(/Fecha ge (\d+)/.exec(decodeURIComponent(ruta))![1])
+        pedidas.push(d)
+        const n = fallos.get(d) ?? 0
+        if (n > 0) { fallos.set(d, n - 1); throw new Error('The operation was aborted due to timeout') }
+        return c.todas<T>(ruta)
+      },
+    }
+    const e = sinEsperar()
+    const l = await leerFacturas(lento, '202601', '202601', { espera: e.espera })
+    expect(l.sinContestar).toEqual([])
+    expect(l.recuperados).toBe(2)
+    expect(e.pausas).toEqual([30_000, 60_000]) // a la segunda vuelta ya están todos: no hay tercera
+    expect(l.dias).toBe(31)
+    expect(l.facturas.length).toBe(253)
+    expect(new Set(l.facturas.map((f) => f.Documento)).size).toBe(253)
+    expect(l.diasLlenos).toBe(1)
+    // En las vueltas solo se piden los que fallaron.
+    expect(new Set(pedidas.slice(31))).toEqual(new Set([20260102, 20260103]))
+  })
+  it('sin días por reintentar no hay pausa', async () => {
+    const e = sinEsperar()
+    const l = await leerFacturas(c, '202601', '202601', { espera: e.espera })
+    expect([l.recuperados, e.pausas]).toEqual([0, []])
+  })
+  it('un tramo de documento que también llena la página se parte y se pide cada mitad', async () => {
+    // La serie 1 y la 2 con los mismos números el mismo día: 300 en el tramo 1–150.
+    const dos = [...dia(20260107, 150, 1), ...dia(20260107, 150, 1).map((f) => ({ ...f, Serie: '1' }))]
+    const cc = {
+      todas: async <T,>(ruta: string): Promise<T[]> => {
+        const f = decodeURIComponent(ruta.split('$filter=')[1])
+        const d = Number(/Fecha ge (\d+)/.exec(f)![1])
+        const docs = /Documento ge (\d+) and Documento le (\d+)/.exec(f)
+        const r = dos.filter((x) => x.Fecha === d && (!docs || (x.Documento >= Number(docs[1]) && x.Documento <= Number(docs[2]))))
+        return (r.length > PAGINA ? r.slice(0, PAGINA) : r) as T[]
+      },
+    }
+    const l = await leerFacturas(cc, '202601', '202601', { espera: async () => {} })
+    expect(l.tramosLlenos).toBe(0)
+    expect(l.facturas.length).toBe(300)
+    expect(l.repetidas).toBe(0)
   })
 })
 
