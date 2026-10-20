@@ -22,7 +22,8 @@ describe('la regla del IVA: la base y el agente «libro», iguales', () => {
   it('la última regla de validar es la de los motivos (con la tolerancia del céntimo), y su tolerancia se lee', () => {
     // S01 (0140): la regla 5 solo pide el local con el eje encendido; la del IVA, igual que en la M01.
     // I01b (0180): la liquidación del 303 no pide tipo a la 477 y la 472; la tolerancia, igual.
-    expect(ultimaValidar()).toBe('20261122T0180_i01b_asiento_303.sql')
+    // I01d (0300): la 477 de la autorrepercusión va sin tipo si casa con la 472 autoliquidada; la tolerancia, igual.
+    expect(ultimaValidar()).toBe('20261125T0300_i01d_autoliquidaciones.sql')
     expect(tolerancia(readFileSync(`${MIG}/${ultimaValidar()}`, 'utf8'))).toBe('greatest(1, floor(l.tax_documents / 2.0)) / 100')
   })
   it('el agente usa exactamente la misma tolerancia que la base', () => {
@@ -41,5 +42,20 @@ describe('la liquidación del 303: la base y el agente «libro», con la misma e
       expect(sql).toMatch(/\.form_code = '303'/)
       expect(sql).toMatch(/case when (v_e|e)\.source_type = 'reversal' then (v_e|e)\.reverses_entry_id else (v_e|e)\.id end/)
     }
+  })
+})
+
+describe('la autorrepercusión: la base y el agente «libro», con la misma excepción', () => {
+  const base = readFileSync(`${MIG}/20261125T0300_i01d_autoliquidaciones.sql`, 'utf8')
+  const agente = readFileSync('scripts/conta/agente-libro.sql', 'utf8')
+  it('las dos libran la 477 sin tipo solo si el asiento lleva una 472 con «Compra en otro país de la UE» o «Inversión del sujeto pasivo»', () => {
+    for (const sql of [base, agente]) {
+      expect(sql).toMatch(/a\.template_code like '477%' and/)
+      expect(sql).toMatch(/treatment in \('intra_eu', 'reverse_charge'\)/)
+    }
+  })
+  it('y las dos piden que la 477 sume lo mismo que la 472 autoliquidada', () => {
+    expect(base).toMatch(/v_isp_472 <> v_auto_477/)
+    expect(agente).toMatch(/la 477 de la autorrepercusión no casa con la 472 autoliquidada/)
   })
 })

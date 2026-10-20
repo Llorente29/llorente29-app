@@ -5,6 +5,7 @@
 // visible, zonas de 44 px y etiqueta encima de cada campo. Los estilos están
 // en ../estilo/proveedor.css y los colores, solo en tokens.css.
 
+import { claseIva, textoClaseIva } from '@/modules/conta/lib/ivaProveedor'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Miga } from '@/config/navegacion'
@@ -131,25 +132,39 @@ export function Dialogo({ titulo, children, alCerrar, cerrable = false }: { titu
   )
 }
 
-/** La píldora del NIF de la cabecera: verde «✓ comprobado», «Comprobando con la UE…» o ámbar. */
+/**
+ * La píldora del NIF de la cabecera: verde «✓ comprobado» (en VIES, si es
+ * europeo), «Comprobando en VIES…» mientras pregunta, o ámbar. I01d: un
+ * NIF-IVA que VIES no ha contestado dice «sin comprobar en VIES», no que está
+ * comprobando: ya no lo está.
+ */
 export function PildoraNif() {
   const { datos: { ficha: f }, comprobandoVies } = useFicha()
   if (!f.taxId) return <span className="cx-chip cx-chip-ambar">Sin NIF</span>
-  if (f.taxIdType === 'vat_eu' && (comprobandoVies || f.taxIdCheckStatus === 'pending')) {
-    return <span className="cx-chip cx-chip-ambar" role="status">{f.taxId} · Comprobando con la UE…</span>
-  }
-  if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span className="cx-chip cx-chip-ia">{f.taxId} ✓ comprobado</span>
-  if (f.taxIdCheckStatus === 'invalid') return <span className="cx-chip cx-chip-ambar">{f.taxId} · no válido</span>
+  const ue = f.taxIdType === 'vat_eu'
+  if (ue && comprobandoVies) return <span className="cx-chip cx-chip-ambar" role="status">{f.taxId} · Comprobando en VIES…</span>
+  if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span className="cx-chip cx-chip-ia">{f.taxId} ✓ {ue ? 'comprobado en VIES' : 'comprobado'}</span>
+  if (f.taxIdCheckStatus === 'invalid') return <span className="cx-chip cx-chip-ambar">{f.taxId} · {ue ? 'VIES dice que no vale' : 'no válido'}</span>
   if (f.taxIdType === 'foreign') return <span className="cx-chip">{f.taxId}</span>
-  return <span className="cx-chip cx-chip-ambar">{f.taxId} · sin comprobar</span>
+  return <span className="cx-chip cx-chip-ambar">{f.taxId} · {ue ? 'sin comprobar en VIES' : 'sin comprobar'}</span>
+}
+
+/** I01d · El país y cómo va su IVA, si no es un proveedor de España normal. */
+export function PildoraIva() {
+  const { datos: { ficha: f } } = useFicha()
+  const c = claseIva({ pais: f.countryCode, tipoNif: f.taxIdType, nif: f.taxId, vies: f.taxIdCheckStatus, regimen: f.vatRegime })
+  if (c === 'nacional') return null
+  return <span className={`cx-chip${c === 'ue_sin_nif_iva' ? ' cx-chip-ambar' : ''}`} data-prueba="pildora-iva">{textoClaseIva(c, f.countryCode).titulo}</span>
 }
 
 /** Lo mismo en una línea de texto (cabecera del móvil). */
 export function TextoNif() {
   const { datos: { ficha: f }, comprobandoVies } = useFicha()
   if (!f.taxId) return <span className="cx-chip-ambar" style={{ background: 'none' }}>Sin NIF</span>
-  if (f.taxIdType === 'vat_eu' && (comprobandoVies || f.taxIdCheckStatus === 'pending')) return <span>{f.taxId} · Comprobando con la UE…</span>
-  if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span>{f.taxId} <span className="cxm-ok">✓ comprobado</span></span>
+  const ue = f.taxIdType === 'vat_eu'
+  if (ue && comprobandoVies) return <span>{f.taxId} · Comprobando en VIES…</span>
+  if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span>{f.taxId} <span className="cxm-ok">✓ {ue ? 'comprobado en VIES' : 'comprobado'}</span></span>
+  if (ue && f.taxIdCheckStatus !== 'invalid') return <span>{f.taxId} · sin comprobar en VIES</span>
   return <span>{f.taxId}</span>
 }
 

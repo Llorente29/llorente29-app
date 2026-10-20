@@ -1,18 +1,24 @@
 {
  "_que": "I01c · «deducida en» · contexto de producción de la tanda viva (20261124T0290), medido en SOLO LECTURA el 20/10 a las 10:08 UTC, después de la 0280 (aplicada) y de la carga de los libros de IVA (#255), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe conta_impuesto_303_calcular con una sola firma (md5 de su cuerpo 34eb07273e5020aea7f270dc0ecd4254, el de la 0280 y el de la vuelta atrás); existe vat_book_entry (4.509 filas, sin columnas deduction_*); no existe conta_libro_iva_deducir_en; nada del camino del pedido; nada en el historial.",
- "medido": "2026-10-20T10:08Z",
+ "medido": "2026-10-20T14:33Z",
  "tanda": {
-  "supabase/migrations/20261124T0290_i01c_deducida.sql": "910c96c2ce61828b27540a025ee654b3"
+  "supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql": "909566f36442a87925a16a619f68fe14",
+  "supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql": "49ec34d7c0de85bfa21b7bad15b9c6d5"
  },
  "contexto": {
   "tablas": [
-   "public.vat_book_entry"
+   "public.company_account_link",
+   "public.supplier"
   ],
   "funciones": [
-   "public.conta_impuesto_303_calcular(uuid,int,text)"
+   "public.conta_impuesto_303_calcular(uuid,int,text)",
+   "public.conta_libro_iva_deducir_en(uuid,jsonb,int,text,text)",
+   "public.conta_motivos_para_validar(uuid)",
+   "public.conta_vat_book_desde_asiento(uuid)"
   ],
   "filas": {
-   "public.vat_book_entry": 4509
+   "public.company_account_link": 82,
+   "public.supplier": 95
   },
   "otras": {},
   "camino": {
