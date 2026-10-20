@@ -1,6 +1,4 @@
-# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt),
-# en orden inverso: primero los proveedores de Foodint (para si alguno ya tiene
-# facturas) y después las funciones, byte a byte como estaban.
-cuenta: scripts/conta/produccion/cuentas/i01d-autoliquidaciones.sql
-supabase/vuelta-atras/20261125T0310_i01d_proveedores_foodint.down.sql
-supabase/vuelta-atras/20261125T0300_i01d_autoliquidaciones.down.sql
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
+# conta_recibida_envio, byte a byte la de antes (md5 6e5ed258).
+cuenta: scripts/conta/produccion/cuentas/i01f-recibida-envio.sql
+supabase/vuelta-atras/20261126T0320_i01f_recibida_envio_tratamiento.down.sql

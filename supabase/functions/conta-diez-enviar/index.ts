@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
       return data as ResumenBD;
     },
     // Los números de la base llegan como texto o número: se pasan a número.
-    recibida: async () => ({ ...rec, lineas: (rec.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), tipoIva: l.tipoIva == null ? null : Number(l.tipoIva), baseIva: l.baseIva == null ? null : Number(l.baseIva) })) }),
+    recibida: async () => ({ ...rec, lineas: (rec.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), tipoIva: l.tipoIva == null ? null : Number(l.tipoIva), baseIva: l.baseIva == null ? null : Number(l.baseIva), tratamiento: l.tratamiento == null ? null : String(l.tratamiento) })) }),
     envio: async (id) => {
       const { data, error } = await srv.from("external_send").select("*").eq("entry_id", id).eq("account_id", r.account_id).neq("status", "rechazado").maybeSingle();
       if (error) throw new Error(`no se ha podido leer el envío: ${error.message}`);
