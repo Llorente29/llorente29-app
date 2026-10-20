@@ -11,14 +11,14 @@
 //     (C03). Sin cuentas marcadas, lo dice y explica dónde se marcan.
 
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaFichaTercero, rutaLibros, rutaPlan } from '@/config/navegacion'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { extracto } from '@/modules/conta/lib/extractos'
 import { trimestre } from '@/modules/conta/lib/libroRegistro'
-import { periodosDelEjercicio, useLeer, useLibros } from '@/modules/conta/libros/contexto'
+import { delTrimestre, periodosDelEjercicio, useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import { cuantas } from '@/modules/conta/lib/plural'
 import { altaBien, cuentasDeSuplidos, leerBienes, movimientos, retenciones, type BienInversion } from '@/modules/conta/services/librosService'
@@ -126,7 +126,9 @@ export function Retenciones() {
   // S01e: con periodo y salida, como los demás libros.
   const ps = periodosDelEjercicio(L.ejercicio.inicio, L.ejercicio.fin)
   const hoy = new Date().toISOString().slice(0, 10)
-  const [periodo, setPeriodo] = useState(() => (ps.find((p) => p.id !== 'año' && p.desde <= hoy && hoy <= p.hasta) ?? ps[ps.length - 1]).id)
+  // I01c · «Facturas del trimestre» (Impuestos › Trimestre) abre aquí con ?periodo=3T.
+  const pedido = useSearchParams()[0].get('periodo')
+  const [periodo, setPeriodo] = useState(() => (delTrimestre(ps, pedido) ?? ps.find((p) => p.id !== 'año' && p.desde <= hoy && hoy <= p.hasta) ?? ps[ps.length - 1]).id)
   const p = ps.find((x) => x.id === periodo) ?? ps[ps.length - 1]
   const [hecho, setHecho] = useState<string | null>(null)
   const d = useLeer(() => retenciones(L.accountId, L.companyId, p.desde, p.hasta), `${L.companyId}:${p.desde}:${p.hasta}:${L.vuelta}`)
