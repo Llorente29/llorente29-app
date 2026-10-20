@@ -40,13 +40,14 @@ create function pg_temp.como(u uuid) returns void language sql as $f$
 $f$;
 grant execute on function pg_temp.id(text), pg_temp.como(uuid) to authenticated;
 
--- Una persona de la empresa clienta 2 (Talleres de Prueba Ruiz), administradora.
+-- Una persona de la empresa clienta 2 (Talleres de Prueba Ruiz), administradora:
+-- la pone la semilla (pg_temp.p01_administracion_de_clientes), que es también
+-- a quien manda el resumen del trimestre. Aquí solo se comprueba que está.
 do $$ begin
-  insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
-    created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change)
-  values ('00000000-0000-0000-0000-000000000000', pg_temp.id('c02a'), 'authenticated', 'authenticated', 'p01.talleres@p01-prueba.test',
-    extensions.crypt(gen_random_uuid()::text, extensions.gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', '');
-  insert into public.user_profiles (user_id, account_id, role, active, display_name) values (pg_temp.id('c02a'), pg_temp.id('c020'), 'admin', true, 'Talleres (prueba)');
+  if not exists (select 1 from public.user_profiles
+                 where user_id = pg_temp.id('c02a') and account_id = pg_temp.id('c020') and role = 'admin' and active) then
+    raise exception 'PRUEBA despacho · 0: falta la administración de Talleres que pone la semilla P01.';
+  end if;
 end $$;
 
 -- ── 1 · La asesoría ve sus 8 clientes ────────────────────────────────────────

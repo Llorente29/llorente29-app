@@ -235,3 +235,38 @@ supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
 #   diferencias; a mano con motivo; y la vuelta atrás.
 supabase/migrations/20261122T0260_i01c_justificantes.sql
 supabase/staging/sql/20261122_i01c_justificantes_prueba.sql
+
+# I01c · P1 definitiva · El justificante por CSV (rama conta/i01c-csv).
+#   La 0270 DE VERDAD (cuatro columnas nuevas en tax_return: expediente,
+#   presentador y de dónde salió el PDF; apuntar los guarda y Presentados da lo
+#   traído y lo compensado del 303), para la e2e de «Ya lo presenté fuera ·
+#   pegar CSV» con el doble de conta-justificante-csv. Y su prueba, con \i y
+#   ROLLBACK: el 3T traído por CSV (comprobado), el 4T subido con 430,00
+#   compensado, el de otro NIF fuera, y la vuelta atrás.
+supabase/migrations/20261122T0270_i01c_csv.sql
+supabase/staging/sql/20261122_i01c_csv_prueba.sql
+
+# P01 · Impuestos de tus clientes (rama conta/p01-despacho).
+#   La 0100 DE VERDAD: solo añade (dos columnas que admiten nulos en accounts,
+#   tax_client_assignee y las funciones conta_despacho_*); se puede volver a
+#   pasar. La asesoría de demo: Asesoría de Prueba Centro, 3 personas, 4
+#   certificados de mentira y 10 clientes inventados (8 con permiso); si ya
+#   está, solo pone al día la caducidad de los certificados. Y su prueba, con
+#   ROLLBACK: cifras y filtros del 3T a 13/10, certificado por persona,
+#   responsable, RLS de la clienta, de otra cuenta y de la asesoría, «Soy una
+#   asesoría», retirar el permiso y la vuelta atrás.
+#   Va detrás de la 0270: no toca nada de lo de arriba.
+supabase/migrations/20261123T0100_p01_despacho.sql
+supabase/seeds/conta/seed_p01_despacho_staging.sql
+supabase/staging/sql/20261123_p01_despacho_prueba.sql
+
+# I01c · Pieza 3, la parte que ordena (rama conta/i01c-trimestre).
+#   La 0280 DE VERDAD (solo añade: conta_impuesto_trimestre, la tira del
+#   trimestre y la cartera de cuotas a compensar del 303, y si el borrador está
+#   desfasado), para la e2e de Impuestos › Trimestre. Y su prueba, con \i y
+#   ROLLBACK: el borrador del 3T calculado antes del 2T, desfasado; la cartera
+#   1.500,00 + 1.200,50 − 400,25 = 2.300,25; vuelto a calcular, trae la [110];
+#   la tira; otra cuenta no lo ve; y la vuelta atrás. En 2026: con 2025 paró
+#   (run 369) porque no hay festivos de 2025 para el plazo.
+supabase/migrations/20261122T0280_i01c_trimestre.sql
+supabase/staging/sql/20261122_i01c_trimestre_prueba.sql

@@ -132,10 +132,19 @@ test('3 y 4 · Dos clientes elegidos, la barra de lotes y la confirmación con l
   await page.waitForTimeout(300)
   await foto(page, '4-confirmar-puerta-cerrada', false)
   await dialogo.getByRole('button', { name: 'Volver' }).click()
-  // El resumen a los clientes: preparado y cerrado, y lo dice.
+  // El resumen a los clientes: a su administración, con el «responder a» de la
+  // asesoría. En staging el freno de send-email lo tiene cerrado: se pide de
+  // verdad, el servidor lo para y la pantalla lo dice (regla 8).
   await barra.getByRole('button', { name: 'Enviar resumen a los clientes' }).click()
-  await expect(page.getByRole('dialog', { name: 'Enviar el resumen a los clientes' }).getByText('No se ha mandado nada', { exact: false })).toBeVisible()
-  await page.getByRole('button', { name: 'Entendido' }).click()
+  const envio = page.getByRole('dialog', { name: 'Enviar el resumen a los clientes' })
+  await expect(envio.getByRole('list', { name: 'A quién se manda' }).getByRole('listitem')).toHaveCount(2)
+  await expect(envio.getByText(/^Si responden, les llega a .+@/)).toBeVisible()
+  if (!esMovil(page)) {
+    await envio.getByRole('button', { name: 'Enviar a 2 clientes' }).click()
+    await expect(page.locator('.s-despacho-aviso')).toContainText(/cerrados hasta que Julio los abra\. No se ha mandado nada\./, { timeout: 30_000 })
+  } else {
+    await envio.getByRole('button', { name: 'Volver' }).click()
+  }
   expect(errores).toEqual([])
 })
 
@@ -177,5 +186,15 @@ test('6 · Un cliente sin consentimiento no sale (ni el que lo retiró ni el que
   await expect(page.getByText('8 de 8 clientes')).toBeVisible()
   await sinDesbordar(page, 'Sin consentimiento')
   await foto(page, '6-sin-consentimiento')
+  expect(errores).toEqual([])
+})
+
+test('7 · Abrir un cliente lleva a su Trimestre (la pantalla de C), por la ruta de su empresa', async ({ page }) => {
+  test.skip(esMovil(page), 'Basta un tamaño: el enlace es el mismo en la tarjeta')
+  const errores = vigilar(page)
+  await abrir(page)
+  await lista(page).getByRole('link', { name: 'Talleres de Prueba Ruiz, S.L.' }).click()
+  await expect(page).toHaveURL(/\/conta\/impuestos\/empresa\/[0-9a-f-]{36}\/trimestre\/2026\/3T(\?|$)/)
+  await expect(page.getByRole('heading', { level: 1, name: /^El trimestre · Talleres de Prueba Ruiz/ })).toBeVisible({ timeout: 20_000 })
   expect(errores).toEqual([])
 })

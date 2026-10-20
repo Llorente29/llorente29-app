@@ -155,6 +155,22 @@ begin
   return v;
 end $f$;
 
+-- P01 · El resumen del trimestre va a la administración de cada cliente: dos
+-- clientes de la demo la tienen (inventada), para que el envío tenga a quién
+-- mandar y se vea el freno de send-email. Se pone también si la asesoría ya
+-- estaba; si ya está, no hace nada.
+create function pg_temp.p01_administracion_de_clientes() returns void language plpgsql as $f$
+declare r record;
+begin
+  for r in select * from (values
+      ('c02a', 'c020', 'p01.talleres@p01-prueba.test', 'Administración de Talleres (prueba)'),
+      ('c08a', 'c080', 'p01.bar@p01-prueba.test', 'Administración del Bar (prueba)')) v(usuario, cuenta, correo, nombre) loop
+    continue when not exists (select 1 from public.accounts where id = pg_temp.p01_id(r.cuenta));
+    continue when exists (select 1 from auth.users where id = pg_temp.p01_id(r.usuario));
+    perform pg_temp.p01_usuario(pg_temp.p01_id(r.usuario), pg_temp.p01_id(r.cuenta), r.correo, r.nombre, 'admin');
+  end loop;
+end $f$;
+
 -- ── La asesoría y sus clientes ───────────────────────────────────────────────
 do $$
 declare
@@ -168,6 +184,7 @@ declare
 begin
   if exists (select 1 from public.accounts where id = v_ase) then
     raise notice 'Semilla P01: la asesoría de demo ya está; solo se pone al día la caducidad de los certificados.';
+    perform pg_temp.p01_administracion_de_clientes();
     return;
   end if;
   if exists (select 1 from auth.users where email like '%@p01-prueba.test') then
@@ -283,7 +300,8 @@ begin
   values (pg_temp.p01_id('c100'), e, 'p01.laura@p01-prueba.test', 'Asesoría de Prueba Centro', 'social_collaborator',
           encode(extensions.digest('p01-invitacion-10', 'sha256'), 'hex'), pg_temp.p01_id('c10f'), 'Administración del cliente (prueba)', now() + interval '6 days');
 
-  raise notice 'Semilla P01 OK: la asesoría de demo con 3 personas, 4 certificados y 10 clientes (8 con permiso).';
+  perform pg_temp.p01_administracion_de_clientes();
+  raise notice 'Semilla P01 OK: la asesoría de demo con 3 personas, 4 certificados y 10 clientes (8 con permiso; 2 con administración).';
 end $$;
 
 -- ── Lo que se repasa en cada pasada ────────────────────────────────────────
