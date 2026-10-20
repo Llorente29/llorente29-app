@@ -38,6 +38,7 @@ import { PAYMENT_METHOD_LABEL } from '@/modules/conta/types'
 import { BloqueAprendido, FraseAprendido } from '@/modules/conta/proveedor/Aprendido'
 import { ConQuienHablas } from '@/modules/conta/proveedor/Contactos'
 import { AvisoIban, ListaFacturas, TarjetaFacturas } from '@/modules/conta/proveedor/Facturas'
+import { Extracto } from '@/modules/conta/proveedor/SusCuentas'
 import { Notas } from '@/modules/conta/proveedor/Notas'
 import DatosFiscales from '@/modules/conta/proveedor/DatosFiscales'
 import Contactos from '@/modules/conta/proveedor/Contactos'
@@ -272,12 +273,24 @@ function BarraCompleta() {
   )
 }
 
+/** I01e · El pie de «Este año»: cuántas, y si vienen del libro (de Diez). */
+const pieEsteAnio = (n: number, delLibro: number) => {
+  if (!n) return 'Ninguna este año'
+  const cuantas = n === 1 ? '1 factura' : `${n} facturas`
+  if (!delLibro) return cuantas
+  return delLibro === n ? `${cuantas}, del libro de IVA` : `${cuantas} (${delLibro} del libro de IVA)`
+}
+
+/** I01e · «Le debes» sale del saldo de su cuenta cuando no hay ninguna factura subida aquí. */
+const pieSaldoCuenta = (codigo: string | null | undefined) => `Saldo de su cuenta${codigo ? ` ${codigo}` : ''}`
+/** Con el saldo de su cuenta a tu favor, la cifra se llama «Te debe». */
+const etDebes = (deCuenta: boolean, saldo: number | null | undefined) => (deCuenta && (saldo ?? 0) < 0 ? 'Te debe' : 'Le debes')
+
 function Cifras() {
-  const { datos, cifras, repetidas } = useFicha()
-  const c = cifras
+  const { datos, cifrasTodas: c, repetidas, facturasLibro } = useFicha()
   const ultima = datos.facturas.find((f) => !repetidas.has(f.id)) ?? null
   const forma = datos.ficha.paymentMethod ? PAYMENT_METHOD_LABEL[datos.ficha.paymentMethod].toLowerCase() : null
-  if (!c?.hayFacturas && !ultima) {
+  if (!c?.hayFacturas && !ultima && !c?.leDebesDe) {
     return (
       <section className="cx-tarjeta" aria-label="Cifras">
         <Vacio titulo="Aún no hay facturas suyas."
@@ -286,16 +299,22 @@ function Cifras() {
     )
   }
   const pendientes = datos.facturas.filter((f) => f.status === 'aprobada' && !repetidas.has(f.id)).length
+  const deCuenta = c?.leDebesDe === 'cuenta'
+  // I01e: la última, de las subidas aquí o de las del libro (de Diez), la más reciente.
+  const l0 = facturasLibro[0] ? { fecha: facturasLibro[0].fecha, numero: facturasLibro[0].numero } : null
+  const s0 = ultima ? { fecha: ultima.invoiceDate ?? '', numero: ultima.invoiceNumber ?? ultima.code ?? 'Sin número' } : null
+  const ult = !s0 ? l0 : l0 && s0.fecha < l0.fecha ? l0 : s0
   return (
     <div className="cxp-cifras">
       <Cifra et="Le has comprado este año" valor={c?.compradoEsteAnio != null ? euros(c.compradoEsteAnio) : null}
-        pie={c?.facturasEsteAnio ? (c.facturasEsteAnio === 1 ? '1 factura' : `${c.facturasEsteAnio} facturas`) : 'Ninguna este año'} />
-      <Cifra et="Le debes" valor={c?.leDebes != null ? euros(c.leDebes) : null}
-        pie={pendientes ? (pendientes === 1 ? '1 factura por pagar' : `${pendientes} facturas por pagar`) : 'Nada pendiente'} ambar={!!c?.leDebes} />
+        pie={pieEsteAnio(c?.facturasEsteAnio ?? 0, c?.delLibroEsteAnio ?? 0)} />
+      <Cifra et={etDebes(deCuenta, c?.leDebes)} valor={c?.leDebes != null ? euros(deCuenta ? Math.abs(c.leDebes) : c.leDebes) : null}
+        pie={deCuenta ? pieSaldoCuenta(datos.libro?.cuenta?.code) : pendientes ? (pendientes === 1 ? '1 factura por pagar' : `${pendientes} facturas por pagar`) : 'Nada pendiente'}
+        ambar={!deCuenta && !!c?.leDebes} />
       <Cifra et="Próximo pago" valor={c?.proximoPago ? diaMes(c.proximoPago.fecha) : null}
-        pie={c?.proximoPago ? `${eurosExactos(c.proximoPago.importe)}${forma ? ` por ${forma}` : ''}` : c?.leDebes ? 'Sin vencimiento puesto' : 'Nada que pagar'} />
-      <Cifra et="Última factura" valor={ultima?.invoiceDate ? diaMes(ultima.invoiceDate) : null}
-        pie={ultima ? (ultima.invoiceNumber ?? ultima.code ?? 'Sin número') : '—'} />
+        pie={c?.proximoPago ? `${eurosExactos(c.proximoPago.importe)}${forma ? ` por ${forma}` : ''}` : deCuenta ? 'Sin vencimientos: sus facturas no se subieron aquí' : c?.leDebes ? 'Sin vencimiento puesto' : 'Nada que pagar'} />
+      <Cifra et="Última factura" valor={ult?.fecha ? diaMes(ult.fecha) : null}
+        pie={ult ? ult.numero : '—'} />
     </div>
   )
 }
@@ -355,6 +374,19 @@ const PANTALLA: Partial<Record<Apartado, () => ReactNode>> = {
   historial: () => <Historial />,
 }
 
+/**
+ * I01e · Debajo de sus facturas, los asientos de su cuenta (400 o 410) con su
+ * origen: traído de Diez, la factura subida, el banco… Por año natural.
+ */
+function AsientosDeSuCuenta() {
+  const { datos } = useFicha()
+  const l = datos.libro
+  if (!l?.cuenta || l.apuntes.length === 0) return null
+  const anios = [...new Set(l.apuntes.map((a) => a.fecha.slice(0, 4)))].sort().reverse()
+    .map((y) => ({ code: y, inicio: `${y}-01-01`, fin: `${y}-12-31` }))
+  return <div data-prueba="asientos-cuenta"><Extracto ejercicios={anios} apuntes={l.apuntes} titulo={`Asientos de su cuenta ${l.cuenta.code}`} /></div>
+}
+
 function Edicion({ ap, secciones }: { ap: Apartado; secciones: SeccionDeFicha[] }) {
   const { datos, rutaApartado } = useFicha()
   if (ap === 'facturas') {
@@ -363,6 +395,7 @@ function Edicion({ ap, secciones }: { ap: Apartado; secciones: SeccionDeFicha[] 
         <Cabecera />
         <Link className="cxp-volver" to={rutaApartado('resumen')}>‹ Volver a la ficha</Link>
         <section className="cx-tarjeta" aria-label="Todas sus facturas"><ListaFacturas facturas={datos.facturas} /></section>
+        <AsientosDeSuCuenta />
       </>
     )
   }
@@ -415,11 +448,14 @@ function useCuentasDelResumen(accountId: string | null, companyId: string | null
 }
 
 function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
-  const { datos, completitud, cifras, repetidas, rutaApartado } = useFicha()
+  const { datos, completitud, cifrasTodas: cifras, repetidas, rutaApartado, facturasLibro } = useFicha()
   const f = datos.ficha
   const llamar = contactoParaLlamar(datos.contactos)
   const tipo = datos.tiposGasto.find((t) => t.id === f.expenseCategoryId) ?? null
-  const ultima = datos.facturas.find((x) => !repetidas.has(x.id)) ?? null
+  // I01e: la última, de las subidas aquí o de las del libro (de Diez), la más reciente.
+  const deSumied = datos.facturas.find((x) => !repetidas.has(x.id)) ?? null
+  const delLibro = facturasLibro[0] ? { invoiceDate: facturasLibro[0].fecha, grandTotal: facturasLibro[0].importe } : null
+  const ultima = !deSumied ? delLibro : delLibro && (deSumied.invoiceDate ?? '') < delLibro.invoiceDate ? delLibro : deSumied
   const pago = etiquetaPago(f, datos.opciones)
   const cuentas = useCuentasDelResumen(datos.conta ? f.accountId : null, datos.opciones.empresa?.id ?? null, f.id, f.expenseCategoryId)
   const base = { ficha: f, contactos: datos.contactos, faltan: completitud?.faltan ?? [], tipoGasto: tipo, ultimaFactura: ultima, numDocumentos: datos.documentos.length, opciones: datos.opciones, cuentas }
@@ -454,8 +490,11 @@ function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
       )}
       <div className="cxm-cifras">
         <div className="cx-tarjeta cxp-cifra">
-          <span className="cxp-cifra-et">Le debes</span>
-          {cifras?.leDebes != null
+          <span className="cxp-cifra-et">{etDebes(cifras?.leDebesDe === 'cuenta', cifras?.leDebes)}</span>
+          {cifras?.leDebes != null && cifras.leDebesDe === 'cuenta'
+            ? <><span className="cxp-cifra-valor">{eurosExactos(Math.abs(cifras.leDebes))}</span>
+                <span className="cxp-cifra-pie">{pieSaldoCuenta(datos.libro?.cuenta?.code)}</span></>
+            : cifras?.leDebes != null
             ? <><span className="cxp-cifra-valor">{eurosExactos(cifras.leDebes)}</span>
                 <span className={`cxp-cifra-pie${cifras.proximoPago ? ' cxp-cifra-pie-ambar' : ''}`}>{cifras.proximoPago ? `vence el ${diaMes(cifras.proximoPago.fecha)}` : cifras.leDebes ? 'sin vencimiento puesto' : 'nada pendiente'}</span></>
             : <span className="cxp-cifra-pie">Aún no hay facturas suyas</span>}
@@ -464,7 +503,7 @@ function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
           <span className="cxp-cifra-et">Este año</span>
           {cifras?.compradoEsteAnio != null
             ? <><span className="cxp-cifra-valor">{eurosExactos(cifras.compradoEsteAnio)}</span>
-                <span className="cxp-cifra-pie">{cifras.facturasEsteAnio === 1 ? '1 factura' : `${cifras.facturasEsteAnio} facturas`}</span></>
+                <span className="cxp-cifra-pie">{pieEsteAnio(cifras.facturasEsteAnio, cifras.delLibroEsteAnio)}</span></>
             : <span className="cxp-cifra-pie">Aún no hay facturas suyas</span>}
         </div>
       </div>
@@ -491,7 +530,7 @@ function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
 function PantallaMovil({ ap, secciones }: { ap: Apartado; secciones: SeccionDeFicha[] }) {
   const { datos, rutaApartado } = useFicha()
   let contenido: ReactNode
-  if (ap === 'facturas') contenido = <section className="cx-tarjeta"><ListaFacturas facturas={datos.facturas} /></section>
+  if (ap === 'facturas') contenido = <><section className="cx-tarjeta"><ListaFacturas facturas={datos.facturas} /></section><AsientosDeSuCuenta /></>
   else if (ap === 'articulos') contenido = <Secciones secciones={secciones} />
   else if (ap === 'contactos') contenido = <><Contactos /><Notas /></>
   else {

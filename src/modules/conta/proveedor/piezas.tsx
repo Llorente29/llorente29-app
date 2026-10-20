@@ -29,15 +29,17 @@ export function Migas({ migas }: { migas: Miga[] }) {
 /**
  * Un campo: etiqueta encima, ayuda, y el fallo o el aviso debajo en lenguaje
  * normal. `campo` es la clave de la ficha y da el id `campo-<campo>`, adonde
- * llevan los enlaces de «Falta: …».
+ * llevan los enlaces de «Falta: …». I01e: `bien`, una buena noticia en verde
+ * (como la píldora de la cabecera): «✓ Comprobado en VIES…». El ámbar es solo
+ * para lo que hay que mirar.
  */
-export function Campo({ campo, etiqueta, ayuda, error, aviso, children }: {
-  campo: string; etiqueta: string; ayuda?: ReactNode; error?: string | null; aviso?: string | null
+export function Campo({ campo, etiqueta, ayuda, error, aviso, bien, children }: {
+  campo: string; etiqueta: string; ayuda?: ReactNode; error?: string | null; aviso?: string | null; bien?: ReactNode
   children: (props: { id: string; 'aria-invalid': boolean; 'aria-describedby'?: string }) => ReactNode
 }) {
   const id = `campo-${campo}`
   const descId = useId()
-  const describe = error || aviso || ayuda ? descId : undefined
+  const describe = error || aviso || bien || ayuda ? descId : undefined
   return (
     <div className="cx-campo">
       <label htmlFor={id}>{etiqueta}</label>
@@ -45,7 +47,8 @@ export function Campo({ campo, etiqueta, ayuda, error, aviso, children }: {
       <div id={descId}>
         {error && <div className="cx-error" role="alert">{error}</div>}
         {!error && aviso && <div className="cx-aviso">{aviso}</div>}
-        {!error && !aviso && ayuda && <span className="cx-ayuda">{ayuda}</span>}
+        {!error && !aviso && bien && <span className="cx-bien" data-prueba="bien">{bien}</span>}
+        {!error && !aviso && !bien && ayuda && <span className="cx-ayuda">{ayuda}</span>}
       </div>
     </div>
   )
@@ -142,7 +145,7 @@ export function PildoraNif() {
   const { datos: { ficha: f }, comprobandoVies } = useFicha()
   if (!f.taxId) return <span className="cx-chip cx-chip-ambar">Sin NIF</span>
   const ue = f.taxIdType === 'vat_eu'
-  if (ue && comprobandoVies) return <span className="cx-chip cx-chip-ambar" role="status">{f.taxId} · Comprobando en VIES…</span>
+  if (ue && comprobandoVies) return <span className="cx-chip" role="status">{f.taxId} · Comprobando en VIES…</span>
   if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span className="cx-chip cx-chip-ia">{f.taxId} ✓ {ue ? 'comprobado en VIES' : 'comprobado'}</span>
   if (f.taxIdCheckStatus === 'invalid') return <span className="cx-chip cx-chip-ambar">{f.taxId} · {ue ? 'VIES dice que no vale' : 'no válido'}</span>
   if (f.taxIdType === 'foreign') return <span className="cx-chip">{f.taxId}</span>
