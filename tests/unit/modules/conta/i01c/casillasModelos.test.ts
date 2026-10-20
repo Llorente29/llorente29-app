@@ -7,7 +7,7 @@
 // 202 → 01 03. Y las del 303 presentado y calculado.
 
 import { describe, expect, it } from 'vitest'
-import { queEsLaCasilla } from '@/modules/conta/impuestos/casillasModelos'
+import { enPalabras303, queEsLaCasilla } from '@/modules/conta/impuestos/casillasModelos'
 
 const REALES: Record<string, string[]> = {
   '111': ['01', '02', '03', '28', '30'],
@@ -39,5 +39,23 @@ describe('qué es cada casilla', () => {
     expect(queEsLaCasilla('115', '5')).toBe('Resultado a ingresar')
     expect(queEsLaCasilla('115', '99')).toBeNull()
     expect(queEsLaCasilla('390', '01')).toBeNull()
+  })
+})
+
+describe('el 303, en palabras (sin la fórmula del diseño de registro)', () => {
+  it('quita la fórmula y el «· Cuota» final', () => {
+    expect(enPalabras303('IVA Devengado · Total cuota devengada ( [152] + [167] + [03] + [155] + [06] )')).toBe('IVA Devengado · Total cuota devengada')
+    expect(enPalabras303('IVA Deducible · Resultado régimen general ( [27] - [45] ) · Cuota')).toBe('IVA Deducible · Resultado régimen general')
+    expect(enPalabras303('Cuotas a compensar de periodos previos pendientes para periodos posteriores ([110] - [78])')).toBe('Cuotas a compensar de periodos previos pendientes para periodos posteriores')
+  })
+  it('lo que no lleva fórmula queda igual', () => {
+    expect(enPalabras303('% Atribuible a la Administración del Estado')).toBe('% Atribuible a la Administración del Estado')
+  })
+  it('ninguna casilla real del 303 se queda con corchetes ni vacía', () => {
+    for (const c of ['27', '45', '46', '64', '65', '66', '69', '71', '78', '87', '110']) {
+      const t = queEsLaCasilla('303', c)
+      expect(t, c).toBeTruthy()
+      expect(t, c).not.toMatch(/\[|\]|\(\s*$/)
+    }
   })
 })

@@ -78,12 +78,25 @@ const C202: Readonly<Record<string, string>> = {
 const POR_MODELO: Readonly<Record<string, Readonly<Record<string, string>>>> = { '111': C111, '115': C115, '202': C202 }
 
 /**
+ * El texto del diseño de registro del 303, en palabras: sin la fórmula entre
+ * paréntesis («( [152] + [167] + … )», «([110] - [78])») ni el «· Cuota» del
+ * final, que ya dice la columna Importe (Julio, 20/10: «qué es», en palabras).
+ */
+export function enPalabras303(texto: string): string {
+  return texto
+    .replace(/\s*\(\s*\[[^)]*\)\s*/g, ' ')
+    .replace(/\s*·\s*Cuota\s*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
  * «Qué es» la casilla, en palabras. Si no está en el impreso que conocemos,
  * null: la fila sale igual (regla 7), con la casilla y su importe, sin inventar
  * un rótulo.
  */
 export function queEsLaCasilla(modelo: string, casilla: string): string | null {
   const c = casilla.padStart(2, '0')
-  if (modelo === '303') return CASILLAS_303[c]?.texto ?? null
+  if (modelo === '303') { const t = CASILLAS_303[c]?.texto; return t ? enPalabras303(t) : null }
   return POR_MODELO[modelo]?.[c] ?? null
 }
