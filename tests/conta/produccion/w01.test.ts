@@ -517,19 +517,20 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (I01c, «deducida en»: la 0290 sigue; ningún «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (I01d, autoliquidaciones: la 0300 sigue; la 0310, datos de Foodint, pide «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261124T0290_i01c_deducida.sql: sigue')
-    expect(r.out).toContain('autorizo: (ninguno)')
+    expect(r.out).toContain('20261125T0300_i01d_autoliquidaciones.sql: sigue')
+    expect(r.out).toContain('20261125T0310_i01d_proveedores_foodint.sql: AUTORIZO')
+    expect(r.out).toContain('autorizo: 20261125T0310_i01d_proveedores_foodint.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261124T0290_i01c_deducida.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261124T0290_i01c_deducida.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261125T0300_i01d_autoliquidaciones.sql ha cambiado desde la medida')
   })
 })
 

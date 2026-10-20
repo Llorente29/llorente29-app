@@ -377,5 +377,16 @@ do $$ begin
   end if;
 end $$;
 
+-- ── 11 · La 0310 y su vuelta atrás, sin Foodint: no tocan nada ─────────────
+do $$ begin perform set_config('prueba.proveedores', (select count(*)::text from public.supplier), true); end $$;
+\i supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql
+\i supabase/vuelta-atras/20261125T0310_i01d_proveedores_foodint.down.sql
+do $$ begin
+  if (select count(*)::text from public.supplier) <> current_setting('prueba.proveedores') then
+    raise exception 'PRUEBA AUTOLIQUIDACIONES · 11: sin Foodint, la 0310 o su vuelta atrás han tocado proveedores.';
+  end if;
+  raise notice 'PRUEBA AUTOLIQUIDACIONES · 11: sin Foodint, la 0310 y su vuelta atrás no tocan nada.';
+end $$;
+
 \echo '>>> PRUEBA AUTOLIQUIDACIONES (0300): en verde. ROLLBACK: staging no cambia.'
 rollback;

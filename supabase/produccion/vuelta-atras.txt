@@ -1,4 +1,6 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt),
-# en orden inverso. Para si alguna recibida ya tiene «deducida en».
-cuenta: scripts/conta/produccion/cuentas/i01c-deducida.sql
-supabase/vuelta-atras/20261124T0290_i01c_deducida.down.sql
+# en orden inverso: primero los proveedores de Foodint (para si alguno ya tiene
+# facturas) y después las funciones, byte a byte como estaban.
+cuenta: scripts/conta/produccion/cuentas/i01d-autoliquidaciones.sql
+supabase/vuelta-atras/20261125T0310_i01d_proveedores_foodint.down.sql
+supabase/vuelta-atras/20261125T0300_i01d_autoliquidaciones.down.sql

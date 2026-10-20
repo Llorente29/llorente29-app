@@ -5,6 +5,11 @@
 -- (las de created_by_name «Sumied · I01d …»), su enlace con su 410 y su tercero
 -- si no tiene otro papel. Si alguna ya tiene facturas, PARA: ya no es la de la
 -- 0310 y borrarla se llevaría trabajo hecho.
+--
+-- sin prueba con datos: solo actúa sobre Foodint (cuenta 51ad1792…), que no
+-- está en staging; la prueba de la 0300 la ejecuta igual (y la 0310) para ver
+-- que se leen y que, sin Foodint, no tocan nada. Su prueba con datos es el
+-- ENSAYO de la tanda en producción (todo en una transacción y rollback).
 
 do $$
 declare
