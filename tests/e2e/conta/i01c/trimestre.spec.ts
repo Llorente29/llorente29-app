@@ -168,7 +168,11 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(tira.getByRole('button').nth(1)).toContainText('Retenciones · 111')
     await expect(tira.getByRole('button').nth(2)).toContainText('Alquiler · 115')
     await expect(tira.getByRole('button').nth(3)).toContainText('Sociedades · 202')
-    await expect(tira.getByRole('button').nth(1)).toContainText('Hasta el 20/10')
+    // El 111 del 3T se presenta hasta el 20/10: antes dice el plazo; ese día, «Vence hoy»; después,
+    // «Fuera de plazo» (punto 5, en rojo). La e2e del 20/10 lo cazó: la fecha decide el texto.
+    const hoyMadrid = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
+    await expect(tira.getByRole('button').nth(1)).toContainText(
+      hoyMadrid < '2026-10-20' ? 'Hasta el 20/10' : hoyMadrid === '2026-10-20' ? 'Vence hoy' : 'Fuera de plazo')
     await expect(page.getByRole('radio', { name: '3T' })).toHaveAttribute('aria-checked', 'true')
     // La cartera sale con el 303 elegido (el primero), en su ficha.
     await expect(page.locator('[data-prueba="ficha-modelo"] [data-prueba="cartera"]')).toBeVisible()
