@@ -270,3 +270,12 @@ supabase/staging/sql/20261123_p01_despacho_prueba.sql
 #   (run 369) porque no hay festivos de 2025 para el plazo.
 supabase/migrations/20261122T0280_i01c_trimestre.sql
 supabase/staging/sql/20261122_i01c_trimestre_prueba.sql
+
+# I01c · «Deducida en» (rama conta/i01c-deducida). La 0290 DE VERDAD (añade
+#   las columnas y la carga; cambia el cálculo del 303) y su prueba, con \i y
+#   ROLLBACK: una recibida inventada del 31/03 va en el 1T; marcada «deducida
+#   en el 2T» va en el 2T y los dos lo dicen; la carga es todas o ninguna y
+#   pide motivo; otra cuenta no puede; quitada vuelve; y la vuelta atrás deja
+#   el cálculo byte a byte como la 0280.
+supabase/migrations/20261124T0290_i01c_deducida.sql
+supabase/staging/sql/20261124_i01c_deducida_prueba.sql

@@ -169,7 +169,7 @@ export const reabrirEjercicio = (fiscalYearId: string, motivo: string) => rpc<{ 
 
 // ── Libro registro ──────────────────────────────────────────────────────────
 
-const COLS_LIBRO = 'id, entry_id, book, invoice_type, series, number, number_to, documents_count, issue_date, operation_date, received_date, received_number, party_id, counterpart_tax_id, counterpart_id_type, counterpart_country, counterpart_name, operation_key, qualification, exempt_cause, tax_base, tax_rate, tax_amount, surcharge_rate, surcharge_amount, total, deductible_amount, deductible_later, reverse_charge, investment_good, withholding_rate, withholding_amount, activity_code, activity_type, activity_iae, corrects_ref, source_type, source_id, voided_at'
+const COLS_LIBRO = 'id, entry_id, book, invoice_type, series, number, number_to, documents_count, issue_date, operation_date, received_date, received_number, party_id, counterpart_tax_id, counterpart_id_type, counterpart_country, counterpart_name, operation_key, qualification, exempt_cause, tax_base, tax_rate, tax_amount, surcharge_rate, surcharge_amount, total, deductible_amount, deductible_later, reverse_charge, investment_good, withholding_rate, withholding_amount, activity_code, activity_type, activity_iae, corrects_ref, source_type, source_id, voided_at, deduction_year, deduction_period, deduction_reason'
 
 export async function leerLibroRegistro(accountId: string, companyId: string, libros: Libro[], desde: string, hasta: string): Promise<AnotacionLibro[]> {
   const { data, error } = await tabla('vat_book_entry').select(COLS_LIBRO)
@@ -187,6 +187,8 @@ export async function leerLibroRegistro(accountId: string, companyId: string, li
     deductibleLater: Boolean(f.deductible_later), reverseCharge: Boolean(f.reverse_charge), investmentGood: Boolean(f.investment_good),
     withholdingRate: numO(f.withholding_rate), withholdingAmount: numO(f.withholding_amount), activityCode: txt(f.activity_code),
     activityType: txt(f.activity_type), activityIae: txt(f.activity_iae), correctsRef: txt(f.corrects_ref), sourceType: String(f.source_type), sourceId: txt(f.source_id), voidedAt: txt(f.voided_at),
+    // 0290 · «Deducida en»: el periodo del 303 en que se dedujo, si no es el de su fecha.
+    deducidaEn: f.deduction_period ? `${String(f.deduction_period)} ${String(f.deduction_year)}` : null, deducidaPorque: txt(f.deduction_reason),
   }))
 }
 
