@@ -8,7 +8,8 @@ import {
   ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Ban, Bell, BookOpen, Building2, Calendar, ChartColumn, Check,
   ChevronDown, ChevronUp, Contact, Copy, CornerDownLeft, Download, Equal, Euro, File, FileText, House, Info, Landmark,
   ListChecks, Mail, Menu, PanelLeftClose, PanelLeftOpen, Percent, Pin, PinOff, Plus, Receipt, Scale, ScanLine, Search,
-  Settings, Sparkles, Star, TriangleAlert, Upload, Users, X, type LucideIcon,
+  Settings, Sparkles, Star, TriangleAlert, Upload, Users, X,
+  ExternalLink, Printer, type LucideIcon,
 } from 'lucide-react'
 
 export const ICONOS = {
@@ -54,6 +55,8 @@ export const ICONOS = {
   correo: Mail,
   subir: Upload,
   descargar: Download,
+  imprimir: Printer,
+  abrirAparte: ExternalLink,
   menu: Menu,
   barraPlegar: PanelLeftClose,
   barraDesplegar: PanelLeftOpen,

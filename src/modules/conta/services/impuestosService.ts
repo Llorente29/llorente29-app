@@ -6,7 +6,7 @@
 // modelos que salen de las reglas de la base.
 
 import { supabase } from '@/lib/supabase'
-import { hayBase, rpc } from '@/modules/conta/services/bd'
+import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
 import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
 import type { Trimestre } from '@/modules/conta/impuestos/trimestre'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
@@ -178,6 +178,20 @@ export function leerPresentados(companyId: string): Promise<Presentados> {
 }
 
 const DOCUMENTOS = 'conta-documentos'
+
+/**
+ * I01c · Los asientos de una declaración (Trimestre › «Ver el asiento»): el de
+ * la liquidación y el del pago, si Sumied los tiene. Regla 9: de su cuenta.
+ * Columnas medidas en producción (tax_return.liquidation_entry_id y
+ * payment_entry_id, 20/10; regla 40).
+ */
+export async function asientosDeDeclaracion(id: string, cuenta: string): Promise<{ liquidacion: string | null; pago: string | null }> {
+  const { data, error } = await tabla('tax_return').select('liquidation_entry_id, payment_entry_id')
+    .eq('id', id).eq('account_id', cuenta).maybeSingle()
+  if (error) throw new Error(`No se han podido leer los asientos de la declaración: ${error.message}`)
+  const f = (data ?? null) as { liquidation_entry_id: string | null; payment_entry_id: string | null } | null
+  return { liquidacion: f?.liquidation_entry_id ?? null, pago: f?.payment_entry_id ?? null }
+}
 
 /** Un enlace de 5 minutos al justificante en PDF. */
 export async function enlaceJustificante(ruta: string): Promise<string> {
