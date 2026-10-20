@@ -201,7 +201,7 @@ begin
     raise exception 'PRUEBA RETENCIONES · 4: casillas del 115 mal: %', c;
   end if;
   -- El arrendador de la prueba cuenta una vez, aunque tenga dos facturas (si ya estaba, ninguna más).
-  if (c->>'01')::int not in (v_p0, v_p0 + 1) or (c->>'01')::int < 1 then raise exception 'PRUEBA RETENCIONES · 4: los arrendadores son %, y antes eran %.', c->>'01', v_p0; end if;
+  if (c->>'01')::numeric::int not in (v_p0, v_p0 + 1) or (c->>'01')::numeric::int < 1 then raise exception 'PRUEBA RETENCIONES · 4: los arrendadores son %, y antes eran %.', c->>'01', v_p0; end if;
   perform public.conta_impuesto_revisar((r->>'declaracion')::uuid);
   raise notice 'PRUEBA RETENCIONES · 4: el 115 sale de los alquileres, un arrendador con dos facturas cuenta una vez, y se revisa.';
 end $$;
