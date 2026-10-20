@@ -413,5 +413,5 @@
   .s-trimestre-visor--completa { position: fixed; inset: 0; z-index: 1000; border-radius: 0; padding: var(--s-3); overflow: auto; }
   .s-trimestre-visor--completa .s-trimestre-pdf-visor { height: calc(100vh - 140px); }
   /* En el móvil ya es una sola columna: ni zoom ni «Ampliar». */
-  .s-trimestre-zoom, .s-trimestre-ampliar { display: none; }
+  .s-trimestre-derecha-acciones .s-trimestre-zoom, .s-trimestre-derecha-acciones .s-trimestre-ampliar { display: none; }
 }
