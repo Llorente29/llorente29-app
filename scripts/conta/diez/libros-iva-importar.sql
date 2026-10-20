@@ -265,7 +265,11 @@ begin
          (select coalesce(sum(round(case when a.cuota then v.tax_amount else v.tax_base end * 100)), 0)::bigint
             from public.vat_book_entry v
            where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null
-             and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date) else coalesce(v.received_date, v.issue_date) end
+             -- 0290: una recibida con «deducida en» cuenta en ese periodo (su primer día), no en el de su fecha.
+             and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date)
+                      when v.deduction_period ~ '^[1-4]T$' then make_date(v.deduction_year, (left(v.deduction_period, 1)::int - 1) * 3 + 1, 1)
+                      when v.deduction_period is not null then make_date(v.deduction_year, v.deduction_period::int, 1)
+                      else coalesce(v.received_date, v.issue_date) end
                  between a.desde and a.hasta
              and case a.casilla
                    when '01' then v.book = 'issued' and v.tax_rate = 4 and not v.reverse_charge

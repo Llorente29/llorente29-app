@@ -10,6 +10,7 @@ create table public.vat_book_entry (id uuid primary key default gen_random_uuid(
   book text not null check (book in ('issued','received','investment','not_subject')),
   invoice_type text not null check (invoice_type in ('F1','F2','F3','F4','R1','R2','R3','R4','R5')), series text, number text, number_to text,
   documents_count int not null check (documents_count > 0), issue_date date not null, operation_date date, received_date date, received_number text,
+  deduction_year smallint, deduction_period text, deduction_reason text,
   party_id uuid, counterpart_tax_id text, counterpart_id_type text check (counterpart_id_type is null or counterpart_id_type in ('02','03','04','05','06')),
   counterpart_country text, counterpart_name text, operation_key text not null,
   qualification text check (qualification is null or qualification in ('S1','S2','N1','N2')),
