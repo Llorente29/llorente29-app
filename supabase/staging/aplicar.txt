@@ -316,3 +316,12 @@ supabase/staging/sql/20261126_w03_como_produccion.sql
 #   pasivo de Estados Unidos (reverse_charge y US), como usuario de A; lo de
 #   antes, igual; la cuenta B no la lee; y la vuelta atrás, byte a byte.
 supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql
+
+# I01g · El 111 y el 115 calculados por Sumied desde el diario (rama
+#   conta/i01g-111-115). La 0330 SOLO dentro de su prueba (ROLLBACK), como el
+#   administrador de A en el 4T de 2026: asientos validados de verdad (una
+#   nómina, un profesional, dos alquileres del mismo arrendador, un pago a
+#   Hacienda y uno con el grupo 1), el 111 sin la [01] (no se revisa), la [01]
+#   a mano con su motivo (se revisa), el 115, un asiento con la 4751 sin
+#   modelo (error), lo que no vale y la cuenta B, que no lee ni calcula.
+supabase/staging/sql/20261127_i01g_retenciones_prueba.sql
