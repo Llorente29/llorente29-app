@@ -249,10 +249,12 @@
   .s-csv-acciones { flex-direction: column-reverse; align-items: stretch; }
 }
 
-/* ── El trimestre (I01c, maqueta_303_v2) ──────────────────────────────────
- * Arriba el selector y la tira de modelos; debajo la ficha del elegido con su
- * PDF y, al lado, la cartera de cuotas a compensar. En el móvil la tira se
- * desliza de lado y todo va en una columna. */
+/* ── El trimestre (I01c, maqueta_303_v2 y revisión de Julio del 20/10) ────
+ * Arriba el selector y la tira de modelos (lo que vence, en rojo). Debajo, a
+ * la izquierda, la ficha del elegido con sus casillas (y, con el 303, la
+ * cartera); a la derecha, el justificante en grande, el impreso calculado o
+ * qué falta. En el móvil la tira se desliza de lado y todo va en una columna:
+ * primero la ficha, luego el justificante. */
 .s-trimestre-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-3) var(--s-4); align-items: center; justify-content: space-between; }
 .s-trimestre-selector { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
 .s-trimestre-ano .s-control { min-width: 96px; }
@@ -272,22 +274,57 @@
   background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
 }
 .s-trimestre-tarjeta:hover { border-color: var(--s-accion-borde); }
-.s-trimestre-tarjeta[aria-pressed='true'] { border-color: var(--s-accion); box-shadow: inset 0 0 0 1px var(--s-accion); background: var(--s-accion-suave); }
-.s-trimestre-tarjeta-nombre { font-size: var(--s-t-s); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo); }
-.s-trimestre-tarjeta-importe { font-size: var(--s-t-l); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-trimestre-tarjeta[aria-pressed='true'] { border-color: var(--s-accion); box-shadow: inset 0 0 0 1px var(--s-accion); }
+.s-trimestre-tarjeta-nombre { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-trimestre-tarjeta-importe { font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
 .s-trimestre-tarjeta .s-chip { white-space: normal; }
 
-.s-trimestre-ficha { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: var(--s-5); align-items: start; padding: var(--s-5) var(--s-6); }
-.s-trimestre-ficha-datos { min-width: 0; display: flex; flex-direction: column; gap: var(--s-3); }
-.s-trimestre-ficha-datos p { margin: 0; }
-.s-trimestre-pdf { min-width: 0; display: flex; flex-direction: column; gap: var(--s-2); }
-.s-trimestre-pdf a { color: var(--s-accion); text-decoration: underline; width: fit-content; }
-.s-trimestre-sinpdf { grid-column: 1 / -1; margin: 0; }
-/* Sin PDF, la ficha ocupa todo su ancho. */
-.s-trimestre-ficha:not(:has(.s-trimestre-pdf)) { grid-template-columns: minmax(0, 1fr); }
+/* El cuerpo: la ficha (2 partes) y el justificante (3 partes), arriba alineados. */
+.s-trimestre-cuerpo { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--s-4); align-items: start; }
+
+.s-trimestre-ficha { min-width: 0; display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5); }
+.s-trimestre-ficha > p { margin: 0; }
+.s-trimestre-ficha-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; justify-content: space-between; }
+.s-trimestre-ficha-titulo { margin: 0; font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-trimestre-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-5); margin: 0; }
+.s-trimestre-dl dt { color: var(--s-apoyo); }
+.s-trimestre-dl dd { margin: 0; color: var(--s-tinta); overflow-wrap: anywhere; }
+
+/* Las casillas: la casilla, qué es (lo único que se parte) y el importe; la del resultado, en negrita. */
+.s-trimestre-casillas { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
+.s-trimestre-casillas th {
+  text-align: left; padding: var(--s-2) var(--s-2); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo);
+  text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); white-space: nowrap;
+}
+.s-trimestre-casillas td { padding: var(--s-2); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: top; color: var(--s-tinta); }
+.s-trimestre-casillas td:nth-child(2) { overflow-wrap: anywhere; }
+.s-trimestre-casillas .s-tabla-cifra { text-align: right; white-space: nowrap; }
+.s-trimestre-casilla { white-space: nowrap; color: var(--s-apoyo); font-variant-numeric: tabular-nums; }
+.s-trimestre-casillas tr[data-resultado='si'] td { font-weight: var(--s-peso-fuerte); }
+.s-trimestre-casillas tr[data-resultado='si'] .s-trimestre-casilla { color: var(--s-tinta); }
+.s-trimestre-casillas tr:last-child td { border-bottom: none; }
+.s-trimestre-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0; }
+
+/* La derecha: el justificante en grande, el impreso calculado o qué falta. */
+.s-trimestre-derecha { min-width: 0; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); }
+.s-trimestre-derecha-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; }
+.s-trimestre-derecha-titulo { margin: 0; font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.s-trimestre-derecha-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-left: auto; }
+.s-trimestre-pdf-visor { width: 100%; height: 860px; border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-suave); }
+.s-trimestre-abriendo { margin: 0; padding: var(--s-6) 0; }
+.s-trimestre-falta { align-items: flex-start; padding: var(--s-6); }
+.s-trimestre-falta p { margin: 0; }
+.s-trimestre-impreso { border: var(--s-linea) solid var(--s-tinta); border-radius: 2px; padding: var(--s-4); background: var(--s-superficie); }
+.s-trimestre-impreso-titulo { margin: 0 0 var(--s-3); font-weight: var(--s-peso-fuerte); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); font-size: var(--s-t-xs); color: var(--s-tinta); }
+.s-trimestre-impreso dl { margin: 0; display: flex; flex-direction: column; }
+.s-trimestre-impreso-fila { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-3); padding: var(--s-1) 0; border-bottom: 1px dotted var(--s-borde-decorativo); }
+.s-trimestre-impreso-fila dt { color: var(--s-tinta); overflow-wrap: anywhere; }
+.s-trimestre-impreso-fila dd { margin: 0; display: flex; gap: var(--s-2); align-items: baseline; white-space: nowrap; }
+.s-trimestre-impreso-num { display: inline-block; min-width: 28px; padding: 0 var(--s-1); border: var(--s-linea) solid var(--s-tinta); font-size: var(--s-t-xs); text-align: center; }
 .s-impuestos-casilla { font-variant-numeric: tabular-nums; color: var(--s-apoyo); margin-right: var(--s-1); }
 
-.s-trimestre-cartera { padding: var(--s-5) var(--s-5) var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); }
+/* La cartera del 303: dentro de la ficha, debajo de sus casillas. */
+.s-trimestre-cartera { display: flex; flex-direction: column; gap: var(--s-3); padding-top: var(--s-4); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
 .s-trimestre-cartera-titulo { margin: 0; font-size: var(--s-t-m); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
 .s-trimestre-cartera-tabla { width: 100%; border-collapse: collapse; }
 .s-trimestre-cartera-tabla th, .s-trimestre-cartera-tabla td { padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: top; }
@@ -303,7 +340,8 @@
 .s-trimestre-desfase { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); border-radius: var(--s-radio-bloque); background: var(--s-duda-fondo); color: var(--s-tinta); }
 
 @media (max-width: 1099px) {
-  .s-trimestre-ficha { grid-template-columns: minmax(0, 1fr); }
+  .s-trimestre-cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .s-trimestre-pdf-visor { height: 80vh; }
 }
 @media (max-width: 767px) {
   .s-trimestre-cabeza { flex-direction: column; align-items: stretch; }
@@ -313,16 +351,9 @@
   /* La tira se desliza de lado: cada tarjeta con su ancho, sin apretarse. */
   .s-trimestre-tira { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: var(--s-2); }
   .s-trimestre-tira > li { flex: 0 0 72%; scroll-snap-align: start; }
-  .s-trimestre-ficha { padding: var(--s-4); }
-  .s-trimestre-cartera { padding: var(--s-4); }
-}
-/* Las casillas de la ficha: tres columnas («Qué es» en medio) con el relleno del sistema (24 px por lado)
-   no caben en el móvil (e2e 661: la página se salía 14 px). Más juntas, y la tabla a lo ancho de la ficha. */
-.s-trimestre-ficha .s-tabla.s-justificantes-dif-tabla { width: 100%; min-width: 0; }
-.s-trimestre-ficha .s-tabla th, .s-trimestre-ficha .s-tabla td { padding: var(--s-2) var(--s-3); }
-/* Solo «Qué es» se parte; la casilla, la cabecera y el importe, enteros (la captura del móvil partía «[27]» y «CASILLA» letra a letra). */
-.s-trimestre-ficha .s-tabla td:nth-child(2) { overflow-wrap: anywhere; }
-.s-trimestre-ficha .s-tabla th, .s-trimestre-ficha .s-tabla td:first-child, .s-trimestre-ficha .s-tabla .s-tabla-cifra { white-space: nowrap; }
-@media (max-width: 767px) {
-  .s-trimestre-ficha .s-tabla th, .s-trimestre-ficha .s-tabla td { padding: var(--s-2) var(--s-1); }
+  .s-trimestre-ficha, .s-trimestre-derecha { padding: var(--s-4); }
+  .s-trimestre-casillas th, .s-trimestre-casillas td { padding: var(--s-2) var(--s-1); }
+  .s-trimestre-derecha-acciones { margin-left: 0; width: 100%; }
+  .s-trimestre-derecha-acciones > * { flex: 1 1 auto; justify-content: center; }
+  .s-trimestre-pdf-visor { height: 70vh; }
 }

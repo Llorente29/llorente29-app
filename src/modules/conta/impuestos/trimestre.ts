@@ -118,22 +118,48 @@ export function importeConSigno(d: Pick<DeclaracionTrimestre, 'resultado' | 'imp
   return d.resultado === 'to_offset' || d.resultado === 'to_refund' ? -Math.abs(d.importe) : Math.abs(d.importe)
 }
 
-/** Lo que dice cada tarjeta de la tira: el importe y su chip (estado y fecha). */
-export function tarjeta(m: ModeloTrimestre): { titulo: string; importe: string; chip: { tono: TonoChip; texto: string } } {
+/** Días de un día a otro (los dos 'AAAA-MM-DD'). */
+const dias = (desde: string, hasta: string) => Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000)
+
+/**
+ * Lo que dice cada tarjeta de la tira: el importe y su chip (estado y fecha).
+ * Sin presentar, lo que vence hoy o ya se pasó va en rojo y lo dice (Julio,
+ * 20/10, punto 5: «Sin calcular · vence hoy»).
+ */
+export function tarjeta(m: ModeloTrimestre, hoy?: string): { titulo: string; importe: string; chip: { tono: TonoChip; texto: string } } {
   const titulo = nombreTarjeta(m)
   if (m.no_toca) return { titulo, importe: '—', chip: { tono: 'neutro', texto: 'No toca este trimestre' } }
   const d = m.declaracion
-  const hasta = m.presentacion ? `Hasta el ${diaMesCorto(m.presentacion)}` : 'Sin plazo'
-  if (!d || d.estado === 'pending') return { titulo, importe: '—', chip: { tono: 'neutro', texto: hasta } }
+  const falta = hoy && m.presentacion ? dias(hoy, m.presentacion) : null
+  const vence = falta === null ? '' : falta < 0 ? 'fuera de plazo' : falta === 0 ? 'vence hoy' : ''
+  const conVence = (chip: { tono: TonoChip; texto: string }) => (vence ? { tono: 'falta' as TonoChip, texto: `${chip.texto} · ${vence}` } : chip)
+  if (!d || d.estado === 'pending') {
+    if (vence) return { titulo, importe: '—', chip: { tono: 'falta', texto: falta! < 0 ? 'Fuera de plazo' : 'Vence hoy' } }
+    return { titulo, importe: '—', chip: { tono: 'neutro', texto: m.presentacion ? `Hasta el ${diaMesCorto(m.presentacion)}` : 'Sin plazo' } }
+  }
   const v = importeConSigno(d)
   const importe = v === null ? '—' : eurosExactos(v)
   if (estaPresentada(d.estado)) {
     return { titulo, importe, chip: { tono: 'seguro', texto: d.presentada ? `Presentado ${diaMesCorto(d.presentada)}` : 'Presentado' } }
   }
   if (d.estado === 'not_required') return { titulo, importe: '—', chip: { tono: 'neutro', texto: 'No hace falta' } }
-  if (d.estado === 'reviewed') return { titulo, importe, chip: { tono: 'accion', texto: 'Revisado · para presentar' } }
-  if (d.resultado === null) return { titulo, importe: '—', chip: { tono: 'falta', texto: 'Sin calcular' } }
-  return { titulo, importe, chip: { tono: 'accion', texto: 'Para revisar' } }
+  if (d.estado === 'reviewed') return { titulo, importe, chip: conVence({ tono: 'accion', texto: 'Revisado · para presentar' }) }
+  if (d.resultado === null) return { titulo, importe: '—', chip: conVence({ tono: 'falta', texto: 'Sin calcular' }) }
+  return { titulo, importe, chip: conVence({ tono: 'accion', texto: 'Para revisar' }) }
+}
+
+/** La casilla del resultado de cada modelo: la que va en negrita en la ficha. */
+export const CASILLA_RESULTADO: Readonly<Record<string, string>> = { '303': '71', '111': '30', '115': '05', '202': '03' }
+
+/**
+ * Quién lo presentó, en palabras: la gestoría con su nombre (y su NIF), o «La
+ * propia empresa» si el NIF del presentador es el de la empresa. Sin dato, null.
+ */
+export function presentadorEnPalabras(p: DeclaracionTrimestre['presentador'], nifEmpresa: string | null): string | null {
+  if (!p || (!p.nif && !p.nombre)) return null
+  const limpio = (x: string | null) => (x ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  if (p.nif && nifEmpresa && limpio(p.nif) === limpio(nifEmpresa)) return 'La propia empresa'
+  return p.nombre ? `${p.nombre}${p.nif ? ` (${p.nif})` : ''}` : p.nif
 }
 
 // ── La cartera ──────────────────────────────────────────────────────────────
@@ -203,9 +229,15 @@ export function fraseDesfasada(t: Pick<Trimestre, 'trimestre' | 'cartera'>): str
   return `El borrador del ${t.trimestre} se calculó antes de tener el ${c.esperada_110.de} presentado: ${tiene} y le tocan ${eurosExactos(c.esperada_110.importe)}.`
 }
 
-/** Lo que dice la pantalla después de volver a calcular un borrador desfasado (regla 8: con contenido). */
-export function fraseRecalculado(trimestre: string, de: string, c110: number | null): string {
-  return c110 === null
-    ? `Vuelto a calcular el ${trimestre}, pero sigue sin [110]: mira el IVA del trimestre.`
-    : `Vuelto a calcular el ${trimestre}: ahora trae la [110] ${eurosExactos(c110)}, lo que dejó el ${de}.`
+/**
+ * Lo que dice la pantalla después de volver a calcular un borrador desfasado
+ * (regla 8: con contenido), como la maqueta: «Vuelto a calcular el 3T: trae
+ * 3.796,17 € a compensar del 2T. El resultado del IVA aún no se sabe: falta el
+ * libro de IVA del trimestre.»
+ */
+export function fraseRecalculado(trimestre: string, de: string, c110: number | null, conResultado = true): string {
+  if (c110 === null) return `Vuelto a calcular el ${trimestre}, pero sigue sin la [110]: mira el IVA del trimestre.`
+  const delAnterior = de.split('/')[0]
+  const base = `Vuelto a calcular el ${trimestre}: trae ${eurosExactos(c110)} a compensar del ${delAnterior}.`
+  return conResultado ? base : `${base} El resultado del IVA aún no se sabe: falta el libro de IVA del trimestre.`
 }

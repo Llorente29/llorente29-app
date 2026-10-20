@@ -159,7 +159,7 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
 
     // Se pone al día solo, y lo dice con la cifra.
     await expect(page.getByRole('status').filter({ hasText: 'Vuelto a calcular el 3T' }))
-      .toHaveText(/^Vuelto a calcular el 3T: ahora trae la \[110\] 2\.300,25 €, lo que dejó el 2T\/2026\./, { timeout: 30_000 })
+      .toHaveText(/^Vuelto a calcular el 3T: trae 2\.300,25 € a compensar del 2T\./, { timeout: 30_000 })
 
     // La tira: los cuatro modelos, en su orden.
     const tira = page.getByRole('list', { name: 'Modelos del 3.er trimestre 2026' })
@@ -170,6 +170,10 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(tira.getByRole('button').nth(3)).toContainText('Sociedades · 202')
     await expect(tira.getByRole('button').nth(1)).toContainText('Hasta el 20/10')
     await expect(page.getByRole('radio', { name: '3T' })).toHaveAttribute('aria-checked', 'true')
+    // Las pestañas del marco, con su icono (pieza común).
+    await expect(page.locator('.s-pestanas .s-pestana .s-icono').first()).toBeVisible()
+    // La cartera sale con el 303 elegido (el primero), en su ficha.
+    await expect(page.locator('[data-prueba="ficha-modelo"] [data-prueba="cartera"]')).toBeVisible()
 
     // La cartera, de los 303 presentados.
     await expect(fila(page, 'Pendiente de 2025')).toContainText('1.500,00 €')
@@ -195,8 +199,14 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(ficha.getByText('Presentado 20/07')).toBeVisible()
     await expect(ficha.locator('[data-prueba="resultado-ficha"]')).toContainText('0,00 €')
     await expect(ficha.getByText(j2.csv)).toBeVisible()
-    await expect(ficha.locator('iframe.s-csv-pdf-visor')).toBeVisible({ timeout: 20_000 })
-    await expect(ficha.getByRole('link', { name: 'Abrir el PDF ↗' })).toBeVisible()
+    // Las casillas dicen qué son, en palabras.
+    await expect(ficha.locator('[data-resultado="si"]')).toContainText('Resultado')
+    // A la derecha, el justificante en grande, con Descargar, Imprimir y Abrir aparte.
+    const visor = page.locator('[data-prueba="justificante"]')
+    await expect(visor.locator('iframe.s-trimestre-pdf-visor')).toBeVisible({ timeout: 20_000 })
+    await expect(visor.getByRole('link', { name: 'Descargar' })).toBeVisible()
+    await expect(visor.getByRole('button', { name: 'Imprimir' })).toBeVisible()
+    await expect(visor.getByRole('link', { name: 'Abrir aparte' })).toBeVisible()
     await sinDesbordar(page, 'Ficha del 303 del 2T')
     await foto(page, 'trimestre-ficha')
 
@@ -204,6 +214,12 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await tira2.getByRole('button').filter({ hasText: 'Retenciones · 111' }).click()
     await expect(ficha.getByRole('heading', { name: 'Retenciones · 111 · 2T 2026' })).toBeVisible()
     await expect(ficha.getByText(/Aún no está en Sumied\. Se presenta hasta el/)).toBeVisible()
+    // La derecha ya no enseña el 303: dice qué falta. Y la cartera solo va con el 303.
+    await expect(page.locator('[data-prueba="que-falta"]')).toContainText('Aún no está en Sumied')
+    await expect(page.locator('[data-prueba="justificante"]')).toHaveCount(0)
+    await expect(page.locator('[data-prueba="cartera"]')).toHaveCount(0)
+    await sinDesbordar(page, 'Ficha del 111 del 2T')
+    await foto(page, 'trimestre-falta')
     expect(errores).toEqual([])
   } finally {
     const b = await rest<unknown[]>(s, 'DELETE', `company?id=eq.${e.id}&account_id=eq.${CUENTA_A.id}`)

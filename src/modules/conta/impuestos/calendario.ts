@@ -13,6 +13,7 @@
 // con sus fechas, y dice «Se calculará aquí pronto»: un modelo que la empresa
 // presenta no se esconde (regla 7).
 
+import { soloConAlgo, type Contadores } from '@/modules/conta/esqueleto/contadores'
 import type { Nivel } from '@/modules/conta/esqueleto/preferencias'
 import type { TonoChip, TonoTarjeta } from '@/modules/conta/diseno'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
@@ -262,6 +263,25 @@ export function vistaDeFila(f: FilaCalendario): VistaFila {
   }
   const final: Record<string, string> = { paid: 'Pagado', refunded: 'Devuelto', offset: 'A compensar' }
   return v({ tono: 'seguro', texto: `${final[d.estado] ?? d.estado_texto} · contabilizado` }, 'ver', { ambar: false })
+}
+
+// ── Los contadores de las pestañas (I01c, 20/10) ────────────────────────────
+
+/** Los días hacia delante en que «vence» algo para el contador rojo del Calendario. */
+export const DIAS_VENCE = 7
+
+/**
+ * Calendario: en rojo, lo que está sin presentar y vence en 7 días o menos (o
+ * ya se pasó). Presentados: en gris, lo presentado este año. Lo que da cero no
+ * sale (regla 7: no hay «0, sin alertas»).
+ */
+export function contadoresImpuestos(c: Calendario): Contadores {
+  const vence = c.filas.filter((f) => sinPresentar(f) && (f.atrasado || diasHasta(c.hoy, f.presentacion) <= DIAS_VENCE)).length
+  const presentados = c.presentados?.presentados ?? 0
+  return soloConAlgo({
+    calendario: { n: vence, tono: 'falta', texto: `${vence} ${vence === 1 ? 'vence' : 'vencen'} en ${DIAS_VENCE} días o menos` },
+    presentados: { n: presentados, tono: 'neutro', texto: `${presentados} ${presentados === 1 ? 'presentado' : 'presentados'} en ${c.presentados?.ano ?? ''}`.trim() },
+  })
 }
 
 // ── Las tres cifras de arriba ───────────────────────────────────────────────

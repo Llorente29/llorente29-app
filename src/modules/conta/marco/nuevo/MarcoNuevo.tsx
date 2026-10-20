@@ -32,6 +32,7 @@ import { BarraProductos } from '@/modules/conta/esqueleto/BarraProductos'
 import { CajonProductos } from '@/modules/conta/esqueleto/CajonProductos'
 import { cuentasDeLaBarra } from '@/modules/conta/esqueleto/cuentasBarra'
 import { Cabecera } from '@/modules/conta/esqueleto/Cabecera'
+import { useContadores } from '@/modules/conta/esqueleto/useContadores'
 import { CintaDePestana } from '@/modules/conta/esqueleto/CintaDePestana'
 import { Favoritos } from '@/modules/conta/esqueleto/Favoritos'
 import { MenuUsuario } from '@/modules/conta/esqueleto/MenuUsuario'
@@ -59,6 +60,8 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   // En el móvil, un producto por niveles (Bancos) lleva su portada: ni fila de pestañas ni cinta.
   const porNiveles = movil && !!producto?.portadaMovil
   const pestanas = producto && !porNiveles ? pestanasVisibles(producto, ctx) : []
+  // I01c · Los contadores de las pestañas del producto (rojo lo que vence).
+  const contadores = useContadores(producto?.id ?? null, activa?.id ?? null)
   const pestana = donde?.pestana ?? null
   const cinta = producto && !porNiveles ? cintaDe(producto.id, pestana?.id ?? null, ctx) : []
   const pendientes = cuentasDeLaBarra(cuentas)
@@ -123,7 +126,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
             desplegada={prefs.barraDesplegada} alternar={() => cambiar({ barraDesplegada: !prefs.barraDesplegada })} />
         )}
         <div className="s-esq-cuerpo">
-          <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
+          <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} contadores={contadores} movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
             huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)} abrirMenu={() => setCajon(true)} menuAbierto={cajon}
             favoritos={favoritos(false)} usuario={usuario(false)} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>

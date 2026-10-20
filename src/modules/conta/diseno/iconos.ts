@@ -8,7 +8,9 @@ import {
   ArrowDownLeft, ArrowLeft, ArrowRight, ArrowUpRight, Ban, Bell, BookOpen, Building2, Calendar, ChartColumn, Check,
   ChevronDown, ChevronUp, Contact, Copy, CornerDownLeft, Download, Equal, Euro, File, FileText, House, Info, Landmark,
   ListChecks, Mail, Menu, PanelLeftClose, PanelLeftOpen, Percent, Pin, PinOff, Plus, Receipt, Scale, ScanLine, Search,
-  Settings, Sparkles, Star, TriangleAlert, Upload, Users, X, type LucideIcon,
+  Settings, Sparkles, Star, TriangleAlert, Upload, Users, X,
+  ArrowLeftRight, Award, Bike, Briefcase, CreditCard, ExternalLink, FileCheck, Handshake, Inbox, LayoutGrid, Library,
+  List, Lock, Printer, Repeat, SlidersHorizontal, Truck, UserRound, Wallet, type LucideIcon,
 } from 'lucide-react'
 
 export const ICONOS = {
@@ -60,6 +62,26 @@ export const ICONOS = {
   fecha: Calendar,
   graficas: ChartColumn,
   ia: Sparkles,
+  imprimir: Printer,
+  abrirAparte: ExternalLink,
+  // Pestañas de los productos (I01c, 20/10: la cabecera de pestañas lleva icono en todos los módulos).
+  cuadricula: LayoutGrid,
+  presentado: FileCheck,
+  certificado: Award,
+  lista: List,
+  libro: Library,
+  candado: Lock,
+  reglas: SlidersHorizontal,
+  repetir: Repeat,
+  pagos: CreditCard,
+  bandeja: Inbox,
+  movimientos: ArrowLeftRight,
+  cuentas: Wallet,
+  cliente: UserRound,
+  proveedor: Truck,
+  plataforma: Bike,
+  socio: Handshake,
+  maletin: Briefcase,
 } as const satisfies Record<string, LucideIcon>
 
 export type NombreIcono = keyof typeof ICONOS

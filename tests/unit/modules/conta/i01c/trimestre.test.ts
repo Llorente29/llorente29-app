@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  fraseDesfasada, fraseRecalculado, importeConSigno, lineasCartera, nombreTarjeta, numeroTrimestre, tarjeta,
+  fraseDesfasada, fraseRecalculado, importeConSigno, lineasCartera, nombreTarjeta, numeroTrimestre, presentadorEnPalabras, tarjeta,
   tituloTrimestre, trimestrePorDefecto,
   type Cartera, type DeclaracionTrimestre, type FilaCartera, type ModeloTrimestre, type Trimestre,
 } from '@/modules/conta/impuestos/trimestre'
@@ -53,6 +53,34 @@ describe('el trimestre que se abre', () => {
     expect(numeroTrimestre('1P')).toBeNull()
     expect(tituloTrimestre(2026, '3T')).toBe('3.er trimestre 2026')
     expect(tituloTrimestre(2026, '2T')).toBe('2.º trimestre 2026')
+  })
+})
+
+describe('la tira: lo que vence, en rojo (Julio, 20/10, punto 5)', () => {
+  const m303 = (x: Partial<DeclaracionTrimestre> | null) => modelo({ modelo: '303', presentacion: '2026-10-20', declaracion: x === null ? null : decl(x) })
+  it('sin calcular y vence hoy', () => {
+    expect(tarjeta(m303({ resultado: null, importe: null }), '2026-10-20').chip).toEqual({ tono: 'falta', texto: 'Sin calcular · vence hoy' })
+  })
+  it('para revisar y ya pasado el plazo', () => {
+    expect(tarjeta(m303({}), '2026-10-21').chip).toEqual({ tono: 'falta', texto: 'Para revisar · fuera de plazo' })
+  })
+  it('sin declaración: «Vence hoy» en rojo en vez de la fecha', () => {
+    expect(tarjeta(m303(null), '2026-10-20').chip).toEqual({ tono: 'falta', texto: 'Vence hoy' })
+    expect(tarjeta(m303(null), '2026-10-19').chip).toEqual({ tono: 'neutro', texto: 'Hasta el 20/10' })
+  })
+  it('lo presentado no vence nunca', () => {
+    expect(tarjeta(m303({ estado: 'filed', presentada: '2026-10-13T08:51:00+00:00' }), '2026-10-21').chip).toEqual({ tono: 'seguro', texto: 'Presentado 13/10' })
+  })
+})
+
+describe('quién lo presentó', () => {
+  it('la propia empresa, si el NIF es el suyo (con o sin guiones)', () => {
+    expect(presentadorEnPalabras({ nif: 'B-28000016', nombre: 'TABERNA' }, 'B28000016')).toBe('La propia empresa')
+  })
+  it('la gestoría, con su nombre y su NIF; sin dato, nada', () => {
+    expect(presentadorEnPalabras({ nif: '00000000T', nombre: 'GESTORIA INVENTADA' }, 'B28000016')).toBe('GESTORIA INVENTADA (00000000T)')
+    expect(presentadorEnPalabras(null, 'B28000016')).toBeNull()
+    expect(presentadorEnPalabras({ nif: null, nombre: null }, 'B28000016')).toBeNull()
   })
 })
 
@@ -161,8 +189,10 @@ describe('la cartera, 3T 2026', () => {
 
 describe('las frases', () => {
   it('el recálculo dice su cifra (regla 8)', () => {
-    expect(fraseRecalculado('3T', '2T/2026', 2300.25)).toBe('Vuelto a calcular el 3T: ahora trae la [110] 2.300,25 €, lo que dejó el 2T/2026.')
-    expect(fraseRecalculado('3T', '2T/2026', null)).toContain('sigue sin [110]')
+    // Como la maqueta (Julio, 20/10): la cifra, de dónde viene y, sin libro, que el resultado aún no se sabe.
+    expect(fraseRecalculado('3T', '2T/2026', 2300.25)).toBe('Vuelto a calcular el 3T: trae 2.300,25 € a compensar del 2T.')
+    expect(fraseRecalculado('3T', '2T/2026', 2300.25, false)).toBe('Vuelto a calcular el 3T: trae 2.300,25 € a compensar del 2T. El resultado del IVA aún no se sabe: falta el libro de IVA del trimestre.')
+    expect(fraseRecalculado('3T', '2T/2026', null)).toContain('sigue sin la [110]')
   })
   it('sin desfase, no hay frase', () => {
     const t: Pick<Trimestre, 'trimestre' | 'cartera'> = { trimestre: '3T', cartera: cartera() }
