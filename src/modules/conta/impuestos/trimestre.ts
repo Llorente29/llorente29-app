@@ -241,3 +241,23 @@ export function fraseRecalculado(trimestre: string, de: string, c110: number | n
   const base = `Vuelto a calcular el ${trimestre}: trae ${eurosExactos(c110)} a compensar del ${delAnterior}.`
   return conResultado ? base : `${base} El resultado del IVA aún no se sabe: falta el libro de IVA del trimestre.`
 }
+
+/**
+ * I01c (maqueta v3) · La cuenta del impuesto en el mayor, para «Ver el asiento»
+ * cuando la declaración no tiene asiento en Sumied: las retenciones (111 y
+ * 115) en la 4751; el pago a cuenta del 202 en la 473; el 303, en la 4750 si
+ * sale a pagar y en la 4700 si sale a compensar o a devolver.
+ */
+export function cuentaDelImpuesto(modelo: string, resultado: string | null): string | null {
+  if (modelo === '111' || modelo === '115') return '4751'
+  if (modelo === '202') return '473'
+  if (modelo === '303') return resultado === 'to_pay' ? '4750' : resultado ? '4700' : null
+  return null
+}
+
+/** El libro registro de las facturas del modelo (Libros › Libros registro): null si no tiene. */
+export function librosDelModelo(modelo: string): 'recibidas' | 'retenciones' | null {
+  if (modelo === '303') return 'recibidas'
+  if (modelo === '111' || modelo === '115') return 'retenciones'
+  return null
+}

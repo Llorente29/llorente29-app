@@ -22,19 +22,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
-import { rutaImpuestos, rutaIvaPeriodo, rutaTrimestre } from '@/config/navegacion'
+import { rutaAsiento, rutaImpuestos, rutaIvaPeriodo, rutaLibros, rutaMayor, rutaTrimestre } from '@/config/navegacion'
 import { Boton, BotonEnlace, Chip, Icono, Tarjeta } from '@/modules/conta/diseno'
 import { clasesBoton } from '@/modules/conta/diseno/valores'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { esCasillaDePersonas } from '@/modules/conta/lib/justificanteAeat'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
-import { calcular303, enlaceJustificante, leerTrimestre } from '@/modules/conta/services/impuestosService'
+import { asientosDeDeclaracion, calcular303, enlaceJustificante, leerTrimestre } from '@/modules/conta/services/impuestosService'
 import { queEsLaCasilla } from './casillasModelos'
 import { textoResultado } from './calendario'
 import {
   CASILLA_RESULTADO, estaPresentada, fraseDesfasada, fraseRecalculado, importeConSigno, lineasCartera, numeroTrimestre, presentadorEnPalabras,
-  tarjeta, tituloTrimestre, trimestrePorDefecto,
+  cuentaDelImpuesto, librosDelModelo, tarjeta, tituloTrimestre, trimestrePorDefecto,
   type CasillaTrimestre, type ModeloTrimestre, type Trimestre,
 } from './trimestre'
 
@@ -227,12 +227,42 @@ function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alRecalcular }:
         </table>
       )}
       {m.modelo === '303' && <Cartera d={datos} alRecalcular={alRecalcular} />}
-      {m.modelo === '303' && m.periodo && !deRuta && (
-        <p className="s-trimestre-acciones">
-          <BotonEnlace a={rutaIvaPeriodo(ejercicio, m.periodo)}>{presentada ? 'Ver el IVA del trimestre' : 'Abrir el IVA del trimestre'}</BotonEnlace>
-        </p>
-      )}
+      {d && !deRuta && <Acciones m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} presentada={presentada} />}
     </section>
+  )
+}
+
+/**
+ * Debajo de las casillas (maqueta v3): «Ver el asiento» y «Facturas del
+ * trimestre». Sin asiento en Sumied (una declaración presentada fuera, como
+ * todas las de Foodint en 2026), el botón lleva a la cuenta del impuesto en el
+ * mayor y lo dice: no promete un asiento que no hay. Van a pantallas de la
+ * empresa activa: por la ruta de otra empresa (despacho) no salen.
+ */
+function Acciones({ m, d, ejercicio, trimestre, presentada }: {
+  m: ModeloTrimestre; d: NonNullable<ModeloTrimestre['declaracion']>; ejercicio: number; trimestre: string; presentada: boolean
+}) {
+  const [asientos, setAsientos] = useState<{ id: string; liquidacion: string | null; pago: string | null } | null>(null)
+  useEffect(() => {
+    let vivo = true
+    asientosDeDeclaracion(d.id, d.cuenta).then((a) => { if (vivo) setAsientos({ id: d.id, ...a }) }).catch(() => { if (vivo) setAsientos({ id: d.id, liquidacion: null, pago: null }) })
+    return () => { vivo = false }
+  }, [d.id, d.cuenta])
+  const a = asientos?.id === d.id ? asientos : null
+  const cuenta = cuentaDelImpuesto(m.modelo, d.resultado)
+  const entrada = a?.liquidacion ?? a?.pago ?? null
+  const libro = librosDelModelo(m.modelo)
+  const conPeriodo = (ruta: string) => `${ruta}?ejercicio=${ejercicio}&periodo=${trimestre}`
+  return (
+    <p className="s-trimestre-acciones">
+      {a && (entrada
+        ? <BotonEnlace a={rutaAsiento(entrada)}>{a.liquidacion ? 'Ver el asiento' : 'Ver el asiento del pago'}</BotonEnlace>
+        : cuenta && <BotonEnlace a={rutaMayor(cuenta)} titulo="Esta declaración no tiene asiento en Sumied (se presentó fuera): su cuenta en el mayor.">Ver la cuenta {cuenta}</BotonEnlace>)}
+      {libro && <BotonEnlace a={conPeriodo(rutaLibros('registro', libro))}>Facturas del trimestre</BotonEnlace>}
+      {m.modelo === '303' && m.periodo && (
+        <BotonEnlace a={rutaIvaPeriodo(ejercicio, m.periodo)}>{presentada ? 'Ver el IVA del trimestre' : 'Abrir el IVA del trimestre'}</BotonEnlace>
+      )}
+    </p>
   )
 }
 

@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  fraseDesfasada, fraseRecalculado, importeConSigno, lineasCartera, nombreTarjeta, numeroTrimestre, presentadorEnPalabras, tarjeta,
+  cuentaDelImpuesto, fraseDesfasada, fraseRecalculado, librosDelModelo, importeConSigno, lineasCartera, nombreTarjeta, numeroTrimestre, presentadorEnPalabras, tarjeta,
   tituloTrimestre, trimestrePorDefecto,
   type Cartera, type DeclaracionTrimestre, type FilaCartera, type ModeloTrimestre, type Trimestre,
 } from '@/modules/conta/impuestos/trimestre'
@@ -197,5 +197,18 @@ describe('las frases', () => {
   it('sin desfase, no hay frase', () => {
     const t: Pick<Trimestre, 'trimestre' | 'cartera'> = { trimestre: '3T', cartera: cartera() }
     expect(fraseDesfasada(t)).toBeNull()
+  })
+})
+
+describe('los botones de la ficha (maqueta v3)', () => {
+  it('sin asiento en Sumied, la cuenta del impuesto en el mayor', () => {
+    expect(['111', '115', '202'].map((m) => cuentaDelImpuesto(m, 'to_pay'))).toEqual(['4751', '4751', '473'])
+    expect(cuentaDelImpuesto('303', 'to_pay')).toBe('4750')
+    expect(cuentaDelImpuesto('303', 'to_offset')).toBe('4700')
+    // Un 303 sin resultado todavía no tiene cuenta que enseñar: no se inventa.
+    expect(cuentaDelImpuesto('303', null)).toBeNull()
+  })
+  it('las facturas del trimestre: el registro de recibidas (303) o las retenciones (111 y 115); el 202 no tiene', () => {
+    expect(['303', '111', '115', '202'].map(librosDelModelo)).toEqual(['recibidas', 'retenciones', 'retenciones', null])
   })
 })
