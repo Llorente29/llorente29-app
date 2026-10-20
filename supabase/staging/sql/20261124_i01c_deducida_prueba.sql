@@ -48,7 +48,7 @@ begin
   select id into v_ej from public.fiscal_year where company_id = v_a and code = '2026';
   insert into public.journal_entry (id, account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type,
                                     external_program, external_year, external_series, external_number)
-  values (v_e, v_cuenta, v_a, v_ej, 'general', '2026-03-31', 'Recibida inventada de la prueba 0290', 'migrated', 'diez', '2026', '2', '90001');
+  values (v_e, v_cuenta, v_a, v_ej, 2, '2026-03-31', 'Recibida inventada de la prueba 0290', 'migrated', 'diez', '2026', '2', '90001');
   insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit) values
     (v_cuenta, v_a, v_e, 1, (select id from public.company_account where company_id = v_a and code = '60000000'), 100.00, 0),
     (v_cuenta, v_a, v_e, 2, (select id from public.company_account where company_id = v_a and code = '47200021'), 21.00, 0),
