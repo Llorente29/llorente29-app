@@ -259,3 +259,14 @@ supabase/staging/sql/20261122_i01c_csv_prueba.sql
 supabase/migrations/20261123T0100_p01_despacho.sql
 supabase/seeds/conta/seed_p01_despacho_staging.sql
 supabase/staging/sql/20261123_p01_despacho_prueba.sql
+
+# I01c · Pieza 3, la parte que ordena (rama conta/i01c-trimestre).
+#   La 0280 DE VERDAD (solo añade: conta_impuesto_trimestre, la tira del
+#   trimestre y la cartera de cuotas a compensar del 303, y si el borrador está
+#   desfasado), para la e2e de Impuestos › Trimestre. Y su prueba, con \i y
+#   ROLLBACK: el borrador del 3T calculado antes del 2T, desfasado; la cartera
+#   1.500,00 + 1.200,50 − 400,25 = 2.300,25; vuelto a calcular, trae la [110];
+#   la tira; otra cuenta no lo ve; y la vuelta atrás. En 2026: con 2025 paró
+#   (run 369) porque no hay festivos de 2025 para el plazo.
+supabase/migrations/20261122T0280_i01c_trimestre.sql
+supabase/staging/sql/20261122_i01c_trimestre_prueba.sql
