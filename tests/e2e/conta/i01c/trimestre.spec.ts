@@ -120,8 +120,11 @@ const foto = (page: Page, nombre: string) => {
   const sufijo = ancho < 768 ? 'movil' : ancho >= 1800 ? '1900' : 'ordenador'
   return page.screenshot({ path: `${DIR}/${nombre}-${sufijo}.jpg`, type: 'jpeg', quality: 75, fullPage: true })
 }
-/** Dónde cae cada columna del cuerpo: su esquina de arriba a la izquierda. */
+/** Dónde cae cada columna del cuerpo, con la página arriba del todo: su esquina de arriba a la izquierda. */
 async function columnas(page: Page) {
+  // Arriba del todo: el centro va fijo al bajar (sticky) y, con la página bajada, ya no está a la altura de las otras dos.
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(150)
   const caja = async (c: string) => { const b = await page.locator(`.s-trimestre-col-${c}`).boundingBox(); return b ? { x: Math.round(b.x), y: Math.round(b.y) } : null }
   return { izq: await caja('izq'), centro: await caja('centro'), der: await caja('der') }
 }
