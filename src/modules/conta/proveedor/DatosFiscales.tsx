@@ -9,8 +9,12 @@
 //   · NIF español: algoritmo oficial al escribir; al guardar uno válido queda
 //     «✓ comprobado».
 //   · NIF-IVA europeo: forma al escribir; al guardar se pregunta a VIES en el
-//     servidor. Mientras no contesta: «Comprobando con la UE…», sin bloquear.
-//   · Extranjero (fuera de la UE): se guarda tal cual.
+//     servidor. Mientras pregunta: «Comprobando en VIES…»; si no contesta,
+//     «Sin comprobar» (I01d), sin bloquear: se vuelve a preguntar al abrir.
+//   · Extranjero (fuera de la UE): se guarda tal cual, con su país.
+//   · I01d · El país, siempre a la vista y en palabras, y «Su IVA»: cómo se
+//     apunta (de España, intracomunitaria o inversión del sujeto pasivo), la
+//     misma regla con la que la validación para una factura que la contradiga.
 //   · Código postal: la provincia y la población salen de la tabla de códigos
 //     postales del C00; nunca pisan lo escrito.
 
@@ -23,6 +27,7 @@ import { Guardado } from '@/modules/conta/ui/piezas'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
 import { normalizarNif, tipoEntidadPorNif, validarNifEs } from '@/modules/conta/lib/nif'
 import { validarFormatoVatEu } from '@/modules/conta/lib/vatEu'
+import { claseIva, nombrePais, textoClaseIva, textoVies } from '@/modules/conta/lib/ivaProveedor'
 import { provinciaPorCp } from '@/modules/conta/lib/direccion'
 import { proponerPoblacion } from '@/modules/conta/lib/codigoPostal'
 import { lugaresPorCp } from '@/modules/conta/services/codigoPostalService'
@@ -139,11 +144,9 @@ function Formulario() {
       ? [{ valor: String(ret), texto: porcentaje(ret), nota: 'ya no está en tus tablas' }] : []),
   ]
   const impuesto = NOMBRE_IMPUESTO[IMPUESTO_DEL_TERRITORIO[datos.opciones.territorio]]
-  const estadoUe = f.taxIdType === 'vat_eu' && f.taxId
-    ? (comprobandoVies || f.taxIdCheckStatus === 'pending' ? 'Comprobando con la UE…'
-      : f.taxIdCheckStatus === 'valid' ? 'Comprobado en VIES (registro europeo)'
-      : f.taxIdCheckStatus === 'invalid' ? 'VIES dice que este NIF-IVA no está dado de alta' : null)
-    : null
+  const estadoUe = textoVies(f.taxIdType, f.taxId, f.taxIdCheckStatus, f.taxIdVerifiedAt ?? f.taxIdCheckedAt, comprobandoVies)
+  const clase = claseIva({ pais: f.countryCode, tipoNif: f.taxIdType, nif: f.taxId, vies: f.taxIdCheckStatus, regimen: f.vatRegime })
+  const suIva = textoClaseIva(clase, f.countryCode)
 
   return (
     <div className="cx-formulario">
@@ -165,11 +168,16 @@ function Formulario() {
           placeholder={tipoId === 'vat_eu' ? 'FR40303265045' : 'B12345678'}
           onChange={(e) => setTaxId(e.target.value)} onBlur={() => void guardarNif()} />}
       </Campo>
-      {tipoId === 'foreign' && (
-        <Campo campo="countryCode" etiqueta="País (código de dos letras)" ayuda="Por ejemplo: GB, US, CH.">
+      {tipoId === 'foreign' ? (
+        <Campo campo="countryCode" etiqueta="País (código de dos letras)"
+          ayuda={/^[A-Z]{2}$/.test(countryCode) && countryCode !== 'ES' ? `${nombrePais(countryCode)}.` : 'Por ejemplo: US (Estados Unidos), GB (Reino Unido), CH (Suiza).'}>
           {(p) => <input {...p} className="cx-input" value={countryCode} maxLength={2} onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
             onBlur={() => void g.guardar({ countryCode: countryCode.trim().toUpperCase() || 'ES' }, 'país')} />}
         </Campo>
+      ) : (
+        <p className="cx-ayuda" data-prueba="pais">
+          País: <strong>{nombrePais(f.countryCode)}</strong>{f.taxIdType === 'vat_eu' && f.taxId ? ' (sale de las dos letras de su NIF-IVA)' : ''}
+        </p>
       )}
       <Pildoras<EntityKind> campo="entityKind" etiqueta="¿Sociedad o autónomo?" ayuda="Con un NIF español lo deducimos de su primera letra; puedes cambiarlo."
         opciones={[{ valor: 'company', texto: 'Sociedad' }, { valor: 'self_employed', texto: 'Autónomo' }]}
@@ -206,6 +214,10 @@ function Formulario() {
           </select>
         )}
       </Campo>
+      <div className="cxp-su-iva" data-prueba="iva-clase" data-clase={clase} role="note">
+        <strong>Su IVA: {suIva.titulo}</strong>
+        <span>{suIva.detalle}</span>
+      </div>
       <Pildoras campo="usualTaxRateIds" etiqueta={`${impuesto} habitual en sus facturas`} varias opciones={opcionesIva} elegidas={f.usualTaxRateIds}
         ayuda="Puedes marcar varios. Salen de tus tablas generales; los que más usas, primero."
         error={g.error('usualTaxRateIds')}

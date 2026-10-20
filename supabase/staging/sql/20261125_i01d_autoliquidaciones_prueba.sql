@@ -40,6 +40,13 @@ do $$ begin
 end $$;
 set local statement_timeout = '300s';
 
+-- Staging NO tiene la m01 (20261117T0100): su journal_entry_validar es la de
+-- antes, con las reglas copiadas, y no llama a conta_motivos_para_validar. En
+-- producción sí (md5 87e0ba8d…, medido el 20/10). Para probar el camino de
+-- PRODUCCIÓN se carga aquí, dentro de la transacción, y la 0300 encima (su
+-- conta_motivos_para_validar manda). El ROLLBACK lo quita todo: staging sigue
+-- como estaba.
+\i supabase/migrations/20261117T0100_m01_motivos_para_validar.sql
 \i supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
 
 do $$

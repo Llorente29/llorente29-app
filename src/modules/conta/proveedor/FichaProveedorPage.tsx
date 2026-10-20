@@ -24,7 +24,7 @@ import { useFichaProveedor } from '@/modules/conta/hooks/useFichaProveedor'
 import { FichaContext, useFicha, type ContextoFicha } from '@/modules/conta/proveedor/contexto'
 import { cuentasDelResumen, gastoAprendido } from '@/modules/conta/services/cuentasProveedorService'
 import {
-  Dialogo, EsqueletoFicha, IconoCamara, IconoTelefono, Migas, PildoraNif, TextoNif,
+  Dialogo, EsqueletoFicha, IconoCamara, IconoTelefono, Migas, PildoraIva, PildoraNif, TextoNif,
 } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
 import { useAvisoGuardado } from '@/modules/conta/hooks/useAvisoGuardado'
@@ -158,6 +158,7 @@ function Cabecera() {
           <div className="cxp-pildoras">
             {f.legalName && <span className="cx-chip">{f.legalName}</span>}
             <PildoraNif />
+            <PildoraIva />
             {pago && <span className="cx-chip">{pago}</span>}
             {f.archivedAt && <span className="cx-chip cx-chip-ambar">Archivado</span>}
           </div>
