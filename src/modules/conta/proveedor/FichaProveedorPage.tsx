@@ -437,6 +437,7 @@ function PortadaMovil({ secciones }: { secciones: SeccionDeFicha[] }) {
         <div style={{ minWidth: 0 }}>
           <h1 className="cxm-nombre">{f.name}</h1>
           <div className="cxm-sub"><TextoNif />{pago ? ` · ${pago}` : ''}</div>
+          <div className="cxm-sub"><PildoraIva /></div>
         </div>
       </div>
       <div className="cxm-botones">
