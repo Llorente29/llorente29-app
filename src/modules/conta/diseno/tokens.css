@@ -98,10 +98,13 @@
 
   /* ── Medidas del esqueleto ──────────────────────────────────────────── */
   --s-alto-control: 32px;        /* Botones y campos */
-  --s-alto-cabecera: 48px;
+  --s-alto-cabecera: 56px;      /* S01f: la cabecera de pestañas (en el móvil, 48: esqueleto.css) */
+  --s-alto-pestanas-movil: 44px; /* S01f: la fila de pestañas del móvil, que se desliza */
   --s-ancho-barra: 220px;        /* S01c: desplegada, icono y nombre en una línea */
   --s-ancho-barra-plegada: 64px; /* S01c: solo los iconos */
   --s-icono: 16px;
+  --s-icono-pestana: 14px;      /* S01f: los de la cabecera de pestañas */
+  --s-raya-pestana: 3px;        /* S01f: el subrayado de la pestaña activa */
   --s-icono-trazo: 1.75;
 
   /* ── Densidad (las tablas leen estas dos) ───────────────────────────── */

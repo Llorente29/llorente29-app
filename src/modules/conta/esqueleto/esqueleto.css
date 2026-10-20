@@ -66,7 +66,8 @@
 .s-cajon-nav { display: flex; flex-direction: column; gap: var(--s-1); min-height: 100%; }
 .s-cajon .s-barra-item, .s-cajon .s-barra-plegar { min-height: 48px; }
 
-/* ── 2 · La cabecera: una fila de 48 px ──────────────────────────────── */
+/* ── 2 · La cabecera: una fila de 56 px (S01f; 48 en el móvil) ───────── */
+.cxm.cxm-es-movil { --s-alto-cabecera: 48px; }
 .s-cabecera {
   position: sticky; top: 0; z-index: 30;
   height: var(--s-alto-cabecera); flex-shrink: 0;
@@ -77,6 +78,10 @@
 .s-cab-izquierda, .s-cab-derecha { display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
 /* S01e: la empresa, entera mientras quepa; solo si la ventana no da, se corta con «…» (y el nombre entero al pasar el ratón). */
 .s-cab-izquierda { flex-shrink: 1; min-width: 0; }
+/* S01f · La empresa (y el ejercicio o el mes), separada de las pestañas por una línea. */
+.cxm:not(.cxm-es-movil) .s-cab-izquierda {
+  margin: var(--s-3) 0; padding-right: var(--s-3); border-right: var(--s-linea) solid var(--s-borde-decorativo);
+}
 .s-cab-periodo { flex-shrink: 0; }
 .s-cab-centro { flex: 1; min-width: 0; display: flex; align-items: stretch; }
 .s-cab-logotipo { display: flex; align-items: center; padding-right: var(--s-3); border-right: var(--s-linea) solid var(--s-borde-decorativo); height: 60%; }
@@ -100,23 +105,52 @@
 .cxm-es-movil .s-cab-periodo > * { display: flex; min-width: 0; max-width: 100%; }
 .cxm.cxm-es-movil .s-cab-periodo .cxm-select { max-width: 132px; min-width: 0; }
 
-/* Pestañas del producto: la activa en negrita y subrayada (maqueta 1). */
+/* S01f · Las pestañas del producto (Julio, 20/10): icono de trazo de 14 px y
+   nombre; la activa en el azul de acción, en negrita y subrayada con 3 px; y su
+   contador donde aplique (gris lo que pide una decisión, rojo lo que vence).
+   El enlace cubre la pestaña entera con su ::after: el contador va a su lado,
+   fuera del enlace (su nombre sigue siendo el de la pestaña). */
 .s-pestanas-caja { position: relative; flex: 1; min-width: 0; display: flex; }
 .s-pestanas-medida { position: absolute; visibility: hidden; pointer-events: none; display: flex; gap: var(--s-1); white-space: nowrap; height: 0; overflow: hidden; }
 .s-pestanas-medida > * { flex-shrink: 0; }
 .s-pestanas { display: flex; align-items: stretch; gap: var(--s-1); min-width: 0; }
 .s-pestana {
-  display: inline-flex; align-items: center; padding: 0 var(--s-2); white-space: nowrap;
-  color: var(--s-apoyo); text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer;
-  border-bottom: 2px solid transparent;
+  position: relative; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  padding: 0 var(--s-2); white-space: nowrap; color: var(--s-apoyo);
+  border-bottom: var(--s-raya-pestana) solid transparent; border-top: var(--s-raya-pestana) solid transparent;
 }
+.s-pestana-enlace {
+  display: inline-flex; align-items: center; gap: 6px; align-self: stretch;
+  color: inherit; text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+}
+.s-pestana-enlace::after { content: ''; position: absolute; inset: 0; }
+.s-pestana-enlace .s-icono { width: var(--s-icono-pestana); height: var(--s-icono-pestana); }
 .s-pestana:hover { color: var(--s-tinta); }
-.s-pestana[aria-current='page'], .s-pestana-activa { color: var(--s-tinta); font-weight: var(--s-peso-fuerte); border-bottom-color: var(--s-accion); }
-.s-pestana:focus-visible { outline: none; box-shadow: inset var(--s-foco); }
+.s-pestana[data-activa], .s-pestana-activa { color: var(--s-accion); font-weight: var(--s-peso-fuerte); border-bottom-color: var(--s-accion); }
+.s-pestana:hover[data-activa] { color: var(--s-accion); }
+.s-pestana:has(.s-pestana-enlace:focus-visible) { box-shadow: inset var(--s-foco); border-radius: var(--s-radio-boton); }
+.s-pestana-enlace:focus-visible { outline: none; }
+/* La medida no tiene enlace que enfocar ni pulsar. */
+.s-pestanas-medida .s-pestana-enlace::after { content: none; }
+
+/* El contador: una píldora pequeña. Gris lo que pide una decisión; rojo lo que vence. */
+.s-pestana-contador {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: var(--s-radio-pildora); font-size: var(--s-t-xs); font-weight: var(--s-peso-medio); line-height: 1;
+  font-variant-numeric: tabular-nums; background: var(--s-neutro-fondo); color: var(--s-apoyo); pointer-events: none;
+}
+.s-pestana-contador[data-tono='vence'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+
+/* En «Más ▾»: la misma pestaña, en una fila del menú, con su contador a la derecha. */
+.s-pestana-en-menu { position: relative; display: flex; align-items: center; gap: var(--s-2); }
+.s-pestana-en-menu .s-menu-item { flex: 1; }
+.s-pestana-en-menu .s-menu-item::after { content: ''; position: absolute; inset: 0; }
+.s-pestana-en-menu .s-pestana-contador { position: absolute; right: var(--s-2); }
+.s-pestana-rotulo { display: inline-flex; align-items: center; gap: 6px; }
+.s-pestana-rotulo .s-icono { width: var(--s-icono-pestana); height: var(--s-icono-pestana); }
 
 /* Los enlaces del esqueleto dentro de «.cx a» (componentes.css, azul): con el mismo peso, su color. */
-.cx a.s-pestana { color: var(--s-apoyo); }
-.cx a.s-pestana[aria-current='page'] { color: var(--s-tinta); }
+.cx a.s-pestana-enlace { color: inherit; }
 .cx a.s-menu-item { color: var(--s-tinta); }
 .cx a.s-cab-empresa, .cx a.s-cab-logotipo { color: var(--s-tinta); }
 
@@ -160,7 +194,14 @@
 .s-esq-aviso:empty { display: none; }
 
 /* ── El móvil ────────────────────────────────────────────────────────── */
-.s-pestanas-movil { display: flex; overflow-x: auto; scrollbar-width: none; background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); min-height: var(--s-alto-control); }
+.s-pestanas-movil {
+  display: flex; overflow-x: auto; scrollbar-width: none; background: var(--s-superficie);
+  border-bottom: var(--s-linea) solid var(--s-borde-decorativo); min-height: var(--s-alto-pestanas-movil);
+  padding: 0 var(--s-1); scroll-padding: 0 var(--s-8);
+}
+/* S01f · Ninguna pestaña se corta: cada una entera, y la fila se desliza. */
+.s-pestanas-movil .s-pestana { flex-shrink: 0; padding: 0 var(--s-3); }
+.s-pestanas-movil::-webkit-scrollbar { display: none; }
 
 /* S01e · Una fila que se desliza (deslizable.ts) dice con un degradado en el
    borde que hay más por ese lado. La cinta: «Ocultar» se queda pegado a la
@@ -192,7 +233,7 @@
 
 /* Lo que se enfoca o se lleva a la vista no queda debajo de la cabecera fija
    (WCAG 2.4.11, foco no tapado). */
-html:has(.s-cabecera) { scroll-padding-top: 56px; }   /* 48 de la cabecera + 8: los tokens viven en .cx, no en html */
+html:has(.s-cabecera) { scroll-padding-top: 64px; }   /* 56 de la cabecera + 8: los tokens viven en .cx, no en html */
 
 /* El usuario en la cabecera: el nombre y, debajo, «Nivel medio» (S01e: sin
    punto colgando ni el nivel suelto). */

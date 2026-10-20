@@ -2,7 +2,8 @@
 //
 // El marco de contabilidad. Desde el S01 es el ESQUELETO (encargo S01 y
 // respuestas de Julio del 17/10): la barra de productos a la izquierda, la
-// cabecera de una fila de 48 px, la cinta de la pestaña debajo y la pantalla.
+// cabecera de una fila (56 px desde el S01f, con las pestañas de icono y
+// contador), la cinta de la pestaña debajo y la pantalla.
 // En el móvil, los productos van en un cajón que abre el botón de menú de la
 // cabecera (S01c) y las pestañas en una fila que se desliza. Las piezas están en src/modules/conta/esqueleto; aquí se juntan.
 //
@@ -25,6 +26,7 @@ import { TeTocaHoy } from '@/modules/conta/ui/marco/TeTocaHoy'
 import { chipsDelInicio } from '@/modules/conta/marco/nuevo/teTocaHoy'
 import { MarcoContexto, type DatosCinta, type EntradasCinta, type Marco } from '@/modules/conta/marco/nuevo/contexto'
 import { Buscador } from '@/modules/conta/marco/nuevo/Buscador'
+import { useContadoresPestanas } from '@/modules/conta/marco/nuevo/useContadoresPestanas'
 import { dondeEsta, pestanasVisibles, productosVisibles } from '@/modules/conta/esqueleto/productos'
 import { alternarFavorito, cintaDe, favoritosDe, ordenPorId, type Orden } from '@/modules/conta/esqueleto/ordenes'
 import { usePreferenciasEsqueleto, useContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
@@ -62,6 +64,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const pestana = donde?.pestana ?? null
   const cinta = producto && !porNiveles ? cintaDe(producto.id, pestana?.id ?? null, ctx) : []
   const pendientes = cuentasDeLaBarra(cuentas)
+  const contadores = useContadoresPestanas(producto?.id ?? null, activa?.id ?? null, cuentas)
 
   // Ctrl K (⌘K): del marco. En la captura, para que no llegue a Libros ni a Bancos.
   useEffect(() => {
@@ -123,7 +126,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
             desplegada={prefs.barraDesplegada} alternar={() => cambiar({ barraDesplegada: !prefs.barraDesplegada })} />
         )}
         <div className="s-esq-cuerpo">
-          <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
+          <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} contadores={contadores} movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
             huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)} abrirMenu={() => setCajon(true)} menuAbierto={cajon}
             favoritos={favoritos(false)} usuario={usuario(false)} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
