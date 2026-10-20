@@ -7,9 +7,11 @@
 // 2026 (3.er trimestre: domiciliado hasta el 15/10, presentar hasta el 20/10;
 // 202: 2.º pago hasta el 20/10, sin domiciliación).
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  cifraPago, cifraPlazo, cifraPresentados, lineaDeFila, loSiguiente, nombreDeFila, periodoEnPalabras, tituloVentana, vistaDeFila,
+  cifraPago, cifraPlazo, cifraPresentados, lineaDeFila, loSiguiente, nombreDeFila, periodoEnPalabras, tituloVentana, tonoDePlazo, vistaDeFila,
   type Calendario, type Declaracion, type FilaCalendario,
 } from '@/modules/conta/impuestos/calendario'
 
@@ -73,6 +75,35 @@ describe('el estado y la acción de cada fila', () => {
     expect(vistaDeFila(fila('202', 'instalments_202', '2P', { declaracion: dec({ estado: 'not_required', no_hace_falta: 'el impuesto de 2025 salió a cero' }) })).frase)
       .toBe('No hay que presentarlo: el impuesto de 2025 salió a cero')
     expect(vistaDeFila(fila('303', 'quarterly', '2T', { atrasado: true, declaracion: dec({}) }))).toMatchObject({ chip: { tono: 'falta', texto: 'Fuera de plazo · Borrador · cuadra con los libros' }, ambar: true })
+  })
+})
+
+describe('el recuadro del plazo: el color y lo fuera de plazo primero (Julio, 20/10)', () => {
+  // La cuenta de pruebas A de staging el 21/10, tal cual (fixtures/): el 3T y el 2.º pago del 202,
+  // fuera de plazo; el 3.er pago del 202, hasta el 21/12. Salía «Presentar hasta el 21/12 · dentro
+  // de 61 días», en rojo y sin decir por qué.
+  const A = JSON.parse(readFileSync(join(__dirname, 'fixtures/calendario-a-staging-20261021.json'), 'utf8')) as { hoy: string; filas: FilaCalendario[] }
+  it('con algo fuera de plazo, lo dice primero, en rojo, y el siguiente plazo debajo', () => {
+    expect(cifraPlazo(cal(A.filas, { hoy: A.hoy }))).toEqual({
+      etiqueta: 'Fuera de plazo',
+      valor: '4 fuera de plazo: 111 · 3T, 115 · 3T, 202 · 2P y 1 más',
+      apoyo: 'el siguiente, hasta el 21/12 · dentro de 61 días · 1 por revisar, 4 sin calcular aquí',
+      tono: 'falta',
+      texto: true,
+    })
+  })
+  it('uno solo: «1 fuera de plazo: 202 · 2P»', () => {
+    const solo = A.filas.filter((f) => !f.atrasado || (f.modelo === '202' && f.periodo === '2P'))
+    expect(cifraPlazo(cal(solo, { hoy: A.hoy }))).toMatchObject({ valor: '1 fuera de plazo: 202 · 2P', tono: 'falta' })
+  })
+  it('lo de la misma cuenta ya presentado: a 61 días del siguiente, neutro (no rojo)', () => {
+    const presentado = A.filas.map((f) => (f.atrasado ? { ...f, atrasado: false, declaracion: dec({ estado: 'filed', estado_texto: 'Presentado' }) } : f))
+    expect(cifraPlazo(cal(presentado, { hoy: A.hoy }))).toEqual({ etiqueta: 'Presentar hasta el 21/12 · dentro de 61 días', valor: '1 modelo', apoyo: '1 sin calcular aquí', tono: 'normal' })
+  })
+  it('el color: rojo con 2 días o menos, ámbar con 15 o menos, neutro con más', () => {
+    expect([0, 1, 2, 3, 15, 16, 61].map(tonoDePlazo)).toEqual(['falta', 'falta', 'falta', 'duda', 'duda', 'normal', 'normal'])
+    const a = (hoy: string) => cifraPlazo(cal([fila('303', 'quarterly', '3T')], { hoy })).tono
+    expect([a('2026-10-18'), a('2026-10-17'), a('2026-10-05'), a('2026-10-04')]).toEqual(['falta', 'duda', 'duda', 'normal'])
   })
 })
 

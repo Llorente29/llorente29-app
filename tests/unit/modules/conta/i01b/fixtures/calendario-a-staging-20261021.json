@@ -1,0 +1,11 @@
+{
+  "_origen": "staging-conta, conta_impuesto_calendario(3b34403a-…, 2026-10-21) como la administración de la cuenta de pruebas A, sacado el 20/10/2026. Las filas, tal cual.",
+  "hoy": "2026-10-21",
+  "filas": [
+    {"modelo":"111","nombre":"Retenciones","periodo":"3T","atrasado":true,"cadencia":"quarterly","domicilia":false,"ejercicio":2026,"obligacion":"5ee47695-3376-4046-8025-b18ff663b17d","se_calcula":false,"declaracion":null,"provisional":null,"cuenta_final":null,"presentacion":"2026-10-20","domiciliacion":"2026-10-15"},
+    {"modelo":"115","nombre":"Retenciones del alquiler","periodo":"3T","atrasado":true,"cadencia":"quarterly","domicilia":false,"ejercicio":2026,"obligacion":"1174d73f-297b-4c20-850b-c394f5db20e7","se_calcula":false,"declaracion":null,"provisional":null,"cuenta_final":null,"presentacion":"2026-10-20","domiciliacion":"2026-10-15"},
+    {"modelo":"202","nombre":"Pago fraccionado de Sociedades","periodo":"2P","atrasado":true,"cadencia":"instalments_202","domicilia":false,"ejercicio":2026,"obligacion":"74f97268-fcce-438e-bdfd-5ffe44e76b37","se_calcula":false,"declaracion":null,"provisional":null,"cuenta_final":null,"presentacion":"2026-10-20","domiciliacion":"2026-10-15"},
+    {"modelo":"303","nombre":"IVA","periodo":"3T","atrasado":true,"cadencia":"quarterly","domicilia":false,"ejercicio":2026,"obligacion":"909f2c34-1bd0-4f01-8256-b963f37ca331","se_calcula":true,"declaracion":null,"provisional":null,"cuenta_final":null,"presentacion":"2026-10-20","domiciliacion":"2026-10-15"},
+    {"modelo":"202","nombre":"Pago fraccionado de Sociedades","periodo":"3P","atrasado":false,"cadencia":"instalments_202","domicilia":false,"ejercicio":2026,"obligacion":"74f97268-fcce-438e-bdfd-5ffe44e76b37","se_calcula":false,"declaracion":null,"provisional":null,"cuenta_final":null,"presentacion":"2026-12-21","domiciliacion":"2026-12-16"}
+  ]
+}

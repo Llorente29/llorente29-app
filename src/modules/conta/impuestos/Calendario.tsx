@@ -22,7 +22,7 @@
 // octubre») van en la cinta de la pestaña, como en el resto del esqueleto.
 
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { rutaImpuestos, rutaIvaPeriodo } from '@/config/navegacion'
 import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, TarjetaCifra, Texto } from '@/modules/conta/diseno'
 import { useEntradasEnCinta, useNivel } from '@/modules/conta/marco/nuevo/contexto'
@@ -33,9 +33,14 @@ import {
   tituloVentana, vistaDeFila, type Calendario as DatosCalendario, type FilaCalendario,
 } from './calendario'
 import { useCalendario } from './useCalendario'
+import { hoyDeLaPantalla } from './despacho/despacho'
+import { baseDeDatos } from '@/services/versionApp'
 
 export function Calendario({ companyId }: { companyId: string }) {
-  const { datos, error, recargar } = useCalendario(companyId)
+  // «Hoy»: el de verdad; `?hoy=` solo contra una base de pruebas (demo y capturas), como en el despacho.
+  const { search } = useLocation()
+  const { hoy, forzado } = useMemo(() => hoyDeLaPantalla(search, baseDeDatos().tipo !== 'pruebas'), [search])
+  const { datos, error, recargar } = useCalendario(companyId, forzado ? hoy : undefined)
   const nivel = useNivel()
 
   // La cinta: «Revisar y presentar los de octubre» lleva a la primera que pide algo.
