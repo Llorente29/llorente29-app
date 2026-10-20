@@ -436,7 +436,7 @@ export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.
 /** I01b · Impuestos: el calendario, o una de sus pestañas (presentados, sociedades, certificados). */
 export const rutaImpuestos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.impuestosPestana, { pestana }) : rutaConta(CONTA.rutas.impuestos))
 /** I01b · El IVA de un periodo: el 303 del 3T de 2026 → /conta/impuestos/iva/2026/3T. */
-/** P01 · El trimestre de un cliente, para su asesoría (hoy, su calendario). */
+/** P01 · La ruta vieja de «abrir un cliente»: redirige a su Trimestre (rutaTrimestre con la empresa). */
 export const rutaClienteImpuestos = (empresa: string): string => rutaConta(CONTA.rutas.impuestosCliente, { empresa })
 export const rutaIvaPeriodo = (ejercicio: number, periodo: string): string => rutaConta(CONTA.rutas.impuestoIva, { ejercicio: String(ejercicio), periodo })
 /**

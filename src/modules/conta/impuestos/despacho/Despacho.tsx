@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Boton, Chip, Dialogo, Selector, Tarjeta, TarjetaCifra } from '@/modules/conta/diseno'
-import { rutaAjustes, rutaClienteImpuestos } from '@/config/navegacion'
+import { rutaAjustes, rutaTrimestre } from '@/config/navegacion'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { baseDeDatos } from '@/services/versionApp'
 import { confirmarCertificado, hacienda, leerPuerta } from '@/modules/conta/services/impuestosService'
@@ -77,6 +77,8 @@ export function Despacho({ accountId }: { accountId: string }) {
   const modelos = useMemo(() => modelosDelTrimestre(clientes), [clientes])
   const r = datos?.resumen
 
+  // Abrir un cliente: su Trimestre (la pantalla de C, por la ruta de la empresa), del trimestre que se mira aquí.
+  const enlace = (c: ClienteDespacho) => rutaTrimestre(trimestre.ejercicio, trimestre.periodo, c.empresa)
   const elegir = (id: string, si: boolean) => setElegidos((e) => { const n = new Set(e); if (si) n.add(id); else n.delete(id); return n })
 
   const exportar = () => {
@@ -188,10 +190,10 @@ export function Despacho({ accountId }: { accountId: string }) {
               </div>
             ) : (
               <>
-                <TablaClientes clientes={visibles} elegidos={elegidos} elegir={elegir} alResponsable={setResponsableDe}
+                <TablaClientes clientes={visibles} elegidos={elegidos} elegir={elegir} alResponsable={setResponsableDe} enlace={enlace}
                   todosElegidos={visibles.length > 0 && visibles.every((c) => elegidos.has(c.empresa))}
                   elegirTodos={(si) => setElegidos((e) => { const n = new Set(e); for (const c of visibles) { if (si) n.add(c.empresa); else n.delete(c.empresa) } return n })} />
-                <TarjetasClientes clientes={visibles} elegidos={elegidos} elegir={elegir} alResponsable={setResponsableDe} />
+                <TarjetasClientes clientes={visibles} elegidos={elegidos} elegir={elegir} alResponsable={setResponsableDe} enlace={enlace} />
                 <p className="s-despacho-pie">
                   {hayFiltros(filtros)
                     ? <>{visibles.length} de {clientes.length} clientes · <button type="button" className="s-despacho-enlace" onClick={() => setFiltros(SIN_FILTROS)}>quitar los filtros</button></>
@@ -264,9 +266,10 @@ function Chips({ c }: { c: ClienteDespacho }) {
 
 const importe = (n: number | null) => (n === null ? '—' : eurosExactos(n).replace(' €', ''))
 
-function TablaClientes({ clientes, elegidos, elegir, alResponsable, todosElegidos, elegirTodos }: {
+function TablaClientes({ clientes, elegidos, elegir, alResponsable, todosElegidos, elegirTodos, enlace }: {
   clientes: ClienteDespacho[]; elegidos: ReadonlySet<string>; elegir: (id: string, si: boolean) => void
   alResponsable: (c: ClienteDespacho) => void; todosElegidos: boolean; elegirTodos: (si: boolean) => void
+  enlace: (c: ClienteDespacho) => string
 }) {
   return (
     <table className="s-tabla s-despacho-tabla" aria-label="Impuestos de tus clientes">
@@ -290,7 +293,7 @@ function TablaClientes({ clientes, elegidos, elegir, alResponsable, todosElegido
               <input type="checkbox" aria-label={`Elegir ${c.nombre}`} checked={elegidos.has(c.empresa)} onChange={(e) => elegir(c.empresa, e.target.checked)} />
             </td>
             <td>
-              <Link className="s-despacho-cliente" to={rutaClienteImpuestos(c.empresa)}>{c.razon_social ?? c.nombre}</Link>
+              <Link className="s-despacho-cliente" to={enlace(c)}>{c.razon_social ?? c.nombre}</Link>
               <span className="s-despacho-tipo">{tipoDeCliente(c)}</span>
             </td>
             <td><Chips c={c} /></td>
@@ -308,8 +311,9 @@ function TablaClientes({ clientes, elegidos, elegir, alResponsable, todosElegido
   )
 }
 
-function TarjetasClientes({ clientes, elegidos, elegir, alResponsable }: {
+function TarjetasClientes({ clientes, elegidos, elegir, alResponsable, enlace }: {
   clientes: ClienteDespacho[]; elegidos: ReadonlySet<string>; elegir: (id: string, si: boolean) => void; alResponsable: (c: ClienteDespacho) => void
+  enlace: (c: ClienteDespacho) => string
 }) {
   return (
     <ul className="s-despacho-tarjetas" aria-label="Impuestos de tus clientes">
@@ -318,7 +322,7 @@ function TarjetasClientes({ clientes, elegidos, elegir, alResponsable }: {
           <div className="s-despacho-tarjeta-cabeza">
             <input type="checkbox" aria-label={`Elegir ${c.nombre}`} checked={elegidos.has(c.empresa)} onChange={(e) => elegir(c.empresa, e.target.checked)} />
             <div>
-              <Link className="s-despacho-cliente" to={rutaClienteImpuestos(c.empresa)}>{c.razon_social ?? c.nombre}</Link>
+              <Link className="s-despacho-cliente" to={enlace(c)}>{c.razon_social ?? c.nombre}</Link>
               <span className="s-despacho-tipo">{tipoDeCliente(c)}</span>
             </div>
           </div>
