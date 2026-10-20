@@ -2,13 +2,17 @@
 // tests/e2e/conta/s01f/pestanas.spec.ts
 //
 // S01f · La cabecera de pestañas, pieza común del marco (Julio, 20/10: «texto
-// plano muy rudimentario»). En cada módulo con pestañas, con Sumied (lo que ve
-// Julio), en ordenador y en móvil:
-//   · ordenador: 56 px; la empresa con su logo y una línea que la separa; cada
-//     pestaña con su icono de trazo de 14 px; la activa en #1E63C9, en
-//     negrita y subrayada con 3 px; el contador gris o rojo, si lo hay;
-//   · móvil: la fila de pestañas se desliza, ninguna se corta, la activa a la
-//     vista y la página no se ensancha.
+// plano muy rudimentario»; maqueta_trimestre_v3 y su decisión de ese día: las
+// pestañas, en su propia franja debajo de la cabecera). En cada módulo con
+// pestañas, con Sumied (lo que ve Julio), en ordenador y en móvil:
+//   · la cabecera se queda en 48 px, con la empresa y su logo (más pequeño);
+//   · la franja: 44 px, blanca, con su separador #DCE5F0; cada pestaña con su
+//     icono de trazo de 14 px y 16 px de aire a cada lado; la activa en
+//     #1E63C9, en negrita y subrayada con 3 px; el contador gris o rojo;
+//   · ordenador, a 1440: caben todas, sin «Más ▾», y la franja va fija debajo
+//     de la cabecera al bajar;
+//   · móvil: la franja se desliza, ninguna se corta, la activa a la vista y la
+//     página no se ensancha.
 // Las pantallas de dentro no se miran: no se han tocado.
 // Capturas en docs/conta/capturas/s01f.
 
@@ -50,7 +54,7 @@ async function quieta(page: Page) {
 
 /** Cada contador, con su tono y si su color es el que le toca (gris de apoyo o rojo de «falta»). */
 async function contadores(page: Page) {
-  return page.locator('.s-cabecera .s-pestana-contador, .s-pestanas-movil .s-pestana-contador').evaluateAll((xs) => xs.map((x) => {
+  return page.locator('.s-franja-pestanas .s-pestana-contador').evaluateAll((xs) => xs.map((x) => {
     const muestra = document.createElement('span')
     muestra.style.color = x.getAttribute('data-tono') === 'vence' ? 'var(--s-falta)' : 'var(--s-apoyo)'
     x.parentElement!.appendChild(muestra)
@@ -79,17 +83,6 @@ for (const m of MODULOS) {
     await expect(nav.getByRole('link', { name: m.activa, exact: true })).toHaveAttribute('aria-current', 'page')
     await quieta(page)
 
-    // Lo que mide la franja (para el parte): el hueco de las pestañas y cada pestaña.
-    if (!movil) {
-      const m2 = await page.evaluate(() => {
-        const w = (sel: string) => Math.round(document.querySelector(sel)?.getBoundingClientRect().width ?? 0)
-        const tabs = Array.from(document.querySelectorAll('.s-cabecera .s-pestanas-medida > .s-pestana')).map((x) => Math.round(x.getBoundingClientRect().width))
-        return { izquierda: w('.s-cabecera .s-cab-izquierda'), centro: w('.s-cabecera .s-cab-centro'), derecha: w('.s-cabecera .s-cab-derecha'), medidas: tabs, mas: !!document.querySelector('.s-cabecera .s-pestana-mas') }
-      })
-      test.info().annotations.push({ type: 'medidas', description: JSON.stringify(m2) })
-      console.log(`[medidas] ${m.producto}: ${JSON.stringify(m2)}`)
-    }
-
     // Cada pestaña con su icono de trazo, de 14 px.
     const iconos = await nav.getByRole('link').evaluateAll((xs) => xs.map((x) => {
       const svg = x.querySelector('svg')
@@ -108,18 +101,37 @@ for (const m of MODULOS) {
     // El contador, si lo hay: gris lo que pide una decisión, rojo lo que vence.
     for (const c of await contadores(page)) expect(c, `contador ${c.tono} ${c.n}`).toMatchObject({ bien: true })
 
+    // La franja: 44 px, blanca, con su separador.
+    const franja = (await nav.boundingBox())!
+    expect(Math.round(franja.height)).toBeGreaterThanOrEqual(44)
+    expect(Math.round(franja.height)).toBeLessThanOrEqual(45)
+    await expect(nav).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+    await expect(nav).toHaveCSS('border-bottom-color', 'rgb(220, 229, 240)')
+    await expect(nav).toHaveCSS('overflow-x', 'auto')
+    // 16 px de aire a cada lado de cada pestaña.
+    await expect(nav.locator('.s-pestana').first()).toHaveCSS('padding-left', '16px')
+    await expect(nav.locator('.s-pestana').first()).toHaveCSS('padding-right', '16px')
+    // La cabecera se queda en 48 px, con el logo de la empresa (24 px).
+    expect(Math.round((await page.locator('.s-cabecera').boundingBox())!.height)).toBe(48)
+    await expect(nav.getByRole('button', { name: /▾$/ })).toHaveCount(0)
+
     if (!movil) {
-      // 56 px; la empresa con su logo, separada por una línea.
-      expect(Math.round((await page.locator('.s-cabecera').boundingBox())!.height)).toBe(56)
-      await expect(page.locator('.s-cabecera .s-cab-cliente-logo')).toBeVisible()
-      await expect(page.locator('.s-cabecera .s-cab-izquierda')).toHaveCSS('border-right-width', '1px')
-      // Todo dentro de la franja: nada se sale por arriba ni por abajo.
-      const caja = (await page.locator('.s-cabecera').boundingBox())!
-      const fuera = await nav.locator('.s-pestana').evaluateAll((xs, b) => xs.filter((x) => {
-        const r = x.getBoundingClientRect()
-        return r.height > 0 && (r.top < (b as number[])[0] - 1 || r.bottom > (b as number[])[1] + 1)
-      }).length, [caja.y, caja.y + caja.height])
-      expect(fuera).toBe(0)
+      const logo = page.locator('.s-cabecera .s-cab-cliente-logo')
+      await expect(logo).toBeVisible()
+      expect(Math.round((await logo.boundingBox())!.width)).toBe(24)
+      // A 1440 caben todas: la franja no se desliza y cada pestaña se ve entera.
+      expect(await nav.evaluate((f) => f.scrollWidth <= f.clientWidth + 1)).toBe(true)
+      for (const l of await nav.getByRole('link').all()) await expect(l).toBeInViewport({ ratio: 1 })
+      // Pegada debajo de la cabecera, también al bajar (en staging, encima va el aviso «BUILD LOCAL»).
+      const pegada = async () => {
+        const c = (await page.locator('.s-cabecera').boundingBox())!
+        const f = (await nav.boundingBox())!
+        return Math.abs(f.y - (c.y + c.height)) <= 1
+      }
+      expect(await pegada()).toBe(true)
+      await page.mouse.wheel(0, 600)
+      await expect.poll(pegada).toBe(true)
+      await page.mouse.wheel(0, -600)
     } else {
       // Deslizable sin cortarse: cada pestaña entera, la activa a la vista, la página no se ensancha.
       const cortadas = await nav.locator('.s-pestana').evaluateAll((xs) => xs.filter((x) => x.scrollWidth > x.clientWidth + 1).length)

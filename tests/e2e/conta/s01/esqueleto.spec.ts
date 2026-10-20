@@ -3,7 +3,7 @@
 //
 // S01 · El esqueleto, en staging-conta, en ordenador y en móvil:
 //   · la cuenta A (hostelería): la barra de productos, la cabecera de UNA fila
-//     de 56 px en el ordenador (S01f; 48 en el móvil), las pestañas de Contabilidad y la cinta de Asientos; en
+//     de 48 px, las pestañas de Contabilidad y la cinta de Asientos; en
 //     Compras y gastos, Liquidaciones;
 //   · la cuenta D (sin hostelería, Julio 17/10): ni Liquidaciones ni nada de
 //     hostelería en el esqueleto;
@@ -52,7 +52,7 @@ async function nivel(page: Page, cual: 'Sin experiencia' | 'Medio' | 'Experto') 
   await expect(aviso(page, `Nivel: ${cual.toLowerCase()}.`)).toBeVisible()
 }
 
-test('A (hostelería): barra de productos, cabecera de una fila (56 px; 48 en el móvil), pestañas de Contabilidad y la cinta de Asientos', async ({ page }) => {
+test('A (hostelería): barra de productos, cabecera de una fila de 48 px, pestañas de Contabilidad y la cinta de Asientos', async ({ page }) => {
   const errores: string[] = []
   await entrarComo(page, CUENTA_A.email)
   vigilar(page, errores)
@@ -60,10 +60,9 @@ test('A (hostelería): barra de productos, cabecera de una fila (56 px; 48 en el
   const cabecera = page.locator('.s-cabecera')
   await expect(cabecera).toBeVisible()
 
-  // UNA fila (Julio, respuesta 3): todo lo de la cabecera dentro de esa altura.
-  // S01f (20/10): 56 px en el ordenador, la cabecera de pestañas; 48 en el móvil.
+  // UNA fila de 48 px (Julio, respuesta 3): todo lo de la cabecera dentro de esa altura.
   const caja = (await cabecera.boundingBox())!
-  expect(Math.round(caja.height)).toBe(lado(page) === 'ordenador' ? 56 : 48)
+  expect(Math.round(caja.height)).toBe(48)
   const fuera = await cabecera.locator('a, button').evaluateAll((xs, alto) => xs.filter((x) => {
     const r = x.getBoundingClientRect()
     return r.height > 0 && (r.top < 0 || r.bottom > (alto as number) + 1)
@@ -579,7 +578,7 @@ test('la cinta se oculta, se recuerda y vuelve (nunca desaparece sin decir dónd
   await expect(aviso(page, 'La cinta vuelve a estar a la vista.')).toBeVisible()
 })
 
-test('Sumied: la barra azul noche, la cabecera (56 px; 48 en el móvil) y la cinta, como la maqueta 1', async ({ page }) => {
+test('Sumied: la barra azul noche, la cabecera de 48 px y la cinta, como la maqueta 1', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario?marca=sumied')
   await expect(page.locator('.s-cabecera')).toBeVisible()
@@ -588,7 +587,7 @@ test('Sumied: la barra azul noche, la cabecera (56 px; 48 en el móvil) y la cin
   const fondoBarra = await page.locator(lado(page) === 'ordenador' ? '.s-barra' : '.s-cajon').evaluate((el) => getComputedStyle(el).backgroundColor)
   expect(fondoBarra).toBe('rgb(11, 31, 59)')
   if (lado(page) === 'movil') await page.keyboard.press('Escape')
-  expect(Math.round((await page.locator('.s-cabecera').boundingBox())!.height)).toBe(lado(page) === 'ordenador' ? 56 : 48)
+  expect(Math.round((await page.locator('.s-cabecera').boundingBox())!.height)).toBe(48)
   await expect(page.locator('.s-cabecera')).toHaveCSS('font-family', /Inter Variable/)
   await capturar(page, 'esqueleto-sumied')
 })

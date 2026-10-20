@@ -60,31 +60,43 @@ describe('S01f · lo que pide una decisión, en gris (las cuentas de la barra)',
   })
 })
 
-describe('S01f · la franja', () => {
+describe('S01f · la franja (Julio, 20/10: debajo de la cabecera)', () => {
   const css = readFileSync('src/modules/conta/esqueleto/esqueleto.css', 'utf8')
   const tokens = readFileSync('src/modules/conta/diseno/tokens.css', 'utf8')
+  const marco = readFileSync('src/modules/conta/estilo/marco.css', 'utf8')
+  const cabecera = readFileSync('src/modules/conta/esqueleto/Cabecera.tsx', 'utf8')
   it('cada pestaña de cada producto lleva su icono de trazo, de 14 px', () => {
     const sin = PRODUCTOS.flatMap((p) => p.pestanas.filter((t) => !ICONOS[t.icono]).map((t) => `${p.id}.${t.id}`))
     expect(sin).toEqual([])
     expect(TAM_ICONO_PESTANA).toBe(14)
     expect(tokens).toMatch(/--s-icono-pestana: 14px;/)
   })
-  it('56 px en el ordenador; 48 en el móvil', () => {
-    expect(tokens).toMatch(/--s-alto-cabecera: 56px;/)
-    expect(css).toMatch(/\.cxm\.cxm-es-movil \{ --s-alto-cabecera: 48px; \}/)
+  it('la cabecera se queda en 48 px; la franja, 44, blanca y con su separador #DCE5F0', () => {
+    expect(tokens).toMatch(/--s-alto-cabecera: 48px;/)
+    expect(tokens).toMatch(/--s-alto-pestanas: 44px;/)
+    expect(tokens).toMatch(/--s-borde-pestanas: #DCE5F0;/)
+    expect(css).toMatch(/\.s-franja-pestanas \{[^}]*min-height: var\(--s-alto-pestanas\)[^}]*background: var\(--s-superficie\); border-bottom: var\(--s-linea\) solid var\(--s-borde-pestanas\)/)
   })
-  it('la activa: el azul de acción, en negrita y subrayada con 3 px (con Sumied, #1E63C9)', () => {
-    expect(css).toMatch(/\.s-pestana\[data-activa\], \.s-pestana-activa \{ color: var\(--s-accion\); font-weight: var\(--s-peso-fuerte\); border-bottom-color: var\(--s-accion\); \}/)
+  it('16 px de aire a cada lado; la activa, el azul de acción, en negrita y subrayada con 3 px (con Sumied, #1E63C9)', () => {
+    expect(css).toMatch(/\.s-pestana \{[^}]*padding: 0 var\(--s-4\)/)
+    expect(css).toMatch(/\.s-pestana\[data-activa\] \{ color: var\(--s-accion\); font-weight: var\(--s-peso-fuerte\); border-bottom-color: var\(--s-accion\); \}/)
     expect(css).toMatch(/border-bottom: var\(--s-raya-pestana\) solid transparent/)
     expect(tokens).toMatch(/--s-raya-pestana: 3px;/)
     expect(MARCAS.sumied.tema?.accion).toBe('#1E63C9')
   })
-  it('el contador: gris de serie, rojo lo que vence', () => {
-    expect(css).toMatch(/\.s-pestana-contador \{[^}]*background: var\(--s-neutro-fondo\); color: var\(--s-apoyo\)/)
+  it('el contador: rectángulo redondeado, gris de serie y rojo lo que vence', () => {
+    expect(css).toMatch(/\.s-pestana-contador \{[^}]*border-radius: var\(--s-radio-campo\)[^}]*background: var\(--s-neutro-fondo\); color: var\(--s-apoyo\)/)
     expect(css).toMatch(/\.s-pestana-contador\[data-tono='vence'\] \{ background: var\(--s-falta-fondo\); color: var\(--s-falta\); \}/)
   })
-  it('en el móvil ninguna pestaña se encoge: la fila se desliza', () => {
-    expect(css).toMatch(/\.s-pestanas-movil \.s-pestana \{ flex-shrink: 0;/)
-    expect(css).toMatch(/\.s-pestanas-movil \{[^}]*overflow-x: auto/)
+  it('sin «Más ▾»: la franja se desliza y ninguna pestaña se encoge', () => {
+    const codigo = cabecera.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    expect(codigo).not.toMatch(/Más|cuantasCaben/)
+    expect(css).toMatch(/\.s-franja-pestanas \{[^}]*overflow-x: auto/)
+    expect(css).toMatch(/\.s-pestana \{[^}]*flex-shrink: 0;/)
+  })
+  it('en el ordenador, la franja fija debajo de la cabecera, y las cabeceras de las tablas debajo de las dos', () => {
+    expect(css).toMatch(/\.cxm:not\(\.cxm-es-movil\) \.s-franja-pestanas \{ position: sticky; top: var\(--s-alto-cabecera\);/)
+    expect(css).toMatch(/\.cxm\.s-con-pestanas:not\(\.cxm-es-movil\) \{ --cxm-alto-arriba: calc\(var\(--s-alto-cabecera\) \+ var\(--s-alto-pestanas\)\); \}/)
+    expect(marco).toMatch(/\.cxm \{ --cxm-alto-arriba: var\(--s-alto-cabecera, 48px\); \}/)
   })
 })

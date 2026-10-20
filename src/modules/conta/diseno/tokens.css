@@ -29,6 +29,7 @@
        el borde de los botones, que ya se reconocen por su texto). */
   --s-borde-control: #7A8496;
   --s-borde-decorativo: #DDE3EB;
+  --s-borde-pestanas: #DCE5F0;   /* S01f: el separador de la franja de pestañas (Julio, 20/10) */
   --s-accion: #2F5BFF;           /* Botón principal, enlaces, pestaña activa */
   --s-accion-encima: #1F45D6;    /* Acción al pasar el ratón */
   --s-accion-suave: #EAF0FF;     /* Lo seleccionado */
@@ -98,8 +99,8 @@
 
   /* ── Medidas del esqueleto ──────────────────────────────────────────── */
   --s-alto-control: 32px;        /* Botones y campos */
-  --s-alto-cabecera: 56px;      /* S01f: la cabecera de pestañas (en el móvil, 48: esqueleto.css) */
-  --s-alto-pestanas-movil: 44px; /* S01f: la fila de pestañas del móvil, que se desliza */
+  --s-alto-cabecera: 48px;
+  --s-alto-pestanas: 44px;      /* S01f: la franja de pestañas, debajo de la cabecera (Julio, 20/10) */
   --s-ancho-barra: 220px;        /* S01c: desplegada, icono y nombre en una línea */
   --s-ancho-barra-plegada: 64px; /* S01c: solo los iconos */
   --s-icono: 16px;
