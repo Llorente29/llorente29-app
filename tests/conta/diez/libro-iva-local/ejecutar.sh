@@ -57,6 +57,11 @@ sql libro_b "update public.tax_return_box set value = 80 where tax_return_id = '
 o=$(corre libro_b real) && falla "cuota del impreso que no casa: salió en verde"
 grep -q '@@ real_en_rojo_deshecho 1' <<<"$o" && grep -q '@@ filas_traidas_despues 0' <<<"$o" \
   && grep -q '@@ testigo.cuotas_que_no_casan 1' <<<"$o" && grep -q '@@ testigo.1t_2t.c29.casa 0' <<<"$o" || falla "cuota que no casa: $o"
+# Y la CLASE de la diferencia, sin importes (20/10): mismo signo y libro/303 = 167/164 → 102 %. Las que casan, sin clase.
+grep -q '@@ testigo.1t_2t.c29.signo 1' <<<"$o" && grep -q '@@ testigo.1t_2t.c29.razon 102' <<<"$o" \
+  && ! grep -q '@@ testigo.1t.c06.signo' <<<"$o" || falla "cuota que no casa · clase: $o"
+r=$(grep '^@@' <<<"$o" | node ../../../../scripts/conta/salida-segura.mjs | grep -o 'retenidas por la puerta de salida: [0-9]*')
+[ "$r" = 'retenidas por la puerta de salida: 0' ] || falla "la clase de la diferencia no pasa la puerta: $r"
 
 # Una BASE que no casa: se dice, y no para.
 nueva libro_b
@@ -90,11 +95,15 @@ cp libro.jsonl "$t/"; : > "$t/autoliquidadas.csv"
 o=$(corre_en "$t" libro_b real) && falla "autoliquidada fuera de la lista: salió en verde"
 grep -q '@@ autoliquidadas_fuera_de_la_lista 1' <<<"$o" && grep -q '@@ autoliquidada_fuera_de_la_lista.2026_s2 2' <<<"$o" \
   && grep -q '@@ filas_escritas 0' <<<"$o" && grep -q '@@ filas_traidas_despues 0' <<<"$o" || falla "autoliquidada fuera de la lista: $o"
+# Sin libro escrito no hay nada que medir: el testigo lo dice y no da «no casa» (el ensayo #6, 20/10: 9 de 9).
+grep -q '@@ testigo.no_se_mide_sin_libro 1' <<<"$o" && ! grep -q 'testigo.cuotas_que_no_casan' <<<"$o" \
+  && ! grep -q '\.casa 0' <<<"$o" || falla "sin libro, el testigo: $o"
 
 # La lista dice «otra_isp» de una con prefijo de la UE: lo dice, y la [37] del impreso ya no casa.
 printf '2026,2,2,otra_isp\n' > "$t/autoliquidadas.csv"
 o=$(corre_en "$t" libro_b ensayo) && falla "lista contradicha: salió en verde"
-grep -q '@@ autoliquidadas.prefijo_contradice_la_lista 1' <<<"$o" && grep -q '@@ testigo.1t.c37.casa 0' <<<"$o" || falla "lista contradicha: $o"
+grep -q '@@ autoliquidadas.prefijo_contradice_la_lista 1' <<<"$o" && grep -q '@@ testigo.1t.c37.casa 0' <<<"$o" \
+  && grep -q '@@ testigo.1t.c37.signo 0' <<<"$o" && grep -q '@@ testigo.1t.c37.razon 0' <<<"$o" || falla "lista contradicha: $o"
 rm -rf "$t"
 
 # Lo que sale es solo lo que deja pasar la puerta de salida: ni una línea «@@» retenida.
@@ -102,4 +111,4 @@ nueva libro_c
 o=$(corre libro_c ensayo) || falla "ensayo de la puerta: $o"
 r=$(grep '^@@' <<<"$o" | node ../../../../scripts/conta/salida-segura.mjs | grep -o 'retenidas por la puerta de salida: [0-9]*')
 [ "$r" = 'retenidas por la puerta de salida: 0' ] || falla "la puerta de salida retiene líneas: $r"
-echo "BIEN: ensayo, real y real otra vez; el testigo de los 303 presentados (cuotas por trimestre, la [29] del semestre, otra cuenta fuera); una cuota que no casa para y dice cuál; una base que no casa se dice y no para; sin el 303 presentado de un trimestre para y dice cuál; cuota de factura cambiada; autoliquidada fuera de la lista para y dice cuál; la lista contradicha; y todo pasa la puerta de salida."
+echo "BIEN: ensayo, real y real otra vez; el testigo de los 303 presentados (cuotas por trimestre, la [29] del semestre, otra cuenta fuera); una cuota que no casa para y dice cuál; una base que no casa se dice y no para; sin el 303 presentado de un trimestre para y dice cuál; cuota de factura cambiada; autoliquidada fuera de la lista para y dice cuál; la lista contradicha; sin libro el testigo no mide; la clase de cada diferencia (signo y razón, sin importes); y todo pasa la puerta de salida."

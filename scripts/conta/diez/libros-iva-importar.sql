@@ -286,14 +286,42 @@ begin
     from ambito a;
   -- Solo las que dicen algo: con importe en el impreso o en el libro.
   delete from testigo where presentado = 0 and libro = 0;
-  select count(*) filter (where cuota), count(*) filter (where cuota and presentado <> libro) into v_test, v_test_mal from testigo;
-  insert into salida (clave, valor) values ('testigo.cuotas', v_test), ('testigo.cuotas_que_no_casan', v_test_mal);
-  -- Cuál, por su nombre (trimestre y casilla; ningún importe).
-  insert into salida (clave, valor)
-  select case when cuota then 'testigo.' else 'testigo_base.' end || ambito || '.c' || casilla || '.casa', (presentado = libro)::int
-    from testigo order by not cuota, desde, hasta, casilla;
-  insert into salida (clave, valor)
-  select 'testigo.bases_que_no_casan', count(*) from testigo where not cuota and presentado <> libro;
+  -- 20/10 · Sin libro no hay nada que medir. El ensayo #6 paró antes de
+  -- escribir (15 autoliquidadas fuera de la lista: v_rech > 0) y el testigo
+  -- comparó los 303 con un libro VACÍO: «9 de 9 no casan», que se leyó como un
+  -- error de método. Ahora lo dice tal cual y no mide.
+  select count(*) into v_n from public.vat_book_entry v
+   where v.company_id = c and v.account_id = v_cuenta and v.voided_at is null and v.source_type = 'migrated'
+     and case when v.book = 'issued' then coalesce(v.operation_date, v.issue_date) else coalesce(v.received_date, v.issue_date) end
+         between v_desde and v_hasta;
+  if v_n = 0 then
+    insert into salida (clave, valor) values ('testigo.no_se_mide_sin_libro', 1);
+    v_test := 0; v_test_mal := 0;
+  else
+    select count(*) filter (where cuota), count(*) filter (where cuota and presentado <> libro) into v_test, v_test_mal from testigo;
+    insert into salida (clave, valor) values ('testigo.cuotas', v_test), ('testigo.cuotas_que_no_casan', v_test_mal);
+    -- Cuál, por su nombre (trimestre y casilla; ningún importe).
+    insert into salida (clave, valor)
+    select case when cuota then 'testigo.' else 'testigo_base.' end || ambito || '.c' || casilla || '.casa', (presentado = libro)::int
+      from testigo order by not cuota, desde, hasta, casilla;
+    insert into salida (clave, valor)
+    select 'testigo.bases_que_no_casan', count(*) from testigo where not cuota and presentado <> libro;
+    -- Y de las que no casan, la CLASE de la diferencia, sin importes (Julio, 20/10):
+    --   .signo  1 igual, −1 opuesto, 0 uno de los dos es cero;
+    --   .razon  libro/303 en por ciento, redondeado (100 = ×1, −100 = ×−1,
+    --           0 = ×0, 200 = ×2); sin 303 en la casilla, .sin_303 1.
+    insert into salida (clave, valor)
+    select k, v from (
+      select desde, hasta, casilla, cuota, 1 o, case when cuota then 'testigo.' else 'testigo_base.' end || ambito || '.c' || casilla || '.signo' k,
+             (sign(libro) * sign(presentado))::text v
+        from testigo where presentado <> libro
+      union all
+      select desde, hasta, casilla, cuota, 2, case when cuota then 'testigo.' else 'testigo_base.' end || ambito || '.c' || casilla
+                  || case when presentado = 0 then '.sin_303' else '.razon' end,
+             case when presentado = 0 then '1' else greatest(-999999, least(999999, round(100.0 * libro / presentado)))::bigint::text end
+        from testigo where presentado <> libro) x
+     order by not cuota, desde, hasta, casilla, o;
+  end if;
 
   -- Las autoliquidadas (asiento con 477 y 472) y cuántas van sin país: sin
   -- país no entran en la [37] (intracomunitarias) del testigo.
