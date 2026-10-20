@@ -8,6 +8,7 @@
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc } from '@/modules/conta/services/bd'
 import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
+import type { Trimestre } from '@/modules/conta/impuestos/trimestre'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
 import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
 import type { DatosJustificante, Mirado } from '@/modules/conta/impuestos/justificantes'
@@ -72,6 +73,11 @@ export function anadirImpuesto(companyId: string, modelo: string, motivo: string
 /** Lo que devuelve conta_impuesto_303_calcular. */
 /** Sin libro de IVA (o sin saber la [110] cuando sale a pagar), `sabido` es false y no hay resultado ni importe. */
 export interface Calculo303 { declaracion: string; desde: string; hasta: string; apuntes: number; resultado: string | null; importe: number | null; sabido: boolean }
+
+/** I01c · El trimestre (conta_impuesto_trimestre, 0280): la tira y la cartera del 303. No escribe nada. */
+export function leerTrimestre(companyId: string, ejercicio: number, trimestre: number): Promise<Trimestre> {
+  return rpc<Trimestre>('conta_impuesto_trimestre', { p_company: companyId, p_year: ejercicio, p_quarter: trimestre })
+}
 
 /** Calcula (o recalcula) el borrador del 303 de un periodo desde el libro de IVA. */
 export function calcular303(companyId: string, ejercicio: number, periodo: string): Promise<Calculo303> {

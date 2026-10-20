@@ -152,6 +152,8 @@ export const PRODUCTOS: Producto[] = [
       // P01 · Lo primero para una asesoría: los impuestos de todos sus clientes.
       { id: 'clientes', etiqueta: 'Tus clientes', ruta: `${R.impuestos}/clientes`, prefijos: [`${R.impuestos}/clientes`], solo: 'asesoria' },
       { id: 'calendario', etiqueta: 'Calendario', ruta: R.impuestos, prefijos: [R.impuestos] },
+      // I01c · El trimestre (maqueta_303_v2): sin año ni trimestre, el último acabado.
+      { id: 'trimestre', etiqueta: 'Trimestre', ruta: `${R.impuestos}/trimestre`, prefijos: [`${R.impuestos}/trimestre`, `${R.impuestos}/empresa`] },
       { id: 'presentados', etiqueta: 'Presentados', ruta: `${R.impuestos}/presentados`, prefijos: [`${R.impuestos}/presentados`] },
       { id: 'sociedades', etiqueta: 'Impuesto de sociedades', ruta: `${R.impuestos}/sociedades`, prefijos: [`${R.impuestos}/sociedades`] },
       { id: 'certificados', etiqueta: 'Certificados', ruta: `${R.impuestos}/certificados`, prefijos: [`${R.impuestos}/certificados`] },
