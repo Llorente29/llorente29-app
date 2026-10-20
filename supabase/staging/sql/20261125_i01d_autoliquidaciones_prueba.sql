@@ -40,17 +40,14 @@ do $$ begin
 end $$;
 set local statement_timeout = '300s';
 
--- Staging NO tiene la m01 (20261117T0100): su journal_entry_validar es la de
--- antes, con las reglas copiadas, y no llama a conta_motivos_para_validar. En
--- producción sí (md5 87e0ba8d…, medido el 20/10). Para probar el camino de
--- PRODUCCIÓN se carga aquí, dentro de la transacción, y la 0300 encima (su
--- conta_motivos_para_validar manda). El ROLLBACK lo quita todo: staging sigue
--- como estaba.
--- La m01 crea con «create function» (sin «or replace») dos funciones que
--- staging ya tiene: se quitan antes, dentro de la transacción.
-drop function if exists public.conta_esperan(uuid, date, date);
-drop function if exists public.conta_motivos_para_validar(uuid);
-\i supabase/migrations/20261117T0100_m01_motivos_para_validar.sql
+-- W03 (20/10): staging tiene la m01 de verdad, como producción
+-- (20261126_w03_c06b_y_m01_de_verdad.sql): su journal_entry_validar llama a
+-- conta_motivos_para_validar. Esta prueba ya no la carga; si faltara, para.
+do $$ begin
+  if position('conta_motivos_para_validar' in coalesce((select prosrc from pg_proc where oid = to_regprocedure('public.journal_entry_validar(uuid,text)')), '')) = 0 then
+    raise exception 'PRUEBA AUTOLIQUIDACIONES: staging no tiene la m01 de verdad (falta 20261126_w03_c06b_y_m01_de_verdad.sql al principio del manifiesto).';
+  end if;
+end $$;
 \i supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
 
 do $$

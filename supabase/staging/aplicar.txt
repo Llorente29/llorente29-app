@@ -1,3 +1,11 @@
+# W03 · Staging como producción (rama conta/w03-staging-alineado, Julio 20/10:
+#   «alinéalo con producción de forma definitiva, con su tanda de staging, no
+#   dentro de cada prueba»). La PRIMERA: la C06b y la M01 DE VERDAD, cada una
+#   solo si falta (se puede volver a pasar). Desde aquí, journal_entry_validar
+#   llama a los motivos como en producción. Las dos pruebas de la M01 la quitan
+#   dentro de su transacción para probarla desde antes; las demás ya no la cargan.
+supabase/staging/sql/20261126_w03_c06b_y_m01_de_verdad.sql
+
 # I01b · Las pantallas de Impuestos y el asiento del 303 (rama conta/i01b-pantallas-impuestos).
 #   Pieza 6, el asiento de liquidación: la prueba aplica la 0100 a la 0180 (la 0160 y la 0170 del S01d ya están) con
 #   \i y ROLLBACK (y la M01 y la 0140 del S01, si staging no las tiene),
@@ -291,3 +299,11 @@ supabase/staging/sql/20261124_i01c_deducida_prueba.sql
 supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
 supabase/staging/sql/20261125_i01d_autoliquidaciones_prueba.sql
 supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql
+
+# W03 · La ÚLTIMA: el manifiesto vuelve a pasar migraciones viejas detrás de
+#   otras más nuevas (la 0110 detrás de la 0180), así que al final se vuelven a
+#   pasar la 0180 y la 0300 y se comprueba, función a función, que 17 cuerpos
+#   son byte a byte los de producción (md5 medido el 20/10). Si una no casa,
+#   para y dice cuál. No toca lo que staging lleva por delante de otros frentes
+#   (B02, D01, el TPV de mesas) ni lo que no está en git.
+supabase/staging/sql/20261126_w03_como_produccion.sql
