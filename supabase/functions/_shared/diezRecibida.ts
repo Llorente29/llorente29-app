@@ -180,6 +180,13 @@ function autoliquidacion(a: AsientoRecibida, l472: LineaRecibida[], l477: LineaR
 export function facturaRecibidaQueAnula(original: FacturaData, o: { fecha: string; hoy: string }): FacturaData {
   if (!FECHA.test(o.fecha) || !FECHA.test(o.hoy)) throw new Error('fechas que no son AAAA-MM-DD')
   if (String(original.Serie) !== '2') throw new Error('no es una factura recibida (serie 2): no se anula como recibida')
+  // I01f (20/10, medido en la C0009, documentos 3176 y 3177): Diez acepta la
+  // «-ANUL» de una autoliquidada (TipoFactura 6 o 7) pero solo le da la vuelta
+  // al proveedor; el gasto, la 472 y la 477 los deja como en la original, y el
+  // asiento descuadra por la base. Hasta medir cómo se anula bien, no se manda.
+  if ((Object.values(TIPO_FACTURA_AUTOLIQUIDADA) as number[]).includes(Number(original.TipoFactura))) {
+    throw new Error('es una autoliquidada (intracomunitaria o inversión del sujeto pasivo): Diez no anula bien su «-ANUL» (le da la vuelta solo al proveedor y el asiento descuadra), así que no se manda; se anula a mano en Diez')
+  }
   const numero = String(original.NumeroFactura ?? '').trim()
   if (!numero) throw new Error('la factura que se anula no tiene número: no se puede decir cuál anula')
   const neg = (x: unknown) => (Number(x ?? 0) === 0 ? 0 : e(-c(Number(x))))
@@ -196,8 +203,6 @@ export function facturaRecibidaQueAnula(original: FacturaData, o: { fecha: strin
     ...original,
     Ejercicio: o.fecha.slice(0, 4), Documento: undefined,
     Fecha: fecha, FechaFactura: fecha, FechaIntroduccionFactura: aaaammdd(o.hoy),
-    // I01f: la de una autoliquidada lleva FechaOperacion (la de la factura): la de la anulación, su fecha.
-    ...(original.FechaOperacion != null ? { FechaOperacion: fecha } : {}),
     NumeroFactura: `${numero}${FORMA_ANULACION.sufijo}`, Descripcion: descripcion,
     ...tipos, TotalFactura: neg(original.TotalFactura), TotalGastosIngresos: neg(original.TotalGastosIngresos),
     Apuntes: apuntes,

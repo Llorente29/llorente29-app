@@ -118,11 +118,13 @@ describe('lo que no se manda, y dice por qué', () => {
 })
 
 describe('anular una autoliquidada ya enviada', () => {
-  it('la «-ANUL» lleva su TipoFactura, todo en negativo y la fecha de la operación, la suya', () => {
+  // Medido en la C0009 (20/10, documentos 3176 y 3177): Diez acepta la «-ANUL»
+  // de una autoliquidada pero solo le da la vuelta al proveedor, y descuadra.
+  it('no se manda: Diez la descuadra (la intracomunitaria y la del sujeto pasivo)', () => {
     const original = facturaRecibida(intra(), hoy).factura
-    const anula = facturaRecibidaQueAnula(original, { fecha: '2026-11-03', hoy: '2026-11-03' })
-    expect([anula.TipoFactura, anula.TotalFactura, anula.BaseImponible1, anula.CuotaIVA1, anula.FechaOperacion, anula.NumeroFactura])
-      .toEqual([7, -35, -35, -7.35, 20261103, '2026/00001-ANUL'])
+    expect(original.TipoFactura).toBe(7)
+    expect(() => facturaRecibidaQueAnula(original, { fecha: '2026-11-03', hoy: '2026-11-03' })).toThrow(/autoliquidada.*descuadra/)
+    expect(() => facturaRecibidaQueAnula({ ...original, TipoFactura: 6 }, { fecha: '2026-11-03', hoy: '2026-11-03' })).toThrow(/autoliquidada/)
   })
   it('la de una normal sigue sin fecha de operación', () => {
     const original = facturaRecibida(intra({
