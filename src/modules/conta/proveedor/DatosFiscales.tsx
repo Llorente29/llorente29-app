@@ -162,8 +162,10 @@ function Formulario() {
       <Pildoras campo="taxIdType" etiqueta="Tipo de NIF" opciones={TIPO_ID} elegidas={[tipoId]}
         alCambiar={(v) => { const t = v[0] ?? tipoId; setTipoId(t); if (taxId.trim()) void guardarNif(t) }} />
       <Campo campo="taxId" etiqueta={tipoId === 'vat_eu' ? 'NIF-IVA (con las letras del país delante)' : 'NIF'}
-        error={g.error('taxId') ?? nifAlMomento} aviso={!g.error('taxId') && !nifAlMomento ? estadoUe : null}
-        ayuda={tipoId === 'nif_es' ? 'Lo comprobamos al momento con su letra o dígito de control.' : undefined}>
+        error={g.error('taxId') ?? nifAlMomento}
+        // I01d: lo comprobado en VIES es una buena noticia (ayuda); «sin comprobar» o «no vale», un aviso.
+        aviso={!g.error('taxId') && !nifAlMomento && f.taxIdCheckStatus !== 'valid' ? estadoUe : null}
+        ayuda={tipoId === 'nif_es' ? 'Lo comprobamos al momento con su letra o dígito de control.' : f.taxIdCheckStatus === 'valid' && estadoUe ? `✓ ${estadoUe}` : undefined}>
         {(p) => <input {...p} className="cx-input" value={taxId} autoComplete="off" autoCapitalize="characters"
           placeholder={tipoId === 'vat_eu' ? 'FR40303265045' : 'B12345678'}
           onChange={(e) => setTaxId(e.target.value)} onBlur={() => void guardarNif()} />}

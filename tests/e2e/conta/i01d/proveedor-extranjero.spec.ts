@@ -57,7 +57,8 @@ test('La ficha de un proveedor extranjero dice su país y cómo va su IVA (Franc
     await expect(page.locator('[data-prueba="pais"]')).toContainText('País: Francia (sale de las dos letras de su NIF-IVA)')
     await expect(page.locator('[data-prueba="iva-clase"]')).toContainText('Su IVA: Compra en otro país de la UE (Francia)')
     await expect(page.locator('[data-prueba="iva-clase"]')).toContainText('472 y 477 por la misma cuota')
-    await expect(page.getByText(/^Comprobado en VIES el \d{2}\/\d{2}\/\d{4}: el NIF-IVA está dado de alta\.$/)).toBeVisible()
+    // Comprobado: en verde de ayuda, no en el ámbar de los avisos.
+    await expect(page.getByText(/^✓ Comprobado en VIES el \d{2}\/\d{2}\/\d{4}: el NIF-IVA está dado de alta\.$/)).toBeVisible()
     await foto(page, 'proveedor-ue')
 
     await ficha(page, us)
