@@ -122,16 +122,9 @@ for (const m of MODULOS) {
       // A 1440 caben todas: la franja no se desliza y cada pestaña se ve entera.
       expect(await nav.evaluate((f) => f.scrollWidth <= f.clientWidth + 1)).toBe(true)
       for (const l of await nav.getByRole('link').all()) await expect(l).toBeInViewport({ ratio: 1 })
-      // Pegada debajo de la cabecera, también al bajar (en staging, encima va el aviso «BUILD LOCAL»).
-      const pegada = async () => {
-        const c = (await page.locator('.s-cabecera').boundingBox())!
-        const f = (await nav.boundingBox())!
-        return Math.abs(f.y - (c.y + c.height)) <= 1
-      }
-      expect(await pegada()).toBe(true)
-      await page.mouse.wheel(0, 600)
-      await expect.poll(pegada).toBe(true)
-      await page.mouse.wheel(0, -600)
+      // Pegada debajo de la cabecera (en staging, encima va el aviso «BUILD LOCAL»).
+      const c0 = (await page.locator('.s-cabecera').boundingBox())!
+      expect(Math.abs(franja.y - (c0.y + c0.height))).toBeLessThanOrEqual(1)
     } else {
       // Deslizable sin cortarse: cada pestaña entera, la activa a la vista, la página no se ensancha.
       const cortadas = await nav.locator('.s-pestana').evaluateAll((xs) => xs.filter((x) => x.scrollWidth > x.clientWidth + 1).length)
@@ -147,5 +140,23 @@ for (const m of MODULOS) {
     }
 
     await page.screenshot({ path: `${DIR}/${m.nombre}-${lado(page)}.png` })
+
+    // Al bajar (en el ordenador): la cabecera y la franja se quedan arriba, a la vista, una pegada a la otra.
+    if (!movil) {
+      const fijas = await page.evaluate(async () => {
+        window.scrollTo(0, 400)
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
+        const c = document.querySelector('.s-cabecera')!.getBoundingClientRect()
+        const f = document.querySelector('.s-franja-pestanas')!.getBoundingClientRect()
+        const fuera = { bajado: window.scrollY, cabecera: Math.round(c.top), franja: Math.round(f.top), alto: c.height }
+        window.scrollTo(0, 0)
+        return fuera
+      })
+      console.log(`[al bajar] ${m.producto}: ${JSON.stringify(fijas)}`)
+      if (fijas.bajado > 0) {
+        expect(fijas.cabecera, 'la cabecera se queda arriba').toBeGreaterThanOrEqual(0)
+        expect(Math.abs(fijas.franja - (fijas.cabecera + fijas.alto)), 'la franja, pegada debajo').toBeLessThanOrEqual(1)
+      }
+    }
   })
 }
