@@ -27,11 +27,14 @@ export function Cinta({ etiqueta, oculta, alCambiarOculta, children }: {
   }
   return (
     <div className="s-cinta" role="toolbar" aria-label={etiqueta}>
-      {/* «Ocultar» va con los grupos, al final: no le quita sitio a la primera fila. */}
+      {/* En el ordenador, «Ocultar» va con los grupos, al final: no le quita sitio a la primera fila.
+          S01f · En el móvil, fuera de la fila que se desliza, a su derecha: la fila se desliza
+          entera y «Ocultar» no pisa nada. Sale uno u otro (el otro, display: none, ni se lee). */}
       <div className="s-cinta-grupos">
         {children}
         <Boton variante="fantasma" icono="plegar" aria-expanded="true" className="s-cinta-ocultar" onClick={() => alCambiarOculta(true)}>Ocultar</Boton>
       </div>
+      <Boton variante="fantasma" icono="plegar" aria-expanded="true" className="s-cinta-ocultar-fuera" onClick={() => alCambiarOculta(true)}>Ocultar</Boton>
     </div>
   )
 }

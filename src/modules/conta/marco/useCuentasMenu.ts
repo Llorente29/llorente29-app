@@ -39,7 +39,9 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 
 export type CuentasMenu = Partial<Record<string, number | null>>
 
-const EVENTO = 'folvy:conta:cuentas-menu'
+/** El aviso de «vuelve a contar» (lo escuchan también los contadores de las pestañas). */
+export const EVENTO_CUENTAS_MENU = 'folvy:conta:cuentas-menu'
+const EVENTO = EVENTO_CUENTAS_MENU
 const NADA: CuentasMenu = {}
 const cache = new Map<string, { cuando: number; valor: Promise<CuentasMenu> }>()
 
