@@ -1,7 +1,12 @@
 // src/modules/conta/impuestos/TrimestrePage.tsx
 //
-// I01c · Pieza 3, la parte que ordena · Impuestos › Trimestre, fiel a
-// maqueta_303_v2 y a la revisión de Julio del 20/10:
+// I01c · Pieza 3, la parte que ordena · Impuestos › Trimestre. Maqueta v4
+// (Julio, 20/10): TODO el ancho, en tres columnas —izquierda, el resumen y la
+// liquidación en palabras; centro, el justificante grande, fijo al bajar, con
+// zoom y «Ampliar»; derecha, las cuotas a compensar y lo comprobado (el 303) o
+// sus cuadres con el diario (111 ↔ 4751, 115 ↔ alquileres)—. Por debajo de
+// 1.500 px la derecha baja debajo de la izquierda; en móvil, una columna y el
+// PDF a pantalla completa al tocarlo. Lo de antes (maqueta v3):
 //   1. arriba, la tira del trimestre: un selector 1T/2T/3T/4T y, por cada
 //      modelo (303, 111, 115 y 202), su estado, importe y fecha; lo que vence
 //      hoy o ya se pasó, en rojo;
@@ -29,13 +34,15 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { esCasillaDePersonas } from '@/modules/conta/lib/justificanteAeat'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
-import { asientosDeDeclaracion, calcular303, enlaceJustificante, leerTrimestre } from '@/modules/conta/services/impuestosService'
-import { queEsLaCasilla } from './casillasModelos'
+import {
+  asientosDeDeclaracion, calcular303, comprobacionesDeDeclaracion, cuentasDelTrimestre, enlaceJustificante, leerTrimestre, libroIvaDelTrimestre,
+} from '@/modules/conta/services/impuestosService'
+import { esCasillaDePorcentaje, queEsLaCasilla } from './casillasModelos'
 import { textoResultado } from './calendario'
 import {
   CASILLA_RESULTADO, estaPresentada, fraseDesfasada, fraseRecalculado, importeConSigno, lineasCartera, numeroTrimestre, presentadorEnPalabras,
-  cuentaDelImpuesto, librosDelModelo, tarjeta, tituloTrimestre, trimestrePorDefecto,
-  type CasillaTrimestre, type ModeloTrimestre, type Trimestre,
+  cuadreLibro303, cuadreRetenciones, cuentaDelImpuesto, fechasTrimestre, librosDelModelo, liquidacion303, tarjeta, tituloTrimestre, trimestrePorDefecto,
+  type CasillaTrimestre, type FilaLiquidacion, type LineaCuadre, type ModeloTrimestre, type SumaCuenta, type Trimestre,
 } from './trimestre'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -62,6 +69,7 @@ export default function TrimestrePage() {
   const error = leido?.pedido === pedido ? leido.error : null
   const [elegido, setElegido] = useState<string | null>(null)
   const [hecho, setHecho] = useState<{ tono: 'ok' | 'falta'; texto: string } | null>(null)
+  const [ampliado, setAmpliado] = useState(false)
   const recalculado = useRef<string | null>(null)
 
   useEffect(() => {
@@ -153,11 +161,18 @@ export default function TrimestrePage() {
             {modelos.length === 0 && <li className="s-apoyo">Esta empresa no tiene modelos trimestrales en sus impuestos.</li>}
           </ul>
           {elegidoModelo && (
-            <div className="s-trimestre-cuerpo">
-              <Ficha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta}
-                hoy={dia} alRecalcular={() => void recalcular(datos, pedido)} />
-              <Derecha key={`${clave(elegidoModelo)}/${elegidoModelo.declaracion?.justificante_pdf ?? ''}`} m={elegidoModelo}
-                ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} />
+            <div className={`s-trimestre-cuerpo${ampliado ? ' s-trimestre-cuerpo--ampliado' : ''}`} data-prueba="cuerpo">
+              <div className="s-trimestre-col s-trimestre-col-izq">
+                <Ficha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} hoy={dia} />
+              </div>
+              <div className="s-trimestre-col s-trimestre-col-centro">
+                <Derecha key={`${clave(elegidoModelo)}/${elegidoModelo.declaracion?.justificante_pdf ?? ''}`} m={elegidoModelo}
+                  ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} ampliado={ampliado} alAmpliar={() => setAmpliado((a) => !a)} />
+              </div>
+              <div className="s-trimestre-col s-trimestre-col-der">
+                <ColDerecha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre}
+                  alRecalcular={() => void recalcular(datos, pedido)} />
+              </div>
             </div>
           )}
         </>
@@ -172,13 +187,17 @@ const clave = (m: ModeloTrimestre) => `${m.modelo}-${m.periodo ?? 'no'}`
 function valorCasilla(modelo: string, c: CasillaTrimestre): string {
   if (c.valor === null) return c.texto ?? ''
   if (esCasillaDePersonas(modelo, c.casilla)) return `${c.valor} ${c.valor === 1 ? 'persona' : 'personas'}`
-  if ((modelo === '303' && c.casilla === '65') || (modelo === '202' && c.casilla === '17')) return `${String(c.valor).replace('.', ',')} %`
+  if (esCasillaDePorcentaje(modelo, c.casilla)) return `${String(c.valor).replace('.', ',')} %`
   return eurosExactos(c.valor)
 }
 
-/** Lo de la izquierda: el modelo elegido, sus datos y sus casillas; con el 303, la cartera debajo. */
-function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alRecalcular }: {
-  m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; deRuta: boolean; hoy: string; alRecalcular: () => void
+/**
+ * La izquierda: el resumen del modelo elegido; con el 303, la liquidación en
+ * palabras y «Ver las casillas» para desplegarlas todas; con los demás, sus
+ * casillas (son pocas).
+ */
+function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy }: {
+  m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; deRuta: boolean; hoy: string
 }) {
   const d = m.declaracion
   const t = tarjeta(m, hoy)
@@ -214,20 +233,162 @@ function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alRecalcular }:
           )}
         </dl>
       )}
-      {casillas.length > 0 && (
-        <table className="s-trimestre-casillas" aria-label={`Casillas del ${m.modelo}`}>
-          <thead><tr><th scope="col">Casilla</th><th scope="col">Qué es</th><th scope="col" className="s-tabla-cifra">Importe</th></tr></thead>
-          <tbody>{casillas.map((c) => (
-            <tr key={c.casilla} data-resultado={c.casilla === resultado ? 'si' : undefined}>
-              <td className="s-trimestre-casilla">[{c.casilla}]{c.origen === 'manual' && <span title={c.motivo ?? 'Escrita a mano'}> ✎</span>}</td>
-              <td>{queEsLaCasilla(m.modelo, c.casilla) ?? ''}</td>
-              <td className="s-tabla-cifra s-cifra">{valorCasilla(m.modelo, c)}</td>
+      {d && !deRuta && <Acciones m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} presentada={presentada} />}
+      {m.modelo === '303' && casillas.length > 0 && <Liquidacion casillas={casillas} />}
+      {casillas.length > 0 && (m.modelo === '303'
+        ? <details className="s-trimestre-todas" data-prueba="todas-las-casillas"><summary>Ver las casillas ({casillas.length})</summary><TablaCasillas m={m} casillas={casillas} resultado={resultado} /></details>
+        : <TablaCasillas m={m} casillas={casillas} resultado={resultado} />)}
+    </section>
+  )
+}
+
+/** Todas las casillas con «qué es» y su importe; la del resultado, marcada. */
+function TablaCasillas({ m, casillas, resultado }: { m: ModeloTrimestre; casillas: CasillaTrimestre[]; resultado: string | undefined }) {
+  return (
+    <table className="s-trimestre-casillas" aria-label={`Casillas del ${m.modelo}`}>
+      <thead><tr><th scope="col">Casilla</th><th scope="col">Qué es</th><th scope="col" className="s-tabla-cifra">Importe</th></tr></thead>
+      <tbody>{casillas.map((c) => (
+        <tr key={c.casilla} data-resultado={c.casilla === resultado ? 'si' : undefined}>
+          <td className="s-trimestre-casilla">[{c.casilla}]{c.origen === 'manual' && <span title={c.motivo ?? 'Escrita a mano'}> ✎</span>}</td>
+          <td>{queEsLaCasilla(m.modelo, c.casilla) ?? ''}</td>
+          <td className="s-tabla-cifra s-cifra">{valorCasilla(m.modelo, c)}</td>
+        </tr>
+      ))}</tbody>
+    </table>
+  )
+}
+
+/** La liquidación del 303 en palabras (maqueta v4): lo que cobras y lo que deduces, por tipo, con sus casillas en pequeño. */
+function Liquidacion({ casillas }: { casillas: CasillaTrimestre[] }) {
+  const l = liquidacion303(casillas)
+  const fmt = (n: number | null) => (n === null ? '—' : eurosExactos(n))
+  const bloque = (titulo: string, filas: FilaLiquidacion[], total: number | null, casillaTotal: string) => (
+    <table className="s-trimestre-liq" aria-label={titulo}>
+      <thead><tr><th scope="col">{titulo}</th><th scope="col" className="s-tabla-cifra">Base</th><th scope="col" className="s-tabla-cifra">Cuota</th></tr></thead>
+      <tbody>
+        {filas.map((f) => (
+          <tr key={f.texto + f.casillas.join()}>
+            <th scope="row">{f.texto}<span className="s-impuestos-casilla">{f.casillas.map((c) => `[${c}]`).join(' ')}</span></th>
+            <td className="s-tabla-cifra s-cifra">{fmt(f.base)}</td>
+            <td className="s-tabla-cifra s-cifra">{fmt(f.cuota)}</td>
+          </tr>
+        ))}
+        {filas.length === 0 && <tr><td colSpan={3} className="s-apoyo">Nada en este trimestre.</td></tr>}
+        <tr className="s-trimestre-liq-total"><th scope="row">Total<span className="s-impuestos-casilla">[{casillaTotal}]</span></th><td /><td className="s-tabla-cifra s-cifra">{fmt(total)}</td></tr>
+      </tbody>
+    </table>
+  )
+  return (
+    <section className="s-trimestre-liquidacion" aria-labelledby="liq-titulo" data-prueba="liquidacion">
+      <h3 id="liq-titulo" className="s-trimestre-cartera-titulo">La liquidación</h3>
+      {bloque('IVA que cobras', l.cobras, l.totalCobras, '27')}
+      {bloque('IVA que deduces', l.deduces, l.totalDeduces, '45')}
+      <dl className="s-trimestre-liq-resultado">
+        <dt>Lo que cobras menos lo que deduces <span className="s-impuestos-casilla">[46]</span></dt><dd className="s-cifra">{fmt(l.diferencia)}</dd>
+        <dt>Resultado <span className="s-impuestos-casilla">[71]</span></dt><dd className="s-cifra">{fmt(l.resultado)}</dd>
+      </dl>
+    </section>
+  )
+}
+
+/**
+ * La derecha (maqueta v4): con el 303, las cuotas a compensar y lo
+ * comprobado (el libro de IVA del trimestre contra las cuotas del 303, y lo
+ * que Sumied comprobó al calcularlo); con el 111 y el 115, sus cuadres con el
+ * diario. Lo que no se puede leer se dice, no se esconde (regla 8).
+ */
+function ColDerecha({ m, d, ejercicio, trimestre, alRecalcular }: { m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; alRecalcular: () => void }) {
+  if (m.modelo === '303') return <><Cartera d={d} alRecalcular={alRecalcular} /><Comprobado303 m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} /></>
+  if (m.modelo === '111' || m.modelo === '115') return <CuadreConDiario m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} />
+  return (
+    <section className="s-tarjeta s-trimestre-comprobado" aria-labelledby="comp-titulo">
+      <h3 id="comp-titulo" className="s-trimestre-cartera-titulo">Lo comprobado</h3>
+      <p className="s-apoyo">Del {m.modelo} no hay cuadres con el diario todavía.</p>
+    </section>
+  )
+}
+
+function Comprobado303({ m, d, ejercicio, trimestre }: { m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string }) {
+  const decl = m.declaracion
+  const [leido, setLeido] = useState<{ para: string; libro: LineaCuadre[] | null; checks: { clave: string; resultado: string; titulo: string }[]; fallo: string | null } | null>(null)
+  const para = `${d.empresa.id}/${ejercicio}/${trimestre}/${decl?.id ?? ''}`
+  useEffect(() => {
+    if (!decl) return
+    let vivo = true
+    const { desde, hasta } = fechasTrimestre(ejercicio, trimestre)
+    Promise.all([libroIvaDelTrimestre(decl.cuenta, d.empresa.id, ejercicio, trimestre, desde, hasta), comprobacionesDeDeclaracion(decl.id, decl.cuenta)])
+      .then(([filas, checks]) => { if (vivo) setLeido({ para, libro: filas.length ? cuadreLibro303(filas, decl.casillas) : null, checks, fallo: null }) },
+        (e: unknown) => { if (vivo) setLeido({ para, libro: null, checks: [], fallo: msg(e) }) })
+    return () => { vivo = false }
+  }, [decl, d.empresa.id, ejercicio, trimestre, para])
+  const l = leido?.para === para ? leido : null
+  return (
+    <section className="s-tarjeta s-trimestre-comprobado" aria-labelledby="comp-titulo" data-prueba="comprobado">
+      <h3 id="comp-titulo" className="s-trimestre-cartera-titulo">Lo comprobado</h3>
+      {!decl && <p className="s-apoyo">Sin 303 del {trimestre} no hay nada que comprobar.</p>}
+      {decl && !l && <p className="s-apoyo">Comprobando…</p>}
+      {l?.fallo && <p className="s-impuestos-fallo" role="alert">{l.fallo}</p>}
+      {l && !l.fallo && l.libro === null && <p className="s-apoyo">El libro de IVA del {trimestre} está vacío: no hay con qué casar el 303.</p>}
+      {l?.libro && (
+        <>
+          <table className="s-trimestre-cuadre" aria-label="Libro de IVA y 303">
+            <thead><tr><th scope="col">Libro de IVA ↔ 303</th><th scope="col" className="s-tabla-cifra">Libro</th><th scope="col" className="s-tabla-cifra">303</th></tr></thead>
+            <tbody>{l.libro.map((x) => (
+              <tr key={x.casilla} data-casa={x.casa ? 'si' : 'no'}>
+                <th scope="row">{x.casa ? '✓ ' : '! '}{x.texto}<span className="s-impuestos-casilla">[{x.casilla}]</span></th>
+                <td className="s-tabla-cifra s-cifra">{eurosExactos(x.libro)}</td>
+                <td className="s-tabla-cifra s-cifra">{eurosExactos(x.presentado)}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+          {l.libro.every((x) => x.casa)
+            ? <p className="s-trimestre-ok">✓ El libro de IVA del {trimestre} casa con el 303, cuota a cuota</p>
+            : <p className="s-impuestos-porque-no" role="note">! No casa cuota a cuota. Si la diferencia está en la [29], puede ser una factura deducida en otro trimestre: se marca con «deducida en».</p>}
+        </>
+      )}
+      {l && l.checks.length > 0 && (
+        <ul className="s-trimestre-checks" aria-label="Lo que comprobó Sumied al calcularlo">
+          {l.checks.map((c) => <li key={c.clave} data-resultado={c.resultado}>{c.resultado === 'ok' ? '✓ ' : '! '}{c.titulo}</li>)}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function CuadreConDiario({ m, d, ejercicio, trimestre }: { m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string }) {
+  const decl = m.declaracion
+  const [leido, setLeido] = useState<{ para: string; cuentas: SumaCuenta[] | null; fallo: string | null } | null>(null)
+  const para = `${d.empresa.id}/${ejercicio}/${trimestre}/${m.modelo}`
+  useEffect(() => {
+    if (!decl) return
+    let vivo = true
+    const { desde, hasta } = fechasTrimestre(ejercicio, trimestre)
+    cuentasDelTrimestre(decl.cuenta, d.empresa.id, m.modelo === '115' ? ['4751', '621'] : ['4751'], desde, hasta)
+      .then((c) => { if (vivo) setLeido({ para, cuentas: c, fallo: null }) }, (e: unknown) => { if (vivo) setLeido({ para, cuentas: null, fallo: msg(e) }) })
+    return () => { vivo = false }
+  }, [decl, d.empresa.id, ejercicio, trimestre, m.modelo, para])
+  const l = leido?.para === para ? leido : null
+  const c = l?.cuentas && decl ? cuadreRetenciones(m.modelo, decl.casillas, l.cuentas) : null
+  return (
+    <section className="s-tarjeta s-trimestre-comprobado" aria-labelledby="comp-titulo" data-prueba="cuadres">
+      <h3 id="comp-titulo" className="s-trimestre-cartera-titulo">{m.modelo === '111' ? 'El 111 y la 4751' : 'El 115, la 4751 y los alquileres'}</h3>
+      {!decl && <p className="s-apoyo">Sin el {m.modelo} del {trimestre} no hay nada que cuadrar.</p>}
+      {decl && !l && <p className="s-apoyo">Leyendo el diario…</p>}
+      {l?.fallo && <p className="s-impuestos-fallo" role="alert">{l.fallo}</p>}
+      {c && c.lineas.length > 0 && (
+        <table className="s-trimestre-cuadre" aria-label={`Cuadres del ${m.modelo}`}>
+          <tbody>{c.lineas.map((x) => (
+            <tr key={x.texto} data-casa={x.casa === true ? 'si' : x.casa === false ? 'no' : undefined}>
+              <th scope="row">{x.casa === true ? '✓ ' : ''}{x.texto}{x.casillas && <span className="s-impuestos-casilla">{x.casillas}</span>}</th>
+              <td className="s-tabla-cifra s-cifra">{x.importe === null ? '—' : eurosExactos(x.importe)}</td>
             </tr>
           ))}</tbody>
         </table>
       )}
-      {m.modelo === '303' && <Cartera d={datos} alRecalcular={alRecalcular} />}
-      {d && !deRuta && <Acciones m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} presentada={presentada} />}
+      {c?.conclusion && (c.conclusion.casa
+        ? <p className="s-trimestre-ok">✓ {c.conclusion.texto}</p>
+        : <p className="s-impuestos-porque-no" role="note">! {c.conclusion.texto}</p>)}
+      {c && m.modelo === '115' && <p className="s-apoyo">La 621 puede llevar también alquileres sin retención (un renting, por ejemplo): su cifra no tiene por qué ser la base del 115.</p>}
     </section>
   )
 }
@@ -270,11 +431,11 @@ function Acciones({ m, d, ejercicio, trimestre, presentada }: {
  * Lo de la derecha: el justificante en grande; sin él, el impreso calculado
  * por Sumied (con sus casillas) o qué falta y el botón para hacerlo.
  */
-function Derecha({ m, ejercicio, trimestre, deRuta }: { m: ModeloTrimestre; ejercicio: number; trimestre: string; deRuta: boolean }) {
+function Derecha({ m, ejercicio, trimestre, deRuta, ampliado, alAmpliar }: { m: ModeloTrimestre; ejercicio: number; trimestre: string; deRuta: boolean; ampliado: boolean; alAmpliar: () => void }) {
   const d = m.declaracion
   const pdf = d?.justificante_pdf ?? null
   if (pdf) {
-    return <VisorJustificante ruta={pdf} nombre={`justificante-${m.modelo}-${m.periodo ?? ''}-${ejercicio}.pdf`} titulo={`${tarjeta(m).titulo} · ${m.periodo ?? ''} ${ejercicio}`} />
+    return <VisorJustificante ruta={pdf} nombre={`justificante-${m.modelo}-${m.periodo ?? ''}-${ejercicio}.pdf`} titulo={`${tarjeta(m).titulo} · ${m.periodo ?? ''} ${ejercicio}`} ampliado={ampliado} alAmpliar={alAmpliar} />
   }
   const presentada = !!d && estaPresentada(d.estado)
   const casillas = (d?.casillas ?? []).filter((c) => c.valor !== null)
@@ -335,7 +496,11 @@ function queFalta(m: ModeloTrimestre, ejercicio: number, trimestre: string, pres
  * enseña desde el navegador, así Descargar, Imprimir y Abrir aparte van con el
  * mismo fichero. Cuántas páginas tiene, de pdfjs.
  */
-function VisorJustificante({ ruta, nombre, titulo }: { ruta: string; nombre: string; titulo: string }) {
+const ZOOM = ['page-width', '75', '100', '125', '150', '200'] as const
+
+function VisorJustificante({ ruta, nombre, titulo, ampliado, alAmpliar }: { ruta: string; nombre: string; titulo: string; ampliado: boolean; alAmpliar: () => void }) {
+  const [zoom, setZoom] = useState(0)
+  const [completa, setCompleta] = useState(false)
   const [url, setUrl] = useState<string | null>(null)
   const [paginas, setPaginas] = useState<number | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
@@ -363,19 +528,33 @@ function VisorJustificante({ ruta, nombre, titulo }: { ruta: string; nombre: str
     try { marco.current?.contentWindow?.focus(); marco.current?.contentWindow?.print() } catch { if (url) window.open(url, '_blank', 'noopener') }
   }
   return (
-    <section className="s-tarjeta s-trimestre-derecha s-trimestre-visor" aria-labelledby="derecha-titulo" data-prueba="justificante">
+    <section className={`s-tarjeta s-trimestre-derecha s-trimestre-visor${completa ? ' s-trimestre-visor--completa' : ''}`} aria-labelledby="derecha-titulo" data-prueba="justificante">
       <div className="s-trimestre-derecha-cabeza">
         <h2 id="derecha-titulo" className="s-trimestre-derecha-titulo">Justificante de Hacienda</h2>
         {paginas !== null && <span className="s-apoyo">{paginas === 1 ? '1 página' : `${paginas} páginas`}</span>}
+        {completa && <Boton variante="secundario" onClick={() => setCompleta(false)}>Cerrar</Boton>}
         {url && (
           <div className="s-trimestre-derecha-acciones">
+            <div className="s-trimestre-zoom" role="group" aria-label="Zoom">
+              <button type="button" className="s-trimestre-zoom-btn" aria-label="Alejar" disabled={zoom === 0} onClick={() => setZoom((z) => Math.max(0, z - 1))}>−</button>
+              <span className="s-trimestre-zoom-valor" aria-live="polite">{ZOOM[zoom] === 'page-width' ? 'Ajustar' : `${ZOOM[zoom]} %`}</span>
+              <button type="button" className="s-trimestre-zoom-btn" aria-label="Acercar" disabled={zoom === ZOOM.length - 1} onClick={() => setZoom((z) => Math.min(ZOOM.length - 1, z + 1))}>+</button>
+            </div>
+            <Boton variante="secundario" onClick={alAmpliar} aria-label={ampliado ? 'Reducir: volver a las tres columnas' : 'Ampliar: solo el justificante'}>{ampliado ? 'Reducir' : 'Ampliar'}</Boton>
             <a className={clasesBoton({ variante: 'secundario' })} href={url} download={nombre}><Icono nombre="descargar" /><span className="s-boton-texto">Descargar</span></a>
             <Boton variante="secundario" icono="imprimir" onClick={imprimir}>Imprimir</Boton>
             <a className={clasesBoton({ variante: 'secundario' })} href={url} target="_blank" rel="noopener noreferrer"><Icono nombre="abrirAparte" /><span className="s-boton-texto">Abrir aparte</span></a>
           </div>
         )}
       </div>
-      {url && <iframe ref={marco} className="s-trimestre-pdf-visor" src={url} title={`Justificante de Hacienda: ${titulo}`} />}
+      {url && (
+        <div className="s-trimestre-pdf-marco">
+          {/* El hash cambia el zoom del visor de PDF del navegador; con otra clave, el iframe se vuelve a cargar con él. */}
+          <iframe key={ZOOM[zoom]} ref={marco} className="s-trimestre-pdf-visor" src={`${url}#zoom=${ZOOM[zoom]}`} title={`Justificante de Hacienda: ${titulo}`} />
+          {/* En el móvil, el PDF se toca para verlo a pantalla completa (lo enseña solo el CSS de móvil). */}
+          {!completa && <button type="button" className="s-trimestre-pdf-tocar" onClick={() => setCompleta(true)}>Ver el justificante a pantalla completa</button>}
+        </div>
+      )}
       {fallo && <p className="s-impuestos-fallo" role="alert">{fallo}</p>}
       {!url && !fallo && <p className="s-apoyo s-trimestre-abriendo">Abriendo el justificante…</p>}
     </section>
