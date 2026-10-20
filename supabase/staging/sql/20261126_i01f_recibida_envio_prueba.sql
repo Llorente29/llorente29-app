@@ -6,7 +6,8 @@
 -- conta_recibida_envio es la LECTURA del envío a Diez de una recibida: no
 -- escribe nada, así que su camino es el de quien la llama (conta-diez-enviar,
 -- como usuario de la cuenta). Se prueba con una recibida de verdad de la
--- empresa A (la primera de supplier_invoice con una línea de IVA), puesta
+-- empresa A (la primera de supplier_invoice, propuesta o en borrador —los
+-- apuntes de una validada no se tocan—, con una línea de IVA), puesta
 -- dentro de la transacción como una intracomunitaria de un proveedor de
 -- Francia (su línea de IVA con el tipo «ue_compra» del catálogo):
 --   1. Antes: sin «tratamiento» ni «pais».
@@ -35,9 +36,9 @@ begin
   select je.id, l.id into v_e, v_l
     from public.journal_entry je
     join public.journal_line l on l.entry_id = je.id and l.tax_rate_id is not null
-   where je.account_id = a and je.source_type = 'supplier_invoice'
+   where je.account_id = a and je.source_type = 'supplier_invoice' and je.status in ('propuesto', 'borrador')
    order by je.created_at, l.position limit 1;
-  if v_e is null then raise exception 'PRUEBA RECIBIDA ENVÍO · 0: la empresa A no tiene ninguna recibida con IVA en staging.'; end if;
+  if v_e is null then raise exception 'PRUEBA RECIBIDA ENVÍO · 0: la empresa A no tiene ninguna recibida propuesta o en borrador con IVA en staging.'; end if;
   select i.supplier_id into v_s from public.journal_entry je join public.supplier_invoice i on i.id = je.source_id and i.account_id = je.account_id where je.id = v_e;
   select id into v_ue from public.tax_rate where is_system and code = 'ue_compra';
   select id into v_isp from public.tax_rate where is_system and code = 'isp';
