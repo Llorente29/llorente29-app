@@ -79,8 +79,19 @@ for (const m of MODULOS) {
     await expect(nav.getByRole('link', { name: m.activa, exact: true })).toHaveAttribute('aria-current', 'page')
     await quieta(page)
 
+    // Lo que mide la franja (para el parte): el hueco de las pestañas y cada pestaña.
+    if (!movil) {
+      const m2 = await page.evaluate(() => {
+        const w = (sel: string) => Math.round(document.querySelector(sel)?.getBoundingClientRect().width ?? 0)
+        const tabs = Array.from(document.querySelectorAll('.s-cabecera .s-pestanas-medida > .s-pestana')).map((x) => Math.round(x.getBoundingClientRect().width))
+        return { izquierda: w('.s-cabecera .s-cab-izquierda'), centro: w('.s-cabecera .s-cab-centro'), derecha: w('.s-cabecera .s-cab-derecha'), medidas: tabs, mas: !!document.querySelector('.s-cabecera .s-pestana-mas') }
+      })
+      test.info().annotations.push({ type: 'medidas', description: JSON.stringify(m2) })
+      console.log(`[medidas] ${m.producto}: ${JSON.stringify(m2)}`)
+    }
+
     // Cada pestaña con su icono de trazo, de 14 px.
-    const iconos = await nav.locator('.s-pestana-enlace').evaluateAll((xs) => xs.map((x) => {
+    const iconos = await nav.getByRole('link').evaluateAll((xs) => xs.map((x) => {
       const svg = x.querySelector('svg')
       return svg ? Math.round(svg.getBoundingClientRect().width) : 0
     }))
