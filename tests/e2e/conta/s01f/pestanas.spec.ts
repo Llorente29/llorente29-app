@@ -137,6 +137,42 @@ for (const m of MODULOS) {
       expect(vista).toBe(true)
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
       await expect(nav).toHaveCSS('overflow-x', 'auto')
+
+      // S01f (Julio, 20/10) · La cinta de botones: se desliza entera, «Ocultar» fuera de la
+      // fila y sin pisar nada, y el título de cada grupo en su sitio, debajo de sus botones.
+      const cinta = page.getByRole('toolbar', { name: /^Acciones de / })
+      if (await cinta.count()) {
+        const grupos = cinta.locator('.s-cinta-grupos')
+        const ocultar = cinta.getByRole('button', { name: 'Ocultar', exact: true })
+        await expect(ocultar).toHaveCount(1)
+        await expect(ocultar).toBeVisible()
+        const medir = () => page.evaluate(() => {
+          const t = document.querySelector('[role="toolbar"].s-cinta')!
+          const g = t.querySelector('.s-cinta-grupos')!.getBoundingClientRect()
+          const o = Array.from(t.querySelectorAll('button')).find((b) => b.textContent?.includes('Ocultar') && b.offsetParent !== null)!.getBoundingClientRect()
+          const titulos = Array.from(t.querySelectorAll('.s-cinta-grupo')).map((grupo) => {
+            const tit = grupo.querySelector('.s-cinta-grupo-titulo')!.getBoundingClientRect()
+            const bot = grupo.querySelector('.s-cinta-grupo-botones')!.getBoundingClientRect()
+            const gr = grupo.getBoundingClientRect()
+            return { bien: tit.top >= bot.bottom - 1 && tit.left >= gr.left - 1 && tit.left <= bot.left + 16 }
+          })
+          return { grupos: { izq: g.left, der: g.right }, ocultar: { izq: o.left, der: o.right }, titulos }
+        })
+        const antes = await medir()
+        expect(antes.ocultar.izq, '«Ocultar» va a la derecha de la fila, sin pisarla').toBeGreaterThanOrEqual(antes.grupos.der - 1)
+        expect(antes.ocultar.der).toBeLessThanOrEqual(390 + 1)
+        expect(antes.titulos.every((x) => x.bien), 'cada título, debajo de sus botones').toBe(true)
+        await page.screenshot({ path: `${DIR}/cinta-${m.nombre}-movil.png`, clip: { x: 0, y: 0, width: 390, height: (await cinta.boundingBox())!.y + (await cinta.boundingBox())!.height } })
+        // Deslizada hasta el final: el último botón, entero y a la vista, no debajo de «Ocultar».
+        await grupos.evaluate((g) => { g.scrollLeft = g.scrollWidth })
+        const ultimo = grupos.locator('.s-cinta-grupo-botones > *').last()
+        const u = (await ultimo.boundingBox())!
+        const fin = await medir()
+        expect(u.x, 'el último botón empieza dentro de la fila').toBeGreaterThanOrEqual(fin.grupos.izq - 1)
+        expect(u.x + u.width, 'el último botón acaba antes de «Ocultar»').toBeLessThanOrEqual(fin.ocultar.izq + 1)
+        await page.screenshot({ path: `${DIR}/cinta-${m.nombre}-movil-final.png`, clip: { x: 0, y: 0, width: 390, height: (await cinta.boundingBox())!.y + (await cinta.boundingBox())!.height } })
+        await grupos.evaluate((g) => { g.scrollLeft = 0 })
+      }
     }
 
     await page.screenshot({ path: `${DIR}/${m.nombre}-${lado(page)}.png` })

@@ -206,11 +206,13 @@
   mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
 }
 @media (max-width: 767px) {
+  /* S01f · La cinta del móvil: la fila de grupos se desliza entera y dice con un
+     degradado que hay más por ese lado; «Ocultar» va fuera de ella (diseno.css). */
+  .s-esqueleto .s-cinta-grupos[data-mas-derecha] { -webkit-mask-image: linear-gradient(to left, transparent, black var(--s-8)); mask-image: linear-gradient(to left, transparent, black var(--s-8)); }
   .s-esqueleto .s-cinta-grupos[data-mas-izquierda] { -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8)); mask-image: linear-gradient(to right, transparent, black var(--s-8)); }
-  .s-esqueleto .s-cinta-ocultar { position: sticky; right: 0; z-index: 1; align-self: stretch; flex-shrink: 0; background: var(--s-suave); }
-  .s-esqueleto .s-cinta-grupos[data-mas-derecha] .s-cinta-ocultar::before {
-    content: ''; position: absolute; top: 0; bottom: 0; right: 100%; width: var(--s-8); pointer-events: none;
-    background: linear-gradient(to right, transparent, var(--s-suave));
+  .s-esqueleto .s-cinta-grupos[data-mas-izquierda][data-mas-derecha] {
+    -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
+    mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
   }
 }
 @media (max-width: 767px) {
