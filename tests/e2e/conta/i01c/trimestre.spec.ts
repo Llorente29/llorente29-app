@@ -1,6 +1,6 @@
 // tests/e2e/conta/i01c/trimestre.spec.ts
 //
-// I01c · Impuestos › Trimestre (maqueta_303_v2), con la marca Sumied, en
+// I01c · Impuestos › Trimestre (maqueta v4: todo el ancho, en tres columnas), con la marca Sumied, en
 // ordenador y en móvil, contra staging-conta. Ningún dato real: cifras
 // inventadas con la forma del caso del 19/10.
 //
@@ -15,6 +15,11 @@
 //     desfasada, como el de producción el 19/10) se vuelve a calcular al abrir,
 //     y la pantalla lo dice con la cifra (regla 8);
 //   · al pulsar un modelo, su ficha con el PDF del justificante;
+//   · maqueta v4: a la izquierda la liquidación en palabras y «Ver las
+//     casillas» (los tipos, en %); en el centro el PDF con zoom y «Ampliar»; a
+//     la derecha la cartera y lo comprobado (303) o los cuadres (111). A 1.900
+//     px, tres columnas; a 1.440, la derecha baja debajo de la izquierda; en
+//     el móvil, una columna y el PDF a pantalla completa al tocarlo;
 //   · la empresa por la ruta (impuestos/empresa/<id>/trimestre/…): la vista de
 //     despacho. Por eso la prueba crea su propia empresa en la cuenta A, que
 //     además no pisa los periodos de 2026 de la empresa A que usan
@@ -47,7 +52,7 @@ const presentado = (nif: string, l: 'ordenador' | 'movil', periodo: '1T' | '2T')
     ? { modelo: '303', ejercicio: 2026, periodo, presentada: '20-04-2026 10:06:28', csv: `PRUEBTRIM${s}1T2026`.slice(0, 16), justificante: `99830${s === 'O' ? 1 : 2}0002601`, nif, nombre,
         resultado: -1200.5, casillas: { '27': 5000, '45': 6200.5, '46': -1200.5, '64': -1200.5, '65': 100, '66': -1200.5, '110': 1500, '78': 0, '87': 1500, '69': -1200.5, '71': -1200.5 } }
     : { modelo: '303', ejercicio: 2026, periodo, presentada: '20-07-2026 10:51:15', csv: `PRUEBTRIM${s}2T2026`.slice(0, 16), justificante: `99830${s === 'O' ? 1 : 2}0002602`, nif, nombre,
-        resultado: 0, casillas: { '27': 8000, '45': 7599.75, '46': 400.25, '64': 400.25, '65': 100, '66': 400.25, '110': 2700.5, '78': 400.25, '87': 2300.25, '69': 0, '71': 0 } }
+        resultado: 0, casillas: { '07': 38095.24, '08': 21, '09': 8000, '27': 8000, '28': 36189.29, '29': 7599.75, '45': 7599.75, '46': 400.25, '64': 400.25, '65': 100, '66': 400.25, '110': 2700.5, '78': 400.25, '87': 2300.25, '69': 0, '71': 0 } }
 }
 const iso = (dmy: string) => { const [f, h] = dmy.split(' '); const [d, m, y] = f.split('-'); return `${y}-${m}-${d}T${h}` }
 
@@ -109,8 +114,23 @@ async function ir(page: Page, ruta: string) {
   await page.goto(`/conta/${ruta}?marca=sumied`)
   await cargada(page)
 }
-const foto = (page: Page, nombre: string) =>
-  page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.jpg`, type: 'jpeg', quality: 75, fullPage: true })
+/** La captura: en el móvil, `-movil`; en ordenador, `-ordenador` a 1.440 px y `-1900` a 1.900 px. */
+const foto = async (page: Page, nombre: string) => {
+  const ancho = page.viewportSize()?.width ?? 1440
+  const sufijo = ancho < 768 ? 'movil' : ancho >= 1800 ? '1900' : 'ordenador'
+  // Arriba del todo: con la página bajada, la cabecera fija sale pintada a media captura.
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(150)
+  return page.screenshot({ path: `${DIR}/${nombre}-${sufijo}.jpg`, type: 'jpeg', quality: 75, fullPage: true })
+}
+/** Dónde cae cada columna del cuerpo, con la página arriba del todo: su esquina de arriba a la izquierda. */
+async function columnas(page: Page) {
+  // Arriba del todo: el centro va fijo al bajar (sticky) y, con la página bajada, ya no está a la altura de las otras dos.
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(150)
+  const caja = async (c: string) => { const b = await page.locator(`.s-trimestre-col-${c}`).boundingBox(); return b ? { x: Math.round(b.x), y: Math.round(b.y) } : null }
+  return { izq: await caja('izq'), centro: await caja('centro'), der: await caja('der') }
+}
 async function sinDesbordar(page: Page, donde: string) {
   const sobra = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   // Si se sale, quién: los elementos más hondos cuyo borde derecho pasa del ancho (e2e 660: 14 px en el móvil).
@@ -174,8 +194,8 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(tira.getByRole('button').nth(1)).toContainText(
       hoyMadrid < '2026-10-20' ? 'Hasta el 20/10' : hoyMadrid === '2026-10-20' ? 'Vence hoy' : 'Fuera de plazo')
     await expect(page.getByRole('radio', { name: '3T' })).toHaveAttribute('aria-checked', 'true')
-    // La cartera sale con el 303 elegido (el primero), en su ficha.
-    await expect(page.locator('[data-prueba="ficha-modelo"] [data-prueba="cartera"]')).toBeVisible()
+    // La cartera sale con el 303 elegido (el primero), en la columna derecha (maqueta v4).
+    await expect(page.locator('.s-trimestre-col-der [data-prueba="cartera"]')).toBeVisible()
 
     // La cartera, de los 303 presentados.
     await expect(fila(page, 'Pendiente de 2025')).toContainText('1.500,00 €')
@@ -201,8 +221,20 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(ficha.getByText('Presentado 20/07')).toBeVisible()
     await expect(ficha.locator('[data-prueba="resultado-ficha"]')).toContainText('0,00 €')
     await expect(ficha.getByText(j2.csv)).toBeVisible()
+    // La liquidación en palabras: lo que cobras, por tipo y con su porcentaje; lo que deduces.
+    const liq = ficha.locator('[data-prueba="liquidacion"]')
+    await expect(liq.getByRole('table', { name: 'IVA que cobras' }).getByRole('row').filter({ hasText: 'Ventas al 21 %' })).toContainText('8.000,00 €')
+    await expect(liq.getByRole('table', { name: 'IVA que deduces' }).getByRole('row').filter({ hasText: 'Compras y gastos corrientes' })).toContainText('7.599,75 €')
+    // «Ver las casillas» las despliega todas; la [08] es un tipo: «21 %», no «21,00 €» (punto 2).
+    const todas = ficha.locator('[data-prueba="todas-las-casillas"]')
+    await expect(todas.getByRole('table')).toBeHidden()
+    await todas.getByText(/^Ver las casillas \(\d+\)$/).click()
+    await expect(todas.getByRole('row').filter({ hasText: '[08]' })).toContainText('21 %')
+    await expect(todas.getByRole('row').filter({ hasText: '[08]' })).not.toContainText('€')
     // Las casillas dicen qué son, en palabras.
     await expect(ficha.locator('[data-resultado="si"]')).toContainText('Resultado')
+    // A la derecha, la cartera y lo comprobado: esta empresa no tiene libro de IVA, y lo dice.
+    await expect(page.locator('.s-trimestre-col-der [data-prueba="comprobado"]')).toContainText('El libro de IVA del 2T está vacío')
     // A la derecha, el justificante en grande, con Descargar, Imprimir y Abrir aparte.
     const visor = page.locator('[data-prueba="justificante"]')
     await expect(visor.locator('iframe.s-trimestre-pdf-visor')).toBeVisible({ timeout: 20_000 })
@@ -211,6 +243,49 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(visor.getByRole('link', { name: 'Abrir aparte' })).toBeVisible()
     await sinDesbordar(page, 'Ficha del 303 del 2T')
     await foto(page, 'trimestre-ficha')
+    if (l === 'ordenador') {
+      // A 1.440 px: la derecha baja debajo de la izquierda y el justificante sigue al lado.
+      const a1440 = await columnas(page)
+      expect(a1440.der!.x, 'a 1.440 px la derecha va debajo de la izquierda').toBe(a1440.izq!.x)
+      expect(a1440.der!.y).toBeGreaterThan(a1440.izq!.y)
+      expect(a1440.centro!.x).toBeGreaterThan(a1440.izq!.x)
+      // El zoom del visor.
+      await visor.getByRole('button', { name: 'Acercar' }).click()
+      await expect(visor.locator('.s-trimestre-zoom-valor')).toHaveText('75 %')
+      await visor.getByRole('button', { name: 'Alejar' }).click()
+      await expect(visor.locator('.s-trimestre-zoom-valor')).toHaveText('Ajustar')
+      // «Ampliar» deja solo el justificante; «Reducir» vuelve.
+      await visor.getByRole('button', { name: /^Ampliar/ }).click()
+      await expect(page.locator('.s-trimestre-col-izq')).toBeHidden()
+      await expect(page.locator('.s-trimestre-col-der')).toBeHidden()
+      // Y el justificante ocupa todo el ancho del cuerpo, no se queda en su columna.
+      const cuerpo = (await page.locator('[data-prueba="cuerpo"]').boundingBox())!
+      const centro = (await page.locator('.s-trimestre-col-centro').boundingBox())!
+      expect(Math.round(centro.width), 'al ampliar, el justificante ocupa todo el ancho').toBe(Math.round(cuerpo.width))
+      await foto(page, 'trimestre-ampliado')
+      await visor.getByRole('button', { name: /^Reducir/ }).click()
+      await expect(page.locator('.s-trimestre-col-izq')).toBeVisible()
+      // A 1.900 px: tres columnas, arriba alineadas, de izquierda a derecha.
+      await page.setViewportSize({ width: 1900, height: 1000 })
+      await page.waitForTimeout(400)
+      const a1900 = await columnas(page)
+      expect([a1900.izq!.y, a1900.der!.y], 'a 1.900 px, tres columnas a la misma altura').toEqual([a1900.centro!.y, a1900.centro!.y])
+      expect(a1900.izq!.x).toBeLessThan(a1900.centro!.x)
+      expect(a1900.centro!.x).toBeLessThan(a1900.der!.x)
+      await sinDesbordar(page, 'Ficha del 303 a 1.900 px')
+      await foto(page, 'trimestre-ficha')
+      await page.setViewportSize({ width: 1440, height: 900 })
+    } else {
+      // En el móvil, una columna; el PDF se toca y se ve a pantalla completa.
+      const m = await columnas(page)
+      expect([m.centro!.x, m.der!.x]).toEqual([m.izq!.x, m.izq!.x])
+      await expect(visor.getByRole('button', { name: /^Ampliar/ })).toBeHidden()
+      await visor.getByRole('button', { name: 'Ver el justificante a pantalla completa' }).click()
+      await expect(visor).toHaveClass(/s-trimestre-visor--completa/)
+      await page.screenshot({ path: `${DIR}/trimestre-pdf-completa-movil.jpg`, type: 'jpeg', quality: 75 })
+      await visor.getByRole('button', { name: 'Cerrar' }).click()
+      await expect(visor).not.toHaveClass(/s-trimestre-visor--completa/)
+    }
 
     // Otro modelo: su ficha, sin declaración, dice su plazo.
     await tira2.getByRole('button').filter({ hasText: 'Retenciones · 111' }).click()
@@ -220,6 +295,8 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(page.locator('[data-prueba="que-falta"]')).toContainText('Aún no está en Sumied')
     await expect(page.locator('[data-prueba="justificante"]')).toHaveCount(0)
     await expect(page.locator('[data-prueba="cartera"]')).toHaveCount(0)
+    // A la derecha, los cuadres del 111 con la 4751: sin 111, nada que cuadrar, y lo dice.
+    await expect(page.locator('.s-trimestre-col-der [data-prueba="cuadres"]')).toContainText('Sin el 111 del 2T no hay nada que cuadrar')
     await sinDesbordar(page, 'Ficha del 111 del 2T')
     await foto(page, 'trimestre-falta')
     expect(errores).toEqual([])

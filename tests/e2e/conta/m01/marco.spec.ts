@@ -161,9 +161,11 @@ test('una pantalla vieja dentro del marco: Bancos, con su estilo y sus pestañas
   await page.goto('/conta/bancos')
   await expect(page.locator('.cxm .cx-principal')).toBeVisible()
   if (lado(page) === 'ordenador') {
-    // S01 · paso 3: sus pestañas, en la cabecera del esqueleto (una sola vez) y su barra, en la cinta.
+    // S01 · paso 3: sus pestañas, en el esqueleto (una sola vez) y su barra, en la cinta.
+    // S01f (Julio, 20/10): las pestañas, en su franja debajo de la cabecera.
     await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveCount(1)
-    await expect(page.locator('.s-cabecera').getByRole('navigation', { name: 'Pestañas de Bancos' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveClass(/s-franja-pestanas/)
     await expect(page.getByRole('toolbar', { name: 'Acciones de Movimientos' })).toBeVisible()
     await expect(page.locator('.cxl-areas, .cxl-barra, .cxl-tuyos')).toHaveCount(0)
     await expect(menu(page).getByRole('link', { name: 'Bancos', exact: true })).toHaveAttribute('aria-current', 'page')

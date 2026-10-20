@@ -5,8 +5,9 @@
 // queda en 960–1200 px y a 1440 o 1900 deja media pantalla vacía; Bancos sí usa
 // todo el ancho»). Las pantallas de contenido usan todo el ancho que hay, hasta
 // 1800 px (--s-ancho-pantalla), y reparten en columnas cuando cabe. Un
-// formulario no se estira. El Trimestre no se toca (lo hace C con su maqueta v4):
-// se queda en sus 960. En el ordenador, a 1440 y a 1900, con Sumied.
+// formulario no se estira. El Trimestre no se toca: lo hace C con su maqueta v4
+// (#259), a todo el ancho, y aquí solo se mira que siga así. En el ordenador, a
+// 1440 y a 1900, con Sumied.
 // Capturas en docs/conta/capturas/s01g.
 
 import { test, expect, type Page } from '@playwright/test'
@@ -25,9 +26,10 @@ const PANTALLAS: Pantalla[] = [
   { nombre: 'impuestos-certificados', ruta: '/conta/impuestos/certificados', ancho: 'todo' },
   { nombre: 'impuestos-iva', ruta: '/conta/impuestos/iva/2026/3T', ancho: 'todo' },
   { nombre: 'impuestos-clientes', ruta: '/conta/impuestos/clientes?hoy=2026-10-13', quien: LAURA, ancho: 'todo' },
-  // Lo que no se estira: un formulario y el Trimestre (de C).
+  // El Trimestre es de C (#259, a todo el ancho): solo se mira que siga así.
+  { nombre: 'impuestos-trimestre', ruta: '/conta/impuestos/trimestre', ancho: 'todo', sel: '.s-pantalla.s-trimestre' },
+  // Lo que no se estira: un formulario.
   { nombre: 'analitica', ruta: '/conta/ajustes/analitica', ancho: 'estrecha' },
-  { nombre: 'impuestos-trimestre', ruta: '/conta/impuestos/trimestre', ancho: 'estrecha', sel: '.s-pantalla.s-trimestre' },
 ]
 
 const conMarca = (ruta: string) => `${ruta}${ruta.includes('?') ? '&' : '?'}marca=sumied`

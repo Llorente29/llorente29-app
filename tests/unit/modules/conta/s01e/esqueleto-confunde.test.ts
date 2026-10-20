@@ -84,11 +84,16 @@ describe('una fila que se desliza (móvil)', () => {
     expect(desplazamientoParaVer(1500, 90, 375, 1590)).toBe(1215)
     expect(desplazamientoParaVer(50, 80, 375, 300)).toBe(0)
   })
-  it('el CSS pinta el degradado y deja «Ocultar» pegado a la derecha', () => {
+  it('el CSS pinta el degradado y deja «Ocultar» a la derecha, fuera de la fila que se desliza (S01f)', () => {
     const css = readFileSync('src/modules/conta/esqueleto/esqueleto.css', 'utf8')
+    const diseno = readFileSync('src/modules/conta/diseno/diseno.css', 'utf8')
     expect(css).toContain('.s-pestanas-movil[data-mas-derecha]')
     expect(css).toContain('.s-cinta-grupos[data-mas-izquierda]')
-    expect(css).toMatch(/\.s-cinta-ocultar \{ position: sticky; right: 0;/)
+    expect(css).toContain('.s-cinta-grupos[data-mas-derecha]')
+    // S01f (Julio, 20/10): pegado encima de la fila tapaba «Revisar y presentar…»; ahora va fuera de ella.
+    expect(css).not.toMatch(/\.s-cinta-ocultar \{ position: sticky/)
+    expect(diseno).toMatch(/\.s-cinta-ocultar \{ display: none; \}/)
+    expect(diseno).toMatch(/\.s-cinta-ocultar-fuera \{\s*display: inline-flex; flex-shrink: 0;/)
   })
 })
 

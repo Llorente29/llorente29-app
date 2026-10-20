@@ -100,3 +100,15 @@ export function queEsLaCasilla(modelo: string, casilla: string): string | null {
   if (modelo === '303') { const t = CASILLAS_303[c]?.texto; return t ? enPalabras303(t) : null }
   return POR_MODELO[modelo]?.[c] ?? null
 }
+
+/**
+ * ¿La casilla es un porcentaje? (I01c, 20/10: los tipos [02], [05] y [08] del
+ * 303 salían como «4,00 €».) Del diseño de registro, no de una lista a mano:
+ * en el 303, las que el diseño llama «Tipo %» y la [65] («% Atribuible…»); en
+ * el 202, la [17] (el porcentaje del pago fraccionado).
+ */
+export function esCasillaDePorcentaje(modelo: string, casilla: string): boolean {
+  const c = casilla.padStart(2, '0')
+  if (modelo === '303') { const t = CASILLAS_303[c]?.texto ?? ''; return /Tipo %$/.test(t) || t.startsWith('%') }
+  return modelo === '202' && c === '17'
+}

@@ -33,6 +33,8 @@ export const INTERRUPTORES: readonly Interruptor[] = ['conta_facturacion', 'cont
 export interface Pestana {
   id: string
   etiqueta: string
+  /** S01f · El icono de trazo que va delante del nombre en la cabecera (14 px). */
+  icono: NombreIcono
   /** Dirección relativa al módulo; null = aún no tiene pantalla (no sale). */
   ruta: string | null
   /** Las direcciones que caen en esta pestaña. */
@@ -102,45 +104,45 @@ export const PRODUCTOS: Producto[] = [
   {
     id: 'contabilidad', etiqueta: 'Contabilidad', icono: 'contabilidad', ruta: R.libroDiario, prefijos: [], periodo: 210,   // «Ejercicio 2025 · cerrado»
     pestanas: [
-      { id: 'asientos', etiqueta: 'Asientos', ruta: R.libroDiario, prefijos: [R.libroDiario] },
+      { id: 'asientos', etiqueta: 'Asientos', icono: 'asientos', ruta: R.libroDiario, prefijos: [R.libroDiario] },
       {
-        id: 'listados', etiqueta: 'Libros y listados', ruta: `${R.libros}/mayor/libro-mayor`,
+        id: 'listados', etiqueta: 'Libros y listados', icono: 'listados', ruta: `${R.libros}/mayor/libro-mayor`,
         prefijos: [R.libros, R.diarioResumido, `${R.libros}/mayor`, `${R.libros}/registro`, `${R.libros}/balances`, 'plan'],
       },
-      { id: 'definiciones', etiqueta: 'Definiciones', ruta: R.plan, prefijos: [R.plan, R.tablas, R.analitica] },
-      { id: 'cierre', etiqueta: 'Cierre y Registro', ruta: `${R.libros}/cierre/ejercicios`, prefijos: [`${R.libros}/cierre`, `${R.libros}/anuales`] },
-      { id: 'importar', etiqueta: 'Importar', ruta: R.pendientesDiez, prefijos: [R.pendientesDiez], solo: 'diez' },
+      { id: 'definiciones', etiqueta: 'Definiciones', icono: 'definiciones', ruta: R.plan, prefijos: [R.plan, R.tablas, R.analitica] },
+      { id: 'cierre', etiqueta: 'Cierre y Registro', icono: 'cierre', ruta: `${R.libros}/cierre/ejercicios`, prefijos: [`${R.libros}/cierre`, `${R.libros}/anuales`] },
+      { id: 'importar', etiqueta: 'Importar', icono: 'importar', ruta: R.pendientesDiez, prefijos: [R.pendientesDiez], solo: 'diez' },
     ],
   },
   {
     id: 'facturacion', etiqueta: 'Facturación', icono: 'facturacion', ruta: null, prefijos: [], interruptor: 'conta_facturacion',
     pestanas: [
-      { id: 'facturas', etiqueta: 'Facturas', ruta: null, prefijos: [] },
-      { id: 'presupuestos', etiqueta: 'Presupuestos', ruta: null, prefijos: [] },
-      { id: 'recurrentes', etiqueta: 'Recurrentes', ruta: null, prefijos: [] },
-      { id: 'rectificativas', etiqueta: 'Rectificativas', ruta: null, prefijos: [] },
-      { id: 'cobros', etiqueta: 'Cobros', ruta: null, prefijos: [] },
-      { id: 'productos', etiqueta: 'Productos y servicios', ruta: null, prefijos: [] },
-      { id: 'series', etiqueta: 'Series y plantillas', ruta: null, prefijos: [] },
+      { id: 'facturas', etiqueta: 'Facturas', icono: 'facturas', ruta: null, prefijos: [] },
+      { id: 'presupuestos', etiqueta: 'Presupuestos', icono: 'presupuestos', ruta: null, prefijos: [] },
+      { id: 'recurrentes', etiqueta: 'Recurrentes', icono: 'recurrentes', ruta: null, prefijos: [] },
+      { id: 'rectificativas', etiqueta: 'Rectificativas', icono: 'rectificativas', ruta: null, prefijos: [] },
+      { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: null, prefijos: [] },
+      { id: 'productos', etiqueta: 'Productos y servicios', icono: 'catalogo', ruta: null, prefijos: [] },
+      { id: 'series', etiqueta: 'Series y plantillas', icono: 'plantillas', ruta: null, prefijos: [] },
     ],
   },
   {
     id: 'compras', etiqueta: 'Compras y gastos', icono: 'compras', ruta: R.compras, prefijos: [], periodo: 100,   // «Oct 2026»
     pestanas: [
-      { id: 'por-revisar', etiqueta: 'Por revisar', ruta: R.compras, prefijos: [R.compras] },
-      { id: 'recibidas', etiqueta: 'Facturas recibidas', ruta: R.documentos, prefijos: [R.documentos] },
-      { id: 'recurrentes', etiqueta: 'Recurrentes', ruta: null, prefijos: [] },
-      { id: 'pagos', etiqueta: 'Pagos', ruta: null, prefijos: [] },
-      { id: 'liquidaciones', etiqueta: 'Liquidaciones', ruta: R.liquidacionNueva, prefijos: [`${R.compras}/liquidacion`, `${R.documentos}/catcher`], solo: 'hosteleria' },
+      { id: 'por-revisar', etiqueta: 'Por revisar', icono: 'revisar', ruta: R.compras, prefijos: [R.compras] },
+      { id: 'recibidas', etiqueta: 'Facturas recibidas', icono: 'recibida', ruta: R.documentos, prefijos: [R.documentos] },
+      { id: 'recurrentes', etiqueta: 'Recurrentes', icono: 'recurrentes', ruta: null, prefijos: [] },
+      { id: 'pagos', etiqueta: 'Pagos', icono: 'pagos', ruta: null, prefijos: [] },
+      { id: 'liquidaciones', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidacionNueva, prefijos: [`${R.compras}/liquidacion`, `${R.documentos}/catcher`], solo: 'hosteleria' },
     ],
   },
   {
     id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], portadaMovil: true, periodo: 100,
     pestanas: [
-      { id: 'movimientos', etiqueta: 'Movimientos', ruta: R.bancos, prefijos: [R.bancos] },
-      { id: 'reglas', etiqueta: 'Reglas', ruta: `${R.bancos}/reglas`, prefijos: [`${R.bancos}/reglas`] },
-      { id: 'cuentas', etiqueta: 'Cuentas y extractos', ruta: `${R.bancos}/cuentas`, prefijos: [`${R.bancos}/cuentas`] },
-      { id: 'cierre', etiqueta: 'Cierre del mes', ruta: `${R.bancos}/cierre`, prefijos: [`${R.bancos}/cierre`] },
+      { id: 'movimientos', etiqueta: 'Movimientos', icono: 'movimientos', ruta: R.bancos, prefijos: [R.bancos] },
+      { id: 'reglas', etiqueta: 'Reglas', icono: 'reglas', ruta: `${R.bancos}/reglas`, prefijos: [`${R.bancos}/reglas`] },
+      { id: 'cuentas', etiqueta: 'Cuentas y extractos', icono: 'cuentasBanco', ruta: `${R.bancos}/cuentas`, prefijos: [`${R.bancos}/cuentas`] },
+      { id: 'cierre', etiqueta: 'Cierre del mes', icono: 'cierreMes', ruta: `${R.bancos}/cierre`, prefijos: [`${R.bancos}/cierre`] },
     ],
   },
   { id: 'laboral', etiqueta: 'Laboral', icono: 'laboral', ruta: null, prefijos: [], interruptor: 'conta_laboral', pestanas: [] },
@@ -150,13 +152,13 @@ export const PRODUCTOS: Producto[] = [
     id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: R.impuestos, prefijos: [], interruptor: 'conta_impuestos',
     pestanas: [
       // P01 · Lo primero para una asesoría: los impuestos de todos sus clientes.
-      { id: 'clientes', etiqueta: 'Tus clientes', ruta: `${R.impuestos}/clientes`, prefijos: [`${R.impuestos}/clientes`], solo: 'asesoria' },
-      { id: 'calendario', etiqueta: 'Calendario', ruta: R.impuestos, prefijos: [R.impuestos] },
+      { id: 'clientes', etiqueta: 'Tus clientes', icono: 'tusClientes', ruta: `${R.impuestos}/clientes`, prefijos: [`${R.impuestos}/clientes`], solo: 'asesoria' },
+      { id: 'calendario', etiqueta: 'Calendario', icono: 'fecha', ruta: R.impuestos, prefijos: [R.impuestos] },
       // I01c · El trimestre (maqueta_303_v2): sin año ni trimestre, el último acabado.
-      { id: 'trimestre', etiqueta: 'Trimestre', ruta: `${R.impuestos}/trimestre`, prefijos: [`${R.impuestos}/trimestre`, `${R.impuestos}/empresa`] },
-      { id: 'presentados', etiqueta: 'Presentados', ruta: `${R.impuestos}/presentados`, prefijos: [`${R.impuestos}/presentados`] },
-      { id: 'sociedades', etiqueta: 'Impuesto de sociedades', ruta: `${R.impuestos}/sociedades`, prefijos: [`${R.impuestos}/sociedades`] },
-      { id: 'certificados', etiqueta: 'Certificados', ruta: `${R.impuestos}/certificados`, prefijos: [`${R.impuestos}/certificados`] },
+      { id: 'trimestre', etiqueta: 'Trimestre', icono: 'trimestre', ruta: `${R.impuestos}/trimestre`, prefijos: [`${R.impuestos}/trimestre`, `${R.impuestos}/empresa`] },
+      { id: 'presentados', etiqueta: 'Presentados', icono: 'presentados', ruta: `${R.impuestos}/presentados`, prefijos: [`${R.impuestos}/presentados`] },
+      { id: 'sociedades', etiqueta: 'Impuesto de sociedades', icono: 'empresa', ruta: `${R.impuestos}/sociedades`, prefijos: [`${R.impuestos}/sociedades`] },
+      { id: 'certificados', etiqueta: 'Certificados', icono: 'certificados', ruta: `${R.impuestos}/certificados`, prefijos: [`${R.impuestos}/certificados`] },
     ],
   },
   {
@@ -165,19 +167,19 @@ export const PRODUCTOS: Producto[] = [
       // Paso 3: los papeles de la lista (antes, sus filtros en la pantalla) pasan a pestañas.
       // Plataformas y Socios de marca, solo con hostelería (inventario §3; en otra empresa
       // siguen en «Todos»: ninguna fila se esconde, regla 7).
-      { id: 'todos', etiqueta: 'Todos', ruta: R.terceros, prefijos: [R.terceros] },
-      { id: 'clientes', etiqueta: 'Clientes', ruta: `${R.terceros}?ver=clientes`, prefijos: [R.terceros], ver: 'clientes' },
-      { id: 'proveedores', etiqueta: 'Proveedores', ruta: `${R.terceros}?ver=proveedores`, prefijos: [R.terceros], ver: 'proveedores' },
-      { id: 'plataformas', etiqueta: 'Plataformas', ruta: `${R.terceros}?ver=plataformas`, prefijos: [R.terceros], ver: 'plataformas', solo: 'hosteleria' },
-      { id: 'socios', etiqueta: 'Socios de marca', ruta: `${R.terceros}?ver=socios`, prefijos: [R.terceros], ver: 'socios', solo: 'hosteleria' },
+      { id: 'todos', etiqueta: 'Todos', icono: 'contactos', ruta: R.terceros, prefijos: [R.terceros] },
+      { id: 'clientes', etiqueta: 'Clientes', icono: 'clientes', ruta: `${R.terceros}?ver=clientes`, prefijos: [R.terceros], ver: 'clientes' },
+      { id: 'proveedores', etiqueta: 'Proveedores', icono: 'proveedores', ruta: `${R.terceros}?ver=proveedores`, prefijos: [R.terceros], ver: 'proveedores' },
+      { id: 'plataformas', etiqueta: 'Plataformas', icono: 'plataformas', ruta: `${R.terceros}?ver=plataformas`, prefijos: [R.terceros], ver: 'plataformas', solo: 'hosteleria' },
+      { id: 'socios', etiqueta: 'Socios de marca', icono: 'socios', ruta: `${R.terceros}?ver=socios`, prefijos: [R.terceros], ver: 'socios', solo: 'hosteleria' },
     ],
   },
   {
     id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: R.empresa, prefijos: [R.alta], abajo: true,
     pestanas: [
-      { id: 'empresa', etiqueta: 'Empresa', ruta: R.empresa, prefijos: [R.empresa] },
-      { id: 'usuarios', etiqueta: 'Usuarios', ruta: null, prefijos: [] },
-      { id: 'registro-ia', etiqueta: 'Registro de la IA', ruta: `${R.empresa}/folvy`, prefijos: [`${R.empresa}/folvy`] },
+      { id: 'empresa', etiqueta: 'Empresa', icono: 'empresa', ruta: R.empresa, prefijos: [R.empresa] },
+      { id: 'usuarios', etiqueta: 'Usuarios', icono: 'usuarios', ruta: null, prefijos: [] },
+      { id: 'registro-ia', etiqueta: 'Registro de la IA', icono: 'ia', ruta: `${R.empresa}/folvy`, prefijos: [`${R.empresa}/folvy`] },
     ],
   },
 ]

@@ -310,10 +310,10 @@
 @media (prefers-reduced-motion: reduce) { .cxm * { transition: none !important; } }
 
 /* ── 2b · La altura de lo que queda fijo arriba: la cabecera del esqueleto
-   (48 px). La cabecera de las tablas se queda fija debajo (--cxm-alto-arriba).
+   (--s-alto-cabecera: 56 px en el ordenador desde el S01f, 48 en el móvil). La cabecera de las tablas se queda fija debajo (--cxm-alto-arriba).
    La segunda fila de antes (SubpestanasEnBarra) es ahora la cinta (S01).
    Las fichas de proveedor y de tercero usan aún .cxm-sub para su subtítulo. */
-.cxm { --cxm-alto-arriba: 48px; }
+.cxm { --cxm-alto-arriba: var(--s-alto-cabecera, 48px); }
 .cxm .cxm-sub {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: var(--cxm-radio-boton);
   background: none; color: var(--cxm-apoyo); font: inherit; font-size: 13px; white-space: nowrap; text-decoration: none; cursor: pointer;

@@ -2,7 +2,8 @@
 //
 // El marco de contabilidad. Desde el S01 es el ESQUELETO (encargo S01 y
 // respuestas de Julio del 17/10): la barra de productos a la izquierda, la
-// cabecera de una fila de 48 px, la cinta de la pestaña debajo y la pantalla.
+// cabecera de una fila de 48 px, la franja de pestañas debajo (S01f: icono y
+// contador, fija debajo de la cabecera), la cinta de la pestaña y la pantalla.
 // En el móvil, los productos van en un cajón que abre el botón de menú de la
 // cabecera (S01c) y las pestañas en una fila que se desliza. Las piezas están en src/modules/conta/esqueleto; aquí se juntan.
 //
@@ -25,13 +26,14 @@ import { TeTocaHoy } from '@/modules/conta/ui/marco/TeTocaHoy'
 import { chipsDelInicio } from '@/modules/conta/marco/nuevo/teTocaHoy'
 import { MarcoContexto, type DatosCinta, type EntradasCinta, type Marco } from '@/modules/conta/marco/nuevo/contexto'
 import { Buscador } from '@/modules/conta/marco/nuevo/Buscador'
+import { useContadoresPestanas } from '@/modules/conta/marco/nuevo/useContadoresPestanas'
 import { dondeEsta, pestanasVisibles, productosVisibles } from '@/modules/conta/esqueleto/productos'
 import { alternarFavorito, cintaDe, favoritosDe, ordenPorId, type Orden } from '@/modules/conta/esqueleto/ordenes'
 import { usePreferenciasEsqueleto, useContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
 import { BarraProductos } from '@/modules/conta/esqueleto/BarraProductos'
 import { CajonProductos } from '@/modules/conta/esqueleto/CajonProductos'
 import { cuentasDeLaBarra } from '@/modules/conta/esqueleto/cuentasBarra'
-import { Cabecera } from '@/modules/conta/esqueleto/Cabecera'
+import { Cabecera, FranjaPestanas } from '@/modules/conta/esqueleto/Cabecera'
 import { CintaDePestana } from '@/modules/conta/esqueleto/CintaDePestana'
 import { Favoritos } from '@/modules/conta/esqueleto/Favoritos'
 import { MenuUsuario } from '@/modules/conta/esqueleto/MenuUsuario'
@@ -62,6 +64,9 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   const pestana = donde?.pestana ?? null
   const cinta = producto && !porNiveles ? cintaDe(producto.id, pestana?.id ?? null, ctx) : []
   const pendientes = cuentasDeLaBarra(cuentas)
+  const contadores = useContadoresPestanas(producto?.id ?? null, activa?.id ?? null, cuentas)
+  // S01f · La franja de pestañas: en el ordenador con una; en el móvil, con dos o más (como antes).
+  const conFranja = !!producto && pestanas.length > (movil ? 1 : 0)
 
   // Ctrl K (⌘K): del marco. En la captura, para que no llegue a Libros ni a Bancos.
   useEffect(() => {
@@ -113,7 +118,7 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
   )
   const usuario = (enCajon: boolean) => <MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} enCajon={enCajon} />
 
-  const clases = ['cx', 'cxm', 's-esqueleto', solo ? 'cx-solo' : null, movil ? 'cxm-es-movil' : null].filter(Boolean).join(' ')
+  const clases = ['cx', 'cxm', 's-esqueleto', solo ? 'cx-solo' : null, movil ? 'cxm-es-movil' : null, conFranja ? 's-con-pestanas' : null].filter(Boolean).join(' ')
   const avisoVisible = aviso ?? (errorCtx ? { texto: `${errorCtx}. Mientras, no sale lo que depende de la empresa (hostelería, Diez).`, tono: 'falta' as const } : null)
   return (
     <MarcoContexto.Provider value={marco}>
@@ -123,9 +128,12 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
             desplegada={prefs.barraDesplegada} alternar={() => cambiar({ barraDesplegada: !prefs.barraDesplegada })} />
         )}
         <div className="s-esq-cuerpo">
-          <Cabecera producto={producto} pestanas={pestanas} pestanaActiva={pestana?.id ?? null} movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
+          <Cabecera movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
             huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)} abrirMenu={() => setCajon(true)} menuAbierto={cajon}
             favoritos={favoritos(false)} usuario={usuario(false)} />
+          {conFranja && producto && (
+            <FranjaPestanas key={producto.id} producto={producto} pestanas={pestanas} activa={pestana?.id ?? null} contadores={contadores} movil={movil} />
+          )}
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
           {producto && pestana && (
             <CintaDePestana etiqueta={`Acciones de ${pestana.etiqueta}`} grupos={cinta} datos={datosCinta} entradas={entradasCinta} oculta={prefs.cintaOculta}
