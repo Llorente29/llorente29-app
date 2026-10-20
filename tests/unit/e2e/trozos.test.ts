@@ -45,7 +45,11 @@ describe('la entera en trozos', () => {
     // medido aún (cuentan como la mediana). La entera de 2 trozos de la rama del P01
     // (run 39256234205, db689e8f) tardó 30,1 y 25,7 min en sus pruebas: 55,8 min, unos
     // 13,9 por trozo de 4; el reparto estimado da 12,2. El techo pasa a 13 min, con esa medida.
-    expect(Math.max(...seg) / 60).toBeLessThan(13)
+    // 20/10 (S01f): medidos ya p01/despacho, i01c/csv, i01c/justificantes y s01e/capturas
+    // (este, 329 s: contaba como la mediana), y entra s01f/pestanas. La entera de 2 trozos
+    // del P01 (run 39385193238, 5fd026cf) tardó 26,5 y 28,5 min en sus pruebas: 55,0 min,
+    // unos 13,75 por trozo de 4; el reparto estimado da 14,0. El techo pasa a 14,5 min, con esa medida.
+    expect(Math.max(...seg) / 60).toBeLessThan(14.5)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {

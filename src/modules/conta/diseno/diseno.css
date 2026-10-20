@@ -197,7 +197,12 @@
 }
 
 /* ── Pantalla (S01): lo mínimo para una pantalla hecha con las piezas ───────── */
-.s-pantalla { display: flex; flex-direction: column; gap: var(--s-4); max-width: 960px; }
+.s-pantalla { display: flex; flex-direction: column; gap: var(--s-4); width: 100%; max-width: var(--s-ancho-pantalla); }
+/* S01g (Julio, 20/10): una pantalla de contenido usa todo el ancho que hay, hasta
+   --s-ancho-pantalla, y reparte en columnas cuando cabe. Un formulario o un texto
+   no se estira: .s-pantalla-estrecha. El Trimestre se queda como estaba (lo hace
+   C con su maqueta v4). */
+.s-pantalla.s-pantalla-estrecha, .s-pantalla.s-trimestre { max-width: var(--s-ancho-lectura); }
 .s-apoyo { margin: 0; color: var(--s-apoyo); }
 .s-fila-campos { display: flex; flex-wrap: wrap; gap: var(--s-4); }
 .s-fila-campos > .s-campo { flex: 1 1 220px; }

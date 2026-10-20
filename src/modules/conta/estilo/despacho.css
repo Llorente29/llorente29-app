@@ -9,7 +9,7 @@
  */
 
 /* min-width 0: dentro del marco la pantalla es un hijo flexible; sin esto, la fila de filtros del móvil la ensanchaba (413 px). */
-.s-pantalla.s-despacho, .s-despacho { flex: 1 1 auto; width: 100%; max-width: 1440px; min-width: 0; padding-bottom: 96px; }
+.s-pantalla.s-despacho, .s-despacho { flex: 1 1 auto; width: 100%; max-width: var(--s-ancho-pantalla); min-width: 0; padding-bottom: 96px; }
 .s-despacho > * { min-width: 0; }
 .s-despacho .s-tarjeta-cifra-valor, .s-despacho-cifra { font-family: var(--s-letra); font-variant-numeric: tabular-nums; }
 
