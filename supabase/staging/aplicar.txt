@@ -307,3 +307,12 @@ supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql
 #   para y dice cuál. No toca lo que staging lleva por delante de otros frentes
 #   (B02, D01, el TPV de mesas) ni lo que no está en git.
 supabase/staging/sql/20261126_w03_como_produccion.sql
+
+# I01f · El envío a Diez de las recibidas autoliquidadas (rama
+#   conta/i01f-diez-autoliquidadas). La 0320 (cambia conta_recibida_envio: solo
+#   añade el tratamiento del IVA de cada línea y el país del proveedor) SOLO
+#   dentro de su prueba (ROLLBACK): una recibida de verdad de A puesta como
+#   intracomunitaria de Francia (intra_eu y FR) y como inversión del sujeto
+#   pasivo de Estados Unidos (reverse_charge y US), como usuario de A; lo de
+#   antes, igual; la cuenta B no la lee; y la vuelta atrás, byte a byte.
+supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql

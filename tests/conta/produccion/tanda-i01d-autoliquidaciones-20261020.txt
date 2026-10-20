@@ -1,0 +1,28 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# I01d · Las autoliquidaciones (rama conta/i01d-autoliquidaciones; encargo de
+# Julio del 20/10, pieza 3a). Va DESPUÉS de «deducida en» (0290, PR #257,
+# aplicada): su copia, tests/conta/produccion/tanda-i01c-deducida-20261020.txt.
+#
+#   1. 0300 — AÑADE conta_pais_nombre, conta_proveedor_iva_clase,
+#      conta_impuesto_303_cajas y conta_impuesto_303_desde_libro (solo lee).
+#      CAMBIA en caliente, declaradas con su prueba de staging (misma firma):
+#      conta_impuesto_303_calcular (la autoliquidación en la [10]–[13] y la
+#      [36]–[39], desde el libro), conta_libro_iva_deducir_en (su testigo),
+#      conta_vat_book_desde_asiento (la intracomunitaria, con inversión del
+#      sujeto pasivo; el país de la ficha del proveedor) y
+#      conta_motivos_para_validar (la 477 de la autorrepercusión, y el tipo
+#      contra el país). Las dos últimas están en la validación de TODOS los
+#      asientos, también los de ventas del día.
+#   2. 0310 — DATOS de Foodint: el país de Trypleez (PT) y el alta de Anthropic
+#      Ireland (IE), HubRise (FR), Supabase (SG) y Vercel (US) con su 410.
+#
+# El testigo, después: conta_impuesto_303_desde_libro(Foodint, 2026, '3T')
+# tiene que dar [46] −3.723,44 (lo dice la cuenta). Ninguna función que desplegar.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/i01d-autoliquidaciones.sql
+supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
+supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql

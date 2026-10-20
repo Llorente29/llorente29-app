@@ -1,0 +1,31 @@
+{
+ "_que": "I01d · las autoliquidaciones · contexto de producción de la tanda (20261125T0300 y 20261125T0310), medido en SOLO LECTURA el 20/10 a las 14:33 UTC, después de la 0290 (aplicada), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las cuatro funciones que cambian (conta_impuesto_303_calcular, conta_libro_iva_deducir_en, conta_vat_book_desde_asiento y conta_motivos_para_validar), cada una con una sola firma; existen company_account_link y supplier; nada del camino del pedido; nada en el historial. (Corregido el 20/10 al archivarla: el texto de antes era el de la 0290.)",
+ "medido": "2026-10-20T14:33Z",
+ "tanda": {
+  "supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql": "909566f36442a87925a16a619f68fe14",
+  "supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql": "49ec34d7c0de85bfa21b7bad15b9c6d5"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account_link",
+   "public.supplier"
+  ],
+  "funciones": [
+   "public.conta_impuesto_303_calcular(uuid,int,text)",
+   "public.conta_libro_iva_deducir_en(uuid,jsonb,int,text,text)",
+   "public.conta_motivos_para_validar(uuid)",
+   "public.conta_vat_book_desde_asiento(uuid)"
+  ],
+  "filas": {
+   "public.company_account_link": 82,
+   "public.supplier": 95
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

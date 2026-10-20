@@ -3,26 +3,19 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01d · Las autoliquidaciones (rama conta/i01d-autoliquidaciones; encargo de
-# Julio del 20/10, pieza 3a). Va DESPUÉS de «deducida en» (0290, PR #257,
-# aplicada): su copia, tests/conta/produccion/tanda-i01c-deducida-20261020.txt.
+# I01f · Enviar a Diez las recibidas autoliquidadas (rama
+# conta/i01f-diez-autoliquidadas; encargo de Julio del 20/10). Va DESPUÉS de
+# las autoliquidaciones (0300 y 0310, PR #260, aplicadas): su copia,
+# tests/conta/produccion/tanda-i01d-autoliquidaciones-20261020.txt.
 #
-#   1. 0300 — AÑADE conta_pais_nombre, conta_proveedor_iva_clase,
-#      conta_impuesto_303_cajas y conta_impuesto_303_desde_libro (solo lee).
-#      CAMBIA en caliente, declaradas con su prueba de staging (misma firma):
-#      conta_impuesto_303_calcular (la autoliquidación en la [10]–[13] y la
-#      [36]–[39], desde el libro), conta_libro_iva_deducir_en (su testigo),
-#      conta_vat_book_desde_asiento (la intracomunitaria, con inversión del
-#      sujeto pasivo; el país de la ficha del proveedor) y
-#      conta_motivos_para_validar (la 477 de la autorrepercusión, y el tipo
-#      contra el país). Las dos últimas están en la validación de TODOS los
-#      asientos, también los de ventas del día.
-#   2. 0310 — DATOS de Foodint: el país de Trypleez (PT) y el alta de Anthropic
-#      Ireland (IE), HubRise (FR), Supabase (SG) y Vercel (US) con su 410.
+#   1. 0320 — CAMBIA en caliente conta_recibida_envio (misma firma, declarada
+#      con su prueba de staging): solo AÑADE dos claves a lo que devuelve, el
+#      «tratamiento» del IVA de cada línea (tax_rate.treatment) y el «pais» del
+#      proveedor. La lee solo conta-diez-enviar. Nada del camino del pedido.
 #
-# El testigo, después: conta_impuesto_303_desde_libro(Foodint, 2026, '3T')
-# tiene que dar [46] −3.723,44 (lo dice la cuenta). Ninguna función que desplegar.
+# Después, a mano: desplegar conta-diez-enviar (importa _shared/diezRecibida.ts
+# y _shared/diezEnviar.ts), con el sí de Julio. Sin la 0320 la función nueva
+# manda igual las recibidas normales y para las autoliquidadas diciendo por qué.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/i01d-autoliquidaciones.sql
-supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
-supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql
+cuenta: scripts/conta/produccion/cuentas/i01f-recibida-envio.sql
+supabase/migrations/20261126T0320_i01f_recibida_envio_tratamiento.sql

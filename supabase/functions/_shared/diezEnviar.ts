@@ -371,7 +371,9 @@ async function enviarAsiento(entryId: string, p: PuertoEnvio): Promise<Resultado
  * solo lo validado, sin documento no se envía, ni C0001 ni C0008, «Diez no
  * guarda documentos todavía», nunca dos veces y el documento leído de vuelta.
  * La factura, la de _shared/diezRecibida.ts (medida en la C0009); lo que no se
- * ha medido (retención, recargo, abonos) no se manda y dice por qué.
+ * ha medido (retención, recargo, abonos) no se manda y dice por qué. I01f: las
+ * autoliquidadas (intracomunitaria e inversión del sujeto pasivo de fuera de
+ * la UE) sí, con su TipoFactura (7 y 6).
  */
 export async function enviarRecibidaADiez(entryId: string, p: PuertoEnvio & { recibida(entryId: string): Promise<RecibidaBD> }): Promise<ResultadoEnvio> {
   return conRed(entryId, p, () => enviarRecibida(entryId, p))
@@ -409,8 +411,8 @@ async function enviarRecibida(entryId: string, p: PuertoEnvio & { recibida(entry
 /** Lo que conta_recibida_envio devuelve de un asiento de factura recibida. */
 export type RecibidaBD = Base & {
   factura: { numero: string | null; fecha: string }
-  proveedor: { nombre: string; nif: string | null }
-  lineas: { cuenta: string; debe: number; haber: number; tipoIva: number | null; baseIva: number | null }[]
+  proveedor: { nombre: string; nif: string | null; pais?: string | null }
+  lineas: { cuenta: string; debe: number; haber: number; tipoIva: number | null; baseIva: number | null; tratamiento?: string | null }[]
 }
 
 async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnvio> {

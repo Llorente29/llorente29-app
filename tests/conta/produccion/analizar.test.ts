@@ -1382,12 +1382,79 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): las autoliquidaciones (I01d, 0300 y 0310)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el envío a Diez de las autoliquidadas (I01f, 0320)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 20/10 a las 14:33 UTC, después de la 0290, para ESTOS ficheros.
+  // lectura en producción el 20/10 a las 18:00 UTC, después de la 0300 y la 0310, para ESTE fichero.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const cuerpo = (f: string) => {
+    const s = readFileSync(f, 'utf8')
+    const k = s.indexOf('create or replace function public.conta_recibida_envio(')
+    const m = /as (\$(?:function)?\$)/.exec(s.slice(k))!
+    const ini = k + m.index + m[0].length
+    return s.slice(ini, s.indexOf(`${m[1]};`, ini))
+  }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const ORIGEN = 'supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql'
+  const DOWN = 'supabase/vuelta-atras/20261126T0320_i01f_recibida_envio_tratamiento.down.sql'
+
+  it('un fichero, el medido; sigue; nada del camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261126T0320_i01f_recibida_envio_tratamiento.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    expect(md5(readFileSync(viva[0], 'utf8'))).toBe(medida.tanda[viva[0]])
+    expect(r.ficheros[viva[0]]).toBe('sigue')
+    expect(ctx.funciones).toEqual(['public.conta_recibida_envio(uuid)'])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente está en la cabecera, con su prueba de staging, que existe y la nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual(['-- cambia: public.conta_recibida_envio · prueba: supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql'])
+    expect(readFileSync('supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql', 'utf8')).toMatch(/\bconta_recibida_envio\b/)
+  })
+  it('sale de la de producción (6e5ed258…), solo AÑADE dos claves, y la vuelta atrás la devuelve BYTE A BYTE', () => {
+    expect(md5(cuerpo(ORIGEN)).slice(0, 8)).toBe('6e5ed258')
+    expect(cuerpo(DOWN)).toBe(cuerpo(ORIGEN))
+    const antes = cuerpo(ORIGEN).split('\n')
+    const ahora = cuerpo(viva[0]).split('\n')
+    // Nada de lo de antes se va, salvo las dos líneas que ahora siguen con una clave más.
+    expect(antes.filter((l) => !ahora.includes(l)).map((l) => l.trim())).toEqual([
+      "'nif', coalesce(nullif(trim(v_i.issuer_tax_id), ''), nullif(trim(v_s.tax_id), ''))),",
+      "'tipoIva', t.rate, 'baseIva', l.tax_base) order by l.position)",
+    ])
+    expect(ahora.filter((l) => !antes.includes(l)).map((l) => l.trim()).filter((l) => !l.startsWith('--'))).toEqual([
+      "'nif', coalesce(nullif(trim(v_i.issuer_tax_id), ''), nullif(trim(v_s.tax_id), '')),",
+      "'pais', coalesce(nullif(upper(btrim(v_s.country_code)), ''), 'ES')),",
+      "'tipoIva', t.rate, 'baseIva', l.tax_base,",
+      "'tratamiento', t.treatment) order by l.position)",
+    ])
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01f-recibida-envio.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás, y la ensaya staging', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+    const prueba = readFileSync('supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${DOWN}`)
+  })
+})
+
+describe('la tanda de las autoliquidaciones (I01d, 0300 y 0310, PR #260), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01d-autoliquidaciones-20261020.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 20/10 a las 14:33 UTC, después de la 0290, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01d-autoliquidaciones-20261020.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1470,7 +1537,7 @@ describe('la tanda de AHORA (manifiesto vivo): las autoliquidaciones (I01d, 0300
     expect(d.replace(/--.*$/gm, '')).not.toMatch(/\b(IE|FR|PT|EU|US)\d{6,}/)
   })
   it('su vuelta atrás, en orden inverso, y la ensaya staging', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01d-autoliquidaciones-20261020.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261125T0310_i01d_proveedores_foodint.down.sql', 'supabase/vuelta-atras/20261125T0300_i01d_autoliquidaciones.down.sql'])
     const down = readFileSync(atras[1], 'utf8')
     for (const f of ['conta_impuesto_303_desde_libro(uuid, int, text)', 'conta_impuesto_303_cajas(public.vat_book_entry)', 'conta_proveedor_iva_clase(text, text, text, text, text)', 'conta_pais_nombre(text)']) {

@@ -99,11 +99,14 @@ describe('la propuesta de una factura autoliquidada', () => {
     const { propuesta: p } = facturaProveedor(entrada({ autoliquidacion: null, lineas: [{ base: 100, tipo: { id: 't21', porcentaje: 21 }, cuentaGasto: '62900005' }], total: 121 }), cuentas)
     expect(p!.lineas.map((l) => l.cuenta)).toEqual(['62900005', '47200021', '41000099'])
   })
-  it('a Diez no se manda: su forma de guardar una autoliquidada no está medida, y lo dice', () => {
+  it('I01f · a Diez va como intracomunitaria (TipoFactura 7), el total es la base', () => {
     const { propuesta: p } = facturaProveedor(entrada(), cuentas)
-    expect(() => facturaRecibida({
-      fecha: '2026-10-05', fechaFactura: '2026-10-05', numero: 'INV-1', proveedor: { nombre: 'FRANCESA INVENTADA', nif: 'FR00123456789' },
-      lineas: p!.lineas.map((l) => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber, tipoIva: l.iva?.tipo ?? null, baseIva: l.iva?.base ?? null })),
-    }, { hoy: '2026-10-06' })).toThrow('líneas que una factura recibida no lleva: 47700021')
+    // El tratamiento del tipo lo pone la base (tax_rate.treatment): «ue_compra» es intra_eu.
+    const { factura } = facturaRecibida({
+      fecha: '2026-10-05', fechaFactura: '2026-10-05', numero: 'INV-1', proveedor: { nombre: 'FRANCESA INVENTADA', nif: 'FR00123456789', pais: 'FR' },
+      lineas: p!.lineas.map((l) => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber, tipoIva: l.iva?.tipo ?? null, baseIva: l.iva?.base ?? null,
+        tratamiento: l.iva?.tipoId === 'ue_compra' ? 'intra_eu' : l.iva ? 'taxed' : null })),
+    }, { hoy: '2026-10-06' })
+    expect([factura.TipoFactura, factura.TotalFactura, factura.CuotaIVA1]).toEqual([7, 100, 21])
   })
 })
