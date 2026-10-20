@@ -154,6 +154,8 @@ jobs:
             '[prueba-c0009:autoliquidada-molde]'*) S=scripts/conta/diez/prueba-c0009-autoliquidada-molde.ts ;;
             # I01f (20/10, sí de Julio): UNA autoliquidada inventada de Sumied a la C0009, leída de vuelta, y su «-ANUL» (si ya están, no se envían otras).
             '[prueba-c0009:autoliquidada]'*) S=scripts/conta/diez/prueba-c0009-autoliquidada.ts ;;
+            # I01f (20/10): el detalle que guardó Diez de esa autoliquidada y de su «-ANUL», solo lectura (escribir: false).
+            '[prueba-c0009:autoliquidada-detalle]'*) S=scripts/conta/diez/prueba-c0009-autoliquidada-detalle.ts ;;
             # D01 (15/10): cómo se anula una recibida en la serie 2 y la «-ANUL» de Folvy, ensayada sin escribir (solo GET).
             '[prueba-c0009:recibida-anular]'*) S=scripts/conta/diez/prueba-c0009-recibida-anular.ts ;;
             # E05 (15/10): las recibidas de riders, flotas y Catcher en la serie 2, solo recuentos (escribir: false).
