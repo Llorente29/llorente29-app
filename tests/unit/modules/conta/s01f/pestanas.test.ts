@@ -17,7 +17,7 @@ import { ICONOS, TAM_ICONO_PESTANA } from '@/modules/conta/diseno/iconos'
 import { MARCAS } from '../../../../../supabase/functions/_shared/marcas'
 
 const F = JSON.parse(readFileSync(join(__dirname, 'fixtures/calendario-staging-20261013.json'), 'utf8')) as { talleres: Calendario; bar: Calendario }
-const vence = (c: Calendario) => contadoresDeImpuestos(avisosInicio(c, 'medio'))
+const vence = (c: Calendario) => contadoresDeImpuestos(avisosInicio(c, 'medio'), c.presentados.presentados)
 
 describe('S01f · lo que vence, en rojo (el calendario de staging a 13/10)', () => {
   it('Talleres: 111, 115 y 303 revisados sin presentar, plazo el 20/10 → 3 en Calendario', () => {
@@ -25,8 +25,11 @@ describe('S01f · lo que vence, en rojo (el calendario de staging a 13/10)', () 
       'impuestos.calendario': { n: 3, tono: 'vence', frase: '3 modelos con el plazo encima o pasado' },
     })
   })
-  it('el Bar: el 111 ya presentado no cuenta; el 303 sí → 1', () => {
-    expect(vence(F.bar)['impuestos.calendario']).toEqual({ n: 1, tono: 'vence', frase: '1 modelo con el plazo encima o pasado' })
+  it('el Bar: el 111 ya presentado no cuenta; el 303 sí → 1. Y «Presentados 1», en gris (maqueta_trimestre_v3)', () => {
+    expect(vence(F.bar)).toEqual({
+      'impuestos.calendario': { n: 1, tono: 'vence', frase: '1 modelo con el plazo encima o pasado' },
+      'impuestos.presentados': { n: 1, tono: 'neutro', frase: '1 presentado este año' },
+    })
   })
   it('a más de 15 días del plazo no hay número (es el umbral del Inicio: interrumpe)', () => {
     expect(vence({ ...F.talleres, hoy: '2026-10-01' })).toEqual({})
@@ -34,7 +37,7 @@ describe('S01f · lo que vence, en rojo (el calendario de staging a 13/10)', () 
   it('el cargo que no ha llegado al banco no «vence»: no cuenta en Calendario', () => {
     const conPago: Calendario = { ...F.bar, filas: [], pagos_sin_llegar: [{ declaracion: 'x', modelo: '303', ejercicio: 2026, periodo: '2T', importe: 10, plazo: '2026-07-20', domicilia: false }] } as Calendario
     expect(avisosInicio(conPago, 'medio')).toHaveLength(1)
-    expect(vence(conPago)).toEqual({})
+    expect(vence(conPago)['impuestos.calendario']).toBeUndefined()
   })
   it('el certificado que caduca (de mentira: en staging no hay) va en Certificados', () => {
     const c = { ...F.talleres, filas: [], certificado: { caduca: '2026-10-18' } } as unknown as Calendario
@@ -53,7 +56,7 @@ describe('S01f · lo que pide una decisión, en gris (las cuentas de la barra)',
   })
   it('cada clave apunta a una pestaña que existe', () => {
     const todas = new Set(PRODUCTOS.flatMap((p) => p.pestanas.map((t) => clavePestana(p.id, t.id))))
-    for (const k of [...Object.keys(CUENTA_DE_PESTANA), 'impuestos.calendario', 'impuestos.certificados']) expect(todas.has(k), k).toBe(true)
+    for (const k of [...Object.keys(CUENTA_DE_PESTANA), 'impuestos.calendario', 'impuestos.presentados', 'impuestos.certificados']) expect(todas.has(k), k).toBe(true)
   })
 })
 

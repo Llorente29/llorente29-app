@@ -4,7 +4,7 @@
 // Los grises salen de lo que el marco ya cuenta para la barra (useCuentasMenu):
 // no piden nada nuevo a la base. Los rojos de Impuestos leen el calendario de
 // la empresa (el mismo que el Inicio), y solo cuando se está en Impuestos: las
-// demás pantallas no pagan esa lectura. Se recuerda 30 s por empresa, como el
+// demás pantallas no pagan esa lectura. De ahí sale también «Presentados N», en gris. Se recuerda 30 s por empresa, como el
 // menú, y vuelve a leer con `refrescarCuentasMenu()`.
 
 import { useEffect, useMemo, useState } from 'react'
@@ -18,7 +18,7 @@ const cache = new Map<string, { cuando: number; valor: Promise<ContadoresPestana
 
 function contarImpuestos(companyId: string): Promise<ContadoresPestanas> {
   // El nivel solo cambia cómo se titula cada aviso, no cuántos hay.
-  return leerCalendario(companyId).then((c) => contadoresDeImpuestos(avisosInicio(c, 'medio')))
+  return leerCalendario(companyId).then((c) => contadoresDeImpuestos(avisosInicio(c, 'medio'), c.presentados?.presentados ?? 0))
     .catch((e: unknown) => { console.error('[pestañas] no se pudo leer lo que vence', e); return {} })
 }
 
