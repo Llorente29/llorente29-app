@@ -279,3 +279,15 @@ supabase/staging/sql/20261122_i01c_trimestre_prueba.sql
 #   el cálculo byte a byte como la 0280.
 supabase/migrations/20261124T0290_i01c_deducida.sql
 supabase/staging/sql/20261124_i01c_deducida_prueba.sql
+
+# I01d · Las autoliquidaciones (rama conta/i01d-autoliquidaciones). La 0300 DE
+#   VERDAD (cambia el cálculo del 303, el testigo de «deducida en», el libro
+#   desde el asiento y la validación; añade cuatro funciones) y su prueba, con
+#   \i y ROLLBACK, por los caminos: una intracomunitaria y una de fuera de la UE
+#   validadas con su autorrepercusión; sin la 477 no; el tipo contra el país,
+#   tres veces, no; el 303 del 4T cambia lo que tiene que cambiar y el cálculo
+#   dice lo mismo que el libro; anular; el testigo; otra cuenta; y la vuelta
+#   atrás byte a byte. La 0310 es solo de Foodint: aquí no hace nada.
+supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
+supabase/staging/sql/20261125_i01d_autoliquidaciones_prueba.sql
+supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql
