@@ -46,6 +46,10 @@ set local statement_timeout = '300s';
 -- PRODUCCIÓN se carga aquí, dentro de la transacción, y la 0300 encima (su
 -- conta_motivos_para_validar manda). El ROLLBACK lo quita todo: staging sigue
 -- como estaba.
+-- La m01 crea con «create function» (sin «or replace») dos funciones que
+-- staging ya tiene: se quitan antes, dentro de la transacción.
+drop function if exists public.conta_esperan(uuid, date, date);
+drop function if exists public.conta_motivos_para_validar(uuid);
 \i supabase/migrations/20261117T0100_m01_motivos_para_validar.sql
 \i supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
 
