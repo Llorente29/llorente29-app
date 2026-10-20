@@ -42,6 +42,7 @@ alter table public.vat_book_entry
   add column if not exists deduction_year smallint,
   add column if not exists deduction_period text,
   add column if not exists deduction_reason text;
+alter table public.vat_book_entry drop constraint if exists vat_book_entry_deducida_en;
 alter table public.vat_book_entry add constraint vat_book_entry_deducida_en check (
   (deduction_year is null and deduction_period is null and deduction_reason is null)
   or (deduction_year between 2000 and 2100
