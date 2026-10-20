@@ -5,7 +5,7 @@
 // escritas a mano cuando el PDF no se pudo leer.
 
 import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
-import { MODELOS_JUSTIFICANTE, tituloJustificante, type Justificante } from '@/modules/conta/lib/justificanteAeat'
+import { MODELOS_JUSTIFICANTE, tituloJustificante, type CausaLectura, type Justificante } from '@/modules/conta/lib/justificanteAeat'
 import type { TonoChip } from '@/modules/conta/diseno'
 
 /** Lo que dice la base de cada justificante (conta_impuesto_justificantes_repasar). */
@@ -36,12 +36,60 @@ export interface DatosJustificante {
   devolucion?: boolean
   a_mano?: boolean
   motivo?: string
+  /** 0270: lo de la primera página y de dónde salió el PDF. */
+  expediente?: string | null
+  presentador?: { nif: string; nombre: string } | null
+  origen_pdf?: 'aeat_csv' | 'upload'
 }
 
-export function datosDe(j: Justificante, resultadoAMano: number | null = null, devolucion = false): DatosJustificante {
+export function datosDe(j: Justificante, resultadoAMano: number | null = null, devolucion = false, traido = false): DatosJustificante {
   return {
     modelo: j.modelo, ejercicio: j.ejercicio, periodo: j.periodo, presentada: j.presentada, csv: j.csv, justificante: j.justificante,
     nif: j.nif, casillas: j.casillas, resultado: j.resultado?.importe ?? resultadoAMano, ...(devolucion ? { devolucion: true } : {}),
+    expediente: j.expediente ?? null, presentador: j.presentador ?? null, origen_pdf: traido ? 'aeat_csv' : 'upload',
+  }
+}
+
+/**
+ * Lo que dice la base de un justificante que no se puede guardar, en palabras
+ * de oficina y en una frase: el de otro NIF es «de otra empresa».
+ */
+export function motivoEnPalabras(motivo: string | null | undefined): string {
+  const m = motivo ?? 'No se puede guardar.'
+  const otro = /^Es de otro NIF(?: \(([^)]+)\))?/.exec(m)
+  return otro ? `Ese justificante es de otra empresa${otro[1] ? ` (NIF ${otro[1]})` : ''}.` : m
+}
+
+/**
+ * Por qué no se ha leído un PDF, en UNA frase de oficina y sin encadenar
+ * motivos (Julio, 19/10):
+ *   · si se trajo de Hacienda y Sumied aún no sabe leerlo: «Traído de Hacienda,
+ *     pero Sumied aún no lee el modelo 111. Puedes escribir las cifras a mano.»;
+ *   · si el PDF no deja ver su CSV: «No encontramos el CSV en este PDF. Pégalo
+ *     a mano.»;
+ *   · si no es un PDF, su motivo (no es un PDF, pasa de 10 MB, no se abre).
+ */
+export function fraseNoSeLee(l: { motivo: string; causa?: CausaLectura; parcial: { modelo?: string } }, traido: boolean): string {
+  if (l.causa === 'no_pdf') return l.motivo
+  if (!traido) return 'No encontramos el CSV en este PDF. Pégalo a mano.'
+  const modelo = l.parcial.modelo
+  return modelo
+    ? `Traído de Hacienda, pero Sumied aún no lee el modelo ${modelo}. Puedes escribir las cifras a mano.`
+    : 'Traído de Hacienda, pero Sumied no reconoce su modelo. Puedes escribir las cifras a mano.'
+}
+
+/**
+ * Lo que contestó Hacienda (conta-justificante-csv) cuando no dio el
+ * justificante, en una frase. Se dice desde aquí por su motivo, no con el texto
+ * de la función, para que sea la misma frase en «Subir» y en «Pegar CSV».
+ */
+export function fraseDeHacienda(t: { motivo: string; mensaje: string }): string {
+  switch (t.motivo) {
+    case 'formato': return 'Ese CSV no tiene la forma de los de Hacienda: son 16 letras y números.'
+    case 'no_encontrado': return 'Hacienda no tiene ningún justificante con ese CSV: revísalo letra a letra.'
+    case 'no_responde': return 'Hacienda no responde ahora mismo: vuelve a intentarlo en un rato.'
+    case 'ya_estaba': return t.mensaje.replace(/\s*No hace falta traerlo otra vez\.\s*$/, '')
+    default: return t.mensaje
   }
 }
 
@@ -102,4 +150,24 @@ export function resumenGuardado(r: { ok: boolean; titulo: string; mensaje: strin
   if (bien.length) partes.push(`${bien.length === 1 ? 'Guardado 1 justificante' : `Guardados ${bien.length} justificantes`}: ${bien.map((x) => x.titulo).join(', ')}.`)
   if (mal.length) partes.push(`${mal.length === 1 ? '1 no se ha podido guardar' : `${mal.length} no se han podido guardar`}: ${mal.map((x) => `${x.titulo} (${x.mensaje})`).join('; ')}.`)
   return partes.join(' ') || 'No había nada que guardar.'
+}
+
+/**
+ * El resultado de un justificante en palabras, para la ficha: el importe sin
+ * signo, hacia dónde va, y —en un 303 que sale a cero porque se compensó con
+ * cuotas de trimestres anteriores— cuánto se compensó ([78]): «0,00 € ·
+ * 647,28 € compensado con trimestres anteriores» (Julio, 19/10).
+ */
+export function resultadoEnPalabras(j: Pick<Justificante, 'modelo' | 'resultado' | 'casillas'>): { importe: string; que: string; compensado: string | null } {
+  const v = j.resultado?.importe ?? null
+  const comp = j.modelo === '303' ? j.casillas['78'] ?? 0 : 0
+  if (v === null) return { importe: '—', que: 'resultado sin leer', compensado: null }
+  const sinActividad = v === 0 && Object.values(j.casillas).every((x) => x === 0)
+  const que = v > 0 ? 'a ingresar' : v < 0 ? 'a compensar' : sinActividad ? 'sin actividad' : 'resultado cero'
+  return { importe: eurosExactos(Math.abs(v)), que, compensado: v === 0 && comp > 0 ? `${eurosExactos(comp)} compensado con trimestres anteriores` : null }
+}
+
+/** Lo mismo en Presentados, con lo que da la base (importe, resultado y la [78]). */
+export function compensadoEnPalabras(p: { importe: number | null; compensado?: number | null }): string | null {
+  return p.importe === 0 && (p.compensado ?? 0) > 0 ? `${eurosExactos(p.compensado!)} compensado con trimestres anteriores` : null
 }

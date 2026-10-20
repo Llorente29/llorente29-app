@@ -24,7 +24,7 @@ import { MARCA } from '../cuenta/marca'
 import { PROGRAMAS } from '@/modules/conta/alta/programa'
 
 export type PasoAlta = 'nif' | 'nombre' | 'actividad' | 'impuestos' | 'cuentas' | 'banco' | 'hecho'
-export type ClavePregunta = 'nif' | 'nombre' | 'direccion' | 'actividad' | 'periodo' | 'retiene' | 'alquiler' | 'retenido70' | 'cuentas' | 'programa' | 'banco'
+export type ClavePregunta = 'nif' | 'nombre' | 'direccion' | 'actividad' | 'periodo' | 'retiene' | 'alquiler' | 'retenido70' | 'asesoria' | 'cuentas' | 'programa' | 'banco'
 
 export interface OpcionAlta { valor: string; texto: string }
 
@@ -60,6 +60,8 @@ export interface ContextoAlta {
   clases: ClaseActividad[]
   respuestas: Partial<Record<ClavePregunta, string>>
   hoy: string
+  /** P01 · La marca con la que se da el alta ('sumied', 'folvy'…): la pregunta de la asesoría, solo con Sumied. */
+  marca?: string
 }
 
 export const PASOS: PasoAlta[] = ['nif', 'nombre', 'actividad', 'impuestos', 'cuentas', 'banco', 'hecho']
@@ -174,6 +176,17 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
           porque: 'Si es así, no adelantas el IRPF cada trimestre (RD 439/2007, art. 109.2).',
           ayuda: 'Si al menos el 70 % de lo que facturaste llevó retención, no adelantas el IRPF cada trimestre. Si no lo sabes, lo dejo en «no» y se lo apunto a tu asesor.',
           opciones: [{ valor: 'no', texto: 'No' }, { valor: 'si', texto: 'Sí' }],
+          entrada: null, normal: 'no', noLoSe: 'No lo sé',
+        })
+      }
+      // P01 (Julio, 19/10): solo con la marca Sumied. Con «Sí», la cuenta queda
+      // como asesoría y al terminar el alta entra en «Impuestos de tus clientes».
+      if (ctx.marca === 'sumied') {
+        out.push({
+          clave: 'asesoria', texto: '¿Llevas los impuestos de otras empresas?',
+          porque: null,
+          ayuda: 'Si eres una asesoría o una gestoría, en Impuestos verás los de todas las empresas que te den permiso y podrás presentarlos por lotes. Solo verás a quien te lo dé. Se cambia luego en Ajustes › Tus impuestos.',
+          opciones: [{ valor: 'no', texto: 'No, solo los de mi empresa' }, { valor: 'si', texto: 'Sí, soy una asesoría' }],
           entrada: null, normal: 'no', noLoSe: 'No lo sé',
         })
       }

@@ -517,19 +517,46 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (I01c, los justificantes: la 0260 sigue; ningún «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (I01c, el trimestre: la 0280 sigue; ningún «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261122T0260_i01c_justificantes.sql: sigue')
+    expect(r.out).toContain('20261122T0280_i01c_trimestre.sql: sigue')
     expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261122T0260_i01c_justificantes.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261122T0280_i01c_trimestre.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261122T0260_i01c_justificantes.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261122T0280_i01c_trimestre.sql ha cambiado desde la medida')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de Impuestos de tus clientes (P01, 0100, su copia), con su contexto medido', () => {
+  it('la 0100 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-p01-despacho-20261019.json',
+      '--manifiesto=tests/conta/produccion/tanda-p01-despacho-20261019.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261123T0100_p01_despacho.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del justificante por CSV (0270, su copia), con su contexto medido', () => {
+  it('la 0270 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01c-csv-20261019.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01c-csv-20261019.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261122T0270_i01c_csv.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de los justificantes (0260, su copia), con su contexto medido', () => {
+  it('la 0260 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01c-justificantes-20261019.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01c-justificantes-20261019.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261122T0260_i01c_justificantes.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
   })
 })
 

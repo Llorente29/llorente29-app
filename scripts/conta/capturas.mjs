@@ -56,11 +56,15 @@ export const DE_QUIEN = {
   // I01b (18/10): Impuestos (conta/i01…) no es un frente de usuarios —sus e2e
   // van con los de siempre, en su carril—, pero tiene sus capturas: i01b/…
   impuestos: /^docs\/conta\/capturas\/i\d[^/]*\//,
+  // P01 (19/10): «Impuestos de tus clientes» (conta/p01…), igual que Impuestos:
+  // sin frente de usuarios, con sus capturas en p01/…
+  despacho: /^docs\/conta\/capturas\/p\d[^/]*\//,
 }
 
 export function duenoDeLaRama(rama) {
   if (/^reparto-/.test(rama)) return 'reparto'
   if (/^conta\/i\d/.test(rama)) return 'impuestos'
+  if (/^conta\/p\d/.test(rama)) return 'despacho'
   return frenteDeLaRama(rama) || null
 }
 

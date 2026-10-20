@@ -8,6 +8,7 @@
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc } from '@/modules/conta/services/bd'
 import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
+import type { Trimestre } from '@/modules/conta/impuestos/trimestre'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
 import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
 import type { DatosJustificante, Mirado } from '@/modules/conta/impuestos/justificantes'
@@ -72,6 +73,11 @@ export function anadirImpuesto(companyId: string, modelo: string, motivo: string
 /** Lo que devuelve conta_impuesto_303_calcular. */
 /** Sin libro de IVA (o sin saber la [110] cuando sale a pagar), `sabido` es false y no hay resultado ni importe. */
 export interface Calculo303 { declaracion: string; desde: string; hasta: string; apuntes: number; resultado: string | null; importe: number | null; sabido: boolean }
+
+/** I01c · El trimestre (conta_impuesto_trimestre, 0280): la tira y la cartera del 303. No escribe nada. */
+export function leerTrimestre(companyId: string, ejercicio: number, trimestre: number): Promise<Trimestre> {
+  return rpc<Trimestre>('conta_impuesto_trimestre', { p_company: companyId, p_year: ejercicio, p_quarter: trimestre })
+}
 
 /** Calcula (o recalcula) el borrador del 303 de un periodo desde el libro de IVA. */
 export function calcular303(companyId: string, ejercicio: number, periodo: string): Promise<Calculo303> {
@@ -160,6 +166,8 @@ export interface Presentado {
   estado_texto: string; resultado: string | null; importe: number | null
   presentada: string | null; presentada_por: string | null; por: 'sumied' | 'outside' | null; plazo: string
   csv: string | null; justificante: string | null; justificante_pdf: string | null; contabilizada: boolean; casada: boolean; comprobada: boolean
+  /** 0270: el PDF traído de Hacienda por su CSV, el expediente, el presentador y, en el 303, lo compensado ([78]). */
+  traido?: boolean; expediente?: string | null; presentador?: { nif: string | null; nombre: string | null } | null; compensado?: number | null
 }
 export interface ParaApuntar { ejercicio: number; periodo: string; presentacion: string; declaracion: string | null; estado: string | null; resultado: string | null; importe: number | null }
 export interface Presentados { puede_gestionar: boolean; presentados: Presentado[]; para_apuntar: ParaApuntar[] }
@@ -184,7 +192,7 @@ export async function enlaceJustificante(ruta: string): Promise<string> {
  * <cuenta>/impuestos/<declaración>/<huella>.pdf, y la base comprueba que es ese
  * fichero (tamaño y tipo) antes de enlazarlo. Uno por declaración: no se cambia.
  */
-export async function subirJustificante(p: { declaracion: string; cuenta: string; fichero: File }): Promise<string> {
+export async function subirJustificante(p: { declaracion: string; cuenta: string; fichero: File | Blob }): Promise<string> {
   hayBase()
   if (p.fichero.type && p.fichero.type !== 'application/pdf') throw new Error('El justificante tiene que ser un PDF.')
   const bytes = new Uint8Array(await p.fichero.arrayBuffer())
@@ -199,20 +207,52 @@ export async function subirJustificante(p: { declaracion: string; cuenta: string
 
 // ── I01c · P1 · Subir justificantes de Hacienda ─────────────────────────────
 
-/** Lee un justificante de la Sede en el navegador (pdfjs + celdasPdf + justificanteAeat). Nunca lanza. */
-export async function leerJustificantePdf(fichero: File): Promise<Lectura> {
-  if (fichero.type && fichero.type !== 'application/pdf' && !/\.pdf$/i.test(fichero.name)) {
-    return { ok: false, motivo: 'No es un PDF: el justificante de la Sede se descarga en PDF.', parcial: {} }
+/**
+ * Lee un justificante de la Sede en el navegador (pdfjs + celdasPdf +
+ * justificanteAeat). Nunca lanza. Da también el CSV que se ve en el PDF (el de
+ * un reimpreso que no se lee, para traer el original de Hacienda).
+ */
+export async function leerJustificantePdf(fichero: File | Blob, nombre = 'el PDF'): Promise<Lectura & { csvVisto?: { csv: string | null; candidatos: string[] } }> {
+  const n = fichero instanceof File ? fichero.name : nombre
+  if (fichero.type && fichero.type !== 'application/pdf' && !/\.pdf$/i.test(n)) {
+    return { ok: false, causa: 'no_pdf', motivo: 'No es un PDF: el justificante de la Sede se descarga en PDF.', parcial: {} }
   }
-  if (fichero.size > 10 * 1024 * 1024) return { ok: false, motivo: 'Pasa de 10 MB: no parece un justificante.', parcial: {} }
+  if (fichero.size > 10 * 1024 * 1024) return { ok: false, causa: 'no_pdf', motivo: 'Pasa de 10 MB: no parece un justificante.', parcial: {} }
   try {
-    const [{ pdfjs }, { celdasPdf }, { leerJustificante }] = await Promise.all([
+    const [{ pdfjs }, { celdasPdf }, { leerJustificante, csvDelPdf }] = await Promise.all([
       import('@/modules/conta/plan/leerFicheros'), import('@/modules/conta/lib/celdasPdf'), import('@/modules/conta/lib/justificanteAeat'),
     ])
-    return leerJustificante(await celdasPdf(await pdfjs(), await fichero.arrayBuffer()))
+    const paginas = await celdasPdf(await pdfjs(), await fichero.arrayBuffer())
+    return { ...leerJustificante(paginas), csvVisto: csvDelPdf(paginas) }
   } catch (e) {
-    return { ok: false, motivo: `No se ha podido abrir como PDF (${e instanceof Error ? e.message : String(e)}).`, parcial: {} }
+    return { ok: false, causa: 'no_pdf', motivo: `No se ha podido abrir como PDF (${e instanceof Error ? e.message : String(e)}).`, parcial: {} }
   }
+}
+
+export type TraidoDeHacienda =
+  | { ok: true; pdf: Blob }
+  | { ok: false; motivo: 'formato' | 'permiso' | 'ya_estaba' | 'no_encontrado' | 'no_responde'; mensaje: string; declaracion?: string }
+
+/**
+ * Trae de Hacienda el justificante original por su CSV (conta-justificante-csv).
+ * No guarda nada: lo devuelve para leerlo y enseñarlo. Nunca lanza.
+ */
+export async function traerJustificanteCsv(companyId: string, csv: string): Promise<TraidoDeHacienda> {
+  hayBase()
+  const { data, error } = await supabase!.functions.invoke('conta-justificante-csv', { body: { company_id: companyId, csv } })
+  let d = data as { ok?: boolean; pdf_base64?: string; motivo?: string; mensaje?: string; declaracion?: string } | null
+  if (error) {
+    const ctx = (error as { context?: Response } | null)?.context
+    d = ctx && typeof ctx.json === 'function' ? await ctx.clone().json().catch(() => null) : null
+    if (!d) return { ok: false, motivo: 'no_responde', mensaje: 'No se ha podido preguntar a Hacienda desde Sumied ahora mismo. Vuelve a intentarlo en un rato. No se ha guardado nada.' }
+  }
+  if (d?.ok && d.pdf_base64) {
+    const bytes = Uint8Array.from(atob(d.pdf_base64), (c) => c.charCodeAt(0))
+    return { ok: true, pdf: new Blob([bytes as BlobPart], { type: 'application/pdf' }) }
+  }
+  const motivos = ['formato', 'permiso', 'ya_estaba', 'no_encontrado', 'no_responde'] as const
+  const motivo = motivos.find((m) => m === d?.motivo) ?? 'no_responde'
+  return { ok: false, motivo, mensaje: d?.mensaje ?? 'Hacienda no responde ahora mismo. No se ha guardado nada.', declaracion: d?.declaracion }
 }
 
 /** La pantalla de repaso: cada justificante mirado por la base. No escribe nada. */
@@ -225,7 +265,7 @@ export function repasarJustificantes(companyId: string, lista: DatosJustificante
  * guarda su PDF en la carpeta de la declaración. Devuelve lo que ha pasado, en
  * palabras; si el PDF no llega, la declaración queda apuntada y se dice.
  */
-export async function apuntarJustificante(companyId: string, datos: DatosJustificante, fichero: File | null): Promise<string> {
+export async function apuntarJustificante(companyId: string, datos: DatosJustificante, fichero: File | Blob | null): Promise<string> {
   const r = await rpc<Mirado & { ok: boolean; mensaje: string; cuenta: string }>('conta_impuesto_justificante_apuntar', { p_company: companyId, p_datos: datos })
   if (!fichero || !r.declaracion || (r.estado === 'ya_estaba' && !r.falta_pdf)) return r.mensaje
   try {

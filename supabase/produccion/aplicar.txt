@@ -3,18 +3,19 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01c · P1 · Subir justificantes de Hacienda (rama conta/i01c-justificantes).
-# Va DESPUÉS de la del 349 por operaciones (0250, PR #244, aplicada): su copia,
-# tests/conta/produccion/tanda-i01b-349-por-operaciones-20261019.txt.
+# I01c · El trimestre (rama conta/i01c-trimestre).
+# Va DESPUÉS de la de Impuestos de tus clientes (0100 de P01, PR #248, aplicada): su copia,
+# tests/conta/produccion/tanda-p01-despacho-20261019.txt.
 #
-#   1. 0260 — CAMBIA en caliente, declarado con su prueba de staging:
-#      tax_return_box (el CHECK de origin AMPLÍA con 'justificante'; las 11
-#      filas de hoy son 'calculated' o 'manual' y caben). AÑADE
-#      conta_impuesto_justificante_mirar, conta_impuesto_justificantes_repasar
-#      y conta_impuesto_justificante_apuntar.
+#   1. 0280 — AÑADE conta_impuesto_trimestre (lo que pinta Impuestos ›
+#      Trimestre: la tira de modelos y la cartera del 303; solo lee). CAMBIA en
+#      caliente, declarado con su prueba de staging, conta_impuesto_303_calcular
+#      (misma firma): sin resultado, escribe igual la [110] del 303 anterior
+#      presentado. Lo demás, como la 0240.
 #
-# No toca el camino del pedido. No escribe ninguna declaración: las escribe
-# Julio al subir los justificantes. Ninguna función que desplegar.
+# No toca el camino del pedido. No escribe ninguna declaración: el borrador
+# del 3T de Foodint se pone al día cuando alguien abre el trimestre (o vuelve a
+# calcular). Ninguna función que desplegar.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/i01c-justificantes.sql
-supabase/migrations/20261122T0260_i01c_justificantes.sql
+cuenta: scripts/conta/produccion/cuentas/i01c-trimestre.sql
+supabase/migrations/20261122T0280_i01c_trimestre.sql

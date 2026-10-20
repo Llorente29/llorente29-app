@@ -25,7 +25,7 @@ import type { NombreIcono } from '@/modules/conta/diseno/iconos'
 export type IdProducto = 'inicio' | 'contabilidad' | 'facturacion' | 'compras' | 'bancos' | 'laboral' | 'impuestos' | 'contactos' | 'ajustes'
 
 /** Lo que solo sale si la empresa lo tiene. */
-export type Condicion = 'hosteleria' | 'diez'
+export type Condicion = 'hosteleria' | 'diez' | 'asesoria'
 
 export type Interruptor = 'conta_facturacion' | 'conta_laboral' | 'conta_impuestos'
 export const INTERRUPTORES: readonly Interruptor[] = ['conta_facturacion', 'conta_laboral', 'conta_impuestos']
@@ -82,6 +82,12 @@ export interface Contexto {
    * null = no se han podido leer (la tabla aún no está): todo sale, como antes.
    */
   analitica?: Analitica | null
+  /**
+   * P01 · La CUENTA dice que es una asesoría («Soy una asesoría»,
+   * accounts.tax_advisor_since) o ya lleva clientes con permiso: sale
+   * «Tus clientes» en Impuestos. Sin leer (la 0100 sin aplicar), no sale.
+   */
+  asesoria?: boolean
 }
 
 /** Un eje de analítica encendido, con el nombre que le da la empresa. */
@@ -143,7 +149,11 @@ export const PRODUCTOS: Producto[] = [
   {
     id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: R.impuestos, prefijos: [], interruptor: 'conta_impuestos',
     pestanas: [
+      // P01 · Lo primero para una asesoría: los impuestos de todos sus clientes.
+      { id: 'clientes', etiqueta: 'Tus clientes', ruta: `${R.impuestos}/clientes`, prefijos: [`${R.impuestos}/clientes`], solo: 'asesoria' },
       { id: 'calendario', etiqueta: 'Calendario', ruta: R.impuestos, prefijos: [R.impuestos] },
+      // I01c · El trimestre (maqueta_303_v2): sin año ni trimestre, el último acabado.
+      { id: 'trimestre', etiqueta: 'Trimestre', ruta: `${R.impuestos}/trimestre`, prefijos: [`${R.impuestos}/trimestre`, `${R.impuestos}/empresa`] },
       { id: 'presentados', etiqueta: 'Presentados', ruta: `${R.impuestos}/presentados`, prefijos: [`${R.impuestos}/presentados`] },
       { id: 'sociedades', etiqueta: 'Impuesto de sociedades', ruta: `${R.impuestos}/sociedades`, prefijos: [`${R.impuestos}/sociedades`] },
       { id: 'certificados', etiqueta: 'Certificados', ruta: `${R.impuestos}/certificados`, prefijos: [`${R.impuestos}/certificados`] },
@@ -172,7 +182,7 @@ export const PRODUCTOS: Producto[] = [
   },
 ]
 
-const cumple = (c: Condicion | undefined, ctx: Contexto) => !c || (c === 'hosteleria' ? ctx.hosteleria : ctx.diez)
+const cumple = (c: Condicion | undefined, ctx: Contexto) => !c || (c === 'hosteleria' ? ctx.hosteleria : c === 'diez' ? ctx.diez : ctx.asesoria === true)
 
 /** Las pestañas que salen: con pantalla y, si piden algo de la empresa, que lo tenga. */
 export function pestanasVisibles(p: Producto, ctx: Contexto): Pestana[] {

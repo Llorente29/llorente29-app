@@ -14,7 +14,7 @@
 // (company, conta_diez_base, feature_flags.feature_key/enabled/expires_at)
 // existe hoy en producción, comprobado el 17/10 en information_schema.
 
-import { tabla, mensaje } from '@/modules/conta/services/bd'
+import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
 import { supabase } from '@/lib/supabase'
 import { aFila, deFila, type Preferencias } from '@/modules/conta/esqueleto/preferencias'
 import { INTERRUPTORES, type Analitica, type Contexto } from '@/modules/conta/esqueleto/productos'
@@ -65,6 +65,21 @@ export async function leerContexto(accountId: string, companyId: string | null):
     interruptores: new Set(encendidos),
     logoEmpresa: typeof fila?.logo_path === 'string' && fila.logo_path ? await urlDelLogo(fila.logo_path) : null,
     analitica: ejes ? analiticaDe(ejes) : null,
+    asesoria: await esAsesoria(accountId),
+  }
+}
+
+/**
+ * P01 · ¿La cuenta es una asesoría? conta_despacho_soy (20261123T0100). Si la
+ * función aún no está o no contesta, no lo es: la pestaña no sale y nada más
+ * se rompe (el resto del esqueleto no depende de esto).
+ */
+async function esAsesoria(accountId: string): Promise<boolean> {
+  try {
+    const d = await rpc<{ asesoria?: boolean; clientes?: number } | null>('conta_despacho_soy', { p_account: accountId })
+    return d?.asesoria === true || (d?.clientes ?? 0) > 0
+  } catch {
+    return false
   }
 }
 

@@ -1,17 +1,15 @@
 {
- "_que": "I01c · P1 · subir justificantes · contexto de producción de la tanda viva (20261122T0260), medido en SOLO LECTURA el 19/10 a las 10:28 UTC, después de la 0250, con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe tax_return_box (11 filas; ninguna con un origen fuera de 'calculated' y 'manual'; el CHECK, el de la 0110); no existe ninguna de las tres funciones; nada del camino del pedido; nada en el historial.",
- "medido": "2026-10-19T10:28Z",
+ "_que": "I01c · el trimestre · contexto de producción de la tanda viva (20261122T0280), medido en SOLO LECTURA el 19/10 a las 21:22 UTC, después de la 0100 de P01 (en el historial, con la 0270; las siete conta_despacho_* existen), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe conta_impuesto_303_calcular con una sola firma (md5 de su cuerpo 9141db88860d38cc7ae7175f12b382b0, el de la 0240 y el de la vuelta atrás); no existe conta_impuesto_trimestre; ninguna tabla; nada del camino del pedido; nada en el historial. Igual que la medida de las 20:32, antes de la 0100.",
+ "medido": "2026-10-19T21:22Z",
  "tanda": {
-  "supabase/migrations/20261122T0260_i01c_justificantes.sql": "60f49993088b15fc494b53969932f078"
+  "supabase/migrations/20261122T0280_i01c_trimestre.sql": "6e5155172e52e5806e8bf689ab41b698"
  },
  "contexto": {
-  "tablas": [
-   "public.tax_return_box"
+  "tablas": [],
+  "funciones": [
+   "public.conta_impuesto_303_calcular(uuid,int,text)"
   ],
-  "funciones": [],
-  "filas": {
-   "public.tax_return_box": 11
-  },
+  "filas": {},
   "otras": {},
   "camino": {
    "tablas": [],
