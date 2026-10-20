@@ -6,13 +6,17 @@
  * el título de su columna: no se pierden.
  */
 
-.s-impuestos { max-width: 1320px; }
+/* S01g · Sin tope propio: el de la pantalla (--s-ancho-pantalla); el Trimestre lleva el suyo, más abajo. */
 .s-impuestos .s-cifra, .s-impuestos .s-tarjeta-cifra-valor { font-family: var(--s-letra); font-variant-numeric: tabular-nums; }
 
 .s-impuestos-cifras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
 .s-impuestos-cifra-apoyo { display: block; margin-top: var(--s-1); font-size: var(--s-t-s); font-weight: var(--s-peso-normal); color: var(--s-apoyo); }
 
 .s-impuestos-columnas { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s-4); align-items: start; }
+/* S01g · Con sitio, la columna de al lado crece con la pantalla (un tercio), en vez de quedarse en 340. */
+@media (min-width: 1600px) {
+  .s-impuestos-columnas { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr); gap: var(--s-6); }
+}
 .s-impuestos-principal, .s-impuestos-lado { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
 
 /* Con .s-tabla delante: el sistema (diseno.css) se carga después y, a la par, ganaría él. */
