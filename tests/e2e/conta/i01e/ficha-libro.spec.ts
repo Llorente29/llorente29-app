@@ -107,14 +107,15 @@ test('La ficha de un proveedor traído de Diez enseña sus facturas del libro y 
     await page.goto(`/kitchen/proveedores/${id}/datos-fiscales`)
     const bien = page.locator('[data-prueba="bien"]')
     await expect(bien).toHaveText(/^✓ Comprobado en VIES el \d{2}\/\d{2}\/\d{4}: el NIF-IVA está dado de alta\.$/, { timeout: 20_000 })
-    const [verde, ambar] = await page.evaluate(() => {
-      const s = getComputedStyle(document.documentElement)
-      return [s.getPropertyValue('--cx-verde-oscuro'), s.getPropertyValue('--cx-ambar')]
+    // Los colores del módulo viven en su raíz, no en la del documento: se leen en el propio elemento.
+    const { color, verde, ambar } = await bien.evaluate((e) => {
+      const enRgb = (x: string) => { const d = document.createElement('i'); d.style.color = x; e.appendChild(d); const r = getComputedStyle(d).color; d.remove(); return r }
+      const s = getComputedStyle(e)
+      return { color: s.color, verde: enRgb(s.getPropertyValue('--cx-verde-oscuro').trim()), ambar: enRgb(s.getPropertyValue('--cx-ambar').trim()) }
     })
-    const color = await bien.evaluate((e) => getComputedStyle(e).color)
-    const enRgb = async (c: string) => page.evaluate((x) => { const d = document.createElement('i'); d.style.color = x; document.body.appendChild(d); const r = getComputedStyle(d).color; d.remove(); return r }, c)
-    expect(color).toBe(await enRgb(verde.trim()))
-    expect(color).not.toBe(await enRgb(ambar.trim()))
+    expect(verde).not.toBe(ambar)
+    expect(color).toBe(verde)
+    expect(color).not.toBe(ambar)
     await expect(page.locator('#campo-taxId').locator('..').locator('.cx-aviso')).toHaveCount(0)
     await expect(page.getByText('Tal como sale en sus facturas', { exact: true })).toBeVisible()
     await expect(page.getByText(/Hermanos Ruiz/)).toHaveCount(0)
