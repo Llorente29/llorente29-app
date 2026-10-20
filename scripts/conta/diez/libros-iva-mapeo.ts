@@ -72,33 +72,73 @@ export function tramosDocumento(max: number, n: number): [number, number][] {
   return out
 }
 
-export type Lectura = { facturas: Factura[]; filas: number; dias: number; sinContestar: number[]; diasLlenos: number; tramosLlenos: number; repetidas: number; repetidasDistintas: number }
+export type Lectura = {
+  facturas: Factura[]; filas: number; dias: number; sinContestar: number[]; diasLlenos: number; tramosLlenos: number
+  repetidas: number; repetidasDistintas: number
+  /** Días que no contestaron a la primera y sí en el reintento del final. */
+  recuperados: number
+}
+
+/** El reintento del final (20/10): cuántas vueltas y cuánto se espera antes de cada una (×1, ×2, ×3…). */
+export type OpcionesLectura = { rondas?: number; pausaMs?: number; espera?: (ms: number) => Promise<void> }
+const esperaReal = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/**
+ * Un día entero. Si llena la página, se vuelve a pedir en tramos de documento;
+ * si un tramo también la llena (p. ej. la serie 1 y la 2 con los mismos
+ * números), se parte en dos y se pide cada mitad, hasta que quepa. Solo si un
+ * único documento llena la página no hay más que partir: se cuenta.
+ */
+async function leerDia(c: Pick<ClienteDiez, 'todas'>, d: number): Promise<{ del: Factura[]; lleno: boolean; tramosLlenos: number }> {
+  const filtro = (x: string) => `/api/facturas?$filter=${encodeURIComponent(x)}`
+  const del = await c.todas<Factura>(filtro(`Fecha ge ${d} and Fecha le ${d}`))
+  if (del.length < PAGINA) return { del, lleno: false, tramosLlenos: 0 }
+  let tramosLlenos = 0
+  const out: Factura[] = []
+  const tramo = async (a: number, b: number): Promise<void> => {
+    const t = await c.todas<Factura>(filtro(`Fecha ge ${d} and Fecha le ${d} and Documento ge ${a} and Documento le ${b}`))
+    if (t.length < PAGINA) { out.push(...t); return }
+    if (a === b) { tramosLlenos++; out.push(...t); return }
+    const m = Math.floor((a + b) / 2)
+    await tramo(a, m)
+    await tramo(m + 1, b)
+  }
+  for (const [a, b] of tramosDocumento(DOCUMENTO_MAX, TRAMO)) await tramo(a, b)
+  return { del: out, lleno: true, tramosLlenos }
+}
 
 /**
  * Las facturas de Diez de un mes a otro, día a día, sin repetidas: el día que
  * llena la página se vuelve a pedir en tramos de documento. Las repetidas con
  * el mismo contenido se quitan; si alguna clave sale con contenido distinto,
  * se cuenta (y quien llama decide parar).
+ *
+ * 20/10 · El ensayo #5 (de día) se quedó con 5 días sin contestar de 273: Diez
+ * tardaba más de 90 s. Los que no contestan se vuelven a pedir AL FINAL, solo
+ * ellos, con una pausa antes de cada vuelta (30 s, 60 s, 90 s por defecto).
+ * Lo que siga sin contestar se dice, y quien llama para.
  */
-export async function leerFacturas(c: Pick<ClienteDiez, 'todas'>, desde: string, hasta: string): Promise<Lectura> {
+export async function leerFacturas(c: Pick<ClienteDiez, 'todas'>, desde: string, hasta: string, o: OpcionesLectura = {}): Promise<Lectura> {
+  const rondas = o.rondas ?? 3, pausaMs = o.pausaMs ?? 30_000, espera = o.espera ?? esperaReal
   const todas: Factura[] = []
-  const sinContestar: number[] = []
-  let dias = 0, diasLlenos = 0, tramosLlenos = 0
-  const filtro = (x: string) => `/api/facturas?$filter=${encodeURIComponent(x)}`
+  let dias = 0, diasLlenos = 0, tramosLlenos = 0, recuperados = 0
+  const uno = async (d: number) => {
+    const r = await leerDia(c, d)
+    if (r.lleno) diasLlenos++
+    tramosLlenos += r.tramosLlenos
+    todas.push(...r.del); dias++
+  }
+  let sinContestar: number[] = []
   for (const d of diasEntre(desde, hasta)) {
-    try {
-      let del = await c.todas<Factura>(filtro(`Fecha ge ${d} and Fecha le ${d}`))
-      if (del.length >= PAGINA) {
-        diasLlenos++
-        del = []
-        for (const [a, b] of tramosDocumento(DOCUMENTO_MAX, TRAMO)) {
-          const t = await c.todas<Factura>(filtro(`Fecha ge ${d} and Fecha le ${d} and Documento ge ${a} and Documento le ${b}`))
-          if (t.length >= PAGINA) tramosLlenos++
-          del.push(...t)
-        }
-      }
-      todas.push(...del); dias++
-    } catch { sinContestar.push(d) }
+    try { await uno(d) } catch { sinContestar.push(d) }
+  }
+  for (let ronda = 1; ronda <= rondas && sinContestar.length; ronda++) {
+    await espera(pausaMs * ronda)
+    const siguen: number[] = []
+    for (const d of sinContestar) {
+      try { await uno(d); recuperados++ } catch { siguen.push(d) }
+    }
+    sinContestar = siguen
   }
   const porClave = new Map<string, Factura[]>()
   for (const f of todas) { const k = `${f.Ejercicio}/${f.Serie}/${f.Documento}`; porClave.set(k, [...(porClave.get(k) ?? []), f]) }
@@ -108,7 +148,7 @@ export async function leerFacturas(c: Pick<ClienteDiez, 'todas'>, desde: string,
     repetidas++
     if (new Set(fs.map((f) => JSON.stringify(f))).size > 1) repetidasDistintas++
   }
-  return { facturas: [...porClave.values()].map((fs) => fs[0]), filas: todas.length, dias, sinContestar, diasLlenos, tramosLlenos, repetidas, repetidasDistintas }
+  return { facturas: [...porClave.values()].map((fs) => fs[0]), filas: todas.length, dias, sinContestar, diasLlenos, tramosLlenos, repetidas, repetidasDistintas, recuperados }
 }
 
 /** De dónde sale el trimestre de una recibida. */

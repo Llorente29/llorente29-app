@@ -52,12 +52,17 @@ export type Cerrojo = { abierto: true } | { abierto: false; motivo: string };
  * send-email: una lista separada por comas, cada entrada
  *   · `plantilla`          abierta a cualquiera, o
  *   · `plantilla:correo`   abierta solo a ese destinatario (el de prueba).
- * Vacío o sin poner = todo cerrado. Folvy no se frena nunca, la pida quien
- * llama sin marca o con `marca: 'folvy'` (conta-asesoria la pone así para las
- * cuentas sin marca propia): lo que ya sale sigue saliendo igual.
+ * Vacío o sin poner = todo cerrado. Folvy no se frena, la pida quien llama sin
+ * marca o con `marca: 'folvy'` (conta-asesoria la pone así para las cuentas sin
+ * marca propia): lo que ya sale sigue saliendo igual. Salvo los tipos de
+ * SIEMPRE_CON_FRENO, que no han salido nunca.
  */
+/** Tipos que el freno cierra con cualquier marca, Folvy incluida: son nuevos y aún no los ha abierto nadie. */
+export const SIEMPRE_CON_FRENO: readonly string[] = ['resumen_trimestre'];
+
 export function cerrojoMarca(marca: Marca | null, plantilla: string, destino: string, abiertos: string | undefined | null): Cerrojo {
-  if (!marca || marca.id === 'folvy') return { abierto: true };
+  // Los tipos nuevos del P01 van frenados también con Folvy: nunca han salido.
+  if (!marca || (marca.id === 'folvy' && !SIEMPRE_CON_FRENO.includes(plantilla))) return { abierto: true };
   const para = destino.trim().toLowerCase();
   const entradas = String(abiertos ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
   for (const e of entradas) {
@@ -265,9 +270,61 @@ export function invitacionAsesoria(m: Marca, data: Record<string, unknown>): Cor
   };
 }
 
+/**
+ * P01 · El resumen del trimestre que una asesoría manda a cada cliente: en
+ * palabras del cliente, sin las tareas de la asesoría.
+ * Responder a este correo le llega a la asesoría (send-email pone su
+ * «responder a», que solo admite por la vía interna: conta-asesoria).
+ * data: los DatosResumen de _shared/resumenTrimestre.ts, ya en texto.
+ */
+export function resumenTrimestre(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
+  const asesoria = String(data.asesoria ?? '').trim() || 'Tu asesoría';
+  const cliente = String(data.cliente ?? '').trim();
+  const trimestre = String(data.trimestre ?? '').trim();
+  const filas = (Array.isArray(data.filas) ? data.filas : []).map((f) => {
+    const x = (f ?? {}) as Record<string, unknown>;
+    return { modelo: String(x.modelo ?? ''), estado: String(x.estado ?? ''), importe: String(x.importe ?? ''), plazo: String(x.plazo ?? '') };
+  });
+  const aIngresar = data.aIngresar ? String(data.aIngresar) : null;
+  const aCompensar = data.aCompensar ? String(data.aCompensar) : null;
+  const titulo = `Tus impuestos del ${trimestre}`;
+  // Sin punto doble cuando el nombre ya acaba en punto («…, S.L.»).
+  const fin = (t: string) => (/[.!?]$/.test(t) ? t : `${t}.`);
+  const celda = (t: string, alinear = 'left', fuerte = false) =>
+    `<td style="padding:10px 8px;border-top:1px solid ${BORDE};font-size:14px;line-height:1.4;text-align:${alinear};color:${c.tinta};${fuerte ? 'font-weight:600;' : ''}">${esc(t)}</td>`;
+  const cab = (t: string, alinear = 'left') =>
+    `<th style="padding:6px 8px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;text-align:${alinear};color:${c.apoyo};">${esc(t)}</th>`;
+  const tabla = filas.length === 0 ? p('Este trimestre no tienes ningún impuesto que presentar.', c) :
+    `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:16px 0;border-collapse:collapse;">
+      <tr>${cab('Impuesto')}${cab('Cómo va')}${cab('Importe', 'right')}${cab('Plazo', 'right')}</tr>
+      ${filas.map((f) => `<tr>${celda(f.modelo, 'left', true)}${celda(f.estado)}${celda(f.importe, 'right')}${celda(f.plazo, 'right')}</tr>`).join('')}
+    </table>`;
+  const totales = [aIngresar ? `A ingresar en total: <strong>${esc(aIngresar)}</strong>.` : '', aCompensar ? `A compensar en los próximos trimestres: <strong>${esc(aCompensar)}</strong>.` : '']
+    .filter(Boolean).join(' ');
+  const cuerpo = `${h1(titulo, c)}${p('Hola.', c)}
+    ${p(`Te escribimos desde <strong>${esc(asesoria)}</strong> con cómo van los impuestos de ${cliente ? `<strong>${esc(cliente)}</strong>` : 'tu empresa'} en el ${esc(trimestre)}.`, c)}
+    ${tabla}
+    ${totales ? p(totales, c) : ''}
+    ${nota(esc(fin(`Si tienes alguna duda, responde a este correo: le llega a ${asesoria}`)), c)}`;
+  const linea = (x: { modelo: string; estado: string; importe: string; plazo: string }) =>
+    `- ${x.modelo}: ${[x.estado, x.importe !== '—' ? x.importe : '', x.plazo !== '—' ? `Plazo: ${x.plazo}` : ''].filter(Boolean).join('. ')}.`;
+  const texto = `Hola.\n\nTe escribimos desde ${asesoria} con cómo van los impuestos de ${cliente || 'tu empresa'} en el ${trimestre}.\n\n` +
+    (filas.length === 0 ? 'Este trimestre no tienes ningún impuesto que presentar.\n\n'
+      : filas.map(linea).join('\n') + '\n\n') +
+    (aIngresar ? `A ingresar en total: ${aIngresar}.\n` : '') + (aCompensar ? `A compensar en los próximos trimestres: ${aCompensar}.\n` : '') +
+    `\n${fin(`Si tienes alguna duda, responde a este correo: le llega a ${asesoria}`)}\n\n${m.nombre}`;
+  return {
+    subject: `${titulo}${cliente ? ` · ${cliente}` : ''}`,
+    html: marco(m, titulo, cuerpo, `Te llega porque ${asesoria} lleva los impuestos de ${cliente || 'tu empresa'} en ${m.nombre}.`.replace(/\.\. /g, '. ')),
+    text: texto,
+  };
+}
+
 export const PLANTILLAS_MARCA: Record<string, (m: Marca, d: Record<string, unknown>) => CorreoMarca> = {
   invitacion_asesoria: invitacionAsesoria,
   invitacion_conta: invitacion,
   contrasena_conta: contrasena,
   contrasena_cambiada_conta: contrasenaCambiada,
+  resumen_trimestre: resumenTrimestre,
 };

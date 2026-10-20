@@ -40,7 +40,7 @@ async function main() {
   try { await c.asegurarToken() } catch { sale('entra_en_diez', 0); process.exit(1) }
 
   const l = await leerFacturas(c, desde, hasta)
-  sale('dias_leidos', l.dias); sale('dias_sin_contestar', l.sinContestar.length); sale('dias_con_la_pagina_llena', l.diasLlenos)
+  sale('dias_leidos', l.dias); sale('dias_recuperados_al_final', l.recuperados); sale('dias_sin_contestar', l.sinContestar.length); sale('dias_con_la_pagina_llena', l.diasLlenos)
   sale('tramos_de_documento_llenos', l.tramosLlenos); sale('filas_leidas', l.filas); sale('facturas', l.facturas.length)
   sale('claves_repetidas', l.repetidas); sale('claves_repetidas_con_contenido_distinto', l.repetidasDistintas)
 

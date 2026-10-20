@@ -65,7 +65,9 @@ insert into _plantilla_usuarios values
   ('c0600000-0000-4000-8000-0000000000f0'),  -- c06.plataforma@c06-prueba.test  · administrador de plataforma
   ('d5ac0000-0000-4000-8000-0000000000a1'),  -- p01.laura@p01-prueba.test       · Asesoría de Prueba Centro (P01), administración
   ('d5ac0000-0000-4000-8000-0000000000a2'),  -- p01.marta@p01-prueba.test       · la asesoría, encargada que presenta
-  ('d5ac0000-0000-4000-8000-0000000000a3');  -- p01.jorge@p01-prueba.test       · la asesoría, encargado sin permiso
+  ('d5ac0000-0000-4000-8000-0000000000a3'),  -- p01.jorge@p01-prueba.test       · la asesoría, encargado sin permiso
+  ('d5ac0000-0000-4000-8000-00000000c02a'),  -- p01.talleres@p01-prueba.test    · administración de un cliente (el resumen va a ella)
+  ('d5ac0000-0000-4000-8000-00000000c08a');  -- p01.bar@p01-prueba.test         · administración de otro cliente
 
 create temp table _plantilla_cuentas (id uuid primary key) on commit drop;
 insert into _plantilla_cuentas values
@@ -74,9 +76,9 @@ insert into _plantilla_cuentas values
   ('c01c0000-0000-4000-8000-00000000000c'),  -- C · Obrador de Prueba Este (sin empresa)
   ('c01d0000-0000-4000-8000-00000000000d'),  -- D · Asesoría de Prueba Oeste (sin hostelería, S01)
   ('c0600000-0000-4000-8000-0000000000d0'),  -- Comercio de Prueba Diez
-  -- P01 · los diez clientes de la asesoría de demo (no tienen usuarios: su
-  -- cuenta entra aquí para que el carril tenga sus empresas, sus permisos y sus
-  -- declaraciones). La asesoría entra por sus perfiles.
+  -- P01 · los diez clientes de la asesoría de demo (su cuenta entra aquí para
+  -- que el carril tenga sus empresas, sus permisos y sus declaraciones; dos
+  -- tienen administración, arriba). La asesoría entra por sus perfiles.
   ('d5ac0000-0000-4000-8000-00000000c010'), ('d5ac0000-0000-4000-8000-00000000c020'),
   ('d5ac0000-0000-4000-8000-00000000c030'), ('d5ac0000-0000-4000-8000-00000000c040'),
   ('d5ac0000-0000-4000-8000-00000000c050'), ('d5ac0000-0000-4000-8000-00000000c060'),

@@ -110,7 +110,8 @@ describe('send-email: aviso de «contraseña cambiada» con la marca (C06, respu
 
   it('está registrada como plantilla de marca, y no hay ninguna de Folvy nueva', () => {
     // I01b (18/10): + invitacion_asesoria, también de marca (la de la cuenta que invita); las de Folvy (templates.ts) no cambian.
-    expect(Object.keys(PLANTILLAS_MARCA).sort()).toEqual(['contrasena_cambiada_conta', 'contrasena_conta', 'invitacion_asesoria', 'invitacion_conta'])
+    // P01 (19/10): + resumen_trimestre, de marca (la de la asesoría que lo manda), cerrado por el freno hasta que Julio lo abra.
+    expect(Object.keys(PLANTILLAS_MARCA).sort()).toEqual(['contrasena_cambiada_conta', 'contrasena_conta', 'invitacion_asesoria', 'invitacion_conta', 'resumen_trimestre'])
   })
 })
 
