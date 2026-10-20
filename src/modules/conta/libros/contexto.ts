@@ -56,6 +56,15 @@ export function trimestreDe(fecha: string): { desde: string; hasta: string; nomb
   return { desde: `${y}-${ini}-01`, hasta: fin, nombre: `${t + 1}T ${y}` }
 }
 
+/**
+ * El periodo pedido por la dirección (?periodo=3T): el de ese trimestre en el
+ * ejercicio elegido, o null (y entonces cada libro abre en el suyo de siempre).
+ */
+export function delTrimestre<P extends { id: string }>(ps: P[], pedido: string | null): P | undefined {
+  if (!pedido || !/^[1-4]T$/.test(pedido)) return undefined
+  return ps.find((p) => p.id.startsWith(`${pedido} `))
+}
+
 /** Los periodos de un ejercicio: sus trimestres (recortados a sus fechas) y el ejercicio entero. */
 export function periodosDelEjercicio(inicio: string, fin: string): { id: string; desde: string; hasta: string; nombre: string }[] {
   const r: { id: string; desde: string; hasta: string; nombre: string }[] = []
