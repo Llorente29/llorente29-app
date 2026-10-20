@@ -396,3 +396,102 @@ export function cuadreRetenciones(modelo: string, casillas: CasillaTrimestre[], 
     : { casa: false, texto: c4751.length ? 'Ninguna subcuenta de la 4751 tiene en el trimestre el mismo haber que lo retenido: mira sus apuntes en el mayor.' : 'El diario no tiene movimientos de la 4751 en el trimestre.' }
   return { lineas, conclusion }
 }
+
+// ── I01g · El 111 y el 115 calculados por Sumied (Julio, 20/10) ────────────
+
+/** Lo que devuelve conta_impuesto_retenciones_diario (0330): el diario del periodo, asiento a asiento. */
+export interface AsientoRetencion {
+  asiento: string; fecha: string; serie: number | null; numero: number | null; concepto: string | null; estado: string
+  tipo: '115' | '111_nomina' | '111_profesional' | 'sin_modelo' | 'pago' | 'apertura'
+  retenido: number; base: number | null; perceptor: string | null; perceptor_nombre: string | null; cuentas_4751: string | null
+}
+type Suma = { asientos: number; base: number; retenido: number; perceptores?: number }
+export interface RetencionesDiario {
+  desde: string; hasta: string
+  asientos: AsientoRetencion[]
+  sumas: { '115': Suma; '111_nomina': Suma; '111_profesional': Suma; sin_modelo: { asientos: number; retenido: number }; pagos: number; aperturas: number }
+  lineas_640: { asiento: string; fecha: string; importe: number; concepto: string | null }[]
+  cuenta_621: number
+  cuentas_4751: { cuenta: string; nombre: string; haber: number; debe: number }[]
+}
+
+/** Una fila de la liquidación del 111 o el 115 en palabras: quién, cuántos, la base y lo retenido. */
+export type FilaRetencion = { texto: string; perceptores: number | null; base: number | null; retenido: number | null; casillas: string[] }
+
+/**
+ * La liquidación del 111 o del 115 en palabras (como la del 303, maqueta v4):
+ * una fila por clase de perceptor con sus casillas al lado, el total y el
+ * resultado. Solo las filas con algo; todas las casillas siguen en «Ver las
+ * casillas» (regla 7).
+ */
+export function liquidacionRetenciones(modelo: string, casillas: CasillaTrimestre[]): { filas: FilaRetencion[]; total: number | null; casillaTotal: string; resultado: number | null; casillaResultado: string } {
+  const v = new Map(casillas.map((c) => [c.casilla.padStart(2, '0'), c.valor]))
+  const n = (k: string) => v.get(k) ?? null
+  const grupos: [string, string, string, string][] = modelo === '115'
+    ? [['Alquileres de locales', '01', '02', '03']]
+    : [['Nóminas', '01', '02', '03'], ['Nóminas en especie', '04', '05', '06'], ['Profesionales', '07', '08', '09'], ['Profesionales en especie', '10', '11', '12'], ['Premios', '13', '14', '15']]
+  const filas = grupos.flatMap(([texto, p, b, r]) => {
+    if (!n(p) && !n(b) && !n(r)) return []
+    return [{ texto, perceptores: n(p), base: n(b), retenido: n(r), casillas: [p, b, r] }]
+  })
+  return modelo === '115'
+    ? { filas, total: n('03'), casillaTotal: '03', resultado: n('05'), casillaResultado: '05' }
+    : { filas, total: n('28'), casillaTotal: '28', resultado: n('30'), casillaResultado: '30' }
+}
+
+export type LineaCuadreDiario = { texto: string; casillas: string; modelo: number | null; diario: number | null; casa: boolean | null; personas?: boolean }
+
+/**
+ * Lo comprobado del 111 o del 115 contra el diario (0330), casilla a casilla
+ * y al céntimo, con la misma regla que el cálculo: la base y lo retenido de
+ * cada clase, los perceptores que salen del diario (no los de las nóminas, que
+ * van a mano) y la 4751 entera. Sirve igual para uno presentado (lo que dice
+ * el justificante) que para un borrador.
+ */
+export function cuadreConDiario(modelo: string, casillas: CasillaTrimestre[], d: RetencionesDiario): { lineas: LineaCuadreDiario[]; casa: boolean; explicacion: string[] } {
+  const v = new Map(casillas.map((c) => [c.casilla.padStart(2, '0'), c.valor]))
+  const cent = (x: number | null | undefined) => Math.round(Number(x ?? 0) * 100)
+  const lineas: LineaCuadreDiario[] = []
+  const fila = (texto: string, casilla: string, diario: number | null, personas = false) => {
+    const m = v.get(casilla) ?? null
+    if (m === null && !diario) return
+    lineas.push({ texto, casillas: `[${casilla}]`, modelo: m, diario, casa: diario === null ? null : cent(m) === cent(diario), personas })
+  }
+  const s = d.sumas
+  if (modelo === '115') {
+    fila('Arrendadores', '01', s['115'].perceptores ?? 0, true)
+    fila('Base: alquileres con retención (621)', '02', s['115'].base)
+    fila('Retenido en los alquileres (4751)', '03', s['115'].retenido)
+  } else {
+    fila('Nóminas: lo cobrado (640, sin la 641)', '02', s['111_nomina'].base)
+    fila('Nóminas: lo retenido (4751)', '03', s['111_nomina'].retenido)
+    fila('Profesionales: cuántos', '07', s['111_profesional'].perceptores ?? 0, true)
+    fila('Profesionales: la base (su gasto)', '08', s['111_profesional'].base)
+    fila('Profesionales: lo retenido (4751)', '09', s['111_profesional'].retenido)
+    fila('Retenido en total', '28', Math.round((s['111_nomina'].retenido + s['111_profesional'].retenido) * 100) / 100)
+  }
+  const casa = lineas.every((l) => l.casa !== false)
+  const explicacion: string[] = []
+  // La base de las nóminas: si la diferencia es justo una línea de la 640, se dice cuál (Julio, 20/10: el 1T de Foodint).
+  const b = lineas.find((l) => l.casillas === '[02]' && modelo === '111')
+  if (b && b.casa === false) {
+    const dif = cent(b.diario) - cent(b.modelo)
+    const una = d.lineas_640.find((l) => cent(l.importe) === Math.abs(dif))
+    const quien = una ? ` Es justo una línea de la 640 de la nómina del ${diaMesCorto(una.fecha)} (${eurosExactos(una.importe)}), que no está en la base del 111.` : ''
+    explicacion.push(`La 640 de las nóminas suma ${eurosExactos(Math.abs(dif) / 100)} ${dif > 0 ? 'más' : 'menos'} que la base del 111 ([02]).${quien} Puede ser una paga que no lleva retención; pregúntalo a quien hace las nóminas. No bloquea nada.`)
+  }
+  if (modelo === '115' && cent(d.cuenta_621) !== cent(s['115'].base)) {
+    explicacion.push(`La 621 del trimestre suma ${eurosExactos(d.cuenta_621)}: ${eurosExactos(Math.round((d.cuenta_621 - s['115'].base) * 100) / 100)} son alquileres sin retención (un renting, por ejemplo), que no van en el 115.`)
+  }
+  if (s.sin_modelo.asientos > 0) {
+    explicacion.push(`${s.sin_modelo.asientos === 1 ? '1 asiento mueve' : `${s.sin_modelo.asientos} asientos mueven`} la 4751 sin gasto ni nómina (${eurosExactos(s.sin_modelo.retenido)} retenidos): Sumied no sabe si ${s.sin_modelo.asientos === 1 ? 'va' : 'van'} en el 111 o en el 115.`)
+  }
+  return { lineas, casa, explicacion }
+}
+
+/** Lo que dice la pantalla al calcular el 111 o el 115 (regla 8: con contenido). */
+export function fraseCalculoRetenciones(modelo: string, periodo: string, c: { importe: number | null; resultado: string | null; falta_perceptores?: boolean }): string {
+  const cuanto = c.importe === null ? 'sale negativo: mira lo comprobado' : c.resultado === 'no_activity' ? 'sin retenciones en el diario' : `${eurosExactos(c.importe)} a ingresar`
+  const falta = c.falta_perceptores ? ' Falta escribir cuántas personas cobraron nómina ([01]).' : ''
+  return `Calculado el ${modelo} del ${periodo} desde el diario: ${cuanto}.${falta}`
+}

@@ -8,7 +8,7 @@
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
 import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
-import type { FilaLibroTrimestre, SumaCuenta, Trimestre } from '@/modules/conta/impuestos/trimestre'
+import type { FilaLibroTrimestre, RetencionesDiario, SumaCuenta, Trimestre } from '@/modules/conta/impuestos/trimestre'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
 import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
 import type { DatosJustificante, Mirado } from '@/modules/conta/impuestos/justificantes'
@@ -230,10 +230,32 @@ export async function cuentasDelTrimestre(cuenta: string, empresa: string, prefi
 }
 
 /** Lo que Sumied comprobó al calcular la declaración (tax_return_check), si la calculó. */
-export async function comprobacionesDeDeclaracion(id: string, cuenta: string): Promise<{ clave: string; resultado: 'ok' | 'warning' | 'error'; titulo: string }[]> {
-  const { data, error } = await tabla('tax_return_check').select('check_key, result, title').eq('tax_return_id', id).eq('account_id', cuenta)
+export async function comprobacionesDeDeclaracion(id: string, cuenta: string): Promise<{ clave: string; resultado: 'ok' | 'warning' | 'error'; titulo: string; detalle: Record<string, unknown> | null }[]> {
+  const { data, error } = await tabla('tax_return_check').select('check_key, result, title, detail').eq('tax_return_id', id).eq('account_id', cuenta)
   if (error) throw new Error(`No se ha podido leer lo comprobado: ${error.message}`)
-  return ((data ?? []) as { check_key: string; result: 'ok' | 'warning' | 'error'; title: string }[]).map((f) => ({ clave: f.check_key, resultado: f.result, titulo: f.title }))
+  return ((data ?? []) as { check_key: string; result: 'ok' | 'warning' | 'error'; title: string; detail: Record<string, unknown> | null }[])
+    .map((f) => ({ clave: f.check_key, resultado: f.result, titulo: f.title, detalle: f.detail }))
+}
+
+/** I01g · Lo que devuelve conta_impuesto_retenciones_calcular (0330). */
+export interface CalculoRetenciones {
+  declaracion: string; modelo: '111' | '115'; desde: string; hasta: string; asientos: number
+  resultado: string | null; importe: number | null; casillas: Record<string, number>; falta_perceptores: boolean; propuesta_perceptores: number | null
+}
+
+/** I01g · Calcula (o recalcula) el borrador del 111 o del 115 de un periodo desde el diario. */
+export function calcularRetenciones(companyId: string, ejercicio: number, periodo: string, modelo: '111' | '115'): Promise<CalculoRetenciones> {
+  return rpc<CalculoRetenciones>('conta_impuesto_retenciones_calcular', { p_company: companyId, p_year: ejercicio, p_period: periodo, p_form: modelo })
+}
+
+/** I01g · La [01] del 111 a mano (cuántas personas cobraron nómina), con su motivo; vuelve a calcular. */
+export function ponerPerceptores(declaracion: string, perceptores: number, motivo: string): Promise<{ ok: boolean; mensaje: string; calculo: CalculoRetenciones }> {
+  return rpc('conta_impuesto_perceptores_poner', { p_return: declaracion, p_perceptores: perceptores, p_motivo: motivo })
+}
+
+/** I01g · Lo que dice el diario de las retenciones de un periodo (conta_impuesto_retenciones_diario). No escribe nada. */
+export function retencionesDelDiario(companyId: string, ejercicio: number, periodo: string): Promise<RetencionesDiario> {
+  return rpc<RetencionesDiario>('conta_impuesto_retenciones_diario', { p_company: companyId, p_year: ejercicio, p_period: periodo })
 }
 
 /**

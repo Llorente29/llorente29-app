@@ -28,21 +28,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { rutaAsiento, rutaImpuestos, rutaIvaPeriodo, rutaLibros, rutaMayor, rutaTrimestre } from '@/config/navegacion'
-import { Boton, BotonEnlace, Chip, Icono, Tarjeta } from '@/modules/conta/diseno'
+import { Boton, BotonEnlace, Campo, Chip, Icono, Tarjeta } from '@/modules/conta/diseno'
 import { clasesBoton } from '@/modules/conta/diseno/valores'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { esCasillaDePersonas } from '@/modules/conta/lib/justificanteAeat'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
 import {
-  asientosDeDeclaracion, calcular303, comprobacionesDeDeclaracion, cuentasDelTrimestre, enlaceJustificante, leerTrimestre, libroIvaDelTrimestre,
+  asientosDeDeclaracion, calcular303, calcularRetenciones, comprobacionesDeDeclaracion, enlaceJustificante, leerTrimestre, libroIvaDelTrimestre,
+  ponerPerceptores, retencionesDelDiario, revisarDeclaracion,
 } from '@/modules/conta/services/impuestosService'
 import { esCasillaDePorcentaje, queEsLaCasilla } from './casillasModelos'
 import { textoResultado } from './calendario'
 import {
   CASILLA_RESULTADO, estaPresentada, fraseDesfasada, fraseRecalculado, importeConSigno, lineasCartera, numeroTrimestre, presentadorEnPalabras,
-  cuadreLibro303, cuadreRetenciones, cuentaDelImpuesto, fechasTrimestre, librosDelModelo, liquidacion303, tarjeta, tituloTrimestre, trimestrePorDefecto,
-  type CasillaTrimestre, type FilaLiquidacion, type LineaCuadre, type ModeloTrimestre, type SumaCuenta, type Trimestre,
+  cuadreConDiario, cuadreLibro303, cuentaDelImpuesto, fechasTrimestre, fraseCalculoRetenciones, librosDelModelo, liquidacion303, liquidacionRetenciones,
+  tarjeta, tituloTrimestre, trimestrePorDefecto,
+  type CasillaTrimestre, type FilaLiquidacion, type LineaCuadre, type ModeloTrimestre, type RetencionesDiario, type Trimestre,
 } from './trimestre'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -108,6 +110,8 @@ export default function TrimestrePage() {
   if (!q || !Number.isInteger(ejercicio)) return <TrimestrePorDefecto />
 
   const ir = (y: number, t: string) => { setElegido(null); setHecho(null); navegar(rutaTrimestre(y, t, deRuta)) }
+  // I01g · Tras calcular, escribir la [01] o revisar: se vuelve a leer el trimestre y se dice lo que pasó (regla 8).
+  const alHacer = (h: { tono: 'ok' | 'falta'; texto: string }) => { setHecho(h); if (h.tono === 'ok') setVuelta((v) => v + 1) }
   const modelos = datos?.modelos ?? []
   const elegidoModelo = modelos.find((m) => clave(m) === elegido) ?? modelos.find((m) => m.modelo === '303') ?? modelos[0] ?? null
   const dia = hoy()
@@ -163,14 +167,16 @@ export default function TrimestrePage() {
           {elegidoModelo && (
             <div className={`s-trimestre-cuerpo${ampliado ? ' s-trimestre-cuerpo--ampliado' : ''}`} data-prueba="cuerpo">
               <div className="s-trimestre-col s-trimestre-col-izq">
-                <Ficha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} hoy={dia} />
+                <Ficha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} hoy={dia} alHacer={alHacer} />
               </div>
               <div className="s-trimestre-col s-trimestre-col-centro">
                 <Derecha key={`${clave(elegidoModelo)}/${elegidoModelo.declaracion?.justificante_pdf ?? ''}`} m={elegidoModelo}
-                  ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} ampliado={ampliado} alAmpliar={() => setAmpliado((a) => !a)} />
+                  ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} ampliado={ampliado} alAmpliar={() => setAmpliado((a) => !a)}
+                  alCalcular={datos.puede_gestionar && (elegidoModelo.modelo === '111' || elegidoModelo.modelo === '115')
+                    ? () => calcularYDecir(datos.empresa.id, ejercicio, trimestre, elegidoModelo.modelo as '111' | '115', alHacer) : undefined} />
               </div>
               <div className="s-trimestre-col s-trimestre-col-der">
-                <ColDerecha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre}
+                <ColDerecha key={`${clave(elegidoModelo)}/${vuelta}`} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre}
                   alRecalcular={() => void recalcular(datos, pedido)} />
               </div>
             </div>
@@ -196,8 +202,8 @@ function valorCasilla(modelo: string, c: CasillaTrimestre): string {
  * palabras y «Ver las casillas» para desplegarlas todas; con los demás, sus
  * casillas (son pocas).
  */
-function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy }: {
-  m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; deRuta: boolean; hoy: string
+function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alHacer }: {
+  m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; deRuta: boolean; hoy: string; alHacer: (h: { tono: 'ok' | 'falta'; texto: string }) => void
 }) {
   const d = m.declaracion
   const t = tarjeta(m, hoy)
@@ -234,8 +240,12 @@ function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy }: {
         </dl>
       )}
       {d && !deRuta && <Acciones m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} presentada={presentada} />}
+      {(m.modelo === '111' || m.modelo === '115') && !presentada && !m.no_toca && datos.puede_gestionar && (
+        <Preparar m={m} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={deRuta} alHacer={alHacer} />
+      )}
       {m.modelo === '303' && casillas.length > 0 && <Liquidacion casillas={casillas} />}
-      {casillas.length > 0 && (m.modelo === '303'
+      {(m.modelo === '111' || m.modelo === '115') && casillas.length > 0 && <LiquidacionRetenciones modelo={m.modelo} casillas={casillas} />}
+      {casillas.length > 0 && (m.modelo === '303' || m.modelo === '111' || m.modelo === '115'
         ? <details className="s-trimestre-todas" data-prueba="todas-las-casillas"><summary>Ver las casillas ({casillas.length})</summary><TablaCasillas m={m} casillas={casillas} resultado={resultado} /></details>
         : <TablaCasillas m={m} casillas={casillas} resultado={resultado} />)}
     </section>
@@ -299,7 +309,7 @@ function Liquidacion({ casillas }: { casillas: CasillaTrimestre[] }) {
  */
 function ColDerecha({ m, d, ejercicio, trimestre, alRecalcular }: { m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; alRecalcular: () => void }) {
   if (m.modelo === '303') return <><Cartera d={d} alRecalcular={alRecalcular} /><Comprobado303 m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} /></>
-  if (m.modelo === '111' || m.modelo === '115') return <CuadreConDiario m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} />
+  if (m.modelo === '111' || m.modelo === '115') return <ComprobadoRetenciones m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} />
   return (
     <section className="s-tarjeta s-trimestre-comprobado" aria-labelledby="comp-titulo">
       <h3 id="comp-titulo" className="s-trimestre-cartera-titulo">Lo comprobado</h3>
@@ -355,40 +365,222 @@ function Comprobado303({ m, d, ejercicio, trimestre }: { m: ModeloTrimestre; d: 
   )
 }
 
-function CuadreConDiario({ m, d, ejercicio, trimestre }: { m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string }) {
-  const decl = m.declaracion
-  const [leido, setLeido] = useState<{ para: string; cuentas: SumaCuenta[] | null; fallo: string | null } | null>(null)
-  const para = `${d.empresa.id}/${ejercicio}/${trimestre}/${m.modelo}`
-  useEffect(() => {
-    if (!decl) return
-    let vivo = true
-    const { desde, hasta } = fechasTrimestre(ejercicio, trimestre)
-    cuentasDelTrimestre(decl.cuenta, d.empresa.id, m.modelo === '115' ? ['4751', '621'] : ['4751'], desde, hasta)
-      .then((c) => { if (vivo) setLeido({ para, cuentas: c, fallo: null }) }, (e: unknown) => { if (vivo) setLeido({ para, cuentas: null, fallo: msg(e) }) })
-    return () => { vivo = false }
-  }, [decl, d.empresa.id, ejercicio, trimestre, m.modelo, para])
-  const l = leido?.para === para ? leido : null
-  const c = l?.cuentas && decl ? cuadreRetenciones(m.modelo, decl.casillas, l.cuentas) : null
+// ── I01g · El 111 y el 115 calculados por Sumied ───────────────────────────
+
+type Hecho = { tono: 'ok' | 'falta'; texto: string }
+
+/** Calcula el 111 o el 115 y lo dice con su cifra (regla 8). */
+async function calcularYDecir(empresa: string, ejercicio: number, trimestre: string, modelo: '111' | '115', alHacer: (h: Hecho) => void) {
+  try {
+    const c = await calcularRetenciones(empresa, ejercicio, trimestre, modelo)
+    alHacer({ tono: 'ok', texto: fraseCalculoRetenciones(modelo, trimestre, c) })
+  } catch (e) {
+    alHacer({ tono: 'falta', texto: `No se ha calculado el ${modelo} del ${trimestre}: ${msg(e)}` })
+  }
+}
+
+/** Un botón que espera a lo que hace y no deja pulsarlo dos veces (regla 8). */
+function BotonCalcular({ texto, alCalcular, variante = 'principal' }: { texto: string; alCalcular: () => Promise<void>; variante?: 'principal' | 'secundario' | 'enlace' }) {
+  const [haciendo, setHaciendo] = useState(false)
   return (
-    <section className="s-tarjeta s-trimestre-comprobado" aria-labelledby="comp-titulo" data-prueba="cuadres">
-      <h3 id="comp-titulo" className="s-trimestre-cartera-titulo">{m.modelo === '111' ? 'El 111 y la 4751' : 'El 115, la 4751 y los alquileres'}</h3>
-      {!decl && <p className="s-apoyo">Sin el {m.modelo} del {trimestre} no hay nada que cuadrar.</p>}
-      {decl && !l && <p className="s-apoyo">Leyendo el diario…</p>}
+    <Boton variante={variante} disabled={haciendo} onClick={async () => { setHaciendo(true); try { await alCalcular() } finally { setHaciendo(false) } }}>
+      {haciendo ? 'Calculando…' : texto}
+    </Boton>
+  )
+}
+
+/**
+ * La liquidación del 111 o el 115 en palabras (maqueta v4, como la del 303):
+ * una fila por clase de perceptor, cuántos, la base y lo retenido, con sus
+ * casillas en pequeño; el total y el resultado.
+ */
+function LiquidacionRetenciones({ modelo, casillas }: { modelo: string; casillas: CasillaTrimestre[] }) {
+  const l = liquidacionRetenciones(modelo, casillas)
+  const fmt = (n: number | null) => (n === null ? '—' : eurosExactos(n))
+  const personas = (n: number | null) => (n === null ? '—' : `${n} ${n === 1 ? 'persona' : 'personas'}`)
+  return (
+    <section className="s-trimestre-liquidacion" aria-labelledby="liq-titulo" data-prueba="liquidacion">
+      <h3 id="liq-titulo" className="s-trimestre-cartera-titulo">La liquidación</h3>
+      <table className="s-trimestre-liq" aria-label={modelo === '115' ? 'Retenciones de los alquileres' : 'Retenciones del trimestre'}>
+        <thead><tr><th scope="col">{modelo === '115' ? 'A quién se retuvo' : 'A quién se retuvo'}</th><th scope="col" className="s-tabla-cifra">Cuántos</th><th scope="col" className="s-tabla-cifra">Base</th><th scope="col" className="s-tabla-cifra">Retenido</th></tr></thead>
+        <tbody>
+          {l.filas.map((f) => (
+            <tr key={f.texto}>
+              <th scope="row">{f.texto}<span className="s-impuestos-casilla">{f.casillas.map((c) => `[${c}]`).join(' ')}</span></th>
+              <td className="s-tabla-cifra s-cifra" data-falta={f.perceptores === null ? 'si' : undefined}>{personas(f.perceptores)}</td>
+              <td className="s-tabla-cifra s-cifra">{fmt(f.base)}</td>
+              <td className="s-tabla-cifra s-cifra">{fmt(f.retenido)}</td>
+            </tr>
+          ))}
+          {l.filas.length === 0 && <tr><td colSpan={4} className="s-apoyo">Nada retenido en este trimestre.</td></tr>}
+          <tr className="s-trimestre-liq-total"><th scope="row">Total retenido<span className="s-impuestos-casilla">[{l.casillaTotal}]</span></th><td /><td /><td className="s-tabla-cifra s-cifra">{fmt(l.total)}</td></tr>
+        </tbody>
+      </table>
+      <dl className="s-trimestre-liq-resultado">
+        <dt>Resultado a ingresar <span className="s-impuestos-casilla">[{l.casillaResultado}]</span></dt><dd className="s-cifra">{fmt(l.resultado)}</dd>
+      </dl>
+    </section>
+  )
+}
+
+type Check = { clave: string; resultado: 'ok' | 'warning' | 'error'; titulo: string; detalle: Record<string, unknown> | null }
+
+/**
+ * Lo que se hace con un 111 o un 115 sin presentar: calcular (o volver a
+ * calcular) desde el diario, escribir la [01] del 111 con su motivo, y
+ * «Revisado: pasar a presentar». Presentar sigue cerrado hasta que se abra la
+ * conexión con Hacienda: se dice, y se ofrece traer lo presentado fuera.
+ */
+function Preparar({ m, d: datos, ejercicio, trimestre, deRuta, alHacer }: {
+  m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; deRuta: boolean; alHacer: (h: Hecho) => void
+}) {
+  const d = m.declaracion
+  const modelo = m.modelo as '111' | '115'
+  const [checks, setChecks] = useState<{ id: string; lista: Check[] } | null>(null)
+  useEffect(() => {
+    if (!d) return
+    let vivo = true
+    comprobacionesDeDeclaracion(d.id, d.cuenta).then((c) => { if (vivo) setChecks({ id: d.id, lista: c }) }, () => { if (vivo) setChecks({ id: d.id, lista: [] }) })
+    return () => { vivo = false }
+  }, [d])
+  const lista = checks && d && checks.id === d.id ? checks.lista : null
+  const perceptores = lista?.find((c) => c.clave === 'payees_111') ?? null
+  const propuesta = typeof perceptores?.detalle?.propuesta === 'number' ? perceptores.detalle.propuesta : null
+  const aMano = d?.casillas.find((c) => c.casilla === '01' && c.origen === 'manual') ?? null
+  const errores = (lista ?? []).filter((c) => c.resultado === 'error')
+  const calcular = () => calcularYDecir(datos.empresa.id, ejercicio, trimestre, modelo, alHacer)
+
+  if (!d || d.estado === 'pending') return null
+  return (
+    <section className="s-trimestre-preparar" aria-label={`Preparar el ${modelo}`} data-prueba="preparar">
+      {modelo === '111' && d.estado === 'draft' && perceptores && (perceptores.resultado === 'error' || aMano) && (
+        <Perceptores key={`${d.id}/${aMano?.valor ?? ''}`} declaracion={d.id} trimestre={trimestre} propuesta={propuesta} aMano={aMano} alHacer={alHacer} />
+      )}
+      {d.estado === 'draft' && (
+        <div className="s-impuestos-fila-botones">
+          {d.resultado !== null && errores.length === 0 && lista && (
+            <BotonCalcular texto="Revisado: pasar a presentar" alCalcular={async () => {
+              try {
+                const r = await revisarDeclaracion(d.id) as { mensaje?: string }
+                alHacer({ tono: 'ok', texto: `${r?.mensaje ?? 'Revisado.'} El ${modelo} del ${trimestre} queda listo para presentar.` })
+              } catch (e) { alHacer({ tono: 'falta', texto: `No se ha dado por revisado: ${msg(e)}` }) }
+            }} />
+          )}
+          {errores.length > 0 && <p className="s-impuestos-porque-no" role="note">Para darlo por revisado falta resolver {errores.length === 1 ? 'una cosa' : `${errores.length} cosas`} de «Lo comprobado».</p>}
+          <BotonCalcular variante="enlace" texto="Volver a calcular con lo que hay ahora en el diario" alCalcular={calcular} />
+        </div>
+      )}
+      {d.estado === 'reviewed' && (
+        <div className="s-trimestre-listo">
+          <p className="s-trimestre-ok">✓ Revisado: listo para presentar.</p>
+          <Boton variante="principal" disabled title="La conexión con Hacienda está cerrada">Presentar el {modelo}</Boton>
+          <p className="s-apoyo">Presentar desde Sumied sigue cerrado hasta que se abra la conexión con Hacienda. Mientras, preséntalo fuera y trae el justificante: aquí se verá entero.</p>
+          <div className="s-impuestos-fila-botones">
+            {!deRuta && <BotonEnlace a={`${rutaImpuestos('presentados')}?fuera=1`}>Ya lo presenté fuera</BotonEnlace>}
+            <BotonCalcular variante="enlace" texto="Volver a calcular (vuelve a borrador)" alCalcular={calcular} />
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** La [01] del 111: cuántas personas cobraron nómina, a mano y con su motivo (Julio, 20/10). */
+function Perceptores({ declaracion, trimestre, propuesta, aMano, alHacer }: {
+  declaracion: string; trimestre: string; propuesta: number | null; aMano: CasillaTrimestre | null; alHacer: (h: Hecho) => void
+}) {
+  const [abierto, setAbierto] = useState(!aMano)
+  const [n, setN] = useState(String(aMano?.valor ?? propuesta ?? ''))
+  const [motivo, setMotivo] = useState('')
+  const [haciendo, setHaciendo] = useState(false)
+  const num = /^\d+$/.test(n.trim()) ? Number(n.trim()) : null
+  if (aMano && !abierto) {
+    return (
+      <div className="s-trimestre-perceptores" data-prueba="perceptores">
+        <p><span className="s-impuestos-casilla">[01]</span> {aMano.valor} {aMano.valor === 1 ? 'persona cobró' : 'personas cobraron'} nómina en el {trimestre}, escrito a mano{aMano.motivo ? `: ${aMano.motivo}` : ''}.</p>
+        <Boton variante="enlace" onClick={() => setAbierto(true)}>Cambiarlo</Boton>
+      </div>
+    )
+  }
+  return (
+    <form className="s-trimestre-perceptores" data-prueba="perceptores" onSubmit={async (e) => {
+      e.preventDefault()
+      if (num === null || num < 1 || !motivo.trim()) return
+      setHaciendo(true)
+      try {
+        const r = await ponerPerceptores(declaracion, num, motivo.trim())
+        alHacer({ tono: 'ok', texto: r.mensaje })
+      } catch (x) { alHacer({ tono: 'falta', texto: `No se ha escrito la [01]: ${msg(x)}` }) } finally { setHaciendo(false) }
+    }}>
+      <p className="s-trimestre-perceptores-titulo">Falta cuántas personas cobraron nómina en el {trimestre} <span className="s-impuestos-casilla">[01]</span></p>
+      <p className="s-apoyo">El diario lleva las nóminas sin trabajadores: este número lo escribes tú.{propuesta !== null ? ` En el trimestre anterior fueron ${propuesta}.` : ''}</p>
+      <div className="s-trimestre-perceptores-campos">
+        <Campo etiqueta="Personas con nómina" error={n && (num === null || num < 1) ? 'Un número entero, 1 o más.' : null}>
+          {(p) => <input {...p} className="s-control s-cifra" inputMode="numeric" value={n} onChange={(e) => setN(e.target.value)} />}
+        </Campo>
+        <Campo etiqueta="De dónde sale" ayuda="Por ejemplo: «las nóminas de octubre a diciembre».">
+          {(p) => <input {...p} className="s-control" value={motivo} onChange={(e) => setMotivo(e.target.value)} />}
+        </Campo>
+      </div>
+      <div className="s-impuestos-fila-botones">
+        <Boton type="submit" variante="principal" disabled={haciendo || num === null || num < 1 || !motivo.trim()}>{haciendo ? 'Guardando…' : 'Guardar la [01]'}</Boton>
+        {aMano && <Boton variante="enlace" onClick={() => setAbierto(false)}>Cancelar</Boton>}
+      </div>
+    </form>
+  )
+}
+
+/**
+ * Lo comprobado del 111 o el 115 (maqueta v4): casilla a casilla contra el
+ * diario del trimestre, con la misma regla que el cálculo (0330), y lo que
+ * Sumied comprobó al calcularlo. Un «no casa» se explica en palabras y no
+ * bloquea (Julio, 20/10: el 1T de Foodint).
+ */
+function ComprobadoRetenciones({ m, d, ejercicio, trimestre }: { m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string }) {
+  const decl = m.declaracion
+  const [leido, setLeido] = useState<{ para: string; diario: RetencionesDiario | null; checks: Check[]; fallo: string | null } | null>(null)
+  const para = `${d.empresa.id}/${ejercicio}/${trimestre}/${m.modelo}/${decl?.id ?? ''}`
+  useEffect(() => {
+    let vivo = true
+    Promise.all([retencionesDelDiario(d.empresa.id, ejercicio, trimestre), decl ? comprobacionesDeDeclaracion(decl.id, decl.cuenta) : Promise.resolve([] as Check[])])
+      .then(([diario, checks]) => { if (vivo) setLeido({ para, diario, checks, fallo: null }) },
+        (e: unknown) => { if (vivo) setLeido({ para, diario: null, checks: [], fallo: msg(e) }) })
+    return () => { vivo = false }
+  }, [decl, d.empresa.id, ejercicio, trimestre, para])
+  const l = leido?.para === para ? leido : null
+  const c = l?.diario && decl ? cuadreConDiario(m.modelo, decl.casillas, l.diario) : null
+  const presentada = !!decl && estaPresentada(decl.estado)
+  const fmt = (x: { personas?: boolean }, n: number | null) => (n === null ? '—' : x.personas ? String(n) : eurosExactos(n))
+  return (
+    <section className="s-tarjeta s-trimestre-comprobado" aria-labelledby="comp-titulo" data-prueba="comprobado">
+      <h3 id="comp-titulo" className="s-trimestre-cartera-titulo">Lo comprobado</h3>
+      {!l && <p className="s-apoyo">Leyendo el diario…</p>}
       {l?.fallo && <p className="s-impuestos-fallo" role="alert">{l.fallo}</p>}
+      {l?.diario && !decl && (
+        <p className="s-apoyo">El diario del {trimestre} lleva {eurosExactos(m.modelo === '115' ? l.diario.sumas['115'].retenido : l.diario.sumas['111_nomina'].retenido + l.diario.sumas['111_profesional'].retenido)} retenidos para el {m.modelo}. Al calcularlo, se comprueba casilla a casilla.</p>
+      )}
       {c && c.lineas.length > 0 && (
-        <table className="s-trimestre-cuadre" aria-label={`Cuadres del ${m.modelo}`}>
+        <table className="s-trimestre-cuadre" aria-label={`El ${m.modelo} y el diario`}>
+          <thead><tr><th scope="col">{m.modelo} ↔ diario</th><th scope="col" className="s-tabla-cifra">{presentada ? 'Presentado' : 'El ' + m.modelo}</th><th scope="col" className="s-tabla-cifra">Diario</th></tr></thead>
           <tbody>{c.lineas.map((x) => (
-            <tr key={x.texto} data-casa={x.casa === true ? 'si' : x.casa === false ? 'no' : undefined}>
-              <th scope="row">{x.casa === true ? '✓ ' : ''}{x.texto}{x.casillas && <span className="s-impuestos-casilla">{x.casillas}</span>}</th>
-              <td className="s-tabla-cifra s-cifra">{x.importe === null ? '—' : eurosExactos(x.importe)}</td>
+            <tr key={x.casillas} data-casa={x.casa === true ? 'si' : x.casa === false ? 'no' : undefined}>
+              <th scope="row">{x.casa === true ? '✓ ' : x.casa === false ? '! ' : ''}{x.texto}<span className="s-impuestos-casilla">{x.casillas}</span></th>
+              <td className="s-tabla-cifra s-cifra">{fmt(x, x.modelo)}</td>
+              <td className="s-tabla-cifra s-cifra">{fmt(x, x.diario)}</td>
             </tr>
           ))}</tbody>
         </table>
       )}
-      {c?.conclusion && (c.conclusion.casa
-        ? <p className="s-trimestre-ok">✓ {c.conclusion.texto}</p>
-        : <p className="s-impuestos-porque-no" role="note">! {c.conclusion.texto}</p>)}
-      {c && m.modelo === '115' && <p className="s-apoyo">La 621 puede llevar también alquileres sin retención (un renting, por ejemplo): su cifra no tiene por qué ser la base del 115.</p>}
+      {c && (c.casa
+        ? <p className="s-trimestre-ok">✓ El {m.modelo} del {trimestre} casa con el diario, casilla a casilla</p>
+        : <p className="s-impuestos-porque-no" role="note">! No casa casilla a casilla con el diario.</p>)}
+      {c && c.explicacion.map((t) => <p key={t} className="s-apoyo" data-prueba="explicacion">{t}</p>)}
+      {m.modelo === '111' && decl && presentada && <p className="s-apoyo">Las personas con nómina ([01]) no salen del diario: van a mano.</p>}
+      {l && l.checks.length > 0 && (
+        <ul className="s-trimestre-checks" aria-label="Lo que comprobó Sumied al calcularlo">
+          {l.checks.map((x) => <li key={x.clave} data-resultado={x.resultado}>{x.resultado === 'ok' ? '✓ ' : '! '}{x.titulo}</li>)}
+        </ul>
+      )}
     </section>
   )
 }
@@ -431,7 +623,9 @@ function Acciones({ m, d, ejercicio, trimestre, presentada }: {
  * Lo de la derecha: el justificante en grande; sin él, el impreso calculado
  * por Sumied (con sus casillas) o qué falta y el botón para hacerlo.
  */
-function Derecha({ m, ejercicio, trimestre, deRuta, ampliado, alAmpliar }: { m: ModeloTrimestre; ejercicio: number; trimestre: string; deRuta: boolean; ampliado: boolean; alAmpliar: () => void }) {
+function Derecha({ m, ejercicio, trimestre, deRuta, ampliado, alAmpliar, alCalcular }: {
+  m: ModeloTrimestre; ejercicio: number; trimestre: string; deRuta: boolean; ampliado: boolean; alAmpliar: () => void; alCalcular?: () => Promise<void>
+}) {
   const d = m.declaracion
   const pdf = d?.justificante_pdf ?? null
   if (pdf) {
@@ -465,15 +659,16 @@ function Derecha({ m, ejercicio, trimestre, deRuta, ampliado, alAmpliar }: { m: 
     <section className="s-tarjeta s-trimestre-derecha s-trimestre-falta" aria-labelledby="derecha-titulo" data-prueba="que-falta">
       <h2 id="derecha-titulo" className="s-trimestre-derecha-titulo">{falta.titulo}</h2>
       <p className="s-apoyo">{falta.texto}</p>
+      {falta.calcular && alCalcular && <p><BotonCalcular texto={falta.calcular} alCalcular={alCalcular} /></p>}
       {falta.boton && !(deRuta && falta.boton.soloPropia) && (
-        <p><BotonEnlace variante="principal" a={falta.boton.a}>{falta.boton.texto}</BotonEnlace></p>
+        <p><BotonEnlace variante={falta.calcular ? 'secundario' : 'principal'} a={falta.boton.a}>{falta.boton.texto}</BotonEnlace></p>
       )}
     </section>
   )
 }
 
 /** Qué falta para que la derecha tenga algo que enseñar, en palabras. */
-function queFalta(m: ModeloTrimestre, ejercicio: number, trimestre: string, presentada: boolean): { titulo: string; texto: string; boton?: { texto: string; a: string; soloPropia?: boolean } } {
+function queFalta(m: ModeloTrimestre, ejercicio: number, trimestre: string, presentada: boolean): { titulo: string; texto: string; calcular?: string; boton?: { texto: string; a: string; soloPropia?: boolean } } {
   // Presentados es de la empresa activa: por la ruta de otra empresa (despacho), sin botón.
   const traer = { texto: 'Traer el justificante', a: `${rutaImpuestos('presentados')}?fuera=1`, soloPropia: true }
   if (m.no_toca) return { titulo: 'En este trimestre no hay 202', texto: `El pago a cuenta del Impuesto de sociedades va en abril, octubre y diciembre; en el ${trimestre}, ninguno.` }
@@ -483,6 +678,17 @@ function queFalta(m: ModeloTrimestre, ejercicio: number, trimestre: string, pres
     const iva = { texto: 'Abrir el IVA del trimestre', a: rutaIvaPeriodo(ejercicio, m.periodo), soloPropia: true }
     if (!d || d.estado === 'pending') return { titulo: `Falta calcular el 303 del ${trimestre}`, texto: 'Sumied lo calcula con el libro de IVA del trimestre.', boton: iva }
     return { titulo: `Falta el libro de IVA del ${trimestre}`, texto: 'Sin el libro de IVA del trimestre, Sumied no sabe el resultado del 303. Cuando esté, aquí saldrá el impreso calculado.', boton: iva }
+  }
+  // I01g · El 111 y el 115 los calcula Sumied desde el diario; si ya se presentó fuera, se trae su justificante.
+  if (m.modelo === '111' || m.modelo === '115') {
+    return {
+      titulo: `Falta calcular el ${m.modelo} del ${trimestre}`,
+      texto: m.modelo === '111'
+        ? 'Sumied lo calcula con el diario del trimestre: las nóminas (la 640 y la 4751) y las facturas de profesionales con retención. Cuántas personas cobraron nómina lo escribes tú.'
+        : 'Sumied lo calcula con el diario del trimestre: las facturas de alquiler con retención (la 621 y la 4751).',
+      calcular: `Calcular el ${m.modelo} del ${trimestre}`,
+      boton: { ...traer, texto: 'Ya lo presenté: traer el justificante' },
+    }
   }
   return {
     titulo: 'Aún no está en Sumied',

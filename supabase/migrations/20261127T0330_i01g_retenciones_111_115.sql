@@ -30,11 +30,16 @@
 --     en Foodint las nóminas van en la 4 y la apertura en la 9.
 --   · El pago a Hacienda no cuenta: lleva la 4751 al debe contra tesorería (57)
 --     y no es un contraasiento.
---   · El modelo: el que diga la línea de la 4751 (withholding_model); si no,
---     115 si el asiento carga la 621 (arrendamientos), nómina si carga la 640,
---     y profesional si carga otro gasto o inmovilizado (6 o 2). Si no carga
---     ninguno, no se sabe: es un error y el modelo no se da por revisado.
---   · La base: la 621 en el 115; la 640 en las nóminas, sin la 641
+--   · El modelo y la base, de la línea de la 4751 si los lleva: Sumied no
+--     valida una retención sin su tipo, su base y su modelo (journal_entry_validar,
+--     medido en staging el 20/10). El tipo «administradores» va en las
+--     nóminas ([01]–[03]: rendimientos del trabajo); el resto del 111, en los
+--     profesionales ([07]–[09]); el 123 (capital) no va en ninguno de los dos.
+--   · Si la línea no los lleva (lo traído de Diez: todo lo de Foodint): 115 si
+--     el asiento carga la 621 (arrendamientos), nómina si carga la 640, y
+--     profesional si carga otro gasto o inmovilizado (6 o 2). Si no carga
+--     ninguno, no se sabe: es un error y el modelo no se da por revisado. La
+--     base: la 621 en el 115; la 640 en las nóminas, sin la 641
 --     (indemnizaciones) ni otras (decisión de Julio, 20/10: así lo presentó la
 --     gestoría el 2T y el 3T); el gasto en los profesionales.
 --   · Los perceptores: en el 115 y los profesionales, cada proveedor distinto
@@ -83,6 +88,10 @@ begin
            coalesce(sum(l.debit - l.credit) filter (where ca.code like '640%'), 0) as b640,
            coalesce(sum(l.debit - l.credit) filter (where ca.code ~ '^(6|2)' and ca.code !~ '^(621|64)'), 0) as bgasto,
            max(l.withholding_model) filter (where ca.code like '4751%') as modelo_linea,
+           max(wr.code) filter (where ca.code like '4751%') as tipo_linea,
+           -- La base de la línea de la 4751 (Sumied la exige al validar): manda si la llevan todas.
+           case when bool_and(l.withholding_base is not null) filter (where ca.code like '4751%')
+                then sum(l.withholding_base) filter (where ca.code like '4751%') end as base_linea,
            string_agg(distinct ca.code, ' ') filter (where ca.code like '4751%') as cuentas_4751,
            -- El perceptor: el tercero de la línea de la 4751 o, si no, la subcuenta del proveedor (40 o 41).
            coalesce(max(l.party_id::text) filter (where ca.code like '4751%'),
@@ -91,36 +100,49 @@ begin
       from e
       join public.journal_line l on l.entry_id = e.id
       join public.company_account ca on ca.id = l.company_account_id
+      left join public.withholding_rate wr on wr.id = l.withholding_rate_id
      group by e.id, e.entry_date, e.series, e.number, e.concept, e.status, e.source_type, e.reverses_entry_id
-  ), m as (
+  ), m0 as (
     select x.*,
            case when x.source_type in ('opening', 'closing') or x.mueve_grupo_1 then 'apertura'
                 when x.retenido < 0 and x.reverses_entry_id is null and x.tesoreria then 'pago'
+                when x.modelo_linea is not null and x.modelo_linea not in ('111', '115') then 'otro_modelo'
                 when x.modelo_linea = '115' or (x.modelo_linea is null and x.b621 <> 0) then '115'
+                when x.modelo_linea = '111' and x.tipo_linea = 'administradores' then '111_nomina'
+                when x.modelo_linea = '111' then '111_profesional'
                 when x.b640 <> 0 then '111_nomina'
                 when x.bgasto <> 0 then '111_profesional'
                 else 'sin_modelo' end as tipo
       from x
+  ), m as (
+    -- La base: la de la línea de la 4751 si la lleva (con el signo de lo retenido: un
+    -- contraasiento resta); si no (lo traído de Diez), la de la regla de arriba.
+    select m0.*,
+           case when m0.base_linea is not null then sign(m0.retenido) * abs(m0.base_linea)
+                else case m0.tipo when '115' then m0.b621 when '111_nomina' then m0.b640 when '111_profesional' then m0.bgasto end end as base
+      from m0
   )
   select coalesce(jsonb_agg(jsonb_build_object(
            'asiento', m.id, 'fecha', m.entry_date, 'serie', m.series, 'numero', m.number, 'concepto', m.concept, 'estado', m.status,
            'tipo', m.tipo, 'retenido', round(m.retenido, 2),
-           'base', round(case m.tipo when '115' then m.b621 when '111_nomina' then m.b640 when '111_profesional' then m.bgasto end, 2),
+           'base', round(m.base, 2), 'tipo_retencion', m.tipo_linea,
            'perceptor', case when m.tipo in ('115', '111_profesional') then m.perceptor end,
            'perceptor_nombre', case when m.tipo in ('115', '111_profesional') then m.perceptor_nombre end,
            'cuentas_4751', m.cuentas_4751) order by m.entry_date, m.series, m.number), '[]'),
          jsonb_build_object(
            '115', jsonb_build_object('asientos', count(*) filter (where m.tipo = '115'),
-                                     'base', round(coalesce(sum(m.b621) filter (where m.tipo = '115'), 0), 2),
+                                     'base', round(coalesce(sum(m.base) filter (where m.tipo = '115'), 0), 2),
                                      'retenido', round(coalesce(sum(m.retenido) filter (where m.tipo = '115'), 0), 2)),
            '111_nomina', jsonb_build_object('asientos', count(*) filter (where m.tipo = '111_nomina'),
-                                     'base', round(coalesce(sum(m.b640) filter (where m.tipo = '111_nomina'), 0), 2),
+                                     'base', round(coalesce(sum(m.base) filter (where m.tipo = '111_nomina'), 0), 2),
                                      'retenido', round(coalesce(sum(m.retenido) filter (where m.tipo = '111_nomina'), 0), 2)),
            '111_profesional', jsonb_build_object('asientos', count(*) filter (where m.tipo = '111_profesional'),
-                                     'base', round(coalesce(sum(m.bgasto) filter (where m.tipo = '111_profesional'), 0), 2),
+                                     'base', round(coalesce(sum(m.base) filter (where m.tipo = '111_profesional'), 0), 2),
                                      'retenido', round(coalesce(sum(m.retenido) filter (where m.tipo = '111_profesional'), 0), 2)),
            'sin_modelo', jsonb_build_object('asientos', count(*) filter (where m.tipo = 'sin_modelo'),
                                      'retenido', round(coalesce(sum(m.retenido) filter (where m.tipo = 'sin_modelo'), 0), 2)),
+           'otro_modelo', jsonb_build_object('asientos', count(*) filter (where m.tipo = 'otro_modelo'),
+                                     'retenido', round(coalesce(sum(m.retenido) filter (where m.tipo = 'otro_modelo'), 0), 2)),
            'pagos', count(*) filter (where m.tipo = 'pago'),
            'aperturas', count(*) filter (where m.tipo = 'apertura'))
     into v_asientos, v_sumas

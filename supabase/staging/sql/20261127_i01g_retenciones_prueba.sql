@@ -4,10 +4,14 @@
 -- dentro de la transacción y ROLLBACK: staging no cambia.
 --
 -- Por sus caminos (regla 10), como el administrador de A, en el 4T de 2026:
--- se validan asientos de verdad (una nómina, una factura de un profesional,
--- dos alquileres del mismo arrendador, un pago a Hacienda y uno que mueve el
--- grupo 1), se calcula el 111 y el 115, se escriben los perceptores a mano y
--- se revisa. Lo que ya hubiera en el 4T de A se mide antes y se compara la
+-- se validan asientos de verdad (la retención de un administrador, que va con
+-- las nóminas; una factura de un profesional; dos alquileres del mismo
+-- arrendador; un pago a Hacienda; uno que mueve el grupo 1, y uno del 123), se
+-- calcula el 111 y el 115, se escriben los perceptores a mano y se revisa.
+-- Sumied no valida una línea de la 4751 sin su tipo, su base y su modelo (lo
+-- dijo la primera pasada de esta prueba, run 391): aquí todas los llevan. El
+-- camino sin ellos (lo traído de Diez) no se puede validar en staging; se
+-- midió contra los 11 trimestres de Foodint en producción, solo leyendo. Lo que ya hubiera en el 4T de A se mide antes y se compara la
 -- diferencia: la prueba no supone que el trimestre esté vacío.
 --   1. El diario: cada asiento con su modelo; el pago y el del grupo 1, fuera.
 --   2. El 111 sin la [01]: sus casillas, el error de los perceptores y que no
@@ -15,7 +19,7 @@
 --   3. La [01] a mano (con su motivo): ya se revisa; recalcular lo devuelve a
 --      borrador.
 --   4. El 115: un arrendador con dos facturas cuenta una vez.
---   5. Un asiento con la 4751 sin gasto ni nómina: error, no se revisa.
+--   5. Una retención del 123 (capital): no va ni en el 111 ni en el 115.
 --   6. Lo que no vale: 0 perceptores, sin motivo, otro modelo.
 --   7. La cuenta B no lee ni calcula lo de A.
 
@@ -51,7 +55,7 @@ declare
   emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
   loc constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
   v_y uuid; c640 uuid; c465 uuid; c4751 uuid; c623 uuid; c41p uuid; c621 uuid; c41a uuid; c572 uuid; c100 uuid; e uuid;
-  procedure_n int := 0;
+  procedure_n int := 0; w_adm uuid; w_prof uuid; w_alq uuid;
 begin
   select id into v_y from public.fiscal_year where company_id = emp and code = '2026';
   select id into c640 from public.company_account where company_id = emp and code = '64000000';
@@ -63,40 +67,44 @@ begin
   select id into c41a from public.company_account where company_id = emp and code = '41000001';
   select id into c572 from public.company_account where company_id = emp and code = '57200001';
   select id into c100 from public.company_account where company_id = emp and code = '10000000';
+  select id into w_adm from public.withholding_rate where is_system and code = 'administradores' and valid_to is null;
+  select id into w_prof from public.withholding_rate where is_system and code = 'profesional' and valid_to is null;
+  select id into w_alq from public.withholding_rate where is_system and code = 'alquiler' and valid_to is null;
+  if w_adm is null or w_prof is null or w_alq is null then raise exception 'PRUEBA RETENCIONES · 1: faltan los tipos de retención administradores, profesional o alquiler.'; end if;
   if v_y is null or c640 is null or c465 is null or c4751 is null or c623 is null or c41p is null or c621 is null or c41a is null or c572 is null or c100 is null then
     raise exception 'PRUEBA RETENCIONES · 1: faltan el ejercicio 2026 o cuentas de la empresa A.';
   end if;
-  -- La nómina: 1.000 de sueldo, 20 retenidos.
+  -- Un administrador (rendimientos del trabajo, con las nóminas): 1.000, 350 retenidos al 35 %.
   insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
-  values (a, emp, v_y, 4, '2026-10-05', 'Prueba I01g · nómina', 'manual') returning id into e;
-  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id)
-  values (a, emp, e, 1, c640, 1000, 0, loc), (a, emp, e, 2, c4751, 0, 20, loc), (a, emp, e, 3, c465, 0, 980, loc);
+  values (a, emp, v_y, 4, '2026-10-05', 'Prueba I01g · administrador', 'manual') returning id into e;
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
+  values (a, emp, e, 1, c640, 1000, 0, loc, null, null, null), (a, emp, e, 2, c4751, 0, 350, loc, w_adm, 1000, '111'), (a, emp, e, 3, c465, 0, 650, loc, null, null, null);
   perform public.journal_entry_validar(e);
   -- Un profesional: 500 de gasto, 75 retenidos.
   insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
   values (a, emp, v_y, 2, '2026-10-06', 'Prueba I01g · profesional', 'manual') returning id into e;
-  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id)
-  values (a, emp, e, 1, c623, 500, 0, loc), (a, emp, e, 2, c4751, 0, 75, loc), (a, emp, e, 3, c41p, 0, 425, loc);
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
+  values (a, emp, e, 1, c623, 500, 0, loc, null, null, null), (a, emp, e, 2, c4751, 0, 75, loc, w_prof, 500, '111'), (a, emp, e, 3, c41p, 0, 425, loc, null, null, null);
   perform public.journal_entry_validar(e);
   -- Dos alquileres del mismo arrendador: 1.000 cada uno, 190 retenidos cada uno.
   for procedure_n in 1 .. 2 loop
     insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
     values (a, emp, v_y, 2, make_date(2026, 10, procedure_n), 'Prueba I01g · alquiler ' || procedure_n, 'manual') returning id into e;
-    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id)
-    values (a, emp, e, 1, c621, 1000, 0, loc), (a, emp, e, 2, c4751, 0, 190, loc), (a, emp, e, 3, c41a, 0, 810, loc);
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
+    values (a, emp, e, 1, c621, 1000, 0, loc, null, null, null), (a, emp, e, 2, c4751, 0, 190, loc, w_alq, 1000, '115'), (a, emp, e, 3, c41a, 0, 810, loc, null, null, null);
     perform public.journal_entry_validar(e);
   end loop;
   -- El pago a Hacienda: fuera.
   insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
   values (a, emp, v_y, 3, '2026-10-07', 'Prueba I01g · pago del 111', 'manual') returning id into e;
-  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id)
-  values (a, emp, e, 1, c4751, 100, 0, loc), (a, emp, e, 2, c572, 0, 100, loc);
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
+  values (a, emp, e, 1, c4751, 100, 0, loc, w_prof, 0, '111'), (a, emp, e, 2, c572, 0, 100, loc, null, null, null);
   perform public.journal_entry_validar(e);
   -- Uno que mueve el grupo 1 (como la apertura): fuera.
   insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
   values (a, emp, v_y, 4, '2026-10-08', 'Prueba I01g · con el grupo 1', 'manual') returning id into e;
-  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id)
-  values (a, emp, e, 1, c100, 5, 0, loc), (a, emp, e, 2, c4751, 0, 5, loc);
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
+  values (a, emp, e, 1, c100, 5, 0, loc, null, null, null), (a, emp, e, 2, c4751, 0, 5, loc, w_prof, 33.33, '111');
   perform public.journal_entry_validar(e);
 end $$;
 
@@ -111,8 +119,8 @@ declare
 begin
   -- dif(ruta) = lo de ahora menos lo de antes.
   if (s#>>'{111_nomina,base}')::numeric - (s0#>>'{111_nomina,base}')::numeric <> 1000
-     or (s#>>'{111_nomina,retenido}')::numeric - (s0#>>'{111_nomina,retenido}')::numeric <> 20 then
-    raise exception 'PRUEBA RETENCIONES · 1b: la nómina no suma 1.000 de base y 20 retenidos (%).', s->'111_nomina';
+     or (s#>>'{111_nomina,retenido}')::numeric - (s0#>>'{111_nomina,retenido}')::numeric <> 350 then
+    raise exception 'PRUEBA RETENCIONES · 1b: el administrador no va con las nóminas con 1.000 de base y 350 retenidos (%).', s->'111_nomina';
   end if;
   if (s#>>'{111_profesional,base}')::numeric - (s0#>>'{111_profesional,base}')::numeric <> 500
      or (s#>>'{111_profesional,retenido}')::numeric - (s0#>>'{111_profesional,retenido}')::numeric <> 75 then
@@ -129,7 +137,7 @@ begin
     raise exception 'PRUEBA RETENCIONES · 1b: hay asientos de la prueba sin modelo.';
   end if;
   if jsonb_array_length(d->'lineas_640') = 0 then raise exception 'PRUEBA RETENCIONES · 1b: no salen las líneas de la 640.'; end if;
-  raise notice 'PRUEBA RETENCIONES · 1: nómina, profesional y alquileres con su modelo; el pago y el del grupo 1, fuera.';
+  raise notice 'PRUEBA RETENCIONES · 1: administrador (con las nóminas), profesional y alquileres con su modelo y su base; el pago y el del grupo 1, fuera.';
 end $$;
 
 -- ── 2 · El 111 sin la [01] ─────────────────────────────────────────────────
@@ -139,9 +147,9 @@ declare
   s0 jsonb := (select v from prueba_ret where k = 'antes');
   r jsonb := public.conta_impuesto_retenciones_calcular(emp, 2026, '4T', '111');
   c jsonb := r->'casillas';
-  v_esperado numeric := (s0#>>'{111_nomina,retenido}')::numeric + (s0#>>'{111_profesional,retenido}')::numeric + 95;
+  v_esperado numeric := (s0#>>'{111_nomina,retenido}')::numeric + (s0#>>'{111_profesional,retenido}')::numeric + 425;
 begin
-  if (c->>'03')::numeric <> (s0#>>'{111_nomina,retenido}')::numeric + 20 or (c->>'09')::numeric <> (s0#>>'{111_profesional,retenido}')::numeric + 75
+  if (c->>'03')::numeric <> (s0#>>'{111_nomina,retenido}')::numeric + 350 or (c->>'09')::numeric <> (s0#>>'{111_profesional,retenido}')::numeric + 75
      or (c->>'28')::numeric <> v_esperado or (c->>'30')::numeric <> v_esperado then
     raise exception 'PRUEBA RETENCIONES · 2: casillas del 111 mal: %', c;
   end if;
@@ -157,7 +165,7 @@ begin
   exception when invalid_parameter_value then null;
   end;
   insert into prueba_ret values ('d111', to_jsonb(r->>'declaracion'));
-  raise notice 'PRUEBA RETENCIONES · 2: el 111 sale de las nóminas y el profesional; sin la [01] no se revisa.';
+  raise notice 'PRUEBA RETENCIONES · 2: el 111 sale del administrador y el profesional; sin la [01] no se revisa.';
 end $$;
 
 -- ── 3 · La [01] a mano ─────────────────────────────────────────────────────
@@ -198,30 +206,33 @@ begin
   raise notice 'PRUEBA RETENCIONES · 4: el 115 sale de los alquileres, un arrendador con dos facturas cuenta una vez, y se revisa.';
 end $$;
 
--- ── 5 · Un asiento con la 4751 sin gasto ni nómina ─────────────────────────
+-- ── 5 · Una retención del 123 (capital): ni en el 111 ni en el 115 ──────────
 do $$
 declare
   a constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
   loc constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
-  e uuid; r jsonb;
+  e uuid; r111 jsonb; r115 jsonb; s jsonb; v_antes111 numeric; v_antes115 numeric;
 begin
+  v_antes111 := (select value from public.tax_return_box b join public.tax_return t on t.id = b.tax_return_id
+                  where t.company_id = emp and t.form_code = '111' and t.fiscal_year = 2026 and t.period = '4T' and b.box = '28');
+  v_antes115 := (select value from public.tax_return_box b join public.tax_return t on t.id = b.tax_return_id
+                  where t.company_id = emp and t.form_code = '115' and t.fiscal_year = 2026 and t.period = '4T' and b.box = '03');
   insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
-  values (a, emp, (select id from public.fiscal_year where company_id = emp and code = '2026'), 4, '2026-10-09', 'Prueba I01g · sin modelo', 'manual') returning id into e;
-  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id)
-  values (a, emp, e, 1, (select id from public.company_account where company_id = emp and code = '57200001'), 10, 0, loc),
-         (a, emp, e, 2, (select id from public.company_account where company_id = emp and code = '47510000'), 0, 10, loc);
+  values (a, emp, (select id from public.fiscal_year where company_id = emp and code = '2026'), 4, '2026-10-09', 'Prueba I01g · capital (123)', 'manual') returning id into e;
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
+  values (a, emp, e, 1, (select id from public.company_account where company_id = emp and code = '57200001'), 19, 0, loc, null, null, null),
+         (a, emp, e, 2, (select id from public.company_account where company_id = emp and code = '47510000'), 0, 19, loc,
+          (select id from public.withholding_rate where is_system and code = 'capital' and valid_to is null), 100, '123');
   perform public.journal_entry_validar(e);
-  r := public.conta_impuesto_retenciones_calcular(emp, 2026, '4T', '111');
-  if (select result from public.tax_return_check where tax_return_id = (r->>'declaracion')::uuid and check_key = 'withholding_unclassified') <> 'error' then
-    raise exception 'PRUEBA RETENCIONES · 5: el asiento sin modelo no da error.';
+  s := public.conta_impuesto_retenciones_diario(emp, 2026, '4T')->'sumas';
+  if (s#>>'{otro_modelo,retenido}')::numeric < 19 then raise exception 'PRUEBA RETENCIONES · 5: el 123 no sale aparte (%).', s->'otro_modelo'; end if;
+  r111 := public.conta_impuesto_retenciones_calcular(emp, 2026, '4T', '111');
+  r115 := public.conta_impuesto_retenciones_calcular(emp, 2026, '4T', '115');
+  if (r111#>>'{casillas,28}')::numeric <> v_antes111 or (r115#>>'{casillas,03}')::numeric <> v_antes115 then
+    raise exception 'PRUEBA RETENCIONES · 5: el 123 se coló en el 111 o en el 115 (% y %).', r111->'casillas', r115->'casillas';
   end if;
-  begin
-    perform public.conta_impuesto_revisar((r->>'declaracion')::uuid);
-    raise exception 'PRUEBA RETENCIONES · 5: se revisó con un asiento sin modelo.';
-  exception when invalid_parameter_value then null;
-  end;
-  raise notice 'PRUEBA RETENCIONES · 5: la 4751 sin gasto ni nómina da error y no se revisa.';
+  raise notice 'PRUEBA RETENCIONES · 5: la retención del 123 sale aparte y no entra ni en el 111 ni en el 115.';
 end $$;
 
 -- ── 6 · Lo que no vale ─────────────────────────────────────────────────────
