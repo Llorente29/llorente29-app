@@ -258,6 +258,10 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
       await visor.getByRole('button', { name: /^Ampliar/ }).click()
       await expect(page.locator('.s-trimestre-col-izq')).toBeHidden()
       await expect(page.locator('.s-trimestre-col-der')).toBeHidden()
+      // Y el justificante ocupa todo el ancho del cuerpo, no se queda en su columna.
+      const cuerpo = (await page.locator('[data-prueba="cuerpo"]').boundingBox())!
+      const centro = (await page.locator('.s-trimestre-col-centro').boundingBox())!
+      expect(Math.round(centro.width), 'al ampliar, el justificante ocupa todo el ancho').toBe(Math.round(cuerpo.width))
       await foto(page, 'trimestre-ampliado')
       await visor.getByRole('button', { name: /^Reducir/ }).click()
       await expect(page.locator('.s-trimestre-col-izq')).toBeVisible()

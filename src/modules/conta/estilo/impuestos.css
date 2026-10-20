@@ -292,7 +292,8 @@
 .s-trimestre-col-izq { grid-area: izq; }
 .s-trimestre-col-centro { grid-area: centro; position: sticky; top: var(--s-4); }
 .s-trimestre-col-der { grid-area: der; }
-.s-trimestre-cuerpo--ampliado { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'centro'; }
+/* Doble clase: tiene que ganar a las rejillas de las pantallas más estrechas, que van después. */
+.s-trimestre-cuerpo.s-trimestre-cuerpo--ampliado { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'centro'; }
 .s-trimestre-cuerpo--ampliado .s-trimestre-col-izq, .s-trimestre-cuerpo--ampliado .s-trimestre-col-der { display: none; }
 
 .s-trimestre-ficha { min-width: 0; display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5); }
