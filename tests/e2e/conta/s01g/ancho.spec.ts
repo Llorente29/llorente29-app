@@ -17,7 +17,7 @@ const LAURA = correoDePrueba('p01.laura@p01-prueba.test')
 const TOPE = 1800
 const ESTRECHA = 960
 
-interface Pantalla { nombre: string; ruta: string; quien?: string; ancho: 'todo' | 'estrecha' }
+interface Pantalla { nombre: string; ruta: string; quien?: string; ancho: 'todo' | 'estrecha'; sel?: string }
 const PANTALLAS: Pantalla[] = [
   { nombre: 'impuestos-calendario', ruta: '/conta/impuestos', ancho: 'todo' },
   { nombre: 'impuestos-presentados', ruta: '/conta/impuestos/presentados', ancho: 'todo' },
@@ -27,7 +27,7 @@ const PANTALLAS: Pantalla[] = [
   { nombre: 'impuestos-clientes', ruta: '/conta/impuestos/clientes?hoy=2026-10-13', quien: LAURA, ancho: 'todo' },
   // Lo que no se estira: un formulario y el Trimestre (de C).
   { nombre: 'analitica', ruta: '/conta/ajustes/analitica', ancho: 'estrecha' },
-  { nombre: 'impuestos-trimestre', ruta: '/conta/impuestos/trimestre', ancho: 'estrecha' },
+  { nombre: 'impuestos-trimestre', ruta: '/conta/impuestos/trimestre', ancho: 'estrecha', sel: '.s-pantalla.s-trimestre' },
 ]
 
 const conMarca = (ruta: string) => `${ruta}${ruta.includes('?') ? '&' : '?'}marca=sumied`
@@ -47,17 +47,19 @@ for (const p of PANTALLAS) {
     for (const ancho of [1440, 1900]) {
       await page.setViewportSize({ width: ancho, height: 1000 })
       await page.goto(conMarca(p.ruta))
-      const pantalla = page.locator('.cx-principal .s-pantalla').first()
+      const pantalla = page.locator(`.cx-principal ${p.sel ?? '.s-pantalla'}`).first()
       await expect(pantalla).toBeVisible({ timeout: 30_000 })
       await quieta(page)
       // Lo que hay: el ancho del hueco de la pantalla, sin su relleno.
-      const m = await page.evaluate(() => {
+      const m = await page.evaluate((sel) => {
         const principal = document.querySelector('.cx-principal')!
         const cs = getComputedStyle(principal)
         const hueco = principal.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight)
-        const s = document.querySelector('.cx-principal .s-pantalla')!.getBoundingClientRect()
+        // La pantalla de dentro: Impuestos envuelve cada pestaña en otra .s-pantalla.
+        const todas = Array.from(document.querySelectorAll(`.cx-principal ${sel}`))
+        const s = (todas.find((x) => !x.querySelector('.s-pantalla')) ?? todas[0]).getBoundingClientRect()
         return { hueco: Math.round(hueco), pantalla: Math.round(s.width) }
-      })
+      }, p.sel ?? '.s-pantalla')
       console.log(`[ancho] ${p.nombre} a ${ancho}: ${JSON.stringify(m)}`)
       if (p.ancho === 'todo') {
         expect(m.pantalla, 'llena el hueco, hasta el tope').toBeGreaterThanOrEqual(Math.min(m.hueco, TOPE) - 2)
