@@ -155,7 +155,7 @@ function Formulario() {
         {(p) => <input {...p} className="cx-input" value={name} autoComplete="off" onChange={(e) => setName(e.target.value)}
           onBlur={() => { if (!name.trim()) { g.marcar('name', 'Pon el nombre con el que lo conocéis.'); return } void g.guardar({ name: name.trim() }, 'nombre') }} />}
       </Campo>
-      <Campo campo="legalName" etiqueta="Razón social" ayuda="Tal como sale en sus facturas: «Hermanos Ruiz Distribución, S.L.»" error={g.error('legalName')}>
+      <Campo campo="legalName" etiqueta="Razón social" ayuda="Tal como sale en sus facturas" error={g.error('legalName')}>
         {(p) => <input {...p} className="cx-input" value={legalName} onChange={(e) => setLegalName(e.target.value)}
           onBlur={() => void g.guardar({ legalName: legalName.trim() || null }, 'razón social')} />}
       </Campo>
@@ -163,9 +163,11 @@ function Formulario() {
         alCambiar={(v) => { const t = v[0] ?? tipoId; setTipoId(t); if (taxId.trim()) void guardarNif(t) }} />
       <Campo campo="taxId" etiqueta={tipoId === 'vat_eu' ? 'NIF-IVA (con las letras del país delante)' : 'NIF'}
         error={g.error('taxId') ?? nifAlMomento}
-        // I01d: lo comprobado en VIES es una buena noticia (ayuda); «sin comprobar» o «no vale», un aviso.
-        aviso={!g.error('taxId') && !nifAlMomento && f.taxIdCheckStatus !== 'valid' ? estadoUe : null}
-        ayuda={tipoId === 'nif_es' ? 'Lo comprobamos al momento con su letra o dígito de control.' : f.taxIdCheckStatus === 'valid' && estadoUe ? `✓ ${estadoUe}` : undefined}>
+        // I01e (Julio, 20/10): comprobado en VIES, en verde como la píldora de la cabecera;
+        // el ámbar, solo para «sin comprobar» o «no vale»; «Comprobando…», en gris mientras pregunta.
+        aviso={!g.error('taxId') && !nifAlMomento && !comprobandoVies && f.taxIdCheckStatus !== 'valid' ? estadoUe : null}
+        bien={!comprobandoVies && f.taxIdCheckStatus === 'valid' && estadoUe ? `✓ ${estadoUe}` : undefined}
+        ayuda={tipoId === 'nif_es' ? 'Lo comprobamos al momento con su letra o dígito de control.' : comprobandoVies ? estadoUe : undefined}>
         {(p) => <input {...p} className="cx-input" value={taxId} autoComplete="off" autoCapitalize="characters"
           placeholder={tipoId === 'vat_eu' ? 'FR40303265045' : 'B12345678'}
           onChange={(e) => setTaxId(e.target.value)} onBlur={() => void guardarNif()} />}

@@ -8,6 +8,10 @@
 //     preguntar sola, sin bloquear nada (§5.3, respuesta 2 punto 4);
 //   · se buscan datos para proponer (§5.4) solo si a la ficha le falta el
 //     NIF, la razón social o la dirección.
+//   · I01e: se lee también lo que el libro sabe de él (su cuenta, sus asientos
+//     y las facturas del libro de IVA de esos asientos), vengan de Diez o de
+//     Sumied. Si falla, la ficha se abre igual y lo dice: nunca «no tiene
+//     facturas» por no haber podido leerlas.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ContactoProveedor, FichaProveedor } from '@/modules/conta/types'
@@ -26,6 +30,8 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { validarFicha, type ResultadoValidacion } from '@/modules/conta/lib/validacionesFicha'
 import { leerOpcionesFicha } from '@/modules/conta/services/fichaTablasService'
 import type { OpcionesFicha } from '@/modules/conta/lib/opcionesFicha'
+import { libroDelProveedor, type LibroDelProveedor } from '@/modules/conta/services/libroService'
+import { cifrasConLibro, facturasDelLibro, type CifrasConLibro, type FacturaDelLibro } from '@/modules/conta/lib/libroProveedor'
 
 export interface DatosFicha {
   ficha: FichaProveedor
@@ -45,6 +51,9 @@ export interface DatosFicha {
   opciones: OpcionesFicha
   /** «Lo que he aprendido de este proveedor», tal como está guardado (C01b, tarea 5). */
   aprendidos: Aprendido[]
+  /** I01e · Lo que el libro sabe de él. null si no se ha podido leer (y `libroError` dice por qué). */
+  libro: LibroDelProveedor | null
+  libroError: string | null
 }
 
 export interface OtroDeLaCuenta {
@@ -66,6 +75,10 @@ export interface UsoFicha {
   repetidas: Map<string, Repetida>
   /** Sin las repetidas. */
   cifras: CifrasFicha | null
+  /** I01e · Las facturas del libro de IVA que no salen como factura de Sumied (de Diez, sobre todo). */
+  facturasLibro: FacturaDelLibro[]
+  /** I01e · Las cifras de arriba con las dos fuentes (las de Sumied y las del libro). */
+  cifrasTodas: CifrasConLibro | null
   /** «Lo que he aprendido de este proveedor» (C01b §4). */
   aprendidos: Aprendido[]
   comprobandoVies: boolean
@@ -141,11 +154,19 @@ async function leerFicha(
     contaActiva(accountId),
   ])
   const aprendidos = await leerAprendido(supplierId, facturas).catch(() => [] as Aprendido[])
+  let libro: LibroDelProveedor | null = { cuenta: null, apuntes: [], filas: [] }
+  let libroError: string | null = null
+  if (opciones.empresa?.id) {
+    try { libro = await libroDelProveedor(accountId, opciones.empresa.id, supplierId) } catch (e) {
+      libro = null
+      libroError = e instanceof Error ? e.message : 'No se ha podido leer el libro.'
+    }
+  }
   const otros = todos.map((p) => ({
     id: p.id, name: p.name, taxId: p.taxId, expenseCategoryId: p.expenseCategoryId, usualTaxRateIds: p.usualTaxRateIds,
     irpfWithholdingPct: p.irpfWithholdingPct, paymentTermsDays: p.paymentTermsDays,
   }))
-  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta, opciones, aprendidos } }
+  return { tipo: 'listo', datos: { ficha, contactos, propuestas, tiposGasto, locales, facturas, documentos, otros, conta, opciones, aprendidos, libro, libroError } }
 }
 
 export function useFichaProveedor(accountId: string | null, supplierId: string): UsoFicha {
@@ -228,8 +249,17 @@ export function useFichaProveedor(accountId: string | null, supplierId: string):
   // Una repetida no se apunta: no cuenta en «Le has comprado», «Le debes» ni el próximo pago.
   const cifras = useMemo(() => datos ? calcularCifras(datos.facturas.filter((f) => !repetidas.has(f.id)), hoyEnMadrid()) : null, [datos, repetidas])
 
+  // I01e: las del libro, sin las que ya salen como factura de Sumied; y las cifras con las dos.
+  const facturasLibro = useMemo(() => datos?.libro
+    ? facturasDelLibro(datos.libro.filas, datos.libro.apuntes, new Set(datos.facturas.map((f) => f.id)))
+    : [], [datos])
+  const cifrasTodas = useMemo(() => {
+    if (!datos) return null
+    return cifrasConLibro(cifras, facturasLibro, datos.libro?.apuntes ?? [], hoyEnMadrid())
+  }, [datos, cifras, facturasLibro])
+
   return {
-    estado, error, datos, completitud, repetidas, cifras, comprobandoVies,
+    estado, error, datos, completitud, repetidas, cifras, facturasLibro, cifrasTodas, comprobandoVies,
     aprendidos: datos?.aprendidos ?? [],
     recargar: () => cargar(),
     reintentar: () => { setEstado('cargando'); setError(null); void cargar() },

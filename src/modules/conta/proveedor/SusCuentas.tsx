@@ -28,6 +28,7 @@ import { porUso } from '@/modules/conta/lib/masUsados'
 import { encaja } from '@/modules/conta/lib/planVista'
 import { euros, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { ExtractoCuenta } from '@/modules/conta/plan/ExtractoCuenta'
+import { textoOrigen } from '@/modules/conta/lib/libroProveedor'
 import { apuntesDeCuentas, terceroDelProveedor } from '@/modules/conta/services/libroService'
 import { rutaAsiento } from '@/config/navegacion'
 import {
@@ -154,11 +155,19 @@ function FilaCuenta({ l, cambiar, quitar, tipos, elegirTipo, idCambiar }: {
   )
 }
 
-function Extracto({ ejercicios, apuntes, alCerrar }: { ejercicios: DatosCuentasProveedor['ejercicios']; apuntes: readonly Apunte[]; alCerrar: () => void }) {
+/**
+ * El extracto de su cuenta. I01e: con el origen de cada asiento (traído de
+ * Diez, una factura subida, el banco…). Lo usan esta pestaña (con «Cerrar») y
+ * el apartado Facturas («Asientos de su cuenta 41000035»).
+ */
+export function Extracto({ ejercicios, apuntes, alCerrar, titulo }: {
+  ejercicios: DatosCuentasProveedor['ejercicios']; apuntes: readonly Apunte[]; alCerrar?: () => void; titulo?: string
+}) {
   const { rutaApartado } = useFicha()
   return (
-    <ExtractoCuenta ejercicios={ejercicios} apuntes={apuntes}
-      accion={<button type="button" className="cx-enlace" onClick={alCerrar}>Cerrar</button>}
+    <ExtractoCuenta ejercicios={ejercicios} apuntes={apuntes} titulo={titulo}
+      origen={(a) => (a.origen ? textoOrigen(a.origen, MARCA.nombre) : '—')}
+      accion={alCerrar ? <button type="button" className="cx-enlace" onClick={alCerrar}>Cerrar</button> : undefined}
       vacio={(ej) => ({
         titulo: 'Aún no hay apuntes con este proveedor.',
         explicacion: `Sus facturas y sus pagos entran en el libro diario al validar sus asientos. Cuando los haya, aquí verás cada apunte con su saldo y, por meses, el debe, el haber y el saldo del ejercicio ${ej}, con su apertura y su cierre.`,

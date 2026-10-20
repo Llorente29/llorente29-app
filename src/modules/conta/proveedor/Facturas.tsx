@@ -15,6 +15,11 @@
 // Cada acción va por su RPC, que escribe la factura y su rastro a la vez, y
 // confirma con contenido (regla 8): «Factura F-… marcada como pagada el
 // 04/10/2026. Ya no le debes esos 1.283,15 €.»
+//
+// I01e (Julio, 20/10): salen también las facturas del libro de IVA de los
+// asientos de su cuenta que no son una factura subida aquí —las traídas de
+// Diez, sobre todo—, con su origen y «Ver» a su asiento. Antes, un proveedor
+// traído de Diez decía «Aún no hay facturas suyas» con cinco en el libro.
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -28,6 +33,9 @@ import { rutaSubirFacturaProveedor } from '@/config/navegacion'
 import { ETIQUETA_REPETIDA } from '@/modules/conta/lib/repetidas'
 import { AVISO_IBAN_DISTINTO, facturaFrenada, puedeSerElNuevo } from '@/modules/conta/lib/ibanFactura'
 import { formatearIban, normalizarIban } from '@/modules/conta/lib/iban'
+import { rutaAsiento } from '@/config/navegacion'
+import { textoOrigenFactura, type FacturaDelLibro } from '@/modules/conta/lib/libroProveedor'
+import { MARCA } from '../cuenta/marca'
 
 const ESTADO: Record<string, { texto: string; tono: string }> = {
   aprobada: { texto: 'Por pagar', tono: 'cx-chip cx-chip-azul' },
@@ -66,23 +74,51 @@ export function AvisoIban() {
 
 /** La tarjeta «Facturas» del resumen: las últimas `max`, con «Ver todas». */
 export function TarjetaFacturas({ max = 6 }: { max?: number }) {
-  const { datos, rutaApartado } = useFicha()
+  const { datos, rutaApartado, facturasLibro } = useFicha()
+  const filas = juntas(datos.facturas, facturasLibro).slice(0, max)
   return (
     <section className="cx-tarjeta" aria-labelledby="cxp-facturas" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="cx-tarjeta-cabeza">
         <h2 id="cxp-facturas" className="cx-tarjeta-titulo">Facturas</h2>
-        {datos.facturas.length > 0 && <Link to={rutaApartado('facturas')} style={{ fontSize: 14, fontWeight: 600 }}>Ver todas</Link>}
+        {datos.facturas.length + facturasLibro.length > 0 && <Link to={rutaApartado('facturas')} style={{ fontSize: 14, fontWeight: 600 }}>Ver todas</Link>}
       </div>
-      <ListaFacturas facturas={datos.facturas.slice(0, max)} />
+      <ListaFacturas facturas={filas.flatMap((x) => (x.tipo === 'sumied' ? [x.f] : []))} libro={filas.flatMap((x) => (x.tipo === 'libro' ? [x.l] : []))} />
     </section>
   )
 }
 
-export function ListaFacturas({ facturas }: { facturas: FacturaDeProveedor[] }) {
-  const { datos, repetidas } = useFicha()
+type Fila = { tipo: 'sumied'; f: FacturaDeProveedor } | { tipo: 'libro'; l: FacturaDelLibro }
+const fechaDe = (x: Fila) => (x.tipo === 'sumied' ? x.f.invoiceDate ?? '' : x.l.fecha)
+
+/** Las de aquí y las del libro, de la más reciente a la más antigua (sin fecha, al final). */
+function juntas(facturas: FacturaDeProveedor[], libro: FacturaDelLibro[]): Fila[] {
+  return [...facturas.map((f) => ({ tipo: 'sumied' as const, f })), ...libro.map((l) => ({ tipo: 'libro' as const, l }))]
+    .sort((a, b) => fechaDe(b).localeCompare(fechaDe(a)))
+}
+
+/** `libro`: las del libro de IVA que no son una factura subida aquí (I01e). Sin ella, las de la ficha. */
+export function ListaFacturas({ facturas, libro: libroDado }: { facturas: FacturaDeProveedor[]; libro?: FacturaDelLibro[] }) {
+  const { datos, repetidas, facturasLibro, rutaApartado } = useFicha()
+  const libro = libroDado ?? facturasLibro
   const [abierta, setAbierta] = useState<FacturaDeProveedor | null>(null)
   const [hecho, setHecho] = useState<{ texto: string; deshacer?: () => Promise<void> } | null>(null)
-  if (facturas.length === 0) {
+  // Si no se ha podido leer el libro, se dice: nunca «no tiene facturas» por no haberlas podido leer.
+  const sinLibro = datos.libroError && (
+    <div className="cx-aviso" role="alert" style={{ marginBottom: 10 }}>
+      No se han podido leer sus facturas del libro de IVA ({datos.libroError}). Las de abajo son solo las subidas a {MARCA.nombre}.
+    </div>
+  )
+  if (facturas.length === 0 && libro.length === 0) {
+    if (datos.libroError) return sinLibro
+    if (datos.libro?.apuntes.length) {
+      return (
+        <div style={{ borderTop: '1px solid var(--cx-linea)', paddingTop: 14 }}>
+          <Vacio titulo="Ninguna factura suya en el libro de IVA."
+            explicacion={`Su cuenta ${datos.libro.cuenta?.code ?? ''} sí tiene ${datos.libro.apuntes.length === 1 ? '1 apunte' : `${datos.libro.apuntes.length} apuntes`}: están en Contabilidad, con su origen.`}
+            accion={<Link className="cx-boton-sec" to={rutaApartado('contabilidad')}>Ver sus apuntes</Link>} />
+        </div>
+      )
+    }
     return (
       <div style={{ borderTop: '1px solid var(--cx-linea)', paddingTop: 14 }}>
         <Vacio titulo="Aún no hay facturas suyas."
@@ -93,9 +129,12 @@ export function ListaFacturas({ facturas }: { facturas: FacturaDeProveedor[] }) 
   }
   return (
     <>
+      {sinLibro}
       {hecho && <HechoConDeshacer texto={hecho.texto} deshacer={hecho.deshacer} alIrse={() => setHecho(null)} />}
       <div role="list" aria-label="Facturas">
-        {facturas.map((f) => {
+        {juntas(facturas, libro).map((x) => {
+          if (x.tipo === 'libro') return <FilaDelLibro key={`libro-${x.l.entryId}-${x.l.numero}`} l={x.l} />
+          const f = x.f
           const rep = repetidas.get(f.id)
           const frena = facturaFrenada(f, datos.ficha.iban)
           const e = rep ? { texto: ETIQUETA_REPETIDA[rep.nivel], tono: 'cx-chip cx-chip-ambar' }
@@ -123,6 +162,26 @@ export function ListaFacturas({ facturas }: { facturas: FacturaDeProveedor[] }) 
           alHecho={(h) => { setAbierta(null); setHecho(h) }} />
       )}
     </>
+  )
+}
+
+/** Una factura del libro de IVA (de Diez, sobre todo): con su origen y «Ver» a su asiento. */
+function FilaDelLibro({ l }: { l: FacturaDelLibro }) {
+  return (
+    <div role="listitem" className="cxp-factura" data-prueba="factura-libro">
+      <span className="cxp-factura-fecha">{diaMesCorto(l.fecha)}</span>
+      <span className="cxp-factura-num">
+        {l.numero}
+        <span className="cxp-factura-origen">
+          En el libro de IVA{l.asiento ? `, asiento ${l.asiento}` : ''}{l.isp ? '. Sin IVA en la factura: lo pusiste tú (inversión del sujeto pasivo)' : ''}
+        </span>
+      </span>
+      <span className="cxp-factura-importe">{eurosExactos(l.importe)}</span>
+      <span className="cxp-factura-estado"><span className="cx-chip" data-prueba="origen">{textoOrigenFactura(l.origen, MARCA.nombre)}</span></span>
+      <span className="cxp-factura-ver">
+        <Link className="cx-enlace" to={rutaAsiento(l.entryId)} aria-label={`Ver el asiento de la factura ${l.numero}`}>Ver</Link>
+      </span>
+    </div>
   )
 }
 
