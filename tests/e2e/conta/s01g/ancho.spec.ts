@@ -34,9 +34,17 @@ const PANTALLAS: Pantalla[] = [
 
 const conMarca = (ruta: string) => `${ruta}${ruta.includes('?') ? '&' : '?'}marca=sumied`
 
+/**
+ * La pantalla ya con lo suyo: la empresa leída y ningún estado de espera
+ * («Leyendo…», «Un momento.», el «Aún no hay ninguna empresa» de mientras se
+ * lee la empresa). Se mide y se fotografía lo de verdad, no la espera.
+ */
 async function quieta(page: Page) {
+  await expect(page.locator('.s-cab-empresa').first()).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('.cx-hueso')).toHaveCount(0, { timeout: 30_000 })
+  await expect(page.locator('.cx-principal').getByText(/^(Leyendo|Un momento\.|Aún no hay ninguna empresa)/)).toHaveCount(0, { timeout: 30_000 })
   await page.evaluate(() => document.fonts.ready)
+  await page.waitForTimeout(500)
 }
 
 test.beforeEach(({ page }) => {
