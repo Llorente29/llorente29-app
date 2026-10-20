@@ -115,9 +115,12 @@ async function ir(page: Page, ruta: string) {
   await cargada(page)
 }
 /** La captura: en el móvil, `-movil`; en ordenador, `-ordenador` a 1.440 px y `-1900` a 1.900 px. */
-const foto = (page: Page, nombre: string) => {
+const foto = async (page: Page, nombre: string) => {
   const ancho = page.viewportSize()?.width ?? 1440
   const sufijo = ancho < 768 ? 'movil' : ancho >= 1800 ? '1900' : 'ordenador'
+  // Arriba del todo: con la página bajada, la cabecera fija sale pintada a media captura.
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.waitForTimeout(150)
   return page.screenshot({ path: `${DIR}/${nombre}-${sufijo}.jpg`, type: 'jpeg', quality: 75, fullPage: true })
 }
 /** Dónde cae cada columna del cuerpo, con la página arriba del todo: su esquina de arriba a la izquierda. */
@@ -272,6 +275,7 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
       // En el móvil, una columna; el PDF se toca y se ve a pantalla completa.
       const m = await columnas(page)
       expect([m.centro!.x, m.der!.x]).toEqual([m.izq!.x, m.izq!.x])
+      await expect(visor.getByRole('button', { name: /^Ampliar/ })).toBeHidden()
       await visor.getByRole('button', { name: 'Ver el justificante a pantalla completa' }).click()
       await expect(visor).toHaveClass(/s-trimestre-visor--completa/)
       await page.screenshot({ path: `${DIR}/trimestre-pdf-completa-movil.jpg`, type: 'jpeg', quality: 75 })

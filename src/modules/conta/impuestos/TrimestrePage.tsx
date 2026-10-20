@@ -540,7 +540,7 @@ function VisorJustificante({ ruta, nombre, titulo, ampliado, alAmpliar }: { ruta
               <span className="s-trimestre-zoom-valor" aria-live="polite">{ZOOM[zoom] === 'page-width' ? 'Ajustar' : `${ZOOM[zoom]} %`}</span>
               <button type="button" className="s-trimestre-zoom-btn" aria-label="Acercar" disabled={zoom === ZOOM.length - 1} onClick={() => setZoom((z) => Math.min(ZOOM.length - 1, z + 1))}>+</button>
             </div>
-            <Boton variante="secundario" onClick={alAmpliar} aria-label={ampliado ? 'Reducir: volver a las tres columnas' : 'Ampliar: solo el justificante'}>{ampliado ? 'Reducir' : 'Ampliar'}</Boton>
+            <Boton variante="secundario" className="s-trimestre-ampliar" onClick={alAmpliar} aria-label={ampliado ? 'Reducir: volver a las tres columnas' : 'Ampliar: solo el justificante'}>{ampliado ? 'Reducir' : 'Ampliar'}</Boton>
             <a className={clasesBoton({ variante: 'secundario' })} href={url} download={nombre}><Icono nombre="descargar" /><span className="s-boton-texto">Descargar</span></a>
             <Boton variante="secundario" icono="imprimir" onClick={imprimir}>Imprimir</Boton>
             <a className={clasesBoton({ variante: 'secundario' })} href={url} target="_blank" rel="noopener noreferrer"><Icono nombre="abrirAparte" /><span className="s-boton-texto">Abrir aparte</span></a>
