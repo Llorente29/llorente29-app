@@ -128,6 +128,25 @@ try {
   // Las claves de los elementos del detalle (nombres de campo), para saber cómo se lee el Debe y el Haber.
   for (const cl of [...new Set(auto.flatMap((f) => de(f).flatMap((d) => Object.keys(d))))].sort()) di(`detalle.campo.${k(cl)}`, auto.filter((f) => de(f).some((d) => conValor(d[cl]))).length)
 
+  // Por cuenta del proveedor (UE: 41000024, 35 y 38; fuera: 36 y 37): qué
+  // TipoFactura, qué porcentaje, si lleva FechaOperacion y NIF. Las cuentas son
+  // del plan, no de una persona.
+  seccion('por_cuenta')
+  for (const cta of [...EXTRANJEROS].sort()) {
+    const xs = auto.filter((f) => String(f.CuentaCliente) === cta)
+    for (const t of [...new Set(xs.map((f) => f.TipoFactura))]) di(`c${cta}.tipofactura_${k(t)}`, xs.filter((f) => f.TipoFactura === t).length)
+    for (const t of [...new Set(xs.map((f) => f.PorcentajeIVA1))]) di(`c${cta}.porcentaje_${k(t)}`, xs.filter((f) => f.PorcentajeIVA1 === t).length)
+    di(`c${cta}.con_fecha_operacion`, xs.filter((f) => conValor(f.FechaOperacion)).length)
+    di(`c${cta}.fecha_operacion_es_la_factura`, xs.filter((f) => f.FechaOperacion === f.FechaFactura).length)
+    di(`c${cta}.con_cif`, xs.filter((f) => conValor(f.CifCliente)).length)
+    di(`c${cta}.cif_con_letras_delante`, xs.filter((f) => /^[A-Z]{2}/.test(String(f.CifCliente ?? ''))).length)
+    di(`c${cta}.cuota_es_el_porcentaje`, xs.filter((f) => Math.abs(n2(f.CuotaIVA1) - Math.round(n2(f.BaseImponible1) * Number(f.PorcentajeIVA1) / 100)) <= 1).length)
+  }
+  // Las normales: ¿alguna con TipoFactura 6 o 7? (el envío los tenía por abonos)
+  for (const t of [6, 7]) di(`normales.tipofactura_${t}`, normales.filter((f) => f.TipoFactura === t).length)
+  for (const t of [...new Set(normales.map((f) => f.TipoFactura))].filter((v) => typeof v === 'number')) di(`normales.todas.tipofactura_${k(t)}`, normales.filter((f) => f.TipoFactura === t).length)
+  di('normales.total_negativo', normales.filter((f) => n2(f.TotalFactura) < 0).length)
+
   seccion('fechas_y_descripcion')
   di('descripcion_es_numero_guion_nombre', auto.filter((f) => String(f.Descripcion ?? '') === `${f.NumeroFactura}-${f.NombreCliente}`).length)
   di('con_cif', auto.filter((f) => conValor(f.CifCliente)).length)
