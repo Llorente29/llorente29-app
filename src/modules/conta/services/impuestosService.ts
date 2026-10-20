@@ -8,7 +8,7 @@
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
 import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
-import type { Trimestre } from '@/modules/conta/impuestos/trimestre'
+import type { FilaLibroTrimestre, SumaCuenta, Trimestre } from '@/modules/conta/impuestos/trimestre'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
 import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
 import type { DatosJustificante, Mirado } from '@/modules/conta/impuestos/justificantes'
@@ -178,6 +178,63 @@ export function leerPresentados(companyId: string): Promise<Presentados> {
 }
 
 const DOCUMENTOS = 'conta-documentos'
+
+/** Lee todas las filas de una consulta, de 1.000 en 1.000 (PostgREST no da más de una vez). */
+async function todasLasFilas<T>(pedir: (desde: number, hasta: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, que: string): Promise<T[]> {
+  const out: T[] = []
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await pedir(i, i + 999)
+    if (error) throw new Error(`No se ha podido leer ${que}: ${error.message}`)
+    const filas = (data ?? []) as T[]
+    out.push(...filas)
+    if (filas.length < 1000) return out
+  }
+}
+
+/**
+ * I01c · maqueta v4 · El libro de IVA de un trimestre, lo justo para casarlo
+ * con el 303: expedidas por su fecha de operación (o de expedición) y
+ * recibidas por «deducida en» o, sin ella, por su fecha de recepción (o de
+ * expedición), como lo hace el cálculo del 303 (0290). Regla 9: cuenta y empresa.
+ */
+export async function libroIvaDelTrimestre(cuenta: string, empresa: string, ejercicio: number, trimestre: string, desde: string, hasta: string): Promise<FilaLibroTrimestre[]> {
+  const cols = 'book, tax_rate, tax_amount, reverse_charge, operation_key, investment_good'
+  const base = () => tabla('vat_book_entry').select(cols).eq('account_id', cuenta).eq('company_id', empresa).is('voided_at', null)
+  const [exp, rec] = await Promise.all([
+    todasLasFilas<FilaLibroTrimestre>((a, b) => base().eq('book', 'issued')
+      .or(`and(operation_date.gte.${desde},operation_date.lte.${hasta}),and(operation_date.is.null,issue_date.gte.${desde},issue_date.lte.${hasta})`)
+      .order('id').range(a, b), 'el libro de IVA (expedidas)'),
+    todasLasFilas<FilaLibroTrimestre>((a, b) => base().eq('book', 'received')
+      .or(`and(deduction_year.eq.${ejercicio},deduction_period.eq.${trimestre}),and(deduction_period.is.null,received_date.gte.${desde},received_date.lte.${hasta}),and(deduction_period.is.null,received_date.is.null,issue_date.gte.${desde},issue_date.lte.${hasta})`)
+      .order('id').range(a, b), 'el libro de IVA (recibidas)'),
+  ])
+  return [...exp, ...rec].map((f) => ({ ...f, tax_rate: f.tax_rate === null ? null : Number(f.tax_rate), tax_amount: Number(f.tax_amount) }))
+}
+
+/** Lo que mueve el diario (validado o anulado) en cada cuenta de unos prefijos en unas fechas, con su nombre. */
+export async function cuentasDelTrimestre(cuenta: string, empresa: string, prefijos: string[], desde: string, hasta: string): Promise<SumaCuenta[]> {
+  const filas = await todasLasFilas<{ account_code: string; account_name: string | null; debit: number; credit: number }>((a, b) =>
+    tabla('journal_ledger').select('account_code, account_name, debit, credit')
+      .eq('account_id', cuenta).eq('company_id', empresa).in('status', ['validado', 'anulado'])
+      .gte('entry_date', desde).lte('entry_date', hasta)
+      .or(prefijos.map((p) => `account_code.like.${p}%`).join(','))
+      .order('line_id').range(a, b), 'el diario del trimestre')
+  const m = new Map<string, SumaCuenta>()
+  for (const f of filas) {
+    const c = m.get(f.account_code) ?? { codigo: f.account_code, nombre: f.account_name ?? '', debe: 0, haber: 0 }
+    c.debe = Math.round((c.debe + Number(f.debit)) * 100) / 100
+    c.haber = Math.round((c.haber + Number(f.credit)) * 100) / 100
+    m.set(f.account_code, c)
+  }
+  return [...m.values()].sort((x, y) => x.codigo.localeCompare(y.codigo))
+}
+
+/** Lo que Sumied comprobó al calcular la declaración (tax_return_check), si la calculó. */
+export async function comprobacionesDeDeclaracion(id: string, cuenta: string): Promise<{ clave: string; resultado: 'ok' | 'warning' | 'error'; titulo: string }[]> {
+  const { data, error } = await tabla('tax_return_check').select('check_key, result, title').eq('tax_return_id', id).eq('account_id', cuenta)
+  if (error) throw new Error(`No se ha podido leer lo comprobado: ${error.message}`)
+  return ((data ?? []) as { check_key: string; result: 'ok' | 'warning' | 'error'; title: string }[]).map((f) => ({ clave: f.check_key, resultado: f.result, titulo: f.title }))
+}
 
 /**
  * I01c · Los asientos de una declaración (Trimestre › «Ver el asiento»): el de

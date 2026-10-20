@@ -280,7 +280,21 @@
 .s-trimestre-tarjeta .s-chip { white-space: normal; }
 
 /* El cuerpo: la ficha (2 partes) y el justificante (3 partes), arriba alineados. */
-.s-trimestre-cuerpo { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--s-4); align-items: start; }
+.s-impuestos.s-trimestre { max-width: none; width: 100%; }
+/* Maqueta v4 (Julio, 20/10): todo el ancho, en tres columnas. El centro (el
+   justificante) va fijo al bajar; «Ampliar» deja solo el centro. */
+.s-trimestre-cuerpo {
+  display: grid; gap: var(--s-4); align-items: start;
+  grid-template-columns: minmax(320px, 1fr) minmax(0, 2fr) minmax(300px, 1fr);
+  grid-template-areas: 'izq centro der';
+}
+.s-trimestre-col { min-width: 0; display: flex; flex-direction: column; gap: var(--s-4); }
+.s-trimestre-col-izq { grid-area: izq; }
+.s-trimestre-col-centro { grid-area: centro; position: sticky; top: var(--s-4); }
+.s-trimestre-col-der { grid-area: der; }
+/* Doble clase: tiene que ganar a las rejillas de las pantallas más estrechas, que van después. */
+.s-trimestre-cuerpo.s-trimestre-cuerpo--ampliado { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'centro'; }
+.s-trimestre-cuerpo--ampliado .s-trimestre-col-izq, .s-trimestre-cuerpo--ampliado .s-trimestre-col-der { display: none; }
 
 .s-trimestre-ficha { min-width: 0; display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5); }
 .s-trimestre-ficha > p { margin: 0; }
@@ -310,7 +324,14 @@
 .s-trimestre-derecha-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; }
 .s-trimestre-derecha-titulo { margin: 0; font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
 .s-trimestre-derecha-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-left: auto; }
-.s-trimestre-pdf-visor { width: 100%; height: 860px; border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-suave); }
+.s-trimestre-pdf-marco { position: relative; }
+.s-trimestre-pdf-visor { display: block; width: 100%; height: calc(100vh - 150px); min-height: 520px; border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-suave); }
+.s-trimestre-pdf-tocar { display: none; }
+.s-trimestre-zoom { display: inline-flex; align-items: center; border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-boton); background: var(--s-superficie); }
+.s-trimestre-zoom-btn { min-width: 36px; min-height: 36px; border: none; background: none; color: var(--s-tinta); font-size: var(--s-t-l); cursor: pointer; }
+.s-trimestre-zoom-btn:disabled { color: var(--s-apoyo); cursor: default; }
+.s-trimestre-zoom-btn:focus-visible { outline: 2px solid var(--s-foco); outline-offset: 1px; }
+.s-trimestre-zoom-valor { min-width: 64px; text-align: center; font-size: var(--s-t-s); color: var(--s-tinta); font-variant-numeric: tabular-nums; }
 .s-trimestre-abriendo { margin: 0; padding: var(--s-6) 0; }
 .s-trimestre-falta { align-items: flex-start; padding: var(--s-6); }
 .s-trimestre-falta p { margin: 0; }
@@ -338,9 +359,36 @@
 .s-trimestre-cartera p { margin: 0; }
 .s-trimestre-ok { color: var(--s-ok); font-size: var(--s-t-s); }
 .s-trimestre-desfase { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); border-radius: var(--s-radio-bloque); background: var(--s-duda-fondo); color: var(--s-tinta); }
+.s-trimestre-col-der .s-trimestre-cartera { padding: var(--s-4); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-superficie); }
+
+/* La liquidación en palabras, «Ver las casillas» y lo comprobado. */
+.s-trimestre-liquidacion { display: flex; flex-direction: column; gap: var(--s-3); }
+.s-trimestre-liq, .s-trimestre-cuadre { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
+.s-trimestre-liq th, .s-trimestre-liq td, .s-trimestre-cuadre th, .s-trimestre-cuadre td { padding: var(--s-2) var(--s-1); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: top; }
+.s-trimestre-liq thead th, .s-trimestre-cuadre thead th { font-size: var(--s-t-xs); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); color: var(--s-apoyo); font-weight: var(--s-peso-fuerte); text-align: left; }
+.s-trimestre-liq tbody th, .s-trimestre-cuadre tbody th { text-align: left; font-weight: var(--s-peso-normal); color: var(--s-tinta); }
+.s-trimestre-liq .s-tabla-cifra, .s-trimestre-cuadre .s-tabla-cifra { text-align: right; white-space: nowrap; }
+.s-trimestre-liq .s-impuestos-casilla, .s-trimestre-cuadre .s-impuestos-casilla, .s-trimestre-liq-resultado .s-impuestos-casilla { display: block; font-size: var(--s-t-xs); color: var(--s-apoyo); }
+.s-trimestre-liq-total th, .s-trimestre-liq-total td { font-weight: var(--s-peso-fuerte); border-bottom: none; border-top: 2px solid var(--s-tinta); }
+.s-trimestre-liq-resultado { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-2) var(--s-3); margin: 0; }
+.s-trimestre-liq-resultado dt { color: var(--s-tinta); }
+.s-trimestre-liq-resultado dd { margin: 0; text-align: right; font-weight: var(--s-peso-fuerte); white-space: nowrap; }
+.s-trimestre-todas > summary { cursor: pointer; color: var(--s-accion); font-weight: var(--s-peso-fuerte); padding: var(--s-2) 0; }
+.s-trimestre-todas[open] > summary { margin-bottom: var(--s-2); }
+.s-trimestre-comprobado { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); }
+.s-trimestre-comprobado p { margin: 0; }
+.s-trimestre-cuadre tr[data-casa='no'] th { color: var(--s-falta); }
+.s-trimestre-checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-2); font-size: var(--s-t-s); color: var(--s-tinta); }
+.s-trimestre-checks li[data-resultado='error'], .s-trimestre-checks li[data-resultado='warning'] { color: var(--s-falta); }
+
+/* Por debajo de 1.500 px, la derecha baja debajo de la izquierda; el justificante sigue al lado. */
+@media (max-width: 1499px) {
+  .s-trimestre-cuerpo { grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr); grid-template-areas: 'izq centro' 'der centro'; }
+}
 
 @media (max-width: 1099px) {
-  .s-trimestre-cuerpo { grid-template-columns: minmax(0, 1fr); }
+  .s-trimestre-cuerpo { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'izq' 'centro' 'der'; }
+  .s-trimestre-col-centro { position: static; }
   .s-trimestre-pdf-visor { height: 80vh; }
 }
 @media (max-width: 767px) {
@@ -355,5 +403,16 @@
   .s-trimestre-casillas th, .s-trimestre-casillas td { padding: var(--s-2) var(--s-1); }
   .s-trimestre-derecha-acciones { margin-left: 0; width: 100%; }
   .s-trimestre-derecha-acciones > * { flex: 1 1 auto; justify-content: center; }
-  .s-trimestre-pdf-visor { height: 70vh; }
+  .s-trimestre-pdf-visor { height: 60vh; min-height: 320px; }
+  /* En el móvil, el PDF se toca y se ve a pantalla completa. */
+  .s-trimestre-pdf-tocar {
+    display: flex; position: absolute; inset: 0; align-items: flex-end; justify-content: center; padding: var(--s-4);
+    border: none; border-radius: var(--s-radio-bloque); background: transparent; color: var(--s-sobre-accion); cursor: pointer;
+    font-size: var(--s-t-m); font-weight: var(--s-peso-fuerte);
+  }
+  .s-trimestre-pdf-tocar::after { content: ''; position: absolute; inset: auto var(--s-4) var(--s-4); height: 44px; border-radius: var(--s-radio-boton); background: var(--s-accion); z-index: -1; }
+  .s-trimestre-visor--completa { position: fixed; inset: 0; z-index: 1000; border-radius: 0; padding: var(--s-3); overflow: auto; }
+  .s-trimestre-visor--completa .s-trimestre-pdf-visor { height: calc(100vh - 140px); }
+  /* En el móvil ya es una sola columna: ni zoom ni «Ampliar». */
+  .s-trimestre-derecha-acciones .s-trimestre-zoom, .s-trimestre-derecha-acciones .s-trimestre-ampliar { display: none; }
 }

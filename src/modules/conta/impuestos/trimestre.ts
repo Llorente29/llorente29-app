@@ -261,3 +261,138 @@ export function librosDelModelo(modelo: string): 'recibidas' | 'retenciones' | n
   if (modelo === '111' || modelo === '115') return 'retenciones'
   return null
 }
+
+// ── I01c · maqueta v4 (20/10): la liquidación en palabras y lo comprobado ──
+
+/** El primer y el último día de un trimestre ('3T' de 2026 → 2026-07-01 a 2026-09-30). */
+export function fechasTrimestre(ejercicio: number, trimestre: string): { desde: string; hasta: string } {
+  const q = Number(trimestre[0])
+  const m1 = (q - 1) * 3 + 1, m3 = q * 3
+  const ultimo = new Date(Date.UTC(ejercicio, m3, 0)).getUTCDate()
+  return { desde: `${ejercicio}-${String(m1).padStart(2, '0')}-01`, hasta: `${ejercicio}-${String(m3).padStart(2, '0')}-${ultimo}` }
+}
+
+/** Una fila de la liquidación del 303 en palabras: base y cuota, con sus casillas en pequeño. */
+export type FilaLiquidacion = { texto: string; base: number | null; cuota: number | null; casillas: string[] }
+type Grupo = { texto: string; base?: string; tipo?: string; cuota: string }
+
+const COBRAS: Grupo[] = [
+  { texto: 'Ventas', base: '150', tipo: '151', cuota: '152' },
+  { texto: 'Ventas', base: '01', tipo: '02', cuota: '03' },
+  { texto: 'Ventas', base: '153', tipo: '154', cuota: '155' },
+  { texto: 'Ventas', base: '04', tipo: '05', cuota: '06' },
+  { texto: 'Ventas', base: '07', tipo: '08', cuota: '09' },
+  { texto: 'Ventas', base: '165', tipo: '166', cuota: '167' },
+  { texto: 'Adquisiciones intracomunitarias (autoliquidadas)', base: '10', cuota: '11' },
+  { texto: 'Otras compras con inversión del sujeto pasivo', base: '12', cuota: '13' },
+  { texto: 'Modificación de bases y cuotas', base: '14', cuota: '15' },
+  { texto: 'Recargo de equivalencia', base: '156', tipo: '157', cuota: '158' },
+  { texto: 'Recargo de equivalencia', base: '16', tipo: '17', cuota: '18' },
+  { texto: 'Recargo de equivalencia', base: '19', tipo: '20', cuota: '21' },
+  { texto: 'Recargo de equivalencia', base: '22', tipo: '23', cuota: '24' },
+  { texto: 'Recargo de equivalencia', base: '168', tipo: '169', cuota: '170' },
+  { texto: 'Modificación del recargo de equivalencia', base: '25', cuota: '26' },
+]
+const DEDUCES: Grupo[] = [
+  { texto: 'Compras y gastos corrientes', base: '28', cuota: '29' },
+  { texto: 'Bienes de inversión', base: '30', cuota: '31' },
+  { texto: 'Importaciones corrientes', base: '32', cuota: '33' },
+  { texto: 'Importaciones de bienes de inversión', base: '34', cuota: '35' },
+  { texto: 'Adquisiciones intracomunitarias corrientes', base: '36', cuota: '37' },
+  { texto: 'Adquisiciones intracomunitarias de bienes de inversión', base: '38', cuota: '39' },
+  { texto: 'Rectificación de deducciones', base: '40', cuota: '41' },
+  { texto: 'Compensaciones del régimen agrario', cuota: '42' },
+  { texto: 'Regularización de bienes de inversión', cuota: '43' },
+  { texto: 'Regularización por la prorrata definitiva', cuota: '44' },
+]
+
+/**
+ * La liquidación del 303 agrupada en palabras (maqueta v4): «IVA que cobras»
+ * y «IVA que deduces», con base y cuota por tipo y sus casillas al lado. Solo
+ * las filas con algo: todas las casillas siguen en «Ver las casillas» (regla 7).
+ */
+export function liquidacion303(casillas: CasillaTrimestre[]) {
+  const v = new Map(casillas.map((c) => [c.casilla.padStart(2, '0'), c.valor]))
+  const n = (k?: string) => (k ? v.get(k) ?? null : null)
+  const filas = (gs: Grupo[]): FilaLiquidacion[] => gs.flatMap((g) => {
+    const base = n(g.base), cuota = n(g.cuota)
+    if (!base && !cuota) return []
+    const tipo = n(g.tipo)
+    const texto = tipo !== null ? `${g.texto} al ${String(tipo).replace('.', ',')} %` : g.texto
+    return [{ texto, base, cuota, casillas: [g.base, g.cuota].filter((x): x is string => !!x) }]
+  })
+  return {
+    cobras: filas(COBRAS), totalCobras: n('27'),
+    deduces: filas(DEDUCES), totalDeduces: n('45'),
+    diferencia: n('46'), resultado: n('71'),
+  }
+}
+
+/** Una fila del libro de IVA del trimestre, lo que hace falta para casarlo con el 303. */
+export type FilaLibroTrimestre = {
+  book: string; tax_rate: number | null; tax_amount: number; reverse_charge: boolean; operation_key: string | null; investment_good: boolean
+}
+export type LineaCuadre = { casilla: string; texto: string; libro: number; presentado: number; casa: boolean }
+
+/**
+ * Lo comprobado del 303: el libro de IVA del trimestre (ya con «deducida en»)
+ * contra las cuotas del 303, casilla a casilla y al céntimo, con las mismas
+ * reglas que el testigo del importador de Diez. Solo las casillas con algo a
+ * un lado o al otro.
+ */
+export function cuadreLibro303(filas: FilaLibroTrimestre[], casillas: CasillaTrimestre[]): LineaCuadre[] {
+  const cent = (x: number | null | undefined) => Math.round(Number(x ?? 0) * 100)
+  const suma = (f: (x: FilaLibroTrimestre) => boolean) => filas.filter(f).reduce((a, x) => a + cent(x.tax_amount), 0)
+  const recibida = (x: FilaLibroTrimestre) => x.book === 'received'
+  const intra = (x: FilaLibroTrimestre) => recibida(x) && x.reverse_charge && x.operation_key === '09'
+  const reglas: [string, string, (x: FilaLibroTrimestre) => boolean][] = [
+    ['03', 'IVA de las ventas al 4 %', (x) => x.book === 'issued' && Number(x.tax_rate) === 4 && !x.reverse_charge],
+    ['06', 'IVA de las ventas al 10 %', (x) => x.book === 'issued' && Number(x.tax_rate) === 10 && !x.reverse_charge],
+    ['09', 'IVA de las ventas al 21 %', (x) => x.book === 'issued' && Number(x.tax_rate) === 21 && !x.reverse_charge],
+    ['11', 'IVA de las adquisiciones intracomunitarias', intra],
+    ['13', 'IVA de otras compras con inversión del sujeto pasivo', (x) => recibida(x) && x.reverse_charge && x.operation_key !== '09'],
+    ['29', 'IVA deducible de compras y gastos corrientes', (x) => recibida(x) && !x.investment_good && (!x.reverse_charge || x.operation_key !== '09')],
+    ['37', 'IVA deducible de las adquisiciones intracomunitarias', intra],
+  ]
+  const pres = new Map(casillas.map((c) => [c.casilla.padStart(2, '0'), cent(c.valor)]))
+  return reglas.flatMap(([casilla, texto, f]) => {
+    const libro = suma(f), presentado = pres.get(casilla) ?? 0
+    return libro === 0 && presentado === 0 ? [] : [{ casilla, texto, libro: libro / 100, presentado: presentado / 100, casa: libro === presentado }]
+  })
+}
+
+/** Lo que el diario mueve en una cuenta en el trimestre. */
+export type SumaCuenta = { codigo: string; nombre: string; debe: number; haber: number }
+export type LineaCuadreCuenta = { texto: string; importe: number | null; casillas?: string; casa?: boolean | null }
+
+/**
+ * Los cuadres del 111 y el 115 contra el diario (maqueta v4): lo retenido
+ * ([28] del 111, [03] del 115) contra el haber del trimestre de cada subcuenta
+ * de la 4751, y la base del 115 ([02]) contra lo cargado en la 621
+ * (arrendamientos), que puede llevar también alquileres sin retención: ese
+ * cuadre se dice, no se da por error.
+ */
+export function cuadreRetenciones(modelo: string, casillas: CasillaTrimestre[], cuentas: SumaCuenta[]): { lineas: LineaCuadreCuenta[]; conclusion: { casa: boolean; texto: string } | null } {
+  const v = new Map(casillas.map((c) => [c.casilla.padStart(2, '0'), c.valor]))
+  const cent = (x: number | null | undefined) => Math.round(Number(x ?? 0) * 100)
+  const retenido = modelo === '111' ? v.get('28') ?? v.get('30') ?? null : modelo === '115' ? v.get('03') ?? null : null
+  if (retenido === null || retenido === undefined) return { lineas: [], conclusion: null }
+  const c4751 = cuentas.filter((c) => c.codigo.startsWith('4751'))
+  const casa = c4751.find((c) => cent(c.haber) === cent(retenido)) ?? null
+  const lineas: LineaCuadreCuenta[] = [
+    { texto: modelo === '111' ? 'Retenciones del 111' : 'Retenciones del 115', importe: retenido, casillas: modelo === '111' ? '[28]' : '[03]' },
+    ...c4751.map((c) => ({ texto: `${c.codigo} · ${c.nombre} (haber del trimestre)`, importe: c.haber, casa: casa ? c.codigo === casa.codigo : null })),
+  ]
+  if (modelo === '115') {
+    const c621 = cuentas.filter((c) => c.codigo.startsWith('621'))
+    const base = v.get('02') ?? null
+    if (base !== null && base !== undefined) {
+      lineas.push({ texto: 'Base de las retenciones del 115', importe: base, casillas: '[02]' })
+      for (const c of c621) lineas.push({ texto: `${c.codigo} · ${c.nombre} (cargado en el trimestre)`, importe: c.debe - c.haber, casa: cent(c.debe - c.haber) === cent(base) })
+    }
+  }
+  const conclusion = casa
+    ? { casa: true, texto: `Lo retenido casa con el haber de la ${casa.codigo} en el trimestre.` }
+    : { casa: false, texto: c4751.length ? 'Ninguna subcuenta de la 4751 tiene en el trimestre el mismo haber que lo retenido: mira sus apuntes en el mayor.' : 'El diario no tiene movimientos de la 4751 en el trimestre.' }
+  return { lineas, conclusion }
+}
