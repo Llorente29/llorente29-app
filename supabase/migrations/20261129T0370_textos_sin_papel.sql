@@ -3,6 +3,7 @@
 -- cambia: public.compras_factura_desde_papel · prueba: supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
 -- cambia: public.compras_sin_iva · prueba: supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
 -- cambia: public.tg_goods_receipt_path_factura · prueba: supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
+-- cambia: public.compras_camino_de · prueba: supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
 -- cambia: public.conta_documentos_recibidos · prueba: supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
 -- cambia: public.company_chart_import_apply · prueba: supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
 -- cambia: public.company_chart_import_undo · prueba: supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
@@ -17,7 +18,8 @@
 -- de verdad no se sabe qué es, «documento». En Clientes y proveedores, «papel»
 -- era el ROL de un tercero: ahí se dice «como cliente, plataforma o socio».
 -- Cocina, reparto e impresora no entran (pase_board, db_health_watchdog,
--- seed_appcc_for_account, compras_camino_de: no se tocan).
+-- seed_appcc_for_account, tg_auto_print_bag_on_ready: no se tocan; ahí
+-- «papel» es papel de verdad, de impresora o de manos).
 --
 -- SOLO CAMBIAN TEXTOS: mensajes de error, motivos, frases y el resumen de la
 -- fusión. No cambia ninguna firma (create or replace con la misma: en
@@ -26,14 +28,17 @@
 -- (compras_factura_desde_papel, v.papel, mc.papel), ni los comentarios de
 -- dentro de los cuerpos.
 --
--- Un sitio lleva además un CASE mínimo, porque ahí el tipo de documento está
--- a mano y se nombra: _compras_camino_calcula, «¿a nombre de quién va?»: «El
--- albarán / La factura / El albarán-factura va a nombre de «X»…» según
--- doc_type (y «El documento» si no lo dice).
---
--- Fuera, a propósito: compras_camino_de («Este papel es un albarán / una
--- factura»). Es la frase que ve la cocina en la tablet del local al confirmar
--- una recepción, y cocina y reparto no entran ahora (Julio, 21/10).
+-- Dos sitios llevan además un CASE mínimo, porque ahí el tipo de documento
+-- está a mano y se nombra:
+--   · _compras_camino_calcula, «¿a nombre de quién va?»: «El albarán / La
+--     factura / El albarán-factura va a nombre de «X»…» según doc_type (y
+--     «El documento» si no lo dice).
+--   · compras_camino_de, la frase de la tablet al confirmar una recepción
+--     (es un documento, no el ticket impreso: entra, Julio 21/10): «Es una
+--     factura.» o «Es un albarán-factura.» en el camino de factura; «Es un
+--     albarán.» en el de pendiente de factura solo si lo es: si no hay
+--     documento leído, antes decía «Este papel es un albarán» sin saberlo, y
+--     ahora solo «La oficina esperará la factura.».
 --
 -- Los cuerpos de partida son los de PRODUCCIÓN (pg_get_functiondef, solo
 -- lectura, 21/10), y casan byte a byte con su última definición del
@@ -43,6 +48,7 @@
 --   compras_factura_desde_papel    4f4d38df93955ba3268052950c32b35d
 --   compras_sin_iva                805d1ed89ae5c424a19b83ec17d311af
 --   tg_goods_receipt_path_factura  5fa9ed53935109ea522d7dba29feaff1
+--   compras_camino_de              72b667d88ebeab8a470d953c9b771911
 --   conta_documentos_recibidos     7e33015af3eeb23e5ffc689007a26887
 --   company_chart_import_apply     670b04da6349d90c69c06e43c90ac69a
 --   company_chart_import_undo      d065d50eb0238f05dafdb0e40cc4f511
@@ -373,6 +379,31 @@ begin
   end if;
   perform set_config('folvy.compras_factura', '', true);
   return null;
+end $function$;
+
+-- ── public.compras_camino_de ──
+--   when 'factura' then 'Este papel es una factura. Ya ha pasado a la oficina. No tienes que hacer nada más.' …
+--   → when 'factura' then case when p.doc_type = 'albaran_factura' then 'Es un albarán-factura.' else 'Es una factura.' end …
+CREATE OR REPLACE FUNCTION public.compras_camino_de(p_recepcion uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare p goods_receipt_path; v_socio text;
+begin
+  select * into p from goods_receipt_path where goods_receipt_id = p_recepcion;
+  if p.id is null then return null; end if;
+  if not (select belongs_to_account(p.account_id)) then raise exception 'Esa recepción no es de tu cuenta.' using errcode = '42501'; end if;
+  select name into v_socio from supplier where id = p.supplier_id;
+  return jsonb_build_object('camino', p.path,
+    'frase', case p.path
+      when 'factura' then case when p.doc_type = 'albaran_factura' then 'Es un albarán-factura.' else 'Es una factura.' end
+                          || ' Ya ha pasado a la oficina. No tienes que hacer nada más.'
+      when 'pendiente_factura' then case when p.doc_type = 'albaran' then 'Es un albarán. ' else '' end
+                          || 'La oficina esperará la factura.'
+      when 'liquidacion' then format('Este género es de %s. Entra en la cuenta del mes.', rtrim(v_socio, '.'))
+      else 'Recibido. La oficina lo revisará.' end);
 end $function$;
 
 -- ── public.conta_documentos_recibidos ──

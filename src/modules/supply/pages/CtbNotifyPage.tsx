@@ -327,7 +327,7 @@ export default function CtbNotifyPage() {
                   <p className="text-xs text-text-secondary">
                     <b className="text-text-primary">{porClase('diferencia').length}</b> {porClase('diferencia').length === 1 ? 'diferencia' : 'diferencias'} en el mensaje
                     {porClase('ruido').length > 0 && ` · ${porClase('ruido').length} por debajo del umbral`}
-                    {porClase('no_comparable').length > 0 && ` · ${porClase('no_comparable').length} sin cantidad en el papel, no comparadas`}
+                    {porClase('no_comparable').length > 0 && ` · ${porClase('no_comparable').length} sin cantidad en el albarán, no comparadas`}
                     {porClase('solo_nota').length > 0 && ` · ${porClase('solo_nota').length} con nota y sin diferencia`}
                   </p>
                   {fuera.length > 0 && (

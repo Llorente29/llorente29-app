@@ -14,9 +14,11 @@
 // y una cadena que es solo una clave («papel», «papel_y_ficha») tampoco: no es
 // una frase.
 //
-// Fuera, porque Julio los dejó para otro día (21/10: «cocina y reparto no
-// entran ahora»): FUERA, abajo. La impresora de tickets habla de papel de
-// verdad (el rollo).
+// Fuera, solo el papel DE VERDAD (Julio, 21/10: «lo que queda fuera es solo
+// el ticket impreso de la bolsa en cocina y reparto»): el rollo de la
+// impresora, cuando sale o no sale. Va frase a frase (IMPRESO), no por
+// carpetas: una carpeta entera fuera escondería un «papel» que sí es un
+// documento, como pasaba con la pantalla de recepciones.
 //
 //   node scripts/textos/papel.mjs        → una línea por texto, y sale con 1 si hay alguno
 
@@ -24,11 +26,15 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
 
-/** Lo que no entra hoy: Cocina (recepciones, cocina, pase, estaciones, TPV), reparto y la impresora. */
-export const FUERA = [
-  'src/modules/kds/', 'src/modules/kitchen/', 'src/modules/pase/', 'src/modules/tablet/', 'src/modules/supply/',
-  'src/modules/pos/', 'src/modules/orders/', 'src/modules/reparto/', 'src/modules/repartidor/',
-  'src/modules/printing/', 'src/native/print/',
+/**
+ * El papel impreso: lo que sale (o no sale) de una impresora de tickets.
+ * Cada frase, con su sitio: si alguien añade otra, la prueba la caza y se
+ * decide aquí, a la vista.
+ */
+export const IMPRESO = [
+  /Saldrá papel si la estación/,           // printing/PrintersSettingsPage: la impresora de la estación
+  /hasta que haya papel: sin etiqueta/,    // pase/PaseBoard: la etiqueta de la bolsa
+  /NO ha salido papel/,                    // pos/TpvSalePage: la comanda y el ticket del TPV
 ]
 
 // Con un guion o un subrayado pegado es un nombre (cxt-papeles, papel_y_ficha), no una palabra.
@@ -47,7 +53,7 @@ export function textosDe(codigo, fichero = 'x.tsx') {
   const sf = ts.createSourceFile(fichero, codigo, ts.ScriptTarget.Latest, true, fichero.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
   const r = []
   const mira = (n, texto, cadena = true) => {
-    if (!PALABRA.test(texto)) return
+    if (!PALABRA.test(texto) || IMPRESO.some((re) => re.test(texto.replace(/\s+/g, ' ')))) return
     // Una clave o una lista de columnas solo puede ir en una cadena o una plantilla; en el texto JSX todo se ve.
     if (cadena && (CLAVE.test(texto) || COLUMNAS.test(texto.trim()))) return
     r.push({ linea: sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1, texto: texto.trim().replace(/\s+/g, ' ') })
@@ -79,11 +85,10 @@ function ficheros(dir) {
   return r
 }
 
-/** Todos los textos con «papel» de src, fuera de FUERA. */
+/** Todos los textos con «papel» de src, salvo el papel impreso (IMPRESO). */
 export function papelEnLaApp(raiz = 'src') {
   const r = []
   for (const f of ficheros(raiz)) {
-    if (FUERA.some((x) => f.startsWith(x))) continue
     const codigo = readFileSync(f, 'utf8')
     if (!/papel/i.test(codigo)) continue // sin la palabra, no hace falta analizarlo
     for (const t of textosDe(codigo, f)) r.push({ fichero: f, ...t })

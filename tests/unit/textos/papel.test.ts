@@ -3,8 +3,8 @@
 // Regla de Julio (21/10): nunca «papel» ni «papeles» en lo que ve alguien.
 // Cada documento se llama por lo que es (albarán, factura…); si agrupa varios,
 // se dicen; si no se sabe, «documento». En Contactos era el rol: «como
-// cliente, plataforma o socio». Cocina, reparto y la impresora, otro día
-// (scripts/textos/papel.mjs, FUERA).
+// cliente, plataforma o socio». Solo queda fuera el papel impreso de la
+// impresora (scripts/textos/papel.mjs, IMPRESO).
 //
 // El detector se prueba contra los textos REALES que había en main antes de
 // la limpieza (regla 31), no contra ejemplos inventados: si deja de verlos,
@@ -12,7 +12,7 @@
 
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { FUERA, papelEnLaApp, textosDe } from '../../../scripts/textos/papel.mjs'
+import { IMPRESO, papelEnLaApp, textosDe } from '../../../scripts/textos/papel.mjs'
 import { cuantosDocumentos, elDocumento, verDocumentos } from '@/modules/conta/lib/compras'
 
 /**
@@ -22,7 +22,7 @@ import { cuantosDocumentos, elDocumento, verDocumentos } from '@/modules/conta/l
 const antes = (f: string) => readFileSync(`tests/unit/textos/fixtures/antes/${f.replace(/^.*\//, '')}.txt`, 'utf8')
 
 describe('nunca «papel» en lo que se ve', () => {
-  it('ningún texto de la app dice «papel» (fuera de Cocina, reparto y la impresora)', () => {
+  it('ningún texto de la app dice «papel» (salvo el papel impreso de la impresora)', () => {
     const r = papelEnLaApp()
     expect(r.map((x) => `${x.fichero}:${x.linea} ${x.texto}`)).toEqual([])
   }, 30_000) // lee todo src: con margen en una máquina lenta
@@ -55,8 +55,12 @@ describe('nunca «papel» en lo que se ve', () => {
     expect(textosDe(codigo, 'x.tsx').map((x) => x.texto)).toEqual(['papel', 'papeles', 'papeles', 'papel'])
   })
 
-  it('Cocina, reparto y la impresora quedan fuera, y los ficheros que lo dicen existen', () => {
-    for (const d of ['src/modules/kds/', 'src/modules/supply/', 'src/modules/reparto/', 'src/native/print/']) expect(FUERA).toContain(d)
+  it('solo queda fuera el papel impreso: tres frases de impresora, y cada una sigue existiendo', () => {
+    expect(IMPRESO).toHaveLength(3)
+    const sitios = ['src/modules/printing/components/PrintersSettingsPage.tsx', 'src/modules/pase/PaseBoard.tsx', 'src/modules/pos/pages/TpvSalePage.tsx']
+    for (const [i, f] of sitios.entries()) expect(IMPRESO[i].test(readFileSync(f, 'utf8').replace(/\s+/g, ' ')), f).toBe(true)
+    // Un «papel» de documento en Cocina sí cuenta (la pantalla de recepciones, 21/10).
+    expect(textosDe("const t = 'Total del papel'", 'x.tsx').map((x) => x.texto)).toEqual(['Total del papel'])
   })
 })
 

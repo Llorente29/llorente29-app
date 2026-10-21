@@ -1,6 +1,6 @@
 -- supabase/vuelta-atras/20261129T0370_textos_sin_papel.down.sql
 --
--- Vuelta atrás de la 0370: las 11 funciones vuelven a sus cuerpos de
+-- Vuelta atrás de la 0370: las 12 funciones vuelven a sus cuerpos de
 -- producción del 21/10, tal cual (pg_get_functiondef), con la misma firma.
 -- md5 del cuerpo al que vuelven:
 --   _compras_camino_calcula        5cbeb3496b36696e1e002bf23cdd9e8f
@@ -8,6 +8,7 @@
 --   compras_factura_desde_papel    4f4d38df93955ba3268052950c32b35d
 --   compras_sin_iva                805d1ed89ae5c424a19b83ec17d311af
 --   tg_goods_receipt_path_factura  5fa9ed53935109ea522d7dba29feaff1
+--   compras_camino_de              72b667d88ebeab8a470d953c9b771911
 --   conta_documentos_recibidos     7e33015af3eeb23e5ffc689007a26887
 --   company_chart_import_apply     670b04da6349d90c69c06e43c90ac69a
 --   company_chart_import_undo      d065d50eb0238f05dafdb0e40cc4f511
@@ -300,6 +301,27 @@ begin
   end if;
   perform set_config('folvy.compras_factura', '', true);
   return null;
+end $function$;
+
+-- ── public.compras_camino_de ──
+CREATE OR REPLACE FUNCTION public.compras_camino_de(p_recepcion uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare p goods_receipt_path; v_socio text;
+begin
+  select * into p from goods_receipt_path where goods_receipt_id = p_recepcion;
+  if p.id is null then return null; end if;
+  if not (select belongs_to_account(p.account_id)) then raise exception 'Esa recepción no es de tu cuenta.' using errcode = '42501'; end if;
+  select name into v_socio from supplier where id = p.supplier_id;
+  return jsonb_build_object('camino', p.path,
+    'frase', case p.path
+      when 'factura' then 'Este papel es una factura. Ya ha pasado a la oficina. No tienes que hacer nada más.'
+      when 'pendiente_factura' then 'Este papel es un albarán. La oficina esperará la factura.'
+      when 'liquidacion' then format('Este género es de %s. Entra en la cuenta del mes.', rtrim(v_socio, '.'))
+      else 'Recibido. La oficina lo revisará.' end);
 end $function$;
 
 -- ── public.conta_documentos_recibidos ──

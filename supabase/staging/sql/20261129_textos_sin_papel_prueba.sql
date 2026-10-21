@@ -3,15 +3,13 @@
 -- con ROLLBACK.
 --
 -- Regla de Julio (21/10): en la app nunca «papel» ni «papeles» en un texto que
--- vea alguien. La 0370 cambia SOLO textos en once funciones:
+-- vea alguien. La 0370 cambia SOLO textos en doce funciones:
 --   public._compras_camino_calcula, public._compras_factura_desde_papel,
 --   public.compras_factura_desde_papel, public.compras_sin_iva,
---   public.tg_goods_receipt_path_factura,
+--   public.tg_goods_receipt_path_factura, public.compras_camino_de,
 --   public.conta_documentos_recibidos, public.company_chart_import_apply,
 --   public.company_chart_import_undo, public.party_add_role,
 --   public.party_misma_cuenta y public._party_merge.
--- (compras_camino_de, la frase de la tablet de cocina, queda fuera: cocina y
--- reparto no entran ahora.)
 --
 --   1. Cada una: una sola firma; ningún literal con «papel» salvo las claves
 --      ('papel', 'papel_y_ficha', 'sin_papel', 'ultimo_papel'; los
@@ -28,9 +26,12 @@
 --      usuario), llamándola directamente: un documento sin líneas, uno con
 --      una línea sin IVA y una lectura de otra cuenta (o que no existe).
 --   4. Las puertas de la pantalla, como el administrador de A («set local
---      role authenticated»): compras_factura_desde_papel con una lectura que
---      no existe y compras_sin_iva de un albarán a nombre de la empresa.
---   5. La vuelta atrás, de verdad (\i): las 11 vuelven al md5 de producción
+--      role authenticated»): la frase de la tablet (compras_camino_de) en
+--      cuatro recepciones confirmadas por confirm_goods_receipt —factura,
+--      albarán-factura, albarán y sin documento—; compras_factura_desde_papel
+--      con una lectura que no existe; y compras_sin_iva de un albarán a nombre
+--      de la empresa.
+--   5. La vuelta atrás, de verdad (\i): las 12 vuelven al md5 de producción
 --      del 21/10, con una sola firma cada una.
 -- ============================================================================
 
@@ -135,6 +136,25 @@ begin
       '''Folvy no pudo crear la factura desde el papel.''');
   if md5(v_rev) <> '5fa9ed53935109ea522d7dba29feaff1' then v_mal := v_mal || ' tg_goods_receipt_path_factura: devuelto al texto viejo no es el cuerpo de producción (md5 ' || md5(v_rev) || ');'; end if;
   if md5(v_src) = '5fa9ed53935109ea522d7dba29feaff1' then v_mal := v_mal || ' tg_goods_receipt_path_factura: sigue con el cuerpo de antes (¿falta pasar la 0370?);'; end if;
+  v_ok := v_ok + 1;
+
+  -- public.compras_camino_de
+  select count(*) into v_n from pg_proc where pronamespace = 'public'::regnamespace and proname = 'compras_camino_de';
+  if v_n <> 1 then v_mal := v_mal || format(' compras_camino_de: %s firmas (debe ser 1);', v_n); end if;
+  select prosrc into v_src from pg_proc where oid = 'public.compras_camino_de(uuid)'::regprocedure;
+  select string_agg(distinct m[1], ' | ') into v_lits
+    from regexp_matches(regexp_replace(v_src, '--[^\n]*', '', 'g'), '''((?:[^'']|'''')*)''', 'g') m
+   where m[1] ~* '\mpapel' and m[1] not in ('papel', 'papel_y_ficha', 'sin_papel', 'ultimo_papel');
+  if v_lits is not null then v_mal := v_mal || format(' compras_camino_de: aún dice «%s»;', v_lits); end if;
+  v_rev := replace(v_src,
+      '      when ''factura'' then case when p.doc_type = ''albaran_factura'' then ''Es un albarán-factura.'' else ''Es una factura.'' end
+                          || '' Ya ha pasado a la oficina. No tienes que hacer nada más.''
+      when ''pendiente_factura'' then case when p.doc_type = ''albaran'' then ''Es un albarán. '' else '''' end
+                          || ''La oficina esperará la factura.''',
+      '      when ''factura'' then ''Este papel es una factura. Ya ha pasado a la oficina. No tienes que hacer nada más.''
+      when ''pendiente_factura'' then ''Este papel es un albarán. La oficina esperará la factura.''');
+  if md5(v_rev) <> '72b667d88ebeab8a470d953c9b771911' then v_mal := v_mal || ' compras_camino_de: devuelto al texto viejo no es el cuerpo de producción (md5 ' || md5(v_rev) || ');'; end if;
+  if md5(v_src) = '72b667d88ebeab8a470d953c9b771911' then v_mal := v_mal || ' compras_camino_de: sigue con el cuerpo de antes (¿falta pasar la 0370?);'; end if;
   v_ok := v_ok + 1;
 
   -- public.conta_documentos_recibidos
@@ -269,6 +289,13 @@ begin
   -- Esta sí se confirma (para el paso 4): un albarán a nombre de la empresa,
   -- camino «pendiente de factura».
   perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000106', v_d, 'albaran', 'TABERNA DE PRUEBA NORTE, SOCIEDAD LIMITADA', true);
+  -- Las de la tablet (paso 4), confirmadas: factura y albarán-factura de uno
+  -- que factura con cada entrega (camino de factura), albarán y sin documento
+  -- de uno que manda la factura después (pendiente de factura).
+  perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000201', v_e, 'factura',         'TABERNA DE PRUEBA NORTE, SOCIEDAD LIMITADA', true);
+  perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000202', v_e, 'albaran_factura', 'TABERNA DE PRUEBA NORTE, SOCIEDAD LIMITADA', true);
+  perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000203', v_d, 'albaran',         'TABERNA DE PRUEBA NORTE, SOCIEDAD LIMITADA', true);
+  perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000204', v_d, null,              null,                                         true);
   for r in select * from (values
       ('c0c37000-0000-4000-8000-000000000101'::uuid, 'La factura va a nombre de «CONTADO PRUEBA», y Folvy no sabe quién es.'),
       ('c0c37000-0000-4000-8000-000000000102'::uuid, 'El albarán va a nombre de «CONTADO PRUEBA», y Folvy no sabe quién es.'),
@@ -283,7 +310,7 @@ begin
   raise notice '2 · _compras_camino_calcula: % de % motivos como se esperaba (factura, albarán y albarán-factura por su nombre; sin documento, «No hay documento leído»)', v_n, v_n;
 end $$;
 
--- ── 3 · _compras_factura_desde_papel y compras_factura_desde_papel ────────
+-- ── 3 · _compras_factura_desde_papel, sin usuario (no tiene grant) ─────────
 do $$
 declare
   c_cuenta constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
@@ -321,12 +348,29 @@ begin
 end $$;
 
 -- ── 4 · Las puertas de la pantalla, como el usuario de A ───────────────────
--- compras_factura_desde_papel y compras_sin_iva tienen grant a authenticated:
--- se llaman como el administrador de A (C04b R7), sin pg_temp ni tablas.
+-- compras_camino_de, compras_factura_desde_papel y compras_sin_iva tienen
+-- grant a authenticated: se llaman como el administrador de A (C04b R7), sin
+-- pg_temp ni tablas.
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
+declare r record; v jsonb; v_mal text := ''; v_n int := 0;
 begin
+  -- La frase de la tablet al confirmar.
+  for r in select * from (values
+      ('c0c37000-0000-4000-8000-000000000201'::uuid, 'factura',           'Es una factura. Ya ha pasado a la oficina. No tienes que hacer nada más.'),
+      ('c0c37000-0000-4000-8000-000000000202'::uuid, 'factura',           'Es un albarán-factura. Ya ha pasado a la oficina. No tienes que hacer nada más.'),
+      ('c0c37000-0000-4000-8000-000000000203'::uuid, 'pendiente_factura', 'Es un albarán. La oficina esperará la factura.'),
+      ('c0c37000-0000-4000-8000-000000000204'::uuid, 'pendiente_factura', 'La oficina esperará la factura.')) t(id, camino, esperado) loop
+    v := public.compras_camino_de(r.id);
+    if v->>'camino' is distinct from r.camino or v->>'frase' is distinct from r.esperado then
+      v_mal := v_mal || format(' %s: %s · «%s» (esperaba %s · «%s»);', right(r.id::text, 3), v->>'camino', v->>'frase', r.camino, r.esperado);
+    end if;
+    v_n := v_n + 1;
+  end loop;
+  if v_mal <> '' then raise exception 'PRUEBA textos · 4: la frase de la tablet no es la esperada:%', v_mal; end if;
+  raise notice '4 · como el usuario de A, compras_camino_de: % de % frases como se esperaba (sin documento leído ya no dice que es un albarán)', v_n, v_n;
+
   begin
     perform public.compras_factura_desde_papel('c0c37000-0000-4000-8000-0000000009ff', 'c0c37000-0000-4000-8000-000000000001', null, null);
     raise exception 'PRUEBA textos · 4: con una lectura que no existe, compras_factura_desde_papel no ha fallado.';
@@ -345,7 +389,7 @@ end $$;
 reset role;
 
 -- ── 5 · La vuelta atrás, de verdad ─────────────────────────────────────────
--- Las 11 funciones vuelven a sus cuerpos de producción del 21/10: cada una
+-- Las 12 funciones vuelven a sus cuerpos de producción del 21/10: cada una
 -- con una sola firma y el md5 de partida.
 \i supabase/vuelta-atras/20261129T0370_textos_sin_papel.down.sql
 do $$
@@ -357,6 +401,7 @@ begin
       ('public.compras_factura_desde_papel(uuid, uuid, uuid, uuid)', '4f4d38df93955ba3268052950c32b35d'),
       ('public.compras_sin_iva(uuid, uuid)', '805d1ed89ae5c424a19b83ec17d311af'),
       ('public.tg_goods_receipt_path_factura()', '5fa9ed53935109ea522d7dba29feaff1'),
+      ('public.compras_camino_de(uuid)', '72b667d88ebeab8a470d953c9b771911'),
       ('public.conta_documentos_recibidos(uuid, date, date)', '7e33015af3eeb23e5ffc689007a26887'),
       ('public.company_chart_import_apply(uuid, jsonb, text)', '670b04da6349d90c69c06e43c90ac69a'),
       ('public.company_chart_import_undo(uuid, text)', 'd065d50eb0238f05dafdb0e40cc4f511'),
@@ -372,7 +417,7 @@ begin
     end if;
   end loop;
   if v_mal <> '' then raise exception 'PRUEBA textos · 5: la vuelta atrás no deja lo de producción:%', v_mal; end if;
-  raise notice '5 · vuelta atrás: % de 11 funciones con una sola firma y el md5 de producción del 21/10', v_ok;
+  raise notice '5 · vuelta atrás: % de 12 funciones con una sola firma y el md5 de producción del 21/10', v_ok;
 end $$;
 
 select set_config('request.jwt.claims', '', true);
