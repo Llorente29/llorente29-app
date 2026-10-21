@@ -328,3 +328,17 @@ supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql
 #   modelo (error), lo que no vale y la cuenta B, que no lee ni calcula.
 supabase/migrations/20261127T0330_i01g_retenciones_111_115.sql
 supabase/staging/sql/20261127_i01g_retenciones_prueba.sql
+
+# Compras · Al guardar cómo factura un proveedor, las preguntas que salen de la
+#   ficha se vuelven a mirar también en las recepciones que ya tienen factura
+#   (rama conta/compras-revisar; Julio, 21/10). La 0350 DE VERDAD (cambia en
+#   caliente _compras_camino_guarda y _compras_forma_facturar, misma firma),
+#   para que la e2e de Compras la tenga; se puede volver a pasar. La 0360 (la
+#   pasada de hoy, solo Foodint) aquí no hace nada. Y su prueba (ROLLBACK),
+#   como el administrador de A: las consumidas pierden la pregunta vieja sin
+#   tocar su camino ni su factura, la del paso de la factura no se toca, lo
+#   que de verdad no casa pasa a «no dicen lo mismo», «Por revisar» deja de
+#   enseñarlas y sin usuario no se cambia la ficha.
+supabase/migrations/20261129T0350_compras_preguntas_de_la_ficha.sql
+supabase/migrations/20261129T0360_compras_preguntas_foodint.sql
+supabase/staging/sql/20261129_compras_preguntas_de_la_ficha_prueba.sql
