@@ -291,12 +291,17 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await tira2.getByRole('button').filter({ hasText: 'Retenciones · 111' }).click()
     await expect(ficha.getByRole('heading', { name: 'Retenciones · 111 · 2T 2026' })).toBeVisible()
     await expect(ficha.getByText(/Aún no está en Sumied\. Se presenta hasta el/)).toBeVisible()
-    // La derecha ya no enseña el 303: dice qué falta. Y la cartera solo va con el 303.
-    await expect(page.locator('[data-prueba="que-falta"]')).toContainText('Aún no está en Sumied')
+    // El centro ya no enseña el 303: dice qué falta. I01g (21/10): el 111 lo calcula Sumied desde el
+    // diario, y si ya se presentó fuera se trae su justificante. Y la cartera solo va con el 303.
+    const falta = page.locator('[data-prueba="que-falta"]')
+    await expect(falta).toContainText('Falta calcular el 111 del 2T')
+    await expect(falta.getByRole('button', { name: 'Calcular el 111 del 2T' })).toBeVisible()
+    // Por la ruta de la empresa (despacho), «Traer el justificante» no sale: Presentados es de la empresa activa.
+    await expect(falta.getByRole('link', { name: 'Ya lo presenté: traer el justificante' })).toHaveCount(0)
     await expect(page.locator('[data-prueba="justificante"]')).toHaveCount(0)
     await expect(page.locator('[data-prueba="cartera"]')).toHaveCount(0)
-    // A la derecha, los cuadres del 111 con la 4751: sin 111, nada que cuadrar, y lo dice.
-    await expect(page.locator('.s-trimestre-col-der [data-prueba="cuadres"]')).toContainText('Sin el 111 del 2T no hay nada que cuadrar')
+    // A la derecha, lo comprobado del 111 contra el diario: sin 111, lo que lleva el diario (esta empresa, nada).
+    await expect(page.locator('.s-trimestre-col-der [data-prueba="comprobado"]')).toContainText('El diario del 2T lleva 0,00 € retenidos para el 111')
     await sinDesbordar(page, 'Ficha del 111 del 2T')
     await foto(page, 'trimestre-falta')
     expect(errores).toEqual([])
