@@ -329,6 +329,19 @@ supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql
 supabase/migrations/20261127T0330_i01g_retenciones_111_115.sql
 supabase/staging/sql/20261127_i01g_retenciones_prueba.sql
 
+# I01h · El 202 calculado por Sumied, con el molde del 303, el 111 y el 115
+#   (rama conta/i01h-202). La 0340 DE VERDAD (solo añade: la tabla de los 200,
+#   tres funciones y una clave más en el CHECK de lo comprobado; y quita a la
+#   clave anónima las tres funciones de la 0330, como el 303), para que la e2e
+#   de «Impuesto de sociedades» la tenga; se puede volver a pasar. Y su prueba
+#   (ROLLBACK), como el administrador de A: el 200 de 2024 da el 1P de 2026; el
+#   de 2025 a cero deja el 2P, el 3P y el 1P de 2027 en «No hace falta» y el
+#   calendario lo dice; corregirlo lo devuelve a borrador; la devolución,
+#   pendiente hasta que llega al banco; lo que no vale; la cuenta B y la clave
+#   anónima; y la vuelta atrás con datos.
+supabase/migrations/20261128T0340_i01h_sociedades_202.sql
+supabase/staging/sql/20261128_i01h_sociedades_202_prueba.sql
+
 # Compras · Al guardar cómo factura un proveedor, las preguntas que salen de la
 #   ficha se vuelven a mirar también en las recepciones que ya tienen factura
 #   (rama conta/compras-revisar; Julio, 21/10). La 0350 DE VERDAD (cambia en
