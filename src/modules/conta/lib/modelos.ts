@@ -123,6 +123,16 @@ export interface ReglaModelo {
 
 export interface PerfilAnuales { tipo: TipoEmpresa; sii: boolean }
 
+/**
+ * Los resúmenes anuales que NO presenta quien lleva el SII, con su norma
+ * (Julio, 21/10). El 390: «no están obligados a presentarlo quienes lleven los
+ * libros registro a través del SII» (instrucciones del modelo 390, AEAT). El
+ * 347 ya lo distingue su regla por defecto (company_not_sii).
+ */
+export const ANUAL_SIN_SII: Record<string, string> = {
+  '390': 'Instrucciones del modelo 390 (AEAT): no lo presentan quienes llevan los libros registro en el SII',
+}
+
 export interface ModeloConPorque { codigo: string; porque: string }
 
 const porqueDe = (r: ReglaModelo | undefined, norma: string | null): string =>
@@ -138,7 +148,7 @@ export function anadirAnuales(periodicos: ModeloConPorque[], reglas: ReglaModelo
   const out = new Map(periodicos.map((m) => [m.codigo, m]))
   for (const m of periodicos) {
     const r = porCodigo.get(m.codigo)
-    if (r?.anual && !out.has(r.anual)) out.set(r.anual, { codigo: r.anual, porque: porqueDe(porCodigo.get(r.anual), r.normaAnual) })
+    if (r?.anual && !out.has(r.anual) && !(perfil.sii && ANUAL_SIN_SII[r.anual])) out.set(r.anual, { codigo: r.anual, porque: porqueDe(porCodigo.get(r.anual), r.normaAnual) })
   }
   for (const r of reglas) {
     if (r.porDefecto === 'company_not_sii' && perfil.tipo === 'company' && !perfil.sii && !out.has(r.codigo)) {
@@ -149,7 +159,7 @@ export function anadirAnuales(periodicos: ModeloConPorque[], reglas: ReglaModelo
 }
 
 export interface Incoherencia {
-  clave: 'periodico_sin_anual' | 'anual_sin_periodico' | 'falta_por_defecto' | 'sobra_por_defecto'
+  clave: 'periodico_sin_anual' | 'anual_sin_periodico' | 'falta_por_defecto' | 'sobra_por_defecto' | 'sobra_con_sii'
   modelo: string
   texto: string
   norma: string | null
@@ -163,7 +173,12 @@ export function coherenciaModelos(modelos: string[], reglas: ReglaModelo[], perf
   const tiene = new Set(modelos)
   const out: Incoherencia[] = []
   for (const r of reglas) {
-    if (r.anual && tiene.has(r.codigo) && !tiene.has(r.anual)) {
+    const sinSii = r.anual ? ANUAL_SIN_SII[r.anual] : undefined
+    if (r.anual && perfil.sii && sinSii && tiene.has(r.anual)) {
+      out.push({ clave: 'sobra_con_sii', modelo: r.anual, norma: sinSii,
+        texto: `Lleva el SII y tiene el ${r.anual}, que con el SII no se presenta.` })
+    }
+    if (r.anual && tiene.has(r.codigo) && !tiene.has(r.anual) && !(perfil.sii && sinSii)) {
       out.push({ clave: 'periodico_sin_anual', modelo: r.codigo, norma: r.normaAnual,
         texto: `Presenta el ${r.codigo} y no su resumen anual, el ${r.anual}.` })
     }

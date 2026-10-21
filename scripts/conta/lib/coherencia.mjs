@@ -35,12 +35,21 @@ export function esHosteleria(iaeCode, cnaeCode) {
 const iaeHosteleria = (c) => { const s = String(c ?? ''); const [sec, n] = s.includes('_') ? s.split('_') : ['1', s]; return sec === '1' && /^6[78]/.test(n) }
 const cnaeHosteleria = (c) => /^5[56]/.test(String(c ?? '').replace(/[^0-9]/g, ''))
 
+/** La misma que ANUAL_SIN_SII de src/modules/conta/lib/modelos.ts: el anual que no presenta quien lleva el SII. */
+export const ANUAL_SIN_SII = {
+  '390': 'Instrucciones del modelo 390 (AEAT): no lo presentan quienes llevan los libros registro en el SII',
+}
+
 /** La misma regla que src/modules/conta/lib/modelos.ts (coherenciaModelos), con las filas de tax_form de la base. */
 export function coherenciaModelos(modelos, reglas, perfil) {
   const tiene = new Set(modelos)
   const out = []
   for (const r of reglas) {
-    if (r.annual_form_code && tiene.has(r.code) && !tiene.has(r.annual_form_code)) {
+    const sinSii = r.annual_form_code ? ANUAL_SIN_SII[r.annual_form_code] : undefined
+    if (r.annual_form_code && perfil.sii && sinSii && tiene.has(r.annual_form_code)) {
+      out.push({ clave: 'sobra_con_sii', modelo: r.annual_form_code, norma: sinSii, texto: `Lleva el SII y tiene el ${r.annual_form_code}, que con el SII no se presenta.` })
+    }
+    if (r.annual_form_code && tiene.has(r.code) && !tiene.has(r.annual_form_code) && !(perfil.sii && sinSii)) {
       out.push({ clave: 'periodico_sin_anual', modelo: r.code, norma: r.annual_legal_ref, texto: `Presenta el ${r.code} y no su resumen anual, el ${r.annual_form_code}.` })
     }
     if (r.annual_form_code && tiene.has(r.annual_form_code) && !tiene.has(r.code)) {
