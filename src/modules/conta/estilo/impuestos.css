@@ -427,6 +427,16 @@
 .s-trimestre-perceptores p { margin: 0; }
 .s-trimestre-perceptores-titulo { font-weight: var(--s-peso-fuerte); }
 .s-trimestre-perceptores-campos { display: grid; grid-template-columns: minmax(6rem, 7.5rem) minmax(0, 1fr); gap: var(--s-3); align-items: start; }
+/* I01h · Impuesto de sociedades: los 200 guardados y el formulario de uno nuevo. */
+.s-sociedades-200 { list-style: none; margin: 0; padding: var(--s-4) var(--s-6) 0; display: grid; gap: var(--s-3); }
+.s-sociedades-escribir { padding: var(--s-3) var(--s-6) var(--s-4); margin: 0; }
+.s-sociedades .s-impuestos-tabla .s-chip { white-space: normal; text-align: left; }
+.s-sociedades-200 li { display: grid; gap: var(--s-1); padding-bottom: var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-sociedades-200 p { margin: 0; }
+.s-sociedades-form { display: grid; gap: var(--s-3); margin: var(--s-3) var(--s-6) var(--s-4); padding: var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); }
+.s-sociedades-form p { margin: 0; }
+.s-sociedades-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: var(--s-3); align-items: start; }
+.s-sociedades .s-impuestos-tabla td[data-titulo='En qué punto está'] { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
 .s-trimestre-listo { display: grid; gap: var(--s-2); justify-items: start; }
 .s-trimestre-listo p { margin: 0; }
 .s-trimestre-liq td[data-falta='si'] { color: var(--s-duda); }

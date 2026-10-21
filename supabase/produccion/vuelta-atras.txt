@@ -1,5 +1,6 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
-# quita las tres funciones del 111 y el 115 y devuelve el CHECK de lo
-# comprobado a sus diez claves.
-cuenta: scripts/conta/produccion/cuentas/i01g-retenciones.sql
-supabase/vuelta-atras/20261127T0330_i01g_retenciones_111_115.down.sql
+# quita la tabla de los 200 (recién aplicada está vacía) y las tres funciones
+# del 202, devuelve el CHECK de lo comprobado a sus trece claves y el
+# calendario al de la 0250, y los permisos de las funciones de la 0330.
+cuenta: scripts/conta/produccion/cuentas/i01h-sociedades.sql
+supabase/vuelta-atras/20261128T0340_i01h_sociedades_202.down.sql
