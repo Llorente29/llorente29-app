@@ -285,18 +285,60 @@ const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno
 
 export interface Cifra { etiqueta: string; valor: string; apoyo: string; tono: TonoTarjeta; texto?: boolean }
 
-/** La primera: el plazo que toca, cuántos modelos y cómo están. */
+/**
+ * El color de un plazo (Julio, 20/10): rojo si vence en 2 días o menos; ámbar
+ * si quedan 15 o menos; si no, neutro. Lo fuera de plazo va siempre en rojo,
+ * pero eso lo decide cifraPlazo, que lo dice primero.
+ */
+export function tonoDePlazo(dias: number): TonoTarjeta {
+  return dias <= 2 ? 'falta' : dias <= 15 ? 'duda' : 'normal'
+}
+
+/** «202 · 2P»: el modelo y su periodo, como se nombran en la oficina. */
+const codigoDe = (f: Pick<FilaCalendario, 'modelo' | 'periodo'>) => `${f.modelo} · ${f.periodo}`
+
+/** «111 · 3T, 115 · 3T, 202 · 2P y 1 más»: hasta tres por su nombre. */
+function listaCodigos(fs: FilaCalendario[]): string {
+  const nombres = fs.slice(0, 3).map(codigoDe)
+  const resto = fs.length - nombres.length
+  if (resto > 0) return `${nombres.join(', ')} y ${resto} más`
+  return nombres.length > 1 ? `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}` : nombres.join('')
+}
+
+/**
+ * La primera: el plazo que toca, cuántos modelos y cómo están.
+ *
+ * Si hay algo fuera de plazo, el recuadro lo dice PRIMERO («1 fuera de plazo:
+ * 202 · 2P»), en rojo, y el siguiente plazo va debajo (Julio, 20/10: salía en
+ * rojo «Presentar hasta el 21/12 · dentro de 61 días» sin decir por qué). Si
+ * no, el plazo que toca, con el color de cuántos días quedan (tonoDePlazo).
+ */
 export function cifraPlazo(c: Calendario): Cifra {
   const pend = c.filas.filter(sinPresentar)
   if (c.filas.length === 0) return { etiqueta: 'Este mes', valor: 'Nada que presentar', apoyo: 'no hay ningún plazo cerca', tono: 'ok', texto: true }
   if (pend.length === 0) return { etiqueta: 'Este mes', valor: 'Todo presentado', apoyo: plural(c.filas.length, 'modelo', 'modelos') + ' en plazo', tono: 'ok', texto: true }
-  const domic = pend.filter((f) => f.domicilia && f.domiciliacion && f.domiciliacion >= c.hoy)
+  const domic = pend.filter((f) => !f.atrasado && f.domicilia && f.domiciliacion && f.domiciliacion >= c.hoy)
   const listos = pend.filter((f) => f.declaracion?.estado === 'reviewed').length
   const porRevisar = pend.filter((f) => f.se_calcula && f.declaracion?.estado !== 'reviewed').length
   const sinCalcular = pend.filter((f) => !f.se_calcula).length
   const estado = [listos ? `${listos} ${listos === 1 ? 'listo' : 'listos'}` : '', porRevisar ? `${porRevisar} por revisar` : '',
     sinCalcular ? `${sinCalcular} sin calcular aquí` : ''].filter(Boolean).join(', ')
-  const atrasados = pend.filter((f) => f.atrasado).length
+  const atrasados = pend.filter((f) => f.atrasado)
+  // El siguiente plazo de lo que aún está en plazo: el de domiciliar si se domicilia y aún se puede; si no, el de presentar.
+  const enPlazo = pend.filter((f) => !f.atrasado)
+  const diaDe = (f: FilaCalendario) => (domic.includes(f) ? f.domiciliacion! : f.presentacion)
+  const siguiente = enPlazo.map(diaDe).sort()[0] ?? null
+
+  if (atrasados.length > 0) {
+    const sig = siguiente ? `el siguiente, hasta el ${diaMesCorto(siguiente)} · ${cuandoEs(diasHasta(c.hoy, siguiente))}` : ''
+    return {
+      etiqueta: 'Fuera de plazo',
+      valor: `${atrasados.length} fuera de plazo: ${listaCodigos(atrasados)}`,
+      apoyo: [sig, estado].filter(Boolean).join(' · '),
+      tono: 'falta',
+      texto: true,
+    }
+  }
   if (domic.length > 0) {
     const fecha = domic.map((f) => f.domiciliacion!).sort()[0]
     const dias = diasHasta(c.hoy, fecha)
@@ -306,19 +348,16 @@ export function cifraPlazo(c: Calendario): Cifra {
       etiqueta: `Domiciliados: presentar hasta el ${diaMesCorto(fecha)} · ${cuandoEs(dias)}`,
       valor: plural(domic.length, 'modelo', 'modelos'),
       apoyo: [estado, sinDom ? `sin domiciliar, hasta el ${diaMesCorto(sinDom)}` : resto ? `los demás, hasta el ${diaMesCorto(resto)}` : ''].filter(Boolean).join(' · '),
-      tono: dias <= 3 ? 'falta' : dias <= 7 ? 'duda' : 'normal',
+      tono: tonoDePlazo(dias),
     }
   }
-  const fecha = pend.filter((f) => !f.atrasado).map((f) => f.presentacion).sort()[0]
-  if (!fecha) {
-    return { etiqueta: 'Se ha pasado el plazo', valor: plural(atrasados, 'modelo', 'modelos'), apoyo: estado, tono: 'falta' }
-  }
+  const fecha = enPlazo.map((f) => f.presentacion).sort()[0]
   const dias = diasHasta(c.hoy, fecha)
   return {
     etiqueta: `Presentar hasta el ${diaMesCorto(fecha)} · ${cuandoEs(dias)}`,
     valor: plural(pend.length, 'modelo', 'modelos'),
-    apoyo: [estado, atrasados ? `${atrasados} fuera de plazo` : ''].filter(Boolean).join(' · '),
-    tono: atrasados || dias <= 3 ? 'falta' : dias <= 7 ? 'duda' : 'normal',
+    apoyo: estado,
+    tono: tonoDePlazo(dias),
   }
 }
 
