@@ -1,0 +1,75 @@
+{
+ "_origen": "Primera línea de error (y el resto cuando lo había) de fallos REALES de e2e-staging-conta del 19 al 21/10, copiada de los registros de los trabajos (get_job_logs). «staging» es la clasificación a mano: un 520 o un HTML de la base, o no poder entrar (el 400 sale en las entradas siguientes a un 520 en el mismo carril), es de staging; todo lo que es una aserción de la pantalla, no.",
+ "fallos": [
+  {
+   "fichero": "tests/e2e/conta/compras/compras.spec.ts:132",
+   "error": "No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520",
+   "staging": true
+  },
+  {
+   "fichero": "tests/e2e/conta/s01c/capturas.spec.ts:62",
+   "error": "No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 400",
+   "staging": true
+  },
+  {
+   "fichero": "tests/e2e/conta/s01d/capturas.spec.ts:44",
+   "error": "No se pudo entrar como b.admin.carril-2@prueba.folvy.test: HTTP 520",
+   "staging": true
+  },
+  {
+   "fichero": "tests/e2e/conta/b01/conciliar.spec.ts:247",
+   "error": "bank_proponer: <html>",
+   "staging": true
+  },
+  {
+   "fichero": "tests/e2e/conta/cierre/cierre.spec.ts:85",
+   "error": "expect(locator).toBeVisible() failed",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/p01/despacho.spec.ts:113",
+   "error": "expect(locator).toHaveCount(expected) failed",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/p01/despacho.spec.ts:142",
+   "error": "expect(locator).toContainText(expected) failed",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/p01/despacho.spec.ts:142",
+   "error": "strict mode violation: getByRole('status') resolved to 2 elements:",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/p01/despacho.spec.ts:82",
+   "error": "Todos: la página se sale 435 px por la derecha",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/p01/despacho.spec.ts:113",
+   "error": "locator.check: Test timeout of 60000ms exceeded.",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/c00/alta.spec.ts:230",
+   "error": "strict mode violation: getByRole('heading', { name: 'Impuestos de tus clientes' }) resolved to 2 elements:",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/s01f/pestanas.spec.ts:64",
+   "error": "expect(received).toBe(expected) // Object.is equality",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/s01g/ancho.spec.ts:45",
+   "error": "no se estira",
+   "staging": false
+  },
+  {
+   "fichero": "tests/e2e/conta/i01c/trimestre.spec.ts:153",
+   "error": "expect(locator).toContainText(expected) failed\n\nLocator: locator('[data-prueba=\"que-falta\"]')\nExpected substring: \"Aún no está en Sumied\"\nReceived string: \"Falta calcular el 111 del 2TSumied lo calcula con el diario del trimestre: …\"\nTimeout: 15000ms",
+   "staging": false
+  }
+ ]
+}

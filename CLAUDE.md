@@ -303,6 +303,34 @@ dice «ninguna», falta alguien. La #181 tocó `_shared/diezCliente.ts`:
 *(14/10. La #181 se fusionó con «[skip ci]» en el mensaje: no corrió el
 despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 
+### Qué pruebas lleva cada PR
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Reglas de
+> Julio, 19/10 y 21/10.
+
+- **En cada PR:** `npm run build`, las unitarias, la e2e de la zona que toca y
+  la **e2e corta de pedidos, cocina y reparto**. Las dos e2e van solas en cada
+  push (`scripts/e2e/area.mjs`: la zona y `CORTA`).
+- **La corta** es `reparto/direccion-falta` (Pedidos en el ordenador, el
+  Despacho, el ticket de la bolsa, la tablet de cocina y el permiso por local)
+  y `reparto/quien-reparte` (la etiqueta de reparto en cocina y que una cuenta
+  no toca lo de otra): 13 pruebas, **91 s** de pruebas en los dos tamaños
+  (`tests/e2e/tiempos.json`). No cubre crear un pedido y llevarlo por todos sus
+  estados en cocina: no hay e2e de eso.
+- **La entera, solo si el PR toca lo común o la pide una etiqueta.** Lo común
+  es `LO_COMUN` en `scripts/e2e/area.mjs`: el marco, la cabecera, la barra y el
+  esqueleto, el diseño compartido, el arranque de la app y lo que mueve todas
+  las pruebas (Playwright, la sesión, el carril, las dependencias). El push lo
+  mira solo contra `main` y, si toca, corre la entera en vez de la zona. La
+  etiqueta **`e2e-entera`** la pide aunque no toque nada de eso, y al ponerla
+  se lanza en ese momento (`e2e-etiqueta.yml`).
+- **Y cada noche sobre `main`**, a las 03:00 de Madrid. Si falla por staging
+  (no poder entrar, un 520, una página HTML de la base) lo repite una vez; si
+  no, o si vuelve a fallar, abre la incidencia «e2e de la noche en rojo» con
+  cada prueba, su fichero y el commit (`scripts/e2e/noche.mjs`).
+- **Las tandas no cambian:** análisis, prueba en staging, ensayo y real desde
+  la rama, antes de fusionar.
+
 ### Un e2e lo cancela solo un commit más nuevo de su rama
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,

@@ -1,0 +1,717 @@
+{
+ "_origen": "Informe JSON de Playwright 1.x de verdad (npx playwright test --reporter json, 21/10), sobre specs mínimos que lanzan los mensajes de error REALES de fallos-reales.json. Sirve para la FORMA del informe (suites, specs, tests, results, projectName); los mensajes, de fallos-reales.json.",
+ "config": {
+  "argv": [
+   "/opt/node22/bin/node",
+   "/repo/node_modules/.bin/playwright",
+   "test"
+  ],
+  "configFile": "/repo/playwright.config.ts",
+  "rootDir": "/repo/e2e",
+  "failOnFlakyTests": false,
+  "forbidOnly": false,
+  "fullyParallel": false,
+  "globalSetup": null,
+  "globalTeardown": null,
+  "globalTimeout": 0,
+  "grep": {},
+  "grepInvert": null,
+  "maxFailures": 0,
+  "metadata": {
+   "actualWorkers": 2
+  },
+  "preserveOutput": "always",
+  "projects": [
+   {
+    "outputDir": "/repo/test-results",
+    "repeatEach": 1,
+    "retries": 0,
+    "metadata": {
+     "actualWorkers": 2
+    },
+    "id": "ordenador",
+    "name": "ordenador",
+    "testDir": "/repo/e2e",
+    "testIgnore": [],
+    "testMatch": [
+     "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+    ],
+    "timeout": 30000
+   },
+   {
+    "outputDir": "/repo/test-results",
+    "repeatEach": 1,
+    "retries": 0,
+    "metadata": {
+     "actualWorkers": 2
+    },
+    "id": "movil",
+    "name": "movil",
+    "testDir": "/repo/e2e",
+    "testIgnore": [],
+    "testMatch": [
+     "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+    ],
+    "timeout": 30000
+   }
+  ],
+  "quiet": false,
+  "reporter": [
+   [
+    "json",
+    null
+   ]
+  ],
+  "reportSlowTests": {
+   "max": 5,
+   "threshold": 300000
+  },
+  "shard": null,
+  "tags": [],
+  "updateSnapshots": "missing",
+  "updateSourceMethod": "patch",
+  "version": "1.63.0",
+  "workers": 2,
+  "webServer": null
+ },
+ "suites": [
+  {
+   "title": "conta/b01/conciliar.spec.ts",
+   "file": "conta/b01/conciliar.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [],
+   "suites": [
+    {
+     "title": "B02 · Bancos, conciliar",
+     "file": "conta/b01/conciliar.spec.ts",
+     "line": 2,
+     "column": 6,
+     "specs": [
+      {
+       "title": "móvil: tarjetas, «Confirmar los 3 seguros» arriba y el panel en hoja",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 30000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "ordenador",
+         "projectName": "ordenador",
+         "results": [
+          {
+           "workerIndex": 0,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 8,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-10-21T06:45:51.566Z",
+           "annotations": [],
+           "attachments": []
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "0f86498e6592831eb15c-b68970a9203892c7149f",
+       "file": "conta/b01/conciliar.spec.ts",
+       "line": 3,
+       "column": 7
+      },
+      {
+       "title": "móvil: tarjetas, «Confirmar los 3 seguros» arriba y el panel en hoja",
+       "ok": false,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 30000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "movil",
+         "projectName": "movil",
+         "results": [
+          {
+           "workerIndex": 4,
+           "parallelIndex": 1,
+           "status": "failed",
+           "duration": 5,
+           "error": {
+            "message": "Error: bank_proponer: <html>\n<head><title>520</title></head>",
+            "stack": "Error: bank_proponer: <html>\n<head><title>520</title></head>\n    at /repo/e2e/conta/b01/conciliar.spec.ts:3:143",
+            "location": {
+             "file": "/repo/e2e/conta/b01/conciliar.spec.ts",
+             "column": 143,
+             "line": 3
+            },
+            "snippet": "  1 | import { test } from '@playwright/test'\n  2 | test.describe('B02 · Bancos, conciliar', () => {\n> 3 |   test('móvil: tarjetas, «Confirmar los 3 seguros» arriba y el panel en hoja', async ({}, info) => { if (info.project.name === 'movil') throw new Error('bank_proponer: <html>\\n<head><title>520</title></head>') })\n    |                                                                                                                                               ^\n  4 | })\n  5 |"
+           },
+           "errors": [
+            {
+             "location": {
+              "file": "/repo/e2e/conta/b01/conciliar.spec.ts",
+              "column": 143,
+              "line": 3
+             },
+             "message": "Error: bank_proponer: <html>\n<head><title>520</title></head>\n\n  1 | import { test } from '@playwright/test'\n  2 | test.describe('B02 · Bancos, conciliar', () => {\n> 3 |   test('móvil: tarjetas, «Confirmar los 3 seguros» arriba y el panel en hoja', async ({}, info) => { if (info.project.name === 'movil') throw new Error('bank_proponer: <html>\\n<head><title>520</title></head>') })\n    |                                                                                                                                               ^\n  4 | })\n  5 |\n    at /repo/e2e/conta/b01/conciliar.spec.ts:3:143"
+            }
+           ],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-10-21T06:45:53.336Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "error-context",
+             "contentType": "text/markdown",
+             "path": "/repo/test-results/conta-b01-conciliar-B02-·--ff710-»-arriba-y-el-panel-en-hoja-movil/error-context.md"
+            }
+           ],
+           "errorLocation": {
+            "file": "/repo/e2e/conta/b01/conciliar.spec.ts",
+            "column": 143,
+            "line": 3
+           }
+          }
+         ],
+         "status": "unexpected"
+        }
+       ],
+       "id": "0f86498e6592831eb15c-5b66c55f45fe5088db79",
+       "file": "conta/b01/conciliar.spec.ts",
+       "line": 3,
+       "column": 7
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "conta/compras/compras.spec.ts",
+   "file": "conta/compras/compras.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "La liquidación de septiembre y su contraste (N19)",
+     "ok": false,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "ordenador",
+       "projectName": "ordenador",
+       "results": [
+        {
+         "workerIndex": 1,
+         "parallelIndex": 1,
+         "status": "failed",
+         "duration": 20,
+         "error": {
+          "message": "Error: No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520",
+          "stack": "Error: No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520\n    at /repo/e2e/conta/compras/compras.spec.ts:2:79",
+          "location": {
+           "file": "/repo/e2e/conta/compras/compras.spec.ts",
+           "column": 79,
+           "line": 2
+          },
+          "snippet": "  1 | import { test } from '@playwright/test'\n> 2 | test('La liquidación de septiembre y su contraste (N19)', async () => { throw new Error('No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520') })\n    |                                                                               ^\n  3 | test('Compras: lo que hay que mirar', async () => {})\n  4 |"
+         },
+         "errors": [
+          {
+           "location": {
+            "file": "/repo/e2e/conta/compras/compras.spec.ts",
+            "column": 79,
+            "line": 2
+           },
+           "message": "Error: No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520\n\n  1 | import { test } from '@playwright/test'\n> 2 | test('La liquidación de septiembre y su contraste (N19)', async () => { throw new Error('No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520') })\n    |                                                                               ^\n  3 | test('Compras: lo que hay que mirar', async () => {})\n  4 |\n    at /repo/e2e/conta/compras/compras.spec.ts:2:79"
+          }
+         ],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:51.628Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "error-context",
+           "contentType": "text/markdown",
+           "path": "/repo/test-results/conta-compras-compras-La-l-24c0c-tiembre-y-su-contraste-N19--ordenador/error-context.md"
+          }
+         ],
+         "errorLocation": {
+          "file": "/repo/e2e/conta/compras/compras.spec.ts",
+          "column": 79,
+          "line": 2
+         }
+        }
+       ],
+       "status": "unexpected"
+      }
+     ],
+     "id": "0e4ee973bba3247d7610-d4d123325e71411a58b8",
+     "file": "conta/compras/compras.spec.ts",
+     "line": 2,
+     "column": 5
+    },
+    {
+     "title": "Compras: lo que hay que mirar",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "ordenador",
+       "projectName": "ordenador",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 1,
+         "status": "passed",
+         "duration": 4,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:52.580Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "0e4ee973bba3247d7610-db3bf47a7d1a199a1bc9",
+     "file": "conta/compras/compras.spec.ts",
+     "line": 3,
+     "column": 5
+    },
+    {
+     "title": "La liquidación de septiembre y su contraste (N19)",
+     "ok": false,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "movil",
+       "projectName": "movil",
+       "results": [
+        {
+         "workerIndex": 5,
+         "parallelIndex": 0,
+         "status": "failed",
+         "duration": 7,
+         "error": {
+          "message": "Error: No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520",
+          "stack": "Error: No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520\n    at /repo/e2e/conta/compras/compras.spec.ts:2:79",
+          "location": {
+           "file": "/repo/e2e/conta/compras/compras.spec.ts",
+           "column": 79,
+           "line": 2
+          },
+          "snippet": "  1 | import { test } from '@playwright/test'\n> 2 | test('La liquidación de septiembre y su contraste (N19)', async () => { throw new Error('No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520') })\n    |                                                                               ^\n  3 | test('Compras: lo que hay que mirar', async () => {})\n  4 |"
+         },
+         "errors": [
+          {
+           "location": {
+            "file": "/repo/e2e/conta/compras/compras.spec.ts",
+            "column": 79,
+            "line": 2
+           },
+           "message": "Error: No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520\n\n  1 | import { test } from '@playwright/test'\n> 2 | test('La liquidación de septiembre y su contraste (N19)', async () => { throw new Error('No se pudo entrar como a.admin.carril-1@prueba.folvy.test: HTTP 520') })\n    |                                                                               ^\n  3 | test('Compras: lo que hay que mirar', async () => {})\n  4 |\n    at /repo/e2e/conta/compras/compras.spec.ts:2:79"
+          }
+         ],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:53.471Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "error-context",
+           "contentType": "text/markdown",
+           "path": "/repo/test-results/conta-compras-compras-La-l-24c0c-tiembre-y-su-contraste-N19--movil/error-context.md"
+          }
+         ],
+         "errorLocation": {
+          "file": "/repo/e2e/conta/compras/compras.spec.ts",
+          "column": 79,
+          "line": 2
+         }
+        }
+       ],
+       "status": "unexpected"
+      }
+     ],
+     "id": "0e4ee973bba3247d7610-bb736a9ee63a76edfb06",
+     "file": "conta/compras/compras.spec.ts",
+     "line": 2,
+     "column": 5
+    },
+    {
+     "title": "Compras: lo que hay que mirar",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "movil",
+       "projectName": "movil",
+       "results": [
+        {
+         "workerIndex": 7,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 5,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:54.284Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "0e4ee973bba3247d7610-41adaf08f625836cd73b",
+     "file": "conta/compras/compras.spec.ts",
+     "line": 3,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "conta/p01/despacho.spec.ts",
+   "file": "conta/p01/despacho.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "ordenador",
+       "projectName": "ordenador",
+       "results": [
+        {
+         "workerIndex": 0,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 7,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:51.736Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "5169e1e79bc78e3e2727-f4934d5705e1bf26c130",
+     "file": "conta/p01/despacho.spec.ts",
+     "line": 2,
+     "column": 5
+    },
+    {
+     "title": "3 y 4 · Dos clientes elegidos, la barra de lotes",
+     "ok": false,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "ordenador",
+       "projectName": "ordenador",
+       "results": [
+        {
+         "workerIndex": 0,
+         "parallelIndex": 0,
+         "status": "failed",
+         "duration": 27,
+         "error": {
+          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"6.106,60 €\"\u001b[39m\nReceived string:    \u001b[31m\"2 clientes elegidos · 4 modelos listos\"\u001b[39m",
+          "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"6.106,60 €\"\u001b[39m\nReceived string:    \u001b[31m\"2 clientes elegidos · 4 modelos listos\"\u001b[39m\n    at /repo/e2e/conta/p01/despacho.spec.ts:3:121",
+          "location": {
+           "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+           "column": 121,
+           "line": 3
+          },
+          "snippet": "  1 | import { test, expect } from '@playwright/test'\n  2 | test('1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero', async ({}, info) => { if (info.project.name === 'movil') throw new Error('Todos: la página se sale 435 px por la derecha') })\n> 3 | test('3 y 4 · Dos clientes elegidos, la barra de lotes', async () => { expect('2 clientes elegidos · 4 modelos listos').toContain('6.106,60 €') })\n    |                                                                                                                         ^\n  4 |"
+         },
+         "errors": [
+          {
+           "location": {
+            "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+            "column": 121,
+            "line": 3
+           },
+           "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"6.106,60 €\"\u001b[39m\nReceived string:    \u001b[31m\"2 clientes elegidos · 4 modelos listos\"\u001b[39m\n\n  1 | import { test, expect } from '@playwright/test'\n  2 | test('1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero', async ({}, info) => { if (info.project.name === 'movil') throw new Error('Todos: la página se sale 435 px por la derecha') })\n> 3 | test('3 y 4 · Dos clientes elegidos, la barra de lotes', async () => { expect('2 clientes elegidos · 4 modelos listos').toContain('6.106,60 €') })\n    |                                                                                                                         ^\n  4 |\n    at /repo/e2e/conta/p01/despacho.spec.ts:3:121"
+          }
+         ],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:51.857Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "error-context",
+           "contentType": "text/markdown",
+           "path": "/repo/test-results/conta-p01-despacho-3-y-4-·-f4f78--elegidos-la-barra-de-lotes-ordenador/error-context.md"
+          }
+         ],
+         "errorLocation": {
+          "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+          "column": 121,
+          "line": 3
+         }
+        }
+       ],
+       "status": "unexpected"
+      }
+     ],
+     "id": "5169e1e79bc78e3e2727-8efe443cc8d29583753b",
+     "file": "conta/p01/despacho.spec.ts",
+     "line": 3,
+     "column": 5
+    },
+    {
+     "title": "1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero",
+     "ok": false,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "movil",
+       "projectName": "movil",
+       "results": [
+        {
+         "workerIndex": 6,
+         "parallelIndex": 1,
+         "status": "failed",
+         "duration": 21,
+         "error": {
+          "message": "Error: Todos: la página se sale 435 px por la derecha",
+          "stack": "Error: Todos: la página se sale 435 px por la derecha\n    at /repo/e2e/conta/p01/despacho.spec.ts:2:154",
+          "location": {
+           "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+           "column": 154,
+           "line": 2
+          },
+          "snippet": "  1 | import { test, expect } from '@playwright/test'\n> 2 | test('1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero', async ({}, info) => { if (info.project.name === 'movil') throw new Error('Todos: la página se sale 435 px por la derecha') })\n    |                                                                                                                                                          ^\n  3 | test('3 y 4 · Dos clientes elegidos, la barra de lotes', async () => { expect('2 clientes elegidos · 4 modelos listos').toContain('6.106,60 €') })\n  4 |"
+         },
+         "errors": [
+          {
+           "location": {
+            "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+            "column": 154,
+            "line": 2
+           },
+           "message": "Error: Todos: la página se sale 435 px por la derecha\n\n  1 | import { test, expect } from '@playwright/test'\n> 2 | test('1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero', async ({}, info) => { if (info.project.name === 'movil') throw new Error('Todos: la página se sale 435 px por la derecha') })\n    |                                                                                                                                                          ^\n  3 | test('3 y 4 · Dos clientes elegidos, la barra de lotes', async () => { expect('2 clientes elegidos · 4 modelos listos').toContain('6.106,60 €') })\n  4 |\n    at /repo/e2e/conta/p01/despacho.spec.ts:2:154"
+          }
+         ],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:54.235Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "error-context",
+           "contentType": "text/markdown",
+           "path": "/repo/test-results/conta-p01-despacho-1-·-Tod-8c7c0-ntes-y-lo-que-vence-primero-movil/error-context.md"
+          }
+         ],
+         "errorLocation": {
+          "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+          "column": 154,
+          "line": 2
+         }
+        }
+       ],
+       "status": "unexpected"
+      }
+     ],
+     "id": "5169e1e79bc78e3e2727-e3f1f54ece0f0adfc444",
+     "file": "conta/p01/despacho.spec.ts",
+     "line": 2,
+     "column": 5
+    },
+    {
+     "title": "3 y 4 · Dos clientes elegidos, la barra de lotes",
+     "ok": false,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "movil",
+       "projectName": "movil",
+       "results": [
+        {
+         "workerIndex": 8,
+         "parallelIndex": 0,
+         "status": "failed",
+         "duration": 13,
+         "error": {
+          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"6.106,60 €\"\u001b[39m\nReceived string:    \u001b[31m\"2 clientes elegidos · 4 modelos listos\"\u001b[39m",
+          "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"6.106,60 €\"\u001b[39m\nReceived string:    \u001b[31m\"2 clientes elegidos · 4 modelos listos\"\u001b[39m\n    at /repo/e2e/conta/p01/despacho.spec.ts:3:121",
+          "location": {
+           "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+           "column": 121,
+           "line": 3
+          },
+          "snippet": "  1 | import { test, expect } from '@playwright/test'\n  2 | test('1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero', async ({}, info) => { if (info.project.name === 'movil') throw new Error('Todos: la página se sale 435 px por la derecha') })\n> 3 | test('3 y 4 · Dos clientes elegidos, la barra de lotes', async () => { expect('2 clientes elegidos · 4 modelos listos').toContain('6.106,60 €') })\n    |                                                                                                                         ^\n  4 |"
+         },
+         "errors": [
+          {
+           "location": {
+            "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+            "column": 121,
+            "line": 3
+           },
+           "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected substring: \u001b[32m\"6.106,60 €\"\u001b[39m\nReceived string:    \u001b[31m\"2 clientes elegidos · 4 modelos listos\"\u001b[39m\n\n  1 | import { test, expect } from '@playwright/test'\n  2 | test('1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence primero', async ({}, info) => { if (info.project.name === 'movil') throw new Error('Todos: la página se sale 435 px por la derecha') })\n> 3 | test('3 y 4 · Dos clientes elegidos, la barra de lotes', async () => { expect('2 clientes elegidos · 4 modelos listos').toContain('6.106,60 €') })\n    |                                                                                                                         ^\n  4 |\n    at /repo/e2e/conta/p01/despacho.spec.ts:3:121"
+          }
+         ],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:55.185Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "error-context",
+           "contentType": "text/markdown",
+           "path": "/repo/test-results/conta-p01-despacho-3-y-4-·-f4f78--elegidos-la-barra-de-lotes-movil/error-context.md"
+          }
+         ],
+         "errorLocation": {
+          "file": "/repo/e2e/conta/p01/despacho.spec.ts",
+          "column": 121,
+          "line": 3
+         }
+        }
+       ],
+       "status": "unexpected"
+      }
+     ],
+     "id": "5169e1e79bc78e3e2727-962ae00ef90f77d0a849",
+     "file": "conta/p01/despacho.spec.ts",
+     "line": 3,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "conta/s01g/ancho.spec.ts",
+   "file": "conta/s01g/ancho.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "impuestos-calendario: usa todo el ancho",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "ordenador",
+       "projectName": "ordenador",
+       "results": [
+        {
+         "workerIndex": 3,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 6,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:52.718Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "a665024f420099e84b15-21b7741b36db977bf36a",
+     "file": "conta/s01g/ancho.spec.ts",
+     "line": 2,
+     "column": 5
+    },
+    {
+     "title": "impuestos-calendario: usa todo el ancho",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 30000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "movil",
+       "projectName": "movil",
+       "results": [
+        {
+         "workerIndex": 7,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 2,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-10-21T06:45:54.400Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "a665024f420099e84b15-5b193aa038dd92b1c32c",
+     "file": "conta/s01g/ancho.spec.ts",
+     "line": 2,
+     "column": 5
+    }
+   ]
+  }
+ ],
+ "errors": [],
+ "stats": {
+  "startTime": "2026-10-21T06:45:49.486Z",
+  "duration": 5820.809,
+  "expected": 6,
+  "skipped": 0,
+  "unexpected": 6,
+  "flaky": 0
+ }
+}

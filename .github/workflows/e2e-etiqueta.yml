@@ -1,0 +1,34 @@
+name: e2e entera por etiqueta
+
+# QUÉ HACE (Julio, 21/10)
+# «La entera solo si el PR toca lo común (marco, cabecera, barra, diseño
+# compartido) o con una etiqueta que la pida.» Lo común lo decide cada push
+# solo (scripts/e2e/area.mjs, LO_COMUN). Esto es la etiqueta: al ponerle a un
+# PR la etiqueta «e2e-entera», lanza la entera sobre su rama en ese momento,
+# sin esperar a otro push (los siguientes ya la llevan: el push mira la
+# etiqueta). El run sale como «e2e · entera · <rama> · <commit>», el mismo que
+# la entera a mano, y vale igual para scripts/conta/e2e-entera.mjs.
+# Solo lanza un workflow; no tiene secretos ni toca staging.
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  actions: write
+
+jobs:
+  lanzar:
+    # Solo PR de este repositorio (una rama de fuera no puede lanzar nada aquí).
+    if: github.event.label.name == 'e2e-entera' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Lanzar la entera sobre la rama del PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAMA: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          gh workflow run e2e-staging-conta.yml --repo "$GITHUB_REPOSITORY" --ref "$RAMA"
+          echo "Lanzada la e2e entera sobre «$RAMA» por la etiqueta «e2e-entera»." | tee -a "$GITHUB_STEP_SUMMARY"
