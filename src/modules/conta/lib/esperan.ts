@@ -77,3 +77,27 @@ export function localDelAsiento(apuntes: readonly { local: string | null; comun:
 export function primerMotivo(motivos: readonly MotivoEspera[] | undefined): string | null {
   return motivos && motivos.length ? motivos[0].motivo : null
 }
+
+/** Los motivos que la pantalla del asiento ya dice con su propia franja: no se repiten. */
+const YA_DICHOS: ReadonlySet<string> = new Set(['mes_cerrado'])
+
+/**
+ * C06b (Julio, 21/10): por qué no se valida un asiento, dicho antes de pulsar.
+ * `bloquea` deja los dos botones de validar en gris (con cualquier motivo de la
+ * base, también los que ya tienen su franja); `texto` es lo que se enseña y el
+ * `title` del botón: los motivos que la pantalla no dice ya, en su orden. Sin
+ * motivos, null: se puede validar.
+ */
+export function porQueNoSeValida(motivos: readonly MotivoEspera[]): { bloquea: true; texto: string | null; franja: string | null; codigos: string[] } | null {
+  if (!motivos.length) return null
+  const nuevos = motivos.filter((m) => !YA_DICHOS.has(m.codigo))
+  const texto = nuevos.length ? nuevos.map((m) => m.motivo).join(' ') : null
+  // La franja ya dice «No se valida todavía»: sin repetir el «No se valida:» con que empiezan algunos motivos.
+  const franja = nuevos.length ? nuevos.map((m) => sinNoSeValida(m.motivo)).join(' ') : null
+  return { bloquea: true, texto, franja, codigos: motivos.map((m) => m.codigo) }
+}
+
+function sinNoSeValida(motivo: string): string {
+  const resto = motivo.replace(/^No se valida:\s*/, '')
+  return resto === motivo ? motivo : resto.charAt(0).toUpperCase() + resto.slice(1)
+}
