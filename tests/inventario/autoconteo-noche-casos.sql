@@ -6,7 +6,7 @@ insert into public.recipe_item_location_stock select '51ad1792-6629-4ef7-833a-b5
 insert into public.stock_movement (account_id, location_id, recipe_item_id, movement_type, qty_base, occurred_at)
 select '51ad1792-6629-4ef7-833a-b57b09a86710', 'aaaa0000-0000-4000-8000-0000000000f1', ('aaaa0000-0000-4000-8000-' || lpad(g::text, 12, '0'))::uuid, 'ajuste', 10, now() - interval '5 days'
   from generate_series(31, 36) g;
-select public.recompute_location_stock(id, 'aaaa0000-0000-4000-8000-0000000000f1') from public.recipe_item;
+select public.recompute_location_stock_core(id, 'aaaa0000-0000-4000-8000-0000000000f1') from public.recipe_item;
 
 create function pg_temp.c(p_code text, p_kind text, p_hace interval) returns uuid language sql as $$
   insert into public.inventory_count (account_id, location_id, code, kind, status, created_at, started_at)

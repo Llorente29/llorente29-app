@@ -52,7 +52,15 @@ create function public.current_user_is_admin_or_manager_of(p uuid) returns boole
   select exists (select 1 from public.user_profiles where user_id = auth.uid() and account_id = p and role in ('admin','manager')) $$;
 create function public.can_operate_manual_count(p uuid) returns boolean language sql stable as $$ select true $$;
 create function public.rebase_count_system_qty(p uuid) returns void language sql as $$ select $$;
-create function public.recompute_location_stock(p_item uuid, p_loc uuid) returns void language sql as $$
+-- Como en producción: la de fuera lleva guarda de cuenta y llama al núcleo.
+create function public.recompute_location_stock(p_item uuid, p_loc uuid) returns void language plpgsql security definer set search_path to 'public' as $$
+begin
+  if not public.belongs_to_account((select account_id from public.recipe_item where id = p_item)) then
+    raise exception 'recompute_location_stock: sin acceso al item %', p_item;
+  end if;
+  perform public.recompute_location_stock_core(p_item, p_loc);
+end $$;
+create function public.recompute_location_stock_core(p_item uuid, p_loc uuid) returns void language sql as $$
   update public.recipe_item_location_stock s set qty_on_hand = (select coalesce(sum(qty_base),0) from public.stock_movement m
     where m.recipe_item_id = p_item and m.location_id = p_loc) where s.recipe_item_id = p_item and s.location_id = p_loc $$;
 -- Stub: pide motivo lo marcado needs_review o con un 25 % o más de diferencia.

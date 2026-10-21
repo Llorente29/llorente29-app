@@ -61,8 +61,10 @@
 -- LO QUE ROZA EL INVENTARIO (dicho a Julio el 21/10):
 --   · Cada autoconteo aplicado pasa a ser «el último conteo aprobado» de sus
 --     artículos: el corte para reprocesar consumo (regla 6) se moverá cada día.
---   · recompute_location_stock, el que usa cerrar una venta, se llama igual y
---     no se toca.
+--   · El recálculo del stock: el núcleo de aplicar llama a
+--     recompute_location_stock_core (el mismo que hay debajo de
+--     recompute_location_stock, sin su guarda de cuenta, que de noche no hay
+--     quien la pase). Ninguno de los dos se toca.
 --   · Camino del pedido: estas funciones las llama un cron, así que el
 --     analizador las cuenta como del camino y pide «autorizo». Ninguna venta,
 --     cocina ni reparto las llama.
@@ -347,7 +349,10 @@ BEGIN
       );
       v_adj := v_adj + 1;
     END IF;
-    PERFORM public.recompute_location_stock(r.recipe_item_id, v_location_id);
+    -- El NÚCLEO del recálculo: recompute_location_stock lleva su propia guarda
+    -- de cuenta y, de noche y sin usuario, la tumbaría (medido en staging el
+    -- 21/10, run 406). La guarda de cuenta ya la hace apply_inventory_count.
+    PERFORM public.recompute_location_stock_core(r.recipe_item_id, v_location_id);
     v_rec := v_rec + 1;
   END LOOP;
 

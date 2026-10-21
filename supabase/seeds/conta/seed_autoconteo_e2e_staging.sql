@@ -74,7 +74,7 @@ begin
                  ('a7c10000-0000-4000-8000-000000000002'::uuid, 20, 0.30),
                  ('a7c10000-0000-4000-8000-000000000003'::uuid, 30, 0.08)) x(id, n, c)
    where not exists (select 1 from public.stock_movement m where m.recipe_item_id = x.id and m.location_id = a_local and m.created_by_name = 'semilla autoconteo e2e');
-  perform public.recompute_location_stock(x, a_local)
+  perform public.recompute_location_stock_core(x, a_local)
      from unnest(array['a7c10000-0000-4000-8000-000000000001', 'a7c10000-0000-4000-8000-000000000002', 'a7c10000-0000-4000-8000-000000000003']::uuid[]) x;
 
   raise notice 'Semilla del autoconteo OK: % (worker con ficha en Norte · Centro) y tres artículos con 10, 20 y 30 ud.', correo;
