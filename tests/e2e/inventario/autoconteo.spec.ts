@@ -107,7 +107,8 @@ test('la tablet aplica el autoconteo al terminarlo, y la pantalla de conteos lo 
   const oficina = page
   await abrirAlmacen(oficina)
   await oficina.getByRole('button', { name: /Inventarios/ }).click()
-  await oficina.getByRole('button', { name: 'Autoinventario', exact: true }).click()
+  // El filtro de la lista («Autoinventario»), no la pestaña de Almacén que se llama igual.
+  await oficina.locator('button').filter({ hasText: /^Autoinventario$/ }).click()
   const fila = oficina.getByRole('button', { name: new RegExp(code) })
   await expect(fila).toContainText('Aplicado')
   await fila.click()
@@ -140,7 +141,9 @@ test('un autoconteo que no se pudo aplicar sale en rojo en Almacén, y se aplica
   await aviso.screenshot({ path: `${DIR}/e2e-aviso${sufijo}.png` })
 
   await aviso.getByRole('button', { name: new RegExp(code) }).click()
-  // Se quedó «contando» (la noche no llegó a cerrarlo): primero se cierra.
+  // Se quedó «contando» (la noche no llegó a cerrarlo): primero se cierra, y
+  // la pantalla lo pregunta con un confirm.
+  page.once('dialog', d => void d.accept())
   await page.getByRole('button', { name: 'Cerrar conteo' }).click()
   await expect(page.getByText('No se ha podido aplicar solo:')).toBeVisible()
   await expect(page.getByText('es un autoconteo')).toBeVisible()
