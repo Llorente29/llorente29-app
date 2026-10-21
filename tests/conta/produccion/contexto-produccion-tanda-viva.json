@@ -1,16 +1,23 @@
 {
-  "_que": "E05 · Las facturas de riders · contexto de producción de la tanda viva (0410), medido en SOLO LECTURA el 21/10 a las 17:42 UTC, después de la 0350–0370 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow.",
-  "medido": "2026-10-21T17:42Z",
+  "_que": "E05 · La ficha de Catcher · contexto de producción de la tanda viva (0420), medido en SOLO LECTURA el 21/10 a las 22:37 UTC, después de la 0410 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow.",
+  "medido": "2026-10-21T22:37Z",
   "tanda": {
-    "supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql": "fb03d2e2eef469d90d7937d4cdfcb7b0"
+    "supabase/migrations/20261130T0420_e05_catcher_ficha.sql": "69897e68058fe7c262f29baaa40ba6df"
   },
   "contexto": {
-    "tablas": [],
-    "funciones": [
-      "public.compras_ficha_le_falta(uuid)",
-      "public.conta_vat_book_desde_asiento(uuid)"
+    "tablas": [
+      "public.company_account",
+      "public.company_account_link",
+      "public.supplier",
+      "public.supplier_invoice"
     ],
-    "filas": {},
+    "funciones": [],
+    "filas": {
+      "public.company_account": 751,
+      "public.company_account_link": 82,
+      "public.supplier": 95,
+      "public.supplier_invoice": 90
+    },
     "otras": {},
     "camino": {
       "tablas": [],

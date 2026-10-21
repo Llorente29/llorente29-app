@@ -1,0 +1,22 @@
+{
+  "_que": "E05 · Las facturas de riders · contexto de producción de la tanda viva (0410), medido en SOLO LECTURA el 21/10 a las 17:42 UTC, después de la 0350–0370 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow.",
+  "medido": "2026-10-21T17:42Z",
+  "tanda": {
+    "supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql": "fb03d2e2eef469d90d7937d4cdfcb7b0"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.compras_ficha_le_falta(uuid)",
+      "public.conta_vat_book_desde_asiento(uuid)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}
