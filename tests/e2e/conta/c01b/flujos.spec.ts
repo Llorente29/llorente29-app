@@ -11,10 +11,10 @@
 // capturas).
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo, pedirSesion, type Sesion } from '../sesion'
+import { CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo, pedirSesion, type Sesion, enCarril } from '../sesion'
 import { borrarProveedor, cifInventado, rest } from '../api'
 
-const LOCAL_A = 'c01a0000-0000-4000-8000-0000000000a2'
+const LOCAL_A = enCarril('c01a0000-0000-4000-8000-0000000000a2')
 const movil = (page: Page) => (page.viewportSize()?.width ?? 1440) < 768
 const ficha = (id: string, ap = '') => `/kitchen/proveedores/${id}${ap ? `/${ap}` : ''}`
 const sello = () => `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`
@@ -60,6 +60,11 @@ test.describe('cuenta A', () => {
         await page.locator('#campo-legalName').fill(`${nombre}, S.L.`); await salir(page)
         await expect(page.getByText('Guardado: razón social.')).toBeVisible()
         await page.locator('#campo-fiscalStreet').fill('Calle de Prueba 1'); await salir(page)
+        // Y la calle, igual (W02, 16/10): el aviso es uno solo, gana el último
+        // guardado en acabar, y sin esperar aquí el de la calle podía acabar
+        // después del del CP y taparlo (e2e 38863742421 y 38576654255:
+        // «Guardado: código postal.» no encontrado; la ficha guardó los dos).
+        await expect(page.getByText('Guardado: calle.')).toBeVisible()
         await page.locator('#campo-fiscalPostalCode').fill('28021'); await salir(page)
         // El CP trae la provincia y la población de la tabla de códigos postales.
         await expect(page.locator('#campo-fiscalProvince')).toHaveValue('Madrid')
@@ -318,7 +323,7 @@ test.describe('cuenta A', () => {
       await expect(page.getByRole('link', { name: new RegExp(nombre) })).toHaveCount(0)
       await page.getByRole('button', { name: 'Archivados' }).click()
       await page.getByRole('button', { name: `Más acciones de ${nombre}` }).click()
-      await expect(page.getByRole('menuitem', { name: 'Subir factura' })).toHaveCount(0)
+      await expect(page.getByRole('menuitem', { name: 'Subir una factura' })).toHaveCount(0)
       await page.getByRole('menuitem', { name: 'Recuperar proveedor' }).click()
       await expect(page.getByText(`${nombre} recuperado: vuelve a salir en la lista de proveedores.`)).toBeVisible()
       await page.getByRole('button', { name: 'En uso' }).click()
@@ -394,7 +399,7 @@ test('RLS de lo nuevo del C01b: B no ve lo aprendido de A ni puede tocarlo', asy
   }
   // El IBAN distinto (0135): B no decide sobre una factura de A (la de Panadería Luna de la semilla).
   const decide = await rest<{ message?: string }>(b, 'POST', 'rpc/supplier_invoice_iban_decide', {
-    p_invoice_id: 'c1b0a000-0000-4000-8000-000000000513', p_decision: 'es_el_nuevo', p_quien_nombre: 'Intruso',
+    p_invoice_id: enCarril('c1b0a000-0000-4000-8000-000000000513'), p_decision: 'es_el_nuevo', p_quien_nombre: 'Intruso',
   })
   expect(decide.status).toBeGreaterThanOrEqual(400)
   expect(decide.datos.message).toContain('no existe o no es de tu cuenta')

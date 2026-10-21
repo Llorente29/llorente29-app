@@ -1,0 +1,271 @@
+/* src/modules/conta/esqueleto/esqueleto.css
+ *
+ * S01 · El esqueleto: barra de productos, cabecera de 48 px en una sola fila,
+ * cinta y menús (maquetas 1, 3 y 4; respuestas de Julio del 17/10). Solo
+ * tokens del sistema de diseño (lo comprueba diseno-reglas.test.ts).
+ */
+
+/* ── El marco entero ─────────────────────────────────────────────────── */
+.cx.cxm.s-esqueleto { font-family: var(--s-letra); color: var(--s-tinta); }
+.s-esq-cuerpo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ── 1 · La barra de productos (S01c, encargo S01b) ─────────────────── */
+/* Desplegada, 220 px: icono de 20 y nombre en una línea a 14 px; el chip a la
+   derecha; el activo con fondo y 3 px de acción a la izquierda; Ajustes abajo,
+   separado; el logo horizontal blanco arriba. Plegada, 64 px: solo iconos. */
+.s-barra {
+  width: var(--s-ancho-barra); flex-shrink: 0; position: sticky; top: 0; height: 100vh; z-index: 35;
+  background: var(--s-barra); color: var(--s-barra-texto);
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--s-1); padding: var(--s-3) var(--s-1);
+  font-family: var(--s-letra); overflow-y: auto; overflow-x: hidden;
+}
+.s-barra[data-desplegada='no'] { width: var(--s-ancho-barra-plegada); }
+.s-barra-marca { display: flex; align-items: center; min-height: var(--s-8); padding: var(--s-1) var(--s-2) var(--s-4); }
+.s-barra[data-desplegada='no'] .s-barra-marca { justify-content: center; padding-left: 0; padding-right: 0; }
+.s-barra-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.s-barra-pie { margin-top: auto; display: flex; flex-direction: column; gap: 2px; padding-top: var(--s-2); border-top: var(--s-linea) solid color-mix(in srgb, var(--s-barra-texto) 25%, transparent); }
+.s-barra-item, .s-barra-plegar {
+  /* S01c: huecos de 8 px; con 12, «Compras y gastos» y su chip no cabían en 220 px. */
+  position: relative; display: flex; align-items: center; gap: var(--s-2); width: 100%;
+  min-height: 40px; padding: 0 var(--s-2) 0 var(--s-3); border-radius: var(--s-radio-campo);
+  color: var(--s-barra-texto); text-decoration: none; background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: var(--s-t-m); line-height: 1.2; text-align: left;
+}
+.s-barra-item .s-icono, .s-barra-plegar .s-icono { flex-shrink: 0; }
+.s-barra-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-barra-item:hover, .s-barra-plegar:hover { color: var(--s-barra-activo-texto); background: color-mix(in srgb, var(--s-barra-activo) 60%, transparent); }
+.s-barra-item[aria-current='page'] { background: var(--s-barra-activo); color: var(--s-barra-activo-texto); font-weight: var(--s-peso-fuerte); }
+.s-barra-item[aria-current='page']::before {
+  content: ''; position: absolute; left: 0; top: var(--s-2); bottom: var(--s-2); width: 3px;
+  border-radius: var(--s-radio-pildora); background: var(--s-accion);
+}
+.s-barra-item:focus-visible, .s-barra-plegar:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-barra-chip {
+  flex-shrink: 0; min-width: 22px; height: 20px; padding: 0 6px; border-radius: var(--s-radio-pildora);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--s-barra-destacado); color: var(--s-barra-destacado-texto);
+  font-family: var(--s-letra-cifras); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); font-variant-numeric: tabular-nums;
+}
+/* Plegada: solo el icono, centrado; el nombre, al pasar el ratón (title) y para el lector; el chip, un globo sobre el icono. */
+.s-barra[data-desplegada='no'] .s-barra-item, .s-barra[data-desplegada='no'] .s-barra-plegar { justify-content: center; padding: 0; gap: 0; }
+.s-barra[data-desplegada='no'] .s-barra-nombre {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+.s-barra[data-desplegada='no'] .s-barra-chip { position: absolute; top: 2px; right: 4px; min-width: 18px; height: 16px; padding: 0 4px; font-size: var(--s-t-xs); }
+.cx .s-barra a.s-barra-item, .cx .s-cajon a.s-barra-item { color: var(--s-barra-texto); }
+.cx .s-barra a.s-barra-item[aria-current='page'], .cx .s-cajon a.s-barra-item[aria-current='page'] { color: var(--s-barra-activo-texto); }
+.cx .s-barra a.s-barra-item:hover, .cx .s-cajon a.s-barra-item:hover { color: var(--s-barra-activo-texto); }
+
+/* El cajón del móvil: la misma barra, por la izquierda, encima de todo. */
+.s-cajon-velo { position: fixed; inset: 0; z-index: 60; background: var(--s-velo); display: flex; }
+.s-cajon {
+  width: min(300px, 85vw); height: 100%; overflow-y: auto; background: var(--s-barra); color: var(--s-barra-texto);
+  padding: var(--s-4) var(--s-2) calc(var(--s-4) + env(safe-area-inset-bottom, 0px)); font-family: var(--s-letra);
+  box-shadow: var(--s-sombra);
+}
+.s-cajon-nav { display: flex; flex-direction: column; gap: var(--s-1); min-height: 100%; }
+.s-cajon .s-barra-item, .s-cajon .s-barra-plegar { min-height: 48px; }
+
+/* ── 2 · La cabecera: una fila de 48 px ──────────────────────────────── */
+.s-cabecera {
+  position: sticky; top: 0; z-index: 30;
+  height: var(--s-alto-cabecera); flex-shrink: 0;
+  display: flex; align-items: stretch; gap: var(--s-2); padding: 0 var(--s-4);
+  background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
+  font-size: var(--s-t-m);
+}
+.s-cab-izquierda, .s-cab-derecha { display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
+/* S01e: la empresa, entera mientras quepa; solo si la ventana no da, se corta con «…» (y el nombre entero al pasar el ratón). */
+.s-cab-izquierda { flex-shrink: 1; min-width: 0; }
+.s-cab-periodo { flex-shrink: 0; }
+.s-cab-centro { flex: 1; min-width: 0; display: flex; align-items: stretch; }
+.s-cab-logotipo { display: flex; align-items: center; padding-right: var(--s-3); border-right: var(--s-linea) solid var(--s-borde-decorativo); height: 60%; }
+.s-cab-cliente { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.s-cab-cliente-logo {
+  width: var(--s-6); height: var(--s-6); border-radius: var(--s-radio-campo); object-fit: contain;
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  background: var(--s-neutro-fondo); color: var(--s-tinta); font-weight: var(--s-peso-titulo); font-size: var(--s-t-s);
+}
+.s-cab-empresa {
+  display: inline-flex; align-items: center; gap: var(--s-1); max-width: 300px; min-width: 0;
+  background: none; border: 0; padding: var(--s-1) var(--s-2); border-radius: var(--s-radio-boton);
+  font: inherit; font-weight: var(--s-peso-fuerte); color: var(--s-tinta); cursor: pointer; text-decoration: none;
+}
+.s-cab-empresa:hover { background: var(--s-suave); }
+.s-cab-empresa:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-cab-empresa-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-cab-empresa .s-icono { flex-shrink: 0; }
+.s-cab-periodo { display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
+.s-cab-periodo:empty { display: none; }
+.cxm-es-movil .s-cab-periodo > * { display: flex; min-width: 0; max-width: 100%; }
+.cxm.cxm-es-movil .s-cab-periodo .cxm-select { max-width: 132px; min-width: 0; }
+
+/* S01f · La franja de pestañas, debajo de la cabecera (Julio, 20/10, y la
+   maqueta del trimestre v3): unos 44 px, fondo blanco y su separador; cada
+   pestaña con su icono de trazo de 14 px y 16 px de aire a cada lado; la activa
+   en el azul de acción, en negrita y subrayada con 3 px en toda la pestaña; y
+   su contador en un rectángulo redondeado (gris; rojo lo que vence). En el
+   ordenador va fija debajo de la cabecera. Se desliza si no cabe: sin «Más».
+   El enlace cubre la pestaña entera con su ::after: el contador va a su lado,
+   fuera del enlace (su nombre sigue siendo el de la pestaña). */
+.s-franja-pestanas {
+  display: flex; align-items: stretch; flex-shrink: 0; min-height: var(--s-alto-pestanas);
+  padding: 0 var(--s-2); overflow-x: auto; scrollbar-width: none;
+  background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-pestanas);
+}
+.s-franja-pestanas::-webkit-scrollbar { display: none; }
+.cxm:not(.cxm-es-movil) .s-franja-pestanas { position: sticky; top: var(--s-alto-cabecera); z-index: 29; }
+.s-pestanas { display: flex; align-items: stretch; min-width: 0; }
+.s-pestana {
+  position: relative; display: inline-flex; align-items: center; gap: var(--s-2); flex-shrink: 0;
+  padding: 0 var(--s-4); white-space: nowrap; color: var(--s-apoyo);
+  border-bottom: var(--s-raya-pestana) solid transparent; border-top: var(--s-raya-pestana) solid transparent;
+}
+.s-pestana-enlace {
+  display: inline-flex; align-items: center; gap: var(--s-2); align-self: stretch;
+  color: inherit; text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer;
+}
+.s-pestana-enlace::after { content: ''; position: absolute; inset: 0; }
+.s-pestana-enlace .s-icono { width: var(--s-icono-pestana); height: var(--s-icono-pestana); }
+.s-pestana:hover { color: var(--s-tinta); }
+.s-pestana[data-activa] { color: var(--s-accion); font-weight: var(--s-peso-fuerte); border-bottom-color: var(--s-accion); }
+.s-pestana:hover[data-activa] { color: var(--s-accion); }
+.s-pestana:has(.s-pestana-enlace:focus-visible) { box-shadow: inset var(--s-foco); border-radius: var(--s-radio-boton); }
+.s-pestana-enlace:focus-visible { outline: none; }
+
+/* El contador: un rectángulo redondeado pequeño. Gris de serie; rojo lo que vence. */
+.s-pestana-contador {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 var(--s-1);
+  border-radius: var(--s-radio-campo); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); line-height: 1;
+  font-variant-numeric: tabular-nums; background: var(--s-neutro-fondo); color: var(--s-apoyo); pointer-events: none;
+}
+.s-pestana-contador[data-tono='vence'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+
+/* Lo que queda fijo arriba: la cabecera y, si la hay, la franja (las cabeceras
+   de las tablas se quedan fijas debajo: --cxm-alto-arriba, marco.css). En el
+   móvil la franja no va fija: solo la cabecera. */
+.cxm.s-con-pestanas:not(.cxm-es-movil) { --cxm-alto-arriba: calc(var(--s-alto-cabecera) + var(--s-alto-pestanas)); }
+
+/* Los enlaces del esqueleto dentro de «.cx a» (componentes.css, azul): con el mismo peso, su color. */
+.cx a.s-pestana-enlace { color: inherit; }
+.cx a.s-menu-item { color: var(--s-tinta); }
+.cx a.s-cab-empresa, .cx a.s-cab-logotipo { color: var(--s-tinta); }
+
+/* Buscar · Ctrl K: un botón corto (Julio, respuesta 3). */
+.s-cab-buscar { color: var(--s-apoyo); }
+
+/* ── Menús desplegables de la cabecera ───────────────────────────────── */
+.s-desplegable { position: relative; display: flex; align-items: center; }
+.s-menu {
+  position: absolute; top: calc(100% + var(--s-1)); left: 0; z-index: 40; min-width: 240px; max-width: 360px;
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+  box-shadow: var(--s-sombra); padding: var(--s-2); display: flex; flex-direction: column; gap: 2px;
+  font-size: var(--s-t-m); font-weight: var(--s-peso-normal);
+}
+.s-menu-derecha { left: auto; right: 0; }
+.s-menu-titulo { padding: var(--s-1) var(--s-2); font-size: var(--s-t-xs); color: var(--s-apoyo); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); }
+.s-menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); width: 100%;
+  padding: var(--s-2); border-radius: var(--s-radio-boton); background: none; border: 0;
+  color: var(--s-tinta); text-decoration: none; text-align: left; font: inherit; cursor: pointer;
+}
+.s-menu-item:hover { background: var(--s-suave); }
+.s-menu-item[aria-current='true'], .s-menu-item[aria-checked='true'] { font-weight: var(--s-peso-fuerte); color: var(--s-accion); }
+.s-menu-item:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-menu-item[aria-disabled='true'] { color: var(--s-apoyo); cursor: default; }
+.s-menu-separador { height: var(--s-linea); background: var(--s-borde-decorativo); margin: var(--s-1) 0; }
+.s-menu-nota { padding: var(--s-1) var(--s-2); font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-menu-fila { display: flex; align-items: center; gap: var(--s-1); }
+.s-menu-fila .s-menu-item { flex: 1; }
+
+/* ── El aviso de lo que ha pasado (regla 8) ──────────────────────────── */
+/* Flota debajo de la cabecera: decir lo que ha pasado no mueve nada de sitio
+   (el nivel cambia palabras, nunca posiciones; y la cinta no salta). */
+.s-esq-aviso {
+  position: fixed; top: calc(var(--cxm-alto-arriba, var(--s-alto-cabecera)) + var(--s-2)); right: var(--s-4); z-index: 45;
+  max-width: min(440px, calc(100vw - var(--s-8))); margin: 0; padding: var(--s-2) var(--s-3);
+  font-size: var(--s-t-s); border-radius: var(--s-radio-bloque); box-shadow: var(--s-sombra);
+  background: var(--s-ok-fondo); color: var(--s-ok); border: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-esq-aviso[data-tono='falta'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.s-esq-aviso:empty { display: none; }
+
+/* ── El móvil ────────────────────────────────────────────────────────── */
+/* S01f · En el móvil, la misma franja (FranjaPestanas), que se desliza: ninguna
+   pestaña se encoge ni se corta. */
+.s-pestanas-movil { padding: 0 var(--s-1); }
+
+/* S01e · Una fila que se desliza (deslizable.ts) dice con un degradado en el
+   borde que hay más por ese lado. La cinta: «Ocultar» se queda pegado a la
+   derecha, a la vista, y su sombra hace de degradado. */
+.s-cinta-marco { display: contents; }
+.s-pestanas-movil[data-mas-derecha], .s-franja-pestanas[data-mas-derecha] { -webkit-mask-image: linear-gradient(to left, transparent, black var(--s-8)); mask-image: linear-gradient(to left, transparent, black var(--s-8)); }
+.s-pestanas-movil[data-mas-izquierda], .s-franja-pestanas[data-mas-izquierda] { -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8)); mask-image: linear-gradient(to right, transparent, black var(--s-8)); }
+.s-pestanas-movil[data-mas-izquierda][data-mas-derecha], .s-franja-pestanas[data-mas-izquierda][data-mas-derecha] {
+  -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
+  mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
+}
+@media (max-width: 767px) {
+  /* S01f · La cinta del móvil: la fila de grupos se desliza entera y dice con un
+     degradado que hay más por ese lado; «Ocultar» va fuera de ella (diseno.css). */
+  .s-esqueleto .s-cinta-grupos[data-mas-derecha] { -webkit-mask-image: linear-gradient(to left, transparent, black var(--s-8)); mask-image: linear-gradient(to left, transparent, black var(--s-8)); }
+  .s-esqueleto .s-cinta-grupos[data-mas-izquierda] { -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8)); mask-image: linear-gradient(to right, transparent, black var(--s-8)); }
+  .s-esqueleto .s-cinta-grupos[data-mas-izquierda][data-mas-derecha] {
+    -webkit-mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
+    mask-image: linear-gradient(to right, transparent, black var(--s-8), black calc(100% - var(--s-8)), transparent);
+  }
+}
+@media (max-width: 767px) {
+  /* Nada de la cabecera puede ensanchar la página (los menús del móvil son fijos: no se recortan). */
+  .s-cabecera { gap: var(--s-2); padding: 0 var(--s-3); overflow: hidden; max-width: 100vw; }
+  /* S01d: la cabecera del móvil es menú, logo y Buscar; nada más cabe ni cede. */
+  .s-cab-izquierda { flex-shrink: 1; min-width: 0; overflow: hidden; }
+  .s-cab-logotipo { padding-right: 0; border-right: 0; height: auto; flex-shrink: 0; }
+  .s-cab-menu { margin-left: calc(-1 * var(--s-2)); flex-shrink: 0; }
+  .s-menu { position: fixed; top: var(--s-alto-cabecera); left: var(--s-2); right: var(--s-2); max-width: none; }
+}
+
+/* Lo que se enfoca o se lleva a la vista no queda debajo de la cabecera fija
+   (WCAG 2.4.11, foco no tapado). */
+html:has(.s-cabecera) { scroll-padding-top: 56px; }   /* 48 de la cabecera + 8: los tokens viven en .cx, no en html */
+html:has(.s-con-pestanas:not(.cxm-es-movil)) { scroll-padding-top: 100px; }   /* S01f: + 44 de la franja de pestañas */
+
+/* El usuario en la cabecera: el nombre y, debajo, «Nivel medio» (S01e: sin
+   punto colgando ni el nivel suelto). */
+.s-usuario { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; line-height: 1.15; text-align: left; }
+.s-usuario-nombre { color: var(--s-tinta); font-weight: var(--s-peso-fuerte); }
+/* El nivel en el botón del usuario: los tres en la misma celda, solo se ve el
+   actual. El botón mide siempre lo del más largo («Nivel sin experiencia»). */
+.s-usuario-nivel { display: inline-grid; font-size: var(--s-t-xs); color: var(--s-apoyo); font-weight: var(--s-peso-normal); }
+.s-usuario-nivel > span { grid-area: 1 / 1; visibility: hidden; }
+.s-usuario-nivel > span[data-actual] { visibility: visible; }
+
+/* Una entrada de la cinta que solo informa («Por correo · facturas@…»). */
+.s-cinta-dato { display: inline-flex; align-items: center; padding: 0 var(--s-2); min-height: var(--s-alto-control); color: var(--s-apoyo); font-size: var(--s-t-s); white-space: nowrap; }
+
+/* El nombre en el botón del usuario: un nombre largo se corta con «…» (entero al
+   pasar el ratón; el botón lo dice entero al lector). */
+.s-usuario-nombre { display: inline-block; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+/* S01d · En el móvil, debajo de la cabecera, una fila con la empresa ENTERA
+   (con su cambio de empresa) y el ejercicio y el mes de la pantalla que los
+   lea. Si el nombre es largo, parte en dos líneas: nunca «…». */
+.s-cab-fila-movil {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2);
+  padding: var(--s-1) var(--s-3); background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-cab-fila-movil .s-cab-cliente { min-width: 0; max-width: 100%; }
+.s-cab-fila-movil .s-cab-empresa { max-width: 100%; text-align: left; padding-left: 0; }
+.s-cab-fila-movil .s-cab-empresa-nombre { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.s-cab-fila-movil .s-cab-empresa .s-icono { flex-shrink: 0; }
+.s-cab-periodo-movil:empty { display: none; }
+
+/* S01d · Favoritos y el usuario, en el cajón del móvil: dos filas como las de
+   los productos; su menú se abre debajo, dentro del cajón. */
+.s-cajon-tuyo { display: flex; flex-direction: column; gap: 2px; margin-top: var(--s-2); padding-top: var(--s-2); border-top: var(--s-linea) solid color-mix(in srgb, var(--s-barra-texto) 25%, transparent); }
+.s-cajon-tuyo .s-desplegable { display: block; }
+.s-cajon-tuyo .s-menu { position: static; max-width: none; margin: var(--s-1) 0 var(--s-2); box-shadow: none; }
+.s-cajon-iniciales {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: var(--s-radio-pildora); display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--s-barra-texto) 20%, transparent); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte);
+}

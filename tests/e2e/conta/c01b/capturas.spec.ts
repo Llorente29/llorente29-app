@@ -15,12 +15,12 @@
 // respuesta 1 del C01b la cambia para todas las cuentas.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CARNES_SUR, CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo } from '../sesion'
+import { CARNES_SUR, CUENTA_A, CUENTA_B, HERMANOS_RUIZ, entrarComo, enCarril } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c01b'
-const MERCADOS_NORTE = 'c1b0a000-0000-4000-8000-0000000000a6'
-const PANADERIA_LUNA = 'c01a0000-0000-4000-8000-0000000000a5'
+const MERCADOS_NORTE = enCarril('c1b0a000-0000-4000-8000-0000000000a6')
+const PANADERIA_LUNA = enCarril('c01a0000-0000-4000-8000-0000000000a5')
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // Lo que flota encima: en el ordenador, la barra «Pregunta o pide algo»; en el
@@ -68,13 +68,13 @@ test('ficha de Hermanos Ruiz (cuenta A): la repetida en ámbar y fuera de las ci
   await capturar(page, 'ficha')
 })
 
-test('lista: el «···» de una fila (Abrir, Subir factura, Archivar) sin entrar en la ficha', async ({ page }) => {
+test('lista: el «···» de una fila (Abrir, Subir una factura, Archivar) sin entrar en la ficha', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/kitchen/proveedores')
   await page.getByRole('button', { name: 'Más acciones de Panadería Luna' }).click()
   const menu = page.getByRole('menu', { name: 'Acciones de Panadería Luna' })
   await expect(menu.getByRole('menuitem', { name: 'Abrir' })).toBeVisible()
-  await expect(menu.getByRole('menuitem', { name: 'Subir factura' })).toBeVisible()
+  await expect(menu.getByRole('menuitem', { name: 'Subir una factura' })).toBeVisible()
   await expect(menu.getByRole('menuitem', { name: 'Archivar proveedor' })).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/lista-menu-${lado(page)}.png`, fullPage: true })

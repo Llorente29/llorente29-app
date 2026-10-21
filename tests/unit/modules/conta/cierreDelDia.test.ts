@@ -126,7 +126,14 @@ describe('las frases de la pantalla', () => {
     expect(lineaNoConfirmados(1, 20.4)).toBe('1 pedido no confirmado · 20,40 € · no está en estas ventas')
   })
   it('el día en curso, con la hora de la empresa', () => {
-    expect(textoDiaEnCurso('06:00:00')).toBe('Hoy se cierra mañana a las 6:00. Sus ventas se proponen entonces.')
-    expect(textoDiaEnCurso('05:30')).toBe('Hoy se cierra mañana a las 5:30. Sus ventas se proponen entonces.')
+    // 18/10 a las 17:16 de Madrid (15:16 UTC, horario de verano).
+    const tarde = new Date('2026-10-18T15:16:00Z')
+    expect(textoDiaEnCurso('06:00:00', tarde)).toBe('El día de hoy (18/10) se cierra a las 6:00 del 19/10. Sus ventas se proponen entonces.')
+    expect(textoDiaEnCurso('05:30', tarde)).toBe('El día de hoy (18/10) se cierra a las 5:30 del 19/10. Sus ventas se proponen entonces.')
+    // 18/10 a la 1:30 de Madrid (23:30 UTC del 17/10): el 17/10 aún no se ha cerrado.
+    const madrugada = new Date('2026-10-17T23:30:00Z')
+    expect(textoDiaEnCurso('02:00', madrugada)).toBe('El día de ayer (17/10) sigue abierto hasta hoy a las 2:00, y el de hoy (18/10) se cierra a las 2:00 del 19/10. Sus ventas se proponen al cerrarse.')
+    // Nunca «hoy se cierra mañana».
+    expect(textoDiaEnCurso('02:00', tarde)).not.toMatch(/Hoy se cierra mañana/)
   })
 })

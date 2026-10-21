@@ -105,14 +105,18 @@ export function apertura(asientoCierre: AsientoCierre, fecha: string, ejercicioS
   }
 }
 
-/** Los tres, en orden, comprobados: cada uno cuadra y el balance queda a cero. */
-export function prepararCierre(saldos: SaldoACerrar[], o: { cuenta129: string; finEjercicio: string; inicioSiguiente: string; ejercicio: string; siguiente: string }): {
+/**
+ * Los tres, en orden, comprobados: cada uno cuadra y el balance queda a cero.
+ * S01e: sin ejercicio siguiente (`inicioSiguiente` y `siguiente` a null) se
+ * calculan la regularización y el cierre; la apertura espera a que exista.
+ */
+export function prepararCierre(saldos: SaldoACerrar[], o: { cuenta129: string; finEjercicio: string; inicioSiguiente: string | null; ejercicio: string; siguiente: string | null }): {
   regularizacion: AsientoCierre | null; cierre: AsientoCierre | null; apertura: AsientoCierre | null; resultado: number
 } {
   const reg = regularizacion(saldos, o.cuenta129, o.finEjercicio, o.ejercicio)
   const tras = aplicar(saldos, reg)
   const cie = cierre(tras, o.finEjercicio, o.ejercicio)
-  const ape = cie ? apertura(cie, o.inicioSiguiente, o.siguiente) : null
+  const ape = cie && o.inicioSiguiente && o.siguiente ? apertura(cie, o.inicioSiguiente, o.siguiente) : null
   for (const a of [reg, cie, ape]) if (a && !sumas(a).cuadra) throw new Error(`El asiento de ${a.tipo} no cuadra: Debe ${sumas(a).debe} y Haber ${sumas(a).haber}.`)
   const resultado = reg ? (() => { const p = reg.apuntes.find((x) => x.cuenta === o.cuenta129); return p ? p.haber - p.debe : 0 })() : 0
   return { regularizacion: reg, cierre: cie, apertura: ape, resultado }

@@ -1,0 +1,4 @@
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
+# conta_recibida_envio, byte a byte la de antes (md5 6e5ed258).
+cuenta: scripts/conta/produccion/cuentas/i01f-recibida-envio.sql
+supabase/vuelta-atras/20261126T0320_i01f_recibida_envio_tratamiento.down.sql

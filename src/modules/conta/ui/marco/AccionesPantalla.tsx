@@ -6,14 +6,25 @@
 // su sitio. Fuera del marco (una página de ejemplo, una prueba) sale donde se
 // declara. Una pantalla vieja no declara ninguna y la barra no se pinta.
 
-import type { ReactNode } from 'react'
+//
+// En el móvil (Julio, 16/10) solo se ve el principal; el resto va en «⋯», con
+// el mismo texto y su número escrito. Una separación no viaja al menú.
+
+import { Children, isValidElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useMarco } from '@/modules/conta/marco/nuevo/contexto'
+import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { Tecla } from '@/modules/conta/ui/marco/Tecla'
+import { useIsMobile } from '@/shell/useIsMobile'
 
 export function AccionesPantalla({ children, etiqueta = 'Acciones de la pantalla' }: { children: ReactNode; etiqueta?: string }) {
   const marco = useMarco()
-  const barra = <div className="cxm-acciones-barra" role="toolbar" aria-label={etiqueta}>{children}</div>
+  const movil = useIsMobile()
+  const barra = (
+    <div className="cxm-acciones-barra" role="toolbar" aria-label={etiqueta}>
+      {movil ? <SoloElPrincipal etiqueta={etiqueta}>{children}</SoloElPrincipal> : children}
+    </div>
+  )
   if (!marco?.huecoAcciones) return <div className="cxm-acciones cxm-acciones-suelta">{barra}</div>
   return createPortal(barra, marco.huecoAcciones)
 }
@@ -43,4 +54,27 @@ export function BotonAccion({ children, tecla, atajo, principal = false, onClick
 /** Una separación entre grupos de botones. */
 export function SeparadorAcciones() {
   return <span className="cxm-acciones-separador" aria-hidden="true" />
+}
+
+const esPrincipal = (c: ReactNode) => isValidElement<{ principal?: boolean }>(c) && c.type === BotonAccion && c.props.principal === true
+const esSeparador = (c: ReactNode) => isValidElement(c) && c.type === SeparadorAcciones
+
+/** El móvil: el principal a la vista y lo demás detrás de «⋯» (se cierra al elegir, al tocar fuera o con Escape). */
+function SoloElPrincipal({ children, etiqueta }: { children: ReactNode; etiqueta: string }) {
+  const { abierto, alternar, setAbierto, caja, boton } = useDesplegable()
+  const todos = Children.toArray(children)
+  const principales = todos.filter(esPrincipal)
+  const resto = todos.filter((c) => !esPrincipal(c) && !esSeparador(c))
+  return (
+    <>
+      {principales}
+      {resto.length > 0 && (
+        <div className="cxm-acciones-mas" ref={caja}>
+          <button type="button" ref={boton} className="cxm-boton cxm-acciones-mas-boton" aria-expanded={abierto} aria-haspopup="true"
+            aria-label={`Más ${etiqueta.toLowerCase()}`} onClick={alternar}>⋯</button>
+          {abierto && <div className="cxm-acciones-menu" onClick={() => setAbierto(false)}>{resto}</div>}
+        </div>
+      )}
+    </>
+  )
 }

@@ -6,6 +6,7 @@
 import type { TicketDoc } from './escpos';
 import { passCode } from '@/modules/orders/lib/passCode';
 import { direccionParaMostrar } from '@/lib/direccionEntrega';
+import { bloqueEntrega, SIN_DIRECCION } from '@/modules/reparto/lib/entregaTicket';
 import { unidadesDeComponente } from '@/lib/unidadesDeComponente';
 
 function ticketNumber(order: any) { return order.external_tab_ref ?? order.external_ref ?? '—'; }
@@ -137,6 +138,19 @@ export function renderBagTicket(order: any, fiscal?: any): TicketDoc {
   b.push({ kind: 'space' });
   b.push({ kind: 'invertBanner', text: pickupCode(order), size: 4 });
   b.push({ kind: 'space' });
+  // R03 · ENTREGA (solo reparto propio), debajo del código.
+  const ent = bloqueEntrega(order);
+  if (ent) {
+    b.push({ kind: 'invertBanner', text: 'ENTREGA', size: 2 });
+    if (ent.sinDireccion) b.push({ kind: 'text', text: SIN_DIRECCION, bold: true, size: 2 });
+    else {
+      if (ent.calle) b.push({ kind: 'text', text: ent.calle, size: 2 });
+      if (ent.detalles) b.push({ kind: 'text', text: ent.detalles, bold: true, size: 2 });
+    }
+    if (ent.telefono) b.push({ kind: 'text', text: ent.telefono, bold: true, size: 2 });
+    if (ent.notas.length) b.push({ kind: 'box', lines: ent.notas, size: 1 });
+    b.push({ kind: 'space' });
+  }
   const ch = (order.channel ?? '').trim();
   // El OTRO código, pequeño debajo (para incidencias/reclamaciones). Para Uber es el
   // corto; para Glovo/propio es el nº de plataforma con el canal delante.
@@ -145,7 +159,7 @@ export function renderBagTicket(order: any, fiscal?: any): TicketDoc {
   b.push({ kind: 'text', text: 'Método: ' + deliveryLabel(order.service_type) });
   if (order.expected_time) b.push({ kind: 'text', text: 'Hora programada: ' + fmtDate(order.expected_time) });
   if (order.customer_name) b.push({ kind: 'text', text: 'Nombre del cliente: ' + order.customer_name });
-  if (isOwnDelivery(order.service_type)) {
+  if (isOwnDelivery(order.service_type) && !ent) {
     // Traducción de presentación: el dato guardado no cambia.
     if (order.delivery_address) b.push({ kind: 'text', text: 'Dirección: ' + direccionParaMostrar(order.delivery_address) });
     if (order.customer_phone)   b.push({ kind: 'text', text: 'Número de teléfono: ' + order.customer_phone });

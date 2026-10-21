@@ -17,6 +17,7 @@ import {
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
 import { tandaDeDias } from '@/modules/conta/lib/proponer'
+import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
 import { ORIGEN_GLOVO } from '@/modules/conta/lib/liquidaciones'
 
 type Fila = Record<string, unknown>
@@ -27,6 +28,31 @@ async function leer(q: PromiseLike<{ data: unknown; error: { message: string } |
   const { data, error } = await q
   if (error) throw new Error(mensaje(`No se ha podido leer ${que}`, error))
   return (data ?? []) as Fila[]
+}
+
+/**
+ * S01 (inventario §11): de estos orígenes, los que ya tienen asiento VIVO en la
+ * empresa (propuesto, borrador o validado), por journal_entry.source_type +
+ * source_id —el enlace que escribe la base, con su índice único—. Sustituye a
+ * `.is('journal_entry_id', null)`, que no filtraba nada: esa columna no la
+ * escribe nadie y se quitará en otra tanda.
+ */
+async function conAsientoVivo(companyId: string, tipo: 'supplier_invoice' | 'channel_settlement' | 'licensed_settlement', ids: readonly string[]): Promise<Set<string>> {
+  const vivos = new Set<string>()
+  for (let i = 0; i < ids.length; i += 100) {
+    const trozo = ids.slice(i, i + 100)
+    const filas = await leer(tabla('journal_entry').select('source_id').eq('company_id', companyId).eq('source_type', tipo)
+      .in('source_id', trozo).in('status', ['propuesto', 'borrador', 'validado']), 'los asientos que ya hay')
+    for (const f of filas) vivos.add(String(f.source_id))
+  }
+  return vivos
+}
+
+/** Quita los que ya tienen asiento vivo y los cuenta como «ya estaban», que es lo que diría la base al proponerlos. */
+async function sinAsientoVivo(companyId: string, tipo: Parameters<typeof conAsientoVivo>[1], filas: Fila[], r: ResultadoProponer): Promise<Fila[]> {
+  const vivos = await conAsientoVivo(companyId, tipo, filas.map((f) => String(f.id)))
+  r.yaEstaban += vivos.size
+  return filas.filter((f) => !vivos.has(String(f.id)))
 }
 
 /** Lo que hace falta para poner cuentas a una propuesta. */
@@ -69,7 +95,7 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
     leer(tabla('fiscal_year').select('code, starts_on, ends_on, status, imported_until').eq('account_id', accountId).eq('company_id', companyId), 'los ejercicios'),
     leer(tabla('fiscal_period_lock').select('month').eq('account_id', accountId).eq('company_id', companyId).is('reopened_at', null), 'los meses cerrados'),
     leer(tabla('sales_channel').select('id, name').eq('account_id', accountId), 'los canales'),
-    leer(tabla('party_role').select('party_id, role, channel_id, supplier_id').eq('account_id', accountId), 'los papeles'),
+    leer(tabla('party_role').select('party_id, role, channel_id, supplier_id').eq('account_id', accountId), 'lo que es cada contacto'),
     leer(tabla('brand').select('id, name, ownership_type').eq('account_id', accountId), 'las marcas'),
     leer(tabla('locations').select('id, name').eq('account_id', accountId), 'los locales'),
     leer(tabla('treasury_account').select('id, location_id, kind, is_active').eq('account_id', accountId).eq('company_id', companyId), 'los bancos'),
@@ -386,8 +412,8 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   // liquidación de SU socio (marca → acuerdo de cesión → socio → enlace «liquidacion»).
   const acuerdos = await leer(tabla('brand_licensing_agreement').select('brand_id, party_id').eq('account_id', accountId), 'los acuerdos de cesión')
   const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
-  const liqs = await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount, commission_invoice_id, promo_charges, ads_spend, item_promotions, chargebacks, other_earnings, adjustments, needs_review, review_note')
-    .eq('account_id', accountId).is('journal_entry_id', null).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones')
+  const liqs = await sinAsientoVivo(companyId, 'channel_settlement', await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount, commission_invoice_id, promo_charges, ads_spend, item_promotions, chargebacks, other_earnings, adjustments, needs_review, review_note, is_reference')
+    .eq('account_id', accountId).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones'), r)
   // B01 (respuesta 1, P2): el cobro que ya ha casado Bancos lo asienta Bancos;
   // aquí solo la comisión y los cargos, para que el cobro no salga dos veces.
   const cobradasPorBanco = new Set((await leer(tabla('bank_match_item').select('channel_settlement_id, bank_match!inner(status)')
@@ -402,6 +428,13 @@ export async function proponerPendientes(accountId: string, companyId: string, d
     if (!abierto(fecha)) continue
     const canal = l.channel_id ? ctx.canales.get(String(l.channel_id)) : undefined
     const que = `Liquidación ${canal?.nombre ?? 'de plataforma'}${l.settlement_ref ? ` · ${l.settlement_ref}` : ''}`
+    // D01 (Julio, 16/10): la contabilidad está cerrada hasta el corte; una liquidación de antes es de
+    // referencia: sin asiento de liquidación (su cobro, si llega, lo asienta Bancos al casarlo).
+    // Va antes que sus cuentas: no se asienta, así que no le faltan; el motivo es éste.
+    if (l.is_reference === true) {
+      r.sinPropuesta.push({ que, porque: s(l.review_note) ?? 'De referencia: es de antes del cierre de la contabilidad; no lleva factura ni asiento.' })
+      continue
+    }
     const c430 = canal?.partyId ? ctx.enlace('customer', canal.partyId, 'principal') : null
     const c410 = canal?.supplierId ? ctx.enlace('supplier', canal.supplierId, 'principal') : null
     const t21 = ctx.tipos.find((x) => x.code === 'iva_general')
@@ -459,8 +492,9 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   // (brand_partner_settlement_compute); aquí solo se asienta.
   const [liqSocio, partes] = await Promise.all([
     leer(tabla('licensed_settlement').select('id, party_id, location_id, period_from, period_to, status, purchases_amount, contributions_amount, commission_amount')
-      .eq('account_id', accountId).eq('formula', 'compras_aportaciones_comision').in('status', ['confirmada', 'saldada']).is('journal_entry_id', null)
-      .gte('period_to', desde).lte('period_to', hasta).order('period_to', { ascending: false }), 'las liquidaciones del socio'),
+      .eq('account_id', accountId).eq('formula', 'compras_aportaciones_comision').in('status', ['confirmada', 'saldada'])
+      .gte('period_to', desde).lte('period_to', hasta).order('period_to', { ascending: false }), 'las liquidaciones del socio')
+      .then((filas) => sinAsientoVivo(companyId, 'licensed_settlement', filas, r)),
     leer(tabla('party').select('id, name').eq('account_id', accountId), 'los terceros'),
   ])
   const nombreDe = new Map(partes.map((x) => [String(x.id), String(x.name)]))
@@ -545,13 +579,15 @@ function proveedorDeParty(roles: readonly Fila[], partyId: string): string | nul
 async function facturasDeProveedor(accountId: string, companyId: string, desde: string, hasta: string, ctx: ContextoLibro, r: ResultadoProponer,
   quien: string | null, abierto: (f: string) => boolean, soloFactura?: string, ver?: (p: Propuesta) => void) {
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
-  const [facturas, socios] = await Promise.all([
+  const [leidas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
-      .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).is('journal_entry_id', null).or(`company_id.is.null,company_id.eq.${companyId}`)
+    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
+      .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).or(`company_id.is.null,company_id.eq.${companyId}`)
       .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
   ])
+  // «Cómo se apunta» (ver) enseña la propuesta aunque ya tenga asiento; al proponer, las que lo tienen ya estaban.
+  const facturas = ver ? leidas : await sinAsientoVivo(companyId, 'supplier_invoice', leidas, r)
   const socioPorProveedor = new Set<string>()
   const partyPorProveedor = new Map<string, string>()
   for (const x of socios) if (x.role === 'supplier' && x.supplier_id) partyPorProveedor.set(String(x.supplier_id), String(x.party_id))
@@ -585,6 +621,18 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const que = `Factura ${s(prov.name) ?? 'de proveedor'}${f.invoice_number ? ` · ${f.invoice_number}` : ''}`
     if (!cuentaProv) { r.sinPropuesta.push({ que, porque: 'El proveedor no tiene su cuenta (Contabilidad de su ficha).' }); continue }
     const rr = ret.find((x) => String(x.id) === s(f.withholding_rate_id))
+    // I01d · La ficha dice cómo va su IVA: si lo declaras tú, la factura se autoliquida.
+    const ficha: FichaIva = {
+      pais: s(prov.country_code), tipoNif: s(prov.tax_id_type) as FichaIva['tipoNif'], nif: s(prov.tax_id),
+      vies: s(prov.tax_id_check_status) as FichaIva['vies'], regimen: s(prov.vat_regime) as FichaIva['regimen'],
+    }
+    const clase = claseIva(ficha)
+    const nombreProv = s(prov.name) ?? 'El proveedor'
+    if (clase === 'ue_sin_nif_iva' && f.vat_non_deductible !== true) {
+      r.sinPropuesta.push({ que, porque: `${nombreProv} es de ${nombrePais(ficha.pais)} y no tiene un NIF-IVA europeo válido: sin él su compra no es intracomunitaria. Ponlo en su ficha (se comprueba en VIES) y la factura se propone.` })
+      continue
+    }
+    const tipoAuto = tipoDeLaClase(clase)
     const res = facturaProveedor({
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
       esSocio: socioPorProveedor.has(sup), tieneNif: !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
@@ -600,11 +648,25 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       } : {}),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: n(f.withholding_amount), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
       ivaNoDeducible: f.vat_non_deductible === true,
+      autoliquidacion: tipoAuto && f.vat_non_deductible !== true ? { tipo: tipoAuto, porque: `${nombreProv} ${porqueAutoliquida(clase, ficha.pais)}.` } : null,
     }, {
       proveedor: cuentaProv, retencion: ctx.hoja('4751') ?? '47510000',
       ivaSoportado: (pct) => { const t = ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_')); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
+      // La 472 y la 477 del tipo autoliquidado; si la empresa no las tiene propias, las del IVA al mismo %.
+      autoliquidada: (codigo) => {
+        const t = ctx.tipos.find((x) => x.code === codigo)
+        if (!t) return null
+        const igual = ctx.tipos.find((x) => x.rate === t.rate && x.code.startsWith('iva_'))
+        const cuenta = (rol: 'soportado' | 'repercutido') => ctx.enlace('tax_rate', t.id, rol) ?? (igual ? ctx.enlace('tax_rate', igual.id, rol) : null)
+        const sop = cuenta('soportado'), rep = cuenta('repercutido')
+        return sop && rep ? { tipoId: t.id, porcentaje: t.rate, soportado: sop, repercutido: rep } : null
+      },
     })
     if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
+    if (clase === 'intracomunitaria' && ficha.vies !== 'valid') {
+      res.propuesta.avisos.push(`El NIF-IVA de ${nombreProv} está sin comprobar en VIES: ábrelo en su ficha y se vuelve a preguntar.`)
+      res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
+    }
     if (res.propuesta.lineas.find((l) => l.retencion)) {
       const l = res.propuesta.lineas.find((x) => x.retencion)!
       l.retencion = { ...l.retencion!, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + x.debe, 0) }
@@ -647,3 +709,9 @@ export async function verPropuestaFactura(accountId: string, companyId: string, 
   return { propuesta: p, nombres: new Map(filas.map((x) => [String(x.code), String(x.name)])) }
 }
 
+/** I01d · Por qué su IVA lo declaras tú, para la propuesta: «es de Francia y tiene NIF-IVA europeo…». */
+function porqueAutoliquida(c: ClaseIva, pais: string | null): string {
+  if (c === 'intracomunitaria') return `es de ${nombrePais(pais)} y tiene NIF-IVA europeo: su compra es intracomunitaria`
+  if (c === 'isp_extranjero') return `es de fuera de la UE (${nombrePais(pais)}): su compra va con inversión del sujeto pasivo`
+  return 'está marcado con inversión del sujeto pasivo en su ficha'
+}

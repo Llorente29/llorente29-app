@@ -17,6 +17,7 @@ import { MapPin, RefreshCw, Bike, Phone, AlertTriangle, PiggyBank, UserRound, La
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { direccionParaMostrar, etiquetasDesconocidas } from '@/lib/direccionEntrega'
+import ListaSinDireccion from '@/modules/reparto/components/ListaSinDireccion'
 import {
   getOrdersFeed, deliveryView, isOwnDeliveryUndispatched, brandDoesOwnDelivery, dispatchOrder, isTerminalStatus,
   type OrderFeedItem,
@@ -203,6 +204,8 @@ function DispatchBoard({ locationId }: { locationId: string }) {
       {/* Cuerpo */}
       <div className="flex-1 overflow-y-auto p-5 bg-page">
         {error && <div className="text-danger bg-danger-bg border border-danger/30 rounded-xl px-4 py-3 text-sm mb-4">{error}</div>}
+        {/* R03: los de hoy sin dirección completa, juntos, para la oficina. */}
+        <ListaSinDireccion locationId={locationId} />
         {loading && orders.length === 0 ? (
           <div className="grid place-items-center h-[40vh] text-text-secondary">Cargando despacho…</div>
         ) : orders.length === 0 ? (

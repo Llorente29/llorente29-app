@@ -279,7 +279,7 @@ describe('Regla 6 · libros registro en el formato de la AEAT', () => {
   })
   it('el asiento resumen de tiques es F4, con el rango y cuántos (respuesta 1)', () => {
     const r = anot({ invoiceType: 'F4', number: 'T-0101', numberTo: 'T-0212', documentsCount: 112, counterpartTaxId: null, counterpartName: 'VENTAS A CONSUMIDOR FINAL' })
-    expect(etiquetaTipo(r)).toBe('F4 · resumen · art. 63.4 · T-0101–T-0212 · 112 tiques')
+    expect(etiquetaTipo(r)).toBe('F4 · resumen de tiques · T-0101–T-0212 · 112 tiques')
     expect(faltaParaCompletar(r)).toEqual([])
     const fila = filaExpedidas(r)
     expect(fila.slice(5, 6)).toEqual(['F4'])
@@ -307,7 +307,8 @@ describe('Regla 6 · libros registro en el formato de la AEAT', () => {
     expect(trimestre('2026-12-31')).toBe('4T')
   })
   it('nombre del fichero: ejercicio + NIF + C + razón social', () => {
-    expect(nombreFichero(2026, 'B-12.345.678', 'Empresa de Prueba, S.L.')).toBe('2026B12345678CEmpresa de Prueba, S.L..xlsx')
+    // S01e: sin el punto final de «S.L.» pegado a la extensión («S.L..xlsx»).
+    expect(nombreFichero(2026, 'B-12.345.678', 'Empresa de Prueba, S.L.')).toBe('2026B12345678CEmpresa de Prueba, S.L.xlsx')
   })
   it('listado de facturación: importe superior a, tipo, agrupar por NIF y solo los del 347', () => {
     const l = [

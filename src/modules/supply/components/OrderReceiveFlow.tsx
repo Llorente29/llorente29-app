@@ -271,7 +271,7 @@ export default function OrderReceiveFlow({ accountId, locationId, confirmPolicy,
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-text-primary">Escanear albarán</p>
-              <p className="text-xs text-text-secondary mt-0.5">La IA lee el papel y lo casa con las líneas del pedido.</p>
+              <p className="text-xs text-text-secondary mt-0.5">La IA lee el albarán y lo casa con las líneas del pedido.</p>
             </div>
             <ChevronRight size={18} className="text-text-secondary shrink-0" />
           </button>

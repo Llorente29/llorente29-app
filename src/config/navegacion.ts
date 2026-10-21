@@ -216,12 +216,36 @@ export const CONTA = {
     documentos: 'documentos',
     /** D01 · Revisar una factura recibida (N23). */
     revisarFactura: 'documentos/recibidas/:invoiceId',
+    /** S01 · La misma factura recibida vista desde Contabilidad › Asientos (maqueta 3): la primera para revisar… */
+    recibidasEnAsientos: 'libros/diario/recibidas',
+    /** …y una en concreto. Mismo componente que revisarFactura, con el marco de Asientos. */
+    recibidaEnAsientos: 'libros/diario/recibidas/:invoiceId',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
     bancos: 'bancos',
     /** Una pestaña de Bancos, o una de sus acciones (subir, hecho-por-folvy). */
     bancosPestana: 'bancos/:pestana',
+    /** M01 · La muestra de las tres piezas comunes, con datos inventados. Solo fuera de producción (module.tsx). */
+    muestraPiezas: 'ajustes/muestra-piezas',
+    /** S01 · El sistema de diseño: tokens y componentes, con datos inventados. Solo fuera de producción (module.tsx). */
+    sistemaDiseno: 'ajustes/sistema-diseno',
+    /** S01 · Contabilidad › Definiciones › Analítica: los ejes de la empresa (conta_eje_analitico). */
+    analitica: 'ajustes/analitica',
+    /** I01b · Impuestos › Calendario (tablero 8). */
+    impuestos: 'impuestos',
+    /** I01b · Una pestaña de Impuestos: presentados, sociedades, certificados. */
+    impuestosPestana: 'impuestos/:pestana',
+    /** I01b · El IVA de un periodo (tablero 9): impuestos/iva/2026/3T. */
+    impuestoIva: 'impuestos/iva/:ejercicio/:periodo',
+    /** I01c · El trimestre (maqueta_303_v2): impuestos/trimestre/2026/3T. */
+    impuestoTrimestre: 'impuestos/trimestre/:ejercicio/:trimestre',
+    /** I01c · El trimestre de una empresa por la ruta (la vista de despacho de P abre el de un cliente). */
+    impuestoTrimestreEmpresa: 'impuestos/empresa/:empresa/trimestre/:ejercicio/:trimestre',
+    /** P01 · El trimestre de un cliente de la asesoría: impuestos/clientes/<empresa>. */
+    impuestosCliente: 'impuestos/clientes/:empresa',
+    /** I01b · Aceptar la invitación de una empresa a su asesoría (también sin sesión: AuthRouter). */
+    aceptarAsesoria: 'asesoria',
   },
 } as const
 
@@ -313,7 +337,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     entradas: [
       { id: 'plan', etiqueta: 'Plan contable', ruta: 'ajustes/plan' },
       { id: 'tablas', etiqueta: 'Tablas generales', ruta: 'ajustes/tablas' },
-      { id: 'numeracion', etiqueta: 'Numeración', ruta: 'ajustes/numeracion', hueco: 'Las series de tus facturas llegan con las facturas que emites.' },
+      // S01e: las series ya se crean en Tablas generales › Numeración de facturas: la entrada lleva allí y cuenta las que hay.
+      { id: 'numeracion', etiqueta: 'Numeración', ruta: 'ajustes/tablas/numeracion' },
       { id: 'certificados', etiqueta: 'Certificados y accesos', ruta: 'ajustes/certificados', hueco: 'El certificado digital y los accesos a la sede de Hacienda llegan con la presentación de impuestos.' },
     ],
   },
@@ -397,11 +422,30 @@ export const rutaDocumentos = (ver?: string, mes?: string): string => {
 }
 /** D01 · N23. */
 export const rutaRevisarFactura = (invoiceId: string): string => rutaConta(CONTA.rutas.revisarFactura, { invoiceId })
+/** S01 · La factura recibida desde Contabilidad › Asientos (sin id: la primera para revisar). */
+export const rutaRecibidaEnAsientos = (invoiceId?: string): string =>
+  invoiceId ? rutaConta(CONTA.rutas.recibidaEnAsientos, { invoiceId }) : rutaConta(CONTA.rutas.recibidasEnAsientos)
+/** S01d · «Nueva recibida a mano»: la misma dirección de Recibidas, con ?nueva=a-mano (no salta a la primera para revisar). */
+export const CONSULTA_RECIBIDA_A_MANO = 'nueva=a-mano'
+export const rutaRecibidaAMano = (): string => `${rutaConta(CONTA.rutas.recibidasEnAsientos)}?${CONSULTA_RECIBIDA_A_MANO}`
 /** E05 · Una quincena de Catcher. */
 export const rutaLoteCatcher = (loteId: string): string => rutaConta(CONTA.rutas.loteCatcher, { loteId })
 /** Bancos (B01): sin pestaña, Movimientos. */
 export const rutaBancos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.bancosPestana, { pestana }) : rutaConta(CONTA.rutas.bancos))
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
+/** I01b · Impuestos: el calendario, o una de sus pestañas (presentados, sociedades, certificados). */
+export const rutaImpuestos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.impuestosPestana, { pestana }) : rutaConta(CONTA.rutas.impuestos))
+/** I01b · El IVA de un periodo: el 303 del 3T de 2026 → /conta/impuestos/iva/2026/3T. */
+/** P01 · La ruta vieja de «abrir un cliente»: redirige a su Trimestre (rutaTrimestre con la empresa). */
+export const rutaClienteImpuestos = (empresa: string): string => rutaConta(CONTA.rutas.impuestosCliente, { empresa })
+export const rutaIvaPeriodo = (ejercicio: number, periodo: string): string => rutaConta(CONTA.rutas.impuestoIva, { ejercicio: String(ejercicio), periodo })
+/**
+ * I01c · El trimestre: el 3T de 2026 → /conta/impuestos/trimestre/2026/3T. Con
+ * la empresa, el de esa empresa (la vista de despacho): /conta/impuestos/empresa/<id>/trimestre/2026/3T.
+ */
+export const rutaTrimestre = (ejercicio: number, trimestre: string, empresa?: string): string => (empresa
+  ? rutaConta(CONTA.rutas.impuestoTrimestreEmpresa, { empresa, ejercicio: String(ejercicio), trimestre })
+  : rutaConta(CONTA.rutas.impuestoTrimestre, { ejercicio: String(ejercicio), trimestre }))
 /** Subir los documentos de la liquidación de un proveedor, en un local y un mes ('YYYY-MM-01'). */
 export const rutaLiquidacionNueva = (proveedor: string, local: string | null, mes: string): string => {
   const q = new URLSearchParams({ proveedor, mes })

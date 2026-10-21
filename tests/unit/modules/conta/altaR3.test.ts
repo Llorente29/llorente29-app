@@ -201,3 +201,30 @@ describe('el guion nuevo', () => {
     expect(claves).toEqual(['nombre', 'actividad', 'periodo', 'cuentas', 'banco'])
   })
 })
+
+// S01 · La marca de hostelería del alta. Los códigos, los de iae_heading y
+// cnae_code de staging-conta (17/10): el IAE lleva su sección delante.
+describe('el alta marca la hostelería por lo que hace', () => {
+  it('por los grupos marcados: restauración, bares, reparto, catering, heladerías y alojamiento sí; panadería no', async () => {
+    const { esHosteleriaPorGrupos } = await import('@/modules/conta/alta/actividades')
+    for (const c of ['restaurante', 'bar', 'domicilio', 'catering', 'heladeria', 'alojamiento']) expect(esHosteleriaPorGrupos([c]), c).toBe(true)
+    expect(esHosteleriaPorGrupos(['panaderia'])).toBe(false)
+    expect(esHosteleriaPorGrupos([])).toBe(false)
+    expect(esHosteleriaPorGrupos(['panaderia', 'bar'])).toBe(true)
+  })
+  it('por los códigos elegidos a mano (IAE 67 y 68; CNAE 55 y 56)', async () => {
+    const { esHosteleriaPorCodigos } = await import('@/modules/conta/alta/actividades')
+    for (const iae of ['1_671', '1_672', '1_673', '1_6732', '1_674', '1_676', '1_681', '1_684', '1_685']) expect(esHosteleriaPorCodigos(iae, null), iae).toBe(true)
+    for (const cnae of ['5510', '5520', '5590', '5611', '5612', '5621', '5622', '5630']) expect(esHosteleriaPorCodigos(null, cnae), cnae).toBe(true)
+    for (const iae of ['1_4191', '1_6442']) expect(esHosteleriaPorCodigos(iae, null), iae).toBe(false)
+    for (const cnae of ['1071', '1072']) expect(esHosteleriaPorCodigos(null, cnae), cnae).toBe(false)
+    // Un epígrafe profesional (sección 2) no es hostelería aunque sus cifras empiecen por 6.
+    expect(esHosteleriaPorCodigos('2_671', null)).toBe(false)
+    expect(esHosteleriaPorCodigos(null, null)).toBe(false)
+  })
+  it('lo dice y dice dónde se cambia (regla 8)', async () => {
+    const { fraseHosteleria } = await import('@/modules/conta/alta/frases')
+    expect(fraseHosteleria(true).map((t) => t.t).join('')).toBe('La marco como hostelería: salen Liquidaciones, las plataformas y los socios de marca. Se cambia en Ajustes › Empresa.')
+    expect(fraseHosteleria(false).map((t) => t.t).join('')).toBe('No la marco como hostelería. Si lo es, se cambia en Ajustes › Empresa.')
+  })
+})

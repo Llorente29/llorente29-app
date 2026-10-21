@@ -1,7 +1,9 @@
 // src/modules/conta/bancos/navegacion.ts
 //
-// B01 · Bancos en tres niveles (N17): las pestañas, las acciones de la barra y
-// lo que encuentra el buscador (Ctrl K). Sin React: se prueba suelto.
+// B01 · Bancos: sus vistas y lo que encuentra el buscador (Ctrl K). Las
+// pestañas las pinta el esqueleto (esqueleto/productos.ts) y la barra de
+// acciones es su cinta (esqueleto/ordenes.ts) desde el paso 3 del S01; los
+// favoritos son los del esqueleto, para todo. Sin React: se prueba suelto.
 
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 
@@ -45,18 +47,28 @@ export function buscarEnBancos(q: string): Buscable[] {
   return BUSCABLES.filter((b) => normal(`${b.nombre} ${b.donde} ${b.palabras}`).includes(t))
 }
 
-/** Favoritos de Bancos, por persona (comodidad del navegador: si no hay almacén, no hay favoritos y nada falla). */
-const clave = (usuario: string) => `folvy:conta:bancos:favoritos:${usuario}`
-export function leerFavoritos(usuario: string, almacen: Storage | null): VistaBancos[] {
-  try { const v = JSON.parse(almacen?.getItem(clave(usuario)) ?? '[]'); return Array.isArray(v) ? v.filter((x) => (VISTAS as string[]).includes(x)) : [] } catch { return [] }
-}
-export function alternarFavorito(usuario: string, vista: VistaBancos, almacen: Storage | null): VistaBancos[] {
-  const ahora = leerFavoritos(usuario, almacen)
-  const nuevo = ahora.includes(vista) ? ahora.filter((x) => x !== vista) : [...ahora, vista]
-  try { almacen?.setItem(clave(usuario), JSON.stringify(nuevo)) } catch { /* sin almacén: solo en esta sesión */ }
-  return nuevo
+/**
+ * S01e · El banco con el que se abre Bancos si la dirección no dice cuál: el de
+ * movimientos más recientes (su último extracto); a igualdad, el de más dudas.
+ * Antes se abría siempre el primero, aunque no tuviera ningún extracto.
+ */
+export function bancoInicial<T extends { id: string; ultimoExtracto: { hasta: string } | null }>(
+  bancos: readonly T[], dudas: Readonly<Record<string, number>>,
+): T | null {
+  if (bancos.length === 0) return null
+  const conExtracto = bancos.filter((b) => b.ultimoExtracto)
+  if (conExtracto.length === 0) return bancos[0]
+  return [...conExtracto].sort((a, b) => b.ultimoExtracto!.hasta.localeCompare(a.ultimoExtracto!.hasta) || (dudas[b.id] ?? 0) - (dudas[a.id] ?? 0))[0]
 }
 
-export const NOMBRE_VISTA: Record<VistaBancos, string> = {
-  movimientos: 'Movimientos', reglas: 'Reglas', cuentas: 'Cuentas y extractos', cierre: 'Cierre del mes', subir: 'Subir extracto', hecho: LO_HECHO,
+/**
+ * S01e · El mes con el que se abre si la dirección no lo dice: el del último
+ * extracto del banco elegido (donde están sus movimientos), si se puede elegir;
+ * si no, el más reciente. Así no se abre en un mes vacío («No hay movimientos de
+ * octubre») mientras el banco tiene sus movimientos en septiembre.
+ */
+export function mesInicial(meses: readonly string[], banco: { ultimoExtracto: { hasta: string } | null } | null, hoy: string): string {
+  const delExtracto = banco?.ultimoExtracto?.hasta.slice(0, 7) ?? null
+  if (delExtracto && meses.includes(delExtracto)) return delExtracto
+  return meses[0] ?? hoy.slice(0, 7)
 }

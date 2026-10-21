@@ -1,0 +1,29 @@
+{
+ "_que": "C06b · contexto de producción de la tanda viva «promociones y envíos en el asiento de ventas del día» (0100 y 0110), medido en SOLO LECTURA el 16/10 a las 06:36 UTC (vuelto a medir tras añadir a la 0100 su cabecera de journal_entry y su «sin hueco»: la misma consulta y la misma respuesta) con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen company_account y journal_entry (fuera del camino del pedido) y las dos funciones que cambian (con la huella de su vuelta atrás: 32bb2645… y c99b05cd…); nada de lo que añade la 0100 existe; ninguno de los dos ficheros está en el historial.",
+ "medido": "2026-10-16T06:36Z",
+ "tanda": {
+  "supabase/migrations/20261116T0100_c06b_promociones_envios.sql": "2111d047adc8e303cc24bf4a34f4b71c",
+  "supabase/migrations/20261116T0110_c06b_promociones_envios_datos.sql": "3fb2e375972518a0428311446528b4cb"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account",
+   "public.journal_entry"
+  ],
+  "funciones": [
+   "public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)",
+   "public.conta_resumen_ventas(uuid)"
+  ],
+  "filas": {
+   "public.company_account": 751,
+   "public.journal_entry": 14955
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

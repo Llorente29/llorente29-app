@@ -1,0 +1,11 @@
+# Vuelta atrás de la tanda viva (supabase/produccion/aplicar.txt): la aplica el
+# workflow si la comprobación de después falla, en orden inverso.
+#
+# I01c · El trimestre · 0280: quita conta_impuesto_trimestre y devuelve
+# conta_impuesto_303_calcular a la de la 0240 byte a byte (md5 del cuerpo
+# 9141db88860d38cc7ae7175f12b382b0, el medido en producción el 19/10 a las
+# 20:32 UTC, y otra vez a las 21:22, después de la 0100 de P01). La ensaya staging (20261122_i01c_trimestre_prueba.sql, paso 7).
+# La anterior de este fichero (Impuestos de tus clientes, 0100 de P01):
+# tests/conta/produccion/vuelta-atras-p01-despacho-20261019.txt.
+cuenta: scripts/conta/produccion/cuentas/i01c-trimestre.sql
+supabase/vuelta-atras/20261122T0280_i01c_trimestre.down.sql

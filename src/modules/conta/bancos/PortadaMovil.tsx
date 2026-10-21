@@ -15,6 +15,7 @@ import { estadoBanco, nombreCorto, ultimosIban } from '@/modules/conta/lib/banco
 import { cuadreDe } from '@/modules/conta/lib/conciliarVista'
 import { leerMovimientos } from '@/modules/conta/services/bancosPantallas'
 import { useBancos } from '@/modules/conta/bancos/contexto'
+import { PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 
 export function PortadaMovil() {
   const { accountId, banco, mes, datos, vuelta, elegirBanco, subir } = useBancos()
@@ -29,7 +30,7 @@ export function PortadaMovil() {
     return `${rutaBancos(vista)}?${p.toString()}`
   }
 
-  if (!banco) return <div className="cx-tarjeta"><p>No hay ningún banco dado de alta.</p><Link to={ir('cuentas')} className="cx-boton">Dar de alta un banco</Link></div>
+  if (!banco) return <div className="cx-tarjeta"><p>No hay ningún banco dado de alta.</p><Link to={ir('cuentas', { [PARAM_NUEVO]: VALOR_NUEVO })} className="cx-boton">Dar de alta un banco</Link></div>
   if (lectura.error) return <ErrorConReintento mensaje={lectura.error} reintentar={lectura.recargar} />
   if (!lectura.datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando los bancos">{[0, 1, 2].map((i) => <Hueso key={i} alto={56} />)}</div>
 

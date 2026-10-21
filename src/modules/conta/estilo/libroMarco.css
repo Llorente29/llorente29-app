@@ -1,0 +1,123 @@
+/* src/modules/conta/estilo/libroMarco.css
+ *
+ * M01 · El libro diario y Libros dentro del marco nuevo (maqueta N30, encargo
+ * F01 tarea 4). La tabla, la franja, las vistas y el pie son de la pieza
+ * común (piezas.css); aquí, lo propio del diario —la línea del concepto, el
+ * número en Diez, el mes en una línea, el lado derecho más estrecho— y la
+ * fila de acciones de un área de Libros que sustituye al recuadro de antes.
+ * Con los tokens del marco (.cxm), como las piezas.
+ */
+
+/* ── Libros: el ejercicio en la barra de arriba y las acciones del área ── */
+.cxm .cxm-select {
+  height: 32px; padding: 0 8px; border: 1px solid var(--cxm-borde-campo); border-radius: var(--cxm-radio-campo);
+  background: var(--cxm-superficie); color: var(--cxm-texto); font: inherit; font-family: var(--cxm-letra); font-size: 13px; font-weight: 600;
+}
+.cxm .cxl-en-marco { gap: 12px; }
+/* ── El libro diario ─────────────────────────────────────────────────── */
+.cxm .cxd-en-marco { gap: 10px; font-family: var(--cxm-letra); }
+/* La tabla a la izquierda y lo que he hecho yo y el cierre a la derecha, más estrecho que antes. */
+.cxm .cxd-en-marco .cxd-cuerpo { grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
+.cxm .cxd-en-marco .cxd-diario { padding: 0; }
+.cxm .cxd-en-marco .cxd-ia { padding: 12px 14px; }
+.cxm .cxd-en-marco .cxd-ia-titulo { font-size: 14px; }
+.cxm .cxd-en-marco .cxd-ia-fila { padding: 7px 0; font-size: 13px; }
+.cxm .cxd-en-marco .cxd-cierre { padding: 12px 14px; }
+.cxm .cxd-en-marco .cxd-cierre .cx-tarjeta-titulo { font-size: 14px; }
+.cxm .cxd-en-marco .cxd-pasos { font-size: 13px; }
+
+/* El mes en una línea: las tres cifras de N11, en pequeño. */
+.cxm .cxd-resumen { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 0; font-size: 12px; color: var(--cxm-apoyo); }
+.cxm .cxd-resumen > div { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.cxm .cxd-resumen dt { color: var(--cxm-apoyo); }
+.cxm .cxd-resumen dd { margin: 0; }
+.cxm .cxd-resumen-cifra { font-family: var(--cxm-letra-cifras); font-size: 13px; font-weight: 600; color: var(--cxm-texto); }
+.cxm .cxd-resumen-apoyo { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+
+/* La fila: todo en UNA línea; los chips enteros y «de dónde sale» con «…» en lo que quede.
+   S01c: el concepto cede hasta 40 px (entero en su title): con la barra de 220 px
+   la columna mide unos 294 px a 1440 y dos chips largos no cabían con 60. */
+.cxm .cxd-en-marco .cxt-tabla td { font-size: 13px; }
+.cxm .cxd-linea-libro { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.cxm .cxd-en-marco .cxd-linea-libro .cxd-concepto-titulo {
+  display: block; flex: 0 1 auto; min-width: 40px; font-size: 13px; line-height: 18px; color: var(--cxm-texto);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset;
+}
+.cxm .cxd-en-marco .cx-chip { flex: none; padding: 0 7px; font-size: 11px; line-height: 17px; white-space: nowrap; }
+.cxm .cxd-en-marco .cxd-linea-libro .cxd-sale {
+  display: block; flex: 1 1 0; min-width: 0; font-size: 12px; color: var(--cxm-apoyo);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset;
+}
+.cxm .cxd-en-marco .cxd-fecha, .cxm .cxd-en-marco .cxd-num { font-family: var(--cxm-letra-cifras); font-size: 12px; color: var(--cxm-apoyo); }
+.cxm .cxd-en-marco .cxd-diez { font-size: 12px; color: var(--cxm-texto); }
+.cxm .cxd-en-marco .cxd-importe { font-family: var(--cxm-letra-cifras); font-weight: 600; font-size: 13px; }
+.cxm .cxd-en-marco .cxt-fila.cxd-anulado .cxd-concepto-titulo, .cxm .cxd-en-marco .cxt-fila.cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cxm-apoyo); }
+.cxm .cxd-en-marco .cxd-apuntes { padding: 6px 12px 10px 230px; }
+.cxm .cxd-en-marco .cxd-apunte { padding: 4px 0; font-size: 13px; }
+
+/* El móvil: cada asiento en una tarjeta de ≤ 110 px (respuesta 5 de Julio):
+   el concepto en dos líneas como mucho y, debajo, en UNA línea, los chips
+   enteros y «de dónde sale» con «…» en lo que quede (como la fila del ordenador). */
+.cxm .cxt-lista .cxt-tarjeta { padding: 8px 12px; }
+.cxm .cxd-tarjeta { display: grid; grid-template-columns: 54px minmax(0, 1fr) auto; gap: 2px 10px; align-items: start; font-size: 14px; }
+.cxm .cxd-tarjeta-concepto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxm .cxd-tarjeta .cxd-concepto-titulo { font-size: 14px; line-height: 18px; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.cxm .cxd-tarjeta .cxd-concepto-apoyo { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; font-size: 12px; line-height: 17px; color: var(--cxm-apoyo); min-width: 0; overflow: hidden; }
+.cxm .cxd-tarjeta .cxd-concepto-apoyo .cx-chip { flex: none; padding: 0 6px; font-size: 11px; line-height: 16px; white-space: nowrap; }
+.cxm .cxd-tarjeta .cxd-sale { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxm .cxd-tarjeta-derecha { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.cxm .cxd-tarjeta.cxd-anulado .cxd-concepto-titulo, .cxm .cxd-tarjeta.cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cxm-apoyo); }
+
+/* Pantallas estrechas del ordenador: el lado derecho baja. */
+@media (max-width: 1180px) {
+  .cxm .cxd-en-marco .cxd-cuerpo { grid-template-columns: minmax(0, 1fr); }
+}
+.cxm.cxm-es-movil .cxd-en-marco .cxd-cuerpo { grid-template-columns: minmax(0, 1fr); }
+.cxm.cxm-es-movil .cxd-resumen { flex-direction: column; gap: 4px; }
+
+/* Móvil · el menú del área en una sola línea desplegable (Julio, 16/10). */
+.cxm .cxl-movil-fila { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.cxm .cxl-movil-acciones { position: relative; flex: 1 1 auto; min-width: 0; }
+.cxm .cxl-movil-boton {
+  display: flex; align-items: center; gap: 4px; width: 100%; min-height: 40px; padding: 0 12px; min-width: 0;
+  border: 1px solid var(--cxm-borde-campo); border-radius: var(--cxm-radio-campo); background: var(--cxm-superficie);
+  font: inherit; font-family: var(--cxm-letra); font-size: 14px; font-weight: 600; color: var(--cxm-azul); cursor: pointer; text-align: left;
+}
+.cxm .cxl-movil-nombre { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxm .cxl-movil-dato { flex: 0 1 auto; min-width: 0; font-weight: 400; color: var(--cxm-apoyo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxm .cxl-movil-flecha { margin-left: auto; color: var(--cxm-apoyo); }
+.cxm .cxl-movil-menu {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 40; max-height: 70vh; overflow-y: auto;
+  background: var(--cxm-superficie); border: 1px solid var(--cxm-borde); border-radius: var(--cxm-radio-campo);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); padding: 6px;
+}
+.cxm .cxl-movil-grupo { display: flex; flex-direction: column; padding: 4px 0; border-bottom: 1px solid var(--cxm-borde); }
+.cxm .cxl-movil-grupo:last-child { border-bottom: none; }
+.cxm .cxl-movil-grupo .cxl-grupo-etiqueta { padding: 6px 8px 2px; font-size: 11px; }
+.cxm .cxl-movil-grupo .cxl-accion { width: 100%; }
+
+/* M01 · «Esperan» y lo que falta para Diez, en la fila y al desplegarla. */
+.cxm .cxd-linea-libro .cxd-sale-espera, .cxm .cxd-tarjeta .cxd-sale-espera { color: var(--cxm-ambar); }
+.cxm .cxd-linea-libro .cxd-sale-tarea, .cxm .cxd-tarjeta .cxd-sale-tarea { color: var(--cxm-azul); }
+.cxm .cxd-espera { margin: 0 0 8px; padding: 6px 10px; border-radius: var(--cxm-radio-campo); background: var(--cxm-ambar-fondo); color: var(--cxm-texto); font-size: 13px; }
+.cxm .cxd-tarea-diez { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; font-size: 13px; }
+
+/* S01e · A 1440 el concepto se cortaba con «…» y sitio a los lados: no cede
+   por debajo de 96 px (antes, 40) y las columnas fijas son más justas (en la página). */
+.cxm .cxd-en-marco .cxd-linea-libro .cxd-concepto-titulo { min-width: 96px; }
+
+/* S01e · Móvil: las vistas en UNA fila que se desliza de lado (antes, una por
+   línea llenando la pantalla) y «Exportar» aparte, abajo del todo, para que la
+   lista se vea sin bajar. La barra se deshace para poder mover Exportar. */
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-barra { display: contents; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vistas {
+  flex: none; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+  padding-bottom: 2px; -webkit-overflow-scrolling: touch;
+}
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vistas::-webkit-scrollbar { display: none; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vistas > * { flex: none; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vista { height: 36px; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-vista-hecho { white-space: nowrap; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-exportar,
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-aviso { order: 2; }
+.cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-exportar { flex-wrap: wrap; }

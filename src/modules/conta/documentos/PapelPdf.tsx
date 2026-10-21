@@ -37,7 +37,10 @@ export function PapelPdf({ url, titulo, alMedir }: { url: string; titulo: string
       const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer())
       const pdf = (await pdfjs()) as unknown as PdfParaPintar
       const tarea = pdf.getDocument({ data: bytes, isEvalSupported: false })
-      soltar = tarea.destroy
+      // Con su `this`: suelto (`soltar = tarea.destroy`), al salir de la página
+      // antes de pintar reventaba con «Cannot set properties of undefined
+      // (setting 'destroyed')» (S01, e2e de «No es una factura»).
+      soltar = () => tarea.destroy()
       const doc = await tarea.promise
       const pagina = await doc.getPage(1)
       const c = lienzo.current
@@ -60,7 +63,7 @@ export function PapelPdf({ url, titulo, alMedir }: { url: string; titulo: string
       }
       setEstado({ url, paginas: doc.numPages, fallo: null })
     })().catch((e: unknown) => { if (vivo) setEstado({ url, paginas: null, fallo: e instanceof Error ? e.message : String(e) }) })
-    return () => { vivo = false; void soltar?.() }
+    return () => { vivo = false; soltar?.().catch(() => {}) }
   // alMedir no cambia lo que se pinta: no vuelve a pintar por él.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url])

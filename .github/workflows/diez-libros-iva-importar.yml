@@ -1,0 +1,196 @@
+# .github/workflows/diez-libros-iva-importar.yml
+#
+# I01b · Traer los libros de IVA de Diez (18/10). La importación del histórico
+# (diez-importar.yml) trajo el diario pero no los libros registro de IVA: en
+# Sumied el libro de Foodint empezaba el 01/10/2026. Esto los trae, enganchados
+# a cada asiento traído, con el molde del histórico:
+#   · ENSAYO (producción): lee de Diez (solo GET), escribe en UNA transacción,
+#     mide (cobertura, 477 y 472 del diario, y las casillas de los 303
+#     PRESENTADOS que Julio subió con su justificante) y DESHACE; comprueba
+#     que no queda nada escrito.
+#   · REAL: lo mismo con commit, solo si está en verde; si no, deshace y sale
+#     en rojo. Lleva «libros-iva-diez» en «autorizo» y solo con un ensayo en
+#     verde del MISMO commit, la misma fecha de las recibidas y el mismo
+#     trimestre final.
+#   · HASTA QUÉ TRIMESTRE (I01c · pieza 2, 19/10): del 1T al que se elija, y
+#     solo si cada uno tiene su 303 presentado con el justificante subido (el
+#     testigo). El 3T entra cuando Julio suba el suyo: no hay que esperar a
+#     él para traer el 1T y el 2T.
+#   · Los datos de las facturas (NIF, nombres) se quedan en el disco del
+#     runner; a la salida solo van recuentos y sí/no («@@», salida-segura.mjs).
+#
+# Lo lanza Julio, a mano: Actions → «Diez · traer los libros de IVA» → Run
+# workflow, en la rama del encargo.
+
+name: 'Diez · traer los libros de IVA'
+run-name: "Diez · libros de IVA · ${{ inputs.modo }} · ${{ inputs.fecha_recibida }} · hasta el ${{ inputs.hasta }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'ensayo (escribe, mide y deshace) o real'
+        required: true
+        default: ensayo
+        type: choice
+        options: [ensayo, real]
+      fecha_recibida:
+        description: 'De qué fecha sale el trimestre de cada recibida (la que mide la lectura contra los 303)'
+        required: true
+        default: asiento
+        type: choice
+        options: [asiento, introduccion]
+      hasta:
+        description: 'Hasta qué trimestre de 2026 (cada uno, con su 303 presentado y subido)'
+        required: true
+        default: 2T
+        type: choice
+        options: [1T, 2T, 3T]
+      confirmo:
+        description: 'Escribe «produccion»'
+        required: true
+        type: string
+      autorizo:
+        description: 'Solo en real: «libros-iva-diez»'
+        required: false
+        type: string
+
+# Con la tanda del histórico: una cosa de Diez a la vez, y la que corre no se cancela.
+concurrency:
+  group: diez-importar
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PROD_REF: xzmpnchlguibclvxyynt
+  STAGING_REF: oseymswjlzplqoxrfjzi
+  PSQL: /usr/lib/postgresql/17/bin/psql
+  PGAPPNAME: gha-diez-libros-iva-${{ github.run_id }}
+  # Foodint (la única con base de Diez registrada). Lo traído del histórico
+  # llega hasta el corte (CORTE); los libros, hasta el trimestre que se elija
+  # (DIEZ_HASTA y HASTA salen de «hasta» en el primer paso).
+  EMPRESA: 658728c0-fcd7-46ef-a860-d4e5e6eb21d9
+  CORTE: '2026-09-30'
+  DIEZ_DESDE: '202601'
+  DESDE: '2026-01-01'
+  MODO: ${{ inputs.modo }}
+  FECHA_RECIBIDA: ${{ inputs.fecha_recibida }}
+  TRIMESTRE: ${{ inputs.hasta }}
+
+jobs:
+  traer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirmación, modo y autorización
+        env:
+          CONFIRMO: ${{ inputs.confirmo }}
+          AUTORIZO: ${{ inputs.autorizo }}
+        run: |
+          set -euo pipefail
+          [ "$CONFIRMO" = "produccion" ] || { echo "::error::Hay que escribir «produccion» en «confirmo». No se hace nada."; exit 1; }
+          case "$MODO" in ensayo|real) ;; *) echo "::error::Modo desconocido."; exit 1 ;; esac
+          case "$FECHA_RECIBIDA" in asiento|introduccion) ;; *) echo "::error::Fecha de las recibidas desconocida."; exit 1 ;; esac
+          case "$TRIMESTRE" in
+            1T) echo "DIEZ_HASTA=202603" >> "$GITHUB_ENV"; echo "HASTA=2026-03-31" >> "$GITHUB_ENV" ;;
+            2T) echo "DIEZ_HASTA=202606" >> "$GITHUB_ENV"; echo "HASTA=2026-06-30" >> "$GITHUB_ENV" ;;
+            3T) echo "DIEZ_HASTA=202609" >> "$GITHUB_ENV"; echo "HASTA=2026-09-30" >> "$GITHUB_ENV" ;;
+            *) echo "::error::Trimestre desconocido."; exit 1 ;;
+          esac
+          if [ "$MODO" = "real" ] && [ "$AUTORIZO" != "libros-iva-diez" ]; then echo "::error::El real lleva «libros-iva-diez» en «autorizo». No se hace nada."; exit 1; fi
+      - name: El real, solo con un ensayo en verde del mismo commit, la misma fecha y el mismo trimestre
+        if: inputs.modo == 'real'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          n=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow diez-libros-iva-importar.yml --commit "$GITHUB_SHA" --status success --limit 50 \
+                --json displayTitle --jq "[.[] | select(.displayTitle == \"Diez · libros de IVA · ensayo · ${FECHA_RECIBIDA} · hasta el ${TRIMESTRE}\")] | length")
+          [ "$n" -ge 1 ] || { echo "::error::No hay un ensayo en verde de este commit con esa fecha de las recibidas y hasta ese trimestre. Primero el ensayo."; exit 1; }
+      - name: Guardas · el secreto apunta a PRODUCCIÓN y no a staging
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta PROD_CONTA_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse as u
+          p = u.urlsplit(os.environ["DB_URL"])
+          for x in (os.environ["DB_URL"], p.password, p.username, p.hostname):
+              if x: print("::add-mask::" + x)
+          PY
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "Producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+      - name: Enmascarar el secreto de Diez
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+      - name: Guarda · la empresa, su base de Diez, su ejercicio mixto hasta el corte y el 303 presentado de cada trimestre
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          BD=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v hasta="$CORTE" <<'SQL'
+          select b.nombre_bd
+            from public.company c
+            join public.conta_diez_base b on b.company_id = c.id and b.account_id = c.account_id
+            join public.fiscal_year f on f.company_id = c.id
+           where c.id = :'empresa'::uuid and c.account_id <> '00000000-0000-0000-0000-000000000001'
+             and b.nombre_bd <> 'C0001' and f.origin = 'mixed' and f.origin_program = 'diez' and f.imported_until = :'hasta'::date;
+          SQL
+          )
+          [ -n "$BD" ] || { echo "::error::La empresa no tiene base de Diez registrada o su ejercicio no es mixto de Diez hasta el corte. Abortado sin leer nada."; exit 1; }
+          # El testigo: cada trimestre del 1T al elegido, con su 303 PRESENTADO y
+          # sus casillas del justificante (regla 9: de la cuenta de la empresa).
+          # Solo sale qué trimestres faltan, ningún importe.
+          FALTAN=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v hasta="$HASTA" <<'SQL'
+          select coalesce(string_agg(extract(quarter from d)::int || 'T', ' ' order by d), '')
+            from generate_series('2026-01-01'::date, :'hasta'::date, interval '3 months') d
+           where not exists (
+             select 1 from public.tax_return r join public.company c on c.id = r.company_id and c.account_id = r.account_id
+              where c.id = :'empresa'::uuid and r.form_code = '303' and r.fiscal_year = 2026
+                and r.period = extract(quarter from d)::int || 'T'
+                and r.status in ('filed', 'booked', 'paid', 'offset', 'refunded')
+                and exists (select 1 from public.tax_return_box b where b.tax_return_id = r.id and b.origin = 'justificante'));
+          SQL
+          )
+          [ -z "$FALTAN" ] || { echo "::error::Falta el 303 presentado, con su justificante subido, de: $FALTAN. Súbelo en Impuestos › Presentados › «Subir justificantes». Abortado sin leer nada de Diez."; exit 1; }
+          echo "DIEZ_BD=$BD" > /tmp/env.txt
+          cat /tmp/env.txt >> "$GITHUB_ENV"
+      - name: Paso 1 · leer de Diez y preparar (solo GET)
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          CARGA: /tmp/carga
+        run: |
+          set -euo pipefail
+          npx --yes tsx@4.19.2 scripts/conta/diez/libros-iva-preparar.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -v '^#' scripts/conta/diez/autoliquidadas-foodint.csv > /tmp/carga/autoliquidadas.csv
+      - name: Paso 2 · escribir, medir contra el testigo y decidir (una transacción)
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          # Solo «@@» (salida-segura) y, de un error, su código (VERBOSITY=sqlstate).
+          # Desde la carpeta de la carga: \copy no sustituye variables en el nombre del fichero.
+          ( cd /tmp/carga && "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -v empresa="$EMPRESA" -v modo="$MODO" -v desde="$DESDE" -v hasta="$HASTA" \
+              -f "$GITHUB_WORKSPACE/scripts/conta/diez/libros-iva-importar.sql" ) 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Borrar la carga (lleva datos reales)
+        if: always()
+        run: rm -rf /tmp/carga

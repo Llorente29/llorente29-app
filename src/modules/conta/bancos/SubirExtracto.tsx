@@ -8,10 +8,15 @@
 // pregunta, y la respuesta se recuerda (bank_account_iban). Un fichero que no
 // cuadra no entra, y dice por qué. Al importar, Folvy concilia lo nuevo y lo
 // dice con cifras (regla 8).
+// S01d: si una cuenta del fichero no es de ningún banco (o aún no hay
+// ninguno), «Nuevo banco con este IBAN (…)» lo da de alta aquí mismo, con el
+// IBAN puesto, y la deja elegida para subirla. Sin volver a Cuentas y extractos.
 
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaBancos } from '@/config/navegacion'
+import { DialogoBancoNuevo } from '@/modules/conta/bancos/DialogoBancoNuevo'
+import { ibanSinBanco, textoNuevoConIban } from '@/modules/conta/bancos/bancoNuevo'
 import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { ibanLegible } from '@/modules/conta/lib/bancosVista'
 import type { Cuadre, ExtractoLeido } from '@/modules/conta/lib/extractoBanco'
@@ -36,10 +41,13 @@ export function SubirExtracto() {
   const [error, setError] = useState<string | null>(null)
   const [asignacion, setAsignacion] = useState<string[]>([])
   const input = useRef<HTMLInputElement>(null)
+  // S01d · La cuenta del fichero para la que se está dando de alta un banco nuevo, y lo que se dijo al hacerlo.
+  const [nuevoPara, setNuevoPara] = useState<number | null>(null)
+  const [dadoDeAlta, setDadoDeAlta] = useState<string | null>(null)
   const nombreBanco = (id: string) => datos.bancos.find((b) => b.id === id)?.nombre ?? 'el banco'
 
   const leer = async (f: File) => {
-    setError(null); setPaso({ que: 'leyendo', nombre: f.name })
+    setError(null); setDadoDeAlta(null); setPaso({ que: 'leyendo', nombre: f.name })
     try {
       const a = await abrirExtracto(f)
       const { extracto, cuadre, resumen } = leerYCuadrar(a)
@@ -85,6 +93,7 @@ export function SubirExtracto() {
     <section className="cxb-seccion" aria-labelledby="cxb-subir-titulo">
       <div className="cxl-seccion"><div><h2 id="cxb-subir-titulo">Subir extracto</h2><p className="cx-ayuda">Norma 43 o Excel del banco. Un fichero puede traer varias cuentas: cada una va a la suya.</p></div></div>
       {error && <div className="cx-error" role="alert">{error}</div>}
+      {dadoDeAlta && paso.que === 'leido' && <div className="cx-guardado" role="status">{dadoDeAlta}</div>}
 
       {(paso.que === 'elegir' || paso.que === 'leyendo') && (
         <div className="cxb-zona" onClick={() => input.current?.click()} role="button" tabIndex={0}
@@ -119,6 +128,9 @@ export function SubirExtracto() {
                   <span className="cx-ayuda">{c.movimientos.length} movimientos{c.desde && c.hasta ? ` del ${fechaLarga(c.desde)} al ${fechaLarga(c.hasta)}` : ''}{c.saldoFinalCent !== null ? ` · saldo final ${eurosExactos(c.saldoFinalCent / 100)}` : ''}</span>
                   {!asignacion[i] && <span className="cxb-ambar">Esta cuenta no la conozco: dime a qué banco va y lo recuerdo.</span>}
                   {nuevoIban && <span className="cx-ayuda">Recordaré que este IBAN va a {elegido!.nombre}.</span>}
+                  {(!asignacion[i] || asignacion[i] === NO_SUBIR) && ibanSinBanco(c.iban, datos.bancos) && (
+                    <button type="button" className="cx-boton-sec" onClick={() => setNuevoPara(i)}>{textoNuevoConIban(c.iban)}</button>
+                  )}
                 </span>
                 <label className="cxb-local">
                   <span className="cx-oculto">A qué banco va</span>
@@ -131,14 +143,25 @@ export function SubirExtracto() {
               </div>
             )
           })}
-          {datos.bancos.length === 0 && <p className="cx-ayuda">Aún no tienes ningún banco: <Link to={rutaBancos('cuentas')} className="cx-enlace">dalo de alta en Cuentas y extractos</Link>.</p>}
+          {datos.bancos.length === 0 && <p className="cx-ayuda">Aún no tienes ningún banco: pulsa «Nuevo banco…» junto a su cuenta y lo doy de alta aquí mismo, con el IBAN del fichero si lo trae; después subes el extracto a él.</p>}
           <div className="cx-pie">
             <button type="button" className="cx-boton-sec" onClick={() => setPaso({ que: 'elegir' })}>Otro fichero</button>
-            <button type="button" className="cx-boton" disabled={!paso.cuadre.ok || asignacion.some((x) => !x) || asignacion.every((x) => x === NO_SUBIR)} onClick={() => importar(paso)}>
+            <button type="button" className="cx-boton" disabled={!paso.cuadre.ok || asignacion.some((x) => !x) || asignacion.every((x) => x === NO_SUBIR)
+              || asignacion.some((x) => x && x !== NO_SUBIR && !datos.bancos.some((b) => b.id === x))} onClick={() => importar(paso)}>
               Subir {asignacion.filter((x) => x && x !== NO_SUBIR).length === 1 ? 'la cuenta' : `las ${asignacion.filter((x) => x && x !== NO_SUBIR).length} cuentas`}
             </button>
           </div>
         </div>
+      )}
+
+      {nuevoPara !== null && paso.que === 'leido' && (
+        <DialogoBancoNuevo ibanInicial={paso.e.cuentas[nuevoPara]?.iban ?? ''} alCerrar={() => setNuevoPara(null)} alCrear={(hecho, texto) => {
+          const i = nuevoPara
+          setAsignacion((a) => a.map((x, j) => (j === i ? hecho.banco : x)))
+          setNuevoPara(null)
+          setDadoDeAlta(`${texto} Elegido para la cuenta ${paso.e.cuentas[i]?.iban ? ibanLegible(paso.e.cuentas[i].iban) : paso.e.cuentas[i]?.identificacion ?? ''} del fichero: ya puedes subirla.`)
+          refrescarCuentasMenu(); recargar()
+        }} />
       )}
 
       {paso.que === 'importando' && <div className="cx-tarjeta" aria-busy="true"><p>Subiendo «{paso.nombre}» y mirando los movimientos nuevos…</p></div>}

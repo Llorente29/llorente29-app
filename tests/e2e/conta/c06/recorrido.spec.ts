@@ -33,7 +33,8 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { FRENTE, STAGING_URL, anonKey, pedirSesion, type Sesion } from '../sesion'
+import { FRENTE, STAGING_URL, anonKey, pedirSesion, type Sesion, correoDelCarril } from '../sesion'
+import { redQuieta } from '../red'
 import { cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { MARCAS } from '../../../../supabase/functions/_shared/marcas'
@@ -45,7 +46,7 @@ import { contrasenaCambiada, invitacion } from '../../../../supabase/functions/s
 test.skip(FRENTE !== 'c', 'Pruebas del frente C (C06): sus usuarios solo reciben contraseña en las ramas conta/c06*.')
 
 const DIR = 'docs/conta/capturas/c06'
-const PLATAFORMA = 'c06.plataforma@c06-prueba.test'
+const PLATAFORMA = correoDelCarril('c06.plataforma@c06-prueba.test')
 const MARCA = MARCAS.contabilidad
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
@@ -117,7 +118,7 @@ function apuntar(nota: string) {
 }
 
 test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez desde la C0009, Inicio, libros y balance', async ({ page, baseURL }) => {
-  test.setTimeout(420_000)
+  test.setTimeout(1_080_000) // 7 min del recorrido + hasta 11 esperando el turno de la C0009
   const errores = vigilar(page)
   const l = lado(page)
   const sello = Date.now()
@@ -269,11 +270,21 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
   await expect(paso(4)).toHaveClass(/cxi-diez-paso-falta/)
   await expect(paso(4)).toContainText('Lo hace Contabilidad por ti: en cuanto registre tu base de Diez, la trae.')
   // Folvy registra su base (en staging, la función de la semilla del recorrido).
-  const base = await fetch(`${STAGING_URL}/rest/v1/rpc/e2e_c06_recorrido_base`, {
+  // La C0009 es una y la usan los dos carriles: si la tiene el recorrido de
+  // otro, «ocupada», y se espera su turno (la función se la da a los 10 min).
+  const pedirBase = () => fetch(`${STAGING_URL}/rest/v1/rpc/e2e_c06_recorrido_base`, {
     method: 'POST', headers: { apikey: anonKey(), Authorization: `Bearer ${plataforma.access_token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_company: empresa }),
   })
+  let base = await pedirBase()
+  const desde = Date.now()
+  while (base.status === 200 && (await base.clone().json()) === 'ocupada' && Date.now() - desde < 11 * 60_000) {
+    await page.waitForTimeout(15_000)
+    base = await pedirBase()
+  }
+  if (Date.now() - desde > 1_000) console.log(`[recorrido] la C0009 estaba en otro carril: ${Math.round((Date.now() - desde) / 1000)} s esperando turno`)
   expect(base.status, `se registra la C0009: ${await base.clone().text()}`).toBe(200)
+  expect(await base.clone().json(), 'la C0009 es de este recorrido (no «ocupada»)').toBe('C0009')
   const listo = await rest<{ falta: string; pasos: { paso: string; base?: string }[] }>(s, 'POST', 'rpc/conta_diez_listo', { p_company: empresa })
   expect(listo.status).toBe(200)
   expect(listo.datos.falta, 'con datos, plan y banco, solo falta traer de Diez').toBe('diez')
@@ -298,7 +309,7 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
   ] as const) {
     await page.goto(ruta)
     await expect(page.locator('.cx-principal')).toBeVisible()
-    await page.waitForLoadState('networkidle')
+    await redQuieta(page)
     await expect(page.getByRole('alert')).toHaveCount(0)
     await sinFolvy(page, titulo)
     await capturar(page, nombre)

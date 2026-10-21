@@ -2,7 +2,7 @@
 //
 // Compras · N21 (maqueta Recepcion.dc.html, repaso del 11/10): al terminar una
 // recepción, quien recibe ve «Recibido», de quién y por cuánto, y en su
-// tarjeta qué pasa con el papel («Este papel es un albarán. La oficina
+// tarjeta qué pasa con el documento («Es un albarán. La oficina
 // esperará la factura.»). Antes la frase iba al final del mensaje de
 // confirmación y en el asistente del móvil no salía.
 //

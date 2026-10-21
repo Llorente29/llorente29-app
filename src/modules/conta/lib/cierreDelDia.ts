@@ -11,7 +11,7 @@
 // marzo no mueve el cierre: a las 2:00 de Madrid es a las 2:00 de Madrid,
 // sea UTC+2 o UTC+1.
 
-import { eurosExactos } from './formato'
+import { diaMesCorto, eurosExactos } from './formato'
 
 export const HORA_DE_CIERRE_DE_SERIE = '02:00'
 
@@ -52,7 +52,7 @@ export function diaCerrado(dia: string, instante: Date, horaCierre: string, zona
   return dia <= ultimoDiaCerrado(instante, horaCierre, zona)
 }
 
-/** «6:00» para la pantalla («Hoy se cierra mañana a las 6:00»). */
+/** «6:00» para la pantalla («se cierra a las 6:00 del 19/10»). */
 export function horaParaLeer(horaCierre: string): string {
   const h = normalizarHora(horaCierre)
   return `${Number(h.slice(0, 2))}:${h.slice(3)}`
@@ -88,7 +88,18 @@ export function lineaNoConfirmados(pedidos: number, total: number): string {
   return `${pedidos} ${pedidos === 1 ? 'pedido no confirmado' : 'pedidos no confirmados'} · ${eurosExactos(total)} · ${pedidos === 1 ? 'no está' : 'no están'} en estas ventas`
 }
 
-/** Lo que se dice del día en curso: información, no un aviso. */
-export function textoDiaEnCurso(horaCierre: string): string {
-  return `Hoy se cierra mañana a las ${horaParaLeer(horaCierre)}. Sus ventas se proponen entonces.`
+/**
+ * Lo que se dice del día en curso: información, no un aviso. Con fechas, para
+ * no decir «hoy se cierra mañana» (S01e): el día D se cierra a la hora de
+ * cierre del D + 1, en la hora de Madrid (regla 4). Antes de esa hora, el de
+ * ayer aún sigue abierto, y se dice.
+ */
+export function textoDiaEnCurso(horaCierre: string, instante: Date = new Date(), zona = 'Europe/Madrid'): string {
+  const { dia, hora } = enLaZona(instante, zona)
+  const h = horaParaLeer(horaCierre)
+  const manana = diaMesCorto(unDia(dia, 1))
+  if (hora < normalizarHora(horaCierre)) {
+    return `El día de ayer (${diaMesCorto(unDia(dia, -1))}) sigue abierto hasta hoy a las ${h}, y el de hoy (${diaMesCorto(dia)}) se cierra a las ${h} del ${manana}. Sus ventas se proponen al cerrarse.`
+  }
+  return `El día de hoy (${diaMesCorto(dia)}) se cierra a las ${h} del ${manana}. Sus ventas se proponen entonces.`
 }

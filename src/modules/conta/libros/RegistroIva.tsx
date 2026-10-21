@@ -19,8 +19,8 @@
 //     documentos que tengamos guardados.
 
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { rutaAsiento, rutaLibros } from '@/config/navegacion'
+import { Link, useSearchParams } from 'react-router-dom'
+import { rutaAsiento, rutaLibros, rutaRecibidaAMano } from '@/config/navegacion'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
@@ -29,12 +29,15 @@ import {
   type AnotacionLibro, type FiltrosLibro, type Libro, type TipoFactura,
 } from '@/modules/conta/lib/libroRegistro'
 import { crearZip, nombresUnicos, type FicheroZip } from '@/modules/conta/lib/zip'
-import { trimestreDe, useLeer, useLibros } from '@/modules/conta/libros/contexto'
+import { delTrimestre, trimestreDe, useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelAeat, excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import {
   completarAnotacion, cuentasPorAsiento, datosFiscales, documentosDeFacturas, leerBienes, leerLibroRegistro, movimientoIva,
 } from '@/modules/conta/services/librosService'
 import { MARCA } from '../cuenta/marca'
+import { cuantas } from '@/modules/conta/lib/plural'
+import { useImpuestoEmpresa } from '@/modules/conta/hooks/useImpuestoEmpresa'
+import { conImpuesto } from '@/modules/conta/lib/impuestoIndirecto'
 
 type Vista = 'issued' | 'received' | 'intracomunitarias'
 const TITULO: Record<Vista, string> = { issued: 'Facturas expedidas', received: 'Facturas recibidas', intracomunitarias: 'Operaciones intracomunitarias' }
@@ -59,9 +62,13 @@ function periodos(inicio: string, fin: string): { id: string; desde: string; has
 
 export function RegistroIva({ libro }: { libro: Vista }) {
   const L = useLibros()
+  // S01e: en Canarias, IGIC; en Ceuta y Melilla, IPSI.
+  const imp = useImpuestoEmpresa(L.accountId, L.companyId)
   const ps = periodos(L.ejercicio.inicio, L.ejercicio.fin)
   const hoy = new Date().toISOString().slice(0, 10)
-  const [periodo, setPeriodo] = useState(() => (ps.find((p) => p.desde <= hoy && hoy <= p.hasta) ?? ps[0]).id)
+  // I01c · «Facturas del trimestre» (Impuestos › Trimestre) abre aquí con ?periodo=3T.
+  const pedido = useSearchParams()[0].get('periodo')
+  const [periodo, setPeriodo] = useState(() => (delTrimestre(ps, pedido) ?? ps.find((p) => p.desde <= hoy && hoy <= p.hasta) ?? ps[0]).id)
   const p = ps.find((x) => x.id === periodo) ?? ps[0]
   const [f, setF] = useState<FiltrosLibro & { importe?: string }>({})
   const [porNif, setPorNif] = useState(false)
@@ -86,7 +93,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
 
   const exportar = (como: 'pdf' | 'excel') => {
     if (!vistas) return
-    const cab = ['Fecha', 'Tipo', 'Número', 'NIF', 'Nombre', 'Base', '% IVA', 'Cuota', 'Total', 'Anulada']
+    const cab = ['Fecha', 'Tipo', 'Número', 'NIF', 'Nombre', 'Base', imp.columnaTipo, 'Cuota', 'Total', 'Anulada']
     const filas: FilaTabla[] = vistas.filas.map((a) => [ddmm(a.issueDate), etiquetaTipo(a), [a.series, a.number].filter(Boolean).join('-') + (a.numberTo ? `–${a.numberTo}` : ''), a.counterpartTaxId, a.counterpartName, a.taxBase, a.taxRate, a.taxAmount, a.total, a.voidedAt ? 'sí' : ''])
     const nombre = `${TITULO[libro]} ${p.nombre}`
     const ok = como === 'pdf' ? pdfTabla(`${nombre}.pdf`, TITULO[libro], `${p.nombre} · ${ddmm(p.desde)} a ${ddmm(p.hasta)}${hayFiltro ? ' · filtrado' : ''}`, cab, filas) : excelTabla(`${nombre}.xlsx`, TITULO[libro], cab, filas)
@@ -97,7 +104,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
   return (
     <section className="cxl-pagina" aria-label={TITULO[libro]}>
       <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libros registro de IVA' }]} /><h2>{TITULO[libro]}</h2></div>
+        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: imp.libros }]} /><h2>{TITULO[libro]}</h2></div>
         <div className="cxl-herramientas">
           <label><span className="cx-oculto">Periodo</span>
             <select className="cx-input" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>{ps.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
@@ -105,6 +112,8 @@ export function RegistroIva({ libro }: { libro: Vista }) {
           <button type="button" className="cx-boton-sec" onClick={() => exportar('pdf')} disabled={!vistas}>Exportar PDF</button>
           <button type="button" className="cx-boton-sec" onClick={() => exportar('excel')} disabled={!vistas}>Excel</button>
           <Link to={rutaLibros('registro', 'formato-aeat')} className="cx-boton-sec">Formato AEAT</Link>
+          {/* S01d: una recibida sin fichero se da de alta a mano; sale aquí cuando se apunta. */}
+          {libro === 'received' && <Link to={rutaRecibidaAMano()} className="cx-boton">+ Nueva recibida a mano</Link>}
         </div>
       </div>
       <Guardado texto={hecho} />
@@ -113,7 +122,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
       {vistas && (
         <div className="cxl-cifras" role="group" aria-label="Cifras del libro">
           <div className="cx-tarjeta cxl-cifra"><span className="cxl-cifra-etiqueta">Base imponible</span><span className="cxl-cifra-valor">{eurosExactos(vistas.cifras.base)}</span></div>
-          <div className="cx-tarjeta cxl-cifra"><span className="cxl-cifra-etiqueta">{libro === 'issued' ? 'IVA repercutido' : libro === 'received' ? 'IVA soportado' : 'Cuota'}</span><span className="cxl-cifra-valor">{eurosExactos(vistas.cifras.cuota)}</span></div>
+          <div className="cx-tarjeta cxl-cifra"><span className="cxl-cifra-etiqueta">{libro === 'issued' ? imp.repercutido : libro === 'received' ? imp.soportado : 'Cuota'}</span><span className="cxl-cifra-valor">{eurosExactos(vistas.cifras.cuota)}</span></div>
           <div className="cx-tarjeta cxl-cifra">
             <span className="cxl-cifra-etiqueta">Cuadre con el diario</span>
             {vistas.cuadre
@@ -141,23 +150,23 @@ export function RegistroIva({ libro }: { libro: Vista }) {
         {hayFiltro && <button type="button" className="cx-boton-sec" onClick={() => setF({ verAnuladas: f.verAnuladas })}>Quitar filtros</button>}
       </details>
 
-      {vistas && !vistas.total && <div className="cx-tarjeta"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion="El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas." /></div>}
+      {vistas && !vistas.total && <div className="cx-tarjeta"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion={conImpuesto('El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas.', imp)} /></div>}
       {vistas && vistas.total > 0 && (
         <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
           <p className="cxl-apoyo" role="status">{hayFiltro ? `${vistas.filas.length} de ${anotaciones(vistas.total)} con los filtros puestos.` : `${anotaciones(vistas.total)}.`}</p>
           {porNif ? <TablaPorNif filas={vistas.filas} /> : (
-            <table className="cxl-tabla" aria-label={TITULO[libro]}>
-              <thead><tr><th>Fecha</th><th>Factura</th><th>{libro === 'issued' ? 'Destinatario' : 'Expedidor'}</th><th className="cxl-der">Base</th><th className="cxl-der">% IVA</th><th className="cxl-der">Cuota</th><th className="cxl-der">Total</th><th /></tr></thead>
+            <table className="cxl-tabla cxl-apilada" aria-label={TITULO[libro]}>
+              <thead><tr><th>Fecha</th><th>Factura</th><th>{libro === 'issued' ? 'Destinatario' : 'Expedidor'}</th><th className="cxl-der">Base</th><th className="cxl-der">{imp.columnaTipo}</th><th className="cxl-der">Cuota</th><th className="cxl-der">Total</th><th /></tr></thead>
               <tbody>
                 {vistas.filas.map((a) => {
                   const falta = faltaParaCompletar(a)
                   return (
                     <tr key={a.id} className={a.voidedAt ? 'cxl-anulada' : undefined}>
                       <td>{ddmm(a.issueDate)}</td>
-                      <td><Link to={rutaAsiento(a.entryId)}>{[a.series, a.number].filter(Boolean).join('-') || 'sin número'}</Link><br /><span className="cxl-apoyo">{etiquetaTipo(a)}</span>{a.voidedAt && <> <Chip>anulada</Chip></>}</td>
-                      <td>{a.counterpartName ?? '—'}{a.counterpartTaxId && <><br /><span className="cxl-apoyo">{a.counterpartTaxId}</span></>}</td>
-                      <td className="cxl-der">{eurosExactos(a.taxBase)}</td><td className="cxl-der">{a.taxRate === null ? '—' : `${a.taxRate} %`}</td>
-                      <td className="cxl-der">{eurosExactos(a.taxAmount)}</td><td className="cxl-der">{a.total === null ? '—' : eurosExactos(a.total)}</td>
+                      <td><Link to={rutaAsiento(a.entryId)}>{[a.series, a.number].filter(Boolean).join('-') || 'sin número'}</Link><br /><span className="cxl-apoyo">{etiquetaTipo(a)}</span>{a.voidedAt && <> <Chip>anulada</Chip></>}{a.deducidaEn && <> <span title={a.deducidaPorque ?? undefined}><Chip tono="azul">deducida en el {a.deducidaEn}</Chip></span></>}</td>
+                      <td data-titulo={libro === 'issued' ? 'Destinatario' : 'Expedidor'}>{a.counterpartName ?? '—'}{a.counterpartTaxId && <><br /><span className="cxl-apoyo">{a.counterpartTaxId}</span></>}</td>
+                      <td className="cxl-der" data-titulo="Base">{eurosExactos(a.taxBase)}</td><td className="cxl-der" data-titulo={imp.columnaTipo}>{a.taxRate === null ? '—' : `${a.taxRate} %`}</td>
+                      <td className="cxl-der" data-titulo="Cuota">{eurosExactos(a.taxAmount)}</td><td className="cxl-der" data-titulo="Total">{a.total === null ? '—' : eurosExactos(a.total)}</td>
                       <td>{falta.length > 0 && !a.voidedAt && <button type="button" className="cxl-defecto" title={`Falta: ${falta.join(', ')}`} onClick={() => setCompletando(a)}>Falta {falta[0]} · Completar</button>}</td>
                     </tr>
                   )
@@ -175,11 +184,11 @@ export function RegistroIva({ libro }: { libro: Vista }) {
 function TablaPorNif({ filas }: { filas: AnotacionLibro[] }) {
   const g = agruparPorNif(filas)
   return (
-    <table className="cxl-tabla" aria-label="Agrupado por NIF">
+    <table className="cxl-tabla cxl-apilada" aria-label="Agrupado por NIF">
       <thead><tr><th>NIF</th><th>Nombre</th><th className="cxl-der">Facturas</th><th className="cxl-der">Base</th><th className="cxl-der">Cuota</th><th className="cxl-der">Total</th><th /></tr></thead>
       <tbody>{g.map((x) => (
-        <tr key={x.nif ?? '—'}><td>{x.nif ?? 'sin NIF (simplificadas)'}</td><td>{x.nombre ?? '—'}</td><td className="cxl-der">{x.anotaciones}</td>
-          <td className="cxl-der">{eurosExactos(x.base)}</td><td className="cxl-der">{eurosExactos(x.cuota)}</td><td className="cxl-der">{eurosExactos(x.total)}</td>
+        <tr key={x.nif ?? '—'}><td>{x.nif ?? 'sin NIF (simplificadas)'}</td><td>{x.nombre ?? '—'}</td><td className="cxl-der" data-titulo="Facturas">{x.anotaciones}</td>
+          <td className="cxl-der" data-titulo="Base">{eurosExactos(x.base)}</td><td className="cxl-der" data-titulo="Cuota">{eurosExactos(x.cuota)}</td><td className="cxl-der" data-titulo="Total">{eurosExactos(x.total)}</td>
           <td>{x.nif && Math.abs(x.total) > UMBRAL_347 && <Chip tono="azul">347</Chip>}</td></tr>
       ))}</tbody>
     </table>
@@ -227,6 +236,7 @@ const extension = (url: string) => { const m = /\.([a-z0-9]{2,5})(?:[?#]|$)/i.ex
 
 export function FormatoAeat() {
   const L = useLibros()
+  const imp = useImpuestoEmpresa(L.accountId, L.companyId)
   const ps = periodos(L.ejercicio.inicio, L.ejercicio.fin).filter((x) => x.id !== 'año')
   const hoy = new Date().toISOString().slice(0, 10)
   const [periodo, setPeriodo] = useState(() => (ps.find((p) => p.desde <= hoy && hoy <= p.hasta) ?? ps[ps.length - 1]).id)
@@ -279,7 +289,7 @@ export function FormatoAeat() {
       const indice = [
         `Documentos de las facturas recibidas del ${ddmm(L.ejercicio.inicio)} al ${ddmm(p.hasta)}.`,
         `Facturas en el libro: ${ids.length}. Con documento guardado: ${docs.length}. Dentro del zip: ${ficheros.length}.`,
-        ...(sinDoc ? [`${sinDoc} facturas no tienen documento guardado en ${MARCA.nombre}.`] : []),
+        ...(sinDoc ? [`${cuantas(sinDoc, 'factura no tiene', 'facturas no tienen')} documento guardado en ${MARCA.nombre}.`] : []),
         ...(fallidos.length ? ['', 'No se han podido bajar (nombre y dirección):', ...fallidos] : []),
       ].join('\r\n')
       const zip = crearZip([{ nombre: 'indice.txt', datos: new TextEncoder().encode(indice) }, ...ficheros])
@@ -287,7 +297,7 @@ export function FormatoAeat() {
       const enlace = document.createElement('a')
       enlace.href = url; enlace.download = `Documentos ${anio} ${p.nombre}.zip`; enlace.click()
       setTimeout(() => URL.revokeObjectURL(url), 10_000)
-      setHecho(`Bajado: Documentos ${anio} ${p.nombre}.zip con ${ficheros.length} de ${ids.length} facturas${sinDoc ? `; ${sinDoc} sin documento guardado` : ''}${fallidos.length ? `; ${fallidos.length} no se han podido bajar (en indice.txt)` : ''}.`)
+      setHecho(`Bajado: Documentos ${anio} ${p.nombre}.zip con ${ficheros.length} de ${cuantas(ids.length, 'factura', 'facturas')}${sinDoc ? `; ${sinDoc} sin documento guardado` : ''}${fallidos.length ? `; ${fallidos.length} no se han podido bajar (en indice.txt)` : ''}.`)
     } catch (e) { setHecho(e instanceof Error ? `No se ha podido hacer el zip: ${e.message}` : 'No se ha podido hacer el zip.') } finally { setOcupado(null) }
   }
 
@@ -295,7 +305,7 @@ export function FormatoAeat() {
   return (
     <section className="cxl-pagina" aria-label="Formato AEAT">
       <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libros registro de IVA' }]} /><h2>Libros en formato AEAT</h2></div>
+        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: imp.libros }]} /><h2>Libros en formato AEAT</h2></div>
         <div className="cxl-herramientas">
           <label><span className="cx-oculto">Hasta el trimestre</span>
             <select className="cx-input" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>{ps.map((x) => <option key={x.id} value={x.id}>Hasta el {x.nombre}</option>)}</select>
@@ -303,6 +313,8 @@ export function FormatoAeat() {
         </div>
       </div>
       <Guardado texto={hecho} />
+      {/* S01e: el formato es el del IVA; con IGIC o IPSI se dice, no se esconde (regla 7). */}
+      {imp.avisoFormatoAeat && <p className="cxl-sin-sitio" role="note">{imp.avisoFormatoAeat}</p>}
       {ocupado && <p className="cxl-apoyo" role="status">{ocupado}</p>}
       {!d.datos && <div className="cx-tarjeta" aria-busy="true">{[0, 1].map((i) => <Hueso key={i} alto={48} />)}</div>}
       {d.datos && (
@@ -310,7 +322,7 @@ export function FormatoAeat() {
           <div className="cx-tarjeta">
             <h3 className="cxl-subtitulo">Excel del requerimiento</h3>
             <p>Un fichero con las hojas EXPEDIDAS, RECIBIDAS{d.datos.bienes.length ? ' y BIENES-INVERSIÓN' : ''}, con las columnas y las dos filas de cabecera del diseño de la AEAT, acumulado del {ddmm(L.ejercicio.inicio)} al {ddmm(p.hasta)}.</p>
-            <p className="cxl-apoyo">Nombre: {d.datos.fiscal.nif ? nombreFichero(anio, d.datos.fiscal.nif, d.datos.fiscal.razon) : '— (falta el NIF de la empresa)'}. {exp.filter((a) => !a.voidedAt).length} expedidas, {rec.filter((a) => !a.voidedAt).length} recibidas, {d.datos.bienes.length} bienes. Las anuladas no van: se compensan con su contraasiento.</p>
+            <p className="cxl-apoyo">Nombre: {d.datos.fiscal.nif ? nombreFichero(anio, d.datos.fiscal.nif, d.datos.fiscal.razon) : '— (falta el NIF de la empresa)'}. {/* S01e: «1 expedida», no «1 expedidas». */}{cuantas(exp.filter((a) => !a.voidedAt).length, 'expedida', 'expedidas')}, {cuantas(rec.filter((a) => !a.voidedAt).length, 'recibida', 'recibidas')}, {cuantas(d.datos.bienes.length, 'bien', 'bienes')}. Las anuladas no van: se compensan con su contraasiento.</p>
             {porCompletar > 0 && <p className="cxl-sin-sitio">{anotaciones(porCompletar)} por completar: el fichero sale igual, pero esas filas tienen huecos. <Link to={rutaLibros('registro', 'recibidas')}>Completarlas</Link></p>}
             <button type="button" className="cx-boton" onClick={bajarExcel}>Bajar el Excel</button>
           </div>

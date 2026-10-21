@@ -1,14 +1,16 @@
 // src/modules/conta/marco/nuevo/MarcoNuevo.tsx
 //
-// M01 · El marco nuevo de contabilidad (maqueta N30, aprobada por Julio el
-// 15/10): módulos fijos a la izquierda, una barra arriba con la empresa, las
-// pestañas del módulo, el buscador, la densidad y el usuario, y debajo la
-// barra de acciones de la pantalla. En el móvil, los módulos van abajo.
+// El marco de contabilidad. Desde el S01 es el ESQUELETO (encargo S01 y
+// respuestas de Julio del 17/10): la barra de productos a la izquierda, la
+// cabecera de una fila de 48 px, la franja de pestañas debajo (S01f: icono y
+// contador, fija debajo de la cabecera), la cinta de la pestaña y la pantalla.
+// En el móvil, los productos van en un cajón que abre el botón de menú de la
+// cabecera (S01c) y las pestañas en una fila que se desliza. Las piezas están en src/modules/conta/esqueleto; aquí se juntan.
 //
 // Envuelve las pantallas que ya existen SIN tocarlas: se ven dentro con su
-// estilo de hoy (los tokens del marco viven aparte, en `.cxm`) hasta que su
-// sesión las pase. Lo único que una pantalla vieja nota es que el marco ya no
-// le pinta la barra «Pregunta o pide algo»: lo que hacía va al buscador.
+// estilo de hoy hasta que el paso 3 las mude. Lo que ya les daba el M01 se
+// queda igual (contexto.ts): la densidad, el documento oculto y los huecos del
+// periodo, de la segunda fila (Libros) y de las acciones de la pantalla.
 //
 // Ctrl K es del marco: se escucha ANTES que las pantallas (en la captura) y
 // no les llega. Sus botones de buscar siguen funcionando con el ratón.
@@ -18,42 +20,53 @@ import { useLocation } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
+import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { TeTocaHoy } from '@/modules/conta/ui/marco/TeTocaHoy'
 import { chipsDelInicio } from '@/modules/conta/marco/nuevo/teTocaHoy'
-import { MarcoContexto, type Marco } from '@/modules/conta/marco/nuevo/contexto'
-import { moduloDe, pestanasArriba } from '@/modules/conta/marco/nuevo/modulos'
-import {
-  almacenDelNavegador, guardarPreferencia, leerPreferencias, type Densidad, type PreferenciasMarco,
-} from '@/modules/conta/marco/nuevo/preferencias'
-import { BarraModulos } from '@/modules/conta/marco/nuevo/BarraModulos'
-import { BarraSuperior } from '@/modules/conta/marco/nuevo/BarraSuperior'
-import { BarraInferior } from '@/modules/conta/marco/nuevo/BarraInferior'
+import { MarcoContexto, type DatosCinta, type EntradasCinta, type Marco } from '@/modules/conta/marco/nuevo/contexto'
 import { Buscador } from '@/modules/conta/marco/nuevo/Buscador'
-
-/** Las preferencias de la persona; se vuelven a leer si cambia quién es (sin efecto: en el render). */
-function usePreferencias(usuario: string) {
-  const [estado, setEstado] = useState<{ usuario: string; p: PreferenciasMarco }>(() => ({ usuario, p: leerPreferencias(usuario, almacenDelNavegador()) }))
-  const p = estado.usuario === usuario ? estado.p : leerPreferencias(usuario, almacenDelNavegador())
-  const cambiar = useCallback((cambio: Partial<PreferenciasMarco>) => {
-    setEstado({ usuario, p: guardarPreferencia(usuario, cambio, almacenDelNavegador()) })
-  }, [usuario])
-  return [p, cambiar] as const
-}
+import { useContadoresPestanas } from '@/modules/conta/marco/nuevo/useContadoresPestanas'
+import { dondeEsta, pestanasVisibles, productosVisibles } from '@/modules/conta/esqueleto/productos'
+import { alternarFavorito, cintaDe, favoritosDe, ordenPorId, type Orden } from '@/modules/conta/esqueleto/ordenes'
+import { usePreferenciasEsqueleto, useContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
+import { BarraProductos } from '@/modules/conta/esqueleto/BarraProductos'
+import { CajonProductos } from '@/modules/conta/esqueleto/CajonProductos'
+import { cuentasDeLaBarra } from '@/modules/conta/esqueleto/cuentasBarra'
+import { Cabecera, FranjaPestanas } from '@/modules/conta/esqueleto/Cabecera'
+import { CintaDePestana } from '@/modules/conta/esqueleto/CintaDePestana'
+import { Favoritos } from '@/modules/conta/esqueleto/Favoritos'
+import { MenuUsuario } from '@/modules/conta/esqueleto/MenuUsuario'
 
 export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactNode; sinPregunta?: boolean }) {
   const movil = useIsMobile()
   const solo = useProductoSolo()
-  const { userId, userName } = useCuentaConta()
-  const { pathname } = useLocation()
+  const { accountId, userId, userName, logoCuenta } = useCuentaConta()
+  const { activa } = useEmpresas()
+  const { pathname, search } = useLocation()
   const cuentas = useCuentasMenu()
-  const [prefs, cambiar] = usePreferencias(userId ?? 'sin-usuario')
+  const { prefs, cargadas, cambiar, aviso, quitarAviso } = usePreferenciasEsqueleto(accountId, userId)
+  const { ctx, error: errorCtx, listo: ctxListo } = useContextoEsqueleto(accountId, activa?.id ?? null)
   const [buscando, setBuscando] = useState(false)
+  const [cajon, setCajon] = useState(false)
+  const cerrarCajon = useCallback(() => setCajon(false), [])
   const [huecoAcciones, setHuecoAcciones] = useState<HTMLDivElement | null>(null)
   const [huecoPeriodo, setHuecoPeriodo] = useState<HTMLDivElement | null>(null)
+  const [datosCinta, setDatosCinta] = useState<DatosCinta | null>(null)
+  const [entradasCinta, setEntradasCinta] = useState<EntradasCinta | null>(null)
 
-  const modulo = moduloDe(pathname)
-  const arriba = pestanasArriba(modulo, movil)
+  const donde = dondeEsta(pathname, undefined, search)
+  const producto = donde?.producto ?? null
+  const productos = productosVisibles(ctx)
+  // En el móvil, un producto por niveles (Bancos) lleva su portada: ni fila de pestañas ni cinta.
+  const porNiveles = movil && !!producto?.portadaMovil
+  const pestanas = producto && !porNiveles ? pestanasVisibles(producto, ctx) : []
+  const pestana = donde?.pestana ?? null
+  const cinta = producto && !porNiveles ? cintaDe(producto.id, pestana?.id ?? null, ctx) : []
+  const pendientes = cuentasDeLaBarra(cuentas)
+  const contadores = useContadoresPestanas(producto?.id ?? null, activa?.id ?? null, cuentas)
+  // S01f · La franja de pestañas: en el ordenador con una; en el móvil, con dos o más (como antes).
+  const conFranja = !!producto && pestanas.length > (movil ? 1 : 0)
 
   // Ctrl K (⌘K): del marco. En la captura, para que no llegue a Libros ni a Bancos.
   useEffect(() => {
@@ -68,36 +81,75 @@ export function MarcoNuevo({ children, sinPregunta = false }: { children: ReactN
     return () => window.removeEventListener('keydown', tecla, true)
   }, [])
 
+  // El aviso de lo que ha pasado se va solo a los 8 s (el siguiente lo pisa antes).
+  useEffect(() => {
+    if (!aviso || aviso.tono === 'falta') return
+    const t = window.setTimeout(quitarAviso, 8000)
+    return () => window.clearTimeout(t)
+  }, [aviso, quitarAviso])
+
   const marco: Marco = useMemo(() => ({
     densidad: prefs.densidad,
     documentoOculto: prefs.documentoOculto,
     ocultarDocumento: (documentoOculto: boolean) => cambiar({ documentoOculto }),
-    pestanasArriba: arriba,
     huecoAcciones,
     huecoPeriodo,
-  }), [prefs.densidad, prefs.documentoOculto, cambiar, arriba, huecoAcciones, huecoPeriodo])
+    ponerDatosCinta: setDatosCinta,
+    ponerEntradasCinta: setEntradasCinta,
+    hosteleria: ctxListo ? ctx.hosteleria : null,
+    analitica: ctxListo ? ctx.analitica ?? null : null,
+    nivel: prefs.nivel,
+  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.analitica])
 
-  const clases = ['cx', 'cxm', solo ? 'cx-solo' : null, movil ? 'cxm-es-movil' : null].filter(Boolean).join(' ')
+  // Lo que se puede fijar desde aquí: esta pantalla y lo de su cinta.
+  const fijables: Orden[] = [
+    ordenPorId(producto ? (pestana && producto.pestanas.length > 0 ? `ir.${producto.id}.${pestana.id}` : `ir.${producto.id}`) : ''),
+    ...cinta.flatMap((g) => g.ordenes),
+  ].filter((o): o is Orden => !!o)
+  const fijar = ({ id, etiqueta }: { id: string; etiqueta: string }) => {
+    const ya = prefs.favoritos.includes(id)
+    cambiar({ favoritos: alternarFavorito(prefs.favoritos, id) }, ya ? `Quitado de Favoritos: «${etiqueta}».` : `Fijado en Favoritos: «${etiqueta}». Lo tienes arriba, en Favoritos.`)
+  }
+
+  // Favoritos y el usuario: en la cabecera del ordenador; en el móvil, en el cajón (S01d).
+  const favoritos = (enCajon: boolean) => (
+    <Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} alternar={fijar}
+      alAbrirBuscador={() => { setCajon(false); setBuscando(true) }} enCajon={enCajon} />
+  )
+  const usuario = (enCajon: boolean) => <MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} enCajon={enCajon} />
+
+  const clases = ['cx', 'cxm', 's-esqueleto', solo ? 'cx-solo' : null, movil ? 'cxm-es-movil' : null, conFranja ? 's-con-pestanas' : null].filter(Boolean).join(' ')
+  const avisoVisible = aviso ?? (errorCtx ? { texto: `${errorCtx}. Mientras, no sale lo que depende de la empresa (hostelería, Diez).`, tono: 'falta' as const } : null)
   return (
     <MarcoContexto.Provider value={marco}>
-      <div className={clases} data-densidad={prefs.densidad} data-barra={prefs.barraDesplegada ? 'desplegada' : 'plegada'}>
+      <div className={clases} data-densidad={prefs.densidad}>
         {!movil && (
-          <BarraModulos solo={solo} desplegada={prefs.barraDesplegada} cuentas={cuentas}
-            alternar={() => cambiar({ barraDesplegada: !prefs.barraDesplegada })} />
+          <BarraProductos productos={productos} activo={producto?.id ?? null} pendientes={pendientes}
+            desplegada={prefs.barraDesplegada} alternar={() => cambiar({ barraDesplegada: !prefs.barraDesplegada })} />
         )}
-        <div className="cxm-cuerpo">
-          <BarraSuperior modulo={modulo} conPestanas={arriba} movil={movil} solo={solo} usuario={userName}
-            densidad={prefs.densidad} cambiarDensidad={(densidad: Densidad) => cambiar({ densidad })}
-            abrirBuscador={() => setBuscando(true)} huecoPeriodo={setHuecoPeriodo} />
-          {/* La barra de acciones: la llena la pantalla (AccionesPantalla); vacía, no se pinta. */}
+        <div className="s-esq-cuerpo">
+          <Cabecera movil={movil} logoCliente={ctx.logoEmpresa ?? logoCuenta}
+            huecoPeriodo={setHuecoPeriodo} abrirBuscador={() => setBuscando(true)} abrirMenu={() => setCajon(true)} menuAbierto={cajon}
+            favoritos={favoritos(false)} usuario={usuario(false)} />
+          {conFranja && producto && (
+            <FranjaPestanas key={producto.id} producto={producto} pestanas={pestanas} activa={pestana?.id ?? null} contadores={contadores} movil={movil} />
+          )}
+          <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
+          {producto && pestana && (
+            <CintaDePestana etiqueta={`Acciones de ${pestana.etiqueta}`} grupos={cinta} datos={datosCinta} entradas={entradasCinta} oculta={prefs.cintaOculta}
+              alCambiarOculta={(cintaOculta) => cambiar({ cintaOculta }, cintaOculta ? 'Cinta oculta: «Mostrar la cinta» la saca otra vez.' : 'La cinta vuelve a estar a la vista.')}
+              alBuscar={() => setBuscando(true)} />
+          )}
+          {/* La barra de acciones de la pantalla (AccionesPantalla); vacía, no se pinta. */}
           <div className="cxm-acciones" ref={setHuecoAcciones} />
           <main className="cx-principal cxm-principal">
-            {modulo?.id === 'inicio' && <TeTocaHoy chips={chipsDelInicio(cuentas)} />}
+            {producto?.id === 'inicio' && <TeTocaHoy chips={chipsDelInicio(cuentas)} />}
             {children}
           </main>
         </div>
-        {movil && <BarraInferior solo={solo} cuentas={cuentas} />}
-        {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={!solo && !sinPregunta} />}
+        {movil && cajon && <CajonProductos productos={productos} activo={producto?.id ?? null} pendientes={pendientes} solo={solo} cerrar={cerrarCajon}
+          tuyo={<>{favoritos(true)}{usuario(true)}</>} />}
+        {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={!solo && !sinPregunta} ctx={ctxListo ? ctx : undefined} />}
       </div>
     </MarcoContexto.Provider>
   )

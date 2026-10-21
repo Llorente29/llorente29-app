@@ -151,6 +151,25 @@ del camino y se dijera antes. Acababa a las 00:30 porque en 30 días (26/08–
 24/09) el pedido más tardío entró a las 23:59 y 0 de 30 días tuvieron alguno
 después de las 00:15.
 
+### Una tanda se ensaya y se aplica desde su rama, antes de fusionar
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> S01d (18/10).
+
+El ensayo y el real de una tanda se lanzan **desde la rama del PR, antes de
+fusionarlo**, no desde `main` después. Así, cuando el front llega a producción
+con la fusión, lo que lee ya está en la base.
+
+*(18/10. La tanda del S01d —0160 y 0170— se aplicó desde `conta/s01d-tanda`,
+con el ensayo y el real en verde, y #236 se fusionó después.)*
+
+### El nombre de una migración
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> W02 (17/10).
+
+El nombre de una migración es el siguiente por encima del más alto que ya existe, no la fecha de hoy. El orden en que se aplican lo decide `supabase/produccion/aplicar.txt`.
+
 ### Una fusión está hecha cuando VERCEL dice READY en producción
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
@@ -284,23 +303,60 @@ dice «ninguna», falta alguien. La #181 tocó `_shared/diezCliente.ts`:
 *(14/10. La #181 se fusionó con «[skip ci]» en el mensaje: no corrió el
 despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 
-### Un e2e en marcha no se cancela
+### Qué pruebas lleva cada PR
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Reglas de
+> Julio, 19/10 y 21/10.
+
+- **En cada PR:** `npm run build`, las unitarias, la e2e de la zona que toca y
+  la **e2e corta de pedidos, cocina y reparto**. Las dos e2e van solas en cada
+  push (`scripts/e2e/area.mjs`: la zona y `CORTA`).
+- **La corta** es `reparto/direccion-falta` (Pedidos en el ordenador, el
+  Despacho, el ticket de la bolsa, la tablet de cocina y el permiso por local)
+  y `reparto/quien-reparte` (la etiqueta de reparto en cocina y que una cuenta
+  no toca lo de otra): 13 pruebas, **91 s** de pruebas en los dos tamaños
+  (`tests/e2e/tiempos.json`). No cubre crear un pedido y llevarlo por todos sus
+  estados en cocina: no hay e2e de eso.
+- **La entera, solo si el PR toca lo común o la pide una etiqueta.** Lo común
+  es `LO_COMUN` en `scripts/e2e/area.mjs`: el marco, la cabecera, la barra y el
+  esqueleto, el diseño compartido, el arranque de la app y lo que mueve todas
+  las pruebas (Playwright, la sesión, el carril, las dependencias). El push lo
+  mira solo contra `main` y, si toca, corre la entera en vez de la zona. La
+  etiqueta **`e2e-entera`** la pide aunque no toque nada de eso, y al ponerla
+  se lanza en ese momento (`e2e-etiqueta.yml`).
+- **Y cada noche sobre `main`**, a las 03:00 de Madrid. Si falla por staging
+  (no poder entrar, un 520, una página HTML de la base) lo repite una vez; si
+  no, o si vuelve a fallar, abre la incidencia «e2e de la noche en rojo» con
+  cada prueba, su fichero y el commit (`scripts/e2e/noche.mjs`).
+- **Las tandas no cambian:** análisis, prueba en staging, ensayo y real desde
+  la rama, antes de fusionar. Antes de una tanda, una entera en verde del mismo
+  commit (`antes-de-subir.sh` con `PEDIR_TANDA=1`): vale la lanzada a mano, la
+  de la etiqueta o la que corrió un push por tocar lo común (Julio, 21/10).
+
+### Un e2e lo cancela solo un commit más nuevo de su rama
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
-> C05, respuesta 3 (08/10).
+> C05, respuesta 3 (08/10), **cambiada en el W02 (17/10) por el gasto de
+> Actions**: antes decía «un e2e en marcha no se cancela».
 
-Un e2e que está corriendo termina siempre. Lo garantiza el workflow, no la
-disciplina de quien empuja: `e2e-staging-conta.yml` tiene
-`cancel-in-progress: false`, así que un push nuevo espera en cola y empieza
-cuando acaba el anterior.
+En `e2e-staging-conta.yml`, el push y la entera de una rama van en **una sola
+cola** (sin `event_name` en el grupo), y:
 
-*Detector automático:* si un workflow que tarda minutos tiene
-`cancel-in-progress: true`, cualquier push lo puede matar a medias, y el
-informe del cancelado no dice nada de lo que había probado.
+- **un push nuevo cancela** la e2e que corre en su rama —la del push anterior o
+  una entera—: es de un commit que ya no es el último, y la nueva prueba lo
+  mismo y algo más (`cancel-in-progress` solo es `true` para `push`);
+- **una e2e lanzada a mano no cancela nada**: espera a que acabe la que corre.
+- La entera vale solo sobre el **commit final**: si después llega un push, hay
+  que volver a lanzarla (`e2e-entera.mjs` pide una en verde del mismo commit).
 
-*(08/10. Empujé un arreglo del cierre que tocaba `src` mientras corría el e2e
-148. El 149 lo canceló. El 149 llevaba lo mismo y algo más, pero el 148 ya no
-dijo nada: perdió su resultado.)*
+*Detector automático:* si vas a lanzar la entera y aún tienes algo por
+empujar, empújalo antes: lanzarla y empujar después es tirar sus minutos.
+
+*(08/10. El 149 canceló el e2e 148, que perdió su resultado: de ahí la regla
+de antes. 16/10: las e2e gastaron 2.953 min de Actions en un día, frente a unos
+250 de un día normal, con cada push esperando a correr la suite entera de un
+commit ya superado. Se acepta perder el informe de un commit viejo a cambio de
+no pagarlo.)*
 
 ### Capturas: artefacto en cada push y fijar las de tu frente antes del informe
 

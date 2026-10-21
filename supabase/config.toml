@@ -147,3 +147,33 @@ verify_jwt = true
 # minuto (public.conta_contrasena_de_marca, solo service_role).
 [functions.conta-contrasena]
 verify_jwt = false
+
+# (17/10) conta-certificado · I01a pieza 4. Guarda un certificado de Hacienda
+# (.p12/.pfx): lo abre y lo valida en memoria y lo guarda cifrado en el
+# almacén (hoy el Vault, y con él solo la cuenta de Foodint). verify_jwt =
+# true: la persona sale del JWT y la base decide si es administradora de esa
+# cuenta. Ni el .p12 ni su contraseña se guardan, ni sale nada al registro.
+[functions.conta-certificado]
+verify_jwt = true
+
+# (18/10) conta-hacienda · I01a pieza 6. Las llamadas a Hacienda (probar,
+# presentar el 303, «ya lo presenté fuera»), todas por la puerta de
+# _shared/hacienda/puerta.ts, que está CERRADA si no se pone CONTA_HACIENDA
+# (y su autorización) a mano. verify_jwt = true: la persona sale de su sesión.
+[functions.conta-hacienda]
+verify_jwt = true
+
+# (19/10) conta-justificante-csv · I01c pieza 1 definitiva. «Ya lo presenté
+# fuera · pegar CSV»: trae de Hacienda el justificante original por su CSV
+# (sin certificado: medido el 19/10, run 39257823670). No pasa por la puerta de
+# conta-hacienda. verify_jwt = true: con la sesión de quien lo pide.
+[functions.conta-justificante-csv]
+verify_jwt = true
+
+# (18/10) I01b · conta-asesoria: «Invitar a mi asesoría». verify_jwt = FALSE,
+# deliberado: «ver» y «aceptar» las pide quien aún no tiene sesión (abre el
+# enlace del correo). Su frontera es el token del enlace (la base guarda solo
+# su huella) y que aceptar solo vincula la cuenta de ESE correo o espera a la
+# plataforma. «invitar» y «aprobar» miran la sesión dentro.
+[functions.conta-asesoria]
+verify_jwt = false

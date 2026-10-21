@@ -79,7 +79,7 @@ export function SumasSaldos() {
         ? <div className="cx-tarjeta"><Vacio titulo="Sin movimientos con estas opciones." explicacion="Marca «Saldos a 0» para ver también las cuentas saldadas, o cambia el periodo." /></div>
         : (
           <div className="cx-tarjeta">
-            <table className="cxl-tabla" aria-label="Sumas y saldos">
+            <table className="cxl-tabla cxl-apilada" aria-label="Sumas y saldos">
               <thead><tr>{cab.map((c, i) => <th key={c} className={i ? 'cxl-der' : undefined}>{c}</th>)}</tr></thead>
               <tbody>
                 {filas.map((f) => (
@@ -87,14 +87,14 @@ export function SumasSaldos() {
                     <td className={f.nivel === 'grupo' ? 'cxl-n1' : f.nivel === 'subgrupo' ? 'cxl-n2' : f.nivel === 'cuenta' ? 'cxl-n3' : 'cxl-n4'}>
                       {f.nivel === 'subcuenta' ? <Link to={rutaMayor(f.code)}>{f.code} · {f.name}</Link> : <>{f.nivel === 'grupo' ? 'Grupo ' : ''}{f.code}</>}
                     </td>
-                    {conInicial && <td className="cxl-der">{eurosExactos(f.inicial)}</td>}
-                    <td className="cxl-der">{eurosExactos(f.debe)}</td><td className="cxl-der">{eurosExactos(f.haber)}</td>
-                    <td className="cxl-der">{eurosExactos(Math.abs(f.saldo))} {f.saldo > 0 ? 'D' : f.saldo < 0 ? 'H' : ''}</td>
+                    {conInicial && <td className="cxl-der" data-titulo="Inicial">{eurosExactos(f.inicial)}</td>}
+                    <td className="cxl-der" data-titulo="Debe">{eurosExactos(f.debe)}</td><td className="cxl-der" data-titulo="Haber">{eurosExactos(f.haber)}</td>
+                    <td className="cxl-der" data-titulo="Saldo">{eurosExactos(Math.abs(f.saldo))} {f.saldo > 0 ? 'D' : f.saldo < 0 ? 'H' : ''}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot><tr><td>Totales ({nivelTotal})</td>{conInicial && <td className="cxl-der">{eurosExactos(t.inicial)}</td>}
-                <td className="cxl-der">{eurosExactos(t.debe)}</td><td className="cxl-der">{eurosExactos(t.haber)}</td><td className="cxl-der">{eurosExactos(t.saldo)}</td></tr></tfoot>
+              <tfoot><tr><td>Totales ({nivelTotal})</td>{conInicial && <td className="cxl-der" data-titulo="Inicial">{eurosExactos(t.inicial)}</td>}
+                <td className="cxl-der" data-titulo="Debe">{eurosExactos(t.debe)}</td><td className="cxl-der" data-titulo="Haber">{eurosExactos(t.haber)}</td><td className="cxl-der" data-titulo="Saldo">{eurosExactos(t.saldo)}</td></tr></tfoot>
             </table>
             <p className={t.cuadra && !malSumadas.length ? 'cxl-pie' : 'cxl-sin-sitio'} role="status">
               {t.cuadra && !malSumadas.length ? `Cuadra: Debe = Haber (${eurosExactos(t.debe)}) y cada nivel suma a sus hijos.`
@@ -105,6 +105,10 @@ export function SumasSaldos() {
     </section>
   )
 }
+
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+/** «2026-01» → «Ene 26»: el título de cada cifra cuando la tabla se apila en el móvil. */
+const mesCorto = (m: string): string => `${MESES_CORTOS[Number(m.slice(5, 7)) - 1]} ${m.slice(2, 4)}`
 
 /** Acumulados: el saldo de cada cuenta al final de cada mes del ejercicio. */
 export function Acumulados() {
@@ -144,10 +148,10 @@ export function Acumulados() {
         ? <div className="cx-tarjeta"><Vacio titulo="Aún no hay movimientos en el ejercicio." explicacion="Cuando haya asientos validados, aquí sale el saldo de cada cuenta al final de cada mes." /></div>
         : (
           <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-            <table className="cxl-tabla" aria-label="Saldo de cada cuenta al final de cada mes">
+            <table className="cxl-tabla cxl-apilada" aria-label="Saldo de cada cuenta al final de cada mes">
               <thead><tr><th>Cuenta</th>{meses.map((m) => <th key={m} className="cxl-der">{m.slice(5)}/{m.slice(2, 4)}</th>)}</tr></thead>
               <tbody>{filas.map((f) => <tr key={f.code}><td><Link to={rutaMayor(f.code)}>{f.code}</Link><span className="cxl-apoyo">{f.nombre}</span></td>
-                {f.saldos.map((s, i) => <td key={i} className="cxl-der">{s === 0 ? '—' : eurosExactos(s)}</td>)}</tr>)}</tbody>
+                {f.saldos.map((s, i) => <td key={i} className="cxl-der" data-titulo={mesCorto(meses[i])}>{s === 0 ? '—' : eurosExactos(s)}</td>)}</tr>)}</tbody>
             </table>
             <p className="cxl-pie">Saldo deudor en positivo y acreedor en negativo, al cierre de cada mes, desde el primer día del ejercicio.</p>
           </div>

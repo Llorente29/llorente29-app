@@ -298,9 +298,11 @@ export default function RepartoSettingsPage() {
 
   function cargarEjemploLiquidacion() {
     setLiqRows([
-      { courier_id: 'ej1', name: 'Marlón Mafla Rivera', kind: 'freelance', nif: '12345678Z', iban: 'ES91 2100 0418 4502 0005 1332', deliveries: 42, km: 96.4, delivery_earnings: 178.60, quest_bonus: 35, total: 213.60 },
-      { courier_id: 'ej2', name: 'Keilymar Araujo Lobo', kind: 'freelance', nif: 'Y1234567X', iban: 'ES79 0049 1500 0512 3456 7892', deliveries: 31, km: 71.2, delivery_earnings: 131.20, quest_bonus: 10, total: 141.20 },
-      { courier_id: 'ej3', name: 'Johanny Garzón Rodríguez', kind: 'freelance', nif: '87654321X', iban: 'ES60 0081 0900 1234 5678 9012', deliveries: 27, km: 60.8, delivery_earnings: 112.45, quest_bonus: 0, total: 112.45 },
+      // Datos inventados (W02, 17/10): nombres que no son de nadie, NIF/NIE de
+      // ejemplo con su letra de control y el IBAN de ejemplo de los manuales.
+      { courier_id: 'ej1', name: 'Repartidor de ejemplo 1', kind: 'freelance', nif: '00000000T', iban: 'ES91 2100 0418 4502 0005 1332', deliveries: 42, km: 96.4, delivery_earnings: 178.60, quest_bonus: 35, total: 213.60 },
+      { courier_id: 'ej2', name: 'Repartidor de ejemplo 2', kind: 'freelance', nif: 'X0000002W', iban: 'ES91 2100 0418 4502 0005 1332', deliveries: 31, km: 71.2, delivery_earnings: 131.20, quest_bonus: 10, total: 141.20 },
+      { courier_id: 'ej3', name: 'Repartidor de ejemplo 3', kind: 'freelance', nif: '00000001R', iban: 'ES91 2100 0418 4502 0005 1332', deliveries: 27, km: 60.8, delivery_earnings: 112.45, quest_bonus: 0, total: 112.45 },
     ])
   }
 

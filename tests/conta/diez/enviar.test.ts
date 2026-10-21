@@ -4,10 +4,10 @@
 // exist.» del R14, el listado que repite filas). Importes INVENTADOS.
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { autorizacionCubre, enviarAsientoADiez, enviarContraasientoADiez, EN_MARCHA, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
+import { autorizacionCubre, enviarAsientoADiez, enviarContraasientoADiez, EN_MARCHA, loQueDijoDiez, PDF_PENDIENTE, TEXTO_CONTENEDOR, type ClienteDiezEnvio, type ContraasientoBD, type EnvioFila, type PuertoEnvio } from '../../../supabase/functions/_shared/diezEnviar'
 import { CORRESPONDENCIA_LLORENTE29 } from '../../../supabase/functions/_shared/diezAnalitica'
 import { resumenDeAsiento, type ResumenBD } from '../../../supabase/functions/_shared/resumenDeAsiento'
-import type { Factura, FacturaData } from '../../../supabase/functions/_shared/diezCliente'
+import { ErrorDiez, type Factura, type FacturaData } from '../../../supabase/functions/_shared/diezCliente'
 
 const PDF = new TextEncoder().encode('%PDF-1.3 ' + 'x'.repeat(400))
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex')
@@ -519,31 +519,82 @@ describe('C06b R8 · el contraasiento, con la fecha de lo que ANULA', () => {
 // credenciales de Diez, y se cortó sin contestar y sin escribir nada en ningún
 // sitio. Un validado nunca puede quedar sin su envío o su motivo.
 describe('15/10 · si el envío se corta al hablar con Diez, queda su fila con el motivo', () => {
-  it('Diez no contesta al leer el mes: la fila queda «empezó y no terminó», sin intento y sin nada escrito en Diez', async () => {
+  it('Diez no contesta al leer el mes: la fila queda con el motivo REAL (17/10), sin intento y sin nada escrito en Diez', async () => {
     const t = puerto()
     t.d.facturasDelMes = async () => { throw new Error('Diez no contesta') }
-    await expect(enviarAsientoADiez('e1', t.p)).rejects.toThrow(/Diez no contesta/)
-    expect(t.actual).toMatchObject({ status: 'pendiente', attempts: 0, last_error: EN_MARCHA, payload_hash: 'sin-enviar' })
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', reintentar: true, motivo: 'se cortó: Diez no contesta' })
+    expect(t.actual).toMatchObject({ status: 'pendiente', attempts: 0, last_error: 'se cortó: Diez no contesta', payload_hash: 'sin-enviar' })
     expect(t.d.altas).toEqual([])
   })
   it('…y al volver a pulsar, se busca en Diez y se envía como siempre (la fila se reutiliza)', async () => {
     const t = puerto()
     const leer = t.d.facturasDelMes
     t.d.facturasDelMes = async () => { throw new Error('Diez no contesta') }
-    await expect(enviarAsientoADiez('e1', t.p)).rejects.toThrow()
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega' })
     t.d.facturasDelMes = leer
     t.p.envio = async () => t.actual
     expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'en_diez', documento: 1801 })
     expect(t.d.altas).toHaveLength(1)
     expect(new Set(t.filas.map((f) => f.id))).toEqual(new Set(['s1']))
   })
-  it('un «enviando» de antes (se cortó a medias escribiendo) no se tapa con el motivo nuevo', async () => {
+  it('un «enviando» de antes (se cortó a medias escribiendo) no se tapa con «empezó y no terminó»: dice que se cortó escribiendo', async () => {
     const enviando = { id: 's9', entry_id: 'e1', account_id: 'acc', company_id: 'emp', account_connector_id: 'k1', kind: 'factura', ext_year: null, ext_series: null, ext_number: null,
       ext_invoice_number: 'UBR-FLO-20261001', payload_hash: 'h', status: 'pendiente', attempts: 1, last_error: 'enviando', sent_at: null, document_id: 'd1', document_status: 'pendiente', document_error: null, document_attached_at: null } as EnvioFila
     const t = puerto({ envio: enviando })
     t.d.facturasDelMes = async () => { throw new Error('Diez no contesta') }
-    await expect(enviarAsientoADiez('e1', t.p)).rejects.toThrow()
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega' })
     expect(t.filas.some((f) => f.last_error === EN_MARCHA)).toBe(false)
+    expect(t.actual?.last_error).toMatch(/^se cortó: Diez no contesta\. Se cortó escribiendo en Diez: al reintentar se busca antes/)
+    expect(t.actual).toMatchObject({ attempts: 1, payload_hash: 'h' })
+  })
+})
+
+// 17/10 · El 1860 y el 1861 (C0008): el 1860 tuvo un intento que Diez no
+// aceptó, pero el motivo solo decía «facturas/add → código» (el cuerpo de Diez
+// se perdía) y el siguiente intento lo tapó con «empezó y no terminó». El 1861
+// contestó 500 a los 6 s y su fila se quedó sin su porqué. Ningún fallo puede
+// quedar sin escribir.
+describe('17/10 · todo fallo deja su porqué escrito, con lo que dijo Diez', () => {
+  const rechazo = new ErrorDiez('facturas/add → 400', 400, { Message: 'La petición no es válida.', ModelState: { 'factura.Analitica[1]': ['Subcuenta sin analítica'] } })
+  it('Diez rechaza la factura: el motivo lleva su código y su mensaje; cuenta como intento', async () => {
+    const t = puerto()
+    t.d.enviarFactura = async () => { throw rechazo }
+    const x = await enviarAsientoADiez('e1', t.p)
+    expect(x).toMatchObject({ estado: 'no_llega', reintentar: true })
+    expect(t.actual).toMatchObject({ status: 'pendiente', attempts: 1 })
+    expect(t.actual?.last_error).toBe('Diez no ha aceptado la factura: facturas/add → 400 (La petición no es válida. · {"factura.Analitica[1]":["Subcuenta sin analítica"]})')
+  })
+  it('Diez no contesta al escribir (se acaba la espera): «puede que la tenga», y el siguiente intento la busca antes', async () => {
+    const t = puerto()
+    t.d.enviarFactura = async () => { const e = new Error('The signal has been aborted'); e.name = 'TimeoutError'; throw e }
+    await enviarAsientoADiez('e1', t.p)
+    expect(t.actual?.last_error).toMatch(/^Diez no ha contestado \(TimeoutError: .*\) al escribir la factura: puede que la tenga; al reintentar se busca antes y no se escribe otra$/)
+    expect(t.actual).toMatchObject({ attempts: 1, status: 'pendiente' })
+  })
+  it('el intento siguiente que se corta NO borra el motivo del anterior (el 1860)', async () => {
+    const t = puerto()
+    t.d.enviarFactura = async () => { throw rechazo }
+    await enviarAsientoADiez('e1', t.p)
+    const antes = t.actual!.last_error!
+    t.p.envio = async () => t.actual
+    t.d.facturasDelMes = async () => { throw new ErrorDiez('GET /api/facturas → 500', 500, { Message: 'An error has occurred.' }) }
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega', reintentar: true })
+    expect(t.actual?.last_error).toBe(`se cortó: GET /api/facturas → 500 (An error has occurred.). El intento anterior: ${antes}`)
+    // Y si la función muere justo después de dejar su fila, lo de antes sigue ahí.
+    expect(t.filas.some((f) => f.last_error === `${EN_MARCHA}. El intento anterior: ${antes}`)).toBe(true)
+  })
+  it('un fallo de la base al leer el documento también queda escrito si ya hay fila', async () => {
+    const t = puerto({ envio: { id: 's3', entry_id: 'e1', account_id: 'acc', company_id: 'emp', account_connector_id: 'k1', kind: 'factura', ext_year: null, ext_series: null, ext_number: null, ext_invoice_number: null,
+      payload_hash: 'sin-enviar', status: 'pendiente', attempts: 0, last_error: EN_MARCHA, sent_at: null, document_id: null, document_status: null, document_error: null, document_attached_at: null } as EnvioFila })
+    t.p.documento = async () => { throw new Error('no se ha podido leer el documento guardado: timeout') }
+    expect(await enviarAsientoADiez('e1', t.p)).toMatchObject({ estado: 'no_llega' })
+    expect(t.actual?.last_error).toBe('se cortó: no se ha podido leer el documento guardado: timeout')
+  })
+  it('lo que dice Diez, en corto: su mensaje, o el cuerpo; nunca más de 300 caracteres', () => {
+    expect(loQueDijoDiez({ Message: 'x', ExceptionMessage: 'y' })).toBe('x · y')
+    expect(loQueDijoDiez('texto\n con  saltos')).toBe('texto con saltos')
+    expect(loQueDijoDiez(null)).toBe('sin cuerpo')
+    expect(loQueDijoDiez({ Otra: 'z'.repeat(500) })).toHaveLength(300)
   })
 })
 

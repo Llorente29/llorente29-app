@@ -1,3 +1,6 @@
+-- W02 (17/10): el secreto que iba aquí escrito se ha quitado del fichero. Ya no
+-- valía (producción lo lee de Vault desde julio y tiene otro valor; medido
+-- por su huella el 17/10). Este fichero es historia: no se vuelve a aplicar.
 -- supabase/migrations/20260603T1600_ingestion_monitor.sql
 --
 -- Monitorización de ingesta de ventas (vigilante activo, 3 capas).
@@ -86,7 +89,7 @@ SELECT cron.schedule(
     url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/ingestion-synthetic-ping',
     headers := jsonb_build_object(
       'Content-Type',  'application/json',
-      'x-cron-secret', 'fv_cron_a7K9mQ2xR8nP4wL6vT3yB5sH1jD0gZ7c'
+      'x-cron-secret', '<retirado: x-cron-secret vive en Vault (cron_secret)>'
     ),
     body    := '{}'::jsonb
   );

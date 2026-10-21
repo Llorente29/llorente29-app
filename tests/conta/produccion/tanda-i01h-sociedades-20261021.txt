@@ -1,0 +1,23 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# I01h · El 202 calculado por Sumied desde el último 200 (rama conta/i01h-202;
+# encargo de Julio del 21/10). Va DESPUÉS del 111 y el 115 (0330, PR #266,
+# aplicada): su copia, tests/conta/produccion/tanda-i01g-retenciones-20261021.txt.
+#
+#   1. 0340 — AÑADE la tabla de los 200 (corporate_tax_filing, vacía) y tres
+#      funciones (conta_impuesto_202_calcular, conta_impuesto_200_poner y
+#      conta_impuesto_sociedades, que solo lee). CAMBIA en caliente, declarado
+#      con su prueba de staging: el CHECK de lo comprobado (solo amplía, una
+#      clave más) y conta_impuesto_calendario (la de la 0250 byte a byte, con
+#      una condición más: lo que no hacía falta presentar del último mes se
+#      enseña con su porqué). Quita a la clave anónima las tres funciones de
+#      la 0330, como el 303. No calcula nada: los 200 de Foodint los escribe
+#      Julio en la pestaña. Nada del camino del pedido.
+#
+# Ninguna función que desplegar a mano.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/i01h-sociedades.sql
+supabase/migrations/20261128T0340_i01h_sociedades_202.sql

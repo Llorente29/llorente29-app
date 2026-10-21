@@ -1,0 +1,4 @@
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt),
+# en orden inverso. Para si alguna recibida ya tiene «deducida en».
+cuenta: scripts/conta/produccion/cuentas/i01c-deducida.sql
+supabase/vuelta-atras/20261124T0290_i01c_deducida.down.sql

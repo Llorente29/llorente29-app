@@ -1,0 +1,23 @@
+{
+ "_que": "D01 · contexto de producción de la tanda viva «encender liquidaciones-foodint@» (0100 del 14), medido en SOLO LECTURA el 16/10 con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. company_inbound_address existe; la fila de liquidaciones-foodint, 1 y apagada (cuenta de la tanda: «1 / 0»); nada en el camino del pedido; el fichero no está en el historial.",
+ "medido": "2026-10-16T07:48Z",
+ "tanda": {
+  "supabase/migrations/20261114T0100_d01_encender_liquidaciones_foodint.sql": "1bc61a8c67cc40040293f50470c75e54"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_inbound_address"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.company_inbound_address": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -17,7 +17,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
-import { CUENTA_A, STAGING_URL, anonKey, entrarComo, type Sesion } from '../sesion'
+import { CUENTA_A, STAGING_URL, anonKey, entrarComo, type Sesion, enCarril } from '../sesion'
 import { rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
@@ -40,16 +40,16 @@ async function ponerPapelDeLaSemilla(s: Sesion) {
   })
   const t = await r.text()
   expect(r.ok || /exists|duplicate/i.test(t), `subir el papel de la semilla: ${r.status} ${t.slice(0, 200)}`).toBe(true)
-  const p = await rest(s, 'PATCH', 'supplier_invoice?id=eq.d0100000-0000-4000-8000-0000000000f1', { raw_document_url: ruta })
+  const p = await rest(s, 'PATCH', `supplier_invoice?id=eq.${enCarril('d0100000-0000-4000-8000-0000000000f1')}`, { raw_document_url: ruta })
   expect(p.status, JSON.stringify(p.datos)).toBe(200)
 }
 
 async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
   // R5 · 10: sin la barra de la IA, en el ordenador no queda nada flotante que mida
-  // (como en B01). En el móvil sigue la barra de abajo, y se mide.
-  if (await page.locator(FLOTANTES_CONTA.join(', ')).count() === 0) expect(lado(page)).toBe('ordenador')
-  else expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+  // (como en B01). S01c: tampoco en el móvil (el menú es un cajón). Si alguna
+  // pantalla vuelve a pintar una pieza flotante, se mide.
+  if (await page.locator(FLOTANTES_CONTA.join(', ')).count() > 0) expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
   const ventana = page.viewportSize() ?? { width: 1440, height: 900 }
   const alto = await page.evaluate(() => document.documentElement.scrollHeight)
   await page.evaluate(() => window.scrollTo(0, 0))
@@ -74,7 +74,7 @@ function vigilar(page: Page): string[] {
  */
 async function sinVolverAFolvy(page: Page, donde: string) {
   await expect(page.getByRole('link', { name: /Volver a Folvy/ }), `«Volver a Folvy» en ${donde}`).toHaveCount(0)
-  await expect(page.locator('.cx-barra-inferior a[href="/"], .cxm-barra-inferior a[href="/"]'), `«‹ Folvy» en la barra de ${donde}`).toHaveCount(0)
+  await expect(page.locator('.cx-barra-inferior a[href="/"], .s-barra-inferior a[href="/"]'), `«‹ Folvy» en la barra de ${donde}`).toHaveCount(0)
   const texto = await page.locator('body').innerText()
   expect(texto.split('\n').filter((l) => /folvy/i.test(l)).slice(0, 5), `«Folvy» en la página de ${donde}`).toEqual([])
 }
@@ -95,7 +95,8 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await ponerPapelDeLaSemilla(await entrarComo(page, CUENTA_A.email))
   const errores = vigilar(page)
   await page.goto(`/conta/documentos?mes=${MES}`)
-  await expect(page.getByRole('heading', { level: 1, name: 'Documentos' })).toBeVisible()
+  // S01 · paso 3: Compras y gastos › Facturas recibidas (el título, en la cabecera del esqueleto).
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
   // La banda de la IA dice lo que ha pasado en una frase.
   // R5 · 8: del mes elegido, no de «esta semana».
   const bandaN22 = page.getByRole('region', { name: 'Lo que ha pasado con tus facturas' })
@@ -131,7 +132,19 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
   await expect(alfa).toContainText(/· 60000000/)
   await expect(alfa.getByRole('button')).toHaveCount(1)
   await expect(page.locator('tr, article', { hasText: 'Suministros Eléctricos Prueba Norte' })).toHaveCount(1)
-  if (lado(page) === 'ordenador') await expect(page.getByRole('navigation', { name: 'Acciones de Facturas recibidas' })).toContainText('Subir')
+  // La barra de la N22, en la cinta de la pestaña (paso 3). S01e: con rótulos en palabras normales.
+  if (lado(page) === 'ordenador') {
+    const cinta = page.getByRole('toolbar', { name: 'Acciones de Facturas recibidas' })
+    for (const g of ['Cómo llegan', 'Las que faltan', 'Apuntadas solas']) await expect(cinta.getByRole('group', { name: g })).toBeVisible()
+    await expect(cinta.getByRole('button', { name: /^Subir varias a la vez/ })).toBeVisible()
+    // S01e: el botón de la página dice lo mismo; «Subir una factura» es otra cosa (Por revisar).
+    await expect(page.locator('.cxr-herramientas').getByRole('button', { name: 'Subir varias a la vez' })).toBeVisible()
+  }
+  // S01e: el mes se escribe igual que en Bancos («Oct 2026»).
+  await expect(page.getByRole('combobox', { name: 'Mes' }).locator('option:checked')).toHaveText('Oct 2026')
+  // S01e: la miga acaba en lo que dice el título.
+  await expect(page.locator('.cxr-seccion').getByRole('navigation', { name: 'Estás en' })).toHaveText(/^Compras y gastos›Facturas recibidas›Para mirar$/)
+  await expect(page.locator('.cxr-seccion h2')).toHaveText('Para mirar')
   await capturar(page, 'n22-para-mirar-a')
 
   // «Por aclarar»: la que no tiene emisor reconocido, con «Decirlo yo».
@@ -175,7 +188,7 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
       expect(await c.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && getComputedStyle(el).textOverflow !== 'ellipsis')).toBe(true)
       await expect(c).toContainText(/· \d{8}/)
     }
-    await expect(comoN23).toContainText('a Diez irá cuando Cegid active los documentos')
+    await expect(comoN23).toContainText('a Diez irá sin el PDF, porque Diez aún no guarda documentos')
     await expect(comoN23).toContainText('Gasto e IVA')
     await expect(comoN23).toContainText('A pagar')
   }
@@ -191,9 +204,9 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
     const recorte = papel.locator('.cxr-papel-recorte')
     const antes = (await recorte.boundingBox())!.height
     expect(antes).toBeLessThanOrEqual(282)
-    await papel.getByRole('button', { name: 'Ver el papel entero' }).click()
+    await papel.getByRole('button', { name: 'Ver la factura entera' }).click()
     await expect.poll(async () => (await recorte.boundingBox())!.height).toBeGreaterThan(antes + 50)
-    await papel.getByRole('button', { name: 'Recoger el papel' }).click()
+    await papel.getByRole('button', { name: 'Recoger la factura' }).click()
     await expect.poll(async () => (await recorte.boundingBox())!.height).toBeLessThanOrEqual(282)
   }
   await capturar(page, 'n23-revisar-a')
@@ -237,7 +250,8 @@ test('Frente C (?marca=contabilidad): ni Cocina ni «Folvy» en Documentos', asy
   const errores = vigilar(page)
   await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'contabilidad') })
   await page.goto(`/conta/documentos?mes=${MES}&marca=contabilidad`)
-  await expect(page.getByRole('heading', { level: 1, name: 'Documentos' })).toBeVisible()
+  // S01 · paso 3: Compras y gastos › Facturas recibidas (el título, en la cabecera del esqueleto).
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
   await expect(page.locator('tr, article', { hasText: 'Mayorista Prueba Alfa' })).toHaveCount(1)
   await sinFolvyNiCocina(page, 'N22')
   await sinVolverAFolvy(page, 'N22')

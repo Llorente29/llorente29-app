@@ -18,14 +18,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import '@/modules/conta/estilo'
 import '../reparto.css'
-import { BloqueIA, Chip, ErrorConReintento, Inicial, TarjetaCargando } from '@/modules/conta/ui/piezas'
+import { Chip, ErrorConReintento, Inicial, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import EtiquetaReparto from '../components/EtiquetaReparto'
 import {
   TODOS_LOS_LOCALES, esDecidida, localesQueSeSeparan, resolver, resolverHerencia,
   type Celda, type QuienReparte, type Resolucion, type TipoDeMarca,
 } from '../lib/resolucion'
 import {
-  cargarQuienReparte, claveCelda, guardarCelda, guardarHerencia, nombreCorto, responderSugerencia,
+  cargarQuienReparte, guardarCelda, guardarHerencia, nombreCorto,
   type DatosQuienReparte, type Marca,
 } from '../services/quienReparteService'
 
@@ -45,7 +45,6 @@ export default function QuienRepartePage() {
   const [aviso, setAviso] = useState<{ texto: string; tono: 'ok' | 'aviso' } | null>(null)
   const [ultimo, setUltimo] = useState<Cambio | null>(null)
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set())
-  const [respuestaIA, setRespuestaIA] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     if (!activeAccountId) return
@@ -136,17 +135,6 @@ export default function QuienRepartePage() {
     }
   }
 
-  async function responder(s: DatosQuienReparte['sugerencias'][number], aceptar: boolean) {
-    try {
-      setRespuestaIA(await responderSugerencia({
-        accountId: activeAccountId!, brandId: s.brandId, channelSlug: s.channelSlug, lastSaleId: s.lastSaleId, aceptar,
-      }))
-      await cargar()
-    } catch (e) {
-      setRespuestaIA(e instanceof Error ? e.message : 'No se ha podido responder.')
-    }
-  }
-
   const fila = (marca: Marca) => {
     const separados = new Set(d.plataformas.flatMap(p => localesQueSeSeparan(d.celdas, marca.id, p.slug)))
     const abierta = abiertas.has(marca.id) || separados.size > 0
@@ -171,8 +159,6 @@ export default function QuienRepartePage() {
           {d.plataformas.map(p => (
             <CeldaQuien key={p.slug} plataforma={p.nombre}
               r={resolver(d.celdas, d.herencias, marca, p.slug, null)}
-              aviso={(d.sinDireccion[claveCelda(marca.id, p.slug)] ?? 0) > 0}
-              avisoTexto={`${d.sinDireccion[claveCelda(marca.id, p.slug)] ?? 0} pedidos «propios» sin dirección en 7 días: ${nombrePlat(p.slug)} no manda la dirección en esta tienda`}
               ocupada={guardando === `${marca.id}|${p.slug}|`}
               error={errorCelda[`${marca.id}|${p.slug}|`] ?? null}
               etiqueta={`${marca.nombre} en ${p.nombre}`}
@@ -185,7 +171,7 @@ export default function QuienRepartePage() {
             {d.plataformas.map(p => {
               const r = resolver(d.celdas, d.herencias, marca, p.slug, l.id)
               return (
-                <CeldaQuien key={p.slug} plataforma={p.nombre} r={r} aviso={false}
+                <CeldaQuien key={p.slug} plataforma={p.nombre} r={r}
                   heredaTexto={r.nivel === 'local' ? undefined : 'como la marca'}
                   ocupada={guardando === `${marca.id}|${p.slug}|${l.id}`}
                   error={errorCelda[`${marca.id}|${p.slug}|${l.id}`] ?? null}
@@ -212,8 +198,7 @@ export default function QuienRepartePage() {
         const h = resolverHerencia(d.herencias, tipo, p.slug, null)
         return (
           <CeldaQuien key={p.slug} plataforma={p.nombre}
-            r={{ deliveryBy: h.deliveryBy, source: 'manual', nivel: 'marca', celda: null }}
-            aviso={false} ocupada={guardando === `herencia|${tipo}|${p.slug}`}
+            r={{ deliveryBy: h.deliveryBy, source: 'manual', nivel: 'marca', celda: null }} ocupada={guardando === `herencia|${tipo}|${p.slug}`}
             error={errorCelda[`herencia|${tipo}|${p.slug}`] ?? null}
             etiqueta={`Si no dices nada, marcas ${tipo === 'own' ? 'propias' : 'cedidas'} en ${p.nombre}`}
             onElegir={v => tocarHerencia(tipo, p.slug, v)} />
@@ -283,33 +268,7 @@ export default function QuienRepartePage() {
             pedido={{ service_type: 'platform_delivery', channel: exPlat.plataforma, delivery_address: null }} />}
           {exOwn && <Ejemplo numero="#118" donde={`${exOwn.marca} · ${exOwn.plataforma}`}
             pedido={{ service_type: 'own_delivery', channel: exOwn.plataforma, delivery_address: 'Calle', carrier_code: 'catcher', has_courier: true, rider_name: 'Ana llega 12:40' }} />}
-          {exOwn && <Ejemplo numero="#112" donde={`${exOwn.marca} · ${exOwn.plataforma}`}
-            pedido={{ service_type: 'own_delivery', channel: exOwn.plataforma, delivery_address: null }} />}
 
-          {d.sugerencias.map(s => (
-            <BloqueIA key={`${s.brandId}|${s.channelSlug}|${s.lastSaleId}`}
-              titulo={`En ${nombreCorto(s.channelSlug)}, ${s.marca} lleva ${s.pedidos} pedidos seguidos sin dirección.`}
-              porque={<>Parece que en {s.channelSlug === 'uber' ? 'Uber Eats Manager' : nombrePlat(s.channelSlug)} la tienda está como «reparto de {nombreCorto(s.channelSlug)}». ¿La paso a «Plataforma» aquí? <span className="cx-rp-apoyo">(pedidos {s.codigos.join(', ')})</span></>}
-              acciones={<>
-                <button type="button" className="cx-boton" onClick={() => responder(s, true)}>Sí, la reparte {nombreCorto(s.channelSlug)}</button>
-                <button type="button" className="cx-boton-sec" onClick={() => responder(s, false)}>No, lo arreglo en {nombreCorto(s.channelSlug)}</button>
-              </>} />
-          ))}
-          <div role="status" aria-live="polite">{respuestaIA && <div className="cx-rp-guardado">{respuestaIA}</div>}</div>
-
-          {d.respondidas.length > 0 && (
-            <section className="cx-rp-folvy" aria-label="Lo que ha hecho Folvy">
-              <h3>Lo que ha hecho Folvy</h3>
-              <ul>
-                {d.respondidas.map(r => (
-                  <li key={r.id}>
-                    <b>{r.status === 'accepted' ? 'Aceptado' : 'No aceptado'}</b> · {nombreMarca(r.brandId)} en {nombrePlat(r.channelSlug)} · {new Date(r.answeredAt).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                    {r.answeredByName ? ` · ${r.answeredByName}` : ''}<br />{r.reason}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
         </aside>
       </div>
     </div>
@@ -317,9 +276,9 @@ export default function QuienRepartePage() {
 }
 
 function CeldaQuien({
-  plataforma, r, aviso, avisoTexto, ocupada, error, etiqueta, onElegir, heredaTexto = 'hereda', decididaSoloSiNivel,
+  plataforma, r, ocupada, error, etiqueta, onElegir, heredaTexto = 'hereda', decididaSoloSiNivel,
 }: {
-  plataforma: string; r: Resolucion; aviso: boolean; avisoTexto?: string; ocupada: boolean; error: string | null
+  plataforma: string; r: Resolucion; ocupada: boolean; error: string | null
   etiqueta: string; onElegir: (v: QuienReparte) => void; heredaTexto?: string; decididaSoloSiNivel?: 'local'
 }) {
   const decidida = decididaSoloSiNivel ? r.nivel === decididaSoloSiNivel : esDecidida(r)
@@ -332,7 +291,6 @@ function CeldaQuien({
           disabled={ocupada} onClick={() => onElegir('platform')}>Plataforma</button>
         <button type="button" aria-pressed={r.deliveryBy === 'own'} className={r.deliveryBy === 'own' ? clase : undefined}
           disabled={ocupada} onClick={() => onElegir('own')}>Nosotros</button>
-        {aviso && <span className="cx-rp-aviso" title={avisoTexto} aria-label={avisoTexto}>!</span>}
       </div>
       {!decidida && <span className="cx-rp-hereda">{heredaTexto}</span>}
       {error && <span className="cx-rp-celda-error" role="alert">{error}</span>}

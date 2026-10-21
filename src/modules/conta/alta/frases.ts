@@ -18,6 +18,13 @@ const y = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).j
 /** El texto plano de una frase (para pruebas y para el lector de pantalla). */
 export const enTexto = (f: Frase): string => f.map((x) => x.t).join('')
 
+/** P01 · «¿Llevas los impuestos de otras empresas?» */
+export function fraseAsesoria(si: boolean): Frase {
+  return si
+    ? [{ t: 'Entendido: ' }, n('llevas los impuestos de otras empresas'), { t: '. Al terminar te llevo a «Impuestos de tus clientes».' }]
+    : [{ t: 'Entendido: ' }, n('solo los de tu empresa'), { t: '.' }]
+}
+
 export function fraseNif(nif: string): Frase {
   return [{ t: 'Entendido: NIF ' }, n(nif), { t: '. Con él empiezo la ficha de tu empresa.' }]
 }
@@ -92,4 +99,11 @@ export function fraseCuentas(plan: 'pymes' | 'normal', digitos: number, ejercici
 
 export function fraseDuda(textoDuda: string): Frase {
   return [{ t: textoDuda }]
+}
+
+/** S01 · Lo que se ha puesto de la marca de hostelería, y dónde se cambia (regla 8). */
+export function fraseHosteleria(es: boolean): Frase {
+  return es
+    ? [{ t: 'La marco como ' }, n('hostelería'), { t: ': salen Liquidaciones, las plataformas y los socios de marca. Se cambia en Ajustes › Empresa.' }]
+    : [{ t: 'No la marco como ' }, n('hostelería'), { t: '. Si lo es, se cambia en Ajustes › Empresa.' }]
 }

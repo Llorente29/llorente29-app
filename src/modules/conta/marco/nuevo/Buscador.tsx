@@ -12,6 +12,7 @@
 // Regla 8: cada grupo dice si está buscando o si ha fallado, y una búsqueda
 // sin nada lo dice con lo que se ha buscado.
 
+import type { Contexto } from '@/modules/conta/esqueleto/productos'
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -53,7 +54,11 @@ function useBase(q: string): Grupo[] {
   return r.grupos
 }
 
-export function Buscador({ cerrar, solo, conPregunta }: { cerrar: () => void; solo: boolean; conPregunta: boolean }) {
+export function Buscador({ cerrar, solo, conPregunta, ctx }: {
+  cerrar: () => void; solo: boolean; conPregunta: boolean
+  /** S01: lo que sale en esta empresa (hostelería, Diez, interruptores); sin él, lo seguro. */
+  ctx?: Contexto
+}) {
   const navegar = useNavigate()
   const [q, setQ] = useState('')
   const [indice, setIndice] = useState(-1)
@@ -64,11 +69,11 @@ export function Buscador({ cerrar, solo, conPregunta }: { cerrar: () => void; so
   const base = useBase(q)
 
   const grupos = useMemo(() => {
-    const deAqui: Grupo[] = [{ tipo: 'opcion', nombre: NOMBRE_GRUPO.opcion, resultados: opciones(q, solo).slice(0, 8) }]
+    const deAqui: Grupo[] = [{ tipo: 'opcion', nombre: NOMBRE_GRUPO.opcion, resultados: opciones(q, solo, ctx).slice(0, 8) }]
     const p = conPregunta ? pregunta(q) : null
     if (p) deAqui.push({ tipo: 'pregunta', nombre: NOMBRE_GRUPO.pregunta, resultados: [p] })
     return ordenar([...base, ...deAqui])
-  }, [base, q, solo, conPregunta])
+  }, [base, q, solo, conPregunta, ctx])
   const fila = enFila(grupos)
   const activo = indice >= 0 && indice < fila.length ? indice : fila.length ? 0 : -1
   const buscando = grupos.some((g) => g.buscando)
@@ -132,7 +137,7 @@ export function Buscador({ cerrar, solo, conPregunta }: { cerrar: () => void; so
               {g.resultados.map((r) => {
                 const i = fila.indexOf(r)
                 return (
-                  <div key={r.clave} id={idDe(r)} role="option" aria-selected={i === activo} className="cxm-buscador-opcion"
+                  <div key={r.clave} id={idDe(r)} role="option" aria-selected={i === activo} className={r.apagado ? 'cxm-buscador-opcion cxm-buscador-opcion-apagada' : 'cxm-buscador-opcion'}
                     onMouseEnter={() => setIndice(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => abrir(r)}>
                     <span className="cxm-buscador-titulo">{r.titulo}</span>
                     {r.apoyo && <span className="cxm-apoyo">{r.apoyo}</span>}

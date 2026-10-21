@@ -38,25 +38,37 @@ export function frenteDeLaRama(rama) {
   if (/^conta\/d\d/.test(rama)) return 'a'      // A · facturas recibidas (D01…)
   if (/^conta\/b\d/.test(rama)) return 'b'      // B · bancos (B01…)
   if (/^conta\/(c06|f\d)/.test(rama)) return 'c' // C · contabilidad sola y facturas emitidas (C06, F01…)
-  if (/^conta\/m\d/.test(rama)) return 'd'      // D · el marco nuevo y sus piezas (M01…)
+  if (/^conta\/[ms]\d/.test(rama)) return 'd'   // D · el marco nuevo, sus piezas y el esqueleto (M01, S01…)
   return ''
 }
 
 /**
  * De quién son las capturas que puede fijar una rama. El reparto (R02) no es
  * un frente de usuarios, pero sí tiene sus capturas.
- * cierre/, compras/ y diez/ no son de ningún frente de hoy: nadie las fija.
+ * cierre/ y diez/ no son de ningún frente de hoy: nadie las fija.
  */
 export const DE_QUIEN = {
   a: /^docs\/conta\/capturas\/d\d[^/]*\//,
   b: /^docs\/conta\/capturas\/b\d[^/]*\//,
   c: /^docs\/conta\/capturas\/c\d[^/]*\//,
-  d: /^docs\/conta\/capturas\/m\d[^/]*\//,
+  d: /^docs\/conta\/capturas\/[ms]\d[^/]*\//,
   reparto: /^docs\/reparto\/capturas\//,
+  // I01b (18/10): Impuestos (conta/i01…) no es un frente de usuarios —sus e2e
+  // van con los de siempre, en su carril—, pero tiene sus capturas: i01b/…
+  impuestos: /^docs\/conta\/capturas\/i\d[^/]*\//,
+  // P01 (19/10): «Impuestos de tus clientes» (conta/p01…), igual que Impuestos:
+  // sin frente de usuarios, con sus capturas en p01/…
+  despacho: /^docs\/conta\/capturas\/p\d[^/]*\//,
+  // Compras (21/10, «Compras pasa a ser tuya»): conta/compras-…, sin frente de
+  // usuarios, con sus capturas en compras/…
+  compras: /^docs\/conta\/capturas\/compras\//,
 }
 
 export function duenoDeLaRama(rama) {
   if (/^reparto-/.test(rama)) return 'reparto'
+  if (/^conta\/i\d/.test(rama)) return 'impuestos'
+  if (/^conta\/p\d/.test(rama)) return 'despacho'
+  if (/^conta\/compras/.test(rama)) return 'compras'
   return frenteDeLaRama(rama) || null
 }
 

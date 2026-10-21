@@ -26,6 +26,7 @@ import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import { aSaldoCuenta, leerLineas, leerMapeo, planDeEmpresa, resultadoRepartido, saldosCuentas, type SaldoConLocal } from '@/modules/conta/services/librosService'
 import { MARCA } from '../cuenta/marca'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 
 type Vista = 'oficial' | 'detallado' | 'local' | 'marca'
 const NOMBRE = { balance: 'Balance de situación', pyg: 'Pérdidas y ganancias', ecpn: 'Cambios en el patrimonio neto' } as const
@@ -81,11 +82,16 @@ export function Estados({ estado, salida }: { estado: 'balance' | 'pyg' | 'ecpn'
     const mapeoPyg = mapeoEfectivo(x.mapeoPyg.serie, x.mapeoPyg.propio)
     const pyg = calcularEstado('pyg', x.lineasPyg, mapeoPyg, x.saldos.map((y) => aSaldoCuenta(y, 'pyg')))
     const bal = est === 'balance' ? actual : null
-    return { actual, anterior, pyg, bal }
+    // S01e: el anterior también, para que el modelo diga lo mismo que en Cuentas anuales.
+    const pygAnt = x.saldosAnt ? calcularEstado('pyg', x.lineasPyg, mapeoPyg, x.saldosAnt.map((y) => aSaldoCuenta(y, 'pyg'))) : null
+    const balAnt = est === 'balance' ? anterior : null
+    return { actual, anterior, pyg, bal, pygAnt, balAnt }
   }, [d.datos, estado])
 
   const col = columnaAnterior(L.anterior ? { estado: L.anterior.origen === 'migrated' ? 'traido' : L.anterior.estado === 'closed' ? 'cerrado' : 'abierto' } : null)
-  const vistas = vistasDeResultado(L.locales.length, L.marcas.length)
+  // S01: «Por local», solo con el eje encendido (Definiciones › Analítica), y con su nombre.
+  const { local: ejeLocal } = useAnalitica()
+  const vistas = vistasDeResultado(ejeLocal ? L.locales.length : 0, L.marcas.length)
   const titulo = NOMBRE[estado]
 
   const filasExport = (r: ResultadoEstado, ant: ResultadoEstado | null): FilaTabla[] => r.lineas.filter((l) => !l.oculta).map((l) => {
@@ -116,7 +122,7 @@ export function Estados({ estado, salida }: { estado: 'balance' | 'pyg' | 'ecpn'
             <div className="cxl-segmento" role="group" aria-label="Cómo verlo">
               <button type="button" aria-pressed={vista === 'oficial'} onClick={() => setVista('oficial')}>Oficial</button>
               <button type="button" aria-pressed={vista === 'detallado'} onClick={() => setVista('detallado')}>{estado === 'pyg' ? 'Detallada' : 'Detallado'}</button>
-              {estado === 'pyg' && vistas.porLocal && <button type="button" aria-pressed={vista === 'local'} onClick={() => setVista('local')}>Por local</button>}
+              {estado === 'pyg' && vistas.porLocal && <button type="button" aria-pressed={vista === 'local'} onClick={() => setVista('local')}>Por {ejeLocal?.nombre.toLowerCase() ?? 'local'}</button>}
             </div>
           )}
           <label><span className="cx-oculto">A qué fecha</span>
@@ -133,7 +139,7 @@ export function Estados({ estado, salida }: { estado: 'balance' | 'pyg' | 'ecpn'
       {L.ejercicio.origen === 'migrated' && <div className="cx-tarjeta cxd-franja" role="status">Ejercicio <strong>traído</strong> de {L.ejercicio.cierre ? `${MARCA.nombre}` : 'otro programa'}: se enseña tal cual, sin recalcular su cierre.</div>}
 
       {!calc && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={36} />)}</div>}
-      {calc && d.datos && <BarraIa calc={calc} estado={estado} modelo={d.datos.modelo} plantilla={L.ejercicio.plantillaMedia} anterior={null} />}
+      {calc && d.datos && <BarraIa calc={calc} estado={estado} modelo={d.datos.modelo} plantilla={L.ejercicio.plantillaMedia} plantillaAnterior={L.anterior?.plantillaMedia ?? null} />}
 
       {calc && estado === 'balance' && (
         <div className="cxl-estados">
@@ -158,7 +164,8 @@ export function Estados({ estado, salida }: { estado: 'balance' | 'pyg' | 'ecpn'
         <PorLocal saldos={d.datos.porLocal} lineas={d.datos.lineas} mapeo={mapeoEfectivo(d.datos.mapeo.serie, d.datos.mapeo.propio)} total={calc.actual} repartido={d.datos.repartido} />
       )}
       {calc && estado === 'ecpn' && d.datos && <Ecpn d={d.datos} />}
-      {calc && <p className="cxl-pie">Toca «+» para ver las cuentas de cada línea; toca una cuenta para ir a su Mayor. {col.sale ? `La columna gris es el ejercicio ${L.anterior!.code}${col.texto ? ` (${col.texto})` : ''}.` : 'Sin ejercicio anterior: no hay columna que comparar, y no se inventan ceros.'}</p>}
+      {/* S01e: el patrimonio neto no tiene «+» ni columna gris: su pie es el suyo. */}
+      {calc && estado !== 'ecpn' && <p className="cxl-pie">Toca «+» para ver las cuentas de cada línea; toca una cuenta para ir a su Mayor. {col.sale ? `La columna gris es el ejercicio ${L.anterior!.code}${col.texto ? ` (${col.texto})` : ''}.` : 'No hay ejercicio anterior: no hay columna que comparar, y no se inventan ceros.'}</p>}
     </section>
   )
 }
@@ -231,18 +238,29 @@ function SinSitio({ r }: { r: ResultadoEstado }) {
   )
 }
 
-function BarraIa({ calc, estado, modelo, plantilla }: {
-  calc: { actual: ResultadoEstado; pyg: ResultadoEstado; bal: ResultadoEstado | null }; estado: string; modelo: Modelo; plantilla: number; anterior: null
+/** Activo total y cifra de negocios de un balance y una PyG (como en Cuentas anuales). */
+function magnitudes(bal: ResultadoEstado, pyg: ResultadoEstado, plantillaMedia: number) {
+  const total = bal.lineas.find((l) => l.code === 'ACT.TOTAL')
+  const activo = total ? total.importe : bal.lineas.filter((l) => l.side === 'activo' && l.level === 1 && !l.isTotal).reduce((a, l) => a + l.importe, 0)
+  return { activo, cifraNegocios: pyg.lineas.find((l) => l.code === '1')?.importe ?? 0, plantillaMedia }
+}
+
+function BarraIa({ calc, estado, modelo, plantilla, plantillaAnterior }: {
+  calc: { actual: ResultadoEstado; pyg: ResultadoEstado; bal: ResultadoEstado | null; pygAnt: ResultadoEstado | null; balAnt: ResultadoEstado | null }
+  estado: 'balance' | 'pyg' | 'ecpn'; modelo: Modelo; plantilla: number; plantillaAnterior: number | null
 }) {
   const notas: { titulo: string; texto: string; enlace?: { a: string; texto: string } }[] = []
+  // S01e: en el patrimonio neto solo lo que habla del patrimonio neto; las notas
+  // del balance nombraban cuentas que esta tabla no enseña.
+  const soloPn = estado === 'ecpn'
   const cuentas = calc.actual.lineas.flatMap((l) => l.cuentas)
   // C06b: la cifra de la línea oficial de clientes, y los que van al pasivo (no compensación).
-  const clientes = notaClientes(calc.actual, eurosExactos)
-  if (clientes) {
+  const clientes = soloPn ? null : notaClientes(calc.actual, eurosExactos)
+  if (soloPn) { /* nada de cuentas sueltas */ } else if (clientes) {
     notas.push({ titulo: clientes.titulo, texto: clientes.texto, enlace: { a: rutaMayor(clientes.cuenta), texto: 'Ver' } })
   } else {
     const otros = cuentas.filter((c) => c.anomalo)
-    if (otros.length) notas.push({ titulo: `${otros.length} ${otros.length === 1 ? 'cuenta con saldo' : 'cuentas con saldo'} del lado contrario.`, texto: `En ámbar en la tabla: ${otros.slice(0, 3).map((c) => c.code).join(', ')}. Puede ser normal (un anticipo) o un apunte en la cuenta equivocada.` })
+    if (otros.length) notas.push({ titulo: `${otros.length} ${otros.length === 1 ? 'cuenta con saldo' : 'cuentas con saldo'} del lado contrario.`, texto: `En ámbar en la tabla: ${otros.slice(0, 3).map((c) => `${c.code} ${c.name}`).join(', ')}. Puede ser normal (un anticipo) o un apunte en la cuenta equivocada.` })
   }
   if (calc.bal) {
     const pn = calc.bal.lineas.find((l) => l.code === 'PNP.A')?.importe ?? 0
@@ -250,27 +268,29 @@ function BarraIa({ calc, estado, modelo, plantilla }: {
     if (pn < 0) notas.push({ titulo: 'Patrimonio neto negativo.', texto: 'Con las pérdidas del año el patrimonio queda por debajo de cero. Si sigue así al cierre, la LSC (art. 363.1.e) obliga a reequilibrarlo. Tu asesora lo ve también.' })
     else if (capital > 0 && pn < capital / 2) notas.push({ titulo: 'Patrimonio neto por debajo de la mitad del capital.', texto: 'Es causa de disolución si sigue así al cierre (LSC art. 363.1.e), salvo que se aumente o reduzca el capital. Solo es un aviso.' })
   }
+  if (soloPn) return <Barra notas={notas} estado={estado} />
   const otrosRes = calc.pyg.lineas.find((l) => l.code === 'OR')
   if (otrosRes && otrosRes.cuentas.length) notas.push({ titulo: 'Hay «Otros resultados».', texto: 'La memoria tiene que explicarlos (norma de elaboración de la PyG). Queda apuntado para la memoria.' })
   if (calc.actual.sinSitio.length) notas.push({ titulo: `${calc.actual.sinSitio.length} ${calc.actual.sinSitio.length === 1 ? 'cuenta' : 'cuentas'} sin sitio en el modelo.`, texto: 'Salen en rojo debajo, con su saldo. Sin línea no se puede presentar.', enlace: { a: rutaLibros('anuales', 'mapeo'), texto: 'Colocar' } })
   const defecto = calc.actual.porDefecto.length
   if (defecto) notas.push({ titulo: `${defecto} ${defecto === 1 ? 'cuenta colocada' : 'cuentas colocadas'} por defecto.`, texto: 'El modelo no las nombra: van con su hermana más parecida. Revísalas.', enlace: { a: rutaLibros('anuales', 'mapeo'), texto: 'Completar' } })
-  if (calc.bal || estado === 'pyg') {
-    const activo = calc.bal ? calc.bal.lineas.filter((l) => l.side === 'activo' && l.level === 1 && !l.isTotal).reduce((a, l) => a + l.importe, 0) : 0
-    const cifra = calc.pyg.lineas.find((l) => l.code === '1')?.importe ?? 0
-    if (calc.bal) {
-      const p = modeloPropuesto({ activo, cifraNegocios: cifra, plantillaMedia: plantilla }, null)
-      notas.push({ titulo: `Modelo ${modelo}.`, texto: p.frase, enlace: { a: rutaLibros('anuales', 'cuentas-anuales'), texto: 'Cómo se decide' } })
-    }
+  if (calc.bal) {
+    const ant = calc.balAnt && calc.pygAnt && plantillaAnterior !== null ? magnitudes(calc.balAnt, calc.pygAnt, plantillaAnterior) : null
+    const p = modeloPropuesto(magnitudes(calc.bal, calc.pyg, plantilla), ant)
+    notas.push({ titulo: `Modelo ${modelo}.`, texto: p.frase, enlace: { a: rutaLibros('anuales', 'cuentas-anuales'), texto: 'Cómo se decide' } })
   }
   if (estado === 'pyg' && calc.bal === null) {
     const r = resultadoTresCifras(calc.pyg, calc.pyg, 0)
     notas.push({ titulo: `Resultado ${r.pyg >= 0 ? 'positivo' : 'negativo'}: ${eurosExactos(r.pyg)}.`, texto: 'Es la misma cifra que sale en el balance como resultado del ejercicio; al regularizar pasa a la 129.' })
   }
+  return <Barra notas={notas} estado={estado} />
+}
+
+function Barra({ notas, estado }: { notas: { titulo: string; texto: string; enlace?: { a: string; texto: string } }[]; estado: string }) {
   return (
     <section className="cxl-ia" aria-label="Lo que veo">
-      <div className="cxl-ia-titulo"><span className="cx-marca-ia" aria-hidden="true">IA</span> Lo que veo{estado === 'balance' ? ' en este balance' : ''}</div>
-      {notas.length === 0 ? <div>Nada fuera de lo normal: todo tiene su sitio y los saldos están del lado que toca.</div>
+      <div className="cxl-ia-titulo"><span className="cx-marca-ia" aria-hidden="true">IA</span> Lo que veo{estado === 'balance' ? ' en este balance' : estado === 'ecpn' ? ' en el patrimonio neto' : ''}</div>
+      {notas.length === 0 ? <div>{estado === 'ecpn' ? 'Nada fuera de lo normal en el patrimonio neto.' : 'Nada fuera de lo normal: todo tiene su sitio y los saldos están del lado que toca.'}</div>
         : notas.slice(0, 3).map((n) => <div key={n.titulo}><strong>{n.titulo}</strong> {n.texto} {n.enlace && <Link to={n.enlace.a}>{n.enlace.texto}</Link>}</div>)}
     </section>
   )
@@ -295,18 +315,18 @@ function PorLocal({ saldos, lineas, mapeo, total, repartido }: {
   if (!saldos.length) return <div className="cx-tarjeta"><Vacio titulo="Aún no hay resultado en este periodo." explicacion="Cuando haya ventas y gastos asentados, sale aquí por local." /></div>
   return (
     <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-      <table className="cxl-tabla" aria-label="Pérdidas y ganancias por local">
+      <table className="cxl-tabla cxl-apilada" aria-label="Pérdidas y ganancias por local">
         <thead><tr><th>Línea</th>{columnas.map((k) => <th key={String(k)} className="cxl-der">{nombre(k)}</th>)}<th className="cxl-der">Total</th></tr></thead>
         <tbody>
           {visibles.map((l) => (
             <tr key={l.code}><td className={l.isTotal ? 'cxl-total' : `cxl-n${l.level}`}>{l.text}</td>
-              {columnas.map((k) => <td key={String(k)} className="cxl-der">{eurosExactos(res.get(k)!.lineas.find((x) => x.code === l.code)?.importe ?? 0)}</td>)}
-              <td className="cxl-der"><strong>{eurosExactos(l.importe)}</strong></td></tr>
+              {columnas.map((k) => <td key={String(k)} className="cxl-der" data-titulo={nombre(k)}>{eurosExactos(res.get(k)!.lineas.find((x) => x.code === l.code)?.importe ?? 0)}</td>)}
+              <td className="cxl-der" data-titulo="Total"><strong>{eurosExactos(l.importe)}</strong></td></tr>
           ))}
         </tbody>
         {repartido && <tfoot><tr><td>Resultado con lo común repartido (tu regla)</td>
-          {columnas.map((k) => <td key={String(k)} className="cxl-der">{k === null ? '—' : eurosExactos(repartido.find((x) => x.locationId === k)?.resultado ?? 0)}</td>)}
-          <td className="cxl-der">{eurosExactos(repartido.reduce((a, x) => a + x.resultado, 0))}</td></tr></tfoot>}
+          {columnas.map((k) => <td key={String(k)} className="cxl-der" data-titulo={nombre(k)}>{k === null ? '—' : eurosExactos(repartido.find((x) => x.locationId === k)?.resultado ?? 0)}</td>)}
+          <td className="cxl-der" data-titulo="Total">{eurosExactos(repartido.reduce((a, x) => a + x.resultado, 0))}</td></tr></tfoot>}
       </table>
       <p className={cuadra ? 'cxl-pie' : 'cxl-sin-sitio'} role="status">{cuadra ? 'Las columnas suman el total al céntimo.' : 'Las columnas no suman el total: revisa los apuntes sin local ni «común».'}</p>
     </div>
@@ -325,16 +345,16 @@ function Ecpn({ d }: { d: { modelo: Modelo; lineas: Parameters<typeof calcularEs
   const pn = fin.lineas.filter((l) => l.code.startsWith('PNP.A') && l.level <= 3 && !l.oculta)
   return (
     <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-      <table className="cxl-tabla" aria-label="Estado de cambios en el patrimonio neto">
+      <table className="cxl-tabla cxl-apilada" aria-label="Estado de cambios en el patrimonio neto">
         <thead><tr><th>Patrimonio neto</th><th className="cxl-der">Al empezar</th><th className="cxl-der">Cambios</th><th className="cxl-der">A la fecha</th></tr></thead>
         <tbody>
           {pn.map((l) => {
             const a = inicio.lineas.find((x) => x.code === l.code)?.importe ?? 0
-            return <tr key={l.code}><td className={`cxl-n${l.level}`}>{l.text}</td><td className="cxl-der">{eurosExactos(a)}</td><td className="cxl-der">{eurosExactos(l.importe - a)}</td><td className="cxl-der">{eurosExactos(l.importe)}</td></tr>
+            return <tr key={l.code}><td className={`cxl-n${l.level}`}>{l.text}</td><td className="cxl-der" data-titulo="Al empezar">{eurosExactos(a)}</td><td className="cxl-der" data-titulo="Cambios">{eurosExactos(l.importe - a)}</td><td className="cxl-der" data-titulo="A la fecha">{eurosExactos(l.importe)}</td></tr>
           })}
         </tbody>
       </table>
-      <p className="cxl-pie">{d.modelo === 'pymes' ? 'El PGC de pymes no tiene estado de ingresos y gastos reconocidos aparte: el estado de cambios en el patrimonio neto es esta matriz.' : 'El estado de ingresos y gastos reconocidos (grupos 8 y 9) sale cuando la empresa tenga apuntes en ellos.'} Los movimientos salen de las cuentas del grupo 1 y de la 129.</p>
+      <p className="cxl-pie">{d.modelo === 'pymes' ? 'El PGC de pymes no tiene estado de ingresos y gastos reconocidos aparte: el estado de cambios en el patrimonio neto es esta matriz.' : 'El estado de ingresos y gastos reconocidos directamente en el patrimonio (cuentas de los grupos 8 y 9) sale cuando la empresa tenga apuntes en ellas.'} Los movimientos salen de las cuentas de capital y reservas (grupo 1) y del resultado del ejercicio (129).</p>
     </div>
   )
 }

@@ -1,0 +1,146 @@
+name: Carril de prueba · ensayo en staging-conta
+
+# QUÉ HACE (W02, paso 1c)
+# Ensaya en staging-conta el clon de la plantilla de prueba a un carril
+# (scripts/e2e/carril.sh ensayo) DENTRO de una transacción que se deshace:
+# dice cuánto tarda y qué copia, y para si el clon quedaría incompleto (una
+# clave ajena colgando, una fila que choca). No deja nada en staging.
+#
+# Y el ciclo entero de una e2e sin pruebas (en cada push, y a mano con
+# «de_verdad»): coger un carril, clonar, comprobar que sus siete usuarios
+# entran y solo ven lo suyo, borrar y soltar. Eso sí escribe en staging, pero
+# solo en el carril que coge, y lo borra.
+#
+# CUÁNDO: al empujar un cambio del carril a una rama conta/w02-*, y a mano.
+# Mismas guardas que las e2e: la URL es de staging-conta, no es de
+# producción, y al otro lado no hay ni Foodint ni Folvy Interno.
+
+on:
+  push:
+    branches: ['conta/w02-**']
+    paths:
+      - 'scripts/e2e/carril/**'
+      - 'scripts/e2e/carril.sh'
+      - '.github/workflows/carril-staging-conta.yml'
+  workflow_dispatch:
+    inputs:
+      de_verdad:
+        description: 'Ciclo entero en un carril de verdad (coger, clonar, entrar, borrar, soltar)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  ensayo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+      VITE_SUPABASE_URL: https://oseymswjlzplqoxrfjzi.supabase.co
+      VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zZXltc3dqbHpwbHFveHJmanppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4ODYzNzUsImV4cCI6MjEwNjQ2MjM3NX0.xszvWohb2R7MWidy1ZsIL0IZg2E55aQSFRc1WX8A4js
+      CARRIL_YO: "run ${{ github.run_id }} · ensayo · ${{ github.ref_name }}"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ]; then echo "::error::Falta STAGING_CONTA_DB_URL."; exit 1; fi
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 · al otro lado no hay cuentas de producción
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710','00000000-0000-0000-0000-000000000001')")
+          if [ "$r" != "0" ]; then echo "::error::Al otro lado hay cuentas de producción. Abortado."; exit 1; fi
+
+      - name: Ensayo del clon (se deshace)
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          scripts/e2e/carril.sh ensayo 4001 | tee "$RUNNER_TEMP/ensayo.txt"
+
+      - name: Carril · esperar a que no se esté migrando y coger uno
+        if: github.event_name == 'push' || inputs.de_verdad
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          scripts/e2e/carril.sh coger
+          scripts/e2e/carril.sh plantilla-coger
+
+      - name: Carril · clonar las cuentas de prueba
+        if: github.event_name == 'push' || inputs.de_verdad
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          CLAVE=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24); echo "::add-mask::$CLAVE"
+          echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
+          CLAVE_PRUEBAS="$CLAVE" scripts/e2e/carril.sh clonar
+          # La transición: el clon ha soltado e2e.cerrojo al acabar.
+          q=$(/usr/lib/postgresql/17/bin/psql "$DB_URL" -X -A -t -c "select coalesce(quien, 'nadie') from e2e.cerrojo where id = 1")
+          echo "e2e.cerrojo después del clon: $q" | tee -a "$GITHUB_STEP_SUMMARY"
+          case "$q" in "carril "*) echo "::error::El clon no ha soltado e2e.cerrojo."; exit 1 ;; esac
+
+      - name: Carril · sus siete usuarios entran, y solo ven lo suyo
+        if: github.event_name == 'push' || inputs.de_verdad
+        run: |
+          set -euo pipefail
+          N=$(cat "$RUNNER_TEMP/carril/numero")
+          node scripts/e2e/carril-entrar.mjs "$N"
+
+      # El runner que muere sin soltar: se mata el psql del guardián con -9 (nadie
+      # termina nada) y se mide cuánto tardan los cerrojos en soltarse solos.
+      - name: Carril · si el runner muere, los cerrojos se sueltan solos
+        if: github.event_name == 'push' || inputs.de_verdad
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          CARRIL_DIR: ${{ runner.temp }}/huerfano
+          CARRIL_YO: "run ${{ github.run_id }} huerfano"
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          scripts/e2e/carril.sh coger
+          bpid=$(grep -m1 '^pid ' "$CARRIL_DIR/guardian.log" | awk '{print $2}')
+          kill -9 "$(cat "$CARRIL_DIR/guardian.pid")"
+          t0=$(date +%s)
+          until [ "$("$PSQL" "$DB_URL" -X -A -t -c "select count(*) from pg_locks where locktype = 'advisory' and classid in (4202, 4203) and pid = $bpid")" = 0 ]; do
+            if [ $(( $(date +%s) - t0 )) -ge 180 ]; then
+              "$PSQL" "$DB_URL" -X -A -t -c "select state, now() - state_change, left(query, 40) from pg_stat_activity where pid = $bpid"
+              "$PSQL" "$DB_URL" -X -A -t -c "select pg_terminate_backend($bpid)" > /dev/null
+              echo "::error::A los 180 s los cerrojos del guardián muerto seguían cogidos (terminado a mano)."; exit 1
+            fi
+            sleep 2
+          done
+          echo "Cerrojos del guardián muerto sueltos solos a los $(( $(date +%s) - t0 )) s." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Carril · borrar y soltar (pase lo que pase)
+        if: always() && (github.event_name == 'push' || inputs.de_verdad)
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: scripts/e2e/carril.sh soltar

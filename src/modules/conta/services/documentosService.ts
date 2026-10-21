@@ -16,7 +16,7 @@
 //     manda ella desde el suyo (mailto) mientras no haya dominio de correo.
 
 import { supabase } from '@/lib/supabase'
-import { rpc, tabla, hayBase } from '@/modules/conta/services/bd'
+import { rpc, tabla, hayBase, mensaje } from '@/modules/conta/services/bd'
 import { validar } from '@/modules/conta/services/diarioService'
 import { enviarADiez, urlDocumento } from '@/modules/conta/services/conDiezService'
 import { proponerFactura, verPropuestaFactura } from '@/modules/conta/services/propuestasLibroService'
@@ -26,6 +26,7 @@ import { fotoAPdf } from '@/modules/conta/lib/fotoAPdf'
 import type { DatosDocumentos, PlazoFicha } from '@/modules/conta/documentos/documentos'
 import { leerFactura as comprobarLectura, type Lectura, type LecturaModelo } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { MAX_BYTES_EXPEDIDA, claseDeFichero, motivoExpedida, nombreExpedida, rutaExpedida, tamano } from '@/modules/conta/lib/expedidaPdf'
 
 type Fila = Record<string, unknown>
 const RECEPCIONES = 'receipt-uploads'
@@ -89,11 +90,11 @@ const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 export function conLoLeidoEnRecepcion(f: FacturaRevisar, hoy = hoyEnMadrid()): FacturaRevisar {
   if (f.lectura || !f.leido_en_recepcion?.modelo) return f
   const l = comprobarLectura(f.leido_en_recepcion.modelo, { hoy })
-  const de = `Lo leyó la recepción del ${ddmm(f.leido_en_recepcion.recepcion)} con su papel; no la he vuelto a leer.`
+  const de = `Lo leyó la recepción del ${ddmm(f.leido_en_recepcion.recepcion)} con su factura; no la he vuelto a leer.`
   return { ...f, lectura: { ...l, porque: [de, ...l.porque] }, confianza: f.confianza ?? l.confianza }
 }
 
-/** R6 · El papel de una recepción, para «Ver papel» en N22: una URL firmada. */
+/** R6 · El documento de una recepción, para «Ver la factura» en N22: una URL firmada. */
 export async function urlDePapelDeRecepcion(ruta: string | null | undefined): Promise<string | null> {
   return ruta ? getReceiptFileUrl(ruta) : null
 }
@@ -196,8 +197,60 @@ async function guardarFacturaPdf(f: FacturaRevisar, entryId: string, quien: stri
   const destino = `${f.account_id}/${entryId}/${huella.slice(0, 16)}.pdf`
   const sub = await supabase!.storage.from(DOCUMENTOS).upload(destino, new Blob([pdf as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })
   if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`no se ha podido guardar el PDF (${sub.error.message})`)
-  const nombre = `${(f.proveedor?.nombre ?? 'factura').replace(/[^\p{L}\p{N} .-]/gu, '').trim()}${f.numero ? ` ${f.numero.replace(/[^\p{L}\p{N}.-]/gu, '-')}` : ''}.pdf`
+  // S01d: journal_entry_document.file_name solo admite [A-Za-z0-9._-]+\.pdf (check de la
+  // 20261021T0100). Con espacios o tildes («Hermanos Ruiz F-12.pdf») la base lo rechazaba y
+  // ninguna recibida llegaba a Diez con su PDF (en producción, 0 de factura_recibida, 18/10).
+  const nombre = nombreExpedida(`${f.proveedor?.nombre ?? 'factura'}${f.numero ? ` ${f.numero}` : ''}`)
   await rpc('conta_documento_factura_guardar', { p_entry: entryId, p_ruta: destino, p_nombre: nombre, p_sha256: huella, p_bytes: pdf.length, p_quien_nombre: quien })
+}
+
+// ── S01d · El PDF de una factura expedida a mano ───────────────────────────
+// Nombres de la base entre comillas (regla 40): conta_documento_expedida_guardar
+// (la 0160 del S01d), journal_entry_document (entry_id, kind, storage_path,
+// file_name, size_bytes, created_at, created_by_name) y el bucket conta-documentos.
+
+export interface DocExpedida { ruta: string; nombre: string; bytes: number | null; cuando: string; quien: string | null }
+
+/** El PDF ya adjunto a una expedida, o null si no tiene (regla 9: por su cuenta). */
+export async function leerExpedidaPdf(accountId: string, entryId: string): Promise<DocExpedida | null> {
+  const { data, error } = await tabla('journal_entry_document').select('storage_path, file_name, size_bytes, created_at, created_by_name')
+    .eq('account_id', accountId).eq('entry_id', entryId).eq('kind', 'factura_expedida').maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer la factura adjunta', error))
+  const f = data as Fila | null
+  if (!f) return null
+  return {
+    ruta: String(f.storage_path), nombre: String(f.file_name), bytes: typeof f.size_bytes === 'number' ? f.size_bytes : null,
+    cuando: String(f.created_at), quien: typeof f.created_by_name === 'string' ? f.created_by_name : null,
+  }
+}
+
+/** El fichero elegido, como PDF: tal cual si lo es; una foto JPG o PNG se convierte. */
+export async function ficheroAPdf(fichero: File): Promise<Uint8Array> {
+  const clase = claseDeFichero(fichero.name, fichero.type)
+  if (!clase) throw new Error(`«${fichero.name}» no es un PDF ni una foto JPG o PNG`)
+  const bytes = new Uint8Array(await fichero.arrayBuffer())
+  if (clase === 'pdf') return bytes
+  const img = await createImageBitmap(fichero)
+  return fotoAPdf(bytes, clase, img.width, img.height).pdf
+}
+
+/**
+ * Sube el PDF de la expedida a conta-documentos y lo enlaza a su asiento ya
+ * validado. Lanza con el motivo (los de la base, en sus palabras) si no.
+ */
+export async function guardarExpedidaPdf(accountId: string, entryId: string, fichero: File, quien: string | null): Promise<{ nombre: string; yaEstaba: boolean }> {
+  hayBase()
+  const pdf = await ficheroAPdf(fichero)
+  if (pdf.length > MAX_BYTES_EXPEDIDA) throw new Error(`el PDF pesa ${tamano(pdf.length)} y caben ${tamano(MAX_BYTES_EXPEDIDA)}`)
+  const huella = await sha256(pdf.slice().buffer)
+  const destino = rutaExpedida(accountId, entryId, huella)
+  const sub = await supabase!.storage.from(DOCUMENTOS).upload(destino, new Blob([pdf as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })
+  // Ya subido con la misma huella (un reintento): es el mismo fichero, se enlaza.
+  if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`no se ha podido subir el PDF (${sub.error.message})`)
+  const r = await rpc<Fila>('conta_documento_expedida_guardar', {
+    p_entry: entryId, p_ruta: destino, p_nombre: nombreExpedida(fichero.name), p_sha256: huella, p_bytes: pdf.length, p_quien_nombre: quien,
+  }).catch((e: unknown) => { throw new Error(motivoExpedida(motivo(e))) })
+  return { nombre: typeof r.nombre === 'string' ? r.nombre : nombreExpedida(fichero.name), yaEstaba: r.ya_estaba === true }
 }
 
 /**
@@ -274,4 +327,33 @@ export async function urlDeLlegada(inboxId: string): Promise<string | null> {
   const { data, error } = await tabla('document_inbox').select('file_path').eq('id', inboxId).maybeSingle()
   if (error) throw new Error(`No se ha podido abrir el documento: ${error.message}`)
   return getReceiptFileUrl((data as Fila | null)?.file_path as string | null)
+}
+
+// ── S01 (0160) · «No es una factura» ───────────────────────────────────────
+// Nombres de la base entre comillas (regla 40): conta_factura_descartar,
+// conta_factura_recuperar y supplier_invoice.discard_reason, discarded_by_name,
+// discarded_at (la 0160 del S01).
+
+export interface Descarte { motivo: string; quien: string | null; cuando: string }
+
+/** Por qué no es una factura, quién y cuándo. Null si no está descartada (o la base aún no tiene la 0160). */
+export async function leerDescarte(invoiceId: string): Promise<Descarte | null> {
+  const { data, error } = await tabla('supplier_invoice').select('discard_reason, discarded_by_name, discarded_at').eq('id', invoiceId).maybeSingle()
+  if (error) {
+    if (error.code === '42703' || error.code === 'PGRST204' || /discard/.test(error.message)) return null
+    throw new Error(mensaje('No se ha podido leer por qué no es una factura', error))
+  }
+  const f = data as { discard_reason: string | null; discarded_by_name: string | null; discarded_at: string | null } | null
+  return f?.discard_reason && f.discarded_at ? { motivo: f.discard_reason, quien: f.discarded_by_name, cuando: f.discarded_at } : null
+}
+
+/** La deja descartada con su motivo; se deshace con recuperarFactura. */
+export async function descartarFactura(invoiceId: string, motivo: string, quien: string | null): Promise<void> {
+  await rpc('conta_factura_descartar', { p_invoice: invoiceId, p_motivo: motivo, p_quien_nombre: quien })
+}
+
+/** Deshace «No es una factura»: vuelve al estado de antes. Devuelve ese estado. */
+export async function recuperarFactura(invoiceId: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ estado: string }>('conta_factura_recuperar', { p_invoice: invoiceId, p_quien_nombre: quien })
+  return r.estado
 }

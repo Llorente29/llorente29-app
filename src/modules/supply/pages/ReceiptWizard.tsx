@@ -809,7 +809,7 @@ function SummaryScreen({
           </ul>
           <p className="text-sm text-text-primary mt-2">
             Tu trabajo aquí ya está hecho y no se pierde. La mercancía entrará al almacén cuando
-            oficina lo cierre con el papel delante.
+            oficina lo cierre con el albarán delante.
           </p>
         </div>
       )}

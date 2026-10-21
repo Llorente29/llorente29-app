@@ -28,13 +28,21 @@
 // ha llegado a Diez: <motivo>.»), salvo sesión (401), permiso (403) o un fallo
 // propio (500, también en palabras): el Libro lo enseña tal cual (regla 8).
 //
+// 17/10 · Y todo fallo queda ESCRITO en su envío (external_send.last_error),
+// no solo en la respuesta: el núcleo lo apunta (conRed, diezEnviar.ts) y, si
+// aun así algo se escapa hasta aquí, esta función lo apunta también
+// (apuntarFallo). El 1861 contestó 500 a los 6 s y su fila se quedó con «el
+// envío empezó y no terminó», sin su porqué. Y cada fallo deja una línea en el
+// registro de la función (console.error: el id del asiento; el porqué va a la
+// base, porque puede llevar texto de Diez).
+//
 // verify_jwt = true (config.toml): sin sesión no hay nada que hacer.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { ClienteDiez, type AlmacenToken } from "../_shared/diezCliente.ts";
 import { correspondenciaDeEmpresa } from "../_shared/diezAnalitica.ts";
-import { autorizacionCubre, enviarAsientoADiez, enviarContraasientoADiez, enviarContraasientoRecibidaADiez, enviarRecibidaADiez, type Autorizacion, type ConexionDiez, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
+import { autorizacionCubre, motivoDeFallo, enviarAsientoADiez, enviarContraasientoADiez, enviarContraasientoRecibidaADiez, enviarRecibidaADiez, type Autorizacion, type ConexionDiez, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
 import type { ResumenBD } from "../_shared/resumenDeAsiento.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -46,6 +54,32 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+
+/**
+ * 17/10 · Lo último que se hace con un fallo: dejarlo escrito en el envío del
+ * asiento (el que no está rechazado). Si ya está en Diez no se toca; si no hay
+ * fila, se crea una sin intentos. Nunca lanza: si tampoco puede, lo dice el
+ * registro de la función.
+ */
+async function apuntarFallo(srv: ReturnType<typeof createClient>, a: { entry: string; account: string; company: string }, motivo: string) {
+  // En el registro, solo que ha fallado y dónde quedó: el porqué va a la base (puede llevar texto de Diez).
+  console.error(`conta-diez-enviar · ${a.entry} · fallo apuntado en su envío`);
+  try {
+    const { data: e } = await srv.from("external_send").select("id, status").eq("entry_id", a.entry).eq("account_id", a.account).neq("status", "rechazado").maybeSingle();
+    const ahora = new Date().toISOString();
+    if (e && (e.status === "enviado" || e.status === "enlazado")) return;
+    const { error } = e
+      ? await srv.from("external_send").update({ last_error: motivo, updated_at: ahora }).eq("id", e.id).eq("account_id", a.account)
+      : await srv.from("external_send").insert({
+          entry_id: a.entry, account_id: a.account, company_id: a.company, account_connector_id: null, kind: "factura",
+          ext_year: null, ext_series: null, ext_number: null, ext_invoice_number: null, payload_hash: "sin-enviar", status: "pendiente", attempts: 0,
+          last_error: motivo, sent_at: null, document_id: null, document_status: null, document_error: null, document_attached_at: null, updated_at: ahora,
+        });
+    if (error) console.error(`conta-diez-enviar · ${a.entry} · no se ha podido apuntar el fallo (${error.message}): ${motivo}`);
+  } catch (x) {
+    console.error(`conta-diez-enviar · ${a.entry} · no se ha podido apuntar el fallo (${x instanceof Error ? x.message : String(x)}): ${motivo}`);
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -82,7 +116,12 @@ Deno.serve(async (req) => {
   const esRecibida = (!contra && je.source_type === "supplier_invoice") || anulaRecibida;
   // El asiento (o, para un contraasiento, lo que anula), con los permisos de quien llama.
   const { data: leido, error: e1 } = await sb.rpc(esRecibida ? "conta_recibida_envio" : "conta_resumen_ventas", { p_entry: contra?.anula ?? entryId });
-  if (e1) return json({ estado: "no_llega", motivo: e1.message, reintentar: false, texto: `No ha llegado a Diez: ${e1.message}` }, e1.code === "P0002" ? 404 : 400);
+  if (e1) {
+    // Leído con los permisos de quien llama: si no es suyo (P0002), no se escribe nada en su nombre.
+    const { data: puedeApuntar } = await sb.rpc("current_user_is_admin_or_manager_of", { p_account_id: je.account_id });
+    if (e1.code !== "P0002" && puedeApuntar === true) await apuntarFallo(createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } }), { entry: entryId, account: je.account_id, company: je.company_id }, `no se ha podido leer el asiento: ${e1.message}`);
+    return json({ estado: "no_llega", motivo: e1.message, reintentar: false, texto: `No ha llegado a Diez: ${e1.message}` }, e1.code === "P0002" ? 404 : 400);
+  }
   const r = leido as ResumenBD;
   const rec = leido as unknown as RecibidaBD;
   const { data: puede } = await sb.rpc("current_user_is_admin_or_manager_of", { p_account_id: r.account_id });
@@ -97,7 +136,7 @@ Deno.serve(async (req) => {
       return data as ResumenBD;
     },
     // Los números de la base llegan como texto o número: se pasan a número.
-    recibida: async () => ({ ...rec, lineas: (rec.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), tipoIva: l.tipoIva == null ? null : Number(l.tipoIva), baseIva: l.baseIva == null ? null : Number(l.baseIva) })) }),
+    recibida: async () => ({ ...rec, lineas: (rec.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), tipoIva: l.tipoIva == null ? null : Number(l.tipoIva), baseIva: l.baseIva == null ? null : Number(l.baseIva), tratamiento: l.tratamiento == null ? null : String(l.tratamiento) })) }),
     envio: async (id) => {
       const { data, error } = await srv.from("external_send").select("*").eq("entry_id", id).eq("account_id", r.account_id).neq("status", "rechazado").maybeSingle();
       if (error) throw new Error(`no se ha podido leer el envío: ${error.message}`);
@@ -165,7 +204,8 @@ Deno.serve(async (req) => {
   try {
     return json(contra ? await (anulaRecibida ? enviarContraasientoRecibidaADiez(contra, puerto) : enviarContraasientoADiez(contra, puerto)) : esRecibida ? await enviarRecibidaADiez(entryId, puerto) : await enviarAsientoADiez(entryId, puerto));
   } catch (x) {
-    const motivo = x instanceof Error ? x.message : String(x);
+    const motivo = `se cortó: ${motivoDeFallo(x)}`;
+    await apuntarFallo(srv, { entry: contra?.id ?? entryId, account: r.account_id, company: r.company_id }, motivo);
     return json({ estado: "no_llega", motivo, reintentar: true, texto: `No ha llegado a Diez: ${motivo}.` }, 500);
   }
 });

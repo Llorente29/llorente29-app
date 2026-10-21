@@ -1,0 +1,43 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# I01b · Las pantallas de Impuestos y el asiento de liquidación del 303 (rama
+# conta/i01b-pantallas-impuestos). La anterior de este fichero (S01d: 0160 y
+# 0170) ya está aplicada en producción; su copia:
+# tests/conta/produccion/tanda-s01d-tanda-20261018.txt. Esta numera por encima
+# de la 0170 (Julio, 18/10).
+#
+#   1. 0180 — AÑADE conta_impuesto_euros, conta_impuesto_303_contabilizar,
+#      conta_impuesto_cargos_posibles y conta_impuesto_casar_cargo, y dos
+#      disparadores con WHEN (bank_match deshecho; asiento de liquidación
+#      anulado). CAMBIA en caliente, declarado con su prueba de staging:
+#      conta_motivos_para_validar (la misma salvo la excepción de la
+#      liquidación de un 303), conta_impuesto_estado_vale (las vueltas atrás),
+#      bank_match_item (columna nueva que admite nulos y su CHECK, que solo
+#      amplía), bank_match y journal_entry (su disparador nuevo).
+#   2. 0190 — AÑADE el calendario (conta_impuesto_calendario y sus dos piezas
+#      de dentro, que solo puede llamar el servidor).
+#   3. 0200 — AÑADE el IVA de un periodo (conta_impuesto_declaracion_ver) y
+#      cómo se paga (conta_impuesto_pago_poner).
+#   4. 0210 — AÑADE Presentados (conta_impuesto_presentados).
+#   5. 0220 — AÑADE Certificados y accesos (conta_impuesto_certificados_ver y
+#      conta_impuesto_certificado_presenta).
+#   6. 0230 — AÑADE «Invitar a mi asesoría»: la tabla tax_advisor_invitation
+#      (con su RLS: la lee un administrador de la cuenta; solo escriben las
+#      funciones) y sus funciones. Vincula; no crea cuentas.
+#   Las cinco últimas solo añaden; las pantallas las necesitan, y por eso van
+#   antes de fusionar.
+#
+# No toca el camino del pedido. No contabiliza nada: lo hace la persona desde
+# la pantalla, después. conta-hacienda, conta-asesoria y send-email se despliegan con la fusión
+# (PR, «Funciones a desplegar a mano»).
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/i01b-asiento-303.sql
+supabase/migrations/20261122T0180_i01b_asiento_303.sql
+supabase/migrations/20261122T0190_i01b_calendario.sql
+supabase/migrations/20261122T0200_i01b_declaracion.sql
+supabase/migrations/20261122T0210_i01b_presentados.sql
+supabase/migrations/20261122T0220_i01b_certificados.sql
+supabase/migrations/20261122T0230_i01b_asesoria.sql

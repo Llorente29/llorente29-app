@@ -17,12 +17,16 @@
 // están en su filtro y lo dicen.
 
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
+import { useMenuFila } from '@/modules/conta/proveedor/useMenuFila'
+import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaFichaTercero, rutaMayor } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { Campo, Dialogo } from '@/modules/conta/proveedor/piezas'
+import { NuevoProveedorDialogo } from '@/modules/conta/proveedor/NuevoProveedorDialogo'
+import { fraseAltaProveedor } from '@/modules/conta/lib/altaProveedor'
 import { Chip, ErrorConReintento, Guardado, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
 import {
   FILTROS_TERCEROS, cuentaPorFiltro, filtrarTerceros, filtrosVisibles, mismoNif, ordenarPapeles, rutaDeTercero, type FiltroTerceros, type Papel,
@@ -90,7 +94,16 @@ export default function TercerosPage() {
   const filtro = (FILTROS_TERCEROS.some((f) => f.id === params.get('ver')) ? params.get('ver') : 'todos') as FiltroTerceros
   const [busca, setBusca] = useState('')
   const [vuelta, setVuelta] = useState(0)
-  const [nuevo, setNuevo] = useState(false)
+  // S01 · paso 3: «Nuevo cliente» está en la cinta (?nuevo), también estando ya aquí.
+  // S01d: y «Nuevo proveedor» (?nuevo=proveedor), con el alta de Proveedores.
+  const [nuevo, setNuevo] = useState<'cliente' | 'proveedor' | null>(null)
+  const pide = params.get('nuevo')
+  const pideNuevo = pide === null ? null : pide === 'proveedor' ? 'proveedor' : 'cliente'
+  const hosteleria = useHosteleria()
+  // Los papeles que ya son pestaña de la cabecera (productos.ts): Plataformas y Socios, solo con hostelería.
+  const PAPELES_EN_PESTANA = new Set<string>(hosteleria ? ['todos', 'clientes', 'proveedores', 'plataformas', 'socios'] : ['todos', 'clientes', 'proveedores'])
+  if (pideNuevo && nuevo !== pideNuevo) setNuevo(pideNuevo)
+  useEffect(() => { if (pideNuevo) setParams((p) => { p.delete('nuevo'); return p }, { replace: true }) }, [pideNuevo, setParams])
   // Lo que viene hecho de la ficha (archivar): se dice aquí, con su contenido (regla 8).
   const llegada = useLocation().state as { aviso?: string } | null
   const [hecho, setHecho] = useState<string | null>(llegada?.aviso ?? null)
@@ -109,6 +122,13 @@ export default function TercerosPage() {
   const cuantos = useMemo(() => (filas ? cuentaPorFiltro(filas) : null), [filas])
   const tarjeta = filas ? tarjetaPorRevisar(filtro, visibles.length, busca, pendientes430, revision?.programa ?? null) : null
   const recargar = () => setVuelta((v) => v + 1)
+  // El NIF repetido del alta de proveedor: el de otro proveedor para; el de un cliente u otro papel
+  // se avisa (la base lo hace también proveedor, en ese mismo tercero: un NIF, un tercero).
+  const proveedoresYa = useMemo(() => (filas ?? []).filter((t) => t.papeles.includes('supplier')).map((t) => ({ name: t.nombre, taxId: t.nif })), [filas])
+  const notaNifProveedor = useMemo(() => (nif: string) => {
+    const m = mismoNif(filas ?? [], normalizarNif(nif), 'supplier')
+    return m && !m.yaLoEs ? `Ese NIF es de ${m.tercero.nombre}: al crearlo pasa a ser también proveedor (una sola ficha para las dos cosas).` : null
+  }, [filas])
 
   async function cambiarArchivo(t: TerceroLista, archivarlo: boolean) {
     setFallo(null); setHecho(null)
@@ -123,13 +143,10 @@ export default function TercerosPage() {
 
   return (
     <div className="cxt-pagina">
-      <header className="cxp-cabecera">
-        <div className="cxp-titulos">
-          <h1 className="cxp-nombre">Clientes y proveedores</h1>
-          <span className="cx-ayuda" style={{ fontSize: 15 }}>Con quién trabajas, qué papel tiene cada uno y quién debe a quién.</span>
-        </div>
-        <button type="button" className="cx-boton" onClick={() => setNuevo(true)} disabled={!accountId}>Nuevo cliente</button>
-      </header>
+      {/* S01 · paso 3: Contactos. El título y los filtros (Todos · Clientes · Proveedores…) son
+          la cabecera y sus pestañas; «Nuevo cliente» y «Nuevo proveedor» (S01d), la cinta. */}
+      <h1 className="cx-oculto">Contactos</h1>
+      <p className="cx-ayuda cxt-entra">Con quién trabajas, si es cliente, proveedor, plataforma o socio, y quién debe a quién.</p>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
 
@@ -143,10 +160,11 @@ export default function TercerosPage() {
         <label htmlFor="buscar-tercero" className="cx-oculto">Buscar por nombre o NIF</label>
         <input id="buscar-tercero" className="cx-input cxp-buscar" type="search" value={busca} onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar por nombre o NIF" />
-        <div className="cx-tablas-filtros" role="group" aria-label="Qué terceros ver">
-          {filtrosVisibles(filas ?? [], filtro).map((f) => (
+        <div className="cx-tablas-filtros" role="group" aria-label="Qué contactos ver">
+          {/* Los papeles son pestañas de la cabecera; aquí queda lo que no es un papel: los archivados. */}
+          {filtrosVisibles(filas ?? [], filtro).filter((f) => f.id === 'archivados' || (f.id === filtro && !PAPELES_EN_PESTANA.has(f.id))).map((f) => (
             <button key={f.id} type="button" className="cx-pildora" aria-pressed={filtro === f.id}
-              onClick={() => setParams(f.id === 'todos' ? {} : { ver: f.id }, { replace: true })}>
+              onClick={() => setParams(f.id === filtro ? {} : { ver: f.id }, { replace: true })}>
               {f.texto}{cuantos ? ` · ${cuantos[f.id]}` : ''}
             </button>
           ))}
@@ -171,7 +189,14 @@ export default function TercerosPage() {
             ? <Vacio titulo={`Nadie coincide con «${busca.trim()}».`} explicacion="Prueba con otra parte del nombre o con su NIF." />
             : filtro === 'archivados'
               ? <Vacio titulo="No hay nadie archivado." explicacion="Lo que archives sale aquí, con su histórico, y se recupera con un clic." />
-              : <Vacio titulo="Aún no hay nadie aquí." explicacion="Los proveedores llegan con sus albaranes; los clientes, con «Nuevo cliente»; las plataformas y los socios, añadiéndoles el papel en su ficha." />}
+              : <Vacio titulo="Aún no hay nadie aquí."
+                  explicacion="Da de alta a tus proveedores y clientes desde aquí (los proveedores de Cocina también llegan solos con sus albaranes); las plataformas y los socios, desde su ficha («Es también plataforma», «Es también socio de marca»)."
+                  accion={(
+                    <div className="cx-pie">
+                      <button type="button" className="cx-boton-sec" onClick={() => setNuevo('cliente')}>Nuevo cliente</button>
+                      <button type="button" className="cx-boton" onClick={() => setNuevo('proveedor')}>Nuevo proveedor</button>
+                    </div>
+                  )} />}
         </div>
       )}
       {visibles.length > 0 && (
@@ -179,7 +204,7 @@ export default function TercerosPage() {
           <div className="cxp-tabla">
             {!movil && (
               <div className="cxp-tabla-cabeza cxt-fila" aria-hidden="true">
-                <span>Nombre</span><span>Papeles</span><span style={{ textAlign: 'right' }}>Te debe / Le debes</span><span style={{ textAlign: 'right' }}>Última operación</span>
+                <span>Nombre</span><span>Es</span><span style={{ textAlign: 'right' }}>Te debe / Le debes</span><span style={{ textAlign: 'right' }}>Última operación</span>
               </div>
             )}
             {visibles.map((t) => (
@@ -214,7 +239,7 @@ export default function TercerosPage() {
       )}
       {filas && filas.length > 0 && (
         <p className="cx-ayuda" style={{ margin: 0 }}>
-          {visibles.length === 1 ? '1 tercero' : `${visibles.length} terceros`}
+          {visibles.length === 1 ? '1 contacto' : `${visibles.length} contactos`}
           {filtro !== 'todos' ? ` en «${FILTROS_TERCEROS.find((f) => f.id === filtro)!.texto}»` : ''}
           {busca.trim() ? ` con «${busca.trim()}»` : ''}
           {filtro !== 'archivados' && cuantos?.archivados ? ` · ${cuantos.archivados} archivado${cuantos.archivados === 1 ? '' : 's'} en su filtro` : ''}
@@ -229,29 +254,34 @@ export default function TercerosPage() {
           </div>
         </Dialogo>
       )}
-      {nuevo && accountId && <NuevoCliente accountId={accountId} terceros={filas ?? []} alCerrar={() => setNuevo(false)} />}
+      {nuevo === 'cliente' && accountId && <NuevoCliente accountId={accountId} terceros={filas ?? []} alCerrar={() => setNuevo(null)} />}
+      {nuevo === 'proveedor' && accountId && (
+        // S01d: se queda en la lista, lo dice con su nombre (regla 8) y lo enseña buscándolo.
+        <NuevoProveedorDialogo accountId={accountId} otros={proveedoresYa} notaNif={notaNifProveedor} textoCrear="Dar de alta"
+          alCerrar={() => setNuevo(null)}
+          alCrear={(p) => {
+            setNuevo(null); setFallo(null)
+            setHecho(fraseAltaProveedor(p.name))
+            if (filtro !== 'todos' && filtro !== 'proveedores') setParams({}, { replace: true })
+            setBusca(p.taxId ?? p.name)
+            recargar()
+          }} />
+      )}
     </div>
   )
 }
 
 /** «···» de una fila: Abrir y Archivar o Recuperar. */
 function MenuFila({ t, alArchivar, alRecuperar }: { t: TerceroLista; alArchivar: () => void; alRecuperar: () => void }) {
-  const [abierto, setAbierto] = useState(false)
-  const caja = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!abierto) return
-    const fuera = (e: MouseEvent) => { if (!caja.current?.contains(e.target as Node)) setAbierto(false) }
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false) }
-    document.addEventListener('mousedown', fuera)
-    document.addEventListener('keydown', esc)
-    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', esc) }
-  }, [abierto])
+  // S01e: debajo de su fila sin taparla (o encima si no cabe), y se cierra al salir.
+  const { abierto, arriba, caja, alternar, cerrar, alSalir, alEntrar } = useMenuFila()
+  const setAbierto = (v: boolean) => { if (!v) cerrar() }
   return (
-    <div className="cxp-tabla-mas" ref={caja}>
+    <div className="cxp-tabla-mas" ref={caja} onMouseLeave={alSalir} onMouseEnter={alEntrar}>
       <button type="button" className="cx-boton-sec cx-mas" aria-haspopup="menu" aria-expanded={abierto}
-        aria-label={`Más acciones de ${t.nombre}`} onClick={() => setAbierto((v) => !v)}>···</button>
+        aria-label={`Más acciones de ${t.nombre}`} onClick={alternar}>···</button>
       {abierto && (
-        <div className="cxp-menu" role="menu" aria-label={`Acciones de ${t.nombre}`}>
+        <div className={arriba ? 'cxp-menu cxp-menu-arriba' : 'cxp-menu'} role="menu" aria-label={`Acciones de ${t.nombre}`}>
           <Link role="menuitem" to={rutaDeTercero(t)}>Abrir</Link>
           {t.archivadoEn
             ? <button type="button" role="menuitem" onClick={() => { setAbierto(false); alRecuperar() }}>Recuperar</button>
@@ -288,7 +318,7 @@ function NuevoCliente({ accountId, terceros, alCerrar }: { accountId: string; te
       navigate(rutaFichaTercero(r.party_id, 'datos-fiscales'), { state: { aviso: `${nombre.trim()} dado de alta como cliente. Completa sus datos fiscales y su cobro.` } })
     } catch (e2) {
       const otro = terceroDelMismoNif(e2)
-      setFallo(otro ? 'Ese NIF ya es de otro tercero: añádele el papel de cliente en vez de crear otro.' : e2 instanceof Error ? e2.message : 'No se pudo crear.')
+      setFallo(otro ? 'Ese NIF ya es de otro contacto: hazlo también cliente en vez de crear otra ficha.' : e2 instanceof Error ? e2.message : 'No se pudo crear.')
       setOcupado(false)
     }
   }
@@ -298,8 +328,8 @@ function NuevoCliente({ accountId, terceros, alCerrar }: { accountId: string; te
     setOcupado(true); setFallo(null)
     try {
       await anadirPapel(mismo.tercero.id, 'customer')
-      navigate(rutaFichaTercero(mismo.tercero.id, 'datos-fiscales'), { state: { aviso: `${mismo.tercero.nombre} ya es también cliente: un solo tercero con los dos papeles.` } })
-    } catch (e2) { setFallo(e2 instanceof Error ? e2.message : 'No se pudo añadir el papel.'); setOcupado(false) }
+      navigate(rutaFichaTercero(mismo.tercero.id, 'datos-fiscales'), { state: { aviso: `${mismo.tercero.nombre} ya es también cliente: una sola ficha para las dos cosas.` } })
+    } catch (e2) { setFallo(e2 instanceof Error ? e2.message : 'No se pudo hacerlo también cliente.'); setOcupado(false) }
   }
 
   return (
@@ -316,7 +346,7 @@ function NuevoCliente({ accountId, terceros, alCerrar }: { accountId: string; te
           <div className="cx-aviso cx-aviso-ia" role="status">
             <strong>{mismo.texto}</strong>
             {!mismo.yaLoEs && <div className="cx-pie" style={{ marginTop: 8 }}>
-              <button type="button" className="cx-boton" onClick={() => void anadir()} disabled={ocupado}>Añadirle el papel de cliente</button>
+              <button type="button" className="cx-boton" onClick={() => void anadir()} disabled={ocupado}>Hacerlo también cliente</button>
             </div>}
             {mismo.yaLoEs && <div style={{ marginTop: 8 }}><Link to={rutaDeTercero(mismo.tercero as TerceroLista)}>Abrir su ficha</Link></div>}
           </div>
@@ -373,7 +403,7 @@ const RevisionCuentas = forwardRef<HTMLElement, {
       alCambiar(await confirmar430({ accountId, companyId, quien: userName }, c, p, { archivar }))
     } catch (e) {
       const otro = terceroDelMismoNif(e)
-      setFallo(`${c.code}: ${otro ? 'ese NIF ya es de otro tercero; elige esa ficha con «Cambiar».' : e instanceof Error ? e.message : 'no se pudo confirmar.'}`)
+      setFallo(`${c.code}: ${otro ? 'ese NIF ya es de otro contacto; elige esa ficha con «Cambiar».' : e instanceof Error ? e.message : 'no se pudo confirmar.'}`)
     }
     setOcupada(null)
   }
@@ -546,7 +576,7 @@ function FilaRevision({ titulo, propuesta, terceros, ocupada, alElegir, crearTex
       </span>
       {cambiando && (
         <div className="cxt-revision-cambiar">
-          <input className="cx-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Busca por nombre o NIF" aria-label="Buscar tercero" autoFocus />
+          <input className="cx-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Busca por nombre o NIF" aria-label="Buscar contacto" autoFocus />
           <div className="cxt-revision-lista">
             {lista.map((t) => <button key={t.id} type="button" className="cx-enlace" onClick={() => { setCambiando(false); alElegir(t.id) }}>Es {t.nombre}{t.nif ? ` · ${t.nif}` : ''}</button>)}
             {lista.length === 0 && <span className="cx-ayuda">Nadie se llama así.</span>}

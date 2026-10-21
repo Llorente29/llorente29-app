@@ -16,7 +16,7 @@
 
 import { corsHeaders } from '../_shared/cors.ts';
 import { renderTemplate, templateExists } from './templates.ts';
-import { PLANTILLAS_MARCA, cuerpoResend, remitenteDe } from './marca.ts';
+import { PLANTILLAS_MARCA, cerrojoMarca, cuerpoResend, remitenteDe } from './marca.ts';
 
 // Remitente y reply-to: sin marca, los fijos de plataforma de siempre (Resend +
 // folvy.app verificado), ahora en marca.ts (REMITENTE_FOLVY). Con marca (C06),
@@ -28,6 +28,7 @@ interface SendEmailPayload {
   template: string;                 // nombre de plantilla registrada
   data?: Record<string, unknown>;   // datos para la plantilla (opcional)
   marca?: string;                   // C06: id de la marca (supabase/functions/_shared/marcas.ts). Sin él, Folvy.
+  responder_a?: string;             // P01: «responder a» de este envío (solo con marca y por la vía interna).
 }
 
 Deno.serve(async (req) => {
@@ -79,9 +80,19 @@ Deno.serve(async (req) => {
       return jsonResponse(400, { error: `Email destino con formato invalido: ${p.to}` });
     }
     // C06: con marca, sus plantillas y su remitente; sin marca, lo de siempre.
-    const remitente = remitenteDe(p.marca);
+    // P01: el «responder a» de un envío solo lo pone otra función (vía interna).
+    if (p.responder_a && !isInternalCall) {
+      return jsonResponse(403, { error: 'El «responder a» de un envío solo lo pone el servidor.' });
+    }
+    const remitente = remitenteDe(p.marca, p.responder_a);
     if (!remitente.ok) {
       return jsonResponse(422, { error: remitente.motivo });
+    }
+    // P01: el freno de los correos con marca, por tipo. Cerrado = 423 y no sale nada.
+    const cerrojo = cerrojoMarca(remitente.marca, p.template, p.to, Deno.env.get('CORREO_MARCA_ABIERTOS'));
+    if (!cerrojo.abierto) {
+      console.log(`[send-email] CERRADO template=${p.template} marca=${remitente.marca?.id}`);
+      return jsonResponse(423, { error: cerrojo.motivo, cerrado: true });
     }
     const plantillaMarca = remitente.marca ? PLANTILLAS_MARCA[p.template] : undefined;
     if (remitente.marca ? !plantillaMarca : !templateExists(p.template)) {
@@ -127,7 +138,9 @@ Deno.serve(async (req) => {
     }
 
     const emailId = (resendBody as { id?: string })?.id ?? null;
-    console.log(`[send-email] OK template=${p.template} to=${p.to} id=${emailId} internal=${isInternalCall}`);
+    // P01: con marca, el destinatario a medias en el registro (son correos de clientes).
+    const aQuien = remitente.marca ? p.to.replace(/^(.).*(@.*)$/, '$1…$2') : p.to;
+    console.log(`[send-email] OK template=${p.template} to=${aQuien} id=${emailId} internal=${isInternalCall}`);
 
     // --- 7. Exito ---
     return jsonResponse(200, { status: 'ok', email_id: emailId });

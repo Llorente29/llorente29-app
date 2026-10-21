@@ -1380,7 +1380,7 @@ export async function getReceiptFileUrl(path: string | null | undefined): Promis
 
 /**
  * Compras (N21): lo que pasa con el papel de una recepción ya confirmada, en
- * una frase para quien recibe («Este papel es un albarán. La oficina esperará
+ * una frase para quien recibe («Es un albarán. La oficina esperará
  * la factura.»). Si la base aún no sabe decirlo, null: la confirmación no
  * depende de esto.
  */

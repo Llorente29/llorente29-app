@@ -40,7 +40,12 @@ select json_build_object(
       'source', c.source, 'accumulated_debt', c.accumulated_debt,
       -- Los mismos otros cargos que la app (tercerosService.ts, COSTES).
       'otros', json_build_array(c.delivery_transport, c.promo_product, c.promo_flash, c.offer_flash_credit, c.access_fee,
-                                c.prime_fee, c.recurring_fee, c.incidents_cost, c.incidents_refund, c.min_order_fee, c.other_cost))
+                                c.prime_fee, c.recurring_fee, c.incidents_cost, c.incidents_refund, c.min_order_fee, c.other_cost),
+      -- D01 (liquidaciones por correo, 20261113T0100): lo que trae el resumen de Uber y antes
+      -- no tenía columna, con el signo del origen, y lo que el lector vio que no cuadraba al leer.
+      'd01', json_build_object('otras_ganancias', c.other_earnings, 'otros_promo', c.promo_charges, 'anuncios', c.ads_spend,
+                               'promociones', c.item_promotions, 'contracargos', c.chargebacks, 'ajustes', c.adjustments),
+      'avisos_lector', case when jsonb_typeof(c.raw->'avisos') = 'array' then c.raw->'avisos' else '[]'::jsonb end)
       order by c.account_id, c.settlement_date), '[]')
     from public.channel_settlement c),
   -- Lo vendido por cada plataforma y lo que cobró de comisión, por año (fecha

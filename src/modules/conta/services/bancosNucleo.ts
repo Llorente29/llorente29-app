@@ -186,7 +186,7 @@ export function crearBancos(bd: Bd) {
       leer(tabla('channel_settlement').select('id, channel_id, settlement_date, period_from, period_to, net_payout, accumulated_debt, gross_sales, commission, source, collected_on, store_id')
         .eq('account_id', accountId).order('settlement_date', { ascending: false }).limit(400), 'las liquidaciones'),
       leer(tabla('sales_channel').select('id, name').eq('account_id', accountId), 'los canales'),
-      leer(tabla('party_role').select('party_id, role, channel_id, supplier_id').eq('account_id', accountId), 'los papeles'),
+      leer(tabla('party_role').select('party_id, role, channel_id, supplier_id').eq('account_id', accountId), 'lo que es cada contacto'),
       leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
       leer(tabla('company_account').select('id, code, name, plain_name, template_code, kind').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
       leer(tabla('recurring_contract').select('*').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los contratos'),

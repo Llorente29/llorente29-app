@@ -19,13 +19,13 @@
 // no escribe, y «Recibido» solo sale tras recibir de verdad.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/compras'
-const VERDURAS = 'c0c00000-0000-4000-8000-000000000001'
-const BODEGA = 'c0c00000-0000-4000-8000-000000000002'
-const AURORA = 'c0c00000-0000-4000-8000-000000000004'
+const VERDURAS = enCarril('c0c00000-0000-4000-8000-000000000001')
+const BODEGA = enCarril('c0c00000-0000-4000-8000-000000000002')
+const AURORA = enCarril('c0c00000-0000-4000-8000-000000000004')
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // La captura de página entera con `fullPage` pinta las piezas fijas (la
@@ -54,13 +54,16 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/compras')
-  await expect(page.getByRole('heading', { level: 1, name: 'Compras' })).toBeVisible()
+  // S01 · paso 3: Compras y gastos › Por revisar. El título lo dice la cabecera del esqueleto.
+  await expect(page.getByRole('heading', { level: 1, name: 'Compras y gastos · Por revisar' })).toHaveCount(1)
+  // Las pestañas, en la cabecera (en el móvil, en su fila debajo).
+  await expect(page.getByRole('navigation', { name: 'Pestañas de Compras y gastos' }).getByRole('link', { name: 'Por revisar' })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByRole('heading', { name: 'Qué tienes que mirar' })).toBeVisible()
   // Una fila por decisión. Lo que le falta a la ficha, todo junto:
   const ficha = page.locator('.cxc-cosa', { hasText: /^A Verduras del Huerto Prueba, S\.L\. le faltan/ })
   await expect(ficha.getByText(/^A Verduras del Huerto Prueba, S\.L\. le faltan .*cómo te factura\.$/)).toBeVisible()
   await expect(ficha.getByRole('button', { name: 'Usar ese NIF' })).toBeVisible()
-  await expect(ficha.getByRole('button', { name: 'Ver el papel' })).toBeVisible()
+  await expect(ficha.getByRole('button', { name: 'Ver el albarán' })).toBeVisible()
   // «Contado» no pregunta de quién es: avisa del IVA, con sus dos salidas.
   const contado = page.locator('.cxc-cosa', { hasText: 'a nombre de «Contado», no de tu empresa' })
   // Como la maqueta N18: la frase, y debajo «Así no puedes descontar su IVA. Recepción del …».
@@ -68,17 +71,17 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await expect(contado.getByText(/^Así no puedes descontar su IVA\. Recepción del \w+ 25 de septiembre · Norte Centro · 102,54\s€$/)).toBeVisible()
   await expect(contado.getByRole('button', { name: 'Pedir que la rehagan' })).toBeVisible()
   await expect(contado.getByRole('button', { name: 'Apuntarla sin descontar el IVA' })).toBeVisible()
-  // Tres papeles a nombre del mismo local: UNA pregunta, con una propuesta y su porqué.
-  const nombre = page.locator('.cxc-cosa', { hasText: '3 papeles van a nombre de «Aurora Cocina Centro». ¿De quién son?' })
+  // Tres albaranes a nombre del mismo local: UNA pregunta, con una propuesta y su porqué.
+  const nombre = page.locator('.cxc-cosa', { hasText: '3 albaranes van a nombre de «Aurora Cocina Centro». ¿De quién son?' })
   await expect(nombre).toHaveCount(1)
   await expect(nombre.getByRole('button', { name: 'Es Distribuciones Prueba Aurora, S.L.' })).toBeVisible()
   await expect(nombre.getByText('Comparte «aurora» y es quien trae el género')).toBeVisible()
   await expect(nombre.getByRole('button', { name: 'Es de otro…' })).toBeVisible()
   await expect(nombre.getByRole('button', { name: 'No es nuestro' })).toBeVisible()
-  // Regla 7: agrupar no esconde. La fila abre sus tres papeles, y cada uno se ve.
-  await nombre.getByText('Ver los 3 papeles').click()
-  await expect(nombre.getByRole('button', { name: 'Ver el papel' })).toHaveCount(3)
-  await nombre.getByText('Ver los 3 papeles').click()
+  // Regla 7: agrupar no esconde. La fila abre sus tres albaranes, y cada uno se ve (Julio, 21/10: «Ver los 2 albaranes», nunca «papeles»).
+  await nombre.getByText('Ver los 3 albaranes').click()
+  await expect(nombre.getByRole('button', { name: 'Ver el albarán' })).toHaveCount(3)
+  await nombre.getByText('Ver los 3 albaranes').click()
   // «Es de otro…» abre una búsqueda, no otra ristra de botones.
   await nombre.getByRole('button', { name: 'Es de otro…' }).click()
   const buscar = page.getByRole('dialog', { name: '¿De quién es «Aurora Cocina Centro»?' })
@@ -86,19 +89,21 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await expect(buscar.getByRole('option', { name: /Carnes Prueba del Valle/ })).toBeVisible()
   await buscar.getByRole('button', { name: 'Cancelar' }).click()
   await expect(buscar).toBeHidden()
-  // El número del menú cuenta filas, como la cabecera (en ordenador; en el móvil el menú va plegado).
+  // S01: lo que hay por mirar de todos los productos va debajo de Inicio («N por
+  // revisar»), y la cuenta de Compras está dentro (en ordenador; en el móvil el
+  // menú va abajo). El número no cambia el nombre del enlace: va como su descripción.
   if (lado(page) === 'ordenador') {
     const filas = await page.locator('.cxc-mirar > .cxc-cosa').count()
-    // M01: en el globo ámbar del círculo (la barra va plegada de serie).
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
-    await expect(menu.locator('.cxm-modulo', { hasText: 'Compras' }).locator('.cxm-globo')).toHaveText(String(filas))
-    // El número no cambia el nombre del enlace: va como su descripción (e2e 172).
-    const enlace = menu.getByRole('link', { name: 'Compras', exact: true })
-    await expect(enlace).toBeVisible()
-    await expect(enlace).toHaveAccessibleDescription(`${filas} por mirar`)
-    // «Ventas» en el menú, delante de Compras, como N30 (V C B L I P A).
-    const nombres = await menu.locator('.cxm-modulo-nombre').allTextContents()
-    expect(nombres.indexOf('Compras')).toBe(nombres.indexOf('Ventas') + 1)
+    await expect(menu.getByRole('link', { name: 'Compras y gastos', exact: true })).toHaveAttribute('aria-current', 'page')
+    if (filas > 0) {
+      const inicio = menu.getByRole('link', { name: 'Inicio', exact: true })
+      await expect(inicio).toHaveAccessibleDescription(/^\d+ por revisar$/)
+      const total = Number((await inicio.locator('.s-barra-chip').textContent())!.trim())
+      expect(total).toBeGreaterThanOrEqual(filas)
+    }
+    // Ventas ya no está: la sustituye Facturación (S01), que sale cuando tenga pantalla.
+    await expect(menu.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()
@@ -106,11 +111,21 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await capturar(page, 'compras')
 
   // Subir una factura: el diálogo, sin subir nada.
-  await page.getByRole('button', { name: 'Subir una factura' }).click()
+  // «Subir una factura» está en la cinta (paso 3): abre el mismo diálogo.
+  await page.getByRole('toolbar', { name: 'Acciones de Por revisar' }).getByRole('link', { name: /Subir una factura/ }).click()
   const dialogo = page.getByRole('dialog', { name: 'Subir una factura' })
   await expect(dialogo.getByLabel('La factura (foto o PDF)')).toBeVisible()
   await capturar(page, 'subir-factura', 'dialogo')
   await dialogo.getByLabel('La factura (foto o PDF)').press('Escape')
+  await expect(dialogo).toBeHidden()
+  // S01e: también desde la página, a la vista aunque la cinta esté plegada; y la ✕ y
+  // «Cancelar» cierran (en el móvil no hay Escape).
+  await page.locator('.cxc-entra-fila').getByRole('button', { name: 'Subir una factura' }).click()
+  await expect(dialogo.getByRole('button', { name: 'Cerrar' })).toBeVisible()
+  await dialogo.getByRole('button', { name: 'Cerrar' }).click()
+  await expect(dialogo).toBeHidden()
+  await page.locator('.cxc-entra-fila').getByRole('button', { name: 'Subir una factura' }).click()
+  await dialogo.getByRole('button', { name: 'Cancelar' }).click()
   await expect(dialogo).toBeHidden()
 })
 
@@ -142,9 +157,9 @@ test('La liquidación de septiembre y su contraste (N19)', async ({ page }) => {
     return Array.from(t.children).filter((c) => c.getBoundingClientRect().right > r.right + 1 || c.scrollWidth > c.clientWidth + 1).map((c) => c.textContent)
   })
   expect(salen).toEqual([])
-  // Los albaranes que cuenta el contraste, con su papel.
+  // Los albaranes que cuenta el contraste, cada uno con su «Ver el albarán».
   await page.getByRole('button', { name: 'Ver los 2 albaranes' }).click()
-  await expect(page.locator('.cxc-albaranes').getByRole('button', { name: 'Ver el papel' })).toHaveCount(2)
+  await expect(page.locator('.cxc-albaranes').getByRole('button', { name: 'Ver el albarán' })).toHaveCount(2)
   await expect(page.getByRole('button', { name: 'Decirle cuál es cuál' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Contabilizar' })).toBeEnabled()
   await capturar(page, 'liquidacion')

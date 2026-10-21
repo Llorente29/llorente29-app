@@ -3,49 +3,51 @@
  * M01 · El marco nuevo (maqueta N30, aprobada por Julio el 15/10). Sus tokens
  * viven en `.cxm` y SOLO los usan el marco y las piezas nuevas (decisión de
  * Julio, F01 respuesta 2): las pantallas de hoy se quedan con los suyos
- * (tokens.css) hasta que su sesión las pase. Estos valores son el tema de
- * Folvy; Sumied pone encima su letra y su azul (src/marca/tema.ts).
+ * (tokens.css) hasta que su sesión las pase. Desde el S01 sus tokens son
+ * alias de los del sistema de diseño (diseno/tokens.css): una marca con tema
+ * (Sumied) los cambia allí, desde src/marca/tema.ts.
  *
  * Sin negro puro, sin degradados y sin sombras grandes. Radios: 6 px en
  * botones, 5 px en campos y 8 px en bloques.
  */
 
 .cxm {
-  /* ── Colores (N30) ─────────────────────────────────────────────────── */
-  --cxm-texto: #0E1A2B;
-  --cxm-apoyo: #5B6678;
-  --cxm-fondo: #EEF1F5;          /* Fondo de página */
-  --cxm-superficie: #FFFFFF;
-  --cxm-suave: #F7F9FC;          /* Fondo suave: barra de módulos, barra de acciones */
-  --cxm-borde: #DDE3EB;
-  --cxm-borde-campo: #CBD3DF;
-  --cxm-azul: #2F5BFF;           /* Acción */
-  --cxm-azul-encima: #1F45D6;    /* Acción, al pasar el ratón */
-  --cxm-verde: #0B7A55;          /* Lo hecho */
-  --cxm-verde-fondo: #E3FBF2;
-  --cxm-ambar: #7A4A00;          /* Lo pendiente */
-  --cxm-ambar-fondo: #FFE7B8;
-  --cxm-propuesto: #EEF3FF;      /* Lo propuesto por la máquina */
-  --cxm-propuesto-borde: #B9C9FF;
-  --cxm-documento: #E9EDF3;      /* Fondo del panel del documento */
-  --cxm-rojo: #A3201A;
-  --cxm-velo: rgba(14, 26, 43, 0.32);
-  --cxm-sombra: 0 4px 14px rgba(14, 26, 43, 0.08); /* Solo los desplegables: pequeña */
+  /* ── Colores (N30). Desde el S01, alias del sistema de diseño
+     (diseno/tokens.css): los valores de serie son los mismos, y una marca
+     con tema los cambia allí, no aquí. ───────────────────────────────── */
+  --cxm-texto: var(--s-tinta);
+  --cxm-apoyo: var(--s-apoyo);
+  --cxm-fondo: var(--s-fondo);   /* Fondo de página */
+  --cxm-superficie: var(--s-superficie);
+  --cxm-suave: var(--s-suave);   /* Fondo suave: barra de módulos, barra de acciones */
+  --cxm-borde: var(--s-borde-decorativo);
+  --cxm-borde-campo: #CBD3DF;    /* El de N30; los controles nuevos usan --s-borde-control (3:1) */
+  --cxm-azul: var(--s-accion);   /* Acción */
+  --cxm-azul-encima: var(--s-accion-encima); /* Acción, al pasar el ratón */
+  --cxm-verde: var(--s-ok);      /* Lo hecho */
+  --cxm-verde-fondo: var(--s-ok-fondo);
+  --cxm-ambar: var(--s-duda);    /* Lo pendiente */
+  --cxm-ambar-fondo: var(--s-duda-fondo);
+  --cxm-propuesto: var(--s-propuesto); /* Lo propuesto por la máquina */
+  --cxm-propuesto-borde: var(--s-propuesto-borde);
+  --cxm-documento: var(--s-documento); /* Fondo del panel del documento */
+  --cxm-rojo: var(--s-falta);
+  --cxm-velo: var(--s-velo);
+  --cxm-sombra: var(--s-sombra); /* Solo los desplegables: pequeña */
 
   /* ── Letra ──────────────────────────────────────────────────────────── */
-  --cxm-letra: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
-  --cxm-letra-cifras: 'Geist Mono Variable', 'Geist Mono', 'SF Mono', Menlo, monospace;
+  --cxm-letra: var(--s-letra);
+  --cxm-letra-cifras: var(--s-letra-cifras);
 
   /* ── Formas ─────────────────────────────────────────────────────────── */
-  --cxm-radio-boton: 6px;
-  --cxm-radio-campo: 5px;
-  --cxm-radio-bloque: 8px;
+  --cxm-radio-boton: var(--s-radio-boton);
+  --cxm-radio-campo: var(--s-radio-campo);
+  --cxm-radio-bloque: var(--s-radio-bloque);
 
   /* ── Densidad (las piezas comunes leen estas dos) ───────────────────── */
-  --cxm-fila: 28px;              /* Compacta: unas 30 filas por pantalla */
-  --cxm-hueco: 8px;
+  --cxm-fila: var(--s-fila);     /* Compacta: unas 30 filas por pantalla */
+  --cxm-hueco: var(--s-hueco);
 }
-.cxm[data-densidad='comoda'] { --cxm-fila: 40px; --cxm-hueco: 12px; }
 
 /* El marco: los módulos y el cuerpo. Sin el degradado de las pantallas de hoy. */
 .cx.cxm {
@@ -103,7 +105,7 @@
 .cxm-modulos[data-desplegada='no'] .cxm-modulo-cuenta { display: none; }
 
 .cxm button.cxm-modulo { width: 100%; border: none; background: none; font-family: inherit; }
-.cxm .cxm-modulo-apagado { opacity: 0.55; cursor: default; }
+.cxm .cxm-modulo-apagado { position: relative; opacity: 0.55; cursor: default; }
 .cxm .cxm-modulo-apagado:hover { background: none; color: var(--cxm-apoyo); }
 .cxm-pronto {
   display: none; position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); z-index: 45;
@@ -221,6 +223,7 @@
 .cxm-te-toca { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; font-family: var(--cxm-letra); }
 .cxm-te-toca-titulo { margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cxm-apoyo); }
 .cxm-te-toca-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cxm-te-toca-nada { margin: 0; font-size: 13px; color: var(--cxm-apoyo); }
 .cxm .cxm-chip {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px;
   border: 1px solid transparent; font: inherit; font-size: 13px; text-decoration: none; cursor: pointer;
@@ -256,6 +259,8 @@
   column-gap: 12px; padding: 6px 10px; border-radius: var(--cxm-radio-boton); cursor: pointer;
 }
 .cxm-buscador-opcion[aria-selected='true'] { background: var(--cxm-propuesto); }
+/* Lo anulado o archivado: al final de su grupo y en gris (Julio, 16/10). */
+.cxm-buscador-opcion-apagada .cxm-buscador-titulo, .cxm-buscador-opcion-apagada .cxm-buscador-cifra { color: var(--cxm-apoyo); }
 .cxm-buscador-titulo { grid-area: titulo; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cxm-buscador-opcion .cxm-apoyo { grid-area: apoyo; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cxm-buscador-cifra { grid-area: cifra; align-self: center; font-size: 12px; color: var(--cxm-texto); }
@@ -266,7 +271,14 @@
 .cxm-es-movil .cxm-arriba { padding: 0 12px; gap: 8px; }
 .cxm-es-movil .cxm-arriba-izquierda { flex: 1; min-width: 0; border-right: none; padding-right: 0; }
 .cxm-es-movil .cxm-arriba-centro { display: none; }
-.cxm.cxm-es-movil .cxm-empresa { max-width: 100%; }
+.cxm.cxm-es-movil .cxm-empresa { max-width: 100%; flex: 0 1 auto; min-width: 0; }
+/* M01 (Julio, 16/10): en el móvil, la empresa y el ejercicio encogen (la empresa
+   con «…») y la lupa nunca tapa el selector: cada cosa en su sitio de la fila. */
+.cxm-es-movil .cxm-arriba-izquierda { overflow: hidden; }
+.cxm-es-movil .cxm-periodo { flex: 0 1 auto; min-width: 0; }
+.cxm-es-movil .cxm-periodo > * { display: flex; min-width: 0; max-width: 100%; }
+.cxm.cxm-es-movil .cxm-periodo .cxm-select { max-width: 132px; min-width: 0; height: 36px; }
+.cxm-es-movil .cxm-arriba-derecha { flex-shrink: 0; }
 .cxm.cxm-es-movil .cxm-buscar { min-width: 0; width: 40px; height: 40px; justify-content: center; padding: 0; }
 .cxm-pestanas-movil {
   height: 40px; overflow-x: auto; padding: 0 8px; background: var(--cxm-superficie); border-bottom: 1px solid var(--cxm-borde);
@@ -296,3 +308,29 @@
 .cxm-hoja-item .cxm-apoyo { margin-left: auto; font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) { .cxm * { transition: none !important; } }
+
+/* ── 2b · La altura de lo que queda fijo arriba: la cabecera del esqueleto
+   (--s-alto-cabecera: 56 px en el ordenador desde el S01f, 48 en el móvil). La cabecera de las tablas se queda fija debajo (--cxm-alto-arriba).
+   La segunda fila de antes (SubpestanasEnBarra) es ahora la cinta (S01).
+   Las fichas de proveedor y de tercero usan aún .cxm-sub para su subtítulo. */
+.cxm { --cxm-alto-arriba: var(--s-alto-cabecera, 48px); }
+.cxm .cxm-sub {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: none; border-radius: var(--cxm-radio-boton);
+  background: none; color: var(--cxm-apoyo); font: inherit; font-size: 13px; white-space: nowrap; text-decoration: none; cursor: pointer;
+}
+.cxm .cxm-sub:hover { color: var(--cxm-texto); background: var(--cxm-suave); }
+.cxm .cxm-sub[aria-current='page'], .cxm .cxm-sub-activa { color: var(--cxm-azul); font-weight: 600; background: var(--cxm-propuesto); }
+.cxm .cxm-sub-gris { opacity: 0.6; }
+.cxm-sub-punto { width: 7px; height: 7px; border-radius: 50%; background: var(--cxm-ambar); display: inline-block; flex-shrink: 0; }
+.cxm .cxm-sub-numero { color: inherit; }
+.cxm .cxm-sub-numero .cxm-cifra { font-size: 12px; }
+
+/* M01 · La barra de acciones en el móvil: el principal y «⋯» con el resto. */
+.cxm-acciones-mas { position: relative; margin-left: auto; }
+.cxm .cxm-acciones-mas-boton { min-width: 40px; justify-content: center; font-size: 18px; line-height: 1; }
+.cxm-acciones-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; min-width: 220px; display: flex; flex-direction: column; gap: 4px;
+  padding: 6px; background: var(--cxm-superficie); border: 1px solid var(--cxm-borde); border-radius: var(--cxm-radio-campo);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+.cxm .cxm-acciones-menu .cxm-boton { width: 100%; justify-content: flex-start; }

@@ -16,7 +16,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { crearBancos, emparejar, leerYCuadrar } from '@/modules/conta/services/bancosNucleo'
-import { BANCOS_B01, EMPRESA_A, FICHERO, baseDeA } from './datos'
+import { BANCOS_B01, EMPRESA_A, FICHERO, baseDeA, conLimpieza } from './datos'
 
 const DIR = 'docs/conta/capturas/b01/pantallas'
 const NORTE = BANCOS_B01[0]
@@ -34,10 +34,10 @@ async function capturar(page: Page, nombre: string) {
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
   await page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
-  // Nada flotante tapa contenido (respuesta 4). En el ordenador Bancos no tiene
-  // ninguna pieza flotante (sin la barra de «Muy pronto»): se comprueba que no esté.
-  if (await page.locator(FLOTANTES_CONTA.join(', ')).count() === 0) expect(lado(page)).toBe('ordenador')
-  else expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
+  // Nada flotante tapa contenido (respuesta 4). Desde el S01c no flota nada ni
+  // en el ordenador (sin la barra de «Muy pronto») ni en el móvil (el menú es un
+  // cajón); si alguna pantalla vuelve a pintar una pieza flotante, se mide.
+  if (await page.locator(FLOTANTES_CONTA.join(', ')).count() > 0) expect(await loQueTapan(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 }
 
 /** Un importe cortado con «…» esconde lo que la pantalla existe para enseñar (respuesta 4: el cierre en el móvil decía «44.237,8…»). */
@@ -75,20 +75,31 @@ test.describe('B01 · Bancos, las pantallas', () => {
   test('ordenador: N17 en tres niveles, las cinco sin maqueta y los botones que confirman', async ({ page }) => {
     test.skip(lado(page) !== 'ordenador', 'En el móvil va su prueba.')
     const base = await preparar()
-    try {
+    await conLimpieza(page, async () => {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
       await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { level: 1, name: 'Bancos' })).toBeVisible()
       const pestanas = page.getByRole('navigation', { name: 'Pestañas de Bancos' })
-      for (const p of ['Movimientos', 'Reglas', 'Cuentas y extractos', 'Cierre del mes']) await expect(pestanas.getByRole('link', { name: p })).toBeVisible()
-      const barra = page.getByRole('navigation', { name: 'Acciones de Bancos' })
-      for (const g of ['Tus bancos', 'Traer movimientos', 'Automático', 'Tuyos']) await expect(barra.getByRole('group', { name: g })).toBeVisible()
-      await expect(barra.getByText('Subir extracto')).toBeVisible()
+      // Las cuatro, a la vista en la cabecera al lado del mes (Julio, 17/10: «Favoritos» solo con
+      // su estrella para que quepan a 1440 px): sin «Más ▾».
+      await expect(pestanas.getByRole('link')).toHaveText(['Movimientos', 'Reglas', 'Cuentas y extractos', 'Cierre del mes'])
+      for (const l of await pestanas.getByRole('link').all()) await expect(l).toBeVisible()
+      await expect(pestanas.getByRole('button', { name: /▾$/ })).toHaveCount(0)
+      // El mes, corto en la cabecera («Oct 2026», como la N30).
+      await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Mes' })).toHaveValue('2026-10')
+      await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Mes' }).locator('option:checked')).toHaveText('Oct 2026')
+      await expect(pestanas.getByRole('link', { name: 'Movimientos' })).toHaveAttribute('aria-current', 'page')
+      // S01 · paso 3: las pestañas, en la cabecera del esqueleto; la barra, en la cinta de la pestaña.
+      // «Tuyos» ya no está: Favoritos y Ctrl K son del esqueleto.
+      const barra = page.getByRole('toolbar', { name: 'Acciones de Movimientos' })
+      for (const g of ['Tus bancos', 'Traer movimientos', 'Automático', 'Revisar']) await expect(barra.getByRole('group', { name: g })).toBeVisible()
+      await expect(page.getByRole('group', { name: 'Tuyos' })).toHaveCount(0)
+      await expect(barra.getByRole('link', { name: /Subir extracto/ })).toBeVisible()
       // Respuesta 4: la barra en UNA fila, con los nombres cortos; ni «Conectar» ni la barra de «Muy pronto».
-      const filas = await Promise.all(['Tus bancos', 'Traer movimientos', 'Automático', 'Tuyos'].map(async (g) => Math.round((await barra.getByRole('group', { name: g }).boundingBox())!.y)))
+      const filas = await Promise.all(['Tus bancos', 'Traer movimientos', 'Automático', 'Revisar'].map(async (g) => Math.round((await barra.getByRole('group', { name: g }).boundingBox())!.y)))
       expect(new Set(filas).size).toBe(1)
-      await expect(barra.getByRole('button', { name: /^B01 Norte/ })).toBeVisible()
+      await expect(barra.getByRole('link', { name: /^B01 Norte/ })).toHaveAttribute('aria-current', 'page')
       await expect(page.getByText('Conectar')).toHaveCount(0)
       await expect(page.locator('.cx-pregunta')).toHaveCount(0)
       // Lo que no funciona no se enseña (respuesta 3, punto 4).
@@ -105,7 +116,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
       await expect(page.locator('.cxn-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
       await expect(page.locator('.cxn-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
-      await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
+      await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos y todos los meses, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
       // Con la apertura de la semilla, lo que falta por casar es exactamente lo que queda sin casar.
       await expect(page.getByTestId('cuadre')).toContainText('2.175,50 €')
       await expect(page.getByTestId('cuadre')).toContainText('son justo los movimientos sin casar')
@@ -123,7 +134,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // Por aclarar, y la tarjeta que nadie ha dado de alta (respuesta 3).
       await page.getByRole('button', { name: /^Por aclarar \d+$/ }).click()
       await capturar(page, 'por-aclarar')
-      await barra.getByRole('button', { name: /^B01 Mercado/ }).click()
+      await barra.getByRole('link', { name: /^B01 Mercado/ }).click()
       // B02: la tarjeta sin dar de alta la anota el motor (se pregunta una vez por tarjeta, no en cada pago).
       await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' })).toContainText('tarjeta ···1234 sin dar de alta')
       await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()
@@ -174,16 +185,16 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByRole('heading', { name: 'Lo que he hecho', level: 2 })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Deshacer' }).first()).toBeVisible()
       await capturar(page, 'hecho-por-folvy')
-    } finally {
+    }, async () => {
       await base.deshacerTodo('Limpieza después de las pantallas B01')
       expect(await base.contarAsientosA()).toBe(base.asientosAntes)
-    }
+    })
   })
 
   test('móvil (M4): portada, Para confirmar y Por aclarar en tarjetas', async ({ page }) => {
     test.skip(lado(page) !== 'movil', 'En el ordenador va la suya.')
     const base = await preparar()
-    try {
+    await conLimpieza(page, async () => {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
       await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
@@ -218,9 +229,9 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
       expect(await importesCortados(page)).toEqual([])
       await capturar(page, 'cierre')
-    } finally {
+    }, async () => {
       await base.deshacerTodo('Limpieza después de las pantallas B01 (móvil)')
       expect(await base.contarAsientosA()).toBe(base.asientosAntes)
-    }
+    })
   })
 })

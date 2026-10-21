@@ -1,3 +1,6 @@
+-- W02 (17/10): el secreto que iba aquí escrito se ha quitado del fichero. Ya no
+-- valía (producción lo lee de Vault desde julio y tiene otro valor; medido
+-- por su huella el 17/10). Este fichero es historia: no se vuelve a aplicar.
 -- 20260721T3000_cfg7_nearest.sql
 -- CFG-7: ASIGNACIÓN por cercanía. Por local, elige cómo se ofrece el pedido a la
 -- flota propia: 'broadcast' (actual, a todos a la vez) o 'nearest' (al más cercano,
@@ -28,7 +31,7 @@ DECLARE
   v_strategy text;
   v_timeout  int;
   v_courier  uuid;
-  v_secret   text := 'fv_catdisp_tnrMMcaI8gALFCitfvzPGsaHgQa3A83w';
+  v_secret   text := '<retirado: vive en Vault (catcher_dispatch_secret)>';
   v_url      text := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/catcher-dispatch';
 BEGIN
   IF new.service_type = 'own_delivery'

@@ -17,9 +17,22 @@
 --     segundo ámbar del local, y esa semilla se metió UNA vez, con la hora de
 --     aquel momento. A las 7 horas el feed ya no lo enseña (e2e 37202533508,
 --     04/10: «Uber no la ha mandado» no encontrado, en ordenador y móvil).
--- Inventado, sin datos de cliente. Locales en dispatch_mode 'manual': ningún
--- disparador llama a Catcher.
+-- Inventado, sin datos de cliente.
+--
+-- LOS LOCALES, EN AUTOMÁTICO, que es el caso real (Julio, 17/10: todos los de
+-- producción están en dispatch_mode 'auto'). Pero tg_auto_dispatch lleva
+-- escrita la dirección de catcher-dispatch de PRODUCCIÓN, y salta al crear un
+-- pedido propio «aceptado» o al pasarlo a «aceptado». Por eso la semilla mete
+-- los pedidos con los locales en 'manual' (el disparador no sale) y los pasa a
+-- 'auto' AL FINAL, cuando ya no inserta nada. Las pruebas de reparto no crean
+-- pedidos ni los pasan a «aceptado». Y si alguno saltara, staging no tiene el
+-- secreto catcher_dispatch_secret: producción contesta 401 sin leer ni
+-- escribir nada (catcher-dispatch, «secreto interno inválido»).
 -- ============================================================================
+update public.locations set dispatch_mode = 'manual'
+ where id in ('c01a0000-0000-4000-8000-0000000000a2', 'e0200000-0000-4000-8000-0000000000a3')
+   and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
 select set_config('folvy.reparto_tal_cual', 'on', true);
 
 insert into public.sale
@@ -40,8 +53,9 @@ on conflict (id) do update
       delivery_alarm_at = null, delivery_alarm_kind = null, delivery_alarm_ack_at = null, updated_at = now();
 
 -- El 7B000, de hoy otra vez (no se crea aquí: si no existe, no hace nada).
--- Sigue siendo el más nuevo de Pita del Sur en Uber, como espera
--- 20261005_r02_prueba_sugerencia.sql.
+-- R03: es un Uber sin calle, sin punto y sin cargo de envío: por la regla de
+-- las tres señales lo reparte Uber («fuera de zona»). Ya no se le fuerza el
+-- «propio»: lo pone la regla, en el bloque del R03 de abajo.
 update public.sale
    set sold_at = now() - interval '8 minutes', created_at = now() - interval '8 minutes',
        status = 'open', order_status = 'accepted', updated_at = now()
@@ -62,3 +76,161 @@ delete from public.brand_delivery_policy
  where account_id = 'c01a0000-0000-4000-8000-00000000000a'
    and location_id <> '00000000-0000-0000-0000-000000000000';
 delete from public.delivery_policy_suggestion where account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
+-- ============================================================================
+-- R03 · La dirección que no llega (16/10). Los tres casos del encargo, en Norte
+-- Centro, y dos tablets (Norte Centro y Norte Mercado) para el permiso por
+-- local. Inventado, sin datos de cliente. Solo si las migraciones del R03 están
+-- en staging (las columnas nuevas): sin ella, esta parte no hace nada y el resto
+-- de la semilla sigue igual.
+--   R03A · con dirección              → ticket con el bloque ENTREGA
+--   R03N · con dirección, indicaciones y nota → ticket con el recuadro de notas
+--   R03B · sin calle, con punto       → ha salido a Catcher, con repartidor; la completa el ordenador
+--   R03C · sin calle ni punto         → no ha podido salir: aviso rojo con el motivo y el teléfono
+--   R03D · sin calle, con punto       → la tablet: ha salido, solo la línea informativa, sin botón
+--   R03E · sin calle, con punto       → en la lista de Despacho, ha salido, sin completar
+--   R03K · sin calle, con punto       → ha salido; la completa la tablet (Julio, 17/10)
+-- (Nada sale a Catcher de verdad: «ha salido» es el estado que deja
+-- catcher-dispatch, puesto a mano con un pedido de Catcher inventado. El motivo
+-- del R03C es el de resolve_dispatch en un local automático.)
+--   R03V · Uber sin calle, sin punto, sin cargo → la reparte Uber, fuera de
+--          zona: ni aviso ni Catcher; ticket como el de la plataforma
+--   R03T · Uber con las tres, marca con Uber en «Plataforma» → propio (la regla
+--          por pedido manda sobre la tabla)
+--   R03M · Uber mezclado → aviso «Decide quién reparte»; no sale a Catcher
+--   R03U · Uber con dirección y código de acceso → ha salido a Catcher; no sale
+--          en el aviso; el ticket y la tarjeta llevan «Tel. … · código …»
+-- Teléfonos y códigos inventados (900 000 000, 600 000 000, 12345678).
+-- ============================================================================
+do $r03$
+begin
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'sale' and column_name = 'customer_phone_code') then
+    raise notice 'R03: las migraciones 0300 y 0310 no están en staging; escenario del R03 sin sembrar.';
+    return;
+  end if;
+
+  -- El 7B000 por la regla de Uber (sin «tal cual»): sin ninguna de las tres
+  -- señales → la reparte Uber · fuera de zona.
+  update public.sale set delivery_by_reason = null, updated_at = now()
+   where id = 'e0200000-0000-4000-8000-0000000052a1' and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
+  perform set_config('folvy.reparto_tal_cual', 'on', true);
+
+  -- El token es único en toda la base y no lleva uuid: en un carril (W02) lleva
+  -- «-cN» detrás, igual que se lo pone el clon (scripts/e2e/carril/clonar.sql).
+  insert into public.kds_device (id, account_id, location_id, label, token) values
+    ('e0300000-0000-4000-8000-0000000000e1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2', 'R03 e2e Norte Centro',
+     'r03-e2e-norte-centro' || coalesce('-c' || nullif(current_setting('e2e.carril', true), ''), '')),
+    ('e0300000-0000-4000-8000-0000000000e2', 'c01a0000-0000-4000-8000-00000000000a', 'e0200000-0000-4000-8000-0000000000a3', 'R03 e2e Norte Mercado',
+     'r03-e2e-norte-mercado' || coalesce('-c' || nullif(current_setting('e2e.carril', true), ''), ''))
+  on conflict (id) do update set is_active = true, location_id = excluded.location_id, token = excluded.token;
+
+  insert into public.sale
+    (id, account_id, location_id, brand_id, channel_id, source, sold_at, created_at, total, status, order_status,
+     service_type, delivery_address, external_channel_text, pos_short_code, platform_order_code, platform_order_ref, raw_tab, customer_phone)
+  values
+    ('e0300000-0000-4000-8000-0000000000a1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '5 minutes', now() - interval '5 minutes',
+     21.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba, 1, Floor: 4, Door: A, 28000', 'Glovo', 'R03A', 'R03A', '100000000031',
+     '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":"Calle Inventada de Prueba, 1","address_2":"Floor: 4, Door: A","latitude":"40.4300","longitude":"-3.6800"}}', '+34600000001'),
+    -- R03N · con dirección, indicaciones de entrega y nota del cliente.
+    ('e0300000-0000-4000-8000-0000000000b1', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '5 minutes', now() - interval '5 minutes',
+     20.50, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba, 9, Floor: 2, Door: C, 28000', 'Glovo', 'R03N', 'R03N', '100000000036',
+     '{"channel":"Glovo","service_type":"delivery","customer_notes":"Sin pepinillos, por favor","customer":{"address_1":"Calle Inventada de Prueba, 9","address_2":"Floor: 2, Door: C","delivery_notes":"Portal azul, timbre 2C","latitude":"40.4310","longitude":"-3.6810"}}', '+34600000006'),
+    ('e0300000-0000-4000-8000-0000000000a2', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '4 minutes', now() - interval '4 minutes',
+     22.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03B', 'R03B', '100000000032',
+     '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":null,"latitude":"40.4100","longitude":"-3.7000"}}', '+34600000002'),
+    ('e0300000-0000-4000-8000-0000000000a3', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '3 minutes', now() - interval '3 minutes',
+     23.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03C', 'R03C', '100000000033',
+     '{"channel":"Glovo","service_type":"delivery","customer":{}}', '+34600000003'),
+    ('e0300000-0000-4000-8000-0000000000a4', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '2 minutes', now() - interval '2 minutes',
+     24.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03D', 'R03D', '100000000034',
+     '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":null,"latitude":"40.4150","longitude":"-3.6950"}}', '+34600000004'),
+    ('e0300000-0000-4000-8000-0000000000a5', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     25.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03E', 'R03E', '100000000035',
+     '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":null,"latitude":"40.4120","longitude":"-3.6980"}}', '+34600000005'),
+    ('e0300000-0000-4000-8000-0000000000b2', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c1', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     19.00, 'open', 'accepted', 'own_delivery', null, 'Glovo', 'R03K', 'R03K', '100000000037',
+     '{"channel":"Glovo","service_type":"delivery","customer":{"address_1":null,"latitude":"40.4130","longitude":"-3.6970"}}', '+34600000007'),
+    ('e0300000-0000-4000-8000-0000000000a6', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '6 minutes', now() - interval '6 minutes',
+     26.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 5, 28000 Madrid, Spain, Unit: 3C', 'Uber Eats', 'R03U', 'R03U', null,
+     '{"channel":"Uber Eats","service_type":"delivery","customer_notes":"Sin cebolla","charges":[{"type":"delivery","price":"2.99 EUR"}],"customer":{"address_1":"Calle Inventada de Prueba 5, 28000 Madrid, Spain","address_2":"Unit: 3C","phone":"+34900000000","phone_access_code":"12345678","delivery_notes":"Timbre 3C","latitude":"40.4180","longitude":"-3.6900"}}', '+34900000000')
+  on conflict (id) do update
+    set sold_at = excluded.sold_at, created_at = excluded.created_at, status = 'open', order_status = 'accepted',
+        service_type = 'own_delivery', delivery_address = excluded.delivery_address, raw_tab = excluded.raw_tab,
+        brand_id = excluded.brand_id, channel_id = excluded.channel_id, carrier_code = null, carrier_order_id = null, delivery_state = null, dispatch_error = null,
+        delivery_address_fixed = null, delivery_address_fixed_at = null, delivery_address_fixed_by = null,
+        delivery_address_origin = null, customer_phone = excluded.customer_phone, rider_name = null, rider_phone = null,
+        updated_at = now();
+
+  update public.sale
+     set dispatch_error = 'No se despachó: la dirección no ha llegado y tampoco el punto del mapa: no se puede despachar'
+   where id = 'e0300000-0000-4000-8000-0000000000a3' and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
+  -- Los que tienen calle o punto del mapa han salido a Catcher: es lo que hace
+  -- tg_auto_dispatch + catcher-dispatch en un local automático (R03U incluido:
+  -- lo prueba supabase/staging/sql/20261118_r03_uber_auto_despacho_prueba.sql).
+  -- Aquí no sale nada de verdad: pedidos de Catcher inventados; el R03B ya con
+  -- repartidor (inventado) para «Llamar».
+  update public.sale
+     set carrier_code = 'catcher', carrier_order_id = 'R03-PRUEBA-' || pos_short_code, delivery_state = 'assigned',
+         rider_name = case when pos_short_code = 'R03B' then 'Repartidor de Prueba' end,
+         rider_phone = case when pos_short_code = 'R03B' then '+34600000090' end
+   where id in ('e0300000-0000-4000-8000-0000000000a1', 'e0300000-0000-4000-8000-0000000000b1',
+                'e0300000-0000-4000-8000-0000000000a2', 'e0300000-0000-4000-8000-0000000000a4',
+                'e0300000-0000-4000-8000-0000000000a5', 'e0300000-0000-4000-8000-0000000000b2',
+                'e0300000-0000-4000-8000-0000000000a6')
+     and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
+  perform set_config('folvy.reparto_tal_cual', '', true);
+
+  -- R03V · Uber sin calle de una marca en «Nosotros» (Pita del Sur): entra SIN
+  -- «tal cual» para que pase por «Quién reparte» y por la regla de fuera de
+  -- zona, y sale como «la reparte Uber». Se borra y se crea de nuevo: así no
+  -- hereda el tipo de reparto de la ejecución anterior.
+  delete from public.sale where id in ('e0300000-0000-4000-8000-0000000000a7', 'e0300000-0000-4000-8000-0000000000a8',
+                                        'e0300000-0000-4000-8000-0000000000a9')
+     and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+  insert into public.sale
+    (id, account_id, location_id, brand_id, channel_id, source, sold_at, created_at, total, status, order_status,
+     service_type, delivery_address, external_channel_text, pos_short_code, platform_order_code, raw_tab, customer_phone)
+  values
+    ('e0300000-0000-4000-8000-0000000000a7', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b2', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     27.00, 'open', 'accepted', 'own_delivery', null, 'Uber Eats', 'R03V', 'R03V',
+     '{"channel":"Uber Eats","service_type":"delivery","customer":{"address_1":null,"phone":"+34900000001","phone_access_code":"87654321"}}', '+34900000001'),
+    -- R03T · Uber con calle, punto y cargo de envío, de una marca con Uber en
+    -- «Plataforma» (Smash): la regla por pedido manda → lo repartimos nosotros.
+    ('e0300000-0000-4000-8000-0000000000a8', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b3', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     28.00, 'open', 'accepted', 'platform_delivery', 'Calle Inventada de Prueba 6, Unit: 1A', 'Uber Eats', 'R03T', 'R03T',
+     '{"channel":"Uber Eats","service_type":"delivery","charges":[{"type":"delivery","price":"2.99 EUR"}],"customer":{"address_1":"Calle Inventada de Prueba 6","address_2":"Unit: 1A","latitude":"40.4170","longitude":"-3.6910"}}', '+34900000002'),
+    -- R03M · Uber mezclado (calle y punto, sin cargo de envío): lo decide una persona.
+    ('e0300000-0000-4000-8000-0000000000a9', 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2',
+     'e0200000-0000-4000-8000-00000000a0b1', 'e0200000-0000-4000-8000-00000000a0c2', 'hubrise', now() - interval '1 minutes', now() - interval '1 minutes',
+     29.00, 'open', 'accepted', 'own_delivery', 'Calle Inventada de Prueba 7', 'Uber Eats', 'R03M', 'R03M',
+     '{"channel":"Uber Eats","service_type":"delivery","customer":{"address_1":"Calle Inventada de Prueba 7","latitude":"40.4160","longitude":"-3.6920"}}', '+34900000003');
+
+  -- Los locales, en automático (ver la cabecera): ya no se inserta nada.
+  update public.locations set dispatch_mode = 'auto'
+   where id in ('c01a0000-0000-4000-8000-0000000000a2', 'e0200000-0000-4000-8000-0000000000a3')
+     and account_id = 'c01a0000-0000-4000-8000-00000000000a';
+
+  -- El modo de despacho del pedido, el de su local, como en producción (allí
+  -- coinciden siempre: 135 de 135 propios de Foodint en 7 días). La tarjeta lo
+  -- lee del pedido y la lista del local: en staging, si no, dirían cosas distintas.
+  update public.sale s set dispatch_mode = coalesce(l.dispatch_mode, 'auto')
+    from public.locations l
+   where l.id = s.location_id and s.account_id = 'c01a0000-0000-4000-8000-00000000000a'
+     and s.id::text like 'e0300000-0000-4000-8000-0000000000%'
+     and s.dispatch_mode is distinct from coalesce(l.dispatch_mode, 'auto');
+end
+$r03$;

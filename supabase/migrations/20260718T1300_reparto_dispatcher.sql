@@ -1,3 +1,6 @@
+-- W02 (17/10): el secreto que iba aquí escrito se ha quitado del fichero. Ya no
+-- valía (producción lo lee de Vault desde julio y tiene otro valor; medido
+-- por su huella el 17/10). Este fichero es historia: no se vuelve a aplicar.
 ﻿-- supabase/migrations/20260718T1300_reparto_dispatcher.sql
 -- T2 — Cerebro dispatcher: resolve_dispatch + tg_auto_dispatch generalizado.
 -- RETROCOMPATIBLE: sin dispatch_rule ni courier en turno, el resultado es
@@ -76,7 +79,7 @@ DECLARE
   v_mode    text;
   v_carrier text;
   v_reason  text;
-  v_secret  text := 'fv_catdisp_tnrMMcaI8gALFCitfvzPGsaHgQa3A83w';
+  v_secret  text := '<retirado: vive en Vault (catcher_dispatch_secret)>';
   v_url     text := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/catcher-dispatch';
 BEGIN
   IF new.service_type = 'own_delivery'

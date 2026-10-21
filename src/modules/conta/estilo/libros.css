@@ -144,12 +144,60 @@
   .cxl-tabla tr { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
   .cxl-tabla td { border-top: none; padding: 0; }
   .cxl-tabla .cxl-movil-oculta { display: none; }
+  /* El pie de la tabla: una sola raya, la de la fila (con la de cada celda, «TOTAL
+     DEL MES» quedaba suelto entre rayas; auditoría S01b). */
+  .cxl-tabla tfoot tr { border-top: 2px solid var(--cx-linea); }
+  .cxl-tabla tfoot td { border-top: none; }
+
+  /* Tabla apilada (S01b): sin cabecera a la vista, cada cifra lleva su título
+     delante. La fila es una tarjeta de una columna: lo que la nombra arriba
+     (las celdas sin título) y debajo una línea por dato, «DEBE    1.234,00 €».
+     El título sale de data-titulo (el <th> de verdad sigue para el lector de
+     pantalla: el ::before es solo para el ojo). Una celda vacía no pinta su
+     título suelto. */
+  /* S01e: la tabla entera en bloque. Una fila flex dentro de una tabla de verdad
+     queda envuelta en celdas anónimas y las cifras perdían su sitio. */
+  .cxl-tabla.cxl-apilada, .cxl-tabla.cxl-apilada tbody, .cxl-tabla.cxl-apilada tfoot { display: block; width: 100%; }
+  .cxl-tabla.cxl-apilada caption { display: block; text-align: left; }
+  .cxl-tabla.cxl-apilada tr { display: flex; flex-direction: column; gap: 4px; }
+  .cxl-tabla.cxl-apilada td { min-width: 0; overflow-wrap: break-word; }
+  .cxl-tabla.cxl-apilada td[data-titulo] { display: flow-root; text-align: right; }
+  .cxl-tabla.cxl-apilada td[data-titulo]::before {
+    content: attr(data-titulo); float: left; margin-right: 12px;
+    font-family: var(--cx-letra); font-size: 12px; font-weight: 600; line-height: 20px; color: var(--cx-apoyo);
+    text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap;
+  }
+  /* Una celda vacía sin título no pinta nada; una cifra vacía (Debe o Haber a
+     cero) sí sale, con su título y una raya: «HABER  —» (S01e). */
+  .cxl-tabla.cxl-apilada td:empty:not([data-titulo]) { display: none; }
+  .cxl-tabla.cxl-apilada td[data-titulo]:empty::after { content: '—'; color: var(--cx-apoyo); }
 }
 
-/* Mapeo: cada cuenta con «cambiar · dejar fuera · estándar» separados. La
-   píldora es inline-flex y se comía los espacios («700cambiardejar fuera»,
-   captura del e2e 153). */
-.cx-pildora.cxl-mapeo-cuenta { gap: 10px; margin: 0 6px 6px 0; max-width: none; overflow: visible; }
+/* Mapeo (S01e): cada cuenta es un botón con su código y su nombre; las
+   acciones van en el diálogo, no repetidas en cada píldora. Envuelve: en el
+   móvil no se sale de la tarjeta. */
+.cxl-mapeo-cuentas { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.cxl-mapeo-cuenta { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; max-width: 100%; min-width: 0;
+  padding: 4px 10px; border: 1px solid var(--cx-linea); border-radius: 999px; background: var(--cx-blanco);
+  font: inherit; font-size: 14px; color: inherit; text-align: left; cursor: pointer; white-space: normal; overflow-wrap: anywhere; }
+.cxl-mapeo-cuenta:hover, .cxl-mapeo-cuenta:focus-visible { border-color: var(--cx-borde-campo); }
+.cxl-mapeo-codigo { font-family: var(--cx-letra-cifras); font-weight: 600; }
+.cxl-mapeo-marca { font-size: 12px; color: var(--cx-apoyo); }
+
+/* Cerrar el mes (S01e): cada mes en una fila de tres sitios fijos (qué mes,
+   cómo está, el botón), el mismo tipo de botón para Cerrar y Reabrir. */
+.cxl-lista-estado .cxl-mes { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; }
+.cxl-mes-que { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.cxl-mes-estado { color: var(--cx-apoyo); }
+
+/* Cierre del ejercicio (S01e): cada paso con su botón a la derecha. */
+.cxl-lista-estado .cxl-paso { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; }
+.cxl-paso-texto { min-width: 0; }
+.cxl-paso-aviso { display: block; margin-top: 4px; font-size: 14px; color: var(--cx-apoyo); }
+@media (max-width: 767px) {
+  .cxl-lista-estado .cxl-mes, .cxl-lista-estado .cxl-paso { grid-template-columns: 1fr; }
+  .cxl-mes .cx-boton-sec, .cxl-paso .cx-boton, .cxl-paso .cx-boton-sec { justify-self: start; }
+}
 
 /* C06b R7 · Pendientes de adjuntar en Diez: una lista (no una tabla) que en el
    móvil apila el qué y los botones. */

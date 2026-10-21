@@ -31,70 +31,58 @@ function vigilar(page: Page) {
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[consola] ${m.text().slice(0, 300)}`) })
 }
 
-/**
- * M01 · En el ordenador las áreas son las pestañas de arriba del marco nuevo
- * (las que no caben, en «Más ▾»); en el móvil, Libros sigue por niveles y las
- * pinta él.
- */
-async function areaDeLibros(page: Page, nombre: string) {
-  if (lado(page) === 'movil') return page.getByRole('navigation', { name: 'Áreas de Libros' }).getByRole('link', { name: nombre, exact: true })
-  const pestanas = page.getByRole('navigation', { name: 'Pestañas de Libros' })
-  const directa = pestanas.getByRole('link', { name: nombre, exact: true })
-  if (await directa.count()) return directa
-  await pestanas.getByRole('button', { name: /▾$/ }).click()
-  return pestanas.getByRole('link', { name: nombre, exact: true })
-}
+const cintaDe = (page: Page, pestana: string) => page.getByRole('toolbar', { name: `Acciones de ${pestana}` })
 
-test('Libros en tres niveles: áreas, acciones con su estado y el buscador', async ({ page }) => {
+test('Libros en la cinta (S01): cada acción en su grupo, con su número escrito, y el buscador', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
+  // «Libros» a secas lleva a la primera de «Libros y listados»: el Libro mayor.
   await page.goto('/conta/libros')
-  await expect(page.getByRole('heading', { level: 1, name: 'Libros' })).toBeVisible()
-  const AREAS = ['Diario', 'Mayor y saldos', 'Libros registro de IVA', 'Balances', 'Cuentas anuales y Registro', 'Cierre']
-  if (lado(page) === 'movil') {
-    const areas = page.getByRole('navigation', { name: 'Áreas de Libros' })
-    for (const a of AREAS) await expect(areas.getByRole('link', { name: a, exact: true })).toBeVisible()
-  } else {
-    // M01: arriba, en el marco; las que no caben, en «Más ▾». Todas, en su orden, y Libros no las repite.
-    const pestanas = page.getByRole('navigation', { name: 'Pestañas de Libros' })
-    const vistas = await pestanas.getByRole('link').allTextContents()
-    const mas = pestanas.getByRole('button', { name: /▾$/ })
-    if (await mas.count()) { await mas.click(); await expect(pestanas.getByRole('link')).toHaveCount(AREAS.length) }
-    expect(await pestanas.getByRole('link').allTextContents()).toEqual(AREAS)
-    expect(vistas.length).toBeGreaterThan(0)
-    if (await mas.count()) await page.keyboard.press('Escape')
-    await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
-  }
-  if (lado(page) === 'movil') {
-    // En el móvil, por niveles: primero las áreas; al tocar una, sus acciones y «‹ Libros».
-    await capturar(page, 'indice')
-    await (await areaDeLibros(page, 'Libros registro de IVA')).click()
-    await expect(page.getByRole('link', { name: '‹ Libros' })).toBeVisible()
-    await expect(page.getByRole('navigation', { name: 'Acciones de Libros registro de IVA' })).toBeVisible()
-  } else {
-    await (await areaDeLibros(page, 'Libros registro de IVA')).click()
-    const barra = page.getByRole('navigation', { name: 'Acciones de Libros registro de IVA' })
-    await expect(barra.getByRole('group', { name: 'Facturas' })).toBeVisible()
-    await expect(barra.getByRole('group', { name: 'Otros libros' })).toBeVisible()
-    await expect(barra.getByRole('group', { name: 'Salidas' })).toBeVisible()
-    // Una sola fila, como N13c: «Tuyos» a la derecha de «Salidas», no debajo
-    // (e2e 154: bajaba sola a una segunda fila).
-    const arriba = async (g: string) => Math.round((await barra.getByRole('group', { name: g, exact: true }).boundingBox())!.y)
-    expect([await arriba('Otros libros'), await arriba('Salidas'), await arriba('Tuyos')]).toEqual(Array(3).fill(await arriba('Facturas')))
-    // Donde no cabe en una (Cuentas anuales), bajan los grupos y «Tuyos» se queda arriba.
-    await (await areaDeLibros(page, 'Cuentas anuales y Registro')).click()
-    const barraAnuales = page.getByRole('navigation', { name: 'Acciones de Cuentas anuales y Registro' })
-    const yAnuales = async (g: string) => Math.round((await barraAnuales.getByRole('group', { name: g, exact: true }).boundingBox())!.y)
-    expect(await yAnuales('Tuyos')).toBe(await yAnuales('Cuentas anuales'))
-    await (await areaDeLibros(page, 'Libros registro de IVA')).click()
-    // El buscador: Ctrl K, «requerimiento» lleva al formato AEAT. M01: Ctrl K
-    // es del marco; las opciones de Libros salen en su grupo «Opciones».
-    await page.keyboard.press('Control+k')
-    const dialogo = page.getByRole('dialog', { name: 'Buscar todo' })
-    await dialogo.getByLabel('Qué buscas').fill('requerimiento')
-    await dialogo.getByRole('group', { name: 'Opciones' }).getByRole('option', { name: /Formato AEAT/ }).click()
-    await expect(page.getByRole('heading', { name: 'Libros en formato AEAT' })).toBeVisible()
-  }
+  await expect(page).toHaveURL(/\/conta\/libros\/mayor\/libro-mayor/)
+  // M01: sin el título grande «Contabilidad · Libros»; el encabezado, para el lector.
+  await expect(page.getByRole('heading', { level: 1, name: 'Libros' })).toHaveCount(1)
+  // Ni áreas ni segunda fila en la pantalla: son la pestaña y su cinta.
+  await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
+  await expect(page.locator('.cxm-subpestanas, .cxl-movil-acciones')).toHaveCount(0)
+  const pestanas = page.getByRole('navigation', { name: 'Pestañas de Contabilidad' })
+  await expect(pestanas.locator('[aria-current="page"], .s-pestana-activa').first()).toHaveText(/^Libros y listados/)
+
+  const cinta = cintaDe(page, 'Libros y listados')
+  await expect(cinta.getByRole('group', { name: 'Mayor' }).getByRole('link')).toHaveText(['Libro mayor', 'Sumas y saldos', 'Acumulados'])
+  await expect(cinta.getByRole('group', { name: 'Estados' }).getByRole('link')).toHaveText(['Balance de situación', 'Pérdidas y ganancias', 'Cambios en el patrimonio neto'])
+  await expect(cinta.getByRole('link', { name: /^Libro mayor/ })).toHaveAttribute('aria-current', 'page')
+  // Ninguna se esconde (regla 7): las seis del IVA, aunque la empresa no use alguna (en gris).
+  // S01e: Retenciones (111, 115) no es IVA: va en su propio grupo.
+  await expect(cinta.getByRole('group', { name: 'IVA' }).getByRole('link')).toHaveCount(6)
+  await expect(cinta.getByRole('group', { name: 'Retenciones' }).getByRole('link')).toHaveText([/^Retenciones/])
+  // Julio, 16/10: lo que enseña un número lo lleva escrito («Expedidas 12»), nunca solo al pasar el ratón.
+  const expedidas = cinta.getByRole('link', { name: /^Expedidas/ })
+  await expect(expedidas).toHaveAttribute('title', /^Expedidas: /)
+  await capturar(page, 'cinta-listados')
+
+  await expedidas.click()
+  await expect(page).toHaveURL(/\/conta\/libros\/registro\/expedidas/)
+  await expect(cintaDe(page, 'Libros y listados').getByRole('link', { name: /^Expedidas/ })).toHaveAttribute('aria-current', 'page')
+  // El ejercicio, en la cabecera (no en un título).
+  await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
+  await expect(page.locator('.cxl-tuyos')).toHaveCount(0)
+
+  // Cierre y Registro: sus dos grupos, sin lo que aún no tiene pantalla (Registro Mercantil).
+  // Con el ejercicio al lado, puede no caber y estar en «Más ▾» (Julio, respuesta 3): se abre si hace falta.
+  const cierre = pestanas.getByRole('link', { name: 'Cierre y Registro' })
+  if (!(await cierre.isVisible())) await pestanas.getByRole('button', { name: /▾$/ }).click()
+  await cierre.click()
+  await expect(page).toHaveURL(/\/conta\/libros\/cierre\/ejercicios/)
+  await expect(cintaDe(page, 'Cierre y Registro').getByRole('group')).toHaveCount(2)
+  await expect(cintaDe(page, 'Cierre y Registro').getByText(/Depósito|Legalización|Memoria/)).toHaveCount(0)
+
+  // El buscador: «requerimiento» lleva al formato AEAT (Ctrl K es del marco).
+  if (lado(page) === 'ordenador') await page.keyboard.press('Control+k')
+  else await page.getByRole('button', { name: 'Buscar', exact: true }).click()
+  const dialogo = page.getByRole('dialog', { name: 'Buscar todo' })
+  await dialogo.getByLabel('Qué buscas').fill('requerimiento')
+  await dialogo.getByRole('group', { name: 'Opciones' }).getByRole('option', { name: /Formato AEAT/ }).click()
+  await expect(page.getByRole('heading', { name: 'Libros en formato AEAT' })).toBeVisible()
 })
 
 test('Balance de situación: cuadra, columna del 2025 traído y la barra de la IA', async ({ page }) => {
@@ -140,7 +128,7 @@ test('Expedidas: el resumen de tiques es F4 con su rango, y el libro cuadra con 
   vigilar(page)
   await page.goto('/conta/libros/registro/expedidas')
   await expect(page.getByRole('heading', { name: 'Facturas expedidas' })).toBeVisible()
-  await expect(page.getByText('F4 · resumen · art. 63.4 · T1-000101–T1-000105 · 5 tiques')).toBeVisible()
+  await expect(page.getByText('F4 · resumen de tiques · T1-000101–T1-000105 · 5 tiques')).toBeVisible()
   await expect(page.getByRole('group', { name: 'Cifras del libro' })).toContainText('✓ Cuadra')
   // «1 anotación.», no «1 anotaciones.» (lo enseñó la captura del e2e 153).
   await expect(page.getByText(/^(1 anotación|(?:0|[2-9]|\d{2,}) anotaciones)\.$/)).toBeVisible()
@@ -177,7 +165,8 @@ test('Qué cuentas alimentan cada línea: el cambio propio y su historial', asyn
   vigilar(page)
   await page.goto('/conta/libros/anuales/mapeo')
   await page.getByRole('button', { name: 'Pérdidas y ganancias' }).click()
-  await expect(page.getByText('624 · tuyo')).toBeVisible()
+  // S01e: cada cuenta es un botón con su código, su nombre y «· tuyo» si el cambio es de la empresa.
+  await expect(page.getByRole('button', { name: /^Cambiar la 624\b/ }).filter({ hasText: '· tuyo' })).toHaveCount(1)
   await page.getByRole('button', { name: 'Historial' }).click()
   await expect(page.getByRole('table', { name: 'Historial del mapeo' })).toContainText('El transporte que pagamos es el de la mercancía comprada')
   await capturar(page, 'mapeo')
@@ -194,9 +183,10 @@ test('Cuentas anuales: el modelo que toca, con sus cifras y su cita', async ({ p
   const texto = (await toca.locator(':scope > div').nth(1).boundingBox())!
   expect(texto.width).toBeGreaterThan(caja.width * 0.6)
   await expect(page.getByRole('table', { name: 'Cifras con las que se decide' })).toBeVisible()
-  // Ningún código de encargo a la vista: lo que aún no está dice «Próximamente».
+  // Ningún código de encargo a la vista. S01e: lo que aún no está lo dice sin prometer.
   await expect(page.locator('body')).not.toContainText(/\bC0\d[a-z]?\b/)
-  await expect(page.getByText('Memoria: próximamente.')).toBeVisible()
+  await expect(page.getByText(/^Memoria: aún no se prepara aquí\./)).toBeVisible()
+  await expect(page.locator('body')).not.toContainText(/próximamente/i)
   await capturar(page, 'cuentas-anuales')
 })
 

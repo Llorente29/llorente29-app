@@ -31,6 +31,8 @@ function from(table: string) {
 export type SupplierInvoiceDocKind = 'invoice' | 'credit_note'
 export type SupplierInvoiceStatus =
   | 'borrador' | 'en_revision' | 'aprobada' | 'con_discrepancias' | 'pagada' | 'anulada'
+  /** S01 (0160): «No es una factura», con su motivo (se deshace en Contabilidad). */
+  | 'descartada'
 export type SupplierInvoiceMatchStatus = 'sin_match' | 'ok' | 'con_diferencias'
 
 export interface SupplierInvoice {

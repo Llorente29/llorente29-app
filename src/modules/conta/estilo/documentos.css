@@ -58,6 +58,9 @@
 .cxr-revisar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .cxr-papel { display: flex; flex-direction: column; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); overflow: hidden; }
 .cxr-papel-cabeza { display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px; font-size: 13px; color: var(--cx-apoyo); border-bottom: 1px solid var(--cx-linea); }
+/* S01e: un nombre de fichero largo, sin espacios, parte en vez de ensanchar la página. */
+.cxr-papel-cabeza > span { min-width: 0; overflow-wrap: anywhere; }
+.cxr-leido-valor { min-width: 0; overflow-wrap: anywhere; }
 .cxr-papel-hoja { background: var(--cx-fondo); padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 640px; }
 .cxr-papel-lienzo { max-width: 100%; height: auto; background: var(--cx-blanco); box-shadow: var(--cx-sombra-menu); }
 .cxr-papel-hoja img { max-width: 100%; height: auto; box-shadow: var(--cx-sombra-menu); }
@@ -134,6 +137,11 @@
     background: var(--cx-fondo);
   }
   .cxr-pulgar > * { flex: 1; height: 52px; font-size: 16px; }
+  /* S01e: «Validar y siguiente» no cabía en su mitad (min-width de su texto) y
+     la página se iba de lado (417 px en 390) llevándose la barra de abajo: los
+     botones ceden y, si hace falta, parten en dos líneas; el principal, más ancho. */
+  .cxr-pulgar > * { flex: 1 1 0; min-width: 0; white-space: normal; line-height: 1.2; padding-left: 10px; padding-right: 10px; }
+  .cxr-pulgar > .cx-boton { flex-grow: 2; }
   .cxr-subir-movil { display: flex; gap: 10px; }
   .cxr-subir-movil > * { flex: 1; height: 52px; font-size: 16px; }
 }
@@ -189,3 +197,19 @@
   .cxk-estado { margin-left: 0; }
   .cxk-lote { flex-direction: column; align-items: flex-start; }
 }
+
+/* S01 · Decisiones de la maqueta 3 (17/10): el enlace a Compras junto a «Lo que he leído»,
+   «No es una factura», el bloque verde «Lo que he comprobado» y «Ver el asiento» plegable. */
+.cxr-bloque-cabeza { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cxr-bloque-enlaces { display: inline-flex; gap: 14px; flex-wrap: wrap; }
+.cxr-descartada { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
+.cxr-motivos { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.cxr-comprobado { background: var(--cx-verde-suave); border: 1px solid color-mix(in srgb, var(--cx-verde-oscuro) 25%, transparent); border-radius: var(--cx-radio-tarjeta); padding: 16px 18px; }
+.cxr-comprobado-ambar { background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
+.cxr-comprobado h2 { margin: 0 0 8px; font-size: inherit; font-weight: 700; color: var(--cx-texto); }
+.cxr-comprobado ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.cxr-comprobado .cxr-ok span { color: var(--cx-verde-oscuro); font-weight: 700; }
+.cxr-comprobado .cxr-falta { color: var(--cx-ambar); }
+.cxr-comprobado .cxr-falta span { font-weight: 700; }
+.cxr-plegable > summary { cursor: pointer; list-style: revert; }
+.cxr-plegable > summary h2 { display: inline; }

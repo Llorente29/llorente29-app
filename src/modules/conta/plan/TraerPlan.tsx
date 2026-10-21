@@ -428,7 +428,7 @@ export function TraerPlan({ p, empezarDeCero, alTraer }: { p: DatosPlan; empezar
 
   const guardar = () => void h.hacer(async () => {
     setImportId(await guardarImportacion(quien.companyId, revision.programa, revision.ficheros, revision.huella, revision as unknown as Record<string, unknown>, null))
-  }, () => `Guardado. Te quedan ${contar(revision.filas).pendientes} por decidir; vuelve cuando quieras a Ajustes › Plan contable y sigues aquí.`)
+  }, () => `Guardado. Te quedan ${contar(revision.filas).pendientes} por decidir; vuelve cuando quieras a Definiciones › Plan contable y sigues aquí.`)
   const tirar = () => {
     if (!window.confirm('¿Tiras esta revisión? No se ha traído nada: vuelves a elegir el fichero.')) return
     void h.hacer(async () => { if (importId) await tirarImportacion(importId); setRevision(null); setImportId(null); setPaso(1) }, 'Revisión tirada: elige otra vez el fichero.')

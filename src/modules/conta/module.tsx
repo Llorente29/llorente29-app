@@ -17,6 +17,7 @@ import { MarcoNuevo } from '@/modules/conta/marco/nuevo/MarcoNuevo'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
+import AnaliticaPage from '@/modules/conta/analitica/AnaliticaPage'
 import MayorPage from '@/modules/conta/pages/MayorPage'
 import AlMayor from '@/modules/conta/plan/AlMayor'
 import QueVaACadaSitioPage from '@/modules/conta/pages/QueVaACadaSitioPage'
@@ -27,6 +28,7 @@ import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 import LibrosPage from '@/modules/conta/libros/LibrosPage'
 import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
+import RecibidasEnAsientos from '@/modules/conta/documentos/RecibidasEnAsientos'
 import LoteCatcherPage from '@/modules/conta/documentos/LoteCatcherPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
@@ -35,10 +37,18 @@ import LiquidacionPage from '@/modules/conta/compras/LiquidacionPage'
 import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
+import ImpuestosPage from '@/modules/conta/impuestos/ImpuestosPage'
+import IvaPeriodoPage from '@/modules/conta/impuestos/IvaPeriodoPage'
+import TrimestrePage from '@/modules/conta/impuestos/TrimestrePage'
+import AceptarAsesoriaPage from '@/modules/conta/impuestos/AceptarAsesoriaPage'
+import { ClienteTrimestre } from '@/modules/conta/impuestos/despacho/ClienteTrimestre'
 import InicioPage from '@/modules/conta/inicio/InicioPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
 import { Portada } from '@/modules/conta/marco/Portada'
 import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
+import MuestraPiezasPage from '@/modules/conta/muestra/MuestraPiezasPage'
+import SistemaDisenoPage from '@/modules/conta/muestra/SistemaDisenoPage'
+import { baseDeDatos } from '@/services/versionApp'
 
 // C06b (respuesta 6 de Julio, tarea 2): la barra «Pregunta o pide algo» solo
 // contesta «Muy pronto», y lo que no funciona no se enseña: ninguna ruta la
@@ -74,6 +84,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.tablas, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.tabla, element: enMarco(<TablasGeneralesPage />, '¿Qué IVA lleva el pan?') },
     { path: CONTA.rutas.plan, element: enMarco(<PlanContablePage />, '¿Dónde va el alquiler?') },
+    { path: CONTA.rutas.analitica, element: enMarco(<AnaliticaPage />, '¿Puedo llamar «Proyecto» a la marca?') },
     { path: CONTA.rutas.planSitio, element: enMarco(<QueVaACadaSitioPage />, '¿Dónde va el alquiler?') },
     { path: CONTA.rutas.planCuenta, element: <AlMayor /> },
     // Una cuenta del plan (respuesta 5): su Mayor, o «Sumas y saldos» si tiene hijas.
@@ -97,6 +108,17 @@ export const contaModule: ModuleDefinition = {
     // Respuesta 4: sin la barra «Pregunta o pide algo» mientras solo diga «Muy pronto».
     { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
+    // I01b · Impuestos (tableros 8, 9 y 10): el calendario, sus pestañas y el IVA de un periodo.
+    { path: CONTA.rutas.impuestos, element: enMarco(<ImpuestosPage />, '¿Cuánto IVA pago este trimestre?') },
+    { path: CONTA.rutas.impuestosPestana, element: enMarco(<ImpuestosPage />, '¿Cuánto IVA pago este trimestre?') },
+    { path: CONTA.rutas.impuestoIva, element: enMarco(<IvaPeriodoPage />, '¿Por qué pago más que el trimestre pasado?') },
+    // I01c · El trimestre (maqueta_303_v2), también de una empresa por la ruta (vista de despacho).
+    { path: CONTA.rutas.impuestoTrimestre, element: enMarco(<TrimestrePage />, '¿Cuánto me queda por compensar?') },
+    { path: CONTA.rutas.impuestoTrimestreEmpresa, element: enMarco(<TrimestrePage />, '¿Cuánto me queda por compensar?') },
+    // P01 · El trimestre de un cliente, abierto desde «Impuestos de tus clientes».
+    { path: CONTA.rutas.impuestosCliente, element: enMarco(<ClienteTrimestre />, '¿Qué le falta a este cliente?') },
+    // I01b · Aceptar la invitación de una empresa (con sesión; sin ella, la misma página en AuthRouter).
+    { path: CONTA.rutas.aceptarAsesoria, element: <AceptarAsesoriaPage /> },
     // Compras (encargo de compras, N18 y N19).
     { path: CONTA.rutas.compras, element: enMarco(<ComprasPage />, '¿Qué facturas me faltan?') },
     { path: CONTA.rutas.ventas, element: enMarco(<VentasPage />, '¿Cuánto vendí ayer?') },
@@ -107,7 +129,14 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
+    // S01 · La factura recibida desde Contabilidad › Asientos (maqueta 3): el mismo componente que N23.
+    { path: CONTA.rutas.recibidasEnAsientos, element: enMarco(<RecibidasEnAsientos />, '¿A qué cuenta va esta factura?', true) },
+    { path: CONTA.rutas.recibidaEnAsientos, element: enMarco(<RevisarFacturaPage enAsientos />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
+    // M01 · La muestra de las piezas comunes (datos inventados): solo fuera de producción.
+    ...(baseDeDatos().tipo === 'produccion' ? [] : [{ path: CONTA.rutas.muestraPiezas, element: enMarco(<MuestraPiezasPage />, '') }]),
+    // S01 · La página del sistema de diseño (datos inventados): solo fuera de producción.
+    ...(baseDeDatos().tipo === 'produccion' ? [] : [{ path: CONTA.rutas.sistemaDiseno, element: enMarco(<SistemaDisenoPage />, '') }]),
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },

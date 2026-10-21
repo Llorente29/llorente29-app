@@ -128,6 +128,34 @@ export function cambio(antes: number | null, ahora: number, formato: (n: number)
   return `${d > 0 ? '+' : '−'}${formato(Math.abs(d))} este mes`
 }
 
+/** Una línea del IVA del trimestre: qué es, su importe y, si hace falta, por qué. */
+export interface LineaIva { etiqueta: string; importe: string; nota?: string }
+
+/**
+ * M01 · Debajo del IVA del trimestre, tres líneas cortas (Julio, 16/10):
+ *   «IVA de tus ventas 8,99 €»
+ *   «IVA de tus compras −5,00 € (más abonos que facturas)»
+ *   «A pagar 13,99 €» (o «A devolver», sin signo).
+ * El importe de compras va con su signo: un soportado en negativo es lo que
+ * hay en el libro, y la nota dice por qué. Lo de abajo es siempre la cifra
+ * de la tarjeta (ventas − compras).
+ */
+export function lineasIva(repercutido: number, soportado: number, formato: (n: number) => string, impuesto = 'IVA'): LineaIva[] {
+  // S01e: `impuesto` es IVA, IGIC (Canarias) o IPSI (lib/impuestoIndirecto).
+  const resultado = Math.round((repercutido - soportado) * 100) / 100
+  return [
+    { etiqueta: `${impuesto} de tus ventas`, importe: formato(repercutido) },
+    soportado < 0
+      ? { etiqueta: `${impuesto} de tus compras`, importe: formato(soportado), nota: '(más abonos que facturas)' }
+      : { etiqueta: `${impuesto} de tus compras`, importe: formato(soportado) },
+    { etiqueta: resultado < 0 ? 'A devolver' : 'A pagar', importe: formato(Math.abs(resultado)) },
+  ]
+}
+
+/** Las tres líneas en texto (para el lector y las pruebas). */
+export const textoIva = (trimestre: string, l: readonly LineaIva[]): string =>
+  `${trimestre}: ${l.map((x) => `${x.etiqueta} ${x.importe}${x.nota ? ` ${x.nota}` : ''}`).join('. ')}.`
+
 /** «Próximo pago el 24 oct» o, si ya pasó, «Vencido desde el 24 oct». */
 export function frasePago(fecha: string | null, hoy: string, diaMes: (iso: string) => string): string | null {
   if (!fecha) return null
@@ -135,12 +163,16 @@ export function frasePago(fecha: string | null, hoy: string, diaMes: (iso: strin
 }
 
 /** Lo que tiene que decir la persona: las sugerencias, los papeles de compras y los asientos por revisar. */
-export interface Duda { id: string; inicial: string; titulo: string; apoyo: string; tipo: 'sugerencia' | 'compras' | 'revisar' | 'sinNombre' }
+export interface Duda { id: string; inicial: string; titulo: string; apoyo: string; tipo: 'sugerencia' | 'compras' | 'recibidas' | 'revisar' | 'sinNombre' }
 
-export function dudas(sugerencias: readonly { id: string; title: string; why: string }[], comprasPorMirar: number, asientosPorRevisar: number, sinNombre = 0): Duda[] {
+export function dudas(sugerencias: readonly { id: string; title: string; why: string }[], comprasPorMirar: number, asientosPorRevisar: number, sinNombre = 0, recibidas = 0): Duda[] {
   const out: Duda[] = sugerencias.map((s) => ({ id: s.id, inicial: 'IA', titulo: s.title, apoyo: s.why, tipo: 'sugerencia' }))
   if (comprasPorMirar > 0) {
-    out.push({ id: 'compras', inicial: 'C', tipo: 'compras', titulo: `${comprasPorMirar} ${comprasPorMirar === 1 ? 'papel de compras por mirar' : 'papeles de compras por mirar'}`, apoyo: 'No sé qué hacer con ellos sin ti.' })
+    out.push({ id: 'compras', inicial: 'C', tipo: 'compras', titulo: `${comprasPorMirar} ${comprasPorMirar === 1 ? 'cosa de compras por mirar' : 'cosas de compras por mirar'}`, apoyo: 'No sé qué hacer con ellos sin ti.' })
+  }
+  // S01 (paso 4): las facturas recibidas, una detrás de otra (Asientos › Recibida, «Validar y siguiente»).
+  if (recibidas > 0) {
+    out.push({ id: 'recibidas', inicial: 'R', tipo: 'recibidas', titulo: `${recibidas} ${recibidas === 1 ? 'factura recibida' : 'facturas recibidas'} para revisar`, apoyo: 'Una detrás de otra: «Validar y siguiente» y pasas a la próxima.' })
   }
   if (asientosPorRevisar > 0) {
     out.push({ id: 'revisar', inicial: 'L', tipo: 'revisar', titulo: `${asientosPorRevisar} ${asientosPorRevisar === 1 ? 'asiento propuesto' : 'asientos propuestos'} para revisar`, apoyo: 'Los he preparado yo; los validas tú.' })
