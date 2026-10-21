@@ -27,8 +27,9 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { zonasTocadas } from '../e2e/area.mjs'
 
-export const CARPETAS = ['docs/conta/capturas', 'docs/reparto/capturas']
+export const CARPETAS = ['docs/conta/capturas', 'docs/reparto/capturas', 'docs/inventario/capturas']
 
 /**
  * El frente de la rama: el MISMO reparto que el paso «Frente» de
@@ -59,13 +60,25 @@ export const DE_QUIEN = {
   // P01 (19/10): «Impuestos de tus clientes» (conta/p01…), igual que Impuestos:
   // sin frente de usuarios, con sus capturas en p01/…
   despacho: /^docs\/conta\/capturas\/p\d[^/]*\//,
+  // Autoconteo (21/10): las de inventario son de la ZONA, no de un frente. Las
+  // fija una rama sin frente que toque inventario (duenoDeLaRama, abajo).
+  inventario: /^docs\/inventario\/capturas\//,
 }
 
-export function duenoDeLaRama(rama) {
+/**
+ * El dueño de las capturas de una rama: el de su nombre y, si el nombre no es de
+ * nadie, la zona por fichero que toca contra main (scripts/e2e/area.mjs,
+ * ZONAS_POR_FICHERO), si toca una sola con capturas. Así una rama sin frente que
+ * toca inventario fija las de docs/inventario/capturas y ninguna más.
+ */
+export function duenoDeLaRama(rama, cambiados = []) {
   if (/^reparto-/.test(rama)) return 'reparto'
   if (/^conta\/i\d/.test(rama)) return 'impuestos'
   if (/^conta\/p\d/.test(rama)) return 'despacho'
-  return frenteDeLaRama(rama) || null
+  const frente = frenteDeLaRama(rama)
+  if (frente) return frente
+  const zonas = zonasTocadas(cambiados).filter((z) => z.zona in DE_QUIEN)
+  return zonas.length === 1 ? zonas[0].zona : null
 }
 
 /** Reparte rutas de capturas entre las del dueño y las de otros. */
@@ -102,12 +115,16 @@ const git = (...a) => execFileSync('git', a, { encoding: 'utf8' })
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [orden, ...args] = process.argv.slice(2)
   const ramaActual = () => git('rev-parse', '--abbrev-ref', 'HEAD').trim()
+  // Lo que la rama cambia contra main (para el dueño por zona). Sin origin/main, nada.
+  const cambiadosContraMain = () => {
+    try { return git('diff', '--name-only', 'origin/main...HEAD').split('\n').filter(Boolean) } catch { return [] }
+  }
 
   if (orden === 'frente') {
     process.stdout.write(frenteDeLaRama(args[0] ?? ramaActual()))
   } else if (orden === 'fijar') {
     const rama = args[0] ?? ramaActual()
-    const dueno = duenoDeLaRama(rama)
+    const dueno = duenoDeLaRama(rama, cambiadosContraMain())
     if (!dueno) { console.error(`✗ La rama «${rama}» no es de ningún frente: no se fija ninguna captura.`); process.exit(1) }
     // Lo cambiado y lo nuevo, fichero a fichero (-uall), solo en las carpetas de capturas.
     const cambiadas = git('status', '--porcelain', '-uall', '--', ...CARPETAS).split('\n').filter(Boolean).map((l) => l.slice(3))
@@ -124,7 +141,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `n=${estas.length}\n`)
   } else if (orden === 'comprobar') {
     const rama = args[0] ?? ramaActual()
-    const dueno = duenoDeLaRama(rama)
+    const dueno = duenoDeLaRama(rama, cambiadosContraMain())
     const enLaRama = git('diff', '--name-only', 'origin/main...HEAD', '--', ...CARPETAS).split('\n').filter(Boolean)
     const { ajenas } = repartir(enLaRama, dueno)
     if (ajenas.length) {

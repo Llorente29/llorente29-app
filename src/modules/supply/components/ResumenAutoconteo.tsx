@@ -57,7 +57,7 @@ export default function ResumenAutoconteo({
   const fuera = hechos && hechos.sinCoste > 0 ? ` (${hechos.sinCoste} sin coste, fuera de esa suma)` : ''
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-testid="resumen-autoconteo" data-via={via}>
       <div>
         <p className="text-[14px] text-cocina-verde font-semibold inline-flex items-start gap-1.5">
           <Check size={16} className="shrink-0 mt-[2px]" />

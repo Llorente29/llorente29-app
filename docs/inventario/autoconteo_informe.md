@@ -85,6 +85,34 @@ Los dos `autorizo`: `20261129T0390_autoconteo_anula_atascados.sql` y
 - **Unitarias**: textos de oficina contra 60 líneas reales de Foodint, y el vigía. 4.938 en verde.
 - **Build** exacto y en limpio, lint igual a los dos lados (76 errores y 9 avisos antes y después).
 
+## La e2e (tests/e2e/inventario/autoconteo.spec.ts)
+
+Ordenador y móvil, en el carril de cada ejecución:
+
+1. **La tablet**: el trabajador de prueba cuenta sus tres productos (10 → 4, 20 que cuadra, 30 → 2,
+   que pide mirarlo otra vez) y ve «El stock ya está al día». La base: aprobado, `al_terminar`,
+   ajustes −6 y −28, diferencias guardadas.
+2. **La pantalla de conteos**: el administrador abre ese recuento y ve «Aplicado al terminar el
+   recuento, a las …, lo terminó Trabajador de Prueba», «Faltaban 28 ud; quedan 2 ud» y «Ver los 1 que
+   cuadran», sin motivos ni «Aprobar».
+3. **El aviso**: un autoconteo de ayer con el fallo apuntado sale en rojo en Almacén; se abre, se
+   cierra y «Aplicar entero (1 contados)» lo aplica; el aviso se va.
+
+Semilla: `supabase/seeds/conta/seed_autoconteo_e2e_staging.sql` (el trabajador
+`a.trabajador@prueba.folvy.test` con ficha en Norte · Centro, tres artículos con 10, 20 y 30 ud, y
+`e2e_autoconteo_preparar`, que solo existe en staging). Va en el manifiesto de staging detrás de la 0400.
+
+Cambios en lo común, aprobados por Julio el 21/10:
+- `scripts/e2e/carril/comun.sql`: el trabajador en la lista de usuarios de la plantilla.
+- `scripts/e2e/area.mjs`: zonas por fichero; tocar `src/modules/supply/`, `src/pages/trabajador/`,
+  `tests/e2e/inventario/` o la semilla añade `tests/e2e/inventario` a la e2e de un push.
+- `scripts/conta/capturas.mjs`: `docs/inventario/capturas` con dueño «inventario», que es la rama sin
+  frente que toca inventario.
+
+No cambia el workflow: se lanza a mano (Run workflow en la rama, `pruebas = tests/e2e/inventario`),
+**después** de la tanda de staging. Antes, el clon del carril de esta rama para: busca un usuario
+que aún no está.
+
 ## Capturas
 
 `docs/inventario/capturas/`: la tablet al terminar (aplicado, faltan compañeros, error), la

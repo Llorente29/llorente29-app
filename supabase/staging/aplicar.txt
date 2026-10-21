@@ -340,4 +340,8 @@ supabase/staging/sql/20261127_i01g_retenciones_prueba.sql
 supabase/staging/sql/20261129_autoconteo_limpiar.sql
 supabase/migrations/20261129T0390_autoconteo_anula_atascados.sql
 supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql
+# Y la semilla de la e2e del autoconteo (tests/e2e/inventario): el trabajador
+#   de A con su ficha, tres artículos con stock y e2e_autoconteo_preparar.
+#   Va detrás de la 0400 (usa sus columnas). Se puede volver a pasar.
+supabase/seeds/conta/seed_autoconteo_e2e_staging.sql
 supabase/staging/sql/20261129_autoconteo_prueba.sql

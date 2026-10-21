@@ -24,7 +24,7 @@ export default function AvisoAutoconteosSinAplicar({
 }: { items: AutoconteoSinAplicar[]; onOpen: (countId: string) => void }) {
   if (items.length === 0) return null
   return (
-    <div className="rounded-lg border border-danger/30 bg-danger-bg p-3.5" role="alert">
+    <div className="rounded-lg border border-danger/30 bg-danger-bg p-3.5" role="alert" data-testid="aviso-autoconteos-sin-aplicar">
       <div className="flex items-start gap-2">
         <AlertTriangle size={17} className="text-danger shrink-0 mt-0.5" />
         <div className="min-w-0 flex-1">

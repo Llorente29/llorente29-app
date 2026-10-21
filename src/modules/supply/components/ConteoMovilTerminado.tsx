@@ -39,6 +39,7 @@ export default function ConteoMovilTerminado({
     <Marco>
       <Cabecera title={title} />
       <Centrado>
+        <span data-testid="conteo-terminado" data-estado={estado.tipo} hidden />
         <Check size={44} className="text-cocina-verde" />
         <p className="text-[24px] font-extrabold text-cocina-tinta mt-4">¡Listo!</p>
         <p className="text-[13px] text-cocina-tinta-2 mt-2 max-w-xs leading-[1.5]">{loHecho}</p>
