@@ -18,11 +18,10 @@ describe('la entera en trozos', () => {
   it('la suite real tiene ficheros, y casi todos tienen su tiempo medido', () => {
     expect(TODOS.length).toBeGreaterThanOrEqual(38)
     const sin = TODOS.filter((f) => typeof TIEMPOS[f] !== 'number')
-    // Los nuevos cuentan como la mediana. 21/10 (autoconteo, Julio): main traía 4 sin medir
-    // (i01b/plazo, i01d/proveedor-extranjero, i01e/ficha-libro, i01h/sociedades) e
-    // inventario/autoconteo es la quinta, que aún no había corrido: el tope pasa a 6. Vuelve a
-    // 5 cuando se apunte lo medido de inventario/autoconteo en su primera e2e en verde.
-    expect(sin.length).toBeLessThan(6)
+    // Los nuevos cuentan como la mediana. 21/10: main trae 4 sin medir (i01b/plazo,
+    // i01d/proveedor-extranjero, i01e/ficha-libro, i01h/sociedades); inventario/autoconteo
+    // ya está medido (e2e 761).
+    expect(sin.length).toBeLessThan(5)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
