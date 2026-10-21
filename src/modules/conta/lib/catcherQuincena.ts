@@ -302,6 +302,30 @@ const fechas = (iso: string | null) => {
   return [iso, `${d}/${m}/${a}`, `${d}-${m}-${a}`, `${+d}/${+m}/${a}`]
 }
 
+/**
+ * El texto de una página de PDF por su POSICIÓN, línea a línea, como lo ve una
+ * persona (lo mismo que pdftotext -layout), y no en el orden en que el PDF
+ * dibuja sus trozos. En las facturas de los riders de Catcher, «Pedidos
+ * entregados:» y su número son dos trozos que no se dibujan seguidos: unidos
+ * en el orden de dibujo no quedaban juntos y pdf_pedidos fallaba en las 83 de
+ * la 1.ª quincena de octubre aunque los números cuadraran.
+ * `items`: los de getTextContent de pdfjs (str y transform: x = [4], y = [5]).
+ */
+export function textoPorPosicion(items: readonly { str?: string; transform?: readonly number[] }[]): string {
+  const trozos = items
+    .filter((x) => (x.str ?? '').trim() !== '')
+    .map((x, i) => ({ str: x.str!, x: x.transform?.[4] ?? 0, y: x.transform?.[5] ?? 0, i }))
+  // Más arriba primero (en PDF la y crece hacia arriba); en la misma línea, de izquierda a derecha.
+  trozos.sort((a, b) => b.y - a.y || a.x - b.x || a.i - b.i)
+  const lineas: { y: number; trozos: typeof trozos }[] = []
+  for (const t of trozos) {
+    const l = lineas.find((x) => Math.abs(x.y - t.y) <= 2)
+    if (l) l.trozos.push(t)
+    else lineas.push({ y: t.y, trozos: [t] })
+  }
+  return lineas.map((l) => l.trozos.sort((a, b) => a.x - b.x || a.i - b.i).map((t) => t.str).join(' ')).join('\n')
+}
+
 /** Lo que el PDF tiene que decir, comparado con lo que dice el Excel. `texto`: el del PDF (pdfjs). */
 export function comprobarPdf(f: FacturaExcel, texto: string): Comprobacion[] {
   const t = plano(texto)
