@@ -116,11 +116,15 @@ test('Calendario (tablero 8): Impuestos en la barra, la tabla del plazo y por qu
   expect(errores).toEqual([])
 })
 
-test('Impuesto de sociedades: sus plazos y «Se calculará aquí pronto»', async ({ page }) => {
+test('Impuesto de sociedades: los pagos a cuenta (202) y las declaraciones (200)', async ({ page }) => {
   const errores = vigilar(page)
   await entrarComo(page, CUENTA_A.email)
   await ir(page, 'impuestos/sociedades')
-  await expect(page.getByText('Se calculará aquí pronto').first()).toBeVisible()
+  // Desde el I01h (0340) el 202 se calcula aquí: ya no dice «Se calculará aquí pronto».
+  // Lo de dentro lo prueba tests/e2e/conta/i01h/sociedades.spec.ts.
+  await expect(page.getByText('Pagos a cuenta (202)').first()).toBeVisible()
+  await expect(page.getByText('Declaraciones del año (200)').first()).toBeVisible()
+  await expect(page.getByText('Se calculará aquí pronto')).toHaveCount(0)
   await sinDesbordar(page, 'Sociedades')
   await foto(page, 'sociedades')
   expect(errores).toEqual([])

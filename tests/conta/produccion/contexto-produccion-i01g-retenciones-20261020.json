@@ -1,0 +1,23 @@
+{
+  "_que": "I01g · el 111 y el 115 desde el diario · contexto de producción de la tanda viva (20261127T0330), medido en SOLO LECTURA el 20/10 a las 23:24 UTC, después de la 0320 (aplicada), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Las tres funciones nuevas no existen; tax_return_check sí; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-20T23:24Z",
+  "tanda": {
+    "supabase/migrations/20261127T0330_i01g_retenciones_111_115.sql": "f6d10a4f507c817346fd6b70d47ba09c"
+  },
+  "contexto": {
+    "tablas": [
+      "public.tax_return_check"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.tax_return_check": 0
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}
