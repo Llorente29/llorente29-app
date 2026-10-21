@@ -90,10 +90,20 @@ describe('el workflow de la e2e (W02)', () => {
     expect(wf).toMatch(/- name: Carril · borrar y soltar[^\n]*\n\s+if: always\(\)/)
   })
 
-  it('el push corre su área (area.mjs), nunca la suite entera', () => {
+  // Julio, 21/10: el push corre su área y la corta; la entera solo si toca lo
+  // común o lleva la etiqueta (area.mjs decide; el workflow obedece).
+  it('el push corre su área (area.mjs) y la entera solo si area.mjs lo dice', () => {
     const plan = wf.slice(wf.indexOf('- name: Frente'), wf.indexOf('  trozo:'))
-    expect(plan).toContain('PRUEBAS=$(node scripts/e2e/area.mjs "$GITHUB_REF_NAME")')
+    expect(plan).toContain('git diff --name-only "origin/main...$GITHUB_SHA"')
+    expect(plan).toContain('node scripts/e2e/area.mjs "$GITHUB_REF_NAME" --cambiados "$RUNNER_TEMP/cambiados.txt" --etiquetas "$ETIQUETAS"')
+    expect(plan).toMatch(/if \[ "\$\(sed -n 's\/\^entera=\/\/p' "\$RUNNER_TEMP\/decision.txt"\)" = true \]; then\n\s+PRUEBAS=\n/)
     expect(plan).toMatch(/\[ -n "\$PRUEBAS" \] \|\| \{/)
+  })
+
+  it('la noche: dos disparos UTC y corre solo el de las 03:00 de Madrid', () => {
+    expect(wf).toMatch(/schedule:\n\s+- cron: '0 1 \* \* \*'\n\s+- cron: '0 2 \* \* \*'/)
+    expect(wf).toContain('"0 1 * * *|+0200" | "0 2 * * *|+0100") toca=true ;;')
+    expect(wf).toContain("if: needs.plan.outputs.toca == 'true'")
   })
 
   it('el tope de trozos a la vez es un ajuste del repositorio, 2 si no está puesto', () => {

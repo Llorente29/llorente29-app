@@ -68,3 +68,40 @@ describe('la e2e de un push corre solo su área', () => {
     expect(pruebasDelPush('conta/c02-x')[0]).toBe('tests/e2e/conta/c02')
   })
 })
+
+// Julio, 21/10: la entera solo si el PR toca lo común o lleva la etiqueta.
+// Contra los 40 últimos PR fusionados en main (fixtures/prs-reales.json).
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { queCorre, deLoComun, LO_COMUN, ETIQUETA_ENTERA } from '../../../scripts/e2e/area.mjs'
+
+const PRS = JSON.parse(readFileSync(join(__dirname, 'fixtures/prs-reales.json'), 'utf8')).prs as { commit: string; titulo: string; ficheros: string[]; comun: boolean }[]
+
+describe('la entera, solo si el PR toca lo común (los 40 últimos PR de main)', () => {
+  it('cada PR, como se revisó a mano', () => {
+    for (const p of PRS) expect(deLoComun(p.ficheros).length > 0, `${p.commit} ${p.titulo}`).toBe(p.comun)
+  })
+  it('de los dos lados: 13 de 40 con lo común', () => {
+    expect(PRS).toHaveLength(40)
+    expect(PRS.filter((p) => p.comun)).toHaveLength(13)
+  })
+  it('la cabecera de pestañas (#258) y el ancho (#263), la entera; el recuadro del plazo (#265), la zona y la corta', () => {
+    const de = (t: string) => PRS.find((p) => p.titulo.includes(t))!
+    expect(queCorre('conta/s01f-pestanas', { cambiados: de('(#258)').ficheros })).toMatchObject({ entera: true })
+    expect(queCorre('conta/s01g-ancho', { cambiados: de('(#263)').ficheros }).porque).toMatch(/^toca lo común: src\/modules\/conta\/diseno\//)
+    const plazo = queCorre('conta/i01b-plazo', { cambiados: de('(#265)').ficheros })
+    expect(plazo.entera).toBe(false)
+    expect(plazo.pruebas).toEqual(pruebasDelPush('conta/i01b-plazo'))
+    expect(plazo.pruebas).toEqual(expect.arrayContaining(CORTA))
+  })
+  it('la etiqueta pide la entera aunque no toque lo común', () => {
+    expect(queCorre('conta/i01b-plazo', { cambiados: ['src/modules/conta/impuestos/calendario.ts'], etiquetas: [ETIQUETA_ENTERA] })).toMatchObject({ entera: true, pruebas: [] })
+    expect(queCorre('conta/i01b-plazo', { cambiados: ['src/modules/conta/impuestos/calendario.ts'], etiquetas: ['otra'] }).entera).toBe(false)
+  })
+  it('todo lo que nombra LO_COMUN existe hoy', () => {
+    for (const p of LO_COMUN) {
+      const ok = existsSync(p.replace(/\/$/, '')) || (p === 'tsconfig' && existsSync('tsconfig.json')) || (p === 'scripts/e2e/carril' && existsSync('scripts/e2e/carril.sh'))
+      expect(ok, p).toBe(true)
+    }
+  })
+})
