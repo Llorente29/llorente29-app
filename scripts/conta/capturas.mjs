@@ -115,9 +115,17 @@ const git = (...a) => execFileSync('git', a, { encoding: 'utf8' })
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [orden, ...args] = process.argv.slice(2)
   const ramaActual = () => git('rev-parse', '--abbrev-ref', 'HEAD').trim()
-  // Lo que la rama cambia contra main (para el dueño por zona). Sin origin/main, nada.
+  // Lo que la rama cambia contra main (para el dueño por zona). En Actions el
+  // checkout es de un solo commit y no trae origin/main (run 762, 21/10): se trae
+  // main y se ahonda la rama hasta encontrar dónde se separaron. Sin eso, nada.
   const cambiadosContraMain = () => {
-    try { return git('diff', '--name-only', 'origin/main...HEAD').split('\n').filter(Boolean) } catch { return [] }
+    const diff = () => execFileSync('git', ['diff', '--name-only', 'origin/main...HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean)
+    try { return diff() } catch { /* sin origin/main o sin la base común: se trae abajo */ }
+    try {
+      execFileSync('git', ['fetch', '--no-tags', '-q', '--depth=200', 'origin', '+refs/heads/main:refs/remotes/origin/main'], { stdio: 'ignore' })
+      execFileSync('git', ['fetch', '--no-tags', '-q', '--deepen=200', 'origin', 'HEAD'], { stdio: 'ignore' })
+      return diff()
+    } catch { return [] }
   }
 
   if (orden === 'frente') {
