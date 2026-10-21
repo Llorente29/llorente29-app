@@ -9,6 +9,9 @@
 --   2. La 0420 aquí no crea ni cambia nada (huella de las fichas, las cuentas y
 --      las facturas de la empresa A, igual antes y después).
 --   3. Su vuelta atrás, tampoco.
+-- sin usuario: la 0420 es una tanda de datos que corre como su dueño (la aplica
+-- el workflow, como en producción), sin pantalla ni función que la llame un
+-- usuario; aquí solo se comprueba que no toca nada.
 -- ============================================================================
 
 begin;
