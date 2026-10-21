@@ -1,8 +1,8 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# Compras · Por revisar y textos), en orden inverso:
-# los textos de las 12 funciones, las 5 preguntas de Foodint como estaban y las
-# dos funciones de la 0350 como en la 0120.
-cuenta: scripts/conta/produccion/cuentas/compras-revisar.sql
-supabase/vuelta-atras/20261129T0370_textos_sin_papel.down.sql
-supabase/vuelta-atras/20261129T0360_compras_preguntas_foodint.down.sql
-supabase/vuelta-atras/20261129T0350_compras_preguntas_de_la_ficha.down.sql
+# Autoconteo), en orden inverso:
+# las cuatro funciones del conteo como estaban (md5 de producción del 21/10), el
+# cron otra vez a cron_autoclose_daily_counts, fuera lo nuevo y sus tres
+# columnas; y los 23 conteos a su estado de antes, desde la copia de la 0390.
+cuenta: scripts/conta/produccion/cuentas/autoconteo.sql
+supabase/vuelta-atras/20261129T0400_autoconteo_se_aplica_entero.down.sql
+supabase/vuelta-atras/20261129T0390_autoconteo_anula_atascados.down.sql

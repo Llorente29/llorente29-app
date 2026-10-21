@@ -59,6 +59,10 @@ supabase/vuelta-atras/20261129T0390_autoconteo_anula_atascados.down.sql
 Los dos `autorizo`: `20261129T0390_autoconteo_anula_atascados.sql` y
 `20261129T0400_autoconteo_se_aplica_entero.sql`.
 
+**Turno dado el 21/10** (la de Compras, 0350–0370, ya aplicada). Vuelto a medir en producción a las 15:58 UTC,
+con la misma vara que la guarda de la 0390: **23 filas, 23 existen, 23 cuadran** (cuenta, `cycle`, estado y
+contadas), ninguna tocada desde el 20/10 a las 21:29 UTC. Ninguna de las dos está en el historial.
+
 ### Lo que dice la cuenta hoy (antes)
 
 | Medida | Antes (21/10) |

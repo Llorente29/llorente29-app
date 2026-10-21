@@ -32,6 +32,9 @@
 --      apply_inventory_count sigue diciendo «sin acceso».
 --   8. Regla 10: los cuatro caminos (venta, albarán, merma, recuento) con todo
 --      lo de arriba puesto, y además un autoconteo de la tablet.
+--   9. Las dos vueltas atrás de producción (la 0400 y la 0390), sobre datos: un
+--      conteo anulado como lo anula la 0390 vuelve a como estaba, y las cuatro
+--      funciones a la huella de producción del 21/10.
 -- El COMMIT por conteo y el rojo de pg_cron no se pueden probar dentro de una
 -- transacción: se prueban fuera, en tests/inventario/autoconteo-noche.sh.
 -- ============================================================================
@@ -415,6 +418,66 @@ begin
   select * into v_r from public.autoclose_daily_count(v_auto);
   if v_r.final_status <> 'aprobado' then raise exception 'PRUEBA autoconteo · 8e: el autoconteo después de los caminos no se ha aplicado (%).', v_r.final_status; end if;
   insert into _hechos values ('8 · autoconteo al terminar', v_r.applied || ' ajuste(s), ' || v_r.final_status);
+end $$;
+
+-- ── 9 · Las dos vueltas atrás, sobre datos ─────────────────────────────────
+-- Las de supabase/produccion/vuelta-atras.txt, en su orden (la 0400 y luego la
+-- 0390), dentro de este ROLLBACK. En staging la 0390 no anula nada (no hay
+-- Foodint): se le da un conteo anulado como lo anula ella, con su copia, y
+-- la vuelta atrás tiene que devolverlo a como estaba.
+select set_config('request.jwt.claims', '', true);
+create temp table _antes_de_bajar (n_cron int) on commit drop;
+do $$
+declare
+  v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
+  v_loc constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
+  c_q constant uuid := 'a7c00000-0000-4000-8000-000000000901';
+begin
+  insert into public.inventory_count (id, account_id, location_id, status, kind, notes)
+  values (c_q, v_acc, v_loc, 'en_revision', 'cycle', 'atascado de prueba');
+  insert into public.autoconteo_anulacion_20261021 (inventory_count_id, account_id, code, status_antes, notes_antes, updated_at_antes)
+  select id, account_id, code, status, notes, updated_at from public.inventory_count where id = c_q;
+  update public.inventory_count set status = 'anulado', notes = 'anulado por la 0390 (prueba)' where id = c_q;
+  insert into _antes_de_bajar select count(*) from cron.job where jobname = 'autoinventory-autoclose';
+end $$;
+
+\i supabase/vuelta-atras/20261129T0400_autoconteo_se_aplica_entero.down.sql
+\i supabase/vuelta-atras/20261129T0390_autoconteo_anula_atascados.down.sql
+
+do $$
+declare
+  v_huellas text;
+  v_esperadas constant text := 'apply_inventory_count=3d4931518da5f145a45c13b31924e4b2 · autoclose_daily_count=057040e8cb2231ed6b6d785b05034d49 · '
+                            || 'close_inventory_count=8b4c2d76e22f88c4807e63c85b745aee · cron_autoclose_daily_counts=50320afc9226f1a2349bbc5d101ef861';
+  v_nuevas int; v_cols int; v_r record;
+begin
+  select * into v_r from public.inventory_count where id = 'a7c00000-0000-4000-8000-000000000901';
+  if v_r.status <> 'en_revision' or v_r.notes is distinct from 'atascado de prueba' then
+    raise exception 'PRUEBA autoconteo · 9: la vuelta atrás de la 0390 no ha devuelto el conteo (%, %).', v_r.status, v_r.notes;
+  end if;
+  if to_regclass('public.autoconteo_anulacion_20261021') is not null then
+    raise exception 'PRUEBA autoconteo · 9: la copia de la 0390 sigue ahí.';
+  end if;
+  select string_agg(proname || '=' || md5(pg_get_functiondef(oid)), ' · ' order by proname) into v_huellas
+    from pg_proc where pronamespace = 'public'::regnamespace
+     and proname in ('apply_inventory_count', 'close_inventory_count', 'autoclose_daily_count', 'cron_autoclose_daily_counts');
+  if v_huellas is distinct from v_esperadas then
+    raise exception 'PRUEBA autoconteo · 9: las cuatro funciones no han vuelto a la huella de producción del 21/10: %', v_huellas;
+  end if;
+  select count(*) into v_nuevas from pg_proc where pronamespace = 'public'::regnamespace
+     and proname in ('_close_inventory_count_core', '_apply_inventory_count_core', '_autoconteo_aplicar',
+                     'autoconteo_cierre_nocturno', 'autoconteos_sin_aplicar', 'autoconteo_vigia');
+  select count(*) into v_cols from information_schema.columns
+   where table_schema = 'public' and table_name = 'inventory_count' and column_name like 'auto_appl%';
+  if v_nuevas <> 0 or v_cols <> 0 then
+    raise exception 'PRUEBA autoconteo · 9: quedan % funciones nuevas y % columnas nuevas.', v_nuevas, v_cols;
+  end if;
+  if (select n_cron from _antes_de_bajar) > 0
+     and (select command from cron.job where jobname = 'autoinventory-autoclose') <> 'select public.cron_autoclose_daily_counts();' then
+    raise exception 'PRUEBA autoconteo · 9: el cron no ha vuelto a cron_autoclose_daily_counts.';
+  end if;
+  insert into _hechos values ('9 · vueltas atrás', 'la 0390 devuelve el conteo anulado a en_revision y quita su copia; la 0400 deja las cuatro con la huella de producción, '
+    || 'sin lo nuevo ni sus columnas' || case when (select n_cron from _antes_de_bajar) > 0 then ', y el cron como estaba' else ' (staging no tiene el trabajo del cron)' end);
 end $$;
 
 do $$ begin

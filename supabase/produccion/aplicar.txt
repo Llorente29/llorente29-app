@@ -3,30 +3,23 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# Compras · Por revisar y los textos sin «papel» (rama conta/compras-revisar;
-# Julio, 21/10). Va DESPUÉS de la 0340 de C (sociedades 202, PR #269,
-# aplicada): su copia, tests/conta/produccion/tanda-i01h-sociedades-20261021.txt.
-# Orden (Julio, 21/10): 0340 de C → esta (0350–0370) → 0380 (el 390 con SII)
-# → autoconteo.
+# AUTOCONTEO · el autoconteo se aplica solo, entero y con cualquier diferencia
+# (rama claude/exciting-cray-eik036; encargo de Julio del 21/10). Va DESPUÉS de
+# la de Compras (0350–0370, aplicada): su copia,
+# tests/conta/produccion/tanda-compras-revisar-20261021.txt. Turno dado el 21/10.
 #
-#   1. 0350 — CAMBIA en caliente _compras_camino_guarda y _compras_forma_facturar
-#      (misma firma, declarado, con su prueba de staging): al guardar cómo
-#      factura un proveedor, las preguntas que salen de la ficha se vuelven a
-#      mirar también en las recepciones que ya tienen factura. No cambia datos.
-#   2. 0360 — la pasada de hoy, solo Foodint: UPDATE de la pregunta de las 5
-#      recepciones con factura que se quedaron con «la ficha no dice cómo
-#      factura» (medido el 21/10): 4 pierden la pregunta y ALB-00218 pasa a
-#      «no dicen lo mismo». El analizador pide «autorizo» con su nombre entero.
-#   3. 0370 — CAMBIA en caliente 12 funciones, SOLO sus textos (misma firma,
-#      declarado, con su prueba de staging): ni «papel» ni «papeles». Entre
-#      ellas la frase de la tablet al confirmar una recepción y el disparador
-#      de la factura desde el documento: la regla 10 (venta, albarán, merma y
-#      recuento) se ensaya en staging con las tres puestas
-#      (20261129_compras_revisar_cuatro_caminos_prueba.sql).
+#   1. 0390 — ANULA los 23 autoconteos atascados (update, AUTORIZO). Para entera
+#      si alguno no está como se midió el 21/10 (vuelto a medir antes de dar el
+#      turno: los 23 cuadran). Copia lo de antes para la vuelta atrás. No toca
+#      el stock.
+#   2. 0400 — CAMBIA en caliente close/apply/autoclose y el cron de las 03:10
+#      UTC (AUTORIZO: las llama un cron), AÑADE los núcleos sin guarda, el
+#      procedimiento de la noche (COMMIT por conteo y error al final: pg_cron en
+#      rojo si falla), la lectura del aviso de la pantalla y la del vigía, y
+#      tres columnas que admiten nulos. audit y full no cambian.
 #
 # No toca el camino del pedido. Ninguna función que desplegar a mano.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/compras-revisar.sql
-supabase/migrations/20261129T0350_compras_preguntas_de_la_ficha.sql
-supabase/migrations/20261129T0360_compras_preguntas_foodint.sql
-supabase/migrations/20261129T0370_textos_sin_papel.sql
+cuenta: scripts/conta/produccion/cuentas/autoconteo.sql
+supabase/migrations/20261129T0390_autoconteo_anula_atascados.sql
+supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql

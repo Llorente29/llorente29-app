@@ -512,26 +512,36 @@ describe('R11 · paso 8 sobre la tanda del esqueleto (S01, su copia, aplicada), 
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de Compras (0350–0370, su copia, aplicada), con su contexto medido', () => {
+  it('la 0350 y la 0370 siguen, la 0360 AUTORIZO', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-compras-revisar-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-compras-revisar-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0350_compras_preguntas_de_la_ficha.sql: sigue')
+    expect(out).toContain('20261129T0360_compras_preguntas_foodint.sql: AUTORIZO')
+    expect(out).toContain('20261129T0370_textos_sin_papel.sql: sigue')
+    expect(out).toContain('autorizo: 20261129T0360_compras_preguntas_foodint.sql')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con los ficheros medidos, da su estado y los «autorizo» (Compras: la 0350 y la 0370 siguen; «autorizo» para la 0360)', () => {
+  it('con los ficheros medidos, da su estado y los «autorizo» (Autoconteo: la 0390 y la 0400 piden «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261129T0350_compras_preguntas_de_la_ficha.sql: sigue')
-    expect(r.out).toContain('20261129T0360_compras_preguntas_foodint.sql: AUTORIZO')
-    expect(r.out).toContain('20261129T0370_textos_sin_papel.sql: sigue')
-    expect(r.out).toContain('autorizo: 20261129T0360_compras_preguntas_foodint.sql')
+    expect(r.out).toContain('20261129T0390_autoconteo_anula_atascados.sql: AUTORIZO')
+    expect(r.out).toContain('20261129T0400_autoconteo_se_aplica_entero.sql: AUTORIZO')
+    expect(r.out).toContain('autorizo: 20261129T0390_autoconteo_anula_atascados.sql 20261129T0400_autoconteo_se_aplica_entero.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261129T0370_textos_sin_papel.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261129T0370_textos_sin_papel.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261129T0400_autoconteo_se_aplica_entero.sql ha cambiado desde la medida')
   })
 })
 

@@ -1,0 +1,32 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# Compras · Por revisar y los textos sin «papel» (rama conta/compras-revisar;
+# Julio, 21/10). Va DESPUÉS de la 0340 de C (sociedades 202, PR #269,
+# aplicada): su copia, tests/conta/produccion/tanda-i01h-sociedades-20261021.txt.
+# Orden (Julio, 21/10): 0340 de C → esta (0350–0370) → 0380 (el 390 con SII)
+# → autoconteo.
+#
+#   1. 0350 — CAMBIA en caliente _compras_camino_guarda y _compras_forma_facturar
+#      (misma firma, declarado, con su prueba de staging): al guardar cómo
+#      factura un proveedor, las preguntas que salen de la ficha se vuelven a
+#      mirar también en las recepciones que ya tienen factura. No cambia datos.
+#   2. 0360 — la pasada de hoy, solo Foodint: UPDATE de la pregunta de las 5
+#      recepciones con factura que se quedaron con «la ficha no dice cómo
+#      factura» (medido el 21/10): 4 pierden la pregunta y ALB-00218 pasa a
+#      «no dicen lo mismo». El analizador pide «autorizo» con su nombre entero.
+#   3. 0370 — CAMBIA en caliente 12 funciones, SOLO sus textos (misma firma,
+#      declarado, con su prueba de staging): ni «papel» ni «papeles». Entre
+#      ellas la frase de la tablet al confirmar una recepción y el disparador
+#      de la factura desde el documento: la regla 10 (venta, albarán, merma y
+#      recuento) se ensaya en staging con las tres puestas
+#      (20261129_compras_revisar_cuatro_caminos_prueba.sql).
+#
+# No toca el camino del pedido. Ninguna función que desplegar a mano.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/compras-revisar.sql
+supabase/migrations/20261129T0350_compras_preguntas_de_la_ficha.sql
+supabase/migrations/20261129T0360_compras_preguntas_foodint.sql
+supabase/migrations/20261129T0370_textos_sin_papel.sql
