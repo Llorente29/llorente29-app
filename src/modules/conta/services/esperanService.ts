@@ -21,3 +21,14 @@ export async function leerEsperan(companyId: string, desde = '1900-01-01', hasta
   }
   return out
 }
+
+/**
+ * C06b (Julio, 21/10): los motivos por los que la base no validaría ESTE
+ * asiento, en orden, con el mismo texto con el que lo para
+ * (conta_motivos_para_validar(p_entry) → orden, codigo, motivo). Vacío: se
+ * puede validar. Es lo que deja «Validar asiento» en gris antes de pulsar.
+ */
+export async function motivosParaValidar(entryId: string): Promise<MotivoEspera[]> {
+  const filas = ((await rpc<Fila[] | null>('conta_motivos_para_validar', { p_entry: entryId })) ?? [])
+  return [...filas].sort((a, b) => Number(a.orden) - Number(b.orden)).map((f) => ({ codigo: String(f.codigo), motivo: String(f.motivo) }))
+}

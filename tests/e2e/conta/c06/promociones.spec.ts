@@ -95,15 +95,19 @@ test('Libros: el asiento del día con su promoción (al debe) y su envío cobrad
   expect(await loQueTapanSinPregunta(page, '.cx-principal')).toEqual([])
 })
 
-test('Libros: un asiento «Por aclarar» dice qué pedido y por qué, y al validar no se valida y lo dice (regla 8)', async ({ page }) => {
+test('Libros: un asiento «Por aclarar» dice qué pedido y por qué, y «Validar asiento» sale en gris con el motivo de la base antes de pulsar (regla 8)', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await porLaRed(page)
   await page.goto(`/conta/libros/diario/${ACLARAR}`)
   const ia = page.getByRole('region', { name: 'Por qué lo propongo así' })
   await expect(ia).toContainText('Por aclarar: 1 pedido con envío', { timeout: 20_000 })
   await expect(ia).toContainText('PR-3 · Casa Lola · envío 2,00 € · repartió la plataforma')
-  await page.getByRole('button', { name: 'Validar asiento' }).click()
-  await expect(page.getByText(FRENO)).toBeVisible()
+  // C06b (Julio, 21/10): ya no hace falta pulsar para saberlo. El motivo es el de la base
+  // (conta_motivos_para_validar, la misma con la que para journal_entry_validar).
+  const validar = page.getByRole('button', { name: 'Validar asiento' })
+  await expect(validar).toBeDisabled()
+  await expect(validar).toHaveAttribute('title', FRENO)
+  await expect(page.getByRole('status', { name: 'Por qué no se valida' })).toHaveText(`No se valida todavía · ${FRENO}`)
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
   await page.screenshot({ path: `${DIR}/promociones-por-aclarar-${lado(page)}.png`, fullPage: true })
