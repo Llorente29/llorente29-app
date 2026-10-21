@@ -9,8 +9,9 @@
 --      (2.000,00 × 18 % = 360,00 a ingresar). No inventa el 2P ni el 3P de
 --      2025 (son de antes de este año y no están en Sumied).
 --   2. El 200 de 2025 a cero (a devolver 300,00): el 2P y el 3P de 2026 y el
---      1P de 2027 quedan «No hace falta», con el porqué; el calendario no los
---      cuenta como pendientes.
+--      1P de 2027 quedan «No hace falta», con el porqué; el calendario
+--      (conta_impuesto_calendario, que cambia) enseña el 2P vencido con su
+--      porqué y no lo cuenta como pendiente.
 --   3. Corregir el 200 de 2025 (cuota 1.000,00): el 2P vuelve a borrador con
 --      180,00; y otra vez a cero, otra vez «No hace falta».
 --   4. Lo que salió a devolver: pendiente hasta que un asiento validado abona
@@ -20,7 +21,8 @@
 --   6. La cuenta B no lee, ni escribe, ni calcula lo de A; y con la clave
 --      anónima no se llama ni al 202 ni al 111 (el hueco de la 0330, cerrado).
 --   7. La vuelta atrás, con datos: quita la tabla, las tres funciones y la
---      clave nueva, y devuelve los permisos de antes; y otra vez delante.
+--      clave nueva, devuelve los permisos de antes y el calendario de la 0250
+--      byte a byte (conta_impuesto_calendario); y otra vez delante.
 
 begin;
 do $$ begin
@@ -96,7 +98,7 @@ begin
   if n <> 3 then raise exception 'PRUEBA 202 · 2: no son tres «No hace falta» con el porqué (%).', n; end if;
   -- El calendario: el 2P de 2026 (vencía el 20/10) dice que no hace falta, no que está pendiente.
   cal := public.conta_impuesto_calendario(emp, '2026-10-21');
-  select f into fila from jsonb_array_elements(cal->'filas') f where f->>'modelo' = '202' and f->>'periodo' = '2P' and (f->>'ejercicio')::int = 2026;
+  select t.f into fila from jsonb_array_elements(cal->'filas') t(f) where t.f->>'modelo' = '202' and t.f->>'periodo' = '2P' and (t.f->>'ejercicio')::int = 2026;
   if fila is null or fila#>>'{declaracion,estado}' <> 'not_required' or fila#>>'{declaracion,no_hace_falta}' <> 'el impuesto de 2025 salió a cero' then
     raise exception 'PRUEBA 202 · 2: el calendario no dice que el 2P de 2026 no hace falta: %', fila;
   end if;
@@ -220,6 +222,9 @@ do $$ begin
   end if;
   if pg_get_constraintdef((select oid from pg_constraint where conname = 'tax_return_check_check_key_check')) like '%base_200%' then
     raise exception 'PRUEBA 202 · 7: el CHECK sigue con la clave nueva.';
+  end if;
+  if (select md5(prosrc) from pg_proc where oid = 'public.conta_impuesto_calendario(uuid,date)'::regprocedure) <> 'caccacb3d2fa9528b5737830b4fd93b2' then
+    raise exception 'PRUEBA 202 · 7: el calendario no vuelve al de la 0250 byte a byte (el de producción, medido el 21/10).';
   end if;
   if not has_function_privilege('anon', 'public.conta_impuesto_retenciones_calcular(uuid,int,text,text)', 'execute') then
     raise exception 'PRUEBA 202 · 7: la vuelta atrás no devuelve los permisos de antes a la 0330.';
