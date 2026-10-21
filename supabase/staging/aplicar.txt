@@ -328,3 +328,16 @@ supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql
 #   modelo (error), lo que no vale y la cuenta B, que no lee ni calcula.
 supabase/migrations/20261127T0330_i01g_retenciones_111_115.sql
 supabase/staging/sql/20261127_i01g_retenciones_prueba.sql
+
+# AUTOCONTEO · el autoconteo se aplica solo, entero y con cualquier diferencia
+#   (rama claude/exciting-cray-eik036; encargo de Julio del 21/10). Primero la
+#   limpieza (si ya están, las quita con sus .down.sql: se puede volver a
+#   pasar), luego la 0390 (en staging no hay filas de Foodint: no anula nada) y
+#   la 0400 DE VERDAD, y su prueba (ROLLBACK): la tablet aplica entero al
+#   terminar, la red aplica el rezagado, la noche aplica, anula el vacío y
+#   apunta el roto con su aviso, la pantalla y el vigía lo ven, la cuenta B no,
+#   el de seguridad sigue pidiendo motivo, y los cuatro caminos de la regla 10.
+supabase/staging/sql/20261129_autoconteo_limpiar.sql
+supabase/migrations/20261129T0390_autoconteo_anula_atascados.sql
+supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql
+supabase/staging/sql/20261129_autoconteo_prueba.sql

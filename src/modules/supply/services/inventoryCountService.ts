@@ -12,6 +12,7 @@
 // el AvT excluirá esos movimientos del cómputo de variación.
 
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
+import type { AutoconteoSinAplicar } from '@/modules/supply/lib/autoconteoTexto'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -48,6 +49,11 @@ export interface InventoryCount {
   closedAt: string | null
   approvedAt: string | null
   approvedByName: string | null
+  /** Cómo se aplicó solo un autoconteo (0400): al terminar en la tablet, de
+   *  noche o al preparar el siguiente. Null = no se aplicó solo. */
+  autoAppliedVia: 'al_terminar' | 'cron' | 'rezagado' | null
+  /** El último error al aplicarlo solo, si lo hubo. */
+  autoApplyError: string | null
   createdAt: string
   lineCount?: number
 }
@@ -256,7 +262,7 @@ export async function listAreasWithItems(_accountId: string, locationId: string)
 export async function listInventoryCounts(accountId: string, locationId: string): Promise<InventoryCount[]> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, approved_by_name, created_at, inventory_count_line(count)')
+    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, approved_by_name, auto_applied_via, auto_apply_error, created_at, inventory_count_line(count)')
     .eq('account_id', accountId)
     .eq('location_id', locationId)
     .order('created_at', { ascending: false })
@@ -280,6 +286,8 @@ export async function listInventoryCounts(accountId: string, locationId: string)
       closedAt: (r.closed_at as string | null) ?? null,
       approvedAt: (r.approved_at as string | null) ?? null,
       approvedByName: (r.approved_by_name as string | null) ?? null,
+      autoAppliedVia: (r.auto_applied_via as InventoryCount['autoAppliedVia']) ?? null,
+      autoApplyError: (r.auto_apply_error as string | null) ?? null,
       createdAt: r.created_at as string,
       lineCount: Number(count),
     }
@@ -289,7 +297,7 @@ export async function listInventoryCounts(accountId: string, locationId: string)
 export async function getInventoryCount(countId: string): Promise<InventoryCount | null> {
   requireSupabase()
   const { data, error } = await from('inventory_count')
-    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, approved_by_name, created_at')
+    .select('id, code, location_id, kind, status, blind, is_opening, assigned_employee_id, assigned_at, scope_area_ids, scheduled_for, started_at, closed_at, approved_at, approved_by_name, auto_applied_via, auto_apply_error, created_at')
     .eq('id', countId)
     .maybeSingle()
   if (error) throw new Error(`Error cargando el conteo: ${error.message}`)
@@ -311,6 +319,8 @@ export async function getInventoryCount(countId: string): Promise<InventoryCount
     closedAt: (r.closed_at as string | null) ?? null,
     approvedAt: (r.approved_at as string | null) ?? null,
     approvedByName: (r.approved_by_name as string | null) ?? null,
+    autoAppliedVia: (r.auto_applied_via as InventoryCount['autoAppliedVia']) ?? null,
+    autoApplyError: (r.auto_apply_error as string | null) ?? null,
     createdAt: r.created_at as string,
   }
 }
@@ -1067,4 +1077,27 @@ export async function classifyCountCauses(
     result.set(line.id, classifyCauseConCobertura(line, isOpening, context, cobertura))
   }
   return result
+}
+
+/**
+ * LOS AUTOCONTEOS SIN APLICAR de la cuenta (0400): con un fallo apuntado, o
+ * abiertos más de un día. Es lo que avisa la pantalla de inventario para que un
+ * fallo de la noche no vuelva a quedar mudo. RPC nueva: aún no está en los
+ * tipos generados, así que se castea como `pending_count_line_for_item`.
+ */
+export async function listAutoconteosSinAplicar(accountId: string): Promise<AutoconteoSinAplicar[]> {
+  requireSupabase()
+  const { data, error } = await (supabase! as unknown as {
+    rpc: (f: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>
+  }).rpc('autoconteos_sin_aplicar', { p_account_id: accountId })
+  if (error) throw new Error(`No se pudo leer los autoconteos sin aplicar: ${error.message}`)
+  return ((data as Row[] | null) ?? []).map(r => ({
+    countId: r.count_id as string,
+    code: (r.code as string | null) ?? null,
+    locationName: (r.location_name as string | null) ?? null,
+    createdAt: r.created_at as string,
+    countedLines: Number(r.counted_lines ?? 0),
+    error: (r.error as string | null) ?? null,
+    failedAt: (r.failed_at as string | null) ?? null,
+  }))
 }

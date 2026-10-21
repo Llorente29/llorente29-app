@@ -50,6 +50,7 @@ import {
 } from '@/modules/supply/services/countApprovalService'
 import { requestRecount, historiaDeLaLinea } from '@/modules/supply/services/countEntryService'
 import CorregirAhoraModal from '@/modules/supply/components/CorregirAhoraModal'
+import ResumenAutoconteo from '@/modules/supply/components/ResumenAutoconteo'
 import {
   PanelCocina, RotuloDePanel, CifraCocina, PastillaCocina, BotonCocina,
 } from '@/modules/kitchen/components/PatronDeKitchen'
@@ -182,6 +183,16 @@ export default function AprobarRecuento({
    * la que se había usado para revisarlo. Un recuento se ve SIEMPRE aquí.
    */
   const soloLectura = count.status === 'aprobado' || count.status === 'anulado'
+
+  /**
+   * UN AUTOCONTEO APLICADO SOLO (0400, Julio 21/10). Nadie lo revisó: se aplicó
+   * entero al terminarlo o de madrugada. No se enseña «lo que se revisó» sino
+   * cuándo se aplicó y qué cambió (ResumenAutoconteo).
+   */
+  const autoAplicado = count.status === 'aprobado' && count.kind === 'cycle'
+    && count.autoAppliedVia != null && count.approvedAt != null
+  /** Un autoconteo que se quedó sin aplicar: se aplica entero, sin motivos. */
+  const autoPendiente = count.kind === 'cycle' && count.status === 'en_revision'
 
   // Las que se pueden aprobar de una vez: las que cuadran, más las de revisar
   // que YA tienen motivo. El botón cuenta lo que va a hacer, no lo que hay.
@@ -417,14 +428,14 @@ export default function AprobarRecuento({
               {quienes.length > 0 && <> · contado por {listar(quienes)}</>}
               {' · '}{lines.length} producto{lines.length === 1 ? '' : 's'}
             </p>
-            {soloLectura && (
+            {soloLectura && !autoAplicado && (
               <p className="text-[13px] text-cocina-verde font-semibold mt-1.5 inline-flex items-center gap-1.5">
                 <Check size={14} />
                 {fraseDeLaAprobacion(count, hechos)}
               </p>
             )}
           </div>
-          {vista && vista.ok.length > 0 && (
+          {vista && vista.ok.length > 0 && !autoAplicado && (
             <BotonCocina peso="borde" onClick={() => setVerCuadran(v => !v)}>
               {verCuadran ? 'Ocultar' : 'Ver'} los {vista.ok.length} que cuadran
             </BotonCocina>
@@ -443,6 +454,11 @@ export default function AprobarRecuento({
           {error}
         </div>
       )}
+      {count.autoApplyError && !soloLectura && (
+        <div className="rounded-cocina px-3.5 py-3 text-[13px] bg-cocina-rojo-bg text-cocina-rojo border border-cocina-rojo/35">
+          <b>No se ha podido aplicar solo:</b> {count.autoApplyError}
+        </div>
+      )}
 
       {/* ── Las cuatro cifras, aprobado ──
            «Contradicen» y «Valor de lo que hay que revisar» son cifras para
@@ -450,7 +466,18 @@ export default function AprobarRecuento({
            cerrado enseñarían un número que no es el que se vio al aprobarlo.
            Aquí van las dos que no se mueven: lo que quedó sin contar y lo que
            de verdad se aplicó, leído del libro. */}
-      {soloLectura && vista && (
+      {autoAplicado && count.autoAppliedVia && count.approvedAt && (
+        <ResumenAutoconteo
+          via={count.autoAppliedVia}
+          approvedAt={count.approvedAt}
+          createdAt={count.createdAt}
+          approvedByName={count.approvedByName}
+          lineas={lines}
+          hechos={hechos}
+        />
+      )}
+
+      {soloLectura && !autoAplicado && vista && (
         <div className="grid grid-cols-4 gap-px bg-cocina-linea-suave border border-cocina-linea rounded-cocina-md overflow-hidden shadow-cocina">
           <CifraCocina titulo="Cuadran" valor={String(vista.ok.length)} tono="bueno"
                        pie="Se aplicaron sin motivo" />
@@ -503,7 +530,8 @@ export default function AprobarRecuento({
         </div>
       )}
 
-      {/* ── Revisa antes de aprobar ── */}
+      {/* ── Revisa antes de aprobar ── (un autoconteo aplicado solo no se revisó) */}
+      {!autoAplicado && (
       <PanelCocina>
         <RotuloDePanel derecha="Ordenado por valor">
           {soloLectura ? 'Lo que se revisó' : 'Revisa antes de aprobar'} · {vista?.toReview.length ?? 0}
@@ -552,9 +580,10 @@ export default function AprobarRecuento({
           </table>
         )}
       </PanelCocina>
+      )}
 
       {/* ── Las que cuadran, cuando se piden ── */}
-      {verCuadran && vista && (
+      {verCuadran && vista && !autoAplicado && (
         <PanelCocina>
           <RotuloDePanel>Cuadran · {vista.ok.length}</RotuloDePanel>
           <table className="w-full border-collapse">
@@ -590,8 +619,11 @@ export default function AprobarRecuento({
         <p className="text-[12px] text-cocina-tinta-2 leading-[1.5] min-w-0 flex-1">
           <b className="text-cocina-tinta">Motivos:</b>{' '}
           {MOTIVOS_DE_COCINA.map(m => m.label).join(' · ')}
-          {sinMotivo > 0 && (
+          {sinMotivo > 0 && !autoPendiente && (
             <> — <b className="text-cocina-ambar">{sinMotivo} sin motivo</b>, y sin motivo no se aplican.</>
+          )}
+          {autoPendiente && (
+            <> — <b className="text-cocina-tinta">es un autoconteo</b>: se aplica entero, con cualquier diferencia y sin motivos.</>
           )}
         </p>
         {/* ── LO QUE ESTE RECUENTO VA A DEJAR SIN DESCONTAR (23/09/2026) ──
@@ -636,7 +668,12 @@ export default function AprobarRecuento({
               Pedir recuento de {paraRecontar}
             </BotonCocina>
           )}
-          {sinMotivo > 0 ? (
+          {autoPendiente ? (
+            // Un autoconteo no pide motivos (0400): se aplica entero, con lo contado.
+            <BotonCocina peso="relleno" onClick={() => void onAprobar()} disabled={approving}>
+              {approving ? 'Aplicando…' : `Aplicar entero (${lines.filter(l => l.countedQty !== null && !l.excludedAt).length} contados)`}
+            </BotonCocina>
+          ) : sinMotivo > 0 ? (
             <BotonCocina peso="aviso" onClick={irAlPrimeroSinMotivo}>
               {`Faltan ${sinMotivo} motivo${sinMotivo === 1 ? '' : 's'}`}
             </BotonCocina>

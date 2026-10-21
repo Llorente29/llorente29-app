@@ -20,6 +20,8 @@ import {
   Play, CalendarClock, UserCog,
 } from 'lucide-react'
 import StockLevelsSection from '@/modules/supply/components/StockLevelsSection'
+import AvisoAutoconteosSinAplicar from '@/modules/supply/components/AvisoAutoconteosSinAplicar'
+import type { AutoconteoSinAplicar } from '@/modules/supply/lib/autoconteoTexto'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { useApp } from '@/context/AppContext'
 import { listSupplyLocations, type SupplyLocation } from '@/modules/supply/services/supplierCatalogService'
@@ -39,6 +41,7 @@ import {
   startInventoryCount,
   reassignInventoryCount,
   listInventoryCounts,
+  listAutoconteosSinAplicar,
   listAreasWithItems,
   type InventoryCount,
   type InventoryCountKind,
@@ -81,6 +84,9 @@ export default function InventoryPage() {
   const [countsLoading, setCountsLoading] = useState(false)
   const [newCountOpen, setNewCountOpen] = useState(false)
   const [reassignFor, setReassignFor] = useState<InventoryCount | null>(null)
+  // Los autoconteos que no han llegado al stock (0400): se avisa en todo Almacén.
+  const [sinAplicar, setSinAplicar] = useState<AutoconteoSinAplicar[]>([])
+  const [sinAplicarError, setSinAplicarError] = useState<string | null>(null)
 
   // ficha de un artículo abierta desde el peek de Zonas
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
@@ -140,6 +146,23 @@ export default function InventoryPage() {
     })()
     return () => { cancelled = true }
   }, [tab, invTab, activeAccountId, locationId, openCountId, reloadTick])
+
+  // QUE UN FALLO DEL AUTOCONTEO NO QUEDE MUDO (Julio, 21/10). De toda la cuenta,
+  // no solo del local: un autoconteo sin aplicar en otro local también importa.
+  // Si no se puede comprobar, se dice (regla 8), pero no tumba la página.
+  useEffect(() => {
+    if (!activeAccountId || openCountId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const xs = await listAutoconteosSinAplicar(activeAccountId)
+        if (!cancelled) { setSinAplicar(xs); setSinAplicarError(null) }
+      } catch (e) {
+        if (!cancelled) setSinAplicarError(e instanceof Error ? e.message : 'error desconocido')
+      }
+    })()
+    return () => { cancelled = true }
+  }, [activeAccountId, openCountId, reloadTick])
 
   // empleados activos del local operativo (mismo criterio que CalendarioPage:
   // local principal O local en assigned_locations). Para el dropdown de asignar.
@@ -281,6 +304,13 @@ export default function InventoryPage() {
 
       {flash && <div className="p-3 rounded-md bg-success-bg text-success border border-success/20 text-sm">{flash}</div>}
       {error && <div className="p-3 rounded-md bg-danger-bg text-danger border border-danger/20 text-sm">{error}</div>}
+
+      <AvisoAutoconteosSinAplicar items={sinAplicar} onOpen={id => setOpenCountId(id)} />
+      {sinAplicarError && (
+        <div className="p-2.5 rounded-md bg-warning-bg border border-warning/30 text-xs text-text-secondary">
+          No se ha podido comprobar si hay autoconteos sin aplicar: {sinAplicarError}
+        </div>
+      )}
 
       {!op.isResolved ? null : (
       <>
@@ -653,6 +683,12 @@ function CountsSection({
     aprobado: 'bg-success-bg text-success border-success/20',
     anulado: 'bg-danger-bg text-danger border-danger/20',
   }
+  // Un autoconteo aplicado solo no lo ha «aprobado» nadie (0400): se dice.
+  const etiquetaDeEstado = (c: InventoryCount) =>
+    c.kind === 'cycle' && c.status === 'aprobado' && c.autoAppliedVia ? 'Aplicado'
+    : c.kind === 'cycle' && c.status === 'anulado' && c.autoAppliedVia ? 'Anulado · sin contar'
+    : c.kind === 'cycle' && c.status !== 'aprobado' && c.autoApplyError ? 'Sin aplicar'
+    : STATUS_LABEL[c.status]
   const fmt = (v: string | null) => v
     ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(v))
     : '—'
@@ -773,7 +809,8 @@ function CountsSection({
                   <span className="text-xs text-text-tertiary shrink-0">{c.lineCount ?? 0} líneas</span>
                   {assignee && <span className="text-xs text-text-secondary truncate">· {assignee}</span>}
                   <span className="text-xs text-text-tertiary ml-auto shrink-0">{fmt(c.createdAt)}</span>
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${STATUS_CLASS[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded border shrink-0 ${STATUS_CLASS[c.status]}`}
+                        title={c.autoApplyError ?? undefined}>{etiquetaDeEstado(c)}</span>
                 </button>
                 {ReassignBtn}
                 <ChevronRight size={16} className="text-text-tertiary shrink-0" />
