@@ -1,0 +1,8 @@
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
+# Compras · Por revisar y textos), en orden inverso:
+# los textos de las 12 funciones, las 5 preguntas de Foodint como estaban y las
+# dos funciones de la 0350 como en la 0120.
+cuenta: scripts/conta/produccion/cuentas/compras-revisar.sql
+supabase/vuelta-atras/20261129T0370_textos_sin_papel.down.sql
+supabase/vuelta-atras/20261129T0360_compras_preguntas_foodint.down.sql
+supabase/vuelta-atras/20261129T0350_compras_preguntas_de_la_ficha.down.sql
