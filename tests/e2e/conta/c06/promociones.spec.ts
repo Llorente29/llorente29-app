@@ -6,8 +6,8 @@
 // Capturas en docs/conta/capturas/c06b/, en ordenador y móvil.
 //
 // El asiento lo da la RED, no staging: Playwright contesta la lectura de ESTE
-// asiento (ids inventados c06b9000-…) y, en el «Por aclarar», el intento de
-// validar con lo que dice la base (el freno de la 20261116T0100, probado en
+// asiento (ids inventados c06b9000-…) y, en el «Por aclarar», sus motivos para
+// no validar y el intento de validar con lo que dice la base (el freno de la 20261116T0100, probado en
 // supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql). Así no se
 // siembra nada en la cuenta A, que comparten los frentes. Las líneas y las
 // razones son las que sacan la base y el espejo del front con el ejemplo del
@@ -70,6 +70,12 @@ async function porLaRed(page: Page) {
     return (r.request().headers()['accept'] ?? '').includes('vnd.pgrst.object') ? json(r, a) : json(r, a ? [a] : [])
   })
   await page.route(/\/rest\/v1\/rpc\/journal_entry_validar/, (r) => json(r, { code: '23514', details: null, hint: null, message: FRENO }, 400))
+  // C06b (21/10): lo que la base diría antes de validar (conta_motivos_para_validar, la misma con la que
+  // para journal_entry_validar): en el «Por aclarar», el envío; en el otro, nada.
+  await page.route(/\/rest\/v1\/rpc\/conta_motivos_para_validar/, (r) => {
+    const entrada = (r.request().postDataJSON() ?? {}) as { p_entry?: string }
+    return json(r, entrada.p_entry === ACLARAR ? [{ orden: 9, codigo: 'envio_por_aclarar', motivo: FRENO }] : [])
+  })
 }
 
 test('Libros: el asiento del día con su promoción (al debe) y su envío cobrado, con sus razones y sus citas', async ({ page }) => {
