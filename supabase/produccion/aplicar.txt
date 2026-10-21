@@ -6,7 +6,8 @@
 # INVENTARIO · anula tres inventarios de seguridad viejos de Foodint
 # (rama claude/autoconteo-anula-audits; Julio, 21/10). Va DESPUÉS de la 0380
 # de C06b (aplicada): su copia, tests/conta/produccion/tanda-c06b-nombre-pdf-base-20261021.txt.
-# Y después de la del autoconteo (0390 y 0400, aplicadas desde el #277).
+# Y después de la del autoconteo (0390 y 0400, aplicadas; #277): su copia,
+# tests/conta/produccion/tanda-autoconteo-20261021.txt.
 #
 #   1. 0440 — ANULA INV-00258, INV-00259 e INV-00283 (kind audit, en_revision
 #      desde el 27/09 y el 05/10, todo contado, 0 movimientos), por id y cuenta

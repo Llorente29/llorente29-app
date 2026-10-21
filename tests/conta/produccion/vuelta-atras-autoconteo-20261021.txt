@@ -1,0 +1,8 @@
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
+# Autoconteo), en orden inverso:
+# las cuatro funciones del conteo como estaban (md5 de producción del 21/10), el
+# cron otra vez a cron_autoclose_daily_counts, fuera lo nuevo y sus tres
+# columnas; y los 23 conteos a su estado de antes, desde la copia de la 0390.
+cuenta: scripts/conta/produccion/cuentas/autoconteo.sql
+supabase/vuelta-atras/20261129T0400_autoconteo_se_aplica_entero.down.sql
+supabase/vuelta-atras/20261129T0390_autoconteo_anula_atascados.down.sql
