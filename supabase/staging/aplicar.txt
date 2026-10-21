@@ -377,3 +377,13 @@ supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
 #   el usuario de A, con la frase de la tablet; apuntar una merma; aprobar un
 #   recuento. Cada uno tiene que escribir lo suyo.
 supabase/staging/sql/20261129_compras_revisar_cuatro_caminos_prueba.sql
+
+# P01 · El alta no propone el 390 a quien lleva el SII (rama
+#   conta/p01-390-sii). Primero su prueba (ROLLBACK), que necesita la regla de
+#   la 0250 tal cual (la deja la línea de la 0250, arriba): Levante (con el
+#   SII) sin el 390 y con su porqué, el Hostal con él, el SII puesto y quitado,
+#   las empresas sin el SII con las mismas filas que antes, calcular que no lo
+#   escribe y la vuelta atrás byte a byte. Después, la 0350 DE VERDAD (cambia
+#   la regla en caliente, misma firma), para que staging la tenga.
+supabase/staging/sql/20261129_p01_390_sin_sii_prueba.sql
+supabase/migrations/20261129T0350_p01_390_sin_sii.sql
