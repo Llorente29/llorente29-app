@@ -22,6 +22,8 @@
 --   5. Una retención del 123 (capital): no va ni en el 111 ni en el 115.
 --   6. Lo que no vale: 0 perceptores, sin motivo, otro modelo.
 --   7. La cuenta B no lee ni calcula lo de A.
+--   8. La vuelta atrás, con lo comprobado de la prueba dentro: quita las tres
+--      funciones y deja el CHECK con sus diez claves; y otra vez delante.
 
 begin;
 do $$ begin
@@ -260,5 +262,34 @@ do $$ begin
   raise notice 'PRUEBA RETENCIONES · 7: la cuenta B no lee ni calcula lo de A.';
 end $$;
 reset role;
+
+-- ── 8 · La vuelta atrás, con datos, y otra vez delante ─────────────────────
+do $$ begin
+  if not exists (select 1 from public.tax_return_check where check_key in ('ledger_4751', 'payees_111', 'withholding_unclassified')) then
+    raise exception 'PRUEBA RETENCIONES · 8: no hay comprobaciones nuevas con que probar la vuelta atrás.';
+  end if;
+end $$;
+\i supabase/vuelta-atras/20261127T0330_i01g_retenciones_111_115.down.sql
+do $$ begin
+  if to_regprocedure('public.conta_impuesto_retenciones_diario(uuid,int,text)') is not null
+     or to_regprocedure('public.conta_impuesto_retenciones_calcular(uuid,int,text,text)') is not null
+     or to_regprocedure('public.conta_impuesto_perceptores_poner(uuid,int,text)') is not null then
+    raise exception 'PRUEBA RETENCIONES · 8: la vuelta atrás deja alguna función.';
+  end if;
+  if pg_get_constraintdef((select oid from pg_constraint where conname = 'tax_return_check_check_key_check')) like '%ledger_4751%' then
+    raise exception 'PRUEBA RETENCIONES · 8: el CHECK sigue con las claves nuevas.';
+  end if;
+  begin
+    insert into public.tax_return_check (tax_return_id, account_id, company_id, check_key, result, title)
+    select id, account_id, company_id, 'payees_111', 'ok', 'x' from public.tax_return limit 1;
+    raise exception 'PRUEBA RETENCIONES · 8: el CHECK de antes deja entrar una clave nueva.';
+  exception when check_violation then null;
+  end;
+end $$;
+\i supabase/migrations/20261127T0330_i01g_retenciones_111_115.sql
+do $$ begin
+  if to_regprocedure('public.conta_impuesto_retenciones_calcular(uuid,int,text,text)') is null then raise exception 'PRUEBA RETENCIONES · 8: otra vez delante, falta el cálculo.'; end if;
+  raise notice 'PRUEBA RETENCIONES · 8: la vuelta atrás quita las tres funciones y deja el CHECK de antes; y otra vez delante.';
+end $$;
 
 rollback;
