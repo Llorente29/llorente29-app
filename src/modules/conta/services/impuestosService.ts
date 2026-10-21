@@ -13,6 +13,7 @@ import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaraci
 import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
 import type { DatosJustificante, Mirado } from '@/modules/conta/impuestos/justificantes'
 import type { Lectura } from '@/modules/conta/lib/justificanteAeat'
+import type { Sociedades } from '@/modules/conta/impuestos/sociedades'
 
 /** Las preguntas del paso «impuestos» del alta que deciden modelos. */
 const CLAVES_DEL_ALTA = ['retiene', 'alquiler', 'retenido70'] as const
@@ -256,6 +257,27 @@ export function ponerPerceptores(declaracion: string, perceptores: number, motiv
 /** I01g · Lo que dice el diario de las retenciones de un periodo (conta_impuesto_retenciones_diario). No escribe nada. */
 export function retencionesDelDiario(companyId: string, ejercicio: number, periodo: string): Promise<RetencionesDiario> {
   return rpc<RetencionesDiario>('conta_impuesto_retenciones_diario', { p_company: companyId, p_year: ejercicio, p_period: periodo })
+}
+
+/** I01h · La pestaña «Impuesto de sociedades»: los 200 guardados y los 202 con su base (conta_impuesto_sociedades). No escribe nada. */
+export function leerSociedades(companyId: string): Promise<Sociedades> {
+  return rpc<Sociedades>('conta_impuesto_sociedades', { p_company: companyId })
+}
+
+/** I01h · Escribe a mano (con su motivo) los datos de un 200 y vuelve a calcular los 202 que salen de él. */
+export function poner200(companyId: string, ejercicio: number, datos: Record<string, unknown>, motivo: string): Promise<{ ok: boolean; mensaje: string }> {
+  return rpc('conta_impuesto_200_poner', { p_company: companyId, p_year: ejercicio, p_datos: datos, p_motivo: motivo })
+}
+
+/** I01h · Lo que devuelve conta_impuesto_202_calcular (0340). */
+export interface Calculo202 {
+  declaracion: string; ejercicio: number; periodo: string; ejercicio_base: number; falta_200: boolean
+  cuota: number | null; resultado: string | null; importe: number | null; no_hace_falta: boolean
+}
+
+/** I01h · Calcula (o recalcula) el 202 de un periodo desde el último 200 (art. 40.2). */
+export function calcular202(companyId: string, ejercicio: number, periodo: string): Promise<Calculo202> {
+  return rpc<Calculo202>('conta_impuesto_202_calcular', { p_company: companyId, p_year: ejercicio, p_period: periodo })
 }
 
 /**

@@ -59,7 +59,7 @@ test('A · fusionar dos fichas del mismo tercero, con rastro y deshacer', async 
     await dialogo.getByRole('button', { name: 'Fusionar' }).click()
 
     // Regla 8: lo dice con contenido.
-    const resumen = `${viejo} fusionado en ${nuevo}: 1 dato movido, con su NIF ${nif}; se queda en ${viejo} (archivada) lo que ${nuevo} ya tenía: su papel de proveedor.`
+    const resumen = `${viejo} fusionado en ${nuevo}: 1 dato movido, con su NIF ${nif}; se queda en ${viejo} (archivada) lo que ${nuevo} ya tenía: como proveedor.`
     await expect(page.getByText(`${resumen} Se puede deshacer arriba.`)).toBeVisible()
     // Y el rastro, con «Deshacer», en la ficha.
     const franja = page.getByRole('status', { name: 'Fusión' })
