@@ -1,33 +1,16 @@
 {
-  "_que": "Compras · Por revisar y textos sin «papel» · contexto de producción de la tanda viva (0350, 0360 y 0370), medido en SOLO LECTURA el 21/10 a las 13:06 UTC, después de la 0340 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow.",
-  "medido": "2026-10-21T13:06Z",
+  "_que": "C06b · el nombre del PDF en la base · contexto de producción de la tanda viva (20261129T0380), medido en SOLO LECTURA el 21/10 a las 19:02 UTC, después de la 0350–0370 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. journal_entry_document existe; conta_nombre_fichero y el disparador no; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-21T19:02Z",
   "tanda": {
-    "supabase/migrations/20261129T0350_compras_preguntas_de_la_ficha.sql": "f892a1a21fce588f1e324bcc0a9948f9",
-    "supabase/migrations/20261129T0360_compras_preguntas_foodint.sql": "353bc8729fe33eb928d1aed978ac0d59",
-    "supabase/migrations/20261129T0370_textos_sin_papel.sql": "fbc087030cf7dc587e402da1dd655e6f"
+    "supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql": "07a0b306075432fffcf128c8ecc0761c"
   },
   "contexto": {
     "tablas": [
-      "public.goods_receipt_path"
+      "public.journal_entry_document"
     ],
-    "funciones": [
-      "public._compras_camino_calcula(uuid)",
-      "public._compras_camino_guarda(uuid)",
-      "public._compras_factura_desde_papel(uuid,uuid,uuid,uuid,uuid,uuid,text)",
-      "public._compras_forma_facturar(uuid,text,boolean,text)",
-      "public._party_merge(uuid,uuid,text)",
-      "public.company_chart_import_apply(uuid,jsonb,text)",
-      "public.company_chart_import_undo(uuid,text)",
-      "public.compras_camino_de(uuid)",
-      "public.compras_factura_desde_papel(uuid,uuid,uuid,uuid)",
-      "public.compras_sin_iva(uuid,uuid)",
-      "public.conta_documentos_recibidos(uuid,date,date)",
-      "public.party_add_role(uuid,text,jsonb)",
-      "public.party_misma_cuenta()",
-      "public.tg_goods_receipt_path_factura()"
-    ],
+    "funciones": [],
     "filas": {
-      "public.goods_receipt_path": 30
+      "public.journal_entry_document": 56
     },
     "otras": {},
     "camino": {
