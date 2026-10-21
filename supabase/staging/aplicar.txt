@@ -403,3 +403,14 @@ supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql
 #   Va detrás de la 0400 (usa sus columnas). Se puede volver a pasar.
 supabase/seeds/conta/seed_autoconteo_e2e_staging.sql
 supabase/staging/sql/20261129_autoconteo_prueba.sql
+
+# E05 · Las facturas de riders (rama conta/e05-riders-asiento; Julio, 21/10).
+#   La 0410 DE VERDAD (cambia en caliente compras_ficha_le_falta y
+#   conta_vat_book_desde_asiento, misma firma; no cambia datos) y su prueba:
+#   la ficha genérica «Riders» no pide NIF ni forma de facturar, una ficha con
+#   su cuenta de gasto no pide tipo de gasto, el libro de IVA de una factura de
+#   lote lleva a su emisor y una recibida normal sigue con el NIF de su ficha;
+#   y su vuelta atrás dentro (ROLLBACK), con los md5 de producción del 21/10.
+#   No toca coste ni stock: sin los cuatro caminos de la regla 10.
+supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql
+supabase/staging/sql/20261130_e05_riders_ficha_y_libro_prueba.sql

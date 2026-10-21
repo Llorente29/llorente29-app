@@ -1,31 +1,22 @@
 {
- "_que": "Autoconteo · contexto de producción de la tanda viva (0390 y 0400), medido en SOLO LECTURA el 21/10 a las 15:58 UTC, después de la de Compras (0350–0370, aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna de las dos está en el historial.",
- "medido": "2026-10-21T15:58Z",
- "tanda": {
-  "supabase/migrations/20261129T0390_autoconteo_anula_atascados.sql": "78228c3d36b582382d83004e8518e155",
-  "supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql": "8824a1143d3d41b6ad68436259e9c7a5"
- },
- "contexto": {
-  "tablas": [
-   "public.inventory_count"
-  ],
-  "funciones": [
-   "public.apply_inventory_count(uuid,uuid,text,boolean)",
-   "public.autoclose_daily_count(uuid)",
-   "public.close_inventory_count(uuid)",
-   "public.cron_autoclose_daily_counts()"
-  ],
-  "filas": {
-   "public.inventory_count": 315
+  "_que": "E05 · Las facturas de riders · contexto de producción de la tanda viva (0410), medido en SOLO LECTURA el 21/10 a las 17:42 UTC, después de la 0350–0370 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow.",
+  "medido": "2026-10-21T17:42Z",
+  "tanda": {
+    "supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql": "fb03d2e2eef469d90d7937d4cdfcb7b0"
   },
-  "otras": {},
-  "camino": {
-   "tablas": [],
-   "funciones": [
-    "public.cron_autoclose_daily_counts()"
-   ]
-  },
-  "usos": {},
-  "registro": []
- }
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.compras_ficha_le_falta(uuid)",
+      "public.conta_vat_book_desde_asiento(uuid)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
 }

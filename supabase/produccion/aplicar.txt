@@ -3,25 +3,24 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# AUTOCONTEO · el autoconteo se aplica solo, entero y con cualquier diferencia
-# (rama claude/exciting-cray-eik036; encargo de Julio del 21/10). Va DESPUÉS de
-# la de Compras (0350–0370, aplicada): su copia,
-# tests/conta/produccion/tanda-compras-revisar-20261021.txt. Turno dado el 21/10.
-# Aplicada después de la 0380 de C06b (#275, aplicada antes): su copia,
-# tests/conta/produccion/tanda-c06b-nombre-pdf-base-20261021.txt.
+# E05 · Las facturas de riders (rama conta/e05-riders-asiento; Julio, 21/10:
+# «riders y flotas siguen en la 41000100 con el gasto en la 624»). APLICADA en
+# producción el 21/10, desde la rama y antes de fusionar. Va después de la de
+# Compras (0350–0370, PR #271), de la 0380 de C06b (PR #275) y de la del
+# Autoconteo (0390 y 0400, PR #277), las tres aplicadas: sus copias,
+# tests/conta/produccion/tanda-compras-revisar-20261021.txt,
+# tanda-c06b-nombre-pdf-base-20261021.txt y tanda-autoconteo-20261021.txt. Sin
+# turno (Julio, 21/10): no comparte funciones ni tablas con ninguna de ellas.
 #
-#   1. 0390 — ANULA los 23 autoconteos atascados (update, AUTORIZO). Para entera
-#      si alguno no está como se midió el 21/10 (vuelto a medir antes de dar el
-#      turno: los 23 cuadran). Copia lo de antes para la vuelta atrás. No toca
-#      el stock.
-#   2. 0400 — CAMBIA en caliente close/apply/autoclose y el cron de las 03:10
-#      UTC (AUTORIZO: las llama un cron), AÑADE los núcleos sin guarda, el
-#      procedimiento de la noche (COMMIT por conteo y error al final: pg_cron en
-#      rojo si falla), la lectura del aviso de la pantalla y la del vigía, y
-#      tres columnas que admiten nulos. audit y full no cambian.
+#   1. 0410 — CAMBIA en caliente compras_ficha_le_falta(uuid) y
+#      conta_vat_book_desde_asiento(uuid) (misma firma, declarado, con su
+#      prueba de staging; los dos cuerpos de partida, los de producción del
+#      21/10 byte a byte): la ficha genérica RIDERS no pide NIF ni forma de
+#      facturar, y una ficha con su cuenta de gasto no pide tipo de gasto; el
+#      libro de IVA de una factura de lote lleva a su emisor (NIF y nombre). No
+#      cambia datos: ninguna de las 82 tiene asiento.
 #
-# No toca el camino del pedido. Ninguna función que desplegar a mano.
+# Ninguna función que desplegar a mano.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/autoconteo.sql
-supabase/migrations/20261129T0390_autoconteo_anula_atascados.sql
-supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql
+cuenta: scripts/conta/produccion/cuentas/e05-riders.sql
+supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql
