@@ -7,6 +7,10 @@
 -- la cuenta (regla 9). Si alguna ya tiene la pregunta cerrada por alguien, se
 -- deja como está: cerrarla es trabajo hecho.
 --
+-- sin prueba con datos: solo actúa sobre Foodint (cuenta 51ad1792…), que no
+-- está en staging; su prueba con datos es el ENSAYO de la tanda en producción
+-- (todo en una transacción y rollback), que la ejecuta tras la 0360.
+--
 -- Es devolver una pregunta que ya no es verdad: solo tiene sentido si la
 -- comprobación de después de la tanda falla y hay que dejarlo todo como
 -- estaba.

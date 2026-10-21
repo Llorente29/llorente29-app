@@ -24,10 +24,14 @@
 --      albarán «El albarán va a nombre…»; un albarán-factura sin nombre «El
 --      albarán-factura no dice…»; sin documento leído, «No hay documento
 --      leído…».
---   3. Los motivos y errores de _compras_factura_desde_papel y
---      compras_factura_desde_papel, llamándolas directamente: un documento
---      sin líneas, uno con una línea sin IVA, una lectura de otra cuenta (o
---      que no existe) y la puerta con una lectura que no existe.
+--   3. Los motivos y errores de _compras_factura_desde_papel (interna, sin
+--      usuario), llamándola directamente: un documento sin líneas, uno con
+--      una línea sin IVA y una lectura de otra cuenta (o que no existe).
+--   4. Las puertas de la pantalla, como el administrador de A («set local
+--      role authenticated»): compras_factura_desde_papel con una lectura que
+--      no existe y compras_sin_iva de un albarán a nombre de la empresa.
+--   5. La vuelta atrás, de verdad (\i): las 11 vuelven al md5 de producción
+--      del 21/10, con una sola firma cada una.
 -- ============================================================================
 
 begin;
@@ -262,6 +266,9 @@ begin
   perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000103', v_e, 'albaran_factura', null,             false);
   perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000104', v_e, null,              null,             false);
   perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000105', v_d, null,              null,             false);
+  -- Esta sí se confirma (para el paso 4): un albarán a nombre de la empresa,
+  -- camino «pendiente de factura».
+  perform pg_temp.recepcion('c0c37000-0000-4000-8000-000000000106', v_d, 'albaran', 'TABERNA DE PRUEBA NORTE, SOCIEDAD LIMITADA', true);
   for r in select * from (values
       ('c0c37000-0000-4000-8000-000000000101'::uuid, 'La factura va a nombre de «CONTADO PRUEBA», y Folvy no sabe quién es.'),
       ('c0c37000-0000-4000-8000-000000000102'::uuid, 'El albarán va a nombre de «CONTADO PRUEBA», y Folvy no sabe quién es.'),
@@ -310,15 +317,62 @@ begin
   exception when sqlstate 'P0002' then
     if sqlerrm <> 'Ese documento no está leído en esta cuenta.' then raise exception 'PRUEBA textos · 3: el error es «%».', sqlerrm; end if;
   end;
+  raise notice '3 · _compras_factura_desde_papel (interna, sin grant a authenticated: se llama sin usuario): sin líneas, una línea sin IVA y una lectura de otra cuenta, con «documento» en los tres';
+end $$;
 
-  -- La puerta, con una lectura que no existe.
+-- ── 4 · Las puertas de la pantalla, como el usuario de A ───────────────────
+-- compras_factura_desde_papel y compras_sin_iva tienen grant a authenticated:
+-- se llaman como el administrador de A (C04b R7), sin pg_temp ni tablas.
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+begin
   begin
-    perform public.compras_factura_desde_papel('c0c37000-0000-4000-8000-0000000009ff', v_e, null, null);
-    raise exception 'PRUEBA textos · 3: con una lectura que no existe, compras_factura_desde_papel no ha fallado.';
+    perform public.compras_factura_desde_papel('c0c37000-0000-4000-8000-0000000009ff', 'c0c37000-0000-4000-8000-000000000001', null, null);
+    raise exception 'PRUEBA textos · 4: con una lectura que no existe, compras_factura_desde_papel no ha fallado.';
   exception when sqlstate 'P0002' then
-    if sqlerrm <> 'Ese documento no existe.' then raise exception 'PRUEBA textos · 3: el error es «%».', sqlerrm; end if;
+    if sqlerrm <> 'Ese documento no existe.' then raise exception 'PRUEBA textos · 4: el error es «%».', sqlerrm; end if;
   end;
-  raise notice '3 · _compras_factura_desde_papel y compras_factura_desde_papel: sin líneas, una línea sin IVA, una lectura de otra cuenta y la puerta sin lectura, con «documento» en los cuatro';
+  -- La 106 es un albarán a nombre de la empresa: no va a nombre de otro.
+  begin
+    perform public.compras_sin_iva('c0c37000-0000-4000-8000-000000000106', 'c0c37000-0000-4000-8000-0000000009fe');
+    raise exception 'PRUEBA textos · 4: compras_sin_iva ha apuntado sin IVA un albarán a nombre de la empresa.';
+  exception when sqlstate '22023' then
+    if sqlerrm <> 'Solo se apunta sin IVA un documento que va a nombre de otro.' then raise exception 'PRUEBA textos · 4: el error es «%».', sqlerrm; end if;
+  end;
+  raise notice '4 · como el usuario de A: compras_factura_desde_papel sin lectura → «Ese documento no existe.»; compras_sin_iva de un albarán a nombre de la empresa → «Solo se apunta sin IVA un documento que va a nombre de otro.»';
+end $$;
+reset role;
+
+-- ── 5 · La vuelta atrás, de verdad ─────────────────────────────────────────
+-- Las 11 funciones vuelven a sus cuerpos de producción del 21/10: cada una
+-- con una sola firma y el md5 de partida.
+\i supabase/vuelta-atras/20261129T0370_textos_sin_papel.down.sql
+do $$
+declare r record; v_n int; v_md5 text; v_mal text := ''; v_ok int := 0;
+begin
+  for r in select * from (values
+      ('public._compras_camino_calcula(uuid)', '5cbeb3496b36696e1e002bf23cdd9e8f'),
+      ('public._compras_factura_desde_papel(uuid, uuid, uuid, uuid, uuid, uuid, text)', '104ebec9514b827669fd918c5d1f89fd'),
+      ('public.compras_factura_desde_papel(uuid, uuid, uuid, uuid)', '4f4d38df93955ba3268052950c32b35d'),
+      ('public.compras_sin_iva(uuid, uuid)', '805d1ed89ae5c424a19b83ec17d311af'),
+      ('public.tg_goods_receipt_path_factura()', '5fa9ed53935109ea522d7dba29feaff1'),
+      ('public.conta_documentos_recibidos(uuid, date, date)', '7e33015af3eeb23e5ffc689007a26887'),
+      ('public.company_chart_import_apply(uuid, jsonb, text)', '670b04da6349d90c69c06e43c90ac69a'),
+      ('public.company_chart_import_undo(uuid, text)', 'd065d50eb0238f05dafdb0e40cc4f511'),
+      ('public.party_add_role(uuid, text, jsonb)', 'eea26b75cf76cd59054f44ec19e369ee'),
+      ('public.party_misma_cuenta()', '981f998d47e5cccd9cdd6a21ea13bdee'),
+      ('public._party_merge(uuid, uuid, text)', 'c88e5a6a71c428b3ab863804bf8906de')) t(firma, md5) loop
+    select count(*) into v_n from pg_proc where pronamespace = 'public'::regnamespace and proname = split_part(split_part(r.firma, '(', 1), '.', 2);
+    select md5(prosrc) into v_md5 from pg_proc where oid = to_regprocedure(r.firma);
+    if v_n <> 1 or v_md5 is distinct from r.md5 then
+      v_mal := v_mal || format(' %s: %s firma(s), md5 %s (esperaba %s);', r.firma, v_n, coalesce(v_md5, '—'), r.md5);
+    else
+      v_ok := v_ok + 1;
+    end if;
+  end loop;
+  if v_mal <> '' then raise exception 'PRUEBA textos · 5: la vuelta atrás no deja lo de producción:%', v_mal; end if;
+  raise notice '5 · vuelta atrás: % de 11 funciones con una sola firma y el md5 de producción del 21/10', v_ok;
 end $$;
 
 select set_config('request.jwt.claims', '', true);

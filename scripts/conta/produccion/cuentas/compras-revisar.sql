@@ -1,14 +1,16 @@
--- scripts/conta/produccion/cuentas/compras-preguntas.sql
+-- scripts/conta/produccion/cuentas/compras-revisar.sql
 --
--- Compras · LO QUE CUENTA LA TANDA DE LA 0350 Y LA 0360 (las preguntas de la
--- ficha, también en las recepciones que ya tienen factura), antes y después.
+-- Compras · LO QUE CUENTA LA TANDA DE LA 0350, LA 0360 Y LA 0370 (las
+-- preguntas de la ficha, también en las recepciones que ya tienen factura, y
+-- los textos sin «papel»), antes y después.
 -- SOLO LEE. Recuentos y huellas de Foodint (regla 9).
 --
 -- Lo que tiene que pasar: las dos funciones cambian de cuerpo (una firma cada
 -- una); en Foodint, las consumidas con «la ficha no dice cómo factura» pasan
 -- de 5 a 0 y las consumidas con «no dicen lo mismo» de 0 a 1 (ALB-00218); el
 -- camino, la factura, la fecha de consumo y el motivo de todas las recepciones
--- de Foodint, IGUAL antes y después (la tanda solo toca la pregunta).
+-- de Foodint, IGUAL antes y después (la tanda solo toca la pregunta); las 11
+-- funciones de textos de la 0370 cambian de cuerpo, una firma cada una.
 select clave, valor from (
   select 1 o, 'funciones de compras (nombre:md5 del cuerpo)' clave,
     (select string_agg(proname || ':' || md5(prosrc), ' · ' order by proname)
@@ -24,5 +26,11 @@ select clave, valor from (
   select 3, 'Foodint · caminos sin la pregunta (md5)',
     (select md5(coalesce(string_agg(p.goods_receipt_id || p.path || coalesce(p.supplier_invoice_id::text, '') || coalesce(p.consumed_at::text, '')
                                     || coalesce(p.reason, '') || coalesce(p.decided_at::text, ''), '|' order by p.goods_receipt_id), ''))
-       from public.goods_receipt_path p where p.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710')
+       from public.goods_receipt_path p where p.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710') union all
+  select 4, 'las 11 funciones de textos (firmas · md5 de sus cuerpos juntos)',
+    (select count(*) || ' · ' || md5(string_agg(proname || md5(prosrc), '|' order by proname, oid))
+       from pg_proc where pronamespace = 'public'::regnamespace
+        and proname in ('_compras_camino_calcula', '_compras_factura_desde_papel', 'compras_factura_desde_papel', 'compras_sin_iva',
+                        'tg_goods_receipt_path_factura', 'conta_documentos_recibidos', 'company_chart_import_apply',
+                        'company_chart_import_undo', 'party_add_role', 'party_misma_cuenta', '_party_merge'))
 ) x order by o;
