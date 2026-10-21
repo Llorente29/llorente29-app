@@ -126,7 +126,7 @@ const dias = (desde: string, hasta: string) => Math.round((Date.parse(`${hasta}T
  * Sin presentar, lo que vence hoy o ya se pasó va en rojo y lo dice (Julio,
  * 20/10, punto 5: «Sin calcular · vence hoy»).
  */
-export function tarjeta(m: ModeloTrimestre, hoy?: string): { titulo: string; importe: string; chip: { tono: TonoChip; texto: string } } {
+export function tarjeta(m: ModeloTrimestre, hoy?: string, ejercicio?: number): { titulo: string; importe: string; chip: { tono: TonoChip; texto: string } } {
   const titulo = nombreTarjeta(m)
   if (m.no_toca) return { titulo, importe: '—', chip: { tono: 'neutro', texto: 'No toca este trimestre' } }
   const d = m.declaracion
@@ -145,6 +145,9 @@ export function tarjeta(m: ModeloTrimestre, hoy?: string): { titulo: string; imp
   if (d.estado === 'not_required') return { titulo, importe: '—', chip: { tono: 'neutro', texto: 'No hace falta' } }
   if (d.estado === 'reviewed') return { titulo, importe, chip: conVence({ tono: 'accion', texto: 'Revisado · para presentar' }) }
   if (d.resultado === null) return { titulo, importe: '—', chip: conVence({ tono: 'falta', texto: 'Sin calcular' }) }
+  // I01h · El 303 del periodo que aún no ha acabado: calculado con lo que va, no se revisa todavía.
+  const f = hoy && ejercicio && m.periodo ? fechasPeriodo(ejercicio, m.periodo) : null
+  if (m.modelo === '303' && f && hoy && enCurso(f, hoy)) return { titulo, importe, chip: { tono: 'neutro', texto: `En curso · se cierra el ${diaMesCorto(f.hasta)}` } }
   return { titulo, importe, chip: conVence({ tono: 'accion', texto: 'Para revisar' }) }
 }
 
@@ -270,6 +273,30 @@ export function fechasTrimestre(ejercicio: number, trimestre: string): { desde: 
   const m1 = (q - 1) * 3 + 1, m3 = q * 3
   const ultimo = new Date(Date.UTC(ejercicio, m3, 0)).getUTCDate()
   return { desde: `${ejercicio}-${String(m1).padStart(2, '0')}-01`, hasta: `${ejercicio}-${String(m3).padStart(2, '0')}-${ultimo}` }
+}
+
+// ── I01h · El 303 en vivo (Julio, 21/10): el del periodo en curso, calculado con lo que va ──
+
+/** El primer y el último día de un periodo del 303: un trimestre ('4T') o un mes ('10'). Lo demás, null. */
+export function fechasPeriodo(ejercicio: number, periodo: string): { desde: string; hasta: string } | null {
+  if (/^[1-4]T$/.test(periodo)) return fechasTrimestre(ejercicio, periodo)
+  if (/^(0[1-9]|1[0-2])$/.test(periodo)) {
+    const ultimo = new Date(Date.UTC(ejercicio, Number(periodo), 0)).getUTCDate()
+    return { desde: `${ejercicio}-${periodo}-01`, hasta: `${ejercicio}-${periodo}-${ultimo}` }
+  }
+  return null
+}
+
+/** ¿El periodo aún no ha acabado? Del primer día al último, los dos dentro. */
+export function enCurso(f: { desde: string; hasta: string }, hoy: string): boolean {
+  return f.desde <= hoy && hoy <= f.hasta
+}
+
+/** «Calculado hasta hoy (21/10/2026) con el libro de IVA de lo que va de trimestre. Se cierra el 31/12: …». */
+export function fraseEnCurso(periodo: string, hoy: string, hasta: string): string {
+  const que = /^[1-4]T$/.test(periodo) ? 'trimestre' : 'mes'
+  const [y, m, d] = hoy.split('-')
+  return `Calculado hasta hoy (${d}/${m}/${y}) con el libro de IVA de lo que va de ${que}. Se cierra el ${diaMesCorto(hasta)}: hasta entonces cambia con cada factura.`
 }
 
 /** Una fila de la liquidación del 303 en palabras: base y cuota, con sus casillas en pequeño. */
