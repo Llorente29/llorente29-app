@@ -329,7 +329,9 @@ despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
   no, o si vuelve a fallar, abre la incidencia «e2e de la noche en rojo» con
   cada prueba, su fichero y el commit (`scripts/e2e/noche.mjs`).
 - **Las tandas no cambian:** análisis, prueba en staging, ensayo y real desde
-  la rama, antes de fusionar.
+  la rama, antes de fusionar. Antes de una tanda, una entera en verde del mismo
+  commit (`antes-de-subir.sh` con `PEDIR_TANDA=1`): vale la lanzada a mano, la
+  de la etiqueta o la que corrió un push por tocar lo común (Julio, 21/10).
 
 ### Un e2e lo cancela solo un commit más nuevo de su rama
 

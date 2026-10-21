@@ -37,3 +37,22 @@ describe('la suite entera del commit', () => {
     expect(enteraEnVerde([run(9, 'entera', 'success')], SHA).ok).toBe(true)
   })
 })
+
+// Julio, 21/10: para una tanda vale cualquier entera en verde del mismo commit,
+// también la que corre un PUSH porque el PR toca lo común (título «frente»).
+// Los trabajos, los de dos runs reales del #245: el 736 (push que tocaba lo
+// común: la entera en 2 trozos) y el 737 (la zona y la corta, en uno).
+describe('la entera que elige un push por tocar lo común', () => {
+  const T736 = ['plan', 'trozo 1/2', 'trozo 2/2', 'entera', 'aviso']
+  const T737 = ['plan', 'trozo 1/1', 'entera', 'aviso']
+  it('el 736 vale; el 737 (una parte, en un trozo) no', () => {
+    expect(enteraEnVerde([run(736, 'frente', 'success')], SHA, { 736: T736 })).toMatchObject({ ok: true, run: { id: 736 } })
+    expect(enteraEnVerde([run(737, 'frente', 'success')], SHA, { 737: T737 }).ok).toBe(false)
+  })
+  it('sin sus trabajos, un «frente» no cuenta (como antes)', () => {
+    expect(enteraEnVerde([run(736, 'frente', 'success')], SHA).ok).toBe(false)
+  })
+  it('en rojo no vale, y lo dice', () => {
+    expect(enteraEnVerde([run(736, 'frente', 'failure')], SHA, { 736: T736 }).porque).toMatch(/en failure \(run 736\)/)
+  })
+})
