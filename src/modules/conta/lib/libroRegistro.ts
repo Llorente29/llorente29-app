@@ -57,6 +57,9 @@ export interface AnotacionLibro {
   /** El documento de origen (la factura del proveedor, el resumen del día…). */
   sourceId?: string | null
   voidedAt: string | null
+  /** 0290 · «Deducida en» (p. ej. «2T 2026»): el 303 en que se dedujo, si no es el de su fecha. */
+  deducidaEn?: string | null
+  deducidaPorque?: string | null
 }
 
 const c = (n: number) => Math.round(n * 100)

@@ -1,9 +1,4 @@
-# Vuelta atrás de la tanda del 349 por operaciones (modo «vuelta_atras»).
-# · 0250: conta_impuesto_reglas vuelve a la de la 0120 (copiada byte a byte) y
-#   se quita conta_paises_ue. Las obligaciones del 349 ya escritas se quedan.
-# Ensayada en staging: supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
-# (la aplica, la deshace y la vuelve a aplicar).
-# La anterior de este fichero (el 303 que no inventa):
-# tests/conta/produccion/vuelta-atras-i01b-303-no-inventa-20261018.txt.
-cuenta: scripts/conta/produccion/cuentas/i01b-349-por-operaciones.sql
-supabase/vuelta-atras/20261122T0250_i01b_349_por_operaciones.down.sql
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
+# conta_recibida_envio, byte a byte la de antes (md5 6e5ed258).
+cuenta: scripts/conta/produccion/cuentas/i01f-recibida-envio.sql
+supabase/vuelta-atras/20261126T0320_i01f_recibida_envio_tratamiento.down.sql

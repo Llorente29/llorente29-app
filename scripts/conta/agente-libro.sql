@@ -110,7 +110,21 @@ select json_build_object(
                               join public.tax_return tr on tr.id = o.source_id and tr.company_id = o.company_id and tr.account_id = o.account_id
                              where o.id = case when e.source_type = 'reversal' then e.reverses_entry_id else e.id end
                                and o.company_id = e.company_id and o.source_type = 'vat_settlement' and tr.form_code = '303')
+            -- I01d (0300): como en conta_motivos_para_validar, la 477 de la
+            -- autorrepercusión va sin tipo si el asiento lleva IVA autoliquidado.
+            and not (a.template_code like '477%' and exists (
+                  select 1 from public.journal_line l2 join public.company_account a2 on a2.id = l2.company_account_id
+                    join public.tax_rate t2 on t2.id = l2.tax_rate_id
+                   where l2.entry_id = e.id and a2.template_code like '472%' and t2.treatment in ('intra_eu', 'reverse_charge')))
          then 'apunte de IVA sin base, tipo ni libro'
+       -- I01d (0300): la 477 de la autorrepercusión casa con la 472 autoliquidada, al céntimo.
+       when a.template_code like '477%' and l.tax_rate_id is null
+            and (select coalesce(sum(l2.debit - l2.credit), 0) from public.journal_line l2 join public.company_account a2 on a2.id = l2.company_account_id
+                   join public.tax_rate t2 on t2.id = l2.tax_rate_id
+                  where l2.entry_id = e.id and a2.template_code like '472%' and t2.treatment in ('intra_eu', 'reverse_charge'))
+             <> (select coalesce(sum(l3.credit - l3.debit), 0) from public.journal_line l3 join public.company_account a3 on a3.id = l3.company_account_id
+                  where l3.entry_id = e.id and a3.template_code like '477%' and l3.tax_rate_id is null)
+         then 'la 477 de la autorrepercusión no casa con la 472 autoliquidada'
        when l.tax_rate_id is not null and (l.tax_base is null or l.vat_book is null) then 'IVA sin base o sin libro registro'
        when l.tax_rate_id is not null and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > greatest(1, floor(l.tax_documents / 2.0)) / 100
          then format('cuota %s y base %s × %s %% = %s', l.debit + l.credit, l.tax_base, t.rate, round(l.tax_base * t.rate / 100, 2))

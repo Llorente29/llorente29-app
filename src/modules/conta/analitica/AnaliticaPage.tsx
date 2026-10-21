@@ -52,7 +52,7 @@ function Analitica() {
 
   if (!activa) return <Vacio titulo="Aún no hay ninguna empresa." explicacion="Da de alta tu empresa y aquí decides su analítica." />
   return (
-    <div className="s-pantalla">
+    <div className="s-pantalla s-pantalla-estrecha">
       {movil && <CabeceraEntradaMovil titulo="Analítica" antetitulo="Definiciones" atras={null} />}
       <p className="s-apoyo">
         Los apuntes pueden llevar el local y la marca. Aquí decides si en {activa.nombre} se piden y se enseñan, y cómo se llaman.

@@ -243,6 +243,7 @@ function Casillas({ d }: { d: DeclaracionVer }) {
               <td data-titulo="Qué es">
                 {CASILLAS_303[c.casilla]?.texto ?? `Casilla ${c.casilla}`}
                 {c.origen === 'manual' && <span className="s-tabla-apoyo">Puesta a mano: {c.motivo}</span>}
+                {c.origen === 'justificante' && <span className="s-tabla-apoyo">Del justificante de Hacienda</span>}
               </td>
               <td data-titulo="Importe" className="s-tabla-cifra">
                 {c.valor !== null ? <span className="s-cifra">{c.casilla === '65' ? `${String(c.valor).replace('.', ',')} %` : eurosExactos(c.valor)}</span> : c.texto}

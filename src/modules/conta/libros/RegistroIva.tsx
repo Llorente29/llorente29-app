@@ -19,7 +19,7 @@
 //     documentos que tengamos guardados.
 
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaLibros, rutaRecibidaAMano } from '@/config/navegacion'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
@@ -29,7 +29,7 @@ import {
   type AnotacionLibro, type FiltrosLibro, type Libro, type TipoFactura,
 } from '@/modules/conta/lib/libroRegistro'
 import { crearZip, nombresUnicos, type FicheroZip } from '@/modules/conta/lib/zip'
-import { trimestreDe, useLeer, useLibros } from '@/modules/conta/libros/contexto'
+import { delTrimestre, trimestreDe, useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelAeat, excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import {
   completarAnotacion, cuentasPorAsiento, datosFiscales, documentosDeFacturas, leerBienes, leerLibroRegistro, movimientoIva,
@@ -66,7 +66,9 @@ export function RegistroIva({ libro }: { libro: Vista }) {
   const imp = useImpuestoEmpresa(L.accountId, L.companyId)
   const ps = periodos(L.ejercicio.inicio, L.ejercicio.fin)
   const hoy = new Date().toISOString().slice(0, 10)
-  const [periodo, setPeriodo] = useState(() => (ps.find((p) => p.desde <= hoy && hoy <= p.hasta) ?? ps[0]).id)
+  // I01c · «Facturas del trimestre» (Impuestos › Trimestre) abre aquí con ?periodo=3T.
+  const pedido = useSearchParams()[0].get('periodo')
+  const [periodo, setPeriodo] = useState(() => (delTrimestre(ps, pedido) ?? ps.find((p) => p.desde <= hoy && hoy <= p.hasta) ?? ps[0]).id)
   const p = ps.find((x) => x.id === periodo) ?? ps[0]
   const [f, setF] = useState<FiltrosLibro & { importe?: string }>({})
   const [porNif, setPorNif] = useState(false)
@@ -161,7 +163,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
                   return (
                     <tr key={a.id} className={a.voidedAt ? 'cxl-anulada' : undefined}>
                       <td>{ddmm(a.issueDate)}</td>
-                      <td><Link to={rutaAsiento(a.entryId)}>{[a.series, a.number].filter(Boolean).join('-') || 'sin número'}</Link><br /><span className="cxl-apoyo">{etiquetaTipo(a)}</span>{a.voidedAt && <> <Chip>anulada</Chip></>}</td>
+                      <td><Link to={rutaAsiento(a.entryId)}>{[a.series, a.number].filter(Boolean).join('-') || 'sin número'}</Link><br /><span className="cxl-apoyo">{etiquetaTipo(a)}</span>{a.voidedAt && <> <Chip>anulada</Chip></>}{a.deducidaEn && <> <span title={a.deducidaPorque ?? undefined}><Chip tono="azul">deducida en el {a.deducidaEn}</Chip></span></>}</td>
                       <td data-titulo={libro === 'issued' ? 'Destinatario' : 'Expedidor'}>{a.counterpartName ?? '—'}{a.counterpartTaxId && <><br /><span className="cxl-apoyo">{a.counterpartTaxId}</span></>}</td>
                       <td className="cxl-der" data-titulo="Base">{eurosExactos(a.taxBase)}</td><td className="cxl-der" data-titulo={imp.columnaTipo}>{a.taxRate === null ? '—' : `${a.taxRate} %`}</td>
                       <td className="cxl-der" data-titulo="Cuota">{eurosExactos(a.taxAmount)}</td><td className="cxl-der" data-titulo="Total">{a.total === null ? '—' : eurosExactos(a.total)}</td>

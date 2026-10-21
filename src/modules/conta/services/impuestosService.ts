@@ -6,10 +6,13 @@
 // modelos que salen de las reglas de la base.
 
 import { supabase } from '@/lib/supabase'
-import { hayBase, rpc } from '@/modules/conta/services/bd'
+import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
 import type { Cadencia, Calendario, Estado } from '@/modules/conta/impuestos/calendario'
+import type { FilaLibroTrimestre, SumaCuenta, Trimestre } from '@/modules/conta/impuestos/trimestre'
 import type { DeclaracionVer, Puerta } from '@/modules/conta/impuestos/declaracion'
 import type { CertificadosVer } from '@/modules/conta/impuestos/certificados'
+import type { DatosJustificante, Mirado } from '@/modules/conta/impuestos/justificantes'
+import type { Lectura } from '@/modules/conta/lib/justificanteAeat'
 
 /** Las preguntas del paso «impuestos» del alta que deciden modelos. */
 const CLAVES_DEL_ALTA = ['retiene', 'alquiler', 'retenido70'] as const
@@ -70,6 +73,11 @@ export function anadirImpuesto(companyId: string, modelo: string, motivo: string
 /** Lo que devuelve conta_impuesto_303_calcular. */
 /** Sin libro de IVA (o sin saber la [110] cuando sale a pagar), `sabido` es false y no hay resultado ni importe. */
 export interface Calculo303 { declaracion: string; desde: string; hasta: string; apuntes: number; resultado: string | null; importe: number | null; sabido: boolean }
+
+/** I01c · El trimestre (conta_impuesto_trimestre, 0280): la tira y la cartera del 303. No escribe nada. */
+export function leerTrimestre(companyId: string, ejercicio: number, trimestre: number): Promise<Trimestre> {
+  return rpc<Trimestre>('conta_impuesto_trimestre', { p_company: companyId, p_year: ejercicio, p_quarter: trimestre })
+}
 
 /** Calcula (o recalcula) el borrador del 303 de un periodo desde el libro de IVA. */
 export function calcular303(companyId: string, ejercicio: number, periodo: string): Promise<Calculo303> {
@@ -158,6 +166,8 @@ export interface Presentado {
   estado_texto: string; resultado: string | null; importe: number | null
   presentada: string | null; presentada_por: string | null; por: 'sumied' | 'outside' | null; plazo: string
   csv: string | null; justificante: string | null; justificante_pdf: string | null; contabilizada: boolean; casada: boolean; comprobada: boolean
+  /** 0270: el PDF traído de Hacienda por su CSV, el expediente, el presentador y, en el 303, lo compensado ([78]). */
+  traido?: boolean; expediente?: string | null; presentador?: { nif: string | null; nombre: string | null } | null; compensado?: number | null
 }
 export interface ParaApuntar { ejercicio: number; periodo: string; presentacion: string; declaracion: string | null; estado: string | null; resultado: string | null; importe: number | null }
 export interface Presentados { puede_gestionar: boolean; presentados: Presentado[]; para_apuntar: ParaApuntar[] }
@@ -168,6 +178,77 @@ export function leerPresentados(companyId: string): Promise<Presentados> {
 }
 
 const DOCUMENTOS = 'conta-documentos'
+
+/** Lee todas las filas de una consulta, de 1.000 en 1.000 (PostgREST no da más de una vez). */
+async function todasLasFilas<T>(pedir: (desde: number, hasta: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>, que: string): Promise<T[]> {
+  const out: T[] = []
+  for (let i = 0; ; i += 1000) {
+    const { data, error } = await pedir(i, i + 999)
+    if (error) throw new Error(`No se ha podido leer ${que}: ${error.message}`)
+    const filas = (data ?? []) as T[]
+    out.push(...filas)
+    if (filas.length < 1000) return out
+  }
+}
+
+/**
+ * I01c · maqueta v4 · El libro de IVA de un trimestre, lo justo para casarlo
+ * con el 303: expedidas por su fecha de operación (o de expedición) y
+ * recibidas por «deducida en» o, sin ella, por su fecha de recepción (o de
+ * expedición), como lo hace el cálculo del 303 (0290). Regla 9: cuenta y empresa.
+ */
+export async function libroIvaDelTrimestre(cuenta: string, empresa: string, ejercicio: number, trimestre: string, desde: string, hasta: string): Promise<FilaLibroTrimestre[]> {
+  const cols = 'book, tax_rate, tax_amount, reverse_charge, operation_key, investment_good'
+  const base = () => tabla('vat_book_entry').select(cols).eq('account_id', cuenta).eq('company_id', empresa).is('voided_at', null)
+  const [exp, rec] = await Promise.all([
+    todasLasFilas<FilaLibroTrimestre>((a, b) => base().eq('book', 'issued')
+      .or(`and(operation_date.gte.${desde},operation_date.lte.${hasta}),and(operation_date.is.null,issue_date.gte.${desde},issue_date.lte.${hasta})`)
+      .order('id').range(a, b), 'el libro de IVA (expedidas)'),
+    todasLasFilas<FilaLibroTrimestre>((a, b) => base().eq('book', 'received')
+      .or(`and(deduction_year.eq.${ejercicio},deduction_period.eq.${trimestre}),and(deduction_period.is.null,received_date.gte.${desde},received_date.lte.${hasta}),and(deduction_period.is.null,received_date.is.null,issue_date.gte.${desde},issue_date.lte.${hasta})`)
+      .order('id').range(a, b), 'el libro de IVA (recibidas)'),
+  ])
+  return [...exp, ...rec].map((f) => ({ ...f, tax_rate: f.tax_rate === null ? null : Number(f.tax_rate), tax_amount: Number(f.tax_amount) }))
+}
+
+/** Lo que mueve el diario (validado o anulado) en cada cuenta de unos prefijos en unas fechas, con su nombre. */
+export async function cuentasDelTrimestre(cuenta: string, empresa: string, prefijos: string[], desde: string, hasta: string): Promise<SumaCuenta[]> {
+  const filas = await todasLasFilas<{ account_code: string; account_name: string | null; debit: number; credit: number }>((a, b) =>
+    tabla('journal_ledger').select('account_code, account_name, debit, credit')
+      .eq('account_id', cuenta).eq('company_id', empresa).in('status', ['validado', 'anulado'])
+      .gte('entry_date', desde).lte('entry_date', hasta)
+      .or(prefijos.map((p) => `account_code.like.${p}%`).join(','))
+      .order('line_id').range(a, b), 'el diario del trimestre')
+  const m = new Map<string, SumaCuenta>()
+  for (const f of filas) {
+    const c = m.get(f.account_code) ?? { codigo: f.account_code, nombre: f.account_name ?? '', debe: 0, haber: 0 }
+    c.debe = Math.round((c.debe + Number(f.debit)) * 100) / 100
+    c.haber = Math.round((c.haber + Number(f.credit)) * 100) / 100
+    m.set(f.account_code, c)
+  }
+  return [...m.values()].sort((x, y) => x.codigo.localeCompare(y.codigo))
+}
+
+/** Lo que Sumied comprobó al calcular la declaración (tax_return_check), si la calculó. */
+export async function comprobacionesDeDeclaracion(id: string, cuenta: string): Promise<{ clave: string; resultado: 'ok' | 'warning' | 'error'; titulo: string }[]> {
+  const { data, error } = await tabla('tax_return_check').select('check_key, result, title').eq('tax_return_id', id).eq('account_id', cuenta)
+  if (error) throw new Error(`No se ha podido leer lo comprobado: ${error.message}`)
+  return ((data ?? []) as { check_key: string; result: 'ok' | 'warning' | 'error'; title: string }[]).map((f) => ({ clave: f.check_key, resultado: f.result, titulo: f.title }))
+}
+
+/**
+ * I01c · Los asientos de una declaración (Trimestre › «Ver el asiento»): el de
+ * la liquidación y el del pago, si Sumied los tiene. Regla 9: de su cuenta.
+ * Columnas medidas en producción (tax_return.liquidation_entry_id y
+ * payment_entry_id, 20/10; regla 40).
+ */
+export async function asientosDeDeclaracion(id: string, cuenta: string): Promise<{ liquidacion: string | null; pago: string | null }> {
+  const { data, error } = await tabla('tax_return').select('liquidation_entry_id, payment_entry_id')
+    .eq('id', id).eq('account_id', cuenta).maybeSingle()
+  if (error) throw new Error(`No se han podido leer los asientos de la declaración: ${error.message}`)
+  const f = (data ?? null) as { liquidation_entry_id: string | null; payment_entry_id: string | null } | null
+  return { liquidacion: f?.liquidation_entry_id ?? null, pago: f?.payment_entry_id ?? null }
+}
 
 /** Un enlace de 5 minutos al justificante en PDF. */
 export async function enlaceJustificante(ruta: string): Promise<string> {
@@ -182,7 +263,7 @@ export async function enlaceJustificante(ruta: string): Promise<string> {
  * <cuenta>/impuestos/<declaración>/<huella>.pdf, y la base comprueba que es ese
  * fichero (tamaño y tipo) antes de enlazarlo. Uno por declaración: no se cambia.
  */
-export async function subirJustificante(p: { declaracion: string; cuenta: string; fichero: File }): Promise<string> {
+export async function subirJustificante(p: { declaracion: string; cuenta: string; fichero: File | Blob }): Promise<string> {
   hayBase()
   if (p.fichero.type && p.fichero.type !== 'application/pdf') throw new Error('El justificante tiene que ser un PDF.')
   const bytes = new Uint8Array(await p.fichero.arrayBuffer())
@@ -193,6 +274,77 @@ export async function subirJustificante(p: { declaracion: string; cuenta: string
   if (sub.error && !/exists|duplicate/i.test(sub.error.message)) throw new Error(`No se ha podido subir el PDF: ${sub.error.message}`)
   const r = await rpc<{ mensaje: string }>('conta_impuesto_justificante_guardar', { p_return: p.declaracion, p_ruta: ruta, p_huella: huella, p_tamano: bytes.length })
   return r.mensaje
+}
+
+// ── I01c · P1 · Subir justificantes de Hacienda ─────────────────────────────
+
+/**
+ * Lee un justificante de la Sede en el navegador (pdfjs + celdasPdf +
+ * justificanteAeat). Nunca lanza. Da también el CSV que se ve en el PDF (el de
+ * un reimpreso que no se lee, para traer el original de Hacienda).
+ */
+export async function leerJustificantePdf(fichero: File | Blob, nombre = 'el PDF'): Promise<Lectura & { csvVisto?: { csv: string | null; candidatos: string[] } }> {
+  const n = fichero instanceof File ? fichero.name : nombre
+  if (fichero.type && fichero.type !== 'application/pdf' && !/\.pdf$/i.test(n)) {
+    return { ok: false, causa: 'no_pdf', motivo: 'No es un PDF: el justificante de la Sede se descarga en PDF.', parcial: {} }
+  }
+  if (fichero.size > 10 * 1024 * 1024) return { ok: false, causa: 'no_pdf', motivo: 'Pasa de 10 MB: no parece un justificante.', parcial: {} }
+  try {
+    const [{ pdfjs }, { celdasPdf }, { leerJustificante, csvDelPdf }] = await Promise.all([
+      import('@/modules/conta/plan/leerFicheros'), import('@/modules/conta/lib/celdasPdf'), import('@/modules/conta/lib/justificanteAeat'),
+    ])
+    const paginas = await celdasPdf(await pdfjs(), await fichero.arrayBuffer())
+    return { ...leerJustificante(paginas), csvVisto: csvDelPdf(paginas) }
+  } catch (e) {
+    return { ok: false, causa: 'no_pdf', motivo: `No se ha podido abrir como PDF (${e instanceof Error ? e.message : String(e)}).`, parcial: {} }
+  }
+}
+
+export type TraidoDeHacienda =
+  | { ok: true; pdf: Blob }
+  | { ok: false; motivo: 'formato' | 'permiso' | 'ya_estaba' | 'no_encontrado' | 'no_responde'; mensaje: string; declaracion?: string }
+
+/**
+ * Trae de Hacienda el justificante original por su CSV (conta-justificante-csv).
+ * No guarda nada: lo devuelve para leerlo y enseñarlo. Nunca lanza.
+ */
+export async function traerJustificanteCsv(companyId: string, csv: string): Promise<TraidoDeHacienda> {
+  hayBase()
+  const { data, error } = await supabase!.functions.invoke('conta-justificante-csv', { body: { company_id: companyId, csv } })
+  let d = data as { ok?: boolean; pdf_base64?: string; motivo?: string; mensaje?: string; declaracion?: string } | null
+  if (error) {
+    const ctx = (error as { context?: Response } | null)?.context
+    d = ctx && typeof ctx.json === 'function' ? await ctx.clone().json().catch(() => null) : null
+    if (!d) return { ok: false, motivo: 'no_responde', mensaje: 'No se ha podido preguntar a Hacienda desde Sumied ahora mismo. Vuelve a intentarlo en un rato. No se ha guardado nada.' }
+  }
+  if (d?.ok && d.pdf_base64) {
+    const bytes = Uint8Array.from(atob(d.pdf_base64), (c) => c.charCodeAt(0))
+    return { ok: true, pdf: new Blob([bytes as BlobPart], { type: 'application/pdf' }) }
+  }
+  const motivos = ['formato', 'permiso', 'ya_estaba', 'no_encontrado', 'no_responde'] as const
+  const motivo = motivos.find((m) => m === d?.motivo) ?? 'no_responde'
+  return { ok: false, motivo, mensaje: d?.mensaje ?? 'Hacienda no responde ahora mismo. No se ha guardado nada.', declaracion: d?.declaracion }
+}
+
+/** La pantalla de repaso: cada justificante mirado por la base. No escribe nada. */
+export function repasarJustificantes(companyId: string, lista: DatosJustificante[]): Promise<Mirado[]> {
+  return rpc<Mirado[]>('conta_impuesto_justificantes_repasar', { p_company: companyId, p_lista: lista })
+}
+
+/**
+ * Apunta un justificante (crea o completa la declaración, presentada fuera) y
+ * guarda su PDF en la carpeta de la declaración. Devuelve lo que ha pasado, en
+ * palabras; si el PDF no llega, la declaración queda apuntada y se dice.
+ */
+export async function apuntarJustificante(companyId: string, datos: DatosJustificante, fichero: File | Blob | null): Promise<string> {
+  const r = await rpc<Mirado & { ok: boolean; mensaje: string; cuenta: string }>('conta_impuesto_justificante_apuntar', { p_company: companyId, p_datos: datos })
+  if (!fichero || !r.declaracion || (r.estado === 'ya_estaba' && !r.falta_pdf)) return r.mensaje
+  try {
+    await subirJustificante({ declaracion: r.declaracion, cuenta: r.cuenta, fichero })
+    return r.mensaje
+  } catch (e) {
+    return `${r.mensaje} El PDF no se ha guardado (${e instanceof Error ? e.message : String(e)}): súbelo desde la lista.`
+  }
 }
 
 // ── P4 · Certificados y accesos ─────────────────────────────────────────────

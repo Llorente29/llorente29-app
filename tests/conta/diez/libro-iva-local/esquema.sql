@@ -10,6 +10,7 @@ create table public.vat_book_entry (id uuid primary key default gen_random_uuid(
   book text not null check (book in ('issued','received','investment','not_subject')),
   invoice_type text not null check (invoice_type in ('F1','F2','F3','F4','R1','R2','R3','R4','R5')), series text, number text, number_to text,
   documents_count int not null check (documents_count > 0), issue_date date not null, operation_date date, received_date date, received_number text,
+  deduction_year smallint, deduction_period text, deduction_reason text,
   party_id uuid, counterpart_tax_id text, counterpart_id_type text check (counterpart_id_type is null or counterpart_id_type in ('02','03','04','05','06')),
   counterpart_country text, counterpart_name text, operation_key text not null,
   qualification text check (qualification is null or qualification in ('S1','S2','N1','N2')),
@@ -61,3 +62,21 @@ select pg_temp.l('20000000-0000-4000-8000-000000000017', '10000000-0000-4000-800
        pg_temp.l('20000000-0000-4000-8000-000000000018', '10000000-0000-4000-8000-000000000006', 2, '472', 21, 0),
        pg_temp.l('20000000-0000-4000-8000-000000000019', '10000000-0000-4000-8000-000000000006', 3, '472', 10, 0),
        pg_temp.l('20000000-0000-4000-8000-000000000020', '10000000-0000-4000-8000-000000000006', 4, '400', 0, 231);
+-- I01c · pieza 2 (19/10): el testigo son los 303 PRESENTADOS con las casillas de su justificante.
+create table public.tax_return (id uuid primary key, account_id uuid not null, company_id uuid not null, form_code text not null,
+  fiscal_year int not null, period text not null, sequence int not null default 1, status text not null);
+create table public.tax_return_box (tax_return_id uuid not null references public.tax_return, account_id uuid not null, company_id uuid not null,
+  box text not null, value numeric, value_text text, origin text not null, manual_reason text, source jsonb);
+-- 1T y 2T presentados. La [28]/[29] reparte el semestre distinto que el libro (como hizo la gestoría de verdad):
+-- 1T 400/84 y 2T 500/83, que suman lo del libro (900/167); cada trimestre por separado, no.
+insert into public.tax_return values
+  ('30000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', '303', 2026, '1T', 1, 'filed'),
+  ('30000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', '303', 2026, '2T', 1, 'filed'),
+  -- Regla 9: un 303 de OTRA cuenta, del mismo periodo y con otras cifras, no cuenta.
+  ('30000000-0000-4000-8000-000000000009', 'a0000000-0000-4000-8000-000000000009', 'e0000000-0000-4000-8000-000000000009', '303', 2026, '1T', 1, 'filed');
+insert into public.tax_return_box (tax_return_id, account_id, company_id, box, value, origin)
+select ('30000000-0000-4000-8000-00000000000' || t)::uuid, 'a0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', b, v, 'justificante'
+  from (values (1, '04', 1000), (1, '05', 10), (1, '06', 100), (1, '10', 100), (1, '11', 21), (1, '28', 400), (1, '29', 84), (1, '36', 100), (1, '37', 21),
+               (2, '04', 2000), (2, '05', 10), (2, '06', 200), (2, '28', 500), (2, '29', 83)) x(t, b, v);
+insert into public.tax_return_box (tax_return_id, account_id, company_id, box, value, origin)
+values ('30000000-0000-4000-8000-000000000009', 'a0000000-0000-4000-8000-000000000009', 'e0000000-0000-4000-8000-000000000009', '06', 999, 'justificante');

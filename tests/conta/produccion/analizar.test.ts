@@ -1382,12 +1382,479 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): el 349 por operaciones con la UE (I01b, 0250)', () => {
+describe('la tanda de AHORA (manifiesto vivo): el envío a Diez de las autoliquidadas (I01f, 0320)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 19/10, después de la 0240, para ESTE fichero (con su md5).
+  // lectura en producción el 20/10 a las 18:00 UTC, después de la 0300 y la 0310, para ESTE fichero.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const cuerpo = (f: string) => {
+    const s = readFileSync(f, 'utf8')
+    const k = s.indexOf('create or replace function public.conta_recibida_envio(')
+    const m = /as (\$(?:function)?\$)/.exec(s.slice(k))!
+    const ini = k + m.index + m[0].length
+    return s.slice(ini, s.indexOf(`${m[1]};`, ini))
+  }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const ORIGEN = 'supabase/migrations/20261113T0100_d01_liquidaciones_correo.sql'
+  const DOWN = 'supabase/vuelta-atras/20261126T0320_i01f_recibida_envio_tratamiento.down.sql'
+
+  it('un fichero, el medido; sigue; nada del camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261126T0320_i01f_recibida_envio_tratamiento.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    expect(md5(readFileSync(viva[0], 'utf8'))).toBe(medida.tanda[viva[0]])
+    expect(r.ficheros[viva[0]]).toBe('sigue')
+    expect(ctx.funciones).toEqual(['public.conta_recibida_envio(uuid)'])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente está en la cabecera, con su prueba de staging, que existe y la nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual(['-- cambia: public.conta_recibida_envio · prueba: supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql'])
+    expect(readFileSync('supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql', 'utf8')).toMatch(/\bconta_recibida_envio\b/)
+  })
+  it('sale de la de producción (6e5ed258…), solo AÑADE dos claves, y la vuelta atrás la devuelve BYTE A BYTE', () => {
+    expect(md5(cuerpo(ORIGEN)).slice(0, 8)).toBe('6e5ed258')
+    expect(cuerpo(DOWN)).toBe(cuerpo(ORIGEN))
+    const antes = cuerpo(ORIGEN).split('\n')
+    const ahora = cuerpo(viva[0]).split('\n')
+    // Nada de lo de antes se va, salvo las dos líneas que ahora siguen con una clave más.
+    expect(antes.filter((l) => !ahora.includes(l)).map((l) => l.trim())).toEqual([
+      "'nif', coalesce(nullif(trim(v_i.issuer_tax_id), ''), nullif(trim(v_s.tax_id), ''))),",
+      "'tipoIva', t.rate, 'baseIva', l.tax_base) order by l.position)",
+    ])
+    expect(ahora.filter((l) => !antes.includes(l)).map((l) => l.trim()).filter((l) => !l.startsWith('--'))).toEqual([
+      "'nif', coalesce(nullif(trim(v_i.issuer_tax_id), ''), nullif(trim(v_s.tax_id), '')),",
+      "'pais', coalesce(nullif(upper(btrim(v_s.country_code)), ''), 'ES')),",
+      "'tipoIva', t.rate, 'baseIva', l.tax_base,",
+      "'tratamiento', t.treatment) order by l.position)",
+    ])
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01f-recibida-envio.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás, y la ensaya staging', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+    const prueba = readFileSync('supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${DOWN}`)
+  })
+})
+
+describe('la tanda de las autoliquidaciones (I01d, 0300 y 0310, PR #260), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01d-autoliquidaciones-20261020.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 20/10 a las 14:33 UTC, después de la 0290, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01d-autoliquidaciones-20261020.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  /** El cuerpo de una función (entre sus $$ o $function$), como lo guarda pg_proc.prosrc. */
+  const cuerpo = (f: string, nombre: string) => {
+    const s = readFileSync(f, 'utf8')
+    const k = s.indexOf(`create or replace function public.${nombre}(`)
+    const m = /as (\$(?:function)?\$)/.exec(s.slice(k))!
+    const ini = k + m.index + m[0].length
+    return s.slice(ini, s.indexOf(`${m[1]};`, ini))
+  }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  // Las cuatro que cambian: de dónde salen y su huella en producción (medida el 20/10).
+  const CAMBIAN: [string, string, string][] = [
+    ['conta_impuesto_303_calcular', 'supabase/migrations/20261124T0290_i01c_deducida.sql', '911debc83af0c4f782d1dc7138423661'],
+    ['conta_libro_iva_deducir_en', 'supabase/migrations/20261124T0290_i01c_deducida.sql', '89e4fde383d80331d16c287a8059dada'],
+    ['conta_vat_book_desde_asiento', 'supabase/migrations/20261014T0100_c05_libros.sql', 'f5570d0cdb353daaa5f4a8eb59c37662'],
+    ['conta_motivos_para_validar', 'supabase/migrations/20261122T0180_i01b_asiento_303.sql', 'ed8b9e8c2e2a1740b4052ea9479d8520'],
+  ]
+
+  it('dos ficheros, los medidos; la 0300 sigue, la 0310 (datos de Foodint) pide «autorizo»; nada del camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261125T0300_i01d_autoliquidaciones.sql', '20261125T0310_i01d_proveedores_foodint.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(r.ficheros[viva[0]]).toBe('sigue')
+    expect(r.ficheros[viva[1]]).toMatch(/autorizo/i)
+    expect(ctx.tablas).toEqual(['public.company_account_link', 'public.supplier'])
+    expect(ctx.funciones).toEqual(CAMBIAN.map(([n]) => n).sort().map((n) => `public.${n}${{
+      conta_impuesto_303_calcular: '(uuid,int,text)', conta_libro_iva_deducir_en: '(uuid,jsonb,int,text,text)',
+      conta_vat_book_desde_asiento: '(uuid)', conta_motivos_para_validar: '(uuid)' }[n]}`))
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente (las cuatro funciones) está en la cabecera, con su prueba de staging, que existe y las nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab.map((l) => l.replace(/^-- cambia: public\.(\S+).*$/, '$1')).sort()).toEqual(CAMBIAN.map(([n]) => n).sort())
+    for (const l of cab) {
+      const prueba = readFileSync(l.replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
+      expect(prueba).toMatch(new RegExp(`\\b${l.replace(/^-- cambia: public\.(\S+).*$/, '$1')}\\b`))
+    }
+  })
+  it('cada una sale de la versión de producción (su md5) y la vuelta atrás la devuelve BYTE A BYTE', () => {
+    const down = 'supabase/vuelta-atras/20261125T0300_i01d_autoliquidaciones.down.sql'
+    for (const [n, origen, huella] of CAMBIAN) {
+      expect(md5(cuerpo(origen, n)), n).toBe(huella)
+      expect(cuerpo(down, n), n).toBe(cuerpo(origen, n))
+      expect(cuerpo(viva[0], n), n).not.toBe(cuerpo(origen, n))
+    }
+  })
+  it('el cálculo del 303: solo cambian las casillas de cada apunte (ahora en conta_impuesto_303_cajas) y la suma de cuatro', () => {
+    const antes = cuerpo(CAMBIAN[0][1], 'conta_impuesto_303_calcular').split('\n')
+    const ahora = cuerpo(viva[0], 'conta_impuesto_303_calcular').split('\n')
+    const soloAhora = ahora.filter((l) => !antes.includes(l)).map((l) => l.trim())
+    expect(soloAhora).toEqual([
+      'cross join lateral public.conta_impuesto_303_cajas(v) x',
+      "when 'rectificativa_isp' then n || ' rectificativas recibidas con inversión del sujeto pasivo o intracomunitarias: Sumied todavía no las declara.'",
+      "when 'extranjera_sin_isp' then n || ' compras a proveedores de fuera de España sin autoliquidar: mira si son importaciones (con DUA) o si les falta el tipo «Compra en otro país de la UE» o «Inversión del sujeto pasivo».'",
+      "select boxes[2], case when libro = 'issued' then cuota else ded end from l where cardinality(boxes) = 2",
+      '-- 0300: la autoliquidación lleva cuatro casillas: base y cuota',
+      '-- devengadas ([10]/[11] o [12]/[13]) y base y cuota deducibles.',
+      'union all select boxes[2], cuota from l where cardinality(boxes) = 4',
+      'union all select boxes[3], base from l where cardinality(boxes) = 4',
+      'union all select boxes[4], ded from l where cardinality(boxes) = 4) s',
+    ])
+  })
+  it('declara qué cuenta; la cuenta solo lee, va por Foodint y lleva el testigo del 3T', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01d-autoliquidaciones.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(c).toContain('conta_impuesto_303_desde_libro')
+  })
+  it('la 0310 solo toca Foodint y no lleva ningún NIF escrito', () => {
+    const d = readFileSync(viva[1], 'utf8')
+    expect(d).toContain("v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(d).toMatch(/if not exists \(select 1 from public\.company where id = v_emp and account_id = v_acc\) then/)
+    expect(d.replace(/--.*$/gm, '')).not.toMatch(/\b(IE|FR|PT|EU|US)\d{6,}/)
+  })
+  it('su vuelta atrás, en orden inverso, y la ensaya staging', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01d-autoliquidaciones-20261020.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261125T0310_i01d_proveedores_foodint.down.sql', 'supabase/vuelta-atras/20261125T0300_i01d_autoliquidaciones.down.sql'])
+    const down = readFileSync(atras[1], 'utf8')
+    for (const f of ['conta_impuesto_303_desde_libro(uuid, int, text)', 'conta_impuesto_303_cajas(public.vat_book_entry)', 'conta_proveedor_iva_clase(text, text, text, text, text)', 'conta_pais_nombre(text)']) {
+      expect(down).toContain(`drop function if exists public.${f};`)
+    }
+    const prueba = readFileSync('supabase/staging/sql/20261125_i01d_autoliquidaciones_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${atras[1]}`)
+  })
+})
+
+describe('la tanda de «deducida en» (I01c, 0290, PR #257), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01c-deducida-20261020.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 20/10 a las 10:08 UTC, después de la 0280, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01c-deducida-20261020.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  /** El cuerpo de conta_impuesto_303_calcular (entre los $$), como lo guarda pg_proc.prosrc. */
+  const cuerpo303 = (f: string) => {
+    const s = readFileSync(f, 'utf8')
+    const i = s.indexOf('$$', s.indexOf('create or replace function public.conta_impuesto_303_calcular')) + 2
+    return s.slice(i, s.indexOf('end $$;', i) + 4)
+  }
+
+  it('un fichero, el medido; sigue (no pide «autorizo») y no toca el camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261124T0290_i01c_deducida.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
+    expect(Object.values(r.ficheros)).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual(['public.vat_book_entry'])
+    expect(ctx.funciones).toEqual(['public.conta_impuesto_303_calcular(uuid,int,text)'])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente (el cálculo del 303 y la restricción) está en la cabecera, con su prueba de staging, que existe y lo nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    // El cálculo del 303 (misma firma) y la restricción nueva sobre vat_book_entry (revisa sus 4.509 filas).
+    expect(cab.map((l) => l.replace(/^-- cambia: (\S+).*$/, '$1'))).toEqual(['public.conta_impuesto_303_calcular', 'public.vat_book_entry'])
+    for (const l of cab) {
+      const prueba = readFileSync(l.replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
+      expect(prueba).toMatch(new RegExp(`\\b${l.replace(/^-- cambia: public\.(\S+).*$/, '$1')}\\b`))
+    }
+  })
+  it('el cálculo del 303 es el de la 0280 (el de producción) con tres cambios y nada más', () => {
+    const antes = cuerpo303('supabase/migrations/20261122T0280_i01c_trimestre.sql')
+    const ahora = cuerpo303(viva[0])
+    // El de la 0280 es el que hay en producción (md5 de prosrc medido el 20/10 a las 10:08 UTC).
+    expect(createHash('md5').update(antes).digest('hex')).toBe('34eb07273e5020aea7f270dc0ecd4254')
+    // Las únicas líneas de la 0280 que ya no están: las tres cosas que cambian (la línea del libro, el
+    // filtro del periodo y «out_of_period») y la declaración de dos variables más.
+    const a = antes.split('\n'), b = ahora.split('\n')
+    const soloAhora = b.filter((l) => !a.includes(l))
+    const soloAntes = a.filter((l) => !b.includes(l))
+    expect([...soloAntes].sort()).toEqual([
+      "                            'no_sabe', x.no_sabe)",
+      "     and case when v.book in ('received', 'investment') then coalesce(v.received_date, v.issue_date) else coalesce(v.operation_date, v.issue_date) end",
+      '         between v_desde and v_hasta;',
+      "  v_sabe110 boolean; v_sabido boolean; v_ant_y int; v_ant_p text; v_txt_vacio text;",
+      "  values (r.id, c.account_id, p_company, 'out_of_period', case when v_n > 0 then 'warning' else 'ok' end,",
+      "          case when v_n = 0 then 'Ninguna factura de otro periodo.'",
+      "               when v_n = 1 then '1 factura recibida tiene fecha de antes del periodo, pero llegó en él: va en este 303.'",
+      "               else v_n || ' facturas recibidas tienen fecha de antes del periodo, pero llegaron en él: van en este 303.' end,",
+    ].sort())
+    expect(soloAhora.join('\n')).toContain('v.deduction_year = p_year and v.deduction_period = p_period')
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01c-deducida.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás quita lo nuevo y devuelve el cálculo del 303 (0280) BYTE A BYTE, y la ensaya staging', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01c-deducida-20261020.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261124T0290_i01c_deducida.down.sql'])
+    const down = readFileSync(atras[0], 'utf8')
+    expect(down).toContain('drop function if exists public.conta_libro_iva_deducir_en(uuid, jsonb, int, text, text);')
+    expect(down).toContain('drop column if exists deduction_year')
+    expect(cuerpo303(atras[0])).toBe(cuerpo303('supabase/migrations/20261122T0280_i01c_trimestre.sql'))
+    const prueba = readFileSync('supabase/staging/sql/20261124_i01c_deducida_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${atras[0]}`)
+  })
+})
+
+describe('la tanda del trimestre (I01c, 0280, PR #252), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01c-trimestre-20261019.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 19/10 a las 21:22 UTC, después de la 0100 de P01, para ESTE fichero (con su md5).
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01c-trimestre-20261019.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  /** El cuerpo de conta_impuesto_303_calcular (entre los $$), como lo guarda pg_proc.prosrc. */
+  const cuerpo303 = (f: string) => {
+    const s = readFileSync(f, 'utf8')
+    const i = s.indexOf('$$', s.indexOf('create or replace function public.conta_impuesto_303_calcular')) + 2
+    return s.slice(i, s.indexOf('end $$;', i) + 4)
+  }
+
+  it('un fichero, el medido; sigue (no pide «autorizo») y no toca el camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261122T0280_i01c_trimestre.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
+    expect(Object.values(r.ficheros)).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual([])
+    expect(ctx.funciones).toEqual(['public.conta_impuesto_303_calcular(uuid,int,text)'])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente (el cálculo del 303, misma firma) está en la cabecera, con su prueba de staging, que existe y lo nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab.map((l) => l.replace(/^-- cambia: (\S+).*$/, '$1'))).toEqual(['public.conta_impuesto_303_calcular'])
+    for (const l of cab) {
+      const prueba = readFileSync(l.replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
+      expect(prueba).toMatch(new RegExp(`\\b${l.replace(/^-- cambia: public\.(\S+).*$/, '$1')}\\b`))
+    }
+  })
+  it('el cálculo del 303 es el de la 0240 con un solo añadido: la [110] también sin resultado', () => {
+    const antes = cuerpo303('supabase/migrations/20261122T0240_i01b_303_no_inventa.sql')
+    const ahora = cuerpo303(viva[0])
+    // El de la 0240 es el que hay en producción (md5 de prosrc medido el 19/10 a las 20:32 y a las 21:22 UTC).
+    expect(createHash('md5').update(antes).digest('hex')).toBe('9141db88860d38cc7ae7175f12b382b0')
+    const quitar = ahora.slice(ahora.indexOf('    -- Salvo la [110] (0280)'), ahora.indexOf('    end if;\n  end if;', ahora.indexOf('    -- Salvo la [110] (0280)')) + '    end if;\n'.length)
+    expect(quitar).toContain("values (r.id, c.account_id, p_company, '110', round(v110, 2),")
+    expect(ahora.replace(quitar, '')).toBe(antes)
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01c-trimestre.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás quita la lectura y devuelve el cálculo del 303 (0240) BYTE A BYTE, y la ensaya staging', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01c-trimestre-20261019.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261122T0280_i01c_trimestre.down.sql'])
+    const down = readFileSync(atras[0], 'utf8')
+    expect(down).toContain('drop function if exists public.conta_impuesto_trimestre(uuid, int, int);')
+    const c24 = readFileSync('supabase/migrations/20261122T0240_i01b_303_no_inventa.sql', 'utf8')
+    const a = c24.indexOf('create or replace function public.conta_impuesto_303_calcular')
+    expect(down).toContain(c24.slice(a, c24.indexOf('comment on function public.conta_impuesto_303_calcular(uuid, int, text)', a)).trimEnd())
+    expect(cuerpo303(atras[0])).toBe(cuerpo303('supabase/migrations/20261122T0240_i01b_303_no_inventa.sql'))
+    const prueba = readFileSync('supabase/staging/sql/20261122_i01c_trimestre_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${atras[0]}`)
+  })
+})
+
+describe('la tanda de Impuestos de tus clientes (P01, 0100, PR #248), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-p01-despacho-20261019.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 19/10 a las 17:08 UTC, después de la 0270, para ESTE fichero (con su md5).
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-p01-despacho-20261019.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero, el medido; sigue (no pide «autorizo») y no toca el camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261123T0100_p01_despacho.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
+    expect(Object.values(r.ficheros)).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual(['public.accounts'])
+    expect(ctx.funciones).toEqual([])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('solo añade: nada «cambia» en la cabecera y las dos columnas de accounts admiten nulos, sin valor por defecto', () => {
+    const sql = readFileSync(viva[0], 'utf8')
+    expect(sql.split('\n').filter((l) => /^-- cambia:/.test(l))).toEqual([])
+    for (const c of ['tax_advisor_since timestamptz', 'tax_advisor_by uuid']) expect(sql).toContain(`add column if not exists ${c}`)
+    const deAccounts = sql.split('\n').filter((l) => /alter table public\.accounts/i.test(l))
+    expect(deAccounts).toHaveLength(2)
+    for (const l of deAccounts) expect(l).not.toMatch(/not null|default/i)
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/p01-despacho.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás quita lo que añade, para si hay datos, y la ensaya staging', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-p01-despacho-20261019.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261123T0100_p01_despacho.down.sql'])
+    const down = readFileSync(atras[0], 'utf8')
+    expect(down).toMatch(/drop table if exists public\.tax_client_assignee/i)
+    for (const c of ['tax_advisor_since', 'tax_advisor_by']) expect(down).toContain(`drop column if exists ${c}`)
+    expect(down).toMatch(/raise exception/i)
+    const prueba = readFileSync('supabase/staging/sql/20261123_p01_despacho_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${atras[0]}`)
+  })
+})
+
+describe('la tanda del justificante por CSV (0270, PR #249), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01c-csv-20261019.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 19/10 a las 13:43 UTC, después de la 0260, para ESTE fichero (con su md5).
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01c-csv-20261019.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero, el medido; sigue (no pide «autorizo») y no toca el camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261122T0270_i01c_csv.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
+    expect(Object.values(r.ficheros)).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual(['public.tax_return'])
+    expect(ctx.funciones).toEqual(['public.conta_impuesto_justificante_apuntar(uuid,jsonb)', 'public.conta_impuesto_presentados(uuid)'])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente (las dos funciones, misma firma) está en la cabecera, con su prueba de staging, que existe y lo nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab.map((l) => l.replace(/^-- cambia: (\S+).*$/, '$1'))).toEqual(['public.conta_impuesto_justificante_apuntar', 'public.conta_impuesto_presentados'])
+    for (const l of cab) {
+      const prueba = readFileSync(l.replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
+      expect(prueba).toMatch(new RegExp(`\\b${l.replace(/^-- cambia: public\.(\S+).*$/, '$1')}\\b`))
+    }
+    // Las columnas, nuevas y que admiten nulos.
+    for (const c of ['aeat_expediente', 'presenter_tax_id', 'presenter_name', 'receipt_source']) {
+      expect(readFileSync(viva[0], 'utf8')).toContain(`alter table public.tax_return add column if not exists ${c} text`)
+    }
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01c-csv.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás devuelve apuntar (0260) y presentados (0210) BYTE A BYTE y quita las columnas, y la ensaya staging', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01c-csv-20261019.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261122T0270_i01c_csv.down.sql'])
+    const down = readFileSync(atras[0], 'utf8')
+    const c26 = readFileSync('supabase/migrations/20261122T0260_i01c_justificantes.sql', 'utf8')
+    const a = c26.indexOf('create or replace function public.conta_impuesto_justificante_apuntar')
+    expect(down).toContain(c26.slice(a, c26.indexOf('comment on function public.conta_impuesto_justificante_apuntar(uuid, jsonb)', a)).trimEnd())
+    const c21 = readFileSync('supabase/migrations/20261122T0210_i01b_presentados.sql', 'utf8')
+    const b = c21.indexOf('create or replace function public.conta_impuesto_presentados')
+    expect(down).toContain(c21.slice(b, c21.indexOf('comment on function public.conta_impuesto_presentados(uuid)', b)).trimEnd())
+    for (const c of ['aeat_expediente', 'presenter_tax_id', 'presenter_name', 'receipt_source']) expect(down).toContain(`alter table public.tax_return drop column if exists ${c};`)
+    const prueba = readFileSync('supabase/staging/sql/20261122_i01c_csv_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${atras[0]}`)
+  })
+})
+
+describe('la tanda de los justificantes (0260, PR #247), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01c-justificantes-20261019.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 19/10 a las 10:28 UTC, después de la 0250, para ESTE fichero (con su md5).
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01c-justificantes-20261019.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+
+  it('un fichero, el medido; sigue (no pide «autorizo») y no toca el camino del pedido', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261122T0260_i01c_justificantes.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(createHash('md5').update(readFileSync(f)).digest('hex'), f).toBe(medida.tanda[f])
+    expect(Object.values(r.ficheros)).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual(['public.tax_return_box'])
+    expect(ctx.funciones).toEqual([])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente (el CHECK de tax_return_box, que amplía) está en la cabecera, con su prueba de staging, que existe y lo nombra', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab.map((l) => l.replace(/^-- cambia: (\S+).*$/, '$1'))).toEqual(['public.tax_return_box'])
+    const prueba = readFileSync(cab[0].replace(/^.*prueba: (\S+).*$/, '$1'), 'utf8')
+    expect(prueba).toMatch(/\btax_return_box\b/)
+    // Amplía: los dos valores de antes siguen dentro.
+    expect(readFileSync(viva[0], 'utf8')).toContain("check (origin in ('calculated', 'manual', 'justificante'))")
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/i01c-justificantes.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    const fuera = c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")
+    expect(fuera).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás quita las tres funciones y devuelve el CHECK de la 0110, y la ensaya staging', () => {
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01c-justificantes-20261019.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261122T0260_i01c_justificantes.down.sql'])
+    const down = readFileSync(atras[0], 'utf8')
+    for (const f of ['conta_impuesto_justificante_apuntar', 'conta_impuesto_justificantes_repasar', 'conta_impuesto_justificante_mirar']) expect(down).toContain(`drop function if exists public.${f}(uuid, jsonb);`)
+    expect(down).toContain("check (origin in ('calculated', 'manual'));")
+    const prueba = readFileSync('supabase/staging/sql/20261122_i01c_justificantes_prueba.sql', 'utf8')
+    expect(prueba).toContain(`\\i ${viva[0]}`)
+    expect(prueba).toContain(`\\i ${atras[0]}`)
+  })
+})
+
+describe('la tanda del 349 por operaciones (0250, PR #244), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01b-349-por-operaciones-20261019.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 19/10, después de la 0240, para ESTE fichero (con su md5).
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01b-349-por-operaciones-20261019.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1419,7 +1886,7 @@ describe('la tanda de AHORA (manifiesto vivo): el 349 por operaciones con la UE 
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
   it('su vuelta atrás devuelve la regla de la 0120 y el calendario de la 0190 BYTE A BYTE, y la ensaya staging', () => {
-    const atras = leerTanda('supabase/produccion/vuelta-atras.txt')
+    const atras = leerTanda('tests/conta/produccion/vuelta-atras-i01b-349-por-operaciones-20261019.txt')
     expect(atras).toEqual(['supabase/vuelta-atras/20261122T0250_i01b_349_por_operaciones.down.sql'])
     const down = readFileSync(atras[0], 'utf8')
     const c20 = readFileSync('supabase/migrations/20261122T0120_i01_obligaciones.sql', 'utf8')

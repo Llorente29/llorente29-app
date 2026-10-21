@@ -5,7 +5,7 @@
 -- ----------------------------------------------------------------------------
 -- W02 (paso 1c, 16/10): cada e2e tiene sus PROPIAS cuentas. Un «carril» es una
 -- copia de las cuentas de prueba (la plantilla: A, B, C, D, Diez, las dos
--- «solas» del C06, y sus ocho usuarios; D, la sin hostelería, desde el S01), con los ids cambiados y los correos con
+-- «solas» del C06, y sus ocho usuarios; D, la sin hostelería, desde el S01; la asesoría del P01 con sus tres personas y sus diez clientes), con los ids cambiados y los correos con
 -- «.carril-N». Dos e2e a la vez ya no se pisan: cada una entra con lo suyo.
 --
 -- El id de una fila del carril N es el de la plantilla con el SEGUNDO grupo
@@ -62,7 +62,12 @@ insert into _plantilla_usuarios values
   ('c01d0000-0000-4000-8000-0000000000d1'),  -- d.admin@prueba.folvy.test       · cuenta D, sin hostelería (S01)
   ('c0600000-0000-4000-8000-0000000000a1'),  -- sola.admin@c06-prueba.test      · Empresa de Prueba Sola
   ('c0600000-0000-4000-8000-0000000000b1'),  -- sola.alta@c06-prueba.test       · Taller de Prueba Solo
-  ('c0600000-0000-4000-8000-0000000000f0');  -- c06.plataforma@c06-prueba.test  · administrador de plataforma
+  ('c0600000-0000-4000-8000-0000000000f0'),  -- c06.plataforma@c06-prueba.test  · administrador de plataforma
+  ('d5ac0000-0000-4000-8000-0000000000a1'),  -- p01.laura@p01-prueba.test       · Asesoría de Prueba Centro (P01), administración
+  ('d5ac0000-0000-4000-8000-0000000000a2'),  -- p01.marta@p01-prueba.test       · la asesoría, encargada que presenta
+  ('d5ac0000-0000-4000-8000-0000000000a3'),  -- p01.jorge@p01-prueba.test       · la asesoría, encargado sin permiso
+  ('d5ac0000-0000-4000-8000-00000000c02a'),  -- p01.talleres@p01-prueba.test    · administración de un cliente (el resumen va a ella)
+  ('d5ac0000-0000-4000-8000-00000000c08a');  -- p01.bar@p01-prueba.test         · administración de otro cliente
 
 create temp table _plantilla_cuentas (id uuid primary key) on commit drop;
 insert into _plantilla_cuentas values
@@ -70,7 +75,15 @@ insert into _plantilla_cuentas values
   ('c01b0000-0000-4000-8000-00000000000b'),  -- B · Cocina de Prueba Sur
   ('c01c0000-0000-4000-8000-00000000000c'),  -- C · Obrador de Prueba Este (sin empresa)
   ('c01d0000-0000-4000-8000-00000000000d'),  -- D · Asesoría de Prueba Oeste (sin hostelería, S01)
-  ('c0600000-0000-4000-8000-0000000000d0');  -- Comercio de Prueba Diez
+  ('c0600000-0000-4000-8000-0000000000d0'),  -- Comercio de Prueba Diez
+  -- P01 · los diez clientes de la asesoría de demo (su cuenta entra aquí para
+  -- que el carril tenga sus empresas, sus permisos y sus declaraciones; dos
+  -- tienen administración, arriba). La asesoría entra por sus perfiles.
+  ('d5ac0000-0000-4000-8000-00000000c010'), ('d5ac0000-0000-4000-8000-00000000c020'),
+  ('d5ac0000-0000-4000-8000-00000000c030'), ('d5ac0000-0000-4000-8000-00000000c040'),
+  ('d5ac0000-0000-4000-8000-00000000c050'), ('d5ac0000-0000-4000-8000-00000000c060'),
+  ('d5ac0000-0000-4000-8000-00000000c070'), ('d5ac0000-0000-4000-8000-00000000c080'),
+  ('d5ac0000-0000-4000-8000-00000000c090'), ('d5ac0000-0000-4000-8000-00000000c100');
 insert into _plantilla_cuentas
   select p.account_id from public.user_profiles p
    where p.user_id in (select id from _plantilla_usuarios) and p.account_id is not null

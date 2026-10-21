@@ -6,10 +6,10 @@
 // iconos sueltos y cambiar uno es cambiarlo aquí. Son decorativos: el texto va
 // siempre al lado, o el botón lleva su aria-label.
 
-import { ICONOS, TAM_ICONO, TRAZO_ICONO, type NombreIcono } from './iconos'
+import { ICONOS, TAM_ICONO, TAM_ICONO_PESTANA, TRAZO_ICONO, type NombreIcono } from './iconos'
 
-export function Icono({ nombre, grande = false }: { nombre: NombreIcono; grande?: boolean }) {
+export function Icono({ nombre, grande = false, pestana = false }: { nombre: NombreIcono; grande?: boolean; /** S01f · 14 px: los de la cabecera de pestañas. */ pestana?: boolean }) {
   const Dibujo = ICONOS[nombre]
-  const tam = grande ? 20 : TAM_ICONO
+  const tam = grande ? 20 : pestana ? TAM_ICONO_PESTANA : TAM_ICONO
   return <Dibujo className="s-icono" size={tam} strokeWidth={TRAZO_ICONO} aria-hidden="true" focusable="false" />
 }

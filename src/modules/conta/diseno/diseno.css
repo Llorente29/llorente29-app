@@ -148,13 +148,24 @@
   padding-left: var(--s-2); line-height: 1.2;
 }
 .s-cinta-ocultar { margin-left: auto; align-self: flex-start; }
+.s-cinta-ocultar-fuera { display: none; }
 /* En la cinta, los botones más bajos y apretados (maqueta 1: una fila en 1440). */
 .s-cinta .s-boton { min-height: calc(var(--s-alto-control) - var(--s-1)); padding: 0 6px; gap: var(--s-1); font-size: var(--s-t-s); }
 .s-cinta-grupos { row-gap: var(--s-1); }
 @media (max-width: 767px) {
-  .s-cinta-grupos { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  /* S01f · En el móvil la cinta es la fila de grupos, que se desliza entera, y
+     «Ocultar» a su derecha, fuera de ella: con su línea, sin pisar nada. */
+  .s-cinta { align-items: stretch; gap: 0; padding: 0; }
+  .s-cinta-grupos { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: var(--s-2) var(--s-3); align-items: flex-start; }
+  .s-cinta-grupos::-webkit-scrollbar { display: none; }
   .s-cinta-grupo { flex-shrink: 0; }
   .s-cinta-grupo-botones { flex-wrap: nowrap; }
+  .s-cinta-ocultar { display: none; }
+  .s-cinta-ocultar-fuera {
+    display: inline-flex; flex-shrink: 0; align-self: stretch; border-radius: 0;
+    padding: 0 var(--s-3); border-left: var(--s-linea) solid var(--s-borde-decorativo);
+  }
+  .s-cinta-oculta { padding: 0 var(--s-4); }
 }
 
 /* ── Diálogo ────────────────────────────────────────────────────────── */
@@ -197,7 +208,12 @@
 }
 
 /* ── Pantalla (S01): lo mínimo para una pantalla hecha con las piezas ───────── */
-.s-pantalla { display: flex; flex-direction: column; gap: var(--s-4); max-width: 960px; }
+.s-pantalla { display: flex; flex-direction: column; gap: var(--s-4); width: 100%; max-width: var(--s-ancho-pantalla); }
+/* S01g (Julio, 20/10): una pantalla de contenido usa todo el ancho que hay, hasta
+   --s-ancho-pantalla, y reparte en columnas cuando cabe. Un formulario o un texto
+   no se estira: .s-pantalla-estrecha. El Trimestre lleva el suyo (todo el ancho,
+   maqueta v4 de C, impuestos.css). */
+.s-pantalla.s-pantalla-estrecha { max-width: var(--s-ancho-lectura); }
 .s-apoyo { margin: 0; color: var(--s-apoyo); }
 .s-fila-campos { display: flex; flex-wrap: wrap; gap: var(--s-4); }
 .s-fila-campos > .s-campo { flex: 1 1 220px; }

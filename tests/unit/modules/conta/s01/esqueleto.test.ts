@@ -20,7 +20,7 @@ import { DE_SERIE, aFila, claveDelNavegador, deFila, deNavegador } from '@/modul
 import { logoDe } from '@/modules/conta/cuenta/contratoCuenta'
 import { mesCorto } from '@/modules/conta/lib/bancosVista'
 
-const rellena = (r: string) => rutaConta(r, { apartado: 'x', tabla: 'x', entrada: 'impuestos', codigo: '40000002', partyId: 'p', supplierId: 's', entryId: 'e', area: 'mayor', accion: 'libro-mayor', liqId: 'l', invoiceId: 'i', loteId: 'k', pestana: 'reglas' })
+const rellena = (r: string) => rutaConta(r, { apartado: 'x', tabla: 'x', entrada: 'impuestos', codigo: '40000002', partyId: 'p', supplierId: 's', entryId: 'e', area: 'mayor', accion: 'libro-mayor', liqId: 'l', invoiceId: 'i', loteId: 'k', pestana: 'reglas', empresa: 'c' })
 const de = (path: string) => { const d = dondeEsta(path); return d ? (d.pestana ? `${d.producto.id}.${d.pestana.id}` : d.producto.id) : null }
 
 const NADA: Contexto = { hosteleria: false, diez: false, interruptores: new Set() }
@@ -45,6 +45,10 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
+    // I01c (19/10): el trimestre, también el de una empresa por la ruta.
+    impuestoTrimestre: 'impuestos.trimestre', impuestoTrimestreEmpresa: 'impuestos.trimestre',
+    // P01 · El trimestre de un cliente, abierto desde «Tus clientes».
+    impuestosCliente: 'impuestos.clientes',
     // La página de aceptar una invitación a la asesoría no es de ningún producto (va sin marco).
     aceptarAsesoria: null,
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
@@ -89,12 +93,20 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
   })
   // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y
   // pisaba «Buscar»; la pestaña se llama «Certificados» y los mensajes dicen «Impuestos › Certificados».
-  it('Impuestos: Calendario, Presentados, Impuesto de sociedades y Certificados; el IVA de un periodo, del Calendario', () => {
+  // I01c (19/10): «Trimestre» detrás del Calendario (maqueta_303_v2).
+  it('Impuestos: (Tus clientes,) Calendario, Trimestre, Presentados, Impuesto de sociedades y Certificados; el IVA de un periodo, del Calendario', () => {
     const i = PRODUCTOS.find((p) => p.id === 'impuestos')!
-    expect(i.pestanas.map((t) => t.etiqueta)).toEqual(['Calendario', 'Presentados', 'Impuesto de sociedades', 'Certificados'])
+    expect(i.pestanas.map((t) => t.etiqueta)).toEqual(['Tus clientes', 'Calendario', 'Trimestre', 'Presentados', 'Impuesto de sociedades', 'Certificados'])
+    // P01 · «Tus clientes» solo para una asesoría, la primera; su cliente cuelga de ella.
+    expect(pestanasVisibles(i, { ...NADA, asesoria: true }).map((t) => t.id)).toEqual(['clientes', 'calendario', 'trimestre', 'presentados', 'sociedades', 'certificados'])
+    expect(de('/conta/impuestos/clientes')).toBe('impuestos.clientes')
+    expect(de('/conta/impuestos/clientes/abc')).toBe('impuestos.clientes')
+    expect(de('/conta/impuestos/trimestre')).toBe('impuestos.trimestre')
+    expect(de('/conta/impuestos/trimestre/2026/3T')).toBe('impuestos.trimestre')
+    expect(de('/conta/impuestos/empresa/0b0b/trimestre/2026/3T')).toBe('impuestos.trimestre')
     expect(de('/conta/impuestos/iva/2026/3T')).toBe('impuestos.calendario')
     expect(de('/conta/impuestos/sociedades')).toBe('impuestos.sociedades')
-    expect(pestanasVisibles(i, NADA).map((t) => t.id)).toEqual(['calendario', 'presentados', 'sociedades', 'certificados'])
+    expect(pestanasVisibles(i, NADA).map((t) => t.id)).toEqual(['calendario', 'trimestre', 'presentados', 'sociedades', 'certificados'])
   })
   it('con pantalla, el interruptor decide (la prueba puede fallar)', () => {
     const conPantalla = PRODUCTOS.map((p) => (p.id === 'facturacion' ? { ...p, ruta: 'facturacion' } : p))

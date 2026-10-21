@@ -1,3 +1,11 @@
+# W03 · Staging como producción (rama conta/w03-staging-alineado, Julio 20/10:
+#   «alinéalo con producción de forma definitiva, con su tanda de staging, no
+#   dentro de cada prueba»). La PRIMERA: la C06b y la M01 DE VERDAD, cada una
+#   solo si falta (se puede volver a pasar). Desde aquí, journal_entry_validar
+#   llama a los motivos como en producción. Las dos pruebas de la M01 la quitan
+#   dentro de su transacción para probarla desde antes; las demás ya no la cargan.
+supabase/staging/sql/20261126_w03_c06b_y_m01_de_verdad.sql
+
 # I01b · Las pantallas de Impuestos y el asiento del 303 (rama conta/i01b-pantallas-impuestos).
 #   Pieza 6, el asiento de liquidación: la prueba aplica la 0100 a la 0180 (la 0160 y la 0170 del S01d ya están) con
 #   \i y ROLLBACK (y la M01 y la 0140 del S01, si staging no las tiene),
@@ -224,3 +232,87 @@ supabase/seeds/conta/seed_c06_sola_ejercicio_staging.sql
 #   la pisaba: staging se quedaba con la regla vieja y el calendario nuevo.
 supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
 supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
+
+# I01c · P1 · Subir justificantes de Hacienda (rama conta/i01c-justificantes).
+#   La 0260 DE VERDAD (amplía el CHECK de tax_return_box.origin con
+#   'justificante' y añade tres funciones; probada en el run 354), para la e2e
+#   de «Subir justificantes». Y su prueba, con \i y ROLLBACK: el NIF
+#   de otra empresa; el repaso (dos veces, antes de acabar el periodo,
+#   negativo); apuntar el 303 del 3T de 2025 con el plazo sin festivos dicho;
+#   ya estaba y otro CSV; el 4T calculado con la [110] del 3T subido y sus
+#   diferencias; a mano con motivo; y la vuelta atrás.
+supabase/migrations/20261122T0260_i01c_justificantes.sql
+supabase/staging/sql/20261122_i01c_justificantes_prueba.sql
+
+# I01c · P1 definitiva · El justificante por CSV (rama conta/i01c-csv).
+#   La 0270 DE VERDAD (cuatro columnas nuevas en tax_return: expediente,
+#   presentador y de dónde salió el PDF; apuntar los guarda y Presentados da lo
+#   traído y lo compensado del 303), para la e2e de «Ya lo presenté fuera ·
+#   pegar CSV» con el doble de conta-justificante-csv. Y su prueba, con \i y
+#   ROLLBACK: el 3T traído por CSV (comprobado), el 4T subido con 430,00
+#   compensado, el de otro NIF fuera, y la vuelta atrás.
+supabase/migrations/20261122T0270_i01c_csv.sql
+supabase/staging/sql/20261122_i01c_csv_prueba.sql
+
+# P01 · Impuestos de tus clientes (rama conta/p01-despacho).
+#   La 0100 DE VERDAD: solo añade (dos columnas que admiten nulos en accounts,
+#   tax_client_assignee y las funciones conta_despacho_*); se puede volver a
+#   pasar. La asesoría de demo: Asesoría de Prueba Centro, 3 personas, 4
+#   certificados de mentira y 10 clientes inventados (8 con permiso); si ya
+#   está, solo pone al día la caducidad de los certificados. Y su prueba, con
+#   ROLLBACK: cifras y filtros del 3T a 13/10, certificado por persona,
+#   responsable, RLS de la clienta, de otra cuenta y de la asesoría, «Soy una
+#   asesoría», retirar el permiso y la vuelta atrás.
+#   Va detrás de la 0270: no toca nada de lo de arriba.
+supabase/migrations/20261123T0100_p01_despacho.sql
+supabase/seeds/conta/seed_p01_despacho_staging.sql
+supabase/staging/sql/20261123_p01_despacho_prueba.sql
+
+# I01c · Pieza 3, la parte que ordena (rama conta/i01c-trimestre).
+#   La 0280 DE VERDAD (solo añade: conta_impuesto_trimestre, la tira del
+#   trimestre y la cartera de cuotas a compensar del 303, y si el borrador está
+#   desfasado), para la e2e de Impuestos › Trimestre. Y su prueba, con \i y
+#   ROLLBACK: el borrador del 3T calculado antes del 2T, desfasado; la cartera
+#   1.500,00 + 1.200,50 − 400,25 = 2.300,25; vuelto a calcular, trae la [110];
+#   la tira; otra cuenta no lo ve; y la vuelta atrás. En 2026: con 2025 paró
+#   (run 369) porque no hay festivos de 2025 para el plazo.
+supabase/migrations/20261122T0280_i01c_trimestre.sql
+supabase/staging/sql/20261122_i01c_trimestre_prueba.sql
+
+# I01c · «Deducida en» (rama conta/i01c-deducida). La 0290 DE VERDAD (añade
+#   las columnas y la carga; cambia el cálculo del 303) y su prueba, con \i y
+#   ROLLBACK: una recibida inventada del 31/03 va en el 1T; marcada «deducida
+#   en el 2T» va en el 2T y los dos lo dicen; la carga es todas o ninguna y
+#   pide motivo; otra cuenta no puede; quitada vuelve; y la vuelta atrás deja
+#   el cálculo byte a byte como la 0280.
+supabase/migrations/20261124T0290_i01c_deducida.sql
+supabase/staging/sql/20261124_i01c_deducida_prueba.sql
+
+# I01d · Las autoliquidaciones (rama conta/i01d-autoliquidaciones). La 0300 DE
+#   VERDAD (cambia el cálculo del 303, el testigo de «deducida en», el libro
+#   desde el asiento y la validación; añade cuatro funciones) y su prueba, con
+#   \i y ROLLBACK, por los caminos: una intracomunitaria y una de fuera de la UE
+#   validadas con su autorrepercusión; sin la 477 no; el tipo contra el país,
+#   tres veces, no; el 303 del 4T cambia lo que tiene que cambiar y el cálculo
+#   dice lo mismo que el libro; anular; el testigo; otra cuenta; y la vuelta
+#   atrás byte a byte. La 0310 es solo de Foodint: aquí no hace nada.
+supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
+supabase/staging/sql/20261125_i01d_autoliquidaciones_prueba.sql
+supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql
+
+# W03 · La ÚLTIMA: el manifiesto vuelve a pasar migraciones viejas detrás de
+#   otras más nuevas (la 0110 detrás de la 0180), así que al final se vuelven a
+#   pasar la 0180 y la 0300 y se comprueba, función a función, que 17 cuerpos
+#   son byte a byte los de producción (md5 medido el 20/10). Si una no casa,
+#   para y dice cuál. No toca lo que staging lleva por delante de otros frentes
+#   (B02, D01, el TPV de mesas) ni lo que no está en git.
+supabase/staging/sql/20261126_w03_como_produccion.sql
+
+# I01f · El envío a Diez de las recibidas autoliquidadas (rama
+#   conta/i01f-diez-autoliquidadas). La 0320 (cambia conta_recibida_envio: solo
+#   añade el tratamiento del IVA de cada línea y el país del proveedor) SOLO
+#   dentro de su prueba (ROLLBACK): una recibida de verdad de A puesta como
+#   intracomunitaria de Francia (intra_eu y FR) y como inversión del sujeto
+#   pasivo de Estados Unidos (reverse_charge y US), como usuario de A; lo de
+#   antes, igual; la cuenta B no la lee; y la vuelta atrás, byte a byte.
+supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql

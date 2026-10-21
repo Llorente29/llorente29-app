@@ -1,0 +1,22 @@
+{
+ "_que": "I01b · el 349 por operaciones con la UE · contexto de producción de la tanda viva (20261122T0250), medido en SOLO LECTURA el 19/10, después de la 0240, con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen conta_impuesto_reglas y conta_impuesto_calendario (una sola firma cada una; las mismas huellas que en staging: reglas c327986c…, calendario ff7dbd56…, el de la 0190); no existe conta_paises_ue; ninguna tabla; nada del camino del pedido; nada en el historial.",
+ "medido": "2026-10-19T07:29Z",
+ "tanda": {
+  "supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql": "29322e9615475e939b48926720e2867c"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_impuesto_calendario(uuid,date)",
+   "public.conta_impuesto_reglas(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

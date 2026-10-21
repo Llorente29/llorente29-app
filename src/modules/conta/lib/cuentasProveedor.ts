@@ -298,7 +298,11 @@ export interface Apunte {
   enlace: { tipo: 'factura' | 'pago' | 'asiento'; id: string } | null
   /** C04: el asiento del que sale (serie/número), y si está anulado. */
   asiento?: { serie: number; numero: number; anulado: boolean }
+  /** I01e: de dónde viene el asiento (traído de Diez, una factura subida, el banco…). */
+  origen?: OrigenApunte
 }
+/** I01e: el origen de un asiento (lib/libroProveedor.ts lo dice en palabras). */
+export type OrigenApunte = 'diez' | 'factura' | 'banco' | 'ventas' | 'sumied'
 export interface FilaExtracto extends Apunte { saldo: number }
 
 /**

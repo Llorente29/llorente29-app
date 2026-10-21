@@ -12,8 +12,23 @@
 // empresa va ENTERA en la fila de debajo, con el ejercicio y el mes de la
 // pantalla que los lea; Favoritos y el usuario, en el cajón del menú. Las
 // pestañas, en una fila que se desliza debajo.
+// S01f (Julio, 20/10: «texto plano muy rudimentario»; la maqueta del
+// trimestre v3 y la decisión de Julio de ese día): las pestañas salen de la
+// cabecera a su PROPIA franja, debajo (FranjaPestanas). La cabecera se queda
+// como estaba (empresa, ejercicio o mes, Buscar · Ctrl K, Favoritos y el
+// usuario), con el logo de la empresa más pequeño. La franja: unos 44 px,
+// fondo blanco y su separador; cada pestaña con su icono de trazo de 14 px y
+// 16 px de aire a cada lado, la activa subrayada con 3 px en toda la pestaña
+// y su contador donde aplique (gris lo que pide una decisión o cuántos hay,
+// rojo lo que vence: contadoresPestanas.ts). A 1440 px caben todas: sin
+// «Más ▾». Si la ventana es estrecha, y en el móvil, la franja se desliza sin
+// cortar ninguna.
+//
+// El contador va FUERA del enlace (a su lado, dentro de la pestaña) y el
+// enlace cubre la pestaña entera: el nombre del enlace sigue siendo el de la
+// pestaña («Movimientos»), y el número lo dice su descripción al lector.
 
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode, type RefCallback } from 'react'
+import type { ReactNode, RefCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { rutaAltaEmpresa, rutaConta } from '@/config/navegacion'
 import { LogoHorizontal } from '@/marca/PiezasMarca'
@@ -21,7 +36,8 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { Boton, Icono } from '@/modules/conta/diseno'
 import { iniciales } from '@/modules/conta/lib/formato'
-import { anchoParaPestanas, cuantasCaben, type Pestana, type Producto } from './productos'
+import type { Pestana, Producto } from './productos'
+import { clavePestana, type ContadorPestana, type ContadoresPestanas } from './contadoresPestanas'
 import { conConsulta } from './ordenes'
 import { useDeslizable } from './deslizable'
 
@@ -31,79 +47,47 @@ function useRutaPestana() {
   return (t: Pestana) => conConsulta(rutaConta(t.ruta!), search)
 }
 
-const HUECO = 4
-/** El hueco de la cabecera entre el cliente y el ejercicio (gap de .s-cab-izquierda). */
-const HUECO_CAB = 8
-
-function Pestanas({ producto, pestanas, activa, periodo }: { producto: Producto; pestanas: Pestana[]; activa: string | null; periodo: HTMLDivElement | null }) {
-  const ruta = useRutaPestana()
-  const caja = useRef<HTMLDivElement | null>(null)
-  const medida = useRef<HTMLDivElement | null>(null)
-  const [caben, setCaben] = useState(pestanas.length)
-  const { abierto: masAbierto, alternar: masAlternar, caja: masCaja, boton: masBoton } = useDesplegable()
-  const claves = pestanas.map((t) => t.id).join(',')
-  const n = pestanas.length
-  // S01e · El sitio del ejercicio o el mes se guarda esté o no: «Más ▾» no cambia de sitio entre pantallas.
-  const reserva = producto.periodo ?? 0
-
-  useLayoutEffect(() => {
-    const c = caja.current, me = medida.current
-    if (!c || !me) return
-    // En la medida, cada pestaña en negrita (como la activa), luego «Más ▾» y luego cada «Pestaña ▾»:
-    // lo que se ve no depende de cuál esté activa.
-    const medir = () => {
-      const anchos = Array.from(me.children).map((x) => (x as HTMLElement).offsetWidth)
-      const ocupaPeriodo = periodo && periodo.offsetWidth > 0 ? periodo.offsetWidth + HUECO_CAB : 0
-      setCaben(cuantasCaben(anchos.slice(0, n), anchoParaPestanas(c.clientWidth, ocupaPeriodo, reserva), anchos[n] ?? 0, HUECO, anchos.slice(n + 1)))
-    }
-    medir()
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(medir)
-    ro?.observe(c)
-    ro?.observe(me)
-    if (periodo) ro?.observe(periodo)
-    // Con la letra ya cargada, las medidas cambian.
-    let vivo = true
-    document.fonts?.ready.then(() => { if (vivo) medir() }).catch(() => {})
-    return () => { vivo = false; ro?.disconnect() }
-  }, [claves, n, periodo, reserva])
-
-  const vistas = pestanas.slice(0, caben)
-  const resto = pestanas.slice(caben)
-  const enResto = resto.find((t) => t.id === activa)
-  const enlace = (t: Pestana, clase: string) => (
-    <Link key={t.id} to={ruta(t)} className={clase} aria-current={t.id === activa ? 'page' : undefined}>{t.etiqueta}</Link>
-  )
+/** El número de una pestaña: gris o rojo. Lo dice al lector la descripción del enlace. */
+function Contador({ c, id }: { c: ContadorPestana | undefined; id?: string }) {
+  if (!c) return null
   return (
-    <div className="s-pestanas-caja" ref={caja}>
-      <div className="s-pestanas-medida" ref={medida} aria-hidden="true">
-        {pestanas.map((t) => <span key={t.id} className="s-pestana s-pestana-activa">{t.etiqueta}</span>)}
-        <span className="s-pestana s-pestana-activa">Más ▾</span>
-        {pestanas.map((t) => <span key={`${t.id}-mas`} className="s-pestana s-pestana-activa">{`${t.etiqueta} ▾`}</span>)}
-      </div>
-      <nav className="s-pestanas" aria-label={`Pestañas de ${producto.etiqueta}`}>
-        {vistas.map((t) => enlace(t, 's-pestana'))}
-        {resto.length > 0 && (
-          <div className="s-desplegable" ref={masCaja}>
-            <button type="button" ref={masBoton} className={enResto ? 's-pestana s-pestana-activa' : 's-pestana'}
-              aria-expanded={masAbierto} aria-haspopup="true" onClick={masAlternar}>
-              {enResto ? `${enResto.etiqueta} ▾` : 'Más ▾'}
-            </button>
-            {masAbierto && <div className="s-menu s-menu-derecha">{resto.map((t) => enlace(t, 's-menu-item'))}</div>}
-          </div>
-        )}
-      </nav>
-    </div>
+    <>
+      <span className="s-pestana-contador" data-tono={c.tono} aria-hidden="true" title={c.frase}>{c.n}</span>
+      {id && <span id={id} hidden>{c.frase}</span>}
+    </>
   )
 }
 
-export function PestanasMovil({ producto, pestanas, activa }: { producto: Producto; pestanas: Pestana[]; activa: string | null }) {
+/**
+ * Una pestaña: el enlace (icono y nombre) y, al lado, su contador. El enlace
+ * cubre la pestaña entera (también el contador) con su ::after.
+ */
+function UnaPestana({ producto, t, activa, contador, ruta }: { producto: Producto; t: Pestana; activa: boolean; contador: ContadorPestana | undefined; ruta: string }) {
+  const desc = contador ? `s-pestana-n-${producto.id}-${t.id}` : undefined
+  return (
+    <span className="s-pestana" data-activa={activa ? '' : undefined}>
+      <Link to={ruta} className="s-pestana-enlace" aria-current={activa ? 'page' : undefined} aria-describedby={desc}>
+        <Icono nombre={t.icono} pestana /><span className="s-pestana-nombre">{t.etiqueta}</span>
+      </Link>
+      <Contador c={contador} id={desc} />
+    </span>
+  )
+}
+
+/**
+ * S01f · La franja de pestañas del producto, debajo de la cabecera (en el
+ * ordenador, fija debajo de ella). Se desliza hasta la activa y dice con un
+ * degradado que hay más por un lado (S01e).
+ */
+export function FranjaPestanas({ producto, pestanas, activa, contadores, movil }: {
+  producto: Producto; pestanas: Pestana[]; activa: string | null; contadores: ContadoresPestanas; movil: boolean
+}) {
   const ruta = useRutaPestana()
-  // S01e · Se desliza hasta la activa y dice con un degradado que hay más.
   const fila = useDeslizable<HTMLElement>(`${producto.id}:${activa ?? ''}`)
   return (
-    <nav ref={fila} className="s-pestanas s-pestanas-movil" aria-label={`Pestañas de ${producto.etiqueta}`}>
+    <nav ref={fila} className={movil ? 's-franja-pestanas s-pestanas s-pestanas-movil' : 's-franja-pestanas s-pestanas'} aria-label={`Pestañas de ${producto.etiqueta}`}>
       {pestanas.map((t) => (
-        <Link key={t.id} to={ruta(t)} className="s-pestana" aria-current={t.id === activa ? 'page' : undefined}>{t.etiqueta}</Link>
+        <UnaPestana key={t.id} producto={producto} t={t} activa={t.id === activa} contador={contadores[clavePestana(producto.id, t.id)]} ruta={ruta(t)} />
       ))}
     </nav>
   )
@@ -148,11 +132,7 @@ function Cliente({ logo, movil }: { logo: string | null; movil: boolean }) {
   )
 }
 
-export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente, huecoPeriodo, abrirBuscador, favoritos, usuario, abrirMenu, menuAbierto }: {
-  producto: Producto | null
-  /** Las pestañas que salen en la cabecera (vacío: ninguna). */
-  pestanas: Pestana[]
-  pestanaActiva: string | null
+export function Cabecera({ movil, logoCliente, huecoPeriodo, abrirBuscador, favoritos, usuario, abrirMenu, menuAbierto }: {
   movil: boolean
   logoCliente: string | null
   huecoPeriodo: RefCallback<HTMLDivElement>
@@ -164,9 +144,8 @@ export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente
   abrirMenu?: () => void
   menuAbierto?: boolean
 }) {
-  // El hueco del ejercicio y el mes: lo llena la pantalla (MarcoNuevo) y lo miden las pestañas.
-  const [periodo, setPeriodo] = useState<HTMLDivElement | null>(null)
-  const refPeriodo = useCallback((el: HTMLDivElement | null) => { huecoPeriodo(el); setPeriodo(el) }, [huecoPeriodo])
+  // El hueco del ejercicio y el mes: lo llena la pantalla (MarcoNuevo).
+  const refPeriodo = huecoPeriodo
   return (
     <>
       <header className="s-cabecera">
@@ -181,9 +160,8 @@ export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente
           {/* El ejercicio y el mes: lo pone la pantalla que lo lee (PeriodoEnBarra); vacío, no sale. En el móvil, en su fila. */}
           {!movil && <div className="s-cab-periodo" ref={refPeriodo} />}
         </div>
-        <div className="s-cab-centro">
-          {!movil && producto && pestanas.length > 0 && <Pestanas key={producto.id} producto={producto} pestanas={pestanas} activa={pestanaActiva} periodo={periodo} />}
-        </div>
+        {/* S01f: las pestañas van en su franja, debajo (FranjaPestanas). */}
+        <div className="s-cab-centro" />
         <div className="s-cab-derecha">
           <Boton variante="fantasma" className="s-cab-buscar" icono="buscar" tecla={movil ? undefined : 'Ctrl K'} atajo="Control+K"
             aria-label={movil ? 'Buscar' : undefined} onClick={abrirBuscador}>{movil ? '' : 'Buscar'}</Boton>
@@ -197,7 +175,6 @@ export function Cabecera({ producto, pestanas, pestanaActiva, movil, logoCliente
           <div className="s-cab-periodo s-cab-periodo-movil" ref={refPeriodo} />
         </div>
       )}
-      {movil && producto && pestanas.length > 1 && <PestanasMovil producto={producto} pestanas={pestanas} activa={pestanaActiva} />}
     </>
   )
 }

@@ -35,6 +35,16 @@ select not exists (select 1 from pg_proc where proname = 'tg_journal_entry_envio
 \i supabase/migrations/20261116T0100_c06b_promociones_envios.sql
 \endif
 
+-- W03 (20/10): la M01 ya está de verdad en staging (20261126_w03_c06b_y_m01_de_verdad.sql).
+-- Para probarla desde antes, como se probó, se quita aquí dentro con su vuelta
+-- atrás; el ROLLBACK del final la devuelve.
+select coalesce((select position('conta_motivos_para_validar' in p.prosrc) > 0
+                   from pg_proc p where p.oid = to_regprocedure('public.journal_entry_validar(uuid,text)')), false) as m01_de_verdad \gset
+\if :m01_de_verdad
+\echo '>>> La M01 ya está de verdad en staging: se quita dentro de la transacción para probarla desde antes.'
+\i supabase/vuelta-atras/20261117T0100_m01_motivos_para_validar.down.sql
+\endif
+
 -- La foto: la misma consulta a los dos lados.
 create temporary table prueba_foto (lado text, clave text, valor text) on commit drop;
 create function pg_temp.foto(p_lado text) returns void language sql as $f$

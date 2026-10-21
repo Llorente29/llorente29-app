@@ -79,6 +79,8 @@
 .cxp-factura-fecha { font-family: var(--cx-letra-cifras); font-size: 14px; color: var(--cx-apoyo); }
 .cxp-factura-num { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
 .cxp-factura-explica { display: block; font-size: 13px; color: var(--cx-ambar); font-weight: 400; }
+/* I01e: de dónde sale una factura del libro (de Diez): información, no aviso. */
+.cxp-factura-origen { display: block; font-size: 13px; color: var(--cx-apoyo); font-weight: 400; }
 .cxp-factura-importe { font-family: var(--cx-letra-cifras); font-size: 15px; font-weight: 600; text-align: right; white-space: nowrap; }
 .cxp-factura-estado { text-align: right; }
 .cxp-factura-ver { text-align: right; }
@@ -260,6 +262,8 @@
 .cxp-extracto th { text-align: left; color: var(--cx-apoyo); font-weight: 500; padding: 8px 6px; border-bottom: 1px solid var(--cx-linea); }
 .cxp-extracto td { padding: 8px 6px; border-bottom: 1px solid var(--cx-linea); font-variant-numeric: tabular-nums; }
 .cxp-extracto td:nth-child(n+4), .cxp-extracto th:nth-child(n+4) { text-align: right; }
+/* I01e: el origen del asiento («Traído de Diez») es texto: a la izquierda, sin partir. */
+.cxp-extracto td.cxp-extracto-origen, .cxp-extracto th.cxp-extracto-origen { text-align: left; white-space: nowrap; color: var(--cx-apoyo); }
 @media (max-width: 720px) {
   .cxp-extracto { display: block; overflow-x: auto; }
   /* En el móvil, la etiqueta arriba y la cuenta debajo, a todo el ancho. */
@@ -267,3 +271,8 @@
   .cxp-cuenta .cx-dato-valor { justify-content: flex-start; text-align: left; }
   .cxp-cuenta-nota { text-align: left; margin-top: 0; }
 }
+
+/* I01d · «Su IVA»: cómo se apunta, en palabras (Datos fiscales). */
+.cxp-su-iva { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--cx-azul-suave); border: 1px solid var(--cx-azul-borde); font-size: 14px; color: var(--cx-texto); }
+.cxp-su-iva[data-clase='ue_sin_nif_iva'] { background: var(--cx-ambar-suave); border-color: var(--cx-ambar-punto); color: var(--cx-ambar); }
+.cxp-su-iva span { color: var(--cx-apoyo); }

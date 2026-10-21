@@ -133,7 +133,7 @@ export default function RecibidaAMano() {
   const altaProveedor = `${rutaTerceros()}?nuevo=proveedor`
 
   return (
-    <div className="s-pantalla">
+    <div className="s-pantalla s-pantalla-estrecha">
       <header className="cxl-cabeza">
         <div>
           <Migas migas={[{ etiqueta: 'Contabilidad', ruta: rutaLibroDiario() }, { etiqueta: 'Asientos', ruta: rutaLibroDiario() }, { etiqueta: 'Recibida a mano' }]} />

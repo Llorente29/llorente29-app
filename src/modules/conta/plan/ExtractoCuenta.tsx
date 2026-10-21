@@ -9,6 +9,8 @@
 // Los apuntes los pone el libro diario (C04). Sin apuntes sale el estado vacío,
 // que lo dice claro, sin ceros que parezcan datos. El Mayor pide el saldo
 // deudor (debe − haber); la ficha del proveedor, el acreedor.
+// I01e: con `origen`, una columna más que dice de dónde viene cada asiento
+// (traído de Diez, una factura subida, el banco…). Solo la ficha del proveedor.
 
 import { useState, type ReactNode } from 'react'
 import { Tarjeta, Vacio } from '@/modules/conta/ui/piezas'
@@ -17,7 +19,7 @@ import { extracto, saldosPorMes, type Apunte, type Naturaleza } from '@/modules/
 
 export interface EjercicioExtracto { code: string; inicio: string; fin: string }
 
-export function ExtractoCuenta({ ejercicios, apuntes, vacio, documento, accion, titulo = 'Extracto', naturaleza = 'acreedora' }: {
+export function ExtractoCuenta({ ejercicios, apuntes, vacio, documento, accion, titulo = 'Extracto', naturaleza = 'acreedora', origen }: {
   ejercicios: readonly EjercicioExtracto[]
   apuntes: readonly Apunte[]
   /** Qué se dice mientras no hay apuntes; recibe el ejercicio que se está mirando. */
@@ -28,6 +30,8 @@ export function ExtractoCuenta({ ejercicios, apuntes, vacio, documento, accion, 
   titulo?: string
   /** Signo del saldo: acreedora (haber − debe, la del proveedor) o deudora (debe − haber, la del Mayor). */
   naturaleza?: Naturaleza
+  /** I01e: el origen de cada apunte, en palabras; con él, la columna «Origen». */
+  origen?: (a: Apunte) => ReactNode
 }) {
   const hoy = hoyEnMadrid()
   const [vista, setVista] = useState<'apuntes' | 'meses'>('apuntes')
@@ -56,12 +60,12 @@ export function ExtractoCuenta({ ejercicios, apuntes, vacio, documento, accion, 
         <Vacio titulo={v.titulo} explicacion={v.explicacion} />
       ) : vista === 'apuntes' ? (
         <table className="cxp-extracto">
-          <thead><tr><th>Fecha</th><th>Documento</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Saldo</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Documento</th><th>Concepto</th>{origen && <th className="cxp-extracto-origen">Origen</th>}<th>Debe</th><th>Haber</th><th>Saldo</th></tr></thead>
           <tbody>
-            <tr><td colSpan={5}>Apertura</td><td>{eurosExactos(apertura)}</td></tr>
+            <tr><td colSpan={origen ? 6 : 5}>Apertura</td><td>{eurosExactos(apertura)}</td></tr>
             {filas.map((a, i) => (
               <tr key={`${a.documento}-${i}`}>
-                <td>{fechaLarga(a.fecha)}</td><td>{documento ? documento(a) : a.documento}</td><td>{a.concepto}</td>
+                <td>{fechaLarga(a.fecha)}</td><td>{documento ? documento(a) : a.documento}</td><td>{a.concepto}</td>{origen && <td className="cxp-extracto-origen" data-prueba="origen-apunte">{origen(a)}</td>}
                 <td>{a.debe ? eurosExactos(a.debe) : ''}</td><td>{a.haber ? eurosExactos(a.haber) : ''}</td><td>{eurosExactos(a.saldo)}</td>
               </tr>
             ))}

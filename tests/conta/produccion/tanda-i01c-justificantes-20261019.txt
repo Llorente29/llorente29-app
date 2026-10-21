@@ -1,0 +1,20 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# I01c · P1 · Subir justificantes de Hacienda (rama conta/i01c-justificantes).
+# Va DESPUÉS de la del 349 por operaciones (0250, PR #244, aplicada): su copia,
+# tests/conta/produccion/tanda-i01b-349-por-operaciones-20261019.txt.
+#
+#   1. 0260 — CAMBIA en caliente, declarado con su prueba de staging:
+#      tax_return_box (el CHECK de origin AMPLÍA con 'justificante'; las 11
+#      filas de hoy son 'calculated' o 'manual' y caben). AÑADE
+#      conta_impuesto_justificante_mirar, conta_impuesto_justificantes_repasar
+#      y conta_impuesto_justificante_apuntar.
+#
+# No toca el camino del pedido. No escribe ninguna declaración: las escribe
+# Julio al subir los justificantes. Ninguna función que desplegar.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/i01c-justificantes.sql
+supabase/migrations/20261122T0260_i01c_justificantes.sql

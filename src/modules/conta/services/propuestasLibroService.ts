@@ -17,6 +17,7 @@ import {
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
 import { tandaDeDias } from '@/modules/conta/lib/proponer'
+import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
 import { ORIGEN_GLOVO } from '@/modules/conta/lib/liquidaciones'
 
 type Fila = Record<string, unknown>
@@ -580,7 +581,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   const [leidas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
+    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
       .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).or(`company_id.is.null,company_id.eq.${companyId}`)
       .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
@@ -620,6 +621,18 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const que = `Factura ${s(prov.name) ?? 'de proveedor'}${f.invoice_number ? ` · ${f.invoice_number}` : ''}`
     if (!cuentaProv) { r.sinPropuesta.push({ que, porque: 'El proveedor no tiene su cuenta (Contabilidad de su ficha).' }); continue }
     const rr = ret.find((x) => String(x.id) === s(f.withholding_rate_id))
+    // I01d · La ficha dice cómo va su IVA: si lo declaras tú, la factura se autoliquida.
+    const ficha: FichaIva = {
+      pais: s(prov.country_code), tipoNif: s(prov.tax_id_type) as FichaIva['tipoNif'], nif: s(prov.tax_id),
+      vies: s(prov.tax_id_check_status) as FichaIva['vies'], regimen: s(prov.vat_regime) as FichaIva['regimen'],
+    }
+    const clase = claseIva(ficha)
+    const nombreProv = s(prov.name) ?? 'El proveedor'
+    if (clase === 'ue_sin_nif_iva' && f.vat_non_deductible !== true) {
+      r.sinPropuesta.push({ que, porque: `${nombreProv} es de ${nombrePais(ficha.pais)} y no tiene un NIF-IVA europeo válido: sin él su compra no es intracomunitaria. Ponlo en su ficha (se comprueba en VIES) y la factura se propone.` })
+      continue
+    }
+    const tipoAuto = tipoDeLaClase(clase)
     const res = facturaProveedor({
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
       esSocio: socioPorProveedor.has(sup), tieneNif: !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
@@ -635,11 +648,25 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       } : {}),
       retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: n(f.withholding_amount), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
       ivaNoDeducible: f.vat_non_deductible === true,
+      autoliquidacion: tipoAuto && f.vat_non_deductible !== true ? { tipo: tipoAuto, porque: `${nombreProv} ${porqueAutoliquida(clase, ficha.pais)}.` } : null,
     }, {
       proveedor: cuentaProv, retencion: ctx.hoja('4751') ?? '47510000',
       ivaSoportado: (pct) => { const t = ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_')); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
+      // La 472 y la 477 del tipo autoliquidado; si la empresa no las tiene propias, las del IVA al mismo %.
+      autoliquidada: (codigo) => {
+        const t = ctx.tipos.find((x) => x.code === codigo)
+        if (!t) return null
+        const igual = ctx.tipos.find((x) => x.rate === t.rate && x.code.startsWith('iva_'))
+        const cuenta = (rol: 'soportado' | 'repercutido') => ctx.enlace('tax_rate', t.id, rol) ?? (igual ? ctx.enlace('tax_rate', igual.id, rol) : null)
+        const sop = cuenta('soportado'), rep = cuenta('repercutido')
+        return sop && rep ? { tipoId: t.id, porcentaje: t.rate, soportado: sop, repercutido: rep } : null
+      },
     })
     if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
+    if (clase === 'intracomunitaria' && ficha.vies !== 'valid') {
+      res.propuesta.avisos.push(`El NIF-IVA de ${nombreProv} está sin comprobar en VIES: ábrelo en su ficha y se vuelve a preguntar.`)
+      res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
+    }
     if (res.propuesta.lineas.find((l) => l.retencion)) {
       const l = res.propuesta.lineas.find((x) => x.retencion)!
       l.retencion = { ...l.retencion!, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + x.debe, 0) }
@@ -682,3 +709,9 @@ export async function verPropuestaFactura(accountId: string, companyId: string, 
   return { propuesta: p, nombres: new Map(filas.map((x) => [String(x.code), String(x.name)])) }
 }
 
+/** I01d · Por qué su IVA lo declaras tú, para la propuesta: «es de Francia y tiene NIF-IVA europeo…». */
+function porqueAutoliquida(c: ClaseIva, pais: string | null): string {
+  if (c === 'intracomunitaria') return `es de ${nombrePais(pais)} y tiene NIF-IVA europeo: su compra es intracomunitaria`
+  if (c === 'isp_extranjero') return `es de fuera de la UE (${nombrePais(pais)}): su compra va con inversión del sujeto pasivo`
+  return 'está marcado con inversión del sujeto pasivo en su ficha'
+}

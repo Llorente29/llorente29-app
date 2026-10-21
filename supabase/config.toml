@@ -163,6 +163,13 @@ verify_jwt = true
 [functions.conta-hacienda]
 verify_jwt = true
 
+# (19/10) conta-justificante-csv · I01c pieza 1 definitiva. «Ya lo presenté
+# fuera · pegar CSV»: trae de Hacienda el justificante original por su CSV
+# (sin certificado: medido el 19/10, run 39257823670). No pasa por la puerta de
+# conta-hacienda. verify_jwt = true: con la sesión de quien lo pide.
+[functions.conta-justificante-csv]
+verify_jwt = true
+
 # (18/10) I01b · conta-asesoria: «Invitar a mi asesoría». verify_jwt = FALSE,
 # deliberado: «ver» y «aceptar» las pide quien aún no tiene sesión (abre el
 # enlace del correo). Su frontera es el token del enlace (la base guarda solo
