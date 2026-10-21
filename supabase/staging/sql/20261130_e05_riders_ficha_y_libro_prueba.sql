@@ -45,9 +45,23 @@ begin
   select id into v_gasto from public.company_account where company_id = v_e and code = '62400000';
   if v_ca is null or v_gasto is null then raise exception 'PRUEBA 0410 · 0: faltan la 41000100 o la 62400000 en el plan de A.'; end if;
 
-  insert into public.supplier (account_id, name, legal_name, is_active, created_by_name) values (v_acc, 'Riders (prueba 0410)', 'Riders', true, 'Prueba 0410') returning id into v_r;
-  insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
-  values (v_acc, v_e, v_ca, 'supplier', v_r::text, 'principal', 'manual'), (v_acc, v_e, v_gasto, 'supplier', v_r::text, 'gasto', 'manual');
+  -- «Riders» es la ficha de la 41000100 (la que usa conta_lote_registrar): la
+  -- de la semilla de staging si ya está, y si no una nueva. Con su gasto.
+  select entity_id::uuid into v_r from public.company_account_link
+   where company_id = v_e and company_account_id = v_ca and entity = 'supplier' and role = 'principal' limit 1;
+  if v_r is null then
+    insert into public.supplier (account_id, name, legal_name, is_active, created_by_name) values (v_acc, 'Riders (prueba 0410)', 'Riders', true, 'Prueba 0410') returning id into v_r;
+    insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+    values (v_acc, v_e, v_ca, 'supplier', v_r::text, 'principal', 'manual');
+  end if;
+  if (select tax_id from public.supplier where id = v_r) is not null then
+    raise exception 'PRUEBA 0410 · 0: la ficha de la 41000100 de staging tiene NIF: no es la genérica que se prueba.';
+  end if;
+  update public.supplier set expense_category_id = null, invoicing_mode = null where id = v_r and account_id = v_acc;
+  if not exists (select 1 from public.company_account_link where company_id = v_e and entity = 'supplier' and entity_id = v_r::text and role = 'gasto') then
+    insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+    values (v_acc, v_e, v_gasto, 'supplier', v_r::text, 'gasto', 'manual');
+  end if;
   -- Una ficha normal sin nada, y otra con su cuenta de gasto puesta y sin tipo de gasto.
   insert into public.supplier (account_id, name, is_active, created_by_name) values (v_acc, 'Proveedor Sin Nada (prueba 0410)', true, 'Prueba 0410') returning id into v_n;
   insert into public.supplier (account_id, name, tax_id, is_active, created_by_name) values (v_acc, 'Proveedor Con Gasto (prueba 0410)', 'B00000410', true, 'Prueba 0410') returning id into v_g;
@@ -141,7 +155,12 @@ declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v_sup uuid := current_setting('prueba.congasto')::uuid; v_ca uuid; v_si uuid; r jsonb; v_entry uuid; v jsonb;
 begin
-  select id into v_ca from public.company_account where company_id = v_e and code = '41000100';
+  -- Su propia subcuenta (la 41000100 es de «Riders»: una subcuenta, un tercero).
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source, created_by_name)
+  select v_acc, v_e, plan, '41000410', '4100', 'Acreedores · Proveedor Con Gasto (prueba 0410)', 'own', 'manual', 'Prueba 0410'
+    from public.company_account where company_id = v_e limit 1
+  on conflict do nothing;
+  select id into v_ca from public.company_account where company_id = v_e and code = '41000410';
   insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
   values (v_acc, v_e, v_ca, 'supplier', v_sup::text, 'principal', 'manual');
   insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, grand_total, status, source, issuer_tax_id, issuer_name, created_by_name)
@@ -155,7 +174,7 @@ begin
       jsonb_build_object('cuenta', '62400000', 'debe', 10, 'haber', 0, 'comun', true, 'documento', 'N-0410'),
       jsonb_build_object('cuenta', '47200021', 'debe', 2.1, 'haber', 0, 'comun', true, 'documento', 'N-0410',
                          'iva', jsonb_build_object('tipo_id', '28f9a398-2c95-4a3c-aebe-66d8cf37154f', 'base', 10, 'libro', 'received', 'deducible', 'yes', 'facturas', 1)),
-      jsonb_build_object('cuenta', '41000100', 'debe', 0, 'haber', 12.1, 'comun', true, 'documento', 'N-0410')),
+      jsonb_build_object('cuenta', '41000410', 'debe', 0, 'haber', 12.1, 'comun', true, 'documento', 'N-0410')),
     null, 'Prueba 0410');
   v_entry := (r->>'id')::uuid;
   perform public.journal_entry_validar(v_entry, 'Prueba 0410');
