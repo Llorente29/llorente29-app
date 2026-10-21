@@ -6,8 +6,8 @@
 // Capturas en docs/conta/capturas/c06b/, en ordenador y móvil.
 //
 // El asiento lo da la RED, no staging: Playwright contesta la lectura de ESTE
-// asiento (ids inventados c06b9000-…) y, en el «Por aclarar», el intento de
-// validar con lo que dice la base (el freno de la 20261116T0100, probado en
+// asiento (ids inventados c06b9000-…) y, en el «Por aclarar», sus motivos para
+// no validar y el intento de validar con lo que dice la base (el freno de la 20261116T0100, probado en
 // supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql). Así no se
 // siembra nada en la cuenta A, que comparten los frentes. Las líneas y las
 // razones son las que sacan la base y el espejo del front con el ejemplo del
@@ -70,6 +70,12 @@ async function porLaRed(page: Page) {
     return (r.request().headers()['accept'] ?? '').includes('vnd.pgrst.object') ? json(r, a) : json(r, a ? [a] : [])
   })
   await page.route(/\/rest\/v1\/rpc\/journal_entry_validar/, (r) => json(r, { code: '23514', details: null, hint: null, message: FRENO }, 400))
+  // C06b (21/10): lo que la base diría antes de validar (conta_motivos_para_validar, la misma con la que
+  // para journal_entry_validar): en el «Por aclarar», el envío; en el otro, nada.
+  await page.route(/\/rest\/v1\/rpc\/conta_motivos_para_validar/, (r) => {
+    const entrada = (r.request().postDataJSON() ?? {}) as { p_entry?: string }
+    return json(r, entrada.p_entry === ACLARAR ? [{ orden: 9, codigo: 'envio_por_aclarar', motivo: FRENO }] : [])
+  })
 }
 
 test('Libros: el asiento del día con su promoción (al debe) y su envío cobrado, con sus razones y sus citas', async ({ page }) => {
@@ -95,15 +101,19 @@ test('Libros: el asiento del día con su promoción (al debe) y su envío cobrad
   expect(await loQueTapanSinPregunta(page, '.cx-principal')).toEqual([])
 })
 
-test('Libros: un asiento «Por aclarar» dice qué pedido y por qué, y al validar no se valida y lo dice (regla 8)', async ({ page }) => {
+test('Libros: un asiento «Por aclarar» dice qué pedido y por qué, y «Validar asiento» sale en gris con el motivo de la base antes de pulsar (regla 8)', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   await porLaRed(page)
   await page.goto(`/conta/libros/diario/${ACLARAR}`)
   const ia = page.getByRole('region', { name: 'Por qué lo propongo así' })
   await expect(ia).toContainText('Por aclarar: 1 pedido con envío', { timeout: 20_000 })
   await expect(ia).toContainText('PR-3 · Casa Lola · envío 2,00 € · repartió la plataforma')
-  await page.getByRole('button', { name: 'Validar asiento' }).click()
-  await expect(page.getByText(FRENO)).toBeVisible()
+  // C06b (Julio, 21/10): ya no hace falta pulsar para saberlo. El motivo es el de la base
+  // (conta_motivos_para_validar, la misma con la que para journal_entry_validar).
+  const validar = page.getByRole('button', { name: 'Validar asiento' })
+  await expect(validar).toBeDisabled()
+  await expect(validar).toHaveAttribute('title', FRENO)
+  await expect(page.getByRole('status', { name: 'Por qué no se valida' })).toHaveText(`No se valida todavía · ${FRENO.replace('No se valida: 1', '1')}`)
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
   await page.screenshot({ path: `${DIR}/promociones-por-aclarar-${lado(page)}.png`, fullPage: true })
