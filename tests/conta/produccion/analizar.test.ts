@@ -1382,12 +1382,74 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): C06b · el nombre del PDF lo limpia la base (0380)', () => {
+describe('la tanda de AHORA (manifiesto vivo): Inventario · anula tres inventarios de seguridad viejos (0440)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo lectura
+  // en producción el 21/10, después de la 0380 y la del autoconteo, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261130_inventario_anula_auditorias_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261130T0440_inventario_anula_auditorias_viejas.down.sql'
+
+  it('un fichero, el medido; pide «autorizo»; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261130T0440_inventario_anula_auditorias_viejas.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(viva.map((f) => r.ficheros[f])).toEqual(['autorizo'])
+    expect(ctx.tablas).toEqual(['public.inventory_count'])
+    expect(ctx.funciones).toEqual([])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('anula los tres por id y cuenta, solo de seguridad, para entera si alguno no está como se midió, y no escribe en el stock', () => {
+    const t = readFileSync(viva[0], 'utf8')
+    const filas = [...t.matchAll(/\('([0-9a-f-]{36})',\s*'(INV-\d+)',\s*c_foodint,\s*'en_revision',\s*(\d+)\)/g)].map((m) => [m[2], Number(m[3])])
+    expect(filas).toEqual([['INV-00258', 88], ['INV-00259', 92], ['INV-00283', 120]])
+    expect(t).toContain("r.kind <> 'audit'")
+    expect(t).toContain("raise exception 'inventario 0440: no se anula nada")
+    const sin = t.replace(/--.*$/gm, '')
+    expect(sin).not.toMatch(/insert into public\.stock_movement|update public\.stock_movement|delete from public\.stock_movement|recompute_location_stock/)
+    expect(sin.match(/\bupdate\s+public\.(\w+)/g)).toEqual(['update public.inventory_count'])
+  })
+  it('el modo de prueba solo vale sin cuentas de producción', () => {
+    const t = readFileSync(viva[0], 'utf8')
+    expect(t).toMatch(/if v_prueba is not null then\s+--[^\n]*\n\s+if exists \(select 1 from public\.accounts where id in \(c_foodint, '00000000-0000-0000-0000-000000000001'\)\) then\s+raise exception/)
+  })
+  it('la copia está en la cabecera, con su prueba de staging; la prueba ejecuta el fichero entero, la guarda y la vuelta atrás', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual([`-- cambia: public.inventario_anulacion_20261021 · prueba: ${PRUEBA}`])
+    const p = readFileSync(PRUEBA, 'utf8')
+    expect(p).toContain(`\\i ${viva[0]}`)
+    expect(p).toContain(`\\i ${DOWN}`)
+    for (const x of ['inventario_0440.esperado', 'LAST_ERROR_MESSAGE', 'save_count_line', 'set local role authenticated', 'rollback;']) expect(p).toContain(x)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m).toContain(PRUEBA)
+    expect(m).not.toContain(viva[0])
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/anula-auditorias.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+  })
+})
+
+describe('la tanda de C06b · el nombre del PDF lo limpia la base (0380, PR #275), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-nombre-pdf-base-20261021.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 21/10 a las 19:16 UTC, después de la 0350–0370, para ESTE fichero.
-  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-nombre-pdf-base-20261021.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1433,7 +1495,7 @@ describe('la tanda de AHORA (manifiesto vivo): C06b · el nombre del PDF lo limp
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
   it('su vuelta atrás', () => {
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-c06b-nombre-pdf-base-20261021.txt')).toEqual([DOWN])
   })
 })
 

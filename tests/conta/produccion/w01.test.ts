@@ -512,24 +512,33 @@ describe('R11 · paso 8 sobre la tanda del esqueleto (S01, su copia, aplicada), 
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de C06b (0380, el nombre del PDF; su copia, aplicada), con su contexto medido', () => {
+  it('la 0380 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-nombre-pdf-base-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-c06b-nombre-pdf-base-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0380_c06b_nombre_pdf_base.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (C06b, el nombre del PDF: la 0380 sigue; ningún «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (Inventario: la 0440 pide «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261129T0380_c06b_nombre_pdf_base.sql: sigue')
-    expect(r.out).toContain('autorizo: (ninguno)')
+    expect(r.out).toContain('20261130T0440_inventario_anula_auditorias_viejas.sql: AUTORIZO')
+    expect(r.out).toContain('autorizo: 20261130T0440_inventario_anula_auditorias_viejas.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261130T0440_inventario_anula_auditorias_viejas.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261129T0380_c06b_nombre_pdf_base.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261130T0440_inventario_anula_auditorias_viejas.sql ha cambiado desde la medida')
   })
 })
 

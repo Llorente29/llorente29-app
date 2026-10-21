@@ -386,3 +386,12 @@ supabase/staging/sql/20261129_compras_revisar_cuatro_caminos_prueba.sql
 #   atrás.
 supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql
 supabase/staging/sql/20261129_c06b_nombre_pdf_base_prueba.sql
+
+# INVENTARIO · la 0440 anula tres inventarios de seguridad viejos de Foodint
+#   (rama claude/autoconteo-anula-audits; Julio, 21/10). En staging no hay
+#   Foodint: la 0440 no va sola (crearía su copia de verdad y la siguiente
+#   pasada no podría volver a crearla). Va SOLO su prueba (ROLLBACK), que la
+#   ejecuta entera con \i sobre la cuenta A: la guarda para con una fila que no
+#   cuadra, el real anula con su nota y su copia sin mover el stock, y la
+#   vuelta atrás los deja como estaban.
+supabase/staging/sql/20261130_inventario_anula_auditorias_prueba.sql

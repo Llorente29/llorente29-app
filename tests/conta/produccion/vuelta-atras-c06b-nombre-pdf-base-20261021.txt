@@ -1,0 +1,6 @@
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
+# C06b · el nombre del PDF en la base): fuera el disparador y sus dos funciones;
+# la columna original_name solo se quita si no guarda nada que no esté ya en
+# file_name.
+cuenta: scripts/conta/produccion/cuentas/nombre-pdf-base.sql
+supabase/vuelta-atras/20261129T0380_c06b_nombre_pdf_base.down.sql
