@@ -18,7 +18,8 @@ import { Boton, Campo, Chip, Dialogo, Importe, Selector, Tarjeta, Texto } from '
 import { importeDeTexto, textoDeImporte } from '@/modules/conta/diseno/valores'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useNivel } from '@/modules/conta/marco/nuevo/contexto'
-import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
+import { diaMesCorto, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { enCurso, fechasPeriodo } from './trimestre'
 import {
   aceptarAviso, calcular303, cargosPosibles, casarCargo, confirmarCertificado, contabilizar303, hacienda, leerDeclaracion, leerPuerta,
   ponerCasillas, ponerPago, revisarDeclaracion, type CargoPosible,
@@ -120,11 +121,16 @@ export default function IvaPeriodoPage() {
 
 type Hacer = (f: () => Promise<string>) => Promise<void>
 
+/** El día siguiente a una fecha ISO: «2026-12-31» → «2027-01-01». */
+const siguienteDia = (iso: string): string => new Date(Date.parse(`${iso}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
+
 function Resumen({ d, hacer, companyId }: { d: DeclaracionVer; hacer: Hacer; companyId: string }) {
   const r = d.declaracion!
   const lineas = deDondeSale(d)
   const editable = d.puede_gestionar && ['draft', 'reviewed'].includes(r.estado)
   const sinCalculo = noSeCalcula(d)
+  const periodo = fechasPeriodo(d.ejercicio, d.periodo)
+  const enCursoHasta = periodo && enCurso(periodo, hoyEnMadrid()) ? periodo.hasta : null
   return (
     <>
       <Tarjeta tono={sinCalculo ? 'falta' : undefined}>
@@ -144,8 +150,10 @@ function Resumen({ d, hacer, companyId }: { d: DeclaracionVer; hacer: Hacer; com
         )}
         {editable && (
           <div className="s-impuestos-fila-botones">
-            {r.estado === 'draft' && r.resultado !== null && d.comprobaciones.every((c) => c.resultado !== 'error') && (
-              <Boton onClick={() => hacer(async () => { await revisarDeclaracion(r.id); return 'Revisado. Ya se puede presentar.' })}>Lo he revisado</Boton>
+            {r.estado === 'draft' && r.resultado !== null && d.comprobaciones.every((c) => c.resultado !== 'error') && (enCursoHasta
+              // I01h · Con el periodo en curso no se revisa: cambia con cada factura hasta el último día.
+              ? <span className="s-apoyo" data-prueba="se-revisa-al-cerrar">Calculado con lo que va de {/T$/.test(d.periodo) ? 'trimestre' : 'mes'}. Se revisa cuando se cierre, a partir del {diaMesCorto(siguienteDia(enCursoHasta))}.</span>
+              : <Boton onClick={() => hacer(async () => { await revisarDeclaracion(r.id); return 'Revisado. Ya se puede presentar.' })}>Lo he revisado</Boton>
             )}
             <Boton variante="enlace" onClick={() => hacer(async () => {
               const x = await calcular303(companyId, d.ejercicio, d.periodo)
