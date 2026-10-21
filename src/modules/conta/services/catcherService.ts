@@ -13,19 +13,19 @@
 import { rpc, tabla, hayBase } from '@/modules/conta/services/bd'
 import { uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
-import { comprobarPdf, leerFacturas, leerQuincena, loteParaRegistrar, reconocer, type Fichero, type PdfSubido, type PedidoExcel, type Quincena, type TipoFactura } from '@/modules/conta/lib/catcherQuincena'
+import { comprobarPdf, textoPorPosicion, leerFacturas, leerQuincena, loteParaRegistrar, reconocer, type Fichero, type PdfSubido, type PedidoExcel, type Quincena, type TipoFactura } from '@/modules/conta/lib/catcherQuincena'
 import { cruzar, type Cruce, type PedidoApp, type Tarifa } from '@/modules/conta/lib/catcherCruces'
 import { cuentaDelLote, type Cuenta, type EstadoCosa } from '@/modules/conta/lib/catcherCuenta'
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
 const sha256 = async (b: Uint8Array) => hex(await crypto.subtle.digest('SHA-256', new Uint8Array(b)))
 
-/** El texto de un PDF, página a página (pdfjs, el build legacy que ya usa el plan). */
+/** El texto de un PDF, página a página y por posición (pdfjs, el build legacy que ya usa el plan). */
 async function textoPdf(bytes: Uint8Array): Promise<string> {
-  const pj = await pdfjs() as unknown as { getDocument(o: { data: Uint8Array; verbosity?: number }): { promise: Promise<{ numPages: number; getPage(i: number): Promise<{ getTextContent(): Promise<{ items: { str?: string }[] }> }> }> } }
+  const pj = await pdfjs() as unknown as { getDocument(o: { data: Uint8Array; verbosity?: number }): { promise: Promise<{ numPages: number; getPage(i: number): Promise<{ getTextContent(): Promise<{ items: { str?: string; transform?: number[] }[] }> }> }> } }
   const doc = await pj.getDocument({ data: new Uint8Array(bytes), verbosity: 0 }).promise
   let t = ''
-  for (let i = 1; i <= doc.numPages; i++) t += (await (await doc.getPage(i)).getTextContent()).items.map((x) => x.str ?? '').join(' ') + '\n'
+  for (let i = 1; i <= doc.numPages; i++) t += textoPorPosicion((await (await doc.getPage(i)).getTextContent()).items) + '\n'
   return t
 }
 
