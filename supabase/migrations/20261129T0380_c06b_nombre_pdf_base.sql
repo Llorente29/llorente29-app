@@ -40,12 +40,15 @@
 --      cualquiera que venga después, sin tocar sus cuerpos.
 --
 -- El CHECK de file_name se queda como está: es la red si el disparador falta.
+--
+-- Se puede volver a correr (staging aplica su manifiesto entero cada vez): las
+-- funciones con «or replace» y el disparador con «drop … if exists» delante.
 
 alter table public.journal_entry_document add column if not exists original_name text;
 comment on column public.journal_entry_document.original_name is
   'C06b · El nombre del documento tal como llegó (con espacios, tildes…), para enseñarlo. file_name es el limpio (conta_nombre_fichero).';
 
-create function public.conta_nombre_fichero(p_nombre text)
+create or replace function public.conta_nombre_fichero(p_nombre text)
 returns text language sql immutable parallel safe set search_path = '' as $$
   select case when c = '' then 'documento' else c end || '.pdf'
     from (select regexp_replace(
@@ -63,7 +66,7 @@ comment on function public.conta_nombre_fichero(text) is
 revoke all on function public.conta_nombre_fichero(text) from public, anon;
 grant execute on function public.conta_nombre_fichero(text) to authenticated, service_role;
 
-create function public.journal_entry_document_nombre_limpio()
+create or replace function public.journal_entry_document_nombre_limpio()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   if tg_op = 'INSERT' then
@@ -78,6 +81,7 @@ begin
 end $$;
 revoke all on function public.journal_entry_document_nombre_limpio() from public, anon, authenticated;
 
+drop trigger if exists trg_journal_entry_document_nombre_limpio on public.journal_entry_document;
 create trigger trg_journal_entry_document_nombre_limpio
   before insert or update of file_name on public.journal_entry_document
   for each row execute function public.journal_entry_document_nombre_limpio();

@@ -36,6 +36,15 @@ do $$ begin
 end $$;
 set local statement_timeout = '300s';
 
+-- 0 · El manifiesto de staging aplica la 0380 antes que esta prueba: para medir
+-- el «antes» (paso 3), se quita aquí con su vuelta atrás, dentro del ROLLBACK.
+\i supabase/vuelta-atras/20261129T0380_c06b_nombre_pdf_base.down.sql
+do $$ begin
+  if exists (select 1 from pg_trigger where tgname = 'trg_journal_entry_document_nombre_limpio' and not tgisinternal) then
+    raise exception 'PRUEBA C06b nombre · 0: la vuelta atrás no ha quitado el disparador.';
+  end if;
+end $$;
+
 -- Una factura recibida de A, validada, con su PDF subido (inventado).
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 set local role authenticated;

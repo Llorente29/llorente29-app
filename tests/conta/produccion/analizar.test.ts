@@ -1386,7 +1386,7 @@ describe('la tanda de AHORA (manifiesto vivo): C06b · el nombre del PDF lo limp
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 21/10 a las 19:02 UTC, después de la 0350–0370, para ESTE fichero.
+  // lectura en producción el 21/10 a las 19:16 UTC, después de la 0350–0370, para ESTE fichero.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
@@ -1407,13 +1407,14 @@ describe('la tanda de AHORA (manifiesto vivo): C06b · el nombre del PDF lo limp
     expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
     expect(ctx.registro).toEqual([])
   })
-  it('solo añade: la columna admite nulos, las funciones son nuevas (create, no replace) y ningún update ni delete', () => {
+  it('solo añade y se puede volver a correr: la columna admite nulos, las dos funciones no existen en producción, el único drop es el del disparador nuevo y ningún update ni delete', () => {
     const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '')
     expect(t).toMatch(/add column if not exists original_name text;/)
     expect(t).not.toMatch(/\bnot null\b/i)
-    expect(t).not.toMatch(/\bor replace\b/i)
-    expect(t).not.toMatch(/\bupdate\s+public\.|\bdelete\s+from\b|\bdrop\b|\brename\b|\btruncate\b/i)
-    expect(t.match(/create function public\.(\w+)/g)).toEqual(['create function public.conta_nombre_fichero', 'create function public.journal_entry_document_nombre_limpio'])
+    expect(t.match(/create or replace function public\.(\w+)/g)).toEqual(['create or replace function public.conta_nombre_fichero', 'create or replace function public.journal_entry_document_nombre_limpio'])
+    expect(ctx.funciones).toEqual([])
+    expect(t.match(/\bdrop\b[^;]*;/g)).toEqual(['drop trigger if exists trg_journal_entry_document_nombre_limpio on public.journal_entry_document;'])
+    expect(t).not.toMatch(/\bupdate\s+public\.|\bdelete\s+from\b|\brename\b|\btruncate\b/i)
   })
   it('el disparador nuevo está en la cabecera, con su prueba de staging; la prueba lo nombra, pasa por los tres que escriben y ejecuta la vuelta atrás', () => {
     const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
