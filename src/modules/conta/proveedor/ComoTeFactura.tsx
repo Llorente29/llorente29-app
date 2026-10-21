@@ -32,7 +32,7 @@ export default function ComoTeFactura({ proveedor: id, nombre, alGuardar }: { pr
     let vivo = true
     Promise.all([
       tabla('supplier').select('invoicing_mode, invoicing_per_location, invoicing_frequency').eq('id', id).single(),
-      ultimosPapeles(id, 5).catch((e: unknown) => { console.error('[cómo te factura] sus últimos papeles', e); return [] as PapelLeido[] }),
+      ultimosPapeles(id, 5).catch((e: unknown) => { console.error('[cómo te factura] sus últimos albaranes y facturas', e); return [] as PapelLeido[] }),
     ]).then(([{ data, error }, ps]) => {
       if (!vivo) return
       if (error) { setFallo(`No se pudo leer cómo factura: ${error.message}`); return }
@@ -49,7 +49,7 @@ export default function ComoTeFactura({ proveedor: id, nombre, alGuardar }: { pr
   const cambiado = elegida.modo !== guardada.modo || (elegida.modo === 'delivery_note_then_invoice'
     && (elegida.porLocal !== guardada.porLocal || elegida.frecuencia !== guardada.frecuencia))
   const dicen = papeles ? fraseUltimosPapeles(papeles) : null
-  // Lo que sugieren sus papeles: la mayoría factura → con cada entrega; si no, albarán y factura después.
+  // Lo que sugieren sus documentos: la mayoría factura → con cada entrega; si no, albarán y factura después.
   const sugerida: FormaFacturar | null = papeles?.length
     ? (papeles.filter((p) => p.tipo === 'factura' || p.tipo === 'albaran_factura').length > papeles.length / 2 ? 'per_delivery' : 'delivery_note_then_invoice')
     : null
@@ -63,11 +63,11 @@ export default function ComoTeFactura({ proveedor: id, nombre, alGuardar }: { pr
             {dicen && <strong>{dicen}</strong>}{' '}
             {guardada.modo
               ? <>Aquí pone que {guardada.modo === 'monthly_settlement' ? 'liquida cada mes' : `factura ${tituloForma(guardada.modo)?.toLowerCase()}`}. Si no es así, cámbialo y dejaré de preguntártelo.</>
-              : <>Su ficha no dice cómo factura{sugerida ? <>: lo normal con esos papeles es «{tituloForma(sugerida)}»</> : null}.</>}
+              : <>Su ficha no dice cómo factura{sugerida ? <>: lo normal con esos documentos es «{tituloForma(sugerida)}»</> : null}.</>}
           </div>
         ) : (
           <p id="cxc-como-dice" className="cxc-dice">
-            {dicen ? <strong>{dicen}</strong> : 'Todavía no hay papeles suyos leídos.'}{' '}
+            {dicen ? <strong>{dicen}</strong> : 'Todavía no hay albaranes ni facturas suyos leídos.'}{' '}
             {guardada.modo ? <>Aquí pone que {guardada.modo === 'monthly_settlement' ? 'liquida cada mes' : `factura ${tituloForma(guardada.modo)?.toLowerCase()}`}.</> : <>Su ficha no dice cómo factura.</>}
           </p>
         )}
@@ -115,7 +115,7 @@ export default function ComoTeFactura({ proveedor: id, nombre, alGuardar }: { pr
         <Guardado texto={aviso} />
         {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       </section>
-      <p className="cx-ayuda cxc-como-nota">Esto es la costumbre. Si un día trae otro tipo de papel, lo veré y te lo preguntaré en Compras.</p>
+      <p className="cx-ayuda cxc-como-nota">Esto es la costumbre. Si un día trae otro tipo de documento (un albarán en vez de factura, o al revés), lo veré y te lo preguntaré en Compras.</p>
     </>
   )
 }

@@ -192,10 +192,10 @@ describe('R5 · N22', () => {
     expect(entendido(fila({ porque: null, entendido: null, previas: 1 })).porque).toBe('Hay una factura suya anterior, pero no está apuntada: elige dónde se apunta y lo recuerdo.')
     // LD: con su cuenta de la ficha, escrita a mano, sin lectura: por qué se mira.
     const ld = fila({ canal: 'a_mano', porque: null, entendido: { cuenta: '62100000', nombre: 'Arrendamientos y cánones', origen: 'de su ficha' } })
-    expect(entendido(ld).porque).toBe('Va a su cuenta de siempre, la de su ficha. La escribieron a mano y no la he leído: comprueba los importes con el papel.')
+    expect(entendido(ld).porque).toBe('Va a su cuenta de siempre, la de su ficha. La escribieron a mano y no la he leído: comprueba los importes con la factura.')
     // La LD de staging (e2e 245): su cuenta sale del asiento ya propuesto, no de la ficha.
     const ldAsiento = fila({ canal: 'a_mano', porque: null, entendido: { cuenta: '62100000', nombre: 'Arrendamientos y cánones', origen: 'del asiento' } })
-    expect(entendido(ldAsiento).porque).toBe('Va a la cuenta de su asiento, ya propuesto. La escribieron a mano y no la he leído: comprueba los importes con el papel.')
+    expect(entendido(ldAsiento).porque).toBe('Va a la cuenta de su asiento, ya propuesto. La escribieron a mano y no la he leído: comprueba los importes con la factura.')
     // SE: con lectura y sin cuenta: lo leído y qué hacer.
     const se = fila({ porque: 'Trae todo lo que pide la norma y el total cuadra.', entendido: null, previas: 0 })
     expect(entendido(se).porque).toBe('Trae todo lo que pide la norma y el total cuadra. Es la primera factura de este proveedor: elige dónde se apunta y lo recuerdo.')
@@ -251,7 +251,7 @@ describe('R6 · la recepción cuyo papel es una factura', () => {
     const casa = rec({ estado: 'en_diez', diez: { id: 'e', serie: 2, numero: 9001, fecha: '2024-12-12' }, porque: 'Es de antes del corte y ya está en Diez (asiento 2/9001, mismo proveedor, número y total): no se vuelve a apuntar.' })
     expect(entendido(casa).titulo).toBe('Ya en Diez · asiento 2/9001')
     expect(punto(casa)).toBe('verde')
-    expect(boton(casa)).toEqual({ texto: 'Ver papel', principal: false })
+    expect(boton(casa)).toEqual({ texto: 'Ver la factura', principal: false })
     const noCasa = rec({ estado: 'en_diez', diez: null, porque: 'Es de antes del corte…' })
     expect(entendido(noCasa).titulo).toBe('De antes del corte · la llevó Diez')
     expect(punto(noCasa)).toBe('gris')
@@ -259,7 +259,7 @@ describe('R6 · la recepción cuyo papel es una factura', () => {
     for (const v of ['para-mirar', 'por-aclarar', 'apuntadas'] as const) expect(filtrar([casa, noCasa], v)).toHaveLength(0)
   })
   it('desde el corte sin factura: «por aclarar», con su porqué y «de su recepción en Cocina»', () => {
-    const f = rec({ estado: 'por_aclarar', porque: 'La recepción la leyó, pero el papel no trae importes por línea con su IVA: no he podido hacer la factura. Súbela o díctamela.' })
+    const f = rec({ estado: 'por_aclarar', porque: 'La recepción la leyó, pero no trae importes por línea con su IVA: no he podido hacer la factura. Súbela o díctamela.' })
     expect(filtrar([f], 'por-aclarar')).toHaveLength(1)
     expect(entendido(f).porque).toMatch(/no trae importes por línea/)
     expect(comoLlego(f.canal, null)).toBe('de su recepción en Cocina')

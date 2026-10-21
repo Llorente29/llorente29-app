@@ -168,7 +168,7 @@ export interface Duda { id: string; inicial: string; titulo: string; apoyo: stri
 export function dudas(sugerencias: readonly { id: string; title: string; why: string }[], comprasPorMirar: number, asientosPorRevisar: number, sinNombre = 0, recibidas = 0): Duda[] {
   const out: Duda[] = sugerencias.map((s) => ({ id: s.id, inicial: 'IA', titulo: s.title, apoyo: s.why, tipo: 'sugerencia' }))
   if (comprasPorMirar > 0) {
-    out.push({ id: 'compras', inicial: 'C', tipo: 'compras', titulo: `${comprasPorMirar} ${comprasPorMirar === 1 ? 'papel de compras por mirar' : 'papeles de compras por mirar'}`, apoyo: 'No sé qué hacer con ellos sin ti.' })
+    out.push({ id: 'compras', inicial: 'C', tipo: 'compras', titulo: `${comprasPorMirar} ${comprasPorMirar === 1 ? 'cosa de compras por mirar' : 'cosas de compras por mirar'}`, apoyo: 'No sé qué hacer con ellos sin ti.' })
   }
   // S01 (paso 4): las facturas recibidas, una detrás de otra (Asientos › Recibida, «Validar y siguiente»).
   if (recibidas > 0) {

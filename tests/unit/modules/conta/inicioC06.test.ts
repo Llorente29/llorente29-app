@@ -95,7 +95,7 @@ describe('lo que tiene que decir la persona', () => {
   it('las sugerencias, los papeles de compras y los asientos por revisar', () => {
     const d = dudas([{ id: 's1', title: 'Presentas el 111', why: 'Tienes nóminas' }], 2, 1)
     expect(d.map((x) => [x.tipo, x.titulo])).toEqual([
-      ['sugerencia', 'Presentas el 111'], ['compras', '2 papeles de compras por mirar'], ['revisar', '1 asiento propuesto para revisar'],
+      ['sugerencia', 'Presentas el 111'], ['compras', '2 cosas de compras por mirar'], ['revisar', '1 asiento propuesto para revisar'],
     ])
     expect(dudas([], 0, 0)).toEqual([])
   })

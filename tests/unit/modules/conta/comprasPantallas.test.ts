@@ -28,7 +28,7 @@ const R102: RecepcionAMirar = {
   ...R101, recepcion: 'c0f00000-0000-4000-8000-000000000102', codigo: 'REC-102', fecha: '2026-10-02', base: 12.5,
   a_nombre_de: 'Bar Desconocido Ocho', camino: 'sin_decidir', pregunta: 'a_nombre_de',
   detalle: { nombre: 'Bar Desconocido Ocho', candidatos: [] },
-  frase: 'El papel va a nombre de «Bar Desconocido Ocho», y Folvy no sabe quién es.',
+  frase: 'El albarán va a nombre de «Bar Desconocido Ocho», y Folvy no sabe quién es.',
 }
 
 describe('Qué tienes que mirar', () => {
@@ -52,15 +52,15 @@ describe('Qué tienes que mirar', () => {
 
   it('las dos del run 126: sin forma y un nombre que no se sabe de quién es', () => {
     expect(fraseDePregunta(R101)).toBe('Verduras Prueba Ocho, S.L. ha entregado con albarán, y su ficha no dice cómo factura.')
-    expect(fraseDePregunta(R102)).toBe('El papel de Verduras Prueba Ocho, S.L. va a nombre de «Bar Desconocido Ocho», y no sé quién es.')
+    expect(fraseDePregunta(R102)).toBe('El albarán de Verduras Prueba Ocho, S.L. va a nombre de «Bar Desconocido Ocho», y no sé quién es.')
   })
 
   it('lo que le falta a la ficha: la forma del run 126 y el NIF de la maqueta', () => {
     expect(fraseDeFalta('Verduras Prueba Ocho, S.L.', { falta: 'forma_facturar', ultimo_papel: 'albaran' }))
-      .toBe('No sé cómo factura Verduras Prueba Ocho, S.L. Su último papel fue un albarán.')
+      .toBe('No sé cómo factura Verduras Prueba Ocho, S.L. Lo último que trajo fue un albarán.')
     expect(fraseDeFalta('Carnes del Valle', { falta: 'nif', ofrece: 'B-12345678', veces: 1, otros_distintos: 0 }))
-      .toBe('A Carnes del Valle le falta el NIF. Sin él no puedo contabilizar sus facturas. En su último papel pone B-12345678. Compruébalo antes de aceptarlo.')
-    expect(fraseDeFalta('X', { falta: 'nif', ofrece: 'B1', veces: 3, otros_distintos: 1 })).toContain('hay otro papel con uno distinto')
+      .toBe('A Carnes del Valle le falta el NIF. Sin él no puedo contabilizar sus facturas. En su último documento pone B-12345678. Compruébalo antes de aceptarlo.')
+    expect(fraseDeFalta('X', { falta: 'nif', ofrece: 'B1', veces: 3, otros_distintos: 1 })).toContain('hay otro documento con uno distinto')
   })
 
   it('cuenta todo y no esconde nada: ordena por fecha', () => {
@@ -210,7 +210,7 @@ describe('Repaso · una fila por decisión', () => {
   })
   it('lo que falta, dicho con su porqué', () => {
     expect(porQueFicha([{ falta: 'nif', ofrece: 'B12345674', veces: 1, otros_distintos: 0 }, { falta: 'tipo_gasto' }]))
-      .toBe('Sin NIF no puedo contabilizar sus facturas; en su último papel pone B12345674: compruébalo antes de aceptarlo; sin tipo de gasto no sé a qué cuenta van.')
+      .toBe('Sin NIF no puedo contabilizar sus facturas; en su último documento pone B12345674: compruébalo antes de aceptarlo; sin tipo de gasto no sé a qué cuenta van.')
   })
 })
 

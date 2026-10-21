@@ -70,7 +70,7 @@ export const AVISO_IBAN_DISTINTO = 'IBAN distinto al de la ficha'
 export function puedeSerElNuevo(ibanLeido: string | null): { ok: true } | { ok: false; motivo: string } {
   if (ibanLeido === null || limpio(ibanLeido) === null) return { ok: false, motivo: 'La factura no trae IBAN.' }
   const v = validarIban(ibanLeido)
-  return v.ok ? { ok: true } : { ok: false, motivo: `El IBAN leído no es válido (${v.motivo.replace(/\.$/, '')}): puede estar mal leído. Compruébalo en el papel.` }
+  return v.ok ? { ok: true } : { ok: false, motivo: `El IBAN leído no es válido (${v.motivo.replace(/\.$/, '')}): puede estar mal leído. Compruébalo en la factura.` }
 }
 
 /**

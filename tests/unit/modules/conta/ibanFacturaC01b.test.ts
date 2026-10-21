@@ -49,7 +49,7 @@ describe('IBAN distinto · lo que se puede decidir', () => {
     expect(puedeSerElNuevo(OTRO)).toEqual({ ok: true })
     const malo = puedeSerElNuevo('ES7921000813610123456780')
     expect(malo.ok).toBe(false)
-    if (!malo.ok) expect(malo.motivo).toMatch(/^El IBAN leído no es válido .*puede estar mal leído\. Compruébalo en el papel\.$/)
+    if (!malo.ok) expect(malo.motivo).toMatch(/^El IBAN leído no es válido .*puede estar mal leído\. Compruébalo en la factura\.$/)
     expect(puedeSerElNuevo(null)).toEqual({ ok: false, motivo: 'La factura no trae IBAN.' })
   })
 })

@@ -34,7 +34,7 @@ function useGuardar() {
   async function guardar(fn: () => Promise<unknown>, texto: string) {
     setOcupado(true); setFallo(null)
     try { await fn(); avisar(texto); recargar() } catch (e) {
-      setFallo(terceroDelMismoNif(e) ? 'Ese NIF ya es de otro contacto. Un NIF, una ficha: añade el papel a esa ficha en vez de repetirla.' : e instanceof Error ? e.message : 'No se pudo guardar.')
+      setFallo(terceroDelMismoNif(e) ? 'Ese NIF ya es de otro contacto. Un NIF, una ficha: hazlo también cliente, plataforma o socio en esa ficha en vez de repetirla.' : e instanceof Error ? e.message : 'No se pudo guardar.')
     }
     setOcupado(false)
   }
@@ -66,7 +66,7 @@ export function DatosFiscalesTercero() {
   const sinMotivo = d.exclude347 && !d.exclude347Reason?.trim()
 
   if (!f && !ficha.papeles.some((p) => p.role === 'customer')) {
-    return <Vacio titulo="Aún no es cliente." explicacion="Sus datos fiscales de cliente aparecen al darle el papel de cliente (menú «···» de la cabecera)." />
+    return <Vacio titulo="Aún no es cliente." explicacion="Sus datos fiscales de cliente aparecen al hacerlo también cliente («Es también cliente», en el menú «···» de la cabecera)." />
   }
   return (
     <form className="cx-formulario" onSubmit={(e) => {
@@ -326,7 +326,7 @@ export function ContactosTercero() { return <ConQuienHablas /> }
 export function DocumentosTercero() {
   const { ficha } = useTercero()
   return ficha.tercero.supplierId
-    ? <Vacio titulo="Sus documentos están en su ficha de proveedor." explicacion="Contratos, certificados y fichas técnicas se guardan allí y valen para los dos papeles."
+    ? <Vacio titulo="Sus documentos están en su ficha de proveedor." explicacion="Contratos, certificados y fichas técnicas se guardan allí y valen también para lo demás que sea (cliente, plataforma o socio)."
         accion={<Link className="cx-boton-sec" to={rutaFichaProveedor(ficha.tercero.supplierId, 'documentos')}>Abrir sus documentos</Link>} />
     : <Vacio titulo="Aún no hay documentos suyos." explicacion="Los documentos de un cliente que no es proveedor (contratos, mandatos SEPA) llegarán más adelante: hoy aún no se pueden guardar aquí." />
 }

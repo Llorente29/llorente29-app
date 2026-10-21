@@ -27,7 +27,7 @@ export type Confianza = 'seguro' | 'probable' | 'duda'
 
 export interface FilaDocumento {
   id: string
-  /** R6 · 'recepcion': una recepción cuyo papel es una factura y que no es (o no hace falta que sea) factura en Folvy. */
+  /** R6 · 'recepcion': una recepción cuyo documento es una factura y que no es (o no hace falta que sea) factura en Folvy. */
   tipo: 'factura' | 'llegada' | 'recepcion'
   estado: Estado
   proveedor: { id: string | null; nombre: string | null }
@@ -166,7 +166,7 @@ export function comoLlego(canal: Canal | string | null, tipo: string | null | un
     case 'subida': return /^image\//.test(tipo ?? '') ? 'foto subida' : /pdf/.test(tipo ?? '') ? 'PDF subido' : 'subida'
     case 'cocina': return solo ? 'de su recepción' : 'de su recepción en Cocina'
     case 'portal': return 'llegó del portal'
-    case 'compras': return solo ? 'leída del papel' : 'leída en Compras'
+    case 'compras': return solo ? 'leída de su recepción' : 'leída en Compras'
     case 'a_mano': return 'escrita a mano'
     default: return ''
   }
@@ -200,9 +200,9 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
     } else if (e.sin_confirmar) {
       partes.push(`${frase(f.aprendido?.porque ?? `Lo he aprendido de sus facturas anteriores (${e.origen})`)} Confírmalo y lo recuerdo.`)
     } else if (!f.porque) {
-      const como = f.canal === 'a_mano' ? 'La escribieron a mano y no la he leído: comprueba los importes con el papel.'
-        : f.canal === 'compras' ? `La leyeron en ${solo ? 'otra pantalla' : 'Compras'}: comprueba los importes con el papel.`
-          : 'Comprueba los importes con el papel.'
+      const como = f.canal === 'a_mano' ? 'La escribieron a mano y no la he leído: comprueba los importes con la factura.'
+        : f.canal === 'compras' ? `La leyeron en ${solo ? 'otra pantalla' : 'Compras'}: comprueba los importes con la factura.`
+          : 'Comprueba los importes con la factura.'
       const va = e.origen === 'de su ficha' ? 'Va a su cuenta de siempre, la de su ficha.'
         : e.origen === 'del asiento' ? 'Va a la cuenta de su asiento, ya propuesto.' : `Va a esta cuenta (${e.origen}).`
       partes.push(`${va} ${como}`)
@@ -213,8 +213,8 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
 
 /** El único botón de la fila. */
 export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
-  // R6 · Una recepción no se apunta desde aquí: se ve su papel.
-  if (f.tipo === 'recepcion') return { texto: 'Ver papel', principal: false }
+  // R6 · Una recepción no se apunta desde aquí: se ve lo que leyó (Julio, 21/10: por lo que es, nunca «papel»).
+  if (f.tipo === 'recepcion') return { texto: 'Ver la factura', principal: false }
   if (f.tipo === 'factura' && !f.proveedor.id) return { texto: 'Decirlo yo', principal: true }
   if (f.estado === 'para_mirar') return { texto: 'Mirar', principal: false }
   if (f.estado === 'por_aclarar') return { texto: f.tipo === 'llegada' ? 'Ver' : 'Aclarar', principal: false }

@@ -13,7 +13,7 @@ describe('el papel dice una sola cosa', () => {
     expect(t).not.toMatch(/no tiene papel/)
   })
   it('escrita a mano: sin papel', () => {
-    expect(textoSinPapel({ archivo: null, aMano: true, error: null })).toBe('Sin papel: apuntada a mano.')
+    expect(textoSinPapel({ archivo: null, aMano: true, error: null })).toBe('Sin fichero: apuntada a mano.')
   })
   it('con error al abrirlo, lo dice con su nombre', () => {
     expect(textoSinPapel({ archivo: 'a.pdf', aMano: false, error: 'caducado' })).toBe('Llegó «a.pdf», pero no se ha podido abrir: caducado')

@@ -42,7 +42,7 @@ import { esCasillaDePorcentaje, queEsLaCasilla } from './casillasModelos'
 import { textoResultado } from './calendario'
 import {
   CASILLA_RESULTADO, estaPresentada, fraseDesfasada, fraseRecalculado, importeConSigno, lineasCartera, numeroTrimestre, presentadorEnPalabras,
-  cuadreConDiario, cuadreLibro303, cuentaDelImpuesto, fechasTrimestre, fraseCalculoRetenciones, librosDelModelo, liquidacion303, liquidacionRetenciones,
+  cuadreConDiario, cuadreLibro303, cuentaDelImpuesto, enCurso, fechasPeriodo, fechasTrimestre, fraseEnCurso, fraseCalculoRetenciones, librosDelModelo, liquidacion303, liquidacionRetenciones,
   tarjeta, tituloTrimestre, trimestrePorDefecto,
   type CasillaTrimestre, type FilaLiquidacion, type LineaCuadre, type ModeloTrimestre, type RetencionesDiario, type Trimestre,
 } from './trimestre'
@@ -94,6 +94,26 @@ export default function TrimestrePage() {
       setHecho({ tono: 'falta', texto: `No se ha vuelto a calcular el ${d.trimestre}: ${msg(e)}` })
     }
   }, [])
+
+  // I01h · El 303 del trimestre en curso se calcula al abrir (una vez por apertura), con lo que va
+  // de trimestre: la ficha lo dice («Calculado hasta hoy… se cierra el 31/12»). Si falla, se dice.
+  const enVivo = useRef<string | null>(null)
+  useEffect(() => {
+    if (!datos || !datos.puede_gestionar) return
+    const m303 = datos.modelos.find((m) => m.modelo === '303' && m.periodo)
+    const f = m303?.periodo ? fechasPeriodo(datos.ejercicio, m303.periodo) : null
+    if (!m303 || !f || !enCurso(f, hoy())) return
+    const estado = m303.declaracion?.estado ?? 'pending'
+    if (estado !== 'pending' && estado !== 'draft') return
+    const clave = `${datos.empresa.id}/${datos.ejercicio}/${datos.trimestre}`
+    if (enVivo.current === clave) return
+    enVivo.current = clave
+    recalculado.current = clave
+    calcular303(datos.empresa.id, datos.ejercicio, m303.periodo!)
+      .then(() => leerTrimestre(datos.empresa.id, datos.ejercicio, numeroTrimestre(datos.trimestre)!))
+      .then((nuevo) => setLeido({ pedido, datos: nuevo, error: null }))
+      .catch((e: unknown) => setHecho({ tono: 'falta', texto: `No se ha calculado el 303 del ${datos.trimestre} con lo que va de trimestre: ${msg(e)}` }))
+  }, [datos, pedido])
 
   // El borrador desfasado y sin revisar, se recalcula al abrir (una vez por trimestre), y se dice.
   useEffect(() => {
@@ -150,7 +170,7 @@ export default function TrimestrePage() {
         <>
           <ul className="s-trimestre-tira" aria-label={`Modelos del ${tituloTrimestre(ejercicio, trimestre)}`}>
             {modelos.map((m) => {
-              const t = tarjeta(m, dia)
+              const t = tarjeta(m, dia, ejercicio)
               const activo = elegidoModelo !== null && clave(m) === clave(elegidoModelo)
               return (
                 <li key={clave(m)}>
@@ -170,7 +190,7 @@ export default function TrimestrePage() {
                 <Ficha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} hoy={dia} alHacer={alHacer} />
               </div>
               <div className="s-trimestre-col s-trimestre-col-centro">
-                <Derecha key={`${clave(elegidoModelo)}/${elegidoModelo.declaracion?.justificante_pdf ?? ''}`} m={elegidoModelo}
+                <Derecha key={`${clave(elegidoModelo)}/${elegidoModelo.declaracion?.justificante_pdf ?? ''}`} m={elegidoModelo} hoy={dia}
                   ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} ampliado={ampliado} alAmpliar={() => setAmpliado((a) => !a)}
                   alCalcular={datos.puede_gestionar && (elegidoModelo.modelo === '111' || elegidoModelo.modelo === '115')
                     ? () => calcularYDecir(datos.empresa.id, ejercicio, trimestre, elegidoModelo.modelo as '111' | '115', alHacer) : undefined} />
@@ -188,6 +208,11 @@ export default function TrimestrePage() {
 }
 
 const clave = (m: ModeloTrimestre) => `${m.modelo}-${m.periodo ?? 'no'}`
+/** El último día del periodo del 303 si aún no ha acabado; si no, null. */
+const enCursoHasta = (m: ModeloTrimestre, ejercicio: number, dia: string): string | null => {
+  const f = m.modelo === '303' && m.periodo ? fechasPeriodo(ejercicio, m.periodo) : null
+  return f && enCurso(f, dia) ? f.hasta : null
+}
 
 /** El importe de una casilla: personas, porcentaje o euros. */
 function valorCasilla(modelo: string, c: CasillaTrimestre): string {
@@ -206,7 +231,9 @@ function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alHacer }: {
   m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; deRuta: boolean; hoy: string; alHacer: (h: { tono: 'ok' | 'falta'; texto: string }) => void
 }) {
   const d = m.declaracion
-  const t = tarjeta(m, hoy)
+  const t = tarjeta(m, hoy, ejercicio)
+  const vivo = m.modelo === '303' && m.periodo ? fechasPeriodo(ejercicio, m.periodo) : null
+  const enVivo = !!vivo && enCurso(vivo, hoy) && !!d && !estaPresentada(d.estado) && d.resultado !== null
   const v = d ? importeConSigno(d) : null
   const casillas = useMemo(() => (d?.casillas ?? []).filter((c) => c.valor !== null || c.texto), [d])
   const presentada = !!d && estaPresentada(d.estado)
@@ -243,6 +270,7 @@ function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alHacer }: {
       {(m.modelo === '111' || m.modelo === '115') && !presentada && !m.no_toca && datos.puede_gestionar && (
         <Preparar m={m} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={deRuta} alHacer={alHacer} />
       )}
+      {enVivo && vivo && m.periodo && <p className="s-apoyo s-trimestre-en-curso" data-prueba="en-curso">{fraseEnCurso(m.periodo, hoy, vivo.hasta)}</p>}
       {m.modelo === '303' && casillas.length > 0 && <Liquidacion casillas={casillas} />}
       {(m.modelo === '111' || m.modelo === '115') && casillas.length > 0 && <LiquidacionRetenciones modelo={m.modelo} casillas={casillas} />}
       {casillas.length > 0 && (m.modelo === '303' || m.modelo === '111' || m.modelo === '115'
@@ -625,8 +653,8 @@ function Acciones({ m, d, ejercicio, trimestre, presentada }: {
  * Lo de la derecha: el justificante en grande; sin él, el impreso calculado
  * por Sumied (con sus casillas) o qué falta y el botón para hacerlo.
  */
-function Derecha({ m, ejercicio, trimestre, deRuta, ampliado, alAmpliar, alCalcular }: {
-  m: ModeloTrimestre; ejercicio: number; trimestre: string; deRuta: boolean; ampliado: boolean; alAmpliar: () => void; alCalcular?: () => Promise<void>
+function Derecha({ m, hoy: dia, ejercicio, trimestre, deRuta, ampliado, alAmpliar, alCalcular }: {
+  m: ModeloTrimestre; hoy: string; ejercicio: number; trimestre: string; deRuta: boolean; ampliado: boolean; alAmpliar: () => void; alCalcular?: () => Promise<void>
 }) {
   const d = m.declaracion
   const pdf = d?.justificante_pdf ?? null
@@ -641,7 +669,7 @@ function Derecha({ m, ejercicio, trimestre, deRuta, ampliado, alAmpliar, alCalcu
       <section className="s-tarjeta s-trimestre-derecha" aria-labelledby="derecha-titulo" data-prueba="impreso-calculado">
         <div className="s-trimestre-derecha-cabeza">
           <h2 id="derecha-titulo" className="s-trimestre-derecha-titulo">Impreso calculado por Sumied</h2>
-          <span className="s-apoyo">Modelo {m.modelo} · {m.periodo} {ejercicio} · sin presentar</span>
+          <span className="s-apoyo">Modelo {m.modelo} · {m.periodo} {ejercicio} · {enCursoHasta(m, ejercicio, dia) ? `calculado hasta hoy · se cierra el ${diaMesCorto(enCursoHasta(m, ejercicio, dia)!)}` : 'sin presentar'}</span>
         </div>
         <div className="s-trimestre-impreso">
           <p className="s-trimestre-impreso-titulo">Modelo {m.modelo} · Liquidación</p>

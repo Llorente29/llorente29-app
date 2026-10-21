@@ -63,7 +63,7 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   const ficha = page.locator('.cxc-cosa', { hasText: /^A Verduras del Huerto Prueba, S\.L\. le faltan/ })
   await expect(ficha.getByText(/^A Verduras del Huerto Prueba, S\.L\. le faltan .*cómo te factura\.$/)).toBeVisible()
   await expect(ficha.getByRole('button', { name: 'Usar ese NIF' })).toBeVisible()
-  await expect(ficha.getByRole('button', { name: 'Ver el papel' })).toBeVisible()
+  await expect(ficha.getByRole('button', { name: 'Ver el albarán' })).toBeVisible()
   // «Contado» no pregunta de quién es: avisa del IVA, con sus dos salidas.
   const contado = page.locator('.cxc-cosa', { hasText: 'a nombre de «Contado», no de tu empresa' })
   // Como la maqueta N18: la frase, y debajo «Así no puedes descontar su IVA. Recepción del …».
@@ -71,17 +71,17 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await expect(contado.getByText(/^Así no puedes descontar su IVA\. Recepción del \w+ 25 de septiembre · Norte Centro · 102,54\s€$/)).toBeVisible()
   await expect(contado.getByRole('button', { name: 'Pedir que la rehagan' })).toBeVisible()
   await expect(contado.getByRole('button', { name: 'Apuntarla sin descontar el IVA' })).toBeVisible()
-  // Tres papeles a nombre del mismo local: UNA pregunta, con una propuesta y su porqué.
-  const nombre = page.locator('.cxc-cosa', { hasText: '3 papeles van a nombre de «Aurora Cocina Centro». ¿De quién son?' })
+  // Tres albaranes a nombre del mismo local: UNA pregunta, con una propuesta y su porqué.
+  const nombre = page.locator('.cxc-cosa', { hasText: '3 albaranes van a nombre de «Aurora Cocina Centro». ¿De quién son?' })
   await expect(nombre).toHaveCount(1)
   await expect(nombre.getByRole('button', { name: 'Es Distribuciones Prueba Aurora, S.L.' })).toBeVisible()
   await expect(nombre.getByText('Comparte «aurora» y es quien trae el género')).toBeVisible()
   await expect(nombre.getByRole('button', { name: 'Es de otro…' })).toBeVisible()
   await expect(nombre.getByRole('button', { name: 'No es nuestro' })).toBeVisible()
-  // Regla 7: agrupar no esconde. La fila abre sus tres papeles, y cada uno se ve.
-  await nombre.getByText('Ver los 3 papeles').click()
-  await expect(nombre.getByRole('button', { name: 'Ver el papel' })).toHaveCount(3)
-  await nombre.getByText('Ver los 3 papeles').click()
+  // Regla 7: agrupar no esconde. La fila abre sus tres albaranes, y cada uno se ve (Julio, 21/10: «Ver los 2 albaranes», nunca «papeles»).
+  await nombre.getByText('Ver los 3 albaranes').click()
+  await expect(nombre.getByRole('button', { name: 'Ver el albarán' })).toHaveCount(3)
+  await nombre.getByText('Ver los 3 albaranes').click()
   // «Es de otro…» abre una búsqueda, no otra ristra de botones.
   await nombre.getByRole('button', { name: 'Es de otro…' }).click()
   const buscar = page.getByRole('dialog', { name: '¿De quién es «Aurora Cocina Centro»?' })
@@ -157,9 +157,9 @@ test('La liquidación de septiembre y su contraste (N19)', async ({ page }) => {
     return Array.from(t.children).filter((c) => c.getBoundingClientRect().right > r.right + 1 || c.scrollWidth > c.clientWidth + 1).map((c) => c.textContent)
   })
   expect(salen).toEqual([])
-  // Los albaranes que cuenta el contraste, con su papel.
+  // Los albaranes que cuenta el contraste, cada uno con su «Ver el albarán».
   await page.getByRole('button', { name: 'Ver los 2 albaranes' }).click()
-  await expect(page.locator('.cxc-albaranes').getByRole('button', { name: 'Ver el papel' })).toHaveCount(2)
+  await expect(page.locator('.cxc-albaranes').getByRole('button', { name: 'Ver el albarán' })).toHaveCount(2)
   await expect(page.getByRole('button', { name: 'Decirle cuál es cuál' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Contabilizar' })).toBeEnabled()
   await capturar(page, 'liquidacion')

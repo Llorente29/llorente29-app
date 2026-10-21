@@ -19,7 +19,7 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { FormularioAltaProveedor } from '@/modules/conta/proveedor/NuevoProveedorDialogo'
 import { fraseAltaEnFactura, textoBotonAlta } from '@/modules/conta/lib/altaProveedor'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import { diaCorto, papelConArticulo } from '@/modules/conta/lib/compras'
+import { diaCorto, elDocumento, mayuscula, papelConArticulo } from '@/modules/conta/lib/compras'
 import { scanReceipt } from '@/modules/supply/services/goodsReceiptService'
 import { resolveInvoiceHeader } from '@/modules/supply/services/supplierInvoiceService'
 import { listarLocales, listarProveedores } from '@/modules/conta/services/proveedorService'
@@ -104,7 +104,7 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
     setPaso(l.paso)
   }
   function noLeido(e: unknown) {
-    setFallo(e instanceof Error ? e.message : 'No se pudo leer el papel.')
+    setFallo(e instanceof Error ? e.message : 'No se pudo leer la factura.')
     setPaso({ que: 'elegir' })
   }
   function leer(fs: File[]) {
@@ -144,7 +144,7 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
       <div className="cxc-pasos">
         {paso.que === 'elegir' && (
           <>
-            <p style={{ margin: 0 }}>Una factura que llega por correo o en papel, sin recepción. La leo, busco a qué albaranes corresponde y te digo si cuadra.</p>
+            <p style={{ margin: 0 }}>Una factura que llega por correo o impresa, sin recepción. La leo, busco a qué albaranes corresponde y te digo si cuadra.</p>
             <label className="cx-campo">
               <span className="cx-etiqueta">La factura (foto o PDF)</span>
               <input type="file" accept="image/*,application/pdf" multiple className="cx-input"
@@ -153,7 +153,7 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
             <div className="cx-pie"><button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button></div>
           </>
         )}
-        {paso.que === 'leyendo' && <p role="status" style={{ margin: 0 }}>Leyendo el papel…</p>}
+        {paso.que === 'leyendo' && <p role="status" style={{ margin: 0 }}>Leyendo la factura…</p>}
         {paso.que === 'leida' && (
           <>
             <p style={{ margin: 0 }}>
@@ -161,7 +161,7 @@ export default function SubirFactura({ accountId, empresaId, ficheros, alCerrar,
               {paso.base != null ? `, ${eurosExactos(paso.base)} de base` : ''}{paso.total != null ? ` y ${eurosExactos(paso.total)} en total` : ''}.
               {paso.tipo && paso.tipo !== 'factura' && paso.tipo !== 'albaran_factura' ? ' No parece una factura: si lo es, sigue; si es un albarán, súbelo como recepción desde el local.' : ''}
             </p>
-            {paso.proveedorLeido && !altaHecha && !alta && <p className="cx-aviso" style={{ margin: 0 }}>El papel dice «{paso.proveedorLeido}» y no lo encuentro entre tus proveedores. Elige cuál es o dalo de alta aquí mismo.</p>}
+            {paso.proveedorLeido && !altaHecha && !alta && <p className="cx-aviso" style={{ margin: 0 }}>{mayuscula(elDocumento(paso.tipo))} dice «{paso.proveedorLeido}» y no lo encuentro entre tus proveedores. Elige cuál es o dalo de alta aquí mismo.</p>}
             {altaHecha && <p role="status" className="cx-guardado" style={{ margin: 0 }}>{altaHecha}</p>}
             {alta ? (
               <div role="group" aria-label="Nuevo proveedor" className="cx-campo">

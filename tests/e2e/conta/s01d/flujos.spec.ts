@@ -158,8 +158,8 @@ test('S01d · recibida a mano (cuenta A): sin base ni local no guarda; con base 
     await expect(page.getByText(new RegExp(`^Factura ${numero} de .+ guardada\\. Revísala y apúntala\\.$`))).toBeVisible()
     // Sin papel: se escribió a mano.
     const papel = page.getByRole('region', { name: 'La factura tal como llegó' })
-    await expect(papel.getByText(/^Sin papel · /)).toBeVisible()
-    await expect(papel.getByText('Sin papel: apuntada a mano.')).toBeVisible()
+    await expect(papel.getByText(/^Sin fichero · /)).toBeVisible()
+    await expect(papel.getByText('Sin fichero: apuntada a mano.')).toBeVisible()
 
     // En la base: para revisar, a mano, con sus importes y UNA línea (de ella sale el asiento).
     const id = new RegExp(`/recibidas/(${UUID})\\?`).exec(page.url())![1]

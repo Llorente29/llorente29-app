@@ -166,7 +166,7 @@ function DialogoFusionar({ alCerrar }: { alCerrar: () => void }) {
   return (
     <Dialogo titulo={`Fusionar con ${t.nombre}`} alCerrar={alCerrar}>
       <p style={{ margin: 0, fontSize: 15 }}>
-        Elige la otra ficha. <strong>{t.nombre}</strong> es la que queda: recibe sus papeles, cuentas, liquidaciones y propuestas del libro.
+        Elige la otra ficha. <strong>{t.nombre}</strong> es la que queda: recibe lo que es la otra (cliente, plataforma o socio), sus cuentas, liquidaciones y propuestas del libro.
         Lo que ya tiene (por ejemplo, su ficha de proveedor de Cocina con sus albaranes) se queda en la otra, que pasa a archivada. Se puede deshacer.
       </p>
       <div className="cx-campo">
@@ -237,7 +237,7 @@ function FranjaFusiones() {
 
 // S01: plataforma y socio de marca solo con hostelería (Ajustes › Empresa).
 const PAPELES_QUE_SE_ANADEN: { papel: 'customer' | 'platform' | 'brand_partner'; texto: string }[] = [
-  { papel: 'customer', texto: 'Añadir papel de cliente' },
+  { papel: 'customer', texto: 'Es también cliente' },
   { papel: 'platform', texto: 'Es también plataforma de reparto' },
   { papel: 'brand_partner', texto: 'Es también socio de marca' },
 ]
@@ -269,7 +269,7 @@ function MenuMas() {
                 const cuenta = p.papel === 'brand_partner' && companyId ? await asegurarCuentaLiquidacion(companyId, t.id, t.nombre, userName) : null
                 avisar(p.papel === 'platform'
                   ? `${t.nombre} es ahora también plataforma. Dime su canal de venta en «Cobro» para enlazar sus liquidaciones${r.liquidaciones_enlazadas ? ` (ya van ${r.liquidaciones_enlazadas})` : ''}.`
-                  : `${t.nombre} tiene ahora también el papel de ${p.papel === 'customer' ? 'cliente' : 'socio de marca'}: una sola ficha, con todos sus papeles.${cuenta?.nueva ? ` Lo que cobres por su cuenta irá a la ${cuenta.code} «Liquidación pendiente con ${t.nombre}».` : ''}`)
+                  : `${t.nombre} es ahora también ${p.papel === 'customer' ? 'cliente' : 'socio de marca'}: una sola ficha para todo lo que es.${cuenta?.nueva ? ` Lo que cobres por su cuenta irá a la ${cuenta.code} «Liquidación pendiente con ${t.nombre}».` : ''}`)
                 recargar()
                 if (p.papel !== 'customer') navigate(rutaApartado('cobro'))
               } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo añadir.') }

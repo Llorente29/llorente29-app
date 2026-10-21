@@ -11,10 +11,10 @@
 
 export interface ComprobacionVista { id: string; ok: boolean; texto: string }
 
-/** Lo que va debajo del papel cuando no se puede enseñar. */
+/** Lo que va en el sitio de la factura cuando no se puede enseñar. */
 export function textoSinPapel(o: { archivo: string | null; aMano: boolean; error: string | null }): string {
-  if (o.aMano) return 'Sin papel: apuntada a mano.'
-  if (o.error) return `${o.archivo ? `Llegó «${o.archivo}», pero` : 'Tiene papel, pero'} no se ha podido abrir: ${o.error}`
+  if (o.aMano) return 'Sin fichero: apuntada a mano.'
+  if (o.error) return `${o.archivo ? `Llegó «${o.archivo}», pero` : 'Tiene fichero, pero'} no se ha podido abrir: ${o.error}`
   return o.archivo
     ? `Llegó «${o.archivo}», pero no encuentro el fichero guardado: no lo puedo enseñar. Pídeselo al proveedor o súbelo otra vez.`
     : 'No encuentro el fichero de esta factura: no lo puedo enseñar. Pídeselo al proveedor o súbelo otra vez.'

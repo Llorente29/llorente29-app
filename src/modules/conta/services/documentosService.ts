@@ -90,11 +90,11 @@ const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 export function conLoLeidoEnRecepcion(f: FacturaRevisar, hoy = hoyEnMadrid()): FacturaRevisar {
   if (f.lectura || !f.leido_en_recepcion?.modelo) return f
   const l = comprobarLectura(f.leido_en_recepcion.modelo, { hoy })
-  const de = `Lo leyó la recepción del ${ddmm(f.leido_en_recepcion.recepcion)} con su papel; no la he vuelto a leer.`
+  const de = `Lo leyó la recepción del ${ddmm(f.leido_en_recepcion.recepcion)} con su factura; no la he vuelto a leer.`
   return { ...f, lectura: { ...l, porque: [de, ...l.porque] }, confianza: f.confianza ?? l.confianza }
 }
 
-/** R6 · El papel de una recepción, para «Ver papel» en N22: una URL firmada. */
+/** R6 · El documento de una recepción, para «Ver la factura» en N22: una URL firmada. */
 export async function urlDePapelDeRecepcion(ruta: string | null | undefined): Promise<string | null> {
   return ruta ? getReceiptFileUrl(ruta) : null
 }

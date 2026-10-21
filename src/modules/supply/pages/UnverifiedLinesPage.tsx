@@ -134,7 +134,7 @@ export default function UnverifiedLinesPage({ accountId, locationId, onBack, onO
             ? 'Ninguna. Todo lo que hay en el almacén lo ha mirado alguien.'
             : <>
                 {visible.length} línea{visible.length === 1 ? '' : 's'} · {fmtMoney(totalAmount)} en juego
-                {sinImporte > 0 && <> · {sinImporte} sin importe en el papel</>}
+                {sinImporte > 0 && <> · {sinImporte} sin importe en el albarán</>}
                 . Ordenadas por lo que valen: ataca por arriba.
               </>}
         </p>
