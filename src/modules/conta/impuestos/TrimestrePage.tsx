@@ -462,7 +462,9 @@ function Preparar({ m, d: datos, ejercicio, trimestre, deRuta, alHacer }: {
             <BotonCalcular texto="Revisado: pasar a presentar" alCalcular={async () => {
               try {
                 const r = await revisarDeclaracion(d.id) as { mensaje?: string }
-                alHacer({ tono: 'ok', texto: `${r?.mensaje ?? 'Revisado.'} El ${modelo} del ${trimestre} queda listo para presentar.` })
+                // La base dice «Quedan 1 avisos…»: en singular cuando es uno.
+                const dicho = (r?.mensaje ?? 'Revisado.').replace(/Quedan 1 avisos sin dar por buenos/, 'Queda 1 aviso sin dar por bueno')
+                alHacer({ tono: 'ok', texto: `${dicho} El ${modelo} del ${trimestre} queda listo para presentar.` })
               } catch (e) { alHacer({ tono: 'falta', texto: `No se ha dado por revisado: ${msg(e)}` }) }
             }} />
           )}

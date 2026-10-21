@@ -426,7 +426,7 @@
 .s-trimestre-perceptores { display: grid; gap: var(--s-2); padding: var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); }
 .s-trimestre-perceptores p { margin: 0; }
 .s-trimestre-perceptores-titulo { font-weight: var(--s-peso-fuerte); }
-.s-trimestre-perceptores-campos { display: grid; grid-template-columns: minmax(9rem, 12rem) 1fr; gap: var(--s-3); align-items: start; }
+.s-trimestre-perceptores-campos { display: grid; grid-template-columns: minmax(6rem, 7.5rem) minmax(0, 1fr); gap: var(--s-3); align-items: start; }
 .s-trimestre-listo { display: grid; gap: var(--s-2); justify-items: start; }
 .s-trimestre-listo p { margin: 0; }
 .s-trimestre-liq td[data-falta='si'] { color: var(--s-duda); }
