@@ -311,6 +311,47 @@ select pg_temp.p01_id('a0'), 'conta_impuestos', true, 'manual_grant', 'P01: ases
  where exists (select 1 from public.accounts where id = pg_temp.p01_id('a0'))
    and not exists (select 1 from public.feature_flags where account_id = pg_temp.p01_id('a0') and feature_key = 'conta_impuestos');
 
+-- Los RESÚMENES ANUALES y el 347 de cada empresa de la demo (Julio, 21/10).
+-- La semilla ponía a mano solo los periódicos, sin las reglas que en un alta
+-- de verdad añaden sus anuales, y el agente «Datos maestros e impuestos» las
+-- daba en rojo (incidencia #253, 25 fallos). La misma regla que el alta y el
+-- agente (tax_form.annual_form_code y default_for), con la excepción del SII:
+-- quien lo lleva no presenta el 390 (instrucciones del modelo 390, AEAT) ni el
+-- 347. Y la empresa de la propia asesoría, que no tenía ninguno, con los de una
+-- sociedad de servicios que retiene (303, 111 y 202, y sus anuales).
+-- Se repasa en cada pasada: solo añade lo que falta.
+do $$
+declare v_ase_emp constant uuid := pg_temp.p01_id('a9'); r record; n int := 0;
+begin
+  if not exists (select 1 from public.company where id = v_ase_emp) then return; end if;
+  if not exists (select 1 from public.tax_obligation where company_id = v_ase_emp and valid_to is null) then
+    perform pg_temp.p01_modelo(v_ase_emp, '303', 'quarterly');
+    perform pg_temp.p01_modelo(v_ase_emp, '111', 'quarterly');
+    perform pg_temp.p01_modelo(v_ase_emp, '202', 'instalments_202');
+  end if;
+  for r in
+    -- El anual de cada periódico activo (con el SII, sin el 390)…
+    select distinct o.company_id, f.annual_form_code as modelo
+      from public.tax_obligation o
+      join public.tax_form f on f.code = o.form_code and f.annual_form_code is not null
+      join public.company_tax_profile p on p.company_id = o.company_id
+     where o.account_id::text like 'd5ac0000-%' and o.active and o.valid_to is null
+       and not (coalesce(p.sii, false) and f.annual_form_code = '390')
+    union
+    -- …y el 347 en toda sociedad fuera del SII.
+    select c.id, f.code
+      from public.company c
+      join public.company_tax_profile p on p.company_id = c.id
+      join public.tax_form f on f.default_for = 'company_not_sii'
+     where c.account_id::text like 'd5ac0000-%' and c.entity_kind = 'company' and not coalesce(p.sii, false)
+  loop
+    continue when exists (select 1 from public.tax_obligation o where o.company_id = r.company_id and o.form_code = r.modelo and o.valid_to is null);
+    perform pg_temp.p01_modelo(r.company_id, r.modelo, 'annual');
+    n := n + 1;
+  end loop;
+  raise notice 'Semilla P01: % resúmenes anuales o 347 añadidos a la demo.', n;
+end $$;
+
 -- La caducidad de los certificados, que depende de «hoy».
 update public.tax_certificate set valid_to = now() + interval '6 days', status = 'active' where id = pg_temp.p01_id('ce2');
 update public.tax_certificate set valid_to = now() - interval '10 days', status = 'expired' where id = pg_temp.p01_id('ce3');
@@ -325,6 +366,10 @@ begin
   v := public.conta_despacho_trimestre(pg_temp.p01_id('a0'), 2026, '3T', date '2026-10-13');
   if (v->'resumen'->>'clientes')::int <> 8 then
     raise exception 'Semilla P01: la asesoría ve % clientes, y tienen que ser 8 (los dos sin permiso no salen).', v->'resumen'->>'clientes';
+  end if;
+  -- Los anuales no son del 3T: el trimestre sigue con sus 21 modelos.
+  if (v->'resumen'->>'modelos')::int <> 21 then
+    raise exception 'Semilla P01: el 3T a 13/10 tiene % modelos, y tienen que ser 21.', v->'resumen'->>'modelos';
   end if;
   if exists (select 1 from jsonb_array_elements(v->'clientes') c where c->>'nombre' in ('Fontanería de Prueba Retirada', 'Ferretería de Prueba Pendiente')) then
     raise exception 'Semilla P01: sale un cliente sin permiso.';
