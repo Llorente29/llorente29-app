@@ -1,6 +1,8 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# C06b · el nombre del PDF en la base): fuera el disparador y sus dos funciones;
-# la columna original_name solo se quita si no guarda nada que no esté ya en
-# file_name.
-cuenta: scripts/conta/produccion/cuentas/nombre-pdf-base.sql
-supabase/vuelta-atras/20261129T0380_c06b_nombre_pdf_base.down.sql
+# Autoconteo), en orden inverso:
+# las cuatro funciones del conteo como estaban (md5 de producción del 21/10), el
+# cron otra vez a cron_autoclose_daily_counts, fuera lo nuevo y sus tres
+# columnas; y los 23 conteos a su estado de antes, desde la copia de la 0390.
+cuenta: scripts/conta/produccion/cuentas/autoconteo.sql
+supabase/vuelta-atras/20261129T0400_autoconteo_se_aplica_entero.down.sql
+supabase/vuelta-atras/20261129T0390_autoconteo_anula_atascados.down.sql

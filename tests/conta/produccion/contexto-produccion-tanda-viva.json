@@ -1,23 +1,31 @@
 {
-  "_que": "C06b · el nombre del PDF en la base · contexto de producción de la tanda viva (20261129T0380), medido en SOLO LECTURA el 21/10 a las 19:16 UTC, después de la 0350–0370 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. journal_entry_document existe; conta_nombre_fichero y el disparador no; nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-21T19:16Z",
-  "tanda": {
-    "supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql": "70fb357ea70c20e4a69b6a58ade560b4"
+ "_que": "Autoconteo · contexto de producción de la tanda viva (0390 y 0400), medido en SOLO LECTURA el 21/10 a las 15:58 UTC, después de la de Compras (0350–0370, aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Ninguna de las dos está en el historial.",
+ "medido": "2026-10-21T15:58Z",
+ "tanda": {
+  "supabase/migrations/20261129T0390_autoconteo_anula_atascados.sql": "78228c3d36b582382d83004e8518e155",
+  "supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql": "8824a1143d3d41b6ad68436259e9c7a5"
+ },
+ "contexto": {
+  "tablas": [
+   "public.inventory_count"
+  ],
+  "funciones": [
+   "public.apply_inventory_count(uuid,uuid,text,boolean)",
+   "public.autoclose_daily_count(uuid)",
+   "public.close_inventory_count(uuid)",
+   "public.cron_autoclose_daily_counts()"
+  ],
+  "filas": {
+   "public.inventory_count": 315
   },
-  "contexto": {
-    "tablas": [
-      "public.journal_entry_document"
-    ],
-    "funciones": [],
-    "filas": {
-      "public.journal_entry_document": 56
-    },
-    "otras": {},
-    "camino": {
-      "tablas": [],
-      "funciones": []
-    },
-    "usos": {},
-    "registro": []
-  }
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": [
+    "public.cron_autoclose_daily_counts()"
+   ]
+  },
+  "usos": {},
+  "registro": []
+ }
 }

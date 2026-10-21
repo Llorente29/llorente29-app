@@ -18,7 +18,10 @@ describe('la entera en trozos', () => {
   it('la suite real tiene ficheros, y casi todos tienen su tiempo medido', () => {
     expect(TODOS.length).toBeGreaterThanOrEqual(38)
     const sin = TODOS.filter((f) => typeof TIEMPOS[f] !== 'number')
-    expect(sin.length).toBeLessThan(5) // los nuevos cuentan como la mediana
+    // Los nuevos cuentan como la mediana. 21/10: main trae 4 sin medir (i01b/plazo,
+    // i01d/proveedor-extranjero, i01e/ficha-libro, i01h/sociedades); inventario/autoconteo
+    // ya está medido (e2e 761).
+    expect(sin.length).toBeLessThan(5)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -58,7 +61,9 @@ describe('la entera en trozos', () => {
     // La entera de 2 trozos de la rama del I01g (run 39522151356, 62b2d7e9) tardó 32,1 y 29,0 min en sus
     // pruebas: 61,1 min, unos 15,3 por trozo de 4. Con los tiempos del I01b y del I01g juntos, el reparto estimado
     // da 15,1 (21/10, al traer main). Un solo techo: 15,5 min.
-    expect(Math.max(...seg) / 60).toBeLessThan(15.5)
+    // 21/10 (autoconteo): entran medidos i01h/sociedades (26,5 s) e inventario/autoconteo (55,9 s,
+    // e2e 761). El reparto estimado da 15,6: el techo pasa a 16 min. Lo mide la entera de la tanda.
+    expect(Math.max(...seg) / 60).toBeLessThan(16)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {

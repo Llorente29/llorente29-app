@@ -73,7 +73,7 @@ describe('la e2e de un push corre solo su área', () => {
 // Contra los 40 últimos PR fusionados en main (fixtures/prs-reales.json).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { queCorre, deLoComun, LO_COMUN, ETIQUETA_ENTERA } from '../../../scripts/e2e/area.mjs'
+import { queCorre, deLoComun, LO_COMUN, ETIQUETA_ENTERA, ZONAS_POR_FICHERO, zonasTocadas } from '../../../scripts/e2e/area.mjs'
 
 const PRS = JSON.parse(readFileSync(join(__dirname, 'fixtures/prs-reales.json'), 'utf8')).prs as { commit: string; titulo: string; ficheros: string[]; comun: boolean }[]
 
@@ -105,3 +105,32 @@ describe('la entera, solo si el PR toca lo común (los 40 últimos PR de main)',
     }
   })
 })
+
+// Autoconteo (Julio, 21/10): la zona de inventario sale de lo que se toca, sea cual sea la rama.
+describe('las zonas por fichero', () => {
+  it('tocar inventario o la tablet de contar añade tests/e2e/inventario, y la corta sigue', () => {
+    for (const f of ['src/modules/supply/components/ResumenAutoconteo.tsx', 'src/pages/trabajador/MiAutoinventario.tsx',
+                     'tests/e2e/inventario/autoconteo.spec.ts', 'supabase/seeds/conta/seed_autoconteo_e2e_staging.sql']) {
+      const r = queCorre('conta/w02-herramientas', { cambiados: [f] })
+      expect(r.entera, f).toBe(false)
+      expect(r.pruebas, f).toContain('tests/e2e/inventario')
+      for (const c of CORTA) expect(r.pruebas, f).toContain(c)
+      expect(r.porque, f).toMatch(/la de lo que toca \(inventario\)/)
+    }
+  })
+  it('sin tocar inventario no la añade, y una rama de frente sigue con su carpeta delante', () => {
+    expect(queCorre('conta/d01-x', { cambiados: ['src/modules/conta/recibidas/a.ts'] }).pruebas).not.toContain('tests/e2e/inventario')
+    const r = queCorre('conta/d01-x', { cambiados: ['src/modules/supply/pages/InventoryPage.tsx'] })
+    expect(r.pruebas[0]).toBe('tests/e2e/conta/d01')
+    expect(r.pruebas).toContain('tests/e2e/inventario')
+    expect(new Set(r.pruebas).size).toBe(r.pruebas.length)
+  })
+  it('lo común sigue mandando: la entera', () => {
+    expect(queCorre('conta/x', { cambiados: ['src/modules/supply/a.ts', 'src/App.tsx'] }).entera).toBe(true)
+  })
+  it('cada zona nombra una carpeta de pruebas que existe', () => {
+    for (const z of ZONAS_POR_FICHERO) expect(existsSync(z.pruebas), z.pruebas).toBe(true)
+    expect(zonasTocadas(['README.md'])).toEqual([])
+  })
+})
+

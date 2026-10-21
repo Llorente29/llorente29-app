@@ -1,0 +1,23 @@
+{
+  "_que": "C06b · el nombre del PDF en la base · contexto de producción de la tanda viva (20261129T0380), medido en SOLO LECTURA el 21/10 a las 19:16 UTC, después de la 0350–0370 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. journal_entry_document existe; conta_nombre_fichero y el disparador no; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-21T19:16Z",
+  "tanda": {
+    "supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql": "70fb357ea70c20e4a69b6a58ade560b4"
+  },
+  "contexto": {
+    "tablas": [
+      "public.journal_entry_document"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.journal_entry_document": 56
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}
