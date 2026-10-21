@@ -121,6 +121,11 @@ begin
      where account_id = v_acc and location_id = v_loc and kind = 'cycle' and status in ('abierto', 'contando', 'en_revision');
     -- El stock de partida otra vez (10, 20 y 30 ud): la pasada de móvil corre
     -- después de la de ordenador en el mismo carril, con su ajuste ya hecho.
+    -- Como «apertura», que es una ENTRADA para el freno del recuento (b): si
+    -- fuera un «ajuste», el freno compararía con el recuento aprobado de la
+    -- pasada de ordenador más este movimiento, y cuántos minutos hay entre las
+    -- dos pasadas decidiría si las latas piden recontar (lo cazó la entera 766:
+    -- sola pasa siempre, con minutos de otras pruebas en medio, no).
     for r in
       select ri.id, (array[10, 20, 30])[right(overlay(ri.id::text placing plantilla from 10 for 4), 1)::int] as objetivo,
              (select coalesce(sum(qty_base), 0) from public.stock_movement m where m.recipe_item_id = ri.id and m.location_id = v_loc) as hay
@@ -129,7 +134,7 @@ begin
     loop
       if r.objetivo <> r.hay then
         insert into public.stock_movement (account_id, location_id, recipe_item_id, movement_type, qty_base, cost_provisional, source_type, occurred_at, created_by_name, notes)
-        values (v_acc, v_loc, r.id, 'ajuste', r.objetivo - r.hay, false, 'adjustment', now() - interval '1 minute', 'e2e autoconteo', 'vuelve al stock de partida de la e2e');
+        values (v_acc, v_loc, r.id, 'apertura', r.objetivo - r.hay, false, 'adjustment', now() - interval '1 minute', 'e2e autoconteo', 'vuelve al stock de partida de la e2e');
         perform public.recompute_location_stock(r.id, v_loc);
       end if;
     end loop;

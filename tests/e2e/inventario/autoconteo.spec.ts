@@ -65,6 +65,9 @@ async function contar(page: Page, producto: string, primero: number, segundo?: n
     await page.getByLabel(/^Cantidad en /).last().fill(String(segundo))
     await otraVez.click()
   }
+  // Que la tablet haya pasado de producto: si pide recontar donde no tocaba, se
+  // queda en ESTE, y el fallo lo dice aquí, con su nombre (entera 766).
+  await expect(page.getByText(producto, { exact: true }), `${producto}: la tablet no ha pasado al siguiente (¿ha pedido recontar?)`).toHaveCount(0)
   await expect(otraVez).toHaveCount(0)
 }
 
