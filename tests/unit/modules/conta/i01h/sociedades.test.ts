@@ -6,7 +6,7 @@
 // devuelve conta_impuesto_sociedades (0340).
 
 import { describe, expect, it } from 'vitest'
-import { estado202, fraseDevolucion, resultado200, validar200, type Formulario200, type Pago202 } from '@/modules/conta/impuestos/sociedades'
+import { estado202, fraseDevolucion, ordenarPagos, resultado200, validar200, type Formulario200, type Pago202 } from '@/modules/conta/impuestos/sociedades'
 
 const pago = (o: Partial<Pago202> = {}, d: Partial<NonNullable<Pago202['declaracion']>> | null = null): Pago202 => ({
   ejercicio: 2026, periodo: '2P', ejercicio_base: 2025, plazo: '2026-10-20', cuota_200: 2000, esperado: 360,
@@ -26,6 +26,15 @@ describe('en qué punto está un 202', () => {
   })
   it('sin el 200 del que sale: lo pide, no inventa la base', () => {
     expect(estado202(pago({ cuota_200: null, esperado: null }))).toEqual({ tono: 'falta', texto: 'Falta el Impuesto de sociedades del 2025: escribe su cuota abajo y Sumied lo calcula.' })
+  })
+  it('sin el 200 del que sale, pero aún no se ha podido presentar: lo dice en neutro, sin pedirlo', () => {
+    expect(estado202(pago({ ejercicio: 2027, ejercicio_base: 2026, cuota_200: null, esperado: null }), '2026-10-21'))
+      .toEqual({ tono: 'neutro', texto: 'Saldrá del Impuesto de sociedades del 2026, que se presenta en julio de 2027.' })
+    expect(estado202(pago({ ejercicio: 2027, ejercicio_base: 2026, cuota_200: null, esperado: null }), '2027-07-01').tono).toBe('falta')
+  })
+  it('los pagos, de antes a después', () => {
+    const ps = [pago({ ejercicio: 2027, periodo: '1P' }), pago({ ejercicio: 2026, periodo: '3P' }), pago({ ejercicio: 2026, periodo: '1P' })]
+    expect(ordenarPagos(ps).map((p) => `${p.periodo}/${p.ejercicio}`)).toEqual(['1P/2026', '3P/2026', '1P/2027'])
   })
   it('calculado: el importe y de dónde sale', () => {
     expect(estado202(pago({}, {})).texto).toBe('360,00 € a ingresar (el 18 % de 2.000,00 €, la cuota del 2025).')

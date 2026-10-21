@@ -17,7 +17,7 @@ import { diaMesCorto, eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/co
 import { calcular202, leerSociedades, poner200 } from '@/modules/conta/services/impuestosService'
 import { nombreDeOficina, periodoEnPalabras } from './calendario'
 import { useCalendario } from './useCalendario'
-import { estado202, fraseDevolucion, resultado200, validar200, type Formulario200, type Pago202, type Sociedades as DatosSociedades } from './sociedades'
+import { estado202, fraseDevolucion, ordenarPagos, resultado200, validar200, type Formulario200, type Pago202, type Sociedades as DatosSociedades } from './sociedades'
 
 const DE_SOCIEDADES = ['200', '202']
 const PRESENTADAS = ['filed', 'booked', 'paid', 'offset', 'refunded']
@@ -77,8 +77,8 @@ export function Sociedades({ companyId }: { companyId: string }) {
             <table className="s-tabla s-impuestos-tabla" data-prueba="pagos-202">
               <thead><tr><th scope="col">Qué</th><th scope="col">Hasta</th><th scope="col">En qué punto está</th></tr></thead>
               <tbody>
-                {datos.pagos_202.map((p) => (
-                  <FilaPago key={`${p.ejercicio}-${p.periodo}`} p={p} companyId={companyId} puede={datos.puede_gestionar} nivel={nivel} alHacer={alHacer} />
+                {ordenarPagos(datos.pagos_202).map((p) => (
+                  <FilaPago key={`${p.ejercicio}-${p.periodo}`} p={p} hoy={datos.hoy || hoyEnMadrid()} companyId={companyId} puede={datos.puede_gestionar} nivel={nivel} alHacer={alHacer} />
                 ))}
               </tbody>
             </table>
@@ -111,9 +111,9 @@ export function Sociedades({ companyId }: { companyId: string }) {
   )
 }
 
-function FilaPago({ p, companyId, puede, nivel, alHacer }: { p: Pago202; companyId: string; puede: boolean; nivel: string; alHacer: (h: Hecho) => void }) {
+function FilaPago({ p, hoy, companyId, puede, nivel, alHacer }: { p: Pago202; hoy: string; companyId: string; puede: boolean; nivel: string; alHacer: (h: Hecho) => void }) {
   const [haciendo, setHaciendo] = useState(false)
-  const e = estado202(p)
+  const e = estado202(p, hoy)
   const presentado = !!p.declaracion && PRESENTADAS.includes(p.declaracion.estado)
   // Se puede calcular si el 200 del que sale está y el 202 aún no tiene sus casillas.
   const sinCalcular = !presentado && p.cuota_200 !== null && (!p.declaracion || (p.declaracion.c03 === null && p.declaracion.estado !== 'not_required'))
@@ -159,7 +159,7 @@ function Escribir200({ companyId, hoy, alHacer }: { companyId: string; hoy: stri
   const err = (k: keyof Formulario200) => (visto ? v.errores[k] ?? null : null)
   const poner = (k: keyof Formulario200) => (x: string) => setF((a) => ({ ...a, [k]: x }))
   const cerrar = () => { setAbierto(false); setF(vacio); setVisto(false) }
-  if (!abierto) return <p><Boton onClick={() => setAbierto(true)}>Escribir un 200</Boton></p>
+  if (!abierto) return <p className="s-sociedades-escribir"><Boton onClick={() => setAbierto(true)}>Escribir un 200</Boton></p>
   return (
     <form className="s-sociedades-form" data-prueba="escribir-200" onSubmit={async (e) => {
       e.preventDefault()

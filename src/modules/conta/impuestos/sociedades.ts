@@ -70,7 +70,7 @@ export function fraseDevolucion(ejercicio: number, d: Devolucion200): { tono: 'f
  * En qué punto está un 202, en palabras. El 200 del que sale es el de dos
  * años antes para el 1P y el del año anterior para el 2P y el 3P.
  */
-export function estado202(p: Pago202): { tono: 'ok' | 'falta' | 'neutro'; texto: string } {
+export function estado202(p: Pago202, hoy?: string): { tono: 'ok' | 'falta' | 'neutro'; texto: string } {
   const d = p.declaracion
   if (d && PRESENTADAS.has(d.estado)) {
     const presentado = d.c03 ?? d.importe
@@ -81,12 +81,21 @@ export function estado202(p: Pago202): { tono: 'ok' | 'falta' | 'neutro'; texto:
       : { tono: 'falta', texto: `Presentado: ${eurosExactos(presentado)}, y el 18 % de la cuota del ${p.ejercicio_base} da ${eurosExactos(p.esperado)}. No casa.` }
   }
   if (d?.estado === 'not_required') return { tono: 'neutro', texto: `No hay que presentarlo${d.no_hace_falta ? `: ${d.no_hace_falta}` : ''}.` }
-  if (p.cuota_200 === null) return { tono: 'falta', texto: `Falta el Impuesto de sociedades del ${p.ejercicio_base}: escribe su cuota abajo y Sumied lo calcula.` }
+  if (p.cuota_200 === null) {
+    // Ese 200 aún no se puede haber presentado (se presenta en julio del año siguiente): se dice, sin pedirlo.
+    if (hoy && hoy < `${p.ejercicio_base + 1}-07-01`) return { tono: 'neutro', texto: `Saldrá del Impuesto de sociedades del ${p.ejercicio_base}, que se presenta en julio de ${p.ejercicio_base + 1}.` }
+    return { tono: 'falta', texto: `Falta el Impuesto de sociedades del ${p.ejercicio_base}: escribe su cuota abajo y Sumied lo calcula.` }
+  }
   if (p.esperado === 0) return { tono: 'neutro', texto: `No hay que presentarlo: el impuesto del ${p.ejercicio_base} salió a cero.` }
   if (d && d.resultado === 'to_pay' && d.importe !== null) {
     return { tono: 'falta', texto: `${eurosExactos(d.importe)} a ingresar (el 18 % de ${eurosExactos(p.cuota_200)}, la cuota del ${p.ejercicio_base}).` }
   }
   return { tono: 'falta', texto: `Saldrá ${eurosExactos(p.esperado ?? 0)} a ingresar (el 18 % de ${eurosExactos(p.cuota_200)}, la cuota del ${p.ejercicio_base}).` }
+}
+
+/** Los pagos de antes a después: por año y, dentro, 1P, 2P y 3P. */
+export function ordenarPagos(ps: readonly Pago202[]): Pago202[] {
+  return [...ps].sort((a, b) => a.ejercicio - b.ejercicio || a.periodo.localeCompare(b.periodo))
 }
 
 /** Lo que se escribe de un 200, como lo teclea la persona. */
