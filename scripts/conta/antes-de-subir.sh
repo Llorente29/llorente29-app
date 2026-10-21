@@ -80,7 +80,8 @@ paso '10/11 · capturas: solo las de tu frente (C06b, 15/10)'
 node scripts/conta/capturas.mjs comprobar
 if [ "${PEDIR_TANDA:-}" = 1 ]; then
   paso '11/11 · antes de pedir tanda o abrir PR a main: la suite e2e ENTERA en verde en este commit (C06b R6)'
-  # En un push solo corre la e2e del frente; la entera se lanza a mano.
+  # Vale cualquier entera en verde del mismo commit: la lanzada a mano, la de la
+  # etiqueta «e2e-entera» o la que corrió un push por tocar lo común (Julio, 21/10).
   node scripts/conta/e2e-entera.mjs
 fi
 

@@ -1,5 +1,5 @@
 name: Pruebas e2e en staging-conta
-run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.pruebas == '' && 'entera' || inputs.pruebas) || 'frente' }} · ${{ github.ref_name }} · ${{ github.sha }}"
+run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' || github.event_name == 'workflow_dispatch' && inputs.repite != '' && 'repetición de la noche' || github.event_name == 'workflow_dispatch' && (inputs.pruebas == '' && 'entera' || inputs.pruebas) || 'frente' }} · ${{ github.ref_name }} · ${{ github.sha }}"
 
 # QUÉ HACE
 # Pasa las pruebas de extremo a extremo del módulo de contabilidad
@@ -46,19 +46,43 @@ run-name: "e2e · ${{ github.event_name == 'workflow_dispatch' && (inputs.prueba
 # por diseño (las lleva cualquier navegador que abra la app) y no dan acceso a
 # nada que la RLS no permita. No sirven para producción.
 #
+# QUÉ PRUEBAS LLEVA CADA PR (Julio, 19/10 y 21/10)
+#   · en cada push: build, unitarias, la e2e de la ZONA de la rama y la CORTA
+#     de pedidos, cocina y reparto (scripts/e2e/area.mjs: la zona y CORTA);
+#   · la ENTERA, en un push, SOLO si el PR toca lo común (marco, cabecera,
+#     barra, diseño compartido, el arranque de la app y lo que mueve todas las
+#     pruebas: LO_COMUN en scripts/e2e/area.mjs) o lleva la etiqueta
+#     «e2e-entera» (al ponerla, e2e-etiqueta.yml la lanza en ese momento);
+#   · y CADA NOCHE sobre main (abajo);
+#   · las tandas no cambian (análisis, staging, ensayo y real desde la rama).
+#
+# LA ENTERA DE LA NOCHE (Julio, 21/10): a las 03:00 de Madrid, en verano y en
+# invierno (dos disparos UTC, 01:00 y 02:00, y el plan deja correr solo el que
+# toca, como cumplimiento-nocturno-conta.yml). Sobre main, en 2 trozos.
+# El job «aviso» lee el informe JSON (scripts/e2e/noche.mjs) y:
+#   · verde: si había una incidencia «e2e de la noche en rojo», lo dice y la cierra;
+#   · si todo lo que falló parece de staging (no poder entrar, un 520, una
+#     página HTML de la base) o no llegó a fallar ninguna prueba: lo repite UNA
+#     vez, solo esos ficheros, en otro run («repetición de la noche»);
+#   · si no: la incidencia (una sola abierta; si ya hay, un comentario) con
+#     cada prueba, su fichero y línea, el tamaño, el error y el commit.
+# Corre a la vez que el cumplimiento nocturno (03:40, solo lee): no se pisan.
+#
 # CUÁNDO SE DISPARA
 # Un push a conta/** que toque la app, las pruebas, el carril o este workflow.
+# Cada noche sobre main (la entera), y su repetición si falló por staging.
 # Y a mano (workflow_dispatch) desde la rama: cuando lo que cambia es staging
 # —una semilla rehecha por aplicar-staging-conta— y no el código (12/10, C04 R3).
 #
 # QUÉ CORRE (C06b, respuesta 6 de Julio, tarea 5 · 14/10)
-#   · en un PUSH corre solo el área de la rama, en un trozo
+#   · en un PUSH corre el área de la rama, en un trozo
 #     (scripts/e2e/area.mjs; W02, 17/10): la carpeta del frente o la de su
 #     nombre (conta/c02c-* → c02c), con el juego común (el marco y el arranque
 #     del C00, y la RLS entre cuentas); reparto-** → tests/e2e/reparto; una
-#     rama sin área (conta/w02-…), solo el juego común. Nunca la suite entera.
-#   · la SUITE ENTERA corre a mano (workflow_dispatch con «pruebas» vacío),
-#     antes de pedir tanda o abrir un PR a main. El título del run lo dice
+#     rama sin área (conta/w02-…), solo el juego común. Y la corta. La suite
+#     entera, solo si toca lo común o lleva la etiqueta (arriba).
+#   · la SUITE ENTERA también corre a mano (workflow_dispatch con «pruebas»
+#     vacío), antes de pedir tanda. El título del run lo dice
 #     («entera»), y scripts/conta/e2e-entera.mjs comprueba que hay una en verde
 #     del mismo commit (antes-de-subir.sh, con PEDIR_TANDA=1).
 #   · el frente sigue saliendo de la rama: decide qué carpeta corre en un push
@@ -108,6 +132,11 @@ on:
       - 'scripts/e2e/trozos.mjs'
       - 'scripts/e2e/area.mjs'
       - '.github/workflows/e2e-staging-conta.yml'
+  # La entera de la noche, sobre main (la rama por defecto: schedule corre ahí).
+  # 03:00 de Madrid: uno vale en verano y el otro en invierno (ver «plan»).
+  schedule:
+    - cron: '0 1 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       # Carpetas o ficheros de tests/e2e, separados por espacios (vacío = la suite entera).
@@ -136,6 +165,13 @@ on:
         type: boolean
         required: false
         default: false
+      # Lo rellena el job «aviso» de la noche, no una persona: el run de la noche
+      # cuyos fallos de staging se repiten (una vez) antes de avisar.
+      repite:
+        description: 'Solo para el aviso de la noche: el run cuyos fallos se repiten (no lo rellenes a mano)'
+        type: string
+        required: false
+        default: ''
 
 # Sin el tipo de evento en el grupo: el push y la entera de la misma rama van
 # en la misma cola. Cancela solo un push (ver LA COLA).
@@ -147,6 +183,10 @@ permissions:
   contents: write
   # El comentario del PR con el enlace al artefacto de las capturas.
   pull-requests: write
+  # La incidencia de la entera de la noche cuando sale en rojo.
+  issues: write
+  # La noche relanza este workflow (una vez) para repetir lo que falló por staging.
+  actions: write
 
 env:
   STAGING_REF: oseymswjlzplqoxrfjzi
@@ -164,18 +204,46 @@ jobs:
       pruebas: ${{ steps.frente.outputs.pruebas }}
       trozos: ${{ steps.frente.outputs.trozos }}
       n: ${{ steps.frente.outputs.n }}
+      toca: ${{ steps.hora.outputs.toca }}
     env:
       PRUEBAS: ${{ inputs.pruebas }}
       FRENTE_PEDIDO: ${{ inputs.frente }}
       TROZOS_PEDIDOS: ${{ inputs.trozos }}
+      REPITE: ${{ inputs.repite }}
     steps:
+      # LA NOCHE A LAS 03:00 DE MADRID, en verano y en invierno: GitHub solo
+      # entiende UTC, así que hay dos disparos (01:00 y 02:00 UTC) y corre solo
+      # el que en Madrid son las 03:00. Se mira el disparo que llegó, no el
+      # reloj: uno que GitHub retrase sigue contando como suyo. La misma guarda
+      # que cumplimiento-nocturno-conta.yml.
+      - name: ¿Son las 03:00 en Madrid? (solo la noche)
+        id: hora
+        env:
+          DISPARO: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          desfase=$(TZ=Europe/Madrid date +%z)
+          toca=true
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            case "$DISPARO|$desfase" in
+              "0 1 * * *|+0200" | "0 2 * * *|+0100") toca=true ;;
+              *) toca=false ;;
+            esac
+            echo "Disparo «$DISPARO», Madrid en $desfase: corre = $toca."
+          fi
+          echo "toca=$toca" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
+          # Todo el historial: un push compara su rama con main (¿toca lo común?).
+          fetch-depth: 0
           sparse-checkout: |
             scripts/e2e
             tests/e2e
       - name: Frente (de la rama, o el pedido a mano)
         id: frente
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Una línea por frente. Una rama que no casa con ninguna no tiene frente.
@@ -189,12 +257,28 @@ jobs:
           if [ -n "${FRENTE_PEDIDO:-}" ]; then
             case "$FRENTE_PEDIDO" in a|b|c|d) FRENTE="$FRENTE_PEDIDO" ;; *) echo "::error::«frente» tiene que ser a, b, c o d (o nada)."; exit 1 ;; esac
           fi
-          # En un push, SOLO las pruebas del área de la rama, en un trozo
-          # (scripts/e2e/area.mjs). La suite entera nunca corre en un push:
-          # solo a mano, sobre el commit final (W02, 17/10: gasto de Actions).
+          # En un PUSH (Julio, 21/10): la zona de la rama y la corta de
+          # pedidos, cocina y reparto, en un trozo; la ENTERA solo si el PR toca
+          # lo común (marco, cabecera, barra, diseño compartido… LO_COMUN en
+          # scripts/e2e/area.mjs) o lleva la etiqueta «e2e-entera».
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            PRUEBAS=$(node scripts/e2e/area.mjs "$GITHUB_REF_NAME")
-            [ -n "$PRUEBAS" ] || { echo "::error::area.mjs no ha dado pruebas para $GITHUB_REF_NAME: sería la suite entera."; exit 1; }
+            git diff --name-only "origin/main...$GITHUB_SHA" > "$RUNNER_TEMP/cambiados.txt"
+            ETIQUETAS=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json labels -q '[.[0].labels[]?.name] | join(",")' 2>/dev/null || true)
+            node scripts/e2e/area.mjs "$GITHUB_REF_NAME" --cambiados "$RUNNER_TEMP/cambiados.txt" --etiquetas "$ETIQUETAS" > "$RUNNER_TEMP/decision.txt"
+            PORQUE=$(sed -n 's/^porque=//p' "$RUNNER_TEMP/decision.txt")
+            if [ "$(sed -n 's/^entera=//p' "$RUNNER_TEMP/decision.txt")" = true ]; then
+              PRUEBAS=
+              echo "### La entera, porque $PORQUE" >> "$GITHUB_STEP_SUMMARY"
+            else
+              PRUEBAS=$(sed -n 's/^pruebas=//p' "$RUNNER_TEMP/decision.txt")
+              [ -n "$PRUEBAS" ] || { echo "::error::area.mjs no ha dado pruebas para $GITHUB_REF_NAME: sería la suite entera."; exit 1; }
+              echo "### La zona y la corta: $PORQUE" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "Qué corre: $PORQUE ($(wc -l < "$RUNNER_TEMP/cambiados.txt") ficheros cambiados contra main)."
+          fi
+          if [ -n "${REPITE:-}" ]; then
+            [[ "$REPITE" =~ ^[0-9]+$ ]] || { echo "::error::«repite» es el número de un run."; exit 1; }
+            echo "### Repetición de la noche (run $REPITE): ${PRUEBAS:-la suite entera}" >> "$GITHUB_STEP_SUMMARY"
           fi
           for p in ${PRUEBAS:-}; do
             if ! [[ "$p" =~ ^tests/e2e/[A-Za-z0-9_./-]*$ ]] || [[ "$p" == *..* ]]; then
@@ -212,6 +296,7 @@ jobs:
 
   trozo:
     needs: plan
+    if: needs.plan.outputs.toca == 'true'
     name: trozo ${{ matrix.trozo }}/${{ needs.plan.outputs.n }}
     runs-on: ubuntu-latest
     # Un trozo de la entera lleva unos 9-17 min de pruebas; uno solo con la
@@ -402,7 +487,7 @@ jobs:
   # ficheros, una vez cada uno.
   entera:
     needs: [plan, trozo]
-    if: always() && needs.plan.result == 'success'
+    if: always() && needs.plan.result == 'success' && needs.plan.outputs.toca == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -489,6 +574,16 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      # El mismo informe en JSON: lo lee el aviso de la noche (qué prueba, qué fichero).
+      - name: Informe en JSON (para el aviso de la noche)
+        if: always() && (github.event_name == 'schedule' || inputs.repite != '')
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-json
+          path: ${{ runner.temp }}/informe.json
+          retention-days: 14
+          if-no-files-found: ignore
+
       # Las capturas de todos los trozos, en su sitio del repositorio (para
       # fijarlas) y en un solo artefacto.
       - name: Capturas · juntar las de los trozos
@@ -561,3 +656,68 @@ jobs:
           # Si alguien ha empujado a la rama mientras tanto: las de este run (-X theirs, en un rebase, son las nuestras).
           git pull --rebase -X theirs origin "$GITHUB_REF_NAME"
           git push origin "HEAD:$GITHUB_REF_NAME"
+
+  # LA NOCHE: verde, repetir o avisar (scripts/e2e/noche.mjs, Julio, 21/10).
+  #   · verde: si había una incidencia abierta, lo dice en ella y la cierra;
+  #   · repetir: todo lo que falló parece de staging (sesión, 520, una página
+  #     HTML de la base) o no llegó a fallar ninguna prueba: relanza este
+  #     workflow sobre main con esos ficheros, UNA vez («repite» = este run);
+  #   · avisar: un fallo de verdad, o la repetición vuelve a fallar: la
+  #     incidencia «e2e de la noche en rojo» con cada prueba, su fichero y el
+  #     commit (una sola abierta: si ya hay, se comenta), y el run en rojo.
+  aviso:
+    needs: [plan, entera]
+    if: always() && needs.plan.outputs.toca == 'true' && (github.event_name == 'schedule' || inputs.repite != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TITULO: 'e2e de la noche en rojo'
+      TROZOS: ${{ needs.plan.result == 'success' && needs.entera.result || 'failure' }}
+      REPITE: ${{ inputs.repite }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/e2e
+          fetch-depth: 1
+
+      - name: El informe de la noche
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: informe-json
+          path: ${{ runner.temp }}/informe
+
+      - name: Verde, repetir o avisar
+        run: |
+          set -euo pipefail
+          export ENLACE="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          export ENLACE_NOCHE="${REPITE:+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$REPITE}"
+          export ASUNTO="$(git log -1 --format=%s "$GITHUB_SHA" 2>/dev/null || true)"
+          INFORME="$RUNNER_TEMP/informe/informe.json"; [ -f "$INFORME" ] || INFORME=-
+          node scripts/e2e/noche.mjs "$INFORME" --trozos "$TROZOS" --repeticion "${REPITE:-}" --cuerpo "$RUNNER_TEMP/aviso.md" > "$RUNNER_TEMP/decision.txt"
+          cat "$RUNNER_TEMP/decision.txt"
+          ACCION=$(sed -n 's/^accion=//p' "$RUNNER_TEMP/decision.txt")
+          FICHEROS=$(sed -n 's/^ficheros=//p' "$RUNNER_TEMP/decision.txt")
+          PORQUE=$(sed -n 's/^porque=//p' "$RUNNER_TEMP/decision.txt")
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          case "$ACCION" in
+            verde)
+              msg="La entera de la noche sobre main (\`${GITHUB_SHA::7}\`) en verde${REPITE:+, después de repetir lo que falló por staging en $ENLACE_NOCHE}."
+              echo "$msg" | tee -a "$GITHUB_STEP_SUMMARY"
+              if [ -n "$n" ]; then
+                gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Vuelve a verde. $msg $ENLACE"
+                gh issue close "$n" --repo "$GITHUB_REPOSITORY"
+              fi ;;
+            repetir)
+              echo "Se repite una vez, porque $PORQUE: ${FICHEROS:-la suite entera}." | tee -a "$GITHUB_STEP_SUMMARY"
+              { echo; cat "$RUNNER_TEMP/aviso.md"; } >> "$GITHUB_STEP_SUMMARY"
+              gh workflow run e2e-staging-conta.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f pruebas="$FICHEROS" -f repite="$GITHUB_RUN_ID" ;;
+            avisar)
+              cat "$RUNNER_TEMP/aviso.md" >> "$GITHUB_STEP_SUMMARY"
+              if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/aviso.md"
+              else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file "$RUNNER_TEMP/aviso.md"; fi
+              echo "::error::La entera de la noche no ha salido en verde: aviso en la incidencia «$TITULO»."
+              exit 1 ;;
+            *) echo "::error::noche.mjs no ha decidido nada."; exit 1 ;;
+          esac
