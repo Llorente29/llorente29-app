@@ -116,7 +116,7 @@ begin
   perform pg_temp.articulo('a7c00000-0000-4000-8000-000000000109', 'Prueba autoconteo · seguridad');
   -- Stock de partida (10) para los que tienen que salir desviados.
   insert into public.stock_movement (account_id, location_id, recipe_item_id, movement_type, qty_base, unit_cost, cost_provisional, source_type, occurred_at, created_by_name, notes)
-  select 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2', x, 'ajuste', 10, 1.00, false, 'manual', now() - interval '3 days', 'prueba', 'prueba autoconteo'
+  select 'c01a0000-0000-4000-8000-00000000000a', 'c01a0000-0000-4000-8000-0000000000a2', x, 'ajuste', 10, 1.00, false, 'adjustment', now() - interval '3 days', 'prueba', 'prueba autoconteo'
     from unnest(array['a7c00000-0000-4000-8000-000000000101', 'a7c00000-0000-4000-8000-000000000102', 'a7c00000-0000-4000-8000-000000000103',
                       'a7c00000-0000-4000-8000-000000000109']::uuid[]) x;
   perform public.recompute_location_stock(x, 'c01a0000-0000-4000-8000-0000000000a2')

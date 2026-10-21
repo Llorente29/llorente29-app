@@ -35,7 +35,9 @@ create table public.inventory_count_line (
 create table public.stock_movement (
   id uuid primary key default gen_random_uuid(), account_id uuid, location_id uuid, recipe_item_id uuid, movement_type text,
   qty_base numeric, unit_cost numeric, cost_provisional boolean, source_type text, source_id uuid, occurred_at timestamptz,
-  created_by uuid, created_by_name text, notes text);
+  created_by uuid, created_by_name text, notes text,
+  -- La de producción (stock_movement_source_valid), tal cual: la semilla de la e2e la pisó el 21/10.
+  constraint stock_movement_source_valid check (source_type = any (array['goods_receipt_line','sale','inventory_count','transfer','adjustment','waste'])));
 create table public.recipe_item_location_stock (account_id uuid, location_id uuid, recipe_item_id uuid, qty_on_hand numeric, avg_unit_cost numeric,
   primary key (recipe_item_id, location_id));
 create table public.system_alert_queue (id bigserial, kind text, subject text, message text, debounce_kind text, created_at timestamptz default now());

@@ -69,7 +69,7 @@ begin
 
   -- El stock de partida, una vez (10, 20 y 30 ud), hace una semana.
   insert into public.stock_movement (account_id, location_id, recipe_item_id, movement_type, qty_base, unit_cost, cost_provisional, source_type, occurred_at, created_by_name, notes)
-  select a_cuenta, a_local, x.id, 'ajuste', x.n, x.c, false, 'manual', now() - interval '7 days', 'semilla autoconteo e2e', 'stock de partida de la e2e del autoconteo'
+  select a_cuenta, a_local, x.id, 'ajuste', x.n, x.c, false, 'adjustment', now() - interval '7 days', 'semilla autoconteo e2e', 'stock de partida de la e2e del autoconteo'
     from (values ('a7c10000-0000-4000-8000-000000000001'::uuid, 10, 0.45),
                  ('a7c10000-0000-4000-8000-000000000002'::uuid, 20, 0.30),
                  ('a7c10000-0000-4000-8000-000000000003'::uuid, 30, 0.08)) x(id, n, c)
@@ -129,7 +129,7 @@ begin
     loop
       if r.objetivo <> r.hay then
         insert into public.stock_movement (account_id, location_id, recipe_item_id, movement_type, qty_base, cost_provisional, source_type, occurred_at, created_by_name, notes)
-        values (v_acc, v_loc, r.id, 'ajuste', r.objetivo - r.hay, false, 'manual', now() - interval '1 minute', 'e2e autoconteo', 'vuelve al stock de partida de la e2e');
+        values (v_acc, v_loc, r.id, 'ajuste', r.objetivo - r.hay, false, 'adjustment', now() - interval '1 minute', 'e2e autoconteo', 'vuelve al stock de partida de la e2e');
         perform public.recompute_location_stock(r.id, v_loc);
       end if;
     end loop;
