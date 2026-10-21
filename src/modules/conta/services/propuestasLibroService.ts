@@ -12,7 +12,7 @@
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
+  ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, deLaFacturaDeLote, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
   type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion, type SerieTesoreria,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { diaAbierto, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
@@ -581,7 +581,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   const [leidas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
+    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, issuer_name, issuer_tax_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
       .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).or(`company_id.is.null,company_id.eq.${companyId}`)
       .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false }), 'las facturas'),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
@@ -633,14 +633,19 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       continue
     }
     const tipoAuto = tipoDeLaClase(clase)
+    // E05 · La factura de un lote (riders y flotas de Catcher): su emisor, su NIF,
+    // su gasto por tipo y su reparto salen de la factura (lib: deLaFacturaDeLote).
+    const tipoDe = (pct: number) => ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_')) ?? null
+    const lote = f.source === 'lote' ? deLaFacturaDeLote(f, gasto, tipoDe, (id) => ctx.locales.get(id) ?? null) : null
     const res = facturaProveedor({
-      id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
-      esSocio: socioPorProveedor.has(sup), tieneNif: !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
+      id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: lote?.proveedor ?? s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
+      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
       // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
-      lineas: ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
-        const t = ctx.tipos.find((x) => x.rate === n(l.vat_pct) && x.code.startsWith('iva_')) ?? null
+      lineas: lote?.lineas ?? ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
+        const t = tipoDe(n(l.vat_pct))
         return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: s(l.expense_account_code) ?? gasto }
       }),
+      ...(lote ? { cuotas: lote.cuotas, reparto: lote.reparto } : {}),
       ...(f.source === 'liquidacion' ? {
         cuotas: ((f.supplier_invoice_tax ?? []) as Fila[]).map((x) => ({ porcentaje: n(x.vat_pct), base: n(x.base), cuota: n(x.vat_amount) })),
         marcaId: s(f.brand_id), faltaNumero: !s(f.invoice_number),

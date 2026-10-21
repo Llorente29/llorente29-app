@@ -1382,12 +1382,64 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): Compras · Por revisar y los textos sin «papel» (0350, 0360 y 0370)', () => {
+describe('la tanda de AHORA (manifiesto vivo): las facturas de riders (E05, 0410)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 21/10 a las 13:06 UTC, después de la 0340, para ESTOS ficheros.
+  // lectura en producción el 21/10 a las 17:42 UTC, después de la 0350–0370, para ESTE fichero.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const DOWN = 'supabase/vuelta-atras/20261130T0410_e05_riders_ficha_y_libro.down.sql'
+  const PRUEBA = 'supabase/staging/sql/20261130_e05_riders_ficha_y_libro_prueba.sql'
+  const DOS = ['public.compras_ficha_le_falta(uuid)', 'public.conta_vat_book_desde_asiento(uuid)']
+
+  it('un fichero, el medido; sigue; nada del camino del pedido; las dos funciones existen con una sola firma', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261130T0410_e05_riders_ficha_y_libro.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    expect(md5(readFileSync(viva[0], 'utf8'))).toBe(medida.tanda[viva[0]])
+    expect(r.ficheros[viva[0]]).toBe('sigue')
+    expect(ctx.funciones).toEqual(DOS)
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente está en la cabecera, con su prueba de staging, que nombra las dos y ejecuta la vuelta atrás', () => {
+    const t = readFileSync(viva[0], 'utf8')
+    expect(t.split('\n').filter((l) => /^-- cambia:/.test(l))).toEqual([
+      `-- cambia: public.compras_ficha_le_falta · prueba: ${PRUEBA}`, `-- cambia: public.conta_vat_book_desde_asiento · prueba: ${PRUEBA}`])
+    const prueba = readFileSync(PRUEBA, 'utf8')
+    expect(prueba).toContain('compras_ficha_le_falta')
+    expect(prueba).toContain('vat_book_entry')
+    expect(prueba).toContain(`\\i ${DOWN}`)
+    expect(prueba.trim().endsWith('rollback;')).toBe(true)
+  })
+  it('la vuelta atrás repone los cuerpos de producción del 21/10, y la prueba lo mira por su md5', () => {
+    const d = readFileSync(DOWN, 'utf8')
+    const cuerpos = [...d.matchAll(/as \$function\$([\s\S]*?)\$function\$;/g)].map((m) => md5(m[1]))
+    expect(cuerpos).toEqual(['5dbcedf7f850fdd8643993ea06e25eec', '08eb4f42e58e105460e64a6396169c51'])
+    expect(readFileSync(PRUEBA, 'utf8')).toContain("'5dbcedf7f850fdd8643993ea06e25eec'")
+  })
+  it('declara qué cuenta; la cuenta solo lee y ancla Foodint por su cuenta', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/e05-riders.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+  })
+})
+
+describe('la tanda de Compras · Por revisar y los textos sin «papel» (0350, 0360 y 0370, PR #271), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-compras-revisar-20261021.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 21/10 a las 13:06 UTC, después de la 0340, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-compras-revisar-20261021.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1442,7 +1494,7 @@ describe('la tanda de AHORA (manifiesto vivo): Compras · Por revisar y los text
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
   it('su vuelta atrás, en orden inverso', () => {
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt').map(nombre)).toEqual([
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-compras-revisar-20261021.txt').map(nombre)).toEqual([
       '20261129T0370_textos_sin_papel.down.sql', '20261129T0360_compras_preguntas_foodint.down.sql', '20261129T0350_compras_preguntas_de_la_ficha.down.sql'])
   })
 })
