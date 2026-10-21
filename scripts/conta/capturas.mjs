@@ -45,7 +45,7 @@ export function frenteDeLaRama(rama) {
 /**
  * De quién son las capturas que puede fijar una rama. El reparto (R02) no es
  * un frente de usuarios, pero sí tiene sus capturas.
- * cierre/, compras/ y diez/ no son de ningún frente de hoy: nadie las fija.
+ * cierre/ y diez/ no son de ningún frente de hoy: nadie las fija.
  */
 export const DE_QUIEN = {
   a: /^docs\/conta\/capturas\/d\d[^/]*\//,
@@ -59,12 +59,16 @@ export const DE_QUIEN = {
   // P01 (19/10): «Impuestos de tus clientes» (conta/p01…), igual que Impuestos:
   // sin frente de usuarios, con sus capturas en p01/…
   despacho: /^docs\/conta\/capturas\/p\d[^/]*\//,
+  // Compras (21/10, «Compras pasa a ser tuya»): conta/compras-…, sin frente de
+  // usuarios, con sus capturas en compras/…
+  compras: /^docs\/conta\/capturas\/compras\//,
 }
 
 export function duenoDeLaRama(rama) {
   if (/^reparto-/.test(rama)) return 'reparto'
   if (/^conta\/i\d/.test(rama)) return 'impuestos'
   if (/^conta\/p\d/.test(rama)) return 'despacho'
+  if (/^conta\/compras/.test(rama)) return 'compras'
   return frenteDeLaRama(rama) || null
 }
 

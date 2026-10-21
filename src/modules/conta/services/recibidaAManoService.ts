@@ -71,7 +71,7 @@ export async function guardarRecibidaAMano(g: GuardarRecibida): Promise<{ id: st
     tax_base_total: d.base,
     tax_total: d.cuota,
     grand_total: d.total,
-    notes: 'Dada de alta a mano en Contabilidad, sin papel.',
+    notes: 'Dada de alta a mano en Contabilidad, sin fichero.',
     created_by: g.userId,
     created_by_name: g.userName,
   }).select('id, code').single()

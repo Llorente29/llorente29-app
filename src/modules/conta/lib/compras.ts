@@ -14,7 +14,7 @@ export type FormaFacturar = 'per_delivery' | 'delivery_note_then_invoice' | 'mon
 /** Las tres formas, con el texto fijo de Julio (N20). */
 export const FORMAS: { valor: FormaFacturar; titulo: string; explicacion: string }[] = [
   { valor: 'per_delivery', titulo: 'Con cada entrega',
-    explicacion: 'El papel que trae con el género ya es la factura. Se contabiliza sola al recibirlo. También vale para quien no entrega género: el alquiler, la luz, la gestoría.' },
+    explicacion: 'Lo que trae con el género ya es la factura. Se contabiliza sola al recibirla. También vale para quien no entrega género: el alquiler, la luz, la gestoría.' },
   { valor: 'delivery_note_then_invoice', titulo: 'Entrega con albarán y factura después',
     explicacion: 'Lo recibido queda esperando factura. Cuando llega, la junto con sus albaranes y te digo si cuadra.' },
   { valor: 'monthly_settlement', titulo: 'Liquidación mensual',
@@ -82,20 +82,68 @@ export function conPunto(t: string): string {
   return t.endsWith('.') ? t : `${t}.`
 }
 
-/** «albarán» / «factura» / «papel», sin artículo («ha entregado con albarán»). */
+/** «albarán» / «factura» / «un documento», sin artículo («ha entregado con albarán»). */
 export function papelSolo(tipo: string | null | undefined): string {
   if (tipo === 'factura' || tipo === 'albaran_factura') return 'factura'
   if (tipo === 'albaran') return 'albarán'
   if (tipo === 'ticket') return 'ticket'
-  return 'un papel'
+  return 'un documento'
 }
 
-/** «un albarán» / «una factura» / «un papel» */
+/** «un albarán» / «una factura» / «un documento» */
 export function papelConArticulo(tipo: string | null | undefined): string {
   if (tipo === 'factura' || tipo === 'albaran_factura') return 'una factura'
   if (tipo === 'albaran') return 'un albarán'
   if (tipo === 'ticket') return 'un ticket'
-  return 'un papel'
+  return 'un documento'
+}
+
+/** «el albarán» / «la factura» / «el documento»: el de una recepción, por lo que es (Julio, 21/10: nunca «papel»). */
+export function elDocumento(tipo: string | null | undefined): string {
+  if (tipo === 'factura' || tipo === 'albaran_factura') return 'la factura'
+  if (tipo === 'albaran') return 'el albarán'
+  if (tipo === 'ticket') return 'el ticket'
+  return 'el documento'
+}
+
+export const mayuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
+
+const NOMBRES: Record<string, [string, string, string]> = {
+  albaran: ['un', 'albarán', 'albaranes'], factura: ['una', 'factura', 'facturas'], ticket: ['un', 'ticket', 'tickets'], otro: ['un', 'documento', 'documentos'],
+}
+
+/**
+ * Un grupo de documentos, cada uno por lo que es: «un albarán», «3 facturas»,
+ * «2 albaranes y 1 factura», «un documento» (sin tipo leído). El albarán-
+ * factura cuenta como factura, como en papelSolo.
+ */
+export function cuantosDocumentos(tipos: readonly (string | null | undefined)[]): string {
+  const cuenta = new Map<string, number>()
+  for (const t of tipos) {
+    const k = t === 'albaran_factura' ? 'factura' : t && t in NOMBRES ? t : 'otro'
+    cuenta.set(k, (cuenta.get(k) ?? 0) + 1)
+  }
+  const partes = [...cuenta.entries()].sort((x, y) => y[1] - x[1]).map(([k, n]) => {
+    const [art, uno, varios] = NOMBRES[k]
+    return n === 1 ? (cuenta.size === 1 ? `${art} ${uno}` : `1 ${uno}`) : `${n} ${varios}`
+  })
+  return partes.length === 1 ? partes[0] : `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`
+}
+
+const LOS: Record<string, [string, string]> = { albaran: ['el', 'los'], factura: ['la', 'las'], ticket: ['el', 'los'], otro: ['el', 'los'] }
+
+/** Lo que se ve, con artículo: «el albarán y la factura», «los 2 albaranes», «los 2 albaranes y la factura» (Julio, 21/10). */
+export function verDocumentos(tipos: readonly (string | null | undefined)[]): string {
+  const cuenta = new Map<string, number>()
+  for (const t of tipos) {
+    const k = t === 'albaran_factura' ? 'factura' : t && t in NOMBRES ? t : 'otro'
+    cuenta.set(k, (cuenta.get(k) ?? 0) + 1)
+  }
+  const partes = [...cuenta.entries()].sort((x, y) => y[1] - x[1]).map(([k, n]) => {
+    const [, uno, varios] = NOMBRES[k]
+    return n === 1 ? `${LOS[k][0]} ${uno}` : `${LOS[k][1]} ${n} ${varios}`
+  })
+  return partes.length === 1 ? partes[0] : `${partes.slice(0, -1).join(', ')} y ${partes[partes.length - 1]}`
 }
 
 // ── Lo que dicen sus últimos papeles (N20) ──────────────────────────────────
@@ -145,7 +193,7 @@ export function fraseUltimosPapeles(papeles: readonly (string | PapelLeido)[]): 
     const k = p === 'albaran_factura' ? 'factura' : p
     cuenta.set(k, (cuenta.get(k) ?? 0) + 1)
   }
-  const con = (k: string) => (k === 'factura' ? 'factura' : k === 'albaran' ? 'albarán' : k === 'ticket' ? 'ticket' : 'otro papel')
+  const con = (k: string) => (k === 'factura' ? 'factura' : k === 'albaran' ? 'albarán' : k === 'ticket' ? 'ticket' : 'otro documento')
   const n = tipos.length
   let frase: string
   if (cuenta.size === 1) {
@@ -243,14 +291,14 @@ export function fraseDePregunta(r: RecepcionAMirar): string {
     case 'ficha_sin_forma':
       return `${prov} ha entregado con ${papelSolo(d.papel ?? r.papel)}, y su ficha no dice cómo factura.`
     case 'a_nombre_de':
-      if (d.proveedor_nombre) return `El papel va a nombre de ${d.proveedor_nombre}, y su ficha no dice si liquida cada mes.`
+      if (d.proveedor_nombre) return `${mayuscula(elDocumento(r.papel))} va a nombre de ${d.proveedor_nombre}, y su ficha no dice si liquida cada mes.`
       return r.a_nombre_de
-        ? `El papel de ${prov} va a nombre de «${r.a_nombre_de}», y no sé quién es.`
-        : `El papel de ${prov} no dice a nombre de quién va.`
+        ? `${mayuscula(elDocumento(r.papel))} de ${prov} va a nombre de «${r.a_nombre_de}», y no sé quién es.`
+        : `${mayuscula(elDocumento(r.papel))} de ${prov} no dice a nombre de quién va.`
     case 'a_nombre_de_otro':
       return `${papelConArticulo(r.papel).replace(/^u/, 'U')} de ${prov} viene a nombre de «${r.a_nombre_de ?? 'otro'}», no de tu empresa. Así no puedes descontar su IVA.`
     case 'sin_papel':
-      return r.frase ?? `No hay papel leído de ${prov}.`
+      return r.frase ?? `No hay ningún documento leído de ${prov}.`
     case 'factura_sin_importes':
       return `La factura de ${prov} no se ha podido apuntar sola: ${r.frase ?? 'le faltan importes'}`
     case 'factura_repetida':
@@ -278,13 +326,13 @@ export function cuantasAMirar(m: Mirar): number {
 export function fraseDeFalta(prov: string, f: FaltaFicha): string {
   if (f.falta === 'nif') {
     const base = `A ${prov} le falta el NIF. Sin él no puedo contabilizar sus facturas.`
-    if (!f.ofrece) return `${base} Ninguno de sus papeles lo trae.`
-    const donde = f.veces && f.veces > 1 ? `En ${f.veces} de sus papeles pone` : 'En su último papel pone'
-    const otros = f.otros_distintos > 0 ? ` Ojo: ${f.otros_distintos === 1 ? 'hay otro papel con uno distinto' : `hay otros ${f.otros_distintos} distintos`}.` : ''
+    if (!f.ofrece) return `${base} No lo trae ninguno de sus albaranes ni facturas.`
+    const donde = f.veces && f.veces > 1 ? `En ${f.veces} de sus albaranes y facturas pone` : 'En su último documento pone'
+    const otros = f.otros_distintos > 0 ? ` Ojo: ${f.otros_distintos === 1 ? 'hay otro documento con uno distinto' : `hay otros ${f.otros_distintos} distintos`}.` : ''
     return `${base} ${donde} ${f.ofrece}.${otros} Compruébalo antes de aceptarlo.`
   }
   if (f.falta === 'tipo_gasto') return `A ${prov} le falta el tipo de gasto: sin él no sé a qué cuenta van sus facturas.`
-  const ultimo = f.ultimo_papel ? ` Su último papel fue ${papelConArticulo(f.ultimo_papel)}.` : ''
+  const ultimo = f.ultimo_papel ? ` Lo último que trajo fue ${papelConArticulo(f.ultimo_papel)}.` : ''
   return `${conPunto(`No sé cómo factura ${prov}`)}${ultimo}`
 }
 
@@ -481,10 +529,10 @@ export function fraseFicha(prov: string, falta: readonly FaltaFicha[]): string {
 export function porQueFicha(falta: readonly FaltaFicha[]): string {
   const t: string[] = []
   const nif = falta.find((f) => f.falta === 'nif')
-  if (nif && nif.falta === 'nif') t.push(nif.ofrece ? `Sin NIF no puedo contabilizar sus facturas; ${nif.veces && nif.veces > 1 ? `en ${nif.veces} de sus papeles` : 'en su último papel'} pone ${nif.ofrece}${nif.otros_distintos > 0 ? ' (y hay otro distinto)' : ''}: compruébalo antes de aceptarlo` : 'Sin NIF no puedo contabilizar sus facturas, y ninguno de sus papeles lo trae')
+  if (nif && nif.falta === 'nif') t.push(nif.ofrece ? `Sin NIF no puedo contabilizar sus facturas; ${nif.veces && nif.veces > 1 ? `en ${nif.veces} de sus albaranes y facturas` : 'en su último documento'} pone ${nif.ofrece}${nif.otros_distintos > 0 ? ' (y hay otro distinto)' : ''}: compruébalo antes de aceptarlo` : 'Sin NIF no puedo contabilizar sus facturas, y no lo trae ninguno de sus albaranes ni facturas')
   if (falta.some((f) => f.falta === 'tipo_gasto')) t.push('sin tipo de gasto no sé a qué cuenta van')
   const forma = falta.find((f) => f.falta === 'forma_facturar')
-  if (forma && forma.falta === 'forma_facturar') t.push(`sin saber cómo factura no sé si esperar su factura${forma.ultimo_papel ? ` (su último papel fue ${papelConArticulo(forma.ultimo_papel)})` : ''}`)
+  if (forma && forma.falta === 'forma_facturar') t.push(`sin saber cómo factura no sé si esperar su factura${forma.ultimo_papel ? ` (lo último que trajo fue ${papelConArticulo(forma.ultimo_papel)})` : ''}`)
   return conPunto(t.join('; ').replace(/^./, (l) => l.toUpperCase()))
 }
 

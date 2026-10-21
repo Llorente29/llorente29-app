@@ -140,7 +140,7 @@ export default function RecibidaAMano() {
           <h1 className="cxl-titulo">Nueva recibida a mano</h1>
         </div>
       </header>
-      <p className="s-apoyo">Para una factura que no tienes en fichero. Se guarda para revisar, sin papel; después la miras y la apuntas como cualquier otra.</p>
+      <p className="s-apoyo">Para una factura que no tienes en fichero. Se guarda para revisar, sin fichero; después la miras y la apuntas como cualquier otra.</p>
 
       <form onSubmit={(e) => void guardar(e)} noValidate>
         <Tarjeta titulo="La factura">

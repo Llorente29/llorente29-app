@@ -74,11 +74,11 @@ export async function ultimosPapeles(proveedor: string, cuantos = 5): Promise<Pa
   const { data, error } = await tabla('goods_receipt').select('ai_session_id, receipt_date, created_at')
     .eq('supplier_id', proveedor).neq('status', 'anulado').not('ai_session_id', 'is', null)
     .order('receipt_date', { ascending: false }).order('created_at', { ascending: false }).limit(cuantos * 3)
-  if (error) throw new Error(`No se pudieron leer sus últimos papeles: ${error.message}`)
+  if (error) throw new Error(`No se pudieron leer sus últimos albaranes y facturas: ${error.message}`)
   const ids = ((data ?? []) as { ai_session_id: string }[]).map((r) => r.ai_session_id)
   if (!ids.length) return []
   const { data: ses, error: e2 } = await tabla('goods_receipt_ai_session').select('id, parsed_result').in('id', ids)
-  if (e2) throw new Error(`No se pudieron leer sus últimos papeles: ${e2.message}`)
+  if (e2) throw new Error(`No se pudieron leer sus últimos albaranes y facturas: ${e2.message}`)
   const porId = new Map(((ses ?? []) as { id: string; parsed_result: { document?: Record<string, unknown> } | null }[])
     .map((x) => [x.id, x.parsed_result?.document ?? null]))
   return ids.map((id) => porId.get(id) ?? null)

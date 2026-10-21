@@ -1,0 +1,25 @@
+{
+  "_que": "I01h · el 202 desde el último 200 · contexto de producción de la tanda viva (20261128T0340), medido en SOLO LECTURA el 21/10 a las 08:20 UTC, después de la 0330 (aplicada), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. La tabla de los 200 y las tres funciones nuevas no existen; tax_return_check y conta_impuesto_calendario sí; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-21T08:20Z",
+  "tanda": {
+    "supabase/migrations/20261128T0340_i01h_sociedades_202.sql": "82adc79e5f07db4f2f9b9d4182d5eaef"
+  },
+  "contexto": {
+    "tablas": [
+      "public.tax_return_check"
+    ],
+    "funciones": [
+      "public.conta_impuesto_calendario(uuid,date)"
+    ],
+    "filas": {
+      "public.tax_return_check": 0
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

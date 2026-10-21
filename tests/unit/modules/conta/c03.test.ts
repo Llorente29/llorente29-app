@@ -42,11 +42,11 @@ describe('regla 1 · un NIF, un tercero', () => {
     const m = mismoNif(terceros, 'b-91000018', 'customer')!
     expect(m.tercero.id).toBe('ruiz')
     expect(m.yaLoEs).toBe(false)
-    expect(m.texto).toBe('Es el mismo que tu proveedor Hermanos Ruiz: añadirle el papel de cliente.')
+    expect(m.texto).toBe('Es el mismo que tu proveedor Hermanos Ruiz: hacerlo también cliente.')
   })
   it('si ya tiene ese papel, lo dice; si está archivado, también', () => {
     expect(mismoNif(terceros, 'B91030049', 'customer')!.texto).toBe('Catering Eventos Norte ya es cliente con el NIF B91030049.')
-    expect(mismoNif(terceros, 'B91030031', 'customer')!.texto).toBe('Es el mismo que tu proveedor Distribuciones Antiguas (está archivado: se recupera): añadirle el papel de cliente.')
+    expect(mismoNif(terceros, 'B91030031', 'customer')!.texto).toBe('Es el mismo que tu proveedor Distribuciones Antiguas (está archivado: se recupera): hacerlo también cliente.')
   })
   it('sin NIF, o con un NIF nuevo, o editando el mismo tercero: nada que proponer', () => {
     expect(mismoNif(terceros, null, 'customer')).toBeNull()

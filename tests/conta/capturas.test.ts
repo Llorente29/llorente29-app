@@ -72,7 +72,7 @@ describe('de quién es cada carpeta de capturas (las que hay en el repositorio)'
     ...readdirSync('docs/conta/capturas', { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `docs/conta/capturas/${e.name}`),
     ...readdirSync('docs/reparto/capturas', { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `docs/reparto/capturas/${e.name}`),
   ]
-  const de = (dueno: 'a' | 'b' | 'c' | 'd' | 'reparto' | 'impuestos' | 'despacho') => carpetas.filter((c) => repartir([`${c}/x.png`], dueno).suyas.length).map((c) => c.split('/').pop())
+  const de = (dueno: 'a' | 'b' | 'c' | 'd' | 'reparto' | 'impuestos' | 'despacho' | 'compras') => carpetas.filter((c) => repartir([`${c}/x.png`], dueno).suyas.length).map((c) => c.split('/').pop())
 
   it('cada frente, las suyas y solo las suyas', () => {
     expect(de('a')).toEqual(['d01', 'd01-e05'])
@@ -81,10 +81,13 @@ describe('de quién es cada carpeta de capturas (las que hay en el repositorio)'
     expect(de('d')).toEqual(['m01', 's01', 's01c', 's01d', 's01e', 's01f', 's01g'].filter((x) => carpetas.some((c) => c.endsWith(`/${x}`))))
     expect(de('reparto')).toEqual(['r02', 'r03'])
     expect(de('despacho')).toEqual(['p01'])
+    // 21/10: «Compras pasa a ser tuya»; sus ramas, conta/compras-….
+    expect(de('compras')).toEqual(['compras'])
+    expect(duenoDeLaRama('conta/compras-revisar')).toBe('compras')
   })
-  it('cierre, compras y diez (y los PNG sueltos de la raíz) no son de nadie: nadie las fija', () => {
-    const nadie = carpetas.filter((c) => (['a', 'b', 'c', 'd', 'reparto', 'impuestos', 'despacho'] as const).every((d) => !repartir([`${c}/x.png`], d).suyas.length))
-    expect(nadie.map((c) => c.split('/').pop()).sort()).toEqual(['cierre', 'compras', 'diez'])
+  it('cierre y diez (y los PNG sueltos de la raíz) no son de nadie: nadie las fija', () => {
+    const nadie = carpetas.filter((c) => (['a', 'b', 'c', 'd', 'reparto', 'impuestos', 'despacho', 'compras'] as const).every((d) => !repartir([`${c}/x.png`], d).suyas.length))
+    expect(nadie.map((c) => c.split('/').pop()).sort()).toEqual(['cierre', 'diez'])
     expect(repartir(['docs/conta/capturas/ficha-movil.png'], 'c').suyas).toEqual([])
   })
 })

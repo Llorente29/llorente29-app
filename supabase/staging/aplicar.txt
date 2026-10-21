@@ -341,3 +341,39 @@ supabase/staging/sql/20261127_i01g_retenciones_prueba.sql
 #   anónima; y la vuelta atrás con datos.
 supabase/migrations/20261128T0340_i01h_sociedades_202.sql
 supabase/staging/sql/20261128_i01h_sociedades_202_prueba.sql
+
+# Compras · Al guardar cómo factura un proveedor, las preguntas que salen de la
+#   ficha se vuelven a mirar también en las recepciones que ya tienen factura
+#   (rama conta/compras-revisar; Julio, 21/10). La 0350 DE VERDAD (cambia en
+#   caliente _compras_camino_guarda y _compras_forma_facturar, misma firma),
+#   para que la e2e de Compras la tenga; se puede volver a pasar. La 0360 (la
+#   pasada de hoy, solo Foodint) aquí no hace nada. Y su prueba (ROLLBACK),
+#   como el administrador de A: las consumidas pierden la pregunta vieja sin
+#   tocar su camino ni su factura, la del paso de la factura no se toca, lo
+#   que de verdad no casa pasa a «no dicen lo mismo», «Por revisar» deja de
+#   enseñarlas y sin usuario no se cambia la ficha.
+supabase/migrations/20261129T0350_compras_preguntas_de_la_ficha.sql
+supabase/migrations/20261129T0360_compras_preguntas_foodint.sql
+supabase/staging/sql/20261129_compras_preguntas_de_la_ficha_prueba.sql
+
+# Textos · Ni «papel» ni «papeles» en un texto que vea alguien (rama
+#   conta/compras-revisar; Julio, 21/10). La 0370 DE VERDAD (cambia en caliente
+#   doce funciones de Compras, la contabilidad y Clientes y proveedores, misma
+#   firma, SOLO textos), para que las e2e la tengan; se puede volver a pasar. Y
+#   su prueba (ROLLBACK): cada una sin literales con «papel» salvo las claves,
+#   y con los textos devueltos a los viejos su md5 es el de producción del
+#   21/10; el «¿a nombre de quién va?» nombra el albarán, la factura o el
+#   albarán-factura; los motivos y errores de la factura desde el documento
+#   (sin líneas, sin IVA, la lectura que no existe); como el usuario de A, la
+#   frase de la tablet al confirmar una recepción y las puertas de la
+#   pantalla; y la vuelta atrás de verdad, con el md5 de producción.
+supabase/migrations/20261129T0370_textos_sin_papel.sql
+supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
+
+# Compras · Regla 10 con la 0350, la 0360 y la 0370 puestas (rama
+#   conta/compras-revisar; Julio, 21/10: «recibir un albarán es uno de los
+#   cuatro caminos de la regla 10: ensáyalos en staging»). Solo su prueba
+#   (ROLLBACK): cerrar una venta; recibir un albarán y un albarán-factura como
+#   el usuario de A, con la frase de la tablet; apuntar una merma; aprobar un
+#   recuento. Cada uno tiene que escribir lo suyo.
+supabase/staging/sql/20261129_compras_revisar_cuatro_caminos_prueba.sql

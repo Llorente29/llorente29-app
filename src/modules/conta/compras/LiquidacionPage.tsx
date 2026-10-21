@@ -336,7 +336,7 @@ function Compras({ c, liqId }: { c: Contraste['compras']; liqId: string }) {
           {albaranes.map((a) => (
             <li key={a.recepcion}>
               <span>{diaConNombre(a.fecha)} · {a.base == null ? 'sin importe' : eurosExactos(a.base)} <span className="cxc-cosa-codigo">{a.codigo}</span></span>
-              <VerPapel recepcion={a.recepcion} titulo={`Albarán · ${diaConNombre(a.fecha)}`} />
+              <VerPapel recepcion={a.recepcion} tipo="albaran" titulo={`Albarán · ${diaConNombre(a.fecha)}`} />
             </li>
           ))}
         </ul>

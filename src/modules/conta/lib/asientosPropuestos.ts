@@ -1002,7 +1002,7 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
     const imp = deCent(Math.abs(cent(r)))
     if (cta) {
       lineas.push({ cuenta: cta, debe: (debeSiPositivo ? r > 0 : r < 0) ? imp : 0, haber: (debeSiPositivo ? r > 0 : r < 0) ? 0 : imp, localId: loc, comun, concepto: `Redondeo del total de ${que}` })
-      avisos.push(`${que[0].toUpperCase()}${que.slice(1)} dice ${eurosExactos(total)}; base y cuota de cada tipo dan ${calculado}. Las cuotas van como en el papel y el ${imp === 0.01 ? 'céntimo' : 'redondeo'}, a «redondeos».`)
+      avisos.push(`${que[0].toUpperCase()}${que.slice(1)} dice ${eurosExactos(total)}; base y cuota de cada tipo dan ${calculado}. Las cuotas van como en la factura y el ${imp === 0.01 ? 'céntimo' : 'redondeo'}, a «redondeos».`)
     } else {
       const lado = principal.debe ? 'debe' : 'haber'
       principal[lado] = deCent(cent(principal[lado]) + (lado === 'debe' ? 1 : -1) * cent(r) * (debeSiPositivo ? 1 : -1))

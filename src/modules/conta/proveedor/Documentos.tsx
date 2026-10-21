@@ -63,7 +63,7 @@ export default function Documentos() {
         <div className="cx-aviso" id="campo-bank_ownership_certificate" tabIndex={-1}>
           {datos.ficha.ibanChangedAt
             ? <>Falta el certificado del banco de la cuenta NUEVA: el IBAN cambió el {fechaLarga(datos.ficha.ibanChangedAt.slice(0, 10))}{datos.ficha.ibanChangedByName ? ` (lo cambió ${datos.ficha.ibanChangedByName})` : ''} y el certificado de antes ya no vale.</>
-            : 'Falta el certificado del banco: el papel del banco que dice que esa cuenta es suya. Protege de cambios de IBAN fraudulentos.'}
+            : 'Falta el certificado del banco: el documento del banco que dice que esa cuenta es suya. Protege de cambios de IBAN fraudulentos.'}
         </div>
       )}
       <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>
