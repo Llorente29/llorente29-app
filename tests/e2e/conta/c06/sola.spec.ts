@@ -247,7 +247,9 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   if (lado(page) === 'movil') {
     await page.getByRole('button', { name: 'Abrir el menú' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
-    await expect(hoja.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    // Los productos (arriba y Ajustes abajo). Favoritos y el usuario van en el
+    // cajón desde el S01d, fuera de las listas de productos (.s-cajon-tuyo).
+    await expect(hoja.locator('.s-barra-lista .s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
     await sinFolvy(page, 'el menú')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/mas-movil.png` })
