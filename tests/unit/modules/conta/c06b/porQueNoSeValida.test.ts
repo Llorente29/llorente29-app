@@ -17,12 +17,15 @@ describe('por qué no se valida un asiento', () => {
     expect(porQueNoSeValida([])).toBeNull()
   })
   it('con un envío por aclarar, bloquea y lo dice con el texto de la base', () => {
-    expect(porQueNoSeValida([ACLARAR])).toEqual({ bloquea: true, texto: ACLARAR.motivo, codigos: ['envio_por_aclarar'] })
+    expect(porQueNoSeValida([ACLARAR])).toEqual({ bloquea: true, texto: ACLARAR.motivo, codigos: ['envio_por_aclarar'],
+      franja: '1 pedido con envío por aclarar: PR-3 (envío 2,00 €, repartió la plataforma). Se resuelve con la liquidación de esa semana.' })
   })
   it('el mes cerrado bloquea, pero no se repite: ya tiene su franja', () => {
-    expect(porQueNoSeValida([MES])).toEqual({ bloquea: true, texto: null, codigos: ['mes_cerrado'] })
+    expect(porQueNoSeValida([MES])).toEqual({ bloquea: true, texto: null, franja: null, codigos: ['mes_cerrado'] })
   })
   it('varios motivos, en el orden de la base y sin el del mes', () => {
     expect(porQueNoSeValida([CUADRA, MES, ACLARAR])?.texto).toBe(`${CUADRA.motivo} ${ACLARAR.motivo}`)
+    // En la franja, el «No cuadra» queda igual y al del envío se le quita el «No se valida:».
+    expect(porQueNoSeValida([CUADRA, MES, ACLARAR])?.franja).toBe(`${CUADRA.motivo} 1 pedido con envío por aclarar: PR-3 (envío 2,00 €, repartió la plataforma). Se resuelve con la liquidación de esa semana.`)
   })
 })

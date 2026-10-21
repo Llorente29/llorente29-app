@@ -179,9 +179,9 @@ export default function AsientoPage() {
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
-      {editable && frena?.texto && (
+      {editable && frena?.franja && (
         <div className="cx-tarjeta cxd-franja" role="status" aria-label="Por qué no se valida" data-prueba="no-se-valida">
-          <span><strong>No se valida todavía</strong> · {frena.texto}</span>
+          <span><strong>No se valida todavía</strong> · {frena.franja}</span>
         </div>
       )}
       {editable && datos.motivosError && <p className="cx-ayuda cxt-ambar" role="note">No he podido comprobar si se puede validar: {datos.motivosError}. Si no se puede, lo dirá al pulsar.</p>}

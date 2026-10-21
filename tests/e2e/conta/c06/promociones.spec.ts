@@ -113,7 +113,7 @@ test('Libros: un asiento «Por aclarar» dice qué pedido y por qué, y «Valida
   const validar = page.getByRole('button', { name: 'Validar asiento' })
   await expect(validar).toBeDisabled()
   await expect(validar).toHaveAttribute('title', FRENO)
-  await expect(page.getByRole('status', { name: 'Por qué no se valida' })).toHaveText(`No se valida todavía · ${FRENO}`)
+  await expect(page.getByRole('status', { name: 'Por qué no se valida' })).toHaveText(`No se valida todavía · ${FRENO.replace('No se valida: 1', '1')}`)
   await page.evaluate(() => document.fonts.ready)
   mkdirSync(DIR, { recursive: true })
   await page.screenshot({ path: `${DIR}/promociones-por-aclarar-${lado(page)}.png`, fullPage: true })

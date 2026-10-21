@@ -88,8 +88,16 @@ const YA_DICHOS: ReadonlySet<string> = new Set(['mes_cerrado'])
  * `title` del botón: los motivos que la pantalla no dice ya, en su orden. Sin
  * motivos, null: se puede validar.
  */
-export function porQueNoSeValida(motivos: readonly MotivoEspera[]): { bloquea: true; texto: string | null; codigos: string[] } | null {
+export function porQueNoSeValida(motivos: readonly MotivoEspera[]): { bloquea: true; texto: string | null; franja: string | null; codigos: string[] } | null {
   if (!motivos.length) return null
   const nuevos = motivos.filter((m) => !YA_DICHOS.has(m.codigo))
-  return { bloquea: true, texto: nuevos.length ? nuevos.map((m) => m.motivo).join(' ') : null, codigos: motivos.map((m) => m.codigo) }
+  const texto = nuevos.length ? nuevos.map((m) => m.motivo).join(' ') : null
+  // La franja ya dice «No se valida todavía»: sin repetir el «No se valida:» con que empiezan algunos motivos.
+  const franja = nuevos.length ? nuevos.map((m) => sinNoSeValida(m.motivo)).join(' ') : null
+  return { bloquea: true, texto, franja, codigos: motivos.map((m) => m.codigo) }
+}
+
+function sinNoSeValida(motivo: string): string {
+  const resto = motivo.replace(/^No se valida:\s*/, '')
+  return resto === motivo ? motivo : resto.charAt(0).toUpperCase() + resto.slice(1)
 }
