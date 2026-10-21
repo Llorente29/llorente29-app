@@ -205,7 +205,7 @@ export function Suplidos() {
         ? 'Lo que se paga en nombre de un cliente y se le repercute sin IVA (art. 78.Tres.3.º LIVA). No es ingreso ni gasto: va a una cuenta de tercero y no entra en el libro de expedidas.'
         : `Lo que se paga en nombre de un cliente y se le repercute sin ${imp.nombre}. No es ingreso ni gasto: va a una cuenta de tercero y no entra en el libro de expedidas. ${imp.avisoLey}`}</p>
       {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
-      {d.datos && !d.datos.cuentas.length && <div className="cx-tarjeta"><Vacio titulo="No hay cuentas de suplidos." explicacion="Se marcan en la ficha del tercero (cuenta con papel «suplidos») o en el plan contable." accion={<Link to={rutaPlan()} className="cx-boton-sec">Ir al plan</Link>} /></div>}
+      {d.datos && !d.datos.cuentas.length && <div className="cx-tarjeta"><Vacio titulo="No hay cuentas de suplidos." explicacion="Se marcan en la ficha del tercero (su cuenta de «suplidos») o en el plan contable." accion={<Link to={rutaPlan()} className="cx-boton-sec">Ir al plan</Link>} /></div>}
       {d.datos?.cuentas.map((cu) => {
         const x = extracto(d.datos!.ms.filter((m) => m.cuenta === cu.code), { desde: L.ejercicio.inicio, hasta: L.ejercicio.fin })
         return (

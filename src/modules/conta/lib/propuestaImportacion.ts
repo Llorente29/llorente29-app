@@ -356,7 +356,7 @@ export function validar(filas: readonly FilaRevision[]): Problema[] {
     if (!k) continue
     const otro = destinos.get(k)
     if (otro) {
-      out.push({ code: f.code, codes: [otro, f.code], texto: f.decision.tipo === 'retencion' ? `${otro} y ${f.code} van los dos al modelo ${f.decision.modelo}: elige uno.` : `${otro} y ${f.code} acaban en la misma ficha con el mismo papel: elige una.` })
+      out.push({ code: f.code, codes: [otro, f.code], texto: f.decision.tipo === 'retencion' ? `${otro} y ${f.code} van los dos al modelo ${f.decision.modelo}: elige uno.` : `${otro} y ${f.code} acaban en la misma ficha para lo mismo: elige una.` })
     } else destinos.set(k, f.code)
   }
   return out

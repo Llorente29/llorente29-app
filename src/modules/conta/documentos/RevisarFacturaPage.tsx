@@ -347,7 +347,7 @@ function Comprobado({ fac, hayNif }: { fac: FacturaRevisar; hayNif: boolean }) {
   return (
     <section className={`cxr-comprobado${todo ? '' : ' cxr-comprobado-ambar'}`} aria-label="Lo que he comprobado">
       <h2>Lo que he comprobado</h2>
-      {com.length === 0 && <p className="cx-ayuda" style={{ margin: 0 }}>No viene de leer un papel (se escribió a mano o en Compras): no hay comprobaciones de la lectura.</p>}
+      {com.length === 0 && <p className="cx-ayuda" style={{ margin: 0 }}>No viene de leer un fichero (se escribió a mano o en Compras): no hay comprobaciones de la lectura.</p>}
       <ul>
         {lineas.map((l) => <li key={l.id} className={l.ok ? 'cxr-ok' : 'cxr-falta'}><span aria-hidden="true">{l.ok ? '✓' : '!'}</span> {l.texto}</li>)}
       </ul>
@@ -377,7 +377,7 @@ function Papel({ fac, url, leyendo, error, solo, movil }: { fac: FacturaRevisar;
   return (
     <section className="cxr-papel" aria-label="La factura tal como llegó">
       <div className="cxr-papel-cabeza">
-        <span>{l?.archivo ?? (sinPapel ? 'Sin papel' : 'Factura')} · {comoLlego(l?.canal ?? fac.canal ?? (sinPapel ? 'a_mano' : null), l?.tipo, solo)}{l?.a ? ` a ${l.a.replace(/@.*/, '@')}` : ''}{cuando ? ` · ${cuando}` : ''}</span>
+        <span>{l?.archivo ?? (sinPapel ? 'Sin fichero' : 'Factura')} · {comoLlego(l?.canal ?? fac.canal ?? (sinPapel ? 'a_mano' : null), l?.tipo, solo)}{l?.a ? ` a ${l.a.replace(/@.*/, '@')}` : ''}{cuando ? ` · ${cuando}` : ''}</span>
         {url && <a href={url} target="_blank" rel="noopener noreferrer" className="cx-enlace">Abrir</a>}
       </div>
       <div className="cxr-papel-hoja">
@@ -396,7 +396,7 @@ function Papel({ fac, url, leyendo, error, solo, movil }: { fac: FacturaRevisar;
         )}
         {url && movil && (
           <button type="button" className="cx-enlace cxr-papel-entero" aria-expanded={entero} onClick={() => setEntero((x) => !x)}>
-            {entero ? 'Recoger el papel' : 'Ver el papel entero'}
+            {entero ? 'Recoger la factura' : 'Ver la factura entera'}
           </button>
         )}
       </div>

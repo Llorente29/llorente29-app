@@ -115,7 +115,7 @@ export default function CedidasPage() {
 
       {!hasCost && (
         <div style={{ background: '#fdf6e6', border: `1px solid #f0e2bf`, borderRadius: 12, padding: '11px 14px', margin: '0 0 14px', fontSize: 12.5, color: '#7a5c00', lineHeight: 1.5 }}>
-          <b>Falta el coste de cocina de las cedidas para cerrar su margen.</b> No sale de los papeles de CTB:
+          <b>Falta el coste de cocina de las cedidas para cerrar su margen.</b> No sale de los documentos de CTB:
           para las cedidas tú aportas material de tus <b>proveedores propios</b> (Mercaderías Aportadas), así que su
           coste vive en tus compras / escandallo, no en la Compras y Ventas de Cloudtown. En cuanto tengamos ese
           dato, cada cedida tendrá su “gana o pierde”.

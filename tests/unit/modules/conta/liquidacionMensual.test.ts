@@ -180,7 +180,7 @@ describe('aceptación 5 · septiembre, al céntimo', () => {
     expect(compra.lineas.filter((l) => l.iva).map((l) => [l.iva!.tipo, l.iva!.base, l.iva!.libro])).toEqual([[4, 777.69, 'received'], [10, 2003.91, 'received'], [21, 805.55, 'received']])
     expect(cuadre(compra.lineas).cuadra).toBe(true)
     expect(compra.origen).toEqual({ tipo: 'supplier_invoice', id: 'fv' })
-    expect(compra.avisos[0]).toBe('Su factura FV-02927 dice 3.987,81 €; base y cuota de cada tipo dan 3.987,82 €. Las cuotas van como en el papel y el céntimo, a «redondeos».')
+    expect(compra.avisos[0]).toBe('Su factura FV-02927 dice 3.987,81 €; base y cuota de cada tipo dan 3.987,82 €. Las cuotas van como en la factura y el céntimo, a «redondeos».')
   })
   it('sin 669/769 en el plan, el céntimo va a la línea del gasto, y se dice', () => {
     const sin = liquidacionMensual(e, { ...c, redondeoGasto: null, redondeoIngreso: null }).propuestas[0]

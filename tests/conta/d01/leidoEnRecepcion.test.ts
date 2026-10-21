@@ -23,7 +23,7 @@ const modelo = {
 describe('lo leído en la recepción', () => {
   it('sin lectura propia, comprueba la de la recepción y lo dice primero', () => {
     const f = conLoLeidoEnRecepcion(base({ leido_en_recepcion: { modelo, cuando: '2026-10-11T08:00:00Z', recepcion: '2026-10-11' } }), '2026-10-14')
-    expect(f.lectura?.porque[0]).toBe('Lo leyó la recepción del 11/10 con su papel; no la he vuelto a leer.')
+    expect(f.lectura?.porque[0]).toBe('Lo leyó la recepción del 11/10 con su factura; no la he vuelto a leer.')
     expect(f.lectura?.factura.numero).toBe('RCP-26/80')
     expect(f.lectura?.comprobaciones.find((c) => c.id === 'suma')).toMatchObject({ ok: true })
     expect(f.confianza).toBe(f.lectura?.confianza)

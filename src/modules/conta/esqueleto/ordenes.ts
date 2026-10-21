@@ -54,7 +54,7 @@ const DE_LA_CINTA: Orden[] = [
   { id: 'asiento.expedida', etiqueta: 'Expedida', icono: 'expedida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=expedida` }, sinonimos: ['nueva expedida', 'factura emitida'] },
   { id: 'asiento.recibida', etiqueta: 'Recibida', icono: 'recibida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.recibidasEnAsientos }, sinonimos: ['nueva recibida', 'factura recibida', 'factura de proveedor'] },
   // S01d: la recibida sin papel, escrita a mano (proveedor, número, fecha, base e IVA).
-  { id: 'asiento.recibida-a-mano', etiqueta: 'Recibida a mano', icono: 'nuevo', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.recibidasEnAsientos}?${CONSULTA_RECIBIDA_A_MANO}` }, sinonimos: ['nueva recibida a mano', 'factura sin papel', 'dar de alta una factura'] },
+  { id: 'asiento.recibida-a-mano', etiqueta: 'Recibida a mano', icono: 'nuevo', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.recibidasEnAsientos}?${CONSULTA_RECIBIDA_A_MANO}` }, sinonimos: ['nueva recibida a mano', 'factura sin fichero', 'dar de alta una factura'] },
   { id: 'asiento.tesoreria', etiqueta: 'Tesorería', icono: 'tesoreria', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=tesoreria` }, sinonimos: ['cobro', 'pago'] },
   { id: 'asiento.general', etiqueta: 'General', icono: 'general', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.nuevoAsiento }, sinonimos: ['nuevo asiento', 'asiento a mano'] },
   { id: 'asiento.predefinidos', etiqueta: 'Predefinidos', icono: 'predefinidos', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=predefinido` }, sinonimos: ['plantilla', 'asiento tipo'] },

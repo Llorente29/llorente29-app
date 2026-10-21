@@ -342,3 +342,15 @@ supabase/staging/sql/20261127_i01g_retenciones_prueba.sql
 supabase/migrations/20261129T0350_compras_preguntas_de_la_ficha.sql
 supabase/migrations/20261129T0360_compras_preguntas_foodint.sql
 supabase/staging/sql/20261129_compras_preguntas_de_la_ficha_prueba.sql
+
+# Textos · Ni «papel» ni «papeles» en un texto que vea alguien (rama
+#   conta/compras-revisar; Julio, 21/10). La 0370 DE VERDAD (cambia en caliente
+#   once funciones de Compras, la contabilidad y Clientes y proveedores, misma
+#   firma, SOLO textos), para que las e2e la tengan; se puede volver a pasar. Y
+#   su prueba (ROLLBACK): cada una sin literales con «papel» salvo las claves,
+#   y con los textos devueltos a los viejos su md5 es el de producción del
+#   21/10; el «¿a nombre de quién va?» nombra el albarán, la factura o el
+#   albarán-factura; y los motivos y errores de la factura desde el documento
+#   (sin líneas, sin IVA, la lectura que no existe).
+supabase/migrations/20261129T0370_textos_sin_papel.sql
+supabase/staging/sql/20261129_textos_sin_papel_prueba.sql

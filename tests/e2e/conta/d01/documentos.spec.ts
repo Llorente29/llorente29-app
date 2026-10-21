@@ -204,9 +204,9 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
     const recorte = papel.locator('.cxr-papel-recorte')
     const antes = (await recorte.boundingBox())!.height
     expect(antes).toBeLessThanOrEqual(282)
-    await papel.getByRole('button', { name: 'Ver el papel entero' }).click()
+    await papel.getByRole('button', { name: 'Ver la factura entera' }).click()
     await expect.poll(async () => (await recorte.boundingBox())!.height).toBeGreaterThan(antes + 50)
-    await papel.getByRole('button', { name: 'Recoger el papel' }).click()
+    await papel.getByRole('button', { name: 'Recoger la factura' }).click()
     await expect.poll(async () => (await recorte.boundingBox())!.height).toBeLessThanOrEqual(282)
   }
   await capturar(page, 'n23-revisar-a')

@@ -95,7 +95,7 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
     leer(tabla('fiscal_year').select('code, starts_on, ends_on, status, imported_until').eq('account_id', accountId).eq('company_id', companyId), 'los ejercicios'),
     leer(tabla('fiscal_period_lock').select('month').eq('account_id', accountId).eq('company_id', companyId).is('reopened_at', null), 'los meses cerrados'),
     leer(tabla('sales_channel').select('id, name').eq('account_id', accountId), 'los canales'),
-    leer(tabla('party_role').select('party_id, role, channel_id, supplier_id').eq('account_id', accountId), 'los papeles'),
+    leer(tabla('party_role').select('party_id, role, channel_id, supplier_id').eq('account_id', accountId), 'lo que es cada contacto'),
     leer(tabla('brand').select('id, name, ownership_type').eq('account_id', accountId), 'las marcas'),
     leer(tabla('locations').select('id, name').eq('account_id', accountId), 'los locales'),
     leer(tabla('treasury_account').select('id, location_id, kind, is_active').eq('account_id', accountId).eq('company_id', companyId), 'los bancos'),
