@@ -1,6 +1,8 @@
-# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
-# quita la tabla de los 200 (recién aplicada está vacía) y las tres funciones
-# del 202, devuelve el CHECK de lo comprobado a sus trece claves y el
-# calendario al de la 0250, y los permisos de las funciones de la 0330.
-cuenta: scripts/conta/produccion/cuentas/i01h-sociedades.sql
-supabase/vuelta-atras/20261128T0340_i01h_sociedades_202.down.sql
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
+# Compras · Por revisar y textos), en orden inverso:
+# los textos de las 12 funciones, las 5 preguntas de Foodint como estaban y las
+# dos funciones de la 0350 como en la 0120.
+cuenta: scripts/conta/produccion/cuentas/compras-revisar.sql
+supabase/vuelta-atras/20261129T0370_textos_sin_papel.down.sql
+supabase/vuelta-atras/20261129T0360_compras_preguntas_foodint.down.sql
+supabase/vuelta-atras/20261129T0350_compras_preguntas_de_la_ficha.down.sql
