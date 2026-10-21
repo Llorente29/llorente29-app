@@ -20,7 +20,7 @@ import {
 import {
   cambiarFormaFacturar, cerrarPregunta, decidirDestinatario, rehacerCamino, sinIva,
 } from '@/modules/conta/services/comprasService'
-import { guardarFicha, listarProveedores } from '@/modules/conta/services/proveedorService'
+import { guardarFicha, listarProveedores, listarTiposGasto, type TipoGasto } from '@/modules/conta/services/proveedorService'
 import { VerPapel } from '@/modules/conta/compras/VerPapel'
 import { MARCA } from '../cuenta/marca'
 
@@ -252,12 +252,13 @@ function FilaLiquida({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'liquida' }>
 
 // ── Lo que le falta a una ficha, todo junto ────────────────────────────────
 
-function FilaFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'ficha' }>; hecho: Hecho }) {
+function FilaFicha({ f, hecho, tipos }: { f: Extract<FilaAMirar, { tipo: 'ficha' }>; hecho: Hecho; tipos: TiposGasto }) {
   const { ocupado, fallo, hacer } = useAccion(hecho)
   const falta = (k: string) => f.falta.find((x) => x.falta === k)
   const nifF = falta('nif')
   const nif = nifF && nifF.falta === 'nif' && nifF.ofrece ? validarNifEs(nifF.ofrece) : null
   const forma = !!falta('forma_facturar')
+  const sinTipo = !!falta('tipo_gasto')
   const destino = forma ? rutaComoTeFactura(f.proveedor)
     : falta('tipo_gasto') ? `${rutaFichaProveedor(f.proveedor, 'contabilidad')}#campo-expenseCategoryId`
     : `${rutaFichaProveedor(f.proveedor, 'datos-fiscales')}#campo-taxId`
@@ -275,6 +276,25 @@ function FilaFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'ficha' }>; he
             await guardarFicha(f.proveedor, { taxId: nif.normalizado, taxIdType: 'nif_es', taxIdVerifiedAt: ahora, taxIdCheckStatus: 'valid', taxIdCheckedAt: ahora })
             return `Guardado: el NIF de ${f.proveedor_nombre} es ${nif.normalizado}.`
           })}>Usar ese NIF</button>
+        )}
+        {sinTipo && (
+          // Julio, 21/10: el tipo de gasto se elige en la misma fila, sin abrir la ficha.
+          <label className="cxc-tipo-gasto">
+            <span className="cx-etiqueta">Tipo de gasto</span>
+            <select className="cx-input" value="" disabled={ocupado || !tipos.lista}
+              aria-label={`Tipo de gasto de ${f.proveedor_nombre}`}
+              onChange={(e) => {
+                const t = tipos.lista?.find((x) => x.id === e.target.value)
+                if (!t) return
+                void hacer(async () => {
+                  await guardarFicha(f.proveedor, { expenseCategoryId: t.id })
+                  return `Guardado en la ficha de ${f.proveedor_nombre}: tipo de gasto «${t.name}» (cuenta ${t.pgcAccountHint}).`
+                })
+              }}>
+              <option value="" disabled>{tipos.lista ? 'Elige uno…' : tipos.fallo ?? 'Cargando…'}</option>
+              {(tipos.lista ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
         )}
         {forma && orden.map((o) => (
           <button key={o.valor} type="button" className={o.valor === f.sugerida && !nif?.ok ? 'cx-boton' : 'cx-boton-sec'} disabled={ocupado}
@@ -372,8 +392,26 @@ function FilaSinCamino({ rs, hecho }: { rs: readonly SinCamino[]; hecho: Hecho }
   )
 }
 
+/** Los tipos de gasto que se pueden elegir (los no ocultos en la empresa activa), o por qué no se han podido cargar. */
+type TiposGasto = { lista: TipoGasto[] | null; fallo: string | null }
+
+function useTiposGasto(accountId: string, companyId: string | null, hacenFalta: boolean): TiposGasto {
+  const [t, setT] = useState<TiposGasto>({ lista: null, fallo: null })
+  useEffect(() => {
+    if (!hacenFalta) return
+    let vivo = true
+    listarTiposGasto(accountId, companyId)
+      .then((l) => { if (vivo) setT({ lista: l.filter((x) => !x.oculto), fallo: null }) })
+      .catch((e: unknown) => { if (vivo) setT({ lista: null, fallo: e instanceof Error ? e.message : 'No se pudieron cargar los tipos de gasto.' }) })
+    return () => { vivo = false }
+  }, [accountId, companyId, hacenFalta])
+  return t
+}
+
 export function FilasAMirar({ filas, accountId, hecho, subir }: { filas: FilaAMirar[]; accountId: string; hecho: Hecho; subir: () => void }) {
   const { activa } = useEmpresas()
+  const faltaTipo = filas.some((f) => f.tipo === 'ficha' && f.falta.some((x) => x.falta === 'tipo_gasto'))
+  const tipos = useTiposGasto(accountId, activa?.id ?? null, faltaTipo)
   return (
     <div className="cxc-mirar">
       {filas.map((f) => {
@@ -382,7 +420,7 @@ export function FilasAMirar({ filas, accountId, hecho, subir }: { filas: FilaAMi
           case 'liquida': return <FilaLiquida key={f.clave} f={f} hecho={hecho} />
           case 'sin_iva': return <FilaSinIva key={f.clave} f={f} empresaId={activa?.id ?? null} hecho={hecho} />
           case 'papel_ficha': return <FilaPapelFicha key={f.clave} f={f} hecho={hecho} />
-          case 'ficha': return <FilaFicha key={f.clave} f={f} hecho={hecho} />
+          case 'ficha': return <FilaFicha key={f.clave} f={f} hecho={hecho} tipos={tipos} />
           case 'otra': return <FilaOtra key={f.clave} f={f} hecho={hecho} subir={subir} />
           case 'sin_camino': return <FilaSinCamino key={f.clave} rs={f.recepciones} hecho={hecho} />
         }
