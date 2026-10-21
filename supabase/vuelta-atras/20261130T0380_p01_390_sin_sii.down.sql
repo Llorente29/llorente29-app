@@ -1,23 +1,6 @@
--- cambia: public.conta_impuesto_reglas · prueba: supabase/staging/sql/20261129_p01_390_sin_sii_prueba.sql
---
--- P01 · El alta no propone el 390 a quien lleva el SII (Julio, 21/10).
---
---   conta_impuesto_reglas(empresa)     [CAMBIA, misma firma] lo de la 0250
---     byte a byte (medido en producción y en staging el 21/10: md5 del cuerpo
---     8d6cce36…), y una condición más en los resúmenes anuales: con el SII,
---     el 390 sale inactivo con su porqué («Llevas el SII: no presentas el
---     390»), en vez de activo. Es la misma regla que ya usan la app
---     (src/modules/conta/lib/modelos.ts, ANUAL_SIN_SII) y el agente de
---     cumplimiento (#268). Sin el SII, todo sale exactamente igual que antes:
---     mismas filas, mismos datos y mismo porqué, así que recalcular los
---     modelos de una empresa sin SII no escribe nada nuevo.
---
--- Medido en producción el 21/10: 0 empresas con el SII, 0 con el SII y el
--- 390. Solo lee: aplicar no cambia ningún dato; los modelos de una empresa se
--- reescriben cuando alguien los recalcula (conta_impuesto_obligaciones_calcular,
--- que respeta lo que decidió una persona).
--- Vuelta atrás: el cuerpo de la 0250, tal cual.
-
+-- Vuelta atrás de 20261130T0380 (P01): conta_impuesto_reglas como la dejó la
+-- 0250, byte a byte (md5 del cuerpo 8d6cce36…). Sin datos que proteger: la
+-- función solo lee; los modelos ya escritos no los toca ni la ida ni la vuelta.
 create or replace function public.conta_impuesto_reglas(p_company uuid)
 returns table (form_code text, active boolean, cadence text, rule_key text, rule_facts jsonb, why text)
 language plpgsql stable security definer set search_path = public as $$
@@ -140,16 +123,6 @@ begin
     continue when (t.code = '111' and not (v_111 or v_hay_retiene)) or (t.code = '115' and not (v_115 or v_hay_alquila));
     form_code := t.annual_form_code; cadence := 'annual'; rule_key := 'anual_de_' || t.code;
     active := case t.code when '303' then v_303 when '111' then v_111 else v_115 end;
-    -- 0350 (Julio, 21/10): quien lleva el SII no presenta el 390 (instrucciones
-    -- del modelo 390, AEAT). Sale igual, inactivo y con su porqué: no se esconde.
-    if t.annual_form_code = '390' and active and coalesce(p.sii, false) then
-      active := false;
-      rule_facts := jsonb_build_object('periodico', t.code, 'presenta_el_periodico', true, 'sii', true,
-                                       'norma', 'Instrucciones del modelo 390 (AEAT): no lo presentan quienes llevan los libros registro en el SII');
-      why := 'Llevas el SII: no presentas el 390 (instrucciones del modelo 390, AEAT).';
-      return next;
-      continue;
-    end if;
     rule_facts := jsonb_build_object('periodico', t.code, 'presenta_el_periodico', active, 'norma', t.annual_legal_ref);
     why := case when active then 'Presentas el ' || t.code || ': en enero resumes el año en el ' || t.annual_form_code || '.'
                 else 'No presentas el ' || t.code || ', así que tampoco su resumen anual.' end;
@@ -187,4 +160,4 @@ begin
   return next;
 end $$;
 comment on function public.conta_impuesto_reglas(uuid) is
-  'I01a/I01b (0250) y P01 (0350). Lo que dice cada regla con nombre sobre los modelos de una empresa, con los datos y el porqué en palabras de oficina. El 349, por operaciones con la UE o el ROI. Con el SII, sin el 390. No escribe nada.';
+  'I01a/I01b (0250). Lo que dice cada regla con nombre sobre los modelos de una empresa, con los datos y el porqué en palabras de oficina. El 349, por operaciones con la UE o el ROI. No escribe nada.';

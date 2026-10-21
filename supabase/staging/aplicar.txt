@@ -383,7 +383,7 @@ supabase/staging/sql/20261129_compras_revisar_cuatro_caminos_prueba.sql
 #   la 0250 tal cual (la deja la línea de la 0250, arriba): Levante (con el
 #   SII) sin el 390 y con su porqué, el Hostal con él, el SII puesto y quitado,
 #   las empresas sin el SII con las mismas filas que antes, calcular que no lo
-#   escribe y la vuelta atrás byte a byte. Después, la 0350 DE VERDAD (cambia
+#   escribe y la vuelta atrás byte a byte. Después, la 0380 DE VERDAD (cambia
 #   la regla en caliente, misma firma), para que staging la tenga.
-supabase/staging/sql/20261129_p01_390_sin_sii_prueba.sql
-supabase/migrations/20261129T0350_p01_390_sin_sii.sql
+supabase/staging/sql/20261130_p01_390_sin_sii_prueba.sql
+supabase/migrations/20261130T0380_p01_390_sin_sii.sql

@@ -1,6 +1,6 @@
--- supabase/staging/sql/20261129_p01_390_sin_sii_prueba.sql
+-- supabase/staging/sql/20261130_p01_390_sin_sii_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261129T0350_p01_390_sin_sii, con \i dentro de la
+-- SOLO STAGING. Prueba de 20261130T0380_p01_390_sin_sii, con \i dentro de la
 -- transacción y ROLLBACK: staging no cambia. Nombra lo que cambia en caliente:
 -- public.conta_impuesto_reglas.
 --
@@ -44,7 +44,7 @@ select c.id as empresa, r.*
   join public.company_tax_profile p on p.company_id = c.id and not coalesce(p.sii, false)
   cross join lateral public.conta_impuesto_reglas(c.id) r;
 
-\i supabase/migrations/20261129T0350_p01_390_sin_sii.sql
+\i supabase/migrations/20261130T0380_p01_390_sin_sii.sql
 
 -- ── 1 · Levante, con el SII: el 390, inactivo y con su porqué ───────────────
 do $$ begin
@@ -124,14 +124,14 @@ do $$ begin
 end $$;
 
 -- ── 6 · La vuelta atrás, y otra vez hacia delante ──────────────────────────
-\i supabase/vuelta-atras/20261129T0350_p01_390_sin_sii.down.sql
+\i supabase/vuelta-atras/20261130T0380_p01_390_sin_sii.down.sql
 do $$ begin
   if (select md5(prosrc) from pg_proc where oid = 'public.conta_impuesto_reglas(uuid)'::regprocedure) <> '8d6cce36753a63009a2a1a71cf4f99fa' then
     raise exception 'PRUEBA 390 SII · 6: la vuelta atrás no deja la regla de la 0250 byte a byte.';
   end if;
   raise notice 'PRUEBA 390 SII · 6: vuelta atrás hecha: la regla de la 0250, md5 8d6cce36….';
 end $$;
-\i supabase/migrations/20261129T0350_p01_390_sin_sii.sql
+\i supabase/migrations/20261130T0380_p01_390_sin_sii.sql
 do $$ begin
   if exists (select 1 from public.conta_impuesto_reglas('d5ac0000-0000-4000-8000-00000000c05e') where form_code = '390' and active) then
     raise exception 'PRUEBA 390 SII · 6: no se vuelve a aplicar.';
