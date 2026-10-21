@@ -378,6 +378,15 @@ supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
 #   recuento. Cada uno tiene que escribir lo suyo.
 supabase/staging/sql/20261129_compras_revisar_cuatro_caminos_prueba.sql
 
+# C06b · El nombre del PDF lo limpia la base (rama conta/c06b-nombre-pdf-base;
+#   Julio, 21/10). La 0380 añade original_name, conta_nombre_fichero y el
+#   disparador; su prueba (ROLLBACK) mete nombres con espacios, tildes y «ñ» por
+#   los tres que escriben (resumen de ventas, recibida y expedida), comprueba que
+#   file_name sale limpio y original_name guarda el de antes, y ejecuta la vuelta
+#   atrás.
+supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql
+supabase/staging/sql/20261129_c06b_nombre_pdf_base_prueba.sql
+
 # AUTOCONTEO · el autoconteo se aplica solo, entero y con cualquier diferencia
 #   (rama claude/exciting-cray-eik036; encargo de Julio del 21/10). Primero la
 #   limpieza (si ya están, las quita con sus .down.sql: se puede volver a

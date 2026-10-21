@@ -40,8 +40,14 @@ import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { TarjetaExpedida } from '@/modules/conta/libro/FacturaExpedida'
 import { esExpedidaAMano } from '@/modules/conta/lib/expedidaPdf'
 import { useIsMobile } from '@/shell/useIsMobile'
+import { motivosParaValidar } from '@/modules/conta/services/esperanService'
+import { porQueNoSeValida, type MotivoEspera } from '@/modules/conta/lib/esperan'
 
-interface Datos { asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null }
+interface Datos {
+  asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null
+  /** C06b (21/10): por qué no lo validaría la base (conta_motivos_para_validar); null si no se ha podido leer. */
+  motivos: MotivoEspera[] | null; motivosError: string | null
+}
 
 export default function AsientoPage() {
   // S01: el local y la marca de cada apunte, solo con su eje encendido (Definiciones › Analítica).
@@ -64,7 +70,12 @@ export default function AsientoPage() {
         const conDiez = asiento?.origen === 'sales_day'
           ? (await leerConDiez(accountId, activa.id, [asiento.id]).catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() })).get(asiento.id) ?? null
           : null
-        return { asiento, cuentas, cierres, conDiez, conDiezError }
+        // C06b (21/10): lo que haría que la base no lo valide (un envío por aclarar, entre otros), para decirlo antes de pulsar.
+        let motivosError: string | null = null
+        const motivos = asiento && (asiento.estado === 'propuesto' || asiento.estado === 'borrador')
+          ? await motivosParaValidar(asiento.id).catch((e: unknown) => { motivosError = e instanceof Error ? e.message : String(e); return null })
+          : []
+        return { asiento, cuentas, cierres, conDiez, conDiezError, motivos, motivosError }
       })
       .then((d) => { if (vivo) setR({ clave, datos: d, error: null }) },
         (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
@@ -136,6 +147,8 @@ export default function AsientoPage() {
   const dosNumeros = numerosFolvyDiez(a, datos.conDiez)
   // 15/10: una plataforma sin patrón en Diez (Glovo) no ofrece «Validar y enviar»: validar no se deshace.
   const sinPatron = datos.conDiez ? motivoSinPatron(datos.conDiez.canal) : null
+  // C06b (21/10): con un motivo de la base (un envío a Diez por aclarar, entre otros), los dos botones de validar en gris y su porqué.
+  const frena = editable ? porQueNoSeValida(datos.motivos ?? []) : null
   // S01e: el porqué en palabras normales, con el nombre junto a cada cuenta.
   const nombres = nombresDeCuentas([...a.apuntes, ...datos.cuentas.map((x) => ({ cuenta: x.code, nombreCuenta: x.nombre }))])
   const llano = (t: string) => palabrasLlanas(t, nombres)
@@ -158,14 +171,20 @@ export default function AsientoPage() {
         </div>
         <div className="cxd-acciones">
           {editable && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('descartar')} disabled={ocupado}>Descartar</button>}
-          {editable && <button type="button" className={datos.conDiez ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando…' : 'Validar asiento'}</button>}
-          {editable && datos.conDiez && !sinPatron && <button type="button" className="cx-boton" onClick={hacerValidarYEnviar} disabled={ocupado || !c?.cuadra || mes.cerrado}>{ocupado ? 'Validando y enviando…' : 'Validar y enviar a Diez'}</button>}
+          {editable && <button type="button" className={datos.conDiez || frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? 'Validando…' : 'Validar asiento'}</button>}
+          {editable && datos.conDiez && !sinPatron && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidarYEnviar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? 'Validando y enviando…' : 'Validar y enviar a Diez'}</button>}
           {a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
         </div>
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
+      {editable && frena?.franja && (
+        <div className="cx-tarjeta cxd-franja" role="status" aria-label="Por qué no se valida" data-prueba="no-se-valida">
+          <span><strong>No se valida todavía</strong> · {frena.franja}</span>
+        </div>
+      )}
+      {editable && datos.motivosError && <p className="cx-ayuda cxt-ambar" role="note">No he podido comprobar si se puede validar: {datos.motivosError}. Si no se puede, lo dirá al pulsar.</p>}
       {editable && mes.cerrado && (
         <div className="cx-tarjeta cxd-franja" role="status">
           <span><strong>{nombreMes(mesDe(a.fecha))} está {mes.texto.toLowerCase()}</strong> · {mes.apoyo}. No se valida con esa fecha: desbloquéalo desde el libro o descártalo y lo vuelvo a proponer en el primer día abierto.</span>

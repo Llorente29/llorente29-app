@@ -523,6 +523,15 @@ describe('R11 · paso 8 sobre la tanda de Compras (0350–0370, su copia, aplica
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de C06b (0380, el nombre del PDF; su copia, aplicada), con su contexto medido', () => {
+  it('la 0380 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-nombre-pdf-base-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-c06b-nombre-pdf-base-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0380_c06b_nombre_pdf_base.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
