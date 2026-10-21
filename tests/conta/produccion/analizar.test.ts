@@ -1434,6 +1434,114 @@ describe('la tanda de AHORA (manifiesto vivo): las facturas de riders (E05, 0410
   })
 })
 
+describe('la tanda del Autoconteo (0390 y 0400, PR #277), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-autoconteo-20261021.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo lectura
+  // en producción el 21/10 a las 15:58 UTC, después de la de Compras, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-autoconteo-20261021.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261129_autoconteo_prueba.sql'
+
+  it('dos ficheros, los medidos; los dos piden «autorizo»; del camino del pedido, solo la función del cron; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261129T0390_autoconteo_anula_atascados.sql', '20261129T0400_autoconteo_se_aplica_entero.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(viva.map((f) => r.ficheros[f])).toEqual(['autorizo', 'autorizo'])
+    expect(ctx.tablas).toEqual(['public.inventory_count'])
+    expect(ctx.funciones).toEqual(['public.apply_inventory_count(uuid,uuid,text,boolean)', 'public.autoclose_daily_count(uuid)',
+      'public.close_inventory_count(uuid)', 'public.cron_autoclose_daily_counts()'])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: ['public.cron_autoclose_daily_counts()'] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('lo que cambia en caliente está en la cabecera, con su prueba de staging, y la prueba lo nombra', () => {
+    const cab = (f: string) => readFileSync(f, 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab(viva[0])).toEqual([`-- cambia: public.autoconteo_anulacion_20261021 · prueba: ${PRUEBA}`])
+    expect(cab(viva[1])).toEqual(['inventory_count', 'close_inventory_count', 'apply_inventory_count', 'autoclose_daily_count', 'cron_autoclose_daily_counts']
+      .map((x) => `-- cambia: public.${x} · prueba: ${PRUEBA}`))
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of ['close_inventory_count', 'apply_inventory_count', 'autoclose_daily_count', 'autoconteo_cierre_nocturno', 'set local role authenticated',
+      'close_sale', 'register_waste']) expect(p).toContain(x)
+  })
+  it('la 0390 anula 23 por id y cuenta, para entera si alguno no está como se midió, y no toca el stock', () => {
+    const t = readFileSync(viva[0], 'utf8')
+    expect(t.match(/\('[0-9a-f-]{36}',\s*'INV-\d+',\s*c_(plantilla|foodint),/g)).toHaveLength(23)
+    expect(t).toContain("raise exception 'autoconteo 0390: no se anula nada")
+    expect(t.replace(/--.*$/gm, '')).not.toMatch(/stock_movement|recompute_location_stock/)
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/autoconteo.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás, en orden inverso', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-autoconteo-20261021.txt').map(nombre)).toEqual([
+      '20261129T0400_autoconteo_se_aplica_entero.down.sql', '20261129T0390_autoconteo_anula_atascados.down.sql'])
+  })
+})
+
+describe('la tanda de C06b · el nombre del PDF lo limpia la base (0380, PR #275), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c06b-nombre-pdf-base-20261021.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 21/10 a las 19:16 UTC, después de la 0350–0370, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c06b-nombre-pdf-base-20261021.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261129_c06b_nombre_pdf_base_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261129T0380_c06b_nombre_pdf_base.down.sql'
+
+  it('un fichero, el medido; sigue sin «autorizo»; la tabla existe y lo nuevo no; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261129T0380_c06b_nombre_pdf_base.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(viva.map((f) => r.ficheros[f])).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual(['public.journal_entry_document'])
+    expect(ctx.funciones).toEqual([])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('solo añade y se puede volver a correr: la columna admite nulos, las dos funciones no existen en producción, el único drop es el del disparador nuevo y ningún update ni delete', () => {
+    const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '')
+    expect(t).toMatch(/add column if not exists original_name text;/)
+    expect(t).not.toMatch(/\bnot null\b/i)
+    expect(t.match(/create or replace function public\.(\w+)/g)).toEqual(['create or replace function public.conta_nombre_fichero', 'create or replace function public.journal_entry_document_nombre_limpio'])
+    expect(ctx.funciones).toEqual([])
+    expect(t.match(/\bdrop\b[^;]*;/g)).toEqual(['drop trigger if exists trg_journal_entry_document_nombre_limpio on public.journal_entry_document;'])
+    expect(t).not.toMatch(/\bupdate\s+public\.|\bdelete\s+from\b|\brename\b|\btruncate\b/i)
+  })
+  it('el disparador nuevo está en la cabecera, con su prueba de staging; la prueba lo nombra, pasa por los tres que escriben y ejecuta la vuelta atrás', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual([`-- cambia: public.journal_entry_document · prueba: ${PRUEBA}`])
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of ['journal_entry_document', 'conta_documento_factura_guardar', "'resumen_ventas'", "'factura_expedida'", 'set local role authenticated', 'rollback;']) expect(p).toContain(x)
+    expect(p).toContain(`\\i ${DOWN}`)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/nombre-pdf-base.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-c06b-nombre-pdf-base-20261021.txt')).toEqual([DOWN])
+  })
+})
+
 describe('la tanda de Compras · Por revisar y los textos sin «papel» (0350, 0360 y 0370, PR #271), ya aplicada: su copia y su contexto medido', () => {
   const MANIFIESTO = 'tests/conta/produccion/tanda-compras-revisar-20261021.txt'
   const viva = leerTanda(MANIFIESTO)

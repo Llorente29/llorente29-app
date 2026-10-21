@@ -1,0 +1,20 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# C06b · El nombre del PDF de un asiento lo limpia SIEMPRE la base (rama
+# conta/c06b-nombre-pdf-base; Julio, 21/10: «rehaz la limpieza en la base con el
+# número de migración libre»). Va DESPUÉS de Compras · Por revisar (0350–0370,
+# PR #271, aplicada): su copia, tests/conta/produccion/tanda-compras-revisar-20261021.txt.
+#
+#   1. 0380 — AÑADE la columna journal_entry_document.original_name (admite
+#      nulos), la función conta_nombre_fichero y un disparador antes de insertar
+#      o de cambiar file_name. No reemplaza ninguna función ni cambia ninguna
+#      fila: los documentos que ya están se quedan como están. El disparador
+#      nuevo está declarado en la cabecera, con su prueba de staging.
+#
+# No toca el camino del pedido. Ninguna función que desplegar a mano.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/nombre-pdf-base.sql
+supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql
