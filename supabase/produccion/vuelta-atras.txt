@@ -1,6 +1,4 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# C06b · el nombre del PDF en la base): fuera el disparador y sus dos funciones;
-# la columna original_name solo se quita si no guarda nada que no esté ya en
-# file_name.
-cuenta: scripts/conta/produccion/cuentas/nombre-pdf-base.sql
-supabase/vuelta-atras/20261129T0380_c06b_nombre_pdf_base.down.sql
+# I01d · los impuestos de 2025): conta_impuesto_trimestre como en la 0280.
+cuenta: scripts/conta/produccion/cuentas/impuestos-2025.sql
+supabase/vuelta-atras/20261130T0420_i01d_impuestos_2025.down.sql

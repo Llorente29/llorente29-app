@@ -1,17 +1,15 @@
 {
-  "_que": "C06b · el nombre del PDF en la base · contexto de producción de la tanda viva (20261129T0380), medido en SOLO LECTURA el 21/10 a las 19:16 UTC, después de la 0350–0370 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. journal_entry_document existe; conta_nombre_fichero y el disparador no; nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-21T19:16Z",
+  "_que": "I01d · los impuestos de 2025 · contexto de producción de la tanda viva (20261130T0420), medido en SOLO LECTURA el 21/10 a las 21:42 UTC, después de la 0380 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. conta_impuesto_trimestre existe (la de la 0280, md5 del cuerpo 9522728be846f7d8acc8d03a09cabfa5); ninguna otra con su nombre; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-21T21:42Z",
   "tanda": {
-    "supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql": "70fb357ea70c20e4a69b6a58ade560b4"
+    "supabase/migrations/20261130T0420_i01d_impuestos_2025.sql": "b34e03c9ce0195bec9ea965cafd2e8dc"
   },
   "contexto": {
-    "tablas": [
-      "public.journal_entry_document"
+    "tablas": [],
+    "funciones": [
+      "public.conta_impuesto_trimestre(uuid,int,int)"
     ],
-    "funciones": [],
-    "filas": {
-      "public.journal_entry_document": 56
-    },
+    "filas": {},
     "otras": {},
     "camino": {
       "tablas": [],
