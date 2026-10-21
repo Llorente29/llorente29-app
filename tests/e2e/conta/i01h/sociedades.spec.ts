@@ -158,7 +158,8 @@ test('El 202 desde el último 200: el 200 a mano, «No hay que presentarlo» con
 
     // El Calendario del 21/10: el 2P no hace falta, con su porqué, y no está fuera de plazo.
     await ir(page, 'impuestos', '&hoy=2026-10-21')
-    await expect(page.locator('.s-impuestos-calendario tr').filter({ hasText: 'No hay que presentarlo: el impuesto de 2025 salió a cero' })).toHaveCount(1)
+    // Dos filas: el 2P, que venció ayer, y el 3P, que es el plazo siguiente (diciembre). Las dos, con su porqué.
+    await expect(page.locator('.s-impuestos-calendario tr').filter({ hasText: 'No hay que presentarlo: el impuesto de 2025 salió a cero' })).toHaveCount(2)
     await expect(page.locator('.s-impuestos-cifras .s-tarjeta-cifra').first()).not.toContainText('202 · 2P')
     await fotos(page, 'calendario-202-no-hace-falta')
   })
