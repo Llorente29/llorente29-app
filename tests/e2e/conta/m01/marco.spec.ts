@@ -3,13 +3,16 @@
 //
 // M01 · El marco nuevo (maqueta N30, decisiones de Julio sobre el F01), en la
 // cuenta A de staging-conta (todo inventado). Desde el S01 el marco es el
-// esqueleto (tests/e2e/conta/s01/esqueleto.spec.ts prueba lo suyo); aquí:
-//   · la barra de productos desplegada y plegada, que se recuerda (en la base);
+// esqueleto (tests/e2e/conta/s01/esqueleto.spec.ts prueba lo suyo); desde el
+// S02 (PR 1), el del patrón único: sin pestañas en la cabecera ni cinta. Aquí:
+//   · la barra desplegada (232 px) y plegada (64), que se recuerda (en la base);
 //   · lo que no tiene pantalla no sale (antes, Impuestos apagado con «Próximamente»);
 //   · el «Te toca hoy» del Inicio;
-//   · la densidad, en el menú del usuario, que se recuerda;
-//   · una pantalla vieja (Bancos) dentro del marco, con su estilo y sus pestañas;
-//   · el buscador general (Ctrl K), que es del marco y no de Libros.
+//   · la densidad (Cómoda de serie, 56 px; Compacta, 40), en el menú del usuario, que se recuerda;
+//   · una pantalla vieja (Bancos) dentro del marco, con su estilo, sus páginas en
+//     la barra y su fila de acciones;
+//   · el buscador general (Ctrl K), que es del marco y no de Libros;
+//   · las piezas, en la única muestra (el patrón único).
 // Las capturas van a docs/conta/capturas/m01 (frente D).
 
 import { test, expect, type Page } from '@playwright/test'
@@ -51,7 +54,7 @@ async function guardandoPreferencias(page: Page, hacer: () => Promise<unknown>) 
   expect((await guardado).ok()).toBe(true)
 }
 
-/** S01: el menú del usuario («Admin», y debajo «Nivel medio»), con el nivel, la densidad y la cinta. */
+/** S01: el menú del usuario, con el nivel y la densidad (S02: ya sin «Ocultar la cinta»). */
 async function abrirUsuario(page: Page) {
   // S01d: en el móvil, el usuario va en el cajón del menú.
   if ((page.viewportSize()?.width ?? 1440) < 768 && await page.getByRole('dialog', { name: 'Menú' }).count() === 0) {
@@ -59,11 +62,11 @@ async function abrirUsuario(page: Page) {
   }
   await page.getByRole('button', { name: /\. Tus preferencias$/ }).click()
 }
-/** S01: la densidad se cambia en el menú del usuario, y lo dice. */
+/** S01: la densidad se cambia en el menú del usuario, y lo dice (S02: con sus filas, «Densidad: cómoda, filas de 56 px.»). */
 async function cambiarDensidad(page: Page, cual: 'Cómoda' | 'Compacta') {
   await abrirUsuario(page)
-  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: cual }).click()
-  await expect(page.getByRole('status').filter({ hasText: `Densidad: ${cual.toLowerCase()}.` })).toBeVisible()
+  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: new RegExp(`^${cual}`) }).click()
+  await expect(page.getByRole('status').filter({ hasText: `Densidad: ${cual.toLowerCase()}, filas de ${cual === 'Cómoda' ? 56 : 40} px.` })).toBeVisible()
   if (await page.getByRole('dialog', { name: 'Menú' }).count()) await page.getByRole('button', { name: 'Cerrar el menú' }).click()
 }
 
@@ -79,10 +82,11 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
   vigilar(page)
   await page.goto('/conta/inicio')
   await expect(page.locator('.cxm')).toBeVisible()
-  // Letra Geist en el marco (Folvy) y fondo de N30, sin el degradado de antes.
+  // S02: el fondo del patrón (#F4F7FB) en todas las marcas (antes, el de N30 con
+  // Folvy), sin el degradado de antes.
   await page.evaluate(() => document.fonts.ready)
   const raiz = await page.locator('.cxm').evaluate((el) => { const s = getComputedStyle(el); return { fondo: s.backgroundColor, imagen: s.backgroundImage } })
-  expect(raiz).toEqual({ fondo: 'rgb(238, 241, 245)', imagen: 'none' })
+  expect(raiz).toEqual({ fondo: 'rgb(244, 247, 251)', imagen: 'none' })
 
   // «Te toca hoy» (Julio, 16/10): sale lo que tiene algo, con su número; lo que
   // está a 0, no; y si todo está a 0, una línea gris «Nada pendiente hoy».
@@ -114,10 +118,11 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
     return
   }
 
-  // Desplegada (de serie, S01c): 220 px, cada producto con su nombre en una línea.
+  // Desplegada (de serie, S01c): S02, 232 px (antes 220), cada apartado con su
+  // nombre en una línea; abajo, Favoritos y Ajustes.
   const barra = menu(page)
-  await expect(barra.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
-  expect(Math.round((await barra.boundingBox())!.width)).toBe(220)
+  await expect(barra.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
+  expect(Math.round((await barra.boundingBox())!.width)).toBe(232)
   // Cada nombre en una sola línea (S01b: «Compras y gastos» se partía).
   for (const alto of await barra.locator('.s-barra-item').evaluateAll((xs) => xs.map((x) => x.getBoundingClientRect().height))) expect(alto).toBeLessThanOrEqual(48)
   // …y entero, sin «…», con su chip al lado (S01c: «Compras y gas…» con el chip 23).
@@ -141,45 +146,60 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
   await page.evaluate(() => window.scrollTo(0, 0))
   await capturar(page, 'marco-plegado')
   await guardandoPreferencias(page, () => menu(page).getByRole('button', { name: 'Desplegar el menú' }).click())
-  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(220)
+  expect(Math.round((await menu(page).boundingBox())!.width)).toBe(232)
 
-  // La densidad, en el menú del usuario (S01): compacta de serie; se recuerda.
-  await guardandoPreferencias(page, () => cambiarDensidad(page, 'Cómoda'))
-  await page.reload()
+  // La densidad, en el menú del usuario (S01). S02 (decisión 2 de Julio, 22/10):
+  // Cómoda de serie (antes, Compacta); se recuerda. Se deja en Cómoda, la de serie,
+  // que es la que leen las demás pruebas.
   await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'comoda')
   await guardandoPreferencias(page, () => cambiarDensidad(page, 'Compacta'))
+  await page.reload()
   await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'compacta')
+  await guardandoPreferencias(page, () => cambiarDensidad(page, 'Cómoda'))
+  await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'comoda')
 
   // «Volver a Folvy», en el menú del usuario (con Folvy; en el producto solo no hay).
   await abrirUsuario(page)
   await expect(page.getByRole('link', { name: 'Volver a Folvy' })).toBeVisible()
 })
 
-test('una pantalla vieja dentro del marco: Bancos, con su estilo y sus pestañas', async ({ page }) => {
+test('una pantalla vieja dentro del marco: Bancos, con su estilo, sus páginas y su fila de acciones', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/bancos')
   await expect(page.locator('.cxm .cx-principal')).toBeVisible()
   if (lado(page) === 'ordenador') {
-    // S01 · paso 3: sus pestañas, en el esqueleto (una sola vez) y su barra, en la cinta.
-    // S01f (Julio, 20/10): las pestañas, en su franja debajo de la cabecera.
-    await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveCount(1)
-    await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toBeVisible()
-    await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveClass(/s-franja-pestanas/)
-    await expect(page.getByRole('toolbar', { name: 'Acciones de Movimientos' })).toBeVisible()
+    // S01 · paso 3: sus páginas, en el esqueleto (una sola vez) y su barra, en la fila de acciones.
+    // S02: las páginas ya no van en la franja de pestañas (S01f) sino debajo de
+    // Bancos, en la barra, en su orden; la cinta es la fila de acciones.
+    const paginas = menu(page).getByRole('list', { name: 'Páginas de Bancos' })
+    await expect(page.getByRole('list', { name: 'Páginas de Bancos' })).toHaveCount(1)
+    await expect(paginas).toBeVisible()
+    await expect(paginas).toHaveClass(/s-barra-paginas/)
+    await expect(paginas.locator('.s-barra-nombre')).toHaveText(['Movimientos', 'Cuentas y extractos', 'Reglas', 'Cierre del mes'])
+    await expect(paginas.getByRole('link', { name: 'Movimientos', exact: true })).toHaveAttribute('aria-current', 'page')
+    const acciones = page.getByRole('toolbar', { name: 'Acciones de Movimientos' })
+    await expect(acciones).toBeVisible()
+    // La regla del patrón: un solo principal, «Subir extracto».
+    await expect(acciones.locator('.s-boton-principal')).toHaveText('Subir extracto')
     await expect(page.locator('.cxl-areas, .cxl-barra, .cxl-tuyos')).toHaveCount(0)
-    await expect(menu(page).getByRole('link', { name: 'Bancos', exact: true })).toHaveAttribute('aria-current', 'page')
+    // S02: el apartado dice «estás dentro» ('true'): estás en una de sus páginas.
+    await expect(menu(page).getByRole('link', { name: 'Bancos', exact: true })).toHaveAttribute('aria-current', 'true')
     // Su estilo de hoy: las tarjetas con el radio de antes (no el de 8 px del marco).
     const tarjetas = page.locator('.cx-principal .cx-tarjeta')
     if (await tarjetas.count()) expect(await tarjetas.first().evaluate((el) => getComputedStyle(el).borderTopLeftRadius)).not.toBe('8px')
   }
   if (lado(page) === 'movil') {
-    // En el móvil, Bancos abre su portada por niveles (PortadaMovil): el esqueleto
-    // no pone ni pestañas ni cinta (portadaMovil), y Bancos va marcado en el cajón (S01c).
-    await expect(page.getByRole('navigation', { name: 'Pestañas de Bancos' })).toHaveCount(0)
+    // En el móvil, Bancos abre su portada por niveles (PortadaMovil), que pinta
+    // sus propias entradas: el marco no pone ni las páginas ni la fila de
+    // acciones (portadaMovil), y las páginas salen en el cajón, con Bancos
+    // marcado (S01c) y «estás dentro» ('true').
+    await expect(page.getByRole('list', { name: 'Páginas de Bancos' })).toHaveCount(0)
     await expect(page.getByRole('toolbar', { name: 'Acciones de Movimientos' })).toHaveCount(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
     await page.getByRole('button', { name: 'Abrir el menú' }).click()
-    await expect(menu(page).getByRole('link', { name: /^Bancos/ })).toHaveAttribute('aria-current', 'page')
+    await expect(menu(page).getByRole('link', { name: /^Bancos/ })).toHaveAttribute('aria-current', 'true')
+    await expect(menu(page).getByRole('list', { name: 'Páginas de Bancos' }).getByRole('link', { name: 'Movimientos', exact: true })).toHaveAttribute('aria-current', 'page')
     await page.getByRole('button', { name: 'Cerrar el menú' }).click()
     await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
   }
@@ -188,17 +208,18 @@ test('una pantalla vieja dentro del marco: Bancos, con su estilo y sus pestañas
   await capturar(page, 'pantalla-vieja')
 })
 
-test('Libros (S01): «Libros y listados» marcada en la cabecera; sus acciones, en la cinta', async ({ page }) => {
+test('Libros (S01): «Libros y listados» marcada en la barra; sus libros, en «Ver» de la fila de acciones', async ({ page }) => {
   test.skip(lado(page) === 'movil', 'En el móvil Libros va por niveles y pinta sus áreas')
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros/balances/balance')
-  const pestanas = page.getByRole('navigation', { name: 'Pestañas de Contabilidad' })
-  await expect(pestanas).toBeVisible()
-  // La de la dirección, activa: si está dentro de «Más», el botón la nombra.
-  await expect(pestanas.locator('[aria-current="page"], .s-pestana-activa')).toHaveText(/^Libros y listados/)
+  // S02: las páginas de Contabilidad, debajo del apartado en la barra (antes, pestañas en la cabecera con «Más»).
+  const paginas = menu(page).getByRole('list', { name: 'Páginas de Contabilidad' })
+  await expect(paginas).toBeVisible()
+  await expect(paginas.locator('[aria-current="page"] .s-barra-nombre')).toHaveText('Libros y listados')
   await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
-  await expect(page.getByRole('toolbar', { name: 'Acciones de Libros y listados' }).getByRole('link', { name: /^Balance de situación/ })).toHaveAttribute('aria-current', 'page')
+  // S02: los libros son a dónde ir dentro de la página: el selector «Ver» nombra el de la dirección.
+  await expect(page.getByRole('toolbar', { name: 'Acciones de Libros y listados' }).getByRole('button', { name: 'Ver: Balance de situación. Cambiar' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Balance de situación' })).toBeVisible({ timeout: 30_000 })
   await capturar(page, 'pestanas-libros')
 })
@@ -208,7 +229,8 @@ test('el buscador general: Ctrl K es del marco, agrupa por tipo y abre con Intro
   vigilar(page)
   await page.goto('/conta/libros/diario')
   await expect(page.locator('.cxm .cx-principal')).toBeVisible()
-  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Buscar', exact: true }).click()
+  // S02: el botón del móvil se llama «Buscar o hacer algo» (antes, «Buscar»).
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Buscar o hacer algo' }).click()
   else await page.keyboard.press('Control+k')
   const dialogo = page.getByRole('dialog', { name: 'Buscar todo' })
   await expect(dialogo).toBeVisible()
@@ -304,12 +326,14 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
 
   // La columna del número en Diez; y la cabecera se queda arriba al bajar.
   await expect(lista.getByRole('columnheader', { name: 'Diez' })).toBeVisible()
-  // Compacta (de serie): filas de unos 28 px, unas 30 por pantalla.
-  await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'compacta')
-  const altoCompacta = (await lista.locator('.cxt-fila').first().boundingBox())!.height
-  expect(altoCompacta).toBeLessThanOrEqual(30)
+  // S02 (decisión 2 de Julio, 22/10): Cómoda de serie, filas de 56 px (antes,
+  // Compacta de serie con filas de 28). Se mira la de serie y luego la otra.
+  await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'comoda')
+  const altoComoda = (await lista.locator('.cxt-fila').first().boundingBox())!.height
+  expect(altoComoda).toBeGreaterThanOrEqual(55)
+  expect(altoComoda).toBeLessThanOrEqual(58)
   await page.evaluate(() => window.scrollTo(0, 0))
-  await capturar(page, 'libro-diario-compacta')
+  await capturar(page, 'libro-diario-comoda')
 
   // Teclado: ↓ marca la fila activa, Espacio la marca, Intro la despliega.
   await lista.focus()
@@ -324,14 +348,15 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   await expect(lista.getByRole('link', { name: 'Abrir el asiento' })).toHaveCount(0)
   await page.getByRole('button', { name: 'Desmarcar' }).click()
 
-  // Cómoda: filas más altas (unas 20 por pantalla); se recuerda.
-  await cambiarDensidad(page, 'Cómoda')
-  await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'comoda')
-  const altoComoda = (await lista.locator('.cxt-fila').first().boundingBox())!.height
+  // Compacta: filas de 40 px, más bajas que las de Cómoda; y se vuelve a la de serie.
+  await cambiarDensidad(page, 'Compacta')
+  await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'compacta')
+  const altoCompacta = (await lista.locator('.cxt-fila').first().boundingBox())!.height
+  expect(altoCompacta).toBeLessThanOrEqual(42)
   expect(altoComoda).toBeGreaterThan(altoCompacta + 8)
   await page.evaluate(() => window.scrollTo(0, 0))
-  await capturar(page, 'libro-diario-comoda')
-  await cambiarDensidad(page, 'Compacta')
+  await capturar(page, 'libro-diario-compacta')
+  await cambiarDensidad(page, 'Cómoda')
 
   // Las fechas, en dd/mm/aaaa y en español, sea cual sea el idioma del navegador (Julio, 16/10).
   const desde = page.getByRole('group', { name: 'Filtros' }).getByLabel('Desde', { exact: true })
@@ -360,39 +385,58 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   await expect(page.getByRole('status').filter({ hasText: /^Bajado libro-diario-.+\.csv: \d+ asientos\.$/ })).toBeVisible()
 })
 
-test('Libros sin el recuadro de antes (S01): las acciones en la cinta, en una fila, y el ejercicio en la cabecera', async ({ page }) => {
-  test.skip(lado(page) === 'movil', 'En el móvil la cinta se desliza de lado')
+test('Libros sin el recuadro de antes (S01): sus libros en «Ver» de la fila de acciones, y el ejercicio en la cabecera', async ({ page }) => {
+  test.skip(lado(page) === 'movil', 'En el móvil Libros va por niveles y pinta sus áreas')
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros/balances/balance')
   await expect(page.getByRole('heading', { name: 'Balance de situación' })).toBeVisible({ timeout: 30_000 })
-  // La cinta (antes, la segunda fila de la barra de arriba, Julio 16/10), debajo de la cabecera: sus 14 acciones en una o dos filas, nunca tras «⋯».
-  const cinta = page.getByRole('toolbar', { name: 'Acciones de Libros y listados' })
-  await expect(cinta.getByRole('link', { name: /^Balance de situación/ })).toHaveAttribute('aria-current', 'page')
-  const ys = await cinta.getByRole('link').evaluateAll((ls) => ls.map((l) => Math.round(l.getBoundingClientRect().top)))
-  expect(new Set(ys).size).toBeLessThanOrEqual(2)
+  // La cinta (antes, la segunda fila de la barra de arriba, Julio 16/10) llevaba
+  // sus 14 libros en una o dos filas, nunca tras «⋯». S02: son a dónde ir dentro
+  // de la página, así que van todos en el selector «Ver» de la fila de acciones,
+  // con el título de su grupo dentro del menú; ninguno se queda fuera.
+  const fila = page.getByRole('toolbar', { name: 'Acciones de Libros y listados' })
+  const ver = fila.getByRole('button', { name: 'Ver: Balance de situación. Cambiar' })
+  await expect(ver).toBeVisible()
+  await ver.click()
+  const libros = fila.getByRole('group', { name: 'Ver', exact: true })
+  for (const g of ['Diario', 'Mayor', 'Estados', 'IVA', 'Retenciones']) await expect(libros.getByRole('group', { name: g, exact: true })).toBeVisible()
+  expect(await libros.getByRole('link').count()).toBeGreaterThanOrEqual(14)
+  // Dentro del menú, el que se está viendo lleva aria-current="true".
+  await expect(libros.getByRole('link', { name: /^Balance de situación/ })).toHaveAttribute('aria-current', 'true')
+  // S02: el ejercicio, con el botón del periodo de la cabecera (un <select> encima).
   await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
   await capturar(page, 'libros-cinta')
   await expect(page.locator('.cxl-tuyos, .cxl-cabeza, .cxl-barra, .cxm-subpestanas')).toHaveCount(0)
-  await cinta.getByRole('link', { name: /^Pérdidas y ganancias/ }).click()
+  await libros.getByRole('link', { name: /^Pérdidas y ganancias/ }).click()
   await expect(page.getByRole('heading', { name: 'Pérdidas y ganancias' })).toBeVisible()
+  await expect(fila.getByRole('button', { name: 'Ver: Pérdidas y ganancias. Cambiar' })).toBeVisible()
 })
 
-// ── Tarea 3 · Las tres piezas comunes, en su página de muestra ───────────
+// ── Tarea 3 · Las piezas comunes, en la página de muestra ────────────────
+//
+// S02: la muestra de las piezas del M01 (/conta/ajustes/muestra-piezas) se ha
+// juntado con la del sistema de diseño en una sola, «El patrón único», y sus
+// tres piezas (TablaDensa, FormularioBloques, PanelDocumento) ya no se enseñan
+// ahí: la tabla densa se sigue mirando en el libro diario (arriba). Lo que
+// cumplían en la muestra lo cumplen ahora sus plantillas: la Lista (la tabla,
+// con su pie y la fila de la que se vino), la Ficha (los datos por bloques,
+// con lo propuesto marcado y el asiento que cuadra) y el documento a su lado,
+// que se pliega y deja los datos a todo el ancho.
 
-test('la muestra de las piezas: tabla densa, formulario por bloques y panel del documento', async ({ page }) => {
+test('la muestra de las piezas: la dirección vieja lleva al patrón, con su lista, su ficha por bloques y el documento', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/ajustes/muestra-piezas')
-  await expect(page.getByRole('heading', { name: 'Muestra de las piezas' })).toBeVisible()
-  await expect(page.getByText('Datos inventados, escritos en la página')).toBeVisible()
+  await expect(page).toHaveURL(/\/conta\/ajustes\/sistema-diseno$/)
+  await expect(page.getByRole('heading', { level: 1, name: 'El patrón único' })).toBeVisible()
+  await expect(page.getByText(/Datos inventados: aquí no se lee ni se escribe nada\./)).toBeVisible()
 
-  // La tabla: 40 asientos, el cuadre, y la franja que filtra.
-  await expect(page.locator('.cxt-pie').first()).toContainText('40 asientos')
-  await expect(page.getByRole('status', { name: 'Cuadre' })).toContainText('Cuadra')
-  await page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /para revisar$/ }).click()
-  await expect(page.locator('.cxt-pie').first()).toContainText(/^\d+ de 40 asientos/)
-  await page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: 'Todos' }).click()
+  // La lista: sus tres filas, su pie con el total y la fila de la que se vino, marcada.
+  const lista = page.getByLabel('Lista de muestra')
+  await expect(lista.locator('[data-fila]')).toHaveCount(3)
+  await expect(lista.locator('[data-fila="2"]')).toHaveAttribute('data-actual', '')
+  await expect(page.locator('.s-lista-pie').first()).toContainText('3 facturas')
 
   if (lado(page) === 'movil') {
     await capturar(page, 'piezas', false)
@@ -401,41 +445,26 @@ test('la muestra de las piezas: tabla densa, formulario por bloques y panel del 
   await page.evaluate(() => window.scrollTo(0, 0))
   await capturar(page, 'piezas-tabla', false)
 
-  // El formulario: lo propuesto en azul hasta que Tab lo acepta; F4 busca subcuenta; Ctrl S guarda y lo dice.
-  const form = page.getByRole('form', { name: 'Factura F-2026-118 · Distribuciones Prueba SL' })
-  await expect(form.locator('.cxf-leyenda')).toContainText('propuesto por la máquina: Tab lo acepta, escribir lo cambia')
-  await expect(form.getByLabel('Fecha', { exact: true })).toHaveValue('12/10/2026')
-  await expect(form.getByLabel('Vence', { exact: true })).toHaveValue('11/11/2026')
-  const gasto = form.getByLabel(/^Subcuenta de gasto/)
-  await expect(gasto).toHaveClass(/cxf-propuesto/)
-  await gasto.focus()
-  await page.keyboard.press('Tab')
-  await expect(gasto).toHaveClass(/cxf-aceptado/)
-  await gasto.focus()
-  await page.keyboard.press('F4')
-  const buscar = page.getByRole('dialog', { name: 'Buscar subcuenta' })
-  await buscar.getByLabel('Número o nombre de la subcuenta').fill('publicidad')
-  await page.keyboard.press('Enter')
-  await expect(gasto).toHaveValue('62700000')
-  await page.keyboard.press('Control+s')
-  await expect(form.getByRole('status')).toHaveText('Guardado (de muestra: no se escribe nada en ninguna parte).')
-  await expect(form.getByText('3 de 12')).toBeVisible()
-  await gasto.focus()
-  await page.keyboard.press('PageDown')
-  await expect(form.getByText('4 de 12')).toBeVisible()
+  // La ficha por bloques: cada bloque con su título; lo propuesto, con su etiqueta y su motivo.
+  for (const b of ['Proveedor y factura', 'A qué gasto va']) await expect(page.getByRole('region', { name: b })).toBeVisible()
+  const gasto = page.getByRole('region', { name: 'A qué gasto va' })
+  await expect(gasto.locator('.s-campo-ficha[data-tono="propuesto"] .s-campo-propuesto')).toHaveText('Propuesto')
+  await expect(gasto.getByText('Lo usaste en sus facturas anteriores.')).toBeVisible()
+  await expect(page.locator('details.s-asiento-ficha table').getByRole('row')).toHaveCount(4)
 
-  // El panel del documento: «Ocultar ›» deja el formulario a todo el ancho y se recuerda.
+  // El documento: «Plegar el documento» deja los datos a todo el ancho, y «Documento» lo devuelve.
+  const ficha = page.locator('.s-ficha')
+  const datos = page.locator('.s-ficha-datos')
   const doc = page.getByRole('complementary', { name: 'Documento' })
-  await expect(doc.getByRole('img', { name: /F-2026-118/ })).toBeVisible()
-  await expect(doc.getByRole('region', { name: 'Por qué lo propongo así' })).toBeVisible()
-  await form.scrollIntoViewIfNeeded()
+  await expect(doc.getByText('Aquí va el PDF, grande.')).toBeVisible()
+  await ficha.scrollIntoViewIfNeeded()
   await capturar(page, 'piezas-formulario', false)
-  const ancho = (await form.boundingBox())!.width
-  await guardandoPreferencias(page, () => doc.getByRole('button', { name: 'Ocultar ›' }).click())
-  await expect(doc.getByRole('button', { name: '‹ Documento' })).toBeVisible()
-  expect((await form.boundingBox())!.width).toBeGreaterThan(ancho + 300)
-  await page.reload()
-  await expect(page.getByRole('complementary', { name: 'Documento' }).getByRole('button', { name: '‹ Documento' })).toBeVisible()
-  // Se deja como estaba (las preferencias van en la base y la siguiente prueba las lee).
-  await guardandoPreferencias(page, () => page.getByRole('button', { name: '‹ Documento' }).click())
+  const ancho = (await datos.boundingBox())!.width
+  await doc.getByRole('button', { name: 'Plegar el documento' }).click()
+  await expect(ficha).toHaveAttribute('data-documento', 'oculto')
+  await expect(doc.getByRole('button', { name: 'Documento' })).toBeVisible()
+  expect((await datos.boundingBox())!.width).toBeGreaterThan(ancho + 300)
+  // En la muestra se pliega sin guardar nada (en la ficha de verdad se recuerda por persona).
+  await doc.getByRole('button', { name: 'Documento' }).click()
+  await expect(ficha).toHaveAttribute('data-documento', 'si')
 })

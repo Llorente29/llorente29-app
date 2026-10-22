@@ -42,8 +42,10 @@ export type TipoVeredicto = 'lista' | 'revisa' | 'no_encaja' | 'hecha'
 const TONO: Record<TipoVeredicto, string> = { lista: 'propuesto', revisa: 'duda', no_encaja: 'falta', hecha: 'seguro' }
 
 /** La banda del veredicto, con su porqué y el detalle detrás de «Por qué». */
-export function Veredicto({ tipo, titulo, porque, detalle }: {
+export function Veredicto({ tipo, titulo, porque, detalle, quien = 'Sumied' }: {
   tipo: TipoVeredicto
+  /** El nombre de la marca que lo dice (MARCA.nombre): la plantilla no lo sabe. */
+  quien?: string
   titulo: string
   porque: string
   /** Lo que sale al pulsar «Por qué»: cada comprobación y cada decisión, con su porqué. */
@@ -51,7 +53,7 @@ export function Veredicto({ tipo, titulo, porque, detalle }: {
 }) {
   const [abierto, setAbierto] = useState(false)
   return (
-    <section className="s-veredicto" data-tono={TONO[tipo]} aria-label="Lo que dice Sumied de esta factura">
+    <section className="s-veredicto" data-tono={TONO[tipo]} aria-label={`Lo que dice ${quien} de esta factura`}>
       <Icono nombre={tipo === 'hecha' ? 'ok' : tipo === 'lista' ? 'ia' : 'aviso'} />
       <div className="s-veredicto-texto">
         <h2 className="s-veredicto-titulo">{titulo}</h2>

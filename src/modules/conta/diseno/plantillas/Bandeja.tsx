@@ -68,13 +68,15 @@ export function Bandeja({ cifras, principal, lateral }: { cifras: ReactNode; pri
 }
 
 /** «Lo que ha hecho Sumied desde ayer»: cada lote con Ver y, si se puede, Deshacer los N. */
-export function HechoAutomatico({ lotes, verTodo }: {
+export function HechoAutomatico({ lotes, verTodo, quien = 'Sumied' }: {
+  /** El nombre de la marca (MARCA.nombre): la plantilla no lo sabe. */
+  quien?: string
   lotes: readonly { id: string; texto: string; ver: string; deshacer?: { texto: string; alPulsar: () => void } }[]
   verTodo: string
 }) {
   return (
-    <section className="s-bandeja-bloque s-bandeja-hecho" aria-label="Lo que ha hecho Sumied desde ayer">
-      <h2><Icono nombre="ia" /> Lo que ha hecho Sumied desde ayer</h2>
+    <section className="s-bandeja-bloque s-bandeja-hecho" aria-label={`Lo que ha hecho ${quien} desde ayer`}>
+      <h2><Icono nombre="ia" /> Lo que ha hecho {quien} desde ayer</h2>
       {lotes.length === 0 && <p className="s-bandeja-nada">Desde ayer no ha hecho nada solo.</p>}
       <ul className="s-bandeja-filas">
         {lotes.map((l) => (

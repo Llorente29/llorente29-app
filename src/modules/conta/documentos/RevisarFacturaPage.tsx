@@ -246,7 +246,7 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
 
   const datos = (
     <>
-      <Veredicto tipo={v.tipo} titulo={v.titulo} porque={v.porque} detalle={v.detalle} />
+      <Veredicto tipo={v.tipo} titulo={v.titulo} porque={v.porque} detalle={v.detalle} quien={MARCA.nombre} />
       {descartada && (
         <BloqueFicha titulo="No es una factura">
           <p className="s-apoyo">

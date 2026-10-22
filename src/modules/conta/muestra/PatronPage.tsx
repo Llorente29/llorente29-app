@@ -10,6 +10,7 @@
 //
 // Solo se monta fuera de producción (module.tsx): no es una pantalla del producto.
 
+import { MARCA } from '@/modules/conta/cuenta/marca'
 import { useState } from 'react'
 import { Boton, Chip, Tecla, type TonoChip } from '@/modules/conta/diseno'
 import {
@@ -77,7 +78,7 @@ export default function PatronPage() {
           { id: 'f', icono: 'compras', titulo: '9 facturas recibidas por revisar', apoyo: 'Compras y gastos · Sumied ha propuesto la cuenta de las 9', n: 9, a: '#' },
           { id: 'b', icono: 'bancos', titulo: '24 movimientos del banco por aclarar', apoyo: 'Bancos', n: 24, a: '#' },
         ]} />}
-        lateral={<HechoAutomatico verTodo="#" lotes={[{ id: 'l', texto: 'Casó 6 movimientos del banco con sus facturas.', ver: '#', deshacer: { texto: 'Deshacer los 6', alPulsar: () => undefined } }]} />}
+        lateral={<HechoAutomatico quien={MARCA.nombre} verTodo="#" lotes={[{ id: 'l', texto: 'Casó 6 movimientos del banco con sus facturas.', ver: '#', deshacer: { texto: 'Deshacer los 6', alPulsar: () => undefined } }]} />}
       />
 
       <h2 className="s-muestra-titulo">2 · Lista</h2>
@@ -100,7 +101,7 @@ export default function PatronPage() {
       <NavegaFicha pos={3} total={9} anterior={() => undefined} siguiente={() => undefined} />
       <Ficha documentoOculto={doc}
         datos={<>
-          <Veredicto tipo="lista" titulo="Lista para contabilizar" porque="El proveedor, el IVA y la cuenta coinciden con sus facturas anteriores, y los importes del PDF cuadran."
+          <Veredicto quien={MARCA.nombre} tipo="lista" titulo="Lista para contabilizar" porque="El proveedor, el IVA y la cuenta coinciden con sus facturas anteriores, y los importes del PDF cuadran."
             detalle={[{ ok: true, texto: 'Cuadra: bases + IVA = total, al céntimo.' }, { ok: null, texto: 'Cuenta de gasto: la de su ficha.' }]} />
           <BloqueFicha titulo="Proveedor y factura">
             <FilaCampos>
