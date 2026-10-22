@@ -33,7 +33,8 @@
   font-family: inherit; font-size: var(--s-t-m); line-height: 1.2; text-align: left;
 }
 .s-barra-item .s-icono, .s-barra-plegar .s-icono { flex-shrink: 0; width: var(--s-icono-barra); height: var(--s-icono-barra); }
-.s-barra-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Un nombre nunca se corta: si no cabe en una línea (con su chip al lado), pasa a dos. */
+.s-barra-nombre { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: var(--s-1) 0; }
 .s-barra-item:hover, .s-barra-plegar:hover { color: var(--s-barra-activo-texto); background: var(--s-barra-activo); }
 /* El apartado activo: abierto, con fondo; sus páginas, debajo. */
 .s-barra-item[aria-current] { background: var(--s-barra-activo); color: var(--s-barra-activo-texto); font-weight: var(--s-peso-fuerte); }
@@ -66,7 +67,7 @@
 
 /* Plegada: solo el icono, centrado; el nombre, al pasar el ratón y para el lector; el chip, un globo. */
 .s-barra[data-desplegada='no'] .s-barra-item, .s-barra[data-desplegada='no'] .s-barra-plegar { justify-content: center; padding: 0; gap: 0; }
-.s-barra[data-desplegada='no'] .s-barra-nombre { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.s-barra[data-desplegada='no'] .s-barra-nombre { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .s-barra[data-desplegada='no'] .s-barra-chip { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 16px; padding: 0 4px; }
 .s-barra[data-desplegada='no'] .s-barra-apartado[data-abierto] { background: none; padding: 0; }
 

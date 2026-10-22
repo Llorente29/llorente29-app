@@ -32,7 +32,7 @@ import { chipsDelInicio } from '@/modules/conta/marco/nuevo/teTocaHoy'
 import { MarcoContexto, type DatosCinta, type EntradasCinta, type Marco as ValorMarco, type Propias } from '@/modules/conta/marco/nuevo/contexto'
 import { Buscador } from '@/modules/conta/marco/nuevo/Buscador'
 import { useContadoresPestanas } from '@/modules/conta/marco/nuevo/useContadoresPestanas'
-import { dondeEsta, productosVisibles } from '@/modules/conta/esqueleto/productos'
+import { PRODUCTOS, dondeEsta, productosVisibles, type Producto } from '@/modules/conta/esqueleto/productos'
 import { alternarFavorito, cintaDe, favoritosDe, ordenPorId, type Orden } from '@/modules/conta/esqueleto/ordenes'
 import { usePreferenciasEsqueleto, useContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
 import { cuentasDeLaBarra } from '@/modules/conta/esqueleto/cuentasBarra'
@@ -45,6 +45,12 @@ import { Cabecera } from './Cabecera'
 import { AccionesDePagina } from './AccionesDePagina'
 import { resolverGrupos } from './resolverGrupos'
 import type { Ejercicio } from './periodo'
+
+/** Los apartados de la barra, con el activo dentro aunque no esté contratado, en el orden del mapa. */
+function conElActivo(visibles: Producto[], activo: Producto | null): Producto[] {
+  if (!activo || visibles.some((p) => p.id === activo.id)) return visibles
+  return PRODUCTOS.filter((p) => p.id === activo.id || visibles.some((v) => v.id === p.id))
+}
 
 export function Marco({ children, sinPregunta = false }: { children: ReactNode; sinPregunta?: boolean }) {
   const movil = useIsMobile()
@@ -70,7 +76,10 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
   const donde = dondeEsta(pathname, undefined, search)
   const producto = donde?.producto ?? null
   const pestana = donde?.pestana ?? null
-  const productos = productosVisibles(ctx)
+  // El apartado en el que estás sale siempre, aunque la empresa no lo tenga
+  // contratado (se llega por la dirección): si no, sus páginas no estarían en
+  // ninguna parte (antes iban en las pestañas de la cabecera).
+  const productos = conElActivo(productosVisibles(ctx), producto)
   const pendientes = cuentasDeLaBarra(cuentas)
   const contadores = useContadoresPestanas(producto?.id ?? null, activa?.id ?? null, cuentas)
   const catalogo = producto && pestana ? cintaDe(producto.id, pestana.id, ctx) : []

@@ -44,7 +44,10 @@
 .s-filtro-etiqueta { color: var(--s-apoyo); }
 .s-filtro select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font: inherit; }
 
-.s-lista { background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); overflow: hidden; }
+/* overflow: clip y no hidden: hidden la hace caja de desplazamiento, y la cabecera
+   fija de la tabla se pegaba a ELLA (bajaba el alto de la cabecera del marco y
+   tapaba la primera fila). clip recorta las esquinas sin cambiar a quién se pega. */
+.s-lista { background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); overflow: clip; }
 .s-lista-tabla { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
 .s-lista-tabla th {
   position: sticky; top: var(--cxm-alto-arriba, 0); z-index: 1; height: var(--s-fila); padding: 0 var(--s-3); text-align: left;

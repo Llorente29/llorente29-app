@@ -41,7 +41,10 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
     await expect(buscar).toBeVisible()
     await expect(buscar).toHaveAttribute('aria-keyshortcuts', 'Control+K')
   }
-  await expect(page.getByRole('button', { name: 'Ayuda' })).toBeVisible()
+  // La Ayuda (los atajos de teclado y cómo se leen los colores) es del ordenador:
+  // en el móvil no hay teclado que explicar y la cabecera no la lleva.
+  if (movil) await expect(page.getByRole('button', { name: 'Ayuda' })).toHaveCount(0)
+  else await expect(page.getByRole('button', { name: 'Ayuda' })).toBeVisible()
 
   // S01c: en el móvil, el menú va en un cajón que abre el botón de la cabecera.
   if (movil) await page.getByRole('button', { name: 'Abrir el menú' }).click()

@@ -170,7 +170,9 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     // La pestaña, sin año ni trimestre: el último acabado. (Va en la misma prueba: una entrada menos,
     // y la entera no pasa de su techo de 12 min por trozo, tests/unit/e2e/trozos.test.ts.)
     await ir(page, 'impuestos/calendario')
-    await page.getByRole('link', { name: 'Trimestre', exact: true }).first().click()
+    // S02: las páginas del apartado van en la barra; en el móvil, en el cajón.
+    if (l === 'movil') await page.getByRole('button', { name: 'Abrir el menú' }).click()
+    await page.getByRole('list', { name: 'Páginas de Impuestos' }).getByRole('link', { name: 'Trimestre', exact: true }).click()
     await expect(page).toHaveURL(/\/conta\/impuestos\/trimestre\/\d{4}\/[1-4]T/)
     await expect(page.locator('[data-prueba="cartera"]')).toBeVisible({ timeout: 20_000 })
 
