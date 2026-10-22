@@ -456,3 +456,12 @@ supabase/staging/sql/20261202_s02_color_empresa_prueba.sql
 #   verdad, desde main después del real.
 supabase/migrations/20261203T0470_d02_recibida_pdf.sql
 supabase/staging/sql/20261203_d02_recibida_pdf_prueba.sql
+# E05 · volver a leer en el servidor los PDF de Catcher (rama conta/e05-releer-riders; Julio, 22/10).
+#   La 0480 añade conta_lote_relectura y las funciones para pedir, lanzar,
+#   empezar, guardar y apuntar una relectura, y deja que el servidor llame a
+#   conta_lote_pedidos_app y conta_lote_cruce_guardar. Su prueba (ROLLBACK):
+#   quién la pide, guardar solo lo que sigue en revisión, cruzar como el
+#   servidor, quién lee, y la vuelta atrás byte a byte. Cambia dos funciones:
+#   desde la rama va en ROLLBACK (W05); de verdad, desde main después del real.
+supabase/migrations/20261204T0480_e05_releer_riders.sql
+supabase/staging/sql/20261204_e05_releer_riders_prueba.sql
