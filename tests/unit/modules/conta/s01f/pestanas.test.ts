@@ -1,10 +1,9 @@
 // tests/unit/modules/conta/s01f/pestanas.test.ts
 //
-// S01f · La cabecera de pestañas como pieza común del marco (Julio, 20/10).
-// Los contadores, contra el calendario REAL de dos clientes de la demo de
-// staging (fixtures/, regla 31); y lo que pide la franja: 56 px, icono de
-// trazo de 14 px en cada pestaña, la activa en el azul de acción (#1E63C9 con
-// Sumied), en negrita y subrayada con 3 px.
+// S01f · Los contadores de cada página (Julio, 20/10), contra el calendario
+// REAL de dos clientes de la demo de staging (fixtures/, regla 31). S02: las
+// páginas ya no van en una franja de pestañas debajo de la cabecera, sino
+// debajo del apartado activo, en la barra; su contador va con ellas.
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -47,8 +46,9 @@ describe('S01f · lo que vence, en rojo (el calendario de staging a 13/10)', () 
 
 describe('S01f · lo que pide una decisión, en gris (las cuentas de la barra)', () => {
   it('cada cuenta en la pestaña donde se resuelve; 0 y lo no contado (null) no salen', () => {
-    expect(contadoresDeCuentas({ compras: 4, recibidas: 0, libros: 6, bancos: null, terceros: 1 })).toEqual({
-      'compras.por-revisar': { n: 4, tono: 'neutro', frase: '4 por revisar' },
+    // S02: «Por revisar» de Compras (las recepciones) no es una página: su número va en el chip del apartado.
+    expect(contadoresDeCuentas({ compras: 4, recibidas: 9, libros: 6, bancos: null, terceros: 1 })).toEqual({
+      'compras.recibidas': { n: 9, tono: 'neutro', frase: '9 por revisar' },
       'contabilidad.asientos': { n: 6, tono: 'neutro', frase: '6 por revisar' },
       'contactos.todos': { n: 1, tono: 'neutro', frase: '1 por revisar' },
     })
@@ -60,43 +60,24 @@ describe('S01f · lo que pide una decisión, en gris (las cuentas de la barra)',
   })
 })
 
-describe('S01f · la franja (Julio, 20/10: debajo de la cabecera)', () => {
-  const css = readFileSync('src/modules/conta/esqueleto/esqueleto.css', 'utf8')
-  const tokens = readFileSync('src/modules/conta/diseno/tokens.css', 'utf8')
-  const marco = readFileSync('src/modules/conta/estilo/marco.css', 'utf8')
-  const cabecera = readFileSync('src/modules/conta/esqueleto/Cabecera.tsx', 'utf8')
-  it('cada pestaña de cada producto lleva su icono de trazo, de 14 px', () => {
+describe('S02 · las páginas, debajo del apartado activo, en la barra', () => {
+  const css = readFileSync('src/modules/conta/marco/marco.css', 'utf8')
+  const barra = readFileSync('src/modules/conta/marco/Barra.tsx', 'utf8')
+  it('cada página de cada apartado lleva su icono (lo usa Ctrl K y Favoritos)', () => {
     const sin = PRODUCTOS.flatMap((p) => p.pestanas.filter((t) => !ICONOS[t.icono]).map((t) => `${p.id}.${t.id}`))
     expect(sin).toEqual([])
     expect(TAM_ICONO_PESTANA).toBe(14)
-    expect(tokens).toMatch(/--s-icono-pestana: 14px;/)
   })
-  it('la cabecera se queda en 48 px; la franja, 44, blanca y con su separador #DCE5F0', () => {
-    expect(tokens).toMatch(/--s-alto-cabecera: 48px;/)
-    expect(tokens).toMatch(/--s-alto-pestanas: 44px;/)
-    expect(tokens).toMatch(/--s-borde-pestanas: #DCE5F0;/)
-    expect(css).toMatch(/\.s-franja-pestanas \{[^}]*min-height: var\(--s-alto-pestanas\)[^}]*background: var\(--s-superficie\); border-bottom: var\(--s-linea\) solid var\(--s-borde-pestanas\)/)
-  })
-  it('16 px de aire a cada lado; la activa, el azul de acción, en negrita y subrayada con 3 px (con Sumied, #1E63C9)', () => {
-    expect(css).toMatch(/\.s-pestana \{[^}]*padding: 0 var\(--s-4\)/)
-    expect(css).toMatch(/\.s-pestana\[data-activa\] \{ color: var\(--s-accion\); font-weight: var\(--s-peso-fuerte\); border-bottom-color: var\(--s-accion\); \}/)
-    expect(css).toMatch(/border-bottom: var\(--s-raya-pestana\) solid transparent/)
-    expect(tokens).toMatch(/--s-raya-pestana: 3px;/)
+  it('la página activa, en el azul de acción con el texto blanco (con Sumied, #1E63C9)', () => {
+    expect(css).toMatch(/\.s-barra-pagina\[aria-current='page'\] \{ background: var\(--s-barra-pagina-activa\); color: var\(--s-sobre-accion\);/)
     expect(MARCAS.sumied.tema?.accion).toBe('#1E63C9')
   })
-  it('el contador: rectángulo redondeado, gris de serie y rojo lo que vence', () => {
-    expect(css).toMatch(/\.s-pestana-contador \{[^}]*border-radius: var\(--s-radio-campo\)[^}]*background: var\(--s-neutro-fondo\); color: var\(--s-apoyo\)/)
-    expect(css).toMatch(/\.s-pestana-contador\[data-tono='vence'\] \{ background: var\(--s-falta-fondo\); color: var\(--s-falta\); \}/)
+  it('el contador de una página, al lado de su nombre; rojo lo que vence; y el número no cambia el nombre del enlace', () => {
+    expect(css).toMatch(/\.s-barra-pagina-chip\[data-tono='vence'\] \{ background: var\(--s-falta-fondo\); color: var\(--s-falta\); \}/)
+    expect(barra).toMatch(/aria-describedby=\{desc\}/)
   })
-  it('sin «Más ▾»: la franja se desliza y ninguna pestaña se encoge', () => {
-    const codigo = cabecera.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-    expect(codigo).not.toMatch(/Más|cuantasCaben/)
-    expect(css).toMatch(/\.s-franja-pestanas \{[^}]*overflow-x: auto/)
-    expect(css).toMatch(/\.s-pestana \{[^}]*flex-shrink: 0;/)
-  })
-  it('en el ordenador, la franja fija debajo de la cabecera, y las cabeceras de las tablas debajo de las dos', () => {
-    expect(css).toMatch(/\.cxm:not\(\.cxm-es-movil\) \.s-franja-pestanas \{ position: sticky; top: var\(--s-alto-cabecera\);/)
-    expect(css).toMatch(/\.cxm\.s-con-pestanas:not\(\.cxm-es-movil\) \{ --cxm-alto-arriba: calc\(var\(--s-alto-cabecera\) \+ var\(--s-alto-pestanas\)\); \}/)
-    expect(marco).toMatch(/\.cxm \{ --cxm-alto-arriba: var\(--s-alto-cabecera, 48px\); \}/)
+  it('se acabaron las pestañas en la cabecera: ni franja ni «Más ▾»', () => {
+    const cab = readFileSync('src/modules/conta/marco/Cabecera.tsx', 'utf8').replace(/\/\/.*$/gm, '')
+    expect(cab).not.toMatch(/FranjaPestanas|Pestañas de|cuantasCaben/)
   })
 })

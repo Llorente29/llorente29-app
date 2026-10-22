@@ -1,0 +1,292 @@
+/* src/modules/conta/marco/marco.css
+ *
+ * S02 · El marco del patrón único (tableros 1 a 9): la barra lateral, la
+ * cabecera con la franja del color de la empresa, el encabezado de página,
+ * los menús y la fila de acciones. Solo tokens del sistema de diseño
+ * (diseno/tokens.css): lo comprueba diseno-reglas.test.ts.
+ */
+
+/* ── El marco entero ─────────────────────────────────────────────────── */
+.cx.cxm.s-esqueleto { font-family: var(--s-letra); color: var(--s-tinta); font-size: var(--s-t-m); background: var(--s-fondo); }
+.s-esq-cuerpo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.s-principal { display: flex; flex-direction: column; }
+
+/* ── 1 · La barra lateral: 232 px, azul noche ────────────────────────── */
+.s-barra {
+  width: var(--s-ancho-barra); flex-shrink: 0; position: sticky; top: 0; height: 100vh; z-index: 35;
+  background: var(--s-barra); color: var(--s-barra-texto);
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--s-1); padding: var(--s-4) var(--s-3);
+  font-family: var(--s-letra); overflow-y: auto; overflow-x: hidden;
+}
+.s-barra[data-desplegada='no'] { width: var(--s-ancho-barra-plegada); padding-left: var(--s-2); padding-right: var(--s-2); }
+.s-barra-marca { display: flex; align-items: center; min-height: var(--s-alto-logo); padding: 0 var(--s-1) var(--s-5); }
+.s-barra[data-desplegada='no'] .s-barra-marca { justify-content: center; padding-left: 0; padding-right: 0; }
+.s-barra-logo { display: inline-flex; border-radius: var(--s-radio-boton); }
+.s-barra-logo:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-barra-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.s-barra-pie { margin-top: auto; display: flex; flex-direction: column; gap: 2px; padding-top: var(--s-3); border-top: var(--s-linea) solid var(--s-barra-separador); }
+
+.s-barra-item, .s-barra-plegar {
+  position: relative; display: flex; align-items: center; gap: var(--s-3); width: 100%;
+  min-height: var(--s-tactil); padding: 0 var(--s-2) 0 var(--s-3); border-radius: var(--s-radio-boton);
+  color: var(--s-barra-texto); text-decoration: none; background: none; border: 0; cursor: pointer;
+  font-family: inherit; font-size: var(--s-t-m); line-height: 1.2; text-align: left;
+}
+.s-barra-item .s-icono, .s-barra-plegar .s-icono { flex-shrink: 0; width: var(--s-icono-barra); height: var(--s-icono-barra); }
+.s-barra-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-barra-item:hover, .s-barra-plegar:hover { color: var(--s-barra-activo-texto); background: var(--s-barra-activo); }
+/* El apartado activo: abierto, con fondo; sus páginas, debajo. */
+.s-barra-item[aria-current] { background: var(--s-barra-activo); color: var(--s-barra-activo-texto); font-weight: var(--s-peso-fuerte); }
+.s-barra-apartado[data-abierto] { background: var(--s-barra-activo); border-radius: var(--s-radio-bloque); padding-bottom: var(--s-2); }
+.s-barra-item:focus-visible, .s-barra-plegar:focus-visible, .s-barra-pagina:focus-visible { outline: none; box-shadow: var(--s-foco); }
+
+/* El chip de lo que espera una acción: turquesa, con el número oscuro encima. */
+.s-barra-chip {
+  flex-shrink: 0; min-width: 22px; height: 20px; padding: 0 6px; border-radius: var(--s-radio-pildora);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--s-barra-destacado); color: var(--s-barra-destacado-texto);
+  font-family: var(--s-letra-cifras); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); font-variant-numeric: tabular-nums;
+}
+
+/* Las páginas del apartado activo, con sangría; la activa en azul con texto blanco. */
+.s-barra-paginas { list-style: none; margin: 2px 0 0; padding: 0 0 0 var(--s-8); display: flex; flex-direction: column; gap: 2px; }
+.s-barra-pagina {
+  display: flex; align-items: center; gap: var(--s-2); min-height: 36px; padding: 0 var(--s-2) 0 var(--s-3);
+  border-radius: var(--s-radio-boton); color: var(--s-barra-texto); text-decoration: none; font-size: var(--s-t-m);
+}
+.s-barra-pagina:hover { color: var(--s-barra-activo-texto); background: var(--s-barra-chip-suave); }
+.s-barra-pagina[aria-current='page'] { background: var(--s-barra-pagina-activa); color: var(--s-sobre-accion); font-weight: var(--s-peso-fuerte); }
+.s-barra-pagina-chip {
+  flex-shrink: 0; min-width: 20px; height: 18px; padding: 0 5px; border-radius: var(--s-radio-pildora);
+  display: inline-flex; align-items: center; justify-content: center; font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte);
+  background: var(--s-barra-chip-suave); color: var(--s-barra-activo-texto); font-variant-numeric: tabular-nums;
+}
+.s-barra-pagina-chip[data-tono='vence'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.s-barra-pagina[aria-current='page'] .s-barra-pagina-chip { background: var(--s-superficie); color: var(--s-accion); }
+
+/* Plegada: solo el icono, centrado; el nombre, al pasar el ratón y para el lector; el chip, un globo. */
+.s-barra[data-desplegada='no'] .s-barra-item, .s-barra[data-desplegada='no'] .s-barra-plegar { justify-content: center; padding: 0; gap: 0; }
+.s-barra[data-desplegada='no'] .s-barra-nombre { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.s-barra[data-desplegada='no'] .s-barra-chip { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 16px; padding: 0 4px; }
+.s-barra[data-desplegada='no'] .s-barra-apartado[data-abierto] { background: none; padding: 0; }
+
+/* Los enlaces de la barra dentro de «.cx a» (componentes.css, azul): con el mismo peso, su color. */
+.cx .s-barra a.s-barra-item, .cx .s-cajon a.s-barra-item, .cx .s-barra a.s-barra-pagina, .cx .s-cajon a.s-barra-pagina { color: var(--s-barra-texto); }
+.cx .s-barra a.s-barra-item[aria-current], .cx .s-cajon a.s-barra-item[aria-current] { color: var(--s-barra-activo-texto); }
+.cx .s-barra a.s-barra-pagina[aria-current='page'], .cx .s-cajon a.s-barra-pagina[aria-current='page'] { color: var(--s-sobre-accion); }
+.cx .s-barra a.s-barra-item:hover, .cx .s-cajon a.s-barra-item:hover, .cx .s-barra a.s-barra-pagina:hover, .cx .s-cajon a.s-barra-pagina:hover { color: var(--s-barra-activo-texto); }
+
+/* El menú de Favoritos sale al lado de la barra (la barra se desliza: un menú dentro se cortaría). */
+.s-barra .s-menu-lado { position: fixed; top: auto; bottom: var(--s-12); left: calc(var(--s-ancho-barra) + var(--s-2)); right: auto; }
+.s-barra[data-desplegada='no'] .s-menu-lado { left: calc(var(--s-ancho-barra-plegada) + var(--s-2)); }
+
+/* El cajón del móvil: la misma barra, por la izquierda, encima de todo. */
+.s-cajon-velo { position: fixed; inset: 0; z-index: 60; background: var(--s-velo); display: flex; }
+.s-cajon {
+  width: min(300px, 85vw); height: 100%; overflow-y: auto; background: var(--s-barra); color: var(--s-barra-texto);
+  padding: var(--s-4) var(--s-2) calc(var(--s-4) + env(safe-area-inset-bottom, 0px)); font-family: var(--s-letra); box-shadow: var(--s-sombra);
+}
+.s-cajon-nav { display: flex; flex-direction: column; gap: var(--s-1); min-height: 100%; }
+.s-cajon .s-barra-item, .s-cajon .s-barra-plegar, .s-cajon .s-barra-pagina { min-height: var(--s-tactil); }
+.s-cajon-tuyo { display: flex; flex-direction: column; gap: 2px; }
+.s-cajon-tuyo .s-desplegable { display: block; }
+.s-cajon-tuyo .s-menu { position: static; max-width: none; margin: var(--s-1) 0 var(--s-2); box-shadow: none; }
+.s-cajon-iniciales {
+  flex-shrink: 0; width: var(--s-icono-barra); height: var(--s-icono-barra); border-radius: var(--s-radio-pildora); display: inline-flex; align-items: center; justify-content: center;
+  background: var(--s-barra-chip-suave); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte);
+}
+
+/* ── 2 · La cabecera: 56 px, blanca, con la franja de la empresa ─────── */
+.s-cab { position: sticky; top: 0; z-index: 30; flex-shrink: 0; }
+.s-franja-empresa { height: var(--s-franja-empresa); background: var(--s-color-empresa, var(--s-accion)); }
+.s-cabecera {
+  height: var(--s-alto-cabecera); display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: 0 var(--s-6);
+  background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); font-size: var(--s-t-m);
+}
+.s-cab-izquierda, .s-cab-derecha { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
+.s-cab-izquierda { flex-shrink: 1; }
+.s-cab-derecha { flex-shrink: 0; }
+.s-cab-periodo { display: flex; align-items: center; min-width: 0; }
+.s-cab-periodo:empty { display: none; }
+
+/* El botón de empresa: el cuadrado en el color de la empresa, el nombre comercial y la razón social. */
+.s-empresa-caja { min-width: 0; }
+.s-empresa {
+  display: inline-flex; align-items: center; gap: var(--s-2); max-width: 320px; min-width: 0; height: 42px;
+  padding: 0 var(--s-2) 0 var(--s-1); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-campo);
+  background: var(--s-superficie); color: var(--s-tinta); font: inherit; text-align: left; cursor: pointer; text-decoration: none;
+}
+.s-empresa:hover { border-color: var(--s-borde-control); }
+.s-empresa:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-empresa-cuadrado {
+  width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--s-radio-boton); object-fit: contain;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--s-color-empresa, var(--s-accion)); color: var(--s-sobre-accion); font-weight: var(--s-peso-titulo); font-size: var(--s-t-m);
+}
+img.s-empresa-cuadrado { background: var(--s-superficie); }
+.s-empresa-textos { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.s-empresa-nombre { font-weight: var(--s-peso-fuerte); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-empresa-razon { font-size: var(--s-t-xs); color: var(--s-apoyo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-empresa .s-icono { flex-shrink: 0; color: var(--s-apoyo); }
+.s-menu-empresas { min-width: 300px; }
+.s-menu-buscar {
+  display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-1); padding: 0 var(--s-2); min-height: var(--s-alto-control);
+  border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-campo); color: var(--s-apoyo);
+}
+.s-menu-buscar input { flex: 1; min-width: 0; border: 0; background: none; font: inherit; color: var(--s-tinta); }
+.s-menu-buscar input:focus-visible { outline: none; }
+.s-menu-buscar:focus-within { box-shadow: var(--s-foco); }
+
+/* El botón del periodo: el mismo en todas las páginas que lo leen. Un <select> transparente encima. */
+.s-periodo {
+  position: relative; display: inline-flex; align-items: center; gap: var(--s-2); height: 42px; min-width: 0;
+  padding: 0 var(--s-2) 0 var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-campo);
+  background: var(--s-superficie); color: var(--s-tinta);
+}
+.s-periodo:hover { border-color: var(--s-borde-control); }
+.s-periodo:focus-within { box-shadow: var(--s-foco); }
+.s-periodo .s-icono { flex-shrink: 0; color: var(--s-apoyo); }
+.s-periodo-texto { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.s-periodo-arriba { font-weight: var(--s-peso-fuerte); white-space: nowrap; }
+.s-periodo-abajo { font-size: var(--s-t-xs); color: var(--s-apoyo); white-space: nowrap; }
+.s-periodo-select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font: inherit; }
+
+/* «Buscar o hacer algo · Ctrl K», la Ayuda y el usuario. */
+.s-cab-buscar {
+  display: inline-flex; align-items: center; gap: var(--s-2); height: var(--s-alto-control); min-width: 300px; padding: 0 var(--s-2) 0 var(--s-3);
+  border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-campo); background: var(--s-superficie);
+  color: var(--s-apoyo); font: inherit; cursor: pointer; text-align: left;
+}
+.s-cab-buscar:hover { border-color: var(--s-tinta); }
+.s-cab-buscar:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-cab-buscar-texto { flex: 1; }
+.s-cab-icono {
+  display: inline-flex; align-items: center; justify-content: center; width: var(--s-tactil); height: var(--s-tactil);
+  border: 0; border-radius: var(--s-radio-pildora); background: none; color: var(--s-apoyo); cursor: pointer;
+}
+.s-cab-icono:hover { color: var(--s-tinta); background: var(--s-accion-suave); }
+.s-cab-icono:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-usuario-boton {
+  display: inline-flex; align-items: center; gap: var(--s-2); height: var(--s-tactil); padding: 0 var(--s-2) 0 var(--s-1);
+  border: 0; border-radius: var(--s-radio-pildora); background: none; color: var(--s-tinta); font: inherit; font-weight: var(--s-peso-fuerte); cursor: pointer;
+}
+.s-usuario-boton:hover { background: var(--s-accion-suave); }
+.s-usuario-boton:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-usuario-inicial {
+  width: 32px; height: 32px; border-radius: var(--s-radio-pildora); display: inline-flex; align-items: center; justify-content: center;
+  background: var(--s-accion); color: var(--s-sobre-accion); font-weight: var(--s-peso-titulo);
+}
+.s-usuario-nombre { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-ayuda { min-width: 340px; }
+.s-ayuda-teclas { display: grid; grid-template-columns: auto 1fr; gap: var(--s-2) var(--s-3); margin: 0; padding: var(--s-1) var(--s-2); align-items: center; }
+.s-ayuda-teclas dt { margin: 0; }
+.s-ayuda-teclas dd { margin: 0; font-size: var(--s-t-s); color: var(--s-tinta); }
+.s-ayuda-colores { list-style: none; margin: 0; padding: var(--s-1) var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); font-size: var(--s-t-s); }
+
+/* En el móvil: menú, logo de 30 px y buscar; la empresa y el periodo, en una fila debajo. */
+.s-cab-logotipo { display: flex; align-items: center; height: var(--s-alto-logo-movil); }
+.s-cab-fila-movil {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-4);
+  background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-cab-fila-movil .s-empresa-caja { flex: 1; }
+.s-cab-fila-movil .s-empresa { max-width: 100%; width: 100%; }
+.s-cab-periodo-movil:empty { display: none; }
+
+/* ── Los menús desplegables ──────────────────────────────────────────── */
+.s-desplegable { position: relative; display: flex; align-items: center; }
+.s-menu {
+  position: absolute; top: calc(100% + var(--s-1)); left: 0; z-index: 40; min-width: 260px; max-width: 380px; max-height: 70vh; overflow-y: auto;
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+  box-shadow: var(--s-sombra); padding: var(--s-2); display: flex; flex-direction: column; gap: 2px;
+  font-size: var(--s-t-m); font-weight: var(--s-peso-normal); color: var(--s-tinta);
+}
+.s-menu-derecha { left: auto; right: 0; }
+.s-menu-titulo { padding: var(--s-1) var(--s-2); font-size: var(--s-t-xs); color: var(--s-apoyo); font-weight: var(--s-peso-fuerte); }
+.s-menu-grupo { display: flex; flex-direction: column; gap: 2px; }
+.s-menu-grupo + .s-menu-grupo { margin-top: var(--s-1); padding-top: var(--s-1); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); width: 100%; min-height: 36px;
+  padding: var(--s-1) var(--s-2); border-radius: var(--s-radio-boton); background: none; border: 0;
+  color: var(--s-tinta); text-decoration: none; text-align: left; font: inherit; cursor: pointer;
+}
+.s-menu-item:hover { background: var(--s-accion-suave); }
+.s-menu-item[aria-current='true'], .s-menu-item[aria-current='page'], .s-menu-item[aria-pressed='true'] { font-weight: var(--s-peso-fuerte); color: var(--s-accion); }
+.s-menu-item:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-menu-item[aria-disabled='true'] { color: var(--s-apoyo); cursor: default; }
+.s-menu-texto { display: flex; flex-direction: column; min-width: 0; }
+.s-menu-separador { height: var(--s-linea); background: var(--s-borde-decorativo); margin: var(--s-1) 0; }
+.s-menu-nota { padding: 0; font-size: var(--s-t-xs); color: var(--s-apoyo); font-weight: var(--s-peso-normal); }
+p.s-menu-nota, li.s-menu-nota { padding: var(--s-1) var(--s-2); }
+.s-menu-fila { display: flex; align-items: center; gap: var(--s-1); }
+.s-menu-fila .s-menu-item { flex: 1; }
+.cx a.s-menu-item { color: var(--s-tinta); }
+.cx a.s-menu-item[aria-current] { color: var(--s-accion); }
+
+/* ── 3 · El encabezado de cada página ────────────────────────────────── */
+.s-encabezado { display: flex; flex-direction: column; gap: var(--s-1); }
+.s-migas ol { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); margin: 0; padding: 0; font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-migas li + li::before { content: '›'; margin-right: var(--s-1); color: var(--s-apoyo); }
+.s-migas a { color: var(--s-apoyo); text-decoration: none; border-radius: var(--s-radio-boton); }
+.s-migas a:hover { color: var(--s-accion); text-decoration: underline; }
+.s-migas a:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-migas [aria-current='page'] { color: var(--s-tinta); font-weight: var(--s-peso-medio); }
+.cx .s-migas a { color: var(--s-apoyo); }
+.s-encabezado-fila { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
+.s-encabezado-titulos { min-width: 0; flex: 1 1 360px; }
+.s-encabezado-titulo-fila { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.s-titulo-pagina { margin: 0; font-size: var(--s-t-titulo); font-weight: var(--s-peso-titulo); line-height: 1.2; color: var(--s-tinta); letter-spacing: -0.01em; }
+.s-frase-pagina { margin: var(--s-1) 0 0; font-size: var(--s-t-m); color: var(--s-apoyo); }
+.s-encabezado-acciones { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; justify-content: flex-end; }
+.s-boton .s-icono + .s-boton-texto { margin-left: 0; }
+
+/* El principal abajo, bajo el pulgar (móvil, tablero 4). */
+.s-pulgar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; gap: var(--s-2);
+  padding: var(--s-3) var(--s-4) calc(var(--s-3) + env(safe-area-inset-bottom, 0px));
+  background: var(--s-superficie); border-top: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-pulgar > * { flex: 1; min-height: var(--s-tactil); justify-content: center; }
+
+/* ── La fila de acciones de serie (las pantallas que aún no tienen encabezado) ── */
+.s-acciones-pagina { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
+.s-acciones-pagina[hidden] { display: none; }
+.s-acciones-izquierda, .s-acciones-derecha { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.s-acciones-derecha { margin-left: auto; }
+.s-acciones-pagina .cxm-acciones { padding: 0; background: none; border: 0; }
+.s-selector-titulo { color: var(--s-apoyo); font-weight: var(--s-peso-normal); }
+
+/* ── El aviso de lo que ha pasado (regla 8) ──────────────────────────── */
+.s-esq-aviso {
+  position: fixed; top: calc(var(--s-alto-cabecera) + var(--s-franja-empresa) + var(--s-2)); right: var(--s-4); z-index: 45;
+  max-width: min(440px, calc(100vw - var(--s-8))); margin: 0; padding: var(--s-2) var(--s-3);
+  font-size: var(--s-t-s); border-radius: var(--s-radio-bloque); box-shadow: var(--s-sombra);
+  background: var(--s-ok-fondo); color: var(--s-ok); border: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-esq-aviso[data-tono='falta'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.s-esq-aviso:empty { display: none; }
+
+/* Lo que se enfoca o se lleva a la vista no queda debajo de la cabecera fija (WCAG 2.4.11). */
+html:has(.s-cabecera) { scroll-padding-top: 72px; }   /* 3 + 56 + aire: los tokens viven en .cx, no en html */
+.cxm { --cxm-alto-arriba: calc(var(--s-alto-cabecera) + var(--s-franja-empresa)); }
+
+/* ── El móvil ────────────────────────────────────────────────────────── */
+.cx.cxm.cxm-es-movil { flex-direction: column; }
+@media (max-width: 767px) {
+  .s-cabecera { padding: 0 var(--s-3); gap: var(--s-2); overflow: hidden; max-width: 100vw; }
+  .s-cab-menu { margin-left: calc(-1 * var(--s-2)); flex-shrink: 0; }
+  .s-menu { position: fixed; top: calc(var(--s-alto-cabecera) + var(--s-franja-empresa)); left: var(--s-2); right: var(--s-2); max-width: none; }
+  .s-encabezado-acciones { justify-content: flex-start; }
+  .s-titulo-pagina { font-size: var(--s-t-xl); }
+}
+.cx-ajustes-solo { display: block; max-width: var(--s-ancho-pantalla); }
+
+/* S02 · Ajustes › Tu empresa: el color de la empresa (los ocho del patrón). */
+.s-colores-empresa { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-2) 0; }
+.s-color-empresa {
+  width: var(--s-tactil); height: var(--s-tactil); border: 0; border-radius: var(--s-radio-boton); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; color: var(--s-sobre-accion); font-weight: var(--s-peso-titulo); font-size: var(--s-t-l);
+}
+.s-color-empresa:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-color-empresa:disabled { opacity: 0.55; cursor: not-allowed; }
+.s-color-empresa-pequeno { width: var(--s-4); height: var(--s-4); display: inline-block; vertical-align: middle; }

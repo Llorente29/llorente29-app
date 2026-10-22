@@ -1,8 +1,9 @@
 // src/modules/conta/esqueleto/contadoresPestanas.ts
 //
-// S01f · El contador de cada pestaña de la cabecera (Julio, 20/10: «contador
-// donde aplique, en gris, y en rojo lo que vence»). Núcleo puro: se prueba
-// sin React.
+// El contador de cada página de un apartado (S01f, Julio, 20/10: «contador
+// donde aplique, en gris, y en rojo lo que vence»). S02: las páginas ya no van
+// en pestañas de la cabecera sino debajo del apartado activo, en la barra; el
+// contador va con ellas. Núcleo puro: se prueba sin React.
 //
 // Dos clases, con la misma vara que lo que ya cuenta otro sitio (regla 31):
 //   · en GRIS, lo que pide una decisión: las mismas cuentas que el chip de la
@@ -42,7 +43,8 @@ export const clavePestana = (producto: IdProducto, pestana: string) => `${produc
 /** De qué cuenta del menú sale el contador gris de cada pestaña. */
 export const CUENTA_DE_PESTANA: Readonly<Record<string, string>> = {
   'contabilidad.asientos': 'libros',
-  'compras.por-revisar': 'compras',
+  // S02: «Por revisar» de Compras (las recepciones) cuelga de Facturas recibidas; su
+  // número va en el chip del apartado (cuentasBarra), y el de la página es el de sus facturas.
   'compras.recibidas': 'recibidas',
   'bancos.movimientos': 'bancos',
   'contactos.todos': 'terceros',

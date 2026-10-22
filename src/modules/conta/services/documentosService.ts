@@ -357,3 +357,43 @@ export async function recuperarFactura(invoiceId: string, quien: string | null):
   const r = await rpc<{ estado: string }>('conta_factura_recuperar', { p_invoice: invoiceId, p_quien_nombre: quien })
   return r.estado
 }
+
+// ── S02 · Lo que la lista de Facturas recibidas enseña además (tablero 2) ──
+//
+// La base, el IVA, el local y si está pagada, de supplier_invoice (columnas
+// comprobadas en information_schema el 22/10: tax_base_total, tax_total,
+// paid_at, paid_method, location_id) y el nombre del local de locations (la
+// misma que lee conta_documentos_recibidos). Sin migración: una lectura más,
+// por ids, con su cuenta (regla 9). Si no se puede leer, la lista sale igual
+// con «—» en esas columnas y lo dice.
+
+export interface ExtraFactura { base: number | null; iva: number | null; pagada: string | null; comoPagada: string | null; localId: string | null; local: string | null }
+
+export async function leerExtrasFacturas(accountId: string, ids: readonly string[]): Promise<Map<string, ExtraFactura>> {
+  const fuera = new Map<string, ExtraFactura>()
+  if (ids.length === 0) return fuera
+  const filas: Record<string, unknown>[] = []
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await tabla('supplier_invoice').select('id, tax_base_total, tax_total, paid_at, paid_method, location_id')
+      .eq('account_id', accountId).in('id', ids.slice(i, i + 200))
+    if (error) throw new Error(mensaje('No se han podido leer la base, el IVA y el pago de las facturas', error))
+    filas.push(...((data ?? []) as Record<string, unknown>[]))
+  }
+  const locales = [...new Set(filas.map((f) => f.location_id).filter((x): x is string => typeof x === 'string'))]
+  const nombres = new Map<string, string>()
+  if (locales.length > 0) {
+    const { data, error } = await tabla('locations').select('id, name').eq('account_id', accountId).in('id', locales)
+    if (error) throw new Error(mensaje('No se han podido leer los locales', error))
+    for (const l of (data ?? []) as Record<string, unknown>[]) nombres.set(String(l.id), String(l.name))
+  }
+  const num = (x: unknown) => (x === null || x === undefined || x === '' ? null : Number(x))
+  for (const f of filas) {
+    const localId = typeof f.location_id === 'string' ? f.location_id : null
+    fuera.set(String(f.id), {
+      base: num(f.tax_base_total), iva: num(f.tax_total),
+      pagada: typeof f.paid_at === 'string' ? f.paid_at : null, comoPagada: typeof f.paid_method === 'string' ? f.paid_method : null,
+      localId, local: localId ? nombres.get(localId) ?? null : null,
+    })
+  }
+  return fuera
+}

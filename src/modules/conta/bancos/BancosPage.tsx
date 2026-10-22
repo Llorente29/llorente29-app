@@ -34,11 +34,13 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
-import { bancosEnBarra, estadoBanco, mesCorto, mesesElegibles, nombreCorto, nombreMes, ultimosIban } from '@/modules/conta/lib/bancosVista'
+import { bancosEnBarra, estadoBanco, mesesElegibles, nombreCorto, nombreMes, ultimosIban } from '@/modules/conta/lib/bancosVista'
 import { agenteTocaHoy, leerDatosBancos, leerHechos, pasarAgente } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { BancosCtx, type ContextoBancos } from '@/modules/conta/bancos/contexto'
 import { bancoInicial, mesInicial, resolverVista, type VistaBancos } from '@/modules/conta/bancos/navegacion'
+import { BotonPeriodo } from '@/modules/conta/marco/BotonPeriodo'
+import { nombreDelMes } from '@/modules/conta/marco/periodo'
 import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
 import { useDatosEnCinta, useEntradasEnCinta, type EntradaPantalla } from '@/modules/conta/marco/nuevo/contexto'
 import { Movimientos } from '@/modules/conta/bancos/Movimientos'
@@ -172,20 +174,20 @@ export default function BancosPage() {
               <h1 className="cxl-titulo">Bancos</h1>
             </div>
             {!enPortadaMovil && (
-              <select className="cx-input cxb-mes" value={mes} aria-label="Mes" onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
-                {/* S01e: el mes, escrito igual que en el ordenador y en Facturas recibidas. */}
-                {meses.map((m) => <option key={m} value={m}>{mesCorto(m)}</option>)}
-              </select>
+              // S02 · El mismo botón del periodo que en el ordenador, en la fila de la empresa.
+              <PeriodoEnBarra>
+                <BotonPeriodo tipo="mes" valor={mes} opciones={meses.map((m) => ({ valor: m, etiqueta: nombreDelMes(m) }))}
+                  alCambiar={(v) => { const p = new URLSearchParams(query); p.set('mes', v); setQuery(p, { replace: true }) }} />
+              </PeriodoEnBarra>
             )}
           </header>
         ) : (
           <>
             <h1 className="cx-oculto">Bancos</h1>
-            {/* En la cabecera, el mes corto («Sep 2026», como la N30): así caben las cuatro pestañas a 1440 px. */}
+            {/* S02 · El periodo, con el mismo control y el mismo formato que en todas las páginas que lo leen. */}
             <PeriodoEnBarra>
-              <select className="cxm-select" value={mes} aria-label="Mes" onChange={(e) => { const p = new URLSearchParams(query); p.set('mes', e.target.value); setQuery(p, { replace: true }) }}>
-                {meses.map((m) => <option key={m} value={m}>{mesCorto(m)}</option>)}
-              </select>
+              <BotonPeriodo tipo="mes" valor={mes} opciones={meses.map((m) => ({ valor: m, etiqueta: nombreDelMes(m) }))}
+                alCambiar={(v) => { const p = new URLSearchParams(query); p.set('mes', v); setQuery(p, { replace: true }) }} />
             </PeriodoEnBarra>
           </>
         )}

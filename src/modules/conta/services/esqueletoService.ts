@@ -18,6 +18,8 @@ import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
 import { supabase } from '@/lib/supabase'
 import { aFila, deFila, type Preferencias } from '@/modules/conta/esqueleto/preferencias'
 import { INTERRUPTORES, type Analitica, type Contexto } from '@/modules/conta/esqueleto/productos'
+import type { Ejercicio } from '@/modules/conta/marco/periodo'
+import { FORMATO_COLOR } from '@/modules/conta/marco/colorEmpresa'
 
 const COLUMNAS = 'nivel, favoritos, cinta_oculta, densidad, barra_desplegada, documento_oculto'
 
@@ -64,6 +66,8 @@ export async function leerContexto(accountId: string, companyId: string | null):
     diez: !!diez.data,
     interruptores: new Set(encendidos),
     logoEmpresa: typeof fila?.logo_path === 'string' && fila.logo_path ? await urlDelLogo(fila.logo_path) : null,
+    // S02 · company.color llega con la 0440; con «*», hasta que esté aplicada no se pide por nombre.
+    colorEmpresa: typeof fila?.color === 'string' && FORMATO_COLOR.test(fila.color) ? fila.color : null,
     analitica: ejes ? analiticaDe(ejes) : null,
     asesoria: await esAsesoria(accountId),
   }
@@ -81,6 +85,25 @@ async function esAsesoria(accountId: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+// ── S02 · Los ejercicios de la empresa (fiscal_year, C00), para el botón del periodo ──
+
+/** Los ejercicios dados de alta, del más nuevo al más viejo. Si no se pueden leer, ninguno: el botón lo dice. */
+export async function leerEjercicios(accountId: string, companyId: string): Promise<Ejercicio[]> {
+  const { data, error } = await tabla('fiscal_year').select('code, starts_on, ends_on, status')
+    .eq('account_id', accountId).eq('company_id', companyId).order('starts_on', { ascending: false })
+  if (error) { console.error('[marco] no se han podido leer los ejercicios', error); return [] }
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    codigo: String(r.code), desde: String(r.starts_on), hasta: String(r.ends_on), estado: r.status === 'closed' ? 'closed' : 'open',
+  }))
+}
+
+/** S02 · Guarda el color de la empresa ('#RRGGBB'), o lo quita (null: el de serie de su inicial). */
+export async function guardarColorEmpresa(accountId: string, companyId: string, color: string | null): Promise<void> {
+  if (color !== null && !FORMATO_COLOR.test(color)) throw new Error('El color tiene que ser #RRGGBB.')
+  const { error } = await tabla('company').update({ color }).eq('id', companyId).eq('account_id', accountId)
+  if (error) throw new Error(mensaje('No se ha guardado el color de la empresa', error))
 }
 
 // ── S01 · La analítica de la empresa (conta_eje_analitico, 0130) ────────────

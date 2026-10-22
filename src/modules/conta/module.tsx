@@ -1,19 +1,20 @@
 // src/modules/conta/module.tsx
 //
 // El módulo de contabilidad (C00, 02/10/2026). Trae su propio marco
-// (`chrome: 'propio'`): desde el M01, el marco nuevo de la maqueta N30
-// (marco/nuevo/MarcoNuevo.tsx), con las pantallas de siempre dentro.
+// (`chrome: 'propio'`): desde el S02, el patrón único (marco/Marco.tsx), con
+// las pantallas de siempre dentro.
 // Sale en la barra de Folvy solo con el interruptor `conta`; sus rutas están
 // montadas siempre y las protege la RLS. Solo administradores.
 //
 // No depende de Cocina para nada: se puede vender solo.
 
 import type { ReactNode } from 'react'
+import { Navigate } from 'react-router-dom'
 import { Calculator } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
-import { CONTA } from '@/config/navegacion'
+import { CONTA, rutaConta } from '@/config/navegacion'
 import '@/modules/conta/estilo'
-import { MarcoNuevo } from '@/modules/conta/marco/nuevo/MarcoNuevo'
+import { Marco } from '@/modules/conta/marco/Marco'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
@@ -46,8 +47,7 @@ import InicioPage from '@/modules/conta/inicio/InicioPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
 import { Portada } from '@/modules/conta/marco/Portada'
 import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
-import MuestraPiezasPage from '@/modules/conta/muestra/MuestraPiezasPage'
-import SistemaDisenoPage from '@/modules/conta/muestra/SistemaDisenoPage'
+import PatronPage from '@/modules/conta/muestra/PatronPage'
 import { baseDeDatos } from '@/services/versionApp'
 
 // C06b (respuesta 6 de Julio, tarea 2): la barra «Pregunta o pide algo» solo
@@ -56,7 +56,7 @@ import { baseDeDatos } from '@/services/versionApp'
 // en las rutas que la llevarían (sinPregunta = false). El ejemplo de cada ruta
 // se queda escrito para cuando la IA conteste de verdad.
 const enMarco = (pagina: ReactNode, _ejemplo: string, sinPregunta = true) => (
-  <EmpresasProveedor><MarcoNuevo sinPregunta={sinPregunta}>{pagina}</MarcoNuevo></EmpresasProveedor>
+  <EmpresasProveedor><Marco sinPregunta={sinPregunta}>{pagina}</Marco></EmpresasProveedor>
 )
 
 export const contaModule: ModuleDefinition = {
@@ -133,10 +133,12 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.recibidasEnAsientos, element: enMarco(<RecibidasEnAsientos />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.recibidaEnAsientos, element: enMarco(<RevisarFacturaPage enAsientos />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
-    // M01 · La muestra de las piezas comunes (datos inventados): solo fuera de producción.
-    ...(baseDeDatos().tipo === 'produccion' ? [] : [{ path: CONTA.rutas.muestraPiezas, element: enMarco(<MuestraPiezasPage />, '') }]),
-    // S01 · La página del sistema de diseño (datos inventados): solo fuera de producción.
-    ...(baseDeDatos().tipo === 'produccion' ? [] : [{ path: CONTA.rutas.sistemaDiseno, element: enMarco(<SistemaDisenoPage />, '') }]),
+    // S02 · La muestra del patrón único: las seis plantillas (datos inventados), solo fuera de
+    // producción. Sustituye a las dos de antes (las piezas del M01 y el sistema de diseño del S01).
+    ...(baseDeDatos().tipo === 'produccion' ? [] : [
+      { path: CONTA.rutas.sistemaDiseno, element: enMarco(<PatronPage />, '') },
+      { path: CONTA.rutas.muestraPiezas, element: <Navigate to={rutaConta(CONTA.rutas.sistemaDiseno)} replace /> },
+    ]),
     { path: CONTA.rutas.ajustesEntrada, element: enMarco(<AjustesPage />, '¿Dónde cambio el plazo de pago?') },
     // El alta va sin el menú del módulo, como la maqueta N1: es una conversación a pantalla completa.
     { path: CONTA.rutas.alta, element: <EmpresasProveedor><AltaPage /></EmpresasProveedor> },
@@ -144,7 +146,8 @@ export const contaModule: ModuleDefinition = {
   ],
   sidebar: {
     // El Shell no pinta este menú (marco propio): sirve para decidir si el
-    // módulo sale en la barra de Folvy. El menú de verdad es MENU_CONTA.
+    // módulo sale en la barra de Folvy. La barra de verdad sale de
+    // esqueleto/productos.ts (marco/Barra.tsx).
     items: [{ id: 'conta_ajustes', label: 'Ajustes', icon: Calculator, path: CONTA.rutas.empresa, requiredRole: 'admin' }],
   },
 }

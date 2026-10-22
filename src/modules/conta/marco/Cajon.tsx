@@ -1,27 +1,22 @@
-// src/modules/conta/esqueleto/CajonProductos.tsx
+// src/modules/conta/marco/Cajon.tsx
 //
-// S01c · En el móvil, la barra de productos va en un CAJÓN que sale por la
-// izquierda al pulsar el botón de menú de la cabecera (encargo S01b, 18/10;
-// sustituye a la barra de abajo con «Más»): los mismos productos que la barra
-// del ordenador, con su icono, su nombre y su chip; Ajustes abajo, separado; y
-// «Volver a Folvy» si no es el producto vendido solo. S01d: también Favoritos
-// y el usuario (en el móvil no están en la cabecera). Se cierra con «Cerrar»,
-// con Escape, tocando fuera o al elegir. El logo no se repite aquí: ya sale en
-// la cabecera (una sola vez, Julio).
+// S02 · En el móvil, la barra va en un CAJÓN que sale por la izquierda al
+// pulsar el botón de menú de la cabecera (tablero 4, «la barra en un cajón»):
+// los mismos apartados que la barra del ordenador, con el activo abierto y sus
+// páginas; abajo, Favoritos, el usuario, Ajustes y, si no es el producto
+// vendido solo, «Volver a Folvy». Se cierra con «Cerrar el menú», con Escape,
+// tocando fuera o al elegir. El logo no se repite: ya sale en la cabecera.
 
 import { useEffect, useRef, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icono } from '@/modules/conta/diseno'
-import { ItemBarra } from './BarraProductos'
-import type { IdProducto, Producto } from './productos'
+import { Apartado, type DatosBarra } from './Barra'
 
-export function CajonProductos({ productos, activo, pendientes, solo, cerrar, tuyo }: {
-  productos: Producto[]
-  activo: string | null
-  pendientes: Partial<Record<IdProducto, number | null>>
+export function Cajon({ d, solo, cerrar, tuyo }: {
+  d: DatosBarra
   solo: boolean
   cerrar: () => void
-  /** S01d · Favoritos y el usuario, en su variante de cajón. */
+  /** Favoritos y el usuario, en su variante de cajón. */
   tuyo?: ReactNode
 }) {
   const caja = useRef<HTMLDivElement | null>(null)
@@ -32,19 +27,19 @@ export function CajonProductos({ productos, activo, pendientes, solo, cerrar, tu
     window.addEventListener('keydown', tecla)
     return () => { window.removeEventListener('keydown', tecla); antes?.focus?.() }
   }, [cerrar])
-  const arriba = productos.filter((p) => !p.abajo)
-  const abajo = productos.filter((p) => p.abajo)
+  const arriba = d.productos.filter((p) => !p.abajo)
+  const abajo = d.productos.filter((p) => p.abajo)
   return (
     <div className="s-cajon-velo" onClick={cerrar}>
       <div className="s-cajon" role="dialog" aria-modal="true" aria-label="Menú" ref={caja} onClick={(e) => e.stopPropagation()}>
         <nav aria-label="Menú de contabilidad" className="s-cajon-nav">
           <ul className="s-barra-lista">
-            {arriba.map((p) => <ItemBarra key={p.id} p={p} activo={activo === p.id} pendientes={pendientes[p.id]} alPulsar={cerrar} />)}
+            {arriba.map((p) => <Apartado key={p.id} p={p} d={d} alPulsar={cerrar} />)}
           </ul>
-          {tuyo && <div className="s-cajon-tuyo">{tuyo}</div>}
           <div className="s-barra-pie">
+            {tuyo && <div className="s-cajon-tuyo">{tuyo}</div>}
             <ul className="s-barra-lista">
-              {abajo.map((p) => <ItemBarra key={p.id} p={p} activo={activo === p.id} pendientes={pendientes[p.id]} alPulsar={cerrar} />)}
+              {abajo.map((p) => <Apartado key={p.id} p={p} d={d} alPulsar={cerrar} />)}
               {!solo && (
                 <li><Link to="/" className="s-barra-item" onClick={cerrar}><Icono nombre="anterior" grande /><span className="s-barra-nombre">Volver a Folvy</span></Link></li>
               )}

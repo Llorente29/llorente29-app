@@ -11,7 +11,8 @@ import {
   LayoutTemplate, LibraryBig, ListChecks, Lock, Mail, Menu, NotebookPen, Package, PanelLeftClose, PanelLeftOpen, Percent, Pin,
   PinOff, Plus, Receipt, Repeat, Scale, ScanLine, Search, Settings, SlidersHorizontal, Sparkles, Star, Store, TriangleAlert,
   Truck, Upload, UserRound, Users, Wallet, Workflow, X,
-  ExternalLink, Printer, type LucideIcon,
+  ExternalLink, Printer, Briefcase, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, CircleQuestionMark, Maximize2, Minimize2, ZoomIn, ZoomOut, Ellipsis,
+  type LucideIcon,
 } from 'lucide-react'
 
 export const ICONOS = {
@@ -93,6 +94,18 @@ export const ICONOS = {
   fecha: Calendar,
   graficas: ChartColumn,
   ia: Sparkles,
+  // S02 · El patrón único.
+  despacho: Briefcase,
+  ayuda: CircleQuestionMark,
+  izquierda: ChevronLeft,
+  derecha: ChevronRight,
+  plegarDocumento: ChevronsRight,
+  desplegarDocumento: ChevronsLeft,
+  pantallaCompleta: Maximize2,
+  salirPantallaCompleta: Minimize2,
+  acercar: ZoomIn,
+  alejar: ZoomOut,
+  masAcciones: Ellipsis,
 } as const satisfies Record<string, LucideIcon>
 
 export type NombreIcono = keyof typeof ICONOS

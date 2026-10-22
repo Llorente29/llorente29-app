@@ -31,7 +31,8 @@ export interface Preferencias {
 }
 
 export const DE_SERIE: Preferencias = {
-  nivel: 'medio', favoritos: [], cintaOculta: false, densidad: 'compacta', barraDesplegada: true, documentoOculto: false,
+  // S02: Cómoda de serie (filas de 56 px, las de los tableros); Compacta, 40.
+  nivel: 'medio', favoritos: [], cintaOculta: false, densidad: 'comoda', barraDesplegada: true, documentoOculto: false,
 }
 
 type Fila = Record<string, unknown>

@@ -86,7 +86,9 @@ export function paraIlike(texto: string): string {
  * Ctrl K), las de Bancos (las del suyo) y las entradas de Ajustes. Sin
  * repetir dirección.
  */
-export function opciones(q: string, solo: boolean, ctx: Contexto = SIN_EMPRESA): Resultado[] {
+export function opciones(q: string, solo: boolean, ctxDado: Contexto = SIN_EMPRESA): Resultado[] {
+  // S02: en el producto vendido solo, tampoco las páginas que dicen «aún no» (las de Ajustes son páginas de la barra).
+  const ctx: Contexto = { ...ctxDado, solo }
   const n = normal(q)
   if (!n) return []
   const fuera: Resultado[] = []

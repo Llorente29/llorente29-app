@@ -3,20 +3,19 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# I01d · Cargar los impuestos de 2025 (rama conta/i01d-impuestos-2025; Julio,
-# 21/10). Va DESPUÉS de la de E05 riders (0410, PR #273, aplicada): su copia,
-# tests/conta/produccion/tanda-e05-riders-20261021.txt. La de Catcher (0420
-# e05_catcher_ficha, también aplicada, mismo número) quedó en su copia:
-# tests/conta/produccion/tanda-e05-catcher-ficha-20261021.txt. Sin turno (Julio, 21/10):
-# no comparte funciones ni tablas con ninguna otra.
+# S02 · PR 1 del patrón único: el color de la empresa (rama
+# claude/cool-noether-i932tx; Julio, 22/10: «Color de la empresa: columna nueva
+# en el PR 1, con su tanda. Fusiona Julio»). Va DESPUÉS de la del C07 (0430,
+# conta/c07-diez-todo), que se aplica y se fusiona antes: no comparte con ella
+# ni tablas ni funciones. La de antes (I01d, 0420, aplicada) quedó en su copia:
+# tests/conta/produccion/tanda-i01d-impuestos-2025-20261022.txt.
 #
-#   1. 0420 — CAMBIA en caliente conta_impuesto_trimestre (misma firma,
-#      declarado, con su prueba de staging): dice desde cuándo lleva la empresa
-#      sus impuestos aquí («desde»), y lo pendiente al empezar el año sale del
-#      303 del 4T del año anterior (antes, de la [110] del 1T). No toca ninguna
-#      tabla ni ninguna fila.
+#   1. 0440 — AÑADE company.color (nula, '#RRGGBB') y su comprobación de
+#      formato. No toca ninguna fila ni ninguna función.
 #
-# No toca el camino del pedido. Ninguna función que desplegar a mano.
+# No toca el camino del pedido (company no se escribe al pedir ni al cocinar;
+# el CHECK nuevo se valida sobre una columna nula en todas las filas). Ninguna
+# función que desplegar a mano.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/impuestos-2025.sql
-supabase/migrations/20261130T0420_i01d_impuestos_2025.sql
+cuenta: scripts/conta/produccion/cuentas/color-empresa.sql
+supabase/migrations/20261202T0440_s02_color_empresa.sql

@@ -1,4 +1,5 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# I01d · los impuestos de 2025): conta_impuesto_trimestre como en la 0280.
-cuenta: scripts/conta/produccion/cuentas/impuestos-2025.sql
-supabase/vuelta-atras/20261130T0420_i01d_impuestos_2025.down.sql
+# S02 · el color de la empresa): sin company.color ni su comprobación. Para si
+# alguna empresa ya ha elegido su color.
+cuenta: scripts/conta/produccion/cuentas/color-empresa.sql
+supabase/vuelta-atras/20261202T0440_s02_color_empresa.down.sql

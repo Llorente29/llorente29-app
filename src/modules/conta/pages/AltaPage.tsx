@@ -13,7 +13,7 @@ import { useState } from 'react'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { ConversacionAlta } from '@/modules/conta/alta/ConversacionAlta'
-import { MarcoNuevo } from '@/modules/conta/marco/nuevo/MarcoNuevo'
+import { Marco } from '@/modules/conta/marco/Marco'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 
 export default function AltaPage() {
@@ -29,7 +29,7 @@ export default function AltaPage() {
     <>
       {/* Folvy detrás, atenuado y sin poder tocarse: la ventana manda. */}
       <div inert aria-hidden="true" className="cx-alta-detras">
-        <MarcoNuevo sinPregunta><AjustesPage /></MarcoNuevo>
+        <Marco sinPregunta><AjustesPage /></Marco>
       </div>
       <ConversacionAlta marco="ventana" />
     </>

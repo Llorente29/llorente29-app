@@ -50,7 +50,7 @@ export function Calendario({ companyId }: { companyId: string }) {
   useEntradasEnCinta(useMemo(() => ({
     impuestos: [
       ...(gestiona ? [{ id: 'impuestos.fuera', etiqueta: 'Ya presenté uno fuera · pegar CSV', a: `${rutaImpuestos('presentados')}?fuera=1` }] : []),
-      ...(primera && mes ? [{ id: 'impuestos.revisar-mes', etiqueta: `Revisar y presentar los de ${mes}`, a: rutaIvaPeriodo(primera.ejercicio, primera.periodo) }] : []),
+      ...(primera && mes ? [{ id: 'impuestos.revisar-mes', etiqueta: `Revisar y presentar los de ${mes}`, a: rutaIvaPeriodo(primera.ejercicio, primera.periodo), principal: true }] : []),
     ],
   }), [primera, mes, gestiona]))
 

@@ -44,7 +44,7 @@ export function ApartadoLogo({ d, quien, alCambiar, movil }: { d: DatosEmpresa; 
     <TarjetaApartado titulo="El logo de la empresa" movil={movil}>
       <div className="cx-fila" style={{ alignItems: 'center', gap: 12 }}>
         {ruta
-          ? (vista ? <img src={vista} alt="El logo de la empresa" className="s-cab-cliente-logo" data-testid="logo-empresa" /> : <span className="cx-ayuda">Leyendo el logo…</span>)
+          ? (vista ? <img src={vista} alt="El logo de la empresa" className="s-empresa-cuadrado" data-testid="logo-empresa" /> : <span className="cx-ayuda">Leyendo el logo…</span>)
           : <span className="cx-ayuda" data-testid="logo-empresa-sin">Sin logo: en la cabecera sale la inicial de la empresa.</span>}
       </div>
       <p className="cx-ayuda">PNG, JPG o WebP de hasta 1 MB. Sale en la cabecera, con el selector de empresa.</p>

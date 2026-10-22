@@ -10,8 +10,9 @@
 //   · «Lo que he hecho» dice qué cuenta;
 //   · el «···» de una fila se abre hacia arriba solo si abajo no cabe.
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { CINTAS, ordenPorId } from '@/modules/conta/esqueleto/ordenes'
+import { ordenPorId } from '@/modules/conta/esqueleto/ordenes'
 import { barra, lineaDiez, type DatosDocumentos } from '@/modules/conta/documentos/documentos'
 import { bancoInicial, mesInicial } from '@/modules/conta/bancos/navegacion'
 import { fraseHecho } from '@/modules/conta/bancos/textosBancos'
@@ -24,25 +25,21 @@ const datos = (o: Partial<DatosDocumentos> = {}): DatosDocumentos => ({
   cifras: { llegadas: 0, llegadas_por_canal: {}, apuntadas_solas: 0, apuntadas: 0, para_mirar: 0, por_aclarar: 0, esperadas_no_llegadas: 0 },
 })
 
-describe('subir: de una en una o varias a la vez, con nombres distintos', () => {
-  it('Por revisar sube una factura; Facturas recibidas, varias a la vez', () => {
-    const una = ordenPorId('compras.subir')!.etiqueta
-    const varias = barra(datos(), { solo: false, producto: 'Folvy' })[0].entradas.find((e) => e.id === 'subir')!.nombre
-    expect(una).toBe('Subir una factura')
-    expect(varias).toBe('Subir varias a la vez')
-    expect(una).not.toBe(varias)
+describe('subir (S02): UN «Subir factura» en Compras, el de Facturas recibidas (regla 1 del patrón)', () => {
+  it('el catálogo y la pantalla dicen lo mismo, y lleva a Facturas recibidas', () => {
+    const o = ordenPorId('compras.subir')!
+    expect(o.etiqueta).toBe('Subir factura')
+    expect(o.pestana).toBe('recibidas')
+    expect(readFileSync('src/modules/conta/documentos/DocumentosPage.tsx', 'utf8')).toMatch(/>Subir factura<\/Boton>/)
+    // La barra de antes de la N22 se queda como dato de la pantalla, sin su «Subir varias a la vez» como botón aparte.
+    expect(barra(datos(), { solo: false, producto: 'Folvy' })[0].entradas.find((e) => e.id === 'subir')!.nombre).toBe('Subir varias a la vez')
+  })
+  it('en Recepciones del local ya no hay un «Subir una factura» suelto: solo el de cada recepción', () => {
+    const compras = readFileSync('src/modules/conta/compras/ComprasPage.tsx', 'utf8')
+    expect(compras).not.toMatch(/>Subir una factura</)
   })
 })
 
-describe('la cinta de Facturas recibidas', () => {
-  it('los grupos que pone la pantalla se llaman igual que los de la cinta, y sin TRAER / ESPERADAS / LEÍDAS', () => {
-    const deLaCinta = CINTAS['compras.recibidas'].map((g) => g.titulo)
-    const deLaPantalla = barra(datos({ correo: { activo: true, direccion: 'a@b.c' }, recibe_mercancia: true }), { solo: false, producto: 'Folvy' }).map((g) => g.etiqueta)
-    expect(deLaPantalla).toEqual(deLaCinta)
-    expect(deLaCinta).toEqual(['Cómo llegan', 'Las que faltan', 'Apuntadas solas'])
-    for (const t of deLaCinta) expect(t).not.toMatch(/^(Traer|Esperadas|Leídas)$/)
-  })
-})
 
 describe('la línea de Diez, sin el nombre del fabricante', () => {
   it('con y sin marca', () => {

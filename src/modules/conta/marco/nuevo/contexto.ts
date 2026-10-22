@@ -1,15 +1,21 @@
 // src/modules/conta/marco/nuevo/contexto.ts
 //
-// M01 · Lo que el marco nuevo deja a las pantallas que lleva dentro:
+// M01 · Lo que el marco deja a las pantallas que lleva dentro:
 //   · la densidad y si el documento está oculto (las piezas comunes la leen);
 //   · los dos huecos donde una pantalla pone lo suyo: su barra de acciones y,
-//     si lo lee, el ejercicio y el periodo (en la cabecera);
-//   · S01: lo que sabe de cada orden de su cinta (useDatosEnCinta).
+//     si lo lee, el periodo (en la cabecera: BotonPeriodo);
+//   · S01: lo que sabe de cada orden de sus acciones (useDatosEnCinta) y lo
+//     que solo ella sabe (useEntradasEnCinta: los bancos de la empresa).
+//   · S02: si la página pinta su propio encabezado (EncabezadoPagina), las
+//     acciones del catálogo de su página (para su «Más acciones»), los
+//     ejercicios de la empresa (el botón del periodo) y si trabaja con Diez.
 // Fuera del marco no hay contexto: las piezas usan lo de serie.
 
 import { createContext, useContext, useEffect, useRef } from 'react'
 import type { Densidad, Nivel } from '@/modules/conta/esqueleto/preferencias'
 import type { Analitica, EjeVista } from '@/modules/conta/esqueleto/productos'
+import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
+import type { Ejercicio } from '@/modules/conta/marco/periodo'
 
 export interface Marco {
   densidad: Densidad
@@ -40,6 +46,22 @@ export interface Marco {
   analitica: Analitica | null
   /** S01 (paso 4) · El nivel de quien mira: cambia palabras y ayuda, nunca posiciones. */
   nivel: Nivel
+  /**
+   * S02 · La página pinta sus propios botones (EncabezadoPagina o su barra):
+   * el marco no pinta la fila de acciones de serie, y lo del catálogo va a su
+   * «Más acciones». Se pone al montar y se quita al irse.
+   */
+  ponerConPropias: (que: Propias | null) => void
+  /** S02 · Las acciones del catálogo de esta página, ya resueltas (para el «Más acciones» del encabezado). */
+  accionesDelCatalogo: GrupoDeAcciones[]
+  /** S02 · Los ejercicios de la empresa, para el botón del periodo. Vacío mientras se leen. */
+  ejercicios: Ejercicio[]
+  /** S02 · ¿La empresa trabaja con Diez? (conta_diez_base). Null mientras no se sabe. */
+  diez: boolean | null
+  /** S02 · Abre «Buscar o hacer algo» (Ctrl K). */
+  abrirBuscador: () => void
+  /** S02 · El color que eligió la empresa ('#RRGGBB'), o null (el de serie de su inicial). */
+  colorEmpresa: string | null
 }
 
 /** Una entrada de la cinta puesta por la pantalla: un enlace (`a`) o un botón (`alPulsar`). */
@@ -58,6 +80,8 @@ export interface EntradaPantalla {
   numero?: number
   /** El nombre entero, cuando la etiqueta es corta. */
   titulo?: string
+  /** S02 · El botón principal de la página (azul, uno solo). */
+  principal?: boolean
 }
 /** Por grupo de la cinta (`dePantalla` en ordenes.ts). */
 export type EntradasCinta = Record<string, EntradaPantalla[]>
@@ -69,6 +93,26 @@ export const MarcoContexto = createContext<Marco | null>(null)
 
 /** El marco nuevo, o null si la pantalla está fuera de él. */
 export const useMarco = (): Marco | null => useContext(MarcoContexto)
+
+/**
+ * S02 · Qué pinta la página por su cuenta:
+ *   · 'encabezado': su EncabezadoPagina, con sus botones y su «Más acciones»
+ *     (que recoge lo del catálogo): el marco no pinta su fila de acciones;
+ *   · 'barra': su barra de botones (AccionesPantalla, el libro diario): el
+ *     marco pinta la fila con esa barra y lo del catálogo en «Más acciones».
+ */
+export type Propias = 'encabezado' | 'barra'
+
+/** S02 · La página dice que pinta sus propios botones mientras está a la vista. */
+export function useConPropias(que: Propias = 'encabezado'): void {
+  const marco = useContext(MarcoContexto)
+  const poner = marco?.ponerConPropias
+  useEffect(() => {
+    if (!poner) return
+    poner(que)
+    return () => poner(null)
+  }, [poner, que])
+}
 
 /**
  * Una pantalla pone en la cinta lo que sabe de sus órdenes mientras está a la

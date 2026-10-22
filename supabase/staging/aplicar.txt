@@ -429,3 +429,11 @@ supabase/staging/sql/20261130_e05_catcher_ficha_prueba.sql
 #   que no casa, otra cuenta y la vuelta atrás de verdad.
 supabase/migrations/20261130T0420_i01d_impuestos_2025.sql
 supabase/staging/sql/20261130_i01d_impuestos_2025_prueba.sql
+
+# S02 · PR 1 del patrón único (rama claude/cool-noether-i932tx; Julio, 22/10).
+#   La 0440 añade company.color ('#RRGGBB', nula) y su comprobación: la franja
+#   de 3 px de la cabecera y el cuadrado de la inicial. Su prueba (ROLLBACK): A
+#   pone y quita el color de su empresa, uno mal escrito no entra, no toca el de
+#   B, y la vuelta atrás para con un color puesto y sin él lo quita todo.
+supabase/migrations/20261202T0440_s02_color_empresa.sql
+supabase/staging/sql/20261202_s02_color_empresa_prueba.sql

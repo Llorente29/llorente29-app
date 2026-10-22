@@ -1,50 +1,62 @@
 // src/modules/conta/esqueleto/productos.ts
 //
-// S01 · El esqueleto de contabilidad: los productos de la barra y sus pestañas
-// (encargo S01 y visto bueno de Julio del 17/10). De aquí salen la barra de la
-// izquierda, las pestañas de la cabecera y qué producto y qué pestaña están
-// activos para cada dirección. Núcleo puro: se prueba sin React.
+// Los apartados de la barra y sus páginas. De aquí salen la barra lateral (y
+// su cajón en el móvil), las páginas que se despliegan bajo el apartado activo
+// y qué apartado y qué página están activos para cada dirección. Núcleo puro:
+// se prueba sin React.
 //
+// S02 · Patrón único (Julio, 22/10, tablero 0 «El mapa»):
 //   Inicio · Contabilidad · Facturación · Compras y gastos · Bancos · Laboral ·
-//   Impuestos · Contactos · (abajo) Ajustes
+//   Impuestos · Contactos · (abajo) Favoritos · Ajustes
+// Y, solo en una cuenta que es asesoría, «Clientes del despacho» arriba del
+// todo: para el asesor es su Inicio (respuesta de Julio al paso 1 del S02).
+// Las páginas de cada apartado ya no van en pestañas de la cabecera: el
+// apartado activo se abre en la barra y enseña sus páginas debajo.
 //
-// Tres reglas:
-//   1. Las pantallas NO cambian de dirección: cada pestaña dice qué direcciones
-//      son suyas (`prefijos`) y gana el prefijo más largo. Una pantalla vieja
-//      no se entera de que ahora cuelga de otro sitio.
-//   2. Nada vacío delante del cliente: un producto o una pestaña sin pantalla
+// Tres reglas (S01, se quedan):
+//   1. Las pantallas NO cambian de dirección: cada página dice qué direcciones
+//      son suyas (`prefijos`) y gana el prefijo más largo.
+//   2. Nada vacío delante del cliente: un apartado o una página sin pantalla
 //      (`ruta: null`) no sale. Facturación, Laboral e Impuestos llevan además
-//      su interruptor por cuenta en `feature_flags` (sin caducidad): salen
-//      cuando lo tengan encendido Y tengan pantalla.
-//   3. Hostelería y Diez son de la EMPRESA: lo que solo tiene sentido con ellas
-//      (Liquidaciones, Importar de Diez) solo sale si la empresa lo tiene.
+//      su interruptor por cuenta en `feature_flags`.
+//   3. Hostelería, Diez y la asesoría son de la EMPRESA o de la CUENTA: lo que
+//      solo tiene sentido con ellas solo sale si lo tienen.
+// Y una del S02: los grupos de la barra (Finanzas · Personas · Operaciones)
+// están previstos en cada apartado (`grupo`), pero NO se pintan hasta que
+// entren más apartados (encargo S02, «Barra lateral»).
 
-import { CONTA } from '@/config/navegacion'
+import { CONTA, INDICE_AJUSTES } from '@/config/navegacion'
 import type { NombreIcono } from '@/modules/conta/diseno/iconos'
 
-export type IdProducto = 'inicio' | 'contabilidad' | 'facturacion' | 'compras' | 'bancos' | 'laboral' | 'impuestos' | 'contactos' | 'ajustes'
+export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'facturacion' | 'compras' | 'bancos' | 'laboral' | 'impuestos' | 'contactos' | 'ajustes'
 
-/** Lo que solo sale si la empresa lo tiene. */
+/** Lo que solo sale si la empresa (o la cuenta) lo tiene. */
 export type Condicion = 'hosteleria' | 'diez' | 'asesoria'
 
 export type Interruptor = 'conta_facturacion' | 'conta_laboral' | 'conta_impuestos'
 export const INTERRUPTORES: readonly Interruptor[] = ['conta_facturacion', 'conta_laboral', 'conta_impuestos']
 
+/** S02 · Los grupos de la barra, previstos y sin pintar (encargo S02). */
+export type GrupoBarra = 'finanzas' | 'personas' | 'operaciones'
+export const NOMBRE_GRUPO: Record<GrupoBarra, string> = { finanzas: 'Finanzas', personas: 'Personas', operaciones: 'Operaciones' }
+
+/** Una página de un apartado (hasta el S02, una «pestaña» de la cabecera). */
 export interface Pestana {
   id: string
   etiqueta: string
-  /** S01f · El icono de trazo que va delante del nombre en la cabecera (14 px). */
   icono: NombreIcono
   /** Dirección relativa al módulo; null = aún no tiene pantalla (no sale). */
   ruta: string | null
-  /** Las direcciones que caen en esta pestaña. */
+  /** Las direcciones que caen en esta página. */
   prefijos: string[]
   solo?: Condicion
   /**
-   * La pestaña es una vista de la misma pantalla (`?ver=`): Contactos. Se marca
+   * La página es una vista de la misma pantalla (`?ver=`): Contactos. Se marca
    * cuando la dirección la pide; la que no lleva `ver` es la de serie.
    */
   ver?: string
+  /** La página existe pero aún dice «aún no» (Ajustes): no sale en el producto vendido solo. */
+  hueco?: boolean
 }
 
 export interface Producto {
@@ -53,23 +65,21 @@ export interface Producto {
   icono: NombreIcono
   /** Dirección de entrada; null = sin pantalla (no sale). */
   ruta: string | null
-  /** Direcciones del producto que no son de ninguna pestaña (la portada, el alta). */
+  /** Direcciones del apartado que no son de ninguna página (la portada, el alta). */
   prefijos: string[]
   pestanas: Pestana[]
   interruptor?: Interruptor
+  /** El apartado entero solo sale si la empresa o la cuenta lo tiene (el despacho). */
+  solo?: Condicion
   /** Va abajo del todo en la barra (Ajustes). */
   abajo?: boolean
+  /** S02 · Su grupo, cuando la barra se agrupe (hoy no se pinta). */
+  grupo?: GrupoBarra
   /**
    * En el móvil, la pantalla va por niveles (patrón M4: portada con sus
-   * apartados y «‹ Volver»): ni la fila de pestañas ni la cinta. Bancos.
-   * En el ordenador, pestañas y cinta como todos (paso 3 del S01).
+   * apartados y «‹ Volver»). Bancos.
    */
   portadaMovil?: boolean
-  /**
-   * S01e · Alguna de sus pantallas pone el ejercicio o el mes en la cabecera
-   * (PeriodoEnBarra): los px que se le guardan siempre, esté o no, con su hueco.
-   */
-  periodo?: number
 }
 
 /** Lo que decide qué sale: de la empresa activa y de la cuenta. */
@@ -79,17 +89,17 @@ export interface Contexto {
   interruptores: ReadonlySet<string>
   /** S01 · El logo de la empresa (URL firmada del bucket company-logos), o null. No decide qué sale. */
   logoEmpresa?: string | null
+  /** S02 · El color que eligió la empresa (company.color, '#RRGGBB'), o null. No decide qué sale. */
+  colorEmpresa?: string | null
   /**
    * S01 · Los ejes de analítica encendidos de la empresa (conta_eje_analitico):
-   * null = no se han podido leer (la tabla aún no está): todo sale, como antes.
+   * null = no se han podido leer: todo sale, como antes.
    */
   analitica?: Analitica | null
-  /**
-   * P01 · La CUENTA dice que es una asesoría («Soy una asesoría»,
-   * accounts.tax_advisor_since) o ya lleva clientes con permiso: sale
-   * «Tus clientes» en Impuestos. Sin leer (la 0100 sin aplicar), no sale.
-   */
+  /** P01 · La CUENTA es una asesoría o ya lleva clientes con permiso. Sin leer, no lo es. */
   asesoria?: boolean
+  /** S02 · El producto vendido solo (C06): sin las páginas que aún dicen «aún no». */
+  solo?: boolean
 }
 
 /** Un eje de analítica encendido, con el nombre que le da la empresa. */
@@ -99,10 +109,31 @@ export interface Analitica { local: EjeVista | null; marca: EjeVista | null }
 
 const R = CONTA.rutas
 
+/**
+ * S02 · Las páginas de Ajustes son las entradas de su índice (C02), menos las
+ * que son de Contabilidad › Definiciones (el plan, las tablas y la numeración,
+ * que vive en las tablas): una cosa, un solo sitio.
+ */
+const DE_DEFINICIONES = new Set(['plan', 'tablas', 'numeracion'])
+const PAGINAS_AJUSTES: Pestana[] = INDICE_AJUSTES.flatMap((g) => g.entradas)
+  .filter((e) => !DE_DEFINICIONES.has(e.id))
+  .map((e): Pestana => ({
+    id: e.id, etiqueta: e.etiqueta, icono: e.id === 'folvy' ? 'ia' : e.id === 'empresa' ? 'empresa' : e.id === 'personas' ? 'usuarios' : e.id === 'avisos' ? 'avisos' : e.id === 'impuestos' ? 'impuestos' : e.id === 'socios' ? 'socios' : e.id === 'ejercicio' ? 'fecha' : 'ajustes',
+    ruta: e.ruta,
+    // «Tu empresa» es también la portada de Ajustes (la dirección «ajustes» a secas).
+    prefijos: e.id === 'empresa' ? [R.empresa, e.ruta] : [e.ruta],
+    hueco: !!e.hueco,
+  }))
+
 export const PRODUCTOS: Producto[] = [
+  // S02 · Solo en una cuenta que es asesoría: la cartera de sus clientes, arriba del todo.
+  {
+    id: 'despacho', etiqueta: 'Clientes del despacho', icono: 'despacho', ruta: `${R.impuestos}/clientes`,
+    prefijos: [`${R.impuestos}/clientes`], solo: 'asesoria', pestanas: [],
+  },
   { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: R.inicio, prefijos: [R.inicio], pestanas: [] },
   {
-    id: 'contabilidad', etiqueta: 'Contabilidad', icono: 'contabilidad', ruta: R.libroDiario, prefijos: [], periodo: 210,   // «Ejercicio 2025 · cerrado»
+    id: 'contabilidad', etiqueta: 'Contabilidad', icono: 'contabilidad', ruta: R.libroDiario, prefijos: [], grupo: 'finanzas',
     pestanas: [
       { id: 'asientos', etiqueta: 'Asientos', icono: 'asientos', ruta: R.libroDiario, prefijos: [R.libroDiario] },
       {
@@ -115,46 +146,53 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    id: 'facturacion', etiqueta: 'Facturación', icono: 'facturacion', ruta: null, prefijos: [], interruptor: 'conta_facturacion',
+    // S02 · Facturas emitidas · Cobros · Series. Aún sin pantalla: no sale.
+    id: 'facturacion', etiqueta: 'Facturación', icono: 'facturacion', ruta: null, prefijos: [], interruptor: 'conta_facturacion', grupo: 'finanzas',
     pestanas: [
-      { id: 'facturas', etiqueta: 'Facturas', icono: 'facturas', ruta: null, prefijos: [] },
-      { id: 'presupuestos', etiqueta: 'Presupuestos', icono: 'presupuestos', ruta: null, prefijos: [] },
-      { id: 'recurrentes', etiqueta: 'Recurrentes', icono: 'recurrentes', ruta: null, prefijos: [] },
-      { id: 'rectificativas', etiqueta: 'Rectificativas', icono: 'rectificativas', ruta: null, prefijos: [] },
+      { id: 'emitidas', etiqueta: 'Facturas emitidas', icono: 'facturas', ruta: null, prefijos: [] },
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: null, prefijos: [] },
-      { id: 'productos', etiqueta: 'Productos y servicios', icono: 'catalogo', ruta: null, prefijos: [] },
-      { id: 'series', etiqueta: 'Series y plantillas', icono: 'plantillas', ruta: null, prefijos: [] },
+      { id: 'series', etiqueta: 'Series', icono: 'plantillas', ruta: null, prefijos: [] },
     ],
   },
   {
-    id: 'compras', etiqueta: 'Compras y gastos', icono: 'compras', ruta: R.compras, prefijos: [], periodo: 100,   // «Oct 2026»
+    // S02 · Facturas recibidas · Tickets · Pagos · Liquidaciones. Tickets y Pagos aún sin pantalla.
+    // «Por revisar» (las recepciones de Cocina que esperan factura, compras/) cuelga de
+    // Facturas recibidas: es de donde salen esas facturas.
+    id: 'compras', etiqueta: 'Compras y gastos', icono: 'compras', ruta: R.documentos, prefijos: [], grupo: 'finanzas',
     pestanas: [
-      { id: 'por-revisar', etiqueta: 'Por revisar', icono: 'revisar', ruta: R.compras, prefijos: [R.compras] },
-      { id: 'recibidas', etiqueta: 'Facturas recibidas', icono: 'recibida', ruta: R.documentos, prefijos: [R.documentos] },
-      { id: 'recurrentes', etiqueta: 'Recurrentes', icono: 'recurrentes', ruta: null, prefijos: [] },
+      { id: 'recibidas', etiqueta: 'Facturas recibidas', icono: 'recibida', ruta: R.documentos, prefijos: [R.documentos, R.compras] },
+      { id: 'tickets', etiqueta: 'Tickets', icono: 'documento', ruta: null, prefijos: [] },
       { id: 'pagos', etiqueta: 'Pagos', icono: 'pagos', ruta: null, prefijos: [] },
       { id: 'liquidaciones', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidacionNueva, prefijos: [`${R.compras}/liquidacion`, `${R.documentos}/catcher`], solo: 'hosteleria' },
     ],
   },
   {
-    id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], portadaMovil: true, periodo: 100,
+    id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], portadaMovil: true, grupo: 'finanzas',
     pestanas: [
       { id: 'movimientos', etiqueta: 'Movimientos', icono: 'movimientos', ruta: R.bancos, prefijos: [R.bancos] },
-      { id: 'reglas', etiqueta: 'Reglas', icono: 'reglas', ruta: `${R.bancos}/reglas`, prefijos: [`${R.bancos}/reglas`] },
       { id: 'cuentas', etiqueta: 'Cuentas y extractos', icono: 'cuentasBanco', ruta: `${R.bancos}/cuentas`, prefijos: [`${R.bancos}/cuentas`] },
+      { id: 'reglas', etiqueta: 'Reglas', icono: 'reglas', ruta: `${R.bancos}/reglas`, prefijos: [`${R.bancos}/reglas`] },
+      // Se muda a Contabilidad › Cierre y Registro en el PR 2 del S02.
       { id: 'cierre', etiqueta: 'Cierre del mes', icono: 'cierreMes', ruta: `${R.bancos}/cierre`, prefijos: [`${R.bancos}/cierre`] },
     ],
   },
-  { id: 'laboral', etiqueta: 'Laboral', icono: 'laboral', ruta: null, prefijos: [], interruptor: 'conta_laboral', pestanas: [] },
-  // I01b · Impuestos (tableros 8, 9 y 10), con su interruptor por cuenta. El IVA de un
-  // periodo (impuestos/iva/…) cuelga del Calendario.
   {
-    id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: R.impuestos, prefijos: [], interruptor: 'conta_impuestos',
+    // S02 · Empleados · Nóminas · Seguros sociales · Fichajes y ausencias · Portal del empleado. Aún sin pantalla: no sale.
+    id: 'laboral', etiqueta: 'Laboral', icono: 'laboral', ruta: null, prefijos: [], interruptor: 'conta_laboral', grupo: 'personas',
     pestanas: [
-      // P01 · Lo primero para una asesoría: los impuestos de todos sus clientes.
-      { id: 'clientes', etiqueta: 'Tus clientes', icono: 'tusClientes', ruta: `${R.impuestos}/clientes`, prefijos: [`${R.impuestos}/clientes`], solo: 'asesoria' },
+      { id: 'empleados', etiqueta: 'Empleados', icono: 'usuarios', ruta: null, prefijos: [] },
+      { id: 'nominas', etiqueta: 'Nóminas', icono: 'facturas', ruta: null, prefijos: [] },
+      { id: 'seguros', etiqueta: 'Seguros sociales', icono: 'certificados', ruta: null, prefijos: [] },
+      { id: 'fichajes', etiqueta: 'Fichajes y ausencias', icono: 'fecha', ruta: null, prefijos: [] },
+      { id: 'portal', etiqueta: 'Portal del empleado', icono: 'clientes', ruta: null, prefijos: [] },
+    ],
+  },
+  // I01b · Impuestos, con su interruptor por cuenta. El IVA de un periodo (impuestos/iva/…)
+  // cuelga del Calendario. Sus páginas pasan a Calendario · Declaraciones · Certificados en el PR 3 del S02.
+  {
+    id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: R.impuestos, prefijos: [], interruptor: 'conta_impuestos', grupo: 'finanzas',
+    pestanas: [
       { id: 'calendario', etiqueta: 'Calendario', icono: 'fecha', ruta: R.impuestos, prefijos: [R.impuestos] },
-      // I01c · El trimestre (maqueta_303_v2): sin año ni trimestre, el último acabado.
       { id: 'trimestre', etiqueta: 'Trimestre', icono: 'trimestre', ruta: `${R.impuestos}/trimestre`, prefijos: [`${R.impuestos}/trimestre`, `${R.impuestos}/empresa`] },
       { id: 'presentados', etiqueta: 'Presentados', icono: 'presentados', ruta: `${R.impuestos}/presentados`, prefijos: [`${R.impuestos}/presentados`] },
       { id: 'sociedades', etiqueta: 'Impuesto de sociedades', icono: 'empresa', ruta: `${R.impuestos}/sociedades`, prefijos: [`${R.impuestos}/sociedades`] },
@@ -162,11 +200,10 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    id: 'contactos', etiqueta: 'Contactos', icono: 'contactos', ruta: R.terceros, prefijos: [],
+    id: 'contactos', etiqueta: 'Contactos', icono: 'contactos', ruta: R.terceros, prefijos: [], grupo: 'operaciones',
     pestanas: [
-      // Paso 3: los papeles de la lista (antes, sus filtros en la pantalla) pasan a pestañas.
-      // Plataformas y Socios de marca, solo con hostelería (inventario §3; en otra empresa
-      // siguen en «Todos»: ninguna fila se esconde, regla 7).
+      // Plataformas y Socios de marca, solo con hostelería (en otra empresa siguen en «Todos»:
+      // ninguna fila se esconde, regla 7).
       { id: 'todos', etiqueta: 'Todos', icono: 'contactos', ruta: R.terceros, prefijos: [R.terceros] },
       { id: 'clientes', etiqueta: 'Clientes', icono: 'clientes', ruta: `${R.terceros}?ver=clientes`, prefijos: [R.terceros], ver: 'clientes' },
       { id: 'proveedores', etiqueta: 'Proveedores', icono: 'proveedores', ruta: `${R.terceros}?ver=proveedores`, prefijos: [R.terceros], ver: 'proveedores' },
@@ -174,28 +211,22 @@ export const PRODUCTOS: Producto[] = [
       { id: 'socios', etiqueta: 'Socios de marca', icono: 'socios', ruta: `${R.terceros}?ver=socios`, prefijos: [R.terceros], ver: 'socios', solo: 'hosteleria' },
     ],
   },
-  {
-    id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: R.empresa, prefijos: [R.alta], abajo: true,
-    pestanas: [
-      { id: 'empresa', etiqueta: 'Empresa', icono: 'empresa', ruta: R.empresa, prefijos: [R.empresa] },
-      { id: 'usuarios', etiqueta: 'Usuarios', icono: 'usuarios', ruta: null, prefijos: [] },
-      { id: 'registro-ia', etiqueta: 'Registro de la IA', icono: 'ia', ruta: `${R.empresa}/folvy`, prefijos: [`${R.empresa}/folvy`] },
-    ],
-  },
+  // S02 · Ajustes es un apartado con sus páginas (las de su índice), abajo, con Favoritos.
+  { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: R.empresa, prefijos: [R.alta], abajo: true, pestanas: PAGINAS_AJUSTES },
 ]
 
 const cumple = (c: Condicion | undefined, ctx: Contexto) => !c || (c === 'hosteleria' ? ctx.hosteleria : c === 'diez' ? ctx.diez : ctx.asesoria === true)
 
-/** Las pestañas que salen: con pantalla y, si piden algo de la empresa, que lo tenga. */
+/** Las páginas que salen: con pantalla y, si piden algo de la empresa, que lo tenga. */
 export function pestanasVisibles(p: Producto, ctx: Contexto): Pestana[] {
-  return p.pestanas.filter((t) => t.ruta !== null && cumple(t.solo, ctx))
+  return p.pestanas.filter((t) => t.ruta !== null && cumple(t.solo, ctx) && !(t.hueco && ctx.solo))
 }
 
-/** ¿Sale el producto? Con pantalla y, si lleva interruptor, encendido. */
+/** ¿Sale el apartado? Con pantalla, si lleva interruptor encendido, y si pide algo de la cuenta, que lo tenga. */
 export function productoVisible(p: Producto, ctx: Contexto): boolean {
   if (p.ruta === null) return false
   if (p.interruptor && !ctx.interruptores.has(p.interruptor)) return false
-  return true
+  return cumple(p.solo, ctx)
 }
 
 export function productosVisibles(ctx: Contexto, lista: Producto[] = PRODUCTOS): Producto[] {
@@ -212,17 +243,17 @@ export function relativa(pathname: string): string {
 
 const casa = (rel: string, prefijo: string) => rel === prefijo || rel.startsWith(`${prefijo}/`)
 
-/** Todos los prefijos de un producto: los suyos y los de sus pestañas. */
+/** Todos los prefijos de un apartado: los suyos y los de sus páginas. */
 const prefijosDe = (p: Producto) => [...p.prefijos, ...p.pestanas.flatMap((t) => t.prefijos)]
 
 /**
- * El producto y la pestaña de una dirección: los del prefijo más largo, mirando
- * TODAS las pestañas (también las que no salen: una dirección de una pestaña
- * oculta sigue siendo de su producto, y la cabecera no marca ninguna).
+ * El apartado y la página de una dirección: los del prefijo más largo, mirando
+ * TODAS las páginas (también las que no salen: una dirección de una página
+ * oculta sigue siendo de su apartado, y la barra no marca ninguna).
  */
 export function dondeEsta(pathname: string, lista: Producto[] = PRODUCTOS, search = ''): { producto: Producto; pestana: Pestana | null } | null {
   const rel = relativa(pathname)
-  // Una pestaña con `ver` solo vale si la dirección lo pide, y entonces gana a la de serie
+  // Una página con `ver` solo vale si la dirección lo pide, y entonces gana a la de serie
   // del mismo prefijo (en la ficha, sin `ver`, se marca la de serie).
   const ver = new URLSearchParams(search).get('ver')
   let mejor: { producto: Producto; pestana: Pestana | null; largo: number } | null = null
@@ -240,39 +271,5 @@ export function dondeEsta(pathname: string, lista: Producto[] = PRODUCTOS, searc
 
 export const productoDe = (pathname: string): Producto | null => dondeEsta(pathname)?.producto ?? null
 
-/** Todas las direcciones que son de algún producto (las prueba la unitaria contra CONTA.rutas). */
+/** Todas las direcciones que son de algún apartado (las prueba la unitaria contra CONTA.rutas). */
 export const TODOS_LOS_PREFIJOS = PRODUCTOS.flatMap(prefijosDe)
-
-/**
- * Cuántas pestañas caben en el ancho que hay; el resto va a «Más ▾». Si caben
- * todas, todas (sin «Más»); si no, se reserva el sitio de «Más».
- *
- * S01e · `anchosActiva[i]`: lo que mide el botón de «Más» si la pestaña i va
- * dentro y es la activa («Cierre y Registro ▾»). Se reserva el de la más ancha
- * de las que irían dentro: así la activa no lo ensancha ni pisa «Buscar», y
- * cuántas caben no depende de en qué pestaña se esté.
- */
-export function cuantasCaben(anchos: number[], disponible: number, anchoMas: number, hueco = 0, anchosActiva: number[] = []): number {
-  const total = anchos.reduce((s, a, i) => s + a + (i ? hueco : 0), 0)
-  if (total <= disponible) return anchos.length
-  // De atrás adelante: con más pestañas fuera, el botón de «Más» puede tener que ser más ancho.
-  const masDesde: number[] = new Array(anchos.length + 1).fill(anchoMas)
-  for (let i = anchos.length - 1; i >= 0; i--) masDesde[i] = Math.max(masDesde[i + 1], anchosActiva[i] ?? 0)
-  let caben = 0
-  let usado = 0
-  for (let i = 0; i < anchos.length; i++) {
-    usado += anchos[i] + hueco
-    if (usado + masDesde[i + 1] <= disponible) caben = i + 1
-  }
-  return caben
-}
-
-/**
- * S01e · El ancho para las pestañas: el que hay, menos lo que le falta al hueco
- * del ejercicio y el mes para llegar a su reserva. En un producto que lo lleva
- * en unas pantallas y en otras no (Contabilidad), las pestañas caben igual en
- * todas y «Más ▾» no cambia de sitio.
- */
-export function anchoParaPestanas(hay: number, periodo: number, reserva: number): number {
-  return Math.max(0, hay - Math.max(0, reserva - periodo))
-}

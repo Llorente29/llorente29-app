@@ -48,7 +48,7 @@ export function Certificados({ companyId }: { companyId: string }) {
 
   const esAdmin = datos?.es_admin ?? false
   useEntradasEnCinta(useMemo(() => (esAdmin ? {
-    certificados: [{ id: 'impuestos.subir-certificado', etiqueta: '+ Añadir un certificado', a: `${rutaImpuestos('certificados')}?subir=1` }],
+    certificados: [{ id: 'impuestos.subir-certificado', etiqueta: '+ Añadir un certificado', a: `${rutaImpuestos('certificados')}?subir=1`, principal: true }],
   } : null), [esAdmin]))
 
   const hacer = async (f: () => Promise<string>) => {

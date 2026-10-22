@@ -51,7 +51,7 @@ export function opcionesConGuardado(valor: string, opciones: readonly OpcionSele
   return [{ valor, texto: `${textoGuardado ?? valor} (ya no se ofrece)` }, ...opciones]
 }
 
-export type TonoChip = 'seguro' | 'duda' | 'falta' | 'neutro' | 'accion' | 'oscuro'
+export type TonoChip = 'seguro' | 'duda' | 'falta' | 'neutro' | 'accion' | 'oscuro' | 'propuesto'
 
 /**
  * El tono de un estado de los de antes (lib/diario: verde, ámbar, azul, gris),

@@ -15,6 +15,7 @@ import { CtxAjustes as Ctx, TITULO_DEFINICION, esDefinicion, resumenEntrada, typ
 import { useSeries } from '@/modules/conta/ajustes/useSeries'
 import { Link } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
+import { useMarco } from '@/modules/conta/marco/nuevo/contexto'
 import { indiceAjustes, rutaAltaEmpresa, rutaAjustes, rutaConta } from '@/config/navegacion'
 import { Cabecera, Chip, ErrorConReintento, TarjetaCargando, Vacio } from '@/modules/conta/ui/piezas'
 import { useEmpresas, type EmpresaResumen } from '@/modules/conta/empresa/contexto'
@@ -99,6 +100,7 @@ export function CabeceraEntradaMovil({ titulo, atras = rutaAjustes(), antetitulo
  */
 export function MarcoAjustes({ entrada, children, titulo }: { entrada: string | null; children: ReactNode; titulo?: string }) {
   const movil = useIsMobile()
+  const enMarco = useMarco() !== null
   const { accountId, userId, esAdmin } = useCuentaConta()
   const { cargando, error, activa, recargar, empresas } = useEmpresas()
   const datos = useDatosEmpresa(accountId, activa?.id ?? null, esAdmin)
@@ -158,8 +160,10 @@ export function MarcoAjustes({ entrada, children, titulo }: { entrada: string | 
   return (
     <Ctx.Provider value={valor}>
       {cabecera}
-      <div className={movil ? 'cx-ajustes-movil' : 'cx-ajustes'}>
-        {!movil && !definicion && <Indice actual={actual} d={d} plan={plan.datos} hoy={hoy} lista={false} series={series} />}
+      {/* S02 · Dentro del marco, las páginas de Ajustes salen en la barra (el apartado abierto):
+          el índice de la izquierda sería lo mismo dos veces. Fuera del marco, como antes. */}
+      <div className={movil ? 'cx-ajustes-movil' : enMarco ? 'cx-ajustes-solo' : 'cx-ajustes'}>
+        {!movil && !definicion && !enMarco && <Indice actual={actual} d={d} plan={plan.datos} hoy={hoy} lista={false} series={series} />}
         <div className={movil ? 'cx-ajustes-movil' : 'cx-ajustes-panel'}>{children}</div>
       </div>
     </Ctx.Provider>
