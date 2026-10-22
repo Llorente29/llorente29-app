@@ -58,11 +58,11 @@ insert into _d02
 select k, id from (
   select i.id, row_number() over (order by i.created_at, i.id) n
     from public.supplier_invoice i
-   where i.account_id = 'c01a0000-0000-4000-8000-00000000000a' and i.discarded_at is null and i.id not in (select id from _d02)
+   where i.account_id = 'c01a0000-0000-4000-8000-00000000000a' and i.discarded_at is null and i.paid_at is null and i.id not in (select id from _d02)
      and not exists (select 1 from public.journal_entry e where e.source_type = 'supplier_invoice' and e.source_id = i.id and e.status <> 'anulado')
 ) s join (values (1, 'foto'), (2, 'pdf'), (3, 'desc'), (4, 'otra')) v(n, k) on v.n = s.n;
 do $$ begin
-  if (select count(*) from _d02) <> 6 then raise exception 'PRUEBA D02 · 0: la empresa A no tiene en staging 2 recibidas validadas y 4 sin asiento (hay %).', (select count(*) from _d02); end if;
+  if (select count(*) from _d02) <> 6 then raise exception 'PRUEBA D02 · 0: la empresa A no tiene en staging 2 recibidas validadas y 4 sin asiento ni pagar (hay %).', (select count(*) from _d02); end if;
 end $$;
 -- Que las validadas no tengan ya su documento (en staging, ninguna lo tiene).
 do $$ begin
