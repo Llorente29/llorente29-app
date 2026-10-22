@@ -1,4 +1,7 @@
 -- cambia: public.conta_impuesto_reglas · prueba: supabase/staging/sql/20261130_p01_390_sin_sii_prueba.sql
+-- PENDIENTE (22/10): el 0380 ya lo usa la C06b (#275, aplicada) y la más alta
+-- registrada es la 0420: renumerar por encima antes de pedir su tanda (y volver
+-- a medir su contexto). Rama aparcada; sigue en otra sesión.
 --
 -- P01 · El alta no propone el 390 a quien lleva el SII (Julio, 21/10).
 --
