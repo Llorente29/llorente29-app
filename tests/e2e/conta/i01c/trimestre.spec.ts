@@ -189,10 +189,11 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
     await expect(tira.getByRole('button').nth(2)).toContainText('Alquiler · 115')
     await expect(tira.getByRole('button').nth(3)).toContainText('Sociedades · 202')
     // El 111 del 3T se presenta hasta el 20/10: antes dice el plazo; ese día, «Vence hoy»; después,
-    // «Fuera de plazo» (punto 5, en rojo). La e2e del 20/10 lo cazó: la fecha decide el texto.
+    // como esta empresa se da de alta hoy, es de antes de llevar aquí sus impuestos: «Sin cargar ·
+    // Pegar CSV» (I01d, 21/10), no «Fuera de plazo». La e2e del 20/10 lo cazó: la fecha decide el texto.
     const hoyMadrid = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
     await expect(tira.getByRole('button').nth(1)).toContainText(
-      hoyMadrid < '2026-10-20' ? 'Hasta el 20/10' : hoyMadrid === '2026-10-20' ? 'Vence hoy' : 'Fuera de plazo')
+      hoyMadrid < '2026-10-20' ? 'Hasta el 20/10' : hoyMadrid === '2026-10-20' ? 'Vence hoy' : 'Sin cargar · Pegar CSV')
     await expect(page.getByRole('radio', { name: '3T' })).toHaveAttribute('aria-checked', 'true')
     // La cartera sale con el 303 elegido (el primero), en la columna derecha (maqueta v4).
     await expect(page.locator('.s-trimestre-col-der [data-prueba="cartera"]')).toBeVisible()
@@ -287,14 +288,16 @@ test('La pestaña Trimestre abre el último acabado; y el de una empresa por la 
       await expect(visor).not.toHaveClass(/s-trimestre-visor--completa/)
     }
 
-    // Otro modelo: su ficha, sin declaración, dice su plazo.
+    // Otro modelo: su ficha, sin declaración. La empresa se da de alta hoy: el 2T es de antes de llevar
+    // aquí sus impuestos, «sin cargar» (I01d, 21/10); por la ruta de la empresa, lo carga ella.
     await tira2.getByRole('button').filter({ hasText: 'Retenciones · 111' }).click()
     await expect(ficha.getByRole('heading', { name: 'Retenciones · 111 · 2T 2026' })).toBeVisible()
-    await expect(ficha.getByText(/Aún no está en Sumied\. Se presenta hasta el/)).toBeVisible()
+    await expect(ficha.getByText('Se presentó fuera, antes de llevar los impuestos en Sumied.', { exact: false })).toBeVisible()
+    await expect(ficha.getByText('Lo carga la propia empresa desde sus Impuestos.')).toBeVisible()
     // El centro ya no enseña el 303: dice qué falta. I01g (21/10): el 111 lo calcula Sumied desde el
-    // diario, y si ya se presentó fuera se trae su justificante. Y la cartera solo va con el 303.
+    // diario, también sin cargar. Y la cartera solo va con el 303.
     const falta = page.locator('[data-prueba="que-falta"]')
-    await expect(falta).toContainText('Falta calcular el 111 del 2T')
+    await expect(falta).toContainText('Sin cargar')
     await expect(falta.getByRole('button', { name: 'Calcular el 111 del 2T' })).toBeVisible()
     // Por la ruta de la empresa (despacho), «Traer el justificante» no sale: Presentados es de la empresa activa.
     await expect(falta.getByRole('link', { name: 'Ya lo presenté: traer el justificante' })).toHaveCount(0)

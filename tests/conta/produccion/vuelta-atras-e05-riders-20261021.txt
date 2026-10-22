@@ -1,4 +1,5 @@
-# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
+# Vuelta atrás de la tanda de E05 · riders (0410, PR #273, ya aplicada; su copia:
+# tanda-e05-riders-20261021.txt):
 # compras_ficha_le_falta y conta_vat_book_desde_asiento vuelven a los cuerpos
 # de producción del 21/10, tal cual.
 cuenta: scripts/conta/produccion/cuentas/e05-riders.sql

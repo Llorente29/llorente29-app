@@ -553,6 +553,24 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de los impuestos de 2025 (I01d, 0420, su copia), con su contexto medido', () => {
+  it('la 0420 de I01d sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01d-impuestos-2025-20261022.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01d-impuestos-2025-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261130T0420_i01d_impuestos_2025.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de la ficha de Catcher (E05, 0420, su copia), con su contexto medido', () => {
+  it('la 0420 de Catcher pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-e05-catcher-ficha-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-e05-catcher-ficha-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261130T0420_e05_catcher_ficha.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261130T0420_e05_catcher_ficha.sql')
+  })
+})
+
 describe('R11 · paso 8 sobre la tanda de las facturas de riders (E05, 0410, su copia), con su contexto medido', () => {
   it('la 0410 sigue; ningún «autorizo»', () => {
     const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-e05-riders-20261021.json',

@@ -21,6 +21,6 @@
 #      cambia datos: ninguna de las 82 tiene asiento.
 #
 # Ninguna función que desplegar a mano.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-e05-riders-20261021.txt.
 cuenta: scripts/conta/produccion/cuentas/e05-riders.sql
 supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql

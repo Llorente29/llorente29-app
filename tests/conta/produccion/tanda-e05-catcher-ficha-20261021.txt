@@ -1,0 +1,24 @@
+# COPIA ARCHIVADA de la tanda de E05 · la ficha de Catcher (0420, ya aplicada en
+# producción; la viva pasó a la de I01d, que tiene su mismo número). Era:
+#
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# E05 · La ficha de Catcher Marketplace (rama conta/e05-catcher-ficha; Julio,
+# 21/10: «Catcher pasa a su propia 410, con su ficha y su NIF, y el gasto en la
+# 623»; la 41000042 y la 62300004, aprobadas). Va después de la de riders
+# (0410, PR #273, aplicada): su copia,
+# tests/conta/produccion/tanda-e05-riders-20261021.txt.
+#
+#   1. 0420 — AÑADE, solo en Foodint, la 41000042 y la 62300004, la ficha
+#      «Catcher Marketplace SL» con el NIF de su factura (su tercero lo crea el
+#      disparador de siempre) y sus dos enlaces; y CAMBIA un dato: su factura
+#      de la 1.ª quincena de octubre pasa a ser suya (supplier_id). El
+#      analizador pide «autorizo». Para entera si algo no está como se midió.
+#
+# No toca el camino del pedido. Ninguna función que desplegar a mano.
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-e05-catcher-ficha-20261021.txt.
+cuenta: scripts/conta/produccion/cuentas/e05-catcher.sql
+supabase/migrations/20261130T0420_e05_catcher_ficha.sql
