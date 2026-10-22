@@ -1,6 +1,6 @@
 // tests/conta/stagingTanda.test.ts — W04 (Julio, 22/10): qué pasa por staging en cada run.
 // Contra la población real (regla 31): las dos últimas fusiones de main, los
-// 96 ficheros del manifiesto de hoy y las migraciones viejas que llevan COMMIT.
+// 98 ficheros del manifiesto de hoy y las migraciones viejas que llevan COMMIT.
 
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -32,10 +32,10 @@ describe('lo que añade una rama o un push al manifiesto', () => {
 
 describe('qué se puede ensayar en ROLLBACK', () => {
   const hoy = lineas(readFileSync(MANIFIESTO, 'utf8'))
-  it('los 96 ficheros del manifiesto de hoy (sin W03) se ensayan, y 44 llevan su propia transacción', () => {
-    expect(hoy).toHaveLength(96)
+  it('los 98 ficheros del manifiesto de hoy (sin W03 y con la 0450 y su prueba) se ensayan, y 45 llevan su propia transacción', () => {
+    expect(hoy).toHaveLength(98)
     expect(hoy.filter((f) => porQueNoSeEnsaya(readFileSync(f, 'utf8')))).toEqual([])
-    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(44)
+    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(45)
   })
   it('una migración vieja con COMMIT no se ensaya: dejaría cosas de verdad', () => {
     const f = 'supabase/migrations/20260923T0015_casar_el_combo_por_su_id.sql'
