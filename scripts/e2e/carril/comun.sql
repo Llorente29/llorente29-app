@@ -57,6 +57,7 @@ create temp table _plantilla_usuarios (id uuid primary key) on commit drop;
 insert into _plantilla_usuarios values
   ('c01a0000-0000-4000-8000-0000000000a1'),  -- a.admin@prueba.folvy.test       · cuenta A
   ('c01a0000-0000-4000-8000-0000000000a6'),  -- a.encargado@prueba.folvy.test   · cuenta A, manager
+  ('c01a0000-0000-4000-8000-0000000000a7'),  -- a.trabajador@prueba.folvy.test  · cuenta A, worker con ficha (autoconteo, 21/10)
   ('c01b0000-0000-4000-8000-0000000000b1'),  -- b.admin@prueba.folvy.test       · cuenta B
   ('c01c0000-0000-4000-8000-0000000000c1'),  -- c.admin@prueba.folvy.test       · cuenta C, sin empresa
   ('c01d0000-0000-4000-8000-0000000000d1'),  -- d.admin@prueba.folvy.test       · cuenta D, sin hostelería (S01)

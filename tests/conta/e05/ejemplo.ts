@@ -91,18 +91,39 @@ export function excelPedidos(ps = PEDIDOS): Uint8Array {
 
 // eslint-disable-next-line no-restricted-syntax -- importes inventados de la prueba, nunca null.
 const coma = (x: number) => x.toFixed(2).replace('.', ',')
-/** El PDF de una factura, con lo que lleva el de verdad. `cambia`: para hacer uno que no cuadra. */
+/**
+ * El PDF de una factura, con lo que lleva el de verdad y COMO lo lleva (el
+ * texto de un PDF real de rider de la 1.ª quincena de octubre, sacado con
+ * pdftotext -layout; aquí con otros nombres e importes, regla 31): el concepto
+ * en dos líneas con la base y el total a su derecha, «Ejercicio: …», y debajo
+ * «Pedidos entregados: N» en una línea suya; luego Subtotal, IVA (21%) y
+ * Total, con coma decimal y el € detrás. El número de los pedidos va en un
+ * trozo aparte que el PDF dibuja AL FINAL: leído en orden de dibujo, no queda
+ * junto a su etiqueta (lo que hacía fallar pdf_pedidos en las 83 reales).
+ * `cambia`: para hacer uno que no cuadra.
+ */
 export function pdf(f: FacturaInventada, cambia: Partial<FacturaInventada> = {}, empresa: typeof EMPRESA = EMPRESA): Uint8Array {
   const x = { ...f, ...cambia }
   const d = new jsPDF()
-  const l = [
+  d.setFontSize(10)
+  const cabecera = [
     'FACTURA', `Número: ${x.numero}`, `Fecha: ${x.fecha.split('-').reverse().join('/')}`,
     `Emisor: ${x.nombre}`, `NIF: ${x.nif}`, `${x.domicilio}, ${x.cp} ${x.ciudad}`,
     `Cobrar a: ${empresa.nombre}`, `NIF: ${empresa.nif}`, empresa.domicilio,
-    'Ejercicio: 2026-09-16 - 2026-09-30', `Pedidos entregados: ${x.pedidos}`,
-    `Base imponible: ${coma(x.base)} €`, `IVA 21%: ${coma(x.cuota)} €`, `Total: ${coma(x.total)} €`,
   ]
-  l.forEach((t, i) => d.text(t, 15, 20 + i * 8))
+  cabecera.forEach((t, i) => d.text(t, 15, 20 + i * 7))
+  const y = 20 + cabecera.length * 7 + 7
+  d.text('Servicio de recogida y entrega de paquetes o comida a', 15, y)
+  d.text(`${coma(x.base)} €`, 130, y)
+  d.text(`${coma(x.total)} €`, 165, y)
+  d.text('domicilio', 15, y + 5)
+  d.text('Ejercicio: 2026-09-16 - 2026-09-30', 15, y + 12)
+  d.text('Pedidos entregados:', 15, y + 19)
+  d.text('Subtotal:', 130, y + 30); d.text(`${coma(x.base)} €`, 165, y + 30)
+  d.text('IVA (21%):', 130, y + 37); d.text(`${coma(x.cuota)} €`, 165, y + 37)
+  d.text('Total:', 130, y + 44); d.text(`${coma(x.total)} €`, 165, y + 44)
+  // El número de los pedidos, en su línea pero dibujado el último.
+  d.text(String(x.pedidos), 52, y + 19)
   return new Uint8Array(d.output('arraybuffer'))
 }
 

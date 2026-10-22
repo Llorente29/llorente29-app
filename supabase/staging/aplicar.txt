@@ -387,6 +387,34 @@ supabase/staging/sql/20261129_compras_revisar_cuatro_caminos_prueba.sql
 supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql
 supabase/staging/sql/20261129_c06b_nombre_pdf_base_prueba.sql
 
+# AUTOCONTEO · el autoconteo se aplica solo, entero y con cualquier diferencia
+#   (rama claude/exciting-cray-eik036; encargo de Julio del 21/10). Primero la
+#   limpieza (si ya están, las quita con sus .down.sql: se puede volver a
+#   pasar), luego la 0390 (en staging no hay filas de Foodint: no anula nada) y
+#   la 0400 DE VERDAD, y su prueba (ROLLBACK): la tablet aplica entero al
+#   terminar, la red aplica el rezagado, la noche aplica, anula el vacío y
+#   apunta el roto con su aviso, la pantalla y el vigía lo ven, la cuenta B no,
+#   el de seguridad sigue pidiendo motivo, y los cuatro caminos de la regla 10.
+supabase/staging/sql/20261129_autoconteo_limpiar.sql
+supabase/migrations/20261129T0390_autoconteo_anula_atascados.sql
+supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql
+# Y la semilla de la e2e del autoconteo (tests/e2e/inventario): el trabajador
+#   de A con su ficha, tres artículos con stock y e2e_autoconteo_preparar.
+#   Va detrás de la 0400 (usa sus columnas). Se puede volver a pasar.
+supabase/seeds/conta/seed_autoconteo_e2e_staging.sql
+supabase/staging/sql/20261129_autoconteo_prueba.sql
+
+# E05 · Las facturas de riders (rama conta/e05-riders-asiento; Julio, 21/10).
+#   La 0410 DE VERDAD (cambia en caliente compras_ficha_le_falta y
+#   conta_vat_book_desde_asiento, misma firma; no cambia datos) y su prueba:
+#   la ficha genérica «Riders» no pide NIF ni forma de facturar, una ficha con
+#   su cuenta de gasto no pide tipo de gasto, el libro de IVA de una factura de
+#   lote lleva a su emisor y una recibida normal sigue con el NIF de su ficha;
+#   y su vuelta atrás dentro (ROLLBACK), con los md5 de producción del 21/10.
+#   No toca coste ni stock: sin los cuatro caminos de la regla 10.
+supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql
+supabase/staging/sql/20261130_e05_riders_ficha_y_libro_prueba.sql
+
 # I01d · Cargar los impuestos de 2025 (rama conta/i01d-impuestos-2025; Julio,
 #   21/10). La 0420 cambia conta_impuesto_trimestre: «desde» y lo pendiente al
 #   empezar el año del 4T anterior. Su prueba (ROLLBACK) carga el 1T de 2026 y

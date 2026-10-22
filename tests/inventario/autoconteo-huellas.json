@@ -1,0 +1,8 @@
+{
+  "medido": "2026-10-21, producción (xzmpnchlguibclvxyynt), md5(pg_get_functiondef(oid))",
+  "para": "supabase/vuelta-atras/20261129T0400_autoconteo_se_aplica_entero.down.sql deja estas cuatro exactamente así (lo comprueba tests/inventario/autoconteo-noche.sh)",
+  "apply_inventory_count": "3d4931518da5f145a45c13b31924e4b2",
+  "close_inventory_count": "8b4c2d76e22f88c4807e63c85b745aee",
+  "autoclose_daily_count": "057040e8cb2231ed6b6d785b05034d49",
+  "cron_autoclose_daily_counts": "50320afc9226f1a2349bbc5d101ef861"
+}

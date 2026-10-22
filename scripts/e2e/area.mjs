@@ -15,7 +15,9 @@
 //   · una conta/<x> cuya carpeta tests/e2e/conta/<x> existe (c02c, c04, cierre…):
 //     esa carpeta (la más larga que casa) y el juego común;
 //   · reparto-**: tests/e2e/reparto;
-//   · cualquier otra (conta/w02-…, de herramientas): solo el juego común.
+//   · cualquier otra (conta/w02-…, de herramientas): solo el juego común;
+//   · y, sea cual sea la rama, la carpeta de cada ZONA POR FICHERO que toque el
+//     push (ZONAS_POR_FICHERO: inventario, 21/10).
 // Nunca vacío: vacío sería la suite entera.
 //
 // Y SIEMPRE la CORTA de pedidos, cocina y reparto (Julio, 19/10): «en cada PR,
@@ -90,6 +92,27 @@ export const LO_COMUN = [
   'tsconfig',
 ]
 
+/**
+ * LAS ZONAS POR FICHERO (Julio, 21/10, encargo del autoconteo): una zona que no
+ * es de ninguna rama, sino de lo que se toca. Un push que cambia algo de aquí
+ * corre además su carpeta de e2e, sea cual sea la rama. Y si la rama no es de
+ * ningún frente, la zona es también la dueña de sus capturas
+ * (scripts/conta/capturas.mjs): la misma tabla para las dos cosas.
+ */
+export const ZONAS_POR_FICHERO = [
+  {
+    zona: 'inventario',
+    pruebas: 'tests/e2e/inventario',
+    capturas: 'docs/inventario/capturas',
+    ficheros: ['src/modules/supply/', 'src/pages/trabajador/', 'tests/e2e/inventario/', 'supabase/seeds/conta/seed_autoconteo_e2e_staging.sql'],
+  },
+]
+
+/** Las zonas que tocan unos ficheros cambiados, en el orden de la tabla. */
+export function zonasTocadas(cambiados) {
+  return ZONAS_POR_FICHERO.filter((z) => cambiados.some((f) => z.ficheros.some((p) => f.startsWith(p))))
+}
+
 /** La etiqueta de un PR que pide la entera aunque no toque lo común. */
 export const ETIQUETA_ENTERA = 'e2e-entera'
 
@@ -111,7 +134,13 @@ export function queCorre(rama, { cambiados = [], etiquetas = [] } = {}, carpetas
     const muestra = comun.slice(0, 3).join(', ') + (comun.length > 3 ? ` y ${comun.length - 3} más` : '')
     return { entera: true, pruebas: [], porque: `toca lo común: ${muestra}` }
   }
-  return { entera: false, pruebas: pruebasDelPush(rama, carpetas), porque: 'no toca lo común: la zona de la rama y la corta' }
+  const zonas = zonasTocadas(cambiados)
+  const deLaRama = pruebasDeLaZona(rama, carpetas)
+  const extra = zonas.map((z) => z.pruebas).filter((p) => !deLaRama.includes(p))
+  const porque = extra.length
+    ? `no toca lo común: la zona de la rama, la de lo que toca (${zonas.map((z) => z.zona).join(', ')}) y la corta`
+    : 'no toca lo común: la zona de la rama y la corta'
+  return { entera: false, pruebas: conLaCorta([...deLaRama, ...extra]), porque }
 }
 
 /** Las de la zona y la corta, sin repetir (una carpeta ya incluye sus ficheros). */

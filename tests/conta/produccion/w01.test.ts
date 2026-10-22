@@ -512,6 +512,26 @@ describe('R11 · paso 8 sobre la tanda del esqueleto (S01, su copia, aplicada), 
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de Compras (0350–0370, su copia, aplicada), con su contexto medido', () => {
+  it('la 0350 y la 0370 siguen, la 0360 AUTORIZO', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-compras-revisar-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-compras-revisar-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0350_compras_preguntas_de_la_ficha.sql: sigue')
+    expect(out).toContain('20261129T0360_compras_preguntas_foodint.sql: AUTORIZO')
+    expect(out).toContain('20261129T0370_textos_sin_papel.sql: sigue')
+    expect(out).toContain('autorizo: 20261129T0360_compras_preguntas_foodint.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de C06b (0380, el nombre del PDF; su copia, aplicada), con su contexto medido', () => {
+  it('la 0380 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-nombre-pdf-base-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-c06b-nombre-pdf-base-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0380_c06b_nombre_pdf_base.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
@@ -533,23 +553,22 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
   })
 })
 
-describe('R11 · paso 8 sobre la tanda del nombre del PDF (0380, su copia), con su contexto medido', () => {
-  it('la 0380 sigue; ningún «autorizo»', () => {
-    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-nombre-pdf-20261021.json',
-      '--manifiesto=tests/conta/produccion/tanda-c06b-nombre-pdf-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
-    expect(out).toContain('20261129T0380_c06b_nombre_pdf_base.sql: sigue')
+describe('R11 · paso 8 sobre la tanda de las facturas de riders (E05, 0410, su copia), con su contexto medido', () => {
+  it('la 0410 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-e05-riders-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-e05-riders-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261130T0410_e05_riders_ficha_y_libro.sql: sigue')
     expect(out).toContain('autorizo: (ninguno)')
   })
 })
 
-describe('R11 · paso 8 sobre la tanda de Compras (0350–0370, su copia), con su contexto medido', () => {
-  it('la 0350 y la 0370 siguen; «autorizo» para la 0360', () => {
-    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-compras-revisar-20261021.json',
-      '--manifiesto=tests/conta/produccion/tanda-compras-revisar-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
-    expect(out).toContain('20261129T0350_compras_preguntas_de_la_ficha.sql: sigue')
-    expect(out).toContain('20261129T0360_compras_preguntas_foodint.sql: AUTORIZO')
-    expect(out).toContain('20261129T0370_textos_sin_papel.sql: sigue')
-    expect(out).toContain('autorizo: 20261129T0360_compras_preguntas_foodint.sql')
+describe('R11 · paso 8 sobre la tanda del Autoconteo (0390 y 0400, su copia), con su contexto medido', () => {
+  it('la 0390 y la 0400 piden «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-autoconteo-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-autoconteo-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0390_autoconteo_anula_atascados.sql: AUTORIZO')
+    expect(out).toContain('20261129T0400_autoconteo_se_aplica_entero.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261129T0390_autoconteo_anula_atascados.sql 20261129T0400_autoconteo_se_aplica_entero.sql')
   })
 })
 

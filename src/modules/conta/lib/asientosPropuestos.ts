@@ -579,6 +579,13 @@ export interface EntradaFactura {
    * IVA español; se autoliquida al tipo del catálogo con su 472 y su 477.
    */
   autoliquidacion?: { tipo: 'ue_compra' | 'isp'; porque: string } | null
+  /**
+   * E05 (Julio, 21/10) · La factura de un lote que reparte entre varios locales
+   * («Varios locales»): sin local propio, su gasto se parte a partes iguales
+   * entre estos locales (los del reparto del lote). El IVA y el proveedor
+   * quedan comunes. Con uno o ninguno, nada cambia.
+   */
+  reparto?: readonly { localId: string; nombre: string }[]
 }
 export interface CuentasFactura {
   proveedor: string
@@ -586,6 +593,42 @@ export interface CuentasFactura {
   retencion: string
   /** I01d · El tipo de la autoliquidación (ue_compra o isp) con su 472 y su 477. */
   autoliquidada?: (tipo: 'ue_compra' | 'isp') => { tipoId: string; porcentaje: number; soportado: string; repercutido: string } | null
+}
+
+/**
+ * E05 · Lo de una factura de lote (riders y flotas de Catcher) que no sale de
+ * su ficha, porque RIDERS es una ficha genérica con la 41000100: el emisor y su
+ * NIF están en la factura (issuer_*); no tiene líneas, así que su gasto sale de
+ * su IVA por tipo (supplier_invoice_tax) contra el gasto de la ficha, con la
+ * cuota que dice; y, si reparte entre varios locales (Julio, 21/10), los
+ * locales de su reparto, para partirlo a partes iguales.
+ */
+export function deLaFacturaDeLote(
+  f: { issuer_name?: unknown; issuer_tax_id?: unknown; reading?: unknown; supplier_invoice_line?: unknown; supplier_invoice_tax?: unknown },
+  gasto: string | null,
+  tipoDe: (porcentaje: number) => { id: string; rate: number } | null,
+  nombreLocal: (id: string) => string | null,
+): { proveedor: string | null; tieneNif: boolean; lineas: LineaFactura[] | undefined; cuotas: { porcentaje: number; base: number; cuota: number }[]; reparto: { localId: string; nombre: string }[] } {
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  const num = (v: unknown) => Number(v ?? 0)
+  const tasas = (Array.isArray(f.supplier_invoice_tax) ? f.supplier_invoice_tax : []) as { vat_pct?: unknown; base?: unknown; vat_amount?: unknown }[]
+  const conLineas = Array.isArray(f.supplier_invoice_line) && f.supplier_invoice_line.length > 0
+  const lote = ((f.reading ?? {}) as { lote?: { reparto?: unknown } }).lote
+  const reparto = new Map<string, { localId: string; nombre: string }>()
+  for (const x of (Array.isArray(lote?.reparto) ? lote!.reparto : []) as { localId?: unknown; tienda?: unknown }[]) {
+    const id = texto(x.localId)
+    if (id && !reparto.has(id)) reparto.set(id, { localId: id, nombre: nombreLocal(id) ?? texto(x.tienda) ?? 'local' })
+  }
+  return {
+    proveedor: texto(f.issuer_name),
+    tieneNif: !!texto(f.issuer_tax_id),
+    lineas: conLineas ? undefined : tasas.map((x) => {
+      const t = tipoDe(num(x.vat_pct))
+      return { base: num(x.base), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: gasto }
+    }),
+    cuotas: tasas.map((x) => ({ porcentaje: num(x.vat_pct), base: num(x.base), cuota: num(x.vat_amount) })),
+    reparto: [...reparto.values()],
+  }
 }
 
 export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propuesta: Propuesta | null; sinPropuesta: string | null } {
@@ -637,7 +680,14 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
   }
   const marca = f.marcaId ?? null
   if (f.autoliquidacion) return autoliquidada(f, c, gastos, razones, avisos, confs)
-  for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}) })
+  const partes = !loc && (f.reparto?.length ?? 0) > 1 ? f.reparto! : null
+  for (const [cuenta, cc] of gastos) {
+    if (!partes) { lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}) }); continue }
+    // A partes iguales, al céntimo: lo que sobra de dividir va a los primeros.
+    const cada = Math.floor(cc / partes.length)
+    partes.forEach((p, i) => lineas.push({ cuenta, debe: deCent(cada + (i < cc - cada * partes.length ? 1 : 0)), haber: 0, localId: p.localId, comun: false,
+      documento: f.numero, ...(marca ? { marcaId: marca } : {}) }))
+  }
   const porTipo = new Map<number, { id: string; base: number }>()
   for (const l of f.lineas) {
     if (!l.tipo) continue
@@ -675,7 +725,8 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
     avisos.push(`Base + IVA = ${eurosExactos(deCent(baseTotal + ivaTotal))}, y la factura dice ${eurosExactos(f.total)}.`)
     confs.push('duda')
   }
-  if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+  if (partes) razones.push({ decision: `Gasto a partes iguales: ${partes.map((p) => p.nombre).join(' y ')}`, porque: 'la factura reparte entre varios locales: su gasto se parte a partes iguales entre los del lote; el IVA y el proveedor quedan comunes' })
+  else if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
   razones.unshift({ decision: 'IVA soportado por tipo', porque: 'una 472 por tipo, con su base, al libro de recibidas' })
   return {
     sinPropuesta: null,

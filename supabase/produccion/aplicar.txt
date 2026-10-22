@@ -4,8 +4,9 @@
 # ensayo en verde del mismo commit, en REAL.
 #
 # I01d · Cargar los impuestos de 2025 (rama conta/i01d-impuestos-2025; Julio,
-# 21/10). Va DESPUÉS de la del nombre del PDF (0380, PR #275, aplicada): su
-# copia, tests/conta/produccion/tanda-c06b-nombre-pdf-20261021.txt.
+# 21/10). Va DESPUÉS de la de E05 riders (0410, PR #273, aplicada): su copia,
+# tests/conta/produccion/tanda-e05-riders-20261021.txt. Sin turno (Julio, 21/10):
+# no comparte funciones ni tablas con ninguna otra.
 #
 #   1. 0420 — CAMBIA en caliente conta_impuesto_trimestre (misma firma,
 #      declarado, con su prueba de staging): dice desde cuándo lleva la empresa

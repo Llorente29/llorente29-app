@@ -146,3 +146,20 @@ describe('el workflow', () => {
     expect(WF).toContain("cancel-in-progress: ${{ github.event_name == 'push' }}")
   })
 })
+
+// Autoconteo (Julio, 21/10): las de inventario son de la zona, no de un frente.
+describe('las capturas de inventario: de la rama sin frente que toca inventario', () => {
+  const nuestras = readdirSync('docs/inventario/capturas').map((f) => `docs/inventario/capturas/${f}`)
+  it('una rama sin frente que toca inventario es su dueña, y fija las de docs/inventario/capturas', () => {
+    const dueno = duenoDeLaRama('claude/exciting-cray-eik036', ['src/modules/supply/lib/autoconteoTexto.ts', 'tests/e2e/inventario/autoconteo.spec.ts'])
+    expect(dueno).toBe('inventario')
+    const { suyas, ajenas } = repartir([...nuestras, 'docs/conta/capturas/c00/marco-ordenador.png'], dueno)
+    expect(suyas).toEqual(nuestras)
+    expect(ajenas).toEqual(['docs/conta/capturas/c00/marco-ordenador.png'])
+  })
+  it('sin tocar inventario no es de nadie; y una rama de frente sigue siendo de su frente aunque toque inventario', () => {
+    expect(duenoDeLaRama('claude/otra', ['README.md'])).toBeNull()
+    expect(duenoDeLaRama('conta/d01-x', ['src/modules/supply/a.ts'])).toBe('a')
+    expect(repartir(nuestras, 'a').suyas).toEqual([])
+  })
+})

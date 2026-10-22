@@ -1,0 +1,139 @@
+name: Vigía del autoconteo (producción, solo lectura)
+
+# QUÉ HACE (encargo de Julio del 21/10, respuesta 4)
+# Que un fallo del autoconteo de la noche no vuelva a quedar mudo. Cada mañana,
+# DESPUÉS del cron de las 03:10 UTC (autoconteo_cierre_nocturno) y del
+# generador de las 04:00 UTC, lee public.autoconteo_vigia() en producción y:
+#   · si el último run del cron no es «succeeded», o hay algún autoconteo sin
+#     aplicar (con fallo apuntado, o abierto con más de 24 h),
+#   · abre una incidencia «Inventario · PRODUCCIÓN · Autoconteo sin aplicar»
+#     (o comenta en la que ya esté abierta), como la e2e de la noche.
+# El detalle (qué conteo, por qué) se mira en la app, en Almacén → Inventario.
+# Al registro, al resumen y a la incidencia solo van NÚMEROS, por la puerta
+# (scripts/conta/salida-segura.mjs): el repositorio es público, y el mensaje
+# de un error puede llevar el nombre de un producto.
+#
+# QUÉ NO HACE: no escribe en la base (conta_lectura, sesión read-only y la
+# guarda de siempre, scripts/conta/produccion/guarda-lectura.sql). Avisa,
+# nunca actúa.
+#
+# CUÁNDO: a las 04:20 UTC (después de los dos crons; no depende del horario de
+# verano porque los crons de la base también van en UTC). Y a mano.
+# OJO: el programado y el «Run workflow» solo existen cuando este fichero está
+# en main.
+
+on:
+  schedule:
+    - cron: '20 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: vigia-autoconteo
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  vigia:
+    name: Autoconteo de la noche · PRODUCCIÓN
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROD_REF: xzmpnchlguibclvxyynt
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      PSQL: /usr/lib/postgresql/17/bin/psql
+      PGAPPNAME: gha-vigia-autoconteo-${{ github.run_id }}
+      PGOPTIONS: '-c default_transaction_read_only=on'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guarda 1 y 2 · producción, y no con el usuario de escritura
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          if (u.username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura. Abortado sin conectar.")
+              raise SystemExit(1)
+          PY
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "La URL es de producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 y 4 · Foodint al otro lado, sesión de solo lectura y sin permisos de escritura
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select (select count(*) from public.supplier where account_id = '$FOODINT') > 0
+               and current_setting('transaction_read_only') = 'on'
+          " 2>&1) || { echo "::error::No se ha podido comprobar: $r"; exit 1; }
+          [ "$r" = "t" ] || { echo "::error::Falla la guarda 3: o no está Foodint, o la sesión no es de solo lectura."; exit 1; }
+          f=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/produccion/guarda-lectura.sql 2>&1) || { echo "::error::No se ha podido comprobar: $f"; exit 1; }
+          [ -z "$f" ] || { echo "::error::Falla la guarda 4, el usuario podría escribir: $f."; exit 1; }
+
+      - name: Leer el autoconteo de la noche
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ "$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select to_regprocedure('public.autoconteo_vigia()') is not null")" = "t" ]; then
+            "$PSQL" "$DB_URL" -X -A -t --csv -v ON_ERROR_STOP=1 -c "select clave, valor from public.autoconteo_vigia()" > /tmp/vigia.csv
+          else
+            : > /tmp/vigia.csv
+          fi
+
+      - name: Revisar
+        id: revisar
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          # Solo números al registro y al resumen (D01 R2): por la puerta.
+          node scripts/inventario/vigia-autoconteo.mjs /tmp/vigia.csv > /tmp/salida.txt; rc=$?
+          node scripts/conta/salida-segura.mjs < /tmp/salida.txt > /tmp/informe.md
+          cat /tmp/salida.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+          exit $rc
+
+      - name: Aviso
+        if: steps.revisar.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITULO: 'Inventario · PRODUCCIÓN · Autoconteo sin aplicar'
+        run: |
+          set -euo pipefail
+          enlace="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo 'El autoconteo de la noche no ha llegado entero al stock (o el cron ha terminado en rojo).'
+            echo 'Qué conteos y por qué: en la app, Almacén → Inventario (el aviso rojo de arriba). Aquí solo van números: el repositorio es público.'
+            echo
+            cat /tmp/informe.md
+          } > /tmp/aviso.md
+          printf '\nEjecución: %s\n' "$enlace" >> /tmp/aviso.md
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file /tmp/aviso.md
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file /tmp/aviso.md; fi
+
+      - name: En rojo si lo está
+        if: steps.revisar.outcome == 'failure'
+        run: exit 1

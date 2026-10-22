@@ -25,7 +25,7 @@
 #      (20261129_compras_revisar_cuatro_caminos_prueba.sql).
 #
 # No toca el camino del pedido. Ninguna función que desplegar a mano.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-compras-revisar-20261021.txt.
 cuenta: scripts/conta/produccion/cuentas/compras-revisar.sql
 supabase/migrations/20261129T0350_compras_preguntas_de_la_ficha.sql
 supabase/migrations/20261129T0360_compras_preguntas_foodint.sql
