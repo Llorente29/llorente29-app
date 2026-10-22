@@ -77,7 +77,7 @@ describe('de quién es cada carpeta de capturas (las que hay en el repositorio)'
   it('cada frente, las suyas y solo las suyas', () => {
     expect(de('a')).toEqual(['d01', 'd01-e05'])
     expect(de('b')).toEqual(['b01', 'b02'])
-    expect(de('c')).toEqual(['c00', 'c01b', 'c02', 'c02c', 'c03', 'c04', 'c04b', 'c05', 'c06', 'c06b'])
+    expect(de('c')).toEqual(['c00', 'c01b', 'c02', 'c02c', 'c03', 'c04', 'c04b', 'c05', 'c06', 'c06b', 'c06c'])
     expect(de('d')).toEqual(['m01', 's01', 's01c', 's01d', 's01e', 's01f', 's01g'].filter((x) => carpetas.some((c) => c.endsWith(`/${x}`))))
     expect(de('reparto')).toEqual(['r02', 'r03'])
     expect(de('despacho')).toEqual(['p01'])
@@ -126,10 +126,11 @@ describe('las capturas de ESTE run (las escritas después de la marca)', () => {
 })
 
 describe('el workflow', () => {
-  it('ya no commitea las capturas en cada run: solo a mano, en verde, con fijar_capturas, y con el script', () => {
+  // W04 (Julio, 22/10): las fija la e2e del push en verde, sin un run aparte; a mano, igual.
+  it('las fija la e2e del push en verde (o a mano con fijar_capturas), solo las del frente y con el script', () => {
     expect(WF).not.toMatch(/git add docs\/conta\/capturas/)
     const fijar = WF.slice(WF.indexOf('- name: Capturas · fijar las del frente en la rama'))
-    expect(fijar).toMatch(/if: success\(\) && github\.event_name == 'workflow_dispatch' && inputs\.fijar_capturas/)
+    expect(fijar).toMatch(/if: success\(\) && \(github\.event_name == 'push' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.fijar_capturas\)\)/)
     expect(fijar).toMatch(/node scripts\/conta\/capturas\.mjs fijar "\$GITHUB_REF_NAME"/)
     expect(WF.match(/git commit/g)).toHaveLength(1)
   })
