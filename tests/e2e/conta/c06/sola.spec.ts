@@ -234,7 +234,10 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     // El texto de cada entrada (sin el número de lo que hay por mirar, que va aparte).
     // S01: los productos del esqueleto; lo que no tiene pantalla no sale (ni Impuestos ni Facturación).
-    await expect(menu.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    // S02: «Favoritos» va ahora abajo en la barra, también como .s-barra-item,
+    // pero es un botón, no un apartado: se cuentan los enlaces.
+    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await expect(menu.getByRole('button', { name: 'Favoritos' })).toBeVisible()
   } else {
     // S01c: en el móvil, el menú es un cajón que abre «Abrir el menú» de la cabecera.
     await expect(page.getByRole('button', { name: /Preguntar/ })).toHaveCount(0)

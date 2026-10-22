@@ -288,6 +288,8 @@ th.s-lista-cifra { text-align: right; }
 @media (max-width: 767px) {
   .s-ficha { grid-template-columns: minmax(0, 1fr); }
   .s-documento { position: static; max-height: 60vh; }
+  /* «Pantalla completa» gana también en el móvil: si no, se quedaba en 60vh. */
+  .s-documento.s-documento-completa { position: fixed; max-height: none; }
   .s-fila-campos, .s-fila-campos[data-columnas='2'], .s-fila-campos[data-columnas='4'] { grid-template-columns: minmax(0, 1fr); }
   .s-campo-ficha { grid-column: auto !important; }
   .s-bandeja-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }

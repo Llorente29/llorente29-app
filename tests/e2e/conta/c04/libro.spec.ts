@@ -59,8 +59,14 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   await page.goto('/conta/libros/diario')
   // M01: el título lo dicen las pestañas del marco (Diario › Libro diario); el encabezado, para el lector.
   await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
-  // Desde el menú (S01): el diario es Contabilidad › Asientos.
-  if (lado(page) === 'ordenador') await expect(page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('link', { name: 'Contabilidad', exact: true })).toHaveAttribute('aria-current', 'page')
+  // Desde el menú (S01): el diario es Contabilidad › Asientos. S02: el apartado
+  // dice «estás dentro» ('true') y la página, debajo de él en la barra, «estás
+  // aquí» ('page'); ya no hay pestañas en la cabecera.
+  if (lado(page) === 'ordenador') {
+    const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+    await expect(menu.getByRole('link', { name: 'Contabilidad', exact: true })).toHaveAttribute('aria-current', 'true')
+    await expect(menu.getByRole('list', { name: 'Páginas de Contabilidad' }).getByRole('link', { name: 'Asientos', exact: true })).toHaveAttribute('aria-current', 'page')
+  }
   // Las vistas: solo los orígenes que hay, con cuántos (los filtros de antes).
   const vistas = page.getByRole('group', { name: 'Vistas' })
   for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Plataformas · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {
@@ -94,7 +100,8 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   }
   await expect(page.getByText(/Anula el \d+\/\d+/)).toHaveCount(0)
   // M01 (maqueta N30 §4): en el ordenador, cada asiento en UNA fila del alto que
-  // pone la densidad (compacta, unas 30 por pantalla); el concepto en una línea
+  // pone la densidad (S02: de serie Cómoda, 56 px; Compacta, 40: se lee de
+  // --cxm-fila, alias de --s-fila, así que vale con las dos); el concepto en una línea
   // con «…» y entero en el title; los chips enteros. En el móvil, la tarjeta
   // sigue en ≤ 110 px (respuesta 5). Se mide fila a fila, todas las del libro.
   if (lado(page) === 'ordenador') {

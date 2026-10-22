@@ -71,13 +71,35 @@ test('Pendientes de adjuntar en Diez: cuántos, el más antiguo, la referencia, 
   await page.goto('/conta/libros/diario/pendientes-diez')
   await expect(page.getByRole('heading', { name: 'Pendientes de adjuntar en Diez' })).toBeVisible({ timeout: 20_000 })
 
+  // S02: dónde estás lo dice la barra: Contabilidad › Importar, marcada (en el
+  // móvil, en el cajón). Antes lo decía el botón de la cinta con aria-current;
+  // en la fila de acciones un botón es una acción, no «dónde estás».
+  const movil = lado(page) === 'movil'
+  if (movil) await page.getByRole('button', { name: 'Abrir el menú' }).click()
+  await expect(page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('list', { name: 'Páginas de Contabilidad' })
+    .getByRole('link', { name: 'Importar' })).toHaveAttribute('aria-current', 'page', { timeout: 20_000 })
+  if (movil) {
+    await page.getByRole('button', { name: 'Cerrar el menú' }).click()
+    await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
+  }
   // La acción cuenta lo pendiente: con filas, nunca «nada pendiente» (regla 7).
-  // S01: en la cinta de Contabilidad › Importar (ordenador y móvil), con el
-  // número en su contador y el dato entero al pasar el ratón.
-  const accion = page.getByRole('toolbar', { name: 'Acciones de Importar' }).getByRole('link', { name: /Pendientes de adjuntar en Diez/ })
-  await expect(accion).toHaveAttribute('aria-current', 'page', { timeout: 20_000 })
-  await expect(accion.locator('.s-boton-contador')).toHaveText('3')
-  await expect(accion).toHaveAttribute('title', 'Pendientes de adjuntar en Diez: 3 sin su PDF')
+  // S02: la cinta es ahora la fila de acciones de Contabilidad › Importar: en el
+  // ordenador, un botón blanco con el número en su contador y el dato entero al
+  // pasar el ratón; en el móvil los blancos van en «Más acciones», con el dato
+  // escrito debajo.
+  const fila = page.getByRole('toolbar', { name: 'Acciones de Importar' })
+  if (movil) {
+    await fila.getByRole('button', { name: 'Más acciones' }).click()
+    const accion = page.getByRole('group', { name: 'Más acciones' }).getByRole('link', { name: /Pendientes de adjuntar en Diez/ })
+    await expect(accion.locator('.s-boton-contador')).toHaveText('3', { timeout: 20_000 })
+    await expect(accion.locator('.s-menu-nota')).toHaveText('Pendientes de adjuntar en Diez: 3 sin su PDF')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('group', { name: 'Más acciones' })).toHaveCount(0)
+  } else {
+    const accion = fila.getByRole('link', { name: /Pendientes de adjuntar en Diez/ })
+    await expect(accion.locator('.s-boton-contador')).toHaveText('3', { timeout: 20_000 })
+    await expect(accion).toHaveAttribute('title', 'Pendientes de adjuntar en Diez: 3 sin su PDF')
+  }
   // Cuántos y el más antiguo (lo anulado no cuenta aquí: va aparte).
   await expect(page.getByText('3 facturas están en Diez sin su PDF. La más antigua, del 01/10/26.')).toBeVisible()
   const lista = page.getByRole('list', { name: 'Facturas en Diez sin su PDF' })
