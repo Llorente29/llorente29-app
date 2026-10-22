@@ -30,7 +30,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaMayor, rutaNuevoAsiento, rutaRecibidaEnAsientos, rutaTerceros } from '@/config/navegacion'
+import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaMayor, rutaNuevoAsiento, rutaDocumentos, rutaTerceros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu, refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
@@ -284,7 +284,8 @@ function Dudas({ accountId, companyId }: { accountId: string; companyId: string 
         } else if (d.tipo === 'sinNombre') {
           acciones = <Link className="cx-boton" to={rutaAjustes('plan')}>Ponerles nombre</Link>
         } else if (d.tipo === 'recibidas') {
-          acciones = <Link className="cx-boton" to={rutaRecibidaEnAsientos()}>Validarlas una a una</Link>
+          // S02 · PR 2: las recibidas se revisan en Compras y gastos › Facturas recibidas, no en Asientos.
+          acciones = <Link className="cx-boton" to={rutaDocumentos('por-revisar')}>Validarlas una a una</Link>
         } else if (d.tipo === 'compras') {
           acciones = <Link className="cx-boton" to={rutaCompras()}>Mirarlos</Link>
         } else {

@@ -16,6 +16,9 @@
 // M01 (encargo F01, tarea 4; Julio, 16/10): sin el recuadro de antes ni el
 // título grande. Ctrl K es del marco y las acciones de Libros salen en su
 // buscador, en «Opciones».
+//
+// S02 · PR 2: cada libro lleva el encabezado del patrón (EncabezadoLibro) con
+// su nombre como título visible y «Ver: <libro>. Cambiar» para pasar a otro.
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { Navigate, useParams, useSearchParams } from 'react-router-dom'
@@ -42,6 +45,17 @@ import { Estados } from '@/modules/conta/libros/Estados'
 import { CuentasAnuales, Mapeo, PendienteC05b } from '@/modules/conta/libros/Anuales'
 import { CerrarMes, CierreEjercicio, Ejercicios } from '@/modules/conta/libros/Cierre'
 import { PendientesDiez } from '@/modules/conta/libros/PendientesDiez'
+
+/**
+ * S02 · PR 2 · Las acciones cuyo contenido pinta su propio encabezado del
+ * patrón (EncabezadoLibro: el h1 visible, la frase, los botones y «Ver: …»).
+ * Las demás (el libro diario y el cierre) siguen con la fila de serie del marco.
+ */
+const CON_ENCABEZADO: ReadonlySet<string> = new Set([
+  'diario-resumido', 'pendientes-diez', 'libro-mayor', 'sumas-saldos', 'acumulados', 'expedidas', 'recibidas', 'intracomunitarias',
+  'bienes-inversion', 'suplidos', 'retenciones', 'formato-aeat', 'balance', 'pyg', 'ecpn', 'balances-pdf', 'balances-excel',
+  'cuentas-anuales', 'mapeo', 'memoria', 'legalizacion', 'deposito',
+])
 
 /** El contenido de cada acción. */
 function contenido(accion: string): ReactNode {
@@ -158,7 +172,9 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
   return (
     <LibrosCtx.Provider value={ctx}>
       <div className="cxl-pagina cxl-en-marco">
-        <h1 className="cx-oculto">Libros</h1>
+        {/* S02 · PR 2: cada libro pinta su encabezado (EncabezadoLibro) con su nombre como h1 visible.
+            Los que aún no se han mudado (el libro diario y el cierre, de otros encargos) llevan el de antes. */}
+        {!CON_ENCABEZADO.has(accion.id) && <h1 className="cx-oculto">Libros</h1>}
         {/* S02 · El periodo, con el mismo control y el mismo formato que en todas las páginas que lo leen. */}
         <PeriodoEnBarra>
           <BotonPeriodo tipo="ejercicio" valor={ejercicio.code} etiqueta="Ejercicio"

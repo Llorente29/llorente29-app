@@ -12,7 +12,7 @@
 // de AREAS_LIBROS. Si se añade una ruta y no se dice aquí de quién es, falla.
 
 import { describe, expect, it } from 'vitest'
-import { CONTA, rutaConta } from '@/config/navegacion'
+import { CONTA, rutaConta, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
 import {
   INTERRUPTORES, PRODUCTOS, dondeEsta, pestanasVisibles, productosVisibles, relativa, type Contexto,
@@ -47,6 +47,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     comoTeFactura: 'contactos.todos', fichaProveedor: 'contactos.todos', fichaProveedorApartado: 'contactos.todos',
     // S02: las recepciones del local cuelgan de Facturas recibidas.
     compras: 'compras.recibidas', documentos: 'compras.recibidas', revisarFactura: 'compras.recibidas', recibidasEnAsientos: 'contabilidad.asientos', recibidaEnAsientos: 'contabilidad.asientos',
+    // S02 · PR 2: las dos de arriba solo llevan a Compras (module.tsx); la recibida a mano y la emitida, en su sitio.
+    recibidaAMano: 'compras.recibidas', facturasEmitidas: 'facturacion.emitidas', nuevaEmitida: 'facturacion.emitidas',
     liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
@@ -102,14 +104,17 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
       ['laboral', 'personas'], ['impuestos', 'finanzas'], ['contactos', 'operaciones'],
     ])
   })
-  it('S02 · las páginas del mapa: Facturación (Facturas emitidas · Cobros · Series) y Laboral, aún sin pantalla', () => {
+  it('S02 · las páginas del mapa: Facturación (Facturas emitidas · Cobros · Series; Cobros y Series aún sin pantalla) y Laboral, aún sin pantalla', () => {
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas emitidas', 'Cobros', 'Series'])
     expect(PRODUCTOS.find((p) => p.id === 'laboral')!.pestanas.map((t) => t.etiqueta)).toEqual(['Empleados', 'Nóminas', 'Seguros sociales', 'Fichajes y ausencias', 'Portal del empleado'])
   })
-  it('Facturación y Laboral no salen: sin pantalla, ni con el interruptor encendido; Impuestos (I01b), solo con el suyo', () => {
+  // S02 · PR 2 (decisión 5 de Julio): la emitida pasa a Facturación › Facturas
+  // emitidas y Facturación sale en la barra con ella, sin interruptor.
+  it('Facturación sale (con Facturas emitidas, sin interruptor); Laboral no, ni con el suyo encendido; Impuestos (I01b), solo con el suyo', () => {
     const todo: Contexto = { ...NADA, interruptores: new Set(INTERRUPTORES) }
-    expect(productosVisibles(NADA).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'compras', 'bancos', 'contactos', 'ajustes'])
-    expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
+    expect(productosVisibles(NADA).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'contactos', 'ajustes'])
+    expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
+    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
   })
   // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y
@@ -126,9 +131,10 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(i, NADA).map((t) => t.id)).toEqual(['calendario', 'trimestre', 'presentados', 'sociedades', 'certificados'])
   })
   it('con pantalla, el interruptor decide (la prueba puede fallar)', () => {
-    const conPantalla = PRODUCTOS.map((p) => (p.id === 'facturacion' ? { ...p, ruta: 'facturacion' } : p))
-    expect(productosVisibles(NADA, conPantalla).map((p) => p.id)).not.toContain('facturacion')
-    expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_facturacion']) }, conPantalla).map((p) => p.id)).toContain('facturacion')
+    // S02 · PR 2: Facturación ya no lleva interruptor; se prueba con Laboral, dándole pantalla.
+    const conPantalla = PRODUCTOS.map((p) => (p.id === 'laboral' ? { ...p, ruta: 'laboral' } : p))
+    expect(productosVisibles(NADA, conPantalla).map((p) => p.id)).not.toContain('laboral')
+    expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_laboral']) }, conPantalla).map((p) => p.id)).toContain('laboral')
   })
   it('las pestañas de Contabilidad, y «Importar» solo con Diez', () => {
     const c = PRODUCTOS.find((p) => p.id === 'contabilidad')!
@@ -142,11 +148,10 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.id)).toEqual(['recibidas', 'liquidaciones'])
     expect(c.ruta).toBe(CONTA.rutas.documentos)
   })
-  it('S02 · Bancos: Movimientos · Cuentas y extractos · Reglas (y Cierre del mes, hasta el PR 2); en el móvil, por niveles', () => {
+  it('S02 · Bancos: Movimientos · Cuentas y extractos · Reglas (el cierre del mes, en Contabilidad › Cierre y Registro desde el PR 2)', () => {
     const b = PRODUCTOS.find((p) => p.id === 'bancos')!
-    expect(b.pestanas.map((t) => t.etiqueta)).toEqual(['Movimientos', 'Cuentas y extractos', 'Reglas', 'Cierre del mes'])
-    expect(b.portadaMovil).toBe(true)
-    expect(PRODUCTOS.filter((p) => p.portadaMovil).map((p) => p.id)).toEqual(['bancos'])
+    expect(b.pestanas.map((t) => t.etiqueta)).toEqual(['Movimientos', 'Cuentas y extractos', 'Reglas'])
+    expect(de('/conta/bancos/cierre')).toBe('contabilidad.cierre')
   })
   it('S02 · Ajustes es un apartado con sus páginas (las de su índice), sin las de Definiciones; en el producto solo, sin las que dicen «aún no»', () => {
     const a = PRODUCTOS.find((p) => p.id === 'ajustes')!
@@ -163,20 +168,23 @@ describe('el catálogo de órdenes', () => {
     expect(new Set(ORDENES.map((o) => o.id)).size).toBe(ORDENES.length)
     for (const grupos of Object.values(CINTAS)) for (const g of grupos) for (const id of g.ordenes) expect(ordenPorId(id), id).not.toBeNull()
   })
-  it('cada orden lleva a una dirección de SU producto, salvo «Digitalizar»', () => {
+  it('cada orden lleva a una dirección de SU producto, sin excepciones', () => {
     const fuera = ORDENES.filter((o) => 'ruta' in o.a).filter((o) => dondeEsta(rutaConta(('ruta' in o.a ? o.a.ruta : '').split('?')[0]))?.producto.id !== o.producto)
-    // Paso 3: «Recibida» abre la factura desde Contabilidad › Asientos (maqueta 3).
-    // «Digitalizar» es subir un papel, y eso vive en Compras y gastos › Facturas recibidas.
-    expect(fuera.map((o) => o.id)).toEqual(['asiento.digitalizar'])
-    expect(dondeEsta(rutaConta(CONTA.rutas.recibidaEnAsientos, { invoiceId: 'x' }))?.pestana?.id).toBe('asientos')
+    // S02 · PR 2: «Digitalizar», «Recibida» y «Recibida a mano» son de Compras y
+    // gastos, y la emitida de Facturación: ya no hay ninguna que lleve fuera.
+    expect(fuera.map((o) => o.id)).toEqual([])
+    // Y la dirección de antes de la recibida en Asientos lleva a su ficha, en Compras.
+    expect(rutaRecibidaEnAsientos('x')).toBe(rutaRevisarFactura('x'))
+    expect(dondeEsta(rutaRecibidaEnAsientos('x'))?.pestana?.id).toBe('recibidas')
     expect(ORDENES.filter((o) => o.id.startsWith('ir.')).filter((o) => fuera.includes(o))).toEqual([])
   })
   it('las acciones de Asientos: Nuevo · Revisar (a dónde ir: «Ver») · Utilidades', () => {
     const c = cintaDe('contabilidad', 'asientos', NADA)
     expect(c.map((g) => [g.titulo, !!g.ver, g.ordenes.map((o) => o.etiqueta)])).toEqual([
-      ['Nuevo', false, ['Expedida', 'Recibida', 'Recibida a mano', 'Tesorería', 'General', 'Predefinidos']],
+      // S02 · PR 2: la emitida (Facturación) y las recibidas (Compras y gastos), fuera.
+      ['Nuevo', false, ['Tesorería', 'General', 'Predefinidos']],
       ['Revisar', true, ['Para revisar', 'Libro diario']],
-      ['Utilidades', false, ['Búsqueda', 'Digitalizar']],
+      ['Utilidades', false, ['Búsqueda']],
     ])
     expect(cintaDe('contabilidad', null, NADA)).toEqual([])
   })
@@ -199,15 +207,8 @@ describe('el catálogo de órdenes', () => {
       expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : ''))), x.id).toBe(`contabilidad.${o.pestana}`)
     }
   })
-  it('paso 3: la barra de Bancos es la cinta de sus cuatro pestañas; «Tus bancos» lo llena la pantalla', () => {
-    for (const t of ['movimientos', 'reglas', 'cuentas', 'cierre']) {
-      expect(cintaDe('bancos', t, NADA).map((g) => [g.titulo, g.dePantalla ?? null, g.ordenes.map((o) => o.etiqueta)]), t).toEqual([
-        ['Tus bancos', 'bancos', []],
-        ['Traer movimientos', null, ['Subir extracto']],
-        ['Automático', null, ['Reglas', 'Casados solos']],
-        ['Revisar', null, ['Lo que he hecho']],
-      ])
-    }
+  it('S02 · PR 2: Bancos pinta su encabezado (bancos/acciones.ts): el catálogo no le pone fila; sus órdenes siguen para el buscador y Favoritos', () => {
+    for (const t of ['movimientos', 'reglas', 'cuentas', 'cierre']) expect(cintaDe('bancos', t, NADA), t).toEqual([])
     // Cada orden lleva a una dirección de Bancos que el esqueleto pone en su pestaña.
     for (const id of ['bancos.subir', 'bancos.reglas', 'bancos.casados', 'bancos.hecho']) {
       const o = ordenPorId(id)!
@@ -269,7 +270,7 @@ describe('Favoritos', () => {
     const f = favoritosDe(['ir.compras.liquidaciones', 'asiento.expedida', 'algo.viejo'], NADA)
     expect(f.map((x) => [x.id, x.orden?.etiqueta ?? null, x.disponible])).toEqual([
       ['ir.compras.liquidaciones', 'Compras y gastos › Liquidaciones', false],
-      ['asiento.expedida', 'Expedida', true],
+      ['asiento.expedida', 'Nueva factura emitida', true],
       ['algo.viejo', null, false],
     ])
     expect(favoritosDe(['ir.compras.liquidaciones'], HOSTELERIA)[0].disponible).toBe(true)

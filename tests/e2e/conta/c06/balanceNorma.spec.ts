@@ -26,13 +26,16 @@ test('bajo «Clientes», la nota de la norma, de apoyo; y el balance cuadra', as
   await expect(page.getByRole('status', { name: 'Cuadre del balance' })).toContainText('Cuadra')
 
   // Una por cada línea de clientes del modelo (en el normal, también la de grupo).
-  const nota = page.locator('.cxl-nota-linea').first()
+  // S02 · PR 2: el balance va en la plantilla Informe y la nota es la fila de nota
+  // de la tabla (`tr.s-informe-nota`, una celda a todo el ancho), antes `.cxl-nota-linea`.
+  const nota = page.locator('tr.s-informe-nota').first()
   await expect(nota).toHaveText(NOTA)
   // Justo debajo de la línea de clientes, no en otro sitio.
   const anterior = nota.locator('xpath=preceding-sibling::*[1]')
   await expect(anterior).toContainText(/Clientes por ventas/)
-  // De apoyo: sin icono, sin rojo ni ámbar, letra más pequeña que la línea.
-  const estilo = await nota.evaluate((el) => {
+  // De apoyo: sin icono, sin rojo ni ámbar, letra más pequeña que la línea. El estilo
+  // (letra, color) lo lleva su celda: se mide ahí.
+  const estilo = await nota.locator('td').first().evaluate((el) => {
     const s = getComputedStyle(el)
     return { color: s.color, fondo: s.backgroundColor, letra: parseFloat(s.fontSize), iconos: el.querySelectorAll('svg, img, [aria-hidden="true"]').length }
   })

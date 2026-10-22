@@ -34,7 +34,8 @@ const MODULOS: Modulo[] = [
   { nombre: 'contabilidad', producto: 'Contabilidad', ruta: '/conta/libros/diario', activa: 'Asientos' },
   // S02: «Por revisar» (/conta/compras, ahora «Recepciones del local») cuelga de Facturas recibidas.
   { nombre: 'compras', producto: 'Compras y gastos', ruta: '/conta/compras', activa: 'Facturas recibidas' },
-  // S02: Bancos va por niveles en el móvil, pero sus páginas están en el cajón como las de todos.
+  // S02 · PR 2: Bancos ya no va por niveles en el móvil (se fue su portada): abre Movimientos con su
+  // encabezado, y sus páginas están en el cajón como las de todos.
   { nombre: 'bancos', producto: 'Bancos', ruta: '/conta/bancos', activa: 'Movimientos' },
   { nombre: 'impuestos', producto: 'Impuestos', ruta: '/conta/impuestos', activa: 'Calendario' },
   // S02: la pestaña «Tus clientes» de Impuestos es ahora el apartado «Clientes del despacho», sin páginas.
@@ -154,9 +155,14 @@ for (const m of MODULOS) {
       // S02: la cinta es ahora la fila de acciones, sin «Ocultar» y sin títulos debajo
       // de los botones: en el móvil, el principal y «Más acciones» (los blancos, dentro).
       // Lo que se cuida es lo mismo: nada se sale de los 390 px ni tapa a otro.
+      // S02 · PR 2: una página que pinta su encabezado (Bancos) no lleva la fila del marco: sus
+      // botones van en el encabezado, y se mide esa fila con la misma vara.
       const acciones = page.getByRole('toolbar', { name: /^Acciones de / })
-      if (await acciones.count() && await acciones.first().isVisible()) {
-        const fila = acciones.first()
+      const delEncabezado = page.locator('header.s-encabezado .s-encabezado-acciones')
+      const fila = await acciones.count() && await acciones.first().isVisible() ? acciones.first()
+        : await delEncabezado.count() && await delEncabezado.first().isVisible() ? delEncabezado.first() : null
+      if (m.nombre === 'bancos') expect(fila, 'Bancos: la fila de su encabezado, con «Tus bancos» y «Más acciones»').not.toBeNull()
+      if (fila) {
         await expect(fila.getByRole('button', { name: 'Ocultar', exact: true })).toHaveCount(0)
         const ancho = page.viewportSize()!.width
         const cajas = await fila.locator('a:visible, button:visible').evaluateAll((xs) => xs.map((x) => {

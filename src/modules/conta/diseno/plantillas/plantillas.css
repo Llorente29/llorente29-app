@@ -236,7 +236,25 @@ th.s-lista-cifra { text-align: right; }
 .s-informe-desplegar:focus-visible { outline: none; box-shadow: var(--s-foco); border-radius: var(--s-radio-boton); }
 .s-informe-calle { font-weight: var(--s-peso-medio); }
 .s-informe-oficial { font-size: var(--s-t-xs); color: var(--s-apoyo); }
-.s-informe-cuenta th { padding-left: var(--s-8); font-size: var(--s-t-s); }
+.s-informe-cuenta th { font-size: var(--s-t-s); }
+/* S02 · PR 2 (Libros): la caja que deja desplazar una tabla ancha (por local)
+   sin sacar la página de su ancho; el nivel de cada partida; el año anterior
+   en gris; lo del lado contrario en ámbar; la nota debajo de una línea. */
+.s-informe-caja { overflow-x: auto; border-radius: var(--s-radio-bloque); }
+.s-informe tbody th[data-nivel='2'] { padding-left: var(--s-6); }
+.s-informe tbody th[data-nivel='3'] { padding-left: var(--s-8); }
+.s-informe tbody th[data-nivel='4'] { padding-left: var(--s-12); color: var(--s-apoyo); }
+.s-informe tbody tr:not([data-total]):not(.s-informe-cuenta):not(.s-informe-nota) th:not([data-nivel]) .s-informe-calle { font-weight: var(--s-peso-fuerte); }
+.s-informe tr[data-total] .s-informe-calle { font-weight: var(--s-peso-titulo); }
+.s-informe-cuenta th { padding-left: calc(var(--s-8) + var(--s-4)); }
+.s-informe-cuenta a { color: var(--s-accion); text-decoration: none; }
+.s-informe-cuenta a:hover span:first-child { text-decoration: underline; }
+.s-informe-cuenta a:focus-visible { outline: none; box-shadow: var(--s-foco); border-radius: var(--s-radio-boton); }
+.s-informe [data-apagada] { color: var(--s-apoyo); }
+.s-informe [data-aviso], .s-informe [data-aviso] a { color: var(--s-duda); }
+.s-informe-nota td { height: auto; padding: 0 var(--s-4) var(--s-2) var(--s-8); font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-informe-titulo { margin: 0; font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.s-informe-pie { margin: 0; font-size: var(--s-t-s); color: var(--s-apoyo); }
 
 /* ── ASISTENTE ───────────────────────────────────────────────────────── */
 .s-asistente { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
@@ -286,6 +304,36 @@ th.s-lista-cifra { text-align: right; }
 .s-hoja-palabras h2 { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-1); font-size: var(--s-t-l); color: var(--s-tinta); }
 .s-hoja-palabras p { margin: 0; }
 .s-hoja-aviso { margin-top: var(--s-1); font-size: var(--s-t-s); color: var(--s-propuesto-texto); }
+/* S02 · PR 2 · La hoja con campos de verdad (el asiento a mano). La cabecera con
+   más de tres cosas (fecha, serie, concepto y documento) se reparte sola. */
+.s-hoja-cabecera-campos { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s-3); }
+.s-hoja-campo { display: flex; flex-direction: column; gap: var(--s-1); min-width: 160px; font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-hoja-campo-ancho { flex: 1 1 280px; }
+.s-hoja-campo .s-control { color: var(--s-tinta); }
+.s-hoja-nota { font-size: var(--s-t-xs); color: var(--s-apoyo); }
+.s-hoja-nota[data-tono='duda'] { color: var(--s-duda); }
+.s-hoja-tabla td { vertical-align: top; }
+.s-hoja-tabla td:first-child { color: var(--s-apoyo); padding-top: var(--s-3); }
+.s-hoja-tabla td .s-control { min-width: 0; }
+.s-hoja-cuenta { position: relative; min-width: 220px; }
+.s-hoja-cuenta-nombre { display: block; margin-top: var(--s-1); font-size: var(--s-t-s); color: var(--s-tinta); }
+.s-hoja-cuenta-nombre .s-campo-ficha-codigo { margin-left: var(--s-1); }
+.s-hoja-quitar { text-align: right; }
+.s-hoja-buscar {
+  position: absolute; top: calc(100% - var(--s-1)); left: var(--s-3); z-index: 20; width: 340px; max-width: 80vw; padding: var(--s-2);
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); box-shadow: var(--s-sombra);
+}
+.s-hoja-buscar-lista { list-style: none; margin: var(--s-2) 0 0; padding: 0; max-height: 240px; overflow-y: auto; font-size: var(--s-t-s); }
+.s-hoja-buscar-lista li { display: flex; gap: var(--s-2); padding: var(--s-1) var(--s-2); border-radius: var(--s-radio-boton); cursor: pointer; }
+.s-hoja-buscar-lista li[aria-selected='true'] { background: var(--s-propuesto); }
+.s-hoja-buscar-nada { color: var(--s-apoyo); cursor: default; }
+/* La hoja con el papel de la factura al lado (la emitida con su PDF). */
+.s-hoja-con-papel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 40%); gap: var(--s-4); align-items: start; }
+.s-hoja-bloque { padding: var(--s-4) var(--s-5); display: flex; flex-direction: column; gap: var(--s-2); }
+.s-hoja-bloque h2 { margin: 0; font-size: var(--s-t-l); color: var(--s-tinta); }
+.s-hoja-bloque-fila { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s-3); }
+.s-hoja-bloque ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-hoja-bloque li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 
 /* ── El móvil ────────────────────────────────────────────────────────── */
 @media (max-width: 767px) {
@@ -298,6 +346,21 @@ th.s-lista-cifra { text-align: right; }
   .s-bandeja-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .s-bandeja-cuerpo, .s-asistente, .s-hoja-cabecera { grid-template-columns: minmax(0, 1fr); }
   .s-filtro-buscar { flex: 1 1 100%; }
+  /* La hoja en el móvil: cada línea, una tarjeta; cada campo con su etiqueta encima (data-titulo). */
+  .s-hoja-con-papel { grid-template-columns: minmax(0, 1fr); }
+  .s-hoja-tabla thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .s-hoja-tabla, .s-hoja-tabla tbody, .s-hoja-tabla tr, .s-hoja-tabla td { display: block; width: 100%; }
+  .s-hoja-tabla tr { padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+  .s-hoja-tabla td { height: auto; padding: var(--s-1) 0; border-bottom: 0; }
+  .s-hoja-tabla td[data-titulo]::before { content: attr(data-titulo); display: block; font-size: var(--s-t-xs); color: var(--s-apoyo); }
+  .s-hoja-tabla td:first-child { padding-top: 0; font-weight: var(--s-peso-fuerte); }
+  .s-hoja-tabla td:first-child::before { content: 'Línea '; }
+  .s-hoja-tabla .s-control { min-height: var(--s-tactil); }
+  .s-hoja-cuenta { min-width: 0; }
+  .s-hoja-buscar { left: 0; width: 100%; max-width: none; }
+  .s-hoja-quitar { text-align: left; }
+  .s-hoja-anadir, .s-hoja-pie { flex-wrap: wrap; }
+  .s-hoja-totales { gap: var(--s-4); }
   .s-pagina { padding-bottom: calc(var(--s-tactil) + var(--s-8)); }
 }
 @media (prefers-reduced-motion: reduce) { .s-lista-tabla * { transition: none; } }

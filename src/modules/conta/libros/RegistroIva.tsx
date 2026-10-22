@@ -17,12 +17,21 @@
 //   · FormatoAeat: el Excel con las columnas de la AEAT (acumulado del 1 de
 //     enero al final del trimestre, como lo piden) y el zip con los
 //     documentos que tengamos guardados.
+//
+// S02 · PR 2 · El encabezado del patrón (EncabezadoLibro): el nombre del libro
+// como título, la frase con el periodo y lo que se ve, «Ver: … Cambiar»,
+// Exportar PDF / Excel blancos, «Formato AEAT» en «Más acciones» y, en las
+// recibidas, «Nueva recibida a mano» como el único principal. El periodo, en la
+// fila de controles del patrón; las tablas, con el estilo del patrón.
 
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaLibros, rutaRecibidaAMano } from '@/config/navegacion'
-import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
-import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
+import { Dialogo } from '@/modules/conta/proveedor/piezas'
+import { Boton, BotonEnlace } from '@/modules/conta/diseno'
+import { ControlesInforme, FiltroSelector } from '@/modules/conta/diseno/plantillas'
+import { EncabezadoLibro } from '@/modules/conta/libros/EncabezadoLibro'
+import { Chip, ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import {
   COLUMNAS_BIENES, UMBRAL_347, agruparPorNif, cifrasLibro, cuadreConDiario, etiquetaTipo, faltaParaCompletar, filaBienes, filtrar, nombreFichero,
@@ -100,25 +109,26 @@ export function RegistroIva({ libro }: { libro: Vista }) {
     setHecho(ok ? `Bajado: ${nombre}.${como === 'pdf' ? 'pdf' : 'xlsx'}, ${anotaciones(filas.length)}${hayFiltro ? ` de ${vistas.total} (con los filtros puestos)` : ''}.` : 'No había nada que bajar con estos filtros.')
   }
 
-  if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
+  const encabezado = (
+    <EncabezadoLibro titulo={TITULO[libro]}
+      frase={`${p.nombre} · del ${ddmm(p.desde)} al ${ddmm(p.hasta)}: ${libro === 'intracomunitarias' ? 'las entregas y adquisiciones dentro de la UE' : 'cada anotación del libro registro, con su base y su cuota'}${hayFiltro ? ', con filtros' : ''}.`}
+      principal={libro === 'received' ? <BotonEnlace a={rutaRecibidaAMano()} variante="principal" icono="nuevo">Nueva recibida a mano</BotonEnlace> : undefined}
+      secundarios={<>
+        <Boton icono="descargar" onClick={() => exportar('pdf')} disabled={!vistas}>Exportar PDF</Boton>
+        <Boton onClick={() => exportar('excel')} disabled={!vistas}>Excel</Boton>
+      </>}
+      masAcciones={[{ titulo: imp.libros, acciones: [{ id: 'formato-aeat', etiqueta: 'Formato AEAT', a: rutaLibros('registro', 'formato-aeat'), dato: 'El Excel y el zip de un requerimiento', grupo: imp.libros }] }]} />
+  )
+  if (d.error) return <section className="cxl-pagina" aria-label={TITULO[libro]}>{encabezado}<ErrorConReintento mensaje={d.error} reintentar={d.recargar} /></section>
   return (
     <section className="cxl-pagina" aria-label={TITULO[libro]}>
-      <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: imp.libros }]} /><h2>{TITULO[libro]}</h2></div>
-        <div className="cxl-herramientas">
-          <label><span className="cx-oculto">Periodo</span>
-            <select className="cx-input" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>{ps.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
-          </label>
-          <button type="button" className="cx-boton-sec" onClick={() => exportar('pdf')} disabled={!vistas}>Exportar PDF</button>
-          <button type="button" className="cx-boton-sec" onClick={() => exportar('excel')} disabled={!vistas}>Excel</button>
-          <Link to={rutaLibros('registro', 'formato-aeat')} className="cx-boton-sec">Formato AEAT</Link>
-          {/* S01d: una recibida sin fichero se da de alta a mano; sale aquí cuando se apunta. */}
-          {libro === 'received' && <Link to={rutaRecibidaAMano()} className="cx-boton">+ Nueva recibida a mano</Link>}
-        </div>
-      </div>
+      {encabezado}
+      <ControlesInforme>
+        <FiltroSelector etiqueta="Periodo" valor={periodo} alCambiar={setPeriodo} opciones={ps.map((x) => ({ valor: x.id, texto: x.nombre }))} />
+      </ControlesInforme>
       <Guardado texto={hecho} />
 
-      {!vistas && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2].map((i) => <Hueso key={i} alto={36} />)}</div>}
+      {!vistas && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando el libro" />}
       {vistas && (
         <div className="cxl-cifras" role="group" aria-label="Cifras del libro">
           <div className="cx-tarjeta cxl-cifra"><span className="cxl-cifra-etiqueta">Base imponible</span><span className="cxl-cifra-valor">{eurosExactos(vistas.cifras.base)}</span></div>
@@ -150,10 +160,10 @@ export function RegistroIva({ libro }: { libro: Vista }) {
         {hayFiltro && <button type="button" className="cx-boton-sec" onClick={() => setF({ verAnuladas: f.verAnuladas })}>Quitar filtros</button>}
       </details>
 
-      {vistas && !vistas.total && <div className="cx-tarjeta"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion={conImpuesto('El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas.', imp)} /></div>}
+      {vistas && !vistas.total && <div className="cxl-caja"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion={conImpuesto('El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas.', imp)} /></div>}
       {vistas && vistas.total > 0 && (
-        <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <p className="cxl-apoyo" role="status">{hayFiltro ? `${vistas.filas.length} de ${anotaciones(vistas.total)} con los filtros puestos.` : `${anotaciones(vistas.total)}.`}</p>
+        <div className="cxl-caja">
+          <p className="cxl-apoyo cxl-caja-cabeza" role="status">{hayFiltro ? `${vistas.filas.length} de ${anotaciones(vistas.total)} con los filtros puestos.` : `${anotaciones(vistas.total)}.`}</p>
           {porNif ? <TablaPorNif filas={vistas.filas} /> : (
             <table className="cxl-tabla cxl-apilada" aria-label={TITULO[libro]}>
               <thead><tr><th>Fecha</th><th>Factura</th><th>{libro === 'issued' ? 'Destinatario' : 'Expedidor'}</th><th className="cxl-der">Base</th><th className="cxl-der">{imp.columnaTipo}</th><th className="cxl-der">Cuota</th><th className="cxl-der">Total</th><th /></tr></thead>
@@ -301,22 +311,22 @@ export function FormatoAeat() {
     } catch (e) { setHecho(e instanceof Error ? `No se ha podido hacer el zip: ${e.message}` : 'No se ha podido hacer el zip.') } finally { setOcupado(null) }
   }
 
-  if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
+  const encabezado = (
+    <EncabezadoLibro titulo="Libros en formato AEAT"
+      frase={`Acumulado del ${ddmm(L.ejercicio.inicio)} al ${ddmm(p.hasta)}, como lo pide la AEAT en un requerimiento: el Excel de los libros y el zip de los documentos.`} />
+  )
+  if (d.error) return <section className="cxl-pagina" aria-label="Formato AEAT">{encabezado}<ErrorConReintento mensaje={d.error} reintentar={d.recargar} /></section>
   return (
     <section className="cxl-pagina" aria-label="Formato AEAT">
-      <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: imp.libros }]} /><h2>Libros en formato AEAT</h2></div>
-        <div className="cxl-herramientas">
-          <label><span className="cx-oculto">Hasta el trimestre</span>
-            <select className="cx-input" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>{ps.map((x) => <option key={x.id} value={x.id}>Hasta el {x.nombre}</option>)}</select>
-          </label>
-        </div>
-      </div>
+      {encabezado}
+      <ControlesInforme>
+        <FiltroSelector etiqueta="Hasta el trimestre" valor={periodo} alCambiar={setPeriodo} opciones={ps.map((x) => ({ valor: x.id, texto: x.nombre }))} />
+      </ControlesInforme>
       <Guardado texto={hecho} />
       {/* S01e: el formato es el del IVA; con IGIC o IPSI se dice, no se esconde (regla 7). */}
       {imp.avisoFormatoAeat && <p className="cxl-sin-sitio" role="note">{imp.avisoFormatoAeat}</p>}
       {ocupado && <p className="cxl-apoyo" role="status">{ocupado}</p>}
-      {!d.datos && <div className="cx-tarjeta" aria-busy="true">{[0, 1].map((i) => <Hueso key={i} alto={48} />)}</div>}
+      {!d.datos && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando los libros" />}
       {d.datos && (
         <>
           <div className="cx-tarjeta">

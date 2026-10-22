@@ -32,6 +32,13 @@ function vigilar(page: Page) {
 }
 
 const cintaDe = (page: Page, pagina: string) => page.getByRole('toolbar', { name: `Acciones de ${pagina}` })
+/**
+ * S02 · PR 2: cada libro de «Libros y listados» pinta su encabezado del patrón
+ * (EncabezadoLibro): el nombre del libro como h1 visible y «Ver: <libro>.
+ * Cambiar» delante de sus botones. La fila de serie del marco ya no sale (nada
+ * dos veces). Cierre y Registro sigue con la fila de serie.
+ */
+const encabezadoDe = (page: Page) => page.locator('header.s-encabezado')
 
 /**
  * S02: las páginas de un apartado ya no son pestañas de la cabecera: salen
@@ -45,14 +52,17 @@ async function cerrarMenu(page: Page) {
   if (lado(page) === 'movil') await page.getByRole('button', { name: 'Cerrar el menú' }).click()
 }
 
-test('Libros en la fila de acciones (S02): «Ver» con cada libro en su grupo, con su número escrito, y el buscador', async ({ page }) => {
+test('Libros en el encabezado (S02 · PR 2): «Ver» con cada libro en su grupo, con su número escrito, y el buscador', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   // «Libros» a secas lleva a la primera de «Libros y listados»: el Libro mayor.
   await page.goto('/conta/libros')
   await expect(page).toHaveURL(/\/conta\/libros\/mayor\/libro-mayor/)
-  // M01: sin el título grande «Contabilidad · Libros»; el encabezado, para el lector.
-  await expect(page.getByRole('heading', { level: 1, name: 'Libros' })).toHaveCount(1)
+  // M01: sin el título grande «Contabilidad · Libros». S02 · PR 2: el h1 es el del libro, visible
+  // (el encabezado del patrón), y el «Libros» oculto de antes ya no sale: un solo h1.
+  await expect(page.getByRole('heading', { level: 1, name: 'Libro mayor', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Libros', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
   // Ni áreas ni segunda fila en la pantalla: son la página de la barra y su fila de acciones.
   await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
   await expect(page.locator('.cxm-subpestanas, .cxl-movil-acciones')).toHaveCount(0)
@@ -63,10 +73,11 @@ test('Libros en la fila de acciones (S02): «Ver» con cada libro en su grupo, c
 
   // S02: los grupos de la cinta (Diario, Mayor, Estados, IVA, Retenciones) son a dónde ir dentro
   // de la página: van en el selector «Ver: <el actual>. Cambiar», con cada grupo y su título dentro.
-  const cinta = cintaDe(page, 'Libros y listados')
-  const ver = cinta.getByRole('button', { name: /^Ver: .*\. Cambiar$/ })
+  // S02 · PR 2: el selector está en el ENCABEZADO del libro, y la fila de serie no sale (nada dos veces).
+  await expect(cintaDe(page, 'Libros y listados')).toHaveCount(0)
+  const ver = encabezadoDe(page).getByRole('button', { name: /^Ver: .*\. Cambiar$/ })
   await expect(ver).toHaveAccessibleName('Ver: Libro mayor. Cambiar')
-  // S02: la captura de la cinta pasa a ser la de la fila de acciones, con «Ver» cerrado (un
+  // S02: la captura de la cinta pasa a ser la del encabezado, con «Ver» cerrado (un
   // desplegable abierto tapa a propósito, y aquí se mide que nada tape).
   await capturar(page, 'acciones-listados')
   await ver.click()
@@ -87,7 +98,8 @@ test('Libros en la fila de acciones (S02): «Ver» con cada libro en su grupo, c
 
   await expedidas.click()
   await expect(page).toHaveURL(/\/conta\/libros\/registro\/expedidas/)
-  await expect(cintaDe(page, 'Libros y listados').getByRole('button', { name: /^Ver: .*\. Cambiar$/ })).toHaveAccessibleName(/^Ver: Expedidas/)
+  await expect(encabezadoDe(page).getByRole('button', { name: /^Ver: .*\. Cambiar$/ })).toHaveAccessibleName(/^Ver: Expedidas/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas expedidas', exact: true })).toBeVisible()
   // El ejercicio, en la cabecera (no en un título), con el formato del S02: «Ejercicio 2026 · abierto».
   const ejercicio = page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })
   await expect(ejercicio).toBeVisible()
@@ -95,6 +107,7 @@ test('Libros en la fila de acciones (S02): «Ver» con cada libro en su grupo, c
   await expect(page.locator('.cxl-tuyos')).toHaveCount(0)
 
   // Cierre y Registro: sus dos grupos, sin lo que aún no tiene pantalla (Registro Mercantil).
+  // S02 · PR 2: Ejercicios sigue con la fila de serie del marco y su «Ver».
   // S02: la página está siempre a la vista en la barra (ya no hay «Más ▾» de pestañas).
   await (await paginasDe(page, 'Contabilidad')).getByRole('link', { name: 'Cierre y Registro' }).click()
   await expect(page).toHaveURL(/\/conta\/libros\/cierre\/ejercicios/)

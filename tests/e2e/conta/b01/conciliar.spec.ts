@@ -127,7 +127,8 @@ test.describe('B02 · Bancos, conciliar', () => {
         }).observe(document, { subtree: true, childList: true })
       })
       await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10`)
-      await expect(page.getByRole('heading', { name: 'Movimientos', level: 2 })).toBeVisible()
+      // S02 · PR 2: el título de la página es el h1 de su encabezado.
+      await expect(page.getByRole('heading', { name: 'Movimientos', level: 1 })).toBeVisible()
 
       // Una sola cuenta: la banda, la barra y los contadores dicen lo mismo.
       const c = await lasCifras(page)
@@ -244,6 +245,68 @@ test.describe('B02 · Bancos, conciliar', () => {
     })
   })
 
+  // S02 · PR 2 (Julio, 22/10): el asiento de lo casado se valida en Bancos › Movimientos › «Por validar»,
+  // uno a uno («Validar y siguiente» o Intro) y en bloque («Validar los N»); Contabilidad › Asientos ya no lo enseña.
+  test('Por validar: el asiento de lo casado se valida aquí, con Intro y en bloque, y no sale en Asientos', async ({ page }) => {
+    test.skip(lado(page) !== 'ordenador', 'El teclado y el bloque, en el ordenador.')
+    const base = await preparar()
+    let validados = 0
+    await conLimpieza(page, async () => {
+      await entrarComo(page, CUENTA_A.email)
+      vigilar(page)
+      await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10`)
+      await expect(page.getByRole('heading', { name: 'Movimientos', level: 1 })).toBeVisible()
+      // Confirmar las 3 recargas: sus asientos quedan propuestos y lo dice dónde esperan.
+      await page.getByRole('region', { name: 'Confirmar en bloque' }).getByRole('button', { name: 'Confirmar los 3' }).click()
+      await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('Confirmados los 3: sus asientos esperan en «Por validar».')
+
+      const contador = async () => Number(await page.getByTestId('contador-validar').textContent())
+      await expect.poll(contador).toBeGreaterThanOrEqual(3)
+      const n = await contador()
+      await page.getByRole('button', { name: `Por validar ${n}`, exact: true }).click()
+      const lista = page.getByRole('grid', { name: /^Por validar de octubre en / })
+      const filas = lista.getByRole('row')
+      await expect(filas).toHaveCount(n)
+      // Cada uno con su veredicto y su porqué: las recargas las confirmaste tú.
+      const recarga = filas.filter({ hasText: 'Lo casaste tú al confirmarlo' }).first()
+      await expect(recarga).toContainText('Lista para contabilizar.')
+      const concepto = ((await recarga.getByText(/^Casado con /).textContent()) ?? '').replace(/^Casado con /, '').trim()
+      expect(concepto.length).toBeGreaterThan(0)
+      const bloque = page.getByRole('region', { name: 'Validar en bloque' })
+      await expect(bloque).toContainText(`${n} listas para contabilizar`)
+      await capturar(page, 'por-validar')
+
+      // Contabilidad › Asientos, «Para revisar»: los del banco ya no salen (se deciden aquí).
+      await page.goto('/conta/libros/diario?ver=revisar')
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await expect(page.getByText(concepto, { exact: true })).toHaveCount(0)
+
+      // Intro valida la elegida y pasa a la siguiente; lo dice con su número de asiento (regla 8).
+      await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10&ver=validar`)
+      await expect(filas).toHaveCount(n)
+      await lista.focus()
+      await page.keyboard.press('Enter')
+      await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText(/^Validado: .+ es el asiento \d+\. Ya está en el libro diario\.$/)
+      validados++
+      await expect(filas).toHaveCount(n - 1)
+      await expect(filas.first()).toHaveAttribute('aria-selected', 'true')
+
+      // «Validar los N»: el resto, cada uno como si fuera solo, y dice cuántos y qué números.
+      if (n - 1 > 0) {
+        await bloque.getByRole('button', { name: n - 1 === 1 ? 'Validar la 1' : `Validar los ${n - 1}` }).click()
+        await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText(n - 1 === 1 ? 'Validado el 1' : `Validados los ${n - 1}`)
+        validados += n - 1
+      }
+      await expect(page.getByText('Nada por validar de octubre en')).toBeVisible()
+      await expect.poll(contador).toBe(0)
+    }, async () => {
+      await base.deshacerTodo('Limpieza después de Por validar B02')
+      await quitarLoMio(base)
+      // Lo validado no se borra: deshacerlo lo anula con su contraasiento (dos asientos por cada uno).
+      expect(await base.contarAsientosA()).toBe(base.asientosAntes + 2 * validados)
+    })
+  })
+
   test('móvil: tarjetas, «Confirmar los 3 seguros» arriba y el panel en hoja', async ({ page }) => {
     test.skip(lado(page) !== 'movil', 'En el ordenador va la suya.')
     const base = await preparar()
@@ -251,9 +314,10 @@ test.describe('B02 · Bancos, conciliar', () => {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
       await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10`)
-      await expect(page.getByRole('link', { name: 'Confirmar los 3 seguros' })).toBeVisible()
-      await capturar(page, 'portada')
-      await page.getByRole('link', { name: 'Confirmar los 3 seguros' }).click()
+      // S02 · PR 2: sin la portada por niveles (y su enlace «Confirmar los 3 seguros»): el móvil abre
+      // Movimientos en «Para confirmar», con «Confirmar los 3 seguros» arriba, en el bloque.
+      await expect(page.getByRole('heading', { name: 'Movimientos', level: 1 })).toBeVisible()
+      await expect(page.getByRole('button', { name: /^Para confirmar \d+$/ })).toHaveAttribute('aria-pressed', 'true')
       await expect(page.getByRole('region', { name: 'Confirmar en bloque' }).getByRole('button', { name: 'Confirmar los 3 seguros' })).toBeVisible()
       await capturar(page, 'conciliar')
       await expect(page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }), `Las filas: ${(await page.locator('.cxn-fila').allTextContents()).join(' ‖ ').slice(0, 900)}`).toHaveCount(1)

@@ -46,7 +46,7 @@ describe('el cuadre, la barra, la banda y las bandejas dicen lo mismo', () => {
     }
   })
   it('la banda usa las mismas cifras que la barra', () => {
-    expect(c.cuenta).toEqual({ confirmar: 6, aclarar: 3, casados: 2, todos: 14 })
+    expect(c.cuenta).toEqual({ confirmar: 6, aclarar: 3, validar: 0, casados: 2, todos: 14 })
     expect(c.frase).toBe('He casado yo 2 de 14 movimientos de octubre. Te quedan 6 por confirmar y 3 por aclarar.')
   })
   it('en el banco − en contabilidad = te falta por casar', () => {

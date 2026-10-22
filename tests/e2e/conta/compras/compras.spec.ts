@@ -117,9 +117,10 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
       const total = Number((await inicio.locator('.s-barra-chip').textContent())!.trim())
       expect(total).toBeGreaterThanOrEqual(filas)
     }
-    // Ventas ya no está: la sustituye Facturación (S01), que sale cuando tenga pantalla.
+    // Ventas ya no está: la sustituye Facturación (S01). S02 · PR 2: Facturación ya
+    // tiene pantalla (Facturas emitidas) y sale, entre Contabilidad y Compras y gastos.
     // S02: «Favoritos» también es un .s-barra-item, pero es un botón: se cuentan los apartados (enlaces).
-    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()

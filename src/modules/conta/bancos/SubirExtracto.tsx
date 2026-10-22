@@ -90,8 +90,8 @@ export function SubirExtracto() {
   }
 
   return (
-    <section className="cxb-seccion" aria-labelledby="cxb-subir-titulo">
-      <div className="cxl-seccion"><div><h2 id="cxb-subir-titulo">Subir extracto</h2><p className="cx-ayuda">Norma 43 o Excel del banco. Un fichero puede traer varias cuentas: cada una va a la suya.</p></div></div>
+    <section className="cxb-seccion" aria-label="Subir extracto">
+      {/* S02 · PR 2: el título y su frase, en el encabezado de la página (BancosPage). */}
       {error && <div className="cx-error" role="alert">{error}</div>}
       {dadoDeAlta && paso.que === 'leido' && <div className="cx-guardado" role="status">{dadoDeAlta}</div>}
 

@@ -205,7 +205,7 @@ export function PanelMovimiento(p: PanelProps) {
               ))}
             </tbody>
           </table>
-          <p className="cx-ayuda">Queda propuesto en contabilidad: lo validas allí o se valida solo si es seguro.</p>
+          <p className="cx-ayuda">Su asiento queda propuesto y espera en «Por validar», donde lo validas.</p>
         </details>
       )}
     </aside>

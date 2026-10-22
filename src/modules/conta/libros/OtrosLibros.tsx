@@ -9,12 +9,20 @@
 //     S01e: no es IVA; va en su propio grupo del menú, con periodo y salida.
 //   · Suplidos: el mayor de las cuentas que la empresa marcó como suplidos
 //     (C03). Sin cuentas marcadas, lo dice y explica dónde se marcan.
+//
+// S02 · PR 2 · Los tres con el encabezado del patrón (EncabezadoLibro: el
+// nombre del libro, una frase con lo que se ve, «Ver: … Cambiar») y sus
+// tablas con el estilo del patrón. «Dar de alta un bien» es el único principal.
 
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaFichaTercero, rutaLibros, rutaPlan } from '@/config/navegacion'
-import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
-import { ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
+import { Dialogo } from '@/modules/conta/proveedor/piezas'
+import { Boton } from '@/modules/conta/diseno'
+import { ControlesInforme, FiltroSelector } from '@/modules/conta/diseno/plantillas'
+import { EncabezadoLibro } from '@/modules/conta/libros/EncabezadoLibro'
+import { fraseDelPeriodo } from '@/modules/conta/libros/encabezado'
+import { ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { extracto } from '@/modules/conta/lib/extractos'
 import { trimestre } from '@/modules/conta/lib/libroRegistro'
@@ -36,29 +44,29 @@ export function BienesInversion() {
   const [alta, setAlta] = useState(false)
   const [hecho, setHecho] = useState<string | null>(null)
   const d = useLeer(() => leerBienes(L.accountId, L.companyId), `${L.companyId}:${L.vuelta}`)
-  if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
   const exportar = () => {
     const filas = (d.datos ?? []).map((b) => [b.descripcion, b.tipo, ddmm(b.alta), b.inicioUso ? ddmm(b.inicioUso) : '', b.valor, b.base, b.tipoIva, b.cuota, b.deducible, b.baja ? ddmm(b.baja) : ''])
     const ok = excelTabla(`Bienes de inversión ${L.ejercicio.code}.xlsx`, 'Bienes de inversión', ['Bien', 'Tipo', 'Alta', 'Inicio de uso', 'Valor', 'Base', imp.columnaTipo, 'Cuota', '% deducible', 'Baja'], filas)
     setHecho(ok ? `Bajado: Bienes de inversión ${L.ejercicio.code}.xlsx, ${filas.length} bienes.` : 'No había nada que bajar: aún no hay bienes de inversión.')
   }
+  const encabezado = (
+    <EncabezadoLibro titulo="Bienes de inversión"
+      frase={d.datos ? `${cuantas(d.datos.length, 'bien', 'bienes')} en el registro, con su cuota deducible y hasta cuándo se regulariza.` : 'El registro de los bienes con su cuota deducible y hasta cuándo se regulariza.'}
+      principal={<Boton variante="principal" icono="nuevo" onClick={() => setAlta(true)}>Dar de alta un bien</Boton>}
+      secundarios={<Boton icono="descargar" onClick={exportar} disabled={!d.datos}>Excel</Boton>} />
+  )
+  if (d.error) return <section className="cxl-pagina" aria-label="Bienes de inversión">{encabezado}<ErrorConReintento mensaje={d.error} reintentar={d.recargar} /></section>
   return (
     <section className="cxl-pagina" aria-label="Bienes de inversión">
-      <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: imp.libros }]} /><h2>Bienes de inversión</h2></div>
-        <div className="cxl-herramientas">
-          <button type="button" className="cx-boton" onClick={() => setAlta(true)}>Dar de alta un bien</button>
-          <button type="button" className="cx-boton-sec" onClick={exportar} disabled={!d.datos}>Excel</button>
-        </div>
-      </div>
+      {encabezado}
       <Guardado texto={hecho} />
       <p className="cxl-apoyo">{imp.ley
         ? 'Bienes cuyo IVA se regulariza durante 5 años (muebles) o 10 (inmuebles) si cambia la prorrata (arts. 107–110 LIVA; libro del art. 65 RIVA). Solo los que superan 3.005,06 € (art. 108 LIVA).'
         : `Bienes cuyo ${imp.nombre} se regulariza durante varios años si cambia la prorrata. ${imp.avisoLey}`}</p>
-      {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
-      {d.datos && !d.datos.length && <div className="cx-tarjeta"><Vacio titulo="Aún no hay bienes de inversión." explicacion="Al dar de alta uno queda en este libro y en la hoja BIENES-INVERSIÓN del formato AEAT." /></div>}
+      {!d.datos && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando los bienes" />}
+      {d.datos && !d.datos.length && <div className="cxl-caja"><Vacio titulo="Aún no hay bienes de inversión." explicacion="Al dar de alta uno queda en este libro y en la hoja BIENES-INVERSIÓN del formato AEAT." /></div>}
       {d.datos && d.datos.length > 0 && (
-        <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
+        <div className="cxl-caja">
           <table className="cxl-tabla cxl-apilada" aria-label="Bienes de inversión">
             <thead><tr><th>Bien</th><th>Alta</th><th>Inicio de uso</th><th className="cxl-der">Base</th><th className="cxl-der">Cuota</th><th className="cxl-der">Deducible</th><th>Regulariza hasta</th></tr></thead>
             <tbody>{d.datos.map((b) => {
@@ -152,30 +160,32 @@ export function Retenciones() {
     const total = (d.datos ?? []).reduce((a, r) => a + c(r.importe), 0) / 100
     setHecho(ok ? `Bajado: ${nombre}.${como === 'pdf' ? 'pdf' : 'xlsx'}, ${cuantas(filas.length, 'apunte', 'apuntes')}; retenido ${eurosExactos(total)}.` : `No había nada que bajar: sin retenciones en ${p.nombre === 'Todo el ejercicio' ? L.ejercicio.code : p.nombre}.`)
   }
-  if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
+  const encabezado = (
+    <EncabezadoLibro titulo="Retenciones"
+      frase={`${p.nombre} · ${fraseDelPeriodo(p.desde, p.hasta).toLowerCase()}: lo retenido por modelo y trimestre, con sus apuntes.`}
+      secundarios={<>
+        <Boton icono="descargar" onClick={() => exportar('pdf')} disabled={!d.datos}>Exportar PDF</Boton>
+        <Boton onClick={() => exportar('excel')} disabled={!d.datos}>Excel</Boton>
+      </>} />
+  )
+  if (d.error) return <section className="cxl-pagina" aria-label="Retenciones">{encabezado}<ErrorConReintento mensaje={d.error} reintentar={d.recargar} /></section>
   return (
     <section className="cxl-pagina" aria-label="Retenciones">
-      <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Retenciones' }]} /><h2>Retenciones</h2></div>
-        <div className="cxl-herramientas">
-          <label><span className="cx-oculto">Periodo</span>
-            <select className="cx-input" value={periodo} onChange={(e) => setPeriodo(e.target.value)}>{ps.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>
-          </label>
-          <button type="button" className="cx-boton-sec" onClick={() => exportar('pdf')} disabled={!d.datos}>Exportar PDF</button>
-          <button type="button" className="cx-boton-sec" onClick={() => exportar('excel')} disabled={!d.datos}>Excel</button>
-        </div>
-      </div>
+      {encabezado}
+      <ControlesInforme>
+        <FiltroSelector etiqueta="Periodo" valor={periodo} alCambiar={setPeriodo} opciones={ps.map((x) => ({ valor: x.id, texto: x.nombre }))} />
+      </ControlesInforme>
       <Guardado texto={hecho} />
       <p className="cxl-apoyo">Lo retenido a otros (nóminas, profesionales, alquileres) que luego se ingresa con el modelo 111 o el 115. Son retenciones de IRPF, no IVA. Aquí no se presenta nada.</p>
-      {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
-      {d.datos && !d.datos.length && <div className="cx-tarjeta"><Vacio titulo={`Sin retenciones en ${p.nombre === 'Todo el ejercicio' ? L.ejercicio.code : p.nombre}.`} explicacion="Salen aquí los apuntes con retención (alquiler, profesionales, nóminas) en cuanto se validen sus asientos." /></div>}
+      {!d.datos && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando las retenciones" />}
+      {d.datos && !d.datos.length && <div className="cxl-caja"><Vacio titulo={`Sin retenciones en ${p.nombre === 'Todo el ejercicio' ? L.ejercicio.code : p.nombre}.`} explicacion="Salen aquí los apuntes con retención (alquiler, profesionales, nóminas) en cuanto se validen sus asientos." /></div>}
       {grupos.length > 0 && (
-        <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
+        <div className="cxl-caja">
           <table className="cxl-tabla cxl-apilada" aria-label="Retenciones por modelo y trimestre">
             <thead><tr><th>Modelo</th><th>Trimestre</th><th className="cxl-der">Apuntes</th><th className="cxl-der">Base</th><th className="cxl-der">Retenido</th></tr></thead>
             <tbody>{grupos.map((g) => <tr key={`${g.modelo}${g.t}`}><td data-titulo="Modelo">{nombreModelo(g.modelo)}</td><td data-titulo="Trimestre">{g.t}</td><td className="cxl-der" data-titulo="Apuntes">{g.apuntes}</td><td className="cxl-der" data-titulo="Base">{eurosExactos(g.base)}</td><td className="cxl-der" data-titulo="Retenido">{eurosExactos(g.importe)}</td></tr>)}</tbody>
           </table>
-          <h3 className="cxl-subtitulo">Apuntes</h3>
+          <h2 className="cxl-subtitulo cxl-caja-cabeza">Apuntes</h2>
           <table className="cxl-tabla cxl-apilada" aria-label="Apuntes con retención">
             <thead><tr><th>Fecha</th><th>Modelo</th><th>Concepto</th><th className="cxl-der">Base</th><th className="cxl-der">Retenido</th></tr></thead>
             <tbody>{d.datos!.map((r, i) => <tr key={`${r.entryId}${i}`}><td><Link to={rutaAsiento(r.entryId)}>{ddmm(r.fecha)}</Link></td><td data-titulo="Modelo">{nombreModelo(r.modelo)}</td>
@@ -197,20 +207,24 @@ export function Suplidos() {
     const ms = (await Promise.all(cuentas.map((x) => movimientos(L.accountId, L.companyId, L.ejercicio.inicio, L.ejercicio.fin, x.code)))).flat()
     return { cuentas, ms }
   }, `${L.companyId}:${L.ejercicio.id}:${L.vuelta}`)
-  if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
+  const encabezado = (
+    <EncabezadoLibro titulo="Suplidos"
+      frase={`${fraseDelPeriodo(L.ejercicio.inicio, L.ejercicio.fin)}: el mayor de cada cuenta de suplidos${d.datos ? ` (${cuantas(d.datos.cuentas.length, 'cuenta', 'cuentas')})` : ''}.`} />
+  )
+  if (d.error) return <section className="cxl-pagina" aria-label="Suplidos">{encabezado}<ErrorConReintento mensaje={d.error} reintentar={d.recargar} /></section>
   return (
     <section className="cxl-pagina" aria-label="Suplidos">
-      <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: imp.libros }]} /><h2>Suplidos</h2></div></div>
+      {encabezado}
       <p className="cxl-apoyo">{imp.ley
         ? 'Lo que se paga en nombre de un cliente y se le repercute sin IVA (art. 78.Tres.3.º LIVA). No es ingreso ni gasto: va a una cuenta de tercero y no entra en el libro de expedidas.'
         : `Lo que se paga en nombre de un cliente y se le repercute sin ${imp.nombre}. No es ingreso ni gasto: va a una cuenta de tercero y no entra en el libro de expedidas. ${imp.avisoLey}`}</p>
-      {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
-      {d.datos && !d.datos.cuentas.length && <div className="cx-tarjeta"><Vacio titulo="No hay cuentas de suplidos." explicacion="Se marcan en la ficha del tercero (su cuenta de «suplidos») o en el plan contable." accion={<Link to={rutaPlan()} className="cx-boton-sec">Ir al plan</Link>} /></div>}
+      {!d.datos && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando los suplidos" />}
+      {d.datos && !d.datos.cuentas.length && <div className="cxl-caja"><Vacio titulo="No hay cuentas de suplidos." explicacion="Se marcan en la ficha del tercero (su cuenta de «suplidos») o en el plan contable." accion={<Link to={rutaPlan()} className="cx-boton-sec">Ir al plan</Link>} /></div>}
       {d.datos?.cuentas.map((cu) => {
         const x = extracto(d.datos!.ms.filter((m) => m.cuenta === cu.code), { desde: L.ejercicio.inicio, hasta: L.ejercicio.fin })
         return (
-          <div key={cu.code} className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-            <h3 className="cxl-subtitulo">{cu.code} · {cu.name} <Link to={`${rutaLibros('mayor', 'libro-mayor')}?cuenta=${cu.code}`} className="cx-enlace">Mayor</Link></h3>
+          <div key={cu.code} className="cxl-caja">
+            <h2 className="cxl-subtitulo cxl-caja-cabeza">{cu.code} · {cu.name} <Link to={`${rutaLibros('mayor', 'libro-mayor')}?cuenta=${cu.code}`} className="cx-enlace">Mayor</Link></h2>
             {!x.filas.length ? <p className="cxl-pie">Sin movimientos en {L.ejercicio.code}.</p> : (
               <table className="cxl-tabla cxl-apilada" aria-label={`Suplidos en la ${cu.code}`}>
                 <thead><tr><th>Fecha</th><th>Concepto</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th><th className="cxl-der">Saldo</th></tr></thead>

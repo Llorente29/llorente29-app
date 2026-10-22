@@ -233,10 +233,12 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   if (lado(page) === 'ordenador') {
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     // El texto de cada entrada (sin el número de lo que hay por mirar, que va aparte).
-    // S01: los productos del esqueleto; lo que no tiene pantalla no sale (ni Impuestos ni Facturación).
+    // S01: los productos del esqueleto; lo que no tiene pantalla no sale (ni Impuestos).
+    // S02 · PR 2: Facturación sí sale, sin interruptor, con «Facturas emitidas» (entre
+    // Contabilidad y Compras y gastos).
     // S02: «Favoritos» va ahora abajo en la barra, también como .s-barra-item,
     // pero es un botón, no un apartado: se cuentan los enlaces.
-    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
     await expect(menu.getByRole('button', { name: 'Favoritos' })).toBeVisible()
   } else {
     // S01c: en el móvil, el menú es un cajón que abre «Abrir el menú» de la cabecera.
@@ -252,7 +254,8 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     const hoja = page.getByRole('dialog', { name: 'Menú' })
     // Los productos (arriba y Ajustes abajo). Favoritos y el usuario van en el
     // cajón desde el S01d, fuera de las listas de productos (.s-cajon-tuyo).
-    await expect(hoja.locator('.s-barra-lista .s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    // S02 · PR 2: con Facturación, entre Contabilidad y Compras y gastos.
+    await expect(hoja.locator('.s-barra-lista .s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
     await sinFolvy(page, 'el menú')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/mas-movil.png` })

@@ -22,12 +22,18 @@ async function cargada(page: Page) {
 }
 
 /** Cada pantalla de la auditoría que el PR 3 toca, con la cuenta en la que se ve el fallo. */
+// S02 · PR 2: la recibida a mano y las recibidas son de Compras y gastos, y la
+// emitida de Facturación › Facturas emitidas. Se va directo a su sitio: la
+// dirección de antes de la recibida a mano solo lleva a «Nueva recibida a
+// mano» si la consulta es exactamente «nueva=a-mano», y aquí lleva además
+// «marca=sumied» (acabaría en la lista). Los nombres de las capturas se quedan
+// para comparar con las de antes.
 const PANTALLAS: { cuenta: 'A' | 'B'; nombre: string; ruta: string }[] = [
-  { cuenta: 'A', nombre: 'recibida-a-mano', ruta: 'libros/diario/recibidas?nueva=a-mano' },
+  { cuenta: 'A', nombre: 'recibida-a-mano', ruta: 'documentos/nueva' },
   { cuenta: 'A', nombre: 'inicio', ruta: 'inicio' },
   { cuenta: 'A', nombre: 'libro-diario', ruta: 'libros/diario' },
   { cuenta: 'A', nombre: 'predefinido', ruta: 'libros/diario/nuevo?tipo=predefinido' },
-  { cuenta: 'A', nombre: 'recibidas', ruta: 'libros/diario/recibidas' },
+  { cuenta: 'A', nombre: 'recibidas', ruta: 'documentos?ver=por-revisar' },
   { cuenta: 'A', nombre: 'diario-resumido', ruta: 'libros/diario/resumido' },
   { cuenta: 'A', nombre: 'sumas-saldos', ruta: 'libros/mayor/sumas-saldos' },
   { cuenta: 'A', nombre: 'retenciones', ruta: 'libros/registro/retenciones' },
@@ -52,7 +58,7 @@ const PANTALLAS: { cuenta: 'A' | 'B'; nombre: string; ruta: string }[] = [
   { cuenta: 'A', nombre: 'tablas-tipos-de-gasto', ruta: 'ajustes/tablas/tipos-de-gasto' },
   { cuenta: 'B', nombre: 'inicio', ruta: 'inicio' },
   { cuenta: 'B', nombre: 'para-revisar', ruta: 'libros/diario?ver=revisar' },
-  { cuenta: 'B', nombre: 'expedida', ruta: 'libros/diario/nuevo?tipo=expedida' },
+  { cuenta: 'B', nombre: 'expedida', ruta: 'facturacion/emitidas/nueva' },
   { cuenta: 'B', nombre: 'registro-expedidas', ruta: 'libros/registro/expedidas' },
   { cuenta: 'B', nombre: 'tablas-impuestos', ruta: 'ajustes/tablas/impuestos' },
   { cuenta: 'B', nombre: 'plan', ruta: 'ajustes/plan' },

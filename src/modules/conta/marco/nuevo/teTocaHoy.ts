@@ -6,7 +6,7 @@
 // (useCuentasMenu, regla 31). Mientras se cuenta, «…»; el que no se ha
 // podido contar, «—»: ninguno de los dos dice 0.
 
-import { rutaBancos, rutaCompras, rutaLibroDiario, rutaRecibidaEnAsientos, rutaTerceros } from '@/config/navegacion'
+import { rutaBancos, rutaCompras, rutaDocumentos, rutaLibroDiario, rutaTerceros } from '@/config/navegacion'
 import type { CuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import type { ChipPendiente } from '@/modules/conta/ui/marco/TeTocaHoy'
 
@@ -16,7 +16,8 @@ export function chipsDelInicio(c: CuentasMenu): ChipPendiente[] {
   return [
     { id: 'compras', etiqueta: 'Compras · por mirar', numero: n('compras'), ruta: rutaCompras() },
     // S01c: las mismas que «N facturas recibidas para revisar» de abajo; la barra las suma igual.
-    { id: 'recibidas', etiqueta: 'Compras · facturas recibidas para revisar', numero: n('recibidas'), ruta: rutaRecibidaEnAsientos() },
+    // S02 · PR 2: llevan a donde se deciden, Compras y gastos › Facturas recibidas › Por revisar.
+    { id: 'recibidas', etiqueta: 'Compras · facturas recibidas para revisar', numero: n('recibidas'), ruta: rutaDocumentos('por-revisar') },
     { id: 'libros', etiqueta: 'Libros · asientos para revisar', numero: n('libros'), ruta: rutaLibroDiario('revisar') },
     { id: 'bancos', etiqueta: 'Bancos · movimientos para confirmar o aclarar', numero: n('bancos'), ruta: rutaBancos() },
     { id: 'terceros', etiqueta: 'Clientes y proveedores · por revisar', numero: n('terceros'), ruta: rutaTerceros() },

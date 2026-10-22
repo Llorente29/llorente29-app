@@ -167,8 +167,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
             usuario={usuario(false)} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
           <main className="cx-principal cxm-principal s-principal">
-            {/* Una portada por niveles del móvil (Bancos) pinta sus propias entradas: sin fila de serie, como antes. */}
-            {propias !== 'encabezado' && !(movil && producto?.portadaMovil) && (
+            {propias !== 'encabezado' && (
               <AccionesDePagina grupos={grupos} conBarra={propias === 'barra'} hueco={setHuecoAcciones} etiqueta={`Acciones de ${nombrePagina}`} />
             )}
             {producto?.id === 'inicio' && <TeTocaHoy chips={chipsDelInicio(cuentas)} />}

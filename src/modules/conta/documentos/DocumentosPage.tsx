@@ -26,7 +26,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { CONSULTA_RECIBIDA_A_MANO, rutaCompras, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
+import { rutaCompras, rutaRecibidaAMano, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -197,7 +197,7 @@ export default function DocumentosPage() {
   const mas: GrupoDeAcciones[] = [{
     titulo: 'Otras formas de traerlas',
     acciones: [
-      { id: 'a-mano', etiqueta: 'Escribir una a mano', dato: 'Sin fichero: proveedor, número, fecha, base e IVA', a: `${rutaRecibidaEnAsientos()}?${CONSULTA_RECIBIDA_A_MANO}`, grupo: '' },
+      { id: 'a-mano', etiqueta: 'Escribir una a mano', dato: 'Sin fichero: proveedor, número, fecha, base e IVA', a: rutaRecibidaAMano(), grupo: '' },
       ...(faltan.length > 0 ? [{ id: 'pedir', etiqueta: `Pedir las que faltan (${faltan.length})`, dato: 'Las que el mes pasado ya habían llegado', alPulsar: () => setPidiendo(true), aviso: true, grupo: '' }] : []),
       ...(d?.recibe_mercancia && !producto.solo ? [{ id: 'recepciones', etiqueta: 'Recepciones del local que esperan factura', a: rutaCompras(), grupo: '' }] : []),
     ],

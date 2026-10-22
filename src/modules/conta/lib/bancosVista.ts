@@ -50,7 +50,9 @@ export interface MovimientoBanco {
   confianza: 'seguro' | 'probable' | 'duda' | null
   porque: string | null
   propuesta: PropuestaGuardada | null
-  casado: { id: string; tipo: string; porque: string; porQuien: 'folvy' | 'persona'; asientoId: string | null; asientoConcepto: string | null } | null
+  casado: { id: string; tipo: string; porque: string; porQuien: 'folvy' | 'persona'; asientoId: string | null; asientoConcepto: string | null
+    /** S02 · PR 2: el estado de su asiento (propuesto: espera en «Por validar»; validado; anulado). */
+    asientoEstado?: 'propuesto' | 'borrador' | 'validado' | 'anulado' | null } | null
   tarjeta: { ultimos4: string; titular: string } | null
   ticket: string | null
   motivoIgnorado: string | null
