@@ -35,7 +35,7 @@ function diez(o: { apuntes?: Apunte[]; subcuentas?: string[]; falla?: unknown; s
     async enviarAsiento(a) {
       if (o.falla) throw o.falla
       d.altas.push(a)
-      const creado: Apunte = { Ejercicio: a.Ejercicio, Serie: a.Serie, Documento: 3158, TipoAsiento: 0, Fecha: a.Fecha, Detalles: a.Detalles }
+      const creado: Apunte = { Ejercicio: a.Ejercicio, Serie: a.Serie, Documento: 3157 + d.altas.length, TipoAsiento: 0, Fecha: a.Fecha, Detalles: a.Detalles }
       apuntes.push(creado)
       return o.sinNumero ? ({ Ejercicio: a.Ejercicio, Serie: a.Serie } as Apunte) : creado
     },
@@ -54,6 +54,7 @@ function puerto(o: { bd?: string | null; d?: Diez; envios?: Record<string, Envio
     conexion: async () => (o.bd === null ? null : { id: 'k1', nombreBd: o.bd ?? 'C0009' }),
     autorizado: async (id, _e, _bd, fecha, tipo) => autorizacionCubre((o.autorizados ?? []).map((a) => ({ alcance: a.alcance, entry_id: a.entry ?? null, desde: a.desde ?? null, incluye_asientos: a.asientos ?? false })), id, fecha, tipo),
     clienteApuntes: async (_c, x) => { llamadas.cliente++; llamadas.real.push(x.real); return d },
+    enlazados: async (_c, menos) => new Set(Object.values(envios).filter((e) => e.entry_id !== menos && e.ext_number != null && e.status !== 'rechazado').map((e) => `${e.ext_series}/${e.ext_number}`)),
     sha256: async (b) => sha(b),
     ahora: () => new Date('2026-10-22T08:00:00Z'),
   }
@@ -139,6 +140,22 @@ describe('enviarApunteADiez: los frenos', () => {
     expect(await enviarApunteADiez(banco(), t.p)).toMatchObject({ estado: 'en_diez', documento: 3001, enlazada: true })
     expect(t.d.altas).toHaveLength(0)
     expect(t.envios.b1.status).toBe('enlazado')
+  })
+  // 22/10, producción: el 13/10 Foodint tiene tres bancos iguales (3166, 3168 y 3169) y el 14/10 dos
+  // (3165 y 3167). El segundo se enlazaba al asiento de Diez del primero y la base lo paraba (external_send_ext_uq).
+  it('bancos gemelos: el asiento de Diez que ya es de otro de Sumied no cuenta como «el mismo»; cada uno, el suyo', async () => {
+    const t = puerto()
+    expect(await enviarApunteADiez(banco({ id: 'g1' }), t.p)).toMatchObject({ estado: 'en_diez', documento: 3158, enlazada: false })
+    expect(await enviarApunteADiez(banco({ id: 'g2' }), t.p)).toMatchObject({ estado: 'en_diez', documento: 3159, enlazada: false })
+    expect(await enviarApunteADiez(banco({ id: 'g3' }), t.p)).toMatchObject({ estado: 'en_diez', documento: 3160, enlazada: false })
+    expect(t.d.altas).toHaveLength(3)
+    expect(['g1', 'g2', 'g3'].map((g) => t.envios[g].ext_number)).toEqual([3158, 3159, 3160])
+  })
+  it('el gemelo que la gestoría ya tiene en Diez y nadie de Sumied ha cogido sí se enlaza', async () => {
+    const ap = apunteDeAsiento(banco())
+    const t = puerto({ d: diez({ apuntes: [{ Ejercicio: '2026', Serie: '4', Documento: 3001, TipoAsiento: 0, Fecha: ap.Fecha, Detalles: ap.Detalles }] }), envios: { g0: enviadoDe('g0', 3158) } })
+    expect(await enviarApunteADiez(banco({ id: 'g1' }), t.p)).toMatchObject({ estado: 'en_diez', documento: 3001, enlazada: true })
+    expect(t.d.altas).toHaveLength(0)
   })
   it('dos iguales en Diez: no se toca nada', async () => {
     const ap = apunteDeAsiento(banco())

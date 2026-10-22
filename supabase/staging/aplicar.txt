@@ -300,13 +300,9 @@ supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
 supabase/staging/sql/20261125_i01d_autoliquidaciones_prueba.sql
 supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql
 
-# W03 · La ÚLTIMA: el manifiesto vuelve a pasar migraciones viejas detrás de
-#   otras más nuevas (la 0110 detrás de la 0180), así que al final se vuelven a
-#   pasar la 0180 y la 0300 y se comprueba, función a función, que 17 cuerpos
-#   son byte a byte los de producción (md5 medido el 20/10). Si una no casa,
-#   para y dice cuál. No toca lo que staging lleva por delante de otros frentes
-#   (B02, D01, el TPV de mesas) ni lo que no está en git.
-supabase/staging/sql/20261126_w03_como_produccion.sql
+# W03 (la comprobación de 17 funciones con su md5) se fue en el W04 (22/10):
+#   staging ya no vuelve a pasar el manifiesto entero, sino lo que cada push
+#   añade (scripts/conta/staging-tanda.mjs), y de verdad solo desde main.
 
 # I01f · El envío a Diez de las recibidas autoliquidadas (rama
 #   conta/i01f-diez-autoliquidadas). La 0320 (cambia conta_recibida_envio: solo
@@ -438,17 +434,15 @@ supabase/staging/sql/20261130_i01d_impuestos_2025_prueba.sql
 #   reclamar con su reintento a 10 minutos, el contraasiento de lo que está en
 #   Diez, conta_asiento_envio, las dos lecturas para el servidor (A lee lo mismo
 #   que antes) y la vuelta atrás byte a byte (md5 de producción del 22/10).
-#   La 0450 NO se aplica de verdad en staging hasta que esté en producción:
-#   cambia conta_resumen_ventas, que W03 (20261126_w03_como_produccion.sql)
-#   exige byte a byte como producción, y con ella dentro el «aplicar» de todas
-#   las ramas sale rojo (pasó el 22/10 con el #281). La prueba la aplica dentro
-#   de su ROLLBACK. No toca coste ni stock: sin los cuatro caminos.
+#   La 0450 ya está en producción (22/10): entra de verdad en staging desde
+#   main (W04). No toca coste ni stock: sin los cuatro caminos.
 supabase/staging/sql/20261201_c07_diez_todo_prueba.sql
+supabase/migrations/20261201T0450_c07_diez_todo.sql
 # S02 · PR 1 del patrón único (rama claude/cool-noether-i932tx; Julio, 22/10).
 #   La 0460 añade company.color ('#RRGGBB', nula) y su comprobación: la franja
 #   de 3 px de la cabecera y el cuadrado de la inicial. Su prueba (ROLLBACK): A
 #   pone y quita el color de su empresa, uno mal escrito no entra, no toca el de
-#   B, y la vuelta atrás para con un color puesto y sin él lo quita todo. Es
-#   idempotente: staging ya tiene la columna de cuando se llamaba 0440.
+#   B, y la vuelta atrás para con un color puesto y sin él lo quita todo.
+#   Desde la rama va en ROLLBACK (W04); de verdad, desde main después del real.
 supabase/migrations/20261202T0460_s02_color_empresa.sql
 supabase/staging/sql/20261202_s02_color_empresa_prueba.sql

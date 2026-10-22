@@ -13,10 +13,25 @@ name: Aplicar SQL en staging-conta
 # tabla inexistente. Las migraciones de staging dejan de depender de él.
 #
 # CUÁNDO SE DISPARA
-# Un push a una rama conta/** o reparto-** que cambie supabase/staging/aplicar.txt. Funciona
-# desde la propia rama, sin estar en main. Nada más lo dispara: ni tocar un
-# .sql ni tocar este workflow. El manifiesto es la tanda de ESTA ejecución;
-# para la siguiente se reescribe entero.
+# Un push a main, a una rama conta/** o a una reparto-** que cambie
+# supabase/staging/aplicar.txt. Nada más lo dispara: ni tocar un .sql ni tocar
+# este workflow.
+#
+# QUÉ PASA (W04, Julio, 22/10): «staging recibe de verdad solo lo que está en
+# producción». Ya no se pasa el manifiesto entero, sino lo que el push AÑADE
+# (scripts/conta/staging-tanda.mjs nuevas):
+#   · desde una RAMA: lo que la rama añade contra main, cada fichero en su
+#     sesión con BEGIN … ROLLBACK (y antes, las migraciones nuevas de la rama,
+#     para que su prueba las encuentre). Staging no cambia, así que no coge el
+#     cerrojo de migrar: no para ninguna e2e. Un fichero con COMMIT, o con un
+#     ROLLBACK que no es su última sentencia, para el run (dejaría cosas de
+#     verdad);
+#   · desde MAIN (después del real de la tanda, que se fusiona en verde): lo que
+#     el push añade, DE VERDAD, fichero a fichero, con el cerrojo;
+#   · a mano («aplicar»): desde main, el manifiesto ENTERO de verdad (para
+#     rehacer staging); desde una rama, lo mismo que su push.
+# Así staging es como producción por construcción, y W03 (17 funciones con su
+# md5, que tapaba lo que el manifiesto entero dejaba fuera de orden) se fue.
 #
 # LO QUE NO PUEDE HACER: TOCAR PRODUCCIÓN
 # Usa un único secreto de base de datos, STAGING_CONTA_DB_URL, y tres guardas
@@ -39,7 +54,7 @@ name: Aplicar SQL en staging-conta
 on:
   push:
     # reparto-**: el R02 (quién reparte) usa la misma tanda y las mismas guardas.
-    branches: ['conta/**', 'reparto-**']
+    branches: ['main', 'conta/**', 'reparto-**']
     paths:
       - 'supabase/staging/aplicar.txt'
   # C04 R4 · A mano, desde la rama: el modo «ensayo-de-vuelta-atras» aplica la
@@ -81,6 +96,9 @@ jobs:
       MANIFIESTO: supabase/staging/aplicar.txt
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Para comparar el manifiesto con el de main o con el del commit de antes.
+          fetch-depth: 0
 
       - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
         env:
@@ -110,14 +128,28 @@ jobs:
       - name: Leer y validar el manifiesto
         id: manifiesto
         if: inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
+        env:
+          ANTES: ${{ github.event.before }}
         run: |
           set -euo pipefail
-          # Líneas sin comentarios ni blancos, en su orden.
-          grep -vE '^\s*(#|$)' "$MANIFIESTO" | sed -E 's/\s+$//' > /tmp/tanda.txt || true
+          # W04: qué pasa y cómo (arriba, «QUÉ PASA»).
+          if [ "$GITHUB_REF_NAME" = main ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            QUE='el manifiesto ENTERO, de verdad (a mano desde main)'; ENSAYO=0
+            grep -vE '^\s*(#|$)' "$MANIFIESTO" | sed -E 's/\s+$//' > /tmp/tanda.txt || true
+          elif [ "$GITHUB_REF_NAME" = main ]; then
+            QUE="lo que añade este push (contra ${ANTES::7}), de verdad"; ENSAYO=0
+            node scripts/conta/staging-tanda.mjs nuevas "$ANTES" > /tmp/tanda.txt
+          else
+            QUE='lo que añade la rama contra main, en ROLLBACK (staging no cambia)'; ENSAYO=1
+            node scripts/conta/staging-tanda.mjs nuevas origin/main > /tmp/tanda.txt
+          fi
+          echo "ENSAYO=$ENSAYO" >> "$GITHUB_ENV"
+          echo "### Qué pasa: $QUE" >> "$GITHUB_STEP_SUMMARY"
           n=$(wc -l < /tmp/tanda.txt)
           if [ "$n" -eq 0 ]; then
-            echo "::error::El manifiesto no lista ningún fichero."
-            exit 1
+            echo "Nada que pasar: $QUE no tiene ningún fichero." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "NADA=1" >> "$GITHUB_ENV"
+            exit 0
           fi
           mal=0
           while IFS= read -r f; do
@@ -132,10 +164,17 @@ jobs:
             fi
           done < /tmp/tanda.txt
           [ "$mal" -eq 0 ] || exit 1
-          echo "Tanda de $n ficheros, en este orden:"
+          # En ROLLBACK, nada puede quedarse de verdad.
+          if [ "$ENSAYO" = 1 ]; then node scripts/conta/staging-tanda.mjs rollback $(cat /tmp/tanda.txt); fi
+          echo "Tanda de $n ficheros ($QUE), en este orden:"
           nl -ba /tmp/tanda.txt
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Instalar psql 17
+        if: env.NADA != '1'
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -145,6 +184,7 @@ jobs:
           /usr/lib/postgresql/17/bin/psql --version
 
       - name: Guarda 3 · al otro lado no hay producción
+        if: env.NADA != '1'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -168,7 +208,9 @@ jobs:
       # corriendo y, mientras aplica, no deja empezar ninguna nueva (Postgres
       # pone en cola a las que llegan detrás). Y, mientras queden ramas con la
       # e2e de antes (sin carril), también el cerrojo de antes, e2e.cerrojo.
+      # W04: solo lo que se queda de verdad coge el cerrojo; un ensayo en ROLLBACK no.
       - name: Cerrojo de migrar · esperar a que acaben las e2e en marcha
+        if: env.NADA != '1' && env.ENSAYO != '1'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
           CARRIL_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
@@ -178,8 +220,47 @@ jobs:
           scripts/e2e/carril.sh migrar-coger
           scripts/e2e/cerrojo.sh coger
 
+      - name: Ensayar en ROLLBACK lo que añade la rama
+        if: env.NADA != '1' && env.ENSAYO == '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -uo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-staging-conta-ensayo-${GITHUB_RUN_ID}"
+          {
+            echo "## Ensayo en staging-conta (ROLLBACK: staging no cambia)"
+            echo
+            echo "Rama \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA::7}\` · lanzado por ${GITHUB_ACTOR}"
+            echo
+            echo "| # | Fichero | md5 | Resultado |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p /tmp/sesiones
+          # Una sesión por fichero: BEGIN, las migraciones nuevas de antes, el fichero, ROLLBACK.
+          node scripts/conta/staging-tanda.mjs sesiones $(cat /tmp/tanda.txt) \
+            | awk '/^--@@ sesión /{n++} {print > sprintf("/tmp/sesiones/%03d.sql", n)}'
+          i=0; fallo=0
+          while IFS= read -r f; do
+            i=$((i+1))
+            md5=$(md5sum "$f" | cut -d' ' -f1)
+            s=$(printf '/tmp/sesiones/%03d.sql' "$i")
+            echo "::group::[$i] $f  (md5 $md5, en ROLLBACK)"
+            if "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -f "$s" > /tmp/salida.txt 2>&1; then
+              cat /tmp/salida.txt; echo "::endgroup::"
+              echo "| $i | \`$f\` | \`$md5\` | **en verde** (ROLLBACK) |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              cat /tmp/salida.txt; echo "::endgroup::"
+              err=$(grep -E '^(psql:.*)?(ERROR|CONTEXT|DETALLE|DETAIL|LÍNEA|LINE)' /tmp/salida.txt | head -8 | tr '\n' ' ' | cut -c1-900)
+              echo "::error title=psql [$i]::${err:-sin mensaje de error}"
+              echo "| $i | \`$f\` | \`$md5\` | **FALLÓ** (ROLLBACK) |" >> "$GITHUB_STEP_SUMMARY"
+              fallo=1
+            fi
+          done < /tmp/tanda.txt
+          exit "$fallo"
+
       - name: Aplicar, fichero a fichero
-        if: inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
+        if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |

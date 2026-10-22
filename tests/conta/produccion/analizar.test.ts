@@ -1418,11 +1418,10 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
     for (const x of ['conta_resumen_ventas', 'conta_recibida_envio', 'conta_diez_por_enviar', 'conta_diez_reclamar', 'conta_diez_envio_poner', 'conta_asiento_envio',
       'set local role authenticated', 'set local role service_role', 'rollback;', `\\i ${DOWN}`]) expect(p).toContain(x)
     const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
-    // Solo la prueba, que aplica la 0450 dentro de su ROLLBACK: la de verdad no va a
-    // staging hasta estar en producción, porque W03 exige conta_resumen_ventas como allí.
+    // W04 (22/10): la 0450 ya está en producción, así que va de verdad a staging, desde
+    // main, detrás de su prueba (que la aplica dentro de su ROLLBACK).
     expect(m.indexOf(PRUEBA)).toBeGreaterThan(-1)
-    expect(m).not.toContain(viva[0])
-    expect(readFileSync('supabase/staging/sql/20261126_w03_como_produccion.sql', 'utf8')).toContain("('public.conta_resumen_ventas(uuid)', '62ba30b9')")
+    expect(m.indexOf(viva[0])).toBeGreaterThan(m.indexOf(PRUEBA))
   })
   it('las dos lecturas: el cuerpo de producción con una sola condición más (el servidor), y la vuelta atrás las deja byte a byte', () => {
     const t = readFileSync(viva[0], 'utf8')

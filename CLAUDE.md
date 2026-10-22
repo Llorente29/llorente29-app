@@ -303,35 +303,57 @@ dice «ninguna», falta alguien. La #181 tocó `_shared/diezCliente.ts`:
 *(14/10. La #181 se fusionó con «[skip ci]» en el mensaje: no corrió el
 despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 
-### Qué pruebas lleva cada PR
+### Qué pruebas lleva cada PR: un criterio por riesgo
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Reglas de
-> Julio, 19/10 y 21/10.
+> Julio, 19/10 y 21/10, **cambiadas en el W04 (22/10)** con la auditoría de las
+> reglas de pruebas: un solo criterio por riesgo.
 
-- **En cada PR:** `npm run build`, las unitarias, la e2e de la zona que toca y
-  la **e2e corta de pedidos, cocina y reparto**. Las dos e2e van solas en cada
-  push (`scripts/e2e/area.mjs`: la zona y `CORTA`).
-- **La corta** es `reparto/direccion-falta` (Pedidos en el ordenador, el
-  Despacho, el ticket de la bolsa, la tablet de cocina y el permiso por local)
-  y `reparto/quien-reparte` (la etiqueta de reparto en cocina y que una cuenta
-  no toca lo de otra): 13 pruebas, **91 s** de pruebas en los dos tamaños
-  (`tests/e2e/tiempos.json`). No cubre crear un pedido y llevarlo por todos sus
-  estados en cocina: no hay e2e de eso.
-- **La entera, solo si el PR toca lo común o la pide una etiqueta.** Lo común
-  es `LO_COMUN` en `scripts/e2e/area.mjs`: el marco, la cabecera, la barra y el
-  esqueleto, el diseño compartido, el arranque de la app y lo que mueve todas
-  las pruebas (Playwright, la sesión, el carril, las dependencias). El push lo
-  mira solo contra `main` y, si toca, corre la entera en vez de la zona. La
-  etiqueta **`e2e-entera`** la pide aunque no toque nada de eso, y al ponerla
-  se lanza en ese momento (`e2e-etiqueta.yml`).
+| Riesgo | Qué corre |
+|---|---|
+| **Solo pantallas** | `antes-de-subir.sh` (lint, unitarias, `npm run build` exacto) y, en cada push, la e2e de su **zona** (`scripts/e2e/area.mjs`). |
+| **Lo común** (`LO_COMUN`: el marco, la cabecera, la barra y el esqueleto, el diseño compartido, el arranque de la app y lo que mueve todas las pruebas) | La **entera** en el push, en vez de la zona. |
+| **Pedidos, cocina o reparto** (`PEDIDOS` en `area.mjs`: sus pantallas, los TPV, tickets y tablets, y las funciones de HubRise, Last.app y pedidos) | **Todo**: la entera en el push, que lleva la corta. |
+| **Con tanda** | Lo de su riesgo, más la prueba de staging en ROLLBACK de cada «cambia», el **ensayo** y el **real** en producción con su comprobación y su deshacer (W01). La entera es la de la noche. |
+
+- **La corta** (`reparto/direccion-falta` y `reparto/quien-reparte`, 91 s) ya
+  no va en cada push: va dentro de la entera cuando el PR toca pedidos, cocina
+  o reparto, y cada noche.
+- **Ya no se pide una entera antes de la tanda**, ni su «primer intento»
+  (`e2e-entera.mjs` se fue): a la tanda la protegen el analizador, el ensayo, la
+  comprobación de después y el deshacer; lo que se cuele entre zonas lo caza la
+  de la noche.
+- **La etiqueta `e2e-entera`** la pide siempre, y al ponerla se lanza en ese
+  momento (`e2e-etiqueta.yml`).
 - **Y cada noche sobre `main`**, a las 03:00 de Madrid. Si falla por staging
   (no poder entrar, un 520, una página HTML de la base) lo repite una vez; si
   no, o si vuelve a fallar, abre la incidencia «e2e de la noche en rojo» con
   cada prueba, su fichero y el commit (`scripts/e2e/noche.mjs`).
-- **Las tandas no cambian:** análisis, prueba en staging, ensayo y real desde
-  la rama, antes de fusionar. Antes de una tanda, una entera en verde del mismo
-  commit (`antes-de-subir.sh` con `PEDIR_TANDA=1`): vale la lanzada a mano, la
-  de la etiqueta o la que corrió un push por tocar lo común (Julio, 21/10).
+
+*(22/10. El #281 y el C07 se llevaron 275 y más de 225 min de máquina; la
+entera antes de la tanda, 141 min y 3 pasadas, y cayó por staging lento, no por
+la tanda. Medido contra los 40 últimos PR de `main`: 13 tocan lo común y 1
+toca pedidos.)*
+
+### Staging recibe de verdad solo lo que está en producción
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> W04 (22/10).
+
+- **Desde una rama**, `aplicar-staging-conta.yml` pasa solo lo que la rama
+  añade al manifiesto (`supabase/staging/aplicar.txt`) contra `main`, en **una
+  transacción que acaba en ROLLBACK**: staging no cambia. Sin el cerrojo
+  exclusivo: una prueba que no deja nada no para las e2e.
+- **Desde `main`** (después del real de la tanda, que se fusiona en verde)
+  aplica **de verdad** lo que el push añade al manifiesto, fichero a fichero,
+  con el cerrojo. Así staging es como producción por construcción, y la
+  comprobación de W03 (17 funciones con su md5) ya no hace falta.
+- Un fichero de una rama con `commit` fuera de sitio, o con un `rollback` que
+  no sea su última sentencia, **para** el run: dejaría cosas de verdad.
+
+*(22/10. Aplicar el C07 de verdad desde su rama dejó `conta_resumen_ventas`
+distinta de producción: el «aplicar» del #281 cayó en W03 y la prueba del I01f
+en otra rama, y hubo que devolver staging a mano.)*
 
 ### Un e2e lo cancela solo un commit más nuevo de su rama
 
@@ -346,8 +368,8 @@ cola** (sin `event_name` en el grupo), y:
   una entera—: es de un commit que ya no es el último, y la nueva prueba lo
   mismo y algo más (`cancel-in-progress` solo es `true` para `push`);
 - **una e2e lanzada a mano no cancela nada**: espera a que acabe la que corre.
-- La entera vale solo sobre el **commit final**: si después llega un push, hay
-  que volver a lanzarla (`e2e-entera.mjs` pide una en verde del mismo commit).
+- Una entera vale solo sobre el **commit final**: si después llega un push, es
+  de un commit que ya no es el último.
 
 *Detector automático:* si vas a lanzar la entera y aún tienes algo por
 empujar, empújalo antes: lanzarla y empujar después es tirar sus minutos.
@@ -358,19 +380,21 @@ de antes. 16/10: las e2e gastaron 2.953 min de Actions en un día, frente a unos
 commit ya superado. Se acepta perder el informe de un commit viejo a cambio de
 no pagarlo.)*
 
-### Capturas: artefacto en cada push y fijar las de tu frente antes del informe
+### Capturas: las fija la e2e del push en verde, solo las de tu frente
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
-> 15/10, después del choque del #194.
+> 15/10, después del choque del #194; **cambiada en el W04 (22/10)**: sin un
+> run aparte para fijarlas.
 
-- **En cada e2e, las capturas van como artefacto del run, nunca como commit.**
+- **En cada e2e, las capturas van como artefacto del run.**
   `e2e-staging-conta.yml` deja en el artefacto «capturas» las que ha sacado
   ESE run, y un comentario del PR (uno solo, que se va editando) da el enlace.
-- **Antes de dar tu informe, fija las de tu frente**: Actions → «Pruebas e2e en
-  staging-conta» → Run workflow en tu rama con **`fijar_capturas`**. Si sale
-  verde, commitea solo la carpeta del frente de la rama —A `d01`, B `b01`,
-  C `c00`…`c06b`, reparto `docs/reparto/capturas`— y nada más. Es lo que Julio
-  mira en «Files changed»: un informe sin ellas no se puede revisar.
+- **La e2e de cada push que sale en verde fija las de tu frente**: commitea
+  solo la carpeta del frente de la rama —A `d01`, B `b01`, C `c00`…`c06c`,
+  reparto `docs/reparto/capturas`— y nada más. La última en verde es la que
+  queda, y es lo que Julio mira en «Files changed». Ese commit lo hace el token
+  del workflow y no lanza otra e2e: **antes del siguiente push, `git pull`**.
+  A mano sigue estando `fijar_capturas`, por si hace falta.
 - **Tu rama no lleva capturas de otro frente.** `antes-de-subir.sh` (paso 10)
   para si las trae, y dice cómo devolverlas a las de `main`.
 - Las que ya están en el repositorio se quedan. `cierre/`, `compras/` y

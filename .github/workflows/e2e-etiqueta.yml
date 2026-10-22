@@ -7,7 +7,7 @@ name: e2e entera por etiqueta
 # PR la etiqueta «e2e-entera», lanza la entera sobre su rama en ese momento,
 # sin esperar a otro push (los siguientes ya la llevan: el push mira la
 # etiqueta). El run sale como «e2e · entera · <rama> · <commit>», el mismo que
-# la entera a mano, y vale igual para scripts/conta/e2e-entera.mjs.
+# la entera a mano.
 # Solo lanza un workflow; no tiene secretos ni toca staging.
 
 on:
