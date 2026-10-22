@@ -42,14 +42,14 @@ insert into _r select 'lote', b.id from public.supplier_batch b
  where b.account_id = 'c01a0000-0000-4000-8000-00000000000a' and b.provider = 'catcher' order by b.period_from limit 1;
 insert into _r select 'f' || row_number() over (order by i.invoice_number), i.id from public.supplier_invoice i
  where i.batch_id = (select id from _r where clave = 'lote') and i.status = 'en_revision';
-insert into _r select 'otro', b.id from public.supplier_batch b
- where b.account_id = 'c01a0000-0001-4000-8000-00000000000a' and b.provider = 'catcher' order by b.period_from limit 1;
-insert into _r select 'otra_f', i.id from public.supplier_invoice i where i.batch_id = (select id from _r where clave = 'otro') order by i.invoice_number limit 1;
+-- Una recibida de A que no es de esta quincena (las copias de los carriles de e2e vienen y van: no se usan).
+insert into _r select 'otra_f', i.id from public.supplier_invoice i
+ where i.account_id = 'c01a0000-0000-4000-8000-00000000000a' and i.batch_id is distinct from (select id from _r where clave = 'lote') order by i.created_at, i.id limit 1;
 do $$
 declare v1 text; v2 text;
 begin
   if (select count(*) from _r where clave like 'f_') <> 5 or not exists (select 1 from _r where clave = 'otra_f') then
-    raise exception 'PRUEBA E05R · 0: no están en staging la quincena de A con sus 5 facturas en revisión y la de B.';
+    raise exception 'PRUEBA E05R · 0: no están en staging la quincena de A con sus 5 facturas en revisión y otra recibida de A.';
   end if;
   select md5(pg_get_functiondef('public.conta_lote_pedidos_app(uuid)'::regprocedure)) into v1;
   select md5(pg_get_functiondef('public.conta_lote_cruce_guardar(uuid,jsonb,text)'::regprocedure)) into v2;
