@@ -64,7 +64,8 @@ export interface FilaCartera {
 
 export interface Cartera {
   filas: FilaCartera[]
-  pendiente_al_empezar: { importe: number; de: string } | null
+  /** Lo que quedaba al empezar el año: del 4T del año anterior («4T/2025») o, si falta, de la [110] del 1T («1T/2026»). Con los dos, la [110] del 1T en c110_1t (0420). */
+  pendiente_al_empezar: { importe: number; de: string; c110_1t?: number | null } | null
   esperada_110: { importe: number; de: string } | null
   borrador: { id: string; estado: Estado; c110: number | null; origen110: string | null } | null
   desfasada: boolean
@@ -75,6 +76,8 @@ export interface Trimestre {
   ejercicio: number
   trimestre: string
   puede_gestionar: boolean
+  /** I01d (0420) · Desde cuándo lleva aquí sus impuestos (la primera obligación vigente). Sin la 0420, no viene. */
+  desde?: string | null
   modelos: ModeloTrimestre[]
   cartera: Cartera
 }
@@ -122,13 +125,39 @@ export function importeConSigno(d: Pick<DeclaracionTrimestre, 'resultado' | 'imp
 const dias = (desde: string, hasta: string) => Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000)
 
 /**
+ * I01d · ¿El periodo es de antes de llevar aquí los impuestos? Lo es si su plazo
+ * de presentación acabó antes de «desde»; sin plazo (Sumied no tiene festivos de
+ * ese año), si su año es anterior al de «desde». Sin «desde», no se sabe: no.
+ */
+export function anteriorASumied(ejercicio: number, presentacion: string | null, desde: string | null | undefined): boolean {
+  if (!desde) return false
+  if (presentacion) return presentacion < desde
+  return ejercicio < Number(desde.slice(0, 4))
+}
+
+/**
+ * I01d · Un modelo «sin cargar»: toca en el periodo, no tiene declaración (o
+ * solo pendiente) y es de antes de llevar aquí los impuestos. Se presentó fuera
+ * y lo que falta es pegar su CSV, no presentarlo: no está fuera de plazo.
+ */
+export function sinCargar(m: ModeloTrimestre, ejercicio: number, desde: string | null | undefined): boolean {
+  if (m.no_toca || !m.periodo) return false
+  if (m.declaracion && m.declaracion.estado !== 'pending') return false
+  return anteriorASumied(ejercicio, m.presentacion, desde)
+}
+
+export const TEXTO_SIN_CARGAR = 'Sin cargar · Pegar CSV'
+
+/**
  * Lo que dice cada tarjeta de la tira: el importe y su chip (estado y fecha).
  * Sin presentar, lo que vence hoy o ya se pasó va en rojo y lo dice (Julio,
- * 20/10, punto 5: «Sin calcular · vence hoy»).
+ * 20/10, punto 5: «Sin calcular · vence hoy»). Lo de antes de Sumied sin
+ * declaración, «Sin cargar · Pegar CSV» (I01d).
  */
-export function tarjeta(m: ModeloTrimestre, hoy?: string, ejercicio?: number): { titulo: string; importe: string; chip: { tono: TonoChip; texto: string } } {
+export function tarjeta(m: ModeloTrimestre, hoy?: string, ejercicio?: number, desde?: string | null): { titulo: string; importe: string; chip: { tono: TonoChip; texto: string } } {
   const titulo = nombreTarjeta(m)
   if (m.no_toca) return { titulo, importe: '—', chip: { tono: 'neutro', texto: 'No toca este trimestre' } }
+  if (ejercicio && sinCargar(m, ejercicio, desde)) return { titulo, importe: '—', chip: { tono: 'accion', texto: TEXTO_SIN_CARGAR } }
   const d = m.declaracion
   const falta = hoy && m.presentacion ? dias(hoy, m.presentacion) : null
   const vence = falta === null ? '' : falta < 0 ? 'fuera de plazo' : falta === 0 ? 'vence hoy' : ''
@@ -180,19 +209,26 @@ function c110DelTrimestre(c: Cartera, fila: FilaCartera | undefined): number | n
  * Las líneas de «Cuotas a compensar de trimestres anteriores», trimestre a
  * trimestre, con la [110], la [78] y la [87] del trimestre y el total después.
  */
-export function lineasCartera(t: Pick<Trimestre, 'ejercicio' | 'trimestre' | 'cartera'>): { lineas: LineaCartera[]; total: LineaCartera; cuadra: boolean | null } {
+export function lineasCartera(t: Pick<Trimestre, 'ejercicio' | 'trimestre' | 'cartera' | 'desde'>): { lineas: LineaCartera[]; total: LineaCartera; cuadra: boolean | null } {
   const c = t.cartera
   const q = numeroTrimestre(t.trimestre) ?? 1
   const lineas: LineaCartera[] = []
-  let cadena: number | null = c.pendiente_al_empezar?.importe ?? null
-  lineas.push(c.pendiente_al_empezar
-    ? { texto: `Pendiente de ${t.ejercicio - 1}`, importe: c.pendiente_al_empezar.importe }
+  const p = c.pendiente_al_empezar
+  const del4T = !!p && p.de.startsWith('4T/')
+  let cadena: number | null = p?.importe ?? null
+  // I01d · De qué 303 sale: del 4T del año anterior; si ese 4T falta, de la [110] del 1T, y se dice.
+  lineas.push(p
+    ? { texto: `Pendiente de ${t.ejercicio - 1}`, importe: p.importe,
+        nota: del4T ? `Lo que dejó el 303 del 4T de ${t.ejercicio - 1}.` : `Sale de la [110] del 1T de ${t.ejercicio}: falta cargar el 303 del 4T de ${t.ejercicio - 1}.` }
     : { texto: `Pendiente de ${t.ejercicio - 1}`, importe: null, nota: `No se sabe: falta el 303 del 4T de ${t.ejercicio - 1} o el del 1T de ${t.ejercicio}.` })
   for (const f of c.filas) {
     const n = numeroTrimestre(f.periodo) ?? 0
     if (n >= q) continue
     if (!estaPresentada(f.estado)) {
-      lineas.push({ texto: `${f.periodo} ${t.ejercicio} · no está presentado en Sumied`, importe: null, nota: 'Súbelo en Presentados para que la cartera siga.' })
+      const antes = anteriorASumied(t.ejercicio, fechasTrimestre(t.ejercicio, f.periodo).hasta, t.desde)
+      lineas.push(antes
+        ? { texto: `${f.periodo} ${t.ejercicio} · sin cargar`, importe: null, nota: 'Pega su CSV para que la cartera siga.' }
+        : { texto: `${f.periodo} ${t.ejercicio} · no está presentado en Sumied`, importe: null, nota: 'Súbelo en Presentados para que la cartera siga.' })
       cadena = null
       continue
     }
@@ -220,7 +256,9 @@ export function lineasCartera(t: Pick<Trimestre, 'ejercicio' | 'trimestre' | 'ca
     fuerte: true,
   }
   // La cadena de los presentados tiene que dar la [110] del trimestre (lo pendiente + lo que salió a compensar − lo aplicado).
-  const cuadra = cadena === null || c110 === null || q === 1 ? null : Math.abs(cadena - c110) < 0.005
+  // En el 1T, solo con lo pendiente sacado del 4T y el 1T presentado: si no, se compararía consigo misma (I01d).
+  const comparable = q !== 1 || (del4T && !!fila && estaPresentada(fila.estado))
+  const cuadra = cadena === null || c110 === null || !comparable ? null : Math.abs(cadena - c110) < 0.005
   return { lineas, total, cuadra }
 }
 

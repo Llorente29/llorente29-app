@@ -421,3 +421,11 @@ supabase/staging/sql/20261130_e05_riders_ficha_y_libro_prueba.sql
 #   prueba con datos es el ENSAYO en producción.
 supabase/migrations/20261130T0420_e05_catcher_ficha.sql
 supabase/staging/sql/20261130_e05_catcher_ficha_prueba.sql
+
+# I01d · Cargar los impuestos de 2025 (rama conta/i01d-impuestos-2025; Julio,
+#   21/10). La 0420 cambia conta_impuesto_trimestre: «desde» y lo pendiente al
+#   empezar el año del 4T anterior. Su prueba (ROLLBACK) carga el 1T de 2026 y
+#   el 4T de 2025 por su justificante, mira de dónde sale lo pendiente, un 4T
+#   que no casa, otra cuenta y la vuelta atrás de verdad.
+supabase/migrations/20261130T0420_i01d_impuestos_2025.sql
+supabase/staging/sql/20261130_i01d_impuestos_2025_prueba.sql

@@ -43,9 +43,10 @@ import { textoResultado } from './calendario'
 import {
   CASILLA_RESULTADO, estaPresentada, fraseDesfasada, fraseRecalculado, importeConSigno, lineasCartera, numeroTrimestre, presentadorEnPalabras,
   cuadreConDiario, cuadreLibro303, cuentaDelImpuesto, enCurso, fechasPeriodo, fechasTrimestre, fraseEnCurso, fraseCalculoRetenciones, librosDelModelo, liquidacion303, liquidacionRetenciones,
-  tarjeta, tituloTrimestre, trimestrePorDefecto,
+  sinCargar, tarjeta, TEXTO_SIN_CARGAR, tituloTrimestre, trimestrePorDefecto,
   type CasillaTrimestre, type FilaLiquidacion, type LineaCuadre, type ModeloTrimestre, type RetencionesDiario, type Trimestre,
 } from './trimestre'
+import { TraerPorCsv } from './TraerPorCsv'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
@@ -72,6 +73,8 @@ export default function TrimestrePage() {
   const [elegido, setElegido] = useState<string | null>(null)
   const [hecho, setHecho] = useState<{ tono: 'ok' | 'falta'; texto: string } | null>(null)
   const [ampliado, setAmpliado] = useState(false)
+  // I01d · «Pegar CSV» de un periodo sin cargar: el mismo de Presentados, aquí arriba.
+  const [pegando, setPegando] = useState(false)
   const recalculado = useRef<string | null>(null)
 
   useEffect(() => {
@@ -129,7 +132,7 @@ export default function TrimestrePage() {
   }
   if (!q || !Number.isInteger(ejercicio)) return <TrimestrePorDefecto />
 
-  const ir = (y: number, t: string) => { setElegido(null); setHecho(null); navegar(rutaTrimestre(y, t, deRuta)) }
+  const ir = (y: number, t: string) => { setElegido(null); setHecho(null); setPegando(false); navegar(rutaTrimestre(y, t, deRuta)) }
   // I01g · Tras calcular, escribir la [01] o revisar: se vuelve a leer el trimestre y se dice lo que pasó (regla 8).
   const alHacer = (h: { tono: 'ok' | 'falta'; texto: string }) => { setHecho(h); if (h.tono === 'ok') setVuelta((v) => v + 1) }
   const modelos = datos?.modelos ?? []
@@ -166,11 +169,16 @@ export default function TrimestrePage() {
       {!error && !datos && <Tarjeta titulo="Leyendo el trimestre…"><p className="s-apoyo">Un momento.</p></Tarjeta>}
       {hecho && <p className={hecho.tono === 'ok' ? 's-impuestos-hecho' : 's-impuestos-fallo'} role={hecho.tono === 'ok' ? 'status' : 'alert'}>{hecho.texto}</p>}
 
+      {datos && pegando && !deRuta && datos.puede_gestionar && (
+        <TraerPorCsv companyId={datos.empresa.id} alCerrar={() => setPegando(false)}
+          alGuardar={(texto, ok) => { setPegando(false); alHacer({ tono: ok ? 'ok' : 'falta', texto }) }} />
+      )}
+
       {datos && (
         <>
           <ul className="s-trimestre-tira" aria-label={`Modelos del ${tituloTrimestre(ejercicio, trimestre)}`}>
             {modelos.map((m) => {
-              const t = tarjeta(m, dia, ejercicio)
+              const t = tarjeta(m, dia, ejercicio, datos.desde)
               const activo = elegidoModelo !== null && clave(m) === clave(elegidoModelo)
               return (
                 <li key={clave(m)}>
@@ -187,10 +195,11 @@ export default function TrimestrePage() {
           {elegidoModelo && (
             <div className={`s-trimestre-cuerpo${ampliado ? ' s-trimestre-cuerpo--ampliado' : ''}`} data-prueba="cuerpo">
               <div className="s-trimestre-col s-trimestre-col-izq">
-                <Ficha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} hoy={dia} alHacer={alHacer} />
+                <Ficha key={clave(elegidoModelo)} m={elegidoModelo} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} hoy={dia} alHacer={alHacer}
+                  alPegar={pegando ? undefined : () => { setHecho(null); setPegando(true) }} />
               </div>
               <div className="s-trimestre-col s-trimestre-col-centro">
-                <Derecha key={`${clave(elegidoModelo)}/${elegidoModelo.declaracion?.justificante_pdf ?? ''}`} m={elegidoModelo} hoy={dia}
+                <Derecha key={`${clave(elegidoModelo)}/${elegidoModelo.declaracion?.justificante_pdf ?? ''}`} m={elegidoModelo} hoy={dia} desde={datos.desde}
                   ejercicio={ejercicio} trimestre={trimestre} deRuta={!!deRuta} ampliado={ampliado} alAmpliar={() => setAmpliado((a) => !a)}
                   alCalcular={datos.puede_gestionar && (elegidoModelo.modelo === '111' || elegidoModelo.modelo === '115')
                     ? () => calcularYDecir(datos.empresa.id, ejercicio, trimestre, elegidoModelo.modelo as '111' | '115', alHacer) : undefined} />
@@ -227,11 +236,13 @@ function valorCasilla(modelo: string, c: CasillaTrimestre): string {
  * palabras y «Ver las casillas» para desplegarlas todas; con los demás, sus
  * casillas (son pocas).
  */
-function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alHacer }: {
+function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alHacer, alPegar }: {
   m: ModeloTrimestre; d: Trimestre; ejercicio: number; trimestre: string; deRuta: boolean; hoy: string; alHacer: (h: { tono: 'ok' | 'falta'; texto: string }) => void
+  alPegar?: () => void
 }) {
   const d = m.declaracion
-  const t = tarjeta(m, hoy, ejercicio)
+  const t = tarjeta(m, hoy, ejercicio, datos.desde)
+  const porCargar = sinCargar(m, ejercicio, datos.desde)
   const vivo = m.modelo === '303' && m.periodo ? fechasPeriodo(ejercicio, m.periodo) : null
   const enVivo = !!vivo && enCurso(vivo, hoy) && !!d && !estaPresentada(d.estado) && d.resultado !== null
   const v = d ? importeConSigno(d) : null
@@ -246,7 +257,15 @@ function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alHacer }: {
         <Chip tono={t.chip.tono}>{t.chip.texto}</Chip>
       </div>
       {m.no_toca && <p className="s-apoyo">El pago a cuenta del Impuesto de sociedades se hace en abril (1P), octubre (2P) y diciembre (3P): en el {trimestre} no hay ninguno.</p>}
-      {!m.no_toca && !d && (
+      {porCargar && (
+        <div className="s-trimestre-sin-cargar" data-prueba="sin-cargar">
+          <p className="s-apoyo">Se presentó fuera, antes de llevar los impuestos en Sumied. Pega su CSV: Sumied trae de Hacienda el justificante y rellena las casillas.</p>
+          {deRuta ? <p className="s-apoyo">Lo carga la propia empresa desde sus Impuestos.</p>
+            : !datos.puede_gestionar ? <p className="s-apoyo">Lo puede cargar un administrador o encargado de la empresa.</p>
+              : alPegar && <p><Boton variante="principal" onClick={alPegar}>Pegar CSV</Boton></p>}
+        </div>
+      )}
+      {!m.no_toca && !d && !porCargar && (
         <p className="s-apoyo">Aún no está en Sumied.{m.presentacion ? ` Se presenta hasta el ${fechaLarga(m.presentacion)}.` : ''}</p>
       )}
       {d && (
@@ -653,8 +672,8 @@ function Acciones({ m, d, ejercicio, trimestre, presentada }: {
  * Lo de la derecha: el justificante en grande; sin él, el impreso calculado
  * por Sumied (con sus casillas) o qué falta y el botón para hacerlo.
  */
-function Derecha({ m, hoy: dia, ejercicio, trimestre, deRuta, ampliado, alAmpliar, alCalcular }: {
-  m: ModeloTrimestre; hoy: string; ejercicio: number; trimestre: string; deRuta: boolean; ampliado: boolean; alAmpliar: () => void; alCalcular?: () => Promise<void>
+function Derecha({ m, hoy: dia, desde, ejercicio, trimestre, deRuta, ampliado, alAmpliar, alCalcular }: {
+  m: ModeloTrimestre; hoy: string; desde?: string | null; ejercicio: number; trimestre: string; deRuta: boolean; ampliado: boolean; alAmpliar: () => void; alCalcular?: () => Promise<void>
 }) {
   const d = m.declaracion
   const pdf = d?.justificante_pdf ?? null
@@ -680,6 +699,17 @@ function Derecha({ m, hoy: dia, ejercicio, trimestre, deRuta, ampliado, alAmplia
             </div>
           ))}</dl>
         </div>
+      </section>
+    )
+  }
+  // I01d · De antes de Sumied y sin cargar: lo que falta es pegar su CSV (en la ficha), no calcularlo.
+  if (sinCargar(m, ejercicio, desde)) {
+    return (
+      <section className="s-tarjeta s-trimestre-derecha s-trimestre-falta" aria-labelledby="derecha-titulo" data-prueba="que-falta">
+        <h2 id="derecha-titulo" className="s-trimestre-derecha-titulo">{TEXTO_SIN_CARGAR.split(' · ')[0]}</h2>
+        <p className="s-apoyo">El {m.modelo} del {m.periodo} de {ejercicio} se presentó antes de llevar los impuestos en Sumied. Con su CSV, aquí se verá el justificante entero.</p>
+        {/* El 111 y el 115 se pueden calcular igual desde el diario, si lo lleva (I01g). */}
+        {(m.modelo === '111' || m.modelo === '115') && alCalcular && <p><BotonCalcular texto={`Calcular el ${m.modelo} del ${trimestre}`} alCalcular={alCalcular} /></p>}
       </section>
     )
   }
