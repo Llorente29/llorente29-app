@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase'
 import { rpc, tabla, hayBase, mensaje } from '@/modules/conta/services/bd'
 import { validar } from '@/modules/conta/services/diarioService'
 import { enviarADiez, urlDocumento } from '@/modules/conta/services/conDiezService'
+import { leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
 import { proponerFactura, verPropuestaFactura } from '@/modules/conta/services/propuestasLibroService'
 import { approveInvoice } from '@/modules/supply/services/supplierInvoiceService'
 import { getReceiptFileUrl, uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
@@ -274,6 +275,8 @@ export async function apuntarFactura(f: FacturaRevisar, quien: string | null, us
     }
     if (!a.validado) { await validar(a.asiento, quien); a.validado = true }
     await guardarFacturaPdf(f, a.asiento, quien); a.documento = true
+    // C07: con «Enviar a Diez» apagado, no se manda ni se habla de Diez.
+    if (!(await leerEnvioEmpresa(f.account_id, f.company_id)).encendido) { a.texto = 'Apuntada y validada.'; return a }
     const r = await enviarADiez(a.asiento)
     a.enDiez = r.estado === 'en_diez'
     a.texto = a.enDiez ? `Apuntada y en Diez. ${r.texto}` : `Apuntada y validada. ${r.texto}`

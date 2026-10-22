@@ -32,9 +32,12 @@ import {
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { nombresDeCuentas, palabrasLlanas } from '@/modules/conta/libro/palabrasLlanas'
 import { MARCA } from '../cuenta/marca'
-import { TarjetaDiez } from '@/modules/conta/libro/ConDiez'
-import { estadoDiez, motivoSinPatron, numerosFolvyDiez, type ConDiez } from '@/modules/conta/lib/conDiez'
-import { anularConDiez, leerConDiez, validarConDocumento, validarYEnviar } from '@/modules/conta/services/conDiezService'
+import { VerDocumento } from '@/modules/conta/libro/ConDiez'
+import type { ConDiez } from '@/modules/conta/lib/conDiez'
+import { anularConDiez, enviarADiez, leerConDiez, validarConDocumento } from '@/modules/conta/services/conDiezService'
+import { leerEnviosDiez, useEnvioDiez } from '@/modules/conta/services/envioDiezService'
+import { detalleDiez, type EnvioAsiento } from '@/modules/conta/lib/enDiez'
+import { DetalleDiezPieza } from '@/modules/conta/libro/DetalleDiez'
 import { noSeValida } from '@/modules/conta/lib/validarConPdf'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { TarjetaExpedida } from '@/modules/conta/libro/FacturaExpedida'
@@ -45,6 +48,8 @@ import { porQueNoSeValida, type MotivoEspera } from '@/modules/conta/lib/esperan
 
 interface Datos {
   asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null
+  /** C07: su envío a Diez y, si está anulado, el de su contraasiento (cualquier tipo de asiento). */
+  envio: EnvioAsiento | null; contra: EnvioAsiento | null
   /** C06b (21/10): por qué no lo validaría la base (conta_motivos_para_validar); null si no se ha podido leer. */
   motivos: MotivoEspera[] | null; motivosError: string | null
 }
@@ -70,12 +75,18 @@ export default function AsientoPage() {
         const conDiez = asiento?.origen === 'sales_day'
           ? (await leerConDiez(accountId, activa.id, [asiento.id]).catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() })).get(asiento.id) ?? null
           : null
+        // C07: el envío a Diez de cualquier asiento (y el de su contraasiento, si está anulado).
+        const envios = asiento
+          ? await leerEnviosDiez(accountId, [asiento.id], asiento.anuladoCon ? new Map([[asiento.id, asiento.anuladoCon]]) : new Map())
+            .catch((e: unknown) => { conDiezError = conDiezError ?? (e instanceof Error ? e.message : String(e)); return null })
+          : null
         // C06b (21/10): lo que haría que la base no lo valide (un envío por aclarar, entre otros), para decirlo antes de pulsar.
         let motivosError: string | null = null
         const motivos = asiento && (asiento.estado === 'propuesto' || asiento.estado === 'borrador')
           ? await motivosParaValidar(asiento.id).catch((e: unknown) => { motivosError = e instanceof Error ? e.message : String(e); return null })
           : []
-        return { asiento, cuentas, cierres, conDiez, conDiezError, motivos, motivosError }
+        return { asiento, cuentas, cierres, conDiez, conDiezError, motivos, motivosError,
+          envio: (asiento && envios?.envios.get(asiento.id)) ?? null, contra: (asiento && envios?.contras.get(asiento.id)) ?? null }
       })
       .then((d) => { if (vivo) setR({ clave, datos: d, error: null }) },
         (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
@@ -83,6 +94,9 @@ export default function AsientoPage() {
   }, [accountId, activa, cargando, entryId, clave])
   const datos = r.clave === clave ? r.datos : null
   const error = r.clave === clave ? r.error : null
+  // C07: «Enviar a Diez» de la empresa. Apagado (o aún sin saberlo), nada de Diez en la pantalla.
+  const envioDiez = useEnvioDiez(accountId, activa?.id)
+  const encendido = envioDiez.envio?.encendido === true
   const recargar = () => setVuelta((v) => v + 1)
 
   // S01d: desde «Nueva factura expedida», si el PDF no se pudo adjuntar, llega por qué (falloPdf).
@@ -103,15 +117,8 @@ export default function AsientoPage() {
   if (!a) return <div className="cx-tarjeta"><Vacio titulo="Ese asiento no está." explicacion="Puede que se descartara, o que sea de otra cuenta." accion={<Link to={rutaLibroDiario()} className="cx-enlace">Volver al libro</Link>} /></div>
 
   const editable = a.estado === 'propuesto' || a.estado === 'borrador'
-  const diez = datos.conDiez ? estadoDiez(a, datos.conDiez) : null
-
-  async function hacerValidarYEnviar() {
-    if (!a) return
-    setOcupado(true); setFallo(null); setHecho(null)
-    try { const [p] = await validarYEnviar([a], userName); (p.enDiez ? setHecho : setFallo)(p.texto); recargar() }
-    catch (x) { setFallo(x instanceof Error ? x.message : 'No se ha podido.') }
-    finally { setOcupado(false) }
-  }
+  // C07: el detalle junto al número («En Diez · 4/1.234» o «No enviado · motivo · Reintentar»).
+  const diez = detalleDiez(a, datos.envio, { encendido, contraasiento: datos.contra })
   const e = estadoDe(a)
   const mes = estadoMes(mesDe(a.fecha), datos.cierres)
 
@@ -120,20 +127,24 @@ export default function AsientoPage() {
     setOcupado(true); setFallo(null); setHecho(null)
     const validado = (v: { serie: number; numero: number }) => `Validado: ${NOMBRE_SERIE[v.serie as 1]} nº ${v.numero.toLocaleString('es-ES')}, encadenado con su huella. Ya está en el Mayor y no se toca: si hiciera falta, se anula.`
     // Respuesta 8: las ventas de una plataforma se validan con su PDF, en una sola transacción.
-    if (datos?.conDiez) {
-      try {
-        const v = await validarConDocumento(a.id, userName)
-        setHecho(`${validado(v)} Con su «Resumen de ventas» guardado en ${MARCA.nombre}; aún no se ha enviado a Diez.`)
-        recargar()
-      } catch (x) { setFallo(noSeValida(x instanceof Error ? x.message : String(x))) }
-      finally { setOcupado(false) }
+    let dicho: string
+    try {
+      dicho = datos?.conDiez
+        ? `${validado(await validarConDocumento(a.id, userName))} Con su «Resumen de ventas» guardado en ${MARCA.nombre}.`
+        : validado(await validar(a.id, userName))
+    } catch (x) {
+      setFallo(datos?.conDiez ? noSeValida(x instanceof Error ? x.message : String(x)) : x instanceof Error ? x.message : 'No se ha validado.')
+      setOcupado(false)
       return
     }
-    try {
-      setHecho(validado(await validar(a.id, userName)))
-      recargar()
-    } catch (x) { setFallo(x instanceof Error ? x.message : 'No se ha validado.') }
-    finally { setOcupado(false) }
+    // C07: con «Enviar a Diez» encendido, sale a Diez en ese momento, sin botón aparte.
+    if (encendido) {
+      const r = await enviarADiez(a.id).catch((x: unknown) => ({ estado: 'no_llega' as const, motivo: x instanceof Error ? x.message : 'no ha contestado', reintentar: true, texto: '' }))
+      if (r.estado === 'en_diez') setHecho(`${dicho} ${r.texto}`)
+      else { setHecho(dicho); setFallo(`No se ha enviado a Diez: ${r.motivo}. Sigue validado; «Reintentar» está junto a su número.`) }
+    } else setHecho(dicho)
+    recargar()
+    setOcupado(false)
   }
 
   async function hacerCambio(posicion: number, nueva: CuentaPlan) {
@@ -143,10 +154,6 @@ export default function AsientoPage() {
     catch (x) { setFallo(x instanceof Error ? x.message : 'No se ha cambiado.') }
   }
 
-  // 15/10: el número de la marca y el de Diez, que ya no coinciden.
-  const dosNumeros = numerosFolvyDiez(a, datos.conDiez)
-  // 15/10: una plataforma sin patrón en Diez (Glovo) no ofrece «Validar y enviar»: validar no se deshace.
-  const sinPatron = datos.conDiez ? motivoSinPatron(datos.conDiez.canal) : null
   // C06b (21/10): con un motivo de la base (un envío a Diez por aclarar, entre otros), los dos botones de validar en gris y su porqué.
   const frena = editable ? porQueNoSeValida(datos.motivos ?? []) : null
   // S01e: el porqué en palabras normales, con el nombre junto a cada cuenta.
@@ -164,21 +171,22 @@ export default function AsientoPage() {
               ? <Chip tono={a.confianza === 'seguro' ? 'ia' : 'ambar'}>{MARCA.id === 'folvy' ? 'Propuesto por Folvy' : 'Propuesto automáticamente'} · {NOMBRE_CONFIANZA[a.confianza]}</Chip>
               : <TonoChip tono={e.tono}>{e.texto}</TonoChip>}
             <Chip>Serie {NOMBRE_SERIE[a.serie]}</Chip>
-            {dosNumeros && <Chip>{dosNumeros}</Chip>}
+            {encendido && a.numero != null && <Chip>{MARCA.nombre} {a.numero.toLocaleString('es-ES')}</Chip>}
+            <DetalleDiezPieza d={diez} alHacer={(t) => { setFallo(null); setHecho(t); recargar() }} alFallar={(t) => { setHecho(null); setFallo(t); recargar() }} />
             <Chip>Fecha {fechaLarga(a.fecha)}</Chip>
             <Chip tono="azul">{deDondeSale(a)}</Chip>
           </div>
         </div>
         <div className="cxd-acciones">
           {editable && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('descartar')} disabled={ocupado}>Descartar</button>}
-          {editable && <button type="button" className={datos.conDiez || frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? 'Validando…' : 'Validar asiento'}</button>}
-          {editable && datos.conDiez && !sinPatron && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidarYEnviar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? 'Validando y enviando…' : 'Validar y enviar a Diez'}</button>}
+          {datos.conDiez?.documento && <VerDocumento ruta={datos.conDiez.documento.ruta} alFallar={(t) => { setHecho(null); setFallo(t) }} />}
+          {editable && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? (encendido ? 'Validando y enviando…' : 'Validando…') : 'Validar asiento'}</button>}
           {a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
         </div>
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      {datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
+      {encendido && datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
       {editable && frena?.franja && (
         <div className="cx-tarjeta cxd-franja" role="status" aria-label="Por qué no se valida" data-prueba="no-se-valida">
           <span><strong>No se valida todavía</strong> · {frena.franja}</span>
@@ -253,10 +261,6 @@ export default function AsientoPage() {
               {editable && <p className="cxd-ia-apoyo">Si me corriges, aprendo para la siguiente del mismo origen.</p>}
             </section>
           ) : null}
-          {datos.conDiez && diez && (
-            <TarjetaDiez a={a} d={datos.conDiez} e={diez} quien={userName}
-              alHacer={(t) => { setFallo(null); setHecho(t); recargar() }} alFallar={(t) => { setHecho(null); setFallo(t) }} />
-          )}
           {esExpedidaAMano(a) && accountId && (
             <TarjetaExpedida a={a} accountId={accountId} quien={userName} movil={movil}
               alHacer={(t) => { setFallo(null); setHecho(t) }} alFallar={(t) => { setHecho(null); setFallo(t) }} />
@@ -289,7 +293,7 @@ export default function AsientoPage() {
             const x = await anularConDiez(a.id, motivo, fecha, userName)
             setDialogo(null)
             const dicho = `Anulado. Contraasiento ${NOMBRE_SERIE[x.serie as 1]} nº ${x.numero.toLocaleString('es-ES')} del ${diaMesCorto(x.fecha)}, enlazado con este.`
-            if (x.diez?.estado === 'no_llega') { setHecho(dicho); setFallo(`${x.diez.texto} Queda en Libros › Pendientes de adjuntar en Diez, con «Enviar el contraasiento».`) }
+            if (x.diez?.estado === 'no_llega') { setHecho(dicho); setFallo(`No se ha anulado en Diez: ${x.diez.motivo}. «Reintentar» está junto a su número.`) }
             else setHecho(x.diez ? `${dicho} ${x.diez.texto}` : dicho)
             recargar()
           }} />

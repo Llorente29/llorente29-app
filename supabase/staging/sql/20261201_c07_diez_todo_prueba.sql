@@ -57,7 +57,8 @@ end $$;
 
 select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
 set local role authenticated;
-select set_config('c07.venta_antes', public.conta_resumen_ventas(current_setting('c07.venta')::uuid)::text, true);
+-- Sin pintarlo en el registro: solo si se ha leído.
+select set_config('c07.venta_antes', public.conta_resumen_ventas(current_setting('c07.venta')::uuid)::text, true) is not null as venta_leida;
 reset role;
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 set local role service_role;

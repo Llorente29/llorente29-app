@@ -36,49 +36,25 @@
 // registro de la función (console.error: el id del asiento; el porqué va a la
 // base, porque puede llevar texto de Diez).
 //
+// C07 (Julio, 22/10) · Todo asiento validado, sea del tipo que sea: el banco,
+// los manuales y las liquidaciones como asiento general, y sus contraasientos.
+// El camino lo elige _shared/diezDespacho.ts, que comparte con conta-diez-cola
+// (el servidor, que manda lo que se queda atrás). Con «Enviar a Diez» apagado
+// en la empresa no se manda nada. Después de cada intento, la fila dice cuándo
+// lo vuelve a intentar el servidor.
+//
 // verify_jwt = true (config.toml): sin sesión no hay nada que hacer.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { ClienteDiez, type AlmacenToken } from "../_shared/diezCliente.ts";
-import { correspondenciaDeEmpresa } from "../_shared/diezAnalitica.ts";
-import { autorizacionCubre, motivoDeFallo, enviarAsientoADiez, enviarContraasientoADiez, enviarContraasientoRecibidaADiez, enviarRecibidaADiez, type Autorizacion, type ConexionDiez, type ContraasientoBD, type EnvioFila, type PuertoEnvio, type RecibidaBD } from "../_shared/diezEnviar.ts";
-import type { ResumenBD } from "../_shared/resumenDeAsiento.ts";
+import { despacharADiez } from "../_shared/diezDespacho.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const BUCKET = "conta-documentos";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-}
-const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
-
-/**
- * 17/10 · Lo último que se hace con un fallo: dejarlo escrito en el envío del
- * asiento (el que no está rechazado). Si ya está en Diez no se toca; si no hay
- * fila, se crea una sin intentos. Nunca lanza: si tampoco puede, lo dice el
- * registro de la función.
- */
-async function apuntarFallo(srv: ReturnType<typeof createClient>, a: { entry: string; account: string; company: string }, motivo: string) {
-  // En el registro, solo que ha fallado y dónde quedó: el porqué va a la base (puede llevar texto de Diez).
-  console.error(`conta-diez-enviar · ${a.entry} · fallo apuntado en su envío`);
-  try {
-    const { data: e } = await srv.from("external_send").select("id, status").eq("entry_id", a.entry).eq("account_id", a.account).neq("status", "rechazado").maybeSingle();
-    const ahora = new Date().toISOString();
-    if (e && (e.status === "enviado" || e.status === "enlazado")) return;
-    const { error } = e
-      ? await srv.from("external_send").update({ last_error: motivo, updated_at: ahora }).eq("id", e.id).eq("account_id", a.account)
-      : await srv.from("external_send").insert({
-          entry_id: a.entry, account_id: a.account, company_id: a.company, account_connector_id: null, kind: "factura",
-          ext_year: null, ext_series: null, ext_number: null, ext_invoice_number: null, payload_hash: "sin-enviar", status: "pendiente", attempts: 0,
-          last_error: motivo, sent_at: null, document_id: null, document_status: null, document_error: null, document_attached_at: null, updated_at: ahora,
-        });
-    if (error) console.error(`conta-diez-enviar · ${a.entry} · no se ha podido apuntar el fallo (${error.message}): ${motivo}`);
-  } catch (x) {
-    console.error(`conta-diez-enviar · ${a.entry} · no se ha podido apuntar el fallo (${x instanceof Error ? x.message : String(x)}): ${motivo}`);
-  }
 }
 
 Deno.serve(async (req) => {
@@ -93,119 +69,18 @@ Deno.serve(async (req) => {
   try { const b = await req.json() as { entry_id?: unknown }; entryId = typeof b.entry_id === "string" ? b.entry_id : ""; } catch { /* vacío */ }
   if (!/^[0-9a-f-]{36}$/i.test(entryId)) return json({ error: "falta entry_id" }, 400);
 
-  // C06b R8: ¿es el contraasiento de una anulación? Entonces se manda la factura
-  // que anula la de lo anulado (enviarContraasientoADiez), y el resumen es el
-  // de lo anulado. Leído con los permisos de quien llama (si no es suyo, no está).
-  const { data: je, error: e0 } = await sb.from("journal_entry")
-    .select("id, account_id, company_id, status, entry_date, source_type, reverses_entry_id, number").eq("id", entryId).maybeSingle();
+  // El asiento, con los permisos de quien llama: si no es de su cuenta, no está.
+  const { data: je, error: e0 } = await sb.from("journal_entry").select("id, account_id").eq("id", entryId).maybeSingle();
   if (e0) return json({ estado: "no_llega", motivo: e0.message, reintentar: true, texto: `No ha llegado a Diez: ${e0.message}` }, 400);
   if (!je) return json({ estado: "no_llega", motivo: "ese asiento no está", reintentar: false, texto: "No ha llegado a Diez: ese asiento no está." }, 404);
-  const contra: ContraasientoBD | null = je.source_type === "reversal"
-    ? { id: je.id, account_id: je.account_id, company_id: je.company_id, estado: je.status, fecha: String(je.entry_date), origen: je.source_type, anula: je.reverses_entry_id, numero: je.number }
-    : null;
-
-  // D01: una factura recibida se lee con conta_recibida_envio y va a la serie 2.
-  // Y el contraasiento de una recibida (15/10), con la recibida que anula: su «-ANUL».
-  let anulaRecibida = false;
-  if (contra?.anula) {
-    const { data: an, error: e2 } = await sb.from("journal_entry").select("source_type")
-      .eq("id", contra.anula).eq("account_id", je.account_id).maybeSingle();
-    if (e2) return json({ estado: "no_llega", motivo: e2.message, reintentar: true, texto: `No ha llegado a Diez: ${e2.message}` }, 400);
-    anulaRecibida = an?.source_type === "supplier_invoice";
-  }
-  const esRecibida = (!contra && je.source_type === "supplier_invoice") || anulaRecibida;
-  // El asiento (o, para un contraasiento, lo que anula), con los permisos de quien llama.
-  const { data: leido, error: e1 } = await sb.rpc(esRecibida ? "conta_recibida_envio" : "conta_resumen_ventas", { p_entry: contra?.anula ?? entryId });
-  if (e1) {
-    // Leído con los permisos de quien llama: si no es suyo (P0002), no se escribe nada en su nombre.
-    const { data: puedeApuntar } = await sb.rpc("current_user_is_admin_or_manager_of", { p_account_id: je.account_id });
-    if (e1.code !== "P0002" && puedeApuntar === true) await apuntarFallo(createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } }), { entry: entryId, account: je.account_id, company: je.company_id }, `no se ha podido leer el asiento: ${e1.message}`);
-    return json({ estado: "no_llega", motivo: e1.message, reintentar: false, texto: `No ha llegado a Diez: ${e1.message}` }, e1.code === "P0002" ? 404 : 400);
-  }
-  const r = leido as ResumenBD;
-  const rec = leido as unknown as RecibidaBD;
-  const { data: puede } = await sb.rpc("current_user_is_admin_or_manager_of", { p_account_id: r.account_id });
+  const { data: puede } = await sb.rpc("current_user_is_admin_or_manager_of", { p_account_id: je.account_id });
   if (puede !== true) return json({ error: "Solo un administrador o un encargado de la cuenta envía a Diez." }, 403);
 
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
-  const puerto: PuertoEnvio & { recibida(id: string): Promise<RecibidaBD> } = {
-    resumen: async (id) => {
-      if (id === r.id) return r;
-      const { data, error } = await sb.rpc("conta_resumen_ventas", { p_entry: id });
-      if (error) throw new Error(error.message);
-      return data as ResumenBD;
-    },
-    // Los números de la base llegan como texto o número: se pasan a número.
-    recibida: async () => ({ ...rec, lineas: (rec.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), tipoIva: l.tipoIva == null ? null : Number(l.tipoIva), baseIva: l.baseIva == null ? null : Number(l.baseIva), tratamiento: l.tratamiento == null ? null : String(l.tratamiento) })) }),
-    envio: async (id) => {
-      const { data, error } = await srv.from("external_send").select("*").eq("entry_id", id).eq("account_id", r.account_id).neq("status", "rechazado").maybeSingle();
-      if (error) throw new Error(`no se ha podido leer el envío: ${error.message}`);
-      return data as EnvioFila | null;
-    },
-    guardar: async (f) => {
-      const { id, ...resto } = f as EnvioFila & { created_at?: string; updated_at?: string };
-      delete (resto as Record<string, unknown>).created_at;
-      const fila = { ...resto, updated_at: new Date().toISOString() };
-      const q = id ? srv.from("external_send").update(fila).eq("id", id).eq("account_id", r.account_id) : srv.from("external_send").insert(fila);
-      const { data, error } = await q.select("*").single();
-      if (error) throw new Error(`no se ha podido apuntar el envío: ${error.message}`);
-      return data as EnvioFila;
-    },
-    conexion: async (companyId) => {
-      const { data, error } = await srv.from("account_connector")
-        .select("id, external_account_id, config, status, connector!inner(code)")
-        .eq("account_id", r.account_id).eq("company_id", companyId).eq("scope", "company").eq("connector.code", "diez").eq("status", "connected").maybeSingle();
-      if (error) throw new Error(`no se ha podido leer la conexión con Diez: ${error.message}`);
-      if (!data) return null;
-      const config = (data.config as Record<string, unknown> | null) ?? {};
-      const bd = String(data.external_account_id ?? config.nombre_bd ?? "");
-      return bd ? { id: String(data.id), nombreBd: bd, adjuntar: config.adjuntar_documentos === true } : null;
-    },
-    autorizado: async (id, companyId, nombreBd, fecha, tipo) => {
-      // R8 (tarea 1): «desde» (0730) limita la de empresa a los asientos desde ese
-      // día, e «incluye_recibidas» (0740) decide si abre las facturas recibidas.
-      const { data, error } = await srv.from("conta_diez_autorizo").select("id, alcance, entry_id, desde, incluye_recibidas")
-        .eq("account_id", r.account_id).eq("company_id", companyId).ilike("nombre_bd", nombreBd);
-      if (error) throw new Error(`no se ha podido leer lo autorizado en Diez: ${error.message}`);
-      return autorizacionCubre((data ?? []) as Autorizacion[], id, fecha, tipo);
-    },
-    cliente: async (c: ConexionDiez, o) => {
-      const { data: s, error } = await srv.rpc("connector_secret_read", { p_account_connector_id: c.id });
-      if (error || !s) throw new Error("la conexión con Diez no tiene credenciales guardadas");
-      const sec = (s as { secrets: Record<string, string>; config: Record<string, unknown> }).secrets;
-      const cfg = (s as { config: Record<string, unknown> }).config ?? {};
-      const almacen: AlmacenToken = {
-        leer: async () => {
-          const { data } = await srv.rpc("connector_token_read", { p_account_connector_id: c.id });
-          const t = data as { token: string; expires_at: string } | null;
-          return t ? { token: t.token, expiresAt: t.expires_at } : null;
-        },
-        guardar: async (token, expiresAt) => { await srv.rpc("connector_token_save", { p_account_connector_id: c.id, p_token: token, p_expires_at: expiresAt }); },
-        caida: async (motivo) => { await srv.rpc("connector_mark_down", { p_account_connector_id: c.id, p_error: motivo }); },
-      };
-      // escribirEnReal solo con autorización de Julio (el núcleo ya lo ha mirado).
-      return new ClienteDiez({
-        base: String(cfg.base_url ?? "https://apicon.diezsoftware.com"), nombreBd: c.nombreBd,
-        credenciales: { grant_type: sec.grant_type, client_id: sec.client_id, client_secret: sec.client_secret, username: sec.username, password: sec.password },
-        almacen, escribir: true, escribirEnReal: o.real, pausaMs: 150,
-      });
-    },
-    documento: async (ruta) => {
-      if (!ruta.startsWith(`${r.account_id}/${r.id}/`)) throw new Error("la ruta del documento no es la de este asiento");
-      const { data, error } = await srv.storage.from(BUCKET).download(ruta);
-      if (error || !data) throw new Error(`no se ha podido leer el documento guardado: ${error?.message ?? "vacío"}`);
-      return new Uint8Array(await data.arrayBuffer());
-    },
-    sha256: async (b) => hex(await crypto.subtle.digest("SHA-256", b)),
-    correspondencia: (companyId) => correspondenciaDeEmpresa(companyId),
-    ahora: () => new Date(),
-  };
-
-  try {
-    return json(contra ? await (anulaRecibida ? enviarContraasientoRecibidaADiez(contra, puerto) : enviarContraasientoADiez(contra, puerto)) : esRecibida ? await enviarRecibidaADiez(entryId, puerto) : await enviarAsientoADiez(entryId, puerto));
-  } catch (x) {
-    const motivo = `se cortó: ${motivoDeFallo(x)}`;
-    await apuntarFallo(srv, { entry: contra?.id ?? entryId, account: r.account_id, company: r.company_id }, motivo);
-    return json({ estado: "no_llega", motivo, reintentar: true, texto: `No ha llegado a Diez: ${motivo}.` }, 500);
-  }
+  const r = await despacharADiez({ lector: sb, srv, entryId });
+  // En el registro, solo el asiento y si llegó: el porqué va a la base (puede llevar texto de Diez).
+  if (r.estado !== "en_diez") console.error(`conta-diez-enviar · ${entryId} · no ha llegado (apuntado en su envío)`);
+  const cuerpo: Record<string, unknown> = { ...r };
+  delete cuerpo.cabecera;
+  return json(cuerpo);
 });
