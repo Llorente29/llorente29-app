@@ -12,8 +12,10 @@ import { enviarADiez } from '@/modules/conta/services/conDiezService'
 
 const tonoChip = (t: DetalleDiez['tono']) => (t === 'verde' ? 'ia' : t === 'azul' ? 'azul' : t === 'ambar' ? 'ambar' : 'neutro')
 
-export function DetalleDiezPieza({ d, alHacer, alFallar, conMotivo = true }: {
+export function DetalleDiezPieza({ d, alHacer, alFallar, conMotivo = true, sinBoton = false }: {
   d: DetalleDiez | null
+  /** Dentro de algo que ya es un botón (la tarjeta del móvil): sin «Reintentar». */
+  sinBoton?: boolean
   alHacer: (texto: string) => void
   alFallar: (texto: string) => void
   /** En la fila del libro el motivo va solo en el title; en el asiento, también escrito. */
@@ -35,7 +37,7 @@ export function DetalleDiezPieza({ d, alHacer, alFallar, conMotivo = true }: {
     <span className="cxd-diez-detalle" data-prueba="detalle-diez" title={frase}>
       <span aria-label={frase}><Chip tono={tonoChip(d.tono)}>{d.texto}</Chip></span>
       {conMotivo && d.motivo && <span className="cx-ayuda" style={{ margin: 0 }}> · {d.motivo}</span>}
-      {d.reintentar && (
+      {d.reintentar && !sinBoton && (
         <>
           {' · '}
           <button type="button" className="cx-enlace" onClick={() => { void reintentar() }} disabled={ocupado}>{ocupado ? 'Enviando…' : 'Reintentar'}</button>

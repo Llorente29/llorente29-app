@@ -51,7 +51,7 @@ import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { paraRevisar, sinValidarDelMes } from '@/modules/conta/libro/paraRevisar'
 import { nombresDeCuentas, palabrasLlanas } from '@/modules/conta/libro/palabrasLlanas'
 import { MARCA } from '../cuenta/marca'
-import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
+import { EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, motivoSinPatron, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, enviarADiez, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
 import { leerEnviosDiez, useEnvioDiez } from '@/modules/conta/services/envioDiezService'
@@ -492,7 +492,7 @@ export default function LibroDiarioPage() {
                 detalle={(a) => <Apuntes a={a} espera={motivoEspera(a)} tarea={tareaDiez(a)} quien={userName}
                   alHacer={(t) => { setHecho(t); recargar() }} alFallar={setFallo} />}
                 claseFila={(a) => (a.estado === 'anulado' ? 'cxd-anulado' : undefined)}
-                tarjeta={(a) => <TarjetaAsiento a={a} diez={diezDe(a)} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />}
+                tarjeta={(a) => <TarjetaAsiento a={a} diez={detalle(a)} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />}
                 vacio={enEsperan
                   ? <Vacio titulo="Nada esperando." explicacion={`Aquí sale lo que todavía no se puede validar o enviar, con su motivo: un mes cerrado, un envío por aclarar${hosteleria ? ', una plataforma sin su factura medida en Diez' : ''}…`} />
                   : filtro === 'revisar' && !soloSinDiez
@@ -597,7 +597,7 @@ function QueLePasa({ a, espera, tarea }: { a: AsientoDiario; espera: string | nu
 }
 
 /** Un asiento en el móvil: fecha y número, el concepto, sus chips, el importe y el estado. */
-function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez?: EstadoDiez; espera: string | null; tarea: string | null }) {
+function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez: DetalleDiez | null; espera: string | null; tarea: string | null }) {
   const e = estadoDe(a)
   const analitica = useAnalitica()
   const ejes = { local: !!analitica.local, marca: !!analitica.marca }
@@ -608,7 +608,8 @@ function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez?: E
         <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
         <span className="cxd-concepto-apoyo">
           {pastillas(a, ejes).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
-          {diez && a.estado !== 'propuesto' && <ChipDiez e={diez} />}
+          {/* C07: la tarjeta entera abre el asiento (es un botón): aquí solo el chip; «Reintentar», en el asiento. */}
+          <DetalleDiezPieza d={diez} conMotivo={false} sinBoton alHacer={() => undefined} alFallar={() => undefined} />
           <QueLePasa a={a} espera={espera} tarea={tarea} />
         </span>
       </span>
