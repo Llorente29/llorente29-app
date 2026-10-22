@@ -292,6 +292,26 @@ export async function mesesEstado(companyId: string, mes: string): Promise<Estad
   })
 }
 
+/** S02 · PR 2 · Un banco tal como lo pinta su cierre del mes (en Contabilidad › Cierre y Registro). */
+export interface BancoDelCierre { id: string; nombre: string; iban: string | null; cuenta: string | null; cuentaNombre: string | null }
+
+/**
+ * S02 · PR 2 · Los bancos de la empresa para «Cerrar el mes», sin todo lo que
+ * lee Bancos (extractos, tarjetas, reglas…): sus cuentas y el nombre de su
+ * 572. Siempre con account_id y company_id (regla 9). Las tarjetas no se
+ * cierran por mes: solo los bancos, como en Bancos.
+ */
+export async function leerBancosDelCierre(accountId: string, companyId: string): Promise<BancoDelCierre[]> {
+  const bs = (await bancos.bancosDeLaEmpresa(accountId, companyId)).filter((b) => b.kind === 'bank')
+  const codigos = [...new Set(bs.map((b) => b.cuenta).filter((c): c is string => !!c))]
+  const cuentas = codigos.length === 0 ? [] : await leer(tabla('company_account').select('code, name, plain_name')
+    .eq('account_id', accountId).eq('company_id', companyId).in('code', codigos), 'el plan')
+  const nombres = new Map(cuentas.map((c) => [String(c.code), String(c.plain_name ?? c.name).trim().replace(/[.\s]+$/, '')]))
+  return bs
+    .map((b) => ({ id: b.id, nombre: b.nombre, iban: b.iban, cuenta: b.cuenta, cuentaNombre: b.cuenta ? nombres.get(b.cuenta) ?? null : null }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+}
+
 export const cerrarMes = (bancoId: string, mes: string, aSabiendas: boolean, motivo: string | null) =>
   rpc<Fila>('bank_mes_cerrar', { p_treasury: bancoId, p_mes: `${mes}-01`, p_a_sabiendas: aSabiendas, p_motivo: motivo })
 export const reabrirMes = (cierreId: string, motivo: string) => rpc<void>('bank_mes_reabrir', { p_cierre: cierreId, p_motivo: motivo })

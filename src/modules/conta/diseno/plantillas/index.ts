@@ -12,13 +12,13 @@
 // Los estilos, en plantillas.css (los carga estilo/index.ts).
 
 export { Bandeja, CifrasBandeja, TeTocaHoy, HechoAutomatico, type CifraBandeja, type FilaTeToca } from './Bandeja'
-export { NOMBRE_ORIGEN, totalTeToca, introEnLaHoja, type OrigenCasilla } from './valores'
+export { NOMBRE_ORIGEN, totalTeToca, introEnLaHoja, buscarCuentasHoja, type OrigenCasilla, type CuentaHoja } from './valores'
 export { PestanasEstado, FiltrosLista, FiltroSelector, FiltroBuscar, TablaLista, type ColumnaLista } from './Lista'
 export {
   pestanasConTodas, sumanTodas, leerEstado, conCambio, recordarLista, listaRecordada, leerOrden, escribirOrden, ordenar,
   type PestanaEstado, type EstadoLista, type Sentido,
 } from './lista'
 export { Ficha, NavegaFicha, Veredicto, BloqueFicha, CampoFicha, FilaCampos, AsientoQueSeCrea, DocumentoFicha, type TipoVeredicto, type TonoCampo } from './Ficha'
-export { ControlesInforme, VistaInforme, ComprobacionInforme, TablaInforme, type LineaInforme } from './Informe'
+export { ControlesInforme, VistaInforme, ComprobacionInforme, TablaInforme, type LineaInforme, type CuentaInforme, type ColumnaInforme } from './Informe'
 export { Asistente, PasosAsistente, LeyendaCasillas, Casilla, BloqueAsistente, DeDondeSale, PieAsistente, type PasoAsistente } from './Asistente'
-export { HojaDeLineas } from './HojaDeLineas'
+export { HojaDeLineas, BuscarCuentaHoja } from './HojaDeLineas'

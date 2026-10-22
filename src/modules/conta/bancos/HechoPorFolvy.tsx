@@ -39,13 +39,11 @@ export function HechoPorFolvy() {
   const casados = deFolvy.filter((h) => h.accion === 'casado')
 
   return (
-    <section className="cxb-seccion" aria-labelledby="cxb-hecho-titulo">
-      <div className="cxl-seccion">
-        <div><h2 id="cxb-hecho-titulo">{LO_HECHO}</h2><p className="cx-ayuda">En {nombreMes(mes).toLowerCase()}, con el porqué de cada cosa.</p></div>
-        <div className="cxl-segmento" role="group" aria-label="Qué ver">
-          <button type="button" aria-pressed={!todo} onClick={() => setTodo(false)}>{SOLO_AUTOMATICO} · {deFolvy.length}</button>
-          <button type="button" aria-pressed={todo} onClick={() => setTodo(true)}>Y lo de las personas · {hechos.datos.length}</button>
-        </div>
+    <section className="cxb-seccion" aria-label={LO_HECHO}>
+      {/* S02 · PR 2: el título y su frase (con el mes), en el encabezado de la página (BancosPage). Aquí, qué ver. */}
+      <div className="cxl-segmento" role="group" aria-label="Qué ver">
+        <button type="button" aria-pressed={!todo} onClick={() => setTodo(false)}>{SOLO_AUTOMATICO} · {deFolvy.length}</button>
+        <button type="button" aria-pressed={todo} onClick={() => setTodo(true)}>Y lo de las personas · {hechos.datos.length}</button>
       </div>
       <div className="cxb-banda" role="note">
         <span className="cx-ia-punto" aria-hidden="true" />

@@ -19,12 +19,16 @@
 //
 // Regla 7: es una pantalla que se abre a propósito; no esconde ninguna fila.
 // Regla 8: cada botón dice qué ha pasado, con contenido.
+//
+// S02 · PR 2 · El encabezado del patrón (EncabezadoLibro): «Descargar todos»
+// es el único principal, y la frase dice cuántas quedan.
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaAsiento } from '@/config/navegacion'
-import { Migas } from '@/modules/conta/proveedor/piezas'
-import { Chip, ErrorConReintento, Guardado, Hueso } from '@/modules/conta/ui/piezas'
+import { Boton } from '@/modules/conta/diseno'
+import { EncabezadoLibro } from '@/modules/conta/libros/EncabezadoLibro'
+import { Chip, ErrorConReintento, Guardado } from '@/modules/conta/ui/piezas'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { fraseResumen, nombreEnZip, referenciaDiez, type PendienteDiez } from '@/modules/conta/lib/pendientesDiez'
 import { enviarADiez, leerPendientesDiez, marcarAdjuntoEnDiez, urlDocumento, zipPendientesDiez, type AnuladoEnDiez } from '@/modules/conta/services/conDiezService'
@@ -71,21 +75,21 @@ export function PendientesDiez() {
     catch (e) { v?.close(); setHecho(`No se ha podido abrir el PDF: ${mensajeDe(e)}`) }
   }
 
-  if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
   const pend = d.datos?.pendientes ?? []
   const anul = d.datos?.anulados ?? []
+  const encabezado = (
+    <EncabezadoLibro titulo="Pendientes de adjuntar en Diez"
+      frase={d.datos ? fraseResumen(pend, ddmmaa) : 'Las facturas que ya están en Diez sin su PDF, y cómo encontrarlas allí.'}
+      principal={<Boton variante="principal" icono="descargar" disabled={!pend.length || ocupado === 'zip'} onClick={() => void descargar()}>
+        {ocupado === 'zip' ? 'Reuniendo los PDF…' : `Descargar todos${pend.length ? ` (${pend.length})` : ''}`}
+      </Boton>} />
+  )
+  if (d.error) return <section className="cxl-pagina" aria-label="Pendientes de adjuntar en Diez">{encabezado}<ErrorConReintento mensaje={d.error} reintentar={d.recargar} /></section>
   return (
     <section className="cxl-pagina" aria-label="Pendientes de adjuntar en Diez">
-      <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Diario' }]} /><h2>Pendientes de adjuntar en Diez</h2></div>
-        <div className="cxl-herramientas">
-          <button type="button" className="cx-boton" disabled={!pend.length || ocupado === 'zip'} onClick={() => void descargar()}>
-            {ocupado === 'zip' ? 'Reuniendo los PDF…' : `Descargar todos${pend.length ? ` (${pend.length})` : ''}`}
-          </button>
-        </div>
-      </div>
+      {encabezado}
       <Guardado texto={hecho} />
-      {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
+      {!d.datos && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando las pendientes" />}
       {d.datos && (
         <div className="cx-tarjeta">
           <p role="status" className="cxp-pendientes-resumen"><strong>{fraseResumen(pend, ddmmaa)}</strong></p>

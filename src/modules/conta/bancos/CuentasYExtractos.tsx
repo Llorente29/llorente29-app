@@ -9,6 +9,8 @@
 // Abajo, las cuentas 572 del plan que aún no son un banco de Folvy.
 // Arriba, siempre, «+ Nuevo banco o tarjeta» (S01d): un banco que aún no está
 // en el plan, con su subcuenta 572 nueva. Llegar con ?nuevo=banco lo abre.
+// S02 · PR 2: ese botón es uno blanco del encabezado de la página (BancosPage),
+// que lleva aquí con ?nuevo=banco; el principal de Bancos es «Subir extracto».
 //
 // Sin tarjetas de crédito: ninguna empresa las usa (respuesta 3, punto 4).
 
@@ -39,12 +41,11 @@ export function CuentasYExtractos() {
   const [aviso, setAviso] = useState<Aviso>(null)
   const porDar = useLeer(() => cuentasPorDarDeAlta(companyId), `${companyId}:${vuelta}`)
   const [alta, setAlta] = useState<{ codigo: string; nombre: string; iban: string } | null>(null)
-  // Los enlaces de «no hay ningún banco» llegan con ?nuevo=banco: el diálogo, ya abierto.
-  // (Se deriva de la dirección, no se copia: también vale si ya estabas en esta pestaña.)
-  const [abierto, setNuevo] = useState(false)
-  const nuevo = abierto || query.get(PARAM_NUEVO) === VALOR_NUEVO
+  // «+ Nuevo banco o tarjeta» (el botón del encabezado) y los enlaces de «no hay ningún banco» llegan
+  // con ?nuevo=banco: el diálogo, ya abierto. (Se deriva de la dirección, no se copia: también vale si
+  // ya estabas en esta página.)
+  const nuevo = query.get(PARAM_NUEVO) === VALOR_NUEVO
   const cerrarNuevo = () => {
-    setNuevo(false)
     if (query.has(PARAM_NUEVO)) { const p = new URLSearchParams(query); p.delete(PARAM_NUEVO); setQuery(p, { replace: true }) }
   }
 
@@ -54,11 +55,9 @@ export function CuentasYExtractos() {
   }
 
   return (
-    <section className="cxb-seccion" aria-labelledby="cxb-cuentas-titulo">
-      <div className="cxl-seccion">
-        <div><h2 id="cxb-cuentas-titulo">Cuentas y extractos</h2><p className="cx-ayuda">Tus cuentas del banco, sus tarjetas de débito y lo que se ha subido de cada una.</p></div>
-        <button type="button" className="cx-boton" onClick={() => { setAviso(null); setNuevo(true) }}>{ACCION_NUEVO}</button>
-      </div>
+    <section className="cxb-seccion" aria-label="Cuentas y extractos">
+      {/* S02 · PR 2: el título, su frase y «+ Nuevo banco o tarjeta» (un botón blanco que llega con
+          ?nuevo=banco y abre el diálogo) van en el encabezado de la página (BancosPage). */}
       {aviso && <div className={aviso.tipo === 'ok' ? 'cx-guardado' : 'cx-error'} role={aviso.tipo === 'ok' ? 'status' : 'alert'}>{aviso.texto}</div>}
       {datos.bancos.length === 0 && (
         <div className="cx-tarjeta">

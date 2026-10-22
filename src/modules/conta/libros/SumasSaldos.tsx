@@ -6,12 +6,18 @@
 // cuentas y salida a pantalla, PDF o Excel (respuesta 1). Los totales de Debe
 // y Haber cuadran; cada nivel suma a sus hijos (regla 5). Y Acumulados: el
 // saldo de cada cuenta mes a mes.
+//
+// S02 · PR 2 · El encabezado del patrón (EncabezadoLibro) con el nombre del
+// libro, la frase del periodo y «Ver: … Cambiar»; PDF y Excel, blancos. Las
+// fechas pasan a la fila de opciones, con los niveles y las casillas.
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaMayor } from '@/config/navegacion'
-import { Migas } from '@/modules/conta/proveedor/piezas'
-import { ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
+import { Boton } from '@/modules/conta/diseno'
+import { EncabezadoLibro } from '@/modules/conta/libros/EncabezadoLibro'
+import { fraseDelPeriodo } from '@/modules/conta/libros/encabezado'
+import { ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { OPCIONES_POR_DEFECTO, filasQueNoSuman, sumasYSaldos, totales, type Nivel, type OpcionesSumas } from '@/modules/conta/lib/sumasSaldos'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
@@ -54,14 +60,15 @@ export function SumasSaldos() {
 
   return (
     <section className="cxl-pagina" aria-label="Sumas y saldos">
-      <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Mayor y saldos' }]} /><h2>Sumas y saldos</h2></div>
-        <div className="cxl-herramientas">
-          <label className="cx-campo"><span className="cx-etiqueta">Desde</span><input className="cx-input" type="date" value={desde} min={L.ejercicio.inicio} max={hasta} onChange={(e) => setDesde(e.target.value)} /></label>
-          <label className="cx-campo"><span className="cx-etiqueta">Hasta</span><input className="cx-input" type="date" value={hasta} min={desde} max={L.ejercicio.fin} onChange={(e) => setHasta(e.target.value)} /></label>
-          <button type="button" className="cx-boton-sec" onClick={() => exportar('pdf')} disabled={!filas.length}>PDF</button>
-          <button type="button" className="cx-boton-sec" onClick={() => exportar('excel')} disabled={!filas.length}>Excel</button>
-        </div>
+      <EncabezadoLibro titulo="Sumas y saldos"
+        frase={`${fraseDelPeriodo(desde, hasta)} · por ${niveles.length ? niveles.join(', ') : 'subcuenta'}: lo que suma cada cuenta al Debe y al Haber, y su saldo.`}
+        secundarios={<>
+          <Boton icono="descargar" onClick={() => exportar('pdf')} disabled={!filas.length}>Exportar PDF</Boton>
+          <Boton onClick={() => exportar('excel')} disabled={!filas.length}>Excel</Boton>
+        </>} />
+      <div className="cxl-opciones" role="group" aria-label="Periodo">
+        <label className="cx-campo"><span className="cx-etiqueta">Desde</span><input className="cx-input" type="date" value={desde} min={L.ejercicio.inicio} max={hasta} onChange={(e) => setDesde(e.target.value)} /></label>
+        <label className="cx-campo"><span className="cx-etiqueta">Hasta</span><input className="cx-input" type="date" value={hasta} min={desde} max={L.ejercicio.fin} onChange={(e) => setHasta(e.target.value)} /></label>
       </div>
       <div className="cx-tablas-filtros" role="group" aria-label="Niveles">
         {NIVELES.map((n) => <button key={n.id} type="button" className="cx-pildora" aria-pressed={niveles.includes(n.id)}
@@ -74,11 +81,11 @@ export function SumasSaldos() {
       </div>
       <Guardado texto={hecho} />
       {d.error && <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />}
-      {!d.datos && !d.error && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2].map((i) => <Hueso key={i} alto={30} />)}</div>}
+      {!d.datos && !d.error && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando sumas y saldos" />}
       {d.datos && (filas.length === 0
-        ? <div className="cx-tarjeta"><Vacio titulo="Sin movimientos con estas opciones." explicacion="Marca «Saldos a 0» para ver también las cuentas saldadas, o cambia el periodo." /></div>
+        ? <div className="cxl-caja"><Vacio titulo="Sin movimientos con estas opciones." explicacion="Marca «Saldos a 0» para ver también las cuentas saldadas, o cambia el periodo." /></div>
         : (
-          <div className="cx-tarjeta">
+          <div className="cxl-caja">
             <table className="cxl-tabla cxl-apilada" aria-label="Sumas y saldos">
               <thead><tr>{cab.map((c, i) => <th key={c} className={i ? 'cxl-der' : undefined}>{c}</th>)}</tr></thead>
               <tbody>
@@ -141,13 +148,13 @@ export function Acumulados() {
   }, [d.datos, meses])
   return (
     <section className="cxl-pagina" aria-label="Acumulados">
-      <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Mayor y saldos' }]} /><h2>Acumulados</h2></div></div>
+      <EncabezadoLibro titulo="Acumulados" frase={`${fraseDelPeriodo(L.ejercicio.inicio, L.ejercicio.fin)}: el saldo de cada cuenta al final de cada mes.`} />
       {d.error && <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />}
-      {!d.datos && !d.error && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={30} /></div>}
+      {!d.datos && !d.error && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando los acumulados" />}
       {d.datos && (filas.length === 0
-        ? <div className="cx-tarjeta"><Vacio titulo="Aún no hay movimientos en el ejercicio." explicacion="Cuando haya asientos validados, aquí sale el saldo de cada cuenta al final de cada mes." /></div>
+        ? <div className="cxl-caja"><Vacio titulo="Aún no hay movimientos en el ejercicio." explicacion="Cuando haya asientos validados, aquí sale el saldo de cada cuenta al final de cada mes." /></div>
         : (
-          <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
+          <div className="cxl-caja">
             <table className="cxl-tabla cxl-apilada" aria-label="Saldo de cada cuenta al final de cada mes">
               <thead><tr><th>Cuenta</th>{meses.map((m) => <th key={m} className="cxl-der">{m.slice(5)}/{m.slice(2, 4)}</th>)}</tr></thead>
               <tbody>{filas.map((f) => <tr key={f.code}><td><Link to={rutaMayor(f.code)}>{f.code}</Link><span className="cxl-apoyo">{f.nombre}</span></td>

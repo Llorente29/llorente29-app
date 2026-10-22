@@ -171,12 +171,27 @@ export const reabrirEjercicio = (fiscalYearId: string, motivo: string) => rpc<{ 
 
 const COLS_LIBRO = 'id, entry_id, book, invoice_type, series, number, number_to, documents_count, issue_date, operation_date, received_date, received_number, party_id, counterpart_tax_id, counterpart_id_type, counterpart_country, counterpart_name, operation_key, qualification, exempt_cause, tax_base, tax_rate, tax_amount, surcharge_rate, surcharge_amount, total, deductible_amount, deductible_later, reverse_charge, investment_good, withholding_rate, withholding_amount, activity_code, activity_type, activity_iae, corrects_ref, source_type, source_id, voided_at, deduction_year, deduction_period, deduction_reason'
 
+/** Lo que la base devuelve como mucho en una consulta (PostgREST, max_rows). */
+const POR_PAGINA = 1000
+
 export async function leerLibroRegistro(accountId: string, companyId: string, libros: Libro[], desde: string, hasta: string): Promise<AnotacionLibro[]> {
-  const { data, error } = await tabla('vat_book_entry').select(COLS_LIBRO)
-    .eq('account_id', accountId).eq('company_id', companyId).in('book', libros)
-    .gte('issue_date', desde).lte('issue_date', hasta).order('issue_date', { ascending: false }).order('number', { ascending: false })
-  if (error) throw new Error(mensaje('No se ha podido leer el libro registro', error))
-  return ((data ?? []) as Fila[]).map((f) => ({
+  // S02 · PR 2: por páginas. La base corta en 1.000 filas sin avisar, y un
+  // ejercicio entero las pasa (Foodint, expedidas de 2026: 1.317). Sin paginar,
+  // el libro enseñaba 1.000 y no decía que faltaban (regla 7). El id desempata
+  // el orden, para que una página no repita ni se salte filas.
+  const filas: Fila[] = []
+  for (let a = 0; ; a += POR_PAGINA) {
+    const { data, error } = await tabla('vat_book_entry').select(COLS_LIBRO)
+      .eq('account_id', accountId).eq('company_id', companyId).in('book', libros)
+      .gte('issue_date', desde).lte('issue_date', hasta)
+      .order('issue_date', { ascending: false }).order('number', { ascending: false }).order('id')
+      .range(a, a + POR_PAGINA - 1)
+    if (error) throw new Error(mensaje('No se ha podido leer el libro registro', error))
+    const pagina = (data ?? []) as Fila[]
+    filas.push(...pagina)
+    if (pagina.length < POR_PAGINA) break
+  }
+  return filas.map((f) => ({
     id: String(f.id), entryId: String(f.entry_id), book: String(f.book) as Libro, invoiceType: String(f.invoice_type) as AnotacionLibro['invoiceType'],
     series: txt(f.series), number: txt(f.number), numberTo: txt(f.number_to), documentsCount: num(f.documents_count),
     issueDate: String(f.issue_date), operationDate: txt(f.operation_date), receivedDate: txt(f.received_date), receivedNumber: txt(f.received_number),

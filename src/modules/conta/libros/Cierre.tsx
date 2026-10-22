@@ -6,6 +6,11 @@
 //   · Cerrar el mes: los meses del ejercicio, cerrados (quién y por qué) o
 //     abiertos, con Cerrar y Reabrir (con motivo). Las mismas funciones que el
 //     libro diario (C04): aquí solo están a mano.
+//     S02 · PR 2: y en la MISMA página, el cierre del mes de cada banco (antes,
+//     Bancos › Cierre del mes): un mes se cierra en contabilidad y en cada
+//     banco, y los dos se ven juntos. El de los bancos es de un mes (?mes=;
+//     sin él, el último terminado) y pone primero el banco por el que se llegó
+//     (?banco=). La dirección de antes, bancos/cierre, lleva aquí.
 //   · Regularización, cierre y apertura: Folvy calcula los tres asientos
 //     (src/modules/conta/lib/cierre.ts), los PROPONE como cualquier otro
 //     asiento (se validan en el libro diario) y los enlaza al ejercicio; luego
@@ -13,11 +18,14 @@
 //     contraasiento. Un ejercicio TRAÍDO se enseña tal cual: no se recalcula.
 
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaLibroDiario, rutaLibros, rutaTuEmpresa } from '@/config/navegacion'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
-import { eurosExactos } from '@/modules/conta/lib/formato'
+import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { FiltroSelector } from '@/modules/conta/diseno/plantillas'
+import { CierreDelMes } from '@/modules/conta/bancos/CierreDelMes'
+import { mesDelCierre } from '@/modules/conta/bancos/navegacion'
 import { prepararCierre, sumas, type AsientoCierre, type SaldoACerrar } from '@/modules/conta/lib/cierre'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { cerrarMes, leerCierres, reabrirMes } from '@/modules/conta/services/diarioService'
@@ -71,22 +79,27 @@ export function Ejercicios() {
 
 export function CerrarMes() {
   const L = useLibros()
+  const [query, setQuery] = useSearchParams()
   const [hecho, setHecho] = useState<string | null>(null)
   const [reabriendo, setReabriendo] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
+  const hoy = hoyEnMadrid()
   const d = useLeer(() => leerCierres(L.accountId, L.companyId), `${L.companyId}:${L.vuelta}`)
   const meses = useMemo(() => {
     const r: string[] = []
     let y = Number(L.ejercicio.inicio.slice(0, 4)); let m = Number(L.ejercicio.inicio.slice(5, 7))
-    const hoy = new Date().toISOString().slice(0, 7)
+    const esteMes = hoy.slice(0, 7)
     for (;;) {
       const k = `${y}-${String(m).padStart(2, '0')}`
-      if (`${k}-01` > L.ejercicio.fin || k > hoy) break
+      if (`${k}-01` > L.ejercicio.fin || k > esteMes) break
       r.push(`${k}-01`)
       m++; if (m > 12) { m = 1; y++ }
     }
     return r
-  }, [L.ejercicio])
+  }, [L.ejercicio, hoy])
+  // El mes de los bancos: el de la dirección o el último terminado del ejercicio.
+  const bancos = mesDelCierre(meses.map((x) => x.slice(0, 7)), query.get('mes'), hoy)
+  const cambiarMesBancos = (mes: string) => { const p = new URLSearchParams(query); p.set('mes', mes); setQuery(p, { replace: true }) }
 
   async function cerrar(mes: string) {
     setOcupado(mes); setHecho(null)
@@ -98,13 +111,18 @@ export function CerrarMes() {
   return (
     <section className="cxl-pagina" aria-label="Cerrar el mes">
       <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cierre' }]} /><h2>Cerrar el mes</h2></div>
+        <div>
+          <Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cierre' }]} /><h2>Cerrar el mes</h2>
+          <p className="cx-ayuda">Un mes se cierra dos veces: en contabilidad (ya no entran asientos con su fecha) y en cada banco (su saldo cuadra con el de contabilidad).</p>
+        </div>
         <div className="cxl-herramientas"><Link to={rutaLibroDiario()} className="cx-boton-sec">Lo que falta, en el libro diario</Link></div>
       </div>
+
+      <h3 className="cxl-subtitulo" id="cxl-cierre-contabilidad">La contabilidad, mes a mes</h3>
       <Guardado texto={hecho} />
       {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
       {d.datos && (
-        <div className="cx-tarjeta">
+        <div className="cx-tarjeta" role="region" aria-labelledby="cxl-cierre-contabilidad">
           <ul className="cxl-lista-estado">
             {meses.map((mes) => {
               const c = d.datos!.find((x) => x.mes === mes)
@@ -127,6 +145,15 @@ export function CerrarMes() {
           <p className="cxl-pie">Un mes cerrado no admite asientos con fecha de ese mes. Uno cerrado porque ya se presentó su impuesto, o traído de otro programa, no se reabre desde aquí.</p>
         </div>
       )}
+
+      {/* S02 · PR 2: el cierre del mes de cada banco, aquí, al lado del de la contabilidad. */}
+      <div className="cxl-seccion" role="group" aria-labelledby="cxl-cierre-bancos">
+        <h3 className="cxl-subtitulo" id="cxl-cierre-bancos">Los bancos, en {nombreMes(`${bancos.mes}-01`)}</h3>
+        <FiltroSelector etiqueta="Mes de los bancos" valor={bancos.mes} alCambiar={cambiarMesBancos}
+          opciones={bancos.opciones.map((m) => ({ valor: m, texto: nombreMes(`${m}-01`) }))} />
+      </div>
+      <CierreDelMes accountId={L.accountId} companyId={L.companyId} mes={bancos.mes} hoy={hoy} bancoDestacado={query.get('banco')} />
+
       {reabriendo && (
         <ConMotivo titulo={`Reabrir ${nombreMes(reabriendo)}`} explicacion="Vuelven a entrar asientos con fecha de ese mes. Queda apuntado quién y por qué." boton="Reabrir"
           alCerrar={() => setReabriendo(null)}

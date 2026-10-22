@@ -100,8 +100,8 @@ export function Reglas() {
   const exNueva = textoNuevo ? examen({ contiene: textoNuevo }) : null
 
   return (
-    <section className="cxb-seccion" aria-labelledby="cxb-reglas-titulo">
-      <div className="cxl-seccion"><div><h2 id="cxb-reglas-titulo">Reglas</h2><p className="cx-ayuda">Lo que se hace siempre igual. Las uso para proponer; una regla casa sola cuando la has confirmado 3 veces sin corregirla.</p></div></div>
+    <section className="cxb-seccion" aria-label="Reglas">
+      {/* S02 · PR 2: el título y su frase, en el encabezado de la página (BancosPage). */}
       {aviso && <div className={aviso.tipo === 'ok' ? 'cx-guardado' : 'cx-error'} role={aviso.tipo === 'ok' ? 'status' : 'alert'}>{aviso.texto}</div>}
 
       <div className="cxb-banda" role="note">

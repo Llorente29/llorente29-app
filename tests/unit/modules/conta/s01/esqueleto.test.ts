@@ -148,12 +148,10 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.id)).toEqual(['recibidas', 'liquidaciones'])
     expect(c.ruta).toBe(CONTA.rutas.documentos)
   })
-  it('S02 · Bancos: Movimientos · Cuentas y extractos · Reglas (el cierre del mes, en Contabilidad › Cierre y Registro desde el PR 2); en el móvil, por niveles', () => {
+  it('S02 · Bancos: Movimientos · Cuentas y extractos · Reglas (el cierre del mes, en Contabilidad › Cierre y Registro desde el PR 2)', () => {
     const b = PRODUCTOS.find((p) => p.id === 'bancos')!
     expect(b.pestanas.map((t) => t.etiqueta)).toEqual(['Movimientos', 'Cuentas y extractos', 'Reglas'])
     expect(de('/conta/bancos/cierre')).toBe('contabilidad.cierre')
-    expect(b.portadaMovil).toBe(true)
-    expect(PRODUCTOS.filter((p) => p.portadaMovil).map((p) => p.id)).toEqual(['bancos'])
   })
   it('S02 · Ajustes es un apartado con sus páginas (las de su índice), sin las de Definiciones; en el producto solo, sin las que dicen «aún no»', () => {
     const a = PRODUCTOS.find((p) => p.id === 'ajustes')!
@@ -209,16 +207,8 @@ describe('el catálogo de órdenes', () => {
       expect(de(rutaConta(('ruta' in o.a ? o.a.ruta : ''))), x.id).toBe(`contabilidad.${o.pestana}`)
     }
   })
-  it('paso 3: la barra de Bancos es la cinta de sus páginas; «Tus bancos» lo llena la pantalla', () => {
-    expect(cintaDe('bancos', 'cierre', NADA)).toEqual([])
-    for (const t of ['movimientos', 'reglas', 'cuentas']) {
-      expect(cintaDe('bancos', t, NADA).map((g) => [g.titulo, g.dePantalla ?? null, g.ordenes.map((o) => o.etiqueta)]), t).toEqual([
-        ['Tus bancos', 'bancos', []],
-        ['Traer movimientos', null, ['Subir extracto']],
-        ['Automático', null, ['Reglas', 'Casados solos']],
-        ['Revisar', null, ['Lo que he hecho']],
-      ])
-    }
+  it('S02 · PR 2: Bancos pinta su encabezado (bancos/acciones.ts): el catálogo no le pone fila; sus órdenes siguen para el buscador y Favoritos', () => {
+    for (const t of ['movimientos', 'reglas', 'cuentas', 'cierre']) expect(cintaDe('bancos', t, NADA), t).toEqual([])
     // Cada orden lleva a una dirección de Bancos que el esqueleto pone en su pestaña.
     for (const id of ['bancos.subir', 'bancos.reglas', 'bancos.casados', 'bancos.hecho']) {
       const o = ordenPorId(id)!

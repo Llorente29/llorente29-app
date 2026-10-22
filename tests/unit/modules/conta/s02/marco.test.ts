@@ -51,7 +51,10 @@ describe('las acciones de una página, con la regla del patrón', () => {
   it('Bancos: «Subir extracto» es el principal; los bancos de la pantalla, un selector', () => {
     const g: GrupoDeAcciones[] = [
       { titulo: 'Tus bancos', acciones: [{ id: 'b1', etiqueta: 'BBVA', a: '/conta/bancos?banco=b1', actual: true, grupo: 'Tus bancos' }, { id: 'b2', etiqueta: 'Caixa', a: '/conta/bancos?banco=b2', actual: false, grupo: 'Tus bancos' }] },
-      ...resueltas('bancos', 'movimientos').filter((x) => x.acciones.length > 0),
+      // S02 · PR 2: Bancos pone sus acciones en su encabezado (bancos/acciones.ts, con sus pruebas en
+      // pr2-bancos-patron); aquí, la regla del reparto con las suyas: el principal y un banco elegido.
+      { titulo: 'Traer movimientos', acciones: [{ id: 'bancos.subir', etiqueta: 'Subir extracto', a: '/conta/bancos/subir', principal: true, grupo: 'Traer movimientos' }] },
+      { titulo: 'Automático', acciones: [{ id: 'bancos.reglas', etiqueta: 'Reglas', a: '/conta/bancos/reglas', grupo: 'Automático' }] },
     ]
     const r = repartirAcciones(g)
     expect(r.principal?.etiqueta).toBe('Subir extracto')

@@ -131,13 +131,6 @@ export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_LIBROS, ...DE_DEFINICIONE
 const POR_ID = new Map(ORDENES.map((o) => [o.id, o]))
 export const ordenPorId = (id: string): Orden | null => POR_ID.get(id) ?? null
 
-const CINTA_BANCOS: GrupoCinta[] = [
-  { titulo: 'Tus bancos', ordenes: [], dePantalla: 'bancos' },
-  { titulo: 'Traer movimientos', ordenes: ['bancos.subir'] },
-  { titulo: 'Automático', ordenes: ['bancos.reglas', 'bancos.casados'] },
-  { titulo: 'Revisar', ordenes: ['bancos.hecho'] },
-]
-
 /** Las acciones de cada página ('producto.página'), por grupos. Sin entrada, la página no lleva. */
 export const CINTAS: Record<string, GrupoCinta[]> = {
   'contabilidad.asientos': [
@@ -175,11 +168,7 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   // S02: Facturas recibidas lleva su propio encabezado (Lista): sus acciones las pone la pantalla.
   // Paso 3: Contactos, la misma en todas sus pestañas.
   ...Object.fromEntries(['todos', 'clientes', 'proveedores', 'plataformas', 'socios'].map((t) => [`contactos.${t}`, [{ titulo: 'Nuevo', ordenes: ['contactos.nuevo', 'contactos.nuevo-proveedor'] }]])),
-  // Paso 3: la barra de Bancos (B01), la misma en sus páginas. S02 · PR 2: el
-  // cierre del mes pasó a Contabilidad › Cierre y Registro.
-  'bancos.movimientos': CINTA_BANCOS,
-  'bancos.reglas': CINTA_BANCOS,
-  'bancos.cuentas': CINTA_BANCOS,
+  // S02 · PR 2: Bancos pinta su encabezado (bancos/acciones.ts): sus acciones las pone la pantalla.
   // I01b · Impuestos: lo de la cabecera del tablero 8 («Ya presenté uno fuera», «Revisar y
   // presentar los de octubre»), que depende del mes y de lo que haya: lo pone la pantalla.
   'impuestos.calendario': [{ titulo: 'Presentar', ordenes: [], dePantalla: 'impuestos' }],

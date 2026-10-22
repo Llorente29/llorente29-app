@@ -75,11 +75,6 @@ export interface Producto {
   abajo?: boolean
   /** S02 · Su grupo, cuando la barra se agrupe (hoy no se pinta). */
   grupo?: GrupoBarra
-  /**
-   * En el móvil, la pantalla va por niveles (patrón M4: portada con sus
-   * apartados y «‹ Volver»). Bancos.
-   */
-  portadaMovil?: boolean
 }
 
 /** Lo que decide qué sale: de la empresa activa y de la cuenta. */
@@ -170,7 +165,7 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], portadaMovil: true, grupo: 'finanzas',
+    id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], grupo: 'finanzas',
     pestanas: [
       { id: 'movimientos', etiqueta: 'Movimientos', icono: 'movimientos', ruta: R.bancos, prefijos: [R.bancos] },
       { id: 'cuentas', etiqueta: 'Cuentas y extractos', icono: 'cuentasBanco', ruta: `${R.bancos}/cuentas`, prefijos: [`${R.bancos}/cuentas`] },

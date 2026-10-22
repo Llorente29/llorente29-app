@@ -30,3 +30,23 @@ export function introEnLaHoja(e: KeyboardEvent<HTMLElement>, alFinal: () => void
   else campos[i + 1].focus()
   return true
 }
+
+/** Hoja de líneas · una cuenta para F4: su número y su nombre. */
+export interface CuentaHoja { codigo: string; nombre: string }
+
+const sinAcentos = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+
+/**
+ * Hoja de líneas · F4 busca la cuenta: por número, las que empiezan por lo
+ * escrito («572» → 57200001…); por nombre, las que tienen todas las palabras,
+ * sin mirar acentos. Como mucho `max`. Es la misma regla que la búsqueda de
+ * subcuenta del formulario del M01 (ui/formulario/formulario.ts), escrita aquí
+ * porque las plantillas no cogen piezas de ui/ (diseno-reglas.test.ts, regla 4).
+ */
+export function buscarCuentasHoja(lista: readonly CuentaHoja[], q: string, max = 12): CuentaHoja[] {
+  const t = sinAcentos(q)
+  if (!t) return lista.slice(0, max)
+  if (/^\d+$/.test(t)) return lista.filter((c) => c.codigo.startsWith(t)).slice(0, max)
+  const palabras = t.split(/\s+/)
+  return lista.filter((c) => { const n = sinAcentos(`${c.codigo} ${c.nombre}`); return palabras.every((p) => n.includes(p)) }).slice(0, max)
+}

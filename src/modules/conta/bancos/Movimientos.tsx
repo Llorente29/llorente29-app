@@ -16,6 +16,11 @@
 // fila se abre su panel lateral (PanelMovimiento). Teclado: ↑↓ para moverse,
 // Intro confirma, espacio marca la casilla.
 //
+// S02 · PR 2: el título, el banco y el mes van en el encabezado de la página
+// (BancosPage), con «Subir extracto» de principal. La lista se queda con su
+// forma (filas por día, casillas, teclado y panel lateral: TablaLista no los
+// tiene) y toma del patrón la altura de fila y las cifras tabulares.
+//
 // En el móvil, una tarjeta por movimiento, «Confirmar los N seguros» arriba,
 // «Hacer foto del ticket» como botón principal cuando falta, y «Es el mismo /
 // Son dos» en los posibles repetidos.
@@ -30,7 +35,7 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
-import { TEXTO_BOTON, filaDe, limitesMes, migasBanco, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
+import { TEXTO_BOTON, filaDe, limitesMes, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import {
   BANDEJAS, PILDORA, bandejaDe, coincide, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, puntoDePartida, quienEs, textoBloque, textoDelBanco, type Bandeja, type Grupo,
@@ -245,14 +250,8 @@ export function Movimientos() {
   )
 
   return (
-    <section className="cxb-movimientos cxn-conciliar" aria-labelledby="cxb-mov-titulo">
-      <div className="cxl-seccion">
-        <div>
-          <nav className="cxp-migas" aria-label="Estás en"><span>Bancos</span><span aria-hidden="true">›</span><span aria-current="page">{migasBanco(banco).replace(/^Bancos › /, '')}</span></nav>
-          <h2 id="cxb-mov-titulo">Movimientos</h2>
-        </div>
-        {!movil && <div className="cxl-herramientas"><button type="button" className="cx-boton-sec" onClick={() => ctx.subir()}>Subir extracto</button></div>}
-      </div>
+    <section className="cxb-movimientos cxn-conciliar" aria-label={`Movimientos de ${banco.nombre}`}>
+      {/* S02 · PR 2: el título, el banco y el mes y «Subir extracto» van en el encabezado de la página (BancosPage). */}
 
       {/* El cuadre: en el banco − en contabilidad = te falta por casar, y la barra. */}
       <div className="cxn-cuadre" data-testid="cuadre">
