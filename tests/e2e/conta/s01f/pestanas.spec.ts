@@ -96,7 +96,9 @@ for (const m of MODULOS) {
     // La empresa, con su cuadrado (su logo o su inicial en su color) de 28 px (antes, el logo de 24).
     const cuadrado = page.locator(movil ? '.s-cab-fila-movil .s-empresa-cuadrado' : '.s-cabecera .s-empresa-cuadrado')
     await expect(cuadrado).toBeVisible()
-    expect(Math.round((await cuadrado.boundingBox())!.width)).toBe(28)
+    // El cuadrado se pinta con la inicial y se cambia por el logo cuando llega:
+    // se mide el que queda, con reintento (entre los dos no hay caja).
+    await expect.poll(async () => Math.round((await cuadrado.boundingBox())?.width ?? 0)).toBe(28)
     // S02: ya no hay franja de pestañas ni «Más ▾» de pestañas en ninguna parte.
     await expect(page.getByRole('navigation', { name: /^Pestañas de / })).toHaveCount(0)
 
