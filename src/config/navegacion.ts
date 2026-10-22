@@ -208,6 +208,8 @@ export const CONTA = {
     compras: 'compras',
     /** Ventas (en el menú como la maqueta; su pantalla, con el detalle de las plataformas). */
     ventas: 'ventas',
+    /** S02 · PR 3 · Compras y gastos › Liquidaciones: todas, las mensuales y las quincenas de Catcher. */
+    liquidaciones: 'compras/liquidaciones',
     /** Subir los documentos de una liquidación mensual (N19). */
     liquidacionNueva: 'compras/liquidacion/nueva',
     /** Una liquidación mensual y su contraste (N19). */
@@ -369,6 +371,8 @@ export const rutaNuevaEmitida = (): string => rutaConta(CONTA.rutas.nuevaEmitida
 export const rutaLoteCatcher = (loteId: string): string => rutaConta(CONTA.rutas.loteCatcher, { loteId })
 /** Bancos (B01): sin pestaña, Movimientos. */
 export const rutaBancos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.bancosPestana, { pestana }) : rutaConta(CONTA.rutas.bancos))
+/** S02 · PR 3 · Compras y gastos › Liquidaciones (con ?subir=catcher, abierta la de subir la quincena). */
+export const rutaLiquidaciones = (subir?: 'catcher'): string => `${rutaConta(CONTA.rutas.liquidaciones)}${subir ? `?subir=${subir}` : ''}`
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
 /** I01b · Impuestos: el calendario, o una de sus pestañas (presentados, sociedades, certificados). */
 export const rutaImpuestos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.impuestosPestana, { pestana }) : rutaConta(CONTA.rutas.impuestos))

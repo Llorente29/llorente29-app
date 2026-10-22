@@ -20,6 +20,9 @@
 // En el móvil: la tabla en tarjetas y, abajo, «Revisar de una en una» y
 // «Subir factura».
 //
+// S02 · PR 3: las quincenas de Catcher ya no salen al final: son liquidaciones
+// y viven en Compras y gastos › Liquidaciones (cada cosa en un sitio).
+//
 // Regla 7: «Todas» trae todas, también las repetidas y las descartadas; un
 // filtro ordena y etiqueta, nunca decide qué existe. Regla 8: subir dice qué
 // ha entrado y qué no.
@@ -37,9 +40,7 @@ import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { leerDocumentos, leerExtrasFacturas, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type ExtraFactura, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
-import { QuincenaCatcher } from '@/modules/conta/documentos/QuincenaCatcher'
-import { usaCatcher } from '@/modules/conta/services/catcherService'
-import { useAnalitica, useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
 import { Boton, Chip, Icono } from '@/modules/conta/diseno'
@@ -61,7 +62,6 @@ export default function DocumentosPage() {
   const solo = useProductoSolo()
   const producto = productoDeDocumentos(solo, MARCA.nombre)
   const { local: ejeLocal } = useAnalitica()
-  const hosteleria = useHosteleria()
   const navegar = useNavigate()
   const { pathname, search } = useLocation()
   const [query, setQuery] = useSearchParams()
@@ -74,7 +74,6 @@ export default function DocumentosPage() {
   const ids = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'factura').map((x) => x.id), [datos.datos])
   const extras = useLeer(accountId && ids.length ? () => leerExtrasFacturas(accountId, ids) : null, `${accountId}:${ids.join(',')}`)
   const mapa = extras.datos ?? (new Map() as Map<string, ExtraFactura>)
-  const conCatcher = useLeer(accountId && activa ? () => usaCatcher(accountId, activa.id) : null, `${accountId}:${activa?.id}`)
 
   const ficheros = useRef<HTMLInputElement>(null)
   const camara = useRef<HTMLInputElement>(null)
@@ -286,9 +285,6 @@ export default function DocumentosPage() {
           pie={pie}
         />
       )}
-
-      {accountId && hosteleria && conCatcher.datos === true && <QuincenaCatcher accountId={accountId} companyId={activa.id} quien={userName} />}
-      {hosteleria && conCatcher.error && <p className="s-aviso-lista" data-tono="falta" role="alert">{conCatcher.error}</p>}
 
       <BotonPulgar>
         {porRevisar > 0 && <Boton onClick={revisarUnaAUna}>Revisar de una en una</Boton>}

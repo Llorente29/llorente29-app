@@ -33,6 +33,7 @@ import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
 import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
 import FacturasEmitidasPage from '@/modules/conta/facturacion/FacturasEmitidasPage'
 import LoteCatcherPage from '@/modules/conta/documentos/LoteCatcherPage'
+import LiquidacionesPage from '@/modules/conta/compras/LiquidacionesPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
 import ComprasPage from '@/modules/conta/compras/ComprasPage'
@@ -128,6 +129,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.documentos, element: enMarco(<DocumentosPage />, '¿Qué facturas me faltan este mes?', true) },
     { path: CONTA.rutas.revisarFactura, element: enMarco(<RevisarFacturaPage />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.loteCatcher, element: enMarco(<LoteCatcherPage />, '¿Cuadra la quincena de Catcher?', true) },
+    // S02 · PR 3: Compras y gastos › Liquidaciones, todas en una lista.
+    { path: CONTA.rutas.liquidaciones, element: enMarco(<LiquidacionesPage />, '¿Qué liquidaciones me faltan?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
