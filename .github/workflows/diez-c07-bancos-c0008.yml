@@ -10,12 +10,12 @@ name: Diez · C07 · ¿están ya en C0008 los bancos de Sumied? (solo lectura)
 # QUÉ SALE: solo «@@ clave número», por scripts/conta/salida-segura.mjs: ni
 # importes, ni cuentas, ni textos.
 #
-# CUÁNDO: al empujar a conta/c07-diez-todo un commit cuyo mensaje EMPIECE por
+# CUÁNDO: al empujar a conta/c06c-diez-todo (o conta/c07-diez-todo) un commit cuyo mensaje EMPIECE por
 # «[c07-bancos-c0008]».
 
 on:
   push:
-    branches: ['conta/c07-diez-todo']
+    branches: ['conta/c07-diez-todo', 'conta/c06c-diez-todo']
 
 concurrency:
   group: diez-lectura

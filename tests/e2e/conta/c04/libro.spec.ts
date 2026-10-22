@@ -85,10 +85,10 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   if (lado(page) === 'ordenador') {
     await expect(contra.locator('.cxd-num')).toHaveText('General 3')
     await expect(filaDe(page, /Nóminas de septiembre/).locator('.cxd-num')).toHaveText('Nóminas 1')
-    // El número en Diez, en su columna; sin número, «—» con su porqué (nunca un hueco mudo).
-    await expect(page.getByRole('columnheader', { name: 'Diez' })).toBeVisible()
-    await expect(contra.locator('.cxd-diez')).toHaveText(/^—/)
-    await expect(contra.locator('.cxd-diez')).toHaveAttribute('title', /.+/)
+    // C07 (Julio, 22/10): A tiene «Enviar a Diez» apagado, así que el libro no habla de Diez: ni su columna.
+    // La columna con «Enviar a Diez» encendido la prueba c06/diezTodo.spec.ts.
+    await expect(page.getByRole('columnheader', { name: 'Diez' })).toHaveCount(0)
+    await expect(contra.locator('.cxd-diez')).toHaveCount(0)
   } else {
     await expect(contra.locator('.cxd-num-movil')).toHaveText('General 3')
   }
