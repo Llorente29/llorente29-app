@@ -1,16 +1,22 @@
 {
-  "_que": "E05 · Las facturas de riders · contexto de producción de la tanda viva (0410), medido en SOLO LECTURA el 21/10 a las 17:42 UTC, después de la 0350–0370 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow.",
-  "medido": "2026-10-21T17:42Z",
+  "_que": "C07 · todo asiento de Sumied a Diez · contexto de producción de la tanda viva (20261201T0430), medido en SOLO LECTURA el 22/10 a las 06:46 UTC, después de la 0410 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen conta_diez_autorizo, external_send, conta_resumen_ventas(uuid) (md5 del cuerpo 62ba30b9…) y conta_recibida_envio(uuid) (e3c57e29…); ninguna de las nuevas; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-22T06:46Z",
   "tanda": {
-    "supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql": "fb03d2e2eef469d90d7937d4cdfcb7b0"
+    "supabase/migrations/20261201T0430_c07_diez_todo.sql": "8efc766d9e3945e32952eb7fc1958a4a"
   },
   "contexto": {
-    "tablas": [],
-    "funciones": [
-      "public.compras_ficha_le_falta(uuid)",
-      "public.conta_vat_book_desde_asiento(uuid)"
+    "tablas": [
+      "public.conta_diez_autorizo",
+      "public.external_send"
     ],
-    "filas": {},
+    "funciones": [
+      "public.conta_recibida_envio(uuid)",
+      "public.conta_resumen_ventas(uuid)"
+    ],
+    "filas": {
+      "public.conta_diez_autorizo": 0,
+      "public.external_send": 75
+    },
     "otras": {},
     "camino": {
       "tablas": [],

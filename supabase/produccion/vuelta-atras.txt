@@ -1,5 +1,7 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
-# compras_ficha_le_falta y conta_vat_book_desde_asiento vuelven a los cuerpos
-# de producción del 21/10, tal cual.
-cuenta: scripts/conta/produccion/cuentas/e05-riders.sql
-supabase/vuelta-atras/20261130T0410_e05_riders_ficha_y_libro.down.sql
+# conta_resumen_ventas y conta_recibida_envio vuelven a los cuerpos de
+# producción del 22/10, tal cual; fuera el cron, las funciones nuevas, el
+# interruptor y las dos columnas. Para, sin tocar nada, si ya hay asientos
+# generales en Diez.
+cuenta: scripts/conta/produccion/cuentas/diez-todo.sql
+supabase/vuelta-atras/20261201T0430_c07_diez_todo.down.sql
