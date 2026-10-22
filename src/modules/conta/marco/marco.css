@@ -192,6 +192,8 @@ img.s-empresa-cuadrado { background: var(--s-superficie); }
 }
 .s-cab-fila-movil .s-empresa-caja { flex: 1; }
 .s-cab-fila-movil .s-empresa { max-width: 100%; width: 100%; }
+/* En la fila del móvil la empresa tiene la anchura entera: su nombre nunca se corta, pasa a dos líneas. */
+.s-cab-fila-movil .s-empresa-nombre { white-space: normal; overflow-wrap: anywhere; }
 .s-cab-periodo-movil:empty { display: none; }
 
 /* ── Los menús desplegables ──────────────────────────────────────────── */

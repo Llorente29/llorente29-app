@@ -248,6 +248,10 @@ test('el nivel cambia las palabras y nunca las posiciones', async ({ page }) => 
   // por revisar bajo Inicio, el ejercicio de Libros en la cabecera) mueve cosas,
   // y eso no es el nivel. Dos lecturas iguales separadas 1 s, o 15 s de margen.
   const cajas = async () => {
+    // Lo que llega tarde de la base (p. ej. «Validar y enviar a Diez», que sale
+    // solo si hay asientos para Diez) añade un botón, y eso tampoco es el nivel:
+    // primero la red quieta.
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => undefined)
     let previa = await medir()
     for (let i = 0; i < 15; i++) {
       await page.waitForTimeout(1000)

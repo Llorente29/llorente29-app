@@ -128,7 +128,8 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
   // …y entero, sin «…», con su chip al lado (S01c: «Compras y gas…» con el chip 23).
   const cortados = await barra.locator('.s-barra-nombre').evaluateAll((xs) => xs.filter((x) => x.scrollWidth > x.clientWidth).map((x) => x.textContent))
   expect(cortados, 'nombres cortados en la barra desplegada').toEqual([])
-  await expect(barra.getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
+  // El apartado, no el logo (que también lleva a Inicio y se llama así).
+  await expect(barra.locator('a.s-barra-item').filter({ hasText: 'Inicio' })).toHaveAttribute('aria-current', 'page')
   // Ni Impuestos ni Ventas: un producto sin pantalla no sale (antes, apagado con «Próximamente»).
   await expect(barra.getByText('Impuestos')).toHaveCount(0)
   await expect(page.getByText('Próximamente')).toHaveCount(0)
