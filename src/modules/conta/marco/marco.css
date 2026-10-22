@@ -247,6 +247,8 @@ p.s-menu-nota, li.s-menu-nota { padding: var(--s-1) var(--s-2); }
   background: var(--s-superficie); border-top: var(--s-linea) solid var(--s-borde-decorativo);
 }
 .s-pulgar > * { flex: 1; min-height: var(--s-tactil); justify-content: center; }
+/* Lo que hay debajo del pulgar se puede leer: la página deja su hueco al final. */
+.s-principal:has(.s-pulgar) { padding-bottom: calc(var(--s-tactil) + 2 * var(--s-3) + env(safe-area-inset-bottom, 0px)); }
 
 /* ── La fila de acciones de serie (las pantallas que aún no tienen encabezado) ── */
 .s-acciones-pagina { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }

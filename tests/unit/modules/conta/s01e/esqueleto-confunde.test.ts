@@ -8,7 +8,6 @@
 //   · el nivel salía suelto («Medio») junto al nombre.
 // Con los anchos de las pestañas de Contabilidad medidos a 14 px en negrita.
 
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { bordesOcultos, desplazamientoParaVer } from '@/modules/conta/esqueleto/deslizable'
 import { NIVELES, fraseNivel } from '@/modules/conta/esqueleto/preferencias'
