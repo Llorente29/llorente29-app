@@ -350,6 +350,16 @@ toca pedidos.)*
   comprobación de W03 (17 funciones con su md5) ya no hace falta.
 - Un fichero de una rama con `commit` fuera de sitio, o con un `rollback` que
   no sea su última sentencia, **para** el run: dejaría cosas de verdad.
+- **Lo que solo añade va de verdad desde la rama** (W05, 22/10): una migración
+  cuya clase es «añade» contra lo que hay en staging —columna que admite nulos,
+  tabla o función nuevas, y un CHECK que solo mira columnas que añade el mismo
+  fichero— se aplica de verdad después del ensayo, con el cerrojo, **si se
+  puede pasar dos veces seguidas** (`if not exists`, `create or replace`):
+  `main` la volverá a pasar al fusionar. Lo que cambia o destruye algo, solo en
+  ROLLBACK. La clase la da el analizador de la tanda
+  (`scripts/conta/staging-tanda.mjs anaden`), con el contexto medido en staging.
+  *Por qué no rompe lo de esta mañana:* añadir no cambia nada de lo que leen
+  las demás ramas; lo que rompió el 22/10 fue un «cambia en caliente».
 
 *(22/10. Aplicar el C07 de verdad desde su rama dejó `conta_resumen_ventas`
 distinta de producción: el «aplicar» del #281 cayó en W03 y la prueba del I01f

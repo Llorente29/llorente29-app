@@ -22,10 +22,13 @@ name: Aplicar SQL en staging-conta
 # (scripts/conta/staging-tanda.mjs nuevas):
 #   · desde una RAMA: lo que la rama añade contra main, cada fichero en su
 #     sesión con BEGIN … ROLLBACK (y antes, las migraciones nuevas de la rama,
-#     para que su prueba las encuentre). Staging no cambia, así que no coge el
-#     cerrojo de migrar: no para ninguna e2e. Un fichero con COMMIT, o con un
-#     ROLLBACK que no es su última sentencia, para el run (dejaría cosas de
-#     verdad);
+#     para que su prueba las encuentre), sin el cerrojo de migrar. Un fichero
+#     con COMMIT, o con un ROLLBACK que no es su última sentencia, para el run
+#     (dejaría cosas de verdad). Y después (W05, Julio, 22/10), las migraciones
+#     que SOLO AÑADEN contra lo que hay en staging (columna que admite nulos,
+#     tabla o función nuevas: la clase del analizador de la tanda) van DE
+#     VERDAD, con el cerrojo, si se pueden pasar dos veces seguidas (main las
+#     volverá a pasar). Las que cambian o destruyen algo, solo en ROLLBACK;
 #   · desde MAIN (después del real de la tanda, que se fusiona en verde): lo que
 #     el push añade, DE VERDAD, fichero a fichero, con el cerrojo;
 #   · a mano («aplicar»): desde main, el manifiesto ENTERO de verdad (para
@@ -258,6 +261,46 @@ jobs:
             fi
           done < /tmp/tanda.txt
           exit "$fallo"
+
+      # W05: lo que solo añade, de verdad desde la rama (arriba, «QUÉ PASA»).
+      - name: Lo que solo añade, de verdad (desde la rama)
+        if: env.NADA != '1' && env.ENSAYO == '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          CARRIL_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
+          CERROJO_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
+        run: |
+          set -euo pipefail
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-staging-conta-anade-${GITHUB_RUN_ID}"
+          A=scripts/conta/produccion/analizar.mjs
+          grep '^supabase/migrations/' /tmp/tanda.txt > /tmp/migraciones.txt || true
+          if [ ! -s /tmp/migraciones.txt ]; then echo "La rama no trae migraciones: nada va de verdad." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          # El contexto, medido en STAGING y solo leyendo (la misma consulta que la tanda de producción).
+          node "$A" objetivos $(cat /tmp/migraciones.txt) > /tmp/objetivos.json
+          node "$A" destruidos $(cat /tmp/migraciones.txt) > /tmp/destruidos.json
+          node "$A" sql-contexto /tmp/objetivos.json /tmp/destruidos.json $(cat /tmp/migraciones.txt) > /tmp/contexto.sql
+          PGOPTIONS="-c default_transaction_read_only=on" "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f /tmp/contexto.sql > /tmp/contexto.json
+          node scripts/conta/staging-tanda.mjs anaden /tmp/contexto.json $(cat /tmp/migraciones.txt) > /tmp/anaden.txt 2> /tmp/no-anaden.txt || true
+          { echo; echo "### Lo que solo añade, de verdad (W05)"; echo; } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r l; do echo "- $l" >> "$GITHUB_STEP_SUMMARY"; done < /tmp/no-anaden.txt
+          if [ ! -s /tmp/anaden.txt ]; then echo "- Ninguna migración de la rama solo añade: todo se queda en ROLLBACK." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          # Que se pueda pasar otra vez: dos veces seguidas, en ROLLBACK.
+          while IFS= read -r f; do
+            if ! printf 'begin;\n\\i %s\n\\i %s\nrollback;\n' "$f" "$f" | "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 > /tmp/dos.txt 2>&1; then
+              cat /tmp/dos.txt
+              echo "::error::$f no se puede pasar dos veces seguidas: main la volverá a pasar. Que use «if not exists» o «create or replace». No va nada de verdad."
+              echo "- \`$f\`: **no se puede pasar dos veces**: no va de verdad." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          done < /tmp/anaden.txt
+          # De verdad, con el cerrojo (espera a las e2e en marcha), fichero a fichero.
+          scripts/e2e/carril.sh migrar-coger
+          scripts/e2e/cerrojo.sh coger
+          while IFS= read -r f; do
+            "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f"
+            echo "- \`$f\`: **solo añade: aplicado de verdad** (se puede pasar otra vez)." >> "$GITHUB_STEP_SUMMARY"
+          done < /tmp/anaden.txt
 
       - name: Aplicar, fichero a fichero
         if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
