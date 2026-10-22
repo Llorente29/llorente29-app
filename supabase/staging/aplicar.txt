@@ -423,7 +423,9 @@ supabase/staging/sql/20261130_e05_riders_ficha_y_libro_prueba.sql
 #   reclamar con su reintento a 10 minutos, el contraasiento de lo que está en
 #   Diez, conta_asiento_envio, las dos lecturas para el servidor (A lee lo mismo
 #   que antes) y la vuelta atrás byte a byte (md5 de producción del 22/10).
-#   Después, la 0450 DE VERDAD (se puede volver a pasar). Sin cron en staging:
-#   falta el cron_secret. No toca coste ni stock: sin los cuatro caminos.
+#   La 0450 NO se aplica de verdad en staging hasta que esté en producción:
+#   cambia conta_resumen_ventas, que W03 (20261126_w03_como_produccion.sql)
+#   exige byte a byte como producción, y con ella dentro el «aplicar» de todas
+#   las ramas sale rojo (pasó el 22/10 con el #281). La prueba la aplica dentro
+#   de su ROLLBACK. No toca coste ni stock: sin los cuatro caminos.
 supabase/staging/sql/20261201_c07_diez_todo_prueba.sql
-supabase/migrations/20261201T0450_c07_diez_todo.sql
