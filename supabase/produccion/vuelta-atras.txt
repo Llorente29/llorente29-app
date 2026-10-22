@@ -1,5 +1,5 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
-# compras_ficha_le_falta y conta_vat_book_desde_asiento vuelven a los cuerpos
-# de producción del 21/10, tal cual.
-cuenta: scripts/conta/produccion/cuentas/e05-riders.sql
-supabase/vuelta-atras/20261130T0410_e05_riders_ficha_y_libro.down.sql
+# la factura de Catcher, otra vez sin proveedor; fuera su ficha, sus enlaces,
+# su tercero y las dos cuentas (para si ya tienen apuntes).
+cuenta: scripts/conta/produccion/cuentas/e05-catcher.sql
+supabase/vuelta-atras/20261130T0420_e05_catcher_ficha.down.sql
