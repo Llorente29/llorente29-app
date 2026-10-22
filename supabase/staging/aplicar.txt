@@ -465,3 +465,13 @@ supabase/staging/sql/20261203_d02_recibida_pdf_prueba.sql
 #   desde la rama va en ROLLBACK (W05); de verdad, desde main después del real.
 supabase/migrations/20261204T0480_e05_releer_riders.sql
 supabase/staging/sql/20261204_e05_releer_riders_prueba.sql
+# S02 · PR 3 · las cifras, una fuente por concepto (rama claude/cool-noether-i932tx; Julio, 22/10).
+#   La 0490 añade conta_pendientes, conta_saldo_bancos y conta_saldos_terceros
+#   (solo leen) y cambia la ventana de conta_impuesto_calendario (salta lo que
+#   no hace falta presentar). Su prueba (ROLLBACK): el calendario de antes y el
+#   de después, lo pendiente con un movimiento de cada clase y tres asientos,
+#   el banco con su 572 y sus extractos, los saldos de terceros contra el
+#   libro, quién lee, y la vuelta atrás byte a byte. Cambia una función: desde
+#   la rama va en ROLLBACK (W05); de verdad, desde main después del real.
+supabase/migrations/20261205T0490_s02_cifras.sql
+supabase/staging/sql/20261205_s02_cifras_prueba.sql

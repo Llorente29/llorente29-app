@@ -1,14 +1,13 @@
 {
-  "_que": "E05 · volver a leer los PDF de Catcher · contexto de producción de la tanda viva (20261204T0480), medido en SOLO LECTURA el 22/10 a las 19:54 UTC, con la 0470 del D02 ya aplicada (la última del historial: 20261203T0470_d02_recibida_pdf), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la 0480 solo existen conta_lote_pedidos_app y conta_lote_cruce_guardar (md5 7586a749… y 79a57d0b…), sin hermanas; nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-22T19:54Z",
+  "_que": "S02 · PR 3 · las cifras · contexto de producción de la tanda viva (20261205T0490), medido en SOLO LECTURA el 22/10 a las 22:29 UTC, con la 0480 del E05 ya aplicada (la última del historial: 20261204T0480_e05_releer_riders), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la 0490 solo existe public.conta_impuesto_calendario (md5 del cuerpo 480da33a…, el de la 0340), sin hermanas; las tres nuevas no existen; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-22T22:29Z",
   "tanda": {
-    "supabase/migrations/20261204T0480_e05_releer_riders.sql": "d919f0aeaacd4912e8d7c1a686b1721c"
+    "supabase/migrations/20261205T0490_s02_cifras.sql": "58636c18cbdf54db7d3aecdb7c618394"
   },
   "contexto": {
     "tablas": [],
     "funciones": [
-      "public.conta_lote_cruce_guardar(uuid,jsonb,text)",
-      "public.conta_lote_pedidos_app(uuid)"
+      "public.conta_impuesto_calendario(uuid,date)"
     ],
     "filas": {},
     "otras": {},
