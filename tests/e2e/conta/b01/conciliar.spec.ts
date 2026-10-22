@@ -127,7 +127,8 @@ test.describe('B02 · Bancos, conciliar', () => {
         }).observe(document, { subtree: true, childList: true })
       })
       await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10`)
-      await expect(page.getByRole('heading', { name: 'Movimientos', level: 2 })).toBeVisible()
+      // S02 · PR 2: el título de la página es el h1 de su encabezado.
+      await expect(page.getByRole('heading', { name: 'Movimientos', level: 1 })).toBeVisible()
 
       // Una sola cuenta: la banda, la barra y los contadores dicen lo mismo.
       const c = await lasCifras(page)
@@ -251,9 +252,10 @@ test.describe('B02 · Bancos, conciliar', () => {
       await entrarComo(page, CUENTA_A.email)
       vigilar(page)
       await page.goto(`/conta/bancos?banco=${MERCADO}&mes=2026-10`)
-      await expect(page.getByRole('link', { name: 'Confirmar los 3 seguros' })).toBeVisible()
-      await capturar(page, 'portada')
-      await page.getByRole('link', { name: 'Confirmar los 3 seguros' }).click()
+      // S02 · PR 2: sin la portada por niveles (y su enlace «Confirmar los 3 seguros»): el móvil abre
+      // Movimientos en «Para confirmar», con «Confirmar los 3 seguros» arriba, en el bloque.
+      await expect(page.getByRole('heading', { name: 'Movimientos', level: 1 })).toBeVisible()
+      await expect(page.getByRole('button', { name: /^Para confirmar \d+$/ })).toHaveAttribute('aria-pressed', 'true')
       await expect(page.getByRole('region', { name: 'Confirmar en bloque' }).getByRole('button', { name: 'Confirmar los 3 seguros' })).toBeVisible()
       await capturar(page, 'conciliar')
       await expect(page.locator('.cxn-fila', { hasText: 'RECARGA MONEDERO INVENTADO' }), `Las filas: ${(await page.locator('.cxn-fila').allTextContents()).join(' ‖ ').slice(0, 900)}`).toHaveCount(1)

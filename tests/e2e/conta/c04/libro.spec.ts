@@ -152,7 +152,10 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   // Para revisar: solo lo que espera, sin esconder el resto (Todos sigue con todo).
   await vistas.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
   await expect(filaDe(page, /Ventas del día/).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
-  await expect(filaDe(page, /Alquiler Norte Mercado · octubre/)).toBeVisible()
+  await expect(filaDe(page, /Liquidación Plataforma Norte · 16–30 sep/)).toBeVisible()
+  // S02 · PR 2: lo propuesto de una factura recibida (el alquiler de la semilla) se
+  // decide en Compras y gastos › Facturas recibidas: no se lista dos veces.
+  await expect(filaDe(page, /Alquiler Norte Mercado · octubre/)).toHaveCount(0)
   await expect(page.locator('.cxt-pie')).toContainText(/\d+ de \d+ asientos/)
 })
 
@@ -262,10 +265,17 @@ test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable',
 
 test('A · cambiar una cuenta de una propuesta: lo dice y lo aprende; y se deja como estaba', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe: solo en un tamaño')
-  await entrarComo(page, CUENTA_A.email)
+  const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
-  await page.goto('/conta/libros/diario?ver=revisar')
-  await abrirAsiento(page, 'Alquiler Norte Mercado · octubre')
+  // S02 · PR 2: el alquiler es una factura recibida propuesta, y eso ya no sale en
+  // la lista de Asientos (se decide en Compras y gastos). Su asiento sigue siendo
+  // el mismo: se abre por su dirección (N12), con su id leído de la base.
+  const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
+  const alquiler = await rest<{ id: string }[]>(s, 'GET',
+    `journal_entry?select=id&company_id=eq.${EMPRESA_A}&concept=eq.${encodeURIComponent('Alquiler Norte Mercado · octubre')}&status=eq.propuesto`)
+  expect(alquiler.datos, 'el alquiler de la semilla C04, propuesto').toHaveLength(1)
+  await page.goto(`/conta/libros/diario/${alquiler.datos[0].id}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Alquiler Norte Mercado · octubre' })).toBeVisible({ timeout: 30_000 })
   // Respuesta 3: la línea se llama por su nombre de uso (el «qué se apunta aquí» de la 621), no por su título del BOE.
   const fila = page.locator('.cxd-linea-envoltura', { hasText: 'El alquiler del local' })
   await fila.getByRole('button', { name: 'Cambiar' }).click()
@@ -297,7 +307,8 @@ test('A · asiento a mano: cuadre en vivo, borrador y descartar', async ({ page 
   await expect(page.getByText('No cuadra: faltan 0,50 € en el Haber')).toBeVisible()
   await capturar(page, 'nuevo-asiento')
   await page.getByLabel('Haber del apunte 2').fill('12,50')
-  await expect(page.getByText('✓ 0,00 €')).toBeVisible()
+  // S02 · PR 2: el pie de la Hoja de líneas dice «Cuadra» (antes, «✓ 0,00 €»).
+  await expect(page.locator('.s-asiento-cuadra')).toHaveText('Cuadra')
   await page.getByRole('button', { name: 'Guardar borrador' }).click()
   await expect(page.getByText('Guardado como borrador: sale en «Para revisar» hasta que lo valides.')).toBeVisible()
   await expect(page.getByText('Borrador', { exact: true })).toBeVisible()
