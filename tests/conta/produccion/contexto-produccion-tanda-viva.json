@@ -1,15 +1,17 @@
 {
-  "_que": "I01d · los impuestos de 2025 · contexto de producción de la tanda viva (20261130T0420), medido en SOLO LECTURA el 22/10 a las 00:15 UTC, después de la 0380, la 0390, la 0400 y la 0410 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. conta_impuesto_trimestre existe (la de la 0280, md5 del cuerpo 9522728be846f7d8acc8d03a09cabfa5); ninguna otra con su nombre; nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-22T00:15Z",
+  "_que": "S02 · PR 1 · el color de la empresa · contexto de producción de la tanda viva (20261202T0440), medido en SOLO LECTURA el 22/10 a las 12:00 UTC, con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. public.company existe y no está en el camino del pedido; company.color aún no existe (information_schema.columns: 0); nada en el historial.",
+  "medido": "2026-10-22T12:00Z",
   "tanda": {
-    "supabase/migrations/20261130T0420_i01d_impuestos_2025.sql": "b34e03c9ce0195bec9ea965cafd2e8dc"
+    "supabase/migrations/20261202T0440_s02_color_empresa.sql": "644c4abe8eb391238c997132ee968570"
   },
   "contexto": {
-    "tablas": [],
-    "funciones": [
-      "public.conta_impuesto_trimestre(uuid,int,int)"
+    "tablas": [
+      "public.company"
     ],
-    "filas": {},
+    "funciones": [],
+    "filas": {
+      "public.company": 0
+    },
     "otras": {},
     "camino": {
       "tablas": [],

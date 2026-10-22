@@ -1,0 +1,21 @@
+{
+  "_que": "I01d · los impuestos de 2025 · contexto de producción de la tanda viva (20261130T0420), medido en SOLO LECTURA el 22/10 a las 00:15 UTC, después de la 0380, la 0390, la 0400 y la 0410 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. conta_impuesto_trimestre existe (la de la 0280, md5 del cuerpo 9522728be846f7d8acc8d03a09cabfa5); ninguna otra con su nombre; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-22T00:15Z",
+  "tanda": {
+    "supabase/migrations/20261130T0420_i01d_impuestos_2025.sql": "b34e03c9ce0195bec9ea965cafd2e8dc"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.conta_impuesto_trimestre(uuid,int,int)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

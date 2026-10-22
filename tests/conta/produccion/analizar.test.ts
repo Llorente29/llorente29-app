@@ -1382,12 +1382,12 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): I01d · los impuestos de 2025 (0420)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda de la I01d · los impuestos de 2025 (0420, aplicada; su copia)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-i01d-impuestos-2025-20261022.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 22/10 a las 00:15 UTC, después de la 0380–0410 (aplicadas), para ESTE fichero.
-  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-i01d-impuestos-2025-20261022.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1453,6 +1453,55 @@ describe('la tanda de AHORA (manifiesto vivo): I01d · los impuestos de 2025 (04
     const c = readFileSync(cuentas[0], 'utf8')
     expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-i01d-impuestos-2025-20261022.txt')).toEqual([DOWN])
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): S02 · el color de la empresa (0440)', () => {
+  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 22/10 a las 12:00 UTC, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261202_s02_color_empresa_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261202T0440_s02_color_empresa.down.sql'
+
+  it('un fichero, el medido; sigue sin «autorizo»; company existe y no es del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261202T0440_s02_color_empresa.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(viva.map((f) => r.ficheros[f])).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual(['public.company'])
+    expect(ctx.funciones).toEqual([])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('la comprobación nueva sobre company va declarada en la cabecera, con su prueba de staging, que entra como usuario y ejecuta la vuelta atrás', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual([`-- cambia: public.company · prueba: ${PRUEBA}`])
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of ['company', 'company_color_formato', 'set local role authenticated', 'rollback;', `\\i ${DOWN}`]) expect(p).toContain(x)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+  })
+  it('solo añade: una columna que admite nulos y su CHECK; ni filas ni funciones', () => {
+    const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '')
+    expect(t).toMatch(/alter table public\.company add column if not exists color text;/)
+    expect(t).toMatch(/check \(color is null or color ~ '\^#\[0-9A-Fa-f\]\{6\}\$'\)/)
+    expect(t).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|drop\s|truncate|not null|function)\b/i)
+  })
+  it('declara qué cuenta; la cuenta solo lee', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/color-empresa.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
   })
   it('su vuelta atrás', () => {
     expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])

@@ -1,4 +1,5 @@
 -- supabase/migrations/20261202T0440_s02_color_empresa.sql
+-- cambia: public.company · prueba: supabase/staging/sql/20261202_s02_color_empresa_prueba.sql
 --
 -- S02 · Patrón único de pantallas (Julio, 22/10: «Color de la empresa: columna
 -- nueva en el PR 1, con su tanda»). La cabecera de Sumied lleva encima una
