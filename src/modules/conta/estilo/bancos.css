@@ -242,3 +242,10 @@
   .cxn-casado { flex-direction: column; align-items: stretch; }
   .cxn-panel { position: static; max-height: none; border: none; padding: 0; }
 }
+
+/* S02 · PR 2 · «Por validar»: el veredicto de cada asiento, con su porqué (los tonos del veredicto de la ficha). */
+.cxv-lista:focus-visible { outline: 2px solid var(--s-foco, #1e63c9); outline-offset: 2px; }
+.cxv-fila { cursor: pointer; }
+.cxv-veredicto { font-size: 13px; padding: 2px 8px; border-radius: 6px; align-self: flex-start; }
+.cxv-veredicto[data-tono='propuesto'] { background: var(--s-propuesto); color: var(--s-propuesto-texto); }
+.cxv-veredicto[data-tono='duda'] { background: var(--s-duda-fondo); color: var(--s-duda); }

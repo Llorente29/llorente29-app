@@ -8,9 +8,9 @@
 //    where account_id = '51ad1792-…' and company_id = '658728c0-…' and status in ('propuesto','borrador')
 //   → propuesto · bank · 25. Nada más.
 // Y de esos 25, con su movimiento: bank_movement.status = 'casado' los 25
-// (del 01/10 al 14/10). Bancos los da por hechos (su número cuenta propuesto,
-// por_aclarar y posible_repetido) y su pantalla dice «lo validas en
-// contabilidad». Por eso «bank» NO sale de Asientos: se quedaría sin sitio.
+// (del 01/10 al 14/10), cada uno con su bank_match vivo. Julio (22/10): se
+// validan en Bancos › Movimientos › «Por validar» (lib/validarBanco.ts), así
+// que «bank» propuesto también sale de Asientos: ya tiene sitio.
 // Facturas recibidas propuestas no hay hoy en la base: ese caso va con
 // ejemplos, y se dice.
 
@@ -45,18 +45,19 @@ const BANCO_REAL = Array.from({ length: 25 }, (_, i) =>
   asiento({ id: `bank-${i + 1}`, fecha: `2026-10-${String(1 + (i % 14)).padStart(2, '0')}`, creadoEn: `2026-10-15T0${i % 10}:00:00Z` }))
 const sinEspera = () => null
 
-describe('la población real: los 25 propuestos del banco se quedan en Asientos', () => {
-  it('ninguno tiene otro sitio donde decidirse (Bancos los da por casados)', () => {
-    expect(BANCO_REAL.filter((a) => seDecideEnSuSitio(a) !== null)).toEqual([])
-    expect(delLibroDiario(BANCO_REAL)).toHaveLength(25)
+describe('la población real: los 25 propuestos del banco se deciden en Bancos › Movimientos', () => {
+  it('los 25 tienen su sitio («bancos») y ninguno se queda en Asientos', () => {
+    expect(BANCO_REAL.every((a) => seDecideEnSuSitio(a) === 'bancos')).toBe(true)
+    expect(delLibroDiario(BANCO_REAL)).toHaveLength(0)
   })
-  it('«Para revisar», su vista y las cifras dicen 25, los tres', () => {
-    expect(paraRevisar(BANCO_REAL, sinEspera)).toHaveLength(25)
-    expect(filtrosVisibles(delLibroDiario(BANCO_REAL)).find((f) => f.id === 'revisar')?.n).toBe(25)
-    expect(cifras(delLibroDiario(BANCO_REAL), '2026-10-01', [], null).revisar).toBe(25)
+  it('«Para revisar», su vista y las cifras dicen 0, los tres (no se cuentan dos veces)', () => {
+    expect(paraRevisar(BANCO_REAL, sinEspera)).toHaveLength(0)
+    expect(filtrosVisibles(delLibroDiario(BANCO_REAL)).find((f) => f.id === 'revisar')?.n).toBe(0)
+    expect(cifras(delLibroDiario(BANCO_REAL), '2026-10-01', [], null).revisar).toBe(0)
   })
-  it('la vista «Banco» sigue teniendo sentido: enseña lo propuesto que se decide aquí', () => {
-    expect(filtrar(delLibroDiario(BANCO_REAL), 'banco')).toHaveLength(25)
+  it('validado, el del banco sí sale en Asientos y en su vista «Banco»: es el libro diario', () => {
+    const validados = BANCO_REAL.map((a, i) => ({ ...a, estado: 'validado' as const, numero: 100 + i, validadoPor: 'Ana', validadoEn: '2026-10-22T10:00:00Z' }))
+    expect(filtrar(delLibroDiario(validados), 'banco')).toHaveLength(25)
   })
 })
 
@@ -90,22 +91,23 @@ describe('la factura recibida propuesta se decide en Compras y gastos (ejemplos:
     const espera = (a: { id: string }) => (a.id === 'bank-2' ? 'El mes está cerrado.' : null)
     const menu = delLibroDiario(filasMenu).filter((a) => !espera(a)).length
     expect(menu).toBe(paraRevisar(libro, espera).length)
-    expect(menu).toBe(5) // bank-1, bank-3, pago, recibido sin factura y el borrador
+    expect(menu).toBe(3) // el pago, el recibido sin factura y el borrador (los del banco, en Bancos)
   })
 })
 
 describe('el cierre: lo que espera en su sitio frena, y dice dónde', () => {
   const libro = [asiento({ id: 'fra', origen: 'supplier_invoice', fecha: '2026-09-20' }), asiento({ id: 'b', fecha: '2026-09-21' }), asiento({ id: 'otro-mes', origen: 'supplier_invoice' })]
   const sep = sinValidarPorSitio(libro, '2026-09-01')
-  it('separa lo de Asientos de lo de Compras, del mes', () => {
-    expect(sep).toEqual({ enAsientos: 1, enSuSitio: [{ sitio: 'recibidas', n: 1 }] })
+  it('separa lo de Asientos de lo de Compras y de Bancos, del mes', () => {
+    expect(sep).toEqual({ enAsientos: 0, enSuSitio: [{ sitio: 'recibidas', n: 1 }, { sitio: 'bancos', n: 1 }] })
   })
   const fuente: FuenteCierre = { diasVenta: null, facturas: null, liquidaciones: null, socios: null, nominas: null, pendientes: sep.enAsientos, enSuSitio: sep.enSuSitio, cerrado: false }
   it('un paso propio con el apartado, y no se puede cerrar hasta decidirlo', () => {
     const pasos = pasosCierre(fuente)
     expect(pasos.map((p) => p.texto)).toEqual([
       '1 asiento propuesto espera en Compras y gastos › Facturas recibidas',
-      '1 asiento espera revisión',
+      '1 asiento propuesto espera en Bancos › Movimientos › Por validar',
+      'Nada esperando revisión',
       'Cerrar el mes',
     ])
     expect(sePuedeCerrar(pasos).puede).toBe(false)

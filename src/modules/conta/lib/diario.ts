@@ -11,7 +11,7 @@
 // también lo anulado, y cada filtro dice cuántos tiene.
 //
 // S02 · PR 2: lo PROPUESTO que se decide en otro apartado (la factura recibida,
-// en Compras y gastos) no es de Asientos mientras espera: ver delLibroDiario.
+// en Compras y gastos; el banco, en Bancos › Movimientos) no es de Asientos mientras espera: ver delLibroDiario.
 // La pantalla lo quita antes de filtrar, contar o pintar nada.
 
 import { euros } from '@/modules/conta/lib/formato'
@@ -148,26 +148,28 @@ export function filtrosVisibles(asientos: readonly AsientoDiario[]): { id: Filtr
 //     Compras y gastos › Facturas recibidas (en «Por revisar» o «Por aclarar»:
 //     la base la pinta así mientras su asiento no está validado), y «Validar»
 //     de la ficha valida ESE asiento (documentosService.apuntarFactura).
-//   · bank: NO, de momento. Bancos › Movimientos decide si el movimiento es lo
-//     que se propone (casar); el asiento que sale de casar queda propuesto y la
-//     propia pantalla dice «lo validas en contabilidad» (PanelMovimiento). Sacarlo
-//     de aquí lo dejaría huérfano. Cuando Movimientos lo valide, se añade aquí
-//     una línea y nada más cambia (lista, contadores, menú y cierre leen esta).
+//   · bank: SÍ (Julio, 22/10). El asiento que sale de casar un movimiento queda
+//     propuesto y espera en Bancos › Movimientos › «Por validar», que lo enseña
+//     con su veredicto y lo valida (uno a uno con «Validar y siguiente» e Intro,
+//     o «Validar los N» los listos). Medido en producción el 22/10: los 25
+//     propuestos del banco (Foodint, 1–14/10) tienen su movimiento casado.
 //   · supplier_payment, purchase_accrual y su contrario: NO. Ninguna pantalla de
 //     Compras los enseña ni los valida: se proponen y se validan aquí.
 // Solo lo PROPUESTO se va: un borrador lo empezó una persona en Asientos, y lo
 // validado o anulado es libro.
 
 /** El apartado donde se decide lo propuesto de un origen. */
-export type SitioPropio = 'recibidas'
+export type SitioPropio = 'recibidas' | 'bancos'
 
 const SE_DECIDE_EN: Partial<Record<OrigenAsiento, SitioPropio>> = {
   supplier_invoice: 'recibidas',
+  bank: 'bancos',
 }
 
 /** Dónde está, en las palabras del menú (para los avisos y el cierre). */
 export const NOMBRE_SITIO: Record<SitioPropio, string> = {
   recibidas: 'Compras y gastos › Facturas recibidas',
+  bancos: 'Bancos › Movimientos › Por validar',
 }
 
 /** Si este asiento se decide en otro apartado, cuál; si se decide en Asientos (o ya es libro), null. */

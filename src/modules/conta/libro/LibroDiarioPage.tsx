@@ -522,7 +522,7 @@ export default function LibroDiarioPage() {
                 vacio={enEsperan
                   ? <Vacio titulo="Nada esperando." explicacion={`Aquí sale lo que todavía no se puede validar o enviar, con su motivo: un mes cerrado, un envío por aclarar${hosteleria ? ', una plataforma sin su factura medida en Diez' : ''}…`} />
                   : filtro === 'revisar' && !soloSinDiez
-                  ? <Vacio titulo="Nada que revisar." explicacion={`Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ${hosteleria ? 'ventas, facturas, liquidaciones y nóminas' : 'ventas, facturas y nóminas'}. Las facturas recibidas se revisan en ${NOMBRE_SITIO.recibidas}.`} />
+                  ? <Vacio titulo="Nada que revisar." explicacion={`Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ${hosteleria ? 'ventas, facturas, liquidaciones y nóminas' : 'ventas, facturas y nóminas'}. Las facturas recibidas se revisan en ${NOMBRE_SITIO.recibidas}, y lo del banco en ${NOMBRE_SITIO.bancos}.`} />
                   : datos.asientos.length === 0
                     ? <Vacio titulo="Aún no hay asientos en este ejercicio." explicacion="Pulsa «Proponer lo pendiente» y los preparo con su porqué; o haz uno a mano con «+ Nuevo asiento»." />
                     : <Vacio titulo="Ningún asiento con lo que hay puesto." explicacion="Prueba con «Todos» o quita los filtros: el libro tiene más." />}

@@ -9,9 +9,10 @@
 //   · Contabilidad › Asientos («libros»): lo de su «Para revisar», con su
 //     regla (S02 · PR 2): propuestos y borradores, menos lo propuesto que se
 //     decide en otro apartado (delLibroDiario: la factura recibida va en
-//     «recibidas», y no se cuenta dos veces) y menos lo que espera.
+//     «recibidas» y el banco en «bancos», y no se cuenta dos veces) y menos lo que espera.
 //   · Bancos (B01): los movimientos para confirmar y por aclarar (los mismos
-//     que cuentan las cifras de Movimientos; lo casado solo no pide nada).
+//     que cuentan las cifras de Movimientos; lo casado solo no pide nada), y
+//     (S02 · PR 2) lo casado cuyo asiento espera en «Por validar».
 //   · Recibidas (S01c, 18/10): las facturas recibidas para revisar de los
 //     últimos 12 meses, las mismas que el Inicio («N facturas recibidas para
 //     revisar»): la barra y el Inicio cuentan lo mismo (Julio).
@@ -88,9 +89,13 @@ async function contar(accountId: string, companyId: string | null): Promise<Cuen
           return esperan ? ids.filter((id) => !esperan.has(id)).length : ids.length
         })()
       : Promise.resolve(0)),
+    // S02 · PR 2: y lo casado cuyo asiento espera en «Por validar» (la misma vara que leerDatosBancos).
     seguro(companyId
-      ? tabla('bank_movement').select('id', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido'])
-          .then(({ count, error }: { count: number | null; error: { message: string } | null }) => { if (error) throw new Error(error.message); return count ?? 0 })
+      ? Promise.all([
+          tabla('bank_movement').select('id', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido']),
+          tabla('bank_movement').select('id, bank_match!inner(status, journal_entry!inner(status))', { count: 'exact', head: true })
+            .eq('company_id', companyId).eq('status', 'casado').eq('bank_match.status', 'vivo').eq('bank_match.journal_entry.status', 'propuesto'),
+        ]).then((rs: { count: number | null; error: { message: string } | null }[]) => rs.reduce((t, { count, error }) => { if (error) throw new Error(error.message); return t + (count ?? 0) }, 0))
       : Promise.resolve(0)),
     seguro(companyId ? recibidasParaRevisar(companyId, hoyEnMadrid()) : Promise.resolve(0)),
   ])

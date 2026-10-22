@@ -51,7 +51,7 @@ export interface DatosBancos {
 
 /** Lo de arriba de todas las pestañas: los bancos, sus tarjetas y extractos, los locales y el plan. */
 export async function leerDatosBancos(accountId: string, companyId: string): Promise<DatosBancos> {
-  const [bs, tarjetas, extractos, locales, cuentas, primero, dudas, reglas, ajustes] = await Promise.all([
+  const [bs, tarjetas, extractos, locales, cuentas, primero, dudas, porValidar, reglas, ajustes] = await Promise.all([
     bancos.bancosDeLaEmpresa(accountId, companyId),
     leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).order('created_at', { ascending: true }), 'las tarjetas'),
     leer(tabla('bank_statement').select('id, treasury_account_id, file_name, format, period_from, period_to, opening_balance, closing_balance, movements_count, new_count, repeated_count, balanced, unchecked_reason, continuity, continuity_gap, imported_at, imported_by_name')
@@ -60,6 +60,10 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
     leer(tabla('company_account').select('code, name, plain_name').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
     leer(tabla('bank_movement').select('op_date').eq('account_id', accountId).eq('company_id', companyId).order('op_date', { ascending: true }).limit(1), 'el primer movimiento'),
     leer(tabla('bank_movement').select('treasury_account_id').eq('account_id', accountId).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido']), 'las dudas'),
+    // S02 · PR 2: lo casado cuyo asiento sigue propuesto también pide algo (se valida en «Por validar»).
+    leer(tabla('bank_movement').select('treasury_account_id, bank_match!inner(status, journal_entry!inner(status))')
+      .eq('account_id', accountId).eq('company_id', companyId).eq('status', 'casado')
+      .eq('bank_match.status', 'vivo').eq('bank_match.journal_entry.status', 'propuesto'), 'lo que falta por validar'),
     leer(tabla('bank_rule').select('status').eq('account_id', accountId).eq('company_id', companyId), 'las reglas'),
     leer(tabla('bank_settings').select('cutover_date').eq('account_id', accountId).eq('company_id', companyId).limit(1), 'los ajustes del banco'),
   ])
@@ -73,7 +77,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
   }))
   const tjs: Tarjeta[] = tarjetas.map((t) => ({ id: String(t.id), cuentaId: String(t.treasury_account_id), ultimos4: String(t.last4), titular: String(t.holder_name), localId: s(t.location_id) }))
   const porBanco: Record<string, number> = {}
-  for (const d of dudas) porBanco[String(d.treasury_account_id)] = (porBanco[String(d.treasury_account_id)] ?? 0) + 1
+  for (const d of [...dudas, ...porValidar]) porBanco[String(d.treasury_account_id)] = (porBanco[String(d.treasury_account_id)] ?? 0) + 1
   return {
     bancos: bs.filter((b) => b.kind === 'bank').map((b) => ({
       ...b, cuentaNombre: b.cuenta ? nombres[b.cuenta] ?? null : null,
@@ -94,7 +98,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
 export async function leerMovimientos(accountId: string, bancoId: string, mes: string): Promise<MovimientoBanco[]> {
   const { desde, hasta } = limitesMes(mes)
   const filas = await leer(tabla('bank_movement')
-    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept))')
+    .select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, counterparty, movement_type, status, confidence, reason, proposal, ignored_reason, receipt_path, bank_card(last4, holder_name), bank_match(id, kind, reason, by_who, status, journal_entry_id, journal_entry(concept, status))')
     .eq('account_id', accountId).eq('treasury_account_id', bancoId).gte('op_date', desde).lte('op_date', hasta)
     .order('op_date', { ascending: false }).order('created_at', { ascending: false }), 'los movimientos')
   return filas.map((m) => {
@@ -109,6 +113,7 @@ export async function leerMovimientos(accountId: string, bancoId: string, mes: s
       casado: vivo ? {
         id: String(vivo.id), tipo: String(vivo.kind), porque: String(vivo.reason), porQuien: vivo.by_who === 'folvy' ? 'folvy' : 'persona',
         asientoId: s(vivo.journal_entry_id), asientoConcepto: s((vivo.journal_entry as Fila | null)?.concept),
+        asientoEstado: (s((vivo.journal_entry as Fila | null)?.status) as NonNullable<MovimientoBanco['casado']>['asientoEstado']) ?? null,
       } : null,
       tarjeta: tarjeta ? { ultimos4: String(tarjeta.last4), titular: String(tarjeta.holder_name) } : null,
       ticket: s(m.receipt_path), motivoIgnorado: s(m.ignored_reason),
