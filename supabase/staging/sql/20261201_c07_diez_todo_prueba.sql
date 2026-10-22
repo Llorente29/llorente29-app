@@ -1,13 +1,13 @@
 -- supabase/staging/sql/20261201_c07_diez_todo_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261201T0430_c07_diez_todo, con \i dentro de la
+-- SOLO STAGING. Prueba de 20261201T0450_c07_diez_todo, con \i dentro de la
 -- transacción y ROLLBACK: staging no cambia. Datos de la empresa A de staging
 -- (inventados); la conexión con Diez, inventada dentro de la transacción.
 --
 --   (Empieza con la vuelta atrás: staging vuelve a pasar el manifiesto entero.)
 --   0. Lo de antes: lo que conta_resumen_ventas devuelve a A de su venta
 --      validada, y que sin sesión (servidor) no la lee.
---   1. La 0430.
+--   1. La 0450.
 --   2. El interruptor: sin conexión no se enciende; con ella sí, y dice qué ha
 --      hecho; apagado, también. Un usuario de B no toca la empresa de A.
 --   3. Lo que falta por mandar: lo validado de A desde «desde» (el manual y la
@@ -32,9 +32,9 @@ do $$ begin
 end $$;
 set local statement_timeout = '120s';
 
--- Staging vuelve a pasar el manifiesto entero: si la 0430 ya está, se quita
+-- Staging vuelve a pasar el manifiesto entero: si la 0450 ya está, se quita
 -- aquí dentro (ROLLBACK) para medir el antes.
-\i supabase/vuelta-atras/20261201T0430_c07_diez_todo.down.sql
+\i supabase/vuelta-atras/20261201T0450_c07_diez_todo.down.sql
 
 -- 0 · Lo de antes.
 do $$
@@ -65,14 +65,14 @@ set local role service_role;
 do $$ begin
   begin
     perform public.conta_resumen_ventas(current_setting('c07.venta')::uuid);
-    raise exception 'PRUEBA C07 · 0: el servidor ya lee la venta antes de la 0430: ¿está ya aplicada?';
+    raise exception 'PRUEBA C07 · 0: el servidor ya lee la venta antes de la 0450: ¿está ya aplicada?';
   exception when sqlstate 'P0002' then null;
   end;
 end $$;
 reset role;
 
--- 1 · La 0430.
-\i supabase/migrations/20261201T0430_c07_diez_todo.sql
+-- 1 · La 0450.
+\i supabase/migrations/20261201T0450_c07_diez_todo.sql
 
 -- 2 · El interruptor.
 select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
@@ -99,8 +99,10 @@ begin
   if (r->>'enviar')::boolean is not true or r->>'texto' not like 'Encendido: todo lo que se valide sale solo a Diez.%' then
     raise exception 'PRUEBA C07 · 2: al encender dice %', r;
   end if;
-  if not exists (select 1 from public.conta_diez_envio_empresa where company_id = current_setting('c07.empresa')::uuid and enviar and desde = current_date) then
-    raise exception 'PRUEBA C07 · 2: A no ve su interruptor encendido desde hoy.';
+  -- «desde», el día después del corte de A con el programa anterior (sin corte, hoy).
+  if not exists (select 1 from public.conta_diez_envio_empresa z where z.company_id = current_setting('c07.empresa')::uuid and z.enviar
+                   and z.desde = coalesce((select max(f.imported_until) + 1 from public.fiscal_year f where f.company_id = z.company_id and f.account_id = z.account_id), current_date)) then
+    raise exception 'PRUEBA C07 · 2: A no ve su interruptor encendido desde el día después de su corte.';
   end if;
 end $$;
 reset role;
@@ -264,7 +266,7 @@ select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000
 set local role authenticated;
 do $$ begin
   if public.conta_resumen_ventas(current_setting('c07.venta')::uuid) <> current_setting('c07.venta_antes')::jsonb then
-    raise exception 'PRUEBA C07 · 7: A no lee lo mismo que antes de la 0430.';
+    raise exception 'PRUEBA C07 · 7: A no lee lo mismo que antes de la 0450.';
   end if;
 end $$;
 reset role;
@@ -296,7 +298,7 @@ reset role;
 
 -- 8 · La vuelta atrás, byte a byte, y otra vez delante.
 delete from public.external_send where kind = 'asiento' and payload_hash = 'prueba';
-\i supabase/vuelta-atras/20261201T0430_c07_diez_todo.down.sql
+\i supabase/vuelta-atras/20261201T0450_c07_diez_todo.down.sql
 do $$
 declare v1 text; v2 text;
 begin
@@ -307,10 +309,10 @@ begin
   end if;
   if to_regclass('public.conta_diez_envio_empresa') is not null or to_regprocedure('public.conta_diez_reclamar(integer)') is not null
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'external_send' and column_name = 'next_try_at') then
-    raise exception 'PRUEBA C07 · 8: la vuelta atrás deja cosas de la 0430.';
+    raise exception 'PRUEBA C07 · 8: la vuelta atrás deja cosas de la 0450.';
   end if;
 end $$;
-\i supabase/migrations/20261201T0430_c07_diez_todo.sql
+\i supabase/migrations/20261201T0450_c07_diez_todo.sql
 
 select 'PRUEBA C07 · todo bien' as resultado;
 rollback;

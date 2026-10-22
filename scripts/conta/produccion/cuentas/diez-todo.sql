@@ -1,10 +1,10 @@
 -- scripts/conta/produccion/cuentas/diez-todo.sql
 --
--- C07 · LO QUE CUENTA LA TANDA DE «TODO ASIENTO A DIEZ» (20261201T0430), antes
+-- C07 · LO QUE CUENTA LA TANDA DE «TODO ASIENTO A DIEZ» (20261201T0450), antes
 -- y después. Lo declara el manifiesto («cuenta: <este fichero>») y lo comparan
 -- deshacer.sh y el ensayo de la vuelta atrás. SOLO LEE.
 --
--- Lo de Foodint, con su account_id (regla 9). La 0430 añade tablas, columnas
+-- Lo de Foodint, con su account_id (regla 9). La 0450 añade tablas, columnas
 -- y funciones, y deja a todas las empresas con «Enviar a Diez» APAGADO (sin
 -- fila): no envía nada ni toca ninguna fila. Lo que hay en Diez, lo que Julio
 -- ha autorizado tiene que salir igual. (Los asientos no se cuentan: se

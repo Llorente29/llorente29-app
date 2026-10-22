@@ -9,7 +9,7 @@
 # comparte funciones ni tablas con ninguna otra sin aplicar (la 0420 del I01d,
 # PR #281, cambia conta_impuesto_trimestre; esta, ninguna de impuestos).
 #
-#   1. 0430 — AÑADE el interruptor «Enviar a Diez» (conta_diez_envio_empresa,
+#   1. 0450 — AÑADE el interruptor «Enviar a Diez» (conta_diez_envio_empresa,
 #      apagado para todas: sin fila), lo que falta por mandar y su reintento
 #      (conta_diez_por_enviar, conta_diez_reclamar, external_send.next_try_at),
 #      el lector del asiento general (conta_asiento_envio), el freno de los
@@ -23,4 +23,4 @@
 # y conta-diez-cola (nueva; verify_jwt = false). Vuelta atrás:
 # supabase/produccion/vuelta-atras.txt.
 cuenta: scripts/conta/produccion/cuentas/diez-todo.sql
-supabase/migrations/20261201T0430_c07_diez_todo.sql
+supabase/migrations/20261201T0450_c07_diez_todo.sql

@@ -1,6 +1,6 @@
--- supabase/vuelta-atras/20261201T0430_c07_diez_todo.down.sql
+-- supabase/vuelta-atras/20261201T0450_c07_diez_todo.down.sql
 --
--- Vuelta atrás de la 0430 (C07 · todo asiento de Sumied a Diez). Devuelve
+-- Vuelta atrás de la 0450 (C07 · todo asiento de Sumied a Diez). Devuelve
 -- conta_resumen_ventas y conta_recibida_envio a su cuerpo de producción byte a
 -- byte (md5 62ba30b9… y e3c57e29…), quita el cron, las funciones nuevas, el
 -- interruptor y las dos columnas.
@@ -12,7 +12,7 @@
 do $$
 begin
   if exists (select 1 from public.external_send where kind = 'asiento' and status in ('enviado', 'enlazado')) then
-    raise exception 'Hay asientos generales ya en Diez: la vuelta atrás de la 0430 no se aplica sola (se perdería qué se mandó). Míralo antes.';
+    raise exception 'Hay asientos generales ya en Diez: la vuelta atrás de la 0450 no se aplica sola (se perdería qué se mandó). Míralo antes.';
   end if;
 end $$;
 

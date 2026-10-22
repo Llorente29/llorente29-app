@@ -1,4 +1,4 @@
--- supabase/migrations/20261201T0430_c07_diez_todo.sql
+-- supabase/migrations/20261201T0450_c07_diez_todo.sql
 -- cambia: public.conta_resumen_ventas · prueba: supabase/staging/sql/20261201_c07_diez_todo_prueba.sql
 -- cambia: public.conta_recibida_envio · prueba: supabase/staging/sql/20261201_c07_diez_todo_prueba.sql
 -- cambia: public.external_send · prueba: supabase/staging/sql/20261201_c07_diez_todo_prueba.sql
@@ -233,7 +233,7 @@ language sql stable security definer set search_path = public as $$
    limit greatest(1, least(coalesce(p_limite, 10), 50))
 $$;
 comment on function public.conta_diez_por_enviar(integer) is
-  'C07 · Lo validado de las empresas con «Enviar a Diez» encendido que no está en Diez y le toca salir ahora (ver la migración 0430). Solo el servidor.';
+  'C07 · Lo validado de las empresas con «Enviar a Diez» encendido que no está en Diez y le toca salir ahora (ver la migración 0450). Solo el servidor.';
 revoke all on function public.conta_diez_por_enviar(integer) from public, anon, authenticated;
 grant execute on function public.conta_diez_por_enviar(integer) to service_role;
 
@@ -289,7 +289,14 @@ begin
   select * into v_z from public.conta_diez_envio_empresa where company_id = v_c.id for update;
   if v_z.company_id is null then
     insert into public.conta_diez_envio_empresa (company_id, account_id, enviar, desde, cambiado_por, cambiado_por_nombre)
-    values (v_c.id, v_c.account_id, p_enviar, current_date, auth.uid(), v_quien)
+    -- «desde»: el día después del corte con el programa anterior (lo que asienta
+    -- Sumied), para que no se quede fuera nada validado antes de encender
+    -- (EUROPASTRY 24048027, validada desde el libro el 16/10, nunca salió). Sin
+    -- corte, hoy.
+    values (v_c.id, v_c.account_id, p_enviar,
+            coalesce((select max(f.imported_until) + 1 from public.fiscal_year f
+                       where f.company_id = v_c.id and f.account_id = v_c.account_id), current_date),
+            auth.uid(), v_quien)
     returning * into v_z;
   elsif v_z.enviar is distinct from p_enviar then
     update public.conta_diez_envio_empresa
@@ -310,7 +317,7 @@ begin
       else format('Apagado: no se envía nada a Diez.%s', case when v_salen > 0 then format(' %s %s sin enviar se quedan aquí, validados.', v_salen, case v_salen when 1 then 'asiento' else 'asientos' end) else '' end) end);
 end $$;
 comment on function public.conta_diez_envio_poner(uuid, boolean, text) is
-  'C07 · Enciende o apaga «Enviar a Diez» en una empresa. Solo un administrador; para encender, la empresa tiene que estar conectada con Diez. La primera vez, «desde» es hoy. Devuelve qué ha hecho y cuántos asientos validados quedan sin enviar.';
+  'C07 · Enciende o apaga «Enviar a Diez» en una empresa. Solo un administrador; para encender, la empresa tiene que estar conectada con Diez. La primera vez, «desde» es el día después del corte con el programa anterior (sin corte, hoy). Devuelve qué ha hecho y cuántos asientos validados quedan sin enviar.';
 revoke all on function public.conta_diez_envio_poner(uuid, boolean, text) from public, anon;
 grant execute on function public.conta_diez_envio_poner(uuid, boolean, text) to authenticated;
 

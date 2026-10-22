@@ -537,19 +537,19 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (C07, todo asiento a Diez: la 0430 sigue; ningún «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (C07, todo asiento a Diez: la 0450 sigue; ningún «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261201T0430_c07_diez_todo.sql: sigue')
+    expect(r.out).toContain('20261201T0450_c07_diez_todo.sql: sigue')
     expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261201T0430_c07_diez_todo.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261201T0450_c07_diez_todo.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261201T0430_c07_diez_todo.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261201T0450_c07_diez_todo.sql ha cambiado desde la medida')
   })
 })
 

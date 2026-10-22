@@ -4,4 +4,4 @@
 # interruptor y las dos columnas. Para, sin tocar nada, si ya hay asientos
 # generales en Diez.
 cuenta: scripts/conta/produccion/cuentas/diez-todo.sql
-supabase/vuelta-atras/20261201T0430_c07_diez_todo.down.sql
+supabase/vuelta-atras/20261201T0450_c07_diez_todo.down.sql

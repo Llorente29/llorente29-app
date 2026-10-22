@@ -3,7 +3,7 @@
 // C07 · Todo asiento de Sumied a Diez (Julio, 22/10): el interruptor «Enviar a
 // Diez» de la empresa y el envío de cada asiento, sea del tipo que sea.
 //
-// Nombres dentro de cadenas (regla 40), los que crea la 20261201T0430:
+// Nombres dentro de cadenas (regla 40), los que crea la 20261201T0450:
 // conta_diez_envio_empresa (company_id, account_id, enviar, desde,
 // cambiado_por_nombre, cambiado_en), conta_diez_envio_poner, y
 // external_send.next_try_at; y los de antes: external_send (entry_id, status,
@@ -20,11 +20,11 @@ const s = (v: unknown): string | null => (v === null || v === undefined || v ===
 export interface EnvioEmpresa { encendido: boolean; desde: string | null; cambiadoPor: string | null; cambiadoEn: string | null }
 const APAGADO: EnvioEmpresa = { encendido: false, desde: null, cambiadoPor: null, cambiadoEn: null }
 
-/** «Enviar a Diez» de la empresa. Sin fila (o sin la 0430 en la base), apagado: no se habla de Diez. */
+/** «Enviar a Diez» de la empresa. Sin fila (o sin la 0450 en la base), apagado: no se habla de Diez. */
 export async function leerEnvioEmpresa(accountId: string, companyId: string): Promise<EnvioEmpresa> {
   const { data, error } = await tabla('conta_diez_envio_empresa').select('enviar, desde, cambiado_por_nombre, cambiado_en')
     .eq('account_id', accountId).eq('company_id', companyId).maybeSingle()
-  // Sin la tabla (42P01, una base sin la 0430): apagado, como hasta hoy sin interruptor.
+  // Sin la tabla (42P01, una base sin la 0450): apagado, como hasta hoy sin interruptor.
   if (error) {
     if ((error as { code?: string }).code === '42P01' || /does not exist|could not find the table/i.test(error.message)) return APAGADO
     throw new Error(mensaje('No se ha podido leer si se envía a Diez', error))

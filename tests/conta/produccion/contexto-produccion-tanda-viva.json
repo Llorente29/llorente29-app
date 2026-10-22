@@ -1,8 +1,8 @@
 {
-  "_que": "C07 · todo asiento de Sumied a Diez · contexto de producción de la tanda viva (20261201T0430), medido en SOLO LECTURA el 22/10 a las 06:46 UTC, después de la 0410 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen conta_diez_autorizo, external_send, conta_resumen_ventas(uuid) (md5 del cuerpo 62ba30b9…) y conta_recibida_envio(uuid) (e3c57e29…); ninguna de las nuevas; nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-22T06:46Z",
+  "_que": "C07 · todo asiento de Sumied a Diez · contexto de producción de la tanda viva (20261201T0450), medido en SOLO LECTURA el 22/10 a las 07:58 UTC, después de la 0410 y las dos 0420 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen conta_diez_autorizo, external_send, conta_resumen_ventas(uuid) (md5 del cuerpo 62ba30b9…) y conta_recibida_envio(uuid) (e3c57e29…); ninguna de las nuevas; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-22T07:58Z",
   "tanda": {
-    "supabase/migrations/20261201T0430_c07_diez_todo.sql": "8efc766d9e3945e32952eb7fc1958a4a"
+    "supabase/migrations/20261201T0450_c07_diez_todo.sql": "1c889cc62f4e84bd2dca50ff2b711426"
   },
   "contexto": {
     "tablas": [

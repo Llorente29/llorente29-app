@@ -159,7 +159,7 @@ export type TipoEnvio = 'ventas' | 'recibidas' | 'asientos'
  * sea de empresa o de un asiento.
  */
 export function autorizacionCubre(xs: readonly Autorizacion[], entryId: string, fecha: string, tipo: TipoEnvio = 'ventas'): boolean {
-  // C07: los asientos generales, solo con incluye_asientos (0430; por defecto, no).
+  // C07: los asientos generales, solo con incluye_asientos (0450; por defecto, no).
   return xs.some((a) => (tipo === 'ventas' || (tipo === 'recibidas' && a.incluye_recibidas === true) || (tipo === 'asientos' && a.incluye_asientos === true))
     && ((a.alcance === 'asiento' && a.entry_id === entryId)
       || (a.alcance === 'empresa' && (a.desde == null || fecha.slice(0, 10) >= String(a.desde).slice(0, 10)))))
@@ -774,7 +774,7 @@ async function enviarContraasientoRecibida(c: ContraasientoBD, p: PuertoEnvio & 
 //   1. Solo lo VALIDADO. Un contraasiento, solo si lo que anula está en Diez
 //      (si no, allí no hay nada que anular).
 //   3. C0001 nunca; Diez real solo con lo que Julio autoriza Y que incluye los
-//      asientos generales (incluye_asientos, 0430); la de empresa desde su
+//      asientos generales (incluye_asientos, 0450); la de empresa desde su
 //      «desde». El contraasiento vale con la del asiento que anula.
 //   5. Nunca dos veces: antes de escribir se busca en Diez un general del mismo
 //      día con las mismas líneas (la gestoría puede haberlo metido); uno → se

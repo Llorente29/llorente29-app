@@ -19,7 +19,7 @@
 //
 // El asiento se lee con `lector`: el cliente con la sesión de quien llama (si
 // no es de su cuenta, no está) o el de servicio (el servidor; las lecturas lo
-// admiten desde la 0430). Lo que solo escribe el servidor (external_send, la
+// admiten desde la 0450). Lo que solo escribe el servidor (external_send, la
 // conexión, el Vault, el bucket), siempre con `srv`.
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -161,7 +161,7 @@ function puertoComun(srv: SupabaseClient, accountId: string): Pick<PuertoEnvio, 
       return bd ? { id: String(data.id), nombreBd: bd, adjuntar: config.adjuntar_documentos === true } : null
     },
     autorizado: async (id, companyId, nombreBd, fecha, tipo) => {
-      // R8: «desde» limita la de empresa; incluye_recibidas (0740) e incluye_asientos (0430) abren cada tipo.
+      // R8: «desde» limita la de empresa; incluye_recibidas (0740) e incluye_asientos (0450) abren cada tipo.
       const { data, error } = await srv.from('conta_diez_autorizo').select('id, alcance, entry_id, desde, incluye_recibidas, incluye_asientos')
         .eq('account_id', accountId).eq('company_id', companyId).ilike('nombre_bd', nombreBd)
       if (error) throw new Error(`no se ha podido leer lo autorizado en Diez: ${error.message}`)

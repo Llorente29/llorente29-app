@@ -1382,7 +1382,7 @@ describe('W02 · un secreto de Vault se escribe llamando a una función: vault.c
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): C07 · todo asiento de Sumied a Diez (0430)', () => {
+describe('la tanda de AHORA (manifiesto vivo): C07 · todo asiento de Sumied a Diez (0450)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
@@ -1394,14 +1394,14 @@ describe('la tanda de AHORA (manifiesto vivo): C07 · todo asiento de Sumied a D
   const md5 = (x: string) => createHash('md5').update(x).digest('hex')
   const nombre = (f: string) => f.replace(/^.*\//, '')
   const PRUEBA = 'supabase/staging/sql/20261201_c07_diez_todo_prueba.sql'
-  const DOWN = 'supabase/vuelta-atras/20261201T0430_c07_diez_todo.down.sql'
+  const DOWN = 'supabase/vuelta-atras/20261201T0450_c07_diez_todo.down.sql'
   // El cuerpo de una función (lo de entre sus $$) en un fichero.
   const cuerpo = (t: string, fn: string) => t.slice(t.indexOf(`create or replace function public.${fn}(`)).split('$$')[1]
   const ORIGEN = { conta_resumen_ventas: ['supabase/migrations/20261116T0100_c06b_promociones_envios.sql', '62ba30b970c7c61849dc2f96e8a8cfb1'], conta_recibida_envio: ['supabase/migrations/20261126T0320_i01f_recibida_envio_tratamiento.sql', 'e3c57e29abd43a52c2c95790e2cc494a'] } as const
   const ultimo = (t: string, fn: string) => t.slice(t.lastIndexOf(`create or replace function public.${fn}(`)).split('$$')[1]
 
   it('un fichero, el medido; sigue sin «autorizo»; las dos que cambian existen sin hermanas; nada del camino del pedido; nada registrado aún', () => {
-    expect(viva.map(nombre)).toEqual(['20261201T0430_c07_diez_todo.sql'])
+    expect(viva.map(nombre)).toEqual(['20261201T0450_c07_diez_todo.sql'])
     expect(Object.keys(medida.tanda)).toEqual(viva)
     for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
     expect(viva.map((f) => r.ficheros[f])).toEqual(['sigue'])
