@@ -29,6 +29,13 @@ test('cuenta B (Canarias, sin interruptor ni Cocina): impuestos con el IGIC arri
   await expect(page.getByRole('main').locator('.cx-antetitulo').first()).toHaveText('Definiciones')
   await expect(page.getByRole('navigation', { name: 'Ajustes' })).toHaveCount(0)
   await expect(page.getByRole('main').getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
+  // S02: Definiciones es una página de Contabilidad en la barra (antes, una pestaña de la
+  // cabecera): el apartado abierto («estás dentro», 'true') y su página marcada. Y las tablas
+  // también están en el selector «Ver» de la fila de acciones (lo que antes iba en la cinta).
+  const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+  await expect(barra.getByRole('link', { name: 'Contabilidad', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(barra.getByRole('list', { name: 'Páginas de Contabilidad' }).getByRole('link', { name: 'Definiciones', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('toolbar', { name: 'Acciones de Definiciones' }).getByRole('button', { name: 'Ver: Impuestos. Cambiar' })).toBeVisible()
 
   // Abre con TODAS (D5): «Todos» pulsado, y las dos separaciones a la vista.
   await expect(page.getByRole('button', { name: 'Todos' })).toHaveAttribute('aria-pressed', 'true')
@@ -110,7 +117,8 @@ test('cuenta A: ocultar una forma de pago de serie la baja a «Los demás», sin
   test.skip(info.project.name === 'movil', 'Escribe: solo en un tamaño')
   await abrirTablas(page, CUENTA_A.email, 'formas-de-pago')
   await page.getByRole('button', { name: 'Abrir Efectivo' }).click()
-  // S01: la cinta también tiene su «Ocultar»; aquí, el de la forma de pago.
+  // S01: la cinta tenía también su «Ocultar» y por eso se acota a la página. S02: la cinta ya no
+  // existe (la fila de acciones no lleva «Ocultar»), pero se sigue acotando: es el de la forma de pago.
   await page.getByRole('main').getByRole('button', { name: 'Ocultar', exact: true }).click()
   await expect(page.getByRole('status').getByText(/Ocultado «Efectivo»: ya no sale en tus desplegables/)).toBeVisible()
   const demas = page.getByRole('rowgroup', { name: 'Los demás' })

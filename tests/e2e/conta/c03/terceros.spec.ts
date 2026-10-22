@@ -54,10 +54,18 @@ test('lista de clientes y proveedores: papeles, filtros y archivados', async ({ 
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/clientes-y-proveedores')
-  // S01 · paso 3: Contactos; los papeles son pestañas de la cabecera (Plataformas y Socios, con hostelería: A lo es).
+  // S01 · paso 3: Contactos, con sus papeles (Plataformas y Socios, con hostelería: A lo es).
+  // S02: los papeles ya no son pestañas de la cabecera: son las páginas de Contactos, debajo del
+  // apartado en la barra; en el móvil, la barra va en el cajón y hay que abrirlo (al elegir una
+  // página se cierra solo).
   await expect(page.getByRole('heading', { level: 1, name: 'Contactos' })).toHaveCount(1)
-  const papeles = page.getByRole('navigation', { name: 'Pestañas de Contactos' })
-  await expect(papeles.getByRole('link')).toHaveText(['Todos', 'Clientes', 'Proveedores', 'Plataformas', 'Socios de marca'])
+  const papeles = page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('list', { name: 'Páginas de Contactos' })
+  const abrirMenu = async () => { if (lado(page) === 'movil') await page.getByRole('button', { name: 'Abrir el menú' }).click() }
+  await abrirMenu()
+  // Por su nombre (.s-barra-nombre): «Todos» puede llevar al lado su contador, que no es parte del nombre.
+  await expect(papeles.locator('.s-barra-nombre')).toHaveText(['Todos', 'Clientes', 'Proveedores', 'Plataformas', 'Socios de marca'])
+  await expect(papeles.getByRole('link', { name: 'Todos', exact: true })).toHaveAttribute('aria-current', 'page')
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Cerrar el menú' }).click()
   const plataforma = page.getByRole('link', { name: /Plataforma Norte/ })
   await expect(plataforma).toBeVisible()
   await expect(page.getByRole('link', { name: /Marcas del Sur/ })).toBeVisible()
@@ -65,14 +73,19 @@ test('lista de clientes y proveedores: papeles, filtros y archivados', async ({ 
   // Regla 7: el archivado no sale en «Todos», sale en su filtro.
   await expect(page.getByRole('link', { name: /Distribuciones Antiguas/ })).toHaveCount(0)
   await capturar(page, 'lista')
+  await abrirMenu()
   await papeles.getByRole('link', { name: 'Plataformas', exact: true }).click()
+  await expect(page).toHaveURL(/[?&]ver=plataformas(&|$)/)
+  await abrirMenu()
   await expect(papeles.getByRole('link', { name: 'Plataformas', exact: true })).toHaveAttribute('aria-current', 'page')
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Cerrar el menú' }).click()
   await expect(page.getByRole('link', { name: /Plataforma Norte/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /Catering Eventos Norte/ })).toHaveCount(0)
   await page.getByRole('button', { name: /^Archivados · \d+$/ }).click()
   await expect(page.getByRole('link', { name: /Distribuciones Antiguas/ })).toBeVisible()
   await expect(page.getByText(/histórico de 2024/).first()).toBeVisible()
   // Buscar por NIF.
+  await abrirMenu()
   await papeles.getByRole('link', { name: 'Todos', exact: true }).click()
   await page.getByLabel('Buscar por nombre o NIF').fill('B91030023')
   await expect(page.getByRole('link', { name: /Marcas del Sur/ })).toBeVisible()
@@ -252,7 +265,9 @@ test('cliente normal: sin facturas, lo dice; archivar y recuperar', async ({ pag
   await capturar(page, 'cliente')
   test.skip(info.project.name === 'movil', 'Archivar escribe en la base: solo en un tamaño')
   try {
-    await page.getByRole('button', { name: 'Más acciones' }).click()
+    // S02: la fila de acciones del marco también puede llevar su «Más acciones» (sin «···»):
+    // éste es el de la ficha, el de los tres puntos.
+    await page.getByRole('button', { name: 'Más acciones', exact: true }).filter({ hasText: '···' }).click()
     await page.getByRole('menuitem', { name: 'Archivar' }).click()
     await page.getByLabel('Por qué (opcional)').fill('Prueba e2e')
     await page.getByRole('button', { name: 'Archivar', exact: true }).click()
@@ -297,7 +312,7 @@ test('alta de cliente con el NIF de un proveedor: una sola ficha con los dos pap
   }
 })
 
-// S01d: «Nuevo proveedor» desde Contactos (la cinta, ?nuevo=proveedor): se queda en la lista,
+// S01d: «Nuevo proveedor» desde Contactos (S02: la fila de acciones, antes la cinta; ?nuevo=proveedor): se queda en la lista,
 // lo dice con su nombre (regla 8) y lo enseña buscándolo por su NIF.
 test('S01d · alta de proveedor desde Contactos: lo confirma y sale en la lista', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
