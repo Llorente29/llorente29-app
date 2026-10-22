@@ -1,0 +1,29 @@
+{
+  "_que": "E05 · La ficha de Catcher · contexto de producción de su tanda (0420, ya aplicada; copia archivada: tanda-e05-catcher-ficha-20261021.txt), medido en SOLO LECTURA el 21/10 a las 22:37 UTC, después de la 0410 (aplicada), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow.",
+  "medido": "2026-10-21T22:37Z",
+  "tanda": {
+    "supabase/migrations/20261130T0420_e05_catcher_ficha.sql": "69897e68058fe7c262f29baaa40ba6df"
+  },
+  "contexto": {
+    "tablas": [
+      "public.company_account",
+      "public.company_account_link",
+      "public.supplier",
+      "public.supplier_invoice"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.company_account": 751,
+      "public.company_account_link": 82,
+      "public.supplier": 95,
+      "public.supplier_invoice": 90
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

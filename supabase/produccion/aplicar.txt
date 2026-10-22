@@ -5,7 +5,9 @@
 #
 # I01d · Cargar los impuestos de 2025 (rama conta/i01d-impuestos-2025; Julio,
 # 21/10). Va DESPUÉS de la de E05 riders (0410, PR #273, aplicada): su copia,
-# tests/conta/produccion/tanda-e05-riders-20261021.txt. Sin turno (Julio, 21/10):
+# tests/conta/produccion/tanda-e05-riders-20261021.txt. La de Catcher (0420
+# e05_catcher_ficha, también aplicada, mismo número) quedó en su copia:
+# tests/conta/produccion/tanda-e05-catcher-ficha-20261021.txt. Sin turno (Julio, 21/10):
 # no comparte funciones ni tablas con ninguna otra.
 #
 #   1. 0420 — CAMBIA en caliente conta_impuesto_trimestre (misma firma,

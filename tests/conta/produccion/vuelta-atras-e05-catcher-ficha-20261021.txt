@@ -1,0 +1,6 @@
+# Vuelta atrás de la tanda de E05 · la ficha de Catcher (0420, ya aplicada; su copia:
+# tanda-e05-catcher-ficha-20261021.txt):
+# la factura de Catcher, otra vez sin proveedor; fuera su ficha, sus enlaces,
+# su tercero y las dos cuentas (para si ya tienen apuntes).
+cuenta: scripts/conta/produccion/cuentas/e05-catcher.sql
+supabase/vuelta-atras/20261130T0420_e05_catcher_ficha.down.sql

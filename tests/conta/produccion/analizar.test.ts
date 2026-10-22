@@ -1459,6 +1459,51 @@ describe('la tanda de AHORA (manifiesto vivo): I01d · los impuestos de 2025 (04
   })
 })
 
+describe('la tanda de E05 · la ficha de Catcher (0420), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-e05-catcher-ficha-20261021.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 21/10 a las 22:37 UTC, después de la 0410, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-e05-catcher-ficha-20261021.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const DOWN = 'supabase/vuelta-atras/20261130T0420_e05_catcher_ficha.down.sql'
+
+  it('un fichero, el medido; pide «autorizo» (cambia un dato); nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map((f) => f.replace(/^.*\//, ''))).toEqual(['20261130T0420_e05_catcher_ficha.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    expect(md5(readFileSync(viva[0], 'utf8'))).toBe(medida.tanda[viva[0]])
+    expect(r.ficheros[viva[0]]).toBe('autorizo')
+    expect(ctx.tablas).toEqual(['public.company_account', 'public.company_account_link', 'public.supplier', 'public.supplier_invoice'])
+    expect(ctx.funciones).toEqual([])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('solo Foodint, con sus guardas, y la factura por su id y su cuenta', () => {
+    const t = readFileSync(viva[0], 'utf8')
+    expect(t).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(t).toContain("'98416803-9f78-411f-a95d-59c334533f05'")
+    expect(t).toContain('where id = f and account_id = a and supplier_id is null')
+    for (const x of ['ya tiene proveedor', 'ya hay % ficha(s)', 'ya existen', 'no es el medido']) expect(t).toContain(x)
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/e05-catcher.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás, y la prueba de staging que la ejecuta', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-e05-catcher-ficha-20261021.txt')).toEqual([DOWN])
+    const p = readFileSync('supabase/staging/sql/20261130_e05_catcher_ficha_prueba.sql', 'utf8')
+    expect(p).toContain(`\\i ${viva[0]}`)
+    expect(p).toContain(`\\i ${DOWN}`)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+  })
+})
+
 describe('la tanda de las facturas de riders (E05, 0410, PR #273), ya aplicada: su copia y su contexto medido', () => {
   const MANIFIESTO = 'tests/conta/produccion/tanda-e05-riders-20261021.txt'
   const viva = leerTanda(MANIFIESTO)
