@@ -22,12 +22,15 @@
 // cerrado con «Pedir desbloqueo», lo que no se propuso y por qué.
 //
 // Regla 7: «Todos» enseña todo, también lo anulado, y el pie dice siempre
-// cuántos hay de cuántos. Regla 8: cada botón dice lo que ha hecho, con
+// cuántos hay de cuántos. S02 · PR 2: «todo» es lo de Asientos. Lo propuesto
+// que se decide en otro apartado (la factura recibida, en Compras y gastos ›
+// Facturas recibidas) no sale ni cuenta aquí mientras espera; validado, sí
+// (lib/diario, delLibroDiario: el porqué y qué orígenes, allí). Regla 8: cada botón dice lo que ha hecho, con
 // contenido («Validado: Ventas nº 1.287»).
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaAsiento, rutaMayor, rutaNuevoAsiento } from '@/config/navegacion'
+import { rutaAsiento, rutaDocumentos, rutaMayor, rutaNuevoAsiento } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -35,8 +38,8 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  cifras, deDondeSale, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, marcaNegativoDiez, mesAnterior, mesDe, nombreMes, numeroVisible,
-  pasosCierre, pastillas, pedirCierre, sePuedeCerrar, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
+  NOMBRE_SITIO, cifras, deDondeSale, delLibroDiario, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, marcaNegativoDiez, mesAnterior, mesDe, nombreMes, numeroVisible,
+  pasosCierre, pastillas, pedirCierre, seDecideEnSuSitio, sePuedeCerrar, sinValidarPorSitio, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
 import {
@@ -48,7 +51,7 @@ import { fijarCorte, primeraVenta } from '@/modules/conta/services/corteService'
 import { corteDesdeRespuesta, rangoAProponer } from '@/modules/conta/lib/proponer'
 import { textoDiaEnCurso, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
-import { paraRevisar, sinValidarDelMes } from '@/modules/conta/libro/paraRevisar'
+import { paraRevisar } from '@/modules/conta/libro/paraRevisar'
 import { nombresDeCuentas, palabrasLlanas } from '@/modules/conta/libro/palabrasLlanas'
 import { MARCA } from '../cuenta/marca'
 import { EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
@@ -79,7 +82,10 @@ interface DatosLibro {
   horaCierre: string
   ejercicios: EjercicioLibro[]
   ejercicio: EjercicioLibro | null
+  /** Lo de Asientos (delLibroDiario): de aquí sale todo lo que se pinta y se cuenta. */
   asientos: AsientoDiario[]
+  /** Lo propuesto del ejercicio que se decide en otro apartado: solo para decir dónde espera. */
+  enSuSitio: AsientoDiario[]
   cierres: CierreMes[]
   mes: string
   resultado: { total: number; porLocal: { nombre: string; resultado: number }[] } | null
@@ -109,9 +115,12 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const [ejercicios, cierres, locales, horaCierre] = await Promise.all([leerEjercicios(accountId, companyId), leerCierres(accountId, companyId), localesDeLaCuenta(accountId), horaDeCierre(accountId, companyId)])
       const hoy = hoyEnMadrid()
       const ejercicio = ejercicios.find((e) => e.code === codigo) ?? ejercicios.find((e) => hoy >= e.inicio && hoy <= e.fin) ?? ejercicios[0] ?? null
-      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null, conDiez: new Map<string, ConDiez>(), conDiezError: null, envios: new Map<string, EnvioAsiento>(), contras: new Map<string, EnvioAsiento>(), esperan: new Map<string, MotivoEspera[]>(), esperanError: null }
+      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], enSuSitio: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null, conDiez: new Map<string, ConDiez>(), conDiezError: null, envios: new Map<string, EnvioAsiento>(), contras: new Map<string, EnvioAsiento>(), esperan: new Map<string, MotivoEspera[]>(), esperanError: null }
       const mes = hoy >= ejercicio.inicio && hoy <= ejercicio.fin ? mesDe(hoy) : mesDe(ejercicio.fin)
-      const asientos = await leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin)
+      const leidos = await leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin)
+      // S02 · PR 2: una sola vez, aquí, y todo lo de abajo lee lo mismo (regla 31).
+      const asientos = delLibroDiario(leidos)
+      const enSuSitio = leidos.filter((a) => seDecideEnSuSitio(a) !== null)
       const anterior = mesAnterior(mes)
       let resultadoError: string | null = null
       let conDiezError: string | null = null
@@ -123,7 +132,9 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const enviables = asientos.filter((a) => (a.estado === 'validado' || a.estado === 'anulado') && !['migrated', 'opening', 'closing', 'template'].includes(a.origen))
       const [resultado, cierre, conDiez, esperan, envios] = await Promise.all([
         resultadoDelMes(companyId, mes, locales).catch((e: unknown) => { resultadoError = e instanceof Error ? e.message : String(e); return null }),
-        pedir ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
+        // El cierre sigue pidiendo que lo propuesto en su sitio esté decidido, pero dice dónde.
+        pedir ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior))
+          .then((f) => ({ ...f, enSuSitio: sinValidarPorSitio(leidos, anterior).enSuSitio })) : Promise.resolve(null),
         leerConDiez(accountId, companyId, asientos.filter((a) => a.origen === 'sales_day').map((a) => a.id))
           .catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() }),
         leerEsperan(companyId, ejercicio.inicio, ejercicio.fin)
@@ -131,7 +142,7 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
         leerEnviosDiez(accountId, enviables.map((a) => a.id), new Map(enviables.filter((a) => a.anuladoCon).map((a) => [a.id, a.anuladoCon!])))
           .catch((e: unknown) => { conDiezError = conDiezError ?? (e instanceof Error ? e.message : String(e)); return { envios: new Map<string, EnvioAsiento>(), contras: new Map<string, EnvioAsiento>() } }),
       ])
-      return { horaCierre, ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre, conDiez, conDiezError, envios: envios.envios, contras: envios.contras, esperan, esperanError }
+      return { horaCierre, ejercicios, ejercicio, asientos, enSuSitio, cierres, mes, resultado, resultadoError, cierre, conDiez, conDiezError, envios: envios.envios, contras: envios.contras, esperan, esperanError }
     })().then((datos) => { if (vivo) setR({ clave, datos, error: null }) },
       (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
@@ -175,6 +186,8 @@ export default function LibroDiarioPage() {
   const [abierto, setAbierto] = useState<string | null>(null)
   const [proponiendo, setProponiendo] = useState(false)
   const [sinPropuesta, setSinPropuesta] = useState<ResultadoProponer['sinPropuesta']>([])
+  // S02 · PR 2: tras «Proponer lo pendiente», dónde se revisa lo propuesto de facturas.
+  const [propuestoAhora, setPropuestoAhora] = useState(false)
   const [desbloqueo, setDesbloqueo] = useState(false)
   const [enviarDiez, setEnviarDiez] = useState(false)
   const usuario = userName ?? 'yo'
@@ -292,7 +305,7 @@ export default function LibroDiarioPage() {
 
   async function proponer() {
     if (!accountId || !activa || !datos?.ejercicio) return
-    setFallo(null); setHecho(null); setProponiendo(true)
+    setFallo(null); setHecho(null); setPropuestoAhora(false); setProponiendo(true)
     try {
       const e = datos.ejercicio
       // Hasta el último día CERRADO, no hasta hoy: un día no se propone antes
@@ -313,7 +326,9 @@ export default function LibroDiarioPage() {
       const quedan = r.quedanDias > 0
         ? ` Quedan ${miles(r.quedanDias)} ${r.quedanDias === 1 ? 'día' : 'días'} de ventas más antiguos por proponer: vuelve a pulsar.`
         : ' No queda ningún día de ventas por proponer.'
-      setHecho(`Repasado del ${diaMesCorto(desde)} al ${diaMesCorto(hasta)}${e.traidoHasta ? ` (hasta el ${diaMesCorto(e.traidoHasta)} lo trae el programa anterior)` : ''}: ${partes.join(' · ')}.${ventas}${quedan}`)
+      // S02 · PR 2: lo de facturas no sale aquí; se revisa en Compras (lo dice la nota de debajo, con su número).
+      setHecho(`Repasado del ${diaMesCorto(desde)} al ${diaMesCorto(hasta)}${e.traidoHasta ? ` (hasta el ${diaMesCorto(e.traidoHasta)} lo trae el programa anterior)` : ''}: ${partes.join(' · ')}.${ventas}${quedan} Lo propuesto de facturas recibidas se revisa en ${NOMBRE_SITIO.recibidas}.`)
+      setPropuestoAhora(true)
       recargar()
     } catch (e) { setFallo(e instanceof Error ? e.message : 'No se ha podido proponer.') }
     finally { setProponiendo(false) }
@@ -347,8 +362,13 @@ export default function LibroDiarioPage() {
 
   const mesCerrado = c?.mes.cerrado ? c.mes : null
   // S01e: un mes cerrado no se da por terminado si dentro hay algo sin validar.
-  const sinValidarMes = datos ? sinValidarDelMes(datos.asientos, datos.mes) : 0
-  const sinValidarTexto = sinValidarMes ? `${sinValidarMes} ${sinValidarMes === 1 ? 'asiento' : 'asientos'} sin validar dentro` : ''
+  // S02 · PR 2: también lo que espera en su sitio (es del mes), dicho dónde.
+  const sinValidar = datos ? sinValidarPorSitio([...datos.asientos, ...datos.enSuSitio], datos.mes) : null
+  const sinValidarMes = sinValidar ? sinValidar.enAsientos + sinValidar.enSuSitio.reduce((t, x) => t + x.n, 0) : 0
+  const fuera = sinValidar?.enSuSitio.filter((x) => x.n > 0).map((x) => `${x.n} en ${NOMBRE_SITIO[x.sitio]}`) ?? []
+  const sinValidarTexto = sinValidarMes ? `${sinValidarMes} ${sinValidarMes === 1 ? 'asiento' : 'asientos'} sin validar dentro${fuera.length ? ` (${fuera.join(', ')})` : ''}` : ''
+  // Las facturas propuestas que esperan en Compras ahora mismo (del libro recién leído, no del recuento de antes).
+  const facturasEnCompras = datos ? datos.enSuSitio.filter((a) => seDecideEnSuSitio(a) === 'recibidas').length : 0
   // S01e: las columnas fijas, a lo que de verdad ocupan («General 1.287», «12.345,67 €»,
   // «Hecho por Folvy»): lo que sobra va al concepto, que antes se cortaba con sitio al lado.
   const columnas: ColumnaDensa<AsientoDiario>[] = datos ? [
@@ -391,6 +411,12 @@ export default function LibroDiarioPage() {
         )}
       </AccionesPantalla>
       <Guardado texto={hecho} />
+      {propuestoAhora && datos && facturasEnCompras > 0 && (
+        <p className="cx-ayuda" role="note">
+          {facturasEnCompras === 1 ? 'Una factura propuesta espera' : `${miles(facturasEnCompras)} facturas propuestas esperan`} en {NOMBRE_SITIO.recibidas}: se validan allí, con su papel al lado.{' '}
+          <Link to={rutaDocumentos('por-revisar')} className="cx-enlace">Revisarlas</Link>
+        </p>
+      )}
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {encendido && datos?.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo están con Diez las ventas por plataforma: {datos.conDiezError}</p>}
       {datos?.esperanError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer qué asientos esperan (lo que la validación pararía): {datos.esperanError}. Mientras tanto, todo lo propuesto cuenta como para revisar.</p>}
@@ -496,7 +522,7 @@ export default function LibroDiarioPage() {
                 vacio={enEsperan
                   ? <Vacio titulo="Nada esperando." explicacion={`Aquí sale lo que todavía no se puede validar o enviar, con su motivo: un mes cerrado, un envío por aclarar${hosteleria ? ', una plataforma sin su factura medida en Diez' : ''}…`} />
                   : filtro === 'revisar' && !soloSinDiez
-                  ? <Vacio titulo="Nada que revisar." explicacion={`Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ${hosteleria ? 'ventas, facturas, liquidaciones y nóminas' : 'ventas, facturas y nóminas'}.`} />
+                  ? <Vacio titulo="Nada que revisar." explicacion={`Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ${hosteleria ? 'ventas, facturas, liquidaciones y nóminas' : 'ventas, facturas y nóminas'}. Las facturas recibidas se revisan en ${NOMBRE_SITIO.recibidas}.`} />
                   : datos.asientos.length === 0
                     ? <Vacio titulo="Aún no hay asientos en este ejercicio." explicacion="Pulsa «Proponer lo pendiente» y los preparo con su porqué; o haz uno a mano con «+ Nuevo asiento»." />
                     : <Vacio titulo="Ningún asiento con lo que hay puesto." explicacion="Prueba con «Todos» o quita los filtros: el libro tiene más." />}

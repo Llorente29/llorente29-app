@@ -22,12 +22,13 @@
 // Lo de siempre se queda (D01, S01): «Validar» aprueba como en Compras,
 // propone, valida, guarda su PDF y la manda a Diez, y cada paso que no sale se
 // dice (regla 8); «No es una factura» la descarta con su motivo y se deshace.
-// La misma ficha se abre desde Contabilidad › Asientos › Recibidas
-// (`enAsientos`) hasta que el PR 2 del S02 lo saque de allí.
+// S02 · PR 2: la ficha vive solo en Compras y gastos (regla 1 del patrón: cada
+// cosa en un solo sitio). Ya no se abre desde Contabilidad › Asientos: «volver»
+// y Esc llevan siempre a la lista de Facturas recibidas de la que se vino.
 
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { rutaCompras, rutaDocumentos, rutaLibroDiario, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
+import { rutaCompras, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -69,7 +70,7 @@ function teclaDeLaFicha(e: KeyboardEvent): boolean {
   return true
 }
 
-export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?: boolean }) {
+export default function RevisarFacturaPage() {
   const { local: ejeLocal } = useAnalitica()
   const tx = useTexto()
   const marco = useMarco()
@@ -101,12 +102,12 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   const pos = ids.indexOf(invoiceId)
 
   // La lista a la que se vuelve: la de la dirección, o la última recordada.
-  const volver = enAsientos ? rutaLibroDiario() : listaRecordada(LISTA_RECIBIDAS, `${rutaDocumentos()}${conCambio(search, { fila: invoiceId })}`)
+  const volver = listaRecordada(LISTA_RECIBIDAS, `${rutaDocumentos()}${conCambio(search, { fila: invoiceId })}`)
   const ir = useCallback((id: string, aviso?: string) => {
     const q = conCambio(search, { fila: id })
-    if (!enAsientos) recordarLista(LISTA_RECIBIDAS, `${rutaDocumentos()}${q}`)
-    navegar(enAsientos ? `${rutaRecibidaEnAsientos(id)}${q}` : `${rutaRevisarFactura(id)}${q}`, aviso ? { state: { aviso } } : undefined)
-  }, [search, enAsientos, navegar])
+    recordarLista(LISTA_RECIBIDAS, `${rutaDocumentos()}${q}`)
+    navegar(`${rutaRevisarFactura(id)}${q}`, aviso ? { state: { aviso } } : undefined)
+  }, [search, navegar])
 
   const papel = useLeer(fac ? async () => ({ url: await urlDelPapel(fac) }) : null, `${invoiceId}:papel:${fac?.llegada?.ruta ?? fac?.papel ?? ''}`)
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo:${vuelta}`)
@@ -334,7 +335,7 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
         titulo={titulo}
         estado={estado}
         frase={frase}
-        migasExtra={enAsientos ? [{ etiqueta: `Recibidas · ${proveedor}` }] : migasExtra}
+        migasExtra={migasExtra}
         derecha={<NavegaFicha pos={pos + 1} total={ids.length} anterior={anterior ? () => ir(anterior) : null} siguiente={siguiente ? () => ir(siguiente) : null} />}
         masAcciones={mas}
         principal={botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}

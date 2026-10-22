@@ -3,7 +3,7 @@ import {
   LOCAL_COMUN, TIPOS_DE_SERIE, comprobarRecibida, cuotaDe, leerImporteEs, textoDeFallo, textoGuardada, totalDe, type BorradorRecibida,
 } from '@/modules/conta/lib/recibidaAMano'
 import { CINTAS, ordenPorId } from '@/modules/conta/esqueleto/ordenes'
-import { CONSULTA_RECIBIDA_A_MANO, rutaRecibidaAMano, rutaRecibidaEnAsientos } from '@/config/navegacion'
+import { CONSULTA_RECIBIDA_A_MANO, CONTA, rutaRecibidaAMano, rutaRecibidaEnAsientos } from '@/config/navegacion'
 
 const HOY = '2026-10-18'
 const bien: BorradorRecibida = { proveedorId: 'p1', numero: ' A-123 ', fecha: '2026-10-10', base: '1.234,56', tipo: '21', cuota: '', local: 'loc1' }
@@ -114,12 +114,16 @@ describe('S01d · lo que se dice (regla 8)', () => {
 })
 
 describe('S01d · por dónde se llega', () => {
-  it('la cinta de Asientos lleva «Recibida a mano» detrás de «Recibida», a Recibidas con ?nueva=a-mano', () => {
+  // S02 · PR 2: la recibida a mano es de Compras y gastos › Facturas recibidas
+  // («Escribir una a mano»), con su dirección; la de antes (Asientos, ?nueva=a-mano) lleva allí.
+  it('«Escribir una a mano», en Compras y gastos, a su dirección (documentos/nueva); ya no en Asientos', () => {
     const o = ordenPorId('asiento.recibida-a-mano')
-    expect(o?.etiqueta).toBe('Recibida a mano')
-    expect(o && 'ruta' in o.a ? o.a.ruta.split('?')[1] : null).toBe(CONSULTA_RECIBIDA_A_MANO)
-    const nuevo = CINTAS['contabilidad.asientos'][0].ordenes
-    expect(nuevo.indexOf('asiento.recibida-a-mano')).toBe(nuevo.indexOf('asiento.recibida') + 1)
-    expect(rutaRecibidaAMano()).toBe(`${rutaRecibidaEnAsientos()}?nueva=a-mano`)
+    expect(o?.etiqueta).toBe('Escribir una a mano')
+    expect(o?.producto).toBe('compras')
+    expect(o && 'ruta' in o.a ? o.a.ruta : null).toBe(CONTA.rutas.recibidaAMano)
+    expect(CINTAS['contabilidad.asientos'][0].ordenes).not.toContain('asiento.recibida-a-mano')
+    expect(rutaRecibidaAMano()).toBe('/conta/documentos/nueva')
+    expect(CONSULTA_RECIBIDA_A_MANO).toBe('nueva=a-mano')
+    expect(rutaRecibidaEnAsientos()).toBe('/conta/documentos?ver=por-revisar')
   })
 })

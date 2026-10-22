@@ -8,28 +8,31 @@
 // con «Común» como una opción más; sin el eje de local no se pregunta.
 //
 // Al guardar: una factura «para revisar» de la empresa activa, sin papel, con
-// una línea (la base a su tipo: de las líneas sale el asiento), y se abre en
-// Asientos › Recibidas para mirarla y apuntarla como cualquier otra. Lo que
-// pasa se dice (regla 8): «Factura 123 de Hermanos Ruiz guardada. Revísala y
-// apúntala.» en la factura, o el fallo aquí, en palabras normales.
+// una línea (la base a su tipo: de las líneas sale el asiento), y se abre su
+// ficha en Compras y gastos › Facturas recibidas para mirarla y apuntarla como
+// cualquier otra. Lo que pasa se dice (regla 8): «Factura 123 de Hermanos
+// Ruiz guardada. Revísala y apúntala.» en la factura, o el fallo aquí, en
+// palabras normales.
 //
-// Vive en la dirección de Recibidas con ?nueva=a-mano (RecibidasEnAsientos la
-// pinta en vez de saltar a la primera para revisar), y por eso la cinta, el
-// vacío de Recibidas y Libros › Registro › Recibidas llegan aquí sin una ruta
-// nueva. Lo escrito se guarda en esta pestaña del navegador mientras se da de
-// alta un proveedor: al volver, sigue ahí.
+// S02 · PR 2: es una página propia de Compras y gastos (`documentos/nueva`),
+// no un modo de Contabilidad › Asientos (regla 1 del patrón: cada cosa en un
+// solo sitio). Por eso sus migas salen del mapa («Compras y gastos › Facturas
+// recibidas › Nueva recibida a mano») con el encabezado común, y «Cancelar»
+// sin historial vuelve a la lista de Facturas recibidas, no al libro diario.
+// Lo escrito se guarda en esta pestaña del navegador mientras se da de alta
+// un proveedor: al volver, sigue ahí.
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { rutaLibroDiario, rutaRecibidaEnAsientos, rutaTerceros } from '@/config/navegacion'
+import { rutaDocumentos, rutaRevisarFactura, rutaTerceros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { Boton, Campo, Fecha, Importe, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
-import { Migas } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
+import { EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import { eurosExactos, hoyEnMadrid, porcentaje } from '@/modules/conta/lib/formato'
 import { LOCAL_COMUN, comprobarRecibida, cuotaDe, leerImporteEs, textoGuardada, totalDe, type BorradorRecibida } from '@/modules/conta/lib/recibidaAMano'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
@@ -93,7 +96,7 @@ export default function RecibidaAMano() {
     guardarBorrador(null)
     const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0
     if (idx > 0) navegar(-1)
-    else navegar(rutaLibroDiario())
+    else navegar(rutaDocumentos('por-revisar'))
   }
 
   async function guardar(e: FormEvent) {
@@ -107,7 +110,7 @@ export default function RecibidaAMano() {
     try {
       const r = await guardarRecibidaAMano({ accountId, companyId: activa.id, userId, userName, proveedor: nombreProveedor, datos })
       guardarBorrador(null)
-      navegar(`${rutaRecibidaEnAsientos(r.id)}?ver=para-mirar`, { state: { aviso: textoGuardada(datos.numero, nombreProveedor) } })
+      navegar(`${rutaRevisarFactura(r.id)}?ver=por-revisar`, { state: { aviso: textoGuardada(datos.numero, nombreProveedor) } })
     } catch (x) {
       setFallo(x instanceof Error ? x.message : String(x))
       setGuardando(false)
@@ -134,13 +137,8 @@ export default function RecibidaAMano() {
 
   return (
     <div className="s-pantalla s-pantalla-estrecha">
-      <header className="cxl-cabeza">
-        <div>
-          <Migas migas={[{ etiqueta: 'Contabilidad', ruta: rutaLibroDiario() }, { etiqueta: 'Asientos', ruta: rutaLibroDiario() }, { etiqueta: 'Recibida a mano' }]} />
-          <h1 className="cxl-titulo">Nueva recibida a mano</h1>
-        </div>
-      </header>
-      <p className="s-apoyo">Para una factura que no tienes en fichero. Se guarda para revisar, sin fichero; después la miras y la apuntas como cualquier otra.</p>
+      <EncabezadoPagina titulo="Nueva recibida a mano" migasExtra={[{ etiqueta: 'Nueva recibida a mano' }]}
+        frase="Para una factura que no tienes en fichero. Se guarda para revisar, sin fichero; después la miras y la apuntas como cualquier otra." />
 
       <form onSubmit={(e) => void guardar(e)} noValidate>
         <Tarjeta titulo="La factura">
