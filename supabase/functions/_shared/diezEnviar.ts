@@ -790,6 +790,12 @@ export interface ClienteDiezApuntes {
 }
 export interface PuertoApunte extends Pick<PuertoEnvio, 'envio' | 'guardar' | 'conexion' | 'autorizado' | 'sha256' | 'ahora'> {
   clienteApuntes(c: ConexionDiez, o: { real: boolean }): Promise<ClienteDiezApuntes>
+  /**
+   * Los asientos de Diez («serie/documento») que ya están enlazados a OTRO asiento
+   * de Sumied de la empresa. Dos movimientos de banco gemelos (el mismo día, las
+   * mismas líneas) son dos asientos en Diez: el del primero no es el del segundo.
+   */
+  enlazados?(companyId: string, menosEntry: string): Promise<Set<string>>
 }
 
 export async function enviarApunteADiez(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnvio> {
@@ -849,9 +855,11 @@ async function enviarApunte(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnv
   }
   if (faltan.length) return apuntar(`${faltan.length === 1 ? `la subcuenta ${faltan[0]} no está` : `las subcuentas ${faltan.join(', ')} no están`} en Diez: no se inventa${faltan.length === 1 ? '' : 'n'}. Créal${faltan.length === 1 ? 'a' : 'as'} allí con el mismo código y reintenta`, { account_connector_id: con.id })
 
-  // 5 · Nunca dos veces.
+  // 5 · Nunca dos veces. Sin los de Diez que ya son de otro asiento de Sumied
+  // (22/10: los bancos gemelos del 13/10 y el 14/10 se enlazaban al de su gemelo).
   const mes = String(ap.Fecha).slice(0, 6)
-  const esElMismo = esElMismoApunte(ap)
+  const usados = p.enlazados ? await p.enlazados(a.company_id, a.id) : new Set<string>()
+  const esElMismo = (d: Apunte) => esElMismoApunte(ap)(d) && !usados.has(`${d.Serie}/${d.Documento}`)
   const ya = unoPorAsiento((await diez.apuntesDelMes(mes)).filter(esElMismo))
   if (ya.length > 1) return apuntar(`hay ${ya.length} asientos iguales en Diez ese día (${ya.map((d) => `${d.Serie}/${d.Documento}`).join(', ')}): no se toca nada`, { account_connector_id: con.id }, false)
   const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(ap)))

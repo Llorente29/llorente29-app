@@ -97,7 +97,16 @@ async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecer
     if (error) return noLlega(`no se ha podido leer el asiento: ${error.message}`, error.code !== 'P0002')
     const a = data as AsientoBD
     const asiento: AsientoBD = { ...a, serie: Number(a.serie), fecha: String(a.fecha), lineas: (a.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), concepto: l.concepto == null ? null : String(l.concepto) })) }
-    const p: PuertoApunte = { ...comun, clienteApuntes: (c, op) => clienteDiez(srv, c, op) }
+    const p: PuertoApunte = {
+      ...comun, clienteApuntes: (c, op) => clienteDiez(srv, c, op),
+      enlazados: async (companyId, menosEntry) => {
+        const { data, error } = await srv.from('external_send').select('ext_series, ext_number')
+          .eq('account_id', j.account_id).eq('company_id', companyId).neq('entry_id', menosEntry)
+          .neq('status', 'rechazado').not('ext_number', 'is', null)
+        if (error) throw new Error(`no se ha podido leer lo enviado a Diez: ${error.message}`)
+        return new Set((data ?? []).map((x) => `${x.ext_series}/${x.ext_number}`))
+      },
+    }
     return enviarApunteADiez(asiento, p)
   }
 
