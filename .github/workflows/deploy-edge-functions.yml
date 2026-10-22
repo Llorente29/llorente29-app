@@ -110,6 +110,10 @@ jobs:
           echo "ref=$REF" >> "$GITHUB_OUTPUT"
           echo "Proyecto: $REF"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Decidir qué funciones se despliegan
         id: lista
         env:
@@ -129,9 +133,12 @@ jobs:
                || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
               ANTES="${{ github.sha }}^"
             fi
-            CANDIDATAS=$(git diff --name-only "$ANTES" "${{ github.sha }}" -- 'supabase/functions/**' \
-              | awk -F/ 'NF>=3 {print $3}' | sort -u | tr '\n' ' ')
-            echo "Cambiaron: ${CANDIDATAS:-(ninguna)}"
+            # W06 (22/10): las carpetas cambiadas Y, si cambia _shared, cada
+            # función que lo usa (directa o indirectamente). Antes se saltaba
+            # _shared y un cambio ahí no desplegaba a nadie (el #285).
+            node scripts/pr/funciones-del-push.mjs "$ANTES" "${{ github.sha }}" > "$RUNNER_TEMP/funciones.txt"
+            CANDIDATAS=$(cat "$RUNNER_TEMP/funciones.txt")
+            echo "Cambiaron (con las que usan lo cambiado de _shared): ${CANDIDATAS:-(ninguna)}"
           fi
 
           # ── LA EXCLUSIÓN, y se dice en voz alta ──────────────────────────
@@ -344,3 +351,35 @@ jobs:
             echo "Verificado: todas quedaron ACTIVE y con el verify_jwt que se quería."
           fi
           exit "$MAL"
+
+      # W06 (Julio, 22/10): lo desplegado se compara con lo de este commit,
+      # fichero a fichero, después de desplegar. El color del run no basta
+      # (16/09: verde sin desplegar hubrise-webhook; 22/10: #285 verde con las
+      # funciones de Diez sin redesplegar). Cada función se baja tal como quedó
+      # y cada fichero tiene que ser el del repositorio, byte a byte, con su
+      # entrada dentro (scripts/pr/comprobar-desplegadas.mjs). Si no se puede
+      # bajar o comparar, en ROJO. El detalle va al artefacto «desplegadas»; al
+      # registro, solo los números (este workflow lee producción).
+      - name: Comprobar que lo desplegado es lo de este commit, fichero a fichero
+        if: steps.lista.outputs.funciones != ''
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ steps.ref.outputs.ref }}
+          FUNCIONES: ${{ steps.lista.outputs.funciones }}
+        run: |
+          set -uo pipefail
+          node scripts/pr/comprobar-desplegadas.mjs "$REF" "$RUNNER_TEMP/desplegadas.md" $FUNCIONES 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "${PIPESTATUS[0]}" != "0" ]; then
+            echo "::error::Alguna función desplegada no es la de este commit, o no se ha podido comprobar: el detalle, en el artefacto «desplegadas»."
+            exit 1
+          fi
+          echo "Comprobado: cada función desplegada es, fichero a fichero, la de este commit."
+
+      - name: El detalle de la comprobación
+        if: always() && steps.lista.outputs.funciones != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: desplegadas
+          path: ${{ runner.temp }}/desplegadas.md
+          if-no-files-found: ignore
+          retention-days: 30
