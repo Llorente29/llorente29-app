@@ -183,6 +183,12 @@ export interface Apuntada { aprobada: boolean; asiento: string | null; validado:
 /** El PDF de la factura, en conta-documentos y enlazado al asiento validado. Una foto se convierte a PDF. */
 async function guardarFacturaPdf(f: FacturaRevisar, entryId: string, quien: string | null): Promise<void> {
   hayBase()
+  // D02: el servidor (conta-recibida-pdf) ya puede haberlo enlazado. Si está, vale:
+  // otro PDF chocaría con «ya tiene su factura».
+  const { data: ya, error: yaError } = await tabla('journal_entry_document').select('id')
+    .eq('account_id', f.account_id).eq('entry_id', entryId).eq('kind', 'factura_recibida').maybeSingle()
+  if (yaError) throw new Error(`no se ha podido mirar si ya tiene su PDF (${yaError.message})`)
+  if (ya) return
   const ruta = f.llegada?.ruta ?? f.papel
   if (!ruta) throw new Error('no tengo el fichero de la factura')
   const bajado = await supabase!.storage.from(RECEPCIONES).download(ruta)

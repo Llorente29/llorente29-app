@@ -11,6 +11,7 @@
 //     estaba y no ha creado nada.
 
 import { rpc, tabla, hayBase } from '@/modules/conta/services/bd'
+import { supabase } from '@/lib/supabase'
 import { uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
 import { comprobarPdf, textoPorPosicion, leerFacturas, leerQuincena, loteParaRegistrar, reconocer, type Fichero, type PdfSubido, type PedidoExcel, type Quincena, type TipoFactura } from '@/modules/conta/lib/catcherQuincena'
@@ -129,6 +130,25 @@ export async function cruzarLote(accountId: string, companyId: string, loteId: s
   })
   const r = await rpc<Record<string, unknown>>('conta_lote_cruce_guardar', { p_lote: loteId, p_cruce: cruce, p_quien_nombre: quien })
   return { cruce, texto: String(r.texto ?? '') }
+}
+
+/**
+ * «Volver a comprobar» (Julio, 22/10): el servidor vuelve a leer los PDF de las
+ * facturas que siguen en revisión (conta-lote-releer, con el mismo código que al
+ * subir) y vuelve a cruzar. Devuelve la frase de lo que ha hecho.
+ */
+export async function volverAComprobarLote(loteId: string, quien: string | null): Promise<string> {
+  hayBase()
+  const { data, error } = await supabase!.functions.invoke('conta-lote-releer', { body: { lote: loteId, quien } })
+  if (error) {
+    // El motivo, el que da la función (403: no es administrador ni encargado).
+    const ctx = (error as { context?: Response }).context
+    const cuerpo = ctx ? await ctx.json().catch(() => null) as { error?: string } | null : null
+    throw new Error(cuerpo?.error ?? `No se ha podido volver a comprobar: ${error.message}`)
+  }
+  const r = data as { texto?: string; error?: string } | null
+  if (!r || r.error) throw new Error(r?.error ?? 'No se ha podido volver a comprobar: la función no ha contestado.')
+  return String(r.texto ?? '')
 }
 
 /** La persona decide sobre una cosa por aclarar: se da por buena, se reclama (con lo que se reclama) o se vuelve a abrir. */

@@ -128,6 +128,12 @@ verify_jwt = true
 [functions.conta-diez-cola]
 verify_jwt = false
 
+[functions.conta-recibida-pdf]
+verify_jwt = false
+
+[functions.conta-lote-releer]
+verify_jwt = false
+
 # (13/10) conta-facturas-entrada · D01. El webhook de Resend para las facturas
 # que se reenvían a facturas-<empresa>@entrada.folvy.app. verify_jwt = false:
 # es un webhook externo; la seguridad la da la firma de svix

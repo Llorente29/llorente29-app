@@ -1,17 +1,16 @@
 {
-  "_que": "S02 · PR 1 · el color de la empresa · contexto de producción de la tanda viva (20261202T0460), medido en SOLO LECTURA el 22/10 a las 15:26 UTC, con la 0450 del C07 ya aplicada (la última del historial: 20261201T0450_c07_diez_todo), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. public.company existe y no está en el camino del pedido; company.color y company_color_formato aún no existen (information_schema.columns y pg_constraint: 0); nada en el historial.",
-  "medido": "2026-10-22T15:26Z",
+  "_que": "E05 · volver a leer los PDF de Catcher · contexto de producción de la tanda viva (20261204T0480), medido en SOLO LECTURA el 22/10 a las 19:54 UTC, con la 0470 del D02 ya aplicada (la última del historial: 20261203T0470_d02_recibida_pdf), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la 0480 solo existen conta_lote_pedidos_app y conta_lote_cruce_guardar (md5 7586a749… y 79a57d0b…), sin hermanas; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-22T19:54Z",
   "tanda": {
-    "supabase/migrations/20261202T0460_s02_color_empresa.sql": "3ad9c0e24de1153668e6b1fb78a46d0a"
+    "supabase/migrations/20261204T0480_e05_releer_riders.sql": "d919f0aeaacd4912e8d7c1a686b1721c"
   },
   "contexto": {
-    "tablas": [
-      "public.company"
+    "tablas": [],
+    "funciones": [
+      "public.conta_lote_cruce_guardar(uuid,jsonb,text)",
+      "public.conta_lote_pedidos_app(uuid)"
     ],
-    "funciones": [],
-    "filas": {
-      "public.company": 0
-    },
+    "filas": {},
     "otras": {},
     "camino": {
       "tablas": [],

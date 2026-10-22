@@ -1,24 +1,21 @@
-# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
-# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
-# (todo en una transacción y rollback, con el registro dentro) y, con un
-# ensayo en verde del mismo commit, en REAL.
+# Tanda de producción viva · E05 · volver a leer en el servidor los PDF de una
+# quincena de Catcher (Julio, 22/10). Rama conta/e05-releer-riders. Número 0480:
+# la siguiente libre por encima de la 0470 (D02, ya aplicada; su copia en
+# tests/conta/produccion/tanda-d02-recibida-pdf-20261022.txt).
 #
-# S02 · PR 1 del patrón único: el color de la empresa (rama
-# claude/cool-noether-i932tx; Julio, 22/10: «Color de la empresa: columna nueva
-# en el PR 1, con su tanda. Fusiona Julio»). Va DESPUÉS de la del C07 (0450,
-# PR #282, aplicada): su copia, tests/conta/produccion/tanda-c07-diez-todo-20261022.txt.
-# No comparte con ella ni tablas ni funciones. Número 0460 (Julio, 22/10): la
-# 0440 es del #280, aparcado.
+#   1. 0480 — AÑADE conta_lote_relectura (quién pidió releer un lote y qué
+#      salió) y las funciones para pedirla (con sesión) o lanzarla desde la base
+#      (solo postgres, con el cron_secret), empezarla, guardar la lectura nueva
+#      del PDF SOLO de las facturas que siguen en revisión y apuntar lo que
+#      salió. CAMBIA en caliente conta_lote_pedidos_app y
+#      conta_lote_cruce_guardar (misma firma): también las puede llamar el
+#      servidor, la condición de la 0450. Declaradas en la cabecera, con su
+#      prueba de staging. No toca ninguna fila.
 #
-#   1. 0460 — AÑADE company.color (nula, '#RRGGBB') y CAMBIA en caliente
-#      public.company con su comprobación de formato (el analizador la cuenta
-#      como cambio: restricción en una tabla que existe; declarada en la
-#      cabecera, con su prueba de staging). No toca ninguna fila ni ninguna
-#      función.
-#
-# No toca el camino del pedido (company no se escribe al pedir ni al cocinar;
-# el CHECK nuevo se valida sobre una columna nula en todas las filas). Ninguna
-# función que desplegar a mano.
+# No toca el camino del pedido: conta_lote_pedidos_app lee sale y sigue solo
+# leyendo. Función que desplegar a mano: conta-lote-releer (nueva; el push a
+# main la despliega sola, y el despliegue compara lo desplegado con main).
+# Después del real y de la fusión, se lanza sobre la 1.ª quincena de octubre.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/color-empresa.sql
-supabase/migrations/20261202T0460_s02_color_empresa.sql
+cuenta: scripts/conta/produccion/cuentas/e05-releer.sql
+supabase/migrations/20261204T0480_e05_releer_riders.sql

@@ -58,8 +58,20 @@ on:
   push:
     # reparto-**: el R02 (quién reparte) usa la misma tanda y las mismas guardas.
     branches: ['main', 'conta/**', 'reparto-**']
+    # W06 (22/10): también cuando cambia un fichero de la tanda, no solo el
+    # manifiesto. El 22/10 bb7d2e24 arregló la prueba de staging de la 0470 sin
+    # tocar el manifiesto y no se ensayó: la tanda iba a salir sin su prueba.
+    # Desde una rama se ensaya lo que la rama añade contra main (aunque el push
+    # solo cambie un fichero); desde main, lo que añade el push (nada, si solo
+    # cambia un fichero: lo de main no se reaplica).
     paths:
       - 'supabase/staging/aplicar.txt'
+      - 'supabase/migrations/**'
+      - 'supabase/staging/sql/**'
+      - 'supabase/vuelta-atras/**'
+      - 'supabase/seeds/conta/**'
+      - 'supabase/seeds/reparto/**'
+      - 'scripts/conta/staging-tanda.mjs'
   # C04 R4 · A mano, desde la rama: el modo «ensayo-de-vuelta-atras» aplica la
   # tanda de ejemplo de supabase/staging/ensayo-vuelta-atras/ con su registro,
   # FUERZA que la comprobación de después falle y deja que deshacer.sh —el de

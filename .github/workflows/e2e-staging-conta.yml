@@ -642,6 +642,8 @@ jobs:
       # «fijar_capturas». Solo en verde (los N trozos) y solo las del frente de la rama.
       - name: Capturas · fijar las del frente en la rama
         if: success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fijar_capturas))
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name "folvy-e2e"
@@ -655,6 +657,16 @@ jobs:
           # Si alguien ha empujado a la rama mientras tanto: las de este run (-X theirs, en un rebase, son las nuestras).
           git pull --rebase -X theirs origin "$GITHUB_REF_NAME"
           git push origin "HEAD:$GITHUB_REF_NAME"
+          # W06 (22/10): un push con este token no lanza workflows, así que el
+          # commit del robot se queda sin ensayo de staging y es el último de la
+          # rama. Si la rama trae tanda (añade algo al manifiesto de staging),
+          # el ensayo se lanza aquí sobre el commit nuevo: la prueba corre sobre
+          # el último commit, sea quien sea el autor.
+          git fetch -q --depth=1 origin main:refs/remotes/origin/main
+          if [ -n "$(node scripts/conta/staging-tanda.mjs nuevas origin/main)" ]; then
+            gh workflow run aplicar-staging-conta.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f modo=aplicar
+            echo "La rama trae tanda: ensayo de staging lanzado sobre $(git rev-parse --short HEAD)." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
   # LA NOCHE: verde, repetir o avisar (scripts/e2e/noche.mjs, Julio, 21/10).
   #   · verde: si había una incidencia abierta, lo dice en ella y la cierra;
