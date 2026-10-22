@@ -1,0 +1,22 @@
+# Tanda de producción viva · D02 · toda factura recibida tiene su PDF desde que
+# entra (Julio, 22/10). Rama conta/d02-imagen-pdf. Número 0470: la siguiente
+# libre por encima de la 0460 (S02, ya aplicada; su copia en
+# tests/conta/produccion/tanda-s02-color-empresa-20261022.txt).
+#
+#   1. 0470 — AÑADE conta_recibida_pdf (una fila por recibida: dónde está su
+#      PDF o por qué aún no) y las funciones del servidor para coger las fotos
+#      que faltan, apuntar lo hecho o lo fallado y enlazar el PDF al asiento
+#      validado (y despertar su envío a Diez si esperaba por el documento), más
+#      su cron de un minuto (solo con el cron_secret del Vault). CAMBIA en
+#      caliente conta_documento_factura_guardar (misma firma): también la
+#      puede llamar el servidor, como la 0450 hizo con conta_resumen_ventas.
+#      Declarada en la cabecera, con su prueba de staging. No toca ninguna fila.
+#
+# No toca el camino del pedido (ningún pedido escribe recibidas, asientos ni
+# documentos). Función que desplegar a mano: conta-recibida-pdf (nueva; el
+# push a main la despliega sola, pero se comprueba el md5 contra main).
+# Después del real, la primera pasada hace las 8 fotos de Foodint y enlaza la
+# de EUROPASTRY, que sale sola a Diez.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/d02-recibida-pdf.sql
+supabase/migrations/20261203T0470_d02_recibida_pdf.sql

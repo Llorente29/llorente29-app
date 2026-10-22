@@ -30,7 +30,7 @@ import {
 } from '@/modules/conta/lib/catcherCuenta'
 import type { TipoFactura } from '@/modules/conta/lib/catcherQuincena'
 import {
-  aclarar, cruzarLote, leerLote, proponerPagoLote, SALDO_PREPAGO, type CosaPorAclarar, type FacturaDeLote,
+  aclarar, leerLote, volverAComprobarLote, proponerPagoLote, SALDO_PREPAGO, type CosaPorAclarar, type FacturaDeLote,
 } from '@/modules/conta/services/catcherService'
 import { SaldoPrepago } from '@/modules/conta/documentos/SaldoPrepago'
 
@@ -78,7 +78,7 @@ export default function LoteCatcherPage() {
             </div>
             <div className="cxr-herramientas">
               <button type="button" className="cx-boton-sec" disabled={!!paso}
-                onClick={() => void hacer('Comprobando con los pedidos…', async () => (await cruzarLote(accountId, activa.id, loteId, userName)).texto)}>Volver a comprobar</button>
+                onClick={() => void hacer('Volviendo a leer los PDF y a comprobar con los pedidos…', () => volverAComprobarLote(loteId, userName))}>Volver a comprobar</button>
               {d.lote.pago
                 ? <Link to={rutaAsiento(d.lote.pago)} className="cxk-hecho-enlace">✓ Pago propuesto · Ver asiento</Link>
                 : <button type="button" className="cx-boton" disabled={!!paso}
