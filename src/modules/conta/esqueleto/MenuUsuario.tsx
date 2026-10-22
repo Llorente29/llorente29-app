@@ -1,17 +1,16 @@
 // src/modules/conta/esqueleto/MenuUsuario.tsx
 //
-// S01 · El usuario y su nivel, a la derecha de la cabecera: el nombre y,
-// debajo, «Nivel medio» (S01e: antes «Julio · Medio», con el punto colgando
-// si el nombre se cortaba y «Medio» suelto, sin decir de qué).
-// Dentro, lo que es de cada persona y se guarda en la base: el nivel (cambia
-// palabras, ayuda y lo que se ofrece de serie; nunca dónde está cada cosa),
-// la densidad (antes un interruptor suelto en la barra) y la cinta. Y, si no
-// es el producto vendido solo, «Volver a Folvy».
+// El usuario, a la derecha de la cabecera. S02 (tableros 1 a 9): el círculo
+// con su inicial y su nombre. Dentro, lo que es de cada persona y se guarda en
+// la base: el nivel (cambia palabras, ayuda y lo que se ofrece de serie; nunca
+// dónde está cada cosa) y la densidad (Cómoda, filas de 56 px; Compacta, de
+// 40: decisión 2 de Julio, 22/10). Y, si no es el producto vendido solo,
+// «Volver a Folvy». S02: se acabó la cinta, y con ella «Ocultar la cinta».
 
 import { Link } from 'react-router-dom'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { iniciales } from '@/modules/conta/lib/formato'
-import { Boton, Icono } from '@/modules/conta/diseno'
+import { Icono } from '@/modules/conta/diseno'
 import { NIVELES, NOMBRE_NIVEL, fraseNivel, type Densidad, type Nivel, type Preferencias } from './preferencias'
 
 const AYUDA_NIVEL: Record<Nivel, string> = {
@@ -41,19 +40,13 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar, enCajon = fal
           <Icono nombre="desplegar" />
         </button>
       )}
-      {!enCajon && <Boton ref={menuBoton} variante="fantasma" icono="desplegar" aria-expanded={menuAbierto} aria-haspopup="true"
-        aria-label={`${nombre}, nivel ${NOMBRE_NIVEL[prefs.nivel].toLowerCase()}. Tus preferencias`} onClick={menuAlternar}>
-        {/* En el móvil no cabe el nombre y el nivel: sus iniciales; el nivel, en el menú y en el nombre del botón. */}
-        {/* El nivel ocupa siempre lo del más largo: cambiarlo no mueve nada (ni manda una pestaña a «Más»). */}
-        {movil ? iniciales(nombre) : (
-          <span className="s-usuario">
-            <span className="s-usuario-nombre" title={nombre}>{nombre}</span>
-            <span className="s-usuario-nivel">
-              {NIVELES.map((n) => <span key={n} aria-hidden={n !== prefs.nivel} data-actual={n === prefs.nivel || undefined}>{fraseNivel(n)}</span>)}
-            </span>
-          </span>
-        )}
-      </Boton>}
+      {!enCajon && (
+        <button ref={menuBoton} type="button" className="s-usuario-boton" aria-expanded={menuAbierto} aria-haspopup="true"
+          aria-label={`${nombre}, nivel ${NOMBRE_NIVEL[prefs.nivel].toLowerCase()}. Tus preferencias`} title={nombre} onClick={menuAlternar}>
+          <span className="s-usuario-inicial" aria-hidden="true">{iniciales(nombre).slice(0, 1)}</span>
+          {!movil && <span className="s-usuario-nombre">{nombre}</span>}
+        </button>
+      )}
       {menuAbierto && (
         <div className="s-menu s-menu-derecha">
           <div role="group" aria-label="Tu nivel">
@@ -68,16 +61,13 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar, enCajon = fal
           <div className="s-menu-separador" />
           <div role="group" aria-label="Densidad">
             <span className="s-menu-titulo">Densidad</span>
-            {([['comoda', 'Cómoda'], ['compacta', 'Compacta']] as [Densidad, string][]).map(([v, t]) => (
+            {([['comoda', 'Cómoda', 'filas de 56 px'], ['compacta', 'Compacta', 'filas de 40 px']] as [Densidad, string, string][]).map(([v, t, nota]) => (
               <button key={v} type="button" className="s-menu-item" aria-pressed={prefs.densidad === v}
-                onClick={() => elegir({ densidad: v }, `Densidad: ${t.toLowerCase()}.`)}>{t}</button>
+                onClick={() => elegir({ densidad: v }, `Densidad: ${t.toLowerCase()}, ${nota}.`)}>
+                <span>{t}</span><span className="s-menu-nota">{nota}</span>
+              </button>
             ))}
           </div>
-          <div className="s-menu-separador" />
-          <button type="button" className="s-menu-item"
-            onClick={() => elegir({ cintaOculta: !prefs.cintaOculta }, prefs.cintaOculta ? 'La cinta vuelve a estar a la vista.' : 'Cinta oculta: «Mostrar la cinta» la saca otra vez.')}>
-            {prefs.cintaOculta ? 'Mostrar la cinta' : 'Ocultar la cinta'}
-          </button>
           {/* En el cajón, «Volver a Folvy» ya es una fila del propio cajón: no se repite. */}
           {!solo && !enCajon && (
             <>

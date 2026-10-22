@@ -98,9 +98,10 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
  * Las piezas que flotan en el marco del módulo de contabilidad. M01: la barra
  * inferior del esqueleto (.s-barra-inferior, S01; antes .cxm-barra-inferior).
  * S01c: ya no hay ninguna (el móvil lleva un cajón); se quedan para que una
- * pantalla que aún las pinte se siga midiendo.
+ * pantalla que aún las pinte se siga midiendo. S02: el botón principal abajo,
+ * bajo el pulgar (.s-pulgar, móvil), sí flota: no puede tapar la página.
  */
-export const FLOTANTES_CONTA = ['.cx-pregunta', '.cx-barra-inferior', '.s-barra-inferior']
+export const FLOTANTES_CONTA = ['.cx-pregunta', '.cx-barra-inferior', '.s-barra-inferior', '.s-pulgar']
 
 /**
  * C06b · Como loQueTapan, y además exige que la barra «Pregunta o pide algo»

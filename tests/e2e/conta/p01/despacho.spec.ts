@@ -92,6 +92,18 @@ test('1 · Todos los filtros apagados: las cifras, los 8 clientes y lo que vence
   await expect(lista(page).getByText('303 vence en 2 días')).toBeVisible()
   await expect(lista(page).getByText('Certificado caduca en', { exact: false })).toBeVisible()
   await expect(page.getByText('8 clientes con permiso')).toBeVisible()
+  // S02: la cartera ya no es la pestaña «Tus clientes» de Impuestos: es el apartado «Clientes del
+  // despacho» de la barra, arriba del todo y solo en una cuenta asesoría (la ruta es la misma). Sin
+  // páginas propias, el apartado dice «estás aquí» ('page'). En el móvil, la barra va en el cajón.
+  if (esMovil(page)) await page.getByRole('button', { name: 'Abrir el menú' }).click()
+  const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+  await expect(menu.getByRole('link', { name: 'Clientes del despacho', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(menu.locator('.s-barra-apartado .s-barra-nombre').first()).toHaveText('Clientes del despacho')
+  await expect(menu.getByRole('link', { name: 'Tus clientes' })).toHaveCount(0)
+  if (esMovil(page)) {
+    await page.getByRole('button', { name: 'Cerrar el menú' }).click()
+    await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
+  }
   await sinDesbordar(page, 'Todos')
   await foto(page, '1-todos')
   expect(errores).toEqual([])

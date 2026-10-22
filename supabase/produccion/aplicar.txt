@@ -3,24 +3,22 @@
 # (todo en una transacción y rollback, con el registro dentro) y, con un
 # ensayo en verde del mismo commit, en REAL.
 #
-# C07 · Todo asiento de Sumied va a Diez al momento (rama conta/c06c-diez-todo;
-# Julio, 22/10). Va DESPUÉS de la de E05 riders (0410, PR #273, aplicada): su
-# copia, tests/conta/produccion/tanda-e05-riders-20261021.txt. Sin turno: no
-# comparte funciones ni tablas con ninguna otra sin aplicar (la 0420 del I01d,
-# PR #281, cambia conta_impuesto_trimestre; esta, ninguna de impuestos).
+# S02 · PR 1 del patrón único: el color de la empresa (rama
+# claude/cool-noether-i932tx; Julio, 22/10: «Color de la empresa: columna nueva
+# en el PR 1, con su tanda. Fusiona Julio»). Va DESPUÉS de la del C07 (0450,
+# PR #282, aplicada): su copia, tests/conta/produccion/tanda-c07-diez-todo-20261022.txt.
+# No comparte con ella ni tablas ni funciones. Número 0460 (Julio, 22/10): la
+# 0440 es del #280, aparcado.
 #
-#   1. 0450 — AÑADE el interruptor «Enviar a Diez» (conta_diez_envio_empresa,
-#      apagado para todas: sin fila), lo que falta por mandar y su reintento
-#      (conta_diez_por_enviar, conta_diez_reclamar, external_send.next_try_at),
-#      el lector del asiento general (conta_asiento_envio), el freno de los
-#      asientos generales (conta_diez_autorizo.incluye_asientos, por defecto no)
-#      y el cron de un minuto conta-diez-despertar (solo llama a conta-diez-cola
-#      si hay algo). CAMBIA en caliente conta_resumen_ventas y
-#      conta_recibida_envio (misma firma, declarado, con su prueba de staging):
-#      también las lee el servidor. No toca ninguna fila.
+#   1. 0460 — AÑADE company.color (nula, '#RRGGBB') y CAMBIA en caliente
+#      public.company con su comprobación de formato (el analizador la cuenta
+#      como cambio: restricción en una tabla que existe; declarada en la
+#      cabecera, con su prueba de staging). No toca ninguna fila ni ninguna
+#      función.
 #
-# No toca el camino del pedido. Funciones a desplegar a mano: conta-diez-enviar
-# y conta-diez-cola (nueva; verify_jwt = false). Vuelta atrás:
-# supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/diez-todo.sql
-supabase/migrations/20261201T0450_c07_diez_todo.sql
+# No toca el camino del pedido (company no se escribe al pedir ni al cocinar;
+# el CHECK nuevo se valida sobre una columna nula en todas las filas). Ninguna
+# función que desplegar a mano.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/color-empresa.sql
+supabase/migrations/20261202T0460_s02_color_empresa.sql

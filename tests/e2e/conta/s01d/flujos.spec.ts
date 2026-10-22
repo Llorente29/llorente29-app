@@ -13,7 +13,7 @@
 //   3. El PDF de la expedida (cuenta A): se adjunta antes de guardar, se ve al
 //      lado (ordenador) o debajo (móvil) y, al «Guardar y validar», queda en la
 //      tarjeta «Factura» del asiento.
-//   4. «Nuevo proveedor» en la cinta de Contactos, también en el móvil (el alta
+//   4. «Nuevo proveedor» en las acciones de Contactos, también en el móvil (el alta
 //      entera en el ordenador ya la prueba c03/terceros.spec.ts).
 //
 // Lo que escribe y no se puede deshacer se escribe en UN tamaño:
@@ -157,8 +157,10 @@ test('S01d · recibida a mano (cuenta A): sin base ni local no guarda; con base 
     // Regla 8: dice qué ha guardado y qué toca ahora.
     await expect(page.getByText(new RegExp(`^Factura ${numero} de .+ guardada\\. Revísala y apúntala\\.$`))).toBeVisible()
     // Sin papel: se escribió a mano.
-    const papel = page.getByRole('region', { name: 'La factura tal como llegó' })
-    await expect(papel.getByText(/^Sin fichero · /)).toBeVisible()
+    // S02: el papel va a la derecha de la ficha, en el panel «Documento»: su
+    // título dice «Sin fichero» y el cuerpo, por qué.
+    const papel = page.getByRole('complementary', { name: 'Documento' })
+    await expect(papel.getByText('Sin fichero', { exact: true })).toBeVisible()
     await expect(papel.getByText('Sin fichero: apuntada a mano.')).toBeVisible()
 
     // En la base: para revisar, a mano, con sus importes y UNA línea (de ella sale el asiento).
@@ -250,15 +252,20 @@ test('S01d · PDF de la expedida (cuenta A): se adjunta, se ve al lado (o debajo
   }
 })
 
-// ── 4 · «Nuevo proveedor» en la cinta de Contactos, en el móvil ─────────────
+// ── 4 · «Nuevo proveedor» en las acciones de Contactos, en el móvil ─────────
 
-test('S01d · Contactos en el móvil: la cinta lleva «Nuevo proveedor» y abre el alta', async ({ page }) => {
+test('S01d · Contactos en el móvil: las acciones llevan «Nuevo proveedor» y abre el alta', async ({ page }) => {
   test.skip(lado(page) !== 'movil', 'En el ordenador, el alta entera: c03/terceros.spec.ts.')
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/clientes-y-proveedores')
   await expect(page.getByRole('heading', { level: 1, name: 'Contactos' })).toHaveCount(1, { timeout: 30_000 })
-  const enlace = page.getByRole('toolbar', { name: 'Acciones de Todos' }).getByRole('link', { name: /Nuevo proveedor/ })
+  // S02: la cinta es ahora la fila de acciones. «Nuevo cliente» es el principal y «Nuevo
+  // proveedor» un botón blanco, que en el móvil va dentro de «Más acciones»: se abre y ahí está.
+  const acciones = page.getByRole('toolbar', { name: 'Acciones de Todos' })
+  await expect(acciones.getByRole('link', { name: /Nuevo cliente/ })).toBeVisible()
+  await acciones.getByRole('button', { name: 'Más acciones' }).click()
+  const enlace = page.getByRole('group', { name: 'Más acciones' }).getByRole('link', { name: /Nuevo proveedor/ })
   await expect(enlace).toBeVisible()
   await expect(enlace).toHaveAttribute('href', /\/conta\/clientes-y-proveedores\?(.*&)?nuevo=proveedor/)
   await enlace.click()

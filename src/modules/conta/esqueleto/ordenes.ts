@@ -1,18 +1,20 @@
 // src/modules/conta/esqueleto/ordenes.ts
 //
-// S01 · El catálogo de ÓRDENES: todo lo que se puede pedir desde el esqueleto,
-// con un id que no cambia. De aquí salen la cinta de cada pestaña, los
-// Favoritos (se guarda el id, no la dirección) y, en el paso 4, la paleta de
-// Ctrl K. Un solo sitio: la cinta y la paleta no pueden decir cosas distintas.
+// S01 · El catálogo de ÓRDENES: todo lo que se puede pedir desde el marco,
+// con un id que no cambia. De aquí salen las acciones de cada página, los
+// Favoritos (se guarda el id, no la dirección) y la paleta de Ctrl K. Un solo
+// sitio: la página y la paleta no pueden decir cosas distintas.
 //
 // Dos clases de orden:
-//   · las de la cinta: «Expedida», «Para revisar», «Búsqueda»…;
-//   · una por pestaña («ir a Libros y listados»), para fijar una pantalla.
+//   · las de una página: «Expedida», «Para revisar», «Búsqueda»…;
+//   · una por página («ir a Libros y listados»), para fijar una pantalla.
 //
-// La cinta de cada pestaña, por grupos con su nombre (maqueta 1: NUEVO ·
-// REVISAR · UTILIDADES). Las pestañas pasan a la cinta según se mudan sus
-// pantallas (paso 3): una pestaña sin cinta aún pinta su propia barra, y así no
-// sale lo mismo dos veces.
+// S02 · Patrón único: se acabó la CINTA (grupos de botones con su título
+// debajo). Los grupos de cada página se quedan como dato y el marco los pinta
+// con la regla del patrón (marco/acciones.ts): un solo botón principal, azul;
+// como mucho dos blancos; lo demás en «Más acciones ▾», con el título del
+// grupo DENTRO del menú. Un grupo marcado `ver` no son acciones sino a dónde
+// ir dentro de la página (los libros, las tablas): sale como «Ver: … ▾».
 //
 // «Vigilancia» y «Anular» de la maqueta no están: Vigilancia no tiene pantalla
 // todavía, y Anular es del asiento abierto (su botón está en el asiento). No
@@ -37,6 +39,8 @@ export interface Orden {
   /** Palabras con las que también se encuentra (la paleta, paso 4). */
   sinonimos?: string[]
   solo?: Condicion
+  /** S02 · El botón principal de su página (azul, uno solo por página). */
+  principal?: boolean
 }
 
 export interface GrupoCinta {
@@ -44,6 +48,8 @@ export interface GrupoCinta {
   ordenes: string[]
   /** El grupo lo llena la pantalla (useEntradasEnCinta) con lo que solo ella sabe: los bancos de la empresa. */
   dePantalla?: string
+  /** S02 · No son acciones: son a dónde ir dentro de la página (sale como «Ver: … ▾»). */
+  ver?: boolean
 }
 
 const R = CONTA.rutas
@@ -67,14 +73,13 @@ const DE_LA_CINTA: Orden[] = [
 
   // Bancos (paso 3; antes, la barra de B01 en la pantalla). «Tus bancos» los
   // pone la pantalla: son los de la empresa (dePantalla en CINTAS).
-  { id: 'bancos.subir', etiqueta: 'Subir extracto', icono: 'subir', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/subir` }, sinonimos: ['extracto', 'norma 43', 'n43', 'excel', 'importar movimientos'] },
+  { id: 'bancos.subir', etiqueta: 'Subir extracto', icono: 'subir', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/subir` }, sinonimos: ['extracto', 'norma 43', 'n43', 'excel', 'importar movimientos'], principal: true },
   { id: 'bancos.reglas', etiqueta: 'Reglas', icono: 'ia', producto: 'bancos', pestana: 'reglas', a: { ruta: `${R.bancos}/reglas` }, sinonimos: ['aprender', 'siempre', 'concepto'] },
   { id: 'bancos.casados', etiqueta: HECHO_POR, icono: 'ok', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}?ver=casados` }, sinonimos: ['casado solo', 'automatico', 'deshacer'] },
-  // Compras y gastos (paso 3). «Por revisar» (N18) sube con su diálogo
-  // (?subir); Facturas recibidas (N22) pone sus grupos desde la pantalla.
-  { id: 'compras.subir', etiqueta: 'Subir una factura', icono: 'subir', producto: 'compras', pestana: 'por-revisar', a: { ruta: `${R.compras}?subir=` }, sinonimos: ['subir factura', 'factura de proveedor', 'albaran'] },
+  // Compras y gastos. S02: un solo «Subir factura», en Facturas recibidas (regla 1 del patrón).
+  { id: 'compras.subir', etiqueta: 'Subir factura', icono: 'subir', producto: 'compras', pestana: 'recibidas', a: { ruta: `${R.documentos}?subir=1` }, sinonimos: ['subir una factura', 'factura de proveedor', 'albaran', 'digitalizar'], principal: true },
   // Contactos (paso 3): «Nuevo cliente», con el diálogo de siempre (?nuevo).
-  { id: 'contactos.nuevo', etiqueta: 'Nuevo cliente', icono: 'nuevo', producto: 'contactos', pestana: 'todos', a: { ruta: `${R.terceros}?nuevo=` }, sinonimos: ['alta cliente', 'nuevo contacto', 'crear cliente'] },
+  { id: 'contactos.nuevo', etiqueta: 'Nuevo cliente', icono: 'nuevo', producto: 'contactos', pestana: 'todos', a: { ruta: `${R.terceros}?nuevo=` }, sinonimos: ['alta cliente', 'nuevo contacto', 'crear cliente'], principal: true },
   // S01d: y «Nuevo proveedor», con el alta de Proveedores (?nuevo=proveedor).
   { id: 'contactos.nuevo-proveedor', etiqueta: 'Nuevo proveedor', icono: 'nuevo', producto: 'contactos', pestana: 'todos', a: { ruta: `${R.terceros}?nuevo=proveedor` }, sinonimos: ['alta proveedor', 'crear proveedor', 'dar de alta un proveedor'] },
   { id: 'bancos.hecho', etiqueta: LO_HECHO, icono: 'revisar', producto: 'bancos', pestana: 'movimientos', a: { ruta: `${R.bancos}/hecho` }, sinonimos: ['hecho', 'registro', 'deshacer'] },
@@ -117,9 +122,9 @@ const DE_DEFINICIONES: Orden[] = [
 const DE_PESTANA: Orden[] = PRODUCTOS.flatMap((p) => p.pestanas.length > 0
   ? p.pestanas.filter((t) => t.ruta !== null).map((t): Orden => ({
       id: `ir.${p.id}.${t.id}`, etiqueta: p.pestanas.length > 1 ? `${p.etiqueta} › ${t.etiqueta}` : p.etiqueta,
-      producto: p.id, pestana: t.id, a: { ruta: t.ruta! }, solo: t.solo,
+      producto: p.id, pestana: t.id, a: { ruta: t.ruta! }, solo: t.solo ?? p.solo,
     }))
-  : p.ruta !== null ? [{ id: `ir.${p.id}`, etiqueta: p.etiqueta, producto: p.id, pestana: '', a: { ruta: p.ruta } }] : [])
+  : p.ruta !== null ? [{ id: `ir.${p.id}`, etiqueta: p.etiqueta, producto: p.id, pestana: '', a: { ruta: p.ruta }, solo: p.solo }] : [])
 
 export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_LIBROS, ...DE_DEFINICIONES, ...DE_PESTANA]
 const POR_ID = new Map(ORDENES.map((o) => [o.id, o]))
@@ -132,48 +137,40 @@ const CINTA_BANCOS: GrupoCinta[] = [
   { titulo: 'Revisar', ordenes: ['bancos.hecho'] },
 ]
 
-/** La cinta de cada pestaña ('producto.pestaña'). Sin entrada, la pestaña no lleva cinta. */
+/** Las acciones de cada página ('producto.página'), por grupos. Sin entrada, la página no lleva. */
 export const CINTAS: Record<string, GrupoCinta[]> = {
   'contabilidad.asientos': [
     { titulo: 'Nuevo', ordenes: ['asiento.expedida', 'asiento.recibida', 'asiento.recibida-a-mano', 'asiento.tesoreria', 'asiento.general', 'asiento.predefinidos'] },
-    { titulo: 'Revisar', ordenes: ['asiento.para-revisar', 'asiento.libro-diario'] },
+    { titulo: 'Revisar', ordenes: ['asiento.para-revisar', 'asiento.libro-diario'], ver: true },
     { titulo: 'Utilidades', ordenes: ['asiento.busqueda', 'asiento.digitalizar'] },
   ],
   // Paso 3: las áreas de Libros, en la cinta de su pestaña (antes, áreas y segunda fila en la pantalla).
   'contabilidad.listados': [
-    { titulo: 'Diario', ordenes: ['libros.diario-resumido'] },
-    { titulo: 'Mayor', ordenes: ['libros.libro-mayor', 'libros.sumas-saldos', 'libros.acumulados'] },
+    { titulo: 'Diario', ordenes: ['libros.diario-resumido'], ver: true },
+    { titulo: 'Mayor', ordenes: ['libros.libro-mayor', 'libros.sumas-saldos', 'libros.acumulados'], ver: true },
     // Estados antes que IVA (medido a 1440 px con sus números): IVA, con siete
     // libros, va solo en la segunda fila y la cinta ocupa dos, no tres.
-    { titulo: 'Estados', ordenes: ['libros.balance', 'libros.pyg', 'libros.ecpn'] },
-    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.formato-aeat'] },
+    { titulo: 'Estados', ordenes: ['libros.balance', 'libros.pyg', 'libros.ecpn'], ver: true },
+    { titulo: 'IVA', ordenes: ['libros.expedidas', 'libros.recibidas', 'libros.intracomunitarias', 'libros.bienes-inversion', 'libros.suplidos', 'libros.formato-aeat'], ver: true },
     // S01e: el 111 y el 115 son retenciones de IRPF, no IVA: su propio grupo.
-    { titulo: 'Retenciones', ordenes: ['libros.retenciones'] },
+    { titulo: 'Retenciones', ordenes: ['libros.retenciones'], ver: true },
   ],
   'contabilidad.cierre': [
-    { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.cierre-ejercicio'] },
-    { titulo: 'Cuentas anuales', ordenes: ['libros.cuentas-anuales', 'libros.mapeo'] },
+    { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.cierre-ejercicio'], ver: true },
+    { titulo: 'Cuentas anuales', ordenes: ['libros.cuentas-anuales', 'libros.mapeo'], ver: true },
   ],
   // Paso 3: Definiciones, que no tenía cinta: el plan, las tablas y la analítica.
   'contabilidad.definiciones': [
-    { titulo: 'Plan', ordenes: ['def.plan', 'def.sitio'] },
-    { titulo: 'Tablas', ordenes: TABLAS_GENERALES.map((t) => `def.tabla.${t.id}`) },
-    { titulo: 'Analítica', ordenes: ['def.analitica'] },
+    { titulo: 'Plan', ordenes: ['def.plan', 'def.sitio'], ver: true },
+    { titulo: 'Tablas', ordenes: TABLAS_GENERALES.map((t) => `def.tabla.${t.id}`), ver: true },
+    { titulo: 'Analítica', ordenes: ['def.analitica'], ver: true },
   ],
   'contabilidad.importar': [
     { titulo: 'Diez', ordenes: ['libros.pendientes-diez'] },
   ],
   // Paso 3: Compras y gastos. Facturas recibidas: la barra de la N22 (TRAER ·
   // ESPERADAS · LEÍDAS), que depende de la empresa (el correo, Cocina): la pone la pantalla.
-  'compras.por-revisar': [
-    { titulo: 'Nuevo', ordenes: ['compras.subir'] },
-  ],
-  // S01e: los rótulos en palabras normales (antes TRAER · ESPERADAS · LEÍDAS, no se entendían).
-  'compras.recibidas': [
-    { titulo: 'Cómo llegan', ordenes: [], dePantalla: 'traer' },
-    { titulo: 'Las que faltan', ordenes: [], dePantalla: 'esperadas' },
-    { titulo: 'Apuntadas solas', ordenes: [], dePantalla: 'leidas' },
-  ],
+  // S02: Facturas recibidas lleva su propio encabezado (Lista): sus acciones las pone la pantalla.
   // Paso 3: Contactos, la misma en todas sus pestañas.
   ...Object.fromEntries(['todos', 'clientes', 'proveedores', 'plataformas', 'socios'].map((t) => [`contactos.${t}`, [{ titulo: 'Nuevo', ordenes: ['contactos.nuevo', 'contactos.nuevo-proveedor'] }]])),
   // Paso 3: la barra de Bancos (B01), la misma en sus cuatro pestañas.
@@ -193,15 +190,15 @@ export function ordenDisponible(o: Orden, ctx: Contexto): boolean {
   const p = PRODUCTOS.find((x) => x.id === o.producto)
   if (!p || !productoVisible(p, ctx)) return false
   if (o.pestana && p.pestanas.length > 0 && !pestanasVisibles(p, ctx).some((t) => t.id === o.pestana)) return false
-  return !o.solo || (o.solo === 'hosteleria' ? ctx.hosteleria : ctx.diez)
+  return !o.solo || (o.solo === 'hosteleria' ? ctx.hosteleria : o.solo === 'diez' ? ctx.diez : ctx.asesoria === true)
 }
 
-/** La cinta de una pestaña, con lo que no se puede usar aquí ya quitado; los grupos vacíos, fuera. */
-export interface GrupoDeCinta { titulo: string; ordenes: Orden[]; dePantalla?: string }
+/** Las acciones de una página, con lo que no se puede usar aquí ya quitado; los grupos vacíos, fuera. */
+export interface GrupoDeCinta { titulo: string; ordenes: Orden[]; dePantalla?: string; ver?: boolean }
 export function cintaDe(producto: IdProducto, pestana: string | null, ctx: Contexto): GrupoDeCinta[] {
   if (!pestana) return []
   return (CINTAS[`${producto}.${pestana}`] ?? [])
-    .map((g) => ({ titulo: g.titulo, ordenes: g.ordenes.map(ordenPorId).filter((o): o is Orden => !!o && ordenDisponible(o, ctx)), dePantalla: g.dePantalla }))
+    .map((g) => ({ titulo: g.titulo, ordenes: g.ordenes.map(ordenPorId).filter((o): o is Orden => !!o && ordenDisponible(o, ctx)), dePantalla: g.dePantalla, ver: g.ver }))
     .filter((g) => g.ordenes.length > 0 || !!g.dePantalla)
 }
 

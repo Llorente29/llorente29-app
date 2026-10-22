@@ -14,7 +14,8 @@ import {
 import { cifrasPlataforma, cuadre, estadoLiquidacion, periodo, pieTeDebe, teDebe, type LiquidacionPlataforma } from '@/modules/conta/lib/liquidaciones'
 import { liquidarLocal, liquidarMes, mesDe, textoImporte, type CalculoLocal } from '@/modules/conta/lib/liquidacionSocio'
 import { aprendidoDeCliente } from '@/modules/conta/lib/aprendidoCliente'
-import { MENU_CONTA, entradaActiva, migasFichaTercero, rutaFichaTercero, rutaTerceros } from '@/config/navegacion'
+import { migasFichaTercero, rutaFichaTercero, rutaTerceros } from '@/config/navegacion'
+import { dondeEsta } from '@/modules/conta/esqueleto/productos'
 import { apartadosDe } from '@/modules/conta/terceros/contextoTercero'
 import { avisoPlazo } from '@/modules/conta/lib/morosidad'
 import { FicheroNoReconocido, importe, leerLiquidaciones, queFichero } from '@/modules/conta/lib/lectorLiquidaciones'
@@ -283,8 +284,8 @@ describe('C03 · direcciones y pestañas de la ficha', () => {
     expect(migasFichaTercero('Plataforma Norte', { etiqueta: 'Plataformas', filtro: 'plataformas' }).map((m) => m.etiqueta))
       .toEqual(['Clientes y proveedores', 'Plataformas', 'Plataforma Norte'])
   })
-  it('dentro de la ficha, el menú marca «Clientes y proveedores»', () => {
-    expect(entradaActiva('/conta/clientes-y-proveedores/p1/cobro', MENU_CONTA.flat())).toBe('terceros')
+  it('dentro de la ficha, la barra marca Contactos (S02: la barra sale del mapa)', () => {
+    expect(dondeEsta('/conta/clientes-y-proveedores/p1/cobro')?.producto.id).toBe('contactos')
   })
   it('«Liquidaciones» solo sale a plataformas y socios', () => {
     expect(apartadosDe(['customer'])).not.toContain('liquidaciones')

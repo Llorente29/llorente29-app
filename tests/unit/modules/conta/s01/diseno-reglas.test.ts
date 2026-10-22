@@ -16,6 +16,8 @@ import { describe, expect, it } from 'vitest'
 const DISENO = 'src/modules/conta/diseno'
 /** Las carpetas del esqueleto: según se creen, entran aquí. */
 const ESQUELETO = ['src/modules/conta/esqueleto', 'src/modules/conta/impuestos']
+/** S02 · El marco del patrón único: sus colores y sus medidas, también solo de los tokens. */
+const MARCO = 'src/modules/conta/marco'
 
 function ficheros(dir: string, ext: RegExp): string[] {
   if (!existsSync(dir)) return []
@@ -41,7 +43,9 @@ function pijama(css: string): string[] {
   return Array.from(sinComentarios(css).matchAll(/:nth-(?:child|of-type)\(\s*(?:even|odd|2n(?:\s*\+\s*[01])?)\s*\)/g)).map((m) => m[0])
 }
 const IMPORTS_PERMITIDOS = [
-  /^react$/, /^react-dom/, /^react-router-dom$/, /^lucide-react$/, /^\.\//, /^\.\.\/\.\.\/\.\.\/\.\.\/supabase\/functions\/_shared\/marcas(\.ts)?$/,
+  /^react$/, /^react-dom/, /^react-router-dom$/, /^lucide-react$/, /^\.\//,
+  // S02 · Las plantillas (diseno/plantillas) cogen las piezas de diseno/, de un nivel más arriba.
+  /^\.\.\/(Icono|iconos|valores)$/, /^\.\.\/\.\.\/\.\.\/\.\.\/supabase\/functions\/_shared\/marcas(\.ts)?$/,
   /^@\/modules\/conta\/lib\/(formato|lectorCsvBanco)$/,
   // Las tres piezas del M01 y el campo de fecha, que se re-exportan con su nombre del sistema.
   /^@\/modules\/conta\/ui\/(tabla\/TablaDensa|formulario\/FormularioBloques|documento\/PanelDocumento|fecha\/CampoFecha)$/,
@@ -51,7 +55,7 @@ function importsDe(ts: string): string[] {
 }
 
 describe('1 · colores solo en los tokens', () => {
-  const todos = [DISENO, ...ESQUELETO].flatMap((d) => ficheros(d, /\.(css|tsx?)$/)).filter((f) => !/tokens\.css$|temas\.ts$/.test(f))
+  const todos = [DISENO, ...ESQUELETO, MARCO].flatMap((d) => ficheros(d, /\.(css|tsx?)$/)).filter((f) => !/tokens\.css$|temas\.ts$/.test(f))
   it('diseno/ y esqueleto/ tienen sus ficheros', () => { expect(todos.length).toBeGreaterThanOrEqual(20) })
   for (const f of todos) it(f, () => { expect(coloresAMano(readFileSync(f, 'utf8'))).toEqual([]) })
   it('la prueba puede fallar', () => {
@@ -61,7 +65,7 @@ describe('1 · colores solo en los tokens', () => {
 })
 
 describe('2 · tamaños de letra y radios solo de los tokens', () => {
-  for (const f of [DISENO, ...ESQUELETO].flatMap((d) => ficheros(d, /\.css$/)).filter((x) => !/tokens\.css$/.test(x))) {
+  for (const f of [DISENO, ...ESQUELETO, MARCO].flatMap((d) => ficheros(d, /\.css$/)).filter((x) => !/tokens\.css$/.test(x))) {
     it(f, () => { expect(medidasAMano(readFileSync(f, 'utf8'))).toEqual([]) })
   }
   it('la prueba puede fallar', () => {

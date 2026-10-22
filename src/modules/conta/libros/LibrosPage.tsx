@@ -24,6 +24,7 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useAnalitica, useDatosEnCinta, type DatosCinta } from '@/modules/conta/marco/nuevo/contexto'
+import { BotonPeriodo } from '@/modules/conta/marco/BotonPeriodo'
 import { PeriodoEnBarra } from '@/modules/conta/ui/marco/PeriodoEnBarra'
 import { miles } from '@/modules/conta/ui/tabla/tablaDensa'
 import { ErrorConReintento, Hueso, Vacio } from '@/modules/conta/ui/piezas'
@@ -158,13 +159,11 @@ export default function LibrosPage({ area: areaFija, accion: accionFija }: { are
     <LibrosCtx.Provider value={ctx}>
       <div className="cxl-pagina cxl-en-marco">
         <h1 className="cx-oculto">Libros</h1>
+        {/* S02 · El periodo, con el mismo control y el mismo formato que en todas las páginas que lo leen. */}
         <PeriodoEnBarra>
-          <label className="cxl-ejercicio">
-            <span className="cx-oculto">Ejercicio</span>
-            <select className="cxm-select" value={ejercicio.code} onChange={(e) => { const p = new URLSearchParams(query); p.set('ejercicio', e.target.value); setQuery(p, { replace: true }) }}>
-              {ejercicios.map((e) => <option key={e.id} value={e.code}>Ejercicio {e.code}{e.origen === 'migrated' ? ' · traído' : e.estado === 'closed' ? ' · cerrado' : ''}</option>)}
-            </select>
-          </label>
+          <BotonPeriodo tipo="ejercicio" valor={ejercicio.code} etiqueta="Ejercicio"
+            opciones={ejercicios.map((e) => ({ valor: e.code, etiqueta: `Ejercicio ${e.code}${e.origen === 'migrated' ? ' · traído' : e.estado === 'closed' ? ' · cerrado' : ' · abierto'}` }))}
+            alCambiar={(v) => { const p = new URLSearchParams(query); p.set('ejercicio', v); setQuery(p, { replace: true }) }} />
         </PeriodoEnBarra>
 
         {resumen.error && <div className="cx-error" role="alert">No se ha podido leer el estado de los libros: {resumen.error}</div>}

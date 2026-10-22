@@ -21,7 +21,7 @@
   --cxm-superficie: var(--s-superficie);
   --cxm-suave: var(--s-suave);   /* Fondo suave: barra de módulos, barra de acciones */
   --cxm-borde: var(--s-borde-decorativo);
-  --cxm-borde-campo: #CBD3DF;    /* El de N30; los controles nuevos usan --s-borde-control (3:1) */
+  --cxm-borde-campo: var(--s-borde-control); /* S02: el de los campos, 3:1 (#7F8FA6) */
   --cxm-azul: var(--s-accion);   /* Acción */
   --cxm-azul-encima: var(--s-accion-encima); /* Acción, al pasar el ratón */
   --cxm-verde: var(--s-ok);      /* Lo hecho */
@@ -49,70 +49,13 @@
   --cxm-hueco: var(--s-hueco);
 }
 
-/* El marco: los módulos y el cuerpo. Sin el degradado de las pantallas de hoy. */
+/* El marco: la barra y el cuerpo. Sin degradado: el fondo del patrón es liso (S02). */
 .cx.cxm {
   display: flex; align-items: stretch; min-height: 100vh;
   background: var(--cxm-fondo); background-image: none;
 }
 .cxm-cifra { font-family: var(--cxm-letra-cifras); font-variant-numeric: tabular-nums; }
 .cxm .cxm-apoyo { color: var(--cxm-apoyo); font-weight: 400; }
-
-/* ── 1 · Barra de módulos ─────────────────────────────────────────────── */
-.cxm-modulos {
-  width: 76px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow: visible; z-index: 35;
-  background: var(--cxm-suave); border-right: 1px solid var(--cxm-borde);
-  display: flex; flex-direction: column; align-items: stretch; padding: 8px 4px; gap: 6px;
-  font-family: var(--cxm-letra);
-}
-.cxm-modulos[data-desplegada='si'] { width: 232px; padding: 8px 10px; }
-.cxm .cxm-plegar {
-  align-self: center; width: 30px; height: 30px; border-radius: var(--cxm-radio-boton); border: 1px solid var(--cxm-borde);
-  background: var(--cxm-superficie); color: var(--cxm-apoyo); font-size: 15px; line-height: 1; cursor: pointer;
-}
-.cxm-modulos[data-desplegada='si'] .cxm-plegar { align-self: flex-end; }
-.cxm .cxm-plegar:hover { color: var(--cxm-texto); border-color: var(--cxm-borde-campo); }
-.cxm-modulos-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.cxm-modulos-separador { height: 1px; background: var(--cxm-borde); margin: 6px 4px; }
-
-.cxm .cxm-modulo {
-  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 6px 2px; border-radius: var(--cxm-radio-boton); text-decoration: none; color: var(--cxm-apoyo);
-  font-size: 11px; line-height: 1.2; text-align: center; cursor: pointer;
-}
-.cxm .cxm-modulo:hover { background: var(--cxm-superficie); color: var(--cxm-texto); }
-.cxm .cxm-modulo[aria-current='page'] { color: var(--cxm-texto); font-weight: 600; }
-.cxm-modulos[data-desplegada='si'] .cxm-modulo { flex-direction: row; gap: 10px; padding: 5px 8px; font-size: 13px; text-align: left; }
-.cxm-modulo-nombre { overflow-wrap: normal; word-break: normal; }
-.cxm-modulos[data-desplegada='si'] .cxm-modulo-nombre { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.cxm-circulo {
-  position: relative; width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--cxm-superficie); border: 1px solid var(--cxm-borde); color: var(--cxm-texto);
-  font-size: 13px; font-weight: 600;
-}
-.cxm [aria-current='page'] > .cxm-circulo { background: var(--cxm-azul); border-color: var(--cxm-azul); color: #FFFFFF; }
-.cxm-globo {
-  position: absolute; top: -5px; right: -8px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
-  background: var(--cxm-ambar-fondo); color: var(--cxm-ambar); border: 1.5px solid var(--cxm-suave);
-  font-family: var(--cxm-letra-cifras); font-size: 10px; font-weight: 600; line-height: 14px; text-align: center;
-}
-.cxm-modulos[data-desplegada='si'] .cxm-globo { display: none; }
-.cxm-modulo-cuenta {
-  font-family: var(--cxm-letra-cifras); font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px;
-  background: var(--cxm-ambar-fondo); color: var(--cxm-ambar);
-}
-.cxm-modulos[data-desplegada='no'] .cxm-modulo-cuenta { display: none; }
-
-.cxm button.cxm-modulo { width: 100%; border: none; background: none; font-family: inherit; }
-.cxm .cxm-modulo-apagado { position: relative; opacity: 0.55; cursor: default; }
-.cxm .cxm-modulo-apagado:hover { background: none; color: var(--cxm-apoyo); }
-.cxm-pronto {
-  display: none; position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); z-index: 45;
-  white-space: nowrap; background: var(--cxm-texto); color: #FFFFFF; font-size: 12px; font-weight: 500;
-  padding: 4px 8px; border-radius: var(--cxm-radio-boton);
-}
-.cxm-modulo-apagado:hover .cxm-pronto, .cxm-modulo-apagado:focus-visible .cxm-pronto { display: block; }
 
 /* ── El cuerpo ────────────────────────────────────────────────────────── */
 .cxm-cuerpo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -287,25 +230,6 @@
 .cxm-menu-movil { position: fixed; top: 52px; left: 12px; right: 12px; min-width: 0; }
 .cxm.cxm-es-movil .cx-principal { padding: 12px 16px calc(88px + env(safe-area-inset-bottom, 0px)); }
 .cxm-es-movil .cxm-acciones { padding: 8px 16px; }
-
-.cxm-barra-inferior {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; padding-bottom: env(safe-area-inset-bottom, 0px);
-  height: calc(64px + env(safe-area-inset-bottom, 0px)); background: var(--cxm-superficie); border-top: 1px solid var(--cxm-borde);
-  display: flex; align-items: center; justify-content: space-around; font-family: var(--cxm-letra);
-}
-.cxm .cxm-barra-item {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 56px; min-height: 48px;
-  background: none; border: none; padding: 0; font: inherit; font-size: 11px; color: var(--cxm-apoyo); text-decoration: none; cursor: pointer;
-}
-.cxm .cxm-barra-item[aria-current='page'] { color: var(--cxm-texto); font-weight: 600; }
-.cxm-circulo-vacio { color: var(--cxm-apoyo); }
-.cxm-hoja { font-family: var(--cxm-letra); }
-.cxm .cxm-hoja-item {
-  display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 4px; color: var(--cxm-texto);
-  text-decoration: none; font-size: 15px; border-radius: var(--cxm-radio-boton);
-}
-.cxm .cxm-hoja-item[aria-current='page'] { font-weight: 600; }
-.cxm-hoja-item .cxm-apoyo { margin-left: auto; font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) { .cxm * { transition: none !important; } }
 

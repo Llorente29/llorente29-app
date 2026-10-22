@@ -23,6 +23,7 @@ import {
 } from '@/modules/conta/lib/compras'
 import { cargarEsperando, cargarLiquidaciones, cargarMirar, contarContabilizadas } from '@/modules/conta/services/comprasService'
 import SubirFactura from '@/modules/conta/compras/SubirFactura'
+import { EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import { FilasAMirar } from '@/modules/conta/compras/QueMirar'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
@@ -72,10 +73,15 @@ export default function ComprasPage() {
 
   const hecho = (frase: string) => { setAviso(frase); setVuelta((v) => v + 1); refrescarCuentasMenu() }
 
-  // S01 · paso 3: el título lo dice la cabecera del esqueleto (Compras y gastos › Por revisar).
-  // «Subir una factura» está en la cinta y, S01e, también aquí arriba: con la cinta plegada
-  // tiene que haber una forma de subir a la vista, no solo la zona de arrastrar de abajo.
-  const cabecera = <h1 className="cx-oculto">Compras y gastos · Por revisar</h1>
+  // S02 · Patrón único: estas son las RECEPCIONES del local que esperan una
+  // decisión o su factura, y cuelgan de Facturas recibidas (es de donde salen
+  // esas facturas). Su título lo dice, con sus migas. «Subir factura» hay UNO
+  // en Compras (regla 1 del patrón), en Facturas recibidas: aquí solo queda el
+  // de cada recepción («Subir su factura»), que la casa con su albarán.
+  const cabecera = (
+    <EncabezadoPagina titulo="Recepciones del local" migasExtra={[{ etiqueta: 'Recepciones del local' }]}
+      frase={`${hosteleria ? 'Lo que llega con el género entra solo desde el local. ' : ''}Aquí solo ves lo que necesita que alguien decida.`} />
+  )
 
   if (error) return <div className="cxc">{cabecera}<ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
   if (!datos || !accountId) return <div className="cxc">{cabecera}<TarjetaCargando /><TarjetaCargando /></div>
@@ -85,10 +91,6 @@ export default function ComprasPage() {
   return (
     <div className="cxc">
       {cabecera}
-      <div className="cxc-entra-fila">
-        <p className="cxc-entra">{hosteleria ? 'Lo que llega con el género ya entra solo desde el local. ' : ''}Aquí sólo ves lo que necesita que alguien decida.</p>
-        <button type="button" className="cx-boton" onClick={() => setSubir({})}>Subir una factura</button>
-      </div>
       <Guardado texto={aviso} />
 
       <Tarjeta titulo="Qué tienes que mirar" accion={<span className={n === 0 ? 'cxc-cuenta cxc-cuenta-cero' : 'cxc-cuenta'} aria-label={`${n} por decidir`}>{n}</span>}>

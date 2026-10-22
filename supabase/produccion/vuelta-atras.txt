@@ -1,7 +1,5 @@
-# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
-# conta_resumen_ventas y conta_recibida_envio vuelven a los cuerpos de
-# producción del 22/10, tal cual; fuera el cron, las funciones nuevas, el
-# interruptor y las dos columnas. Para, sin tocar nada, si ya hay asientos
-# generales en Diez.
-cuenta: scripts/conta/produccion/cuentas/diez-todo.sql
-supabase/vuelta-atras/20261201T0450_c07_diez_todo.down.sql
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
+# S02 · el color de la empresa): sin company.color ni su comprobación. Para si
+# alguna empresa ya ha elegido su color.
+cuenta: scripts/conta/produccion/cuentas/color-empresa.sql
+supabase/vuelta-atras/20261202T0460_s02_color_empresa.down.sql

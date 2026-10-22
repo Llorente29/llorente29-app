@@ -1,21 +1,16 @@
 {
-  "_que": "C07 · todo asiento de Sumied a Diez · contexto de producción de la tanda viva (20261201T0450), medido en SOLO LECTURA el 22/10 a las 07:58 UTC, después de la 0410 y las dos 0420 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen conta_diez_autorizo, external_send, conta_resumen_ventas(uuid) (md5 del cuerpo 62ba30b9…) y conta_recibida_envio(uuid) (e3c57e29…); ninguna de las nuevas; nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-22T07:58Z",
+  "_que": "S02 · PR 1 · el color de la empresa · contexto de producción de la tanda viva (20261202T0460), medido en SOLO LECTURA el 22/10 a las 15:26 UTC, con la 0450 del C07 ya aplicada (la última del historial: 20261201T0450_c07_diez_todo), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. public.company existe y no está en el camino del pedido; company.color y company_color_formato aún no existen (information_schema.columns y pg_constraint: 0); nada en el historial.",
+  "medido": "2026-10-22T15:26Z",
   "tanda": {
-    "supabase/migrations/20261201T0450_c07_diez_todo.sql": "1c889cc62f4e84bd2dca50ff2b711426"
+    "supabase/migrations/20261202T0460_s02_color_empresa.sql": "3ad9c0e24de1153668e6b1fb78a46d0a"
   },
   "contexto": {
     "tablas": [
-      "public.conta_diez_autorizo",
-      "public.external_send"
+      "public.company"
     ],
-    "funciones": [
-      "public.conta_recibida_envio(uuid)",
-      "public.conta_resumen_ventas(uuid)"
-    ],
+    "funciones": [],
     "filas": {
-      "public.conta_diez_autorizo": 0,
-      "public.external_send": 75
+      "public.company": 0
     },
     "otras": {},
     "camino": {

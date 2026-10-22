@@ -249,70 +249,9 @@ export const CONTA = {
   },
 } as const
 
-export interface EntradaMenuConta {
-  id: string
-  etiqueta: string
-  icono: IconoConta
-  /** Ruta relativa al módulo. `null` = la pantalla aún no existe: no se pinta. */
-  ruta: string | null
-  /** Solo en el producto vendido solo (C06): con Folvy no se pinta (Inicio). */
-  soloProducto?: boolean
-  /** En el producto vendido solo NO se pinta: su pantalla aún no funciona sin Cocina o dice «aún no» (C06). */
-  noEnSolo?: boolean
-}
-
-/** El menú de la maqueta, en su orden y con sus separaciones (grupos). */
-export const MENU_CONTA: EntradaMenuConta[][] = [
-  [
-    // C06: Inicio, solo en el producto vendido solo; con Folvy el menú sigue igual.
-    { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: CONTA.rutas.inicio, soloProducto: true },
-    { id: 'por-hacer', etiqueta: 'Por hacer', icono: 'porHacer', ruta: null },
-  ],
-  [
-    // Compras (N18): delante de Bancos, como en la maqueta.
-    { id: 'compras', etiqueta: 'Compras', icono: 'facturas', ruta: CONTA.rutas.compras },
-    // Ventas: detrás de Compras, como la maqueta (respuesta 1 del repaso de compras).
-    // C06: su pantalla dice «Aún no.»: en el producto vendido solo no se pinta.
-    { id: 'ventas', etiqueta: 'Ventas', icono: 'negocio', ruta: CONTA.rutas.ventas, noEnSolo: true },
-    { id: 'documentos', etiqueta: 'Documentos', icono: 'documentos', ruta: CONTA.rutas.documentos },
-    { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: CONTA.rutas.bancos },
-    // C03: la lista única de terceros. Un tercero que solo es proveedor abre su
-    // ficha de siempre (en Cocina); con papel de cliente, plataforma o socio,
-    // la ficha N9/N10 de aquí.
-    { id: 'terceros', etiqueta: 'Clientes y proveedores', icono: 'personas', ruta: CONTA.rutas.terceros },
-    { id: 'pagos', etiqueta: 'Pagos y cobros', icono: 'pagos', ruta: null },
-    { id: 'emitidas', etiqueta: 'Facturas que emites', icono: 'facturas', ruta: null },
-  ],
-  [
-    { id: 'impuestos', etiqueta: 'Impuestos', icono: 'impuestos', ruta: null },
-    { id: 'negocio', etiqueta: 'Cómo va tu negocio', icono: 'negocio', ruta: null },
-    { id: 'libros', etiqueta: 'Libros', icono: 'libros', ruta: CONTA.rutas.libros },
-  ],
-  [
-    { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: CONTA.rutas.empresa },
-  ],
-]
-
-/** La barra inferior del móvil: dos a cada lado del botón central de la IA. */
-export const BARRA_CONTA: { izquierda: EntradaMenuConta[]; derecha: EntradaMenuConta[] } = {
-  izquierda: [
-    { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: CONTA.rutas.inicio, soloProducto: true },
-    { id: 'por-hacer', etiqueta: 'Por hacer', icono: 'porHacer', ruta: null },
-  ],
-  derecha: [
-    { id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: CONTA.rutas.bancos },
-    { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: CONTA.rutas.empresa },
-  ],
-}
-
-/** Las pestañas de Ajustes, en su orden. */
-export const PESTANAS_AJUSTES: EntradaMenuConta[] = [
-  { id: 'empresa', etiqueta: 'Tu empresa', icono: 'ajustes', ruta: CONTA.rutas.empresa },
-  { id: 'tablas', etiqueta: 'Tablas generales', icono: 'ajustes', ruta: CONTA.rutas.tablas },
-  // Vuelve con «Personas y asesor» (respuesta 1 del C00, D4).
-  { id: 'personas', etiqueta: 'Personas y asesor', icono: 'personas', ruta: null },
-  { id: 'avisos', etiqueta: 'Avisos', icono: 'porHacer', ruta: null },
-]
+// S02 · Aquí estaba el menú del C00 (MENU_CONTA, BARRA_CONTA y PESTANAS_AJUSTES,
+// con entradasVisibles y entradaActiva). No lo pintaba nada desde el S01: la
+// barra de contabilidad sale de src/modules/conta/esqueleto/productos.ts.
 
 /**
  * Ajustes como índice lateral agrupado (C02 §5a, maqueta N6Ajustes): solo
@@ -359,20 +298,6 @@ export const entradaAjustes = (id: string | undefined): EntradaAjustes | null =>
 export const ENTRADA_DE_APARTADO: Record<string, string> = {
   'quien-eres': 'empresa', actividad: 'empresa', impuestos: 'impuestos', presentar: 'impuestos', detalle: 'impuestos',
   ejercicio: 'ejercicio', socios: 'socios', registro: 'folvy',
-}
-
-/**
- * Solo las entradas que existen: lo que se pinta. En el producto vendido solo
- * (C06: con una marca propia, o en una cuenta solo de contabilidad), además,
- * nada que diga «aún no» y sí su Inicio. Con Folvy (`solo` = false), lo de siempre.
- *
- * Para que A (Ventas, facturas recibidas) o B (Bancos) enseñen su pantalla basta
- * UNA línea: poner su ruta en su entrada de MENU_CONTA (hoy `ruta: null`), o
- * quitar su `noEnSolo` cuando funcione sin Cocina.
- */
-export function entradasVisibles(lista: EntradaMenuConta[], solo = false): (EntradaMenuConta & { ruta: string })[] {
-  return lista.filter((e): e is EntradaMenuConta & { ruta: string } =>
-    e.ruta !== null && (solo ? !e.noEnSolo : !e.soloProducto))
 }
 
 /** Las entradas del índice de Ajustes que se pintan: en el producto vendido solo, sin las que dicen «aún no». */
@@ -468,16 +393,3 @@ export function migasFichaTercero(nombre: string, lista: { etiqueta: string; fil
   ]
 }
 
-/**
- * ¿Qué entrada del menú está activa para esta dirección? La de prefijo más
- * largo, como el Shell (C01): «ajustes/tablas/impuestos» sigue siendo Ajustes.
- */
-export function entradaActiva(pathname: string, lista: EntradaMenuConta[]): string | null {
-  const base = `/${CONTA.modulo}`
-  if (!pathname.startsWith(base)) return null
-  const resto = pathname.slice(base.length).replace(/^\/+|\/+$/g, '')
-  const candidatas = lista.filter((e): e is EntradaMenuConta & { ruta: string } => e.ruta !== null)
-    .filter(e => resto === e.ruta || (e.ruta === '' ? true : resto.startsWith(`${e.ruta}/`)))
-    .sort((a, b) => b.ruta.length - a.ruta.length)
-  return candidatas[0]?.id ?? null
-}

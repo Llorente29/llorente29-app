@@ -361,7 +361,8 @@ test.describe('Intro envía (respuesta 4)', () => {
       expect(await tecla.evaluate((k) => {
         const c = getComputedStyle(k)
         return { seleccion: c.userSelect, color: c.color, fondo: c.backgroundColor }
-      })).toEqual({ seleccion: 'none', color: 'rgb(47, 91, 255)', fondo: 'rgb(234, 240, 255)' })
+      // S02: los colores del patrón en todas las marcas: la acción #1E63C9 sobre lo seleccionado #EAF2F8.
+      })).toEqual({ seleccion: 'none', color: 'rgb(30, 99, 201)', fondo: 'rgb(234, 242, 248)' })
       await page.evaluate(() => document.fonts.ready)
       await page.screenshot({ path: `${DIR}/alta-intro.png` })
       await page.keyboard.press('Enter')

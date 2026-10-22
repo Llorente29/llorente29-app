@@ -40,7 +40,9 @@ const conMarca = (ruta: string) => `${ruta}${ruta.includes('?') ? '&' : '?'}marc
  * lee la empresa). Se mide y se fotografía lo de verdad, no la espera.
  */
 async function quieta(page: Page) {
-  await expect(page.locator('.s-cab-empresa').first()).toBeVisible({ timeout: 30_000 })
+  // S02: la empresa es .s-empresa (antes .s-cab-empresa): el botón, o el enlace de
+  // darla de alta si no hay ninguna; mientras se lee es un <span> vacío, que no vale.
+  await expect(page.locator('button.s-empresa, a.s-empresa').first()).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('.cx-hueso')).toHaveCount(0, { timeout: 30_000 })
   await expect(page.locator('.cx-principal').getByText(/^(Leyendo|Un momento\.|Aún no hay ninguna empresa)/)).toHaveCount(0, { timeout: 30_000 })
   await page.evaluate(() => document.fonts.ready)

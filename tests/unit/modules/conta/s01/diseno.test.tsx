@@ -11,7 +11,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import {
-  Boton, BotonEnlace, Campo, Chip, Cifra, Cinta, GrupoCinta, ICONOS, Icono, Selector, Tarjeta, TarjetaCifra, Texto,
+  Boton, BotonEnlace, Campo, Chip, Cifra, ICONOS, Icono, Selector, Tarjeta, TarjetaCifra, Texto,
   expandirSubcuenta, importeDeTexto, opcionesConGuardado, textoCifra, textoDeImporte, tonoDeEstado, type NombreIcono,
 } from '@/modules/conta/diseno'
 import { TEMAS_DISENO, variablesDeMarca } from '@/modules/conta/diseno/temas'
@@ -69,45 +69,41 @@ describe('los contrastes, marca a marca', () => {
     const css = readFileSync('src/modules/conta/diseno/diseno.css', 'utf8')
     const regla = (sel: string) => { const i = css.indexOf(`${sel} {`); return css.slice(i, css.indexOf('}', i)) }
     expect(regla('.s-control')).toContain('var(--s-borde-control)')
-    for (const sel of ['.s-tarjeta', '.s-tabla td', '.s-cinta', '.s-boton-secundario']) expect(regla(sel), sel).toContain('var(--s-borde-decorativo)')
+    // S02: se acabó la cinta.
+    for (const sel of ['.s-tarjeta', '.s-tabla td', '.s-boton-secundario']) expect(regla(sel), sel).toContain('var(--s-borde-decorativo)')
   })
   it('la prueba puede fallar: el borde de la maqueta (#DCE5F0) no llega a 3:1, por eso solo decora', () => {
     expect(contraste('#DCE5F0', '#FFFFFF')).toBeLessThan(3)
   })
 })
 
-describe('las marcas', () => {
-  it('Sumied: la barra azul noche y los estados de las maquetas; Folvy y la de pruebas, sin tema', () => {
-    expect(TEMAS_DISENO.sumied).toMatchObject({ barra: '#0B1F3B', fondo: '#F4F7FB', ok: '#0B6B58', duda: '#7A4A00', falta: '#8A1F12' })
-    // Julio, S01 respuestas 1 y 2: el control a 3:1; lo que decora, el de la maqueta; acción y apoyo, los de la identidad.
-    expect(TEMAS_DISENO.sumied).toMatchObject({ bordeControl: '#7F8FA6', bordeDecorativo: '#DCE5F0' })
-    expect(MARCAS.sumied.tema).toMatchObject({ accion: '#1E63C9', apoyo: '#4A5B73' })
-    expect(variablesDeMarca(MARCAS.folvy)).toBeNull()
-    expect(variablesDeMarca(MARCAS.contabilidad)).toBeNull()
+describe('las marcas (S02: un solo patrón)', () => {
+  it('los valores de serie SON los del patrón (encargo S02, con las decisiones de Julio del 22/10)', () => {
+    expect(deSerie).toMatchObject({
+      '--s-tinta': '#172443', '--s-apoyo': '#4A5B73', '--s-fondo': '#F4F7FB', '--s-accion': '#1E63C9',
+      '--s-borde-decorativo': '#DCE5F0', '--s-borde-control': '#7F8FA6', '--s-barra': '#0B1F3B',
+      '--s-propuesto-texto': '#0B6B67', '--s-propuesto': '#EAF9F8', '--s-duda': '#8A4B00', '--s-duda-fondo': '#FFF1DC',
+      '--s-ok': '#1B6B3A', '--s-ok-fondo': '#E6F4EA', '--s-t-m': '14px', '--s-t-titulo': '28px',
+      '--s-alto-cabecera': '56px', '--s-ancho-barra': '232px', '--s-ancho-barra-plegada': '64px', '--s-franja-empresa': '3px',
+      '--s-alto-logo': '40px', '--s-alto-logo-movil': '30px', '--s-fila': '56px',
+    })
+    expect(deSerie['--s-letra']).toMatch(/^'Inter Variable'/)
+    // Compacta: filas de 40 px (decisión 2 de Julio).
+    expect(TOKENS).toMatch(/\[data-densidad='compacta'\][^{]*\{ --s-fila: 40px;/)
   })
-  it('el tema de Sumied escribe los --s-* en .cx, .cx-colores y .cxm, con la identidad de marcas.ts', () => {
+  it('ninguna marca repinta el patrón: la marca cambia el logo y el nombre, no la forma', () => {
+    expect(TEMAS_DISENO).toEqual({})
+    for (const m of Object.values(MARCAS)) expect(variablesDeMarca(m), m.id).toBeNull()
+  })
+  it('el tema de Sumied ya solo escribe la pantalla de entrar (--mx-*), fuera del módulo', () => {
     const css = cssDelTema(MARCAS.sumied)!
-    const desde = css.indexOf('html[data-marca="sumied"] .cxm {')
-    const bloque = css.slice(desde, css.indexOf('}', desde))
-    expect(css).toContain('html[data-marca="sumied"] .cx, html[data-marca="sumied"] .cx-colores, html[data-marca="sumied"] .cxm {')
-    expect(bloque).toContain(`--s-accion: ${MARCAS.sumied.tema!.accion};`)
-    expect(bloque).toContain("--s-letra: 'Inter Variable'")
-    expect(bloque).toContain('--s-barra: #0B1F3B;')
-    expect(bloque).not.toMatch(/--cxm-/)
+    expect(css).toContain('html[data-marca="sumied"] .mx-entrar {')
+    expect(css).not.toContain('.cxm')
+    expect(css).not.toMatch(/--s-|--cx-/)
   })
-  it('Folvy no cambia: cada --cxm-* del marco es alias de un --s-* cuyo valor de serie es el de N30', () => {
-    const N30: Record<string, string> = {
-      '--cxm-texto': '#0E1A2B', '--cxm-apoyo': '#5B6678', '--cxm-fondo': '#EEF1F5', '--cxm-superficie': '#FFFFFF', '--cxm-suave': '#F7F9FC',
-      '--cxm-borde': '#DDE3EB', '--cxm-azul': '#2F5BFF', '--cxm-azul-encima': '#1F45D6', '--cxm-verde': '#0B7A55', '--cxm-verde-fondo': '#E3FBF2',
-      '--cxm-ambar': '#7A4A00', '--cxm-ambar-fondo': '#FFE7B8', '--cxm-propuesto': '#EEF3FF', '--cxm-propuesto-borde': '#B9C9FF',
-      '--cxm-documento': '#E9EDF3', '--cxm-rojo': '#A3201A', '--cxm-radio-boton': '6px', '--cxm-radio-campo': '5px', '--cxm-radio-bloque': '8px',
-      '--cxm-fila': '28px', '--cxm-hueco': '8px',
-    }
-    for (const [cxm, valor] of Object.entries(N30)) {
-      const alias = new RegExp(`${cxm}:\\s*var\\((--s-[a-z0-9-]+)\\)`).exec(MARCO)
-      expect(alias, cxm).not.toBeNull()
-      expect(deSerie[alias![1]], `${cxm} → ${alias![1]}`).toBe(valor)
-    }
+  it('cada --cxm-* del marco es alias de un --s-* que existe', () => {
+    for (const m of MARCO.matchAll(/(--cxm-[a-z0-9-]+):\s*var\((--s-[a-z0-9-]+)\)/g)) expect(deSerie[m[2]], `${m[1]} → ${m[2]}`).toBeDefined()
+    expect(MARCO).toMatch(/--cxm-borde-campo:\s*var\(--s-borde-control\)/)
   })
 })
 
@@ -223,44 +219,24 @@ describe('valores de los campos', () => {
   })
 })
 
-describe('Tarjeta y Cinta', () => {
+describe('Tarjeta', () => {
   it('la tarjeta se nombra por su título; el tono va en data-tono', () => {
     const h = html(<Tarjeta titulo="Retención del alquiler" tono="duda">x</Tarjeta>)
     expect(h).toMatch(/^<section class="s-tarjeta" data-tono="duda" aria-labelledby="([^"]+)"><div class="s-tarjeta-cabeza"><div class="s-tarjeta-titulos"><h2 id="\1"/)
     expect(html(<TarjetaCifra etiqueta="Banco hoy">1</TarjetaCifra>)).toContain('Banco hoy</h3>')
   })
-  it('la cinta: barra de herramientas con sus grupos nombrados, y «Ocultar»', () => {
-    const h = html(<Cinta etiqueta="Acciones de Asientos" oculta={false} alCambiarOculta={() => {}}><GrupoCinta titulo="Nuevo"><Boton>Expedida</Boton></GrupoCinta></Cinta>)
-    expect(h).toContain('role="toolbar" aria-label="Acciones de Asientos"')
-    // El título, debajo de los botones del grupo (Julio, 17/10), y el grupo se llama por él.
-    expect(h).toMatch(/role="group" aria-labelledby="([^"]+)"><div class="s-cinta-grupo-botones">.*Expedida.*<\/div><span id="\1" class="s-cinta-grupo-titulo">Nuevo<\/span>/)
-    expect(h).toContain('aria-expanded="true"')
-  })
-  it('oculta, no desaparece: queda «Mostrar la cinta» (regla 7)', () => {
-    const h = html(<Cinta etiqueta="Acciones" oculta alCambiarOculta={() => {}}><GrupoCinta titulo="Nuevo"><Boton>Expedida</Boton></GrupoCinta></Cinta>)
-    expect(h).toContain('Mostrar la cinta')
-    expect(h).toContain('aria-expanded="false"')
-    expect(h).not.toContain('Expedida')
-  })
 })
 
-describe('el botón del usuario mide lo mismo en los tres niveles (el nivel no mueve nada)', () => {
-  it('lleva los tres nombres en la misma celda; solo el actual se ve y se lee', async () => {
+describe('el botón del usuario (S02): el círculo con su inicial y su nombre; el nivel, dentro', () => {
+  it('el nivel cambia palabras, no posiciones: el botón es el mismo en los tres', async () => {
     const { MenuUsuario } = await import('@/modules/conta/esqueleto/MenuUsuario')
-    const { DE_SERIE, NIVELES, fraseNivel } = await import('@/modules/conta/esqueleto/preferencias')
-    for (const nivel of NIVELES) {
-      const html = renderToStaticMarkup(
-        <MemoryRouter><MenuUsuario nombre="Julio" prefs={{ ...DE_SERIE, nivel }} solo={false} movil={false} cambiar={() => {}} /></MemoryRouter>,
-      )
-      // S01e: «Nivel medio» debajo del nombre, sin «Julio · Medio» (ni punto colgando ni el nivel suelto).
-      const celda = html.match(/<span class="s-usuario-nivel">((?:<span[^>]*>[^<]*<\/span>)+)<\/span>/)![1]
-      for (const n of NIVELES) expect(celda).toContain(`>${fraseNivel(n)}<`)
-      expect(celda.match(/data-actual="true"/g)).toHaveLength(1)
-      expect(celda).toContain(`aria-hidden="false" data-actual="true">${fraseNivel(nivel)}<`)
-      expect(html).not.toContain(' · ')
-      expect(html).toContain(`aria-label="Julio, nivel ${nivel === 'sin_experiencia' ? 'sin experiencia' : nivel}. Tus preferencias"`)
-    }
-    const css = readFileSync('src/modules/conta/esqueleto/esqueleto.css', 'utf8')
-    expect(css).toMatch(/\.s-usuario-nivel > span \{ grid-area: 1 \/ 1; visibility: hidden; \}/)
+    const { DE_SERIE, NIVELES } = await import('@/modules/conta/esqueleto/preferencias')
+    const botones = NIVELES.map((nivel) => {
+      const h = renderToStaticMarkup(<MemoryRouter><MenuUsuario nombre="Julio" prefs={{ ...DE_SERIE, nivel }} solo={false} movil={false} cambiar={() => {}} /></MemoryRouter>)
+      expect(h).toContain(`aria-label="Julio, nivel ${nivel === 'sin_experiencia' ? 'sin experiencia' : nivel}. Tus preferencias"`)
+      expect(h).toContain('<span class="s-usuario-inicial" aria-hidden="true">J</span><span class="s-usuario-nombre">Julio</span>')
+      return h.replace(/aria-label="[^"]*"/, '')
+    })
+    expect(new Set(botones).size).toBe(1)
   })
 })

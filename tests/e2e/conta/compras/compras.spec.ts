@@ -54,10 +54,23 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/compras')
-  // S01 · paso 3: Compras y gastos › Por revisar. El título lo dice la cabecera del esqueleto.
-  await expect(page.getByRole('heading', { level: 1, name: 'Compras y gastos · Por revisar' })).toHaveCount(1)
-  // Las pestañas, en la cabecera (en el móvil, en su fila debajo).
-  await expect(page.getByRole('navigation', { name: 'Pestañas de Compras y gastos' }).getByRole('link', { name: 'Por revisar' })).toHaveAttribute('aria-current', 'page')
+  // S02: «Por revisar» es ahora «Recepciones del local», con su h1 a la vista y
+  // sus migas: cuelga de Facturas recibidas, que es de donde salen esas facturas.
+  await expect(page.getByRole('heading', { level: 1, name: 'Recepciones del local' })).toHaveCount(1)
+  const migas = page.getByRole('navigation', { name: 'Estás en' })
+  await expect(migas.getByRole('link', { name: 'Compras y gastos' })).toBeVisible()
+  await expect(migas.getByRole('link', { name: 'Facturas recibidas' })).toBeVisible()
+  await expect(migas.locator('[aria-current="page"]')).toHaveText('Recepciones del local')
+  // S02: las pestañas de la cabecera ya no existen: las páginas del apartado
+  // salen debajo de él, en la barra (en el móvil, en el cajón), y la marcada es
+  // Facturas recibidas, de la que cuelga esta pantalla.
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Abrir el menú' }).click()
+  await expect(page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('list', { name: 'Páginas de Compras y gastos' })
+    .getByRole('link', { name: 'Facturas recibidas' })).toHaveAttribute('aria-current', 'page')
+  if (lado(page) === 'movil') {
+    await page.getByRole('button', { name: 'Cerrar el menú' }).click()
+    await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
+  }
   await expect(page.getByRole('heading', { name: 'Qué tienes que mirar' })).toBeVisible()
   // Una fila por decisión. Lo que le falta a la ficha, todo junto:
   const ficha = page.locator('.cxc-cosa', { hasText: /^A Verduras del Huerto Prueba, S\.L\. le faltan/ })
@@ -95,15 +108,18 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   if (lado(page) === 'ordenador') {
     const filas = await page.locator('.cxc-mirar > .cxc-cosa').count()
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
-    await expect(menu.getByRole('link', { name: 'Compras y gastos', exact: true })).toHaveAttribute('aria-current', 'page')
+    // S02: el apartado dice «estás dentro» ('true') cuando estás en una de sus páginas.
+    await expect(menu.getByRole('link', { name: 'Compras y gastos', exact: true })).toHaveAttribute('aria-current', 'true')
     if (filas > 0) {
-      const inicio = menu.getByRole('link', { name: 'Inicio', exact: true })
+      // S02: el logo de arriba también se llama «Inicio»: se coge el apartado.
+      const inicio = menu.locator('a.s-barra-item').filter({ has: page.locator('.s-barra-nombre', { hasText: /^Inicio$/ }) })
       await expect(inicio).toHaveAccessibleDescription(/^\d+ por revisar$/)
       const total = Number((await inicio.locator('.s-barra-chip').textContent())!.trim())
       expect(total).toBeGreaterThanOrEqual(filas)
     }
     // Ventas ya no está: la sustituye Facturación (S01), que sale cuando tenga pantalla.
-    await expect(menu.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    // S02: «Favoritos» también es un .s-barra-item, pero es un botón: se cuentan los apartados (enlaces).
+    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()
@@ -111,20 +127,28 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   await capturar(page, 'compras')
 
   // Subir una factura: el diálogo, sin subir nada.
-  // «Subir una factura» está en la cinta (paso 3): abre el mismo diálogo.
-  await page.getByRole('toolbar', { name: 'Acciones de Por revisar' }).getByRole('link', { name: /Subir una factura/ }).click()
+  // S02: la cinta y el botón suelto de arriba («Subir una factura») ya no
+  // existen a propósito: «Subir factura» hay UNO en Compras, en Facturas
+  // recibidas (regla 1 del patrón). Aquí quedan los de cada recepción («Subir
+  // su factura») y el diálogo que abre la dirección con ?subir (el que usan la
+  // ficha del proveedor y el buscador).
+  await expect(page.getByRole('button', { name: 'Subir una factura', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('toolbar', { name: 'Acciones de Por revisar' })).toHaveCount(0)
+  await page.goto('/conta/compras?subir=1')
   const dialogo = page.getByRole('dialog', { name: 'Subir una factura' })
   await expect(dialogo.getByLabel('La factura (foto o PDF)')).toBeVisible()
+  // El ?subir se quita al abrir: recargar no lo vuelve a abrir solo.
+  await expect(page).not.toHaveURL(/[?&]subir/)
   await capturar(page, 'subir-factura', 'dialogo')
   await dialogo.getByLabel('La factura (foto o PDF)').press('Escape')
   await expect(dialogo).toBeHidden()
-  // S01e: también desde la página, a la vista aunque la cinta esté plegada; y la ✕ y
-  // «Cancelar» cierran (en el móvil no hay Escape).
-  await page.locator('.cxc-entra-fila').getByRole('button', { name: 'Subir una factura' }).click()
+  // S01e: la ✕ y «Cancelar» cierran (en el móvil no hay Escape). S02: se
+  // vuelve a abrir como se abre ahora, con ?subir.
+  await page.goto('/conta/compras?subir=1')
   await expect(dialogo.getByRole('button', { name: 'Cerrar' })).toBeVisible()
   await dialogo.getByRole('button', { name: 'Cerrar' }).click()
   await expect(dialogo).toBeHidden()
-  await page.locator('.cxc-entra-fila').getByRole('button', { name: 'Subir una factura' }).click()
+  await page.goto('/conta/compras?subir=1')
   await dialogo.getByRole('button', { name: 'Cancelar' }).click()
   await expect(dialogo).toBeHidden()
 })

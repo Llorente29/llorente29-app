@@ -1,114 +1,133 @@
 // src/modules/conta/documentos/RevisarFacturaPage.tsx
 //
-// D01 · N23 «Revisar factura» (maqueta N23Revisar). A la izquierda el papel tal
-// como llegó; a la derecha la banda de la IA (qué es y con qué casa), «Lo que
-// he leído» con su porqué, «Cómo se apunta» con la propuesta de verdad (la
-// misma función que la tanda, sin escribir) y un solo botón azul: «Está bien ·
-// apuntar». Las cuentas, siempre nombre · código. Anterior y Siguiente recorren
-// la lista de N22 con su mismo filtro y mes.
+// S02 · Compras y gastos › Facturas recibidas › una factura, con la plantilla
+// FICHA del patrón único (tablero 3):
+//   · Encabezado: migas («Compras y gastos › Facturas recibidas › EUROPASTRY
+//     24048027»), el título con su estado, «Llegó por correo el 14/10 ·
+//     factura recibida»; arriba a la derecha «‹ 3 de 9 ›», «Más acciones ▾» y
+//     el principal «Validar y siguiente» con Intro.
+//   · A la izquierda, por bloques: el VEREDICTO de la IA con su motivo y «Por
+//     qué» (veredicto.ts); proveedor y factura; importes; a qué gasto va (con
+//     PROPUESTO y su motivo); el pago; y, abajo y desplegable, el asiento que
+//     se crea, con «Cuadra» y, si la empresa tiene «Enviar a Diez» encendido (C07),
+//     «Al validar se envía también a Diez».
+//   · A la derecha, el PDF: grande, ampliable a pantalla completa y plegable
+//     (se recuerda por persona).
+//   · Teclado (regla 5 del patrón): Intro valida y pasa a la siguiente, las
+//     flechas mueven y Esc vuelve a la lista como la dejaste.
 //
-// «Está bien · apuntar» aprueba como en Compras, propone, valida, guarda su PDF
-// y la manda a Diez; cada paso que no sale se dice (regla 8), también el freno
-// de Diez («No ha llegado a Diez: …»). En el móvil, el papel arriba y el botón
-// abajo, bajo el pulgar.
+// «3 de 9» es la cola de la LISTA de la que se vino, con sus mismos filtros y
+// su orden (recibidas.ts): la dirección de la ficha lleva la de la lista.
 //
-// R5 (Julio, capturas): el vencimiento de la factura manda y, si su ficha da
-// otro día, se dice en ámbar; no se promete «a Diez con su PDF» mientras Diez
-// no guarde documentos; «Cómo se apunta» en dos columnas con su título; el
-// papel del móvil recortado a lo escrito (unos 280 px como mucho) y entero al
-// tocarlo; la banda en ámbar mientras no esté apuntada.
-//
-// S01 · Decisiones de Julio sobre la maqueta 3 (17/10): «No es una factura»
-// la deja descartada con su motivo, quién y cuándo, y se deshace (0160);
-// «Lo que he leído» es de lectura, con el enlace directo a corregir en Compras;
-// «Lo que he comprobado» es el bloque verde (✓ por comprobación, y en ámbar
-// lo que no cuadra: no se esconde) y «Ver el asiento» se pliega.
-//
-// S01 (maqueta 3): la MISMA factura y el MISMO componente se ven desde
-// Contabilidad › Asientos › Recibidas (`enAsientos`), con otro marco: las migas
-// de Asientos, «N de M para revisar» y «Validar y siguiente ⏎» (Intro), que
-// apunta y, si queda validada, pasa a la siguiente diciendo lo que ha hecho.
+// Lo de siempre se queda (D01, S01): «Validar» aprueba como en Compras,
+// propone, valida, guarda su PDF y la manda a Diez, y cada paso que no sale se
+// dice (regla 8); «No es una factura» la descarta con su motivo y se deshace.
+// La misma ficha se abre desde Contabilidad › Asientos › Recibidas
+// (`enAsientos`) hasta que el PR 2 del S02 lo saque de allí.
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaCompras, rutaDocumentos, rutaLibroDiario, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
-import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
-import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
+import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { eurosExactos, hoyEnMadrid, porcentaje } from '@/modules/conta/lib/formato'
-import {
-  VERES, ventanaParaRevisar, columnasDelApunte, facturasEnOrden, comoLlego, limites, lineaDiez, productoDeDocumentos, tonoDeLaFactura, vencimientoAEnsenar, verDe,
-} from '@/modules/conta/documentos/documentos'
+import { comoLlego, productoDeDocumentos, vencimientoAEnsenar } from '@/modules/conta/documentos/documentos'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import {
-  apuntarFactura, decirProveedor, descartarFactura, leerDescarte, leerDocumentos, leerFactura, plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura,
-  urlDelPapel, verPropuestaFactura, type Apuntada, type FacturaRevisar,
+  apuntarFactura, decirProveedor, descartarFactura, leerDescarte, leerDocumentos, leerExtrasFacturas, leerFactura, plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura,
+  urlDelPapel, verPropuestaFactura, type Apuntada,
 } from '@/modules/conta/services/documentosService'
-import { useAnalitica, useNivel } from '@/modules/conta/marco/nuevo/contexto'
+import { useAnalitica, useMarco } from '@/modules/conta/marco/nuevo/contexto'
 import { PorNivel } from '@/modules/conta/textos/PorNivel'
 import { useTexto } from '@/modules/conta/textos/useTexto'
-import { apoyoProveedor, comprobacionesSinContradecir, cuentaDeSusFacturas, textoSinPapel } from '@/modules/conta/documentos/RevisarFacturaPage.textos'
+import { comprobacionesSinContradecir, textoSinPapel } from '@/modules/conta/documentos/RevisarFacturaPage.textos'
+import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
+import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
+import { Boton, Tecla } from '@/modules/conta/diseno'
+import {
+  AsientoQueSeCrea, BloqueFicha, CampoFicha, DocumentoFicha, Ficha, FilaCampos, NavegaFicha, Veredicto, conCambio, listaRecordada, recordarLista,
+} from '@/modules/conta/diseno/plantillas'
+import { LISTA_RECIBIDAS, colaDeFacturas, filasDeLaLista, filtrosDe, ventanaDe } from '@/modules/conta/documentos/recibidas'
+import { motivoGasto, motivoImportes, motivoProveedor, veredictoFactura, type Comprobacion } from '@/modules/conta/documentos/veredicto'
 
 const fecha = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—')
-/** R5 · 4: lo más que ocupa el papel en el móvil antes de tocarlo. */
-const PAPEL_MOVIL_MAX = 280
 const euro = (n: number | null) => (n === null ? '—' : eurosExactos(n))
+const importe = (n: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+const mayuscula = (x: string) => x.charAt(0).toUpperCase() + x.slice(1)
+
+/** ¿La tecla es para la ficha? No mientras se escribe, ni con un diálogo abierto, ni sobre un botón o enlace. */
+function teclaDeLaFicha(e: KeyboardEvent): boolean {
+  if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return false
+  const t = e.target as HTMLElement | null
+  if (t && (t.closest('input, textarea, select, [contenteditable="true"]') || t.closest('[role="dialog"]'))) return false
+  if (e.key === 'Enter' && t && t.closest('button, a, summary')) return false
+  return true
+}
 
 export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?: boolean }) {
-  // S01: el local de la recepción, solo con el eje encendido (Definiciones › Analítica).
   const { local: ejeLocal } = useAnalitica()
-  // S01 (paso 4): las palabras por nivel (maqueta 5); las cajas no se mueven.
   const tx = useTexto()
+  const marco = useMarco()
   const { invoiceId = '' } = useParams()
   const [query] = useSearchParams()
+  const { search } = useLocation()
   const navegar = useNavigate()
   const { accountId, userId, userName } = useCuentaConta()
   const movil = useIsMobile()
   const producto = productoDeDocumentos(useProductoSolo(), MARCA.nombre)
-  const ver = verDe(query.get('ver'))
-  const mes = query.get('mes')
   const avisoDeAntes = (useLocation().state as { aviso?: string } | null)?.aviso ?? null
   const [vuelta, setVuelta] = useState(0)
   const f = useLeer(invoiceId ? () => leerFactura(invoiceId) : null, `${invoiceId}:${vuelta}`)
   const fac = f.datos
+  // C07: con «Enviar a Diez» apagado para la empresa, ni una palabra de Diez.
+  const enviaADiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio?.encendido === true
+  const hoy = hoyEnMadrid()
 
-  // La lista de N22 con su filtro, para «1 de 5», Anterior y Siguiente.
-  // Desde Asientos (S01), no por mes: las que esperan de los últimos 12 meses.
-  const lista = useLeer(fac?.company_id && (mes || enAsientos) ? async () => {
-    const { desde, hasta } = enAsientos ? ventanaParaRevisar(hoyEnMadrid()) : limites(mes!)
+  // La cola de la lista de la que se vino, con sus filtros y su orden: «3 de 9», ‹ y ›.
+  const filtros = filtrosDe(query)
+  const { desde, hasta } = ventanaDe(filtros.mes, hoy)
+  const lista = useLeer(fac?.company_id && accountId ? async () => {
     const d = await leerDocumentos(fac.company_id!, desde, hasta)
-    return facturasEnOrden(d.filas, ver)
-  } : null, `${fac?.company_id}:${mes}:${ver}:${vuelta}`)
+    const ids = d.filas.filter((x) => x.tipo === 'factura').map((x) => x.id)
+    const extras = await leerExtrasFacturas(accountId, ids).catch(() => new Map())
+    return colaDeFacturas(filasDeLaLista(d.filas, extras, filtros))
+  } : null, `${fac?.company_id}:${desde}:${hasta}:${search}:${vuelta}`)
   const ids = lista.datos ?? []
   const pos = ids.indexOf(invoiceId)
-  const ir = (id: string, aviso?: string) => navegar(enAsientos ? `${rutaRecibidaEnAsientos(id)}?ver=${ver}` : `${rutaRevisarFactura(id)}?ver=${ver}&mes=${mes ?? ''}`, aviso ? { state: { aviso } } : undefined)
 
-  // La clave lleva la ruta: sin ella no se vuelve a leer cuando llega la factura (y se quedaba sin papel).
-  // S01e: envuelto, para distinguir «aún leyendo» (null) de «no hay fichero» ({ url: null }).
+  // La lista a la que se vuelve: la de la dirección, o la última recordada.
+  const volver = enAsientos ? rutaLibroDiario() : listaRecordada(LISTA_RECIBIDAS, `${rutaDocumentos()}${conCambio(search, { fila: invoiceId })}`)
+  const ir = useCallback((id: string, aviso?: string) => {
+    const q = conCambio(search, { fila: id })
+    if (!enAsientos) recordarLista(LISTA_RECIBIDAS, `${rutaDocumentos()}${q}`)
+    navegar(enAsientos ? `${rutaRecibidaEnAsientos(id)}${q}` : `${rutaRevisarFactura(id)}${q}`, aviso ? { state: { aviso } } : undefined)
+  }, [search, enAsientos, navegar])
+
   const papel = useLeer(fac ? async () => ({ url: await urlDelPapel(fac) }) : null, `${invoiceId}:papel:${fac?.llegada?.ruta ?? fac?.papel ?? ''}`)
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo:${vuelta}`)
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!) : null,
     `${invoiceId}:${fac?.estado}:${fac?.proveedor?.id}:${vuelta}`)
+  const extra = useLeer(accountId && invoiceId ? () => leerExtrasFacturas(accountId, [invoiceId]).then((m) => m.get(invoiceId) ?? null) : null, `${accountId}:${invoiceId}:extra:${vuelta}`)
 
-  // S01 (0160): si está descartada, por qué, quién y cuándo.
   const descarte = useLeer(fac?.estado === 'descartada' ? () => leerDescarte(fac.id) : null, `${invoiceId}:${fac?.estado}:descarte:${vuelta}`)
   const [noEs, setNoEs] = useState(false)
   const [recuperado, setRecuperado] = useState<{ id: string; texto: string } | null>(null)
   const [falloDescarte, setFalloDescarte] = useState<string | null>(null)
+  const siguiente = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : null
+  const anterior = pos > 0 ? ids[pos - 1] : null
   async function descartar(motivo: string) {
     if (!fac) return
     setFalloDescarte(null)
     try {
       await descartarFactura(fac.id, motivo, userName)
       setNoEs(false)
-      const texto = `Descartada: «${motivo}». No es una factura y sale de «para revisar»; la tienes en Facturas recibidas › Todas, por si hay que deshacerlo.`
-      const siguiente = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : null
-      if (enAsientos && siguiente) { ir(siguiente, texto); return }
+      const texto = `Descartada: «${motivo}». No es una factura y sale de «Por revisar»; la tienes en «Todas», por si hay que deshacerlo.`
+      if (siguiente) { ir(siguiente, texto); return }
       setRecuperado({ id: fac.id, texto })
       setVuelta((v) => v + 1)
     } catch (e) { setFalloDescarte(e instanceof Error ? e.message : String(e)) }
@@ -123,186 +142,224 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
     } catch (e) { setFalloDescarte(e instanceof Error ? e.message : String(e)) }
   }
   const [apuntando, setApuntando] = useState(false)
-  // Lo que ha pasado al apuntar, de ESTA factura (al pasar a la siguiente no se arrastra).
   const [apuntada, setApuntada] = useState<{ id: string; r: Apuntada } | null>(null)
   const hecho = apuntada?.id === invoiceId ? apuntada.r : null
   const [otra, setOtra] = useState(false)
 
-  async function apuntar(ySiguiente = false) {
+  async function validar() {
     if (!fac) return
     setApuntando(true)
     try {
       const r = await apuntarFactura(fac, userName, userId)
       // «Validar y siguiente»: solo pasa si quedó validada; lo hecho se dice en la siguiente (regla 8).
-      const siguiente = pos >= 0 && pos < ids.length - 1 ? ids[pos + 1] : null
-      if (ySiguiente && r.validado && siguiente) { ir(siguiente, r.texto); return }
+      if (r.validado && siguiente) { ir(siguiente, r.texto); return }
       setApuntada({ id: fac.id, r })
       setVuelta((v) => v + 1)
     } finally {
       setApuntando(false)
     }
   }
-  // Intro valida y pasa (el ⏎ del botón), salvo escribiendo o con un diálogo abierto.
-  // Pulsa el botón mismo: si está apagado (sin proveedor, sin fecha, ya validada), no hace nada.
+
+  // El teclado de la cola: Intro valida y pasa; ← y → mueven; Esc vuelve a la lista.
   useEffect(() => {
-    if (!enAsientos) return
     const alPulsar = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter' || e.defaultPrevented || e.isComposing) return
-      const t = e.target as HTMLElement | null
-      if (t && (t.closest('input, textarea, select, button, a, [contenteditable="true"]') || t.closest('[role="dialog"]'))) return
-      const boton = document.querySelector<HTMLButtonElement>('[data-validar-y-siguiente]')
-      if (!boton || boton.disabled) return
-      e.preventDefault(); boton.click()
+      if (!teclaDeLaFicha(e)) return
+      if (e.key === 'Enter') {
+        const boton = document.querySelector<HTMLButtonElement>('[data-validar-y-siguiente]')
+        if (!boton || boton.disabled) return
+        e.preventDefault(); boton.click()
+      } else if (e.key === 'ArrowRight' && siguiente) { e.preventDefault(); ir(siguiente) }
+      else if (e.key === 'ArrowLeft' && anterior) { e.preventDefault(); ir(anterior) }
+      else if (e.key === 'Escape') { e.preventDefault(); navegar(volver) }
     }
     window.addEventListener('keydown', alPulsar)
     return () => window.removeEventListener('keydown', alPulsar)
-  }, [enAsientos])
+  }, [siguiente, anterior, ir, navegar, volver])
 
-  const volver = rutaDocumentos(ver, mes ?? undefined)
-  if (f.error) return <ErrorConReintento mensaje={f.error} reintentar={f.recargar} />
-  if (!fac) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando la factura">{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={40} />)}</div>
+  if (f.error) {
+    return (
+      <div className="s-pagina">
+        <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido abrir la factura: {f.error} <button type="button" className="s-boton s-boton-enlace" onClick={f.recargar}>Reintentar</button></p>
+      </div>
+    )
+  }
+  if (!fac) return <div className="s-pagina" aria-busy="true" aria-label="Cargando la factura"><div className="s-lista-cargando" /></div>
 
   const prov = fac.proveedor
   const proveedor = prov?.nombre ?? 'No reconozco el emisor'
   const titulo = fac.numero ? tx('recibida.titulo', { proveedor, numero: fac.numero }) : tx('recibida.tituloSinNumero', { proveedor })
   const descartada = fac.estado === 'descartada'
-  const yaApuntada = fac.asiento?.estado === 'validado' || descartada
+  const validada = fac.asiento?.estado === 'validado'
+  const yaApuntada = validada || descartada
   const sinProveedor = !prov
   const lectura = fac.lectura
-  const avisos = (lectura?.comprobaciones ?? []).filter((c) => !c.ok)
-  // S01e: el NIF que trae la factura (lo leído o lo propuesto), aparte del de su ficha.
   const nifDeLaFactura = lectura?.factura?.proveedor?.nif ?? fac.propuesto?.nif ?? null
+  const comprobaciones: Comprobacion[] = comprobacionesSinContradecir(lectura?.comprobaciones ?? [], !!(prov?.nif || nifDeLaFactura))
+    .map((c) => ({ ...c, grave: (lectura?.comprobaciones ?? []).find((x) => x.id === c.id)?.grave }))
   const vence = vencimientoAEnsenar(fac.vence, fac.fecha, plazo.datos ?? null)
+  const propuesta = fac.asiento ? undefined : vista.datos ? (vista.datos.propuesta ?? null) : vista.error ? null : undefined
+  const pagada = extra.datos?.pagada ? { fecha: extra.datos.pagada } : null
+  const v = veredictoFactura({
+    validada, numeroAsiento: fac.asiento?.numero ?? null, descartada, motivoDescarte: descarte.datos?.motivo ?? null,
+    proveedor: prov ? { nombre: prov.nombre, nif: prov.nif } : null, nifFactura: nifDeLaFactura, fecha: fac.fecha,
+    comprobaciones, propuesta: propuesta ? { confianza: propuesta.confianza, avisos: propuesta.avisos, razones: propuesta.razones } : propuesta,
+    porqueSinPropuesta: vista.datos && !vista.datos.propuesta ? vista.datos.porque : vista.error,
+    origenGasto: prov?.gasto?.origen ?? null, pagada,
+  })
 
-  const navegacion = ids.length > 1 && pos >= 0 && (
-    <div className="cxr-navegar">
-      <button type="button" className="cx-boton-sec" disabled={pos <= 0} onClick={() => ir(ids[pos - 1])}>← Anterior</button>
-      <button type="button" className="cx-boton-sec" disabled={pos >= ids.length - 1} onClick={() => ir(ids[pos + 1])}>Siguiente →</button>
-    </div>
-  )
+  // La cuenta de gasto: la de la propuesta (su primera línea de gasto) o la de sus facturas.
+  const lineaGasto = propuesta?.lineas.find((l) => l.debe > 0 && /^6/.test(l.cuenta)) ?? null
+  const nombres = vista.datos?.propuesta ? vista.datos.nombres : null
+  const gasto = lineaGasto ? { cuenta: lineaGasto.cuenta, nombre: nombres?.get(lineaGasto.cuenta) ?? 'Cuenta' } : prov?.gasto ? { cuenta: prov.gasto.cuenta, nombre: prov.gasto.nombre } : null
+  const mGasto = motivoGasto({ cuenta: gasto?.cuenta ?? null, origen: prov?.gasto?.origen ?? (propuesta?.razones[0]?.porque ?? null), confirmada: validada })
+  const mProv = motivoProveedor({ proveedor: prov ? { nombre: prov.nombre, nif: prov.nif } : null, nifFactura: nifDeLaFactura })
+  const mImportes = motivoImportes(comprobaciones)
 
-  const sePuedeApuntar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha
-  const botonApuntar = !yaApuntada && (enAsientos
-    ? <button type="button" className="cx-boton" onClick={() => void apuntar(true)} disabled={!sePuedeApuntar} aria-keyshortcuts="Enter" data-validar-y-siguiente="">
-        {apuntando ? 'Validando…' : <><PorNivel clave="recibida.validarYSiguiente" />{!movil && <> <span aria-hidden="true">⏎</span></>}</>}
-      </button>
-    : <button type="button" className="cx-boton" onClick={() => void apuntar()} disabled={apuntando || sinProveedor || !fac.fecha}>
-        {apuntando ? 'Apuntando…' : <PorNivel clave="recibida.apuntar" />}
-      </button>)
-  const paraRevisar = pos >= 0 && ids.length ? ` · ${pos + 1} de ${ids.length}${ver === 'para-mirar' ? ' para revisar' : ''}` : ''
-  const migas = enAsientos
-    ? [{ etiqueta: 'Contabilidad', ruta: rutaLibroDiario() }, { etiqueta: 'Asientos', ruta: rutaLibroDiario() }, { etiqueta: `Recibidas${paraRevisar}` }]
-    : [{ etiqueta: 'Documentos', ruta: rutaDocumentos() }, { etiqueta: 'Facturas recibidas', ruta: volver },
-       { etiqueta: `${VERES.find((v) => v.id === ver)!.nombre}${pos >= 0 && ids.length ? ` · ${pos + 1} de ${ids.length}` : ''}` }]
-  // Maqueta 3: arriba a la derecha, «← Anterior», lo que le pasa y «Validar y siguiente».
-  const cabezaAsientos = enAsientos && !movil && (
-    <div className="cxr-navegar">
-      <button type="button" className="cx-boton-sec" disabled={pos <= 0} onClick={() => ir(ids[pos - 1])}>← Anterior</button>
-      <button type="button" className="cx-boton-sec" onClick={() => setNoEs(true)} disabled={descartada}>No es una factura</button>
-      {botonApuntar}
-    </div>
+  const sePuedeValidar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha
+  const botonValidar = !yaApuntada && (
+    <Boton variante="principal" icono="ok" onClick={() => void validar()} disabled={!sePuedeValidar} aria-keyshortcuts="Enter" data-validar-y-siguiente="">
+      {apuntando ? 'Validando…' : <><PorNivel clave="recibida.validarYSiguiente" />{!movil && <> <Tecla>Intro</Tecla></>}</>}
+    </Boton>
   )
+  const l = fac.llegada
+  const cuando = l?.cuando ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(l.cuando)) : null
+  const como = comoLlego(l?.canal ?? fac.canal ?? (!l && !fac.papel ? 'a_mano' : null), l?.tipo, producto.solo)
+  const frase = `${como ? mayuscula(como) : 'Llegó'}${cuando ? ` el ${cuando}` : ''} · factura recibida`
+  const estado = descartada ? { texto: 'No es una factura', tono: 'neutro' as const }
+    : validada ? (pagada ? { texto: 'Pagada', tono: 'seguro' as const } : { texto: 'Por pagar', tono: 'neutro' as const })
+      : sinProveedor ? { texto: 'Proveedor nuevo', tono: 'duda' as const } : { texto: 'Por revisar', tono: 'duda' as const }
+  const migasExtra = [{ etiqueta: `${proveedor}${fac.numero ? ` ${fac.numero}` : ''}` }]
+  const mas: GrupoDeAcciones[] = [{
+    titulo: '',
+    acciones: [
+      ...(!descartada ? [{ id: 'no-es', etiqueta: 'No es una factura', dato: 'Un albarán, un presupuesto, un extracto…', alPulsar: () => setNoEs(true), grupo: '' }] : []),
+      ...(prov ? [{ id: 'otro-proveedor', etiqueta: 'No es de este proveedor', alPulsar: () => setOtra(true), grupo: '' }] : []),
+      { id: 'corregir', etiqueta: 'Corregir los importes', dato: 'En la recepción de la que salió', a: rutaCompras(), grupo: '' },
+      ...(papel.datos?.url ? [{ id: 'abrir', etiqueta: 'Abrir el PDF aparte', alPulsar: () => window.open(papel.datos!.url!, '_blank', 'noopener'), grupo: '' }] : []),
+    ],
+  }]
   const msgRecuperado = recuperado?.id === invoiceId ? recuperado.texto : null
+  const lineasAsiento = (propuesta?.lineas ?? []).map((x) => ({
+    nombre: nombres?.get(x.cuenta) ?? 'Cuenta', codigo: x.cuenta, debe: x.debe ? importe(x.debe) : null, haber: x.haber ? importe(x.haber) : null,
+  }))
+  const notaDiez = enviaADiez ? 'Al validar se envía también a Diez (sin el PDF: Diez aún no guarda documentos)' : undefined
+  const tipos = fac.tipos.length > 0 ? fac.tipos : fac.base !== null ? [{ tipo: fac.lineas.length === 1 ? fac.lineas[0].iva ?? null : null, base: fac.base, cuota: fac.cuota ?? 0, recargo: null }] : []
+  const esFoto = /^image\//.test(l?.tipo ?? '') || /\.(jpe?g|png|webp)$/i.test(l?.archivo ?? fac.papel ?? '')
+  const sinPapel = !l && !fac.papel
+
+  const datos = (
+    <>
+      <Veredicto tipo={v.tipo} titulo={v.titulo} porque={v.porque} detalle={v.detalle} quien={MARCA.nombre} />
+      {descartada && (
+        <BloqueFicha titulo="No es una factura">
+          <p className="s-apoyo">
+            {descarte.datos ? `La descartó ${descarte.datos.quien ?? 'una persona'} el ${fecha(descarte.datos.cuando.slice(0, 10))}: «${descarte.datos.motivo}». ` : ''}No se contabiliza ni cuenta en lo que debes.
+          </p>
+          <div><Boton onClick={() => void deshacerDescarte()}>Deshacer: sí es una factura</Boton></div>
+        </BloqueFicha>
+      )}
+      <BloqueFicha titulo="Proveedor y factura">
+        <FilaCampos>
+          <CampoFicha etiqueta="Proveedor" valor={prov?.nombre ?? fac.propuesto?.nombre ?? 'No lo reconozco'} tono={mProv.tono} marca={mProv.marca} motivo={mProv.motivo} />
+          <CampoFicha etiqueta="Nº de factura" valor={fac.numero ?? 'Sin número'} tono={fac.numero ? 'normal' : 'revisar'}
+            motivo={fac.no_repetida ? 'No está repetida: lo confirmaste.' : fac.numero ? 'No hay otra con su número y su total.' : 'Sin número no es una factura completa.'} />
+          <CampoFicha etiqueta="Fecha de la factura" valor={fecha(fac.fecha)} tono={fac.fecha ? 'normal' : 'revisar'} motivo={fac.fecha ? undefined : 'No he leído la fecha.'} />
+        </FilaCampos>
+      </BloqueFicha>
+      {sinProveedor && <DecirProveedor accountId={accountId} invoiceId={fac.id} alGuardar={() => setVuelta((x) => x + 1)} />}
+      <BloqueFicha titulo="Importes">
+        {tipos.map((t, i) => (
+          <FilaCampos key={i} columnas={4}>
+            <CampoFicha etiqueta="Base" valor={euro(t.base)} cifra tono={mImportes.tono === 'revisar' ? 'revisar' : 'normal'} />
+            <CampoFicha etiqueta="Tipo de IVA" valor={t.tipo !== null ? porcentaje(t.tipo) : '—'} />
+            <CampoFicha etiqueta="IVA" valor={euro(t.cuota)} cifra />
+            {i === tipos.length - 1
+              ? <CampoFicha etiqueta="Total" valor={<strong>{euro(fac.total)}</strong>} cifra tono={mImportes.tono} motivo={mImportes.motivo} />
+              : <span />}
+          </FilaCampos>
+        ))}
+        {tipos.length === 0 && <FilaCampos columnas={4}><CampoFicha etiqueta="Total" valor={<strong>{euro(fac.total)}</strong>} cifra tono={mImportes.tono} motivo={mImportes.motivo} /></FilaCampos>}
+        {(!!fac.recargo || !!fac.retencion) && (
+          <FilaCampos columnas={4}>
+            {!!fac.recargo && <CampoFicha etiqueta="Recargo de equivalencia" valor={euro(fac.recargo)} cifra />}
+            {!!fac.retencion && <CampoFicha etiqueta="Retención" valor={euro(-Math.abs(fac.retencion))} cifra />}
+          </FilaCampos>
+        )}
+      </BloqueFicha>
+      <BloqueFicha titulo="A qué gasto va">
+        <FilaCampos columnas={ejeLocal ? 3 : 2}>
+          <CampoFicha etiqueta="Gasto" valor={gasto?.nombre ?? 'Sin cuenta todavía'} codigo={gasto?.cuenta} tono={mGasto.tono} motivo={mGasto.motivo} ancho={ejeLocal ? 2 : 1} />
+          {ejeLocal && <CampoFicha etiqueta={ejeLocal.nombre} valor={fac.recepcion?.local ?? extra.datos?.local ?? 'Común'}
+            motivo={fac.recepcion ? `De la recepción del ${fecha(fac.recepcion.fecha).slice(0, 5)}.` : undefined} />}
+          {!ejeLocal && <CampoFicha etiqueta="Vence" valor={vence.valor} tono={vence.aviso ? 'revisar' : 'normal'} motivo={mayuscula(vence.apoyo)} />}
+        </FilaCampos>
+      </BloqueFicha>
+      <BloqueFicha titulo="Pago">
+        {pagada
+          ? <p className="s-pago"><span className="s-chip" data-tono="seguro">Pagada</span> <span className="s-cifra">{euro(fac.total)}</span> el {fecha(pagada.fecha)}{extra.datos?.comoPagada ? ` · ${extra.datos.comoPagada}` : ''}</p>
+          : <p className="s-pago"><span className="s-chip" data-tono="neutro">Sin pagar</span> {ejeLocal ? <>Vence: <strong>{vence.valor}</strong> · {vence.apoyo}</> : 'Aún no está casada con ningún pago del banco.'}</p>}
+        {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}
+      </BloqueFicha>
+      <AsientoQueSeCrea abierto={abiertoDeSerie(marco?.nivel)} titulo={fac.asiento ? 'Su asiento' : 'El asiento que se crea'} lineas={lineasAsiento} nota={notaDiez}
+        vacio={fac.asiento ? `Ya tiene su asiento (${fac.asiento.estado}${fac.asiento.numero ? `, el ${fac.asiento.numero}` : ''}).`
+          : vista.error ? `No se ha podido preparar: ${vista.error}` : vista.datos && !vista.datos.propuesta ? vista.datos.porque : 'Preparando el asiento…'} />
+      <div role="status" aria-live="polite">
+        {avisoDeAntes && !hecho && !msgRecuperado && <p className="s-aviso-lista" data-tono="ok">{avisoDeAntes}</p>}
+        {msgRecuperado && <p className="s-aviso-lista" data-tono="ok">{msgRecuperado}</p>}
+        {hecho && (
+          <p className="s-aviso-lista" data-tono={hecho.validado ? 'ok' : 'falta'}><strong>{hecho.texto}</strong>
+            {hecho.validado && siguiente && <> <button type="button" className="s-boton s-boton-enlace" onClick={() => ir(siguiente)}>La siguiente →</button></>}
+          </p>
+        )}
+      </div>
+      {falloDescarte && <p className="s-aviso-lista" data-tono="falta" role="alert">{falloDescarte}</p>}
+    </>
+  )
+  const documento = (
+    <DocumentoFicha titulo={l?.archivo ?? (sinPapel ? 'Sin fichero' : `${fac.numero ?? 'factura'}.pdf`)} descargar={papel.datos?.url ?? null}
+      oculto={marco?.documentoOculto ?? false} alOcultar={(x) => marco?.ocultarDocumento(x)}>
+      {!papel.datos && !papel.error && !sinPapel && <div className="s-lista-cargando" aria-label="Cargando el PDF" />}
+      {papel.error && <p className="s-documento-nada">{textoSinPapel({ archivo: l?.archivo ?? null, aMano: false, error: papel.error })}</p>}
+      {!papel.error && papel.datos && !papel.datos.url && <p className="s-documento-nada">{textoSinPapel({ archivo: l?.archivo ?? null, aMano: sinPapel, error: null })}</p>}
+      {sinPapel && !papel.datos && <p className="s-documento-nada">{textoSinPapel({ archivo: null, aMano: true, error: null })}</p>}
+      {papel.datos?.url && (esFoto
+        ? <img src={papel.datos.url} alt={`La factura ${fac.numero ?? ''} tal como llegó`} />
+        : <PapelPdf url={papel.datos.url} titulo={`La factura ${fac.numero ?? ''} tal como llegó`} />)}
+    </DocumentoFicha>
+  )
 
   return (
-    <div className="cxl-pagina">
-      <header className="cxl-cabeza">
-        <div>
-          <Migas migas={migas} />
-          <h1 className="cxl-titulo" style={{ fontSize: movil ? 24 : 28 }}>{titulo}</h1>
-        </div>
-        {enAsientos ? cabezaAsientos : !movil && navegacion}
-      </header>
-      <div role="status" aria-live="polite">
-        {avisoDeAntes && !hecho && !msgRecuperado && <div className="cx-tarjeta cxr-hecho"><strong>{avisoDeAntes}</strong></div>}
-        {msgRecuperado && <div className="cx-tarjeta cxr-hecho"><strong>{msgRecuperado}</strong></div>}
-      </div>
-      {falloDescarte && <div className="cx-error" role="alert">{falloDescarte}</div>}
-      {descartada && (
-        <section className="cx-tarjeta cxr-descartada" aria-label="No es una factura">
-          <strong>No es una factura{descarte.datos ? `: ${descarte.datos.motivo}` : ''}.</strong>
-          {descarte.datos && <span className="cx-ayuda"> La descartó {descarte.datos.quien ?? 'una persona'} el {fecha(descarte.datos.cuando.slice(0, 10))}. No se apunta ni cuenta en lo que debes.</span>}
-          <button type="button" className="cx-boton-sec" onClick={() => void deshacerDescarte()}>Deshacer: sí es una factura</button>
-        </section>
-      )}
-
-      <div className="cxr-revisar">
-        <Papel fac={fac} url={papel.datos?.url ?? null} leyendo={!papel.datos && !papel.error} error={papel.error} solo={producto.solo} movil={movil} />
-
-        <div className="cxr-lado">
-          <BandaFactura fac={fac} />
-
-          <section className="cxr-bloque" aria-label="Lo que he leído">
-            <div className="cxr-bloque-cabeza">
-              <h2><PorNivel clave="recibida.leido" /></h2>
-              {/* Decisión 2 (17/10): de lectura en este PR; se corrige en Compras, a un clic. */}
-              <span className="cxr-bloque-enlaces">
-                <Link to={rutaCompras()} className="cx-enlace">Corregir en Compras</Link>
-                {prov && <button type="button" className="cx-enlace" onClick={() => setOtra(true)}>No es de este proveedor</button>}
-              </span>
-            </div>
-            <div className="cxr-leido">
-              <Leido etiqueta="Proveedor" valor={prov?.nombre ?? fac.propuesto?.nombre ?? 'No lo reconozco'}
-                apoyo={prov ? apoyoProveedor(prov.nif, nifDeLaFactura) : `${nifDeLaFactura ? `NIF ${nifDeLaFactura} · ` : ''}no está en tus proveedores`} />
-              <Leido etiqueta="Factura" valor={`${fac.numero ?? 'sin número'} · ${fecha(fac.fecha)}`} apoyo={fac.no_repetida ? 'no está repetida (lo confirmaste)' : 'no hay otra con su número y su total'} />
-              {fac.tipos.map((t) => <Leido key={`b${t.tipo}`} etiqueta={`Base al ${porcentaje(t.tipo)}`} valor={euro(t.base)} />)}
-              {fac.tipos.map((t) => <Leido key={`c${t.tipo}`} etiqueta={`IVA ${porcentaje(t.tipo)}`} valor={euro(t.cuota)} />)}
-              {/* S01d: sin cuadro de impuestos (la escrita a mano no lo tiene), la base y la cuota de la factura, con el tipo de su línea. */}
-              {fac.tipos.length === 0 && fac.base !== null && <Leido etiqueta={`Base${fac.lineas.length === 1 && fac.lineas[0].iva !== null ? ` al ${porcentaje(fac.lineas[0].iva)}` : ''}`} valor={euro(fac.base)} />}
-              {fac.tipos.length === 0 && fac.cuota !== null && <Leido etiqueta={`IVA${fac.lineas.length === 1 && fac.lineas[0].iva !== null ? ` ${porcentaje(fac.lineas[0].iva)}` : ''}`} valor={euro(fac.cuota)} />}
-              {!!fac.recargo && <Leido etiqueta="Recargo de equivalencia" valor={euro(fac.recargo)} />}
-              {!!fac.retencion && <Leido etiqueta="Retención" valor={euro(-Math.abs(fac.retencion))} />}
-              <Leido etiqueta="Total" valor={euro(fac.total)} apoyo={avisos.some((a) => a.id === 'total' || a.id === 'suma') ? 'no cuadra con sus bases' : 'cuadra con sus bases'} aviso={avisos.some((a) => a.id === 'total' || a.id === 'suma')} />
-              {ejeLocal && fac.recepcion && <Leido etiqueta={ejeLocal.nombre} valor={fac.recepcion.local ?? '—'} apoyo={`de la recepción del ${fecha(fac.recepcion.fecha).slice(0, 5)}`} />}
-              <Leido etiqueta="Vence" valor={vence.valor} apoyo={vence.apoyo} aviso={vence.aviso} />
-              {prov && <Leido etiqueta="Cuenta de sus facturas" {...cuentaDeSusFacturas(prov.gasto)} />}
-              {prov?.facturacion && <Leido etiqueta="Facturación" valor={prov.facturacion.nombre} apoyo={prov.facturacion.email} />}
-            </div>
-          </section>
-
-          <Comprobado fac={fac} hayNif={!!(prov?.nif || nifDeLaFactura)} />
-
-          {sinProveedor && <DecirProveedor accountId={accountId} invoiceId={fac.id} alGuardar={() => setVuelta((v) => v + 1)} />}
-
-          <ComoSeApunta fac={fac} vista={vista.datos} error={vista.error} movil={movil} solo={producto.solo} />
-
-          <div role="status" aria-live="polite">
-            {hecho && <div className={`cx-tarjeta cxr-hecho${hecho.validado ? '' : ' cxr-mal'}`}><strong>{hecho.texto}</strong>
-              {hecho.validado && pos >= 0 && pos < ids.length - 1 && <button type="button" className="cx-enlace" onClick={() => ir(ids[pos + 1])}>Siguiente factura →</button>}
-            </div>}
-          </div>
-
-          {!movil && !enAsientos && (
-            <div className="cxr-acciones">
-              <button type="button" className="cx-boton-sec" onClick={() => setOtra(true)}>Otra cosa</button>
-              <button type="button" className="cx-boton-sec" onClick={() => setNoEs(true)} disabled={descartada}>No es una factura</button>
-              {botonApuntar}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {movil && (
-        <div className="cxr-pulgar">
-          <button type="button" className="cx-boton-sec" onClick={() => setOtra(true)}>Otra cosa</button>
-          {botonApuntar || <Link to={volver} className="cx-boton-sec">Volver</Link>}
-        </div>
-      )}
-      {movil && navegacion}
+    <div className="s-pagina">
+      <EncabezadoPagina
+        titulo={titulo}
+        estado={estado}
+        frase={frase}
+        migasExtra={enAsientos ? [{ etiqueta: `Recibidas · ${proveedor}` }] : migasExtra}
+        derecha={<NavegaFicha pos={pos + 1} total={ids.length} anterior={anterior ? () => ir(anterior) : null} siguiente={siguiente ? () => ir(siguiente) : null} />}
+        masAcciones={mas}
+        principal={botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}
+      />
+      <Ficha datos={datos} documento={documento} documentoOculto={marco?.documentoOculto ?? false} />
+      <BotonPulgar>{botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}</BotonPulgar>
 
       {otra && (
         <Dialogo titulo="¿Qué le pasa?" alCerrar={() => setOtra(false)}>
           <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <li>Si los importes, la fecha o el número no son esos, corrígelos en <Link to={rutaCompras()}>Compras</Link>: allí se aprueba la factura de su recepción.</li>
+            <li>Si los importes, la fecha o el número no son esos, corrígelos en <Link to={rutaCompras()}>la recepción de la que salió</Link>: allí se aprueba la factura.</li>
             <li>Si no es de este proveedor, elige el bueno aquí abajo.</li>
             <li>Si no es una factura (un albarán, un presupuesto, un extracto…), <button type="button" className="cx-enlace" disabled={descartada} onClick={() => { setOtra(false); setNoEs(true) }}>dímelo y la saco de lo que hay que revisar</button>.</li>
           </ul>
-          <DecirProveedor accountId={accountId} invoiceId={fac.id} alGuardar={() => { setOtra(false); setVuelta((v) => v + 1) }} />
+          <DecirProveedor accountId={accountId} invoiceId={fac.id} alGuardar={() => { setOtra(false); setVuelta((x) => x + 1) }} />
         </Dialogo>
       )}
       {noEs && <NoEsFactura alCerrar={() => setNoEs(false)} alDescartar={(m) => descartar(m)} fallo={falloDescarte} />}
     </div>
   )
+}
+
+/** El asiento, abierto de serie; sin experiencia, plegado (lo que se ofrece, no dónde está). */
+function abiertoDeSerie(nivel: string | undefined): boolean {
+  return nivel !== 'sin_experiencia'
 }
 
 const NOMBRE_ESTADO: Record<string, string> = { borrador: 'borrador', en_revision: 'en revisión', aprobada: 'aprobada', con_discrepancias: 'con diferencias' }
@@ -316,7 +373,7 @@ function NoEsFactura({ alCerrar, alDescartar, fallo }: { alCerrar: () => void; a
   const listo = motivo.trim().length > 0
   return (
     <Dialogo titulo="No es una factura" alCerrar={alCerrar}>
-      <p style={{ margin: 0 }}>Sale de lo que hay que revisar y no se apunta. No se borra: la tienes en Facturas recibidas › Todas y se puede deshacer.</p>
+      <p style={{ margin: 0 }}>Sale de lo que hay que revisar y no se contabiliza. No se borra: la tienes en Facturas recibidas › Todas y se puede deshacer.</p>
       <div role="group" aria-label="Qué es" className="cxr-motivos">
         {MOTIVOS.map((m) => <button key={m} type="button" className={motivo === m ? 'cx-boton' : 'cx-boton-sec'} aria-pressed={motivo === m} onClick={() => setMotivo(m)}>{m}</button>)}
       </div>
@@ -333,156 +390,6 @@ function NoEsFactura({ alCerrar, alDescartar, fallo }: { alCerrar: () => void; a
   )
 }
 
-/**
- * «Lo que he comprobado» (maqueta 3): una línea por comprobación de la lectura,
- * ✓ lo que cuadra y en ámbar lo que no (no se esconde: regla 7). Verde si todo
- * cuadra. Sin lectura del papel (hecha a mano), lo dice.
- */
-function Comprobado({ fac, hayNif }: { fac: FacturaRevisar; hayNif: boolean }) {
-  const com = comprobacionesSinContradecir(fac.lectura?.comprobaciones ?? [], hayNif)
-  const todo = com.length > 0 && com.every((c) => c.ok)
-  const lineas = [
-    ...com.map((c) => ({ id: c.id, ok: c.ok, texto: c.texto })),
-    { id: 'repetida', ok: true, texto: fac.no_repetida ? 'No está repetida: lo confirmaste.' : 'No está repetida: ninguna otra de este proveedor con su número y su total.' },
-  ]
-  return (
-    <section className={`cxr-comprobado${todo ? '' : ' cxr-comprobado-ambar'}`} aria-label="Lo que he comprobado">
-      <h2>Lo que he comprobado</h2>
-      {com.length === 0 && <p className="cx-ayuda" style={{ margin: 0 }}>No viene de leer un fichero (se escribió a mano o en Compras): no hay comprobaciones de la lectura.</p>}
-      <ul>
-        {lineas.map((l) => <li key={l.id} className={l.ok ? 'cxr-ok' : 'cxr-falta'}><span aria-hidden="true">{l.ok ? '✓' : '!'}</span> {l.texto}</li>)}
-      </ul>
-    </section>
-  )
-}
-
-function Leido({ etiqueta, valor, apoyo, aviso }: { etiqueta: string; valor: string; apoyo?: string; aviso?: boolean }) {
-  return (
-    <>
-      <div>{etiqueta}</div>
-      <div className="cxr-leido-valor">{valor}{apoyo && <span className={`cxr-apoyo${aviso ? ' cxr-aviso' : ''}`}>{apoyo}</span>}</div>
-    </>
-  )
-}
-
-function Papel({ fac, url, leyendo, error, solo, movil }: { fac: FacturaRevisar; url: string | null; leyendo: boolean; error: string | null; solo: boolean; movil: boolean }) {
-  const l = fac.llegada
-  const esFoto = /^image\//.test(l?.tipo ?? '') || /\.(jpe?g|png|webp)$/i.test(l?.archivo ?? fac.papel ?? '')
-  // R5 · 4: en el móvil, recortado a lo escrito (como mucho 280 px) y entero al tocarlo.
-  const [entero, setEntero] = useState(false)
-  const [tinta, setTinta] = useState<number | null>(null)
-  const recorte = movil && !entero ? Math.min(PAPEL_MOVIL_MAX, tinta ? Math.max(120, Math.ceil(tinta) + 12) : PAPEL_MOVIL_MAX) : null
-  // S01d: sin llegada ni papel guardado, la factura se escribió a mano.
-  const sinPapel = !l && !fac.papel
-  const cuando = l?.cuando ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(l.cuando)) : null
-  return (
-    <section className="cxr-papel" aria-label="La factura tal como llegó">
-      <div className="cxr-papel-cabeza">
-        <span>{l?.archivo ?? (sinPapel ? 'Sin fichero' : 'Factura')} · {comoLlego(l?.canal ?? fac.canal ?? (sinPapel ? 'a_mano' : null), l?.tipo, solo)}{l?.a ? ` a ${l.a.replace(/@.*/, '@')}` : ''}{cuando ? ` · ${cuando}` : ''}</span>
-        {url && <a href={url} target="_blank" rel="noopener noreferrer" className="cx-enlace">Abrir</a>}
-      </div>
-      <div className="cxr-papel-hoja">
-        {/* S01e: una sola cosa: si se sabe su nombre y no está el fichero, se dice así (no «no tiene papel» bajo su nombre). */}
-        {leyendo && !sinPapel && <Hueso alto={120} />}
-        {error && <p className="cx-error">{textoSinPapel({ archivo: l?.archivo ?? null, aMano: false, error })}</p>}
-        {!error && !url && !leyendo && <p className="cx-ayuda">{textoSinPapel({ archivo: l?.archivo ?? null, aMano: sinPapel, error: null })}</p>}
-        {!error && !url && leyendo && sinPapel && <p className="cx-ayuda">{textoSinPapel({ archivo: null, aMano: true, error: null })}</p>}
-        {url && (
-          // Tocar el papel también lo abre o lo recoge (el botón de debajo es lo mismo, para el teclado y el lector).
-          <div className={`cxr-papel-recorte${recorte !== null ? ' cxr-papel-recortado' : ''}`} style={recorte !== null ? { maxHeight: recorte } : undefined}
-            onClick={movil ? () => setEntero((x) => !x) : undefined}>
-            {esFoto ? <img src={url} alt={`La factura ${fac.numero ?? ''} tal como llegó`} />
-              : <PapelPdf url={url} titulo={`La factura ${fac.numero ?? ''} tal como llegó`} alMedir={setTinta} />}
-          </div>
-        )}
-        {url && movil && (
-          <button type="button" className="cx-enlace cxr-papel-entero" aria-expanded={entero} onClick={() => setEntero((x) => !x)}>
-            {entero ? 'Recoger la factura' : 'Ver la factura entera'}
-          </button>
-        )}
-      </div>
-    </section>
-  )
-}
-
-function BandaFactura({ fac }: { fac: FacturaRevisar }) {
-  const porque = fac.lectura?.porque ?? []
-  const prov = fac.proveedor?.nombre
-  const casa = fac.recepcion ? ` y casa con lo recibido${fac.recepcion.local ? ` en ${fac.recepcion.local}` : ''} el ${fecha(fac.recepcion.fecha).slice(0, 5)}` : ''
-  const titulo = fac.asiento?.estado === 'validado' ? `Ya está apuntada${fac.asiento.numero ? ` (asiento ${fac.asiento.numero})` : ''}.`
-    : prov ? `Es de ${prov}${casa}.` : 'No reconozco quién la emite: dime de quién es y la apunto.'
-  return (
-    <section className={`cx-ia-bloque${tonoDeLaFactura(fac.asiento) === 'ambar' ? ' cxr-ia-ambar' : ''}`} aria-label="Lo que entiendo de esta factura">
-      <span className="cx-ia-punto" aria-hidden="true" />
-      <div className="cx-ia-texto">
-        <span className="cx-ia-titulo">{titulo}</span>
-        {porque.length > 0 && <span className="cx-ia-porque">{porque.join(' ')}</span>}
-      </div>
-    </section>
-  )
-}
-
-function ComoSeApunta({ fac, vista, error, movil, solo }: {
-  fac: FacturaRevisar; vista: Awaited<ReturnType<typeof verPropuestaFactura>> | null; error: string | null; movil: boolean; solo: boolean
-}) {
-  // C07: con «Enviar a Diez» apagado, ni una palabra de Diez.
-  const enviaADiez = useEnvioDiez(fac.account_id, fac.company_id).envio?.encendido === true
-  const lineas = vista?.propuesta ? vista.propuesta.lineas : []
-  // El nombre se acorta si no cabe; el código, nunca: una cuenta siempre con su código al lado.
-  const nombre = (cuenta: string) => (
-    <span className="cxr-apunte-cuenta" title={`${(vista?.propuesta ? vista.nombres.get(cuenta) : null) ?? 'Cuenta'} · ${cuenta}`}>
-      <span className="cxr-apunte-nombre">{(vista?.propuesta ? vista.nombres.get(cuenta) : null) ?? 'Cuenta'}</span>
-      <span className="cxr-apunte-codigo">{`\u00a0· ${cuenta}`}</span>
-    </span>
-  )
-  const col = columnasDelApunte(lineas)
-  const [abierto, setAbierto] = useState(useNivel() !== 'sin_experiencia')
-  return (
-    <section className="cxr-bloque" aria-label="Cómo se apunta">
-      {/* Maqueta 3: «Ver el asiento», plegable. De serie abierto; sin experiencia, plegado (lo que se ofrece, no dónde está). */}
-      <details className="cxr-plegable" open={abierto} onToggle={(e) => setAbierto((e.currentTarget as HTMLDetailsElement).open)}>
-      <summary><h2><PorNivel clave="recibida.verAsiento" /></h2></summary>
-      {fac.asiento && <p style={{ margin: 0 }}>Ya tiene su asiento ({fac.asiento.estado}).</p>}
-      {!fac.asiento && error && <p className="cx-error">No se ha podido preparar: {error}</p>}
-      {!fac.asiento && !error && !vista && <Hueso alto={60} />}
-      {!fac.asiento && vista && !vista.propuesta && <p className="cxr-aviso" style={{ margin: 0 }}>{vista.porque}</p>}
-      {!fac.asiento && vista?.propuesta && (
-        <>
-          {movil ? (
-            // R5 · 3: en el móvil, cada cuenta en su línea y su cifra a la derecha, por grupos.
-            <div className="cxr-apunte-movil">
-              {([['Gasto e IVA', col.gasto], ['A pagar', col.pagar]] as const).map(([titulo, filas]) => (
-                <div key={titulo} className="cxr-apunte-grupo">
-                  <span className="cxr-apunte-titulo">{titulo}</span>
-                  {filas.map((l, i) => (
-                    <div key={i} className="cxr-apunte-linea">{nombre(l.cuenta)}<span className="cxr-der">{eurosExactos(l.importe)}</span></div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="cxr-apunte" role="table" aria-label="Las líneas del asiento">
-              <span className="cxr-apunte-titulo" role="columnheader">Cuenta</span>
-              <span className="cxr-apunte-titulo cxr-der" role="columnheader">Gasto e IVA</span>
-              <span className="cxr-apunte-titulo cxr-der" role="columnheader">A pagar</span>
-              {lineas.map((l, i) => (
-                <div key={i} style={{ display: 'contents' }} role="row">
-                  <span role="cell" className="cxr-apunte-celda">{nombre(l.cuenta)}</span>
-                  <span className="cxr-der" role="cell">{l.debe ? eurosExactos(l.debe) : ''}</span>
-                  <span className="cxr-der" role="cell">{l.haber ? eurosExactos(l.haber) : ''}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="cxr-apoyo" style={{ margin: '8px 0 0' }}>Facturas recibidas{fac.recepcion?.local ? ` · ${fac.recepcion.local}` : ''}{enviaADiez ? <> · {lineaDiez(solo)}</> : null}</p>
-          {vista.propuesta.avisos.length > 0 && <ul className="cxr-aviso" style={{ margin: '8px 0 0', paddingLeft: 18 }}>{vista.propuesta.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul>}
-        </>
-      )}
-      </details>
-    </section>
-  )
-}
-
 function DecirProveedor({ accountId, invoiceId, alGuardar }: { accountId: string | null; invoiceId: string; alGuardar: () => void }) {
   const ps = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores`)
   const [elegido, setElegido] = useState('')
@@ -493,16 +400,15 @@ function DecirProveedor({ accountId, invoiceId, alGuardar }: { accountId: string
     try { await decirProveedor(invoiceId, elegido); alGuardar() } catch (e) { setFallo(e instanceof Error ? e.message : String(e)) } finally { setOcupado(false) }
   }
   return (
-    <section className="cxr-bloque" aria-label="De quién es">
-      <h2>¿De quién es?</h2>
+    <BloqueFicha titulo="¿De quién es?">
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <select className="cx-input" value={elegido} onChange={(e) => setElegido(e.target.value)} aria-label="Proveedor" style={{ flex: 1, minWidth: 0 }}>
           <option value="">Elige el proveedor…</option>
           {(ps.datos ?? []).map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.nif ? ` · ${p.nif}` : ''}</option>)}
         </select>
-        <button type="button" className="cx-boton" disabled={!elegido || ocupado} onClick={() => void guardar()}>Es este</button>
+        <Boton variante="principal" disabled={!elegido || ocupado} onClick={() => void guardar()}>Es este</Boton>
       </div>
-      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-    </section>
+      {fallo && <p className="s-aviso-lista" data-tono="falta" role="alert">{fallo}</p>}
+    </BloqueFicha>
   )
 }

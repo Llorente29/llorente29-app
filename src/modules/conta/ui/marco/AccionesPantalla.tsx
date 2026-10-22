@@ -12,13 +12,15 @@
 
 import { Children, isValidElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { useMarco } from '@/modules/conta/marco/nuevo/contexto'
+import { useConPropias, useMarco } from '@/modules/conta/marco/nuevo/contexto'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { Tecla } from '@/modules/conta/ui/marco/Tecla'
 import { useIsMobile } from '@/shell/useIsMobile'
 
 export function AccionesPantalla({ children, etiqueta = 'Acciones de la pantalla' }: { children: ReactNode; etiqueta?: string }) {
   const marco = useMarco()
+  // S02: el marco pinta su fila con esta barra, y lo del catálogo de la página en «Más acciones».
+  useConPropias('barra')
   const movil = useIsMobile()
   const barra = (
     <div className="cxm-acciones-barra" role="toolbar" aria-label={etiqueta}>

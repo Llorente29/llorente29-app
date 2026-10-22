@@ -32,6 +32,7 @@ import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
 import { ApartadoLogo } from '@/modules/conta/empresa/ApartadoLogo'
+import { ApartadoColor } from '@/modules/conta/empresa/ApartadoColor'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
@@ -77,6 +78,7 @@ function Entrada({ id }: { id: string }) {
               <ApartadoHosteleria {...p} />
               {/* S01: el logo de la empresa, el de la cabecera. */}
               <ApartadoLogo {...p} />
+              <ApartadoColor quien={p.quien} movil={p.movil} />
             </div>
           </div>
         </>

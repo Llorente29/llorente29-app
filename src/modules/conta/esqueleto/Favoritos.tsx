@@ -1,9 +1,10 @@
 // src/modules/conta/esqueleto/Favoritos.tsx
 //
-// S01 · Favoritos, en la cabecera: lo que la persona fija sale aquí, en el
-// orden en que lo fijó, y se guarda en la base (le sigue de un ordenador a
-// otro). Se fija desde el mismo menú: la pantalla en la que está y cada
-// orden de su cinta, con su estrella.
+// Favoritos. S02 (tablero 0: «Favoritos y Ajustes, abajo en la barra»): una
+// entrada más de la barra, abajo, separada, con Ajustes; su menú sale a su
+// lado. Lo que la persona fija sale aquí, en el orden en que lo fijó, y se
+// guarda en la base (le sigue de un ordenador a otro). Se fija desde el mismo
+// menú: la página en la que está y cada acción de la página, con su estrella.
 //
 // Un favorito que en esta empresa no se puede abrir (Liquidaciones en una
 // empresa sin hostelería) no se esconde: sale en gris y dice por qué (regla
@@ -17,7 +18,7 @@ import type { Favorito, Orden } from './ordenes'
 
 const destino = (o: Orden) => ('ruta' in o.a ? rutaConta(o.a.ruta) : null)
 
-export function Favoritos({ favoritos, cargando = false, fijables, alternar, alAbrirBuscador, enCajon = false }: {
+export function Favoritos({ favoritos, cargando = false, fijables, alternar, alAbrirBuscador, enCajon = false, plegada = false }: {
   favoritos: Favorito[]
   /** Aún se están leyendo de la base: no se dice «ninguno» de lo que no se sabe. */
   cargando?: boolean
@@ -26,8 +27,10 @@ export function Favoritos({ favoritos, cargando = false, fijables, alternar, alA
   /** Fija o quita (y lo dice quien lo llama). */
   alternar: (o: { id: string; etiqueta: string }) => void
   alAbrirBuscador: () => void
-  /** S01d · En el móvil va en el cajón del menú: una fila con su nombre, y el menú se abre debajo. */
+  /** En el móvil va en el cajón del menú y el menú se abre debajo; en la barra, a su lado. */
   enCajon?: boolean
+  /** La barra está plegada: solo la estrella, con su nombre al pasar el ratón. */
+  plegada?: boolean
 }) {
   const { abierto: menuAbierto, setAbierto: menuSetAbierto, alternar: menuAlternar, caja: menuCaja, boton: menuBoton } = useDesplegable()
   const fijados = new Set(favoritos.map((f) => f.id))
@@ -37,16 +40,12 @@ export function Favoritos({ favoritos, cargando = false, fijables, alternar, alA
   }
   return (
     <div className="s-desplegable" ref={menuCaja}>
-      {/* Solo la estrella, en todas las pantallas (Julio, 17/10): así caben las cuatro
-          pestañas de Bancos a 1440 px. Al pasar el ratón y para el lector dice «Favoritos». */}
-      {enCajon
-        ? <button ref={menuBoton} type="button" className="s-barra-item" aria-expanded={menuAbierto} aria-haspopup="true" onClick={menuAlternar}>
-            <Icono nombre="favorito" grande /><span className="s-barra-nombre">Favoritos</span>
-          </button>
-        : <Boton ref={menuBoton} variante="fantasma" icono="favorito" aria-expanded={menuAbierto} aria-haspopup="true"
-            aria-label="Favoritos" title="Favoritos" onClick={menuAlternar}>{''}</Boton>}
+      <button ref={menuBoton} type="button" className="s-barra-item" aria-expanded={menuAbierto} aria-haspopup="true" onClick={menuAlternar}
+        title={plegada ? 'Favoritos' : undefined}>
+        <Icono nombre="favorito" grande /><span className="s-barra-nombre">Favoritos</span>
+      </button>
       {menuAbierto && (
-        <div className="s-menu s-menu-derecha" role="group" aria-label="Favoritos" aria-busy={cargando}>
+        <div className={enCajon ? 's-menu' : 's-menu s-menu-lado'} role="group" aria-label="Favoritos" aria-busy={cargando}>
           <span className="s-menu-titulo">Favoritos</span>
           {cargando && <p className="s-menu-nota">Leyendo tus favoritos…</p>}
           {!cargando && favoritos.length === 0 && <p className="s-menu-nota">Aún no tienes ninguno. Fija abajo lo que más uses y saldrá aquí.</p>}
