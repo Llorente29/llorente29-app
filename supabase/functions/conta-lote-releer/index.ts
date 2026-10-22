@@ -13,7 +13,10 @@
 // conta_lote_releer_pedir. En el registro, solo recuentos.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import * as pdfjs from "npm:pdfjs-dist@6.4.299/legacy/build/pdf.mjs";
+// pdfjs para servidor (unpdf, 1,7 MB): con npm:pdfjs-dist el paquete entero
+// (35 MB) iba dentro de la función y Supabase la rechazaba (413, 22/10). Saca el
+// mismo texto que el pdfjs del front: medido sobre los 15 PDF de tests/.
+import { getDocumentProxy } from "npm:unpdf@1.8.1";
 import { textoPorPosicion } from "../_shared/catcherPdf.ts";
 import { releerLote, textoReleido, type FacturaGuardada, type PuertoReleer } from "../_shared/catcherReleer.ts";
 import type { PedidoApp, Tarifa } from "../_shared/catcherCruces.ts";
@@ -78,7 +81,7 @@ Deno.serve(async (req) => {
       if (error || !data) throw new Error(`no se ha podido leer el PDF guardado (${error?.message ?? "vacío"})`);
       const bytes = new Uint8Array(await data.arrayBuffer());
       const sha256 = hex(await crypto.subtle.digest("SHA-256", bytes));
-      const doc = await pdfjs.getDocument({ data: bytes, verbosity: 0, useSystemFonts: false, disableFontFace: true }).promise;
+      const doc = await getDocumentProxy(bytes.slice(), { verbosity: 0, useSystemFonts: false, disableFontFace: true });
       let texto = "";
       for (let i = 1; i <= doc.numPages; i++) {
         const items = (await (await doc.getPage(i)).getTextContent()).items as { str?: string; transform?: number[] }[];
