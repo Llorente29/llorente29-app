@@ -12,7 +12,7 @@
 // catálogo ni selector, y el encabezado se pinta igual.
 
 import { useMemo, type ReactNode } from 'react'
-import { EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
+import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import { SelectorDePagina } from '@/modules/conta/marco/MasAcciones'
 import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
 import { MarcoContexto, useMarco } from '@/modules/conta/marco/nuevo/contexto'
@@ -30,9 +30,13 @@ export function EncabezadoLibro({ titulo, frase, principal, secundarios, masAcci
   const catalogo = marco?.accionesDelCatalogo
   const reparto = useMemo(() => repartoDelLibro(catalogo ?? []), [catalogo])
   const sinVer = useMemo(() => (marco ? { ...marco, accionesDelCatalogo: reparto.resto } : null), [marco, reparto.resto])
+  // En el móvil, EncabezadoPagina no pinta el principal: va abajo, bajo el pulgar.
   const encabezado = (
+    <>
     <EncabezadoPagina titulo={titulo} frase={frase} principal={principal} secundarios={secundarios} masAcciones={masAcciones}
       derecha={reparto.selectores.length > 0 ? reparto.selectores.map((s) => <SelectorDePagina key={s.titulo} s={s} />) : undefined} />
+    {principal && <BotonPulgar>{principal}</BotonPulgar>}
+    </>
   )
   return sinVer ? <MarcoContexto.Provider value={sinVer}>{encabezado}</MarcoContexto.Provider> : encabezado
 }
