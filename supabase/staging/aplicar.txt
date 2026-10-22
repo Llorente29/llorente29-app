@@ -414,3 +414,16 @@ supabase/staging/sql/20261129_autoconteo_prueba.sql
 #   No toca coste ni stock: sin los cuatro caminos de la regla 10.
 supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql
 supabase/staging/sql/20261130_e05_riders_ficha_y_libro_prueba.sql
+
+# C07 · Todo asiento de Sumied a Diez al momento (rama conta/c07-diez-todo; Julio, 22/10).
+#   La prueba primero (empieza con la vuelta atrás, así mide el antes aunque la
+#   0430 ya esté): el interruptor (sin conexión no se enciende; B no toca el de
+#   A), lo que falta por mandar (manual y nómina como asiento, la venta como
+#   factura; ni la apertura ni un contraasiento de algo que no está en Diez),
+#   reclamar con su reintento a 10 minutos, el contraasiento de lo que está en
+#   Diez, conta_asiento_envio, las dos lecturas para el servidor (A lee lo mismo
+#   que antes) y la vuelta atrás byte a byte (md5 de producción del 22/10).
+#   Después, la 0430 DE VERDAD (se puede volver a pasar). Sin cron en staging:
+#   falta el cron_secret. No toca coste ni stock: sin los cuatro caminos.
+supabase/staging/sql/20261201_c07_diez_todo_prueba.sql
+supabase/migrations/20261201T0430_c07_diez_todo.sql
