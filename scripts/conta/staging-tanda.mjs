@@ -15,9 +15,22 @@
 //     → para (sale con 1) si alguno haría algo de verdad dentro del ROLLBACK
 //   node scripts/conta/staging-tanda.mjs sesiones <ficheros…>
 //     → el SQL de cada sesión de ensayo, separadas por una línea «--@@ sesión»
+//   node scripts/conta/staging-tanda.mjs anaden <contexto.json> <ficheros…>
+//     → de las migraciones, las que SOLO AÑADEN contra ese contexto (W05),
+//       una por línea; en el error, las demás y por qué
+//
+// W05 (Julio, 22/10): «lo que solo añade (columna que admite nulos, tabla o
+// función nuevas) se aplica de verdad en staging desde la rama, y tiene que
+// poder pasarse otra vez; todo lo demás, solo en ROLLBACK». Solo añadir no
+// cambia nada de lo que leen las demás ramas: el problema del 22/10 fue un
+// «cambia en caliente» (la 0450 cambió conta_resumen_ventas). La clase la da el
+// analizador de la tanda (analizar.mjs categoria), contra el contexto medido en
+// STAGING; y un CHECK que solo mira una columna que añade el mismo fichero
+// también cuenta como añadir (nace vacía: no cambia ninguna fila).
 
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
+import { analizarFichero, categoria, creadosPorLaTanda } from './produccion/analizar.mjs'
 
 export const MANIFIESTO = 'supabase/staging/aplicar.txt'
 
@@ -74,6 +87,55 @@ export function sesiones(ficheros, leer = (f) => readFileSync(f, 'utf8')) {
   })
 }
 
+const sinFirma = (obj) => obj.replace(/\(.*$/, '')
+const PALABRAS_SQL = new Set(['is', 'not', 'null', 'or', 'and', 'in', 'like', 'ilike', 'similar', 'to', 'between', 'true', 'false', 'any', 'all', 'array', 'case', 'when', 'then', 'else', 'end', 'distinct', 'from'])
+/** Las columnas que el fichero añade a una tabla (para el CHECK que solo las mira). */
+function columnasNuevas(ops, tabla) {
+  return ops.filter((o) => o.tipo === 'columna' && o.accion === 'añade' && sinFirma(o.objeto) === tabla)
+    .map((o) => o.detalle.match(/^add\s+(?:column\s+)?(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?/i)?.[1]?.toLowerCase())
+    .filter(Boolean)
+}
+
+/**
+ * ¿Solo añade este fichero, contra el contexto (tablas y funciones que existen,
+ * medido en staging)? null si sí; si no, el porqué de la primera operación que no.
+ * Solo migraciones: una prueba de staging nunca va de verdad.
+ */
+export function porQueNoSoloAnade(fichero, sql, contexto) {
+  if (!/^supabase\/migrations\//.test(fichero)) return 'no es una migración: solo en ROLLBACK'
+  const ops = analizarFichero(fichero, sql)
+  if (!ops.length) return 'no hace nada que se pueda medir'
+  const tablas = new Set(contexto.tablas ?? [])
+  const funciones = new Set(contexto.funciones ?? [])
+  const deLaTanda = creadosPorLaTanda({ [fichero]: ops })
+  const existe = (o) => {
+    const antes = o.tipo === 'funcion'
+      ? (o.objeto.includes('(') ? funciones.has(o.objeto) : [...funciones].some((x) => x.startsWith(`${o.objeto}(`)))
+      : tablas.has(sinFirma(o.objeto))
+    return antes && !deLaTanda.has(o.tipo === 'funcion' ? o.objeto : sinFirma(o.objeto))
+  }
+  const ctx = {
+    existe,
+    filas: (o) => contexto.filas?.[sinFirma(o.objeto)],
+    otrasFirmas: (o) => [...funciones].filter((x) => sinFirma(x) === sinFirma(o.objeto) && x !== o.objeto),
+    enCamino: () => false,
+    opsDelFichero: ops,
+  }
+  for (const o of ops) {
+    const c = categoria(o, ctx)
+    if (c.cat === 'añade') continue
+    if (o.tipo === 'restriccion' && o.accion === 'añade' && /\bcheck\b/i.test(o.detalle)) {
+      const nuevas = columnasNuevas(ops, sinFirma(o.objeto))
+      // Todo lo que nombra el CHECK tiene que ser columna nueva (sin cadenas, palabras de SQL ni funciones).
+      const expr = o.detalle.slice(o.detalle.search(/\bcheck\b/i) + 5).replace(/'(?:[^']|'')*'/g, ' ').replace(/::\s*[a-z_][a-z0-9_]*/gi, ' ')
+      const nombres = [...expr.matchAll(/\b([a-z_][a-z0-9_]*)\b(?!\s*\()/gi)].map((m) => m[1].toLowerCase()).filter((w) => !PALABRAS_SQL.has(w))
+      if (nuevas.length && nombres.length && nombres.every((w) => nuevas.includes(w))) continue
+    }
+    return `${o.accion} ${o.tipo} ${o.objeto}: ${c.motivo ?? c.cat}`
+  }
+  return null
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [modo, ...args] = process.argv.slice(2)
   if (modo === 'nuevas') {
@@ -88,6 +150,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       if (p) { console.log(`::error::${f} ${p}. No se ensaya nada.`); mal = 1 }
     }
     process.exit(mal)
+  } else if (modo === 'anaden') {
+    const [fCtx, ...fs] = args
+    const raw = JSON.parse(readFileSync(fCtx, 'utf8'))
+    const contexto = raw.contexto ?? raw
+    for (const f of fs) {
+      const p = porQueNoSoloAnade(f, readFileSync(f, 'utf8'), contexto)
+      if (p) console.error(`${f}: solo en ROLLBACK (${p})`)
+      else console.log(f)
+    }
   } else if (modo === 'sesiones') {
     for (const s of sesiones(args)) console.log(`--@@ sesión ${s.fichero}\n${s.sql}`)
   } else {
