@@ -1,15 +1,22 @@
 {
-  "_que": "I01d · los impuestos de 2025 · contexto de producción de la tanda viva (20261130T0420), medido en SOLO LECTURA el 22/10 a las 00:15 UTC, después de la 0380, la 0390, la 0400 y la 0410 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. conta_impuesto_trimestre existe (la de la 0280, md5 del cuerpo 9522728be846f7d8acc8d03a09cabfa5); ninguna otra con su nombre; nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-22T00:15Z",
+  "_que": "C07 · todo asiento de Sumied a Diez · contexto de producción de la tanda viva (20261201T0450), medido en SOLO LECTURA el 22/10 a las 07:58 UTC, después de la 0410 y las dos 0420 (aplicadas), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen conta_diez_autorizo, external_send, conta_resumen_ventas(uuid) (md5 del cuerpo 62ba30b9…) y conta_recibida_envio(uuid) (e3c57e29…); ninguna de las nuevas; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-22T07:58Z",
   "tanda": {
-    "supabase/migrations/20261130T0420_i01d_impuestos_2025.sql": "b34e03c9ce0195bec9ea965cafd2e8dc"
+    "supabase/migrations/20261201T0450_c07_diez_todo.sql": "1c889cc62f4e84bd2dca50ff2b711426"
   },
   "contexto": {
-    "tablas": [],
-    "funciones": [
-      "public.conta_impuesto_trimestre(uuid,int,int)"
+    "tablas": [
+      "public.conta_diez_autorizo",
+      "public.external_send"
     ],
-    "filas": {},
+    "funciones": [
+      "public.conta_recibida_envio(uuid)",
+      "public.conta_resumen_ventas(uuid)"
+    ],
+    "filas": {
+      "public.conta_diez_autorizo": 0,
+      "public.external_send": 75
+    },
     "otras": {},
     "camino": {
       "tablas": [],

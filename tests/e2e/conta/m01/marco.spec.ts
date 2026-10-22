@@ -302,8 +302,8 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
     return
   }
 
-  // La columna del número en Diez; y la cabecera se queda arriba al bajar.
-  await expect(lista.getByRole('columnheader', { name: 'Diez' })).toBeVisible()
+  // C07 (Julio, 22/10): con «Enviar a Diez» apagado (A), sin columna de Diez (c06/diezTodo.spec.ts, encendido).
+  await expect(lista.getByRole('columnheader', { name: 'Diez' })).toHaveCount(0)
   // Compacta (de serie): filas de unos 28 px, unas 30 por pantalla.
   await expect(page.locator('.cxm')).toHaveAttribute('data-densidad', 'compacta')
   const altoCompacta = (await lista.locator('.cxt-fila').first().boundingBox())!.height

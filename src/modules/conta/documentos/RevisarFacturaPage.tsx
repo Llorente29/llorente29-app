@@ -33,6 +33,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaCompras, rutaDocumentos, rutaLibroDiario, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
@@ -424,6 +425,8 @@ function BandaFactura({ fac }: { fac: FacturaRevisar }) {
 function ComoSeApunta({ fac, vista, error, movil, solo }: {
   fac: FacturaRevisar; vista: Awaited<ReturnType<typeof verPropuestaFactura>> | null; error: string | null; movil: boolean; solo: boolean
 }) {
+  // C07: con «Enviar a Diez» apagado, ni una palabra de Diez.
+  const enviaADiez = useEnvioDiez(fac.account_id, fac.company_id).envio?.encendido === true
   const lineas = vista?.propuesta ? vista.propuesta.lineas : []
   // El nombre se acorta si no cabe; el código, nunca: una cuenta siempre con su código al lado.
   const nombre = (cuenta: string) => (
@@ -471,7 +474,7 @@ function ComoSeApunta({ fac, vista, error, movil, solo }: {
               ))}
             </div>
           )}
-          <p className="cxr-apoyo" style={{ margin: '8px 0 0' }}>Facturas recibidas{fac.recepcion?.local ? ` · ${fac.recepcion.local}` : ''} · {lineaDiez(solo)}</p>
+          <p className="cxr-apoyo" style={{ margin: '8px 0 0' }}>Facturas recibidas{fac.recepcion?.local ? ` · ${fac.recepcion.local}` : ''}{enviaADiez ? <> · {lineaDiez(solo)}</> : null}</p>
           {vista.propuesta.avisos.length > 0 && <ul className="cxr-aviso" style={{ margin: '8px 0 0', paddingLeft: 18 }}>{vista.propuesta.avisos.map((a, i) => <li key={i}>{a}</li>)}</ul>}
         </>
       )}

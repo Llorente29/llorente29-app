@@ -188,7 +188,8 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Está bien 
       expect(await c.evaluate((el) => el.scrollWidth <= el.clientWidth + 1 && getComputedStyle(el).textOverflow !== 'ellipsis')).toBe(true)
       await expect(c).toContainText(/· \d{8}/)
     }
-    await expect(comoN23).toContainText('a Diez irá sin el PDF, porque Diez aún no guarda documentos')
+    // C07 (Julio, 22/10): A tiene «Enviar a Diez» apagado, así que la revisión no habla de Diez.
+    await expect(comoN23).not.toContainText('Diez')
     await expect(comoN23).toContainText('Gasto e IVA')
     await expect(comoN23).toContainText('A pagar')
   }
