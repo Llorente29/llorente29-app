@@ -57,7 +57,8 @@ export default function LiquidacionesPage() {
   // Aparte de la lista: al subir una quincena la lista se vuelve a leer, y la zona de subir (con lo que ha hecho) no se va.
   const trabajaConCatcher = useLeer(accountId && activa ? () => usaCatcher(accountId, activa.id) : null, `${accountId}:${activa?.id}`)
   const conCatcher = hosteleria && trabajaConCatcher.datos === true
-  const saldo = useLeer(conCatcher && activa ? () => saldoPrepago(activa.id) : null, `${activa?.id}:${vuelta}`)
+  // La clave lleva `conCatcher`: si no, al saberse que usa Catcher (después de pintar) no se volvía a leer y se quedaba en «Leyendo el saldo…».
+  const saldo = useLeer(conCatcher && activa ? () => saldoPrepago(activa.id) : null, `${activa?.id}:${conCatcher}:${vuelta}`)
   const cambiar = (c: Record<string, string | null>) => setQuery(new URLSearchParams(conCambio(search, c)), { replace: true })
 
   const principal = conCatcher
