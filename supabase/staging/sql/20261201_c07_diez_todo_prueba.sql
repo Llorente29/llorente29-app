@@ -40,13 +40,16 @@ set local statement_timeout = '120s';
 do $$
 declare
   a constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
-  v_c uuid; v_venta uuid; v_rec uuid;
+  v_c uuid; v_venta uuid; v_val uuid; v_rec uuid;
 begin
   select company_id into v_c from public.journal_entry where account_id = a limit 1;
+  -- La venta de una plataforma (la que lee conta_resumen_ventas; propuesta, como las de A) y una venta validada.
   select je.id into v_venta from public.journal_entry je join public.sales_day_summary d on d.entry_id = je.id and d.channel_id is not null
-   where je.account_id = a and je.status = 'validado' order by je.created_at limit 1;
+   where je.account_id = a order by je.created_at limit 1;
+  select je.id into v_val from public.journal_entry je where je.account_id = a and je.source_type = 'sales_day' and je.status = 'validado' order by je.created_at limit 1;
   select je.id into v_rec from public.journal_entry je where je.account_id = a and je.source_type = 'supplier_invoice' order by je.created_at limit 1;
-  if v_c is null or v_venta is null or v_rec is null then raise exception 'PRUEBA C07 · 0: la empresa A no tiene su venta validada o su recibida en staging.'; end if;
+  if v_c is null or v_venta is null or v_val is null or v_rec is null then raise exception 'PRUEBA C07 · 0: la empresa A no tiene su venta de plataforma, su venta validada o su recibida en staging.'; end if;
+  perform set_config('c07.venta_val', v_val::text, true);
   perform set_config('c07.empresa', v_c::text, true);
   perform set_config('c07.venta', v_venta::text, true);
   perform set_config('c07.recibida', v_rec::text, true);
@@ -129,7 +132,7 @@ begin
   if v_n = 0 then raise exception 'PRUEBA C07 · 3: no sale nada de A.'; end if;
   if not exists (select 1 from _c07_ver where origen = 'manual' and kind = 'asiento') then raise exception 'PRUEBA C07 · 3: el manual validado no sale como asiento.'; end if;
   if not exists (select 1 from _c07_ver where origen = 'payroll' and kind = 'asiento') then raise exception 'PRUEBA C07 · 3: la nómina validada no sale como asiento.'; end if;
-  if not exists (select 1 from _c07_ver where entry_id = current_setting('c07.venta')::uuid and kind = 'factura') then raise exception 'PRUEBA C07 · 3: la venta validada no sale como factura.'; end if;
+  if not exists (select 1 from _c07_ver where entry_id = current_setting('c07.venta_val')::uuid and kind = 'factura') then raise exception 'PRUEBA C07 · 3: la venta validada no sale como factura.'; end if;
   select count(*) into v_mal from _c07_ver v join public.journal_entry e on e.id = v.entry_id
    where e.status <> 'validado' or e.source_type in ('opening', 'migrated') or (e.source_type = 'reversal');
   if v_mal > 0 then raise exception 'PRUEBA C07 · 3: salen % que no deben (apertura, no validados o contraasientos de algo que no está en Diez).', v_mal; end if;
