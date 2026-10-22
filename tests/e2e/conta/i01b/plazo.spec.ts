@@ -20,7 +20,9 @@ const recuadro = (page: Page) => page.locator('.s-impuestos-cifras .s-tarjeta-ci
 
 async function abrir(page: Page, hoy: string) {
   await page.goto(`/conta/impuestos?marca=sumied&hoy=${hoy}`)
-  await expect(page.locator('.s-cab-empresa').first()).toBeVisible({ timeout: 30_000 })
+  // S02: el botón de empresa es `.s-empresa` (antes `.s-cab-empresa`); se espera al botón ya
+  // cargado, por su nombre, y no a la caja vacía que pinta mientras carga.
+  await expect(page.getByRole('button', { name: /Cambiar de empresa/ })).toBeVisible({ timeout: 30_000 })
   await expect(recuadro(page)).toBeVisible({ timeout: 30_000 })
   await page.evaluate(() => document.fonts.ready)
 }

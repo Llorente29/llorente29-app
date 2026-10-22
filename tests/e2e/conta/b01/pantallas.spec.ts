@@ -80,26 +80,41 @@ test.describe('B01 · Bancos, las pantallas', () => {
       vigilar(page)
       await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
       await expect(page.getByRole('heading', { level: 1, name: 'Bancos' })).toBeVisible()
-      const pestanas = page.getByRole('navigation', { name: 'Pestañas de Bancos' })
-      // Las cuatro, a la vista en la cabecera al lado del mes (Julio, 17/10: «Favoritos» solo con
-      // su estrella para que quepan a 1440 px): sin «Más ▾».
-      await expect(pestanas.getByRole('link')).toHaveText(['Movimientos', 'Reglas', 'Cuentas y extractos', 'Cierre del mes'])
-      for (const l of await pestanas.getByRole('link').all()) await expect(l).toBeVisible()
-      await expect(pestanas.getByRole('button', { name: /▾$/ })).toHaveCount(0)
-      // El mes, corto en la cabecera («Oct 2026», como la N30).
+      // S02: las pestañas de la cabecera ya no existen; las cuatro páginas de Bancos salen
+      // debajo del apartado, en la barra, todas a la vista y en el orden del mapa del S02.
+      const paginas = page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('list', { name: 'Páginas de Bancos' })
+      await expect(paginas.getByRole('link')).toHaveText(['Movimientos', 'Cuentas y extractos', 'Reglas', 'Cierre del mes'])
+      for (const l of await paginas.getByRole('link').all()) await expect(l).toBeVisible()
+      // El mes, en el botón del periodo de la cabecera (S02: «Octubre 2026», el formato de todas).
       await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Mes' })).toHaveValue('2026-10')
-      await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Mes' }).locator('option:checked')).toHaveText('Oct 2026')
-      await expect(pestanas.getByRole('link', { name: 'Movimientos' })).toHaveAttribute('aria-current', 'page')
-      // S01 · paso 3: las pestañas, en la cabecera del esqueleto; la barra, en la cinta de la pestaña.
-      // «Tuyos» ya no está: Favoritos y Ctrl K son del esqueleto.
+      await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Mes' }).locator('option:checked')).toHaveText('Octubre 2026')
+      await expect(paginas.getByRole('link', { name: 'Movimientos' })).toHaveAttribute('aria-current', 'page')
+      // S02: la cinta pasa a la fila de acciones (marco/acciones.ts). «Tus bancos» es un selector a la
+      // izquierda; «Subir extracto», el principal; «Reglas» y «Casados solos», los dos blancos; y
+      // «Lo que he hecho» (grupo Revisar), en «Más acciones». Cada acción de la cinta sigue a mano.
+      // «Tuyos» sigue sin estar: Favoritos y Ctrl K son del marco.
       const barra = page.getByRole('toolbar', { name: 'Acciones de Movimientos' })
-      for (const g of ['Tus bancos', 'Traer movimientos', 'Automático', 'Revisar']) await expect(barra.getByRole('group', { name: g })).toBeVisible()
+      const selectorBancos = barra.getByRole('button', { name: /^Tus bancos: B01 Norte.*\. Cambiar$/ })
+      await expect(selectorBancos).toBeVisible()
       await expect(page.getByRole('group', { name: 'Tuyos' })).toHaveCount(0)
-      await expect(barra.getByRole('link', { name: /Subir extracto/ })).toBeVisible()
-      // Respuesta 4: la barra en UNA fila, con los nombres cortos; ni «Conectar» ni la barra de «Muy pronto».
-      const filas = await Promise.all(['Tus bancos', 'Traer movimientos', 'Automático', 'Revisar'].map(async (g) => Math.round((await barra.getByRole('group', { name: g }).boundingBox())!.y)))
-      expect(new Set(filas).size).toBe(1)
-      await expect(barra.getByRole('link', { name: /^B01 Norte/ })).toHaveAttribute('aria-current', 'page')
+      const subir = barra.getByRole('link', { name: /Subir extracto/ })
+      await expect(subir).toBeVisible()
+      await expect(subir).toHaveClass(/s-boton-principal/)
+      await expect(barra.getByRole('link', { name: /^Reglas/ })).toBeVisible()
+      await expect(barra.getByRole('link', { name: /^Casados solos/ })).toBeVisible()
+      await barra.getByRole('button', { name: 'Más acciones' }).click()
+      await expect(page.getByRole('group', { name: 'Más acciones' }).getByRole('group', { name: 'Revisar' }).getByRole('link', { name: /^Lo que he hecho/ })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(page.getByRole('group', { name: 'Más acciones' })).toHaveCount(0)
+      // Respuesta 4: la barra en UNA fila (antes, los cuatro grupos de la cinta a la misma altura;
+      // S02: el selector, el principal y «Más acciones», con el centro a la misma altura).
+      const centros = await Promise.all([selectorBancos, subir, barra.getByRole('button', { name: 'Más acciones' })]
+        .map(async (l) => { const c = (await l.boundingBox())!; return c.y + c.height / 2 }))
+      expect(Math.max(...centros) - Math.min(...centros)).toBeLessThan(4)
+      // El banco que se ve es el actual dentro del selector (S02: 'true' en la entrada del menú).
+      await selectorBancos.click()
+      await expect(page.getByRole('group', { name: 'Tus bancos' }).getByRole('link', { name: /^B01 Norte/ })).toHaveAttribute('aria-current', 'true')
+      await page.keyboard.press('Escape')
       await expect(page.getByText('Conectar')).toHaveCount(0)
       await expect(page.locator('.cx-pregunta')).toHaveCount(0)
       // Lo que no funciona no se enseña (respuesta 3, punto 4).
@@ -134,14 +149,17 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // Por aclarar, y la tarjeta que nadie ha dado de alta (respuesta 3).
       await page.getByRole('button', { name: /^Por aclarar \d+$/ }).click()
       await capturar(page, 'por-aclarar')
-      await barra.getByRole('link', { name: /^B01 Mercado/ }).click()
+      // S02: el otro banco se elige en el selector «Tus bancos» de la fila de acciones.
+      await barra.getByRole('button', { name: /^Tus bancos: .*\. Cambiar$/ }).click()
+      await page.getByRole('group', { name: 'Tus bancos' }).getByRole('link', { name: /^B01 Mercado/ }).click()
       // B02: la tarjeta sin dar de alta la anota el motor (se pregunta una vez por tarjeta, no en cada pago).
       await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' })).toContainText('tarjeta ···1234 sin dar de alta')
       await expect(page.locator('.cxn-fila', { hasText: 'FERRETERIA' }).getByRole('button', { name: 'Dar de alta la tarjeta' })).toBeVisible()
       await capturar(page, 'tarjeta-desconocida')
 
       // Reglas.
-      await pestanas.getByRole('link', { name: 'Reglas' }).click()
+      // S02: la página Reglas, en la barra (no el botón blanco «Reglas» de la fila, que lleva su número).
+      await paginas.getByRole('link', { name: 'Reglas' }).click()
       await expect(page.getByRole('heading', { name: 'Reglas', level: 2 })).toBeVisible()
       await expect(page.getByRole('form', { name: 'Regla nueva' })).toBeVisible()
       await expect(page.getByText('Mirando lo que se repite…')).toHaveCount(0, { timeout: 30_000 })

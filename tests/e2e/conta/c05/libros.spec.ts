@@ -31,9 +31,21 @@ function vigilar(page: Page) {
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[consola] ${m.text().slice(0, 300)}`) })
 }
 
-const cintaDe = (page: Page, pestana: string) => page.getByRole('toolbar', { name: `Acciones de ${pestana}` })
+const cintaDe = (page: Page, pagina: string) => page.getByRole('toolbar', { name: `Acciones de ${pagina}` })
 
-test('Libros en la cinta (S01): cada acción en su grupo, con su número escrito, y el buscador', async ({ page }) => {
+/**
+ * S02: las páginas de un apartado ya no son pestañas de la cabecera: salen
+ * debajo del apartado, en la barra (en el móvil, dentro del cajón, que se abre).
+ */
+async function paginasDe(page: Page, apartado: string) {
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Abrir el menú' }).click()
+  return page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('list', { name: `Páginas de ${apartado}` })
+}
+async function cerrarMenu(page: Page) {
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Cerrar el menú' }).click()
+}
+
+test('Libros en la fila de acciones (S02): «Ver» con cada libro en su grupo, con su número escrito, y el buscador', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   // «Libros» a secas lleva a la primera de «Libros y listados»: el Libro mayor.
@@ -41,44 +53,60 @@ test('Libros en la cinta (S01): cada acción en su grupo, con su número escrito
   await expect(page).toHaveURL(/\/conta\/libros\/mayor\/libro-mayor/)
   // M01: sin el título grande «Contabilidad · Libros»; el encabezado, para el lector.
   await expect(page.getByRole('heading', { level: 1, name: 'Libros' })).toHaveCount(1)
-  // Ni áreas ni segunda fila en la pantalla: son la pestaña y su cinta.
+  // Ni áreas ni segunda fila en la pantalla: son la página de la barra y su fila de acciones.
   await expect(page.getByRole('navigation', { name: 'Áreas de Libros' })).toHaveCount(0)
   await expect(page.locator('.cxm-subpestanas, .cxl-movil-acciones')).toHaveCount(0)
-  const pestanas = page.getByRole('navigation', { name: 'Pestañas de Contabilidad' })
-  await expect(pestanas.locator('[aria-current="page"], .s-pestana-activa').first()).toHaveText(/^Libros y listados/)
+  // S02: la página activa, debajo de Contabilidad en la barra (antes, la pestaña de la cabecera).
+  const paginas = await paginasDe(page, 'Contabilidad')
+  await expect(paginas.getByRole('link', { name: 'Libros y listados' })).toHaveAttribute('aria-current', 'page')
+  await cerrarMenu(page)
 
+  // S02: los grupos de la cinta (Diario, Mayor, Estados, IVA, Retenciones) son a dónde ir dentro
+  // de la página: van en el selector «Ver: <el actual>. Cambiar», con cada grupo y su título dentro.
   const cinta = cintaDe(page, 'Libros y listados')
-  await expect(cinta.getByRole('group', { name: 'Mayor' }).getByRole('link')).toHaveText(['Libro mayor', 'Sumas y saldos', 'Acumulados'])
-  await expect(cinta.getByRole('group', { name: 'Estados' }).getByRole('link')).toHaveText(['Balance de situación', 'Pérdidas y ganancias', 'Cambios en el patrimonio neto'])
-  await expect(cinta.getByRole('link', { name: /^Libro mayor/ })).toHaveAttribute('aria-current', 'page')
+  const ver = cinta.getByRole('button', { name: /^Ver: .*\. Cambiar$/ })
+  await expect(ver).toHaveAccessibleName('Ver: Libro mayor. Cambiar')
+  // S02: la captura de la cinta pasa a ser la de la fila de acciones, con «Ver» cerrado (un
+  // desplegable abierto tapa a propósito, y aquí se mide que nada tape).
+  await capturar(page, 'acciones-listados')
+  await ver.click()
+  const menu = page.getByRole('group', { name: 'Ver', exact: true })
+  // La entrada lleva su nombre y, debajo, su dato (`.s-menu-nota`): se compara el principio.
+  await expect(menu.getByRole('group', { name: 'Mayor', exact: true }).getByRole('link')).toHaveText([/^Libro mayor/, /^Sumas y saldos/, /^Acumulados/])
+  await expect(menu.getByRole('group', { name: 'Estados', exact: true }).getByRole('link')).toHaveText([/^Balance de situación/, /^Pérdidas y ganancias/, /^Cambios en el patrimonio neto/])
+  // S02: la actual, dentro del menú, con aria-current="true" (la página es la de la barra).
+  await expect(menu.getByRole('link', { name: /^Libro mayor/ })).toHaveAttribute('aria-current', 'true')
   // Ninguna se esconde (regla 7): las seis del IVA, aunque la empresa no use alguna (en gris).
   // S01e: Retenciones (111, 115) no es IVA: va en su propio grupo.
-  await expect(cinta.getByRole('group', { name: 'IVA' }).getByRole('link')).toHaveCount(6)
-  await expect(cinta.getByRole('group', { name: 'Retenciones' }).getByRole('link')).toHaveText([/^Retenciones/])
-  // Julio, 16/10: lo que enseña un número lo lleva escrito («Expedidas 12»), nunca solo al pasar el ratón.
-  const expedidas = cinta.getByRole('link', { name: /^Expedidas/ })
-  await expect(expedidas).toHaveAttribute('title', /^Expedidas: /)
-  await capturar(page, 'cinta-listados')
+  await expect(menu.getByRole('group', { name: 'IVA', exact: true }).getByRole('link')).toHaveCount(6)
+  await expect(menu.getByRole('group', { name: 'Retenciones', exact: true }).getByRole('link')).toHaveText([/^Retenciones/])
+  // Julio, 16/10: lo que enseña un número lo lleva escrito («Expedidas 12»), nunca solo al pasar el
+  // ratón. S02: el dato ya no va en el `title` del botón: va escrito en la entrada del menú.
+  const expedidas = menu.getByRole('link', { name: /^Expedidas/ })
+  await expect(expedidas.locator('.s-menu-nota')).toHaveText(/^Expedidas: /)
 
   await expedidas.click()
   await expect(page).toHaveURL(/\/conta\/libros\/registro\/expedidas/)
-  await expect(cintaDe(page, 'Libros y listados').getByRole('link', { name: /^Expedidas/ })).toHaveAttribute('aria-current', 'page')
-  // El ejercicio, en la cabecera (no en un título).
-  await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
+  await expect(cintaDe(page, 'Libros y listados').getByRole('button', { name: /^Ver: .*\. Cambiar$/ })).toHaveAccessibleName(/^Ver: Expedidas/)
+  // El ejercicio, en la cabecera (no en un título), con el formato del S02: «Ejercicio 2026 · abierto».
+  const ejercicio = page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })
+  await expect(ejercicio).toBeVisible()
+  await expect(ejercicio.locator('option:checked')).toHaveText(/^Ejercicio \d{4} · (abierto|cerrado|traído)$/)
   await expect(page.locator('.cxl-tuyos')).toHaveCount(0)
 
   // Cierre y Registro: sus dos grupos, sin lo que aún no tiene pantalla (Registro Mercantil).
-  // Con el ejercicio al lado, puede no caber y estar en «Más ▾» (Julio, respuesta 3): se abre si hace falta.
-  const cierre = pestanas.getByRole('link', { name: 'Cierre y Registro' })
-  if (!(await cierre.isVisible())) await pestanas.getByRole('button', { name: /▾$/ }).click()
-  await cierre.click()
+  // S02: la página está siempre a la vista en la barra (ya no hay «Más ▾» de pestañas).
+  await (await paginasDe(page, 'Contabilidad')).getByRole('link', { name: 'Cierre y Registro' }).click()
   await expect(page).toHaveURL(/\/conta\/libros\/cierre\/ejercicios/)
-  await expect(cintaDe(page, 'Cierre y Registro').getByRole('group')).toHaveCount(2)
-  await expect(cintaDe(page, 'Cierre y Registro').getByText(/Depósito|Legalización|Memoria/)).toHaveCount(0)
+  const cierre = cintaDe(page, 'Cierre y Registro')
+  await cierre.getByRole('button', { name: /^Ver: .*\. Cambiar$/ }).click()
+  await expect(page.getByRole('group', { name: 'Ver', exact: true }).getByRole('group')).toHaveCount(2)
+  await expect(cierre.getByText(/Depósito|Legalización|Memoria/)).toHaveCount(0)
+  await page.keyboard.press('Escape')
 
   // El buscador: «requerimiento» lleva al formato AEAT (Ctrl K es del marco).
   if (lado(page) === 'ordenador') await page.keyboard.press('Control+k')
-  else await page.getByRole('button', { name: 'Buscar', exact: true }).click()
+  else await page.getByRole('button', { name: 'Buscar o hacer algo', exact: true }).click()
   const dialogo = page.getByRole('dialog', { name: 'Buscar todo' })
   await dialogo.getByLabel('Qué buscas').fill('requerimiento')
   await dialogo.getByRole('group', { name: 'Opciones' }).getByRole('option', { name: /Formato AEAT/ }).click()
