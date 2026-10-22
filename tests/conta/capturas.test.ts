@@ -126,10 +126,11 @@ describe('las capturas de ESTE run (las escritas después de la marca)', () => {
 })
 
 describe('el workflow', () => {
-  it('ya no commitea las capturas en cada run: solo a mano, en verde, con fijar_capturas, y con el script', () => {
+  // W04 (Julio, 22/10): las fija la e2e del push en verde, sin un run aparte; a mano, igual.
+  it('las fija la e2e del push en verde (o a mano con fijar_capturas), solo las del frente y con el script', () => {
     expect(WF).not.toMatch(/git add docs\/conta\/capturas/)
     const fijar = WF.slice(WF.indexOf('- name: Capturas · fijar las del frente en la rama'))
-    expect(fijar).toMatch(/if: success\(\) && github\.event_name == 'workflow_dispatch' && inputs\.fijar_capturas/)
+    expect(fijar).toMatch(/if: success\(\) && \(github\.event_name == 'push' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.fijar_capturas\)\)/)
     expect(fijar).toMatch(/node scripts\/conta\/capturas\.mjs fijar "\$GITHUB_REF_NAME"/)
     expect(WF.match(/git commit/g)).toHaveLength(1)
   })

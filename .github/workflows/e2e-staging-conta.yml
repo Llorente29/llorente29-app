@@ -34,9 +34,8 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 # rápido, al trozo que menos lleva), cada uno en su runner y en su carril. El
 # job «entera» los junta: comprueba que entre todos están TODOS los ficheros,
 # una vez cada uno, y que todos han salido en verde en este commit. Solo así el
-# run sale en verde, y solo así cuenta como entera (scripts/conta/e2e-entera.mjs,
-# que además exige que sea el PRIMER intento: relanzar un trozo que falló sirve
-# para diagnosticar, no para dar valores a Julio).
+# run sale en verde. (W04, 22/10: la entera ya no se pide antes de una tanda,
+# y con ella se fue la regla del «primer intento».)
 #
 # Se pone con el mismo y único secreto del otro workflow, STAGING_CONTA_DB_URL,
 # y con las mismas tres guardas: la URL es de staging-conta, no es de
@@ -46,15 +45,17 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 # por diseño (las lleva cualquier navegador que abra la app) y no dan acceso a
 # nada que la RLS no permita. No sirven para producción.
 #
-# QUÉ PRUEBAS LLEVA CADA PR (Julio, 19/10 y 21/10)
-#   · en cada push: build, unitarias, la e2e de la ZONA de la rama y la CORTA
-#     de pedidos, cocina y reparto (scripts/e2e/area.mjs: la zona y CORTA);
-#   · la ENTERA, en un push, SOLO si el PR toca lo común (marco, cabecera,
-#     barra, diseño compartido, el arranque de la app y lo que mueve todas las
-#     pruebas: LO_COMUN en scripts/e2e/area.mjs) o lleva la etiqueta
-#     «e2e-entera» (al ponerla, e2e-etiqueta.yml la lanza en ese momento);
-#   · y CADA NOCHE sobre main (abajo);
-#   · las tandas no cambian (análisis, staging, ensayo y real desde la rama).
+# QUÉ PRUEBAS LLEVA CADA PR · UN CRITERIO POR RIESGO (W04, Julio, 22/10)
+#   · solo pantallas: build, unitarias y la e2e de la ZONA de la rama en cada
+#     push (scripts/e2e/area.mjs);
+#   · lo común (marco, cabecera, barra, diseño compartido, el arranque de la
+#     app y lo que mueve todas las pruebas: LO_COMUN) → la ENTERA en el push;
+#   · pedidos, cocina o reparto (PEDIDOS en area.mjs) → todo: la ENTERA en el
+#     push, que lleva la corta;
+#   · con tanda: lo de su riesgo, más su prueba de staging en ROLLBACK, el
+#     ensayo y el real en producción (W01); la entera, la de la noche;
+#   · la etiqueta «e2e-entera» la pide siempre (e2e-etiqueta.yml la lanza);
+#   · y CADA NOCHE sobre main (abajo).
 #
 # LA ENTERA DE LA NOCHE (Julio, 21/10): a las 03:00 de Madrid, en verano y en
 # invierno (dos disparos UTC, 01:00 y 02:00, y el plan deja correr solo el que
@@ -79,12 +80,10 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 #     (scripts/e2e/area.mjs; W02, 17/10): la carpeta del frente o la de su
 #     nombre (conta/c02c-* → c02c), con el juego común (el marco y el arranque
 #     del C00, y la RLS entre cuentas); reparto-** → tests/e2e/reparto; una
-#     rama sin área (conta/w02-…), solo el juego común. Y la corta. La suite
-#     entera, solo si toca lo común o lleva la etiqueta (arriba).
+#     rama sin área (conta/w02-…), solo el juego común. La suite entera, solo
+#     si toca lo común, pedidos, cocina o reparto, o lleva la etiqueta (arriba).
 #   · la SUITE ENTERA también corre a mano (workflow_dispatch con «pruebas»
-#     vacío), antes de pedir tanda. El título del run lo dice
-#     («entera»), y scripts/conta/e2e-entera.mjs comprueba que hay una en verde
-#     del mismo commit (antes-de-subir.sh, con PEDIR_TANDA=1).
+#     vacío), cuando se quiera; ya no se pide antes de una tanda (W04).
 #   · el frente sigue saliendo de la rama: decide qué carpeta corre en un push
 #     y qué capturas se fijan, y las pruebas del C06 que solo son del frente C
 #     siguen mirándolo (E2E_FRENTE). Los usuarios ya no: son los del carril.
@@ -107,16 +106,17 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 # Por eso: el push corre solo su área (scripts/e2e/area.mjs), la entera solo a
 # mano, y un push nuevo cancela la e2e del commit anterior.
 #
-# LAS CAPTURAS (C06b, Julio, 15/10): «capturas: artefacto en cada push y fijar
-# las de tu frente antes del informe».
+# LAS CAPTURAS (C06b, Julio, 15/10; W04, 22/10):
 #   · En CADA trozo, las capturas que ha sacado (las escritas después de la
 #     marca) van en su artefacto «capturas-N»; el job «entera» las junta en el
 #     artefacto «capturas», 30 días, y un comentario del PR (uno solo, que se va
-#     editando) da el enlace. Nunca un commit en la rama.
-#   · Antes de dar su informe, la sesión lanza este workflow a mano con
-#     «fijar_capturas»: si sale verde, commitea SOLO la carpeta del frente de
-#     la rama (scripts/conta/capturas.mjs fijar), y Julio las ve en «Files
-#     changed». Las de otros frentes de ese run se quedan en el artefacto.
+#     editando) da el enlace.
+#   · La e2e de cada PUSH que sale en verde commitea SOLO la carpeta del frente
+#     de la rama (scripts/conta/capturas.mjs fijar): la última en verde es la
+#     que queda, y Julio las ve en «Files changed». Sin un run aparte. Las de
+#     otros frentes de ese run se quedan en el artefacto. Ese commit no lanza
+#     otra e2e (lo hace el token del workflow): antes del siguiente push, traer
+#     la rama (git pull). A mano, igual, con «fijar_capturas».
 
 on:
   push:
@@ -257,10 +257,10 @@ jobs:
           if [ -n "${FRENTE_PEDIDO:-}" ]; then
             case "$FRENTE_PEDIDO" in a|b|c|d) FRENTE="$FRENTE_PEDIDO" ;; *) echo "::error::«frente» tiene que ser a, b, c o d (o nada)."; exit 1 ;; esac
           fi
-          # En un PUSH (Julio, 21/10): la zona de la rama y la corta de
-          # pedidos, cocina y reparto, en un trozo; la ENTERA solo si el PR toca
-          # lo común (marco, cabecera, barra, diseño compartido… LO_COMUN en
-          # scripts/e2e/area.mjs) o lleva la etiqueta «e2e-entera».
+          # En un PUSH (W04, Julio, 22/10): un criterio por riesgo. Solo
+          # pantallas, la zona de la rama, en un trozo; la ENTERA si el PR toca
+          # lo común (LO_COMUN en scripts/e2e/area.mjs), pedidos, cocina o
+          # reparto (PEDIDOS) o lleva la etiqueta «e2e-entera».
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             git diff --name-only "origin/main...$GITHUB_SHA" > "$RUNNER_TEMP/cambiados.txt"
             ETIQUETAS=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json labels -q '[.[0].labels[]?.name] | join(",")' 2>/dev/null || true)
@@ -272,7 +272,7 @@ jobs:
             else
               PRUEBAS=$(sed -n 's/^pruebas=//p' "$RUNNER_TEMP/decision.txt")
               [ -n "$PRUEBAS" ] || { echo "::error::area.mjs no ha dado pruebas para $GITHUB_REF_NAME: sería la suite entera."; exit 1; }
-              echo "### La zona y la corta: $PORQUE" >> "$GITHUB_STEP_SUMMARY"
+              echo "### La zona: $PORQUE" >> "$GITHUB_STEP_SUMMARY"
             fi
             echo "Qué corre: $PORQUE ($(wc -l < "$RUNNER_TEMP/cambiados.txt") ficheros cambiados contra main)."
           fi
@@ -541,9 +541,6 @@ jobs:
             echo "::error::Entre los trozos no están todos los ficheros una vez cada uno (arriba, la diferencia)."; exit 1
           fi
           echo "Los $N trozos han pasado los $(wc -l < "$RUNNER_TEMP/todos.txt") ficheros, una vez cada uno." | tee -a "$GITHUB_STEP_SUMMARY"
-          if [ "$GITHUB_RUN_ATTEMPT" != 1 ]; then
-            echo "> Intento $GITHUB_RUN_ATTEMPT: sirve para diagnosticar, NO cuenta como entera para dar valores (scripts/conta/e2e-entera.mjs pide el primer intento)." >> "$GITHUB_STEP_SUMMARY"
-          fi
 
       - uses: actions/setup-node@v4
         if: always()
@@ -628,7 +625,7 @@ jobs:
         run: |
           set -euo pipefail
           MARCA='<!-- capturas-e2e -->'
-          T="$(printf '%s\n**Capturas de la e2e** · run [%s](%s/%s/actions/runs/%s) · `%s` · %s\n\n%s capturas de este run: [descargar el artefacto](%s) (caduca a los 30 días).\n\nPara verlas en «Files changed», antes del informe: Actions → «Pruebas e2e en staging-conta» → Run workflow en esta rama con **fijar_capturas**. Solo se fijan las del frente de la rama.' \
+          T="$(printf '%s\n**Capturas de la e2e** · run [%s](%s/%s/actions/runs/%s) · `%s` · %s\n\n%s capturas de este run: [descargar el artefacto](%s) (caduca a los 30 días).\n\nSi el run sale en verde, las del frente de la rama quedan fijadas en la rama (un commit «Capturas fijadas…»), y Julio las ve en «Files changed».' \
             "$MARCA" "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "${GITHUB_SHA::7}" "$([ "$ESTADO" = success ] && echo 'en verde' || echo "en $ESTADO")" "$N" "$URL")"
           echo "$T" >> "$GITHUB_STEP_SUMMARY"
           PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number -q '.[0].number')
@@ -640,9 +637,11 @@ jobs:
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$T" > /dev/null; echo "Comentario en el PR #$PR."
           fi
 
-      # Solo a mano y solo en verde (los N trozos): las del frente de la rama, y ninguna más.
+      # W04 (Julio, 22/10): las fija la e2e de cada PUSH que sale en verde (la
+      # última en verde es la que vale), sin un run aparte; a mano, con
+      # «fijar_capturas». Solo en verde (los N trozos) y solo las del frente de la rama.
       - name: Capturas · fijar las del frente en la rama
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.fijar_capturas
+        if: success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fijar_capturas))
         run: |
           set -euo pipefail
           git config user.name "folvy-e2e"

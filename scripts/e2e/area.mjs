@@ -2,8 +2,8 @@
 // scripts/e2e/area.mjs — qué pruebas corre la e2e de un PUSH, según la rama.
 //
 // W02 (17/10, gasto de Actions). La e2e de cada push corre solo las pruebas
-// del área de la rama, en un trozo. La suite ENTERA no corre nunca en un push:
-// solo a mano (workflow_dispatch con «pruebas» vacío), sobre el commit final.
+// del área de la rama, en un trozo. La suite ENTERA corre en un push solo si
+// toca lo común o pedidos, cocina o reparto (abajo); si no, cada noche.
 // El 16/10 las e2e gastaron 2.953 min; cada push de una rama sin frente (las
 // reparto-**, las conta/c00…c05, las conta/w*) corría la suite entera en 2
 // trozos.
@@ -20,11 +20,13 @@
 //     push (ZONAS_POR_FICHERO: inventario, 21/10).
 // Nunca vacío: vacío sería la suite entera.
 //
-// Y SIEMPRE la CORTA de pedidos, cocina y reparto (Julio, 19/10): «en cada PR,
-// la e2e de la zona que toques y una e2e corta de pedidos, cocina y reparto».
-// La entera corre cada noche sobre main (e2e-staging-conta.yml, «schedule») y,
-// en un push, solo si el PR toca LO_COMUN o lleva la etiqueta «e2e-entera»
-// (Julio, 21/10: queCorre, abajo).
+// UN CRITERIO POR RIESGO (W04, Julio, 22/10, la auditoría de las reglas de pruebas):
+//   · solo pantallas → la zona de la rama (y la de lo que toca);
+//   · lo común → la entera (lo ven todas las pantallas);
+//   · pedidos, cocina o reparto (PEDIDOS, abajo) → todo: la entera, que lleva la corta.
+// La corta ya no va en cada push: no protege nada que una rama que no toca
+// pedidos pueda romper. La entera corre además cada noche sobre main
+// (e2e-staging-conta.yml, «schedule»), y con la etiqueta «e2e-entera».
 //
 //   node scripts/e2e/area.mjs <rama> --cambiados <fichero> --etiquetas "a,b"
 //     → entera=…, pruebas=…, porque=… (lo usa el plan del workflow)
@@ -45,6 +47,28 @@ export const COMUN = ['tests/e2e/conta/c00/marco.spec.ts', 'tests/e2e/conta/rls.
  * y llevarlo por todos sus estados en cocina.
  */
 export const CORTA = ['tests/e2e/reparto/direccion-falta.spec.ts', 'tests/e2e/reparto/quien-reparte.spec.ts']
+
+/**
+ * PEDIDOS, COCINA Y REPARTO (W04, 22/10): lo que, si se toca, pide «todo». Las
+ * pantallas y las funciones del camino del pedido: pedidos, cocina, pase, TPV,
+ * tickets, tablets, reparto y seguimiento, y las integraciones que traen o
+ * mueven pedidos. La base del camino la mira el analizador de la tanda (W01).
+ */
+export const PEDIDOS = [
+  'src/modules/orders/', 'src/modules/kds/', 'src/modules/kitchen/', 'src/modules/pase/',
+  'src/modules/pos/', 'src/modules/printing/', 'src/modules/tablet/', 'src/modules/shop/',
+  'src/modules/reparto/', 'src/modules/repartidor/', 'src/modules/seguimiento/',
+  'src/pages/RepartoSettingsPage.tsx',
+  'supabase/functions/hubrise-', 'supabase/functions/lastapp-', 'supabase/functions/order-',
+  'supabase/functions/catcher-dispatch/', 'supabase/functions/availability-dispatch/',
+  'supabase/functions/courier-proof-upload/',
+  'tests/e2e/reparto/',
+]
+
+/** De los ficheros cambiados, los de pedidos, cocina o reparto. */
+export function dePedidos(cambiados) {
+  return cambiados.filter((f) => PEDIDOS.some((p) => f.startsWith(p)))
+}
 
 /**
  * LO COMÚN (Julio, 21/10): «la entera solo si el PR toca lo común (marco,
@@ -122,8 +146,9 @@ export function deLoComun(cambiados) {
 }
 
 /**
- * Qué corre la e2e de un PUSH: la entera si el PR toca lo común o lleva la
- * etiqueta; si no, la zona de la rama y la corta. «porque» va al resumen del run.
+ * Qué corre la e2e de un PUSH: la entera si el PR toca lo común, pedidos, cocina
+ * o reparto, o lleva la etiqueta; si no, la zona de la rama (y la de lo que
+ * toca). «porque» va al resumen del run.
  */
 export function queCorre(rama, { cambiados = [], etiquetas = [] } = {}, carpetas = carpetasConta()) {
   const comun = deLoComun(cambiados)
@@ -134,19 +159,18 @@ export function queCorre(rama, { cambiados = [], etiquetas = [] } = {}, carpetas
     const muestra = comun.slice(0, 3).join(', ') + (comun.length > 3 ? ` y ${comun.length - 3} más` : '')
     return { entera: true, pruebas: [], porque: `toca lo común: ${muestra}` }
   }
+  const pedidos = dePedidos(cambiados)
+  if (pedidos.length) {
+    const muestra = pedidos.slice(0, 3).join(', ') + (pedidos.length > 3 ? ` y ${pedidos.length - 3} más` : '')
+    return { entera: true, pruebas: [], porque: `toca pedidos, cocina o reparto: ${muestra}` }
+  }
   const zonas = zonasTocadas(cambiados)
   const deLaRama = pruebasDeLaZona(rama, carpetas)
   const extra = zonas.map((z) => z.pruebas).filter((p) => !deLaRama.includes(p))
   const porque = extra.length
-    ? `no toca lo común: la zona de la rama, la de lo que toca (${zonas.map((z) => z.zona).join(', ')}) y la corta`
-    : 'no toca lo común: la zona de la rama y la corta'
-  return { entera: false, pruebas: conLaCorta([...deLaRama, ...extra]), porque }
-}
-
-/** Las de la zona y la corta, sin repetir (una carpeta ya incluye sus ficheros). */
-export function conLaCorta(pruebas) {
-  const dentro = (f) => pruebas.some((p) => f === p || f.startsWith(`${p.replace(/\/$/, '')}/`))
-  return [...pruebas, ...CORTA.filter((f) => !dentro(f))]
+    ? `solo pantallas: la zona de la rama y la de lo que toca (${zonas.map((z) => z.zona).join(', ')})`
+    : 'solo pantallas: la zona de la rama'
+  return { entera: false, pruebas: [...deLaRama, ...extra], porque }
 }
 
 /** Las carpetas de tests/e2e/conta (b01, c02c, cierre…). */
@@ -155,8 +179,9 @@ export function carpetasConta(dir = 'tests/e2e/conta') {
   return readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
 }
 
+/** Lo que corre un push sin saber qué toca: solo la zona de la rama. */
 export function pruebasDelPush(rama, carpetas = carpetasConta()) {
-  return conLaCorta(pruebasDeLaZona(rama, carpetas))
+  return pruebasDeLaZona(rama, carpetas)
 }
 
 /** Solo las de la zona de la rama (sin la corta). */
@@ -179,7 +204,7 @@ export function pruebasDeLaZona(rama, carpetas = carpetasConta()) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  // node scripts/e2e/area.mjs <rama>                                  → las pruebas de la zona y la corta
+  // node scripts/e2e/area.mjs <rama>                                  → las pruebas de la zona
   // node scripts/e2e/area.mjs <rama> --cambiados <fichero> --etiquetas "a,b"
   //   → tres líneas para $GITHUB_OUTPUT: entera=true|false, pruebas=…, porque=…
   const args = process.argv.slice(2)

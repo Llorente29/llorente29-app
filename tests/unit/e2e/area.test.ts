@@ -3,8 +3,8 @@
 // que hay hoy en tests/e2e/conta: ninguna puede dar la suite entera.
 
 import { describe, it, expect } from 'vitest'
-import { existsSync } from 'node:fs'
-import { pruebasDelPush, pruebasDeLaZona, COMUN, CORTA, carpetasConta } from '../../../scripts/e2e/area.mjs'
+import { existsSync, readdirSync } from 'node:fs'
+import { pruebasDelPush, pruebasDeLaZona, COMUN, CORTA, PEDIDOS, dePedidos, carpetasConta } from '../../../scripts/e2e/area.mjs'
 
 // Ramas reales que disparan la e2e por push (conta/** y reparto-**), una por familia.
 const RAMAS = {
@@ -26,16 +26,12 @@ describe('la e2e de un push corre solo su área', () => {
     for (const [rama, esperado] of Object.entries(RAMAS)) expect(pruebasDeLaZona(rama), rama).toEqual(esperado)
   })
 
-  // Julio, 19/10: en cada PR, la zona Y la corta de pedidos, cocina y reparto.
-  it('cada push lleva además la corta de pedidos, cocina y reparto, sin repetir', () => {
-    for (const [rama, esperado] of Object.entries(RAMAS)) {
-      const p = pruebasDelPush(rama)
-      expect(p.slice(0, esperado.length), rama).toEqual(esperado)
-      for (const f of CORTA) expect(p.some((x) => x === f || f.startsWith(`${x}/`)), `${rama}: ${f}`).toBe(true)
-      expect(new Set(p).size, rama).toBe(p.length)
+  // W04 (Julio, 22/10): la corta ya no va en cada push; un push sin saber qué toca, solo su zona.
+  it('un push corre su zona y nada más: la corta no va si no toca pedidos', () => {
+    for (const [rama, esperado] of Object.entries(RAMAS)) expect(pruebasDelPush(rama), rama).toEqual(esperado)
+    for (const rama of Object.keys(RAMAS).filter((r) => !r.startsWith('reparto-'))) {
+      for (const f of CORTA) expect(pruebasDelPush(rama), `${rama}: ${f}`).not.toContain(f)
     }
-    // reparto-** ya corre su carpeta entera: la corta no se repite.
-    expect(pruebasDelPush('reparto-r04-x')).toEqual(['tests/e2e/reparto'])
   })
 
   it('la corta existe y está medida en tiempos.json (91 s en los dos tamaños)', async () => {
@@ -85,14 +81,14 @@ describe('la entera, solo si el PR toca lo común (los 40 últimos PR de main)',
     expect(PRS).toHaveLength(40)
     expect(PRS.filter((p) => p.comun)).toHaveLength(13)
   })
-  it('la cabecera de pestañas (#258) y el ancho (#263), la entera; el recuadro del plazo (#265), la zona y la corta', () => {
+  it('la cabecera de pestañas (#258) y el ancho (#263), la entera; el recuadro del plazo (#265), solo su zona', () => {
     const de = (t: string) => PRS.find((p) => p.titulo.includes(t))!
     expect(queCorre('conta/s01f-pestanas', { cambiados: de('(#258)').ficheros })).toMatchObject({ entera: true })
     expect(queCorre('conta/s01g-ancho', { cambiados: de('(#263)').ficheros }).porque).toMatch(/^toca lo común: src\/modules\/conta\/diseno\//)
     const plazo = queCorre('conta/i01b-plazo', { cambiados: de('(#265)').ficheros })
     expect(plazo.entera).toBe(false)
     expect(plazo.pruebas).toEqual(pruebasDelPush('conta/i01b-plazo'))
-    expect(plazo.pruebas).toEqual(expect.arrayContaining(CORTA))
+    for (const c of CORTA) expect(plazo.pruebas).not.toContain(c)
   })
   it('la etiqueta pide la entera aunque no toque lo común', () => {
     expect(queCorre('conta/i01b-plazo', { cambiados: ['src/modules/conta/impuestos/calendario.ts'], etiquetas: [ETIQUETA_ENTERA] })).toMatchObject({ entera: true, pruebas: [] })
@@ -108,13 +104,13 @@ describe('la entera, solo si el PR toca lo común (los 40 últimos PR de main)',
 
 // Autoconteo (Julio, 21/10): la zona de inventario sale de lo que se toca, sea cual sea la rama.
 describe('las zonas por fichero', () => {
-  it('tocar inventario o la tablet de contar añade tests/e2e/inventario, y la corta sigue', () => {
+  it('tocar inventario o la tablet de contar añade tests/e2e/inventario, sin la corta', () => {
     for (const f of ['src/modules/supply/components/ResumenAutoconteo.tsx', 'src/pages/trabajador/MiAutoinventario.tsx',
                      'tests/e2e/inventario/autoconteo.spec.ts', 'supabase/seeds/conta/seed_autoconteo_e2e_staging.sql']) {
       const r = queCorre('conta/w02-herramientas', { cambiados: [f] })
       expect(r.entera, f).toBe(false)
       expect(r.pruebas, f).toContain('tests/e2e/inventario')
-      for (const c of CORTA) expect(r.pruebas, f).toContain(c)
+      for (const c of CORTA) expect(r.pruebas, f).not.toContain(c)
       expect(r.porque, f).toMatch(/la de lo que toca \(inventario\)/)
     }
   })
@@ -134,3 +130,26 @@ describe('las zonas por fichero', () => {
   })
 })
 
+
+// W04 (Julio, 22/10): pedidos, cocina o reparto → todo. Contra los 40 últimos PR de main.
+describe('pedidos, cocina o reparto: la entera', () => {
+  it('de los 40 PR reales, solo uno toca pedidos (el relevo del secreto del W02), y ese corre la entera', () => {
+    const tocan = PRS.filter((p) => dePedidos(p.ficheros).length > 0)
+    expect(tocan.map((p) => p.titulo.slice(0, 40))).toEqual(['W02 · Secretos fuera del código antes de'])
+    const r = queCorre('conta/w02-secretos', { cambiados: tocan[0].ficheros })
+    expect(r).toMatchObject({ entera: true, pruebas: [] })
+    expect(r.porque).toMatch(/^toca pedidos, cocina o reparto: /)
+  })
+  it('una pantalla de pedidos, la cocina, una función de HubRise y las e2e de reparto piden la entera', () => {
+    for (const f of ['src/modules/orders/pages/OrdersPage.tsx', 'src/modules/kitchen/x.tsx', 'supabase/functions/hubrise-webhook/index.ts', 'tests/e2e/reparto/quien-reparte.spec.ts']) {
+      expect(queCorre('conta/c06c-x', { cambiados: [f] }).entera, f).toBe(true)
+    }
+    expect(queCorre('conta/c06c-x', { cambiados: ['src/modules/conta/libro/DetalleDiez.tsx'] }).entera).toBe(false)
+  })
+  it('todo lo que nombra PEDIDOS existe hoy (una carpeta, un fichero o el principio de varias funciones)', () => {
+    for (const p of PEDIDOS) {
+      const ok = existsSync(p.replace(/\/$/, '')) || (p.endsWith('-') && readdirSync('supabase/functions').some((d) => `supabase/functions/${d}`.startsWith(p)))
+      expect(ok, p).toBe(true)
+    }
+  })
+})
