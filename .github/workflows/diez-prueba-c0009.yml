@@ -176,6 +176,8 @@ jobs:
             '[prueba-c0009:promociones]'*) S=scripts/conta/diez/prueba-c0009-promociones.ts ;;
             # C07 (22/10): SOLO LEE cómo guarda Diez los asientos que no son facturas (banco, manuales, liquidaciones).
             '[prueba-c0009:apunte-molde]'*) S=scripts/conta/diez/prueba-c0009-apunte-molde.ts ;;
+            # C07: UN banco inventado de Sumied a la C0009 y su contraasiento, leídos de vuelta (escribe: solo con el «sí» de Julio).
+            '[prueba-c0009:apunte]'*) S=scripts/conta/diez/prueba-c0009-apunte.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac
