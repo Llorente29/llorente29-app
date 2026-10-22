@@ -92,7 +92,6 @@ export function PendientesDiez() {
       {!d.datos && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando las pendientes" />}
       {d.datos && (
         <div className="cx-tarjeta">
-          <p role="status" className="cxp-pendientes-resumen"><strong>{fraseResumen(pend, ddmmaa)}</strong></p>
           <p className="cx-ayuda">
             Diez aún no guarda documentos (falta que Cegid lo active), así que {MARCA.nombre} manda la factura sin su PDF. En Diez, busca cada una por su asiento o su número de factura,
             adjunta el PDF y pulsa «Ya está adjunto». El zip trae cada PDF con el nombre de su referencia en Diez.

@@ -226,7 +226,6 @@
 
 /* C06b R7 · Pendientes de adjuntar en Diez: una lista (no una tabla) que en el
    móvil apila el qué y los botones. */
-.cxp-pendientes-resumen { margin: 0 0 6px; font-size: 15px; }
 .cxp-pendientes { list-style: none; margin: 12px 0 0; padding: 0; }
 .cxp-pendiente { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
 .cxp-pendiente-que { min-width: 0; }
