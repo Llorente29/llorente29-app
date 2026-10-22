@@ -1,5 +1,6 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# S02 · el color de la empresa): sin company.color ni su comprobación. Para si
-# alguna empresa ya ha elegido su color.
-cuenta: scripts/conta/produccion/cuentas/color-empresa.sql
-supabase/vuelta-atras/20261202T0460_s02_color_empresa.down.sql
+# D02 · el PDF de las recibidas): sin conta_recibida_pdf ni sus funciones ni su
+# cron, y conta_documento_factura_guardar la de antes, byte a byte. Para si el
+# servidor ya ha hecho algún PDF. Lo enlazado a un asiento se queda.
+cuenta: scripts/conta/produccion/cuentas/d02-recibida-pdf.sql
+supabase/vuelta-atras/20261203T0470_d02_recibida_pdf.down.sql
