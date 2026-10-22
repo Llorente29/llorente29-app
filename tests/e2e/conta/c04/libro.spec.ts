@@ -54,7 +54,7 @@ async function abrirAsiento(page: Page, concepto: string) {
 }
 
 test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, Diez y lo que he hecho yo', async ({ page }) => {
-  await entrarComo(page, CUENTA_A.email)
+  const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/libros/diario')
   // M01: el título lo dicen las pestañas del marco (Diario › Libro diario); el encabezado, para el lector.
@@ -72,7 +72,12 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Plataformas · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {
     await expect(vistas.getByRole('button', { name: f })).toBeVisible()
   }
-  await expect(vistas.getByRole('button', { name: /^Banco · / })).toHaveCount(0)
+  // «Banco» sale solo si A tiene asientos del banco que son libro (validados o anulados: lo propuesto del
+  // banco se decide en Bancos › Por validar, S02 · PR 2). La semilla no trae ninguno, pero «Por validar»
+  // de b01 valida de verdad, y deshacerlo después los anula: se mira lo que hay, no lo que había (regla 31).
+  const banco = await rest<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')}&source_type=eq.bank&status=neq.propuesto&limit=1`)
+  expect(banco.status, JSON.stringify(banco.datos)).toBe(200)
+  await expect(vistas.getByRole('button', { name: /^Banco · \d+$/ })).toHaveCount(banco.datos.length)
   // «Te toca hoy»: lo que espera revisión, con su número (filtra al pulsarlo).
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()
   // El mes, en una línea: sus asientos, si está abierto y su resultado.
