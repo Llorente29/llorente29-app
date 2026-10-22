@@ -14,6 +14,8 @@ export default function LlevarACompras() {
   const { invoiceId } = useParams()
   const { search } = useLocation()
   if (invoiceId) return <Navigate replace to={`${rutaRevisarFactura(invoiceId)}${search}`} />
-  if (new URLSearchParams(search).toString() === CONSULTA_RECIBIDA_A_MANO) return <Navigate replace to={rutaRecibidaAMano()} />
+  // Con otros parámetros detrás (la marca, un origen…) sigue siendo «a mano».
+  const [clave, valor] = CONSULTA_RECIBIDA_A_MANO.split('=')
+  if (new URLSearchParams(search).get(clave) === valor) return <Navigate replace to={rutaRecibidaAMano()} />
   return <Navigate replace to={rutaRecibidaEnAsientos()} />
 }
