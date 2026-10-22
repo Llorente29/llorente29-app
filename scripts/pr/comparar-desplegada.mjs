@@ -60,7 +60,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const bajados = new Map()
   if (existsSync(bajada)) for (const f of todos(bajada)) bajados.set(rutaEnFunciones(relative(bajada, f)), readFileSync(f))
   const leerRepo = (r) => (existsSync(join(raiz, r)) ? readFileSync(join(raiz, r)) : null)
-  const usa = ficherosDeFuncion(fn, raiz).map((f) => f.slice(raiz.length + 1))
+  const usa = ficherosDeFuncion(fn, raiz, { soloEjecucion: true }).map((f) => f.slice(raiz.length + 1))
   const { bien, lineas } = comparar(fn, bajados, leerRepo, usa)
   console.log(`${fn}:`)
   for (const l of lineas) console.log(l)

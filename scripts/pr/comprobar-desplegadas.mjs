@@ -44,7 +44,7 @@ for (const fn of funciones) {
   const bajados = new Map()
   if (existsSync(bajada)) for (const f of todos(bajada)) bajados.set(rutaEnFunciones(relative(bajada, f)), readFileSync(f))
   const leerRepo = (r) => (existsSync(join(RAIZ, r)) ? readFileSync(join(RAIZ, r)) : null)
-  const usa = ficherosDeFuncion(fn).map((f) => f.slice(RAIZ.length + 1))
+  const usa = ficherosDeFuncion(fn, RAIZ, { soloEjecucion: true }).map((f) => f.slice(RAIZ.length + 1))
   const r = comparar(fn, bajados, leerRepo, usa)
   if (r.bien) iguales++; else distintas++
   md.push(`| \`${fn}\` | ${r.bien ? ':white_check_mark: igual' : ':x: no es la de este commit'} |`)

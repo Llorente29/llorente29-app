@@ -10,14 +10,23 @@ import { dirname, join, normalize } from 'node:path'
 
 export const RAIZ = 'supabase/functions'
 
-const importsDe = (fichero) => {
+// Un «import type …» o «export type … from» lo quita Deno al empaquetar: el
+// fichero que solo se importa así no se despliega (catcherTipos.ts, 22/10).
+const SOLO_TIPOS = /(?:^|[;\n])\s*(?:import|export)\s+type\s[^;]*?from\s*['"][^'"]+['"]/g
+
+const importsDe = (fichero, soloEjecucion = false) => {
   if (!existsSync(fichero)) return []
-  const src = readFileSync(fichero, 'utf8')
+  let src = readFileSync(fichero, 'utf8')
+  if (soloEjecucion) src = src.replace(SOLO_TIPOS, '\n')
   return [...src.matchAll(/(?:from|import)\s*\(?\s*['"](\.{1,2}\/[^'"]+)['"]/g)].map((m) => normalize(join(dirname(fichero), m[1])))
 }
 
-/** Todos los ficheros que usa una función: los de su carpeta y lo que importan, directa o indirectamente. */
-export function ficherosDeFuncion(fn, raiz = RAIZ) {
+/**
+ * Todos los ficheros que usa una función: los de su carpeta y lo que importan,
+ * directa o indirectamente. Con `soloEjecucion`, sin los que solo se importan
+ * como tipos: los que de verdad van en lo desplegado.
+ */
+export function ficherosDeFuncion(fn, raiz = RAIZ, { soloEjecucion = false } = {}) {
   const dir = join(raiz, fn)
   const vistos = new Set()
   const pendientes = readdirSync(dir).filter((f) => /\.(ts|js|mjs)$/.test(f)).map((f) => join(dir, f))
@@ -25,7 +34,7 @@ export function ficherosDeFuncion(fn, raiz = RAIZ) {
     const f = pendientes.pop()
     if (vistos.has(f) || !existsSync(f)) continue
     vistos.add(f)
-    pendientes.push(...importsDe(f))
+    pendientes.push(...importsDe(f, soloEjecucion))
   }
   return [...vistos].sort()
 }
