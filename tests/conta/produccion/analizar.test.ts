@@ -1459,12 +1459,70 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): S02 · el color de la empresa (0460)', () => {
+describe('la tanda de AHORA (manifiesto vivo): D02 · el PDF de las recibidas (0470)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 22/10 (se vuelve a medir con el número nuevo), para ESTE fichero.
+  // lectura en producción el 22/10 a las 17:17 UTC, con la 0460 ya aplicada, para ESTE fichero.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261203_d02_recibida_pdf_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261203T0470_d02_recibida_pdf.down.sql'
+  const GUARDAR = 'public.conta_documento_factura_guardar(uuid,text,text,text,integer,text)'
+  const cuerpo = (t: string) => t.slice(t.indexOf('create or replace function public.conta_documento_factura_guardar')).split('$function$')[1]
+
+  it('un fichero, el medido; sigue sin «autorizo»; de lo que toca solo existe la función de guardar el documento; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261203T0470_d02_recibida_pdf.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(viva.map((f) => r.ficheros[f])).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual([])
+    expect(ctx.funciones).toEqual([GUARDAR])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('el cambio de la función va declarado en la cabecera, con su prueba de staging, que entra como usuario y como servidor y ejecuta la vuelta atrás', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual([`-- cambia: public.conta_documento_factura_guardar · prueba: ${PRUEBA}`])
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of ['conta_documento_factura_guardar', 'set local role authenticated', 'set local role service_role', 'rollback;', `\\i ${DOWN}`, 'dbc3443e216fe2a6b5131f40d2d04240']) expect(p).toContain(x)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+  })
+  it('la función cambia SOLO en sus dos comprobaciones de quién llama, y la vuelta atrás la deja como estaba', () => {
+    const nueva = cuerpo(readFileSync(viva[0], 'utf8'))
+    const antes = cuerpo(readFileSync(DOWN, 'utf8'))
+    expect(nueva.replaceAll(" or auth.role() = 'service_role')", '').replace('not (public.belongs_to_account(v_e.account_id)', 'not public.belongs_to_account(v_e.account_id)')
+      .replace('if not (public.current_user_is_admin_or_manager_of(v_e.account_id)', 'if not public.current_user_is_admin_or_manager_of(v_e.account_id)')).toBe(antes)
+    expect(nueva.match(/auth\.role\(\) = 'service_role'/g)).toHaveLength(2)
+  })
+  it('no toca filas: solo crea y reemplaza; lo que escribe va dentro de las funciones', () => {
+    const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '').replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, '$$$$')
+    expect(t).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|truncate|drop\s+table|alter\s+table\s+public\.(?!conta_recibida_pdf))/i)
+  })
+  it('declara qué cuenta; la cuenta solo lee y es de Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d02-recibida-pdf.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+  })
+})
+
+describe('la tanda del S02 · el color de la empresa (0460, aplicada; su copia)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-s02-color-empresa-20261022.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 22/10 (se vuelve a medir con el número nuevo), para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-s02-color-empresa-20261022.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1504,7 +1562,7 @@ describe('la tanda de AHORA (manifiesto vivo): S02 · el color de la empresa (04
     expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
   })
   it('su vuelta atrás', () => {
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-s02-color-empresa-20261022.txt')).toEqual([DOWN])
   })
 })
 

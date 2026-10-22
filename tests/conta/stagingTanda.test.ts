@@ -32,10 +32,10 @@ describe('lo que añade una rama o un push al manifiesto', () => {
 
 describe('qué se puede ensayar en ROLLBACK', () => {
   const hoy = lineas(readFileSync(MANIFIESTO, 'utf8'))
-  it('los 100 ficheros del manifiesto de hoy (sin W03, con la 0450 y su prueba y con la 0460 del S02 y la suya) se ensayan, y 46 llevan su propia transacción', () => {
-    expect(hoy).toHaveLength(100)
+  it('los 102 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02 y la 0470 del D02, cada una con su prueba) se ensayan, y 47 llevan su propia transacción', () => {
+    expect(hoy).toHaveLength(102)
     expect(hoy.filter((f) => porQueNoSeEnsaya(readFileSync(f, 'utf8')))).toEqual([])
-    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(46)
+    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(47)
   })
   it('una migración vieja con COMMIT no se ensaya: dejaría cosas de verdad', () => {
     const f = 'supabase/migrations/20260923T0015_casar_el_combo_por_su_id.sql'
@@ -88,6 +88,12 @@ end $$;`
       const ruta = `supabase/migrations/${f}.sql`
       expect(porQueNoSoloAnade(ruta, readFileSync(ruta, 'utf8'), ctx), f).toMatch(new RegExp(`reemplaza funcion public\\.${fn}`))
     }
+  })
+  it('la 0470 del D02 cambia conta_documento_factura_guardar (que existe): solo en ROLLBACK; sin ella, solo añadiría', () => {
+    const ruta = 'supabase/migrations/20261203T0470_d02_recibida_pdf.sql'
+    const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+    expect(porQueNoSoloAnade(ruta, readFileSync(ruta, 'utf8'), medida)).toMatch(/reemplaza funcion public\.conta_documento_factura_guardar/)
+    expect(porQueNoSoloAnade(ruta, readFileSync(ruta, 'utf8'), { tablas: [], funciones: [] })).toBeNull()
   })
   it('una función nueva solo añade; la misma, si ya existe, la cambia; una prueba de staging nunca va de verdad', () => {
     const sql = 'create or replace function public.nueva_w05(p uuid) returns int language sql as $$ select 1 $$;'

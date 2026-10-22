@@ -1,17 +1,15 @@
 {
-  "_que": "S02 · PR 1 · el color de la empresa · contexto de producción de la tanda viva (20261202T0460), medido en SOLO LECTURA el 22/10 a las 15:26 UTC, con la 0450 del C07 ya aplicada (la última del historial: 20261201T0450_c07_diez_todo), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. public.company existe y no está en el camino del pedido; company.color y company_color_formato aún no existen (information_schema.columns y pg_constraint: 0); nada en el historial.",
-  "medido": "2026-10-22T15:26Z",
+  "_que": "D02 · el PDF de las recibidas · contexto de producción de la tanda viva (20261203T0470), medido en SOLO LECTURA el 22/10 a las 17:17 UTC, con la 0460 del S02 ya aplicada (la última del historial: 20261202T0460_s02_color_empresa), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la 0470 solo existe public.conta_documento_factura_guardar (md5 dbc3443e216fe2a6b5131f40d2d04240), sin hermanas; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-22T17:17Z",
   "tanda": {
-    "supabase/migrations/20261202T0460_s02_color_empresa.sql": "3ad9c0e24de1153668e6b1fb78a46d0a"
+    "supabase/migrations/20261203T0470_d02_recibida_pdf.sql": "87ed311c1c71fd23a244528d5f79a97c"
   },
   "contexto": {
-    "tablas": [
-      "public.company"
+    "tablas": [],
+    "funciones": [
+      "public.conta_documento_factura_guardar(uuid,text,text,text,integer,text)"
     ],
-    "funciones": [],
-    "filas": {
-      "public.company": 0
-    },
+    "filas": {},
     "otras": {},
     "camino": {
       "tablas": [],

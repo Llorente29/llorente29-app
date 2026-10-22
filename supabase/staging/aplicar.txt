@@ -446,3 +446,13 @@ supabase/migrations/20261201T0450_c07_diez_todo.sql
 #   Desde la rama va en ROLLBACK (W04); de verdad, desde main después del real.
 supabase/migrations/20261202T0460_s02_color_empresa.sql
 supabase/staging/sql/20261202_s02_color_empresa_prueba.sql
+# D02 · el PDF de las recibidas (rama conta/d02-imagen-pdf; Julio, 22/10).
+#   La 0470 añade conta_recibida_pdf y las funciones del servidor que hacen el
+#   PDF de una recibida que entra como foto y lo enlazan a su asiento validado,
+#   y deja que el servidor llame a conta_documento_factura_guardar. Su prueba
+#   (ROLLBACK): lo que falta por convertir, cogerlo, apuntar lo hecho y lo
+#   fallado, enlazar (y despertar su envío a Diez), quién lee, y la vuelta atrás
+#   byte a byte. Cambia una función: desde la rama va en ROLLBACK (W05); de
+#   verdad, desde main después del real.
+supabase/migrations/20261203T0470_d02_recibida_pdf.sql
+supabase/staging/sql/20261203_d02_recibida_pdf_prueba.sql

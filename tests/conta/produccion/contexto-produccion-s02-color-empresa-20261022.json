@@ -1,0 +1,23 @@
+{
+  "_que": "S02 · PR 1 · el color de la empresa · contexto de producción de la tanda viva (20261202T0460), medido en SOLO LECTURA el 22/10 a las 15:26 UTC, con la 0450 del C07 ya aplicada (la última del historial: 20261201T0450_c07_diez_todo), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. public.company existe y no está en el camino del pedido; company.color y company_color_formato aún no existen (information_schema.columns y pg_constraint: 0); nada en el historial.",
+  "medido": "2026-10-22T15:26Z",
+  "tanda": {
+    "supabase/migrations/20261202T0460_s02_color_empresa.sql": "3ad9c0e24de1153668e6b1fb78a46d0a"
+  },
+  "contexto": {
+    "tablas": [
+      "public.company"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.company": 0
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}
