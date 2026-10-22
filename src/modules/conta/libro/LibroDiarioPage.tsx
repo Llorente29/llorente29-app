@@ -413,7 +413,7 @@ export default function LibroDiarioPage() {
       <Guardado texto={hecho} />
       {propuestoAhora && datos && facturasEnCompras > 0 && (
         <p className="cx-ayuda" role="note">
-          {facturasEnCompras === 1 ? 'Una factura propuesta espera' : `${miles(facturasEnCompras)} facturas propuestas esperan`} en {NOMBRE_SITIO.recibidas}: se validan allí, con su papel al lado.{' '}
+          {facturasEnCompras === 1 ? 'Una factura propuesta espera' : `${miles(facturasEnCompras)} facturas propuestas esperan`} en {NOMBRE_SITIO.recibidas}: se validan allí, con la factura al lado.{' '}
           <Link to={rutaDocumentos('por-revisar')} className="cx-enlace">Revisarlas</Link>
         </p>
       )}
