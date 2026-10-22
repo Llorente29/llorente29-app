@@ -141,15 +141,18 @@ export const PRODUCTOS: Producto[] = [
         prefijos: [R.libros, R.diarioResumido, `${R.libros}/mayor`, `${R.libros}/registro`, `${R.libros}/balances`, 'plan'],
       },
       { id: 'definiciones', etiqueta: 'Definiciones', icono: 'definiciones', ruta: R.plan, prefijos: [R.plan, R.tablas, R.analitica] },
-      { id: 'cierre', etiqueta: 'Cierre y Registro', icono: 'cierre', ruta: `${R.libros}/cierre/ejercicios`, prefijos: [`${R.libros}/cierre`, `${R.libros}/anuales`] },
+      // S02 · PR 2: el cierre del mes del banco vive aquí, junto al de la contabilidad (bancos/cierre lleva aquí).
+      { id: 'cierre', etiqueta: 'Cierre y Registro', icono: 'cierre', ruta: `${R.libros}/cierre/ejercicios`, prefijos: [`${R.libros}/cierre`, `${R.libros}/anuales`, `${R.bancos}/cierre`] },
       { id: 'importar', etiqueta: 'Importar', icono: 'importar', ruta: R.pendientesDiez, prefijos: [R.pendientesDiez], solo: 'diez' },
     ],
   },
   {
-    // S02 · Facturas emitidas · Cobros · Series. Aún sin pantalla: no sale.
-    id: 'facturacion', etiqueta: 'Facturación', icono: 'facturacion', ruta: null, prefijos: [], interruptor: 'conta_facturacion', grupo: 'finanzas',
+    // S02 · Facturas emitidas · Cobros · Series. PR 2 (decisión 5 de Julio): la
+    // emitida pasa aquí y Facturación sale en la barra con ella. Cobros y Series,
+    // aún sin pantalla: no salen.
+    id: 'facturacion', etiqueta: 'Facturación', icono: 'facturacion', ruta: R.facturasEmitidas, prefijos: [], grupo: 'finanzas',
     pestanas: [
-      { id: 'emitidas', etiqueta: 'Facturas emitidas', icono: 'facturas', ruta: null, prefijos: [] },
+      { id: 'emitidas', etiqueta: 'Facturas emitidas', icono: 'facturas', ruta: R.facturasEmitidas, prefijos: [R.facturasEmitidas] },
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: null, prefijos: [] },
       { id: 'series', etiqueta: 'Series', icono: 'plantillas', ruta: null, prefijos: [] },
     ],
@@ -172,8 +175,6 @@ export const PRODUCTOS: Producto[] = [
       { id: 'movimientos', etiqueta: 'Movimientos', icono: 'movimientos', ruta: R.bancos, prefijos: [R.bancos] },
       { id: 'cuentas', etiqueta: 'Cuentas y extractos', icono: 'cuentasBanco', ruta: `${R.bancos}/cuentas`, prefijos: [`${R.bancos}/cuentas`] },
       { id: 'reglas', etiqueta: 'Reglas', icono: 'reglas', ruta: `${R.bancos}/reglas`, prefijos: [`${R.bancos}/reglas`] },
-      // Se muda a Contabilidad › Cierre y Registro en el PR 2 del S02.
-      { id: 'cierre', etiqueta: 'Cierre del mes', icono: 'cierreMes', ruta: `${R.bancos}/cierre`, prefijos: [`${R.bancos}/cierre`] },
     ],
   },
   {

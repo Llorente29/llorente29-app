@@ -218,8 +218,13 @@ export const CONTA = {
     revisarFactura: 'documentos/recibidas/:invoiceId',
     /** S01 · La misma factura recibida vista desde Contabilidad › Asientos (maqueta 3): la primera para revisar… */
     recibidasEnAsientos: 'libros/diario/recibidas',
-    /** …y una en concreto. Mismo componente que revisarFactura, con el marco de Asientos. */
+    /** …y una en concreto. S02 · PR 2: las dos se quedan solo para llevar a Compras (module.tsx). */
     recibidaEnAsientos: 'libros/diario/recibidas/:invoiceId',
+    /** S02 · PR 2 · Una factura recibida escrita a mano, sin papel (antes, libros/diario/recibidas?nueva=a-mano). */
+    recibidaAMano: 'documentos/nueva',
+    /** S02 · PR 2 · Facturación › Facturas emitidas, y una nueva (la hoja del asiento con la factura). */
+    facturasEmitidas: 'facturacion/emitidas',
+    nuevaEmitida: 'facturacion/emitidas/nueva',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
@@ -347,12 +352,19 @@ export const rutaDocumentos = (ver?: string, mes?: string): string => {
 }
 /** D01 · N23. */
 export const rutaRevisarFactura = (invoiceId: string): string => rutaConta(CONTA.rutas.revisarFactura, { invoiceId })
-/** S01 · La factura recibida desde Contabilidad › Asientos (sin id: la primera para revisar). */
+/**
+ * S02 · PR 2 · Las recibidas son de Compras y gastos (regla 1 del patrón: cada
+ * cosa en un sitio). Sin id, la lista en «Por revisar»; con id, su ficha.
+ */
 export const rutaRecibidaEnAsientos = (invoiceId?: string): string =>
-  invoiceId ? rutaConta(CONTA.rutas.recibidaEnAsientos, { invoiceId }) : rutaConta(CONTA.rutas.recibidasEnAsientos)
-/** S01d · «Nueva recibida a mano»: la misma dirección de Recibidas, con ?nueva=a-mano (no salta a la primera para revisar). */
+  invoiceId ? rutaRevisarFactura(invoiceId) : `${rutaConta(CONTA.rutas.documentos)}?ver=por-revisar`
+/** S01d · La consulta de antes para «Nueva recibida a mano» (libros/diario/recibidas?nueva=a-mano): module.tsx la lleva a Compras. */
 export const CONSULTA_RECIBIDA_A_MANO = 'nueva=a-mano'
-export const rutaRecibidaAMano = (): string => `${rutaConta(CONTA.rutas.recibidasEnAsientos)}?${CONSULTA_RECIBIDA_A_MANO}`
+/** S02 · PR 2 · «Escribir una a mano», en Compras y gastos › Facturas recibidas. */
+export const rutaRecibidaAMano = (): string => rutaConta(CONTA.rutas.recibidaAMano)
+/** S02 · PR 2 · Facturación › Facturas emitidas, y una nueva. */
+export const rutaFacturasEmitidas = (): string => rutaConta(CONTA.rutas.facturasEmitidas)
+export const rutaNuevaEmitida = (): string => rutaConta(CONTA.rutas.nuevaEmitida)
 /** E05 · Una quincena de Catcher. */
 export const rutaLoteCatcher = (loteId: string): string => rutaConta(CONTA.rutas.loteCatcher, { loteId })
 /** Bancos (B01): sin pestaña, Movimientos. */

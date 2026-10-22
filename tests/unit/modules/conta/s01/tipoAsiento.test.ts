@@ -1,3 +1,4 @@
+import { CONTA } from '@/config/navegacion'
 import { describe, expect, it } from 'vitest'
 import { lineasDePredefinido, predefinidoDeMano, tipoDeAsiento, TIPOS_ASIENTO } from '@/modules/conta/lib/tipoAsiento'
 import { ORDENES } from '@/modules/conta/esqueleto/ordenes'
@@ -19,6 +20,8 @@ describe('S01 · ?tipo= del asiento a mano', () => {
       const ruta = 'ruta' in o.a ? o.a.ruta : ''
       const m = /[?&]tipo=([^&]+)/.exec(ruta)
       if (m) tipos.add(m[1])
+      // S02 · PR 2: la expedida se abre en su sitio, Facturación › Nueva factura emitida (sin ?tipo=).
+      if (ruta === CONTA.rutas.nuevaEmitida) tipos.add('expedida')
     }
     expect([...tipos].sort()).toEqual(Object.keys(TIPOS_ASIENTO).sort())
     for (const t of tipos) expect(tipoDeAsiento(t)).not.toBeNull()

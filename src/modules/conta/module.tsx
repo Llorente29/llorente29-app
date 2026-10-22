@@ -29,7 +29,9 @@ import FichaTerceroPage from '@/modules/conta/terceros/FichaTerceroPage'
 import LibrosPage from '@/modules/conta/libros/LibrosPage'
 import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
-import RecibidasEnAsientos from '@/modules/conta/documentos/RecibidasEnAsientos'
+import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
+import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
+import FacturasEmitidasPage from '@/modules/conta/facturacion/FacturasEmitidasPage'
 import LoteCatcherPage from '@/modules/conta/documentos/LoteCatcherPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
 import NuevoAsientoPage from '@/modules/conta/libro/NuevoAsientoPage'
@@ -130,8 +132,13 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },
     // S01 · La factura recibida desde Contabilidad › Asientos (maqueta 3): el mismo componente que N23.
-    { path: CONTA.rutas.recibidasEnAsientos, element: enMarco(<RecibidasEnAsientos />, '¿A qué cuenta va esta factura?', true) },
-    { path: CONTA.rutas.recibidaEnAsientos, element: enMarco(<RevisarFacturaPage enAsientos />, '¿A qué cuenta va esta factura?', true) },
+    // S02 · PR 2: las recibidas son de Compras y gastos; las direcciones de antes llevan allí.
+    { path: CONTA.rutas.recibidasEnAsientos, element: <LlevarACompras /> },
+    { path: CONTA.rutas.recibidaEnAsientos, element: <LlevarACompras /> },
+    { path: CONTA.rutas.recibidaAMano, element: enMarco(<RecibidaAMano />, '¿A qué cuenta va esta factura?', true) },
+    // S02 · PR 2: Facturación › Facturas emitidas, y una nueva (la hoja del asiento, tipo expedida).
+    { path: CONTA.rutas.facturasEmitidas, element: enMarco(<FacturasEmitidasPage />, '¿Cuánto he facturado este mes?', true) },
+    { path: CONTA.rutas.nuevaEmitida, element: enMarco(<NuevoAsientoPage tipo="expedida" />, '¿Qué IVA lleva esta factura?', true) },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
     // S02 · La muestra del patrón único: las seis plantillas (datos inventados), solo fuera de
     // producción. Sustituye a las dos de antes (las piezas del M01 y el sistema de diseño del S01).

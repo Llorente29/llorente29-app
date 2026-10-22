@@ -38,14 +38,15 @@ describe('las acciones de una página, con la regla del patrón', () => {
     const r = repartirAcciones(resueltas('contabilidad', 'asientos', '/conta/libros/diario', '?ver=revisar'))
     expect(r.selectores.map((s) => [s.titulo, s.actual?.etiqueta])).toEqual([['Ver', 'Para revisar']])
     expect(r.principal).toBeNull()
-    expect(r.blancos.map((a) => a.etiqueta)).toEqual(['Expedida', 'Recibida'])
+    // S02 · PR 2: la emitida y las recibidas salieron de Asientos (Facturación, Compras y gastos).
+    expect(r.blancos.map((a) => a.etiqueta)).toEqual(['Tesorería', 'General'])
     expect(r.mas.map((g) => g.titulo)).toEqual(['Nuevo', 'Utilidades'])
   })
   it('con la barra de la página (el libro diario), todo lo del catálogo va a «Más acciones»: no compite con su principal', () => {
     const r = repartirAcciones(resueltas('contabilidad', 'asientos'), true)
     expect(r.principal).toBeNull()
     expect(r.blancos).toEqual([])
-    expect(r.mas.flatMap((g) => g.acciones).length).toBe(8)
+    expect(r.mas.flatMap((g) => g.acciones).length).toBe(4)
   })
   it('Bancos: «Subir extracto» es el principal; los bancos de la pantalla, un selector', () => {
     const g: GrupoDeAcciones[] = [
