@@ -123,6 +123,11 @@ verify_jwt = true
 [functions.conta-diez-enviar]
 verify_jwt = true
 
+# C07 (22/10): el servidor manda a Diez lo que se queda atrás. La despierta el
+# cron conta-diez-despertar con x-cron-secret (CRON_SECRET), sin sesión.
+[functions.conta-diez-cola]
+verify_jwt = false
+
 # (13/10) conta-facturas-entrada · D01. El webhook de Resend para las facturas
 # que se reenvían a facturas-<empresa>@entrada.folvy.app. verify_jwt = false:
 # es un webhook externo; la seguridad la da la firma de svix

@@ -63,7 +63,9 @@ describe('la entera en trozos', () => {
     // da 15,1 (21/10, al traer main). Un solo techo: 15,5 min.
     // 21/10 (autoconteo): entran medidos i01h/sociedades (26,5 s) e inventario/autoconteo (55,9 s,
     // e2e 761). El reparto estimado da 15,6: el techo pasa a 16 min. Lo mide la entera de la tanda.
-    expect(Math.max(...seg) / 60).toBeLessThan(16)
+    // 22/10 (C07): entran medidos i01h/en-vivo (20,6 s, del #281) y c06/diezTodo (85,0 s, e2e
+    // 39735848930). El reparto estimado da 16,04: el techo pasa a 16,5 min. Lo mide la entera de la tanda.
+    expect(Math.max(...seg) / 60).toBeLessThan(16.5)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {

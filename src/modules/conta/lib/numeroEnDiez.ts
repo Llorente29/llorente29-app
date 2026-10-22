@@ -24,7 +24,8 @@ export interface NumeroDiez {
 const conSerie = (serie: string | null, numero: string): string => `${serie && serie !== '1' ? `${serie}/` : ''}${numero}`
 const numeroBonito = (n: string): string => (/^\d+$/.test(n) ? miles(Number(n)) : n)
 
-export function numeroEnDiez(a: { estado: string; traido: { programa: string; serie: string | null; numero: string | null } | null }, d?: ConDiez | null): NumeroDiez {
+// C07: el envío de cualquier asiento (no solo el de una venta de plataforma).
+export function numeroEnDiez(a: { estado: string; traido: { programa: string; serie: string | null; numero: string | null } | null }, d?: Pick<ConDiez, 'envio'> | { envio: { status: string; serie: string | null; numero: number | null } | null } | null): NumeroDiez {
   const e = d?.envio
   if (e && (e.status === 'enviado' || e.status === 'enlazado') && e.numero != null) {
     const n = String(e.numero)

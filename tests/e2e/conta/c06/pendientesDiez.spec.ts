@@ -40,6 +40,8 @@ async function porLaRed(page: Page) {
     ...(contraEnDiez ? [{ entry_id: ID(5), ext_year: '2026', ext_series: '1', ext_number: 9904, ext_invoice_number: 'UBR-PRU-20260930-ANUL', sent_at: '2026-10-14T10:00:00Z', document_status: null }] : [])]
   // S01: la pestaña «Importar» (y su entrada en la cinta) es de las empresas que trabajan con Diez (conta_diez_base).
   await page.route(/\/rest\/v1\/conta_diez_base\?/, (r) => json(r, { company_id: 'empresa-de-la-prueba' }))
+  // C07: y solo con «Enviar a Diez» encendido (apagado, las pantallas no hablan de Diez).
+  await page.route(/\/rest\/v1\/conta_diez_envio_empresa\?/, (r) => json(r, { enviar: true, desde: '2026-10-01', cambiado_por_nombre: null, cambiado_en: null }))
   await page.route(/\/rest\/v1\/external_send\?/, async (r) => {
     const pendientes = envios().filter((e, i) => e.document_status === 'pendiente_diez' && ASIENTOS[i].status !== 'anulado').length
     // Como PostgREST: el recuento va en content-range, y el navegador solo lo deja leer si se expone por CORS.
