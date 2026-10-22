@@ -1,4 +1,5 @@
-# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
+# Vuelta atrás de la tanda de I01d (0420, PR #281, ya aplicada; su copia:
+# tanda-i01d-impuestos-2025-20261022.txt;
 # I01d · los impuestos de 2025): conta_impuesto_trimestre como en la 0280.
 cuenta: scripts/conta/produccion/cuentas/impuestos-2025.sql
 supabase/vuelta-atras/20261130T0420_i01d_impuestos_2025.down.sql

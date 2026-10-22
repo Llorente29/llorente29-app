@@ -3,12 +3,12 @@
 // S02 · El color de la empresa activa: la franja de arriba de la cabecera
 // (--s-franja-empresa) y el cuadrado con su inicial, del mismo color (encargo
 // S02, «Cabecera»). Lo elige la empresa en Ajustes › Tu empresa
-// (company.color, '#RRGGBB', 0440). Sin elegir, uno de los ocho de serie
+// (company.color, '#RRGGBB', 0460). Sin elegir, uno de los ocho de serie
 // (--s-empresa-1…8, diseno/tokens.css) por su inicial: la misma empresa sale
 // siempre del mismo color, y dos empresas con distinta inicial casi nunca
 // coinciden. Núcleo puro: se prueba sin React.
 
-/** Lo que guarda company.color: '#RRGGBB'. La base lo comprueba igual (0440). */
+/** Lo que guarda company.color: '#RRGGBB'. La base lo comprueba igual (0460). */
 export const FORMATO_COLOR = /^#[0-9A-Fa-f]{6}$/
 
 /** Cuántos colores de serie hay (--s-empresa-1…N en diseno/tokens.css). */

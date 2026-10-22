@@ -25,6 +25,8 @@ import { ParaPresentar } from '@/modules/conta/empresa/ApartadoPresentar'
 import { RegistroPlan } from '@/modules/conta/plan/RegistroPlan'
 import { DeshacerTraido } from '@/modules/conta/plan/DeshacerTraido'
 import { ApartadoCorte } from '@/modules/conta/empresa/ApartadoCorte'
+import { ApartadoEnviarDiez } from '@/modules/conta/empresa/ApartadoEnviarDiez'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { ApartadoCierreDelDia } from '@/modules/conta/empresa/ApartadoCierreDelDia'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
@@ -45,6 +47,7 @@ function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
 function Entrada({ id }: { id: string }) {
   const { datos, plan, quien, movil, hoy } = useAjustes()
   const hosteleria = useHosteleria()
+  const { userName } = useCuentaConta()
   // C02c: lo que ha hecho «Deshacer entero» del plan traído, en una frase (el botón desaparece al recargar).
   const [aviso, setAviso] = useState<string | null>(null)
   const e = entradaAjustes(id)!
@@ -93,7 +96,8 @@ function Entrada({ id }: { id: string }) {
       )
     case 'socios': return <>{cabeza}<Socios {...p} /></>
     // La hora de cierre del día es de pedidos: solo en una empresa de hostelería (inventario del S01, §3).
-    case 'ejercicio': return <>{cabeza}<EjercicioMeses {...p} /><ApartadoCorte quien={quien} movil={movil} alCambiar={datos.recargar} />{hosteleria && <ApartadoCierreDelDia quien={quien} movil={movil} />}</>
+    // C07: «Enviar a Diez», junto a «Desde cuándo asienta» (solo en una empresa que trabaja con Diez).
+    case 'ejercicio': return <>{cabeza}<EjercicioMeses {...p} /><ApartadoCorte quien={quien} movil={movil} alCambiar={datos.recargar} /><ApartadoEnviarDiez quien={quien} movil={movil} nombre={userName ?? null} />{hosteleria && <ApartadoCierreDelDia quien={quien} movil={movil} />}</>
     case 'folvy':
       return (
         <>

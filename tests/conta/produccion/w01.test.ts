@@ -537,24 +537,33 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (S02, el color de la empresa: la 0440 sigue; ningún «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (S02, el color de la empresa: la 0460 sigue; ningún «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261202T0440_s02_color_empresa.sql: sigue')
+    expect(r.out).toContain('20261202T0460_s02_color_empresa.sql: sigue')
     expect(r.out).toContain('autorizo: (ninguno)')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261202T0440_s02_color_empresa.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261202T0460_s02_color_empresa.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261202T0440_s02_color_empresa.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261202T0460_s02_color_empresa.sql ha cambiado desde la medida')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del C07 (0450, su copia), con su contexto medido', () => {
+  it('la 0450 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c07-diez-todo-20261022.json',
+      '--manifiesto=tests/conta/produccion/tanda-c07-diez-todo-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261201T0450_c07_diez_todo.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
   })
 })
 
 describe('R11 · paso 8 sobre la tanda de los impuestos de 2025 (I01d, 0420, su copia), con su contexto medido', () => {
-  it('la 0420 sigue; ningún «autorizo»', () => {
+  it('la 0420 de I01d sigue; ningún «autorizo»', () => {
     const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01d-impuestos-2025-20261022.json',
       '--manifiesto=tests/conta/produccion/tanda-i01d-impuestos-2025-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
     expect(out).toContain('20261130T0420_i01d_impuestos_2025.sql: sigue')

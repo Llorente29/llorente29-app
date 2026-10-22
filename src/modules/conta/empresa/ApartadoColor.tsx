@@ -4,7 +4,7 @@
 // franja de 3 px de la cabecera y el cuadrado de la inicial, en el color de la
 // empresa activa). Se elige uno de los ocho del patrón (--s-empresa-1…8 de
 // diseno/tokens.css, todos con texto blanco a ≥ 4,5:1) o se deja el de serie,
-// que sale de su inicial. Se guarda en company.color ('#RRGGBB', 0440).
+// que sale de su inicial. Se guarda en company.color ('#RRGGBB', 0460).
 //
 // Regla 8: elegir dice lo que ha pasado («Color guardado: ya sale en la
 // cabecera»); si la base no lo guarda, se dice y no cambia nada.

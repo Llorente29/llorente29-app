@@ -1,3 +1,6 @@
+# COPIA ARCHIVADA de la tanda de I01d · los impuestos de 2025 (0420, PR #281, ya
+# aplicada en producción; la viva pasó a la del C07). Era:
+#
 # Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
 # .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
 # (todo en una transacción y rollback, con el registro dentro) y, con un
@@ -17,6 +20,6 @@
 #      tabla ni ninguna fila.
 #
 # No toca el camino del pedido. Ninguna función que desplegar a mano.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+# Vuelta atrás: tests/conta/produccion/vuelta-atras-i01d-impuestos-2025-20261022.txt.
 cuenta: scripts/conta/produccion/cuentas/impuestos-2025.sql
 supabase/migrations/20261130T0420_i01d_impuestos_2025.sql

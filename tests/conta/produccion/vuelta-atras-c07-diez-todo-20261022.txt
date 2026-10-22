@@ -1,0 +1,10 @@
+# Vuelta atrás de la tanda del C07 (0450, PR #282, ya aplicada; su copia:
+# tanda-c07-diez-todo-20261022.txt). Era:
+#
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt):
+# conta_resumen_ventas y conta_recibida_envio vuelven a los cuerpos de
+# producción del 22/10, tal cual; fuera el cron, las funciones nuevas, el
+# interruptor y las dos columnas. Para, sin tocar nada, si ya hay asientos
+# generales en Diez.
+cuenta: scripts/conta/produccion/cuentas/diez-todo.sql
+supabase/vuelta-atras/20261201T0450_c07_diez_todo.down.sql

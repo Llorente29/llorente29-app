@@ -93,7 +93,7 @@ describe('el color de la empresa', () => {
     expect(inicialDeEmpresa('  29 Llorente')).toBe('2')
     expect(inicialDeEmpresa('')).toBe('·')
   })
-  it('lo que pinta el navegador se guarda como #RRGGBB, el mismo formato que comprueba la base (0440)', () => {
+  it('lo que pinta el navegador se guarda como #RRGGBB, el mismo formato que comprueba la base (0460)', () => {
     expect(aHex('rgb(11, 107, 103)')).toBe('#0B6B67')
     expect(aHex('#1e63c9')).toBe('#1E63C9')
     expect(aHex('var(--x)')).toBeNull()

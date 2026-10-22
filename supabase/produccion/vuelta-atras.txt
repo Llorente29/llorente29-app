@@ -2,4 +2,4 @@
 # S02 · el color de la empresa): sin company.color ni su comprobación. Para si
 # alguna empresa ya ha elegido su color.
 cuenta: scripts/conta/produccion/cuentas/color-empresa.sql
-supabase/vuelta-atras/20261202T0440_s02_color_empresa.down.sql
+supabase/vuelta-atras/20261202T0460_s02_color_empresa.down.sql

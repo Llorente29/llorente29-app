@@ -30,6 +30,7 @@ import { jsPDF } from 'jspdf'
 import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje, hayBase } from '@/modules/conta/services/bd'
 import { anular } from '@/modules/conta/services/diarioService'
+import { encendidoDelAsiento } from '@/modules/conta/services/envioDiezService'
 import { correspondenciaDeEmpresa } from '../../../../supabase/functions/_shared/diezAnalitica.ts'
 import { resumenDeAsiento, type ResumenBD } from '../../../../supabase/functions/_shared/resumenDeAsiento.ts'
 import { resumenVentasPdf } from '../../../../supabase/functions/_shared/resumenVentasPdf.ts'
@@ -290,7 +291,8 @@ export async function zipPendientesDiez(xs: readonly PendienteDiez[]): Promise<{
 export async function anularConDiez(entryId: string, motivo: string, fecha: string | null, quien: string | null): Promise<{ serie: number; numero: number; fecha: string; contraasiento: string; diez: ResultadoEnvio | null }> {
   const { data, error } = await tabla('external_send').select('status').eq('entry_id', entryId).in('status', ['enviado', 'enlazado']).limit(1)
   if (error) throw new Error(mensaje('No se ha podido mirar si está en Diez', error))
-  const enDiez = (data ?? []).length > 0
+  // C07: con «Enviar a Diez» apagado no se manda nada (ni se dice nada de Diez).
+  const enDiez = (data ?? []).length > 0 && await encendidoDelAsiento(entryId)
   const x = await anular(entryId, motivo, fecha, quien)
   return { ...x, diez: enDiez ? await enviarADiez(x.contraasiento) : null }
 }

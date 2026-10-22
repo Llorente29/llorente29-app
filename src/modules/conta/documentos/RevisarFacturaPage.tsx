@@ -9,8 +9,8 @@
 //   · A la izquierda, por bloques: el VEREDICTO de la IA con su motivo y «Por
 //     qué» (veredicto.ts); proveedor y factura; importes; a qué gasto va (con
 //     PROPUESTO y su motivo); el pago; y, abajo y desplegable, el asiento que
-//     se crea, con «Cuadra» y, si la empresa trabaja con Diez, «Al validar se
-//     envía también a Diez».
+//     se crea, con «Cuadra» y, si la empresa tiene «Enviar a Diez» encendido (C07),
+//     «Al validar se envía también a Diez».
 //   · A la derecha, el PDF: grande, ampliable a pantalla completa y plegable
 //     (se recuerda por persona).
 //   · Teclado (regla 5 del patrón): Intro valida y pasa a la siguiente, las
@@ -29,6 +29,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaCompras, rutaDocumentos, rutaLibroDiario, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
@@ -83,6 +84,8 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   const [vuelta, setVuelta] = useState(0)
   const f = useLeer(invoiceId ? () => leerFactura(invoiceId) : null, `${invoiceId}:${vuelta}`)
   const fac = f.datos
+  // C07: con «Enviar a Diez» apagado para la empresa, ni una palabra de Diez.
+  const enviaADiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio?.encendido === true
   const hoy = hoyEnMadrid()
 
   // La cola de la lista de la que se vino, con sus filtros y su orden: «3 de 9», ‹ y ›.
@@ -239,7 +242,7 @@ export default function RevisarFacturaPage({ enAsientos = false }: { enAsientos?
   const lineasAsiento = (propuesta?.lineas ?? []).map((x) => ({
     nombre: nombres?.get(x.cuenta) ?? 'Cuenta', codigo: x.cuenta, debe: x.debe ? importe(x.debe) : null, haber: x.haber ? importe(x.haber) : null,
   }))
-  const notaDiez = marco?.diez ? 'Al validar se envía también a Diez (sin el PDF: Diez aún no guarda documentos)' : undefined
+  const notaDiez = enviaADiez ? 'Al validar se envía también a Diez (sin el PDF: Diez aún no guarda documentos)' : undefined
   const tipos = fac.tipos.length > 0 ? fac.tipos : fac.base !== null ? [{ tipo: fac.lineas.length === 1 ? fac.lineas[0].iva ?? null : null, base: fac.base, cuota: fac.cuota ?? 0, recargo: null }] : []
   const esFoto = /^image\//.test(l?.tipo ?? '') || /\.(jpe?g|png|webp)$/i.test(l?.archivo ?? fac.papel ?? '')
   const sinPapel = !l && !fac.papel

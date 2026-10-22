@@ -1,6 +1,6 @@
 -- scripts/conta/produccion/cuentas/color-empresa.sql
 --
--- S02 · LO QUE CUENTA LA TANDA «EL COLOR DE LA EMPRESA» (0440), antes y
+-- S02 · LO QUE CUENTA LA TANDA «EL COLOR DE LA EMPRESA» (0460), antes y
 -- después. SOLO LEE. Antes: sin columna ni comprobación. Después: con las dos y
 -- ninguna empresa con color (la tanda no toca filas). Y que no se pierde ni se
 -- mueve ninguna empresa.

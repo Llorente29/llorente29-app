@@ -1,4 +1,4 @@
--- supabase/migrations/20261202T0440_s02_color_empresa.sql
+-- supabase/migrations/20261202T0460_s02_color_empresa.sql
 -- cambia: public.company · prueba: supabase/staging/sql/20261202_s02_color_empresa_prueba.sql
 --
 -- S02 · Patrón único de pantallas (Julio, 22/10: «Color de la empresa: columna
@@ -16,9 +16,10 @@
 --   2. company_color_formato: CHECK de que es '#RRGGBB'. Solo amplía lo que se
 --      puede guardar en una columna nueva: hoy no hay ninguna fila con color.
 --
--- Número: el siguiente por encima del más alto que existe, contando la 0430 del
--- C07 (rama conta/c07-diez-todo), que va antes. No depende de ella.
--- Vuelta atrás: supabase/vuelta-atras/20261202T0440_s02_color_empresa.down.sql.
+-- Número: el siguiente por encima del más alto que existe (Julio, 22/10): la
+-- 0440 es del #280 (aparcado) y la 0450 del C07 (#282, aplicada). No depende
+-- de ninguna de las dos.
+-- Vuelta atrás: supabase/vuelta-atras/20261202T0460_s02_color_empresa.down.sql.
 -- Prueba (rollback): supabase/staging/sql/20261202_s02_color_empresa_prueba.sql.
 
 alter table public.company add column if not exists color text;

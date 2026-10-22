@@ -5,21 +5,20 @@
 #
 # S02 · PR 1 del patrón único: el color de la empresa (rama
 # claude/cool-noether-i932tx; Julio, 22/10: «Color de la empresa: columna nueva
-# en el PR 1, con su tanda. Fusiona Julio»). Va DESPUÉS de la del C07 (0430,
-# conta/c07-diez-todo), que se aplica y se fusiona antes: no comparte con ella
-# ni tablas ni funciones. La de antes (I01d, 0420, aplicada) quedó en su copia:
-# tests/conta/produccion/tanda-i01d-impuestos-2025-20261022.txt.
+# en el PR 1, con su tanda. Fusiona Julio»). Va DESPUÉS de la del C07 (0450,
+# PR #282, aplicada): su copia, tests/conta/produccion/tanda-c07-diez-todo-20261022.txt.
+# No comparte con ella ni tablas ni funciones. Número 0460 (Julio, 22/10): la
+# 0440 es del #280, aparcado.
 #
-#   1. 0440 — AÑADE company.color (nula, '#RRGGBB') y CAMBIA en caliente
+#   1. 0460 — AÑADE company.color (nula, '#RRGGBB') y CAMBIA en caliente
 #      public.company con su comprobación de formato (el analizador la cuenta
 #      como cambio: restricción en una tabla que existe; declarada en la
 #      cabecera, con su prueba de staging). No toca ninguna fila ni ninguna
-#      función. Analizada contra producción (22/10, 12:00 UTC): «sigue», ningún
-#      «autorizo».
+#      función.
 #
 # No toca el camino del pedido (company no se escribe al pedir ni al cocinar;
 # el CHECK nuevo se valida sobre una columna nula en todas las filas). Ninguna
 # función que desplegar a mano.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
 cuenta: scripts/conta/produccion/cuentas/color-empresa.sql
-supabase/migrations/20261202T0440_s02_color_empresa.sql
+supabase/migrations/20261202T0460_s02_color_empresa.sql

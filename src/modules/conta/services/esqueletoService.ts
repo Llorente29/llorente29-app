@@ -5,7 +5,8 @@
 //     usuario; RLS: cada uno la suya);
 //   · lo que decide qué sale: si la EMPRESA es de hostelería
 //     (company.is_hospitality, la marca explícita que pidió Julio el 17/10: los
-//     datos solo sugieren), si trabaja con Diez (conta_diez_base) y qué
+//     datos solo sugieren), si trabaja con Diez (conta_diez_base, y C07: con
+//     «Enviar a Diez» encendido, conta_diez_envio_empresa) y qué
 //     interruptores de producto tiene la CUENTA (feature_flags:
 //     conta_facturacion, conta_laboral, conta_impuestos; sin caducidad).
 //
@@ -15,6 +16,7 @@
 // existe hoy en producción, comprobado el 17/10 en information_schema.
 
 import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
+import { leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
 import { supabase } from '@/lib/supabase'
 import { aFila, deFila, type Preferencias } from '@/modules/conta/esqueleto/preferencias'
 import { INTERRUPTORES, type Analitica, type Contexto } from '@/modules/conta/esqueleto/productos'
@@ -53,6 +55,8 @@ export async function leerContexto(accountId: string, companyId: string | null):
     tabla('feature_flags').select('feature_key, enabled, expires_at').eq('account_id', accountId).in('feature_key', [...INTERRUPTORES]),
     companyId ? leerEjes(accountId, companyId) : Promise.resolve(null),
   ])
+  // C07 (Julio, 22/10): con «Enviar a Diez» apagado, las pantallas no hablan de Diez (tampoco su pestaña).
+  const enviaADiez = companyId && diez.data ? (await leerEnvioEmpresa(accountId, companyId)).encendido : false
   if (empresa.error) throw new Error(mensaje('No se ha podido leer la empresa', empresa.error))
   if (diez.error) throw new Error(mensaje('No se ha podido saber si la empresa trabaja con Diez', diez.error))
   if (flags.error) throw new Error(mensaje('No se han podido leer los productos de la cuenta', flags.error))
@@ -63,10 +67,10 @@ export async function leerContexto(accountId: string, companyId: string | null):
   const fila = empresa.data as Record<string, unknown> | null
   return {
     hosteleria: fila?.is_hospitality === true,
-    diez: !!diez.data,
+    diez: !!diez.data && enviaADiez,
     interruptores: new Set(encendidos),
     logoEmpresa: typeof fila?.logo_path === 'string' && fila.logo_path ? await urlDelLogo(fila.logo_path) : null,
-    // S02 · company.color llega con la 0440; con «*», hasta que esté aplicada no se pide por nombre.
+    // S02 · company.color llega con la 0460; con «*», hasta que esté aplicada no se pide por nombre.
     colorEmpresa: typeof fila?.color === 'string' && FORMATO_COLOR.test(fila.color) ? fila.color : null,
     analitica: ejes ? analiticaDe(ejes) : null,
     asesoria: await esAsesoria(accountId),

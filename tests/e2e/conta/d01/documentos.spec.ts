@@ -282,8 +282,8 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
     await expect(asiento.getByRole('columnheader', { name: 'Debe' })).toBeVisible()
     await expect(asiento.getByRole('columnheader', { name: 'Haber' })).toBeVisible()
     await expect(asiento).toContainText('Cuadra')
-    // R5 · 2: si la empresa trabaja con Diez, lo dice, y dice que va sin el PDF.
-    if (await asiento.getByText(/Diez/).count()) await expect(asiento).toContainText('sin el PDF: Diez aún no guarda documentos')
+    // C07 (Julio, 22/10): A tiene «Enviar a Diez» apagado, así que el asiento que se crea no habla de Diez.
+    await expect(asiento).not.toContainText('Diez')
   }
   // S02: «Está bien · apuntar» es ahora «Validar y siguiente», con Intro.
   const validar = page.getByRole('button', { name: /^Validar y siguiente/ })

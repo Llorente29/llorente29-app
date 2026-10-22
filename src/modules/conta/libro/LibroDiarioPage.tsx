@@ -51,9 +51,12 @@ import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { paraRevisar, sinValidarDelMes } from '@/modules/conta/libro/paraRevisar'
 import { nombresDeCuentas, palabrasLlanas } from '@/modules/conta/libro/palabrasLlanas'
 import { MARCA } from '../cuenta/marca'
-import { ChipDiez, EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
+import { EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, motivoSinPatron, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
-import { anularConDiez, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
+import { anularConDiez, enviarADiez, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
+import { leerEnviosDiez, useEnvioDiez } from '@/modules/conta/services/envioDiezService'
+import { detalleDiez, type DetalleDiez, type EnvioAsiento } from '@/modules/conta/lib/enDiez'
+import { DetalleDiezPieza } from '@/modules/conta/libro/DetalleDiez'
 import { numeroEnDiez } from '@/modules/conta/lib/numeroEnDiez'
 import { localDelAsiento, porQueNoLlegaADiez, primerMotivo, type MotivoEspera, type NoLlegaADiez } from '@/modules/conta/lib/esperan'
 import { leerEsperan } from '@/modules/conta/services/esperanService'
@@ -87,6 +90,9 @@ interface DatosLibro {
   conDiez: Map<string, ConDiez>
   /** Si no se ha podido leer, por qué (el libro sigue: es el estado con Diez, no el libro). */
   conDiezError: string | null
+  /** C07: el envío a Diez de cada asiento validado o anulado (de cualquier tipo), y el del contraasiento de cada anulado. */
+  envios: Map<string, EnvioAsiento>
+  contras: Map<string, EnvioAsiento>
   /** M01 · «Esperan»: lo propuesto que la validación pararía, con sus motivos (conta_esperan). */
   esperan: Map<string, MotivoEspera[]>
   /** Si no se ha podido leer, por qué: entonces todo lo propuesto cuenta, como antes, y «Esperan» dice «—». */
@@ -103,7 +109,7 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const [ejercicios, cierres, locales, horaCierre] = await Promise.all([leerEjercicios(accountId, companyId), leerCierres(accountId, companyId), localesDeLaCuenta(accountId), horaDeCierre(accountId, companyId)])
       const hoy = hoyEnMadrid()
       const ejercicio = ejercicios.find((e) => e.code === codigo) ?? ejercicios.find((e) => hoy >= e.inicio && hoy <= e.fin) ?? ejercicios[0] ?? null
-      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null, conDiez: new Map<string, ConDiez>(), conDiezError: null, esperan: new Map<string, MotivoEspera[]>(), esperanError: null }
+      if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null, conDiez: new Map<string, ConDiez>(), conDiezError: null, envios: new Map<string, EnvioAsiento>(), contras: new Map<string, EnvioAsiento>(), esperan: new Map<string, MotivoEspera[]>(), esperanError: null }
       const mes = hoy >= ejercicio.inicio && hoy <= ejercicio.fin ? mesDe(hoy) : mesDe(ejercicio.fin)
       const asientos = await leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin)
       const anterior = mesAnterior(mes)
@@ -113,15 +119,19 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       // M01 (Julio, 16/10): el cierre del mes anterior no se pide si ya está
       // cerrado fuera (la regla de la validación, de la base: pedirCierre).
       const pedir = anterior >= ejercicio.inicio && pedirCierre(anterior, await primerDiaAbierto(companyId, anterior), cierres)
-      const [resultado, cierre, conDiez, esperan] = await Promise.all([
+      // C07: los que pueden estar en Diez (lo traído, la apertura, el cierre y las plantillas no van).
+      const enviables = asientos.filter((a) => (a.estado === 'validado' || a.estado === 'anulado') && !['migrated', 'opening', 'closing', 'template'].includes(a.origen))
+      const [resultado, cierre, conDiez, esperan, envios] = await Promise.all([
         resultadoDelMes(companyId, mes, locales).catch((e: unknown) => { resultadoError = e instanceof Error ? e.message : String(e); return null }),
         pedir ? fuenteCierre(accountId, companyId, anterior, asientos, cierres.some((c) => c.mes === anterior)) : Promise.resolve(null),
         leerConDiez(accountId, companyId, asientos.filter((a) => a.origen === 'sales_day').map((a) => a.id))
           .catch((e: unknown) => { conDiezError = e instanceof Error ? e.message : String(e); return new Map<string, ConDiez>() }),
         leerEsperan(companyId, ejercicio.inicio, ejercicio.fin)
           .catch((e: unknown) => { esperanError = e instanceof Error ? e.message : String(e); return new Map<string, MotivoEspera[]>() }),
+        leerEnviosDiez(accountId, enviables.map((a) => a.id), new Map(enviables.filter((a) => a.anuladoCon).map((a) => [a.id, a.anuladoCon!])))
+          .catch((e: unknown) => { conDiezError = conDiezError ?? (e instanceof Error ? e.message : String(e)); return { envios: new Map<string, EnvioAsiento>(), contras: new Map<string, EnvioAsiento>() } }),
       ])
-      return { horaCierre, ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre, conDiez, conDiezError, esperan, esperanError }
+      return { horaCierre, ejercicios, ejercicio, asientos, cierres, mes, resultado, resultadoError, cierre, conDiez, conDiezError, envios: envios.envios, contras: envios.contras, esperan, esperanError }
     })().then((datos) => { if (vivo) setR({ clave, datos, error: null }) },
       (e: unknown) => { if (vivo) setR({ clave, datos: null, error: e instanceof Error ? e.message : String(e) }) })
     return () => { vivo = false }
@@ -157,6 +167,8 @@ export default function LibroDiarioPage() {
   const [params, setParams] = useSearchParams()
   const [vuelta, setVuelta] = useState(0)
   const recargar = () => setVuelta((v) => v + 1)
+  // C07: «Enviar a Diez» de la empresa. Apagado (o aún sin saberlo), el libro no habla de Diez.
+  const encendido = useEnvioDiez(accountId, activa?.id).envio?.encendido === true
   const { datos, error } = useLibro(cargando ? null : accountId, activa?.id ?? null, params.get('ejercicio'), vuelta)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
@@ -181,8 +193,10 @@ export default function LibroDiarioPage() {
   const hechos = datos ? loQueHeHechoYo(datos.asientos) : []
   // R15 · Con Diez: el estado de cada asiento de ventas de una plataforma, y lo
   // que se puede validar y enviar (lo propuesto, y lo validado que no ha llegado).
-  const diezDe = (a: AsientoDiario): EstadoDiez | undefined => { const d = datos?.conDiez.get(a.id); return d ? estadoDiez(a, d) : undefined }
-  const candidatosDiez: CandidatoDiez[] = datos
+  const diezDe = (a: AsientoDiario): EstadoDiez | undefined => { const d = encendido ? datos?.conDiez.get(a.id) : undefined; return d ? estadoDiez(a, d) : undefined }
+  // C07: el detalle junto al número, de cualquier asiento.
+  const detalle = (a: AsientoDiario): DetalleDiez | null => (datos ? detalleDiez(a, datos.envios.get(a.id), { encendido, contraasiento: datos.contras.get(a.id) }) : null)
+  const candidatosDiez: CandidatoDiez[] = datos && encendido
     ? datos.asientos.flatMap((a) => {
       const e = diezDe(a)
       if (!e || !(a.estado === 'propuesto' || (a.estado === 'validado' && e.reintentar))) return []
@@ -201,8 +215,12 @@ export default function LibroDiarioPage() {
   // Sin correspondencia, la empresa no tiene Diez: el envío decide, no el grupo.
   const grupoDe = (local: string) => (correspondencia ? correspondencia.localAlEnviar[local] : 'sin correspondencia')
   const noDiez = (a: AsientoDiario): NoLlegaADiez | null => {
+    if (!encendido) return null
     const d = datos?.conDiez.get(a.id)
-    return d ? porQueNoLlegaADiez(a, d, localDelAsiento(a.apuntes), grupoDe) : null
+    if (d && a.estado !== 'anulado') return porQueNoLlegaADiez(a, d, localDelAsiento(a.apuntes), grupoDe)
+    // C07: cualquier otro asiento validado que no está en Diez (o anulado aquí y no allí) es tarea, con su motivo.
+    const x = detalle(a)
+    return x?.reintentar ? { tipo: 'tarea', accion: 'reintentar', texto: `${x.texto}${x.motivo ? `: ${x.motivo}` : ''}.` } : null
   }
   // S01e: los motivos en palabras normales, con el nombre junto a cada cuenta («57200001 (Banco)»).
   const nombres = useMemo(() => nombresDeCuentas(datos ? datos.asientos.flatMap((a) => a.apuntes) : []), [datos])
@@ -221,7 +239,7 @@ export default function LibroDiarioPage() {
 
   // Sin memo: filtrar unos miles de asientos es nada, y así no se queda viejo.
   const lista: AsientoDiario[] = !datos ? [] : (() => {
-    const diez = (a: AsientoDiario) => numeroEnDiez(a, datos.conDiez.get(a.id))
+    const diez = (a: AsientoDiario) => numeroEnDiez(a, { envio: datos.envios.get(a.id) ?? null })
     const base = enEsperan ? filtrar(datos.asientos, 'todos').filter((a) => motivoEspera(a) !== null)
       // «Para revisar» es lo que se puede revisar: lo que espera va en «Esperan».
       : filtro === 'revisar' ? paraRevisar(datos.asientos, motivoEspera)
@@ -336,20 +354,21 @@ export default function LibroDiarioPage() {
   const columnas: ColumnaDensa<AsientoDiario>[] = datos ? [
     { id: 'fecha', titulo: 'Fecha', ancho: '56px', celda: (a) => <span className="cxd-fecha">{diaMesCorto(a.fecha)}</span>, exportar: (a) => a.fecha },
     { id: 'numero', titulo: 'Nº', ancho: '104px', celda: (a) => <span className="cxd-num">{numeroVisible(a)}</span>, exportar: (a) => numeroVisible(a), pesoPdf: 1.3 },
-    {
+    // C07: con «Enviar a Diez» apagado, sin columna de Diez.
+    ...(encendido ? [{
       id: 'diez', titulo: 'Diez', ancho: '68px', cifra: true,
-      celda: (a) => { const n = numeroEnDiez(a, datos.conDiez.get(a.id)); return <span className="cxd-diez" title={n.explicacion}>{n.texto}<span className="cx-oculto"> ({n.explicacion})</span></span> },
-      exportar: (a) => numeroEnDiez(a, datos.conDiez.get(a.id)).valor,
-    },
+      celda: (a: AsientoDiario) => { const n = numeroEnDiez(a, { envio: datos.envios.get(a.id) ?? null }); return <span className="cxd-diez" title={n.explicacion}>{n.texto}<span className="cx-oculto"> ({n.explicacion})</span></span> },
+      exportar: (a: AsientoDiario) => numeroEnDiez(a, { envio: datos.envios.get(a.id) ?? null }).valor,
+    }] : []),
     {
       id: 'concepto', titulo: ['Concepto', analitica.local?.nombre.toLowerCase(), analitica.marca?.nombre.toLowerCase(), 'de dónde sale'].filter(Boolean).join(' · '), pesoPdf: 4,
       celda: (a) => {
-        const d = diezDe(a)
+        const d = detalle(a)
         return (
           <span className="cxd-linea-libro">
             <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
             {pastillas(a, ejes).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
-            {d && a.estado !== 'propuesto' && <ChipDiez e={d} />}
+            <DetalleDiezPieza d={d} conMotivo={false} alHacer={(t) => { setFallo(null); setHecho(t); recargar() }} alFallar={(t) => { setHecho(null); setFallo(t); recargar() }} />
             <QueLePasa a={a} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />
           </span>
         )
@@ -367,13 +386,13 @@ export default function LibroDiarioPage() {
       <AccionesPantalla etiqueta="Acciones del libro diario">
         <BotonAccion principal tecla="Ins" atajo="Insert" onClick={() => navegar(rutaNuevoAsiento())} disabled={!puedeNuevo}>+ Nuevo asiento</BotonAccion>
         <BotonAccion onClick={proponer} disabled={proponiendo || !datos?.ejercicio}>{proponiendo ? 'Repasando…' : 'Proponer lo pendiente'}</BotonAccion>
-        {candidatosDiez.length > 0 && (
+        {encendido && candidatosDiez.length > 0 && (
           <BotonAccion onClick={() => setEnviarDiez(true)}>Validar y enviar a Diez{propuestosDiez ? ` · ${propuestosDiez}` : ''}</BotonAccion>
         )}
       </AccionesPantalla>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      {datos?.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo están con Diez las ventas por plataforma: {datos.conDiezError}</p>}
+      {encendido && datos?.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo están con Diez las ventas por plataforma: {datos.conDiezError}</p>}
       {datos?.esperanError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer qué asientos esperan (lo que la validación pararía): {datos.esperanError}. Mientras tanto, todo lo propuesto cuenta como para revisar.</p>}
       {datos?.ejercicio && hoyEnMadrid() >= datos.ejercicio.inicio && hoyEnMadrid() <= datos.ejercicio.fin && (
         // Información, no un aviso: el día en curso no se propone hasta su cierre.
@@ -440,7 +459,7 @@ export default function LibroDiarioPage() {
                 teTocaHoy={[
                   { id: 'revisar', etiqueta: 'para revisar', numero: revisables, activo: filtro === 'revisar' && !vistaGuardada && !enEsperan,
                     alPulsar: () => { setVistaGuardada(null); setVista(null); setSoloSinDiez(false); cambiarFiltro(filtro === 'revisar' && !enEsperan ? 'todos' : 'revisar') } },
-                  ...(datos.conDiez.size > 0 || datos.conDiezError ? [{
+                  ...(encendido ? [{
                     id: 'sin-diez', etiqueta: 'para enviar a Diez', numero: datos.conDiezError ? null : porEnviar, activo: soloSinDiez,
                     alPulsar: () => { setVista(null); setSoloSinDiez((v) => !v) },
                   }] : []),
@@ -473,7 +492,7 @@ export default function LibroDiarioPage() {
                 detalle={(a) => <Apuntes a={a} espera={motivoEspera(a)} tarea={tareaDiez(a)} quien={userName}
                   alHacer={(t) => { setHecho(t); recargar() }} alFallar={setFallo} />}
                 claseFila={(a) => (a.estado === 'anulado' ? 'cxd-anulado' : undefined)}
-                tarjeta={(a) => <TarjetaAsiento a={a} diez={diezDe(a)} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />}
+                tarjeta={(a) => <TarjetaAsiento a={a} diez={detalle(a)} espera={motivoEspera(a)} tarea={tareaDiez(a)?.texto ?? null} />}
                 vacio={enEsperan
                   ? <Vacio titulo="Nada esperando." explicacion={`Aquí sale lo que todavía no se puede validar o enviar, con su motivo: un mes cerrado, un envío por aclarar${hosteleria ? ', una plataforma sin su factura medida en Diez' : ''}…`} />
                   : filtro === 'revisar' && !soloSinDiez
@@ -526,7 +545,13 @@ function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
   // su documento si le falta y enviarlo. Lo que ha pasado se dice con contenido (regla 8).
   async function hacer() {
     setOcupado(true)
-    try { const [p] = await validarYEnviar([a], quien); alHacer(p.texto) }
+    // C07: lo que no es una venta de plataforma no lleva PDF propio: solo se manda (el contraasiento, si falta anularlo).
+    const enviar = async () => {
+      if (a.origen === 'sales_day' && a.estado !== 'anulado') return (await validarYEnviar([a], quien))[0].texto
+      const r = await enviarADiez(a.estado === 'anulado' && a.anuladoCon ? a.anuladoCon : a.id)
+      return r.estado === 'en_diez' ? r.texto : `No se ha enviado a Diez: ${r.motivo}.`
+    }
+    try { alHacer(await enviar()) }
     catch (e) { alFallar(e instanceof Error ? e.message : 'No se ha podido enviar a Diez.') }
     finally { setOcupado(false) }
   }
@@ -572,7 +597,7 @@ function QueLePasa({ a, espera, tarea }: { a: AsientoDiario; espera: string | nu
 }
 
 /** Un asiento en el móvil: fecha y número, el concepto, sus chips, el importe y el estado. */
-function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez?: EstadoDiez; espera: string | null; tarea: string | null }) {
+function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez: DetalleDiez | null; espera: string | null; tarea: string | null }) {
   const e = estadoDe(a)
   const analitica = useAnalitica()
   const ejes = { local: !!analitica.local, marca: !!analitica.marca }
@@ -583,7 +608,8 @@ function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez?: E
         <span className="cxd-concepto-titulo" title={a.concepto}>{a.concepto}</span>
         <span className="cxd-concepto-apoyo">
           {pastillas(a, ejes).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
-          {diez && a.estado !== 'propuesto' && <ChipDiez e={diez} />}
+          {/* C07: la tarjeta entera abre el asiento (es un botón): aquí solo el chip; «Reintentar», en el asiento. */}
+          <DetalleDiezPieza d={diez} conMotivo={false} sinBoton alHacer={() => undefined} alFallar={() => undefined} />
           <QueLePasa a={a} espera={espera} tarea={tarea} />
         </span>
       </span>
