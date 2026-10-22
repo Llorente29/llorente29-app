@@ -212,9 +212,11 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
   // pregunta «¿De quién es?» con el proveedor y «Es este».
   await pestana(page, 'Por aclarar').click()
   await expect(page).toHaveURL(/[?&]ver=por-aclarar/)
-  const sin = filaDe(page, 'No reconozco el emisor')
+  // S02: la fila enseña el nombre tal como se leyó del papel (o «No reconozco el
+  // emisor» si no se leyó ninguno); lo que dice que no está en tus proveedores es
+  // su chip «Proveedor nuevo».
+  const sin = filaDe(page, 'Proveedor nuevo')
   await expect(sin.first()).toBeVisible()
-  await expect(sin.first()).toContainText('Proveedor nuevo')
   await sin.first().getByRole('button').click()
   const deQuien = page.getByRole('region', { name: '¿De quién es?' })
   await expect(deQuien.getByRole('combobox', { name: 'Proveedor' })).toBeVisible()
@@ -226,7 +228,7 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
   // «Todas» trae todas (regla 7).
   await pestana(page, 'Todas').click()
   await expect(filaDe(page, 'Mayorista Prueba Alfa')).toHaveCount(1)
-  await expect(filaDe(page, 'No reconozco el emisor').first()).toBeVisible()
+  await expect(filaDe(page, 'Proveedor nuevo').first()).toBeVisible()
 
   // N23.
   await pestana(page, 'Por revisar').click()
