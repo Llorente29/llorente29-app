@@ -217,7 +217,8 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
 
   // Inicio («Estilo nuevo · Inicio»).
   await expect(page.getByRole('heading', { level: 1, name: /^(Buenos días|Buenas tardes|Buenas noches), Marta$/ })).toBeVisible()
-  for (const t of ['En el banco', 'Te deben', 'Debes', 'IVA del trimestre']) await expect(page.locator('.cxi-cifra-etiqueta', { hasText: t })).toBeVisible()
+  // S02 · PR 3: la tarjeta de bancos dice lo que es: «en contabilidad» (lo validado).
+  for (const t of ['Bancos · en contabilidad', 'Te deben', 'Debes', 'IVA del trimestre']) await expect(page.locator('.cxi-cifra-etiqueta', { hasText: t })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Solo necesito que me digas esto' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Lo que he hecho yo desde ayer' })).toBeVisible()
   // El mes anterior está por cerrar (lo comprueba mesAnteriorAbierto): su tarjeta,

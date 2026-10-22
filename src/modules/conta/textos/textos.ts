@@ -30,9 +30,12 @@ export const TEXTOS = {
   'recibida.verAsiento': t('Ver cómo lo guardo en tu contabilidad', 'Ver el asiento', 'Asiento propuesto'),
 
   // ── Inicio como bandeja ──
-  'inicio.banco': t('Tienes en el banco', 'En el banco', 'Bancos (572)'),
+  // S02 · PR 3: «En el banco» decía el libro aquí y el extracto en Bancos. Ahora la tarjeta
+  // dice lo que es, como Bancos: «En contabilidad» (lo validado); lo del banco va debajo.
+  'inicio.banco': t('Tus bancos, en contabilidad', 'Bancos · en contabilidad', 'Bancos (572)'),
   'inicio.teDeben': t('Te deben tus clientes', 'Te deben', 'Clientes (43, 44)'),
-  'inicio.debes': t('Debes a proveedores', 'Debes', 'Proveedores (40, 41)'),
+  // S02 · PR 3: sin la 407 (anticipos: es activo) ni «por localizar», que se dice aparte.
+  'inicio.debes': t('Debes a proveedores', 'Debes', 'Proveedores (40 sin 407, 41)'),
   // S01e: {impuesto} es IVA, IGIC (Canarias) o IPSI (Ceuta y Melilla).
   'inicio.iva': t('{impuesto} de este trimestre', '{impuesto} del trimestre', '{impuesto} (477 − 472)'),
   'inicio.pendiente': t('Solo necesito que me digas esto', 'Solo necesito que me digas esto', 'Pendiente de ti'),

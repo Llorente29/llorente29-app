@@ -29,7 +29,8 @@ describe('S01 · El diccionario de textos por nivel', () => {
     expect(TEXTOS['recibida.leido'].medio).toBe('Lo que he leído')
     // Maqueta 3: «Ver el asiento», plegable, en vez de «Cómo se apunta» (el bloque se sigue llamando así para el lector).
     expect(TEXTOS['recibida.verAsiento'].medio).toBe('Ver el asiento')
-    expect(TEXTOS['inicio.banco'].medio).toBe('En el banco')
+    // S02 · PR 3: «En el banco» era el libro aquí y el extracto en Bancos; ahora dice lo que es.
+    expect(TEXTOS['inicio.banco'].medio).toBe('Bancos · en contabilidad')
     expect(TEXTOS['inicio.pendiente'].medio).toBe('Solo necesito que me digas esto')
   })
 

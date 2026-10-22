@@ -35,7 +35,7 @@ import { useContadoresPestanas } from '@/modules/conta/marco/nuevo/useContadores
 import { PRODUCTOS, dondeEsta, productosVisibles, type Producto } from '@/modules/conta/esqueleto/productos'
 import { alternarFavorito, cintaDe, favoritosDe, ordenPorId, type Orden } from '@/modules/conta/esqueleto/ordenes'
 import { usePreferenciasEsqueleto, useContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
-import { cuentasDeLaBarra } from '@/modules/conta/esqueleto/cuentasBarra'
+import { cuentasDeLaBarra, frasesDeLaBarra } from '@/modules/conta/esqueleto/cuentasBarra'
 import { Favoritos } from '@/modules/conta/esqueleto/Favoritos'
 import { MenuUsuario } from '@/modules/conta/esqueleto/MenuUsuario'
 import { leerEjercicios } from '@/modules/conta/services/esqueletoService'
@@ -81,6 +81,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
   // ninguna parte (antes iban en las pestañas de la cabecera).
   const productos = conElActivo(productosVisibles(ctx), producto)
   const pendientes = cuentasDeLaBarra(cuentas)
+  const frases = frasesDeLaBarra(cuentas)
   const contadores = useContadoresPestanas(producto?.id ?? null, activa?.id ?? null, cuentas)
   const catalogo = producto && pestana ? cintaDe(producto.id, pestana.id, ctx) : []
   const grupos = resolverGrupos(catalogo, { datos: datosCinta, entradas: entradasCinta, pathname, search, abrirBuscador })
@@ -150,7 +151,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
   )
   const usuario = (enCajon: boolean) => <MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} enCajon={enCajon} />
 
-  const datosBarra: DatosBarra = { productos, activo: producto?.id ?? null, pagina: pestana?.id ?? null, ctx, pendientes, contadores, search }
+  const datosBarra: DatosBarra = { productos, activo: producto?.id ?? null, pagina: pestana?.id ?? null, ctx, pendientes, frases, contadores, search }
   const clases = ['cx', 'cxm', 's-esqueleto', 's-marco', solo ? 'cx-solo' : null, movil ? 'cxm-es-movil' : null].filter(Boolean).join(' ')
   const avisoVisible = aviso ?? (errorCtx ? { texto: `${errorCtx}. Mientras, no sale lo que depende de la empresa (hostelería, Diez).`, tono: 'falta' as const } : null)
   const nombrePagina = pestana?.etiqueta ?? producto?.etiqueta ?? 'la página'
