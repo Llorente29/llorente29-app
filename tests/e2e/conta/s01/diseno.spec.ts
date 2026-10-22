@@ -123,10 +123,15 @@ test('el patrón en Sumied: colores por tokens, las seis plantillas, sus estados
     : page.getByRole('dialog', { name: 'Menú' })
   await abrir.click()
   await expect(abierto).toBeVisible()
-  await capturar(page, 'sistema-sumied-dialogo')
   await page.keyboard.press('Escape')
   await expect(abierto).toHaveCount(0)
   await expect(abrir).toBeFocused()
+  // La captura, después y con el menú abierto otra vez: la de página entera
+  // encoge la ventana un instante y la cabecera pasa a ser la del móvil, que
+  // desmonta la Ayuda; hecha antes de Escape, el botón ya no era el mismo.
+  await abrir.click()
+  await expect(abierto).toBeVisible()
+  await capturar(page, 'sistema-sumied-dialogo')
 
   expect(errores).toEqual([])
 })
