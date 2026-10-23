@@ -6,7 +6,7 @@
 -- Una liquidación que entretanto se enlazó con una factura de verdad se queda
 -- con la suya (no se pisa). Sin respaldo (staging), no hace nada.
 do $$
-declare v_cols text; r record; v_n int := 0;
+declare v_cols text; v_sel text; r record; v_n int := 0;
 begin
   if to_regclass('public.conta_respaldo_d07_provisionales') is null then
     raise notice 'D07 0870 vuelta atrás: no hay respaldo: nada que devolver.';
@@ -14,11 +14,12 @@ begin
   end if;
   -- Las columnas que se escriben (number_key es generada).
   for r in select t.tabla from (values (1, 'supplier_invoice'), (2, 'supplier_invoice_line'), (3, 'supplier_invoice_tax')) t(o, tabla) order by t.o loop
-    select string_agg(quote_ident(c.column_name), ', ' order by c.ordinal_position) into v_cols
+    select string_agg(quote_ident(c.column_name), ', ' order by c.ordinal_position),
+           string_agg('x.' || quote_ident(c.column_name), ', ' order by c.ordinal_position) into v_cols, v_sel
       from information_schema.columns c
      where c.table_schema = 'public' and c.table_name = r.tabla and c.is_generated = 'NEVER';
-    execute format('insert into public.%1$I (%2$s) select %2$s from public.conta_respaldo_d07_provisionales b, '
-                   'jsonb_populate_record(null::public.%1$I, b.fila) where b.tabla = %3$L on conflict do nothing', r.tabla, v_cols, r.tabla);
+    execute format('insert into public.%1$I (%2$s) select %3$s from public.conta_respaldo_d07_provisionales b '
+                   'cross join lateral jsonb_populate_record(null::public.%1$I, b.fila) x where b.tabla = %4$L on conflict do nothing', r.tabla, v_cols, v_sel, r.tabla);
   end loop;
   update public.channel_settlement cs
      set commission_invoice_id = (b.fila->>'commission_invoice_id')::uuid,

@@ -213,6 +213,17 @@ export function fechaPropuesta(fecha: string, c: CalendarioEmpresa): { fecha: st
   return { fecha: f, aviso: f ? `El documento es del ${fecha.split('-').reverse().join('/')}, pero ${motivo}: lo propongo el ${f.split('-').reverse().join('/')}.` : `No hay ningún día abierto para asentarlo: ${motivo}.` }
 }
 
+/**
+ * D07b · El aviso ámbar de una recibida de un periodo cerrado, con las dos
+ * fechas: la de la factura (que conserva) y la del asiento (el primer día
+ * abierto, donde va su IVA).
+ */
+export function avisoPeriodoCerrado(fechaFactura: string, fechaAsiento: string): string {
+  const es = (x: string) => x.split('-').reverse().join('/')
+  const t = Math.floor((Number(fechaAsiento.slice(5, 7)) - 1) / 3) + 1
+  return `La factura es del ${es(fechaFactura)}, en un periodo ya cerrado: se asienta el ${es(fechaAsiento)}, el primer día abierto. Conserva su fecha de factura en el libro de IVA y su IVA va al ${t}T ${fechaAsiento.slice(0, 4)}.`
+}
+
 // ── Regla 9 · el resultado por local suma el total ──────────────────────────
 
 export interface ApunteResultado { cuenta: string; debe: number; haber: number; localId: string | null }
