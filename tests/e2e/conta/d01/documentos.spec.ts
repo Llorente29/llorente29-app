@@ -247,7 +247,8 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
   // base, tipo y cuota que se editan, y debajo base, IVA y total contra el PDF.
   const importes = page.getByRole('region', { name: 'Importes por tipo de IVA' })
   await expect(importes.getByRole('combobox', { name: 'Tipo de IVA de la línea 1' })).toHaveValue('10')
-  await expect(importes.getByLabel('Base al 10 %')).toHaveValue('1.283,15')
+  // En el campo, sin punto de miles (se escribe en él); en los totales, con él.
+  await expect(importes.getByLabel('Base al 10 %')).toHaveValue('1283,15')
   await expect(importes.locator('[data-prueba="totales-iva"]')).toContainText('1.283,15')
   await expect(importes.locator('[data-prueba="totales-iva"]')).toContainText('1.411,47 €')
   const gasto = page.getByRole('region', { name: 'A qué gasto va' })

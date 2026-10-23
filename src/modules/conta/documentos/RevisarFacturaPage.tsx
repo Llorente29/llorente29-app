@@ -412,6 +412,10 @@ export default function RevisarFacturaPage() {
     </>
   )
   const esFoto = (x: string | null | undefined) => /^image\//.test(x ?? '') || /\.(jpe?g|png|webp)$/i.test(x ?? '')
+  // Foto o PDF según el fichero que se enseña de verdad (el mismo orden que urlDelPapel), no el nombre de lo que se leyó.
+  const papelEsFoto = fac.llegada?.ruta
+    ? esFoto(fac.llegada.tipo) || esFoto(fac.llegada.archivo ?? fac.llegada.ruta)
+    : esFoto(fac.papel ?? ficha?.lectura?.ruta ?? null)
   const archivo = fac.llegada?.archivo ?? ficha?.lectura?.archivo ?? (fac.papel ? fac.papel.split('/').pop() ?? null : null)
   const sinPapelGuardado = !fac.llegada && !fac.papel && !ficha?.lectura?.ruta
   const soloLectura = yaApuntada
@@ -495,7 +499,7 @@ export default function RevisarFacturaPage() {
             {sinPapelGuardado && hueco(aMano_ ? 'Escrita a mano, sin PDF todavía.' : 'Esta factura no tiene su PDF enlazado.')}
             {!sinPapelGuardado && papel.error && hueco(textoSinPapel({ archivo, aMano: false, error: papel.error }))}
             {!sinPapelGuardado && !papel.error && papel.datos && !papel.datos.url && hueco(textoSinPapel({ archivo, aMano: false, error: null }))}
-            {papel.datos?.url && (esFoto(fac.llegada?.tipo) || esFoto(archivo ?? fac.papel)
+            {papel.datos?.url && (papelEsFoto
               ? <img src={papel.datos.url} alt={`La factura ${fac.numero ?? ''} tal como llegó`} />
               : <PapelPdf url={papel.datos.url} titulo={`La factura ${fac.numero ?? ''} tal como llegó`} />)}
           </>}
