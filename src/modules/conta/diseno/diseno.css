@@ -135,8 +135,9 @@
 .s-tabla-apoyo { display: block; font-size: var(--s-t-s); color: var(--s-apoyo); }
 
 /* ── Diálogo ────────────────────────────────────────────────────────── */
+/* Por encima del cajón del menú (60): un aviso que sale al pulsar un enlace del cajón («¿Salir sin guardar?») tiene que verse y poder pulsarse. */
 .s-velo {
-  position: fixed; inset: 0; z-index: 60; background: var(--s-velo);
+  position: fixed; inset: 0; z-index: 70; background: var(--s-velo);
   display: flex; align-items: center; justify-content: center; padding: var(--s-4);
 }
 .s-dialogo {

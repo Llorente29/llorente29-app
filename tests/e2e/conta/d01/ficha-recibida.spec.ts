@@ -229,6 +229,10 @@ async function opcionesDeMasAcciones(page: Page): Promise<string[]> {
 /** Lo que la ficha ofrece, para comparar la que entró sola con la escrita a mano. */
 async function huellaDeLaFicha(page: Page) {
   const raiz = page.locator('[data-prueba="ficha-recibida"]')
+  // Lo que se lee aparte tiene que haber llegado antes de mirar (isVisible no espera):
+  // el asiento (de él cuelga «Editar el asiento a mano») y el hueco del PDF.
+  await expect(raiz.locator('details.s-asiento-ficha').getByRole('button', { name: 'Editar el asiento a mano' })).toBeVisible({ timeout: 20_000 })
+  await expect(raiz.locator('[data-prueba="hueco-pdf"]').first()).toBeVisible({ timeout: 20_000 })
   const pruebas = [...new Set(await raiz.locator('[data-prueba]').evaluateAll((xs) => xs.map((x) => x.getAttribute('data-prueba') ?? '')))].sort()
   const bloques = await raiz.locator('section.s-bloque-ficha').evaluateAll((xs) => xs.map((x) => x.getAttribute('aria-label') ?? ''))
   const controles: Record<string, boolean> = {}

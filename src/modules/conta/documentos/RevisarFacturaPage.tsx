@@ -366,7 +366,7 @@ export default function RevisarFacturaPage() {
 
   // De dónde vino, sin inventar.
   const origen = ficha ? {
-    fuente: ficha.fuente, canal: fac.llegada?.canal ?? null,
+    fuente: ficha.fuente, canal: fac.llegada?.canal ?? fac.canal ?? null,
     recepcion: ficha.recepcion ? { fecha: ficha.recepcion.fecha, local: ficha.recepcion.local, quien: ficha.recepcion.quien, cuando: ficha.recepcion.cuando } : null,
     lectura: ficha.lectura ? { cuando: ficha.lectura.cuando, archivo: ficha.lectura.archivo } : fac.llegada && lectura ? { cuando: fac.llegada.cuando, archivo: fac.llegada.archivo } : null,
     creada: ficha.creada,
@@ -491,12 +491,11 @@ export default function RevisarFacturaPage() {
           ? (esFoto(ficheroVivo.file.type) ? <img src={ficheroVivo.url} alt={`El documento elegido para la factura ${fac.numero ?? ''}`} /> : <PapelPdf url={ficheroVivo.url} titulo={`El documento elegido para la factura ${fac.numero ?? ''}`} />)
           : <>
             {!papel.datos && !papel.error && !sinPapelGuardado && <div className="s-lista-cargando" aria-label="Cargando el PDF" />}
-            {papel.error && hueco(textoSinPapel({ archivo, aMano: false, error: papel.error }))}
-            {!papel.error && papel.datos && !papel.datos.url && hueco(sinPapelGuardado
-              ? (aMano_ ? 'Escrita a mano, sin PDF todavía.' : 'Esta factura no tiene su PDF enlazado.')
-              : textoSinPapel({ archivo, aMano: false, error: null }))}
-            {sinPapelGuardado && !papel.datos && !papel.error && hueco()}
-            {papel.datos?.url && (esFoto(fac.llegada?.tipo ?? archivo)
+            {/* Sin documento guardado no hay nada que bajar: el hueco y su porqué, sin esperar a leerlo. */}
+            {sinPapelGuardado && hueco(aMano_ ? 'Escrita a mano, sin PDF todavía.' : 'Esta factura no tiene su PDF enlazado.')}
+            {!sinPapelGuardado && papel.error && hueco(textoSinPapel({ archivo, aMano: false, error: papel.error }))}
+            {!sinPapelGuardado && !papel.error && papel.datos && !papel.datos.url && hueco(textoSinPapel({ archivo, aMano: false, error: null }))}
+            {papel.datos?.url && (esFoto(fac.llegada?.tipo) || esFoto(archivo ?? fac.papel)
               ? <img src={papel.datos.url} alt={`La factura ${fac.numero ?? ''} tal como llegó`} />
               : <PapelPdf url={papel.datos.url} titulo={`La factura ${fac.numero ?? ''} tal como llegó`} />)}
           </>}

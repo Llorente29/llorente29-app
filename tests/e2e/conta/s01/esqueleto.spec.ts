@@ -650,7 +650,10 @@ test('Recibida (maqueta 3): el porqué de la IA, corregir en Compras, y «No es 
   // recepción, en Compras; antes «Corregir en Compras» en «Lo que he leído») y
   // «No es una factura».
   const mas = await masAcciones(page.locator('header.s-encabezado'))
-  await expect(mas.getByRole('link', { name: /^Corregir los importes/ })).toHaveAttribute('href', '/conta/compras')
+  // D03 (ficha completa): los importes se corrigen en la propia ficha, así que con la
+  // 0790 en la base ya no hay «Corregir los importes» en Compras; «Más acciones» es la del tablero 3b.
+  await expect(mas.getByRole('button', { name: /^Ver el historial/ })).toBeVisible()
+  await expect(mas.getByRole('link', { name: /^Corregir los importes/ })).toHaveCount(0)
 
   // «No es una factura» → ficha completa (tablero 3b): «Descartar con motivo», en
   // «Más acciones», en el ordenador y en el móvil (el proveedor se cambia en su campo).
