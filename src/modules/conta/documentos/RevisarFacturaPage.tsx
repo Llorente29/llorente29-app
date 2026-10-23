@@ -135,7 +135,8 @@ export default function RevisarFacturaPage() {
   const ficha = useUltimo(fichaLeida.datos, invoiceId)
   const localPropuesto = ficha ? ficha.localId ?? ficha.recepcion?.localId ?? null : undefined
   const papel = useLeer(fac && ficha ? async () => ({ url: await urlDelPapel(fac, ficha.lectura?.ruta ?? null) }) : null,
-    `${invoiceId}:papel:${fac?.llegada?.ruta ?? fac?.papel ?? ficha?.lectura?.ruta ?? ''}`)
+    // `ficha ? …`: la lectura espera a la ficha; sin eso en la clave, si la factura ya traía su ruta, no se volvía a leer al llegar la ficha y se quedaba «Cargando».
+    `${invoiceId}:papel:${ficha ? 'ficha' : '-'}:${fac?.llegada?.ruta ?? fac?.papel ?? ficha?.lectura?.ruta ?? ''}`)
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo:${vuelta}`)
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento && localPropuesto !== undefined
     ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!, localPropuesto) : null,

@@ -384,12 +384,6 @@ test('Frente C (?marca=contabilidad): ni Cocina ni «Folvy» en Documentos', asy
   await expect(page.getByRole('heading', { level: 1, name: 'Mayorista Prueba Alfa · F-2026-1022' })).toBeVisible()
   // S02: «Cómo se apunta» es «El asiento que se crea».
   await expect(page.locator('details.s-asiento-ficha')).toContainText(/\d{8}|cerrado|no tiene|Falta|asiento/, { timeout: 20_000 })
-  // TEMPORAL (D03): qué enseña el panel si no sale el documento. Se quita al encontrarlo.
-  {
-    const d = await documentoALaVista(page)
-    await page.waitForTimeout(8000)
-    console.log('[D03-panel]', JSON.stringify({ texto: (await d.innerText()).slice(0, 400), html: (await d.innerHTML()).slice(0, 1500) }))
-  }
   await expect((await documentoALaVista(page)).getByRole('img', { name: /La factura F-2026-1022/ })).toBeVisible()
   await page.waitForTimeout(500)
   await sinFolvyNiCocina(page, 'N23')
