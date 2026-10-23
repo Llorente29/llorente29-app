@@ -172,3 +172,15 @@ export function repartoDelBloque(xs: readonly ParaRepartir[]): { cuentas: FilaRe
   const locales = [...new Set(xs.map((x) => x.local ?? 'Común'))].sort((a, b) => a.localeCompare(b, 'es'))
   return { cuentas, locales, base: r2(base), total: r2(total) }
 }
+
+/** El texto de la forma de pago que se leyó del documento (payment_terms_text), esté donde esté en la lectura. */
+export function textoDePago(lectura: unknown): string | null {
+  const ver = (x: unknown, hondo: number): string | null => {
+    if (!x || typeof x !== 'object' || hondo > 6) return null
+    const o = x as Record<string, unknown>
+    if (typeof o.payment_terms_text === 'string' && o.payment_terms_text.trim()) return o.payment_terms_text
+    for (const v of Object.values(o)) { const r = ver(v, hondo + 1); if (r) return r }
+    return null
+  }
+  return ver(lectura, 0)
+}

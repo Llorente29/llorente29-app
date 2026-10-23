@@ -64,6 +64,8 @@ import {
 } from '@/modules/conta/diseno/plantillas'
 import { LISTA_RECIBIDAS, filtrosDe, queCuentaLaCola, ventanaDe } from '@/modules/conta/documentos/recibidas'
 import { colaRecibidas } from '@/modules/conta/documentos/colaRecibidas'
+import { cargoParaLaTarjeta, casarPagoConTarjeta, duplicadaDe } from '@/modules/conta/documentos/paraValidarService'
+import { faltaDocumento, pagadaConTarjeta, textoDePago, ultimos4 } from '@/modules/conta/documentos/paraValidar'
 import { motivoGasto, motivoImportes, motivoProveedor, veredictoFactura, type Comprobacion } from '@/modules/conta/documentos/veredicto'
 import {
   ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
@@ -157,13 +159,18 @@ export default function RevisarFacturaPage() {
   // Las cuentas del asiento (la 400, la 472 de cada tipo, la 4751), de la propuesta.
   const cuentasProp = useMemo(() => (propuesta ? cuentasDeLaPropuesta(propuesta.lineas, (c) => nombresProp?.get(c) ?? 'Cuenta') : null), [propuesta, nombresProp])
   const guardado = ficha?.guardado ?? null
+  // D06: lo que el documento dice del pago («Pagado con tarjeta …»), y si puede estar repetida.
+  const textoPago = textoDePago(fac?.lectura ?? fac?.leido_en_recepcion?.modelo ?? null)
+  const conTarjeta = pagadaConTarjeta(textoPago)
+  const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${invoiceId}:${fac?.proveedor?.id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`)
   const original = useMemo<BorradorFicha>(() => {
     if (!fac) return VACIO
     const datos = {
       proveedorId: fac.proveedor?.id ?? null, numero: fac.numero, fecha: fac.fecha, vence: fac.vence ?? venceFicha,
       retencion: fac.retencion, recargo: fac.recargo, gasto: gastoPropuesto, local: localPropuesto ?? null,
       // La forma de pago: la guardada en la factura (0790), la de cuando se pagó, o la de su ficha.
-      formaPago: guardado?.formaPago ?? extra.datos?.comoPagada ?? ficha?.formaPagoFicha ?? null, pagada: !!extra.datos?.pagada,
+      // D06: si el documento dice que se pagó con tarjeta, tarjeta.
+      formaPago: guardado?.formaPago ?? extra.datos?.comoPagada ?? (conTarjeta ? 'card' : null) ?? ficha?.formaPagoFicha ?? null, pagada: !!extra.datos?.pagada,
       tipos: fac.tipos, lineas: fac.lineas, base: fac.base, cuota: fac.cuota,
       reparto: guardado?.reparto.length ? guardado.reparto.map((g) => ({ cuenta: g.cuenta, local: g.comun ? null : g.local, importe: g.importe })) : null,
       sinPdf: guardado?.sinPdf ? { motivo: guardado.sinPdf.motivo } : null,
@@ -173,7 +180,7 @@ export default function RevisarFacturaPage() {
     if (!guardado?.asientoAMano || !cuentasProp) return base
     const previa = asientoVistaPrevia(base, cuentasProp, () => 'Cuenta', () => null)
     return { ...base, aMano: aManoDeLoGuardado(guardado.asientoAMano, previa.lineas) }
-  }, [fac, venceFicha, gastoPropuesto, localPropuesto, extra.datos, ficha, guardado, cuentasProp])
+  }, [fac, venceFicha, gastoPropuesto, localPropuesto, extra.datos, ficha, guardado, cuentasProp, conTarjeta])
 
   const nombreProveedor = useCallback((id: string) => (proveedores.datos ?? []).find((p) => p.id === id)?.nombre ?? (fac?.proveedor?.id === id ? fac.proveedor.nombre : 'otro proveedor'), [proveedores.datos, fac])
   const nombreLocal = useCallback((id: string) => (locales.datos ?? []).find((l) => l.id === id)?.nombre ?? (id === ficha?.recepcion?.localId ? ficha.recepcion.local : null), [locales.datos, ficha])
@@ -286,6 +293,16 @@ export default function RevisarFacturaPage() {
     setApuntando(true)
     try {
       const r = await apuntarFactura(fac, userName, userId, localPropuesto ?? null)
+      // D06: pagada con tarjeta → se casa con el cargo del banco (mismo importe, en los 5 días siguientes).
+      if (r.validado && conTarjeta && !extra.datos?.pagada && fac.total !== null) {
+        const cuentaProveedor = propuesta?.lineas.find((l) => l.haber > 0 && /^4[01]/.test(l.cuenta))?.cuenta
+        try {
+          const cargo = await cargoParaLaTarjeta({ account_id: fac.account_id, company_id: fac.company_id, fecha: fac.fecha, total: fac.total, proveedor: fac.proveedor?.nombre ?? '', tarjeta: ultimos4(textoPago) })
+          r.texto += cargo && cuentaProveedor
+            ? ` ${await casarPagoConTarjeta(cargo, { id: fac.id, total: fac.total, cuentaProveedor, terceroId: propuesta?.terceroId ?? null, concepto: `Factura ${fac.proveedor?.nombre ?? ''}${fac.numero ? ` · ${fac.numero}` : ''}` })}`
+            : ' Pagada con tarjeta, pero no encuentro un único cargo del mismo importe en los 5 días siguientes: cásalo en Bancos.'
+        } catch (e) { r.texto += ` No se ha podido casar el pago con tarjeta: ${e instanceof Error ? e.message : String(e)}.` }
+      }
       refrescarCuentasMenu()
       if (r.validado && siguiente) { ir(siguiente, r.texto); return }
       setApuntada({ id: fac.id, r })
@@ -339,12 +356,15 @@ export default function RevisarFacturaPage() {
   const masDecimales = lineasConMasDecimales(fac.lineas)
   const contraGuardado = contraElPdf(totalesDe(original), pdf, leidaDeFichero ? 'pdf' : 'factura', { masDecimales })
   const cuadraGuardado = contraGuardado.igual
+  // D06: sin documento no se valida (salvo «Sin PDF» con su motivo; las liquidaciones del correo de Uber, como hoy).
+  const faltaDoc = faltaDocumento({ tieneDocumento: !!(fac.llegada || fac.papel || ficha?.lectura?.ruta), sinPdf: !!guardado?.sinPdf, fuente: ficha?.fuente ?? null })
   const v = veredictoFactura({
     validada, numeroAsiento: fac.asiento?.numero ?? null, descartada, motivoDescarte: descarte.datos?.motivo ?? null,
     proveedor: prov ? { nombre: prov.nombre, nif: prov.nif } : null, nifFactura: nifDeLaFactura, fecha: fac.fecha,
     comprobaciones, propuesta: propuesta ? { confianza: propuesta.confianza, avisos: propuesta.avisos, razones: propuesta.razones } : propuesta,
     porqueSinPropuesta: vista.datos && !vista.datos.propuesta ? vista.datos.porque : vista.error,
     origenGasto: prov?.gasto?.origen ?? null, pagada, cuadraConElPdf: leidaDeFichero ? cuadraGuardado : null, redondeo: contraGuardado.redondeo === true,
+    faltaDocumento: faltaDoc, duplicada: dup.datos ?? null,
   })
   const mGasto = motivoGasto({ cuenta: gastoPropuesto, origen: prov?.gasto?.origen ?? (propuesta?.razones[0]?.porque ?? null), confirmada: validada })
   const mProv = motivoProveedor({ proveedor: prov ? { nombre: prov.nombre, nif: prov.nif } : null, nifFactura: nifDeLaFactura })
@@ -352,14 +372,15 @@ export default function RevisarFacturaPage() {
   const totales = totalesDe(b)
 
   const hayCambios = ed.hay
-  const sePuedeValidar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha && !hayCambios
+  const sePuedeValidar = !yaApuntada && !apuntando && !sinProveedor && !!fac.fecha && !hayCambios && !faltaDoc
   const botonValidar = !yaApuntada && (
     <span className="cxf-validar">
       <Boton variante="principal" icono="ok" onClick={() => void validar()} disabled={!sePuedeValidar} aria-keyshortcuts="Enter" data-validar-y-siguiente=""
-        title={hayCambios ? 'Guarda o descarta primero' : undefined}>
+        title={hayCambios ? 'Guarda o descarta primero' : faltaDoc ?? undefined}>
         {apuntando ? 'Validando…' : <><PorNivel clave="recibida.validarYSiguiente" />{!movil && <> <Tecla>Intro</Tecla></>}</>}
       </Boton>
       {hayCambios && <span className="cxf-guarda-primero" data-prueba="guarda-primero">Guarda o descarta primero</span>}
+      {!hayCambios && faltaDoc && <span className="cxf-guarda-primero" data-prueba="falta-pdf">Falta su PDF o marcarla «Sin PDF»</span>}
     </span>
   )
 
@@ -447,8 +468,9 @@ export default function RevisarFacturaPage() {
         tono={mGasto.tono} motivo={[mGasto.motivo, !ficha?.localId && ficha?.recepcion?.local ? `El local sale de la recepción del ${fechaEs(ficha.recepcion.fecha).slice(0, 5)}.` : null].filter(Boolean).join(' ')} />
       <BloquePago formaPago={b.formaPago} vence={b.vence} estadoPago={b.estadoPago} soloLectura={soloLectura}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'vence', x as string) }} cambioDe={ed.cambioDe} deshacer={ed.deshacer}
-        motivoVence={mayuscula(vence.apoyo)} tonoVence={vence.aviso ? 'revisar' : 'normal'}
-        motivoForma={extra.datos?.comoPagada ? 'Con la que se pagó.' : ficha?.formaPagoFicha ? 'La de su ficha.' : undefined}
+        motivoVence={b.formaPago === 'prepaid' ? 'Se paga del saldo prepago Catcher (40700001): no espera a un vencimiento.' : mayuscula(vence.apoyo)}
+        tonoVence={vence.aviso && b.formaPago !== 'prepaid' ? 'revisar' : 'normal'}
+        motivoForma={extra.datos?.comoPagada ? 'Con la que se pagó.' : conTarjeta && !guardado?.formaPago ? 'Lo dice el documento: pagada con tarjeta. Al validarla, la caso con su cargo del banco.' : ficha?.formaPagoFicha ? 'La de su ficha.' : undefined}
         pagada={pagada ? `Pagada el ${fechaEs(pagada.fecha)}${extra.datos?.comoPagada ? ` · ${extra.datos.comoPagada}` : ''}.` : null} />
       {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}
       <AsientoQueSeCrea titulo={fac.asiento ? 'Su asiento' : 'El asiento que se crea'} lineas={lineasAsiento} nota={notaAsiento}

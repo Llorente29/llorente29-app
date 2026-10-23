@@ -8,13 +8,13 @@
 // validarla sola (apuntarFactura: su asiento, validado y a Diez), sin pararse
 // si una falla.
 
-import { tabla, mensaje } from '@/modules/conta/services/bd'
+import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
 import { verPropuestasFacturas } from '@/modules/conta/services/propuestasLibroService'
 import { apuntarFactura, leerFactura, leerFichaRecibida, type ExtraFactura } from '@/modules/conta/services/documentosService'
 import type { TipoVeredicto } from '@/modules/conta/diseno/plantillas'
 import { comprobacionesSinContradecir } from './RevisarFacturaPage.textos'
 import { veredictoFactura, type Comprobacion } from './veredicto'
-import { duplicadas, faltaDocumento, textoDuplicada } from './paraValidar'
+import { cargoDeLaTarjeta, duplicadas, faltaDocumento, textoDuplicada, type CargoBanco } from './paraValidar'
 import type { FilaDocumento } from './documentos'
 
 export interface ParaValidar {
@@ -110,4 +110,47 @@ export async function validarEnBloque(accountId: string, ids: readonly string[],
     alAvanzar?.(++hechas)
   }
   return r
+}
+
+/** D06 · Si puede estar repetida (otra del mismo proveedor con el mismo número normalizado, o la misma fecha y total), el aviso. */
+export async function duplicadaDe(accountId: string, invoiceId: string, proveedorId: string | null): Promise<string | null> {
+  if (!proveedorId) return null
+  const { data, error } = await tabla('supplier_invoice').select('id, supplier_id, invoice_number, invoice_date, grand_total, status')
+    .eq('account_id', accountId).eq('supplier_id', proveedorId)
+  if (error) throw new Error(mensaje('No se ha podido mirar si está repetida', error))
+  const d = duplicadas(((data ?? []) as Fila[]).map((f) => ({ id: String(f.id), proveedorId: s(f.supplier_id), numero: s(f.invoice_number), fecha: s(f.invoice_date), total: n(f.grand_total), descartada: f.status === 'descartada' })))
+  const x = d.get(invoiceId)
+  return x ? textoDuplicada(x) : null
+}
+
+/**
+ * D06 · Pagada con tarjeta: el cargo del banco que casa (mismo importe, del día de la factura a 5 días
+ * después, con el proveedor o la tarjeta en su concepto), sin casar todavía. null si no hay uno claro.
+ */
+export async function cargoParaLaTarjeta(f: { account_id: string; company_id: string | null; fecha: string | null; total: number | null; proveedor: string; tarjeta: string | null }): Promise<CargoBanco | null> {
+  if (!f.company_id || !f.fecha || f.total === null) return null
+  const hasta = new Date(Date.parse(`${f.fecha}T00:00:00Z`) + 5 * 86_400_000).toISOString().slice(0, 10)
+  const { data, error } = await tabla('bank_movement').select('id, op_date, amount, bank_concept, clean_concept, counterparty, status')
+    .eq('account_id', f.account_id).eq('company_id', f.company_id).eq('amount', -Math.abs(f.total)).gte('op_date', f.fecha).lte('op_date', hasta)
+    .not('status', 'in', '(casado,ignorado)')
+  if (error) throw new Error(mensaje('No se han podido leer los cargos del banco', error))
+  const cargos = ((data ?? []) as Fila[]).map((m) => ({ id: String(m.id), fecha: String(m.op_date), importe: Number(m.amount), concepto: [s(m.clean_concept), s(m.bank_concept), s(m.counterparty)].filter(Boolean).join(' ') }))
+  return cargoDeLaTarjeta({ fecha: f.fecha, total: f.total, proveedor: f.proveedor, tarjeta: f.tarjeta }, cargos)
+}
+
+/** Casa el cargo con la factura (ya validada): queda pagada con tarjeta (bank_casar, como en Bancos). */
+export async function casarPagoConTarjeta(cargo: CargoBanco, factura: { id: string; total: number; cuentaProveedor: string; terceroId: string | null; concepto: string }): Promise<string> {
+  const { error } = await rpcCasar(cargo.id, {
+    tipo: 'factura_recibida', facturas: [{ id: factura.id, importe: factura.total }], cuenta_tercero: factura.cuentaProveedor, tercero_id: factura.terceroId,
+    concepto: factura.concepto, metodo: 'card',
+  })
+  if (error) throw new Error(error)
+  return `Casada con el cargo de ${factura.total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € del ${cargo.fecha.slice(8, 10)}/${cargo.fecha.slice(5, 7)}: pagada con tarjeta.`
+}
+
+async function rpcCasar(movimiento: string, destino: Record<string, unknown>): Promise<{ error: string | null }> {
+  try {
+    await rpc('bank_casar', { p_movement: movimiento, p_destino: destino, p_confianza: 'seguro', p_porque: 'Pagada con tarjeta: lo dice su factura, y el cargo es del mismo importe y de los días siguientes.', p_razones: [], p_por: 'folvy', p_regla: null })
+    return { error: null }
+  } catch (e) { return { error: e instanceof Error ? e.message : String(e) } }
 }

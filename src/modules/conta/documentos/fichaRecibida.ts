@@ -35,13 +35,15 @@ export interface LineaGasto { cuenta: string; local: string; importe: string }
 /** Retención (IRPF) o recargo de equivalencia: su tipo y su importe. */
 export interface Adicional { tipo: string; importe: string }
 
-export type FormaPago = '' | 'transfer' | 'direct_debit' | 'card' | 'cash'
+export type FormaPago = '' | 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid'
 export const FORMAS_PAGO: { valor: FormaPago; texto: string }[] = [
   { valor: '', texto: 'Sin decir' },
   { valor: 'transfer', texto: 'Transferencia' },
   { valor: 'direct_debit', texto: 'Domiciliación' },
   { valor: 'card', texto: 'Tarjeta' },
   { valor: 'cash', texto: 'Efectivo' },
+  // D06 · Riders: se paga del saldo prepago de Catcher (la 40700001), sin vencimiento que esperar.
+  { valor: 'prepaid', texto: 'Saldo prepago Catcher (40700001)' },
 ]
 export const ESTADOS_PAGO: { valor: string; texto: string }[] = [
   { valor: 'sin_pagar', texto: 'Sin pagar' },
