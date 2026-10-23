@@ -21,7 +21,9 @@ describe('la entera en trozos', () => {
     // Los nuevos cuentan como la mediana. 21/10: main trae 4 sin medir (i01b/plazo,
     // i01d/proveedor-extranjero, i01e/ficha-libro, i01h/sociedades); inventario/autoconteo
     // ya está medido (e2e 761).
-    expect(sin.length).toBeLessThan(5)
+    // D03 (23/10): d01/ficha-recibida, nueva, sin medir hasta su primera e2e en verde;
+    // al medirla se apunta en tiempos.json y esto vuelve a «menos de 5».
+    expect(sin.length).toBeLessThan(6)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
