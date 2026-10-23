@@ -1,9 +1,7 @@
-# C11 · el cierre del día ya no anula ventas (2045, cambia en caliente
-# conta_cerrar_dias y añade sales_day_close_log.accion) y la restauración de
-# las anuladas que la plataforma entregó (2050, datos de Foodint: en staging no
-# hace nada). Desde la rama va en ROLLBACK. Su prueba (ROLLBACK): un pedido
-# abierto a las 2:07 sigue igual y queda «para revisar» una vez; lo cerrado no
-# se apunta; sin Foodint la restauración no toca nada; las dos vueltas atrás.
+# C11 · el freno: el cierre del día ya no anula ventas (2045, cambia en
+# caliente conta_cerrar_dias y añade sales_day_close_log.accion). Desde la
+# rama va en ROLLBACK. Su prueba (ROLLBACK): un pedido abierto a las 2:07 sigue
+# igual y queda «para revisar» una vez; lo cerrado no se apunta; un usuario no
+# puede lanzar el cierre; la vuelta atrás, byte a byte.
 supabase/migrations/20261023T2045_c11_cierre_marca_para_revisar.sql
-supabase/migrations/20261023T2050_c11_restaurar_ventas_entregadas.sql
 supabase/staging/sql/20261023_c11_cierre_no_anula_prueba.sql

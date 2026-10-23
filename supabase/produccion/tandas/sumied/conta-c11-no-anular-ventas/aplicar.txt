@@ -7,14 +7,10 @@
 #      su cabecera con su prueba de staging, y AÑADE sales_day_close_log.accion
 #      (admite nulos). El cierre ya no hace update de sale: solo apunta
 #      «para revisar». AUTORIZO: sales_day_close_log está en el camino.
-#   2. 2050 — DATOS de Foodint: las ventas que anuló el cierre y la plataforma
-#      entregó (order_status completed) vuelven a open, con copia y guarda por
-#      huella. AUTORIZO: update de sale. Las cancelled, rejected y
-#      delivery_failed de la plataforma no se tocan.
 #
-# El orden importa: primero la 2045 (si no, la pasada siguiente las volvería a
-# anular) y la 2050 usa su columna.
+# La restauración de las ventas anuladas (2050) va en OTRA tanda, después
+# (Julio, 23/10, tras el real del run 40032630864: la comprobación de después
+# se puso en rojo porque las ventas devueltas a «open» son de días ya cerrados).
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 cuenta: scripts/conta/produccion/cuentas/c11-cierre-no-anula.sql
 supabase/migrations/20261023T2045_c11_cierre_marca_para_revisar.sql
-supabase/migrations/20261023T2050_c11_restaurar_ventas_entregadas.sql

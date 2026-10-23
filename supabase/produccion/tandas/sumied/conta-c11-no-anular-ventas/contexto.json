@@ -1,9 +1,30 @@
 {
-  "_que": "C11 · el cierre del día ya no anula ventas y se devuelven a open las anuladas que la plataforma entregó · contexto de producción de la tanda (20261023T2045 y 20261023T2050), medido en SOLO LECTURA el 23/10 a las 20:50 UTC con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen sale y sales_day_close_log (las dos en el camino del pedido) y conta_cerrar_dias con una sola firma (md5 7d1dd3c15193d716616fe268e3a5bab6, igual en staging y en el repositorio, 0170); la copia de la 2050 no existe; nada en el historial.",
+  "_que": "C11 · el cierre del día ya no anula ventas · contexto de producción de la tanda (20261023T2045; la 2050 va en otra tanda), medido en SOLO LECTURA el 23/10 a las 20:50 UTC con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen sale y sales_day_close_log (las dos en el camino del pedido) y conta_cerrar_dias con una sola firma (md5 7d1dd3c15193d716616fe268e3a5bab6, igual en staging y en el repositorio, 0170); nada en el historial.",
   "medido": "2026-10-23T20:50Z",
   "tanda": {
-    "supabase/migrations/20261023T2045_c11_cierre_marca_para_revisar.sql": "150abb68d94caba45247dc79e5dc84db",
-    "supabase/migrations/20261023T2050_c11_restaurar_ventas_entregadas.sql": "aaeb150eb8d00d0a4c79a724c17fee61"
+    "supabase/migrations/20261023T2045_c11_cierre_marca_para_revisar.sql": "150abb68d94caba45247dc79e5dc84db"
   },
-  "contexto": {"tablas":["public.sale","public.sales_day_close_log"],"funciones":["public.conta_cerrar_dias(uuid,timestamp with time zone)"],"filas":{"public.sale":20490,"public.sales_day_close_log":51},"otras":{},"camino":{"tablas":["public.sale","public.sales_day_close_log"],"funciones":[]},"usos":{},"registro":[]}
+  "contexto": {
+    "tablas": [
+      "public.sale",
+      "public.sales_day_close_log"
+    ],
+    "funciones": [
+      "public.conta_cerrar_dias(uuid,timestamp with time zone)"
+    ],
+    "filas": {
+      "public.sale": 20490,
+      "public.sales_day_close_log": 51
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [
+        "public.sale",
+        "public.sales_day_close_log"
+      ],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
 }

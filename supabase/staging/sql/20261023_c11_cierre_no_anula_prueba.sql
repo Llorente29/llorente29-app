@@ -1,8 +1,7 @@
 -- supabase/staging/sql/20261023_c11_cierre_no_anula_prueba.sql
 --
 -- SOLO STAGING. Prueba de 20261023T2045_c11_cierre_marca_para_revisar
--- (public.conta_cerrar_dias) y de 20261023T2050_c11_restaurar_ventas_entregadas,
--- con \i dentro de la transacción y ROLLBACK: staging no cambia. En la empresa
+-- (public.conta_cerrar_dias), con \i dentro de la transacción y ROLLBACK: staging no cambia. En la empresa
 -- de la cuenta A de pruebas, con pedidos inventados.
 --
 --   1. El cierre ya NO anula: un pedido abierto de las 23:00 del día D sigue
@@ -11,9 +10,9 @@
 --      sales_day_close_log con accion = 'revisar'.
 --   2. Una segunda pasada no lo apunta otra vez.
 --   3. Un pedido ya cerrado ('closed') no se apunta.
---   4. La restauración, sin Foodint, no toca ninguna venta.
---   5. La vuelta atrás de la 2045 deja conta_cerrar_dias byte a byte como la
---      0170 (md5 7d1dd3c1…), y la de la 2050, sin copia, no hace nada.
+--   4. La vuelta atrás deja conta_cerrar_dias byte a byte como la 0170
+--      (md5 7d1dd3c1…).
+--   5. Un usuario no puede lanzar el cierre.
 
 begin;
 do $$ begin
@@ -24,20 +23,6 @@ end $$;
 set local statement_timeout = '60s';
 
 \i supabase/migrations/20261023T2045_c11_cierre_marca_para_revisar.sql
-
-create temp table _c11_ventas_antes on commit drop as
-  select id, status, order_status, unconfirmed_at, cancelled_at, cancel_reason from public.sale;
-
-\i supabase/migrations/20261023T2050_c11_restaurar_ventas_entregadas.sql
-
-do $$ begin
-  if exists (select 1 from public.sale s join _c11_ventas_antes a on a.id = s.id
-              where s.status is distinct from a.status or s.unconfirmed_at is distinct from a.unconfirmed_at
-                 or s.cancelled_at is distinct from a.cancelled_at or s.cancel_reason is distinct from a.cancel_reason) then
-    raise exception 'PRUEBA C11 · 4: sin Foodint, la restauración ha tocado alguna venta.';
-  end if;
-  raise notice 'C11 · 4: sin Foodint, la restauración no toca ninguna venta';
-end $$;
 
 do $$
 declare
@@ -101,14 +86,13 @@ begin
 end $$;
 reset role;
 
--- 5 · Las vueltas atrás.
-\i supabase/vuelta-atras/20261023T2050_c11_restaurar_ventas_entregadas.down.sql
+-- 5 · La vuelta atrás.
 \i supabase/vuelta-atras/20261023T2045_c11_cierre_marca_para_revisar.down.sql
 do $$ begin
   if md5((select prosrc from pg_proc where oid = 'public.conta_cerrar_dias(uuid, timestamptz)'::regprocedure)) <> '7d1dd3c15193d716616fe268e3a5bab6' then
     raise exception 'PRUEBA C11 · 5: la vuelta atrás no deja conta_cerrar_dias como la 0170.';
   end if;
-  raise notice 'PRUEBA C11 en verde: el cierre no anula y marca para revisar una vez; sin Foodint la restauración no toca nada; las dos vueltas atrás, como estaba.';
+  raise notice 'PRUEBA C11 en verde: el cierre no anula y marca para revisar una vez; un usuario no puede lanzarlo; la vuelta atrás, como estaba.';
 end $$;
 
 rollback;

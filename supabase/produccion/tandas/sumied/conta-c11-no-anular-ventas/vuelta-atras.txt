@@ -1,6 +1,4 @@
-# Vuelta atrás de la tanda C11, en orden inverso: primero las ventas vuelven a
-# como las dejó el cierre (anuladas), luego conta_cerrar_dias vuelve a la 0170
+# Vuelta atrás de la tanda C11 (el freno): conta_cerrar_dias vuelve a la 0170
 # (y con ella, a ANULAR). Solo si Julio lo pide.
 cuenta: scripts/conta/produccion/cuentas/c11-cierre-no-anula.sql
-supabase/vuelta-atras/20261023T2050_c11_restaurar_ventas_entregadas.down.sql
 supabase/vuelta-atras/20261023T2045_c11_cierre_marca_para_revisar.down.sql
