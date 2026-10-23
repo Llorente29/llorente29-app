@@ -22,7 +22,23 @@
 # volvería a mandar los de la 0820 con la descripción larga y gastaría los
 # intentos otra vez. (La 0830 no depende del despliegue: va en la misma tanda.)
 # No toca el camino del pedido.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+# Vuelta atrás: el vuelta-atras.txt de esta carpeta.
+#
+# C10 (23/10): ésta es la tanda «heredada», la viva el día del C10. La termina
+# el #299, y solo él la edita. Se lanza con tanda=heredada, desde main o desde
+# la rama claude/d07a-vuelta-atras-0820. Lo de staging de la 0880 está en
+# supabase/staging/tandas/sumied/claude-d07a-vuelta-atras-0820.txt.
+#
+# D07a (run 190, 23/10): el ensayo paró en «la vuelta atrás automática
+# funcionaría»: la vuelta atrás de la 0820 no devolvía last_error ni
+# next_try_at. Ahora va primero la 0880 —AÑADE: la tabla
+# conta_respaldo_d07a_envios con el estado de antes de esos envíos— y la vuelta
+# atrás de la 0820 los devuelve de ahí, byte a byte. La 0880 va ANTES que la
+# 0820 aunque su número sea mayor: el orden lo decide este fichero.
+# La 0880 se llamaba 0840: la 0840 es la del C08 (#301), ya aplicada, y la 0850
+# a la 0870 son del #300; la 0880 es la siguiente libre. La tanda del C08,
+# en su copia (tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt).
 cuenta: scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql
+supabase/migrations/20261208T0880_d07a_respaldo_antes_de_reenviar.sql
 supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
 supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql

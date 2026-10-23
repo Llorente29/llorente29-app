@@ -1,8 +1,9 @@
-# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
+# Vuelta atrás de la tanda de producción viva (sumied/heredada, el aplicar.txt de esta carpeta:
 # D07a + D07c), en orden inverso: primero «Saldo prepago» fuera de las listas
 # que añadió la 0830 (las dos funciones byte a byte; para si alguna fila ya lo
-# usa), luego los envíos que siguen pendientes con el motivo de la 0820 dejan
-# de reintentarse.
+# usa), luego los envíos que siguen pendientes con el motivo de la 0820 vuelven a
+# como estaban (desde el respaldo de la 0880), y al final se quita el respaldo.
 cuenta: scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql
 supabase/vuelta-atras/20261208T0830_d07c_prepago_en_todas_las_listas.down.sql
 supabase/vuelta-atras/20261208T0820_d07a_diez_reenviar_descripcion.down.sql
+supabase/vuelta-atras/20261208T0880_d07a_respaldo_antes_de_reenviar.down.sql

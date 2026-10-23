@@ -540,9 +540,10 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe', env: { ...process.env, TANDA: 'heredada' } }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (D07a + D07c: la 0820, datos de Foodint, pide «autorizo»; la 0830 sigue)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (D07a + D07c: la 0880, el respaldo, sigue; la 0820, datos de Foodint, pide «autorizo»; la 0830 sigue)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
+    expect(r.out).toContain('20261208T0880_d07a_respaldo_antes_de_reenviar.sql: sigue')
     expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql: AUTORIZO')
     expect(r.out).toContain('20261208T0830_d07c_prepago_en_todas_las_listas.sql: sigue')
     expect(r.out).toContain('autorizo: 20261208T0820_d07a_diez_reenviar_descripcion.sql')
