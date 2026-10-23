@@ -3,6 +3,7 @@
 -- Vuelta atrás de la 0840 (C08): la fila de Lovers Burgers en Carabanchel,
 -- otra vez al q3v47. Solo si está como la dejó la 0840 (2qjdb); si no, no toca
 -- nada y lo dice. En staging, nada.
+-- sin prueba con datos: staging no tiene la cuenta de Foodint ni esa fila (la 0840 y esta no hacen nada allí); el ensayo de producción la pasa entera, en ROLLBACK, sobre la fila de verdad.
 do $$
 declare
   v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
