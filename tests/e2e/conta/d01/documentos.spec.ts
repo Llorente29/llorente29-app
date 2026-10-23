@@ -247,8 +247,7 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
   // base, tipo y cuota que se editan, y debajo base, IVA y total contra el PDF.
   const importes = page.getByRole('region', { name: 'Importes por tipo de IVA' })
   await expect(importes.getByRole('combobox', { name: 'Tipo de IVA de la línea 1' })).toHaveValue('10')
-  // En el campo, sin punto de miles (se escribe en él); en los totales, con él.
-  await expect(importes.getByLabel('Base al 10 %')).toHaveValue('1283,15')
+  await expect(importes.getByLabel('Base al 10 %')).toHaveValue('1.283,15')
   await expect(importes.locator('[data-prueba="totales-iva"]')).toContainText('1.283,15')
   await expect(importes.locator('[data-prueba="totales-iva"]')).toContainText('1.411,47 €')
   const gasto = page.getByRole('region', { name: 'A qué gasto va' })
@@ -385,6 +384,12 @@ test('Frente C (?marca=contabilidad): ni Cocina ni «Folvy» en Documentos', asy
   await expect(page.getByRole('heading', { level: 1, name: 'Mayorista Prueba Alfa · F-2026-1022' })).toBeVisible()
   // S02: «Cómo se apunta» es «El asiento que se crea».
   await expect(page.locator('details.s-asiento-ficha')).toContainText(/\d{8}|cerrado|no tiene|Falta|asiento/, { timeout: 20_000 })
+  // TEMPORAL (D03): qué enseña el panel si no sale el documento. Se quita al encontrarlo.
+  {
+    const d = await documentoALaVista(page)
+    await page.waitForTimeout(8000)
+    console.log('[D03-panel]', JSON.stringify({ texto: (await d.innerText()).slice(0, 400), html: (await d.innerHTML()).slice(0, 1500) }))
+  }
   await expect((await documentoALaVista(page)).getByRole('img', { name: /La factura F-2026-1022/ })).toBeVisible()
   await page.waitForTimeout(500)
   await sinFolvyNiCocina(page, 'N23')

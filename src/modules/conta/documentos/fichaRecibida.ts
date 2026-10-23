@@ -90,7 +90,8 @@ export const ETIQUETAS: Record<CampoFicha, string> = {
   aMano: 'El asiento, a mano',
 }
 
-const num2 = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+// useGrouping 'always': en es-ES, sin él, cuatro cifras no llevan punto («1283,15») y el total sí («1.411,47 €»).
+const num2 = new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' })
 /** Un importe como se escribe en el campo: «1.234,56». */
 export const importeEs = (n: number): string => num2.format(n)
 /** dd/mm/aaaa. */
