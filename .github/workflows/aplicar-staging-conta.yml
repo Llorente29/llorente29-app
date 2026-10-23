@@ -66,6 +66,7 @@ on:
     # cambia un fichero: lo de main no se reaplica).
     paths:
       - 'supabase/staging/aplicar.txt'
+      - 'supabase/staging/tandas/**'
       - 'supabase/migrations/**'
       - 'supabase/staging/sql/**'
       - 'supabase/vuelta-atras/**'
@@ -150,7 +151,7 @@ jobs:
           # W04: qué pasa y cómo (arriba, «QUÉ PASA»).
           if [ "$GITHUB_REF_NAME" = main ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             QUE='el manifiesto ENTERO, de verdad (a mano desde main)'; ENSAYO=0
-            grep -vE '^\s*(#|$)' "$MANIFIESTO" | sed -E 's/\s+$//' > /tmp/tanda.txt || true
+            node scripts/conta/staging-tanda.mjs entero > /tmp/tanda.txt
           elif [ "$GITHUB_REF_NAME" = main ]; then
             QUE="lo que añade este push (contra ${ANTES::7}), de verdad"; ENSAYO=0
             node scripts/conta/staging-tanda.mjs nuevas "$ANTES" > /tmp/tanda.txt

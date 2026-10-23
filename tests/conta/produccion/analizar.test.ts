@@ -25,7 +25,7 @@
 //   · La del C05 (libros y balances), ya aplicada: los seis en el historial de
 //     producción con la huella del repositorio (medido el 09/10). Copia fija en
 //     tanda-c05-20261009.txt, con su vuelta atrás en vuelta-atras-c05-20261009.txt.
-//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt):
+//   · La de AHORA, el manifiesto vivo (supabase/produccion/tandas/sumied/heredada/aplicar.txt, C10):
 //     impuestos por dentro (I01a, 0100–0150), con el contexto de producción
 //     leído en solo lectura el 18/10 y la regla del W01 (`informe`, la misma
 //     del ensayo). La del S01, ya aplicada, queda en su copia
@@ -1503,11 +1503,11 @@ describe('la tanda C08 · Lovers Burgers de Carabanchel, al catálogo de HubRise
 })
 
 describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+  const MANIFIESTO = 'supabase/produccion/tandas/sumied/heredada/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 23/10 a las 13:38 UTC, con la 0810 ya aplicada, para ESTOS ficheros.
-  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const medida = JSON.parse(readFileSync('supabase/produccion/tandas/sumied/heredada/contexto.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1558,7 +1558,7 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que 
     expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql'])
     const c = readFileSync(cuentas[0], 'utf8')
     expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN_C, DOWN])
+    expect(leerTanda('supabase/produccion/tandas/sumied/heredada/vuelta-atras.txt')).toEqual([DOWN_C, DOWN])
   })
   it('la 0830: las cinco declaradas con su prueba; las dos funciones cambian SOLO en la lista y el error, y la vuelta atrás las deja como en producción byte a byte', () => {
     const t = readFileSync(viva[1], 'utf8')

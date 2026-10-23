@@ -67,11 +67,19 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { posix } from 'node:path'
 import { ordenEnElFichero, ambiguosEnPlpgsql, columnasConocidas } from './produccion/analizar.mjs'
+import { carpetaDeTanda, ficherosDeTanda, ramaActual } from './produccion/tanda.mjs'
+import { textoDelManifiesto } from './staging-tanda.mjs'
+
+// C10 (23/10): la tanda de producción es la de la RAMA (supabase/produccion/tandas/<producto>/<rama>/),
+// y el manifiesto de staging, el cerrado más las tandas de cada rama (staging-tanda.mjs).
+const CARPETA_TANDA = carpetaDeTanda(process.env.TANDA || ramaActual())
+const TANDA_APLICAR = CARPETA_TANDA ? ficherosDeTanda(CARPETA_TANDA).aplicar : null
+const TANDA_VUELTA = CARPETA_TANDA ? ficherosDeTanda(CARPETA_TANDA).vueltaAtras : null
+const lineasDe = (texto) => texto.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
 
 const mal = []
-const manifiesto = 'supabase/staging/aplicar.txt'
-if (existsSync(manifiesto)) {
-  const pruebas = readFileSync(manifiesto, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#') && /_prueba\.sql$/.test(l))
+{
+  const pruebas = lineasDe(textoDelManifiesto()).filter((l) => /_prueba\.sql$/.test(l) && existsSync(l))
   for (const f of pruebas) {
     const t = readFileSync(f, 'utf8')
     if (!/^\s*set\s+local\s+role\s+authenticated\s*;/mi.test(t) && !/^--\s*sin usuario:\s*\S/m.test(t)) {
@@ -95,8 +103,8 @@ for (const n of readdirSync('scripts/conta').filter((x) => /^agente-.*\.sql$/.te
     if (/;\s*$/.test(l)) buf = ''
   }
 }
-const tanda = 'supabase/produccion/aplicar.txt'
-if (existsSync(tanda)) {
+const tanda = TANDA_APLICAR
+if (tanda && existsSync(tanda)) {
   const lineas = readFileSync(tanda, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
   if (!lineas.some((l) => /^cuenta:\s*scripts\/conta\/produccion\/cuentas\/[A-Za-z0-9_-]+\.sql$/.test(l))) {
     mal.push(`${tanda}: no declara qué cuenta antes y después («cuenta: scripts/conta/produccion/cuentas/<f>.sql»)`)
@@ -121,9 +129,8 @@ if (existsSync(tanda)) {
   }
 }
 const sqlDeLasTandas = new Set()
-for (const m of ['supabase/produccion/aplicar.txt', 'supabase/produccion/vuelta-atras.txt', 'supabase/staging/aplicar.txt']) {
-  if (!existsSync(m)) continue
-  for (const l of readFileSync(m, 'utf8').split('\n').map((x) => x.trim())) if (l && !l.startsWith('#') && !l.startsWith('cuenta:') && /\.sql$/.test(l) && existsSync(l)) sqlDeLasTandas.add(l)
+for (const texto of [TANDA_APLICAR, TANDA_VUELTA].filter((m) => m && existsSync(m)).map((m) => readFileSync(m, 'utf8')).concat(textoDelManifiesto())) {
+  for (const l of texto.split('\n').map((x) => x.trim())) if (l && !l.startsWith('#') && !l.startsWith('cuenta:') && /\.sql$/.test(l) && existsSync(l)) sqlDeLasTandas.add(l)
 }
 for (const f of sqlDeLasTandas) {
   for (const x of ordenEnElFichero(readFileSync(f, 'utf8'))) {
@@ -143,8 +150,8 @@ for (const [f, t] of textos) {
 // tanda ya aplicada (B02 · T1, la 0200), se queda como estaba: nombrada aquí, una por una, y
 // ninguna más. La siguiente tanda de ese fichero ya cumple la regla.
 const ANTES_DE_LA_REGLA_8 = new Set(['supabase/vuelta-atras/20261101T0200_b02_entrada.down.sql'])
-const vueltas = 'supabase/produccion/vuelta-atras.txt'
-if (existsSync(vueltas)) {
+const vueltas = TANDA_VUELTA
+if (vueltas && existsSync(vueltas)) {
   // Lo que ejecuta cada prueba: «\i ruta» (desde la raíz, como corre el workflow) y «\ir ruta» (desde la carpeta de la prueba).
   const ejecutadas = new Set()
   const carpeta = 'supabase/staging/sql'
