@@ -63,7 +63,7 @@ export type BorradorFicha = {
   vence: string
   estadoPago: string
   /** El nombre del PDF o la foto nueva que se ha elegido ('' = ninguno). */
-  papel: string
+  documento: string
   sinPdf: boolean
   motivoSinPdf: string
   /** «Editar el asiento a mano»: la cuenta que se pone en lugar de la propuesta (código propuesto → código elegido). */
@@ -84,7 +84,7 @@ export const ETIQUETAS: Record<CampoFicha, string> = {
   formaPago: 'Forma de pago',
   vence: 'Vence',
   estadoPago: 'Estado del pago',
-  papel: 'PDF',
+  documento: 'PDF',
   sinPdf: 'Sin PDF',
   motivoSinPdf: 'Motivo de «Sin PDF»',
   aMano: 'El asiento, a mano',
@@ -181,7 +181,7 @@ export function borradorDe(d: DatosParaBorrador): BorradorFicha {
     formaPago: d.formaPago ?? '',
     vence: d.vence ?? '',
     estadoPago: d.pagada ? 'pagada' : 'sin_pagar',
-    papel: '',
+    documento: '',
     sinPdf: !!d.sinPdf,
     motivoSinPdf: d.sinPdf?.motivo ?? '',
     aMano: d.aMano ?? {},
@@ -406,7 +406,7 @@ export const COMO_SE_GUARDA: Record<CampoFicha, ComoSeGuarda> = {
   formaPago: { con: 'conta_recibida_guardar' },
   vence: { con: 'conta_recibida_guardar' },
   aMano: { con: 'conta_recibida_guardar' },
-  papel: { con: 'conta_recibida_papel_poner' },
+  documento: { con: 'conta_recibida_papel_poner' },
   sinPdf: { con: 'conta_recibida_sin_papel' },
   motivoSinPdf: { con: 'conta_recibida_sin_papel' },
   estadoPago: { falta: 'una factura sin validar no se puede marcar pagada: mark_supplier_invoice_paid pide que esté aprobada. Se marca al validarla, o la casa el banco' },
@@ -571,7 +571,7 @@ export function formatoCampo(nombreProveedor: (id: string) => string, nombreLoca
       }
       case 'formaPago': return FORMAS_PAGO.find((f) => f.valor === v)?.texto ?? '—'
       case 'estadoPago': return ESTADOS_PAGO.find((f) => f.valor === v)?.texto ?? '—'
-      case 'papel': return v ? `«${String(v)}»` : 'el que tenía'
+      case 'documento': return v ? `«${String(v)}»` : 'el que tenía'
       case 'sinPdf': return v ? 'Sí' : 'No'
       case 'aMano': {
         const m = (v as Record<string, string> | null) ?? {}

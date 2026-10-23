@@ -195,9 +195,9 @@ export default function RevisarFacturaPage() {
   useEffect(() => () => { if (fichero) URL.revokeObjectURL(fichero.url) }, [fichero])
   const elegirPapel = (file: File) => {
     setFichero({ file, url: URL.createObjectURL(file) })
-    ed.poner('papel', file.name)
+    ed.poner('documento', file.name)
   }
-  const ficheroVivo = b.papel && fichero?.file.name === b.papel ? fichero : null
+  const ficheroVivo = b.documento && fichero?.file.name === b.documento ? fichero : null
 
   const [mensaje, setMensaje] = useState<MensajeGuardado | null>(null)
   const [guardando, setGuardando] = useState(false)
@@ -220,7 +220,7 @@ export default function RevisarFacturaPage() {
       else if (r.hechos.length) partes.push(`Guardado: ${r.hechos.join(' · ')}.`)
       if (r.repropuesto) partes.push(r.repropuesto)
       let sinTanda = !r.conTanda && aLaFuncion.length > 0
-      if (campos.includes('papel') && ficheroVivo) {
+      if (campos.includes('documento') && ficheroVivo) {
         const x = await ponerPapelRecibida(fac, ficheroVivo.file, userName)
         if (x.hecho) { partes.push(x.texto); tocado = true } else if (x.falta) sinTanda = true; else fallos.push({ etiqueta: 'PDF', porque: x.texto })
       }
@@ -484,7 +484,7 @@ export default function RevisarFacturaPage() {
           </div>
         )}
         {ficheroVivo
-          ? (esFoto(ficheroVivo.file.type) ? <img src={ficheroVivo.url} alt={`El papel elegido para la factura ${fac.numero ?? ''}`} /> : <PapelPdf url={ficheroVivo.url} titulo={`El papel elegido para la factura ${fac.numero ?? ''}`} />)
+          ? (esFoto(ficheroVivo.file.type) ? <img src={ficheroVivo.url} alt={`El documento elegido para la factura ${fac.numero ?? ''}`} /> : <PapelPdf url={ficheroVivo.url} titulo={`El documento elegido para la factura ${fac.numero ?? ''}`} />)
           : <>
             {!papel.datos && !papel.error && !sinPapelGuardado && <div className="s-lista-cargando" aria-label="Cargando el PDF" />}
             {papel.error && hueco(textoSinPapel({ archivo, aMano: false, error: papel.error }))}

@@ -52,7 +52,7 @@ function leerGuardado(hoy: string): BorradorFicha {
   try {
     const t = sessionStorage.getItem(GUARDADO)
     if (!t) return vacio(hoy)
-    return { ...vacio(hoy), ...(JSON.parse(t) as Partial<BorradorFicha>), papel: '' }
+    return { ...vacio(hoy), ...(JSON.parse(t) as Partial<BorradorFicha>), documento: '' }
   } catch { return vacio(hoy) }
 }
 function guardarBorrador(b: BorradorFicha | null): void {
@@ -167,10 +167,10 @@ export default function RecibidaAMano() {
     <DocumentoFicha titulo={fichero?.file.name ?? 'Sin PDF todavía'} oculto={false} alOcultar={() => undefined}>
       {fichero
         ? <>
-          <div className="cxf-papel-acciones"><Boton variante="secundario" onClick={() => { setFichero(null); poner({ papel: '' }) }}>Quitar</Boton></div>
+          <div className="cxf-papel-acciones"><Boton variante="secundario" onClick={() => { setFichero(null); poner({ documento: '' }) }}>Quitar</Boton></div>
           {/^image\//.test(fichero.file.type) ? <img src={fichero.url} alt="La factura elegida" /> : <PapelPdf url={fichero.url} titulo="La factura elegida" />}
         </>
-        : <HuecoPapel alElegir={(file) => { setFichero({ file, url: URL.createObjectURL(file) }); poner({ papel: file.name }) }} sinPdf={b.sinPdf} motivoSinPdf={b.motivoSinPdf}
+        : <HuecoPapel alElegir={(file) => { setFichero({ file, url: URL.createObjectURL(file) }); poner({ documento: file.name }) }} sinPdf={b.sinPdf} motivoSinPdf={b.motivoSinPdf}
             alCambiarSinPdf={poner} deshacerSinPdf={sinCambio} soloLectura={false} />}
     </DocumentoFicha>
   )
