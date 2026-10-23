@@ -19,7 +19,7 @@ import { esFirmaAutomatica } from '@/modules/conta/lib/autor'
 import { pasosCierre, pedirCierre, type PasoCierre, type CierreMes } from '@/modules/conta/lib/diario'
 import { finDeMes, mesesHasta, puntoDeMes, trimestreDe, type PuntoMes } from '@/modules/conta/lib/inicio'
 import type { PerfilFiscal } from '@/modules/conta/lib/plazosImpuestos'
-import { ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
+import { filtrar, ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
 import { colaPorRevisar } from '@/modules/conta/documentos/recibidas'
 import { leerDocumentos } from '@/modules/conta/services/documentosService'
 
