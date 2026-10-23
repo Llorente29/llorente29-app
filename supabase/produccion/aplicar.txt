@@ -1,21 +1,31 @@
-# Tanda de producción viva · S02 · PR 3 · las cifras: una fuente por concepto
-# (Julio, 22/10). Rama claude/cool-noether-i932tx. Número 0490: la siguiente
-# libre por encima de la 0480 (E05, ya aplicada; su copia en
-# tests/conta/produccion/tanda-e05-releer-riders-20261022.txt).
+# Tanda de producción viva · D03 · la recibida que se sube sin recepción nace
+# con su documento, las dos de Foodint que nacieron sin él, y «Guardar
+# cambios» de su ficha (Julio, 23/10).
+# Rama claude/ficha-recibida. Números 0770, 0780 y 0790: por encima del más alto que
+# existe (la 0760 de la C06b; la 0500 y la 0510 ya son de la C06b). La
+# anterior de este fichero (S02 · PR 3, 0490, ya aplicada y fusionada en el
+# #293): su copia en tests/conta/produccion/tanda-s02-cifras-20261023.txt.
 #
-#   1. 0490 — AÑADE conta_pendientes (lo que espera una acción de una
-#      persona, contado una vez con la vara de su pantalla), conta_saldo_bancos
-#      (por banco: su 572 validada, lo propuesto aparte, el último extracto y
-#      lo sin casar) y conta_saldos_terceros (el saldo del libro de cada 40,
-#      41, 43 y 44, deudor o acreedor, con su grupo y su contacto). Las tres
-#      solo leen. CAMBIA en caliente conta_impuesto_calendario (misma firma):
-#      la ventana salta lo que está «No hace falta», y eso sigue en las filas
-#      con su porqué (regla 7). Declarada en la cabecera, con su prueba de
-#      staging. No toca ninguna fila.
+#   1. 0770 — CAMBIA en caliente _compras_factura_desde_papel (misma firma):
+#      sin recepción, o con una recepción sin documento, la factura nace con
+#      el primer fichero de su lectura (de su cuenta, en receipt-uploads).
+#      Declarada en la cabecera, con su prueba de staging. No toca filas.
+#   2. 0780 — DATOS de Foodint: FAC-00098 (S11/0177416578) y FAC-00101
+#      (COHELDI P26 4.980), con el PDF de su lectura. Cambia DOS filas que
+#      existen: AUTORIZO con su nombre. Para si las que están así, en todas
+#      las cuentas, no son esas dos, o si alguna ya tiene documento.
+#   3. 0790 — AÑADE lo que guarda la ficha de la recibida: columnas que
+#      admiten nulos en supplier_invoice (forma de pago prevista, «Sin PDF»,
+#      asiento a mano, base de la retención), supplier_invoice_expense (el
+#      gasto repartido) y supplier_invoice_change (el historial), y las
+#      funciones conta_recibida_guardar, conta_recibida_papel_poner y
+#      conta_recibida_sin_papel. No toca filas ni ninguna función que exista.
 #
-# No toca el camino del pedido (ni lo lee ni lo llama). Funciones que
-# desplegar a mano: ninguna. Después del real, el front del PR 3 lee las tres
-# (si aún no están, cae a la cuenta de antes y lo dice en la consola).
+# No toca el camino del pedido (ningún pedido escribe recibidas ni asientos).
+# Ninguna función que desplegar. No sale nada a Diez: las dos siguen en revisión y sin
+# asiento; al validarlas, el D02 enlaza su PDF al asiento.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/s02-cifras.sql
-supabase/migrations/20261205T0490_s02_cifras.sql
+cuenta: scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
+supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
+supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql
+supabase/migrations/20261206T0790_d03_recibida_guardar.sql

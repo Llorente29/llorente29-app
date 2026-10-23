@@ -44,8 +44,9 @@ function pijama(css: string): string[] {
 }
 const IMPORTS_PERMITIDOS = [
   /^react$/, /^react-dom/, /^react-router-dom$/, /^lucide-react$/, /^\.\//,
-  // S02 · Las plantillas (diseno/plantillas) cogen las piezas de diseno/, de un nivel más arriba.
-  /^\.\.\/(Icono|iconos|valores)$/, /^\.\.\/\.\.\/\.\.\/\.\.\/supabase\/functions\/_shared\/marcas(\.ts)?$/,
+  // S02 · Las plantillas (diseno/plantillas) cogen las piezas de diseno/, de un nivel más arriba
+  // (el botón y el diálogo, desde «Cambios sin guardar»: la barra y «¿Salir sin guardar?»).
+  /^\.\.\/(Icono|iconos|valores|Boton|Dialogo)$/, /^\.\.\/\.\.\/\.\.\/\.\.\/supabase\/functions\/_shared\/marcas(\.ts)?$/,
   /^@\/modules\/conta\/lib\/(formato|lectorCsvBanco)$/,
   // Las tres piezas del M01 y el campo de fecha, que se re-exportan con su nombre del sistema.
   /^@\/modules\/conta\/ui\/(tabla\/TablaDensa|formulario\/FormularioBloques|documento\/PanelDocumento|fecha\/CampoFecha)$/,

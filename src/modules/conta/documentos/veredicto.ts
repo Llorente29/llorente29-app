@@ -40,6 +40,18 @@ export interface DatosVeredicto {
   /** De dónde sale la cuenta de gasto (proveedor.gasto.origen o lo aprendido). */
   origenGasto: string | null
   pagada: { fecha: string } | null
+  /**
+   * Ficha completa (tablero 3b): ¿base + IVA de sus importes por tipo dan el
+   * total del PDF? Sale de la ficha (fichaRecibida.contraElPdf), también para
+   * la que entró desde una recepción sin lectura propia. null: no se sabe.
+   */
+  cuadraConElPdf?: boolean | null
+  /**
+   * D03: la diferencia con el PDF es 1 céntimo de redondeo (sus líneas traen más de
+   * dos decimales, como la Orange). Se dice en ámbar en los importes, pero no es
+   * «Revisa esto»: el aviso «Base + IVA = …» de la propuesta no cuenta.
+   */
+  redondeo?: boolean
 }
 
 export interface Veredicto {
@@ -96,11 +108,22 @@ export function veredictoFactura(d: DatosVeredicto): Veredicto {
   if (d.propuesta === null) {
     return { tipo: 'no_encaja', titulo: 'No encaja', porque: frase(d.porqueSinPropuesta ?? 'No he podido preparar su asiento'), detalle }
   }
+  if (d.cuadraConElPdf === false) {
+    return { tipo: 'revisa', titulo: 'Revisa esto', porque: 'Base + IVA no dan el total del PDF: corrige los importes por tipo de IVA.', detalle }
+  }
   const leves = d.comprobaciones.filter((c) => !c.ok && c.grave === false)
-  const avisos = d.propuesta?.avisos ?? []
-  if (graves.length > 0 || leves.length > 0 || avisos.length > 0 || (d.propuesta && d.propuesta.confianza !== 'seguro')) {
-    const motivo = graves[0]?.texto ?? avisos[0] ?? leves[0]?.texto
-      ?? (d.propuesta?.confianza === 'duda' ? 'La cuenta de gasto es una duda: confírmala.' : 'La cuenta de gasto no está confirmada todavía: míralo antes de validar.')
+  const avisos = (d.propuesta?.avisos ?? []).filter((a) => !(d.redondeo && /^Base \+ IVA = /.test(a)))
+  // Ficha completa (tablero 3b): «Revisa esto» solo si falta algo DE VERDAD, y
+  // diciendo qué. Una propuesta «probable» dice por qué en sus razones (el
+  // local, varias cuentas en sus facturas anteriores): eso es lo que se dice.
+  // Sin una razón que la haga dudosa, si el gasto es el de su ficha o el de sus
+  // facturas anteriores y los importes cuadran, está lista.
+  // El redondeo de 1 céntimo pone la propuesta en «duda» (su aviso «Base + IVA = …»): quitado ese aviso, no cuenta.
+  const soloRedondeo = !!d.redondeo && (d.propuesta?.avisos ?? []).length > avisos.length && avisos.length === 0
+  const prop = d.propuesta && soloRedondeo && d.propuesta.confianza === 'duda' ? { ...d.propuesta, confianza: 'probable' as const } : d.propuesta
+  const duda = prop && prop.confianza !== 'seguro' ? motivoDeLaDuda(prop, d.origenGasto, d.comprobaciones.length > 0 || d.cuadraConElPdf === true) : null
+  if (graves.length > 0 || leves.length > 0 || avisos.length > 0 || duda) {
+    const motivo = graves[0]?.texto ?? avisos[0] ?? leves[0]?.texto ?? duda ?? ''
     return { tipo: 'revisa', titulo: 'Revisa esto', porque: frase(motivo), detalle }
   }
   if (d.propuesta === undefined) {
@@ -110,13 +133,29 @@ export function veredictoFactura(d: DatosVeredicto): Veredicto {
   const partes: string[] = []
   const deFicha = coincide === true
   const gasto = motivoDelGasto(d.origenGasto)
-  if (deFicha && gasto) partes.push('El proveedor, el IVA y la cuenta coinciden con su ficha y sus facturas anteriores')
+  const deAnteriores = !!d.origenGasto && /aprend|anterior|historial|diez/i.test(d.origenGasto)
+  if (deAnteriores) partes.push(deFicha ? 'El proveedor coincide con su ficha y el gasto es el de sus facturas anteriores' : `Es de ${d.proveedor.nombre} y el gasto es el de sus facturas anteriores`)
+  else if (deFicha && gasto) partes.push('El proveedor, el IVA y la cuenta coinciden con su ficha y sus facturas anteriores')
   else if (deFicha) partes.push('El proveedor y su NIF coinciden con su ficha')
   else partes.push(`Es de ${d.proveedor.nombre}`)
-  if (d.comprobaciones.length > 0) partes.push('los importes del PDF cuadran')
+  if (d.comprobaciones.length > 0 || d.cuadraConElPdf === true) partes.push('los importes del PDF cuadran')
   const primera = `${partes.join(', y ')}.`
   const pagada = d.pagada ? ` Ya está pagada en el banco (${ddmm(d.pagada.fecha)}).` : ''
   return { tipo: 'lista', titulo: 'Lista para contabilizar', porque: `${primera}${pagada}`, detalle }
+}
+
+/**
+ * Por qué una propuesta no es segura, dicho como lo que falta. null si no hay
+ * una razón de verdad: el gasto es el de su ficha o el de sus facturas
+ * anteriores y los importes cuadran (entonces no hay nada que revisar).
+ */
+export function motivoDeLaDuda(p: NonNullable<DatosVeredicto['propuesta']>, origenGasto: string | null, cuadra: boolean): string | null {
+  if (p.razones.some((r) => r.decision === 'Común')) return 'No sé de qué local es: elígelo en «A qué gasto va» (si no, queda común y el informe lo reparte).'
+  const varias = p.razones.find((r) => /Probable, no segura|varias cuentas|\d+ cuentas/i.test(r.porque))
+  if (varias) return varias.porque.replace(/\s*\([^)]*\)\s*$/, '')
+  if (p.confianza === 'duda') return 'La cuenta de gasto es una duda: confírmala.'
+  if (origenGasto && cuadra) return null
+  return origenGasto ? 'Los importes no se han comprobado con el PDF: compáralos antes de validar.' : 'No sé de dónde sale la cuenta de gasto: confírmala.'
 }
 
 /** El tono y el motivo de cada campo de la ficha (PROPUESTO, Por revisar o bien). */

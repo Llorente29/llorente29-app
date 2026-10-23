@@ -184,7 +184,8 @@ test.describe('B02 · Bancos, conciliar', () => {
       await expect(panel.getByRole('button', { name: /^Traspaso a / }).first()).toBeVisible()
       await expect(panel.getByRole('button', { name: 'No va a contabilidad…' })).toBeVisible()
       await panel.getByText('Ver el asiento que se crea').click()
-      await expect(panel.locator('.cxn-asiento')).toContainText('40700001')
+      // El asiento común (diseno/plantillas): la tabla Cuenta · Nombre · Debe · Haber.
+      await expect(panel.locator('details.s-asiento-ficha .s-asiento-tabla')).toContainText('40700001')
       // Cambiar el alto de la ventana con el panel abierto no vuelve a montar la pantalla:
       // ni recarga la página (la marca en window sigue), ni reaparece el esqueleto, ni navega.
       const navegaciones: string[] = []

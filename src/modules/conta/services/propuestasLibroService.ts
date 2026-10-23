@@ -10,6 +10,7 @@
 // (después de lo traído y de los meses cerrados): lo de antes es del programa
 // anterior o ya está cerrado.
 
+import { aplicarAsientoAMano, aplicarReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
   ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, deLaFacturaDeLote, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
@@ -577,13 +578,22 @@ function proveedorDeParty(roles: readonly Fila[], partyId: string): string | nul
  * proponerPendientes, sacado para que una factura se apunte igual que en la tanda.
  */
 async function facturasDeProveedor(accountId: string, companyId: string, desde: string, hasta: string, ctx: ContextoLibro, r: ResultadoProponer,
-  quien: string | null, abierto: (f: string) => boolean, soloFactura?: string, ver?: (p: Propuesta) => void) {
+  quien: string | null, abierto: (f: string) => boolean, soloFactura?: string, ver?: (p: Propuesta) => void, localPropuesto?: string | null) {
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
+  // D03 · 0790: lo que guarda la ficha (el gasto repartido y el asiento a mano). Mientras
+  // la base no lo tenga (staging antes de aplicarla), se lee lo de siempre.
+  const SELECT = 'id, supplier_id, location_id, brand_id, source, issuer_name, issuer_tax_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)'
+  const consulta = (sel: string) => tabla('supplier_invoice').select(sel)
+    .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).or(`company_id.is.null,company_id.eq.${companyId}`)
+    .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false })
+  const conLaFicha = async (): Promise<Fila[]> => {
+    const x = await consulta(`${SELECT}, entry_overrides, supplier_invoice_expense(position, account_code, location_id, is_common, amount)`)
+    if (x.error && /does not exist|could not find|relationship/i.test(x.error.message)) return leer(consulta(SELECT), 'las facturas')
+    return leer(Promise.resolve(x), 'las facturas')
+  }
   const [leidas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
-    leer(tabla('supplier_invoice').select('id, supplier_id, location_id, brand_id, source, issuer_name, issuer_tax_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)')
-      .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).or(`company_id.is.null,company_id.eq.${companyId}`)
-      .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false }), 'las facturas'),
+    conLaFicha(),
     leer(tabla('party_role').select('party_id, supplier_id, role').eq('account_id', accountId), 'los socios'),
   ])
   // «Cómo se apunta» (ver) enseña la propuesta aunque ya tenga asiento; al proponer, las que lo tienen ya estaban.
@@ -637,17 +647,23 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     // su gasto por tipo y su reparto salen de la factura (lib: deLaFacturaDeLote).
     const tipoDe = (pct: number) => ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_')) ?? null
     const lote = f.source === 'lote' ? deLaFacturaDeLote(f, gasto, tipoDe, (id) => ctx.locales.get(id) ?? null) : null
+    // D03 · 0790: el IVA por tipo de supplier_invoice_tax manda siempre que tenga filas (lo corregido en la ficha).
+    const deLineas = ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
+      const t = tipoDe(n(l.vat_pct))
+      return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: s(l.expense_account_code) ?? gasto }
+    })
+    const impuestos = ((f.supplier_invoice_tax ?? []) as Fila[]).map((x) => ({ porcentaje: n(x.vat_pct), base: n(x.base), cuota: n(x.vat_amount) }))
+    const lc = lineasYCuotas(deLineas, impuestos, gasto, tipoDe, ((f.supplier_invoice_line ?? []) as Fila[]).some((l) => !!s(l.expense_account_code)))
     const res = facturaProveedor({
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: lote?.proveedor ?? s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
-      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
+      // Ficha completa (tablero 3b): una sola factura sin local guardado lleva el de su
+      // recepción, el que la ficha enseña como PROPUESTO («el local sale de la recepción»).
+      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id) ?? (soloFactura ? localPropuesto ?? null : null), total: n(f.grand_total),
       // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
-      lineas: lote?.lineas ?? ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
-        const t = tipoDe(n(l.vat_pct))
-        return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: s(l.expense_account_code) ?? gasto }
-      }),
-      ...(lote ? { cuotas: lote.cuotas, reparto: lote.reparto } : {}),
+      lineas: lote?.lineas ?? (f.source === 'liquidacion' ? deLineas : lc.lineas),
+      ...(lote ? { cuotas: lote.cuotas, reparto: lote.reparto } : lc.cuotas ? { cuotas: lc.cuotas } : {}),
       ...(f.source === 'liquidacion' ? {
-        cuotas: ((f.supplier_invoice_tax ?? []) as Fila[]).map((x) => ({ porcentaje: n(x.vat_pct), base: n(x.base), cuota: n(x.vat_amount) })),
+        cuotas: impuestos,
         marcaId: s(f.brand_id), faltaNumero: !s(f.invoice_number),
         porAclarar: (((f.reading as Fila | null)?.requisitos ?? []) as Fila[]).filter((x) => (x.id === 'solape' || x.id === 'cuadre') && x.ok === false).map((x) => String(x.texto)),
       } : {}),
@@ -680,7 +696,11 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       res.propuesta.razones.push({ decision: `Gasto: ${s(deLoAprendido.nombre) ?? 'la cuenta'} · ${deLoAprendido.cuenta}`, porque: `${s(deLoAprendido.porque) ?? ''} (${s(deLoAprendido.origen) ?? 'aprendido'})` })
       if (deLoAprendido.confianza !== 'seguro') res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
     }
-    const final = aplicarAprendizaje(res.propuesta, `supplier_invoice:${sup}`, ctx.correcciones)
+    // D03 · 0790: el gasto repartido y el asiento a mano de la ficha mandan sobre lo aprendido.
+    const reparto = ((f.supplier_invoice_expense ?? []) as Fila[]).sort((a, b) => n(a.position) - n(b.position))
+      .map((x) => ({ cuenta: String(x.account_code), local: s(x.location_id), comun: x.is_common === true, importe: n(x.amount) }))
+    const aprendida = aplicarAprendizaje(res.propuesta, `supplier_invoice:${sup}`, ctx.correcciones)
+    const final = aplicarAsientoAMano(f.vat_non_deductible === true ? aprendida : aplicarReparto(aprendida, reparto), f.entry_overrides ?? null)
     // N23 «Cómo se apunta»: la misma propuesta, sin escribirla.
     if (ver) ver(final)
     else await proponer(companyId, final, null, r, ctx, quien)
@@ -689,10 +709,10 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
 }
 
 /** D01 · N23: propone la factura recibida (ya aprobada) como en la tanda. Lo que no se propone, dice por qué. */
-export async function proponerFactura(accountId: string, companyId: string, invoiceId: string, fecha: string, quien: string | null): Promise<ResultadoProponer> {
+export async function proponerFactura(accountId: string, companyId: string, invoiceId: string, fecha: string, quien: string | null, localPropuesto?: string | null): Promise<ResultadoProponer> {
   const ctx = await cargarContexto(accountId, companyId)
   const r: ResultadoProponer = { propuestas: 0, yaEstaban: 0, descartadas: 0, sinPropuesta: [], validadasSolas: 0, mesVentas: null, quedanDias: 0 }
-  await facturasDeProveedor(accountId, companyId, fecha, fecha, ctx, r, quien, (f) => diaAbierto(f, ctx.calendario), invoiceId)
+  await facturasDeProveedor(accountId, companyId, fecha, fecha, ctx, r, quien, (f) => diaAbierto(f, ctx.calendario), invoiceId, undefined, localPropuesto)
   return r
 }
 
@@ -701,12 +721,12 @@ export async function proponerFactura(accountId: string, companyId: string, invo
  * en revisión o ya aprobada), con el nombre de cada cuenta. No escribe nada.
  * Si no sale, dice por qué.
  */
-export async function verPropuestaFactura(accountId: string, companyId: string, invoiceId: string, fecha: string): Promise<
+export async function verPropuestaFactura(accountId: string, companyId: string, invoiceId: string, fecha: string, localPropuesto?: string | null): Promise<
   { propuesta: Propuesta; nombres: Map<string, string> } | { propuesta: null; porque: string }> {
   const ctx = await cargarContexto(accountId, companyId)
   const r: ResultadoProponer = { propuestas: 0, yaEstaban: 0, descartadas: 0, sinPropuesta: [], validadasSolas: 0, mesVentas: null, quedanDias: 0 }
   let vista: Propuesta | null = null
-  await facturasDeProveedor(accountId, companyId, fecha, fecha, ctx, r, null, (f) => diaAbierto(f, ctx.calendario), invoiceId, (p) => { vista = p })
+  await facturasDeProveedor(accountId, companyId, fecha, fecha, ctx, r, null, (f) => diaAbierto(f, ctx.calendario), invoiceId, (p) => { vista = p }, localPropuesto)
   const p = vista as Propuesta | null
   if (!p) return { propuesta: null, porque: r.sinPropuesta[0]?.porque ?? 'Esta factura no tiene propuesta todavía.' }
   const codigos = [...new Set(p.lineas.map((l) => l.cuenta))]

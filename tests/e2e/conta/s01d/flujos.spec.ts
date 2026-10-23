@@ -152,9 +152,11 @@ test('S01d · recibida a mano (cuenta A): sin base ni local no guarda; con base 
     const elegido = valores.includes(HERMANOS_RUIZ) ? HERMANOS_RUIZ : valores.find((v) => v !== '')
     expect(elegido, 'la cuenta A tiene algún proveedor').toBeTruthy()
     await proveedor.selectOption(elegido!)
-    await page.getByLabel('Número de factura').fill(numero)
+    // Ficha completa (tablero 3b): la a mano es la misma ficha que la que entra sola
+    // (FichaRecibidaBloques): «Nº de factura» y una línea de IVA con base, tipo y cuota.
+    await page.getByLabel('Nº de factura').fill(numero)
     // La fecha de expedición viene puesta (hoy); el tipo, el 21 %.
-    await page.getByLabel('Tipo de IVA').selectOption('21')
+    await page.getByLabel('Tipo de IVA de la línea 1').selectOption('21')
 
     // Sin base ni local: no guarda y dice qué falta, debajo del campo.
     // S01e: A lleva el eje de local, así que se pide, con «Común» como una opción más.
@@ -171,9 +173,9 @@ test('S01d · recibida a mano (cuenta A): sin base ni local no guarda; con base 
     await expect(page).toHaveURL(/\/conta\/documentos\/nueva$/)
 
     // Con base: cuota (base × tipo) y total (base + cuota), al céntimo.
-    await page.getByLabel('Base imponible (€)').fill('100,00')
-    await expect(page.getByLabel('Cuota de IVA (€)')).toHaveValue('21,00')
-    await expect(page.getByLabel('Total (€)')).toHaveValue('121,00')
+    await page.getByLabel('Base al 21 %').fill('100,00')
+    await expect(page.getByLabel('Cuota al 21 %')).toHaveValue('21,00')
+    await expect(page.locator('[data-prueba="totales-iva"]')).toContainText(/Total\s*121,00\s€/)
     await expect(page.getByText('Escribe la base imponible.')).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Guardar y revisarla' }).click()
@@ -181,12 +183,14 @@ test('S01d · recibida a mano (cuenta A): sin base ni local no guarda; con base 
     await expect(page).toHaveURL(new RegExp(`/conta/documentos/recibidas/${UUID}\\?ver=por-revisar$`), { timeout: 30_000 })
     // Regla 8: dice qué ha guardado y qué toca ahora.
     await expect(page.getByText(new RegExp(`^Factura ${numero} de .+ guardada\\. Revísala y apúntala\\.$`))).toBeVisible()
-    // Sin papel: se escribió a mano.
-    // S02: el papel va a la derecha de la ficha, en el panel «Documento»: su
-    // título dice «Sin fichero» y el cuerpo, por qué.
+    // Sin papel: se escribió a mano. Ficha completa: el panel «Documento» dice «Sin PDF»
+    // y, en su hueco, por qué y «Arrastra aquí el PDF o la foto · Subir»; debajo del
+    // título, «Escrita a mano» (solo porque lo es).
     const papel = page.getByRole('complementary', { name: 'Documento' })
-    await expect(papel.getByText('Sin fichero', { exact: true })).toBeVisible()
-    await expect(papel.getByText('Sin fichero: apuntada a mano.')).toBeVisible()
+    await expect(papel.getByText('Sin PDF', { exact: true })).toBeVisible()
+    await expect(papel.getByText('Escrita a mano, sin PDF todavía.')).toBeVisible()
+    await expect(papel.getByText(/Arrastra aquí el PDF o la foto/)).toBeVisible()
+    await expect(page.locator('[data-prueba="de-donde-vino"]')).toHaveText(/^Escrita a mano el \d{2}\/\d{2}/)
 
     // En la base: para revisar, a mano, con sus importes y UNA línea (de ella sale el asiento).
     const id = new RegExp(`/recibidas/(${UUID})\\?`).exec(page.url())![1]

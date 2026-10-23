@@ -38,7 +38,7 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  NOMBRE_SITIO, cifras, deDondeSale, delLibroDiario, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, marcaNegativoDiez, mesAnterior, mesDe, nombreMes, numeroVisible,
+  NOMBRE_SITIO, cifras, deDondeSale, delLibroDiario, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, mesAnterior, mesDe, nombreMes, numeroVisible,
   pasosCierre, pastillas, pedirCierre, seDecideEnSuSitio, sePuedeCerrar, sinValidarPorSitio, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
@@ -66,6 +66,8 @@ import { leerEsperan } from '@/modules/conta/services/esperanService'
 import { correspondenciaDeEmpresa } from '../../../../supabase/functions/_shared/diezAnalitica.ts'
 import { AccionesPantalla, BotonAccion } from '@/modules/conta/ui/marco/AccionesPantalla'
 import { TablaDensa, type ColumnaDensa } from '@/modules/conta/ui/tabla/TablaDensa'
+import { TablaAsiento } from '@/modules/conta/diseno/plantillas'
+import { apoyoApunte, columnasApuntes, lineasDeApuntes } from '@/modules/conta/libro/apuntesAsiento'
 import { borrarVista, cumpleFiltros, guardarVista, leerVistas, miles, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
 import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
 import { useAnalitica, useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
@@ -593,20 +595,11 @@ function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
           </button>
         </p>
       )}
-      {a.apuntes.map((l) => (
-        <div key={l.posicion} className="cxd-apunte">
-          <span className="cxd-apunte-cuenta">
-            <span>{l.nombreCuenta}{!ejeLocal ? '' : l.local ? ` · ${l.local}` : l.comun ? ' · común' : ''}</span>
-            <Link to={rutaMayor(l.cuenta)} className="cxd-codigo" onClick={(e) => e.stopPropagation()}>{l.cuenta}</Link>
-          </span>
-          <span>
-            {ejeMarca && l.marca && <Chip tono={l.cedida ? 'ambar' : 'neutro'}>{l.cedida ? `${l.marca} · cedida` : l.marca}</Chip>}
-            {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
-          </span>
-          <span className="cxd-importe">{eurosExactos(l.debe || l.haber)}</span>
-          <span className="cx-ayuda">{l.debe ? 'al Debe' : 'al Haber'}</span>
-        </div>
-      ))}
+      {/* Asientos: la tabla común del asiento (diseno/plantillas), con lo mismo de cada línea que el asiento abierto. */}
+      <TablaAsiento etiqueta={`Apuntes de ${a.concepto}`} lineas={lineasDeApuntes(a.apuntes)}
+        enlaceCuenta={(l) => rutaMayor(l.apunte.cuenta)}
+        columnas={columnasApuntes(a.apuntes, { local: !!ejeLocal, marca: !!ejeMarca })}
+        apoyo={(l) => apoyoApunte(l.apunte)} />
       <div className="cxd-apunte-pie"><Link to={rutaAsiento(a.id)} className="cx-enlace">Abrir el asiento</Link></div>
     </div>
   )

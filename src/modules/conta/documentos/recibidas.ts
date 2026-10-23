@@ -144,6 +144,19 @@ export function filasDeLaLista(filas: readonly FilaDocumento[], extras: Readonly
 /** Las facturas de la cola, en el orden de la lista: para «3 de 9» y «Validar y siguiente». */
 export const colaDeFacturas = (filas: readonly FilaDocumento[]): string[] => filas.filter((x) => x.tipo === 'factura').map((x) => x.id)
 
+/**
+ * Ficha completa, punto 11 («la barra dice 78 y la ficha 1 de 77»): la cola
+ * «Por revisar» de serie, la de la lista sin filtros. De aquí sale el número
+ * de la barra (inicioService.recibidasParaRevisar) y la ficha cuenta su «1 de
+ * N» con la misma regla (colaDeFacturas ∘ filasDeLaLista): una sola cola. La
+ * barra se vuelve a contar cuando la ficha valida, descarta o guarda
+ * (refrescarCuentasMenu); antes no se le avisaba y se quedaba con el número de
+ * antes de validar.
+ */
+export function colaPorRevisar(filas: readonly FilaDocumento[]): string[] {
+  return colaDeFacturas(filasDeLaLista(filas, new Map(), filtrosDe(new URLSearchParams())))
+}
+
 /** El pie: «9 facturas por revisar · Base … · IVA … · Total …». */
 export function totales(filas: readonly FilaDocumento[], extras: ReadonlyMap<string, ExtraFactura>): { n: number; base: number; iva: number; total: number; sinImporte: number } {
   let base = 0, iva = 0, total = 0, sinImporte = 0

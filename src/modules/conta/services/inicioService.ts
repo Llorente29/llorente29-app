@@ -20,6 +20,7 @@ import { pasosCierre, pedirCierre, type PasoCierre, type CierreMes } from '@/mod
 import { finDeMes, mesesHasta, puntoDeMes, trimestreDe, type PuntoMes } from '@/modules/conta/lib/inicio'
 import type { PerfilFiscal } from '@/modules/conta/lib/plazosImpuestos'
 import { filtrar, ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
+import { colaPorRevisar } from '@/modules/conta/documentos/recibidas'
 import { leerDocumentos } from '@/modules/conta/services/documentosService'
 
 type Fila = Record<string, unknown>
@@ -132,5 +133,6 @@ export async function recibidasPorEstado(companyId: string, hoy: string): Promis
   const { desde, hasta } = ventanaParaRevisar(hoy)
   const d = await leerDocumentos(companyId, desde, hasta)
   const facturas = d.filas.filter((x) => x.tipo === 'factura')
-  return { paraMirar: filtrar(facturas, 'para-mirar').length, porAclarar: filtrar(facturas, 'por-aclarar').length }
+  // D03 · punto 11: «para mirar» es la cola de la ficha (colaPorRevisar), la misma que cuenta su «1 de N».
+  return { paraMirar: colaPorRevisar(d.filas).length, porAclarar: filtrar(facturas, 'por-aclarar').length }
 }

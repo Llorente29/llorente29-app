@@ -25,7 +25,9 @@ export function Dialogo({ titulo, explicacion, acciones, alCerrar, children }: {
     const previo = document.activeElement as HTMLElement | null
     const caja = ref.current
     const enfocables = () => Array.from(caja?.querySelectorAll<HTMLElement>(ENFOCABLES) ?? [])
-    ;(enfocables().find((e) => !e.classList.contains('s-dialogo-cerrar')) ?? enfocables()[0])?.focus()
+    // El que lleve data-autofocus, si lo hay (p. ej. «Seguir editando»: que Intro no
+    // tire los cambios); si no, el primero que no sea la ×.
+    ;(caja?.querySelector<HTMLElement>('[data-autofocus]') ?? enfocables().find((e) => !e.classList.contains('s-dialogo-cerrar')) ?? enfocables()[0])?.focus()
     const tecla = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.stopPropagation(); cerrar.current(); return }
       if (e.key !== 'Tab') return

@@ -650,17 +650,15 @@ test('Recibida (maqueta 3): el porqué de la IA, corregir en Compras, y «No es 
   // recepción, en Compras; antes «Corregir en Compras» en «Lo que he leído») y
   // «No es una factura».
   const mas = await masAcciones(page.locator('header.s-encabezado'))
-  await expect(mas.getByRole('link', { name: /^Corregir los importes/ })).toHaveAttribute('href', '/conta/compras')
+  // D03 (ficha completa): los importes se corrigen en la propia ficha, así que con la
+  // 0790 en la base ya no hay «Corregir los importes» en Compras; «Más acciones» es la del tablero 3b.
+  await expect(mas.getByRole('button', { name: /^Ver el historial/ })).toBeVisible()
+  await expect(mas.getByRole('link', { name: /^Corregir los importes/ })).toHaveCount(0)
 
-  // «No es una factura»: con su motivo. En el ordenador, directo; en el móvil, por
-  // «No es de este proveedor» › «¿Qué le pasa?» (antes, «Otra cosa»): los dos caminos llegan.
-  if (lado(page) === 'ordenador') {
-    await mas.getByRole('button', { name: /^No es una factura/ }).click()
-  } else {
-    await mas.getByRole('button', { name: 'No es de este proveedor' }).click()
-    await page.getByRole('dialog', { name: '¿Qué le pasa?' }).getByRole('button', { name: /dímelo y la saco/ }).click()
-  }
-  const dialogo = page.getByRole('dialog', { name: 'No es una factura' })
+  // «No es una factura» → ficha completa (tablero 3b): «Descartar con motivo», en
+  // «Más acciones», en el ordenador y en el móvil (el proveedor se cambia en su campo).
+  await mas.getByRole('button', { name: /^Descartar con motivo/ }).click()
+  const dialogo = page.getByRole('dialog', { name: 'Descartar con motivo' })
   await expect(dialogo.getByRole('button', { name: 'Descartar' })).toBeDisabled()
   await dialogo.getByRole('button', { name: 'Es un presupuesto' }).click()
   await dialogo.getByRole('button', { name: 'Descartar' }).click()
