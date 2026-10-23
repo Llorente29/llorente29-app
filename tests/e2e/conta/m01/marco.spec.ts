@@ -472,7 +472,13 @@ test('la muestra de las piezas: la dirección vieja lleva al patrón, con su lis
   const gasto = page.getByRole('region', { name: 'A qué gasto va' })
   await expect(gasto.locator('.s-campo-ficha[data-tono="propuesto"] .s-campo-propuesto')).toHaveText('Propuesto')
   await expect(gasto.getByText('Lo usaste en sus facturas anteriores.')).toBeVisible()
-  await expect(page.locator('details.s-asiento-ficha table').getByRole('row')).toHaveCount(4)
+  // El asiento común (encargo «Ficha de la recibida completa», punto 7): la cabecera, sus 3 líneas
+  // (el debe arriba, el haber debajo) y la fila de totales con «Cuadra».
+  const asiento = page.locator('details.s-asiento-ficha table')
+  await expect(asiento.getByRole('row')).toHaveCount(5)
+  await expect(asiento.locator('tbody tr').last()).toContainText('Bebidas Inventadas')
+  await expect(asiento.locator('tfoot')).toContainText('Cuadra')
+  await expect(asiento.locator('tfoot')).toContainText('110,87')
 
   // El documento: «Plegar el documento» deja los datos a todo el ancho, y «Documento» lo devuelve.
   const ficha = page.locator('.s-ficha')

@@ -148,18 +148,66 @@ th.s-lista-cifra { text-align: right; }
 .s-campo-ficha[data-tono='revisar'] .s-campo-ficha-motivo { color: var(--s-duda); }
 .s-campo-ficha[data-tono='normal'] .s-campo-ficha-motivo, .s-campo-ficha[data-tono='ok'] .s-campo-ficha-motivo { color: var(--s-apoyo); }
 
-.s-asiento-ficha { padding: var(--s-4) var(--s-5); }
+/* El asiento, como un asiento de verdad (encargo «Ficha de la recibida completa»,
+   punto 7): Cuenta · Nombre · Debe · Haber; la cuenta delante, en negrita y más
+   grande, en cifras tabulares; cada importe bajo su título; totales con «Cuadra». */
+.s-asiento-ficha { position: relative; padding: var(--s-4) var(--s-5); }
 .s-asiento-ficha summary { cursor: pointer; list-style: revert; }
-.s-asiento-ficha summary h2 { display: inline; margin: 0; font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); }
+.s-asiento-ficha summary :is(h2, h3, h4) { display: inline; margin: 0; font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); }
 .s-asiento-ficha summary:focus-visible { outline: none; box-shadow: var(--s-foco); border-radius: var(--s-radio-boton); }
-.s-asiento-tabla { width: 100%; margin-top: var(--s-3); border-collapse: collapse; }
-.s-asiento-tabla th { padding: var(--s-2) 0; text-align: left; font-size: var(--s-t-s); color: var(--s-apoyo); font-weight: var(--s-peso-medio); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
-.s-asiento-tabla td { padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
-.s-asiento-tabla td.s-lista-cifra, .s-asiento-tabla th.s-lista-cifra { padding-left: var(--s-4); }
+.s-asiento-editar { position: absolute; top: var(--s-4); right: var(--s-5); }
+.s-asiento-marco { margin-top: var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); overflow-x: auto; }
+.s-asiento-tabla { width: 100%; border-collapse: collapse; }
+.s-asiento-tabla th { padding: var(--s-2) var(--s-4); text-align: left; font-size: var(--s-t-s); color: var(--s-apoyo); font-weight: var(--s-peso-medio); background: var(--s-suave); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-asiento-tabla td { padding: var(--s-3) var(--s-4); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: baseline; }
+.s-asiento-tabla th.s-lista-cifra { text-align: right; }
+.s-asiento-tabla td.s-lista-cifra { width: 1%; }
+.s-asiento-col-cuenta { width: 1%; white-space: nowrap; }
+.s-asiento-codigo { font-size: var(--s-t-l); font-weight: var(--s-peso-titulo); color: var(--s-tinta); font-family: var(--s-letra-cifras); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.s-asiento-cuenta { color: var(--s-tinta); overflow-wrap: anywhere; }
+.s-asiento-a-mano {
+  margin-left: var(--s-2); padding: 0 var(--s-1); border-radius: var(--s-radio-boton); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte);
+  background: var(--s-duda-fondo); color: var(--s-duda); white-space: nowrap;
+}
+.s-asiento-tabla tbody tr[data-a-mano] td { background: var(--s-duda-fondo); }
+.s-asiento-tabla tfoot td { border-bottom: 0; font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.s-asiento-tabla tfoot tr[data-cuadra='no'] td { background: var(--s-duda-fondo); }
+.s-asiento-totales { color: var(--s-apoyo); }
 .s-asiento-pie { margin: var(--s-3) 0 0; font-size: var(--s-t-s); color: var(--s-apoyo); }
-.s-asiento-cuadra { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--s-ok); font-weight: var(--s-peso-fuerte); }
+.s-asiento-cuadra { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--s-ok); font-weight: var(--s-peso-fuerte); white-space: nowrap; }
 .s-asiento-descuadra { color: var(--s-duda); font-weight: var(--s-peso-fuerte); }
 .s-asiento-vacio { margin-top: var(--s-2); color: var(--s-apoyo); }
+@media (max-width: 640px) {
+  .s-asiento-ficha { padding: var(--s-3); }
+  .s-asiento-editar { position: static; display: block; margin-top: var(--s-2); }
+  .s-asiento-tabla th, .s-asiento-tabla td { padding-left: var(--s-2); padding-right: var(--s-2); }
+  .s-asiento-codigo { font-size: var(--s-t-m); }
+}
+
+/* Cambios sin guardar (encargo «Ficha de la recibida completa», punto 2): el
+   campo cambiado, en ámbar, con «CAMBIADO» y «Antes: … · Deshacer»; la barra
+   fija arriba del formulario; y «Salir sin guardar», en rojo. */
+.s-campo-cambiado {
+  padding: 0 var(--s-1); border-radius: var(--s-radio-boton); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte);
+  text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); background: var(--s-duda-fondo); color: var(--s-duda);
+}
+.s-campo-antes { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-campo-antes .s-campo-deshacer { min-height: 0; padding: 0; font-size: var(--s-t-s); }
+.s-campo-ficha[data-cambiado] .s-campo-ficha-caja,
+.s-campo-ficha[data-cambiado] :is(input, select, textarea) { border-color: var(--s-duda); background: var(--s-duda-fondo); }
+.s-barra-cambios {
+  position: sticky; top: var(--cxm-alto-arriba, 0px); z-index: 5;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3) var(--s-5);
+  background: var(--s-duda-fondo); color: var(--s-duda); border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-barra-cambios[data-tono='ok'] { position: static; background: var(--s-ok-fondo); color: var(--s-ok); }
+.s-barra-cambios[data-tono='falta'] { position: static; background: var(--s-falta-fondo); color: var(--s-falta); }
+.s-barra-cambios > .s-icono { flex-shrink: 0; }
+.s-barra-cambios-texto { flex: 1 1 16rem; min-width: 0; color: var(--s-tinta); overflow-wrap: anywhere; }
+.s-barra-cambios[data-tono='duda'] .s-barra-cambios-texto strong { color: var(--s-duda); }
+.s-barra-cambios-fallo { color: var(--s-falta); font-weight: var(--s-peso-medio); }
+.s-barra-cambios-acciones { display: flex; gap: var(--s-2); flex-shrink: 0; margin-left: auto; }
+.s-boton.s-boton-perder, .cx .s-boton.s-boton-perder { color: var(--s-falta); }
 
 .s-documento {
   position: sticky; top: calc(var(--cxm-alto-arriba, 0px) + var(--s-4)); display: flex; flex-direction: column; max-height: calc(100vh - var(--cxm-alto-arriba, 0px) - var(--s-8));

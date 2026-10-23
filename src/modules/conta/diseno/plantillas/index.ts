@@ -12,7 +12,10 @@
 // Los estilos, en plantillas.css (los carga estilo/index.ts).
 
 export { Bandeja, CifrasBandeja, TeTocaHoy, HechoAutomatico, type CifraBandeja, type FilaTeToca } from './Bandeja'
-export { NOMBRE_ORIGEN, totalTeToca, introEnLaHoja, buscarCuentasHoja, type OrigenCasilla, type CuentaHoja } from './valores'
+export {
+  NOMBRE_ORIGEN, totalTeToca, introEnLaHoja, buscarCuentasHoja, centDeTexto, ordenarAsiento, totalesAsiento,
+  type OrigenCasilla, type CuentaHoja, type LineaAsientoVista, type TotalesAsiento,
+} from './valores'
 export { PestanasEstado, FiltrosLista, FiltroSelector, FiltroBuscar, TablaLista, type ColumnaLista } from './Lista'
 export {
   pestanasConTodas, sumanTodas, leerEstado, conCambio, recordarLista, listaRecordada, leerOrden, escribirOrden, ordenar,
@@ -22,3 +25,11 @@ export { Ficha, NavegaFicha, Veredicto, BloqueFicha, CampoFicha, FilaCampos, Asi
 export { ControlesInforme, VistaInforme, ComprobacionInforme, TablaInforme, type LineaInforme, type CuentaInforme, type ColumnaInforme } from './Informe'
 export { Asistente, PasosAsistente, LeyendaCasillas, Casilla, BloqueAsistente, DeDondeSale, PieAsistente, type PasoAsistente } from './Asistente'
 export { HojaDeLineas, BuscarCuentaHoja } from './HojaDeLineas'
+// Cambios sin guardar: la pieza común de toda ficha que se edita (encargo «Ficha de la recibida completa», punto 2).
+export { MarcaCambiado, BarraCambios, AvisoSalir, type MensajeGuardado } from './CambiosSinGuardar'
+export { DialogoSalir } from './DialogoSalir'
+export {
+  useCambiosSinGuardar, contarCambios, adoptar, igual, huella, formatoDeSerie, resumenCambios, cuentaCambios, textoSalir, listaY,
+  type CambioCampo, type CambiosSinGuardar, type FormatoCampo, type Registro, type ResultadoGuardar,
+} from './cambios'
+export { useAvisoSalir, destinoDelClic, type AvisoSalirControl, type OpcionesAvisoSalir } from './avisoSalir'

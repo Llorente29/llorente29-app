@@ -14,6 +14,9 @@
 
 import { useState, type ReactNode } from 'react'
 import { Icono } from '../Icono'
+import { MarcaCambiado } from './CambiosSinGuardar'
+import type { CambioCampo } from './cambios'
+import { ordenarAsiento, totalesAsiento, type LineaAsientoVista } from './valores'
 
 /** «‹ 3 de 9 ›»: recorrer la cola sin volver a la lista. */
 export function NavegaFicha({ pos, total, anterior, siguiente, etiqueta = 'Facturas' }: {
@@ -94,7 +97,7 @@ export type TonoCampo = 'propuesto' | 'revisar' | 'ok' | 'normal'
  * motivo. Propuesto: la etiqueta PROPUESTO y la caja en el verde de Sumied.
  * Por revisar: en ámbar. Bien: con su ✓ al lado («NIF de su ficha»).
  */
-export function CampoFicha({ etiqueta, valor, codigo, motivo, tono = 'normal', marca, ancho = 1, cifra = false }: {
+export function CampoFicha({ etiqueta, valor, codigo, motivo, tono = 'normal', marca, ancho = 1, cifra = false, cambio, alDeshacer }: {
   etiqueta: string
   valor: ReactNode
   /** El número de cuenta, debajo del nombre (nunca en su lugar). */
@@ -107,13 +110,18 @@ export function CampoFicha({ etiqueta, valor, codigo, motivo, tono = 'normal', m
   /** Cuántas columnas ocupa en su bloque (1 o 2). */
   ancho?: 1 | 2 | 3
   cifra?: boolean
+  /** Cambiado y sin guardar (useCambiosSinGuardar().cambioDe(campo)): «CAMBIADO» junto al rótulo y «Antes: … · Deshacer» debajo. */
+  cambio?: CambioCampo | null
+  alDeshacer?: () => void
 }) {
+  const cambiado = !!cambio && !!alDeshacer
   return (
-    <div className="s-campo-ficha" data-tono={tono} style={ancho > 1 ? { gridColumn: `span ${ancho}` } : undefined}>
+    <div className="s-campo-ficha" data-tono={tono} data-cambiado={cambiado ? '' : undefined} style={ancho > 1 ? { gridColumn: `span ${ancho}` } : undefined}>
       <span className="s-campo-ficha-etiqueta">
         {etiqueta}
         {tono === 'propuesto' && <span className="s-campo-propuesto">Propuesto</span>}
         {tono === 'revisar' && <span className="s-campo-revisar">Por revisar</span>}
+        {cambio && alDeshacer && <MarcaCambiado cambio={cambio} onDeshacer={alDeshacer} parte="etiqueta" />}
       </span>
       <div className={`s-campo-ficha-caja${cifra ? ' s-campo-ficha-cifra' : ''}`}>
         <span className="s-campo-ficha-valor">
@@ -123,6 +131,7 @@ export function CampoFicha({ etiqueta, valor, codigo, motivo, tono = 'normal', m
         {marca && <span className="s-campo-ficha-marca"><Icono nombre="ok" /> {marca}</span>}
       </div>
       {motivo && <span className="s-campo-ficha-motivo">{motivo}</span>}
+      {cambio && alDeshacer && <MarcaCambiado cambio={cambio} onDeshacer={alDeshacer} parte="antes" />}
     </div>
   )
 }
@@ -132,44 +141,80 @@ export function FilaCampos({ children, columnas = 3 }: { children: ReactNode; co
   return <div className="s-fila-campos" data-columnas={columnas}>{children}</div>
 }
 
-/** El asiento que se crea, abajo y desplegable: cuenta (nombre y número debajo), debe y haber, y si cuadra. */
-export function AsientoQueSeCrea({ lineas, nota, abierto: deSerie = true, titulo = 'El asiento que se crea', vacio }: {
-  lineas: readonly { nombre: string; codigo: string; debe: string | null; haber: string | null }[]
+/**
+ * El asiento, como un asiento de verdad (encargo «Ficha de la recibida
+ * completa», punto 7; tablero 3b): columnas Cuenta · Nombre · Debe · Haber; la
+ * cuenta delante, en negrita y más grande, en cifras tabulares; cada importe a
+ * la derecha, bajo su título; primero las líneas del debe y luego las del
+ * haber; y la fila de totales con «Cuadra» (o «No cuadra: diferencia X», en
+ * ámbar). Con `alEditar`, «Editar el asiento a mano»; la línea tocada a mano
+ * lleva su marca. Es LA pieza para enseñar un asiento: la ficha de la
+ * recibida, el panel del banco, los asientos del cierre, la muestra.
+ */
+export function AsientoQueSeCrea({ lineas, nota, abierto: deSerie = true, titulo = 'El asiento que se crea', vacio, alEditar, textoEditar = 'Editar el asiento a mano', nivel = 2 }: {
+  lineas: readonly LineaAsientoVista[]
   /** «Al validar se envía también a Diez», o lo que diga la página. */
-  nota?: string
+  nota?: ReactNode
   abierto?: boolean
   titulo?: string
   /** Lo que se dice si aún no hay asiento que enseñar. */
   vacio?: ReactNode
+  /** «Editar el asiento a mano»: sin él, no sale. */
+  alEditar?: () => void
+  textoEditar?: string
+  /** El nivel del título, para que encaje en su página (un panel con h3 lo quiere en h4). */
+  nivel?: 2 | 3 | 4
 }) {
   const [abierto, setAbierto] = useState(deSerie)
-  const cent = (x: string | null) => (x ? Math.round(Number(x.replace(/\./g, '').replace(',', '.')) * 100) : 0)
-  const debe = lineas.reduce((s, l) => s + cent(l.debe), 0)
-  const haber = lineas.reduce((s, l) => s + cent(l.haber), 0)
-  const cuadra = lineas.length > 0 && debe === haber
+  const ordenadas = ordenarAsiento(lineas)
+  const t = totalesAsiento(lineas)
+  const Titulo = `h${nivel}` as 'h2' | 'h3' | 'h4'
   return (
     <details className="s-asiento-ficha" open={abierto} onToggle={(e) => setAbierto((e.currentTarget as HTMLDetailsElement).open)}>
-      <summary><h2>{titulo}</h2></summary>
+      <summary><Titulo>{titulo}</Titulo></summary>
+      {alEditar && lineas.length > 0 && (
+        <button type="button" className="s-boton s-boton-enlace s-asiento-editar" onClick={alEditar}>{textoEditar}</button>
+      )}
       {lineas.length === 0 ? <div className="s-asiento-vacio">{vacio}</div> : (
-        <table className="s-asiento-tabla">
-          <thead><tr><th scope="col">Cuenta</th><th scope="col" className="s-lista-cifra">Debe</th><th scope="col" className="s-lista-cifra">Haber</th></tr></thead>
-          <tbody>
-            {lineas.map((l, i) => (
-              <tr key={i}>
-                <td><span className="s-asiento-cuenta">{l.nombre}</span> <span className="s-campo-ficha-codigo">{l.codigo}</span></td>
-                <td className="s-lista-cifra">{l.debe ?? ''}</td>
-                <td className="s-lista-cifra">{l.haber ?? ''}</td>
+        <div className="s-asiento-marco">
+          <table className="s-asiento-tabla" aria-label={titulo}>
+            <thead>
+              <tr>
+                <th scope="col" className="s-asiento-col-cuenta">Cuenta</th>
+                <th scope="col">Nombre</th>
+                <th scope="col" className="s-lista-cifra">Debe</th>
+                <th scope="col" className="s-lista-cifra">Haber</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ordenadas.map((l, i) => (
+                <tr key={i} data-a-mano={l.aMano ? '' : undefined}>
+                  <td className="s-asiento-codigo">{l.codigo}</td>
+                  <td>
+                    <span className="s-asiento-cuenta">{l.nombre}</span>
+                    {l.aMano && <span className="s-asiento-a-mano">Cambiado a mano</span>}
+                  </td>
+                  <td className="s-lista-cifra">{l.debe ?? ''}</td>
+                  <td className="s-lista-cifra">{l.haber ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr data-cuadra={t.cuadra ? 'si' : 'no'}>
+                <td className="s-asiento-col-cuenta">
+                  {t.cuadra
+                    ? <span className="s-asiento-cuadra"><Icono nombre="ok" /> Cuadra</span>
+                    : <span className="s-asiento-descuadra">No cuadra: diferencia {t.diferencia}</span>}
+                </td>
+                <td className="s-asiento-totales">Totales</td>
+                <td className="s-lista-cifra">{t.debe}</td>
+                <td className="s-lista-cifra">{t.haber}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
-      {lineas.length > 0 && (
-        <p className="s-asiento-pie">
-          {cuadra ? <span className="s-asiento-cuadra"><Icono nombre="ok" /> Cuadra</span> : <span className="s-asiento-descuadra">No cuadra</span>}
-          {nota && <span className="s-asiento-nota"> · {nota}</span>}
-        </p>
-      )}
+      {lineas.length > 0 && nota && <p className="s-asiento-pie">{nota}</p>}
     </details>
   )
 }

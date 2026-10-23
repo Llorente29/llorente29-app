@@ -23,7 +23,8 @@ import { rutaAsiento, rutaLibroDiario, rutaLibros, rutaTuEmpresa } from '@/confi
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { FiltroSelector } from '@/modules/conta/diseno/plantillas'
+import { AsientoQueSeCrea, FiltroSelector } from '@/modules/conta/diseno/plantillas'
+import { textoDeImporte } from '@/modules/conta/diseno'
 import { CierreDelMes } from '@/modules/conta/bancos/CierreDelMes'
 import { mesDelCierre } from '@/modules/conta/bancos/navegacion'
 import { prepararCierre, sumas, type AsientoCierre, type SaldoACerrar } from '@/modules/conta/lib/cierre'
@@ -346,14 +347,13 @@ export function CierreEjercicio() {
 
 function ResumenAsiento({ a, nombres }: { a: AsientoCierre; nombres: Map<string, string> }) {
   const s = sumas(a)
+  // El asiento común (diseno/plantillas): cada cuenta con su número delante y su nombre (S01e), el debe arriba y los totales con «Cuadra».
   return (
-    <details>
-      <summary>{a.concepto} · {ddmm(a.fecha)} · {a.apuntes.length} apuntes · {eurosExactos(s.debe)} {s.cuadra ? '✓ cuadra' : '✗ no cuadra'}</summary>
-      <table className="cxl-tabla cxl-apilada" aria-label={a.concepto}>
-        <thead><tr><th>Cuenta</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th></tr></thead>
-        {/* S01e: cada cuenta con su nombre, no el número en bruto. */}
-        <tbody>{a.apuntes.map((p, i) => <tr key={i}><td>{p.cuenta}{nombres.get(p.cuenta) ? ` · ${nombres.get(p.cuenta)}` : ''}</td><td className="cxl-der" data-titulo="Debe">{p.debe ? eurosExactos(p.debe) : ''}</td><td className="cxl-der" data-titulo="Haber">{p.haber ? eurosExactos(p.haber) : ''}</td></tr>)}</tbody>
-      </table>
-    </details>
+    <AsientoQueSeCrea abierto={false} nivel={4}
+      titulo={`${a.concepto} · ${ddmm(a.fecha)} · ${a.apuntes.length} apuntes · ${eurosExactos(s.debe)} ${s.cuadra ? '✓ cuadra' : '✗ no cuadra'}`}
+      lineas={a.apuntes.map((p) => ({
+        codigo: p.cuenta, nombre: nombres.get(p.cuenta) ?? '',
+        debe: p.debe ? textoDeImporte(p.debe) : null, haber: p.haber ? textoDeImporte(p.haber) : null,
+      }))} />
   )
 }
