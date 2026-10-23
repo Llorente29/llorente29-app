@@ -532,25 +532,36 @@ describe('R11 · paso 8 sobre la tanda de C06b (0380, el nombre del PDF; su copi
   })
 })
 
+describe('R11 · paso 8 sobre la tanda del D07a + D07c (0820 y 0830, su copia; se aplica desde main), con su contexto medido', () => {
+  it('la 0820 (datos de Foodint) pide «autorizo»; la 0830 sigue', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d07ac-diez-y-prepago-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-d07ac-diez-y-prepago-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql: AUTORIZO')
+    expect(out).toContain('20261208T0830_d07c_prepago_en_todas_las_listas.sql: sigue')
+    expect(out).toContain('autorizo: 20261208T0820_d07a_diez_reenviar_descripcion.sql')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (D07a + D07c: la 0820, datos de Foodint, pide «autorizo»; la 0830 sigue)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (D07 + D07b: la 0850 y la 0860 siguen; la 0870, datos de Foodint, pide «autorizo»)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql: AUTORIZO')
-    expect(r.out).toContain('20261208T0830_d07c_prepago_en_todas_las_listas.sql: sigue')
-    expect(r.out).toContain('autorizo: 20261208T0820_d07a_diez_reenviar_descripcion.sql')
+    expect(r.out).toContain('20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.sql: sigue')
+    expect(r.out).toContain('20261208T0860_d07_uber_liquidaciones.sql: sigue')
+    expect(r.out).toContain('20261208T0870_d07_uber_quitar_provisionales.sql: AUTORIZO')
+    expect(r.out).toContain('autorizo: 20261208T0870_d07_uber_quitar_provisionales.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261208T0870_d07_uber_quitar_provisionales.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261208T0870_d07_uber_quitar_provisionales.sql ha cambiado desde la medida')
   })
 })
 

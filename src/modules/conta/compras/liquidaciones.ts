@@ -22,7 +22,7 @@ import { eurosExactos } from '@/modules/conta/lib/formato'
 import { leerOrden, ordenar, pestanasConTodas, type PestanaEstado, type Sentido } from '@/modules/conta/diseno/plantillas/lista'
 import type { TonoChip } from '@/modules/conta/diseno/valores'
 
-export type TipoLiquidacion = 'mensual' | 'catcher'
+export type TipoLiquidacion = 'mensual' | 'catcher' | 'plataforma'
 
 /** Lo que pide cada estado: te toca hacer algo · ya está · esperar (a que llegue, a Catcher, o nada que hacer aquí). */
 export type GrupoLiquidacion = 'te-toca' | 'hecha' | 'espera'
@@ -156,6 +156,87 @@ export function filaQuincena(q: QuincenaParaLista): FilaLiquidaciones {
   }
 }
 
+// ── Las de plataforma (D07, Julio 23/10, camino B) ────────────────────────
+
+/**
+ * Una liquidación de plataforma (channel_settlement): lo que la plataforma te
+ * liquida de una semana —ventas, su comisión y lo que te transfiere—. No es una
+ * factura ni tiene PDF: su factura de comisión llega aparte, cada semana, como
+ * su propia factura recibida, y se enlaza con las liquidaciones de su semana.
+ */
+export interface LiquidacionPlataforma {
+  id: string
+  canal: string
+  tienda: string | null
+  desde: string
+  hasta: string
+  ventas: number | null
+  /** Comisión y cargos (la comisión, la publicidad): en positivo. */
+  comision: number
+  neto: number | null
+  cobrado: { fecha: string; importe: number | null } | null
+  /** Lo que factura la plataforma por esta liquidación (su parte de la factura de la semana). 0 si nada. */
+  aFacturar: number
+  factura: { id: string; numero: string | null } | null
+  deReferencia: boolean
+  porAclarar: string | null
+}
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+export function estadoPlataforma(l: LiquidacionPlataforma): EstadoLiquidacionLista {
+  if (l.deReferencia) return { texto: 'De referencia', tono: 'neutro', grupo: 'espera', detalle: 'De antes del cierre: sin factura ni asiento; su cobro se casa en Bancos.' }
+  if (l.porAclarar) return { texto: 'Por aclarar', tono: 'duda', grupo: 'te-toca', detalle: l.porAclarar }
+  if (l.aFacturar > 0 && !l.factura) {
+    return { texto: 'Falta su factura', tono: 'duda', grupo: 'espera', detalle: `Su factura de comisión de la semana (${eurosExactos(l.aFacturar)} de esta liquidación) aún no ha llegado.` }
+  }
+  if (l.factura) return { texto: 'Con su factura', tono: 'seguro', grupo: 'hecha', detalle: `Enlazada con la factura de comisión${l.factura.numero ? ` ${l.factura.numero}` : ''}.` }
+  return l.comision > 0
+    ? { texto: 'Sin factura aparte', tono: 'neutro', grupo: 'hecha', detalle: 'Su comisión va en la propia liquidación (la de Glovo, por ejemplo): no espera otra factura.' }
+    : { texto: 'Sin comisión', tono: 'neutro', grupo: 'hecha', detalle: 'No trae comisión ni cargos que facturar.' }
+}
+
+export function filaPlataforma(l: LiquidacionPlataforma): FilaLiquidaciones {
+  const partes = [
+    l.ventas !== null ? `ventas ${eurosExactos(l.ventas)}` : null,
+    `comisión ${eurosExactos(l.comision)}`,
+    l.cobrado ? `cobrado ${eurosExactos(l.cobrado.importe ?? l.neto ?? 0)} el ${ddmm(l.cobrado.fecha)}` : l.neto !== null ? 'neto sin cobrar aún' : null,
+  ].filter(Boolean) as string[]
+  return {
+    id: `plataforma:${l.id}`, tipo: 'plataforma', proveedor: l.canal, local: l.tienda, desde: l.desde, hasta: l.hasta,
+    periodo: `del ${ddmm(l.desde)} al ${ddmm(l.hasta)}/${l.hasta.slice(0, 4)}`, referencia: l.factura?.numero ?? null,
+    importe: l.neto, apoyoImporte: partes.join(' · ').replace(/^./, (x) => x.toUpperCase()),
+    estado: estadoPlataforma(l),
+    abrir: { a: 'sin-ficha', porque: `Es una liquidación de ${l.canal}: lo que te liquida de una semana. No es una factura ni tiene PDF; su factura de comisión llega aparte, cada semana, en Facturas recibidas, y se enlaza con las liquidaciones de su semana.` },
+  }
+}
+
+/**
+ * D07 · Las semanas cuya factura de comisión no ha llegado (para Inicio): las
+ * liquidaciones que la esperan, agrupadas por la semana que acaba, contando
+ * solo las que acabaron hace más de `diasDeMargen` días (la factura llega el
+ * martes siguiente).
+ */
+export function semanasSinFactura(ls: readonly LiquidacionPlataforma[], hoy: string, diasDeMargen = 7): { canal: string; hasta: string; desde: string; n: number; importe: number }[] {
+  const limite = new Date(`${hoy}T12:00:00Z`); limite.setUTCDate(limite.getUTCDate() - diasDeMargen)
+  const corte = limite.toISOString().slice(0, 10)
+  const porSemana = new Map<string, { canal: string; hasta: string; desde: string; n: number; importe: number }>()
+  for (const l of ls) {
+    if (l.deReferencia || l.factura || l.aFacturar <= 0 || l.hasta > corte) continue
+    const k = `${l.canal}|${l.hasta}`
+    const x = porSemana.get(k) ?? { canal: l.canal, hasta: l.hasta, desde: l.desde, n: 0, importe: 0 }
+    x.n += 1; x.importe = Math.round((x.importe + l.aFacturar) * 100) / 100
+    if (l.desde > x.desde) x.desde = l.desde
+    porSemana.set(k, x)
+  }
+  return [...porSemana.values()].sort((a, b) => b.hasta.localeCompare(a.hasta) || a.canal.localeCompare(b.canal, 'es'))
+}
+
+/** El aviso de una semana sin su factura, en una frase. */
+export function fraseSemanaSinFactura(x: { canal: string; desde: string; hasta: string; n: number; importe: number }): string {
+  return `Falta la factura de comisión de ${x.canal} de la semana del ${ddmm(x.desde)} al ${ddmm(x.hasta)}/${x.hasta.slice(0, 4)}: ${x.n === 1 ? 'una liquidación la espera' : `${x.n} liquidaciones la esperan`} (${eurosExactos(x.importe)}).`
+}
+
 // ── Pestañas, filtros y orden ─────────────────────────────────────────────
 
 export type IdPestanaLiquidaciones = 'todas' | GrupoLiquidacion
@@ -182,7 +263,7 @@ export function filtrosLiquidaciones(query: URLSearchParams): FiltrosLiquidacion
   const orden = leerOrden(query.get('orden') ?? undefined, ORDEN_DE_SERIE)
   return {
     pestana: ver === 'te-toca' || ver === 'espera' || ver === 'hecha' ? ver : 'todas',
-    tipo: tipo === 'mensual' || tipo === 'catcher' ? tipo : '',
+    tipo: tipo === 'mensual' || tipo === 'catcher' || tipo === 'plataforma' ? tipo : '',
     orden: (COLUMNAS_ORDENABLES as readonly string[]).includes(orden.columna) ? orden : ORDEN_DE_SERIE,
   }
 }

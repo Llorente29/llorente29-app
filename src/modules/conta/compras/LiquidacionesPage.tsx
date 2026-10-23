@@ -38,7 +38,7 @@ import {
   filasLiquidaciones, filtrarPorTipo, filtrosLiquidaciones, fraseSaldoPrepago, pestanasLiquidaciones, pieLiquidaciones, type FilaLiquidaciones,
 } from '@/modules/conta/compras/liquidaciones'
 
-const NOMBRE_TIPO = { mensual: 'Mensual', catcher: 'Quincena de Catcher' } as const
+const NOMBRE_TIPO = { mensual: 'Mensual', catcher: 'Quincena de Catcher', plataforma: 'Liquidación de plataforma' } as const
 
 export default function LiquidacionesPage() {
   const { accountId, cargando, userName } = useCuentaConta()
@@ -66,7 +66,7 @@ export default function LiquidacionesPage() {
     : undefined
   const encabezado = (
     <EncabezadoPagina titulo="Liquidaciones"
-      frase="Los proveedores que no facturan cada entrega: las liquidaciones mensuales, local por local, y las quincenas de Catcher. Cada una con su estado."
+      frase="Los proveedores que no facturan cada entrega: las liquidaciones mensuales, local por local, las quincenas de Catcher y lo que te liquidan las plataformas cada semana (ventas, comisión y neto cobrado). Cada una con su estado."
       principal={principal} />
   )
   if (!accountId && !cargando) return <div className="s-pagina">{encabezado}<p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus liquidaciones.</p></div>
@@ -141,7 +141,7 @@ export default function LiquidacionesPage() {
       <PestanasEstado etiqueta="Estado de las liquidaciones" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id === 'todas' ? null : id })} />
       <FiltrosLista etiqueta="Filtros de las liquidaciones">
         <FiltroSelector etiqueta="Tipo" valor={f.tipo} alCambiar={(tipo) => cambiar({ tipo: tipo || null })}
-          opciones={[{ valor: '', texto: 'Todas' }, { valor: 'mensual', texto: 'Mensuales' }, { valor: 'catcher', texto: 'Quincenas de Catcher' }]} />
+          opciones={[{ valor: '', texto: 'Todas' }, { valor: 'mensual', texto: 'Mensuales' }, { valor: 'catcher', texto: 'Quincenas de Catcher' }, { valor: 'plataforma', texto: 'De plataforma (Uber, Glovo…)' }]} />
       </FiltrosLista>
 
       {!d && !datos.error && <div className="s-lista" aria-busy="true" aria-label="Cargando las liquidaciones"><div className="s-lista-cargando" /></div>}

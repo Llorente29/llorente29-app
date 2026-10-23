@@ -275,11 +275,14 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
   })
   // Compras (repaso, 10/10): «Apuntarla sin descontar el IVA». El papel de la
   // semilla a nombre de «Contado»: 102,54 de base al 10 %, 112,79 de total.
-  it('sin descontar el IVA: la cuota es más gasto, sin 472, y no pide NIF', () => {
+  // D07 (Julio, 23/10): la cuota, en su PROPIA línea de gasto, al libro de recibidas como NO deducible
+  // (sale en el libro con deducible 0 y no entra en el 303); antes iba sumada al gasto y fuera del libro.
+  it('sin descontar el IVA: la cuota es más gasto (en su línea, no deducible), sin 472, y no pide NIF', () => {
     const p = facturaProveedor({ id: 'f5', numero: 'BR-77', fecha: '2026-09-25', proveedor: 'Bodega de prueba', terceroId: null, esSocio: false, tieneNif: false, localId: NORTE,
       lineas: [{ base: 102.54, tipo: { id: 't10', porcentaje: 10 }, cuentaGasto: '60000000' }], total: 112.79, retencion: null, ivaNoDeducible: true }, c).propuesta!
-    expect(p.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 112.79, 0], ['41000006', 0, 112.79]])
-    expect(p.lineas.some((l) => l.iva)).toBe(false)
+    expect(p.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 102.54, 0], ['60000000', 10.25, 0], ['41000006', 0, 112.79]])
+    expect(p.lineas.filter((l) => l.iva).map((l) => l.iva)).toEqual([{ tipoId: 't10', tipo: 10, base: 102.54, libro: 'received', deducible: 'no' }])
+    expect(p.lineas.some((l) => /^472/.test(l.cuenta))).toBe(false)
     expect(problemas(p.lineas, esIva, esRet)).toEqual([])
     expect(p.avisos).toEqual([])
     expect(p.concepto).toContain('sin descontar el IVA')

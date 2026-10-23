@@ -214,9 +214,18 @@ export interface CuadreLibro { libro: number; diario: number; diferencia: number
  * (expedidas) o la 472 (recibidas y bienes de inversión). Las anuladas no
  * cuentan: su asiento y su contraasiento se compensan también en el diario.
  */
+/**
+ * D07 · Una recibida con IVA NO deducible (0850): su cuota va al gasto, no a
+ * la 472; sale en el libro con deducible 0 y no entra en el 303.
+ */
+export function esNoDeducible(a: Pick<AnotacionLibro, 'book' | 'deductibleAmount' | 'taxAmount' | 'reverseCharge'>): boolean {
+  return (a.book === 'received' || a.book === 'investment') && !a.reverseCharge && (a.deductibleAmount ?? 0) === 0 && (a.taxAmount ?? 0) !== 0
+}
+
 export function cuadreConDiario(anotaciones: AnotacionLibro[], libro: 'issued' | 'received', movimientoDiario: number): CuadreLibro {
   const cuentaDe = libro === 'issued' ? '477' : '472'
-  const vivas = anotaciones.filter((a) => !a.voidedAt && (libro === 'issued' ? a.book === 'issued' : a.book === 'received' || a.book === 'investment'))
+  // Las no deducibles no están en la 472 (su cuota es gasto): no cuentan en el cuadre.
+  const vivas = anotaciones.filter((a) => !a.voidedAt && (libro === 'issued' ? a.book === 'issued' : (a.book === 'received' || a.book === 'investment') && !esNoDeducible(a)))
   const suma = vivas.reduce((x, a) => x + c(a.taxAmount), 0) / 100
   const diferencia = (c(suma) - c(movimientoDiario)) / 100
   const cuadra = c(diferencia) === 0

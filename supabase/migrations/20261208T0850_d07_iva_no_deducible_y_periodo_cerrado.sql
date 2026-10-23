@@ -1,6 +1,7 @@
 -- supabase/migrations/20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.sql
 -- cambia: public.conta_vat_book_desde_asiento · prueba: supabase/staging/sql/20261208_d07_iva_no_deducible_prueba.sql
 -- cambia: public.conta_impuesto_303_cajas · prueba: supabase/staging/sql/20261208_d07_iva_no_deducible_prueba.sql
+-- cambia: public.supplier_invoice · prueba: supabase/staging/sql/20261208_d07_iva_no_deducible_prueba.sql
 --
 -- D07 · IVA NO DEDUCIBLE CON SU MOTIVO, Y LA RECIBIDA DE UN PERIODO CERRADO
 -- (Julio, 23/10; D07 punto 2 y D07b punto 3).
