@@ -655,6 +655,23 @@ export default function KitchenMenuPage() {
     }
   }
 
+  // C08 (23/10): el catálogo enlazado ya no existe en HubRise. Se elige uno
+  // de los que hay en ese local; se guarda y se publica solo ahí.
+  async function handleElegirCatalogo(locationId: string, catalogId: string) {
+    if (!selectedBrand || connecting) return
+    setConnecting(true)
+    setError(null)
+    try {
+      const res = await connectBrandToDelivery(selectedBrand.id, locationId, catalogId)
+      setConnectResult(res)
+      setPublishStatusKey((k) => k + 1)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setConnecting(false)
+    }
+  }
+
   // ── Capa 1: organizar la carta (mover/recategorizar) ──────────────────────
 
   // Categoría actual de cada producto (para poder deshacer un movimiento).
@@ -2562,7 +2579,7 @@ export default function KitchenMenuPage() {
                   <ul className="space-y-1">
                     {connectResult.locations.map((l, i) => (
                       <li key={i} className="flex items-start gap-2">
-                        {l.status === 'error'
+                        {l.status === 'error' || l.status === 'catalogo_perdido'
                           ? <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
                           : <CheckCircle2 className="w-4 h-4 text-green-600 mt-0.5 shrink-0" />}
                         <span>
@@ -2571,12 +2588,32 @@ export default function KitchenMenuPage() {
                           {l.status === 'ya_conectada' && 'ya conectada'}
                           {l.status === 'creada' && 'catálogo creado'}
                           {l.status === 'reusada_por_nombre' && 'catálogo reusado'}
+                          {l.status === 'elegido' && 'catálogo elegido y guardado'}
+                          {l.status === 'catalogo_perdido' && 'el catálogo enlazado ya no existe en HubRise'}
                           {l.status === 'error' && 'error'}
                           {l.external_catalog_id && (
                             <span className="text-text-secondary"> ({l.external_catalog_id})</span>
                           )}
                           {l.status === 'error' && l.error && (
                             <span className="block text-xs text-red-600">{l.error}</span>
+                          )}
+                          {l.status === 'catalogo_perdido' && (
+                            <span className="block mt-1">
+                              {(l.catalogos ?? []).length === 0
+                                ? <span className="block text-xs text-red-600">No hay ningún catálogo en este local de HubRise. Créalo allí y vuelve a conectar.</span>
+                                : <>
+                                    <span className="block text-xs text-text-secondary mb-1">Elige el catálogo de este local. Se guarda y se publica la carta en él:</span>
+                                    <span className="flex flex-wrap gap-1.5">
+                                      {(l.catalogos ?? []).map((c) => (
+                                        <button key={c.id} type="button" disabled={connecting}
+                                          onClick={() => void handleElegirCatalogo(l.location_id, c.id)}
+                                          className="px-2.5 py-1 text-xs rounded-md border border-border-default bg-white hover:bg-gray-50 disabled:opacity-50">
+                                          {c.name} <span className="text-text-secondary">({c.id})</span>
+                                        </button>
+                                      ))}
+                                    </span>
+                                  </>}
+                            </span>
                           )}
                         </span>
                       </li>
