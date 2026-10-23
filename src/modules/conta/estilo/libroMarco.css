@@ -56,7 +56,21 @@
 .cxm .cxd-en-marco .cxd-importe { font-family: var(--cxm-letra-cifras); font-weight: 600; font-size: 13px; }
 .cxm .cxd-en-marco .cxt-fila.cxd-anulado .cxd-concepto-titulo, .cxm .cxd-en-marco .cxt-fila.cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cxm-apoyo); }
 .cxm .cxd-en-marco .cxd-apuntes { padding: 6px 12px 10px 230px; }
-.cxm .cxd-en-marco .cxd-apunte { padding: 4px 0; font-size: 13px; }
+/* Los apuntes al desplegar van en la tabla común del asiento (TablaAsiento),
+   dentro de la fila de la tabla densa. Lo de la densa (cabecera fija en
+   mayúsculas, celdas de una línea con «…» y del alto de la fila) no es suyo: se
+   devuelve a lo de la pieza, para que se lea igual que en el asiento abierto. */
+.cxm .cxt-tabla .s-asiento-marco { background: var(--cxm-superficie); }
+.cxm .cxt-tabla .s-asiento-marco .s-asiento-tabla thead th {
+  position: static; height: auto; padding: var(--s-2) var(--s-4); border-radius: 0;
+  font-size: var(--s-t-s); text-transform: none; letter-spacing: normal; overflow: visible;
+}
+.cxm .cxt-tabla .s-asiento-marco .s-asiento-tabla td {
+  height: auto; padding: var(--s-2) var(--s-4); white-space: normal; overflow: visible; text-overflow: clip;
+  vertical-align: baseline; border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.cxm .cxt-tabla .s-asiento-marco .s-asiento-tabla td:is(.s-asiento-codigo, .s-lista-cifra, .s-asiento-acciones) { white-space: nowrap; }
+.cxm .cxt-tabla .s-asiento-marco .s-asiento-tabla tfoot td { border-bottom: 0; }
 
 /* El móvil: cada asiento en una tarjeta de ≤ 110 px (respuesta 5 de Julio):
    el concepto en dos líneas como mucho y, debajo, en UNA línea, los chips

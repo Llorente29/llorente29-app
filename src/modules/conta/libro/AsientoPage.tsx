@@ -1,10 +1,12 @@
 // src/modules/conta/libro/AsientoPage.tsx
 //
 // C04 · Un asiento (maqueta N12Asiento). Cabecera con su estado y su
-// confianza, la serie por su palabra, la fecha y el documento. Los apuntes con
-// «Cambiar» en cada línea mientras no está validado (la cuenta se busca por
-// nombre o por código y la corrección se aprende para la siguiente del mismo
-// origen, regla 11), y el cuadre al pie. A la derecha, «Por qué lo propongo
+// confianza, la serie por su palabra, la fecha y el documento. Los apuntes, en
+// la tabla común del asiento (TablaAsiento: Cuenta · Nombre · Debe · Haber, la
+// cuenta delante y enlazada a su mayor, con sus columnas de local, marca, IVA y
+// retención), con «Cambiar cuenta» en cada línea mientras no está validado (la
+// cuenta se busca por nombre o por código y la corrección se aprende para la
+// siguiente del mismo origen, regla 11), y el cuadre al pie. A la derecha, «Por qué lo propongo
 // así» con una frase y su cita por decisión, y el documento. Abajo, «Detalle
 // contable»: el código de la serie, el número, la huella y la cadena.
 //
@@ -23,8 +25,10 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
-import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
-import { deDondeSale, estadoDe, estadoMes, marcaNegativoDiez, mesDe, nombreMes, pastillasDeLinea, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
+import { diaMesCorto, fechaLarga } from '@/modules/conta/lib/formato'
+import { deDondeSale, estadoDe, estadoMes, mesDe, nombreMes, type AsientoDiario, type CierreMes } from '@/modules/conta/lib/diario'
+import { TablaAsiento } from '@/modules/conta/diseno/plantillas'
+import { apoyoApunte, columnasApuntes, lineasDeApuntes } from '@/modules/conta/libro/apuntesAsiento'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
 import {
   cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
@@ -111,6 +115,7 @@ export default function AsientoPage() {
 
   const a = datos?.asiento ?? null
   const c = useMemo(() => (a ? cuadre(a.apuntes) : null), [a])
+  const lineas = useMemo(() => (a ? lineasDeApuntes(a.apuntes) : []), [a])
 
   if (error) return <ErrorConReintento mensaje={error} reintentar={recargar} />
   if (!datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando el asiento" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={44} />)}</div>
@@ -213,36 +218,19 @@ export default function AsientoPage() {
       <div className="cxd-cuerpo">
         <section className="cx-tarjeta cxd-asiento" aria-label="Apuntes">
           <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">Apuntes</h2></div>
-          <div className="cxd-linea cxd-linea-cabeza" aria-hidden="true"><span>{['Cuenta', analitica.local?.nombre.toLowerCase(), analitica.marca?.nombre.toLowerCase()].filter(Boolean).join(' · ')}</span><span className="cxd-der">Debe</span><span className="cxd-der">Haber</span><span /></div>
-          {a.apuntes.map((l) => (
-            <div key={l.posicion} className="cxd-linea-envoltura">
-              <div className="cxd-linea">
-                <span className="cxd-linea-cuenta">
-                  <span className="cxd-linea-nombre">{l.nombreCuenta}</span>
-                  <span className="cxd-concepto-apoyo">
-                    {pastillasDeLinea(l, { local: !!analitica.local, marca: !!analitica.marca }).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
-                    {marcaNegativoDiez(l) && <Chip tono="ambar">{marcaNegativoDiez(l)}</Chip>}
-                    <Link to={rutaMayor(l.cuenta)} className="cxd-codigo">{l.cuenta}</Link>
-                    {l.concepto && <span className="cxd-sale">· {l.concepto}</span>}
-                    {l.iva && <span className="cxd-sale">· IVA {l.iva.tipo ?? ''} % sobre {eurosExactos(l.iva.base)}</span>}
-                    {l.retencion && <span className="cxd-sale">· retención ({l.retencion.modelo}) sobre {eurosExactos(l.retencion.base)}</span>}
-                  </span>
-                </span>
-                <span className="cxd-importe">{l.debe ? eurosExactos(l.debe) : '—'}</span>
-                <span className="cxd-importe">{l.haber ? eurosExactos(l.haber) : '—'}</span>
-                <span>{editable && <button type="button" className="cx-enlace" onClick={() => setCambiando(cambiando === l.posicion ? null : l.posicion)}>Cambiar</button>}</span>
-              </div>
-              {cambiando === l.posicion && <BuscarCuenta cuentas={datos.cuentas} actual={l.cuenta} alElegir={(x) => hacerCambio(l.posicion, x)} alCerrar={() => setCambiando(null)} />}
-            </div>
-          ))}
-          {c && (
-            <div className="cxd-cuadre">
-              <strong>{c.cuadra ? 'Cuadra' : 'No cuadra'}</strong>
-              <span className="cxd-importe">Debe {eurosExactos(c.debe)}</span>
-              <span className="cxd-importe">Haber {eurosExactos(c.haber)}</span>
-              <span className={c.cuadra ? 'cxt-verde' : 'cxt-ambar'}>{c.cuadra ? '✓ 0,00 €' : c.texto}</span>
-            </div>
-          )}
+          {/* Asientos › asiento abierto: la tabla común del asiento (diseno/plantillas), con todas sus opciones de antes. */}
+          <TablaAsiento etiqueta="Apuntes del asiento" lineas={lineas} compacta={movil}
+            enlaceCuenta={(l) => rutaMayor(l.apunte.cuenta)}
+            columnas={columnasApuntes(a.apuntes, { local: !!analitica.local, marca: !!analitica.marca })}
+            apoyo={(l) => apoyoApunte(l.apunte)}
+            tituloAcciones="Cambiar la cuenta"
+            acciones={editable ? (l) => (
+              <button type="button" className="cx-enlace" aria-expanded={cambiando === l.apunte.posicion}
+                onClick={() => setCambiando(cambiando === l.apunte.posicion ? null : l.apunte.posicion)}>Cambiar cuenta</button>
+            ) : undefined}
+            debajo={(l) => (editable && cambiando === l.apunte.posicion
+              ? <BuscarCuenta cuentas={datos.cuentas} actual={l.apunte.cuenta} alElegir={(x) => hacerCambio(l.apunte.posicion, x)} alCerrar={() => setCambiando(null)} />
+              : null)} />
           {a.origen === 'sales_day' && a.origenId && accountId && activa && <NoConfirmadosDelDia accountId={accountId} companyId={activa.id} resumenId={a.origenId} />}
           {editable && <p className="cx-ayuda">Cambia cualquier cuenta: se busca por nombre («comisiones») o por código. Un asiento nunca se guarda descuadrado.</p>}
         </section>

@@ -10,15 +10,18 @@
 // del 19/10, la que abrió Julio), no uno inventado; y la factura de la prueba
 // de cambios es esa misma, con su vencimiento del 19/10 al 18/11 del tablero 3b.
 
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { AsientoQueSeCrea } from '@/modules/conta/diseno/plantillas/Ficha'
+import { AsientoQueSeCrea, TablaAsiento, type ColumnaAsiento } from '@/modules/conta/diseno/plantillas/Ficha'
+import { columnasApuntes, lineasDeApuntes, textoIva, type LineaApunte } from '@/modules/conta/libro/apuntesAsiento'
+import type { ApunteDiario } from '@/modules/conta/lib/diario'
 import { BarraCambios, MarcaCambiado } from '@/modules/conta/diseno/plantillas/CambiosSinGuardar'
 import {
   adoptar, contarCambios, cuentaCambios, formatoDeSerie, huella, igual, resumenCambios, textoSalir,
 } from '@/modules/conta/diseno/plantillas/cambios'
-import { centDeTexto, ordenarAsiento, totalesAsiento, type LineaAsientoVista } from '@/modules/conta/diseno/plantillas/valores'
+import { centDeTexto, claveLineaAsiento, lineasEnOrden, ordenarAsiento, totalesAsiento, type LineaAsientoVista } from '@/modules/conta/diseno/plantillas/valores'
 
 // La COHELDI P26 4.980 tal como la lee la ficha.
 const COHELDI = {
@@ -179,5 +182,114 @@ describe('pintado: la tabla del asiento, la barra y la marca', () => {
     const [cambio] = contarCambios(COHELDI, { ...COHELDI, vence: '18/11/2026' }, ETIQUETAS)
     expect(texto(renderToStaticMarkup(createElement(MarcaCambiado, { cambio, onDeshacer: nada })))).toBe('Cambiado Antes: 19/10/2026 · Deshacer')
     expect(renderToStaticMarkup(createElement(MarcaCambiado, { cambio: null, onDeshacer: nada }))).toBe('')
+  })
+})
+
+// ── La tabla común del asiento con sus opciones (Asientos › asiento abierto) ──
+// El mismo asiento real de la COHELDI, ahora con la posición de cada apunte
+// (el haber delante, como puede venir guardado) y lo que lleva cada línea.
+
+type LineaCoheldi = LineaAsientoVista & { iva: string | null; local: string }
+const COHELDI_CON_POSICION: LineaCoheldi[] = ASIENTO_COHELDI.map((l, i) => ({
+  ...l, id: i + 1, local: COHELDI.local,
+  iva: l.codigo === '47200004' ? '4 % sobre 127,40 €' : l.codigo === '47200010' ? '10 % sobre 136,26 €' : null,
+}))
+const COLUMNAS: ColumnaAsiento<LineaCoheldi>[] = [
+  { id: 'local', titulo: 'Local', celda: (l) => l.local },
+  { id: 'iva', titulo: 'IVA', celda: (l) => l.iva },
+]
+
+describe('la tabla común del asiento: orden y clave', () => {
+  it('de serie, el debe arriba; con «posicion», tal como vino guardado (el haber de la 1 delante)', () => {
+    expect(lineasEnOrden(COHELDI_CON_POSICION).map((l) => l.id)).toEqual([2, 3, 4, 1])
+    expect(lineasEnOrden(COHELDI_CON_POSICION, 'posicion').map((l) => l.id)).toEqual([1, 2, 3, 4])
+  })
+  it('la clave de la fila es su id; sin él, su sitio', () => {
+    expect(claveLineaAsiento(COHELDI_CON_POSICION[0], 0)).toBe('1')
+    expect(claveLineaAsiento(ASIENTO_COHELDI[0], 0)).toBe('#0')
+  })
+})
+
+describe('pintado: la tabla común del asiento con sus opciones', () => {
+  const texto = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  const trozo = (html: string, tag: string) => html.slice(html.indexOf(`<${tag}>`), html.indexOf(`</${tag}>`))
+  const pinta = (n: ReactNode) => renderToStaticMarkup(createElement(MemoryRouter, null, n))
+  const codigos = (html: string) => [...trozo(html, 'tbody').matchAll(/s-asiento-codigo">(?:<a[^>]*>)?(\d+)</g)].map((m) => m[1])
+  const accion = (l: LineaCoheldi) => createElement('button', { type: 'button' }, `Cambiar cuenta ${l.codigo}`)
+
+  it('sin opciones, igual que siempre: Cuenta · Nombre · Debe · Haber (los usos de hoy no cambian)', () => {
+    const html = pinta(createElement(TablaAsiento, { lineas: ASIENTO_COHELDI }))
+    expect(texto(trozo(html, 'thead'))).toBe('Cuenta Nombre Debe Haber')
+    expect(codigos(html)).toEqual(['60000000', '47200004', '47200010', '40000007'])
+    expect(texto(trozo(html, 'tfoot'))).toBe('Cuadra Totales 282,39 282,39')
+    expect(html).not.toContain('<a ')
+  })
+  it('con columnas y acciones: van entre Nombre y Debe, y la acción al final; el pie deja sus huecos y sigue cuadrando', () => {
+    const html = pinta(createElement(TablaAsiento<LineaCoheldi>, { lineas: COHELDI_CON_POSICION, columnas: COLUMNAS, acciones: accion, tituloAcciones: 'Cambiar la cuenta' }))
+    expect(texto(trozo(html, 'thead'))).toBe('Cuenta Nombre Local IVA Debe Haber Cambiar la cuenta')
+    const filas = trozo(html, 'tbody').split('</tr>').filter((f) => f.includes('<td'))
+    expect(texto(filas[1])).toBe('47200004 IVA soportado 4 % Foodint Alcalá 4 % sobre 127,40 € 5,10 Cambiar cuenta 47200004')
+    expect(texto(filas[3])).toBe('40000007 COHELDI, S.L. Foodint Alcalá 282,39 Cambiar cuenta 40000007')
+    expect(trozo(html, 'tfoot').match(/<td/g)).toHaveLength(7)
+    expect(texto(trozo(html, 'tfoot'))).toBe('Cuadra Totales 282,39 282,39')
+  })
+  it('compacta (móvil): la tabla sigue en cuatro columnas; lo de más y la acción bajan debajo del nombre, con su título (lo vacío no sale)', () => {
+    const html = pinta(createElement(TablaAsiento<LineaCoheldi>, { lineas: COHELDI_CON_POSICION, columnas: COLUMNAS, acciones: accion, compacta: true }))
+    expect(texto(trozo(html, 'thead'))).toBe('Cuenta Nombre Debe Haber')
+    const filas = trozo(html, 'tbody').split('</tr>').filter((f) => f.includes('<td'))
+    expect(filas[0].match(/<td/g)).toHaveLength(4)
+    expect(texto(filas[1])).toBe('47200004 IVA soportado 4 % Local Foodint Alcalá IVA 4 % sobre 127,40 € Cambiar cuenta 47200004 5,10')
+    expect(texto(filas[3])).not.toContain('IVA')
+  })
+  it('el número de cuenta lleva a su mayor; lo de apoyo va debajo del nombre; «debajo» abre una fila a todo el ancho solo en su línea', () => {
+    const html = pinta(createElement(TablaAsiento<LineaCoheldi>, {
+      lineas: COHELDI_CON_POSICION, columnas: COLUMNAS, acciones: accion,
+      enlaceCuenta: (l) => `/conta/libros/mayor/${l.codigo}`,
+      apoyo: (l) => (l.codigo === '40000007' ? 'P26 4.980' : null),
+      debajo: (l) => (l.id === 3 ? createElement('div', null, 'Busca por nombre o código') : null),
+    }))
+    expect(html).toContain('href="/conta/libros/mayor/60000000"')
+    expect(codigos(html)).toEqual(['60000000', '47200004', '47200010', '40000007'])
+    expect(html.match(/s-asiento-apoyo/g)).toHaveLength(1)
+    const debajo = html.match(/<tr class="s-asiento-debajo" data-linea="3"><td colSpan="7">/)
+    expect(debajo, 'la fila del buscador, debajo de la 47200010 y a lo ancho de las 7 columnas').not.toBeNull()
+    expect(html.indexOf('s-asiento-debajo')).toBeGreaterThan(html.indexOf('data-linea="3"'))
+    expect(html.match(/s-asiento-debajo/g)).toHaveLength(1)
+  })
+  it('AsientoQueSeCrea pasa las mismas opciones a su tabla', () => {
+    const html = pinta(createElement(AsientoQueSeCrea<LineaCoheldi>, { lineas: COHELDI_CON_POSICION, columnas: COLUMNAS, orden: 'posicion' }))
+    expect(texto(trozo(html, 'thead'))).toBe('Cuenta Nombre Local IVA Debe Haber')
+    expect(codigos(html)).toEqual(['40000007', '60000000', '47200004', '47200010'])
+  })
+})
+
+describe('los apuntes del libro en la tabla común (asiento abierto y libro desplegado)', () => {
+  // Los apuntes de la COHELDI tal como los lee diarioService: IVA del libro de recibidas, en Foodint Alcalá.
+  const apunte = (p: number, cuenta: string, nombre: string, debe: number, haber: number, iva: ApunteDiario['iva'] = null): ApunteDiario => ({
+    posicion: p, cuentaId: `c${p}`, cuenta, nombreCuenta: nombre, tituloOficial: null, debe, haber, concepto: null,
+    localId: 'alcala', local: COHELDI.local, comun: false, marcaId: null, marca: null, cedida: false, documento: null, iva, retencion: null, negativoEnDiez: null,
+  })
+  const APUNTES: ApunteDiario[] = [
+    apunte(1, '40000007', 'COHELDI, S.L.', 0, 282.39),
+    apunte(2, '60000000', 'Compras de mercaderías', 263.66, 0),
+    apunte(3, '47200004', 'IVA soportado 4 %', 5.1, 0, { tipoId: 't4', base: 127.4, libro: 'received', tipo: 4 }),
+    apunte(4, '47200010', 'IVA soportado 10 %', 13.63, 0, { tipoId: 't10', base: 136.26, libro: 'received', tipo: 10 }),
+  ]
+  it('cada apunte, con su posición de id y su importe en su lado', () => {
+    const l = lineasDeApuntes(APUNTES)
+    expect(l.map((x) => [x.id, x.codigo, x.debe, x.haber])).toEqual([[1, '40000007', null, '282,39'], [2, '60000000', '263,66', null], [3, '47200004', '5,10', null], [4, '47200010', '13,63', null]])
+    expect(totalesAsiento(l).cuadra).toBe(true)
+  })
+  it('el IVA dice tipo, base y libro', () => {
+    expect(textoIva(APUNTES[2].iva!)).toMatch(/^4 % sobre 127,40\s€ · libro de recibidas$/)
+  })
+  it('las columnas: Local con su eje encendido; sin marca en ninguna línea, sin columna Marca; IVA porque alguna lo lleva; sin retención', () => {
+    expect(columnasApuntes(APUNTES, { local: true, marca: true }).map((c) => c.titulo)).toEqual(['Local', 'IVA'])
+    expect(columnasApuntes(APUNTES, { local: false, marca: true }).map((c) => c.titulo)).toEqual(['IVA'])
+    const cedida = APUNTES.map((x) => (x.posicion === 1 ? { ...x, marcaId: 'm', marca: 'Brasa Prestada', cedida: true } : x))
+    const marca = columnasApuntes(cedida, { local: true, marca: true }).find((c) => c.id === 'marca')!
+    const lineas: LineaApunte[] = lineasDeApuntes(cedida)
+    expect(renderToStaticMarkup(createElement('div', null, marca.celda(lineas[0])))).toContain('Brasa Prestada · cedida')
+    expect(renderToStaticMarkup(createElement('div', null, marca.celda(lineas[1])))).toBe('<div></div>')
   })
 })

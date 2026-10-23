@@ -150,8 +150,11 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   if (lado(page) === 'ordenador') {
     // La fila se despliega en sus apuntes (clic, o Intro con la tabla).
     await ventas.filter({ hasText: 'Hecho por Folvy' }).click()
-    await expect(page.getByRole('link', { name: '47700010' }).first()).toBeVisible()
-    await expect(page.getByText('al Haber').first()).toBeVisible()
+    // En la tabla común del asiento: la cuenta delante (enlazada a su mayor), Debe y Haber en su columna, y «Cuadra».
+    const desplegado = page.getByRole('table', { name: /^Apuntes de Ventas del día · Norte Centro/ }).first()
+    await expect(desplegado.getByRole('link', { name: '47700010' }).first()).toBeVisible()
+    await expect(desplegado.getByRole('columnheader', { name: 'Haber' })).toBeVisible()
+    await expect(desplegado.locator('tfoot .s-asiento-cuadra')).toHaveText('Cuadra')
     await capturar(page, 'diario-abierto')
   }
   // Para revisar: solo lo que espera, sin esconder el resto (Todos sigue con todo).
@@ -224,25 +227,45 @@ test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable',
   const porque = page.getByRole('region', { name: 'Por qué lo propongo así' })
   await expect(porque.getByText('Brasa Prestada va al socio, no a tus ventas')).toBeVisible()
   await expect(porque.getByText(/NRV 16\.ª/)).toBeVisible()
-  await expect(page.getByText('Cuadra', { exact: true })).toBeVisible()
-  await expect(page.getByText('✓ 0,00 €')).toBeVisible()
+  // Asientos › asiento abierto: la tabla común del asiento (Cuenta · Nombre · … ·
+  // Debe · Haber) y su pie con «Cuadra» y los totales (antes, «Cuadra» y «✓ 0,00 €»).
+  const apuntes = page.getByRole('region', { name: 'Apuntes' })
+  const tabla = apuntes.getByRole('table', { name: 'Apuntes del asiento' })
+  await expect(tabla.locator('thead th').first()).toHaveText('Cuenta')
+  await expect(tabla.getByRole('columnheader', { name: 'Debe' })).toBeVisible()
+  await expect(tabla.getByRole('columnheader', { name: 'Haber' })).toBeVisible()
+  await expect(tabla.locator('tfoot .s-asiento-cuadra')).toHaveText('Cuadra')
+  await expect(tabla.locator('tfoot')).toContainText('Totales')
   await expect(page.getByRole('button', { name: 'Validar asiento' })).toBeEnabled()
+  // Propuesto: «Cambiar cuenta» en cada línea (en el móvil, debajo del nombre).
+  await expect(tabla.getByRole('button', { name: 'Cambiar cuenta' }).first()).toBeVisible()
+  // La marca cedida, en su columna (en el móvil, debajo del nombre): la misma etiqueta que en el libro.
+  await expect(tabla.getByText('Brasa Prestada · cedida').first()).toBeVisible()
   // Respuesta 3 · 3 y 4: cada cuenta por su nombre de uso; lo de la marca cedida,
   // a la cuenta de liquidación del socio y no a su 400.
-  const apuntes = page.getByRole('region', { name: 'Apuntes' })
   await expect(apuntes.getByText('Comisiones de plataformas', { exact: true })).toBeVisible()
   await expect(apuntes.getByText('Liquidación pendiente con Marcas del Sur', { exact: true })).toBeVisible()
   await expect(apuntes.getByText('Servicios de profesionales independientes')).toHaveCount(0)
   await expect(apuntes.getByText('Proveedores · Marcas del Sur')).toHaveCount(0)
-  // Cada código de cuenta se lee entero, también con el chip de la marca al lado
-  // (e2e 134: salía «410000» por «41000003»).
-  for (const codigo of await apuntes.locator('a.cxd-codigo').all()) {
+  // Cada código de cuenta va delante, enlazado a su mayor, y se lee entero, también
+  // con los chips de local y marca en la línea (e2e 134: salía «410000» por
+  // «41000003»): ni se sale de su celda ni de lo que se ve de la tabla.
+  const codigos = await tabla.locator('tbody td.s-asiento-codigo a.s-asiento-codigo-enlace').all()
+  expect(codigos.length).toBeGreaterThan(1)
+  for (const codigo of codigos) {
+    const texto = (await codigo.textContent()) ?? ''
+    expect(texto, 'el número de cuenta entero').toMatch(/^\d{8}$/)
+    await expect(codigo).toHaveAttribute('href', new RegExp(texto))
     const sobra = await codigo.evaluate((el) => {
-      const caja = el.closest('.cxd-concepto-apoyo')!.getBoundingClientRect()
-      return el.getBoundingClientRect().right - caja.right
+      const r = el.getBoundingClientRect()
+      const celda = el.closest('td')!.getBoundingClientRect()
+      const marco = el.closest('.s-asiento-marco')!.getBoundingClientRect()
+      return Math.max(r.right - celda.right, r.right - marco.right)
     })
-    expect(sobra, `${await codigo.textContent()} cortado`).toBeLessThanOrEqual(0.5)
+    expect(sobra, `${texto} cortado`).toBeLessThanOrEqual(0.5)
   }
+  // La tabla no se sale de la página (móvil, 390 px): ni la página tiene scroll de lado.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0)
   await capturar(page, 'asiento')
   // El título oficial, en Detalle contable.
   await page.getByRole('button', { name: /Detalle contable/ }).click()
@@ -253,8 +276,9 @@ test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable',
   await page.goto('/conta/libros/diario')
   await abrirAsiento(page, 'Nóminas de septiembre · Norte Centro')
   await expect(page.getByRole('button', { name: 'Validar asiento' })).toHaveCount(0)
-  // exact: en ordenador el menú lleva «Cambiar de empresa» (e2e 127).
-  await expect(page.getByRole('button', { name: 'Cambiar', exact: true })).toHaveCount(0)
+  // Validado: sin «Cambiar cuenta» (lo validado no se toca, se anula).
+  await expect(page.getByRole('table', { name: 'Apuntes del asiento' }).locator('tbody tr').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cambiar cuenta' })).toHaveCount(0)
   await page.getByRole('button', { name: /Detalle contable/ }).click()
   await expect(page.getByText('Nóminas · código 9')).toBeVisible()
   await page.getByRole('button', { name: 'Comprobar la cadena' }).click()
@@ -282,15 +306,20 @@ test('A · cambiar una cuenta de una propuesta: lo dice y lo aprende; y se deja 
   await page.goto(`/conta/libros/diario/${alquiler.datos[0].id}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Alquiler Norte Mercado · octubre' })).toBeVisible({ timeout: 30_000 })
   // Respuesta 3: la línea se llama por su nombre de uso (el «qué se apunta aquí» de la 621), no por su título del BOE.
-  const fila = page.locator('.cxd-linea-envoltura', { hasText: 'El alquiler del local' })
-  await fila.getByRole('button', { name: 'Cambiar' }).click()
+  // Asientos › asiento abierto: cada apunte es una fila de la tabla común; «Cambiar cuenta» abre el buscador debajo.
+  const lineas = page.getByRole('table', { name: 'Apuntes del asiento' }).locator('tbody tr:not(.s-asiento-debajo)')
+  const fila = lineas.filter({ hasText: 'El alquiler del local' })
+  await expect(fila.locator('td.s-asiento-codigo')).toHaveText('62100000')
+  await fila.getByRole('button', { name: 'Cambiar cuenta' }).click()
+  await expect(fila.getByRole('button', { name: 'Cambiar cuenta' })).toHaveAttribute('aria-expanded', 'true')
   await page.getByLabel('Buscar cuenta por nombre o código').fill('otros servicios')
   // Se busca también por el título oficial («otros servicios»), y sale con su nombre de uso.
   await page.getByRole('button', { name: /62900000 Servicios que no van en otra/ }).click()
   await expect(page.getByRole('status').getByText(/Cambiada la 62100000 por la 62900000 \(Servicios que no van en otra.*\)\. La próxima del mismo origen la propondré así\./)).toBeVisible()
   // Y vuelta a la suya (también queda aprendido: la última manda).
-  const otra = page.locator('.cxd-linea-envoltura', { hasText: 'Servicios que no van en otra' })
-  await otra.getByRole('button', { name: 'Cambiar' }).click()
+  const otra = lineas.filter({ hasText: 'Servicios que no van en otra' })
+  await expect(otra.locator('td.s-asiento-codigo')).toHaveText('62900000')
+  await otra.getByRole('button', { name: 'Cambiar cuenta' }).click()
   await page.getByLabel('Buscar cuenta por nombre o código').fill('62100000')
   await page.getByRole('button', { name: /62100000 El alquiler del local/ }).click()
   await expect(page.getByRole('status').getByText(/Cambiada la 62900000 por la 62100000/)).toBeVisible()

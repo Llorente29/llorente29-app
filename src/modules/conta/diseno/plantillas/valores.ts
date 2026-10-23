@@ -67,6 +67,11 @@ export interface LineaAsientoVista {
   haber: string | null
   /** Tocada en «Editar el asiento a mano»: se marca «cambiado a mano». */
   aMano?: boolean
+  /**
+   * Quién es la línea (la posición del apunte, su id): la clave de su fila y lo
+   * que reciben sus columnas y sus acciones. Sin él, su sitio en la lista.
+   */
+  id?: string | number
 }
 
 /** Céntimos de un importe escrito («1.234,56», «1.234,56 €»); vacío o ilegible, 0. */
@@ -81,6 +86,20 @@ export function ordenarAsiento<L extends LineaAsientoVista>(lineas: readonly L[]
   const alDebe = (l: L) => centDeTexto(l.debe) !== 0 || centDeTexto(l.haber) === 0
   return [...lineas.filter(alDebe), ...lineas.filter((l) => !alDebe(l))]
 }
+
+/**
+ * En qué orden se enseñan: 'debe-haber' (de serie, la regla de la pieza) o
+ * 'posicion', tal como vinieron (el orden de posición del asiento guardado).
+ */
+export type OrdenAsiento = 'debe-haber' | 'posicion'
+
+/** Las líneas en el orden pedido; las de la lista no se tocan. */
+export function lineasEnOrden<L extends LineaAsientoVista>(lineas: readonly L[], orden: OrdenAsiento = 'debe-haber'): L[] {
+  return orden === 'posicion' ? [...lineas] : ordenarAsiento(lineas)
+}
+
+/** La clave de la fila: su `id` si lo trae; si no, su sitio. */
+export const claveLineaAsiento = (l: LineaAsientoVista, i: number): string => (l.id != null ? String(l.id) : `#${i}`)
 
 export interface TotalesAsiento { debeCent: number; haberCent: number; cuadra: boolean; diferenciaCent: number; debe: string; haber: string; diferencia: string }
 

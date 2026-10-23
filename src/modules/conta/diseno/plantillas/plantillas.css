@@ -177,6 +177,25 @@ th.s-lista-cifra { text-align: right; }
 .s-asiento-cuadra { display: inline-flex; align-items: center; gap: var(--s-1); color: var(--s-ok); font-weight: var(--s-peso-fuerte); white-space: nowrap; }
 .s-asiento-descuadra { color: var(--s-duda); font-weight: var(--s-peso-fuerte); }
 .s-asiento-vacio { margin-top: var(--s-2); color: var(--s-apoyo); }
+/* La tabla del asiento con sus opciones (Asientos › asiento abierto): el número
+   de cuenta que lleva a su mayor, lo de debajo del nombre (chips, concepto), las
+   columnas de más, las acciones por línea y la fila de debajo (el buscador). */
+.s-asiento-codigo-enlace { color: inherit; text-decoration: none; }
+.s-asiento-codigo-enlace:hover { color: var(--s-accion); text-decoration: underline; }
+.s-asiento-codigo-enlace:focus-visible { outline: none; box-shadow: var(--s-foco); border-radius: var(--s-radio-boton); }
+.s-asiento-col-nombre { min-width: 0; }
+.s-asiento-col-nombre :is(.s-asiento-apoyo, .s-asiento-datos, .s-asiento-acciones) {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); margin-top: var(--s-1);
+  font-size: var(--s-t-s); color: var(--s-apoyo); min-width: 0; overflow-wrap: anywhere;
+}
+.s-asiento-dato { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1); min-width: 0; }
+.s-asiento-dato-titulo { font-weight: var(--s-peso-medio); }
+.s-asiento-dato-titulo::after { content: ':'; }
+.s-asiento-tabla th.s-asiento-col-extra { white-space: nowrap; }
+.s-asiento-extra { font-size: var(--s-t-s); color: var(--s-apoyo); overflow-wrap: anywhere; }
+.s-asiento-col-acciones, td.s-asiento-acciones { width: 1%; white-space: nowrap; text-align: right; }
+.s-asiento-tabla tbody tr:has(+ .s-asiento-debajo) td { border-bottom: 0; }
+.s-asiento-debajo td { padding-top: 0; }
 @media (max-width: 640px) {
   .s-asiento-ficha { padding: var(--s-3); }
   .s-asiento-editar { position: static; display: block; margin-top: var(--s-2); }

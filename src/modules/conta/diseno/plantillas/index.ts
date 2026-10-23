@@ -13,15 +13,18 @@
 
 export { Bandeja, CifrasBandeja, TeTocaHoy, HechoAutomatico, type CifraBandeja, type FilaTeToca } from './Bandeja'
 export {
-  NOMBRE_ORIGEN, totalTeToca, introEnLaHoja, buscarCuentasHoja, centDeTexto, ordenarAsiento, totalesAsiento,
-  type OrigenCasilla, type CuentaHoja, type LineaAsientoVista, type TotalesAsiento,
+  NOMBRE_ORIGEN, totalTeToca, introEnLaHoja, buscarCuentasHoja, centDeTexto, ordenarAsiento, lineasEnOrden, claveLineaAsiento, totalesAsiento,
+  type OrigenCasilla, type CuentaHoja, type LineaAsientoVista, type OrdenAsiento, type TotalesAsiento,
 } from './valores'
 export { PestanasEstado, FiltrosLista, FiltroSelector, FiltroBuscar, TablaLista, type ColumnaLista } from './Lista'
 export {
   pestanasConTodas, sumanTodas, leerEstado, conCambio, recordarLista, listaRecordada, leerOrden, escribirOrden, ordenar,
   type PestanaEstado, type EstadoLista, type Sentido,
 } from './lista'
-export { Ficha, NavegaFicha, Veredicto, BloqueFicha, CampoFicha, FilaCampos, AsientoQueSeCrea, DocumentoFicha, type TipoVeredicto, type TonoCampo } from './Ficha'
+export {
+  Ficha, NavegaFicha, Veredicto, BloqueFicha, CampoFicha, FilaCampos, AsientoQueSeCrea, TablaAsiento, DocumentoFicha,
+  type TipoVeredicto, type TonoCampo, type ColumnaAsiento, type OpcionesTablaAsiento,
+} from './Ficha'
 export { ControlesInforme, VistaInforme, ComprobacionInforme, TablaInforme, type LineaInforme, type CuentaInforme, type ColumnaInforme } from './Informe'
 export { Asistente, PasosAsistente, LeyendaCasillas, Casilla, BloqueAsistente, DeDondeSale, PieAsistente, type PasoAsistente } from './Asistente'
 export { HojaDeLineas, BuscarCuentaHoja } from './HojaDeLineas'

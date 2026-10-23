@@ -12,11 +12,12 @@
 // propuesto, la etiqueta PROPUESTO y una línea con su motivo; lo que no se
 // supo rellenar, en ámbar («Por revisar»).
 
-import { useState, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Icono } from '../Icono'
 import { MarcaCambiado } from './CambiosSinGuardar'
 import type { CambioCampo } from './cambios'
-import { ordenarAsiento, totalesAsiento, type LineaAsientoVista } from './valores'
+import { claveLineaAsiento, lineasEnOrden, totalesAsiento, type LineaAsientoVista, type OrdenAsiento } from './valores'
 
 /** «‹ 3 de 9 ›»: recorrer la cola sin volver a la lista. */
 export function NavegaFicha({ pos, total, anterior, siguiente, etiqueta = 'Facturas' }: {
@@ -142,17 +143,135 @@ export function FilaCampos({ children, columnas = 3 }: { children: ReactNode; co
 }
 
 /**
- * El asiento, como un asiento de verdad (encargo «Ficha de la recibida
- * completa», punto 7; tablero 3b): columnas Cuenta · Nombre · Debe · Haber; la
- * cuenta delante, en negrita y más grande, en cifras tabulares; cada importe a
- * la derecha, bajo su título; primero las líneas del debe y luego las del
- * haber; y la fila de totales con «Cuadra» (o «No cuadra: diferencia X», en
- * ámbar). Con `alEditar`, «Editar el asiento a mano»; la línea tocada a mano
- * lleva su marca. Es LA pieza para enseñar un asiento: la ficha de la
- * recibida, el panel del banco, los asientos del cierre, la muestra.
+ * Una columna de más en la tabla del asiento (local, marca, IVA, retención…):
+ * su título y lo que pinta en cada línea. Va entre «Nombre» y «Debe»; en la
+ * tabla compacta (móvil) baja debajo del nombre, con su título delante.
  */
-export function AsientoQueSeCrea({ lineas, nota, abierto: deSerie = true, titulo = 'El asiento que se crea', vacio, alEditar, textoEditar = 'Editar el asiento a mano', nivel = 2 }: {
-  lineas: readonly LineaAsientoVista[]
+export interface ColumnaAsiento<L extends LineaAsientoVista = LineaAsientoVista> {
+  id: string
+  titulo: string
+  celda: (linea: L) => ReactNode
+  /** Una cifra: a la derecha y en cifras tabulares. */
+  cifra?: boolean
+}
+
+/** Lo que admite la tabla del asiento, además de sus líneas. Todo opcional: sin nada, Cuenta · Nombre · Debe · Haber. */
+export interface OpcionesTablaAsiento<L extends LineaAsientoVista = LineaAsientoVista> {
+  /** Columnas entre «Nombre» y «Debe». */
+  columnas?: readonly ColumnaAsiento<L>[]
+  /** Lo que se puede hacer con cada línea («Cambiar cuenta»…): su columna al final. */
+  acciones?: (linea: L) => ReactNode
+  /** El título (para el lector) de la columna de acciones. */
+  tituloAcciones?: string
+  /** Lo que va debajo del nombre, en pequeño: chips, el concepto de la línea… */
+  apoyo?: (linea: L) => ReactNode
+  /** Una fila a todo el ancho debajo de la línea (p. ej. el buscador de «Cambiar cuenta»); null, nada. */
+  debajo?: (linea: L) => ReactNode
+  /** El número de cuenta lleva a esta dirección (su mayor). */
+  enlaceCuenta?: (linea: L) => string | null | undefined
+  /** De serie, primero el debe y luego el haber; 'posicion', tal como vienen. */
+  orden?: OrdenAsiento
+  /** Móvil: las columnas de más y las acciones bajan debajo del nombre (la tabla sigue en Cuenta · Nombre · Debe · Haber). */
+  compacta?: boolean
+}
+
+const vacia = (x: ReactNode) => x === null || x === undefined || x === false || x === ''
+
+/**
+ * La tabla del asiento, sola (sin título ni desplegable): Cuenta · Nombre ·
+ * Debe · Haber; la cuenta delante, en negrita y más grande, en cifras
+ * tabulares; cada importe a la derecha, bajo su título; primero las líneas del
+ * debe y luego las del haber; y la fila de totales con «Cuadra» (o «No cuadra:
+ * diferencia X», en ámbar). Con sus opciones, columnas de más y acciones por
+ * línea. La usan AsientoQueSeCrea y las páginas que ya tienen su propio marco
+ * (el asiento abierto, los apuntes del libro).
+ */
+export function TablaAsiento<L extends LineaAsientoVista>({ lineas, etiqueta = 'Asiento', columnas = [], acciones, tituloAcciones = 'Acciones', apoyo, debajo, enlaceCuenta, orden = 'debe-haber', compacta = false }: {
+  lineas: readonly L[]
+  /** El nombre de la tabla para el lector. */
+  etiqueta?: string
+} & OpcionesTablaAsiento<L>) {
+  const enOrden = lineasEnOrden(lineas, orden)
+  const t = totalesAsiento(lineas)
+  const enFila = compacta ? [] : columnas
+  const conAcciones = !!acciones && !compacta
+  const ancho = 4 + enFila.length + (conAcciones ? 1 : 0)
+  return (
+    <div className="s-asiento-marco" data-compacta={compacta ? '' : undefined}>
+      <table className="s-asiento-tabla" aria-label={etiqueta}>
+        <thead>
+          <tr>
+            <th scope="col" className="s-asiento-col-cuenta">Cuenta</th>
+            <th scope="col">Nombre</th>
+            {enFila.map((c) => <th key={c.id} scope="col" className={c.cifra ? 's-lista-cifra' : 's-asiento-col-extra'}>{c.titulo}</th>)}
+            <th scope="col" className="s-lista-cifra">Debe</th>
+            <th scope="col" className="s-lista-cifra">Haber</th>
+            {conAcciones && <th scope="col" className="s-asiento-col-acciones"><span className="s-oculto">{tituloAcciones}</span></th>}
+          </tr>
+        </thead>
+        <tbody>
+          {enOrden.map((l, i) => {
+            const clave = claveLineaAsiento(l, i)
+            const enlace = enlaceCuenta?.(l)
+            const deApoyo = apoyo?.(l)
+            const bajo = debajo?.(l)
+            const datos = compacta ? columnas.map((c) => ({ c, v: c.celda(l) })).filter((x) => !vacia(x.v)) : []
+            const hacer = acciones && compacta ? acciones(l) : null
+            return (
+              <Fragment key={clave}>
+                <tr data-a-mano={l.aMano ? '' : undefined} data-linea={clave}>
+                  <td className="s-asiento-codigo">{enlace ? <Link to={enlace} className="s-asiento-codigo-enlace" title={`El mayor de la ${l.codigo}`}>{l.codigo}</Link> : l.codigo}</td>
+                  <td className="s-asiento-col-nombre">
+                    <span className="s-asiento-cuenta">{l.nombre}</span>
+                    {l.aMano && <span className="s-asiento-a-mano">Cambiado a mano</span>}
+                    {!vacia(deApoyo) && <span className="s-asiento-apoyo">{deApoyo}</span>}
+                    {datos.length > 0 && (
+                      <span className="s-asiento-datos">
+                        {datos.map(({ c, v }) => <span key={c.id} className="s-asiento-dato"><span className="s-asiento-dato-titulo">{c.titulo}</span> {v}</span>)}
+                      </span>
+                    )}
+                    {!vacia(hacer) && <span className="s-asiento-acciones">{hacer}</span>}
+                  </td>
+                  {enFila.map((c) => <td key={c.id} className={c.cifra ? 's-lista-cifra' : 's-asiento-extra'}>{c.celda(l)}</td>)}
+                  <td className="s-lista-cifra">{l.debe ?? ''}</td>
+                  <td className="s-lista-cifra">{l.haber ?? ''}</td>
+                  {conAcciones && <td className="s-asiento-acciones">{acciones(l)}</td>}
+                </tr>
+                {!vacia(bajo) && <tr className="s-asiento-debajo" data-linea={clave}><td colSpan={ancho}>{bajo}</td></tr>}
+              </Fragment>
+            )
+          })}
+        </tbody>
+        <tfoot>
+          <tr data-cuadra={t.cuadra ? 'si' : 'no'}>
+            <td className="s-asiento-col-cuenta">
+              {t.cuadra
+                ? <span className="s-asiento-cuadra"><Icono nombre="ok" /> Cuadra</span>
+                : <span className="s-asiento-descuadra">No cuadra: diferencia {t.diferencia}</span>}
+            </td>
+            <td className="s-asiento-totales">Totales</td>
+            {enFila.map((c) => <td key={c.id} />)}
+            <td className="s-lista-cifra">{t.debe}</td>
+            <td className="s-lista-cifra">{t.haber}</td>
+            {conAcciones && <td />}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
+/**
+ * El asiento, como un asiento de verdad (encargo «Ficha de la recibida
+ * completa», punto 7; tablero 3b): la TablaAsiento dentro de su desplegable,
+ * con su título. Con `alEditar`, «Editar el asiento a mano»; la línea tocada a
+ * mano lleva su marca. Admite las mismas opciones que la tabla (columnas,
+ * acciones por línea, enlace al mayor, orden, compacta). Es LA pieza para
+ * enseñar un asiento: la ficha de la recibida, el panel del banco, los
+ * asientos del cierre, la muestra.
+ */
+export function AsientoQueSeCrea<L extends LineaAsientoVista>({ lineas, nota, abierto: deSerie = true, titulo = 'El asiento que se crea', vacio, alEditar, textoEditar = 'Editar el asiento a mano', nivel = 2, ...opciones }: {
+  lineas: readonly L[]
   /** «Al validar se envía también a Diez», o lo que diga la página. */
   nota?: ReactNode
   abierto?: boolean
@@ -164,10 +283,8 @@ export function AsientoQueSeCrea({ lineas, nota, abierto: deSerie = true, titulo
   textoEditar?: string
   /** El nivel del título, para que encaje en su página (un panel con h3 lo quiere en h4). */
   nivel?: 2 | 3 | 4
-}) {
+} & OpcionesTablaAsiento<L>) {
   const [abierto, setAbierto] = useState(deSerie)
-  const ordenadas = ordenarAsiento(lineas)
-  const t = totalesAsiento(lineas)
   const Titulo = `h${nivel}` as 'h2' | 'h3' | 'h4'
   return (
     <details className="s-asiento-ficha" open={abierto} onToggle={(e) => setAbierto((e.currentTarget as HTMLDetailsElement).open)}>
@@ -175,45 +292,7 @@ export function AsientoQueSeCrea({ lineas, nota, abierto: deSerie = true, titulo
       {alEditar && lineas.length > 0 && (
         <button type="button" className="s-boton s-boton-enlace s-asiento-editar" onClick={alEditar}>{textoEditar}</button>
       )}
-      {lineas.length === 0 ? <div className="s-asiento-vacio">{vacio}</div> : (
-        <div className="s-asiento-marco">
-          <table className="s-asiento-tabla" aria-label={titulo}>
-            <thead>
-              <tr>
-                <th scope="col" className="s-asiento-col-cuenta">Cuenta</th>
-                <th scope="col">Nombre</th>
-                <th scope="col" className="s-lista-cifra">Debe</th>
-                <th scope="col" className="s-lista-cifra">Haber</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ordenadas.map((l, i) => (
-                <tr key={i} data-a-mano={l.aMano ? '' : undefined}>
-                  <td className="s-asiento-codigo">{l.codigo}</td>
-                  <td>
-                    <span className="s-asiento-cuenta">{l.nombre}</span>
-                    {l.aMano && <span className="s-asiento-a-mano">Cambiado a mano</span>}
-                  </td>
-                  <td className="s-lista-cifra">{l.debe ?? ''}</td>
-                  <td className="s-lista-cifra">{l.haber ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr data-cuadra={t.cuadra ? 'si' : 'no'}>
-                <td className="s-asiento-col-cuenta">
-                  {t.cuadra
-                    ? <span className="s-asiento-cuadra"><Icono nombre="ok" /> Cuadra</span>
-                    : <span className="s-asiento-descuadra">No cuadra: diferencia {t.diferencia}</span>}
-                </td>
-                <td className="s-asiento-totales">Totales</td>
-                <td className="s-lista-cifra">{t.debe}</td>
-                <td className="s-lista-cifra">{t.haber}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
+      {lineas.length === 0 ? <div className="s-asiento-vacio">{vacio}</div> : <TablaAsiento lineas={lineas} etiqueta={titulo} {...opciones} />}
       {lineas.length > 0 && nota && <p className="s-asiento-pie">{nota}</p>}
     </details>
   )
