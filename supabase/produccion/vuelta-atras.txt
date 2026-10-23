@@ -1,10 +1,8 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# D03 · la recibida sin recepción con su documento y «Guardar cambios» de su
-# ficha), en orden inverso: primero sin lo que añade la 0790 (para si ya se ha
-# guardado algo con ella), luego las dos de Foodint otra vez sin documento (para
-# si alguna ya tiene asiento o el D02 ya ha hecho algo con ella) y después
-# _compras_factura_desde_papel la de antes, byte a byte.
-cuenta: scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
-supabase/vuelta-atras/20261206T0790_d03_recibida_guardar.down.sql
-supabase/vuelta-atras/20261206T0780_d03_recibida_pdf_datos.down.sql
-supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql
+# D06 · el saldo prepago de Riders y el PDF bueno que sustituye a la foto), en
+# orden inverso: primero RIDERS otra vez sin forma de pago (la 0810), luego la
+# 0800: conta_factura_desde_lectura la de antes, byte a byte, y los dos CHECK
+# sin 'prepaid' (para si alguna fila aún lo usa).
+cuenta: scripts/conta/produccion/cuentas/d06-prepago-y-pdf.sql
+supabase/vuelta-atras/20261207T0810_d06_riders_prepago.down.sql
+supabase/vuelta-atras/20261207T0800_d06_prepago_y_pdf_bueno.down.sql

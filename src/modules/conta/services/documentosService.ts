@@ -173,7 +173,8 @@ export async function subirFacturas(accountId: string, companyId: string, ficher
       const sesion = await leerEnModoFactura(accountId, leer)
       const r = await rpc<Fila>('conta_factura_desde_lectura', { p_inbox: reg.id, p_session: sesion })
       s.factura = typeof r.factura_id === 'string' ? r.factura_id : null
-      s.bien = r.estado === 'factura'
+      // D06: el PDF bueno de una que entró con foto ocupa su sitio (no hay otra factura): también es bien.
+      s.bien = r.estado === 'factura' || r.estado === 'pdf_sustituye_foto'
       s.texto = typeof r.texto === 'string' ? `«${f.name}»: ${r.texto}` : `«${f.name}»: ${String(r.estado)}.`
     } catch (e) {
       s.texto = `«${f.name}» no ha entrado: ${motivo(e)}.`
@@ -465,7 +466,7 @@ export interface FichaExtra {
     sinPdf: { cuando: string; motivo: string | null; quien: string | null } | null
     asientoAMano: unknown
     reparto: { cuenta: string; local: string | null; comun: boolean; importe: number }[]
-    cambios: { cuando: string; quien: string | null; que: string; campos: string[] }[]
+    cambios: { cuando: string; quien: string | null; que: string; campos: string[]; anterior?: string | null; pdfSustituye?: boolean }[]
   } | null
 }
 
@@ -490,11 +491,20 @@ async function leerLoGuardado(accountId: string, invoiceId: string): Promise<Fic
     cambios: h.error ? [] : ((h.data ?? []) as Fila[]).map((r) => ({
       cuando: String(r.at), quien: texto(r.by_name), que: String(r.what ?? 'guardar'),
       campos: Array.isArray(r.cambios) ? (r.cambios as Fila[]).map((k) => String(k.campo ?? '')).filter(Boolean) : [],
+      ...documentoAnterior(r.cambios),
     })),
   }
 }
 
 const texto = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x : null)
+
+/** D06 · Si el cambio fue el PDF bueno que sustituyó a la foto (0800), la foto: queda como documento anterior. */
+function documentoAnterior(cambios: unknown): { anterior?: string | null; pdfSustituye?: boolean } {
+  if (!Array.isArray(cambios)) return {}
+  const d = (cambios as Fila[]).find((k) => k.campo === 'documento')
+  if (!d) return {}
+  return { anterior: texto(d.antes), pdfSustituye: d.motivo === 'pdf_sustituye_foto' }
+}
 
 /** El papel que guardó la lectura de una factura, si no tiene otro. */
 async function leerPapelDeLaLectura(accountId: string, invoiceId: string): Promise<string | null> {

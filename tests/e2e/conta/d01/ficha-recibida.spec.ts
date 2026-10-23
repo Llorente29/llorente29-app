@@ -482,6 +482,9 @@ test('D03 · con cambios sin guardar, Intro no valida y «Validar y siguiente» 
   let p: Preparada | null = null
   try {
     p = await prepararRecibida(s, 'sola', `PD03-INT-${lado(page)}-${sello()}`, COMO_COHELDI)
+    // D06: sin PDF no se valida; marcada «Sin PDF» con su motivo, sí (y el botón se enciende).
+    const sin = await rest(s, 'POST', 'rpc/conta_recibida_sin_papel', { p_invoice: p.id, p_sin: true, p_motivo: 'Prueba e2e: no hay papel', p_quien_nombre: QUIEN })
+    expect(sin.status, `«Sin PDF»: ${JSON.stringify(sin.datos).slice(0, 300)}`).toBe(200)
     await abrir(page, p)
     const boton = validar(page)
     await expect(boton).toHaveCount(1)

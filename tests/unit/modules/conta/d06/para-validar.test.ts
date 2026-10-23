@@ -101,3 +101,21 @@ describe('D06 · pagada con tarjeta', () => {
     expect(cargoDeLaTarjeta({ fecha: '2026-10-06', total: 95.95, proveedor: 'EUROPASTRY, S.A.', tarjeta: null }, [...cargos, { ...cargos[0], id: 'gemelo' }])).toBeNull()
   })
 })
+
+import { historialDe } from '../../../../../src/modules/conta/documentos/fichaRecibida'
+
+describe('D06 · la foto sustituida por el PDF bueno, en el historial de la ficha', () => {
+  const base = {
+    fuente: 'ocr', canal: 'correo', recepcion: null, lectura: { cuando: '2026-10-06T08:00:00+00:00', archivo: '01-foto.jpg' },
+    creada: { cuando: '2026-10-06T08:00:05+00:00', quien: 'Folvy' }, marca: 'Sumied', aprobada: null, venceCambiado: null, pagos: [], asiento: null, descartada: null,
+  }
+  it('la foto queda como documento anterior, con su nombre; no es «Puso el PDF» de una persona', () => {
+    const h = historialDe({ ...base, cambios: [{ cuando: '2026-10-07T09:00:00+00:00', quien: 'Folvy', que: 'papel', campos: ['documento'],
+      anterior: '51ad1792-6629-4ef7-833a-b57b09a86710/_correo/x/01-foto.jpg', pdfSustituye: true }] })
+    expect(h.at(-1)?.texto).toBe('Llegó su PDF: sustituye a la foto «01-foto.jpg», que queda como documento anterior')
+  })
+  it('poner el PDF a mano sigue diciéndose como antes', () => {
+    const h = historialDe({ ...base, cambios: [{ cuando: '2026-10-07T09:00:00+00:00', quien: 'Julio', que: 'papel', campos: ['documento'], anterior: null, pdfSustituye: false }] })
+    expect(h.at(-1)?.texto).toBe('Puso el PDF (Julio)')
+  })
+})

@@ -626,7 +626,13 @@ export interface DatosHistorial extends OrigenFicha {
   asiento: { numero: number | null; validado: { cuando: string; quien: string | null } | null; creado: string | null } | null
   descartada: { cuando: string; quien: string | null; motivo: string | null } | null
   /** supplier_invoice_change (0790): lo que guardó una persona en la ficha. */
-  cambios?: readonly { cuando: string; quien: string | null; que: string; campos: readonly string[] }[]
+  cambios?: readonly {
+    cuando: string; quien: string | null; que: string; campos: readonly string[]
+    /** D06 · El documento que había antes (la foto, si llegó su PDF). */
+    anterior?: string | null
+    /** D06 · Fue el PDF bueno, llegado después, que ocupó el sitio de la foto. */
+    pdfSustituye?: boolean
+  }[]
 }
 
 const QUE_CAMBIO: Record<string, string> = { guardar: 'Cambió', papel: 'Puso el PDF', sin_papel: 'Marcó «Sin PDF»' }
@@ -657,6 +663,11 @@ export function historialDe(d: DatosHistorial): HechoHistorial[] {
   if (d.asiento?.creado) h.push({ cuando: d.asiento.creado, texto: 'Se propuso su asiento' })
   if (d.asiento?.validado) h.push({ cuando: d.asiento.validado.cuando, texto: `Contabilizada${d.asiento.numero ? `: asiento ${d.asiento.numero}` : ''}${quienEs(d.asiento.validado.quien)}` })
   for (const c of d.cambios ?? []) {
+    if (c.pdfSustituye) {
+      const foto = c.anterior ? c.anterior.replace(/^.*\//, '') : null
+      h.push({ cuando: c.cuando, texto: `Llegó su PDF: sustituye a ${foto ? `la foto «${foto}»` : 'la foto'}, que queda como documento anterior` })
+      continue
+    }
     const que = QUE_CAMBIO[c.que] ?? 'Cambió'
     const campos = [...new Set(c.campos.map((k) => ETIQUETA_DE_CLAVE[k] ?? k))]
     h.push({ cuando: c.cuando, texto: `${que}${c.que === 'guardar' && campos.length ? ` ${campos.join(', ')}` : ''}${quienEs(c.quien)}` })

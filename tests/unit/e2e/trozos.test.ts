@@ -20,8 +20,9 @@ describe('la entera en trozos', () => {
     const sin = TODOS.filter((f) => typeof TIEMPOS[f] !== 'number')
     // Los nuevos cuentan como la mediana. 21/10: main trae 4 sin medir (i01b/plazo,
     // i01d/proveedor-extranjero, i01e/ficha-libro, i01h/sociedades); inventario/autoconteo
-    // ya está medido (e2e 761).
-    expect(sin.length).toBeLessThan(5)
+    // ya está medido (e2e 761). 23/10 (D06): entra d01/validar-en-bloque, nueva y sin medir
+    // (cuenta como la mediana): son 5. La mide la entera de su PR.
+    expect(sin.length).toBeLessThan(6)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -65,7 +66,9 @@ describe('la entera en trozos', () => {
     // e2e 761). El reparto estimado da 15,6: el techo pasa a 16 min. Lo mide la entera de la tanda.
     // 22/10 (C07): entran medidos i01h/en-vivo (20,6 s, del #281) y c06/diezTodo (85,0 s, e2e
     // 39735848930). El reparto estimado da 16,04: el techo pasa a 16,5 min. Lo mide la entera de la tanda.
-    expect(Math.max(...seg) / 60).toBeLessThan(16.5)
+    // 23/10 (D06): entra d01/validar-en-bloque, sin medir (cuenta como la mediana). El reparto
+    // estimado da 16,65: el techo pasa a 17 min. Lo mide la entera de su PR.
+    expect(Math.max(...seg) / 60).toBeLessThan(17)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {
