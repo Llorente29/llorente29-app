@@ -1459,12 +1459,68 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): D06 · el saldo prepago de Riders y el PDF bueno que sustituye a la foto (0800 y 0810)', () => {
+describe('la tanda de AHORA (manifiesto vivo): D07a · las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 23/10 a las 11:27 UTC, con la 0790 ya aplicada, para ESTOS ficheros.
+  // lectura en producción el 23/10 a las 13:24 UTC, con la 0810 ya aplicada, para ESTE fichero.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261208_d07a_diez_reenviar_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261208T0820_d07a_diez_reenviar_descripcion.down.sql'
+
+  it('un fichero, el medido; pide «autorizo» (cambia datos de Foodint); nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261208T0820_d07a_diez_reenviar_descripcion.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(r.ficheros[viva[0]]).toMatch(/autorizo/i)
+    expect(ctx.tablas).toEqual(['public.external_send'])
+    expect(ctx.funciones).toEqual([])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('solo toca los envíos de RIDERS de Foodint rechazados por la descripción, y para si no hay o si son más de 200', () => {
+    const d = readFileSync(viva[0], 'utf8')
+    expect(d).toContain("v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(d).toContain("v_prov constant uuid := 'cbe3ddb1-5d3a-4aa7-a907-38f362e922b1'")
+    expect(d).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
+    const sin = d.replace(/--.*$/gm, '')
+    expect(sin.match(/\bupdate\s+public\./gi)).toHaveLength(1)
+    expect(sin).toContain("x.account_id = v_acc and i.supplier_id = v_prov and x.kind = 'factura' and x.status = 'pendiente'")
+    expect(sin).toContain("x.last_error ilike '%factura.Descripcion%'")
+    expect(sin).toContain('set attempts = 0, next_try_at = now()')
+    expect(sin).toContain('if v_n = 0 then raise exception')
+    expect(sin).toContain('if v_n > 200 then raise exception')
+    // Solo los intentos, el siguiente intento y el motivo: el estado no se toca.
+    expect(sin.match(/update public\.external_send x\s+set ([\s\S]*?)\s+from _d07a_reenviar/)?.[1]).not.toMatch(/\bstatus\b/)
+    // El orden va dicho: después de desplegar las dos funciones.
+    expect(d).toContain('Esta tanda va DESPUÉS de desplegar conta-diez-cola y')
+    expect(readFileSync(MANIFIESTO, 'utf8')).toContain('DESPUÉS se aplica esta tanda, desde main')
+  })
+  it('su prueba de staging ejecuta la 0820 y su vuelta atrás, entra como usuario y acaba en ROLLBACK; la cuenta solo lee', () => {
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of [`\\i ${viva[0]}`, `\\i ${DOWN}`, 'set local role authenticated']) expect(p).toContain(x)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d07a-diez-reenviar.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+  })
+})
+
+describe('la tanda del D06 · el saldo prepago de Riders y el PDF bueno que sustituye a la foto (0800 y 0810, aplicada; su copia)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-d06-prepago-y-pdf-20261023.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 23/10 a las 11:27 UTC, con la 0790 ya aplicada, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-d06-prepago-y-pdf-20261023.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1566,7 +1622,7 @@ describe('la tanda de AHORA (manifiesto vivo): D06 · el saldo prepago de Riders
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
   it('su vuelta atrás, en orden inverso', () => {
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN_DATOS, DOWN])
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-d06-prepago-y-pdf-20261023.txt')).toEqual([DOWN_DATOS, DOWN])
   })
 })
 

@@ -1,21 +1,16 @@
 {
-  "_que": "D06 · bloque 1 de Compras y gastos: el saldo prepago de Riders y el PDF bueno que sustituye a la foto · contexto de producción de la tanda viva (20261207T0800 y 20261207T0810), medido en SOLO LECTURA el 23/10 a las 11:27 UTC, con la 0790 del D03 ya aplicada (la última del historial: 20261206T0790_d03_recibida_guardar), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la tanda existen public.supplier (95 filas estimadas), public.supplier_invoice (101) y public.conta_factura_desde_lectura (md5 c7e7811e385ce489612d491213276602, una sola firma); nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-23T11:27Z",
+  "_que": "D07a · las recibidas que Diez rechazó por la descripción, otra vez a la cola · contexto de producción de la tanda viva (20261208T0820), medido en SOLO LECTURA el 23/10 a las 13:24 UTC, con la 0810 del D06 ya aplicada (la última del historial: 20261207T0810_d06_riders_prepago), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la tanda existe public.external_send (208 filas estimadas); nada del camino del pedido; nada en el historial. A esa hora, 65 envíos de RIDERS por reponer (17 con 1 intento y 48 con 2).",
+  "medido": "2026-10-23T13:24Z",
   "tanda": {
-    "supabase/migrations/20261207T0800_d06_prepago_y_pdf_bueno.sql": "b41323a7f93929d4e6ec7e5ef9aa23ea",
-    "supabase/migrations/20261207T0810_d06_riders_prepago.sql": "314e4ac10b760cb382583d580a8d145a"
+    "supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql": "62a9812899ca0c6cc9f36f70ebb8c4a8"
   },
   "contexto": {
     "tablas": [
-      "public.supplier",
-      "public.supplier_invoice"
+      "public.external_send"
     ],
-    "funciones": [
-      "public.conta_factura_desde_lectura(uuid,uuid)"
-    ],
+    "funciones": [],
     "filas": {
-      "public.supplier": 95,
-      "public.supplier_invoice": 101
+      "public.external_send": 208
     },
     "otras": {},
     "camino": {

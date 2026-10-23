@@ -32,10 +32,10 @@ describe('lo que añade una rama o un push al manifiesto', () => {
 
 describe('qué se puede ensayar en ROLLBACK', () => {
   const hoy = lineas(readFileSync(MANIFIESTO, 'utf8'))
-  it('los 114 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02, la 0470 del D02, la 0480 del E05, la 0490 del S02 · PR 3, la 0770, la 0780 y la 0790 del D03 y la 0800 y la 0810 del D06, cada una con su prueba) se ensayan, y 52 llevan su propia transacción', () => {
-    expect(hoy).toHaveLength(114)
+  it('los 116 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02, la 0470 del D02, la 0480 del E05, la 0490 del S02 · PR 3, la 0770, la 0780 y la 0790 del D03 y la 0800 y la 0810 del D06 y la 0820 del D07a, cada una con su prueba) se ensayan, y 53 llevan su propia transacción', () => {
+    expect(hoy).toHaveLength(116)
     expect(hoy.filter((f) => porQueNoSeEnsaya(readFileSync(f, 'utf8')))).toEqual([])
-    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(52)
+    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(53)
   })
   it('una migración vieja con COMMIT no se ensaya: dejaría cosas de verdad', () => {
     const f = 'supabase/migrations/20260923T0015_casar_el_combo_por_su_id.sql'
@@ -118,7 +118,7 @@ end $$;`
     expect(porQueNoSoloAnade(ruta, readFileSync(ruta, 'utf8'), { tablas: [], funciones: [] })).toBeNull()
   })
   it('la 0800 del D06 cambia los dos CHECK de payment_method y conta_factura_desde_lectura (que existen), y la 0810 cambia datos: las dos, solo en ROLLBACK', () => {
-    const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+    const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-d06-prepago-y-pdf-20261023.json', 'utf8')).contexto
     const f0800 = 'supabase/migrations/20261207T0800_d06_prepago_y_pdf_bueno.sql', f0810 = 'supabase/migrations/20261207T0810_d06_riders_prepago.sql'
     expect(porQueNoSoloAnade(f0800, readFileSync(f0800, 'utf8'), medida)).not.toBeNull()
     expect(porQueNoSoloAnade(f0810, readFileSync(f0810, 'utf8'), medida)).toMatch(/cambia_datos tabla public\.supplier/)

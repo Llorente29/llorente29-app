@@ -16,6 +16,8 @@
 //   3. sin PDF no se valida: «Falta su PDF» en la lista y en la ficha, y
 //      «Validar y siguiente» apagado; marcada «Sin PDF» con su motivo, se
 //      enciende;
+//      Y la ficha de una de las validadas enseña su asiento de verdad
+//      (Cuenta · Nombre · Debe · Haber) con un enlace a él (D07a);
 //   4. el NIF leído mal en un carácter (el de su ficha es válido y el leído no):
 //      ámbar, «He leído mal el NIF; uso el de su ficha», y el asiento que se
 //      crea, a la vista.
@@ -212,6 +214,20 @@ test('D06 · validar en bloque: 3 de 5, con 2 que no están listas (sin PDF y el
     // Las 3 se van de «Por revisar»; las 2 se quedan, con su motivo.
     await expect(page.locator('[data-fila]')).toHaveCount(2, { timeout: 30_000 })
     await expect(await listaDe(page, sinPdf)).toContainText('Falta su PDF')
+
+    // D07a · La ficha validada enseña su asiento DE VERDAD (Cuenta · Nombre · Debe · Haber) y un enlace a él.
+    await abrirFicha(page, l1)
+    const asiento = page.locator('details.s-asiento-ficha table.s-asiento-tabla')
+    await expect(asiento).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('details.s-asiento-ficha')).not.toContainText('Ya tiene su asiento')
+    const filas = asiento.locator('tbody tr')
+    expect(await filas.count()).toBeGreaterThanOrEqual(3)
+    for (const f of await filas.all()) await expect(f).toContainText(/\d{8}/)
+    await expect(asiento).toContainText('122,21')
+    const ver = page.locator('[data-prueba="ver-asiento"]')
+    await expect(ver).toHaveText(/^Ver el asiento \d+$/)
+    await ver.click()
+    await expect(page).toHaveURL(/\/conta\/libros\/diario\/[0-9a-f-]{36}/, { timeout: 20_000 })
     expect(errores).toEqual([])
   } finally {
     await limpiar(s, ps)
