@@ -8,7 +8,7 @@
 -- entregadas); el freno del C11 (2045) dejó de anular y solo lo marcaba «para
 -- revisar», que bloquea el día. La regla nueva, a la hora de cierre de su día:
 --
---   · Pedido de plataforma (source hubrise o lastapp) que sigue abierto:
+--   · Pedido de plataforma (source hubrise, lastapp u otter) que sigue abierto:
 --       - order_status cancelled, rejected o delivery_failed → fuera: se anula
 --         como hacía el cierre antes (status cancelled, unconfirmed_at,
 --         cancel_reason; el stock no se devuelve, como entonces) y se apunta
@@ -21,7 +21,7 @@
 --         ningún movimiento de stock (si ya consumió al aceptarse, no se toca).
 --         Se apunta accion = 'cerrado_sin_confirmar'. Entra en el asiento de
 --         ventas de su día como cualquier venta cerrada.
---   · Pedido que no es de plataforma (TPV, tienda propia): no se toca; se
+--   · Pedido que no es de plataforma (folvy_pos, folvy_shop, manual, import): no se toca; se
 --     apunta 'revisar' como en el freno.
 --
 -- Y el aviso: conta_sin_confirmar_no_cobrados(empresa) — los cerrados sin
@@ -78,7 +78,7 @@ begin
      where s.status = 'open'
      for update of s skip locked
   loop
-    if coalesce(r.source, '') not in ('hubrise', 'lastapp') then
+    if coalesce(r.source, '') not in ('hubrise', 'lastapp', 'otter') then
       v_accion := 'revisar'; v_revisar := v_revisar + 1;
     elsif coalesce(r.order_status, '') in ('cancelled', 'rejected', 'delivery_failed') then
       update public.sale s

@@ -12,7 +12,7 @@
 --      genera su consumo una vez.
 --   2. Uno que la plataforma canceló: se anula (cancelled, unconfirmed_at) y
 --      queda «anulado».
---   3. Uno del TPV: no se toca y queda «revisar».
+--   3. Uno del TPV (folvy_pos): no se toca y queda «revisar».
 --   4. Uno que el freno había apuntado «para revisar»: pasa a
 --      «cerrado_sin_confirmar».
 --   5. Una segunda pasada no cambia nada.
@@ -51,7 +51,7 @@ begin
   values (v_plat, v_acc, v_loc, v_marca, v_canal, (v_d::timestamp + time '21:00') at time zone 'Europe/Madrid', 'open', 'awaiting_collection', 12.5, 'hubrise', 'P1201', true,
           (v_d::timestamp + time '21:20') at time zone 'Europe/Madrid'),
          (v_canc, v_acc, v_loc, v_marca, v_canal, (v_d::timestamp + time '21:30') at time zone 'Europe/Madrid', 'open', 'cancelled', 8.0, 'hubrise', 'P1202', true, null),
-         (v_tpv,  v_acc, v_loc, v_marca, v_canal, (v_d::timestamp + time '22:00') at time zone 'Europe/Madrid', 'open', 'accepted', 5.0, 'tpv', 'T1203', true, null),
+         (v_tpv,  v_acc, v_loc, v_marca, v_canal, (v_d::timestamp + time '22:00') at time zone 'Europe/Madrid', 'open', 'accepted', 5.0, 'folvy_pos', 'T1203', true, null),
          (v_rev,  v_acc, v_loc, v_marca, v_canal, (v_d::timestamp + time '22:30') at time zone 'Europe/Madrid', 'open', 'in_delivery', 9.9, 'lastapp', 'L1204', true, null);
   insert into public.sales_day_close_log (account_id, company_id, sale_id, location_id, sales_day, closed_through, close_time, order_code, total, order_status, accion)
   values (v_acc, v_e, v_rev, v_loc, v_d, v_d, time '02:00', 'L1204', 9.9, 'in_delivery', 'revisar');
