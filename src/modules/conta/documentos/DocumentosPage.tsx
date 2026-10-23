@@ -40,6 +40,10 @@ import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { leerDocumentos, leerExtrasFacturas, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type ExtraFactura, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
+import { leerParaValidar, validarEnBloque, type ResultadoBloque } from '@/modules/conta/documentos/paraValidarService'
+import { BarraMarcadas, ConfirmarBloque, ResultadoDelBloque } from '@/modules/conta/documentos/ValidarEnBloque'
+import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
+import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
@@ -56,7 +60,7 @@ const ACEPTA = 'application/pdf,image/jpeg,image/png,image/webp'
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
 
 export default function DocumentosPage() {
-  const { accountId, cargando, userName } = useCuentaConta()
+  const { accountId, cargando, userName, userId } = useCuentaConta()
   const { activa } = useEmpresas()
   const movil = useIsMobile()
   const solo = useProductoSolo()
@@ -74,6 +78,16 @@ export default function DocumentosPage() {
   const ids = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'factura').map((x) => x.id), [datos.datos])
   const extras = useLeer(accountId && ids.length ? () => leerExtrasFacturas(accountId, ids) : null, `${accountId}:${ids.join(',')}`)
   const mapa = extras.datos ?? (new Map() as Map<string, ExtraFactura>)
+  // D06 · Validar en bloque (tablero 2b): en «Por revisar», el veredicto de cada fila (el de su ficha), y las que se marcan.
+  const enBloque = f.pestana === 'por-revisar'
+  const listas = useLeer(enBloque && accountId && activa && datos.datos && extras.datos
+    ? () => leerParaValidar(accountId, activa.id, datos.datos!.filas, extras.datos!, desde, hasta) : null,
+  `${activa?.id}:${desde}:${hasta}:${vuelta}:${ids.length}:validar`)
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set())
+  const [confirmando, setConfirmando] = useState(false)
+  const [validando, setValidando] = useState<{ hechas: number; de: number } | null>(null)
+  const [resultado, setResultado] = useState<ResultadoBloque | null>(null)
+  const envioDiez = useEnvioDiez(accountId, activa?.id)
 
   const ficheros = useRef<HTMLInputElement>(null)
   const camara = useRef<HTMLInputElement>(null)
@@ -123,6 +137,28 @@ export default function DocumentosPage() {
   const filas = filasDeLaLista(todasLasFilas, mapa, f)
   const t = totales(filas, mapa)
   const nombrePestana = pestanas.find((p) => p.id === f.pestana)?.etiqueta ?? 'Todas'
+  const pv = listas.datos
+  const deLaLista = new Set(filas.map((x) => x.id))
+  const marcadasVivas = [...marcadas].filter((id) => deLaLista.has(id))
+  const marcadasListas = marcadasVivas.filter((id) => pv?.get(id)?.lista)
+  const totalMarcadas = marcadasVivas.reduce((t, id) => t + (filas.find((x) => x.id === id)?.total ?? 0), 0)
+  const listasEnLaLista = filas.filter((x) => pv?.get(x.id)?.lista).map((x) => x.id)
+  const marcarListas = () => setMarcadas(new Set(listasEnLaLista))
+  async function validarMarcadas() {
+    if (!accountId) return
+    setConfirmando(false); setResultado(null)
+    const nombres = new Map(filas.map((x) => [x.id, `${nombre(x)}${x.numero ? ` ${x.numero}` : ''}`]))
+    setValidando({ hechas: 0, de: marcadasListas.length })
+    try {
+      const r = await validarEnBloque(accountId, marcadasListas, nombres, userName, userId, (hechas) => setValidando({ hechas, de: marcadasListas.length }))
+      setResultado(r)
+      setMarcadas(new Set(r.mal.map((m) => m.id)))
+    } finally {
+      setValidando(null)
+      refrescarCuentasMenu()
+      setVuelta((v) => v + 1)
+    }
+  }
 
   /** Abrir una fila: se apunta la fila en la lista (para volver a ella) y se va a su ficha con la lista detrás. */
   const abrir = (x: FilaDocumento) => {
@@ -167,7 +203,9 @@ export default function DocumentosPage() {
     { id: 'base', titulo: 'Base', cifra: true, celda: (x) => euro(mapa.get(x.id)?.base) },
     { id: 'iva', titulo: 'IVA', cifra: true, celda: (x) => euro(mapa.get(x.id)?.iva) },
     { id: 'total', titulo: 'Total', cifra: true, ordenable: true, celda: (x) => <strong>{euro(x.total)}</strong> },
-    { id: 'estado', titulo: 'Estado', celda: (x) => { const e = estadoDeFila(x, mapa.get(x.id)); return <Chip tono={e.tono}>{e.texto}</Chip> } },
+    enBloque
+      ? { id: 'lista', titulo: '¿Lista para validar?', celda: (x) => <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> }
+      : { id: 'estado', titulo: 'Estado', celda: (x) => { const e = estadoDeFila(x, mapa.get(x.id)); return <Chip tono={e.tono}>{e.texto}</Chip> } },
   ]
   const tarjeta = (x: FilaDocumento) => {
     const e = estadoDeFila(x, mapa.get(x.id))
@@ -176,7 +214,7 @@ export default function DocumentosPage() {
       <>
         <span className="s-tarjeta-cabeza"><span className="s-lista-principal">{nombre(x)}</span><strong className="s-cifra">{euro(x.total)}</strong></span>
         <span className="s-tarjeta-apoyo">{[x.numero ?? 'sin número', diaMes(x.fecha ?? x.llego.slice(0, 10)), l].filter(Boolean).join(' · ')}</span>
-        <span className="s-tarjeta-pie"><Chip tono={e.tono}>{e.texto}</Chip>{propuesto(x)}</span>
+        <span className="s-tarjeta-pie">{enBloque ? <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> : <Chip tono={e.tono}>{e.texto}</Chip>}{propuesto(x)}</span>
       </>
     )
   }
@@ -272,12 +310,33 @@ export default function DocumentosPage() {
         <p className="s-aviso-lista" role="status">La factura que mirabas ya no sale en «{nombrePestana}» con estos filtros{f.pestana === 'por-revisar' ? ': la validaste o cambió de estado' : ''}. La tienes en «Todas».</p>
       )}
 
+      {enBloque && d && filas.length > 0 && (
+        <div className="s-bloque-acciones">
+          {listas.error && <span className="s-aviso-lista" data-tono="falta" role="alert">No he podido comprobar cuáles están listas: {listas.error} <button type="button" className="s-boton s-boton-enlace" onClick={listas.recargar}>Reintentar</button></span>}
+          {pv && <Boton icono="ok" onClick={marcarListas} disabled={listasEnLaLista.length === 0 || !!validando}>Marcar las que están listas ({listasEnLaLista.length})</Boton>}
+        </div>
+      )}
+      {resultado && <ResultadoDelBloque r={resultado} />}
+      {enBloque && marcadasVivas.length > 0 && (
+        <BarraMarcadas marcadas={marcadasVivas.length} total={totalMarcadas} listas={marcadasListas.length} validando={validando}
+          alQuitar={() => setMarcadas(new Set())} alValidar={() => setConfirmando(true)} />
+      )}
+      {confirmando && (
+        <ConfirmarBloque enviaADiez={envioDiez.envio?.encendido === true} noListas={marcadasVivas.length - marcadasListas.length}
+          facturas={marcadasListas.map((id) => { const x = filas.find((y) => y.id === id)!; return { cuenta: pv?.get(id)?.cuenta ?? null, base: mapa.get(id)?.base ?? null, total: x.total, local: localDeFila(x, mapa.get(id)) } })}
+          alCancelar={() => setConfirmando(false)} alValidar={() => void validarMarcadas()} />
+      )}
       {!d && !datos.error && <div className="s-lista" aria-busy="true" aria-label="Cargando las facturas"><div className="s-lista-cargando" /></div>}
       {d && (
         <TablaLista<FilaDocumento>
           etiqueta={`Facturas recibidas · ${nombrePestana}`}
           columnas={columnas} filas={filas} clave={(x) => x.id} nombre={(x) => `${nombre(x)}${x.numero ? ` ${x.numero}` : ''}`}
           alAbrir={abrir} filaActual={fila} movil={movil} tarjeta={tarjeta}
+          seleccion={enBloque ? {
+            marcadas: new Set(marcadasVivas),
+            alMarcar: (id, si) => setMarcadas((m) => { const n = new Set(m); if (si) n.add(id); else n.delete(id); return n }),
+            alMarcarTodas: (si) => setMarcadas(si ? new Set(filas.map((x) => x.id)) : new Set()),
+          } : undefined}
           orden={f.orden} alOrdenar={(c) => cambiar({ orden: escribirOrden({ columna: c, sentido: f.orden.columna === c && f.orden.sentido === 'desc' ? 'asc' : 'desc' }) })}
           vacio={f.pestana === 'por-revisar' && !f.q && !f.prov && !f.local && !f.canal
             ? <><strong>Todo al día.</strong> No queda ninguna factura por revisar{f.mes ? ' este mes' : ''}. <button type="button" className="s-boton s-boton-enlace" onClick={() => ficheros.current?.click()}>Subir factura</button></>
@@ -309,4 +368,11 @@ function ResultadoSubida({ subidas }: { subidas: Subida[] }) {
       <ul>{subidas.map((s, i) => <li key={i}>{s.texto}</li>)}</ul>
     </div>
   )
+}
+
+/** D06 · «¿Lista para validar?» de una fila: «Lista», o «No está lista.» con su motivo (el de su ficha). */
+function ListaParaValidar({ p, cargando }: { p: { lista: boolean; motivo: string } | undefined; cargando: boolean }) {
+  if (!p) return <span className="s-apoyo">{cargando ? 'Comprobando…' : '—'}</span>
+  if (p.lista) return <span className="s-lista-para-validar" data-lista="">✓ Lista</span>
+  return <span className="s-lista-para-validar" data-tono="duda"><strong>No está lista.</strong> {p.motivo}</span>
 }

@@ -16,7 +16,7 @@ export {
   NOMBRE_ORIGEN, totalTeToca, introEnLaHoja, buscarCuentasHoja, centDeTexto, ordenarAsiento, lineasEnOrden, claveLineaAsiento, totalesAsiento,
   type OrigenCasilla, type CuentaHoja, type LineaAsientoVista, type OrdenAsiento, type TotalesAsiento,
 } from './valores'
-export { PestanasEstado, FiltrosLista, FiltroSelector, FiltroBuscar, TablaLista, type ColumnaLista } from './Lista'
+export { PestanasEstado, FiltrosLista, FiltroSelector, FiltroBuscar, TablaLista, type ColumnaLista, type SeleccionLista } from './Lista'
 export {
   pestanasConTodas, sumanTodas, leerEstado, conCambio, recordarLista, listaRecordada, leerOrden, escribirOrden, ordenar,
   type PestanaEstado, type EstadoLista, type Sentido,

@@ -194,7 +194,8 @@ export interface ResultadoProponer {
   yaEstaban: number
   descartadas: number
   /** Lo que no se ha propuesto, con por qué (se enseña: regla 8, nada callado). */
-  sinPropuesta: { que: string; porque: string; pedidos?: PedidoParaVer[] }[]
+  /** D06: `id`, el de lo que no se propone (las facturas de proveedor), para decirlo en su fila. */
+  sinPropuesta: { id?: string; que: string; porque: string; pedidos?: PedidoParaVer[] }[]
   validadasSolas: number
   /** El mes de ventas repasado esta vez (del más reciente hacia atrás). */
   mesVentas: string | null
@@ -615,7 +616,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const fecha = String(f.invoice_date)
     if (!abierto(fecha)) {
       // Una sola (N23): lo que no se apunta se dice (regla 8). En la tanda, como siempre.
-      if (soloFactura) r.sinPropuesta.push({ que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: 'Su fecha cae en un periodo cerrado o antes del primer día abierto: no se apunta ahí.' })
+      if (soloFactura || ver) r.sinPropuesta.push({ id: String(f.id), que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: 'Su fecha cae en un periodo cerrado o antes del primer día abierto: no se apunta ahí.' })
       continue
     }
     const cuentaProv = ctx.enlace('supplier', sup, 'principal')
@@ -629,7 +630,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       if (deLoAprendido?.cuenta) gasto = String(deLoAprendido.cuenta)
     }
     const que = `Factura ${s(prov.name) ?? 'de proveedor'}${f.invoice_number ? ` · ${f.invoice_number}` : ''}`
-    if (!cuentaProv) { r.sinPropuesta.push({ que, porque: 'El proveedor no tiene su cuenta (Contabilidad de su ficha).' }); continue }
+    if (!cuentaProv) { r.sinPropuesta.push({ id: String(f.id), que, porque: 'El proveedor no tiene su cuenta (Contabilidad de su ficha).' }); continue }
     const rr = ret.find((x) => String(x.id) === s(f.withholding_rate_id))
     // I01d · La ficha dice cómo va su IVA: si lo declaras tú, la factura se autoliquida.
     const ficha: FichaIva = {
@@ -639,7 +640,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const clase = claseIva(ficha)
     const nombreProv = s(prov.name) ?? 'El proveedor'
     if (clase === 'ue_sin_nif_iva' && f.vat_non_deductible !== true) {
-      r.sinPropuesta.push({ que, porque: `${nombreProv} es de ${nombrePais(ficha.pais)} y no tiene un NIF-IVA europeo válido: sin él su compra no es intracomunitaria. Ponlo en su ficha (se comprueba en VIES) y la factura se propone.` })
+      r.sinPropuesta.push({ id: String(f.id), que, porque: `${nombreProv} es de ${nombrePais(ficha.pais)} y no tiene un NIF-IVA europeo válido: sin él su compra no es intracomunitaria. Ponlo en su ficha (se comprueba en VIES) y la factura se propone.` })
       continue
     }
     const tipoAuto = tipoDeLaClase(clase)
@@ -683,7 +684,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
         return sop && rep ? { tipoId: t.id, porcentaje: t.rate, soportado: sop, repercutido: rep } : null
       },
     })
-    if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
+    if (!res.propuesta) { r.sinPropuesta.push({ id: String(f.id), que, porque: res.sinPropuesta ?? '' }); continue }
     if (clase === 'intracomunitaria' && ficha.vies !== 'valid') {
       res.propuesta.avisos.push(`El NIF-IVA de ${nombreProv} está sin comprobar en VIES: ábrelo en su ficha y se vuelve a preguntar.`)
       res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
@@ -732,6 +733,23 @@ export async function verPropuestaFactura(accountId: string, companyId: string, 
   const codigos = [...new Set(p.lineas.map((l) => l.cuenta))]
   const filas = await leer(tabla('company_account').select('code, name').eq('company_id', companyId).in('code', codigos), 'los nombres de las cuentas')
   return { propuesta: p, nombres: new Map(filas.map((x) => [String(x.code), String(x.name)])) }
+}
+
+/**
+ * D06 · La propuesta de cada factura recibida de un periodo (en revisión o aprobada), sin escribir nada:
+ * la misma que enseña su ficha («El asiento que se crea»), para todas de una vez (validar en bloque).
+ * Las que no tienen propuesta, con su porqué.
+ */
+export async function verPropuestasFacturas(accountId: string, companyId: string, desde: string, hasta: string): Promise<{
+  propuestas: Map<string, Propuesta>; sinPropuesta: Map<string, string>; nombres: Map<string, string> }> {
+  const ctx = await cargarContexto(accountId, companyId)
+  const r: ResultadoProponer = { propuestas: 0, yaEstaban: 0, descartadas: 0, sinPropuesta: [], validadasSolas: 0, mesVentas: null, quedanDias: 0 }
+  const propuestas = new Map<string, Propuesta>()
+  await facturasDeProveedor(accountId, companyId, desde, hasta, ctx, r, null, (f) => diaAbierto(f, ctx.calendario), undefined, (p) => { if (p.origen.id) propuestas.set(p.origen.id, p) })
+  const sinPropuesta = new Map(r.sinPropuesta.filter((x) => x.id).map((x) => [x.id!, x.porque]))
+  const codigos = [...new Set([...propuestas.values()].flatMap((p) => p.lineas.map((l) => l.cuenta)))]
+  const filas = codigos.length ? await leer(tabla('company_account').select('code, name').eq('company_id', companyId).in('code', codigos), 'los nombres de las cuentas') : []
+  return { propuestas, sinPropuesta, nombres: new Map(filas.map((x) => [String(x.code), String(x.name)])) }
 }
 
 /** I01d · Por qué su IVA lo declaras tú, para la propuesta: «es de Francia y tiene NIF-IVA europeo…». */
