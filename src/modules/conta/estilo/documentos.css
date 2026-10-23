@@ -243,7 +243,7 @@
 .cxf-total { margin-left: auto; font-size: var(--s-t-m); }
 .cxf-contra { display: inline-flex; align-items: center; gap: var(--s-1); font-weight: var(--s-peso-medio); }
 .cxf-contra[data-igual='si'] { color: var(--s-ok); }
-.cxf-contra[data-igual='no'] { color: var(--s-duda); background: var(--s-duda-fondo); padding: 0 var(--s-2); border-radius: var(--s-radio-pildora); }
+.cxf-contra[data-igual='no'], .cxf-contra[data-igual='redondeo'] { color: var(--s-duda); background: var(--s-duda-fondo); padding: 0 var(--s-2); border-radius: var(--s-radio-pildora); }
 .cxf-antes { display: flex; flex-direction: column; gap: var(--s-1); }
 
 .cxf-gasto-cabeza, .cxf-gasto-linea { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) var(--s-tactil); gap: var(--s-2); align-items: center; }

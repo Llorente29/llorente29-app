@@ -18,8 +18,10 @@
 //     (9,34), que NO es el de sus líneas por el tipo (9,33): manda la fila.
 
 import { describe, expect, it } from 'vitest'
+import { aplicarAsientoAMano, aplicarReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
+import type { Propuesta } from '@/modules/conta/lib/libro'
 import {
-  COMO_SE_GUARDA, ETIQUETAS, asientoVistaPrevia, borradorDe, comprobarAMano, contraElPdf, cuadraElGasto, cuentasDeLaPropuesta, deDondeVino, formatoCampo,
+  COMO_SE_GUARDA, ETIQUETAS, SIN_LA_TANDA, aManoDeLoGuardado, asientoAManoParaGuardar, asientoVistaPrevia, borradorDe, cambiosParaLaBase, comprobarAMano, lineasConMasDecimales, recargoPorTipo, contraElPdf, cuadraElGasto, cuentasDeLaPropuesta, deDondeVino, formatoCampo,
   gastosConImporte, historialDe, otroTipo, papelDeLaLectura, partirCambios, rehacerCuota, textoDelGuardado, tiposDeFactura, totalesDe, type BorradorFicha,
   type DatosParaBorrador,
 } from '@/modules/conta/documentos/fichaRecibida'
@@ -82,10 +84,18 @@ describe('base, IVA y total contra el PDF', () => {
     expect(contraElPdf(totalesDe(borradorDe(OLIMPO)), { base: 342.13, iva: 21.54, total: 363.67 }).igual).toBe(true)
     expect(contraElPdf(totalesDe(borradorDe(EUROPASTRY)), { base: 134.38, iva: 13.44, total: 147.82 }).igual).toBe(true)
   })
-  it('Orange: sus líneas al céntimo dan 34,96 y el PDF dice 34,95: la diferencia, no «igual»', () => {
-    const c = contraElPdf(totalesDe(borradorDe(ORANGE)), { base: 28.8843, iva: 6.0657, total: 34.95 })
-    expect(c.igual).toBe(false)
-    expect(c.texto).toMatch(/^0,01\s€ más que el PDF \(34,95\s€\)$/)
+  it('Orange: sus líneas al céntimo dan 34,96 y el PDF dice 34,95: «1 céntimo de redondeo» (sus líneas traen 4 decimales), en ámbar pero igual', () => {
+    expect(lineasConMasDecimales(ORANGE.lineas)).toBe(true)
+    expect(lineasConMasDecimales(COHELDI.lineas)).toBe(false)
+    const c = contraElPdf(totalesDe(borradorDe(ORANGE)), { base: 28.8843, iva: 6.0657, total: 34.95 }, 'pdf', { masDecimales: true })
+    expect(c).toMatchObject({ igual: true, redondeo: true })
+    expect(c.texto).toMatch(/^1 céntimo de redondeo: sus líneas traen más de dos decimales \(el PDF dice 34,95\s€\)$/)
+    // Sin líneas de más decimales, el mismo céntimo es una diferencia de verdad.
+    const sin = contraElPdf(totalesDe(borradorDe(ORANGE)), { base: 28.8843, iva: 6.0657, total: 34.95 })
+    expect(sin.igual).toBe(false)
+    expect(sin.texto).toMatch(/^0,01\s€ más que el PDF \(34,95\s€\)$/)
+    // Dos céntimos ya no son redondeo.
+    expect(contraElPdf(totalesDe(borradorDe(ORANGE)), { base: 28.8843, iva: 6.0657, total: 34.94 }, 'pdf', { masDecimales: true }).igual).toBe(false)
   })
   it('cambiar un importe rehace la cuota y el total, y lo dice contra el PDF', () => {
     const b = borradorDe(COHELDI)
@@ -153,18 +163,21 @@ describe('el asiento, como vista previa', () => {
   })
 })
 
-describe('qué se guarda hoy y qué no (regla 8)', () => {
-  it('cada campo del borrador dice cómo se guarda o qué falta', () => {
+describe('qué se guarda y con qué (regla 8; contrato de la 0790)', () => {
+  it('con la tanda, todo con su función salvo «Pagada» antes de validar; sin ella, solo el proveedor y el vencimiento', () => {
     expect(Object.keys(COMO_SE_GUARDA).sort()).toEqual(Object.keys(ETIQUETAS).sort())
-    expect(Object.entries(COMO_SE_GUARDA).filter(([, c]) => 'con' in c).map(([k]) => k).sort()).toEqual(['proveedorId', 'vence'])
+    expect(Object.entries(COMO_SE_GUARDA).filter(([, c]) => 'falta' in c).map(([k]) => k)).toEqual(['estadoPago'])
+    expect(new Set(Object.values(COMO_SE_GUARDA).flatMap((c) => ('con' in c ? [c.con] : [])))).toEqual(new Set(['conta_recibida_guardar', 'conta_recibida_papel_poner', 'conta_recibida_sin_papel']))
+    expect(Object.entries(SIN_LA_TANDA).filter(([, c]) => 'con' in c).map(([k]) => k).sort()).toEqual(['proveedorId', 'vence'])
   })
   it('partir los cambios y decirlo con contenido', () => {
-    const { hoy, noHoy } = partirCambios([{ campo: 'vence', etiqueta: 'Vence' }, { campo: 'iva', etiqueta: 'Importes por tipo de IVA' }])
-    expect(hoy.map((c) => c.campo)).toEqual(['vence'])
-    expect(noHoy.map((c) => c.campo)).toEqual(['iva'])
-    const t = textoDelGuardado({ hechos: ['Vence: 18/11/2026'], fallos: [], noHoy })
+    const cambios = [{ campo: 'vence', etiqueta: 'Vence' }, { campo: 'iva', etiqueta: 'Importes por tipo de IVA' }, { campo: 'estadoPago', etiqueta: 'Estado del pago' }]
+    expect(partirCambios(cambios).noHoy.map((c) => c.campo)).toEqual(['estadoPago'])
+    const { noHoy } = partirCambios(cambios, false)
+    expect(noHoy.map((c) => c.campo)).toEqual(['iva', 'estadoPago'])
+    const t = textoDelGuardado({ hechos: ['Vence: 18/11/2026'], fallos: [], noHoy: noHoy.slice(0, 1) })
     expect(t.tono).toBe('falta')
-    expect(t.texto).toMatch(/^Guardado: Vence: 18\/11\/2026\. Importes por tipo de IVA: no se puede guardar todavía — supplier_invoice_tax solo se lee/)
+    expect(t.texto).toMatch(/^Guardado: Vence: 18\/11\/2026\. Importes por tipo de IVA: no se puede guardar todavía — la base aún no tiene la función/)
     expect(textoDelGuardado({ hechos: ['Vence: 18/11/2026'], fallos: [], noHoy: [] })).toEqual({ tono: 'ok', texto: 'Guardado: Vence: 18/11/2026.' })
   })
   it('«Antes: …» se escribe en palabras', () => {
@@ -172,6 +185,44 @@ describe('qué se guarda hoy y qué no (regla 8)', () => {
     expect(f('vence', '2026-10-19')).toBe('19/10/2026')
     expect(f('iva', borradorDe(COHELDI).iva)).toBe('127,40 al 4 % + 136,26 al 10 %')
     expect(f('gastos', borradorDe(COHELDI).gastos)).toBe('60000000 · Foodint Alcalá')
+  })
+})
+
+describe('p_cambios para conta_recibida_guardar (contrato final: una clave de más es un error 22023)', () => {
+  const CLAVES = ['proveedor', 'numero', 'fecha', 'local', 'vence', 'forma_pago', 'iva', 'retencion', 'gasto', 'asiento_a_mano']
+  const cuentas = cuentasDeLaPropuesta(PROPUESTA_COHELDI, nombre)
+  it('solo lo cambiado, y solo claves del contrato', () => {
+    const b = { ...borradorDe(COHELDI), vence: '2026-11-18', formaPago: 'transfer' }
+    expect(cambiosParaLaBase(b, ['vence', 'formaPago'])).toEqual({ vence: '2026-11-18', forma_pago: 'transfer' })
+    const todo = cambiosParaLaBase({ ...b, aMano: { '60000000': '62900000' } }, Object.keys(ETIQUETAS), { previa: asientoVistaPrevia(b, cuentas, nombre, () => null).lineas, comun: '' })
+    for (const k of Object.keys(todo)) expect(CLAVES).toContain(k)
+  })
+  it('COHELDI: el IVA por tipo, sin recargo; el gasto con su local; el asiento a mano cuadrando', () => {
+    const b = borradorDe(COHELDI)
+    expect(cambiosParaLaBase(b, ['iva'])).toEqual({ iva: [{ tipo: 4, base: 127.4, cuota: 5.1 }, { tipo: 10, base: 136.26, cuota: 13.63 }] })
+    expect(cambiosParaLaBase(b, ['gastos'])).toEqual({ gasto: [{ cuenta: '60000000', local: COHELDI.local, comun: false, importe: 263.66 }], local: COHELDI.local })
+    const reparto = { ...b, gastos: [{ cuenta: '60000000', local: 'alcala', importe: '200,00' }, { cuenta: '62900000', local: '', importe: '' }] }
+    expect(cambiosParaLaBase(reparto, ['gastos'])).toEqual({ gasto: [{ cuenta: '60000000', local: 'alcala', comun: false, importe: 200 }, { cuenta: '62900000', local: null, comun: true, importe: 63.66 }], local: null })
+    const aMano = { ...b, aMano: { '60000000': '62900000' } }
+    const x = cambiosParaLaBase(aMano, ['aMano'], { previa: asientoVistaPrevia(aMano, cuentas, nombre, () => null).lineas }).asiento_a_mano as { cuenta: string; debe: number; haber: number }[]
+    expect(x.map((l) => l.cuenta)).toEqual(['62900000', '47200004', '47200010', '40000007'])
+    expect(x.reduce((t, l) => t + Math.round(l.debe * 100) - Math.round(l.haber * 100), 0)).toBe(0)
+    expect(cambiosParaLaBase(b, ['aMano'], { previa: [] })).toEqual({ asiento_a_mano: null })
+  })
+  it('el asiento a mano guardado vuelve a la ficha como «cuenta propuesta → elegida»', () => {
+    const b = borradorDe(COHELDI)
+    const previa = asientoVistaPrevia(b, cuentas, nombre, () => null).lineas
+    const guardado = asientoAManoParaGuardar({ ...b, aMano: { '60000000': '62900000' } }, asientoVistaPrevia({ ...b, aMano: { '60000000': '62900000' } }, cuentas, nombre, () => null).lineas)
+    expect(aManoDeLoGuardado(guardado, previa)).toEqual({ '60000000': '62900000' })
+    expect(aManoDeLoGuardado(null, previa)).toEqual({})
+  })
+  it('la retención, con su tipo_id si es la de siempre; el recargo por tipo, cuadrando con lo escrito', () => {
+    const b = { ...borradorDe(EUROPASTRY), retencion: { tipo: '15', importe: '20,16' } }
+    expect(cambiosParaLaBase(b, ['retencion'], { retencionTipoId: 'r15' })).toEqual({ retencion: { tipo: 15, tipo_id: 'r15', base: 134.38, importe: 20.16 } })
+    expect(recargoPorTipo(borradorDe(COHELDI).iva, { tipo: '', importe: '2,55' })).toEqual([{ tipo: 0.5, importe: 0.64 }, { tipo: 1.4, importe: 1.91 }])
+    expect(recargoPorTipo(borradorDe(COHELDI).iva, { tipo: '', importe: '2,56' }).map((x) => x.importe)).toEqual([0.64, 1.92])
+    const conRec = cambiosParaLaBase({ ...borradorDe(COHELDI), recargo: { tipo: '', importe: '2,55' } }, ['recargo']).iva as Record<string, unknown>[]
+    expect(conRec[0]).toEqual({ tipo: 4, base: 127.4, cuota: 5.1, recargo_tipo: 0.5, recargo: 0.64 })
   })
 })
 
@@ -188,6 +239,11 @@ describe('de dónde vino, sin inventar', () => {
   it('«Escrita a mano» solo si lo es', () => {
     expect(deDondeVino({ ...coheldi, fuente: 'manual', recepcion: null, lectura: null })).toBe('Escrita a mano el 21/10 por Julio')
     expect(deDondeVino(coheldi)).not.toMatch(/mano/)
+  })
+  it('lo que cambió una persona (supplier_invoice_change), en palabras', () => {
+    const h = historialDe({ ...coheldi, marca: 'Sumied', aprobada: null, venceCambiado: null, pagos: [], asiento: null, descartada: null,
+      cambios: [{ cuando: '2026-10-23T09:00:00+00:00', quien: 'Julio', que: 'guardar', campos: ['vence', 'iva'] }, { cuando: '2026-10-23T09:01:00+00:00', quien: 'Julio', que: 'papel', campos: [] }] })
+    expect(h.slice(-2).map((x) => x.texto)).toEqual(['Cambió el vencimiento, los importes por tipo de IVA (Julio)', 'Puso el PDF (Julio)'])
   })
   it('el historial, de los sellos que hay, en orden', () => {
     const h = historialDe({ ...coheldi, marca: 'Sumied', aprobada: null, venceCambiado: null, pagos: [], asiento: null, descartada: null })
@@ -217,5 +273,45 @@ describe('la a mano, con la misma ficha', () => {
   it('dos líneas con el mismo tipo: que se sumen', () => {
     const b: BorradorFicha = { ...vacia(), proveedorId: 'p', numero: 'X', iva: [{ base: '13,50', tipo: '10', cuota: '' }, { base: '122,76', tipo: '10', cuota: '' }] }
     expect(comprobarAMano(b, [21, 10, 4, 0], '2026-10-23', false, 'comun').errores.importes).toEqual(['Hay dos líneas con el mismo tipo de IVA: súmalas en una.'])
+  })
+})
+
+// ── Lo que hace la propuesta con lo guardado (lib/recibidaGuardada) ──────────
+
+describe('la propuesta lee lo que guarda la ficha', () => {
+  const tipoDe = (pct: number) => ({ id: `iva${pct}`, rate: pct })
+  const deLineas = (r: Real) => r.lineas.map((l) => ({ base: Number(l.importe), tipo: { id: `iva${l.iva}`, porcentaje: Number(l.iva) }, cuentaGasto: null }))
+  it('PORTIER: con filas de impuesto, una línea por tipo con la base de la fila y su cuota (9,34, no 9,33)', () => {
+    const x = lineasYCuotas(deLineas(PORTIER), [{ porcentaje: 21, base: 44.45, cuota: 9.34 }], '62300000', tipoDe, false)
+    expect(x.lineas).toEqual([{ base: 44.45, tipo: { id: 'iva21', porcentaje: 21 }, cuentaGasto: '62300000' }])
+    expect(x.cuotas).toEqual([{ porcentaje: 21, base: 44.45, cuota: 9.34 }])
+  })
+  it('COHELDI sin filas de impuesto: sus líneas, como siempre; con cuentas propias en las líneas, las líneas y las cuotas de las filas', () => {
+    expect(lineasYCuotas(deLineas(COHELDI), [], '60000000', tipoDe, false)).toEqual({ lineas: deLineas(COHELDI), cuotas: undefined })
+    expect(lineasYCuotas(deLineas(PORTIER), [{ porcentaje: 21, base: 44.45, cuota: 9.34 }], null, tipoDe, true).lineas).toHaveLength(2)
+  })
+  const prop = (): Propuesta => ({
+    serie: 2, fecha: '2026-10-19', concepto: 'Factura COHELDI, S.L. · P26 4.980', origen: { tipo: 'supplier_invoice', id: COHELDI.id }, confianza: 'seguro', porque: '', razones: [], avisos: [],
+    lineas: [
+      { cuenta: '60000000', debe: 263.66, haber: 0, localId: 'alcala' },
+      { cuenta: '47200004', debe: 5.1, haber: 0, localId: 'alcala', iva: { tipoId: 'iva4', tipo: 4, base: 127.4, libro: 'received' } },
+      { cuenta: '47200010', debe: 13.63, haber: 0, localId: 'alcala', iva: { tipoId: 'iva10', tipo: 10, base: 136.26, libro: 'received' } },
+      { cuenta: '40000007', debe: 0, haber: 282.39, localId: 'alcala' },
+    ],
+  })
+  it('el gasto repartido manda: cada fila, su línea con su local; si no suma la base, se avisa y no se toca', () => {
+    const p = aplicarReparto(prop(), [{ cuenta: '60000000', local: 'alcala', comun: false, importe: 200 }, { cuenta: '62900000', local: null, comun: true, importe: 63.66 }])
+    expect(p.lineas.map((l) => [l.cuenta, l.debe, l.localId ?? null])).toEqual([['60000000', 200, 'alcala'], ['62900000', 63.66, null], ['47200004', 5.1, 'alcala'], ['47200010', 13.63, 'alcala'], ['40000007', 0, 'alcala']])
+    const mal = aplicarReparto(prop(), [{ cuenta: '60000000', local: null, comun: true, importe: 200 }])
+    expect(mal.lineas).toEqual(prop().lineas)
+    expect(mal.avisos[0]).toMatch(/^El gasto repartido suma 200,00\s€ y la base es 263,66\s€/)
+  })
+  it('el asiento a mano: sus cuentas e importes por posición, conservando el IVA de cada línea; si no cuadra, no se usa', () => {
+    const p = aplicarAsientoAMano(prop(), [{ posicion: 0, cuenta: '62900000', debe: 263.66, haber: 0 }, { posicion: 1, cuenta: '47200004', debe: 5.1, haber: 0 }, { posicion: 2, cuenta: '47200010', debe: 13.63, haber: 0 }, { posicion: 3, cuenta: '40000007', debe: 0, haber: 282.39 }])
+    expect(p.lineas.map((l) => l.cuenta)).toEqual(['62900000', '47200004', '47200010', '40000007'])
+    expect(p.lineas[1].iva?.tipo).toBe(4)
+    expect(p.razones.at(-1)?.decision).toBe('A mano')
+    expect(aplicarAsientoAMano(prop(), [{ cuenta: '62900000', debe: 10, haber: 0 }, { cuenta: '40000007', debe: 0, haber: 9 }]).avisos).toEqual(['El asiento guardado a mano no cuadra: no se usa. Vuelve a tocarlo en la ficha.'])
+    expect(aplicarAsientoAMano(prop(), null)).toEqual(prop())
   })
 })

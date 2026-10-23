@@ -34,10 +34,10 @@ import { EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { LOCAL_COMUN, textoGuardada } from '@/modules/conta/lib/recibidaAMano'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
-import { cuentasDeGasto, proveedoresDeLaCuenta } from '@/modules/conta/services/documentosService'
+import { cuentasDeGasto, guardarCambiosRecibida, proveedoresDeLaCuenta, sinPapelRecibida } from '@/modules/conta/services/documentosService'
 import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
-import { borradorDe, comprobarAMano, noSeGuardaAMano, totalesDe, type BorradorFicha } from '@/modules/conta/documentos/fichaRecibida'
+import { borradorDe, cambiosParaLaBase, comprobarAMano, noSeGuardaAMano, totalesDe, type BorradorFicha } from '@/modules/conta/documentos/fichaRecibida'
 import { BloqueGasto, BloqueImportesIva, BloquePago, BloqueProveedorFactura, HuecoPapel } from '@/modules/conta/documentos/FichaRecibidaBloques'
 
 const GUARDADO = 'conta.recibidaAMano.ficha'
@@ -104,8 +104,22 @@ export default function RecibidaAMano() {
     setGuardando(true)
     try {
       const r = await guardarRecibidaAMano({ accountId, companyId: activa.id, userId, userName, proveedor: nombreProveedor, datos, papel: fichero?.file ?? null })
-      const no = noSeGuardaAMano(b)
-      const aviso = [textoGuardada(datos.numero, nombreProveedor), ...r.ademas,
+      // D03 · 0790: lo que la factura nueva no lleva en su alta (la forma de pago, la retención,
+      // el recargo, «Sin PDF») va con las funciones de la ficha. Sin la tanda, se dice qué no.
+      const ademas = [...r.ademas]
+      let no = noSeGuardaAMano(b)
+      const campos = [...(b.formaPago ? ['formaPago'] : []), ...(b.retencion ? ['retencion'] : []), ...(b.recargo ? ['recargo'] : [])]
+      const fac = { id: r.id, account_id: accountId, company_id: activa.id, estado: 'en_revision', fecha: datos.fecha }
+      if (campos.length) {
+        const g = await guardarCambiosRecibida(fac, cambiosParaLaBase(b, campos), { quien: userName, nombres: {} })
+        if (g.conTanda && !g.fallos.length) { no = no.filter((x) => !/forma de pago|retención|recargo/.test(x)); if (g.texto) ademas.push(g.texto) }
+        for (const f of g.fallos) ademas.push(`${f.etiqueta}: no se ha guardado (${f.porque}).`)
+      }
+      if (b.sinPdf && !fichero) {
+        const x = await sinPapelRecibida(r.id, true, b.motivoSinPdf || 'Escrita a mano, sin documento', userName)
+        if (x.hecho) { no = no.filter((y) => !/Sin PDF/.test(y)); ademas.push(x.texto) } else if (!x.falta) ademas.push(`«Sin PDF»: no se ha guardado (${x.texto}).`)
+      }
+      const aviso = [textoGuardada(datos.numero, nombreProveedor), ...ademas,
         ...(no.length ? [`No se ha guardado ${no.join(', ')}: aún no hay dónde en la base.`] : [])].join(' ')
       guardarBorrador(null)
       navegar(`${rutaRevisarFactura(r.id)}?ver=por-revisar`, { state: { aviso } })

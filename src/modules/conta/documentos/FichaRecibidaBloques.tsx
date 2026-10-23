@@ -102,7 +102,7 @@ export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores
 
 // ── Importes por tipo de IVA ────────────────────────────────────────────────
 
-export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf, fuente, alCambiar, cambioDe, deshacer, soloLectura, errores = [] }: {
+export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf, fuente, alCambiar, cambioDe, deshacer, soloLectura, errores = [], masDecimales = false }: {
   iva: readonly LineaIva[]
   retencion: Adicional | null
   recargo: Adicional | null
@@ -118,13 +118,15 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
   soloLectura: boolean
   /** Lo que falta o está mal en los importes (la a mano, al guardar). */
   errores?: readonly string[]
+  /** Sus líneas traen más de dos decimales: 1 céntimo de diferencia es redondeo. */
+  masDecimales?: boolean
 }) {
   const ofrecidos = [...new Set([...tipos, ...iva.map((l) => Number(l.tipo)).filter((x) => Number.isFinite(x))])].sort((a, b) => b - a)
   const poner = (i: number, l: Partial<LineaIva>, rehacer: boolean) => {
     const nuevas = iva.map((x, k) => (k === i ? (rehacer ? rehacerCuota({ ...x, ...l }) : { ...x, ...l }) : x))
     alCambiar({ iva: nuevas })
   }
-  const contra = pdf ? contraElPdf(totales, pdf, fuente) : null
+  const contra = pdf ? contraElPdf(totales, pdf, fuente, { masDecimales }) : null
   const cIva = cambioDe('iva'), cRet = cambioDe('retencion'), cRec = cambioDe('recargo')
   const base = totales.base
   return (
@@ -190,8 +192,8 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
           {!!totales.retencion && <span>Retención <strong className="s-cifra">−{importeEs(totales.retencion)}</strong></span>}
           <span className="cxf-total">Total <strong className="s-cifra">{eurosExactos(totales.total)}</strong></span>
           {contra && (
-            <span className="cxf-contra" data-igual={contra.igual === true ? 'si' : contra.igual === false ? 'no' : undefined} data-prueba="contra-pdf">
-              {contra.igual === true && <Icono nombre="ok" />} {contra.texto}
+            <span className="cxf-contra" data-igual={contra.redondeo ? 'redondeo' : contra.igual === true ? 'si' : contra.igual === false ? 'no' : undefined} data-prueba="contra-pdf">
+              {contra.igual === true && !contra.redondeo && <Icono nombre="ok" />} {contra.texto}
             </span>
           )}
         </div>

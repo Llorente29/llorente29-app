@@ -45,7 +45,7 @@ import { vencimientoAEnsenar } from '@/modules/conta/documentos/documentos'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import {
-  apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, leerDocumentos, leerExtrasFacturas, leerFactura, leerFichaRecibida,
+  apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, ponerPapelRecibida, sinPapelRecibida, leerDocumentos, leerExtrasFacturas, leerFactura, leerFichaRecibida,
   plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura, urlDelPapel, verPropuestaFactura, type Apuntada,
 } from '@/modules/conta/services/documentosService'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
@@ -65,7 +65,7 @@ import {
 import { LISTA_RECIBIDAS, colaDeFacturas, filasDeLaLista, filtrosDe, ventanaDe } from '@/modules/conta/documentos/recibidas'
 import { motivoGasto, motivoImportes, motivoProveedor, veredictoFactura, type Comprobacion } from '@/modules/conta/documentos/veredicto'
 import {
-  ACEPTA_PAPEL, ETIQUETAS, asientoVistaPrevia, borradorDe, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
+  ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
   textoDelGuardado, totalesDe, type BorradorFicha,
 } from '@/modules/conta/documentos/fichaRecibida'
 import {
@@ -155,12 +155,26 @@ export default function RevisarFacturaPage() {
   const venceFicha = fac?.fecha && plazo.datos && plazo.datos.dias !== null ? calcularVencimiento(fac.fecha, plazo.datos.dias, plazo.datos.fijos) : null
 
   // Lo guardado, como borrador (el «Antes» de cada campo).
-  const original = useMemo<BorradorFicha>(() => (fac ? borradorDe({
-    proveedorId: fac.proveedor?.id ?? null, numero: fac.numero, fecha: fac.fecha, vence: fac.vence ?? venceFicha,
-    retencion: fac.retencion, recargo: fac.recargo, gasto: gastoPropuesto, local: localPropuesto ?? null,
-    formaPago: extra.datos?.comoPagada ?? ficha?.formaPagoFicha ?? null, pagada: !!extra.datos?.pagada,
-    tipos: fac.tipos, lineas: fac.lineas, base: fac.base, cuota: fac.cuota,
-  }) : VACIO), [fac, venceFicha, gastoPropuesto, localPropuesto, extra.datos, ficha])
+  // Las cuentas del asiento (la 400, la 472 de cada tipo, la 4751), de la propuesta.
+  const cuentasProp = useMemo(() => (propuesta ? cuentasDeLaPropuesta(propuesta.lineas, (c) => nombresProp?.get(c) ?? 'Cuenta') : null), [propuesta, nombresProp])
+  const guardado = ficha?.guardado ?? null
+  const original = useMemo<BorradorFicha>(() => {
+    if (!fac) return VACIO
+    const datos = {
+      proveedorId: fac.proveedor?.id ?? null, numero: fac.numero, fecha: fac.fecha, vence: fac.vence ?? venceFicha,
+      retencion: fac.retencion, recargo: fac.recargo, gasto: gastoPropuesto, local: localPropuesto ?? null,
+      // La forma de pago: la guardada en la factura (0790), la de cuando se pagó, o la de su ficha.
+      formaPago: guardado?.formaPago ?? extra.datos?.comoPagada ?? ficha?.formaPagoFicha ?? null, pagada: !!extra.datos?.pagada,
+      tipos: fac.tipos, lineas: fac.lineas, base: fac.base, cuota: fac.cuota,
+      reparto: guardado?.reparto.length ? guardado.reparto.map((g) => ({ cuenta: g.cuenta, local: g.comun ? null : g.local, importe: g.importe })) : null,
+      sinPdf: guardado?.sinPdf ? { motivo: guardado.sinPdf.motivo } : null,
+    }
+    const base = borradorDe(datos)
+    // El asiento guardado a mano, como «cuenta propuesta → elegida» sobre la vista previa sin tocar.
+    if (!guardado?.asientoAMano || !cuentasProp) return base
+    const previa = asientoVistaPrevia(base, cuentasProp, () => 'Cuenta', () => null)
+    return { ...base, aMano: aManoDeLoGuardado(guardado.asientoAMano, previa.lineas) }
+  }, [fac, venceFicha, gastoPropuesto, localPropuesto, extra.datos, ficha, guardado, cuentasProp])
 
   const nombreProveedor = useCallback((id: string) => (proveedores.datos ?? []).find((p) => p.id === id)?.nombre ?? (fac?.proveedor?.id === id ? fac.proveedor.nombre : 'otro proveedor'), [proveedores.datos, fac])
   const nombreLocal = useCallback((id: string) => (locales.datos ?? []).find((l) => l.id === id)?.nombre ?? (id === ficha?.recepcion?.localId ? ficha.recepcion.local : null), [locales.datos, ficha])
@@ -191,17 +205,41 @@ export default function RevisarFacturaPage() {
     if (!fac) return false
     setGuardando(true); setMensaje(null)
     try {
-      const { hoy: ahora, noHoy } = partirCambios(ed.cambios)
-      const pedir: { proveedorId?: string; vence?: string } = {}
-      for (const c of ahora) {
-        if (c.campo === 'proveedorId') pedir.proveedorId = b.proveedorId
-        if (c.campo === 'vence') pedir.vence = b.vence
+      // D03 · 0790: todo lo de la ficha en un viaje (conta_recibida_guardar), el PDF nuevo con
+      // conta_recibida_papel_poner y «Sin PDF» con conta_recibida_sin_papel. Sin la tanda, lo de antes.
+      const campos = ed.cambios.map((c) => c.campo)
+      const aLaFuncion = campos.filter((c) => COMO_SE_GUARDA[c as keyof BorradorFicha] && 'con' in COMO_SE_GUARDA[c as keyof BorradorFicha]
+        && (COMO_SE_GUARDA[c as keyof BorradorFicha] as { con: string }).con === 'conta_recibida_guardar')
+      const previa = cuentasProp ? asientoVistaPrevia(b, cuentasProp, () => 'Cuenta', () => null).lineas : undefined
+      const r = await guardarCambiosRecibida(fac, cambiosParaLaBase(b, aLaFuncion, { previa, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null }),
+        { quien: userName, nombres: { proveedor: nombreProveedor(b.proveedorId), vence: fechaEs(b.vence) }, localPropuesto: localPropuesto ?? null })
+      const partes: string[] = []
+      const fallos = [...r.fallos]
+      let tocado = r.hechos.length > 0
+      if (r.conTanda && r.texto) partes.push(r.texto)
+      else if (r.hechos.length) partes.push(`Guardado: ${r.hechos.join(' · ')}.`)
+      if (r.repropuesto) partes.push(r.repropuesto)
+      let sinTanda = !r.conTanda && aLaFuncion.length > 0
+      if (campos.includes('papel') && ficheroVivo) {
+        const x = await ponerPapelRecibida(fac, ficheroVivo.file, userName)
+        if (x.hecho) { partes.push(x.texto); tocado = true } else if (x.falta) sinTanda = true; else fallos.push({ etiqueta: 'PDF', porque: x.texto })
       }
-      const r = ahora.length ? await guardarCambiosRecibida(fac.id, pedir, { proveedor: nombreProveedor(b.proveedorId), vence: fechaEs(b.vence) }) : { hechos: [], fallos: [] }
-      const m = textoDelGuardado({ hechos: r.hechos, fallos: r.fallos, noHoy })
-      setMensaje(m)
-      if (r.hechos.length) { setVuelta((v) => v + 1); refrescarCuentasMenu() }
-      return r.fallos.length || noHoy.length ? m.texto : true
+      if (campos.includes('sinPdf') || campos.includes('motivoSinPdf')) {
+        if (b.sinPdf && !b.motivoSinPdf.trim()) fallos.push({ etiqueta: 'Sin PDF', porque: 'di por qué no hay documento' })
+        else {
+          const x = await sinPapelRecibida(fac.id, b.sinPdf, b.motivoSinPdf, userName)
+          if (x.hecho) { partes.push(x.texto); tocado = true } else if (x.falta) sinTanda = true; else fallos.push({ etiqueta: 'Sin PDF', porque: x.texto })
+        }
+      }
+      // Lo que no se ha podido guardar: sin la 0790, lo que solo ella guarda; y siempre, «Pagada» antes de validar.
+      const { noHoy } = partirCambios(ed.cambios, !sinTanda)
+      const resto = noHoy.filter((c) => sinTanda || c.campo === 'estadoPago')
+      const m = textoDelGuardado({ hechos: [], fallos, noHoy: resto })
+      const texto = [...partes, ...(m.texto === 'No había nada que guardar.' ? [] : [m.texto])].join(' ') || 'No había nada que guardar.'
+      const malo = fallos.length > 0 || resto.length > 0
+      setMensaje({ tono: malo ? 'falta' : 'ok', texto })
+      if (tocado) { setVuelta((v) => v + 1); refrescarCuentasMenu() }
+      return malo ? texto : true
     } finally { setGuardando(false) }
   }
 
@@ -295,13 +333,15 @@ export default function RevisarFacturaPage() {
   const pagada = extra.datos?.pagada ? { fecha: extra.datos.pagada } : null
   const leidaDeFichero = !!(lectura || fac.leido_en_recepcion || ficha?.lectura)
   const pdf = { base: fac.base, iva: fac.cuota, total: fac.total }
-  const cuadraGuardado = contraElPdf(totalesDe(original), pdf, leidaDeFichero ? 'pdf' : 'factura').igual
+  const masDecimales = lineasConMasDecimales(fac.lineas)
+  const contraGuardado = contraElPdf(totalesDe(original), pdf, leidaDeFichero ? 'pdf' : 'factura', { masDecimales })
+  const cuadraGuardado = contraGuardado.igual
   const v = veredictoFactura({
     validada, numeroAsiento: fac.asiento?.numero ?? null, descartada, motivoDescarte: descarte.datos?.motivo ?? null,
     proveedor: prov ? { nombre: prov.nombre, nif: prov.nif } : null, nifFactura: nifDeLaFactura, fecha: fac.fecha,
     comprobaciones, propuesta: propuesta ? { confianza: propuesta.confianza, avisos: propuesta.avisos, razones: propuesta.razones } : propuesta,
     porqueSinPropuesta: vista.datos && !vista.datos.propuesta ? vista.datos.porque : vista.error,
-    origenGasto: prov?.gasto?.origen ?? null, pagada, cuadraConElPdf: leidaDeFichero ? cuadraGuardado : null,
+    origenGasto: prov?.gasto?.origen ?? null, pagada, cuadraConElPdf: leidaDeFichero ? cuadraGuardado : null, redondeo: contraGuardado.redondeo === true,
   })
   const mGasto = motivoGasto({ cuenta: gastoPropuesto, origen: prov?.gasto?.origen ?? (propuesta?.razones[0]?.porque ?? null), confirmada: validada })
   const mProv = motivoProveedor({ proveedor: prov ? { nombre: prov.nombre, nif: prov.nif } : null, nifFactura: nifDeLaFactura })
@@ -331,7 +371,7 @@ export default function RevisarFacturaPage() {
   const hechos = ficha && origen ? historialDe({
     ...origen, marca: MARCA.nombre, aprobada: ficha.aprobada,
     venceCambiado: ficha.venceCambiado ? { ...ficha.venceCambiado, vence: fac.vence } : null,
-    pagos: ficha.pagos, asiento: ficha.asiento, descartada: ficha.descartada,
+    pagos: ficha.pagos, asiento: ficha.asiento, descartada: ficha.descartada, cambios: ficha.guardado?.cambios ?? [],
   }) : null
   const aMano_ = ficha?.fuente === 'manual'
 
@@ -346,8 +386,8 @@ export default function RevisarFacturaPage() {
       ...(!yaApuntada ? [{ id: 'cambiar-pdf', etiqueta: tienePapel ? 'Cambiar el PDF' : 'Subir el PDF', dato: 'Un PDF o una foto, que se guarda como PDF', alPulsar: () => inputCambiar.current?.click(), grupo: '' }] : []),
       ...(!descartada ? [{ id: 'duplicada', etiqueta: 'Marcar como duplicada', dato: 'Ya la tienes: sale de «Por revisar»', alPulsar: () => setNoEs('Está repetida'), grupo: '' }] : []),
       ...(!descartada ? [{ id: 'no-es', etiqueta: 'Descartar con motivo', dato: 'Un albarán, un presupuesto, un extracto…', alPulsar: () => setNoEs(''), grupo: '' }] : []),
-      // Mientras la base no guarda los importes desde aquí (fichaRecibida.COMO_SE_GUARDA), se corrigen donde se aprobó.
-      ...(!yaApuntada ? [{ id: 'corregir', etiqueta: 'Corregir los importes', dato: 'En la recepción de la que salió', a: rutaCompras(), grupo: '' }] : []),
+      // Sin la tanda 0790 (la base aún no guarda los importes desde aquí), se corrigen donde se aprobó.
+      ...(!yaApuntada && ficha && !ficha.guardado ? [{ id: 'corregir', etiqueta: 'Corregir los importes', dato: 'En la recepción de la que salió', a: rutaCompras(), grupo: '' }] : []),
       { id: 'historial', etiqueta: 'Ver el historial', alPulsar: () => { const h = document.getElementById('historial'); h?.scrollIntoView({ behavior: 'smooth', block: 'start' }); h?.focus() }, grupo: '' },
       ...(tienePapel ? [{ id: 'abrir', etiqueta: 'Abrir el PDF aparte', alPulsar: () => window.open(papel.datos!.url!, '_blank', 'noopener'), grupo: '' }] : []),
     ],
@@ -355,7 +395,6 @@ export default function RevisarFacturaPage() {
   const msgRecuperado = recuperado?.id === invoiceId ? recuperado.texto : null
 
   // El asiento: si ya lo tiene, el suyo; si no, la vista previa con lo que hay en pantalla.
-  const cuentasProp = propuesta ? cuentasDeLaPropuesta(propuesta.lineas, (c) => nombresProp?.get(c) ?? 'Cuenta') : null
   const nombreCuenta = (c: string) => (cuentas.datos ?? []).find((x) => x.codigo === c)?.nombre ?? nombresProp?.get(c) ?? (prov?.gasto?.cuenta === c ? prov.gasto.nombre : 'Cuenta')
   const previa = cuentasProp ? asientoVistaPrevia(b, cuentasProp, nombreCuenta, nombreLocal) : null
   const lineasAsiento = fac.asiento
@@ -392,7 +431,7 @@ export default function RevisarFacturaPage() {
         tonoProveedor={mProv.tono} motivoProveedor={mProv.marca ? `${mProv.marca}${prov?.nif ? ` · NIF ${prov.nif}` : ''}` : mProv.motivo}
         motivoNumero={fac.no_repetida ? 'No está repetida: lo confirmaste.' : fac.numero ? 'No hay otra con su número y su total.' : 'Sin número no es una factura completa.'} />
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={tiposIva.datos ?? [21, 10, 4, 0]} totales={totales} pdf={pdf}
-        fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura}
+        fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} />
       {mImportes.tono === 'revisar' && <p className="cxf-error" role="status">{mImportes.motivo}</p>}

@@ -27,6 +27,7 @@ import { fotoAPdf } from '@/modules/conta/lib/fotoAPdf'
 import type { DatosDocumentos, PlazoFicha } from '@/modules/conta/documentos/documentos'
 import { leerFactura as comprobarLectura, type Lectura, type LecturaModelo } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { textoParaPantalla } from '@/modules/conta/lib/errorBase'
 import { MAX_BYTES_EXPEDIDA, claseDeFichero, motivoExpedida, nombreExpedida, rutaExpedida, tamano } from '@/modules/conta/lib/expedidaPdf'
 import { papelDeLaLectura } from '@/modules/conta/documentos/fichaRecibida'
 
@@ -432,6 +433,12 @@ export async function leerExtrasFacturas(accountId: string, ids: readonly string
 // source_type, source_id, number, status, validated_at, validated_by_name,
 // created_at), supplier (id, account_id, payment_method), company_account
 // (account_id, company_id, code, name) y locations (id, account_id, name).
+// Y los de la 0790 (contrato D03, aún no en producción el 23/10; si faltan, la
+// ficha sale igual): supplier_invoice (payment_method, no_document_at,
+// no_document_reason, no_document_by_name, entry_overrides),
+// supplier_invoice_expense (account_id, supplier_invoice_id, position,
+// account_code, location_id, is_common, amount) y supplier_invoice_change
+// (account_id, supplier_invoice_id, at, by_name, what, cambios).
 
 export interface FichaExtra {
   fuente: string | null
@@ -445,6 +452,46 @@ export interface FichaExtra {
   pagos: { cuando: string; accion: string; quien: string | null; pagada: string | null; vence: string | null }[]
   asiento: { numero: number | null; validado: { cuando: string; quien: string | null } | null; creado: string | null } | null
   formaPagoFicha: string | null
+  /** withholding_rate_id: la retención que lleva, para mandarla por su id. */
+  retencionId: string | null
+  /**
+   * Lo que guarda la ficha con la tanda D03 · 0790 (null si la base aún no lo
+   * tiene): supplier_invoice.payment_method, no_document_at/_reason/_by_name y
+   * entry_overrides; supplier_invoice_expense (el gasto repartido) y
+   * supplier_invoice_change (lo que cambió una persona).
+   */
+  guardado: {
+    formaPago: string | null
+    sinPdf: { cuando: string; motivo: string | null; quien: string | null } | null
+    asientoAMano: unknown
+    reparto: { cuenta: string; local: string | null; comun: boolean; importe: number }[]
+    cambios: { cuando: string; quien: string | null; que: string; campos: string[] }[]
+  } | null
+}
+
+/** Las columnas y tablas de la 0790 que aún no estén en la base no rompen la ficha: se leen como «no hay». */
+const noEstaAun = (e: { code?: string | null; message?: string } | null) =>
+  !!e && (e.code === '42703' || e.code === '42P01' || e.code === 'PGRST204' || e.code === 'PGRST205' || /does not exist|could not find/i.test(e.message ?? ''))
+
+async function leerLoGuardado(accountId: string, invoiceId: string): Promise<FichaExtra['guardado']> {
+  const [c, g, h] = await Promise.all([
+    tabla('supplier_invoice').select('payment_method, no_document_at, no_document_reason, no_document_by_name, entry_overrides').eq('account_id', accountId).eq('id', invoiceId).maybeSingle(),
+    tabla('supplier_invoice_expense').select('position, account_code, location_id, is_common, amount').eq('account_id', accountId).eq('supplier_invoice_id', invoiceId).order('position'),
+    tabla('supplier_invoice_change').select('at, by_name, what, cambios').eq('account_id', accountId).eq('supplier_invoice_id', invoiceId).order('at'),
+  ])
+  if (noEstaAun(c.error)) return null
+  for (const r of [c, g, h]) if (r.error && !noEstaAun(r.error)) throw new Error(mensaje('No se ha podido leer lo guardado en la ficha', r.error))
+  const x = (c.data ?? {}) as Fila
+  return {
+    formaPago: texto(x.payment_method),
+    sinPdf: texto(x.no_document_at) ? { cuando: String(x.no_document_at), motivo: texto(x.no_document_reason), quien: texto(x.no_document_by_name) } : null,
+    asientoAMano: x.entry_overrides ?? null,
+    reparto: g.error ? [] : ((g.data ?? []) as Fila[]).map((r) => ({ cuenta: String(r.account_code), local: texto(r.location_id), comun: r.is_common === true, importe: Number(r.amount) })),
+    cambios: h.error ? [] : ((h.data ?? []) as Fila[]).map((r) => ({
+      cuando: String(r.at), quien: texto(r.by_name), que: String(r.what ?? 'guardar'),
+      campos: Array.isArray(r.cambios) ? (r.cambios as Fila[]).map((k) => String(k.campo ?? '')).filter(Boolean) : [],
+    })),
+  }
 }
 
 const texto = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x : null)
@@ -460,17 +507,18 @@ async function leerPapelDeLaLectura(accountId: string, invoiceId: string): Promi
 
 export async function leerFichaRecibida(accountId: string, invoiceId: string): Promise<FichaExtra> {
   const { data: d, error } = await tabla('supplier_invoice')
-    .select('id, source, location_id, ai_session_id, created_at, created_by_name, approved_at, approved_by_name, due_date_set_at, due_date_set_name, discarded_at, discarded_by_name, discard_reason, supplier_id')
+    .select('id, source, location_id, ai_session_id, created_at, created_by_name, approved_at, approved_by_name, due_date_set_at, due_date_set_name, discarded_at, discarded_by_name, discard_reason, supplier_id, withholding_rate_id')
     .eq('account_id', accountId).eq('id', invoiceId).maybeSingle()
   if (error) throw new Error(mensaje('No se ha podido leer de dónde vino la factura', error))
   const i = (d ?? {}) as Fila
-  const [recs, sesion, pagos, asientos, prov] = await Promise.all([
+  const [recs, sesion, pagos, asientos, prov, guardado] = await Promise.all([
     tabla('supplier_invoice_receipt').select('goods_receipt_id').eq('supplier_invoice_id', invoiceId),
     texto(i.ai_session_id) ? tabla('goods_receipt_ai_session').select('input_files, created_at').eq('account_id', accountId).eq('id', String(i.ai_session_id)).maybeSingle() : Promise.resolve({ data: null, error: null }),
     tabla('supplier_invoice_payment_log').select('action, paid_at, due_date, actor_name, created_at').eq('account_id', accountId).eq('invoice_id', invoiceId).order('created_at'),
     tabla('journal_entry').select('number, status, validated_at, validated_by_name, created_at').eq('account_id', accountId).eq('source_type', 'supplier_invoice').eq('source_id', invoiceId)
       .in('status', ['propuesto', 'borrador', 'validado']).order('created_at', { ascending: false }),
     texto(i.supplier_id) ? tabla('supplier').select('payment_method').eq('account_id', accountId).eq('id', String(i.supplier_id)).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    leerLoGuardado(accountId, invoiceId),
   ])
   for (const r of [recs, sesion, pagos, asientos, prov]) if (r.error) throw new Error(mensaje('No se ha podido leer el historial de la factura', r.error))
   const idsRec = ((recs.data ?? []) as Fila[]).map((x) => String(x.goods_receipt_id))
@@ -509,6 +557,8 @@ export async function leerFichaRecibida(accountId: string, invoiceId: string): P
       creado: texto(a.created_at),
     } : null,
     formaPagoFicha: texto((prov.data as Fila | null)?.payment_method),
+    retencionId: texto(i.withholding_rate_id),
+    guardado,
   }
 }
 
@@ -519,27 +569,94 @@ export async function cuentasDeGasto(accountId: string, companyId: string): Prom
   return ((data ?? []) as Fila[]).map((x) => ({ codigo: String(x.code), nombre: String(x.name) }))
 }
 
-export interface GuardadoFicha { hechos: string[]; fallos: { etiqueta: string; porque: string }[] }
+// ── «Guardar cambios» con la tanda D03 · 0790 ──────────────────────────────
+// conta_recibida_guardar(p_invoice uuid, p_cambios jsonb, p_quien_nombre text),
+// conta_recibida_papel_poner(p_invoice uuid, p_ruta text, p_nombre text, p_quien_nombre text)
+// y conta_recibida_sin_papel(p_invoice uuid, p_sin boolean, p_motivo text, p_quien_nombre text),
+// según el contrato de la 0790. Si la base aún no las tiene (staging antes de
+// aplicarla: PGRST202 / 42883), se dice, y lo de antes sigue funcionando.
+
+type ErrorRpc = { code?: string | null; message: string; details?: string | null; hint?: string | null }
+
+async function llamar<T>(nombre: string, args: Record<string, unknown>): Promise<{ datos: T | null; falta: boolean; error: string | null }> {
+  hayBase()
+  const cliente = supabase as unknown as { rpc: (n: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: ErrorRpc | null }> }
+  const { data, error } = await cliente.rpc(nombre, args)
+  if (!error) return { datos: data as T, falta: false, error: null }
+  const falta = error.code === 'PGRST202' || error.code === '42883' || /could not find the function|function .* does not exist/i.test(error.message)
+  return { datos: null, falta, error: falta ? null : textoParaPantalla(nombre, error, error.message) }
+}
+
+export interface GuardadoFicha {
+  /** false: la base aún no tiene conta_recibida_guardar y se guardó lo de antes. */
+  conTanda: boolean
+  hechos: string[]
+  fallos: { etiqueta: string; porque: string }[]
+  /** El `texto` de la base (regla 8), si lo dio. */
+  texto: string | null
+  asientoQuitado: boolean
+  /** Lo que pasó al volver a proponer el asiento quitado. */
+  repropuesto: string | null
+}
 
 /**
- * «Guardar cambios» de la ficha: guarda lo que hoy tiene dónde guardarse
- * (fichaRecibida.COMO_SE_GUARDA) y dice lo que no. Cada paso que falla se dice
- * con su porqué y no para a los demás (regla 8).
+ * «Guardar cambios»: TODO lo cambiado en un viaje, con conta_recibida_guardar. Si
+ * quita un asiento propuesto (ya no vale con lo nuevo), se vuelve a proponer con
+ * lo guardado. Sin la función en la base, el proveedor y el vencimiento como
+ * antes, y el resto se dice.
  */
-export async function guardarCambiosRecibida(invoiceId: string, cambios: { proveedorId?: string; vence?: string }, nombres: { proveedor?: string; vence?: string }): Promise<GuardadoFicha> {
-  const r: GuardadoFicha = { hechos: [], fallos: [] }
-  if (cambios.proveedorId !== undefined) {
-    try {
-      if (!cambios.proveedorId) throw new Error('una factura no se puede quedar sin proveedor')
-      await decirProveedor(invoiceId, cambios.proveedorId)
-      r.hechos.push(`Proveedor: ${nombres.proveedor ?? 'el elegido'}`)
-    } catch (e) { r.fallos.push({ etiqueta: 'Proveedor', porque: motivo(e) }) }
+export async function guardarCambiosRecibida(f: Pick<FacturaRevisar, 'id' | 'account_id' | 'company_id' | 'estado' | 'fecha'>, p_cambios: Record<string, unknown>,
+  o: { quien: string | null; nombres: { proveedor?: string; vence?: string }; localPropuesto?: string | null }): Promise<GuardadoFicha> {
+  const r: GuardadoFicha = { conTanda: true, hechos: [], fallos: [], texto: null, asientoQuitado: false, repropuesto: null }
+  if (Object.keys(p_cambios).length === 0) return r
+  const x = await llamar<{ guardado?: string[]; texto?: string; asiento_quitado?: boolean }>('conta_recibida_guardar', { p_invoice: f.id, p_cambios, p_quien_nombre: o.quien })
+  if (x.error) { r.fallos.push({ etiqueta: 'Los cambios', porque: x.error }); return r }
+  if (!x.falta) {
+    r.hechos = (x.datos?.guardado ?? []).map(String)
+    r.texto = typeof x.datos?.texto === 'string' ? x.datos.texto : null
+    r.asientoQuitado = x.datos?.asiento_quitado === true
+    if (r.asientoQuitado && f.company_id) {
+      try {
+        const fecha = typeof p_cambios.fecha === 'string' ? p_cambios.fecha : f.fecha
+        if (f.estado !== 'aprobada' || !fecha) r.repropuesto = 'Su asiento propuesto se ha quitado: se vuelve a proponer al validarla.'
+        else {
+          const pr = await proponerFactura(f.account_id, f.company_id, f.id, fecha, o.quien, o.localPropuesto)
+          r.repropuesto = pr.sinPropuesta.length ? `Su asiento propuesto se ha quitado y no ha salido otro: ${pr.sinPropuesta[0].porque}` : 'Su asiento se ha vuelto a proponer con lo nuevo.'
+        }
+      } catch (e) { r.repropuesto = `Su asiento propuesto se ha quitado y no se ha podido volver a proponer (${motivo(e)}): sale al validarla.` }
+    }
+    return r
   }
-  if (cambios.vence !== undefined) {
+  // Sin la 0790: lo de antes.
+  r.conTanda = false
+  if (typeof p_cambios.proveedor === 'string') {
+    try { await decirProveedor(f.id, p_cambios.proveedor); r.hechos.push(`Proveedor: ${o.nombres.proveedor ?? 'el elegido'}`) } catch (e) { r.fallos.push({ etiqueta: 'Proveedor', porque: motivo(e) }) }
+  }
+  if ('vence' in p_cambios) {
     try {
-      await rpc('set_supplier_invoice_due_date', { p_invoice_id: invoiceId, p_due_date: cambios.vence || null })
-      r.hechos.push(`Vence: ${nombres.vence ?? (cambios.vence || 'sin vencimiento')}`)
+      await rpc('set_supplier_invoice_due_date', { p_invoice_id: f.id, p_due_date: p_cambios.vence ?? null })
+      r.hechos.push(`Vence: ${o.nombres.vence ?? (p_cambios.vence || 'sin vencimiento')}`)
     } catch (e) { r.fallos.push({ etiqueta: 'Vence', porque: motivo(e) }) }
   }
   return r
+}
+
+/** Sube el PDF o la foto a receipt-uploads (bajo `<account_id>/…`) y lo pone a la factura. La foto la pasa a PDF el servidor (D02). */
+export async function ponerPapelRecibida(f: Pick<FacturaRevisar, 'id' | 'account_id'>, fichero: File, quien: string | null): Promise<{ hecho: boolean; falta: boolean; texto: string }> {
+  // Sin una función que diga si existe sin hacer nada, se sube primero: si la base aún no
+  // sabe enlazarlo, el fichero queda en receipt-uploads sin enlazar (y se dice).
+  let ruta: string
+  try { [ruta] = await uploadReceiptFiles(f.account_id, [fichero]) } catch (e) { return { hecho: false, falta: false, texto: `no se ha podido subir «${fichero.name}» (${motivo(e)})` } }
+  const x = await llamar<{ texto?: string }>('conta_recibida_papel_poner', { p_invoice: f.id, p_ruta: ruta, p_nombre: fichero.name, p_quien_nombre: quien })
+  if (x.falta) return { hecho: false, falta: true, texto: 'la base aún no tiene con qué enlazar un PDF nuevo (la tanda D03, 0790): se ha subido, pero la factura sigue sin él' }
+  if (x.error) return { hecho: false, falta: false, texto: x.error }
+  return { hecho: true, falta: false, texto: typeof x.datos?.texto === 'string' ? x.datos.texto : `PDF: «${fichero.name}»` }
+}
+
+/** «Sin PDF» con su motivo (o quitarlo). */
+export async function sinPapelRecibida(invoiceId: string, sin: boolean, motivoSin: string, quien: string | null): Promise<{ hecho: boolean; falta: boolean; texto: string }> {
+  const x = await llamar<{ texto?: string }>('conta_recibida_sin_papel', { p_invoice: invoiceId, p_sin: sin, p_motivo: sin ? motivoSin.trim() : null, p_quien_nombre: quien })
+  if (x.falta) return { hecho: false, falta: true, texto: 'la base aún no tiene dónde guardar «Sin PDF» (la tanda D03, 0790)' }
+  if (x.error) return { hecho: false, falta: false, texto: x.error }
+  return { hecho: true, falta: false, texto: typeof x.datos?.texto === 'string' ? x.datos.texto : sin ? `Sin PDF: «${motivoSin.trim()}»` : 'Ya no está marcada «Sin PDF»' }
 }

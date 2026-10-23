@@ -67,6 +67,12 @@ describe('el veredicto', () => {
     expect(varias.porque).not.toMatch(/aprendido de Diez/)
     expect(veredictoFactura(base({ propuesta: { confianza: 'probable', avisos: [], razones: [] }, origenGasto: null })).porque).toBe('No sé de dónde sale la cuenta de gasto: confírmala.')
   })
+  it('1 céntimo de redondeo (la Orange: sus líneas traen 4 decimales): el aviso «Base + IVA = …» y su duda no son «Revisa esto»', () => {
+    const orange = { confianza: 'duda' as const, avisos: ['Base + IVA = 34,96 €, y la factura dice 34,95 €.'], razones: [] }
+    expect(veredictoFactura(base({ comprobaciones: [], cuadraConElPdf: true, redondeo: true, propuesta: orange })).tipo).toBe('lista')
+    expect(veredictoFactura(base({ comprobaciones: [], cuadraConElPdf: true, propuesta: orange })).tipo).toBe('revisa')
+    expect(veredictoFactura(base({ comprobaciones: [], cuadraConElPdf: true, redondeo: true, propuesta: { ...orange, avisos: [...orange.avisos, 'No hay 472 del 5 % en tu plan.'] } })).porque).toBe('No hay 472 del 5 % en tu plan.')
+  })
   it('un aviso de la propuesta: «Revisa esto», con el primero que pesa', () => {
     expect(veredictoFactura(base({ propuesta: { confianza: 'seguro', avisos: ['Trae retención y su ficha no'], razones: [] } })).porque).toBe('Trae retención y su ficha no.')
   })

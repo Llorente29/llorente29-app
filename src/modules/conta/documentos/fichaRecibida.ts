@@ -156,7 +156,12 @@ export interface DatosParaBorrador extends FacturaParaTipos {
   local: string | null
   formaPago: string | null
   pagada: boolean
-  /** El PDF que ya tiene: nada que elegir. */
+  /** El gasto repartido guardado (supplier_invoice_expense, 0790): manda sobre `gasto` y `local`. */
+  reparto?: readonly { cuenta: string; local: string | null; importe: number }[] | null
+  /** «Sin PDF» guardado (no_document_*, 0790). */
+  sinPdf?: { motivo: string | null } | null
+  /** El asiento a mano guardado, ya como borrador (aManoDeLoGuardado). */
+  aMano?: Record<string, string>
 }
 
 /** Lo guardado, como borrador: el «Antes» de cada campo. */
@@ -170,14 +175,16 @@ export function borradorDe(d: DatosParaBorrador): BorradorFicha {
     iva: tipos.map((t) => ({ base: importeEs(t.base), tipo: t.tipo === null ? '' : String(t.tipo), cuota: importeEs(t.cuota) })),
     retencion: d.retencion ? { tipo: tipoDeRetencion(deCent(base), d.retencion), importe: importeEs(Math.abs(d.retencion)) } : null,
     recargo: d.recargo ? { tipo: '', importe: importeEs(d.recargo) } : null,
-    gastos: [{ cuenta: d.gasto ?? '', local: d.local ?? '', importe: '' }],
+    gastos: d.reparto && d.reparto.length > 0
+      ? d.reparto.map((g) => ({ cuenta: g.cuenta, local: g.local ?? '', importe: d.reparto!.length === 1 ? '' : importeEs(g.importe) }))
+      : [{ cuenta: d.gasto ?? '', local: d.local ?? '', importe: '' }],
     formaPago: d.formaPago ?? '',
     vence: d.vence ?? '',
     estadoPago: d.pagada ? 'pagada' : 'sin_pagar',
     papel: '',
-    sinPdf: false,
-    motivoSinPdf: '',
-    aMano: {},
+    sinPdf: !!d.sinPdf,
+    motivoSinPdf: d.sinPdf?.motivo ?? '',
+    aMano: d.aMano ?? {},
   }
 }
 
@@ -240,15 +247,23 @@ export interface ImportesDelPdf { base: number | null; iva: number | null; total
  * ¿Cuadra con el PDF? «Igual que el PDF» o la diferencia, en ámbar. `fuente`:
  * 'pdf' si salió de leer su fichero; 'factura' si se escribió (la a mano).
  */
-export function contraElPdf(t: Totales, pdf: ImportesDelPdf, fuente: 'pdf' | 'factura' = 'pdf'): { igual: boolean | null; texto: string } {
+export function contraElPdf(t: Totales, pdf: ImportesDelPdf, fuente: 'pdf' | 'factura' = 'pdf', o: { masDecimales?: boolean } = {}):
+  { igual: boolean | null; texto: string; redondeo?: boolean } {
   const quien = fuente === 'pdf' ? 'el PDF' : 'la factura'
   if (t.malEscrito.length > 0) return { igual: false, texto: `No sé sumar: ${t.malEscrito.join(', ')} no es un importe.` }
   if (pdf.total === null) return { igual: null, texto: `${fuente === 'pdf' ? 'El PDF' : 'La factura'} no dice el total: compruébalo a ojo.` }
   const d = cent(t.total) - cent(pdf.total)
   if (d === 0) return { igual: true, texto: `Igual que ${quien}` }
+  // Las líneas traen más de dos decimales (la Orange: 21,4463 + 7,438) y, al céntimo como el
+  // asiento, sale un céntimo arriba o abajo: es redondeo, se dice en ámbar pero no es «Revisa esto».
+  if (Math.abs(d) === 1 && o.masDecimales) return { igual: true, redondeo: true, texto: `1 céntimo de redondeo: sus líneas traen más de dos decimales (${quien} dice ${eurosExactos(pdf.total)})` }
   const cuanto = eurosExactos(deCent(Math.abs(d)))
   return { igual: false, texto: `${d > 0 ? `${cuanto} más` : `${cuanto} menos`} que ${quien} (${eurosExactos(pdf.total)})` }
 }
+
+/** ¿Alguna línea trae más de dos decimales? (la Orange: 21,4463). */
+export const lineasConMasDecimales = (lineas: readonly { importe: number | null }[]): boolean =>
+  lineas.some((l) => l.importe !== null && Math.abs(Math.round(Number(l.importe) * 100) - Number(l.importe) * 100) > 1e-6)
 
 // ── El gasto ─────────────────────────────────────────────────────────────────
 
@@ -368,38 +383,56 @@ export function asientoVistaPrevia(b: BorradorFicha, c: CuentasFicha, nombreGast
 // ── Qué se guarda hoy, y con qué ────────────────────────────────────────────
 
 /**
- * Cómo se guarda cada campo HOY, con lo que ya existe en la base (comprobado en
- * pg_proc e information_schema el 23/10, regla 40). Lo que no tiene dónde
- * guardarse se dice con su porqué, y queda para la tanda: el front no inventa
- * escrituras que la base no tiene.
+ * Cómo se guarda cada campo. Con la tanda 0790 (D03), todo lo de la ficha tiene
+ * su función en la base y nada se escribe directo en una tabla desde aquí:
+ *   · conta_recibida_guardar(p_invoice, p_cambios, p_quien_nombre): proveedor,
+ *     número, fecha, local, vence, forma de pago, IVA por tipo, retención,
+ *     recargo, el gasto repartido y el asiento a mano, en un viaje;
+ *   · conta_recibida_papel_poner: el PDF nuevo (subido a receipt-uploads);
+ *   · conta_recibida_sin_papel: «Sin PDF» con su motivo.
+ * «Pagada» no: mark_supplier_invoice_paid pide la factura aprobada (se marca al
+ * validarla, o la casa el banco).
  */
 export type ComoSeGuarda = { con: string } | { falta: string }
 
 export const COMO_SE_GUARDA: Record<CampoFicha, ComoSeGuarda> = {
-  proveedorId: { con: 'supplier_invoice.supplier_id (el «Es este» de siempre)' },
-  vence: { con: 'set_supplier_invoice_due_date' },
-  numero: { falta: 'no hay función que cambie el número de una recibida (va en la tanda: conta_recibida_guardar)' },
-  fecha: { falta: 'no hay función que cambie la fecha de una recibida (va en la tanda: conta_recibida_guardar)' },
-  iva: { falta: 'supplier_invoice_tax solo se lee desde la pantalla y no hay función que rehaga los importes por tipo (va en la tanda: conta_recibida_guardar)' },
-  retencion: { falta: 'no hay función que ponga la retención de una recibida (va en la tanda: conta_recibida_guardar)' },
-  recargo: { falta: 'no hay función que ponga el recargo de una recibida (va en la tanda: conta_recibida_guardar)' },
-  gastos: { falta: 'no hay función que guarde el gasto y el local de una recibida, ni dónde guardar un reparto por locales (va en la tanda: conta_recibida_guardar)' },
-  formaPago: { falta: 'la factura no tiene columna para la forma de pago prevista, solo la de cuando ya está pagada (va en la tanda: supplier_invoice.payment_method)' },
+  proveedorId: { con: 'conta_recibida_guardar' },
+  numero: { con: 'conta_recibida_guardar' },
+  fecha: { con: 'conta_recibida_guardar' },
+  iva: { con: 'conta_recibida_guardar' },
+  retencion: { con: 'conta_recibida_guardar' },
+  recargo: { con: 'conta_recibida_guardar' },
+  gastos: { con: 'conta_recibida_guardar' },
+  formaPago: { con: 'conta_recibida_guardar' },
+  vence: { con: 'conta_recibida_guardar' },
+  aMano: { con: 'conta_recibida_guardar' },
+  papel: { con: 'conta_recibida_papel_poner' },
+  sinPdf: { con: 'conta_recibida_sin_papel' },
+  motivoSinPdf: { con: 'conta_recibida_sin_papel' },
   estadoPago: { falta: 'una factura sin validar no se puede marcar pagada: mark_supplier_invoice_paid pide que esté aprobada. Se marca al validarla, o la casa el banco' },
-  papel: { falta: 'no hay función que enlace un PDF nuevo a una recibida que ya existe (va en la tanda: conta_recibida_papel_poner)' },
-  sinPdf: { falta: 'no hay columna para «Sin PDF» ni su motivo (va en la tanda: conta_recibida_sin_papel)' },
-  motivoSinPdf: { falta: 'no hay columna para «Sin PDF» ni su motivo (va en la tanda: conta_recibida_sin_papel)' },
-  aMano: { falta: 'el asiento de una recibida se propone al validarla y no hay dónde guardar antes una cuenta cambiada a mano (va en la tanda: conta_recibida_guardar)' },
 }
 
-export const seGuardaHoy = (campo: CampoFicha): boolean => 'con' in COMO_SE_GUARDA[campo]
+const SIN_TANDA = 'la base aún no tiene la función que lo guarda (la tanda D03, 0790, no está aplicada)'
+/**
+ * Lo de antes de la 0790, para cuando la base aún no tiene sus funciones (staging antes
+ * de aplicarla): el proveedor y el vencimiento con lo que ya existía; lo demás se dice.
+ */
+export const SIN_LA_TANDA: Record<CampoFicha, ComoSeGuarda> = {
+  ...(Object.fromEntries(Object.keys(COMO_SE_GUARDA).map((k) => [k, { falta: SIN_TANDA }])) as Record<CampoFicha, ComoSeGuarda>),
+  proveedorId: { con: 'supplier_invoice.supplier_id (el «Es este» de siempre)' },
+  vence: { con: 'set_supplier_invoice_due_date' },
+  estadoPago: COMO_SE_GUARDA.estadoPago,
+}
 
-/** Los campos cambiados, partidos en lo que se guarda hoy y lo que no. */
-export function partirCambios<C extends { campo: string; etiqueta: string }>(cambios: readonly C[]): { hoy: C[]; noHoy: (C & { porque: string })[] } {
+export const seGuardaHoy = (campo: CampoFicha, conTanda = true): boolean => 'con' in (conTanda ? COMO_SE_GUARDA : SIN_LA_TANDA)[campo]
+
+/** Los campos cambiados, partidos en lo que se guarda y lo que no (con la tanda 0790 o sin ella). */
+export function partirCambios<C extends { campo: string; etiqueta: string }>(cambios: readonly C[], conTanda = true): { hoy: C[]; noHoy: (C & { porque: string })[] } {
+  const mapa = conTanda ? COMO_SE_GUARDA : SIN_LA_TANDA
   const hoy: C[] = []
   const noHoy: (C & { porque: string })[] = []
   for (const c of cambios) {
-    const como = COMO_SE_GUARDA[c.campo as CampoFicha]
+    const como = mapa[c.campo as CampoFicha]
     if (como && 'con' in como) hoy.push(c)
     else noHoy.push({ ...c, porque: como && 'falta' in como ? como.falta : 'no se sabe dónde guardarlo' })
   }
@@ -426,6 +459,96 @@ export function textoDelGuardado(o: {
   }
   if (!partes.length) return { tono: 'ok', texto: 'No había nada que guardar.' }
   return { tono: o.fallos.length || o.noHoy.length ? 'falta' : 'ok', texto: partes.join(' ') }
+}
+
+// ── Lo que va a conta_recibida_guardar (contrato D03 · 0790) ──────────────
+
+/** Recargo de equivalencia de cada tipo de IVA (Ley del IVA, art. 161). */
+export const RECARGO_DE: Readonly<Record<number, number>> = { 21: 5.2, 10: 1.4, 5: 0.62, 4: 0.5, 2: 0.26, 0: 0 }
+
+/**
+ * El recargo, repartido por tipo: el de cada tipo por su base; si el escrito no es
+ * la suma (el PDF lo redondea de otro modo), la diferencia va al tipo de más base.
+ */
+export function recargoPorTipo(iva: readonly LineaIva[], recargo: Adicional | null): { tipo: number | null; importe: number }[] {
+  const xs = iva.map((l) => {
+    const base = leerImporteEs(l.base) ?? 0, tipo = l.tipo === '' ? null : Number(l.tipo)
+    const pct = tipo === null ? null : RECARGO_DE[tipo] ?? null
+    return { base, tipo: pct, importe: recargo && pct ? cuotaIva(base, pct) : 0 }
+  })
+  if (!recargo) return xs.map(() => ({ tipo: null, importe: 0 }))
+  const total = leerImporteEs(recargo.importe) ?? 0
+  const d = cent(total) - xs.reduce((t, x) => t + cent(x.importe), 0)
+  if (d !== 0 && xs.length) {
+    const i = xs.reduce((m, x, k) => (x.base > xs[m].base ? k : m), 0)
+    xs[i] = { ...xs[i], importe: deCent(cent(xs[i].importe) + d) }
+  }
+  return xs.map((x) => ({ tipo: x.tipo, importe: x.importe }))
+}
+
+export interface LineaAMano { posicion: number; cuenta: string; debe: number; haber: number; local?: string | null }
+
+/** El asiento a mano para la base (entry_overrides): las líneas de la vista previa con la cuenta tocada; null si no se tocó nada. */
+export function asientoAManoParaGuardar(b: BorradorFicha, previa: readonly LineaVista[]): LineaAMano[] | null {
+  if (!Object.entries(b.aMano).some(([a, x]) => a !== x)) return null
+  return previa.map((l, i) => ({ posicion: i, cuenta: l.codigo, debe: l.debe ?? 0, haber: l.haber ?? 0 }))
+}
+
+/** Lo guardado en entry_overrides, como el «aMano» del borrador: cuenta propuesta → cuenta elegida, por posición. */
+export function aManoDeLoGuardado(overrides: unknown, previaSinTocar: readonly LineaVista[]): Record<string, string> {
+  if (!Array.isArray(overrides)) return {}
+  const m: Record<string, string> = {}
+  overrides.forEach((o, i) => {
+    const x = o as { posicion?: number; cuenta?: string }
+    const orig = previaSinTocar[typeof x.posicion === 'number' ? x.posicion : i]
+    if (orig?.codigo && typeof x.cuenta === 'string' && x.cuenta && x.cuenta !== orig.codigo) m[orig.codigo] = x.cuenta
+  })
+  return m
+}
+
+const nulo = (x: string) => (x === '' ? null : x)
+
+/**
+ * Las claves de p_cambios para conta_recibida_guardar, SOLO de los campos
+ * cambiados (todas son opcionales: lo que no viene no se toca). `previa`: las
+ * líneas del asiento que se ve (para el asiento a mano); `comun`: el valor de
+ * «Común» en el selector de local de esta pantalla ('' en la ficha).
+ */
+export function cambiosParaLaBase(b: BorradorFicha, campos: readonly string[], o: { previa?: readonly LineaVista[]; comun?: string; retencionTipoId?: string | null } = {}): Record<string, unknown> {
+  const c = new Set(campos)
+  const p: Record<string, unknown> = {}
+  const t = totalesDe(b)
+  if (c.has('proveedorId')) p.proveedor = nulo(b.proveedorId)
+  if (c.has('numero')) p.numero = b.numero.trim()
+  if (c.has('fecha')) p.fecha = nulo(b.fecha)
+  if (c.has('vence')) p.vence = nulo(b.vence)
+  if (c.has('formaPago')) p.forma_pago = nulo(b.formaPago)
+  if (c.has('iva') || c.has('recargo')) {
+    const rec = recargoPorTipo(b.iva, b.recargo)
+    // Contrato final de la 0790: un tipo por línea; recargo_tipo y recargo solo si hay recargo.
+    p.iva = b.iva.map((l, i) => ({
+      tipo: l.tipo === '' ? null : Number(l.tipo), base: leerImporteEs(l.base), cuota: leerImporteEs(l.cuota) ?? 0,
+      ...(b.recargo ? { recargo_tipo: rec[i].tipo, recargo: rec[i].importe } : {}),
+    }))
+  }
+  if (c.has('retencion') || (b.retencion && c.has('iva'))) {
+    // Con su tipo_id si es la de siempre (withholding_rate_id): con solo el tanto, la base coge la última del proveedor.
+    p.retencion = b.retencion ? {
+      ...(b.retencion.tipo !== '' ? { tipo: Number(b.retencion.tipo) } : {}),
+      ...(o.retencionTipoId ? { tipo_id: o.retencionTipoId } : {}),
+      base: t.base, importe: leerImporteEs(b.retencion.importe) ?? 0,
+    } : null
+  }
+  if (c.has('gastos')) {
+    const comun = o.comun ?? ''
+    const g = gastosConImporte(b.gastos, t.base)
+    p.gasto = g.map((x) => ({ cuenta: x.cuenta, local: x.local && x.local !== comun ? x.local : null, comun: !x.local || x.local === comun, importe: x.importe }))
+    const locales = [...new Set(g.map((x) => (x.local && x.local !== comun ? x.local : null)))]
+    // El local de la factura: el de su gasto si es uno solo; si se reparte, común (lo dice el reparto).
+    p.local = locales.length === 1 ? locales[0] : null
+  }
+  if (c.has('aMano')) p.asiento_a_mano = o.previa ? asientoAManoParaGuardar(b, o.previa) : null
+  return p
 }
 
 /** Cómo se escribe cada campo en «Antes: …» y en la barra. */
@@ -499,6 +622,16 @@ export interface DatosHistorial extends OrigenFicha {
   pagos: readonly { cuando: string; accion: string; quien: string | null; pagada: string | null; vence: string | null }[]
   asiento: { numero: number | null; validado: { cuando: string; quien: string | null } | null; creado: string | null } | null
   descartada: { cuando: string; quien: string | null; motivo: string | null } | null
+  /** supplier_invoice_change (0790): lo que guardó una persona en la ficha. */
+  cambios?: readonly { cuando: string; quien: string | null; que: string; campos: readonly string[] }[]
+}
+
+const QUE_CAMBIO: Record<string, string> = { guardar: 'Cambió', papel: 'Puso el PDF', sin_papel: 'Marcó «Sin PDF»' }
+
+/** Las claves de p_cambios (y de supplier_invoice_change.cambios[].campo), en palabras. */
+export const ETIQUETA_DE_CLAVE: Record<string, string> = {
+  proveedor: 'el proveedor', numero: 'el número', fecha: 'la fecha', local: 'el local', vence: 'el vencimiento', forma_pago: 'la forma de pago',
+  iva: 'los importes por tipo de IVA', retencion: 'la retención', gasto: 'el gasto', asiento_a_mano: 'el asiento a mano',
 }
 
 const quienEs = (q: string | null | undefined) => (q && q.trim() ? ` (${q.trim()})` : '')
@@ -520,6 +653,11 @@ export function historialDe(d: DatosHistorial): HechoHistorial[] {
   if (d.aprobada) h.push({ cuando: d.aprobada.cuando, texto: `Aprobada${quienEs(d.aprobada.quien)}` })
   if (d.asiento?.creado) h.push({ cuando: d.asiento.creado, texto: 'Se propuso su asiento' })
   if (d.asiento?.validado) h.push({ cuando: d.asiento.validado.cuando, texto: `Contabilizada${d.asiento.numero ? `: asiento ${d.asiento.numero}` : ''}${quienEs(d.asiento.validado.quien)}` })
+  for (const c of d.cambios ?? []) {
+    const que = QUE_CAMBIO[c.que] ?? 'Cambió'
+    const campos = [...new Set(c.campos.map((k) => ETIQUETA_DE_CLAVE[k] ?? k))]
+    h.push({ cuando: c.cuando, texto: `${que}${c.que === 'guardar' && campos.length ? ` ${campos.join(', ')}` : ''}${quienEs(c.quien)}` })
+  }
   if (d.descartada) h.push({ cuando: d.descartada.cuando, texto: `No es una factura${d.descartada.motivo ? `: «${d.descartada.motivo}»` : ''}${quienEs(d.descartada.quien)}` })
   return h.sort((a, b) => (a.cuando < b.cuando ? -1 : a.cuando > b.cuando ? 1 : 0))
 }

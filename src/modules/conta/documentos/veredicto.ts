@@ -46,6 +46,12 @@ export interface DatosVeredicto {
    * la que entró desde una recepción sin lectura propia. null: no se sabe.
    */
   cuadraConElPdf?: boolean | null
+  /**
+   * D03: la diferencia con el PDF es 1 céntimo de redondeo (sus líneas traen más de
+   * dos decimales, como la Orange). Se dice en ámbar en los importes, pero no es
+   * «Revisa esto»: el aviso «Base + IVA = …» de la propuesta no cuenta.
+   */
+  redondeo?: boolean
 }
 
 export interface Veredicto {
@@ -106,13 +112,16 @@ export function veredictoFactura(d: DatosVeredicto): Veredicto {
     return { tipo: 'revisa', titulo: 'Revisa esto', porque: 'Base + IVA no dan el total del PDF: corrige los importes por tipo de IVA.', detalle }
   }
   const leves = d.comprobaciones.filter((c) => !c.ok && c.grave === false)
-  const avisos = d.propuesta?.avisos ?? []
+  const avisos = (d.propuesta?.avisos ?? []).filter((a) => !(d.redondeo && /^Base \+ IVA = /.test(a)))
   // Ficha completa (tablero 3b): «Revisa esto» solo si falta algo DE VERDAD, y
   // diciendo qué. Una propuesta «probable» dice por qué en sus razones (el
   // local, varias cuentas en sus facturas anteriores): eso es lo que se dice.
   // Sin una razón que la haga dudosa, si el gasto es el de su ficha o el de sus
   // facturas anteriores y los importes cuadran, está lista.
-  const duda = d.propuesta && d.propuesta.confianza !== 'seguro' ? motivoDeLaDuda(d.propuesta, d.origenGasto, d.comprobaciones.length > 0 || d.cuadraConElPdf === true) : null
+  // El redondeo de 1 céntimo pone la propuesta en «duda» (su aviso «Base + IVA = …»): quitado ese aviso, no cuenta.
+  const soloRedondeo = !!d.redondeo && (d.propuesta?.avisos ?? []).length > avisos.length && avisos.length === 0
+  const prop = d.propuesta && soloRedondeo && d.propuesta.confianza === 'duda' ? { ...d.propuesta, confianza: 'probable' as const } : d.propuesta
+  const duda = prop && prop.confianza !== 'seguro' ? motivoDeLaDuda(prop, d.origenGasto, d.comprobaciones.length > 0 || d.cuadraConElPdf === true) : null
   if (graves.length > 0 || leves.length > 0 || avisos.length > 0 || duda) {
     const motivo = graves[0]?.texto ?? avisos[0] ?? leves[0]?.texto ?? duda ?? ''
     return { tipo: 'revisa', titulo: 'Revisa esto', porque: frase(motivo), detalle }
