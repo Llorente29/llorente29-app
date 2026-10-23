@@ -1,26 +1,26 @@
 -- supabase/staging/sql/20261206_d03_recibida_pdf_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261206T0500_d03_recibida_pdf_sin_recepcion (y de
--- la 0510 y su vuelta atrás, que sin Foodint no hacen nada), con \i dentro de
+-- SOLO STAGING. Prueba de 20261206T0770_d03_recibida_pdf_sin_recepcion (y de
+-- la 0780 y su vuelta atrás, que sin Foodint no hacen nada), con \i dentro de
 -- la transacción y ROLLBACK: staging no cambia. Datos de la empresa A de
 -- staging; las lecturas, las recepciones y las rutas son inventadas dentro de
 -- la transacción (la función no mira el almacén: la ruta es la de la lectura).
 --
---   (Empieza con la vuelta atrás, por si la 0500 ya estuviera.)
+--   (Empieza con la vuelta atrás, por si la 0770 ya estuviera.)
 --   0. Lo de antes: _compras_factura_desde_papel es la de producción (md5
 --      e0d04afd…), y con ella, una factura PDF subida SIN recepción, como
 --      usuario de A («Subir una factura»), nace sin documento: el hueco.
---   1. La 0500.
+--   1. La 0770.
 --   2. Como usuario de A: un PDF sin recepción nace con el fichero de su
---      lectura. El que nació sin él antes de la 0500 sigue igual (lo arregla
---      la 0510 en producción): repetir la lectura no lo toca.
+--      lectura. El que nació sin él antes de la 0770 sigue igual (lo arregla
+--      la 0780 en producción): repetir la lectura no lo toca.
 --   3. Una foto con su recepción, como antes: el documento de la RECEPCIÓN,
 --      aunque la lectura diga otro.
 --   4. Una recepción sin documento: el fichero de la lectura.
 --   5. Una lectura sin ficheros, o con su fichero en otro bucket: sin
 --      documento, y la factura nace igual.
 --   6. B no hace facturas con la lectura de A.
---   7. La 0510 y su vuelta atrás: sin Foodint, no tocan nada.
+--   7. La 0780 y su vuelta atrás: sin Foodint, no tocan nada.
 --   8. La vuelta atrás: la función byte a byte (md5 de producción). Y otra
 --      vez delante: su md5 nuevo.
 -- No toca coste ni stock: las líneas nacen sin artículo (sin los cuatro
@@ -34,7 +34,7 @@ do $$ begin
 end $$;
 set local statement_timeout = '120s';
 
-\i supabase/vuelta-atras/20261206T0500_d03_recibida_pdf_sin_recepcion.down.sql
+\i supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql
 
 -- 0 · Lo de antes.
 do $$
@@ -86,7 +86,7 @@ select 'd0300000-0000-4000-8000-000000000102', 'c01a0000-0000-4000-8000-00000000
        (select id from _d03 where clave = 'recsin'), null, 'prueba D03'
   from _d03 p where p.clave = 'prov';
 
--- Sin la 0500, como usuario de A: el PDF sin recepción nace sin documento.
+-- Sin la 0770, como usuario de A: el PDF sin recepción nace sin documento.
 select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
 set local role authenticated;
 do $$
@@ -95,14 +95,14 @@ begin
   v := public.compras_factura_desde_papel((select id from _d03 where clave = 'antes'), (select id from _d03 where clave = 'prov'), null, '3b34403a-a7d6-4a48-a8d7-737e8cababdc');
   if not coalesce((v->>'creada')::boolean, false) then raise exception 'PRUEBA D03 · 0: no se ha creado la factura de antes (%).', v; end if;
   if (select raw_document_url from public.supplier_invoice where id = (v->>'factura')::uuid) is not null then
-    raise exception 'PRUEBA D03 · 0: sin la 0500 ya nace con documento: ¿está ya aplicada?';
+    raise exception 'PRUEBA D03 · 0: sin la 0770 ya nace con documento: ¿está ya aplicada?';
   end if;
-  raise notice '0 · sin la 0500, «Subir una factura» con un PDF: % sin documento (el hueco de FAC-00098 y FAC-00101)', (select code from public.supplier_invoice where id = (v->>'factura')::uuid);
+  raise notice '0 · sin la 0770, «Subir una factura» con un PDF: % sin documento (el hueco de FAC-00098 y FAC-00101)', (select code from public.supplier_invoice where id = (v->>'factura')::uuid);
 end $$;
 reset role;
 
--- 1 · La 0500.
-\i supabase/migrations/20261206T0500_d03_recibida_pdf_sin_recepcion.sql
+-- 1 · La 0770.
+\i supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
 
 -- 2 · Como usuario de A, un PDF sin recepción.
 select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
@@ -116,11 +116,11 @@ begin
      or f.source <> 'ocr' or f.status <> 'en_revision' or f.ai_session_id <> (select id from _d03 where clave = 'pdf') then
     raise exception 'PRUEBA D03 · 2: el PDF sin recepción no nace con el fichero de su lectura (% / %).', v, f.raw_document_url;
   end if;
-  -- El de antes de la 0500 sigue sin él: repetir su lectura no lo toca.
+  -- El de antes de la 0770 sigue sin él: repetir su lectura no lo toca.
   v2 := public.compras_factura_desde_papel((select id from _d03 where clave = 'antes'), (select id from _d03 where clave = 'prov'), null, '3b34403a-a7d6-4a48-a8d7-737e8cababdc');
   if not coalesce((v2->>'repetida')::boolean, false)
      or (select raw_document_url from public.supplier_invoice where id = (v2->>'factura')::uuid) is not null then
-    raise exception 'PRUEBA D03 · 2: la de antes de la 0500 ha cambiado al repetir su lectura (%).', v2;
+    raise exception 'PRUEBA D03 · 2: la de antes de la 0770 ha cambiado al repetir su lectura (%).', v2;
   end if;
   raise notice '2 · %: nace con el fichero de su lectura; la de antes, repetida, sigue sin documento', f.code;
 end $$;
@@ -174,20 +174,20 @@ do $$ begin
 end $$;
 reset role;
 
--- 7 · La 0510 y su vuelta atrás: sin Foodint, nada.
+-- 7 · La 0780 y su vuelta atrás: sin Foodint, nada.
 create temp table _d03_antes on commit drop as
   select id, raw_document_url from public.supplier_invoice where raw_document_url is null;
-\i supabase/migrations/20261206T0510_d03_recibida_pdf_datos.sql
-\i supabase/vuelta-atras/20261206T0510_d03_recibida_pdf_datos.down.sql
+\i supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql
+\i supabase/vuelta-atras/20261206T0780_d03_recibida_pdf_datos.down.sql
 do $$ begin
   if exists (select 1 from _d03_antes a join public.supplier_invoice i on i.id = a.id where i.raw_document_url is not null) then
-    raise exception 'PRUEBA D03 · 7: sin Foodint, la 0510 o su vuelta atrás han tocado alguna recibida.';
+    raise exception 'PRUEBA D03 · 7: sin Foodint, la 0780 o su vuelta atrás han tocado alguna recibida.';
   end if;
-  raise notice '7 · la 0510 y su vuelta atrás, sin Foodint: ninguna recibida tocada';
+  raise notice '7 · la 0780 y su vuelta atrás, sin Foodint: ninguna recibida tocada';
 end $$;
 
 -- 8 · La vuelta atrás, byte a byte; y otra vez delante.
-\i supabase/vuelta-atras/20261206T0500_d03_recibida_pdf_sin_recepcion.down.sql
+\i supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql
 do $$
 declare v_md5 text; v_n int;
 begin
@@ -196,15 +196,15 @@ begin
   select count(*) into v_n from pg_proc where proname = '_compras_factura_desde_papel' and pronamespace = 'public'::regnamespace;
   if v_n <> 1 then raise exception 'PRUEBA D03 · 8: hay % firmas de _compras_factura_desde_papel (regla 2).', v_n; end if;
 end $$;
-\i supabase/migrations/20261206T0500_d03_recibida_pdf_sin_recepcion.sql
+\i supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
 do $$
 declare v_md5 text; v_n int;
 begin
   select md5(pg_get_functiondef('public._compras_factura_desde_papel(uuid,uuid,uuid,uuid,uuid,uuid,text)'::regprocedure)) into v_md5;
-  if v_md5 <> '8beefcf524b9bb482e6529e96589ad70' then raise exception 'PRUEBA D03 · 8: la 0500 no deja la función que se espera (%).', v_md5; end if;
+  if v_md5 <> 'a8b44ec38a996a24274f984030a13aa7' then raise exception 'PRUEBA D03 · 8: la 0770 no deja la función que se espera (%).', v_md5; end if;
   select count(*) into v_n from pg_proc where proname = '_compras_factura_desde_papel' and pronamespace = 'public'::regnamespace;
   if v_n <> 1 then raise exception 'PRUEBA D03 · 8: hay % firmas de _compras_factura_desde_papel (regla 2).', v_n; end if;
-  raise notice '8 · vuelta atrás byte a byte (e0d04afd…) y otra vez delante (8beefcf5…), una sola firma';
+  raise notice '8 · vuelta atrás byte a byte (e0d04afd…) y otra vez delante (a8b44ec3…), una sola firma';
 end $$;
 
 rollback;

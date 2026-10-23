@@ -1,4 +1,4 @@
--- supabase/migrations/20261206T0510_d03_recibida_pdf_datos.sql
+-- supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql
 --
 -- D03 · DATOS: las dos recibidas de Foodint que nacieron sin su documento
 -- (Julio, 23/10). Las subió «Subir una factura» (Compras), sin recepción, y la
@@ -13,7 +13,7 @@
 --     la factura: por eso no se coge el de la recepción)
 --
 -- Les pone como raw_document_url el primer fichero de su lectura, que es lo
--- que pone la 0500 desde ahora a las que entren igual. Nada más: ni
+-- que pone la 0770 desde ahora a las que entren igual. Nada más: ni
 -- updated_at (la vuelta atrás las deja exactamente como estaban), ni estado,
 -- ni importes. Ningún disparador de supplier_invoice mira raw_document_url.
 -- Siguen «en revisión» y sin asiento: no sale nada a Diez por esto. Cuando
@@ -29,11 +29,11 @@
 --
 -- Anclado por cuenta, factura y lectura (regla 9). PARA, sin cambiar nada:
 -- si las que están así no son exactamente estas dos (en cualquier cuenta: si
--- ha entrado otra antes de la 0500, se vuelve a medir); si alguna ya tiene
+-- ha entrado otra antes de la 0770, se vuelve a medir); si alguna ya tiene
 -- documento o no es la de su lectura; si su fichero no está en receipt-uploads.
 -- En una base sin Foodint (staging), no hace nada y lo dice.
 -- No toca el camino del pedido, ni coste ni stock.
--- Vuelta atrás: supabase/vuelta-atras/20261206T0510_d03_recibida_pdf_datos.down.sql
+-- Vuelta atrás: supabase/vuelta-atras/20261206T0780_d03_recibida_pdf_datos.down.sql
 do $$
 declare
   v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
@@ -44,7 +44,7 @@ declare
   v_n int;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
-    raise notice 'D03 0510: esta base no tiene la cuenta de Foodint (staging): no hay nada que enlazar.';
+    raise notice 'D03 0780: esta base no tiene la cuenta de Foodint (staging): no hay nada que enlazar.';
     return;
   end if;
 
@@ -55,7 +55,7 @@ begin
    where i.source = 'ocr' and i.raw_document_url is null
      and jsonb_typeof(a.input_files) = 'array' and nullif(btrim(a.input_files -> 0 ->> 'path'), '') is not null;
   if v_todas is distinct from (select array_agg(x order by x) from unnest(v_fac) x) then
-    raise exception 'D03 0510: las recibidas «ocr» sin documento con fichero en su lectura (todas las cuentas) no son las dos medidas el 23/10: son % (%). No se cambia nada: vuelve a medir.',
+    raise exception 'D03 0780: las recibidas «ocr» sin documento con fichero en su lectura (todas las cuentas) no son las dos medidas el 23/10: son % (%). No se cambia nada: vuelve a medir.',
       cardinality(v_todas), v_todas;
   end if;
 
@@ -69,7 +69,7 @@ begin
      and left(a.input_files -> 0 ->> 'path', 37) = v_acc::text || '/'
      and exists (select 1 from storage.objects o where o.bucket_id = 'receipt-uploads' and o.name = a.input_files -> 0 ->> 'path');
   if v_bien <> 2 then
-    raise exception 'D03 0510: de las dos recibidas, % están como se midieron (de Foodint, de su lectura, sin documento y con su fichero en receipt-uploads). No se cambia nada.', v_bien;
+    raise exception 'D03 0780: de las dos recibidas, % están como se midieron (de Foodint, de su lectura, sin documento y con su fichero en receipt-uploads). No se cambia nada.', v_bien;
   end if;
 
   update public.supplier_invoice i
@@ -79,7 +79,7 @@ begin
      and a.id = m.lec and a.account_id = v_acc;
   get diagnostics v_n = row_count;
   if v_n <> 2 then
-    raise exception 'D03 0510: esperaba enlazar DOS documentos y han sido %.', v_n;
+    raise exception 'D03 0780: esperaba enlazar DOS documentos y han sido %.', v_n;
   end if;
-  raise notice 'D03 0510: FAC-00098 y FAC-00101 de Foodint, con el PDF de su lectura (2).';
+  raise notice 'D03 0780: FAC-00098 y FAC-00101 de Foodint, con el PDF de su lectura (2).';
 end $$;

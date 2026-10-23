@@ -1,4 +1,4 @@
--- supabase/migrations/20261206T0500_d03_recibida_pdf_sin_recepcion.sql
+-- supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
 -- cambia: public._compras_factura_desde_papel · prueba: supabase/staging/sql/20261206_d03_recibida_pdf_prueba.sql
 --
 -- D03 · LA RECIBIDA QUE SE SUBE SIN RECEPCIÓN NACE CON SU DOCUMENTO (Julio, 23/10).
@@ -32,10 +32,10 @@
 -- envío a Diez si esperaba por el documento. Hasta hoy, una recibida subida
 -- sin recepción se habría ido a Diez con «falta el documento».
 --
--- No toca filas (las dos de Foodint las arregla la 0510, aparte, con su
+-- No toca filas (las dos de Foodint las arregla la 0780, aparte, con su
 -- «autorizo»). No toca el camino del pedido ni coste ni stock: la factura
 -- nace con líneas sin artículo, como antes.
--- Vuelta atrás: supabase/vuelta-atras/20261206T0500_d03_recibida_pdf_sin_recepcion.down.sql
+-- Vuelta atrás: supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql
 CREATE OR REPLACE FUNCTION public._compras_factura_desde_papel(p_cuenta uuid, p_sesion uuid, p_proveedor uuid, p_local uuid, p_empresa uuid, p_recepcion uuid DEFAULT NULL::uuid, p_quien_nombre text DEFAULT NULL::text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -88,7 +88,7 @@ begin
   select sum((l->>'line_amount')::numeric), sum(round((l->>'line_amount')::numeric * (l->>'vat_pct')::numeric / 100, 2))
     into v_base, v_cuota from jsonb_array_elements(v_lineas) l;
   if p_recepcion is not null then select raw_document_url into v_url from goods_receipt where id = p_recepcion; end if;
-  -- 0500: sin recepción, o con una recepción sin documento, el fichero que se
+  -- 0770: sin recepción, o con una recepción sin documento, el fichero que se
   -- leyó: el primero de su lectura, de esta misma cuenta (lo que la recepción
   -- guarda en goods_receipt.raw_document_url). «Subir una factura» no lo
   -- guardaba: FAC-00098 y FAC-00101 de Foodint (19 y 21/10) nacieron sin él.

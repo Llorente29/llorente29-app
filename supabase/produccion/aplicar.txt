@@ -1,15 +1,16 @@
 # Tanda de producción viva · D03 · la recibida que se sube sin recepción nace
 # con su documento, y las dos de Foodint que nacieron sin él (Julio, 23/10).
-# Rama claude/ficha-recibida. Número 0500: la siguiente por encima de la más
-# alta que existe (la 0490 del #293, sin fusionar; este PR va antes). La
+# Rama claude/ficha-recibida. Números 0770 y 0780: por encima del más alto que
+# existe (la 0760 de la C06b; la 0500 y la 0510 ya son de la C06b, y la 0490
+# es del #293, sin fusionar; este PR va antes). La
 # anterior de este fichero (E05, 0480, ya aplicada): su copia en
 # tests/conta/produccion/tanda-e05-releer-riders-20261022.txt.
 #
-#   1. 0500 — CAMBIA en caliente _compras_factura_desde_papel (misma firma):
+#   1. 0770 — CAMBIA en caliente _compras_factura_desde_papel (misma firma):
 #      sin recepción, o con una recepción sin documento, la factura nace con
 #      el primer fichero de su lectura (de su cuenta, en receipt-uploads).
 #      Declarada en la cabecera, con su prueba de staging. No toca filas.
-#   2. 0510 — DATOS de Foodint: FAC-00098 (S11/0177416578) y FAC-00101
+#   2. 0780 — DATOS de Foodint: FAC-00098 (S11/0177416578) y FAC-00101
 #      (COHELDI P26 4.980), con el PDF de su lectura. Cambia DOS filas que
 #      existen: AUTORIZO con su nombre. Para si las que están así, en todas
 #      las cuentas, no son esas dos, o si alguna ya tiene documento.
@@ -19,5 +20,5 @@
 # asiento; al validarlas, el D02 enlaza su PDF al asiento.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
 cuenta: scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
-supabase/migrations/20261206T0500_d03_recibida_pdf_sin_recepcion.sql
-supabase/migrations/20261206T0510_d03_recibida_pdf_datos.sql
+supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
+supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql

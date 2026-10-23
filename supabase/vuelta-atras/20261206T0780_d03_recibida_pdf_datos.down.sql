@@ -1,9 +1,9 @@
--- supabase/vuelta-atras/20261206T0510_d03_recibida_pdf_datos.down.sql
+-- supabase/vuelta-atras/20261206T0780_d03_recibida_pdf_datos.down.sql
 --
--- Vuelta atrás de 20261206T0510_d03_recibida_pdf_datos (solo Foodint):
+-- Vuelta atrás de 20261206T0780_d03_recibida_pdf_datos (solo Foodint):
 -- FAC-00098 y FAC-00101 otra vez sin documento (raw_document_url nulo), como
--- estaban; la 0510 no tocó nada más. Solo las que tienen JUSTO el fichero de
--- su lectura: si alguna tiene otro, no es lo que puso la 0510 y no se toca.
+-- estaban; la 0780 no tocó nada más. Solo las que tienen JUSTO el fichero de
+-- su lectura: si alguna tiene otro, no es lo que puso la 0780 y no se toca.
 --
 -- PARA, sin cambiar nada, si alguna ya se ha usado con ese documento: tiene
 -- asiento (validado o no: «Apuntar» o el libro pueden haber guardado ya el
@@ -12,7 +12,7 @@
 -- dejaría a medias lo que ya se hizo con él.
 --
 -- sin prueba con datos: solo actúa sobre Foodint (cuenta 51ad1792…), que no
--- está en staging; la prueba de la 0500 la ejecuta igual (y la 0510) para ver
+-- está en staging; la prueba de la 0770 la ejecuta igual (y la 0780) para ver
 -- que se leen y que, sin Foodint, no tocan nada. Su prueba con datos es el
 -- ENSAYO de la tanda en producción (todo en una transacción y rollback).
 do $$
@@ -24,7 +24,7 @@ declare
   v_n int;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
-    raise notice 'D03 0510 (vuelta atrás): esta base no tiene la cuenta de Foodint (staging): nada que deshacer.';
+    raise notice 'D03 0780 (vuelta atrás): esta base no tiene la cuenta de Foodint (staging): nada que deshacer.';
     return;
   end if;
 
@@ -34,7 +34,7 @@ begin
                      or exists (select 1 from public.journal_entry e
                                  where e.account_id = v_acc and e.source_type = 'supplier_invoice' and e.source_id = i.id)
                      or exists (select 1 from public.conta_recibida_pdf r where r.invoice_id = i.id))) then
-    raise exception 'D03 0510 (vuelta atrás): FAC-00098 o FAC-00101 ya tiene asiento o el D02 ya ha hecho algo con su documento: no se le quita. Míralo antes.';
+    raise exception 'D03 0780 (vuelta atrás): FAC-00098 o FAC-00101 ya tiene asiento o el D02 ya ha hecho algo con su documento: no se le quita. Míralo antes.';
   end if;
 
   select count(*) into v_suyas
@@ -50,7 +50,7 @@ begin
      and a.id = m.lec and a.account_id = v_acc and i.raw_document_url = a.input_files -> 0 ->> 'path';
   get diagnostics v_n = row_count;
   if v_n <> v_suyas then
-    raise exception 'D03 0510 (vuelta atrás): esperaba quitar % documento(s) y han sido %.', v_suyas, v_n;
+    raise exception 'D03 0780 (vuelta atrás): esperaba quitar % documento(s) y han sido %.', v_suyas, v_n;
   end if;
-  raise notice 'D03 0510 (vuelta atrás): % recibida(s) de Foodint otra vez sin documento.', v_n;
+  raise notice 'D03 0780 (vuelta atrás): % recibida(s) de Foodint otra vez sin documento.', v_n;
 end $$;

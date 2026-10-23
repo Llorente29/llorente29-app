@@ -1,7 +1,7 @@
--- supabase/vuelta-atras/20261206T0500_d03_recibida_pdf_sin_recepcion.down.sql
+-- supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql
 --
--- Vuelta atrás de 20261206T0500_d03_recibida_pdf_sin_recepcion:
--- _compras_factura_desde_papel otra vez como en producción antes de la 0500
+-- Vuelta atrás de 20261206T0770_d03_recibida_pdf_sin_recepcion:
+-- _compras_factura_desde_papel otra vez como en producción antes de la 0770
 -- (la de la 0370), BYTE A BYTE: md5(pg_get_functiondef) e0d04afddb7e98ab9cb1b46deccb91e0.
 -- Misma firma: create or replace. Las recibidas que ya nacieron con su
 -- documento lo conservan (es el suyo). La ejecuta la prueba de staging.

@@ -1,7 +1,7 @@
 -- scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
 --
 -- D03 · LO QUE CUENTA LA TANDA «LA RECIBIDA SIN RECEPCIÓN NACE CON SU
--- DOCUMENTO» (0500 y 0510), antes y después. SOLO LEE. Antes (medido el 23/10):
+-- DOCUMENTO» (0770 y 0780), antes y después. SOLO LEE. Antes (medido el 23/10):
 -- _compras_factura_desde_papel con su md5 de producción (e0d04afd…); 2
 -- recibidas «ocr» sin documento con fichero en su lectura, en todas las
 -- cuentas, las dos de Foodint; FAC-00098 y FAC-00101 «sin documento».

@@ -1459,7 +1459,7 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): D03 · la recibida sin recepción nace con su documento (0500 y 0510)', () => {
+describe('la tanda de AHORA (manifiesto vivo): D03 · la recibida sin recepción nace con su documento (0770 y 0780)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
@@ -1472,8 +1472,8 @@ describe('la tanda de AHORA (manifiesto vivo): D03 · la recibida sin recepción
   const nombre = (f: string) => f.replace(/^.*\//, '')
   const FN = '_compras_factura_desde_papel'
   const PRUEBA = 'supabase/staging/sql/20261206_d03_recibida_pdf_prueba.sql'
-  const DOWN = 'supabase/vuelta-atras/20261206T0500_d03_recibida_pdf_sin_recepcion.down.sql'
-  const DOWN_DATOS = 'supabase/vuelta-atras/20261206T0510_d03_recibida_pdf_datos.down.sql'
+  const DOWN = 'supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql'
+  const DOWN_DATOS = 'supabase/vuelta-atras/20261206T0780_d03_recibida_pdf_datos.down.sql'
   /** La definición entera, como la devuelve pg_get_functiondef (sin su salto final). */
   const definicion = (f: string) => {
     const s = readFileSync(f, 'utf8')
@@ -1482,8 +1482,8 @@ describe('la tanda de AHORA (manifiesto vivo): D03 · la recibida sin recepción
     return s.slice(a, b + '$function$'.length)
   }
 
-  it('dos ficheros, los medidos; la 0500 sigue y la 0510 (datos de Foodint) pide «autorizo»; nada del camino del pedido; nada registrado aún', () => {
-    expect(viva.map(nombre)).toEqual(['20261206T0500_d03_recibida_pdf_sin_recepcion.sql', '20261206T0510_d03_recibida_pdf_datos.sql'])
+  it('dos ficheros, los medidos; la 0770 sigue y la 0780 (datos de Foodint) pide «autorizo»; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261206T0770_d03_recibida_pdf_sin_recepcion.sql', '20261206T0780_d03_recibida_pdf_datos.sql'])
     expect(Object.keys(medida.tanda)).toEqual(viva)
     for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
     expect(r.ficheros[viva[0]]).toBe('sigue')
@@ -1494,13 +1494,13 @@ describe('la tanda de AHORA (manifiesto vivo): D03 · la recibida sin recepción
     expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
     expect(ctx.registro).toEqual([])
   })
-  it('el cambio va declarado en la cabecera, con su prueba de staging, que entra como usuario, ejecuta la 0510 y las dos vueltas atrás, y acaba en ROLLBACK', () => {
+  it('el cambio va declarado en la cabecera, con su prueba de staging, que entra como usuario, ejecuta la 0780 y las dos vueltas atrás, y acaba en ROLLBACK', () => {
     const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
     expect(cab).toEqual([`-- cambia: public.${FN} · prueba: ${PRUEBA}`])
     expect(readFileSync(viva[1], 'utf8')).not.toMatch(/^-- cambia:/m)
     const p = readFileSync(PRUEBA, 'utf8')
     for (const x of [FN, 'set local role authenticated', `\\i ${viva[0]}`, `\\i ${viva[1]}`, `\\i ${DOWN}`, `\\i ${DOWN_DATOS}`,
-      'e0d04afddb7e98ab9cb1b46deccb91e0', '8beefcf524b9bb482e6529e96589ad70']) expect(p).toContain(x)
+      'e0d04afddb7e98ab9cb1b46deccb91e0', 'a8b44ec38a996a24274f984030a13aa7']) expect(p).toContain(x)
     expect(p.trim().endsWith('rollback;')).toBe(true)
     const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
     expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
@@ -1511,7 +1511,7 @@ describe('la tanda de AHORA (manifiesto vivo): D03 · la recibida sin recepción
     expect(md5(origen + '\n')).toBe('e0d04afddb7e98ab9cb1b46deccb91e0')
     expect(definicion(DOWN)).toBe(origen)
     const nueva = definicion(viva[0])
-    expect(md5(nueva + '\n')).toBe('8beefcf524b9bb482e6529e96589ad70')
+    expect(md5(nueva + '\n')).toBe('a8b44ec38a996a24274f984030a13aa7')
     const ancla = '  if p_recepcion is not null then select raw_document_url into v_url from goods_receipt where id = p_recepcion; end if;\n'
     const a = nueva.indexOf(ancla) + ancla.length
     const bloque = nueva.slice(a, nueva.indexOf('  end if;\n', a) + '  end if;\n'.length)
@@ -1522,11 +1522,11 @@ describe('la tanda de AHORA (manifiesto vivo): D03 · la recibida sin recepción
     expect(bloque).toContain("= 'receipt-uploads'")
     expect(bloque.replace(/--.*$/gm, '')).not.toMatch(/\b(insert|update|delete)\b/i)
   })
-  it('la 0500 no toca filas: solo reemplaza la función', () => {
+  it('la 0770 no toca filas: solo reemplaza la función', () => {
     const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '').replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, '$$$$')
     expect(t).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|truncate|drop\s+|alter\s+table)/i)
   })
-  it('la 0510 solo toca las dos de Foodint, ancladas por cuenta, factura y lectura, y para si no son ellas', () => {
+  it('la 0780 solo toca las dos de Foodint, ancladas por cuenta, factura y lectura, y para si no son ellas', () => {
     const d = readFileSync(viva[1], 'utf8')
     expect(d).toContain("v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710'")
     expect(d).toContain("array['9a87fa22-fbc7-471b-bf1d-a88c856259ea', 'd6913598-9f52-4d43-8860-eddff2a6d436']::uuid[]")

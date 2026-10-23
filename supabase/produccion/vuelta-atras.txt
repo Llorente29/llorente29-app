@@ -4,5 +4,5 @@
 # el D02 ya ha hecho algo con ella) y después _compras_factura_desde_papel la
 # de antes, byte a byte.
 cuenta: scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
-supabase/vuelta-atras/20261206T0510_d03_recibida_pdf_datos.down.sql
-supabase/vuelta-atras/20261206T0500_d03_recibida_pdf_sin_recepcion.down.sql
+supabase/vuelta-atras/20261206T0780_d03_recibida_pdf_datos.down.sql
+supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql
