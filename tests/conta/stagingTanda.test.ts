@@ -32,10 +32,10 @@ describe('lo que añade una rama o un push al manifiesto', () => {
 
 describe('qué se puede ensayar en ROLLBACK', () => {
   const hoy = lineas(readFileSync(MANIFIESTO, 'utf8'))
-  it('los 116 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02, la 0470 del D02, la 0480 del E05, la 0490 del S02 · PR 3, la 0770, la 0780 y la 0790 del D03 y la 0800 y la 0810 del D06 y la 0820 del D07a, cada una con su prueba) se ensayan, y 53 llevan su propia transacción', () => {
-    expect(hoy).toHaveLength(116)
+  it('los 118 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02, la 0470 del D02, la 0480 del E05, la 0490 del S02 · PR 3, la 0770, la 0780 y la 0790 del D03 y la 0800 y la 0810 del D06 la 0820 del D07a y la 0830 del D07c, cada una con su prueba) se ensayan, y 54 llevan su propia transacción', () => {
+    expect(hoy).toHaveLength(118)
     expect(hoy.filter((f) => porQueNoSeEnsaya(readFileSync(f, 'utf8')))).toEqual([])
-    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(53)
+    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(54)
   })
   it('una migración vieja con COMMIT no se ensaya: dejaría cosas de verdad', () => {
     const f = 'supabase/migrations/20260923T0015_casar_el_combo_por_su_id.sql'

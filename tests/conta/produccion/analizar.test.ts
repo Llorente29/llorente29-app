@@ -1459,11 +1459,11 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): D07a · las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820)', () => {
+describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 23/10 a las 13:24 UTC, con la 0810 ya aplicada, para ESTE fichero.
+  // lectura en producción el 23/10 a las 13:38 UTC, con la 0810 ya aplicada, para ESTOS ficheros.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
@@ -1472,14 +1472,18 @@ describe('la tanda de AHORA (manifiesto vivo): D07a · las recibidas que Diez re
   const nombre = (f: string) => f.replace(/^.*\//, '')
   const PRUEBA = 'supabase/staging/sql/20261208_d07a_diez_reenviar_prueba.sql'
   const DOWN = 'supabase/vuelta-atras/20261208T0820_d07a_diez_reenviar_descripcion.down.sql'
+  const PRUEBA_C = 'supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql'
+  const DOWN_C = 'supabase/vuelta-atras/20261208T0830_d07c_prepago_en_todas_las_listas.down.sql'
 
-  it('un fichero, el medido; pide «autorizo» (cambia datos de Foodint); nada del camino del pedido; nada registrado aún', () => {
-    expect(viva.map(nombre)).toEqual(['20261208T0820_d07a_diez_reenviar_descripcion.sql'])
+  it('dos ficheros, los medidos; la 0820 (datos de Foodint) pide «autorizo» y la 0830 sigue; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261208T0820_d07a_diez_reenviar_descripcion.sql', '20261208T0830_d07c_prepago_en_todas_las_listas.sql'])
     expect(Object.keys(medida.tanda)).toEqual(viva)
     for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
     expect(r.ficheros[viva[0]]).toMatch(/autorizo/i)
-    expect(ctx.tablas).toEqual(['public.external_send'])
-    expect(ctx.funciones).toEqual([])
+    expect(r.ficheros[viva[1]]).toBe('sigue')
+    expect(ctx.tablas).toEqual(['public.customer_fiscal', 'public.external_send', 'public.payment_method', 'public.supplier_invoice'])
+    expect(ctx.funciones).toEqual(['public.conta_recibida_guardar(uuid,jsonb,text)', 'public.mark_supplier_invoice_paid(uuid,date,text)'])
+    expect(ctx.otras).toEqual({})
     expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
     expect(ctx.registro).toEqual([])
   })
@@ -1508,10 +1512,33 @@ describe('la tanda de AHORA (manifiesto vivo): D07a · las recibidas que Diez re
     const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
     expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
     const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d07a-diez-reenviar.sql'])
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql'])
     const c = readFileSync(cuentas[0], 'utf8')
     expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN_C, DOWN])
+  })
+  it('la 0830: las cinco declaradas con su prueba; las dos funciones cambian SOLO en la lista y el error, y la vuelta atrás las deja como en producción byte a byte', () => {
+    const t = readFileSync(viva[1], 'utf8')
+    const cab = t.split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual(['public.conta_recibida_guardar', 'public.mark_supplier_invoice_paid', 'public.supplier_invoice', 'public.customer_fiscal', 'public.payment_method']
+      .map((o) => `-- cambia: ${o} · prueba: ${PRUEBA_C}`))
+    const def = (s: string, fn: string) => { const a = s.indexOf(`CREATE OR REPLACE FUNCTION public.${fn}(`); return s.slice(a, s.indexOf('end $function$', a) + 'end $function$'.length) }
+    const d = readFileSync(DOWN_C, 'utf8')
+    expect(md5(def(d, 'conta_recibida_guardar') + '\n')).toBe('08126d47a81d33fbb3826ce6b84179d8')
+    expect(md5(def(d, 'mark_supplier_invoice_paid') + '\n')).toBe('192d75fa8906f443db5800ee209b0e9a')
+    expect(md5(def(t, 'conta_recibida_guardar') + '\n')).toBe('5eecff4e2fea2a335fe7323cc1cc638e')
+    expect(md5(def(t, 'mark_supplier_invoice_paid') + '\n')).toBe('7ec159755cec7bf80a8b548f9f213d9a')
+    // La de guardar: solo la lista (con «prepaid» y su nombre) y el error en español.
+    expect(def(t, 'conta_recibida_guardar')).toContain('"prepaid": "Saldo prepago Catcher (40700001)"')
+    expect(def(t, 'conta_recibida_guardar')).not.toContain('transfer, direct_debit, card o cash')
+    expect(def(t, 'mark_supplier_invoice_paid')).toContain("('transfer','direct_debit','card','cash','prepaid')")
+    // Los CHECK solo amplían.
+    for (const c of ['supplier_invoice_paid_method_check', 'customer_fiscal_payment_method_check', 'payment_method_kind_check']) expect(t).toContain(`drop constraint if exists ${c};`)
+    const p = readFileSync(PRUEBA_C, 'utf8')
+    for (const x of [`\\i ${viva[1]}`, `\\i ${DOWN_C}`, 'set local role authenticated', 'c01b0000-0000-4000-8000-0000000000b1', '08126d47a81d33fbb3826ce6b84179d8', '5eecff4e2fea2a335fe7323cc1cc638e', '"forma_pago": "prepaid"']) expect(p).toContain(x)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA_C)).toBeGreaterThan(m.indexOf(viva[1]))
   })
 })
 

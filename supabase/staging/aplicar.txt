@@ -515,3 +515,11 @@ supabase/staging/sql/20261207_d06_prepago_y_pdf_prueba.sql
 # tocan ningún envío; B no ve los de A.
 supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
 supabase/staging/sql/20261208_d07a_diez_reenviar_prueba.sql
+#
+# D07c · «Saldo prepago» en todas las listas de formas de pago (la misma rama
+# y la misma tanda que la 0820). La 0830 cambia en caliente dos funciones y
+# tres CHECK: desde la rama va en ROLLBACK (W05). Su prueba (ROLLBACK): guardar
+# en la ficha una recibida con «Saldo prepago Catcher» como usuario de A; el
+# error en español; las demás listas; B no; y la vuelta atrás byte a byte.
+supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql
+supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql
