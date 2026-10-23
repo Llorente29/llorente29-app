@@ -30,6 +30,11 @@ export const PESTANAS: { id: Exclude<IdPestana, 'todas'>; etiqueta: string; siem
   { id: 'otras', etiqueta: 'Otras', siempre: false },
 ]
 
+/** D04 · Lo que cuenta la cola de la ficha («1 de 77 por revisar»): el nombre de su pestaña, en minúscula. */
+export function queCuentaLaCola(p: IdPestana): string {
+  return p === 'todas' ? 'en total' : (PESTANAS.find((x) => x.id === p)?.etiqueta ?? '').toLowerCase()
+}
+
 /** La pestaña de la dirección; las de antes del S02 (?ver=para-mirar…) caen en la suya. */
 export function pestanaDe(ver: string | null): IdPestana {
   if (ver === 'para-mirar') return 'por-revisar'

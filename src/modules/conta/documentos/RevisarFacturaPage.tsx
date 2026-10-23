@@ -45,7 +45,7 @@ import { vencimientoAEnsenar } from '@/modules/conta/documentos/documentos'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import {
-  apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, ponerPapelRecibida, sinPapelRecibida, leerDocumentos, leerExtrasFacturas, leerFactura, leerFichaRecibida,
+  apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, ponerPapelRecibida, sinPapelRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida,
   plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura, urlDelPapel, verPropuestaFactura, type Apuntada,
 } from '@/modules/conta/services/documentosService'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
@@ -62,7 +62,8 @@ import {
   AsientoQueSeCrea, BarraCambios, DocumentoFicha, Ficha, NavegaFicha, Veredicto, conCambio, listaRecordada, recordarLista, useAvisoSalir, useCambiosSinGuardar,
   type MensajeGuardado, type ResultadoGuardar,
 } from '@/modules/conta/diseno/plantillas'
-import { LISTA_RECIBIDAS, colaDeFacturas, filasDeLaLista, filtrosDe, ventanaDe } from '@/modules/conta/documentos/recibidas'
+import { LISTA_RECIBIDAS, filtrosDe, queCuentaLaCola, ventanaDe } from '@/modules/conta/documentos/recibidas'
+import { colaRecibidas } from '@/modules/conta/documentos/colaRecibidas'
 import { motivoGasto, motivoImportes, motivoProveedor, veredictoFactura, type Comprobacion } from '@/modules/conta/documentos/veredicto'
 import {
   ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
@@ -115,12 +116,9 @@ export default function RevisarFacturaPage() {
   // La cola: la de la lista de la que se vino, con sus filtros y su orden, y de la empresa activa (como la lista y la barra).
   const filtros = filtrosDe(query)
   const { desde, hasta } = ventanaDe(filtros.mes, hoy)
-  const lista = useLeer(empresa && accountId ? async () => {
-    const d = await leerDocumentos(empresa, desde, hasta)
-    const ids = d.filas.filter((x) => x.tipo === 'factura').map((x) => x.id)
-    const extras = await leerExtrasFacturas(accountId, ids).catch(() => new Map())
-    return colaDeFacturas(filasDeLaLista(d.filas, extras, filtros))
-  } : null, `${empresa}:${desde}:${hasta}:${search}:${vuelta}`)
+  // D04: la misma lectura que la barra (colaRecibidas).
+  const lista = useLeer(empresa && accountId ? () => colaRecibidas(accountId, empresa, desde, hasta, filtros) : null,
+    `${empresa}:${desde}:${hasta}:${search}:${vuelta}`)
   const ids = useUltimo(lista.datos, `${empresa}:${search}`) ?? []
   const pos = ids.indexOf(invoiceId)
 
@@ -518,11 +516,11 @@ export default function RevisarFacturaPage() {
         estado={estado}
         frase={<span data-prueba="de-donde-vino">{frase}</span>}
         migasExtra={migasExtra}
-        derecha={<NavegaFicha pos={pos + 1} total={ids.length} anterior={anterior ? () => pedirSalir(() => ir(anterior)) : null} siguiente={siguiente ? () => pedirSalir(() => ir(siguiente)) : null} />}
+        derecha={<NavegaFicha pos={pos + 1} total={ids.length} que={queCuentaLaCola(filtros.pestana)} anterior={anterior ? () => pedirSalir(() => ir(anterior)) : null} siguiente={siguiente ? () => pedirSalir(() => ir(siguiente)) : null} />}
         masAcciones={mas}
         principal={botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}
       />
-      <Ficha datos={datos} documento={documento} documentoOculto={marco?.documentoOculto ?? false} />
+      <Ficha datos={datos} documento={documento} documentoOculto={marco?.documentoOculto ?? false} usuario={userId} />
       <BotonPulgar>{botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}</BotonPulgar>
       {salida.aviso}
       {noEs !== null && <NoEsFactura inicial={noEs} alCerrar={() => setNoEs(null)} alDescartar={(m) => descartar(m)} fallo={falloDescarte} />}

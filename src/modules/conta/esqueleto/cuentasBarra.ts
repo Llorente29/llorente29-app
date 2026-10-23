@@ -48,7 +48,8 @@ export function frasePendientes(n: number): string {
 /** Cómo se dice cada parte de una cuenta del menú («9 facturas para mirar»). */
 const PARTES: Readonly<Record<string, (n: number) => string>> = {
   compras: (n) => `${n} ${n === 1 ? 'cosa de compras por decidir' : 'cosas de compras por decidir'}`,
-  recibidas: (n) => `${n} ${n === 1 ? 'factura para mirar' : 'facturas para mirar'}`,
+  // D04: «por revisar», como la pestaña y la ficha («1 de 77 por revisar»).
+  recibidas: (n) => `${n} ${n === 1 ? 'factura por revisar' : 'facturas por revisar'}`,
   aclarar: (n) => `${n} ${n === 1 ? 'factura por aclarar' : 'facturas por aclarar'}`,
   libros: (n) => `${n} ${n === 1 ? 'asiento por validar' : 'asientos por validar'}`,
   bancosConfirmar: (n) => `${n} para confirmar`,
@@ -58,6 +59,11 @@ const PARTES: Readonly<Record<string, (n: number) => string>> = {
 }
 
 /** Las partes de una lista de claves que tienen algo, dichas una a una. */
+/** D04 · Cada parte con su número y lo que es, para pintarla en su propio chip. */
+export function partesDe(c: CuentasMenu, claves: readonly string[]): { n: number; frase: string }[] {
+  return claves.flatMap((k) => { const n = c[k]; return typeof n === 'number' && n > 0 && PARTES[k] ? [{ n, frase: PARTES[k](n) }] : [] })
+}
+
 export function frasePartes(c: CuentasMenu, claves: readonly string[]): string | null {
   const partes = claves.flatMap((k) => { const n = c[k]; return typeof n === 'number' && n > 0 && PARTES[k] ? [PARTES[k](n)] : [] })
   return partes.length ? partes.join(', ') : null
