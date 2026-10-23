@@ -32,7 +32,7 @@ select clave, valor from (
   select 7, 'CHECK con prepaid (paid_method, customer_fiscal, payment_method.kind)',
          (select count(*) from pg_constraint where conname in ('supplier_invoice_paid_method_check', 'customer_fiscal_payment_method_check', 'payment_method_kind_check')
              and pg_get_constraintdef(oid) like '%prepaid%')::text union all
-  select 8, 'fila «Saldo prepago» en el catálogo', (select count(*) from public.payment_method where is_system and account_id is null and kind = 'prepaid')::text union all
+  select 8, 'fila «Saldo prepago» en el catálogo de Foodint', (select count(*) from public.payment_method where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and kind = 'prepaid')::text union all
   select 9, 'facturas pagadas con prepaid y clientes con prepaid (todas las cuentas)',
          ((select count(*) from public.supplier_invoice where paid_method = 'prepaid') || ' y ' || (select count(*) from public.customer_fiscal where payment_method = 'prepaid'))
 ) t order by o;

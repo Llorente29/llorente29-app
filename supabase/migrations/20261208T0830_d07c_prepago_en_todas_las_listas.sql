@@ -26,9 +26,10 @@
 --   3. supplier_invoice_paid_method_check (con qué se pagó): solo amplía.
 --   4. customer_fiscal_payment_method_check (la ficha fiscal del cliente):
 --      solo amplía, para que todas las listas digan lo mismo.
---   5. payment_method_kind_check (el catálogo de formas de pago) y su fila de
---      sistema «Saldo prepago Catcher (40700001)»: de ahí sale el desplegable
---      de la ficha del proveedor. La fila, si no está.
+--   5. payment_method_kind_check (el catálogo de formas de pago) y la fila
+--      «Saldo prepago Catcher (40700001)» de la empresa de Foodint (propia,
+--      no de sistema): de ahí sale el desplegable de la ficha del proveedor.
+--      La fila, si no está.
 -- Las que NO se tocan, y por qué: tax_obligation/tax_return payment_mode (cómo
 -- se paga un impuesto a Hacienda: domiciliación, NRC…, no la forma de pago de
 -- una factura); _bank_factura_aprobada_con_pago (no comprueba una lista:
@@ -36,7 +37,7 @@
 --
 -- Misma firma en las dos funciones: create or replace, sin sobrecarga (regla 2).
 -- Los CHECK solo amplían: toda fila que cabía antes cabe ahora. No toca filas
--- salvo la del catálogo (nueva). No toca el camino del pedido.
+-- salvo la del catálogo (nueva, de Foodint). No toca el camino del pedido.
 -- sin hueco: no retira nada al aplicarse; el «delete from journal_entry» va
 -- dentro de conta_recibida_guardar (el de la 0790, sin tocar) y solo quita el
 -- asiento PROPUESTO de una recibida que alguien acaba de cambiar, para que se
@@ -385,10 +386,16 @@ alter table public.customer_fiscal drop constraint if exists customer_fiscal_pay
 alter table public.customer_fiscal add constraint customer_fiscal_payment_method_check
   check (payment_method is null or payment_method in ('transfer', 'direct_debit', 'card', 'cash', 'prepaid'));
 
--- 5 · El catálogo y su fila de sistema ----------------------------------------------------
+-- 5 · El catálogo y la fila de Foodint ------------------------------------------------------
 alter table public.payment_method drop constraint if exists payment_method_kind_check;
 alter table public.payment_method add constraint payment_method_kind_check
   check (kind in ('transfer', 'direct_debit', 'card', 'cash', 'other', 'prepaid'));
+-- Una fila PROPIA de la empresa de Foodint, no de sistema: una de sistema exige su
+-- base legal y su fuente oficial (payment_method_serie), y «Saldo prepago
+-- Catcher» no es una forma de pago de la ley, es la de Catcher. Anclada por
+-- cuenta y empresa (regla 9). En una base sin Foodint (staging), ninguna.
 insert into public.payment_method (account_id, company_id, is_system, code, name, example, kind, sort_order)
-select null, null, true, 'saldo_prepago', 'Saldo prepago Catcher (40700001)', 'Se descuenta del saldo que recargas por adelantado', 'prepaid', 50
- where not exists (select 1 from public.payment_method where is_system and account_id is null and kind = 'prepaid');
+select c.account_id, c.id, false, 'saldo_prepago', 'Saldo prepago Catcher (40700001)', 'Se descuenta del saldo que recargas por adelantado en Catcher', 'prepaid', 50
+  from public.company c
+ where c.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and c.id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9'
+   and not exists (select 1 from public.payment_method p where p.company_id = c.id and p.kind = 'prepaid');

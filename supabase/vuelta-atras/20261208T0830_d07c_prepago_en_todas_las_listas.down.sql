@@ -16,7 +16,8 @@ begin
     raise exception 'D07c 0830 vuelta atrás: hay facturas pagadas o clientes con «prepaid»: cámbialos antes.';
   end if;
 end $$;
-delete from public.payment_method where is_system and account_id is null and kind = 'prepaid' and code = 'saldo_prepago';
+delete from public.payment_method where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9'
+   and kind = 'prepaid' and code = 'saldo_prepago';
 alter table public.payment_method drop constraint if exists payment_method_kind_check;
 alter table public.payment_method add constraint payment_method_kind_check
   check (kind in ('transfer', 'direct_debit', 'card', 'cash', 'other'));

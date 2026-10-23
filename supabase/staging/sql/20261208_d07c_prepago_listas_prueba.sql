@@ -14,11 +14,11 @@
 --      forma, sin claves en inglés.
 --   4. Las demás listas: mark_supplier_invoice_paid admite prepaid (y su error
 --      sale en español); los CHECK de supplier_invoice.paid_method,
---      customer_fiscal y payment_method admiten prepaid; el catálogo tiene su
---      fila «Saldo prepago Catcher (40700001)».
+--      customer_fiscal y payment_method admiten prepaid (una fila propia de A,
+--      «Saldo prepago Catcher (40700001)»; la de Foodint no está en staging).
 --   5. B no guarda en la ficha de A.
---   6. La vuelta atrás: las dos funciones byte a byte, sin la fila del
---      catálogo. Y otra vez delante: los md5 nuevos.
+--   6. La vuelta atrás: las dos funciones byte a byte, sin la fila de
+--      Foodint. Y otra vez delante: los md5 nuevos.
 
 begin;
 do $$ begin
@@ -108,9 +108,9 @@ declare v_msg text;
 begin
   update public.supplier_invoice set paid_method = 'prepaid' where id = 'd07c0000-0000-4000-8000-000000000830';
   update public.supplier_invoice set paid_method = null where id = 'd07c0000-0000-4000-8000-000000000830';
-  if not exists (select 1 from public.payment_method where is_system and account_id is null and kind = 'prepaid' and name = 'Saldo prepago Catcher (40700001)') then
-    raise exception 'PRUEBA D07c · 4: el catálogo no tiene «Saldo prepago Catcher».';
-  end if;
+  -- La fila de Foodint no está en staging (sin Foodint): el catálogo admite una propia de A con «prepaid».
+  insert into public.payment_method (account_id, company_id, is_system, code, name, kind, sort_order)
+  values ('c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', false, 'saldo_prepago_prueba', 'Saldo prepago Catcher (40700001)', 'prepaid', 50);
   if pg_get_constraintdef((select oid from pg_constraint where conname = 'customer_fiscal_payment_method_check')) not like '%prepaid%' then
     raise exception 'PRUEBA D07c · 4: la ficha fiscal del cliente no admite prepaid.';
   end if;
@@ -135,11 +135,12 @@ reset role;
 
 -- 6 · La vuelta atrás, y otra vez delante.
 update public.supplier_invoice set payment_method = null where id = 'd07c0000-0000-4000-8000-000000000830';
+delete from public.payment_method where code = 'saldo_prepago_prueba';
 \i supabase/vuelta-atras/20261208T0830_d07c_prepago_en_todas_las_listas.down.sql
 do $$ begin
   if md5(pg_get_functiondef('public.conta_recibida_guardar(uuid,jsonb,text)'::regprocedure)) <> '08126d47a81d33fbb3826ce6b84179d8'
      or md5(pg_get_functiondef('public.mark_supplier_invoice_paid(uuid,date,text)'::regprocedure)) <> '192d75fa8906f443db5800ee209b0e9a'
-     or exists (select 1 from public.payment_method where kind = 'prepaid') then
+     or exists (select 1 from public.payment_method where kind = 'prepaid' and code = 'saldo_prepago') then
     raise exception 'PRUEBA D07c · 6: la vuelta atrás no deja las funciones byte a byte o deja la fila del catálogo.';
   end if;
 end $$;

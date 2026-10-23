@@ -3,7 +3,7 @@
   "medido": "2026-10-23T13:38Z",
   "tanda": {
     "supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql": "62a9812899ca0c6cc9f36f70ebb8c4a8",
-    "supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql": "fe022a507ac743d9d292010b0edf3229"
+    "supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql": "56b895348707cbcc42c4c613a7be8edd"
   },
   "contexto": {
     "tablas": ["public.customer_fiscal", "public.external_send", "public.payment_method", "public.supplier_invoice"],
