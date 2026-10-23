@@ -51,9 +51,30 @@ describe('el veredicto', () => {
     expect(veredictoFactura(base({ propuesta: null, porqueSinPropuesta: 'El mes está cerrado' })).porque).toBe('El mes está cerrado.')
     expect(veredictoFactura(base({ fecha: null })).tipo).toBe('no_encaja')
   })
-  it('la cuenta probable o un aviso: «Revisa esto», con el primero que pesa', () => {
-    expect(veredictoFactura(base({ propuesta: { confianza: 'probable', avisos: [], razones: [] } })).tipo).toBe('revisa')
+  // Ficha completa, punto 8 (Julio): «Revisa esto» solo cuando falta algo de verdad, y diciendo qué.
+  // Antes, una propuesta «probable» sin razón decía «la cuenta de gasto no está confirmada» aunque el
+  // gasto fuera el de su ficha y los importes cuadraran (la COHELDI P26 4.980: era «probable» solo
+  // porque la factura no tenía local, y el local estaba en su recepción).
+  it('probable SIN razón, con el gasto de su ficha y los importes cuadrando: lista (no hay nada que revisar)', () => {
+    expect(veredictoFactura(base({ propuesta: { confianza: 'probable', avisos: [], razones: [] } })).tipo).toBe('lista')
+  })
+  it('probable CON razón: «Revisa esto», diciendo qué falta', () => {
+    const comun = veredictoFactura(base({ propuesta: { confianza: 'probable', avisos: [], razones: [{ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }] } }))
+    expect(comun.tipo).toBe('revisa')
+    expect(comun.porque).toMatch(/^No sé de qué local es/)
+    const varias = veredictoFactura(base({ propuesta: { confianza: 'probable', avisos: [], razones: [{ decision: 'Gasto', porque: 'Las 12 facturas anteriores de este proveedor fueron a 2 cuentas; la más reciente, a Compras · 60000000 (9 de 12). Probable, no segura: confírmalo. (aprendido de Diez)' }] } }))
+    expect(varias.porque).toMatch(/fueron a 2 cuentas/)
+    expect(varias.porque).not.toMatch(/aprendido de Diez/)
+    expect(veredictoFactura(base({ propuesta: { confianza: 'probable', avisos: [], razones: [] }, origenGasto: null })).porque).toBe('No sé de dónde sale la cuenta de gasto: confírmala.')
+  })
+  it('un aviso de la propuesta: «Revisa esto», con el primero que pesa', () => {
     expect(veredictoFactura(base({ propuesta: { confianza: 'seguro', avisos: ['Trae retención y su ficha no'], razones: [] } })).porque).toBe('Trae retención y su ficha no.')
+  })
+  it('lo aprendido de sus facturas y los importes cuadrando con el PDF (sin lectura propia): lista, en una frase', () => {
+    const v = veredictoFactura(base({ comprobaciones: [], origenGasto: 'aprendido de Diez', cuadraConElPdf: true, pagada: null }))
+    expect(v.tipo).toBe('lista')
+    expect(v.porque).toBe('El proveedor coincide con su ficha y el gasto es el de sus facturas anteriores, y los importes del PDF cuadran.')
+    expect(veredictoFactura(base({ comprobaciones: [], cuadraConElPdf: false })).tipo).toBe('revisa')
   })
   it('ya validada o descartada', () => {
     expect(veredictoFactura(base({ validada: true, numeroAsiento: 812 })).porque).toBe('Tiene su asiento validado (el 812): no hay nada que hacer.')

@@ -218,9 +218,11 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
   const sin = filaDe(page, 'Proveedor nuevo')
   await expect(sin.first()).toBeVisible()
   await sin.first().getByRole('button').click()
-  const deQuien = page.getByRole('region', { name: '¿De quién es?' })
+  // Ficha completa (tablero 3b): el proveedor se elige en su campo, en «Proveedor y
+  // factura», como todo lo demás; se confirma con «Guardar cambios» (ya no «Es este»).
+  const deQuien = page.getByRole('region', { name: 'Proveedor y factura' })
   await expect(deQuien.getByRole('combobox', { name: 'Proveedor' })).toBeVisible()
-  await expect(deQuien.getByRole('button', { name: 'Es este' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Es este' })).toHaveCount(0)
   // Esc vuelve a la lista como se dejó: la pestaña, el filtro y la fila marcada.
   await page.keyboard.press('Escape')
   await expect(page).toHaveURL(/\/conta\/documentos\?.*ver=por-aclarar/)
@@ -241,10 +243,13 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
   await expect(frase).toHaveText(/^Llegó por correo/)
   await expect(frase).not.toContainText(/llegó por a mano|llegó por Subida|llegó por Correo/)
   // S02: «Lo que he leído» ya no existe; lo que decía va en sus bloques.
-  const importes = page.getByRole('region', { name: 'Importes' })
-  await expect(importes).toContainText('10 %')
-  await expect(importes).toContainText('1.283,15 €')
-  await expect(importes).toContainText('1.411,47 €')
+  // Ficha completa (tablero 3b): «Importes por tipo de IVA», una línea por tipo con
+  // base, tipo y cuota que se editan, y debajo base, IVA y total contra el PDF.
+  const importes = page.getByRole('region', { name: 'Importes por tipo de IVA' })
+  await expect(importes.getByRole('combobox', { name: 'Tipo de IVA de la línea 1' })).toHaveValue('10')
+  await expect(importes.getByLabel('Base al 10 %')).toHaveValue('1.283,15')
+  await expect(importes.locator('[data-prueba="totales-iva"]')).toContainText('1.283,15')
+  await expect(importes.locator('[data-prueba="totales-iva"]')).toContainText('1.411,47 €')
   const gasto = page.getByRole('region', { name: 'A qué gasto va' })
   await expect(gasto).toContainText('60000000')
   // «elegida en su ficha»: el motivo de la cuenta, en palabras.
@@ -252,7 +257,8 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
   // R5 · 1: el vencimiento del papel («Vencimiento: 10/11/2026 · transferencia»)
   // manda. S02: va en «A qué gasto va» o, con locales, en «Pago».
   const datosFicha = page.locator('.s-ficha-datos')
-  await expect(datosFicha).toContainText('10/11/2026')
+  // Ficha completa: el vencimiento es un campo que se edita, en «Pago».
+  await expect(page.getByRole('region', { name: 'Pago' }).getByLabel('Vence', { exact: true })).toHaveValue('10/11/2026')
   await expect(datosFicha).toContainText(/lo dice la factura/i)
   await expect(datosFicha).not.toContainText('sin vencimiento')
   // R5 · 5: mientras no esté apuntada, el veredicto no está en verde. S02: la
@@ -310,11 +316,14 @@ test('Cuenta A: N22 con sus filas y su porqué, N23 con el papel y «Validar y s
     await expect.poll(async () => (await papel.boundingBox())!.height).toBeLessThanOrEqual(alto * 0.6 + 2)
   }
   await capturar(page, 'n23-revisar-a')
-  // S02: «Otra cosa» ya no es un botón a la vista: el diálogo «¿Qué le pasa?»
-  // se abre con «No es de este proveedor», en «Más acciones».
+  // Ficha completa (tablero 3b): «Más acciones» trae Cambiar el PDF · Marcar como
+  // duplicada · Descartar con motivo · Ver el historial. El proveedor se cambia en
+  // su campo («Cambiar de proveedor»), no en un diálogo aparte.
   await page.locator('header.s-encabezado').getByRole('button', { name: 'Más acciones' }).click()
-  await page.getByRole('group', { name: 'Más acciones' }).getByRole('button', { name: 'No es de este proveedor' }).click()
-  await expect(page.getByRole('dialog', { name: '¿Qué le pasa?' })).toBeVisible()
+  const masAcciones = page.getByRole('group', { name: 'Más acciones' })
+  for (const a of ['Cambiar el PDF', 'Marcar como duplicada', 'Descartar con motivo', 'Ver el historial']) await expect(masAcciones.getByRole('button', { name: a })).toBeVisible()
+  await masAcciones.getByRole('button', { name: 'Descartar con motivo' }).click()
+  await expect(page.getByRole('dialog', { name: 'Descartar con motivo' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   // Esc con el diálogo abierto cierra el diálogo, no la ficha.

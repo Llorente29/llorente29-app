@@ -213,3 +213,80 @@
 .cxr-comprobado .cxr-falta span { font-weight: 700; }
 .cxr-plegable > summary { cursor: pointer; list-style: revert; }
 .cxr-plegable > summary h2 { display: inline; }
+
+/* ── Ficha completa de la recibida (tablero 3b): FichaRecibidaBloques ── */
+.cxf-barra { position: sticky; top: 0; z-index: 3; }
+.cxf-campo .s-control { width: 100%; min-width: 0; }
+.cxf-error { margin: 0; font-size: var(--s-t-s); color: var(--s-falta); }
+.cxf-validar { display: inline-flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.cxf-guarda-primero { font-size: var(--s-t-s); color: var(--s-duda); }
+
+.cxf-iva, .cxf-gasto { display: flex; flex-direction: column; gap: var(--s-2); }
+.cxf-iva-cabeza, .cxf-iva-linea { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.4fr) var(--s-tactil); gap: var(--s-2); align-items: center; }
+.cxf-iva-cabeza, .cxf-gasto-cabeza { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.cxf-iva-rotulo { font-size: var(--s-t-s); color: var(--s-tinta); }
+.cxf-importe { text-align: right; font-family: var(--s-letra-cifras); font-variant-numeric: tabular-nums; }
+.cxf-iva[data-cambiado] .cxf-iva-linea .s-control,
+.cxf-iva-linea[data-cambiado] .s-control,
+.cxf-gasto[data-cambiado] .s-control { border-color: var(--s-duda); background: var(--s-duda-fondo); }
+.cxf-quitar {
+  display: inline-flex; align-items: center; justify-content: center; min-height: var(--s-tactil); min-width: var(--s-tactil);
+  border: 0; background: none; color: var(--s-apoyo); cursor: pointer; border-radius: var(--s-radio-boton);
+}
+.cxf-quitar:hover { color: var(--s-falta); background: var(--s-suave); }
+.cxf-anadir { display: flex; gap: var(--s-4); flex-wrap: wrap; }
+.cxf-totales {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2) var(--s-4); padding: var(--s-3) var(--s-4);
+  background: var(--s-suave); border-radius: var(--s-radio-campo); font-size: var(--s-t-s); color: var(--s-apoyo);
+}
+.cxf-totales strong { color: var(--s-tinta); }
+.cxf-total { margin-left: auto; font-size: var(--s-t-m); }
+.cxf-contra { display: inline-flex; align-items: center; gap: var(--s-1); font-weight: var(--s-peso-medio); }
+.cxf-contra[data-igual='si'] { color: var(--s-ok); }
+.cxf-contra[data-igual='no'] { color: var(--s-duda); background: var(--s-duda-fondo); padding: 0 var(--s-2); border-radius: var(--s-radio-pildora); }
+.cxf-antes { display: flex; flex-direction: column; gap: var(--s-1); }
+
+.cxf-gasto-cabeza, .cxf-gasto-linea { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) var(--s-tactil); gap: var(--s-2); align-items: center; }
+.cxf-gasto-cabeza[data-con-local], .cxf-gasto-linea[data-con-local] { grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) var(--s-tactil); }
+.cxf-gasto-cabeza > span:first-child { display: inline-flex; gap: var(--s-2); align-items: center; }
+.cxf-cuenta { position: relative; min-width: 0; }
+.cxf-cuenta-boton { display: flex; align-items: center; gap: var(--s-2); width: 100%; text-align: left; cursor: pointer; min-width: 0; }
+.cxf-gasto-linea[data-tono='propuesto'] .cxf-cuenta-boton { background: var(--s-propuesto); border-color: var(--s-propuesto-borde); }
+.cxf-cuenta-codigo { font-size: var(--s-t-m); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.cxf-cuenta-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--s-tinta); }
+.cxf-cuenta .s-hoja-buscar { position: absolute; z-index: 5; left: 0; right: 0; }
+
+.cxf-derecha { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.cxf-papel-acciones { display: flex; justify-content: flex-end; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); }
+.cxf-hueco { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); }
+.cxf-soltar {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-6) var(--s-4); text-align: center;
+  border: var(--s-linea) dashed var(--s-borde-control); border-radius: var(--s-radio-bloque); background: var(--s-superficie); color: var(--s-tinta);
+}
+.cxf-soltar[data-encima] { border-color: var(--s-accion); background: var(--s-accion-suave); }
+.cxf-soltar p { margin: 0; }
+.cxf-sin-pdf { display: flex; flex-direction: column; gap: var(--s-2); }
+.cxf-casilla { display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--s-tactil); }
+.cxf-motivo { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--s-t-s); color: var(--s-apoyo); }
+
+.cxf-historial {
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); padding: var(--s-4);
+}
+.cxf-historial h2 { margin: 0 0 var(--s-2); font-size: var(--s-t-m); }
+.cxf-historial ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--s-t-s); color: var(--s-tinta); }
+
+.cxf-a-mano { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); border: var(--s-linea) solid var(--s-duda); border-radius: var(--s-radio-bloque); }
+.cxf-a-mano ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-2); }
+.cxf-a-mano-linea { position: relative; display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: var(--s-2); align-items: center; }
+.cxf-a-mano-linea .s-hoja-buscar { position: absolute; z-index: 5; left: 7em; right: 0; top: 100%; }
+.cxf-a-mano-form { display: flex; flex-direction: column; gap: var(--s-4); }
+
+@media (max-width: 767px) {
+  .cxf-iva-cabeza, .cxf-gasto-cabeza { display: none; }
+  .cxf-iva-linea { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--s-tactil); }
+  .cxf-iva-linea > :nth-child(3) { grid-column: 1 / 3; }
+  .cxf-gasto-linea, .cxf-gasto-linea[data-con-local] { grid-template-columns: minmax(0, 1fr) var(--s-tactil); }
+  .cxf-gasto-linea > :not(:last-child) { grid-column: 1; }
+  .cxf-total { margin-left: 0; }
+  .cxf-fila-proveedor { grid-template-columns: minmax(0, 1fr); }
+}

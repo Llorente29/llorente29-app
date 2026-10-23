@@ -577,7 +577,7 @@ function proveedorDeParty(roles: readonly Fila[], partyId: string): string | nul
  * proponerPendientes, sacado para que una factura se apunte igual que en la tanda.
  */
 async function facturasDeProveedor(accountId: string, companyId: string, desde: string, hasta: string, ctx: ContextoLibro, r: ResultadoProponer,
-  quien: string | null, abierto: (f: string) => boolean, soloFactura?: string, ver?: (p: Propuesta) => void) {
+  quien: string | null, abierto: (f: string) => boolean, soloFactura?: string, ver?: (p: Propuesta) => void, localPropuesto?: string | null) {
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   const [leidas, socios] = await Promise.all([
     // Compras (10/10): las de esta empresa, y las de antes que no dicen de cuál.
@@ -639,7 +639,9 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const lote = f.source === 'lote' ? deLaFacturaDeLote(f, gasto, tipoDe, (id) => ctx.locales.get(id) ?? null) : null
     const res = facturaProveedor({
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: lote?.proveedor ?? s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
-      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id), total: n(f.grand_total),
+      // Ficha completa (tablero 3b): una sola factura sin local guardado lleva el de su
+      // recepción, el que la ficha enseña como PROPUESTO («el local sale de la recepción»).
+      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id) ?? (soloFactura ? localPropuesto ?? null : null), total: n(f.grand_total),
       // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
       lineas: lote?.lineas ?? ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
         const t = tipoDe(n(l.vat_pct))
@@ -689,10 +691,10 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
 }
 
 /** D01 · N23: propone la factura recibida (ya aprobada) como en la tanda. Lo que no se propone, dice por qué. */
-export async function proponerFactura(accountId: string, companyId: string, invoiceId: string, fecha: string, quien: string | null): Promise<ResultadoProponer> {
+export async function proponerFactura(accountId: string, companyId: string, invoiceId: string, fecha: string, quien: string | null, localPropuesto?: string | null): Promise<ResultadoProponer> {
   const ctx = await cargarContexto(accountId, companyId)
   const r: ResultadoProponer = { propuestas: 0, yaEstaban: 0, descartadas: 0, sinPropuesta: [], validadasSolas: 0, mesVentas: null, quedanDias: 0 }
-  await facturasDeProveedor(accountId, companyId, fecha, fecha, ctx, r, quien, (f) => diaAbierto(f, ctx.calendario), invoiceId)
+  await facturasDeProveedor(accountId, companyId, fecha, fecha, ctx, r, quien, (f) => diaAbierto(f, ctx.calendario), invoiceId, undefined, localPropuesto)
   return r
 }
 
@@ -701,12 +703,12 @@ export async function proponerFactura(accountId: string, companyId: string, invo
  * en revisión o ya aprobada), con el nombre de cada cuenta. No escribe nada.
  * Si no sale, dice por qué.
  */
-export async function verPropuestaFactura(accountId: string, companyId: string, invoiceId: string, fecha: string): Promise<
+export async function verPropuestaFactura(accountId: string, companyId: string, invoiceId: string, fecha: string, localPropuesto?: string | null): Promise<
   { propuesta: Propuesta; nombres: Map<string, string> } | { propuesta: null; porque: string }> {
   const ctx = await cargarContexto(accountId, companyId)
   const r: ResultadoProponer = { propuestas: 0, yaEstaban: 0, descartadas: 0, sinPropuesta: [], validadasSolas: 0, mesVentas: null, quedanDias: 0 }
   let vista: Propuesta | null = null
-  await facturasDeProveedor(accountId, companyId, fecha, fecha, ctx, r, null, (f) => diaAbierto(f, ctx.calendario), invoiceId, (p) => { vista = p })
+  await facturasDeProveedor(accountId, companyId, fecha, fecha, ctx, r, null, (f) => diaAbierto(f, ctx.calendario), invoiceId, (p) => { vista = p }, localPropuesto)
   const p = vista as Propuesta | null
   if (!p) return { propuesta: null, porque: r.sinPropuesta[0]?.porque ?? 'Esta factura no tiene propuesta todavía.' }
   const codigos = [...new Set(p.lineas.map((l) => l.cuenta))]

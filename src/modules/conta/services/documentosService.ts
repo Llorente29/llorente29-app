@@ -28,6 +28,7 @@ import type { DatosDocumentos, PlazoFicha } from '@/modules/conta/documentos/doc
 import { leerFactura as comprobarLectura, type Lectura, type LecturaModelo } from '../../../../supabase/functions/_shared/lecturaFactura.ts'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { MAX_BYTES_EXPEDIDA, claseDeFichero, motivoExpedida, nombreExpedida, rutaExpedida, tamano } from '@/modules/conta/lib/expedidaPdf'
+import { papelDeLaLectura } from '@/modules/conta/documentos/fichaRecibida'
 
 type Fila = Record<string, unknown>
 const RECEPCIONES = 'receipt-uploads'
@@ -100,9 +101,14 @@ export async function urlDePapelDeRecepcion(ruta: string | null | undefined): Pr
   return ruta ? getReceiptFileUrl(ruta) : null
 }
 
-/** El fichero tal como llegó, para verlo a la izquierda: una URL firmada. */
-export async function urlDelPapel(f: Pick<FacturaRevisar, 'llegada' | 'papel'>): Promise<string | null> {
-  return getReceiptFileUrl(f.llegada?.ruta ?? f.papel)
+/**
+ * El fichero tal como llegó, para verlo a la derecha: una URL firmada. Ficha
+ * completa: si la factura no tiene enlazado su papel (raw_document_url vacío),
+ * el que guardó su lectura (`deLaLectura`, de goods_receipt_ai_session.input_files):
+ * la COHELDI P26 4.980 lo tenía ahí y salía «sin fichero».
+ */
+export async function urlDelPapel(f: Pick<FacturaRevisar, 'llegada' | 'papel'>, deLaLectura?: string | null): Promise<string | null> {
+  return getReceiptFileUrl(f.llegada?.ruta ?? f.papel ?? deLaLectura ?? null)
 }
 
 export { verPropuestaFactura }
@@ -189,7 +195,7 @@ async function guardarFacturaPdf(f: FacturaRevisar, entryId: string, quien: stri
     .eq('account_id', f.account_id).eq('entry_id', entryId).eq('kind', 'factura_recibida').maybeSingle()
   if (yaError) throw new Error(`no se ha podido mirar si ya tiene su PDF (${yaError.message})`)
   if (ya) return
-  const ruta = f.llegada?.ruta ?? f.papel
+  const ruta = f.llegada?.ruta ?? f.papel ?? (await leerPapelDeLaLectura(f.account_id, f.id))
   if (!ruta) throw new Error('no tengo el fichero de la factura')
   const bajado = await supabase!.storage.from(RECEPCIONES).download(ruta)
   if (bajado.error || !bajado.data) throw new Error(`no se ha podido leer el fichero (${bajado.error?.message ?? 'vacío'})`)
@@ -264,7 +270,7 @@ export async function guardarExpedidaPdf(accountId: string, entryId: string, fic
  * Aprueba (como en Compras), propone su asiento (como la tanda), lo valida,
  * guarda su PDF y lo manda a Diez. Se para donde falle y lo dice.
  */
-export async function apuntarFactura(f: FacturaRevisar, quien: string | null, userId: string | null): Promise<Apuntada> {
+export async function apuntarFactura(f: FacturaRevisar, quien: string | null, userId: string | null, localPropuesto?: string | null): Promise<Apuntada> {
   const a: Apuntada = { aprobada: f.estado === 'aprobada', asiento: f.asiento?.id ?? null, validado: f.asiento?.estado === 'validado', documento: false, enDiez: false, texto: '' }
   try {
     if (!f.company_id) throw new Error('la factura no dice de qué empresa es')
@@ -272,7 +278,7 @@ export async function apuntarFactura(f: FacturaRevisar, quien: string | null, us
     if (!a.aprobada && f.estado === 'en_revision') { await approveInvoice(f.id, userId, quien); a.aprobada = true }
     if (!a.aprobada) throw new Error(`la factura está ${f.estado}`)
     if (!a.asiento) {
-      const r = await proponerFactura(f.account_id, f.company_id, f.id, f.fecha, quien)
+      const r = await proponerFactura(f.account_id, f.company_id, f.id, f.fecha, quien, localPropuesto)
       if (r.sinPropuesta.length) throw new Error(`aprobada, pero sin asiento: ${r.sinPropuesta[0].porque}`)
       const de = await leerFactura(f.id)
       a.asiento = de.asiento?.id ?? null
@@ -405,4 +411,135 @@ export async function leerExtrasFacturas(accountId: string, ids: readonly string
     })
   }
   return fuera
+}
+
+// ── La ficha de la recibida, completa (tablero 3b) ─────────────────────────
+//
+// Lo que la ficha enseña además de conta_factura_para_revisar: de dónde vino
+// (su recepción con su local y quién la hizo, la lectura de su fichero), su
+// historial (los sellos que ya se guardan: alta, aprobada, vence, pagos,
+// asiento, descarte), la forma de pago de su ficha y el papel de su lectura.
+// Todo por su cuenta (regla 9). Nombres de la base entre comillas (regla 40),
+// comprobados en information_schema el 23/10: supplier_invoice (id,
+// account_id, source, location_id, ai_session_id, created_at, created_by_name,
+// approved_at, approved_by_name, due_date_set_at, due_date_set_name,
+// discarded_at, discarded_by_name, discard_reason, supplier_id),
+// supplier_invoice_receipt (supplier_invoice_id, goods_receipt_id),
+// goods_receipt (id, account_id, receipt_date, location_id, created_at,
+// created_by_name), goods_receipt_ai_session (id, account_id, input_files,
+// created_at), supplier_invoice_payment_log (account_id, invoice_id, action,
+// paid_at, due_date, actor_name, created_at), journal_entry (account_id,
+// source_type, source_id, number, status, validated_at, validated_by_name,
+// created_at), supplier (id, account_id, payment_method), company_account
+// (account_id, company_id, code, name) y locations (id, account_id, name).
+
+export interface FichaExtra {
+  fuente: string | null
+  localId: string | null
+  creada: { cuando: string; quien: string | null }
+  aprobada: { cuando: string; quien: string | null } | null
+  venceCambiado: { cuando: string; quien: string | null } | null
+  descartada: { cuando: string; quien: string | null; motivo: string | null } | null
+  recepcion: { fecha: string; localId: string | null; local: string | null; quien: string | null; cuando: string | null } | null
+  lectura: { cuando: string; ruta: string | null; archivo: string | null } | null
+  pagos: { cuando: string; accion: string; quien: string | null; pagada: string | null; vence: string | null }[]
+  asiento: { numero: number | null; validado: { cuando: string; quien: string | null } | null; creado: string | null } | null
+  formaPagoFicha: string | null
+}
+
+const texto = (x: unknown): string | null => (typeof x === 'string' && x.trim() ? x : null)
+
+/** El papel que guardó la lectura de una factura, si no tiene otro. */
+async function leerPapelDeLaLectura(accountId: string, invoiceId: string): Promise<string | null> {
+  const { data } = await tabla('supplier_invoice').select('ai_session_id').eq('account_id', accountId).eq('id', invoiceId).maybeSingle()
+  const sesion = texto((data as Fila | null)?.ai_session_id)
+  if (!sesion) return null
+  const { data: a } = await tabla('goods_receipt_ai_session').select('input_files').eq('account_id', accountId).eq('id', sesion).maybeSingle()
+  return papelDeLaLectura((a as Fila | null)?.input_files)
+}
+
+export async function leerFichaRecibida(accountId: string, invoiceId: string): Promise<FichaExtra> {
+  const { data: d, error } = await tabla('supplier_invoice')
+    .select('id, source, location_id, ai_session_id, created_at, created_by_name, approved_at, approved_by_name, due_date_set_at, due_date_set_name, discarded_at, discarded_by_name, discard_reason, supplier_id')
+    .eq('account_id', accountId).eq('id', invoiceId).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer de dónde vino la factura', error))
+  const i = (d ?? {}) as Fila
+  const [recs, sesion, pagos, asientos, prov] = await Promise.all([
+    tabla('supplier_invoice_receipt').select('goods_receipt_id').eq('supplier_invoice_id', invoiceId),
+    texto(i.ai_session_id) ? tabla('goods_receipt_ai_session').select('input_files, created_at').eq('account_id', accountId).eq('id', String(i.ai_session_id)).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    tabla('supplier_invoice_payment_log').select('action, paid_at, due_date, actor_name, created_at').eq('account_id', accountId).eq('invoice_id', invoiceId).order('created_at'),
+    tabla('journal_entry').select('number, status, validated_at, validated_by_name, created_at').eq('account_id', accountId).eq('source_type', 'supplier_invoice').eq('source_id', invoiceId)
+      .in('status', ['propuesto', 'borrador', 'validado']).order('created_at', { ascending: false }),
+    texto(i.supplier_id) ? tabla('supplier').select('payment_method').eq('account_id', accountId).eq('id', String(i.supplier_id)).maybeSingle() : Promise.resolve({ data: null, error: null }),
+  ])
+  for (const r of [recs, sesion, pagos, asientos, prov]) if (r.error) throw new Error(mensaje('No se ha podido leer el historial de la factura', r.error))
+  const idsRec = ((recs.data ?? []) as Fila[]).map((x) => String(x.goods_receipt_id))
+  let recepcion: FichaExtra['recepcion'] = null
+  if (idsRec.length) {
+    const { data: g, error: eg } = await tabla('goods_receipt').select('id, receipt_date, location_id, created_at, created_by_name')
+      .eq('account_id', accountId).in('id', idsRec).order('receipt_date', { ascending: false }).limit(1)
+    if (eg) throw new Error(mensaje('No se ha podido leer su recepción', eg))
+    const r = ((g ?? []) as Fila[])[0]
+    if (r) {
+      const localId = texto(r.location_id)
+      let local: string | null = null
+      if (localId) {
+        const { data: l } = await tabla('locations').select('name').eq('account_id', accountId).eq('id', localId).maybeSingle()
+        local = texto((l as Fila | null)?.name)
+      }
+      recepcion = { fecha: String(r.receipt_date), localId, local, quien: texto(r.created_by_name), cuando: texto(r.created_at) }
+    }
+  }
+  const s = sesion.data as Fila | null
+  const ruta = s ? papelDeLaLectura(s.input_files) : null
+  const a = ((asientos.data ?? []) as Fila[]).sort((x, y) => Number(y.status === 'validado') - Number(x.status === 'validado'))[0]
+  return {
+    fuente: texto(i.source),
+    localId: texto(i.location_id),
+    creada: { cuando: String(i.created_at ?? ''), quien: texto(i.created_by_name) },
+    aprobada: texto(i.approved_at) ? { cuando: String(i.approved_at), quien: texto(i.approved_by_name) } : null,
+    venceCambiado: texto(i.due_date_set_at) ? { cuando: String(i.due_date_set_at), quien: texto(i.due_date_set_name) } : null,
+    descartada: texto(i.discarded_at) ? { cuando: String(i.discarded_at), quien: texto(i.discarded_by_name), motivo: texto(i.discard_reason) } : null,
+    recepcion,
+    lectura: s ? { cuando: String(s.created_at), ruta, archivo: ruta ? ruta.split('/').pop() ?? null : null } : null,
+    pagos: ((pagos.data ?? []) as Fila[]).map((p) => ({ cuando: String(p.created_at), accion: String(p.action), quien: texto(p.actor_name), pagada: texto(p.paid_at), vence: texto(p.due_date) })),
+    asiento: a ? {
+      numero: typeof a.number === 'number' ? a.number : null,
+      validado: texto(a.validated_at) ? { cuando: String(a.validated_at), quien: texto(a.validated_by_name) } : null,
+      creado: texto(a.created_at),
+    } : null,
+    formaPagoFicha: texto((prov.data as Fila | null)?.payment_method),
+  }
+}
+
+/** Las cuentas de gasto (6…) de la empresa, para F4. */
+export async function cuentasDeGasto(accountId: string, companyId: string): Promise<{ codigo: string; nombre: string }[]> {
+  const { data, error } = await tabla('company_account').select('code, name').eq('account_id', accountId).eq('company_id', companyId).like('code', '6%').order('code')
+  if (error) throw new Error(mensaje('No se han podido leer las cuentas de gasto', error))
+  return ((data ?? []) as Fila[]).map((x) => ({ codigo: String(x.code), nombre: String(x.name) }))
+}
+
+export interface GuardadoFicha { hechos: string[]; fallos: { etiqueta: string; porque: string }[] }
+
+/**
+ * «Guardar cambios» de la ficha: guarda lo que hoy tiene dónde guardarse
+ * (fichaRecibida.COMO_SE_GUARDA) y dice lo que no. Cada paso que falla se dice
+ * con su porqué y no para a los demás (regla 8).
+ */
+export async function guardarCambiosRecibida(invoiceId: string, cambios: { proveedorId?: string; vence?: string }, nombres: { proveedor?: string; vence?: string }): Promise<GuardadoFicha> {
+  const r: GuardadoFicha = { hechos: [], fallos: [] }
+  if (cambios.proveedorId !== undefined) {
+    try {
+      if (!cambios.proveedorId) throw new Error('una factura no se puede quedar sin proveedor')
+      await decirProveedor(invoiceId, cambios.proveedorId)
+      r.hechos.push(`Proveedor: ${nombres.proveedor ?? 'el elegido'}`)
+    } catch (e) { r.fallos.push({ etiqueta: 'Proveedor', porque: motivo(e) }) }
+  }
+  if (cambios.vence !== undefined) {
+    try {
+      await rpc('set_supplier_invoice_due_date', { p_invoice_id: invoiceId, p_due_date: cambios.vence || null })
+      r.hechos.push(`Vence: ${nombres.vence ?? (cambios.vence || 'sin vencimiento')}`)
+    } catch (e) { r.fallos.push({ etiqueta: 'Vence', porque: motivo(e) }) }
+  }
+  return r
 }

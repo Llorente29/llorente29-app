@@ -28,8 +28,11 @@ describe('S01g · el ancho de las pantallas', () => {
     expect(despacho).toMatch(/max-width: var\(--s-ancho-pantalla\)/)
   })
   it('los formularios llevan su clase estrecha', () => {
-    for (const f of ['src/modules/conta/analitica/AnaliticaPage.tsx', 'src/modules/conta/documentos/RecibidaAMano.tsx']) {
+    for (const f of ['src/modules/conta/analitica/AnaliticaPage.tsx']) {
       expect(readFileSync(f, 'utf8'), f).toContain('s-pantalla s-pantalla-estrecha')
     }
+    // Ficha completa de la recibida (tablero 3b): «Nueva recibida a mano» ya no es un
+    // formulario estrecho, es LA MISMA ficha que la que entra sola, con el PDF a la derecha.
+    expect(readFileSync('src/modules/conta/documentos/RecibidaAMano.tsx', 'utf8')).toMatch(/<Ficha datos=\{datos\} documento=\{documento\} \/>/)
   })
 })

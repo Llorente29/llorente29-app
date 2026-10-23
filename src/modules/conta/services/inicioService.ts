@@ -19,7 +19,8 @@ import { esFirmaAutomatica } from '@/modules/conta/lib/autor'
 import { pasosCierre, pedirCierre, type PasoCierre, type CierreMes } from '@/modules/conta/lib/diario'
 import { finDeMes, mesesHasta, puntoDeMes, trimestreDe, type PuntoMes } from '@/modules/conta/lib/inicio'
 import type { PerfilFiscal } from '@/modules/conta/lib/plazosImpuestos'
-import { filtrar, ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
+import { ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
+import { colaPorRevisar } from '@/modules/conta/documentos/recibidas'
 import { leerDocumentos } from '@/modules/conta/services/documentosService'
 
 type Fila = Record<string, unknown>
@@ -122,5 +123,5 @@ export async function perfilFiscal(companyId: string): Promise<PerfilFiscal | nu
 export async function recibidasParaRevisar(companyId: string, hoy: string): Promise<number> {
   const { desde, hasta } = ventanaParaRevisar(hoy)
   const d = await leerDocumentos(companyId, desde, hasta)
-  return filtrar(d.filas, 'para-mirar').filter((x) => x.tipo === 'factura').length
+  return colaPorRevisar(d.filas).length
 }
