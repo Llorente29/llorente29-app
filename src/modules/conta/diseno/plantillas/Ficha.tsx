@@ -12,29 +12,32 @@
 // propuesto, la etiqueta PROPUESTO y una línea con su motivo; lo que no se
 // supo rellenar, en ámbar («Por revisar»).
 
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icono } from '../Icono'
 import { MarcaCambiado } from './CambiosSinGuardar'
 import type { CambioCampo } from './cambios'
+import { DATOS_MAX, DATOS_MIN, acotarAncho, anchoConTecla, guardarAncho, leerAncho } from './reparto'
 import { claveLineaAsiento, lineasEnOrden, totalesAsiento, type LineaAsientoVista, type OrdenAsiento } from './valores'
 
 /** «‹ 3 de 9 ›»: recorrer la cola sin volver a la lista. */
-export function NavegaFicha({ pos, total, anterior, siguiente, etiqueta = 'Facturas' }: {
+export function NavegaFicha({ pos, total, anterior, siguiente, etiqueta = 'Facturas', que }: {
   /** 0 si no está en la cola. */
   pos: number
   total: number
   anterior: (() => void) | null
   siguiente: (() => void) | null
   etiqueta?: string
+  /** D04 · Qué cuenta la cola («por revisar»): se dice al lado del número, para que no se confunda con otro. */
+  que?: string
 }) {
   if (total === 0 || pos === 0) return null
   return (
-    <div className="s-navega" role="group" aria-label={`${etiqueta}: ${pos} de ${total}`}>
+    <div className="s-navega" role="group" aria-label={`${etiqueta}${que ? ` ${que}` : ''}: ${pos} de ${total}`}>
       <button type="button" className="s-navega-flecha" aria-label="La anterior" aria-keyshortcuts="ArrowLeft" disabled={!anterior} onClick={() => anterior?.()}>
         <Icono nombre="izquierda" />
       </button>
-      <span className="s-navega-cuenta s-cifra">{pos} de {total}</span>
+      <span className="s-navega-cuenta"><span className="s-cifra">{pos} de {total}</span>{que && <span className="s-navega-que"> {que}</span>}</span>
       <button type="button" className="s-navega-flecha" aria-label="La siguiente" aria-keyshortcuts="ArrowRight" disabled={!siguiente} onClick={() => siguiente?.()}>
         <Icono nombre="derecha" />
       </button>
@@ -341,12 +344,44 @@ export function DocumentoFicha({ titulo, descargar, abrir, oculto, alOcultar, ch
   )
 }
 
-/** La ficha entera: los datos a la izquierda y el documento a la derecha (o a todo el ancho si está plegado). */
-export function Ficha({ datos, documento, documentoOculto = false }: { datos: ReactNode; documento?: ReactNode; documentoOculto?: boolean }) {
+/**
+ * La ficha entera: los datos a la izquierda (como mucho 680 px) y el documento
+ * a la derecha, con todo lo que queda (o a todo el ancho si está plegado). D04:
+ * entre los dos, un separador que se arrastra o se mueve con las flechas; el
+ * ancho se recuerda por persona (`usuario`). En el móvil, el documento arriba.
+ */
+export function Ficha({ datos, documento, documentoOculto = false, usuario }: { datos: ReactNode; documento?: ReactNode; documentoOculto?: boolean; usuario?: string | null }) {
+  const almacen = typeof window !== 'undefined' ? window.localStorage : null
+  const [ancho, setAncho] = useState(() => leerAncho(usuario, almacen))
+  const [deQuien, setDeQuien] = useState(usuario)
+  if (deQuien !== usuario) { setDeQuien(usuario); setAncho(leerAncho(usuario, almacen)) }
+  const caja = useRef<HTMLDivElement>(null)
+  const poner = (px: number) => { const a = acotarAncho(px); setAncho(a); guardarAncho(usuario, a, almacen) }
+  const conSeparador = !!documento && !documentoOculto
+  const arrastrar = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const izquierda = caja.current?.getBoundingClientRect().left ?? 0
+    const sep = e.currentTarget
+    sep.setPointerCapture(e.pointerId)
+    const mover = (m: PointerEvent) => setAncho(acotarAncho(m.clientX - izquierda))
+    const soltar = (m: PointerEvent) => {
+      sep.removeEventListener('pointermove', mover); sep.removeEventListener('pointerup', soltar)
+      poner(m.clientX - izquierda)
+    }
+    sep.addEventListener('pointermove', mover); sep.addEventListener('pointerup', soltar)
+    e.preventDefault()
+  }
   return (
-    <div className="s-ficha" data-documento={documento ? (documentoOculto ? 'oculto' : 'si') : 'no'}>
+    <div ref={caja} className="s-ficha" data-documento={documento ? (documentoOculto ? 'oculto' : 'si') : 'no'}
+      style={conSeparador ? ({ '--s-ficha-datos': `${ancho}px` } as CSSProperties) : undefined}>
       <div className="s-ficha-datos">{datos}</div>
-      {documento}
+      {conSeparador && (
+        <div className="s-ficha-separador" role="separator" aria-orientation="vertical" aria-label="Ancho de los datos y del documento"
+          aria-valuemin={DATOS_MIN} aria-valuemax={DATOS_MAX} aria-valuenow={ancho} tabIndex={0} data-prueba="separador-ficha"
+          title="Arrastra para dar más sitio al documento o a los datos (doble clic: lo de serie)"
+          onPointerDown={arrastrar} onDoubleClick={() => poner(DATOS_MAX)}
+          onKeyDown={(e) => { const a = anchoConTecla(ancho, e.key); if (a !== null) { e.preventDefault(); poner(a) } }} />
+      )}
+      {documento && <div className="s-ficha-documento">{documento}</div>}
     </div>
   )
 }

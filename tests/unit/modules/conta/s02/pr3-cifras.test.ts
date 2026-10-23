@@ -54,10 +54,10 @@ describe('conta_pendientes: una lista y un total, la misma vara', () => {
 
   it('el chip DICE qué es lo que cuenta (regla 7): la pantalla a la que lleva tiene «Por revisar» y «Por aclarar»', () => {
     const f = frasesDeLaBarra(c)
-    expect(f.compras).toBe('78 facturas para mirar, 22 facturas por aclarar')
+    expect(f.compras).toBe('78 facturas por revisar, 22 facturas por aclarar')
     expect(f.bancos).toBe('5 para confirmar, 57 por aclarar, 2 por validar')
     expect(f.contabilidad).toBeUndefined()
-    expect(contadoresDeCuentas(c)['compras.recibidas']).toEqual({ n: 100, tono: 'neutro', frase: '78 facturas para mirar, 22 facturas por aclarar' })
+    expect(contadoresDeCuentas(c)['compras.recibidas']).toEqual({ n: 100, tono: 'neutro', frase: '78 facturas por revisar, 22 facturas por aclarar', partes: [{ n: 78, frase: '78 facturas por revisar' }, { n: 22, frase: '22 facturas por aclarar' }] })
   })
 
   it('«Te toca hoy», la barra de Inicio y «Pendiente de ti» suman lo mismo: 164', () => {

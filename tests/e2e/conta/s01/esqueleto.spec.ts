@@ -573,7 +573,7 @@ test('Asientos › Recibida de antes lleva a Compras y gastos: la misma ficha, e
   const id = page.url().match(/recibidas\/([0-9a-f-]{36})/)![1]
   // «1 de N»: la primera de la MISMA cola que recorre la ficha (la pestaña «Por
   // revisar», con el orden de la lista): es la 1 y «La anterior» está apagada.
-  const cola = page.getByRole('group', { name: /^Facturas: 1 de \d+$/ })
+  const cola = page.getByRole('group', { name: /^Facturas por revisar: 1 de \d+$/ })
   await expect(cola).toBeVisible()
   await expect(cola.getByRole('button', { name: 'La anterior' })).toBeDisabled()
   await expect(cola.getByRole('button', { name: 'La siguiente' })).toBeVisible()

@@ -45,6 +45,7 @@ import { acuerdosSinSocio, listarTercerosBase } from '@/modules/conta/services/t
 import { cargarRevision430 } from '@/modules/conta/services/revision430Service'
 import { leerEsperan } from '@/modules/conta/services/esperanService'
 import { recibidasPorEstado } from '@/modules/conta/services/inicioService'
+import { cuentaRecibidas } from '@/modules/conta/documentos/colaRecibidas'
 import { leerPendientes } from '@/modules/conta/services/cifrasService'
 import { cuentasDePendientes } from '@/modules/conta/lib/cifrasLibro'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -76,12 +77,14 @@ async function contarTerceros(accountId: string, companyId: string | null): Prom
 }
 
 async function contar(accountId: string, companyId: string | null): Promise<CuentasMenu> {
-  const [pendientes, terceros] = await Promise.all([
+  const [pendientes, terceros, colas] = await Promise.all([
     companyId ? leerPendientes(companyId) : Promise.resolve(null),
     seguro(contarTerceros(accountId, companyId)),
+    // D04: las facturas, de la MISMA lectura que la ficha cuenta su «1 de N» (colaRecibidas).
+    companyId ? cuentaRecibidas(accountId, companyId, hoyEnMadrid()).catch((e: unknown) => { console.error('[menú] no se pudo contar', e); return null }) : Promise.resolve(null),
   ])
-  if (pendientes) return { ...cuentasDePendientes(pendientes), terceros }
-  return { ...(await contarComoHoy(accountId, companyId)), terceros }
+  const base = pendientes ? cuentasDePendientes(pendientes) : await contarComoHoy(accountId, companyId)
+  return { ...base, ...(colas ? { recibidas: colas.porRevisar, aclarar: colas.porAclarar } : {}), terceros }
 }
 
 /**

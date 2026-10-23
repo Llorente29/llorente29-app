@@ -430,7 +430,7 @@ test('D03 · salir con un cambio sin guardar, por el menú y con ‹ ›: avisa,
     // ‹ ›: a otra factura de la cola.
     await abrir(page, p)
     await cambiar()
-    const navega = page.locator('header.s-encabezado').getByRole('group', { name: /^Facturas: \d+ de \d+$/ })
+    const navega = page.locator('header.s-encabezado').getByRole('group', { name: /^Facturas por revisar: \d+ de \d+$/ })
     await expect(navega).toBeVisible({ timeout: 20_000 })
     const flecha = (await navega.getByRole('button', { name: 'La siguiente' }).isEnabled())
       ? navega.getByRole('button', { name: 'La siguiente' }) : navega.getByRole('button', { name: 'La anterior' })
@@ -650,6 +650,118 @@ test('D03 · «Sin PDF»: sin motivo no deja; con motivo queda marcada y en el H
     await expect(casilla).toBeChecked()
     await expect(page.getByLabel('Por qué no hay')).toHaveValue(motivo)
     await expect(historial(page)).toContainText('Marcó «Sin PDF»', { timeout: 20_000 })
+    expect(errores).toEqual([])
+  } finally {
+    await limpiar(s, [p])
+  }
+})
+
+// ── D04 · El reparto de la pantalla y un PDF que se lea ─────────────────────
+
+/**
+ * Un PDF como el de la COHELDI (00-VR26102011251.pdf): A4, letra pequeña
+ * (6 pt) y dos páginas. El de producción no se baja a staging; éste tiene su
+ * forma: mucho texto pequeño, que es lo que se veía borroso.
+ */
+function pdfComoLaCoheldi(): Buffer {
+  const pagina = (n: number) => {
+    const lineas = Array.from({ length: 40 }, (_, i) => `COHELDI S.L. · albaran ${n}-${String(i + 1).padStart(2, '0')} · Ref 0${i}4.98${i} · 1,000 kg x 12,74 = 12,74 · IVA 4 %`)
+    return `BT /F1 6 Tf 40 800 Td 8 TL ${lineas.map((l) => `(${l.replace(/[()\\]/g, '')}) '`).join(' ')} ET`
+  }
+  const contenidos = [pagina(1), pagina(2)]
+  const objetos = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 5 0 R /Resources << /Font << /F1 7 0 R >> >> >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 6 0 R /Resources << /Font << /F1 7 0 R >> >> >>',
+    ...contenidos.map((c) => `<< /Length ${Buffer.byteLength(c, 'latin1')} >>\nstream\n${c}\nendstream`),
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ]
+  let pdf = '%PDF-1.4\n'
+  const posiciones: number[] = []
+  objetos.forEach((o, i) => { posiciones.push(Buffer.byteLength(pdf, 'latin1')); pdf += `${i + 1} 0 obj\n${o}\nendobj\n` })
+  const xref = Buffer.byteLength(pdf, 'latin1')
+  pdf += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${posiciones.map((p) => `${String(p).padStart(10, '0')} 00000 n \n`).join('')}`
+  pdf += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return Buffer.from(pdf, 'latin1')
+}
+
+/** Cada página pintada: su lienzo (píxeles de verdad) contra lo que ocupa en pantalla × la densidad. */
+async function lienzos(page: Page) {
+  return page.locator('[data-prueba="papel-pdf"] canvas').evaluateAll((xs) => xs.map((c) => {
+    const k = c as HTMLCanvasElement
+    return { ancho: k.width, css: k.clientWidth, dpr: window.devicePixelRatio, hoja: k.closest('.s-documento-hoja')?.clientWidth ?? 0 }
+  }))
+}
+/** Pintado a la resolución del panel: el lienzo es lo que ocupa × la densidad (± 2 px de redondeo). */
+async function aLaResolucionDelPanel(page: Page) {
+  await expect.poll(async () => {
+    const ls = await lienzos(page)
+    return ls.length === 2 && ls.every((l) => l.css > 0 && Math.abs(l.ancho - l.css * l.dpr) <= 2)
+  }, { timeout: 20_000, message: 'cada página, pintada al ancho que ocupa × devicePixelRatio' }).toBe(true)
+  return lienzos(page)
+}
+
+test('D04 · la COHELDI: el PDF a la resolución del panel (no a un tamaño fijo), con sus dos páginas; se vuelve a pintar al ampliar y al mover el separador, que se recuerda', async ({ page }) => {
+  test.setTimeout(120_000)
+  const s = await entrarComo(page, CUENTA_A.email)
+  const errores = vigilar(page)
+  const movil = lado(page) === 'movil'
+  let p: Preparada | null = null
+  try {
+    p = await prepararRecibida(s, 'sola', `PD04-COHELDI-${lado(page)}-${sello()}`, COMO_COHELDI)
+    const ruta = `${CUENTA_A.id}/d04/00-VR26102011251-${sello()}.pdf`
+    const subido = await fetch(`${STAGING_URL}/storage/v1/object/receipt-uploads/${ruta}`, {
+      method: 'POST', headers: { apikey: anonKey(), Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/pdf' }, body: new Uint8Array(pdfComoLaCoheldi()),
+    })
+    expect(subido.ok, `subir el PDF: ${subido.status} ${(await subido.text()).slice(0, 200)}`).toBe(true)
+    const r = await rest(s, 'PATCH', `supplier_invoice?account_id=eq.${CUENTA_A.id}&id=eq.${p.id}`, { raw_document_url: ruta })
+    expect(r.status, JSON.stringify(r.datos)).toBeLessThan(300)
+
+    await abrir(page, p)
+    const papel = page.locator('[data-prueba="papel-pdf"]')
+    await expect(papel).toHaveAttribute('data-paginas', '2', { timeout: 30_000 })
+    await expect(page.getByRole('img', { name: new RegExp(`La factura ${p.numero} tal como llegó`) })).toBeVisible()
+    await expect(page.getByRole('img', { name: 'Página 2 de 2' })).toBeAttached()
+    // Al abrirlo, ocupa todo el ancho del panel; y se pinta a esa resolución por la densidad (no a un tamaño fijo).
+    const antes = await aLaResolucionDelPanel(page)
+    for (const l of antes) expect(Math.abs(l.css - l.hoja), 'la página, a todo el ancho del panel').toBeLessThanOrEqual(40)
+
+    if (!movil) {
+      // El reparto: los datos, como mucho 680 px; el PDF, lo que queda.
+      const datos = await page.locator('.s-ficha-datos').boundingBox()
+      expect(datos!.width).toBeLessThanOrEqual(681)
+      // Ampliar: más píxeles, no los mismos estirados.
+      await page.getByRole('button', { name: 'Acercar' }).click()
+      await expect.poll(async () => (await lienzos(page))[0]?.ancho ?? 0, { timeout: 20_000 }).toBeGreaterThan(antes[0].ancho * 1.15)
+      const ampliado = await aLaResolucionDelPanel(page)
+      expect(ampliado[0].ancho).toBeGreaterThan(antes[0].ancho)
+      await page.getByRole('button', { name: 'Alejar' }).click()
+      await aLaResolucionDelPanel(page)
+      // El separador: cinco flechas a la izquierda, datos 100 px más estrechos, el PDF más ancho y repintado.
+      const sep = page.getByRole('separator', { name: 'Ancho de los datos y del documento' })
+      const de = Number(await sep.getAttribute('aria-valuenow'))
+      await sep.focus()
+      for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowLeft')
+      await expect(sep).toHaveAttribute('aria-valuenow', String(de - 100))
+      await expect.poll(async () => (await lienzos(page))[0]?.css ?? 0, { timeout: 20_000 }).toBeGreaterThan(antes[0].css + 50)
+      await aLaResolucionDelPanel(page)
+      // Se recuerda: al volver, el mismo ancho.
+      await page.reload()
+      await expect(page.getByRole('separator', { name: 'Ancho de los datos y del documento' })).toHaveAttribute('aria-valuenow', String(de - 100), { timeout: 30_000 })
+      await page.getByRole('separator', { name: 'Ancho de los datos y del documento' }).focus()
+      await page.keyboard.press('End')
+    } else {
+      // En el móvil: el PDF arriba, y se puede plegar.
+      const doc = await page.getByRole('complementary', { name: 'Documento' }).boundingBox()
+      const datos = await page.locator('.s-ficha-datos').boundingBox()
+      expect(doc!.y, 'el documento, encima de los datos').toBeLessThan(datos!.y)
+      await expect(page.getByRole('separator', { name: 'Ancho de los datos y del documento' })).toBeHidden()
+      await page.getByRole('button', { name: 'Plegar el documento' }).click()
+      await expect(page.getByRole('complementary', { name: 'Documento' }).getByRole('button', { name: 'Documento', exact: true })).toBeVisible()
+      await page.getByRole('complementary', { name: 'Documento' }).getByRole('button', { name: 'Documento', exact: true }).click()
+      await aLaResolucionDelPanel(page)
+    }
     expect(errores).toEqual([])
   } finally {
     await limpiar(s, [p])

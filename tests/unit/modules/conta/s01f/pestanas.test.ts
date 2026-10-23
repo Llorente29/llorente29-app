@@ -49,7 +49,7 @@ describe('S01f · lo que pide una decisión, en gris (las cuentas de la barra)',
     // S02: «Por revisar» de Compras (las recepciones) no es una página: su número va en el chip del apartado.
     // S02 · PR 3: Facturas recibidas cuenta sus dos pestañas (para mirar y por aclarar) y dice qué son.
     expect(contadoresDeCuentas({ compras: 4, recibidas: 9, aclarar: 91, libros: 6, bancos: null, terceros: 1 })).toEqual({
-      'compras.recibidas': { n: 100, tono: 'neutro', frase: '9 facturas para mirar, 91 facturas por aclarar' },
+      'compras.recibidas': { n: 100, tono: 'neutro', frase: '9 facturas por revisar, 91 facturas por aclarar', partes: [{ n: 9, frase: '9 facturas por revisar' }, { n: 91, frase: '91 facturas por aclarar' }] },
       'contabilidad.asientos': { n: 6, tono: 'neutro', frase: '6 por revisar' },
       'contactos.todos': { n: 1, tono: 'neutro', frase: '1 por revisar' },
     })
