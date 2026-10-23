@@ -532,15 +532,6 @@ describe('R11 · paso 8 sobre la tanda de C06b (0380, el nombre del PDF; su copi
   })
 })
 
-describe('R11 · paso 8 sobre la tanda del C08 (0840, aplicada; su copia), con su contexto medido', () => {
-  it('la 0840, una fila de Foodint, pide «autorizo»', () => {
-    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c08-lovers-catalogo-20261023.json',
-      '--manifiesto=tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
-    expect(out).toContain('20261208T0840_c08_lovers_catalogo_2qjdb.sql: AUTORIZO')
-    expect(out).toContain('autorizo: 20261208T0840_c08_lovers_catalogo_2qjdb.sql')
-  })
-})
-
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
@@ -563,6 +554,14 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql ha cambiado desde la medida')
   })
 })
+describe('R11 · paso 8 sobre la tanda de la C08 (0840, PR #301, ya aplicada: su copia), con su contexto medido', () => {
+  it('la 0840 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c08-lovers-catalogo-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261208T0840_c08_lovers_catalogo_2qjdb.sql: AUTORIZO')
+  })
+})
+
 describe('R11 · paso 8 sobre la tanda del D06 (0800 y 0810, su copia), con su contexto medido', () => {
   it('la 0800 sigue; solo la 0810 pide «autorizo»', () => {
     const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d06-prepago-y-pdf-20261023.json',

@@ -1459,6 +1459,49 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
+describe('la tanda C08 · Lovers Burgers de Carabanchel, al catálogo de HubRise que existe (0840, PR #301), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 23/10 a las 16:24 UTC, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c08-lovers-catalogo-20261023.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const DOWN = 'supabase/vuelta-atras/20261208T0840_c08_lovers_catalogo_2qjdb.down.sql'
+
+  it('un fichero, el medido; pidió «autorizo»; nada del camino del pedido; nada registrado al medir', () => {
+    expect(viva).toEqual(['supabase/migrations/20261208T0840_c08_lovers_catalogo_2qjdb.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    expect(md5(readFileSync(viva[0], 'utf8'))).toBe(medida.tanda[viva[0]])
+    expect(r.ficheros[viva[0]]).toMatch(/autorizo/i)
+    expect(ctx.tablas).toEqual(['public.brand_hubrise_catalog'])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('una sola fila, anclada por id, cuenta, marca, location y el catálogo de antes; para si no es una', () => {
+    const sin = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '')
+    expect(sin.match(/\bupdate\s+public\./gi)).toHaveLength(1)
+    expect(sin).toContain("set external_catalog_id = '2qjdb'")
+    expect(sin).toContain("where id = v_fila and account_id = v_acc and brand_id = v_marca")
+    expect(sin).toContain("and external_location_id = '1b6p8-2' and external_catalog_id = 'q3v47'")
+    expect(sin).toContain('if v_n <> 1 then')
+    expect(sin).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
+  })
+  it('su vuelta atrás la devuelve al q3v47 solo si está en 2qjdb; la cuenta solo lee; y el manifiesto avisaba de la D07', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-c08-lovers-catalogo-20261023.txt')).toEqual([DOWN])
+    const d = readFileSync(DOWN, 'utf8').replace(/--.*$/gm, '')
+    expect(d).toContain("set external_catalog_id = 'q3v47'")
+    expect(d).toContain("and external_location_id = '1b6p8-2' and external_catalog_id = '2qjdb'")
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/c08-lovers-catalogo.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(readFileSync(MANIFIESTO, 'utf8')).toContain('Antes de fusionar, aplicar.txt y')
+  })
+})
+
 describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · el respaldo (0880), las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
@@ -1564,49 +1607,6 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · el respaldo (0880)
     expect(p.trim().endsWith('rollback;')).toBe(true)
     const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
     expect(m.indexOf(PRUEBA_R)).toBeGreaterThan(m.indexOf(respaldo))
-  })
-})
-
-describe('la tanda del C08 · Lovers Burgers de Carabanchel, al catálogo de HubRise que existe (0840, aplicada; su copia)', () => {
-  const MANIFIESTO = 'tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt'
-  const viva = leerTanda(MANIFIESTO)
-  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 23/10 a las 16:24 UTC, para ESTE fichero.
-  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c08-lovers-catalogo-20261023.json', 'utf8'))
-  const ctx = medida.contexto
-  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
-  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
-  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
-  const DOWN = 'supabase/vuelta-atras/20261208T0840_c08_lovers_catalogo_2qjdb.down.sql'
-
-  it('un fichero, el medido; pide «autorizo»; nada del camino del pedido; nada registrado aún', () => {
-    expect(viva).toEqual(['supabase/migrations/20261208T0840_c08_lovers_catalogo_2qjdb.sql'])
-    expect(Object.keys(medida.tanda)).toEqual(viva)
-    expect(md5(readFileSync(viva[0], 'utf8'))).toBe(medida.tanda[viva[0]])
-    expect(r.ficheros[viva[0]]).toMatch(/autorizo/i)
-    expect(ctx.tablas).toEqual(['public.brand_hubrise_catalog'])
-    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
-    expect(ctx.registro).toEqual([])
-  })
-  it('una sola fila, anclada por id, cuenta, marca, location y el catálogo de antes; para si no es una', () => {
-    const sin = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '')
-    expect(sin.match(/\bupdate\s+public\./gi)).toHaveLength(1)
-    expect(sin).toContain("set external_catalog_id = '2qjdb'")
-    expect(sin).toContain("where id = v_fila and account_id = v_acc and brand_id = v_marca")
-    expect(sin).toContain("and external_location_id = '1b6p8-2' and external_catalog_id = 'q3v47'")
-    expect(sin).toContain('if v_n <> 1 then')
-    expect(sin).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
-  })
-  it('su vuelta atrás la devuelve al q3v47 solo si está en 2qjdb; la cuenta solo lee; la D07 queda en su copia', () => {
-    expect(leerTanda('tests/conta/produccion/vuelta-atras-c08-lovers-catalogo-20261023.txt')).toEqual([DOWN])
-    const d = readFileSync(DOWN, 'utf8').replace(/--.*$/gm, '')
-    expect(d).toContain("set external_catalog_id = 'q3v47'")
-    expect(d).toContain("and external_location_id = '1b6p8-2' and external_catalog_id = '2qjdb'")
-    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
-    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/c08-lovers-catalogo.sql'])
-    const c = readFileSync(cuentas[0], 'utf8')
-    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
-    expect(readFileSync(MANIFIESTO, 'utf8')).toContain('Antes de fusionar, aplicar.txt y')
   })
 })
 

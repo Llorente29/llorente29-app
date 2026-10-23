@@ -1,4 +1,4 @@
-# Tanda de producción viva · C08 (23/10): Lovers Burgers de Carabanchel publica
+# COPIA (ya aplicada: real en verde el 23/10, fusionada en el #301) · C08 (23/10): Lovers Burgers de Carabanchel publica
 # en el catálogo de HubRise que existe (2qjdb), no en el q3v47, que HubRise da
 # por inexistente. Rama conta/c08-lovers-catalogo. Número 0840: por encima del
 # más alto que existe (la 0830 de la D07).

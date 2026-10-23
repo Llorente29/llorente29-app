@@ -1,5 +1,5 @@
 {
- "_que": "C08 (23/10) · Lovers Burgers de Carabanchel al catálogo de HubRise que existe (2qjdb) · contexto de producción de la tanda viva (20261208T0840), medido en SOLO LECTURA el 23/10 a las 16:24 UTC. Aplicada el 23/10 (su copia, al volver la D07 a ser la viva).",
+ "_que": "C08 (23/10) · Lovers Burgers de Carabanchel al catálogo de HubRise que existe (2qjdb) · contexto de producción de la tanda viva (20261208T0840), medido en SOLO LECTURA el 23/10 a las 16:24 UTC. La D07 (0820 y 0830) está fusionada y sin aplicar: su contexto, en contexto-produccion-d07ac-diez-y-prepago-20261023.json.",
  "medido": "2026-10-23T16:24Z",
  "tanda": {
   "supabase/migrations/20261208T0840_c08_lovers_catalogo_2qjdb.sql": "eede08b76e0d639481e245a2642294d5"
