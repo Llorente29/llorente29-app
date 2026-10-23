@@ -1,13 +1,15 @@
 /* src/modules/conta/estilo/bancos.css
  *
- * B01 · Bancos (N17Bancos) y sus cinco pantallas sin maqueta. Las pestañas y
- * la barra son las de Libros (libros.css, .cxl-*); aquí, lo propio: la banda
- * de la IA, las cinco cifras, la tabla con el punto de confianza, la zona de
- * soltar el extracto y el móvil por apartados (M4). Solo tokens de tokens.css.
+ * B01 · Bancos (N17Bancos) y sus pantallas sin maqueta: la banda de la IA, las
+ * cifras, la lista de movimientos con el punto de confianza, la zona de soltar
+ * el extracto y el cierre del mes de cada banco (que desde el S02 · PR 2 se
+ * pinta en Contabilidad › Cierre y Registro). El encabezado de cada página es
+ * el del patrón (marco/EncabezadoPagina, marco.css). Solo tokens.
+ * S02 · PR 2: se fueron la portada del móvil por niveles (M4), la tabla de
+ * antes de N17b (.cxb-tabla/.cxb-fila) y la barra de Bancos en una fila.
  */
 
 .cxb-pagina { position: relative; }
-.cxb-mes { min-width: 180px; font-weight: 600; }
 .cxb-seccion, .cxb-movimientos { display: flex; flex-direction: column; gap: 14px; }
 
 /* La banda de la IA (N17): punto verde, frase en negrita y su apoyo; botón a la derecha. */
@@ -30,32 +32,17 @@
   border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); min-width: 0;
 }
 .cxb-cifra-etiqueta { font-size: 13px; color: var(--cx-apoyo); }
-.cxb-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 22px; font-weight: 600; letter-spacing: -0.8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cxb-cifra-valor { font-variant-numeric: tabular-nums; font-family: var(--cx-letra-cifras); font-size: 22px; font-weight: 600; letter-spacing: -0.8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cxb-cifra-pie { font-size: 13px; color: var(--cx-apoyo); font-weight: 500; }
 .cxb-verde { color: var(--cx-verde-oscuro); }
 .cxb-ambar { color: var(--cx-ambar); }
 
-/* La tabla: fecha · lo que dice el banco · importe · punto · lo que Folvy cree · botones */
-.cxb-tabla { padding: 8px 18px 14px; }
-.cxb-fila {
-  display: grid; grid-template-columns: 74px minmax(0, 1.1fr) 120px 24px minmax(0, 1.5fr) auto; gap: 12px; align-items: center;
-  padding: 11px 0; border-top: 1px solid var(--cx-linea);
-}
-.cxb-cabeza { border-top: none; font-size: 12px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; color: var(--cx-apoyo); padding: 8px 0; }
-.cxb-fila-ambar { background: var(--cx-ambar-fila); }
-.cxb-fecha { font-family: var(--cx-letra-cifras); font-size: 13px; color: var(--cx-apoyo); }
-.cxb-banco { font-size: 14px; line-height: 1.3; }
-.cxb-tarjeta { color: var(--cx-apoyo); font-size: 13px; }
-.cxb-importe, .cxb-der { font-family: var(--cx-letra-cifras); font-size: 14px; font-weight: 600; text-align: right; white-space: nowrap; }
-.cxb-cabeza .cxb-der { font-family: inherit; font-size: 12px; font-weight: 700; }
+/* El importe de un movimiento: cifras tabulares (el patrón: .s-cifra), a la derecha. */
+.cxb-importe, .cxb-der { font-family: var(--s-letra-cifras); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; text-align: right; white-space: nowrap; }
 .cxb-entra { color: var(--cx-verde-oscuro); }
-.cxb-punto-celda { display: flex; justify-content: center; }
 .cxb-punto { width: 10px; height: 10px; border-radius: 50%; background: var(--cx-borde-campo); display: inline-block; }
 .cxb-punto-verde { background: var(--cx-ia); }
 .cxb-punto-ambar { background: var(--cx-ambar-punto); }
-.cxb-folvy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.cxb-folvy strong { font-size: 14px; }
-.cxb-folvy span { font-size: 13px; color: var(--cx-apoyo); }
 .cxb-botones { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
 .cxb-botones .cx-boton, .cxb-botones .cx-boton-sec { min-height: 34px; height: 34px; padding: 0 14px; white-space: nowrap; }
 .cxb-pie { display: flex; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--cx-linea); font-size: 13px; color: var(--cx-apoyo); flex-wrap: wrap; }
@@ -70,7 +57,9 @@
 .cxb-apagada .cxb-lista-texto strong { color: var(--cx-apoyo); }
 .cxb-banco-tarjeta { display: flex; flex-direction: column; gap: 12px; }
 .cxb-subbloque { border-top: 1px solid var(--cx-linea); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
-.cxb-subbloque h4, .cxb-cierre h4 { margin: 4px 0 0; font-size: 15px; }
+.cxb-subbloque h4, .cxb-cierre-sub { margin: 4px 0 0; font-size: 15px; }
+/* El banco por el que se llegó al cierre (?banco=): el primero, y marcado. */
+.cxb-cierre[data-destacado] { border-color: var(--cx-azul-borde); }
 .cxb-banco-cabeza { gap: 12px; flex-wrap: wrap; }
 .cxb-local { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--cx-apoyo); min-width: 200px; }
 .cxb-revisa { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -100,28 +89,8 @@
 .cxb-soltar-caja strong { font-size: 20px; color: var(--cx-texto); }
 .cxb-cuenta-fichero .cxb-local { min-width: 240px; }
 
-/* Móvil (M4): portada con píldoras, dos cifras, frase verde y apartados de 56 px */
-.cxb-portada { display: flex; flex-direction: column; gap: 14px; }
-.cxb-pildoras { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
-.cxb-pildora-banco { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; min-height: 40px; flex: none; max-width: none; overflow: visible; }
-.cxb-pildora-banco[aria-pressed='true'] { background: var(--cx-azul-suave); color: var(--cx-azul); border-color: var(--cx-azul-borde); }
-.cxb-botones-grandes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.cxb-botones-grandes > * { min-height: 52px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
-.cxb-cifras-movil { grid-template-columns: 1fr 1fr; }
-.cxb-apartados { list-style: none; margin: 0; padding: 0; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); overflow: hidden; }
-.cxb-apartado { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; border-top: 1px solid var(--cx-linea); color: var(--cx-texto); text-decoration: none; }
-.cxb-apartados li:first-child .cxb-apartado { border-top: none; }
-.cxb-apartado-texto { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
-.cxb-apartado-titulo { font-size: 16px; font-weight: 600; }
-.cxb-apartado-resumen { font-size: 13px; color: var(--cx-apoyo); }
-.cxb-apartado-resumen.cxb-ambar { color: var(--cx-ambar); }
-
-/* Respuesta 4: la barra de Bancos va en UNA fila (los bancos que no caben, a «y N más»). */
-@media (min-width: 768px) {
-  .cxb-pagina .cxl-barra-grupos { flex-wrap: nowrap; }
-  .cxb-pagina .cxl-grupo-acciones { flex-wrap: nowrap; }
-  .cxb-pagina .cxl-accion { padding: 8px 6px; }
-}
+/* «Lo que he hecho»: qué ver, a la izquierda y a su tamaño. */
+.cxb-seccion > .cxl-segmento { align-self: flex-start; }
 .cxb-pasada { color: var(--cx-ia-apoyo); }
 
 @media (max-width: 1100px) {
@@ -134,16 +103,7 @@
   /* El cierre (respuesta 4): banco, contabilidad y diferencia, una debajo de otra; en dos columnas el importe no cabía y salía cortado. */
   .cxb-cierre .cxb-cifras-tres { grid-template-columns: 1fr; }
   .cxb-banda { flex-direction: column; align-items: flex-start; }
-  .cxb-tabla { padding: 4px 12px 12px; }
-  .cxb-cabeza { display: none; }
-  /* Una tarjeta por movimiento: fecha e importe arriba, lo que dice el banco, y Folvy con sus botones. */
-  .cxb-fila { grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-areas: 'punto fecha importe' 'banco banco banco' 'folvy folvy folvy' 'botones botones botones'; gap: 6px 10px; padding: 14px 4px; }
-  .cxb-fecha { grid-area: fecha; }
-  .cxb-banco { grid-area: banco; font-weight: 500; }
-  .cxb-importe { grid-area: importe; }
-  .cxb-punto-celda { grid-area: punto; justify-content: flex-start; }
-  .cxb-folvy { grid-area: folvy; }
-  .cxb-botones { grid-area: botones; justify-content: stretch; }
+  .cxb-botones { justify-content: stretch; }
   .cxb-botones .cx-boton, .cxb-botones .cx-boton-sec { flex: 1 1 0; height: 44px; min-height: 44px; }
   .cxb-lista-fila { flex-direction: column; align-items: stretch; }
   .cxb-tarjeta-nueva { grid-template-columns: 1fr; }
@@ -175,10 +135,10 @@
 .cxn-tramo-confirmar { background: var(--cx-ambar-punto); }
 .cxn-tramo-aclarar { background: var(--cx-borde-campo); }
 .cxn-leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--cx-apoyo); }
-.cxn-leyenda b { font-family: var(--cx-letra-cifras); color: var(--cx-texto); font-weight: 600; }
+.cxn-leyenda b { font-variant-numeric: tabular-nums; font-family: var(--cx-letra-cifras); color: var(--cx-texto); font-weight: 600; }
 
 .cxn-bandejas-fila { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.cxn-contador { font-family: var(--cx-letra-cifras); font-weight: 600; margin-left: 4px; }
+.cxn-contador { font-variant-numeric: tabular-nums; font-family: var(--cx-letra-cifras); font-weight: 600; margin-left: 4px; }
 .cxn-buscar { flex: 0 1 340px; min-width: 220px; }
 .cxn-buscar .cx-input { width: 100%; }
 
@@ -192,9 +152,10 @@
 .cxn-lista { padding: 4px 18px 14px; outline: none; }
 .cxn-lista:focus-visible { box-shadow: 0 0 0 3px var(--cx-azul-borde); }
 .cxn-dia-cabeza { padding: 14px 0 6px; font-size: 13px; font-weight: 700; color: var(--cx-apoyo); }
+/* S02 · PR 2: cada fila, como mínimo la altura de fila del patrón (--s-fila: 56 px; 40 en compacta). */
 .cxn-fila {
   display: grid; grid-template-columns: 28px minmax(0, 1.1fr) 120px minmax(0, 1.5fr) auto; gap: 12px; align-items: center;
-  padding: 10px 8px; border-top: 1px solid var(--cx-linea); cursor: pointer; border-radius: 10px;
+  min-height: var(--s-fila); padding: var(--s-2) var(--s-2); border-top: var(--s-linea) solid var(--s-borde-decorativo); cursor: pointer; border-radius: 10px;
 }
 .cxn-fila-ambar, .cxn-fila-verde { background: var(--cx-ambar-fila); }
 .cxn-fila-verde { background: var(--cx-verde-suave); }
@@ -242,9 +203,6 @@
 .cxn-facturas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .cxn-factura-pie { display: block; }
 .cxn-queda { display: flex; justify-content: space-between; font-weight: 600; padding: 6px 10px; background: var(--cx-fondo); border-radius: 10px; }
-.cxn-asiento { width: 100%; border-collapse: collapse; font-size: 13px; }
-.cxn-asiento th { text-align: left; font-size: 12px; color: var(--cx-apoyo); font-weight: 700; padding: 4px 0; }
-.cxn-asiento td { padding: 4px 0; border-top: 1px solid var(--cx-linea); }
 
 /* Con el panel abierto, la fila en dos pisos: quién e importe arriba; lo que propongo y los botones debajo. */
 .cxn-con-panel .cxn-fila {
@@ -281,3 +239,10 @@
   .cxn-casado { flex-direction: column; align-items: stretch; }
   .cxn-panel { position: static; max-height: none; border: none; padding: 0; }
 }
+
+/* S02 · PR 2 · «Por validar»: el veredicto de cada asiento, con su porqué (los tonos del veredicto de la ficha). */
+.cxv-lista:focus-visible { outline: 2px solid var(--s-foco, #1e63c9); outline-offset: 2px; }
+.cxv-fila { cursor: pointer; }
+.cxv-veredicto { font-size: 13px; padding: 2px 8px; border-radius: 6px; align-self: flex-start; }
+.cxv-veredicto[data-tono='propuesto'] { background: var(--s-propuesto); color: var(--s-propuesto-texto); }
+.cxv-veredicto[data-tono='duda'] { background: var(--s-duda-fondo); color: var(--s-duda); }

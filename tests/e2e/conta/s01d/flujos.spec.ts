@@ -12,7 +12,8 @@
 //      factura «para revisar», sin papel.
 //   3. El PDF de la expedida (cuenta A): se adjunta antes de guardar, se ve al
 //      lado (ordenador) o debajo (móvil) y, al «Guardar y validar», queda en la
-//      tarjeta «Factura» del asiento.
+//      tarjeta «Factura» del asiento. S02 · PR 2: la hoja es «Nueva factura
+//      emitida», en Facturación › Facturas emitidas.
 //   4. «Nuevo proveedor» en las acciones de Contactos, también en el móvil (el alta
 //      entera en el ordenador ya la prueba c03/terceros.spec.ts).
 //
@@ -54,8 +55,25 @@ async function abrirBancoNuevo(page: Page) {
   if (await page.locator('article.cxb-banco-tarjeta').count() === 0) {
     await expect(page.getByText(/^Aún no hay ningún banco\. Dalo de alta con «\+ Nuevo banco o tarjeta»/)).toBeVisible()
   }
-  await expect(page.getByRole('button', { name: '+ Nuevo banco o tarjeta' })).toBeVisible()
   return dialogo
+}
+
+/**
+ * «+ Nuevo banco o tarjeta» está siempre. S02 · PR 2: es un botón blanco del
+ * encabezado de Cuentas y extractos; en el móvil, dentro de «Más acciones».
+ * Se mira con el diálogo ya cerrado (en el móvil hay que abrir el menú).
+ */
+async function nuevoBancoEnSuSitio(page: Page) {
+  const encabezado = page.locator('header.s-encabezado')
+  if (lado(page) === 'ordenador') {
+    await expect(encabezado.getByRole('button', { name: '+ Nuevo banco o tarjeta' })).toBeVisible()
+    return
+  }
+  await encabezado.getByRole('button', { name: 'Más acciones', exact: true }).click()
+  const menu = encabezado.getByRole('group', { name: 'Más acciones', exact: true })
+  await expect(menu.getByRole('button', { name: '+ Nuevo banco o tarjeta' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
 }
 
 /** Con el eje «local» encendido, el diálogo pregunta de qué local es: común a todos. */
@@ -81,6 +99,7 @@ test('S01d · banco nuevo (cuenta B): se abre con ?nuevo=banco, comprueba el IBA
     await dialogo.getByRole('button', { name: 'Cancelar' }).click()
     await expect(page.getByRole('dialog', { name: 'Nuevo banco o tarjeta' })).toHaveCount(0)
     await expect(page).not.toHaveURL(/nuevo=banco/)
+    await nuevoBancoEnSuSitio(page)
     const nada = await rest<unknown[]>(s, 'GET', `treasury_account?select=id&account_id=eq.${CUENTA_B.id}&name=eq.${encodeURIComponent(nombre)}`)
     expect(nada.datos).toEqual([])
     return
@@ -95,6 +114,7 @@ test('S01d · banco nuevo (cuenta B): se abre con ?nuevo=banco, comprueba el IBA
     `^${nombre} dado de alta(, [^.]+)?\\. (Nueva subcuenta 572\\d+ · Bancos · ${nombre}, enlazada al banco\\.|El plan contable de la empresa aún no está activado: .+) Ya puedes subir su extracto\\.$`))
   await expect(page.getByRole('dialog', { name: 'Nuevo banco o tarjeta' })).toHaveCount(0)
   await expect(page).not.toHaveURL(/nuevo=banco/)
+  await nuevoBancoEnSuSitio(page)
   // Y ya está en la lista, con su IBAN.
   const tarjeta = page.getByRole('article', { name: nombre })
   await expect(tarjeta).toBeVisible()
@@ -120,17 +140,23 @@ test('S01d · recibida a mano (cuenta A): sin base ni local no guarda; con base 
   vigilar(page)
   const numero = `PS01D-${lado(page)}-${Date.now()}`
   try {
+    // S02 · PR 2: es una página de Compras y gastos (documentos/nueva); la dirección
+    // de antes, desde Asientos, lleva allí.
     await page.goto('/conta/libros/diario/recibidas?nueva=a-mano')
+    await expect(page).toHaveURL(/\/conta\/documentos\/nueva$/, { timeout: 30_000 })
     await expect(page.getByRole('heading', { level: 1, name: 'Nueva recibida a mano' })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Compras y gastos', 'Facturas recibidas', 'Nueva recibida a mano'])
     // El proveedor: Hermanos Ruiz, de la semilla; si no saliera, el primero de la lista.
     const proveedor = page.getByLabel('Proveedor', { exact: true })
     const valores = await proveedor.locator('option').evaluateAll((os) => os.map((o) => (o as HTMLOptionElement).value))
     const elegido = valores.includes(HERMANOS_RUIZ) ? HERMANOS_RUIZ : valores.find((v) => v !== '')
     expect(elegido, 'la cuenta A tiene algún proveedor').toBeTruthy()
     await proveedor.selectOption(elegido!)
-    await page.getByLabel('Número de factura').fill(numero)
+    // Ficha completa (tablero 3b): la a mano es la misma ficha que la que entra sola
+    // (FichaRecibidaBloques): «Nº de factura» y una línea de IVA con base, tipo y cuota.
+    await page.getByLabel('Nº de factura').fill(numero)
     // La fecha de expedición viene puesta (hoy); el tipo, el 21 %.
-    await page.getByLabel('Tipo de IVA').selectOption('21')
+    await page.getByLabel('Tipo de IVA de la línea 1').selectOption('21')
 
     // Sin base ni local: no guarda y dice qué falta, debajo del campo.
     // S01e: A lleva el eje de local, así que se pide, con «Común» como una opción más.
@@ -144,24 +170,27 @@ test('S01d · recibida a mano (cuenta A): sin base ni local no guarda; con base 
     expect(unLocal, 'la cuenta A tiene algún local').toBeTruthy()
     await local.selectOption(unLocal!.v)
     await expect(page.getByText('Falta algo: lo tienes debajo de cada campo en rojo.')).toBeVisible()
-    await expect(page).toHaveURL(/\/conta\/libros\/diario\/recibidas\?nueva=a-mano$/)
+    await expect(page).toHaveURL(/\/conta\/documentos\/nueva$/)
 
     // Con base: cuota (base × tipo) y total (base + cuota), al céntimo.
-    await page.getByLabel('Base imponible (€)').fill('100,00')
-    await expect(page.getByLabel('Cuota de IVA (€)')).toHaveValue('21,00')
-    await expect(page.getByLabel('Total (€)')).toHaveValue('121,00')
+    await page.getByLabel('Base al 21 %').fill('100,00')
+    await expect(page.getByLabel('Cuota al 21 %')).toHaveValue('21,00')
+    await expect(page.locator('[data-prueba="totales-iva"]')).toContainText(/Total\s*121,00\s€/)
     await expect(page.getByText('Escribe la base imponible.')).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Guardar y revisarla' }).click()
-    await expect(page).toHaveURL(new RegExp(`/conta/libros/diario/recibidas/${UUID}\\?ver=para-mirar$`), { timeout: 30_000 })
+    // S02 · PR 2: se abre su ficha en Compras y gastos › Facturas recibidas, en «Por revisar».
+    await expect(page).toHaveURL(new RegExp(`/conta/documentos/recibidas/${UUID}\\?ver=por-revisar$`), { timeout: 30_000 })
     // Regla 8: dice qué ha guardado y qué toca ahora.
     await expect(page.getByText(new RegExp(`^Factura ${numero} de .+ guardada\\. Revísala y apúntala\\.$`))).toBeVisible()
-    // Sin papel: se escribió a mano.
-    // S02: el papel va a la derecha de la ficha, en el panel «Documento»: su
-    // título dice «Sin fichero» y el cuerpo, por qué.
+    // Sin papel: se escribió a mano. Ficha completa: el panel «Documento» dice «Sin PDF»
+    // y, en su hueco, por qué y «Arrastra aquí el PDF o la foto · Subir»; debajo del
+    // título, «Escrita a mano» (solo porque lo es).
     const papel = page.getByRole('complementary', { name: 'Documento' })
-    await expect(papel.getByText('Sin fichero', { exact: true })).toBeVisible()
-    await expect(papel.getByText('Sin fichero: apuntada a mano.')).toBeVisible()
+    await expect(papel.getByText('Sin PDF', { exact: true })).toBeVisible()
+    await expect(papel.getByText('Escrita a mano, sin PDF todavía.')).toBeVisible()
+    await expect(papel.getByText(/Arrastra aquí el PDF o la foto/)).toBeVisible()
+    await expect(page.locator('[data-prueba="de-donde-vino"]')).toHaveText(/^Escrita a mano el \d{2}\/\d{2}/)
 
     // En la base: para revisar, a mano, con sus importes y UNA línea (de ella sale el asiento).
     const id = new RegExp(`/recibidas/(${UUID})\\?`).exec(page.url())![1]
@@ -187,8 +216,13 @@ async function anularSiQueda(s: Sesion, id: string) {
 test('S01d · PDF de la expedida (cuenta A): se adjunta, se ve al lado (o debajo) y queda en la tarjeta «Factura» al validar', async ({ page }) => {
   const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
-  await page.goto('/conta/libros/diario/nuevo?tipo=expedida')
-  await expect(page.getByRole('heading', { name: 'Nueva factura expedida' })).toBeVisible({ timeout: 30_000 })
+  // S02 · PR 2: la emitida es de Facturación › Facturas emitidas, con su principal «Nueva factura emitida».
+  await page.goto('/conta/facturacion/emitidas')
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas emitidas' })).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('link', { name: 'Nueva factura emitida' }).first().click()
+  await expect(page).toHaveURL(/\/conta\/facturacion\/emitidas\/nueva$/, { timeout: 30_000 })
+  await expect(page.getByRole('heading', { level: 1, name: 'Nueva factura emitida' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Facturación', 'Facturas emitidas', 'Nueva factura emitida'])
   await expect(page.getByLabel('Serie')).toHaveValue('1')
 
   // Adjuntar: el selector está escondido detrás de su etiqueta, que hace de botón.
@@ -197,14 +231,16 @@ test('S01d · PDF de la expedida (cuenta A): se adjunta, se ve al lado (o debajo
   await factura.getByLabel('Adjuntar el PDF de la factura').setInputFiles(PDF_PRUEBA)
   await expect(factura.getByText(NOMBRE_PDF, { exact: true })).toBeVisible()
   await expect(factura.getByRole('button', { name: 'Quitar' })).toBeVisible()
-  await expect(page.getByText('El PDF se adjunta al validar', { exact: true })).toBeVisible()
+  // S02 · PR 2: la nota dice cuándo se adjunta (antes, «El PDF se adjunta al validar» suelto).
+  await expect(factura.getByText(/Se adjunta al pulsar «Guardar y validar»\./)).toBeVisible()
 
   // El papel, pintado: al lado del formulario en el ordenador, debajo en el móvil.
   const papel = page.getByRole('region', { name: 'La factura', exact: true })
   await expect(papel).toBeVisible()
   await expect(papel.getByRole('img', { name: `${NOMBRE_PDF} · aún sin adjuntar` })).toBeVisible()
   await expect(papel.getByText(/No he podido pintar el PDF/)).toHaveCount(0)
-  const form = page.locator('.cxd-expedida-con-papel > .cxd-expedida-form')
+  // S02 · PR 2: la Hoja de líneas y el papel, en .s-hoja-con-papel (antes .cxd-expedida-con-papel).
+  const form = page.locator('.s-hoja-con-papel > div').first()
   const cf = (await form.boundingBox())!
   const cp = (await papel.boundingBox())!
   if (lado(page) === 'ordenador') {
@@ -231,7 +267,8 @@ test('S01d · PDF de la expedida (cuenta A): se adjunta, se ve al lado (o debajo
     const local = page.getByLabel(`Local del apunte ${n}`)
     if (await local.count() > 0) await local.selectOption({ label: 'Común (se reparte)' })
   }
-  await expect(page.getByText('✓ 0,00 €')).toBeVisible()
+  // S02 · PR 2: el pie de la Hoja de líneas dice «Cuadra» (antes, «✓ 0,00 €»).
+  await expect(page.locator('.s-asiento-cuadra')).toHaveText('Cuadra')
   await page.getByRole('button', { name: 'Guardar y validar' }).click()
   await expect(page).toHaveURL(new RegExp(`/conta/libros/diario/${UUID}$`), { timeout: 30_000 })
   const id = new RegExp(`/diario/(${UUID})$`).exec(page.url())![1]

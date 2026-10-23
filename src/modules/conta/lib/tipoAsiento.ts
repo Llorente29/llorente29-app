@@ -7,6 +7,7 @@
 // Sin pantalla: se prueba sola.
 
 import { importeMano, type LineaMano } from '@/modules/conta/lib/diario'
+import { eurosExactos } from '@/modules/conta/lib/formato'
 import type { Serie } from '@/modules/conta/lib/libro'
 
 export type TipoAsiento = 'expedida' | 'tesoreria' | 'predefinido'
@@ -15,8 +16,9 @@ export interface DefTipoAsiento { tipo: TipoAsiento; serie: Serie; titulo: strin
 
 export const TIPOS_ASIENTO: Record<TipoAsiento, DefTipoAsiento> = {
   expedida: {
-    tipo: 'expedida', serie: 1, titulo: 'Nueva factura expedida',
-    ayuda: 'Hasta que llegue Facturación, una factura que emites se apunta a mano: el cliente (430) al debe; las ventas (700) y el IVA repercutido (477) al haber.',
+    // S02 · PR 2: vive en Facturación › Nueva factura emitida (la palabra de la calle es «emitida»).
+    tipo: 'expedida', serie: 1, titulo: 'Nueva factura emitida',
+    ayuda: 'Una factura que emites se apunta así: el cliente (430) al debe; las ventas (700) y el IVA repercutido (477) al haber.',
   },
   tesoreria: {
     tipo: 'tesoreria', serie: 3, titulo: 'Nuevo cobro o pago',
@@ -79,4 +81,55 @@ export function predefinidoDeMano(lineas: readonly LineaMano[], idDe: ReadonlyMa
       concepto: l.concepto.trim() || null, localId: l.comun ? null : l.localId, comun: l.comun,
     }
   })
+}
+
+// ── S02 · PR 2 · El asiento dicho en palabras (la Hoja de líneas) ───────────
+
+/** Una línea ya resuelta: la cuenta del plan (su número y su nombre) y sus importes. */
+export interface LineaEnPalabras { codigo: string; nombre: string; debe: number; haber: number }
+
+const cent = (n: number) => Math.round(n * 100)
+const lista = (xs: readonly string[]): string => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`)
+const esBanco = (codigo: string) => codigo.startsWith('57')
+const esCliente = (codigo: string) => codigo.startsWith('43')
+const esVenta = (codigo: string) => codigo.startsWith('70')
+
+/**
+ * El asiento en una frase sencilla, para quien no lee debe y haber: de dónde
+ * sale el dinero (el haber) y adónde va (el debe). Solo dice lo que se sabe por
+ * las cuentas: el banco o la caja (57) que paga o cobra, y la factura a un
+ * cliente (43 contra 70). Si no cuadra, o falta una cuenta o un importe, no
+ * dice nada: una frase sobre un asiento a medias sería inventada.
+ */
+export function asientoEnPalabras(lineas: readonly LineaEnPalabras[]): string | null {
+  const usadas = lineas.filter((l) => cent(l.debe) > 0 || cent(l.haber) > 0)
+  if (usadas.length < 2 || usadas.some((l) => !l.codigo || (cent(l.debe) > 0) === (cent(l.haber) > 0))) return null
+  const debe = usadas.filter((l) => cent(l.debe) > 0)
+  const haber = usadas.filter((l) => cent(l.haber) > 0)
+  const totalDebe = debe.reduce((t, l) => t + cent(l.debe), 0)
+  if (totalDebe !== haber.reduce((t, l) => t + cent(l.haber), 0) || !debe.length || !haber.length) return null
+  const total = eurosExactos(totalDebe / 100)
+  const nombre = (l: LineaEnPalabras) => l.nombre.trim() || l.codigo
+  const partes = (ls: readonly LineaEnPalabras[], lado: 'debe' | 'haber', prep: string) => lista(ls.map((l) => `${eurosExactos(l[lado])} ${prep} ${nombre(l)}`))
+
+  // Una factura a un cliente: el cliente al debe y una venta al haber.
+  if (debe.length === 1 && esCliente(debe[0].codigo) && haber.some((l) => esVenta(l.codigo))) {
+    return haber.length === 1
+      ? `Facturas ${total} a ${nombre(debe[0])}, por ${nombre(haber[0])}.`
+      : `Facturas ${total} a ${nombre(debe[0])}: ${partes(haber, 'haber', 'de')}.`
+  }
+  if (haber.length === 1 && debe.length === 1 && !esBanco(haber[0].codigo) && esBanco(debe[0].codigo)) {
+    return `Cobras ${total} en ${nombre(debe[0])}, de ${nombre(haber[0])}.`
+  }
+  if (haber.length === 1) {
+    const de = haber[0]
+    const inicio = esBanco(de.codigo) ? `Pagas ${total} desde ${nombre(de)}` : `Pasas ${total} de ${nombre(de)}`
+    return debe.length === 1 ? `${inicio} a ${nombre(debe[0])}.` : `${inicio}. De eso, ${partes(debe, 'debe', 'a')}.`
+  }
+  if (debe.length === 1) {
+    const a = debe[0]
+    const inicio = esBanco(a.codigo) ? `Cobras ${total} en ${nombre(a)}` : `Llevas ${total} a ${nombre(a)}`
+    return `${inicio}: ${partes(haber, 'haber', 'de')}.`
+  }
+  return `Mueves ${total}: sale de ${lista(haber.map(nombre))} y va a ${lista(debe.map(nombre))}.`
 }

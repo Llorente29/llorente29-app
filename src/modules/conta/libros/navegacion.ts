@@ -86,7 +86,7 @@ export const AREAS_LIBROS: Area[] = [
   { id: 'cierre', nombre: 'Cierre', grupos: [
     { etiqueta: 'Cierre', acciones: [
       { id: 'ejercicios', nombre: 'Ejercicios', sinonimos: ['años', 'abrir ejercicio'] },
-      { id: 'cerrar-mes', nombre: 'Cerrar el mes', sinonimos: ['bloquear mes'] },
+      { id: 'cerrar-mes', nombre: 'Cerrar el mes', sinonimos: ['bloquear mes', 'cierre del mes', 'cierre del banco', 'cuadrar el banco'] },
       { id: 'cierre-ejercicio', nombre: 'Regularización, cierre y apertura', sinonimos: ['cerrar el ejercicio', 'asiento de apertura', 'regularización'] },
     ] },
   ] },

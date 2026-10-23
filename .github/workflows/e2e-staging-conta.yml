@@ -267,8 +267,9 @@ jobs:
             node scripts/e2e/area.mjs "$GITHUB_REF_NAME" --cambiados "$RUNNER_TEMP/cambiados.txt" --etiquetas "$ETIQUETAS" > "$RUNNER_TEMP/decision.txt"
             PORQUE=$(sed -n 's/^porque=//p' "$RUNNER_TEMP/decision.txt")
             if [ "$(sed -n 's/^entera=//p' "$RUNNER_TEMP/decision.txt")" = true ]; then
-              PRUEBAS=
-              echo "### La entera, porque $PORQUE" >> "$GITHUB_STEP_SUMMARY"
+              # C10: la entera puede ir acotada a un producto (Sumied o Folvy), y va en trozos igual.
+              PRUEBAS=$(sed -n 's/^pruebas=//p' "$RUNNER_TEMP/decision.txt"); ENTERA=1
+              echo "### La entera${PRUEBAS:+ de ${PRUEBAS}}, porque $PORQUE" >> "$GITHUB_STEP_SUMMARY"
             else
               PRUEBAS=$(sed -n 's/^pruebas=//p' "$RUNNER_TEMP/decision.txt")
               [ -n "$PRUEBAS" ] || { echo "::error::area.mjs no ha dado pruebas para $GITHUB_REF_NAME: sería la suite entera."; exit 1; }
@@ -289,7 +290,7 @@ jobs:
           # aguanta 4, medido el 16/10); una parte, en uno.
           N=${TROZOS_PEDIDOS:-2}
           case "$N" in 1|2|3|4) ;; *) echo "::error::«trozos» tiene que ser 1, 2, 3 o 4 (o nada)."; exit 1 ;; esac
-          [ -z "${PRUEBAS:-}" ] || N=1
+          [ -z "${PRUEBAS:-}" ] || [ "${ENTERA:-0}" = 1 ] || N=1
           TROZOS=$(seq -s, 1 "$N" | sed 's/^/[/; s/$/]/')
           { echo "frente=$FRENTE"; echo "pruebas=${PRUEBAS:-}"; echo "trozos=$TROZOS"; echo "n=$N"; } >> "$GITHUB_OUTPUT"
           echo "Frente: ${FRENTE:-ninguno} · pruebas: ${PRUEBAS:-la suite entera} · trozos: $N"

@@ -1,0 +1,21 @@
+{
+  "_que": "S02 · PR 3 · las cifras · contexto de producción de la tanda viva (20261205T0490), medido en SOLO LECTURA el 22/10 a las 22:29 UTC, con la 0480 del E05 ya aplicada (la última del historial: 20261204T0480_e05_releer_riders), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la 0490 solo existe public.conta_impuesto_calendario (md5 del cuerpo 480da33a…, el de la 0340), sin hermanas; las tres nuevas no existen; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-22T22:29Z",
+  "tanda": {
+    "supabase/migrations/20261205T0490_s02_cifras.sql": "58636c18cbdf54db7d3aecdb7c618394"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.conta_impuesto_calendario(uuid,date)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

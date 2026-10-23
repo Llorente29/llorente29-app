@@ -25,7 +25,7 @@
 //   · La del C05 (libros y balances), ya aplicada: los seis en el historial de
 //     producción con la huella del repositorio (medido el 09/10). Copia fija en
 //     tanda-c05-20261009.txt, con su vuelta atrás en vuelta-atras-c05-20261009.txt.
-//   · La de AHORA, el manifiesto vivo (supabase/produccion/aplicar.txt):
+//   · La de AHORA, el manifiesto vivo (supabase/produccion/tandas/sumied/heredada/aplicar.txt, C10):
 //     impuestos por dentro (I01a, 0100–0150), con el contexto de producción
 //     leído en solo lectura el 18/10 y la regla del W01 (`informe`, la misma
 //     del ensayo). La del S01, ya aplicada, queda en su copia
@@ -1459,12 +1459,503 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): E05 · volver a leer los PDF de Catcher (0480)', () => {
-  const MANIFIESTO = 'supabase/produccion/aplicar.txt'
+describe('la tanda C08 · Lovers Burgers de Carabanchel, al catálogo de HubRise que existe (0840, PR #301), ya aplicada: su copia y su contexto medido', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 23/10 a las 16:24 UTC, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-c08-lovers-catalogo-20261023.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const DOWN = 'supabase/vuelta-atras/20261208T0840_c08_lovers_catalogo_2qjdb.down.sql'
+
+  it('un fichero, el medido; pidió «autorizo»; nada del camino del pedido; nada registrado al medir', () => {
+    expect(viva).toEqual(['supabase/migrations/20261208T0840_c08_lovers_catalogo_2qjdb.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    expect(md5(readFileSync(viva[0], 'utf8'))).toBe(medida.tanda[viva[0]])
+    expect(r.ficheros[viva[0]]).toMatch(/autorizo/i)
+    expect(ctx.tablas).toEqual(['public.brand_hubrise_catalog'])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('una sola fila, anclada por id, cuenta, marca, location y el catálogo de antes; para si no es una', () => {
+    const sin = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '')
+    expect(sin.match(/\bupdate\s+public\./gi)).toHaveLength(1)
+    expect(sin).toContain("set external_catalog_id = '2qjdb'")
+    expect(sin).toContain("where id = v_fila and account_id = v_acc and brand_id = v_marca")
+    expect(sin).toContain("and external_location_id = '1b6p8-2' and external_catalog_id = 'q3v47'")
+    expect(sin).toContain('if v_n <> 1 then')
+    expect(sin).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
+  })
+  it('su vuelta atrás la devuelve al q3v47 solo si está en 2qjdb; la cuenta solo lee; y el manifiesto avisaba de la D07', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-c08-lovers-catalogo-20261023.txt')).toEqual([DOWN])
+    const d = readFileSync(DOWN, 'utf8').replace(/--.*$/gm, '')
+    expect(d).toContain("set external_catalog_id = 'q3v47'")
+    expect(d).toContain("and external_location_id = '1b6p8-2' and external_catalog_id = '2qjdb'")
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/c08-lovers-catalogo.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(readFileSync(MANIFIESTO, 'utf8')).toContain('Antes de fusionar, aplicar.txt y')
+  })
+})
+
+describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
+  const MANIFIESTO = 'supabase/produccion/tandas/sumied/heredada/aplicar.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 23/10 a las 13:38 UTC, con la 0810 ya aplicada, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('supabase/produccion/tandas/sumied/heredada/contexto.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261208_d07a_diez_reenviar_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261208T0820_d07a_diez_reenviar_descripcion.down.sql'
+  const PRUEBA_C = 'supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql'
+  const DOWN_C = 'supabase/vuelta-atras/20261208T0830_d07c_prepago_en_todas_las_listas.down.sql'
+
+  it('dos ficheros, los medidos; la 0820 (datos de Foodint) pide «autorizo» y la 0830 sigue; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261208T0820_d07a_diez_reenviar_descripcion.sql', '20261208T0830_d07c_prepago_en_todas_las_listas.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(r.ficheros[viva[0]]).toMatch(/autorizo/i)
+    expect(r.ficheros[viva[1]]).toBe('sigue')
+    expect(ctx.tablas).toEqual(['public.customer_fiscal', 'public.external_send', 'public.payment_method', 'public.supplier_invoice'])
+    expect(ctx.funciones).toEqual(['public.conta_recibida_guardar(uuid,jsonb,text)', 'public.mark_supplier_invoice_paid(uuid,date,text)'])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('solo toca los envíos de RIDERS de Foodint rechazados por la descripción, y para si no hay o si son más de 200', () => {
+    const d = readFileSync(viva[0], 'utf8')
+    expect(d).toContain("v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(d).toContain("v_prov constant uuid := 'cbe3ddb1-5d3a-4aa7-a907-38f362e922b1'")
+    expect(d).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
+    const sin = d.replace(/--.*$/gm, '')
+    expect(sin.match(/\bupdate\s+public\./gi)).toHaveLength(1)
+    expect(sin).toContain("x.account_id = v_acc and i.supplier_id = v_prov and x.kind = 'factura' and x.status = 'pendiente'")
+    expect(sin).toContain("x.last_error ilike '%factura.Descripcion%'")
+    expect(sin).toContain('set attempts = 0, next_try_at = now()')
+    expect(sin).toContain('if v_n = 0 then raise exception')
+    expect(sin).toContain('if v_n > 200 then raise exception')
+    // Solo los intentos, el siguiente intento y el motivo: el estado no se toca.
+    expect(sin.match(/update public\.external_send x\s+set ([\s\S]*?)\s+from _d07a_reenviar/)?.[1]).not.toMatch(/\bstatus\b/)
+    // El orden va dicho: después de desplegar las dos funciones.
+    expect(d).toContain('Esta tanda va DESPUÉS de desplegar conta-diez-cola y')
+    expect(readFileSync(MANIFIESTO, 'utf8')).toContain('DESPUÉS se aplica esta tanda, desde main')
+  })
+  it('su prueba de staging ejecuta la 0820 y su vuelta atrás, entra como usuario y acaba en ROLLBACK; la cuenta solo lee', () => {
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of [`\\i ${viva[0]}`, `\\i ${DOWN}`, 'set local role authenticated']) expect(p).toContain(x)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(leerTanda('supabase/produccion/tandas/sumied/heredada/vuelta-atras.txt')).toEqual([DOWN_C, DOWN])
+  })
+  it('la 0830: las cinco declaradas con su prueba; las dos funciones cambian SOLO en la lista y el error, y la vuelta atrás las deja como en producción byte a byte', () => {
+    const t = readFileSync(viva[1], 'utf8')
+    const cab = t.split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual(['public.conta_recibida_guardar', 'public.mark_supplier_invoice_paid', 'public.supplier_invoice', 'public.customer_fiscal', 'public.payment_method']
+      .map((o) => `-- cambia: ${o} · prueba: ${PRUEBA_C}`))
+    const def = (s: string, fn: string) => { const a = s.indexOf(`CREATE OR REPLACE FUNCTION public.${fn}(`); return s.slice(a, s.indexOf('end $function$', a) + 'end $function$'.length) }
+    const d = readFileSync(DOWN_C, 'utf8')
+    expect(md5(def(d, 'conta_recibida_guardar') + '\n')).toBe('08126d47a81d33fbb3826ce6b84179d8')
+    expect(md5(def(d, 'mark_supplier_invoice_paid') + '\n')).toBe('192d75fa8906f443db5800ee209b0e9a')
+    expect(md5(def(t, 'conta_recibida_guardar') + '\n')).toBe('5eecff4e2fea2a335fe7323cc1cc638e')
+    expect(md5(def(t, 'mark_supplier_invoice_paid') + '\n')).toBe('7ec159755cec7bf80a8b548f9f213d9a')
+    // La de guardar: solo la lista (con «prepaid» y su nombre) y el error en español.
+    expect(def(t, 'conta_recibida_guardar')).toContain('"prepaid": "Saldo prepago Catcher (40700001)"')
+    expect(def(t, 'conta_recibida_guardar')).not.toContain('transfer, direct_debit, card o cash')
+    expect(def(t, 'mark_supplier_invoice_paid')).toContain("('transfer','direct_debit','card','cash','prepaid')")
+    // Los CHECK solo amplían.
+    for (const c of ['supplier_invoice_paid_method_check', 'customer_fiscal_payment_method_check', 'payment_method_kind_check']) expect(t).toContain(`drop constraint if exists ${c};`)
+    const p = readFileSync(PRUEBA_C, 'utf8')
+    for (const x of [`\\i ${viva[1]}`, `\\i ${DOWN_C}`, 'set local role authenticated', 'c01b0000-0000-4000-8000-0000000000b1', '08126d47a81d33fbb3826ce6b84179d8', '5eecff4e2fea2a335fe7323cc1cc638e', '"forma_pago": "prepaid"']) expect(p).toContain(x)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA_C)).toBeGreaterThan(m.indexOf(viva[1]))
+  })
+})
+
+describe('la tanda del D06 · el saldo prepago de Riders y el PDF bueno que sustituye a la foto (0800 y 0810, aplicada; su copia)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-d06-prepago-y-pdf-20261023.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 23/10 a las 11:27 UTC, con la 0790 ya aplicada, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-d06-prepago-y-pdf-20261023.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const FN = 'conta_factura_desde_lectura'
+  const PRUEBA = 'supabase/staging/sql/20261207_d06_prepago_y_pdf_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261207T0800_d06_prepago_y_pdf_bueno.down.sql'
+  const DOWN_DATOS = 'supabase/vuelta-atras/20261207T0810_d06_riders_prepago.down.sql'
+  /** La definición entera, como la devuelve pg_get_functiondef (sin su salto final). */
+  const definicion = (f: string) => {
+    const s = readFileSync(f, 'utf8')
+    const a = s.indexOf(`CREATE OR REPLACE FUNCTION public.${FN}(`)
+    const b = s.indexOf('$function$', s.indexOf('AS $function$', a) + 'AS $function$'.length)
+    return s.slice(a, b + '$function$'.length)
+  }
+
+  it('dos ficheros, los medidos; la 0800 sigue y solo la 0810 (datos de Foodint) pide «autorizo»; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261207T0800_d06_prepago_y_pdf_bueno.sql', '20261207T0810_d06_riders_prepago.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(r.ficheros[viva[0]]).toBe('sigue')
+    expect(r.ficheros[viva[1]]).toMatch(/autorizo/i)
+    expect(ctx.tablas).toEqual(['public.supplier', 'public.supplier_invoice'])
+    expect(ctx.funciones).toEqual([`public.${FN}(uuid,uuid)`])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('los tres cambios van declarados en la cabecera, con su prueba de staging, que ejecuta la 0810 y las dos vueltas atrás, y acaba en ROLLBACK', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual(['public.supplier', 'public.supplier_invoice', `public.${FN}`].map((o) => `-- cambia: ${o} · prueba: ${PRUEBA}`))
+    expect(readFileSync(viva[1], 'utf8')).not.toMatch(/^-- cambia:/m)
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of [FN, 'set local role service_role', `\\i ${viva[0]}`, `\\i ${viva[1]}`, `\\i ${DOWN}`, `\\i ${DOWN_DATOS}`,
+      'c7e7811e385ce489612d491213276602', '2279355e38145dd73f902a03e92e2808', 'pdf_sustituye_foto', 'check_violation']) expect(p).toContain(x)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[1]))
+    expect(m.indexOf(viva[1])).toBeGreaterThan(m.indexOf(viva[0]))
+  })
+  it('los dos CHECK solo AMPLÍAN: lo de antes y «prepaid»; su vuelta atrás, lo de antes (y para si alguien ya lo usa)', () => {
+    const t = readFileSync(viva[0], 'utf8')
+    for (const [tb, c] of [['supplier', 'supplier_payment_method_check'], ['supplier_invoice', 'supplier_invoice_payment_method_check']]) {
+      expect(t).toContain(`alter table public.${tb} drop constraint if exists ${c};\nalter table public.${tb} add constraint ${c}\n  check (payment_method is null or payment_method in ('transfer', 'direct_debit', 'card', 'cash', 'prepaid'));`)
+      expect(readFileSync(DOWN, 'utf8')).toContain(`alter table public.${tb} add constraint ${c}\n  check (payment_method is null or payment_method in ('transfer', 'direct_debit', 'card', 'cash'));`)
+    }
+    const d = readFileSync(DOWN, 'utf8')
+    expect(d.indexOf("payment_method = 'prepaid'")).toBeLessThan(d.indexOf('drop constraint'))
+  })
+  it('la función cambia SOLO en el bloque nuevo, y la vuelta atrás la deja como la de producción (la 0220, md5 c7e7811e…) byte a byte', () => {
+    const origen = definicion(DOWN)
+    expect(md5(origen + '\n')).toBe('c7e7811e385ce489612d491213276602')
+    // Y es la de la 0220, cuerpo a cuerpo.
+    const s = readFileSync('supabase/migrations/20261021T0220_d01_entrada.sql', 'utf8')
+    const a = s.indexOf(`create or replace function public.${FN}(`)
+    const cuerpo0220 = s.slice(s.indexOf('$$', a) + 2, s.indexOf('end $$;', a))
+    expect(origen.slice(origen.indexOf('AS $function$') + 'AS $function$'.length, origen.lastIndexOf('end $function$'))).toBe(cuerpo0220)
+    const nueva = definicion(viva[0])
+    expect(md5(nueva + '\n')).toBe('2279355e38145dd73f902a03e92e2808')
+    const decl = '  v_doc text; v_total numeric; v_estado text; v_validada boolean;\n'
+    const ancla = "  if v_rep.nivel = 'repetida' then\n"
+    const a2 = nueva.indexOf(ancla) + ancla.length
+    const fin = "      return jsonb_build_object('estado', 'pdf_sustituye_foto'"
+    const bloque = nueva.slice(a2, nueva.indexOf('    end if;\n', nueva.indexOf(fin)) + '    end if;\n'.length)
+    expect(nueva.replace(decl, '').replace(bloque, '')).toBe(origen)
+    // Lo que añade: la factura de ESTA cuenta (regla 9); solo un PDF, sobre una foto o nada, con el mismo total, sin asiento validado.
+    expect(bloque).toContain('from public.supplier_invoice i where i.id = v_rep.invoice_id and i.account_id = v_in.account_id for update;')
+    expect(bloque).toContain("(v_in.mime_type = 'application/pdf' or v_in.file_path ~* '\\.pdf$')")
+    expect(bloque).toContain("(v_doc is null or v_doc ~* '\\.(jpe?g|png|webp|heic|heif)$')")
+    expect(bloque).toContain("round(v_total, 2) = round(nullif(f->>'total', '')::numeric, 2)")
+    expect(bloque).toContain("e.source_id = i.id and e.status = 'validado')")
+    expect(bloque).toContain('delete from public.conta_recibida_pdf r where r.invoice_id = v_rep.invoice_id;')
+    expect(bloque).toContain("'antes', v_doc, 'ahora', v_in.file_path")
+    expect(bloque).not.toMatch(/insert into public\.supplier_invoice \(/)
+  })
+  it('la 0800 no toca filas fuera de la función', () => {
+    const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '').replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, '$$$$')
+    expect(t).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|truncate)/i)
+  })
+  it('la 0810 solo toca RIDERS de Foodint, anclado por cuenta e id, y para si no es él o ya tiene otra forma', () => {
+    const d = readFileSync(viva[1], 'utf8')
+    expect(d).toContain("v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(d).toContain("v_prov constant uuid := 'cbe3ddb1-5d3a-4aa7-a907-38f362e922b1'")
+    expect(d).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
+    const sin = d.replace(/--.*$/gm, '')
+    expect(sin.match(/\bupdate\s+public\./gi)).toHaveLength(1)
+    expect(sin).toContain("update public.supplier set payment_method = 'prepaid' where account_id = v_acc and id = v_prov and payment_method is null;")
+    expect(sin).toContain("if v_s.name is distinct from 'RIDERS' then")
+    expect(sin).toContain('if v_n <> 1 then')
+    expect(sin).not.toMatch(/updated_at/)
+    expect(readFileSync(DOWN_DATOS, 'utf8')).toContain("and payment_method = 'prepaid';")
+  })
+  it('declara qué cuenta; la cuenta solo lee y va por Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d06-prepago-y-pdf.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás, en orden inverso', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-d06-prepago-y-pdf-20261023.txt')).toEqual([DOWN_DATOS, DOWN])
+  })
+})
+
+describe('la tanda del D03 · la recibida sin recepción nace con su documento, y «Guardar cambios» de su ficha (0770, 0780 y 0790, aplicada; su copia)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-d03-recibida-pdf-20261023.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 23/10 a las 06:19 UTC, con la 0480 ya aplicada, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-d03-recibida-pdf-20261023.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const FN = '_compras_factura_desde_papel'
+  const GUARDAR_DOWN = 'supabase/vuelta-atras/20261206T0790_d03_recibida_guardar.down.sql'
+  const GUARDAR_PRUEBA = 'supabase/staging/sql/20261206_d03_recibida_guardar_prueba.sql'
+  const PRUEBA = 'supabase/staging/sql/20261206_d03_recibida_pdf_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql'
+  const DOWN_DATOS = 'supabase/vuelta-atras/20261206T0780_d03_recibida_pdf_datos.down.sql'
+  /** La definición entera, como la devuelve pg_get_functiondef (sin su salto final). */
+  const definicion = (f: string) => {
+    const s = readFileSync(f, 'utf8')
+    const a = s.indexOf(`CREATE OR REPLACE FUNCTION public.${FN}(`)
+    const b = s.indexOf('$function$', s.indexOf('AS $function$', a) + 'AS $function$'.length)
+    return s.slice(a, b + '$function$'.length)
+  }
+
+  it('tres ficheros, los medidos; la 0770 y la 0790 siguen y solo la 0780 (datos de Foodint) pide «autorizo»; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261206T0770_d03_recibida_pdf_sin_recepcion.sql', '20261206T0780_d03_recibida_pdf_datos.sql', '20261206T0790_d03_recibida_guardar.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(r.ficheros[viva[0]]).toBe('sigue')
+    expect(r.ficheros[viva[1]]).toMatch(/autorizo/i)
+    expect(r.ficheros[viva[2]]).toBe('sigue')
+    expect(ctx.tablas).toEqual(['public.supplier_invoice'])
+    expect(ctx.funciones).toEqual([`public.${FN}(uuid,uuid,uuid,uuid,uuid,uuid,text)`])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('el cambio va declarado en la cabecera, con su prueba de staging, que entra como usuario, ejecuta la 0780 y las dos vueltas atrás, y acaba en ROLLBACK', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual([`-- cambia: public.${FN} · prueba: ${PRUEBA}`])
+    expect(readFileSync(viva[1], 'utf8')).not.toMatch(/^-- cambia:/m)
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of [FN, 'set local role authenticated', `\\i ${viva[0]}`, `\\i ${viva[1]}`, `\\i ${DOWN}`, `\\i ${DOWN_DATOS}`,
+      'e0d04afddb7e98ab9cb1b46deccb91e0', 'a8b44ec38a996a24274f984030a13aa7']) expect(p).toContain(x)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+    expect(m).toContain(viva[1])
+  })
+  it('la función cambia SOLO en el bloque nuevo, y la vuelta atrás la deja como la 0370 (la de producción, md5 e0d04afd…) byte a byte', () => {
+    const origen = definicion('supabase/migrations/20261129T0370_textos_sin_papel.sql')
+    expect(md5(origen + '\n')).toBe('e0d04afddb7e98ab9cb1b46deccb91e0')
+    expect(definicion(DOWN)).toBe(origen)
+    const nueva = definicion(viva[0])
+    expect(md5(nueva + '\n')).toBe('a8b44ec38a996a24274f984030a13aa7')
+    const ancla = '  if p_recepcion is not null then select raw_document_url into v_url from goods_receipt where id = p_recepcion; end if;\n'
+    const a = nueva.indexOf(ancla) + ancla.length
+    const bloque = nueva.slice(a, nueva.indexOf('  end if;\n', a) + '  end if;\n'.length)
+    expect(nueva.replace(bloque, '')).toBe(origen)
+    // Lo que añade: solo lee la lectura de ESTA cuenta (regla 9), y solo si no hay documento todavía.
+    expect(bloque).toMatch(/^ {2}--[\s\S]*\n {2}if v_url is null then\n/)
+    expect(bloque).toContain('where a.id = p_sesion and a.account_id = p_cuenta')
+    expect(bloque).toContain("= 'receipt-uploads'")
+    expect(bloque.replace(/--.*$/gm, '')).not.toMatch(/\b(insert|update|delete)\b/i)
+  })
+  it('la 0770 no toca filas: solo reemplaza la función', () => {
+    const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '').replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, '$$$$')
+    expect(t).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|truncate|drop\s+|alter\s+table)/i)
+  })
+  it('la 0780 solo toca las dos de Foodint, ancladas por cuenta, factura y lectura, y para si no son ellas', () => {
+    const d = readFileSync(viva[1], 'utf8')
+    expect(d).toContain("v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(d).toContain("array['9a87fa22-fbc7-471b-bf1d-a88c856259ea', 'd6913598-9f52-4d43-8860-eddff2a6d436']::uuid[]")
+    expect(d).toContain("array['92c53abd-d369-40e2-9beb-9a05adf5c80c', 'd155b941-2c47-4f1f-bca9-067129cfcd77']::uuid[]")
+    expect(d).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
+    const sin = d.replace(/--.*$/gm, '')
+    expect(sin.match(/\bupdate\s+public\./gi)).toHaveLength(1)
+    expect(sin).toContain('set raw_document_url = a.input_files -> 0 ->> \'path\'\n')
+    expect(sin).toMatch(/i\.raw_document_url is null\n\s+and a\.id = m\.lec and a\.account_id = v_acc;/)
+    expect(sin).toContain('if v_n <> 2 then')
+    expect(sin).not.toMatch(/updated_at|status\s*=/)
+    // Su vuelta atrás para si alguna ya tiene asiento o el D02 ya hizo algo con ella.
+    const atras = readFileSync(DOWN_DATOS, 'utf8')
+    expect(atras).toContain('from public.journal_entry e')
+    expect(atras).toContain('from public.conta_recibida_pdf r')
+    expect(atras).toMatch(/^-- sin prueba con datos: \S/m)
+  })
+  it('declara qué cuenta; la cuenta solo lee, va por Foodint y no enseña rutas', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d03-recibida-pdf.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+    expect(c).toContain("'el de su lectura'")
+    expect(c.replace(/--.*$/gm, '')).not.toMatch(/raw_document_url\s+(valor|as)/i)
+  })
+  it('su vuelta atrás, en orden inverso', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-d03-recibida-pdf-20261023.txt')).toEqual([GUARDAR_DOWN, DOWN_DATOS, DOWN])
+  })
+  it('la 0790 solo añade: columnas que admiten nulos, dos tablas nuevas y tres funciones nuevas; ninguna función que exista, ninguna fila', () => {
+    const t = readFileSync(viva[2], 'utf8')
+    expect(t).not.toMatch(/^-- cambia:/m)
+    const fuera = t.replace(/--.*$/gm, '').replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, '$$$$')
+    expect(fuera).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|truncate|drop\s+(table|function|column)|set\s+not\s+null|alter\s+column)/i)
+    for (const l of fuera.split(';').filter((x) => /alter table public\.supplier_invoice add column/.test(x))) expect(l).not.toMatch(/not\s+null/i)
+    const columnas = [...fuera.matchAll(/alter table public\.supplier_invoice add column if not exists (\w+)/g)].map((m) => m[1])
+    expect(columnas).toEqual(['payment_method', 'no_document_at', 'no_document_reason', 'no_document_by_name', 'entry_overrides', 'withholding_base'])
+    const funciones = [...fuera.matchAll(/create or replace function public\.(\w+)\(/g)].map((m) => m[1])
+    expect(funciones).toEqual(['conta_recibida_guardar', 'conta_recibida_papel_poner', 'conta_recibida_sin_papel'])
+    expect(ctx.funciones.some((f: string) => /conta_recibida_(guardar|papel_poner|sin_papel)/.test(f))).toBe(false)
+    expect(ctx.tablas).not.toContain('public.supplier_invoice_expense')
+    expect(ctx.tablas).not.toContain('public.supplier_invoice_change')
+    // Las dos tablas, solo de lectura con la sesión; escriben las funciones.
+    for (const tb of ['supplier_invoice_expense', 'supplier_invoice_change']) {
+      expect(t).toContain(`revoke all on table public.${tb} from public, anon, authenticated;`)
+      expect(t).toContain(`grant select on table public.${tb} to authenticated;`)
+      expect(t).toMatch(new RegExp(`create policy ${tb}_leer on public\\.${tb} for select to authenticated\\s+using \\(public\\.belongs_to_account\\(account_id\\)\\);`))
+    }
+  })
+  it('conta_recibida_guardar: sus diez claves, la cuenta de la factura, no con su asiento validado, quita el propuesto sin descartarlo, y el vencimiento por set_supplier_invoice_due_date', () => {
+    const t = readFileSync(viva[2], 'utf8')
+    const a = t.indexOf('create or replace function public.conta_recibida_guardar(')
+    const g = t.slice(a, t.indexOf('end $$;', a))
+    expect(g).toContain("v_claves constant text[] := array['proveedor', 'numero', 'fecha', 'local', 'vence', 'forma_pago', 'iva', 'retencion', 'gasto', 'asiento_a_mano'];")
+    expect(g).toContain("if v_f.id is null or not public.belongs_to_account(v_f.account_id) then")
+    expect(g).toMatch(/e\.source_id = v_f\.id and e\.status = 'validado'\) then\n\s+raise exception 'Ya está contabilizada: para cambiarla, anula su asiento\.'/)
+    expect(g).toContain("and e.source_id = v_f.id and e.status in ('propuesto', 'borrador');")
+    expect(g).not.toMatch(/journal_dismissal|journal_entry_descartar/)
+    expect(g).toContain('perform public.set_supplier_invoice_due_date(v_f.id, v_vence);')
+    expect(g).toContain("where a.company_id = v_n.company_id and a.code = g ->> 'cuenta' and a.status <> 'cerrada'")
+    expect(g).toContain("insert into public.supplier_invoice_change (account_id, supplier_invoice_id, by_name, what, cambios)")
+  })
+  it('poner su documento reinicia su fila del D02; la prueba de staging entra como usuario y como B, y ejecuta la 0790 y su vuelta atrás; la vuelta atrás para si ya se guardó algo', () => {
+    const t = readFileSync(viva[2], 'utf8')
+    expect(t).toContain('delete from public.conta_recibida_pdf r where r.invoice_id = v_f.id;')
+    expect(t).toContain("left(v_ruta, 37) <> v_f.account_id::text || '/'")
+    expect(t).toMatch(/^-- sin hueco: \S/m)
+    const p = readFileSync(GUARDAR_PRUEBA, 'utf8')
+    for (const x of ['set local role authenticated', 'c01a0000-0001-4000-8000-0000000000a1', `\\i ${viva[2]}`, `\\i ${GUARDAR_DOWN}`, 'Ya está contabilizada']) expect(p).toContain(x)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(GUARDAR_PRUEBA)).toBeGreaterThan(m.indexOf(viva[2]))
+    const d = readFileSync(GUARDAR_DOWN, 'utf8')
+    expect(d).toMatch(/raise exception 'D03 0790 \(vuelta atrás\): ya hay/)
+    expect(d.indexOf('raise exception')).toBeLessThan(d.indexOf('drop function'))
+  })
+})
+
+describe('la tanda del S02 · PR 3 · las cifras (0490, aplicada; su copia)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-s02-cifras-20261023.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 22/10 a las 22:29 UTC, con la 0480 ya aplicada, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-s02-cifras-20261023.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261205_s02_cifras_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261205T0490_s02_cifras.down.sql'
+  const NUEVAS = ['conta_pendientes', 'conta_saldo_bancos', 'conta_saldos_terceros']
+  const cuerpo = (t: string, fn: string) => { const a = t.indexOf(`create or replace function public.${fn}`); return t.slice(a, t.indexOf('end $$;', a) + 'end $$;'.length) }
+  // El cuerpo entre $$ (lo que es prosrc en la base).
+  const prosrc = (t: string, fn: string) => { const c = cuerpo(t, fn); return c.slice(c.indexOf('$$') + 2, c.length - '$$;'.length) }
+
+  it('un fichero, el medido; sigue sin «autorizo»; de lo que toca solo existe el calendario; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261205T0490_s02_cifras.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(viva.map((f) => r.ficheros[f])).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual([])
+    expect(ctx.funciones).toEqual(['public.conta_impuesto_calendario(uuid,date)'])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('el cambio va declarado en la cabecera, con su prueba de staging, que entra como usuario de A, mira que B no ve nada y ejecuta la vuelta atrás', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual([`-- cambia: public.conta_impuesto_calendario · prueba: ${PRUEBA}`])
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of [...NUEVAS, 'conta_impuesto_calendario', 'set local role authenticated', 'c01b0000-0000-4000-8000-0000000000b1', 'set local role anon',
+      'insufficient_privilege', 'rollback;', `\\i ${DOWN}`, `\\i ${viva[0]}`, '480da33a07e1885441de585237156d3e', '51ad1792-6629-4ef7-833a-b57b09a86710']) expect(p).toContain(x)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+  })
+  it('el calendario cambia SOLO en la ventana (salta lo que no hace falta) y en que eso que no hace falta sigue en las filas, y la vuelta atrás lo deja como en la 0340 (el de producción, md5 del cuerpo medido)', () => {
+    const nueva = readFileSync(viva[0], 'utf8'), antes = readFileSync(DOWN, 'utf8'), origen = readFileSync('supabase/migrations/20261128T0340_i01h_sociedades_202.sql', 'utf8')
+    const fn = 'conta_impuesto_calendario'
+    expect(cuerpo(antes, fn)).toBe(cuerpo(origen, fn))
+    expect(md5(prosrc(antes, fn))).toBe('480da33a07e1885441de585237156d3e')
+    const ventana = / {2}-- La ventana:[\s\S]*?into v_ventana[\s\S]*?;\n/
+    // Y una condición más en las filas: lo que no hace falta y vence antes de la ventana sigue saliendo (regla 7).
+    const noHaceFalta = /\n {6}-- S02 · PR 3 \(0490\)[\s\S]*?\n {6}or \(d\.presentacion >= v_hoy and d\.status = 'not_required' and \(v_ventana is null or d\.presentacion < v_ventana\)\)/
+    expect(cuerpo(nueva, fn)).toMatch(noHaceFalta)
+    expect(cuerpo(nueva, fn).replace(ventana, '').replace(noHaceFalta, '')).toBe(cuerpo(origen, fn).replace(ventana, ''))
+    expect(cuerpo(nueva, fn).match(ventana)?.[0]).toContain("coalesce(r.status, 'pending') <> 'not_required'")
+  })
+  it('las tres nuevas solo leen, comprueban la empresa (42501) y solo las llama quien tiene sesión', () => {
+    const t = readFileSync(viva[0], 'utf8')
+    for (const fn of NUEVAS) {
+      const c = cuerpo(t, fn)
+      expect(c, fn).toMatch(/ stable /)
+      expect(c, fn).not.toMatch(/security definer/)
+      expect(c, fn).toContain("if v_acc is null or not public.belongs_to_account(v_acc) then\n    raise exception 'Esa empresa no es tuya.' using errcode = '42501';")
+      expect(c.replace(/--.*$/gm, ''), fn).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|perform\s+public\.(?!belongs))/i)
+    }
+    const permisos = t.split('\n').filter((l) => /^(grant|revoke)\b/.test(l))
+    expect(permisos).toEqual([
+      'revoke all on function public.conta_pendientes(uuid) from public, anon;',
+      'revoke all on function public.conta_saldo_bancos(uuid, date) from public, anon;',
+      'revoke all on function public.conta_saldos_terceros(uuid, date) from public, anon;',
+      'grant execute on function public.conta_pendientes(uuid) to authenticated, service_role;',
+      'grant execute on function public.conta_saldo_bancos(uuid, date) to authenticated, service_role;',
+      'grant execute on function public.conta_saldos_terceros(uuid, date) to authenticated, service_role;',
+    ])
+  })
+  it('conta_pendientes devuelve exactamente sus ocho claves, y los movimientos y asientos con account_id y company_id (regla 9)', () => {
+    const c = cuerpo(readFileSync(viva[0], 'utf8'), 'conta_pendientes')
+    const ret = c.slice(c.indexOf('return jsonb_build_object('))
+    expect([...ret.matchAll(/'([a-z_]+)', /g)].map((m) => m[1])).toEqual(['compras_decidir', 'compras_filas', 'facturas_para_mirar', 'facturas_por_aclarar',
+      'asientos_por_validar', 'bancos_confirmar', 'bancos_aclarar', 'bancos_validar'])
+    expect(c.match(/m\.account_id = v_acc and m\.company_id = p_company/g)).toHaveLength(2)
+    expect(c).toContain('e.account_id = v_acc and e.company_id = p_company')
+    // La misma vara que la pantalla: las bandejas de lib/conciliarVista y lo que se decide en su sitio de lib/diario.
+    expect(c).toContain("m.status in ('por_aclarar', 'pendiente', 'posible_repetido')")
+    expect(c).toContain("not (e.status = 'propuesto' and e.source_type in ('supplier_invoice', 'bank'))")
+  })
+  it('no toca filas: solo crea y reemplaza funciones', () => {
+    const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '').replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, '$$$$')
+    expect(t).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|truncate|drop\s+|alter\s+table)/i)
+  })
+  it('la vuelta atrás para si otra función las llama, y quita las tres', () => {
+    const d = readFileSync(DOWN, 'utf8')
+    expect(d).toContain("raise exception 'S02 0490 vuelta atrás: % llama(n) a las funciones de las cifras y se quedarían rotas. No se toca nada.'")
+    expect(d.split('\n').filter((l) => l.startsWith('drop function'))).toEqual([
+      'drop function if exists public.conta_saldos_terceros(uuid, date);',
+      'drop function if exists public.conta_saldo_bancos(uuid, date);',
+      'drop function if exists public.conta_pendientes(uuid);',
+    ])
+  })
+  it('declara qué cuenta; la cuenta solo lee y es de Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/s02-cifras.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-s02-cifras-20261023.txt')).toEqual([DOWN])
+  })
+})
+
+describe('la tanda del E05 · volver a leer los PDF de Catcher (0480, aplicada; su copia)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-e05-releer-riders-20261022.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
   // lectura en producción el 22/10 a las 19:54 UTC, con la 0470 ya aplicada, para ESTE fichero.
-  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-e05-releer-riders-20261022.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1519,7 +2010,7 @@ describe('la tanda de AHORA (manifiesto vivo): E05 · volver a leer los PDF de C
     expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
   })
   it('su vuelta atrás', () => {
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-e05-releer-riders-20261022.txt')).toEqual([DOWN])
   })
 })
 

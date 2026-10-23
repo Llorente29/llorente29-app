@@ -16,9 +16,21 @@
 // fila se abre su panel lateral (PanelMovimiento). Teclado: ↑↓ para moverse,
 // Intro confirma, espacio marca la casilla.
 //
+// S02 · PR 2: el título, el banco y el mes van en el encabezado de la página
+// (BancosPage), con «Subir extracto» de principal. La lista se queda con su
+// forma (filas por día, casillas, teclado y panel lateral: TablaLista no los
+// tiene) y toma del patrón la altura de fila y las cifras tabulares.
+//
 // En el móvil, una tarjeta por movimiento, «Confirmar los N seguros» arriba,
 // «Hacer foto del ticket» como botón principal cuando falta, y «Es el mismo /
 // Son dos» en los posibles repetidos.
+//
+// S02 · PR 3 («las cifras»): las palabras del Inicio. «Según el banco, a
+// dd/mm» es el extracto (antes «En el banco», que en el Inicio era el libro).
+// «En contabilidad» sigue siendo la 572 con lo propuesto, porque lo casado
+// crea su asiento propuesto y sin él el cuadre contaría lo ya casado como por
+// casar; debajo, de conta_saldo_bancos, cuánto está validado y cuánto por
+// validar (solo si suma lo mismo: desgloseContable).
 //
 // Todo lo que se pulsa confirma con contenido o dice el fallo (regla 8). Las
 // bandejas filtran porque se piden; «Todos» enseña todas las filas (regla 7).
@@ -30,10 +42,10 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
-import { TEXTO_BOTON, filaDe, limitesMes, migasBanco, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
+import { TEXTO_BOTON, filaDe, limitesMes, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import {
-  BANDEJAS, PILDORA, bandejaDe, coincide, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, puntoDePartida, quienEs, textoBloque, textoDelBanco, type Bandeja, type Grupo,
+  BANDEJAS, PILDORA, coincide, enBandeja, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, puntoDePartida, quienEs, textoBloque, textoDelBanco, type Bandeja, type Grupo,
 } from '@/modules/conta/lib/conciliarVista'
 import { bancos as nucleo } from '@/modules/conta/services/bancosService'
 import {
@@ -45,6 +57,13 @@ import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/ba
 import { PanelMovimiento } from '@/modules/conta/bancos/PanelMovimiento'
 import { PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
+import { PorValidar } from '@/modules/conta/bancos/PorValidar'
+import { conVeredicto, textoValidados } from '@/modules/conta/lib/validarBanco'
+import { validar } from '@/modules/conta/services/diarioService'
+import { leerEsperan } from '@/modules/conta/services/esperanService'
+import { leerSaldoBancosSiEsta } from '@/modules/conta/services/cifrasService'
+import { desgloseContable } from '@/modules/conta/lib/cifrasLibro'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
 const VISIBLES = 60
 const euros = (c: number) => eurosExactos(c / 100)
@@ -55,6 +74,7 @@ const hoja = (nombres: Readonly<Record<string, string>>, prefijo: string, porDef
 export function Movimientos() {
   const ctx = useBancos()
   const { accountId, companyId, banco, mes, movil, vuelta, recargar } = ctx
+  const { userName } = useCuentaConta()
   const [query, setQuery] = useSearchParams()
   const navegar = useNavigate()
   const pedida = query.get('ver') === 'todo' ? 'todos' : query.get('ver')
@@ -78,7 +98,7 @@ export function Movimientos() {
   const fotoDe = useRef<string | null>(null)
   const inputFoto = useRef<HTMLInputElement>(null)
 
-  const { hasta } = limitesMes(mes)
+  const { desde, hasta } = limitesMes(mes)
   const corte = hasta < ctx.hoy ? hasta : ctx.hoy
   // Conserva lo leído mientras vuelve a leer (la pasada del agente recarga): la lista no se vacía.
   // Con fecha de corte (antes, la contabilidad está cerrada y casi sin conciliar), también la 572 a la víspera:
@@ -87,14 +107,21 @@ export function Movimientos() {
   const vispera = fechaCorte ? new Date(Date.parse(`${fechaCorte}T12:00:00Z`) - 86400000).toISOString().slice(0, 10) : null
   const lectura = useLeerConservando(banco ? async () => {
     const cuentas = banco.cuenta ? [banco.cuenta] : []
-    const [movs, saldos, antes, pasada, facturas] = await Promise.all([
+    const [movs, saldos, antes, pasada, facturas, esperan, unaFuente] = await Promise.all([
       leerMovimientos(accountId, banco.id, mes),
       saldosContables(companyId, corte, cuentas),
       vispera && corte >= (fechaCorte ?? '') ? saldosContables(companyId, vispera, cuentas) : Promise.resolve(null),
       ultimaPasada(accountId, companyId),
       facturasParaCasar(companyId),
+      // S02 · PR 2: lo que la validación pararía (conta_esperan), para el veredicto de «Por validar».
+      // Si no se puede leer, el veredicto no lo sabe y la validación lo dirá al pulsar.
+      leerEsperan(companyId, desde, hasta).catch((e: unknown) => { console.warn('[bancos] no se pudo leer lo que espera', e); return new Map() }),
+      // S02 · PR 3: la fila de este banco en conta_saldo_bancos, la misma que lee el Inicio.
+      leerSaldoBancosSiEsta(companyId, corte),
     ])
-    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas }
+    const espera = new Map<string, string>([...esperan].map(([id, ms]) => [id, ms[0]?.motivo || 'La base no lo validaría todavía.']))
+    const fila = unaFuente?.find((f) => (banco.cuenta && f.cuenta === banco.cuenta) || f.treasuryAccountId === banco.id) ?? null
+    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera, fila }
   } : null, `${banco?.id}:${mes}`, String(vuelta))
 
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
@@ -105,8 +132,9 @@ export function Movimientos() {
     [fechaCorte, corte, banco, ctx.datos.extractos, lectura.datos])
   const cuadre = useMemo(() => cuadreDe(movs, extracto?.saldoFinalCent ?? null, partida.libroCent, mes), [movs, extracto, partida, mes])
   const seleccion = marcado && marcado.de === lectura.datos ? marcado.ids : cuadre.preseleccionados
+  const desglose = partida.apertura ? null : desgloseContable(lectura.datos?.fila, cuadre.libroCent)
 
-  const vistos = useMemo(() => movs.filter((m) => (bandeja === 'todos' || bandejaDe(m) === bandeja) && coincide(m, busca)), [movs, bandeja, busca])
+  const vistos = useMemo(() => movs.filter((m) => enBandeja(m, bandeja) && coincide(m, busca)), [movs, bandeja, busca])
   const dias = useMemo(() => porDia(todas ? vistos : vistos.slice(0, VISIBLES)), [vistos, todas])
   const grupos = useMemo(() => dias.flatMap((d) => d.grupos), [dias])
 
@@ -136,7 +164,7 @@ export function Movimientos() {
       try { await confirmarPropuesta(m); bien++ } catch (e) { mal.push(`${quien(m)}: ${e instanceof Error ? e.message : String(e)}`) }
     }
     if (mal.length) { setAviso({ tipo: 'error', texto: `Confirmados ${bien} de ${ms.length}. No he podido: ${mal.join(' · ')}` }); refrescarCuentasMenu(); recargar(); lectura.recargar() }
-    else hecho(`Confirmados ${bien === 1 ? 'el 1' : `los ${bien}`}: sus asientos quedan propuestos en contabilidad.`)
+    else hecho(`Confirmados ${bien === 1 ? 'el 1' : `los ${bien}`}: sus asientos esperan en «Por validar».`)
   })
 
   const pulsar = (m: MovimientoBanco, b: Boton) => {
@@ -145,7 +173,7 @@ export function Movimientos() {
       case 'deshacer': return deshacer(m)
       case 'si': case 'si-sin-ticket': return con(m.id, async () => {
         await confirmarPropuesta(m)
-        hecho(`Casado: ${m.propuesta?.que ?? 'el movimiento'} (${quien(m)}). El asiento queda propuesto en contabilidad${b === 'si-sin-ticket' ? ', sin ticket' : ''}.`)
+        hecho(`Casado: ${m.propuesta?.que ?? 'el movimiento'} (${quien(m)}). Su asiento espera en «Por validar»${b === 'si-sin-ticket' ? ', sin ticket' : ''}.`)
       })
       case 'subir-foto': fotoDe.current = m.id; inputFoto.current?.click(); return
       case 'otra-cosa': case 'decirlo-yo': setDialogo({ que: 'cuenta', m }); return
@@ -163,6 +191,25 @@ export function Movimientos() {
   const deshacer = (m: MovimientoBanco) => con(m.id, async () => {
     await nucleo.deshacer(m.casado!.id, 'Deshecho desde Bancos › Movimientos')
     hecho(`Deshecho: el movimiento del ${quien(m)} vuelve a estar sin casar, y su asiento se ha quitado de contabilidad (o anulado, si estaba validado).`)
+  })
+
+  // S02 · PR 2: validar el asiento de lo casado, aquí («Por validar»), uno a uno o en bloque.
+  const validarUno = async (m: MovimientoBanco): Promise<boolean> => {
+    let ok = false
+    await con(m.id, async () => {
+      const r = await validar(m.casado!.asientoId!, userName)
+      ok = true
+      hecho(`Validado: ${m.casado?.asientoConcepto ?? quien(m)} (${quien(m)}) es el asiento ${r.numero}. Ya está en el libro diario.`)
+    })
+    return ok
+  }
+  const validarLos = (ms: readonly MovimientoBanco[]) => con('validar-bloque', async () => {
+    const numeros: number[] = []
+    const mal: string[] = []
+    for (const m of ms) {
+      try { numeros.push((await validar(m.casado!.asientoId!, userName)).numero) } catch (e) { mal.push(`${quien(m)}: ${e instanceof Error ? e.message : String(e)}`) }
+    }
+    setAviso(textoValidados(numeros, mal, ms.length)); refrescarCuentasMenu(); recargar(); lectura.recargar()
   })
 
   const alFoto = async (file: File | undefined) => {
@@ -222,6 +269,7 @@ export function Movimientos() {
   const seleccionables = seleccion.filter((id) => porId.has(id) && confirmable(porId.get(id)!))
   const bloque = textoBloque(seleccionables, cuadre.preseleccionados)
   const elegidoM = elegido ? porId.get(elegido) ?? null : null
+  const paraValidar = conVeredicto(vistos, lectura.datos.espera).map((x) => ({ ...x, espera: lectura.datos!.espera.has(x.m.casado!.asientoId!) }))
   // S01e: lo que queda por decidir en este banco, de todos los meses (la misma cuenta que la cinta: datos.dudas).
   const pendientesBanco = ctx.datos.dudas[banco.id] ?? 0
   const total = cuadre.cuenta.casados + cuadre.cuenta.confirmar + cuadre.cuenta.aclarar
@@ -234,7 +282,7 @@ export function Movimientos() {
       alConfirmarPropuesta={() => pulsar(elegidoM, 'si')}
       alConfirmar={(d, porque, que) => con(elegidoM.id, async () => {
         await nucleo.confirmar(elegidoM.id, porque, d, 'probable', null)
-        hecho(`Casado: ${que} (${quien(elegidoM)}). El asiento queda propuesto en contabilidad.`)
+        hecho(`Casado: ${que} (${quien(elegidoM)}). Su asiento espera en «Por validar».`)
       })}
       alDeshacer={() => deshacer(elegidoM)}
       alVerAsiento={() => elegidoM.casado?.asientoId && navegar(rutaAsiento(elegidoM.casado.asientoId))}
@@ -245,28 +293,23 @@ export function Movimientos() {
   )
 
   return (
-    <section className="cxb-movimientos cxn-conciliar" aria-labelledby="cxb-mov-titulo">
-      <div className="cxl-seccion">
-        <div>
-          <nav className="cxp-migas" aria-label="Estás en"><span>Bancos</span><span aria-hidden="true">›</span><span aria-current="page">{migasBanco(banco).replace(/^Bancos › /, '')}</span></nav>
-          <h2 id="cxb-mov-titulo">Movimientos</h2>
-        </div>
-        {!movil && <div className="cxl-herramientas"><button type="button" className="cx-boton-sec" onClick={() => ctx.subir()}>Subir extracto</button></div>}
-      </div>
+    <section className="cxb-movimientos cxn-conciliar" aria-label={`Movimientos de ${banco.nombre}`}>
+      {/* S02 · PR 2: el título, el banco y el mes y «Subir extracto» van en el encabezado de la página (BancosPage). */}
 
       {/* El cuadre: en el banco − en contabilidad = te falta por casar, y la barra. */}
       <div className="cxn-cuadre" data-testid="cuadre">
         <div className="cxn-cuenta">
           <div className="cxn-cifra">
-            <span className="cxb-cifra-etiqueta">En el banco</span>
+            <span className="cxb-cifra-etiqueta">Según el banco</span>
             <span className="cxb-cifra-valor">{cuadre.bancoCent === null ? '—' : euros(cuadre.bancoCent)}</span>
-            <span className="cxb-cifra-pie">{extracto ? `extracto hasta el ${fechaLarga(extracto.hasta)}` : 'sube un extracto con saldos'}</span>
+            <span className="cxb-cifra-pie">{extracto ? `a ${diaMesCorto(extracto.hasta)}, su extracto` : 'sube un extracto con saldos'}</span>
           </div>
           <span className="cxn-signo" aria-hidden="true">−</span>
           <div className="cxn-cifra">
             <span className="cxb-cifra-etiqueta">En contabilidad</span>
             <span className="cxb-cifra-valor">{cuadre.libroCent === null ? '—' : euros(cuadre.libroCent)}</span>
             <span className="cxb-cifra-pie">{cuadre.libroCent === null ? 'el banco no tiene su cuenta' : `a ${fechaLarga(corte)}`}</span>
+            {desglose && <span className="cxb-cifra-pie" data-testid="desglose-contable">{eurosExactos(desglose.validado)} validado y {eurosExactos(desglose.propuesto)} por validar</span>}
             {partida.apertura && <span className="cxb-cifra-pie cxn-apertura" data-testid="apertura">{partida.apertura.frase}</span>}
           </div>
           <span className="cxn-signo" aria-hidden="true">=</span>
@@ -324,7 +367,7 @@ export function Movimientos() {
 
       {aviso && <div className={aviso.tipo === 'ok' ? 'cx-guardado' : 'cx-error'} role={aviso.tipo === 'ok' ? 'status' : 'alert'}>{aviso.texto}</div>}
 
-      {bandeja !== 'casados' && bandeja !== 'aclarar' && seleccionables.length > 0 && (
+      {bandeja !== 'casados' && bandeja !== 'aclarar' && bandeja !== 'validar' && seleccionables.length > 0 && (
         <div className="cxn-bloque-barra" role="region" aria-label="Confirmar en bloque">
           <span><strong>{bloque.etiqueta}</strong>{!movil && <span className="cx-ayuda"> · las casillas quitan o añaden; cada uno se confirma como si fuera solo</span>}</span>
           <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => confirmarVarios(seleccionables, 'bloque')}>
@@ -334,7 +377,11 @@ export function Movimientos() {
       )}
 
       <div className={`cxn-cuerpo${panel && !movil ? ' cxn-con-panel' : ''}`}>
-        {bandeja === 'casados' ? (
+        {bandeja === 'validar' ? (
+          <PorValidar filas={paraValidar} donde={`de ${nombreMes(mes).toLowerCase()} en ${banco.nombre}`} movil={movil} ocupado={ocupado}
+            alValidar={validarUno} alValidarLos={validarLos} alDeshacer={deshacer}
+            alVerAsiento={(m) => m.casado?.asientoId && navegar(rutaAsiento(m.casado.asientoId))} />
+        ) : bandeja === 'casados' ? (
           <CasadosSolos movs={vistos} donde={`de ${nombreMes(mes).toLowerCase()} en ${banco.nombre}`} ocupado={ocupado} alAbrir={(m) => setElegido(m.id)} alDeshacer={deshacer}
             alVerAsiento={(m) => m.casado?.asientoId && navegar(rutaAsiento(m.casado.asientoId))} />
         ) : (

@@ -20,8 +20,9 @@ describe('la entera en trozos', () => {
     const sin = TODOS.filter((f) => typeof TIEMPOS[f] !== 'number')
     // Los nuevos cuentan como la mediana. 21/10: main trae 4 sin medir (i01b/plazo,
     // i01d/proveedor-extranjero, i01e/ficha-libro, i01h/sociedades); inventario/autoconteo
-    // ya está medido (e2e 761).
-    expect(sin.length).toBeLessThan(5)
+    // ya está medido (e2e 761). 23/10 (D06): entra d01/validar-en-bloque, nueva y sin medir
+    // (cuenta como la mediana): son 5. La mide la entera de su PR.
+    expect(sin.length).toBeLessThan(6)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -65,7 +66,9 @@ describe('la entera en trozos', () => {
     // e2e 761). El reparto estimado da 15,6: el techo pasa a 16 min. Lo mide la entera de la tanda.
     // 22/10 (C07): entran medidos i01h/en-vivo (20,6 s, del #281) y c06/diezTodo (85,0 s, e2e
     // 39735848930). El reparto estimado da 16,04: el techo pasa a 16,5 min. Lo mide la entera de la tanda.
-    expect(Math.max(...seg) / 60).toBeLessThan(16.5)
+    // 23/10 (D06): entra d01/validar-en-bloque, sin medir (cuenta como la mediana). El reparto
+    // estimado da 16,65: el techo pasa a 17 min. Lo mide la entera de su PR.
+    expect(Math.max(...seg) / 60).toBeLessThan(17)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {
@@ -107,7 +110,9 @@ describe('el workflow de la e2e (W02)', () => {
     const plan = wf.slice(wf.indexOf('- name: Frente'), wf.indexOf('  trozo:'))
     expect(plan).toContain('git diff --name-only "origin/main...$GITHUB_SHA"')
     expect(plan).toContain('node scripts/e2e/area.mjs "$GITHUB_REF_NAME" --cambiados "$RUNNER_TEMP/cambiados.txt" --etiquetas "$ETIQUETAS"')
-    expect(plan).toMatch(/if \[ "\$\(sed -n 's\/\^entera=\/\/p' "\$RUNNER_TEMP\/decision.txt"\)" = true \]; then\n\s+PRUEBAS=\n/)
+    // C10 (23/10): la entera puede ir acotada a un producto (Sumied o Folvy): las pruebas las da area.mjs, y va en trozos.
+    expect(plan).toMatch(/if \[ "\$\(sed -n 's\/\^entera=\/\/p' "\$RUNNER_TEMP\/decision.txt"\)" = true \]; then\n[^\n]*\n\s+PRUEBAS=\$\(sed -n 's\/\^pruebas=\/\/p' "\$RUNNER_TEMP\/decision.txt"\); ENTERA=1\n/)
+    expect(plan).toContain('[ -z "${PRUEBAS:-}" ] || [ "${ENTERA:-0}" = 1 ] || N=1')
     expect(plan).toMatch(/\[ -n "\$PRUEBAS" \] \|\| \{/)
   })
 

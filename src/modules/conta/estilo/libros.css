@@ -121,6 +121,31 @@
 .cxl-lista-estado { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .cxl-lista-estado li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
 
+/* S02 · PR 2 · Los libros en el patrón: cada tabla en su caja blanca (la de la
+   Lista del patrón) y la tabla con sus filas de --s-fila, la cabecera en el
+   gris suave, sin mayúsculas, y las cifras tabulares a la derecha. Solo dentro
+   de .cxl-caja: el cierre y bancos, que aún no se han mudado, siguen igual. */
+.cxl-caja {
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+  overflow-x: auto; min-width: 0;
+}
+.cxl-caja > .cxl-subtitulo, .cxl-caja-cabeza { margin: 0; padding: var(--s-3) var(--s-4); }
+.cxl-caja > .cxl-subtitulo { font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); letter-spacing: 0; }
+.cxl-caja > .cxl-apoyo, .cxl-caja > .cxl-pie, .cxl-caja > .cx-ayuda { padding: 0 var(--s-4); }
+.cxl-caja > .cxl-sin-sitio { margin: var(--s-3) var(--s-4); }
+.cxl-caja .cxl-tabla { font-size: var(--s-t-m); }
+.cxl-caja .cxl-tabla caption { padding: var(--s-3) var(--s-4) 0; }
+.cxl-caja .cxl-tabla th {
+  height: var(--s-fila); padding: 0 var(--s-3); background: var(--s-suave); color: var(--s-apoyo);
+  font-size: var(--s-t-s); font-weight: var(--s-peso-medio); text-transform: none; letter-spacing: 0;
+  border-bottom: var(--s-linea) solid var(--s-borde-decorativo); white-space: nowrap;
+}
+.cxl-caja .cxl-tabla td { height: var(--s-fila); padding: var(--s-1) var(--s-3); border-top: 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: middle; }
+.cxl-caja .cxl-tabla .cxl-der { font-family: var(--s-letra-cifras); font-variant-numeric: tabular-nums; }
+.cxl-caja .cxl-tabla tfoot td { background: var(--s-suave); font-weight: var(--s-peso-titulo); border-top: 0; }
+.cxl-caja .cxl-tabla tbody tr:hover { background: var(--s-suave); }
+.cxl-informe-lado { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+
 @media (max-width: 1100px) {
   .cxl-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cxl-ia { grid-template-columns: 1fr; grid-auto-flow: row; }
@@ -201,7 +226,6 @@
 
 /* C06b R7 · Pendientes de adjuntar en Diez: una lista (no una tabla) que en el
    móvil apila el qué y los botones. */
-.cxp-pendientes-resumen { margin: 0 0 6px; font-size: 15px; }
 .cxp-pendientes { list-style: none; margin: 12px 0 0; padding: 0; }
 .cxp-pendiente { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
 .cxp-pendiente-que { min-width: 0; }
@@ -211,4 +235,19 @@
 @media (max-width: 767px) {
   .cxp-pendiente { flex-direction: column; align-items: stretch; }
   .cxp-pendiente-acciones > * { flex: 1; }
+}
+
+/* S02 · PR 2 · En el móvil, la tabla de una caja se apila como siempre
+   (cxl-apilada): sin el alto de fila del ordenador y con el margen de la caja. */
+@media (max-width: 767px) {
+  .cxl-caja .cxl-tabla th, .cxl-caja .cxl-tabla td { height: auto; padding: 0; border-bottom: 0; }
+  .cxl-caja .cxl-tabla tr { padding: var(--s-2) var(--s-4); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+  .cxl-caja .cxl-tabla tbody tr:hover { background: none; }
+}
+
+/* S02 · PR 2 · «Ver: <libro>. Cambiar» va en el encabezado, a la derecha:
+   su menú se abre hacia dentro de la página (alineado a su derecha), no hacia
+   fuera. En el móvil manda la regla del marco (el menú a todo el ancho). */
+@media (min-width: 768px) {
+  .cxl-pagina .s-encabezado-acciones .s-menu { left: auto; right: 0; }
 }

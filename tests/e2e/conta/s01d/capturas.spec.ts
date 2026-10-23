@@ -30,8 +30,12 @@ const foto = (page: Page, nombre: string) => page.screenshot({ path: `${DIR}/${F
 
 const PANTALLAS: { nombre: string; ruta: string; cuenta?: 'B' }[] = [
   { nombre: 'libro-diario', ruta: 'libros/diario' },
-  { nombre: 'expedida', ruta: 'libros/diario/nuevo?tipo=expedida' },
-  { nombre: 'recibidas', ruta: 'libros/diario/recibidas' },
+  // S02 · PR 2: la emitida es de Facturación › Facturas emitidas, y las
+  // recibidas solo de Compras y gastos (libros/diario/recibidas lleva a
+  // documentos?ver=por-revisar). Se va directo a su sitio; los nombres de las
+  // capturas se quedan para comparar con las de antes.
+  { nombre: 'expedida', ruta: 'facturacion/emitidas/nueva' },
+  { nombre: 'recibidas', ruta: 'documentos?ver=por-revisar' },
   { nombre: 'registro-recibidas', ruta: 'libros/registro/recibidas' },
   { nombre: 'contactos', ruta: 'clientes-y-proveedores' },
   { nombre: 'contactos-proveedores', ruta: 'clientes-y-proveedores?ver=proveedores' },

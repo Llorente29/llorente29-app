@@ -465,3 +465,61 @@ supabase/staging/sql/20261203_d02_recibida_pdf_prueba.sql
 #   desde la rama va en ROLLBACK (W05); de verdad, desde main después del real.
 supabase/migrations/20261204T0480_e05_releer_riders.sql
 supabase/staging/sql/20261204_e05_releer_riders_prueba.sql
+# S02 · PR 3 · las cifras, una fuente por concepto (rama claude/cool-noether-i932tx; Julio, 22/10).
+#   La 0490 añade conta_pendientes, conta_saldo_bancos y conta_saldos_terceros
+#   (solo leen) y cambia la ventana de conta_impuesto_calendario (salta lo que
+#   no hace falta presentar). Su prueba (ROLLBACK): el calendario de antes y el
+#   de después, lo pendiente con un movimiento de cada clase y tres asientos,
+#   el banco con su 572 y sus extractos, los saldos de terceros contra el
+#   libro, quién lee, y la vuelta atrás byte a byte. Cambia una función: desde
+#   la rama va en ROLLBACK (W05); de verdad, desde main después del real.
+supabase/migrations/20261205T0490_s02_cifras.sql
+supabase/staging/sql/20261205_s02_cifras_prueba.sql
+# D03 · la recibida que se sube sin recepción nace con su documento (rama claude/ficha-recibida; Julio, 23/10).
+#   La 0770 cambia _compras_factura_desde_papel: sin recepción, o con una sin
+#   documento, el primer fichero de su lectura. Su prueba (ROLLBACK): el hueco
+#   antes, como usuario de A; un PDF sin recepción con su documento; la foto
+#   con su recepción como antes; recepción sin documento; sin ficheros u otro
+#   bucket; B no; la 0780 y su vuelta atrás sin Foodint; y la vuelta atrás
+#   byte a byte. Cambia una función: desde la rama va en ROLLBACK (W05); de
+#   verdad, desde main después del real. La 0780 es solo de Foodint: aquí no
+#   hace nada.
+supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
+supabase/staging/sql/20261206_d03_recibida_pdf_prueba.sql
+supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql
+# D03 · «Guardar cambios» de la ficha de la recibida (la misma rama; Julio, 23/10).
+#   La 0790 solo añade (columnas que admiten nulos, dos tablas y tres
+#   funciones) y se puede pasar dos veces: desde la rama va de verdad (W05).
+#   Su prueba (ROLLBACK): cada clave de p_cambios como usuario de A y lo
+#   escrito, el historial y el asiento propuesto quitado; lo que no; poner su
+#   documento y «Sin PDF»; B no; con su asiento validado no; y la vuelta atrás.
+supabase/migrations/20261206T0790_d03_recibida_guardar.sql
+supabase/staging/sql/20261206_d03_recibida_guardar_prueba.sql
+#
+# D06 · bloque 1 de Compras y gastos (rama claude/cool-noether-i932tx, 23/10).
+#   La 0800 cambia en caliente (los dos CHECK de payment_method admiten
+#   'prepaid'; conta_factura_desde_lectura: el PDF bueno sustituye a la foto):
+#   desde la rama va en ROLLBACK (W05); de verdad, desde main después del real.
+#   La 0810 es solo de Foodint: aquí no hace nada.
+#   Su prueba (ROLLBACK): lo de antes con el md5 de producción; prepaid entra y
+#   «bizum» no; el correo con foto y luego su PDF (sustituye, la foto al
+#   historial, sin otra factura); lo que no sustituye; y las vueltas atrás
+#   byte a byte.
+supabase/migrations/20261207T0800_d06_prepago_y_pdf_bueno.sql
+supabase/migrations/20261207T0810_d06_riders_prepago.sql
+supabase/staging/sql/20261207_d06_prepago_y_pdf_prueba.sql
+#
+# D07a · las recibidas rechazadas por la descripción, otra vez a la cola
+# (rama claude/cool-noether-i932tx, 23/10). La 0820 es solo de Foodint: aquí no
+# hace nada. Su prueba (ROLLBACK): sin Foodint, ni la 0820 ni su vuelta atrás
+# tocan ningún envío; B no ve los de A.
+supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
+supabase/staging/sql/20261208_d07a_diez_reenviar_prueba.sql
+#
+# D07c · «Saldo prepago» en todas las listas de formas de pago (la misma rama
+# y la misma tanda que la 0820). La 0830 cambia en caliente dos funciones y
+# tres CHECK: desde la rama va en ROLLBACK (W05). Su prueba (ROLLBACK): guardar
+# en la ficha una recibida con «Saldo prepago Catcher» como usuario de A; el
+# error en español; las demás listas; B no; y la vuelta atrás byte a byte.
+supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql
+supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql

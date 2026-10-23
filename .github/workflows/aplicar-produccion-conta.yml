@@ -1,8 +1,11 @@
 name: Aplicar SQL en PRODUCCIÓN (contabilidad)
 
 # QUÉ HACE (C00, respuestas 6 y 7 de Julio; W01, 08/10: a cualquier hora)
-# Aplica en PRODUCCIÓN la tanda de supabase/produccion/aplicar.txt (o, en modo
-# «vuelta_atras», la de supabase/produccion/vuelta-atras.txt).
+# Aplica en PRODUCCIÓN la tanda DE LA RAMA (C10, 23/10):
+# supabase/produccion/tandas/<producto>/<rama>/aplicar.txt (o, en modo
+# «vuelta_atras», su vuelta-atras.txt). Cada rama tiene la suya y nadie más la
+# edita (scripts/conta/produccion/tanda.mjs). Desde main, la que se nombre en
+# «tanda» (una ya fusionada, p. ej. «heredada»).
 #
 #   · Solo a mano (workflow_dispatch). NUNCA por push. Pide escribir
 #     «produccion» en el campo `confirmo`.
@@ -65,7 +68,7 @@ name: Aplicar SQL en PRODUCCIÓN (contabilidad)
 # OJO: GitHub solo deja lanzar un workflow_dispatch si el fichero del workflow
 # existe en la rama por defecto (main). Ver el informe del PR #138.
 
-run-name: "${{ inputs.modo }} · ${{ github.ref_name }} · ${{ github.sha }}"
+run-name: "${{ inputs.modo }} · ${{ github.ref_name }}${{ inputs.tanda && format(' · tanda {0}', inputs.tanda) || '' }} · ${{ github.sha }}"
 
 on:
   workflow_dispatch:
@@ -75,11 +78,16 @@ on:
         required: true
         type: string
       modo:
-        description: 'ensayo = todo en una transacción y rollback; real = aplica (solo con un ensayo en verde de este mismo commit); vuelta_atras = aplica supabase/produccion/vuelta-atras.txt'
+        description: 'ensayo = todo en una transacción y rollback; real = aplica (solo con un ensayo en verde de este mismo commit); vuelta_atras = aplica el vuelta-atras.txt de la tanda'
         required: true
         type: choice
         options: [ensayo, real, vuelta_atras]
         default: ensayo
+      tanda:
+        description: 'Vacío = la tanda de la rama desde la que se lanza. Desde main, el nombre de la carpeta de la tanda (supabase/produccion/tandas/<producto>/<nombre>), p. ej. «heredada».'
+        required: false
+        type: string
+        default: ''
       autorizo:
         description: 'Solo para los ficheros que el análisis marca AUTORIZO: el nombre ENTERO de cada uno, sin carpeta, separados por espacios. Vacío = ninguno. Un BLOQUEA no se abre aquí.'
         required: false
@@ -105,6 +113,7 @@ jobs:
       STAGING_REF: oseymswjlzplqoxrfjzi
       FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
       MODO: ${{ inputs.modo }}
+      TANDA_PEDIDA: ${{ inputs.tanda }}
       PSQL: /usr/lib/postgresql/17/bin/psql
       PGAPPNAME: gha-produccion-conta-${{ github.run_id }}
       # D01 R2 (13/10): sin NOTICE (los avisos de una migración pueden llevar
@@ -140,7 +149,7 @@ jobs:
             echo "::error::Hay que escribir «produccion» en «confirmo». No se hace nada."
             exit 1
           fi
-          case "$MODO" in ensayo|real|vuelta_atras) ;; *) echo "::error::Modo desconocido: $MODO"; exit 1 ;; esac
+          case "$MODO" in ensayo|real|vuelta_atras) ;; *) echo "::error::Modo desconocido: tiene que ser ensayo, real o vuelta_atras."; exit 1 ;; esac
           {
             echo "# Producción · modo **$MODO**"
             echo
@@ -175,8 +184,13 @@ jobs:
           set -euo pipefail
           # R9: el manifiesto declara también qué se cuenta antes y después
           # («cuenta: …»), obligatorio en la tanda de aplicar (manifiesto.sh).
-          if [ "$MODO" = "vuelta_atras" ]; then M=supabase/produccion/vuelta-atras.txt; PAT='^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.down\.sql$'; OBLIG=no
-          else M=supabase/produccion/aplicar.txt; PAT='^supabase/migrations/[A-Za-z0-9_./-]+\.sql$'; OBLIG=si; fi
+          # C10: la tanda de la rama (o la nombrada en «tanda»), en su carpeta.
+          if [ -n "${TANDA_PEDIDA:-}" ] && ! [[ "$TANDA_PEDIDA" =~ ^[A-Za-z0-9._/-]+$ ]]; then echo "::error::«tanda» es el nombre de una carpeta de supabase/produccion/tandas."; exit 1; fi
+          node scripts/conta/produccion/tanda.mjs workflow "${TANDA_PEDIDA:-$GITHUB_REF_NAME}" > /tmp/tanda-error.txt 2>&1 || {
+            echo "::error::No hay tanda para esta rama en supabase/produccion/tandas/<producto>/<rama>/aplicar.txt (o está en los dos productos). Desde main, di cuál en «tanda»."; exit 1; }
+          DIR=$(cat /tmp/tanda-dir.txt)
+          if [ "$MODO" = "vuelta_atras" ]; then M=$DIR/vuelta-atras.txt; PAT='^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.down\.sql$'; OBLIG=no
+          else M=$DIR/aplicar.txt; PAT='^supabase/migrations/[A-Za-z0-9_./-]+\.sql$'; OBLIG=si; fi
           # W02: y si la tanda va SIN VUELTA ATRÁS, a propósito («sin-vuelta-atras:»),
           # con lo que se espera después («esperado:»). Vacíos si no lo declara.
           bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG" /tmp/sin-vuelta.txt /tmp/esperado.txt
@@ -214,7 +228,7 @@ jobs:
             echo "::error::No hay ningún ENSAYO en verde del commit ${GITHUB_SHA}. Primero el ensayo, luego el real."
             exit 1
           fi
-          echo "Hay $n ensayo(s) en verde de este commit."
+          echo "Hay al menos un ensayo en verde de este commit."
           echo "Ensayo en verde de este mismo commit: sí ($n)." >> "$INFORME"; echo >> "$INFORME"
 
       - name: Contexto (solo lee) e historial · lo ya aplicado no se reaplica
@@ -229,6 +243,10 @@ jobs:
           node "$A" sql-contexto /tmp/objetivos.json /tmp/destruidos.json $(cat /tmp/tanda.txt) > /tmp/contexto.sql
           PGOPTIONS="$PGOPTIONS -c default_transaction_read_only=on" "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f /tmp/contexto.sql > /tmp/contexto.json
           node "$A" historial /tmp/contexto.json $(cat /tmp/tanda.txt) > /tmp/historial.json
+          # C10: ningún fichero de la tanda repite la fecha, hora y sesión de otro ya aplicado.
+          PGOPTIONS="$PGOPTIONS -c default_transaction_read_only=on" "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select version from supabase_migrations.schema_migrations" > /tmp/versiones.txt
+          node scripts/conta/produccion/nombres.mjs produccion /tmp/versiones.txt $(cat /tmp/tanda.txt) > /tmp/nombres.txt 2>&1 || {
+            echo "::error::Un fichero de la tanda repite la fecha, hora y sesión de una migración ya aplicada en producción (nombres.mjs): cámbiale el minuto."; exit 1; }
           node -e '
             const h = require("/tmp/historial.json"), fs = require("fs")
             const l = ["## Historial", ""]

@@ -147,9 +147,11 @@ test('A (hostelería): la barra con Contabilidad abierta, la cabecera de 56 px y
   const ver = c.getByRole('button', { name: 'Ver: Libro diario. Cambiar' })
   await expect(ver).toBeVisible()
   const mas = await masAcciones(c)
-  await expect(mas.getByRole('group', { name: 'Nuevo' }).getByRole('link')).toHaveText(['Expedida', 'Recibida', 'Recibida a mano', 'Tesorería', 'General', 'Predefinidos'])
+  // S02 · PR 2: la emitida es de Facturación y las recibidas (y Digitalizar), de
+  // Compras y gastos; en Asientos queda lo que es un asiento a mano.
+  await expect(mas.getByRole('group', { name: 'Nuevo' }).getByRole('link')).toHaveText(['Tesorería', 'General', 'Predefinidos'])
   await expect(mas.getByRole('group', { name: 'Utilidades' }).getByRole('button', { name: 'Búsqueda' })).toBeVisible()
-  await expect(mas.getByRole('group', { name: 'Utilidades' }).getByRole('link', { name: 'Digitalizar' })).toBeVisible()
+  await expect(mas.getByRole('group', { name: 'Utilidades' }).getByRole('link')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect(mas).toHaveCount(0)
   await ver.click()
@@ -164,15 +166,15 @@ test('A (hostelería): la barra con Contabilidad abierta, la cabecera de 56 px y
 
   // La barra: lo que tiene pantalla, con Contabilidad marcada. S02: Favoritos va
   // abajo, con Ajustes; y el apartado dice «estás dentro» ('true') porque estás
-  // en una de sus páginas.
+  // en una de sus páginas. S02 · PR 2: Facturación sale, con Facturas emitidas.
   if (lado(page) === 'ordenador') {
-    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
+    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
     await expect(barra(page).getByRole('link', { name: 'Contabilidad', exact: true })).toHaveAttribute('aria-current', 'true')
   } else {
     // S01c: el cajón, con todos los apartados (y «Volver a Folvy»: A no es el producto solo).
     // S01d: y, sobre Ajustes, Favoritos y el usuario («<nombre> · nivel <nivel>»).
     await abrirCajon(page)
-    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', / · nivel (sin experiencia|medio|experto)$/, 'Ajustes', 'Volver a Folvy'])
+    await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', / · nivel (sin experiencia|medio|experto)$/, 'Ajustes', 'Volver a Folvy'])
     await expect(barra(page).getByRole('link', { name: 'Contabilidad', exact: true })).toHaveAttribute('aria-current', 'true')
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
@@ -202,7 +204,7 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await expect(page.locator('.s-cabecera, .s-barra, .s-cajon, .s-acciones-pagina, .s-encabezado').getByText(/Liquidaci|plataforma|Catcher|socio/i)).toHaveCount(0)
   await cerrarCajon(page)
   // La misma barra que A: el esqueleto es uno; lo que cambia es lo de hostelería.
-  if (lado(page) === 'ordenador') await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
+  if (lado(page) === 'ordenador') await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
   // Ni por la dirección: una liquidación no marca ninguna página.
   await page.goto('/conta/compras/liquidacion/nueva')
   await expect((await paginas(page, 'Compras y gastos')).locator('[aria-current="page"]')).toHaveCount(0)
@@ -219,12 +221,13 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
   await page.waitForLoadState('networkidle')
   await expect(page.getByText(/Sube la quincena de Catcher/)).toHaveCount(0)
-  // Ventas: sin plataformas; la factura emitida, a mano («Expedida»).
+  // Ventas: sin plataformas; la factura emitida, a mano. S02 · PR 2: la hoja se
+  // titula «Nueva factura emitida» (antes, «expedida»).
   await page.goto('/conta/ventas')
   await expect(page.getByText(/^Tus ventas llegan con Facturación/)).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText(/plataforma/i)).toHaveCount(0)
   await page.getByRole('link', { name: 'Apuntar una factura expedida' }).click()
-  await expect(page.getByRole('heading', { name: 'Nueva factura expedida' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('heading', { level: 1, name: 'Nueva factura emitida' })).toBeVisible({ timeout: 30_000 })
   expect(errores).toEqual([])
 })
 
@@ -323,7 +326,8 @@ test('Inicio como bandeja: impuestos con el plazo que toca, las gráficas a un c
     return previa
   }
   const banco = page.locator('.cxi-cifra-etiqueta [data-actual]').first()
-  await expect(banco).toHaveText('En el banco')
+  // S02 · PR 3: «En el banco» era el libro aquí y el extracto en Bancos; ahora dice lo que es.
+  await expect(banco).toHaveText('Bancos · en contabilidad')
   const antes = await cajas()
   expect(antes.length).toBeGreaterThan(5)
   try {
@@ -333,14 +337,14 @@ test('Inicio como bandeja: impuestos con el plazo que toca, las gráficas a un c
     expect(await cajas()).toEqual(antes)
     await capturar(page, 'inicio-experto')
     await nivel(page, 'Sin experiencia')
-    await expect(banco).toHaveText('Tienes en el banco')
+    await expect(banco).toHaveText('Tus bancos, en contabilidad')
     await expect(page.getByRole('heading', { name: 'Lo que toca presentar a Hacienda' })).toBeVisible()
     expect(await cajas()).toEqual(antes)
     await capturar(page, 'inicio-sin-experiencia')
   } finally {
     await nivel(page, 'Medio')
   }
-  await expect(banco).toHaveText('En el banco')
+  await expect(banco).toHaveText('Bancos · en contabilidad')
   await capturar(page, 'inicio-bandeja')
   expect(errores).toEqual([])
 })
@@ -369,32 +373,34 @@ test('Favoritos: se fija desde el menú, se guarda en la base y sigue en otro na
   await expect(fav.getByText('Aún no tienes ninguno. Fija abajo lo que más uses y saldrá aquí.')).toBeVisible()
   // Lo que se puede fijar desde aquí: esta pantalla y sus acciones (S02: las de su fila, antes la cinta).
   await expect(fav.getByRole('button', { name: /^Contabilidad › Asientos/ })).toBeVisible()
-  await fav.getByRole('button', { name: /^Expedida/ }).click()
+  // S02 · PR 2: «Expedida» ya no es de Asientos (es «Nueva factura emitida», de
+  // Facturación): se fija «Tesorería», que sigue en la fila de Asientos.
+  await fav.getByRole('button', { name: /^Tesorería/ }).click()
   try {
     // Fijar lo dice (regla 8), y dice dónde está: S02, abajo en la barra (antes, arriba en la cabecera).
-    await expect(aviso(page, 'Fijado en Favoritos: «Expedida». Lo tienes abajo, en Favoritos.')).toBeVisible()
+    await expect(aviso(page, 'Fijado en Favoritos: «Tesorería». Lo tienes abajo, en Favoritos.')).toBeVisible()
 
     await page.reload()
     await abrirFavoritos(page)
     const tras = page.getByRole('group', { name: 'Favoritos' })
     await expect(tras).toHaveAttribute('aria-busy', 'false')
-    await expect(tras.getByRole('link', { name: 'Expedida' })).toHaveAttribute('href', '/conta/libros/diario/nuevo?tipo=expedida')
+    await expect(tras.getByRole('link', { name: 'Tesorería' })).toHaveAttribute('href', '/conta/libros/diario/nuevo?tipo=tesoreria')
     await capturar(page, 'esqueleto-favoritos')
 
     // Otro navegador (otro ordenador): la misma lista, porque está en la base.
-    expect(await favoritosEnOtroNavegador(browser, CUENTA_A.email)).toEqual(['Expedida'])
+    expect(await favoritosEnOtroNavegador(browser, CUENTA_A.email)).toEqual(['Tesorería'])
 
     // Quitar también lo dice; y la lista queda vacía.
-    await tras.getByRole('button', { name: 'Quitar «Expedida» de Favoritos' }).click()
-    await expect(aviso(page, 'Quitado de Favoritos: «Expedida».')).toBeVisible()
+    await tras.getByRole('button', { name: 'Quitar «Tesorería» de Favoritos' }).click()
+    await expect(aviso(page, 'Quitado de Favoritos: «Tesorería».')).toBeVisible()
     expect(await favoritosEnOtroNavegador(browser, CUENTA_A.email)).toEqual([])
   } finally {
-    // Si algo falló a medias, «Expedida» no se queda fijado para la siguiente prueba (van en la base).
+    // Si algo falló a medias, «Tesorería» no se queda fijado para la siguiente prueba (van en la base).
     await page.goto('/conta/libros/diario')
     await abrirFavoritos(page)
     const f = page.getByRole('group', { name: 'Favoritos' })
     await expect(f).toHaveAttribute('aria-busy', 'false')
-    const quitar = f.getByRole('button', { name: 'Quitar «Expedida» de Favoritos' })
+    const quitar = f.getByRole('button', { name: 'Quitar «Tesorería» de Favoritos' })
     if (await quitar.count()) await quitar.click()
   }
 })
@@ -505,9 +511,10 @@ test('Asientos › Predefinidos: se guarda uno desde el asiento a mano, sale en 
   await entrarComo(page, CUENTA_A.email)
   vigilar(page, errores)
   const nombre = `Alquiler e2e ${lado(page)} ${Date.now()}`
-  // «Expedida» y «Tesorería» ponen su serie y dicen qué se apunta.
+  // «Expedida» y «Tesorería» ponen su serie y dicen qué se apunta. S02 · PR 2: la
+  // expedida se titula «Nueva factura emitida».
   await page.goto('/conta/libros/diario/nuevo?tipo=expedida')
-  await expect(page.getByRole('heading', { name: 'Nueva factura expedida' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('heading', { level: 1, name: 'Nueva factura emitida' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByLabel('Serie')).toHaveValue('1')
   await page.goto('/conta/libros/diario/nuevo?tipo=tesoreria')
   await expect(page.getByRole('heading', { name: 'Nuevo cobro o pago' })).toBeVisible({ timeout: 30_000 })
@@ -541,26 +548,32 @@ test('Asientos › Predefinidos: se guarda uno desde el asiento a mano, sale en 
   expect(errores).toEqual([])
 })
 
-test('Asientos › Recibida (maqueta 3): la misma factura que en Compras y gastos, con el marco de Contabilidad', async ({ page }) => {
+test('Asientos › Recibida de antes lleva a Compras y gastos: la misma ficha, en un solo sitio', async ({ page }) => {
   const errores: string[] = []
   await entrarComo(page, CUENTA_A.email)
   vigilar(page, errores)
+  // S02 · PR 2: las recibidas son solo de Compras y gastos (regla 1 del patrón).
+  // La dirección de antes (Contabilidad › Asientos › Recibida) lleva a Facturas
+  // recibidas, en «Por revisar», con su página marcada en la barra.
   await page.goto('/conta/libros/diario/recibidas')
-  // Lleva a la primera para revisar, en Contabilidad › Asientos.
-  await expect(page).toHaveURL(/\/conta\/libros\/diario\/recibidas\/[0-9a-f-]{36}\?ver=para-mirar$/, { timeout: 30_000 })
-  await expect(nombres((await paginas(page, 'Contabilidad')).locator('[aria-current="page"]'))).toHaveText(['Asientos'])
+  await expect(page).toHaveURL(/\/conta\/documentos\?ver=por-revisar$/, { timeout: 30_000 })
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toBeVisible({ timeout: 30_000 })
+  await expect(nombres((await paginas(page, 'Compras y gastos')).locator('[aria-current="page"]'))).toHaveText(['Facturas recibidas'])
   await cerrarCajon(page)
-  // S02: la ficha lleva su encabezado: las migas (el «1 de N» va ahora en su
-  // propio grupo, al lado de «La anterior» y «La siguiente») y el veredicto de
-  // la IA arriba de los datos (antes, «Lo que he leído»).
+  // «Revisar(las) de una en una» abre la primera de la cola (lo que antes hacía
+  // Asientos › Recibida); en el ordenador, en el encabezado; en el móvil, abajo.
+  await page.getByRole('button', { name: /^Revisar(las)? de una en una/ }).click()
+  await expect(page).toHaveURL(/\/conta\/documentos\/recibidas\/[0-9a-f-]{36}/, { timeout: 30_000 })
+  // S02: la ficha lleva su encabezado: las migas (el «1 de N» va en su propio
+  // grupo, al lado de «La anterior» y «La siguiente») y el veredicto de la IA
+  // arriba de los datos (antes, «Lo que he leído»).
   const migas = page.getByRole('navigation', { name: 'Estás en' })
-  await expect(migas.getByRole('listitem')).toHaveText(['Contabilidad', 'Asientos', /^Recibidas · .+/], { timeout: 30_000 })
+  await expect(migas.getByRole('listitem')).toHaveText(['Compras y gastos', 'Facturas recibidas', /.+/], { timeout: 30_000 })
   await expect(page.getByRole('region', { name: /^Lo que dice .+ de esta factura$/ })).toBeVisible({ timeout: 30_000 })
   const id = page.url().match(/recibidas\/([0-9a-f-]{36})/)![1]
-  // «1 de N»: Asientos › Recibida abre la primera de la MISMA cola que recorre
-  // la ficha (la pestaña «Por revisar», con el orden de la lista): es la 1 y
-  // «La anterior» está apagada.
-  const cola = page.getByRole('group', { name: /^Facturas: 1 de \d+$/ })
+  // «1 de N»: la primera de la MISMA cola que recorre la ficha (la pestaña «Por
+  // revisar», con el orden de la lista): es la 1 y «La anterior» está apagada.
+  const cola = page.getByRole('group', { name: /^Facturas por revisar: 1 de \d+$/ })
   await expect(cola).toBeVisible()
   await expect(cola.getByRole('button', { name: 'La anterior' })).toBeDisabled()
   await expect(cola.getByRole('button', { name: 'La siguiente' })).toBeVisible()
@@ -569,11 +582,13 @@ test('Asientos › Recibida (maqueta 3): la misma factura que en Compras y gasto
   await expect(page.getByRole('button', { name: 'Está bien · apuntar' })).toHaveCount(0)
   if (lado(page) === 'ordenador') await expect(page.getByRole('button', { name: /^Validar y siguiente/ })).toHaveAttribute('aria-keyshortcuts', 'Enter')
   await capturar(page, 'asientos-recibida')
-  // La misma factura desde Compras y gastos, con sus migas. S02: el botón es el
-  // mismo en las dos rutas (antes, aquí era «Está bien · apuntar»).
-  await page.goto(`/conta/documentos/recibidas/${id}?ver=para-mirar`)
+  // La dirección de antes de UNA factura lleva a su ficha en Compras y gastos, con su consulta.
+  await page.goto(`/conta/libros/diario/recibidas/${id}?ver=para-mirar`)
+  await expect(page).toHaveURL(new RegExp(`/conta/documentos/recibidas/${id}\\?ver=para-mirar$`), { timeout: 30_000 })
   await expect(page.getByRole('region', { name: /^Lo que dice .+ de esta factura$/ })).toBeVisible({ timeout: 30_000 })
   await expect(migas.getByRole('listitem')).toHaveText(['Compras y gastos', 'Facturas recibidas', /.+/])
+  await expect(nombres((await paginas(page, 'Compras y gastos')).locator('[aria-current="page"]'))).toHaveText(['Facturas recibidas'])
+  await cerrarCajon(page)
   await expect(page.getByRole('button', { name: /^Validar y siguiente/ })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Está bien · apuntar' })).toHaveCount(0)
   expect(errores).toEqual([])
@@ -620,7 +635,8 @@ test('Recibida (maqueta 3): el porqué de la IA, corregir en Compras, y «No es 
   await page.getByRole('button', { name: /Mayorista Prueba Alfa/ }).first().click()
   await expect(page).toHaveURL(/\/documentos\/recibidas\/[0-9a-f-]{36}/, { timeout: 30_000 })
   const id = page.url().match(/recibidas\/([0-9a-f-]{36})/)![1]
-  await page.goto(`/conta/libros/diario/recibidas/${id}?ver=para-mirar`)
+  // S02 · PR 2: la ficha vive solo en Compras y gastos (antes, también en libros/diario/recibidas).
+  await page.goto(`/conta/documentos/recibidas/${id}?ver=para-mirar`)
   // S02: «Lo que he comprobado» ya no es un bloque: va dentro de «Por qué», en el veredicto.
   const veredicto = page.getByRole('region', { name: /^Lo que dice .+ de esta factura$/ })
   await expect(veredicto).toBeVisible({ timeout: 30_000 })
@@ -634,17 +650,15 @@ test('Recibida (maqueta 3): el porqué de la IA, corregir en Compras, y «No es 
   // recepción, en Compras; antes «Corregir en Compras» en «Lo que he leído») y
   // «No es una factura».
   const mas = await masAcciones(page.locator('header.s-encabezado'))
-  await expect(mas.getByRole('link', { name: /^Corregir los importes/ })).toHaveAttribute('href', '/conta/compras')
+  // D03 (ficha completa): los importes se corrigen en la propia ficha, así que con la
+  // 0790 en la base ya no hay «Corregir los importes» en Compras; «Más acciones» es la del tablero 3b.
+  await expect(mas.getByRole('button', { name: /^Ver el historial/ })).toBeVisible()
+  await expect(mas.getByRole('link', { name: /^Corregir los importes/ })).toHaveCount(0)
 
-  // «No es una factura»: con su motivo. En el ordenador, directo; en el móvil, por
-  // «No es de este proveedor» › «¿Qué le pasa?» (antes, «Otra cosa»): los dos caminos llegan.
-  if (lado(page) === 'ordenador') {
-    await mas.getByRole('button', { name: /^No es una factura/ }).click()
-  } else {
-    await mas.getByRole('button', { name: 'No es de este proveedor' }).click()
-    await page.getByRole('dialog', { name: '¿Qué le pasa?' }).getByRole('button', { name: /dímelo y la saco/ }).click()
-  }
-  const dialogo = page.getByRole('dialog', { name: 'No es una factura' })
+  // «No es una factura» → ficha completa (tablero 3b): «Descartar con motivo», en
+  // «Más acciones», en el ordenador y en el móvil (el proveedor se cambia en su campo).
+  await mas.getByRole('button', { name: /^Descartar con motivo/ }).click()
+  const dialogo = page.getByRole('dialog', { name: 'Descartar con motivo' })
   await expect(dialogo.getByRole('button', { name: 'Descartar' })).toBeDisabled()
   await dialogo.getByRole('button', { name: 'Es un presupuesto' }).click()
   await dialogo.getByRole('button', { name: 'Descartar' }).click()
@@ -652,7 +666,7 @@ test('Recibida (maqueta 3): el porqué de la IA, corregir en Compras, y «No es 
   await expect(page.getByRole('status').getByText(/^Descartada: «Es un presupuesto»\. No es una factura y sale de «Por revisar»/)).toBeVisible({ timeout: 30_000 })
 
   // La misma factura: dice qué es, quién y cuándo, y se deshace.
-  await page.goto(`/conta/libros/diario/recibidas/${id}?ver=todas`)
+  await page.goto(`/conta/documentos/recibidas/${id}?ver=todas`)
   const descartada = page.getByRole('region', { name: 'No es una factura' })
   await expect(descartada).toContainText('«Es un presupuesto»', { timeout: 30_000 })
   await expect(descartada).toContainText(/La descartó .+ el \d{2}\/\d{2}\/\d{4}/)
@@ -680,8 +694,13 @@ test('la fila de acciones no se oculta: cada acción sigue a mano, en la fila o 
     await expect(c.getByRole('button', { name: 'Ocultar', exact: true })).toHaveCount(0)
     await expect(c.getByRole('button', { name: 'Ver: Libro diario. Cambiar' })).toBeVisible()
     const mas = await masAcciones(c)
-    for (const a of ['Expedida', 'Recibida', 'Recibida a mano', 'Tesorería', 'General', 'Predefinidos', 'Digitalizar']) {
+    // S02 · PR 2: la emitida, las recibidas y Digitalizar ya no son de Asientos
+    // (Facturación y Compras y gastos): no salen aquí, ni en la fila ni en el menú.
+    for (const a of ['Tesorería', 'General', 'Predefinidos']) {
       await expect(mas.getByRole('link', { name: a, exact: true }), `${a} (${vuelta})`).toBeVisible()
+    }
+    for (const a of ['Expedida', 'Recibida', 'Recibida a mano', 'Digitalizar', 'Nueva factura emitida']) {
+      await expect(page.getByRole('link', { name: a, exact: true }), `${a} fuera de Asientos (${vuelta})`).toHaveCount(0)
     }
     await expect(mas.getByRole('button', { name: 'Búsqueda', exact: true })).toBeVisible()
     await page.keyboard.press('Escape')

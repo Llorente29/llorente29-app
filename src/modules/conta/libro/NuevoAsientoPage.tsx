@@ -6,27 +6,43 @@
 // o se guarda y se valida (entonces lleva número y huella). Un asiento nunca
 // se guarda descuadrado: la base tampoco lo deja validar.
 //
-// S01: la cinta de Asientos lo abre con ?tipo= («Expedida» → serie Ventas,
-// «Tesorería» → Banco, «Predefinidos» → elegir uno de entry_template). Y lo que
-// se escribe aquí se puede guardar como predefinido (regla 8: lo dice al guardar).
+// S01: la cinta de Asientos lo abre con ?tipo= («Tesorería» → Banco,
+// «Predefinidos» → elegir uno de entry_template). Y lo que se escribe aquí se
+// puede guardar como predefinido (regla 8: lo dice al guardar).
 //
 // S01d: en una expedida se elige su PDF (o una foto) y se ve al lado mientras
 // se escribe; al «Guardar y validar» se sube y se enlaza al asiento validado.
 // Si eso falla, el asiento queda guardado y validado igual, y la pantalla del
 // asiento lo dice con el motivo y deja volver a adjuntarla.
+//
+// S02 · PR 2 · La plantilla HOJA DE LÍNEAS del patrón único (tablero 5):
+//   · Encabezado del marco: migas del mapa (Contabilidad › Asientos, o
+//     Facturación › Facturas emitidas cuando se entra por «Nueva factura
+//     emitida»), el título del tipo, su ayuda como frase; UN principal,
+//     «Guardar y validar» con Ctrl Intro dibujado y funcionando; «Guardar
+//     borrador» y «Cancelar» en blanco. En el móvil, el principal abajo.
+//   · La cabecera de la hoja: fecha, serie, concepto y, en la emitida, su
+//     documento (el PDF, que se ve al lado).
+//   · Las líneas son filas de la tabla con data-campo-hoja: Intro pasa de campo
+//     y en la última columna añade línea (introEnLaHoja); F4 en la cuenta abre
+//     la búsqueda (BuscarCuentaHoja).
+//   · Pie con los totales y lo que dice el cuadre (cuánto falta y dónde), y
+//     debajo el asiento dicho en palabras (asientoEnPalabras: solo lo que dicen
+//     las cuentas; si no cuadra, nada).
 
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaAsiento, rutaLibroDiario } from '@/config/navegacion'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { rutaAsiento, rutaFacturasEmitidas, rutaLibroDiario } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
-import { Migas } from '@/modules/conta/proveedor/piezas'
-import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
-import { hoyEnMadrid, eurosExactos } from '@/modules/conta/lib/formato'
-import { cuadreMano, problemasMano, type LineaMano } from '@/modules/conta/lib/diario'
+import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
+import { Boton, BotonEnlace } from '@/modules/conta/diseno'
+import { BuscarCuentaHoja, HojaDeLineas, introEnLaHoja } from '@/modules/conta/diseno/plantillas'
+import { hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { cuadreMano, importeMano, problemasMano, type LineaMano } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE, SERIES, type Serie } from '@/modules/conta/lib/libro'
-import { lineasDePredefinido, predefinidoDeMano, tipoDeAsiento, type Predefinido } from '@/modules/conta/lib/tipoAsiento'
+import { asientoEnPalabras, lineasDePredefinido, predefinidoDeMano, tipoDeAsiento, type Predefinido } from '@/modules/conta/lib/tipoAsiento'
 import {
   cuentasDeApunte, guardarAMano, guardarPredefinido, leerEjercicios, leerPredefinidos, localesDeLaCuenta, validar,
   type CuentaPlan, type EjercicioLibro, type LocalEmpresa,
@@ -39,13 +55,19 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { TextoConImpuesto } from '@/modules/conta/ui/TextoConImpuesto'
 
 const vacia = (localId: string | null): LineaMano => ({ cuenta: '', debe: '', haber: '', localId, comun: false, concepto: '' })
+/** Los totales del pie, como se escriben en la hoja («1.234,56»). */
+const cifra = (n: number) => n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export default function NuevoAsientoPage() {
+/** S02 · PR 2 · `tipo`: el de la dirección (Facturación › Nueva factura emitida es la expedida); si no, el de ?tipo=. */
+export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
   const { accountId, cargando, userName } = useCuentaConta()
   const { activa } = useEmpresas()
   const navegar = useNavigate()
   const [query] = useSearchParams()
-  const def = tipoDeAsiento(query.get('tipo'))
+  const def = tipoDeAsiento(tipo ?? query.get('tipo'))
+  // Entrando por Facturación, Cancelar vuelve a sus facturas emitidas; si no, al libro diario.
+  const volverA = tipo === 'expedida' ? rutaFacturasEmitidas() : rutaLibroDiario()
+  const titulo = def?.titulo ?? 'Nuevo asiento'
   const [base, setBase] = useState<{ cuentas: CuentaPlan[]; locales: LocalEmpresa[]; ejercicios: EjercicioLibro[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [vuelta, setVuelta] = useState(0)
@@ -74,13 +96,22 @@ export default function NuevoAsientoPage() {
   const [pdf, elegirPdf] = useFicheroElegido()
   const [adjuntando, setAdjuntando] = useState(false)
   const movil = useIsMobile()
+  // F4: la línea cuya cuenta se está buscando.
+  const [buscando, setBuscando] = useState<number | null>(null)
+  const hoja = useRef<HTMLDivElement | null>(null)
 
   const codigos = useMemo(() => new Set((base?.cuentas ?? []).map((c) => c.code)), [base])
+  const porCodigo = useMemo(() => new Map((base?.cuentas ?? []).map((c) => [c.code, c])), [base])
+  const paraBuscar = useMemo(() => (base?.cuentas ?? []).map((c) => ({ codigo: c.code, nombre: c.nombre })), [base])
   // S01: con el eje «local» apagado (Definiciones › Analítica), ni la columna ni el aviso; los apuntes van sin local.
   const { local: ejeLocal } = useAnalitica()
   const problemas = problemasMano(concepto, fecha, lineas.map((l) => ({ ...l, localId: l.localId ?? unLocal })), codigos, !!ejeLocal)
   const c = cuadreMano(lineas)
   const ejercicio = base?.ejercicios.find((e) => fecha >= e.inicio && fecha <= e.fin) ?? null
+  const enPalabras = asientoEnPalabras(lineas.map((l) => {
+    const cta = porCodigo.get(l.cuenta.trim())
+    return { codigo: cta?.code ?? '', nombre: cta?.nombre ?? '', debe: importeMano(l.debe) || 0, haber: importeMano(l.haber) || 0 }
+  }))
   // Predefinidos: los de la empresa (solo con ?tipo=predefinido) y guardar el que se escribe.
   const [predefinidos, setPredefinidos] = useState<Predefinido[] | null>(null)
   const [falloPredef, setFalloPredef] = useState<string | null>(null)
@@ -119,6 +150,33 @@ export default function NuevoAsientoPage() {
     finally { setOcupado(false) }
   }
   const cambia = (i: number, p: Partial<LineaMano>) => setLineas((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)))
+
+  // Una línea nueva y el foco en su cuenta (Intro en la última columna, o «Añadir línea»).
+  const enfocarLinea = useRef<number | null>(null)
+  useEffect(() => {
+    if (enfocarLinea.current === null) return
+    hoja.current?.querySelector<HTMLElement>(`[data-linea-cuenta="${enfocarLinea.current}"]`)?.focus()
+    enfocarLinea.current = null
+  })
+  const anadir = () => { enfocarLinea.current = lineas.length; setLineas((ls) => [...ls, vacia(null)]) }
+
+  /** El campo que va después de `el` en la hoja (el orden de data-campo-hoja). */
+  const siguienteCampo = (el: HTMLElement | null | undefined) => {
+    const campos = [...(hoja.current?.querySelectorAll<HTMLElement>('[data-campo-hoja]') ?? [])]
+    const i = el ? campos.indexOf(el) : -1
+    campos[i + 1]?.focus()
+  }
+  const cuentaDe = (i: number) => hoja.current?.querySelector<HTMLElement>(`[data-linea-cuenta="${i}"]`)
+
+  function teclas(e: KeyboardEvent<HTMLDivElement>) {
+    // F4 en la cuenta de una línea: la búsqueda debajo del campo.
+    if (e.key === 'F4' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const i = (e.target as HTMLElement).getAttribute('data-linea-cuenta')
+      if (i !== null) { e.preventDefault(); setBuscando(Number(i)) }
+      return
+    }
+    introEnLaHoja(e, anadir)
+  }
 
   async function guardar(yValidar: boolean) {
     setIntentado(true); setFallo(null)
@@ -161,139 +219,191 @@ export default function NuevoAsientoPage() {
     finally { setOcupado(false); setAdjuntando(false) }
   }
 
-  if (error) return <ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} />
-  if (!base) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando el plan">{[0, 1, 2].map((i) => <Hueso key={i} alto={40} />)}</div>
+  // Ctrl Intro (⌘ Intro en el Mac): guardar y validar, desde cualquier campo de la página.
+  // La función cambia en cada pintada; el oyente lee siempre la última.
+  const validarConTecla = useRef<() => void>(() => undefined)
+  useEffect(() => { validarConTecla.current = () => { if (!ocupado && base) void guardar(true) } })
+  useEffect(() => {
+    const oir = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
+      e.preventDefault()
+      validarConTecla.current()
+    }
+    window.addEventListener('keydown', oir)
+    return () => window.removeEventListener('keydown', oir)
+  }, [])
+
+  const textoPrincipal = adjuntando ? 'Adjuntando la factura…' : ocupado ? 'Guardando…' : 'Guardar y validar'
+  const principal = (
+    <Boton variante="principal" onClick={() => void guardar(true)} disabled={ocupado || !base} tecla="Ctrl Intro" atajo="Control+Enter">{textoPrincipal}</Boton>
+  )
+  const encabezado = (
+    <EncabezadoPagina titulo={titulo} migasExtra={[{ etiqueta: titulo }]}
+      // S01e: en Canarias, «IGIC repercutido», no «IVA».
+      frase={def ? <TextoConImpuesto texto={def.ayuda} /> : 'Escribe los apuntes: el debe y el haber tienen que sumar lo mismo. Se guarda como borrador o se guarda y se valida.'}
+      secundarios={<>
+        <BotonEnlace a={volverA}>Cancelar</BotonEnlace>
+        <Boton onClick={() => void guardar(false)} disabled={ocupado || !base}>Guardar borrador</Boton>
+      </>}
+      principal={principal} />
+  )
+
+  if (error) {
+    return (
+      <div className="s-pagina">
+        {encabezado}
+        <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido leer el plan de cuentas: {error} <button type="button" className="s-boton s-boton-enlace" onClick={() => setVuelta((v) => v + 1)}>Reintentar</button></p>
+      </div>
+    )
+  }
+  if (!base) {
+    return (
+      <div className="s-pagina">
+        {encabezado}
+        <div className="s-lista" aria-busy="true" aria-label="Cargando el plan"><div className="s-lista-cargando" /></div>
+      </div>
+    )
+  }
+
+  const columnas = [
+    { titulo: 'Cuenta' }, { titulo: 'Concepto' }, ...(ejeLocal ? [{ titulo: ejeLocal.nombre }] : []),
+    { titulo: 'Debe', cifra: true }, { titulo: 'Haber', cifra: true }, { titulo: 'Quitar', oculta: true },
+  ]
+  const conPapel = esExpedida && !!pdf
+
+  const cabecera = (
+    <div className="s-hoja-cabecera-campos">
+      <label className="s-hoja-campo">Fecha
+        <input className="s-control" type="date" data-campo-hoja="fecha" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        {!ejercicio && <span className="s-hoja-nota" data-tono="duda">No hay ejercicio abierto para esa fecha.</span>}
+      </label>
+      <label className="s-hoja-campo">Serie
+        <select className="s-control s-control-selector" data-campo-hoja="serie" value={serie} onChange={(e) => setSerie(Number(e.target.value) as Serie)}>
+          {SERIES.map((s) => <option key={s} value={s}>{NOMBRE_SERIE[s]}</option>)}
+        </select>
+      </label>
+      <label className="s-hoja-campo s-hoja-campo-ancho">Concepto
+        <input className="s-control" data-campo-hoja="concepto" value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder="Ej.: Alquiler del local de octubre" />
+      </label>
+      {esExpedida && (
+        <section className="s-hoja-campo s-hoja-campo-ancho" aria-label="Factura">
+          <span>Documento</span>
+          {!pdf && <ElegirExpedida etiqueta="Adjuntar el PDF de la factura" alElegir={elegirPdf} deshabilitado={ocupado} />}
+          {pdf && (
+            <span className="s-hoja-nota">
+              <strong>{pdf.fichero.name}</strong> · {tamano(pdf.fichero.size)}{claseDeFichero(pdf.fichero.name, pdf.fichero.type) !== 'pdf' ? ' · foto: se convierte a PDF' : ''}{' '}
+              <button type="button" className="s-boton s-boton-enlace" onClick={() => elegirPdf(null)} disabled={ocupado}>Quitar</button>
+              <br />Se adjunta al pulsar «Guardar y validar». Con «Guardar borrador» no se adjunta: el PDF se adjunta al validar.{serie !== 1 ? ` Ojo: solo la lleva la serie ${NOMBRE_SERIE[1]}, y has elegido ${NOMBRE_SERIE[serie]}.` : ''}
+            </span>
+          )}
+          {!pdf && <span className="s-hoja-nota">Adjunta su PDF y lo tienes al lado mientras copias los datos. Se guarda con el asiento al «Guardar y validar»; una vez adjunta no se cambia.</span>}
+        </section>
+      )}
+    </div>
+  )
+
+  const filas = lineas.map((l, i) => {
+    const cta = porCodigo.get(l.cuenta.trim())
+    const n = i + 1
+    return (
+      <tr key={i}>
+        <td>{n}</td>
+        <td className="s-hoja-cuenta" data-titulo="Cuenta">
+          <input className="s-control" aria-label={`Cuenta del apunte ${n}`} list="cuentas-de-apunte" data-campo-hoja="cuenta" data-linea-cuenta={i}
+            aria-keyshortcuts="F4" value={l.cuenta} onChange={(e) => cambia(i, { cuenta: buscarCodigo(e.target.value, base.cuentas) })} placeholder="Nombre o número · F4" />
+          {cta && <span className="s-hoja-cuenta-nombre">{cta.nombre}<span className="s-campo-ficha-codigo">{cta.code}</span></span>}
+          {buscando === i && (
+            <BuscarCuentaHoja cuentas={paraBuscar} inicial={l.cuenta}
+              alElegir={(x) => { cambia(i, { cuenta: x.codigo }); setBuscando(null); siguienteCampo(cuentaDe(i)) }}
+              alCerrar={(volver) => { setBuscando(null); if (volver) cuentaDe(i)?.focus() }} />
+          )}
+        </td>
+        <td data-titulo="Concepto">
+          <input className="s-control" aria-label={`Concepto del apunte ${n}`} data-campo-hoja="concepto" value={l.concepto} onChange={(e) => cambia(i, { concepto: e.target.value })} />
+        </td>
+        {ejeLocal && (
+          <td data-titulo={ejeLocal.nombre}>
+            <select className="s-control s-control-selector" aria-label={`${ejeLocal.nombre} del apunte ${n}`} data-campo-hoja="local"
+              value={l.comun ? 'comun' : l.localId ?? unLocal ?? ''} onChange={(e) => cambia(i, e.target.value === 'comun' ? { comun: true, localId: null } : { comun: false, localId: e.target.value || null })}>
+              <option value="">Elige el {ejeLocal.nombre.toLowerCase()}</option>
+              {base.locales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+              <option value="comun">Común (se reparte)</option>
+            </select>
+          </td>
+        )}
+        <td data-titulo="Debe">
+          <input className="s-control s-control-cifra s-cifra" aria-label={`Debe del apunte ${n}`} data-campo-hoja="debe" inputMode="decimal" value={l.debe} onChange={(e) => cambia(i, { debe: e.target.value })} />
+        </td>
+        <td data-titulo="Haber">
+          <input className="s-control s-control-cifra s-cifra" aria-label={`Haber del apunte ${n}`} data-campo-hoja="haber" inputMode="decimal" value={l.haber} onChange={(e) => cambia(i, { haber: e.target.value })} />
+        </td>
+        <td className="s-hoja-quitar">
+          <button type="button" className="s-boton s-boton-enlace" aria-label={`Quitar el apunte ${n}`} onClick={() => setLineas((ls) => ls.filter((_, j) => j !== i))} disabled={lineas.length <= 2}>Quitar</button>
+        </td>
+      </tr>
+    )
+  })
 
   return (
-    <div className="cxd-pagina">
-      <header className="cxp-cabecera cxd-cabecera">
-        <div className="cxp-titulos">
-          <Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Libro diario', ruta: rutaLibroDiario() }, { etiqueta: def?.titulo ?? 'Nuevo asiento' }]} />
-          <h1 className="cxp-nombre">{def?.titulo ?? 'Nuevo asiento'}</h1>
-          {/* S01e: en Canarias, «IGIC repercutido», no «IVA». */}
-          {def && <p className="cx-ayuda cxd-ayuda-tipo"><TextoConImpuesto texto={def.ayuda} /></p>}
+    <div className="s-pagina">
+      {encabezado}
+      {fallo && <p className="s-aviso-lista" data-tono="falta" role="alert">{fallo}</p>}
+      {intentado && problemas.length > 0 && (
+        <div className="s-aviso-lista" data-tono="falta" role="alert">
+          Aún no se puede guardar:
+          <ul>{problemas.map((p) => <li key={p}>{p}</li>)}</ul>
         </div>
-        <div className="cxd-acciones">
-          <Link to={rutaLibroDiario()} className="cx-boton-sec">Cancelar</Link>
-          {esExpedida && pdf && <span className="cx-ayuda">El PDF se adjunta al validar</span>}
-          <button type="button" className="cx-boton-sec" onClick={() => guardar(false)} disabled={ocupado}>Guardar borrador</button>
-          <button type="button" className="cx-boton" onClick={() => guardar(true)} disabled={ocupado}>{adjuntando ? 'Adjuntando la factura…' : ocupado ? 'Guardando…' : 'Guardar y validar'}</button>
-        </div>
-      </header>
-      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      )}
 
       {def?.tipo === 'predefinido' && (
-        <section className="cx-tarjeta" aria-label="Tus asientos predefinidos">
-          <h2 className="cx-tarjeta-titulo">Tus asientos predefinidos</h2>
-          {predefinidos === null && !falloPredef && <Hueso alto={32} />}
+        <section className="s-tarjeta-blanca s-hoja-bloque" aria-label="Tus asientos predefinidos">
+          <h2>Tus asientos predefinidos</h2>
+          {predefinidos === null && !falloPredef && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando los predefinidos" />}
           {predefinidos && predefinidos.length === 0 && (
             <p>Aún no tienes ninguno. Escribe el asiento abajo y, al final, guárdalo como predefinido con un nombre.</p>
           )}
           {predefinidos && predefinidos.length > 0 && (
-            <ul className="cxd-predefinidos">
+            <ul>
               {predefinidos.map((p) => (
                 <li key={p.id}>
-                  <button type="button" className="cx-boton-sec" onClick={() => usar(p)} disabled={ocupado}>{p.nombre}</button>
-                  <span className="cx-ayuda">{NOMBRE_SERIE[p.serie]} · {p.lineas.length} apuntes · {p.concepto}</span>
+                  <Boton onClick={() => usar(p)} disabled={ocupado}>{p.nombre}</Boton>
+                  <span className="s-hoja-nota">{NOMBRE_SERIE[p.serie]} · {p.lineas.length} apuntes · {p.concepto}</span>
                 </li>
               ))}
             </ul>
           )}
-          <div role="status" aria-live="polite">{puesto && <p className="cxt-verde">{puesto}</p>}</div>
+          <div role="status" aria-live="polite">{puesto && <p className="s-aviso-lista" data-tono="ok">{puesto}</p>}</div>
         </section>
       )}
 
-      <div className={esExpedida && pdf ? 'cxd-expedida-con-papel' : 'cxd-expedida-form'}>
-      <div className="cxd-expedida-form">
-      {esExpedida && (
-        <section className="cx-tarjeta cxd-expedida" aria-label="Factura">
-          <h2 className="cx-tarjeta-titulo">Factura</h2>
-          {!pdf && (
-            <>
-              <p className="cx-ayuda">Adjunta su PDF y lo tienes al lado mientras copias los datos. Se guarda con el asiento al «Guardar y validar»; una vez adjunta no se cambia.</p>
-              <ElegirExpedida etiqueta="Adjuntar el PDF de la factura" alElegir={elegirPdf} deshabilitado={ocupado} />
-            </>
-          )}
-          {pdf && (
-            <div className="cxd-expedida-elegido">
-              <span><strong className="cxd-expedida-nombre">{pdf.fichero.name}</strong> · {tamano(pdf.fichero.size)}{claseDeFichero(pdf.fichero.name, pdf.fichero.type) !== 'pdf' ? ' · foto: se convierte a PDF' : ''}</span>
-              <button type="button" className="cx-enlace" onClick={() => elegirPdf(null)} disabled={ocupado}>Quitar</button>
-              <span className="cx-ayuda">Se adjunta al pulsar «Guardar y validar». Con «Guardar borrador» no se adjunta: el PDF se adjunta al validar.{serie !== 1 ? ` Ojo: solo la lleva la serie ${NOMBRE_SERIE[1]}, y has elegido ${NOMBRE_SERIE[serie]}.` : ''}</span>
-            </div>
-          )}
-        </section>
-      )}
-
-      <section className="cx-tarjeta cxd-mano" aria-label="Datos del asiento">
-        <div className="cxd-mano-cabeza">
-          <label className="cxd-campo">Fecha<input className="cx-input" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} /></label>
-          <label className="cxd-campo">Serie
-            <select className="cx-input" value={serie} onChange={(e) => setSerie(Number(e.target.value) as Serie)}>
-              {SERIES.map((s) => <option key={s} value={s}>{NOMBRE_SERIE[s]}</option>)}
-            </select>
-          </label>
-          <label className="cxd-campo cxd-campo-ancho">Concepto<input className="cx-input" value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder="Ej.: Alquiler del local de octubre" /></label>
+      <div className={conPapel ? 's-hoja-con-papel' : undefined}>
+        <div ref={hoja} onKeyDown={teclas}>
+          <datalist id="cuentas-de-apunte">{base.cuentas.map((x) => <option key={x.id} value={x.code}>{x.nombre}</option>)}</datalist>
+          <HojaDeLineas cabecera={cabecera} columnas={columnas}
+            totales={{ debe: cifra(c.debe), haber: cifra(c.haber) }} cuadra={c.cuadra} textoCuadre={c.texto}
+            alAnadir={anadir} enPalabras={enPalabras ?? undefined}>
+            {filas}
+          </HojaDeLineas>
         </div>
-        {!ejercicio && <span className="cxt-ambar">No hay ejercicio abierto para esa fecha.</span>}
-      </section>
-
-      <section className="cx-tarjeta" aria-label="Apuntes">
-        <datalist id="cuentas-de-apunte">{base.cuentas.map((c) => <option key={c.id} value={c.code}>{c.nombre}</option>)}</datalist>
-        <div className={`cxd-mano-linea cxd-linea-cabeza${ejeLocal ? '' : ' cxd-mano-sin-local'}`} aria-hidden="true"><span>Cuenta</span>{ejeLocal && <span>{ejeLocal.nombre}</span>}<span className="cxd-der">Debe</span><span className="cxd-der">Haber</span><span>Concepto</span><span /></div>
-        {/* Móvil: no hay fila de cabecera; cada campo lleva su etiqueta visible (cxd-mano-etiqueta, aria-hidden: el nombre accesible es el aria-label «Debe del apunte 1»). */}
-        {lineas.map((l, i) => {
-          const cta = base.cuentas.find((x) => x.code === l.cuenta.trim())
-          return (
-            <div key={i} className={`cxd-mano-linea${ejeLocal ? '' : ' cxd-mano-sin-local'}`}>
-              <label><span className="cxd-mano-etiqueta" aria-hidden="true">Cuenta</span>
-                <input className="cx-input" aria-label={`Cuenta del apunte ${i + 1}`} list="cuentas-de-apunte" value={l.cuenta} onChange={(e) => cambia(i, { cuenta: buscarCodigo(e.target.value, base.cuentas) })} placeholder="Nombre o código" />
-                <span className="cx-ayuda">{cta ? cta.nombre : ' '}</span></label>
-              {ejeLocal && (
-                <label><span className="cxd-mano-etiqueta" aria-hidden="true">{ejeLocal.nombre}</span>
-                  <select className="cx-input" aria-label={`${ejeLocal.nombre} del apunte ${i + 1}`} value={l.comun ? 'comun' : l.localId ?? unLocal ?? ''} onChange={(e) => cambia(i, e.target.value === 'comun' ? { comun: true, localId: null } : { comun: false, localId: e.target.value || null })}>
-                    <option value="">Elige el {ejeLocal.nombre.toLowerCase()}</option>
-                    {base.locales.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
-                    <option value="comun">Común (se reparte)</option>
-                  </select></label>
-              )}
-              <label><span className="cxd-mano-etiqueta cxd-der" aria-hidden="true">Debe</span><input className="cx-input cxd-der" aria-label={`Debe del apunte ${i + 1}`} inputMode="decimal" value={l.debe} onChange={(e) => cambia(i, { debe: e.target.value })} /></label>
-              <label><span className="cxd-mano-etiqueta cxd-der" aria-hidden="true">Haber</span><input className="cx-input cxd-der" aria-label={`Haber del apunte ${i + 1}`} inputMode="decimal" value={l.haber} onChange={(e) => cambia(i, { haber: e.target.value })} /></label>
-              <label><span className="cxd-mano-etiqueta" aria-hidden="true">Concepto</span><input className="cx-input" aria-label={`Concepto del apunte ${i + 1}`} value={l.concepto} onChange={(e) => cambia(i, { concepto: e.target.value })} /></label>
-              <button type="button" className="cx-enlace" aria-label={`Quitar el apunte ${i + 1}`} onClick={() => setLineas((ls) => ls.filter((_, j) => j !== i))} disabled={lineas.length <= 2}>Quitar</button>
-            </div>
-          )
-        })}
-        <button type="button" className="cx-enlace" onClick={() => setLineas((ls) => [...ls, vacia(null)])}>+ Añadir apunte</button>
-        {/* Un solo estado (cuadre().estado): sin importes, «Faltan importes» neutro; descuadrado, cuánto y dónde
-            en ámbar, una vez; cuadrado, en verde con su ✓ y la diferencia a cero. El pie no se contradice. */}
-        <div className={`cxd-cuadre cxd-mano-cuadre cxd-cuadre-${c.estado}`} role="status" aria-live="polite">
-          <strong className={c.estado === 'cuadra' ? 'cxt-verde' : c.estado === 'descuadre' ? 'cxt-ambar' : 'cxd-cuadre-neutro'}>{c.texto}</strong>
-          <span className="cxd-importe">Debe {eurosExactos(c.debe)}</span>
-          <span className="cxd-importe">Haber {eurosExactos(c.haber)}</span>
-          {c.estado === 'cuadra' && <span className="cxt-verde">✓ 0,00 €</span>}
-        </div>
-        {intentado && problemas.length > 0 && (
-          <ul className="cx-error" role="alert">{problemas.map((p) => <li key={p}>{p}</li>)}</ul>
+        {conPapel && pdf && (
+          <PapelExpedida titulo={`${pdf.fichero.name} · aún sin adjuntar`} url={pdf.url} movil={movil}
+            esFoto={claseDeFichero(pdf.fichero.name, pdf.fichero.type) !== 'pdf'} />
         )}
+      </div>
+
+      <section className="s-tarjeta-blanca s-hoja-bloque" aria-label="Guardar como predefinido">
+        <h2>Guardar como predefinido</h2>
+        <p className="s-hoja-nota">Para un asiento que se repite (el alquiler, una cuota): guarda la serie, el concepto y los apuntes. No guarda el asiento.</p>
+        <div className="s-hoja-bloque-fila">
+          <label className="s-hoja-campo s-hoja-campo-ancho">Nombre del predefinido<input className="s-control" value={nombrePredef} onChange={(e) => setNombrePredef(e.target.value)} maxLength={80} placeholder="Ej.: Alquiler del local" /></label>
+          <label className="s-hoja-campo"><span><input type="checkbox" checked={conImportes} onChange={(e) => setConImportes(e.target.checked)} /> Con sus importes</span></label>
+          <Boton onClick={() => void guardarComoPredefinido()} disabled={ocupado}>Guardar como predefinido</Boton>
+        </div>
+        <div role="status" aria-live="polite">{guardadoPredef && <p className="s-aviso-lista" data-tono="ok">{guardadoPredef}</p>}</div>
+        {falloPredef && <p className="s-aviso-lista" data-tono="falta" role="alert">{falloPredef}</p>}
       </section>
 
-      <section className="cx-tarjeta" aria-label="Guardar como predefinido">
-        <h2 className="cx-tarjeta-titulo">Guardar como predefinido</h2>
-        <p className="cx-ayuda">Para un asiento que se repite (el alquiler, una cuota): guarda la serie, el concepto y los apuntes. No guarda el asiento.</p>
-        <div className="cxd-predef-fila">
-          <label className="cxd-campo cxd-predef-nombre">Nombre del predefinido<input className="cx-input" value={nombrePredef} onChange={(e) => setNombrePredef(e.target.value)} maxLength={80} placeholder="Ej.: Alquiler del local" /></label>
-          <label className="cxd-predef-importes"><input type="checkbox" checked={conImportes} onChange={(e) => setConImportes(e.target.checked)} /> Con sus importes</label>
-          <button type="button" className="cx-boton-sec" onClick={() => void guardarComoPredefinido()} disabled={ocupado}>Guardar como predefinido</button>
-        </div>
-        <div role="status" aria-live="polite">{guardadoPredef && <p className="cxt-verde">{guardadoPredef}</p>}</div>
-        {falloPredef && <p className="cx-error" role="alert">{falloPredef}</p>}
-      </section>
-      </div>
-      {esExpedida && pdf && (
-        <PapelExpedida titulo={`${pdf.fichero.name} · aún sin adjuntar`} url={pdf.url} movil={movil}
-          esFoto={claseDeFichero(pdf.fichero.name, pdf.fichero.type) !== 'pdf'} />
-      )}
-      </div>
+      <BotonPulgar>{principal}</BotonPulgar>
     </div>
   )
 }

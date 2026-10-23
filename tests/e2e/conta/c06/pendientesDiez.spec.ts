@@ -85,23 +85,18 @@ test('Pendientes de adjuntar en Diez: cuántos, el más antiguo, la referencia, 
     await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
   }
   // La acción cuenta lo pendiente: con filas, nunca «nada pendiente» (regla 7).
-  // S02: la cinta es ahora la fila de acciones de Contabilidad › Importar: en el
-  // ordenador, un botón blanco con el número en su contador y el dato entero al
-  // pasar el ratón; en el móvil los blancos van en «Más acciones», con el dato
-  // escrito debajo.
-  const fila = page.getByRole('toolbar', { name: 'Acciones de Importar' })
-  if (movil) {
-    await fila.getByRole('button', { name: 'Más acciones' }).click()
-    const accion = page.getByRole('group', { name: 'Más acciones' }).getByRole('link', { name: /Pendientes de adjuntar en Diez/ })
-    await expect(accion.locator('.s-boton-contador')).toHaveText('3', { timeout: 20_000 })
-    await expect(accion.locator('.s-menu-nota')).toHaveText('Pendientes de adjuntar en Diez: 3 sin su PDF')
-    await page.keyboard.press('Escape')
-    await expect(page.getByRole('group', { name: 'Más acciones' })).toHaveCount(0)
-  } else {
-    const accion = fila.getByRole('link', { name: /Pendientes de adjuntar en Diez/ })
-    await expect(accion.locator('.s-boton-contador')).toHaveText('3', { timeout: 20_000 })
-    await expect(accion).toHaveAttribute('title', 'Pendientes de adjuntar en Diez: 3 sin su PDF')
-  }
+  // S02 · PR 2: la página pinta su encabezado del patrón (EncabezadoLibro, con
+  // «Descargar todos» como principal) y la fila de serie del marco ya no sale
+  // (nada dos veces). Lo del catálogo de Contabilidad › Importar va a «Más
+  // acciones» del encabezado, en el ordenador y en el móvil: la entrada lleva el
+  // número en su contador y el dato escrito debajo.
+  await expect(page.getByRole('toolbar', { name: 'Acciones de Importar' })).toHaveCount(0)
+  await page.locator('header.s-encabezado').getByRole('button', { name: 'Más acciones' }).click()
+  const accion = page.getByRole('group', { name: 'Más acciones' }).getByRole('link', { name: /Pendientes de adjuntar en Diez/ })
+  await expect(accion.locator('.s-boton-contador')).toHaveText('3', { timeout: 20_000 })
+  await expect(accion.locator('.s-menu-nota')).toHaveText('Pendientes de adjuntar en Diez: 3 sin su PDF')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('group', { name: 'Más acciones' })).toHaveCount(0)
   // Cuántos y el más antiguo (lo anulado no cuenta aquí: va aparte).
   await expect(page.getByText('3 facturas están en Diez sin su PDF. La más antigua, del 01/10/26.')).toBeVisible()
   const lista = page.getByRole('list', { name: 'Facturas en Diez sin su PDF' })

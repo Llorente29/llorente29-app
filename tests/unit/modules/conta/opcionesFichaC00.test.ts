@@ -85,4 +85,12 @@ describe('la ficha lee de las tablas generales', () => {
     expect(nombreFormaPago(o, 'transfer', PAYMENT_METHOD_LABEL)).toBe('Transferencia BBVA')
     expect(nombreFormaPago(null, 'transfer', PAYMENT_METHOD_LABEL)).toBe('Transferencia')
   })
+
+  it('D07c · la fila «Saldo prepago Catcher» del catálogo (0830) se ofrece en la ficha del proveedor', () => {
+    const prepago = { id: 'prepago', name: 'Saldo prepago Catcher (40700001)', kind: 'prepaid', sortOrder: 50 }
+    const o = construirOpciones({ ...filas, formasPago: [...filas.formasPago, prepago] }, nada, 'peninsula_baleares', HOY, null)
+    expect(o.formasPago.map((f) => f.valor)).toEqual(['transfer', 'direct_debit', 'card', 'cash', 'prepaid'])
+    expect(nombreFormaPago(o, 'prepaid', PAYMENT_METHOD_LABEL)).toBe('Saldo prepago Catcher (40700001)')
+    expect(nombreFormaPago(null, 'prepaid', PAYMENT_METHOD_LABEL)).toBe('Saldo prepago Catcher (40700001)')
+  })
 })

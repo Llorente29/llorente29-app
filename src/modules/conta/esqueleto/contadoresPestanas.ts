@@ -23,7 +23,7 @@
 
 import type { CuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import type { AvisoInicio } from '@/modules/conta/impuestos/avisosInicio'
-import { frasePendientes } from './cuentasBarra'
+import { frasePartes, frasePendientes, partesDe } from './cuentasBarra'
 import type { IdProducto } from './productos'
 
 export type TonoContador = 'neutro' | 'vence'
@@ -33,6 +33,12 @@ export interface ContadorPestana {
   tono: TonoContador
   /** Lo que dice al lector y al pasar el ratón («3 por revisar»). */
   frase: string
+  /**
+   * D04 · Si la pestaña suma dos cosas («77 por revisar» y «22 por aclarar»),
+   * cada una en su chip con lo que es: un 99 suelto no decía qué contaba y no
+   * cuadraba con el «1 de 77» de la ficha.
+   */
+  partes?: { n: number; frase: string }[]
 }
 
 /** Por pestaña: `${producto}.${pestana}`. */
@@ -40,21 +46,26 @@ export type ContadoresPestanas = Partial<Record<string, ContadorPestana>>
 
 export const clavePestana = (producto: IdProducto, pestana: string) => `${producto}.${pestana}`
 
-/** De qué cuenta del menú sale el contador gris de cada pestaña. */
-export const CUENTA_DE_PESTANA: Readonly<Record<string, string>> = {
-  'contabilidad.asientos': 'libros',
+/** De qué cuentas del menú sale el contador gris de cada pestaña (se suman). */
+export const CUENTA_DE_PESTANA: Readonly<Record<string, readonly string[]>> = {
+  'contabilidad.asientos': ['libros'],
   // S02: «Por revisar» de Compras (las recepciones) cuelga de Facturas recibidas; su
   // número va en el chip del apartado (cuentasBarra), y el de la página es el de sus facturas.
-  'compras.recibidas': 'recibidas',
-  'bancos.movimientos': 'bancos',
-  'contactos.todos': 'terceros',
+  // S02 · PR 3: sus facturas son las para mirar Y las por aclarar (sus dos pestañas).
+  'compras.recibidas': ['recibidas', 'aclarar'],
+  'bancos.movimientos': ['bancos'],
+  'contactos.todos': ['terceros'],
 }
 
 export function contadoresDeCuentas(c: CuentasMenu): ContadoresPestanas {
   const fuera: ContadoresPestanas = {}
-  for (const [pestana, cuenta] of Object.entries(CUENTA_DE_PESTANA)) {
-    const n = c[cuenta]
-    if (typeof n === 'number' && n > 0) fuera[pestana] = { n, tono: 'neutro', frase: frasePendientes(n) }
+  for (const [pestana, cuentas] of Object.entries(CUENTA_DE_PESTANA)) {
+    const ns = cuentas.map((k) => c[k]).filter((n): n is number => typeof n === 'number')
+    const n = ns.reduce((s, x) => s + x, 0)
+    if (n > 0) {
+      const partes = cuentas.length > 1 ? partesDe(c, cuentas) : []
+      fuera[pestana] = { n, tono: 'neutro', frase: cuentas.length > 1 ? frasePartes(c, cuentas) ?? frasePendientes(n) : frasePendientes(n), ...(partes.length > 1 ? { partes } : {}) }
+    }
   }
   return fuera
 }

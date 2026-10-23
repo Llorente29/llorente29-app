@@ -9,7 +9,7 @@
 // FASE dice con qué nombre salen: «antes» en el commit que solo trae esta
 // prueba; «despues» desde el arreglo.
 
-import { test, type Page } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, CUENTA_B, entrarComo } from '../sesion'
 
 const FASE = 'despues'
@@ -30,7 +30,10 @@ const foto = (page: Page, nombre: string) => page.screenshot({ path: `${DIR}/${F
 
 const PANTALLAS: { nombre: string; ruta: string; cuenta?: 'B' }[] = [
   { nombre: 'inicio', ruta: 'inicio' },
-  { nombre: 'expedida', ruta: 'libros/diario/nuevo?tipo=expedida' },
+  // S02 · PR 2: la emitida es de Facturación › Facturas emitidas (su «Nueva
+  // factura emitida»). Se queda el nombre de la captura para seguir comparando
+  // con las de antes.
+  { nombre: 'expedida', ruta: 'facturacion/emitidas/nueva' },
   { nombre: 'libro-diario', ruta: 'libros/diario' },
   { nombre: 'bancos-y-cajas', ruta: 'ajustes/tablas/bancos-y-cajas' },
   { nombre: 'acumulados', ruta: 'libros/mayor/acumulados' },
@@ -52,10 +55,11 @@ for (const p of PANTALLAS) {
 
 test(`${FASE} · la expedida con importes que no cuadran`, async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
-  await ir(page, 'libros/diario/nuevo?tipo=expedida')
-  const debe = page.getByLabel('Debe del apunte 1')
-  if (await debe.count()) await debe.fill('121')
-  await page.waitForTimeout(300)
+  // S02 · PR 2: la emitida, en Facturación › Facturas emitidas › Nueva, con
+  // la Hoja de líneas: el pie dice cuánto falta y dónde («No cuadra: …»).
+  await ir(page, 'facturacion/emitidas/nueva')
+  await page.getByLabel('Debe del apunte 1').fill('121')
+  await expect(page.locator('.s-asiento-descuadra')).toContainText('No cuadra')
   await foto(page, 'expedida-sin-cuadrar')
 })
 

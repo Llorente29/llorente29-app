@@ -20,7 +20,7 @@
 // todavía, y Anular es del asiento abierto (su botón está en el asiento). No
 // se pinta un botón que no lleva a nada (regla del encargo: nada vacío).
 
-import { CONSULTA_RECIBIDA_A_MANO, CONTA, rutaConta, rutaLibros } from '@/config/navegacion'
+import { CONTA, rutaConta, rutaLibros } from '@/config/navegacion'
 import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
 import { TABLAS_GENERALES } from '@/modules/conta/tablas/registro'
 import { HECHO_POR, LO_HECHO } from '@/modules/conta/bancos/marca'
@@ -55,12 +55,13 @@ export interface GrupoCinta {
 const R = CONTA.rutas
 
 const DE_LA_CINTA: Orden[] = [
-  // Contabilidad › Asientos · NUEVO. Lo que aún no tiene su pantalla propia
-  // (expedida, tesorería, predefinidos) abre el asiento a mano con su tipo.
-  { id: 'asiento.expedida', etiqueta: 'Expedida', icono: 'expedida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=expedida` }, sinonimos: ['nueva expedida', 'factura emitida'] },
-  { id: 'asiento.recibida', etiqueta: 'Recibida', icono: 'recibida', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.recibidasEnAsientos }, sinonimos: ['nueva recibida', 'factura recibida', 'factura de proveedor'] },
+  // S02 · PR 2 · Cada cosa en su sitio (regla 1 del patrón). La emitida es de
+  // Facturación › Facturas emitidas; las recibidas, de Compras y gastos. Los id se
+  // quedan: los Favoritos guardados los nombran.
+  { id: 'asiento.expedida', etiqueta: 'Nueva factura emitida', icono: 'expedida', producto: 'facturacion', pestana: 'emitidas', a: { ruta: R.nuevaEmitida }, sinonimos: ['expedida', 'nueva expedida', 'factura emitida', 'emitir factura'], principal: true },
+  { id: 'asiento.recibida', etiqueta: 'Facturas recibidas por revisar', icono: 'recibida', producto: 'compras', pestana: 'recibidas', a: { ruta: `${R.documentos}?ver=por-revisar` }, sinonimos: ['recibida', 'nueva recibida', 'factura recibida', 'factura de proveedor'] },
   // S01d: la recibida sin papel, escrita a mano (proveedor, número, fecha, base e IVA).
-  { id: 'asiento.recibida-a-mano', etiqueta: 'Recibida a mano', icono: 'nuevo', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.recibidasEnAsientos}?${CONSULTA_RECIBIDA_A_MANO}` }, sinonimos: ['nueva recibida a mano', 'factura sin fichero', 'dar de alta una factura'] },
+  { id: 'asiento.recibida-a-mano', etiqueta: 'Escribir una a mano', icono: 'nuevo', producto: 'compras', pestana: 'recibidas', a: { ruta: R.recibidaAMano }, sinonimos: ['recibida a mano', 'nueva recibida a mano', 'factura sin fichero', 'dar de alta una factura'] },
   { id: 'asiento.tesoreria', etiqueta: 'Tesorería', icono: 'tesoreria', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=tesoreria` }, sinonimos: ['cobro', 'pago'] },
   { id: 'asiento.general', etiqueta: 'General', icono: 'general', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.nuevoAsiento }, sinonimos: ['nuevo asiento', 'asiento a mano'] },
   { id: 'asiento.predefinidos', etiqueta: 'Predefinidos', icono: 'predefinidos', producto: 'contabilidad', pestana: 'asientos', a: { ruta: `${R.nuevoAsiento}?tipo=predefinido` }, sinonimos: ['plantilla', 'asiento tipo'] },
@@ -69,7 +70,7 @@ const DE_LA_CINTA: Orden[] = [
   { id: 'asiento.libro-diario', etiqueta: 'Libro diario', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.libroDiario }, sinonimos: ['diario', 'asientos'] },
   // · UTILIDADES
   { id: 'asiento.busqueda', etiqueta: 'Búsqueda', icono: 'buscar', producto: 'contabilidad', pestana: 'asientos', a: { accion: 'buscar' }, sinonimos: ['buscar'] },
-  { id: 'asiento.digitalizar', etiqueta: 'Digitalizar', icono: 'digitalizar', producto: 'contabilidad', pestana: 'asientos', a: { ruta: R.documentos }, sinonimos: ['subir factura', 'escanear'] },
+  { id: 'asiento.digitalizar', etiqueta: 'Digitalizar', icono: 'digitalizar', producto: 'compras', pestana: 'recibidas', a: { ruta: `${R.documentos}?subir=1` }, sinonimos: ['subir factura', 'escanear'] },
 
   // Bancos (paso 3; antes, la barra de B01 en la pantalla). «Tus bancos» los
   // pone la pantalla: son los de la empresa (dePantalla en CINTAS).
@@ -130,19 +131,13 @@ export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_LIBROS, ...DE_DEFINICIONE
 const POR_ID = new Map(ORDENES.map((o) => [o.id, o]))
 export const ordenPorId = (id: string): Orden | null => POR_ID.get(id) ?? null
 
-const CINTA_BANCOS: GrupoCinta[] = [
-  { titulo: 'Tus bancos', ordenes: [], dePantalla: 'bancos' },
-  { titulo: 'Traer movimientos', ordenes: ['bancos.subir'] },
-  { titulo: 'Automático', ordenes: ['bancos.reglas', 'bancos.casados'] },
-  { titulo: 'Revisar', ordenes: ['bancos.hecho'] },
-]
-
 /** Las acciones de cada página ('producto.página'), por grupos. Sin entrada, la página no lleva. */
 export const CINTAS: Record<string, GrupoCinta[]> = {
   'contabilidad.asientos': [
-    { titulo: 'Nuevo', ordenes: ['asiento.expedida', 'asiento.recibida', 'asiento.recibida-a-mano', 'asiento.tesoreria', 'asiento.general', 'asiento.predefinidos'] },
+    // S02 · PR 2: la emitida y las recibidas, fuera (Facturación y Compras y gastos).
+    { titulo: 'Nuevo', ordenes: ['asiento.tesoreria', 'asiento.general', 'asiento.predefinidos'] },
     { titulo: 'Revisar', ordenes: ['asiento.para-revisar', 'asiento.libro-diario'], ver: true },
-    { titulo: 'Utilidades', ordenes: ['asiento.busqueda', 'asiento.digitalizar'] },
+    { titulo: 'Utilidades', ordenes: ['asiento.busqueda'] },
   ],
   // Paso 3: las áreas de Libros, en la cinta de su pestaña (antes, áreas y segunda fila en la pantalla).
   'contabilidad.listados': [
@@ -173,11 +168,7 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
   // S02: Facturas recibidas lleva su propio encabezado (Lista): sus acciones las pone la pantalla.
   // Paso 3: Contactos, la misma en todas sus pestañas.
   ...Object.fromEntries(['todos', 'clientes', 'proveedores', 'plataformas', 'socios'].map((t) => [`contactos.${t}`, [{ titulo: 'Nuevo', ordenes: ['contactos.nuevo', 'contactos.nuevo-proveedor'] }]])),
-  // Paso 3: la barra de Bancos (B01), la misma en sus cuatro pestañas.
-  'bancos.movimientos': CINTA_BANCOS,
-  'bancos.reglas': CINTA_BANCOS,
-  'bancos.cuentas': CINTA_BANCOS,
-  'bancos.cierre': CINTA_BANCOS,
+  // S02 · PR 2: Bancos pinta su encabezado (bancos/acciones.ts): sus acciones las pone la pantalla.
   // I01b · Impuestos: lo de la cabecera del tablero 8 («Ya presenté uno fuera», «Revisar y
   // presentar los de octubre»), que depende del mes y de lo que haya: lo pone la pantalla.
   'impuestos.calendario': [{ titulo: 'Presentar', ordenes: [], dePantalla: 'impuestos' }],

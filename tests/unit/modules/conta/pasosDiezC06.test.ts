@@ -53,9 +53,10 @@ import { filasPlan, SIN_NOMBRE, type CuentaPlan } from '../../../../src/modules/
 
 describe('la subcuenta que llega de Diez sin nombre', () => {
   it('sale en «Solo necesito que me digas esto», con su texto', () => {
-    expect(dudas([], 0, 0, 2)).toEqual([expect.objectContaining({ id: 'sin-nombre', tipo: 'sinNombre', titulo: '2 subcuentas sin nombre en Diez · pónselo' })])
-    expect(dudas([], 0, 0, 1)[0].titulo).toBe('1 subcuenta sin nombre en Diez · pónselo')
-    expect(dudas([], 0, 0)).toEqual([])
+    // S02 · PR 3: dudas() recibe las cuentas del menú (la lista del «Te toca hoy»), no números sueltos.
+    expect(dudas([], {}, 2)).toEqual([expect.objectContaining({ id: 'sin-nombre', tipo: 'sinNombre', titulo: '2 subcuentas sin nombre en Diez · pónselo' })])
+    expect(dudas([], {}, 1)[0].titulo).toBe('1 subcuenta sin nombre en Diez · pónselo')
+    expect(dudas([], {})).toEqual([])
   })
   it('en el plan: «sin nombre en Diez · pónselo», y debajo el nombre de su cuenta del plan', () => {
     const c = (code: string, name: string, sinNombre: boolean): CuentaPlan => ({

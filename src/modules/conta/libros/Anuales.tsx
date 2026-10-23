@@ -11,11 +11,20 @@
 //     al estándar; abajo el historial. Cada cambio confirma con contenido
 //     (regla 8): de qué línea a qué línea y quién.
 //   · PendienteC05b: memoria, legalización y depósito, que van en el C05b.
+//
+// S02 · PR 2 · Los tres con el encabezado del patrón (EncabezadoLibro: su
+// nombre como título, una frase con lo que se ve, «Ver: … Cambiar») y las
+// tablas con el estilo del patrón. Lo que antes eran botones al lado del
+// título del mapeo (Historial, Volver todo al estándar) son blancos del
+// encabezado; el estado (Balance / PyG) es la vista del patrón.
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaLibros, rutaMayor } from '@/config/navegacion'
-import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
+import { Dialogo } from '@/modules/conta/proveedor/piezas'
+import { Boton, BotonEnlace } from '@/modules/conta/diseno'
+import { ControlesInforme, VistaInforme } from '@/modules/conta/diseno/plantillas'
+import { EncabezadoLibro } from '@/modules/conta/libros/EncabezadoLibro'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import {
@@ -77,19 +86,23 @@ export function CuentasAnuales() {
     } catch (e) { setError(e instanceof Error ? e.message : 'No se ha podido guardar.') } finally { setOcupado(false) }
   }
 
-  if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
+  const encabezado = (
+    <EncabezadoLibro titulo={`Cuentas anuales ${L.ejercicio.code}`}
+      frase={`El modelo que le toca a la empresa en ${L.ejercicio.code}, con las cifras con las que se decide${elegido ? `: ${NOMBRE_MODELO[elegido].toLowerCase()}, elegido` : ''}.`} />
+  )
+  if (d.error) return <section className="cxl-pagina" aria-label="Cuentas anuales del ejercicio">{encabezado}<ErrorConReintento mensaje={d.error} reintentar={d.recargar} /></section>
   return (
     <section className="cxl-pagina" aria-label="Cuentas anuales del ejercicio">
-      <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cuentas anuales y Registro' }]} /><h2>Cuentas anuales {L.ejercicio.code}</h2></div></div>
+      {encabezado}
       <Guardado texto={hecho} />
-      {!prop && <div className="cx-tarjeta" aria-busy="true">{[0, 1].map((i) => <Hueso key={i} alto={48} />)}</div>}
+      {!prop && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando las cifras" />}
       {prop && d.datos && (
         <>
           <section className="cxl-ia" aria-label="Qué modelo te toca">
             <div className="cxl-ia-titulo"><span className="cx-marca-ia" aria-hidden="true">IA</span> El modelo que te toca</div>
             <div>{prop.frase}</div>
           </section>
-          <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
+          <div className="cxl-caja">
             <table className="cxl-tabla cxl-apilada" aria-label="Cifras con las que se decide">
               <thead><tr><th>Límite (dos de tres)</th><th className="cxl-der">{L.ejercicio.code}</th>{d.datos.anterior && <th className="cxl-der">{L.anterior!.code}</th>}<th className="cxl-der">Abreviado / pymes</th><th className="cxl-der">PyG abreviada</th></tr></thead>
               <tbody>
@@ -98,10 +111,10 @@ export function CuentasAnuales() {
                 <tr><td>Plantilla media</td><td className="cxl-der" data-titulo={L.ejercicio.code}>{d.datos.actual.plantillaMedia}</td>{d.datos.anterior && <td className="cxl-der" data-titulo={L.anterior?.code}>{d.datos.anterior.plantillaMedia}</td>}<td className="cxl-der" data-titulo="Abreviado / pymes">50</td><td className="cxl-der" data-titulo="PyG abreviada">250</td></tr>
               </tbody>
             </table>
-            <p className="cxl-pie">LSC art. 257.1 (balance y ECPN abreviados, y RD 1515/2007 art. 2.1 para pymes) y art. 258.1 (PyG abreviada). {d.datos.anterior ? `Hace falta cumplir dos de los tres límites dos ejercicios seguidos: se miran ${L.ejercicio.code} y ${L.anterior!.code}.` : 'Hace falta cumplir dos de los tres límites dos ejercicios seguidos; como no hay un ejercicio anterior con el que comparar, basta este.'} Las cifras son las de hoy: al cierre se recalculan. {L.ejercicio.plantillaMedia === 0 && <>La plantilla media está a 0: ponla en <Link to={rutaLibros('cierre', 'ejercicios')}>Ejercicios</Link>.</>}</p>
+            <p className="cxl-pie cxl-caja-cabeza">LSC art. 257.1 (balance y ECPN abreviados, y RD 1515/2007 art. 2.1 para pymes) y art. 258.1 (PyG abreviada). {d.datos.anterior ? `Hace falta cumplir dos de los tres límites dos ejercicios seguidos: se miran ${L.ejercicio.code} y ${L.anterior!.code}.` : 'Hace falta cumplir dos de los tres límites dos ejercicios seguidos; como no hay un ejercicio anterior con el que comparar, basta este.'} Las cifras son las de hoy: al cierre se recalculan. {L.ejercicio.plantillaMedia === 0 && <>La plantilla media está a 0: ponla en <Link to={rutaLibros('cierre', 'ejercicios')}>Ejercicios</Link>.</>}</p>
           </div>
           <div className="cx-tarjeta">
-            <h3 className="cxl-subtitulo">Modelo de {L.ejercicio.code}{elegido ? `: ${NOMBRE_MODELO[elegido].toLowerCase()}` : ' (sin elegir: se usa el propuesto)'}</h3>
+            <h2 className="cxl-subtitulo">Modelo de {L.ejercicio.code}{elegido ? `: ${NOMBRE_MODELO[elegido].toLowerCase()}` : ' (sin elegir: se usa el propuesto)'}</h2>
             {L.ejercicio.modelo?.quien && <p className="cxl-apoyo">Lo eligió {L.ejercicio.modelo.quien}.</p>}
             <div className="cxl-segmento" role="group" aria-label="Elegir el modelo">
               {(['pymes', 'abreviado', 'normal'] as Modelo[]).filter((m) => d.datos!.plan === 'pymes' || m !== 'pymes').map((m) => (
@@ -114,7 +127,7 @@ export function CuentasAnuales() {
             {error && <p className="cxl-sin-sitio" role="alert">{error}</p>}
           </div>
           <div className="cx-tarjeta">
-            <h3 className="cxl-subtitulo">Los estados</h3>
+            <h2 className="cxl-subtitulo">Los estados</h2>
             <ul>
               <li><Link to={rutaLibros('balances', 'balance')}>Balance de situación</Link></li>
               <li><Link to={rutaLibros('balances', 'pyg')}>Pérdidas y ganancias</Link>{prop.pygAbreviada && prop.modelo === 'normal' ? ' (puede ser abreviada)' : ''}</li>
@@ -178,26 +191,27 @@ export function Mapeo() {
     } catch (e) { setHecho(e instanceof Error ? e.message : 'No se ha podido.') }
   }
 
-  if (d.error) return <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />
+  const encabezado = (
+    <EncabezadoLibro titulo="Qué cuentas alimentan cada línea"
+      frase={`${estado === 'pyg' ? 'Pérdidas y ganancias' : 'Balance'}${d.datos ? `, modelo ${NOMBRE_MODELO[d.datos.modelo].toLowerCase()}` : ''}: cada línea del modelo con las cuentas que la forman.`}
+      secundarios={<>
+        <Boton onClick={() => setVerHistorial(!verHistorial)} aria-expanded={verHistorial}>Historial</Boton>
+        {calc && calc.propios.size > 0 && <Boton onClick={() => void alEstandar(null)}>Volver todo al estándar</Boton>}
+      </>} />
+  )
+  if (d.error) return <section className="cxl-pagina" aria-label="Qué cuentas alimentan cada línea">{encabezado}<ErrorConReintento mensaje={d.error} reintentar={d.recargar} /></section>
   return (
     <section className="cxl-pagina" aria-label="Qué cuentas alimentan cada línea">
-      <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cuentas anuales y Registro' }]} /><h2>Qué cuentas alimentan cada línea</h2></div>
-        <div className="cxl-herramientas">
-          <div className="cxl-segmento" role="group" aria-label="Estado">
-            <button type="button" aria-pressed={estado === 'balance'} onClick={() => setEstado('balance')}>Balance</button>
-            <button type="button" aria-pressed={estado === 'pyg'} onClick={() => setEstado('pyg')}>Pérdidas y ganancias</button>
-          </div>
-          <button type="button" className="cx-boton-sec" onClick={() => setVerHistorial(!verHistorial)} aria-expanded={verHistorial}>Historial</button>
-          {calc && calc.propios.size > 0 && <button type="button" className="cx-boton-sec" onClick={() => void alEstandar(null)}>Volver todo al estándar</button>}
-        </div>
-      </div>
+      {encabezado}
+      <ControlesInforme>
+        <VistaInforme etiqueta="Estado" vistas={[{ id: 'balance', nombre: 'Balance' }, { id: 'pyg', nombre: 'Pérdidas y ganancias' }] as const} actual={estado === 'pyg' ? 'pyg' : 'balance'} alCambiar={setEstado} />
+      </ControlesInforme>
       <Guardado texto={hecho} />
       {d.datos && <p className="cxl-apoyo">Modelo {NOMBRE_MODELO[d.datos.modelo].toLowerCase()}. De serie, cada cuenta va donde dice el Plan General de Contabilidad. Toca una cuenta para cambiarla de línea, dejarla fuera o devolverla a su sitio de serie: un cambio tuyo vale para esta empresa y queda en el historial.</p>}
 
       {verHistorial && (
-        <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <h3 className="cxl-subtitulo">Historial</h3>
+        <div className="cxl-caja">
+          <h2 className="cxl-subtitulo cxl-caja-cabeza">Historial</h2>
           {h.error && <ErrorConReintento mensaje={h.error} reintentar={h.recargar} />}
           {!h.datos && !h.error && <Hueso alto={32} />}
           {h.datos && !h.datos.length && <p className="cxl-pie">Sin cambios: todo está como el estándar.</p>}
@@ -211,10 +225,10 @@ export function Mapeo() {
         </div>
       )}
 
-      {!calc && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2].map((i) => <Hueso key={i} alto={36} />)}</div>}
+      {!calc && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando el mapeo" />}
       {calc && (calc.r.sinSitio.length > 0 || calc.r.porDefecto.length > 0) && (
         <div className="cx-tarjeta">
-          <h3 className="cxl-subtitulo">Por revisar</h3>
+          <h2 className="cxl-subtitulo">Por revisar</h2>
           <ul className="cxl-lista-estado">
             {calc.r.sinSitio.map((s) => (
               <li key={s.code}><span><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /> <Link to={rutaMayor(s.code)}>{s.code} {s.name}</Link> · {eurosExactos(s.saldo)} · <strong>sin sitio en el modelo</strong></span>
@@ -229,13 +243,13 @@ export function Mapeo() {
       )}
       {calc && calc.fuera.length > 0 && (
         <div className="cx-tarjeta">
-          <h3 className="cxl-subtitulo">Fuera del modelo (por decisión tuya)</h3>
+          <h2 className="cxl-subtitulo">Fuera del modelo (por decisión tuya)</h2>
           <ul>{calc.fuera.map((m) => <li key={`${m.prefix}${m.byBalance ?? ''}`}>{conNombre(m.prefix)}{m.byBalance ? ` (${textoSigno(m.byBalance)})` : ''}{m.note ? ` · ${m.note}` : ''} <button type="button" className="cx-enlace" onClick={() => void alEstandar(m.prefix)}>Volver al estándar</button></li>)}</ul>
           <p className="cxl-pie">Una cuenta fuera con saldo deja de salir en los estados: el agente lo vigila cada noche.</p>
         </div>
       )}
       {calc && d.datos && (
-        <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
+        <div className="cxl-caja">
           <table className="cxl-tabla cxl-apilada" aria-label="Líneas y sus cuentas">
             <thead><tr><th>Línea</th><th>Cuentas que la alimentan</th><th className="cxl-der">Importe</th></tr></thead>
             <tbody>
@@ -335,8 +349,8 @@ export function PendienteC05b({ que }: { que: keyof typeof C05B }) {
   const x = C05B[que]
   return (
     <section className="cxl-pagina" aria-label={x.titulo}>
-      <div className="cxl-seccion"><div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cuentas anuales y Registro' }]} /><h2>{x.titulo}</h2></div></div>
-      <div className="cx-tarjeta cxl-c05b"><Vacio titulo="Esto aún no se hace aquí." explicacion={x.texto} accion={<Link to={rutaLibros('balances', 'balance')} className="cx-boton-sec">Ir a Balances</Link>} /></div>
+      <EncabezadoLibro titulo={x.titulo} frase="Esto aún no se hace aquí: lo que sí hay, abajo." />
+      <div className="cxl-caja cxl-c05b"><Vacio titulo="Esto aún no se hace aquí." explicacion={x.texto} accion={<BotonEnlace a={rutaLibros('balances', 'balance')}>Ir a Balances</BotonEnlace>} /></div>
     </section>
   )
 }

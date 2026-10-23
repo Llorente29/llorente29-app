@@ -39,6 +39,8 @@
 // una página repite CUALQUIERA de las ya leídas, y lo leído tiene que sumar el
 // total que dice Diez: si no, es un error, no un resultado.
 
+import { conTextosDiez } from './diezTexto.ts'
+
 export const BASES_PROHIBIDAS = ['C0001'] as const
 export const BASE_REAL = 'C0008'
 export const BASE_PRUEBAS = 'C0009'
@@ -371,7 +373,8 @@ export class ClienteDiez {
 
   // ── Escribir ─────────────────────────────────────────────────────────────────
   async enviarAsiento(a: ApunteSimplificado): Promise<Apunte> {
-    const r = await this.llamar('POST', '/api/apuntes/add', a)
+    // D07a: Diez no admite más de 40 caracteres en la descripción (ni en la de cada línea).
+    const r = await this.llamar('POST', '/api/apuntes/add', conTextosDiez(a))
     if (r.status !== 200) throw new ErrorDiez(`apuntes/add → ${r.status}`, r.status, r.json)
     return r.json as Apunte
   }
@@ -394,7 +397,8 @@ export class ClienteDiez {
     return this.llamar('GET', `/api/facturas/getfile/${encodeURIComponent(ejercicio)}/${encodeURIComponent(serie)}/${documento}`)
   }
   async enviarFactura(fd: FacturaData): Promise<Factura> {
-    const r = await this.llamar('POST', '/api/facturas/add', fd)
+    // D07a: Diez rechaza `factura.Descripcion` de más de 40 caracteres; el mismo límite para los conceptos y la analítica.
+    const r = await this.llamar('POST', '/api/facturas/add', conTextosDiez(fd))
     if (r.status !== 200) throw new ErrorDiez(`facturas/add → ${r.status}`, r.status, r.json)
     return r.json as Factura
   }

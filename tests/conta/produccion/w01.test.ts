@@ -312,7 +312,9 @@ describe('W01 · el workflow de producción: sin franja, y las guardas de siempr
   })
   it('R9: el manifiesto se lee con manifiesto.sh, y en la tanda de aplicar las cuentas son obligatorias', () => {
     expect(texto).toContain('bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG"')
-    expect(texto).toMatch(/M=supabase\/produccion\/aplicar\.txt; PAT='[^']+'; OBLIG=si/)
+    // C10: la tanda de la rama, en su carpeta (tanda.mjs workflow).
+    expect(texto).toMatch(/M=\$DIR\/aplicar\.txt; PAT='[^']+'; OBLIG=si/)
+    expect(texto).toContain('node scripts/conta/produccion/tanda.mjs workflow "${TANDA_PEDIDA:-$GITHUB_REF_NAME}"')
   })
 })
 
@@ -335,7 +337,7 @@ describe('W01 · front compatible en los dos sentidos (antes-de-subir)', { timeo
     expect(r.out).toContain('nadie lee public.sale.rider_seen_at')
   })
   it('la tanda viva no borra nada', () => {
-    expect(correr('supabase/produccion/aplicar.txt').out).toContain('no borra ni renombra nada')
+    expect(correr('supabase/produccion/tandas/sumied/heredada/aplicar.txt').out).toContain('no borra ni renombra nada')
   })
 })
 
@@ -379,7 +381,7 @@ describe('R9 · la tanda de producción en staging (real-con-fallo y real)', () 
   })
   it('el script mira que no es producción antes de deshacer nada, y en real-con-fallo solo sale en verde si deshacer.sh sale con 0', () => {
     const sh = readFileSync('scripts/conta/produccion/real-en-staging.sh', 'utf8')
-    expect(sh.indexOf("'51ad1792-6629-4ef7-833a-b57b09a86710'")).toBeLessThan(sh.indexOf('vuelta-atras.txt | while'))
+    expect(sh.indexOf("'51ad1792-6629-4ef7-833a-b57b09a86710'")).toBeLessThan(sh.indexOf('"$VA" | while'))
     expect(sh).toContain('bash scripts/conta/produccion/deshacer.sh "$T/aplicados.txt"; rc=$?')
     expect(sh).toContain('[ "$rc" -eq 0 ] || ok=0')
   })
@@ -534,22 +536,62 @@ describe('R11 · paso 8 sobre la tanda de C06b (0380, el nombre del PDF; su copi
 
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
-    try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
+    // C10: la tanda de la rama; aquí, la que quedó del manifiesto único (heredada).
+    try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe', env: { ...process.env, TANDA: 'heredada' } }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (E05, volver a leer los PDF de Catcher: la 0480 sigue; ningún «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (D07a + D07c: la 0820, datos de Foodint, pide «autorizo»; la 0830 sigue)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261204T0480_e05_releer_riders.sql: sigue')
-    expect(r.out).toContain('autorizo: (ninguno)')
+    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql: AUTORIZO')
+    expect(r.out).toContain('20261208T0830_d07c_prepago_en_todas_las_listas.sql: sigue')
+    expect(r.out).toContain('autorizo: 20261208T0820_d07a_diez_reenviar_descripcion.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
-    const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261204T0480_e05_releer_riders.sql'] = '00000000000000000000000000000000'
+    const m = JSON.parse(readFileSync('supabase/produccion/tandas/sumied/heredada/contexto.json', 'utf8'))
+    m.tanda['supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261204T0480_e05_releer_riders.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql ha cambiado desde la medida')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de la C08 (0840, PR #301, ya aplicada: su copia), con su contexto medido', () => {
+  it('la 0840 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c08-lovers-catalogo-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261208T0840_c08_lovers_catalogo_2qjdb.sql: AUTORIZO')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del D06 (0800 y 0810, su copia), con su contexto medido', () => {
+  it('la 0800 sigue; solo la 0810 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d06-prepago-y-pdf-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-d06-prepago-y-pdf-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261207T0800_d06_prepago_y_pdf_bueno.sql: sigue')
+    expect(out).toContain('20261207T0810_d06_riders_prepago.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261207T0810_d06_riders_prepago.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del D03 (0770, 0780 y 0790, su copia), con su contexto medido', () => {
+  it('la 0770 y la 0790 siguen; solo la 0780 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d03-recibida-pdf-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-d03-recibida-pdf-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261206T0770_d03_recibida_pdf_sin_recepcion.sql: sigue')
+    expect(out).toContain('20261206T0780_d03_recibida_pdf_datos.sql: AUTORIZO')
+    expect(out).toContain('20261206T0790_d03_recibida_guardar.sql: sigue')
+    expect(out).toContain('autorizo: 20261206T0780_d03_recibida_pdf_datos.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del E05 (0480, su copia), con su contexto medido', () => {
+  it('la 0480 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-e05-releer-riders-20261022.json',
+      '--manifiesto=tests/conta/produccion/tanda-e05-releer-riders-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261204T0480_e05_releer_riders.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
   })
 })
 

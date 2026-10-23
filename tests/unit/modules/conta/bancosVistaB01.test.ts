@@ -141,10 +141,14 @@ describe('navegación de Bancos', () => {
     expect(resolverVista('reglas')).toBe('reglas')
     expect(resolverVista('por-correo')).toBe('movimientos')
     expect(pestanaDe('subir')).toBe('movimientos')
+    // S02 · PR 2: el cierre del mes ya no es una vista de Bancos (vive en Contabilidad › Cierre y Registro).
+    expect(resolverVista('cierre')).toBe('movimientos')
   })
   it('el buscador encuentra las tarjetas y el extracto; no hay «Por correo»', () => {
     expect(buscarEnBancos('tarjeta').map((b) => b.nombre)).toContain('Tarjetas')
     expect(buscarEnBancos('norma 43').map((b) => b.vista)).toEqual(['subir'])
     expect(buscarEnBancos('correo')).toEqual([])
+    // S02 · PR 2: «Cierre del mes» lo encuentra el buscador en Contabilidad, no en Bancos.
+    expect(buscarEnBancos('cierre')).toEqual([])
   })
 })

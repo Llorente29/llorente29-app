@@ -38,19 +38,23 @@ describe('las acciones de una página, con la regla del patrón', () => {
     const r = repartirAcciones(resueltas('contabilidad', 'asientos', '/conta/libros/diario', '?ver=revisar'))
     expect(r.selectores.map((s) => [s.titulo, s.actual?.etiqueta])).toEqual([['Ver', 'Para revisar']])
     expect(r.principal).toBeNull()
-    expect(r.blancos.map((a) => a.etiqueta)).toEqual(['Expedida', 'Recibida'])
+    // S02 · PR 2: la emitida y las recibidas salieron de Asientos (Facturación, Compras y gastos).
+    expect(r.blancos.map((a) => a.etiqueta)).toEqual(['Tesorería', 'General'])
     expect(r.mas.map((g) => g.titulo)).toEqual(['Nuevo', 'Utilidades'])
   })
   it('con la barra de la página (el libro diario), todo lo del catálogo va a «Más acciones»: no compite con su principal', () => {
     const r = repartirAcciones(resueltas('contabilidad', 'asientos'), true)
     expect(r.principal).toBeNull()
     expect(r.blancos).toEqual([])
-    expect(r.mas.flatMap((g) => g.acciones).length).toBe(8)
+    expect(r.mas.flatMap((g) => g.acciones).length).toBe(4)
   })
   it('Bancos: «Subir extracto» es el principal; los bancos de la pantalla, un selector', () => {
     const g: GrupoDeAcciones[] = [
       { titulo: 'Tus bancos', acciones: [{ id: 'b1', etiqueta: 'BBVA', a: '/conta/bancos?banco=b1', actual: true, grupo: 'Tus bancos' }, { id: 'b2', etiqueta: 'Caixa', a: '/conta/bancos?banco=b2', actual: false, grupo: 'Tus bancos' }] },
-      ...resueltas('bancos', 'movimientos').filter((x) => x.acciones.length > 0),
+      // S02 · PR 2: Bancos pone sus acciones en su encabezado (bancos/acciones.ts, con sus pruebas en
+      // pr2-bancos-patron); aquí, la regla del reparto con las suyas: el principal y un banco elegido.
+      { titulo: 'Traer movimientos', acciones: [{ id: 'bancos.subir', etiqueta: 'Subir extracto', a: '/conta/bancos/subir', principal: true, grupo: 'Traer movimientos' }] },
+      { titulo: 'Automático', acciones: [{ id: 'bancos.reglas', etiqueta: 'Reglas', a: '/conta/bancos/reglas', grupo: 'Automático' }] },
     ]
     const r = repartirAcciones(g)
     expect(r.principal?.etiqueta).toBe('Subir extracto')

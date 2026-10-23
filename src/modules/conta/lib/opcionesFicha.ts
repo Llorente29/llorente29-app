@@ -70,8 +70,8 @@ export interface OpcionesFicha {
 const vigente = (desde: string, hasta: string | null, hoy: string) => desde <= hoy && (hasta === null || hasta >= hoy)
 const porOrden = <T extends { sortOrder: number }>(a: T, b: T) => a.sortOrder - b.sortOrder
 
-/** Las cuatro formas que admite la ficha del C01 (su CHECK). «Otra» no tiene dónde guardarse. */
-const FORMAS_DE_LA_FICHA: readonly PaymentMethod[] = ['transfer', 'direct_debit', 'card', 'cash']
+/** Las formas que admite la ficha (su CHECK; D07c: también el saldo prepago de Catcher, 0800). «Otra» no tiene dónde guardarse. */
+const FORMAS_DE_LA_FICHA: readonly PaymentMethod[] = ['transfer', 'direct_debit', 'card', 'cash', 'prepaid']
 
 /**
  * Las opciones de la ficha, de las filas leídas.

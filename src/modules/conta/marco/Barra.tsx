@@ -29,17 +29,19 @@ export interface DatosBarra {
   ctx: Contexto
   /** Lo que espera una acción en cada apartado (cuentasDeLaBarra). */
   pendientes: Partial<Record<IdProducto, number | null>>
+  /** S02 · PR 3: qué son las que cuenta cada chip (frasesDeLaBarra); sin ella, «N por revisar». */
+  frases?: Partial<Record<IdProducto, string>>
   contadores: ContadoresPestanas
   /** La consulta de la dirección de ahora: el ejercicio, el mes y el banco viajan de una página a otra. */
   search: string
 }
 
-function Chip({ n, id }: { n: number | null | undefined; id: string }) {
+function Chip({ n, id, frase }: { n: number | null | undefined; id: string; frase?: string }) {
   if (typeof n !== 'number' || n <= 0) return null
   return (
     <>
       <span className="s-barra-chip" aria-hidden="true">{n}</span>
-      <span id={id} hidden>{frasePendientes(n)}</span>
+      <span id={id} hidden>{frase ?? frasePendientes(n)}</span>
     </>
   )
 }
@@ -58,7 +60,9 @@ function Paginas({ p, paginas, actual, contadores, search, alPulsar }: {
             <Link to={conConsulta(rutaConta(t.ruta!), search)} className="s-barra-pagina" aria-current={t.id === actual ? 'page' : undefined}
               aria-describedby={desc} onClick={alPulsar}>
               <span className="s-barra-nombre">{t.etiqueta}</span>
-              {c && <span className="s-barra-pagina-chip" data-tono={c.tono} aria-hidden="true" title={c.frase}>{c.n}</span>}
+              {c && (c.partes
+                ? c.partes.map((x) => <span key={x.frase} className="s-barra-pagina-chip" data-tono={c.tono} aria-hidden="true" title={x.frase}>{x.n}</span>)
+                : <span className="s-barra-pagina-chip" data-tono={c.tono} aria-hidden="true" title={c.frase}>{c.n}</span>)}
               {c && <span id={desc} hidden>{c.frase}</span>}
             </Link>
           </li>
@@ -77,11 +81,11 @@ export function Apartado({ p, d, desplegada = true, alPulsar }: { p: Producto; d
   const desc = typeof n === 'number' && n > 0 ? `s-barra-pend-${p.id}` : undefined
   return (
     <li className="s-barra-apartado" data-abierto={activo && paginas.length > 0 ? '' : undefined}>
-      <Link to={rutaConta(p.ruta!)} className="s-barra-item" title={desc ? `${p.etiqueta} · ${frasePendientes(n as number)}` : p.etiqueta}
+      <Link to={rutaConta(p.ruta!)} className="s-barra-item" title={desc ? `${p.etiqueta} · ${d.frases?.[p.id] ?? frasePendientes(n as number)}` : p.etiqueta}
         aria-current={activo ? (conPagina ? 'true' : 'page') : undefined} aria-describedby={desc} onClick={alPulsar}>
         <Icono nombre={p.icono} grande />
         <span className="s-barra-nombre">{p.etiqueta}</span>
-        {desc && <Chip n={n} id={desc} />}
+        {desc && <Chip n={n} id={desc} frase={d.frases?.[p.id]} />}
       </Link>
       <Paginas p={p} paginas={paginas} actual={d.pagina} contadores={d.contadores} search={d.search} alPulsar={alPulsar} />
     </li>

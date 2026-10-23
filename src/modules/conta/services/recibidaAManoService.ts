@@ -6,7 +6,11 @@
 //     apuntar (los mismos que lee cargarContexto en propuestasLibroService:
 //     sistema iva, vigentes, código «iva_…»), del sistema o de la cuenta.
 //   · Guardar: una supplier_invoice (source 'manual', status 'en_revision',
-//     de la empresa activa) y UNA supplier_invoice_line con la base y su tipo,
+//     de la empresa activa) y una supplier_invoice_line POR TIPO DE IVA (ficha
+//     completa: la misma ficha que la que entra sola, con varios tipos), con la
+//     cuenta de gasto elegida (expense_account_code); su PDF o foto en
+//     raw_document_url (receipt-uploads), y su vencimiento con
+//     set_supplier_invoice_due_date. Antes era UNA línea con la base y su tipo,
 //     porque el asiento sale de las líneas (facturasDeProveedor lee
 //     supplier_invoice_line.line_amount y vat_pct). Sin línea, «Está bien ·
 //     apuntar» propondría un asiento de 0 €.
@@ -24,13 +28,16 @@
 // invoice_date, status, source, tax_base_total, tax_total, grand_total,
 // notes, created_by, created_by_name, code), supplier_invoice_line
 // (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct,
-// position) y tax_rate (code, rate, tax_system, valid_to, is_system,
+// position, expense_account_code), supplier_invoice.raw_document_url,
+// set_supplier_invoice_due_date(p_invoice_id, p_due_date) y tax_rate (code, rate, tax_system, valid_to, is_system,
 // account_id).
 
-import { tabla } from '@/modules/conta/services/bd'
+import { rpc, tabla } from '@/modules/conta/services/bd'
+import { uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
+import type { RecibidaAManoComprobada } from '@/modules/conta/documentos/fichaRecibida'
 import { textoParaPantalla } from '@/modules/conta/lib/errorBase'
 import { porcentaje } from '@/modules/conta/lib/formato'
-import { TIPOS_DE_SERIE, textoDeFallo, type RecibidaComprobada } from '@/modules/conta/lib/recibidaAMano'
+import { TIPOS_DE_SERIE, textoDeFallo } from '@/modules/conta/lib/recibidaAMano'
 
 type Fila = Record<string, unknown>
 
@@ -52,12 +59,26 @@ export interface GuardarRecibida {
   userName: string | null
   /** El nombre del proveedor, para lo que se dice (no se guarda). */
   proveedor: string
-  datos: RecibidaComprobada
+  datos: RecibidaAManoComprobada
+  /** El PDF o la foto, si se subió con ella (la foto la pasa a PDF el servidor, D02). */
+  papel?: File | null
 }
 
-/** Guarda la factura y su línea. Devuelve su id y su código (FAC-…). Si falla, lanza el porqué en lenguaje normal. */
-export async function guardarRecibidaAMano(g: GuardarRecibida): Promise<{ id: string; codigo: string | null }> {
+/**
+ * Guarda la factura, una línea por tipo de IVA y, si se dijo, su vencimiento.
+ * Devuelve su id, su código (FAC-…) y lo que se dice de lo de después. Si la
+ * factura no entra, lanza el porqué en lenguaje normal.
+ */
+export async function guardarRecibidaAMano(g: GuardarRecibida): Promise<{ id: string; codigo: string | null; ademas: string[] }> {
   const d = g.datos
+  const ademas: string[] = []
+  // Ficha completa: el PDF o la foto van con ella (raw_document_url, receipt-uploads), como los de Compras.
+  let ruta: string | null = null
+  if (g.papel) {
+    try { [ruta] = await uploadReceiptFiles(g.accountId, [g.papel]) } catch (e) {
+      ademas.push(`El PDF no se ha subido (${e instanceof Error ? e.message : String(e)}): súbelo desde su ficha.`)
+    }
+  }
   const { data, error } = await tabla('supplier_invoice').insert({
     account_id: g.accountId,
     company_id: g.companyId,
@@ -71,7 +92,8 @@ export async function guardarRecibidaAMano(g: GuardarRecibida): Promise<{ id: st
     tax_base_total: d.base,
     tax_total: d.cuota,
     grand_total: d.total,
-    notes: 'Dada de alta a mano en Contabilidad, sin fichero.',
+    raw_document_url: ruta,
+    notes: ruta ? 'Dada de alta a mano en Contabilidad, con su PDF.' : 'Dada de alta a mano en Contabilidad, sin fichero.',
     created_by: g.userId,
     created_by_name: g.userName,
   }).select('id, code').single()
@@ -82,17 +104,18 @@ export async function guardarRecibidaAMano(g: GuardarRecibida): Promise<{ id: st
   const id = String(f.id)
   const codigo = typeof f.code === 'string' ? f.code : null
 
-  const linea = await tabla('supplier_invoice_line').insert({
+  const linea = await tabla('supplier_invoice_line').insert(d.lineas.map((l, i) => ({
     supplier_invoice_id: id,
-    raw_text: `Base al ${porcentaje(d.tipo)} (a mano)`,
+    raw_text: `Base al ${porcentaje(l.tipo)} (a mano)`,
     qty: 1,
-    unit_price: d.base,
-    line_amount: d.base,
-    vat_pct: d.tipo,
-    position: 0,
-  })
+    unit_price: l.base,
+    line_amount: l.base,
+    vat_pct: l.tipo,
+    expense_account_code: d.cuentaGasto,
+    position: i,
+  })))
   if (linea.error) {
-    // Sin su línea, el asiento saldría de 0 €: se quita la cabecera y se dice.
+    // Sin sus líneas, el asiento saldría de 0 €: se quita la cabecera y se dice.
     // Se mira lo borrado de verdad: un borrado que la seguridad no deja no da error, da cero filas.
     const quitada = await tabla('supplier_invoice').delete().eq('id', id).eq('account_id', g.accountId).select('id')
     const motivo = textoParaPantalla('supplier_invoice_line', linea.error, linea.error.message)
@@ -100,5 +123,10 @@ export async function guardarRecibidaAMano(g: GuardarRecibida): Promise<{ id: st
       ? `La factura ${d.numero} se ha guardado sin su base (${motivo}) y no he podido quitarla: es la ${codigo ?? id}. Anúlala en Compras antes de volver a darla de alta.`
       : `No se ha guardado la factura: no ha entrado su base (${motivo}). No ha quedado nada a medias; vuelve a intentarlo.`)
   }
-  return { id, codigo }
+  if (d.vence) {
+    try { await rpc('set_supplier_invoice_due_date', { p_invoice_id: id, p_due_date: d.vence }) } catch (e) {
+      ademas.push(`El vencimiento no se ha guardado (${e instanceof Error ? e.message : String(e)}): ponlo en su ficha.`)
+    }
+  }
+  return { id, codigo, ademas }
 }

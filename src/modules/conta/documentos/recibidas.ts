@@ -30,6 +30,11 @@ export const PESTANAS: { id: Exclude<IdPestana, 'todas'>; etiqueta: string; siem
   { id: 'otras', etiqueta: 'Otras', siempre: false },
 ]
 
+/** D04 · Lo que cuenta la cola de la ficha («1 de 77 por revisar»): el nombre de su pestaña, en minúscula. */
+export function queCuentaLaCola(p: IdPestana): string {
+  return p === 'todas' ? 'en total' : (PESTANAS.find((x) => x.id === p)?.etiqueta ?? '').toLowerCase()
+}
+
 /** La pestaña de la dirección; las de antes del S02 (?ver=para-mirar…) caen en la suya. */
 export function pestanaDe(ver: string | null): IdPestana {
   if (ver === 'para-mirar') return 'por-revisar'
@@ -143,6 +148,19 @@ export function filasDeLaLista(filas: readonly FilaDocumento[], extras: Readonly
 
 /** Las facturas de la cola, en el orden de la lista: para «3 de 9» y «Validar y siguiente». */
 export const colaDeFacturas = (filas: readonly FilaDocumento[]): string[] => filas.filter((x) => x.tipo === 'factura').map((x) => x.id)
+
+/**
+ * Ficha completa, punto 11 («la barra dice 78 y la ficha 1 de 77»): la cola
+ * «Por revisar» de serie, la de la lista sin filtros. De aquí sale el número
+ * de la barra (inicioService.recibidasParaRevisar) y la ficha cuenta su «1 de
+ * N» con la misma regla (colaDeFacturas ∘ filasDeLaLista): una sola cola. La
+ * barra se vuelve a contar cuando la ficha valida, descarta o guarda
+ * (refrescarCuentasMenu); antes no se le avisaba y se quedaba con el número de
+ * antes de validar.
+ */
+export function colaPorRevisar(filas: readonly FilaDocumento[]): string[] {
+  return colaDeFacturas(filasDeLaLista(filas, new Map(), filtrosDe(new URLSearchParams())))
+}
 
 /** El pie: «9 facturas por revisar · Base … · IVA … · Total …». */
 export function totales(filas: readonly FilaDocumento[], extras: ReadonlyMap<string, ExtraFactura>): { n: number; base: number; iva: number; total: number; sinImporte: number } {

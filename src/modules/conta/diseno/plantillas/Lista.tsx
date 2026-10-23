@@ -87,7 +87,14 @@ export interface ColumnaLista<T> {
   ancho?: string
 }
 
-export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbrir, filaActual, orden, alOrdenar, vacio, pie, movil, tarjeta }: {
+/** D06 · Marcar filas (validar en bloque): una casilla en cada fila y otra en la cabecera para todas. */
+export interface SeleccionLista {
+  marcadas: ReadonlySet<string>
+  alMarcar: (id: string, marcada: boolean) => void
+  alMarcarTodas: (marcadas: boolean) => void
+}
+
+export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbrir, filaActual, orden, alOrdenar, vacio, pie, movil, tarjeta, seleccion }: {
   etiqueta: string
   columnas: readonly ColumnaLista<T>[]
   filas: readonly T[]
@@ -107,7 +114,18 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
   movil: boolean
   /** En el móvil, cada fila como tarjeta. */
   tarjeta: (f: T) => ReactNode
+  /** D06 · Con ella, las filas se pueden marcar. */
+  seleccion?: SeleccionLista
 }) {
+  const todas = !!seleccion && filas.length > 0 && filas.every((f) => seleccion.marcadas.has(clave(f)))
+  const algunas = !!seleccion && !todas && filas.some((f) => seleccion.marcadas.has(clave(f)))
+  const casilla = (f: T) => {
+    const id = clave(f)
+    return (
+      <input type="checkbox" className="s-lista-casilla" aria-label={`Marcar ${nombre(f)}`} checked={seleccion!.marcadas.has(id)}
+        onClick={(e) => e.stopPropagation()} onChange={(e) => seleccion!.alMarcar(id, e.target.checked)} />
+    )
+  }
   const caja = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     if (!filaActual) return
@@ -122,7 +140,8 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
         {filas.map((f) => {
           const id = clave(f)
           return (
-            <div key={id} role="listitem" data-fila={id} data-actual={id === filaActual ? '' : undefined}>
+            <div key={id} role="listitem" data-fila={id} data-actual={id === filaActual ? '' : undefined} data-con-casilla={seleccion ? '' : undefined}>
+              {seleccion && casilla(f)}
               <button type="button" className="s-lista-tarjeta" onClick={() => alAbrir(f)}>{tarjeta(f)}</button>
             </div>
           )
@@ -136,6 +155,12 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
       <table className="s-lista-tabla" aria-label={etiqueta}>
         <thead>
           <tr>
+            {seleccion && (
+              <th scope="col" className="s-lista-marca">
+                <input type="checkbox" className="s-lista-casilla" aria-label="Marcar todas" checked={todas}
+                  ref={(el) => { if (el) el.indeterminate = algunas }} onChange={(e) => seleccion.alMarcarTodas(e.target.checked)} />
+              </th>
+            )}
             {columnas.map((c) => {
               const activa = orden?.columna === c.id
               return (
@@ -151,11 +176,12 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
           </tr>
         </thead>
         <tbody>
-          {filas.length === 0 && <tr><td colSpan={columnas.length + 1} className="s-lista-vacia">{vacio}</td></tr>}
+          {filas.length === 0 && <tr><td colSpan={columnas.length + (seleccion ? 2 : 1)} className="s-lista-vacia">{vacio}</td></tr>}
           {filas.map((f) => {
             const id = clave(f)
             return (
-              <tr key={id} data-fila={id} data-actual={id === filaActual ? '' : undefined} onClick={() => alAbrir(f)}>
+              <tr key={id} data-fila={id} data-actual={id === filaActual ? '' : undefined} data-marcada={seleccion?.marcadas.has(id) ? '' : undefined} onClick={() => alAbrir(f)}>
+                {seleccion && <td className="s-lista-marca">{casilla(f)}</td>}
                 {columnas.map((c) => <td key={c.id} className={c.cifra ? 's-lista-cifra' : undefined}>{c.celda(f)}</td>)}
                 <td className="s-lista-abrir">
                   <button type="button" className="s-lista-abrir-boton" aria-label={`Abrir ${nombre(f)}`} onClick={(e) => { e.stopPropagation(); alAbrir(f) }}>›</button>

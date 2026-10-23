@@ -45,7 +45,7 @@ paso '3/10 · unitarias y de cumplimiento'
 npx vitest run
 
 paso '4/10 · front compatible con lo que borra la tanda de producción (W01)'
-# Lo que supabase/produccion/aplicar.txt borra o renombra no puede leerlo ni el
+# Lo que la tanda de la rama (supabase/produccion/tandas/<producto>/<rama>/aplicar.txt) borra o renombra no puede leerlo ni el
 # front publicado (origin/main) ni el de este commit: primero se deja de leer,
 # después se borra.
 git rev-parse --verify -q origin/main > /dev/null || { echo 'Falta origin/main: git fetch origin main'; exit 1; }
