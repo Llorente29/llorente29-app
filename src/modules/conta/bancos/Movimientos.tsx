@@ -25,6 +25,13 @@
 // «Hacer foto del ticket» como botón principal cuando falta, y «Es el mismo /
 // Son dos» en los posibles repetidos.
 //
+// S02 · PR 3 («las cifras»): las palabras del Inicio. «Según el banco, a
+// dd/mm» es el extracto (antes «En el banco», que en el Inicio era el libro).
+// «En contabilidad» sigue siendo la 572 con lo propuesto, porque lo casado
+// crea su asiento propuesto y sin él el cuadre contaría lo ya casado como por
+// casar; debajo, de conta_saldo_bancos, cuánto está validado y cuánto por
+// validar (solo si suma lo mismo: desgloseContable).
+//
 // Todo lo que se pulsa confirma con contenido o dice el fallo (regla 8). Las
 // bandejas filtran porque se piden; «Todos» enseña todas las filas (regla 7).
 
@@ -54,6 +61,8 @@ import { PorValidar } from '@/modules/conta/bancos/PorValidar'
 import { conVeredicto, textoValidados } from '@/modules/conta/lib/validarBanco'
 import { validar } from '@/modules/conta/services/diarioService'
 import { leerEsperan } from '@/modules/conta/services/esperanService'
+import { leerSaldoBancosSiEsta } from '@/modules/conta/services/cifrasService'
+import { desgloseContable } from '@/modules/conta/lib/cifrasLibro'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
 const VISIBLES = 60
@@ -98,7 +107,7 @@ export function Movimientos() {
   const vispera = fechaCorte ? new Date(Date.parse(`${fechaCorte}T12:00:00Z`) - 86400000).toISOString().slice(0, 10) : null
   const lectura = useLeerConservando(banco ? async () => {
     const cuentas = banco.cuenta ? [banco.cuenta] : []
-    const [movs, saldos, antes, pasada, facturas, esperan] = await Promise.all([
+    const [movs, saldos, antes, pasada, facturas, esperan, unaFuente] = await Promise.all([
       leerMovimientos(accountId, banco.id, mes),
       saldosContables(companyId, corte, cuentas),
       vispera && corte >= (fechaCorte ?? '') ? saldosContables(companyId, vispera, cuentas) : Promise.resolve(null),
@@ -107,9 +116,12 @@ export function Movimientos() {
       // S02 · PR 2: lo que la validación pararía (conta_esperan), para el veredicto de «Por validar».
       // Si no se puede leer, el veredicto no lo sabe y la validación lo dirá al pulsar.
       leerEsperan(companyId, desde, hasta).catch((e: unknown) => { console.warn('[bancos] no se pudo leer lo que espera', e); return new Map() }),
+      // S02 · PR 3: la fila de este banco en conta_saldo_bancos, la misma que lee el Inicio.
+      leerSaldoBancosSiEsta(companyId, corte),
     ])
     const espera = new Map<string, string>([...esperan].map(([id, ms]) => [id, ms[0]?.motivo || 'La base no lo validaría todavía.']))
-    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera }
+    const fila = unaFuente?.find((f) => (banco.cuenta && f.cuenta === banco.cuenta) || f.treasuryAccountId === banco.id) ?? null
+    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera, fila }
   } : null, `${banco?.id}:${mes}`, String(vuelta))
 
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
@@ -120,6 +132,7 @@ export function Movimientos() {
     [fechaCorte, corte, banco, ctx.datos.extractos, lectura.datos])
   const cuadre = useMemo(() => cuadreDe(movs, extracto?.saldoFinalCent ?? null, partida.libroCent, mes), [movs, extracto, partida, mes])
   const seleccion = marcado && marcado.de === lectura.datos ? marcado.ids : cuadre.preseleccionados
+  const desglose = partida.apertura ? null : desgloseContable(lectura.datos?.fila, cuadre.libroCent)
 
   const vistos = useMemo(() => movs.filter((m) => enBandeja(m, bandeja) && coincide(m, busca)), [movs, bandeja, busca])
   const dias = useMemo(() => porDia(todas ? vistos : vistos.slice(0, VISIBLES)), [vistos, todas])
@@ -287,15 +300,16 @@ export function Movimientos() {
       <div className="cxn-cuadre" data-testid="cuadre">
         <div className="cxn-cuenta">
           <div className="cxn-cifra">
-            <span className="cxb-cifra-etiqueta">En el banco</span>
+            <span className="cxb-cifra-etiqueta">Según el banco</span>
             <span className="cxb-cifra-valor">{cuadre.bancoCent === null ? '—' : euros(cuadre.bancoCent)}</span>
-            <span className="cxb-cifra-pie">{extracto ? `extracto hasta el ${fechaLarga(extracto.hasta)}` : 'sube un extracto con saldos'}</span>
+            <span className="cxb-cifra-pie">{extracto ? `a ${diaMesCorto(extracto.hasta)}, su extracto` : 'sube un extracto con saldos'}</span>
           </div>
           <span className="cxn-signo" aria-hidden="true">−</span>
           <div className="cxn-cifra">
             <span className="cxb-cifra-etiqueta">En contabilidad</span>
             <span className="cxb-cifra-valor">{cuadre.libroCent === null ? '—' : euros(cuadre.libroCent)}</span>
             <span className="cxb-cifra-pie">{cuadre.libroCent === null ? 'el banco no tiene su cuenta' : `a ${fechaLarga(corte)}`}</span>
+            {desglose && <span className="cxb-cifra-pie" data-testid="desglose-contable">{eurosExactos(desglose.validado)} validado y {eurosExactos(desglose.propuesto)} por validar</span>}
             {partida.apertura && <span className="cxb-cifra-pie cxn-apertura" data-testid="apertura">{partida.apertura.frase}</span>}
           </div>
           <span className="cxn-signo" aria-hidden="true">=</span>

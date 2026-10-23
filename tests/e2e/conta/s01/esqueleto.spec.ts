@@ -326,7 +326,8 @@ test('Inicio como bandeja: impuestos con el plazo que toca, las gráficas a un c
     return previa
   }
   const banco = page.locator('.cxi-cifra-etiqueta [data-actual]').first()
-  await expect(banco).toHaveText('En el banco')
+  // S02 · PR 3: «En el banco» era el libro aquí y el extracto en Bancos; ahora dice lo que es.
+  await expect(banco).toHaveText('Bancos · en contabilidad')
   const antes = await cajas()
   expect(antes.length).toBeGreaterThan(5)
   try {
@@ -336,14 +337,14 @@ test('Inicio como bandeja: impuestos con el plazo que toca, las gráficas a un c
     expect(await cajas()).toEqual(antes)
     await capturar(page, 'inicio-experto')
     await nivel(page, 'Sin experiencia')
-    await expect(banco).toHaveText('Tienes en el banco')
+    await expect(banco).toHaveText('Tus bancos, en contabilidad')
     await expect(page.getByRole('heading', { name: 'Lo que toca presentar a Hacienda' })).toBeVisible()
     expect(await cajas()).toEqual(antes)
     await capturar(page, 'inicio-sin-experiencia')
   } finally {
     await nivel(page, 'Medio')
   }
-  await expect(banco).toHaveText('En el banco')
+  await expect(banco).toHaveText('Bancos · en contabilidad')
   await capturar(page, 'inicio-bandeja')
   expect(errores).toEqual([])
 })

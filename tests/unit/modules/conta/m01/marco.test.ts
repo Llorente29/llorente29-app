@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { enFila, interpretar, mover, opciones, ordenar, paraIlike, pregunta, type Grupo } from '@/modules/conta/marco/nuevo/buscar'
 import { chipsDelInicio } from '@/modules/conta/marco/nuevo/teTocaHoy'
-import { rutaRecibidaEnAsientos } from '@/config/navegacion'
+import { rutaDocumentos, rutaRecibidaEnAsientos } from '@/config/navegacion'
 
 describe('el buscador general (Ctrl K)', () => {
   it('lee números, importes y texto como se escriben en una oficina', () => {
@@ -63,13 +63,14 @@ describe('el buscador general (Ctrl K)', () => {
 
 describe('el «Te toca hoy» del Inicio', () => {
   // S01c: cinco, con las recibidas para revisar (antes iban solo en «Dudas» y la barra no cuadraba con el Inicio).
-  it('los cinco, siempre; contando (undefined) o sin poder contar (null), nunca 0', () => {
-    expect(chipsDelInicio({}).map((c) => c.numero)).toEqual([undefined, undefined, undefined, undefined, undefined])
-    expect(chipsDelInicio({ compras: 3, recibidas: 4, libros: 0, bancos: null, terceros: 2 }).map((c) => [c.id, c.numero])).toEqual([
-      ['compras', 3], ['recibidas', 4], ['libros', 0], ['bancos', null], ['terceros', 2],
+  // S02 · PR 3: seis, con las facturas por aclarar (conta_pendientes.facturas_por_aclarar: antes no las contaba nadie).
+  it('los seis, siempre; contando (undefined) o sin poder contar (null), nunca 0', () => {
+    expect(chipsDelInicio({}).map((c) => c.numero)).toEqual([undefined, undefined, undefined, undefined, undefined, undefined])
+    expect(chipsDelInicio({ compras: 3, recibidas: 4, aclarar: 91, libros: 0, bancos: null, terceros: 2 }).map((c) => [c.id, c.numero])).toEqual([
+      ['compras', 3], ['recibidas', 4], ['aclarar', 91], ['libros', 0], ['bancos', null], ['terceros', 2],
     ])
   })
   it('cada chip lleva a lo suyo', () => {
-    expect(chipsDelInicio({}).map((c) => c.ruta)).toEqual(['/conta/compras', rutaRecibidaEnAsientos(), '/conta/libros/diario?ver=revisar', '/conta/bancos', '/conta/clientes-y-proveedores'])
+    expect(chipsDelInicio({}).map((c) => c.ruta)).toEqual(['/conta/compras', rutaRecibidaEnAsientos(), rutaDocumentos('por-aclarar'), '/conta/libros/diario?ver=revisar', '/conta/bancos', '/conta/clientes-y-proveedores'])
   })
 })

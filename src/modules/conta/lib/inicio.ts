@@ -12,9 +12,21 @@
 //                     movimientos del banco todavía (frente B).
 //   · Te deben      = saldo deudor de los grupos 43 y 44 (clientes y deudores).
 //   · Debes         = saldo acreedor de los grupos 40 y 41 (proveedores y acreedores).
+//
+// S02 · PR 3 («las cifras»): las tarjetas leen conta_saldo_bancos y
+// conta_saldos_terceros (lib/cifrasLibro); las barritas de los seis meses
+// siguen saliendo de aquí, con la MISMA regla: «Te deben» suma los saldos
+// DEUDORES de cada subcuenta de cliente (no el neto, que restaba los
+// anticipos de clientes) y «Debes» los ACREEDORES de cada proveedor y
+// acreedor, sin la 407 (el prefijo '40' la atrapaba: es un anticipo, activo)
+// ni «facturas por localizar». Y «Pendiente de ti» es la misma lista que el
+// «Te toca hoy», con el mismo total que la barra de Inicio.
 //   · IVA del trimestre = 477 menos 472 del trimestre, sin la liquidación
 //                     del IVA (movimientoIva). Sin fecha de presentación: no
 //                     hay calendario de plazos en la serie, y no se inventa.
+
+import { cifrasTerceros, filaDeSaldo, grupoDeCuenta } from '@/modules/conta/lib/cifrasLibro'
+import type { CuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
@@ -92,18 +104,27 @@ export function saldoDe(saldos: readonly SaldoSimple[], prefijos: readonly strin
 export const GRUPOS = {
   banco: ['572'],
   teDeben: ['43', '44'],
+  // S02 · PR 3: las barritas ya no usan este prefijo (puntoDeMes va subcuenta a subcuenta,
+  // sin la 407 ni «por localizar»: lib/cifrasLibro grupoDeCuenta).
   debes: ['40', '41'],
 } as const
 
 export interface PuntoMes { mes: string; banco: number; teDeben: number; debes: number }
 
-export function puntoDeMes(mes: string, saldos: readonly SaldoSimple[]): PuntoMes {
-  return {
-    mes,
-    banco: saldoDe(saldos, GRUPOS.banco, 'deudor'),
-    teDeben: saldoDe(saldos, GRUPOS.teDeben, 'deudor'),
-    debes: saldoDe(saldos, GRUPOS.debes, 'acreedor'),
-  }
+/**
+ * Un punto del mes. Los de terceros, subcuenta a subcuenta y con su lado (la
+ * regla de conta_saldos_terceros, lib/cifrasLibro): «Te deben» solo lo deudor
+ * de clientes; «Debes» solo lo acreedor de proveedores y acreedores, sin
+ * «facturas por localizar». El grupo lo dice el código de la subcuenta (o el
+ * de su plantilla, si es otro).
+ */
+export function puntoDeMes(mes: string, saldos: readonly (SaldoSimple & { name?: string })[]): PuntoMes {
+  const filas = saldos.map((x) => {
+    const codigo = grupoDeCuenta(x.code, x.name ?? '') ? x.code : x.templateCode ?? x.code
+    return filaDeSaldo(codigo, x.name ?? '', x.debe - x.haber)
+  })
+  const t = cifrasTerceros(filas)
+  return { mes, banco: saldoDe(saldos, GRUPOS.banco, 'deudor'), teDeben: t.teDeben, debes: t.debes }
 }
 
 /**
@@ -162,31 +183,64 @@ export function frasePago(fecha: string | null, hoy: string, diaMes: (iso: strin
   return fecha < hoy ? `Vencido desde el ${diaMes(fecha)}` : `Próximo pago el ${diaMes(fecha)}`
 }
 
-/** Lo que tiene que decir la persona: las sugerencias, los papeles de compras y los asientos por revisar. */
-export interface Duda { id: string; inicial: string; titulo: string; apoyo: string; tipo: 'sugerencia' | 'compras' | 'recibidas' | 'revisar' | 'sinNombre' }
+/**
+ * Lo que tiene que decir la persona. S02 · PR 3: la MISMA lista que el «Te
+ * toca hoy» (marco/nuevo/teTocaHoy, de conta_pendientes): compras, facturas
+ * para mirar y por aclarar, asientos, bancos y contactos (antes no llevaba ni
+ * bancos ni contactos), más lo que solo pregunta el Inicio: las sugerencias de
+ * la IA y las subcuentas sin nombre.
+ */
+export interface Duda {
+  id: string; inicial: string; titulo: string; apoyo: string
+  tipo: 'sugerencia' | 'compras' | 'recibidas' | 'aclarar' | 'revisar' | 'bancos' | 'terceros' | 'sinNombre'
+}
 
-export function dudas(sugerencias: readonly { id: string; title: string; why: string }[], comprasPorMirar: number, asientosPorRevisar: number, sinNombre = 0, recibidas = 0): Duda[] {
+const veces = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
+
+/** Las claves del menú que son también dudas, en el orden del «Te toca hoy». */
+export const CLAVES_DE_DUDAS = ['compras', 'recibidas', 'aclarar', 'libros', 'bancos', 'terceros'] as const
+
+export function dudas(sugerencias: readonly { id: string; title: string; why: string }[], cuentas: CuentasMenu, sinNombre = 0): Duda[] {
   const out: Duda[] = sugerencias.map((s) => ({ id: s.id, inicial: 'IA', titulo: s.title, apoyo: s.why, tipo: 'sugerencia' }))
-  if (comprasPorMirar > 0) {
-    out.push({ id: 'compras', inicial: 'C', tipo: 'compras', titulo: `${comprasPorMirar} ${comprasPorMirar === 1 ? 'cosa de compras por mirar' : 'cosas de compras por mirar'}`, apoyo: 'No sé qué hacer con ellos sin ti.' })
+  const n = (k: string) => { const v = cuentas[k]; return typeof v === 'number' ? v : 0 }
+  if (n('compras') > 0) {
+    out.push({ id: 'compras', inicial: 'C', tipo: 'compras', titulo: veces(n('compras'), 'cosa de compras por mirar', 'cosas de compras por mirar'), apoyo: 'No sé qué hacer con ellos sin ti.' })
   }
-  // S01 (paso 4): las facturas recibidas, una detrás de otra (Asientos › Recibida, «Validar y siguiente»).
-  if (recibidas > 0) {
-    out.push({ id: 'recibidas', inicial: 'R', tipo: 'recibidas', titulo: `${recibidas} ${recibidas === 1 ? 'factura recibida' : 'facturas recibidas'} para revisar`, apoyo: 'Una detrás de otra: «Validar y siguiente» y pasas a la próxima.' })
+  // S01 (paso 4): las facturas recibidas, una detrás de otra («Validar y siguiente»).
+  if (n('recibidas') > 0) {
+    out.push({ id: 'recibidas', inicial: 'R', tipo: 'recibidas', titulo: `${veces(n('recibidas'), 'factura recibida', 'facturas recibidas')} para revisar`, apoyo: 'Una detrás de otra: «Validar y siguiente» y pasas a la próxima.' })
   }
-  if (asientosPorRevisar > 0) {
-    out.push({ id: 'revisar', inicial: 'L', tipo: 'revisar', titulo: `${asientosPorRevisar} ${asientosPorRevisar === 1 ? 'asiento propuesto' : 'asientos propuestos'} para revisar`, apoyo: 'Los he preparado yo; los validas tú.' })
+  if (n('aclarar') > 0) {
+    out.push({ id: 'aclarar', inicial: 'R', tipo: 'aclarar', titulo: `${veces(n('aclarar'), 'factura recibida', 'facturas recibidas')} por aclarar`, apoyo: 'Les falta algo para apuntarlas: el proveedor, un dato que no he leído bien o una diferencia.' })
+  }
+  if (n('libros') > 0) {
+    out.push({ id: 'revisar', inicial: 'L', tipo: 'revisar', titulo: `${veces(n('libros'), 'asiento propuesto', 'asientos propuestos')} para revisar`, apoyo: 'Los he preparado yo; los validas tú.' })
+  }
+  if (n('bancos') > 0) {
+    const partes = [['bancosConfirmar', 'para confirmar'], ['bancosAclarar', 'por aclarar'], ['bancosValidar', 'por validar']]
+      .flatMap(([k, t]) => (n(k) > 0 ? [`${n(k)} ${t}`] : []))
+    out.push({ id: 'bancos', inicial: 'B', tipo: 'bancos', titulo: `${veces(n('bancos'), 'movimiento del banco', 'movimientos del banco')} por decidir`, apoyo: partes.length ? `${partes.join(', ')}.` : 'Para confirmar, aclarar o validar.' })
+  }
+  if (n('terceros') > 0) {
+    out.push({ id: 'terceros', inicial: 'T', tipo: 'terceros', titulo: `${veces(n('terceros'), 'cliente o proveedor', 'clientes o proveedores')} por revisar`, apoyo: 'Cuentas traídas sin revisar o acuerdos sin su socio.' })
   }
   // C06, respuesta 3: lo que llegó de Diez sin nombre no se inventa: se pide.
   if (sinNombre > 0) {
-    out.push({ id: 'sin-nombre', inicial: 'P', tipo: 'sinNombre', titulo: `${sinNombre} ${sinNombre === 1 ? 'subcuenta' : 'subcuentas'} sin nombre en Diez · pónselo`, apoyo: 'Llegaron de Diez sin nombre: llevan el de su cuenta del plan hasta que les pongas el suyo.' })
+    out.push({ id: 'sin-nombre', inicial: 'P', tipo: 'sinNombre', titulo: `${veces(sinNombre, 'subcuenta', 'subcuentas')} sin nombre en Diez · pónselo`, apoyo: 'Llegaron de Diez sin nombre: llevan el de su cuenta del plan hasta que les pongas el suyo.' })
   }
   return out
 }
 
-/** «3 dudas · 1 minuto»: un minuto por cada tres, por lo alto. */
-export function resumenDudas(n: number): string {
-  if (n === 0) return 'nada pendiente'
-  const min = Math.max(1, Math.ceil(n / 3))
-  return `${n} ${n === 1 ? 'duda' : 'dudas'} · ${min} ${min === 1 ? 'minuto' : 'minutos'}`
+/**
+ * El resumen de «Pendiente de ti». S02 · PR 3: ya no cuenta filas («9
+ * facturas» valía 1): `total` es la suma de lo pendiente, el mismo número que
+ * la barra de Inicio (cuentasDeLaBarra); `preguntas`, las sugerencias y las
+ * subcuentas sin nombre, que solo pregunta el Inicio y se dicen aparte. Un
+ * total que no se ha podido contar (null) nunca es «nada pendiente».
+ */
+export function resumenDudas(total: number | null, preguntas = 0): string {
+  const p = preguntas > 0 ? veces(preguntas, 'pregunta mía', 'preguntas mías') : null
+  if (total === null) return ['no he podido contarlo todo', p].filter(Boolean).join(' · ')
+  if (total === 0 && !p) return 'nada pendiente'
+  return [total > 0 ? veces(total, 'cosa pendiente', 'cosas pendientes') : null, p].filter(Boolean).join(' · ')
 }

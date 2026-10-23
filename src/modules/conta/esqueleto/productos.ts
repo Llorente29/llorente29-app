@@ -161,7 +161,11 @@ export const PRODUCTOS: Producto[] = [
       { id: 'recibidas', etiqueta: 'Facturas recibidas', icono: 'recibida', ruta: R.documentos, prefijos: [R.documentos, R.compras] },
       { id: 'tickets', etiqueta: 'Tickets', icono: 'documento', ruta: null, prefijos: [] },
       { id: 'pagos', etiqueta: 'Pagos', icono: 'pagos', ruta: null, prefijos: [] },
-      { id: 'liquidaciones', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidacionNueva, prefijos: [`${R.compras}/liquidacion`, `${R.documentos}/catcher`], solo: 'hosteleria' },
+      // S02 · PR 3: la lista de todas (mensuales y quincenas de Catcher); la marcan también la ficha de una y la quincena.
+      {
+        id: 'liquidaciones', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidaciones,
+        prefijos: [R.liquidaciones, `${R.compras}/liquidacion`, `${R.documentos}/catcher`], solo: 'hosteleria',
+      },
     ],
   },
   {

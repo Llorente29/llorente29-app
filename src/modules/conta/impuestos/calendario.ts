@@ -315,8 +315,18 @@ function listaCodigos(fs: FilaCalendario[]): string {
  */
 export function cifraPlazo(c: Calendario): Cifra {
   const pend = c.filas.filter(sinPresentar)
-  if (c.filas.length === 0) return { etiqueta: 'Este mes', valor: 'Nada que presentar', apoyo: 'no hay ningún plazo cerca', tono: 'ok', texto: true }
-  if (pend.length === 0) return { etiqueta: 'Este mes', valor: 'Todo presentado', apoyo: plural(c.filas.length, 'modelo', 'modelos') + ' en plazo', tono: 'ok', texto: true }
+  // S02 · PR 3: la etiqueta es el mes de la ventana, nunca el literal «Este mes»
+  // (el 22/10 decía «Este mes» bajo «Diciembre»). Y lo que no se presenta
+  // (not_required) no es «presentado»: si todo es eso, «Nada que presentar».
+  const etiqueta = etiquetaVentana(c)
+  if (c.filas.length === 0) return { etiqueta, valor: 'Nada que presentar', apoyo: 'no hay ningún plazo cerca', tono: 'ok', texto: true }
+  if (pend.length === 0) {
+    const noSe = c.filas.filter((f) => f.declaracion?.estado === 'not_required').length
+    const presentados = c.filas.length - noSe
+    const nota = noSe ? plural(noSe, 'modelo que no hay que presentar', 'modelos que no hay que presentar') : ''
+    if (presentados === 0) return { etiqueta, valor: 'Nada que presentar', apoyo: nota, tono: 'ok', texto: true }
+    return { etiqueta, valor: 'Todo presentado', apoyo: [plural(presentados, 'modelo presentado', 'modelos presentados'), nota].filter(Boolean).join(' · '), tono: 'ok', texto: true }
+  }
   const domic = pend.filter((f) => !f.atrasado && f.domicilia && f.domiciliacion && f.domiciliacion >= c.hoy)
   const listos = pend.filter((f) => f.declaracion?.estado === 'reviewed').length
   const porRevisar = pend.filter((f) => f.se_calcula && f.declaracion?.estado !== 'reviewed').length
@@ -409,6 +419,11 @@ export function tituloVentana(c: Calendario): string {
   const delMes = c.filas.filter((f) => f.presentacion.slice(0, 7) === c.ventana!.slice(0, 7))
   const t = delMes.find((f) => f.cadencia === 'quarterly') ?? delMes.find((f) => f.cadencia === 'monthly')
   return t ? `${mes} · ${periodoEnPalabras(t.periodo)}` : mes
+}
+
+/** S02 · PR 3 · La etiqueta de la primera cifra: el mes de la ventana («Diciembre»), o «Ningún plazo cerca». */
+export function etiquetaVentana(c: Pick<Calendario, 'ventana'>): string {
+  return c.ventana ? mayuscula(MESES[Number(c.ventana.slice(5, 7)) - 1]) : 'Ningún plazo cerca'
 }
 
 /** El mes de la ventana, para el botón: «los de octubre». */

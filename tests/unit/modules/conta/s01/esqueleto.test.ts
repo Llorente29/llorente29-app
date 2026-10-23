@@ -49,7 +49,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     compras: 'compras.recibidas', documentos: 'compras.recibidas', revisarFactura: 'compras.recibidas', recibidasEnAsientos: 'contabilidad.asientos', recibidaEnAsientos: 'contabilidad.asientos',
     // S02 · PR 2: las dos de arriba solo llevan a Compras (module.tsx); la recibida a mano y la emitida, en su sitio.
     recibidaAMano: 'compras.recibidas', facturasEmitidas: 'facturacion.emitidas', nuevaEmitida: 'facturacion.emitidas',
-    liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
+    // S02 · PR 3: la lista de liquidaciones, la ficha de una (y la de subir sus documentos) y la quincena de Catcher.
+    liquidaciones: 'compras.liquidaciones', liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
     // I01c (19/10): el trimestre, también el de una empresa por la ruta.

@@ -47,8 +47,9 @@ describe('S01f · lo que vence, en rojo (el calendario de staging a 13/10)', () 
 describe('S01f · lo que pide una decisión, en gris (las cuentas de la barra)', () => {
   it('cada cuenta en la pestaña donde se resuelve; 0 y lo no contado (null) no salen', () => {
     // S02: «Por revisar» de Compras (las recepciones) no es una página: su número va en el chip del apartado.
-    expect(contadoresDeCuentas({ compras: 4, recibidas: 9, libros: 6, bancos: null, terceros: 1 })).toEqual({
-      'compras.recibidas': { n: 9, tono: 'neutro', frase: '9 por revisar' },
+    // S02 · PR 3: Facturas recibidas cuenta sus dos pestañas (para mirar y por aclarar) y dice qué son.
+    expect(contadoresDeCuentas({ compras: 4, recibidas: 9, aclarar: 91, libros: 6, bancos: null, terceros: 1 })).toEqual({
+      'compras.recibidas': { n: 100, tono: 'neutro', frase: '9 facturas para mirar, 91 facturas por aclarar' },
       'contabilidad.asientos': { n: 6, tono: 'neutro', frase: '6 por revisar' },
       'contactos.todos': { n: 1, tono: 'neutro', frase: '1 por revisar' },
     })
