@@ -82,7 +82,8 @@ export default function DocumentosPage() {
   const enBloque = f.pestana === 'por-revisar'
   const listas = useLeer(enBloque && accountId && activa && datos.datos && extras.datos
     ? () => leerParaValidar(accountId, activa.id, datos.datos!.filas, extras.datos!, desde, hasta) : null,
-  `${activa?.id}:${desde}:${hasta}:${vuelta}:${ids.length}:validar`)
+  // La clave cambia cuando llegan las filas y sus importes: useLeer solo vuelve a leer si cambia la clave.
+  `${activa?.id}:${desde}:${hasta}:${vuelta}:${ids.join(',')}:${extras.datos ? 'con-importes' : 'sin-importes'}:validar`)
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set())
   const [confirmando, setConfirmando] = useState(false)
   const [validando, setValidando] = useState<{ hechas: number; de: number } | null>(null)
@@ -372,7 +373,8 @@ function ResultadoSubida({ subidas }: { subidas: Subida[] }) {
 
 /** D06 · «¿Lista para validar?» de una fila: «Lista», o «No está lista.» con su motivo (el de su ficha). */
 function ListaParaValidar({ p, cargando }: { p: { lista: boolean; motivo: string } | undefined; cargando: boolean }) {
-  if (!p) return <span className="s-apoyo">{cargando ? 'Comprobando…' : '—'}</span>
-  if (p.lista) return <span className="s-lista-para-validar" data-lista="">✓ Lista</span>
-  return <span className="s-lista-para-validar" data-tono="duda"><strong>No está lista.</strong> {p.motivo}</span>
+  // En un chip, como el estado de las demás pestañas: cada fila dice qué le pasa.
+  if (!p) return <span className="s-apoyo"><Chip>{cargando ? 'Comprobando…' : 'Sin comprobar'}</Chip></span>
+  if (p.lista) return <span className="s-lista-para-validar" data-lista=""><Chip tono="seguro">✓ Lista</Chip></span>
+  return <span className="s-lista-para-validar" data-tono="duda"><Chip tono="duda">No está lista.</Chip> {p.motivo}</span>
 }
