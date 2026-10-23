@@ -486,18 +486,18 @@ export default function RevisarFacturaPage() {
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} soloLectura={soloLectura}
         tonoProveedor={mProv.tono} motivoProveedor={mProv.marca ? `${mProv.marca}${prov?.nif ? ` · NIF ${prov.nif}` : ''}` : mProv.motivo}
         motivoNumero={fac.no_repetida ? 'No está repetida: lo confirmaste.' : fac.numero ? 'No hay otra con su número y su total.' : 'Sin número no es una factura completa.'} />
+      {/* D07b · La ficha del proveedor, desde el documento: una nota bajo «Proveedor y factura», solo si hay algo que decir. */}
+      {!soloLectura && desdeDocumento && (
+        <div className="cxf-desde-documento" aria-label="Su ficha, desde el documento">
+          {desdeDocumento.frases.length > 0 && <p className="s-apoyo">A la ficha de {proveedor} le falta {enUnaFrase(desdeDocumento.frases)}: lo trae el documento y lo guardo al validar.</p>}
+          {desdeDocumento.contradice.map((x) => <p key={x} className="s-aviso-lista" data-tono="duda">{x} No cambio su ficha: mira cuál vale.</p>)}
+        </div>
+      )}
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={tiposIva.datos ?? [21, 10, 4, 0]} totales={totales} pdf={pdf}
         fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} />
       {mImportes.tono === 'revisar' && <p className="cxf-error" role="status">{mImportes.motivo}</p>}
-      {!soloLectura && desdeDocumento && (
-        <section className="s-bloque-ficha" aria-label="Su ficha, desde el documento" data-prueba="ficha-desde-documento">
-          <div className="s-bloque-ficha-cabeza"><h2>Su ficha, desde el documento</h2></div>
-          {desdeDocumento.frases.length > 0 && <p className="s-apoyo">A su ficha le falta {enUnaFrase(desdeDocumento.frases)}: lo trae el documento y lo guardo al validar.</p>}
-          {desdeDocumento.contradice.map((x) => <p key={x} className="s-aviso-lista" data-tono="duda">{x} No cambio la ficha: mira cuál vale.</p>)}
-        </section>
-      )}
       {!descartada && <IvaNoDeducibleFicha accountId={accountId} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alGuardar={() => setVuelta((x) => x + 1)} />}
       {!descartada && <LiquidacionesDeLaFactura accountId={accountId} supplierId={fac.proveedor?.id ?? null} invoiceId={invoiceId} fecha={fac.fecha} total={fac.total} soloLectura={descartada} quien={userName} />}
       <BloqueGasto gastos={b.gastos} base={totales.base} cuentas={cuentas.datos ?? []} locales={ejeLocal ? locales.datos ?? [] : null} nombreEje={ejeLocal?.nombre ?? 'Local'}

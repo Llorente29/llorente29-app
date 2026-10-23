@@ -22,7 +22,8 @@ describe('la entera en trozos', () => {
     // i01d/proveedor-extranjero, i01e/ficha-libro, i01h/sociedades); inventario/autoconteo
     // ya está medido (e2e 761). 23/10 (D06): entra d01/validar-en-bloque, nueva y sin medir
     // (cuenta como la mediana): son 5. La mide la entera de su PR.
-    expect(sin.length).toBeLessThan(6)
+    // 23/10 (D07): entra d01/plataforma, nueva y sin medir (una sola prueba, sin datos que crear): son 6.
+    expect(sin.length).toBeLessThan(7)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {

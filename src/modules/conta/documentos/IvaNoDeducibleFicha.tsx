@@ -29,8 +29,9 @@ export function IvaNoDeducibleFicha({ accountId, invoiceId, soloLectura, quien, 
   const d = leido.datos
   const clave = `${invoiceId}:${vuelta}`
   const b = borrador?.clave === clave ? borrador : d ? { clave, nd: d.noDeducible, motivo: d.motivo, texto: d.texto ?? '' } : null
-  if (leido.error) return <BloqueFicha titulo="IVA"><p className="s-apoyo">No se ha podido saber si su IVA se deduce: {leido.error}</p></BloqueFicha>
-  if (!d || !b) return null
+  if (leido.error) return <BloqueFicha titulo="IVA"><p className="s-apoyo" data-prueba="iva-no-deducible">No se ha podido saber si su IVA se deduce: {leido.error}</p></BloqueFicha>
+  // Mientras se lee, el bloque ya está (la ficha no cambia de forma al llegar).
+  if (!d || !b) return <BloqueFicha titulo="IVA"><p className="s-apoyo" data-prueba="iva-no-deducible" aria-busy="true">Leyendo si su IVA se deduce…</p></BloqueFicha>
   const cambiado = b.nd !== d.noDeducible || (b.nd && (b.motivo !== d.motivo || (b.motivo === 'otro' && b.texto.trim() !== (d.texto ?? ''))))
   const falta = faltaParaGuardar(b.nd, b.motivo, b.texto)
   const guardar = async () => {
@@ -44,11 +45,13 @@ export function IvaNoDeducibleFicha({ accountId, invoiceId, soloLectura, quien, 
   }
   const porque = porQueNoDeducible(d.motivo, d.texto)
   if (soloLectura) {
-    return d.noDeducible ? (
+    return (
       <BloqueFicha titulo="IVA">
-        <p className="s-apoyo" data-prueba="iva-no-deducible">Su IVA no se deduce{porque ? `: ${porque}` : ''}. Va a su gasto, en el libro de recibidas como no deducible y fuera del 303.</p>
+        <p className="s-apoyo" data-prueba="iva-no-deducible">
+          {d.noDeducible ? `Su IVA no se deduce${porque ? `: ${porque}` : ''}. Va a su gasto, en el libro de recibidas como no deducible y fuera del 303.` : 'Su IVA se deduce: va a la 472 y al 303.'}
+        </p>
       </BloqueFicha>
-    ) : null
+    )
   }
   return (
     <BloqueFicha titulo="IVA">

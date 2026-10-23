@@ -318,7 +318,8 @@ test('D03 · una recibida que entró sola y una escrita a mano: la misma pantall
 
     // La regla de Julio: la misma pantalla para las dos. Los mismos bloques, las mismas piezas, los mismos campos que se editan y las mismas acciones.
     expect(deLaAMano).toEqual(deLaSola)
-    expect(deLaSola.bloques).toEqual(['Proveedor y factura', 'Importes por tipo de IVA', 'A qué gasto va', 'Pago'])
+    // D07: el bloque «IVA» (si se deduce, con su motivo si no) en las dos.
+    expect(deLaSola.bloques).toEqual(['Proveedor y factura', 'Importes por tipo de IVA', 'IVA', 'A qué gasto va', 'Pago'])
     for (const p of ['de-donde-vino', 'importes-iva', 'linea-iva', 'totales-iva', 'gasto', 'linea-gasto', 'campo-vence', 'hueco-pdf', 'historial']) {
       expect(deLaSola.pruebas, `«${p}» en la ficha`).toContain(p)
     }
