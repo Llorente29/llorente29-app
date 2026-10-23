@@ -477,3 +477,11 @@ supabase/staging/sql/20261204_e05_releer_riders_prueba.sql
 supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
 supabase/staging/sql/20261206_d03_recibida_pdf_prueba.sql
 supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql
+# D03 · «Guardar cambios» de la ficha de la recibida (la misma rama; Julio, 23/10).
+#   La 0790 solo añade (columnas que admiten nulos, dos tablas y tres
+#   funciones) y se puede pasar dos veces: desde la rama va de verdad (W05).
+#   Su prueba (ROLLBACK): cada clave de p_cambios como usuario de A y lo
+#   escrito, el historial y el asiento propuesto quitado; lo que no; poner su
+#   documento y «Sin PDF»; B no; con su asiento validado no; y la vuelta atrás.
+supabase/migrations/20261206T0790_d03_recibida_guardar.sql
+supabase/staging/sql/20261206_d03_recibida_guardar_prueba.sql

@@ -1,8 +1,10 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# D03 · la recibida sin recepción con su documento), en orden inverso: primero
-# las dos de Foodint otra vez sin documento (para si alguna ya tiene asiento o
-# el D02 ya ha hecho algo con ella) y después _compras_factura_desde_papel la
-# de antes, byte a byte.
+# D03 · la recibida sin recepción con su documento y «Guardar cambios» de su
+# ficha), en orden inverso: primero sin lo que añade la 0790 (para si ya se ha
+# guardado algo con ella), luego las dos de Foodint otra vez sin documento (para
+# si alguna ya tiene asiento o el D02 ya ha hecho algo con ella) y después
+# _compras_factura_desde_papel la de antes, byte a byte.
 cuenta: scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
+supabase/vuelta-atras/20261206T0790_d03_recibida_guardar.down.sql
 supabase/vuelta-atras/20261206T0780_d03_recibida_pdf_datos.down.sql
 supabase/vuelta-atras/20261206T0770_d03_recibida_pdf_sin_recepcion.down.sql

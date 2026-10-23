@@ -1,9 +1,10 @@
 {
-  "_que": "D03 · la recibida sin recepción con su documento · contexto de producción de la tanda viva (20261206T0770 y 20261206T0780), medido en SOLO LECTURA el 23/10 a las 05:46 UTC, con la 0480 del E05 ya aplicada (la última del historial: 20261204T0480_e05_releer_riders; la 0490 del #293 no está), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la tanda existen public.supplier_invoice (101 filas, todas de Foodint) y public._compras_factura_desde_papel (md5 e0d04afddb7e98ab9cb1b46deccb91e0, una sola firma); nada del camino del pedido; nada en el historial. Los ficheros se renumeraron de 0500/0510 a 0770/0780 (chocaban con la C06b); el contexto no depende del número: comprobado otra vez en solo lectura el 23/10 a las 06:06 UTC (historial sin los dos nombres nuevos, la última 20261204T0480; la función con el mismo md5 y una firma; 101 filas).",
-  "medido": "2026-10-23T05:46Z",
+  "_que": "D03 · la recibida sin recepción con su documento y «Guardar cambios» de su ficha · contexto de producción de la tanda viva (20261206T0770, 20261206T0780 y 20261206T0790), medido en SOLO LECTURA el 23/10 a las 06:19 UTC, con la 0480 del E05 ya aplicada (la última del historial: 20261204T0480_e05_releer_riders; la 0490 del #293 no está), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que toca la tanda existen public.supplier_invoice (101 filas, todas de Foodint) y public._compras_factura_desde_papel (md5 e0d04afddb7e98ab9cb1b46deccb91e0, una sola firma); no existen supplier_invoice_expense, supplier_invoice_change ni las tres conta_recibida_* de la 0790; nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-23T06:19Z",
   "tanda": {
     "supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql": "4e976266dfd0794a2f696bcc631e45c5",
-    "supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql": "30424947709e9c07af852e49d5ae1a4f"
+    "supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql": "30424947709e9c07af852e49d5ae1a4f",
+    "supabase/migrations/20261206T0790_d03_recibida_guardar.sql": "dfe52e29453e38f139d73536ffe3b3a7"
   },
   "contexto": {
     "tablas": [
