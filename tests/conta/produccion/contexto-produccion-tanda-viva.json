@@ -1,16 +1,33 @@
 {
-  "_que": "D07a + D07c (PR 1 del 23/10) · las recibidas que Diez rechazó por la descripción, otra vez a la cola, y «Saldo prepago» en todas las listas de formas de pago · contexto de producción de la tanda viva (20261208T0820 y 20261208T0830), medido en SOLO LECTURA el 23/10 a las 13:38 UTC, con la 0810 del D06 ya aplicada (la última del historial: 20261207T0810_d06_riders_prepago), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las cuatro tablas (filas estimadas: external_send 210, supplier_invoice 102; customer_fiscal y payment_method sin estadística) y las dos funciones (conta_recibida_guardar md5 08126d47a81d33fbb3826ce6b84179d8, mark_supplier_invoice_paid md5 192d75fa8906f443db5800ee209b0e9a, una sola firma cada una); nada del camino del pedido; nada en el historial.",
-  "medido": "2026-10-23T13:38Z",
+  "_que": "D07a + D07c (PR 1 del 23/10) y el respaldo de la 0840 · las recibidas que Diez rechazó por la descripción, otra vez a la cola (con su estado de antes respaldado, para que la vuelta atrás las deje como estaban: el ensayo del run 190 paró por eso), y «Saldo prepago» en todas las listas de formas de pago · contexto de producción de la tanda viva (20261208T0840, 20261208T0820 y 20261208T0830), medido en SOLO LECTURA el 23/10 a las 14:55 UTC, con la 0810 del D06 ya aplicada, con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las cuatro tablas (filas estimadas: external_send 210, supplier_invoice 102; customer_fiscal y payment_method 0); conta_respaldo_d07a_envios no existe (la crea la 0840). Ninguna en el camino del pedido; ninguna de las tres en el historial.",
+  "medido": "2026-10-23T14:55Z",
   "tanda": {
+    "supabase/migrations/20261208T0840_d07a_respaldo_antes_de_reenviar.sql": "b24ebd6ce753b91027ba89e773e4c07d",
     "supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql": "62a9812899ca0c6cc9f36f70ebb8c4a8",
     "supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql": "56b895348707cbcc42c4c613a7be8edd"
   },
   "contexto": {
-    "tablas": ["public.customer_fiscal", "public.external_send", "public.payment_method", "public.supplier_invoice"],
-    "funciones": ["public.conta_recibida_guardar(uuid,jsonb,text)", "public.mark_supplier_invoice_paid(uuid,date,text)"],
-    "filas": { "public.customer_fiscal": 0, "public.external_send": 210, "public.payment_method": 0, "public.supplier_invoice": 102 },
+    "tablas": [
+      "public.customer_fiscal",
+      "public.external_send",
+      "public.payment_method",
+      "public.supplier_invoice"
+    ],
+    "funciones": [
+      "public.conta_recibida_guardar(uuid,jsonb,text)",
+      "public.mark_supplier_invoice_paid(uuid,date,text)"
+    ],
+    "filas": {
+      "public.customer_fiscal": 0,
+      "public.external_send": 210,
+      "public.payment_method": 0,
+      "public.supplier_invoice": 102
+    },
     "otras": {},
-    "camino": { "tablas": [], "funciones": [] },
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
     "usos": {},
     "registro": []
   }

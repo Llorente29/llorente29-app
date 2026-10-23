@@ -23,6 +23,14 @@
 # intentos otra vez. (La 0830 no depende del despliegue: va en la misma tanda.)
 # No toca el camino del pedido.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+#
+# D07a (run 190, 23/10): el ensayo paró en «la vuelta atrás automática
+# funcionaría»: la vuelta atrás de la 0820 no devolvía last_error ni
+# next_try_at. Ahora va primero la 0840 —AÑADE: la tabla
+# conta_respaldo_d07a_envios con el estado de antes de esos envíos— y la vuelta
+# atrás de la 0820 los devuelve de ahí, byte a byte. La 0840 va ANTES que la
+# 0820 aunque su número sea mayor: el orden lo decide este fichero.
 cuenta: scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql
+supabase/migrations/20261208T0840_d07a_respaldo_antes_de_reenviar.sql
 supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
 supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql

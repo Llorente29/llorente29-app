@@ -1459,11 +1459,11 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
+describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · el respaldo (0840), las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 23/10 a las 13:38 UTC, con la 0810 ya aplicada, para ESTOS ficheros.
+  // lectura en producción el 23/10 a las 14:55 UTC (después del run 190), con la 0810 ya aplicada, para ESTOS ficheros.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
@@ -1474,13 +1474,17 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que 
   const DOWN = 'supabase/vuelta-atras/20261208T0820_d07a_diez_reenviar_descripcion.down.sql'
   const PRUEBA_C = 'supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql'
   const DOWN_C = 'supabase/vuelta-atras/20261208T0830_d07c_prepago_en_todas_las_listas.down.sql'
+  const PRUEBA_R = 'supabase/staging/sql/20261208_d07a_respaldo_prueba.sql'
+  const DOWN_R = 'supabase/vuelta-atras/20261208T0840_d07a_respaldo_antes_de_reenviar.down.sql'
+  const [respaldo, reenviar, prepago] = viva
 
-  it('dos ficheros, los medidos; la 0820 (datos de Foodint) pide «autorizo» y la 0830 sigue; nada del camino del pedido; nada registrado aún', () => {
-    expect(viva.map(nombre)).toEqual(['20261208T0820_d07a_diez_reenviar_descripcion.sql', '20261208T0830_d07c_prepago_en_todas_las_listas.sql'])
+  it('tres ficheros, los medidos, la 0840 ANTES que la 0820; la 0840 sigue, la 0820 (datos de Foodint) pide «autorizo» y la 0830 sigue; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261208T0840_d07a_respaldo_antes_de_reenviar.sql', '20261208T0820_d07a_diez_reenviar_descripcion.sql', '20261208T0830_d07c_prepago_en_todas_las_listas.sql'])
     expect(Object.keys(medida.tanda)).toEqual(viva)
     for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
-    expect(r.ficheros[viva[0]]).toMatch(/autorizo/i)
-    expect(r.ficheros[viva[1]]).toBe('sigue')
+    expect(r.ficheros[respaldo]).toBe('sigue')
+    expect(r.ficheros[reenviar]).toMatch(/autorizo/i)
+    expect(r.ficheros[prepago]).toBe('sigue')
     expect(ctx.tablas).toEqual(['public.customer_fiscal', 'public.external_send', 'public.payment_method', 'public.supplier_invoice'])
     expect(ctx.funciones).toEqual(['public.conta_recibida_guardar(uuid,jsonb,text)', 'public.mark_supplier_invoice_paid(uuid,date,text)'])
     expect(ctx.otras).toEqual({})
@@ -1488,7 +1492,7 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que 
     expect(ctx.registro).toEqual([])
   })
   it('solo toca los envíos de RIDERS de Foodint rechazados por la descripción, y para si no hay o si son más de 200', () => {
-    const d = readFileSync(viva[0], 'utf8')
+    const d = readFileSync(reenviar, 'utf8')
     expect(d).toContain("v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710'")
     expect(d).toContain("v_prov constant uuid := 'cbe3ddb1-5d3a-4aa7-a907-38f362e922b1'")
     expect(d).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
@@ -1507,18 +1511,18 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que 
   })
   it('su prueba de staging ejecuta la 0820 y su vuelta atrás, entra como usuario y acaba en ROLLBACK; la cuenta solo lee', () => {
     const p = readFileSync(PRUEBA, 'utf8')
-    for (const x of [`\\i ${viva[0]}`, `\\i ${DOWN}`, 'set local role authenticated']) expect(p).toContain(x)
+    for (const x of [`\\i ${reenviar}`, `\\i ${DOWN}`, 'set local role authenticated']) expect(p).toContain(x)
     expect(p.trim().endsWith('rollback;')).toBe(true)
     const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
-    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(reenviar))
     const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
     expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql'])
     const c = readFileSync(cuentas[0], 'utf8')
     expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN_C, DOWN])
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN_C, DOWN, DOWN_R])
   })
   it('la 0830: las cinco declaradas con su prueba; las dos funciones cambian SOLO en la lista y el error, y la vuelta atrás las deja como en producción byte a byte', () => {
-    const t = readFileSync(viva[1], 'utf8')
+    const t = readFileSync(prepago, 'utf8')
     const cab = t.split('\n').filter((l) => /^-- cambia:/.test(l))
     expect(cab).toEqual(['public.conta_recibida_guardar', 'public.mark_supplier_invoice_paid', 'public.supplier_invoice', 'public.customer_fiscal', 'public.payment_method']
       .map((o) => `-- cambia: ${o} · prueba: ${PRUEBA_C}`))
@@ -1535,10 +1539,31 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que 
     // Los CHECK solo amplían.
     for (const c of ['supplier_invoice_paid_method_check', 'customer_fiscal_payment_method_check', 'payment_method_kind_check']) expect(t).toContain(`drop constraint if exists ${c};`)
     const p = readFileSync(PRUEBA_C, 'utf8')
-    for (const x of [`\\i ${viva[1]}`, `\\i ${DOWN_C}`, 'set local role authenticated', 'c01b0000-0000-4000-8000-0000000000b1', '08126d47a81d33fbb3826ce6b84179d8', '5eecff4e2fea2a335fe7323cc1cc638e', '"forma_pago": "prepaid"']) expect(p).toContain(x)
+    for (const x of [`\\i ${prepago}`, `\\i ${DOWN_C}`, 'set local role authenticated', 'c01b0000-0000-4000-8000-0000000000b1', '08126d47a81d33fbb3826ce6b84179d8', '5eecff4e2fea2a335fe7323cc1cc638e', '"forma_pago": "prepaid"']) expect(p).toContain(x)
     expect(p.trim().endsWith('rollback;')).toBe(true)
     const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
-    expect(m.indexOf(PRUEBA_C)).toBeGreaterThan(m.indexOf(viva[1]))
+    expect(m.indexOf(PRUEBA_C)).toBeGreaterThan(m.indexOf(prepago))
+  })
+  it('la 0840 respalda, con la MISMA selección que la 0820, el estado de antes; la vuelta atrás de la 0820 lo devuelve de ahí byte a byte, y la de la 0840 quita la tabla (run 190: la de antes dejaba el last_error de la 0820)', () => {
+    const sel = (x: string) => x.replace(/--.*$/gm, '').match(/from public\.external_send x[\s\S]*?intento anterior: Diez no ha aceptado la factura%'\)/)?.[0]
+    const r0 = readFileSync(respaldo, 'utf8'), r1 = readFileSync(reenviar, 'utf8')
+    expect(sel(r0)).toBeTruthy()
+    expect(sel(r0)).toBe(sel(r1))
+    const sin = r0.replace(/--.*$/gm, '')
+    expect(sin).toContain('create table if not exists public.conta_respaldo_d07a_envios')
+    expect(sin).toContain('enable row level security')
+    expect(sin).not.toMatch(/\b(update|delete)\s+(from\s+)?public\.external_send/i)
+    const d = readFileSync(DOWN, 'utf8').replace(/--.*$/gm, '')
+    expect(d).toContain("to_regclass('public.conta_respaldo_d07a_envios') is null")
+    expect(d).toContain('set attempts = r.attempts, next_try_at = r.next_try_at, last_error = r.last_error, updated_at = r.updated_at')
+    expect(d).toContain("x.status = 'pendiente'")
+    expect(d).not.toContain('set attempts = 3')
+    expect(readFileSync(DOWN_R, 'utf8')).toContain('drop table if exists public.conta_respaldo_d07a_envios;')
+    const p = readFileSync(PRUEBA_R, 'utf8')
+    for (const x of [`\\i ${respaldo}`, `\\i ${reenviar}`, `\\i ${DOWN}`, `\\i ${DOWN_R}`, 'set local role authenticated', 'byte a byte']) expect(p).toContain(x)
+    expect(p.trim().endsWith('rollback;')).toBe(true)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA_R)).toBeGreaterThan(m.indexOf(respaldo))
   })
 })
 
