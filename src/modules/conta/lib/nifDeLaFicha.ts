@@ -13,7 +13,7 @@
 // que guarda «Datos fiscales» de la ficha del proveedor para un NIF español).
 
 import { normalizarNif, tipoEntidadPorNif, validarNifEs } from '@/modules/conta/lib/nif'
-import type { FichaProveedor } from '@/modules/conta/services/proveedorService'
+import type { FichaProveedor } from '@/modules/conta/types'
 
 /** El NIF que se escribe de partida: el que trae el documento, si es válido; si no, vacío. */
 export function nifPropuesto(delDocumento: string | null | undefined): string {

@@ -9,7 +9,8 @@ import { useState } from 'react'
 import { Boton } from '@/modules/conta/diseno'
 import { BloqueFicha } from '@/modules/conta/diseno/plantillas'
 import { cambiosDelNif, faltaEnElNif, nifPropuesto, textoGuardado } from '@/modules/conta/lib/nifDeLaFicha'
-import { guardarFicha, type FichaProveedor } from '@/modules/conta/services/proveedorService'
+import { guardarFicha } from '@/modules/conta/services/proveedorService'
+import type { FichaProveedor } from '@/modules/conta/types'
 
 export function NifDeLaFicha({ proveedorId, proveedor, entityKind, delDocumento, alGuardar }: {
   proveedorId: string
