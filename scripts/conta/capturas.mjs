@@ -137,7 +137,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (orden === 'fijar') {
     const rama = args[0] ?? ramaActual()
     const dueno = duenoDeLaRama(rama, cambiadosContraMain())
-    if (!dueno) { console.error(`✗ La rama «${rama}» no es de ningún frente: no se fija ninguna captura.`); process.exit(1) }
+    // C10 (Julio, 23/10): una rama sin frente de contabilidad (la carta de cocina, una
+    // herramienta…) no tiene capturas que fijar: se salta, sin poner el run en rojo.
+    // Antes salía con 1 y la e2e, con todas las pruebas en verde, acababa en rojo (#302).
+    if (!dueno) { console.log(`La rama «${rama}» no es de ningún frente de contabilidad: no hay capturas que fijar (se salta).`); process.exit(0) }
     // Lo cambiado y lo nuevo, fichero a fichero (-uall), solo en las carpetas de capturas.
     const cambiadas = git('status', '--porcelain', '-uall', '--', ...CARPETAS).split('\n').filter(Boolean).map((l) => l.slice(3))
     const { suyas, ajenas } = repartir(cambiadas, dueno)

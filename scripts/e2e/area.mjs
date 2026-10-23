@@ -77,7 +77,18 @@ export function dePedidos(cambiados) {
  * Un camino que acaba en «/» es una carpeta; si no, un fichero o el principio
  * de un nombre (tsconfig → tsconfig.json, tsconfig.app.json…).
  */
-export const LO_COMUN = [
+/**
+ * SUMIED Y FOLVY, SEPARADOS (C10, Julio, 23/10): «un cambio solo de Sumied no
+ * lanza las de Folvy, y al revés; lo común lanza las dos». Sumied es la
+ * contabilidad (sus pruebas, tests/e2e/conta); Folvy, el resto (tests/e2e/reparto,
+ * tests/e2e/inventario…). LO_COMUN se parte en dos:
+ *   · LO_COMUN_SUMIED: el marco, el diseño y la sesión de las pruebas de la
+ *     contabilidad → la entera de Sumied;
+ *   · LO_COMUN_AMBOS: el arranque de la app, las dependencias, Playwright y el
+ *     reparto en trozos → la entera de las dos.
+ * PEDIDOS (cocina, pedidos y reparto) es la entera de Folvy.
+ */
+export const LO_COMUN_SUMIED = [
   // El marco, la cabecera, la barra de productos y el esqueleto.
   'src/modules/conta/esqueleto/',
   'src/modules/conta/marco/',
@@ -91,6 +102,15 @@ export const LO_COMUN = [
   'src/modules/conta/estilo/index.ts',
   // Las rutas de contabilidad y el arranque de la app (el armazón de todo).
   'src/modules/conta/module.tsx',
+  // Lo que mueve todas las pruebas de la contabilidad: la sesión, la API, la red, la burbuja y los solapes.
+  'tests/e2e/conta/sesion.ts',
+  'tests/e2e/conta/api.ts',
+  'tests/e2e/conta/red.ts',
+  'tests/e2e/conta/burbuja.ts',
+  'tests/e2e/conta/solapes.ts',
+]
+export const LO_COMUN_AMBOS = [
+  // El arranque de la app (el armazón de todo).
   'src/App.tsx',
   'src/main.tsx',
   'src/index.css',
@@ -99,13 +119,8 @@ export const LO_COMUN = [
   'src/shell/',
   'src/marca/',
   'src/branding.ts',
-  // Lo que mueve todas las pruebas: Playwright, la sesión, el carril y el reparto en trozos.
+  // Lo que mueve todas las pruebas: Playwright, el carril y el reparto en trozos.
   'playwright.config.ts',
-  'tests/e2e/conta/sesion.ts',
-  'tests/e2e/conta/api.ts',
-  'tests/e2e/conta/red.ts',
-  'tests/e2e/conta/burbuja.ts',
-  'tests/e2e/conta/solapes.ts',
   'scripts/e2e/carril',
   'scripts/e2e/trozos.mjs',
   '.github/workflows/e2e-staging-conta.yml',
@@ -115,6 +130,26 @@ export const LO_COMUN = [
   'vite.config.ts',
   'tsconfig',
 ]
+/** Lo común de antes del C10: los dos juntos. */
+export const LO_COMUN = [...LO_COMUN_SUMIED, ...LO_COMUN_AMBOS]
+
+/** Las pruebas de cada producto. Folvy: cada carpeta de tests/e2e que no es la de la contabilidad. */
+export const SUITE_SUMIED = ['tests/e2e/conta']
+export function suiteFolvy(raiz = 'tests/e2e') {
+  if (!existsSync(raiz)) return []
+  return readdirSync(raiz, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name !== 'conta').map((d) => `${raiz}/${d.name}`).sort()
+}
+/** Lo que es de Sumied (la contabilidad): sus pantallas, funciones, guiones, pruebas y documentos. */
+export const RUTAS_SUMIED = [
+  'src/modules/conta/', 'supabase/functions/conta-', 'scripts/conta/', 'tests/conta/', 'tests/e2e/conta/',
+  'tests/unit/modules/conta/', 'docs/conta/', 'supabase/seeds/conta/', 'supabase/produccion/tandas/sumied/', 'supabase/staging/tandas/sumied/',
+]
+/** ¿Toca la contabilidad? ¿Toca Folvy (pantallas, funciones o pruebas que no son de la contabilidad)? */
+export function productosTocados(cambiados) {
+  const esSumied = (f) => RUTAS_SUMIED.some((p) => f.startsWith(p))
+  const esFolvy = (f) => !esSumied(f) && /^(src\/|supabase\/functions\/|tests\/e2e\/|tests\/unit\/|supabase\/(produccion|staging)\/tandas\/folvy\/)/.test(f)
+  return { sumied: cambiados.some(esSumied), folvy: cambiados.some(esFolvy) }
+}
 
 /**
  * LAS ZONAS POR FICHERO (Julio, 21/10, encargo del autoconteo): una zona que no
@@ -150,27 +185,34 @@ export function deLoComun(cambiados) {
  * o reparto, o lleva la etiqueta; si no, la zona de la rama (y la de lo que
  * toca). «porque» va al resumen del run.
  */
-export function queCorre(rama, { cambiados = [], etiquetas = [] } = {}, carpetas = carpetasConta()) {
-  const comun = deLoComun(cambiados)
+export function queCorre(rama, { cambiados = [], etiquetas = [] } = {}, carpetas = carpetasConta(), folvy = suiteFolvy()) {
+  const muestra = (xs) => xs.slice(0, 3).join(', ') + (xs.length > 3 ? ` y ${xs.length - 3} más` : '')
   if (etiquetas.includes(ETIQUETA_ENTERA)) {
     return { entera: true, pruebas: [], porque: `el PR lleva la etiqueta «${ETIQUETA_ENTERA}»` }
   }
-  if (comun.length) {
-    const muestra = comun.slice(0, 3).join(', ') + (comun.length > 3 ? ` y ${comun.length - 3} más` : '')
-    return { entera: true, pruebas: [], porque: `toca lo común: ${muestra}` }
-  }
+  const de = (lista) => cambiados.filter((f) => lista.some((p) => f === p || f.startsWith(p)))
+  const ambos = de(LO_COMUN_AMBOS)
+  if (ambos.length) return { entera: true, pruebas: [], porque: `toca lo común: ${muestra(ambos)}` }
+  const toca = productosTocados(cambiados)
+  const comunSumied = de(LO_COMUN_SUMIED)
   const pedidos = dePedidos(cambiados)
-  if (pedidos.length) {
-    const muestra = pedidos.slice(0, 3).join(', ') + (pedidos.length > 3 ? ` y ${pedidos.length - 3} más` : '')
-    return { entera: true, pruebas: [], porque: `toca pedidos, cocina o reparto: ${muestra}` }
-  }
   const zonas = zonasTocadas(cambiados)
-  const deLaRama = pruebasDeLaZona(rama, carpetas)
-  const extra = zonas.map((z) => z.pruebas).filter((p) => !deLaRama.includes(p))
-  const porque = extra.length
-    ? `solo pantallas: la zona de la rama y la de lo que toca (${zonas.map((z) => z.zona).join(', ')})`
-    : 'solo pantallas: la zona de la rama'
-  return { entera: false, pruebas: [...deLaRama, ...extra], porque }
+  // Sumied: la entera de Sumied si toca su común; su zona si toca Sumied (o si no toca nada de Folvy); nada si solo toca Folvy.
+  const sumied = comunSumied.length ? { entera: true, pruebas: SUITE_SUMIED, porque: `toca lo común de Sumied: ${muestra(comunSumied)}` }
+    : (toca.sumied || !toca.folvy) ? { entera: false, pruebas: pruebasDeLaZona(rama, carpetas), porque: 'la zona de la rama' }
+    : null
+  // Folvy: la entera de Folvy si toca pedidos, cocina o reparto; si no, la zona de lo que toca; y si toca Folvy sin zona, su suite.
+  const extra = zonas.map((z) => z.pruebas)
+  const folvyR = pedidos.length ? { entera: true, pruebas: folvy, porque: `toca pedidos, cocina o reparto: ${muestra(pedidos)}` }
+    : extra.length ? { entera: false, pruebas: extra, porque: `la de lo que toca (${zonas.map((z) => z.zona).join(', ')})` }
+    : toca.folvy && !sumied ? { entera: false, pruebas: folvy, porque: 'las de Folvy (solo toca Folvy)' }
+    : null
+  if (sumied?.entera && folvyR?.entera) return { entera: true, pruebas: [], porque: `${sumied.porque}; y ${folvyR.porque}` }
+  const partes = [sumied, folvyR].filter(Boolean)
+  const pruebas = [...new Set(partes.flatMap((p) => p.pruebas))]
+  const entera = partes.some((p) => p.entera)
+  const porque = (entera ? '' : 'solo pantallas: ') + partes.map((p) => p.porque).join('; ')
+  return { entera, pruebas, porque }
 }
 
 /** Las carpetas de tests/e2e/conta (b01, c02c, cierre…). */

@@ -735,7 +735,11 @@ if (modo === 'objetivos') {
   // front-compatible [manifiesto]: lo que la tanda borra o renombra, ¿lo lee
   // todavía el front publicado (origin/main) o el del commit que se sube? Sale
   // con 1 si alguno lo lee: primero se quita del front, después de la base.
-  const manifiesto = resto[0] ?? 'supabase/produccion/aplicar.txt'
+  // C10: sin manifiesto, el de la tanda de la rama; si la rama no tiene tanda, nada que mirar.
+  const { carpetaDeTanda, ficherosDeTanda, ramaActual } = await import('./tanda.mjs')
+  const dir = resto[0] ? null : carpetaDeTanda(process.env.TANDA || ramaActual())
+  if (!resto[0] && !dir) { process.stdout.write('Front compatible: la rama no tiene tanda de producción.\n'); process.exit(0) }
+  const manifiesto = resto[0] ?? ficherosDeTanda(dir).aplicar
   const ficheros = readFileSync(manifiesto, 'utf8').split('\n').map((x) => x.trim()).filter((x) => x && !x.startsWith('#') && !/^(cuenta|sin-vuelta-atras|esperado):/.test(x))
   const vistos = new Map()
   for (const f of ficheros) for (const o of analizarFichero(f)) { const d = destruido(o); if (d) vistos.set(d.clave, d) }

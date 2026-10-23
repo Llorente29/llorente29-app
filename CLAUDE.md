@@ -177,12 +177,54 @@ con la fusión, lo que lee ya está en la base.
 *(18/10. La tanda del S01d —0160 y 0170— se aplicó desde `conta/s01d-tanda`,
 con el ensayo y el real en verde, y #236 se fusionó después.)*
 
+### Una tanda por rama: dos PR con tanda no comparten ningún fichero
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> C10 (23/10). Sustituye al `aplicar.txt` único.
+
+- **Cada rama tiene su tanda, en su carpeta**, y nadie más la edita:
+  `supabase/produccion/tandas/<producto>/<rama>/` con `aplicar.txt`,
+  `vuelta-atras.txt` y `contexto.json`. `<producto>` es `sumied`
+  (contabilidad) o `folvy` (el resto); `<rama>`, su nombre con «/» cambiada por
+  «-» (`node scripts/conta/produccion/tanda.mjs slug <rama>` lo da).
+- **Lo de staging, igual**: `supabase/staging/tandas/<producto>/<rama>.txt`. El
+  `supabase/staging/aplicar.txt` de antes queda **cerrado**, con lo de antes
+  dentro: se lee junto a los de las ramas como un solo manifiesto.
+- **El workflow aplica la tanda de la rama desde la que se lanza.** Para lanzar
+  desde `main` una ya fusionada, se nombra en el campo `tanda`. La que estaba
+  viva el día del C10 es `sumied/heredada` (la termina el #299, y solo él).
+- **Al fusionar, la carpeta se queda en `main` tal cual: ése es su archivo.**
+  No hay nada que copiar ni que vaciar.
+- **Lo vigila `pr-a-main.yml`** (`tanda.mjs ajenos`): un PR que edita la tanda
+  de otra rama, o uno de los manifiestos únicos de antes, no pasa.
+
+*Detector automático:* si dos PR abiertos tocan el mismo fichero de
+`supabase/produccion` o de `supabase/staging` que no sea una migración, uno de
+los dos está escribiendo en la tanda del otro.
+
+*(23/10. El #301 se fusionó con el `aplicar.txt` único y dejó sin manifiesto a
+la D07 del #300; hubo que devolverlo con el #303.)*
+
 ### El nombre de una migración
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
-> W02 (17/10).
+> C10 (23/10). **Sustituye a la del W02 (17/10)**, «el siguiente por encima del
+> más alto».
 
-El nombre de una migración es el siguiente por encima del más alto que ya existe, no la fecha de hoy. El orden en que se aplican lo decide `supabase/produccion/aplicar.txt`.
+`AAAAMMDDTHHMM_<sesión>_<qué>.sql`: la fecha, la hora y el minuto de cuando se
+escribe, la sesión en minúscula (`c10`, `d08`…) y qué hace, con «_». Por
+ejemplo `20261023T1812_c10_tandas_por_rama.sql`. **Nunca repetido**: ni el
+nombre ni su «fecha, hora y sesión» pueden estar ya en `main`, en otro PR
+abierto (`pr-a-main.yml`) o en el historial de producción (el aplicar, antes
+del ensayo). Si choca, se cambia el minuto. El orden en que se aplican lo
+decide el `aplicar.txt` de la tanda.
+
+*Las de antes se quedan como están*, y también las cuatro que ya estaban en PR
+abiertos el 23/10 (0850, 0860, 0870 y 0880 de la D07: `ANTIGUAS_ABIERTAS` en
+`scripts/conta/produccion/nombres.mjs`).
+
+*(23/10. «El siguiente por encima» lo cogían dos sesiones a la vez: la 0840 la
+quisieron el C08 y la D07a el mismo día.)*
 
 ### Una fusión está hecha cuando VERCEL dice READY en producción
 
@@ -328,6 +370,7 @@ despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 | **Solo pantallas** | `antes-de-subir.sh` (lint, unitarias, `npm run build` exacto) y, en cada push, la e2e de su **zona** (`scripts/e2e/area.mjs`). |
 | **Lo común** (`LO_COMUN`: el marco, la cabecera, la barra y el esqueleto, el diseño compartido, el arranque de la app y lo que mueve todas las pruebas) | La **entera** en el push, en vez de la zona. |
 | **Pedidos, cocina o reparto** (`PEDIDOS` en `area.mjs`: sus pantallas, los TPV, tickets y tablets, y las funciones de HubRise, Last.app y pedidos) | **Todo**: la entera en el push, que lleva la corta. |
+| **Sumied o Folvy** (C10, 23/10) | Un cambio solo de Sumied (contabilidad: `src/modules/conta`, `tests/e2e/conta`…) no lanza las de Folvy, y al revés. Lo común **de Sumied** (`LO_COMUN_SUMIED`: el marco y el diseño de contabilidad) lanza la entera de `tests/e2e/conta`; lo común **a los dos** (`LO_COMUN_AMBOS`: el arranque de la app, la configuración, lo que mueve todas las pruebas), las dos. |
 | **Con tanda** | Lo de su riesgo, más la prueba de staging en ROLLBACK de cada «cambia», el **ensayo** y el **real** en producción con su comprobación y su deshacer (W01). La entera es la de la noche. |
 
 - **La corta** (`reparto/direccion-falta` y `reparto/quien-reparte`, 91 s) ya
@@ -355,7 +398,7 @@ toca pedidos.)*
 > W04 (22/10).
 
 - **Desde una rama**, `aplicar-staging-conta.yml` pasa solo lo que la rama
-  añade al manifiesto (`supabase/staging/aplicar.txt`) contra `main`, en **una
+  añade al manifiesto (desde el C10, su `supabase/staging/tandas/<producto>/<rama>.txt`) contra `main`, en **una
   transacción que acaba en ROLLBACK**: staging no cambia. Sin el cerrojo
   exclusivo: una prueba que no deja nada no para las e2e.
 - **Desde `main`** (después del real de la tanda, que se fusiona en verde)
@@ -419,6 +462,8 @@ no pagarlo.)*
   queda, y es lo que Julio mira en «Files changed». Ese commit lo hace el token
   del workflow y no lanza otra e2e: **antes del siguiente push, `git pull`**.
   A mano sigue estando `fijar_capturas`, por si hace falta.
+- **Una rama sin frente de contabilidad no fija nada**, y el run no se pone en
+  rojo por eso (C10, 23/10): el paso lo dice y se salta.
 - **Tu rama no lleva capturas de otro frente.** `antes-de-subir.sh` (paso 10)
   para si las trae, y dice cómo devolverlas a las de `main`.
 - Las que ya están en el repositorio se quedan. `cierre/`, `compras/` y

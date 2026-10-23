@@ -28,11 +28,39 @@
 // STAGING; y un CHECK que solo mira una columna que añade el mismo fichero
 // también cuenta como añadir (nace vacía: no cambia ninguna fila).
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { analizarFichero, categoria, creadosPorLaTanda } from './produccion/analizar.mjs'
 
+// C10 (Julio, 23/10): «ningún fichero compartido se edita en dos PR». El
+// manifiesto de staging de siempre (aplicar.txt) queda CERRADO: no se le añade
+// nada. Cada rama pone lo suyo en supabase/staging/tandas/<producto>/<rama>.txt
+// (<producto>: sumied o folvy; <rama>, como en produccion/tanda.mjs). El
+// manifiesto que se lee es el cerrado y, detrás, cada tanda por orden de nombre:
+// así «lo que añade la rama contra main» sigue siendo lo mismo, y dos ramas no
+// editan nunca el mismo fichero.
 export const MANIFIESTO = 'supabase/staging/aplicar.txt'
+export const TANDAS = 'supabase/staging/tandas'
+
+const git = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+
+/** Los ficheros de tanda de staging (las rutas), en orden: en el árbol de trabajo o en un ref. */
+export function ficherosDeTandas(ref = null) {
+  if (ref) {
+    try { return git('ls-tree', '-r', '--name-only', ref, '--', TANDAS).split('\n').filter((f) => /\.txt$/.test(f)).sort() } catch { return [] }
+  }
+  const out = []
+  const andar = (d) => { if (!existsSync(d)) return; for (const n of readdirSync(d).sort()) { const p = join(d, n); if (statSync(p).isDirectory()) andar(p); else if (/\.txt$/.test(n)) out.push(p) } }
+  andar(TANDAS)
+  return out.sort()
+}
+
+/** El texto del manifiesto entero de staging: el cerrado y las tandas detrás (de un ref, o del árbol de trabajo). */
+export function textoDelManifiesto(ref = null) {
+  const leer = (f) => { try { return ref ? git('show', `${ref}:${f}`) : readFileSync(f, 'utf8') } catch { return '' } }
+  return [MANIFIESTO, ...ficherosDeTandas(ref)].map(leer).join('\n')
+}
 
 /** Las rutas de un manifiesto: sin comentarios ni blancos, en su orden. */
 export function lineas(texto) {
@@ -139,10 +167,17 @@ export function porQueNoSoloAnade(fichero, sql, contexto) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [modo, ...args] = process.argv.slice(2)
   if (modo === 'nuevas') {
-    const [ref, manifiesto = MANIFIESTO] = args
-    let antes = ''
-    try { antes = execFileSync('git', ['show', `${ref}:${manifiesto}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }) } catch { antes = '' }
-    for (const l of nuevas(antes, readFileSync(manifiesto, 'utf8'))) console.log(l)
+    // Un manifiesto nombrado (pruebas), tal cual; sin él, el entero (el cerrado y las tandas, C10).
+    const [ref, manifiesto] = args
+    if (manifiesto) {
+      let antes = ''
+      try { antes = git('show', `${ref}:${manifiesto}`) } catch { antes = '' }
+      for (const l of nuevas(antes, readFileSync(manifiesto, 'utf8'))) console.log(l)
+    } else {
+      for (const l of nuevas(textoDelManifiesto(ref), textoDelManifiesto())) console.log(l)
+    }
+  } else if (modo === 'entero') {
+    for (const l of lineas(textoDelManifiesto())) console.log(l)
   } else if (modo === 'rollback') {
     let mal = 0
     for (const f of args) {
@@ -162,7 +197,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (modo === 'sesiones') {
     for (const s of sesiones(args)) console.log(`--@@ sesión ${s.fichero}\n${s.sql}`)
   } else {
-    console.error('uso: staging-tanda.mjs nuevas <ref> [manifiesto] | rollback <ficheros…> | sesiones <ficheros…>')
+    console.error('uso: staging-tanda.mjs nuevas <ref> [manifiesto] | entero | rollback <ficheros…> | sesiones <ficheros…>')
     process.exit(2)
   }
 }

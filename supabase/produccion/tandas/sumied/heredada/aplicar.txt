@@ -22,7 +22,12 @@
 # volvería a mandar los de la 0820 con la descripción larga y gastaría los
 # intentos otra vez. (La 0830 no depende del despliegue: va en la misma tanda.)
 # No toca el camino del pedido.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+# Vuelta atrás: el vuelta-atras.txt de esta carpeta.
+#
+# C10 (23/10): ésta es la tanda «heredada», la viva el día del C10. La termina
+# el #299, y solo él la edita. Se lanza con tanda=heredada, desde main o desde
+# la rama claude/d07a-vuelta-atras-0820. Lo de staging de la 0880 está en
+# supabase/staging/tandas/sumied/claude-d07a-vuelta-atras-0820.txt.
 #
 # D07a (run 190, 23/10): el ensayo paró en «la vuelta atrás automática
 # funcionaría»: la vuelta atrás de la 0820 no devolvía last_error ni
