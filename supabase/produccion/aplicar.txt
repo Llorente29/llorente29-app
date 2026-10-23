@@ -2,10 +2,9 @@
 # con su documento, las dos de Foodint que nacieron sin él, y «Guardar
 # cambios» de su ficha (Julio, 23/10).
 # Rama claude/ficha-recibida. Números 0770, 0780 y 0790: por encima del más alto que
-# existe (la 0760 de la C06b; la 0500 y la 0510 ya son de la C06b, y la 0490
-# es del #293, sin fusionar; este PR va antes). La
-# anterior de este fichero (E05, 0480, ya aplicada): su copia en
-# tests/conta/produccion/tanda-e05-releer-riders-20261022.txt.
+# existe (la 0760 de la C06b; la 0500 y la 0510 ya son de la C06b). La
+# anterior de este fichero (S02 · PR 3, 0490, ya aplicada y fusionada en el
+# #293): su copia en tests/conta/produccion/tanda-s02-cifras-20261023.txt.
 #
 #   1. 0770 — CAMBIA en caliente _compras_factura_desde_papel (misma firma):
 #      sin recepción, o con una recepción sin documento, la factura nace con

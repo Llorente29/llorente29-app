@@ -300,7 +300,8 @@ test('el recorrido entero: invitación, entrada, alta con plan y banco, Diez des
 
   // ── 5 · Inicio, libros y balance ──────────────────────────────────────────
   await expect(page.getByRole('heading', { level: 1, name: /^(Buenos días|Buenas tardes|Buenas noches), Lucía$/ })).toBeVisible()
-  for (const t of ['En el banco', 'Te deben', 'Debes', 'IVA del trimestre']) await expect(page.locator('.cxi-cifra-etiqueta', { hasText: t })).toBeVisible()
+  // S02 · PR 3: la tarjeta de bancos dice lo que es: «en contabilidad» (lo validado).
+  for (const t of ['Bancos · en contabilidad', 'Te deben', 'Debes', 'IVA del trimestre']) await expect(page.locator('.cxi-cifra-etiqueta', { hasText: t })).toBeVisible()
   await capturar(page, 'inicio')
   for (const [ruta, nombre, titulo] of [
     ['/conta/libros', 'libros', 'Libros'],

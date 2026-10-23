@@ -1608,6 +1608,111 @@ describe('la tanda de AHORA (manifiesto vivo): D03 · la recibida sin recepción
   })
 })
 
+describe('la tanda del S02 · PR 3 · las cifras (0490, aplicada; su copia)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-s02-cifras-20261023.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 22/10 a las 22:29 UTC, con la 0480 ya aplicada, para ESTE fichero.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-s02-cifras-20261023.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const nombre = (f: string) => f.replace(/^.*\//, '')
+  const PRUEBA = 'supabase/staging/sql/20261205_s02_cifras_prueba.sql'
+  const DOWN = 'supabase/vuelta-atras/20261205T0490_s02_cifras.down.sql'
+  const NUEVAS = ['conta_pendientes', 'conta_saldo_bancos', 'conta_saldos_terceros']
+  const cuerpo = (t: string, fn: string) => { const a = t.indexOf(`create or replace function public.${fn}`); return t.slice(a, t.indexOf('end $$;', a) + 'end $$;'.length) }
+  // El cuerpo entre $$ (lo que es prosrc en la base).
+  const prosrc = (t: string, fn: string) => { const c = cuerpo(t, fn); return c.slice(c.indexOf('$$') + 2, c.length - '$$;'.length) }
+
+  it('un fichero, el medido; sigue sin «autorizo»; de lo que toca solo existe el calendario; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261205T0490_s02_cifras.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
+    expect(viva.map((f) => r.ficheros[f])).toEqual(['sigue'])
+    expect(ctx.tablas).toEqual([])
+    expect(ctx.funciones).toEqual(['public.conta_impuesto_calendario(uuid,date)'])
+    expect(ctx.otras).toEqual({})
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('el cambio va declarado en la cabecera, con su prueba de staging, que entra como usuario de A, mira que B no ve nada y ejecuta la vuelta atrás', () => {
+    const cab = readFileSync(viva[0], 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l))
+    expect(cab).toEqual([`-- cambia: public.conta_impuesto_calendario · prueba: ${PRUEBA}`])
+    const p = readFileSync(PRUEBA, 'utf8')
+    for (const x of [...NUEVAS, 'conta_impuesto_calendario', 'set local role authenticated', 'c01b0000-0000-4000-8000-0000000000b1', 'set local role anon',
+      'insufficient_privilege', 'rollback;', `\\i ${DOWN}`, `\\i ${viva[0]}`, '480da33a07e1885441de585237156d3e', '51ad1792-6629-4ef7-833a-b57b09a86710']) expect(p).toContain(x)
+    const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    expect(m.indexOf(PRUEBA)).toBeGreaterThan(m.indexOf(viva[0]))
+  })
+  it('el calendario cambia SOLO en la ventana (salta lo que no hace falta) y en que eso que no hace falta sigue en las filas, y la vuelta atrás lo deja como en la 0340 (el de producción, md5 del cuerpo medido)', () => {
+    const nueva = readFileSync(viva[0], 'utf8'), antes = readFileSync(DOWN, 'utf8'), origen = readFileSync('supabase/migrations/20261128T0340_i01h_sociedades_202.sql', 'utf8')
+    const fn = 'conta_impuesto_calendario'
+    expect(cuerpo(antes, fn)).toBe(cuerpo(origen, fn))
+    expect(md5(prosrc(antes, fn))).toBe('480da33a07e1885441de585237156d3e')
+    const ventana = / {2}-- La ventana:[\s\S]*?into v_ventana[\s\S]*?;\n/
+    // Y una condición más en las filas: lo que no hace falta y vence antes de la ventana sigue saliendo (regla 7).
+    const noHaceFalta = /\n {6}-- S02 · PR 3 \(0490\)[\s\S]*?\n {6}or \(d\.presentacion >= v_hoy and d\.status = 'not_required' and \(v_ventana is null or d\.presentacion < v_ventana\)\)/
+    expect(cuerpo(nueva, fn)).toMatch(noHaceFalta)
+    expect(cuerpo(nueva, fn).replace(ventana, '').replace(noHaceFalta, '')).toBe(cuerpo(origen, fn).replace(ventana, ''))
+    expect(cuerpo(nueva, fn).match(ventana)?.[0]).toContain("coalesce(r.status, 'pending') <> 'not_required'")
+  })
+  it('las tres nuevas solo leen, comprueban la empresa (42501) y solo las llama quien tiene sesión', () => {
+    const t = readFileSync(viva[0], 'utf8')
+    for (const fn of NUEVAS) {
+      const c = cuerpo(t, fn)
+      expect(c, fn).toMatch(/ stable /)
+      expect(c, fn).not.toMatch(/security definer/)
+      expect(c, fn).toContain("if v_acc is null or not public.belongs_to_account(v_acc) then\n    raise exception 'Esa empresa no es tuya.' using errcode = '42501';")
+      expect(c.replace(/--.*$/gm, ''), fn).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|perform\s+public\.(?!belongs))/i)
+    }
+    const permisos = t.split('\n').filter((l) => /^(grant|revoke)\b/.test(l))
+    expect(permisos).toEqual([
+      'revoke all on function public.conta_pendientes(uuid) from public, anon;',
+      'revoke all on function public.conta_saldo_bancos(uuid, date) from public, anon;',
+      'revoke all on function public.conta_saldos_terceros(uuid, date) from public, anon;',
+      'grant execute on function public.conta_pendientes(uuid) to authenticated, service_role;',
+      'grant execute on function public.conta_saldo_bancos(uuid, date) to authenticated, service_role;',
+      'grant execute on function public.conta_saldos_terceros(uuid, date) to authenticated, service_role;',
+    ])
+  })
+  it('conta_pendientes devuelve exactamente sus ocho claves, y los movimientos y asientos con account_id y company_id (regla 9)', () => {
+    const c = cuerpo(readFileSync(viva[0], 'utf8'), 'conta_pendientes')
+    const ret = c.slice(c.indexOf('return jsonb_build_object('))
+    expect([...ret.matchAll(/'([a-z_]+)', /g)].map((m) => m[1])).toEqual(['compras_decidir', 'compras_filas', 'facturas_para_mirar', 'facturas_por_aclarar',
+      'asientos_por_validar', 'bancos_confirmar', 'bancos_aclarar', 'bancos_validar'])
+    expect(c.match(/m\.account_id = v_acc and m\.company_id = p_company/g)).toHaveLength(2)
+    expect(c).toContain('e.account_id = v_acc and e.company_id = p_company')
+    // La misma vara que la pantalla: las bandejas de lib/conciliarVista y lo que se decide en su sitio de lib/diario.
+    expect(c).toContain("m.status in ('por_aclarar', 'pendiente', 'posible_repetido')")
+    expect(c).toContain("not (e.status = 'propuesto' and e.source_type in ('supplier_invoice', 'bank'))")
+  })
+  it('no toca filas: solo crea y reemplaza funciones', () => {
+    const t = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '').replace(/\$(\w*)\$[\s\S]*?\$\1\$/g, '$$$$')
+    expect(t).not.toMatch(/\b(insert\s+into|update\s+public\.|delete\s+from|truncate|drop\s+|alter\s+table)/i)
+  })
+  it('la vuelta atrás para si otra función las llama, y quita las tres', () => {
+    const d = readFileSync(DOWN, 'utf8')
+    expect(d).toContain("raise exception 'S02 0490 vuelta atrás: % llama(n) a las funciones de las cifras y se quedarían rotas. No se toca nada.'")
+    expect(d.split('\n').filter((l) => l.startsWith('drop function'))).toEqual([
+      'drop function if exists public.conta_saldos_terceros(uuid, date);',
+      'drop function if exists public.conta_saldo_bancos(uuid, date);',
+      'drop function if exists public.conta_pendientes(uuid);',
+    ])
+  })
+  it('declara qué cuenta; la cuenta solo lee y es de Foodint', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/s02-cifras.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(c).toContain("'51ad1792-6629-4ef7-833a-b57b09a86710'")
+  })
+  it('su vuelta atrás', () => {
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-s02-cifras-20261023.txt')).toEqual([DOWN])
+  })
+})
+
 describe('la tanda del E05 · volver a leer los PDF de Catcher (0480, aplicada; su copia)', () => {
   const MANIFIESTO = 'tests/conta/produccion/tanda-e05-releer-riders-20261022.txt'
   const viva = leerTanda(MANIFIESTO)

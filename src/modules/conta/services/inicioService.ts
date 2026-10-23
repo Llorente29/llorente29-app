@@ -121,7 +121,18 @@ export async function perfilFiscal(companyId: string): Promise<PerfilFiscal | nu
 
 /** Las facturas recibidas para revisar (las de N22 «Para mirar») de los últimos 12 meses: el recorrido de Asientos › Recibida. */
 export async function recibidasParaRevisar(companyId: string, hoy: string): Promise<number> {
+  return (await recibidasPorEstado(companyId, hoy)).paraMirar
+}
+
+/**
+ * S02 · PR 3: las facturas recibidas de los últimos 12 meses que esperan una
+ * acción, de UNA lectura: para mirar («Por revisar») y por aclarar («Por
+ * aclarar», que antes no contaba nadie). La cuenta de hoy de conta_pendientes.
+ */
+export async function recibidasPorEstado(companyId: string, hoy: string): Promise<{ paraMirar: number; porAclarar: number }> {
   const { desde, hasta } = ventanaParaRevisar(hoy)
   const d = await leerDocumentos(companyId, desde, hasta)
-  return colaPorRevisar(d.filas).length
+  const facturas = d.filas.filter((x) => x.tipo === 'factura')
+  // D03 · punto 11: «para mirar» es la cola de la ficha (colaPorRevisar), la misma que cuenta su «1 de N».
+  return { paraMirar: colaPorRevisar(d.filas).length, porAclarar: filtrar(facturas, 'por-aclarar').length }
 }

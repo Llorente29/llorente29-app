@@ -142,7 +142,8 @@ test.describe('B01 · Bancos, las pantallas', () => {
 
       // La banda, el cuadre (B02: en el banco − en contabilidad = te falta por casar) y la lista.
       await expect(page.getByText(/^He casado yo 3 de 8 movimientos de octubre\./)).toBeVisible()
-      for (const c of ['En el banco', 'En contabilidad', 'Te falta por casar']) await expect(page.locator('.cxb-cifra-etiqueta', { hasText: c })).toBeVisible()
+      // S02 · PR 3: el extracto es «Según el banco» (las palabras del Inicio).
+      for (const c of ['Según el banco', 'En contabilidad', 'Te falta por casar']) await expect(page.locator('.cxb-cifra-etiqueta', { hasText: c })).toBeVisible()
       await expect(page.getByText(/· tarjeta de Ana Prueba \(···0937\)/)).toBeVisible()
       await expect(page.getByText(/Tarjeta de Ana \(···0937\)|pídele el ticket a Ana/).first()).toBeVisible()
       // Las migas, sin caracteres raros; un solo botón principal por fila; y la banda del agente.

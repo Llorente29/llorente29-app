@@ -134,7 +134,8 @@ test.describe('B02 · Bancos, conciliar', () => {
       const c = await lasCifras(page)
       expect(c.frase).toEqual({ casados: c.contadores.casados, todos: c.contadores.todos, confirmar: c.contadores.confirmar, aclarar: c.contadores.aclarar })
       expect(c.barra).toEqual({ casados: c.contadores.casados, confirmar: c.contadores.confirmar, aclarar: c.contadores.aclarar })
-      for (const t of ['En el banco', 'En contabilidad', 'Te falta por casar']) await expect(page.getByTestId('cuadre')).toContainText(t)
+      // S02 · PR 3: el extracto es «Según el banco» (las palabras del Inicio).
+      for (const t of ['Según el banco', 'En contabilidad', 'Te falta por casar']) await expect(page.getByTestId('cuadre')).toContainText(t)
       // El último extracto de Mercado (el de las recargas) acaba en 4.185,25 − 300 = 3.885,25 €.
       await expect(page.getByTestId('cuadre')).toContainText('3.885,25 €')
 

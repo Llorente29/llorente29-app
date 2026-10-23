@@ -15,6 +15,13 @@
 // apuntan a su socio. Nada se escribe sin «Confirmar» fila a fila.
 // Regla 7 de CLAUDE.md: ningún filtro esconde filas que existen; los archivados
 // están en su filtro y lo dicen.
+//
+// S02 · PR 3 («las cifras»): «Te debe / Le debes» es el saldo DEL LIBRO de
+// sus subcuentas en la empresa activa (conta_saldos_terceros por party_id),
+// la misma fuente que «Te deben» y «Debes» del Inicio. Antes eran las facturas
+// de Folvy aprobadas sin pagar, y casi todo salía «Nada pendiente» con 40.000 €
+// en el libro. «Nada pendiente» solo si el libro dice 0. Si la función aún no
+// está en esa base, la cuenta de antes (y la consola lo dice).
 
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import { useMenuFila } from '@/modules/conta/proveedor/useMenuFila'
@@ -33,6 +40,8 @@ import {
 } from '@/modules/conta/lib/terceros'
 import { teDebe } from '@/modules/conta/lib/liquidaciones'
 import { calcularCifras } from '@/modules/conta/lib/cifras'
+import { saldoDeContacto } from '@/modules/conta/lib/cifrasLibro'
+import { leerSaldosTerceros } from '@/modules/conta/services/cifrasService'
 import { detectarRepetidas } from '@/modules/conta/lib/repetidas'
 import { parecido } from '@/modules/conta/lib/importarPlan'
 import { diaMesCorto, euros, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
@@ -49,16 +58,21 @@ const PILDORA: Record<Papel, string> = {
   platform: 'Plataforma', brand_partner: 'Socio de marca', customer: 'Cliente', supplier: 'Proveedor',
 }
 
-function useTerceros(accountId: string | null, vuelta: number) {
+function useTerceros(accountId: string | null, companyId: string | null, vuelta: number) {
   const [filas, setFilas] = useState<TerceroLista[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     if (!accountId) return
     let vivo = true
-    Promise.all([listarTercerosBase(accountId), liquidacionesDeLaCuenta(accountId), liquidacionesSocioDe(accountId, null), listarFacturasDeLaCuenta(accountId)])
-      .then(([{ terceros }, liqs, socio, facturas]) => {
+    const hoy = hoyEnMadrid()
+    // El libro de la empresa activa; sin empresa, o si no se puede leer, la cuenta de antes.
+    const libro = companyId
+      ? leerSaldosTerceros(companyId, hoy).then((r) => (r.fuente === 'base' ? r.filas : null))
+        .catch((e: unknown) => { console.warn('[contactos] no se pudo leer el saldo del libro: cuento como antes', e); return null })
+      : Promise.resolve(null)
+    Promise.all([listarTercerosBase(accountId), liquidacionesDeLaCuenta(accountId), liquidacionesSocioDe(accountId, null), listarFacturasDeLaCuenta(accountId), libro])
+      .then(([{ terceros }, liqs, socio, facturas, saldos]) => {
         if (!vivo) return
-        const hoy = hoyEnMadrid()
         setFilas(terceros.map((t) => {
           const suyas = liqs.filter((l) => l.partyId === t.id)
           const deEl = t.supplierId ? facturas.filter((f) => f.supplierId === t.supplierId) : []
@@ -72,17 +86,18 @@ function useTerceros(accountId: string | null, vuelta: number) {
             ...socio.filter((s) => s.partyId === t.id).map((s) => ({ fecha: s.hasta, texto: 'liquidación del socio' })),
             ...buenas.filter((f) => f.invoiceDate).map((f) => ({ fecha: f.invoiceDate!, texto: 'factura' })),
           ].sort((a, b) => b.fecha.localeCompare(a.fecha))
+          const delLibro = saldos ? saldoDeContacto(saldos, t.id) : null
           return {
             ...t,
-            teDebe: Math.round((teDebe(suyas, hoy).total + aTuFavor) * 100) / 100,
-            leDebes: Math.round(((calcularCifras(buenas, hoy).leDebes ?? 0) + aFavorSuyo) * 100) / 100,
+            teDebe: delLibro ? delLibro.teDebe : Math.round((teDebe(suyas, hoy).total + aTuFavor) * 100) / 100,
+            leDebes: delLibro ? delLibro.leDebes : Math.round(((calcularCifras(buenas, hoy).leDebes ?? 0) + aFavorSuyo) * 100) / 100,
             ultima: fechas[0] ?? null,
           }
         }))
       })
       .catch((e: unknown) => { if (vivo) setError(e instanceof Error ? e.message : String(e)) })
     return () => { vivo = false }
-  }, [accountId, vuelta])
+  }, [accountId, companyId, vuelta])
   return { filas, error }
 }
 
@@ -109,7 +124,7 @@ export default function TercerosPage() {
   const [hecho, setHecho] = useState<string | null>(llegada?.aviso ?? null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [archivar, setArchivar] = useState<TerceroLista | null>(null)
-  const { filas, error } = useTerceros(cargando ? null : accountId, vuelta)
+  const { filas, error } = useTerceros(cargando ? null : accountId, activa?.id ?? null, vuelta)
   const revision = useRevision430(cargando ? null : accountId, activa?.id ?? null, vuelta)
   const [revisionAbierta, setRevisionAbierta] = useState(false)
   const cajaRevision = useRef<HTMLElement>(null)

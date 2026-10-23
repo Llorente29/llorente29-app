@@ -2,20 +2,26 @@
 //
 // El número de cada entrada del menú (repaso de compras, 10/10): lo que hay
 // por mirar en ella. Cuenta lo mismo que enseña su pantalla, con la misma
-// vara (regla 31):
-//   · Compras: las filas de «Qué tienes que mirar» (decisiones, no papeles).
-//   · Clientes y proveedores: las cuentas 430 traídas sin revisar y los
-//     acuerdos de cesión sin socio.
-//   · Contabilidad › Asientos («libros»): lo de su «Para revisar», con su
-//     regla (S02 · PR 2): propuestos y borradores, menos lo propuesto que se
-//     decide en otro apartado (delLibroDiario: la factura recibida va en
-//     «recibidas» y el banco en «bancos», y no se cuenta dos veces) y menos lo que espera.
-//   · Bancos (B01): los movimientos para confirmar y por aclarar (los mismos
-//     que cuentan las cifras de Movimientos; lo casado solo no pide nada), y
-//     (S02 · PR 2) lo casado cuyo asiento espera en «Por validar».
-//   · Recibidas (S01c, 18/10): las facturas recibidas para revisar de los
-//     últimos 12 meses, las mismas que el Inicio («N facturas recibidas para
-//     revisar»): la barra y el Inicio cuentan lo mismo (Julio).
+// vara (regla 31).
+//
+// S02 · PR 3 («las cifras»): UNA fuente. Todo lo que espera una acción sale de
+// conta_pendientes (la base lo cuenta una vez, con la regla de la pantalla a
+// la que lleva), y de aquí lo leen la barra, las pestañas, el «Te toca hoy» y
+// el «Pendiente de ti» del Inicio:
+//   · compras: las filas de «Qué tienes que mirar» (compras_decidir).
+//   · recibidas: las facturas recibidas para mirar, 12 meses (facturas_para_mirar).
+//   · aclarar: las facturas recibidas por aclarar (facturas_por_aclarar): antes
+//     no las contaba nadie, y esperan una acción («Aclarar»).
+//   · libros: los asientos por validar, menos lo que se decide en su sitio y
+//     menos lo que espera (asientos_por_validar).
+//   · bancos: para confirmar + por aclarar + por validar, con sus tres partes
+//     al lado (bancosConfirmar, bancosAclarar, bancosValidar) para que el chip
+//     diga qué son.
+//   · terceros (Clientes y proveedores): las cuentas 430 traídas sin revisar y
+//     los acuerdos de cesión sin socio. Sigue contado AQUÍ: la regla hecha()
+//     vive en el cliente (contrato del PR 3).
+// Si conta_pendientes aún no está en esa base (staging antes de aplicar), se
+// cuenta como hasta ahora y se dice en la consola (services/cifrasService).
 // Es un aviso que interrumpe (el badge del menú, regla 7): cuenta lo que pide
 // una decisión, y si no hay nada no se pinta.
 //
@@ -38,7 +44,9 @@ import { cargarMirar } from '@/modules/conta/services/comprasService'
 import { acuerdosSinSocio, listarTercerosBase } from '@/modules/conta/services/tercerosService'
 import { cargarRevision430 } from '@/modules/conta/services/revision430Service'
 import { leerEsperan } from '@/modules/conta/services/esperanService'
-import { recibidasParaRevisar } from '@/modules/conta/services/inicioService'
+import { recibidasPorEstado } from '@/modules/conta/services/inicioService'
+import { leerPendientes } from '@/modules/conta/services/cifrasService'
+import { cuentasDePendientes } from '@/modules/conta/lib/cifrasLibro'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { delLibroDiario, type AsientoDiario } from '@/modules/conta/lib/diario'
 
@@ -58,24 +66,43 @@ export function refrescarCuentasMenu(): void {
 
 const seguro = (p: Promise<number>): Promise<number | null> => p.catch((e: unknown) => { console.error('[menú] no se pudo contar', e); return null })
 
+/** Clientes y proveedores: se cuenta en el cliente (la regla hecha() vive aquí). */
+async function contarTerceros(accountId: string, companyId: string | null): Promise<number> {
+  const acuerdos = (await acuerdosSinSocio(accountId)).length
+  if (!companyId) return acuerdos
+  const [rev, { terceros: ts }] = await Promise.all([cargarRevision430(accountId, companyId), listarTercerosBase(accountId)])
+  const t430 = ts.map((t) => ({ id: t.id, nombre: t.nombre, nif: t.nif, papeles: t.papeles, supplierId: t.supplierId, archivado: !!t.archivadoEn, codigoProveedor: null }))
+  return acuerdos + rev.cuentas.filter((c) => !hecha(c, t430)).length
+}
+
 async function contar(accountId: string, companyId: string | null): Promise<CuentasMenu> {
-  const [compras, terceros, libros, bancos, recibidas] = await Promise.all([
+  const [pendientes, terceros] = await Promise.all([
+    companyId ? leerPendientes(companyId) : Promise.resolve(null),
+    seguro(contarTerceros(accountId, companyId)),
+  ])
+  if (pendientes) return { ...cuentasDePendientes(pendientes), terceros }
+  return { ...(await contarComoHoy(accountId, companyId)), terceros }
+}
+
+/**
+ * La cuenta de antes de conta_pendientes, para la base que aún no la tiene.
+ * Con dos arreglos que no esperan a la tanda: las facturas por aclarar
+ * también cuentan (de la misma lectura que las para mirar), y Bancos filtra
+ * por cuenta Y empresa (regla 9).
+ */
+async function contarComoHoy(accountId: string, companyId: string | null): Promise<CuentasMenu> {
+  const recibidas = companyId
+    ? recibidasPorEstado(companyId, hoyEnMadrid()).catch((e: unknown) => { console.error('[menú] no se pudo contar', e); return null })
+    : Promise.resolve({ paraMirar: 0, porAclarar: 0 })
+  const [compras, libros, bancos, r] = await Promise.all([
     seguro(cargarMirar(accountId).then((m) => agruparAMirar(m).length)),
-    seguro((async () => {
-      const acuerdos = (await acuerdosSinSocio(accountId)).length
-      if (!companyId) return acuerdos
-      const [rev, { terceros: ts }] = await Promise.all([cargarRevision430(accountId, companyId), listarTercerosBase(accountId)])
-      const t430 = ts.map((t) => ({ id: t.id, nombre: t.nombre, nif: t.nif, papeles: t.papeles, supplierId: t.supplierId, archivado: !!t.archivadoEn, codigoProveedor: null }))
-      return acuerdos + rev.cuentas.filter((c) => !hecha(c, t430)).length
-    })()),
     // M01 («Esperan», Julio, 16/10): lo propuesto que la validación pararía no
     // es una tarea; no cuenta. La regla la dice la base (conta_esperan). Si aún
     // no se puede leer (la función no está en esa base), cuenta todo lo
     // propuesto, como antes, y lo dice en la consola.
     // S02 · PR 2: la misma vara que la lista «Para revisar» de Asientos
     // (paraRevisar): también los borradores, y fuera lo que tiene su sitio en
-    // otro apartado (delLibroDiario). Antes contaba todo lo propuesto: una
-    // factura recibida propuesta salía en «recibidas» Y aquí.
+    // otro apartado (delLibroDiario).
     seguro(companyId
       ? (async () => {
           const { data, error } = await tabla('journal_entry').select('id, status, source_type')
@@ -92,14 +119,14 @@ async function contar(accountId: string, companyId: string | null): Promise<Cuen
     // S02 · PR 2: y lo casado cuyo asiento espera en «Por validar» (la misma vara que leerDatosBancos).
     seguro(companyId
       ? Promise.all([
-          tabla('bank_movement').select('id', { count: 'exact', head: true }).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido']),
+          tabla('bank_movement').select('id', { count: 'exact', head: true }).eq('account_id', accountId).eq('company_id', companyId).in('status', ['propuesto', 'por_aclarar', 'posible_repetido']),
           tabla('bank_movement').select('id, bank_match!inner(status, journal_entry!inner(status))', { count: 'exact', head: true })
-            .eq('company_id', companyId).eq('status', 'casado').eq('bank_match.status', 'vivo').eq('bank_match.journal_entry.status', 'propuesto'),
+            .eq('account_id', accountId).eq('company_id', companyId).eq('status', 'casado').eq('bank_match.status', 'vivo').eq('bank_match.journal_entry.status', 'propuesto'),
         ]).then((rs: { count: number | null; error: { message: string } | null }[]) => rs.reduce((t, { count, error }) => { if (error) throw new Error(error.message); return t + (count ?? 0) }, 0))
       : Promise.resolve(0)),
-    seguro(companyId ? recibidasParaRevisar(companyId, hoyEnMadrid()) : Promise.resolve(0)),
+    recibidas,
   ])
-  return { compras, terceros, libros, bancos, recibidas }
+  return { compras, libros, bancos, recibidas: r ? r.paraMirar : null, aclarar: r ? r.porAclarar : null }
 }
 
 export function useCuentasMenu(): CuentasMenu {
