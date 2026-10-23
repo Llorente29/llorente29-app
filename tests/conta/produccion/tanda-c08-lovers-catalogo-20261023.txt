@@ -1,0 +1,18 @@
+# Tanda de producción viva · C08 (23/10): Lovers Burgers de Carabanchel publica
+# en el catálogo de HubRise que existe (2qjdb), no en el q3v47, que HubRise da
+# por inexistente. Rama conta/c08-lovers-catalogo. Número 0840: por encima del
+# más alto que existe (la 0830 de la D07).
+#
+#   1. 0840 — DATOS de Foodint: una fila de brand_hubrise_catalog
+#      (84c5951d-…), external_catalog_id de q3v47 a 2qjdb. AUTORIZO con su
+#      nombre. Para si la fila no está con q3v47.
+#
+# ¡OJO! La tanda de la D07 (0820 y 0830) está fusionada en main y SIN APLICAR:
+# este manifiesto, en esta rama, lleva solo la 0840, para que el ensayo y el
+# real de aquí no apliquen la D07. Antes de fusionar, aplicar.txt y
+# vuelta-atras.txt vuelven a ser los de main (la D07), y este queda en su
+# copia: tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt.
+# No toca el camino del pedido.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/c08-lovers-catalogo.sql
+supabase/migrations/20261208T0840_c08_lovers_catalogo_2qjdb.sql

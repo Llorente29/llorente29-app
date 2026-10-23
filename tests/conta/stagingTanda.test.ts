@@ -32,7 +32,7 @@ describe('lo que añade una rama o un push al manifiesto', () => {
 
 describe('qué se puede ensayar en ROLLBACK', () => {
   const hoy = lineas(readFileSync(MANIFIESTO, 'utf8'))
-  it('los 120 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02, la 0470 del D02, la 0480 del E05, la 0490 del S02 · PR 3, la 0770, la 0780 y la 0790 del D03 y la 0800 y la 0810 del D06 la 0820 del D07a, la 0830 del D07c y la 0840 del respaldo del D07a, cada una con su prueba) se ensayan, y 55 llevan su propia transacción', () => {
+  it('los 120 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02, la 0470 del D02, la 0480 del E05, la 0490 del S02 · PR 3, la 0770, la 0780 y la 0790 del D03 y la 0800 y la 0810 del D06 la 0820 del D07a, la 0830 del D07c y la 0850 del respaldo del D07a, cada una con su prueba) se ensayan, y 55 llevan su propia transacción', () => {
     expect(hoy).toHaveLength(120)
     expect(hoy.filter((f) => porQueNoSeEnsaya(readFileSync(f, 'utf8')))).toEqual([])
     expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(55)

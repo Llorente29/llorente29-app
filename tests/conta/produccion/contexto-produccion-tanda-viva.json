@@ -1,8 +1,8 @@
 {
-  "_que": "D07a + D07c (PR 1 del 23/10) y el respaldo de la 0840 · las recibidas que Diez rechazó por la descripción, otra vez a la cola (con su estado de antes respaldado, para que la vuelta atrás las deje como estaban: el ensayo del run 190 paró por eso), y «Saldo prepago» en todas las listas de formas de pago · contexto de producción de la tanda viva (20261208T0840, 20261208T0820 y 20261208T0830), medido en SOLO LECTURA el 23/10 a las 14:55 UTC, con la 0810 del D06 ya aplicada, con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las cuatro tablas (filas estimadas: external_send 210, supplier_invoice 102; customer_fiscal y payment_method 0); conta_respaldo_d07a_envios no existe (la crea la 0840). Ninguna en el camino del pedido; ninguna de las tres en el historial.",
-  "medido": "2026-10-23T14:55Z",
+  "_que": "D07a + D07c (PR 1 del 23/10) y el respaldo de la 0850 · las recibidas que Diez rechazó por la descripción, otra vez a la cola (con su estado de antes respaldado, para que la vuelta atrás las deje como estaban: el ensayo del run 190 paró por eso), y «Saldo prepago» en todas las listas de formas de pago · contexto de producción de la tanda viva (20261208T0850, 20261208T0820 y 20261208T0830; la 0850 era la 0840, renombrada porque la 0840 es del C08, ya aplicada), medido en SOLO LECTURA el 23/10 a las 14:55 UTC y otra vez a las 16:50 UTC (con la 0840 del C08 ya aplicada; el mismo resultado), con la 0810 del D06 ya aplicada, con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las cuatro tablas (filas estimadas: external_send 210, supplier_invoice 102; customer_fiscal y payment_method 0); conta_respaldo_d07a_envios no existe (la crea la 0850). Ninguna en el camino del pedido; ninguna de las tres en el historial.",
+  "medido": "2026-10-23T16:50Z",
   "tanda": {
-    "supabase/migrations/20261208T0840_d07a_respaldo_antes_de_reenviar.sql": "b24ebd6ce753b91027ba89e773e4c07d",
+    "supabase/migrations/20261208T0850_d07a_respaldo_antes_de_reenviar.sql": "61248e1e3ed40097a543df382eef2acb",
     "supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql": "62a9812899ca0c6cc9f36f70ebb8c4a8",
     "supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql": "56b895348707cbcc42c4c613a7be8edd"
   },
