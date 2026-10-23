@@ -1,0 +1,6 @@
+# Vuelta atrás de la tanda C11b, en orden inverso: las ventas vuelven a como
+# las dejó el cierre (y se borran los asientos propuestos de esos días, si
+# siguen propuestos), y conta_cerrar_dias vuelve al freno de la 2045.
+cuenta: scripts/conta/produccion/cuentas/c11b-cerrar-sin-confirmar.sql
+supabase/vuelta-atras/20261023T2310_c11b_cerrar_las_entregadas.down.sql
+supabase/vuelta-atras/20261023T2300_c11b_cierre_cierra_sin_confirmar.down.sql
