@@ -1,31 +1,24 @@
-# Tanda de producción viva · D03 · la recibida que se sube sin recepción nace
-# con su documento, las dos de Foodint que nacieron sin él, y «Guardar
-# cambios» de su ficha (Julio, 23/10).
-# Rama claude/ficha-recibida. Números 0770, 0780 y 0790: por encima del más alto que
-# existe (la 0760 de la C06b; la 0500 y la 0510 ya son de la C06b). La
-# anterior de este fichero (S02 · PR 3, 0490, ya aplicada y fusionada en el
-# #293): su copia en tests/conta/produccion/tanda-s02-cifras-20261023.txt.
+# Tanda de producción viva · D06 · bloque 1 de Compras y gastos: el saldo
+# prepago de Riders y el PDF bueno que sustituye a la foto (Julio, 23/10).
+# Rama claude/cool-noether-i932tx. Números 0800 y 0810: por encima del más alto
+# que existe (la 0790 del D03). La anterior de este fichero (D03, 0770–0790,
+# ya aplicada y fusionada en el #294): su copia en
+# tests/conta/produccion/tanda-d03-recibida-pdf-20261023.txt.
 #
-#   1. 0770 — CAMBIA en caliente _compras_factura_desde_papel (misma firma):
-#      sin recepción, o con una recepción sin documento, la factura nace con
-#      el primer fichero de su lectura (de su cuenta, en receipt-uploads).
-#      Declarada en la cabecera, con su prueba de staging. No toca filas.
-#   2. 0780 — DATOS de Foodint: FAC-00098 (S11/0177416578) y FAC-00101
-#      (COHELDI P26 4.980), con el PDF de su lectura. Cambia DOS filas que
-#      existen: AUTORIZO con su nombre. Para si las que están así, en todas
-#      las cuentas, no son esas dos, o si alguna ya tiene documento.
-#   3. 0790 — AÑADE lo que guarda la ficha de la recibida: columnas que
-#      admiten nulos en supplier_invoice (forma de pago prevista, «Sin PDF»,
-#      asiento a mano, base de la retención), supplier_invoice_expense (el
-#      gasto repartido) y supplier_invoice_change (el historial), y las
-#      funciones conta_recibida_guardar, conta_recibida_papel_poner y
-#      conta_recibida_sin_papel. No toca filas ni ninguna función que exista.
+#   1. 0800 — CAMBIA en caliente, declarado en su cabecera con su prueba de
+#      staging: los dos CHECK de payment_method (supplier y supplier_invoice)
+#      admiten 'prepaid' (solo amplían), y conta_factura_desde_lectura (misma
+#      firma): el PDF de una factura que ya está con foto, del mismo proveedor,
+#      número y total, ocupa su sitio; la foto queda en su historial; no se
+#      crea otra. No toca filas.
+#   2. 0810 — DATOS de Foodint: RIDERS con «Saldo prepago Catcher» (prepaid).
+#      Cambia UNA fila que existe: AUTORIZO con su nombre. Para si no es RIDERS,
+#      si está archivado o si ya tiene otra forma de pago.
 #
-# No toca el camino del pedido (ningún pedido escribe recibidas ni asientos).
-# Ninguna función que desplegar. No sale nada a Diez: las dos siguen en revisión y sin
-# asiento; al validarlas, el D02 enlaza su PDF al asiento.
+# No toca el camino del pedido (ningún pedido escribe proveedores, recibidas ni
+# asientos). Ninguna función que desplegar: conta-facturas-entrada pasa el
+# estado nuevo tal cual. No sale nada a Diez.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
-supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
-supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql
-supabase/migrations/20261206T0790_d03_recibida_guardar.sql
+cuenta: scripts/conta/produccion/cuentas/d06-prepago-y-pdf.sql
+supabase/migrations/20261207T0800_d06_prepago_y_pdf_bueno.sql
+supabase/migrations/20261207T0810_d06_riders_prepago.sql

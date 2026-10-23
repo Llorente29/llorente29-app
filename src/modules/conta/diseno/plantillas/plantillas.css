@@ -478,3 +478,20 @@ th.s-lista-cifra { text-align: right; }
 /* D04 · El PDF, página a página, a lo ancho de su panel (PapelPdf lo pinta a esa resolución). */
 .s-papel-pdf { display: flex; flex-direction: column; gap: var(--s-2); width: 100%; }
 .s-papel-pdf canvas { display: block; width: 100%; height: auto; background: var(--s-superficie); }
+
+/* D06 · Validar en bloque (tablero 2b): la casilla de cada fila, la barra azul de las marcadas y «¿Lista para validar?». */
+.s-lista-marca { width: 40px; }
+.s-lista-casilla { width: 18px; height: 18px; accent-color: var(--s-accion); cursor: pointer; }
+.s-lista-tabla tr[data-marcada] { background: var(--s-accion-suave); }
+.s-lista-tarjetas [data-con-casilla] { display: flex; align-items: center; gap: var(--s-2); }
+.s-lista-tarjetas [data-con-casilla] .s-lista-tarjeta { flex: 1; min-width: 0; }
+.s-lista-para-validar { color: var(--s-ok); font-weight: var(--s-peso-medio); }
+.s-lista-para-validar[data-tono='duda'] { color: var(--s-duda); font-weight: var(--s-peso-normal); }
+.s-bloque-acciones { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); }
+.s-barra-marcadas {
+  position: sticky; top: var(--cxm-alto-arriba, 0px); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3);
+  padding: var(--s-3) var(--s-4); border-radius: var(--s-radio-bloque); background: var(--s-accion); color: var(--s-sobre-accion);
+}
+.s-barra-marcadas-texto { flex: 1 1 16rem; min-width: 0; }
+.s-barra-marcadas-acciones { display: flex; gap: var(--s-2); margin-left: auto; }
+.s-reparto-bloque td, .s-reparto-bloque th { padding: var(--s-2) var(--s-3); }

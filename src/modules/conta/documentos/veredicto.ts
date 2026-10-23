@@ -19,6 +19,7 @@
 // ámbar («Por revisar») salen de lo mismo. Núcleo puro: se prueba sin React.
 
 import type { TipoVeredicto, TonoCampo } from '@/modules/conta/diseno/plantillas'
+import { AVISO_NIF_LEIDO_MAL, casaNif } from './paraValidar'
 
 export interface Comprobacion { id: string; ok: boolean; texto: string; grave?: boolean }
 
@@ -52,6 +53,10 @@ export interface DatosVeredicto {
    * «Revisa esto»: el aviso «Base + IVA = …» de la propuesta no cuenta.
    */
   redondeo?: boolean
+  /** D06 · Por qué no se puede validar por falta de documento (paraValidar.faltaDocumento); null o sin dar: lo tiene. */
+  faltaDocumento?: string | null
+  /** D06 · Si puede estar repetida, el aviso (paraValidar.textoDuplicada). */
+  duplicada?: string | null
 }
 
 export interface Veredicto {
@@ -61,15 +66,21 @@ export interface Veredicto {
   detalle: { ok: boolean | null; texto: string }[]
 }
 
-const normaNif = (x: string | null | undefined) => (x ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^ES(?=[A-Z0-9]{9}$)/, '')
 const frase = (x: string) => (/[.!?…:]$/.test(x.trim()) ? x.trim() : `${x.trim()}.`)
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
-/** ¿Coincide el NIF de la factura con el de su ficha? null si falta uno de los dos. */
+/**
+ * ¿Coincide el NIF de la factura con el de su ficha? null si falta uno de los dos. D06: normalizado
+ * (sin guiones, espacios ni «ES»), y un NIF leído mal en un solo carácter (no válido, cuando el de la
+ * ficha sí lo es) cuenta como el de la ficha: se usa ése y se avisa (nifLeidoMal).
+ */
 export function nifCoincide(ficha: string | null | undefined, factura: string | null | undefined): boolean | null {
-  if (!ficha || !factura) return null
-  return normaNif(ficha) === normaNif(factura)
+  const c = casaNif(ficha, factura)
+  return c === null ? null : c !== 'distinto'
 }
+
+/** D06 · ¿Se leyó mal el NIF (un carácter, el leído no es válido y el de la ficha sí)? */
+export const nifLeidoMal = (ficha: string | null | undefined, factura: string | null | undefined): boolean => casaNif(ficha, factura) === 'leido_mal'
 
 /** El motivo de la cuenta de gasto, en palabras de calle. */
 export function motivoDelGasto(origen: string | null): string | null {
@@ -107,6 +118,13 @@ export function veredictoFactura(d: DatosVeredicto): Veredicto {
   if (!d.fecha) return { tipo: 'no_encaja', titulo: 'No encaja', porque: 'No tiene fecha: sin ella no se puede contabilizar.', detalle }
   if (d.propuesta === null) {
     return { tipo: 'no_encaja', titulo: 'No encaja', porque: frase(d.porqueSinPropuesta ?? 'No he podido preparar su asiento'), detalle }
+  }
+  // D06: sin documento no se valida (salvo «Sin PDF» con su motivo); una posible duplicada se avisa antes.
+  if (d.faltaDocumento) return { tipo: 'revisa', titulo: 'Revisa esto', porque: frase(d.faltaDocumento), detalle }
+  if (d.duplicada) return { tipo: 'revisa', titulo: 'Revisa esto', porque: frase(d.duplicada), detalle }
+  // D06: el NIF leído mal en un carácter no es «No encaja»: se usa el de su ficha y se avisa en ámbar (el asiento se propone).
+  if (nifLeidoMal(d.proveedor.nif, d.nifFactura)) {
+    return { tipo: 'revisa', titulo: 'Revisa esto', porque: `${AVISO_NIF_LEIDO_MAL} (leí ${d.nifFactura}; su ficha dice ${d.proveedor.nif}).`, detalle }
   }
   if (d.cuadraConElPdf === false) {
     return { tipo: 'revisa', titulo: 'Revisa esto', porque: 'Base + IVA no dan el total del PDF: corrige los importes por tipo de IVA.', detalle }
@@ -163,6 +181,7 @@ export interface MotivoCampo { tono: TonoCampo; motivo?: string; marca?: string 
 
 export function motivoProveedor(d: Pick<DatosVeredicto, 'proveedor' | 'nifFactura'>): MotivoCampo {
   if (!d.proveedor) return { tono: 'revisar', motivo: d.nifFactura ? `NIF ${d.nifFactura}: no está en tus proveedores.` : 'No está en tus proveedores.' }
+  if (nifLeidoMal(d.proveedor.nif, d.nifFactura)) return { tono: 'revisar', motivo: `${AVISO_NIF_LEIDO_MAL}: leí ${d.nifFactura}, su ficha dice ${d.proveedor.nif}.` }
   const c = nifCoincide(d.proveedor.nif, d.nifFactura)
   if (c === true) return { tono: 'ok', marca: 'NIF de su ficha' }
   if (c === false) return { tono: 'revisar', motivo: `La factura trae el NIF ${d.nifFactura}; su ficha, el ${d.proveedor.nif}.` }
