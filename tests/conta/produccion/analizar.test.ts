@@ -1459,12 +1459,55 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
+describe('la tanda de AHORA (manifiesto vivo): C08 · Lovers Burgers de Carabanchel, al catálogo de HubRise que existe (0840)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
-  // lectura en producción el 23/10 a las 13:38 UTC, con la 0810 ya aplicada, para ESTOS ficheros.
+  // lectura en producción el 23/10 a las 16:24 UTC, para ESTE fichero.
   const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
+  const ctx = medida.contexto
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  const md5 = (x: string) => createHash('md5').update(x).digest('hex')
+  const DOWN = 'supabase/vuelta-atras/20261208T0840_c08_lovers_catalogo_2qjdb.down.sql'
+
+  it('un fichero, el medido; pide «autorizo»; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva).toEqual(['supabase/migrations/20261208T0840_c08_lovers_catalogo_2qjdb.sql'])
+    expect(Object.keys(medida.tanda)).toEqual(viva)
+    expect(md5(readFileSync(viva[0], 'utf8'))).toBe(medida.tanda[viva[0]])
+    expect(r.ficheros[viva[0]]).toMatch(/autorizo/i)
+    expect(ctx.tablas).toEqual(['public.brand_hubrise_catalog'])
+    expect(ctx.camino).toEqual({ tablas: [], funciones: [] })
+    expect(ctx.registro).toEqual([])
+  })
+  it('una sola fila, anclada por id, cuenta, marca, location y el catálogo de antes; para si no es una', () => {
+    const sin = readFileSync(viva[0], 'utf8').replace(/--.*$/gm, '')
+    expect(sin.match(/\bupdate\s+public\./gi)).toHaveLength(1)
+    expect(sin).toContain("set external_catalog_id = '2qjdb'")
+    expect(sin).toContain("where id = v_fila and account_id = v_acc and brand_id = v_marca")
+    expect(sin).toContain("and external_location_id = '1b6p8-2' and external_catalog_id = 'q3v47'")
+    expect(sin).toContain('if v_n <> 1 then')
+    expect(sin).toMatch(/if not exists \(select 1 from public\.accounts where id = v_acc\) then/)
+  })
+  it('su vuelta atrás la devuelve al q3v47 solo si está en 2qjdb; la cuenta solo lee; la D07 queda en su copia', () => {
+    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN])
+    const d = readFileSync(DOWN, 'utf8').replace(/--.*$/gm, '')
+    expect(d).toContain("set external_catalog_id = 'q3v47'")
+    expect(d).toContain("and external_location_id = '1b6p8-2' and external_catalog_id = '2qjdb'")
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/c08-lovers-catalogo.sql'])
+    const c = readFileSync(cuentas[0], 'utf8')
+    expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
+    expect(readFileSync(MANIFIESTO, 'utf8')).toContain('Antes de fusionar, aplicar.txt y')
+  })
+})
+
+describe('la tanda D07a + D07c (fusionada en main y SIN APLICAR; mientras corre la C08, en su copia) · las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
+  const MANIFIESTO = 'tests/conta/produccion/tanda-d07ac-diez-y-prepago-20261023.txt'
+  const viva = leerTanda(MANIFIESTO)
+  // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
+  // lectura en producción el 23/10 a las 13:38 UTC, con la 0810 ya aplicada, para ESTOS ficheros.
+  const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-d07ac-diez-y-prepago-20261023.json', 'utf8'))
   const ctx = medida.contexto
   const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
   const r = informe(viva, ctx, {}, leer) as { markdown: string; ficheros: Record<string, string> }
@@ -1515,7 +1558,7 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · las recibidas que 
     expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql'])
     const c = readFileSync(cuentas[0], 'utf8')
     expect(c.replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(insert|update|delete|create|drop|alter|grant|perform)\b/i)
-    expect(leerTanda('supabase/produccion/vuelta-atras.txt')).toEqual([DOWN_C, DOWN])
+    expect(leerTanda('tests/conta/produccion/vuelta-atras-d07ac-diez-y-prepago-20261023.txt')).toEqual([DOWN_C, DOWN])
   })
   it('la 0830: las cinco declaradas con su prueba; las dos funciones cambian SOLO en la lista y el error, y la vuelta atrás las deja como en producción byte a byte', () => {
     const t = readFileSync(viva[1], 'utf8')
