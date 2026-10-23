@@ -222,7 +222,11 @@ export default function RevisarFacturaPage() {
       let sinTanda = !r.conTanda && aLaFuncion.length > 0
       if (campos.includes('documento') && ficheroVivo) {
         const x = await ponerPapelRecibida(fac, ficheroVivo.file, userName)
-        if (x.hecho) { partes.push(x.texto); tocado = true } else if (x.falta) sinTanda = true; else fallos.push({ etiqueta: 'PDF', porque: x.texto })
+        if (x.hecho) {
+          partes.push(x.texto); tocado = true
+          // El PDF ya está en la factura: deja de ser un cambio pendiente (la ficha lo vuelve a leer).
+          ed.poner('documento', ''); setFichero(null)
+        } else if (x.falta) sinTanda = true; else fallos.push({ etiqueta: 'PDF', porque: x.texto })
       }
       if (campos.includes('sinPdf') || campos.includes('motivoSinPdf')) {
         if (b.sinPdf && !b.motivoSinPdf.trim()) fallos.push({ etiqueta: 'Sin PDF', porque: 'di por qué no hay documento' })

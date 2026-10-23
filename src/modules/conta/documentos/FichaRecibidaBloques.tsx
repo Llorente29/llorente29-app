@@ -130,7 +130,16 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
   const cIva = cambioDe('iva'), cRet = cambioDe('retencion'), cRec = cambioDe('recargo')
   const base = totales.base
   return (
-    <BloqueFicha titulo="Importes por tipo de IVA">
+    <BloqueFicha
+      titulo="Importes por tipo de IVA"
+      accion={(cIva ?? cRet ?? cRec) && (
+        <MarcaCambiado
+          cambio={(cIva ?? cRet ?? cRec)!}
+          onDeshacer={() => deshacer(cIva ? 'iva' : cRet ? 'retencion' : 'recargo')}
+          parte="etiqueta"
+        />
+      )}
+    >
       <div className="cxf-iva" data-prueba="importes-iva" data-cambiado={cIva ? '' : undefined}>
         <div className="cxf-iva-cabeza" aria-hidden="true"><span>Base</span><span>Tipo de IVA</span><span>Cuota</span><span /></div>
         {iva.map((l, i) => {
