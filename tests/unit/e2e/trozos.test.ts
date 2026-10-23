@@ -23,7 +23,9 @@ describe('la entera en trozos', () => {
     // ya está medido (e2e 761). 23/10 (D06): entra d01/validar-en-bloque, nueva y sin medir
     // (cuenta como la mediana): son 5. La mide la entera de su PR.
     // 23/10 (D07): entra d01/plataforma, nueva y sin medir (una sola prueba, sin datos que crear): son 6.
-    expect(sin.length).toBeLessThan(7)
+    // 24/10 (N1): se miden d01/validar-en-bloque y d01/plataforma (e2e 39980636692) y entra
+    // d01/nif-de-la-ficha, nueva y sin medir: son 5.
+    expect(sin.length).toBeLessThan(6)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -69,7 +71,10 @@ describe('la entera en trozos', () => {
     // 39735848930). El reparto estimado da 16,04: el techo pasa a 16,5 min. Lo mide la entera de la tanda.
     // 23/10 (D06): entra d01/validar-en-bloque, sin medir (cuenta como la mediana). El reparto
     // estimado da 16,65: el techo pasa a 17 min. Lo mide la entera de su PR.
-    expect(Math.max(...seg) / 60).toBeLessThan(17)
+    // 24/10 (N1): d01/validar-en-bloque medido (130,2 s en la e2e 39980636692; contaba como la
+    // mediana) y d01/plataforma (6,8 s); entra d01/nif-de-la-ficha, sin medir. El reparto estimado
+    // da 17,25: el techo pasa a 17,5 min. Lo mide la entera de la noche.
+    expect(Math.max(...seg) / 60).toBeLessThan(17.5)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {
