@@ -1459,7 +1459,7 @@ describe('la tanda del C07 · todo asiento de Sumied a Diez (0450, aplicada; su 
   })
 })
 
-describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · el respaldo (0850), las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
+describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · el respaldo (0880), las recibidas que Diez rechazó por la descripción, otra vez a la cola (0820), y «Saldo prepago» en todas las listas (0830)', () => {
   const MANIFIESTO = 'supabase/produccion/aplicar.txt'
   const viva = leerTanda(MANIFIESTO)
   // La respuesta REAL de la consulta de contexto del workflow, lanzada en solo
@@ -1475,11 +1475,11 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · el respaldo (0850)
   const PRUEBA_C = 'supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql'
   const DOWN_C = 'supabase/vuelta-atras/20261208T0830_d07c_prepago_en_todas_las_listas.down.sql'
   const PRUEBA_R = 'supabase/staging/sql/20261208_d07a_respaldo_prueba.sql'
-  const DOWN_R = 'supabase/vuelta-atras/20261208T0850_d07a_respaldo_antes_de_reenviar.down.sql'
+  const DOWN_R = 'supabase/vuelta-atras/20261208T0880_d07a_respaldo_antes_de_reenviar.down.sql'
   const [respaldo, reenviar, prepago] = viva
 
-  it('tres ficheros, los medidos, la 0850 ANTES que la 0820; la 0850 sigue, la 0820 (datos de Foodint) pide «autorizo» y la 0830 sigue; nada del camino del pedido; nada registrado aún', () => {
-    expect(viva.map(nombre)).toEqual(['20261208T0850_d07a_respaldo_antes_de_reenviar.sql', '20261208T0820_d07a_diez_reenviar_descripcion.sql', '20261208T0830_d07c_prepago_en_todas_las_listas.sql'])
+  it('tres ficheros, los medidos, la 0880 ANTES que la 0820; la 0880 sigue, la 0820 (datos de Foodint) pide «autorizo» y la 0830 sigue; nada del camino del pedido; nada registrado aún', () => {
+    expect(viva.map(nombre)).toEqual(['20261208T0880_d07a_respaldo_antes_de_reenviar.sql', '20261208T0820_d07a_diez_reenviar_descripcion.sql', '20261208T0830_d07c_prepago_en_todas_las_listas.sql'])
     expect(Object.keys(medida.tanda)).toEqual(viva)
     for (const f of viva) expect(md5(readFileSync(f, 'utf8')), f).toBe(medida.tanda[f])
     expect(r.ficheros[respaldo]).toBe('sigue')
@@ -1544,7 +1544,7 @@ describe('la tanda de AHORA (manifiesto vivo): D07a + D07c · el respaldo (0850)
     const m = readFileSync('supabase/staging/aplicar.txt', 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
     expect(m.indexOf(PRUEBA_C)).toBeGreaterThan(m.indexOf(prepago))
   })
-  it('la 0850 respalda, con la MISMA selección que la 0820, el estado de antes; la vuelta atrás de la 0820 lo devuelve de ahí byte a byte, y la de la 0850 quita la tabla (run 190: la de antes dejaba el last_error de la 0820)', () => {
+  it('la 0880 respalda, con la MISMA selección que la 0820, el estado de antes; la vuelta atrás de la 0820 lo devuelve de ahí byte a byte, y la de la 0880 quita la tabla (run 190: la de antes dejaba el last_error de la 0820)', () => {
     const sel = (x: string) => x.replace(/--.*$/gm, '').match(/from public\.external_send x[\s\S]*?intento anterior: Diez no ha aceptado la factura%'\)/)?.[0]
     const r0 = readFileSync(respaldo, 'utf8'), r1 = readFileSync(reenviar, 'utf8')
     expect(sel(r0)).toBeTruthy()

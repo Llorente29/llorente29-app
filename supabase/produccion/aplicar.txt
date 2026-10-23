@@ -26,13 +26,14 @@
 #
 # D07a (run 190, 23/10): el ensayo paró en «la vuelta atrás automática
 # funcionaría»: la vuelta atrás de la 0820 no devolvía last_error ni
-# next_try_at. Ahora va primero la 0850 —AÑADE: la tabla
+# next_try_at. Ahora va primero la 0880 —AÑADE: la tabla
 # conta_respaldo_d07a_envios con el estado de antes de esos envíos— y la vuelta
-# atrás de la 0820 los devuelve de ahí, byte a byte. La 0850 va ANTES que la
+# atrás de la 0820 los devuelve de ahí, byte a byte. La 0880 va ANTES que la
 # 0820 aunque su número sea mayor: el orden lo decide este fichero.
-# La 0850 se llamaba 0840: la 0840 es la del C08 (#301), ya aplicada; su tanda,
+# La 0880 se llamaba 0840: la 0840 es la del C08 (#301), ya aplicada, y la 0850
+# a la 0870 son del #300; la 0880 es la siguiente libre. La tanda del C08,
 # en su copia (tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt).
 cuenta: scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql
-supabase/migrations/20261208T0850_d07a_respaldo_antes_de_reenviar.sql
+supabase/migrations/20261208T0880_d07a_respaldo_antes_de_reenviar.sql
 supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
 supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql

@@ -1,4 +1,4 @@
--- supabase/migrations/20261208T0850_d07a_respaldo_antes_de_reenviar.sql
+-- supabase/migrations/20261208T0880_d07a_respaldo_antes_de_reenviar.sql
 --
 -- D07a · EL RESPALDO DE LOS ENVÍOS QUE LA 0820 VUELVE A PONER A LA COLA, para
 -- que su vuelta atrás los deje EXACTAMENTE como estaban (Julio, 23/10).
@@ -24,7 +24,7 @@
 -- Solo añade: una tabla nueva, con RLS y sin políticas (solo la lee quien
 -- aplica). Anclado por cuenta y proveedor (regla 9): Foodint y RIDERS. En
 -- staging, la tabla vacía. No toca el camino del pedido, ni coste ni stock.
--- Vuelta atrás: supabase/vuelta-atras/20261208T0850_d07a_respaldo_antes_de_reenviar.down.sql
+-- Vuelta atrás: supabase/vuelta-atras/20261208T0880_d07a_respaldo_antes_de_reenviar.down.sql
 create table if not exists public.conta_respaldo_d07a_envios (
   id uuid primary key,
   attempts smallint not null,
@@ -34,7 +34,7 @@ create table if not exists public.conta_respaldo_d07a_envios (
   guardado_at timestamptz not null default now()
 );
 comment on table public.conta_respaldo_d07a_envios is
-  'D07a (0850). El estado de antes de los envíos que la 0820 vuelve a poner a la cola, para que su vuelta atrás los deje como estaban.';
+  'D07a (0880). El estado de antes de los envíos que la 0820 vuelve a poner a la cola, para que su vuelta atrás los deje como estaban.';
 alter table public.conta_respaldo_d07a_envios enable row level security;
 revoke all on table public.conta_respaldo_d07a_envios from anon, authenticated;
 
@@ -45,7 +45,7 @@ declare
   v_n int;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
-    raise notice 'D07a 0850: esta base no tiene la cuenta de Foodint (staging): el respaldo queda vacío.';
+    raise notice 'D07a 0880: esta base no tiene la cuenta de Foodint (staging): el respaldo queda vacío.';
     return;
   end if;
   -- La misma selección que la 0820.
@@ -59,5 +59,5 @@ begin
      and (x.last_error ilike '%factura.Descripcion%' or x.last_error ilike '%intento anterior: Diez no ha aceptado la factura%')
   on conflict (id) do nothing;
   get diagnostics v_n = row_count;
-  raise notice 'D07a 0850: % envíos de RIDERS respaldados antes de volver a la cola.', v_n;
+  raise notice 'D07a 0880: % envíos de RIDERS respaldados antes de volver a la cola.', v_n;
 end $$;
