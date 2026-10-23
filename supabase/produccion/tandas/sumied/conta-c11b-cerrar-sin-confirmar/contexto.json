@@ -1,0 +1,17 @@
+{
+  "_que": "C11b · los no confirmados se cierran como vendidos y se cierran las 32 entregadas · contexto de producción de la tanda (20261023T2300 y 20261023T2310), medido en SOLO LECTURA el 23/10 con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen sale y sales_day_close_log (las dos en el camino del pedido) y conta_cerrar_dias con una sola firma (md5 12743c982825a9ee11d970b6d095c275, la 2045 del C11); no existen conta_sin_confirmar_no_cobrados ni la copia c11b_ventas_cerradas_20261023; nada en el historial.",
+  "medido": "2026-10-23T23:01Z",
+  "tanda": {
+    "supabase/migrations/20261023T2300_c11b_cierre_cierra_sin_confirmar.sql": "30430bf9fc816924d0820808b8ef58b3",
+    "supabase/migrations/20261023T2310_c11b_cerrar_las_entregadas.sql": "30dc072e104344206d769b18c1d914a7"
+  },
+  "contexto": {
+    "tablas": ["public.sale", "public.sales_day_close_log"],
+    "funciones": ["public.conta_cerrar_dias(uuid,timestamp with time zone)"],
+    "filas": { "public.sale": 20490, "public.sales_day_close_log": 51 },
+    "otras": {},
+    "camino": { "tablas": ["public.sale", "public.sales_day_close_log"], "funciones": [] },
+    "usos": {},
+    "registro": []
+  }
+}

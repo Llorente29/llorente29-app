@@ -1,0 +1,9 @@
+# C11b · la regla nueva del cierre del día (2300: cambia en caliente
+# conta_cerrar_dias y el CHECK de sales_day_close_log, añade el aviso) y el
+# cierre de las ventas anuladas que la plataforma entregó (2310, datos de
+# Foodint: en staging no hace nada). Desde la rama va en ROLLBACK. Su prueba
+# (ROLLBACK): los cuatro casos del cierre, la segunda pasada, como usuario, y
+# las dos vueltas atrás.
+supabase/migrations/20261023T2300_c11b_cierre_cierra_sin_confirmar.sql
+supabase/migrations/20261023T2310_c11b_cerrar_las_entregadas.sql
+supabase/staging/sql/20261023_c11b_cierre_sin_confirmar_prueba.sql
