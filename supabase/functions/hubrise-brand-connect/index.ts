@@ -48,6 +48,15 @@
 //        a) el local pertenece a esta cuenta (locations.account_id)
 //        b) tiene conexión HubRise activa (external_location_map)
 //        c) la marca está activa ahí (brand_location_availability)
+//
+// CATÁLOGO PERDIDO (C08, Julio, 23/10): si el catálogo enlazado ya no existe en
+// HubRise (404), no se da por «ya conectada»: se dice («catalogo_perdido»), con
+// los catálogos que SÍ existen en esa location, y no se publica (se publicaría
+// en un catálogo que no está). Para arreglarlo, se vuelve a llamar con
+// `catalog_id` (y `location_id`): se comprueba que es de esa location, se
+// guarda en brand_hubrise_catalog y se publica solo ahí («elegido»).
+// Lo pagó Lovers Burgers en Carabanchel el 23/10: el enlace apuntaba a q3v47,
+// que no existía, y la pantalla solo decía «ya conectada (q3v47)».
 // ============================================================================
 
 import { corsHeaders } from "../_shared/cors.ts";
@@ -72,9 +81,29 @@ interface CatalogResult {
   location_id: string;
   external_location_id: string;
   location_name: string;
-  status: "ya_conectada" | "reusada_por_nombre" | "creada" | "error";
+  status: "ya_conectada" | "reusada_por_nombre" | "creada" | "elegido" | "catalogo_perdido" | "error";
   external_catalog_id?: string;
   error?: string;
+  // Solo con «catalogo_perdido»: los catálogos que existen en esa location.
+  catalogos?: { id: string; name: string }[];
+}
+
+/** Los catálogos de una location en HubRise (solo los suyos, no los de cuenta). */
+async function catalogosDeLaLocation(token: string, extLoc: string): Promise<{ id: string; name: string }[] | null> {
+  const r = await fetch(`${HUBRISE_BASE}/locations/${extLoc}/catalogs`, { headers: { "X-Access-Token": token } });
+  if (!r.ok) return null;
+  const list = await r.json();
+  return Array.isArray(list)
+    ? list.filter((c: { id?: string; location_id?: string | null }) => c.id && c.location_id === extLoc)
+        .map((c: { id: string; name?: string }) => ({ id: c.id, name: c.name ?? c.id }))
+    : null;
+}
+
+/** ¿Existe ese catálogo en HubRise? null si no se ha podido saber (red, 5xx). */
+async function catalogoExiste(token: string, catalogId: string): Promise<boolean | null> {
+  const r = await fetch(`${HUBRISE_BASE}/catalogs/${catalogId}`, { headers: { "X-Access-Token": token } });
+  if (r.status === 404) return false;
+  return r.ok ? true : null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -95,11 +124,15 @@ Deno.serve(async (req: Request) => {
   const user = userData?.user ?? null;
   if (!user) return json({ ok: false, error: "no autenticado" }, 401);
 
-  let body: { brand_id?: string; location_id?: string } = {};
+  let body: { brand_id?: string; location_id?: string; catalog_id?: string } = {};
   try { body = await req.json(); } catch { /* ignore */ }
   const brandId = body.brand_id;
   if (!brandId) return json({ ok: false, error: "brand_id requerido" }, 400);
   const requestedLocationId = body.location_id ? body.location_id : null;
+  const chosenCatalogId = body.catalog_id ? body.catalog_id : null;
+  if (chosenCatalogId && !requestedLocationId) {
+    return json({ ok: false, error: "Para elegir catálogo hace falta el local (location_id)." }, 400);
+  }
 
   // ── Autorización por RLS: leer la marca con el cliente del USUARIO ─────────
   const { data: brand, error: brErr } = await sbUser
@@ -240,8 +273,44 @@ Deno.serve(async (req: Request) => {
   const results: CatalogResult[] = [];
 
   for (const t of targets) {
+    // Elegir catálogo (C08): solo uno de los que existen en esa location.
+    if (chosenCatalogId) {
+      const cats = await catalogosDeLaLocation(writerToken, t.externalLocationId);
+      const elegido = cats?.find((c) => c.id === chosenCatalogId);
+      if (!elegido) {
+        results.push({
+          location_id: t.locationId, external_location_id: t.externalLocationId, location_name: t.locationName,
+          status: "error", external_catalog_id: chosenCatalogId,
+          error: cats ? `El catálogo ${chosenCatalogId} no está en esta location de HubRise.` : "No se ha podido leer la lista de catálogos de HubRise.",
+        });
+        continue;
+      }
+      const { error: upErr } = await sb.from("brand_hubrise_catalog").upsert({
+        account_id: accountId, brand_id: brandId, location_id: t.locationId,
+        external_location_id: t.externalLocationId, external_catalog_id: elegido.id,
+        hubrise_catalog_name: elegido.name, created_by: user.id,
+      }, { onConflict: "account_id,brand_id,external_location_id" });
+      results.push(upErr
+        ? { location_id: t.locationId, external_location_id: t.externalLocationId, location_name: t.locationName,
+            status: "error", external_catalog_id: elegido.id, error: `no se pudo guardar el catálogo elegido: ${upErr.message}` }
+        : { location_id: t.locationId, external_location_id: t.externalLocationId, location_name: t.locationName,
+            status: "elegido", external_catalog_id: elegido.id });
+      continue;
+    }
+
     const already = existingByLoc.get(t.externalLocationId);
     if (already) {
+      // ¿Sigue existiendo en HubRise? Si no, se dice y se dan los que sí hay.
+      const existe = await catalogoExiste(writerToken, already).catch(() => null);
+      if (existe === false) {
+        const cats = await catalogosDeLaLocation(writerToken, t.externalLocationId).catch(() => null);
+        results.push({
+          location_id: t.locationId, external_location_id: t.externalLocationId, location_name: t.locationName,
+          status: "catalogo_perdido", external_catalog_id: already, catalogos: cats ?? [],
+          error: `El catálogo ${already} ya no existe en HubRise: elige uno de los que hay en este local.`,
+        });
+        continue;
+      }
       results.push({
         location_id: t.locationId, external_location_id: t.externalLocationId,
         location_name: t.locationName, status: "ya_conectada", external_catalog_id: already,
@@ -320,7 +389,9 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const anyCatalogReady = results.some((r) => r.status !== "error");
+  // Con un catálogo perdido no se publica: iría a un catálogo que no existe.
+  const anyLost = results.some((r) => r.status === "catalogo_perdido");
+  const anyCatalogReady = !anyLost && results.some((r) => r.status !== "error");
 
   // ── Publicar la carta -- REUSA hubrise-catalog-publish (mismo JWT de usuario) ──
   //
@@ -355,7 +426,7 @@ Deno.serve(async (req: Request) => {
   }
 
   return json({
-    ok: results.every((r) => r.status !== "error"),
+    ok: results.every((r) => r.status !== "error" && r.status !== "catalogo_perdido"),
     brand_id: brandId,
     // El alcance nunca queda implícito en el tamaño de `locations`: se dice
     // explícitamente si fue acotado (y a qué local) o barrido completo.

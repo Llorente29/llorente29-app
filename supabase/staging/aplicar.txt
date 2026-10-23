@@ -523,22 +523,3 @@ supabase/staging/sql/20261208_d07a_diez_reenviar_prueba.sql
 # error en español; las demás listas; B no; y la vuelta atrás byte a byte.
 supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql
 supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql
-#
-# D07 + D07b · IVA no deducible con su motivo, la recibida de un periodo
-# cerrado y Uber fuera de recibidas (rama claude/cool-noether-i932tx, 23/10).
-# La 0850 cambia en caliente conta_impuesto_303_cajas y
-# conta_vat_book_desde_asiento (y añade dos columnas y una función): desde la
-# rama va en ROLLBACK. Su prueba (ROLLBACK): marcarlo con su motivo como
-# usuario de A (y B no); su camino entero —proponer, validar, el libro con
-# deducible 0 y fuera del 303—; la del periodo cerrado con su fecha de
-# factura y registrada el día del asiento; la vuelta atrás.
-supabase/migrations/20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.sql
-supabase/staging/sql/20261208_d07_iva_no_deducible_prueba.sql
-# La 0860 cambia en caliente conta_liquidacion_factura_proponer (sin
-# provisional) y añade la de enlazar; la 0870 (datos de Foodint) aquí no quita
-# nada. Su prueba (ROLLBACK): dos liquidaciones de la semana sin provisional;
-# la factura de verdad enlazada con las dos; lo que no se enlaza; B no; la
-# vuelta atrás de la 0870 con datos y la de la 0860.
-supabase/migrations/20261208T0860_d07_uber_liquidaciones.sql
-supabase/migrations/20261208T0870_d07_uber_quitar_provisionales.sql
-supabase/staging/sql/20261208_d07_uber_liquidaciones_prueba.sql

@@ -1,12 +1,11 @@
-# Tanda de producción viva: D07 + D07b (PR 2 del 23/10) · el IVA no deducible
+# Tanda de la rama claude/cool-noether-i932tx (#300, C10: una tanda por rama): D07 + D07b (PR 2 del 23/10) · el IVA no deducible
 # con su motivo, la recibida de un periodo cerrado, y Uber fuera de «Facturas
-# recibidas» (camino B). Rama claude/cool-noether-i932tx. Números 0850 a 0870:
-# por encima del más alto que existe (la 0840 del #299).
+# recibidas» (camino B). Números 0850 a 0870: conservan su nombre
+# (ANTIGUAS_ABIERTAS de scripts/conta/produccion/nombres.mjs).
 #
-# La tanda anterior (D07a + D07c, 0820 y 0830, con la 0840 del #299) va ANTES
-# y desde main, después de su fusión: su copia en
-# tests/conta/produccion/tanda-d07ac-diez-y-prepago-20261023.txt. Las dos no
-# tocan los mismos objetos.
+# La tanda del #299 (sumied/heredada: 0880, 0820 y 0830) va ANTES, desde main
+# después de su fusión. Las dos no tocan los mismos objetos.
+# Ésta se lanza desde esta rama, ANTES de fusionar, con el campo «tanda» vacío.
 #
 #   1. 0850 — CAMBIA en caliente, declarado en su cabecera con su prueba de
 #      staging: conta_impuesto_303_cajas (la no deducible fuera del 303) y
@@ -21,7 +20,8 @@
 #      liquidaciones esperan la factura de la semana. AUTORIZO con su nombre.
 #      Para si no son exactamente provisionales sin número, PDF ni asiento.
 # No toca el camino del pedido.
-# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+# Vuelta atrás: el vuelta-atras.txt de esta carpeta.
+# Staging: supabase/staging/tandas/sumied/claude-cool-noether-i932tx.txt.
 cuenta: scripts/conta/produccion/cuentas/d07-uber-y-no-deducible.sql
 supabase/migrations/20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.sql
 supabase/migrations/20261208T0860_d07_uber_liquidaciones.sql

@@ -164,3 +164,11 @@ describe('las capturas de inventario: de la rama sin frente que toca inventario'
     expect(repartir(nuestras, 'a').suyas).toEqual([])
   })
 })
+
+describe('fijar en una rama sin frente (C10, 23/10)', () => {
+  it('se salta con 0 y lo dice: no pone el run en rojo', async () => {
+    const { execFileSync } = await import('node:child_process')
+    const out = execFileSync('node', ['scripts/conta/capturas.mjs', 'fijar', 'conta/c08b-catalogo-perdido'], { encoding: 'utf8' })
+    expect(out).toContain('no hay capturas que fijar (se salta)')
+  })
+})

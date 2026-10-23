@@ -1,0 +1,4 @@
+# Vuelta atrás de la tanda viva · C08 (0840): la fila de Lovers Burgers en
+# Carabanchel, otra vez al q3v47.
+cuenta: scripts/conta/produccion/cuentas/c08-lovers-catalogo.sql
+supabase/vuelta-atras/20261208T0840_c08_lovers_catalogo_2qjdb.down.sql

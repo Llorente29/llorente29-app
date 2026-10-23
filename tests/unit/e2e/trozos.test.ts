@@ -111,7 +111,9 @@ describe('el workflow de la e2e (W02)', () => {
     const plan = wf.slice(wf.indexOf('- name: Frente'), wf.indexOf('  trozo:'))
     expect(plan).toContain('git diff --name-only "origin/main...$GITHUB_SHA"')
     expect(plan).toContain('node scripts/e2e/area.mjs "$GITHUB_REF_NAME" --cambiados "$RUNNER_TEMP/cambiados.txt" --etiquetas "$ETIQUETAS"')
-    expect(plan).toMatch(/if \[ "\$\(sed -n 's\/\^entera=\/\/p' "\$RUNNER_TEMP\/decision.txt"\)" = true \]; then\n\s+PRUEBAS=\n/)
+    // C10 (23/10): la entera puede ir acotada a un producto (Sumied o Folvy): las pruebas las da area.mjs, y va en trozos.
+    expect(plan).toMatch(/if \[ "\$\(sed -n 's\/\^entera=\/\/p' "\$RUNNER_TEMP\/decision.txt"\)" = true \]; then\n[^\n]*\n\s+PRUEBAS=\$\(sed -n 's\/\^pruebas=\/\/p' "\$RUNNER_TEMP\/decision.txt"\); ENTERA=1\n/)
+    expect(plan).toContain('[ -z "${PRUEBAS:-}" ] || [ "${ENTERA:-0}" = 1 ] || N=1')
     expect(plan).toMatch(/\[ -n "\$PRUEBAS" \] \|\| \{/)
   })
 
