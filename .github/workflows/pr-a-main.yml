@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   revisar:
@@ -39,3 +40,32 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/pr/revisar-pr.mjs "$BASE" "$HEAD"
+      # C10 (23/10): el nombre de cada migración nueva, en su formato y sin
+      # repetir en main ni en los demás PR abiertos.
+      - name: Cada PR edita solo su tanda (C10)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          RAMA: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git diff --name-only --diff-filter=d "$BASE...$HEAD" > /tmp/cambiados.txt
+          node scripts/conta/produccion/tanda.mjs ajenos "$RAMA" /tmp/cambiados.txt
+
+      - name: Nombres de las migraciones nuevas
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          ESTE: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          git diff --name-only --diff-filter=A "$BASE...$HEAD" -- supabase/migrations > /tmp/nuevas.txt || true
+          git ls-tree --name-only "$BASE" -- supabase/migrations/ > /tmp/main.txt
+          : > /tmp/prs.txt
+          for n in $(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --limit 100 --json number -q '.[].number'); do
+            [ "$n" = "$ESTE" ] && continue
+            gh api "repos/$GITHUB_REPOSITORY/pulls/$n/files?per_page=100" --paginate -q '.[] | select(.status == "added") | .filename' | grep '^supabase/migrations/' >> /tmp/prs.txt || true
+          done
+          echo "Migraciones nuevas en este PR: $(wc -l < /tmp/nuevas.txt) · en main: $(wc -l < /tmp/main.txt) · en otros PR abiertos: $(wc -l < /tmp/prs.txt)."
+          node scripts/conta/produccion/nombres.mjs revisar /tmp/nuevas.txt /tmp/main.txt /tmp/prs.txt

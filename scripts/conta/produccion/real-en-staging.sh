@@ -7,7 +7,7 @@
 # cada fichero (analizar.mjs registro), deshacer.sh y cuentas-comparar.mjs.
 #
 #   0. Preparar: si staging tiene la tanda puesta (run 144), se deshace con la
-#      vuelta atrás de producción (supabase/produccion/vuelta-atras.txt), y
+#      vuelta atrás de la tanda de la rama (C10: supabase/produccion/tandas/<producto>/<rama>/vuelta-atras.txt), y
 #      supabase/staging/sql/20261020_r9_preparar.sql deja a la empresa A con
 #      días propuestos enteros, como estaba Foodint el 13/10.
 #   1. Antes: lo que la tanda declara que cuenta, D1 y el recuento de serie.
@@ -53,7 +53,9 @@ fi
 # 0 · Preparar.
 if [ "$(q -c "select to_regclass('public.conta_ventas_canal') is not null")" = "t" ]; then
   echo "- Staging tiene la tanda puesta: se deshace con la vuelta atrás de producción, en orden." >> "$INFORME"
-  grep -vE '^\s*(#|$|cuenta:)' supabase/produccion/vuelta-atras.txt | while IFS= read -r d; do
+  VA="$(node scripts/conta/produccion/tanda.mjs carpeta)/vuelta-atras.txt"
+  [ -f "$VA" ] || { echo "::error::Preparar: la rama no tiene tanda (supabase/produccion/tandas/<producto>/<rama>/vuelta-atras.txt)."; exit 1; }
+  grep -vE '^\s*(#|$|cuenta:)' "$VA" | while IFS= read -r d; do
     # La 0125 de staging, si está, va antes que la 0120 (orden inverso).
     if [ "$(basename "$d")" = "20261020T0120_ventas_por_plataforma_foodint.down.sql" ]; then
       f=supabase/staging/vuelta-atras/20261020T0125_ventas_por_plataforma_regla_a.down.sql

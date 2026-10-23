@@ -193,8 +193,19 @@ async function documentoALaVista(page: Page): Promise<Locator> {
 }
 
 async function abrir(page: Page, p: Preparada) {
-  await page.goto(ficha(p.id))
-  await expect(page.locator('[data-prueba="ficha-recibida"]')).toBeVisible({ timeout: 30_000 })
+  // C10 (23/10): el D03 falló una vez aquí, en el móvil, al volver a abrir la
+  // ficha justo después de «Salir sin guardar» por el menú. El goto llega con
+  // la lista de recibidas todavía cargando sus consultas y, con staging lento,
+  // la ficha no se pintó en 30 s. Se espera a que la página cargue y, si la
+  // ficha no sale, se recarga UNA vez: si tampoco sale, falla como antes.
+  const laFicha = page.locator('[data-prueba="ficha-recibida"]')
+  await page.goto(ficha(p.id), { waitUntil: 'load' })
+  try {
+    await expect(laFicha).toBeVisible({ timeout: 20_000 })
+  } catch {
+    await page.reload({ waitUntil: 'load' })
+    await expect(laFicha).toBeVisible({ timeout: 30_000 })
+  }
   await expect(page.getByRole('heading', { level: 1, name: `Mayorista Prueba Alfa · ${p.numero}` })).toBeVisible({ timeout: 30_000 })
   await documentoALaVista(page)
 }
@@ -466,6 +477,8 @@ test('D03 · salir con un cambio sin guardar, por el menú y con ‹ ›: avisa,
     await expect(aviso).toHaveCount(0)
     await expect(page).toHaveURL(/\/conta\/documentos(\?|$)/)
     await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toBeVisible({ timeout: 20_000 })
+    // Que la lista acabe de cargar antes de irse: el goto de perdido() no se cruza con sus consultas.
+    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
     await perdido()
     expect(errores).toEqual([])
   } finally {
