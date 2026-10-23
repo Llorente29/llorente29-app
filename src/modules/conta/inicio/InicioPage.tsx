@@ -40,7 +40,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaBancos, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaMayor, rutaNuevoAsiento, rutaDocumentos, rutaTerceros } from '@/config/navegacion'
+import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaBancos, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaLiquidaciones, rutaMayor, rutaNuevoAsiento, rutaDocumentos, rutaTerceros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu, refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
@@ -67,6 +67,8 @@ import { usePasosDiez } from '@/modules/conta/diez/usePasosDiez'
 import { verTarjetaDiez } from '@/modules/conta/lib/pasosDiez'
 import { leerCierres } from '@/modules/conta/services/diarioService'
 import { useImpuestoEmpresa } from '@/modules/conta/hooks/useImpuestoEmpresa'
+import { leerPlataforma } from '@/modules/conta/services/liquidacionesService'
+import { fraseSemanaSinFactura, semanasSinFactura } from '@/modules/conta/compras/liquidaciones'
 
 type Carga<T> = { estado: 'cargando' } | { estado: 'listo'; v: T } | { estado: 'fallo'; texto: string }
 
@@ -110,6 +112,7 @@ export default function InicioPage() {
         </div>
       )}
       <Diez accountId={accountId} companyId={activa.id} quien={userName} />
+      <FacturasDePlataforma accountId={accountId} companyId={activa.id} hoy={hoy} />
       <Cifras accountId={accountId} companyId={activa.id} mes={mes} hoy={hoy} />
       <div className="cxi-cuerpo">
         <Dudas accountId={accountId} companyId={activa.id} />
@@ -135,6 +138,29 @@ function Diez({ accountId, companyId, quien }: { accountId: string; companyId: s
   if (e === null || e === 'fallo') return null
   if (!verTarjetaDiez(e.listo, e.programa)) return null
   return <PasosDiez accountId={accountId} companyId={companyId} quien={quien} estado={e} recargar={recargar} />
+}
+
+// ── D07 · La factura de comisión de la semana que no ha llegado ─────────────
+
+/**
+ * D07 (Julio, 23/10, camino B): la factura de comisión de Uber llega cada
+ * semana, con su PDF, y se enlaza con sus liquidaciones. Si una semana no
+ * llega (7 días después de acabar), se avisa aquí, con su semana y lo que la
+ * espera. Es un aviso que interrumpe: sin semanas pendientes, no sale.
+ */
+function FacturasDePlataforma({ accountId, companyId, hoy }: { accountId: string; companyId: string; hoy: string }) {
+  const [c] = useCarga(() => leerPlataforma(accountId, companyId), `${accountId}|${companyId}|plataforma`)
+  if (c.estado === 'fallo') return <p className="cx-aviso" role="alert">No se ha podido mirar si faltan facturas de comisión de las plataformas: {c.texto}</p>
+  if (c.estado !== 'listo') return null
+  const semanas = semanasSinFactura(c.v, hoy)
+  if (!semanas.length) return null
+  return (
+    <div className="cx-aviso" role="status" aria-label="Facturas de comisión que faltan" data-prueba="falta-factura-plataforma">
+      {semanas.slice(0, 3).map((x) => <p key={`${x.canal}|${x.hasta}`}>{fraseSemanaSinFactura(x)}</p>)}
+      {semanas.length > 3 && <p>Y {semanas.length - 3} semanas más.</p>}
+      <Link to={`${rutaLiquidaciones()}?tipo=plataforma`}>Ver las liquidaciones de plataforma</Link>
+    </div>
+  )
 }
 
 // ── Cabecera ────────────────────────────────────────────────────────────────

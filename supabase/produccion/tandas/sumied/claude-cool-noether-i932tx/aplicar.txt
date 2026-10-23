@@ -1,0 +1,28 @@
+# Tanda de la rama claude/cool-noether-i932tx (#300, C10: una tanda por rama): D07 + D07b (PR 2 del 23/10) · el IVA no deducible
+# con su motivo, la recibida de un periodo cerrado, y Uber fuera de «Facturas
+# recibidas» (camino B). Números 0850 a 0870: conservan su nombre
+# (ANTIGUAS_ABIERTAS de scripts/conta/produccion/nombres.mjs).
+#
+# La tanda del #299 (sumied/heredada: 0880, 0820 y 0830) va ANTES, desde main
+# después de su fusión. Las dos no tocan los mismos objetos.
+# Ésta se lanza desde esta rama, ANTES de fusionar, con el campo «tanda» vacío.
+#
+#   1. 0850 — CAMBIA en caliente, declarado en su cabecera con su prueba de
+#      staging: conta_impuesto_303_cajas (la no deducible fuera del 303) y
+#      conta_vat_book_desde_asiento (la recibida conserva su fecha de factura y
+#      se registra el día del asiento). AÑADE las dos columnas del motivo y
+#      conta_recibida_iva_no_deducible.
+#   2. 0860 — CAMBIA en caliente, declarado: conta_liquidacion_factura_proponer
+#      ya no crea la factura provisional de comisión. AÑADE
+#      conta_liquidacion_enlazar_factura.
+#   3. 0870 — DATOS de Foodint: las 8 facturas provisionales de PORTIER
+#      (FAC-00007, FAC-00091…00097), respaldadas y fuera de recibidas; sus
+#      liquidaciones esperan la factura de la semana. AUTORIZO con su nombre.
+#      Para si no son exactamente provisionales sin número, PDF ni asiento.
+# No toca el camino del pedido.
+# Vuelta atrás: el vuelta-atras.txt de esta carpeta.
+# Staging: supabase/staging/tandas/sumied/claude-cool-noether-i932tx.txt.
+cuenta: scripts/conta/produccion/cuentas/d07-uber-y-no-deducible.sql
+supabase/migrations/20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.sql
+supabase/migrations/20261208T0860_d07_uber_liquidaciones.sql
+supabase/migrations/20261208T0870_d07_uber_quitar_provisionales.sql

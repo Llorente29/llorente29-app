@@ -560,6 +560,8 @@ export interface EntradaFactura {
    * recibidas como deducible (supplier_invoice.vat_non_deductible).
    */
   ivaNoDeducible?: boolean
+  /** D07 · Por qué no se deduce, dicho para la persona («el ticket no lleva NIF»). Sin él, «no va a nombre de tu empresa». */
+  motivoNoDeducible?: string | null
   /**
    * D01 · Liquidaciones: el IVA tal como lo dice la factura, por tipo (la de
    * comisión de Uber: la base del total y su cuota, que a veces no es base ×
@@ -646,34 +648,41 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
   const gastos = new Map<string, number>()
   for (const l of f.lineas) gastos.set(l.cuentaGasto!, (gastos.get(l.cuentaGasto!) ?? 0) + cent(l.base))
   if (f.ivaNoDeducible) {
-    // La cuota, por cuenta de gasto y tipo, se suma a su gasto: no hay 472.
-    const porCuentaTipo = new Map<string, { cuenta: string; pct: number; base: number }>()
+    // La cuota, por cuenta de gasto y tipo, va a su gasto: no hay 472.
+    // D07 · En su PROPIA línea, en la cuenta de gasto, con su tipo y su base, al
+    // libro de recibidas como NO deducible: sale en el libro registro (con
+    // deducible 0) y no entra en el 303 (conta_impuesto_303_cajas, 0840).
+    const porCuentaTipo = new Map<string, { cuenta: string; pct: number; tipoId: string | null; base: number }>()
     for (const l of f.lineas) {
       const pct = l.tipo?.porcentaje ?? 0
       const k = `${l.cuentaGasto}|${pct}`
-      const x = porCuentaTipo.get(k) ?? { cuenta: l.cuentaGasto!, pct, base: 0 }
+      const x = porCuentaTipo.get(k) ?? { cuenta: l.cuentaGasto!, pct, tipoId: l.tipo?.id ?? null, base: 0 }
       x.base += cent(l.base)
       porCuentaTipo.set(k, x)
     }
     let ivaNd = 0
+    for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
     for (const x of porCuentaTipo.values()) {
       if (!x.pct) continue
       const cuota = cent(cuotaIva(deCent(x.base), x.pct))
+      if (!cuota) continue
       ivaNd += cuota
-      gastos.set(x.cuenta, (gastos.get(x.cuenta) ?? 0) + cuota)
+      lineas.push({ cuenta: x.cuenta, debe: deCent(cuota), haber: 0, localId: loc, comun: !loc, documento: f.numero,
+        concepto: `IVA no deducible ${x.pct} %`,
+        ...(x.tipoId ? { iva: { tipoId: x.tipoId, tipo: x.pct, base: deCent(x.base), libro: 'received' as const, deducible: 'no' as const } } : {}) })
     }
-    for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
     const totalNd = f.lineas.reduce((t, l) => t + cent(l.base), 0) + ivaNd
     lineas.push({ cuenta: c.proveedor, debe: 0, haber: deCent(totalNd), localId: loc, comun: !loc, documento: f.numero, terceroId: f.terceroId })
     if (totalNd !== cent(f.total)) { avisos.push(`Base + IVA = ${eurosExactos(deCent(totalNd))}, y la factura dice ${eurosExactos(f.total)}.`); confs.push('duda') }
-    razones.push({ decision: 'IVA como más gasto', porque: 'la factura no va a nombre de tu empresa: su IVA no se descuenta, no va a la 472 ni al libro de recibidas como deducible' })
+    const porQueNd = f.motivoNoDeducible ?? 'la factura no va a nombre de tu empresa'
+    razones.push({ decision: 'IVA no deducible: más gasto', porque: `${porQueNd}: su IVA no se descuenta. Va a su gasto, no a la 472; sale en el libro de recibidas como no deducible y no entra en el 303` })
     if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
     return {
       sinPropuesta: null,
       propuesta: {
         serie: 2, fecha: f.fecha, concepto: `Factura ${f.proveedor}${f.numero ? ` · ${f.numero}` : ''} (sin descontar el IVA)`, origen: { tipo: 'supplier_invoice', id: f.id },
         lineas, confianza: peor('seguro', ...confs),
-        porque: 'Gasto con su IVA dentro y el total a su cuenta: la factura no va a nombre de tu empresa.',
+        porque: `Gasto con su IVA dentro y el total a su cuenta: ${porQueNd}.`,
         razones, avisos, terceroId: f.terceroId, documento: f.numero,
       },
     }

@@ -13,7 +13,7 @@ import { verPropuestasFacturas } from '@/modules/conta/services/propuestasLibroS
 import { apuntarFactura, leerFactura, leerFichaRecibida, type ExtraFactura } from '@/modules/conta/services/documentosService'
 import type { TipoVeredicto } from '@/modules/conta/diseno/plantillas'
 import { comprobacionesSinContradecir } from './RevisarFacturaPage.textos'
-import { veredictoFactura, type Comprobacion } from './veredicto'
+import { TITULO_PREPARANDO, veredictoFactura, type Comprobacion } from './veredicto'
 import { cargoDeLaTarjeta, duplicadas, faltaDocumento, textoDuplicada, type CargoBanco } from './paraValidar'
 import type { FilaDocumento } from './documentos'
 
@@ -22,6 +22,8 @@ export interface ParaValidar {
   tipo: TipoVeredicto
   /** El motivo, en una frase (el de su ficha). */
   motivo: string
+  /** D07b · Su asiento aún se está preparando: la fila dice «Comprobando…» en gris, no «No está lista». */
+  comprobando: boolean
   /** La cuenta de gasto de su asiento (la de más importe al debe que no es IVA), para el reparto. */
   cuenta: { codigo: string; nombre: string } | null
 }
@@ -81,7 +83,7 @@ export async function leerParaValidar(accountId: string, companyId: string, fila
     })
     const gasto = p?.lineas.filter((l) => (l.debe ?? 0) > 0 && !/^47[23]/.test(l.cuenta) && !/^4[0-4]/.test(l.cuenta)).sort((a, b) => (b.debe ?? 0) - (a.debe ?? 0))[0]
     fuera.set(x.id, {
-      lista: v.tipo === 'lista', tipo: v.tipo, motivo: v.porque,
+      lista: v.tipo === 'lista', tipo: v.tipo, motivo: v.porque, comprobando: v.titulo === TITULO_PREPARANDO,
       cuenta: gasto ? { codigo: gasto.cuenta, nombre: vistas.nombres.get(gasto.cuenta) ?? x.entendido?.nombre ?? 'Cuenta' } : x.entendido ? { codigo: x.entendido.cuenta, nombre: x.entendido.nombre } : null,
     })
   }

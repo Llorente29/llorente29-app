@@ -44,6 +44,10 @@ import { calcularVencimiento } from '@/modules/conta/lib/cifras'
 import { vencimientoAEnsenar } from '@/modules/conta/documentos/documentos'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
+import { IvaNoDeducibleFicha } from '@/modules/conta/documentos/IvaNoDeducibleFicha'
+import { LiquidacionesDeLaFactura } from '@/modules/conta/documentos/LiquidacionesDeLaFactura'
+import { completarFicha, enUnaFrase } from '@/modules/conta/lib/fichaDesdeDocumento'
+import { guardarFicha, obtenerFicha } from '@/modules/conta/services/proveedorService'
 import {
   apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, ponerPapelRecibida, sinPapelRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida,
   plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura, urlDelPapel, verPropuestaFactura, type Apuntada,
@@ -120,7 +124,7 @@ export default function RevisarFacturaPage() {
   const { desde, hasta } = ventanaDe(filtros.mes, hoy)
   // D04: la misma lectura que la barra (colaRecibidas).
   const lista = useLeer(empresa && accountId ? () => colaRecibidas(accountId, empresa, desde, hasta, filtros) : null,
-    `${empresa}:${desde}:${hasta}:${search}:${vuelta}`)
+    `${accountId}:${empresa}:${desde}:${hasta}:${search}:${vuelta}`)
   const ids = useUltimo(lista.datos, `${empresa}:${search}`) ?? []
   const pos = ids.indexOf(invoiceId)
 
@@ -139,16 +143,18 @@ export default function RevisarFacturaPage() {
     `${invoiceId}:papel:${ficha ? 'ficha' : '-'}:${fac?.llegada?.ruta ?? fac?.papel ?? ficha?.lectura?.ruta ?? ''}`)
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo:${vuelta}`)
   // D07a · Validada: su asiento DE VERDAD (sus apuntes), con su enlace; no solo «Ya tiene su asiento».
-  const asientoReal = useLeer(fac?.asiento && accountId ? () => leerAsiento(accountId, fac.asiento!.id) : null, `${invoiceId}:asiento:${fac?.asiento?.id ?? '-'}:${vuelta}`)
+  const asientoReal = useLeer(fac?.asiento && accountId ? () => leerAsiento(accountId, fac.asiento!.id) : null, `${accountId}:${invoiceId}:asiento:${fac?.asiento?.id ?? '-'}:${vuelta}`)
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento && localPropuesto !== undefined
     ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!, localPropuesto) : null,
-  `${invoiceId}:${fac?.estado}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
+  `${accountId}:${invoiceId}:${fac?.company_id}:${fac?.fecha}:${fac?.asiento ? 'con' : 'sin'}-asiento:${fac?.estado}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
   const extra = useLeer(accountId && invoiceId ? () => leerExtrasFacturas(accountId, [invoiceId]).then((m) => m.get(invoiceId) ?? null) : null, `${accountId}:${invoiceId}:extra:${vuelta}`)
   const proveedores = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores`)
-  const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:locales`)
+  const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales`)
   const cuentas = useLeer(accountId && fac?.company_id ? () => cuentasDeGasto(accountId, fac.company_id!) : null, `${accountId}:${fac?.company_id}:gastos`)
   const tiposIva = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva`)
-  const descarte = useLeer(fac?.estado === 'descartada' ? () => leerDescarte(fac.id) : null, `${invoiceId}:${fac?.estado}:descarte:${vuelta}`)
+  // D07b · La ficha del proveedor, completada desde el documento (lo que le falta; si lo contradice, se avisa).
+  const fichaProv = useLeer(accountId && fac?.proveedor?.id ? () => obtenerFicha(fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id ?? '-'}:ficha-proveedor:${vuelta}`)
+  const descarte = useLeer(fac?.estado === 'descartada' ? () => leerDescarte(fac.id) : null, `${invoiceId}:${fac?.id ?? '-'}:${fac?.estado}:descarte:${vuelta}`)
 
   // La propuesta y la cuenta de gasto propuesta (la de su primera línea de gasto, o la de sus facturas).
   const propuesta = fac?.asiento ? undefined : vista.datos ? (vista.datos.propuesta ?? null) : vista.error ? null : undefined
@@ -164,7 +170,15 @@ export default function RevisarFacturaPage() {
   // D06: lo que el documento dice del pago («Pagado con tarjeta …»), y si puede estar repetida.
   const textoPago = textoDePago(fac?.lectura ?? fac?.leido_en_recepcion?.modelo ?? null)
   const conTarjeta = pagadaConTarjeta(textoPago)
-  const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${invoiceId}:${fac?.proveedor?.id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`)
+  const desdeDocumento = useMemo(() => {
+    const p = fac?.lectura?.factura?.proveedor
+    const fp = fichaProv.datos
+    if (!p || !fp) return null
+    const c = completarFicha({ nif: fp.taxId, nombreFiscal: fp.legalName, calle: fp.fiscalStreet, codigoPostal: fp.fiscalPostalCode, ciudad: fp.fiscalCity },
+      { nif: p.nif, nombre: p.nombre, direccion: p.direccion })
+    return c.frases.length || c.contradice.length ? c : null
+  }, [fac?.lectura, fichaProv.datos])
+  const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${accountId}:${invoiceId}:${fac ? 'leida' : '-'}:${fac?.proveedor?.id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`)
   const original = useMemo<BorradorFicha>(() => {
     if (!fac) return VACIO
     const datos = {
@@ -295,6 +309,13 @@ export default function RevisarFacturaPage() {
     setApuntando(true)
     try {
       const r = await apuntarFactura(fac, userName, userId, localPropuesto ?? null)
+      // D07b: lo que le faltaba a la ficha del proveedor y trae el documento, guardado al validar.
+      if (r.validado && desdeDocumento?.frases.length && fac.proveedor?.id) {
+        try {
+          await guardarFicha(fac.proveedor.id, desdeDocumento.proponer)
+          r.texto += ` Ficha de ${fac.proveedor.nombre ?? 'su proveedor'} completada con ${enUnaFrase(desdeDocumento.frases)}, del documento.`
+        } catch (e) { r.texto += ` No se ha podido completar la ficha del proveedor: ${e instanceof Error ? e.message : String(e)}.` }
+      }
       // D06: pagada con tarjeta → se casa con el cargo del banco (mismo importe, en los 5 días siguientes).
       if (r.validado && conTarjeta && !extra.datos?.pagada && fac.total !== null) {
         const cuentaProveedor = propuesta?.lineas.find((l) => l.haber > 0 && /^4[01]/.test(l.cuenta))?.cuenta
@@ -465,11 +486,20 @@ export default function RevisarFacturaPage() {
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} soloLectura={soloLectura}
         tonoProveedor={mProv.tono} motivoProveedor={mProv.marca ? `${mProv.marca}${prov?.nif ? ` · NIF ${prov.nif}` : ''}` : mProv.motivo}
         motivoNumero={fac.no_repetida ? 'No está repetida: lo confirmaste.' : fac.numero ? 'No hay otra con su número y su total.' : 'Sin número no es una factura completa.'} />
+      {/* D07b · La ficha del proveedor, desde el documento: una nota bajo «Proveedor y factura», solo si hay algo que decir. */}
+      {!soloLectura && desdeDocumento && (
+        <div className="cxf-desde-documento" aria-label="Su ficha, desde el documento">
+          {desdeDocumento.frases.length > 0 && <p className="s-apoyo">A la ficha de {proveedor} le falta {enUnaFrase(desdeDocumento.frases)}: lo trae el documento y lo guardo al validar.</p>}
+          {desdeDocumento.contradice.map((x) => <p key={x} className="s-aviso-lista" data-tono="duda">{x} No cambio su ficha: mira cuál vale.</p>)}
+        </div>
+      )}
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={tiposIva.datos ?? [21, 10, 4, 0]} totales={totales} pdf={pdf}
         fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} />
       {mImportes.tono === 'revisar' && <p className="cxf-error" role="status">{mImportes.motivo}</p>}
+      {!descartada && <IvaNoDeducibleFicha accountId={accountId} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alGuardar={() => setVuelta((x) => x + 1)} />}
+      {!descartada && <LiquidacionesDeLaFactura accountId={accountId} supplierId={fac.proveedor?.id ?? null} invoiceId={invoiceId} fecha={fac.fecha} total={fac.total} soloLectura={descartada} quien={userName} />}
       <BloqueGasto gastos={b.gastos} base={totales.base} cuentas={cuentas.datos ?? []} locales={ejeLocal ? locales.datos ?? [] : null} nombreEje={ejeLocal?.nombre ?? 'Local'}
         alCambiar={(g) => ed.poner('gastos', g)} cambio={ed.cambioDe('gastos')} alDeshacer={() => ed.deshacer('gastos')} soloLectura={soloLectura}
         tono={mGasto.tono} motivo={[mGasto.motivo, !ficha?.localId && ficha?.recepcion?.local ? `El local sale de la recepción del ${fechaEs(ficha.recepcion.fecha).slice(0, 5)}.` : null].filter(Boolean).join(' ')} />

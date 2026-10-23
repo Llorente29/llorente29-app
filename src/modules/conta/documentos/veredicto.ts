@@ -21,6 +21,9 @@
 import type { TipoVeredicto, TonoCampo } from '@/modules/conta/diseno/plantillas'
 import { AVISO_NIF_LEIDO_MAL, casaNif } from './paraValidar'
 
+/** El veredicto mientras su asiento se prepara: no es «No está lista», es «Comprobando…». */
+export const TITULO_PREPARANDO = 'Preparando su asiento…'
+
 export interface Comprobacion { id: string; ok: boolean; texto: string; grave?: boolean }
 
 export interface DatosVeredicto {
@@ -145,7 +148,7 @@ export function veredictoFactura(d: DatosVeredicto): Veredicto {
     return { tipo: 'revisa', titulo: 'Revisa esto', porque: frase(motivo), detalle }
   }
   if (d.propuesta === undefined) {
-    return { tipo: 'revisa', titulo: 'Preparando su asiento…', porque: 'Estoy comprobando la cuenta y el IVA.', detalle }
+    return { tipo: 'revisa', titulo: TITULO_PREPARANDO, porque: 'Estoy comprobando la cuenta y el IVA.', detalle }
   }
   // Lista: se dice por qué, con lo que de verdad se ha comprobado.
   const partes: string[] = []

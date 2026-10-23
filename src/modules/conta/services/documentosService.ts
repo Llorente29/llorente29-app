@@ -273,7 +273,8 @@ export async function guardarExpedidaPdf(accountId: string, entryId: string, fic
  * guarda su PDF y lo manda a Diez. Se para donde falle y lo dice.
  */
 export async function apuntarFactura(f: FacturaRevisar, quien: string | null, userId: string | null, localPropuesto?: string | null): Promise<Apuntada> {
-  const a: Apuntada = { aprobada: f.estado === 'aprobada', asiento: f.asiento?.id ?? null, validado: f.asiento?.estado === 'validado', documento: false, enDiez: false, texto: '' }
+  // D07b · Pagada en el banco antes de validarla: ya está aprobada (cuenta como tal); le falta el asiento.
+  const a: Apuntada = { aprobada: f.estado === 'aprobada' || f.estado === 'pagada', asiento: f.asiento?.id ?? null, validado: f.asiento?.estado === 'validado', documento: false, enDiez: false, texto: '' }
   try {
     if (!f.company_id) throw new Error('la factura no dice de qué empresa es')
     if (!f.fecha) throw new Error('la factura no tiene fecha: dímela antes de apuntarla')

@@ -769,3 +769,26 @@ describe('R11 · paso 8 sobre la tanda del I01a (su copia, aplicada el 18/10), c
     expect(out).toContain('autorizo: 20261122T0130_i01_certificados.sql')
   })
 })
+
+describe('R11 · paso 8 sobre la tanda de la rama claude/cool-noether-i932tx (D07 + D07b, 0850–0870; C10), con su contexto medido', () => {
+  const correr = (fixture?: string) => {
+    try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe', env: { ...process.env, TANDA: 'claude-cool-noether-i932tx' } }) } }
+    catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
+  }
+  it('con el fichero medido: la 0850 y la 0860 siguen; la 0870, datos de Foodint, pide «autorizo»', () => {
+    const r = correr()
+    expect(r.rc).toBe(0)
+    expect(r.out).toContain('20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.sql: sigue')
+    expect(r.out).toContain('20261208T0860_d07_uber_liquidaciones.sql: sigue')
+    expect(r.out).toContain('20261208T0870_d07_uber_quitar_provisionales.sql: AUTORIZO')
+    expect(r.out).toContain('autorizo: 20261208T0870_d07_uber_quitar_provisionales.sql')
+  })
+  it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
+    const m = JSON.parse(readFileSync('supabase/produccion/tandas/sumied/claude-cool-noether-i932tx/contexto.json', 'utf8'))
+    m.tanda['supabase/migrations/20261208T0870_d07_uber_quitar_provisionales.sql'] = '00000000000000000000000000000000'
+    const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
+    const r = correr(f)
+    expect(r.rc).toBe(1)
+    expect(r.out).toContain('20261208T0870_d07_uber_quitar_provisionales.sql ha cambiado desde la medida')
+  })
+})

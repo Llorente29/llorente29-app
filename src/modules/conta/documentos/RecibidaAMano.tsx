@@ -69,7 +69,7 @@ export default function RecibidaAMano() {
   const proveedores = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores-a-mano`)
   const tipos = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva-recibida`)
   const { local: ejeLocal } = useAnalitica()
-  const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:locales-a-mano`)
+  const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales-a-mano`)
   const cuentas = useLeer(accountId && activa ? () => cuentasDeGasto(accountId, activa.id) : null, `${accountId}:${activa?.id}:gastos-a-mano`)
 
   const [b, setB] = useState<BorradorFicha>(() => leerGuardado(hoy))

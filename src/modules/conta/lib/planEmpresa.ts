@@ -379,3 +379,14 @@ export function limpiarPalabras(palabras: readonly string[]): string[] {
   }
   return out.slice(0, 20)
 }
+
+/**
+ * D07b · La hoja de la cuenta de un proveedor que no la tiene: 4000
+ * (proveedores) si lo que factura es compra (grupo 60, mercaderías y
+ * materias primas); si no —servicios, suministros, telefonía…—, 4100
+ * (acreedores por prestaciones de servicios). Sin gasto conocido, 4100.
+ */
+export function hojaDelProveedor(cuentaGasto: string | null): '4000' | '4100' {
+  return cuentaGasto && /^60/.test(cuentaGasto) ? '4000' : '4100'
+}
+

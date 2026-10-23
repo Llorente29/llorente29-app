@@ -34,7 +34,7 @@ import { EncabezadoLibro } from '@/modules/conta/libros/EncabezadoLibro'
 import { Chip, ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import {
-  COLUMNAS_BIENES, UMBRAL_347, agruparPorNif, cifrasLibro, cuadreConDiario, etiquetaTipo, faltaParaCompletar, filaBienes, filtrar, nombreFichero,
+  COLUMNAS_BIENES, UMBRAL_347, agruparPorNif, cifrasLibro, cuadreConDiario, esNoDeducible, etiquetaTipo, faltaParaCompletar, filaBienes, filtrar, nombreFichero,
   type AnotacionLibro, type FiltrosLibro, type Libro, type TipoFactura,
 } from '@/modules/conta/lib/libroRegistro'
 import { crearZip, nombresUnicos, type FicheroZip } from '@/modules/conta/lib/zip'
@@ -173,7 +173,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
                   return (
                     <tr key={a.id} className={a.voidedAt ? 'cxl-anulada' : undefined}>
                       <td>{ddmm(a.issueDate)}</td>
-                      <td><Link to={rutaAsiento(a.entryId)}>{[a.series, a.number].filter(Boolean).join('-') || 'sin número'}</Link><br /><span className="cxl-apoyo">{etiquetaTipo(a)}</span>{a.voidedAt && <> <Chip>anulada</Chip></>}{a.deducidaEn && <> <span title={a.deducidaPorque ?? undefined}><Chip tono="azul">deducida en el {a.deducidaEn}</Chip></span></>}</td>
+                      <td><Link to={rutaAsiento(a.entryId)}>{[a.series, a.number].filter(Boolean).join('-') || 'sin número'}</Link><br /><span className="cxl-apoyo">{etiquetaTipo(a)}</span>{a.voidedAt && <> <Chip>anulada</Chip></>}{a.deducidaEn && <> <span title={a.deducidaPorque ?? undefined}><Chip tono="azul">deducida en el {a.deducidaEn}</Chip></span></>}{esNoDeducible(a) && <> <span title="Su cuota va al gasto, no a la 472, y no entra en el 303." data-prueba="no-deducible"><Chip>no deducible</Chip></span></>}</td>
                       <td data-titulo={libro === 'issued' ? 'Destinatario' : 'Expedidor'}>{a.counterpartName ?? '—'}{a.counterpartTaxId && <><br /><span className="cxl-apoyo">{a.counterpartTaxId}</span></>}</td>
                       <td className="cxl-der" data-titulo="Base">{eurosExactos(a.taxBase)}</td><td className="cxl-der" data-titulo={imp.columnaTipo}>{a.taxRate === null ? '—' : `${a.taxRate} %`}</td>
                       <td className="cxl-der" data-titulo="Cuota">{eurosExactos(a.taxAmount)}</td><td className="cxl-der" data-titulo="Total">{a.total === null ? '—' : eurosExactos(a.total)}</td>
