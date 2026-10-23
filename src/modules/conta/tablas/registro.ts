@@ -221,7 +221,7 @@ export const TRATAMIENTO: Record<string, string> = {
   reverse_charge: 'Lo declaras tú (inversión del sujeto pasivo)', not_subject: 'No sujeto',
 }
 export const FORMA_PAGO: Record<string, string> = {
-  transfer: 'Transferencia', direct_debit: 'Domiciliación', card: 'Tarjeta', cash: 'Efectivo', other: 'Otra',
+  transfer: 'Transferencia', direct_debit: 'Domiciliación', card: 'Tarjeta', cash: 'Efectivo', other: 'Otra', prepaid: 'Saldo prepago Catcher (40700001)',
 }
 export const DOCUMENTO: Record<string, string> = {
   invoice: 'Factura', simplified: 'Factura simplificada (ticket)', rectifying: 'Factura rectificativa',

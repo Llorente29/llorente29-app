@@ -32,7 +32,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { rutaCompras, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
+import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
@@ -48,7 +48,7 @@ import {
   apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, ponerPapelRecibida, sinPapelRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida,
   plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura, urlDelPapel, verPropuestaFactura, type Apuntada,
 } from '@/modules/conta/services/documentosService'
-import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
+import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useAnalitica, useMarco } from '@/modules/conta/marco/nuevo/contexto'
@@ -138,6 +138,8 @@ export default function RevisarFacturaPage() {
     // `ficha ? …`: la lectura espera a la ficha; sin eso en la clave, si la factura ya traía su ruta, no se volvía a leer al llegar la ficha y se quedaba «Cargando».
     `${invoiceId}:papel:${ficha ? 'ficha' : '-'}:${fac?.llegada?.ruta ?? fac?.papel ?? ficha?.lectura?.ruta ?? ''}`)
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo:${vuelta}`)
+  // D07a · Validada: su asiento DE VERDAD (sus apuntes), con su enlace; no solo «Ya tiene su asiento».
+  const asientoReal = useLeer(fac?.asiento && accountId ? () => leerAsiento(accountId, fac.asiento!.id) : null, `${invoiceId}:asiento:${fac?.asiento?.id ?? '-'}:${vuelta}`)
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento && localPropuesto !== undefined
     ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!, localPropuesto) : null,
   `${invoiceId}:${fac?.estado}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
@@ -422,9 +424,14 @@ export default function RevisarFacturaPage() {
   const nombreCuenta = (c: string) => (cuentas.datos ?? []).find((x) => x.codigo === c)?.nombre ?? nombresProp?.get(c) ?? (prov?.gasto?.cuenta === c ? prov.gasto.nombre : 'Cuenta')
   const previa = cuentasProp ? asientoVistaPrevia(b, cuentasProp, nombreCuenta, nombreLocal) : null
   const lineasAsiento = fac.asiento
-    ? (propuesta?.lineas ?? []).map((x) => ({ nombre: nombresProp?.get(x.cuenta) ?? 'Cuenta', codigo: x.cuenta, debe: x.debe ? importeEs(x.debe) : null, haber: x.haber ? importeEs(x.haber) : null }))
+    ? (asientoReal.datos?.apuntes ?? []).map((x) => ({ nombre: x.nombreCuenta, codigo: x.cuenta, debe: x.debe ? importeEs(x.debe) : null, haber: x.haber ? importeEs(x.haber) : null }))
     : (previa?.lineas ?? []).map((x) => ({ nombre: x.nombre, codigo: x.codigo || '—', debe: x.debe !== null ? importeEs(x.debe) : null, haber: x.haber !== null ? importeEs(x.haber) : null, aMano: x.aMano }))
-  const notaAsiento = (
+  const notaAsiento = fac.asiento ? (
+    <>
+      <Link to={rutaAsiento(fac.asiento.id)} data-prueba="ver-asiento">Ver el asiento{fac.asiento.numero ? ` ${fac.asiento.numero}` : ''}</Link>
+      {` · ${fac.asiento.estado === 'validado' ? 'Validado' : mayuscula(fac.asiento.estado)}.`}
+    </>
+  ) : (
     <>
       {hayCambios ? 'Con cambios sin guardar, es la vista previa de cómo quedará: no se guarda ni se envía nada hasta «Guardar cambios». ' : ''}
       {previa?.faltan.length ? `Falta ${previa.faltan.join(', ')}. ` : ''}
@@ -475,7 +482,7 @@ export default function RevisarFacturaPage() {
       {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}
       <AsientoQueSeCrea titulo={fac.asiento ? 'Su asiento' : 'El asiento que se crea'} lineas={lineasAsiento} nota={notaAsiento}
         alEditar={!fac.asiento && !soloLectura ? () => setAMano((x) => !x) : undefined}
-        vacio={fac.asiento ? `Ya tiene su asiento (${fac.asiento.estado}${fac.asiento.numero ? `, el ${fac.asiento.numero}` : ''}).`
+        vacio={fac.asiento ? (asientoReal.error ? `No se ha podido leer su asiento${fac.asiento.numero ? ` (el ${fac.asiento.numero})` : ''}: ${asientoReal.error}` : 'Leyendo su asiento…')
           : vista.error ? `No se ha podido preparar: ${vista.error}` : vista.datos && !vista.datos.propuesta ? vista.datos.porque : 'Preparando el asiento…'} />
       {aMano && previa && (
         <EditarAsientoAMano lineas={previa.lineas.map((l) => ({ codigo: Object.entries(b.aMano).find(([, x]) => x === l.codigo && l.aMano)?.[0] ?? l.codigo, nombre: l.nombre, importe: importeEs(l.debe ?? l.haber ?? 0) }))}

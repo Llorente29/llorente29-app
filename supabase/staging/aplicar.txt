@@ -508,3 +508,18 @@ supabase/staging/sql/20261206_d03_recibida_guardar_prueba.sql
 supabase/migrations/20261207T0800_d06_prepago_y_pdf_bueno.sql
 supabase/migrations/20261207T0810_d06_riders_prepago.sql
 supabase/staging/sql/20261207_d06_prepago_y_pdf_prueba.sql
+#
+# D07a · las recibidas rechazadas por la descripción, otra vez a la cola
+# (rama claude/cool-noether-i932tx, 23/10). La 0820 es solo de Foodint: aquí no
+# hace nada. Su prueba (ROLLBACK): sin Foodint, ni la 0820 ni su vuelta atrás
+# tocan ningún envío; B no ve los de A.
+supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
+supabase/staging/sql/20261208_d07a_diez_reenviar_prueba.sql
+#
+# D07c · «Saldo prepago» en todas las listas de formas de pago (la misma rama
+# y la misma tanda que la 0820). La 0830 cambia en caliente dos funciones y
+# tres CHECK: desde la rama va en ROLLBACK (W05). Su prueba (ROLLBACK): guardar
+# en la ficha una recibida con «Saldo prepago Catcher» como usuario de A; el
+# error en español; las demás listas; B no; y la vuelta atrás byte a byte.
+supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql
+supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql

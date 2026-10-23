@@ -18,7 +18,8 @@
 //     sola 472 (47200000), aunque Folvy lleve una por tipo;
 //   · Fecha (del asiento) = FechaFactura en 833, posterior en 599: se manda la
 //     del asiento de Folvy; FechaIntroduccionFactura, el día en que se mete;
-//   · Descripcion «<número>-<nombre del proveedor>»;
+//   · Descripcion «<número>-<nombre del proveedor>», en 40 caracteres como
+//     mucho (D07a: Diez rechaza más), con el número entero;
 //   · sin analítica en ninguna recibida: no se manda.
 // Lo NO medido no se manda (se lanza, y se dice): retención (12 de 1.432, con
 // TipoRetencion sin descifrar), recargo (0), abonos, más de tres tipos, o una
@@ -43,6 +44,7 @@
 
 import type { FacturaData } from './diezCliente.ts'
 import { FORMA_ANULACION } from './diezFactura.ts'
+import { descripcionRecibida } from './diezTexto.ts'
 
 export type LineaRecibida = {
   cuenta: string; debe: number; haber: number; tipoIva?: number | null; baseIva?: number | null
@@ -117,7 +119,8 @@ export function facturaRecibida(a: AsientoRecibida, o: { hoy: string }): Factura
     if (bases !== total) throw new Error(`no cuadra: en una autoliquidada el proveedor factura la base (${e(bases)}) y el asiento le debe ${e(total)}`)
   } else if (bases + cuotas !== total) throw new Error(`no cuadra: bases ${e(bases)} + cuotas ${e(cuotas)} ≠ total ${e(total)}`)
 
-  const descripcion = `${numero}-${nombre}`
+  // D07a: en 40, con el número entero (Diez rechaza más; RIDERS ES I 34427 26 00014, asiento 3248).
+  const descripcion = descripcionRecibida(numero, nombre)
   const fecha = aaaammdd(a.fecha)
   const slots: Record<string, number> = {}
   tipos.forEach((t, i) => {

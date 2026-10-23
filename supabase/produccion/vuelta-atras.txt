@@ -1,8 +1,8 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# D06 · el saldo prepago de Riders y el PDF bueno que sustituye a la foto), en
-# orden inverso: primero RIDERS otra vez sin forma de pago (la 0810), luego la
-# 0800: conta_factura_desde_lectura la de antes, byte a byte, y los dos CHECK
-# sin 'prepaid' (para si alguna fila aún lo usa).
-cuenta: scripts/conta/produccion/cuentas/d06-prepago-y-pdf.sql
-supabase/vuelta-atras/20261207T0810_d06_riders_prepago.down.sql
-supabase/vuelta-atras/20261207T0800_d06_prepago_y_pdf_bueno.down.sql
+# D07a + D07c), en orden inverso: primero «Saldo prepago» fuera de las listas
+# que añadió la 0830 (las dos funciones byte a byte; para si alguna fila ya lo
+# usa), luego los envíos que siguen pendientes con el motivo de la 0820 dejan
+# de reintentarse.
+cuenta: scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql
+supabase/vuelta-atras/20261208T0830_d07c_prepago_en_todas_las_listas.down.sql
+supabase/vuelta-atras/20261208T0820_d07a_diez_reenviar_descripcion.down.sql

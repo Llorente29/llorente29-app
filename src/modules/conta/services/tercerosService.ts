@@ -187,7 +187,7 @@ export interface DatosFiscalesCliente {
   operationScope: 'domestic' | 'eu' | 'export'
   exclude347: boolean
   exclude347Reason: string | null
-  paymentMethod: 'transfer' | 'direct_debit' | 'card' | 'cash' | null
+  paymentMethod: 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid' | null
   paymentTermsDays: number | null
   paymentFixedDays: number[] | null
   collectionTreasuryId: string | null

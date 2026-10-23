@@ -537,20 +537,30 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (D06: la 0800 sigue; la 0810, datos de Riders, pide «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (D07a + D07c: la 0820, datos de Foodint, pide «autorizo»; la 0830 sigue)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261207T0800_d06_prepago_y_pdf_bueno.sql: sigue')
-    expect(r.out).toContain('20261207T0810_d06_riders_prepago.sql: AUTORIZO')
-    expect(r.out).toContain('autorizo: 20261207T0810_d06_riders_prepago.sql')
+    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql: AUTORIZO')
+    expect(r.out).toContain('20261208T0830_d07c_prepago_en_todas_las_listas.sql: sigue')
+    expect(r.out).toContain('autorizo: 20261208T0820_d07a_diez_reenviar_descripcion.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261207T0800_d06_prepago_y_pdf_bueno.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261207T0800_d06_prepago_y_pdf_bueno.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql ha cambiado desde la medida')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del D06 (0800 y 0810, su copia), con su contexto medido', () => {
+  it('la 0800 sigue; solo la 0810 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d06-prepago-y-pdf-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-d06-prepago-y-pdf-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261207T0800_d06_prepago_y_pdf_bueno.sql: sigue')
+    expect(out).toContain('20261207T0810_d06_riders_prepago.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261207T0810_d06_riders_prepago.sql')
   })
 })
 

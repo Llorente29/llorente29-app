@@ -1,24 +1,28 @@
-# Tanda de producción viva · D06 · bloque 1 de Compras y gastos: el saldo
-# prepago de Riders y el PDF bueno que sustituye a la foto (Julio, 23/10).
-# Rama claude/cool-noether-i932tx. Números 0800 y 0810: por encima del más alto
-# que existe (la 0790 del D03). La anterior de este fichero (D03, 0770–0790,
-# ya aplicada y fusionada en el #294): su copia en
-# tests/conta/produccion/tanda-d03-recibida-pdf-20261023.txt.
+# Tanda de producción viva · D07a + D07c (PR 1 del 23/10): las recibidas que
+# Diez rechazó por la descripción, otra vez a la cola, y «Saldo prepago» en
+# todas las listas de formas de pago (Julio, 23/10).
+# Rama claude/cool-noether-i932tx. Números 0820 y 0830: por encima del más alto
+# que existe (la 0810 del D06). La anterior de este fichero (D06, 0800 y 0810,
+# ya aplicada y fusionada en el #297): su copia en
+# tests/conta/produccion/tanda-d06-prepago-y-pdf-20261023.txt.
 #
-#   1. 0800 — CAMBIA en caliente, declarado en su cabecera con su prueba de
-#      staging: los dos CHECK de payment_method (supplier y supplier_invoice)
-#      admiten 'prepaid' (solo amplían), y conta_factura_desde_lectura (misma
-#      firma): el PDF de una factura que ya está con foto, del mismo proveedor,
-#      número y total, ocupa su sitio; la foto queda en su historial; no se
-#      crea otra. No toca filas.
-#   2. 0810 — DATOS de Foodint: RIDERS con «Saldo prepago Catcher» (prepaid).
-#      Cambia UNA fila que existe: AUTORIZO con su nombre. Para si no es RIDERS,
-#      si está archivado o si ya tiene otra forma de pago.
+#   1. 0820 — DATOS de Foodint: los envíos de RIDERS rechazados por
+#      `factura.Descripcion` de más de 40 caracteres, con attempts = 0 y
+#      next_try_at = ahora, para que la cola los vuelva a mandar. AUTORIZO con
+#      su nombre. Para si no hay ninguno o si son más de 200.
+#   2. 0830 — CAMBIA en caliente, declarado en su cabecera con su prueba de
+#      staging: conta_recibida_guardar y mark_supplier_invoice_paid admiten
+#      «prepaid» (y su error sale en español, con los nombres); los CHECK de
+#      supplier_invoice.paid_method, customer_fiscal y payment_method.kind lo
+#      admiten (solo amplían); y el catálogo, su fila «Saldo prepago Catcher».
 #
-# No toca el camino del pedido (ningún pedido escribe proveedores, recibidas ni
-# asientos). Ninguna función que desplegar: conta-facturas-entrada pasa el
-# estado nuevo tal cual. No sale nada a Diez.
+# ¡ORDEN, y es una excepción a «se aplica desde su rama antes de fusionar»!:
+# primero se fusiona y se despliegan conta-diez-cola y conta-diez-enviar (el
+# recorte a 40); DESPUÉS se aplica esta tanda, desde main. Antes, la cola
+# volvería a mandar los de la 0820 con la descripción larga y gastaría los
+# intentos otra vez. (La 0830 no depende del despliegue: va en la misma tanda.)
+# No toca el camino del pedido.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/d06-prepago-y-pdf.sql
-supabase/migrations/20261207T0800_d06_prepago_y_pdf_bueno.sql
-supabase/migrations/20261207T0810_d06_riders_prepago.sql
+cuenta: scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql
+supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
+supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql
