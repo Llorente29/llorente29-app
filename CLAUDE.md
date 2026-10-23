@@ -11,6 +11,20 @@ Reglas de trabajo del CEO (Julio):
 - Marcar siempre cada acción operativa (commit, build, push, deploy).
 - TypeScript strict, camelCase cliente / snake_case BBDD.
 
+## Cómo se trabaja un encargo
+
+> Regla de Julio (23/10). Vale para todas las sesiones.
+
+- **El alcance se cierra al recibir el encargo.** Lo que surja mientras se
+  trabaja se apunta para el siguiente encargo y **no entra en el PR en
+  marcha**, aunque lo pida un mensaje posterior.
+- **Sin agentes en paralelo**, salvo que el encargo lo diga expresamente.
+- **Las pruebas de la zona, una vez y al final**, sobre el commit definitivo.
+  No se relanzan por cada commit intermedio.
+- **Tiempo máximo: el que diga el encargo, o 90 minutos** si no dice nada. Si
+  se pasa, se para y se avisa en dos líneas: qué falta y por qué.
+- **Siempre en español.**
+
 ## Reglas ganadas en producción
 
 Cada una costó un incidente real. La fecha es el día que se pagó.
