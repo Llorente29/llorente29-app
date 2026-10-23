@@ -1,21 +1,23 @@
-# Tanda de producción viva · E05 · volver a leer en el servidor los PDF de una
-# quincena de Catcher (Julio, 22/10). Rama conta/e05-releer-riders. Número 0480:
-# la siguiente libre por encima de la 0470 (D02, ya aplicada; su copia en
-# tests/conta/produccion/tanda-d02-recibida-pdf-20261022.txt).
+# Tanda de producción viva · D03 · la recibida que se sube sin recepción nace
+# con su documento, y las dos de Foodint que nacieron sin él (Julio, 23/10).
+# Rama claude/ficha-recibida. Número 0500: la siguiente por encima de la más
+# alta que existe (la 0490 del #293, sin fusionar; este PR va antes). La
+# anterior de este fichero (E05, 0480, ya aplicada): su copia en
+# tests/conta/produccion/tanda-e05-releer-riders-20261022.txt.
 #
-#   1. 0480 — AÑADE conta_lote_relectura (quién pidió releer un lote y qué
-#      salió) y las funciones para pedirla (con sesión) o lanzarla desde la base
-#      (solo postgres, con el cron_secret), empezarla, guardar la lectura nueva
-#      del PDF SOLO de las facturas que siguen en revisión y apuntar lo que
-#      salió. CAMBIA en caliente conta_lote_pedidos_app y
-#      conta_lote_cruce_guardar (misma firma): también las puede llamar el
-#      servidor, la condición de la 0450. Declaradas en la cabecera, con su
-#      prueba de staging. No toca ninguna fila.
+#   1. 0500 — CAMBIA en caliente _compras_factura_desde_papel (misma firma):
+#      sin recepción, o con una recepción sin documento, la factura nace con
+#      el primer fichero de su lectura (de su cuenta, en receipt-uploads).
+#      Declarada en la cabecera, con su prueba de staging. No toca filas.
+#   2. 0510 — DATOS de Foodint: FAC-00098 (S11/0177416578) y FAC-00101
+#      (COHELDI P26 4.980), con el PDF de su lectura. Cambia DOS filas que
+#      existen: AUTORIZO con su nombre. Para si las que están así, en todas
+#      las cuentas, no son esas dos, o si alguna ya tiene documento.
 #
-# No toca el camino del pedido: conta_lote_pedidos_app lee sale y sigue solo
-# leyendo. Función que desplegar a mano: conta-lote-releer (nueva; el push a
-# main la despliega sola, y el despliegue compara lo desplegado con main).
-# Después del real y de la fusión, se lanza sobre la 1.ª quincena de octubre.
+# No toca el camino del pedido (ningún pedido escribe recibidas). Ninguna
+# función que desplegar. No sale nada a Diez: las dos siguen en revisión y sin
+# asiento; al validarlas, el D02 enlaza su PDF al asiento.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/e05-releer.sql
-supabase/migrations/20261204T0480_e05_releer_riders.sql
+cuenta: scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
+supabase/migrations/20261206T0500_d03_recibida_pdf_sin_recepcion.sql
+supabase/migrations/20261206T0510_d03_recibida_pdf_datos.sql

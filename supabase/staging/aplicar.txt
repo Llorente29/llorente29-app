@@ -465,3 +465,15 @@ supabase/staging/sql/20261203_d02_recibida_pdf_prueba.sql
 #   desde la rama va en ROLLBACK (W05); de verdad, desde main después del real.
 supabase/migrations/20261204T0480_e05_releer_riders.sql
 supabase/staging/sql/20261204_e05_releer_riders_prueba.sql
+# D03 · la recibida que se sube sin recepción nace con su documento (rama claude/ficha-recibida; Julio, 23/10).
+#   La 0500 cambia _compras_factura_desde_papel: sin recepción, o con una sin
+#   documento, el primer fichero de su lectura. Su prueba (ROLLBACK): el hueco
+#   antes, como usuario de A; un PDF sin recepción con su documento; la foto
+#   con su recepción como antes; recepción sin documento; sin ficheros u otro
+#   bucket; B no; la 0510 y su vuelta atrás sin Foodint; y la vuelta atrás
+#   byte a byte. Cambia una función: desde la rama va en ROLLBACK (W05); de
+#   verdad, desde main después del real. La 0510 es solo de Foodint: aquí no
+#   hace nada.
+supabase/migrations/20261206T0500_d03_recibida_pdf_sin_recepcion.sql
+supabase/staging/sql/20261206_d03_recibida_pdf_prueba.sql
+supabase/migrations/20261206T0510_d03_recibida_pdf_datos.sql

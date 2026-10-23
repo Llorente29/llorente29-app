@@ -32,10 +32,10 @@ describe('lo que añade una rama o un push al manifiesto', () => {
 
 describe('qué se puede ensayar en ROLLBACK', () => {
   const hoy = lineas(readFileSync(MANIFIESTO, 'utf8'))
-  it('los 104 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02, la 0470 del D02 y la 0480 del E05, cada una con su prueba) se ensayan, y 48 llevan su propia transacción', () => {
-    expect(hoy).toHaveLength(104)
+  it('los 107 ficheros del manifiesto de hoy (sin W03, con la 0450, la 0460 del S02, la 0470 del D02, la 0480 del E05 y la 0500 y la 0510 del D03, cada una con su prueba) se ensayan, y 49 llevan su propia transacción', () => {
+    expect(hoy).toHaveLength(107)
     expect(hoy.filter((f) => porQueNoSeEnsaya(readFileSync(f, 'utf8')))).toEqual([])
-    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(48)
+    expect(hoy.filter((f) => llevaSuTransaccion(readFileSync(f, 'utf8')))).toHaveLength(49)
   })
   it('una migración vieja con COMMIT no se ensaya: dejaría cosas de verdad', () => {
     const f = 'supabase/migrations/20260923T0015_casar_el_combo_por_su_id.sql'
@@ -97,8 +97,14 @@ end $$;`
   })
   it('la 0480 del E05 cambia las dos funciones de cruzar (que existen): solo en ROLLBACK', () => {
     const ruta = 'supabase/migrations/20261204T0480_e05_releer_riders.sql'
-    const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+    const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-e05-releer-riders-20261022.json', 'utf8')).contexto
     expect(porQueNoSoloAnade(ruta, readFileSync(ruta, 'utf8'), medida)).toMatch(/reemplaza funcion public\.conta_lote_(pedidos_app|cruce_guardar)/)
+  })
+  it('la 0500 del D03 cambia _compras_factura_desde_papel (que existe) y la 0510 cambia datos: las dos, solo en ROLLBACK', () => {
+    const medida = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8')).contexto
+    const f0500 = 'supabase/migrations/20261206T0500_d03_recibida_pdf_sin_recepcion.sql', f0510 = 'supabase/migrations/20261206T0510_d03_recibida_pdf_datos.sql'
+    expect(porQueNoSoloAnade(f0500, readFileSync(f0500, 'utf8'), medida)).toMatch(/reemplaza funcion public\._compras_factura_desde_papel/)
+    expect(porQueNoSoloAnade(f0510, readFileSync(f0510, 'utf8'), medida)).toMatch(/cambia_datos tabla public\.supplier_invoice/)
   })
   it('una función nueva solo añade; la misma, si ya existe, la cambia; una prueba de staging nunca va de verdad', () => {
     const sql = 'create or replace function public.nueva_w05(p uuid) returns int language sql as $$ select 1 $$;'

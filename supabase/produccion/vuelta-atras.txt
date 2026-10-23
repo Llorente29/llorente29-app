@@ -1,7 +1,8 @@
 # Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
-# E05 · volver a leer los PDF de Catcher): sin conta_lote_relectura ni sus
-# funciones, y conta_lote_pedidos_app y conta_lote_cruce_guardar las de antes,
-# byte a byte. Para si ya se ha hecho alguna relectura. Las lecturas ya
-# guardadas en las facturas se quedan.
-cuenta: scripts/conta/produccion/cuentas/e05-releer.sql
-supabase/vuelta-atras/20261204T0480_e05_releer_riders.down.sql
+# D03 · la recibida sin recepción con su documento), en orden inverso: primero
+# las dos de Foodint otra vez sin documento (para si alguna ya tiene asiento o
+# el D02 ya ha hecho algo con ella) y después _compras_factura_desde_papel la
+# de antes, byte a byte.
+cuenta: scripts/conta/produccion/cuentas/d03-recibida-pdf.sql
+supabase/vuelta-atras/20261206T0510_d03_recibida_pdf_datos.down.sql
+supabase/vuelta-atras/20261206T0500_d03_recibida_pdf_sin_recepcion.down.sql
