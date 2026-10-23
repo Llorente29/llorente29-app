@@ -584,8 +584,11 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   // D03 · 0790: lo que guarda la ficha (el gasto repartido y el asiento a mano). Mientras
   // la base no lo tenga (staging antes de aplicarla), se lee lo de siempre.
   const SELECT = 'id, supplier_id, location_id, brand_id, source, issuer_name, issuer_tax_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)'
+  // D07b · 'pagada' también: una factura pagada en el banco antes de validarla (COHELDI T0626/657,
+  // EUROPASTRY 2403975) está aprobada y sin asiento; sin ella aquí, su ficha decía «Estoy
+  // comprobando la cuenta y el IVA» para siempre y no se podía validar.
   const consulta = (sel: string) => tabla('supplier_invoice').select(sel)
-    .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada'] : ['aprobada']).or(`company_id.is.null,company_id.eq.${companyId}`)
+    .eq('account_id', accountId).in('status', ver ? ['en_revision', 'aprobada', 'pagada'] : ['aprobada', 'pagada']).or(`company_id.is.null,company_id.eq.${companyId}`)
     .gte('invoice_date', desde).lte('invoice_date', hasta).match(soloFactura ? { id: soloFactura } : {}).order('invoice_date', { ascending: false })
   const conLaFicha = async (): Promise<Fila[]> => {
     const x = await consulta(`${SELECT}, entry_overrides, supplier_invoice_expense(position, account_code, location_id, is_common, amount)`)

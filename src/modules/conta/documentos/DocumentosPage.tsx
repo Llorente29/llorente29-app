@@ -372,9 +372,10 @@ function ResultadoSubida({ subidas }: { subidas: Subida[] }) {
 }
 
 /** D06 · «¿Lista para validar?» de una fila: «Lista», o «No está lista.» con su motivo (el de su ficha). */
-function ListaParaValidar({ p, cargando }: { p: { lista: boolean; motivo: string } | undefined; cargando: boolean }) {
+function ListaParaValidar({ p, cargando }: { p: { lista: boolean; motivo: string; comprobando?: boolean } | undefined; cargando: boolean }) {
   // En un chip, como el estado de las demás pestañas: cada fila dice qué le pasa.
-  if (!p) return <span className="s-apoyo"><Chip>{cargando ? 'Comprobando…' : 'Sin comprobar'}</Chip></span>
+  // D07b · Mientras se prepara su asiento, «Comprobando…» en gris: aún no se sabe si está lista.
+  if (!p || p.comprobando) return <span className="s-apoyo"><Chip>{cargando || p?.comprobando ? 'Comprobando…' : 'Sin comprobar'}</Chip></span>
   if (p.lista) return <span className="s-lista-para-validar" data-lista=""><Chip tono="seguro">✓ Lista</Chip></span>
   return <span className="s-lista-para-validar" data-tono="duda"><Chip tono="duda">No está lista.</Chip> {p.motivo}</span>
 }

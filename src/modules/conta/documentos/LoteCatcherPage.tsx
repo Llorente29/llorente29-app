@@ -46,7 +46,7 @@ export default function LoteCatcherPage() {
   const { activa } = useEmpresas()
   const movil = useIsMobile()
   const [vuelta, setVuelta] = useState(0)
-  const datos = useLeer(accountId && loteId ? () => leerLote(accountId, loteId) : null, `${loteId}:${vuelta}`)
+  const datos = useLeer(accountId && loteId ? () => leerLote(accountId, loteId) : null, `${accountId}:${loteId}:${vuelta}`)
   const [paso, setPaso] = useState<string | null>(null)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)

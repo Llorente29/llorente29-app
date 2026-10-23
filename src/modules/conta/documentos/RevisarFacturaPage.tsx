@@ -120,7 +120,7 @@ export default function RevisarFacturaPage() {
   const { desde, hasta } = ventanaDe(filtros.mes, hoy)
   // D04: la misma lectura que la barra (colaRecibidas).
   const lista = useLeer(empresa && accountId ? () => colaRecibidas(accountId, empresa, desde, hasta, filtros) : null,
-    `${empresa}:${desde}:${hasta}:${search}:${vuelta}`)
+    `${accountId}:${empresa}:${desde}:${hasta}:${search}:${vuelta}`)
   const ids = useUltimo(lista.datos, `${empresa}:${search}`) ?? []
   const pos = ids.indexOf(invoiceId)
 
@@ -139,16 +139,16 @@ export default function RevisarFacturaPage() {
     `${invoiceId}:papel:${ficha ? 'ficha' : '-'}:${fac?.llegada?.ruta ?? fac?.papel ?? ficha?.lectura?.ruta ?? ''}`)
   const plazo = useLeer(fac?.proveedor?.id && accountId ? () => plazoDeLaFicha(accountId, fac.proveedor!.id) : null, `${accountId}:${fac?.proveedor?.id}:plazo:${vuelta}`)
   // D07a · Validada: su asiento DE VERDAD (sus apuntes), con su enlace; no solo «Ya tiene su asiento».
-  const asientoReal = useLeer(fac?.asiento && accountId ? () => leerAsiento(accountId, fac.asiento!.id) : null, `${invoiceId}:asiento:${fac?.asiento?.id ?? '-'}:${vuelta}`)
+  const asientoReal = useLeer(fac?.asiento && accountId ? () => leerAsiento(accountId, fac.asiento!.id) : null, `${accountId}:${invoiceId}:asiento:${fac?.asiento?.id ?? '-'}:${vuelta}`)
   const vista = useLeer(fac && accountId && fac.company_id && fac.fecha && !fac.asiento && localPropuesto !== undefined
     ? () => verPropuestaFactura(accountId, fac.company_id!, fac.id, fac.fecha!, localPropuesto) : null,
-  `${invoiceId}:${fac?.estado}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
+  `${accountId}:${invoiceId}:${fac?.company_id}:${fac?.fecha}:${fac?.asiento ? 'con' : 'sin'}-asiento:${fac?.estado}:${fac?.proveedor?.id}:${localPropuesto}:${vuelta}`)
   const extra = useLeer(accountId && invoiceId ? () => leerExtrasFacturas(accountId, [invoiceId]).then((m) => m.get(invoiceId) ?? null) : null, `${accountId}:${invoiceId}:extra:${vuelta}`)
   const proveedores = useLeer(accountId ? () => proveedoresDeLaCuenta(accountId) : null, `${accountId}:proveedores`)
-  const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:locales`)
+  const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales`)
   const cuentas = useLeer(accountId && fac?.company_id ? () => cuentasDeGasto(accountId, fac.company_id!) : null, `${accountId}:${fac?.company_id}:gastos`)
   const tiposIva = useLeer(accountId ? () => tiposDeIvaRecibida(accountId) : null, `${accountId}:tipos-iva`)
-  const descarte = useLeer(fac?.estado === 'descartada' ? () => leerDescarte(fac.id) : null, `${invoiceId}:${fac?.estado}:descarte:${vuelta}`)
+  const descarte = useLeer(fac?.estado === 'descartada' ? () => leerDescarte(fac.id) : null, `${invoiceId}:${fac?.id ?? '-'}:${fac?.estado}:descarte:${vuelta}`)
 
   // La propuesta y la cuenta de gasto propuesta (la de su primera línea de gasto, o la de sus facturas).
   const propuesta = fac?.asiento ? undefined : vista.datos ? (vista.datos.propuesta ?? null) : vista.error ? null : undefined
@@ -164,7 +164,7 @@ export default function RevisarFacturaPage() {
   // D06: lo que el documento dice del pago («Pagado con tarjeta …»), y si puede estar repetida.
   const textoPago = textoDePago(fac?.lectura ?? fac?.leido_en_recepcion?.modelo ?? null)
   const conTarjeta = pagadaConTarjeta(textoPago)
-  const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${invoiceId}:${fac?.proveedor?.id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`)
+  const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${accountId}:${invoiceId}:${fac ? 'leida' : '-'}:${fac?.proveedor?.id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`)
   const original = useMemo<BorradorFicha>(() => {
     if (!fac) return VACIO
     const datos = {
