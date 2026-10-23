@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  AVISO_NIF_LEIDO_MAL, cargoDeLaTarjeta, casaNif, duplicadas, faltaDocumento, nifValido, normaNif, normaNumero, pagadaConTarjeta, textoDuplicada, ultimos4, unCaracter,
+  AVISO_NIF_LEIDO_MAL, cargoDeLaTarjeta, casaNif, clavesNumero, duplicadas, faltaDocumento, nifValido, normaNif, normaNumero, pagadaConTarjeta, textoDuplicada, ultimos4, unCaracter,
 } from '../../../../../src/modules/conta/documentos/paraValidar'
 import { veredictoFactura, type DatosVeredicto } from '../../../../../src/modules/conta/documentos/veredicto'
 
@@ -17,8 +17,20 @@ describe('D06 · el número de factura, normalizado', () => {
     expect(normaNumero('F-0012 / 26')).toBe('F1226')
     expect(normaNumero('000123')).toBe('123')
     expect(normaNumero('2403975')).toBe(normaNumero('02403975'))
-    expect(normaNumero('ES I 32029 26 00124')).toBe('ESI320292600124')
+    expect(normaNumero('ES I 32029 26 00124')).toBe('ESI3202926124')
     expect(normaNumero(null)).toBe('')
+  })
+  it('el mismo número escrito de dos formas: casa tramo a tramo o todo junto', () => {
+    const casan = (a: string, b: string) => clavesNumero(a).some((k) => clavesNumero(b).includes(k))
+    // Los ceros tras un separador, aunque el tramo de antes acabe en cifra (la e2e: «…3076 007» y «…3076-7»).
+    expect(casan('PD06D3076 007', 'PD06D3076-7')).toBe(true)
+    expect(casan('2026/000123', '2026-123')).toBe(true)
+    // Y el mismo número con y sin espacios.
+    expect(casan('26 00124', '2600124')).toBe(true)
+    expect(casan('2403975', '02403975')).toBe(true)
+    // Otro número, no.
+    expect(casan('2026-123', '2026-124')).toBe(false)
+    expect(clavesNumero(null)).toEqual([])
   })
 })
 
@@ -33,6 +45,10 @@ describe('D06 · duplicadas', () => {
     const d = duplicadas([{ id: 'a', ...base, numero: 'X1' }, { id: 'b', ...base, numero: 'X2' }])
     expect(d.get('a')).toMatchObject({ otra: 'b', por: 'fecha_total' })
     expect(textoDuplicada(d.get('a')!)).toMatch(/^Puede estar repetida: ya tienes otra de este proveedor del 06\/10\/2026/)
+  })
+  it('el número con sus ceros tras un espacio, y el mismo con un guion y sin ellos', () => {
+    const d = duplicadas([{ id: 'a', ...base, numero: 'PD06D3076 007' }, { id: 'b', ...base, numero: 'PD06D3076-7', total: 10 }])
+    expect(d.get('a')).toMatchObject({ otra: 'b', por: 'numero' })
   })
   it('otro proveedor, o una descartada, no la repiten', () => {
     expect(duplicadas([{ id: 'a', ...base, numero: '1' }, { id: 'b', ...base, proveedorId: 'p2', numero: '1' }]).size).toBe(0)

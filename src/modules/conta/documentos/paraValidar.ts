@@ -18,9 +18,22 @@ import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 
 // ── El número de factura ────────────────────────────────────────────────────
 
-/** «F-0012 / 26» → «F1226»: sin espacios, guiones, barras ni puntos, y sin ceros a la izquierda de cada tramo de cifras. */
+const SEPARADORES = /[\s\-_./\\]+/
+const sinCerosDelante = (x: string) => x.replace(/(^|[^0-9])0+(?=[0-9])/g, '$1')
+
+/** «F-0012 / 26» → «F1226»: sin espacios, guiones, barras ni puntos, y sin ceros a la izquierda de cada tramo (los separados por ellos, y cada tramo de cifras tras una letra). */
 export function normaNumero(n: string | null | undefined): string {
-  return (n ?? '').toUpperCase().replace(/[\s\-_./\\]/g, '').replace(/(^|[^0-9])0+(?=[0-9])/g, '$1')
+  return (n ?? '').toUpperCase().split(SEPARADORES).map(sinCerosDelante).join('')
+}
+
+/**
+ * Las claves con las que dos números son «el mismo»: tramo a tramo («2026/000123» = «2026-123») y todo
+ * junto («26 00124» = «2600124»). Ningún orden sirve para los dos casos: casa si casa cualquiera.
+ */
+export function clavesNumero(n: string | null | undefined): string[] {
+  const tramos = normaNumero(n)
+  const junto = sinCerosDelante((n ?? '').toUpperCase().split(SEPARADORES).join(''))
+  return [...new Set([tramos, junto].filter(Boolean))]
 }
 
 // ── Duplicadas ──────────────────────────────────────────────────────────────
@@ -44,8 +57,7 @@ export function duplicadas(facturas: readonly FacturaParaComparar[]): Map<string
   const porNumero = new Map<string, FacturaParaComparar[]>()
   const porFechaTotal = new Map<string, FacturaParaComparar[]>()
   for (const f of vivas) {
-    const n = normaNumero(f.numero)
-    if (n) porNumero.set(`${f.proveedorId}|${n}`, [...(porNumero.get(`${f.proveedorId}|${n}`) ?? []), f])
+    for (const n of clavesNumero(f.numero)) porNumero.set(`${f.proveedorId}|${n}`, [...(porNumero.get(`${f.proveedorId}|${n}`) ?? []), f])
     if (f.fecha && f.total !== null) {
       const k = `${f.proveedorId}|${f.fecha}|${Math.round(f.total * 100)}`
       porFechaTotal.set(k, [...(porFechaTotal.get(k) ?? []), f])
@@ -53,8 +65,7 @@ export function duplicadas(facturas: readonly FacturaParaComparar[]): Map<string
   }
   for (const f of facturas) {
     if (!f.proveedorId) continue
-    const n = normaNumero(f.numero)
-    const mismo = n ? (porNumero.get(`${f.proveedorId}|${n}`) ?? []).find((o) => o.id !== f.id) : undefined
+    const mismo = clavesNumero(f.numero).map((n) => (porNumero.get(`${f.proveedorId}|${n}`) ?? []).find((o) => o.id !== f.id)).find(Boolean)
     if (mismo) { fuera.set(f.id, { otra: mismo.id, por: 'numero', numero: mismo.numero, fecha: mismo.fecha, total: mismo.total }); continue }
     if (!f.fecha || f.total === null) continue
     const otra = (porFechaTotal.get(`${f.proveedorId}|${f.fecha}|${Math.round(f.total * 100)}`) ?? []).find((o) => o.id !== f.id)
