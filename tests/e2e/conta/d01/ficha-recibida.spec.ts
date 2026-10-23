@@ -50,7 +50,7 @@ import { CARRIL, CUENTA_A, STAGING_URL, anonKey, entrarComo, enCarril, type Sesi
 import { rest } from '../api'
 
 const DIR = 'docs/conta/capturas/d03'
-const TABLERO = `${DIR}/tablero-3b.webp`
+const TABLERO = 'tests/e2e/conta/d01/tablero-3b.webp'  // la maqueta, junto a la prueba (la rama no fija capturas)
 const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
 const LOCAL_A = enCarril('c01a0000-0000-4000-8000-0000000000a2')
 /** Mayorista Prueba Alfa (semilla D01): subcuenta 40000006 y gasto 60000000 en el plan de A. */
