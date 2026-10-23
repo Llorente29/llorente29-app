@@ -1,18 +1,28 @@
-# Tanda de producción viva · C08 (23/10): Lovers Burgers de Carabanchel publica
-# en el catálogo de HubRise que existe (2qjdb), no en el q3v47, que HubRise da
-# por inexistente. Rama conta/c08-lovers-catalogo. Número 0840: por encima del
-# más alto que existe (la 0830 de la D07).
+# Tanda de producción viva · D07a + D07c (PR 1 del 23/10): las recibidas que
+# Diez rechazó por la descripción, otra vez a la cola, y «Saldo prepago» en
+# todas las listas de formas de pago (Julio, 23/10).
+# Rama claude/cool-noether-i932tx. Números 0820 y 0830: por encima del más alto
+# que existe (la 0810 del D06). La anterior de este fichero (D06, 0800 y 0810,
+# ya aplicada y fusionada en el #297): su copia en
+# tests/conta/produccion/tanda-d06-prepago-y-pdf-20261023.txt.
 #
-#   1. 0840 — DATOS de Foodint: una fila de brand_hubrise_catalog
-#      (84c5951d-…), external_catalog_id de q3v47 a 2qjdb. AUTORIZO con su
-#      nombre. Para si la fila no está con q3v47.
+#   1. 0820 — DATOS de Foodint: los envíos de RIDERS rechazados por
+#      `factura.Descripcion` de más de 40 caracteres, con attempts = 0 y
+#      next_try_at = ahora, para que la cola los vuelva a mandar. AUTORIZO con
+#      su nombre. Para si no hay ninguno o si son más de 200.
+#   2. 0830 — CAMBIA en caliente, declarado en su cabecera con su prueba de
+#      staging: conta_recibida_guardar y mark_supplier_invoice_paid admiten
+#      «prepaid» (y su error sale en español, con los nombres); los CHECK de
+#      supplier_invoice.paid_method, customer_fiscal y payment_method.kind lo
+#      admiten (solo amplían); y el catálogo, su fila «Saldo prepago Catcher».
 #
-# ¡OJO! La tanda de la D07 (0820 y 0830) está fusionada en main y SIN APLICAR:
-# este manifiesto, en esta rama, lleva solo la 0840, para que el ensayo y el
-# real de aquí no apliquen la D07. Antes de fusionar, aplicar.txt y
-# vuelta-atras.txt vuelven a ser los de main (la D07), y este queda en su
-# copia: tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt.
+# ¡ORDEN, y es una excepción a «se aplica desde su rama antes de fusionar»!:
+# primero se fusiona y se despliegan conta-diez-cola y conta-diez-enviar (el
+# recorte a 40); DESPUÉS se aplica esta tanda, desde main. Antes, la cola
+# volvería a mandar los de la 0820 con la descripción larga y gastaría los
+# intentos otra vez. (La 0830 no depende del despliegue: va en la misma tanda.)
 # No toca el camino del pedido.
 # Vuelta atrás: supabase/produccion/vuelta-atras.txt.
-cuenta: scripts/conta/produccion/cuentas/c08-lovers-catalogo.sql
-supabase/migrations/20261208T0840_c08_lovers_catalogo_2qjdb.sql
+cuenta: scripts/conta/produccion/cuentas/d07ac-diez-y-prepago.sql
+supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
+supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql

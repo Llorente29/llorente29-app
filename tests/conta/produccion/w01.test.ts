@@ -537,28 +537,28 @@ describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS
     try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con el fichero medido, da su estado y los «autorizo» (C08: la 0840, una fila de Foodint, pide «autorizo»)', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (D07a + D07c: la 0820, datos de Foodint, pide «autorizo»; la 0830 sigue)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261208T0840_c08_lovers_catalogo_2qjdb.sql: AUTORIZO')
-    expect(r.out).toContain('autorizo: 20261208T0840_c08_lovers_catalogo_2qjdb.sql')
+    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql: AUTORIZO')
+    expect(r.out).toContain('20261208T0830_d07c_prepago_en_todas_las_listas.sql: sigue')
+    expect(r.out).toContain('autorizo: 20261208T0820_d07a_diez_reenviar_descripcion.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
     const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261208T0840_c08_lovers_catalogo_2qjdb.sql'] = '00000000000000000000000000000000'
+    m.tanda['supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261208T0840_c08_lovers_catalogo_2qjdb.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql ha cambiado desde la medida')
   })
 })
 
-describe('R11 · paso 8 sobre la tanda de la D07 (0820 y 0830, fusionada y sin aplicar: su copia mientras corre la C08), con su contexto medido', () => {
-  it('la 0820 pide «autorizo»; la 0830 sigue', () => {
-    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d07ac-diez-y-prepago-20261023.json',
-      '--manifiesto=tests/conta/produccion/tanda-d07ac-diez-y-prepago-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
-    expect(out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql: AUTORIZO')
-    expect(out).toContain('20261208T0830_d07c_prepago_en_todas_las_listas.sql: sigue')
+describe('R11 · paso 8 sobre la tanda de la C08 (0840, PR #301, ya aplicada: su copia), con su contexto medido', () => {
+  it('la 0840 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c08-lovers-catalogo-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261208T0840_c08_lovers_catalogo_2qjdb.sql: AUTORIZO')
   })
 })
 
