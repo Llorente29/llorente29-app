@@ -1,13 +1,14 @@
 -- supabase/staging/sql/20261024_v01_facturas_venta_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261024T0835_v01_facturas_venta (public.journal_entry
--- y las facturas de venta), con \i dentro de la transacción y ROLLBACK:
+-- SOLO STAGING. Prueba de 20261024T0835_v01_facturas_venta (las facturas de
+-- venta) y de 20261024T0836_v01_origen_factura_venta (public.journal_entry), con \i dentro de la transacción y ROLLBACK:
 -- staging no cambia. En la empresa A de pruebas (Taberna de Prueba Norte), con
 -- clientes y facturas inventados dentro de la transacción.
 --
---   (Empieza con su vuelta atrás, por si la 0835 ya estuviera.)
+--   (Empieza con sus vueltas atrás, por si ya estuvieran: la 0835 entra de
+--   verdad en staging desde la rama, porque solo añade.)
 --   0. Lo de antes: el CHECK de los orígenes de un asiento no admite
---      'customer_invoice'. La 0835, y ya lo admite.
+--      'customer_invoice'. La 0835 y la 0836, y ya lo admite.
 --   1. Como usuario de A: un cliente con NIF y un borrador con dos líneas (21 %
 --      y 10 % con descuento): sus cifras.
 --   2. Emitir: F-2026/0001, el asiento validado y cuadrado (430 por el total,
@@ -31,20 +32,22 @@ do $$ begin
 end $$;
 set local statement_timeout = '120s';
 
+\i supabase/vuelta-atras/20261024T0836_v01_origen_factura_venta.down.sql
 \i supabase/vuelta-atras/20261024T0835_v01_facturas_venta.down.sql
 
 -- 0 · Lo de antes.
 do $$ begin
   if pg_get_constraintdef((select oid from pg_constraint where conname = 'journal_entry_source_type_check' and conrelid = 'public.journal_entry'::regclass)) ~ 'customer_invoice' then
-    raise exception 'PRUEBA V01 · 0: el CHECK ya admitía customer_invoice antes de la 0835.';
+    raise exception 'PRUEBA V01 · 0: el CHECK ya admitía customer_invoice antes de la 0836.';
   end if;
 end $$;
 
 \i supabase/migrations/20261024T0835_v01_facturas_venta.sql
+\i supabase/migrations/20261024T0836_v01_origen_factura_venta.sql
 
 do $$ begin
   if pg_get_constraintdef((select oid from pg_constraint where conname = 'journal_entry_source_type_check' and conrelid = 'public.journal_entry'::regclass)) !~ 'customer_invoice' then
-    raise exception 'PRUEBA V01 · 0: con la 0835, el CHECK no admite customer_invoice.';
+    raise exception 'PRUEBA V01 · 0: con la 0836, el CHECK no admite customer_invoice.';
   end if;
   raise notice '0 · el CHECK, antes y después';
 end $$;

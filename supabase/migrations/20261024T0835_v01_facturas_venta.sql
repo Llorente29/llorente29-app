@@ -5,7 +5,8 @@
 -- en el libro de expedidas; ahora tiene su borrador, que se cambia entero, y al
 -- emitirla su número, su asiento, su PDF y su envío a Diez.
 --
--- Solo añade. No cambia ninguna función ni ninguna tabla que ya exista:
+-- Solo añade. No cambia ninguna función ni ninguna tabla que ya exista, y se
+-- puede pasar dos veces seguidas:
 --
 --   1. customer_invoice, customer_invoice_line: la factura y sus líneas. Un borrador
 --      se cambia y se borra; una emitida no se borra NUNCA (ni el disparador
@@ -29,22 +30,12 @@
 -- Verifactu: cada emitida guarda su huella encadenada con la anterior de la
 -- empresa (prev_hash, hash). Preparado; no es aún el registro de Verifactu.
 --
--- Lo único que cambia de lo que hay: el CHECK de los orígenes de un asiento
--- (journal_entry_source_type_check) admite uno más, 'customer_invoice'. Solo
--- amplía: todo lo que valía sigue valiendo. Se pone NOT VALID y se valida
--- después (sin cierre exclusivo largo sobre journal_entry).
---
--- cambia: public.journal_entry · prueba: supabase/staging/sql/20261024_v01_facturas_venta_prueba.sql
---
--- Vuelta atrás: supabase/vuelta-atras/20261024T0835_v01_facturas_venta.down.sql
+-- Lo único que cambia de lo que hay, el CHECK de los orígenes de un asiento
+-- ('customer_invoice'), va aparte, en la 0836: así esta, que solo añade y se
+-- puede pasar dos veces, entra de verdad en staging desde la rama (W05) y las
+-- e2e ven las pantallas; la 0836 solo se ensaya hasta que esté en producción.
 
--- 0 · Un origen más para los asientos: la factura de venta ------------------------------
-alter table public.journal_entry drop constraint if exists journal_entry_source_type_check;
-alter table public.journal_entry add constraint journal_entry_source_type_check check (source_type = any (array[
-  'sales_day', 'sales_adjustment', 'supplier_invoice', 'supplier_payment', 'channel_settlement', 'licensed_settlement', 'payroll', 'bank',
-  'vat_settlement', 'manual', 'template', 'reversal', 'opening', 'closing', 'migrated', 'purchase_accrual', 'purchase_accrual_reversal',
-  'customer_invoice'])) not valid;
-alter table public.journal_entry validate constraint journal_entry_source_type_check;
+-- Vuelta atrás: supabase/vuelta-atras/20261024T0835_v01_facturas_venta.down.sql
 
 -- 1 · La factura y sus líneas ---------------------------------------------------------
 create table if not exists public.customer_invoice (
@@ -643,7 +634,14 @@ returns jsonb language plpgsql security definer set search_path = public, storag
 declare v_f public.customer_invoice; v_obj record;
 begin
   select * into v_f from public.customer_invoice where id = p_id for update;
-  if v_f.id is null then raise exception 'Esa factura no está.' using errcode = 'P0002'; end if;
+  -- Lo llama el navegador de quien emite (el PDF se hace allí, como el resumen
+  -- de ventas): sus permisos, y la ruta tiene que ser la de ESTA factura.
+  if v_f.id is null or not (public.belongs_to_account(v_f.account_id) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Esa factura no está.' using errcode = 'P0002';
+  end if;
+  if not (public.current_user_is_admin_or_manager_of(v_f.account_id) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Solo un administrador o un encargado de la cuenta guarda el PDF de una factura.' using errcode = '42501';
+  end if;
   if v_f.status = 'borrador' then raise exception 'Un borrador no lleva PDF: se hace al emitir.' using errcode = '23514'; end if;
   if v_f.pdf_sha256 is not null then
     if v_f.pdf_sha256 = p_sha256 then return jsonb_build_object('id', p_id, 'ruta', v_f.pdf_path, 'ya_estaba', true); end if;
@@ -657,8 +655,8 @@ begin
   update public.customer_invoice set pdf_path = p_ruta, pdf_sha256 = p_sha256, pdf_bytes = p_bytes where id = p_id;
   return jsonb_build_object('id', p_id, 'ruta', p_ruta, 'ya_estaba', false);
 end $$;
-revoke all on function public.conta_venta_pdf_guardar(uuid, text, text, integer) from public, anon, authenticated;
-grant execute on function public.conta_venta_pdf_guardar(uuid, text, text, integer) to service_role;
+revoke all on function public.conta_venta_pdf_guardar(uuid, text, text, integer) from public, anon;
+grant execute on function public.conta_venta_pdf_guardar(uuid, text, text, integer) to authenticated, service_role;
 
 create or replace function public.conta_venta_enviada(p_id uuid, p_para text, p_texto text, p_detalle jsonb, p_quien_nombre text)
 returns void language plpgsql security definer set search_path = public as $$

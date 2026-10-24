@@ -1,8 +1,8 @@
 -- supabase/vuelta-atras/20261024T0835_v01_facturas_venta.down.sql
 --
 -- Vuelta atrás de la 0835 (V01 · Ventas › Facturas): quita las tablas y las
--- funciones de las facturas de venta y deja el CHECK de los orígenes de un
--- asiento como estaba.
+-- funciones de las facturas de venta. El CHECK de los orígenes de un asiento
+-- lo devuelve la vuelta atrás de la 0836, que va antes que esta.
 --
 -- FRENO: si ya hay alguna factura EMITIDA (o un asiento con origen
 -- 'customer_invoice'), para sin tocar nada: una emitida no se borra nunca, y su
@@ -38,9 +38,3 @@ drop table if exists public.customer_invoice_line;
 drop table if exists public.customer_invoice;
 drop function if exists public.customer_invoice_line_inalterable();
 drop function if exists public.customer_invoice_inalterable();
-
-alter table public.journal_entry drop constraint if exists journal_entry_source_type_check;
-alter table public.journal_entry add constraint journal_entry_source_type_check check (source_type = any (array[
-  'sales_day', 'sales_adjustment', 'supplier_invoice', 'supplier_payment', 'channel_settlement', 'licensed_settlement', 'payroll', 'bank',
-  'vat_settlement', 'manual', 'template', 'reversal', 'opening', 'closing', 'migrated', 'purchase_accrual', 'purchase_accrual_reversal'])) not valid;
-alter table public.journal_entry validate constraint journal_entry_source_type_check;
