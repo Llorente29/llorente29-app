@@ -76,7 +76,28 @@ export async function leerAsientos(accountId: string, companyId: string, desde: 
     .eq('account_id', accountId).eq('company_id', companyId).gte('entry_date', desde).lte('entry_date', hasta)
     .order('entry_date', { ascending: false }).limit(5000)
   if (error) throw new Error(mensaje('No se ha podido leer el libro', error))
-  return ((data ?? []) as Fila[]).map(aAsiento)
+  const asientos = ((data ?? []) as Fila[]).map(aAsiento)
+  // V01 · Entrega 2: las propuestas de ventas del día entero (sin canal) se quedan en Asientos.
+  const sinCanal = await ventasSinCanal(accountId, companyId, asientos.filter((a) => a.origen === 'sales_day' && a.estado === 'propuesto').map((a) => a.origenId))
+  return sinCanal.size ? asientos.map((a) => (a.origenId && sinCanal.has(a.origenId) ? { ...a, sinCanal: true } : a)) : asientos
+}
+
+/**
+ * V01 · Entrega 2 · De estos resúmenes del día (origen de un asiento de ventas),
+ * los que no son de un canal: los días asentados enteros «a la antigua», que
+ * no salen en Ventas › Cierres del día y se deciden en Asientos.
+ * Nombres dentro de cadenas (regla 40): sales_day_summary (id, channel_id).
+ */
+export async function ventasSinCanal(accountId: string, companyId: string, resumenes: readonly (string | null)[]): Promise<Set<string>> {
+  const ids = [...new Set(resumenes.filter((x): x is string => !!x))]
+  const out = new Set<string>()
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await tabla('sales_day_summary').select('id').eq('account_id', accountId).eq('company_id', companyId)
+      .in('id', ids.slice(i, i + 200)).is('channel_id', null)
+    if (error) throw new Error(mensaje('No se han podido leer los resúmenes de ventas', error))
+    for (const f of (data ?? []) as Fila[]) out.add(String(f.id))
+  }
+  return out
 }
 
 export async function leerAsiento(accountId: string, entryId: string): Promise<AsientoDiario | null> {
