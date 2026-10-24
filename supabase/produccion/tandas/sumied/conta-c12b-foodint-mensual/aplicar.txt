@@ -1,0 +1,12 @@
+# C12b · Foodint pasa al traspaso mensual a Diez. Rama conta/c12b-foodint-mensual.
+# Va JUSTO DESPUÉS del #322 (C12): su tanda (1250 y 1251) aplicada, fusionado,
+# Vercel READY y conta-diez-traspaso desplegada. Se ensaya y se aplica desde esta
+# rama, antes de fusionar.
+#
+#   1. 1631 — MUEVE datos (necesita autorizo): Foodint a modo 'mensual' y, sin
+#      enviar nada, se quita el reintento a sus envíos pendientes. No borra nada.
+#      Nada del camino del pedido.
+#
+# Sin aplicar: lo lanza Julio, con autorizo = 20261024T1631_c12b_foodint_mensual.sql.
+cuenta: scripts/conta/produccion/cuentas/c12b-foodint-mensual.sql
+supabase/migrations/20261024T1631_c12b_foodint_mensual.sql

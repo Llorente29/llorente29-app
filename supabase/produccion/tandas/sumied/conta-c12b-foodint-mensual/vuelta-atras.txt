@@ -1,0 +1,2 @@
+# C12b · vuelta atrás. Foodint vuelve a «al validar»; para si tiene un traspaso a medias.
+supabase/vuelta-atras/20261024T1631_c12b_foodint_mensual.down.sql
