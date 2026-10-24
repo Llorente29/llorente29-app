@@ -7,9 +7,9 @@
 // local (ventas, comisión, otros, pagan, banco y su factura), y cada fila abre
 // su ficha. Contra staging-conta, cuenta A, en los dos tamaños.
 //
-// Datos: las liquidaciones de Uber de la cuenta A de staging (medido el 23/10,
-// solo lectura: 6, del 28/12/2025 al 15/10/2026, una de referencia, ninguna
-// con factura de comisión). La prueba no crea ni borra nada.
+// Datos: las liquidaciones de Uber de la cuenta A de staging. Se mira lo que
+// hay (regla 31): el 23/10 eran 6; el 24/10, una sola, del 22 al 28/12/2025, y
+// su plataforma se llama «Uber Eats». La prueba no crea ni borra nada.
 
 import { test, expect } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
@@ -28,7 +28,7 @@ test('D07 · Ventas › Liquidaciones enseña las de plataforma, con ventas, com
   await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('alert')).toHaveCount(0)
   // Las de Uber (en la tabla y en la tarjeta del móvil).
-  const uber = page.getByText(/^Uber · /)
+  const uber = page.getByText(/^Uber( Eats)? · /)
   await expect(uber.first()).toBeVisible({ timeout: 30_000 })
 
   // La ficha de una: lo que liquida, comparado con tus cierres, sus diferencias y sus liquidaciones.

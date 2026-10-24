@@ -54,7 +54,8 @@ test('Plataformas: la lista por periodo, plataforma y local, sus pestañas y la 
     const cabeza = page.getByRole('table').first().getByRole('columnheader')
     for (const c of ['Plataforma', 'Ventas', 'Pagan', 'Estado']) await expect(cabeza.filter({ hasText: new RegExp(`^${c}`) })).toBeVisible()
   }
-  const uber = page.getByText(/^Uber · /)
+  // La plataforma de staging se llama «Uber Eats» (24/10).
+  const uber = page.getByText(/^Uber( Eats)? · /)
   await expect(uber.first()).toBeVisible({ timeout: 30_000 })
   await foto(page, 'liquidaciones')
 

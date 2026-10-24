@@ -213,9 +213,10 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await cerrarCajon(page)
   // La misma barra que A: el esqueleto es uno; lo que cambia es lo de hostelería.
   if (lado(page) === 'ordenador') await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Ventas', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
-  // Ni por la dirección: una liquidación no marca ninguna página.
+  // Ni por la dirección: una liquidación no marca ninguna página. V01 · Entrega 3: la del
+  // socio vive en Ventas › Liquidaciones (solo hostelería): en D, Ventas, sin página marcada.
   await page.goto('/conta/compras/liquidacion/nueva')
-  await expect((await paginas(page, 'Compras y gastos')).locator('[aria-current="page"]')).toHaveCount(0)
+  await expect((await paginas(page, 'Ventas')).locator('[aria-current="page"]')).toHaveCount(0)
   await cerrarCajon(page)
   await page.goto('/conta/compras')
   // Paso 3: dentro de las pantallas, tampoco (inventario del paso 1, §3). Se mira con la red quieta:
