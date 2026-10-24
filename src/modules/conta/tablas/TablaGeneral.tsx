@@ -25,6 +25,7 @@ import {
   borrarFila, crearFila, editarFila, guardarAjuste, nuevaVigencia, type Quien,
 } from '@/modules/conta/services/tablasService'
 import { fechaLarga, porcentaje } from '@/modules/conta/lib/formato'
+import { cuentaDeApunte } from '@/modules/conta/lib/pgc'
 import { leerPorcentaje, valoresIniciales } from '@/modules/conta/tablas/registro'
 
 type Filtro = 'todos' | 'usas'
@@ -155,7 +156,7 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
         oculta ? `Ocultado «${nombre(c.fila)}»: ya no sale en tus desplegables. Sigue aquí, en «Los demás».`
           : `«${nombre(c.fila)}» vuelve a salir en tus desplegables.`)}
       guardarCuentas={(cuentas) => void hacer(() => guardarAjuste(quien, def, c.fila, { cuentas }),
-        `Cuentas de «${nombre(c.fila)}» cambiadas: ${Object.values(cuentas).filter(Boolean).join(' y ') || 'vuelven a las de serie'}.`)}
+        `Cuentas de «${nombre(c.fila)}» cambiadas: ${Object.values(cuentas).filter((x): x is string => Boolean(x)).map((x) => cuentaDeApunte(x, ctx.digitos)).join(' y ') || 'vuelven a las de serie'}.`)}
       editar={(v) => void hacer(() => editarFila(def, c.fila, v), `Guardado «${String(v.name ?? v.text ?? nombre(c.fila)).trim()}».`)}
       vigencia={(rate, desde) => void hacer(() => nuevaVigencia(quien, c.fila, rate, desde),
         `«${nombre(c.fila)}» pasa al ${porcentaje(rate)} desde el ${fechaLarga(desde)}. El ${porcentaje(Number(c.fila.datos.rate))} queda en su historial.`)}
@@ -167,6 +168,8 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
     const fila = (c: ConceptoConUso) => {
       const abiertaEsta = abierta === c.fila.id
       const cifra = def.columnas[0]?.valor(c.fila, ctx)
+      // Lo largo (un IBAN) va en su línea, debajo del nombre: al lado no cabe.
+      const debajo = Boolean(cifra && def.columnas[0].cifra && def.columnas[0].lineaPropiaEnMovil)
       return (
         <div key={c.fila.id} className={abiertaEsta ? 'cx-tablas-movil-abierta' : undefined}>
           <button type="button" className="cx-lista-fila" aria-expanded={abiertaEsta} aria-controls={`det-${c.fila.id}`}
@@ -174,9 +177,10 @@ export function TablaGeneral({ def, filas, ctx, quien, bancos, movil, alCambiar,
             <Inicial texto={def.inicial(c.fila)} tono={def.tono?.(c.fila)} />
             <span className="cx-lista-fila-texto">
               <span className="cx-lista-fila-titulo">{def.tituloFila(c.fila)}</span>
+              {debajo && <span className="cx-cifra cx-lista-fila-linea">{cifra}</span>}
               <span className="cx-lista-fila-apoyo">{abiertaEsta ? def.apoyoFila(c.fila) ?? c.uso.donde : etiquetaMovil(c, def, ctx.hoy)}</span>
             </span>
-            {cifra && def.columnas[0].cifra && <span className="cx-cifra" style={{ fontSize: 17 }}>{cifra}</span>}
+            {cifra && def.columnas[0].cifra && !debajo && <span className="cx-cifra" style={{ fontSize: 17 }}>{cifra}</span>}
             {!abiertaEsta && <span className="cx-flecha" aria-hidden="true">›</span>}
           </button>
           {abiertaEsta && <div id={`det-${c.fila.id}`}>{detalle(c)}</div>}
@@ -369,7 +373,7 @@ function Detalle({ def, c, hoy, ctx, modo, setModo, guardando, fallo, bancos, mo
         )}
       </div>
 
-      {modo === 'cuentas' && <CambiarCuentas def={def} f={f} guardando={guardando} cancelar={() => setModo('ver')} guardar={guardarCuentas} />}
+      {modo === 'cuentas' && <CambiarCuentas def={def} f={f} digitos={ctx.digitos} guardando={guardando} cancelar={() => setModo('ver')} guardar={guardarCuentas} />}
       {modo === 'vigencia' && <NuevoPorcentaje f={f} hoy={hoy} guardando={guardando} cancelar={() => setModo('ver')} guardar={vigencia} />}
       {modo === 'borrar' && (
         <div className="cx-aviso" role="alert" style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -408,8 +412,8 @@ function Detalle({ def, c, hoy, ctx, modo, setModo, guardando, fallo, bancos, mo
   )
 }
 
-function CambiarCuentas({ def, f, guardando, cancelar, guardar }: {
-  def: DefinicionTabla; f: FilaGeneral; guardando: boolean; cancelar: () => void
+function CambiarCuentas({ def, f, digitos, guardando, cancelar, guardar }: {
+  def: DefinicionTabla; f: FilaGeneral; digitos: number; guardando: boolean; cancelar: () => void
   guardar: (c: Partial<Record<CuentaEditable, string | null>>) => void
 }) {
   const [v, setV] = useState<Record<string, string>>(() =>
@@ -433,7 +437,8 @@ function CambiarCuentas({ def, f, guardando, cancelar, guardar }: {
             <label htmlFor={`cta-${f.id}-${c.clave}`}>{c.etiqueta}</label>
             <input id={`cta-${f.id}-${c.clave}`} className="cx-input" inputMode="numeric" value={v[c.clave]} disabled={guardando}
               onChange={(e) => setV((x) => ({ ...x, [c.clave]: e.target.value }))} />
-            <span className="cx-ayuda">De serie: {String(f.datos[c.clave] ?? '—')}. Vacía, vuelve a la de serie.</span>
+            {/* S01e: la cuenta con su nombre, no el número a secas. */}
+            <span className="cx-ayuda">De serie: {f.datos[c.clave] ? cuentaDeApunte(String(f.datos[c.clave]), digitos) : '—'}. Vacía, vuelve a la de serie.</span>
           </div>
         ))}
       </div>

@@ -11,6 +11,8 @@
 
 import { useMemo, useState } from 'react'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
+import { textoDeImporte } from '@/modules/conta/diseno'
+import { AsientoQueSeCrea } from '@/modules/conta/diseno/plantillas'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import {
@@ -191,22 +193,13 @@ export function PanelMovimiento(p: PanelProps) {
       )}
 
       {lineas && (
-        <details className="cxn-bloque">
-          <summary>Ver el asiento que se crea</summary>
-          <table className="cxn-asiento">
-            <thead><tr><th>Cuenta</th><th className="cxb-der">Debe</th><th className="cxb-der">Haber</th></tr></thead>
-            <tbody>
-              {lineas.map((l, i) => (
-                <tr key={i}>
-                  <td>{cuentaLegible(p.nombres, l.cuenta)}</td>
-                  <td className="cx-cifra cxb-der">{l.debeCent ? eurosExactos(l.debeCent / 100) : ''}</td>
-                  <td className="cx-cifra cxb-der">{l.haberCent ? eurosExactos(l.haberCent / 100) : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="cx-ayuda">Queda propuesto en contabilidad: lo validas allí o se valida solo si es seguro.</p>
-        </details>
+        // El asiento común (diseno/plantillas): Cuenta · Nombre · Debe · Haber, el debe arriba y los totales con «Cuadra».
+        <AsientoQueSeCrea titulo="Ver el asiento que se crea" abierto={false} nivel={4}
+          lineas={lineas.map((l) => ({
+            codigo: l.cuenta, nombre: p.nombres[l.cuenta] ?? '',
+            debe: l.debeCent ? textoDeImporte(l.debeCent / 100) : null, haber: l.haberCent ? textoDeImporte(l.haberCent / 100) : null,
+          }))}
+          nota="Su asiento queda propuesto y espera en «Por validar», donde lo validas." />
       )}
     </aside>
   )

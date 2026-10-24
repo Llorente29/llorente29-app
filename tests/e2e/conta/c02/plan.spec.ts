@@ -37,12 +37,31 @@ test('cuenta A: el árbol, «qué se apunta aquí», buscar, añadir y deshacer,
   await entrarComo(page, CUENTA_A.email)
   await planActivado(page)
 
-  // El índice dice la cifra real (D2), no la de la maqueta.
-  const indice = page.getByRole('navigation', { name: 'Ajustes' })
-  await expect(indice.getByRole('link', { name: /^Plan contable\s*Pymes · 8 dígitos · \d+ cuentas$/ })).toHaveAttribute('aria-current', 'page')
-  await expect(page.getByText('Plan de pymes · subcuentas de 8 dígitos · la longitud queda fija con el primer asiento')).toBeVisible()
+  // S01e: el plan es Contabilidad › Definiciones (la miga, el título y el menú dicen lo mismo).
+  // S02: en el ordenador, Ajustes ya no lleva índice lateral: sus páginas van en la barra, debajo
+  // del apartado, y el plan NO está entre ellas (una cosa, un solo sitio). La cifra real del plan
+  // (D2) la sigue diciendo el índice de Ajustes del móvil: se mira en la prueba del móvil.
+  await page.goto('/conta/ajustes')
+  const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+  const deAjustes = barra.getByRole('list', { name: 'Páginas de Ajustes' })
+  await expect(deAjustes.getByRole('link', { name: 'Tu empresa', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('navigation', { name: 'Ajustes' })).toHaveCount(0)
+  await expect(deAjustes.getByRole('link', { name: 'Plan contable' })).toHaveCount(0)
   // Nada de Cocina en los Ajustes de contabilidad.
-  for (const cocina of ['Quién reparte', 'Locales', 'Marcas']) await expect(indice.getByText(cocina)).toHaveCount(0)
+  for (const cocina of ['Quién reparte', 'Locales', 'Marcas']) await expect(deAjustes.getByText(cocina)).toHaveCount(0)
+  // Al plan, por la barra: Contabilidad se abre con sus páginas y Definiciones lleva al plan.
+  await barra.getByRole('link', { name: 'Contabilidad', exact: true }).click()
+  const deContabilidad = barra.getByRole('list', { name: 'Páginas de Contabilidad' })
+  await expect(deContabilidad.getByRole('link', { name: 'Definiciones', exact: true })).toHaveAttribute('href', /^\/conta\/ajustes\/plan(\?|$)/)
+  await deContabilidad.getByRole('link', { name: 'Definiciones', exact: true }).click()
+  await expect(page).toHaveURL(/\/conta\/ajustes\/plan(\?|$)/)
+  await expect(page.getByRole('heading', { level: 1, name: 'Plan contable' })).toBeVisible()
+  await expect(deContabilidad.getByRole('link', { name: 'Definiciones', exact: true })).toHaveAttribute('aria-current', 'page')
+  // El título sale UNA vez, y encima dice dónde estás.
+  await expect(page.getByRole('heading', { name: 'Plan contable', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('main').locator('.cx-antetitulo').first()).toHaveText('Definiciones')
+  await expect(page.getByRole('navigation', { name: 'Ajustes' })).toHaveCount(0)
+  await expect(page.getByText('Plan de pymes · subcuentas de 8 dígitos · la longitud queda fija con el primer asiento')).toBeVisible()
 
   // Respuesta 5: el árbol. Con «Las que usas», el grupo 4 abierto hasta el nivel
   // de cuenta, y abiertas las que tienen subcuentas o enlaces (400, 410, 472).
@@ -212,7 +231,9 @@ test('cuenta A: «Qué va a cada sitio» responde con sus palabras', async ({ pa
   test.skip(info.project.name === 'movil', 'Solo lee: basta un tamaño')
   await entrarComo(page, CUENTA_A.email)
   await planActivado(page)
-  await page.getByRole('link', { name: 'Qué va a cada sitio' }).click()
+  // S01: también estaba en la cinta de Definiciones. S02: ahora está en el selector «Ver» de la
+  // fila de acciones, que es un botón y solo enseña sus enlaces abierto; aquí, el de la pantalla.
+  await page.getByRole('main').getByRole('link', { name: 'Qué va a cada sitio' }).click()
   await expect(page).toHaveURL(/\/conta\/ajustes\/plan\/que-va-a-cada-sitio$/)
   await page.getByRole('searchbox', { name: '¿Dónde va…?' }).fill('¿Dónde va la luz?')
   const res = page.getByRole('list', { name: 'Dónde va cada cosa' })
@@ -225,13 +246,18 @@ test('cuenta A: el índice de Ajustes (N6), con «aún no» donde aún no hay pa
   test.skip(info.project.name === 'movil', 'El móvil va en su prueba')
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/ajustes/certificados')
-  const indice = page.getByRole('navigation', { name: 'Ajustes' })
-  for (const g of ['Empresa', 'Contabilidad', 'Acceso y avisos']) await expect(indice.getByRole('heading', { name: g })).toBeVisible()
-  await expect(indice.getByRole('link', { name: /^Certificados y accesos\s*Aún no$/ })).toHaveAttribute('aria-current', 'page')
+  // S02: en el ordenador, el índice de Ajustes son sus páginas en la barra, debajo del apartado
+  // abierto; ya no hay índice lateral con grupos ni líneas de resumen (los grupos, la Numeración,
+  // el plan y el ejercicio con su resumen se miran en el índice del móvil, en su prueba). Aquí: las
+  // páginas en su orden, la de ahora marcada, y sin lo que es de Contabilidad › Definiciones.
+  await expect(page.getByRole('navigation', { name: 'Ajustes' })).toHaveCount(0)
+  const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+  await expect(barra.getByRole('link', { name: 'Ajustes', exact: true })).toHaveAttribute('aria-current', 'true')
+  const indice = barra.getByRole('list', { name: 'Páginas de Ajustes' })
+  await expect(indice.locator('.s-barra-nombre')).toHaveText(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Personas y asesor', 'Avisos', /^Lo que ha hecho /])
+  await expect(indice.getByRole('link', { name: 'Certificados y accesos', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('Aún no.')).toBeVisible()
-  // Con sus líneas de resumen ya cargadas (como N6), no el esqueleto.
-  await expect(indice.getByRole('link', { name: /^Plan contable\s*Pymes · 8 dígitos · \d+ cuentas$/ })).toBeVisible()
-  await expect(indice.getByRole('link', { name: /^Ejercicio\s*\d{4} · / })).toBeVisible()
+  for (const deDefiniciones of ['Plan contable', 'Tablas generales', 'Numeración']) await expect(indice.getByRole('link', { name: deDefiniciones })).toHaveCount(0)
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/ajustes-ordenador.png`, fullPage: true })
 })
@@ -252,7 +278,18 @@ test('cuenta A en el móvil: índice, el plan por niveles y una cuenta en su May
   test.skip(info.project.name !== 'movil', 'La forma del móvil')
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/ajustes')
-  await page.getByRole('navigation', { name: 'Ajustes' }).getByRole('link', { name: /^Plan contable/ }).click()
+  // S02: en el ordenador, Ajustes ya no lleva índice lateral (sus páginas van en la barra); en el
+  // móvil, sí: aquí se miran lo que antes se miraba en el del ordenador. Sus grupos; la cifra real
+  // del plan (D2), no la de la maqueta; la Numeración, que cuenta las series como su tabla y lleva a
+  // ella (S01e); el ejercicio con su resumen, y «Aún no» donde aún no hay pantalla. Nada de Cocina.
+  const indice = page.getByRole('navigation', { name: 'Ajustes' })
+  for (const g of ['Empresa', 'Contabilidad', 'Acceso y avisos']) await expect(indice.getByRole('heading', { name: g })).toBeVisible()
+  await expect(indice.getByRole('link', { name: /^Plan contable\s*Pymes · 8 dígitos · \d+ cuentas$/ })).toHaveAttribute('href', '/conta/ajustes/plan')
+  await expect(indice.getByRole('link', { name: /^Numeración\s*(Ninguna serie todavía|1 serie|\d+ series)$/ })).toHaveAttribute('href', '/conta/ajustes/tablas/numeracion')
+  await expect(indice.getByRole('link', { name: /^Ejercicio\s*\d{4} · / })).toBeVisible()
+  await expect(indice.getByRole('link', { name: /^Certificados y accesos\s*Aún no$/ })).toHaveAttribute('href', '/conta/ajustes/certificados')
+  for (const cocina of ['Quién reparte', 'Locales', 'Marcas']) await expect(indice.getByText(cocina)).toHaveCount(0)
+  await indice.getByRole('link', { name: /^Plan contable/ }).click()
   await expect(page).toHaveURL(/\/conta\/ajustes\/plan$/)
   await expect(page.getByRole('heading', { level: 1, name: 'Plan contable' })).toBeVisible()
   const buscar = page.getByRole('searchbox', { name: 'Buscar una cuenta' })

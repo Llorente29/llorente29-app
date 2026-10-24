@@ -1,0 +1,25 @@
+{
+ "_que": "I01c · «deducida en» · contexto de producción de la tanda viva (20261124T0290), medido en SOLO LECTURA el 20/10 a las 10:08 UTC, después de la 0280 (aplicada) y de la carga de los libros de IVA (#255), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe conta_impuesto_303_calcular con una sola firma (md5 de su cuerpo 34eb07273e5020aea7f270dc0ecd4254, el de la 0280 y el de la vuelta atrás); existe vat_book_entry (4.509 filas, sin columnas deduction_*); no existe conta_libro_iva_deducir_en; nada del camino del pedido; nada en el historial.",
+ "medido": "2026-10-20T10:08Z",
+ "tanda": {
+  "supabase/migrations/20261124T0290_i01c_deducida.sql": "910c96c2ce61828b27540a025ee654b3"
+ },
+ "contexto": {
+  "tablas": [
+   "public.vat_book_entry"
+  ],
+  "funciones": [
+   "public.conta_impuesto_303_calcular(uuid,int,text)"
+  ],
+  "filas": {
+   "public.vat_book_entry": 4509
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

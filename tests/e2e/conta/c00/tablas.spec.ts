@@ -24,7 +24,18 @@ test('cuenta B (Canarias, sin interruptor ni Cocina): impuestos con el IGIC arri
   test.skip(info.project.name === 'movil', 'El reparto es el mismo; el móvil se mira con A')
   await abrirTablas(page, CUENTA_B.email, 'impuestos')
   await expect(page.getByRole('heading', { name: 'Tablas generales', exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
+  // S01e: Contabilidad › Definiciones: el título una vez, «Definiciones» encima y sin el índice de Ajustes al lado.
+  await expect(page.getByRole('heading', { name: 'Tablas generales', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('main').locator('.cx-antetitulo').first()).toHaveText('Definiciones')
+  await expect(page.getByRole('navigation', { name: 'Ajustes' })).toHaveCount(0)
+  await expect(page.getByRole('main').getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
+  // S02: Definiciones es una página de Contabilidad en la barra (antes, una pestaña de la
+  // cabecera): el apartado abierto («estás dentro», 'true') y su página marcada. Y las tablas
+  // también están en el selector «Ver» de la fila de acciones (lo que antes iba en la cinta).
+  const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
+  await expect(barra.getByRole('link', { name: 'Contabilidad', exact: true })).toHaveAttribute('aria-current', 'true')
+  await expect(barra.getByRole('list', { name: 'Páginas de Contabilidad' }).getByRole('link', { name: 'Definiciones', exact: true })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('toolbar', { name: 'Acciones de Definiciones' }).getByRole('button', { name: 'Ver: Impuestos. Cambiar' })).toBeVisible()
 
   // Abre con TODAS (D5): «Todos» pulsado, y las dos separaciones a la vista.
   await expect(page.getByRole('button', { name: 'Todos' })).toHaveAttribute('aria-pressed', 'true')
@@ -76,13 +87,13 @@ test('cuenta A: impuestos como en la maqueta, con el IVA reducido abierto', asyn
   if (movil) {
     // Móvil: la lista de tablas y, al tocar una, esa tabla con «atrás» (dos pasos).
     await abrirTablas(page, CUENTA_A.email)
-    await page.getByRole('link', { name: /^Impuestos/ }).click()
+    await page.getByRole('main').getByRole('link', { name: /^Impuestos/ }).click()
     await expect(page.getByRole('heading', { level: 1, name: 'Impuestos' })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Volver a las tablas generales' })).toBeVisible()
     await page.getByRole('button', { name: /^IVA reducido/ }).click()
   } else {
     await abrirTablas(page, CUENTA_A.email)
-    await expect(page.getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('main').getByRole('link', { name: /^Impuestos/ })).toHaveAttribute('aria-current', 'page')
     await page.getByRole('button', { name: 'Abrir IVA reducido' }).click()
   }
   // Cuentas de apunte con la longitud de la empresa: A lleva 8 dígitos (respuesta 3, punto 3).
@@ -106,7 +117,9 @@ test('cuenta A: ocultar una forma de pago de serie la baja a «Los demás», sin
   test.skip(info.project.name === 'movil', 'Escribe: solo en un tamaño')
   await abrirTablas(page, CUENTA_A.email, 'formas-de-pago')
   await page.getByRole('button', { name: 'Abrir Efectivo' }).click()
-  await page.getByRole('button', { name: 'Ocultar' }).click()
+  // S01: la cinta tenía también su «Ocultar» y por eso se acota a la página. S02: la cinta ya no
+  // existe (la fila de acciones no lleva «Ocultar»), pero se sigue acotando: es el de la forma de pago.
+  await page.getByRole('main').getByRole('button', { name: 'Ocultar', exact: true }).click()
   await expect(page.getByRole('status').getByText(/Ocultado «Efectivo»: ya no sale en tus desplegables/)).toBeVisible()
   const demas = page.getByRole('rowgroup', { name: 'Los demás' })
   await expect(demas).toBeVisible()

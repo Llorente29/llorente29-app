@@ -150,6 +150,12 @@ jobs:
             '[prueba-c0009:emitida-molde]'*) S=scripts/conta/diez/prueba-c0009-emitida-molde.ts ;;
             # D01: la recibida de molde (serie 2), solo lectura (escribir: false).
             '[prueba-c0009:recibida-molde]'*) S=scripts/conta/diez/prueba-c0009-recibida-molde.ts ;;
+            # I01f (20/10): la recibida AUTOLIQUIDADA de molde (serie 2, con 477), solo lectura (escribir: false).
+            '[prueba-c0009:autoliquidada-molde]'*) S=scripts/conta/diez/prueba-c0009-autoliquidada-molde.ts ;;
+            # I01f (20/10, sí de Julio): UNA autoliquidada inventada de Sumied a la C0009, leída de vuelta, y su «-ANUL» (si ya están, no se envían otras).
+            '[prueba-c0009:autoliquidada]'*) S=scripts/conta/diez/prueba-c0009-autoliquidada.ts ;;
+            # I01f (20/10): el detalle que guardó Diez de esa autoliquidada y de su «-ANUL», solo lectura (escribir: false).
+            '[prueba-c0009:autoliquidada-detalle]'*) S=scripts/conta/diez/prueba-c0009-autoliquidada-detalle.ts ;;
             # D01 (15/10): cómo se anula una recibida en la serie 2 y la «-ANUL» de Folvy, ensayada sin escribir (solo GET).
             '[prueba-c0009:recibida-anular]'*) S=scripts/conta/diez/prueba-c0009-recibida-anular.ts ;;
             # E05 (15/10): las recibidas de riders, flotas y Catcher en la serie 2, solo recuentos (escribir: false).
@@ -168,6 +174,10 @@ jobs:
             '[prueba-c0009:adjunto]'*) S=scripts/conta/diez/prueba-c0009-adjunto.ts ;;
             # C06b (16/10): la forma nueva del asiento del día (promoción en negativo y envíos) en la C0009, leída de vuelta.
             '[prueba-c0009:promociones]'*) S=scripts/conta/diez/prueba-c0009-promociones.ts ;;
+            # C07 (22/10): SOLO LEE cómo guarda Diez los asientos que no son facturas (banco, manuales, liquidaciones).
+            '[prueba-c0009:apunte-molde]'*) S=scripts/conta/diez/prueba-c0009-apunte-molde.ts ;;
+            # C07: UN banco inventado de Sumied a la C0009 y su contraasiento, leídos de vuelta (escribe: solo con el «sí» de Julio).
+            '[prueba-c0009:apunte]'*) S=scripts/conta/diez/prueba-c0009-apunte.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac

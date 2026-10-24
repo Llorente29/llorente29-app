@@ -52,26 +52,22 @@ describe('los colores de Sumied, con AA donde se usan', () => {
     expect(contraste(t.tinta, t.acento)).toBeGreaterThanOrEqual(4.5)
     expect(contraste(t.acento, '#FFFFFF')).toBeLessThan(3)
   })
-  it('el tema se escribe encima de los tokens del módulo y de la entrada; sin tema, nada', () => {
+  it('el tema se escribe en la pantalla de entrar; sin tema, nada', () => {
     const css = cssDelTema(S)!
-    expect(css).toContain('html[data-marca="sumied"] .cx')
-    expect(css).toContain('--cx-azul: #1E63C9;')
     expect(css).toContain('--mx-azul: #1E63C9;')
-    expect(css).toContain("--cx-letra: 'Inter Variable'")
     expect(cssDelTema(MARCAS.folvy)).toBeNull()
     expect(cssDelTema(MARCAS.contabilidad)).toBeNull()
   })
-  // M01 (F01, respuesta 3): el marco nuevo va con tokens por marca. En Sumied,
-  // su letra y su azul; el resto (fondos, bordes, ámbar, radios) es el de N30.
-  it('el marco nuevo: en Sumied, su letra y su azul, y nada más', () => {
+  // S02 · Patrón único: dentro del módulo, los valores de serie de diseno/tokens.css
+  // SON los de Sumied (azul de acción #1E63C9, Inter…), y ninguna marca los repinta.
+  // Los --cx-* y --cxm-* son alias de los --s-*. Los contrastes, en s01/diseno.test.tsx.
+  it('S02: el módulo ya no se repinta por marca; sus valores de serie son los de la identidad de Sumied', () => {
     const css = cssDelTema(S)!
-    const desde = css.indexOf('html[data-marca="sumied"] .cxm {')
-    const bloque = css.slice(desde, css.indexOf('}', desde))
-    expect(desde).toBeGreaterThan(-1)
-    expect(bloque).toContain('--cxm-azul: #1E63C9;')
-    expect(bloque).toContain("--cxm-letra: 'Inter Variable'")
-    expect(bloque).toContain('--cxm-azul-encima: color-mix(in srgb, #1E63C9')
-    expect(bloque.match(/--cxm-[a-z-]+/g)).toEqual(['--cxm-azul', '--cxm-azul-encima', '--cxm-letra'])
+    expect(css).not.toMatch(/\.cx\b|\.cxm\b|--s-|--cx-/)
+    const tokens = readFileSync('src/modules/conta/diseno/tokens.css', 'utf8')
+    expect(tokens).toContain(`--s-accion: ${t.accion};`)
+    expect(tokens).toContain(`--s-apoyo: ${t.apoyo};`)
+    expect(tokens).toContain("--s-letra: 'Inter Variable'")
   })
 })
 

@@ -81,7 +81,10 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
     // «Pregunta o pide algo» no se enseña en ninguna ruta): no hay nada que
     // pueda tapar. Lo que se pedía flotando era la barra; que NO esté lo mira
     // la e2e c06/sinBarra.spec.ts, en todas las rutas.
-    if (encontrado.error?.startsWith('No encuentro ninguna pieza flotante') && (page.viewportSize()?.width ?? 1440) >= 768 && flotantes.includes('.cx-pregunta')) return []
+    // S01c (18/10): tampoco en el móvil. La barra de abajo con «Más» pasó a ser
+    // un cajón que abre la cabecera (modal: mientras está abierto no se lee lo de
+    // debajo), así que en el marco de contabilidad no flota nada que tape.
+    if (encontrado.error?.startsWith('No encuentro ninguna pieza flotante') && flotantes.includes('.cx-pregunta')) return []
     if (encontrado.error) throw new Error(encontrado.error)
     if (await altura() !== alto) throw new Error('La página cambió de alto mientras se medía: la medida no vale')
     encontrado.tapado.forEach((t) => tapado.add(t))
@@ -93,10 +96,12 @@ export async function loQueTapan(page: Page, raiz: string, flotantes: string[]):
 
 /**
  * Las piezas que flotan en el marco del módulo de contabilidad. M01: la barra
- * inferior del marco nuevo (.cxm-barra-inferior); las otras dos se quedan para
- * que una pantalla que aún las pinte se siga midiendo.
+ * inferior del esqueleto (.s-barra-inferior, S01; antes .cxm-barra-inferior).
+ * S01c: ya no hay ninguna (el móvil lleva un cajón); se quedan para que una
+ * pantalla que aún las pinte se siga midiendo. S02: el botón principal abajo,
+ * bajo el pulgar (.s-pulgar, móvil), sí flota: no puede tapar la página.
  */
-export const FLOTANTES_CONTA = ['.cx-pregunta', '.cx-barra-inferior', '.cxm-barra-inferior']
+export const FLOTANTES_CONTA = ['.cx-pregunta', '.cx-barra-inferior', '.s-barra-inferior', '.s-pulgar']
 
 /**
  * C06b · Como loQueTapan, y además exige que la barra «Pregunta o pide algo»

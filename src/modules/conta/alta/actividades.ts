@@ -112,3 +112,30 @@ export function proponer(grupos: Grupo[], encontrado: Map<string, { iae: Encontr
   }
   return out
 }
+
+// ── S01 · ¿Es de hostelería? ──────────────────────────────────────────────
+//
+// La marca de la empresa (company.is_hospitality) se pone en el alta por lo que
+// hace, y se cambia en Ajustes › Empresa. Es hostelería lo que da de comer, de
+// beber o alojamiento: restauración y hospedaje. Una panadería u obrador vende
+// producto, no sirve: no lo es (como en la 0110, por la actividad de la cuenta).
+
+const GRUPOS_HOSTELERIA = new Set(['restaurante', 'bar', 'domicilio', 'catering', 'heladeria', 'alojamiento'])
+
+/** Por los grupos que la persona marcó en el alta. */
+export function esHosteleriaPorGrupos(claves: readonly string[]): boolean {
+  return claves.some((c) => GRUPOS_HOSTELERIA.has(c))
+}
+
+/**
+ * Por los códigos elegidos a mano. IAE (sección 1): agrupación 67 (servicio de
+ * alimentación: restaurantes, cafeterías, bares, chocolaterías y heladerías,
+ * comedores) y 68 (hospedaje). CNAE-2025: división 55 (alojamiento) y 56
+ * (servicios de comidas y bebidas).
+ */
+export function esHosteleriaPorCodigos(iae: string | null, cnae: string | null): boolean {
+  // En iae_heading el código lleva su sección delante: «1_671» (medido en staging-conta, 17/10).
+  const i = /^1_(\d+)/.exec(iae ?? '')?.[1] ?? ''
+  const c = (cnae ?? '').replace(/\D/g, '')
+  return /^6[78]/.test(i) || /^5[56]/.test(c)
+}

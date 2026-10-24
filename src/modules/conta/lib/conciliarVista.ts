@@ -16,18 +16,34 @@
 import { normal, nombra, type Destino } from '@/modules/conta/lib/conciliacion'
 import { nombreMes, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 
-export type Bandeja = 'confirmar' | 'aclarar' | 'casados' | 'todos'
+export type Bandeja = 'confirmar' | 'aclarar' | 'validar' | 'casados' | 'todos'
 export const BANDEJAS: { id: Bandeja; nombre: string }[] = [
-  { id: 'confirmar', nombre: 'Para confirmar' }, { id: 'aclarar', nombre: 'Por aclarar' }, { id: 'casados', nombre: 'Casados solos' }, { id: 'todos', nombre: 'Todos' },
+  { id: 'confirmar', nombre: 'Para confirmar' }, { id: 'aclarar', nombre: 'Por aclarar' }, { id: 'validar', nombre: 'Por validar' },
+  { id: 'casados', nombre: 'Casados solos' }, { id: 'todos', nombre: 'Todos' },
 ]
 
-/** En qué bandeja cae un movimiento (además de «Todos», donde están todos). */
-export function bandejaDe(m: MovimientoBanco): Exclude<Bandeja, 'todos'> | null {
+/**
+ * S02 · PR 2 (Julio, 22/10): ¿está casado y su asiento sigue propuesto? Entonces
+ * espera en «Por validar»: Contabilidad › Asientos ya no lo enseña (lib/diario,
+ * SE_DECIDE_EN), y se valida aquí. «Por validar» mira el ASIENTO y las demás
+ * bandejas el movimiento, así que lo casado solo y sin validar está en las dos
+ * («Casados solos», para ver y deshacer lo que hice; «Por validar», para
+ * validarlo): con «validar lo seguro» apagado, que es lo de serie, todo lo que
+ * caso solo queda propuesto, y «Casados solos» no puede quedarse vacío por eso.
+ */
+export const porValidar = (m: MovimientoBanco): boolean => m.estado === 'casado' && m.casado?.asientoEstado === 'propuesto' && !!m.casado.asientoId
+
+/** En qué bandeja cae un movimiento por su estado (además de «Todos», y de «Por validar» si su asiento espera). */
+export function bandejaDe(m: MovimientoBanco): Exclude<Bandeja, 'todos' | 'validar'> | null {
   if (m.estado === 'propuesto') return 'confirmar'
   if (m.estado === 'por_aclarar' || m.estado === 'pendiente' || m.estado === 'posible_repetido') return 'aclarar'
   if (m.estado === 'casado' && m.casado?.porQuien === 'folvy') return 'casados'
   return null
 }
+
+/** ¿Sale en esa bandeja? (lo que lista cada bandeja y lo que cuenta su número, con la misma vara). */
+export const enBandeja = (m: MovimientoBanco, b: Bandeja): boolean =>
+  b === 'todos' || (b === 'validar' ? porValidar(m) : bandejaDe(m) === b)
 
 /** Lo que se puede confirmar tal cual: tiene destino, no falta el ticket y no hay que elegir entre dos. */
 export function confirmable(m: MovimientoBanco): boolean {
@@ -61,14 +77,14 @@ export interface Cuadre {
 
 /** El cuadre, la barra, la banda y los contadores de las bandejas, de una sola lectura. */
 export function cuadreDe(movs: readonly MovimientoBanco[], bancoCent: number | null, libroCent: number | null, mes: string): Cuadre {
-  const cuenta: Record<Bandeja, number> = { confirmar: 0, aclarar: 0, casados: 0, todos: movs.length }
-  for (const m of movs) { const b = bandejaDe(m); if (b) cuenta[b]++ }
+  const cuenta: Record<Bandeja, number> = { confirmar: 0, aclarar: 0, validar: 0, casados: 0, todos: movs.length }
+  for (const m of movs) { const b = bandejaDe(m); if (b) cuenta[b]++; if (porValidar(m)) cuenta.validar++ }
   const sinCasarCent = movs.filter((m) => m.estado !== 'casado' && m.estado !== 'ignorado').reduce((t, m) => t + m.importeCent, 0)
   const nombre = nombreMes(mes).toLowerCase()
   const frase = movs.length === 0
     ? `No hay movimientos de ${nombre}: sube el extracto y los miro.`
-    : `He casado yo ${cuenta.casados} de ${movs.length} movimientos de ${nombre}. ${cuenta.confirmar || cuenta.aclarar
-      ? `Te quedan ${cuenta.confirmar} por confirmar y ${cuenta.aclarar} por aclarar.`
+    : `He casado yo ${cuenta.casados} de ${movs.length} movimientos de ${nombre}. ${cuenta.confirmar || cuenta.aclarar || cuenta.validar
+      ? `Te quedan ${cuenta.confirmar} por confirmar y ${cuenta.aclarar} por aclarar${cuenta.validar ? `, y ${cuenta.validar} por validar` : ''}.`
       : 'No te queda nada.'}`
   return {
     bancoCent, libroCent, faltaCent: bancoCent === null || libroCent === null ? null : bancoCent - libroCent, sinCasarCent,

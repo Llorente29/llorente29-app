@@ -1,13 +1,17 @@
 // src/modules/conta/compras/VerPapel.tsx
 //
-// «Ver el papel» (repaso, 10/10): nadie decide sobre un papel que no ve. Abre
-// la foto o el PDF que ya está guardado con la recepción (las páginas de su
-// lectura, o el documento de la recepción), sin salir de Compras.
+// «Ver el albarán» o «Ver la factura» (repaso, 10/10): nadie decide sobre un
+// documento que no ve. Abre la foto o el PDF que ya está guardado con la
+// recepción (las páginas de su lectura, o el documento de la recepción), sin
+// salir de Compras. Se llama por lo que es (Julio, 21/10: nunca «papel»): con
+// el tipo leído, albarán o factura; sin él, «documento».
+// El nombre del componente se queda: no lo ve nadie.
 
 import { useEffect, useState } from 'react'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { tabla } from '@/modules/conta/services/bd'
 import { getReceiptFileUrl } from '@/modules/supply/services/goodsReceiptService'
+import { elDocumento } from '@/modules/conta/lib/compras'
 
 interface Pagina { url: string; pdf: boolean }
 
@@ -26,7 +30,8 @@ async function paginasDe(recepcion: string): Promise<Pagina[]> {
   return urls.filter((u): u is Pagina => !!u.url)
 }
 
-export function DialogoPapel({ recepcion, titulo, alCerrar }: { recepcion: string; titulo: string; alCerrar: () => void }) {
+export function DialogoPapel({ recepcion, titulo, tipo, alCerrar }: { recepcion: string; titulo: string; tipo?: string | null; alCerrar: () => void }) {
+  const doc = elDocumento(tipo)
   const [paginas, setPaginas] = useState<Pagina[] | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   useEffect(() => {
@@ -37,9 +42,9 @@ export function DialogoPapel({ recepcion, titulo, alCerrar }: { recepcion: strin
   return (
     <Dialogo titulo={titulo} alCerrar={alCerrar}>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      {!fallo && paginas === null && <p role="status" style={{ margin: 0 }}>Abriendo el papel…</p>}
+      {!fallo && paginas === null && <p role="status" style={{ margin: 0 }}>Abriendo {doc}…</p>}
       {paginas && paginas.length === 0 && (
-        <p style={{ margin: 0 }}>Esta recepción no tiene el papel guardado: se apuntó sin foto ni PDF. Lo que se leyó de él es lo que sale en la fila.</p>
+        <p style={{ margin: 0 }}>Esta recepción no tiene {doc} guardado: se apuntó sin foto ni PDF. Lo que se leyó es lo que sale en la fila.</p>
       )}
       {paginas && paginas.length > 0 && (
         <div className="cxc-papel">
@@ -53,13 +58,13 @@ export function DialogoPapel({ recepcion, titulo, alCerrar }: { recepcion: strin
   )
 }
 
-/** El botón «Ver el papel», con su diálogo. */
-export function VerPapel({ recepcion, titulo }: { recepcion: string; titulo: string }) {
+/** El botón «Ver el albarán» / «Ver la factura» / «Ver el documento», con su diálogo. */
+export function VerPapel({ recepcion, titulo, tipo }: { recepcion: string; titulo: string; tipo?: string | null }) {
   const [abierto, setAbierto] = useState(false)
   return (
     <>
-      <button type="button" className="cx-boton-sec" onClick={() => setAbierto(true)}>Ver el papel</button>
-      {abierto && <DialogoPapel recepcion={recepcion} titulo={titulo} alCerrar={() => setAbierto(false)} />}
+      <button type="button" className="cx-boton-sec" onClick={() => setAbierto(true)}>Ver {elDocumento(tipo)}</button>
+      {abierto && <DialogoPapel recepcion={recepcion} titulo={titulo} tipo={tipo} alCerrar={() => setAbierto(false)} />}
     </>
   )
 }

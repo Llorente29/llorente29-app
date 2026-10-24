@@ -44,12 +44,17 @@ export function Sugerencias({ sugerencias, alCambiar }: { sugerencias: Sugerenci
   )
 }
 
-export function RegistroIA({ registro, alCambiar, movil }: { registro: Registro[]; alCambiar: () => void; movil: boolean }) {
+/** enElPlan: cuántos cambios hay en el historial del plan, que va debajo (S01e: no decir «nada» con algo hecho). */
+export function RegistroIA({ registro, alCambiar, movil, enElPlan = 0 }: { registro: Registro[]; alCambiar: () => void; movil: boolean; enElPlan?: number }) {
   const h = useHacer(alCambiar)
   return (
     <TarjetaApartado titulo={`Lo que ha hecho ${MARCA.nombre}`} movil={movil}>
       {registro.length === 0 ? (
-        <p className="cx-vacio">Aún no ha hecho nada por su cuenta. Cuando lo haga, lo verás aquí con su porqué, y lo podrás deshacer.</p>
+        <p className="cx-vacio">
+          {enElPlan > 0
+            ? `En los datos de tu empresa no ha cambiado nada por su cuenta. Lo que ha hecho en tu plan contable está debajo, en su historial.`
+            : 'Aún no ha hecho nada por su cuenta. Cuando lo haga, lo verás aquí con su porqué, y lo podrás deshacer.'}
+        </p>
       ) : (
         <ul className="cx-registro" aria-label={`Lo que ha hecho ${MARCA.nombre}`}>
           {registro.map((r) => {

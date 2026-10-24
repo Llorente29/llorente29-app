@@ -245,7 +245,7 @@ export function ConQuienHablas() {
       </div>
       {ficha.contactos.length === 0 && (
         <p className="cx-ayuda" style={{ margin: 0 }}>
-          {ficha.tercero.supplierId ? 'Aún no hay contactos. Se añaden en su ficha de proveedor y salen aquí también.' : 'Los contactos de un cliente que no es proveedor llegan en un encargo propio (pendiente en el PR).'}
+          {ficha.tercero.supplierId ? 'Aún no hay contactos. Se añaden en su ficha de proveedor y salen aquí también.' : 'Los contactos de un cliente que no es proveedor aún no se pueden guardar aquí: llegarán más adelante.'}
         </p>
       )}
       {ficha.contactos.map((c) => (
@@ -326,25 +326,25 @@ export function SusCuentas({ completa = false }: { completa?: boolean }) {
         {!completa && <Link to={rutaApartado('contabilidad')}>Contabilidad</Link>}
       </div>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      {!ficha.planActivo && <p className="cx-ayuda" style={{ margin: 0 }}>Se asignan al activar el plan contable (Ajustes › Plan contable).</p>}
+      {!ficha.planActivo && <p className="cx-ayuda" style={{ margin: 0 }}>Se asignan al activar el plan contable (Contabilidad › Definiciones › Plan contable).</p>}
       {ficha.planActivo && <>
         {(cliente || socio) && fila('Como cliente', comoCliente ? enlace(comoCliente) : (
           <span className="cxt-sin-cuenta">
             <span>Sin cuenta de cliente</span>
             {propuesta && companyId && <button type="button" className="cx-enlace" disabled={ocupado}
-              onClick={() => void hacer(() => enlazarCuentaCliente(companyId, ficha.tercero.id, propuesta.id, userName), `${propuesta.code} es ahora su cuenta de cliente.`)}>
-              Es la {propuesta.code}{propuesta.traida ? ' (traída)' : ''}</button>}
+              onClick={() => void hacer(() => enlazarCuentaCliente(companyId, ficha.tercero.id, propuesta.id, userName), `${propuesta.code} · ${propuesta.name} es ahora su cuenta de cliente.`)}>
+              Es la {propuesta.code} · {propuesta.name}{propuesta.traida ? ' (traída)' : ''}</button>}
             {companyId && <button type="button" className="cx-enlace" disabled={ocupado}
-              onClick={() => void hacer(async () => { const r = await crearCuentaCliente(companyId, ficha.tercero.id, ficha.tercero.nombre, userName); avisar(`Creada su subcuenta ${r.code} bajo la 4300.`) }, 'Cuenta de cliente creada.')}>
-              Crear su subcuenta 4300</button>}
+              onClick={() => void hacer(async () => { const r = await crearCuentaCliente(companyId, ficha.tercero.id, ficha.tercero.nombre, userName); avisar(`Creada su cuenta de cliente ${r.code} · Clientes · ${ficha.tercero.nombre}.`) }, 'Cuenta de cliente creada.')}>
+              Crear su cuenta de cliente</button>}
           </span>
         ))}
-        {proveedor && fila('Como proveedor', comoProveedor ? enlace(comoProveedor) : 'Sin subcuenta de proveedor')}
+        {proveedor && fila('Como proveedor', comoProveedor ? enlace(comoProveedor) : 'Sin cuenta de proveedor')}
         {socio && fila('Lo que cobras por su cuenta', deLiquidacion ? enlace(deLiquidacion) : (
           <span className="cxt-sin-cuenta">
             <span>Sin cuenta de liquidación</span>
             {companyId && <button type="button" className="cx-enlace" disabled={ocupado}
-              onClick={() => void hacer(async () => { const r = await asegurarCuentaLiquidacion(companyId, ficha.tercero.id, ficha.tercero.nombre, userName); if (r) avisar(`Creada su cuenta ${r.code} «Liquidación pendiente con ${ficha.tercero.nombre}», bajo la 410.`) }, 'Cuenta de liquidación creada.')}>
+              onClick={() => void hacer(async () => { const r = await asegurarCuentaLiquidacion(companyId, ficha.tercero.id, ficha.tercero.nombre, userName); if (r) avisar(`Creada su cuenta ${r.code} «Liquidación pendiente con ${ficha.tercero.nombre}».`) }, 'Cuenta de liquidación creada.')}>
               Crear su cuenta de liquidación</button>}
           </span>
         ))}

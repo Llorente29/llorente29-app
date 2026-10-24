@@ -46,7 +46,7 @@ export interface PapelGuardado {
 export async function listarTercerosBase(accountId: string): Promise<{ terceros: (Tercero & { supplierId: string | null })[]; papeles: Map<string, PapelGuardado[]> }> {
   const [parties, roles] = await Promise.all([
     leer(tabla('party').select('id, name, tax_id, archived_at, archived_note').eq('account_id', accountId).order('name'), 'los terceros'),
-    leer(tabla('party_role').select('party_id, role, supplier_id, channel_id, settlement_every, commission_pct, contribution_kinds, platform_model').eq('account_id', accountId), 'sus papeles'),
+    leer(tabla('party_role').select('party_id, role, supplier_id, channel_id, settlement_every, commission_pct, contribution_kinds, platform_model').eq('account_id', accountId), 'si son cliente, proveedor, plataforma o socio'),
   ])
   const papeles = new Map<string, PapelGuardado[]>()
   for (const r of roles) {
@@ -187,7 +187,7 @@ export interface DatosFiscalesCliente {
   operationScope: 'domestic' | 'eu' | 'export'
   exclude347: boolean
   exclude347Reason: string | null
-  paymentMethod: 'transfer' | 'direct_debit' | 'card' | 'cash' | null
+  paymentMethod: 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid' | null
   paymentTermsDays: number | null
   paymentFixedDays: number[] | null
   collectionTreasuryId: string | null
@@ -312,7 +312,7 @@ export const anadirPapel = (partyId: string, papel: 'customer' | 'platform' | 'b
 export async function guardarModeloPlataforma(partyId: string, modelo: ModeloPlataforma | null): Promise<void> {
   const { data, error } = await tabla('party_role').update({ platform_model: modelo }).eq('party_id', partyId).eq('role', 'platform').select('party_id')
   if (error) throw new Error(mensaje('No se ha podido guardar cómo vende la plataforma', error))
-  if (!data?.length) throw new Error('Este tercero no tiene el papel de plataforma.')
+  if (!data?.length) throw new Error('Este contacto no está como plataforma.')
 }
 
 export const archivarTercero = (partyId: string, archivar: boolean, nota?: string | null) =>

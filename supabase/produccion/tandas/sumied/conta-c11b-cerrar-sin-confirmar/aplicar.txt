@@ -1,0 +1,24 @@
+# C11b · Los no confirmados se contabilizan y se cierran las 32 (Julio, 23/10).
+# Rama conta/c11b-cerrar-sin-confirmar. Se ensaya y se aplica desde esta rama,
+# antes de fusionar.
+#
+#   1. 2300 — CAMBIA en caliente conta_cerrar_dias (misma firma) y el CHECK de
+#      sales_day_close_log.accion (solo amplía), declarados en su cabecera con
+#      su prueba de staging, y AÑADE conta_sin_confirmar_no_cobrados. La regla
+#      nueva del cierre: lo de plataforma abierto se cierra como vendido (sin
+#      volver a consumir), lo cancelado en la plataforma fuera, lo demás para
+#      revisar. AUTORIZO: sales_day_close_log está en el camino.
+#   2. 2310 — DATOS de Foodint: las ventas que el cierre anuló y la plataforma
+#      entregó se cierran como vendidas (sin close_sale, sin tocar su stock,
+#      con el coste de línea que falte), con guarda (las 32 y su importe),
+#      copia y vuelta atrás; y sus días que no tenían asiento quedan con el
+#      asiento PROPUESTO (conta_proponer_dias, como el cron). AUTORIZO: update
+#      de sale.
+#
+# Lo que NO hace la tanda, a propósito: anular los asientos ya validados y
+# enviados a Diez de esos días ni validar los nuevos. Eso lo hace una persona
+# en el libro (anular manda el contraasiento a Diez; validar manda el nuevo).
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/c11b-cerrar-sin-confirmar.sql
+supabase/migrations/20261023T2300_c11b_cierre_cierra_sin_confirmar.sql
+supabase/migrations/20261023T2310_c11b_cerrar_las_entregadas.sql

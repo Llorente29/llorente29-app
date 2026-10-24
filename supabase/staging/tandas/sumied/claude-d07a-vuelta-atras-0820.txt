@@ -1,0 +1,11 @@
+# Staging de la rama claude/d07a-vuelta-atras-0820 (D07a, #299). Desde el C10
+# el supabase/staging/aplicar.txt queda cerrado: lo de esta rama va aquí.
+#
+# D07a · el respaldo de los envíos que repone la 0820, para que su vuelta atrás
+# los deje como estaban (23/10: el ensayo del run 190 paró por eso). La 0880
+# añade una tabla; con Foodint la llena, aquí queda vacía. Su prueba (ROLLBACK):
+# sin Foodint no toca nada; con un envío de A, la vuelta atrás de la 0820 lo
+# deja byte a byte como estaba y no toca el que ya llegó a Diez; un usuario no
+# lee el respaldo.
+supabase/migrations/20261208T0880_d07a_respaldo_antes_de_reenviar.sql
+supabase/staging/sql/20261208_d07a_respaldo_prueba.sql

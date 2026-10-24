@@ -11,21 +11,22 @@
 //     estaba y no ha creado nada.
 
 import { rpc, tabla, hayBase } from '@/modules/conta/services/bd'
+import { supabase } from '@/lib/supabase'
 import { uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
-import { comprobarPdf, leerFacturas, leerQuincena, loteParaRegistrar, reconocer, type Fichero, type PdfSubido, type PedidoExcel, type Quincena, type TipoFactura } from '@/modules/conta/lib/catcherQuincena'
+import { comprobarPdf, textoPorPosicion, leerFacturas, leerQuincena, loteParaRegistrar, reconocer, type Fichero, type PdfSubido, type PedidoExcel, type Quincena, type TipoFactura } from '@/modules/conta/lib/catcherQuincena'
 import { cruzar, type Cruce, type PedidoApp, type Tarifa } from '@/modules/conta/lib/catcherCruces'
 import { cuentaDelLote, type Cuenta, type EstadoCosa } from '@/modules/conta/lib/catcherCuenta'
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
 const sha256 = async (b: Uint8Array) => hex(await crypto.subtle.digest('SHA-256', new Uint8Array(b)))
 
-/** El texto de un PDF, página a página (pdfjs, el build legacy que ya usa el plan). */
+/** El texto de un PDF, página a página y por posición (pdfjs, el build legacy que ya usa el plan). */
 async function textoPdf(bytes: Uint8Array): Promise<string> {
-  const pj = await pdfjs() as unknown as { getDocument(o: { data: Uint8Array; verbosity?: number }): { promise: Promise<{ numPages: number; getPage(i: number): Promise<{ getTextContent(): Promise<{ items: { str?: string }[] }> }> }> } }
+  const pj = await pdfjs() as unknown as { getDocument(o: { data: Uint8Array; verbosity?: number }): { promise: Promise<{ numPages: number; getPage(i: number): Promise<{ getTextContent(): Promise<{ items: { str?: string; transform?: number[] }[] }> }> }> } }
   const doc = await pj.getDocument({ data: new Uint8Array(bytes), verbosity: 0 }).promise
   let t = ''
-  for (let i = 1; i <= doc.numPages; i++) t += (await (await doc.getPage(i)).getTextContent()).items.map((x) => x.str ?? '').join(' ') + '\n'
+  for (let i = 1; i <= doc.numPages; i++) t += textoPorPosicion((await (await doc.getPage(i)).getTextContent()).items) + '\n'
   return t
 }
 
@@ -131,6 +132,25 @@ export async function cruzarLote(accountId: string, companyId: string, loteId: s
   return { cruce, texto: String(r.texto ?? '') }
 }
 
+/**
+ * «Volver a comprobar» (Julio, 22/10): el servidor vuelve a leer los PDF de las
+ * facturas que siguen en revisión (conta-lote-releer, con el mismo código que al
+ * subir) y vuelve a cruzar. Devuelve la frase de lo que ha hecho.
+ */
+export async function volverAComprobarLote(loteId: string, quien: string | null): Promise<string> {
+  hayBase()
+  const { data, error } = await supabase!.functions.invoke('conta-lote-releer', { body: { lote: loteId, quien } })
+  if (error) {
+    // El motivo, el que da la función (403: no es administrador ni encargado).
+    const ctx = (error as { context?: Response }).context
+    const cuerpo = ctx ? await ctx.json().catch(() => null) as { error?: string } | null : null
+    throw new Error(cuerpo?.error ?? `No se ha podido volver a comprobar: ${error.message}`)
+  }
+  const r = data as { texto?: string; error?: string } | null
+  if (!r || r.error) throw new Error(r?.error ?? 'No se ha podido volver a comprobar: la función no ha contestado.')
+  return String(r.texto ?? '')
+}
+
 /** La persona decide sobre una cosa por aclarar: se da por buena, se reclama (con lo que se reclama) o se vuelve a abrir. */
 export async function aclarar(issueId: string, decision: 'aceptada' | 'reclamada' | 'abierta', nota: string | null, quien: string | null): Promise<string> {
   hayBase()
@@ -203,6 +223,23 @@ const deFila = (r: FilaLote, cuenta: Cuenta): LoteFila => ({
   cruzado: !!r.crossed_at, pago: r.payment_entry_id, subido: r.created_at, quien: r.created_by_name, cuenta,
 })
 const COLUMNAS_LOTE = 'id, label, period_from, period_to, invoice_count, grand_total, crossed_at, cross_summary, payment_entry_id, created_at, created_by_name'
+
+/**
+ * S01e · ¿Trabaja la empresa con Catcher? Sí si tiene algo suyo puesto: sus tiendas
+ * (supplier_batch_store), su tarifa (supplier_rate) o alguna quincena ya subida
+ * (supplier_batch). Sin nada de eso, la tarjeta de la quincena no se enseña: no
+ * esconde ninguna fila, porque no hay ninguna (regla 7). Siempre por cuenta y empresa (regla 9).
+ */
+export async function usaCatcher(accountId: string, companyId: string): Promise<boolean> {
+  hayBase()
+  const hay = async (t: 'supplier_batch_store' | 'supplier_rate' | 'supplier_batch', que: string) => {
+    const { data, error } = await tabla(t).select('id').eq('account_id', accountId).eq('company_id', companyId).eq('provider', 'catcher').limit(1)
+    if (error) throw new Error(`No se ha podido saber si trabajas con Catcher (${que}): ${error.message}`)
+    return (data ?? []).length > 0
+  }
+  const [tiendas, tarifa, lotes] = await Promise.all([hay('supplier_batch_store', 'las tiendas'), hay('supplier_rate', 'la tarifa'), hay('supplier_batch', 'las quincenas')])
+  return tiendas || tarifa || lotes
+}
 
 /** Las quincenas de Catcher subidas por la empresa, la más reciente primero. */
 export async function leerLotes(accountId: string, companyId: string): Promise<LoteFila[]> {

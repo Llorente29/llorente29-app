@@ -4,7 +4,7 @@
 #   carril.sh coger          espera a que nadie esté migrando staging, coge un
 #                            carril libre y deja su número en $CARRIL_DIR/numero
 #   carril.sh clonar         copia la plantilla de prueba en ese carril (y le pone
-#                            a sus siete usuarios la contraseña de un solo uso)
+#                            a sus usuarios la contraseña de un solo uso)
 #   carril.sh borrar         borra lo del carril (también lo que dejó un run
 #                            cortado que usó el mismo número)
 #   carril.sh soltar         borra y suelta (pase lo que pase: if: always())
@@ -20,9 +20,15 @@
 #
 # Entorno: DB_URL; CARRIL_DIR (por defecto $RUNNER_TEMP/carril); CARRIL_YO (quién:
 # «run 123 · trozo 2/4 · conta/b02…», sale en pg_stat_activity); CLAVE_PRUEBAS
-# (clonar). Opcionales: PSQL, CARRIL_ESPERA_MIN (40), CARRIL_MAX (16: cada
-# carril en uso es una conexión más, y la Micro tiene 60, 30 ya ocupadas por
-# PostgREST, auth y el pooler; medido el 16/10).
+# (clonar). Opcionales: PSQL, CARRIL_ESPERA_MIN (40: lo que espera a que nadie
+# migre y, aparte, lo que espera a que quede un carril libre), CARRIL_MAX (2).
+#
+# EL TOPE (W02, 17/10). CARRIL_MAX es cuántos trozos corren A LA VEZ en todo
+# staging, de todas las ramas. Con 4 a la vez la Micro se satura (ocupación
+# p95 2.312 ms/s contra 578 con 2; run 484) y las pruebas caen por tiempo, cada
+# vuelta unas. El que llega con los carriles cogidos espera su turno. En el
+# workflow sale de la variable del repositorio E2E_CARRILES (vacía = 2): si
+# staging pasa a Small, se pone a 4 allí, sin tocar el código.
 #
 # CÓMO SE CIERRA SIN TABLAS NI CADUCIDADES. Dos cerrojos consultivos de
 # Postgres que mantiene un psql en segundo plano mientras dura el job:
@@ -52,7 +58,7 @@ AQUI=$(cd "$(dirname "$0")" && pwd)
 SQL="$AQUI/carril"
 CARRIL_DIR=${CARRIL_DIR:-${RUNNER_TEMP:-/tmp}/carril}
 ESPERA_MIN=${CARRIL_ESPERA_MIN:-40}
-MAX=${CARRIL_MAX:-16}
+MAX=${CARRIL_MAX:-2}
 VIEJO=${CARRIL_CERROJO_VIEJO:-1}
 : "${DB_URL:?Falta DB_URL}"
 mkdir -p "$CARRIL_DIR"
@@ -104,6 +110,13 @@ quien_hay() {
                where l.locktype = 'advisory' and l.classid = 4202 and l.objid = 0" 2>/dev/null || true
 }
 
+# Quién tiene los carriles: para decir a quién se espera.
+quien_carriles() {
+  q -A -t -c "select string_agg(a.application_name, ' | ' order by l.objid)
+                from pg_locks l join pg_stat_activity a on a.pid = l.pid
+               where l.locktype = 'advisory' and l.classid = 4203 and l.granted" 2>/dev/null || true
+}
+
 # Suelta los cerrojos: termina en el servidor el proceso del guardián (si no,
 # con el pooler, su consulta seguiría viva con los cerrojos) y mata el psql.
 matar_guardian() {
@@ -128,13 +141,18 @@ coger() {
   [ -n "$otros" ] && echo "Cerrojo de migrar ahora: $otros"
   esperar_linea 'migrar-libre' > /dev/null || { echo "::error::Sin el cerrojo compartido en ${ESPERA_MIN} min. Lo tiene: $(quien_hay)"; matar_guardian; exit 1; }
   echo "Nadie migra staging (esperado $(( $(date +%s) - t0 )) s)."
+  local t1; t1=$(date +%s)
   n=$(esperar_linea 'carril ' | awk '{print $2}') || { matar_guardian; exit 1; }
   if [ -z "$n" ] || [ "$n" = 0 ]; then
-    echo "::error::Los $MAX carriles están cogidos: $(q -A -t -c "select count(*) from pg_locks where locktype = 'advisory' and classid = 4203 and granted")."
+    echo "::error::Los $MAX carriles siguen cogidos tras ${ESPERA_MIN} min de espera. Los tienen: $(quien_carriles)"
     matar_guardian; exit 1
   fi
   echo "$n" > "$CARRIL_DIR/numero"
-  echo "Carril $n cogido (${CARRIL_YO:-?})."
+  if grep -q '^carril-espera' "$CARRIL_DIR/guardian.log"; then
+    echo "Carril $n cogido tras $(( $(date +%s) - t1 )) s en cola: estaban los $MAX cogidos (${CARRIL_YO:-?})."
+  else
+    echo "Carril $n cogido (${CARRIL_YO:-?})."
+  fi
 }
 
 # Los parámetros, en un fichero: psql sustituye :'variable' en lo que lee de

@@ -27,14 +27,8 @@ export function euros(n: number): string {
   return `${negativo ? '−' : ''}${cuerpo} €`
 }
 
-/** Importe siempre con dos decimales, para listas de facturas («964,40 €»). */
-export function eurosExactos(n: number): string {
-  const negativo = n < 0
-  const centimos = Math.round(Math.abs(n) * 100)
-  const entero = Math.floor(centimos / 100)
-  const resto = centimos % 100
-  return `${negativo ? '−' : ''}${miles(String(entero))},${String(resto).padStart(2, '0')} €`
-}
+/** Importe siempre con dos decimales, para listas de facturas («964,40 €»). En _shared: el servidor lo usa igual. */
+export { eurosExactos } from '../../../../supabase/functions/_shared/euros.ts'
 
 /** 'YYYY-MM-DD' → «24 oct». */
 export function diaMes(iso: string): string {

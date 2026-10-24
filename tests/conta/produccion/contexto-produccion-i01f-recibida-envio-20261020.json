@@ -1,0 +1,21 @@
+{
+  "_que": "I01f · el envío a Diez de las autoliquidadas · contexto de producción de la tanda de la 0320 (I01f, aplicada el 20/10; su copia, tests/conta/produccion/tanda-i01f-recibida-envio-20261020.txt), medido en SOLO LECTURA el 20/10 a las 18:00 UTC, después de la 0300 y la 0310 (aplicadas), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe conta_recibida_envio(uuid) con una sola firma (md5 de su cuerpo 6e5ed258…, el de 20261113T0100 y el de la vuelta atrás); nada del camino del pedido; nada en el historial.",
+  "medido": "2026-10-20T18:00Z",
+  "tanda": {
+    "supabase/migrations/20261126T0320_i01f_recibida_envio_tratamiento.sql": "1f5c4b4b4587ceacb5d746b354a48251"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.conta_recibida_envio(uuid)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

@@ -1,0 +1,21 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# I01c · «Deducida en» (rama conta/i01c-deducida; aprobado por Julio, 20/10).
+# Va DESPUÉS de la del trimestre (0280, PR #252, aplicada): su copia,
+# tests/conta/produccion/tanda-i01c-trimestre-20261019.txt.
+#
+#   1. 0290 — AÑADE a vat_book_entry «deducida en» (deduction_year,
+#      deduction_period, deduction_reason; admiten nulos, todas nulas hoy) con
+#      su restricción, y conta_libro_iva_deducir_en (la carga, todas o
+#      ninguna). CAMBIA en caliente, declarado con su prueba de staging,
+#      conta_impuesto_303_calcular (misma firma): una recibida con «deducida
+#      en» va en ese periodo, y «out_of_period» lo dice a los dos lados.
+#
+# No toca el camino del pedido. No marca ninguna factura: la carga de Foodint
+# espera a la lista de la gestoría. Ninguna función que desplegar.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/i01c-deducida.sql
+supabase/migrations/20261124T0290_i01c_deducida.sql

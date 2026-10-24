@@ -64,6 +64,12 @@ export interface Columna {
   apoyo?: boolean
   /** Ancho en la rejilla de ordenador. */
   ancho: string
+  /**
+   * En el móvil va en su propia línea, debajo del nombre, y puede partirse:
+   * al lado del nombre no cabe (el IBAN se salía de la tarjeta y se pintaba
+   * encima del nombre; auditoría S01b a 390 px).
+   */
+  lineaPropiaEnMovil?: boolean
 }
 
 export interface DatoDetalle {
@@ -215,7 +221,7 @@ export const TRATAMIENTO: Record<string, string> = {
   reverse_charge: 'Lo declaras tú (inversión del sujeto pasivo)', not_subject: 'No sujeto',
 }
 export const FORMA_PAGO: Record<string, string> = {
-  transfer: 'Transferencia', direct_debit: 'Domiciliación', card: 'Tarjeta', cash: 'Efectivo', other: 'Otra',
+  transfer: 'Transferencia', direct_debit: 'Domiciliación', card: 'Tarjeta', cash: 'Efectivo', other: 'Otra', prepaid: 'Saldo prepago Catcher (40700001)',
 }
 export const DOCUMENTO: Record<string, string> = {
   invoice: 'Factura', simplified: 'Factura simplificada (ticket)', rectifying: 'Factura rectificativa',
@@ -482,7 +488,7 @@ const BANCOS: DefinicionTabla = {
   tituloFila: (f) => txt(d(f, 'name')),
   apoyoFila: (f) => CAJA[txt(d(f, 'kind'))] ?? null,
   columnas: [
-    { id: 'iban', etiqueta: 'IBAN', cifra: true, apoyo: true, ancho: '260px', valor: (f) => (d(f, 'iban') ? formatearIban(txt(d(f, 'iban'))) : '—') },
+    { id: 'iban', etiqueta: 'IBAN', cifra: true, apoyo: true, ancho: '260px', lineaPropiaEnMovil: true, valor: (f) => (d(f, 'iban') ? formatearIban(txt(d(f, 'iban'))) : '—') },
   ],
   detalle: [
     { etiqueta: 'Tipo', valor: (f) => CAJA[txt(d(f, 'kind'))] ?? null },
@@ -643,6 +649,20 @@ export function agruparConceptos(filas: FilaGeneral[], conVigencia: boolean, hoy
     const fila = orden.find((f) => vale(f, hoy)) ?? orden[0]
     return { fila, historial: orden.filter((f) => f !== fila) }
   })
+}
+
+/**
+ * Cuántos conceptos tiene una tabla (las vigencias de lo mismo cuentan una
+ * vez). La MISMA cuenta para la cifra del menú de las tablas y para la línea
+ * de «Numeración» del índice de Ajustes (S01e: no decir «aún no» con series).
+ */
+export function cuantosConceptos(def: DefinicionTabla, filas: FilaGeneral[], hoy: string): number {
+  return agruparConceptos(filas, def.conVigencia, hoy).length
+}
+
+/** La línea de «Numeración» en el índice de Ajustes: «2 series», o que aún no hay. */
+export function resumenSeries(n: number): string {
+  return n === 0 ? 'Ninguna serie todavía' : `${n} ${n === 1 ? 'serie' : 'series'}`
 }
 
 /** «Desde 01/09/2012», «Hasta 31/12/2024», «Del 01/10/2024 al 31/12/2024». */

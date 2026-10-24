@@ -12,9 +12,17 @@
 -- solo service_role): en producción, a mano y con registro. Aquí lo necesita la
 -- prueba, sin la clave de servicio, así que esta función —que SOLO existe en
 -- staging, por esta semilla, y no está en ninguna migración— se lo deja hacer
--- al administrador de plataforma de prueba y a nadie más, y solo para una
+-- al administrador de plataforma de prueba (el de la plantilla o el de su
+-- carril) y a nadie más, y solo para una
 -- empresa de una cuenta del recorrido. Pasa la C0009 (que es una, única) de la
 -- empresa que la tenga a la del recorrido, con su registro.
+--
+-- La C0009 es UNA (conta_diez_base_una_empresa) y con carriles hay dos e2e a
+-- la vez: el 17/10 (entera 39033907423) el recorrido de otro carril se la quitó
+-- a mitad del mío. Por eso va con turno: quien la pone deja su id en puesto_por;
+-- su mismo carril la vuelve a coger cuando quiera (ordenador y luego móvil), y
+-- otro carril solo pasados 10 minutos desde que se puso (el recorrido la usa
+-- un minuto). Mientras tanto devuelve «ocupada» y la prueba espera su turno.
 --
 -- Guardas: aborta si al otro lado hay cuentas de producción, o si falta el
 -- administrador de plataforma de prueba (seed_c06_staging.sql).
@@ -37,18 +45,34 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  -- Quién tiene el turno: el administrador de plataforma de prueba de este carril.
+  v_por constant text := 'e2e C06 · ' || coalesce(auth.uid()::text, '');
 begin
-  if auth.uid() is distinct from 'c0600000-0000-4000-8000-0000000000f0'::uuid then
+  -- W02 (carriles): cada e2e entra con su copia del administrador de plataforma
+  -- de prueba, con el segundo grupo del id cambiado por el número de su carril
+  -- (scripts/e2e/carril/comun.sql, en_carril). Vale el de la plantilla y el de
+  -- cualquier carril, siempre que sea administrador de plataforma activo.
+  if auth.uid() is null
+     or overlay(auth.uid()::text placing '0000' from 10 for 4) <> 'c0600000-0000-4000-8000-0000000000f0'
+     or not exists (select 1 from public.platform_admins where user_id = auth.uid() and active) then
     raise exception 'Solo el administrador de plataforma de prueba del C06.' using errcode = '42501';
   end if;
   if not exists (select 1 from public.company c join public.accounts a on a.id = c.account_id
                   where c.id = p_company and a.name like 'Recorrido de Prueba C06 %' and a.product_brand = 'contabilidad') then
     raise exception 'Esa empresa no es de una cuenta del recorrido del C06.' using errcode = '42501';
   end if;
+  -- El turno se mira y se coge en un solo paso: dos carriles a la vez esperan aquí.
+  perform pg_advisory_xact_lock(hashtext('e2e_c06_recorrido_base'));
+  if exists (select 1 from public.conta_diez_base
+              where nombre_bd = 'C0009' and company_id <> p_company
+                and puesto_por <> v_por and created_at > now() - interval '10 minutes') then
+    return 'ocupada';
+  end if;
   delete from public.conta_diez_base where nombre_bd = 'C0009' and company_id <> p_company;
   if not exists (select 1 from public.conta_diez_base where company_id = p_company) then
     perform public.conta_diez_base_poner(p_company, 'C0009',
-      'Recorrido e2e del C06 (staging): traer de Diez leyendo la C0009.', 'e2e C06 · c06.plataforma');
+      'Recorrido e2e del C06 (staging): traer de Diez leyendo la C0009.', v_por);
   end if;
   return 'C0009';
 end;
@@ -57,7 +81,7 @@ $$;
 revoke all on function public.e2e_c06_recorrido_base(uuid) from public, anon;
 grant execute on function public.e2e_c06_recorrido_base(uuid) to authenticated;
 comment on function public.e2e_c06_recorrido_base(uuid) is
-  'SOLO STAGING (seed_c06_recorrido_staging.sql). El recorrido e2e del C06 registra la C0009 para su empresa. Solo el administrador de plataforma de prueba.';
+  'SOLO STAGING (seed_c06_recorrido_staging.sql). El recorrido e2e del C06 registra la C0009 para su empresa, por turnos entre carriles («ocupada» mientras otro la tenga, hasta 10 min). Solo el administrador de plataforma de prueba (el de la plantilla o el de su carril).';
 
 -- Comprobación: existe y la ve quien tiene que verla.
 do $$

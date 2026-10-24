@@ -6,6 +6,11 @@
 //   · Cerrar el mes: los meses del ejercicio, cerrados (quién y por qué) o
 //     abiertos, con Cerrar y Reabrir (con motivo). Las mismas funciones que el
 //     libro diario (C04): aquí solo están a mano.
+//     S02 · PR 2: y en la MISMA página, el cierre del mes de cada banco (antes,
+//     Bancos › Cierre del mes): un mes se cierra en contabilidad y en cada
+//     banco, y los dos se ven juntos. El de los bancos es de un mes (?mes=;
+//     sin él, el último terminado) y pone primero el banco por el que se llegó
+//     (?banco=). La dirección de antes, bancos/cierre, lleva aquí.
 //   · Regularización, cierre y apertura: Folvy calcula los tres asientos
 //     (src/modules/conta/lib/cierre.ts), los PROPONE como cualquier otro
 //     asiento (se validan en el libro diario) y los enlaza al ejercicio; luego
@@ -13,11 +18,15 @@
 //     contraasiento. Un ejercicio TRAÍDO se enseña tal cual: no se recalcula.
 
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaLibroDiario, rutaLibros, rutaTuEmpresa } from '@/config/navegacion'
 import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
-import { eurosExactos } from '@/modules/conta/lib/formato'
+import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { AsientoQueSeCrea, FiltroSelector } from '@/modules/conta/diseno/plantillas'
+import { textoDeImporte } from '@/modules/conta/diseno'
+import { CierreDelMes } from '@/modules/conta/bancos/CierreDelMes'
+import { mesDelCierre } from '@/modules/conta/bancos/navegacion'
 import { prepararCierre, sumas, type AsientoCierre, type SaldoACerrar } from '@/modules/conta/lib/cierre'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { cerrarMes, leerCierres, reabrirMes } from '@/modules/conta/services/diarioService'
@@ -47,16 +56,16 @@ export function Ejercicios() {
         <div className="cxl-herramientas"><Link to={rutaTuEmpresa()} className="cx-boton-sec">Abrir un ejercicio o cambiar su plantilla</Link></div>
       </div>
       <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-        <table className="cxl-tabla" aria-label="Ejercicios de la empresa">
+        <table className="cxl-tabla cxl-apilada" aria-label="Ejercicios de la empresa">
           <thead><tr><th>Ejercicio</th><th>Fechas</th><th>Estado</th><th>Modelo</th><th className="cxl-der">Plantilla media</th><th /></tr></thead>
           <tbody>{L.ejercicios.map((e) => {
             const s = estadoEjercicio(e)
             return (
               <tr key={e.id}><td><strong>{e.code}</strong>{e.id === L.ejercicio.id && <> <Chip tono="azul">el que miras</Chip></>}</td>
-                <td>{ddmm(e.inicio)} – {ddmm(e.fin)}</td>
-                <td><Chip tono={s.tono}>{s.texto}</Chip>{e.traidoHasta ? <span className="cxl-apoyo"> · traído hasta {ddmm(e.traidoHasta)}</span> : null}{e.cierre && e.cierre.reaperturas > 0 ? <span className="cxl-apoyo"> · reabierto {e.cierre.reaperturas} {e.cierre.reaperturas === 1 ? 'vez' : 'veces'}</span> : null}</td>
-                <td>{e.modelo ? e.modelo.elegido : <span className="cxl-apoyo">sin elegir</span>}</td>
-                <td className="cxl-der">{e.plantillaMedia}</td>
+                <td data-titulo="Fechas">{ddmm(e.inicio)} – {ddmm(e.fin)}</td>
+                <td data-titulo="Estado"><Chip tono={s.tono}>{s.texto}</Chip>{e.traidoHasta ? <span className="cxl-apoyo"> · traído hasta {ddmm(e.traidoHasta)}</span> : null}{e.cierre && e.cierre.reaperturas > 0 ? <span className="cxl-apoyo"> · reabierto {e.cierre.reaperturas} {e.cierre.reaperturas === 1 ? 'vez' : 'veces'}</span> : null}</td>
+                <td data-titulo="Modelo">{e.modelo ? e.modelo.elegido : <span className="cxl-apoyo">sin elegir</span>}</td>
+                <td className="cxl-der" data-titulo="Plantilla media">{e.plantillaMedia}</td>
                 <td>{e.origen !== 'migrated' && <Link to={rutaLibros('cierre', 'cierre-ejercicio')} className="cx-enlace">{e.estado === 'closed' ? 'Ver el cierre' : 'Cerrar'}</Link>}</td></tr>
             )
           })}</tbody>
@@ -71,22 +80,27 @@ export function Ejercicios() {
 
 export function CerrarMes() {
   const L = useLibros()
+  const [query, setQuery] = useSearchParams()
   const [hecho, setHecho] = useState<string | null>(null)
   const [reabriendo, setReabriendo] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
+  const hoy = hoyEnMadrid()
   const d = useLeer(() => leerCierres(L.accountId, L.companyId), `${L.companyId}:${L.vuelta}`)
   const meses = useMemo(() => {
     const r: string[] = []
     let y = Number(L.ejercicio.inicio.slice(0, 4)); let m = Number(L.ejercicio.inicio.slice(5, 7))
-    const hoy = new Date().toISOString().slice(0, 7)
+    const esteMes = hoy.slice(0, 7)
     for (;;) {
       const k = `${y}-${String(m).padStart(2, '0')}`
-      if (`${k}-01` > L.ejercicio.fin || k > hoy) break
+      if (`${k}-01` > L.ejercicio.fin || k > esteMes) break
       r.push(`${k}-01`)
       m++; if (m > 12) { m = 1; y++ }
     }
     return r
-  }, [L.ejercicio])
+  }, [L.ejercicio, hoy])
+  // El mes de los bancos: el de la dirección o el último terminado del ejercicio.
+  const bancos = mesDelCierre(meses.map((x) => x.slice(0, 7)), query.get('mes'), hoy)
+  const cambiarMesBancos = (mes: string) => { const p = new URLSearchParams(query); p.set('mes', mes); setQuery(p, { replace: true }) }
 
   async function cerrar(mes: string) {
     setOcupado(mes); setHecho(null)
@@ -98,29 +112,49 @@ export function CerrarMes() {
   return (
     <section className="cxl-pagina" aria-label="Cerrar el mes">
       <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cierre' }]} /><h2>Cerrar el mes</h2></div>
+        <div>
+          <Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Cierre' }]} /><h2>Cerrar el mes</h2>
+          <p className="cx-ayuda">Un mes se cierra dos veces: en contabilidad (ya no entran asientos con su fecha) y en cada banco (su saldo cuadra con el de contabilidad).</p>
+        </div>
         <div className="cxl-herramientas"><Link to={rutaLibroDiario()} className="cx-boton-sec">Lo que falta, en el libro diario</Link></div>
       </div>
+
+      <h3 className="cxl-subtitulo" id="cxl-cierre-contabilidad">La contabilidad, mes a mes</h3>
       <Guardado texto={hecho} />
       {!d.datos && <div className="cx-tarjeta" aria-busy="true"><Hueso alto={40} /></div>}
       {d.datos && (
-        <div className="cx-tarjeta">
+        <div className="cx-tarjeta" role="region" aria-labelledby="cxl-cierre-contabilidad">
           <ul className="cxl-lista-estado">
             {meses.map((mes) => {
               const c = d.datos!.find((x) => x.mes === mes)
+              // S01e: tres sitios fijos (qué mes, cómo está, el botón) y el mismo botón para Cerrar y Reabrir.
+              const estado = c ? `Cerrado${c.tipo === 'tax_filed' ? ' (impuesto presentado)' : c.tipo === 'migrated' ? ' (traído)' : ''}${c.quien ? ` por ${c.quien}` : ''}` : 'Abierto'
               return (
-                <li key={mes}>
-                  <span className={`cxl-punto ${c ? 'cxl-punto-verde' : 'cxl-punto-ambar'}`} aria-hidden="true" /> <strong>{nombreMes(mes)}</strong>
-                  {c ? <> · cerrado{c.tipo === 'tax_filed' ? ' (impuesto presentado)' : c.tipo === 'migrated' ? ' (traído)' : ''}{c.quien ? ` por ${c.quien}` : ''}
-                    {c.tipo === 'manual' && <> <button type="button" className="cx-enlace" onClick={() => setReabriendo(mes)}>Reabrir</button></>}</>
-                    : <> · abierto <button type="button" className="cx-boton-sec" disabled={ocupado === mes} onClick={() => void cerrar(mes)}>{ocupado === mes ? 'Cerrando…' : 'Cerrar'}</button></>}
+                <li key={mes} className="cxl-mes">
+                  <span className="cxl-mes-que">
+                    <span className={`cxl-punto ${c ? 'cxl-punto-verde' : 'cxl-punto-ambar'}`} aria-hidden="true" />
+                    <strong>{nombreMes(mes)}</strong>
+                    <span className="cxl-mes-estado">{estado}</span>
+                  </span>
+                  {!c && <button type="button" className="cx-boton-sec" disabled={ocupado === mes} onClick={() => void cerrar(mes)} aria-label={`Cerrar ${nombreMes(mes)}`}>{ocupado === mes ? 'Cerrando…' : 'Cerrar'}</button>}
+                  {c?.tipo === 'manual' && <button type="button" className="cx-boton-sec" onClick={() => setReabriendo(mes)} aria-label={`Reabrir ${nombreMes(mes)}`}>Reabrir</button>}
+                  {c && c.tipo !== 'manual' && <span className="cxl-apoyo">No se reabre desde aquí</span>}
                 </li>
               )
             })}
           </ul>
-          <p className="cxl-pie">Cerrar un mes impide asientos con fecha en él (regla 9 del libro). Un mes cerrado por un impuesto presentado o traído no se reabre desde aquí.</p>
+          <p className="cxl-pie">Un mes cerrado no admite asientos con fecha de ese mes. Uno cerrado porque ya se presentó su impuesto, o traído de otro programa, no se reabre desde aquí.</p>
         </div>
       )}
+
+      {/* S02 · PR 2: el cierre del mes de cada banco, aquí, al lado del de la contabilidad. */}
+      <div className="cxl-seccion" role="group" aria-labelledby="cxl-cierre-bancos">
+        <h3 className="cxl-subtitulo" id="cxl-cierre-bancos">Los bancos, en {nombreMes(`${bancos.mes}-01`)}</h3>
+        <FiltroSelector etiqueta="Mes de los bancos" valor={bancos.mes} alCambiar={cambiarMesBancos}
+          opciones={bancos.opciones.map((m) => ({ valor: m, texto: nombreMes(`${m}-01`) }))} />
+      </div>
+      <CierreDelMes accountId={L.accountId} companyId={L.companyId} mes={bancos.mes} hoy={hoy} bancoDestacado={query.get('banco')} />
+
       {reabriendo && (
         <ConMotivo titulo={`Reabrir ${nombreMes(reabriendo)}`} explicacion="Vuelven a entrar asientos con fecha de ese mes. Queda apuntado quién y por qué." boton="Reabrir"
           alCerrar={() => setReabriendo(null)}
@@ -162,6 +196,7 @@ export function CierreEjercicio() {
   const [error, setError] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [reabrir, setReabrir] = useState(false)
+  const [confirmar, setConfirmar] = useState<'preparar' | 'cerrar' | null>(null)
   const traido = e.origen === 'migrated'
 
   const d = useLeer(traido ? null : async () => {
@@ -176,32 +211,57 @@ export function CierreEjercicio() {
     return { lista, c129 }
   }, `${L.companyId}:${e.id}:${L.vuelta}`)
 
+  // S01e: sin ejercicio siguiente se calculan igual la regularización y el cierre; solo la apertura espera.
   const plan = useMemo(() => {
-    if (!d.datos || !d.datos.c129 || !siguiente) return null
+    if (!d.datos || !d.datos.c129) return null
     try {
-      return { ok: prepararCierre(d.datos.lista, { cuenta129: d.datos.c129, finEjercicio: e.fin, inicioSiguiente: siguiente.inicio, ejercicio: e.code, siguiente: siguiente.code }), error: null }
+      return { ok: prepararCierre(d.datos.lista, { cuenta129: d.datos.c129, finEjercicio: e.fin, inicioSiguiente: siguiente?.inicio ?? null, ejercicio: e.code, siguiente: siguiente?.code ?? null }), error: null }
     } catch (x) { return { ok: null, error: mensajeDe(x) } }
   }, [d.datos, e, siguiente])
+  const nombres = useMemo(() => new Map((d.datos?.lista ?? []).map((s) => [s.code, s.name])), [d.datos])
 
   // Una regularización ya enlazada se reutiliza; si aún quedan 6 o 7 con saldo, no se apila otra encima.
   const regEnlazada = e.cierre?.regularizacion ?? null
   const regDoble = !!(regEnlazada && plan?.ok?.regularizacion)
+  // Regularización y cierre ya preparados sin apertura, y ahora existe el siguiente: solo falta ella.
+  const soloApertura = !!(e.cierre?.cierre && !e.cierre.apertura && siguiente && plan?.ok?.apertura)
+  const cerrado = e.estado === 'closed'
+  const puedePreparar = !cerrado && !!plan?.ok && (soloApertura || !regDoble)
+  const puedeCerrar = !cerrado && e.cierre?.estado === 'preparado' && !!e.cierre.apertura
 
   async function preparar() {
-    if (!plan?.ok || regDoble) return
+    if (!plan?.ok || !puedePreparar) return
     setOcupado(true); setError(null); setHecho(null)
     try {
-      await prepararCierreEnBase(L.companyId, e.id, [plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura], L.quien, regEnlazada)
-      const n = [plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura].filter(Boolean).length
-      setHecho(`Propuestos ${n} asientos (${[plan.ok.regularizacion && 'regularización', plan.ok.cierre && 'cierre', plan.ok.apertura && `apertura de ${siguiente!.code}`].filter(Boolean).join(', ')}). ${plan.ok.regularizacion ? `Resultado ${eurosExactos(plan.ok.resultado)} a la ${d.datos!.c129}.` : 'La regularización ya estaba hecha: se mantiene.'} Valídalos en el libro diario y vuelve para cerrar.`)
+      if (soloApertura) {
+        await prepararCierreEnBase(L.companyId, e.id, [null, null, plan.ok.apertura], L.quien, regEnlazada, e.cierre!.cierre)
+        setHecho(`Propuesta la apertura de ${siguiente!.code} (${plan.ok.apertura!.apuntes.length} apuntes, ${eurosExactos(sumas(plan.ok.apertura!).debe)}). La regularización y el cierre se mantienen. Valídala en el libro diario y vuelve para cerrar.`)
+      } else {
+        await prepararCierreEnBase(L.companyId, e.id, [plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura], L.quien, regEnlazada)
+        const n = [plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura].filter(Boolean).length
+        setHecho(`Propuestos ${n} ${n === 1 ? 'asiento' : 'asientos'} (${[plan.ok.regularizacion && 'regularización', plan.ok.cierre && 'cierre', plan.ok.apertura && `apertura de ${siguiente!.code}`].filter(Boolean).join(', ')}). ${plan.ok.regularizacion ? `Resultado ${eurosExactos(plan.ok.resultado)} a la ${d.datos!.c129}.` : 'La regularización ya estaba hecha: se mantiene.'}${siguiente ? '' : ' La apertura queda para cuando exista el ejercicio siguiente.'} Valídalos en el libro diario y vuelve para cerrar.`)
+      }
       L.recargar()
-    } catch (x) { setError(mensajeDe(x)) } finally { setOcupado(false) }
+    } catch (x) { setError(mensajeDe(x)) } finally { setOcupado(false); setConfirmar(null) }
   }
   async function cerrar() {
     setOcupado(true); setError(null); setHecho(null)
     try { const r = await cerrarEjercicio(e.id); setHecho(`Ejercicio ${r.ejercicio} cerrado por ${r.quien}. Ya no entra ningún asiento con fecha en él.`); L.recargar() }
-    catch (x) { setError(mensajeDe(x)) } finally { setOcupado(false) }
+    catch (x) { setError(mensajeDe(x)) } finally { setOcupado(false); setConfirmar(null) }
   }
+
+  // Por qué no se puede preparar o cerrar, dicho en el paso (nunca un botón mudo).
+  const porQueNoPreparar = cerrado ? null
+    : !d.datos?.c129 ? 'Falta la cuenta 129 (Resultado del ejercicio) en el plan contable.'
+      : plan?.error ? plan.error
+        : regDoble && !soloApertura ? 'Ya hay una regularización enlazada sin validar: valídala en el libro diario.' : null
+  const porQueNoCerrar = cerrado ? null
+    : !e.cierre ? 'Antes hay que preparar los asientos y validarlos.'
+      : !e.cierre.apertura ? (siguiente ? `Falta la apertura de ${siguiente.code}: prepárala en el paso 1.` : 'Falta la apertura, que va en el ejercicio siguiente: ábrelo primero.')
+        : null
+  const aviso = !siguiente && !cerrado
+    ? <span className="cxl-paso-aviso" role="note">La apertura va en el ejercicio siguiente, que aún no existe: ábrelo en <Link to={rutaTuEmpresa()}>Tu empresa › Ejercicio</Link>. Mientras, ya se pueden preparar la regularización y el cierre.</span>
+    : null
 
   return (
     <section className="cxl-pagina" aria-label="Regularización, cierre y apertura">
@@ -214,31 +274,48 @@ export function CierreEjercicio() {
       {!traido && d.datos && (
         <>
           <div className="cx-tarjeta">
-            <ol className="cxl-lista-estado">
-              <li><span className={`cxl-punto ${e.cierre ? 'cxl-punto-verde' : 'cxl-punto-ambar'}`} aria-hidden="true" /> Preparar los tres asientos{e.cierre ? ` · preparados${e.cierre.estado === 'cerrado' ? ' y validados' : ''}` : ''}</li>
-              <li><span className={`cxl-punto ${e.cierre?.estado === 'cerrado' ? 'cxl-punto-verde' : 'cxl-punto-ambar'}`} aria-hidden="true" /> Validarlos en el libro diario {e.cierre && <>({[e.cierre.regularizacion, e.cierre.cierre, e.cierre.apertura].map((id, i) => id ? <Link key={id} to={rutaAsiento(id)} className="cx-enlace">{['regularización', 'cierre', 'apertura'][i]} </Link> : null)})</>}</li>
-              <li><span className={`cxl-punto ${e.estado === 'closed' ? 'cxl-punto-verde' : 'cxl-punto-ambar'}`} aria-hidden="true" /> Cerrar el ejercicio{e.estado === 'closed' ? ' · cerrado' : ''}</li>
+            <ol className="cxl-lista-estado" aria-label="Pasos del cierre">
+              <li className="cxl-paso">
+                <span className="cxl-paso-texto">
+                  <span className={`cxl-punto ${e.cierre?.apertura ? 'cxl-punto-verde' : 'cxl-punto-ambar'}`} aria-hidden="true" /> <strong>1. Preparar los asientos</strong>
+                  {' '}<span className="cxl-apoyo">{e.cierre ? (e.cierre.apertura ? 'Preparados los tres' : 'Preparados la regularización y el cierre; falta la apertura') : 'Regularización, cierre y apertura'}</span>
+                  {porQueNoPreparar && <span className="cxl-paso-aviso">{porQueNoPreparar}</span>}
+                  {aviso}
+                </span>
+                {!cerrado && <button type="button" className={e.cierre && !soloApertura ? 'cx-boton-sec' : 'cx-boton'} disabled={ocupado || !puedePreparar} onClick={() => setConfirmar('preparar')}>
+                  {soloApertura ? 'Preparar la apertura' : e.cierre ? 'Preparar otra vez' : 'Preparar el cierre'}
+                </button>}
+              </li>
+              <li className="cxl-paso">
+                <span className="cxl-paso-texto">
+                  <span className={`cxl-punto ${e.cierre?.estado === 'cerrado' ? 'cxl-punto-verde' : 'cxl-punto-ambar'}`} aria-hidden="true" /> <strong>2. Validarlos en el libro diario</strong>
+                  {e.cierre && <> · {[e.cierre.regularizacion, e.cierre.cierre, e.cierre.apertura].map((id, i) => id ? <Link key={id} to={rutaAsiento(id)} className="cx-enlace">{['regularización', 'cierre', 'apertura'][i]} </Link> : null)}</>}
+                  <span className="cxl-paso-aviso">Se validan como cualquier otro asiento: ábrelos y valídalos allí.</span>
+                </span>
+                <Link to={rutaLibroDiario()} className="cx-boton-sec">Ir al libro diario</Link>
+              </li>
+              <li className="cxl-paso">
+                <span className="cxl-paso-texto">
+                  <span className={`cxl-punto ${cerrado ? 'cxl-punto-verde' : 'cxl-punto-ambar'}`} aria-hidden="true" /> <strong>3. Cerrar el ejercicio</strong>
+                  {cerrado && <span className="cxl-apoyo"> · cerrado</span>}
+                  {porQueNoCerrar && <span className="cxl-paso-aviso">{porQueNoCerrar}</span>}
+                </span>
+                {!cerrado && <button type="button" className="cx-boton" disabled={ocupado || !puedeCerrar} onClick={() => setConfirmar('cerrar')}>Cerrar el ejercicio</button>}
+              </li>
             </ol>
           </div>
-          {!d.datos.c129 && <p className="cxl-sin-sitio" role="alert">La empresa no tiene la cuenta 129 (Resultado del ejercicio) en su plan: hace falta para regularizar. Actívala en el plan contable.</p>}
-          {!siguiente && <p className="cxl-sin-sitio" role="alert">Aún no existe el ejercicio siguiente: la apertura va en él. Ábrelo en <Link to={rutaTuEmpresa()}>Tu empresa › Ejercicio</Link>.</p>}
-          {plan?.error && <p className="cxl-sin-sitio" role="alert">{plan.error}</p>}
-          {plan?.ok && e.estado !== 'closed' && (
+          {plan?.ok && !cerrado && (
             <div className="cx-tarjeta">
               <h3 className="cxl-subtitulo">Lo que {MARCA.nombre} propone</h3>
               {plan.ok.regularizacion
-                ? <p>Resultado del ejercicio: <strong>{eurosExactos(plan.ok.resultado)}</strong> ({plan.ok.resultado >= 0 ? 'beneficio' : 'pérdida'}), a la {d.datos.c129}.</p>
-                : <p>La regularización ya está validada: gastos e ingresos están a cero y el resultado está en la {d.datos.c129}.</p>}
-              {regDoble && <p className="cxl-sin-sitio" role="alert">Ya hay una regularización enlazada y aún quedan gastos o ingresos con saldo: o está sin validar (valídala en el libro diario) o hay apuntes posteriores (anúlala allí y prepara otra vez). No se apila una segunda.</p>}
-              {[plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura].map((a) => a && <ResumenAsiento key={a.tipo} a={a} />)}
-              {e.cierre?.estado === 'preparado' && <p className="cxl-apoyo">Ya están preparados. Prepararlos otra vez propone tres nuevos y enlaza esos: descarta antes los anteriores en el libro diario.</p>}
-              <div className="cxl-herramientas">
-                <button type="button" className={e.cierre ? 'cx-boton-sec' : 'cx-boton'} onClick={() => void preparar()} disabled={ocupado || regDoble}>{ocupado ? 'Un momento…' : e.cierre ? 'Preparar otra vez' : 'Preparar el cierre'}</button>
-                {e.cierre?.estado === 'preparado' && <button type="button" className="cx-boton" onClick={() => void cerrar()} disabled={ocupado}>Cerrar el ejercicio</button>}
-              </div>
+                ? <p>Resultado del ejercicio: <strong>{eurosExactos(plan.ok.resultado)}</strong> ({plan.ok.resultado >= 0 ? 'beneficio' : 'pérdida'}), a la {d.datos.c129} · {nombres.get(d.datos.c129!) ?? 'Resultado del ejercicio'}.</p>
+                : <p>La regularización ya está validada: gastos e ingresos están a cero y el resultado está en la {d.datos.c129} · {nombres.get(d.datos.c129!) ?? 'Resultado del ejercicio'}.</p>}
+              {regDoble && !soloApertura && <p className="cxl-sin-sitio" role="alert">Ya hay una regularización enlazada y aún quedan gastos o ingresos con saldo: o está sin validar (valídala en el libro diario) o hay apuntes posteriores (anúlala allí y prepara otra vez). No se apila una segunda.</p>}
+              {[plan.ok.regularizacion, plan.ok.cierre, plan.ok.apertura].map((a) => a && <ResumenAsiento key={a.tipo} a={a} nombres={nombres} />)}
+              {e.cierre?.estado === 'preparado' && !soloApertura && <p className="cxl-apoyo">Ya están preparados. Prepararlos otra vez propone asientos nuevos y enlaza esos: descarta antes los anteriores en el libro diario.</p>}
             </div>
           )}
-          {e.estado === 'closed' && (
+          {cerrado && (
             <div className="cx-tarjeta">
               <p>El ejercicio {e.code} está cerrado. Reabrirlo anula la apertura y el cierre con contraasiento; la regularización se queda y se rehace al volver a cerrar.</p>
               <button type="button" className="cx-boton-sec" onClick={() => setReabrir(true)}>Reabrir el ejercicio</button>
@@ -246,24 +323,37 @@ export function CierreEjercicio() {
           )}
         </>
       )}
+      {confirmar && (confirmar === 'cerrar' || plan?.ok) && (
+        <Dialogo titulo={confirmar === 'cerrar' ? `¿Cerrar el ejercicio ${e.code}?` : soloApertura ? `¿Preparar la apertura de ${siguiente!.code}?` : `¿Preparar el cierre de ${e.code}?`} alCerrar={() => setConfirmar(null)}>
+          <p className="cxl-apoyo">{confirmar === 'cerrar'
+            ? `Después no entra ningún asiento con fecha en ${e.code}. Se puede reabrir con motivo (solo un administrador).`
+            : soloApertura
+              ? `Se propone el asiento de apertura del ${ddmm(siguiente!.inicio)}; la regularización y el cierre ya preparados se mantienen.`
+              : `Se proponen ${[plan?.ok?.regularizacion && 'la regularización', plan?.ok?.cierre && 'el cierre', plan?.ok?.apertura && 'la apertura'].filter(Boolean).join(', ') || 'los asientos'}. Quedan como propuestas: no cuentan hasta que los valides en el libro diario.`}</p>
+          <div className="cxl-herramientas">
+            <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void (confirmar === 'cerrar' ? cerrar() : preparar())}>{ocupado ? 'Un momento…' : confirmar === 'cerrar' ? 'Sí, cerrar' : 'Sí, preparar'}</button>
+            <button type="button" className="cx-boton-sec" onClick={() => setConfirmar(null)}>Cancelar</button>
+          </div>
+        </Dialogo>
+      )}
       {reabrir && (
         <ConMotivo titulo={`Reabrir el ejercicio ${e.code}`} explicacion="Solo un administrador. Se anulan la apertura y el cierre con su contraasiento, y queda apuntado quién y por qué." boton="Reabrir"
           alCerrar={() => setReabrir(false)}
-          hacer={async (motivo) => { const r = await reabrirEjercicio(e.id, motivo); setReabrir(false); setHecho(`Ejercicio ${r.ejercicio} reabierto por ${r.quien}; ${r.anulados.length} asientos anulados con contraasiento. Motivo: «${motivo}».`); L.recargar() }} />
+          hacer={async (motivo) => { const r = await reabrirEjercicio(e.id, motivo); setReabrir(false); setHecho(`Ejercicio ${r.ejercicio} reabierto por ${r.quien}; ${r.anulados.length} ${r.anulados.length === 1 ? 'asiento anulado' : 'asientos anulados'} con contraasiento. Motivo: «${motivo}».`); L.recargar() }} />
       )}
     </section>
   )
 }
 
-function ResumenAsiento({ a }: { a: AsientoCierre }) {
+function ResumenAsiento({ a, nombres }: { a: AsientoCierre; nombres: Map<string, string> }) {
   const s = sumas(a)
+  // El asiento común (diseno/plantillas): cada cuenta con su número delante y su nombre (S01e), el debe arriba y los totales con «Cuadra».
   return (
-    <details>
-      <summary>{a.concepto} · {ddmm(a.fecha)} · {a.apuntes.length} apuntes · {eurosExactos(s.debe)} {s.cuadra ? '✓ cuadra' : '✗ no cuadra'}</summary>
-      <table className="cxl-tabla" aria-label={a.concepto}>
-        <thead><tr><th>Cuenta</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th></tr></thead>
-        <tbody>{a.apuntes.map((p, i) => <tr key={i}><td>{p.cuenta}</td><td className="cxl-der">{p.debe ? eurosExactos(p.debe) : ''}</td><td className="cxl-der">{p.haber ? eurosExactos(p.haber) : ''}</td></tr>)}</tbody>
-      </table>
-    </details>
+    <AsientoQueSeCrea abierto={false} nivel={4}
+      titulo={`${a.concepto} · ${ddmm(a.fecha)} · ${a.apuntes.length} apuntes · ${eurosExactos(s.debe)} ${s.cuadra ? '✓ cuadra' : '✗ no cuadra'}`}
+      lineas={a.apuntes.map((p) => ({
+        codigo: p.cuenta, nombre: nombres.get(p.cuenta) ?? '',
+        debe: p.debe ? textoDeImporte(p.debe) : null, haber: p.haber ? textoDeImporte(p.haber) : null,
+      }))} />
   )
 }

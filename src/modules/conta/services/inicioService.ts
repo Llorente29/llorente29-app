@@ -12,12 +12,16 @@
 
 import { tabla, mensaje } from '@/modules/conta/services/bd'
 import { saldosCuentas, aSaldoCuenta, movimientoIva } from '@/modules/conta/services/librosService'
-import { leerAsientos, leerCierres, fuenteCierre } from '@/modules/conta/services/diarioService'
+import { leerAsientos, leerCierres, fuenteCierre, primerDiaAbierto } from '@/modules/conta/services/diarioService'
 import { listarFacturasDeLaCuenta } from '@/modules/conta/services/proveedorService'
 import { calcularCifras } from '@/modules/conta/lib/cifras'
 import { esFirmaAutomatica } from '@/modules/conta/lib/autor'
-import { pasosCierre, type PasoCierre, type CierreMes } from '@/modules/conta/lib/diario'
+import { pasosCierre, pedirCierre, type PasoCierre, type CierreMes } from '@/modules/conta/lib/diario'
 import { finDeMes, mesesHasta, puntoDeMes, trimestreDe, type PuntoMes } from '@/modules/conta/lib/inicio'
+import type { PerfilFiscal } from '@/modules/conta/lib/plazosImpuestos'
+import { filtrar, ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
+import { colaPorRevisar } from '@/modules/conta/documentos/recibidas'
+import { leerDocumentos } from '@/modules/conta/services/documentosService'
 
 type Fila = Record<string, unknown>
 
@@ -82,8 +86,11 @@ export async function hechoDesdeAyer(companyId: string, desde: string): Promise<
 }
 
 /** El cierre de un mes: sus pasos (los del Libro diario) y si ya está cerrado. */
-export async function cierreDelMes(accountId: string, companyId: string, mes: string): Promise<{ pasos: PasoCierre[]; cierres: CierreMes[] }> {
-  const [asientos, cierres] = await Promise.all([leerAsientos(accountId, companyId, mes, finDeMes(mes)), leerCierres(accountId, companyId)])
+/** Los pasos del cierre del mes; null si ese mes ya está cerrado fuera y no hay nada que pedir (pedirCierre). */
+export async function cierreDelMes(accountId: string, companyId: string, mes: string): Promise<{ pasos: PasoCierre[]; cierres: CierreMes[] } | null> {
+  const [cierres, primero] = await Promise.all([leerCierres(accountId, companyId), primerDiaAbierto(companyId, mes)])
+  if (!pedirCierre(mes, primero, cierres)) return null
+  const asientos = await leerAsientos(accountId, companyId, mes, finDeMes(mes))
   const f = await fuenteCierre(accountId, companyId, mes, asientos, cierres.some((c) => c.mes === mes))
   return { pasos: pasosCierre(f), cierres }
 }
@@ -97,4 +104,35 @@ export function ayerEnMadrid(hoy: string): string {
   const hora = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }).format(ayer))
   const desfase = hora - 12
   return `${dia}T00:00:00+0${desfase}:00`
+}
+
+// ── S01 (paso 4) · La bandeja ─────────────────────────────────────────────
+// Nombres de la base entre comillas (regla 40), comprobados en producción el
+// 17/10: company_tax_profile.vat_period, tax_forms (text[]) y sii.
+
+/** Los modelos que presenta la empresa y cómo declara el IVA; null si aún no tiene perfil fiscal. */
+export async function perfilFiscal(companyId: string): Promise<PerfilFiscal | null> {
+  const { data, error } = await tabla('company_tax_profile').select('vat_period, tax_forms, sii').eq('company_id', companyId).maybeSingle()
+  if (error) throw new Error(mensaje('No se han podido leer tus impuestos', error))
+  if (!data) return null
+  const f = data as { vat_period: string | null; tax_forms: string[] | null; sii: boolean | null }
+  return { modelos: f.tax_forms ?? [], periodoIva: f.vat_period === 'monthly' ? 'monthly' : f.vat_period === 'quarterly' ? 'quarterly' : null, sii: f.sii === true }
+}
+
+/** Las facturas recibidas para revisar (las de N22 «Para mirar») de los últimos 12 meses: el recorrido de Asientos › Recibida. */
+export async function recibidasParaRevisar(companyId: string, hoy: string): Promise<number> {
+  return (await recibidasPorEstado(companyId, hoy)).paraMirar
+}
+
+/**
+ * S02 · PR 3: las facturas recibidas de los últimos 12 meses que esperan una
+ * acción, de UNA lectura: para mirar («Por revisar») y por aclarar («Por
+ * aclarar», que antes no contaba nadie). La cuenta de hoy de conta_pendientes.
+ */
+export async function recibidasPorEstado(companyId: string, hoy: string): Promise<{ paraMirar: number; porAclarar: number }> {
+  const { desde, hasta } = ventanaParaRevisar(hoy)
+  const d = await leerDocumentos(companyId, desde, hasta)
+  const facturas = d.filas.filter((x) => x.tipo === 'factura')
+  // D03 · punto 11: «para mirar» es la cola de la ficha (colaPorRevisar), la misma que cuenta su «1 de N».
+  return { paraMirar: colaPorRevisar(d.filas).length, porAclarar: filtrar(facturas, 'por-aclarar').length }
 }

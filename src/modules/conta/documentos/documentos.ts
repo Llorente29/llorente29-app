@@ -20,13 +20,14 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
  * llevó el programa anterior: sale (en «Todas») enlazada con su asiento traído
  * de Diez si casa, y nunca se apunta otra vez.
  */
-export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez'
+/** S01 (0160) · 'descartada': «No es una factura», con su motivo; sale en «Todas» y se deshace. */
+export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada'
 export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
 export interface FilaDocumento {
   id: string
-  /** R6 · 'recepcion': una recepción cuyo papel es una factura y que no es (o no hace falta que sea) factura en Folvy. */
+  /** R6 · 'recepcion': una recepción cuyo documento es una factura y que no es (o no hace falta que sea) factura en Folvy. */
   tipo: 'factura' | 'llegada' | 'recepcion'
   estado: Estado
   proveedor: { id: string | null; nombre: string | null }
@@ -91,6 +92,18 @@ export function filtrar(filas: readonly FilaDocumento[], ver: Ver): FilaDocument
   return filas.filter((f) => ESTADO_DE[ver].includes(f.estado))
 }
 
+/**
+ * S01c · Las facturas de una vista, en el orden en que se recorren una a una
+ * (la última que llegó primero). La base ordena solo por la llegada, y con
+ * empates el orden cambia entre dos lecturas: la que abre «Recibida» y la que
+ * cuenta «1 de N» no eran la misma. El id desempata, igual en los dos sitios.
+ */
+export function facturasEnOrden(filas: readonly FilaDocumento[], ver: Ver): string[] {
+  return filtrar(filas, ver).filter((x) => x.tipo === 'factura')
+    .sort((a, b) => (a.llego === b.llego ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.llego < b.llego ? 1 : -1))
+    .map((x) => x.id)
+}
+
 const n = (x: number) => new Intl.NumberFormat('es-ES').format(x)
 const plural = (k: number, uno: string, varios: string) => `${n(k)} ${k === 1 ? uno : varios}`
 
@@ -153,7 +166,7 @@ export function comoLlego(canal: Canal | string | null, tipo: string | null | un
     case 'subida': return /^image\//.test(tipo ?? '') ? 'foto subida' : /pdf/.test(tipo ?? '') ? 'PDF subido' : 'subida'
     case 'cocina': return solo ? 'de su recepción' : 'de su recepción en Cocina'
     case 'portal': return 'llegó del portal'
-    case 'compras': return solo ? 'leída del papel' : 'leída en Compras'
+    case 'compras': return solo ? 'leída de su recepción' : 'leída en Compras'
     case 'a_mano': return 'escrita a mano'
     default: return ''
   }
@@ -187,9 +200,9 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
     } else if (e.sin_confirmar) {
       partes.push(`${frase(f.aprendido?.porque ?? `Lo he aprendido de sus facturas anteriores (${e.origen})`)} Confírmalo y lo recuerdo.`)
     } else if (!f.porque) {
-      const como = f.canal === 'a_mano' ? 'La escribieron a mano y no la he leído: comprueba los importes con el papel.'
-        : f.canal === 'compras' ? `La leyeron en ${solo ? 'otra pantalla' : 'Compras'}: comprueba los importes con el papel.`
-          : 'Comprueba los importes con el papel.'
+      const como = f.canal === 'a_mano' ? 'La escribieron a mano y no la he leído: comprueba los importes con la factura.'
+        : f.canal === 'compras' ? `La leyeron en ${solo ? 'otra pantalla' : 'Compras'}: comprueba los importes con la factura.`
+          : 'Comprueba los importes con la factura.'
       const va = e.origen === 'de su ficha' ? 'Va a su cuenta de siempre, la de su ficha.'
         : e.origen === 'del asiento' ? 'Va a la cuenta de su asiento, ya propuesto.' : `Va a esta cuenta (${e.origen}).`
       partes.push(`${va} ${como}`)
@@ -200,8 +213,8 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
 
 /** El único botón de la fila. */
 export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
-  // R6 · Una recepción no se apunta desde aquí: se ve su papel.
-  if (f.tipo === 'recepcion') return { texto: 'Ver papel', principal: false }
+  // R6 · Una recepción no se apunta desde aquí: se ve lo que leyó (Julio, 21/10: por lo que es, nunca «papel»).
+  if (f.tipo === 'recepcion') return { texto: 'Ver la factura', principal: false }
   if (f.tipo === 'factura' && !f.proveedor.id) return { texto: 'Decirlo yo', principal: true }
   if (f.estado === 'para_mirar') return { texto: 'Mirar', principal: false }
   if (f.estado === 'por_aclarar') return { texto: f.tipo === 'llegada' ? 'Ver' : 'Aclarar', principal: false }
@@ -212,7 +225,7 @@ export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
 export function punto(f: FilaDocumento): 'verde' | 'ambar' | 'gris' | 'rojo' {
   if (f.estado === 'apuntada') return 'verde'
   if (f.estado === 'en_diez') return f.diez ? 'verde' : 'gris'
-  if (f.estado === 'repetida') return 'gris'
+  if (f.estado === 'repetida' || f.estado === 'descartada') return 'gris'
   if (f.confianza === 'duda' || f.tipo === 'llegada') return 'gris'
   return 'ambar'
 }
@@ -223,7 +236,8 @@ export const diaMes = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.
 export interface EntradaBarra { id: string; nombre: string; dato: string; tono: 'verde' | 'ambar' | 'gris' }
 export function barra(d: DatosDocumentos, o: { solo: boolean; producto: string | null }): { etiqueta: string; entradas: EntradaBarra[] }[] {
   const c = d.cifras
-  const traer: EntradaBarra[] = [{ id: 'subir', nombre: 'Subir', dato: 'PDF · foto · varios', tono: 'verde' }]
+  // S01e: «Subir varias a la vez» (en lote), para no confundirlo con «Subir una factura» de Por revisar.
+  const traer: EntradaBarra[] = [{ id: 'subir', nombre: 'Subir varias a la vez', dato: 'PDF o foto', tono: 'verde' }]
   if (d.correo.activo && d.correo.direccion) traer.push({ id: 'correo', nombre: 'Por correo', dato: d.correo.direccion.replace(/@.*/, '@…'), tono: 'verde' })
   if (d.recibe_mercancia && !o.solo) traer.push({ id: 'cocina', nombre: 'De Cocina', dato: 'recepciones', tono: 'verde' })
   const esperadas: EntradaBarra[] = [{
@@ -232,7 +246,7 @@ export function barra(d: DatosDocumentos, o: { solo: boolean; producto: string |
     tono: c.esperadas_no_llegadas ? 'ambar' : 'gris',
   }]
   const leidas: EntradaBarra[] = [{ id: 'hecho', nombre: textos(o.producto).hecho, dato: `${plural(c.apuntadas_solas, 'apuntada sola', 'apuntadas solas')}`, tono: c.apuntadas_solas ? 'verde' : 'gris' }]
-  return [{ etiqueta: 'Traer', entradas: traer }, { etiqueta: 'Esperadas', entradas: esperadas }, { etiqueta: 'Leídas', entradas: leidas }]
+  return [{ etiqueta: 'Cómo llegan', entradas: traer }, { etiqueta: 'Las que faltan', entradas: esperadas }, { etiqueta: 'Apuntadas solas', entradas: leidas }]
 }
 
 /** Lo que cambia con el producto: con nombre («Folvy») o, vendido solo, en primera persona y sin él. */
@@ -302,7 +316,7 @@ export function vencimientoAEnsenar(vence: string | null, fecha: string | null, 
  * (Cegid aún no ha activado su almacén): no se promete que irá «con su PDF».
  */
 export const lineaDiez = (solo = false): string =>
-  `Se apunta ${solo ? 'aquí' : `en ${MARCA.nombre}`} · a Diez irá cuando Cegid active los documentos`
+  `Se apunta ${solo ? 'aquí' : `en ${MARCA.nombre}`} · a Diez irá sin el PDF, porque Diez aún no guarda documentos`
 
 /** R5 · 5 · El tono de la banda de N23: verde solo si ya está apuntada; si no, ámbar, como su fila en la bandeja. */
 export const tonoDeLaFactura = (asiento: { estado: string } | null): 'verde' | 'ambar' => (asiento?.estado === 'validado' ? 'verde' : 'ambar')
@@ -318,4 +332,15 @@ export function columnasDelApunte(lineas: readonly { cuenta: string; debe: numbe
     gasto: lineas.filter((l) => l.debe).map((l) => ({ cuenta: l.cuenta, importe: l.debe })),
     pagar: lineas.filter((l) => l.haber).map((l) => ({ cuenta: l.cuenta, importe: l.haber })),
   }
+}
+
+/**
+ * S01 · Desde Contabilidad › Asientos, «para revisar» no va por mes: todas las
+ * que esperan de los últimos 12 meses (este incluido), en el orden de N22.
+ */
+export function ventanaParaRevisar(hoy: string): { desde: string; hasta: string } {
+  const y = Number(hoy.slice(0, 4)), m = Number(hoy.slice(5, 7))
+  const ini = new Date(Date.UTC(y, m - 12, 1))
+  const desde = `${ini.getUTCFullYear()}-${String(ini.getUTCMonth() + 1).padStart(2, '0')}-01`
+  return { desde, hasta: limites(hoy.slice(0, 7)).hasta }
 }

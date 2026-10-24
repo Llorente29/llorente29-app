@@ -1,0 +1,21 @@
+{
+ "_que": "I01c · el trimestre · contexto de producción de la tanda viva (20261122T0280), medido en SOLO LECTURA el 19/10 a las 21:22 UTC, después de la 0100 de P01 (en el historial, con la 0270; las siete conta_despacho_* existen), con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe conta_impuesto_303_calcular con una sola firma (md5 de su cuerpo 9141db88860d38cc7ae7175f12b382b0, el de la 0240 y el de la vuelta atrás); no existe conta_impuesto_trimestre; ninguna tabla; nada del camino del pedido; nada en el historial. Igual que la medida de las 20:32, antes de la 0100.",
+ "medido": "2026-10-19T21:22Z",
+ "tanda": {
+  "supabase/migrations/20261122T0280_i01c_trimestre.sql": "6e5155172e52e5806e8bf689ab41b698"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_impuesto_303_calcular(uuid,int,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

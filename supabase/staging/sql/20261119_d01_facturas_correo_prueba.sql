@@ -36,7 +36,7 @@ set local statement_timeout = '300s';
 select set_config('d01_facturas.cuenta', 'c01a0000-0000-4000-8000-00000000000a', true);
 select set_config('d01_facturas.empresa', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', true);
 select set_config('d01_facturas.direccion', 'facturas-prueba-d01f', true);
-\i supabase/migrations/20261119T0110_d01_facturas_foodint.sql
+\i supabase/migrations/20261024T0041_d01_facturas_foodint.sql
 do $$
 declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
@@ -156,7 +156,7 @@ reset role;
 -- La de la 0110, con correos llegados a la dirección: para.
 savepoint freno_0110;
 \set ON_ERROR_STOP 0
-\i supabase/vuelta-atras/20261119T0110_d01_facturas_foodint.down.sql
+\i supabase/vuelta-atras/20261024T0041_d01_facturas_foodint.down.sql
 \set ON_ERROR_STOP 1
 rollback to savepoint freno_0110;
 select (:'LAST_ERROR_MESSAGE' like 'VUELTA ATRÁS 0110 (facturas de Foodint) PARADA: a facturas-prueba-d01f@entrada.folvy.app ya le han llegado correos.%') as freno_0110_ok \gset
@@ -168,7 +168,7 @@ select (:'LAST_ERROR_MESSAGE' like 'VUELTA ATRÁS 0110 (facturas de Foodint) PAR
 -- La de la 0100 con filas en company_inbound_sender: su guarda para (primero va la de la 0110).
 savepoint freno_0100;
 \set ON_ERROR_STOP 0
-\i supabase/vuelta-atras/20261119T0100_d01_facturas_correo.down.guarda.sql
+\i supabase/vuelta-atras/20261024T0040_d01_facturas_correo.down.guarda.sql
 \set ON_ERROR_STOP 1
 rollback to savepoint freno_0100;
 select (:'LAST_ERROR_MESSAGE' like 'VUELTA ATRÁS 0100 (facturas por correo) PARADA:%') as freno_0100_ok \gset
@@ -184,13 +184,13 @@ do $$ begin
   delete from public.inbound_email_log where email_id like 'prueba-d01f-%';
   delete from public.company_inbound_sender where company_id = '3b34403a-a7d6-4a48-a8d7-737e8cababdc' and sender_sha256 = encode(sha256(convert_to('justificantes@panaderia-inventada.test', 'UTF8')), 'hex');
 end $$;
-\i supabase/vuelta-atras/20261119T0110_d01_facturas_foodint.down.sql
+\i supabase/vuelta-atras/20261024T0041_d01_facturas_foodint.down.sql
 do $$ begin
   if exists (select 1 from public.company_inbound_address where local_part = 'facturas-prueba-d01f') or exists (select 1 from public.company_inbound_sender) then
     raise exception 'PRUEBA D01 facturas por correo · 4: la vuelta atrás de la 0110 no quita la dirección o el remitente.';
   end if;
 end $$;
-\i supabase/vuelta-atras/20261119T0100_d01_facturas_correo.down.sql
+\i supabase/vuelta-atras/20261024T0040_d01_facturas_correo.down.sql
 do $$ begin
   if to_regclass('public.company_inbound_sender') is not null or to_regprocedure('public.conta_entrada_remitente(uuid,text)') is not null then
     raise exception 'PRUEBA D01 facturas por correo · 4: la vuelta atrás de la 0100 no quita la tabla o la función.';

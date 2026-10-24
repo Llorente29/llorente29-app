@@ -1,0 +1,34 @@
+{
+  "_que": "D07a + D07c (PR 1 del 23/10) y el respaldo de la 0880 · las recibidas que Diez rechazó por la descripción, otra vez a la cola (con su estado de antes respaldado, para que la vuelta atrás las deje como estaban: el ensayo del run 190 paró por eso), y «Saldo prepago» en todas las listas de formas de pago · contexto de producción de la tanda viva (20261208T0880, 20261208T0820 y 20261208T0830; la 0880 era la 0840; la 0840 es la del C08, ya aplicada, y la 0850 a la 0870 son del #300), medido en SOLO LECTURA el 23/10 a las 14:55 UTC y otra vez a las 16:50 UTC (con la 0840 del C08 ya aplicada; el mismo resultado), con la 0810 del D06 ya aplicada, con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen las cuatro tablas (filas estimadas: external_send 210, supplier_invoice 102; customer_fiscal y payment_method 0); conta_respaldo_d07a_envios no existe (la crea la 0880). Ninguna en el camino del pedido; ninguna de las tres en el historial.",
+  "medido": "2026-10-23T16:50Z",
+  "tanda": {
+    "supabase/migrations/20261208T0880_d07a_respaldo_antes_de_reenviar.sql": "195ed3d4ccb8dd123f490770b608bc27",
+    "supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql": "62a9812899ca0c6cc9f36f70ebb8c4a8",
+    "supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql": "56b895348707cbcc42c4c613a7be8edd"
+  },
+  "contexto": {
+    "tablas": [
+      "public.customer_fiscal",
+      "public.external_send",
+      "public.payment_method",
+      "public.supplier_invoice"
+    ],
+    "funciones": [
+      "public.conta_recibida_guardar(uuid,jsonb,text)",
+      "public.mark_supplier_invoice_paid(uuid,date,text)"
+    ],
+    "filas": {
+      "public.customer_fiscal": 0,
+      "public.external_send": 210,
+      "public.payment_method": 0,
+      "public.supplier_invoice": 102
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

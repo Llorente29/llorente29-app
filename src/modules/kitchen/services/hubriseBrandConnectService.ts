@@ -17,9 +17,11 @@ export interface ConnectLocationResult {
   location_id: string
   external_location_id: string
   location_name: string
-  status: 'ya_conectada' | 'reusada_por_nombre' | 'creada' | 'error'
+  status: 'ya_conectada' | 'reusada_por_nombre' | 'creada' | 'elegido' | 'catalogo_perdido' | 'error'
   external_catalog_id?: string
   error?: string
+  /** Solo con «catalogo_perdido»: los catálogos que existen en ese local de HubRise. */
+  catalogos?: { id: string; name: string }[]
 }
 
 export interface ConnectResult {
@@ -36,13 +38,19 @@ export interface ConnectResult {
 // comportamiento de siempre (el botón "Conectar a delivery" de Kitchen no
 // cambia). El asistente de conexión de Fase 3 lo pasará siempre, acotando al
 // local que se acaba de conectar por 2.1.
-export async function connectBrandToDelivery(brandId: string, locationId?: string): Promise<ConnectResult> {
+// catalogId (C08, 23/10): elegir el catálogo de HubRise de un local cuando el
+// enlazado ya no existe. Va siempre con locationId.
+export async function connectBrandToDelivery(brandId: string, locationId?: string, catalogId?: string): Promise<ConnectResult> {
   if (!isSupabaseEnabled || !supabase) {
     throw new Error('Supabase no está configurado.')
   }
 
   const { data, error } = await supabase.functions.invoke('hubrise-brand-connect', {
-    body: locationId ? { brand_id: brandId, location_id: locationId } : { brand_id: brandId },
+    body: {
+      brand_id: brandId,
+      ...(locationId ? { location_id: locationId } : {}),
+      ...(catalogId ? { catalog_id: catalogId } : {}),
+    },
   })
 
   // Error de transporte / no-2xx (auth, crash). Intentamos leer el cuerpo si lo hay.

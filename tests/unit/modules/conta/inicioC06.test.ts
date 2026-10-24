@@ -3,10 +3,10 @@
 // C06 · El Inicio del producto vendido solo: lo que se decide sin base.
 
 import {
-  barras, cambio, diaDeHoy, dudas, frasePago, mesYAnio, mesesHasta, primerNombre, puntoDeMes, resumenDudas, saldoDe, saludo, trimestreDe,
+  barras, cambio, diaDeHoy, dudas, frasePago, lineasIva, textoIva, mesYAnio, mesesHasta, primerNombre, puntoDeMes, resumenDudas, saldoDe, saludo, trimestreDe,
 } from '@/modules/conta/lib/inicio'
 import { ayerEnMadrid } from '@/modules/conta/services/inicioService'
-import { diaMes, euros } from '@/modules/conta/lib/formato'
+import { diaMes, euros, eurosExactos } from '@/modules/conta/lib/formato'
 
 describe('la cabecera', () => {
   it('saluda según la hora de Madrid', () => {
@@ -68,7 +68,10 @@ describe('las tarjetas salen del libro', () => {
     expect(saldoDe([{ code: '99999999', templateCode: '5720', debe: 5, haber: 0 }], ['572'], 'deudor')).toBe(5)
   })
   it('un punto del mes', () => {
-    expect(puntoDeMes('2026-09-01', saldos)).toEqual({ mes: '2026-09-01', banco: 47730, teDeben: 12200, debes: 10015 })
+    // S02 · PR 3: subcuenta a subcuenta y con su lado. «Te deben» ya no resta el anticipo de
+    // cliente (4380, 480 acreedor: 12480 + 200 = 12680) y «Debes» ya no resta la 407 (anticipo a
+    // proveedor, activo: 9615 + 700 = 10315). Antes: 12200 y 10015, dos netos contables.
+    expect(puntoDeMes('2026-09-01', saldos)).toEqual({ mes: '2026-09-01', banco: 47730, teDeben: 12680, debes: 10315 })
   })
 })
 
@@ -93,16 +96,35 @@ describe('barritas, cambios y pagos', () => {
 
 describe('lo que tiene que decir la persona', () => {
   it('las sugerencias, los papeles de compras y los asientos por revisar', () => {
-    const d = dudas([{ id: 's1', title: 'Presentas el 111', why: 'Tienes nóminas' }], 2, 1)
+    const d = dudas([{ id: 's1', title: 'Presentas el 111', why: 'Tienes nóminas' }], { compras: 2, libros: 1 })
     expect(d.map((x) => [x.tipo, x.titulo])).toEqual([
-      ['sugerencia', 'Presentas el 111'], ['compras', '2 papeles de compras por mirar'], ['revisar', '1 asiento propuesto para revisar'],
+      ['sugerencia', 'Presentas el 111'], ['compras', '2 cosas de compras por mirar'], ['revisar', '1 asiento propuesto para revisar'],
     ])
-    expect(dudas([], 0, 0)).toEqual([])
+    expect(dudas([], {})).toEqual([])
   })
-  it('cuántas y cuánto se tarda', () => {
-    expect(resumenDudas(3)).toBe('3 dudas · 1 minuto')
-    expect(resumenDudas(4)).toBe('4 dudas · 2 minutos')
-    expect(resumenDudas(1)).toBe('1 duda · 1 minuto')
+  it('cuánto hay pendiente (S02 · PR 3: la suma, el número de la barra de Inicio; no las filas)', () => {
+    expect(resumenDudas(3)).toBe('3 cosas pendientes')
+    expect(resumenDudas(1)).toBe('1 cosa pendiente')
+    expect(resumenDudas(100, 2)).toBe('100 cosas pendientes · 2 preguntas mías')
+    expect(resumenDudas(0, 1)).toBe('1 pregunta mía')
     expect(resumenDudas(0)).toBe('nada pendiente')
+    expect(resumenDudas(null)).toBe('no he podido contarlo todo')
+  })
+})
+
+describe('M01 · el IVA del trimestre, en tres líneas cortas', () => {
+  const lineas = (r: number, s: number) => lineasIva(r, s, eurosExactos).map((l) => `${l.etiqueta} ${l.importe}${l.nota ? ` ${l.nota}` : ''}`)
+  it('soportado en negativo (el caso de staging): con su signo y su porqué, y lo que sale', () => {
+    expect(lineas(8.99, -5)).toEqual(['IVA de tus ventas 8,99 €', 'IVA de tus compras −5,00 € (más abonos que facturas)', 'A pagar 13,99 €'])
+  })
+  it('soportado normal: las mismas tres líneas, sin nota', () => {
+    expect(lineas(8.99, 5)).toEqual(['IVA de tus ventas 8,99 €', 'IVA de tus compras 5,00 €', 'A pagar 3,99 €'])
+    expect(lineas(1200, 450.5)).toEqual(['IVA de tus ventas 1.200,00 €', 'IVA de tus compras 450,50 €', 'A pagar 749,50 €'])
+  })
+  it('si sale negativo, «A devolver», sin signo', () => {
+    expect(lineas(100, 250)).toEqual(['IVA de tus ventas 100,00 €', 'IVA de tus compras 250,00 €', 'A devolver 150,00 €'])
+  })
+  it('para el lector, una frase con las tres', () => {
+    expect(textoIva('4.º trimestre', lineasIva(8.99, -5, eurosExactos))).toBe('4.º trimestre: IVA de tus ventas 8,99 €. IVA de tus compras −5,00 € (más abonos que facturas). A pagar 13,99 €.')
   })
 })

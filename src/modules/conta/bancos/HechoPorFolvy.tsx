@@ -16,11 +16,12 @@ import { leerHechos } from '@/modules/conta/services/bancosPantallas'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { LO_HECHO, QUIEN_AUTOMATICO, SOLO_AUTOMATICO } from '@/modules/conta/bancos/marca'
+import { fraseHecho } from '@/modules/conta/bancos/textosBancos'
 
 const ACCION: Record<string, string> = {
   importado: 'Extracto subido', casado: 'Casado', enlazado: 'Enlazado', propuesto: 'Propuesto', por_aclarar: 'Por aclarar',
   validado: 'Validado', deshecho: 'Deshecho', ignorado: 'Apartado', regla: 'Regla',
-  cierre: 'Cierre del mes', reabierto: 'Mes reabierto', agente: 'Pasada del agente',
+  cierre: 'Cierre del mes', reabierto: 'Mes reabierto', agente: 'Repaso automático',
 }
 const hora = (iso: string) => new Date(iso).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
 
@@ -38,18 +39,17 @@ export function HechoPorFolvy() {
   const casados = deFolvy.filter((h) => h.accion === 'casado')
 
   return (
-    <section className="cxb-seccion" aria-labelledby="cxb-hecho-titulo">
-      <div className="cxl-seccion">
-        <div><h2 id="cxb-hecho-titulo">{LO_HECHO}</h2><p className="cx-ayuda">En {nombreMes(mes).toLowerCase()}, con el porqué de cada cosa.</p></div>
-        <div className="cxl-segmento" role="group" aria-label="Qué ver">
-          <button type="button" aria-pressed={!todo} onClick={() => setTodo(false)}>{SOLO_AUTOMATICO} · {deFolvy.length}</button>
-          <button type="button" aria-pressed={todo} onClick={() => setTodo(true)}>Y lo de las personas · {hechos.datos.length}</button>
-        </div>
+    <section className="cxb-seccion" aria-label={LO_HECHO}>
+      {/* S02 · PR 2: el título y su frase (con el mes), en el encabezado de la página (BancosPage). Aquí, qué ver. */}
+      <div className="cxl-segmento" role="group" aria-label="Qué ver">
+        <button type="button" aria-pressed={!todo} onClick={() => setTodo(false)}>{SOLO_AUTOMATICO} · {deFolvy.length}</button>
+        <button type="button" aria-pressed={todo} onClick={() => setTodo(true)}>Y lo de las personas · {hechos.datos.length}</button>
       </div>
       <div className="cxb-banda" role="note">
         <span className="cx-ia-punto" aria-hidden="true" />
         <div className="cxb-banda-texto">
-          <strong>{casados.length ? `He casado yo ${casados.length} ${casados.length === 1 ? 'movimiento' : 'movimientos'} este mes, ${casados.filter((h) => h.casadoVivo).length} siguen como los dejé.` : 'Este mes no he casado nada solo.'}</strong>
+          {/* S01e: dice qué cuenta (todos los bancos, por el día en que lo hice), para no chocar con «Casados solos» de un banco. */}
+          <strong>{fraseHecho(casados.length, casados.filter((h) => h.casadoVivo).length, nombreMes(mes).toLowerCase())}</strong>
           <span>Deshacer quita el asiento si aún está propuesto, o lo anula con contraasiento si ya está validado. Nunca se borra nada del libro.</span>
         </div>
       </div>

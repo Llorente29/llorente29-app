@@ -4,10 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import {
-  BARRA_CONTA, CONTA, MENU_CONTA, PESTANAS_AJUSTES, entradaActiva, entradasVisibles, indiceAjustes,
-  rutaAltaEmpresa, rutaApartadoEmpresa, rutaTablasGenerales, rutaTuEmpresa,
-} from '@/config/navegacion'
+import { CONTA, indiceAjustes, rutaAltaEmpresa, rutaApartadoEmpresa, rutaTablasGenerales, rutaTuEmpresa } from '@/config/navegacion'
 import { leerFilaDeCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { empresaQueQuedaActiva, type EmpresaResumen } from '@/modules/conta/empresa/contexto'
 
@@ -19,45 +16,18 @@ describe('navegación del módulo de contabilidad', () => {
     expect(rutaApartadoEmpresa('quien')).toBe('/conta/ajustes/empresa/quien')
     expect(rutaAltaEmpresa()).toBe('/conta/alta')
   })
-  it('las entradas sin pantalla no se pintan', () => {
-    // C06: con Folvy, las mismas de siempre (Inicio solo sale en el producto vendido solo).
-    const visibles = entradasVisibles(MENU_CONTA.flat()).map((e) => e.id)
-    // C03: «Clientes y proveedores» ya tiene su pantalla; C04: «Libros» (el libro diario); compras: «Compras»;
-    // respuesta 1 del repaso de compras: «Ventas», como la maqueta (su pantalla dice que aún no);
-    // D01: «Documentos» (N22, las facturas recibidas); B01: «Bancos».
-    expect(visibles).toEqual(['compras', 'ventas', 'documentos', 'bancos', 'terceros', 'libros', 'ajustes'])
-    expect(entradasVisibles(PESTANAS_AJUSTES).map((e) => e.id)).toEqual(['empresa', 'tablas'])
-    expect(entradasVisibles(BARRA_CONTA.derecha).map((e) => e.id)).toEqual(['bancos', 'ajustes'])
-  })
-  it('C06 · en el producto vendido solo: su Inicio y nada que diga «aún no»', () => {
-    // D01: Documentos ya tiene pantalla, y vendida sola es de las que funcionan.
-    // B01: Bancos entra en el producto solo al tener ruta (encargo del C06, tarea 5: «Bancos, cuando el frente B lo tenga»).
-    expect(entradasVisibles(MENU_CONTA.flat(), true).map((e) => e.id)).toEqual(['inicio', 'compras', 'documentos', 'bancos', 'terceros', 'libros', 'ajustes'])
-    expect(entradasVisibles(BARRA_CONTA.izquierda, true).map((e) => e.id)).toEqual(['inicio'])
-    expect(entradasVisibles(BARRA_CONTA.izquierda).map((e) => e.id)).toEqual([])
+  it('C06 · en el producto vendido solo, nada que diga «aún no» en Ajustes', () => {
     expect(indiceAjustes(true).flatMap((g) => g.entradas).some((e) => e.hueco)).toBe(false)
-    expect(indiceAjustes().flatMap((g) => g.entradas).filter((e) => e.hueco).map((e) => e.id)).toEqual(['numeracion', 'certificados', 'personas', 'avisos'])
-    // La entrada activa se encuentra aunque solo se pinte en el producto vendido solo.
-    expect(entradaActiva('/conta/inicio', MENU_CONTA.flat())).toBe('inicio')
+    // S01e: Numeración ya tiene pantalla (Tablas generales › Numeración de facturas): no dice «aún no».
+    expect(indiceAjustes().flatMap((g) => g.entradas).filter((e) => e.hueco).map((e) => e.id)).toEqual(['certificados', 'personas', 'avisos'])
   })
-  it('el menú está entero, en el orden de la maqueta', () => {
-    expect(MENU_CONTA.flat().map((e) => e.etiqueta)).toEqual([
-      'Inicio', 'Por hacer', 'Compras', 'Ventas', 'Documentos', 'Bancos', 'Clientes y proveedores', 'Pagos y cobros',
-      'Facturas que emites', 'Impuestos', 'Cómo va tu negocio', 'Libros', 'Ajustes',
-    ])
-  })
-  it('la pestaña activa es la de prefijo más largo', () => {
-    expect(entradaActiva('/conta/ajustes', PESTANAS_AJUSTES)).toBe('empresa')
-    expect(entradaActiva('/conta/ajustes/empresa/quien', PESTANAS_AJUSTES)).toBe('empresa')
-    expect(entradaActiva('/conta/ajustes/tablas', PESTANAS_AJUSTES)).toBe('tablas')
-    expect(entradaActiva('/conta/ajustes/tablas/impuestos', PESTANAS_AJUSTES)).toBe('tablas')
-    expect(entradaActiva('/conta/ajustes/tablas/impuestos', MENU_CONTA.flat())).toBe('ajustes')
-    expect(entradaActiva('/kitchen/proveedores', PESTANAS_AJUSTES)).toBeNull()
+  it('S02 · el menú del C00 ya no existe: la barra sale del mapa (productos.ts)', async () => {
+    const nav = await import('@/config/navegacion') as Record<string, unknown>
+    for (const muerto of ['MENU_CONTA', 'BARRA_CONTA', 'PESTANAS_AJUSTES', 'entradasVisibles', 'entradaActiva']) expect(nav[muerto]).toBeUndefined()
   })
   it('no cuelga de Cocina', () => {
     expect(CONTA.modulo).toBe('conta')
-    const todas = [...MENU_CONTA.flat(), ...PESTANAS_AJUSTES].map((e) => e.ruta ?? '')
-    expect(todas.some((r) => r.includes('kitchen'))).toBe(false)
+    expect(Object.values(CONTA.rutas).some((r) => r.includes('kitchen'))).toBe(false)
   })
 })
 
@@ -88,12 +58,16 @@ describe('empresa activa', () => {
 })
 
 // ── Contraste, con los valores de tokens.css ──────────────────────────────
+// S02: muchos --cx-* son ya alias de los del patrón (var(--s-*), diseno/tokens.css):
+// se sigue el alias hasta su valor, el que de verdad se pinta.
 const tokens = readFileSync(resolve(__dirname, '../../../../src/modules/conta/estilo/tokens.css'), 'utf8')
-function token(nombre: string): string {
-  const m = tokens.match(new RegExp(`--cx-${nombre}:\\s*(#[0-9A-Fa-f]{6})`))
-  if (!m) throw new Error(`no encuentro --cx-${nombre}`)
-  return m[1]
+const patron = readFileSync(resolve(__dirname, '../../../../src/modules/conta/diseno/tokens.css'), 'utf8')
+function valor(hoja: string, nombre: string): string {
+  const m = hoja.match(new RegExp(`${nombre}:\\s*(#[0-9A-Fa-f]{6}|var\\((--[a-z0-9-]+)\\))`))
+  if (!m) throw new Error(`no encuentro ${nombre}`)
+  return m[2] ? valor(patron, m[2]) : m[1]
 }
+const token = (nombre: string): string => valor(tokens, `--cx-${nombre}`)
 function luminancia(hex: string): number {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
     .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))

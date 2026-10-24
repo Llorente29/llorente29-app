@@ -15,11 +15,19 @@ export function useDesplegable<T extends HTMLElement = HTMLDivElement>() {
   const setAbierto = (v: boolean) => setAbiertoEn(v ? pathname : null)
   const caja = useRef<T | null>(null)
   const boton = useRef<HTMLButtonElement | null>(null)
+  // S02: el foco vuelve al botón DESPUÉS de cerrar (en el efecto), no en el
+  // mismo evento: lo que el cierre pinta de nuevo no se lo puede llevar.
+  const volverFoco = useRef(false)
+  useEffect(() => {
+    if (abierto || !volverFoco.current) return
+    volverFoco.current = false
+    boton.current?.focus()
+  }, [abierto])
 
   useEffect(() => {
     if (!abierto) return
     const fuera = (e: MouseEvent) => { if (caja.current && !caja.current.contains(e.target as Node)) setAbiertoEn(null) }
-    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') { setAbiertoEn(null); boton.current?.focus() } }
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') { volverFoco.current = true; setAbiertoEn(null); boton.current?.focus() } }
     document.addEventListener('mousedown', fuera)
     document.addEventListener('keydown', tecla)
     return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', tecla) }

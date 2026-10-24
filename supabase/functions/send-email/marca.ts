@@ -20,7 +20,14 @@ export type Remitente =
   | { ok: true; from: string; replyTo: string | null; marca: Marca | null }
   | { ok: false; motivo: string };
 
-export function remitenteDe(marca: unknown): Remitente {
+const CORREO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/**
+ * Quién manda el correo. Con marca, `responderA` (P01) pone el «responder a» de
+ * ESTE envío —el correo de la asesoría que manda el resumen—; si no vale, se
+ * dice y no se manda. Sin marca no se usa: Folvy sigue exactamente igual.
+ */
+export function remitenteDe(marca: unknown, responderA?: unknown): Remitente {
   if (marca === undefined || marca === null || marca === '') {
     return { ok: true, from: REMITENTE_FOLVY.from, replyTo: REMITENTE_FOLVY.replyTo, marca: null };
   }
@@ -29,7 +36,49 @@ export function remitenteDe(marca: unknown): Remitente {
   if (!m.remitente) {
     return { ok: false, motivo: `La marca «${m.nombre}» aún no tiene remitente: su dominio no está verificado en Resend. No se manda desde otra dirección.` };
   }
+  if (responderA !== undefined && responderA !== null && responderA !== '') {
+    const r = String(responderA).trim().toLowerCase();
+    if (!CORREO.test(r) || /[\r\n,;<>]/.test(r)) return { ok: false, motivo: `El correo para las respuestas no vale: ${String(responderA).slice(0, 80)}` };
+    return { ok: true, from: m.remitente, replyTo: r, marca: m };
+  }
   return { ok: true, from: m.remitente, replyTo: m.responderA, marca: m };
+}
+
+export type Cerrojo = { abierto: true } | { abierto: false; motivo: string };
+
+/**
+ * P01 · EL FRENO DE LOS CORREOS CON MARCA, por tipo (decisión de Julio, 19/10).
+ * Todos cerrados salvo lo que Julio abra en el secreto CORREO_MARCA_ABIERTOS de
+ * send-email: una lista separada por comas, cada entrada
+ *   · `plantilla`          abierta a cualquiera, o
+ *   · `plantilla:correo`   abierta solo a ese destinatario (el de prueba).
+ * Vacío o sin poner = todo cerrado. Folvy no se frena, la pida quien llama sin
+ * marca o con `marca: 'folvy'` (conta-asesoria la pone así para las cuentas sin
+ * marca propia): lo que ya sale sigue saliendo igual. Salvo los tipos de
+ * SIEMPRE_CON_FRENO, que no han salido nunca.
+ */
+/** Tipos que el freno cierra con cualquier marca, Folvy incluida: son nuevos y aún no los ha abierto nadie. */
+export const SIEMPRE_CON_FRENO: readonly string[] = ['resumen_trimestre'];
+
+export function cerrojoMarca(marca: Marca | null, plantilla: string, destino: string, abiertos: string | undefined | null): Cerrojo {
+  // Los tipos nuevos del P01 van frenados también con Folvy: nunca han salido.
+  if (!marca || (marca.id === 'folvy' && !SIEMPRE_CON_FRENO.includes(plantilla))) return { abierto: true };
+  const para = destino.trim().toLowerCase();
+  const entradas = String(abiertos ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+  for (const e of entradas) {
+    const i = e.indexOf(':');
+    const tipo = i < 0 ? e : e.slice(0, i);
+    const solo = i < 0 ? null : e.slice(i + 1).trim();
+    if (tipo !== plantilla.toLowerCase()) continue;
+    if (solo === null || solo === para) return { abierto: true };
+  }
+  const soloA = entradas.filter((e) => e.startsWith(plantilla.toLowerCase() + ':')).length > 0;
+  return {
+    abierto: false,
+    motivo: soloA
+      ? `Los correos «${plantilla}» de ${marca.nombre} solo están abiertos para la prueba, no para ${para}. No se ha mandado nada.`
+      : `Los correos «${plantilla}» de ${marca.nombre} están cerrados hasta que Julio los abra. No se ha mandado nada.`,
+  };
 }
 
 /**
@@ -194,8 +243,88 @@ export function contrasenaCambiada(m: Marca, data: Record<string, unknown>): Cor
   };
 }
 
+/**
+ * I01b · Una empresa invita a su asesoría a llevar sus impuestos.
+ * data: { asesoria, empresa, invita, base ('social_collaborator' | 'power_of_attorney'), enlace, caduca ('dd/mm') }
+ */
+export function invitacionAsesoria(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
+  const empresa = String(data.empresa ?? '').trim() || 'una empresa';
+  const invita = String(data.invita ?? '').trim();
+  const asesoria = String(data.asesoria ?? '').trim();
+  const url = urlSegura(data.enlace);
+  const caduca = String(data.caduca ?? '').trim();
+  const como = data.base === 'power_of_attorney' ? 'con el poder que tiene en Hacienda' : 'como colaboradora social';
+  const quien = invita ? `${esc(invita)}, de <strong>${esc(empresa)}</strong>,` : `<strong>${esc(empresa)}</strong>`;
+  const frase = `${quien} te invita a llevar sus impuestos en ${esc(m.nombre)}${asesoria ? ` como ${esc(asesoria)}` : ''}, ${como}. Verás su calendario de impuestos, sus declaraciones y sus libros de IVA.`;
+  const despues = 'Si ya usas Sumied con este correo, al aceptar la verás en Impuestos. Si no, aceptas y te damos de alta: te llegará otro correo para poner tu contraseña.';
+  const cuerpo = `${h1('Te invitan a llevar sus impuestos', c)}${p('Hola.', c)}${p(frase, c)}${p(esc(despues), c)}
+    ${url ? boton(url, 'Ver la invitación', c) : p('<em>El enlace no está disponible. Pide a la empresa que te mande otra.</em>', c)}
+    ${nota(`${caduca ? `La invitación caduca el ${esc(caduca)}. ` : ''}Si el botón no funciona, copia esta dirección en tu navegador:<br /><span style="color:${c.tinta};word-break:break-all;">${url}</span>`, c)}`;
+  const texto = `Hola.\n\n${invita ? `${invita}, de ${empresa},` : empresa} te invita a llevar sus impuestos en ${m.nombre}${asesoria ? ` como ${asesoria}` : ''}, ${como}.\n\n` +
+    `${despues}\n\nVer la invitación: ${url || '(enlace no disponible)'}\n\n${caduca ? `La invitación caduca el ${caduca}.\n\n` : ''}${m.nombre}`;
+  return {
+    subject: `${m.nombre} · ${empresa} te invita a llevar sus impuestos`,
+    html: marco(m, 'Te invitan a llevar sus impuestos', cuerpo, `Te llega porque ${empresa} ha escrito este correo como el de su asesoría. Si no es así, no hagas nada: sin aceptar, no pasa nada.`),
+    text: texto,
+  };
+}
+
+/**
+ * P01 · El resumen del trimestre que una asesoría manda a cada cliente: en
+ * palabras del cliente, sin las tareas de la asesoría.
+ * Responder a este correo le llega a la asesoría (send-email pone su
+ * «responder a», que solo admite por la vía interna: conta-asesoria).
+ * data: los DatosResumen de _shared/resumenTrimestre.ts, ya en texto.
+ */
+export function resumenTrimestre(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
+  const asesoria = String(data.asesoria ?? '').trim() || 'Tu asesoría';
+  const cliente = String(data.cliente ?? '').trim();
+  const trimestre = String(data.trimestre ?? '').trim();
+  const filas = (Array.isArray(data.filas) ? data.filas : []).map((f) => {
+    const x = (f ?? {}) as Record<string, unknown>;
+    return { modelo: String(x.modelo ?? ''), estado: String(x.estado ?? ''), importe: String(x.importe ?? ''), plazo: String(x.plazo ?? '') };
+  });
+  const aIngresar = data.aIngresar ? String(data.aIngresar) : null;
+  const aCompensar = data.aCompensar ? String(data.aCompensar) : null;
+  const titulo = `Tus impuestos del ${trimestre}`;
+  // Sin punto doble cuando el nombre ya acaba en punto («…, S.L.»).
+  const fin = (t: string) => (/[.!?]$/.test(t) ? t : `${t}.`);
+  const celda = (t: string, alinear = 'left', fuerte = false) =>
+    `<td style="padding:10px 8px;border-top:1px solid ${BORDE};font-size:14px;line-height:1.4;text-align:${alinear};color:${c.tinta};${fuerte ? 'font-weight:600;' : ''}">${esc(t)}</td>`;
+  const cab = (t: string, alinear = 'left') =>
+    `<th style="padding:6px 8px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;text-align:${alinear};color:${c.apoyo};">${esc(t)}</th>`;
+  const tabla = filas.length === 0 ? p('Este trimestre no tienes ningún impuesto que presentar.', c) :
+    `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin:16px 0;border-collapse:collapse;">
+      <tr>${cab('Impuesto')}${cab('Cómo va')}${cab('Importe', 'right')}${cab('Plazo', 'right')}</tr>
+      ${filas.map((f) => `<tr>${celda(f.modelo, 'left', true)}${celda(f.estado)}${celda(f.importe, 'right')}${celda(f.plazo, 'right')}</tr>`).join('')}
+    </table>`;
+  const totales = [aIngresar ? `A ingresar en total: <strong>${esc(aIngresar)}</strong>.` : '', aCompensar ? `A compensar en los próximos trimestres: <strong>${esc(aCompensar)}</strong>.` : '']
+    .filter(Boolean).join(' ');
+  const cuerpo = `${h1(titulo, c)}${p('Hola.', c)}
+    ${p(`Te escribimos desde <strong>${esc(asesoria)}</strong> con cómo van los impuestos de ${cliente ? `<strong>${esc(cliente)}</strong>` : 'tu empresa'} en el ${esc(trimestre)}.`, c)}
+    ${tabla}
+    ${totales ? p(totales, c) : ''}
+    ${nota(esc(fin(`Si tienes alguna duda, responde a este correo: le llega a ${asesoria}`)), c)}`;
+  const linea = (x: { modelo: string; estado: string; importe: string; plazo: string }) =>
+    `- ${x.modelo}: ${[x.estado, x.importe !== '—' ? x.importe : '', x.plazo !== '—' ? `Plazo: ${x.plazo}` : ''].filter(Boolean).join('. ')}.`;
+  const texto = `Hola.\n\nTe escribimos desde ${asesoria} con cómo van los impuestos de ${cliente || 'tu empresa'} en el ${trimestre}.\n\n` +
+    (filas.length === 0 ? 'Este trimestre no tienes ningún impuesto que presentar.\n\n'
+      : filas.map(linea).join('\n') + '\n\n') +
+    (aIngresar ? `A ingresar en total: ${aIngresar}.\n` : '') + (aCompensar ? `A compensar en los próximos trimestres: ${aCompensar}.\n` : '') +
+    `\n${fin(`Si tienes alguna duda, responde a este correo: le llega a ${asesoria}`)}\n\n${m.nombre}`;
+  return {
+    subject: `${titulo}${cliente ? ` · ${cliente}` : ''}`,
+    html: marco(m, titulo, cuerpo, `Te llega porque ${asesoria} lleva los impuestos de ${cliente || 'tu empresa'} en ${m.nombre}.`.replace(/\.\. /g, '. ')),
+    text: texto,
+  };
+}
+
 export const PLANTILLAS_MARCA: Record<string, (m: Marca, d: Record<string, unknown>) => CorreoMarca> = {
+  invitacion_asesoria: invitacionAsesoria,
   invitacion_conta: invitacion,
   contrasena_conta: contrasena,
   contrasena_cambiada_conta: contrasenaCambiada,
+  resumen_trimestre: resumenTrimestre,
 };

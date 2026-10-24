@@ -1,0 +1,24 @@
+{
+ "_que": "S01d · contexto de producción de la tanda viva (20261122T0160–0170), medido en SOLO LECTURA el 18/10 a las 09:25 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que nombra la tanda solo existe journal_entry_document (56 filas: se le amplía el CHECK de kind); ninguna de las dos funciones existe; nada del camino del pedido; ninguno de los dos en el historial.",
+ "medido": "2026-10-18T09:25Z",
+ "tanda": {
+  "supabase/migrations/20261122T0160_s01d_documento_expedida.sql": "99cf07c5d6269e51b0118ed57e95aa7f",
+  "supabase/migrations/20261122T0170_s01d_banco_nuevo.sql": "e812161e4678d13f2b626c53fab3eccf"
+ },
+ "contexto": {
+  "tablas": [
+   "public.journal_entry_document"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.journal_entry_document": 56
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,9 @@
+# Vuelta atrás de la tanda de producción viva (el aplicar.txt de esta carpeta,
+# D07 + D07b), en orden inverso: las provisionales de Uber vuelven tal cual
+# desde su respaldo (0870), conta_liquidacion_factura_proponer como estaba y
+# fuera la de enlazar (0860), y las dos funciones del IVA como estaban, sin la
+# de marcar ni las dos columnas del motivo (0850).
+cuenta: scripts/conta/produccion/cuentas/d07-uber-y-no-deducible.sql
+supabase/vuelta-atras/20261208T0870_d07_uber_quitar_provisionales.down.sql
+supabase/vuelta-atras/20261208T0860_d07_uber_liquidaciones.down.sql
+supabase/vuelta-atras/20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.down.sql

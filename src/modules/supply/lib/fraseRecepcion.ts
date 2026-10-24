@@ -1,7 +1,7 @@
 // src/modules/supply/lib/fraseRecepcion.ts
 //
 // La frase de la pantalla «Recibido» (Compras · N21): la primera oración en
-// negrita, como la maqueta («**Este papel es un albarán.** La oficina esperará
+// negrita, como la maqueta («**Es un albarán.** La oficina esperará
 // la factura.»).
 
 export function partirFrase(frase: string): [string, string] {

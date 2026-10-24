@@ -1,17 +1,203 @@
-# R03 · La dirección que no llega. Staging tiene el R03 al día desde el run
-# 39001277072 (17/10, 04:06 UTC: las tres vueltas atrás de la versión anterior,
-# las dos pruebas y la 0300, la 0310 y la 0320 de verdad); desde entonces la 0310
-# solo cambió un comentario de su cabecera. Aquí, las tres vueltas atrás que van
-# a producción, de verdad, en orden y sobre datos, con ROLLBACK: staging no cambia.
-supabase/staging/sql/20261118_r03_vuelta_atras_prueba.sql
-# Y que un Uber de reparto nuestro sale solo a Catcher en un local automático
-# (lo de R03U en las capturas es la semilla), con ROLLBACK: no se envía nada.
-supabase/staging/sql/20261118_r03_uber_auto_despacho_prueba.sql
+# W03 · Staging como producción (rama conta/w03-staging-alineado, Julio 20/10:
+#   «alinéalo con producción de forma definitiva, con su tanda de staging, no
+#   dentro de cada prueba»). La PRIMERA: la C06b y la M01 DE VERDAD, cada una
+#   solo si falta (se puede volver a pasar). Desde aquí, journal_entry_validar
+#   llama a los motivos como en producción. Las dos pruebas de la M01 la quitan
+#   dentro de su transacción para probarla desde antes; las demás ya no la cargan.
+supabase/staging/sql/20261126_w03_c06b_y_m01_de_verdad.sql
 
-# C06b · Promociones y envíos en el asiento de ventas del día (16/10): la
-# prueba aplica la 0100 con \i dentro de su transacción y acaba en ROLLBACK:
-# staging no cambia.
-supabase/staging/sql/20261116_c06b_promociones_envios_prueba.sql
+# I01b · Las pantallas de Impuestos y el asiento del 303 (rama conta/i01b-pantallas-impuestos).
+#   Pieza 6, el asiento de liquidación: la prueba aplica la 0100 a la 0180 (la 0160 y la 0170 del S01d ya están) con
+#   \i y ROLLBACK (y la M01 y la 0140 del S01, si staging no las tiene),
+#   contra los 303 de 2026 de la empresa A: la validación sigue pidiendo tipo
+#   a los demás asientos; contabilizar (477 contra 472, el resultado a la 4750,
+#   validado, «Contabilizado», una sola vez, la cuenta B no); casar el cargo
+#   (un movimiento de prueba creado dentro) → «Pagado» y bank_match_item con
+#   su declaración; deshacer el casado y anular la liquidación devuelven la
+#   declaración; con el mes cerrado va al primer día abierto; y una [68] para.
+#   Antes de nada, la conta_motivos_para_validar huérfana que deja la 0180 de
+#   verdad del run anterior (abajo): con ella, las pruebas creen que la M01
+#   está y no la cargan (run 345). La misma limpieza va otra vez detrás de la 0180.
+supabase/staging/sql/20261122_i01b_sin_m01_en_staging.sql
+supabase/staging/sql/20261122_i01b_asiento_303_prueba.sql
+#   Su vuelta atrás: hacia delante, atrás (las tres huellas como antes y nada
+#   de la 0180) y otra vez hacia delante.
+supabase/staging/sql/20261122_i01b_vuelta_atras_prueba.sql
+#   Para las pantallas en staging, lo que falta del I01a DE VERDAD: la 0120
+#   (obligaciones), 0130 (certificados, solo funciones y la tabla de
+#   confirmaciones), 0140 (el cálculo del 303) y 0150 (presentar). Solo
+#   añaden y se pueden volver a pasar (create or replace, if not exists, la
+#   política con su drop). La 0100 y la 0110 ya estaban (runs 313 y 314). El
+#   run 338 lo enseñó: sin la 0140, el calendario no podía calcular nada.
+supabase/migrations/20261122T0120_i01_obligaciones.sql
+supabase/migrations/20261122T0130_i01_certificados.sql
+supabase/migrations/20261122T0140_i01_calculo_303.sql
+supabase/migrations/20261122T0150_i01_presentar.sql
+#   La 0180 (el asiento de liquidación y casar el cargo) DE VERDAD desde el
+#   18/10 (decisión del frente, con permiso de Julio: «elige lo mejor para el
+#   desarrollo»): sin ella la e2e no puede contabilizar ni casar, y presentar
+#   con el doble acabaría en «sin contabilizar». Cambia en caliente, pero solo
+#   para lo suyo: la excepción de conta_motivos_para_validar es solo para la
+#   liquidación de un 303; el CHECK y la columna nueva de bank_match_item
+#   solo amplían; los dos disparadores solo despiertan al deshacer un casado o
+#   anular una liquidación. Se puede volver a pasar. Su prueba (arriba) y su
+#   vuelta atrás la vuelven a cargar dentro de su transacción. La vuelta atrás
+#   del I01a deshace antes el I01b.
+supabase/migrations/20261122T0180_i01b_asiento_303.sql
+#   Y justo después, solo en staging: la 0180 deja conta_motivos_para_validar
+#   sin la M01 (que aquí no está de verdad) y la prueba de la M01 choca con ella
+#   (run 344). Se quita si nadie la llama; el resto de la 0180 se queda.
+supabase/staging/sql/20261122_i01b_sin_m01_en_staging.sql
+#   P1, el calendario: la 0190 se aplica DE VERDAD (solo añade tres funciones
+#   que leen; la pantalla de Impuestos la necesita en staging) y después su
+#   prueba: como A y como B, y su vuelta atrás dentro (y otra vez delante).
+supabase/migrations/20261122T0190_i01b_calendario.sql
+supabase/staging/sql/20261122_i01b_calendario_prueba.sql
+#   P2, el IVA de un periodo: la 0200 DE VERDAD (solo añade dos funciones: la
+#   que lee para la pantalla y la que guarda cómo se paga) y su prueba: como A
+#   y como B, el pago, y su vuelta atrás dentro (y otra vez delante).
+supabase/migrations/20261122T0200_i01b_declaracion.sql
+supabase/staging/sql/20261122_i01b_declaracion_prueba.sql
+#   P3, presentados: la 0210 DE VERDAD (solo añade una función que lee) y su
+#   prueba: el 3T de A para apuntar, apuntado fuera, B no lo ve, y su vuelta atrás.
+supabase/migrations/20261122T0210_i01b_presentados.sql
+supabase/staging/sql/20261122_i01b_presentados_prueba.sql
+#   P4, certificados: la 0220 DE VERDAD (solo añade dos funciones) y su prueba
+#   con fichas de mentira: A no sube (con el porqué de la base), presenta con
+#   el suyo y no con el de B, B no ve, y su vuelta atrás.
+supabase/migrations/20261122T0220_i01b_certificados.sql
+supabase/staging/sql/20261122_i01b_certificados_prueba.sql
+#   P4b, invitar a la asesoría: la 0230 DE VERDAD (añade una tabla y funciones)
+#   y su prueba: invitar con sus límites, aceptar con cuenta (vincula) y sin
+#   ella (espera el alta de la plataforma), cancelar, el tope de 30 días y su
+#   vuelta atrás (para si hay invitaciones).
+supabase/migrations/20261122T0230_i01b_asesoria.sql
+supabase/staging/sql/20261122_i01b_asesoria_prueba.sql
+#   El 303 no se inventa lo que no sabe (rama conta/i01b-303-no-inventa): la
+#   0240 DE VERDAD, al final del bloque para que mande sobre la 0140 que se
+#   vuelve a pasar arriba (cambia en caliente el cálculo, el fichero y «fuera»,
+#   misma firma, y añade casillas_poner). Su prueba: el 3T de A con el libro
+#   vacío y la 472 llena sale sin resultado; no se revisa, ni sale el fichero,
+#   ni se apunta fuera; las casillas del justificante con los totales de la
+#   gestoría dan 3.723,44 a compensar y entonces sí se apunta fuera; el 4T
+#   arrastra 7.519,61; un aviso sin mirar para el fichero; y su vuelta atrás.
+supabase/migrations/20261122T0240_i01b_303_no_inventa.sql
+supabase/staging/sql/20261122_i01b_303_no_inventa_prueba.sql
+
+# S01d · Lo del S01 que necesita base (rama conta/s01d-tanda, PR 2 del S01b).
+#   La 0160 (el CHECK de journal_entry_document.kind amplía con
+#   'factura_expedida' y conta_documento_expedida_guardar) y la 0170
+#   (bank_cuenta_nueva) se aplican DE VERDAD: solo amplían un CHECK y añaden
+#   dos funciones, y el front nuevo (el PDF de la expedida, el banco nuevo) las
+#   necesita para su e2e. Ya están aplicadas (run 334, 18/10 09:49: las dos
+#   OK) y no se vuelven a pasar (create function no se repite). Quedan sus dos
+#   pruebas, con \i dentro de su transacción y ROLLBACK: como usuario de A y
+#   de B, y la vuelta atrás de verdad (y otra vez delante). Van las primeras:
+#   lo de abajo es de otros frentes y no se toca.
+supabase/staging/sql/20261122_s01d_documento_expedida_prueba.sql
+supabase/staging/sql/20261122_s01d_banco_nuevo_prueba.sql
+#
+# I01a · Impuestos por dentro (rama conta/i01a-impuestos-por-dentro).
+#   Pieza 1, plazos: la prueba aplica la 20261122T0100 (festivos del BOE 2026 y
+#   2027, reglas de plazo y conta_impuesto_plazo) y comprueba, como usuario, las
+#   14 fechas de domiciliación del calendario oficial de la AEAT de 2026.
+#   Pieza 2, modelo de datos: la prueba aplica la 0100 y la 0110 (tax_obligation,
+#   company_tax_facts, tax_return y su registro, certificados, quién presenta) y
+#   comprueba el espejo de tax_forms, las respuestas del alta, el estado como dato
+#   y el permiso de la asesoría solo con consentimiento.
+#   Las dos pruebas, con \i dentro de su transacción y ROLLBACK.
+#   La 0100 y la 0110 se aplican DE VERDAD (solo añaden: tablas, funciones,
+#   vistas y el disparador nuevo de company_tax_profile, probados en los runs
+#   313 y 314), para que el alta del front pueda guardar sus respuestas. Las
+#   pruebas corren después: son la segunda pasada, y prueban que reaplicar no
+#   duplica nada. Van las primeras: lo de abajo es de otros frentes y no se toca.
+supabase/migrations/20261122T0100_i01_plazos.sql
+supabase/migrations/20261122T0110_i01_modelo_datos.sql
+supabase/migrations/20261122T0120_i01_obligaciones.sql
+supabase/staging/sql/20261122_i01_plazos_prueba.sql
+supabase/staging/sql/20261122_i01_modelo_datos_prueba.sql
+#   Pieza 3, obligaciones: la 0120 (las reglas con nombre; solo funciones) se
+#   aplica DE VERDAD arriba, probada en el run 316, para que el alta tome los
+#   modelos de la base. Su prueba, otra vez con \i y ROLLBACK: regla, datos y porqué de cada
+#   modelo; calcular dos veces no escribe dos; quitar pide motivo y ninguna
+#   regla lo pisa; un dato cambia la regla; Canarias; el 130 de un autónomo;
+#   y las reglas no se pueden llamar como usuario (otra vez tras 032068bf);
+#   y la IA escribiendo en el perfil no da de baja los modelos (tras ad8ccdd8).
+supabase/staging/sql/20261122_i01_obligaciones_prueba.sql
+#   Pieza 4, certificados: la prueba aplica la 0130 (el almacén con el Vault)
+#   con \i y ROLLBACK: fuera de Foodint no se guarda; Foodint guarda (con una
+#   cuenta de su id creada solo dentro de la transacción); el token de un solo
+#   uso; «solo ver» no presenta; «quitar ahora» borra el secreto del Vault.
+#   (Otra vez tras 084986dc: la cuenta de prueba se crea sin persona en la sesión.)
+supabase/staging/sql/20261122_i01_certificados_prueba.sql
+#   Pieza 5, el 303: la prueba aplica la 0130 y la 0140 (el cálculo desde el
+#   libro de IVA, sus comprobaciones y lo que pide el fichero) con \i y
+#   ROLLBACK, contra el libro de verdad de la empresa A (3 apuntes del 4T):
+#   casillas, foto de lo declarado, la 472 que no casa, «de otro periodo»; lo
+#   que no sabe (recargo) sin fichero; [110] a mano; el 21 %; el fichero solo
+#   para service_role; presentada no se recalcula; el 1T de 2027 arrastra.
+supabase/staging/sql/20261122_i01_calculo_303_prueba.sql
+#   Pieza 6, presentar: la prueba aplica la 0130 a la 0150 con \i y ROLLBACK,
+#   contra el 4T de verdad de la empresa A y un certificado de mentira creado
+#   dentro: revisar (y dar por bueno un aviso con motivo), preparar solo con el
+#   token de esa persona para esa declaración, «Presentado» solo con su uso
+#   del certificado, el justificante en su carpeta y uno, «ya lo presenté
+#   fuera» sin comprobar, y las de servicio no se llaman como persona.
+supabase/staging/sql/20261122_i01_presentar_prueba.sql
+#   La vuelta atrás de la tanda de producción del I01a (0150 a 0100), con \i y
+#   ROLLBACK: hacia delante, atrás (no queda nada de la tanda y tax_forms de
+#   cada empresa sigue igual) y otra vez hacia delante.
+supabase/staging/sql/20261122_i01_vuelta_atras_prueba.sql
+
+# S01 · El esqueleto (rama conta/s01-esqueleto). VA PRIMERO: la prueba de corte
+# de la D01 (más abajo) para con los datos de staging (ux_party_role_canal) y
+# el workflow se detiene en el primer fallo.
+#
+#   0100: añade conta_user_pref (nivel, favoritos y lo demás de cada persona)
+#         y company.is_hospitality (la marca de hostelería de la empresa).
+#   0110: la marca de las empresas de hoy, por la actividad de su cuenta.
+#   La cuenta D de prueba, sin hostelería (la clonan los carriles).
+#   Y la prueba (ROLLBACK): la 0110 sobre datos, las políticas como usuario y
+#   las dos vueltas atrás de verdad.
+supabase/migrations/20261121T0100_s01_esqueleto.sql
+supabase/migrations/20261121T0110_s01_hosteleria_de_hoy.sql
+supabase/seeds/conta/seed_s01_cuenta_d_sin_hosteleria_staging.sql
+#   Y su plan completo, como lo deja el alta (el agente «Plan contable» lo pide).
+supabase/seeds/conta/seed_s01_cuenta_d_plan_staging.sql
+supabase/staging/sql/20261121_s01_esqueleto_prueba.sql
+#   0120: el logo de cada empresa (company.logo_path y el bucket privado company-logos),
+#   con su prueba (ROLLBACK): como usuario de A sube el suyo y no toca la carpeta de B.
+supabase/migrations/20261121T0120_s01_logo_empresa.sql
+supabase/staging/sql/20261121_s01_logo_empresa_prueba.sql
+#   0130: los ejes de analítica de cada empresa (conta_eje_analitico), de verdad.
+#   0140 (cambia conta_motivos_para_validar): SOLO dentro de su prueba (ROLLBACK).
+#   Staging no tiene la tanda «Esperan» (M01) que crea esa función; la prueba la
+#   aplica antes, dentro de su transacción, como la prueba de la M01.
+supabase/migrations/20261121T0130_s01_ejes_analiticos.sql
+supabase/staging/sql/20261121_s01_analitica_prueba.sql
+#   0150 (cambia banco_facturas_recibidas_pendientes, misma firma y contrato): el
+#   asiento de la factura por source_type + source_id, no por la columna que nadie
+#   escribe. De verdad, y su prueba (ROLLBACK): como usuario de A, con y sin
+#   asiento vivo, y la vuelta atrás byte a byte.
+supabase/migrations/20261121T0150_s01_recibidas_asiento_por_origen.sql
+supabase/staging/sql/20261121_s01_recibidas_asiento_prueba.sql
+#   0160 («No es una factura»): el estado «descartada» con su motivo, quién y
+#   cuándo, que se deshace; N22 la enseña como descartada; repetidas la trata
+#   como anulada. De verdad, y su prueba (ROLLBACK) como usuario de A.
+supabase/migrations/20261121T0160_s01_factura_descartada.sql
+supabase/staging/sql/20261121_s01_factura_descartada_prueba.sql
+
+# M01 · «Esperan» (20261117T0100, motivos para validar), 16/10: las dos
+# pruebas aplican la 0100 (y, si staging aún no la tiene, la 0100 de C antes)
+# con \i dentro de su transacción y acaban en ROLLBACK: staging no cambia.
+#   1. Los motivos: cinco casos validados como usuario con la validación de
+#      antes y con la nueva, el mismo texto, y «Esperan» da lo que pararía.
+#   2. La vuelta atrás, ejecutada de verdad: todo vuelve a la huella de antes.
+# Van las primeras: lo de D01 de abajo puede fallar por datos de otro frente
+# y no debe parar estas. Las pruebas de C (promociones y envíos) y del R03 ya
+# pasaron: sus tandas están en el historial de producción (16/10 y 17/10).
+supabase/staging/sql/20261117_m01_motivos_para_validar_prueba.sql
+supabase/staging/sql/20261117_m01_motivos_para_validar_vuelta_atras_prueba.sql
 
 # D01 · El corte por fecha de las liquidaciones por correo (rama conta/d01-corte-liquidaciones).
 #   0100: el corte (de referencia antes de la fecha de Bancos; la que cruza, real).
@@ -25,10 +211,315 @@ supabase/staging/sql/20261115_d01_liquidaciones_corte_prueba.sql
 supabase/staging/sql/20261115_d01_referencia_vuelta_atras_prueba.sql
 supabase/seeds/conta/seed_d01_liquidacion_referencia_staging.sql
 
-# D01 · Las facturas de los proveedores por correo (16/10): la 0100 añade los
-# remitentes que no mandan facturas y el rastro de la repetida; la 0110 no hace
-# nada en staging (no está Foodint). La prueba ejecuta la 0110 sobre la cuenta A
-# y las dos vueltas atrás con \i, con correos inventados, y acaba en ROLLBACK.
-supabase/migrations/20261119T0100_d01_facturas_correo.sql
-supabase/migrations/20261119T0110_d01_facturas_foodint.sql
-supabase/staging/sql/20261119_d01_facturas_correo_prueba.sql
+# C06 · Las pruebas del frente C con carriles (rama conta/c06-pruebas-carriles).
+#   La función del recorrido reconoce al administrador de plataforma de prueba
+#   de su carril, no solo al de la plantilla (create or replace, misma firma),
+#   y reparte la C0009 por turnos entre carriles («ocupada» hasta 10 min).
+#   La cuenta «sola» de la plantilla, con su ejercicio abierto: Inicio pide
+#   cerrar el mes anterior (M01). Solo añade; si ya está, no hace nada.
+supabase/seeds/conta/seed_c06_recorrido_staging.sql
+supabase/seeds/conta/seed_c06_sola_ejercicio_staging.sql
+
+# I01b · El 349 lo proponen las operaciones con la UE (rama conta/i01b-349-por-operaciones).
+#   La 0250 DE VERDAD (cambia en caliente conta_impuesto_reglas y
+#   conta_impuesto_calendario, misma firma, y añade conta_paises_ue) y su
+#   prueba: sin operaciones no le sale, y lo dice («No te sale el 349» en el
+#   calendario); una compra intracomunitaria lo propone y calcular lo escribe;
+#   quitado con motivo no se pisa; venta E5 y «no estoy en el ROI»; lo de más de
+#   12 meses no cuenta; y su vuelta atrás.
+#   VA LA ÚLTIMA: el bloque del I01a vuelve a aplicar la 0120, que trae la regla
+#   de antes. Puesta antes de él (runs 351 y 352), la 0250 se aplicaba y la 0120
+#   la pisaba: staging se quedaba con la regla vieja y el calendario nuevo.
+supabase/migrations/20261122T0250_i01b_349_por_operaciones.sql
+supabase/staging/sql/20261122_i01b_349_por_operaciones_prueba.sql
+
+# I01c · P1 · Subir justificantes de Hacienda (rama conta/i01c-justificantes).
+#   La 0260 DE VERDAD (amplía el CHECK de tax_return_box.origin con
+#   'justificante' y añade tres funciones; probada en el run 354), para la e2e
+#   de «Subir justificantes». Y su prueba, con \i y ROLLBACK: el NIF
+#   de otra empresa; el repaso (dos veces, antes de acabar el periodo,
+#   negativo); apuntar el 303 del 3T de 2025 con el plazo sin festivos dicho;
+#   ya estaba y otro CSV; el 4T calculado con la [110] del 3T subido y sus
+#   diferencias; a mano con motivo; y la vuelta atrás.
+supabase/migrations/20261122T0260_i01c_justificantes.sql
+supabase/staging/sql/20261122_i01c_justificantes_prueba.sql
+
+# I01c · P1 definitiva · El justificante por CSV (rama conta/i01c-csv).
+#   La 0270 DE VERDAD (cuatro columnas nuevas en tax_return: expediente,
+#   presentador y de dónde salió el PDF; apuntar los guarda y Presentados da lo
+#   traído y lo compensado del 303), para la e2e de «Ya lo presenté fuera ·
+#   pegar CSV» con el doble de conta-justificante-csv. Y su prueba, con \i y
+#   ROLLBACK: el 3T traído por CSV (comprobado), el 4T subido con 430,00
+#   compensado, el de otro NIF fuera, y la vuelta atrás.
+supabase/migrations/20261122T0270_i01c_csv.sql
+supabase/staging/sql/20261122_i01c_csv_prueba.sql
+
+# P01 · Impuestos de tus clientes (rama conta/p01-despacho).
+#   La 0100 DE VERDAD: solo añade (dos columnas que admiten nulos en accounts,
+#   tax_client_assignee y las funciones conta_despacho_*); se puede volver a
+#   pasar. La asesoría de demo: Asesoría de Prueba Centro, 3 personas, 4
+#   certificados de mentira y 10 clientes inventados (8 con permiso); si ya
+#   está, solo pone al día la caducidad de los certificados. Y su prueba, con
+#   ROLLBACK: cifras y filtros del 3T a 13/10, certificado por persona,
+#   responsable, RLS de la clienta, de otra cuenta y de la asesoría, «Soy una
+#   asesoría», retirar el permiso y la vuelta atrás.
+#   Va detrás de la 0270: no toca nada de lo de arriba.
+supabase/migrations/20261123T0100_p01_despacho.sql
+supabase/seeds/conta/seed_p01_despacho_staging.sql
+supabase/staging/sql/20261123_p01_despacho_prueba.sql
+
+# I01c · Pieza 3, la parte que ordena (rama conta/i01c-trimestre).
+#   La 0280 DE VERDAD (solo añade: conta_impuesto_trimestre, la tira del
+#   trimestre y la cartera de cuotas a compensar del 303, y si el borrador está
+#   desfasado), para la e2e de Impuestos › Trimestre. Y su prueba, con \i y
+#   ROLLBACK: el borrador del 3T calculado antes del 2T, desfasado; la cartera
+#   1.500,00 + 1.200,50 − 400,25 = 2.300,25; vuelto a calcular, trae la [110];
+#   la tira; otra cuenta no lo ve; y la vuelta atrás. En 2026: con 2025 paró
+#   (run 369) porque no hay festivos de 2025 para el plazo.
+supabase/migrations/20261122T0280_i01c_trimestre.sql
+supabase/staging/sql/20261122_i01c_trimestre_prueba.sql
+
+# I01c · «Deducida en» (rama conta/i01c-deducida). La 0290 DE VERDAD (añade
+#   las columnas y la carga; cambia el cálculo del 303) y su prueba, con \i y
+#   ROLLBACK: una recibida inventada del 31/03 va en el 1T; marcada «deducida
+#   en el 2T» va en el 2T y los dos lo dicen; la carga es todas o ninguna y
+#   pide motivo; otra cuenta no puede; quitada vuelve; y la vuelta atrás deja
+#   el cálculo byte a byte como la 0280.
+supabase/migrations/20261124T0290_i01c_deducida.sql
+supabase/staging/sql/20261124_i01c_deducida_prueba.sql
+
+# I01d · Las autoliquidaciones (rama conta/i01d-autoliquidaciones). La 0300 DE
+#   VERDAD (cambia el cálculo del 303, el testigo de «deducida en», el libro
+#   desde el asiento y la validación; añade cuatro funciones) y su prueba, con
+#   \i y ROLLBACK, por los caminos: una intracomunitaria y una de fuera de la UE
+#   validadas con su autorrepercusión; sin la 477 no; el tipo contra el país,
+#   tres veces, no; el 303 del 4T cambia lo que tiene que cambiar y el cálculo
+#   dice lo mismo que el libro; anular; el testigo; otra cuenta; y la vuelta
+#   atrás byte a byte. La 0310 es solo de Foodint: aquí no hace nada.
+supabase/migrations/20261125T0300_i01d_autoliquidaciones.sql
+supabase/staging/sql/20261125_i01d_autoliquidaciones_prueba.sql
+supabase/migrations/20261125T0310_i01d_proveedores_foodint.sql
+
+# W03 (la comprobación de 17 funciones con su md5) se fue en el W04 (22/10):
+#   staging ya no vuelve a pasar el manifiesto entero, sino lo que cada push
+#   añade (scripts/conta/staging-tanda.mjs), y de verdad solo desde main.
+
+# I01f · El envío a Diez de las recibidas autoliquidadas (rama
+#   conta/i01f-diez-autoliquidadas). La 0320 (cambia conta_recibida_envio: solo
+#   añade el tratamiento del IVA de cada línea y el país del proveedor) SOLO
+#   dentro de su prueba (ROLLBACK): una recibida de verdad de A puesta como
+#   intracomunitaria de Francia (intra_eu y FR) y como inversión del sujeto
+#   pasivo de Estados Unidos (reverse_charge y US), como usuario de A; lo de
+#   antes, igual; la cuenta B no la lee; y la vuelta atrás, byte a byte.
+supabase/staging/sql/20261126_i01f_recibida_envio_prueba.sql
+
+# I01g · El 111 y el 115 calculados por Sumied desde el diario (rama
+#   conta/i01g-111-115). La 0330 DE VERDAD (solo añade: tres funciones y tres
+#   claves más en el CHECK de lo comprobado), para que la e2e del Trimestre la
+#   tenga; se puede volver a pasar. Y su prueba (ROLLBACK), como el
+#   administrador de A en el 4T de 2026: asientos validados de verdad (una
+#   nómina, un profesional, dos alquileres del mismo arrendador, un pago a
+#   Hacienda y uno con el grupo 1), el 111 sin la [01] (no se revisa), la [01]
+#   a mano con su motivo (se revisa), el 115, un asiento con la 4751 sin
+#   modelo (error), lo que no vale y la cuenta B, que no lee ni calcula.
+supabase/migrations/20261127T0330_i01g_retenciones_111_115.sql
+supabase/staging/sql/20261127_i01g_retenciones_prueba.sql
+
+# I01h · El 202 calculado por Sumied, con el molde del 303, el 111 y el 115
+#   (rama conta/i01h-202). La 0340 DE VERDAD (solo añade: la tabla de los 200,
+#   tres funciones y una clave más en el CHECK de lo comprobado; y quita a la
+#   clave anónima las tres funciones de la 0330, como el 303), para que la e2e
+#   de «Impuesto de sociedades» la tenga; se puede volver a pasar. Y su prueba
+#   (ROLLBACK), como el administrador de A: el 200 de 2024 da el 1P de 2026; el
+#   de 2025 a cero deja el 2P, el 3P y el 1P de 2027 en «No hace falta» y el
+#   calendario lo dice; corregirlo lo devuelve a borrador; la devolución,
+#   pendiente hasta que llega al banco; lo que no vale; la cuenta B y la clave
+#   anónima; y la vuelta atrás con datos.
+supabase/migrations/20261128T0340_i01h_sociedades_202.sql
+supabase/staging/sql/20261128_i01h_sociedades_202_prueba.sql
+
+# Compras · Al guardar cómo factura un proveedor, las preguntas que salen de la
+#   ficha se vuelven a mirar también en las recepciones que ya tienen factura
+#   (rama conta/compras-revisar; Julio, 21/10). La 0350 DE VERDAD (cambia en
+#   caliente _compras_camino_guarda y _compras_forma_facturar, misma firma),
+#   para que la e2e de Compras la tenga; se puede volver a pasar. La 0360 (la
+#   pasada de hoy, solo Foodint) aquí no hace nada. Y su prueba (ROLLBACK),
+#   como el administrador de A: las consumidas pierden la pregunta vieja sin
+#   tocar su camino ni su factura, la del paso de la factura no se toca, lo
+#   que de verdad no casa pasa a «no dicen lo mismo», «Por revisar» deja de
+#   enseñarlas y sin usuario no se cambia la ficha.
+supabase/migrations/20261129T0350_compras_preguntas_de_la_ficha.sql
+supabase/migrations/20261129T0360_compras_preguntas_foodint.sql
+supabase/staging/sql/20261129_compras_preguntas_de_la_ficha_prueba.sql
+
+# Textos · Ni «papel» ni «papeles» en un texto que vea alguien (rama
+#   conta/compras-revisar; Julio, 21/10). La 0370 DE VERDAD (cambia en caliente
+#   doce funciones de Compras, la contabilidad y Clientes y proveedores, misma
+#   firma, SOLO textos), para que las e2e la tengan; se puede volver a pasar. Y
+#   su prueba (ROLLBACK): cada una sin literales con «papel» salvo las claves,
+#   y con los textos devueltos a los viejos su md5 es el de producción del
+#   21/10; el «¿a nombre de quién va?» nombra el albarán, la factura o el
+#   albarán-factura; los motivos y errores de la factura desde el documento
+#   (sin líneas, sin IVA, la lectura que no existe); como el usuario de A, la
+#   frase de la tablet al confirmar una recepción y las puertas de la
+#   pantalla; y la vuelta atrás de verdad, con el md5 de producción.
+supabase/migrations/20261129T0370_textos_sin_papel.sql
+supabase/staging/sql/20261129_textos_sin_papel_prueba.sql
+
+# Compras · Regla 10 con la 0350, la 0360 y la 0370 puestas (rama
+#   conta/compras-revisar; Julio, 21/10: «recibir un albarán es uno de los
+#   cuatro caminos de la regla 10: ensáyalos en staging»). Solo su prueba
+#   (ROLLBACK): cerrar una venta; recibir un albarán y un albarán-factura como
+#   el usuario de A, con la frase de la tablet; apuntar una merma; aprobar un
+#   recuento. Cada uno tiene que escribir lo suyo.
+supabase/staging/sql/20261129_compras_revisar_cuatro_caminos_prueba.sql
+
+# C06b · El nombre del PDF lo limpia la base (rama conta/c06b-nombre-pdf-base;
+#   Julio, 21/10). La 0380 añade original_name, conta_nombre_fichero y el
+#   disparador; su prueba (ROLLBACK) mete nombres con espacios, tildes y «ñ» por
+#   los tres que escriben (resumen de ventas, recibida y expedida), comprueba que
+#   file_name sale limpio y original_name guarda el de antes, y ejecuta la vuelta
+#   atrás.
+supabase/migrations/20261129T0380_c06b_nombre_pdf_base.sql
+supabase/staging/sql/20261129_c06b_nombre_pdf_base_prueba.sql
+
+# AUTOCONTEO · el autoconteo se aplica solo, entero y con cualquier diferencia
+#   (rama claude/exciting-cray-eik036; encargo de Julio del 21/10). Primero la
+#   limpieza (si ya están, las quita con sus .down.sql: se puede volver a
+#   pasar), luego la 0390 (en staging no hay filas de Foodint: no anula nada) y
+#   la 0400 DE VERDAD, y su prueba (ROLLBACK): la tablet aplica entero al
+#   terminar, la red aplica el rezagado, la noche aplica, anula el vacío y
+#   apunta el roto con su aviso, la pantalla y el vigía lo ven, la cuenta B no,
+#   el de seguridad sigue pidiendo motivo, y los cuatro caminos de la regla 10.
+supabase/staging/sql/20261129_autoconteo_limpiar.sql
+supabase/migrations/20261129T0390_autoconteo_anula_atascados.sql
+supabase/migrations/20261129T0400_autoconteo_se_aplica_entero.sql
+# Y la semilla de la e2e del autoconteo (tests/e2e/inventario): el trabajador
+#   de A con su ficha, tres artículos con stock y e2e_autoconteo_preparar.
+#   Va detrás de la 0400 (usa sus columnas). Se puede volver a pasar.
+supabase/seeds/conta/seed_autoconteo_e2e_staging.sql
+supabase/staging/sql/20261129_autoconteo_prueba.sql
+
+# E05 · Las facturas de riders (rama conta/e05-riders-asiento; Julio, 21/10).
+#   La 0410 DE VERDAD (cambia en caliente compras_ficha_le_falta y
+#   conta_vat_book_desde_asiento, misma firma; no cambia datos) y su prueba:
+#   la ficha genérica «Riders» no pide NIF ni forma de facturar, una ficha con
+#   su cuenta de gasto no pide tipo de gasto, el libro de IVA de una factura de
+#   lote lleva a su emisor y una recibida normal sigue con el NIF de su ficha;
+#   y su vuelta atrás dentro (ROLLBACK), con los md5 de producción del 21/10.
+#   No toca coste ni stock: sin los cuatro caminos de la regla 10.
+supabase/migrations/20261130T0410_e05_riders_ficha_y_libro.sql
+supabase/staging/sql/20261130_e05_riders_ficha_y_libro_prueba.sql
+
+# E05 · La ficha de Catcher Marketplace (rama conta/e05-catcher-ficha; Julio,
+#   21/10). La 0420 solo actúa sobre Foodint, que no está en staging: aquí no
+#   hace nada y su prueba (ROLLBACK) lo comprueba, con su vuelta atrás. Su
+#   prueba con datos es el ENSAYO en producción.
+supabase/migrations/20261130T0420_e05_catcher_ficha.sql
+supabase/staging/sql/20261130_e05_catcher_ficha_prueba.sql
+
+# I01d · Cargar los impuestos de 2025 (rama conta/i01d-impuestos-2025; Julio,
+#   21/10). La 0420 cambia conta_impuesto_trimestre: «desde» y lo pendiente al
+#   empezar el año del 4T anterior. Su prueba (ROLLBACK) carga el 1T de 2026 y
+#   el 4T de 2025 por su justificante, mira de dónde sale lo pendiente, un 4T
+#   que no casa, otra cuenta y la vuelta atrás de verdad.
+supabase/migrations/20261130T0420_i01d_impuestos_2025.sql
+supabase/staging/sql/20261130_i01d_impuestos_2025_prueba.sql
+
+# C07 · Todo asiento de Sumied a Diez al momento (rama conta/c07-diez-todo; Julio, 22/10).
+#   La prueba primero (empieza con la vuelta atrás, así mide el antes aunque la
+#   0450 ya esté): el interruptor (sin conexión no se enciende; B no toca el de
+#   A), lo que falta por mandar (manual y nómina como asiento, la venta como
+#   factura; ni la apertura ni un contraasiento de algo que no está en Diez),
+#   reclamar con su reintento a 10 minutos, el contraasiento de lo que está en
+#   Diez, conta_asiento_envio, las dos lecturas para el servidor (A lee lo mismo
+#   que antes) y la vuelta atrás byte a byte (md5 de producción del 22/10).
+#   La 0450 ya está en producción (22/10): entra de verdad en staging desde
+#   main (W04). No toca coste ni stock: sin los cuatro caminos.
+supabase/staging/sql/20261201_c07_diez_todo_prueba.sql
+supabase/migrations/20261201T0450_c07_diez_todo.sql
+# S02 · PR 1 del patrón único (rama claude/cool-noether-i932tx; Julio, 22/10).
+#   La 0460 añade company.color ('#RRGGBB', nula) y su comprobación: la franja
+#   de 3 px de la cabecera y el cuadrado de la inicial. Su prueba (ROLLBACK): A
+#   pone y quita el color de su empresa, uno mal escrito no entra, no toca el de
+#   B, y la vuelta atrás para con un color puesto y sin él lo quita todo.
+#   Desde la rama va en ROLLBACK (W04); de verdad, desde main después del real.
+supabase/migrations/20261202T0460_s02_color_empresa.sql
+supabase/staging/sql/20261202_s02_color_empresa_prueba.sql
+# D02 · el PDF de las recibidas (rama conta/d02-imagen-pdf; Julio, 22/10).
+#   La 0470 añade conta_recibida_pdf y las funciones del servidor que hacen el
+#   PDF de una recibida que entra como foto y lo enlazan a su asiento validado,
+#   y deja que el servidor llame a conta_documento_factura_guardar. Su prueba
+#   (ROLLBACK): lo que falta por convertir, cogerlo, apuntar lo hecho y lo
+#   fallado, enlazar (y despertar su envío a Diez), quién lee, y la vuelta atrás
+#   byte a byte. Cambia una función: desde la rama va en ROLLBACK (W05); de
+#   verdad, desde main después del real.
+supabase/migrations/20261203T0470_d02_recibida_pdf.sql
+supabase/staging/sql/20261203_d02_recibida_pdf_prueba.sql
+# E05 · volver a leer en el servidor los PDF de Catcher (rama conta/e05-releer-riders; Julio, 22/10).
+#   La 0480 añade conta_lote_relectura y las funciones para pedir, lanzar,
+#   empezar, guardar y apuntar una relectura, y deja que el servidor llame a
+#   conta_lote_pedidos_app y conta_lote_cruce_guardar. Su prueba (ROLLBACK):
+#   quién la pide, guardar solo lo que sigue en revisión, cruzar como el
+#   servidor, quién lee, y la vuelta atrás byte a byte. Cambia dos funciones:
+#   desde la rama va en ROLLBACK (W05); de verdad, desde main después del real.
+supabase/migrations/20261204T0480_e05_releer_riders.sql
+supabase/staging/sql/20261204_e05_releer_riders_prueba.sql
+# S02 · PR 3 · las cifras, una fuente por concepto (rama claude/cool-noether-i932tx; Julio, 22/10).
+#   La 0490 añade conta_pendientes, conta_saldo_bancos y conta_saldos_terceros
+#   (solo leen) y cambia la ventana de conta_impuesto_calendario (salta lo que
+#   no hace falta presentar). Su prueba (ROLLBACK): el calendario de antes y el
+#   de después, lo pendiente con un movimiento de cada clase y tres asientos,
+#   el banco con su 572 y sus extractos, los saldos de terceros contra el
+#   libro, quién lee, y la vuelta atrás byte a byte. Cambia una función: desde
+#   la rama va en ROLLBACK (W05); de verdad, desde main después del real.
+supabase/migrations/20261205T0490_s02_cifras.sql
+supabase/staging/sql/20261205_s02_cifras_prueba.sql
+# D03 · la recibida que se sube sin recepción nace con su documento (rama claude/ficha-recibida; Julio, 23/10).
+#   La 0770 cambia _compras_factura_desde_papel: sin recepción, o con una sin
+#   documento, el primer fichero de su lectura. Su prueba (ROLLBACK): el hueco
+#   antes, como usuario de A; un PDF sin recepción con su documento; la foto
+#   con su recepción como antes; recepción sin documento; sin ficheros u otro
+#   bucket; B no; la 0780 y su vuelta atrás sin Foodint; y la vuelta atrás
+#   byte a byte. Cambia una función: desde la rama va en ROLLBACK (W05); de
+#   verdad, desde main después del real. La 0780 es solo de Foodint: aquí no
+#   hace nada.
+supabase/migrations/20261206T0770_d03_recibida_pdf_sin_recepcion.sql
+supabase/staging/sql/20261206_d03_recibida_pdf_prueba.sql
+supabase/migrations/20261206T0780_d03_recibida_pdf_datos.sql
+# D03 · «Guardar cambios» de la ficha de la recibida (la misma rama; Julio, 23/10).
+#   La 0790 solo añade (columnas que admiten nulos, dos tablas y tres
+#   funciones) y se puede pasar dos veces: desde la rama va de verdad (W05).
+#   Su prueba (ROLLBACK): cada clave de p_cambios como usuario de A y lo
+#   escrito, el historial y el asiento propuesto quitado; lo que no; poner su
+#   documento y «Sin PDF»; B no; con su asiento validado no; y la vuelta atrás.
+supabase/migrations/20261206T0790_d03_recibida_guardar.sql
+supabase/staging/sql/20261206_d03_recibida_guardar_prueba.sql
+#
+# D06 · bloque 1 de Compras y gastos (rama claude/cool-noether-i932tx, 23/10).
+#   La 0800 cambia en caliente (los dos CHECK de payment_method admiten
+#   'prepaid'; conta_factura_desde_lectura: el PDF bueno sustituye a la foto):
+#   desde la rama va en ROLLBACK (W05); de verdad, desde main después del real.
+#   La 0810 es solo de Foodint: aquí no hace nada.
+#   Su prueba (ROLLBACK): lo de antes con el md5 de producción; prepaid entra y
+#   «bizum» no; el correo con foto y luego su PDF (sustituye, la foto al
+#   historial, sin otra factura); lo que no sustituye; y las vueltas atrás
+#   byte a byte.
+supabase/migrations/20261207T0800_d06_prepago_y_pdf_bueno.sql
+supabase/migrations/20261207T0810_d06_riders_prepago.sql
+supabase/staging/sql/20261207_d06_prepago_y_pdf_prueba.sql
+#
+# D07a · las recibidas rechazadas por la descripción, otra vez a la cola
+# (rama claude/cool-noether-i932tx, 23/10). La 0820 es solo de Foodint: aquí no
+# hace nada. Su prueba (ROLLBACK): sin Foodint, ni la 0820 ni su vuelta atrás
+# tocan ningún envío; B no ve los de A.
+supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql
+supabase/staging/sql/20261208_d07a_diez_reenviar_prueba.sql
+#
+# D07c · «Saldo prepago» en todas las listas de formas de pago (la misma rama
+# y la misma tanda que la 0820). La 0830 cambia en caliente dos funciones y
+# tres CHECK: desde la rama va en ROLLBACK (W05). Su prueba (ROLLBACK): guardar
+# en la ficha una recibida con «Saldo prepago Catcher» como usuario de A; el
+# error en español; las demás listas; B no; y la vuelta atrás byte a byte.
+supabase/migrations/20261208T0830_d07c_prepago_en_todas_las_listas.sql
+supabase/staging/sql/20261208_d07c_prepago_listas_prueba.sql

@@ -54,7 +54,18 @@ test('lista de clientes y proveedores: papeles, filtros y archivados', async ({ 
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/clientes-y-proveedores')
-  await expect(page.getByRole('heading', { level: 1, name: 'Clientes y proveedores' })).toBeVisible()
+  // S01 · paso 3: Contactos, con sus papeles (Plataformas y Socios, con hostelería: A lo es).
+  // S02: los papeles ya no son pestañas de la cabecera: son las páginas de Contactos, debajo del
+  // apartado en la barra; en el móvil, la barra va en el cajón y hay que abrirlo (al elegir una
+  // página se cierra solo).
+  await expect(page.getByRole('heading', { level: 1, name: 'Contactos' })).toHaveCount(1)
+  const papeles = page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('list', { name: 'Páginas de Contactos' })
+  const abrirMenu = async () => { if (lado(page) === 'movil') await page.getByRole('button', { name: 'Abrir el menú' }).click() }
+  await abrirMenu()
+  // Por su nombre (.s-barra-nombre): «Todos» puede llevar al lado su contador, que no es parte del nombre.
+  await expect(papeles.locator('.s-barra-nombre')).toHaveText(['Todos', 'Clientes', 'Proveedores', 'Plataformas', 'Socios de marca'])
+  await expect(papeles.getByRole('link', { name: 'Todos', exact: true })).toHaveAttribute('aria-current', 'page')
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Cerrar el menú' }).click()
   const plataforma = page.getByRole('link', { name: /Plataforma Norte/ })
   await expect(plataforma).toBeVisible()
   await expect(page.getByRole('link', { name: /Marcas del Sur/ })).toBeVisible()
@@ -62,14 +73,20 @@ test('lista de clientes y proveedores: papeles, filtros y archivados', async ({ 
   // Regla 7: el archivado no sale en «Todos», sale en su filtro.
   await expect(page.getByRole('link', { name: /Distribuciones Antiguas/ })).toHaveCount(0)
   await capturar(page, 'lista')
-  await page.getByRole('button', { name: /^Plataformas · \d+$/ }).click()
+  await abrirMenu()
+  await papeles.getByRole('link', { name: 'Plataformas', exact: true }).click()
+  await expect(page).toHaveURL(/[?&]ver=plataformas(&|$)/)
+  await abrirMenu()
+  await expect(papeles.getByRole('link', { name: 'Plataformas', exact: true })).toHaveAttribute('aria-current', 'page')
+  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Cerrar el menú' }).click()
   await expect(page.getByRole('link', { name: /Plataforma Norte/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /Catering Eventos Norte/ })).toHaveCount(0)
   await page.getByRole('button', { name: /^Archivados · \d+$/ }).click()
   await expect(page.getByRole('link', { name: /Distribuciones Antiguas/ })).toBeVisible()
   await expect(page.getByText(/histórico de 2024/).first()).toBeVisible()
   // Buscar por NIF.
-  await page.getByRole('button', { name: /^Todos · \d+$/ }).click()
+  await abrirMenu()
+  await papeles.getByRole('link', { name: 'Todos', exact: true }).click()
   await page.getByLabel('Buscar por nombre o NIF').fill('B91030023')
   await expect(page.getByRole('link', { name: /Marcas del Sur/ })).toBeVisible()
   await expect(page.getByRole('link', { name: /Plataforma Norte/ })).toHaveCount(0)
@@ -248,7 +265,9 @@ test('cliente normal: sin facturas, lo dice; archivar y recuperar', async ({ pag
   await capturar(page, 'cliente')
   test.skip(info.project.name === 'movil', 'Archivar escribe en la base: solo en un tamaño')
   try {
-    await page.getByRole('button', { name: 'Más acciones' }).click()
+    // S02: la fila de acciones del marco también puede llevar su «Más acciones» (sin «···»):
+    // éste es el de la ficha, el de los tres puntos.
+    await page.getByRole('button', { name: 'Más acciones', exact: true }).filter({ hasText: '···' }).click()
     await page.getByRole('menuitem', { name: 'Archivar' }).click()
     await page.getByLabel('Por qué (opcional)').fill('Prueba e2e')
     await page.getByRole('button', { name: 'Archivar', exact: true }).click()
@@ -267,7 +286,7 @@ test('cliente normal: sin facturas, lo dice; archivar y recuperar', async ({ pag
   }
 })
 
-test('alta de cliente con el NIF de un proveedor: un solo tercero con los dos papeles', async ({ page }, info) => {
+test('alta de cliente con el NIF de un proveedor: una sola ficha con los dos papeles', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
   const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
@@ -277,18 +296,46 @@ test('alta de cliente con el NIF de un proveedor: un solo tercero con los dos pa
   expect(p.status, 'se crea el proveedor de prueba').toBe(201)
   try {
     await page.goto('/conta/clientes-y-proveedores')
-    await page.getByRole('button', { name: 'Nuevo cliente' }).click()
+    await page.getByRole('toolbar', { name: 'Acciones de Todos' }).getByRole('link', { name: /Nuevo cliente/ }).click()
     await page.getByLabel('Nombre con el que lo conocéis').fill('Otro nombre cualquiera')
     await page.getByLabel('NIF (opcional)').fill(nif)
     // Regla 1: un NIF, un tercero.
-    await expect(page.getByText(`Es el mismo que tu proveedor ${nombre}: añadirle el papel de cliente.`)).toBeVisible()
-    await page.getByRole('button', { name: 'Añadirle el papel de cliente' }).click()
-    await expect(page.getByText(`${nombre} ya es también cliente: un solo tercero con los dos papeles.`)).toBeVisible()
+    await expect(page.getByText(`Es el mismo que tu proveedor ${nombre}: hacerlo también cliente.`)).toBeVisible()
+    await page.getByRole('button', { name: 'Hacerlo también cliente' }).click()
+    await expect(page.getByText(`${nombre} ya es también cliente: una sola ficha para las dos cosas.`)).toBeVisible()
     await expect(page).toHaveURL(/\/conta\/clientes-y-proveedores\/[0-9a-f-]+\/datos-fiscales$/)
     const roles = await rest<{ role: string }[]>(s, 'GET', `party_role?select=role,party!inner(name)&account_id=eq.${CUENTA_A.id}&party.name=eq.${encodeURIComponent(nombre)}&order=role`)
     expect(roles.datos.map((r) => r.role)).toEqual(['customer', 'supplier'])
   } finally {
     await borrarProveedor(s, p.datos[0].id)
+    await rest(s, 'DELETE', `party?account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
+  }
+})
+
+// S01d: «Nuevo proveedor» desde Contactos (S02: la fila de acciones, antes la cinta; ?nuevo=proveedor): se queda en la lista,
+// lo dice con su nombre (regla 8) y lo enseña buscándolo por su NIF.
+test('S01d · alta de proveedor desde Contactos: lo confirma y sale en la lista', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Escribe en la base: solo en un tamaño')
+  const s = await entrarComo(page, CUENTA_A.email)
+  vigilar(page)
+  const nombre = `Proveedor S01d e2e ${Date.now()}`
+  const nif = cifInventado()
+  try {
+    await page.goto('/conta/clientes-y-proveedores')
+    await page.getByRole('toolbar', { name: 'Acciones de Todos' }).getByRole('link', { name: /Nuevo proveedor/ }).click()
+    const dialogo = page.getByRole('dialog', { name: 'Nuevo proveedor' })
+    await dialogo.getByLabel('Nombre con el que lo conocéis').fill(nombre)
+    await dialogo.getByLabel('NIF (opcional)').fill(nif)
+    await dialogo.getByRole('button', { name: 'Dar de alta' }).click()
+    await expect(page.getByText(`Proveedor ${nombre} dado de alta. Ya puedes subir sus facturas.`)).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Nuevo proveedor' })).toHaveCount(0)
+    await expect(page.getByLabel('Buscar por nombre o NIF')).toHaveValue(nif)
+    await expect(page.getByRole('link', { name: new RegExp(nombre) })).toBeVisible()
+    const roles = await rest<{ role: string }[]>(s, 'GET', `party_role?select=role,party!inner(name)&account_id=eq.${CUENTA_A.id}&party.name=eq.${encodeURIComponent(nombre)}`)
+    expect(roles.datos.map((r) => r.role)).toEqual(['supplier'])
+  } finally {
+    const p = await rest<{ id: string }[]>(s, 'GET', `supplier?select=id&account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
+    for (const x of p.datos ?? []) await borrarProveedor(s, x.id)
     await rest(s, 'DELETE', `party?account_id=eq.${CUENTA_A.id}&name=eq.${encodeURIComponent(nombre)}`)
   }
 })

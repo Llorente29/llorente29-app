@@ -1,0 +1,8 @@
+# Vuelta atrás de la tanda D01 · Facturas por correo, en orden inverso. La de la
+# 0041 quita la dirección de Foodint y el remitente, y PARA si a la dirección ya
+# le ha llegado algún correo (entonces se apaga, no se borra). La de la 0040
+# deja conta_entrada_llegada con el texto de la 0220 del 21 y quita la tabla y
+# la función nuevas; PARA si la tabla tiene filas.
+cuenta: scripts/conta/produccion/cuentas/d01-facturas-correo.sql
+supabase/vuelta-atras/20261024T0041_d01_facturas_foodint.down.sql
+supabase/vuelta-atras/20261024T0040_d01_facturas_correo.down.sql

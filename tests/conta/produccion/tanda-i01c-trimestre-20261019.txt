@@ -1,0 +1,21 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# I01c · El trimestre (rama conta/i01c-trimestre).
+# Va DESPUÉS de la de Impuestos de tus clientes (0100 de P01, PR #248, aplicada): su copia,
+# tests/conta/produccion/tanda-p01-despacho-20261019.txt.
+#
+#   1. 0280 — AÑADE conta_impuesto_trimestre (lo que pinta Impuestos ›
+#      Trimestre: la tira de modelos y la cartera del 303; solo lee). CAMBIA en
+#      caliente, declarado con su prueba de staging, conta_impuesto_303_calcular
+#      (misma firma): sin resultado, escribe igual la [110] del 303 anterior
+#      presentado. Lo demás, como la 0240.
+#
+# No toca el camino del pedido. No escribe ninguna declaración: el borrador
+# del 3T de Foodint se pone al día cuando alguien abre el trimestre (o vuelve a
+# calcular). Ninguna función que desplegar.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/i01c-trimestre.sql
+supabase/migrations/20261122T0280_i01c_trimestre.sql

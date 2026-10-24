@@ -1,0 +1,31 @@
+{
+  "_que": "D07 + D07b (PR 2 del 23/10) · el IVA no deducible con su motivo (fuera del 303), la recibida de un periodo cerrado (su fecha de factura en el libro y registrada el día del asiento), y Uber fuera de «Facturas recibidas» (sin provisionales; la factura de la semana se enlaza con sus liquidaciones) · contexto de producción de la tanda viva (20261208T0850, 0860 y 0870), medido en SOLO LECTURA el 23/10 a las 15:33 UTC, con la 0810 del D06 como la última del historial (la tanda del D07a, 0820–0840, aún sin aplicar), con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen channel_settlement (262 filas estimadas) y supplier_invoice (102), y las tres funciones que cambian; conta_respaldo_d07_provisionales y las dos funciones nuevas, no (las crea la tanda). Ninguna en el camino del pedido; ninguna de las tres en el historial.",
+  "medido": "2026-10-23T15:33Z",
+  "tanda": {
+    "supabase/migrations/20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.sql": "eb724488a7206bb967344fa8e4df9f61",
+    "supabase/migrations/20261208T0860_d07_uber_liquidaciones.sql": "9f726ee1bbf7a1f98804aaa4a94642a7",
+    "supabase/migrations/20261208T0870_d07_uber_quitar_provisionales.sql": "b239f76458c52a9127322e9645155a70"
+  },
+  "contexto": {
+    "tablas": [
+      "public.channel_settlement",
+      "public.supplier_invoice"
+    ],
+    "funciones": [
+      "public.conta_impuesto_303_cajas(public.vat_book_entry)",
+      "public.conta_liquidacion_factura_proponer(uuid,text)",
+      "public.conta_vat_book_desde_asiento(uuid)"
+    ],
+    "filas": {
+      "public.channel_settlement": 262,
+      "public.supplier_invoice": 102
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

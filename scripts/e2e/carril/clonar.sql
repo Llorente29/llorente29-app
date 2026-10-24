@@ -8,7 +8,7 @@
 -- (lo hace scripts/e2e/carril.sh clonar). Lo que hace, en este orden:
 --   1. Lee la plantilla en UNA foto (REPEATABLE READ: lo que otra e2e esté
 --      cambiando a la vez no entra a medias): las cuentas, todo lo que tiene su
---      columna de cuenta, lo que cuelga de ello, los siete usuarios y sus
+--      columna de cuenta, lo que cuelga de ello, los usuarios de la plantilla y sus
 --      identidades, y quién es administrador de plataforma.
 --   2. Calcula el id nuevo de cada fila (comun.sql: el segundo grupo = N).
 --   3. Inserta la copia con todo cambiado: los uuid, las listas de uuid, los
@@ -16,7 +16,7 @@
 --      ser único en toda la base (un token, una clave de importación) con «-cN».
 --   4. Comprueba que no ha quedado ninguna clave ajena colgando: sin
 --      disparadores no las mira la base, así que las mira esto, una a una.
---   5. Pone a los siete usuarios del carril la contraseña de un solo uso.
+--   5. Pone a los usuarios de la plantilla del carril la contraseña de un solo uso.
 --
 -- Si el carril ya tiene datos, para: primero se borra (borrar.sql).
 -- ============================================================================
@@ -52,15 +52,15 @@ begin
   if exists (select 1 from public.accounts where id = pg_temp.en_carril('c01a0000-0000-4000-8000-00000000000a', n)) then
     raise exception 'Carril %: ya tiene datos. Antes, borrar.sql.', n;
   end if;
-  if (select count(*) from auth.users where id in (select id from _plantilla_usuarios)) <> 7 then
-    raise exception 'Carril %: faltan usuarios de la plantilla (hay % de 7). ¿Están las semillas C00, C01 y C06?', n,
-      (select count(*) from auth.users where id in (select id from _plantilla_usuarios));
+  if (select count(*) from auth.users where id in (select id from _plantilla_usuarios)) <> (select count(*) from _plantilla_usuarios) then
+    raise exception 'Carril %: faltan usuarios de la plantilla (hay % de %). ¿Están las semillas C00, C01, C06, S01 y P01?', n,
+      (select count(*) from auth.users where id in (select id from _plantilla_usuarios)), (select count(*) from _plantilla_usuarios);
   end if;
 
   -- 1 · La foto de la plantilla ----------------------------------------------
   perform pg_temp.anadir('public.accounts', 'x.id in (select id from _plantilla_cuentas)');
   for t in select * from _tabla where col_cuenta is not null and tabla <> 'public.accounts'::regclass loop
-    -- Lo que es de UN usuario (su perfil, su user_id): solo de los siete de la
+    -- Lo que es de UN usuario (su perfil, su user_id): solo de los de la
     -- plantilla. No entran los dobles por frente ni el acceso de Julio a la A.
     v := null;
     select string_agg(format('(x.%I is null or x.%I in (select id from _plantilla_usuarios))', a.attname, a.attname), ' and ')
@@ -160,7 +160,13 @@ begin
         when c.atttypid = 'json'::regtype then format('pg_temp.mt(%s::text)::json', v)
         when c.atttypid = 'text[]'::regtype then format('case when %s is null then null else coalesce((select array_agg(pg_temp.mt(e) order by o) from unnest(%s) with ordinality u(e, o)), ''{}''::text[]) end', v, v)
         else v end;
-      if c.unico is not null then v := format('case when %s is null or not (%s) then %s else %s || %L end', v, c.unico, v, v, '-c' || n); end if;
+      -- P01 (19/10): una huella (64 hex, con su CHECK: la de un certificado, el
+      -- token de una invitación) no admite «-cN»: pasa a ser la huella de sí
+      -- misma con «-cN». Sigue siendo única por carril y cumple su CHECK.
+      if c.unico is not null then
+        v := format('case when %1$s is null or not (%2$s) then %1$s when %1$s ~ ''^[0-9a-f]{64}$'' then encode(extensions.digest(%1$s || %3$L, ''sha256''), ''hex'') else %1$s || %3$L end',
+                    v, c.unico, '-c' || n);
+      end if;
       -- Un usuario del carril nace sin enlaces pendientes: los tokens de
       -- confirmar, recuperar o cambiar el correo son únicos y no son suyos.
       if cp.tabla = 'auth.users'::regclass and c.attname::text like '%token%' and c.atttypid in ('text'::regtype, 'varchar'::regtype) then
@@ -215,6 +221,6 @@ begin
     update auth.users set encrypted_password = extensions.crypt(current_setting('e2e.clave'), extensions.gen_salt('bf'))
      where id in (select pg_temp.en_carril(id, n) from _plantilla_usuarios);
     get diagnostics k = row_count;
-    if k <> 7 then raise exception 'Carril %: esperaba poner la contraseña a 7 usuarios y han sido %.', n, k; end if;
+    if k <> (select count(*) from _plantilla_usuarios) then raise exception 'Carril %: esperaba poner la contraseña a % usuarios y han sido %.', n, (select count(*) from _plantilla_usuarios), k; end if;
   end if;
 end $$;

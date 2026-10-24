@@ -48,6 +48,7 @@ const STATUS_LABEL: Record<SupplierInvoiceStatus, string> = {
   con_discrepancias: 'Con discrepancias',
   pagada: 'Pagada',
   anulada: 'Anulada',
+  descartada: 'No es una factura',
 }
 const STATUS_CLS: Record<SupplierInvoiceStatus, string> = {
   borrador: 'bg-page text-text-secondary border-border-default',
@@ -56,6 +57,7 @@ const STATUS_CLS: Record<SupplierInvoiceStatus, string> = {
   con_discrepancias: 'bg-warning-bg text-warning border-warning/20',
   pagada: 'bg-accent-bg text-accent border-accent/20',
   anulada: 'bg-page text-text-tertiary border-border-default line-through',
+  descartada: 'bg-page text-text-tertiary border-border-default',
 }
 
 function fmtMoney(n: number | null): string {
@@ -412,7 +414,7 @@ export default function SupplierInvoicesPage() {
                     <span className={`text-[11px] px-1.5 py-0.5 rounded border ${STATUS_CLS[inv.status]}`}>{STATUS_LABEL[inv.status]}</span>
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {inv.status !== 'anulada' && inv.status !== 'pagada' && (
+                    {inv.status !== 'anulada' && inv.status !== 'pagada' && inv.status !== 'descartada' && (
                       <button type="button" onClick={(e) => { e.stopPropagation(); handleVoid(inv.id) }} disabled={busyId === inv.id}
                         title="Anular" className="text-text-tertiary hover:text-danger disabled:opacity-50">
                         {busyId === inv.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}

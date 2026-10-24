@@ -10,8 +10,8 @@
 //
 // Respuesta 1 del C05: el asiento resumen de tiques es F4 («asiento resumen
 // de facturas»), con el primer y el último número y cuántos tiques; F2 queda
-// para una factura simplificada suelta. La pantalla dice «F4 · resumen ·
-// art. 63.4».
+// para una factura simplificada suelta. La pantalla dice «F4 · resumen de
+// tiques» (S01e: sin la cita del reglamento).
 
 export type Libro = 'issued' | 'received' | 'investment' | 'not_subject'
 export type TipoFactura = 'F1' | 'F2' | 'F3' | 'F4' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5'
@@ -57,6 +57,9 @@ export interface AnotacionLibro {
   /** El documento de origen (la factura del proveedor, el resumen del día…). */
   sourceId?: string | null
   voidedAt: string | null
+  /** 0290 · «Deducida en» (p. ej. «2T 2026»): el 303 en que se dedujo, si no es el de su fecha. */
+  deducidaEn?: string | null
+  deducidaPorque?: string | null
 }
 
 const c = (n: number) => Math.round(n * 100)
@@ -115,7 +118,8 @@ export const HOJAS = { issued: 'EXPEDIDAS', received: 'RECIBIDAS', investment: '
 
 /** Nombre del fichero: ejercicio + NIF + «C» (libros del IVA) + nombre o razón social. */
 export function nombreFichero(ejercicio: number, nif: string, razonSocial: string): string {
-  const limpio = razonSocial.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim()
+  // S01e: sin puntos ni espacios al final («S.L.» + «.xlsx» daba «S.L..xlsx»).
+  const limpio = razonSocial.replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().replace(/[.\s]+$/, '')
   return `${ejercicio}${nif.replace(/[\s.-]/g, '').toUpperCase()}C${limpio}.xlsx`
 }
 
@@ -195,7 +199,8 @@ export function faltaParaCompletar(a: AnotacionLibro): string[] {
 export function etiquetaTipo(a: Pick<AnotacionLibro, 'invoiceType' | 'number' | 'numberTo' | 'documentsCount'>): string {
   if (a.invoiceType === 'F4') {
     const rango = a.number && a.numberTo ? ` · ${a.number}–${a.numberTo}` : ''
-    return `F4 · resumen · art. 63.4${rango} · ${a.documentsCount} ${a.documentsCount === 1 ? 'tique' : 'tiques'}`
+    // S01e: en llano, sin el artículo del reglamento (va en la ficha de la norma).
+    return `F4 · resumen de tiques${rango} · ${a.documentsCount} ${a.documentsCount === 1 ? 'tique' : 'tiques'}`
   }
   return ({ F1: 'F1 · factura', F2: 'F2 · simplificada', F3: 'F3 · sustitutiva', R1: 'R1 · rectificativa', R2: 'R2 · rectificativa (concurso)', R3: 'R3 · rectificativa (incobrable)', R4: 'R4 · rectificativa', R5: 'R5 · rectificativa de simplificada' } as const)[a.invoiceType]
 }
@@ -209,9 +214,18 @@ export interface CuadreLibro { libro: number; diario: number; diferencia: number
  * (expedidas) o la 472 (recibidas y bienes de inversión). Las anuladas no
  * cuentan: su asiento y su contraasiento se compensan también en el diario.
  */
+/**
+ * D07 · Una recibida con IVA NO deducible (0850): su cuota va al gasto, no a
+ * la 472; sale en el libro con deducible 0 y no entra en el 303.
+ */
+export function esNoDeducible(a: Pick<AnotacionLibro, 'book' | 'deductibleAmount' | 'taxAmount' | 'reverseCharge'>): boolean {
+  return (a.book === 'received' || a.book === 'investment') && !a.reverseCharge && (a.deductibleAmount ?? 0) === 0 && (a.taxAmount ?? 0) !== 0
+}
+
 export function cuadreConDiario(anotaciones: AnotacionLibro[], libro: 'issued' | 'received', movimientoDiario: number): CuadreLibro {
   const cuentaDe = libro === 'issued' ? '477' : '472'
-  const vivas = anotaciones.filter((a) => !a.voidedAt && (libro === 'issued' ? a.book === 'issued' : a.book === 'received' || a.book === 'investment'))
+  // Las no deducibles no están en la 472 (su cuota es gasto): no cuentan en el cuadre.
+  const vivas = anotaciones.filter((a) => !a.voidedAt && (libro === 'issued' ? a.book === 'issued' : (a.book === 'received' || a.book === 'investment') && !esNoDeducible(a)))
   const suma = vivas.reduce((x, a) => x + c(a.taxAmount), 0) / 100
   const diferencia = (c(suma) - c(movimientoDiario)) / 100
   const cuadra = c(diferencia) === 0

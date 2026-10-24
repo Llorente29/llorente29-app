@@ -242,7 +242,7 @@ export function modeloPropuesto(actual: Magnitudes, anterior: Magnitudes | null)
   const permitidos: Modelo[] = abreviado ? ['pymes', 'abreviado', 'normal'] : ['normal']
   const cifras = `activo ${fmt(actual.activo)}, cifra de negocios ${fmt(actual.cifraNegocios)}, plantilla media ${actual.plantillaMedia}`
   const frase = abreviado
-    ? `Te corresponde el modelo de pymes (o el abreviado): ${cifras}, dentro de dos de los tres límites (4 M de activo, 8 M de cifra de negocios, 50 personas) ${anterior ? 'también el ejercicio anterior' : 'en tu primer ejercicio'} (LSC art. 257.1; RD 1515/2007 art. 2.1). Puedes elegir el normal, que es más completo.`
+    ? `Te corresponde el modelo de pymes (o el abreviado): ${cifras}, dentro de dos de los tres límites (4 M de activo, 8 M de cifra de negocios, 50 personas) ${anterior ? 'en este ejercicio y también en el anterior' : 'en este ejercicio (no hay uno anterior con el que comparar, así que basta este)'} (LSC art. 257.1; RD 1515/2007 art. 2.1). Puedes elegir el normal, que es más completo.`
     : `Te corresponde el modelo normal: ${cifras} superan dos de los tres límites del abreviado (LSC art. 257.1)${anterior ? ' en alguno de los dos últimos ejercicios' : ''}.${pygAbreviada ? ' La cuenta de pérdidas y ganancias sí puede ser abreviada (LSC art. 258.1).' : ''}`
   return { modelo, pygAbreviada, frase, permitidos }
 }

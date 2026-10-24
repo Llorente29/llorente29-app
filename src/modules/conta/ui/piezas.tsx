@@ -5,9 +5,6 @@
 // Los estilos están en ../estilo/componentes.css y los colores en tokens.css.
 
 import { useId, useState, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { entradaActiva, entradasVisibles, type EntradaMenuConta } from '@/config/navegacion'
-import { rutaConta } from '@/config/navegacion'
 import { MARCA } from '../cuenta/marca'
 
 /** Cabecera de página: antetítulo pequeño y título grande. */
@@ -20,27 +17,6 @@ export function Cabecera({ antetitulo, titulo, derecha }: { antetitulo?: string;
       </div>
       {derecha && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{derecha}</div>}
     </header>
-  )
-}
-
-/**
- * Pestañas en forma de píldora, sacadas de la configuración de navegación.
- * Son enlaces (cada pestaña tiene su dirección): se marca la activa con
- * aria-current, no con role=tab, porque cambian de página.
- */
-export function PestanasPildora({ entradas, etiqueta }: { entradas: EntradaMenuConta[]; etiqueta: string }) {
-  const { pathname } = useLocation()
-  const activa = entradaActiva(pathname, entradas)
-  return (
-    <nav aria-label={etiqueta}>
-      <div className="cx-pestanas">
-        {entradasVisibles(entradas).map((e) => (
-          <Link key={e.id} to={rutaConta(e.ruta)} className="cx-pestana" aria-current={activa === e.id ? 'page' : undefined}>
-            {e.etiqueta}
-          </Link>
-        ))}
-      </div>
-    </nav>
   )
 }
 

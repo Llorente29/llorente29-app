@@ -11,6 +11,20 @@ Reglas de trabajo del CEO (Julio):
 - Marcar siempre cada acción operativa (commit, build, push, deploy).
 - TypeScript strict, camelCase cliente / snake_case BBDD.
 
+## Cómo se trabaja un encargo
+
+> Regla de Julio (23/10). Vale para todas las sesiones.
+
+- **El alcance se cierra al recibir el encargo.** Lo que surja mientras se
+  trabaja se apunta para el siguiente encargo y **no entra en el PR en
+  marcha**, aunque lo pida un mensaje posterior.
+- **Sin agentes en paralelo**, salvo que el encargo lo diga expresamente.
+- **Las pruebas de la zona, una vez y al final**, sobre el commit definitivo.
+  No se relanzan por cada commit intermedio.
+- **Tiempo máximo: el que diga el encargo, o 90 minutos** si no dice nada. Si
+  se pasa, se para y se avisa en dos líneas: qué falta y por qué.
+- **Siempre en español.**
+
 ## Reglas ganadas en producción
 
 Cada una costó un incidente real. La fecha es el día que se pagó.
@@ -151,6 +165,67 @@ del camino y se dijera antes. Acababa a las 00:30 porque en 30 días (26/08–
 24/09) el pedido más tardío entró a las 23:59 y 0 de 30 días tuvieron alguno
 después de las 00:15.
 
+### Una tanda se ensaya y se aplica desde su rama, antes de fusionar
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> S01d (18/10).
+
+El ensayo y el real de una tanda se lanzan **desde la rama del PR, antes de
+fusionarlo**, no desde `main` después. Así, cuando el front llega a producción
+con la fusión, lo que lee ya está en la base.
+
+*(18/10. La tanda del S01d —0160 y 0170— se aplicó desde `conta/s01d-tanda`,
+con el ensayo y el real en verde, y #236 se fusionó después.)*
+
+### Una tanda por rama: dos PR con tanda no comparten ningún fichero
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> C10 (23/10). Sustituye al `aplicar.txt` único.
+
+- **Cada rama tiene su tanda, en su carpeta**, y nadie más la edita:
+  `supabase/produccion/tandas/<producto>/<rama>/` con `aplicar.txt`,
+  `vuelta-atras.txt` y `contexto.json`. `<producto>` es `sumied`
+  (contabilidad) o `folvy` (el resto); `<rama>`, su nombre con «/» cambiada por
+  «-» (`node scripts/conta/produccion/tanda.mjs slug <rama>` lo da).
+- **Lo de staging, igual**: `supabase/staging/tandas/<producto>/<rama>.txt`. El
+  `supabase/staging/aplicar.txt` de antes queda **cerrado**, con lo de antes
+  dentro: se lee junto a los de las ramas como un solo manifiesto.
+- **El workflow aplica la tanda de la rama desde la que se lanza.** Para lanzar
+  desde `main` una ya fusionada, se nombra en el campo `tanda`. La que estaba
+  viva el día del C10 es `sumied/heredada` (la termina el #299, y solo él).
+- **Al fusionar, la carpeta se queda en `main` tal cual: ése es su archivo.**
+  No hay nada que copiar ni que vaciar.
+- **Lo vigila `pr-a-main.yml`** (`tanda.mjs ajenos`): un PR que edita la tanda
+  de otra rama, o uno de los manifiestos únicos de antes, no pasa.
+
+*Detector automático:* si dos PR abiertos tocan el mismo fichero de
+`supabase/produccion` o de `supabase/staging` que no sea una migración, uno de
+los dos está escribiendo en la tanda del otro.
+
+*(23/10. El #301 se fusionó con el `aplicar.txt` único y dejó sin manifiesto a
+la D07 del #300; hubo que devolverlo con el #303.)*
+
+### El nombre de una migración
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> C10 (23/10). **Sustituye a la del W02 (17/10)**, «el siguiente por encima del
+> más alto».
+
+`AAAAMMDDTHHMM_<sesión>_<qué>.sql`: la fecha, la hora y el minuto de cuando se
+escribe, la sesión en minúscula (`c10`, `d08`…) y qué hace, con «_». Por
+ejemplo `20261023T1812_c10_tandas_por_rama.sql`. **Nunca repetido**: ni el
+nombre ni su «fecha, hora y sesión» pueden estar ya en `main`, en otro PR
+abierto (`pr-a-main.yml`) o en el historial de producción (el aplicar, antes
+del ensayo). Si choca, se cambia el minuto. El orden en que se aplican lo
+decide el `aplicar.txt` de la tanda.
+
+*Las de antes se quedan como están*, y también las cuatro que ya estaban en PR
+abiertos el 23/10 (0850, 0860, 0870 y 0880 de la D07: `ANTIGUAS_ABIERTAS` en
+`scripts/conta/produccion/nombres.mjs`).
+
+*(23/10. «El siguiente por encima» lo cogían dos sesiones a la vez: la 0840 la
+quisieron el C08 y la D07a el mismo día.)*
+
 ### Una fusión está hecha cuando VERCEL dice READY en producción
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
@@ -284,37 +359,111 @@ dice «ninguna», falta alguien. La #181 tocó `_shared/diezCliente.ts`:
 *(14/10. La #181 se fusionó con «[skip ci]» en el mensaje: no corrió el
 despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 
-### Un e2e en marcha no se cancela
+### Qué pruebas lleva cada PR: un criterio por riesgo
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Reglas de
+> Julio, 19/10 y 21/10, **cambiadas en el W04 (22/10)** con la auditoría de las
+> reglas de pruebas: un solo criterio por riesgo.
+
+| Riesgo | Qué corre |
+|---|---|
+| **Solo pantallas** | `antes-de-subir.sh` (lint, unitarias, `npm run build` exacto) y, en cada push, la e2e de su **zona** (`scripts/e2e/area.mjs`). |
+| **Lo común** (`LO_COMUN`: el marco, la cabecera, la barra y el esqueleto, el diseño compartido, el arranque de la app y lo que mueve todas las pruebas) | La **entera** en el push, en vez de la zona. |
+| **Pedidos, cocina o reparto** (`PEDIDOS` en `area.mjs`: sus pantallas, los TPV, tickets y tablets, y las funciones de HubRise, Last.app y pedidos) | **Todo**: la entera en el push, que lleva la corta. |
+| **Sumied o Folvy** (C10, 23/10) | Un cambio solo de Sumied (contabilidad: `src/modules/conta`, `tests/e2e/conta`…) no lanza las de Folvy, y al revés. Lo común **de Sumied** (`LO_COMUN_SUMIED`: el marco y el diseño de contabilidad) lanza la entera de `tests/e2e/conta`; lo común **a los dos** (`LO_COMUN_AMBOS`: el arranque de la app, la configuración, lo que mueve todas las pruebas), las dos. |
+| **Con tanda** | Lo de su riesgo, más la prueba de staging en ROLLBACK de cada «cambia», el **ensayo** y el **real** en producción con su comprobación y su deshacer (W01). La entera es la de la noche. |
+
+- **La corta** (`reparto/direccion-falta` y `reparto/quien-reparte`, 91 s) ya
+  no va en cada push: va dentro de la entera cuando el PR toca pedidos, cocina
+  o reparto, y cada noche.
+- **Ya no se pide una entera antes de la tanda**, ni su «primer intento»
+  (`e2e-entera.mjs` se fue): a la tanda la protegen el analizador, el ensayo, la
+  comprobación de después y el deshacer; lo que se cuele entre zonas lo caza la
+  de la noche.
+- **La etiqueta `e2e-entera`** la pide siempre, y al ponerla se lanza en ese
+  momento (`e2e-etiqueta.yml`).
+- **Y cada noche sobre `main`**, a las 03:00 de Madrid. Si falla por staging
+  (no poder entrar, un 520, una página HTML de la base) lo repite una vez; si
+  no, o si vuelve a fallar, abre la incidencia «e2e de la noche en rojo» con
+  cada prueba, su fichero y el commit (`scripts/e2e/noche.mjs`).
+
+*(22/10. El #281 y el C07 se llevaron 275 y más de 225 min de máquina; la
+entera antes de la tanda, 141 min y 3 pasadas, y cayó por staging lento, no por
+la tanda. Medido contra los 40 últimos PR de `main`: 13 tocan lo común y 1
+toca pedidos.)*
+
+### Staging recibe de verdad solo lo que está en producción
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
-> C05, respuesta 3 (08/10).
+> W04 (22/10).
 
-Un e2e que está corriendo termina siempre. Lo garantiza el workflow, no la
-disciplina de quien empuja: `e2e-staging-conta.yml` tiene
-`cancel-in-progress: false`, así que un push nuevo espera en cola y empieza
-cuando acaba el anterior.
+- **Desde una rama**, `aplicar-staging-conta.yml` pasa solo lo que la rama
+  añade al manifiesto (desde el C10, su `supabase/staging/tandas/<producto>/<rama>.txt`) contra `main`, en **una
+  transacción que acaba en ROLLBACK**: staging no cambia. Sin el cerrojo
+  exclusivo: una prueba que no deja nada no para las e2e.
+- **Desde `main`** (después del real de la tanda, que se fusiona en verde)
+  aplica **de verdad** lo que el push añade al manifiesto, fichero a fichero,
+  con el cerrojo. Así staging es como producción por construcción, y la
+  comprobación de W03 (17 funciones con su md5) ya no hace falta.
+- Un fichero de una rama con `commit` fuera de sitio, o con un `rollback` que
+  no sea su última sentencia, **para** el run: dejaría cosas de verdad.
+- **Lo que solo añade va de verdad desde la rama** (W05, 22/10): una migración
+  cuya clase es «añade» contra lo que hay en staging —columna que admite nulos,
+  tabla o función nuevas, y un CHECK que solo mira columnas que añade el mismo
+  fichero— se aplica de verdad después del ensayo, con el cerrojo, **si se
+  puede pasar dos veces seguidas** (`if not exists`, `create or replace`):
+  `main` la volverá a pasar al fusionar. Lo que cambia o destruye algo, solo en
+  ROLLBACK. La clase la da el analizador de la tanda
+  (`scripts/conta/staging-tanda.mjs anaden`), con el contexto medido en staging.
+  *Por qué no rompe lo de esta mañana:* añadir no cambia nada de lo que leen
+  las demás ramas; lo que rompió el 22/10 fue un «cambia en caliente».
 
-*Detector automático:* si un workflow que tarda minutos tiene
-`cancel-in-progress: true`, cualquier push lo puede matar a medias, y el
-informe del cancelado no dice nada de lo que había probado.
+*(22/10. Aplicar el C07 de verdad desde su rama dejó `conta_resumen_ventas`
+distinta de producción: el «aplicar» del #281 cayó en W03 y la prueba del I01f
+en otra rama, y hubo que devolver staging a mano.)*
 
-*(08/10. Empujé un arreglo del cierre que tocaba `src` mientras corría el e2e
-148. El 149 lo canceló. El 149 llevaba lo mismo y algo más, pero el 148 ya no
-dijo nada: perdió su resultado.)*
-
-### Capturas: artefacto en cada push y fijar las de tu frente antes del informe
+### Un e2e lo cancela solo un commit más nuevo de su rama
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
-> 15/10, después del choque del #194.
+> C05, respuesta 3 (08/10), **cambiada en el W02 (17/10) por el gasto de
+> Actions**: antes decía «un e2e en marcha no se cancela».
 
-- **En cada e2e, las capturas van como artefacto del run, nunca como commit.**
+En `e2e-staging-conta.yml`, el push y la entera de una rama van en **una sola
+cola** (sin `event_name` en el grupo), y:
+
+- **un push nuevo cancela** la e2e que corre en su rama —la del push anterior o
+  una entera—: es de un commit que ya no es el último, y la nueva prueba lo
+  mismo y algo más (`cancel-in-progress` solo es `true` para `push`);
+- **una e2e lanzada a mano no cancela nada**: espera a que acabe la que corre.
+- Una entera vale solo sobre el **commit final**: si después llega un push, es
+  de un commit que ya no es el último.
+
+*Detector automático:* si vas a lanzar la entera y aún tienes algo por
+empujar, empújalo antes: lanzarla y empujar después es tirar sus minutos.
+
+*(08/10. El 149 canceló el e2e 148, que perdió su resultado: de ahí la regla
+de antes. 16/10: las e2e gastaron 2.953 min de Actions en un día, frente a unos
+250 de un día normal, con cada push esperando a correr la suite entera de un
+commit ya superado. Se acepta perder el informe de un commit viejo a cambio de
+no pagarlo.)*
+
+### Capturas: las fija la e2e del push en verde, solo las de tu frente
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
+> 15/10, después del choque del #194; **cambiada en el W04 (22/10)**: sin un
+> run aparte para fijarlas.
+
+- **En cada e2e, las capturas van como artefacto del run.**
   `e2e-staging-conta.yml` deja en el artefacto «capturas» las que ha sacado
   ESE run, y un comentario del PR (uno solo, que se va editando) da el enlace.
-- **Antes de dar tu informe, fija las de tu frente**: Actions → «Pruebas e2e en
-  staging-conta» → Run workflow en tu rama con **`fijar_capturas`**. Si sale
-  verde, commitea solo la carpeta del frente de la rama —A `d01`, B `b01`,
-  C `c00`…`c06b`, reparto `docs/reparto/capturas`— y nada más. Es lo que Julio
-  mira en «Files changed»: un informe sin ellas no se puede revisar.
+- **La e2e de cada push que sale en verde fija las de tu frente**: commitea
+  solo la carpeta del frente de la rama —A `d01`, B `b01`, C `c00`…`c06c`,
+  reparto `docs/reparto/capturas`— y nada más. La última en verde es la que
+  queda, y es lo que Julio mira en «Files changed». Ese commit lo hace el token
+  del workflow y no lanza otra e2e: **antes del siguiente push, `git pull`**.
+  A mano sigue estando `fijar_capturas`, por si hace falta.
+- **Una rama sin frente de contabilidad no fija nada**, y el run no se pone en
+  rojo por eso (C10, 23/10): el paso lo dice y se salta.
 - **Tu rama no lleva capturas de otro frente.** `antes-de-subir.sh` (paso 10)
   para si las trae, y dice cómo devolverlas a las de `main`.
 - Las que ya están en el repositorio se quedan. `cierre/`, `compras/` y

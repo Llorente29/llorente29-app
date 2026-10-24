@@ -50,7 +50,9 @@ export interface MovimientoBanco {
   confianza: 'seguro' | 'probable' | 'duda' | null
   porque: string | null
   propuesta: PropuestaGuardada | null
-  casado: { id: string; tipo: string; porque: string; porQuien: 'folvy' | 'persona'; asientoId: string | null; asientoConcepto: string | null } | null
+  casado: { id: string; tipo: string; porque: string; porQuien: 'folvy' | 'persona'; asientoId: string | null; asientoConcepto: string | null
+    /** S02 · PR 2: el estado de su asiento (propuesto: espera en «Por validar»; validado; anulado). */
+    asientoEstado?: 'propuesto' | 'borrador' | 'validado' | 'anulado' | null } | null
   tarjeta: { ultimos4: string; titular: string } | null
   ticket: string | null
   motivoIgnorado: string | null
@@ -148,6 +150,12 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 /** '2026-10' → «Octubre». */
 export function nombreMes(mes: string): string {
   return MESES[Number(mes.slice(5, 7)) - 1] ?? mes
+}
+
+/** El mes corto de la cabecera (N30: «2026 · Oct»): '2026-09' → 'Sep 2026'. */
+export function mesCorto(mes: string): string {
+  const n = nombreMes(mes)
+  return `${n.charAt(0).toUpperCase()}${n.slice(1, 3)} ${mes.slice(0, 4)}`
 }
 
 /** '2026-10' → { desde: '2026-10-01', hasta: '2026-10-31' }. */

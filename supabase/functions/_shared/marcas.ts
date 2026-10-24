@@ -49,8 +49,16 @@ export interface Marca {
   inicial: string
   /** Color del logo cuadrado. */
   colorLogo: string
-  /** El isotipo dibujado (SVG, ruta del sitio). Null: el cuadrado con la inicial. */
+  /** El símbolo dibujado (SVG, ruta del sitio). Null: el cuadrado con la inicial. */
   logo: string | null
+  /**
+   * S01c (identidad del 14/10): el logo horizontal, símbolo y nombre en un solo
+   * fichero, para fondo claro (la cabecera del móvil). Null: el símbolo y el
+   * nombre escrito.
+   */
+  logoHorizontal: string | null
+  /** El mismo en blanco, para fondo oscuro (la barra de productos). */
+  logoHorizontalBlanco: string | null
   /** Colores y letra propios. Null: el estilo nuevo tal cual (azul #2F5BFF, Geist). */
   tema: TemaMarca | null
   /** Dominios por los que se entra con esta marca. Vacío: aún no tiene. */
@@ -102,6 +110,8 @@ export const MARCAS: Record<IdMarca, Marca> = {
     inicial: 'F',
     colorLogo: '#15171A',
     logo: null,
+    logoHorizontal: null,
+    logoHorizontalBlanco: null,
     tema: null,
     dominios: ['app.folvy.app', 'foodint.folvy.app', 'folvy-app.vercel.app'],
     direccionVisible: 'app.folvy.app',
@@ -133,6 +143,8 @@ export const MARCAS: Record<IdMarca, Marca> = {
     inicial: 'C',
     colorLogo: '#2F5BFF',
     logo: null,
+    logoHorizontal: null,
+    logoHorizontalBlanco: null,
     tema: null,
     dominios: [],
     direccionVisible: null,
@@ -179,7 +191,10 @@ export const MARCAS: Record<IdMarca, Marca> = {
     nombre: 'Sumied',
     inicial: 'S',
     colorLogo: '#0B1F3B',
-    logo: '/marcas/sumied/isotipo.svg',
+    // Los ficheros de la identidad del 14/10 (S01c, 18/10).
+    logo: '/marcas/sumied/sumied-simbolo.svg',
+    logoHorizontal: '/marcas/sumied/sumied-logo-horizontal.svg',
+    logoHorizontalBlanco: '/marcas/sumied/sumied-logo-horizontal-blanco.svg',
     tema: {
       tinta: '#0B1F3B',
       apoyo: '#4A5B73',
@@ -194,10 +209,12 @@ export const MARCAS: Record<IdMarca, Marca> = {
     soloContabilidad: true,
     favicon: '/marcas/sumied/favicon.svg',
     manifiesto: '/marcas/sumied/manifest.json',
-    // Null hasta que Julio dé de alta sumied.com en Resend (pasos en el informe
-    // del C06b): con null, el correo no sale y la pantalla lo dice (regla 8).
-    // Después: 'Sumied <no-reply@sumied.com>'.
-    remitente: null,
+    // P01 (19/10): sumied.com verificado en Resend (Julio). Que haya remitente
+    // NO abre ningún correo: send-email los tiene todos cerrados por tipo hasta
+    // que Julio los abra (CORREO_MARCA_ABIERTOS, marca.ts · cerrojoMarca).
+    // Sin «responder a» de la marca: las respuestas van a quien manda cada
+    // correo (el de la asesoría, en el resumen del trimestre).
+    remitente: 'Sumied <impuestos@sumied.com>',
     responderA: null,
     // Null hasta que entrada.sumied.com reciba correo (su MX en Resend).
     dominioEntradaCorreo: null,
