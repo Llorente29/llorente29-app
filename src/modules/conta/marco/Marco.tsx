@@ -45,6 +45,8 @@ import { Cabecera } from './Cabecera'
 import { AccionesDePagina } from './AccionesDePagina'
 import { resolverGrupos } from './resolverGrupos'
 import type { Ejercicio } from './periodo'
+import { barraAbierta } from '@/modules/conta/diseno/plantillas/anchos'
+import { useTramoAncho } from '@/modules/conta/diseno/plantillas/useAncho'
 
 /** Los apartados de la barra, con el activo dentro aunque no esté contratado, en el orden del mapa. */
 function conElActivo(visibles: Producto[], activo: Producto | null): Producto[] {
@@ -145,9 +147,18 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     cambiar({ favoritos: alternarFavorito(prefs.favoritos, id) }, ya ? `Quitado de Favoritos: «${etiqueta}».` : `Fijado en Favoritos: «${etiqueta}». Lo tienes abajo, en Favoritos.`)
   }
 
+  // N5 · La regla de anchos (Julio, 23/10), por ahora en Compras y gastos: con 1600 px o más, la barra
+  // como la deje cada persona; por debajo, plegada sola (abrirla a mano vale mientras no cambie de tramo).
+  const tramo = useTramoAncho()
+  const [barraAMano, setBarraAMano] = useState<{ tramo: string; abierta: boolean } | null>(null)
+  const conRegla = producto?.id === 'compras'
+  const desplegada = conRegla ? barraAbierta(tramo, prefs.barraDesplegada, barraAMano?.tramo === tramo ? barraAMano.abierta : null) : prefs.barraDesplegada
+  const alternarBarra = () => (conRegla && tramo !== 'ancho'
+    ? setBarraAMano({ tramo, abierta: !desplegada })
+    : cambiar({ barraDesplegada: !prefs.barraDesplegada }))
   const favoritos = (enCajon: boolean) => (
     <Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} alternar={fijar}
-      alAbrirBuscador={() => { setCajon(false); setBuscando(true) }} enCajon={enCajon} plegada={!enCajon && !prefs.barraDesplegada} />
+      alAbrirBuscador={() => { setCajon(false); setBuscando(true) }} enCajon={enCajon} plegada={!enCajon && !desplegada} />
   )
   const usuario = (enCajon: boolean) => <MenuUsuario nombre={userName ?? 'Tú'} prefs={prefs} solo={solo} movil={movil} cambiar={cambiar} enCajon={enCajon} />
 
@@ -159,7 +170,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     <MarcoContexto.Provider value={marco}>
       <div className={clases} data-densidad={prefs.densidad}>
         {!movil && (
-          <Barra d={datosBarra} desplegada={prefs.barraDesplegada} alternar={() => cambiar({ barraDesplegada: !prefs.barraDesplegada })}
+          <Barra d={datosBarra} desplegada={desplegada} alternar={alternarBarra}
             favoritos={favoritos(false)} />
         )}
         <div className="s-esq-cuerpo">

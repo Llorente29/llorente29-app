@@ -104,6 +104,21 @@ th.s-lista-cifra { text-align: right; }
   .s-ficha[data-documento='si'] { grid-template-columns: minmax(0, min(var(--s-ficha-datos, 680px), calc(100% - 50vw - 32px))) 16px minmax(0, 1fr); }
 }
 .s-ficha-documento { align-self: stretch; min-width: 0; }
+/* N5 · La regla de anchos: de 768 a 1279 px el documento va en un panel, que se abre con «Ver el documento». */
+.s-ficha[data-documento='panel'] { grid-template-columns: minmax(0, 1fr); }
+.s-ficha-ver-documento { display: flex; justify-content: flex-end; padding: var(--s-2) var(--s-3) 0; }
+.s-ficha-ver-documento .s-boton { display: inline-flex; align-items: center; gap: var(--s-1); }
+.s-ficha-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 50; width: min(720px, 92vw); display: flex; flex-direction: column;
+  padding: var(--s-3); background: var(--s-superficie); box-shadow: var(--s-sombra-documento); border-left: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-ficha-panel > :not(.s-ficha-panel-cerrar) { flex: 1; min-height: 0; }
+.s-ficha-panel-cerrar {
+  align-self: flex-end; width: var(--s-tactil, 44px); height: var(--s-tactil, 44px); margin-bottom: var(--s-2); border: 0; border-radius: var(--s-radio-boton);
+  background: none; color: var(--s-apoyo); font-size: 24px; line-height: 1; cursor: pointer;
+}
+.s-ficha-panel-cerrar:hover { background: var(--s-borde-decorativo); color: inherit; }
+.s-ficha-panel-cerrar:focus-visible { outline: none; box-shadow: var(--s-foco); }
 .s-ficha-separador { align-self: stretch; position: relative; cursor: col-resize; touch-action: none; border-radius: var(--s-radio-boton); }
 .s-ficha-separador::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: var(--s-borde-decorativo); border-radius: var(--s-radio-pildora); }
 .s-ficha-separador:hover::after, .s-ficha-separador:focus-visible::after { background: var(--s-accion); width: 4px; }

@@ -193,20 +193,21 @@ export default function DocumentosPage() {
       </span>
     )
   }
+  // N5 · La regla de anchos: sin sitio, se ocultan primero el local, la base y el IVA, luego el número; nunca la fecha, el proveedor ni el total.
   const columnas: ColumnaLista<FilaDocumento>[] = [
-    { id: 'fecha', titulo: 'Fecha', ordenable: true, ancho: '80px', celda: (x) => <span className="s-cifra">{diaMes(x.fecha ?? x.llego.slice(0, 10))}</span> },
+    { id: 'fecha', titulo: 'Fecha', ordenable: true, ancho: '80px', prioridad: 1, minimo: 80, celda: (x) => <span className="s-cifra">{diaMes(x.fecha ?? x.llego.slice(0, 10))}</span> },
     {
-      id: 'proveedor', titulo: 'Proveedor', ordenable: true,
+      id: 'proveedor', titulo: 'Proveedor', ordenable: true, prioridad: 1, minimo: 200,
       celda: (x) => <span className="s-lista-texto-doble"><span className="s-lista-principal">{nombre(x)}</span>{propuesto(x)}</span>,
     },
-    { id: 'numero', titulo: 'Nº de factura', ordenable: true, celda: (x) => <span className="s-cifra">{x.numero ?? '—'}</span> },
-    ...(ejeLocal ? [{ id: 'local', titulo: ejeLocal.nombre, celda: (x: FilaDocumento) => localDeFila(x, mapa.get(x.id)) ?? 'Común' }] : []),
-    { id: 'base', titulo: 'Base', cifra: true, celda: (x) => euro(mapa.get(x.id)?.base) },
-    { id: 'iva', titulo: 'IVA', cifra: true, celda: (x) => euro(mapa.get(x.id)?.iva) },
-    { id: 'total', titulo: 'Total', cifra: true, ordenable: true, celda: (x) => <strong>{euro(x.total)}</strong> },
+    { id: 'numero', titulo: 'Nº de factura', ordenable: true, prioridad: 3, minimo: 130, celda: (x) => <span className="s-cifra">{x.numero ?? '—'}</span> },
+    ...(ejeLocal ? [{ id: 'local', titulo: ejeLocal.nombre, prioridad: 5, minimo: 120, celda: (x: FilaDocumento) => localDeFila(x, mapa.get(x.id)) ?? 'Común' }] : []),
+    { id: 'base', titulo: 'Base', cifra: true, prioridad: 4, minimo: 100, celda: (x) => euro(mapa.get(x.id)?.base) },
+    { id: 'iva', titulo: 'IVA', cifra: true, prioridad: 4, minimo: 90, celda: (x) => euro(mapa.get(x.id)?.iva) },
+    { id: 'total', titulo: 'Total', cifra: true, ordenable: true, prioridad: 1, minimo: 110, celda: (x) => <strong>{euro(x.total)}</strong> },
     enBloque
-      ? { id: 'lista', titulo: '¿Lista para validar?', celda: (x) => <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> }
-      : { id: 'estado', titulo: 'Estado', celda: (x) => { const e = estadoDeFila(x, mapa.get(x.id)); return <Chip tono={e.tono}>{e.texto}</Chip> } },
+      ? { id: 'lista', titulo: '¿Lista para validar?', prioridad: 2, minimo: 170, celda: (x) => <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> }
+      : { id: 'estado', titulo: 'Estado', prioridad: 2, minimo: 150, celda: (x) => { const e = estadoDeFila(x, mapa.get(x.id)); return <Chip tono={e.tono}>{e.texto}</Chip> } },
   ]
   const tarjeta = (x: FilaDocumento) => {
     const e = estadoDeFila(x, mapa.get(x.id))

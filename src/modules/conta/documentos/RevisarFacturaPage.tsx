@@ -579,7 +579,7 @@ export default function RevisarFacturaPage() {
         masAcciones={mas}
         principal={botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}
       />
-      <Ficha datos={datos} documento={documento} documentoOculto={marco?.documentoOculto ?? false} usuario={userId} />
+      <Ficha datos={datos} documento={documento} documentoOculto={marco?.documentoOculto ?? false} usuario={userId} reglaAnchos />
       <BotonPulgar>{botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}</BotonPulgar>
       {salida.aviso}
       {noEs !== null && <NoEsFactura inicial={noEs} alCerrar={() => setNoEs(null)} alDescartar={(m) => descartar(m)} fallo={falloDescarte} />}
