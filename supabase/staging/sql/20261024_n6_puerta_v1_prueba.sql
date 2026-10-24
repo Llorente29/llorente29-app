@@ -112,10 +112,12 @@ begin
 end $$;
 
 -- 6 · Como usuario de B, de A y anónimo.
+-- La empresa de B se lee ANTES de cambiar de rol: como usuario de A, la RLS de company no la deja ver.
+select set_config('prueba.empresa_b', (select id from public.company where account_id = 'c01b0000-0000-4000-8000-00000000000b' order by created_at limit 1)::text, true);
 select set_config('request.jwt.claims', json_build_object('sub', 'c01b0000-0000-4000-8000-0000000000b1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
-declare v_e uuid := (select id from public.company where account_id = 'c01b0000-0000-4000-8000-00000000000b' order by created_at limit 1);
+declare v_e uuid := current_setting('prueba.empresa_b')::uuid;
 begin
   if not exists (select 1 from public.fuente_recepciones_v1(v_e, date '2026-10-20', date '2026-10-20')) then
     raise exception 'PRUEBA N6 · 6: el usuario de B no lee sus recepciones.';
@@ -130,7 +132,7 @@ reset role;
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
-declare v_e uuid := (select id from public.company where account_id = 'c01b0000-0000-4000-8000-00000000000b' order by created_at limit 1);
+declare v_e uuid := current_setting('prueba.empresa_b')::uuid;
 begin
   begin
     perform * from public.fuente_recepciones_v1(v_e, date '2026-10-01', date '2026-10-31');
