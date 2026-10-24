@@ -68,9 +68,15 @@ async function enElCajon(page: Page) {
  */
 async function paginas(page: Page, apartado: string) {
   await enElCajon(page)
-  await barraAbiertaSiPlegada(page)
   const lista = page.getByRole('list', { name: `Páginas de ${apartado}` })
-  await expect(lista).toBeVisible()
+  // N5: en Compras y Ventas, a 1440 px, la barra se pliega SOLA al llegar. Si se
+  // mira una vez, puede estar aún abierta (la página de antes) y plegarse justo
+  // después: entonces la lista no sale nunca (s01/esqueleto, 413, 24/10). Se
+  // vuelve a mirar hasta que sale, abriéndola cada vez que esté plegada.
+  await expect(async () => {
+    await barraAbiertaSiPlegada(page)
+    await expect(lista).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
   return lista
 }
 /** Los nombres de las páginas, sin el número de su contador. */
@@ -427,6 +433,7 @@ test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esque
     // S02: sus páginas, debajo del apartado en la barra; «Por revisar» ya no es una de ellas.
     if (lado(page) === 'ordenador') await barra(page).getByRole('link', { name: 'Compras y gastos', exact: true }).click()
     else await page.goto('/conta/compras')
+    await expect(page).toHaveURL(/\/conta\/compras/)
     await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Liquidaciones'])
     await cerrarCajon(page)
   } finally {
