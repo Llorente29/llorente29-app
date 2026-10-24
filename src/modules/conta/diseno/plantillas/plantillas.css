@@ -115,7 +115,7 @@ th.s-lista-cifra { text-align: right; }
 .s-ficha-panel > :not(.s-ficha-panel-cerrar) { flex: 1; min-height: 0; }
 .s-ficha-panel-cerrar {
   align-self: flex-end; width: var(--s-tactil, 44px); height: var(--s-tactil, 44px); margin-bottom: var(--s-2); border: 0; border-radius: var(--s-radio-boton);
-  background: none; color: var(--s-apoyo); font-size: 24px; line-height: 1; cursor: pointer;
+  background: none; color: var(--s-apoyo); font-size: var(--s-t-titulo); line-height: 1; cursor: pointer;
 }
 .s-ficha-panel-cerrar:hover { background: var(--s-borde-decorativo); color: inherit; }
 .s-ficha-panel-cerrar:focus-visible { outline: none; box-shadow: var(--s-foco); }
