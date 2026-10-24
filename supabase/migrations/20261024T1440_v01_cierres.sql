@@ -29,6 +29,12 @@
 --
 -- Nombres que no empiezan por sales_ a propósito: no son del camino del pedido.
 
+-- sin hueco: el fichero no retira nada al aplicarse. Solo _conta_cierre_rehacer
+-- borra un asiento PROPUESTO, cuando alguien guarda cambios en un cierre, y lo
+-- vuelve a proponer en la MISMA transacción con el motor del cierre del día
+-- (conta_propuestas_ventas_dia + _journal_entry_proponer); si no sale propuesta,
+-- el cierre queda «en espera» con su porqué. Nunca toca uno validado.
+
 -- Vuelta atrás: supabase/vuelta-atras/20261024T1440_v01_cierres.down.sql
 
 -- 1 · Los cambios de un pedido en su cierre ----------------------------------------------

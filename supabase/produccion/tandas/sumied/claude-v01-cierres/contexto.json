@@ -2,7 +2,7 @@
   "_que": "V01 · Entrega 2 · cierres del día · contexto de producción de la tanda (1440 y 1441), medido en SOLO LECTURA el 24/10 con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen invoice_series y customer_invoice_payment (0 filas las dos) y las nueve funciones que cambian (conta_venta_guardar, medida aparte el 24/10: una sola firma, fuera de cron), ninguna en el camino del pedido; no existe nada de lo que crea la 1440; nada en el historial.",
   "medido": "2026-10-24T13:20Z",
   "tanda": {
-    "supabase/migrations/20261024T1440_v01_cierres.sql": "6b6cdf490a935fd932fedac38b826c19",
+    "supabase/migrations/20261024T1440_v01_cierres.sql": "9224aac3e6dc890fe33ab87906be8f46",
     "supabase/migrations/20261024T1441_v01_cierres_cambia.sql": "8ce72ef8a2dbaf2400f577475f3b060b"
   },
   "contexto": {
