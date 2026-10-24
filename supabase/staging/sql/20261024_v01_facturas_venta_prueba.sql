@@ -83,6 +83,7 @@ declare
   v_c705 uuid := (select v from _v01 where clave = 'c705');
   v_c700 uuid := (select v from _v01 where clave = 'c700');
   v_ret uuid := (select v from _v01 where clave = 'ret');
+  -- El número que toca: con las cifras de la serie de la empresa (Numeración), o 4.
   v_cli uuid; v_sin uuid; r jsonb; v_f1 uuid; v_f2 uuid; v_b uuid; v_r1 uuid; v_r2 uuid; v_entry uuid; v_n int; v_d numeric; v_h numeric; v_x record;
 begin
   -- 1 · El cliente y el borrador.
@@ -101,13 +102,13 @@ begin
 
   -- 2 · Emitir.
   r := public.conta_venta_emitir(v_f1, 'Prueba V01');
-  if r->>'numero' <> 'F-2026/0001' then raise exception 'PRUEBA V01 · 2: el número es % y no F-2026/0001.', r->>'numero'; end if;
+  if r->>'numero' <> 'F-2026/' || lpad('1', coalesce((select digits from public.invoice_series where company_id = v_e and code = 'F' and is_active), 4), '0') then raise exception 'PRUEBA V01 · 2: el número es % y no F-2026/0001.', r->>'numero'; end if;
   v_entry := (r->>'asiento')::uuid;
   select sum(debit), sum(credit) into v_d, v_h from public.journal_line where entry_id = v_entry;
   if v_d <> v_h or v_d <> 1259.5 then raise exception 'PRUEBA V01 · 2: el asiento no cuadra a 1.259,50 (debe %, haber %).', v_d, v_h; end if;
   perform 1 from public.journal_entry where id = v_entry and status = 'validado' and source_type = 'customer_invoice' and source_id = v_f1 and series = 1;
   if not found then raise exception 'PRUEBA V01 · 2: el asiento no está validado en la serie de Ventas con su factura.'; end if;
-  select count(*) into v_n from public.vat_book_entry where entry_id = v_entry and book = 'issued' and invoice_type = 'F1' and number = 'F-2026/0001'
+  select count(*) into v_n from public.vat_book_entry where entry_id = v_entry and book = 'issued' and invoice_type = 'F1' and number = (select number_text from public.customer_invoice where id = v_f1)
      and counterpart_tax_id = '12345678Z' and tax_amount in (210, 4.5);
   if v_n <> 2 then raise exception 'PRUEBA V01 · 2: el libro de expedidas no tiene las dos anotaciones F1 con el NIF (%).', v_n; end if;
   perform 1 from public.customer_invoice where id = v_f1 and status = 'emitida' and hash is not null and entry_id = v_entry;
@@ -120,7 +121,7 @@ begin
     jsonb_build_array(jsonb_build_object('concepto', 'Catering', 'cantidad', 1, 'precio', 1000, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V01');
   v_f2 := (r->>'id')::uuid;
   r := public.conta_venta_emitir(v_f2, 'Prueba V01');
-  if r->>'numero' <> 'F-2026/0002' then raise exception 'PRUEBA V01 · 3: el número es % y no F-2026/0002.', r->>'numero'; end if;
+  if r->>'numero' <> 'F-2026/' || lpad('2', coalesce((select digits from public.invoice_series where company_id = v_e and code = 'F' and is_active), 4), '0') then raise exception 'PRUEBA V01 · 3: el número es % y no F-2026/0002.', r->>'numero'; end if;
   select sum(debit), sum(credit) into v_d, v_h from public.journal_line where entry_id = (r->>'asiento')::uuid;
   if v_d <> v_h then raise exception 'PRUEBA V01 · 3: con recargo y retención el asiento no cuadra (debe %, haber %).', v_d, v_h; end if;
   perform 1 from public.vat_book_entry where entry_id = (r->>'asiento')::uuid and surcharge_amount = 52;
@@ -172,7 +173,7 @@ begin
       jsonb_build_object('concepto', 'Menú comedor', 'cantidad', 8, 'precio', 100, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705),
       jsonb_build_object('concepto', 'Menú celíaco', 'cantidad', 1, 'precio', 50, 'descuento', 10, 'tipo_id', v_t10, 'cuenta_id', v_c700)), 'Prueba V01');
   r := public.conta_venta_emitir(v_r1, 'Prueba V01');
-  if r->>'numero' <> 'R-2026/0001' or (r->>'total')::numeric <> -242 then
+  if r->>'numero' <> 'R-2026/' || lpad('1', coalesce((select digits from public.invoice_series where company_id = v_e and code = 'R' and is_active), 4), '0') or (r->>'total')::numeric <> -242 then
     raise exception 'PRUEBA V01 · 6: la rectificativa es % por % y no R-2026/0001 por −242.', r->>'numero', r->>'total';
   end if;
   select sum(debit), sum(credit) into v_d, v_h from public.journal_line where entry_id = (r->>'asiento')::uuid;
@@ -180,7 +181,7 @@ begin
   perform 1 from public.journal_line jl join public.company_account a on a.id = jl.company_account_id
    where jl.entry_id = (r->>'asiento')::uuid and a.code like '430%' and jl.credit = 242;
   if not found then raise exception 'PRUEBA V01 · 6: en la rectificativa la 430 no va al haber.'; end if;
-  perform 1 from public.vat_book_entry where entry_id = (r->>'asiento')::uuid and invoice_type = 'R4' and corrects_ref = 'F-2026/0001' and tax_amount = -42;
+  perform 1 from public.vat_book_entry where entry_id = (r->>'asiento')::uuid and invoice_type = 'R4' and corrects_ref = (select number_text from public.customer_invoice where id = v_f1) and tax_amount = -42;
   if not found then raise exception 'PRUEBA V01 · 6: el libro no tiene la R4 que corrige la F-2026/0001 por −42 de IVA.'; end if;
   raise notice '6 · R-2026/0001 por la diferencia';
 
@@ -188,7 +189,7 @@ begin
   r := public.conta_venta_corregir(v_f2, 'anular', 'Pedido cancelado', 'Prueba V01');
   v_r2 := (r->>'id')::uuid;
   r := public.conta_venta_emitir(v_r2, 'Prueba V01');
-  if r->>'numero' <> 'R-2026/0002' then raise exception 'PRUEBA V01 · 7: la rectificativa para anular es % y no R-2026/0002.', r->>'numero'; end if;
+  if r->>'numero' <> 'R-2026/' || lpad('2', coalesce((select digits from public.invoice_series where company_id = v_e and code = 'R' and is_active), 4), '0') then raise exception 'PRUEBA V01 · 7: la rectificativa para anular es % y no R-2026/0002.', r->>'numero'; end if;
   perform 1 from public.customer_invoice where id = v_f2 and status = 'anulada';
   if not found then raise exception 'PRUEBA V01 · 7: la F-2026/0002 no queda anulada.'; end if;
   raise notice '7 · anulada entera con la R-2026/0002';
