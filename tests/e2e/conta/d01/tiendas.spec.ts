@@ -12,14 +12,15 @@
 // aquí; cualquier otra escritura se corta y la prueba lo dice.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapanSinPregunta } from '../solapes'
 
+// Desde el W02 cada e2e corre en su carril, con las cuentas clonadas: los id de la semilla, por enCarril (24/10).
 const DIR = 'docs/conta/capturas/d01'
-const PLATAFORMA = 'd1d00000-0000-4000-8000-000000000001'
-const BURGER = 'd1d00000-0000-4000-8000-000000000011'
-const RARA = 'd1d00000-0000-4000-8000-000000000013'
-const MARCA_BURGER = 'e0200000-0000-4000-8000-00000000a0b1'
+const PLATAFORMA = enCarril('d1d00000-0000-4000-8000-000000000001')
+const BURGER = enCarril('d1d00000-0000-4000-8000-000000000011')
+const RARA = enCarril('d1d00000-0000-4000-8000-000000000013')
+const MARCA_BURGER = enCarril('e0200000-0000-4000-8000-00000000a0b1')
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 async function capturar(page: Page, nombre: string) {

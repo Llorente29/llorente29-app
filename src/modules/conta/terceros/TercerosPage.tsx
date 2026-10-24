@@ -163,7 +163,7 @@ export default function TercerosPage() {
       {/* S01 · paso 3: Contactos. El título y los filtros (Todos · Clientes · Proveedores…) son
           la cabecera y sus pestañas; «Nuevo cliente» y «Nuevo proveedor» (S01d), la cinta. */}
       <h1 className="cx-oculto">Contactos</h1>
-      <p className="cx-ayuda cxt-entra">Con quién trabajas, si es cliente, proveedor, plataforma o socio, y quién debe a quién.</p>
+      <p className="cx-ayuda cxt-entra">{vende ? 'Con quién trabajas, si es cliente, proveedor, plataforma o socio, y quién debe a quién.' : 'Con quién trabajas, si es cliente, proveedor o socio, y quién debe a quién.'}</p>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
 
