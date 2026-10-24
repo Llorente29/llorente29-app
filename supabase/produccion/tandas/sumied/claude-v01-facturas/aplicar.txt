@@ -1,0 +1,15 @@
+# V01 · Entrega 1 · Ventas › Facturas (Julio, 24/10). Rama claude/v01-facturas.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0835 — AÑADE la factura de venta (customer_invoice, sus líneas, su
+#      contador sin huecos, sus cobros y su historial; RLS por cuenta, sin
+#      escritura desde la API) y sus funciones (guardar, borrar, emitir,
+#      corregir, cobrar; y las del servidor: el PDF y el correo). CAMBIA en
+#      caliente un CHECK que solo amplía: los orígenes de un asiento admiten
+#      'customer_invoice' (declarado en su cabecera, con su prueba de staging).
+#      No toca datos. No está en el camino del pedido.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta (para si ya hay emitidas).
+cuenta: scripts/conta/produccion/cuentas/v01-facturas-venta.sql
+supabase/migrations/20261024T0835_v01_facturas_venta.sql

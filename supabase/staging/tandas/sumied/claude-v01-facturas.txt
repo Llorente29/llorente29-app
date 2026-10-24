@@ -1,0 +1,6 @@
+# V01 · Entrega 1 · Ventas › Facturas. La 0835 cambia un CHECK (solo amplía)
+# y añade las facturas de venta: desde la rama, en ROLLBACK. Su prueba (ROLLBACK):
+# borrador, emitir sin huecos, asiento y libro, recargo y retención, corregir y
+# anular, cobros, B fuera; y la vuelta atrás.
+supabase/migrations/20261024T0835_v01_facturas_venta.sql
+supabase/staging/sql/20261024_v01_facturas_venta_prueba.sql
