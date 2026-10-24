@@ -179,7 +179,7 @@ jobs:
             '[prueba-c0009:apunte-molde]'*) S=scripts/conta/diez/prueba-c0009-apunte-molde.ts ;;
             # C07: UN banco inventado de Sumied a la C0009 y su contraasiento, leídos de vuelta (escribe: solo con el «sí» de Julio).
             '[prueba-c0009:apunte]'*) S=scripts/conta/diez/prueba-c0009-apunte.ts ;;
-            # C12 (24/10): el «Cuadra» del traspaso mensual contra la C0009 (getSumasYsaldos), SOLO LEE (escribir: false).
+            # C12 (24/10): el «Cuadra» del traspaso mensual contra la C0009 (los apuntes del mes), SOLO LEE (escribir: false).
             '[prueba-c0009:traspaso]'*) S=scripts/conta/diez/prueba-c0009-traspaso.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
