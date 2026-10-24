@@ -59,6 +59,11 @@ jobs:
       - name: Build (lo leen las pruebas de captura)
         if: steps.plan.outputs.ninguna != 'true'
         run: npm run build
+      - name: Cómo es el unzip de esta máquina (zipC05)
+        if: steps.plan.outputs.ninguna != 'true'
+        run: |
+          unzip -v | head -2; unzip -v | grep -i unicode || echo "unzip SIN UNICODE_SUPPORT"
+          locale -a | head -5
       - name: Unitarias
         if: steps.plan.outputs.ninguna != 'true'
         # zipC05 comprueba con `unzip` un nombre con «ñ»: sin un locale UTF-8,
