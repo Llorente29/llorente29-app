@@ -1,0 +1,13 @@
+# N7 · Laboral por la puerta (cola de noche, paso 10 de la auditoría C09). Rama conta/n7-laboral.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0801 — AÑADE a payroll_cost dos columnas que admiten nulos, irpf y
+#      employee_ss (numeric(14,2), con un CHECK >= 0 que solo las mira a ellas),
+#      y la función de solo lectura fuente_nominas_mes_v1 (la novena de la
+#      puerta: el coste de personal del mes por local). No rellena nada ni
+#      cambia ninguna función, vista o pantalla: todavía no la llama nadie.
+#      payroll_cost no está en el camino del pedido.
+#
+# Sin aplicar: lo lanza Julio. Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/n7-laboral.sql
+supabase/migrations/20261024T0801_n7_laboral.sql
