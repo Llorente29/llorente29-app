@@ -3686,6 +3686,41 @@ describe('la tanda B02 · T1 «lo que entra» (0200; ya en el historial de produ
   })
 })
 
+describe('la tanda de las facturas por correo (D01, la 0040 y la 0041; antes 0100 y 0110 del 19), en su carpeta de rama (C10)', () => {
+  const MANIFIESTO = 'supabase/produccion/tandas/sumied/conta-d01-facturas-correo/aplicar.txt'
+  const F0 = 'supabase/migrations/20261024T0040_d01_facturas_correo.sql'
+  const F1 = 'supabase/migrations/20261024T0041_d01_facturas_foodint.sql'
+  const viva = leerTanda(MANIFIESTO)
+  const ctx = JSON.parse(readFileSync('supabase/produccion/tandas/sumied/conta-d01-facturas-correo/contexto.json', 'utf8'))
+  const leer = (r: string) => { try { return readFileSync(r, 'utf8') } catch { return null } }
+  const r = informe(viva, ctx.contexto, {}, leer) as { markdown: string; ficheros: Record<string, string> }
+  it('dos ficheros, y los dos siguen (sin «autorizo»): la 0100 añade y cambia con la misma firma, declarado y con su prueba; la 0110 solo añade', () => {
+    expect(viva).toEqual([F0, F1])
+    expect(r.ficheros).toEqual({ [F0]: 'sigue', [F1]: 'sigue' })
+    for (const f of viva) expect(ctx.tanda[f]).toBe(createHash('md5').update(readFileSync(f)).digest('hex'))
+    const cabecera = readFileSync(F0, 'utf8').split('\n').filter((l) => /^-- cambia:/.test(l)).map((l) => l.replace(/^-- cambia: (\S+) .*$/, '$1'))
+    expect(cabecera).toEqual(['public.conta_entrada_llegada'])
+  })
+  it('la 0110 solo añade: ni update ni delete; inserta una dirección de Foodint y un remitente por su huella, sin la dirección en claro', () => {
+    const t = readFileSync(F1, 'utf8')
+    expect(t.replace(/--.*$/gm, '')).not.toMatch(/\b(update|delete)\b/i)
+    expect(t).toMatch(/'efb721fef32c202a4279b3b73b3111296e5359cf133edcc22ac383e6b2b2f2c8'/)
+    expect(t).not.toMatch(/[a-z0-9._-]+@(?!entrada\.folvy\.app)[a-z0-9-]+\.[a-z]{2,}/i)
+  })
+  it('su vuelta atrás va en orden inverso, y la de la 0100 deja conta_entrada_llegada con el texto de la 0220, tal cual', () => {
+    const atras = leerTanda('supabase/produccion/tandas/sumied/conta-d01-facturas-correo/vuelta-atras.txt')
+    expect(atras).toEqual(['supabase/vuelta-atras/20261024T0041_d01_facturas_foodint.down.sql', 'supabase/vuelta-atras/20261024T0040_d01_facturas_correo.down.sql'])
+    const cuerpo = (t: string) => { const i = t.indexOf('create or replace function public.conta_entrada_llegada('); const a = t.indexOf('$$', i) + 2; return t.slice(a, t.indexOf('$$', a)) }
+    expect(cuerpo(readFileSync(atras[1], 'utf8'))).toBe(cuerpo(readFileSync('supabase/migrations/20261021T0220_d01_entrada.sql', 'utf8')))
+    expect(cuerpo(readFileSync(F0, 'utf8'))).toContain('Ha vuelto a llegar por correo el ')
+  })
+  it('declara qué cuenta, y la cuenta solo lee', () => {
+    const cuentas = readFileSync(MANIFIESTO, 'utf8').split('\n').filter((l) => l.startsWith('cuenta:')).map((l) => l.replace(/^cuenta:\s*/, '').trim())
+    expect(cuentas).toEqual(['scripts/conta/produccion/cuentas/d01-facturas-correo.sql'])
+    expect(readFileSync(cuentas[0], 'utf8').replace(/--.*$/gm, '').replace(/'(?:[^']|'')*'/g, "''")).not.toMatch(/\b(update|delete|insert)\b/i)
+  })
+})
+
 describe('la tanda B02 · T2 «lo ya guardado, legible» (0201; ya en el historial de producción, run real sobre d0d9a74c), tal cual', () => {
   const MANIFIESTO = 'tests/conta/produccion/tanda-b02-relleno-20261016.txt'
   const viva = leerTanda(MANIFIESTO)
