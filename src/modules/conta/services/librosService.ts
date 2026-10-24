@@ -144,11 +144,12 @@ export async function elegirModelo(accountId: string, companyId: string, fiscalY
 }
 
 /** Propone los tres asientos del cierre (como cualquier propuesta) y los enlaza al ejercicio. */
-export async function prepararCierreEnBase(companyId: string, fiscalYearId: string, asientos: (AsientoCierre | null)[], quien: string | null, regularizacionEnlazada: string | null = null): Promise<{ ids: (string | null)[] }> {
+export async function prepararCierreEnBase(companyId: string, fiscalYearId: string, asientos: (AsientoCierre | null)[], quien: string | null, regularizacionEnlazada: string | null = null, cierreEnlazado: string | null = null): Promise<{ ids: (string | null)[] }> {
   const ids: (string | null)[] = []
   for (const [i, a] of asientos.entries()) {
     // Sin regularización nueva, se mantiene la ya enlazada (al reabrir se queda): enlazar con null la soltaría.
-    if (!a) { ids.push(i === 0 ? regularizacionEnlazada : null); continue }
+    // S01e: igual con el cierre cuando solo se añade la apertura (el ejercicio siguiente llegó después).
+    if (!a) { ids.push(i === 0 ? regularizacionEnlazada : i === 1 ? cierreEnlazado : null); continue }
     const r = await rpc<{ id: string }>('journal_entry_proponer', {
       p_company: companyId,
       p_entry: { fecha: a.fecha, source_type: a.sourceType, series: a.serie, concepto: a.concepto, confianza: 'seguro', porque: `Preparado por ${MARCA.nombre}: ${a.tipo} del ejercicio (PGC, quinta parte, cuenta 129 y normas de cierre).`,
@@ -168,14 +169,29 @@ export const reabrirEjercicio = (fiscalYearId: string, motivo: string) => rpc<{ 
 
 // ── Libro registro ──────────────────────────────────────────────────────────
 
-const COLS_LIBRO = 'id, entry_id, book, invoice_type, series, number, number_to, documents_count, issue_date, operation_date, received_date, received_number, party_id, counterpart_tax_id, counterpart_id_type, counterpart_country, counterpart_name, operation_key, qualification, exempt_cause, tax_base, tax_rate, tax_amount, surcharge_rate, surcharge_amount, total, deductible_amount, deductible_later, reverse_charge, investment_good, withholding_rate, withholding_amount, activity_code, activity_type, activity_iae, corrects_ref, source_type, source_id, voided_at'
+const COLS_LIBRO = 'id, entry_id, book, invoice_type, series, number, number_to, documents_count, issue_date, operation_date, received_date, received_number, party_id, counterpart_tax_id, counterpart_id_type, counterpart_country, counterpart_name, operation_key, qualification, exempt_cause, tax_base, tax_rate, tax_amount, surcharge_rate, surcharge_amount, total, deductible_amount, deductible_later, reverse_charge, investment_good, withholding_rate, withholding_amount, activity_code, activity_type, activity_iae, corrects_ref, source_type, source_id, voided_at, deduction_year, deduction_period, deduction_reason'
+
+/** Lo que la base devuelve como mucho en una consulta (PostgREST, max_rows). */
+const POR_PAGINA = 1000
 
 export async function leerLibroRegistro(accountId: string, companyId: string, libros: Libro[], desde: string, hasta: string): Promise<AnotacionLibro[]> {
-  const { data, error } = await tabla('vat_book_entry').select(COLS_LIBRO)
-    .eq('account_id', accountId).eq('company_id', companyId).in('book', libros)
-    .gte('issue_date', desde).lte('issue_date', hasta).order('issue_date', { ascending: false }).order('number', { ascending: false })
-  if (error) throw new Error(mensaje('No se ha podido leer el libro registro', error))
-  return ((data ?? []) as Fila[]).map((f) => ({
+  // S02 · PR 2: por páginas. La base corta en 1.000 filas sin avisar, y un
+  // ejercicio entero las pasa (Foodint, expedidas de 2026: 1.317). Sin paginar,
+  // el libro enseñaba 1.000 y no decía que faltaban (regla 7). El id desempata
+  // el orden, para que una página no repita ni se salte filas.
+  const filas: Fila[] = []
+  for (let a = 0; ; a += POR_PAGINA) {
+    const { data, error } = await tabla('vat_book_entry').select(COLS_LIBRO)
+      .eq('account_id', accountId).eq('company_id', companyId).in('book', libros)
+      .gte('issue_date', desde).lte('issue_date', hasta)
+      .order('issue_date', { ascending: false }).order('number', { ascending: false }).order('id')
+      .range(a, a + POR_PAGINA - 1)
+    if (error) throw new Error(mensaje('No se ha podido leer el libro registro', error))
+    const pagina = (data ?? []) as Fila[]
+    filas.push(...pagina)
+    if (pagina.length < POR_PAGINA) break
+  }
+  return filas.map((f) => ({
     id: String(f.id), entryId: String(f.entry_id), book: String(f.book) as Libro, invoiceType: String(f.invoice_type) as AnotacionLibro['invoiceType'],
     series: txt(f.series), number: txt(f.number), numberTo: txt(f.number_to), documentsCount: num(f.documents_count),
     issueDate: String(f.issue_date), operationDate: txt(f.operation_date), receivedDate: txt(f.received_date), receivedNumber: txt(f.received_number),
@@ -186,6 +202,8 @@ export async function leerLibroRegistro(accountId: string, companyId: string, li
     deductibleLater: Boolean(f.deductible_later), reverseCharge: Boolean(f.reverse_charge), investmentGood: Boolean(f.investment_good),
     withholdingRate: numO(f.withholding_rate), withholdingAmount: numO(f.withholding_amount), activityCode: txt(f.activity_code),
     activityType: txt(f.activity_type), activityIae: txt(f.activity_iae), correctsRef: txt(f.corrects_ref), sourceType: String(f.source_type), sourceId: txt(f.source_id), voidedAt: txt(f.voided_at),
+    // 0290 · «Deducida en»: el periodo del 303 en que se dedujo, si no es el de su fecha.
+    deducidaEn: f.deduction_period ? `${String(f.deduction_period)} ${String(f.deduction_year)}` : null, deducidaPorque: txt(f.deduction_reason),
   }))
 }
 
@@ -390,6 +408,18 @@ export async function cuentasDeSuplidos(accountId: string, companyId: string): P
   const m = new Map<string, string>()
   for (const f of (data ?? []) as Fila[]) { const ca = f.company_account as Fila | null; if (ca) m.set(String(ca.code), String(ca.name)) }
   return [...m.entries()].map(([code, name]) => ({ code, name })).sort((a, b) => a.code.localeCompare(b.code))
+}
+
+/**
+ * S01e · El nombre del cuadro de cuentas (PGC) de unos códigos o prefijos
+ * («624» → «Transportes»). Catálogo global, sin account_id, leído a propósito.
+ */
+export async function nombresPgc(plan: 'pymes' | 'general', codigos: string[]): Promise<Map<string, string>> {
+  const unicos = [...new Set(codigos)].filter(Boolean)
+  if (!unicos.length) return new Map()
+  const { data, error } = await tabla('pgc_account').select('code, name').eq('plan', plan).is('valid_to', null).in('code', unicos)
+  if (error) throw new Error(mensaje('No se han podido leer los nombres del cuadro de cuentas', error))
+  return new Map(((data ?? []) as Fila[]).map((f) => [String(f.code), String(f.name)]))
 }
 
 /** La cuenta de apunte de la 129 (Resultado del ejercicio) de la empresa, si la tiene. */

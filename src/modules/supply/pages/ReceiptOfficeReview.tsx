@@ -478,7 +478,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
       unitCost = line.unitCost != null && line.qtyReceived > 0 ? line.unitCost * line.qtyReceived / qty : (line.unitCost ?? null)
       if (!clean) {
         needsReview = true
-        discrepancyReason = `Formato cambiado sin dato del papel: ${line.qtyInBase} en base ÷ ${qtyInBaseFactor} = ${rawQty.toFixed(3)}, no es un número limpio. Revisa a mano.`
+        discrepancyReason = `Formato cambiado sin dato del albarán: ${line.qtyInBase} en base ÷ ${qtyInBaseFactor} = ${rawQty.toFixed(3)}, no es un número limpio. Revisa a mano.`
       }
     } else {
       qty = line.qtyReceived > 0 ? line.qtyReceived : 1
@@ -698,7 +698,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
     if (almacen == null) return `Guardado: ${nombre} queda sin coste, así que no valora el almacén.`
     return `Guardado: ${nombre} entra al almacén por ${fmtMoney(almacen)}`
       + (porBase != null ? ` (${fmtMoneyPrecise(porBase)} la ${uSingular})` : '')
-      + (papel != null ? `. El papel sigue diciendo ${fmtMoney(papel)}.` : '.')
+      + (papel != null ? `. El albarán sigue diciendo ${fmtMoney(papel)}.` : '.')
   }, [pendingConfirm, loadedTick, lines, itemInfo])
 
   /**
@@ -875,7 +875,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
             <div className="text-sm text-text-primary font-medium">{receipt.supplierDocNumber ?? DASH}</div>
           </div>
           <div>
-            <div className="text-xs text-text-secondary">Total del papel</div>
+            <div className="text-xs text-text-secondary">Total del albarán</div>
             <div className="text-sm text-text-primary font-medium">{isNum(docTotal) ? fmtMoney(docTotal) : DASH}</div>
           </div>
           <div>
@@ -915,7 +915,7 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
               <label className="text-xs text-text-secondary">
                 Nº de albarán
                 <input type="text" value={hdrDocNumber} onChange={e => setHdrDocNumber(e.target.value)} disabled={saving}
-                  placeholder="el que viene en el papel"
+                  placeholder="el que viene en el albarán"
                   className="mt-0.5 block w-52 max-w-full px-2.5 py-2 text-sm border border-border-default rounded-md bg-page text-text-primary focus:outline-none focus:ring-1 focus:ring-accent" />
               </label>
             </div>
@@ -1029,12 +1029,12 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
               <p className="text-sm font-medium text-text-primary">
                 {supplierName || 'Este proveedor'} factura con el IVA dentro, y en{' '}
                 {ivaWarnings.length === 1 ? 'una línea' : `${ivaWarnings.length} líneas`} el coste del almacén
-                es idéntico al importe del papel. {ivaWarnings.length === 1 ? 'Ese importe parece' : 'Esos importes parecen'} llevar el IVA dentro.
+                es idéntico al importe del albarán. {ivaWarnings.length === 1 ? 'Ese importe parece' : 'Esos importes parecen'} llevar el IVA dentro.
               </p>
               <ul className="space-y-1 mt-1.5">
                 {ivaWarnings.map(w => (
                   <li key={w.lineId} className="text-sm text-text-secondary tabular-nums">
-                    <span className="text-text-primary font-medium">{w.nombre}</span>: papel {fmtMoney(w.papel)} = almacén {fmtMoney(w.almacen)}
+                    <span className="text-text-primary font-medium">{w.nombre}</span>: albarán {fmtMoney(w.papel)} = almacén {fmtMoney(w.almacen)}
                     {w.netoPropuesto != null && w.tipo?.rate != null ? (
                       <> · sin el {fmtNumEs(w.tipo.rate, 0)} % serían <b className="text-text-primary">{fmtMoney(w.netoPropuesto)}</b></>
                     ) : (
@@ -1321,7 +1321,7 @@ function LineEditor({
           <input type="checkbox" checked={ivaOn} disabled={saving}
             onChange={e => aplicarIva(e.target.checked, ivaRate)}
             className="w-4 h-4 accent-accent" />
-          El precio del papel lleva IVA
+          El precio del albarán lleva IVA
         </label>
         {ivaSugeridoPorProveedor && !ivaOn && (
           <p className="text-xs text-text-secondary">
@@ -1366,11 +1366,11 @@ function LineEditor({
                 </span>
               ) : brutoBase == null || netoPropuesto == null ? (
                 <span className="text-text-secondary">
-                  Falta el importe del papel o la cantidad para poder quitarle el IVA.
+                  Falta el importe del albarán o la cantidad para poder quitarle el IVA.
                 </span>
               ) : (
                 <>
-                  {brutoPorUnidad != null ? 'Papel' : 'Lo escrito'} {fmtMoney(brutoBase)} con IVA {fmtNumEs(rateN, 0)} %
+                  {brutoPorUnidad != null ? 'Albarán' : 'Lo escrito'} {fmtMoney(brutoBase)} con IVA {fmtNumEs(rateN, 0)} %
                   {' → '}al almacén <b>{fmtMoney(netoPropuesto)}</b> cada uno
                   {!netoYaAplicado && <span className="text-warning"> · lo escrito ahora es {costN !== null ? fmtMoney(costN) : 'nada'}</span>}
                 </>
@@ -1464,7 +1464,7 @@ function ImportesLinea({ line, baseUnitAbbr }: {
 
   return (
     <>
-      {papel != null && <> · <span className="text-text-secondary">Papel:</span> {fmtMoney(papel)}</>}
+      {papel != null && <> · <span className="text-text-secondary">Albarán:</span> {fmtMoney(papel)}</>}
       {almacen != null
         ? <> · <span className="text-text-secondary">Al almacén:</span> <b className="text-text-primary">{fmtMoney(almacen)}</b></>
         : <b className="text-warning"> · sin coste (no valora el almacén)</b>}
@@ -1574,7 +1574,7 @@ function DudosaRow({ line, itemInfo, formatNames, saving, onConfirm, onCorregir,
           </div>
           {line.docAmount != null && (
             <div>
-              Papel: {fmtMoney(line.docAmount)}
+              Albarán: {fmtMoney(line.docAmount)}
               {perUnitPapel != null && <> ÷ {fmtQtyDisplay(qtyInBase)} = {fmtMoneyPrecise(perUnitPapel)} la {uNounSingular}</>}
             </div>
           )}

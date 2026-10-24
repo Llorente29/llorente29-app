@@ -145,6 +145,23 @@ describe('paginación (las rarezas medidas)', () => {
     await expect(c.series()).rejects.toThrow(/429/)
   })
 
+  it('17/10 · 500 en una LECTURA: repite (Diez falla a ratos), como mucho 3 veces en total', async () => {
+    const { c, falso } = await montar({ C0009: { series: [{ Codigo: '1', Descripcion: 'x' }] } })
+    falso.estado.fallos.veces500 = 2
+    expect(await c.series()).toHaveLength(1)
+    expect(c.metrica.reintentos5xx).toBe(2)
+    falso.estado.fallos.veces500 = 3
+    await expect(c.series()).rejects.toThrow(/500/)
+  }, 20_000)
+
+  it('17/10 · 500 al ESCRIBIR: no se repite nunca (no se sabe si entró)', async () => {
+    const { c, falso } = await montar({ C0009: {} }, { escribir: true })
+    falso.estado.fallos.veces500 = 1
+    await expect(c.enviarFactura({ Ejercicio: '2026', Serie: '1', TipoAsiento: 1, CuentaCliente: '43000002', FechaFactura: 20261001 })).rejects.toThrow(/facturas\/add → 500/)
+    expect(c.metrica.reintentos5xx).toBe(0)
+    expect(falso.estado.peticiones.filter((p) => p.ruta === '/api/facturas/add')).toHaveLength(1)
+  })
+
   it('limitesMes', () => {
     expect(limitesMes('202602')).toEqual([20260201, 20260228])
     expect(limitesMes('202402')).toEqual([20240201, 20240229])

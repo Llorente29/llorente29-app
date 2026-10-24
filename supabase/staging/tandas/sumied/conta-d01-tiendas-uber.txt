@@ -1,0 +1,14 @@
+# D01 · «Sus tiendas» en la ficha de una plataforma (rama conta/d01-tiendas-uber,
+# #221; al sistema del C10 el 24/10: el staging/aplicar.txt de siempre queda
+# cerrado y lo de esta rama va aquí).
+#
+# Reparto Rápido Inventado, plataforma en Uber Eats de la cuenta A, con tres
+# tiendas sin asignar, para la e2e y sus capturas. Solo añade; si ya está, no
+# hace nada.
+supabase/seeds/conta/seed_d01_tiendas_staging.sql
+#
+# Regla de Julio (17/10): en la cuenta C (solo contabilidad) no sale nada de
+# plataformas. Un cliente inventado en cada cuenta C, para tener una ficha que
+# abrir en la e2e. Sin empresa: las pruebas del alta siguen igual. Solo añade;
+# si ya está, no hace nada.
+supabase/seeds/conta/seed_d01_cuenta_c_cliente_staging.sql

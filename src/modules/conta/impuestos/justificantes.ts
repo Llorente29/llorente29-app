@@ -1,0 +1,173 @@
+// src/modules/conta/impuestos/justificantes.ts
+//
+// I01c · P1 · «Subir justificantes», lo que no es pantalla: cada fila del
+// repaso en palabras, su chip, lo que se manda a la base y las casillas
+// escritas a mano cuando el PDF no se pudo leer.
+
+import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
+import { MODELOS_JUSTIFICANTE, tituloJustificante, type CausaLectura, type Justificante } from '@/modules/conta/lib/justificanteAeat'
+import type { TonoChip } from '@/modules/conta/diseno'
+
+/** Lo que dice la base de cada justificante (conta_impuesto_justificantes_repasar). */
+export interface Mirado {
+  i: number
+  estado: 'nuevo' | 'completa' | 'ya_estaba' | 'error'
+  motivo: string | null
+  declaracion: string | null
+  cuenta?: string
+  resultado?: 'to_pay' | 'to_refund' | 'to_offset' | 'zero' | null
+  importe?: number | null
+  presentada?: string | null
+  falta_pdf?: boolean
+  diferencias?: { casilla: string; sumied: number; presentado: number | null }[]
+}
+
+/** Lo que se manda a la base: lo leído, o lo escrito a mano. */
+export interface DatosJustificante {
+  modelo: string
+  ejercicio: number
+  periodo: string
+  presentada: string
+  csv: string
+  justificante: string | null
+  nif: string
+  casillas: Record<string, number>
+  resultado: number | null
+  devolucion?: boolean
+  a_mano?: boolean
+  motivo?: string
+  /** 0270: lo de la primera página y de dónde salió el PDF. */
+  expediente?: string | null
+  presentador?: { nif: string; nombre: string } | null
+  origen_pdf?: 'aeat_csv' | 'upload'
+}
+
+export function datosDe(j: Justificante, resultadoAMano: number | null = null, devolucion = false, traido = false): DatosJustificante {
+  return {
+    modelo: j.modelo, ejercicio: j.ejercicio, periodo: j.periodo, presentada: j.presentada, csv: j.csv, justificante: j.justificante,
+    nif: j.nif, casillas: j.casillas, resultado: j.resultado?.importe ?? resultadoAMano, ...(devolucion ? { devolucion: true } : {}),
+    expediente: j.expediente ?? null, presentador: j.presentador ?? null, origen_pdf: traido ? 'aeat_csv' : 'upload',
+  }
+}
+
+/**
+ * Lo que dice la base de un justificante que no se puede guardar, en palabras
+ * de oficina y en una frase: el de otro NIF es «de otra empresa».
+ */
+export function motivoEnPalabras(motivo: string | null | undefined): string {
+  const m = motivo ?? 'No se puede guardar.'
+  const otro = /^Es de otro NIF(?: \(([^)]+)\))?/.exec(m)
+  return otro ? `Ese justificante es de otra empresa${otro[1] ? ` (NIF ${otro[1]})` : ''}.` : m
+}
+
+/**
+ * Por qué no se ha leído un PDF, en UNA frase de oficina y sin encadenar
+ * motivos (Julio, 19/10):
+ *   · si se trajo de Hacienda y Sumied aún no sabe leerlo: «Traído de Hacienda,
+ *     pero Sumied aún no lee el modelo 111. Puedes escribir las cifras a mano.»;
+ *   · si el PDF no deja ver su CSV: «No encontramos el CSV en este PDF. Pégalo
+ *     a mano.»;
+ *   · si no es un PDF, su motivo (no es un PDF, pasa de 10 MB, no se abre).
+ */
+export function fraseNoSeLee(l: { motivo: string; causa?: CausaLectura; parcial: { modelo?: string } }, traido: boolean): string {
+  if (l.causa === 'no_pdf') return l.motivo
+  if (!traido) return 'No encontramos el CSV en este PDF. Pégalo a mano.'
+  const modelo = l.parcial.modelo
+  return modelo
+    ? `Traído de Hacienda, pero Sumied aún no lee el modelo ${modelo}. Puedes escribir las cifras a mano.`
+    : 'Traído de Hacienda, pero Sumied no reconoce su modelo. Puedes escribir las cifras a mano.'
+}
+
+/**
+ * Lo que contestó Hacienda (conta-justificante-csv) cuando no dio el
+ * justificante, en una frase. Se dice desde aquí por su motivo, no con el texto
+ * de la función, para que sea la misma frase en «Subir» y en «Pegar CSV».
+ */
+export function fraseDeHacienda(t: { motivo: string; mensaje: string }): string {
+  switch (t.motivo) {
+    case 'formato': return 'Ese CSV no tiene la forma de los de Hacienda: son 16 letras y números.'
+    case 'no_encontrado': return 'Hacienda no tiene ningún justificante con ese CSV: revísalo letra a letra.'
+    case 'no_responde': return 'Hacienda no responde ahora mismo: vuelve a intentarlo en un rato.'
+    case 'ya_estaba': return t.mensaje.replace(/\s*No hace falta traerlo otra vez\.\s*$/, '')
+    default: return t.mensaje
+  }
+}
+
+/** El chip de cada fila: Leído, Ya estaba o No se pudo leer. */
+export function chipDe(m: Pick<Mirado, 'estado'> | null): { tono: TonoChip; texto: string } {
+  if (!m || m.estado === 'error') return { tono: 'falta', texto: 'No se pudo leer' }
+  if (m.estado === 'ya_estaba') return { tono: 'neutro', texto: 'Ya estaba' }
+  return { tono: 'seguro', texto: 'Leído' }
+}
+
+/**
+ * La línea de debajo del título: «303 · 1.761,96 € a compensar · presentado
+ * el 20/10/2025». El importe sin signo y la palabra que dice hacia dónde va,
+ * igual que en Presentados: el signo ya lo dice «a compensar» o «a devolver».
+ */
+export function lineaDe(d: Pick<DatosJustificante, 'modelo' | 'presentada' | 'resultado'>, devolucion = false): string {
+  const partes = [`modelo ${d.modelo}`]
+  if (d.resultado !== null && d.resultado !== undefined) {
+    const que = d.resultado > 0 ? 'a ingresar' : d.resultado === 0 ? 'sale a cero' : devolucion ? 'a devolver' : 'a compensar'
+    partes.push(`${eurosExactos(Math.abs(d.resultado))} ${que}`)
+  } else partes.push('resultado sin leer')
+  if (d.presentada) partes.push(`presentado el ${fechaLarga(d.presentada.slice(0, 10))}`)
+  return partes.join(' · ')
+}
+
+export const tituloDe = tituloJustificante
+
+/** El 303 del último periodo del año que sale negativo: compensar o pedir la devolución lo decide la persona. */
+export const pideDevolucion = (d: Pick<DatosJustificante, 'modelo' | 'periodo' | 'resultado'>) =>
+  d.modelo === '303' && (d.periodo === '4T' || d.periodo === '12') && (d.resultado ?? 0) < 0
+
+/**
+ * Las casillas escritas a mano: una por línea, el número y el importe como en el
+ * justificante («27 9.855,66», «[71] -3.723,44»). Devuelve las casillas o la
+ * primera línea que no se entiende.
+ */
+export function casillasEscritas(texto: string): { ok: true; casillas: Record<string, number> } | { ok: false; linea: string } {
+  const out: Record<string, number> = {}
+  for (const l of texto.split('\n').map((x) => x.trim()).filter(Boolean)) {
+    const m = /^\[?(\d{2,3})\]?\s*[:=·]?\s*([-−]?[\d.]*\d(?:,\d{1,2})?)\s*€?$/.exec(l)
+    if (!m) return { ok: false, linea: l }
+    // El punto, de miles; la coma, decimal (como en el justificante).
+    const v = Number(m[2].replace('−', '-').replace(/\./g, '').replace(',', '.'))
+    if (!Number.isFinite(v)) return { ok: false, linea: l }
+    out[m[1]] = v
+  }
+  return { ok: true, casillas: out }
+}
+
+/** La casilla del resultado de cada modelo (el 202 no tiene una fija). */
+export const casillaResultado = (modelo: string): string | null => MODELOS_JUSTIFICANTE[modelo]?.resultado ?? null
+
+/** El resumen de lo guardado: «Guardados 4 justificantes. 1 no se ha podido: …». Con contenido, regla 8. */
+export function resumenGuardado(r: { ok: boolean; titulo: string; mensaje: string }[]): string {
+  const bien = r.filter((x) => x.ok)
+  const mal = r.filter((x) => !x.ok)
+  const partes: string[] = []
+  if (bien.length) partes.push(`${bien.length === 1 ? 'Guardado 1 justificante' : `Guardados ${bien.length} justificantes`}: ${bien.map((x) => x.titulo).join(', ')}.`)
+  if (mal.length) partes.push(`${mal.length === 1 ? '1 no se ha podido guardar' : `${mal.length} no se han podido guardar`}: ${mal.map((x) => `${x.titulo} (${x.mensaje})`).join('; ')}.`)
+  return partes.join(' ') || 'No había nada que guardar.'
+}
+
+/**
+ * El resultado de un justificante en palabras, para la ficha: el importe sin
+ * signo, hacia dónde va, y —en un 303 que sale a cero porque se compensó con
+ * cuotas de trimestres anteriores— cuánto se compensó ([78]): «0,00 € ·
+ * 647,28 € compensado con trimestres anteriores» (Julio, 19/10).
+ */
+export function resultadoEnPalabras(j: Pick<Justificante, 'modelo' | 'resultado' | 'casillas'>): { importe: string; que: string; compensado: string | null } {
+  const v = j.resultado?.importe ?? null
+  const comp = j.modelo === '303' ? j.casillas['78'] ?? 0 : 0
+  if (v === null) return { importe: '—', que: 'resultado sin leer', compensado: null }
+  const sinActividad = v === 0 && Object.values(j.casillas).every((x) => x === 0)
+  const que = v > 0 ? 'a ingresar' : v < 0 ? 'a compensar' : sinActividad ? 'sin actividad' : 'resultado cero'
+  return { importe: eurosExactos(Math.abs(v)), que, compensado: v === 0 && comp > 0 ? `${eurosExactos(comp)} compensado con trimestres anteriores` : null }
+}
+
+/** Lo mismo en Presentados, con lo que da la base (importe, resultado y la [78]). */
+export function compensadoEnPalabras(p: { importe: number | null; compensado?: number | null }): string | null {
+  return p.importe === 0 && (p.compensado ?? 0) > 0 ? `${eurosExactos(p.compensado!)} compensado con trimestres anteriores` : null
+}

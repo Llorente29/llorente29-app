@@ -1,0 +1,7 @@
+# Vuelta atrás de la tanda de producción viva (supabase/produccion/aplicar.txt,
+# E05 · volver a leer los PDF de Catcher): sin conta_lote_relectura ni sus
+# funciones, y conta_lote_pedidos_app y conta_lote_cruce_guardar las de antes,
+# byte a byte. Para si ya se ha hecho alguna relectura. Las lecturas ya
+# guardadas en las facturas se quedan.
+cuenta: scripts/conta/produccion/cuentas/e05-releer.sql
+supabase/vuelta-atras/20261204T0480_e05_releer_riders.down.sql

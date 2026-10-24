@@ -1,0 +1,21 @@
+# Tanda de producción viva · E05 · volver a leer en el servidor los PDF de una
+# quincena de Catcher (Julio, 22/10). Rama conta/e05-releer-riders. Número 0480:
+# la siguiente libre por encima de la 0470 (D02, ya aplicada; su copia en
+# tests/conta/produccion/tanda-d02-recibida-pdf-20261022.txt).
+#
+#   1. 0480 — AÑADE conta_lote_relectura (quién pidió releer un lote y qué
+#      salió) y las funciones para pedirla (con sesión) o lanzarla desde la base
+#      (solo postgres, con el cron_secret), empezarla, guardar la lectura nueva
+#      del PDF SOLO de las facturas que siguen en revisión y apuntar lo que
+#      salió. CAMBIA en caliente conta_lote_pedidos_app y
+#      conta_lote_cruce_guardar (misma firma): también las puede llamar el
+#      servidor, la condición de la 0450. Declaradas en la cabecera, con su
+#      prueba de staging. No toca ninguna fila.
+#
+# No toca el camino del pedido: conta_lote_pedidos_app lee sale y sigue solo
+# leyendo. Función que desplegar a mano: conta-lote-releer (nueva; el push a
+# main la despliega sola, y el despliegue compara lo desplegado con main).
+# Después del real y de la fusión, se lanza sobre la 1.ª quincena de octubre.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/e05-releer.sql
+supabase/migrations/20261204T0480_e05_releer_riders.sql

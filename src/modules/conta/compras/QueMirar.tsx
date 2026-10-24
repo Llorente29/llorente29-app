@@ -1,9 +1,10 @@
 // src/modules/conta/compras/QueMirar.tsx
 //
 // «Qué tienes que mirar» (N18, repaso del 10/10): una fila por DECISIÓN, no
-// por papel. Trece papeles a nombre del mismo local son una pregunta; lo que
-// le falta a una ficha va junto. Cada fila enseña sus papeles (regla 7:
-// agrupar no esconde) y cada papel se puede ver. Primero lo humano (quién,
+// por documento. Trece albaranes a nombre del mismo local son una pregunta; lo
+// que le falta a una ficha va junto. Cada fila enseña sus documentos (regla 7:
+// agrupar no esconde) y cada uno se puede ver, llamado por lo que es (Julio,
+// 21/10: nunca «papel»). Primero lo humano (quién,
 // cuándo, dónde, cuánto); el código, pequeño y al final.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -14,13 +15,13 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import {
-  FORMAS, conPunto, diaConNombre, fraseFicha, normaNombre, papelSolo, porQueFicha, propuestasDeNombre, rangoFechas, totalPapeles,
+  FORMAS, conPunto, cuantosDocumentos, diaConNombre, mayuscula, verDocumentos, fraseFicha, normaNombre, papelSolo, porQueFicha, propuestasDeNombre, rangoFechas, totalPapeles,
   type FilaAMirar, type FormaFacturar, type RecepcionAMirar, type SinCamino,
 } from '@/modules/conta/lib/compras'
 import {
   cambiarFormaFacturar, cerrarPregunta, decidirDestinatario, rehacerCamino, sinIva,
 } from '@/modules/conta/services/comprasService'
-import { guardarFicha, listarProveedores } from '@/modules/conta/services/proveedorService'
+import { guardarFicha, listarProveedores, listarTiposGasto, type TipoGasto } from '@/modules/conta/services/proveedorService'
 import { VerPapel } from '@/modules/conta/compras/VerPapel'
 import { MARCA } from '../cuenta/marca'
 
@@ -36,7 +37,10 @@ function useAccion(hecho: Hecho) {
   return { ocupado, fallo, hacer }
 }
 
-const papeles = (n: number, uno = 'papel', varios = 'papeles') => (n === 1 ? `1 ${uno}` : `${n} ${varios}`)
+const recepciones = (n: number) => (n === 1 ? '1 recepción' : `${n} recepciones`)
+/** «Un albarán va» · «3 facturas van» · «2 albaranes y 1 factura van». */
+const vanANombre = (ps: readonly RecepcionAMirar[]) => `${mayuscula(cuantosDocumentos(ps.map((p) => p.papel)))} ${ps.length === 1 ? 'va' : 'van'}`
+const titulo = (p: { proveedor_nombre: string | null; fecha: string }) => `${p.proveedor_nombre ?? 'Recepción'} · ${diaConNombre(p.fecha)}`
 const vuelta = (n: number) => (n === 0 ? '' : n === 1 ? ' He vuelto a mirar 1 recepción.' : ` He vuelto a mirar ${n} recepciones.`)
 const quienes = (ps: readonly RecepcionAMirar[]) => [...new Set(ps.map((p) => p.proveedor_nombre).filter(Boolean))] as string[]
 
@@ -54,7 +58,7 @@ function resumen(ps: readonly RecepcionAMirar[], conQuien = true): string {
   return t.join(' · ')
 }
 
-/** La fila: lo que hay que decidir, por qué, sus botones y, debajo, sus papeles. */
+/** La fila: lo que hay que decidir, por qué, sus botones y, debajo, sus documentos. */
 function Fila({ frase, apoyo, porque, acciones, ps, fallo }: {
   frase: ReactNode; apoyo?: ReactNode; porque?: ReactNode; acciones: ReactNode; ps: readonly RecepcionAMirar[]; fallo: string | null
 }) {
@@ -67,13 +71,13 @@ function Fila({ frase, apoyo, porque, acciones, ps, fallo }: {
         {ps.length === 1 && <span className="cxc-cosa-codigo">{ps[0].codigo}</span>}
         {ps.length > 1 && (
           <details className="cxc-papeles">
-            <summary>Ver los {ps.length} papeles</summary>
+            <summary>Ver {verDocumentos(ps.map((p) => p.papel))}</summary>
             <ul>
               {ps.map((p) => (
                 <li key={p.recepcion}>
                   <span>{[p.proveedor_nombre, diaConNombre(p.fecha), p.local_nombre, p.base == null ? 'sin importe' : eurosExactos(p.base)].filter(Boolean).join(' · ')}
                     {' '}<span className="cxc-cosa-codigo">{p.codigo}</span></span>
-                  <VerPapel recepcion={p.recepcion} titulo={`${p.proveedor_nombre ?? 'Papel'} · ${diaConNombre(p.fecha)}`} />
+                  <VerPapel recepcion={p.recepcion} tipo={p.papel} titulo={titulo(p)} />
                 </li>
               ))}
             </ul>
@@ -83,7 +87,7 @@ function Fila({ frase, apoyo, porque, acciones, ps, fallo }: {
       </div>
       <div className="cxc-cosa-acciones">
         {acciones}
-        {ps.length === 1 && <VerPapel recepcion={ps[0].recepcion} titulo={`${ps[0].proveedor_nombre ?? 'Papel'} · ${diaConNombre(ps[0].fecha)}`} />}
+        {ps.length === 1 && <VerPapel recepcion={ps[0].recepcion} tipo={ps[0].papel} titulo={titulo(ps[0])} />}
       </div>
     </div>
   )
@@ -101,13 +105,13 @@ function FilaNombre({ f, accountId, hecho }: { f: Extract<FilaAMirar, { tipo: 'n
     const x = await decidirDestinatario(accountId, f.nombre, a)
     return a.otro
       ? `Apuntado: «${f.nombre}» no es tuyo. Lo recordaré.${vuelta(x.recepciones)}`
-      : `Apuntado: «${f.nombre}» es ${conPunto(quien)} Lo recordaré para los próximos papeles.${vuelta(x.recepciones)}`
+      : `Apuntado: «${f.nombre}» es ${conPunto(quien)} Lo recordaré para los próximos albaranes y facturas.${vuelta(x.recepciones)}`
   })
   const n = f.papeles.length
   return (
     <>
       <Fila ps={f.papeles} fallo={fallo}
-        frase={<>{n === 1 ? 'Un papel va' : `${n} papeles van`} a nombre de «{f.nombre}». ¿De quién {n === 1 ? 'es' : 'son'}?</>}
+        frase={<>{vanANombre(f.papeles)} a nombre de «{f.nombre}». ¿De quién {n === 1 ? 'es' : 'son'}?</>}
         apoyo={resumen(f.papeles)}
         acciones={<>
           {propuestas.map((p, i) => (
@@ -170,7 +174,7 @@ function FilaSinIva({ f, empresaId, hecho }: { f: Extract<FilaAMirar, { tipo: 's
   const facturas = f.papeles.every((p) => p.papel === 'factura' || p.papel === 'albaran_factura')
   const qs = quienes(f.papeles)
   const { total } = totalPapeles(f.papeles)
-  const cosa = facturas ? (n === 1 ? 'Una factura' : `${n} facturas`) : (n === 1 ? 'Un papel' : `${n} papeles`)
+  const cosa = facturas ? (n === 1 ? 'Una factura' : `${n} facturas`) : mayuscula(cuantosDocumentos(f.papeles.map((p) => p.papel)))
   return (
     <>
       <Fila ps={f.papeles} fallo={fallo}
@@ -206,7 +210,7 @@ function FilaSinIva({ f, empresaId, hecho }: { f: Extract<FilaAMirar, { tipo: 's
   )
 }
 
-// ── La ficha dice una cosa y el papel otra ─────────────────────────────────
+// ── La ficha dice una cosa y el documento otra ─────────────────────────────
 
 const tituloDe = (m: FormaFacturar | null) => FORMAS.find((x) => x.valor === m)?.titulo ?? ''
 
@@ -221,7 +225,7 @@ function FilaPapelFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'papel_fi
         ? <>{f.proveedor_nombre} ha entregado{veces} con {papelSolo(f.papel)} a nombre de tu empresa, y en su ficha pone que liquida cada mes.</>
         : <>{f.proveedor_nombre} ha entregado{veces} con {papelSolo(f.papel)}, y en su ficha pone que factura {tituloDe(f.ficha).toLowerCase()}.</>}
       apoyo={resumen(f.papeles, false)}
-      // Como la maqueta N18: un botón, con su texto exacto, y «Ver el papel».
+      // Como la maqueta N18: un botón, con su texto exacto, y «Ver el albarán» (o la factura).
       // Cambiar la costumbre se hace en «Cómo te factura» (su aviso lo pide).
       acciones={<>
         <button type="button" className="cx-boton-sec" disabled={ocupado} onClick={() => void hacer(async () => {
@@ -235,10 +239,9 @@ function FilaPapelFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'papel_fi
 /** El socio, o quien sea, sin decir si liquida cada mes. */
 function FilaLiquida({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'liquida' }>; hecho: Hecho }) {
   const { ocupado, fallo, hacer } = useAccion(hecho)
-  const n = f.papeles.length
   return (
     <Fila ps={f.papeles} fallo={fallo}
-      frase={<>{n === 1 ? 'Un papel va' : `${n} papeles van`} a nombre de {f.proveedor_nombre}, y su ficha no dice si liquida cada mes.</>}
+      frase={<>{vanANombre(f.papeles)} a nombre de {f.proveedor_nombre}, y su ficha no dice si liquida cada mes.</>}
       apoyo={resumen(f.papeles)}
       acciones={<>
         <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void hacer(async () => {
@@ -252,12 +255,13 @@ function FilaLiquida({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'liquida' }>
 
 // ── Lo que le falta a una ficha, todo junto ────────────────────────────────
 
-function FilaFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'ficha' }>; hecho: Hecho }) {
+function FilaFicha({ f, hecho, tipos }: { f: Extract<FilaAMirar, { tipo: 'ficha' }>; hecho: Hecho; tipos: TiposGasto }) {
   const { ocupado, fallo, hacer } = useAccion(hecho)
   const falta = (k: string) => f.falta.find((x) => x.falta === k)
   const nifF = falta('nif')
   const nif = nifF && nifF.falta === 'nif' && nifF.ofrece ? validarNifEs(nifF.ofrece) : null
   const forma = !!falta('forma_facturar')
+  const sinTipo = !!falta('tipo_gasto')
   const destino = forma ? rutaComoTeFactura(f.proveedor)
     : falta('tipo_gasto') ? `${rutaFichaProveedor(f.proveedor, 'contabilidad')}#campo-expenseCategoryId`
     : `${rutaFichaProveedor(f.proveedor, 'datos-fiscales')}#campo-taxId`
@@ -266,7 +270,7 @@ function FilaFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'ficha' }>; he
     <Fila ps={f.papeles} fallo={fallo}
       frase={fraseFicha(f.proveedor_nombre, f.falta)}
       apoyo={f.papeles.length ? resumen(f.papeles, false) : undefined}
-      porque={<>{porQueFicha(f.falta)}{nif && !nif.ok ? ` El NIF de su papel no es válido (${nif.motivo}): pídeselo.` : ''}</>}
+      porque={<>{porQueFicha(f.falta)}{nif && !nif.ok ? ` El NIF que pone en sus albaranes y facturas no es válido (${nif.motivo}): pídeselo.` : ''}</>}
       acciones={<>
         {nif?.ok && (
           <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void hacer(async () => {
@@ -275,6 +279,25 @@ function FilaFicha({ f, hecho }: { f: Extract<FilaAMirar, { tipo: 'ficha' }>; he
             await guardarFicha(f.proveedor, { taxId: nif.normalizado, taxIdType: 'nif_es', taxIdVerifiedAt: ahora, taxIdCheckStatus: 'valid', taxIdCheckedAt: ahora })
             return `Guardado: el NIF de ${f.proveedor_nombre} es ${nif.normalizado}.`
           })}>Usar ese NIF</button>
+        )}
+        {sinTipo && (
+          // Julio, 21/10: el tipo de gasto se elige en la misma fila, sin abrir la ficha.
+          <label className="cxc-tipo-gasto">
+            <span className="cx-etiqueta">Tipo de gasto</span>
+            <select className="cx-input" value="" disabled={ocupado || !tipos.lista}
+              aria-label={`Tipo de gasto de ${f.proveedor_nombre}`}
+              onChange={(e) => {
+                const t = tipos.lista?.find((x) => x.id === e.target.value)
+                if (!t) return
+                void hacer(async () => {
+                  await guardarFicha(f.proveedor, { expenseCategoryId: t.id })
+                  return `Guardado en la ficha de ${f.proveedor_nombre}: tipo de gasto «${t.name}» (cuenta ${t.pgcAccountHint}).`
+                })
+              }}>
+              <option value="" disabled>{tipos.lista ? 'Elige uno…' : tipos.fallo ?? 'Cargando…'}</option>
+              {(tipos.lista ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
         )}
         {forma && orden.map((o) => (
           <button key={o.valor} type="button" className={o.valor === f.sugerida && !nif?.ok ? 'cx-boton' : 'cx-boton-sec'} disabled={ocupado}
@@ -299,11 +322,11 @@ function FilaOtra({ f, hecho, subir }: { f: Extract<FilaAMirar, { tipo: 'otra' }
   let porque: string | undefined
   let principal: ReactNode = null
   if (f.pregunta === 'sin_papel') {
-    frase = `${n === 1 ? 'Una entrega' : `${n} entregas`} de ${prov} ${n === 1 ? 'llegó' : 'llegaron'} sin papel leído, y su ficha dice que factura con cada entrega.`
+    frase = `${n === 1 ? 'Una entrega' : `${n} entregas`} de ${prov} ${n === 1 ? 'llegó' : 'llegaron'} sin ningún documento leído, y su ficha dice que factura con cada entrega.`
     porque = 'Sin su factura no hay nada que apuntar: súbela cuando la tengas.'
     principal = <button type="button" className="cx-boton" disabled={ocupado} onClick={subir}>Subir su factura</button>
   } else if (f.pregunta === 'factura_sin_importes') {
-    frase = `${n === 1 ? 'La factura' : `${n} facturas`} de ${prov} no se ${n === 1 ? 'ha' : 'han'} podido apuntar: al papel le faltan importes o el IVA de alguna línea.`
+    frase = `${n === 1 ? 'La factura' : `${n} facturas`} de ${prov} no se ${n === 1 ? 'ha' : 'han'} podido apuntar: ${n === 1 ? 'a la factura le faltan' : 'les faltan'} importes o el IVA de alguna línea.`
     porque = (p0.detalle as { motivo?: string } | null)?.motivo ?? undefined
     principal = <button type="button" className="cx-boton" disabled={ocupado} onClick={subir}>Subir la factura completa</button>
   } else if (f.pregunta === 'factura_repetida') {
@@ -315,7 +338,7 @@ function FilaOtra({ f, hecho, subir }: { f: Extract<FilaAMirar, { tipo: 'otra' }
     principal = <button type="button" className="cx-boton" disabled={ocupado} onClick={() => void hacer(async () => {
       let ok = 0
       for (const p of f.papeles) { await rehacerCamino(p.recepcion); ok++ }
-      return `Vuelto a intentar con ${papeles(ok, 'recepción', 'recepciones')}.`
+      return `Vuelto a intentar con ${recepciones(ok)}.`
     })}>Volver a intentarlo</button>
   }
   return (
@@ -338,15 +361,15 @@ function FilaSinCamino({ rs, hecho }: { rs: readonly SinCamino[]; hecho: Hecho }
   return (
     <div className="cxc-cosa">
       <div className="cxc-cosa-texto">
-        <span className="cxc-cosa-frase">{n === 1 ? 'Una recepción se confirmó' : `${n} recepciones se confirmaron`} antes de que {MARCA.nombre} mirara cada papel: no sé si {n === 1 ? 'espera' : 'esperan'} factura, si ya la {n === 1 ? 'trajo' : 'trajeron'} o si {n === 1 ? 'es' : 'son'} del socio.</span>
+        <span className="cxc-cosa-frase">{n === 1 ? 'Una recepción se confirmó' : `${n} recepciones se confirmaron`} antes de que {MARCA.nombre} mirara su albarán o su factura: no sé si {n === 1 ? 'espera' : 'esperan'} factura, si ya la {n === 1 ? 'trajo' : 'trajeron'} o si {n === 1 ? 'es' : 'son'} del socio.</span>
         <span className="cxc-cosa-apoyo">{[provs.length === 1 ? provs[0] : `${provs.length} proveedores`, rangoFechas(rs.map((r) => r.fecha))].join(' · ')}</span>
-        <span className="cxc-cosa-porque">Leo su papel y su ficha, y cada una va a su sitio; lo que no se pueda decidir solo, vuelve aquí como pregunta.</span>
+        <span className="cxc-cosa-porque">Leo su albarán o su factura y su ficha, y cada una va a su sitio; lo que no se pueda decidir solo, vuelve aquí como pregunta.</span>
         <details className="cxc-papeles">
           <summary>Ver {n === 1 ? 'la recepción' : `las ${n} recepciones`}</summary>
           <ul>{rs.map((r) => (
             <li key={r.recepcion}>
               <span>{[r.proveedor_nombre, diaConNombre(r.fecha), r.local_nombre].filter(Boolean).join(' · ')} <span className="cxc-cosa-codigo">{r.codigo}</span></span>
-              <VerPapel recepcion={r.recepcion} titulo={`${r.proveedor_nombre ?? 'Papel'} · ${diaConNombre(r.fecha)}`} />
+              <VerPapel recepcion={r.recepcion} titulo={titulo(r)} />
             </li>
           ))}</ul>
         </details>
@@ -365,15 +388,33 @@ function FilaSinCamino({ rs, hecho }: { rs: readonly SinCamino[]; hecho: Hecho }
             sin_decidir: ['tiene una pregunta', 'tienen una pregunta'],
           }
           const partes = [...cuenta.entries()].map(([c, k]) => `${k} ${(nombre[c] ?? [c, c])[k === 1 ? 0 : 1]}`)
-          return `Mirados ${papeles(n)}: ${partes.join(', ')}.`
-        })}>Mirar {n === 1 ? 'su papel' : `sus ${n} papeles`} ahora</button>
+          return `Miradas ${recepciones(n)}: ${partes.join(', ')}.`
+        })}>Mirar {n === 1 ? 'su documento' : `sus ${n} documentos`} ahora</button>
       </div>
     </div>
   )
 }
 
+/** Los tipos de gasto que se pueden elegir (los no ocultos en la empresa activa), o por qué no se han podido cargar. */
+type TiposGasto = { lista: TipoGasto[] | null; fallo: string | null }
+
+function useTiposGasto(accountId: string, companyId: string | null, hacenFalta: boolean): TiposGasto {
+  const [t, setT] = useState<TiposGasto>({ lista: null, fallo: null })
+  useEffect(() => {
+    if (!hacenFalta) return
+    let vivo = true
+    listarTiposGasto(accountId, companyId)
+      .then((l) => { if (vivo) setT({ lista: l.filter((x) => !x.oculto), fallo: null }) })
+      .catch((e: unknown) => { if (vivo) setT({ lista: null, fallo: e instanceof Error ? e.message : 'No se pudieron cargar los tipos de gasto.' }) })
+    return () => { vivo = false }
+  }, [accountId, companyId, hacenFalta])
+  return t
+}
+
 export function FilasAMirar({ filas, accountId, hecho, subir }: { filas: FilaAMirar[]; accountId: string; hecho: Hecho; subir: () => void }) {
   const { activa } = useEmpresas()
+  const faltaTipo = filas.some((f) => f.tipo === 'ficha' && f.falta.some((x) => x.falta === 'tipo_gasto'))
+  const tipos = useTiposGasto(accountId, activa?.id ?? null, faltaTipo)
   return (
     <div className="cxc-mirar">
       {filas.map((f) => {
@@ -382,7 +423,7 @@ export function FilasAMirar({ filas, accountId, hecho, subir }: { filas: FilaAMi
           case 'liquida': return <FilaLiquida key={f.clave} f={f} hecho={hecho} />
           case 'sin_iva': return <FilaSinIva key={f.clave} f={f} empresaId={activa?.id ?? null} hecho={hecho} />
           case 'papel_ficha': return <FilaPapelFicha key={f.clave} f={f} hecho={hecho} />
-          case 'ficha': return <FilaFicha key={f.clave} f={f} hecho={hecho} />
+          case 'ficha': return <FilaFicha key={f.clave} f={f} hecho={hecho} tipos={tipos} />
           case 'otra': return <FilaOtra key={f.clave} f={f} hecho={hecho} subir={subir} />
           case 'sin_camino': return <FilaSinCamino key={f.clave} rs={f.recepciones} hecho={hecho} />
         }

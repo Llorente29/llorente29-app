@@ -1,0 +1,195 @@
+/* src/modules/conta/diseno/diseno.css
+ *
+ * S01 · Los componentes del sistema de diseño. Aquí no hay ni un color, ni un
+ * tamaño de letra, ni un radio escritos a mano: todo es var(--s-*) de
+ * tokens.css (lo comprueba diseno-reglas.test.ts). Sin tablas tipo pijama:
+ * separadores finos entre filas y el fondo solo al pasar el ratón.
+ */
+
+/* ── Base: lo que pinta un contenedor del sistema ───────────────────── */
+.s-raiz {
+  font-family: var(--s-letra); font-size: var(--s-t-m); line-height: var(--s-interlinea);
+  color: var(--s-tinta); background: var(--s-fondo);
+  font-variant-numeric: tabular-nums; /* S01e: cifras tabulares en todo lo del sistema */
+}
+.s-cifra { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; white-space: nowrap; }
+.s-cifra-fuerte { font-weight: var(--s-peso-fuerte); }
+.s-cifra-grande { font-size: var(--s-t-cifra); font-weight: var(--s-peso-titulo); line-height: 1.1; }
+.s-icono { flex-shrink: 0; }
+
+/* ── Botón ──────────────────────────────────────────────────────────── */
+.s-boton {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: var(--s-alto-control); padding: 0 var(--s-3);
+  font-family: var(--s-letra); font-size: var(--s-t-m); font-weight: var(--s-peso-medio); line-height: 1;
+  border: var(--s-linea) solid transparent; border-radius: var(--s-radio-boton);
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+}
+.s-boton:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.s-boton:disabled, .s-boton[aria-disabled='true'] { cursor: not-allowed; opacity: 0.55; }
+.s-boton-principal { background: var(--s-accion); color: var(--s-sobre-accion); font-weight: var(--s-peso-fuerte); }
+.s-boton-principal:hover:not(:disabled) { background: var(--s-accion-encima); }
+.s-boton-secundario { background: var(--s-superficie); color: var(--s-tinta); border-color: var(--s-borde-decorativo); }
+.s-boton-secundario:hover:not(:disabled) { border-color: var(--s-accion-borde); background: var(--s-accion-suave); }
+.s-boton-secundario[aria-current='page'], .s-boton-secundario[aria-pressed='true'] {
+  background: var(--s-accion-suave); border-color: var(--s-accion); font-weight: var(--s-peso-fuerte);
+}
+.s-boton-enlace {
+  min-height: 0; padding: 0; background: none; color: var(--s-accion);
+  text-decoration: underline; text-underline-offset: 2px; font-weight: var(--s-peso-normal);
+}
+.s-boton-fantasma { background: none; color: var(--s-apoyo); padding: 0 var(--s-2); font-weight: var(--s-peso-normal); }
+.s-boton-fantasma:hover:not(:disabled) { color: var(--s-tinta); }
+.s-boton-grande { min-height: calc(var(--s-alto-control) + var(--s-2)); padding: 0 var(--s-5); font-size: var(--s-t-l); }
+.s-boton-ancho { display: flex; width: 100%; }
+/* Un botón que es enlace (BotonEnlace) dentro de una pantalla vieja: «.cx a»
+   (componentes.css) pinta todos los enlaces de azul y pesa más que una clase
+   sola. Aquí, con el mismo peso, cada variante con su color. */
+.cx a.s-boton-principal { color: var(--s-sobre-accion); }
+.cx a.s-boton-secundario { color: var(--s-tinta); }
+.cx a.s-boton-fantasma { color: var(--s-apoyo); }
+.cx a.s-boton-enlace { color: var(--s-accion); }
+.s-boton-contador {
+  padding: 0 var(--s-2); border-radius: var(--s-radio-pildora);
+  background: var(--s-duda-fondo); color: var(--s-duda); font-size: var(--s-t-s); line-height: 1.6;
+}
+.s-boton-contador[data-tono='neutro'] { background: var(--s-neutro-fondo); color: var(--s-tinta); }
+.s-boton-aviso::after {
+  content: ''; width: var(--s-2); height: var(--s-2); border-radius: var(--s-radio-pildora); background: var(--s-duda); flex-shrink: 0;
+}
+.s-boton-apagado:not([aria-current='page']) { color: var(--s-apoyo); }
+.cx a.s-boton-apagado:not([aria-current='page']) { color: var(--s-apoyo); }
+.s-tecla {
+  font-family: var(--s-letra-cifras); font-size: var(--s-t-xs); line-height: 1;
+  padding: 2px var(--s-1); border-radius: var(--s-radio-campo);
+  border: var(--s-linea) solid currentColor; border-bottom-width: 2px; opacity: 0.8;
+}
+
+/* ── Chip ───────────────────────────────────────────────────────────── */
+.s-chip {
+  display: inline-flex; align-items: center; gap: var(--s-1); padding: 2px var(--s-3);
+  border-radius: var(--s-radio-pildora); font-size: var(--s-t-s); font-weight: var(--s-peso-fuerte);
+  line-height: 1.5; white-space: nowrap; background: var(--s-neutro-fondo); color: var(--s-tinta);
+}
+.s-chip[data-tono='neutro'] { font-weight: var(--s-peso-medio); }
+.s-chip[data-tono='seguro'] { background: var(--s-ok-fondo); color: var(--s-ok); }
+.s-chip[data-tono='duda'] { background: var(--s-duda-fondo); color: var(--s-duda); }
+.s-chip[data-tono='falta'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.s-chip[data-tono='accion'] { background: var(--s-accion-suave); color: var(--s-accion); }
+.s-chip[data-tono='oscuro'] { background: var(--s-oscuro); color: var(--s-superficie); }
+/* S02 · Propuesto: lo que pone Sumied y espera tu visto bueno. */
+.s-chip[data-tono='propuesto'] { background: var(--s-propuesto); color: var(--s-propuesto-texto); }
+
+/* ── Campo ──────────────────────────────────────────────────────────── */
+.s-campo { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.s-campo-etiqueta { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-campo-nota { font-size: var(--s-t-xs); color: var(--s-apoyo); }
+.s-campo[data-estado='duda'] .s-campo-nota { color: var(--s-duda); }
+.s-campo[data-estado='falta'] .s-campo-nota { color: var(--s-falta); }
+.s-control {
+  width: 100%; min-height: var(--s-alto-control); padding: 0 var(--s-3);
+  font-family: var(--s-letra); font-size: var(--s-t-m); color: var(--s-tinta);
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-campo);
+}
+.s-control:focus-visible { outline: none; border-color: var(--s-accion); box-shadow: var(--s-foco); }
+.s-control[aria-invalid='true'] { border-color: var(--s-falta); }
+.s-control[readonly] { background: var(--s-suave); }
+.s-control-cifra { text-align: right; }
+.s-control-selector { padding-right: var(--s-6); }
+
+/* ── Tarjeta ────────────────────────────────────────────────────────── */
+.s-tarjeta {
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+  padding: var(--s-5) var(--s-6); display: flex; flex-direction: column; gap: var(--s-4); min-width: 0;
+}
+.s-tarjeta[data-compacta='si'] { padding: 0; gap: 0; overflow: hidden; }
+.s-tarjeta[data-compacta='si'] .s-tarjeta-cabeza { padding: var(--s-5) var(--s-6) var(--s-4); }
+.s-tarjeta[data-tono='duda'] { background: var(--s-duda-fondo); border-color: color-mix(in srgb, var(--s-duda) 25%, var(--s-duda-fondo)); }
+.s-tarjeta[data-tono='ok'] { background: var(--s-ok-fondo); border-color: color-mix(in srgb, var(--s-ok) 20%, var(--s-ok-fondo)); }
+.s-tarjeta[data-tono='falta'] { background: var(--s-falta-fondo); border-color: color-mix(in srgb, var(--s-falta) 25%, var(--s-falta-fondo)); }
+.s-tarjeta-cabeza { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; }
+.s-tarjeta-titulos { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; flex: 1 1 240px; }
+.s-tarjeta-titulo { margin: 0; font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-tarjeta-apoyo { margin: 0; color: var(--s-apoyo); }
+.s-tarjeta-accion { display: flex; gap: var(--s-2); flex-shrink: 0; }
+.s-tarjeta-cifra { gap: var(--s-1); padding: var(--s-4) var(--s-5); }
+.s-tarjeta-cifra-etiqueta { margin: 0; font-size: var(--s-t-m); font-weight: var(--s-peso-normal); color: var(--s-apoyo); }
+.s-tarjeta-cifra[data-tono='duda'] { background: var(--s-superficie); border-color: var(--s-duda-fondo); }
+.s-tarjeta-cifra[data-tono='duda'] .s-tarjeta-cifra-etiqueta { color: var(--s-duda); }
+.s-tarjeta-cifra[data-tono='ok'] { background: var(--s-superficie); border-color: var(--s-ok-fondo); }
+.s-tarjeta-cifra[data-tono='ok'] .s-tarjeta-cifra-etiqueta { color: var(--s-ok); }
+.s-tarjeta-cifra-valor { font-size: var(--s-t-cifra); font-weight: var(--s-peso-titulo); color: var(--s-tinta); line-height: 1.2; }
+.s-tarjeta-cifra-texto { font-size: var(--s-t-xl); font-weight: var(--s-peso-fuerte); line-height: var(--s-interlinea); }
+
+/* ── Tabla simple (la densa trae la suya: ui/tabla) ─────────────────── */
+.s-tabla { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
+.s-tabla th {
+  text-align: left; padding: var(--s-3) var(--s-6); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte);
+  color: var(--s-apoyo); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
+  border-bottom: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-tabla td { padding: var(--s-3) var(--s-6); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: middle; }
+.s-tabla tr:last-child td { border-bottom: none; }
+.s-tabla tbody tr:hover { background: var(--s-suave); }
+.s-tabla .s-tabla-cifra { text-align: right; }
+.s-tabla-apoyo { display: block; font-size: var(--s-t-s); color: var(--s-apoyo); }
+
+/* ── Diálogo ────────────────────────────────────────────────────────── */
+/* Por encima del cajón del menú (60): un aviso que sale al pulsar un enlace del cajón («¿Salir sin guardar?») tiene que verse y poder pulsarse. */
+.s-velo {
+  position: fixed; inset: 0; z-index: 70; background: var(--s-velo);
+  display: flex; align-items: center; justify-content: center; padding: var(--s-4);
+}
+.s-dialogo {
+  width: min(520px, 100%); max-height: calc(100vh - var(--s-8)); overflow: auto;
+  background: var(--s-superficie); border-radius: var(--s-radio-bloque); box-shadow: var(--s-sombra);
+  padding: var(--s-5) var(--s-6); display: flex; flex-direction: column; gap: var(--s-4);
+  font-family: var(--s-letra); color: var(--s-tinta);
+}
+.s-dialogo-cabeza { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.s-dialogo-titulo { margin: 0; font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); }
+.s-dialogo-explicacion { margin: 0; color: var(--s-apoyo); }
+.s-dialogo-acciones { display: flex; justify-content: flex-end; gap: var(--s-2); flex-wrap: wrap; }
+
+/* ── La página del sistema (ajustes/sistema-diseno, fuera de producción) ── */
+.s-muestra { min-height: 100%; display: flex; flex-direction: column; }
+.s-muestra-cabeza { padding: var(--s-6) var(--s-6) var(--s-4); background: var(--s-superficie); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-muestra-titulo { margin: 0; font-size: var(--s-t-titulo); font-weight: var(--s-peso-titulo); }
+.s-muestra-apoyo { margin: var(--s-1) 0 0; color: var(--s-apoyo); }
+.s-muestra-cuerpo { display: flex; flex-direction: column; gap: var(--s-6); padding: var(--s-6); }
+.s-muestra-rejilla { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--s-3); }
+.s-muestra-color { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--s-t-s); }
+.s-muestra-color code, .s-muestra-icono code { font-family: var(--s-letra-cifras); font-size: var(--s-t-xs); color: var(--s-apoyo); }
+.s-muestra-muestra { height: var(--s-8); border-radius: var(--s-radio-campo); border: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-muestra-icono { display: flex; align-items: center; gap: var(--s-2); color: var(--s-tinta); }
+.s-muestra-letra { margin: 0; }
+.s-muestra-fila { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.s-muestra-aviso { color: var(--s-ok); font-size: var(--s-t-s); min-height: var(--s-5); }
+.s-muestra-campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.s-muestra-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4); }
+.s-muestra-dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); }
+@media (max-width: 767px) {
+  .s-muestra-cuerpo { padding: var(--s-4); gap: var(--s-4); }
+  .s-muestra-campos, .s-muestra-cifras, .s-muestra-dos { grid-template-columns: minmax(0, 1fr); }
+  .s-tarjeta[data-compacta='si'] { overflow-x: auto; }
+}
+
+/* ── Pantalla (S01): lo mínimo para una pantalla hecha con las piezas ───────── */
+.s-pantalla { display: flex; flex-direction: column; gap: var(--s-4); width: 100%; max-width: var(--s-ancho-pantalla); }
+/* S01g (Julio, 20/10): una pantalla de contenido usa todo el ancho que hay, hasta
+   --s-ancho-pantalla, y reparte en columnas cuando cabe. Un formulario o un texto
+   no se estira: .s-pantalla-estrecha. El Trimestre lleva el suyo (todo el ancho,
+   maqueta v4 de C, impuestos.css). */
+.s-pantalla.s-pantalla-estrecha { max-width: var(--s-ancho-lectura); }
+.s-apoyo { margin: 0; color: var(--s-apoyo); }
+.s-fila-campos { display: flex; flex-wrap: wrap; gap: var(--s-4); }
+.s-fila-campos > .s-campo { flex: 1 1 220px; }
+.s-pie { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-3); }
+/* Lo que ha pasado al pulsar (regla 8): en verde lo hecho, en rojo el fallo. */
+.s-hecho { margin: var(--s-2) 0 0; padding: var(--s-2) var(--s-3); border-radius: var(--s-radio-campo); background: var(--s-ok-fondo); color: var(--s-ok); }
+.s-fallo { margin: var(--s-2) 0 0; padding: var(--s-2) var(--s-3); border-radius: var(--s-radio-campo); background: var(--s-falta-fondo); color: var(--s-falta); }
+
+/* S01 (paso 4) · Un texto por nivel que no mueve nada: los tres en la misma celda, ocupa lo del más largo. */
+.s-por-nivel { display: inline-grid; }
+.s-por-nivel > span { grid-area: 1 / 1; visibility: hidden; }
+.s-por-nivel > span[data-actual] { visibility: visible; }

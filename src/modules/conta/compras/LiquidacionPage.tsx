@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { rutaCompras, rutaLibroDiario, rutaLiquidacion } from '@/config/navegacion'
+import { rutaLibroDiario, rutaLiquidacion, rutaLiquidaciones } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
@@ -93,7 +93,7 @@ function NuevaLiquidacion() {
     <div className="cxc">
       <CabeceraLiquidacion titulo={titulo} sub={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}`} lectura={lectura} />
       <Tarjeta titulo="Sus documentos">
-        <p style={{ marginTop: 0 }}>Suelta los cinco PDF que te manda: tu factura, la suya, la cuenta, las ventas y el inventario. Los leo aquí, en tu navegador.</p>
+        <p style={{ marginTop: 0 }}>Suelta los cinco PDF que te manda: tu factura, la suya, la cuenta, las ventas y el inventario.</p>
         <label className="cx-campo">
           <span className="cx-etiqueta">Los PDF de la liquidación</span>
           <input type="file" accept="application/pdf" multiple className="cx-input" disabled={leyendo}
@@ -150,7 +150,7 @@ function TresCifras({ lectura, saldo }: { lectura: LiquidacionLeida; saldo: numb
 }
 
 /**
- * La cabecera de la liquidación (N19): «‹ Compras», el título y debajo el mes,
+ * La cabecera de la liquidación (N19): «‹ Liquidaciones», el título y debajo el mes,
  * el local y la referencia; a la derecha, los cinco documentos leídos como en
  * la maqueta (una píldora verde por documento y «Los cinco documentos,
  * leídos» debajo). Si falta alguno, su píldora va en ámbar y debajo de la
@@ -163,7 +163,7 @@ function CabeceraLiquidacion({ titulo, sub, lectura }: { titulo: string; sub: st
     <>
       <header className="cx-cabecera cxc-liq-cabecera">
         <div className="cx-cabecera-titulos">
-          <Link className="cx-enlace cxc-volver" to={rutaCompras()}>‹ Compras</Link>
+          <Link className="cx-enlace cxc-volver" to={rutaLiquidaciones()}>‹ Liquidaciones</Link>
           <h1 className="cx-titulo">{titulo}</h1>
           <span className="cx-antetitulo">{sub}</span>
         </div>
@@ -242,7 +242,7 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
     return () => { vivo = false }
   }, [liqId, vuelta])
 
-  if (error) return <div className="cxc"><Link className="cx-enlace cx-mayor-volver" to={rutaCompras()}>‹ Compras</Link><ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
+  if (error) return <div className="cxc"><Link className="cx-enlace cx-mayor-volver" to={rutaLiquidaciones()}>‹ Liquidaciones</Link><ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
   if (!liq || !contraste) return <div className="cxc"><TarjetaCargando /><TarjetaCargando /></div>
 
   const lec = liq.detail
@@ -336,7 +336,7 @@ function Compras({ c, liqId }: { c: Contraste['compras']; liqId: string }) {
           {albaranes.map((a) => (
             <li key={a.recepcion}>
               <span>{diaConNombre(a.fecha)} · {a.base == null ? 'sin importe' : eurosExactos(a.base)} <span className="cxc-cosa-codigo">{a.codigo}</span></span>
-              <VerPapel recepcion={a.recepcion} titulo={`Albarán · ${diaConNombre(a.fecha)}`} />
+              <VerPapel recepcion={a.recepcion} tipo="albaran" titulo={`Albarán · ${diaConNombre(a.fecha)}`} />
             </li>
           ))}
         </ul>

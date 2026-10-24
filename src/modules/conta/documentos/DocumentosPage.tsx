@@ -1,59 +1,94 @@
 // src/modules/conta/documentos/DocumentosPage.tsx
 //
-// D01 · N22 «Documentos › Facturas recibidas» (maqueta N22Documentos). Los tres
-// niveles de Libros: el menú lateral (MarcoConta), las pestañas de área y la
-// barra de acciones agrupadas (Traer · Esperadas · Leídas). Debajo, la banda de
-// la IA con lo que ha pasado en una frase, las cinco cifras y la lista: cada
-// fila con su porqué y un solo botón.
+// S02 · Compras y gastos › Facturas recibidas, con la plantilla LISTA del
+// patrón único (tablero 2; en el móvil, tablero 4). La primera pantalla que se
+// muda al patrón: el ejemplo para las demás.
 //
-// Lo que no funciona no se enseña (R2): solo la pestaña «Facturas recibidas»
-// (emitidas y otros documentos no tienen pantalla aquí), «Por correo» solo con
-// el correo de la empresa encendido, «De Cocina» solo si la empresa recibe la
-// mercancía con Folvy y la cuenta no es solo de contabilidad, y sin «Tuyos»
-// (favoritos y buscar no existen en Documentos). Vendida sola, ni Cocina ni la
-// palabra Folvy (productoDeDocumentos, con useProductoSolo de la C06).
+//   · Encabezado: migas, «Facturas recibidas», su frase; «Exportar» en blanco y
+//     UN principal, «Subir factura» (el único de Compras: regla 1 del patrón);
+//     lo demás en «Más acciones ▾».
+//   · Pestañas de estado con su número, que suman «Todas» (recibidas.ts), y a
+//     la derecha «Revisarlas de una en una →».
+//   · Una fila de filtros: buscar, fecha, proveedor, local y «Más filtros»
+//     (cómo llegó). La fecha es un filtro de la lista: esta pantalla no lee el
+//     periodo contable, así que no pone el botón del periodo en la cabecera
+//     (decisión 3 de Julio, 22/10).
+//   · La tabla, y abajo «9 facturas por revisar · Base … · IVA … · Total …».
+//   · Al volver de una ficha, la lista está igual: los filtros, el orden y la
+//     fila donde ibas (?fila=) en la dirección, y la última lista recordada en
+//     la pestaña del navegador para «Volver», las migas y Esc.
+// En el móvil: la tabla en tarjetas y, abajo, «Revisar de una en una» y
+// «Subir factura».
 //
-// Regla 7: «Todas» trae todas, también las repetidas; un filtro ordena y
-// etiqueta, nunca decide qué existe. En el móvil, las filas son tarjetas y se
-// sube con la cámara.
+// S02 · PR 3: las quincenas de Catcher ya no salen al final: son liquidaciones
+// y viven en Compras y gastos › Liquidaciones (cada cosa en un sitio).
+//
+// Regla 7: «Todas» trae todas, también las repetidas y las descartadas; un
+// filtro ordena y etiqueta, nunca decide qué existe. Regla 8: subir dice qué
+// ha entrado y qué no.
 
-import { useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaCompras, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { rutaCompras, rutaRecibidaAMano, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
-import { Migas } from '@/modules/conta/proveedor/piezas'
-import { ErrorConReintento, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
-import { eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
-import {
-  VERES, banda, barra, boton, comoLlego, diaMes, entendido, filtrar, limites, meses, nombreDelMes, porDonde, productoDeDocumentos, punto, textos, verDe,
-  type DatosDocumentos, type FilaDocumento, type Ver,
-} from '@/modules/conta/documentos/documentos'
+import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { diaMes, entendido, meses, productoDeDocumentos, type FilaDocumento } from '@/modules/conta/documentos/documentos'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { MARCA } from '@/modules/conta/cuenta/marca'
-import { leerDocumentos, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type Subida } from '@/modules/conta/services/documentosService'
+import { leerDocumentos, leerExtrasFacturas, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type ExtraFactura, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
-import { QuincenaCatcher } from '@/modules/conta/documentos/QuincenaCatcher'
+import { leerParaValidar, validarEnBloque, type ResultadoBloque } from '@/modules/conta/documentos/paraValidarService'
+import { BarraMarcadas, ConfirmarBloque, ResultadoDelBloque } from '@/modules/conta/documentos/ValidarEnBloque'
+import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
+import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
+import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
+import { Boton, Chip, Icono } from '@/modules/conta/diseno'
+import {
+  FiltroBuscar, FiltroSelector, FiltrosLista, PestanasEstado, TablaLista, conCambio, escribirOrden, recordarLista, type ColumnaLista,
+} from '@/modules/conta/diseno/plantillas'
+import {
+  LISTA_RECIBIDAS, NOMBRE_CANAL, colaDeFacturas, estadoDeFila, filasDeLaLista, filtrarSinPestana, filtrosDe, fraseDeLaLista, localDeFila, pestanasConNumero, totales,
+  ventanaDe,
+} from '@/modules/conta/documentos/recibidas'
 
 const ACEPTA = 'application/pdf,image/jpeg,image/png,image/webp'
+const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
 
 export default function DocumentosPage() {
-  const { accountId, cargando, userName } = useCuentaConta()
+  const { accountId, cargando, userName, userId } = useCuentaConta()
   const { activa } = useEmpresas()
   const movil = useIsMobile()
-  const producto = productoDeDocumentos(useProductoSolo(), MARCA.nombre)
-  const t = textos(producto.nombre)
+  const solo = useProductoSolo()
+  const producto = productoDeDocumentos(solo, MARCA.nombre)
+  const { local: ejeLocal } = useAnalitica()
   const navegar = useNavigate()
+  const { pathname, search } = useLocation()
   const [query, setQuery] = useSearchParams()
   const hoy = hoyEnMadrid()
-  const listaMeses = useMemo(() => meses(hoy), [hoy])
-  const mes = listaMeses.some((m) => m.valor === query.get('mes')) ? query.get('mes')! : listaMeses[0].valor
-  const ver = verDe(query.get('ver'))
+  const f = filtrosDe(query)
+  const fila = query.get('fila')
+  const { desde, hasta } = ventanaDe(f.mes, hoy)
   const [vuelta, setVuelta] = useState(0)
-  const { desde, hasta } = limites(mes)
-  const datos = useLeer(activa ? () => leerDocumentos(activa.id, desde, hasta) : null, `${activa?.id}:${mes}:${vuelta}`)
+  const datos = useLeer(activa ? () => leerDocumentos(activa.id, desde, hasta) : null, `${activa?.id}:${desde}:${hasta}:${vuelta}`)
+  const ids = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'factura').map((x) => x.id), [datos.datos])
+  const extras = useLeer(accountId && ids.length ? () => leerExtrasFacturas(accountId, ids) : null, `${accountId}:${ids.join(',')}`)
+  const mapa = extras.datos ?? (new Map() as Map<string, ExtraFactura>)
+  // D06 · Validar en bloque (tablero 2b): en «Por revisar», el veredicto de cada fila (el de su ficha), y las que se marcan.
+  const enBloque = f.pestana === 'por-revisar'
+  const listas = useLeer(enBloque && accountId && activa && datos.datos && extras.datos
+    ? () => leerParaValidar(accountId, activa.id, datos.datos!.filas, extras.datos!, desde, hasta) : null,
+  // La clave cambia cuando llegan las filas y sus importes: useLeer solo vuelve a leer si cambia la clave.
+  `${activa?.id}:${desde}:${hasta}:${vuelta}:${ids.join(',')}:${extras.datos ? 'con-importes' : 'sin-importes'}:validar`)
+  const [marcadas, setMarcadas] = useState<Set<string>>(new Set())
+  const [confirmando, setConfirmando] = useState(false)
+  const [validando, setValidando] = useState<{ hechas: number; de: number } | null>(null)
+  const [resultado, setResultado] = useState<ResultadoBloque | null>(null)
+  const envioDiez = useEnvioDiez(accountId, activa?.id)
 
   const ficheros = useRef<HTMLInputElement>(null)
   const camara = useRef<HTMLInputElement>(null)
@@ -61,13 +96,12 @@ export default function DocumentosPage() {
   const [subidas, setSubidas] = useState<Subida[] | null>(null)
   const [pidiendo, setPidiendo] = useState(false)
   const [fallo, setFallo] = useState<string | null>(null)
+  const [masFiltros, setMasFiltros] = useState(!!f.canal)
 
-  const cambiar = (p: { ver?: Ver; mes?: string }) => {
-    const q = new URLSearchParams(query)
-    if (p.ver) q.set('ver', p.ver)
-    if (p.mes) q.set('mes', p.mes)
-    setQuery(q, { replace: true })
-  }
+  // La lista se recuerda tal cual está (filtros, orden y fila), para volver a ella.
+  useEffect(() => { recordarLista(LISTA_RECIBIDAS, `${pathname}${search}`) }, [pathname, search])
+
+  const cambiar = (c: Record<string, string | null>) => setQuery(new URLSearchParams(conCambio(search, { ...c, fila: null })), { replace: true })
 
   async function subir(lista: FileList | null) {
     const fs = lista ? [...lista] : []
@@ -86,258 +120,262 @@ export default function DocumentosPage() {
     }
   }
 
-  async function abrirLlegada(f: FilaDocumento) {
+  async function abrirLlegada(x: FilaDocumento) {
     try {
-      const url = f.tipo === 'recepcion' ? await urlDePapelDeRecepcion(f.papel) : await urlDeLlegada(f.id)
+      const url = x.tipo === 'recepcion' ? await urlDePapelDeRecepcion(x.papel) : await urlDeLlegada(x.id)
       if (!url) { setFallo('Ese documento no tiene fichero que enseñar.'); return }
       window.open(url, '_blank', 'noopener')
     } catch (e) { setFallo(e instanceof Error ? e.message : String(e)) }
   }
 
-  if (!accountId && !cargando) return <Vacio titulo="No hay cuenta activa." explicacion="Elige una cuenta para ver sus documentos." />
-  if (!activa) return <div className="cx-tarjeta"><Vacio titulo="Aún no hay ninguna empresa." explicacion="Da de alta tu empresa y aquí llegan sus facturas." /></div>
+  if (!accountId && !cargando) return <div className="s-pagina"><p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus facturas.</p></div>
+  if (!activa) return <div className="s-pagina"><p className="s-apoyo">Aún no hay ninguna empresa: da de alta tu empresa y aquí llegan sus facturas.</p></div>
 
   const d = datos.datos
-  const irA = (f: FilaDocumento) => (f.tipo === 'factura' ? navegar(`${rutaRevisarFactura(f.id)}?ver=${ver}&mes=${mes}`) : void abrirLlegada(f))
-  const inputs = (
+  const todasLasFilas = d?.filas ?? []
+  const base = filtrarSinPestana(todasLasFilas, mapa, f)
+  const pestanas = pestanasConNumero(base, mapa)
+  const filas = filasDeLaLista(todasLasFilas, mapa, f)
+  const t = totales(filas, mapa)
+  const nombrePestana = pestanas.find((p) => p.id === f.pestana)?.etiqueta ?? 'Todas'
+  const pv = listas.datos
+  const deLaLista = new Set(filas.map((x) => x.id))
+  const marcadasVivas = [...marcadas].filter((id) => deLaLista.has(id))
+  const marcadasListas = marcadasVivas.filter((id) => pv?.get(id)?.lista)
+  const totalMarcadas = marcadasVivas.reduce((t, id) => t + (filas.find((x) => x.id === id)?.total ?? 0), 0)
+  const listasEnLaLista = filas.filter((x) => pv?.get(x.id)?.lista).map((x) => x.id)
+  const marcarListas = () => setMarcadas(new Set(listasEnLaLista))
+  async function validarMarcadas() {
+    if (!accountId) return
+    setConfirmando(false); setResultado(null)
+    const nombres = new Map(filas.map((x) => [x.id, `${nombre(x)}${x.numero ? ` ${x.numero}` : ''}`]))
+    setValidando({ hechas: 0, de: marcadasListas.length })
+    try {
+      const r = await validarEnBloque(accountId, marcadasListas, nombres, userName, userId, (hechas) => setValidando({ hechas, de: marcadasListas.length }))
+      setResultado(r)
+      setMarcadas(new Set(r.mal.map((m) => m.id)))
+    } finally {
+      setValidando(null)
+      refrescarCuentasMenu()
+      setVuelta((v) => v + 1)
+    }
+  }
+
+  /** Abrir una fila: se apunta la fila en la lista (para volver a ella) y se va a su ficha con la lista detrás. */
+  const abrir = (x: FilaDocumento) => {
+    if (x.tipo !== 'factura') { void abrirLlegada(x); return }
+    const conFila = conCambio(search, { fila: x.id })
+    setQuery(new URLSearchParams(conFila), { replace: true })
+    recordarLista(LISTA_RECIBIDAS, `${pathname}${conFila}`)
+    navegar(`${rutaRevisarFactura(x.id)}${conFila}`)
+  }
+  const revisarUnaAUna = () => {
+    const q = conCambio(search, { ver: 'por-revisar', fila: null })
+    const primera = colaDeFacturas(filasDeLaLista(todasLasFilas, mapa, { ...f, pestana: 'por-revisar' }))[0]
+    if (primera) navegar(`${rutaRevisarFactura(primera)}${q}`)
+  }
+  const porRevisar = pestanas.find((p) => p.id === 'por-revisar')?.n ?? 0
+
+  // Los filtros: proveedores y locales de las filas que hay (la lista con la que se elige es la que se lee: regla 30).
+  const proveedores = [...new Map(todasLasFilas.filter((x) => x.proveedor.id).map((x) => [x.proveedor.id!, x.proveedor.nombre ?? '—'])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], 'es'))
+  const locales = [...new Set(todasLasFilas.map((x) => localDeFila(x, mapa.get(x.id))).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, 'es'))
+  const canales = [...new Set(todasLasFilas.map((x) => x.canal))]
+
+  const nombre = (x: FilaDocumento) => x.proveedor.nombre ?? (x.tipo === 'llegada' ? 'Documento sin leer' : 'No reconozco el emisor')
+  const euro = (n: number | null | undefined) => (n === null || n === undefined ? '—' : eurosExactos(n))
+  const propuesto = (x: FilaDocumento) => {
+    if (x.tipo !== 'factura' || !x.entendido) return null
+    const apuntada = x.estado === 'apuntada'
+    return (
+      <span className="s-lista-propuesto" title={entendido(x, producto.solo).porque ?? undefined}>
+        {!apuntada && <Icono nombre="ia" />}{apuntada ? '' : 'Propuesto: '}{x.entendido.nombre}
+      </span>
+    )
+  }
+  const columnas: ColumnaLista<FilaDocumento>[] = [
+    { id: 'fecha', titulo: 'Fecha', ordenable: true, ancho: '80px', celda: (x) => <span className="s-cifra">{diaMes(x.fecha ?? x.llego.slice(0, 10))}</span> },
+    {
+      id: 'proveedor', titulo: 'Proveedor', ordenable: true,
+      celda: (x) => <span className="s-lista-texto-doble"><span className="s-lista-principal">{nombre(x)}</span>{propuesto(x)}</span>,
+    },
+    { id: 'numero', titulo: 'Nº de factura', ordenable: true, celda: (x) => <span className="s-cifra">{x.numero ?? '—'}</span> },
+    ...(ejeLocal ? [{ id: 'local', titulo: ejeLocal.nombre, celda: (x: FilaDocumento) => localDeFila(x, mapa.get(x.id)) ?? 'Común' }] : []),
+    { id: 'base', titulo: 'Base', cifra: true, celda: (x) => euro(mapa.get(x.id)?.base) },
+    { id: 'iva', titulo: 'IVA', cifra: true, celda: (x) => euro(mapa.get(x.id)?.iva) },
+    { id: 'total', titulo: 'Total', cifra: true, ordenable: true, celda: (x) => <strong>{euro(x.total)}</strong> },
+    enBloque
+      ? { id: 'lista', titulo: '¿Lista para validar?', celda: (x) => <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> }
+      : { id: 'estado', titulo: 'Estado', celda: (x) => { const e = estadoDeFila(x, mapa.get(x.id)); return <Chip tono={e.tono}>{e.texto}</Chip> } },
+  ]
+  const tarjeta = (x: FilaDocumento) => {
+    const e = estadoDeFila(x, mapa.get(x.id))
+    const l = ejeLocal ? localDeFila(x, mapa.get(x.id)) ?? 'Común' : null
+    return (
+      <>
+        <span className="s-tarjeta-cabeza"><span className="s-lista-principal">{nombre(x)}</span><strong className="s-cifra">{euro(x.total)}</strong></span>
+        <span className="s-tarjeta-apoyo">{[x.numero ?? 'sin número', diaMes(x.fecha ?? x.llego.slice(0, 10)), l].filter(Boolean).join(' · ')}</span>
+        <span className="s-tarjeta-pie">{enBloque ? <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> : <Chip tono={e.tono}>{e.texto}</Chip>}{propuesto(x)}</span>
+      </>
+    )
+  }
+  const pie = (
     <>
-      <input ref={ficheros} type="file" multiple accept={ACEPTA} className="cx-oculto" aria-label="Elegir facturas para subir"
-        onChange={(e) => void subir(e.target.files)} data-prueba="subir-ficheros" />
-      <input ref={camara} type="file" accept="image/*" capture="environment" className="cx-oculto" aria-label="Hacer una foto a una factura"
-        onChange={(e) => void subir(e.target.files)} />
+      <span>{plural(t.n, nombrePestana === 'Todas' ? 'factura' : 'factura', 'facturas')}{f.pestana !== 'todas' ? ` ${nombrePestana.toLowerCase()}` : ''}{t.sinImporte ? ` (${plural(t.sinImporte, 'sin importe todavía', 'sin importe todavía')})` : ''}</span>
+      <span className="s-lista-pie-totales">
+        <span>Base <strong className="s-cifra">{eurosExactos(t.base)}</strong></span>
+        <span>IVA <strong className="s-cifra">{eurosExactos(t.iva)}</strong></span>
+        <span>Total <strong className="s-cifra">{eurosExactos(t.total)}</strong></span>
+      </span>
     </>
   )
+  const filaNoEsta = fila && d && !filas.some((x) => x.id === fila)
+  const faltan = (d?.esperadas ?? []).filter((e) => !e.pedida)
 
+  const mas: GrupoDeAcciones[] = [{
+    titulo: 'Otras formas de traerlas',
+    acciones: [
+      { id: 'a-mano', etiqueta: 'Escribir una a mano', dato: 'Sin fichero: proveedor, número, fecha, base e IVA', a: rutaRecibidaAMano(), grupo: '' },
+      ...(faltan.length > 0 ? [{ id: 'pedir', etiqueta: `Pedir las que faltan (${faltan.length})`, dato: 'Las que el mes pasado ya habían llegado', alPulsar: () => setPidiendo(true), aviso: true, grupo: '' }] : []),
+      ...(d?.recibe_mercancia && !producto.solo ? [{ id: 'recepciones', etiqueta: 'Recepciones del local que esperan factura', a: rutaCompras(), grupo: '' }] : []),
+    ],
+  }]
+  const exportar = () => {
+    const filasCsv = [['Fecha', 'Proveedor', 'Nº de factura', 'Local', 'Base', 'IVA', 'Total', 'Estado'],
+      ...filas.map((x) => {
+        const e = mapa.get(x.id)
+        return [x.fecha ?? '', nombre(x), x.numero ?? '', localDeFila(x, e) ?? '', e?.base ?? '', e?.iva ?? '', x.total ?? '', estadoDeFila(x, e).texto].map(String)
+      })]
+    const csv = filasCsv.map((r) => r.map((c) => (/[;"\n]/.test(c) ? `"${c.replace(/"/g, '""')}"` : c)).join(';')).join('\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }))
+    a.download = `facturas-recibidas-${f.mes || 'ultimos-12-meses'}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  const botonSubir = (
+    <Boton variante="principal" icono="nuevo" onClick={() => ficheros.current?.click()} disabled={!!subiendo}>Subir factura</Boton>
+  )
   return (
-    <div className="cxl-pagina">
-      <header className="cxl-cabeza">
-        <div>
-          <span className="cxl-ante">Contabilidad</span>
-          <h1 className="cxl-titulo">Documentos</h1>
+    <div className="s-pagina">
+      <EncabezadoPagina
+        titulo="Facturas recibidas"
+        frase={fraseDeLaLista({ correo: !!d?.correo.activo, recibeMercancia: !!d?.recibe_mercancia, solo: producto.solo })}
+        secundarios={!movil && <Boton icono="descargar" onClick={exportar} disabled={filas.length === 0}>Exportar</Boton>}
+        masAcciones={mas}
+        principal={botonSubir}
+      />
+      <input ref={ficheros} type="file" multiple accept={ACEPTA} className="s-oculto" aria-label="Elegir facturas para subir"
+        onChange={(e) => void subir(e.target.files)} data-prueba="subir-ficheros" />
+      <input ref={camara} type="file" accept="image/*" capture="environment" className="s-oculto" aria-label="Hacer una foto a una factura"
+        onChange={(e) => void subir(e.target.files)} />
+
+      <div role="status" aria-live="polite">
+        {subiendo && <p className="s-aviso-lista">Subiendo y leyendo {subiendo.de === 1 ? 'la factura' : `${subiendo.i + 1} de ${subiendo.de}`}…</p>}
+        {subidas && <ResultadoSubida subidas={subidas} />}
+        {query.get('subir') !== null && !subidas && !subiendo && (
+          <p className="s-aviso-lista">Elige el PDF o la foto de la factura con «Subir factura»{movil ? ', o hazle una foto' : ''}: la leo y la pongo aquí, en «Por revisar».</p>
+        )}
+      </div>
+      {fallo && <p className="s-aviso-lista" data-tono="falta" role="alert">{fallo}</p>}
+      {datos.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>}
+      {extras.error && <p className="s-aviso-lista" data-tono="falta" role="alert">{extras.error}. La base, el IVA y si están pagadas salen con «—». <button type="button" className="s-boton s-boton-enlace" onClick={extras.recargar}>Reintentar</button></p>}
+
+      <PestanasEstado etiqueta="Estado de las facturas" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id })}
+        derecha={!movil && porRevisar > 0 && <button type="button" className="s-boton s-boton-enlace" onClick={revisarUnaAUna}>Revisarlas de una en una <Icono nombre="siguiente" /></button>} />
+
+      <FiltrosLista etiqueta="Filtros de las facturas">
+        <FiltroBuscar valor={f.q} alCambiar={(q) => cambiar({ q })} placeholder="Proveedor, número o importe" etiqueta="Buscar factura" />
+        <FiltroSelector etiqueta="Fecha" valor={f.mes} alCambiar={(mes) => cambiar({ mes })}
+          opciones={[{ valor: '', texto: 'Últimos 12 meses' }, ...meses(hoy).map((m) => ({ valor: m.valor, texto: m.nombre }))]} />
+        <FiltroSelector etiqueta="Proveedor" valor={f.prov} alCambiar={(prov) => cambiar({ prov })}
+          opciones={[{ valor: '', texto: 'Todos' }, ...proveedores.map(([id, n]) => ({ valor: id, texto: n }))]} />
+        {ejeLocal && (
+          <FiltroSelector etiqueta={ejeLocal.nombre} valor={f.local} alCambiar={(local) => cambiar({ local })}
+            opciones={[{ valor: '', texto: 'Todos' }, { valor: 'comun', texto: 'Común' }, ...locales.map((l) => ({ valor: l, texto: l }))]} />
+        )}
+        {masFiltros
+          ? <FiltroSelector etiqueta="Cómo llegó" valor={f.canal} alCambiar={(canal) => cambiar({ canal })}
+              opciones={[{ valor: '', texto: 'De cualquier forma' }, ...canales.map((c) => ({ valor: c, texto: NOMBRE_CANAL[c] ?? c }))]} />
+          : <button type="button" className="s-boton s-boton-enlace" onClick={() => setMasFiltros(true)}>Más filtros</button>}
+      </FiltrosLista>
+
+      {faltan.length > 0 && f.pestana !== 'pagadas' && (
+        <p className="s-aviso-lista" data-tono="duda">
+          {faltan.length === 1 ? 'Falta la factura de' : 'Faltan las facturas de'} {faltan.slice(0, 3).map((e) => (e.label ?? e.supplier_name).toLowerCase()).join(', ')}{faltan.length > 3 ? ` y ${faltan.length - 3} más` : ''}: el mes pasado ya {faltan.length === 1 ? 'había' : 'habían'} llegado.
+          {' '}<button type="button" className="s-boton s-boton-enlace" onClick={() => setPidiendo(true)}>Pedírselas</button>
+        </p>
+      )}
+      {filaNoEsta && (
+        <p className="s-aviso-lista" role="status">La factura que mirabas ya no sale en «{nombrePestana}» con estos filtros{f.pestana === 'por-revisar' ? ': la validaste o cambió de estado' : ''}. La tienes en «Todas».</p>
+      )}
+
+      {enBloque && d && filas.length > 0 && (
+        <div className="s-bloque-acciones">
+          {listas.error && <span className="s-aviso-lista" data-tono="falta" role="alert">No he podido comprobar cuáles están listas: {listas.error} <button type="button" className="s-boton s-boton-enlace" onClick={listas.recargar}>Reintentar</button></span>}
+          {pv && <Boton icono="ok" onClick={marcarListas} disabled={listasEnLaLista.length === 0 || !!validando}>Marcar las que están listas ({listasEnLaLista.length})</Boton>}
         </div>
-        <label>
-          <span className="cx-oculto">Mes</span>
-          <select className="cx-input" value={mes} onChange={(e) => cambiar({ mes: e.target.value })}>
-            {listaMeses.map((m) => <option key={m.valor} value={m.valor}>{m.nombre}</option>)}
-          </select>
-        </label>
-      </header>
-
-      {!movil && (
-        <nav className="cxl-areas" aria-label="Áreas de Documentos">
-          <Link to={rutaDocumentos()} className="cxl-area" aria-current="page">Facturas recibidas</Link>
-        </nav>
       )}
-
-      {inputs}
-      {datos.error && <ErrorConReintento mensaje={datos.error} reintentar={datos.recargar} />}
-      {!d && !datos.error && <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando los documentos">{[0, 1, 2].map((i) => <Hueso key={i} alto={40} />)}</div>}
-
+      {resultado && <ResultadoDelBloque r={resultado} />}
+      {enBloque && marcadasVivas.length > 0 && (
+        <BarraMarcadas marcadas={marcadasVivas.length} total={totalMarcadas} listas={marcadasListas.length} validando={validando}
+          alQuitar={() => setMarcadas(new Set())} alValidar={() => setConfirmando(true)} />
+      )}
+      {confirmando && (
+        <ConfirmarBloque enviaADiez={envioDiez.envio?.encendido === true} noListas={marcadasVivas.length - marcadasListas.length}
+          facturas={marcadasListas.map((id) => { const x = filas.find((y) => y.id === id)!; return { cuenta: pv?.get(id)?.cuenta ?? null, base: mapa.get(id)?.base ?? null, total: x.total, local: localDeFila(x, mapa.get(id)) } })}
+          alCancelar={() => setConfirmando(false)} alValidar={() => void validarMarcadas()} />
+      )}
+      {!d && !datos.error && <div className="s-lista" aria-busy="true" aria-label="Cargando las facturas"><div className="s-lista-cargando" /></div>}
       {d && (
-        <>
-          {!movil && <Barra d={d} solo={producto.solo} producto={producto.nombre}
-            alSubir={() => ficheros.current?.click()} alPedir={() => setPidiendo(true)} alVerApuntadas={() => cambiar({ ver: 'apuntadas' })} />}
-
-          <div className="cxr-seccion">
-            <div>
-              <Migas migas={[{ etiqueta: 'Documentos' }, { etiqueta: 'Facturas recibidas' }]} />
-              <h2>{VERES.find((v) => v.id === ver)!.nombre}</h2>
-            </div>
-            <div className="cxr-herramientas">
-              <div className="cxl-segmento" role="group" aria-label="Qué facturas ver">
-                {VERES.map((v) => <button key={v.id} type="button" aria-pressed={v.id === ver} onClick={() => cambiar({ ver: v.id })}>{v.nombre}</button>)}
-              </div>
-              {!movil && <button type="button" className="cx-boton" onClick={() => ficheros.current?.click()} disabled={!!subiendo}>Subir facturas</button>}
-            </div>
-          </div>
-
-          {movil && (
-            <div className="cxr-subir-movil">
-              <button type="button" className="cx-boton" onClick={() => camara.current?.click()} disabled={!!subiendo}>Hacer foto</button>
-              <button type="button" className="cx-boton-sec" onClick={() => ficheros.current?.click()} disabled={!!subiendo}>Subir PDF</button>
-            </div>
-          )}
-
-          <div role="status" aria-live="polite">
-            {subiendo && <div className="cx-tarjeta">Subiendo y leyendo {subiendo.de === 1 ? 'la factura' : `${subiendo.i + 1} de ${subiendo.de}`}…</div>}
-            {subidas && <ResultadoSubida subidas={subidas} />}
-          </div>
-          {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-
-          <Banda d={d} alPedir={() => setPidiendo(true)} />
-          <Cifras d={d} ver={ver} solo={producto.solo} alVer={(v) => cambiar({ ver: v })} alPedir={() => setPidiendo(true)} />
-          {accountId && <QuincenaCatcher accountId={accountId} companyId={activa.id} quien={userName} />}
-          <Lista d={d} ver={ver} movil={movil} solo={producto.solo} entendidoTitulo={t.entendido} pie={t.repetida} alIr={irA} alVerTodas={() => cambiar({ ver: 'todas' })} />
-        </>
+        <TablaLista<FilaDocumento>
+          etiqueta={`Facturas recibidas · ${nombrePestana}`}
+          columnas={columnas} filas={filas} clave={(x) => x.id} nombre={(x) => `${nombre(x)}${x.numero ? ` ${x.numero}` : ''}`}
+          alAbrir={abrir} filaActual={fila} movil={movil} tarjeta={tarjeta}
+          seleccion={enBloque ? {
+            marcadas: new Set(marcadasVivas),
+            alMarcar: (id, si) => setMarcadas((m) => { const n = new Set(m); if (si) n.add(id); else n.delete(id); return n }),
+            alMarcarTodas: (si) => setMarcadas(si ? new Set(filas.map((x) => x.id)) : new Set()),
+          } : undefined}
+          orden={f.orden} alOrdenar={(c) => cambiar({ orden: escribirOrden({ columna: c, sentido: f.orden.columna === c && f.orden.sentido === 'desc' ? 'asc' : 'desc' }) })}
+          vacio={f.pestana === 'por-revisar' && !f.q && !f.prov && !f.local && !f.canal
+            ? <><strong>Todo al día.</strong> No queda ninguna factura por revisar{f.mes ? ' este mes' : ''}. <button type="button" className="s-boton s-boton-enlace" onClick={() => ficheros.current?.click()}>Subir factura</button></>
+            : <>Ninguna factura con estos filtros. <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ q: null, prov: null, local: null, canal: null })}>Quitar los filtros</button></>}
+          pie={pie}
+        />
       )}
 
-      {pidiendo && d && activa && (
-        <Pedirselas companyId={activa.id} esperadas={d.esperadas.filter((e) => !e.pedida)} quien={userName}
+      <BotonPulgar>
+        {porRevisar > 0 && <Boton onClick={revisarUnaAUna}>Revisar de una en una</Boton>}
+        <Boton variante="principal" icono="subir" onClick={() => camara.current?.click()} disabled={!!subiendo}>Subir factura</Boton>
+      </BotonPulgar>
+
+      {pidiendo && d && (
+        <Pedirselas companyId={activa.id} esperadas={faltan} quien={userName}
           alCerrar={() => setPidiendo(false)} alPedir={() => setVuelta((v) => v + 1)} />
       )}
     </div>
   )
 }
 
-/** Nivel 3: Traer · Esperadas · Leídas. */
-function Barra({ d, solo, producto, alSubir, alPedir, alVerApuntadas }: {
-  d: DatosDocumentos; solo: boolean; producto: string | null; alSubir: () => void; alPedir: () => void; alVerApuntadas: () => void
-}) {
-  const accion: Record<string, (() => void) | undefined> = { subir: alSubir, fijas: alPedir, hecho: alVerApuntadas }
-  return (
-    <nav className="cxl-barra cxr-barra" aria-label="Acciones de Facturas recibidas">
-      <div className="cxl-barra-grupos">
-        {barra(d, { solo, producto }).map((g) => (
-          <div key={g.etiqueta} className="cxl-grupo" role="group" aria-label={g.etiqueta}>
-            <div className="cxl-grupo-acciones">
-              {g.entradas.map((e) => {
-                const dentro = (
-                  <>
-                    <span className="cxl-accion-nombre">{e.nombre} <span className={`cxl-punto cxl-punto-${e.tono}`} aria-hidden="true" /></span>
-                    <span className="cxl-accion-dato">{e.dato}</span>
-                  </>
-                )
-                // «De Cocina» lleva a sus recepciones; «Por correo» enseña su dirección (no hace nada más).
-                if (e.id === 'cocina') return <Link key={e.id} to={rutaCompras()} className="cxl-accion">{dentro}</Link>
-                const hacer = accion[e.id]
-                return hacer
-                  ? <button key={e.id} type="button" className="cxl-accion" onClick={hacer}>{dentro}</button>
-                  : <span key={e.id} className="cxl-accion" title={e.id === 'correo' ? d.correo.direccion ?? undefined : undefined}>{dentro}</span>
-              })}
-            </div>
-            <span className="cxl-grupo-etiqueta">{g.etiqueta}</span>
-          </div>
-        ))}
-      </div>
-    </nav>
-  )
-}
-
-function Banda({ d, alPedir }: { d: DatosDocumentos; alPedir: () => void }) {
-  const b = banda(d)
-  return (
-    <section className={`cx-ia-bloque${b.tono === 'ambar' ? ' cxr-ia-ambar' : ''}`} aria-label="Lo que ha pasado con tus facturas">
-      <span className="cx-ia-punto" aria-hidden="true" />
-      <div className="cx-ia-texto">
-        <span className="cx-ia-titulo">{b.titulo}</span>
-        {b.porque && <span className="cx-ia-porque">{b.porque}</span>}
-      </div>
-      {b.pedir && <div className="cx-ia-acciones"><button type="button" className="cx-boton-sec" onClick={alPedir}>Pedírselas</button></div>}
-    </section>
-  )
-}
-
-function Cifras({ d, ver, solo, alVer, alPedir }: { d: DatosDocumentos; ver: Ver; solo: boolean; alVer: (v: Ver) => void; alPedir: () => void }) {
-  const c = d.cifras
-  const faltan = d.esperadas.filter((e) => !e.pedida)
-  const cifra = (etiqueta: string, valor: number, apoyo: string, alPulsar: () => void, actual = false, ia = false) => (
-    <button type="button" className={`cxr-cifra${ia ? ' cxr-cifra-ia' : ''}`} onClick={alPulsar} aria-pressed={actual}>
-      <span className="cxr-cifra-etiqueta">{etiqueta}</span>
-      <span className="cxr-cifra-valor">{valor.toLocaleString('es-ES')}</span>
-      <span className="cxr-cifra-apoyo">{apoyo}</span>
-    </button>
-  )
-  return (
-    <div className="cxr-cifras">
-      {cifra(`Llegadas en ${nombreDelMes(d.desde)}`, c.llegadas, porDonde(c.llegadas_por_canal, solo), () => alVer('todas'), ver === 'todas')}
-      {cifra('Apuntadas solas', c.apuntadas_solas, c.apuntadas_solas ? 'las ves en Apuntadas' : 'ninguna esta vez', () => alVer('apuntadas'), ver === 'apuntadas', true)}
-      {cifra('Para mirar', c.para_mirar, 'una pantalla cada una', () => alVer('para-mirar'), ver === 'para-mirar')}
-      {cifra('Por aclarar', c.por_aclarar, 'falta algo: te digo qué', () => alVer('por-aclarar'), ver === 'por-aclarar')}
-      {cifra('Esperadas y no llegadas', c.esperadas_no_llegadas,
-        d.esperadas.length ? d.esperadas.slice(0, 3).map((e) => (e.label ?? e.supplier_name).toLowerCase()).join(' · ') : 'ninguna',
-        () => { if (faltan.length) alPedir() })}
-    </div>
-  )
-}
-
-function Lista({ d, ver, movil, solo, entendidoTitulo, pie, alIr, alVerTodas }: {
-  d: DatosDocumentos; ver: Ver; movil: boolean; solo: boolean; entendidoTitulo: string; pie: string; alIr: (f: FilaDocumento) => void; alVerTodas: () => void
-}) {
-  const filas = filtrar(d.filas, ver)
-  const repetidas = d.filas.filter((f) => f.estado === 'repetida').length
-  const nombre = (f: FilaDocumento) => f.proveedor.nombre ?? (f.tipo === 'llegada' ? 'Documento sin leer' : 'No reconozco el emisor')
-  const ini = (f: FilaDocumento) => (f.proveedor.nombre ? iniciales(f.proveedor.nombre) : '??')
-  // R5 · 7 y 9: cómo llegó, en minúscula y lo que pasó de verdad; en el móvil, la fecha junto al número.
-  const apoyo = (f: FilaDocumento) => [f.numero ?? 'sin número', movil ? diaMes(f.fecha) : null, comoLlego(f.canal, f.llegada_tipo, solo)].filter(Boolean).join(' · ')
-  const vacio = ver === 'todas' ? 'Este mes no ha llegado ninguna factura.' : `No hay ninguna ${VERES.find((v) => v.id === ver)!.nombre.toLowerCase()}.`
-  const piePagina = (
-    <div className="cxr-pie">
-      <span>{pie}</span>
-      {repetidas > 0 && ver !== 'todas' && <button type="button" className="cx-enlace" onClick={alVerTodas}>Ver {repetidas === 1 ? 'la repetida' : `las ${repetidas} repetidas`}</button>}
-    </div>
-  )
-  const botonDe = (f: FilaDocumento) => {
-    const b = boton(f)
-    return <button type="button" className={b.principal ? 'cx-boton' : 'cx-boton-sec'} onClick={() => alIr(f)} aria-label={`${b.texto}: ${nombre(f)}${f.numero ? ` ${f.numero}` : ''}`}>{b.texto}</button>
-  }
-
-  if (movil) {
-    return (
-      <section aria-label="Facturas">
-        {filas.length === 0 && <div className="cx-tarjeta cxr-vacio">{vacio}</div>}
-        <div className="cxr-tarjetas">
-          {filas.map((f) => {
-            const e = entendido(f, solo)
-            return (
-              <article key={f.id} className={`cxr-tarjeta${f.estado === 'para_mirar' ? ' cxr-fila-mirar' : ''}`}>
-                <div className="cxr-tarjeta-cabeza">
-                  <div className="cxr-quien">
-                    <Inicial texto={ini(f)} redonda={false} tono={f.proveedor.nombre ? undefined : 6} />
-                    <div className="cxr-quien-texto"><span className="cxr-nombre">{nombre(f)}</span><span className="cxr-apoyo">{apoyo(f)}</span></div>
-                  </div>
-                  <span className="cx-cifra">{f.total !== null ? eurosExactos(f.total) : '—'}</span>
-                </div>
-                <div className="cxr-entendido">
-                  <span className="cxr-entendido-titulo"><span className={`cxl-punto cxl-punto-${punto(f)}`} aria-hidden="true" /> {e.titulo}</span>
-                  {e.porque && <span className="cxr-apoyo">{e.porque}</span>}
-                </div>
-                {botonDe(f)}
-              </article>
-            )
-          })}
-        </div>
-        {piePagina}
-      </section>
-    )
-  }
-
-  return (
-    <section className="cx-tarjeta" aria-label="Facturas">
-      <table className="cxr-tabla">
-        <thead>
-          <tr><th colSpan={2}>Proveedor · factura</th><th>Fecha</th><th className="cxr-der">Total</th><th aria-label="Seguridad" /><th>{entendidoTitulo}</th><th aria-label="Qué hacer" /></tr>
-        </thead>
-        <tbody>
-          {filas.length === 0 && <tr><td colSpan={7} className="cxr-vacio">{vacio}</td></tr>}
-          {filas.map((f) => {
-            const e = entendido(f, solo)
-            return (
-              <tr key={f.id} className={f.estado === 'para_mirar' ? 'cxr-fila-mirar' : undefined}>
-                <td style={{ width: 48 }}><Inicial texto={ini(f)} tono={f.proveedor.nombre ? undefined : 6} /></td>
-                <td><div className="cxr-quien-texto"><span className="cxr-nombre">{nombre(f)}</span><span className="cxr-apoyo">{apoyo(f)}</span></div></td>
-                <td className="cxr-mono">{diaMes(f.fecha)}</td>
-                <td className="cxr-der">{f.total !== null ? eurosExactos(f.total) : '—'}</td>
-                <td><span className={`cxl-punto cxl-punto-${punto(f)}`} aria-hidden="true" /></td>
-                <td><div className="cxr-entendido"><span className="cxr-entendido-titulo">{e.titulo}</span>{e.porque && <span className="cxr-apoyo">{e.porque}</span>}</div></td>
-                <td style={{ textAlign: 'right' }}>{botonDe(f)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-      {piePagina}
-    </section>
-  )
-}
-
 function ResultadoSubida({ subidas }: { subidas: Subida[] }) {
   const bien = subidas.filter((s) => s.bien).length
   return (
-    <div className="cx-tarjeta cxr-hecho">
+    <div className="s-aviso-lista" data-tono={bien === subidas.length ? 'ok' : 'duda'}>
       <strong>{bien === subidas.length
-        ? `${subidas.length === 1 ? 'Subida y leída' : `Subidas y leídas las ${subidas.length}`}.`
+        ? `${subidas.length === 1 ? 'Subida y leída' : `Subidas y leídas las ${subidas.length}`}: las tienes en «Por revisar».`
         : `${bien} de ${subidas.length} han entrado.`}</strong>
-      <ul>{subidas.map((s, i) => <li key={i} className={s.bien ? undefined : 'cxr-mal'}>{s.texto}</li>)}</ul>
+      <ul>{subidas.map((s, i) => <li key={i}>{s.texto}</li>)}</ul>
     </div>
   )
+}
+
+/** D06 · «¿Lista para validar?» de una fila: «Lista», o «No está lista.» con su motivo (el de su ficha). */
+function ListaParaValidar({ p, cargando }: { p: { lista: boolean; motivo: string; comprobando?: boolean } | undefined; cargando: boolean }) {
+  // En un chip, como el estado de las demás pestañas: cada fila dice qué le pasa.
+  // D07b · Mientras se prepara su asiento, «Comprobando…» en gris: aún no se sabe si está lista.
+  if (!p || p.comprobando) return <span className="s-apoyo"><Chip>{cargando || p?.comprobando ? 'Comprobando…' : 'Sin comprobar'}</Chip></span>
+  if (p.lista) return <span className="s-lista-para-validar" data-lista=""><Chip tono="seguro">✓ Lista</Chip></span>
+  return <span className="s-lista-para-validar" data-tono="duda"><Chip tono="duda">No está lista.</Chip> {p.motivo}</span>
 }

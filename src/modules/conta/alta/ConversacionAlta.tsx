@@ -29,7 +29,9 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
-import { rutaTuEmpresa } from '@/config/navegacion'
+import { rutaImpuestos, rutaTuEmpresa } from '@/config/navegacion'
+import { leerSoyAsesoria, marcarAsesoria } from '@/modules/conta/services/despachoService'
+import { refrescarContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
 import { useCuentaConta, leerDatosDeLaCuenta, type DatosDeLaCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDatosEmpresa } from '@/modules/conta/empresa/useDatosEmpresa'
@@ -37,26 +39,25 @@ import { TarjetaCargando, ErrorConReintento, MarcaIA } from '@/modules/conta/ui/
 import { Flecha, Microfono } from '@/modules/conta/ui/Icono'
 import { TEXTO_MUY_PRONTO } from '@/modules/conta/marco/muyPronto'
 import {
-  PASOS, modelosDeRespuestas, pasoSiguiente, preguntaActual, territorioPorCp, textoDuda, todasLasPreguntas,
+  PASOS, pasoSiguiente, preguntaActual, territorioPorCp, textoDuda, todasLasPreguntas,
   type ClavePregunta, type ContextoAlta, type PasoAlta, type Pregunta,
 } from '@/modules/conta/alta/guion'
-import { gruposDe, proponer, type PropuestaActividad } from '@/modules/conta/alta/actividades'
+import { esHosteleriaPorCodigos, esHosteleriaPorGrupos, gruposDe, proponer, type PropuestaActividad } from '@/modules/conta/alta/actividades'
 import {
   TOTAL_PUNTOS, cuantosHechos, loQueLlevamos, puntoQuePide, respuestasParaVolver, sePuedeVolver,
   type ClavePunto, type Punto,
 } from '@/modules/conta/alta/llevamos'
 import { entender } from '@/modules/conta/alta/entender'
 import {
-  fraseActividadAMano, fraseActividades, fraseAlquiler, fraseCuentas, fraseDireccion, fraseDuda, fraseModelos, fraseNif,
-  fraseNombre, frasePeriodo, fraseRetenido70, fraseRetiene, fraseSinNif, type Frase,
+  fraseActividadAMano, fraseActividades, fraseAlquiler, fraseHosteleria, fraseCuentas, fraseDireccion, fraseDuda, fraseModelos, fraseNif,
+  fraseAsesoria, fraseNombre, frasePeriodo, fraseRetenido70, fraseRetiene, fraseSinNif, type Frase,
 } from '@/modules/conta/alta/frases'
 import {
   anadirBanco, apuntarDuda, buscarParaGrupos, crearEmpresa, ponerDireccion, ponerEnPerfil, ponerNombre, ponerPaso,
-  quitarActividadesDelAlta, terminarAlta, type DireccionAlta,
+  ponerHosteleriaDelAlta, quitarActividadesDelAlta, terminarAlta, type DireccionAlta,
 } from '@/modules/conta/services/altaService'
 import { anadirActividadConIa, ponerConIa } from '@/modules/conta/services/iaService'
-import { leerReglasModelos } from '@/modules/conta/services/modelosService'
-import type { ReglaModelo } from '@/modules/conta/lib/modelos'
+import { calcularObligaciones, guardarRespuestasDelAlta } from '@/modules/conta/services/impuestosService'
 import { abrirEjercicio, anadirActividad, buscarCnae, buscarIae, type OpcionCodigo } from '@/modules/conta/services/empresaDatosService'
 import { validarNifEs } from '@/modules/conta/lib/nif'
 import { validarIban } from '@/modules/conta/lib/iban'
@@ -113,18 +114,6 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
     return () => { vivo = false }
   }, [accountId])
 
-  // La regla de los anuales y del 347 vive en la tabla de modelos.
-  const [reglas, setReglas] = useState<ReglaModelo[] | null>(null)
-  const [falloReglas, setFalloReglas] = useState<string | null>(null)
-  const [vueltaReglas, setVueltaReglas] = useState(0)
-  useEffect(() => {
-    let vivo = true
-    leerReglasModelos()
-      .then((r) => { if (vivo) { setReglas(r); setFalloReglas(null) } })
-      .catch((e: unknown) => { if (vivo) setFalloReglas(e instanceof Error ? e.message : String(e)) })
-    return () => { vivo = false }
-  }, [vueltaReglas])
-
   const [respuestas, setRespuestas] = useState<Partial<Record<ClavePregunta, string>>>({})
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
   const [ocupado, setOcupado] = useState(false)
@@ -157,6 +146,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const ctx: ContextoAlta | null = cuenta ? {
     cuenta, tipo: d?.empresa.entityKind ?? null, cp: d?.empresa.fiscalPostalCode ?? null,
     clases: (d?.actividades ?? []).filter((a) => a.endedOn === null).map((a) => a.kind), respuestas: vistas, hoy,
+    marca: MARCA.id,
   } : null
   const pregunta = ctx && !propuestas && !aMano ? preguntaActual(paso, ctx) : null
 
@@ -341,9 +331,24 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           setPasoLocal('hecho')
           elegir(id!)
           recargarEmpresas()
+          // P01 · Una asesoría entra directamente en «Impuestos de tus clientes».
+          if (MARCA.id === 'sumied' && (await leerSoyAsesoria(accountId).catch(() => null))?.asesoria) {
+            refrescarContextoEsqueleto()
+            navigate(rutaImpuestos('clientes'))
+            return
+          }
           decir('folvy', <>Listo: <b>{d?.empresa.legalName ?? 'tu empresa'}</b> está montada. {planHecho ? `${planHecho} ` : ''}{noLoSe ? 'El banco lo pones cuando quieras en «Tablas generales». ' : 'Apuntado el banco como cuenta principal. '}Todo lo que he puesto lleva la marca «IA» y su porqué, y lo puedes cambiar o deshacer en <Link to={rutaTuEmpresa()}>Tu empresa</Link>.</>)
           datos.recargar()
           return
+        }
+        case 'asesoria': {
+          // P01 · Con «Sí», la cuenta queda como asesoría (conta_despacho_marcar). «No» y «No lo sé» no tocan nada.
+          if (valor === 'si' && !noLoSe) {
+            await marcarAsesoria(accountId, true)
+            refrescarContextoEsqueleto()
+            apuntado(fraseAsesoria(true))
+          } else apuntado(fraseAsesoria(false))
+          break
         }
         default: {
           // retiene, alquiler, retenido70: se guardan al terminar el paso, como modelos.
@@ -366,13 +371,17 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   async function terminarPaso(r: Partial<Record<ClavePregunta, string>>, id: string) {
     if (!ctx || !accountId) return
     if (paso === 'impuestos') {
+      // I01a: las respuestas se guardan como datos de la empresa (quién y cuándo), no solo como modelos.
+      await guardarRespuestasDelAlta(id, r)
       const t = territorioPorCp(ctx.cp)
       await ponerConIa(id, 'company_tax_profile', 'tax_territory', t.territorio, t.porque)
       if (t.territorio === 'peninsula_baleares') {
         await ponerConIa(id, 'company_tax_profile', 'vat_scheme_code', 'general',
           ctx.tipo === 'self_employed' ? 'Lo normal es el régimen general; si tu actividad está en módulos, lo confirma tu asesor.' : 'Una sociedad va en el régimen general (Ley 37/1992, art. 122).')
       }
-      const m = modelosDeRespuestas({ ...ctx, respuestas: r }, reglas ?? [])
+      // I01a: los modelos salen de las reglas de la base, cada uno con su porqué
+      // (tax_obligation); aquí solo se dejan con su marca de la IA.
+      const m = await calcularObligaciones(id)
       await ponerConIa(id, 'company_tax_profile', 'tax_forms', m.modelos, m.porque)
       apuntado(fraseModelos(m.modelos))
     }
@@ -393,7 +402,12 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
         })
       }
       const iva = await ponerIvaVentas(companyId, elegidas.map((x) => ({ iaeCode: x.iae?.code ?? null, cnaeCode: x.cnae?.code ?? null })))
-      apuntado(fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva))
+      // S01: la marca de hostelería, por lo que hace (se cambia en Ajustes › Empresa).
+      // Va en la MISMA frase que las actividades: la pregunta siguiente se pega
+      // a la última frase apuntada, y tiene que seguir en la burbuja del «Entendido».
+      const hosteleria = esHosteleriaPorGrupos(elegidas.map((x) => x.clave)) || elegidas.some((x) => esHosteleriaPorCodigos(x.iae?.code ?? null, x.cnae?.code ?? null))
+      await ponerHosteleriaDelAlta(accountId!, companyId, hosteleria)
+      apuntado([...fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva), { t: ' ' }, ...fraseHosteleria(hosteleria)])
       setPropuestas(null)
       await avanzar('impuestos')
     })
@@ -411,7 +425,9 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       })
       const iva = await ponerIvaVentas(companyId, [{ iaeCode: a.iae?.code ?? null, cnaeCode: a.cnae?.code ?? null }])
       setAMano(false)
-      apuntado(fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva))
+      const hosteleria = esHosteleriaPorCodigos(a.iae?.code ?? null, a.cnae?.code ?? null)
+      await ponerHosteleriaDelAlta(accountId!, companyId, hosteleria)
+      apuntado([...fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva), { t: ' ' }, ...fraseHosteleria(hosteleria)])
       await avanzar('impuestos')
     })
   }
@@ -518,8 +534,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   }, [movil, ocupado, claveActual])
 
   // ── Pintar ────────────────────────────────────────────────────────────
-  const cargandoTodo = cargandoEmpresas || !cuenta || (!reglas && !falloReglas) || (companyId !== null && datos.cargando && !d)
-  const fallo = falloReglas ?? (companyId && !datos.cargando ? (datos.error ?? (d ? null : 'No se ha podido leer.')) : null)
+  const cargandoTodo = cargandoEmpresas || !cuenta || (companyId !== null && datos.cargando && !d)
+  const fallo = companyId && !datos.cargando ? (datos.error ?? (d ? null : 'No se ha podido leer.')) : null
 
   const ultimo = mensajes[mensajes.length - 1]
   const juntoConPregunta = pregunta && ultimo?.de === 'folvy' && ultimo.junto ? ultimo : null
@@ -610,7 +626,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   )
 
   const cuerpo = cargandoTodo ? <TarjetaCargando />
-    : fallo ? <ErrorConReintento mensaje={fallo} reintentar={() => { if (falloReglas) setVueltaReglas((v) => v + 1); else datos.recargar() }} />
+    : fallo ? <ErrorConReintento mensaje={fallo} reintentar={() => datos.recargar()} />
       : conversacion
 
   // ── Ventana flotante (N1c) ────────────────────────────────────────────

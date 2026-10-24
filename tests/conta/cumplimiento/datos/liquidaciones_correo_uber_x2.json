@@ -1,0 +1,270 @@
+[
+ {
+  "account_id": "c01a0000-0000-4000-8000-00000000000a",
+  "id": "liq-1",
+  "ref": "UBER-1",
+  "source": "correo_uber",
+  "gross_sales": 741.2,
+  "commission": -187.32,
+  "net_payout": -122.54,
+  "accumulated_debt": null,
+  "otros": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "d01": {
+   "otras_ganancias": 0.0,
+   "otros_promo": 0.0,
+   "anuncios": 0.0,
+   "promociones": -111.18,
+   "contracargos": -50.44,
+   "ajustes": -56.24
+  },
+  "avisos_lector": [
+   "Gastos de marketing: las líneas suman −111,18 € y el total dice −569,74 €."
+  ]
+ },
+ {
+  "account_id": "c01a0000-0000-4000-8000-00000000000a",
+  "id": "liq-2",
+  "ref": "UBER-2",
+  "source": "correo_uber",
+  "gross_sales": 401.4,
+  "commission": -69.12,
+  "net_payout": -0.94,
+  "accumulated_debt": null,
+  "otros": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "d01": {
+   "otras_ganancias": 0.0,
+   "otros_promo": 0.0,
+   "anuncios": 0.0,
+   "promociones": -189.8,
+   "contracargos": -21.8,
+   "ajustes": 0.0
+  },
+  "avisos_lector": [
+   "Gastos de marketing: las líneas suman −189,80 € y el total dice −311,42 €."
+  ]
+ },
+ {
+  "account_id": "c01a0000-0000-4000-8000-00000000000a",
+  "id": "liq-3",
+  "ref": "UBER-3",
+  "source": "correo_uber",
+  "gross_sales": 80.8,
+  "commission": -13.18,
+  "net_payout": 25.24,
+  "accumulated_debt": null,
+  "otros": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "d01": {
+   "otras_ganancias": 0.0,
+   "otros_promo": 0.0,
+   "anuncios": 0.0,
+   "promociones": -40.4,
+   "contracargos": 0.0,
+   "ajustes": 0.0
+  },
+  "avisos_lector": [
+   "Gastos de marketing: las líneas suman −40,40 € y el total dice −42,38 €."
+  ]
+ },
+ {
+  "account_id": "c01a0000-0000-4000-8000-00000000000a",
+  "id": "liq-4",
+  "ref": "UBER-4",
+  "source": "correo_uber",
+  "gross_sales": 627.4,
+  "commission": -106.04,
+  "net_payout": 71.18,
+  "accumulated_debt": null,
+  "otros": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "d01": {
+   "otras_ganancias": 0.0,
+   "otros_promo": 0.0,
+   "anuncios": 0.0,
+   "promociones": -302.8,
+   "contracargos": -21.8,
+   "ajustes": 0.0
+  },
+  "avisos_lector": [
+   "Gastos de marketing: las líneas suman −302,80 € y el total dice −428,38 €."
+  ]
+ },
+ {
+  "account_id": "c01a0000-0000-4000-8000-00000000000a",
+  "id": "liq-5",
+  "ref": "UBER-5",
+  "source": "correo_uber",
+  "gross_sales": 239.8,
+  "commission": -54.74,
+  "net_payout": 106.92,
+  "accumulated_debt": null,
+  "otros": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "d01": {
+   "otras_ganancias": 0.0,
+   "otros_promo": 0.0,
+   "anuncios": 0.0,
+   "promociones": -72.2,
+   "contracargos": 0.0,
+   "ajustes": 0.0
+  },
+  "avisos_lector": [
+   "Gastos de marketing: las líneas suman −72,20 € y el total dice −78,14 €."
+  ]
+ },
+ {
+  "account_id": "c01a0000-0000-4000-8000-00000000000a",
+  "id": "liq-6",
+  "ref": "UBER-6",
+  "source": "correo_uber",
+  "gross_sales": 80.6,
+  "commission": -26.34,
+  "net_payout": 54.22,
+  "accumulated_debt": null,
+  "otros": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "d01": {
+   "otras_ganancias": 0.0,
+   "otros_promo": 0.0,
+   "anuncios": 0.0,
+   "promociones": 0.0,
+   "contracargos": 0.0,
+   "ajustes": -0.04
+  },
+  "avisos_lector": []
+ },
+ {
+  "account_id": "c01a0000-0000-4000-8000-00000000000a",
+  "id": "liq-7",
+  "ref": "UBER-7",
+  "source": "correo_uber",
+  "gross_sales": 465.4,
+  "commission": -73.44,
+  "net_payout": 159.26,
+  "accumulated_debt": null,
+  "otros": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "d01": {
+   "otras_ganancias": 0.0,
+   "otros_promo": 0.0,
+   "anuncios": 0.0,
+   "promociones": -222.8,
+   "contracargos": 0.0,
+   "ajustes": 0.0
+  },
+  "avisos_lector": [
+   "Gastos de marketing: las líneas suman −222,80 € y el total dice −232,70 €."
+  ]
+ },
+ {
+  "account_id": "c01a0000-0000-4000-8000-00000000000a",
+  "id": "liq-8",
+  "ref": "UBER-8",
+  "source": "correo_uber",
+  "gross_sales": 445.6,
+  "commission": -42.28,
+  "net_payout": 220.0,
+  "accumulated_debt": null,
+  "otros": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "d01": {
+   "otras_ganancias": 42.96,
+   "otros_promo": -7.92,
+   "anuncios": -63.76,
+   "promociones": -154.6,
+   "contracargos": 0.0,
+   "ajustes": 0.0
+  },
+  "avisos_lector": []
+ }
+]

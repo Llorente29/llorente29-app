@@ -46,6 +46,7 @@ import QRCode from 'qrcode'
 import { numeroGrande, passCode, type PassCode, type PassCodeInput } from '@/modules/orders/lib/passCode'
 import { allergenLabel, isAllergenCode } from '@/modules/kitchen/lib/allergens'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
+import { bloqueEntrega, SIN_DIRECCION } from '@/modules/reparto/lib/entregaTicket'
 import dejaVuRegularUrl from './assets/DejaVuSans.ttf?url'
 import dejaVuBoldUrl from './assets/DejaVuSans-Bold.ttf?url'
 import folvyPieUrl from './assets/folvy_pie.png'
@@ -377,6 +378,39 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   // números es el fallo mudo que este trabajo existe para evitar.
   band(numeroGrande(pc), 46)
 
+  // ── R03 · ENTREGA (solo reparto propio): debajo del código, en grande ──
+  // Todo lo que necesita el repartidor, antes que nada más. En lo que reparte
+  // la plataforma no hay bloque y el ticket queda como estaba.
+  const ent = bloqueEntrega(order)
+  if (ent) {
+    band('ENTREGA', 30)
+    const parrafo = (t: string, size: number, bold: boolean) => {
+      ctx.font = fnt(size, bold)
+      for (const ln of enLineas(ctx, t, W - 2 * PAD)) left(ln, size, bold)
+    }
+    if (ent.sinDireccion) {
+      parrafo(SIN_DIRECCION, 32, true)
+    } else {
+      if (ent.calle) parrafo(ent.calle, 30, false)
+      if (ent.detalles) parrafo(ent.detalles, 32, true)
+    }
+    if (ent.telefono) { y += 4; parrafo(ent.telefono, 28, true) }
+    if (ent.notas.length) {
+      y += 8
+      const y0 = y
+      y += 12
+      ctx.font = fnt(24, false)
+      for (const n of ent.notas) {
+        for (const ln of enLineas(ctx, n, W - 2 * PAD - 28)) left(ln, 24, false, INK, PAD + 14)
+      }
+      y += 6
+      ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.setLineDash([])
+      ctx.strokeRect(PAD - 2, y0, W - 2 * PAD + 4, y - y0)
+      y += 10
+    }
+    y += 14
+  }
+
   // Datos del pedido — los códigos enteros en la línea fina: el de la
   // plataforma para soporte, y el interno mientras el pase lo necesite.
   for (const l of lineasDeCodigo(order, pc)) field(l.label, l.value)
@@ -384,11 +418,15 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   if (order.expected_time) field('Hora programada:', fmtDate(order.expected_time))
   else field('Hora programada:', 'Lo antes posible')
   if (order.customer_name) field('Nombre del cliente:', order.customer_name)
-  if (isOwnDelivery(order.service_type)) {
+  // R03: en reparto propio la dirección, el teléfono y las notas ya van en el
+  // bloque ENTREGA de arriba. Los detalles de Last (raw_tab.delivery) siguen aquí.
+  if (isOwnDelivery(order.service_type) && !ent) {
     if (addr.address) field('Dirección:', addr.address)
+    if (order.customer_phone) field('Número de teléfono:', order.customer_phone)
+  }
+  if (isOwnDelivery(order.service_type)) {
     if (addr.details) field('Detalles de dirección:', addr.details)
     if (addr.postalCode) field('Código postal:', addr.postalCode)
-    if (order.customer_phone) field('Número de teléfono:', order.customer_phone)
   }
   y += 12
 

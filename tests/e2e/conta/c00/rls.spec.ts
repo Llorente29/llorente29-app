@@ -14,10 +14,10 @@
 // Solo habla con la API: no depende del tamaño de pantalla.
 
 import { test, expect } from '@playwright/test'
-import { CUENTA_A, CUENTA_B, ENCARGADO_A, pedirSesion, type Sesion } from '../sesion'
+import { CUENTA_A, CUENTA_B, ENCARGADO_A, pedirSesion, type Sesion, enCarril } from '../sesion'
 import { rest, cifInventado } from '../api'
 
-const EMPRESA_A = '3b34403a-a7d6-4a48-a8d7-737e8cababdc'
+const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
 
 /** Las tablas del C00 que llevan account_id: B no puede ver ni una fila de A en ninguna. */
 const TABLAS_DE_CUENTA = [

@@ -1,0 +1,82 @@
+name: Diez · C07 · ¿están ya en C0008 los bancos de Sumied? (solo lectura)
+
+# QUÉ HACE (C07, 22/10)
+# Antes de mandar a Diez los asientos de banco de Sumied, cuenta cuántos tiene
+# ya la gestoría en C0008 con la misma fecha y las mismas líneas
+# (scripts/conta/diez/c07-bancos-c0008.ts). Los de Sumied se leen de
+# producción con conta_lectura (solo lectura) y no se publican; Diez, solo con
+# GET (escribir: false).
+#
+# QUÉ SALE: solo «@@ clave número», por scripts/conta/salida-segura.mjs: ni
+# importes, ni cuentas, ni textos.
+#
+# CUÁNDO: al empujar a conta/c06c-diez-todo (o conta/c07-diez-todo) un commit cuyo mensaje EMPIECE por
+# «[c07-bancos-c0008]».
+
+on:
+  push:
+    branches: ['conta/c07-diez-todo', 'conta/c06c-diez-todo']
+
+concurrency:
+  group: diez-lectura
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bancos:
+    if: startsWith(github.event.head_commit.message, '[c07-bancos-c0008]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Enmascarar los secretos
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+          [ -n "${RO_DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["RO_DB_URL"])
+          for parte in (os.environ["RO_DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          if (u.username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura.")
+              raise SystemExit(1)
+          if "xzmpnchlguibclvxyynt" not in os.environ["RO_DB_URL"]:
+              print("::error::PROD_CONTA_RO_DB_URL no es la de producción.")
+              raise SystemExit(1)
+          PY
+      - name: Los bancos de Foodint en Sumied (producción, conta_lectura, solo lectura)
+        env:
+          RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
+          # Anclado por empresa y cuenta (regla 9).
+          PGOPTIONS='-c default_transaction_read_only=on' psql "$RO_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select json_agg(json_build_object('estado', e.status, 'fecha', e.entry_date::text,
+              'lineas', (select json_agg(json_build_object('cuenta', a.code, 'debe', l.debit, 'haber', l.credit) order by l.position)
+                           from public.journal_line l join public.company_account a on a.id = l.company_account_id and a.company_id = e.company_id
+                          where l.entry_id = e.id and l.account_id = e.account_id)))
+              from public.journal_entry e
+             where e.source_type = 'bank' and e.status in ('validado', 'propuesto')
+               and e.company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9' and e.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'" > /tmp/bancos.json
+          [ -s /tmp/bancos.json ] || { echo "::error::No se han leído los bancos."; exit 1; }
+          echo "Bancos leídos ($(wc -c < /tmp/bancos.json) bytes; no se publican)."
+      - name: Comparar con C0008 (solo GET)
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+          BANCOS: /tmp/bancos.json
+        run: |
+          set -euo pipefail
+          npx --yes tsx@4.19.2 scripts/conta/diez/c07-bancos-c0008.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,445 @@
+/* src/modules/conta/estilo/impuestos.css
+ *
+ * I01b · Impuestos (tableros 8, 9 y 10). Solo tokens del sistema (--s-*).
+ * Los importes, en Inter y con cifras tabulares (encargo, «Diseño»: no en letra
+ * de máquina). En el móvil la tabla se hace bloques y cada dato lleva delante
+ * el título de su columna: no se pierden.
+ */
+
+/* S01g · Sin tope propio: el de la pantalla (--s-ancho-pantalla); el Trimestre lleva el suyo, más abajo. */
+.s-impuestos .s-cifra, .s-impuestos .s-tarjeta-cifra-valor { font-family: var(--s-letra); font-variant-numeric: tabular-nums; }
+
+.s-impuestos-cifras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.s-impuestos-cifra-apoyo { display: block; margin-top: var(--s-1); font-size: var(--s-t-s); font-weight: var(--s-peso-normal); color: var(--s-apoyo); }
+
+.s-impuestos-columnas { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--s-4); align-items: start; }
+/* S01g · Con sitio, la columna de al lado crece con la pantalla (un tercio), en vez de quedarse en 340. */
+@media (min-width: 1600px) {
+  .s-impuestos-columnas { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr); gap: var(--s-6); }
+}
+.s-impuestos-principal, .s-impuestos-lado { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+
+/* Con .s-tabla delante: el sistema (diseno.css) se carga después y, a la par, ganaría él. */
+.s-tabla.s-impuestos-tabla td { vertical-align: top; }
+/* Ancho en %, no mínimo en px: un mínimo empujaba la tabla fuera de su tarjeta (18/10). */
+/* Anchos fijos por columna en el ordenador (cotejo con el tablero 8, 19/10): con el reparto automático la tabla
+   daba a «Impuesto» lo mínimo de su contenido y partía las palabras («Retencione s»); el % no mandaba. Con
+   table-layout fixed mandan estos, y nada se sale: cada celda parte dentro de su ancho. En el móvil, bloques. */
+@media (min-width: 768px) {
+  .s-tabla.s-impuestos-calendario { table-layout: fixed; }
+  .s-tabla.s-impuestos-calendario th:nth-child(1) { width: 36%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(2) { width: 15%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(3) { width: 30%; }
+  .s-tabla.s-impuestos-calendario th:nth-child(4) { width: 19%; }
+  .s-tabla.s-impuestos-calendario th, .s-tabla.s-impuestos-calendario td { padding-left: var(--s-3); padding-right: var(--s-3); }
+  .s-tabla.s-impuestos-calendario th:first-child, .s-tabla.s-impuestos-calendario td:first-child { padding-left: var(--s-6); }
+  /* Un chip largo («Borrador · 2 cosas que Sumied no sabe») parte en su celda antes que sacar la tabla. */
+  .s-tabla.s-impuestos-calendario .s-chip { white-space: normal; }
+}
+/* El aviso se parte dentro de su celda (e2e 612, 18/10: sacaba la tabla 11 px de la tarjeta); el chip no, y
+   el aviso del calendario va en corto (porQueNoSeCalcula). La acción sigue entera. */
+.s-tabla.s-impuestos-calendario td:not(.s-impuestos-accion) { overflow-wrap: break-word; }
+.s-tabla.s-impuestos-tabla tr[data-ambar='si'] td { background: var(--s-duda-fondo); }
+.s-impuestos-nombre { font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.cx a.s-impuestos-nombre { color: var(--s-accion); text-decoration: underline; }
+.s-impuestos-aviso { display: block; margin-top: var(--s-1); font-size: var(--s-t-s); color: var(--s-duda); }
+.s-impuestos-accion { text-align: right; white-space: nowrap; }
+.s-impuestos-vacio { padding: var(--s-4) var(--s-6); }
+.s-impuestos-hecho { margin: 0; color: var(--s-ok); }
+
+.s-impuestos-siguiente { padding: var(--s-4) var(--s-6) var(--s-5); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-impuestos-subtitulo {
+  margin: 0 0 var(--s-2); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo);
+  text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
+}
+.s-impuestos-siguiente ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-impuestos-siguiente li { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: var(--s-3); align-items: baseline; }
+.s-impuestos-siguiente-cuando { color: var(--s-apoyo); }
+.s-impuestos-siguiente-nota { font-size: var(--s-t-s); color: var(--s-apoyo); text-align: right; }
+
+.s-impuestos-porque { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-impuestos-porque.s-impuestos-vacio { padding: var(--s-4) var(--s-6) var(--s-5); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+
+@media (max-width: 1099px) {
+  .s-impuestos-columnas { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 767px) {
+  .s-impuestos-cifras { grid-template-columns: minmax(0, 1fr); }
+  .s-impuestos-siguiente li { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .s-impuestos-siguiente-nota { text-align: left; }
+  /* La tabla, en bloques: cada dato con el título de su columna delante. */
+  .s-tabla.s-impuestos-tabla thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .s-tabla.s-impuestos-tabla, .s-tabla.s-impuestos-tabla tbody, .s-tabla.s-impuestos-tabla tr, .s-tabla.s-impuestos-tabla td { display: block; width: 100%; }
+  .s-tabla.s-impuestos-tabla tr { padding: var(--s-3) var(--s-4); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+  .s-tabla.s-impuestos-tabla tr[data-ambar='si'] { background: var(--s-duda-fondo); }
+  .s-tabla.s-impuestos-tabla td, .s-tabla.s-impuestos-tabla td.s-tabla-cifra { padding: var(--s-1) 0; border-bottom: none; text-align: left; white-space: normal; }
+  .s-tabla.s-impuestos-tabla td::before {
+    content: attr(data-titulo); display: block; font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo);
+    text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus);
+  }
+  .s-tabla.s-impuestos-tabla td.s-impuestos-accion::before { content: none; }
+  .s-tabla.s-impuestos-tabla td:empty { display: none; }
+}
+
+/* ── El IVA de un periodo (tablero 9) ──────────────────────────────────── */
+.s-impuestos-migas { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-impuestos-cabeza { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
+/* En el ordenador, los pasos en la fila del título, a la derecha (tablero 9): el título parte su línea, no los empuja abajo. */
+@media (min-width: 1024px) {
+  .s-impuestos-cabeza { flex-wrap: nowrap; }
+  .s-impuestos-cabeza .s-impuestos-titulo { flex: 1 1 auto; }
+  .s-impuestos-cabeza .s-impuestos-pasos { flex: none; flex-wrap: nowrap; }
+}
+.s-impuestos-titulo { margin: 0; font-size: var(--s-t-titulo); font-weight: var(--s-peso-titulo); color: var(--s-tinta); min-width: 0; }
+.s-impuestos-titulo-apoyo { font-size: var(--s-t-m); font-weight: var(--s-peso-normal); color: var(--s-apoyo); }
+.s-impuestos-pasos { list-style: none; margin: 0; padding: 0; display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.s-impuestos-pasos li[data-estado='ahora'] .s-chip { box-shadow: inset 0 0 0 var(--s-linea) var(--s-accion); }
+.s-impuestos-pestanas { display: flex; gap: var(--s-4); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-impuestos-pestanas button {
+  background: none; border: none; padding: var(--s-2) var(--s-1); font: inherit; color: var(--s-apoyo); cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.s-impuestos-pestanas button[aria-selected='true'] { color: var(--s-tinta); font-weight: var(--s-peso-fuerte); border-bottom-color: var(--s-accion); }
+.s-impuestos-fallo { margin: 0; color: var(--s-falta); }
+.s-impuestos-resultado { display: flex; flex-direction: column; gap: var(--s-1); }
+.s-impuestos-grande { font-size: var(--s-t-cifra); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-impuestos-resultado-que { font-size: var(--s-t-l); color: var(--s-tinta); }
+.s-impuestos-fila-botones { display: flex; gap: var(--s-3); flex-wrap: wrap; align-items: center; }
+.s-impuestos-origen tr[data-fuerte='si'] td { border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-impuestos-comprobado { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-impuestos-comprobado li { display: grid; grid-template-columns: var(--s-4) minmax(0, 1fr); gap: var(--s-2); }
+.s-impuestos-marca { font-weight: var(--s-peso-fuerte); }
+.s-impuestos-comprobado li[data-marca='✓'] .s-impuestos-marca { color: var(--s-ok); }
+.s-impuestos-comprobado li[data-marca='!'] .s-impuestos-marca { color: var(--s-duda); }
+.s-impuestos-comprobado li[data-marca='✗'] .s-impuestos-marca { color: var(--s-falta); }
+.s-impuestos-aceptar { display: flex; gap: var(--s-2); align-items: flex-end; flex-wrap: wrap; margin-top: var(--s-2); }
+.s-impuestos-registro summary { cursor: pointer; color: var(--s-apoyo); }
+.s-impuestos-registro ul { margin: var(--s-2) 0 0; padding-left: var(--s-4); display: flex; flex-direction: column; gap: var(--s-1); }
+
+/* Con .s-tarjeta delante: el sistema se carga después y le quitaba el borde (cotejo con el tablero 9, 18/10). */
+.s-tarjeta.s-impuestos-panel { border: 2px solid var(--s-accion); gap: var(--s-3); }
+.s-impuestos-panel-bloque { display: flex; flex-direction: column; gap: 2px; }
+.s-impuestos-lista { margin: var(--s-1) 0 0; padding-left: var(--s-4); list-style: disc; }
+.s-impuestos-porque-no { margin: 0; font-size: var(--s-t-s); color: var(--s-duda); }
+.s-impuestos-nota { font-size: var(--s-t-s); }
+.s-impuestos-raya { border: none; border-top: var(--s-linea) solid var(--s-borde-decorativo); margin: 0; width: 100%; }
+.s-impuestos-pago { display: flex; gap: var(--s-2); align-items: flex-end; flex-wrap: wrap; }
+
+/* ── Presentados ───────────────────────────────────────────────────────── */
+.s-impuestos-csv { font-variant-numeric: tabular-nums; letter-spacing: var(--s-espaciado-mayus); word-break: break-all; }
+.s-impuestos-subir { cursor: pointer; }
+.s-impuestos-subir-texto { color: var(--s-accion); text-decoration: underline; }
+.s-impuestos-subir:focus-within .s-impuestos-subir-texto { outline: 2px solid var(--s-foco); outline-offset: 2px; }
+
+/* ── Certificados y accesos (tablero 10) ───────────────────────────────── */
+.s-impuestos-opciones { display: flex; flex-direction: column; }
+.s-impuestos-opcion {
+  display: grid; grid-template-columns: var(--s-5) minmax(0, 1fr); gap: var(--s-3); padding: var(--s-4) var(--s-6);
+  border-top: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-impuestos-opcion[data-elegida='si'] { background: var(--s-ok-fondo); }
+.s-impuestos-radio {
+  width: var(--s-4); height: var(--s-4); margin-top: 2px; border-radius: var(--s-radio-pildora);
+  border: 2px solid var(--s-borde-control); background: var(--s-superficie);
+}
+.s-impuestos-radio[aria-checked='true'] { border-color: var(--s-accion); box-shadow: inset 0 0 0 3px var(--s-superficie); background: var(--s-accion); }
+.s-impuestos-opcion-cuerpo { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.s-impuestos-opcion-cabeza { display: flex; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; align-items: baseline; }
+.s-impuestos-certificado { display: flex; flex-direction: column; gap: var(--s-1); }
+.s-impuestos-chips { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.s-impuestos-ok { color: var(--s-ok); }
+
+.s-tarjeta.s-impuestos-custodia { background: var(--s-oscuro); border-color: var(--s-oscuro); color: var(--s-superficie); gap: var(--s-3); }
+.s-tarjeta.s-impuestos-custodia .s-tarjeta-titulo { color: var(--s-superficie); }
+.s-impuestos-custodia p { margin: 0; }
+.s-tarjeta.s-impuestos-custodia .s-boton { background: transparent; color: var(--s-superficie); border-color: var(--s-superficie); }
+.s-impuestos-custodia-nota { font-size: var(--s-t-s); opacity: 0.85; }
+.s-impuestos-invitacion { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; margin-top: var(--s-1); }
+
+/* ── Aceptar la invitación (página sin marco) ──────────────────────────── */
+.s-aceptar { min-height: 100vh; background: var(--s-fondo); font-family: var(--s-letra); color: var(--s-tinta); }
+.s-aceptar-cuerpo { margin: 0 auto; padding: var(--s-8) var(--s-4); max-width: 640px; }
+.s-aceptar-cuerpo p { margin: 0; }
+
+/* 0240 · «Ya lo presenté fuera» con las casillas del justificante: dos columnas en ordenador, una en el móvil. */
+.s-impuestos-justificante { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2) var(--s-3); margin-bottom: var(--s-3); }
+.s-impuestos-justificante > .s-impuestos-porque-no { grid-column: 1 / -1; }
+@media (max-width: 767px) { .s-impuestos-justificante { grid-template-columns: minmax(0, 1fr); } }
+
+/* I01c · P1 · Subir justificantes: la zona grande, el repaso y sus diferencias. */
+.s-justificantes-zona {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-1);
+  min-height: 160px; padding: var(--s-6) var(--s-4); margin-bottom: var(--s-4);
+  border: 2px dashed var(--s-borde-control); border-radius: var(--s-radio-bloque); background: var(--s-suave);
+  text-align: center; cursor: pointer;
+}
+.s-justificantes-zona-sobre, .s-justificantes-zona:hover { border-color: var(--s-accion); }
+.s-justificantes-zona:focus-within { outline: 2px solid var(--s-accion); outline-offset: 2px; }
+.s-justificantes-zona-titulo { font-size: 1.0625rem; font-weight: 600; color: var(--s-tinta); }
+.s-justificantes-motivo { display: block; margin-top: var(--s-1); color: var(--s-tinta); }
+.s-justificantes-mal .s-justificantes-motivo { color: var(--s-falta); }
+.s-justificantes-fichero { overflow-wrap: anywhere; }
+.s-justificantes-mano { max-width: 260px; margin-top: var(--s-2); }
+.s-justificantes-dif { margin-top: var(--s-2); }
+.s-justificantes-dif summary { cursor: pointer; color: var(--s-duda); font-weight: 600; }
+.s-tabla.s-justificantes-dif-tabla { width: auto; min-width: 280px; margin-top: var(--s-1); }
+.s-justificantes-pie { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-3); margin-top: var(--s-4); }
+.s-justificantes-pie .s-apoyo { margin-right: auto; }
+.s-justificantes-mano-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+.s-justificantes-casillas { width: 100%; font-variant-numeric: tabular-nums; resize: vertical; }
+@media (max-width: 767px) {
+  .s-justificantes-zona { min-height: 120px; }
+  .s-justificantes-mano-grid { grid-template-columns: minmax(0, 1fr); }
+  .s-justificantes-pie { flex-direction: column; align-items: stretch; }
+  .s-justificantes-pie .s-apoyo { margin-right: 0; }
+}
+.s-impuestos-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); justify-content: flex-end; }
+@media (max-width: 767px) {
+  /* En el móvil los botones de la cabecera bajan a su fila y se reparten en ella:
+     la caja de la acción de la tarjeta no encoge, y sin esto se salían por la derecha. */
+  .s-tarjeta-accion:has(> .s-impuestos-acciones) { flex: 1 1 100%; min-width: 0; }
+  .s-impuestos-acciones { justify-content: flex-start; }
+  /* Las diferencias del repaso siguen siendo una tabla de tres columnas (caben):
+     la regla de arriba apila las celdas de la tabla de fuera, y también alcanzaba a esta. */
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla { display: table; width: 100%; min-width: 0; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla thead { position: static; width: auto; height: auto; overflow: visible; clip: auto; display: table-header-group; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla tbody { display: table-row-group; width: auto; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla tr { display: table-row; width: auto; padding: 0; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla th,
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td { display: table-cell; width: auto; padding: var(--s-1) var(--s-2); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td.s-tabla-cifra,
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla th.s-tabla-cifra { text-align: right; white-space: nowrap; }
+  .s-tabla.s-impuestos-tabla .s-justificantes-dif-tabla td::before { content: none; }
+}
+
+/* ── I01c · Ya lo presenté fuera · pegar CSV (TraerPorCsv.tsx) ─────────────── */
+.s-csv-traer { display: grid; gap: var(--s-2); margin-bottom: var(--s-4); }
+.s-csv-etiqueta { font-weight: 600; color: var(--s-tinta); }
+.s-csv-fila { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: stretch; }
+.s-control.s-csv-campo {
+  flex: 1 1 320px; min-width: 0; min-height: 52px; padding: var(--s-2) var(--s-4);
+  font-size: 1.375rem; letter-spacing: 0.08em; text-transform: uppercase; font-variant-numeric: tabular-nums;
+}
+.s-csv-fila .s-boton { min-height: 52px; padding-inline: var(--s-6); }
+.s-csv-nota { margin: 0; }
+.s-csv-pdf { display: inline-flex; flex-wrap: wrap; gap: var(--s-1); align-items: baseline; cursor: pointer; color: var(--s-apoyo); width: fit-content; }
+.s-csv-pdf-enlace { color: var(--s-accion); text-decoration: underline; }
+.s-csv-pdf:focus-within { outline: 2px solid var(--s-accion); outline-offset: 2px; }
+.s-csv-trayendo { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-3) 0; color: var(--s-tinta); font-weight: 600; }
+.s-csv-rueda {
+  width: 20px; height: 20px; flex: none; border-radius: 50%;
+  border: 3px solid var(--s-borde-decorativo); border-top-color: var(--s-accion); animation: s-csv-gira 0.8s linear infinite;
+}
+@keyframes s-csv-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .s-csv-rueda { animation-duration: 2.4s; } }
+.s-csv-error { margin: var(--s-3) 0; }
+.s-csv-elegir { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin: var(--s-3) 0; }
+.s-csv-elegir .s-apoyo { flex: 1 1 100%; margin: 0; }
+.s-csv-ficha { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: var(--s-5); align-items: start; margin-top: var(--s-2); }
+.s-csv-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; justify-content: space-between; margin-bottom: var(--s-3); }
+.s-csv-titulo { margin: 0; font-size: 1.125rem; color: var(--s-tinta); }
+.s-csv-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
+.s-csv-dl dt { color: var(--s-apoyo); }
+.s-csv-dl dd { margin: 0; color: var(--s-tinta); overflow-wrap: anywhere; }
+.s-csv-compensado { display: block; color: var(--s-apoyo); font-size: var(--s-t-sm, 0.875rem); }
+.s-csv-casillas summary { cursor: pointer; font-weight: 600; color: var(--s-tinta); }
+.s-csv-devolucion { border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); padding: var(--s-3); margin: var(--s-3) 0; display: grid; gap: var(--s-2); }
+.s-csv-acciones { display: flex; flex-wrap: wrap; gap: var(--s-3); justify-content: flex-end; margin-top: var(--s-4); }
+.s-csv-pdf-visor { width: 100%; height: 720px; border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-suave); }
+@media (max-width: 767px) {
+  .s-csv-ficha { grid-template-columns: minmax(0, 1fr); }
+  .s-csv-fila .s-boton { flex: 1 1 100%; }
+  .s-csv-pdf-visor { height: 70vh; }
+  .s-csv-acciones { flex-direction: column-reverse; align-items: stretch; }
+}
+
+/* ── El trimestre (I01c, maqueta_303_v2 y revisión de Julio del 20/10) ────
+ * Arriba el selector y la tira de modelos (lo que vence, en rojo). Debajo, a
+ * la izquierda, la ficha del elegido con sus casillas (y, con el 303, la
+ * cartera); a la derecha, el justificante en grande, el impreso calculado o
+ * qué falta. En el móvil la tira se desliza de lado y todo va en una columna:
+ * primero la ficha, luego el justificante. */
+.s-trimestre-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-3) var(--s-4); align-items: center; justify-content: space-between; }
+.s-trimestre-selector { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+.s-trimestre-ano .s-control { min-width: 96px; }
+.s-trimestre-qs { display: inline-flex; border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-boton); overflow: hidden; background: var(--s-superficie); }
+.s-trimestre-q {
+  min-width: 52px; min-height: var(--s-alto-control); padding: 0 var(--s-3); border: none; background: transparent;
+  font: inherit; font-weight: var(--s-peso-medio); color: var(--s-tinta); cursor: pointer;
+}
+.s-trimestre-q + .s-trimestre-q { border-left: var(--s-linea) solid var(--s-borde-control); }
+.s-trimestre-q[aria-checked='true'] { background: var(--s-accion); color: var(--s-sobre-accion); }
+.s-trimestre-q:focus-visible, .s-trimestre-tarjeta:focus-visible { outline: 2px solid var(--s-foco); outline-offset: 2px; }
+
+.s-trimestre-tira { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+.s-trimestre-tarjeta {
+  width: 100%; height: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2);
+  padding: var(--s-4); text-align: left; font: inherit; cursor: pointer;
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+}
+.s-trimestre-tarjeta:hover { border-color: var(--s-accion-borde); }
+.s-trimestre-tarjeta[aria-pressed='true'] { border-color: var(--s-accion); box-shadow: inset 0 0 0 1px var(--s-accion); }
+.s-trimestre-tarjeta-nombre { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-trimestre-tarjeta-importe { font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-trimestre-tarjeta .s-chip { white-space: normal; }
+
+/* El cuerpo: la ficha (2 partes) y el justificante (3 partes), arriba alineados. */
+.s-impuestos.s-trimestre { max-width: none; width: 100%; }
+/* Maqueta v4 (Julio, 20/10): todo el ancho, en tres columnas. El centro (el
+   justificante) va fijo al bajar; «Ampliar» deja solo el centro. */
+.s-trimestre-cuerpo {
+  display: grid; gap: var(--s-4); align-items: start;
+  grid-template-columns: minmax(320px, 1fr) minmax(0, 2fr) minmax(300px, 1fr);
+  grid-template-areas: 'izq centro der';
+}
+.s-trimestre-col { min-width: 0; display: flex; flex-direction: column; gap: var(--s-4); }
+.s-trimestre-col-izq { grid-area: izq; }
+.s-trimestre-col-centro { grid-area: centro; position: sticky; top: var(--s-4); }
+.s-trimestre-col-der { grid-area: der; }
+/* Doble clase: tiene que ganar a las rejillas de las pantallas más estrechas, que van después. */
+.s-trimestre-cuerpo.s-trimestre-cuerpo--ampliado { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'centro'; }
+.s-trimestre-cuerpo--ampliado .s-trimestre-col-izq, .s-trimestre-cuerpo--ampliado .s-trimestre-col-der { display: none; }
+
+.s-trimestre-ficha { min-width: 0; display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5); }
+.s-trimestre-ficha > p { margin: 0; }
+.s-trimestre-ficha-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; justify-content: space-between; }
+.s-trimestre-ficha-titulo { margin: 0; font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-trimestre-dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-5); margin: 0; }
+.s-trimestre-dl dt { color: var(--s-apoyo); }
+.s-trimestre-dl dd { margin: 0; color: var(--s-tinta); overflow-wrap: anywhere; }
+
+/* Las casillas: la casilla, qué es (lo único que se parte) y el importe; la del resultado, en negrita. */
+.s-trimestre-casillas { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
+.s-trimestre-casillas th {
+  text-align: left; padding: var(--s-2) var(--s-2); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo);
+  text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); white-space: nowrap;
+}
+.s-trimestre-casillas td { padding: var(--s-2); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: top; color: var(--s-tinta); }
+.s-trimestre-casillas td:nth-child(2) { overflow-wrap: anywhere; }
+.s-trimestre-casillas .s-tabla-cifra { text-align: right; white-space: nowrap; }
+.s-trimestre-casilla { white-space: nowrap; color: var(--s-apoyo); font-variant-numeric: tabular-nums; }
+.s-trimestre-casillas tr[data-resultado='si'] td { font-weight: var(--s-peso-fuerte); }
+.s-trimestre-casillas tr[data-resultado='si'] .s-trimestre-casilla { color: var(--s-tinta); }
+.s-trimestre-casillas tr:last-child td { border-bottom: none; }
+.s-trimestre-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0; }
+
+/* La derecha: el justificante en grande, el impreso calculado o qué falta. */
+.s-trimestre-derecha { min-width: 0; display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); }
+.s-trimestre-derecha-cabeza { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-3); align-items: center; }
+.s-trimestre-derecha-titulo { margin: 0; font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.s-trimestre-derecha-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-left: auto; }
+.s-trimestre-pdf-marco { position: relative; }
+.s-trimestre-pdf-visor { display: block; width: 100%; height: calc(100vh - 150px); min-height: 520px; border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-suave); }
+.s-trimestre-pdf-tocar { display: none; }
+.s-trimestre-zoom { display: inline-flex; align-items: center; border: var(--s-linea) solid var(--s-borde-control); border-radius: var(--s-radio-boton); background: var(--s-superficie); }
+.s-trimestre-zoom-btn { min-width: 36px; min-height: 36px; border: none; background: none; color: var(--s-tinta); font-size: var(--s-t-l); cursor: pointer; }
+.s-trimestre-zoom-btn:disabled { color: var(--s-apoyo); cursor: default; }
+.s-trimestre-zoom-btn:focus-visible { outline: 2px solid var(--s-foco); outline-offset: 1px; }
+.s-trimestre-zoom-valor { min-width: 64px; text-align: center; font-size: var(--s-t-s); color: var(--s-tinta); font-variant-numeric: tabular-nums; }
+.s-trimestre-abriendo { margin: 0; padding: var(--s-6) 0; }
+.s-trimestre-falta { align-items: flex-start; padding: var(--s-6); }
+.s-trimestre-falta p { margin: 0; }
+.s-trimestre-impreso { border: var(--s-linea) solid var(--s-tinta); border-radius: 2px; padding: var(--s-4); background: var(--s-superficie); }
+.s-trimestre-impreso-titulo { margin: 0 0 var(--s-3); font-weight: var(--s-peso-fuerte); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); font-size: var(--s-t-xs); color: var(--s-tinta); }
+.s-trimestre-impreso dl { margin: 0; display: flex; flex-direction: column; }
+.s-trimestre-impreso-fila { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-3); padding: var(--s-1) 0; border-bottom: 1px dotted var(--s-borde-decorativo); }
+.s-trimestre-impreso-fila dt { color: var(--s-tinta); overflow-wrap: anywhere; }
+.s-trimestre-impreso-fila dd { margin: 0; display: flex; gap: var(--s-2); align-items: baseline; white-space: nowrap; }
+.s-trimestre-impreso-num { display: inline-block; min-width: 28px; padding: 0 var(--s-1); border: var(--s-linea) solid var(--s-tinta); font-size: var(--s-t-xs); text-align: center; }
+.s-impuestos-casilla { font-variant-numeric: tabular-nums; color: var(--s-apoyo); margin-right: var(--s-1); }
+
+/* La cartera del 303: dentro de la ficha, debajo de sus casillas. */
+.s-trimestre-cartera { display: flex; flex-direction: column; gap: var(--s-3); padding-top: var(--s-4); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-trimestre-cartera-titulo { margin: 0; font-size: var(--s-t-m); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-trimestre-cartera-tabla { width: 100%; border-collapse: collapse; }
+.s-trimestre-cartera-tabla th, .s-trimestre-cartera-tabla td { padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: top; }
+.s-trimestre-cartera-tabla th { text-align: left; font-weight: var(--s-peso-normal); color: var(--s-tinta); padding-right: var(--s-3); }
+.s-trimestre-cartera-tabla th .s-impuestos-casilla { margin-left: var(--s-2); font-size: var(--s-t-xs); }
+.s-trimestre-cartera-tabla th .s-impuestos-casilla::before { content: '['; }
+.s-trimestre-cartera-tabla th .s-impuestos-casilla::after { content: ']'; }
+.s-trimestre-cartera-tabla th .s-tabla-apoyo { display: block; }
+.s-trimestre-cartera-tabla td { text-align: right; white-space: nowrap; }
+.s-trimestre-cartera-total th, .s-trimestre-cartera-total td { font-weight: var(--s-peso-fuerte); border-bottom: none; border-top: 2px solid var(--s-tinta); }
+.s-trimestre-cartera p { margin: 0; }
+.s-trimestre-ok { color: var(--s-ok); font-size: var(--s-t-s); }
+.s-trimestre-desfase { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); border-radius: var(--s-radio-bloque); background: var(--s-duda-fondo); color: var(--s-tinta); }
+.s-trimestre-col-der .s-trimestre-cartera { padding: var(--s-4); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-superficie); }
+
+/* La liquidación en palabras, «Ver las casillas» y lo comprobado. */
+.s-trimestre-liquidacion { display: flex; flex-direction: column; gap: var(--s-3); }
+.s-trimestre-liq, .s-trimestre-cuadre { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
+.s-trimestre-liq th, .s-trimestre-liq td, .s-trimestre-cuadre th, .s-trimestre-cuadre td { padding: var(--s-2) var(--s-1); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: top; }
+.s-trimestre-liq thead th, .s-trimestre-cuadre thead th { font-size: var(--s-t-xs); text-transform: uppercase; letter-spacing: var(--s-espaciado-mayus); color: var(--s-apoyo); font-weight: var(--s-peso-fuerte); text-align: left; }
+.s-trimestre-liq tbody th, .s-trimestre-cuadre tbody th { text-align: left; font-weight: var(--s-peso-normal); color: var(--s-tinta); }
+.s-trimestre-liq .s-tabla-cifra, .s-trimestre-cuadre .s-tabla-cifra { text-align: right; white-space: nowrap; }
+.s-trimestre-liq .s-impuestos-casilla, .s-trimestre-cuadre .s-impuestos-casilla, .s-trimestre-liq-resultado .s-impuestos-casilla { display: block; font-size: var(--s-t-xs); color: var(--s-apoyo); }
+.s-trimestre-liq-total th, .s-trimestre-liq-total td { font-weight: var(--s-peso-fuerte); border-bottom: none; border-top: 2px solid var(--s-tinta); }
+.s-trimestre-liq-resultado { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-2) var(--s-3); margin: 0; }
+.s-trimestre-liq-resultado dt { color: var(--s-tinta); }
+.s-trimestre-liq-resultado dd { margin: 0; text-align: right; font-weight: var(--s-peso-fuerte); white-space: nowrap; }
+.s-trimestre-todas > summary { cursor: pointer; color: var(--s-accion); font-weight: var(--s-peso-fuerte); padding: var(--s-2) 0; }
+.s-trimestre-todas[open] > summary { margin-bottom: var(--s-2); }
+.s-trimestre-comprobado { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); }
+.s-trimestre-comprobado p { margin: 0; }
+.s-trimestre-cuadre tr[data-casa='no'] th { color: var(--s-falta); }
+.s-trimestre-checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-2); font-size: var(--s-t-s); color: var(--s-tinta); }
+.s-trimestre-checks li[data-resultado='error'], .s-trimestre-checks li[data-resultado='warning'] { color: var(--s-falta); }
+
+/* Por debajo de 1.500 px, la derecha baja debajo de la izquierda; el justificante sigue al lado. */
+@media (max-width: 1499px) {
+  .s-trimestre-cuerpo { grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr); grid-template-areas: 'izq centro' 'der centro'; }
+}
+
+@media (max-width: 1099px) {
+  .s-trimestre-cuerpo { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'izq' 'centro' 'der'; }
+  .s-trimestre-col-centro { position: static; }
+  .s-trimestre-pdf-visor { height: 80vh; }
+}
+@media (max-width: 767px) {
+  .s-trimestre-cabeza { flex-direction: column; align-items: stretch; }
+  .s-trimestre-selector { justify-content: space-between; }
+  .s-trimestre-qs { flex: 1; }
+  .s-trimestre-q { flex: 1; min-width: 0; }
+  /* La tira se desliza de lado: cada tarjeta con su ancho, sin apretarse. */
+  .s-trimestre-tira { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: var(--s-2); }
+  .s-trimestre-tira > li { flex: 0 0 72%; scroll-snap-align: start; }
+  .s-trimestre-ficha, .s-trimestre-derecha { padding: var(--s-4); }
+  .s-trimestre-casillas th, .s-trimestre-casillas td { padding: var(--s-2) var(--s-1); }
+  .s-trimestre-derecha-acciones { margin-left: 0; width: 100%; }
+  .s-trimestre-derecha-acciones > * { flex: 1 1 auto; justify-content: center; }
+  .s-trimestre-pdf-visor { height: 60vh; min-height: 320px; }
+  /* En el móvil, el PDF se toca y se ve a pantalla completa. */
+  .s-trimestre-pdf-tocar {
+    display: flex; position: absolute; inset: 0; align-items: flex-end; justify-content: center; padding: var(--s-4);
+    border: none; border-radius: var(--s-radio-bloque); background: transparent; color: var(--s-sobre-accion); cursor: pointer;
+    font-size: var(--s-t-m); font-weight: var(--s-peso-fuerte);
+  }
+  .s-trimestre-pdf-tocar::after { content: ''; position: absolute; inset: auto var(--s-4) var(--s-4); height: 44px; border-radius: var(--s-radio-boton); background: var(--s-accion); z-index: -1; }
+  .s-trimestre-visor--completa { position: fixed; inset: 0; z-index: 1000; border-radius: 0; padding: var(--s-3); overflow: auto; }
+  .s-trimestre-visor--completa .s-trimestre-pdf-visor { height: calc(100vh - 140px); }
+  /* En el móvil ya es una sola columna: ni zoom ni «Ampliar». */
+  .s-trimestre-derecha-acciones .s-trimestre-zoom, .s-trimestre-derecha-acciones .s-trimestre-ampliar { display: none; }
+}
+
+/* I01g · Preparar el 111 y el 115: la [01] a mano, «Revisado» y presentar cerrado. */
+.s-trimestre-preparar { display: grid; gap: var(--s-3); margin: var(--s-3) 0 0; }
+.s-trimestre-perceptores { display: grid; gap: var(--s-2); padding: var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); }
+.s-trimestre-perceptores p { margin: 0; }
+.s-trimestre-perceptores-titulo { font-weight: var(--s-peso-fuerte); }
+.s-trimestre-perceptores-campos { display: grid; grid-template-columns: minmax(6rem, 7.5rem) minmax(0, 1fr); gap: var(--s-3); align-items: start; }
+/* I01h · Impuesto de sociedades: los 200 guardados y el formulario de uno nuevo. */
+.s-sociedades-200 { list-style: none; margin: 0; padding: var(--s-4) var(--s-6) 0; display: grid; gap: var(--s-3); }
+.s-sociedades-escribir { padding: var(--s-3) var(--s-6) var(--s-4); margin: 0; }
+.s-sociedades .s-impuestos-tabla .s-chip { white-space: normal; text-align: left; }
+.s-sociedades-200 li { display: grid; gap: var(--s-1); padding-bottom: var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-sociedades-200 p { margin: 0; }
+.s-sociedades-form { display: grid; gap: var(--s-3); margin: var(--s-3) var(--s-6) var(--s-4); padding: var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); }
+.s-sociedades-form p { margin: 0; }
+.s-sociedades-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: var(--s-3); align-items: start; }
+.s-sociedades .s-impuestos-tabla td[data-titulo='En qué punto está'] { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+.s-trimestre-listo { display: grid; gap: var(--s-2); justify-items: start; }
+.s-trimestre-listo p { margin: 0; }
+.s-trimestre-liq td[data-falta='si'] { color: var(--s-duda); }
+@media (max-width: 767px) {
+  .s-trimestre-perceptores-campos { grid-template-columns: 1fr; }
+}

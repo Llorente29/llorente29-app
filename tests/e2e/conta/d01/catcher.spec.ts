@@ -20,7 +20,7 @@
 // solo, el caso real en «Por aclarar».
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 import { EMPRESA, PEDIDOS, quincenaInventada } from '../../../conta/e05/ejemplo'
 import { madridAUtc } from '../../../../src/modules/conta/lib/catcherQuincena'
@@ -67,7 +67,7 @@ function pedidosDeLaApp() {
     const k = `${codigo}|${momento}`
     if (vistos.has(k) && /commission/.test(tipo)) continue
     vistos.set(k, {
-      id: `e05e0000-0000-4000-8000-${String(++i).padStart(12, '0')}`, codigo, momento, localId: null, marcaId: null, canalId: null,
+      id: enCarril(`e05e0000-0000-4000-8000-${String(++i).padStart(12, '0')}`), codigo, momento, localId: null, marcaId: null, canalId: null,
       estado: estado === 'canceled' ? 'canceled' : 'delivered', precio: /commission/.test(tipo) ? 0 : base,
     })
   }
@@ -80,8 +80,20 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   await entrarComo(page, CUENTA_A.email)
   await page.route('**/rest/v1/rpc/conta_lote_pedidos_app', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pedidosDeLaApp()) }))
 
-  // 1 · Documentos: la zona de arrastre y lo leído, antes de subir nada.
+  // 0 · S02 · PR 3: Facturas recibidas ya no la enseña al final (cada cosa en un sitio).
   await page.goto('/conta/documentos')
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toBeVisible({ timeout: 30_000 })
+  await page.waitForLoadState('networkidle')
+  await expect(page.getByText(/Sube la quincena de Catcher/)).toHaveCount(0)
+
+  // 1 · Compras y gastos › Liquidaciones: el saldo prepago a la vista, y «Subir
+  // quincena de Catcher» abre la zona de arrastre; lo leído, antes de subir nada.
+  await page.goto('/conta/compras/liquidaciones')
+  await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
+  const saldoArriba = page.locator('[data-prueba="saldo-prepago"]')
+  await expect(saldoArriba).toContainText('Saldo prepago Catcher · 40700001.', { timeout: 30_000 })
+  await expect(saldoArriba).toContainText(/Te quedan −?[\d.]+,\d\d\s€: has recargado [\d.]+,\d\d\s€ y se han pagado [\d.]+,\d\d\s€\./)
+  await page.getByRole('button', { name: 'Subir quincena de Catcher' }).first().click()
   const bloque = page.locator('section.cxk-quincena')
   await expect(bloque.getByText('Sube la quincena de Catcher')).toBeVisible({ timeout: 30_000 })
   await page.locator('input[data-prueba="subir-catcher"]').setInputFiles(quincenaInventada(EMPRESA_A).map((f) => ({
@@ -98,11 +110,16 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   const estado = bloque.getByRole('status')
   await expect(estado).toContainText(/Subida la 2\.ª quincena de septiembre de 2026: 5 facturas \(54,69 €\)|La 2\.ª quincena de septiembre de 2026 ya estaba subida/, { timeout: 90_000 })
   if (/Subida la/.test(await estado.innerText())) await expect(estado).toContainText('Cruzada la 2.ª quincena de septiembre de 2026: 5 facturas, 4 cuadran y 1 por aclarar (1 cosa que mirar).', { timeout: 60_000 })
-  await expect(bloque.getByRole('link', { name: /2\.ª quincena de septiembre de 2026 · 5 facturas · 54,69 €/ })).toBeVisible()
+  // S02 · PR 3: la quincena sale en la lista de Liquidaciones, con su importe y su estado.
+  const fila = page.locator('[data-fila^="catcher:"]', { hasText: '2.ª quincena de septiembre de 2026' })
+  await expect(fila).toHaveCount(1, { timeout: 30_000 })
+  await expect(fila).toContainText('54,69')
+  await expect(fila).toContainText(/por aclarar|reclamad|Falta el pago|pago propuesto/)
   await capturar(page, 'catcher-subida')
 
-  // 3 · La quincena: resumen, «Por aclarar» con el G236 y las facturas por grupos.
-  await bloque.getByRole('link', { name: /2\.ª quincena de septiembre de 2026 · 5 facturas · 54,69 €/ }).click()
+  // 3 · La quincena (al pulsar su fila): resumen, «Por aclarar» con el G236 y las facturas por grupos.
+  await fila.click()
+  await expect(page.locator('nav.cxp-migas').getByRole('link', { name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('heading', { name: '2.ª quincena de septiembre de 2026' })).toBeVisible({ timeout: 30_000 })
   // Lo que dice la quincena (no el aviso de staging, que también es un role=status).
   const dice = page.locator('[data-prueba="hecho-quincena"]')

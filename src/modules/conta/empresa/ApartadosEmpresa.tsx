@@ -20,6 +20,7 @@ import type { Quien } from '@/modules/conta/empresa/apartados'
 import { guardarDominante, guardarPerfil, guardarQuienEres } from '@/modules/conta/services/empresaDatosService'
 import { useHacer } from '@/modules/conta/empresa/useHacer'
 import { Marca } from '@/modules/conta/ia/Marca'
+import { formaEnSingular } from '@/modules/conta/ajustes/formaJuridica'
 import { CampoLista, CampoSiNo, CampoTexto, PieFormulario, Resultado, TarjetaApartado } from '@/modules/conta/empresa/campos'
 
 interface Props { d: DatosEmpresa; quien: Quien; alCambiar: () => void; movil: boolean }
@@ -34,7 +35,8 @@ export function QuienEres({ d, quien, alCambiar, movil }: Props) {
   const [editando, setEditando] = useState(false)
   const h = useHacer(alCambiar)
   const e = d.empresa
-  const forma = d.formasJuridicas.find((f) => f.code === e.legalFormCode)?.name
+  // S01e: el tipo de UNA empresa, en singular (el catálogo copia el plural de la Orden).
+  const forma = formaEnSingular(e.legalFormCode, d.formasJuridicas.find((f) => f.code === e.legalFormCode)?.name)
     ?? (e.entityKind === 'self_employed' ? 'Autónomo' : e.entityKind === 'company' ? 'Sociedad' : null)
   const nifOk = e.taxId ? validarNifEs(e.taxId).ok : false
 
@@ -111,7 +113,7 @@ function FormQuienEres({ d, guardando, cancelar, guardar }: {
         ayuda="El nombre que sale en el NIF." deshabilitado={guardando} />
       <CampoTexto etiqueta="Nombre comercial (si quieres)" valor={c.tradeName} cambiar={pon('tradeName')} deshabilitado={guardando} />
       <CampoLista etiqueta="Tipo" valor={c.legalFormCode} cambiar={pon('legalFormCode')} deshabilitado={guardando}
-        opciones={[{ valor: '', texto: 'Sin poner' }, ...d.formasJuridicas.map((f) => ({ valor: f.code, texto: f.name }))]} />
+        opciones={[{ valor: '', texto: 'Sin poner' }, ...d.formasJuridicas.map((f) => ({ valor: f.code, texto: formaEnSingular(f.code, f.name) ?? f.name }))]} />
       <p className="cx-ayuda" style={{ margin: 0 }}>
         El NIF no se cambia aquí: {d.empresa.taxId ?? 'sin NIF'}. Otro NIF es otra empresa.
       </p>

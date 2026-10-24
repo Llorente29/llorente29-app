@@ -1,11 +1,12 @@
 // src/modules/conta/documentos/QuincenaCatcher.tsx
 //
-// E05 · Dentro de Documentos (N22): «Sube la quincena de Catcher». Se arrastran
-// juntos el ZIP de PDF y los dos Excel (FACTURAS y PEDIDOS); se leen aquí, en
-// el navegador, y antes de subir nada se enseña lo leído en una línea. Al subir:
-// cada PDF al almacén, una factura por PDF, el cruce con los pedidos y lo que
-// ha pasado, dicho (regla 8). Debajo, las quincenas ya subidas, cada una con su
-// resumen y su enlace.
+// E05 · «Sube la quincena de Catcher». Se arrastran juntos el ZIP de PDF y los
+// dos Excel (FACTURAS y PEDIDOS); se leen en el navegador, y antes de subir
+// nada se enseña lo leído en una línea. Al subir: cada PDF al almacén, una
+// factura por PDF, el cruce con los pedidos y lo que ha pasado, dicho (regla 8).
+// S02 · PR 3: vive en Compras y gastos › Liquidaciones (antes, al final de
+// Facturas recibidas). Las quincenas ya subidas salen en la lista de esa
+// página, con su estado: aquí solo se sube (cada cosa en un sitio).
 //
 // Lo que impide subir (un fichero que falta, periodos mezclados) se dice y no se
 // sube; lo que no cuadra en una factura sube igual y queda «Por aclarar».
@@ -13,17 +14,14 @@
 import { useRef, useState, type DragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaLoteCatcher } from '@/config/navegacion'
-import { useLeer } from '@/modules/conta/libros/contexto'
 import { resumen, LoteNoValido } from '@/modules/conta/lib/catcherQuincena'
-import { resumenLote } from '@/modules/conta/lib/catcherCruces'
-import { contar, etiquetasDe, facturasPorGrupo } from '@/modules/conta/lib/catcherCuenta'
-import { abrirQuincena, cruzarLote, leerLotes, subirQuincena, type QuincenaAbierta } from '@/modules/conta/services/catcherService'
+import { contar, facturasPorGrupo } from '@/modules/conta/lib/catcherCuenta'
+import { abrirQuincena, cruzarLote, subirQuincena, type QuincenaAbierta } from '@/modules/conta/services/catcherService'
 
 const ACEPTA = '.zip,.xlsx,.xls,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
-export function QuincenaCatcher({ accountId, companyId, quien }: { accountId: string; companyId: string; quien: string | null }) {
-  const [vuelta, setVuelta] = useState(0)
-  const lotes = useLeer(() => leerLotes(accountId, companyId), `${companyId}:${vuelta}`)
+/** `alSubir`: la quincena ya está subida (y cruzada): la lista de la página la vuelve a leer. */
+export function QuincenaCatcher({ accountId, companyId, quien, alSubir }: { accountId: string; companyId: string; quien: string | null; alSubir?: () => void }) {
   const entrada = useRef<HTMLInputElement>(null)
   const [encima, setEncima] = useState(false)
   const [paso, setPaso] = useState<string | null>(null)
@@ -56,7 +54,7 @@ export function QuincenaCatcher({ accountId, companyId, quien }: { accountId: st
       }
       setHecho({ textos, loteId: s.loteId })
       setLeida(null)
-      setVuelta((v) => v + 1)
+      alSubir?.()
     } catch (e) {
       setFallo(e instanceof Error ? e.message : String(e))
     } finally { setPaso(null) }
@@ -69,7 +67,7 @@ export function QuincenaCatcher({ accountId, companyId, quien }: { accountId: st
 
   return (
     <section className="cx-tarjeta cxk-quincena" aria-labelledby="cxk-quincena-titulo">
-      <h3 id="cxk-quincena-titulo">Facturas de Catcher</h3>
+      <h3 id="cxk-quincena-titulo">Subir una quincena de Catcher</h3>
       <div className={encima ? 'cxc-soltar cxc-soltar-encima' : 'cxc-soltar'} data-prueba="soltar-catcher"
         onDragOver={(e) => { e.preventDefault(); setEncima(true) }} onDragLeave={() => setEncima(false)} onDrop={alSoltar}>
         <span><strong>Sube la quincena de Catcher</strong>: el ZIP de las facturas y los dos Excel (FACTURAS y PEDIDOS), los tres a la vez.</span>
@@ -108,20 +106,6 @@ export function QuincenaCatcher({ accountId, companyId, quien }: { accountId: st
         )}
       </div>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-
-      {lotes.error && <div className="cx-error" role="alert">{lotes.error}</div>}
-      {lotes.datos && lotes.datos.length > 0 && (
-        <ul className="cxk-lotes" aria-label="Quincenas subidas">
-          {lotes.datos.map((l) => (
-            <li key={l.id}>
-              <Link to={rutaLoteCatcher(l.id)} className="cxk-lote">
-                <span>{resumenLote({ etiqueta: l.etiqueta, facturas: l.facturas, total: l.total, cruzado: l.cruzado, cuenta: l.cuenta })}</span>
-                {etiquetasDe(l.cuenta).map((e) => <span key={e.tono} className={`cxk-contador cxk-contador-${e.tono}`}>{e.texto}</span>)}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
     </section>
   )
 }

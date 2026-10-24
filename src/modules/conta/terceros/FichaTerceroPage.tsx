@@ -39,6 +39,7 @@ import {
   anadirPapel, archivarTercero, asegurarCuentaLiquidacion, deshacerFusion, fusionarTerceros, fusionesDe, listarTercerosBase, type Fusion,
 } from '@/modules/conta/services/tercerosService'
 import { MARCA } from '../cuenta/marca'
+import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 const CADA: Record<string, string> = { weekly: 'Liquida cada semana', fortnightly: 'Liquida cada 15 días', monthly: 'Liquida cada mes' }
 
@@ -85,7 +86,7 @@ function Ficha({ partyId }: { partyId: string }) {
   else if (uso.estado === 'no-existe' || !ctx) {
     cuerpo = (
       <div className="cx-tarjeta">
-        <Vacio titulo="Ese tercero no existe o no es de esta cuenta."
+        <Vacio titulo="Ese contacto no existe o no es de esta cuenta."
           explicacion="Puede que estés en otra cuenta."
           accion={<Link className="cx-boton-sec" to={rutaTerceros()}>Ver clientes y proveedores</Link>} />
       </div>
@@ -166,7 +167,7 @@ function DialogoFusionar({ alCerrar }: { alCerrar: () => void }) {
   return (
     <Dialogo titulo={`Fusionar con ${t.nombre}`} alCerrar={alCerrar}>
       <p style={{ margin: 0, fontSize: 15 }}>
-        Elige la otra ficha. <strong>{t.nombre}</strong> es la que queda: recibe sus papeles, cuentas, liquidaciones y propuestas del libro.
+        Elige la otra ficha. <strong>{t.nombre}</strong> es la que queda: recibe lo que es la otra (cliente, plataforma o socio), sus cuentas, liquidaciones y propuestas del libro.
         Lo que ya tiene (por ejemplo, su ficha de proveedor de Cocina con sus albaranes) se queda en la otra, que pasa a archivada. Se puede deshacer.
       </p>
       <div className="cx-campo">
@@ -235,8 +236,9 @@ function FranjaFusiones() {
   )
 }
 
+// S01: plataforma y socio de marca solo con hostelería (Ajustes › Empresa).
 const PAPELES_QUE_SE_ANADEN: { papel: 'customer' | 'platform' | 'brand_partner'; texto: string }[] = [
-  { papel: 'customer', texto: 'Añadir papel de cliente' },
+  { papel: 'customer', texto: 'Es también cliente' },
   { papel: 'platform', texto: 'Es también plataforma de reparto' },
   { papel: 'brand_partner', texto: 'Es también socio de marca' },
 ]
@@ -252,6 +254,7 @@ function MenuMas() {
   const [fallo, setFallo] = useState<string | null>(null)
   const t = ficha.tercero
   const tiene = new Set(ficha.papeles.map((p) => p.role))
+  const hosteleria = useHosteleria()
   // Regla de Julio (17/10): «Es también plataforma de reparto», solo si la cuenta vende por plataformas.
   const vende = vendePorPlataformas(ficha.canales)
   return (
@@ -261,7 +264,7 @@ function MenuMas() {
       {abierto && (
         <div className="cxp-menu" role="menu">
           {t.supplierId && <Link role="menuitem" to={rutaFichaProveedor(t.supplierId)}>Abrir su ficha de proveedor</Link>}
-          {PAPELES_QUE_SE_ANADEN.filter((p) => !tiene.has(p.papel) && (p.papel !== 'platform' || vende)).map((p) => (
+          {PAPELES_QUE_SE_ANADEN.filter((p) => !tiene.has(p.papel) && (hosteleria || p.papel === 'customer') && (p.papel !== 'platform' || vende)).map((p) => (
             <button key={p.papel} type="button" role="menuitem" onClick={async () => {
               setAbierto(false); setFallo(null)
               try {
@@ -269,7 +272,7 @@ function MenuMas() {
                 const cuenta = p.papel === 'brand_partner' && companyId ? await asegurarCuentaLiquidacion(companyId, t.id, t.nombre, userName) : null
                 avisar(p.papel === 'platform'
                   ? `${t.nombre} es ahora también plataforma. Dime su canal de venta en «Cobro» para enlazar sus liquidaciones${r.liquidaciones_enlazadas ? ` (ya van ${r.liquidaciones_enlazadas})` : ''}.`
-                  : `${t.nombre} tiene ahora también el papel de ${p.papel === 'customer' ? 'cliente' : 'socio de marca'}: un solo tercero, con todos sus papeles.${cuenta?.nueva ? ` Lo que cobres por su cuenta irá a la ${cuenta.code} «Liquidación pendiente con ${t.nombre}».` : ''}`)
+                  : `${t.nombre} es ahora también ${p.papel === 'customer' ? 'cliente' : 'socio de marca'}: una sola ficha para todo lo que es.${cuenta?.nueva ? ` Lo que cobres por su cuenta irá a la ${cuenta.code} «Liquidación pendiente con ${t.nombre}».` : ''}`)
                 recargar()
                 if (p.papel !== 'customer') navigate(rutaApartado('cobro'))
               } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo añadir.') }

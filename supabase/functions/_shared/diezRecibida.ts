@@ -6,8 +6,9 @@
 //
 // La forma es la de Diez, medida en la C0009 el 13/10 (1.432 recibidas de la
 // serie 2 de tres meses, scripts/conta/diez/prueba-c0009-recibida-molde.ts):
-//   · Serie 2, TipoAsiento 2, TipoFactura 1 (las 6 y 7 son abonos: no se han
-//     medido, no se mandan);
+//   · Serie 2, TipoAsiento 2, TipoFactura 1. I01f (20/10): las 2.836 recibidas
+//     normales de nueve meses llevan TipoFactura 1, también los 87 abonos (en
+//     negativo). Las 6 y 7 NO son abonos: son las autoliquidadas (abajo);
 //   · CuentaCliente = la 400/410 del proveedor, con CifCliente (1.427 de 1.432)
 //     y NombreCliente (todas);
 //   · hasta tres tipos de IVA (BaseImponibleN, PorcentajeIVAN, CuotaIVAN): 1.404
@@ -17,23 +18,47 @@
 //     sola 472 (47200000), aunque Folvy lleve una por tipo;
 //   · Fecha (del asiento) = FechaFactura en 833, posterior en 599: se manda la
 //     del asiento de Folvy; FechaIntroduccionFactura, el día en que se mete;
-//   · Descripcion «<número>-<nombre del proveedor>»;
+//   · Descripcion «<número>-<nombre del proveedor>», en 40 caracteres como
+//     mucho (D07a: Diez rechaza más), con el número entero;
 //   · sin analítica en ninguna recibida: no se manda.
 // Lo NO medido no se manda (se lanza, y se dice): retención (12 de 1.432, con
 // TipoRetencion sin descifrar), recargo (0), abonos, más de tres tipos, o una
 // línea que una factura recibida no lleva.
+//
+// I01f · LAS AUTOLIQUIDADAS (Julio, 20/10), medidas en la C0009 solo leyendo
+// (run 140 de diez-prueba-c0009, scripts/conta/diez/prueba-c0009-autoliquidada-molde.ts):
+// las 16 de nueve meses, todas de los cinco proveedores extranjeros de Foodint.
+//   · TipoFactura 7 la intracomunitaria (6 de 6: Trypleez, Anthropic, HubRise)
+//     y 6 la inversión del sujeto pasivo de fuera de la UE (10 de 10: Vercel,
+//     Supabase). Ninguna normal lleva 6 ni 7;
+//   · un solo tipo de IVA (16 de 16), con su base y su cuota;
+//   · TotalFactura = la base, no base + cuota (16 de 16), y TotalGastosIngresos
+//     también; los Apuntes, el gasto, que suma la base (16 de 16);
+//   · la 472 (47200000) y la 477 (47700000) por la misma cuota las pone Diez
+//     en el detalle (16 de 16): no se mandan;
+//   · FechaOperacion = FechaFactura (15 de 16; la que no, de enero).
+// En Folvy una autoliquidada lleva su 477 por la misma cuota que la 472, y la
+// 472 con el tipo «ue_compra» (tratamiento intra_eu) o «isp» (reverse_charge).
+// La inversión del sujeto pasivo NACIONAL (proveedor de España) no se ha
+// medido —Diez no tiene ninguna—: no se manda y se dice.
 
 import type { FacturaData } from './diezCliente.ts'
 import { FORMA_ANULACION } from './diezFactura.ts'
+import { descripcionRecibida } from './diezTexto.ts'
 
-export type LineaRecibida = { cuenta: string; debe: number; haber: number; tipoIva?: number | null; baseIva?: number | null }
+export type LineaRecibida = {
+  cuenta: string; debe: number; haber: number; tipoIva?: number | null; baseIva?: number | null
+  /** I01f · tax_rate.treatment de la línea: taxed, intra_eu, reverse_charge… */
+  tratamiento?: string | null
+}
 export type AsientoRecibida = {
   /** AAAA-MM-DD, la fecha del asiento en Folvy. */
   fecha: string
   /** AAAA-MM-DD, la de la factura del proveedor. */
   fechaFactura: string
   numero: string
-  proveedor: { nombre: string; nif: string | null }
+  /** I01f · `pais`: el de la ficha del proveedor (dos letras); sin él, España. */
+  proveedor: { nombre: string; nif: string | null; pais?: string | null }
   lineas: LineaRecibida[]
 }
 export type FacturaRecibida = { factura: FacturaData; esperado: { total: number; bases: number; cuotas: number; tipos: number[] } }
@@ -57,7 +82,7 @@ export function facturaRecibida(a: AsientoRecibida, o: { hoy: string }): Factura
 
   const de = (re: RegExp) => a.lineas.filter((l) => re.test(l.cuenta))
   if (de(/^4751/).length) throw new Error('lleva retención: Diez la guarda con un TipoRetencion que no se ha medido; no se envía hasta medirlo')
-  const otras = a.lineas.filter((l) => !/^(6|472|400|410)/.test(l.cuenta))
+  const otras = a.lineas.filter((l) => !/^(6|472|477|400|410)/.test(l.cuenta))
   if (otras.length) throw new Error(`líneas que una factura recibida no lleva: ${otras.map((l) => l.cuenta).join(', ')}`)
 
   const prov = de(/^4(00|10)/)
@@ -87,9 +112,15 @@ export function facturaRecibida(a: AsientoRecibida, o: { hoy: string }): Factura
   const bases = tipos.reduce((t, k) => t + porTipo.get(k)!.base, 0)
   const cuotas = tipos.reduce((t, k) => t + porTipo.get(k)!.cuota, 0)
   if (sumaGastos !== bases) throw new Error(`el gasto (${e(sumaGastos)}) no es la suma de las bases (${e(bases)}): Diez exige que los Apuntes sumen las bases`)
-  if (bases + cuotas !== total) throw new Error(`no cuadra: bases ${e(bases)} + cuotas ${e(cuotas)} ≠ total ${e(total)}`)
 
-  const descripcion = `${numero}-${nombre}`
+  // I01f · ¿Autoliquidada? La dice su 472 (el tratamiento de su tipo) y su 477.
+  const auto = autoliquidacion(a, de(/^472/), de(/^477/), cuotas, tipos.length)
+  if (auto) {
+    if (bases !== total) throw new Error(`no cuadra: en una autoliquidada el proveedor factura la base (${e(bases)}) y el asiento le debe ${e(total)}`)
+  } else if (bases + cuotas !== total) throw new Error(`no cuadra: bases ${e(bases)} + cuotas ${e(cuotas)} ≠ total ${e(total)}`)
+
+  // D07a: en 40, con el número entero (Diez rechaza más; RIDERS ES I 34427 26 00014, asiento 3248).
+  const descripcion = descripcionRecibida(numero, nombre)
   const fecha = aaaammdd(a.fecha)
   const slots: Record<string, number> = {}
   tipos.forEach((t, i) => {
@@ -98,15 +129,44 @@ export function facturaRecibida(a: AsientoRecibida, o: { hoy: string }): Factura
     slots[`CuotaIVA${i + 1}`] = e(porTipo.get(t)!.cuota)
   })
   const factura: FacturaData = {
-    Ejercicio: a.fecha.slice(0, 4), Serie: '2', TipoAsiento: 2, TipoFactura: 1,
+    Ejercicio: a.fecha.slice(0, 4), Serie: '2', TipoAsiento: 2, TipoFactura: auto ?? 1,
     Fecha: fecha, FechaFactura: aaaammdd(a.fechaFactura), FechaIntroduccionFactura: aaaammdd(o.hoy),
+    // I01f: en las autoliquidadas Diez guarda la fecha de la operación, la de la factura.
+    ...(auto ? { FechaOperacion: aaaammdd(a.fechaFactura) } : {}),
     CuentaCliente: cuentasProv[0], ...(a.proveedor.nif ? { CifCliente: a.proveedor.nif } : {}), NombreCliente: nombre,
     NumeroFactura: numero, Descripcion: descripcion,
     ...slots,
+    // Una autoliquidada: el total es la base (la cuota la pone quien compra).
     TotalFactura: e(total), TotalGastosIngresos: e(bases),
     Apuntes: cuentas.map((k, i) => ({ Linea: i + 1, Cuenta: k, Concepto: descripcion, Fecha: fecha, Importe: e(porCuenta.get(k)!) })),
   }
   return { factura, esperado: { total: e(total), bases: e(bases), cuotas: e(cuotas), tipos } }
+}
+
+/** I01f · TipoFactura de Diez de una recibida autoliquidada (medido en la C0009, 20/10). */
+export const TIPO_FACTURA_AUTOLIQUIDADA = { intracomunitaria: 7, ispExtranjero: 6 } as const
+
+/**
+ * I01f · Si la recibida es autoliquidada, su TipoFactura de Diez (7 la
+ * intracomunitaria, 6 la inversión del sujeto pasivo de fuera de la UE); si
+ * no, null. Lanza si lleva media autoliquidación o una que no se ha medido.
+ */
+function autoliquidacion(a: AsientoRecibida, l472: LineaRecibida[], l477: LineaRecibida[], cuotas: number, nTipos: number): 6 | 7 | null {
+  const trat = [...new Set(l472.map((l) => l.tratamiento ?? 'taxed'))]
+  const autoliquidada = trat.some((t) => t === 'intra_eu' || t === 'reverse_charge')
+  if (!autoliquidada) {
+    if (l477.length) throw new Error('lleva una 477 y su IVA no es de compra intracomunitaria ni de inversión del sujeto pasivo: una recibida normal no la lleva')
+    return null
+  }
+  if (trat.length !== 1) throw new Error('mezcla en la misma factura IVA autoliquidado y del normal: Diez no tiene ninguna así; no se envía')
+  if (nTipos !== 1) throw new Error(`una autoliquidada con ${nTipos} tipos de IVA: las de Diez llevan uno; no se envía`)
+  const auto477 = l477.reduce((t, l) => t + c(l.haber) - c(l.debe), 0)
+  if (!l477.length) throw new Error('falta la autorrepercusión: la 477 por la misma cuota que la 472')
+  if (auto477 !== cuotas) throw new Error(`la 477 (${e(auto477)}) no es la misma cuota que la 472 (${e(cuotas)})`)
+  if (trat[0] === 'intra_eu') return TIPO_FACTURA_AUTOLIQUIDADA.intracomunitaria
+  const pais = (a.proveedor.pais ?? '').trim().toUpperCase() || 'ES'
+  if (pais === 'ES') throw new Error('inversión del sujeto pasivo de un proveedor de España: Diez no tiene ninguna para medir cómo la guarda; no se envía')
+  return TIPO_FACTURA_AUTOLIQUIDADA.ispExtranjero
 }
 
 // ── D01 · La factura que ANULA una recibida ya enviada (su contraasiento) ──────
@@ -123,6 +183,13 @@ export function facturaRecibida(a: AsientoRecibida, o: { hoy: string }): Factura
 export function facturaRecibidaQueAnula(original: FacturaData, o: { fecha: string; hoy: string }): FacturaData {
   if (!FECHA.test(o.fecha) || !FECHA.test(o.hoy)) throw new Error('fechas que no son AAAA-MM-DD')
   if (String(original.Serie) !== '2') throw new Error('no es una factura recibida (serie 2): no se anula como recibida')
+  // I01f (20/10, medido en la C0009, documentos 3176 y 3177): Diez acepta la
+  // «-ANUL» de una autoliquidada (TipoFactura 6 o 7) pero solo le da la vuelta
+  // al proveedor; el gasto, la 472 y la 477 los deja como en la original, y el
+  // asiento descuadra por la base. Hasta medir cómo se anula bien, no se manda.
+  if ((Object.values(TIPO_FACTURA_AUTOLIQUIDADA) as number[]).includes(Number(original.TipoFactura))) {
+    throw new Error('es una autoliquidada (intracomunitaria o inversión del sujeto pasivo): Diez no anula bien su «-ANUL» (le da la vuelta solo al proveedor y el asiento descuadra), así que no se manda; se anula a mano en Diez')
+  }
   const numero = String(original.NumeroFactura ?? '').trim()
   if (!numero) throw new Error('la factura que se anula no tiene número: no se puede decir cuál anula')
   const neg = (x: unknown) => (Number(x ?? 0) === 0 ? 0 : e(-c(Number(x))))

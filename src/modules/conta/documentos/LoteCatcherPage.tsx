@@ -1,6 +1,7 @@
 // src/modules/conta/documentos/LoteCatcherPage.tsx
 //
-// E05 · Una quincena de Catcher subida, dentro de Documentos y con su estilo:
+// E05 · Una quincena de Catcher subida (S02 · PR 3: cuelga de Compras y gastos ›
+// Liquidaciones, que es donde sale en la lista y donde se sube):
 //   · bajo el título, solo «Cuadra con los pedidos salvo 1», y las cifras;
 //   · «Por aclarar», cada cosa con su pedido, su porqué y sus botones: «Dar por
 //     buena», «Reclamar» (diciendo qué) y «Volver a abrir». Lo ya decidido se
@@ -16,7 +17,7 @@
 
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { rutaAsiento, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
+import { rutaAsiento, rutaLiquidaciones, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -30,7 +31,7 @@ import {
 } from '@/modules/conta/lib/catcherCuenta'
 import type { TipoFactura } from '@/modules/conta/lib/catcherQuincena'
 import {
-  aclarar, cruzarLote, leerLote, proponerPagoLote, SALDO_PREPAGO, type CosaPorAclarar, type FacturaDeLote,
+  aclarar, leerLote, volverAComprobarLote, proponerPagoLote, SALDO_PREPAGO, type CosaPorAclarar, type FacturaDeLote,
 } from '@/modules/conta/services/catcherService'
 import { SaldoPrepago } from '@/modules/conta/documentos/SaldoPrepago'
 
@@ -45,7 +46,7 @@ export default function LoteCatcherPage() {
   const { activa } = useEmpresas()
   const movil = useIsMobile()
   const [vuelta, setVuelta] = useState(0)
-  const datos = useLeer(accountId && loteId ? () => leerLote(accountId, loteId) : null, `${loteId}:${vuelta}`)
+  const datos = useLeer(accountId && loteId ? () => leerLote(accountId, loteId) : null, `${accountId}:${loteId}:${vuelta}`)
   const [paso, setPaso] = useState<string | null>(null)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
@@ -63,8 +64,8 @@ export default function LoteCatcherPage() {
     <div className="cxl-pagina">
       <header className="cxl-cabeza">
         <div>
-          <span className="cxl-ante">Contabilidad</span>
-          <h1 className="cxl-titulo">Documentos</h1>
+          <span className="cxl-ante">Compras y gastos</span>
+          <h1 className="cxl-titulo">Liquidaciones</h1>
         </div>
       </header>
       {datos.error && <ErrorConReintento mensaje={datos.error} reintentar={datos.recargar} />}
@@ -73,12 +74,12 @@ export default function LoteCatcherPage() {
         <>
           <div className="cxr-seccion">
             <div>
-              <Migas migas={[{ etiqueta: 'Documentos', ruta: rutaDocumentos() }, { etiqueta: 'Facturas de Catcher' }]} />
+              <Migas migas={[{ etiqueta: 'Liquidaciones', ruta: rutaLiquidaciones() }, { etiqueta: 'Quincena de Catcher' }]} />
               <h2>{d.lote.etiqueta}</h2>
             </div>
             <div className="cxr-herramientas">
               <button type="button" className="cx-boton-sec" disabled={!!paso}
-                onClick={() => void hacer('Comprobando con los pedidos…', async () => (await cruzarLote(accountId, activa.id, loteId, userName)).texto)}>Volver a comprobar</button>
+                onClick={() => void hacer('Volviendo a leer los PDF y a comprobar con los pedidos…', () => volverAComprobarLote(loteId, userName))}>Volver a comprobar</button>
               {d.lote.pago
                 ? <Link to={rutaAsiento(d.lote.pago)} className="cxk-hecho-enlace">✓ Pago propuesto · Ver asiento</Link>
                 : <button type="button" className="cx-boton" disabled={!!paso}

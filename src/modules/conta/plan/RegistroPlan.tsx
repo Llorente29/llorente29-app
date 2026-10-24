@@ -7,6 +7,7 @@
 import type { ReactNode } from 'react'
 import { TarjetaApartado } from '@/modules/conta/empresa/campos'
 import { MARCA } from '../cuenta/marca'
+import { detalleEnPalabras } from '@/modules/conta/plan/detalleRegistro'
 
 const FECHA = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Madrid' })
 const HORA = new Intl.DateTimeFormat('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })
@@ -28,7 +29,7 @@ export function RegistroPlan({ registro, movil = false, titulo = 'Historial del 
           {registro.map((r) => (
             <li key={r.id}>
               <div className="cx-fila-texto">
-                <span className="cx-fila-titulo">{r.detalle}</span>
+                <span className="cx-fila-titulo">{detalleEnPalabras(r.detalle)}</span>
                 <span className="cx-fila-apoyo">{cuando(r.doneAt)} · {ORIGEN[r.source] ?? r.source}{r.doneByName ? ` · ${r.doneByName}` : ''}</span>
               </div>
               {accion?.(r)}

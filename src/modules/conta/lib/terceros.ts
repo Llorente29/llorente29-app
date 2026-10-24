@@ -77,7 +77,7 @@ export function mismoNif(terceros: readonly Tercero[], nif: string | null | unde
   const archivado = t.archivadoEn ? ' (está archivado: se recupera)' : ''
   const texto = yaLoEs
     ? `${t.nombre} ya es ${NOMBRE_PAPEL[papel].toLowerCase()} con el NIF ${n}${archivado}.`
-    : `Es el mismo que ${quienEs(t)}${archivado}: añadirle el papel de ${NOMBRE_PAPEL[papel].toLowerCase()}.`
+    : `Es el mismo que ${quienEs(t)}${archivado}: hacerlo también ${NOMBRE_PAPEL[papel].toLowerCase()}.`
   return { tercero: t, yaLoEs, texto }
 }
 

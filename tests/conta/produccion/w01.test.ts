@@ -312,7 +312,9 @@ describe('W01 · el workflow de producción: sin franja, y las guardas de siempr
   })
   it('R9: el manifiesto se lee con manifiesto.sh, y en la tanda de aplicar las cuentas son obligatorias', () => {
     expect(texto).toContain('bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG"')
-    expect(texto).toMatch(/M=supabase\/produccion\/aplicar\.txt; PAT='[^']+'; OBLIG=si/)
+    // C10: la tanda de la rama, en su carpeta (tanda.mjs workflow).
+    expect(texto).toMatch(/M=\$DIR\/aplicar\.txt; PAT='[^']+'; OBLIG=si/)
+    expect(texto).toContain('node scripts/conta/produccion/tanda.mjs workflow "${TANDA_PEDIDA:-$GITHUB_REF_NAME}"')
   })
 })
 
@@ -335,7 +337,7 @@ describe('W01 · front compatible en los dos sentidos (antes-de-subir)', { timeo
     expect(r.out).toContain('nadie lee public.sale.rider_seen_at')
   })
   it('la tanda viva no borra nada', () => {
-    expect(correr('supabase/produccion/aplicar.txt').out).toContain('no borra ni renombra nada')
+    expect(correr('supabase/produccion/tandas/sumied/heredada/aplicar.txt').out).toContain('no borra ni renombra nada')
   })
 })
 
@@ -379,7 +381,7 @@ describe('R9 · la tanda de producción en staging (real-con-fallo y real)', () 
   })
   it('el script mira que no es producción antes de deshacer nada, y en real-con-fallo solo sale en verde si deshacer.sh sale con 0', () => {
     const sh = readFileSync('scripts/conta/produccion/real-en-staging.sh', 'utf8')
-    expect(sh.indexOf("'51ad1792-6629-4ef7-833a-b57b09a86710'")).toBeLessThan(sh.indexOf('vuelta-atras.txt | while'))
+    expect(sh.indexOf("'51ad1792-6629-4ef7-833a-b57b09a86710'")).toBeLessThan(sh.indexOf('"$VA" | while'))
     expect(sh).toContain('bash scripts/conta/produccion/deshacer.sh "$T/aplicados.txt"; rc=$?')
     expect(sh).toContain('[ "$rc" -eq 0 ] || ok=0')
   })
@@ -455,24 +457,338 @@ describe('R11 · paso 8 sobre la tanda B02 · T1 «lo que entra» (0200, su copi
   })
 })
 
+describe('R11 · paso 8 sobre la tanda de la C06b «promociones y envíos» (0100 y 0110, su copia, aplicada: run 38954792366), con su contexto medido', () => {
+  it('las dos siguen, sin «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-promociones-envios-20261016.json',
+      '--manifiesto=tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261116T0100_c06b_promociones_envios.sql: sigue')
+    expect(out).toContain('20261116T0110_c06b_promociones_envios_datos.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del R03 «la dirección que no llega» (0300, 0310 y 0320, su copia, aplicada), con su contexto medido', () => {
+  it('las tres, en el camino del pedido: autorizo con su nombre', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-r03-direccion-20261017.json',
+      '--manifiesto=tests/conta/produccion/tanda-r03-direccion-20261017.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261118T0300_r03_direccion_incompleta.sql: AUTORIZO')
+    expect(out).toContain('20261118T0310_r03_ticket_codigo_quien_reparte.sql: AUTORIZO')
+    expect(out).toContain('20261118T0320_r03_entrega_datos.sql: AUTORIZO')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del M01 «Esperan» (0100, su copia, aplicada), con su contexto medido', () => {
+  it('sigue, sin autorizo', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-m01-esperan-20261017.json',
+      '--manifiesto=tests/conta/produccion/tanda-m01-esperan-20261017.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261117T0100_m01_motivos_para_validar.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del relevo del secreto del despacho (W02, 0100, su copia, aplicada), con su contexto medido', () => {
+  it('AUTORIZO, con su nombre', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-w02-secreto-relevo-20261017.json',
+      '--manifiesto=tests/conta/produccion/tanda-w02-secreto-relevo-20261017.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261120T0100_w02_secreto_despacho_relevo.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261120T0100_w02_secreto_despacho_relevo.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del fin del relevo (W02, 0200, su copia, aplicada), con su contexto medido', () => {
+  it('AUTORIZO, con su nombre', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-w02-secreto-despacho-20261017.json',
+      '--manifiesto=tests/conta/produccion/tanda-w02-secreto-despacho-20261017.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261120T0200_w02_secreto_despacho_fin_relevo.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261120T0200_w02_secreto_despacho_fin_relevo.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del esqueleto (S01, su copia, aplicada), con su contexto medido', () => {
+  it('la 0110 AUTORIZO, las demás siguen', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-s01-esqueleto-20261017.json',
+      '--manifiesto=tests/conta/produccion/tanda-s01-esqueleto-20261017.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261121T0110_s01_hosteleria_de_hoy.sql: AUTORIZO')
+    expect(out).toContain('20261121T0140_s01_regla5_eje_local.sql: sigue')
+    expect(out).toContain('autorizo: 20261121T0110_s01_hosteleria_de_hoy.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de Compras (0350–0370, su copia, aplicada), con su contexto medido', () => {
+  it('la 0350 y la 0370 siguen, la 0360 AUTORIZO', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-compras-revisar-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-compras-revisar-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0350_compras_preguntas_de_la_ficha.sql: sigue')
+    expect(out).toContain('20261129T0360_compras_preguntas_foodint.sql: AUTORIZO')
+    expect(out).toContain('20261129T0370_textos_sin_papel.sql: sigue')
+    expect(out).toContain('autorizo: 20261129T0360_compras_preguntas_foodint.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de C06b (0380, el nombre del PDF; su copia, aplicada), con su contexto medido', () => {
+  it('la 0380 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c06b-nombre-pdf-base-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-c06b-nombre-pdf-base-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0380_c06b_nombre_pdf_base.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
 describe('R11 · paso 8: la tanda viva, contra el contexto real medido para ESOS ficheros', () => {
   const correr = (fixture?: string) => {
-    try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe' }) } }
+    // C10: la tanda de la rama; aquí, la que quedó del manifiesto único (heredada).
+    try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe', env: { ...process.env, TANDA: 'heredada' } }) } }
     catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
   }
-  it('con los ficheros medidos, da el estado de cada uno y los «autorizo»', () => {
+  it('con el fichero medido, da su estado y los «autorizo» (D07a + D07c: la 0880, el respaldo, sigue; la 0820, datos de Foodint, pide «autorizo»; la 0830 sigue)', () => {
     const r = correr()
     expect(r.rc).toBe(0)
-    expect(r.out).toContain('20261116T0100_c06b_promociones_envios.sql: sigue')
-    expect(r.out).toContain('20261116T0110_c06b_promociones_envios_datos.sql: sigue')
-    expect(r.out).toContain('autorizo: (ninguno)')
+    expect(r.out).toContain('20261208T0880_d07a_respaldo_antes_de_reenviar.sql: sigue')
+    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql: AUTORIZO')
+    expect(r.out).toContain('20261208T0830_d07c_prepago_en_todas_las_listas.sql: sigue')
+    expect(r.out).toContain('autorizo: 20261208T0820_d07a_diez_reenviar_descripcion.sql')
   })
   it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
-    const m = JSON.parse(readFileSync('tests/conta/produccion/contexto-produccion-tanda-viva.json', 'utf8'))
-    m.tanda['supabase/migrations/20261116T0100_c06b_promociones_envios.sql'] = '00000000000000000000000000000000'
+    const m = JSON.parse(readFileSync('supabase/produccion/tandas/sumied/heredada/contexto.json', 'utf8'))
+    m.tanda['supabase/migrations/20261208T0820_d07a_diez_reenviar_descripcion.sql'] = '00000000000000000000000000000000'
     const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
     const r = correr(f)
     expect(r.rc).toBe(1)
-    expect(r.out).toContain('20261116T0100_c06b_promociones_envios.sql ha cambiado desde la medida')
+    expect(r.out).toContain('20261208T0820_d07a_diez_reenviar_descripcion.sql ha cambiado desde la medida')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de la C08 (0840, PR #301, ya aplicada: su copia), con su contexto medido', () => {
+  it('la 0840 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c08-lovers-catalogo-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-c08-lovers-catalogo-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261208T0840_c08_lovers_catalogo_2qjdb.sql: AUTORIZO')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del D06 (0800 y 0810, su copia), con su contexto medido', () => {
+  it('la 0800 sigue; solo la 0810 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d06-prepago-y-pdf-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-d06-prepago-y-pdf-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261207T0800_d06_prepago_y_pdf_bueno.sql: sigue')
+    expect(out).toContain('20261207T0810_d06_riders_prepago.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261207T0810_d06_riders_prepago.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del D03 (0770, 0780 y 0790, su copia), con su contexto medido', () => {
+  it('la 0770 y la 0790 siguen; solo la 0780 pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d03-recibida-pdf-20261023.json',
+      '--manifiesto=tests/conta/produccion/tanda-d03-recibida-pdf-20261023.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261206T0770_d03_recibida_pdf_sin_recepcion.sql: sigue')
+    expect(out).toContain('20261206T0780_d03_recibida_pdf_datos.sql: AUTORIZO')
+    expect(out).toContain('20261206T0790_d03_recibida_guardar.sql: sigue')
+    expect(out).toContain('autorizo: 20261206T0780_d03_recibida_pdf_datos.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del E05 (0480, su copia), con su contexto medido', () => {
+  it('la 0480 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-e05-releer-riders-20261022.json',
+      '--manifiesto=tests/conta/produccion/tanda-e05-releer-riders-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261204T0480_e05_releer_riders.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del D02 (0470, su copia), con su contexto medido', () => {
+  it('la 0470 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-d02-recibida-pdf-20261022.json',
+      '--manifiesto=tests/conta/produccion/tanda-d02-recibida-pdf-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261203T0470_d02_recibida_pdf.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del S02 (0460, su copia), con su contexto medido', () => {
+  it('la 0460 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-s02-color-empresa-20261022.json',
+      '--manifiesto=tests/conta/produccion/tanda-s02-color-empresa-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261202T0460_s02_color_empresa.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del C07 (0450, su copia), con su contexto medido', () => {
+  it('la 0450 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-c07-diez-todo-20261022.json',
+      '--manifiesto=tests/conta/produccion/tanda-c07-diez-todo-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261201T0450_c07_diez_todo.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de los impuestos de 2025 (I01d, 0420, su copia), con su contexto medido', () => {
+  it('la 0420 de I01d sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01d-impuestos-2025-20261022.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01d-impuestos-2025-20261022.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261130T0420_i01d_impuestos_2025.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de la ficha de Catcher (E05, 0420, su copia), con su contexto medido', () => {
+  it('la 0420 de Catcher pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-e05-catcher-ficha-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-e05-catcher-ficha-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261130T0420_e05_catcher_ficha.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261130T0420_e05_catcher_ficha.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de las facturas de riders (E05, 0410, su copia), con su contexto medido', () => {
+  it('la 0410 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-e05-riders-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-e05-riders-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261130T0410_e05_riders_ficha_y_libro.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del Autoconteo (0390 y 0400, su copia), con su contexto medido', () => {
+  it('la 0390 y la 0400 piden «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-autoconteo-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-autoconteo-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261129T0390_autoconteo_anula_atascados.sql: AUTORIZO')
+    expect(out).toContain('20261129T0400_autoconteo_se_aplica_entero.sql: AUTORIZO')
+    expect(out).toContain('autorizo: 20261129T0390_autoconteo_anula_atascados.sql 20261129T0400_autoconteo_se_aplica_entero.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del 202 (I01h, 0340, su copia), con su contexto medido', () => {
+  it('la 0340 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01h-sociedades-20261021.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01h-sociedades-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261128T0340_i01h_sociedades_202.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del 111 y el 115 (I01g, 0330, su copia), con su contexto medido', () => {
+  it('la 0330 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01g-retenciones-20261020.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01g-retenciones-20261021.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261127T0330_i01g_retenciones_111_115.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del envío de las autoliquidadas (I01f, 0320, su copia), con su contexto medido', () => {
+  it('la 0320 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01f-recibida-envio-20261020.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01f-recibida-envio-20261020.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261126T0320_i01f_recibida_envio_tratamiento.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de las autoliquidaciones (I01d, 0300 y 0310, su copia), con su contexto medido', () => {
+  it('la 0300 sigue; la 0310, datos de Foodint, pide «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01d-autoliquidaciones-20261020.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01d-autoliquidaciones-20261020.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261125T0300_i01d_autoliquidaciones.sql: sigue')
+    expect(out).toContain('20261125T0310_i01d_proveedores_foodint.sql: AUTORIZO')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de Impuestos de tus clientes (P01, 0100, su copia), con su contexto medido', () => {
+  it('la 0100 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-p01-despacho-20261019.json',
+      '--manifiesto=tests/conta/produccion/tanda-p01-despacho-20261019.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261123T0100_p01_despacho.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del justificante por CSV (0270, su copia), con su contexto medido', () => {
+  it('la 0270 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01c-csv-20261019.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01c-csv-20261019.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261122T0270_i01c_csv.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de los justificantes (0260, su copia), con su contexto medido', () => {
+  it('la 0260 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01c-justificantes-20261019.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01c-justificantes-20261019.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261122T0260_i01c_justificantes.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del 349 por operaciones (0250, su copia), con su contexto medido', () => {
+  it('la 0250 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01b-349-por-operaciones-20261019.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01b-349-por-operaciones-20261019.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261122T0250_i01b_349_por_operaciones.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del 303 que no inventa (0240, su copia), con su contexto medido', () => {
+  it('la 0240 sigue; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01b-303-no-inventa-20261018.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01b-303-no-inventa-20261018.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261122T0240_i01b_303_no_inventa.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del I01b (0180–0230, su copia, aplicada el 18/10), con su contexto medido', () => {
+  it('las seis siguen; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01b-asiento-303-20261018.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01b-asiento-303-20261018.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    for (const f of ['20261122T0180_i01b_asiento_303', '20261122T0190_i01b_calendario', '20261122T0200_i01b_declaracion',
+      '20261122T0210_i01b_presentados', '20261122T0220_i01b_certificados', '20261122T0230_i01b_asesoria']) expect(out).toContain(`${f}.sql: sigue`)
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del S01d (su copia, aplicada el 18/10), con su contexto medido', () => {
+  it('la 0160 y la 0170 siguen; ningún «autorizo»', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-s01d-tanda-20261018.json',
+      '--manifiesto=tests/conta/produccion/tanda-s01d-tanda-20261018.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261122T0160_s01d_documento_expedida.sql: sigue')
+    expect(out).toContain('20261122T0170_s01d_banco_nuevo.sql: sigue')
+    expect(out).toContain('autorizo: (ninguno)')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda del I01a (su copia, aplicada el 18/10), con su contexto medido', () => {
+  it('la 0130 pide autorizo y las demás siguen', () => {
+    const out = execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', 'tests/conta/produccion/contexto-produccion-i01a-impuestos-20261018.json',
+      '--manifiesto=tests/conta/produccion/tanda-i01a-impuestos-20261018.txt'], { encoding: 'utf8', stdio: 'pipe' })
+    expect(out).toContain('20261122T0110_i01_modelo_datos.sql: sigue')
+    expect(out).toContain('autorizo: 20261122T0130_i01_certificados.sql')
+  })
+})
+
+describe('R11 · paso 8 sobre la tanda de la rama claude/cool-noether-i932tx (D07 + D07b, 0850–0870; C10), con su contexto medido', () => {
+  const correr = (fixture?: string) => {
+    try { return { rc: 0, out: execFileSync('node', ['scripts/conta/produccion/analisis-tanda-viva.mjs', ...(fixture ? [fixture] : [])], { encoding: 'utf8', stdio: 'pipe', env: { ...process.env, TANDA: 'claude-cool-noether-i932tx' } }) } }
+    catch (e) { const x = e as { status: number; stdout: string; stderr: string }; return { rc: x.status, out: x.stdout + x.stderr } }
+  }
+  it('con el fichero medido: la 0850 y la 0860 siguen; la 0870, datos de Foodint, pide «autorizo»', () => {
+    const r = correr()
+    expect(r.rc).toBe(0)
+    expect(r.out).toContain('20261208T0850_d07_iva_no_deducible_y_periodo_cerrado.sql: sigue')
+    expect(r.out).toContain('20261208T0860_d07_uber_liquidaciones.sql: sigue')
+    expect(r.out).toContain('20261208T0870_d07_uber_quitar_provisionales.sql: AUTORIZO')
+    expect(r.out).toContain('autorizo: 20261208T0870_d07_uber_quitar_provisionales.sql')
+  })
+  it('si un fichero de la tanda no es el medido (otro md5), PARA y pide volver a medir', () => {
+    const m = JSON.parse(readFileSync('supabase/produccion/tandas/sumied/claude-cool-noether-i932tx/contexto.json', 'utf8'))
+    m.tanda['supabase/migrations/20261208T0870_d07_uber_quitar_provisionales.sql'] = '00000000000000000000000000000000'
+    const f = join(mkdtempSync(join(tmpdir(), 'r11-')), 'ctx.json'); writeFileSync(f, JSON.stringify(m))
+    const r = correr(f)
+    expect(r.rc).toBe(1)
+    expect(r.out).toContain('20261208T0870_d07_uber_quitar_provisionales.sql ha cambiado desde la medida')
   })
 })

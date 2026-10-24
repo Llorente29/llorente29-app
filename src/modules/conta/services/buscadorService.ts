@@ -18,7 +18,7 @@ import { rutaAsiento, rutaMayor, rutaRevisarFactura } from '@/config/navegacion'
 import { NOMBRE_SERIE, type Serie } from '@/modules/conta/lib/libro'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import { rutaDeTercero, type Papel } from '@/modules/conta/lib/terceros'
-import { paraIlike, POR_GRUPO, type Consulta, type Resultado, type TipoResultado } from '@/modules/conta/marco/nuevo/buscar'
+import { paraIlike, POR_GRUPO, vivoPrimero, type Consulta, type Resultado, type TipoResultado } from '@/modules/conta/marco/nuevo/buscar'
 
 type Fila = Record<string, unknown>
 
@@ -36,10 +36,17 @@ const ESTADO: Record<string, string> = { propuesto: 'para revisar', borrador: 'b
 
 export async function buscarAsientos(accountId: string, companyId: string, c: Consulta): Promise<Resultado[]> {
   const t = paraIlike(c.texto)
-  let q = tabla('journal_entry').select('id, series, number, entry_date, concept, status')
-    .eq('account_id', accountId).eq('company_id', companyId)
-  q = c.entero !== null ? q.or(`number.eq.${c.entero},concept.ilike."*${t}*"`) : q.ilike('concept', `%${t}%`)
-  const r = await filas(q.order('entry_date', { ascending: false }).limit(POR_GRUPO), 'en los asientos')
+  // Lo vivo primero (Julio, 16/10): los anulados no se comen el sitio de los
+  // vivos. Dos lecturas, y los anulados rellenan lo que quede del grupo.
+  const consulta = (anulados: boolean) => {
+    let q = tabla('journal_entry').select('id, series, number, entry_date, concept, status')
+      .eq('account_id', accountId).eq('company_id', companyId)
+    q = anulados ? q.eq('status', 'anulado') : q.neq('status', 'anulado')
+    q = c.entero !== null ? q.or(`number.eq.${c.entero},concept.ilike."*${t}*"`) : q.ilike('concept', `%${t}%`)
+    return filas(q.order('entry_date', { ascending: false }).limit(POR_GRUPO), 'en los asientos')
+  }
+  const [vivos, anulados] = await Promise.all([consulta(false), consulta(true)])
+  const r = [...vivos, ...anulados].slice(0, POR_GRUPO)
   return r.map((f) => {
     const n = num(f.number)
     const serie = NOMBRE_SERIE[(num(f.series) ?? 4) as Serie] ?? 'General'
@@ -48,6 +55,7 @@ export async function buscarAsientos(accountId: string, companyId: string, c: Co
       titulo: txt(f.concept) || 'Asiento sin concepto',
       apoyo: [txt(f.entry_date) ? diaMesCorto(txt(f.entry_date)) + '/' + txt(f.entry_date).slice(0, 4) : null, ESTADO[txt(f.status)] ?? txt(f.status)].filter(Boolean).join(' · '),
       cifra: n === null ? `${serie} —` : `${serie} ${conMiles(n)}`,
+      apagado: f.status === 'anulado',
     }
   })
 }
@@ -85,7 +93,7 @@ export async function buscarTerceros(accountId: string, c: Consulta): Promise<Re
   if (nif.length >= 3) o.push(`tax_id.ilike."*${nif}*"`)
   const r = await filas(tabla('party').select('id, name, tax_id, archived_at, party_role(role, supplier_id)')
     .eq('account_id', accountId).or(o.join(',')).order('name').limit(POR_GRUPO), 'en clientes y proveedores')
-  return r.map((f) => {
+  return vivoPrimero(r.map((f) => {
     const roles = Array.isArray(f.party_role) ? (f.party_role as Fila[]) : []
     const papeles = roles.map((x) => txt(x.role)).filter((x): x is Papel => x in PAPEL)
     const supplierId = roles.find((x) => x.role === 'supplier')?.supplier_id
@@ -96,8 +104,9 @@ export async function buscarTerceros(accountId: string, c: Consulta): Promise<Re
       // Un umbral ordena, no esconde (regla 7): el archivado sale, y lo dice.
       apoyo: [papeles.map((p) => PAPEL[p]).join(', ') || null, f.archived_at ? 'archivado' : null].filter(Boolean).join(' · '),
       cifra: txt(f.tax_id) || undefined,
+      apagado: Boolean(f.archived_at),
     }
-  })
+  }))
 }
 
 export async function buscarSubcuentas(accountId: string, companyId: string, c: Consulta): Promise<Resultado[]> {

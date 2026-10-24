@@ -148,3 +148,25 @@ describe('lo que está mal falla en rojo, con el caso y su norma', () => {
     expect(t).toContain('- **Llorente29 Food, S.L. (cuenta c01a0000)**: Presenta el 111 y no su resumen anual, el 190. _(RD 439/2007 (Reglamento del IRPF), art. 108.2)_')
   })
 })
+
+// Julio, 21/10: quien lleva el SII no presenta el 390 (instrucciones del modelo
+// 390, AEAT), ni el 347. El caso real: Importaciones de Prueba Levante, S.A.,
+// de la demo del P01 en staging (cuenta d5ac0000…c050), sociedad mensual con
+// SII y modelos 303 y 349, tal cual en company_tax_profile el 21/10. El agente
+// del 20 y 21/10 la daba en rojo: «Presenta el 303 y no su resumen anual, el 390».
+describe('con el SII no van ni el 390 ni el 347 (Levante, staging, 21/10)', () => {
+  const LEVANTE = { modelos: ['303', '349'], perfil: { tipo: 'company' as const, sii: true } }
+  it('Levante, como está: nada en rojo, ni en el agente ni en la app', () => {
+    expect(coherenciaAgente(LEVANTE.modelos, TAX_FORM, LEVANTE.perfil)).toEqual([])
+    expect(coherenciaModelos(LEVANTE.modelos, REGLAS, LEVANTE.perfil)).toEqual([])
+  })
+  it('si le pusieran el 390 o el 347, sobran, y lo dice con su norma', () => {
+    const r = coherenciaAgente([...LEVANTE.modelos, '390', '347'], TAX_FORM, LEVANTE.perfil) as { clave: string; modelo: string; norma: string }[]
+    expect(r.map((x) => `${x.clave} ${x.modelo}`).sort()).toEqual(['sobra_con_sii 390', 'sobra_por_defecto 347'])
+    expect(r.find((x) => x.modelo === '390')!.norma).toMatch(/modelo 390 \(AEAT\).*SII/)
+  })
+  it('la misma empresa SIN el SII sí necesita el 390 y el 347', () => {
+    const r = coherenciaAgente(LEVANTE.modelos, TAX_FORM, { tipo: 'company', sii: false }) as { clave: string; modelo: string }[]
+    expect(r.map((x) => `${x.clave} ${x.modelo}`).sort()).toEqual(['falta_por_defecto 347', 'periodico_sin_anual 303'])
+  })
+})

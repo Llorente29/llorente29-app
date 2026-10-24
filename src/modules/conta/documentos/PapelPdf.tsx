@@ -1,35 +1,46 @@
 // src/modules/conta/documentos/PapelPdf.tsx
 //
-// D01 · N23: la primera página del PDF de la factura, pintada como imagen a la
-// izquierda (maqueta N23Revisar). Un PDF dentro de un iframe no se ve en el
-// Safari del móvil ni en el Chromium de las pruebas: por eso se pinta con
-// pdfjs, el mismo que ya carga el módulo (plan/leerFicheros.ts), y solo cuando
-// llega un PDF. Si no se puede pintar, lo dice y deja «Abrir».
+// D01 · N23: el PDF de la factura, pintado con pdfjs (el mismo que ya carga el
+// módulo, plan/leerFicheros.ts). Un PDF dentro de un iframe no se ve en el
+// Safari del móvil ni en el Chromium de las pruebas. Si no se puede pintar, lo
+// dice y deja «Abrir».
 //
-// R5 · 4: al pintar, mide hasta dónde llega la tinta (`hastaDondeHayTinta`) y
-// lo dice con `alMedir`, para que el móvil recorte el papel a la altura de lo
-// escrito y no a la de la hoja en blanco.
+// D04 · Nítido (Julio, con la COHELDI en producción: «se ve borroso, y al
+// ampliarlo sigue borroso»). Antes se pintaba UNA vez la primera página, al
+// ancho que tuviera la caja al abrir, y el navegador la estiraba. Ahora:
+//   · cada página se pinta a la resolución real del panel (su ancho en píxeles
+//     CSS × devicePixelRatio, escalaPdf.ts);
+//   · se vuelve a pintar cada vez que cambia ese ancho: al ampliar o reducir
+//     (el zoom del panel cambia el ancho de la hoja), al mover el separador o
+//     al cambiar la ventana (ResizeObserver);
+//   · al abrir, ocupa todo el ancho del panel;
+//   · todas las páginas, una debajo de otra: se recorren con el scroll.
 
 import { useEffect, useRef, useState } from 'react'
 import { pdfjs } from '@/modules/conta/plan/leerFicheros'
-import { hastaDondeHayTinta } from '@/modules/conta/documentos/tinta'
+import { escalaParaPintar } from '@/modules/conta/documentos/escalaPdf'
 
 /** Lo que se usa de pdfjs para pintar (el tipo compartido solo describe la lectura de celdas). */
 interface PdfParaPintar {
   getDocument: (src: { data: Uint8Array; isEvalSupported?: boolean }) => {
-    promise: Promise<{ numPages: number; getPage: (n: number) => Promise<Pagina> }>
+    promise: Promise<DocPdf>
     destroy: () => Promise<void>
   }
 }
+interface DocPdf { numPages: number; getPage: (n: number) => Promise<Pagina> }
 interface Pagina {
   getViewport: (o: { scale: number }) => { width: number; height: number }
-  render: (o: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<void> }
+  render: (o: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<void>; cancel?: () => void }
 }
 
-export function PapelPdf({ url, titulo, alMedir }: { url: string; titulo: string; alMedir?: (altoCss: number) => void }) {
-  const lienzo = useRef<HTMLCanvasElement>(null)
-  const [estado, setEstado] = useState<{ url: string; paginas: number | null; fallo: string | null }>({ url: '', paginas: null, fallo: null })
+export function PapelPdf({ url, titulo }: { url: string; titulo: string }) {
+  const caja = useRef<HTMLDivElement>(null)
+  const lienzos = useRef<(HTMLCanvasElement | null)[]>([])
+  const [doc, setDoc] = useState<{ url: string; doc: DocPdf | null; fallo: string | null }>({ url: '', doc: null, fallo: null })
+  // El ancho del panel en píxeles CSS y la densidad de la pantalla: lo que decide la resolución.
+  const [medida, setMedida] = useState<{ ancho: number; dpr: number }>({ ancho: 0, dpr: 1 })
 
+  // 1 · Leer el PDF (una vez por dirección).
   useEffect(() => {
     let vivo = true
     let soltar: (() => Promise<void>) | null = null
@@ -37,40 +48,77 @@ export function PapelPdf({ url, titulo, alMedir }: { url: string; titulo: string
       const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer())
       const pdf = (await pdfjs()) as unknown as PdfParaPintar
       const tarea = pdf.getDocument({ data: bytes, isEvalSupported: false })
-      soltar = tarea.destroy
-      const doc = await tarea.promise
-      const pagina = await doc.getPage(1)
-      const c = lienzo.current
-      if (!vivo || !c) return
-      // Al ancho de su caja, con la densidad de la pantalla (nítido en el móvil).
-      const ancho = c.parentElement?.clientWidth || 600
-      const base = pagina.getViewport({ scale: 1 })
-      const escala = (ancho / base.width) * (window.devicePixelRatio || 1)
-      const vista = pagina.getViewport({ scale: escala })
-      c.width = Math.floor(vista.width)
-      c.height = Math.floor(vista.height)
-      c.style.width = `${ancho}px`
-      const ctx = c.getContext('2d')
-      if (!ctx) throw new Error('el navegador no deja pintar')
-      await pagina.render({ canvasContext: ctx, viewport: vista }).promise
-      if (!vivo) return
-      if (alMedir) {
-        const img = ctx.getImageData(0, 0, c.width, c.height)
-        alMedir(hastaDondeHayTinta(img.data, c.width, c.height) / (window.devicePixelRatio || 1))
-      }
-      setEstado({ url, paginas: doc.numPages, fallo: null })
-    })().catch((e: unknown) => { if (vivo) setEstado({ url, paginas: null, fallo: e instanceof Error ? e.message : String(e) }) })
-    return () => { vivo = false; void soltar?.() }
-  // alMedir no cambia lo que se pinta: no vuelve a pintar por él.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      // Con su `this`: suelto (`soltar = tarea.destroy`), al salir de la página
+      // antes de pintar reventaba con «Cannot set properties of undefined
+      // (setting 'destroyed')» (S01, e2e de «No es una factura»).
+      soltar = () => tarea.destroy()
+      const d = await tarea.promise
+      if (vivo) setDoc({ url, doc: d, fallo: null })
+    })().catch((e: unknown) => { if (vivo) setDoc({ url, doc: null, fallo: e instanceof Error ? e.message : String(e) }) })
+    return () => { vivo = false; soltar?.().catch(() => {}) }
   }, [url])
 
-  const e = estado.url === url ? estado : null
+  // 2 · Medir el panel, y volver a medir cuando cambie (zoom, separador, ventana).
+  useEffect(() => {
+    const c = caja.current
+    if (!c) return
+    const medir = () => {
+      const ancho = Math.round(c.clientWidth)
+      const dpr = window.devicePixelRatio || 1
+      setMedida((m) => (m.ancho === ancho && m.dpr === dpr ? m : { ancho, dpr }))
+    }
+    medir()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(medir) : null
+    ro?.observe(c)
+    window.addEventListener('resize', medir)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', medir) }
+  }, [])
+
+  // 3 · Pintar cada página a esa resolución; si cambia antes de acabar, se cancela y se vuelve a pintar.
+  const d = doc.url === url ? doc.doc : null
+  const [fallo, setFallo] = useState<string | null>(null)
+  useEffect(() => {
+    if (!d || medida.ancho <= 0) return
+    let vivo = true
+    const tareas: { cancel?: () => void }[] = []
+    ;(async () => {
+      for (let n = 1; n <= d.numPages && vivo; n++) {
+        const pagina = await d.getPage(n)
+        const c = lienzos.current[n - 1]
+        if (!vivo || !c) return
+        const e = escalaParaPintar(medida.ancho, pagina.getViewport({ scale: 1 }), medida.dpr)
+        const vista = pagina.getViewport({ scale: e.escala })
+        // Se pinta en uno aparte y se copia: el lienzo visible no se queda en blanco mientras.
+        const tmp = document.createElement('canvas')
+        tmp.width = e.ancho; tmp.height = e.alto
+        const ctx = tmp.getContext('2d')
+        if (!ctx) throw new Error('el navegador no deja pintar')
+        const t = pagina.render({ canvasContext: ctx, viewport: vista })
+        tareas.push(t)
+        await t.promise
+        if (!vivo) return
+        c.width = e.ancho; c.height = e.alto
+        c.getContext('2d')?.drawImage(tmp, 0, 0)
+        c.dataset.anchoCss = String(medida.ancho)
+        c.dataset.dpr = String(medida.dpr)
+      }
+      if (vivo) setFallo(null)
+    })().catch((e: unknown) => {
+      // Cancelado porque cambió el ancho: no es un fallo.
+      if (vivo && !(e instanceof Error && /cancel/i.test(e.name + e.message))) setFallo(e instanceof Error ? e.message : String(e))
+    })
+    return () => { vivo = false; for (const t of tareas) t.cancel?.() }
+  }, [d, medida])
+
+  const paginas = d?.numPages ?? 1
+  const noSePinta = (doc.url === url ? doc.fallo : null) ?? fallo
   return (
-    <>
-      <canvas ref={lienzo} role="img" aria-label={titulo} className="cxr-papel-lienzo" />
-      {e?.fallo && <p className="cx-ayuda">No he podido pintar el PDF ({e.fallo}). Ábrelo con «Abrir».</p>}
-      {e?.paginas && e.paginas > 1 && <p className="cx-ayuda">Página 1 de {e.paginas}: el resto, con «Abrir».</p>}
-    </>
+    <div ref={caja} className="s-papel-pdf" data-prueba="papel-pdf" data-paginas={d?.numPages ?? undefined}>
+      {Array.from({ length: paginas }, (_, i) => (
+        <canvas key={i} ref={(el) => { lienzos.current[i] = el }} className="cxr-papel-lienzo" role="img"
+          aria-label={i === 0 ? titulo : `Página ${i + 1} de ${paginas}`} />
+      ))}
+      {noSePinta && <p className="cx-ayuda">No he podido pintar el PDF ({noSePinta}). Ábrelo con «Abrir».</p>}
+    </div>
   )
 }

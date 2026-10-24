@@ -1,0 +1,14 @@
+# Vuelta atrás de la tanda del S01d (modo «vuelta_atras»), en orden inverso.
+# ANTES, el front tiene que volver al de antes del S01d (la expedida y Bancos
+# llaman a las dos funciones que esto quita).
+# · 0170: quita bank_cuenta_nueva. Los bancos dados de alta con ella y sus
+#   subcuentas 572 se quedan: son datos de la empresa.
+# · 0160: PARA, sin tocar nada, si ya hay algún PDF de expedida enlazado; si
+#   no, quita la función y deja el CHECK de kind como estaba.
+# Ensayadas en staging: supabase/staging/sql/20261122_s01d_documento_expedida_prueba.sql
+# y supabase/staging/sql/20261122_s01d_banco_nuevo_prueba.sql.
+# La anterior de este fichero (I01a):
+# tests/conta/produccion/vuelta-atras-i01a-impuestos-20261018.txt.
+cuenta: scripts/conta/produccion/cuentas/s01d-tanda.sql
+supabase/vuelta-atras/20261122T0170_s01d_banco_nuevo.down.sql
+supabase/vuelta-atras/20261122T0160_s01d_documento_expedida.down.sql

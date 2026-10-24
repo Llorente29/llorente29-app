@@ -8,7 +8,8 @@ export type EntityKind = 'company' | 'self_employed'
 export type VatRegime =
   | 'general' | 'recargo_equivalencia' | 'intracomunitario' | 'exento'
   | 'inversion_sujeto_pasivo' | 'extranjero'
-export type PaymentMethod = 'transfer' | 'direct_debit' | 'card' | 'cash'
+/** D06: 'prepaid', el saldo prepago de Catcher (40700001): Riders se paga de ahí (tanda 0800). */
+export type PaymentMethod = 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid'
 export type ContactRole = 'orders' | 'sales' | 'admin' | 'billing' | 'delivery' | 'other'
 /** Cada cuánto factura (C01b; columna supplier.invoicing_frequency). */
 export type InvoicingFrequency = 'per_delivery' | 'weekly' | 'fortnightly' | 'monthly' | 'other'
@@ -109,6 +110,7 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   direct_debit: 'Domiciliación',
   card: 'Tarjeta',
   cash: 'Efectivo',
+  prepaid: 'Saldo prepago Catcher (40700001)',
 }
 
 export const INVOICING_FREQUENCY_LABEL: Record<InvoicingFrequency, string> = {

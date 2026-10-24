@@ -5,6 +5,11 @@
  * un color, se cambia AQUÍ y en ningún otro sitio: ningún componente lleva un
  * hex escrito.
  *
+ * S02 · Patrón único (22/10): los colores, la letra y los radios de aquí
+ * son ALIAS de los del patrón (diseno/tokens.css), para que las pantallas que
+ * aún no se han mudado se vean con los mismos colores y la misma letra que
+ * las nuevas. Los que no tienen equivalente se quedan con su valor.
+ *
  * Todo cuelga de `.cx` (el contenedor del módulo): fuera de él no existe nada
  * de esto, y el resto de Folvy no se entera. `.cx-colores` da SOLO los
  * colores, sin letra ni fondo, a una pieza suelta del estilo nuevo dentro de
@@ -19,31 +24,31 @@
 
 .cx, .cx-colores {
   /* ── Los diez del encargo (§7) ─────────────────────────────────────── */
-  --cx-texto: #0E1A2B;          /* Texto principal */
-  --cx-apoyo: #5B6678;          /* Etiquetas y ayudas */
-  --cx-azul: #2F5BFF;           /* Botón principal, enlaces, menú activo */
-  --cx-azul-suave: #EAF0FF;     /* Fondo del menú activo y de lo seleccionado */
-  --cx-ia: #2EE6A8;             /* Punto de la IA, progreso, hecho (solo fondo) */
-  --cx-verde-oscuro: #0B7A55;   /* Texto sobre verde suave */
-  --cx-verde-suave: #E3FBF2;    /* Fondo de lo que dice o hace la IA */
-  --cx-ambar-suave: #FFF1DC;    /* Fondo de duda o aviso */
-  --cx-ambar: #8A4B00;          /* Texto de duda o aviso */
-  --cx-linea: #E6EAF0;          /* Bordes y separadores */
-  --cx-fondo: #F5F7FA;          /* Fondo de página */
+  --cx-texto: var(--s-tinta);      /* Texto principal */
+  --cx-apoyo: var(--s-apoyo);      /* Etiquetas y ayudas */
+  --cx-azul: var(--s-accion);      /* Botón principal, enlaces, menú activo */
+  --cx-azul-suave: var(--s-accion-suave); /* Fondo del menú activo y de lo seleccionado */
+  --cx-ia: var(--s-acento);        /* Punto de la IA, progreso, hecho (solo fondo) */
+  --cx-verde-oscuro: var(--s-propuesto-texto); /* Texto sobre verde suave (lo que dice la IA) */
+  --cx-verde-suave: var(--s-propuesto); /* Fondo de lo que dice o hace la IA */
+  --cx-ambar-suave: var(--s-duda-fondo); /* Fondo de duda o aviso */
+  --cx-ambar: var(--s-duda);       /* Texto de duda o aviso */
+  --cx-linea: var(--s-borde-decorativo); /* Bordes y separadores */
+  --cx-fondo: var(--s-fondo);      /* Fondo de página */
   --cx-blanco: #FFFFFF;
 
   /* ── Tonos que usan las maquetas y el encargo no nombraba ──────────── */
-  --cx-borde-campo: #C9D0DC;    /* Borde de botones blancos, píldoras y cajas */
-  --cx-borde-control: #848E9E;  /* C06 R4 · Borde de los CAMPOS (inputs y desplegables): 3,31:1 sobre blanco, 3,08:1 sobre el fondo (WCAG 1.4.11) */
-  --cx-neutro-suave: #EEF1F5;   /* Píldora neutra («Principal», «303 IVA») */
+  --cx-borde-campo: var(--s-borde-decorativo); /* Borde de botones blancos, píldoras y cajas */
+  --cx-borde-control: var(--s-borde-control);  /* C06 R4 · Borde de los CAMPOS (inputs y desplegables): 3,31:1 sobre blanco, 3,08:1 sobre el fondo (WCAG 1.4.11) */
+  --cx-neutro-suave: var(--s-neutro-fondo); /* Píldora neutra («Principal», «303 IVA») */
   --cx-neutro-texto: #2B3648;   /* Texto de la píldora neutra */
   --cx-pendiente: #F1F3F6;      /* Fondo de lo que aún no ha llegado (meses) */
   --cx-ia-apoyo: #1F4B3C;       /* Texto de apoyo sobre verde suave */
-  --cx-ia-borde: #B9EFD8;       /* Borde del bloque de la IA */
+  --cx-ia-borde: var(--s-propuesto-borde); /* Borde del bloque de la IA */
   --cx-ia-borde-fuerte: #8FE3C2;/* Borde discontinuo de lo propuesto */
-  --cx-azul-borde: #C9D7FF;     /* Borde de lo seleccionado */
-  --cx-rojo: #A3201A;           /* Error (texto) — 6,6:1 sobre su fondo */
-  --cx-rojo-suave: #FDECEA;     /* Error (fondo) */
+  --cx-azul-borde: var(--s-accion-borde); /* Borde de lo seleccionado */
+  --cx-rojo: var(--s-falta);       /* Error (texto) */
+  --cx-rojo-suave: var(--s-falta-fondo); /* Error (fondo) */
   --cx-ambar-fila: #FFFBF3;     /* Fila «para confirmar» de Bancos (N17) */
   --cx-ambar-punto: #F2B544;    /* Punto ámbar de confianza (N17); solo fondo */
 
@@ -56,14 +61,16 @@
   --cx-inicial-6: #EEF1F5;      /* gris */
 
   /* ── Letra ──────────────────────────────────────────────────────────── */
-  --cx-letra: 'Geist Variable', 'Geist', 'Helvetica Neue', Arial, sans-serif;
-  --cx-letra-cifras: 'Geist Mono Variable', 'Geist Mono', 'SF Mono', Menlo, monospace;
+  --cx-letra: var(--s-letra);
+  /* S01e: los importes, en la letra de la app con cifras tabulares, no en letra
+     de máquina de escribir (como R5b en Documentos). Las tabulares las pone la raíz. */
+  --cx-letra-cifras: var(--cx-letra);
 
   /* ── Formas ─────────────────────────────────────────────────────────── */
-  --cx-radio-tarjeta: 24px;
-  --cx-radio-bloque: 20px;
-  --cx-radio-caja: 14px;
-  --cx-radio-boton: 12px;
+  --cx-radio-tarjeta: var(--s-radio-bloque);
+  --cx-radio-bloque: var(--s-radio-bloque);
+  --cx-radio-caja: var(--s-radio-bloque);
+  --cx-radio-boton: var(--s-radio-boton);
   --cx-sombra-menu: 0 8px 30px rgba(14, 26, 43, 0.05);
   --cx-sombra-flotante: 0 16px 50px rgba(14, 26, 43, 0.18);
   --cx-sombra-barra: 0 12px 40px rgba(14, 26, 43, 0.14);
@@ -74,7 +81,6 @@
   --cx-blanco-velo: rgba(255, 255, 255, 0.72);               /* Carril «Lo que llevamos», translúcido */
   --cx-velo-app: rgba(233, 237, 243, 0.55);                  /* Folvy atenuado detrás de la ventana */
   --cx-velo-hoja: rgba(14, 26, 43, 0.32);                    /* Detrás de la hoja del móvil */
-  --cx-degradado:
-    radial-gradient(900px 500px at 85% -10%, #E3FBF2 0%, rgba(227, 251, 242, 0) 70%),
-    radial-gradient(700px 500px at 10% 110%, #EAF0FF 0%, rgba(234, 240, 255, 0) 70%);
+  /* S02: sin degradado: el fondo del patrón es liso. */
+  --cx-degradado: linear-gradient(var(--s-fondo), var(--s-fondo));
 }

@@ -53,8 +53,10 @@ async function borrarRestos(s: Sesion) {
 }
 
 async function cambiarA(page: Page, nombre: RegExp) {
-  // M01: la empresa va arriba, en la barra del marco, también en el móvil (y
-  // solo ahí: Ajustes ya no repite la suya). Un solo botón.
+  // M01: la empresa va arriba, también en el móvil (y solo ahí: Ajustes ya no
+  // repite la suya). Un solo botón. S02: en la cabecera (en el móvil, en la fila
+  // de debajo); su nombre accesible acaba en «Cambiar de empresa», con la razón
+  // social si es otra, y su lista «Tus empresas» sigue igual.
   await expect(page.getByRole('button', { name: /Cambiar de empresa/ })).toHaveCount(1)
   await page.getByRole('button', { name: /Cambiar de empresa/ }).click()
   await page.getByRole('list', { name: 'Tus empresas' }).getByRole('button', { name: nombre }).click()
@@ -71,7 +73,7 @@ test('cambiar de empresa, rechazar una sugerencia y cambiar un dato que puso la 
     await page.goto('/conta/ajustes')
     await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible()
 
-    // Cambiar de empresa (M01: arriba, en la barra del marco, en los dos tamaños).
+    // Cambiar de empresa (M01: arriba, en los dos tamaños; S02: en la cabecera).
     await cambiarA(page, new RegExp(escapar(nombre)))
     const sugerencia = page.getByRole('region', { name: 'Lo que propone Folvy' })
     await expect(sugerencia.getByText('Pagas un alquiler con retención y no tienes el modelo 115. ¿Lo añado?')).toBeVisible()
@@ -90,9 +92,9 @@ test('cambiar de empresa, rechazar una sugerencia y cambiar un dato que puso la 
     const tipo = page.locator('.cx-dato').filter({ has: page.getByText('Tipo', { exact: true }) })
     await expect(tipo.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toBeVisible()
     await page.getByRole('button', { name: 'Cambiar quién eres' }).click()
-    await page.getByLabel('Tipo', { exact: true }).selectOption({ label: 'Sociedades anónimas' }) // no «Tipo de vía»
+    await page.getByLabel('Tipo', { exact: true }).selectOption({ label: 'Sociedad anónima' }) // no «Tipo de vía»
     await page.getByRole('button', { name: 'Guardar' }).click()
-    await expect(tipo.getByText('Sociedades anónimas')).toBeVisible()
+    await expect(tipo.getByText('Sociedad anónima')).toBeVisible()
     await expect(tipo.getByRole('button', { name: 'Lo puso Folvy. Ver por qué' })).toHaveCount(0)
 
     // Y de vuelta a la de siempre.

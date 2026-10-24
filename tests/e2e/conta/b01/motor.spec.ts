@@ -19,7 +19,7 @@
 import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { test, expect } from '@playwright/test'
-import { CUENTA_A } from '../sesion'
+import { CUENTA_A, enCarril } from '../sesion'
 import { eurosCent } from '@/modules/conta/lib/extractoBanco'
 import { crearBancos, emparejar, leerYCuadrar } from '@/modules/conta/services/bancosNucleo'
 import { BANCOS_B01, EMPRESA_A, FICHERO, baseDeA } from './datos'
@@ -73,7 +73,7 @@ test.describe('B01 · motor de conciliación en staging', () => {
       'Recibo SUMINISTROS B01 DEL NORTE FRA B01-0477', 'Transferencia de GLOVO liquidacion 1-7 oct', 'Traspaso a cuenta B01 SUR', 'Traspaso de cuenta B01 NORTE',
     ].sort())
     expect(filas.filter((f) => f.status === 'propuesto').length + filas.filter((f) => f.status === 'por_aclarar').length).toBe(11)
-    const factura = await cliente.from('supplier_invoice').select('status, paid_at, paid_method').eq('id', 'b0100000-0000-4000-8000-000000000f77').single()
+    const factura = await cliente.from('supplier_invoice').select('status, paid_at, paid_method').eq('id', enCarril('b0100000-0000-4000-8000-000000000f77')).single()
     expect(factura.data).toMatchObject({ status: 'pagada', paid_at: '2026-10-02', paid_method: 'direct_debit' })
 
     // La captura: la tabla como la verá N17 (fecha, lo que dice el banco, importe, punto, lo que Folvy cree que es).
@@ -119,7 +119,7 @@ test.describe('B01 · motor de conciliación en staging', () => {
     await deshacerTodo('Limpieza después de la demostración B01')
     const asientosDespues = await contarAsientosA()
     expect(asientosDespues).toBe(asientosAntes)
-    const otra = await cliente.from('supplier_invoice').select('status').eq('id', 'b0100000-0000-4000-8000-000000000f77').single()
+    const otra = await cliente.from('supplier_invoice').select('status').eq('id', enCarril('b0100000-0000-4000-8000-000000000f77')).single()
     expect(otra.data).toMatchObject({ status: 'aprobada' })
     writeFileSync(`${DIR}/motor.md`, `Asientos de la empresa A después de deshacer: ${asientosDespues} (antes ${asientosAntes}).\n`, { flag: 'a' })
   })

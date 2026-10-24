@@ -35,7 +35,7 @@ function useGuardar() {
   async function guardar(fn: () => Promise<unknown>, texto: string) {
     setOcupado(true); setFallo(null)
     try { await fn(); avisar(texto); recargar() } catch (e) {
-      setFallo(terceroDelMismoNif(e) ? 'Ese NIF ya es de otro tercero. Un NIF, un tercero: añade el papel a esa ficha en vez de repetirlo.' : e instanceof Error ? e.message : 'No se pudo guardar.')
+      setFallo(terceroDelMismoNif(e) ? 'Ese NIF ya es de otro contacto. Un NIF, una ficha: hazlo también cliente, plataforma o socio en esa ficha en vez de repetirla.' : e instanceof Error ? e.message : 'No se pudo guardar.')
     }
     setOcupado(false)
   }
@@ -67,7 +67,7 @@ export function DatosFiscalesTercero() {
   const sinMotivo = d.exclude347 && !d.exclude347Reason?.trim()
 
   if (!f && !ficha.papeles.some((p) => p.role === 'customer')) {
-    return <Vacio titulo="Aún no es cliente." explicacion="Sus datos fiscales de cliente aparecen al darle el papel de cliente (menú «···» de la cabecera)." />
+    return <Vacio titulo="Aún no es cliente." explicacion="Sus datos fiscales de cliente aparecen al hacerlo también cliente («Es también cliente», en el menú «···» de la cabecera)." />
   }
   return (
     <form className="cx-formulario" onSubmit={(e) => {
@@ -83,12 +83,12 @@ export function DatosFiscalesTercero() {
         {(p) => <input {...p} className="cx-input" value={nombre} disabled={conProveedor} onChange={(e) => setNombre(e.target.value)} />}
       </Campo>
       <Campo campo="razon" etiqueta="Razón social">
-        {(p) => <input {...p} className="cx-input" value={d.legalName ?? ''} onChange={(e) => pon('legalName', e.target.value || null)} placeholder="Plataforma Norte Spain, S.L." />}
+        {(p) => <input {...p} className="cx-input" value={d.legalName ?? ''} onChange={(e) => pon('legalName', e.target.value || null)} placeholder="Ej.: Distribuciones Norte, S.L." />}
       </Campo>
       <Pildoras campo="tipo-nif" etiqueta="Tipo de identificación" elegidas={d.taxIdType ? [d.taxIdType] : []}
         opciones={[{ valor: 'nif_es', texto: 'NIF español' }, { valor: 'vat_eu', texto: 'NIF-IVA de la UE' }, { valor: 'foreign', texto: 'Pasaporte u otro' }]}
         alCambiar={(v) => pon('taxIdType', (v[0] ?? null) as DatosFiscalesCliente['taxIdType'])} />
-      <Campo campo="nif" etiqueta="NIF" error={nifMal} ayuda={d.taxIdType === 'nif_es' ? 'Se comprueba la letra de control al momento. Un NIF, un tercero.' : 'El NIF-IVA europeo se comprueba con la UE (VIES) cuando esté conectada para clientes.'}>
+      <Campo campo="nif" etiqueta="NIF" error={nifMal} ayuda={d.taxIdType === 'nif_es' ? 'Se comprueba la letra de control al momento. Un NIF, una ficha.' : 'El NIF-IVA europeo se comprueba con la UE (VIES) cuando esté conectada para clientes.'}>
         {(p) => <input {...p} className="cx-input" value={nif} onChange={(e) => setNif(e.target.value)} autoCapitalize="characters" />}
       </Campo>
       <Pildoras campo="entidad" etiqueta="Qué es" elegidas={d.entityKind ? [d.entityKind] : []}
@@ -165,7 +165,7 @@ export function CobroTercero() {
             ayuda="Más de 60 días se puede guardar, pero entre empresas lo limita la ley de morosidad." />
           <Pildoras campo="banco" etiqueta="Cuenta donde cobras" elegidas={banco ? [banco] : []}
             opciones={ficha.bancos.map((b) => ({ valor: b.id, texto: `${b.name}${b.iban ? ` ···${b.iban.slice(-4)}` : ''}` }))}
-            alCambiar={(v) => setBanco(v[0] ?? null)} ayuda={ficha.bancos.length ? undefined : 'Da de alta tus bancos en Ajustes › Tablas generales › Bancos y cajas.'} />
+            alCambiar={(v) => setBanco(v[0] ?? null)} ayuda={ficha.bancos.length ? undefined : 'Da de alta tus bancos en Contabilidad › Definiciones › Tablas generales › Bancos y cajas.'} />
           {forma === 'direct_debit' && <>
             <Campo campo="iban" etiqueta="IBAN del cliente (para domiciliar)" error={ibanMal}>{(p) => <input {...p} className="cx-input" value={iban} onChange={(e) => setIban(e.target.value)} />}</Campo>
             <Campo campo="mandato" etiqueta="Referencia del mandato SEPA">{(p) => <input {...p} className="cx-input" value={mandato} onChange={(e) => setMandato(e.target.value)} />}</Campo>
@@ -328,9 +328,9 @@ export function ContactosTercero() { return <ConQuienHablas /> }
 export function DocumentosTercero() {
   const { ficha } = useTercero()
   return ficha.tercero.supplierId
-    ? <Vacio titulo="Sus documentos están en su ficha de proveedor." explicacion="Contratos, certificados y fichas técnicas se guardan allí y valen para los dos papeles."
+    ? <Vacio titulo="Sus documentos están en su ficha de proveedor." explicacion="Contratos, certificados y fichas técnicas se guardan allí y valen también para lo demás que sea (cliente, plataforma o socio)."
         accion={<Link className="cx-boton-sec" to={rutaFichaProveedor(ficha.tercero.supplierId, 'documentos')}>Abrir sus documentos</Link>} />
-    : <Vacio titulo="Aún no hay documentos suyos." explicacion="Los documentos de un cliente que no es proveedor (contratos, mandatos SEPA) llegan con los contactos de cliente (pendiente en el PR)." />
+    : <Vacio titulo="Aún no hay documentos suyos." explicacion="Los documentos de un cliente que no es proveedor (contratos, mandatos SEPA) llegarán más adelante: hoy aún no se pueden guardar aquí." />
 }
 
 export function HistorialTercero() {
@@ -346,7 +346,7 @@ export function HistorialTercero() {
   return (
     <section className="cx-tarjeta" aria-label="Historial">
       {eventos.map((e, i) => <div key={i} className="cxt-linea"><span>{e.texto}</span><span className="cx-ayuda">{diaMes(e.fecha)}</span></div>)}
-      <p className="cx-ayuda"><Chip>Lo que cambia en su ficha</Chip> (datos fiscales, cobro) llega al historial con el registro de cambios de terceros (pendiente en el PR).</p>
+      <p className="cx-ayuda"><Chip>Lo que cambia en su ficha</Chip> (datos fiscales, cobro) aún no sale en el historial: llegará más adelante.</p>
     </section>
   )
 }

@@ -9,6 +9,10 @@
 // filtros de origen solo aparecen si la empresa tiene asientos de ese origen
 // (una ferretería no ve «Plataformas»), pero «Todos» enseña siempre todo,
 // también lo anulado, y cada filtro dice cuántos tiene.
+//
+// S02 · PR 2: lo PROPUESTO que se decide en otro apartado (la factura recibida,
+// en Compras y gastos; el banco, en Bancos › Movimientos) no es de Asientos mientras espera: ver delLibroDiario.
+// La pantalla lo quita antes de filtrar, contar o pintar nada.
 
 import { euros } from '@/modules/conta/lib/formato'
 import { CON_MARCA } from '../cuenta/marca'
@@ -129,6 +133,67 @@ export function filtrosVisibles(asientos: readonly AsientoDiario[]): { id: Filtr
     .filter((f) => f.id === 'todos' || f.id === 'revisar' || f.n > 0)
 }
 
+// ── Lo que se decide en otro apartado (S02 · PR 2) ──────────────────────────
+//
+// Regla 1 del patrón: cada cosa en un solo sitio. Lo que espera una decisión
+// se decide en UN sitio, y Contabilidad › Asientos deja de listar lo propuesto
+// que ya tiene el suyo. Una vez validado sí sale: es el libro diario, y todo lo
+// validado está en él (también la vista «Compras» de los filtros, que desde
+// aquí enseña lo validado y lo anulado de compras).
+//
+// La vara para entrar en esta tabla no es «de qué trata» sino «¿ese otro sitio
+// enseña el asiento propuesto Y lo valida?». Si no, sacarlo de aquí lo dejaría
+// sin ningún sitio donde decidirlo: escondido (regla 7), no movido.
+//   · supplier_invoice: SÍ. La factura con su asiento propuesto sale en
+//     Compras y gastos › Facturas recibidas (en «Por revisar» o «Por aclarar»:
+//     la base la pinta así mientras su asiento no está validado), y «Validar»
+//     de la ficha valida ESE asiento (documentosService.apuntarFactura).
+//   · bank: SÍ (Julio, 22/10). El asiento que sale de casar un movimiento queda
+//     propuesto y espera en Bancos › Movimientos › «Por validar», que lo enseña
+//     con su veredicto y lo valida (uno a uno con «Validar y siguiente» e Intro,
+//     o «Validar los N» los listos). Medido en producción el 22/10: los 25
+//     propuestos del banco (Foodint, 1–14/10) tienen su movimiento casado.
+//   · supplier_payment, purchase_accrual y su contrario: NO. Ninguna pantalla de
+//     Compras los enseña ni los valida: se proponen y se validan aquí.
+// Solo lo PROPUESTO se va: un borrador lo empezó una persona en Asientos, y lo
+// validado o anulado es libro.
+
+/** El apartado donde se decide lo propuesto de un origen. */
+export type SitioPropio = 'recibidas' | 'bancos'
+
+const SE_DECIDE_EN: Partial<Record<OrigenAsiento, SitioPropio>> = {
+  supplier_invoice: 'recibidas',
+  bank: 'bancos',
+}
+
+/** Dónde está, en las palabras del menú (para los avisos y el cierre). */
+export const NOMBRE_SITIO: Record<SitioPropio, string> = {
+  recibidas: 'Compras y gastos › Facturas recibidas',
+  bancos: 'Bancos › Movimientos › Por validar',
+}
+
+/** Si este asiento se decide en otro apartado, cuál; si se decide en Asientos (o ya es libro), null. */
+export function seDecideEnSuSitio(a: Pick<AsientoDiario, 'estado' | 'origen'>): SitioPropio | null {
+  return a.estado === 'propuesto' ? SE_DECIDE_EN[a.origen] ?? null : null
+}
+
+/**
+ * Lo que es de Contabilidad › Asientos: todo menos lo propuesto que se decide
+ * en otro apartado. La lista, sus vistas, «Para revisar», las cifras, «Lo que
+ * he hecho yo» y el número del menú salen de aquí: la misma vara (regla 31).
+ */
+export function delLibroDiario<T extends Pick<AsientoDiario, 'estado' | 'origen'>>(asientos: readonly T[]): T[] {
+  return asientos.filter((a) => seDecideEnSuSitio(a) === null)
+}
+
+/** Lo sin validar con fecha de un mes, separado: lo de Asientos y lo que espera en su sitio (por sitio). */
+export function sinValidarPorSitio(asientos: readonly AsientoDiario[], mes: string): { enAsientos: number; enSuSitio: { sitio: SitioPropio; n: number }[] } {
+  const delMes = asientos.filter((a) => (a.estado === 'propuesto' || a.estado === 'borrador') && mesDe(a.fecha) === mes)
+  const por = new Map<SitioPropio, number>()
+  for (const a of delMes) { const s = seDecideEnSuSitio(a); if (s) por.set(s, (por.get(s) ?? 0) + 1) }
+  return { enAsientos: delMes.length - [...por.values()].reduce((t, n) => t + n, 0), enSuSitio: [...por].map(([sitio, n]) => ({ sitio, n })) }
+}
+
 /** Lo que se ve con un filtro: lo propuesto primero (es lo que espera), luego por fecha y número, lo último arriba. */
 export function filtrar(asientos: readonly AsientoDiario[], f: FiltroDiario): AsientoDiario[] {
   const porId = new Map(asientos.map((a) => [a.id, a]))
@@ -191,7 +256,11 @@ export function numeroVisible(a: Pick<AsientoDiario, 'numero' | 'serie'>): strin
 export const nombreSerie = (s: Serie): string => NOMBRE_SERIE[s]
 
 /** Las pastillas de la fila: el local (o «N locales», o «Común») y la marca (propias o la cedida, dicha). */
-export function pastillas(a: Pick<AsientoDiario, 'apuntes'>): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
+/** Ejes de analítica que se enseñan (S01, Definiciones › Analítica); de serie, los dos. */
+export interface EjesVisibles { local: boolean; marca: boolean }
+const LOS_DOS: EjesVisibles = { local: true, marca: true }
+
+export function pastillas(a: Pick<AsientoDiario, 'apuntes'>, ejes: EjesVisibles = LOS_DOS): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
   const locales = new Map<string, string>()
   let comun = false
   for (const l of a.apuntes) {
@@ -199,9 +268,12 @@ export function pastillas(a: Pick<AsientoDiario, 'apuntes'>): { texto: string; t
     else if (l.localId) locales.set(l.localId, l.local ?? 'local')
   }
   const r: { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] = []
-  if (locales.size === 1) r.push({ texto: [...locales.values()][0], tono: 'azul' })
-  else if (locales.size > 1) r.push({ texto: `${locales.size} locales`, tono: 'azul' })
-  if (comun) r.push({ texto: 'Común', tono: 'azul' })
+  if (ejes.local) {
+    if (locales.size === 1) r.push({ texto: [...locales.values()][0], tono: 'azul' })
+    else if (locales.size > 1) r.push({ texto: `${locales.size} locales`, tono: 'azul' })
+    if (comun) r.push({ texto: 'Común', tono: 'azul' })
+  }
+  if (!ejes.marca) return r
   const cedidas = new Map<string, string>()
   let propias = false
   for (const l of a.apuntes) {
@@ -219,11 +291,11 @@ export function pastillas(a: Pick<AsientoDiario, 'apuntes'>): { texto: string; t
  * marca con su NOMBRE, propia o cedida, para que la marca se lea junto a la
  * subcuenta (7000000x, 7080000x) sin tener que traducir códigos.
  */
-export function pastillasDeLinea(l: Pick<ApunteDiario, 'comun' | 'localId' | 'local' | 'marcaId' | 'marca' | 'cedida'>): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
+export function pastillasDeLinea(l: Pick<ApunteDiario, 'comun' | 'localId' | 'local' | 'marcaId' | 'marca' | 'cedida'>, ejes: EjesVisibles = LOS_DOS): { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] {
   const r: { texto: string; tono: 'azul' | 'neutro' | 'ambar' }[] = []
-  if (l.comun) r.push({ texto: 'Común', tono: 'azul' })
-  else if (l.localId) r.push({ texto: l.local ?? 'local', tono: 'azul' })
-  if (l.marcaId) r.push(l.cedida ? { texto: `${l.marca ?? 'marca'} · cedida`, tono: 'ambar' } : { texto: l.marca ?? 'marca propia', tono: 'neutro' })
+  if (ejes.local && l.comun) r.push({ texto: 'Común', tono: 'azul' })
+  else if (ejes.local && l.localId) r.push({ texto: l.local ?? 'local', tono: 'azul' })
+  if (ejes.marca && l.marcaId) r.push(l.cedida ? { texto: `${l.marca ?? 'marca'} · cedida`, tono: 'ambar' } : { texto: l.marca ?? 'marca propia', tono: 'neutro' })
   return r
 }
 
@@ -343,8 +415,14 @@ export interface FuenteCierre {
   liquidaciones: { total: number; asentadas: number } | null
   socios: { total: number; asentadas: number } | null
   nominas: { total: number; asentadas: number } | null
-  /** Propuestas o borradores del mes sin validar. */
+  /** Propuestas o borradores del mes sin validar (los de Asientos, si se da `enSuSitio`). */
   pendientes: number
+  /**
+   * S02 · PR 2: lo propuesto del mes que se decide en otro apartado
+   * (sinValidarPorSitio). Sigue frenando el cierre, pero dice dónde está: en
+   * Asientos ya no sale. Sin darlo, todo va en `pendientes`, como antes.
+   */
+  enSuSitio?: readonly { sitio: SitioPropio; n: number }[]
   cerrado: boolean
 }
 
@@ -366,9 +444,29 @@ export function pasosCierre(f: FuenteCierre): PasoCierre[] {
   paso(f.liquidaciones, 'Liquidaciones de plataformas')
   paso(f.socios, 'Liquidaciones del socio de marca')
   paso(f.nominas, 'Nóminas')
+  for (const x of f.enSuSitio ?? []) {
+    if (x.n > 0) r.push({ texto: `${x.n} ${x.n === 1 ? 'asiento propuesto espera' : 'asientos propuestos esperan'} en ${NOMBRE_SITIO[x.sitio]}`, hecho: false })
+  }
   r.push({ texto: f.pendientes === 0 ? 'Nada esperando revisión' : `${f.pendientes} ${f.pendientes === 1 ? 'asiento espera' : 'asientos esperan'} revisión`, hecho: f.pendientes === 0 })
-  r.push({ texto: f.cerrado ? 'Mes cerrado' : 'Cerrar el mes', hecho: f.cerrado })
+  // S01e: un mes cerrado con asientos sin validar dentro no sale «✓»: lo dice.
+  // Con los que esperan en su sitio: también son del mes, también cuentan.
+  const sinValidar = f.pendientes + (f.enSuSitio ?? []).reduce((t, x) => t + x.n, 0)
+  r.push({ texto: !f.cerrado ? 'Cerrar el mes' : sinValidar === 0 ? 'Mes cerrado'
+    : `Mes cerrado, pero con ${sinValidar} ${sinValidar === 1 ? 'asiento' : 'asientos'} sin validar dentro`, hecho: f.cerrado && sinValidar === 0 })
   return r
+}
+
+/**
+ * M01 (Julio, 16/10) · ¿Se pide cerrar este mes? No si ya está cerrado fuera:
+ * traído de otro programa, con el ejercicio cerrado o cerrado al presentar o
+ * al traerlo. La regla es la de la validación, leída de la base:
+ * `primerDiaAbierto` es lo que contesta `conta_primer_dia_abierto` desde el
+ * día 1 del mes. Si cae dentro del mes, al mes le queda algo abierto y se pide.
+ * Lo que se cerró a mano en Folvy sí sale, hecho («Mes cerrado ✓»).
+ */
+export function pedirCierre(mes: string, primerDiaAbierto: string | null, cierres: readonly CierreMes[]): boolean {
+  if (cierres.some((c) => c.mes === mes && c.tipo === 'manual')) return true
+  return primerDiaAbierto !== null && primerDiaAbierto >= mes && primerDiaAbierto <= finDeMes(mes)
 }
 
 /** ¿Se puede cerrar? Todo lo anterior hecho. Si no, qué falta (en una frase). */
@@ -388,7 +486,8 @@ const numero = (t: string): number => {
 }
 
 /** Lo que falta para poder guardar un asiento a mano, en frases; vacío = se puede. */
-export function problemasMano(concepto: string, fecha: string, lineas: readonly LineaMano[], cuentas: ReadonlySet<string>): string[] {
+/** pideLocal (S01): con el eje «local» apagado en Definiciones › Analítica, el local ni se pide. */
+export function problemasMano(concepto: string, fecha: string, lineas: readonly LineaMano[], cuentas: ReadonlySet<string>, pideLocal = true): string[] {
   const r: string[] = []
   if (!concepto.trim()) r.push('Ponle un concepto.')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) r.push('Pon la fecha.')
@@ -403,7 +502,7 @@ export function problemasMano(concepto: string, fecha: string, lineas: readonly 
     if (Number.isNaN(d) || Number.isNaN(h)) r.push(`${n}: el importe no es un número.`)
     else if ((d > 0) === (h > 0)) r.push(`${n}: va al Debe o al Haber, uno de los dos.`)
     else if (d < 0 || h < 0) r.push(`${n}: sin importes negativos; cámbialo de lado.`)
-    if (!l.comun && !l.localId) r.push(`${n}: elige el local, o márcalo como común.`)
+    if (pideLocal && !l.comun && !l.localId) r.push(`${n}: elige el local, o márcalo como común.`)
   })
   const c = cuadreMano(lineas)
   if (usadas.length >= 2 && !c.cuadra) r.push(c.texto)

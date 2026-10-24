@@ -42,6 +42,9 @@
 --                      Por día y local: horas desde el cierre y si al menos
 --                      hay resumen. El porqué de cada uno está en
 --                      sales_day_proposal_log y en el Libro diario.
+--                      Y si la empresa está en IGIC (Canarias): eso es «ya
+--                      sabido» (#176), no rojo, mientras el cierre no lo sepa
+--                      hacer.
 
 -- El registro del cierre del día se lee solo si este rol puede (conta_lectura
 -- lo recibe en 20261020T0140): así el agente sigue corriendo antes de esa tanda.
@@ -100,7 +103,28 @@ select json_build_object(
     join public.company_account a on a.id = l.company_account_id
     left join public.tax_rate t on t.id = l.tax_rate_id
     cross join lateral (select case
-       when (a.template_code like '472%' or a.template_code like '477%') and l.tax_rate_id is null then 'apunte de IVA sin base, tipo ni libro'
+       -- I01b (0180): como en conta_motivos_para_validar, la liquidación de un 303
+       -- (o su contraasiento) salda la 477 y la 472 sin tipo ni libro.
+       when (a.template_code like '472%' or a.template_code like '477%') and l.tax_rate_id is null
+            and not exists (select 1 from public.journal_entry o
+                              join public.tax_return tr on tr.id = o.source_id and tr.company_id = o.company_id and tr.account_id = o.account_id
+                             where o.id = case when e.source_type = 'reversal' then e.reverses_entry_id else e.id end
+                               and o.company_id = e.company_id and o.source_type = 'vat_settlement' and tr.form_code = '303')
+            -- I01d (0300): como en conta_motivos_para_validar, la 477 de la
+            -- autorrepercusión va sin tipo si el asiento lleva IVA autoliquidado.
+            and not (a.template_code like '477%' and exists (
+                  select 1 from public.journal_line l2 join public.company_account a2 on a2.id = l2.company_account_id
+                    join public.tax_rate t2 on t2.id = l2.tax_rate_id
+                   where l2.entry_id = e.id and a2.template_code like '472%' and t2.treatment in ('intra_eu', 'reverse_charge')))
+         then 'apunte de IVA sin base, tipo ni libro'
+       -- I01d (0300): la 477 de la autorrepercusión casa con la 472 autoliquidada, al céntimo.
+       when a.template_code like '477%' and l.tax_rate_id is null
+            and (select coalesce(sum(l2.debit - l2.credit), 0) from public.journal_line l2 join public.company_account a2 on a2.id = l2.company_account_id
+                   join public.tax_rate t2 on t2.id = l2.tax_rate_id
+                  where l2.entry_id = e.id and a2.template_code like '472%' and t2.treatment in ('intra_eu', 'reverse_charge'))
+             <> (select coalesce(sum(l3.credit - l3.debit), 0) from public.journal_line l3 join public.company_account a3 on a3.id = l3.company_account_id
+                  where l3.entry_id = e.id and a3.template_code like '477%' and l3.tax_rate_id is null)
+         then 'la 477 de la autorrepercusión no casa con la 472 autoliquidada'
        when l.tax_rate_id is not null and (l.tax_base is null or l.vat_book is null) then 'IVA sin base o sin libro registro'
        when l.tax_rate_id is not null and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > greatest(1, floor(l.tax_documents / 2.0)) / 100
          then format('cuota %s y base %s × %s %% = %s', l.debit + l.credit, l.tax_base, t.rate, round(l.tax_base * t.rate / 100, 2))
@@ -179,7 +203,11 @@ select json_build_object(
            group by 1, 2) x),
 
   'dia_sin_asiento', (select coalesce(json_agg(json_build_object('account_id', x.account_id, 'company_id', x.company_id, 'local', x.location_id,
-      'dia', x.dia, 'pedidos', x.pedidos, 'horas', x.horas, 'resumen', x.resumen
+      'dia', x.dia, 'pedidos', x.pedidos, 'horas', x.horas, 'resumen', x.resumen,
+      -- Ya sabido (#176): una empresa en IGIC (Canarias) no tiene asiento de
+      -- ventas hasta que se construya el IGIC en el cierre (CONTEXTO_CLAUDE.md,
+      -- «C06b · 16/10 — APARCADO: el IGIC en el cierre del día»).
+      'igic', x.igic
 \if :lee_registro
       -- Lo que apuntó el cierre del día la última vez (sales_day_proposal_log):
       -- el porqué viaja con el aviso, no hay que ir a buscarlo.
@@ -190,7 +218,8 @@ select json_build_object(
     from (select c.account_id, c.id company_id, s.location_id, (s.sold_at at time zone 'Europe/Madrid')::date dia, count(*) pedidos,
                  round(extract(epoch from now() - ((((s.sold_at at time zone 'Europe/Madrid')::date + 1)::timestamp + coalesce(t.sales_day_close_time, time '02:00')) at time zone 'Europe/Madrid')) / 3600) horas,
                  exists (select 1 from public.sales_day_summary d where d.company_id = c.id and d.location_id = s.location_id
-                            and d.sales_day = (s.sold_at at time zone 'Europe/Madrid')::date) resumen
+                            and d.sales_day = (s.sold_at at time zone 'Europe/Madrid')::date) resumen,
+                 coalesce(t.tax_territory = 'canarias' or t.sales_tax_rate_code like 'igic%', false) igic
             from public.company c
             left join public.company_tax_profile t on t.company_id = c.id
             join public.sale s on s.account_id = c.account_id
@@ -210,7 +239,7 @@ select json_build_object(
                                 and e.status in ('propuesto', 'borrador', 'validado'))
              and not exists (select 1 from public.journal_dismissal x where x.company_id = c.id and x.source_type = 'sales_day'
                               and x.source_key = s.location_id || ':' || (s.sold_at at time zone 'Europe/Madrid')::date)
-           group by 1, 2, 3, 4, 6, 7) x),
+           group by 1, 2, 3, 4, 6, 7, 8) x),
 
   'propuestas', (select coalesce(json_agg(json_build_object('account_id', e.account_id, 'company_id', e.company_id, 'fecha', e.entry_date,
       'serie', e.series, 'origen', e.source_type, 'dias', current_date - e.created_at::date)), '[]')

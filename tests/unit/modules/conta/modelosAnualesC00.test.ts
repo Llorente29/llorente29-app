@@ -52,9 +52,10 @@ describe('los modelos de una empresa: periódicos de la regla del núcleo y anua
     expect(codigos(todos)).toEqual(['111', '115', '180', '190', '200', '202', '303', '347', '390'])
     expect(todos.find((m) => m.codigo === '190')?.porque).toBe('En enero resumes las retenciones de todo el año. (RD 439/2007 (Reglamento del IRPF), art. 108.2)')
   })
-  it('con el SII, sin 347', () => {
+  // Julio, 21/10: con el SII tampoco va el 390 (instrucciones del modelo 390, AEAT).
+  it('con el SII, sin 347 ni 390', () => {
     const periodicos = modelosQuePresenta({ ...base, tipo: 'company', retiene: true, alquilaConRetencion: false }).modelos
-    expect(codigos(anadirAnuales(periodicos, REGLAS, { tipo: 'company', sii: true }))).toEqual(['111', '190', '200', '202', '303', '390'])
+    expect(codigos(anadirAnuales(periodicos, REGLAS, { tipo: 'company', sii: true }))).toEqual(['111', '190', '200', '202', '303'])
   })
   it('un autónomo no lleva el 347 por defecto, ni un anual que la tabla no tenga (el 130)', () => {
     const periodicos = modelosQuePresenta({ ...base, tipo: 'self_employed', retiene: false, alquilaConRetencion: false }).modelos
@@ -73,9 +74,9 @@ describe('coherencia, con su norma y el caso concreto', () => {
     expect(r[0].texto).toBe('Presenta el 111 y no su resumen anual, el 190.')
     expect(r[0].norma).toBe('RD 439/2007 (Reglamento del IRPF), art. 108.2')
   })
-  it('un anual sin su periódico, y el 347 con el SII', () => {
+  it('un anual sin su periódico, y el 347 y el 390 con el SII', () => {
     const r = coherenciaModelos(['190', '303', '390', '347', '202', '200'], REGLAS, { tipo: 'company', sii: true })
-    expect(r.map((x) => `${x.clave} ${x.modelo}`)).toEqual(['anual_sin_periodico 190', 'sobra_por_defecto 347'])
+    expect(r.map((x) => `${x.clave} ${x.modelo}`).sort()).toEqual(['anual_sin_periodico 190', 'sobra_con_sii 390', 'sobra_por_defecto 347'])
   })
   it('lo que sale del alta cuadra siempre', () => {
     for (const retiene of [true, false]) for (const alquila of [true, false]) for (const sii of [true, false]) {

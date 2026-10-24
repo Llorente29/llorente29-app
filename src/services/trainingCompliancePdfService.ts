@@ -343,7 +343,7 @@ export function generateTrainingCompliancePdf(data: TrainingCompliancePdfData): 
   doc.text('Anexo de firmas', MARGIN, sy)
   sy += 6
   sans('normal'); doc.setFontSize(8); ink(MUTED)
-  doc.text('Sustituye al Documento 4 en papel del dosier: evidencia de quién se formó, cuándo y con qué nota.', MARGIN, sy)
+  doc.text('Sustituye al Documento 4 impreso del dosier: evidencia de quién se formó, cuándo y con qué nota.', MARGIN, sy)
   sy += 8
 
   if (data.attendeeSignatures.length === 0) {

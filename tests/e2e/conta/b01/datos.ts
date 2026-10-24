@@ -8,12 +8,12 @@
 // Datos inventados. Ninguna tarjeta dada de alta sobrevive a una prueba.
 
 import { createClient } from '@supabase/supabase-js'
-import { STAGING_URL, anonKey, pedirSesion, CUENTA_A } from '../sesion'
+import { STAGING_URL, anonKey, pedirSesion, CUENTA_A, enCarril } from '../sesion'
 import { escribirNorma43 } from '@/modules/conta/lib/norma43'
 import type { Bd, Consulta } from '@/modules/conta/services/bancosNucleo'
 
-export const EMPRESA_A = '3b34403a-a7d6-4a48-a8d7-737e8cababdc'
-export const BANCOS_B01 = ['b0100000-0000-4000-8000-0000000000b1', 'b0100000-0000-4000-8000-0000000000b2', 'b0100000-0000-4000-8000-0000000000b3']
+export const EMPRESA_A = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
+export const BANCOS_B01 = ['b0100000-0000-4000-8000-0000000000b1', 'b0100000-0000-4000-8000-0000000000b2', 'b0100000-0000-4000-8000-0000000000b3'].map((id) => enCarril(id))
 
 export const FICHERO = escribirNorma43([
   { entidad: '0182', oficina: '9101', cuenta: '0000000011', nombre: 'TABERNA DE PRUEBA NORTE', desde: '2026-10-01', hasta: '2026-10-13', saldoInicialCent: 4_500_000, movimientos: [
@@ -77,4 +77,30 @@ export async function baseDeA() {
     for (const t of (tarjetas ?? []) as Fila[]) await bd.rpc('bank_tarjeta_baja', { p_id: t.id })
   }
   return { cliente, bd, contarAsientosA, deshacerTodo }
+}
+
+/**
+ * La limpieza del final de una prueba de Bancos (W, 16/10): sale en rojo cuando
+ * staging va cargado porque `bank_deshacer` choca con el motor de conciliación
+ * que la página aún tiene en marcha (la pasada del agente, una recarga). No es
+ * volumen: 1.222 llamadas, 29 ms de media. Así que:
+ *   · primero se CIERRA la página (su motor deja de correr), y después se deshace;
+ *   · si el cuerpo de la prueba ya había fallado, su error es el que sale: el de
+ *     la limpieza se apunta en el registro y no lo tapa.
+ */
+export async function conLimpieza(page: { close: () => Promise<void> }, cuerpo: () => Promise<void>, limpieza: () => Promise<void>): Promise<void> {
+  let fallo: unknown = null
+  try {
+    await cuerpo()
+  } catch (e) {
+    fallo = e
+  }
+  await page.close().catch(() => {})
+  try {
+    await limpieza()
+  } catch (e) {
+    if (!fallo) throw e
+    console.log(`[limpieza] también ha fallado (el error de la prueba va arriba): ${e instanceof Error ? e.message : String(e)}`)
+  }
+  if (fallo) throw fallo
 }

@@ -160,9 +160,12 @@ describe('el registro, en palabras', () => {
     expect(queHizo(r({ field: 'account_digits', before: 8, after: '8' }))).toBe('Puso los dígitos de las cuentas: 8')
     expect(queHizo(r({ field: 'tax_forms', before: [], after: ['111', '303'] }))).toBe('Puso los modelos que presentas: 111, 303')
     expect(queHizo(r({ field: 'tax_forms', before: ['303'], after: ['111', '303'] }))).toBe('Cambió los modelos que presentas: 111, 303')
-    // La forma jurídica, por su nombre del catálogo y no por su código («nif_b»).
+    // La forma jurídica, por su nombre y no por su código («nif_b»); S01e: en singular, es UNA empresa.
     expect(queHizo(r({ field: 'legal_form_code', before: null, after: 'nif_b', afterName: 'Sociedades de responsabilidad limitada' })))
-      .toBe('Puso el tipo de empresa: Sociedades de responsabilidad limitada')
+      .toBe('Puso el tipo de empresa: Sociedad de responsabilidad limitada')
+    // Un código que no está en la lista sale con el nombre del catálogo, sin inventar.
+    expect(queHizo(r({ field: 'legal_form_code', before: null, after: 'nif_x', afterName: 'Otra cosa' })))
+      .toBe('Puso el tipo de empresa: Otra cosa')
   })
   it('lo deshecho no se vuelve a deshacer y dice quién', () => {
     expect(sePuedeDeshacer(r({ undoneAt: '2026-10-03', undoneByName: 'Admin Norte' }))).toEqual({ ok: false, motivo: 'Deshecho por Admin Norte' })

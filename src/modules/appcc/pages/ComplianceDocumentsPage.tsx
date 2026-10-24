@@ -390,7 +390,7 @@ export default function ComplianceDocumentsPage() {
           <h1 className="text-4xl font-display text-text-primary mb-1">Archivo documental</h1>
           <p className="text-base text-text-secondary">
             Las fichas y documentos que un inspector puede pedir: técnicas de producto y de
-            seguridad, plagas, agua, aceite, homologación de proveedores. Guarda el papel que
+            seguridad, plagas, agua, aceite, homologación de proveedores. Guarda el documento que
             respalda cada dato.
           </p>
         </div>

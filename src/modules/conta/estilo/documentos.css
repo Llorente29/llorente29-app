@@ -58,6 +58,9 @@
 .cxr-revisar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .cxr-papel { display: flex; flex-direction: column; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); overflow: hidden; }
 .cxr-papel-cabeza { display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px; font-size: 13px; color: var(--cx-apoyo); border-bottom: 1px solid var(--cx-linea); }
+/* S01e: un nombre de fichero largo, sin espacios, parte en vez de ensanchar la página. */
+.cxr-papel-cabeza > span { min-width: 0; overflow-wrap: anywhere; }
+.cxr-leido-valor { min-width: 0; overflow-wrap: anywhere; }
 .cxr-papel-hoja { background: var(--cx-fondo); padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; min-height: 640px; }
 .cxr-papel-lienzo { max-width: 100%; height: auto; background: var(--cx-blanco); box-shadow: var(--cx-sombra-menu); }
 .cxr-papel-hoja img { max-width: 100%; height: auto; box-shadow: var(--cx-sombra-menu); }
@@ -134,6 +137,11 @@
     background: var(--cx-fondo);
   }
   .cxr-pulgar > * { flex: 1; height: 52px; font-size: 16px; }
+  /* S01e: «Validar y siguiente» no cabía en su mitad (min-width de su texto) y
+     la página se iba de lado (417 px en 390) llevándose la barra de abajo: los
+     botones ceden y, si hace falta, parten en dos líneas; el principal, más ancho. */
+  .cxr-pulgar > * { flex: 1 1 0; min-width: 0; white-space: normal; line-height: 1.2; padding-left: 10px; padding-right: 10px; }
+  .cxr-pulgar > .cx-boton { flex-grow: 2; }
   .cxr-subir-movil { display: flex; gap: 10px; }
   .cxr-subir-movil > * { flex: 1; height: 52px; font-size: 16px; }
 }
@@ -188,4 +196,97 @@
   .cxk-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cxk-estado { margin-left: 0; }
   .cxk-lote { flex-direction: column; align-items: flex-start; }
+}
+
+/* S01 · Decisiones de la maqueta 3 (17/10): el enlace a Compras junto a «Lo que he leído»,
+   «No es una factura», el bloque verde «Lo que he comprobado» y «Ver el asiento» plegable. */
+.cxr-bloque-cabeza { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cxr-bloque-enlaces { display: inline-flex; gap: 14px; flex-wrap: wrap; }
+.cxr-descartada { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
+.cxr-motivos { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.cxr-comprobado { background: var(--cx-verde-suave); border: 1px solid color-mix(in srgb, var(--cx-verde-oscuro) 25%, transparent); border-radius: var(--cx-radio-tarjeta); padding: 16px 18px; }
+.cxr-comprobado-ambar { background: var(--cx-ambar-suave); border-color: color-mix(in srgb, var(--cx-ambar) 30%, transparent); }
+.cxr-comprobado h2 { margin: 0 0 8px; font-size: inherit; font-weight: 700; color: var(--cx-texto); }
+.cxr-comprobado ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.cxr-comprobado .cxr-ok span { color: var(--cx-verde-oscuro); font-weight: 700; }
+.cxr-comprobado .cxr-falta { color: var(--cx-ambar); }
+.cxr-comprobado .cxr-falta span { font-weight: 700; }
+.cxr-plegable > summary { cursor: pointer; list-style: revert; }
+.cxr-plegable > summary h2 { display: inline; }
+
+/* ── Ficha completa de la recibida (tablero 3b): FichaRecibidaBloques ── */
+.cxf-barra { position: sticky; top: 0; z-index: 3; }
+.cxf-campo .s-control { width: 100%; min-width: 0; }
+.cxf-error { margin: 0; font-size: var(--s-t-s); color: var(--s-falta); }
+.cxf-validar { display: inline-flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.cxf-guarda-primero { font-size: var(--s-t-s); color: var(--s-duda); }
+
+.cxf-iva, .cxf-gasto { display: flex; flex-direction: column; gap: var(--s-2); }
+.cxf-iva-cabeza, .cxf-iva-linea { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.4fr) var(--s-tactil); gap: var(--s-2); align-items: center; }
+.cxf-iva-cabeza, .cxf-gasto-cabeza { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.cxf-iva-rotulo { font-size: var(--s-t-s); color: var(--s-tinta); }
+.cxf-importe { text-align: right; font-family: var(--s-letra-cifras); font-variant-numeric: tabular-nums; }
+.cxf-iva[data-cambiado] .cxf-iva-linea .s-control,
+.cxf-iva-linea[data-cambiado] .s-control,
+.cxf-gasto[data-cambiado] .s-control { border-color: var(--s-duda); background: var(--s-duda-fondo); }
+.cxf-quitar {
+  display: inline-flex; align-items: center; justify-content: center; min-height: var(--s-tactil); min-width: var(--s-tactil);
+  border: 0; background: none; color: var(--s-apoyo); cursor: pointer; border-radius: var(--s-radio-boton);
+}
+.cxf-quitar:hover { color: var(--s-falta); background: var(--s-suave); }
+.cxf-anadir { display: flex; gap: var(--s-4); flex-wrap: wrap; }
+.cxf-totales {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2) var(--s-4); padding: var(--s-3) var(--s-4);
+  background: var(--s-suave); border-radius: var(--s-radio-campo); font-size: var(--s-t-s); color: var(--s-apoyo);
+}
+.cxf-totales strong { color: var(--s-tinta); }
+.cxf-total { margin-left: auto; font-size: var(--s-t-m); }
+.cxf-contra { display: inline-flex; align-items: center; gap: var(--s-1); font-weight: var(--s-peso-medio); }
+.cxf-contra[data-igual='si'] { color: var(--s-ok); }
+.cxf-contra[data-igual='no'], .cxf-contra[data-igual='redondeo'] { color: var(--s-duda); background: var(--s-duda-fondo); padding: 0 var(--s-2); border-radius: var(--s-radio-pildora); }
+.cxf-antes { display: flex; flex-direction: column; gap: var(--s-1); }
+
+.cxf-gasto-cabeza, .cxf-gasto-linea { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) var(--s-tactil); gap: var(--s-2); align-items: center; }
+.cxf-gasto-cabeza[data-con-local], .cxf-gasto-linea[data-con-local] { grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) var(--s-tactil); }
+.cxf-gasto-cabeza > span:first-child { display: inline-flex; gap: var(--s-2); align-items: center; }
+.cxf-cuenta { position: relative; min-width: 0; }
+.cxf-cuenta-boton { display: flex; align-items: center; gap: var(--s-2); width: 100%; text-align: left; cursor: pointer; min-width: 0; }
+.cxf-gasto-linea[data-tono='propuesto'] .cxf-cuenta-boton { background: var(--s-propuesto); border-color: var(--s-propuesto-borde); }
+.cxf-cuenta-codigo { font-size: var(--s-t-m); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.cxf-cuenta-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--s-tinta); }
+.cxf-cuenta .s-hoja-buscar { position: absolute; z-index: 5; left: 0; right: 0; }
+
+.cxf-derecha { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.cxf-papel-acciones { display: flex; justify-content: flex-end; align-items: center; gap: var(--s-2); margin-bottom: var(--s-2); }
+.cxf-hueco { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); }
+.cxf-soltar {
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2); padding: var(--s-6) var(--s-4); text-align: center;
+  border: var(--s-linea) dashed var(--s-borde-control); border-radius: var(--s-radio-bloque); background: var(--s-superficie); color: var(--s-tinta);
+}
+.cxf-soltar[data-encima] { border-color: var(--s-accion); background: var(--s-accion-suave); }
+.cxf-soltar p { margin: 0; }
+.cxf-sin-pdf { display: flex; flex-direction: column; gap: var(--s-2); }
+.cxf-casilla { display: inline-flex; align-items: center; gap: var(--s-2); min-height: var(--s-tactil); }
+.cxf-motivo { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--s-t-s); color: var(--s-apoyo); }
+
+.cxf-historial {
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); padding: var(--s-4);
+}
+.cxf-historial h2 { margin: 0 0 var(--s-2); font-size: var(--s-t-m); }
+.cxf-historial ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--s-t-s); color: var(--s-tinta); }
+
+.cxf-a-mano { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-4); border: var(--s-linea) solid var(--s-duda); border-radius: var(--s-radio-bloque); }
+.cxf-a-mano ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-2); }
+.cxf-a-mano-linea { position: relative; display: grid; grid-template-columns: 7em minmax(0, 1fr); gap: var(--s-2); align-items: center; }
+.cxf-a-mano-linea .s-hoja-buscar { position: absolute; z-index: 5; left: 7em; right: 0; top: 100%; }
+.cxf-a-mano-form { display: flex; flex-direction: column; gap: var(--s-4); }
+
+@media (max-width: 767px) {
+  .cxf-iva-cabeza, .cxf-gasto-cabeza { display: none; }
+  .cxf-iva-linea { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--s-tactil); }
+  .cxf-iva-linea > :nth-child(3) { grid-column: 1 / 3; }
+  .cxf-gasto-linea, .cxf-gasto-linea[data-con-local] { grid-template-columns: minmax(0, 1fr) var(--s-tactil); }
+  .cxf-gasto-linea > :not(:last-child) { grid-column: 1; }
+  .cxf-total { margin-left: 0; }
+  .cxf-fila-proveedor { grid-template-columns: minmax(0, 1fr); }
 }

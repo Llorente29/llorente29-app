@@ -148,8 +148,30 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
     await expect(entendido).toBeVisible()
     // Y en la MISMA burbuja, la pregunta siguiente (el texto es de la burbuja entera).
     await expect(entendido).toContainText('Ahora, tus impuestos. ¿Presentas el IVA cada tres meses?')
+    // S01: una dark kitchen es hostelería; el alta lo marca y dice dónde se cambia.
+    await expect(entendido).toContainText('La marco como hostelería: salen Liquidaciones, las plataformas y los socios de marca. Se cambia en Ajustes › Empresa.')
     await expect(log(page).getByText(/^Apuntad[oa]\.$/)).toHaveCount(0)
     await hastaLasCuentas(page)
+
+    // I01a: las respuestas de impuestos quedan como datos de la empresa, del alta.
+    const datos = await rest<{ fact: string; value: unknown; origin: string }[]>(s, 'GET',
+      `company_tax_facts?account_id=eq.${CUENTA_C.id}&select=fact,value,origin&order=fact`)
+    expect(datos.datos).toEqual([
+      { fact: 'pays_with_withholding', value: true, origin: 'alta' },
+      { fact: 'rents_premises_with_withholding', value: false, origin: 'alta' },
+    ])
+    // Y los modelos salen de las reglas de la base, cada uno con la suya.
+    const modelos = await rest<{ form_code: string; rule_key: string }[]>(s, 'GET',
+      `tax_obligation?account_id=eq.${CUENTA_C.id}&valid_to=is.null&active=is.true&select=form_code,rule_key&order=form_code`)
+    expect(modelos.datos).toEqual([
+      { form_code: '111', rule_key: 'ret_111' },
+      { form_code: '190', rule_key: 'anual_de_111' },
+      { form_code: '200', rule_key: 'is_200' },
+      { form_code: '202', rule_key: 'is_202' },
+      { form_code: '303', rule_key: 'iva_303' },
+      { form_code: '347', rule_key: 'defecto_347' },
+      { form_code: '390', rule_key: 'anual_de_303' },
+    ])
 
     // N1b: 4 de 6, las cuentas preguntándose y el banco al final.
     await expect(carril.getByText('4 de 6')).toBeVisible()
@@ -197,6 +219,44 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
     await expect(log(page).getByText(/^Listo: .* está montada\. Plan activado: \d+ cuentas de serie/)).toBeVisible({ timeout: 45_000 })
     await expect(carril.getByText('6 de 6')).toBeVisible()
   } finally {
+    await borrarEmpresas(s, CUENTA_C.id, true)
+  }
+})
+
+// P01 (Julio, 19/10): solo con la marca Sumied, «¿Llevas los impuestos de
+// otras empresas?». Con «Sí», la cuenta queda como asesoría y al terminar el
+// alta entra en «Impuestos de tus clientes». Al acabar se desmarca (C vive sin
+// empresa y sin ser asesoría).
+test('cuenta C con Sumied: «¿Llevas los impuestos de otras empresas?» → asesoría, y al terminar, «Impuestos de tus clientes»', async ({ page }, info) => {
+  test.skip(info.project.name === 'movil', 'Escribe: basta un tamaño')
+  const s = await entrarComo(page, CUENTA_C.email)
+  await borrarEmpresas(s, CUENTA_C.id, true)
+  const desmarcar = () => rest(s, 'POST', 'rpc/conta_despacho_marcar', { p_account: CUENTA_C.id, p_es: false })
+  await desmarcar()
+  try {
+    await page.goto('/conta/alta?marca=sumied')
+    await hastaLaActividad(page, `Alta e2e Sumied ${Date.now()}`)
+    await decir(page, 'somos dark kitchen, solo reparto de comida a domicilio por plataformas')
+    await page.getByRole('button', { name: 'Añadir las marcadas' }).click()
+    await page.getByRole('button', { name: 'Sí, cada tres meses' }).click()
+    await page.getByRole('button', { name: 'Sí', exact: true }).click()
+    await expect(log(page).getByText('¿Pagas el alquiler de un local con retención?')).toBeVisible()
+    await page.getByRole('button', { name: 'No', exact: true }).click()
+    await expect(log(page).getByText('¿Llevas los impuestos de otras empresas?')).toBeVisible()
+    await page.getByRole('button', { name: 'Sí, soy una asesoría' }).click()
+    await expect(log(page).getByText('Entendido: llevas los impuestos de otras empresas. Al terminar te llevo a «Impuestos de tus clientes».')).toBeVisible()
+    // Queda escrito en la cuenta, no solo en la pantalla.
+    const soy = await rest<{ asesoria: boolean }>(s, 'POST', 'rpc/conta_despacho_soy', { p_account: CUENTA_C.id })
+    expect(soy.datos?.asesoria).toBe(true)
+    await expect(log(page).getByText(PREGUNTA_CUENTAS)).toBeVisible()
+    await page.getByRole('button', { name: 'El de pymes, el normal' }).click()
+    await page.getByRole('button', { name: 'Empiezo de cero' }).click()
+    await expect(log(page).getByText('¿Cuál es el IBAN de la cuenta del banco de la empresa?')).toBeVisible()
+    await decir(page, 'ni idea')
+    await expect(page).toHaveURL(/\/conta\/impuestos\/clientes/, { timeout: 45_000 })
+    await expect(page.getByRole('heading', { level: 1, name: 'Impuestos de tus clientes' })).toBeVisible()
+  } finally {
+    await desmarcar()
     await borrarEmpresas(s, CUENTA_C.id, true)
   }
 })
@@ -301,7 +361,8 @@ test.describe('Intro envía (respuesta 4)', () => {
       expect(await tecla.evaluate((k) => {
         const c = getComputedStyle(k)
         return { seleccion: c.userSelect, color: c.color, fondo: c.backgroundColor }
-      })).toEqual({ seleccion: 'none', color: 'rgb(47, 91, 255)', fondo: 'rgb(234, 240, 255)' })
+      // S02: los colores del patrón en todas las marcas: la acción #1E63C9 sobre lo seleccionado #EAF2F8.
+      })).toEqual({ seleccion: 'none', color: 'rgb(30, 99, 201)', fondo: 'rgb(234, 242, 248)' })
       await page.evaluate(() => document.fonts.ready)
       await page.screenshot({ path: `${DIR}/alta-intro.png` })
       await page.keyboard.press('Enter')
@@ -483,7 +544,7 @@ test('cuenta A: otra empresa en la ventana, con píldoras; cerrar guarda; y lo q
     await expect(page.getByRole('heading', { level: 2, name: 'Lo que ha hecho Folvy' })).toBeVisible()
     // Primero que haya cargado: un «no está» mirado con el esqueleto delante siempre se cumple.
     await expect(registro.getByText('Deshecho por Admin Norte').first()).toBeVisible()
-    await expect(registro.getByText('Puso el tipo de empresa: Sociedades de responsabilidad limitada')).toBeVisible()
+    await expect(registro.getByText('Puso el tipo de empresa: Sociedad de responsabilidad limitada')).toBeVisible()
     await page.goto('/conta/ajustes')
     await expect(page.getByText(nombre).first()).toBeVisible()
     await expect(page.getByRole('heading', { level: 2, name: 'Tu empresa' })).toBeVisible()

@@ -6,17 +6,25 @@
 // fila a fila. Filtros de local y marca (regla 10): el saldo inicial se filtra
 // igual, para que el arrastre no mezcle. Cada apunte lleva a su asiento; la
 // cuenta, a su ficha del plan (Mayor de la cuenta, C02).
+//
+// S02 · PR 2 · El encabezado del patrón (EncabezadoLibro): «Libro mayor» como
+// título, la frase con el periodo y la cuenta que se ve, «Ver: Libro mayor.
+// Cambiar» y Exportar PDF / Excel como botones blancos. La tabla, con el
+// estilo del patrón (filas de --s-fila, cifras tabulares a la derecha).
 
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaMayor } from '@/config/navegacion'
-import { Migas } from '@/modules/conta/proveedor/piezas'
-import { ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
+import { Boton } from '@/modules/conta/diseno'
+import { ErrorConReintento, Guardado, Vacio } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { extracto } from '@/modules/conta/lib/extractos'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
 import { excelTabla, pdfTabla, type FilaTabla } from '@/modules/conta/libros/exportar'
 import { cuentasConSaldo, movimientos } from '@/modules/conta/services/librosService'
+import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
+import { EncabezadoLibro } from '@/modules/conta/libros/EncabezadoLibro'
+import { fraseDelPeriodo } from '@/modules/conta/libros/encabezado'
 
 const ddmm = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
 const SERIES: Record<number, string> = { 1: 'Ventas', 2: 'Compras', 3: 'Bancos', 4: 'General' }
@@ -30,6 +38,7 @@ export function LibroMayor() {
   const [hasta, setHasta] = useState(L.ejercicio.fin)
   const [local, setLocal] = useState<string>('')
   const [marca, setMarca] = useState<string>('')
+  const { local: ejeLocal, marca: ejeMarca } = useAnalitica()
   const [hecho, setHecho] = useState<string | null>(null)
 
   const cuentas = useLeer(() => cuentasConSaldo(L.companyId, L.ejercicio.inicio, L.ejercicio.fin), `${L.companyId}:${L.ejercicio.id}:${L.vuelta}`)
@@ -62,14 +71,13 @@ export function LibroMayor() {
 
   return (
     <section className="cxl-pagina" aria-label="Libro mayor">
-      <div className="cxl-seccion">
-        <div><Migas migas={[{ etiqueta: 'Libros' }, { etiqueta: 'Mayor y saldos' }]} /><h2>Libro mayor</h2></div>
-        <div className="cxl-herramientas">
-          <button type="button" className="cx-boton-sec" onClick={() => exportar('pdf')} disabled={!x}>Exportar PDF</button>
-          <button type="button" className="cx-boton-sec" onClick={() => exportar('excel')} disabled={!x}>Excel</button>
-        </div>
-      </div>
-      <div className="cx-tarjeta cxl-opciones">
+      <EncabezadoLibro titulo="Libro mayor"
+        frase={`${fraseDelPeriodo(desde, hasta)}${cuenta ? ` · ${cuenta}${nombreCuenta ? ` ${nombreCuenta}` : ''}: cada apunte con su saldo arrastrado` : ': elige una cuenta o un nivel'}${filtrosTexto ? ` · ${filtrosTexto}` : ''}.`}
+        secundarios={<>
+          <Boton icono="descargar" onClick={() => exportar('pdf')} disabled={!x}>Exportar PDF</Boton>
+          <Boton onClick={() => exportar('excel')} disabled={!x}>Excel</Boton>
+        </>} />
+      <div className="cxl-opciones">
         <label>Cuenta
           <input className="cx-input" list="cxl-cuentas" value={cuenta} placeholder="57200001 o 400" inputMode="numeric"
             onChange={(e) => elegir(e.target.value.replace(/\D/g, ''))} aria-describedby="cxl-cuenta-ayuda" />
@@ -77,13 +85,14 @@ export function LibroMayor() {
         </label>
         <label>Desde<input type="date" className="cx-input" value={desde} min={L.ejercicio.inicio} max={hasta} onChange={(e) => setDesde(e.target.value || L.ejercicio.inicio)} /></label>
         <label>Hasta<input type="date" className="cx-input" value={hasta} min={desde} max={L.ejercicio.fin} onChange={(e) => setHasta(e.target.value || L.ejercicio.fin)} /></label>
-        {L.locales.length > 0 && (
-          <label>Local<select className="cx-input" value={local} onChange={(e) => setLocal(e.target.value)}>
+        {/* S01: cada filtro, solo con su eje encendido (Definiciones › Analítica) y con su nombre. */}
+        {ejeLocal && L.locales.length > 0 && (
+          <label>{ejeLocal.nombre}<select className="cx-input" value={local} onChange={(e) => setLocal(e.target.value)}>
             <option value="">Todos</option>{L.locales.map((l) => <option key={l.id} value={l.id}>{l.nombre}</option>)}<option value="comun">Solo lo común</option>
           </select></label>
         )}
-        {L.marcas.length > 0 && (
-          <label>Marca<select className="cx-input" value={marca} onChange={(e) => setMarca(e.target.value)}>
+        {ejeMarca && L.marcas.length > 0 && (
+          <label>{ejeMarca.nombre}<select className="cx-input" value={marca} onChange={(e) => setMarca(e.target.value)}>
             <option value="">Todas</option>{L.marcas.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}<option value="sin">Sin marca</option>
           </select></label>
         )}
@@ -92,28 +101,28 @@ export function LibroMayor() {
       <Guardado texto={hecho} />
       {cuentas.error && <ErrorConReintento mensaje={cuentas.error} reintentar={cuentas.recargar} />}
       {d.error && <ErrorConReintento mensaje={d.error} reintentar={d.recargar} />}
-      {!cuenta && <div className="cx-tarjeta"><Vacio titulo="Elige una cuenta." explicacion={cuentas.datos ? `Hay ${cuentas.datos.length} cuentas con movimiento o saldo en ${L.ejercicio.code}.` : 'Escribe su número o elígela de la lista.'} /></div>}
-      {cuenta && !x && !d.error && <div className="cx-tarjeta" aria-busy="true">{[0, 1, 2].map((i) => <Hueso key={i} alto={32} />)}</div>}
+      {!cuenta && <div className="cxl-caja"><Vacio titulo="Elige una cuenta." explicacion={cuentas.datos ? `Hay ${cuentas.datos.length} cuentas con movimiento o saldo en ${L.ejercicio.code}.` : 'Escribe su número o elígela de la lista.'} /></div>}
+      {cuenta && !x && !d.error && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando el mayor" />}
       {cuenta && x && (
-        <div className="cx-tarjeta" style={{ overflowX: 'auto' }}>
-          <h3 className="cxl-subtitulo">{cuenta} · {nombreCuenta} {cuenta.length >= 4 && <Link to={rutaMayor(cuenta)} className="cx-enlace">Ficha de la cuenta</Link>}</h3>
+        <div className="cxl-caja">
+          <h2 className="cxl-subtitulo">{cuenta} · {nombreCuenta} {cuenta.length >= 4 && <Link to={rutaMayor(cuenta)} className="cx-enlace">Ficha de la cuenta</Link>}</h2>
           {filtrosTexto && <p className="cxl-apoyo">Filtrado: {filtrosTexto}. El saldo inicial está filtrado igual.</p>}
-          <table className="cxl-tabla" aria-label={`Mayor de la ${cuenta}`}>
+          <table className="cxl-tabla cxl-apilada" aria-label={`Mayor de la ${cuenta}`}>
             <thead><tr><th>Fecha</th><th>Asiento</th>{cuenta.length < 4 && <th>Cuenta</th>}<th>Concepto</th><th className="cxl-der">Debe</th><th className="cxl-der">Haber</th><th className="cxl-der">Saldo</th></tr></thead>
             <tbody>
-              <tr><td>{ddmm(desde)}</td><td />{cuenta.length < 4 && <td />}<td><em>Saldo inicial</em>{desde === L.ejercicio.inicio ? ' (apertura)' : ''}</td><td /><td /><td className="cxl-der">{textoSaldo(x.inicial)}</td></tr>
+              <tr><td>{ddmm(desde)}</td><td />{cuenta.length < 4 && <td />}<td><em>Saldo inicial</em>{desde === L.ejercicio.inicio ? ' (apertura)' : ''}</td><td /><td /><td className="cxl-der" data-titulo="Saldo">{textoSaldo(x.inicial)}</td></tr>
               {x.filas.map((m, i) => (
                 <tr key={`${m.entryId}-${i}`}>
                   <td>{ddmm(m.fecha)}</td>
                   <td><Link to={rutaAsiento(m.entryId)}>{m.numero === null ? 'Sin nº' : `${SERIES[m.serie] ?? m.serie} ${m.numero}`}</Link></td>
-                  {cuenta.length < 4 && <td>{m.cuenta}</td>}
+                  {cuenta.length < 4 && <td data-titulo="Cuenta">{m.cuenta}</td>}
                   <td>{m.concepto}</td>
-                  <td className="cxl-der">{m.debe ? eurosExactos(m.debe) : ''}</td><td className="cxl-der">{m.haber ? eurosExactos(m.haber) : ''}</td>
-                  <td className="cxl-der">{textoSaldo(m.saldo)}</td>
+                  <td className="cxl-der" data-titulo="Debe">{m.debe ? eurosExactos(m.debe) : ''}</td><td className="cxl-der" data-titulo="Haber">{m.haber ? eurosExactos(m.haber) : ''}</td>
+                  <td className="cxl-der" data-titulo="Saldo">{textoSaldo(m.saldo)}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr><td colSpan={cuenta.length < 4 ? 4 : 3} className="cxl-total">Sumas del periodo</td><td className="cxl-der cxl-total">{eurosExactos(x.debe)}</td><td className="cxl-der cxl-total">{eurosExactos(x.haber)}</td><td className="cxl-der cxl-total">{textoSaldo(x.final)}</td></tr></tfoot>
+            <tfoot><tr><td colSpan={cuenta.length < 4 ? 4 : 3} className="cxl-total">Sumas del periodo</td><td className="cxl-der cxl-total" data-titulo="Debe">{eurosExactos(x.debe)}</td><td className="cxl-der cxl-total" data-titulo="Haber">{eurosExactos(x.haber)}</td><td className="cxl-der cxl-total" data-titulo="Saldo">{textoSaldo(x.final)}</td></tr></tfoot>
           </table>
           {!x.filas.length && <p className="cxl-pie">Sin apuntes entre el {ddmm(desde)} y el {ddmm(hasta)}: el saldo es el inicial.</p>}
         </div>

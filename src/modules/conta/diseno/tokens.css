@@ -1,0 +1,150 @@
+/* src/modules/conta/diseno/tokens.css
+ *
+ * EL ÚNICO SITIO de los colores, la letra, los tamaños, los espacios, los
+ * radios y las medidas de Sumied. Ningún componente lleva un valor escrito a
+ * mano: lo comprueba tests/unit/modules/conta/s01/diseno-reglas.test.ts.
+ *
+ * S02 · Patrón único de pantallas (Julio, 22/10, tableros 0 a 9 del lienzo
+ * «Sumied · Patrón único»). Desde aquí los valores de serie SON los del patrón:
+ * el mismo marco, los mismos colores y la misma letra en todas las pantallas,
+ * venga la persona por la marca que venga (la marca cambia el logo y el
+ * nombre, no la forma). Decisiones de Julio sobre las medidas del encargo
+ * (respuesta al paso 1 del S02, 22/10):
+ *   · el borde de los campos es #7F8FA6 (el gris de la identidad del 14/10):
+ *     3,29:1 sobre blanco y 3,06:1 sobre el fondo (WCAG 1.4.11; el #B9C6D8 de
+ *     la maqueta daba 1,73:1);
+ *   · se queda Cómoda/Compacta: filas de 56 px y de 40 px;
+ *   · el grosor de la franja del color de la empresa, con nombre aquí.
+ *
+ * Contraste medido (WCAG): títulos #172443 / blanco 15,4 · apoyo #4A5B73 /
+ * fondo 6,44 · blanco / acción #1E63C9 5,70 · Propuesto 5,86 · Por revisar
+ * 6,11 · Hecho 5,76 (tests/unit/modules/conta/s02/patron.test.ts).
+ *
+ * Los tokens de antes: --cxm-* (marco.css) son alias de éstos desde el S01, y
+ * los --cx-* (estilo/tokens.css) desde el S02. Se retiran cuando ya no los lea
+ * nadie.
+ */
+
+.cx, .cx-colores, .cxm {
+  /* ── Color ──────────────────────────────────────────────────────────── */
+  --s-tinta: #172443;            /* Títulos y texto principal */
+  --s-apoyo: #4A5B73;            /* Texto de apoyo, etiquetas, cabeceras de tabla */
+  --s-fondo: #F4F7FB;            /* Fondo de página */
+  --s-superficie: #FFFFFF;       /* Tarjetas, cabecera, campos */
+  --s-suave: #FBFCFE;            /* Fondos suaves: cabecera de tabla, lo que se pasa por encima */
+  /* Dos bordes con dos trabajos distintos (Julio, S01 respuesta 1; S02):
+     · el de CONTROL rodea lo que hay que ver para usarlo (campos,
+       desplegables, casillas): ≥ 3:1 sobre la superficie y el fondo;
+     · el DECORATIVO solo ordena (tarjetas, separadores de tabla, botones
+       blancos, que ya se reconocen por su texto). */
+  --s-borde-control: #7F8FA6;
+  --s-borde-decorativo: #DCE5F0;
+  --s-borde-pestanas: #DCE5F0;   /* El separador de las pestañas de estado */
+  --s-accion: #1E63C9;           /* Botón principal, enlaces, página activa */
+  --s-accion-encima: #174FA1;     /* Acción al pasar el ratón */
+  --s-accion-suave: #EAF2F8;     /* Lo seleccionado */
+  --s-accion-borde: #B8D0F0;     /* Borde de lo seleccionado */
+  --s-acento: #00D1B2;           /* El turquesa de la identidad: SIEMPRE fondo */
+  --s-sobre-accion: #FFFFFF;     /* Texto encima de la acción */
+  /* Los tres estados del patrón (texto sobre fondo). */
+  --s-propuesto-texto: #0B6B67;  /* Propuesto: lo que pone Sumied y espera tu visto bueno */
+  --s-propuesto: #EAF9F8;
+  --s-propuesto-borde: #9ED8D2;
+  --s-duda: #8A4B00;             /* Por revisar: lo que pide una decisión */
+  --s-duda-fondo: #FFF1DC;
+  --s-ok: #1B6B3A;               /* Hecho */
+  --s-ok-fondo: #E6F4EA;
+  --s-falta: #8A1F12;            /* Falta, error */
+  --s-falta-fondo: #FFE4E1;
+  --s-neutro-fondo: #EAF2F8;     /* Píldora neutra */
+  --s-oscuro: var(--s-tinta);    /* Píldora oscura («Experto») */
+  --s-documento: #E9EDF3;        /* Fondo del panel del documento */
+  --s-resaltado: #FFF3B0;        /* Lo leído en el documento */
+  --s-velo: rgba(11, 31, 59, 0.32);
+  --s-sombra: 0 4px 14px rgba(11, 31, 59, 0.08); /* Solo desplegables y diálogos */
+  --s-sombra-documento: 0 1px 3px rgba(11, 31, 59, 0.12); /* La hoja del PDF */
+
+  /* La barra lateral: azul noche, el texto claro y la página activa en el azul de acción. */
+  --s-barra: #0B1F3B;
+  --s-barra-texto: #C9D6E8;
+  --s-barra-activo: #172E52;     /* El apartado abierto */
+  --s-barra-activo-texto: #FFFFFF;
+  --s-barra-pagina-activa: var(--s-accion);   /* La página activa: azul con texto blanco */
+  --s-barra-destacado: #00D1B2;  /* El chip de pendientes (turquesa, solo fondo) */
+  --s-barra-destacado-texto: #0B1F3B;
+  --s-barra-chip-suave: #1F3A63; /* El chip de una página (sobre la barra) */
+  --s-barra-separador: #23395C;
+
+  /* El color de la empresa que se pinta cuando la empresa no ha elegido uno:
+     una de estas ocho, por su inicial (marco/colorEmpresa.ts). Todas con
+     texto blanco encima a ≥ 4,5:1. */
+  --s-empresa-1: #0B6B67;
+  --s-empresa-2: #1E63C9;
+  --s-empresa-3: #6B3FA0;
+  --s-empresa-4: #A3361F;
+  --s-empresa-5: #8A4B00;
+  --s-empresa-6: #1B6B3A;
+  --s-empresa-7: #A12F63;
+  --s-empresa-8: #3D4F6B;
+
+  /* ── Letra ──────────────────────────────────────────────────────────── */
+  --s-letra: 'Inter Variable', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  --s-letra-cifras: var(--s-letra);
+  --s-t-xs: 12px;                /* Cabeceras de tabla, migas, chips */
+  --s-t-s: 13px;                 /* Apoyo */
+  --s-t-m: 14px;                 /* Texto, botones, campos, la frase de la página */
+  --s-t-l: 16px;                 /* Títulos de bloque */
+  --s-t-xl: 18px;                /* Títulos de tarjeta */
+  --s-t-titulo: 28px;            /* Título de página */
+  --s-t-cifra: 28px;             /* Cifras grandes de la bandeja */
+  --s-peso-normal: 400;
+  --s-peso-medio: 500;
+  --s-peso-fuerte: 600;
+  --s-peso-titulo: 700;
+  --s-interlinea: 1.4;
+  --s-espaciado-mayus: 0.06em;   /* Lo que va en mayúsculas pequeñas («PROPUESTO») */
+
+  /* ── Espacios (base 4) ──────────────────────────────────────────────── */
+  --s-0: 0;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-12: 48px;
+
+  /* ── Formas ─────────────────────────────────────────────────────────── */
+  --s-radio-boton: 6px;
+  --s-radio-campo: 6px;
+  --s-radio-bloque: 10px;
+  --s-radio-pildora: 999px;
+  --s-linea: 1px;
+  --s-foco: 0 0 0 2px var(--s-superficie), 0 0 0 4px var(--s-accion);
+
+  /* ── Medidas del marco (S02) ────────────────────────────────────────── */
+  --s-alto-control: 36px;        /* Botones y campos */
+  --s-tactil: 44px;              /* Lo que se toca en el móvil */
+  --s-alto-cabecera: 56px;       /* La cabecera, blanca, la misma en todas las páginas */
+  --s-franja-empresa: 3px;       /* La franja del color de la empresa, encima de la cabecera */
+  --s-alto-pestanas: 44px;       /* Las pestañas de estado de una lista */
+  --s-ancho-pantalla: 1800px;    /* S01g: el tope de una pantalla de contenido */
+  --s-ancho-lectura: 960px;      /* S01g: el de un formulario o un texto, que no se estira */
+  --s-ancho-barra: 232px;        /* La barra lateral desplegada */
+  --s-ancho-barra-plegada: 64px; /* Plegada: solo los iconos */
+  --s-ancho-documento: 420px;    /* El PDF a la derecha de una ficha */
+  --s-alto-logo: 40px;           /* El logo de la barra */
+  --s-alto-logo-movil: 30px;     /* El logo de la cabecera del móvil */
+  --s-icono: 16px;
+  --s-icono-barra: 20px;         /* Los iconos de la barra */
+  --s-icono-pestana: 14px;
+  --s-raya-pestana: 3px;         /* El subrayado de la pestaña de estado activa */
+  --s-icono-trazo: 1.75;
+
+  /* ── Densidad (las tablas leen estas dos) ───────────────────────────── */
+  /* S02 (Julio): Cómoda, filas de 56 px; Compacta, de 40. */
+  --s-fila: 56px;
+  --s-hueco: 12px;
+}
+.cxm[data-densidad='compacta'], .cx[data-densidad='compacta'] { --s-fila: 40px; --s-hueco: 8px; }

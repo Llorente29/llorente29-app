@@ -16,6 +16,7 @@ import { ClipboardList, MonitorPlay, CircleOff, Printer as PrinterIcon, Loader2,
 import KdsBoard from '../kds/components/KdsBoard'
 import KdsAlarmOverlay from '../kds/components/KdsAlarmOverlay'
 import AvailabilityNoticeOverlay from '../kds/components/AvailabilityNoticeOverlay'
+import AvisoDireccionFalta from '../reparto/components/AvisoDireccionFalta'
 import TabletAvailabilityTab from './TabletAvailabilityTab'
 import PaseBoard from '@/modules/pase/PaseBoard'
 import { getLoQueEsLaTablet, type LoQueEsLaTablet } from '@/modules/pase/services/paseService'
@@ -322,6 +323,11 @@ export default function TabletStationRoute() {
 
       {/* Alarma de reparto: banner+sonido a nivel de ruta → visible en CUALQUIER pestaña. */}
       <KdsAlarmOverlay locationId={locInfo?.locationId ?? null} token={token} />
+      {/* R03 (Julio, 17/10): el aviso rojo, debajo de la barra y dentro de la
+          página. En Pedidos va dentro de la página que se desplaza (abajo), así
+          con el teclado abierto se aparta y no tapa el campo; en las otras
+          pestañas, aquí, sobre fondo claro. Solo uno montado: suena una vez. */}
+      {tabActual !== 'pedidos' && <AvisoDireccionFalta locationId={null} token={token} />}
       {/* Aviso multi-integrador: recuerda desconectar en Last/Otter tras un 86. */}
       <AvailabilityNoticeOverlay locationId={locInfo?.locationId ?? null} token={token} />
 
@@ -354,6 +360,7 @@ export default function TabletStationRoute() {
             aparcada en Disponibilidad, que es justo donde se agotan los extras,
             se recargaba sola con comandas vivas. */}
         <div className={`h-full overflow-y-auto p-4 bg-page${tabActual === 'pedidos' ? '' : ' hidden'}`}>
+          {tabActual === 'pedidos' && <AvisoDireccionFalta locationId={null} token={token} enPagina />}
           {hayPase && (
             // Regla 8, un piso más abajo: si un botón desaparece y nadie dice
             // por qué, quien lo busca concluye que la pantalla está rota.

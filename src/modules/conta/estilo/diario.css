@@ -67,16 +67,9 @@
 .cxd-anulado .cxd-concepto-titulo, .cxd-anulado .cxd-importe { text-decoration: line-through; color: var(--cx-apoyo); }
 .cxd-chip-gris .cx-chip { background: var(--cx-neutro-suave); color: var(--cx-apoyo); }
 .cxd-codigo { font-family: var(--cx-letra-cifras); font-size: 13px; color: var(--cx-apoyo); }
-/* En el asiento la línea de apoyo SÍ salta: con los dos chips (local y marca
-   cedida) el código no cabía y el contenedor lo recortaba, «410000» por
-   «41000003», que parece otra cuenta (captura de la e2e 134). La fila baja de
-   una sola línea es la del libro, no ésta. */
-.cxd-linea-cuenta .cxd-concepto-apoyo { flex-wrap: wrap; row-gap: 2px; }
 a.cxd-codigo:hover { color: var(--cx-azul); }
 
 .cxd-apuntes { padding: 0 0 12px 140px; display: flex; flex-direction: column; }
-.cxd-apunte { display: grid; grid-template-columns: minmax(0, 1fr) auto 130px 90px; gap: 12px; align-items: center; padding: 6px 0; }
-.cxd-apunte-cuenta { display: flex; flex-direction: column; min-width: 0; }
 .cxd-apunte-pie { padding-top: 6px; }
 
 /* Lo que he hecho yo · Por qué lo propongo así */
@@ -106,13 +99,8 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
 .cxd-noconf-fila { display: grid; grid-template-columns: 56px minmax(0, 1fr) 90px 110px 90px minmax(0, 1.2fr); gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--cx-linea); font-size: 14px; }
 .cxd-noconf-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; border-top: none; padding: 4px 0; }
 
-/* N12 · el asiento */
-.cxd-asiento { display: flex; flex-direction: column; }
-.cxd-linea { display: grid; grid-template-columns: minmax(0, 1fr) 130px 130px 64px; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
-.cxd-linea-cabeza { font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; border-top: none; padding: 4px 0; }
-.cxd-linea-cuenta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.cxd-linea-nombre { font-size: 15px; }
-.cxd-cuadre { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 16px; align-items: center; padding: 14px 0 6px; border-top: 2px solid var(--cx-texto); }
+/* N12 · el asiento: sus apuntes van en la tabla común (diseno/plantillas, TablaAsiento). */
+.cxd-asiento { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cxd-buscar { display: flex; flex-direction: column; gap: 6px; padding: 0 0 12px; }
 .cxd-buscar-lista { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; }
 .cxd-buscar-opcion { width: 100%; text-align: left; background: none; border: none; padding: 8px 6px; font: inherit; cursor: pointer; border-radius: 8px; }
@@ -127,8 +115,24 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
 .cxd-campo { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
 .cxd-dialogo-acciones { display: flex; justify-content: flex-end; gap: 10px; }
 .cxd-mano-cabeza { display: grid; grid-template-columns: 180px 180px minmax(0, 1fr); gap: 14px; }
-.cxd-mano-linea { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 120px 120px minmax(0, 1fr) 60px; gap: 10px; align-items: start; padding: 8px 0; }
+/* S01c: la cabecera y las líneas comparten plantilla (cada rótulo encima de su
+   columna); Debe y Haber crecen con la pantalla, sin bajar de 120px. */
+.cxd-mano-linea { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) minmax(0, 1fr) 60px; gap: 10px; align-items: start; padding: 8px 0; }
 .cxd-mano-linea label { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxd-mano-linea .cxd-der.cx-input { font-family: var(--cx-letra-cifras); }
+/* S01: sin el eje «local» (Definiciones › Analítica), sin su columna. */
+.cxd-mano-linea.cxd-mano-sin-local { grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) minmax(0, 1fr) 60px; }
+/* La etiqueta de cada campo dentro de la línea: solo en móvil, donde no hay fila de cabecera. */
+.cxd-mano-etiqueta { display: none; font-size: 12px; font-weight: 600; color: var(--cx-apoyo); text-transform: uppercase; letter-spacing: 0.3px; }
+/* El pie del asiento a mano: sin importes, neutro (ni ámbar ni verde). */
+.cxd-cuadre-neutro { color: var(--cx-apoyo); }
+/* S01c · «Guardar como predefinido»: su propia fila (nombre que crece, casilla
+   centrada con el campo, botón a su ancho al final). */
+.cxd-predef-fila { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.cxd-predef-nombre { flex: 1 1 280px; min-width: 280px; }
+.cxd-predef-importes { display: inline-flex; align-items: center; gap: 8px; height: 48px; font-size: 14px; white-space: nowrap; cursor: pointer; }
+.cxd-predef-importes input { margin: 0; width: 18px; height: 18px; }
+.cxd-predef-fila > button { flex: 0 0 auto; margin-left: auto; }
 
 @media (max-width: 1100px) {
   .cxd-cuerpo { grid-template-columns: minmax(0, 1fr); }
@@ -148,7 +152,6 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
   .cxd-fila .cxd-concepto-apoyo .cx-chip { padding: 1px 6px; }
   .cxd-fila .cxd-importe { grid-area: importe; }
   .cxd-fila > span:last-child { grid-area: estado; justify-self: end; }
-  .cxd-linea { grid-template-columns: minmax(0, 1fr) auto; }
   /* Por niveles: código e importe; hora, marca y canal; cómo acabó. */
   .cxd-noconf-cabeza { display: none; }
   .cxd-noconf-fila { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'codigo codigo importe' 'hora marca canal' 'como como como'; column-gap: 8px; row-gap: 2px; }
@@ -159,12 +162,20 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
   .cxd-noconf-canal { grid-area: canal; }
   .cxd-noconf-hora, .cxd-noconf-marca, .cxd-noconf-canal { color: var(--cx-apoyo); font-size: 13px; }
   .cxd-noconf-como { grid-area: como; font-size: 13px; }
-  .cxd-linea-cabeza { display: none; }
-  .cxd-linea > .cxd-importe:nth-of-type(2) { grid-column: 2; }
-  .cxd-cuadre { grid-template-columns: 1fr 1fr; }
   .cxd-mano-cabeza { grid-template-columns: 1fr 1fr; }
   .cxd-mano-cabeza .cxd-campo-ancho { grid-column: 1 / -1; }
-  .cxd-mano-linea { grid-template-columns: 1fr 1fr; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+  .cxd-mano-linea, .cxd-mano-linea.cxd-mano-sin-local { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 12px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
+  /* Cuenta y local a lo ancho (que «Nombre o código» quepa); Debe y Haber juntos; concepto a lo ancho; «Quitar» al final. */
+  .cxd-mano-linea > label:first-child { grid-column: 1 / -1; }
+  .cxd-mano-linea:not(.cxd-mano-sin-local) > label:nth-child(2) { grid-column: 1 / -1; }
+  .cxd-mano-linea > label:nth-last-child(2) { grid-column: 1 / -1; }
+  .cxd-mano-linea > button:last-child { grid-column: 1 / -1; justify-self: end; }
+  .cxd-mano-etiqueta { display: block; }
+  .cxd-mano-cuadre > strong { grid-column: 1 / -1; }
+  .cxd-predef-fila { flex-direction: column; align-items: stretch; gap: 12px; }
+  .cxd-predef-nombre { flex: 0 0 auto; min-width: 0; }
+  .cxd-predef-importes { height: auto; white-space: normal; }
+  .cxd-predef-fila > button { width: 100%; margin-left: 0; }
 }
 
 .cxd-detalle-cuentas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -175,3 +186,28 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
 .cxd-diez-opcion { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: start; cursor: pointer; }
 .cxd-diez-opcion input { margin-top: 3px; }
 .cxd-diez-concepto { min-width: 0; }
+
+/* S01 · ?tipo= en el asiento a mano: la ayuda del tipo y la lista de predefinidos. */
+.cxd-ayuda-tipo { margin: 4px 0 0; max-width: 72ch; }
+.cxd-predefinidos { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cxd-predefinidos li { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+
+/* S01d · La factura expedida: su PDF al lado del asiento a mano (formulario a
+   la izquierda, papel a la derecha) y en la tarjeta «Factura» del asiento. Por
+   debajo de 1100 px, el papel baja debajo del formulario y se puede recoger. */
+.cxd-expedida-con-papel { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 1fr); gap: 14px; align-items: start; }
+.cxd-expedida-form { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxd-expedida-con-papel > .cxd-expedida-papel { position: sticky; top: 14px; }
+.cxd-expedida { display: flex; flex-direction: column; gap: 8px; }
+.cxd-expedida-elegir { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cxd-expedida-boton { cursor: pointer; display: inline-flex; align-items: center; }
+.cxd-expedida-elegir input:focus-visible + .cxd-expedida-boton { outline: 3px solid var(--cx-azul); outline-offset: 2px; }
+.cxd-expedida-elegir input:disabled + .cxd-expedida-boton { opacity: .5; cursor: default; }
+.cxd-expedida-elegido { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cxd-expedida-nombre { min-width: 0; overflow-wrap: anywhere; }
+.cxd-expedida-hoja { min-height: 0; padding: 10px; }
+.cxd-expedida-recoger { align-self: flex-start; margin: 8px 14px 0; }
+@media (max-width: 1100px) {
+  .cxd-expedida-con-papel { grid-template-columns: minmax(0, 1fr); }
+  .cxd-expedida-con-papel > .cxd-expedida-papel { position: static; }
+}

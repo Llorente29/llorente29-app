@@ -16,18 +16,34 @@
 import { normal, nombra, type Destino } from '@/modules/conta/lib/conciliacion'
 import { nombreMes, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 
-export type Bandeja = 'confirmar' | 'aclarar' | 'casados' | 'todos'
+export type Bandeja = 'confirmar' | 'aclarar' | 'validar' | 'casados' | 'todos'
 export const BANDEJAS: { id: Bandeja; nombre: string }[] = [
-  { id: 'confirmar', nombre: 'Para confirmar' }, { id: 'aclarar', nombre: 'Por aclarar' }, { id: 'casados', nombre: 'Casados solos' }, { id: 'todos', nombre: 'Todos' },
+  { id: 'confirmar', nombre: 'Para confirmar' }, { id: 'aclarar', nombre: 'Por aclarar' }, { id: 'validar', nombre: 'Por validar' },
+  { id: 'casados', nombre: 'Casados solos' }, { id: 'todos', nombre: 'Todos' },
 ]
 
-/** En qué bandeja cae un movimiento (además de «Todos», donde están todos). */
-export function bandejaDe(m: MovimientoBanco): Exclude<Bandeja, 'todos'> | null {
+/**
+ * S02 · PR 2 (Julio, 22/10): ¿está casado y su asiento sigue propuesto? Entonces
+ * espera en «Por validar»: Contabilidad › Asientos ya no lo enseña (lib/diario,
+ * SE_DECIDE_EN), y se valida aquí. «Por validar» mira el ASIENTO y las demás
+ * bandejas el movimiento, así que lo casado solo y sin validar está en las dos
+ * («Casados solos», para ver y deshacer lo que hice; «Por validar», para
+ * validarlo): con «validar lo seguro» apagado, que es lo de serie, todo lo que
+ * caso solo queda propuesto, y «Casados solos» no puede quedarse vacío por eso.
+ */
+export const porValidar = (m: MovimientoBanco): boolean => m.estado === 'casado' && m.casado?.asientoEstado === 'propuesto' && !!m.casado.asientoId
+
+/** En qué bandeja cae un movimiento por su estado (además de «Todos», y de «Por validar» si su asiento espera). */
+export function bandejaDe(m: MovimientoBanco): Exclude<Bandeja, 'todos' | 'validar'> | null {
   if (m.estado === 'propuesto') return 'confirmar'
   if (m.estado === 'por_aclarar' || m.estado === 'pendiente' || m.estado === 'posible_repetido') return 'aclarar'
   if (m.estado === 'casado' && m.casado?.porQuien === 'folvy') return 'casados'
   return null
 }
+
+/** ¿Sale en esa bandeja? (lo que lista cada bandeja y lo que cuenta su número, con la misma vara). */
+export const enBandeja = (m: MovimientoBanco, b: Bandeja): boolean =>
+  b === 'todos' || (b === 'validar' ? porValidar(m) : bandejaDe(m) === b)
 
 /** Lo que se puede confirmar tal cual: tiene destino, no falta el ticket y no hay que elegir entre dos. */
 export function confirmable(m: MovimientoBanco): boolean {
@@ -61,14 +77,14 @@ export interface Cuadre {
 
 /** El cuadre, la barra, la banda y los contadores de las bandejas, de una sola lectura. */
 export function cuadreDe(movs: readonly MovimientoBanco[], bancoCent: number | null, libroCent: number | null, mes: string): Cuadre {
-  const cuenta: Record<Bandeja, number> = { confirmar: 0, aclarar: 0, casados: 0, todos: movs.length }
-  for (const m of movs) { const b = bandejaDe(m); if (b) cuenta[b]++ }
+  const cuenta: Record<Bandeja, number> = { confirmar: 0, aclarar: 0, validar: 0, casados: 0, todos: movs.length }
+  for (const m of movs) { const b = bandejaDe(m); if (b) cuenta[b]++; if (porValidar(m)) cuenta.validar++ }
   const sinCasarCent = movs.filter((m) => m.estado !== 'casado' && m.estado !== 'ignorado').reduce((t, m) => t + m.importeCent, 0)
   const nombre = nombreMes(mes).toLowerCase()
   const frase = movs.length === 0
     ? `No hay movimientos de ${nombre}: sube el extracto y los miro.`
-    : `He casado yo ${cuenta.casados} de ${movs.length} movimientos de ${nombre}. ${cuenta.confirmar || cuenta.aclarar
-      ? `Te quedan ${cuenta.confirmar} por confirmar y ${cuenta.aclarar} por aclarar.`
+    : `He casado yo ${cuenta.casados} de ${movs.length} movimientos de ${nombre}. ${cuenta.confirmar || cuenta.aclarar || cuenta.validar
+      ? `Te quedan ${cuenta.confirmar} por confirmar y ${cuenta.aclarar} por aclarar${cuenta.validar ? `, y ${cuenta.validar} por validar` : ''}.`
       : 'No te queda nada.'}`
   return {
     bancoCent, libroCent, faltaCent: bancoCent === null || libroCent === null ? null : bancoCent - libroCent, sinCasarCent,
@@ -268,5 +284,53 @@ export function textoBloque(seleccion: readonly string[], preseleccionados: read
     etiqueta: `${n} ${seguros ? (n === 1 ? 'seguro seleccionado' : 'seguros seleccionados') : (n === 1 ? 'seleccionado' : 'seleccionados')}`,
     boton: n === 1 ? 'Confirmar el 1' : `Confirmar los ${n}`,
     seguros,
+  }
+}
+
+// ── De dónde parte el cuadre (regla de Julio, 16/10) ───────────────────────
+// Si los bancos tienen fecha de corte (antes de ella la contabilidad está
+// cerrada y casi sin conciliar), el cuadre NO parte del saldo contable a la
+// víspera del corte: parte del saldo del EXTRACTO ese día, y le suma lo que
+// la contabilidad ha movido en la cuenta desde el corte. Y lo dice.
+
+export interface ExtractoSaldos { desde: string; hasta: string; saldoInicialCent: number | null; saldoFinalCent: number | null }
+
+export interface PuntoDePartida {
+  /** «En contabilidad» para el cuadre. */
+  libroCent: number | null
+  /** Lo que la pantalla dice debajo; null si no hay corte (se parte del contable, como siempre). */
+  apertura: { fecha: string; bancoCent: number | null; contableCent: number; frase: string } | null
+}
+
+const dia = (iso: string, d: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + d * 86400000).toISOString().slice(0, 10)
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+/** El saldo del banco al cierre de `fecha`: el inicial del extracto que empieza al día siguiente, o el final del que acaba ese día. */
+export function saldoDelExtractoA(extractos: readonly ExtractoSaldos[], fecha: string): number | null {
+  const empieza = extractos.find((e) => e.desde === dia(fecha, 1) && e.saldoInicialCent !== null)
+  if (empieza) return empieza.saldoInicialCent
+  const acaba = extractos.find((e) => e.hasta === fecha && e.saldoFinalCent !== null)
+  return acaba ? acaba.saldoFinalCent : null
+}
+
+/**
+ * `libroAntesCent`: la 572 a la víspera del corte; `libroAhoraCent`: a la fecha del cuadre.
+ * Sin corte (o con el cuadre antes del corte), el contable de siempre.
+ */
+export function puntoDePartida(corte: string | null, hasta: string, extractos: readonly ExtractoSaldos[], libroAntesCent: number | null, libroAhoraCent: number | null): PuntoDePartida {
+  if (!corte || libroAhoraCent === null || libroAntesCent === null || hasta < corte) return { libroCent: libroAhoraCent, apertura: null }
+  const vispera = dia(corte, -1)
+  const bancoCent = saldoDelExtractoA(extractos, vispera)
+  const e = (c: number) => `${(c / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
+  if (bancoCent === null) {
+    return { libroCent: libroAhoraCent, apertura: { fecha: vispera, bancoCent: null, contableCent: libroAntesCent,
+      frase: `No tengo el saldo del extracto a ${ddmm(vispera)}: parto del contable (${e(libroAntesCent)}). Sube el extracto que empieza el ${ddmm(corte)}.` } }
+  }
+  return {
+    libroCent: bancoCent + (libroAhoraCent - libroAntesCent),
+    apertura: { fecha: vispera, bancoCent, contableCent: libroAntesCent,
+      frase: bancoCent === libroAntesCent
+        ? `Parto del saldo del extracto a ${ddmm(vispera)} (${e(bancoCent)}), que coincide con el contable.`
+        : `Parto del saldo del extracto a ${ddmm(vispera)} (${e(bancoCent)}), no del contable (${e(libroAntesCent)}): hasta esa fecha la contabilidad está cerrada y casi sin conciliar.` },
   }
 }

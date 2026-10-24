@@ -27,8 +27,9 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { zonasTocadas } from '../e2e/area.mjs'
 
-export const CARPETAS = ['docs/conta/capturas', 'docs/reparto/capturas']
+export const CARPETAS = ['docs/conta/capturas', 'docs/reparto/capturas', 'docs/inventario/capturas']
 
 /**
  * El frente de la rama: el MISMO reparto que el paso «Frente» de
@@ -38,26 +39,50 @@ export function frenteDeLaRama(rama) {
   if (/^conta\/d\d/.test(rama)) return 'a'      // A · facturas recibidas (D01…)
   if (/^conta\/b\d/.test(rama)) return 'b'      // B · bancos (B01…)
   if (/^conta\/(c06|f\d)/.test(rama)) return 'c' // C · contabilidad sola y facturas emitidas (C06, F01…)
-  if (/^conta\/m\d/.test(rama)) return 'd'      // D · el marco nuevo y sus piezas (M01…)
+  if (/^conta\/[ms]\d/.test(rama)) return 'd'   // D · el marco nuevo, sus piezas y el esqueleto (M01, S01…)
   return ''
 }
 
 /**
  * De quién son las capturas que puede fijar una rama. El reparto (R02) no es
  * un frente de usuarios, pero sí tiene sus capturas.
- * cierre/, compras/ y diez/ no son de ningún frente de hoy: nadie las fija.
+ * cierre/ y diez/ no son de ningún frente de hoy: nadie las fija.
  */
 export const DE_QUIEN = {
   a: /^docs\/conta\/capturas\/d\d[^/]*\//,
   b: /^docs\/conta\/capturas\/b\d[^/]*\//,
   c: /^docs\/conta\/capturas\/c\d[^/]*\//,
-  d: /^docs\/conta\/capturas\/m\d[^/]*\//,
+  d: /^docs\/conta\/capturas\/[ms]\d[^/]*\//,
   reparto: /^docs\/reparto\/capturas\//,
+  // I01b (18/10): Impuestos (conta/i01…) no es un frente de usuarios —sus e2e
+  // van con los de siempre, en su carril—, pero tiene sus capturas: i01b/…
+  impuestos: /^docs\/conta\/capturas\/i\d[^/]*\//,
+  // P01 (19/10): «Impuestos de tus clientes» (conta/p01…), igual que Impuestos:
+  // sin frente de usuarios, con sus capturas en p01/…
+  despacho: /^docs\/conta\/capturas\/p\d[^/]*\//,
+  // Compras (21/10, «Compras pasa a ser tuya»): conta/compras-…, sin frente de
+  // usuarios, con sus capturas en compras/…
+  compras: /^docs\/conta\/capturas\/compras\//,
+  // Autoconteo (21/10): las de inventario son de la ZONA, no de un frente. Las
+  // fija una rama sin frente que toque inventario (duenoDeLaRama, abajo).
+  inventario: /^docs\/inventario\/capturas\//,
 }
 
-export function duenoDeLaRama(rama) {
+/**
+ * El dueño de las capturas de una rama: el de su nombre y, si el nombre no es de
+ * nadie, la zona por fichero que toca contra main (scripts/e2e/area.mjs,
+ * ZONAS_POR_FICHERO), si toca una sola con capturas. Así una rama sin frente que
+ * toca inventario fija las de docs/inventario/capturas y ninguna más.
+ */
+export function duenoDeLaRama(rama, cambiados = []) {
   if (/^reparto-/.test(rama)) return 'reparto'
-  return frenteDeLaRama(rama) || null
+  if (/^conta\/i\d/.test(rama)) return 'impuestos'
+  if (/^conta\/p\d/.test(rama)) return 'despacho'
+  if (/^conta\/compras/.test(rama)) return 'compras'
+  const frente = frenteDeLaRama(rama)
+  if (frente) return frente
+  const zonas = zonasTocadas(cambiados).filter((z) => z.zona in DE_QUIEN)
+  return zonas.length === 1 ? zonas[0].zona : null
 }
 
 /** Reparte rutas de capturas entre las del dueño y las de otros. */
@@ -94,13 +119,28 @@ const git = (...a) => execFileSync('git', a, { encoding: 'utf8' })
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [orden, ...args] = process.argv.slice(2)
   const ramaActual = () => git('rev-parse', '--abbrev-ref', 'HEAD').trim()
+  // Lo que la rama cambia contra main (para el dueño por zona). En Actions el
+  // checkout es de un solo commit y no trae origin/main (run 762, 21/10): se trae
+  // main y se ahonda la rama hasta encontrar dónde se separaron. Sin eso, nada.
+  const cambiadosContraMain = () => {
+    const diff = () => execFileSync('git', ['diff', '--name-only', 'origin/main...HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean)
+    try { return diff() } catch { /* sin origin/main o sin la base común: se trae abajo */ }
+    try {
+      execFileSync('git', ['fetch', '--no-tags', '-q', '--depth=200', 'origin', '+refs/heads/main:refs/remotes/origin/main'], { stdio: 'ignore' })
+      execFileSync('git', ['fetch', '--no-tags', '-q', '--deepen=200', 'origin', 'HEAD'], { stdio: 'ignore' })
+      return diff()
+    } catch { return [] }
+  }
 
   if (orden === 'frente') {
     process.stdout.write(frenteDeLaRama(args[0] ?? ramaActual()))
   } else if (orden === 'fijar') {
     const rama = args[0] ?? ramaActual()
-    const dueno = duenoDeLaRama(rama)
-    if (!dueno) { console.error(`✗ La rama «${rama}» no es de ningún frente: no se fija ninguna captura.`); process.exit(1) }
+    const dueno = duenoDeLaRama(rama, cambiadosContraMain())
+    // C10 (Julio, 23/10): una rama sin frente de contabilidad (la carta de cocina, una
+    // herramienta…) no tiene capturas que fijar: se salta, sin poner el run en rojo.
+    // Antes salía con 1 y la e2e, con todas las pruebas en verde, acababa en rojo (#302).
+    if (!dueno) { console.log(`La rama «${rama}» no es de ningún frente de contabilidad: no hay capturas que fijar (se salta).`); process.exit(0) }
     // Lo cambiado y lo nuevo, fichero a fichero (-uall), solo en las carpetas de capturas.
     const cambiadas = git('status', '--porcelain', '-uall', '--', ...CARPETAS).split('\n').filter(Boolean).map((l) => l.slice(3))
     const { suyas, ajenas } = repartir(cambiadas, dueno)
@@ -116,7 +156,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `n=${estas.length}\n`)
   } else if (orden === 'comprobar') {
     const rama = args[0] ?? ramaActual()
-    const dueno = duenoDeLaRama(rama)
+    const dueno = duenoDeLaRama(rama, cambiadosContraMain())
     const enLaRama = git('diff', '--name-only', 'origin/main...HEAD', '--', ...CARPETAS).split('\n').filter(Boolean)
     const { ajenas } = repartir(enLaRama, dueno)
     if (ajenas.length) {

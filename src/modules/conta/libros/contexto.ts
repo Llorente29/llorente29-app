@@ -55,3 +55,25 @@ export function trimestreDe(fecha: string): { desde: string; hasta: string; nomb
   const fin = `${y}-${String(finMes).padStart(2, '0')}-${String(new Date(Number(y), finMes, 0).getDate()).padStart(2, '0')}`
   return { desde: `${y}-${ini}-01`, hasta: fin, nombre: `${t + 1}T ${y}` }
 }
+
+/**
+ * El periodo pedido por la dirección (?periodo=3T): el de ese trimestre en el
+ * ejercicio elegido, o null (y entonces cada libro abre en el suyo de siempre).
+ */
+export function delTrimestre<P extends { id: string }>(ps: P[], pedido: string | null): P | undefined {
+  if (!pedido || !/^[1-4]T$/.test(pedido)) return undefined
+  return ps.find((p) => p.id.startsWith(`${pedido} `))
+}
+
+/** Los periodos de un ejercicio: sus trimestres (recortados a sus fechas) y el ejercicio entero. */
+export function periodosDelEjercicio(inicio: string, fin: string): { id: string; desde: string; hasta: string; nombre: string }[] {
+  const r: { id: string; desde: string; hasta: string; nombre: string }[] = []
+  let f = inicio
+  while (f <= fin) {
+    const t = trimestreDe(f)
+    r.push({ id: t.nombre, desde: t.desde < inicio ? inicio : t.desde, hasta: t.hasta > fin ? fin : t.hasta, nombre: t.nombre })
+    const siguiente = new Date(`${t.hasta}T12:00:00Z`); siguiente.setUTCDate(siguiente.getUTCDate() + 1)
+    f = siguiente.toISOString().slice(0, 10)
+  }
+  return [...r, { id: 'año', desde: inicio, hasta: fin, nombre: 'Todo el ejercicio' }]
+}

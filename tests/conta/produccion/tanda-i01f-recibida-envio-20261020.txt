@@ -1,0 +1,21 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# I01f · Enviar a Diez las recibidas autoliquidadas (rama
+# conta/i01f-diez-autoliquidadas; encargo de Julio del 20/10). Va DESPUÉS de
+# las autoliquidaciones (0300 y 0310, PR #260, aplicadas): su copia,
+# tests/conta/produccion/tanda-i01d-autoliquidaciones-20261020.txt.
+#
+#   1. 0320 — CAMBIA en caliente conta_recibida_envio (misma firma, declarada
+#      con su prueba de staging): solo AÑADE dos claves a lo que devuelve, el
+#      «tratamiento» del IVA de cada línea (tax_rate.treatment) y el «pais» del
+#      proveedor. La lee solo conta-diez-enviar. Nada del camino del pedido.
+#
+# Después, a mano: desplegar conta-diez-enviar (importa _shared/diezRecibida.ts
+# y _shared/diezEnviar.ts), con el sí de Julio. Sin la 0320 la función nueva
+# manda igual las recibidas normales y para las autoliquidadas diciendo por qué.
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/i01f-recibida-envio.sql
+supabase/migrations/20261126T0320_i01f_recibida_envio_tratamiento.sql

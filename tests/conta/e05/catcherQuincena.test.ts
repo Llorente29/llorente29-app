@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import {
-  comprobarPdf, confianzaDe, etiquetaQuincena, loteParaRegistrar, fechaExcel, leerFacturas, leerQuincena, LoteNoValido, madridAUtc, reconocer, resumen, type Fichero,
+  comprobarPdf, confianzaDe, etiquetaQuincena, textoPorPosicion, loteParaRegistrar, fechaExcel, leerFacturas, leerQuincena, LoteNoValido, madridAUtc, reconocer, resumen, type Fichero,
 } from '../../../src/modules/conta/lib/catcherQuincena'
 import * as XLSX from 'xlsx'
 import { eurosExactos } from '../../../src/modules/conta/lib/formato'
@@ -14,11 +14,20 @@ import { EMPRESA, excelFacturas, excelPedidos, FACTURAS, pdf, quincenaInventada,
 const TIENDAS = { [TIENDA_A]: 'local-carabanchel', [TIENDA_B]: 'local-alcala' }
 const o = { tiendas: TIENDAS, empresa: { nif: EMPRESA.nif } }
 
-async function textoPdf(bytes: Uint8Array): Promise<string> {
+type Trozo = { str?: string; transform?: number[] }
+async function trozos(bytes: Uint8Array): Promise<Trozo[][]> {
   const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 }).promise
-  let t = ''
-  for (let i = 1; i <= doc.numPages; i++) t += (await (await doc.getPage(i)).getTextContent()).items.map((x) => ('str' in x ? x.str : '')).join(' ') + '\n'
-  return t
+  const r: Trozo[][] = []
+  for (let i = 1; i <= doc.numPages; i++) r.push((await (await doc.getPage(i)).getTextContent()).items as Trozo[])
+  return r
+}
+/** Lo mismo que textoPdf de catcherService: por posición. */
+async function textoPdf(bytes: Uint8Array): Promise<string> {
+  return (await trozos(bytes)).map((p) => textoPorPosicion(p)).join('\n')
+}
+/** Como se leía hasta el 22/10: los trozos en el orden en que el PDF los dibuja. */
+async function textoEnOrdenDeDibujo(bytes: Uint8Array): Promise<string> {
+  return (await trozos(bytes)).map((p) => p.map((x) => x.str ?? '').join(' ')).join('\n')
 }
 
 describe('reconocer: qué es cada fichero, por lo que lleva dentro', () => {
@@ -130,6 +139,21 @@ describe('comprobarPdf: el PDF dice lo mismo que el Excel (texto de pdfjs)', () 
     const ex = leerFacturas(XLSX.read(excelFacturas(), { type: 'array' })).facturas[1]
     const r = comprobarPdf(ex, await textoPdf(pdf(FACTURAS[1], { total: 9.99, nif: '00000009Z', pedidos: 3 })))
     expect(r.filter((x) => !x.ok).map((x) => x.id)).toEqual(['pdf_nif', 'pdf_total', 'pdf_pedidos'])
+  })
+  it('«Pedidos entregados:» y su número, dos trozos que el PDF no dibuja seguidos: por posición cuadra; en orden de dibujo, no (las 83 del 18/10)', async () => {
+    const ex = leerFacturas(XLSX.read(excelFacturas(), { type: 'array' })).facturas[1]
+    const bytes = pdf(FACTURAS[1])
+    const pos = await textoPdf(bytes)
+    expect(pos).toMatch(new RegExp(`Pedidos entregados: ${FACTURAS[1].pedidos}\\n`))
+    expect(pos).toMatch(/Servicio de recogida y entrega de paquetes o comida a \d+,\d\d € \d+,\d\d €\ndomicilio\nEjercicio: /)
+    expect(comprobarPdf(ex, pos).find((x) => x.id === 'pdf_pedidos')!.ok).toBe(true)
+    const dibujo = await textoEnOrdenDeDibujo(bytes)
+    expect(comprobarPdf(ex, dibujo).filter((x) => !x.ok).map((x) => x.id)).toEqual(['pdf_pedidos'])
+  })
+  it('textoPorPosicion: de arriba abajo y de izquierda a derecha, una línea por altura', () => {
+    const t = (str: string, x: number, y: number) => ({ str, transform: [1, 0, 0, 1, x, y] })
+    expect(textoPorPosicion([t('Total:', 300, 100), t('2', 120, 200), t('Pedidos entregados:', 40, 200.8), t(' ', 0, 50), t('6,81 €', 400, 100)]))
+      .toBe('Pedidos entregados: 2\nTotal: 6,81 €')
   })
   it('sin comprobar el PDF, no es segura', () => {
     expect(confianzaDe(q.facturas[1])).toBe('duda')

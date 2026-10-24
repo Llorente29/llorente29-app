@@ -48,7 +48,8 @@
 //     asientos con fecha desde ese día (autorizacionCubre). El contraasiento,
 //     con la fecha de lo que anula.
 
-import { BASE_PRUEBAS, BASES_PROHIBIDAS, MAX_INTENTOS, type Factura, type FacturaData } from './diezCliente.ts'
+import { BASE_PRUEBAS, BASES_PROHIBIDAS, ErrorDiez, MAX_INTENTOS, type Apunte, type ApunteSimplificado, type Factura, type FacturaData } from './diezCliente.ts'
+import { apunteDeAsiento, comoVa, cuentasDe, esElMismoApunte, unoPorAsiento, type AsientoBD } from './diezApunte.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
 import { esDeLaGestoria, facturaDeVentas, facturaQueAnula, PATRONES } from './diezFactura.ts'
 import { facturaRecibida, facturaRecibidaQueAnula, type FacturaRecibida } from './diezRecibida.ts'
@@ -62,7 +63,8 @@ export type EnvioFila = {
   account_id: string
   company_id: string
   account_connector_id: string | null
-  kind: 'factura'
+  /** C07: 'asiento' para los que van como asiento general (banco, manual, liquidación…). */
+  kind: 'factura' | 'asiento'
   ext_year: string | null
   ext_series: string | null
   ext_number: number | null
@@ -77,6 +79,8 @@ export type EnvioFila = {
   document_error: string | null
   document_attached_at: string | null
   document_attached_via?: 'diez' | 'a_mano' | null
+  /** C07 · Cuándo lo vuelve a intentar el servidor (null: no solo). */
+  next_try_at?: string | null
 }
 
 /** adjuntar: ¿guarda Diez documentos? (config.adjuntar_documentos; hoy, no). */
@@ -136,10 +140,10 @@ export const TEXTO_CONTENEDOR = 'Diez todavía no guarda documentos (falta que C
 
 export const PDF_PENDIENTE = 'PDF pendiente en Diez'
 /** Una fila de public.conta_diez_autorizo (lo que se mira de ella). */
-export type Autorizacion = { alcance: string; entry_id: string | null; desde: string | null; incluye_recibidas?: boolean | null }
+export type Autorizacion = { alcance: string; entry_id: string | null; desde: string | null; incluye_recibidas?: boolean | null; incluye_asientos?: boolean | null }
 
-/** Qué se escribe en Diez: la factura de ventas (serie 1) o una recibida (serie 2). */
-export type TipoEnvio = 'ventas' | 'recibidas'
+/** Qué se escribe en Diez: la factura de ventas (serie 1), una recibida (serie 2) o (C07) un asiento general. */
+export type TipoEnvio = 'ventas' | 'recibidas' | 'asientos'
 
 /**
  * C06b R8 · tarea 1: ¿cubre alguna de estas autorizaciones (de la empresa, en
@@ -155,7 +159,8 @@ export type TipoEnvio = 'ventas' | 'recibidas'
  * sea de empresa o de un asiento.
  */
 export function autorizacionCubre(xs: readonly Autorizacion[], entryId: string, fecha: string, tipo: TipoEnvio = 'ventas'): boolean {
-  return xs.some((a) => (tipo === 'ventas' || a.incluye_recibidas === true)
+  // C07: los asientos generales, solo con incluye_asientos (0450; por defecto, no).
+  return xs.some((a) => (tipo === 'ventas' || (tipo === 'recibidas' && a.incluye_recibidas === true) || (tipo === 'asientos' && a.incluye_asientos === true))
     && ((a.alcance === 'asiento' && a.entry_id === entryId)
       || (a.alcance === 'empresa' && (a.desde == null || fecha.slice(0, 10) >= String(a.desde).slice(0, 10)))))
 }
@@ -163,7 +168,9 @@ export function autorizacionCubre(xs: readonly Autorizacion[], entryId: string, 
 /** El texto de Diez real cerrado, para cada tipo. */
 export const cerradoEn = (bd: string, tipo: TipoEnvio) => tipo === 'recibidas'
   ? `Diez real está cerrado para facturas recibidas (${bd}): no se escribe nada hasta que Julio las autorice`
-  : `Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`
+  : tipo === 'asientos'
+    ? `Diez real está cerrado para asientos de banco, manuales y liquidaciones (${bd}): no se escribe nada hasta que Julio los autorice`
+    : `Diez real (${bd}) está cerrado: no se escribe nada hasta que Julio lo autorice`
 
 const yaEnviado = (e: EnvioFila | null) => !!e && (e.status === 'enviado' || e.status === 'enlazado')
 
@@ -176,16 +183,82 @@ const yaEnviado = (e: EnvioFila | null) => !!e && (e.status === 'enviado' || e.s
  */
 export const EN_MARCHA = 'el envío empezó y no terminó: se cortó antes de escribir en Diez (allí no se ha escrito nada). Pulsa «Reintentar»'
 
+/**
+ * 17/10 · Lo que contestó Diez, en corto, para el motivo: su mensaje
+ * (Message, ExceptionMessage, error_description…) o el cuerpo tal cual, sin
+ * saltos de línea y con 300 caracteres como mucho. Solo va a la base
+ * (external_send.last_error) y a la pantalla, nunca a un registro público.
+ */
+export function loQueDijoDiez(cuerpo: unknown): string {
+  if (cuerpo == null || cuerpo === '') return 'sin cuerpo'
+  const o = typeof cuerpo === 'object' && !Array.isArray(cuerpo) ? cuerpo as Record<string, unknown> : null
+  const partes = o
+    ? ['Message', 'ExceptionMessage', 'error_description', 'error', 'Mensaje', 'ModelState'].map((k) => o[k]).filter((v) => v != null && v !== '')
+    : []
+  const t = partes.length ? partes.map((v) => (typeof v === 'string' ? v : JSON.stringify(v))).join(' · ') : (typeof cuerpo === 'string' ? cuerpo : JSON.stringify(cuerpo))
+  return t.replace(/\s+/g, ' ').trim().slice(0, 300) || 'sin cuerpo'
+}
+
+/** 17/10 · ¿Se cortó la espera (Diez no contestó a tiempo o se cayó la red)? Entonces no se sabe si escribió. */
+const sinRespuesta = (x: unknown) => x instanceof Error && (x.name === 'TimeoutError' || x.name === 'AbortError' || x.name === 'TypeError')
+
+/**
+ * 17/10 · El motivo de un fallo, con todo lo que se sabe: lo que dijo Diez si
+ * contestó (su código y su mensaje), o que no contestó. El 1860 se quedó sin
+ * esto: ErrorDiez solo traía «facturas/add → código» y el cuerpo se perdía.
+ */
+export function motivoDeFallo(x: unknown): string {
+  if (x instanceof ErrorDiez) return `${x.message} (${loQueDijoDiez(x.cuerpo)})`
+  if (sinRespuesta(x)) return `Diez no ha contestado (${(x as Error).name}: ${(x as Error).message})`
+  return x instanceof Error ? x.message : String(x)
+}
+
+/**
+ * 17/10 · El motivo cuando falla la escritura en Diez. Si Diez contestó, no la
+ * ha aceptado y dice por qué. Si no contestó, no se sabe si la ha escrito: el
+ * siguiente intento la busca antes de escribir (nunca dos veces).
+ */
+export function alEscribir(que: string, x: unknown): string {
+  return sinRespuesta(x)
+    ? `${motivoDeFallo(x)} al escribir ${que}: puede que la tenga; al reintentar se busca antes y no se escribe otra`
+    : `Diez no ha aceptado ${que}: ${motivoDeFallo(x)}`
+}
+
+/**
+ * 17/10 · La red de todo envío: si algo se rompe por el camino (Diez contesta
+ * un error al leer, no contesta, o falla la base), el envío NUNCA se queda en
+ * «empezó y no terminó» ni con el motivo de antes: se escribe lo que ha pasado
+ * y se contesta en palabras. El 1861 se cortó así (500 a los 6 s) y su fila se
+ * quedó con «empezó y no terminó», sin su porqué.
+ */
+async function conRed(entryId: string, p: Pick<PuertoEnvio, 'envio' | 'guardar'>, f: () => Promise<ResultadoEnvio>): Promise<ResultadoEnvio> {
+  try { return await f() } catch (x) {
+    let motivo = `se cortó: ${motivoDeFallo(x)}`
+    const e = await p.envio(entryId).catch(() => null)
+    if (e && !yaEnviado(e)) {
+      // Cortado escribiendo («enviando»): no se sabe si Diez la tiene; el siguiente intento la busca antes.
+      if (e.last_error === 'enviando') motivo += '. Se cortó escribiendo en Diez: al reintentar se busca antes y no se escribe otra'
+      // Lo que dijo el intento de antes (dejarRastro lo guardó), tampoco se pierde.
+      const antes = e.last_error?.split(`${EN_MARCHA}. El intento anterior: `)[1]
+      if (antes) motivo += `. El intento anterior: ${antes}`
+      try { await p.guardar({ ...e, last_error: motivo }) } catch (y) { motivo += ` (y no se ha podido apuntar: ${motivoDeFallo(y)})` }
+    }
+    return noLlega(motivo)
+  }
+}
+
 /** La fila del envío antes de hablar con Diez (ver EN_MARCHA). No toca lo enviado ni un «enviando» a medias. */
 async function dejarRastro(previo: EnvioFila | null, a: { id: string; account_id: string; company_id: string }, conexion: string, p: PuertoEnvio): Promise<EnvioFila> {
   if (previo && (yaEnviado(previo) || previo.last_error === 'enviando')) return previo
+  // 17/10: el motivo del intento de antes no se borra (el 1860 perdió el suyo así).
+  const antes = previo?.last_error && !previo.last_error.startsWith(EN_MARCHA) ? previo.last_error : null
   return p.guardar({
     ...(previo ?? {
       entry_id: a.id, account_id: a.account_id, company_id: a.company_id, kind: 'factura',
       ext_year: null, ext_series: null, ext_number: null, ext_invoice_number: null, payload_hash: 'sin-enviar', status: 'pendiente', attempts: 0,
       sent_at: null, document_id: null, document_status: null, document_error: null, document_attached_at: null,
     }),
-    account_connector_id: conexion, last_error: EN_MARCHA,
+    account_connector_id: conexion, last_error: antes ? `${EN_MARCHA}. El intento anterior: ${antes}` : EN_MARCHA,
   } as EnvioFila)
 }
 
@@ -254,6 +327,10 @@ export function esLaMismaRecibida(q: { numero: unknown; cuenta: unknown; nif: un
 }
 
 export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promise<ResultadoEnvio> {
+  return conRed(entryId, p, () => enviarAsiento(entryId, p))
+}
+
+async function enviarAsiento(entryId: string, p: PuertoEnvio): Promise<ResultadoEnvio> {
   const r = await p.resumen(entryId)
   const corr = p.correspondencia(r.company_id)
   const plan: Plan = {
@@ -301,9 +378,15 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
  * solo lo validado, sin documento no se envía, ni C0001 ni C0008, «Diez no
  * guarda documentos todavía», nunca dos veces y el documento leído de vuelta.
  * La factura, la de _shared/diezRecibida.ts (medida en la C0009); lo que no se
- * ha medido (retención, recargo, abonos) no se manda y dice por qué.
+ * ha medido (retención, recargo, abonos) no se manda y dice por qué. I01f: las
+ * autoliquidadas (intracomunitaria e inversión del sujeto pasivo de fuera de
+ * la UE) sí, con su TipoFactura (7 y 6).
  */
 export async function enviarRecibidaADiez(entryId: string, p: PuertoEnvio & { recibida(entryId: string): Promise<RecibidaBD> }): Promise<ResultadoEnvio> {
+  return conRed(entryId, p, () => enviarRecibida(entryId, p))
+}
+
+async function enviarRecibida(entryId: string, p: PuertoEnvio & { recibida(entryId: string): Promise<RecibidaBD> }): Promise<ResultadoEnvio> {
   const r = await p.recibida(entryId)
   let hecha: FacturaRecibida | null = null
   let porque: string | null = null
@@ -335,8 +418,8 @@ export async function enviarRecibidaADiez(entryId: string, p: PuertoEnvio & { re
 /** Lo que conta_recibida_envio devuelve de un asiento de factura recibida. */
 export type RecibidaBD = Base & {
   factura: { numero: string | null; fecha: string }
-  proveedor: { nombre: string; nif: string | null }
-  lineas: { cuenta: string; debe: number; haber: number; tipoIva: number | null; baseIva: number | null }[]
+  proveedor: { nombre: string; nif: string | null; pais?: string | null }
+  lineas: { cuenta: string; debe: number; haber: number; tipoIva: number | null; baseIva: number | null; tratamiento?: string | null }[]
 }
 
 async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnvio> {
@@ -432,7 +515,7 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
       previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'pendiente', ext_year: null, ext_series: null, ext_number: null, attempts: (previo?.attempts ?? 0) + 1, last_error: 'enviando', sent_at: null, document_status: 'pendiente', document_error: null, document_attached_at: null })
       let creada: Factura
       try { creada = await diez.enviarFactura(fd) } catch (x) {
-        return apuntar(`Diez no ha aceptado la factura: ${x instanceof Error ? x.message : String(x)}`)
+        return apuntar(alEscribir('la factura', x))
       }
       documento = Number(creada.Documento); serie = String(creada.Serie ?? fd.Serie)
       previo = await p.guardar({ ...previo, status: 'enviado', ext_year: ej, ext_series: serie, ext_number: documento, last_error: null, sent_at: iso(p.ahora()) })
@@ -492,6 +575,10 @@ export type ContraasientoBD = {
 }
 
 export async function enviarContraasientoADiez(c: ContraasientoBD, p: PuertoEnvio): Promise<ResultadoEnvio> {
+  return conRed(c.id, p, () => enviarContraasiento(c, p))
+}
+
+async function enviarContraasiento(c: ContraasientoBD, p: PuertoEnvio): Promise<ResultadoEnvio> {
   if (c.origen !== 'reversal' || !c.anula) return noLlega('ese asiento no es el contraasiento de una anulación', false)
   if (c.estado !== 'validado') return noLlega(`el contraasiento está ${c.estado}: solo se envía lo validado`, false)
 
@@ -563,7 +650,7 @@ export async function enviarContraasientoADiez(c: ContraasientoBD, p: PuertoEnvi
     previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'pendiente', ext_year: null, ext_series: null, ext_number: null, attempts: (previo?.attempts ?? 0) + 1, last_error: 'enviando', sent_at: null })
     let creada: Factura
     try { creada = await diez.enviarFactura(fd) } catch (x) {
-      return apuntar(`Diez no ha aceptado el contraasiento: ${x instanceof Error ? x.message : String(x)}`)
+      return apuntar(alEscribir('el contraasiento', x))
     }
     serie = String(creada.Serie ?? fd.Serie); documento = Number(creada.Documento); enlazada = false
     previo = await p.guardar({ ...previo, status: 'enviado', ext_year: ej, ext_series: serie, ext_number: documento, last_error: null, sent_at: iso(p.ahora()) })
@@ -593,6 +680,10 @@ export async function enviarContraasientoADiez(c: ContraasientoBD, p: PuertoEnvi
 // Sin PDF, como el contraasiento de ventas: su envío queda sin document_status.
 
 export async function enviarContraasientoRecibidaADiez(c: ContraasientoBD, p: PuertoEnvio & { recibida(entryId: string): Promise<RecibidaBD> }): Promise<ResultadoEnvio> {
+  return conRed(c.id, p, () => enviarContraasientoRecibida(c, p))
+}
+
+async function enviarContraasientoRecibida(c: ContraasientoBD, p: PuertoEnvio & { recibida(entryId: string): Promise<RecibidaBD> }): Promise<ResultadoEnvio> {
   if (c.origen !== 'reversal' || !c.anula) return noLlega('ese asiento no es el contraasiento de una anulación', false)
   if (c.estado !== 'validado') return noLlega(`el contraasiento está ${c.estado}: solo se envía lo validado`, false)
 
@@ -665,11 +756,135 @@ export async function enviarContraasientoRecibidaADiez(c: ContraasientoBD, p: Pu
     previo = await p.guardar({ ...(previo ?? {} as EnvioFila), ...comun, status: 'pendiente', ext_year: null, ext_series: null, ext_number: null, attempts: (previo?.attempts ?? 0) + 1, last_error: 'enviando', sent_at: null })
     let creada: Factura
     try { creada = await diez.enviarFactura(fd) } catch (x) {
-      return apuntar(`Diez no ha aceptado el contraasiento: ${x instanceof Error ? x.message : String(x)}`)
+      return apuntar(alEscribir('el contraasiento', x))
     }
     serie = String(creada.Serie ?? fd.Serie); documento = Number(creada.Documento); enlazada = false
     previo = await p.guardar({ ...previo, status: 'enviado', ext_year: ej, ext_series: serie, ext_number: documento, last_error: null, sent_at: iso(p.ahora()) })
   }
   return { estado: 'en_diez', serie, documento, enlazada, pdfPendiente: false,
     texto: `Anulada también en Diez: ${orig!.ext_series}/${orig!.ext_number} (${orig!.ext_invoice_number}) con ${serie}/${documento} (${fd.NumeroFactura})${enlazada ? ', que ya estaba: enlazada, no se ha enviado otra' : ''}.` }
+}
+
+// ── C07 · El asiento general (banco, manual, liquidación…) y su contraasiento ────
+//
+// Julio (22/10): «cualquier asiento que se valide en Sumied sale a Diez en ese
+// momento, solo». Lo que no es una factura va como asiento general por
+// /api/apuntes/add (diezApunte.ts, con lo medido en la C0009). Los frenos, los
+// de siempre y en el mismo orden:
+//   1. Solo lo VALIDADO. Un contraasiento, solo si lo que anula está en Diez
+//      (si no, allí no hay nada que anular).
+//   3. C0001 nunca; Diez real solo con lo que Julio autoriza Y que incluye los
+//      asientos generales (incluye_asientos, 0450); la de empresa desde su
+//      «desde». El contraasiento vale con la del asiento que anula.
+//   5. Nunca dos veces: antes de escribir se busca en Diez un general del mismo
+//      día con las mismas líneas (la gestoría puede haberlo metido); uno → se
+//      enlaza; más de uno → no se toca. La intención se apunta antes.
+//   7. Como mucho 3 intentos que escriben.
+// Y las subcuentas: si Diez no tiene alguna, no se manda y se dice cuál.
+
+/** Lo que el envío de un asiento general usa del cliente de Diez (ClienteDiez lo cumple). */
+export interface ClienteDiezApuntes {
+  apuntesDelMes(aaaamm: string): Promise<Apunte[]>
+  enviarAsiento(a: ApunteSimplificado): Promise<Apunte>
+  subcuenta(codigo: string): Promise<Record<string, unknown> | null>
+}
+export interface PuertoApunte extends Pick<PuertoEnvio, 'envio' | 'guardar' | 'conexion' | 'autorizado' | 'sha256' | 'ahora'> {
+  clienteApuntes(c: ConexionDiez, o: { real: boolean }): Promise<ClienteDiezApuntes>
+  /**
+   * Los asientos de Diez («serie/documento») que ya están enlazados a OTRO asiento
+   * de Sumied de la empresa. Dos movimientos de banco gemelos (el mismo día, las
+   * mismas líneas) son dos asientos en Diez: el del primero no es el del segundo.
+   */
+  enlazados?(companyId: string, menosEntry: string): Promise<Set<string>>
+}
+
+export async function enviarApunteADiez(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnvio> {
+  return conRed(a.id, p, () => enviarApunte(a, p))
+}
+
+const fila0 = (a: { id: string; account_id: string; company_id: string }): EnvioFila => ({
+  entry_id: a.id, account_id: a.account_id, company_id: a.company_id, account_connector_id: null, kind: 'asiento',
+  ext_year: null, ext_series: null, ext_number: null, ext_invoice_number: null, payload_hash: 'sin-enviar', status: 'pendiente', attempts: 0,
+  last_error: null, sent_at: null, document_id: null, document_status: null, document_error: null, document_attached_at: null,
+})
+
+async function enviarApunte(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnvio> {
+  const como = comoVa(a.origen, a.anulaOrigen)
+  if (como !== 'apunte' && como !== 'contra_apunte') return noLlega('este asiento no va a Diez como asiento general', false)
+  if (a.estado !== 'validado') return noLlega(`el asiento está ${a.estado}: solo se envía lo validado`, false)
+
+  let previo = await p.envio(a.id)
+  const apuntar = async (motivo: string, extra: Partial<EnvioFila> = {}, reintentar = true): Promise<ResultadoEnvio> => {
+    previo = await p.guardar({ ...(previo ?? fila0(a)), kind: 'asiento', last_error: motivo, ...extra } as EnvioFila)
+    return noLlega(motivo, reintentar)
+  }
+  const orig = como === 'contra_apunte' ? await p.envio(a.anula!) : null
+  if (como === 'contra_apunte' && !yaEnviado(orig)) return apuntar('lo que anula no llegó a Diez: allí no hay nada que anular', {}, false)
+  if (yaEnviado(previo)) {
+    const t = `${previo!.ext_series}/${previo!.ext_number}`
+    return { estado: 'en_diez', serie: String(previo!.ext_series), documento: Number(previo!.ext_number), enlazada: previo!.status === 'enlazado', pdfPendiente: false,
+      texto: orig ? `Ya estaba anulado en Diez: ${orig.ext_series}/${orig.ext_number}, con ${t}.` : `Ya estaba en Diez: ${t}.` }
+  }
+
+  let ap: ApunteSimplificado
+  try { ap = apunteDeAsiento(a) } catch (x) { return apuntar(x instanceof Error ? x.message : String(x), {}, false) }
+
+  const con = await p.conexion(a.company_id)
+  if (!con) return apuntar('la conexión con Diez no está configurada para esta empresa')
+  const bd = con.nombreBd.trim().toUpperCase()
+  if ((BASES_PROHIBIDAS as readonly string[]).includes(bd)) return apuntar(`la base ${bd} de Diez no se toca nunca`, { account_connector_id: con.id }, false)
+  const real = bd !== BASE_PRUEBAS
+  if (real && !(await p.autorizado(a.id, a.company_id, bd, a.fecha, 'asientos'))
+      && !(a.anula && await p.autorizado(a.anula, a.company_id, bd, a.fecha, 'asientos'))) {
+    return apuntar(cerradoEn(bd, 'asientos'), { account_connector_id: con.id })
+  }
+  if (previo && previo.attempts >= MAX_INTENTOS) return noLlega(`ya van ${previo.attempts} intentos: lo tiene que mirar una persona`, false)
+
+  // Antes de hablar con Diez, la fila con su motivo (si se corta, queda dicho).
+  if (!(previo && previo.last_error === 'enviando')) {
+    const antes = previo?.last_error && !previo.last_error.startsWith(EN_MARCHA) ? previo.last_error : null
+    previo = await p.guardar({ ...(previo ?? fila0(a)), kind: 'asiento', account_connector_id: con.id, last_error: antes ? `${EN_MARCHA}. El intento anterior: ${antes}` : EN_MARCHA })
+  }
+  const diez = await p.clienteApuntes(con, { real })
+
+  // Las subcuentas: sin ellas en Diez, no se manda.
+  const faltan: string[] = []
+  for (const c of cuentasDe(ap)) {
+    const sc = await diez.subcuenta(c)
+    if (!sc || String(sc.Codigo ?? '').trim() !== c) faltan.push(c)
+  }
+  if (faltan.length) return apuntar(`${faltan.length === 1 ? `la subcuenta ${faltan[0]} no está` : `las subcuentas ${faltan.join(', ')} no están`} en Diez: no se inventa${faltan.length === 1 ? '' : 'n'}. Créal${faltan.length === 1 ? 'a' : 'as'} allí con el mismo código y reintenta`, { account_connector_id: con.id })
+
+  // 5 · Nunca dos veces. Sin los de Diez que ya son de otro asiento de Sumied
+  // (22/10: los bancos gemelos del 13/10 y el 14/10 se enlazaban al de su gemelo).
+  const mes = String(ap.Fecha).slice(0, 6)
+  const usados = p.enlazados ? await p.enlazados(a.company_id, a.id) : new Set<string>()
+  const esElMismo = (d: Apunte) => esElMismoApunte(ap)(d) && !usados.has(`${d.Serie}/${d.Documento}`)
+  const ya = unoPorAsiento((await diez.apuntesDelMes(mes)).filter(esElMismo))
+  if (ya.length > 1) return apuntar(`hay ${ya.length} asientos iguales en Diez ese día (${ya.map((d) => `${d.Serie}/${d.Documento}`).join(', ')}): no se toca nada`, { account_connector_id: con.id }, false)
+  const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(ap)))
+  const comun = { entry_id: a.id, account_id: a.account_id, company_id: a.company_id, account_connector_id: con.id, kind: 'asiento' as const, ext_invoice_number: null, payload_hash: hash, document_id: null, document_status: null, document_error: null, document_attached_at: null }
+  let serie: string, documento: number, enlazada: boolean
+  if (ya.length === 1) {
+    serie = String(ya[0].Serie); documento = Number(ya[0].Documento); enlazada = true
+    previo = await p.guardar({ ...(previo ?? fila0(a)), ...comun, status: 'enlazado', ext_year: String(ya[0].Ejercicio ?? ap.Ejercicio), ext_series: serie, ext_number: documento, last_error: null, sent_at: iso(p.ahora()), next_try_at: null })
+  } else {
+    // La intención, antes de escribir: cuenta como intento.
+    previo = await p.guardar({ ...(previo ?? fila0(a)), ...comun, status: 'pendiente', ext_year: null, ext_series: null, ext_number: null, attempts: (previo?.attempts ?? 0) + 1, last_error: 'enviando', sent_at: null })
+    let creado: Apunte
+    try { creado = await diez.enviarAsiento(ap) } catch (x) { return apuntar(alEscribir(como === 'contra_apunte' ? 'el contraasiento' : 'el asiento', x)) }
+    let ej = String(creado?.Ejercicio ?? ap.Ejercicio)
+    serie = String(creado?.Serie ?? ap.Serie); documento = Number(creado?.Documento ?? 0)
+    if (!documento) {
+      // Diez lo ha aceptado sin decir su número: se busca el que acaba de escribir.
+      const vuelta = unoPorAsiento((await diez.apuntesDelMes(mes)).filter(esElMismo))
+      if (vuelta.length !== 1) return apuntar('Diez lo ha aceptado pero no dice su número y no se encuentra uno solo: al reintentar se busca antes y se enlaza, no se escribe otro')
+      ej = String(vuelta[0].Ejercicio ?? ej); serie = String(vuelta[0].Serie); documento = Number(vuelta[0].Documento)
+    }
+    enlazada = false
+    previo = await p.guardar({ ...previo, status: 'enviado', ext_year: ej, ext_series: serie, ext_number: documento, last_error: null, sent_at: iso(p.ahora()), next_try_at: null })
+  }
+  const yaTxt = enlazada ? ' (ya estaba: enlazado, no se ha enviado otro)' : ''
+  return { estado: 'en_diez', serie, documento, enlazada, pdfPendiente: false,
+    texto: orig ? `Anulado también en Diez: ${orig.ext_series}/${orig.ext_number} con ${serie}/${documento}${yaTxt}.` : `En Diez: ${serie}/${documento}${yaTxt}.` }
 }

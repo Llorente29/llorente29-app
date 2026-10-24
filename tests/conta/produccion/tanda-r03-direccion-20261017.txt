@@ -1,0 +1,29 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# R03 · La dirección que no llega (PR #219, Julio, 16 y 17/10). La anterior de
+# este fichero (C06b, promociones y envíos) ya está en el historial de
+# producción (run 38954792366); su copia:
+# tests/conta/produccion/tanda-c06b-promociones-envios-20261016.txt.
+#
+#   1. 0300 — 5 columnas que admiten nulos en sale; fijar_direccion_entrega,
+#      pedidos_sin_direccion y sale_coordenadas_de_entrega_by_token, nuevas; y,
+#      en caliente con la misma firma, resolve_dispatch (solo las guardas de la
+#      dirección y de uber_decidir). En el camino del pedido: autorizo.
+#   2. 0310 — 3 columnas que admiten nulos; los disparadores de la entrega y de
+#      Uber; decidir_quien_reparte; y, en caliente, pedidos_sin_direccion,
+#      orders_feed, orders_feed_by_token y order_for_print (añaden campos).
+#      En el camino del pedido: autorizo.
+#   3. 0320 — DATOS: rellena los abiertos de las últimas 48 h y recoloca los
+#      Uber abiertos (apunta cómo estaban en r03_entrega_relleno). Autorizo.
+#
+# Antes de la tanda: fusionado el PR y desplegado catcher-dispatch (funciona
+# con la base de antes y con la nueva). El front nuevo funciona sin la base
+# nueva (sin ella no hay lista ni aviso).
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/r03-direccion.sql
+supabase/migrations/20261118T0300_r03_direccion_incompleta.sql
+supabase/migrations/20261118T0310_r03_ticket_codigo_quien_reparte.sql
+supabase/migrations/20261118T0320_r03_entrega_datos.sql

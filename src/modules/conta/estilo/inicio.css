@@ -29,12 +29,15 @@
 .cxi-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .cxi-cifra {
   background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-bloque);
-  padding: 18px 20px; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; min-width: 0;
+  padding: 18px 20px; display: flex; justify-content: space-between; align-items: stretch; gap: 12px; min-width: 0;
   text-decoration: none; color: var(--cx-texto);
 }
 .cx a.cxi-cifra { color: var(--cx-texto); }
 a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
-.cxi-cifra-texto { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* M01 (Julio, 16/10): las cuatro alineadas arriba —etiqueta, cifra y nota a la
+   misma altura— y del mismo alto (la rejilla estira); las barritas, abajo. */
+.cxi-cifra-texto { display: flex; flex-direction: column; justify-content: flex-start; gap: 6px; min-width: 0; }
+.cxi-cifra .cxi-barras { align-self: flex-end; }
 .cxi-cifra-etiqueta { font-size: 14px; color: var(--cx-apoyo); white-space: nowrap; }
 .cxi-cifra-valor { font-family: var(--cx-letra-cifras); font-size: 26px; font-weight: 600; letter-spacing: -1px; white-space: nowrap; color: var(--cx-texto); }
 .cxi-cifra-apoyo { font-size: 13px; font-weight: 500; color: var(--cx-apoyo); line-height: 1.35; overflow-wrap: anywhere; }
@@ -105,6 +108,9 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
   .cxi-cifra { padding: 14px; flex-direction: column; align-items: flex-start; }
   .cxi-cifra-valor { font-size: 22px; }
   .cxi-barras { height: 28px; }
+  .cxi-cifra .cxi-barras { align-self: flex-start; margin-top: auto; }
+  /* S01e: el texto ocupa la tarjeta entera, para que los importes del IVA vayan a la derecha. */
+  .cxi-cifra-texto { align-self: stretch; }
   .cxi-seccion, .cxi-hecho { padding: 18px; }
   .cxi-duda { flex-wrap: wrap; }
   .cxi-duda-acciones { width: 100%; padding-left: 50px; }
@@ -135,4 +141,28 @@ a.cxi-cifra:hover { border-color: var(--cx-azul-borde); }
      se apretaba en una columna estrecha al lado del botón: captura del recorrido). */
   .cxi-diez-paso-texto { flex-basis: calc(100% - 46px); }
   .cxi-diez-paso .cx-boton { margin-left: 46px; }
+}
+.cxi-cifra-mono { font-family: var(--cx-letra-cifras); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cxi-iva { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12px; line-height: 1.35; overflow-wrap: normal; }
+/* El desglose en letra más pequeña: cada línea, el nombre a la izquierda y el
+   importe a su lado, a la derecha, que nunca baja ni parte (S01e: en móvil
+   bajaba bajo su etiqueta); si el nombre no cabe, parte el nombre. La nota, debajo. */
+.cxi-iva-linea { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 6px; align-items: baseline; min-width: 0; }
+.cxi-iva-linea > .cxi-cifra-mono { text-align: right; }
+.cxi-iva-nota { grid-column: 1 / -1; color: var(--cx-apoyo); font-weight: 400; font-size: 11px; }
+.cxi-duda-inicial-r { background: var(--cx-inicial-2); }
+
+/* S01 (paso 4) · La bandeja: el enlace de las gráficas sobre las cifras y los impuestos que vienen. */
+/* S01e: «Ver la evolución» pegado al borde derecho de las tarjetas. <PorNivel>
+   ocupa lo del texto más largo: el que se ve, a la derecha de esa caja. */
+.cxi-cifras-cabeza { display: flex; justify-content: flex-end; align-items: center; margin: 0 0 -6px; }
+.cxi-cifras-cabeza .s-por-nivel > span { justify-self: end; text-align: right; }
+.cxi-impuesto { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--cx-linea); }
+.cxi-impuesto-modelo { font-family: var(--cx-letra-cifras); font-weight: 600; min-width: 36px; }
+/* I01b (18/10): el título del aviso cambia con el nivel («Retenciones de nóminas y profesionales
+ * · 3.er trimestre» / «111 · 3T»), y el nivel cambia palabras, no cajas (S01): dos líneas
+ * reservadas siempre, y lo que no quepa se corta (el texto entero va en «title»). */
+.cxi-impuesto .cxi-duda-titulo {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  line-height: 1.35; min-height: 2.7em;
 }

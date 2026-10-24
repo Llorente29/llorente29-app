@@ -15,23 +15,23 @@
 // Archivar/Recuperar sin entrar en la ficha. Archivar pregunta antes, como en
 // la ficha; las dos confirman con contenido (regla 8).
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useMenuFila } from '@/modules/conta/proveedor/useMenuFila'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import '@/modules/conta/estilo'
-import { useApp } from '@/context/AppContext'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { migasProveedores, rutaFichaProveedor, rutaSubirFacturaProveedor } from '@/config/navegacion'
-import { Campo, Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
+import { Dialogo, Migas } from '@/modules/conta/proveedor/piezas'
+import { NuevoProveedorDialogo } from '@/modules/conta/proveedor/NuevoProveedorDialogo'
 import { ErrorConReintento, Guardado, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
 import {
-  crearProveedor, guardarFicha, listarContactosDeLaCuenta, listarFacturasDeLaCuenta, listarProveedores, listarTiposGasto, proveedoresConCertificadoBanco,
+  guardarFicha, listarContactosDeLaCuenta, listarFacturasDeLaCuenta, listarProveedores, listarTiposGasto, proveedoresConCertificadoBanco,
 } from '@/modules/conta/services/proveedorService'
 import { calcularCompletitud, type Falta } from '@/modules/conta/lib/completitud'
 import { calcularCifras } from '@/modules/conta/lib/cifras'
 import { detectarRepetidas } from '@/modules/conta/lib/repetidas'
 import { certificadoVale } from '@/modules/conta/lib/ibanFactura'
 import { diaMesCorto, euros, hoyEnMadrid, iniciales } from '@/modules/conta/lib/formato'
-import { normalizarNif, tipoEntidadPorNif, validarNifEs } from '@/modules/conta/lib/nif'
 import type { ExtensionesProveedor } from '@/modules/conta/extensiones'
 import type { FichaProveedor } from '@/modules/conta/types'
 
@@ -63,6 +63,7 @@ function textoFalta(faltan: Falta[]): string {
 export default function ProveedoresPage({ extensiones = {} }: { extensiones?: ExtensionesProveedor }) {
   const { activeAccountId, accountsLoading } = useActiveAccount()
   const location = useLocation()
+  const navigate = useNavigate()
   const [filas, setFilas] = useState<Fila[] | null>(null)
   const [extra, setExtra] = useState<Record<string, number>>({})
   const [error, setError] = useState<string | null>(null)
@@ -231,7 +232,10 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
           </div>
         </Dialogo>
       )}
-      {nuevo && activeAccountId && <NuevoProveedor accountId={activeAccountId} otros={filas?.map((x) => x.ficha) ?? []} alCerrar={() => setNuevo(false)} />}
+      {nuevo && activeAccountId && (
+        <NuevoProveedorDialogo accountId={activeAccountId} otros={filas?.map((x) => x.ficha) ?? []} alCerrar={() => setNuevo(false)}
+          alCrear={(p) => navigate(rutaFichaProveedor(p.id, 'datos-fiscales'))} />
+      )}
       {/* C06b: sin la barra «Pregunta o pide algo» (solo diría «Muy pronto»); vuelve cuando conteste. */}
     </div>
   )
@@ -239,87 +243,22 @@ export default function ProveedoresPage({ extensiones = {} }: { extensiones?: Ex
 
 /** «···» de una fila: Abrir, Subir factura, Archivar o Recuperar. */
 function MenuFila({ ficha: f, alArchivar, alRecuperar }: { ficha: FichaProveedor; alArchivar: () => void; alRecuperar: () => void }) {
-  const [abierto, setAbierto] = useState(false)
-  const caja = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!abierto) return
-    const fuera = (e: MouseEvent) => { if (!caja.current?.contains(e.target as Node)) setAbierto(false) }
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setAbierto(false) }
-    document.addEventListener('mousedown', fuera)
-    document.addEventListener('keydown', esc)
-    return () => { document.removeEventListener('mousedown', fuera); document.removeEventListener('keydown', esc) }
-  }, [abierto])
+  // S01e: debajo de su fila sin taparla (o encima si no cabe), y se cierra al salir.
+  const { abierto, arriba, caja, alternar, cerrar, alSalir, alEntrar } = useMenuFila()
+  const setAbierto = (v: boolean) => { if (!v) cerrar() }
   return (
-    <div className="cxp-tabla-mas" ref={caja}>
+    <div className="cxp-tabla-mas" ref={caja} onMouseLeave={alSalir} onMouseEnter={alEntrar}>
       <button type="button" className="cx-boton-sec cx-mas" aria-haspopup="menu" aria-expanded={abierto}
-        aria-label={`Más acciones de ${f.name}`} onClick={() => setAbierto((v) => !v)}>···</button>
+        aria-label={`Más acciones de ${f.name}`} onClick={alternar}>···</button>
       {abierto && (
-        <div className="cxp-menu" role="menu" aria-label={`Acciones de ${f.name}`}>
+        <div className={arriba ? 'cxp-menu cxp-menu-arriba' : 'cxp-menu'} role="menu" aria-label={`Acciones de ${f.name}`}>
           <Link role="menuitem" to={rutaFichaProveedor(f.id)}>Abrir</Link>
-          {!f.archivedAt && <Link role="menuitem" to={rutaSubirFacturaProveedor(f.id)}>Subir factura</Link>}
+          {!f.archivedAt && <Link role="menuitem" to={rutaSubirFacturaProveedor(f.id)}>Subir una factura</Link>}
           {f.archivedAt
             ? <button type="button" role="menuitem" onClick={() => { setAbierto(false); alRecuperar() }}>Recuperar proveedor</button>
             : <button type="button" role="menuitem" onClick={() => { setAbierto(false); alArchivar() }}>Archivar proveedor</button>}
         </div>
       )}
     </div>
-  )
-}
-
-function NuevoProveedor({ accountId, otros, alCerrar }: { accountId: string; otros: FichaProveedor[]; alCerrar: () => void }) {
-  const { userProfile, authUserId } = useApp()
-  const navigate = useNavigate()
-  const [name, setName] = useState('')
-  const [nif, setNif] = useState('')
-  const [errores, setErrores] = useState<{ name?: string; nif?: string }>({})
-  const [ocupado, setOcupado] = useState(false)
-  const [fallo, setFallo] = useState<string | null>(null)
-
-  const nifAlMomento = useMemo(() => {
-    if (!nif.trim()) return null
-    const r = validarNifEs(nif)
-    return r.ok ? null : `${r.motivo} Si es de otro país, déjalo vacío y ponlo luego en su ficha.`
-  }, [nif])
-
-  async function enviar(e: React.FormEvent) {
-    e.preventDefault()
-    const errs: { name?: string; nif?: string } = {}
-    if (!name.trim()) errs.name = 'Pon el nombre con el que lo conocéis.'
-    if (nifAlMomento) errs.nif = nifAlMomento
-    const norm = nif.trim() ? normalizarNif(nif) : null
-    const repe = norm ? otros.find((o) => o.taxId && normalizarNif(o.taxId) === norm) : null
-    if (repe) errs.nif = `Ese NIF ya lo tiene ${repe.name}.`
-    setErrores(errs)
-    if (Object.keys(errs).length) return
-    setOcupado(true); setFallo(null)
-    try {
-      const creado = await crearProveedor({
-        accountId, name, taxId: norm, taxIdType: norm ? 'nif_es' : null,
-        nifComprobado: !!norm, entityKind: norm ? tipoEntidadPorNif(norm) : null,
-        createdBy: authUserId ?? null, createdByName: userProfile?.displayName ?? null,
-      })
-      navigate(rutaFichaProveedor(creado.id, 'datos-fiscales'))
-    } catch (e2) {
-      setFallo(e2 instanceof Error ? e2.message : 'No se pudo crear.')
-      setOcupado(false)
-    }
-  }
-
-  return (
-    <Dialogo titulo="Nuevo proveedor" alCerrar={alCerrar}>
-      <form className="cx-formulario" onSubmit={enviar} noValidate>
-        {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-        <Campo campo="nuevo-name" etiqueta="Nombre con el que lo conocéis" error={errores.name}>
-          {(p) => <input {...p} className="cx-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Hermanos Ruiz" />}
-        </Campo>
-        <Campo campo="nuevo-nif" etiqueta="NIF (opcional)" error={errores.nif ?? nifAlMomento} ayuda="Lo comprobamos al momento. El resto se completa en su ficha.">
-          {(p) => <input {...p} className="cx-input" value={nif} onChange={(e) => setNif(e.target.value)} autoCapitalize="characters" placeholder="B12345678" />}
-        </Campo>
-        <div className="cx-pie">
-          <button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button>
-          <button type="submit" className="cx-boton" disabled={ocupado}>{ocupado ? 'Creando…' : 'Crear y completar su ficha'}</button>
-        </div>
-      </form>
-    </Dialogo>
   )
 }

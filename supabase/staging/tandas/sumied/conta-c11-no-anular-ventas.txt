@@ -1,0 +1,7 @@
+# C11 · el freno: el cierre del día ya no anula ventas (2045, cambia en
+# caliente conta_cerrar_dias y añade sales_day_close_log.accion). Desde la
+# rama va en ROLLBACK. Su prueba (ROLLBACK): un pedido abierto a las 2:07 sigue
+# igual y queda «para revisar» una vez; lo cerrado no se apunta; un usuario no
+# puede lanzar el cierre; la vuelta atrás, byte a byte.
+supabase/migrations/20261023T2045_c11_cierre_marca_para_revisar.sql
+supabase/staging/sql/20261023_c11_cierre_no_anula_prueba.sql

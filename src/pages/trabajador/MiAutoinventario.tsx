@@ -55,6 +55,7 @@ import {
   unidadLarga, desglose, dudaDeKilos, type Abierto,
 } from '../../modules/supply/lib/conteoMovilTexto'
 import { getLocationName } from '../../modules/supply/services/countFormatService'
+import ConteoMovilTerminado, { type EstadoDelFinal } from '../../modules/supply/components/ConteoMovilTerminado'
 import { declaraTrabajoEnCurso } from '../../services/trabajoEnCurso'
 import '@/modules/kitchen/estilo/cocinaTokens.css'
 
@@ -81,6 +82,8 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
     { entradas: CountEntryInput[]; kilos: NonNullable<ReturnType<typeof dudaDeKilos>> } | null
   >(null)
   const [countId, setCountId] = useState<string | null>(null)
+  /** Qué ha pasado al terminar (regla 8): se aplica, faltan compañeros o ha fallado. */
+  const [final, setFinal] = useState<EstadoDelFinal>({ tipo: 'aplicando' })
   const [locationName, setLocationName] = useState('')
 
   // Lo que se cuenta del artículo en curso.
@@ -300,16 +303,31 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
     limpiar()
     if (idx + 1 >= queue.length) {
       setPhase('done')
-      if (countId) {
+      if (manualCountId) {
+        // Un inventario MANUAL no cambia: lo cierra quien cuenta y lo aprueba
+        // la oficina. Si cerrar falla, la oficina lo ve en «Contando».
+        setFinal({ tipo: 'manual' })
+        if (countId) void closeInventoryCount(countId).catch(() => undefined)
+      } else if (countId) {
+        // EL AUTOCONTEO SE APLICA AL TERMINARLO (0360, Julio 21/10): entero, con
+        // cualquier diferencia. Lo dispara quien cuenta la última pieza del
+        // conteo, sea de quien sea. Y se dice lo que ha pasado (regla 8): hasta
+        // hoy un fallo aquí se callaba, «el barrido del día siguiente lo recoge»,
+        // y el barrido no recogió nada en dos meses.
+        setFinal({ tipo: 'aplicando' })
         void (async () => {
           try {
-            if (manualCountId) await closeInventoryCount(countId)
-            else if (await countRemainingLines(countId) === 0) await autocloseDailyCount(countId)
-          } catch {
-            // Si falla el cierre no se le enseña error a quien cuenta: ya ha
-            // terminado su parte. El barrido del día siguiente lo recoge.
+            const faltan = await countRemainingLines(countId)
+            if (faltan > 0) { setFinal({ tipo: 'faltan', faltan }); return }
+            const r = await autocloseDailyCount(countId)
+            if (r.finalStatus === 'aprobado') setFinal({ tipo: 'aplicado', a: new Date().toISOString() })
+            else setFinal({ tipo: 'error', mensaje: `El recuento ha quedado «${r.finalStatus}».` })
+          } catch (e) {
+            setFinal({ tipo: 'error', mensaje: e instanceof Error ? e.message : 'No se pudo aplicar.' })
           }
         })()
+      } else {
+        setFinal({ tipo: 'error', mensaje: 'No se encuentra el recuento de hoy.' })
       }
     } else {
       setIdx(idx + 1)
@@ -405,22 +423,7 @@ export default function MiAutoinventario({ employee, onBack, manualCountId, titl
   }
 
   if (phase === 'done') {
-    return (
-      <Marco>
-        <Cabecera title={title} />
-        <Centrado>
-          <Check size={44} className="text-cocina-verde" />
-          <p className="text-[24px] font-extrabold text-cocina-tinta mt-4">¡Listo!</p>
-          <p className="text-[13px] text-cocina-tinta-2 mt-2 max-w-xs leading-[1.5]">
-            Has contado {total === 1 ? 'el producto' : `los ${total} productos`} de hoy. Gracias.
-          </p>
-          <p className="text-[13px] text-cocina-tinta-3 mt-5 max-w-xs leading-[1.5]">
-            El encargado lo revisa y ajusta el stock. Tú no tienes que hacer nada más.
-          </p>
-        </Centrado>
-        <Pie><BotonPrincipal onClick={onBack}>Cerrar</BotonPrincipal></Pie>
-      </Marco>
-    )
+    return <ConteoMovilTerminado title={title} total={total} estado={final} onBack={onBack} />
   }
 
   // ─── phase 'counting' y 'recount' comparten el cuerpo ────────────────────

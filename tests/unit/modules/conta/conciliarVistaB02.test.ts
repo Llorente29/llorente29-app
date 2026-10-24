@@ -11,7 +11,7 @@ import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import {
   BANDEJAS, asientoQueSeCrea, bandejaDe, coincide, confirmable, cuadreDe, destinoDelReparto, diaConNombre, facturasDe, importeBuscado, porDia,
-  preseleccionado, quienEs, repartir, textoBloque, textoDelBanco, type FacturaParaCasar,
+  preseleccionado, puntoDePartida, quienEs, repartir, saldoDelExtractoA, textoBloque, textoDelBanco, type ExtractoSaldos, type FacturaParaCasar,
 } from '@/modules/conta/lib/conciliarVista'
 
 let n = 0
@@ -46,7 +46,7 @@ describe('el cuadre, la barra, la banda y las bandejas dicen lo mismo', () => {
     }
   })
   it('la banda usa las mismas cifras que la barra', () => {
-    expect(c.cuenta).toEqual({ confirmar: 6, aclarar: 3, casados: 2, todos: 14 })
+    expect(c.cuenta).toEqual({ confirmar: 6, aclarar: 3, validar: 0, casados: 2, todos: 14 })
     expect(c.frase).toBe('He casado yo 2 de 14 movimientos de octubre. Te quedan 6 por confirmar y 3 por aclarar.')
   })
   it('en el banco − en contabilidad = te falta por casar', () => {
@@ -175,4 +175,34 @@ describe('«Ver el asiento que se crea»: cuadra, y el banco va a su lado', () =
     expect(ls[0]).toEqual({ cuenta: '57200001', debeCent: m.importeCent > 0 ? 24_861 : 0, haberCent: m.importeCent > 0 ? 0 : 24_861 })
   })
   it('si se enlaza un asiento que ya existe, no se crea ninguno', () => expect(asientoQueSeCrea(sale, { tipo: 'asiento', entry_id: 'e' }, '57200001')).toBeNull())
+})
+
+describe('de dónde parte el cuadre: con fecha de corte, del saldo del extracto (regla de Julio, 16/10)', () => {
+  // Las cifras de producción medidas el 16/10 en solo lectura: el extracto de ···4525 empieza el 01/10
+  // con 0,01 € y su 572 dice 290,01 € a 30/09 (la gestoría casi no concilió de enero a septiembre);
+  // la 572 ha movido +462,00 € desde el 01/10.
+  const ext4525: ExtractoSaldos[] = [{ desde: '2026-10-01', hasta: '2026-10-14', saldoInicialCent: 1, saldoFinalCent: 46_301 }]
+  it('···4525: parte de 0,01 € (el extracto), no de 290,01 € (el contable), y lo dice', () => {
+    const p = puntoDePartida('2026-10-01', '2026-10-16', ext4525, 29_001, 29_001 + 46_200)
+    expect(p.libroCent).toBe(1 + 46_200)
+    expect(p.apertura).toEqual({ fecha: '2026-09-30', bancoCent: 1, contableCent: 29_001,
+      frase: 'Parto del saldo del extracto a 30/09 (0,01 €), no del contable (290,01 €): hasta esa fecha la contabilidad está cerrada y casi sin conciliar.' })
+  })
+  it('···6536: el extracto y el contable coinciden (105,58 €): el mismo número, y también lo dice', () => {
+    const p = puntoDePartida('2026-10-01', '2026-10-16', [{ desde: '2026-10-01', hasta: '2026-10-14', saldoInicialCent: 10_558, saldoFinalCent: 47_919 }], 10_558, 10_558 + 307_661)
+    expect(p.libroCent).toBe(10_558 + 307_661)
+    expect(p.apertura?.frase).toBe('Parto del saldo del extracto a 30/09 (105,58 €), que coincide con el contable.')
+  })
+  it('sin el extracto que empieza el día del corte (ni uno que acabe la víspera), parte del contable y pide el extracto', () => {
+    const p = puntoDePartida('2026-10-01', '2026-10-16', [{ desde: '2026-10-05', hasta: '2026-10-14', saldoInicialCent: 0, saldoFinalCent: 0 }], 29_001, 75_201)
+    expect(p.libroCent).toBe(75_201)
+    expect(p.apertura?.frase).toBe('No tengo el saldo del extracto a 30/09: parto del contable (290,01 €). Sube el extracto que empieza el 01/10.')
+  })
+  it('un extracto que acaba la víspera también vale', () => {
+    expect(saldoDelExtractoA([{ desde: '2026-09-01', hasta: '2026-09-30', saldoInicialCent: 0, saldoFinalCent: 1 }], '2026-09-30')).toBe(1)
+  })
+  it('sin fecha de corte, o con el cuadre antes del corte, el contable de siempre y sin frase', () => {
+    expect(puntoDePartida(null, '2026-10-16', ext4525, 29_001, 75_201)).toEqual({ libroCent: 75_201, apertura: null })
+    expect(puntoDePartida('2026-10-01', '2026-09-30', ext4525, 29_001, 29_001)).toEqual({ libroCent: 29_001, apertura: null })
+  })
 })

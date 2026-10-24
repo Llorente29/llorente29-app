@@ -36,7 +36,7 @@ export async function arrancarDiezFalso(opciones = {}) {
   const estado = {
     bases,
     peticiones: [], // { metodo, ruta, bd }
-    fallos: { entrar: null, abreOtraBase: null, veces429: 0, totalMiente: 0 },
+    fallos: { entrar: null, abreOtraBase: null, veces429: 0, veces500: 0, totalMiente: 0 },
     tokens: new Map(), // token → bd
   }
   let n = 0
@@ -88,6 +88,8 @@ export async function arrancarDiezFalso(opciones = {}) {
     if (req.method === 'GET' && ruta === '/swagger/docs/v1') return responder(res, 200, { swagger: '2.0', paths: {} })
     if (!bd) return responder(res, 401, { Message: 'Authorization has been denied for this request.' })
     if (estado.fallos.veces429 > 0) { estado.fallos.veces429--; res.setHeader('retry-after', '0'); return responder(res, 429, { Message: 'Too many requests' }) }
+    // 17/10: Diez a ratos contesta 500 (medido en C0008, run 39004201118: días sueltos, apuntes y una subcuenta).
+    if (estado.fallos.veces500 > 0) { estado.fallos.veces500--; return responder(res, 500, { Message: 'An error has occurred.' }) }
     const b = estado.bases[bd]
 
     if (req.method === 'GET') {

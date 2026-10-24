@@ -15,11 +15,13 @@ describe('la etiqueta de reparto', () => {
     expect(etiquetaDeReparto({ ...base, service_type: 'platform_delivery', channel: 'Uber', delivery_address: null }))
       .toEqual({ tono: 'gris', texto: 'La reparte Uber', detalle: 'nada que hacer', acciones: [] })
   })
-  it('el 431 (Scandal · Glovo, propio sin dirección): ámbar con sus dos acciones, aunque traiga el error del vigía', () => {
+  it('R03: el 431 (Scandal · Glovo, propio sin dirección) ya no es un estado aparte: ni «falta la dirección» ni pasar la marca a «Plataforma»', () => {
     const e = etiquetaDeReparto({ ...base, delivery_address: null,
       dispatch_error: 'No se despachó: sin dirección de entrega: la plataforma no la ha enviado' })
-    expect(e).toEqual({ tono: 'ambar', texto: 'Nosotros · falta la dirección', detalle: 'Glovo no la ha mandado',
-      acciones: ['pedir_direccion', 'cambiar_a_plataforma'] })
+    expect(e).toMatchObject({ tono: 'ambar', texto: 'Nosotros · aún sin rider', acciones: ['despachar'] })
+    // En Catcher, como cualquier otro: buscando rider.
+    expect(etiquetaDeReparto({ ...base, delivery_address: null, carrier_code: 'catcher' }))
+      .toMatchObject({ tono: 'azul', texto: 'Nosotros · buscando rider', acciones: [] })
   })
   it('propio con rider asignado: verde', () => {
     expect(etiquetaDeReparto({ ...base, carrier_code: 'catcher', has_courier: true, rider_name: 'Ana' }))
@@ -27,7 +29,7 @@ describe('la etiqueta de reparto', () => {
   })
   it('propio con dirección que no ha salido: ámbar con «Despachar» (y sin él en modo off)', () => {
     expect(etiquetaDeReparto({ ...base, dispatch_error: 'No se pudo enviar a Catcher: 500' }))
-      .toMatchObject({ tono: 'ambar', texto: 'Nosotros · aún sin rider', detalle: 'no ha salido: 500', acciones: ['despachar'] })
+      .toMatchObject({ tono: 'ambar', texto: 'Nosotros · aún sin rider', detalle: 'No ha salido: 500', acciones: ['despachar'] })
     expect(etiquetaDeReparto({ ...base, dispatch_mode: 'off' })?.acciones).toEqual([])
   })
   it('nunca rojo, en ningún estado', () => {
@@ -45,5 +47,17 @@ describe('la etiqueta de reparto', () => {
   it('el nombre corto de la plataforma', () => {
     expect(['Uber Eats', 'Glovo', 'JustEat', 'Just Eat', null].map(plataformaCorta))
       .toEqual(['Uber', 'Glovo', 'Just Eat', 'Just Eat', 'la plataforma'])
+  })
+  it('R03: Uber sin calle, fuera de zona: la reparte Uber, gris y sin acciones', () => {
+    expect(etiquetaDeReparto({ ...base, channel: 'Uber Eats', service_type: 'platform_delivery', delivery_address: null, delivery_by_reason: 'fuera_de_zona' }))
+      .toEqual({ tono: 'gris', texto: 'La reparte Uber · fuera de zona', detalle: 'nada que hacer', acciones: [] })
+  })
+  it('R03: Uber decidido «lo reparte Uber»: igual que fuera de zona', () => {
+    expect(etiquetaDeReparto({ ...base, channel: 'Uber Eats', service_type: 'platform_delivery', delivery_by_reason: 'decidido_uber' })?.texto)
+      .toBe('La reparte Uber · fuera de zona')
+  })
+  it('R03: Uber con señales mezcladas: ámbar, sin botones (se decide en el aviso)', () => {
+    expect(etiquetaDeReparto({ ...base, channel: 'Uber Eats', service_type: 'own_delivery', delivery_address: 'Calle Inventada 1', delivery_by_reason: 'uber_decidir' }))
+      .toEqual({ tono: 'ambar', texto: 'Nosotros · falta decidir quién reparte', detalle: 'decídelo en el aviso rojo', acciones: [] })
   })
 })

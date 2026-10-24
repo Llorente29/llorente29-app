@@ -1,0 +1,16 @@
+# C11 · Sumied anulaba ventas entregadas de Folvy (Julio, 23/10).
+# Rama conta/c11-no-anular-ventas. Se ensaya y se aplica desde esta rama,
+# antes de fusionar, y ANTES de las 02:07 de Madrid (00:07 UTC): es la próxima
+# pasada del cierre que podría anular algo.
+#
+#   1. 2045 — CAMBIA en caliente conta_cerrar_dias (misma firma), declarado en
+#      su cabecera con su prueba de staging, y AÑADE sales_day_close_log.accion
+#      (admite nulos). El cierre ya no hace update de sale: solo apunta
+#      «para revisar». AUTORIZO: sales_day_close_log está en el camino.
+#
+# La restauración de las ventas anuladas (2050) va en OTRA tanda, después
+# (Julio, 23/10, tras el real del run 40032630864: la comprobación de después
+# se puso en rojo porque las ventas devueltas a «open» son de días ya cerrados).
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/c11-cierre-no-anula.sql
+supabase/migrations/20261023T2045_c11_cierre_marca_para_revisar.sql

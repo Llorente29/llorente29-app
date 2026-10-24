@@ -5,6 +5,7 @@
 // visible, zonas de 44 px y etiqueta encima de cada campo. Los estilos están
 // en ../estilo/proveedor.css y los colores, solo en tokens.css.
 
+import { claseIva, textoClaseIva } from '@/modules/conta/lib/ivaProveedor'
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { Miga } from '@/config/navegacion'
@@ -28,15 +29,17 @@ export function Migas({ migas }: { migas: Miga[] }) {
 /**
  * Un campo: etiqueta encima, ayuda, y el fallo o el aviso debajo en lenguaje
  * normal. `campo` es la clave de la ficha y da el id `campo-<campo>`, adonde
- * llevan los enlaces de «Falta: …».
+ * llevan los enlaces de «Falta: …». I01e: `bien`, una buena noticia en verde
+ * (como la píldora de la cabecera): «✓ Comprobado en VIES…». El ámbar es solo
+ * para lo que hay que mirar.
  */
-export function Campo({ campo, etiqueta, ayuda, error, aviso, children }: {
-  campo: string; etiqueta: string; ayuda?: ReactNode; error?: string | null; aviso?: string | null
+export function Campo({ campo, etiqueta, ayuda, error, aviso, bien, children }: {
+  campo: string; etiqueta: string; ayuda?: ReactNode; error?: string | null; aviso?: string | null; bien?: ReactNode
   children: (props: { id: string; 'aria-invalid': boolean; 'aria-describedby'?: string }) => ReactNode
 }) {
   const id = `campo-${campo}`
   const descId = useId()
-  const describe = error || aviso || ayuda ? descId : undefined
+  const describe = error || aviso || bien || ayuda ? descId : undefined
   return (
     <div className="cx-campo">
       <label htmlFor={id}>{etiqueta}</label>
@@ -44,7 +47,8 @@ export function Campo({ campo, etiqueta, ayuda, error, aviso, children }: {
       <div id={descId}>
         {error && <div className="cx-error" role="alert">{error}</div>}
         {!error && aviso && <div className="cx-aviso">{aviso}</div>}
-        {!error && !aviso && ayuda && <span className="cx-ayuda">{ayuda}</span>}
+        {!error && !aviso && bien && <span className="cx-bien" data-prueba="bien">{bien}</span>}
+        {!error && !aviso && !bien && ayuda && <span className="cx-ayuda">{ayuda}</span>}
       </div>
     </div>
   )
@@ -104,8 +108,11 @@ export function SeGuarda({ texto, ocupado }: { texto: string | null; ocupado?: b
   )
 }
 
-/** Una ventana encima de la ficha. Escape y el fondo la cierran; el foco vuelve adonde estaba. */
-export function Dialogo({ titulo, children, alCerrar }: { titulo: string; children: ReactNode; alCerrar: () => void }) {
+/**
+ * Una ventana encima de la ficha. Escape y el fondo la cierran; el foco vuelve adonde estaba.
+ * Con `cerrable`, además una ✕ visible arriba a la derecha (en el móvil no hay Escape ni fondo a la vista).
+ */
+export function Dialogo({ titulo, children, alCerrar, cerrable = false }: { titulo: string; children: ReactNode; alCerrar: () => void; cerrable?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const cerrar = useRef(alCerrar)
   useEffect(() => { cerrar.current = alCerrar }, [alCerrar])
@@ -118,33 +125,49 @@ export function Dialogo({ titulo, children, alCerrar }: { titulo: string; childr
   }, [])
   return (
     <div className="cxp-velo cx" onMouseDown={(e) => { if (e.target === e.currentTarget) alCerrar() }}>
-      <div className="cxp-dialogo" role="dialog" aria-modal="true" aria-label={titulo} ref={ref}>
+      <div className={cerrable ? 'cxp-dialogo cxp-dialogo-cerrable' : 'cxp-dialogo'} role="dialog" aria-modal="true" aria-label={titulo} ref={ref}>
         <h2>{titulo}</h2>
         {children}
+        {/* Al final del árbol para que el foco inicial siga yendo al primer campo; se pinta arriba. */}
+        {cerrable && <button type="button" className="cxp-cerrar" aria-label="Cerrar" title="Cerrar (Esc)" onClick={alCerrar}>✕</button>}
       </div>
     </div>
   )
 }
 
-/** La píldora del NIF de la cabecera: verde «✓ comprobado», «Comprobando con la UE…» o ámbar. */
+/**
+ * La píldora del NIF de la cabecera: verde «✓ comprobado» (en VIES, si es
+ * europeo), «Comprobando en VIES…» mientras pregunta, o ámbar. I01d: un
+ * NIF-IVA que VIES no ha contestado dice «sin comprobar en VIES», no que está
+ * comprobando: ya no lo está.
+ */
 export function PildoraNif() {
   const { datos: { ficha: f }, comprobandoVies } = useFicha()
   if (!f.taxId) return <span className="cx-chip cx-chip-ambar">Sin NIF</span>
-  if (f.taxIdType === 'vat_eu' && (comprobandoVies || f.taxIdCheckStatus === 'pending')) {
-    return <span className="cx-chip cx-chip-ambar" role="status">{f.taxId} · Comprobando con la UE…</span>
-  }
-  if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span className="cx-chip cx-chip-ia">{f.taxId} ✓ comprobado</span>
-  if (f.taxIdCheckStatus === 'invalid') return <span className="cx-chip cx-chip-ambar">{f.taxId} · no válido</span>
+  const ue = f.taxIdType === 'vat_eu'
+  if (ue && comprobandoVies) return <span className="cx-chip" role="status">{f.taxId} · Comprobando en VIES…</span>
+  if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span className="cx-chip cx-chip-ia">{f.taxId} ✓ {ue ? 'comprobado en VIES' : 'comprobado'}</span>
+  if (f.taxIdCheckStatus === 'invalid') return <span className="cx-chip cx-chip-ambar">{f.taxId} · {ue ? 'VIES dice que no vale' : 'no válido'}</span>
   if (f.taxIdType === 'foreign') return <span className="cx-chip">{f.taxId}</span>
-  return <span className="cx-chip cx-chip-ambar">{f.taxId} · sin comprobar</span>
+  return <span className="cx-chip cx-chip-ambar">{f.taxId} · {ue ? 'sin comprobar en VIES' : 'sin comprobar'}</span>
+}
+
+/** I01d · El país y cómo va su IVA, si no es un proveedor de España normal. */
+export function PildoraIva() {
+  const { datos: { ficha: f } } = useFicha()
+  const c = claseIva({ pais: f.countryCode, tipoNif: f.taxIdType, nif: f.taxId, vies: f.taxIdCheckStatus, regimen: f.vatRegime })
+  if (c === 'nacional') return null
+  return <span className={`cx-chip${c === 'ue_sin_nif_iva' ? ' cx-chip-ambar' : ''}`} data-prueba="pildora-iva">{textoClaseIva(c, f.countryCode).titulo}</span>
 }
 
 /** Lo mismo en una línea de texto (cabecera del móvil). */
 export function TextoNif() {
   const { datos: { ficha: f }, comprobandoVies } = useFicha()
   if (!f.taxId) return <span className="cx-chip-ambar" style={{ background: 'none' }}>Sin NIF</span>
-  if (f.taxIdType === 'vat_eu' && (comprobandoVies || f.taxIdCheckStatus === 'pending')) return <span>{f.taxId} · Comprobando con la UE…</span>
-  if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span>{f.taxId} <span className="cxm-ok">✓ comprobado</span></span>
+  const ue = f.taxIdType === 'vat_eu'
+  if (ue && comprobandoVies) return <span>{f.taxId} · Comprobando en VIES…</span>
+  if (f.taxIdCheckStatus === 'valid' && f.taxIdVerifiedAt) return <span>{f.taxId} <span className="cxm-ok">✓ {ue ? 'comprobado en VIES' : 'comprobado'}</span></span>
+  if (ue && f.taxIdCheckStatus !== 'invalid') return <span>{f.taxId} · sin comprobar en VIES</span>
   return <span>{f.taxId}</span>
 }
 

@@ -102,16 +102,27 @@ export function baseDeTotal(total: number, tipo: number): { base: number; cuota:
 
 // ── Regla 1 · cuadra ────────────────────────────────────────────────────────
 
-export interface Cuadre { cuadra: boolean; debe: number; haber: number; diferencia: number; texto: string }
+/**
+ * El estado del cuadre, una sola fuente para lo que dice el pie (S01c):
+ *   · 'vacio'     — no hay importes (todo a cero): «Faltan importes», neutro;
+ *   · 'descuadre' — Debe ≠ Haber: «No cuadra: faltan X € en el Haber/Debe»;
+ *   · 'cuadra'    — Debe = Haber y > 0: «Cuadra · N €».
+ */
+export type EstadoCuadre = 'vacio' | 'descuadre' | 'cuadra'
+
+export interface Cuadre { estado: EstadoCuadre; cuadra: boolean; debe: number; haber: number; diferencia: number; texto: string }
 
 export function cuadre(lineas: readonly Pick<LineaAsiento, 'debe' | 'haber'>[]): Cuadre {
   const d = lineas.reduce((t, l) => t + cent(l.debe), 0)
   const h = lineas.reduce((t, l) => t + cent(l.haber), 0)
   const dif = d - h
-  const texto = dif === 0
+  const estado: EstadoCuadre = dif !== 0 ? 'descuadre' : d > 0 ? 'cuadra' : 'vacio'
+  const texto = estado === 'cuadra'
     ? `Cuadra · ${eurosExactos(deCent(d))}`
-    : `No cuadra: faltan ${eurosExactos(deCent(Math.abs(dif)))} en el ${dif > 0 ? 'Haber' : 'Debe'}`
-  return { cuadra: dif === 0 && d > 0, debe: deCent(d), haber: deCent(h), diferencia: deCent(dif), texto }
+    : estado === 'descuadre'
+      ? `No cuadra: faltan ${eurosExactos(deCent(Math.abs(dif)))} en el ${dif > 0 ? 'Haber' : 'Debe'}`
+      : 'Faltan importes'
+  return { estado, cuadra: estado === 'cuadra', debe: deCent(d), haber: deCent(h), diferencia: deCent(dif), texto }
 }
 
 // ── Lo que la base no dejaría validar, dicho antes ──────────────────────────
@@ -200,6 +211,17 @@ export function fechaPropuesta(fecha: string, c: CalendarioEmpresa): { fecha: st
     : e.traidoHasta && fecha <= e.traidoHasta ? `hasta el ${e.traidoHasta.split('-').reverse().join('/')} el ejercicio es traído`
       : !e.abierto ? `el ejercicio ${e.code} está cerrado` : `el mes ${fecha.slice(5, 7)}/${fecha.slice(0, 4)} está cerrado`
   return { fecha: f, aviso: f ? `El documento es del ${fecha.split('-').reverse().join('/')}, pero ${motivo}: lo propongo el ${f.split('-').reverse().join('/')}.` : `No hay ningún día abierto para asentarlo: ${motivo}.` }
+}
+
+/**
+ * D07b · El aviso ámbar de una recibida de un periodo cerrado, con las dos
+ * fechas: la de la factura (que conserva) y la del asiento (el primer día
+ * abierto, donde va su IVA).
+ */
+export function avisoPeriodoCerrado(fechaFactura: string, fechaAsiento: string): string {
+  const es = (x: string) => x.split('-').reverse().join('/')
+  const t = Math.floor((Number(fechaAsiento.slice(5, 7)) - 1) / 3) + 1
+  return `La factura es del ${es(fechaFactura)}, en un periodo ya cerrado: se asienta el ${es(fechaAsiento)}, el primer día abierto. Conserva su fecha de factura en el libro de IVA y su IVA va al ${t}T ${fechaAsiento.slice(0, 4)}.`
 }
 
 // ── Regla 9 · el resultado por local suma el total ──────────────────────────

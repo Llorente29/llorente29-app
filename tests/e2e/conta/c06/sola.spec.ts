@@ -17,13 +17,14 @@
 // acabar lo que crea.
 
 import { test, expect, type Page } from '@playwright/test'
-import { FRENTE, entrarComo, type Sesion } from '../sesion'
+import { FRENTE, entrarComo, type Sesion, correoDelCarril } from '../sesion'
+import { redQuieta } from '../red'
 import { cifInventado, rest } from '../api'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c06'
-const SOLA = { email: 'sola.admin@c06-prueba.test', empresa: 'Empresa de Prueba Sola, S.L.' }
-const ALTA = { email: 'sola.alta@c06-prueba.test' }
+const SOLA = { email: correoDelCarril('sola.admin@c06-prueba.test'), empresa: 'Empresa de Prueba Sola, S.L.' }
+const ALTA = { email: correoDelCarril('sola.alta@c06-prueba.test') }
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 // C06b (respuesta 6, tarea 5): las contraseñas de los usuarios del C06
@@ -102,6 +103,38 @@ async function empresaDelRecorrido(s: Sesion, cuenta: string): Promise<string> {
   return id
 }
 
+/** El mes que Inicio pide cerrar: el anterior al de hoy en Madrid (regla 4), con su primer y último día. */
+function mesAnterior(): { inicio: string; fin: string } {
+  const [y, m] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit' }).format(new Date()).split('-').map(Number)
+  const ano = m === 1 ? y - 1 : y
+  const mes = m === 1 ? 12 : m - 1
+  const dos = (n: number) => String(n).padStart(2, '0')
+  const ultimo = new Date(Date.UTC(ano, mes, 0)).getUTCDate()
+  return { inicio: `${ano}-${dos(mes)}-01`, fin: `${ano}-${dos(mes)}-${dos(ultimo)}` }
+}
+
+/**
+ * M01 (#224): «Cerrar <mes>» solo sale si ese mes está por cerrar en la
+ * contabilidad: un ejercicio abierto que lo cubre, sin traer y sin cierre. Lo
+ * deja así la semilla (seed_c06_sola_ejercicio_staging.sql, en la plantilla que
+ * copia cada carril); aquí se comprueba antes de mirar la tarjeta, para que un
+ * fallo diga si es la pantalla o el estado. Devuelve el ejercicio.
+ */
+type Ejercicio = { id: string; ends_on: string; origin: string; origin_program: string | null; imported_until: string | null }
+
+async function mesAnteriorAbierto(s: Sesion, empresa: string): Promise<Ejercicio> {
+  const m = mesAnterior()
+  const ej = await rest<(Ejercicio & { status: string })[]>(s, 'GET',
+    `fiscal_year?select=id,status,ends_on,origin,origin_program,imported_until&company_id=eq.${empresa}&starts_on=lte.${m.inicio}&ends_on=gte.${m.fin}`)
+  expect(ej.datos, `un ejercicio cubre ${m.inicio} (semilla seed_c06_sola_ejercicio_staging.sql)`).toHaveLength(1)
+  expect(ej.datos[0].status, 'el ejercicio está abierto').toBe('open')
+  expect(ej.datos[0].imported_until === null || ej.datos[0].imported_until < m.inicio, `${m.inicio} no está traído de otro programa`).toBe(true)
+  const cierres = await rest<unknown[]>(s, 'GET', `fiscal_period_lock?select=month&company_id=eq.${empresa}&month=eq.${m.inicio}&reopened_at=is.null`)
+  expect(cierres.datos, `${m.inicio} sin cerrar`).toEqual([])
+  const { id, ends_on, origin, origin_program, imported_until } = ej.datos[0]
+  return { id, ends_on, origin, origin_program, imported_until }
+}
+
 // ── La entrada N18 ──────────────────────────────────────────────────────────
 
 test('N18 · la entrada con la marca: logo, «Entra en tu contabilidad», las cuatro frases y el pie', async ({ page }) => {
@@ -173,7 +206,8 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   await conMarca(page)
   const s = await entrarComo(page, SOLA.email)
   const cuenta = await cuentaDe(s)
-  await empresaDelRecorrido(s, cuenta)
+  const empresa = await empresaDelRecorrido(s, cuenta)
+  await mesAnteriorAbierto(s, empresa)
 
   // Aterrizaje: lo de hostelería no existe para esta cuenta; todo lleva al Inicio de contabilidad.
   await page.goto('/')
@@ -183,10 +217,14 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
 
   // Inicio («Estilo nuevo · Inicio»).
   await expect(page.getByRole('heading', { level: 1, name: /^(Buenos días|Buenas tardes|Buenas noches), Marta$/ })).toBeVisible()
-  for (const t of ['En el banco', 'Te deben', 'Debes', 'IVA del trimestre']) await expect(page.locator('.cxi-cifra-etiqueta', { hasText: t })).toBeVisible()
+  // S02 · PR 3: la tarjeta de bancos dice lo que es: «en contabilidad» (lo validado).
+  for (const t of ['Bancos · en contabilidad', 'Te deben', 'Debes', 'IVA del trimestre']) await expect(page.locator('.cxi-cifra-etiqueta', { hasText: t })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Solo necesito que me digas esto' })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2, name: 'Lo que he hecho yo desde ayer' })).toBeVisible()
+  // El mes anterior está por cerrar (lo comprueba mesAnteriorAbierto): su tarjeta,
+  // ya cargada. Mientras carga el título sale igual, así que se mira su barra.
   await expect(page.getByRole('heading', { level: 2, name: /^Cerrar / })).toBeVisible()
+  await expect(page.getByRole('progressbar', { name: /^Cierre de / })).toBeVisible({ timeout: 20_000 })
   await expect(page.locator('.cxi-cifra-valor').first()).not.toHaveText('…')
   // Sin la barra de la IA (solo contestaría «Muy pronto») ni «Volver a…».
   await expect(page.locator('.cx-pregunta')).toHaveCount(0)
@@ -196,28 +234,33 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
   if (lado(page) === 'ordenador') {
     const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
     // El texto de cada entrada (sin el número de lo que hay por mirar, que va aparte).
-    // M01: los módulos del marco nuevo (Documentos va dentro de Compras; Impuestos, apagado).
-    await expect(menu.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes'])
+    // S01: los productos del esqueleto; lo que no tiene pantalla no sale (ni Impuestos).
+    // S02 · PR 2: Facturación sí sale, sin interruptor, con «Facturas emitidas» (entre
+    // Contabilidad y Compras y gastos).
+    // S02: «Favoritos» va ahora abajo en la barra, también como .s-barra-item,
+    // pero es un botón, no un apartado: se cuentan los enlaces.
+    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await expect(menu.getByRole('button', { name: 'Favoritos' })).toBeVisible()
   } else {
-    const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
-    await expect(barra.getByRole('link', { name: 'Inicio' })).toBeVisible()
-    await expect(barra.getByRole('link', { name: 'Libros' })).toBeVisible()
-    await expect(barra.getByRole('button', { name: /Preguntar/ })).toHaveCount(0)
+    // S01c: en el móvil, el menú es un cajón que abre «Abrir el menú» de la cabecera.
+    await expect(page.getByRole('button', { name: /Preguntar/ })).toHaveCount(0)
   }
   await sinFolvy(page, 'el Inicio')
   await capturar(page, 'inicio')
 
-  // C06, respuesta 2: en el móvil, «Más» abre el menú entero con lo que
-  // funciona (la barra solo tiene sitio para Inicio y Ajustes hoy).
+  // C06, respuesta 2 (S01c: ya no es «Más» abajo, es el cajón): en el móvil,
+  // el menú entero con lo que funciona y sin «Volver a Folvy» (producto solo).
   if (lado(page) === 'movil') {
-    const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
-    await barra.getByRole('button', { name: 'Más' }).click()
+    await page.getByRole('button', { name: 'Abrir el menú' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
-    await expect(hoja.locator('.cxm-modulo-nombre')).toHaveText(['Inicio', 'Compras', 'Bancos', 'Libros', 'Impuestos', 'Clientes y proveedores', 'Ajustes'])
-    await sinFolvy(page, 'el menú «Más»')
+    // Los productos (arriba y Ajustes abajo). Favoritos y el usuario van en el
+    // cajón desde el S01d, fuera de las listas de productos (.s-cajon-tuyo).
+    // S02 · PR 2: con Facturación, entre Contabilidad y Compras y gastos.
+    await expect(hoja.locator('.s-barra-lista .s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await sinFolvy(page, 'el menú')
     await page.evaluate(() => document.fonts.ready)
     await page.screenshot({ path: `${DIR}/mas-movil.png` })
-    await hoja.getByRole('link', { name: 'Libros' }).click()
+    await hoja.getByRole('link', { name: /^Contabilidad/ }).click()
     await expect(page).toHaveURL(/\/conta\/libros/)
     await expect(hoja).toHaveCount(0)
   }
@@ -230,7 +273,7 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     await expect(page.getByText(/^Plan activado: /)).toBeVisible({ timeout: 30_000 })
   }
   await expect(page.locator('.cx-principal')).toBeVisible()
-  await page.waitForLoadState('networkidle')
+  await redQuieta(page)
   await sinFolvy(page, 'el plan contable')
   await capturar(page, 'plan')
 
@@ -255,13 +298,50 @@ test('el recorrido: aterrizaje, Inicio, menú, plan, libro, libros y balances y 
     ['/conta/ajustes', 'ajustes', 'ajustes'],
   ] as const) {
     await page.goto(ruta)
-    await expect(page.locator('.cx-principal')).toBeVisible()
-    await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('alert')).toHaveCount(0)
+    await expect(page.locator('.cx-principal'), `${ruta} (${lado(page)}) abre dentro del marco`).toBeVisible()
+    await redQuieta(page)
+    await expect(page.getByRole('alert'), `${ruta} (${lado(page)}) sin avisos de error`).toHaveCount(0)
     await sinFolvy(page, titulo)
     if (nombre === 'libro' || nombre === 'balance' || nombre === 'fichas') await capturar(page, nombre)
   }
   expect(errores, 'errores de la página en el recorrido').toEqual([])
+})
+
+// M01 (#224): un mes ya cerrado fuera (traído de otro programa) no se pide cerrar.
+// La prueba lo pone así en SU carril (el ejercicio, traído hasta el último día del
+// mes anterior) y lo deja como estaba, pase lo que pase.
+test('Inicio no pide cerrar el mes anterior si ya está cerrado fuera: sin «Cerrar <mes>»', async ({ page }) => {
+  test.setTimeout(120_000)
+  const errores = vigilar(page)
+  await conMarca(page)
+  const s = await entrarComo(page, SOLA.email)
+  const empresa = await empresaDelRecorrido(s, await cuentaDe(s))
+  const ej = await mesAnteriorAbierto(s, empresa)
+  const m = mesAnterior()
+  // Traído de Diez hasta el último día del mes anterior, como lo deja el corte
+  // (20261012T0110_c04r_corte_datos): «mixed» si el ejercicio sigue después;
+  // «migrated» si ese día es el último del ejercicio (CHECK fiscal_year_traido_coherente).
+  const traido = { origin: m.fin === ej.ends_on ? 'migrated' : 'mixed', origin_program: 'diez', imported_until: m.fin }
+  const cambio = await rest(s, 'PATCH', `fiscal_year?id=eq.${ej.id}`, traido)
+  expect(cambio.status, `el ejercicio, traído hasta el ${m.fin}: ${JSON.stringify(cambio.datos)}`).toBe(200)
+  try {
+    await page.goto('/conta/inicio')
+    await expect(page.getByRole('heading', { level: 1, name: /^(Buenos días|Buenas tardes|Buenas noches), Marta$/ })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Solo necesito que me digas esto' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 2, name: 'Lo que he hecho yo desde ayer' })).toBeVisible()
+    await expect(page.locator('.cxi-cifra-valor').first()).not.toHaveText('…')
+    await redQuieta(page)
+    // Ya cargado todo: ni la tarjeta ni su barra (mientras carga, el título sale un momento).
+    await expect(page.getByRole('heading', { level: 2, name: /^Cerrar / })).toHaveCount(0)
+    await expect(page.getByRole('progressbar', { name: /^Cierre de / })).toHaveCount(0)
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    await sinFolvy(page, 'el Inicio con el mes cerrado fuera')
+  } finally {
+    const vuelta = await rest(s, 'PATCH', `fiscal_year?id=eq.${ej.id}`,
+      { origin: ej.origin, origin_program: ej.origin_program, imported_until: ej.imported_until })
+    expect(vuelta.status, `el ejercicio, como estaba: ${JSON.stringify(vuelta.datos)}`).toBe(200)
+  }
+  expect(errores).toEqual([])
 })
 
 test('sin marca, la cuenta sola también aterriza en su Inicio y nunca ve hostelería', async ({ page }) => {

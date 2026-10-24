@@ -1,0 +1,47 @@
+# Tanda de PRODUCCIÓN. Una ruta por línea, en orden. La aplica
+# .github/workflows/aplicar-produccion-conta.yml (W01): primero en ENSAYO
+# (todo en una transacción y rollback, con el registro dentro) y, con un
+# ensayo en verde del mismo commit, en REAL.
+#
+# S01 · El esqueleto de Sumied (rama conta/s01-esqueleto, PR #226). La anterior
+# de este fichero (W02, fin del relevo del secreto del despacho: 0200) ya está
+# en el historial de producción; su copia:
+# tests/conta/produccion/tanda-w02-secreto-despacho-20261017.txt.
+#
+#   1. 0100 — AÑADE conta_user_pref (el nivel, los favoritos y lo demás de
+#      cada persona; RLS: cada uno su fila) y company.is_hospitality (nula).
+#   2. 0110 — la marca de hostelería de las empresas de hoy, por la actividad
+#      de su cuenta. AUTORIZO: es un update de company (en producción, la única
+#      empresa de Foodint).
+#   3. 0120 — AÑADE company.logo_path (nula) y el bucket privado company-logos
+#      con sus cuatro políticas.
+#   4. 0130 — AÑADE conta_eje_analitico (los ejes local y marca de cada empresa,
+#      RLS) y los siembra: local y marca encendidos donde hay locales y marcas.
+#   5. 0140 — CAMBIA en caliente conta_motivos_para_validar (misma firma): el
+#      local solo se pide con el eje «local» encendido. Parte del cuerpo de
+#      producción (la M01, md5 66965ffa…). Declarado, con su prueba de staging.
+#   6. 0150 — CAMBIA en caliente banco_facturas_recibidas_pendientes (misma
+#      firma y contrato): el asiento de la factura por su origen. Parte del
+#      cuerpo de producción (md5 f6e2f68f…). Declarado, con su prueba.
+#   7. 0160 — «No es una factura» (decisión 1 de Julio, 17/10): AÑADE las
+#      columnas del descarte (nulas) y conta_factura_descartar/recuperar; CAMBIA
+#      en caliente el CHECK de status de supplier_invoice (solo amplía, con
+#      'descartada'), tg_supplier_invoice_no_repetida (md5 a69d2408…) y
+#      conta_documentos_recibidos (md5 ea1dd614…). Declarado, con su prueba.
+#
+# Ninguna toca el camino del pedido (analizador contra producción, 17/10: seis
+# «sigue» y la 0110 «autorizo»).
+#
+# ORDEN: la tanda ANTES de fusionar el #226. El front del S01 lee lo que crea; el
+# de antes no lee nada de esto, así que la base nueva con el front viejo no
+# cambia nada que se vea (la 0140, con el eje «local» encendido en Foodint,
+# valida igual que antes).
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/s01-esqueleto.sql
+supabase/migrations/20261121T0100_s01_esqueleto.sql
+supabase/migrations/20261121T0110_s01_hosteleria_de_hoy.sql
+supabase/migrations/20261121T0120_s01_logo_empresa.sql
+supabase/migrations/20261121T0130_s01_ejes_analiticos.sql
+supabase/migrations/20261121T0140_s01_regla5_eje_local.sql
+supabase/migrations/20261121T0150_s01_recibidas_asiento_por_origen.sql
+supabase/migrations/20261121T0160_s01_factura_descartada.sql

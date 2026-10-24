@@ -1,0 +1,21 @@
+# Tanda de producción viva · S02 · PR 3 · las cifras: una fuente por concepto
+# (Julio, 22/10). Rama claude/cool-noether-i932tx. Número 0490: la siguiente
+# libre por encima de la 0480 (E05, ya aplicada; su copia en
+# tests/conta/produccion/tanda-e05-releer-riders-20261022.txt).
+#
+#   1. 0490 — AÑADE conta_pendientes (lo que espera una acción de una
+#      persona, contado una vez con la vara de su pantalla), conta_saldo_bancos
+#      (por banco: su 572 validada, lo propuesto aparte, el último extracto y
+#      lo sin casar) y conta_saldos_terceros (el saldo del libro de cada 40,
+#      41, 43 y 44, deudor o acreedor, con su grupo y su contacto). Las tres
+#      solo leen. CAMBIA en caliente conta_impuesto_calendario (misma firma):
+#      la ventana salta lo que está «No hace falta», y eso sigue en las filas
+#      con su porqué (regla 7). Declarada en la cabecera, con su prueba de
+#      staging. No toca ninguna fila.
+#
+# No toca el camino del pedido (ni lo lee ni lo llama). Funciones que
+# desplegar a mano: ninguna. Después del real, el front del PR 3 lee las tres
+# (si aún no están, cae a la cuenta de antes y lo dice en la consola).
+# Vuelta atrás: supabase/produccion/vuelta-atras.txt.
+cuenta: scripts/conta/produccion/cuentas/s02-cifras.sql
+supabase/migrations/20261205T0490_s02_cifras.sql

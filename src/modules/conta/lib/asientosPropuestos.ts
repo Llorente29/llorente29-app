@@ -560,6 +560,8 @@ export interface EntradaFactura {
    * recibidas como deducible (supplier_invoice.vat_non_deductible).
    */
   ivaNoDeducible?: boolean
+  /** D07 · Por qué no se deduce, dicho para la persona («el ticket no lleva NIF»). Sin él, «no va a nombre de tu empresa». */
+  motivoNoDeducible?: string | null
   /**
    * D01 · Liquidaciones: el IVA tal como lo dice la factura, por tipo (la de
    * comisión de Uber: la base del total y su cuota, que a veces no es base ×
@@ -572,11 +574,63 @@ export interface EntradaFactura {
   faltaNumero?: boolean
   /** D01 (Julio, 16/10) · Lo que la deja por aclarar (un solape, su liquidación que no cuadra): no se propone hasta aclararlo. */
   porAclarar?: readonly string[]
+  /**
+   * I01d · La ficha del proveedor dice que su IVA lo declaras tú: compra
+   * intracomunitaria (otro país de la UE con NIF-IVA) o inversión del sujeto
+   * pasivo (de fuera de la UE, o nacional marcada a mano). Su factura no trae
+   * IVA español; se autoliquida al tipo del catálogo con su 472 y su 477.
+   */
+  autoliquidacion?: { tipo: 'ue_compra' | 'isp'; porque: string } | null
+  /**
+   * E05 (Julio, 21/10) · La factura de un lote que reparte entre varios locales
+   * («Varios locales»): sin local propio, su gasto se parte a partes iguales
+   * entre estos locales (los del reparto del lote). El IVA y el proveedor
+   * quedan comunes. Con uno o ninguno, nada cambia.
+   */
+  reparto?: readonly { localId: string; nombre: string }[]
 }
 export interface CuentasFactura {
   proveedor: string
   ivaSoportado: (porcentaje: number) => { cuenta: string; tipoId: string } | null
   retencion: string
+  /** I01d · El tipo de la autoliquidación (ue_compra o isp) con su 472 y su 477. */
+  autoliquidada?: (tipo: 'ue_compra' | 'isp') => { tipoId: string; porcentaje: number; soportado: string; repercutido: string } | null
+}
+
+/**
+ * E05 · Lo de una factura de lote (riders y flotas de Catcher) que no sale de
+ * su ficha, porque RIDERS es una ficha genérica con la 41000100: el emisor y su
+ * NIF están en la factura (issuer_*); no tiene líneas, así que su gasto sale de
+ * su IVA por tipo (supplier_invoice_tax) contra el gasto de la ficha, con la
+ * cuota que dice; y, si reparte entre varios locales (Julio, 21/10), los
+ * locales de su reparto, para partirlo a partes iguales.
+ */
+export function deLaFacturaDeLote(
+  f: { issuer_name?: unknown; issuer_tax_id?: unknown; reading?: unknown; supplier_invoice_line?: unknown; supplier_invoice_tax?: unknown },
+  gasto: string | null,
+  tipoDe: (porcentaje: number) => { id: string; rate: number } | null,
+  nombreLocal: (id: string) => string | null,
+): { proveedor: string | null; tieneNif: boolean; lineas: LineaFactura[] | undefined; cuotas: { porcentaje: number; base: number; cuota: number }[]; reparto: { localId: string; nombre: string }[] } {
+  const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+  const num = (v: unknown) => Number(v ?? 0)
+  const tasas = (Array.isArray(f.supplier_invoice_tax) ? f.supplier_invoice_tax : []) as { vat_pct?: unknown; base?: unknown; vat_amount?: unknown }[]
+  const conLineas = Array.isArray(f.supplier_invoice_line) && f.supplier_invoice_line.length > 0
+  const lote = ((f.reading ?? {}) as { lote?: { reparto?: unknown } }).lote
+  const reparto = new Map<string, { localId: string; nombre: string }>()
+  for (const x of (Array.isArray(lote?.reparto) ? lote!.reparto : []) as { localId?: unknown; tienda?: unknown }[]) {
+    const id = texto(x.localId)
+    if (id && !reparto.has(id)) reparto.set(id, { localId: id, nombre: nombreLocal(id) ?? texto(x.tienda) ?? 'local' })
+  }
+  return {
+    proveedor: texto(f.issuer_name),
+    tieneNif: !!texto(f.issuer_tax_id),
+    lineas: conLineas ? undefined : tasas.map((x) => {
+      const t = tipoDe(num(x.vat_pct))
+      return { base: num(x.base), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: gasto }
+    }),
+    cuotas: tasas.map((x) => ({ porcentaje: num(x.vat_pct), base: num(x.base), cuota: num(x.vat_amount) })),
+    reparto: [...reparto.values()],
+  }
 }
 
 export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propuesta: Propuesta | null; sinPropuesta: string | null } {
@@ -594,40 +648,55 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
   const gastos = new Map<string, number>()
   for (const l of f.lineas) gastos.set(l.cuentaGasto!, (gastos.get(l.cuentaGasto!) ?? 0) + cent(l.base))
   if (f.ivaNoDeducible) {
-    // La cuota, por cuenta de gasto y tipo, se suma a su gasto: no hay 472.
-    const porCuentaTipo = new Map<string, { cuenta: string; pct: number; base: number }>()
+    // La cuota, por cuenta de gasto y tipo, va a su gasto: no hay 472.
+    // D07 · En su PROPIA línea, en la cuenta de gasto, con su tipo y su base, al
+    // libro de recibidas como NO deducible: sale en el libro registro (con
+    // deducible 0) y no entra en el 303 (conta_impuesto_303_cajas, 0840).
+    const porCuentaTipo = new Map<string, { cuenta: string; pct: number; tipoId: string | null; base: number }>()
     for (const l of f.lineas) {
       const pct = l.tipo?.porcentaje ?? 0
       const k = `${l.cuentaGasto}|${pct}`
-      const x = porCuentaTipo.get(k) ?? { cuenta: l.cuentaGasto!, pct, base: 0 }
+      const x = porCuentaTipo.get(k) ?? { cuenta: l.cuentaGasto!, pct, tipoId: l.tipo?.id ?? null, base: 0 }
       x.base += cent(l.base)
       porCuentaTipo.set(k, x)
     }
     let ivaNd = 0
+    for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
     for (const x of porCuentaTipo.values()) {
       if (!x.pct) continue
       const cuota = cent(cuotaIva(deCent(x.base), x.pct))
+      if (!cuota) continue
       ivaNd += cuota
-      gastos.set(x.cuenta, (gastos.get(x.cuenta) ?? 0) + cuota)
+      lineas.push({ cuenta: x.cuenta, debe: deCent(cuota), haber: 0, localId: loc, comun: !loc, documento: f.numero,
+        concepto: `IVA no deducible ${x.pct} %`,
+        ...(x.tipoId ? { iva: { tipoId: x.tipoId, tipo: x.pct, base: deCent(x.base), libro: 'received' as const, deducible: 'no' as const } } : {}) })
     }
-    for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero })
     const totalNd = f.lineas.reduce((t, l) => t + cent(l.base), 0) + ivaNd
     lineas.push({ cuenta: c.proveedor, debe: 0, haber: deCent(totalNd), localId: loc, comun: !loc, documento: f.numero, terceroId: f.terceroId })
     if (totalNd !== cent(f.total)) { avisos.push(`Base + IVA = ${eurosExactos(deCent(totalNd))}, y la factura dice ${eurosExactos(f.total)}.`); confs.push('duda') }
-    razones.push({ decision: 'IVA como más gasto', porque: 'la factura no va a nombre de tu empresa: su IVA no se descuenta, no va a la 472 ni al libro de recibidas como deducible' })
+    const porQueNd = f.motivoNoDeducible ?? 'la factura no va a nombre de tu empresa'
+    razones.push({ decision: 'IVA no deducible: más gasto', porque: `${porQueNd}: su IVA no se descuenta. Va a su gasto, no a la 472; sale en el libro de recibidas como no deducible y no entra en el 303` })
     if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
     return {
       sinPropuesta: null,
       propuesta: {
         serie: 2, fecha: f.fecha, concepto: `Factura ${f.proveedor}${f.numero ? ` · ${f.numero}` : ''} (sin descontar el IVA)`, origen: { tipo: 'supplier_invoice', id: f.id },
         lineas, confianza: peor('seguro', ...confs),
-        porque: 'Gasto con su IVA dentro y el total a su cuenta: la factura no va a nombre de tu empresa.',
+        porque: `Gasto con su IVA dentro y el total a su cuenta: ${porQueNd}.`,
         razones, avisos, terceroId: f.terceroId, documento: f.numero,
       },
     }
   }
   const marca = f.marcaId ?? null
-  for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}) })
+  if (f.autoliquidacion) return autoliquidada(f, c, gastos, razones, avisos, confs)
+  const partes = !loc && (f.reparto?.length ?? 0) > 1 ? f.reparto! : null
+  for (const [cuenta, cc] of gastos) {
+    if (!partes) { lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...(marca ? { marcaId: marca } : {}) }); continue }
+    // A partes iguales, al céntimo: lo que sobra de dividir va a los primeros.
+    const cada = Math.floor(cc / partes.length)
+    partes.forEach((p, i) => lineas.push({ cuenta, debe: deCent(cada + (i < cc - cada * partes.length ? 1 : 0)), haber: 0, localId: p.localId, comun: false,
+      documento: f.numero, ...(marca ? { marcaId: marca } : {}) }))
+  }
   const porTipo = new Map<number, { id: string; base: number }>()
   for (const l of f.lineas) {
     if (!l.tipo) continue
@@ -665,7 +734,8 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
     avisos.push(`Base + IVA = ${eurosExactos(deCent(baseTotal + ivaTotal))}, y la factura dice ${eurosExactos(f.total)}.`)
     confs.push('duda')
   }
-  if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+  if (partes) razones.push({ decision: `Gasto a partes iguales: ${partes.map((p) => p.nombre).join(' y ')}`, porque: 'la factura reparte entre varios locales: su gasto se parte a partes iguales entre los del lote; el IVA y el proveedor quedan comunes' })
+  else if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
   razones.unshift({ decision: 'IVA soportado por tipo', porque: 'una 472 por tipo, con su base, al libro de recibidas' })
   return {
     sinPropuesta: null,
@@ -673,6 +743,57 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
       serie: 2, fecha: f.fecha, concepto: `Factura ${f.proveedor}${f.numero ? ` · ${f.numero}` : ''}`, origen: { tipo: 'supplier_invoice', id: f.id },
       lineas, confianza: peor('seguro', ...confs),
       porque: `Gasto por su tipo, IVA por tipo${f.retencion ? ', retención' : ''} y el total a su cuenta.`,
+      razones, avisos, terceroId: f.terceroId, documento: f.numero,
+    },
+  }
+}
+
+/**
+ * I01d · La factura de un proveedor cuyo IVA declaras tú (intracomunitaria o
+ * inversión del sujeto pasivo): gasto, la 472 del tipo autoliquidado con su
+ * base, la 477 de la autorrepercusión por la MISMA cuota (sin tipo ni libro:
+ * la validación la casa con la 472) y el total, que es la base, a su cuenta.
+ * Si la factura trae IVA español, contradice la ficha: no se propone.
+ */
+function autoliquidada(f: EntradaFactura, c: CuentasFactura, gastos: Map<string, number>, razones: Razon[], avisos: string[], confs: Confianza[]):
+  { propuesta: Propuesta | null; sinPropuesta: string | null } {
+  const a = f.autoliquidacion!
+  const conIva = f.lineas.filter((l) => (l.tipo?.porcentaje ?? 0) > 0)
+  if (conIva.length) {
+    return { propuesta: null, sinPropuesta: `${a.porque} Pero su factura trae IVA español (${[...new Set(conIva.map((l) => `${l.tipo!.porcentaje} %`))].join(', ')}): o la factura o su ficha están mal. Revísalas antes de apuntarla.` }
+  }
+  const t = c.autoliquidada?.(a.tipo) ?? null
+  if (!t) return { propuesta: null, sinPropuesta: `${a.porque} Falta en tu plan la 472 o la 477 del ${a.tipo === 'ue_compra' ? 'IVA intracomunitario' : 'IVA de la inversión del sujeto pasivo'} (las del 21 %).` }
+  const loc = f.localId
+  const marca = f.marcaId ?? null
+  const m = marca ? { marcaId: marca } : {}
+  const lineas: LineaAsiento[] = []
+  for (const [cuenta, cc] of gastos) lineas.push({ cuenta, debe: deCent(cc), haber: 0, localId: loc, comun: !loc, documento: f.numero, ...m })
+  const baseC = f.lineas.reduce((x, l) => x + cent(l.base), 0)
+  const base = deCent(baseC)
+  const cuota = cuotaIva(base, t.porcentaje)
+  lineas.push({ cuenta: t.soportado, debe: cuota, haber: 0, localId: loc, comun: !loc, documento: f.numero, ...m,
+    iva: { tipoId: t.tipoId, tipo: t.porcentaje, base, libro: 'received', deducible: 'yes' } })
+  lineas.push({ cuenta: t.repercutido, debe: 0, haber: cuota, localId: loc, comun: !loc, documento: f.numero, ...m })
+  if (f.retencion) {
+    lineas.push({ cuenta: c.retencion, debe: 0, haber: f.retencion.importe, localId: loc, comun: !loc, documento: f.numero,
+      retencion: { tipoId: f.retencion.tipoId, tipo: f.retencion.porcentaje, base: f.retencion.base, modelo: f.retencion.modelo } })
+    razones.push({ decision: `Retención ${f.retencion.porcentaje} % (${eurosExactos(f.retencion.importe)})`, porque: `se la ingresas tú a Hacienda en el ${f.retencion.modelo}` })
+  }
+  lineas.push({ cuenta: c.proveedor, debe: 0, haber: deCent(baseC - cent(f.retencion?.importe ?? 0)), localId: loc, comun: !loc, documento: f.numero, terceroId: f.terceroId, ...m })
+  if (baseC !== cent(f.total)) {
+    avisos.push(`Su factura no trae IVA, así que el total tendría que ser la base (${eurosExactos(base)}), y dice ${eurosExactos(f.total)}.`)
+    confs.push('duda')
+  }
+  if (f.faltaNumero) { avisos.push('Falta el número de la factura: sin él no se valida ni va a Diez.'); confs.push('duda') }
+  if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+  razones.unshift({ decision: `Autoliquidación al ${t.porcentaje} % (${eurosExactos(cuota)})`, porque: `${a.porque} El IVA lo declaras y lo deduces tú: 472 y 477 por la misma cuota, al libro de recibidas.` })
+  return {
+    sinPropuesta: null,
+    propuesta: {
+      serie: 2, fecha: f.fecha, concepto: `Factura ${f.proveedor}${f.numero ? ` · ${f.numero}` : ''}`, origen: { tipo: 'supplier_invoice', id: f.id },
+      lineas, confianza: peor('seguro', ...confs),
+      porque: `Gasto, el IVA autoliquidado (472 y 477) y el total a su cuenta.`,
       razones, avisos, terceroId: f.terceroId, documento: f.numero,
     },
   }
@@ -941,7 +1062,7 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
     const imp = deCent(Math.abs(cent(r)))
     if (cta) {
       lineas.push({ cuenta: cta, debe: (debeSiPositivo ? r > 0 : r < 0) ? imp : 0, haber: (debeSiPositivo ? r > 0 : r < 0) ? 0 : imp, localId: loc, comun, concepto: `Redondeo del total de ${que}` })
-      avisos.push(`${que[0].toUpperCase()}${que.slice(1)} dice ${eurosExactos(total)}; base y cuota de cada tipo dan ${calculado}. Las cuotas van como en el papel y el ${imp === 0.01 ? 'céntimo' : 'redondeo'}, a «redondeos».`)
+      avisos.push(`${que[0].toUpperCase()}${que.slice(1)} dice ${eurosExactos(total)}; base y cuota de cada tipo dan ${calculado}. Las cuotas van como en la factura y el ${imp === 0.01 ? 'céntimo' : 'redondeo'}, a «redondeos».`)
     } else {
       const lado = principal.debe ? 'debe' : 'haber'
       principal[lado] = deCent(cent(principal[lado]) + (lado === 'debe' ? 1 : -1) * cent(r) * (debeSiPositivo ? 1 : -1))
