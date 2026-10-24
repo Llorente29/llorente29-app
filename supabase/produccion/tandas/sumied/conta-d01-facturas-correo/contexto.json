@@ -1,0 +1,26 @@
+{
+ "_que": "D01 · contexto de producción de la tanda «facturas de los proveedores por correo» (0040 y 0041; antes 0100 y 0110 del 19), medido en SOLO LECTURA el 24/10 a las 00:35 UTC con la consulta de analizar.mjs sql-contexto y CAMINO_TABLAS/CAMINO_FUNCIONES del workflow, después de renombrarlas al formato del C10. Lo mismo que el 16/10: conta_entrada_llegada(jsonb) existe, una firma, con el texto de la 0220 del 21 (md5 de su definición 2b167f38, el mismo); company_inbound_sender y conta_entrada_remitente no existen; nada en el camino del pedido; ninguna en el historial. Foodint tiene solo liquidaciones-foodint@entrada.folvy.app (encendida) y nadie tiene facturas-foodint: el freno de la 0041 deja pasar.",
+ "medido": "2026-10-24T00:35Z",
+ "tanda": {
+  "supabase/migrations/20261024T0040_d01_facturas_correo.sql": "37cffa8467259524974ab94c8f0b57f0",
+  "supabase/migrations/20261024T0041_d01_facturas_foodint.sql": "da3efcfaafcce6ef89351f4f4f43f387"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_inbound_address"
+  ],
+  "funciones": [
+   "public.conta_entrada_llegada(jsonb)"
+  ],
+  "filas": {
+   "public.company_inbound_address": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -21,6 +21,7 @@
 
 import { test, expect, type Browser, type Locator, type Page } from '@playwright/test'
 import { CUENTA_A, CUENTA_D, entrarComo } from '../sesion'
+import { barraAbiertaSiPlegada } from '../barra'
 
 const DIR = 'docs/conta/capturas/s01'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -67,6 +68,7 @@ async function enElCajon(page: Page) {
  */
 async function paginas(page: Page, apartado: string) {
   await enElCajon(page)
+  await barraAbiertaSiPlegada(page)
   const lista = page.getByRole('list', { name: `Páginas de ${apartado}` })
   await expect(lista).toBeVisible()
   return lista

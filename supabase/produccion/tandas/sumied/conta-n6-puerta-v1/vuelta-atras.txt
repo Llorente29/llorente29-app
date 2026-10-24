@@ -1,0 +1,2 @@
+# N6 · vuelta atrás.
+supabase/vuelta-atras/20261024T0714_n6_puerta_v1.down.sql

@@ -170,6 +170,26 @@ export function facturaDeVentas(a: AsientoVentas, o: { correspondencia: Correspo
 //     de compras, serie 2, llevan NumeroFacturaRectificativa).
 // Así que no se rellena ninguno: lo que no se ha visto no se inventa.
 
+// ── C11c · El número del asiento REHECHO después de anular (24/10) ─────────────
+//
+// El número de una factura de ventas sale del local y el día
+// («UBR-CAM-20261010»): un asiento rehecho después de anular el del mismo día
+// llevaba el MISMO número que el anulado, que sigue en Diez (con su «-ANUL»).
+// El rehecho va con la vez: «UBR-CAM-20261010-2», la tercera «-3»… La vez la
+// da la base (conta_diez_numero_vez: 1 + los asientos anulados de la empresa
+// que ya mandaron ese número). La primera vez, el número de siempre.
+
+/** El número de la factura de la vez `vez` (1 = el de siempre). */
+export function numeroDeLaVez(base: string, vez: number): string {
+  return vez > 1 ? `${base}-${vez}` : base
+}
+
+/** ¿Es `numero` el número de alguna vez de `base` (el de siempre o «base-N»)? */
+export function esNumeroDe(base: string, numero: string): boolean {
+  if (numero === base) return true
+  return numero.startsWith(`${base}-`) && /^\d+$/.test(numero.slice(base.length + 1))
+}
+
 /** Cómo se anula en Diez una factura emitida (lo medido; ver arriba). */
 export const FORMA_ANULACION = { sufijo: '-ANUL', prefijoDescripcion: 'ANUL ' } as const
 

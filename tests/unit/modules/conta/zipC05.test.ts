@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { crc32, crearZip, nombresUnicos } from '@/modules/conta/lib/zip'
@@ -28,10 +28,16 @@ describe('zip sin compresión', () => {
       const t = spawnSync('unzip', ['-t', f], { encoding: 'utf8' })
       expect(t.status, t.stdout + t.stderr).toBe(0)
       expect(t.stdout).toContain('No errors detected')
-      const x = spawnSync('unzip', ['-o', '-d', join(dir, 'fuera'), f], { encoding: 'utf8' })
-      expect(x.status).toBe(0)
-      expect(Buffer.compare(readFileSync(join(dir, 'fuera', 'F1 2026-0001.pdf')), Buffer.from(pdf))).toBe(0)
-      expect(readFileSync(join(dir, 'fuera', 'tique ñandú.txt'), 'utf8')).toBe('hola')
+      // Con locale C y con UTF-8: el unzip de Debian/Ubuntu, con UTF-8, pasaba
+      // por CP437 los nombres de un zip «hecho por» MS-DOS (24/10, la CI).
+      for (const locale of ['C', 'C.UTF-8']) {
+        const fuera = join(dir, `fuera-${locale}`)
+        const x = spawnSync('unzip', ['-o', '-d', fuera, f], { encoding: 'utf8', env: { ...process.env, LC_ALL: locale, LANG: locale } })
+        expect(x.status, `${locale}: ${x.stdout}${x.stderr}`).toBe(0)
+        expect(Buffer.compare(readFileSync(join(fuera, 'F1 2026-0001.pdf')), Buffer.from(pdf)), locale).toBe(0)
+        expect(readFileSync(join(fuera, 'tique ñandú.txt'), 'utf8'), locale).toBe('hola')
+        expect(statSync(join(fuera, 'tique ñandú.txt')).mode & 0o777, locale).toBe(0o644)
+      }
     } finally { rmSync(dir, { recursive: true, force: true }) }
   })
 

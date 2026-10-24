@@ -21,6 +21,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { FLOTANTES_CONTA, loQueTapan } from '../solapes'
+import { barraAbiertaSiPlegada } from '../barra'
 
 const DIR = 'docs/conta/capturas/compras'
 const VERDURAS = enCarril('c0c00000-0000-4000-8000-000000000001')
@@ -65,6 +66,7 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
   // salen debajo de él, en la barra (en el móvil, en el cajón), y la marcada es
   // Facturas recibidas, de la que cuelga esta pantalla.
   if (lado(page) === 'movil') await page.getByRole('button', { name: 'Abrir el menú' }).click()
+  else await barraAbiertaSiPlegada(page)
   await expect(page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('list', { name: 'Páginas de Compras y gastos' })
     .getByRole('link', { name: 'Facturas recibidas' })).toHaveAttribute('aria-current', 'page')
   if (lado(page) === 'movil') {

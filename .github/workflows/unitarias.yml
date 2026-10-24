@@ -1,0 +1,74 @@
+name: Unitarias por producto
+
+# QUÉ HACE (N1, cola de noche del 23/10, paso 1 de la auditoría C09)
+# Corre las unitarias (vitest) en cada PR a main, solo las del producto que
+# toca: las de Sumied si cambia Sumied, las de Folvy si cambia Folvy, y las dos
+# si toca lo común o algo que no es claramente de ninguno. El reparto lo decide
+# scripts/pruebas/unitarias.mjs (con sus pruebas en
+# tests/unit/scripts/unitarias.test.ts), contra los ficheros del PR.
+# Hasta hoy solo corrían en local (antes-de-subir.sh, paso 3), y allí siguen
+# corriendo enteras: esto es la red de la CI.
+# Solo lee: no tiene secretos ni permisos de escritura.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unitarias-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  unitarias:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Qué unitarias tocan
+        id: plan
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git diff --name-only "$BASE...$HEAD" > /tmp/cambiados.txt
+          echo "Ficheros cambiados: $(wc -l < /tmp/cambiados.txt)"
+          node scripts/pruebas/unitarias.mjs /tmp/cambiados.txt /tmp/pruebas.txt | tee /tmp/plan.txt >> "$GITHUB_OUTPUT"
+          cat /tmp/plan.txt
+          {
+            echo "### Unitarias"
+            echo
+            echo "- $(grep '^n=' /tmp/plan.txt | cut -d= -f2-) pruebas"
+            echo "- Por qué: $(grep '^porque=' /tmp/plan.txt | cut -d= -f2-)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Dependencias
+        if: steps.plan.outputs.ninguna != 'true'
+        run: npm ci --ignore-scripts
+      # Las pruebas de captura (cocina, inventario, tablet) leen dist/assets:
+      # en local existe de builds anteriores; aquí hay que construirlo antes.
+      - name: Build (lo leen las pruebas de captura)
+        if: steps.plan.outputs.ninguna != 'true'
+        run: npm run build
+      - name: Unitarias
+        if: steps.plan.outputs.ninguna != 'true'
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.plan.outputs.todas }}" = "true" ]; then
+            npx vitest run
+          else
+            # Las de su producto, una a una: la lista la escribe unitarias.mjs.
+            xargs -a /tmp/pruebas.txt npx vitest run
+          fi
+      - name: Sin unitarias que correr
+        if: steps.plan.outputs.ninguna == 'true'
+        run: echo "El PR no toca nada que lean las unitarias." | tee -a "$GITHUB_STEP_SUMMARY"

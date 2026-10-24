@@ -40,6 +40,16 @@
 // monthly_statement_*.pdf) se guarda con ella. Lo que no es un resumen se
 // apunta y se dice. Y en las dos clases, el correo con el que Gmail pide
 // confirmar un reenvío se apunta con su código, para enseñarlo.
+//
+// FACTURAS DE LOS PROVEEDORES (D01, 16/10). Cada proveedor reenvía desde su
+// buzón a facturas-<empresa>@. Dos cosas más:
+//   · La confirmación del reenvío también se apunta con su ENLACE: hay buzones
+//     (los de Google Workspace) en los que se confirma con el enlace y no con
+//     el código. Solo enlaces de Google (mail.google.com, mail-settings…).
+//   · Un remitente que la base sabe que no manda facturas (los justificantes
+//     de entrega de un proveedor, por ejemplo) no se lee como factura: se
+//     apunta y se dice por qué (conta_entrada_remitente; la dirección va por
+//     su huella).
 
 import { leerResumenUber, NoEsResumenUber, paraRegistrar, type ResumenUber } from './liquidacionUber.ts'
 
@@ -215,21 +225,43 @@ export interface PuertoEntrada {
   cuerpo?(emailId: string): Promise<{ html: string | null; text: string | null }>
   /** Registra un resumen leído (conta_liquidacion_registrar). */
   liquidacion?(x: { companyId: string; datos: DatosLiquidacion }): Promise<{ id: string; yaEstaba: boolean; texto: string; factura: string | null }>
+  /** Lo que la base sabe del remitente para esa empresa (conta_entrada_remitente), o null. */
+  remitente?(companyId: string, from: string): Promise<{ decision: 'no_facturas'; motivo: string } | null>
 }
 
 export type ResultadoEntrada = {
-  resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido' | 'liquidacion' | 'confirmacion' | 'no_es_liquidacion'
+  resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido' | 'liquidacion' | 'confirmacion' | 'no_es_liquidacion' | 'no_es_factura'
   texto: string
   llegadas: { id: string; estado: string; texto: string }[]
 }
 
-/** El correo con el que Gmail pide confirmar un reenvío: su código (para enseñarlo y escribirlo en Gmail). */
-export function confirmacionDeReenvio(c: Pick<CorreoResend, 'from' | 'subject' | 'text' | 'html'>): { codigo: string } | null {
-  const de = (c.from ?? '').toLowerCase()
+/** ¿Es el correo con el que Gmail pide confirmar un reenvío? */
+export function esConfirmacionDeReenvio(c: Pick<CorreoResend, 'from' | 'subject'>): boolean {
+  return /forwarding-noreply@google\.com/.test((c.from ?? '').toLowerCase()) || /(confirmaci[oó]n de reenv[ií]o|forwarding confirmation)/i.test(c.subject ?? '')
+}
+
+/** El enlace de confirmación de Gmail (solo de Google: mail.google.com o mail-settings.google.com, con «/mail/vf-»). */
+const ENLACE_CONFIRMACION = /https:\/\/(?:[a-z0-9-]+\.)*?(?:mail-settings\.google\.com|mail\.google\.com)\/mail\/(?:u\/\d+\/)?vf-[^\s"'<>]+/i
+
+/**
+ * El correo con el que Gmail pide confirmar un reenvío: su código y su enlace
+ * (para enseñarlos: unos buzones se confirman escribiendo el código y otros,
+ * los de Google Workspace, abriendo el enlace). null si no lo es o no trae ni uno ni otro.
+ */
+export function confirmacionDeReenvio(c: Pick<CorreoResend, 'from' | 'subject' | 'text' | 'html'>): { codigo: string | null; enlace: string | null } | null {
+  if (!esConfirmacionDeReenvio(c)) return null
   const asunto = c.subject ?? ''
-  if (!/forwarding-noreply@google\.com/.test(de) && !/(confirmaci[oó]n de reenv[ií]o|forwarding confirmation)/i.test(asunto)) return null
-  const codigo = asunto.match(/#(\d{6,12})/)?.[1] ?? `${c.text ?? ''} ${(c.html ?? '').replace(/<[^>]+>/g, ' ')}`.match(/(?:c[oó]digo de confirmaci[oó]n|confirmation code)\D{0,20}(\d{6,12})/i)?.[1]
-  return codigo ? { codigo } : null
+  const cuerpo = `${c.text ?? ''} ${(c.html ?? '').replace(/&amp;/g, '&')}`
+  const codigo = asunto.match(/#(\d{6,12})/)?.[1] ?? `${c.text ?? ''} ${(c.html ?? '').replace(/<[^>]+>/g, ' ')}`.match(/(?:c[oó]digo de confirmaci[oó]n|confirmation code)\D{0,20}(\d{6,12})/i)?.[1] ?? null
+  const enlace = cuerpo.match(ENLACE_CONFIRMACION)?.[0].replace(/[.,;]+$/, '') ?? null
+  return codigo || enlace ? { codigo, enlace } : null
+}
+
+/** Lo que se dice de una confirmación: el código, el enlace o los dos. */
+export function textoConfirmacion(direccion: string, x: { codigo: string | null; enlace: string | null }): string {
+  if (x.codigo && !x.enlace) return `Gmail pide confirmar el reenvío a ${direccion}: el código es ${x.codigo}. Escríbelo en Gmail.`
+  if (!x.codigo) return `Gmail pide confirmar el reenvío a ${direccion}: se confirma abriendo el enlace del correo (queda apuntado en el registro de entrada).`
+  return `Gmail pide confirmar el reenvío a ${direccion}: el código es ${x.codigo}, o abre el enlace del correo (los dos quedan apuntados en el registro de entrada).`
 }
 
 /** El resumen mensual que Uber adjunta al primero del mes (monthly_statement_<Mes>_<Año>.pdf). */
@@ -273,13 +305,27 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
     return { resultado: 'apagada', texto: `La dirección ${destino.direccion} está apagada: queda apuntado y no se lee.`, llegadas: [] }
   }
 
-  // Gmail pide confirmar el reenvío (en las dos clases): se apunta con su código.
-  const conf = confirmacionDeReenvio(c)
-  if (conf) {
-    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'confirmacion', detalle: { codigo: conf.codigo } })
-    return { resultado: 'confirmacion', texto: `Gmail pide confirmar el reenvío a ${destino.direccion}: el código es ${conf.codigo}. Escríbelo en Gmail.`, llegadas: [] }
+  // Gmail pide confirmar el reenvío (en las dos clases): se apunta con su
+  // código y su enlace. El enlace va en el cuerpo, que el webhook no trae: se pide.
+  if (esConfirmacionDeReenvio(c)) {
+    let conf = confirmacionDeReenvio(c)
+    if (!conf?.enlace && !c.text && !c.html && p.cuerpo) {
+      const b = await p.cuerpo(c.email_id).catch(() => null)
+      if (b) conf = confirmacionDeReenvio({ ...c, text: b.text, html: b.html }) ?? conf
+    }
+    if (conf) {
+      await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'confirmacion', detalle: { codigo: conf.codigo, enlace: conf.enlace } })
+      return { resultado: 'confirmacion', texto: textoConfirmacion(destino.direccion, conf), llegadas: [] }
+    }
   }
   if (destino.tipo === 'liquidaciones') return recibirLiquidacion(c, { ...destino }, base, p)
+
+  // Un remitente que no manda facturas (sus justificantes, por ejemplo): se apunta y no se lee.
+  const quien = c.from && p.remitente ? await p.remitente(destino.companyId, c.from) : null
+  if (quien?.decision === 'no_facturas') {
+    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'sin_facturas', detalle: { motivo: 'remitente_no_facturas' } })
+    return { resultado: 'no_es_factura', texto: `No se lee como factura: ${quien.motivo.replace(/\.$/, '')}. Queda apuntado en el registro de entrada.`, llegadas: [] }
+  }
 
   const { tomar, dejar } = clasificarAdjuntos(await p.adjuntos(c.email_id))
   const llegadas: ResultadoEntrada['llegadas'] = []

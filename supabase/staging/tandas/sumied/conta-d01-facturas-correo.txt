@@ -1,0 +1,9 @@
+# D01 · Las facturas de los proveedores por correo (rama conta/d01-facturas-correo,
+# #216; al sistema del C10 el 24/10). La 0040 añade los remitentes que no mandan
+# facturas y el rastro de la repetida (y cambia en caliente conta_entrada_llegada:
+# desde la rama, en ROLLBACK); la 0041 no hace nada en staging (no está Foodint).
+# La prueba ejecuta la 0041 sobre la cuenta A y las dos vueltas atrás con \i, con
+# correos inventados, y acaba en ROLLBACK.
+supabase/migrations/20261024T0040_d01_facturas_correo.sql
+supabase/migrations/20261024T0041_d01_facturas_foodint.sql
+supabase/staging/sql/20261119_d01_facturas_correo_prueba.sql

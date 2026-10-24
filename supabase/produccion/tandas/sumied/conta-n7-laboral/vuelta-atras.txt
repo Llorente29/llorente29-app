@@ -1,0 +1,2 @@
+# N7 · vuelta atrás. Para si alguna nómina ya tiene IRPF o SS del trabajador.
+supabase/vuelta-atras/20261024T0801_n7_laboral.down.sql

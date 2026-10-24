@@ -31,7 +31,12 @@ const TONO: Record<ReturnType<typeof estadoDe>, TonoChip> = {
   revisar: 'duda', sin_cobrar: 'falta', sin_liquidacion: 'neutro', devolucion_propuesta: 'propuesto', descartado: 'seguro', cobrado: 'seguro', revisar_resuelto: 'seguro',
 }
 
-export function LoQueDejaElCierre() {
+/**
+ * D01 (#221): sin canal de plataforma no hay pedidos de plataforma, así que sus
+ * dos cifras no tienen nada que contar y no salen (ni la palabra «plataforma»).
+ * Las filas se enseñan todas igual (regla 7).
+ */
+export function LoQueDejaElCierre({ conPlataformas = true }: { conPlataformas?: boolean }) {
   const { accountId, userName } = useCuentaConta()
   const { activa } = useEmpresas()
   const [vuelta, setVuelta] = useState(0)
@@ -65,8 +70,10 @@ export function LoQueDejaElCierre() {
       <Bandeja
         cifras={<CifrasBandeja cifras={[
           { etiqueta: 'Para revisar', valor: c.revisar.toLocaleString('es-ES'), apoyo: 'del TPV y de la tienda, abiertos al cierre', a: aqui },
-          { etiqueta: 'Sin cobrar', valor: eurosExactos(c.sinCobrar.total), apoyo: `${c.sinCobrar.n} cerrado${c.sinCobrar.n === 1 ? '' : 's'} sin confirmar que su liquidación no cobra`, a: aqui },
-          { etiqueta: 'Cerrados sin confirmar', valor: eurosExactos(c.sinConfirmar.total), apoyo: `${c.sinConfirmar.n} pedido${c.sinConfirmar.n === 1 ? '' : 's'} de plataforma, en ventas de su día`, a: aqui },
+          ...(conPlataformas ? [
+            { etiqueta: 'Sin cobrar', valor: eurosExactos(c.sinCobrar.total), apoyo: `${c.sinCobrar.n} cerrado${c.sinCobrar.n === 1 ? '' : 's'} sin confirmar que su liquidación no cobra`, a: aqui },
+            { etiqueta: 'Cerrados sin confirmar', valor: eurosExactos(c.sinConfirmar.total), apoyo: `${c.sinConfirmar.n} pedido${c.sinConfirmar.n === 1 ? '' : 's'} de plataforma, en ventas de su día`, a: aqui },
+          ] : []),
         ]} />}
         principal={
           <section className="s-bandeja-bloque" aria-label="Pedidos que dejó el cierre del día">
