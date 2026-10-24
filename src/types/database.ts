@@ -17925,6 +17925,7 @@ export type Database = {
           manual_close_reason: string | null
           manual_closed_at: string | null
           manual_closed_device_id: string | null
+          merged_into_sale_id: string | null
           opened_at: string | null
           order_status: string | null
           paid: number | null
@@ -18010,6 +18011,7 @@ export type Database = {
           manual_close_reason?: string | null
           manual_closed_at?: string | null
           manual_closed_device_id?: string | null
+          merged_into_sale_id?: string | null
           opened_at?: string | null
           order_status?: string | null
           paid?: number | null
@@ -18095,6 +18097,7 @@ export type Database = {
           manual_close_reason?: string | null
           manual_closed_at?: string | null
           manual_closed_device_id?: string | null
+          merged_into_sale_id?: string | null
           opened_at?: string | null
           order_status?: string | null
           paid?: number | null
@@ -18348,6 +18351,8 @@ export type Database = {
           fired_by_name: string | null
           id: string
           location_id: string
+          origin_fire_id: string | null
+          origin_table_name: string | null
           sale_id: string
         }
         Insert: {
@@ -18359,6 +18364,8 @@ export type Database = {
           fired_by_name?: string | null
           id?: string
           location_id: string
+          origin_fire_id?: string | null
+          origin_table_name?: string | null
           sale_id: string
         }
         Update: {
@@ -18370,6 +18377,8 @@ export type Database = {
           fired_by_name?: string | null
           id?: string
           location_id?: string
+          origin_fire_id?: string | null
+          origin_table_name?: string | null
           sale_id?: string
         }
         Relationships: []
@@ -18695,6 +18704,60 @@ export type Database = {
           voided_at?: string
           voided_by?: string | null
           voided_by_name?: string | null
+        }
+        Relationships: []
+      }
+      sale_table_move: {
+        Row: {
+          account_id: string
+          amount_moved: number | null
+          covers_moved: number | null
+          device_id: string | null
+          from_sale_id: string
+          from_table_id: string | null
+          id: string
+          kind: string
+          line_ids: string[] | null
+          location_id: string
+          moved_at: string
+          moved_by: string | null
+          moved_by_name: string | null
+          to_sale_id: string
+          to_table_id: string | null
+        }
+        Insert: {
+          account_id: string
+          amount_moved?: number | null
+          covers_moved?: number | null
+          device_id?: string | null
+          from_sale_id: string
+          from_table_id?: string | null
+          id?: string
+          kind: string
+          line_ids?: string[] | null
+          location_id: string
+          moved_at?: string
+          moved_by?: string | null
+          moved_by_name?: string | null
+          to_sale_id: string
+          to_table_id?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount_moved?: number | null
+          covers_moved?: number | null
+          device_id?: string | null
+          from_sale_id?: string
+          from_table_id?: string | null
+          id?: string
+          kind?: string
+          line_ids?: string[] | null
+          location_id?: string
+          moved_at?: string
+          moved_by?: string | null
+          moved_by_name?: string | null
+          to_sale_id?: string
+          to_table_id?: string | null
         }
         Relationships: []
       }
@@ -26587,6 +26650,16 @@ export type Database = {
       pos_table_clear: { Args: { p_sale_id: string }; Returns: Json }
       pos_table_detail: { Args: { p_sale_id: string }; Returns: Json }
       pos_table_fire: { Args: { p_device_token?: string; p_lines?: Json; p_sale_id: string }; Returns: Json }
+      pos_table_move: { Args: { p_device_token?: string; p_sale_id: string; p_to_table_id: string }; Returns: Json }
+      pos_table_move_lines: {
+        Args: {
+          p_covers?: number
+          p_device_token?: string
+          p_line_ids: string[]
+          p_to_table_id: string
+        }
+        Returns: Json
+      }
       pos_table_open: {
         Args: {
           p_brand_id: string

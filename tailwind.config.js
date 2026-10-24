@@ -98,6 +98,7 @@ export default {
         'tpv-warn-text': 'var(--tpv-warn-text)',
         'tpv-ok-tint': 'var(--tpv-ok-tint)',
         'tpv-ok-text': 'var(--tpv-ok-text)',
+        'tpv-accent-soft': 'var(--tpv-accent-soft)',
 
         // ── COCINA (§9 de Extras, 07/09): el estándar de la maqueta ──
         // Valores en src/modules/kitchen/estilo/cocinaTokens.css, escopados a
@@ -144,6 +145,11 @@ export default {
         'xl': ['24px', { lineHeight: '1.3' }],
         '2xl': ['30px', { lineHeight: '1.2' }],
         '3xl': ['36px', { lineHeight: '1.15' }],
+      },
+      borderWidth: {
+        // TPV Sala (S2): el borde que señala destino u origen en «mover o
+        // juntar» (maqueta, pantalla 4).
+        'tpv-strong': '3px',
       },
       borderRadius: {
         'sm': '6px',
@@ -192,6 +198,8 @@ export default {
         'tpv-table-sm': '132px',
         // TPV Sala (S1): alto de la cabecera del TPV en la maqueta.
         'tpv-header': '68px',
+        // TPV Sala (S2): la banda azul de «mover o juntar».
+        'tpv-banner': '96px',
         // ENCARGO CODE (14/08) feat/recepcion-oficina-cierre, B.9 — pantallas
         // de OFICINA/escritorio (ratón, no tablet): control ≥44px (ya cubierto
         // por 'touch'), acción de cierre ≥56px. Sin token previo para 56px.
@@ -229,6 +237,7 @@ export default {
         'tpv-tab-sm': ['13px', { lineHeight: '1.2' }],         // ocupación de zona en el móvil
         'tpv-title': ['22px', { lineHeight: '1.2' }],          // «Mesa 7 · Sala» en la cabecera
         'tpv-charge': ['26px', { lineHeight: '1.1' }],         // «Cobrar» / «Mesa lista» de la mesa
+        'tpv-banner': ['26px', { lineHeight: '1.2' }],         // «La mesa 4 se cambia. Toca a cuál va.» (S2)
       },
     },
   },
