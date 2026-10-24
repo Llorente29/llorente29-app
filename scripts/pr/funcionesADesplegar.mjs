@@ -42,9 +42,13 @@ export function funcionesDelCuerpo(cuerpo) {
   const lineas = String(cuerpo ?? '').split(/\r?\n/)
   const i = lineas.findIndex((l) => /^#{1,6}\s*funciones a desplegar a mano\s*$/i.test(l.trim()))
   if (i < 0) return null
+  // N2: las funciones pueden ir en «### Sumied» y «### Folvy»; solo para un encabezado de su nivel o más alto.
+  const nivel = lineas[i].trim().match(/^#+/)[0].length
   const out = []
   for (const l of lineas.slice(i + 1)) {
-    if (/^#{1,6}\s/.test(l.trim())) break
+    const h = l.trim().match(/^(#{1,6})\s/)
+    if (h && h[1].length <= nivel) break
+    if (h) continue
     if (/^\s*ninguna\b/i.test(l)) return []
     const m = l.match(/^\s*[-*]\s*`?([a-z0-9][a-z0-9_-]*)`?/i)
     if (m) out.push(m[1])
