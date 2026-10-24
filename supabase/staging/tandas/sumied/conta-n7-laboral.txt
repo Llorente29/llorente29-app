@@ -1,0 +1,2 @@
+supabase/migrations/20261024T0801_n7_laboral.sql
+supabase/staging/sql/20261024_n7_laboral_prueba.sql
