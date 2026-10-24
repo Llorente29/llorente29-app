@@ -1,15 +1,17 @@
 # C12 · El traspaso completo: qué va por Excel, qué va por la API y por qué
 
-> Propuesta (24/10, respuesta 2). No está construida: se construye cuando Julio
-> diga que sí y cuando sepamos si Diez guarda copia del PDF (prueba de la URL
-> corta, abajo).
+> **Decidido por Julio (24/10, respuesta 3):** de acuerdo con la propuesta.
+> Emitidas y recibidas por Excel con su PDF y el número de Sumied, con «Ya lo he
+> importado» y la lectura de vuelta; banco, manuales y liquidaciones por la API.
+> El PDF, con **el enlace permanente con llave por documento** descrito abajo. La
+> prueba de la URL corta **no se hace**. Falta construirlo (siguiente encargo).
 
 ## Lo que ya sabemos
 
 | | Medido | Dónde |
 |---|---|---|
 | Emitidas por Excel con «Url documento» | **Entran con su PDF** las tres: normal, dos tipos de IVA y rectificativa | C0009, Julio, 24/10 |
-| Recibidas por Excel con «Url documento» | Por probar: `prueba-c12-recibidas-url.xlsx` | C0009, Julio |
+| Recibidas por Excel con «Url documento» | Por probar: `prueba-c12-recibidas-url.xlsx`, con las columnas de Julio | C0009, Julio |
 | Asientos por Excel | La configuración de Julio **no trae campo de documento** | Julio, 24/10 |
 | PDF por la API (`facturas/upload`, `apuntes/upload`) | 500 «The specified container does not exist»: el almacén de documentos de la base no existe en el servidor de Diez | runs 8, 10 y 40091895961 |
 | Asientos por la API (`apuntes/add`) | Funcionan: banco, manual y su contraasiento en la C0009; se busca antes de escribir, no se duplica | C07 |
@@ -64,12 +66,7 @@ contra lo que Sumied dice que tiene que estar allí. Si cuadra, se cierra el mes
 
 ## La URL del PDF
 
-**Si Diez guarda copia** (la prueba de la URL corta lo dice): URL firmada de
-Supabase que caduca a las **24 horas** del Excel. Da tiempo a importar y, después,
-no sirve para nada.
-
-**Si Diez solo guarda el enlace**, la URL tiene que durar siempre. Propuesta de
-cómo protegerla:
+**Decidido: enlace permanente, con llave por documento.** Cómo se protege:
 - **No** una URL firmada de diez años: no se puede retirar una sola, solo
   todas a la vez (cambiando la clave del proyecto).
 - **Una dirección propia por documento**, `https://…/functions/v1/conta-pdf/<llave>`:
@@ -84,19 +81,3 @@ cómo protegerla:
   o todas las de una empresa. Al retirarla, Diez deja de ver ese PDF: es lo que se
   quiere en esos casos.
 - **Solo hay llave** para un documento que ha ido en un traspaso.
-
-## La prueba de la URL corta
-
-`diez-prueba-c0009.yml` con la etiqueta `[prueba-c0009:url-corta]` (a mano,
-«Run workflow»):
-- sube a **staging** un PDF inventado (`PRB-C12-U<n>`);
-- lo firma para **10 minutos**, comprueba que contesta y deja el Excel en el
-  artefacto «url-corta-excel»;
-- un segundo trabajo, a los 11 minutos, comprueba que la URL **ya no
-  contesta**.
-
-Julio importa el Excel en la C0009 antes de la hora que dice el run
-(`caduca_hhmm_madrid`) y, media hora después, abre el PDF de esa factura en
-Diez:
-- si se ve, Diez guardó copia;
-- si no, solo guarda el enlace.
