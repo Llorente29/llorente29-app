@@ -54,8 +54,18 @@ jobs:
       - name: Dependencias
         if: steps.plan.outputs.ninguna != 'true'
         run: npm ci --ignore-scripts
+      # Las pruebas de captura (cocina, inventario, tablet) leen dist/assets:
+      # en local existe de builds anteriores; aquí hay que construirlo antes.
+      - name: Build (lo leen las pruebas de captura)
+        if: steps.plan.outputs.ninguna != 'true'
+        run: npm run build
       - name: Unitarias
         if: steps.plan.outputs.ninguna != 'true'
+        # zipC05 comprueba con `unzip` un nombre con «ñ»: sin un locale UTF-8,
+        # unzip no lo devuelve igual.
+        env:
+          LC_ALL: C.UTF-8
+          LANG: C.UTF-8
         run: |
           set -euo pipefail
           if [ "${{ steps.plan.outputs.todas }}" = "true" ]; then
