@@ -34,7 +34,7 @@ const PANTALLAS: { nombre: string; ruta: string; cuenta?: 'B' }[] = [
   // recibidas solo de Compras y gastos (libros/diario/recibidas lleva a
   // documentos?ver=por-revisar). Se va directo a su sitio; los nombres de las
   // capturas se quedan para comparar con las de antes.
-  { nombre: 'expedida', ruta: 'facturacion/emitidas/nueva' },
+  { nombre: 'expedida', ruta: 'libros/diario/nuevo?tipo=expedida' },
   { nombre: 'recibidas', ruta: 'documentos?ver=por-revisar' },
   { nombre: 'registro-recibidas', ruta: 'libros/registro/recibidas' },
   { nombre: 'contactos', ruta: 'clientes-y-proveedores' },

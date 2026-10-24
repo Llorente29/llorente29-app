@@ -260,7 +260,7 @@ test('cliente normal: sin facturas, lo dice; archivar y recuperar', async ({ pag
   vigilar(page)
   await page.goto(`/conta/clientes-y-proveedores/${CATERING}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Catering Eventos Norte' })).toBeVisible()
-  await expect(page.getByText('Las facturas llegan con Facturación.')).toBeVisible()
+  await expect(page.getByText('Sus facturas, en Ventas › Facturas.')).toBeVisible()
   await sinBarra(page)
   await capturar(page, 'cliente')
   test.skip(info.project.name === 'movil', 'Archivar escribe en la base: solo en un tamaño')

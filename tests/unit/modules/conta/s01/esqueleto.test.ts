@@ -61,6 +61,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     aceptarAsesoria: null,
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
     ventas: null,
+    // V01 · Ventas › Facturas: la lista, una nueva y la ficha.
+    facturasVenta: 'facturacion.emitidas', nuevaFacturaVenta: 'facturacion.emitidas', facturaVenta: 'facturacion.emitidas',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
@@ -89,8 +91,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
 })
 
 describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
-  it('el orden de la barra (tablero 0): (Clientes del despacho) · Inicio · Contabilidad · Facturación · Compras y gastos · Bancos · Laboral · Impuestos · Contactos · (abajo) Ajustes', () => {
-    expect(PRODUCTOS.map((p) => p.etiqueta)).toEqual(['Clientes del despacho', 'Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Laboral', 'Impuestos', 'Contactos', 'Ajustes'])
+  it('el orden de la barra (tablero 0): (Clientes del despacho) · Inicio · Contabilidad · Ventas (V01: antes Facturación) · Compras y gastos · Bancos · Laboral · Impuestos · Contactos · (abajo) Ajustes', () => {
+    expect(PRODUCTOS.map((p) => p.etiqueta)).toEqual(['Clientes del despacho', 'Inicio', 'Contabilidad', 'Ventas', 'Compras y gastos', 'Bancos', 'Laboral', 'Impuestos', 'Contactos', 'Ajustes'])
     expect(PRODUCTOS.filter((p) => p.abajo).map((p) => p.id)).toEqual(['ajustes'])
   })
   it('S02 · «Clientes del despacho», arriba del todo, solo en una cuenta que es asesoría', () => {
@@ -105,13 +107,13 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
       ['laboral', 'personas'], ['impuestos', 'finanzas'], ['contactos', 'operaciones'],
     ])
   })
-  it('S02 · las páginas del mapa: Facturación (Facturas emitidas · Cobros · Series; Cobros y Series aún sin pantalla) y Laboral, aún sin pantalla', () => {
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas emitidas', 'Cobros', 'Series'])
+  it('S02 · las páginas del mapa: Ventas (V01: Facturas · Cobros · Series; Cobros y Series aún sin pantalla) y Laboral, aún sin pantalla', () => {
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Series'])
     expect(PRODUCTOS.find((p) => p.id === 'laboral')!.pestanas.map((t) => t.etiqueta)).toEqual(['Empleados', 'Nóminas', 'Seguros sociales', 'Fichajes y ausencias', 'Portal del empleado'])
   })
   // S02 · PR 2 (decisión 5 de Julio): la emitida pasa a Facturación › Facturas
   // emitidas y Facturación sale en la barra con ella, sin interruptor.
-  it('Facturación sale (con Facturas emitidas, sin interruptor); Laboral no, ni con el suyo encendido; Impuestos (I01b), solo con el suyo', () => {
+  it('Ventas (antes Facturación) sale (con Facturas, sin interruptor); Laboral no, ni con el suyo encendido; Impuestos (I01b), solo con el suyo', () => {
     const todo: Contexto = { ...NADA, interruptores: new Set(INTERRUPTORES) }
     expect(productosVisibles(NADA).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'contactos', 'ajustes'])
     expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
@@ -271,7 +273,7 @@ describe('Favoritos', () => {
     const f = favoritosDe(['ir.compras.liquidaciones', 'asiento.expedida', 'algo.viejo'], NADA)
     expect(f.map((x) => [x.id, x.orden?.etiqueta ?? null, x.disponible])).toEqual([
       ['ir.compras.liquidaciones', 'Compras y gastos › Liquidaciones', false],
-      ['asiento.expedida', 'Nueva factura emitida', true],
+      ['asiento.expedida', 'Nueva factura', true],
       ['algo.viejo', null, false],
     ])
     expect(favoritosDe(['ir.compras.liquidaciones'], HOSTELERIA)[0].disponible).toBe(true)

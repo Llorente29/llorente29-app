@@ -12,7 +12,7 @@
 // con Facturación, y hoy una factura emitida se apunta a mano («Expedida»).
 
 import { Link } from 'react-router-dom'
-import { rutaLibroDiario, rutaNuevoAsiento } from '@/config/navegacion'
+import { rutaFacturasVenta, rutaLibroDiario } from '@/config/navegacion'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import { Cabecera, Vacio } from '@/modules/conta/ui/piezas'
 import { useVendePorPlataformas } from '@/modules/conta/services/plataformasCuenta'
@@ -34,8 +34,8 @@ export default function VentasPage() {
                 : 'Esta pantalla aún no está. Lo que hay de ventas está en el libro diario.'}
               accion={<Link to={rutaLibroDiario('ventas')} className="cx-enlace">Ver los asientos de ventas</Link>} />
           : <Vacio titulo="Aún no."
-              explicacion="Tus ventas llegan con Facturación: cada factura que emitas, con su asiento. Mientras, una factura emitida se apunta a mano."
-              accion={<Link to={`${rutaNuevoAsiento()}?tipo=expedida`} className="cx-enlace">Apuntar una factura expedida</Link>} />}
+              explicacion="Tus facturas están en Ventas › Facturas: cada una con su número, su PDF y su asiento."
+              accion={<Link to={rutaFacturasVenta()} className="cx-enlace">Ir a Facturas</Link>} />}
       </div>
     </div>
   )

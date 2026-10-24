@@ -33,7 +33,7 @@ const PANTALLAS: { nombre: string; ruta: string; cuenta?: 'B' }[] = [
   // S02 · PR 2: la emitida es de Facturación › Facturas emitidas (su «Nueva
   // factura emitida»). Se queda el nombre de la captura para seguir comparando
   // con las de antes.
-  { nombre: 'expedida', ruta: 'facturacion/emitidas/nueva' },
+  { nombre: 'expedida', ruta: 'libros/diario/nuevo?tipo=expedida' },
   { nombre: 'libro-diario', ruta: 'libros/diario' },
   { nombre: 'bancos-y-cajas', ruta: 'ajustes/tablas/bancos-y-cajas' },
   { nombre: 'acumulados', ruta: 'libros/mayor/acumulados' },
@@ -57,7 +57,7 @@ test(`${FASE} · la expedida con importes que no cuadran`, async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   // S02 · PR 2: la emitida, en Facturación › Facturas emitidas › Nueva, con
   // la Hoja de líneas: el pie dice cuánto falta y dónde («No cuadra: …»).
-  await ir(page, 'facturacion/emitidas/nueva')
+  await ir(page, 'libros/diario/nuevo?tipo=expedida')
   await page.getByLabel('Debe del apunte 1').fill('121')
   await expect(page.locator('.s-asiento-descuadra')).toContainText('No cuadra')
   await foto(page, 'expedida-sin-cuadrar')

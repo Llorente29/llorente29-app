@@ -58,7 +58,7 @@ const DE_LA_CINTA: Orden[] = [
   // S02 · PR 2 · Cada cosa en su sitio (regla 1 del patrón). La emitida es de
   // Facturación › Facturas emitidas; las recibidas, de Compras y gastos. Los id se
   // quedan: los Favoritos guardados los nombran.
-  { id: 'asiento.expedida', etiqueta: 'Nueva factura emitida', icono: 'expedida', producto: 'facturacion', pestana: 'emitidas', a: { ruta: R.nuevaEmitida }, sinonimos: ['expedida', 'nueva expedida', 'factura emitida', 'emitir factura'], principal: true },
+  { id: 'asiento.expedida', etiqueta: 'Nueva factura', icono: 'expedida', producto: 'facturacion', pestana: 'emitidas', a: { ruta: R.nuevaFacturaVenta }, sinonimos: ['expedida', 'nueva expedida', 'factura emitida', 'emitir factura', 'factura de venta', 'facturar'], principal: true },
   { id: 'asiento.recibida', etiqueta: 'Facturas recibidas por revisar', icono: 'recibida', producto: 'compras', pestana: 'recibidas', a: { ruta: `${R.documentos}?ver=por-revisar` }, sinonimos: ['recibida', 'nueva recibida', 'factura recibida', 'factura de proveedor'] },
   // S01d: la recibida sin papel, escrita a mano (proveedor, número, fecha, base e IVA).
   { id: 'asiento.recibida-a-mano', etiqueta: 'Escribir una a mano', icono: 'nuevo', producto: 'compras', pestana: 'recibidas', a: { ruta: R.recibidaAMano }, sinonimos: ['recibida a mano', 'nueva recibida a mano', 'factura sin fichero', 'dar de alta una factura'] },

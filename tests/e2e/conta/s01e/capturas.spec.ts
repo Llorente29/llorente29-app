@@ -58,7 +58,7 @@ const PANTALLAS: { cuenta: 'A' | 'B'; nombre: string; ruta: string }[] = [
   { cuenta: 'A', nombre: 'tablas-tipos-de-gasto', ruta: 'ajustes/tablas/tipos-de-gasto' },
   { cuenta: 'B', nombre: 'inicio', ruta: 'inicio' },
   { cuenta: 'B', nombre: 'para-revisar', ruta: 'libros/diario?ver=revisar' },
-  { cuenta: 'B', nombre: 'expedida', ruta: 'facturacion/emitidas/nueva' },
+  { cuenta: 'B', nombre: 'expedida', ruta: 'libros/diario/nuevo?tipo=expedida' },
   { cuenta: 'B', nombre: 'registro-expedidas', ruta: 'libros/registro/expedidas' },
   { cuenta: 'B', nombre: 'tablas-impuestos', ruta: 'ajustes/tablas/impuestos' },
   { cuenta: 'B', nombre: 'plan', ruta: 'ajustes/plan' },
