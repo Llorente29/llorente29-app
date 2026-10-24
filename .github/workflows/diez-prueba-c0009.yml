@@ -78,7 +78,8 @@ permissions:
 
 jobs:
   prueba:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[prueba-c0009]') || startsWith(github.event.head_commit.message, '[prueba-c0009:')
+    # C12 (24/10): «[prueba-c0009:url-corta]» va en sus dos trabajos de abajo, no aquí.
+    if: (github.event_name == 'workflow_dispatch' && !startsWith(inputs.etiqueta, '[prueba-c0009:url-corta]')) || startsWith(github.event.head_commit.message, '[prueba-c0009]') || startsWith(github.event.head_commit.message, '[prueba-c0009:')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -188,3 +189,77 @@ jobs:
           # «@@ clave número|huella». Lo de los scripts anteriores al D01, que
           # escribían Markdown con texto, ya no sale: se cuentan sus líneas.
           npx --yes tsx@4.19.2 "$S" 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # C12 (24/10) · ¿Diez guarda una copia del PDF o solo el enlace? (Julio, respuesta 2)
+  # 1. url-corta: sube a STAGING (bucket privado conta-documentos) un PDF inventado,
+  #    lo firma para 10 minutos y deja el Excel en el artefacto «url-corta-excel».
+  #    Julio lo importa en la C0009 en esos 10 minutos.
+  # 2. url-corta-despues: pasada la caducidad, la misma URL ya no contesta. Si Julio
+  #    ve el PDF en Diez media hora después, es que Diez guardó su copia.
+  # No escribe en Diez ni en producción. Solo saca «@@ clave número».
+  url-corta:
+    if: github.event_name == 'workflow_dispatch' && startsWith(inputs.etiqueta, '[prueba-c0009:url-corta]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: La clave de servicio de staging (enmascarada)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/oseymswjlzplqoxrfjzi/api-keys?reveal=true" > "$RUNNER_TEMP/claves.json"
+          jq -r '.[] | select(.name == "service_role") | .api_key' "$RUNNER_TEMP/claves.json" | head -1 > "$RUNNER_TEMP/clave.txt"
+          rm -f "$RUNNER_TEMP/claves.json"
+          grep -q '^ey' "$RUNNER_TEMP/clave.txt" || { echo "::error::No se pudo obtener la clave de servicio de staging."; exit 1; }
+          echo "::add-mask::$(cat "$RUNNER_TEMP/clave.txt")"
+          { printf 'SB_KEY='; cat "$RUNNER_TEMP/clave.txt"; } >> "$GITHUB_ENV"
+      - name: xlsx y jspdf (las versiones del package-lock)
+        run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund xlsx@0.18.5 jspdf@4.2.1
+      - name: Subir, firmar para 10 minutos y hacer el Excel
+        env:
+          SB_URL: https://oseymswjlzplqoxrfjzi.supabase.co
+          RUN: ${{ github.run_number }}
+          MINUTOS: '10'
+          SALIDA: ${{ runner.temp }}/url-corta
+        run: |
+          set -euo pipefail
+          node scripts/conta/diez/c12-url-corta.mjs antes 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::add-mask::$(cat "$SALIDA/url.txt")"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: url-corta-excel
+          path: ${{ runner.temp }}/url-corta/prueba-c12-url-corta.xlsx
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: url-corta-url
+          path: ${{ runner.temp }}/url-corta/url.txt
+          retention-days: 1
+
+  url-corta-despues:
+    needs: url-corta
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: url-corta-url
+          path: ${{ runner.temp }}/url-corta
+      - name: Esperar a que caduque (10 minutos y uno más)
+        run: sleep 660
+      - name: La misma URL, ya caducada
+        env:
+          SB_URL: https://oseymswjlzplqoxrfjzi.supabase.co
+        run: |
+          set -euo pipefail
+          URL_FIRMADA=$(cat "${{ runner.temp }}/url-corta/url.txt")
+          echo "::add-mask::$URL_FIRMADA"
+          URL_FIRMADA="$URL_FIRMADA" node scripts/conta/diez/c12-url-corta.mjs despues 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"

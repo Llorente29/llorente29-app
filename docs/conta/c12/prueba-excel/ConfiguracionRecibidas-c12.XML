@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Configuracion_Excel_Recibidas xmlns="Configuracion_Excel_Recibidas">
+  <Configuracion>
+    <Campo001>17</Campo001>
+    <Campo002>17</Campo002>
+    <Campo005>3</Campo005>
+    <Campo006>6</Campo006>
+    <Campo007>2</Campo007>
+    <Campo004>1</Campo004>
+    <Campo045>16</Campo045>
+    <Campo118>17</Campo118>
+    <Campo041>5</Campo041>
+    <Campo043>7</Campo043>
+    <Campo092>8</Campo092>
+    <Campo094>9</Campo094>
+    <Campo056>11</Campo056>
+    <Campo010>13</Campo010>
+    <Campo011>14</Campo011>
+    <Campo012>15</Campo012>
+    <Campo013>18</Campo013>
+    <Campo014>19</Campo014>
+    <Campo015>20</Campo015>
+  </Configuracion>
+</Configuracion_Excel_Recibidas>

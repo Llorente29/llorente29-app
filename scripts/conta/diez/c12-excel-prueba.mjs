@@ -16,8 +16,8 @@
 //
 // Sale en docs/conta/c12/prueba-excel/:
 //   · prueba-c12-url.xlsx   → con la columna K (Url documento), para probar 1.º;
-//   · prueba-c12-ruta.zip   → el mismo Excel y los tres PDF, para «Ruta documento»
-//                             (J = C:\Sumied\Traspasos\prueba-c12\<nº>.pdf);
+//   (el zip para «Ruta documento» se descartó el 24/10: con la URL, Diez trajo
+//   los tres PDF y Julio se queda con la URL);
 //   · ConfiguracionExpedidas-c12.XML → la de Julio más las columnas nuevas.
 //
 //   node scripts/conta/diez/c12-excel-prueba.mjs
@@ -26,7 +26,6 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as XLSX from 'xlsx'
 import { jsPDF } from 'jspdf'
-import { zipSync } from 'fflate'
 
 const SALIDA = 'docs/conta/c12/prueba-excel'
 const CARPETA_WINDOWS = 'C:\\Sumied\\Traspasos\\prueba-c12\\'
@@ -35,8 +34,8 @@ const CARPETA_WINDOWS = 'C:\\Sumied\\Traspasos\\prueba-c12\\'
 // verdad sería un enlace firmado de Sumied.
 const URL_PDF = 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
 
-const CLIENTE = { subcuenta: '43000990', nombre: 'CLIENTE PRUEBA C12', nif: 'B00000000' }
-const FECHA = new Date(Date.UTC(2026, 9, 24))
+export const CLIENTE = { subcuenta: '43000990', nombre: 'CLIENTE PRUEBA C12', nif: 'B00000000' }
+export const FECHA = new Date(Date.UTC(2026, 9, 24))
 
 /** Las tres facturas, con sus importes cuadrados al céntimo. */
 export const FACTURAS = [
@@ -58,36 +57,36 @@ export const FACTURAS = [
   },
 ]
 
-const CABECERA = [
+export const CABECERA = [
   'Subcuenta cliente', 'Concepto asiento', 'Nombre', 'NIF', 'Subcuenta ingresos 1', 'Nº factura',
   'Importe ingresos 1', 'Subcuenta ingresos 2', 'Importe ingresos 2', 'Ruta documento', 'Url documento', '',
   'Base IVA 1', '% IVA 1', 'Cuota IVA 1', 'Total factura', 'Fecha', 'Base IVA 2', '% IVA 2', 'Cuota IVA 2',
   'Tipo factura rectificativa', 'Tipo rectificación', 'Nº factura rectificada', 'Fecha factura rectificada',
 ]
 
-/** Las filas del Excel (sin cabecera), con o sin la columna K. */
-export function filas({ conUrl }) {
-  return FACTURAS.map((f) => [
+/** Las filas del Excel (sin cabecera), con o sin la columna K (con `url`, esa en vez de la de prueba). */
+export function filas({ conUrl, url = URL_PDF, facturas = FACTURAS }) {
+  return facturas.map((f) => [
     CLIENTE.subcuenta, f.concepto, CLIENTE.nombre, CLIENTE.nif,
     f.ingresos[0].subcuenta, f.numero, f.ingresos[0].importe,
     f.ingresos[1]?.subcuenta ?? '', f.ingresos[1]?.importe ?? '',
     // Una prueba cada vez: con URL, J vacía; con ruta, K vacía.
-    conUrl ? '' : `${CARPETA_WINDOWS}${f.numero}.pdf`, conUrl ? URL_PDF : '', '',
+    conUrl ? '' : `${CARPETA_WINDOWS}${f.numero}.pdf`, conUrl ? url : '', '',
     f.iva[0].base, f.iva[0].pct, f.iva[0].cuota, f.total, FECHA,
     f.iva[1]?.base ?? '', f.iva[1]?.pct ?? '', f.iva[1]?.cuota ?? '',
     f.rectifica?.tipoFactura ?? '', f.rectifica?.tipoRectificacion ?? '', f.rectifica?.numero ?? '', f.rectifica?.fecha ?? '',
   ])
 }
 
-function libro(conUrl) {
-  const ws = XLSX.utils.aoa_to_sheet([CABECERA, ...filas({ conUrl })], { cellDates: true })
+export function libro(conUrl, o = {}) {
+  const ws = XLSX.utils.aoa_to_sheet([CABECERA, ...filas({ conUrl, ...o })], { cellDates: true })
   for (const c of Object.keys(ws)) if (ws[c]?.t === 'd') ws[c].z = 'dd/mm/yyyy'
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Facturas')
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx', cellDates: true })
 }
 
-function pdf(f) {
+export function pdf(f) {
   const d = new jsPDF()
   d.setFontSize(14); d.text(`Factura ${f.numero} (PRUEBA C12, inventada)`, 15, 20)
   d.setFontSize(10)
@@ -165,9 +164,6 @@ const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 if (import.meta.url === `file://${process.argv[1]}`) {
   mkdirSync(SALIDA, { recursive: true })
   writeFileSync(join(SALIDA, 'prueba-c12-url.xlsx'), libro(true))
-  const zip = { 'prueba-c12-ruta.xlsx': new Uint8Array(libro(false)) }
-  for (const f of FACTURAS) zip[`${f.numero}.pdf`] = pdf(f)
-  writeFileSync(join(SALIDA, 'prueba-c12-ruta.zip'), zipSync(zip))
   writeFileSync(join(SALIDA, 'ConfiguracionExpedidas-c12.XML'), XML.replace(/\n/g, '\r\n'))
-  console.log(`Hecho: ${SALIDA} (3 facturas; Excel con URL; zip con Excel y 3 PDF; XML).`)
+  console.log(`Hecho: ${SALIDA} (3 facturas; Excel con URL; XML).`)
 }
