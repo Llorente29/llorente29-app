@@ -93,7 +93,7 @@ test('nueva a mano: cliente nuevo, líneas, guardar; emitir, cobrar y corregir',
   await foto(page, 'cliente-nuevo')
   await dialogo.getByRole('button', { name: 'Guardar el cliente' }).click()
   await expect(dialogo).toHaveCount(0, { timeout: 30_000 })
-  await expect(page.getByLabel('Cliente', { exact: true })).toHaveValue(/[0-9a-f-]{36}/, { timeout: 30_000 })
+  await expect(page.getByRole('region', { name: 'Cliente' }).getByLabel('Cliente', { exact: true })).toHaveValue(/[0-9a-f-]{36}/, { timeout: 30_000 })
 
   // Dos líneas: 10 × 100 al 21 % y 1 × 50 con un 10 % de descuento al 10 %.
   await page.getByLabel('Concepto de la línea 1').fill('Menú del día')
