@@ -29,6 +29,8 @@ import { resumenVentasPdf, type PedidoResumen } from '../../../supabase/function
 import { limpiar } from './publicable.mjs'
 
 const BD = 'C0009'
+/** C12: ¿la respuesta es el «container does not exist» del almacén de Diez? */
+const sinContenedor = (j: unknown) => /container does not exist/i.test(typeof j === 'string' ? j : JSON.stringify(j ?? ''))
 const ASIENTO = 'ae586513-1792-4563-ae73-8ef4870363c2'
 const LOCAL: Record<string, string> = { '38158159-cd71-4056-950b-53425afac1ce': 'Foodint Alcalá' }
 const CANAL: Record<string, string> = { '16ed2c7e-294b-4652-9a80-e5d3a241d2be': 'uber' }
@@ -89,20 +91,28 @@ try {
   // 1. ¿Tiene ya documento?
   const antes = await c.documentoDeFactura('2026', '1', doc)
   md('### 1 · getfile antes de subir', '', `- ${antes.status}: ${corto(antes.json)}`, '')
+  // C12 (24/10): lo que deja pasar la puerta de salida (solo números).
+  console.log(`@@ getfile_antes ${antes.status}`)
+  console.log(`@@ getfile_antes_sin_contenedor ${sinContenedor(antes.json) ? 1 : 0}`)
   if (antes.status === 200 && typeof antes.json === 'string' && antes.json.length > 100) {
     md('- **Ya tiene documento: no se sube otro.**')
   } else {
     // 2. Subir.
     const sub = await c.adjuntarDocumentoFactura({ Ejercicio: '2026', Serie: '1', Documento: doc, NombreArchivo: `${fd.NumeroFactura}.pdf`, Archivo: Buffer.from(pdf).toString('base64') })
+    console.log(`@@ upload ${sub.status}`)
+    console.log(`@@ upload_sin_contenedor ${sinContenedor(sub.json) ? 1 : 0}`)
     md('### 2 · facturas/upload', '', `- **${sub.status}**: ${sub.status === 200 ? `devuelve la factura ${corto((sub.json as Record<string, unknown> | null)?.NumeroFactura)} (documento ${corto((sub.json as Record<string, unknown> | null)?.Documento)})` : corto(sub.json)}`, '')
   }
 
   // 3. ¿Lo devuelve igual?
   const despues = await c.documentoDeFactura('2026', '1', doc)
   let veredicto: string
+  console.log(`@@ getfile_despues ${despues.status}`)
+  console.log(`@@ getfile_despues_sin_contenedor ${sinContenedor(despues.json) ? 1 : 0}`)
   if (despues.status === 200 && typeof despues.json === 'string' && despues.json.length > 100) {
     const bytes = new Uint8Array(Buffer.from(despues.json, 'base64'))
     const igual = huella(bytes) === huella(pdf)
+    console.log(`@@ devuelve_el_mismo ${igual ? 1 : 0}`)
     md('### 3 · getfile después de subir', '', `- 200: ${bytes.length} bytes, huella \`${huella(bytes)}\`, empieza por «${new TextDecoder().decode(bytes.slice(0, 5))}» · **igual que el subido: ${igual ? 'sí' : 'no'}**`, '')
     veredicto = igual ? '**Se puede adjuntar por la API: Diez guarda el PDF y lo devuelve igual.**' : '**Diez guarda un documento, pero no es el subido (otra huella).**'
   } else {
