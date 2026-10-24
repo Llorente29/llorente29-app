@@ -11,7 +11,7 @@
 | | Medido | Dónde |
 |---|---|---|
 | Emitidas por Excel con «Url documento» | **Entran con su PDF** las tres: normal, dos tipos de IVA y rectificativa | C0009, Julio, 24/10 |
-| Recibidas por Excel con «Url documento» | **Entran con su PDF** las tres. Dos fallos de mi Excel: el N.I.F. (columna C) llevaba una fecha, y la R003 entró sin retención (descuadre de 30 €). Segunda prueba: cada dato a la columna que dice el XML de Julio, con la retención PRO en T/U/V/W, y el generador comprueba que cada asiento cuadra | C0009, Julio, 24/10 |
+| Recibidas por Excel con «Url documento» | **Entran con su PDF** las tres, con N.I.F., IVA y retención «Profesionales» (200 · 15 · 30), y el asiento cuadra a 242 (segunda prueba). Quedaban dos cosas, ya en la tercera: la fila de títulos se leía como una factura, y la línea de la retención iba sin subcuenta (ahora en la X, `Campo038`) | C0009, Julio, 24/10 |
 | Asientos por Excel | La configuración de Julio **no trae campo de documento** | Julio, 24/10 |
 | PDF por la API (`facturas/upload`, `apuntes/upload`) | 500 «The specified container does not exist»: el almacén de documentos de la base no existe en el servidor de Diez | runs 8, 10 y 40091895961 |
 | Asientos por la API (`apuntes/add`) | Funcionan: banco, manual y su contraasiento en la C0009; se busca antes de escribir, no se duplica | C07 |
@@ -32,6 +32,12 @@
   con las suyas por número y fecha, y dice cuáles faltan, si falta alguna.
 - Las anulaciones de facturas que ya estaban en Diez van como rectificativa en
   el mismo Excel, como la R4 de la prueba.
+- Los dos Excel van **sin fila de títulos**: la fila 1 es la primera factura
+  (Diez lee la de títulos como una factura más; C0009, 24/10).
+- Cada retención lleva su tipo (W) y **su subcuenta (X)**, la que Sumied tiene
+  enlazada a ese tipo de retención (`company_account_link`, la misma que en
+  Diez). Si un tipo no la tiene, o si alguna línea del asiento va sin cuenta,
+  el Excel no se prepara y la pantalla dice cuál.
 
 *Por qué Excel:* es la única forma de que el PDF llegue a Diez (la API no puede
 guardar documentos en esa base). *El coste:* un paso a mano de Julio cada mes,

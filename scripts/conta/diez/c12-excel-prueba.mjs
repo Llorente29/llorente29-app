@@ -57,6 +57,7 @@ export const FACTURAS = [
   },
 ]
 
+/** Los títulos de cada columna, solo para leer este fichero: el Excel va SIN fila de títulos. */
 export const CABECERA = [
   'Subcuenta cliente', 'Concepto asiento', 'Nombre', 'NIF', 'Subcuenta ingresos 1', 'Nº factura',
   'Importe ingresos 1', 'Subcuenta ingresos 2', 'Importe ingresos 2', 'Ruta documento', 'Url documento', '',
@@ -79,7 +80,8 @@ export function filas({ conUrl, url = URL_PDF, facturas = FACTURAS }) {
 }
 
 export function libro(conUrl, o = {}) {
-  const ws = XLSX.utils.aoa_to_sheet([CABECERA, ...filas({ conUrl, ...o })], { cellDates: true })
+  // Sin fila de títulos (24/10, respuesta 5): Diez la lee como una factura más.
+  const ws = XLSX.utils.aoa_to_sheet(filas({ conUrl, ...o }), { cellDates: true })
   for (const c of Object.keys(ws)) if (ws[c]?.t === 'd') ws[c].z = 'dd/mm/yyyy'
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Facturas')

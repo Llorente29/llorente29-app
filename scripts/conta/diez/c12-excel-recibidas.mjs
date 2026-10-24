@@ -18,6 +18,15 @@
 // el generador vuelve a leer el Excel ya hecho, por esas mismas columnas, y
 // comprueba que cada asiento cuadra.
 //
+// Tercera versión (24/10, respuesta 5). En la segunda, Diez leyó la fila de
+// títulos como una factura más, y la línea de los 30 € de la retención salió
+// sin subcuenta. Ahora:
+//   · sin fila de títulos: la fila 1 es la primera factura;
+//   · la subcuenta de la retención va en la X (Campo038), y es la que Sumied
+//     tiene enlazada a ese tipo de retención (company_account_link). Si un
+//     tipo no la tiene, el generador para;
+//   · también para si alguna línea del asiento va sin cuenta.
+//
 // Sale en docs/conta/c12/prueba-excel/:
 //   · prueba-c12-recibidas-url.xlsx
 //   · ConfiguracionRecibidas-c12.XML (el de Julio, tal cual)
@@ -36,6 +45,26 @@ export const FECHA = new Date(Date.UTC(2026, 9, 24))
 /** El valor de «tipo de retención» que Julio asoció a profesionales (Campo034 · Valor01). */
 export const TIPO_RETENCION = 'PRO'
 
+/**
+ * Cada tipo de retención de Sumied (withholding_rate.code): su valor en la
+ * configuración de Diez y la subcuenta que Sumied tiene enlazada a ese tipo
+ * (company_account_link, entity = 'withholding_rate'). Medido en producción,
+ * solo leyendo, en la cuenta de Foodint (24/10): «Profesionales» (15 %) →
+ * 47510015, traída de su Diez (source = migrated). En el traspaso de verdad
+ * se lee de la base, empresa a empresa.
+ */
+export const RETENCIONES = {
+  profesional: { tipoDiez: TIPO_RETENCION, subcuenta: '47510015' },
+}
+
+/** La subcuenta de retención de un tipo, o para: sin ella, Diez deja la línea sin cuenta. */
+export function subcuentaRetencion(codigo, tabla = RETENCIONES) {
+  const r = tabla[codigo]
+  if (!r?.subcuenta) throw new Error(`El tipo de retención «${codigo}» no tiene subcuenta en Sumied: el asiento saldría con una línea sin cuenta.`)
+  if (!r.tipoDiez) throw new Error(`El tipo de retención «${codigo}» no tiene su valor en la configuración de Diez.`)
+  return r
+}
+
 /** Las tres recibidas. */
 export const RECIBIDAS = [
   {
@@ -51,11 +80,11 @@ export const RECIBIDAS = [
   {
     numero: 'PRB-C12-R003', concepto: 'Prueba C12 · profesional con retención',
     gastos: [{ subcuenta: '62300000', importe: 200 }],
-    iva: [{ base: 200, pct: 21, cuota: 42 }], retencion: { tipo: TIPO_RETENCION, base: 200, pct: 15, cuota: 30 }, total: 212,
+    iva: [{ base: 200, pct: 21, cuota: 42 }], retencion: { codigo: 'profesional', base: 200, pct: 15, cuota: 30 }, total: 212,
   },
 ]
 
-// La configuración de Julio (ConfiguracionRecibidas.XML, 24/10, segunda), TAL CUAL.
+// La configuración de Julio (ConfiguracionRecibidas.XML, 24/10, tercera: con la X), TAL CUAL.
 export const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Configuracion_Excel_Recibidas xmlns="Configuracion_Excel_Recibidas">
   <Configuracion>
@@ -71,6 +100,7 @@ export const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <Campo035>20</Campo035>
     <Campo036>21</Campo036>
     <Campo037>22</Campo037>
+    <Campo038>24</Campo038>
     <Campo041>12</Campo041>
     <Campo043>13</Campo043>
     <Campo092>18</Campo092>
@@ -130,7 +160,7 @@ export const CAMPOS = {
   '010': 'Base IVA 1', '045': 'Total factura', '056': 'Url documento', '041': 'Subcuenta gasto 1',
   '043': 'Importe gasto 1', '057': 'Ruta documento', '013': 'Base IVA 2', '014': '% IVA 2', '015': 'Cuota IVA 2',
   '092': 'Subcuenta gasto 2', '094': 'Importe gasto 2', '035': 'Base retención', '036': '% retención',
-  '037': 'Cuota retención', '034': 'Tipo retención',
+  '037': 'Cuota retención', '034': 'Tipo retención', '038': 'Subcuenta retención',
 }
 
 /** Código → columna (1 = A), leído del bloque <Configuracion> del XML. */
@@ -144,6 +174,7 @@ export function columnas(xml = XML) {
 
 /** Lo que va en cada código, para una recibida. Vacío = no lleva. */
 export function valores(f, url = URL_PDF) {
+  const ret = f.retencion ? subcuentaRetencion(f.retencion.codigo) : null
   return {
     '006': f.numero, '001': FECHA, '002': FECHA, '003': PROVEEDOR.nif, '005': PROVEEDOR.nombre,
     '011': f.iva[0].pct, '012': f.iva[0].cuota, '004': PROVEEDOR.subcuenta, '007': f.concepto,
@@ -152,7 +183,7 @@ export function valores(f, url = URL_PDF) {
     '013': f.iva[1]?.base ?? '', '014': f.iva[1]?.pct ?? '', '015': f.iva[1]?.cuota ?? '',
     '092': f.gastos[1]?.subcuenta ?? '', '094': f.gastos[1]?.importe ?? '',
     '035': f.retencion?.base ?? '', '036': f.retencion?.pct ?? '', '037': f.retencion?.cuota ?? '',
-    '034': f.retencion?.tipo ?? '',
+    '034': ret?.tipoDiez ?? '', '038': ret?.subcuenta ?? '',
   }
 }
 
@@ -173,6 +204,7 @@ function colocar(v, col) {
   return fila
 }
 
+/** Los títulos de cada columna, solo para leerlo aquí: el Excel va SIN fila de títulos (Diez la lee como una factura). */
 export function cabecera(col = columnas()) {
   const c = Array(Math.max(...Object.values(col))).fill('')
   for (const [cod, i] of Object.entries(col)) c[i - 1] = c[i - 1] ? `${c[i - 1]} / ${CAMPOS[cod] ?? cod}` : (CAMPOS[cod] ?? cod)
@@ -184,7 +216,7 @@ export function filas(url = URL_PDF, col = columnas()) {
 }
 
 export function libro(col = columnas()) {
-  const ws = XLSX.utils.aoa_to_sheet([cabecera(col), ...filas(URL_PDF, col)], { cellDates: true })
+  const ws = XLSX.utils.aoa_to_sheet(filas(URL_PDF, col), { cellDates: true })
   for (const k of Object.keys(ws)) if (ws[k]?.t === 'd') ws[k].z = 'dd/mm/yyyy'
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Recibidas')
@@ -203,7 +235,8 @@ const ct = (x) => (x === '' || x === undefined || x === null ? 0 : Math.round(Nu
  */
 export function revisar(buffer, col = columnas()) {
   const wb = XLSX.read(buffer, { cellDates: true })
-  const [, ...rs] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' })
+  // Sin fila de títulos: todas las filas son facturas.
+  const rs = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' })
   const mal = []
   const lee = (r, cod) => r[col[cod] - 1]
   if (rs.length !== RECIBIDAS.length) mal.push(`hay ${rs.length} filas y se esperaban ${RECIBIDAS.length}`)
@@ -212,12 +245,21 @@ export function revisar(buffer, col = columnas()) {
     const debe = ct(lee(r, '043')) + ct(lee(r, '094')) + ct(lee(r, '012')) + ct(lee(r, '015'))
     const haber = ct(lee(r, '045')) + ct(lee(r, '037'))
     if (debe !== haber) mal.push(`${n}: el asiento no cuadra (debe ${debe / 100}, haber ${haber / 100})`)
+    // Cada línea del asiento con importe, con su cuenta. (Las de IVA las pone
+    // Diez por el tipo de su configuración: el Excel no lleva su cuenta.)
+    const lineas = [
+      ['gasto 1', '043', '041'], ['gasto 2', '094', '092'], ['proveedor', '045', '004'], ['retención', '037', '038'],
+    ]
+    for (const [qué, imp, cta] of lineas) {
+      if (ct(lee(r, imp)) !== 0 && !/^[0-9]{6,12}$/.test(String(lee(r, cta)))) mal.push(`${n}: la línea de ${qué} va sin cuenta (columna ${XLSX.utils.encode_col(col[cta] - 1)})`)
+    }
     if (ct(lee(r, '043')) + ct(lee(r, '094')) !== ct(lee(r, '010')) + ct(lee(r, '013'))) mal.push(`${n}: los gastos no suman las bases`)
     if (ct(lee(r, '012')) !== Math.round(Number(lee(r, '010')) * Number(lee(r, '011')))) mal.push(`${n}: la cuota de IVA 1 no es base × %`)
     if (lee(r, '013') !== '' && ct(lee(r, '015')) !== Math.round(Number(lee(r, '013')) * Number(lee(r, '014')))) mal.push(`${n}: la cuota de IVA 2 no es base × %`)
     const conRet = lee(r, '037') !== ''
     if (conRet && ct(lee(r, '037')) !== Math.round(Number(lee(r, '035')) * Number(lee(r, '036')))) mal.push(`${n}: la cuota de retención no es base × %`)
     if (conRet !== (lee(r, '034') === TIPO_RETENCION)) mal.push(`${n}: retención sin su tipo ${TIPO_RETENCION}, o tipo sin retención`)
+    if (typeof lee(r, '045') !== 'number') mal.push(`la fila «${n}» no es una factura (sin total numérico): ¿una fila de títulos? Diez la leería como una factura más`)
     if (!/^[A-Z0-9][0-9]{7}[A-Z0-9]$/.test(String(lee(r, '003')))) mal.push(`${n}: el N.I.F. (columna ${col['003']}) no parece un N.I.F.: «${lee(r, '003')}»`)
     if (!(lee(r, '001') instanceof Date)) mal.push(`${n}: la fecha (columna ${col['001']}) no es una fecha`)
     if (String(lee(r, '004')) !== PROVEEDOR.subcuenta) mal.push(`${n}: la subcuenta del proveedor no es la ${PROVEEDOR.subcuenta}`)
