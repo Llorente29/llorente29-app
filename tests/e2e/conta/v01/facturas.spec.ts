@@ -84,7 +84,8 @@ test('nueva a mano: cliente nuevo, líneas, guardar; emitir, cobrar y corregir',
   await page.goto('/conta/ajustes/ejercicio')
   const ano = new Date().getFullYear()
   const abrir = page.getByRole('button', { name: `Abrir el ejercicio ${ano}` })
-  await expect(abrir.or(page.getByText(new RegExp(`${ano}`)).first())).toBeVisible({ timeout: 30_000 })
+  // Sale cuando la pantalla ha leído los ejercicios; si ya está abierto, no sale (y se sigue).
+  await abrir.waitFor({ timeout: 20_000 }).catch(() => undefined)
   if (await abrir.count()) {
     await abrir.click()
     await expect(page.getByText(`Abierto el ejercicio ${ano}.`)).toBeVisible({ timeout: 30_000 })
