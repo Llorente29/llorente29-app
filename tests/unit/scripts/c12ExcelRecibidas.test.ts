@@ -1,5 +1,5 @@
 // Prueba de scripts/conta/diez/c12-excel-recibidas.mjs contra la configuración
-// REAL de Julio (ConfiguracionRecibidas.XML, 24/10, tercera: con la X) y contra
+// DEFINITIVA de Julio (ConfiguracionRecibidas.XML, 24/10: con la X, PRO y ALQ) y contra
 // los fallos REALES de las importaciones en la C0009:
 //   · 1.ª: el N.I.F. con una fecha («24102026») y la R003 sin tipo de
 //     retención (asiento descuadrado en 30 €);
@@ -28,9 +28,13 @@ describe('C12 · Excel de recibidas para Diez', () => {
     expect(XML).toContain(`<Valor01>${TIPO_RETENCION}</Valor01>`)
   })
 
-  it('el XML que se entrega es el de Julio, byte a byte (salvo los finales de línea)', () => {
+  it('los XML que se entregan son los definitivos de Julio, byte a byte (salvo los finales de línea)', async () => {
     const julio = readFileSync('docs/conta/c12/prueba-excel/ConfiguracionRecibidas-c12.XML', 'utf8')
     expect(julio.replace(/\r\n/g, '\n')).toBe(XML)
+    // @ts-expect-error módulo .mjs sin tipos
+    const emitidas = await import('../../../scripts/conta/diez/c12-excel-prueba.mjs')
+    const suya = readFileSync('docs/conta/c12/prueba-excel/ConfiguracionExpedidas-c12.XML', 'utf8')
+    expect(suya.replace(/\r\n/g, '\n')).toBe(emitidas.XML)
   })
 
   it('sin fila de títulos: la fila 1 es la primera factura', () => {
@@ -55,11 +59,11 @@ describe('C12 · Excel de recibidas para Diez', () => {
     expect(() => subcuentaRetencion('profesional', { profesional: { tipoDiez: null, subcuenta: '47510015' } })).toThrow(/no tiene su valor/)
   })
 
-  it('para si la configuración de Diez no conoce el valor del tipo (ALQ, hasta que Julio lo guarde)', () => {
-    expect(tiposRetencionDelXml(XML)).toEqual(['PRO'])
-    expect(() => subcuentaRetencion('alquiler')).toThrow(/no conoce el valor «ALQ»/)
-    const conAlq = XML.replace('<Valor01>PRO</Valor01>', '<Valor01>PRO</Valor01>\n      <Valor02>ALQ</Valor02>')
-    expect(subcuentaRetencion('alquiler', RETENCIONES, conAlq)).toEqual(RETENCIONES.alquiler)
+  it('la configuración definitiva conoce PRO y ALQ; sin ALQ, para', () => {
+    expect(tiposRetencionDelXml(XML)).toEqual(['PRO', 'ALQ'])
+    expect(subcuentaRetencion('alquiler')).toEqual(RETENCIONES.alquiler)
+    const sinAlq = XML.replace('<Valor02>ALQ</Valor02>', '')
+    expect(() => subcuentaRetencion('alquiler', RETENCIONES, sinAlq)).toThrow(/no conoce el valor «ALQ»/)
     expect(() => subcuentaRetencion('profesional', { profesional: { tipoDiez: 'PRO', subcuenta: '' } })).toThrow(/no tiene subcuenta/)
   })
 

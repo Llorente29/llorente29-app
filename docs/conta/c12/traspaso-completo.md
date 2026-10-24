@@ -75,8 +75,11 @@ las guarda por base, y la C0008 no tiene las de las pruebas de la C0009.
 
 | | Fichero | Qué hay que comprobar en la pantalla |
 |---|---|---|
-| Emitidas | `docs/conta/c12/prueba-excel/ConfiguracionExpedidas-c12.XML` | Probada en la C0009 (las tres con su PDF). |
-| Recibidas | `docs/conta/c12/prueba-excel/ConfiguracionRecibidas-c12.XML` | Probada en la C0009 con **PRO**. En la retención, añadir **ALQ** a «Alquiler de local», guardar y exportar el XML: ése es el definitivo, y entra en el generador (hoy para si falta ALQ). |
+| Emitidas | `docs/conta/c12/prueba-excel/ConfiguracionExpedidas-c12.XML` | **Definitiva** (exportada por Julio, 24/10): la probada en la C0009, las tres con su PDF. |
+| Recibidas | `docs/conta/c12/prueba-excel/ConfiguracionRecibidas-c12.XML` | **Definitiva** (exportada por Julio, 24/10): la probada en la C0009, con la subcuenta de la retención en la X y los dos tipos, **PRO** y **ALQ**. |
+
+Las dos están en los generadores tal cual, byte a byte (lo comprueba la prueba
+unitaria). Lo que queda es cargarlas en la C0008.
 
 Después, el primer traspaso comprueba él solo que la C0008 tiene todas las
 subcuentas (la 47510015 y la 47510019 incluidas) antes de preparar los Excel.

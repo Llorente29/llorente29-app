@@ -100,11 +100,10 @@ export function pdf(f) {
   return new Uint8Array(d.output('arraybuffer'))
 }
 
-// La configuración de Julio, con las columnas nuevas. Los números de campo que
-// Julio NO tenía asignados son una suposición por su orden en la pantalla
-// (Ruta documento = Campo057, así que Url documento = Campo056; IVA 2 sigue al
-// IVA 1, 010-012 → 013-015). Se comprueban en la pantalla (instrucciones).
-const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+// La configuración DEFINITIVA de Julio (ConfiguracionExpedidas.XML, 24/10),
+// TAL CUAL: la que se probó en la C0009 (las tres con su PDF), exportada de su
+// pantalla. Es la que se carga en la C0008 para el primer traspaso real.
+export const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Configuracion_Excel_Expedidas xmlns="Configuracion_Excel_Expedidas">
   <Configuracion>
     <Campo001>17</Campo001>
@@ -119,8 +118,8 @@ const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <Campo043>7</Campo043>
     <Campo092>8</Campo092>
     <Campo094>9</Campo094>
-    <Campo057>10</Campo057>
     <Campo056>11</Campo056>
+    <Campo057>10</Campo057>
     <Campo010>13</Campo010>
     <Campo011>14</Campo011>
     <Campo012>15</Campo012>

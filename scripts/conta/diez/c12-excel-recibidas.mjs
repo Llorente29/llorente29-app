@@ -57,7 +57,7 @@ export const TIPO_RETENCION = 'PRO'
 export const RETENCIONES = {
   profesional: { tipoDiez: TIPO_RETENCION, subcuenta: '47510015' },
   // Julio, 24/10: alquileres a la 47510019 (respuesta 6) con el valor ALQ
-  // (respuesta 7). Mientras el XML no traiga ALQ, el generador para.
+  // (respuesta 7), ya en su configuración definitiva.
   alquiler: { tipoDiez: 'ALQ', subcuenta: '47510019' },
 }
 
@@ -100,7 +100,7 @@ export const RECIBIDAS = [
   },
 ]
 
-// La configuración de Julio (ConfiguracionRecibidas.XML, 24/10, tercera: con la X), TAL CUAL.
+// La configuración DEFINITIVA de Julio (ConfiguracionRecibidas.XML, 24/10: con la X, PRO y ALQ), TAL CUAL.
 export const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Configuracion_Excel_Recibidas xmlns="Configuracion_Excel_Recibidas">
   <Configuracion>
@@ -113,10 +113,10 @@ export const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <Campo004>7</Campo004>
     <Campo045>10</Campo045>
     <Campo034>23</Campo034>
+    <Campo038>24</Campo038>
     <Campo035>20</Campo035>
     <Campo036>21</Campo036>
     <Campo037>22</Campo037>
-    <Campo038>24</Campo038>
     <Campo041>12</Campo041>
     <Campo043>13</Campo043>
     <Campo092>18</Campo092>
@@ -137,9 +137,11 @@ export const XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
     <Campo034>
       <Retencion/>
       <Valor01>PRO</Valor01>
+      <Valor02>ALQ</Valor02>
       <Situacion01>0</Situacion01>
       <Situacion02>0</Situacion02>
       <Situacion03>PRO</Situacion03>
+      <Situacion04>ALQ</Situacion04>
     </Campo034>
     <Campo064>
       <TipoIdentificacion/>
