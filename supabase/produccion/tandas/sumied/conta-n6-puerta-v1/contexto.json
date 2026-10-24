@@ -1,8 +1,8 @@
 {
-  "_que": "N6 · la puerta v1 · contexto de producción de la tanda (20261024T0714), medido en SOLO LECTURA el 24/10 a las 07:17 UTC con la consulta de analizar.mjs sql-contexto. No existe ninguna de las diez funciones que crea (ninguna fuente_*); nada en el camino del pedido; nada en el historial.",
-  "medido": "2026-10-24T07:17Z",
+  "_que": "N6 · la puerta v1 · contexto de producción de la tanda (20261024T0714), medido en SOLO LECTURA el 24/10 a las 09:08 UTC con la consulta de analizar.mjs sql-contexto, después de quitar las tres fuentes de liquidaciones (son de Sumied: Julio, 24/10). No existe ninguna de las siete funciones que crea; nada en el camino del pedido; nada en el historial.",
+  "medido": "2026-10-24T09:08Z",
   "tanda": {
-    "supabase/migrations/20261024T0714_n6_puerta_v1.sql": "acd6591119d4f61b68c1786239212b10"
+    "supabase/migrations/20261024T0714_n6_puerta_v1.sql": "4f99471ef904f9315e58561aee7a2ce8"
   },
   "contexto": {
     "tablas": [], "funciones": [], "filas": {}, "otras": {},

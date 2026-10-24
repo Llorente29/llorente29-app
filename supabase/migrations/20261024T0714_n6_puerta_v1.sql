@@ -1,14 +1,16 @@
 -- N6 · La puerta v1: lo que Sumied lee de Folvy, por funciones con versión (paso 9 de la auditoría C09).
 --
--- SOLO AÑADE: diez funciones nuevas, todas de LECTURA. No cambia ninguna tabla,
+-- SOLO AÑADE: siete funciones nuevas, todas de LECTURA. No cambia ninguna tabla,
 -- ninguna función que exista ni ninguna pantalla: todavía nadie las llama
 -- (pasar Sumied a ellas es otra tanda, a la vista de Julio).
 --
--- Las ocho de la puerta (la novena del C09, fuente_nominas_mes_v1, va con
+-- Las cinco de la puerta (la de nóminas, fuente_nominas_mes_v1, va con
 -- Laboral, en su PR, porque necesita columnas nuevas en payroll_cost):
 --   fuente_recepciones_v1, fuente_recepcion_lineas_v1, fuente_ventas_dia_v1,
---   fuente_pedidos_v1, fuente_liquidaciones_plataforma_v1,
---   fuente_liquidacion_pedidos_v1, fuente_licencias_mes_v1, fuente_productos_v1.
+--   fuente_pedidos_v1, fuente_productos_v1.
+-- Las liquidaciones de plataforma (channel_settlement) y de licencia
+-- (licensed_settlement) NO van por la puerta: son de Sumied (Julio, 24/10, a la
+-- vista del N8), y Sumied no se lee a sí mismo por una puerta.
 -- Y dos de apoyo, internas (no se ejecutan desde la API):
 --   fuente__cuenta(empresa): la cuenta de la empresa, o para (42501) si quien
 --     pregunta es un usuario que no puede verla (conta_impuesto_puede_ver: sus
@@ -19,7 +21,7 @@
 --     tiene una sola empresa; si no existe todavía, los de su cuenta (hoy, en
 --     producción, 1 empresa en 1 cuenta).
 --
--- El contrato, igual en las ocho: SECURITY DEFINER con search_path fijo,
+-- El contrato, igual en las cinco: SECURITY DEFINER con search_path fijo,
 -- comprueban la empresa, importes en numeric(14,2), horas en UTC y el día en
 -- Madrid. Last o Revo implementarían las mismas firmas desde su importador.
 -- Ejecutan authenticated y service_role; anon y public, no.
@@ -191,76 +193,7 @@ as $function$
    order by s.sold_at, s.id
 $function$;
 
--- 5 · Las liquidaciones de plataforma cuyo periodo toca el intervalo.
-create or replace function public.fuente_liquidaciones_plataforma_v1(p_empresa uuid, p_desde date, p_hasta date)
- returns table(liquidacion_id uuid, canal_id uuid, tienda_id uuid, local_id uuid, desde date, hasta date,
-               fecha date, referencia text, pedidos integer, bruto numeric(14,2), comision numeric(14,2),
-               iva numeric(14,2), ajustes numeric(14,2), neto numeric(14,2), cobrada_el date)
- language sql
- stable
- security definer
- set search_path to 'public'
-as $function$
-  select x.id, x.channel_id, x.store_id, x.location_id,
-         coalesce(x.period_from, x.proposed_period_from), coalesce(x.period_to, x.proposed_period_to),
-         x.settlement_date, x.settlement_ref, x.orders_count,
-         coalesce(x.gross_sales, 0)::numeric(14,2), coalesce(x.commission, 0)::numeric(14,2),
-         coalesce(x.vat_amount, 0)::numeric(14,2), coalesce(x.adjustments, 0)::numeric(14,2),
-         coalesce(x.net_payout, 0)::numeric(14,2), x.collected_on
-    from public.channel_settlement x
-   where x.account_id = public.fuente__cuenta(p_empresa)
-     and (x.location_id is null or x.location_id in (select public.fuente__locales(p_empresa)))
-     and not coalesce(x.is_reference, false)
-     and coalesce(x.period_from, x.proposed_period_from) <= p_hasta
-     and coalesce(x.period_to, x.proposed_period_to) >= p_desde
-   order by coalesce(x.period_from, x.proposed_period_from), x.id
-$function$;
-
--- 6 · Los pedidos de una liquidación.
-create or replace function public.fuente_liquidacion_pedidos_v1(p_liquidacion uuid)
- returns table(linea_id uuid, pedido_id uuid, codigo text, fecha date, productos numeric(14,2),
-               comision numeric(14,2), neto numeric(14,2), casado boolean)
- language plpgsql
- stable
- security definer
- set search_path to 'public'
-as $function$
-declare v_cuenta uuid; v_empresa uuid;
-begin
-  select x.account_id into v_cuenta from public.channel_settlement x where x.id = p_liquidacion;
-  if v_cuenta is null then raise exception 'La liquidación % no existe.', p_liquidacion using errcode = 'P0002'; end if;
-  select c.id into v_empresa from public.company c where c.account_id = v_cuenta order by c.created_at limit 1;
-  perform public.fuente__cuenta(v_empresa);
-  return query
-    select o.id, o.sale_id, o.platform_order_code, o.order_date, coalesce(o.products, 0)::numeric(14,2),
-           coalesce(o.commission, 0)::numeric(14,2), coalesce(o.net_payout, 0)::numeric(14,2), coalesce(o.matched, false)
-      from public.channel_settlement_order o
-     where o.settlement_id = p_liquidacion
-     order by o.order_date, o.platform_order_code;
-end
-$function$;
-
--- 7 · Las liquidaciones de licencias (Cloudtown) de un mes.
-create or replace function public.fuente_licencias_mes_v1(p_empresa uuid, p_mes date)
- returns table(liquidacion_id uuid, local_id uuid, socio_id uuid, desde date, hasta date, ventas numeric(14,2),
-               comision_pct numeric, royalty numeric(14,2), importe numeric(14,2), estado text, productos jsonb)
- language sql
- stable
- security definer
- set search_path to 'public'
-as $function$
-  select x.id, x.location_id, x.party_id, x.period_from, x.period_to,
-         coalesce(x.brand_sales_base, 0)::numeric(14,2), x.commission_pct,
-         coalesce(x.commission_amount, 0)::numeric(14,2), coalesce(x.amount, 0)::numeric(14,2), x.status, x.detail
-    from public.licensed_settlement x
-   where x.account_id = public.fuente__cuenta(p_empresa)
-     and (x.company_id = p_empresa or (x.company_id is null and x.location_id in (select public.fuente__locales(p_empresa))))
-     and x.period_from <= (date_trunc('month', p_mes) + interval '1 month - 1 day')::date
-     and x.period_to >= date_trunc('month', p_mes)::date
-   order by x.period_from, x.id
-$function$;
-
--- 8 · Los productos de la cuenta de la empresa (para casar los de las liquidaciones).
+-- 5 · Los productos de la cuenta de la empresa.
 create or replace function public.fuente_productos_v1(p_empresa uuid, p_tipo text default null)
  returns table(producto_id uuid, nombre text, tipo text, unidad text, activo boolean)
  language sql
@@ -277,7 +210,7 @@ as $function$
 $function$;
 
 -- Quién ejecuta: las dos de apoyo, nadie desde la API (las llaman las otras,
--- que son del mismo dueño); las ocho, authenticated y service_role.
+-- que son del mismo dueño); las cinco, authenticated y service_role.
 do $$
 declare f text;
 begin
@@ -287,8 +220,7 @@ begin
   foreach f in array array[
     'public.fuente_recepciones_v1(uuid, date, date)', 'public.fuente_recepcion_lineas_v1(uuid)',
     'public.fuente_ventas_dia_v1(uuid, date)', 'public.fuente_pedidos_v1(uuid, timestamptz, timestamptz, text)',
-    'public.fuente_liquidaciones_plataforma_v1(uuid, date, date)', 'public.fuente_liquidacion_pedidos_v1(uuid)',
-    'public.fuente_licencias_mes_v1(uuid, date)', 'public.fuente_productos_v1(uuid, text)'] loop
+    'public.fuente_productos_v1(uuid, text)'] loop
     execute format('revoke execute on function %s from public, anon', f);
     execute format('grant execute on function %s to authenticated, service_role', f);
     execute format('comment on function %s is %L', f,

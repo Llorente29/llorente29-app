@@ -1,6 +1,6 @@
 -- supabase/staging/sql/20261024_n6_puerta_v1_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261024T0714_n6_puerta_v1 (las ocho fuente_*_v1 y
+-- SOLO STAGING. Prueba de 20261024T0714_n6_puerta_v1 (las cinco fuente_*_v1 y
 -- sus dos de apoyo), con \i dentro de la transacción y ROLLBACK: staging no
 -- cambia. Con datos inventados en la cuenta B de pruebas (una empresa, un local).
 --
@@ -10,11 +10,13 @@
 --   2. Ventas del día: una venta cerrada a la 01:30 de Madrid es del día
 --      anterior (hora de cierre 02:00), con su base, IVA y total.
 --   3. Pedidos: la misma venta, con su día en Madrid, y el filtro por canal.
---   4. Productos, liquidaciones y licencias responden (sin filas inventadas).
+--   4. Productos responde. Las liquidaciones de plataforma y de licencia NO
+--      están en la puerta: son de Sumied (Julio, 24/10).
 --   5. Importes con dos decimales.
 --   6. Como usuario de B: lee lo suyo. Como usuario de A: lo de B le da 42501.
 --      anon no puede ejecutarlas; las de apoyo no se ejecutan desde la API.
---   7. Pasarla otra vez no cambia nada, y la vuelta atrás las quita todas.
+--   7. Pasarla otra vez no cambia nada, y la vuelta atrás quita sus siete
+--      (no toca otras fuente_*, como la de nóminas del N7).
 
 begin;
 do $$ begin
@@ -97,18 +99,21 @@ begin
     raise exception 'PRUEBA N6 · 3: el filtro por canal no filtra.';
   end if;
 
-  -- 4 · Productos, liquidaciones y licencias responden.
+  -- 4 · Productos responde; las de liquidaciones no existen.
   if not exists (select 1 from public.fuente_productos_v1(v_e, 'raw') where producto_id = v_ri) then
     raise exception 'PRUEBA N6 · 4: fuente_productos_v1 no da el tomate.';
   end if;
-  perform * from public.fuente_liquidaciones_plataforma_v1(v_e, date '2026-10-01', date '2026-10-31');
-  perform * from public.fuente_licencias_mes_v1(v_e, date '2026-10-01');
+  if to_regprocedure('public.fuente_liquidaciones_plataforma_v1(uuid,date,date)') is not null
+     or to_regprocedure('public.fuente_liquidacion_pedidos_v1(uuid)') is not null
+     or to_regprocedure('public.fuente_licencias_mes_v1(uuid,date)') is not null then
+    raise exception 'PRUEBA N6 · 4: sigue habiendo una fuente de liquidaciones, y son de Sumied.';
+  end if;
 
   -- 5 · Dos decimales.
   if (select scale(base) from public.fuente_recepciones_v1(v_e, date '2026-10-20', date '2026-10-20') where recepcion_id = v_rec) <> 2 then
     raise exception 'PRUEBA N6 · 5: los importes no van con dos decimales.';
   end if;
-  raise notice 'N6 · 1-5: recepciones y sus líneas, ventas del día por su cierre, pedidos, productos, liquidaciones y licencias, con dos decimales';
+  raise notice 'N6 · 1-5: recepciones y sus líneas, ventas del día por su cierre, pedidos y productos, con dos decimales; sin fuentes de liquidaciones';
 end $$;
 
 -- 6 · Como usuario de B, de A y anónimo.
@@ -161,8 +166,10 @@ reset role;
 \i supabase/migrations/20261024T0714_n6_puerta_v1.sql
 \i supabase/vuelta-atras/20261024T0714_n6_puerta_v1.down.sql
 do $$ begin
-  if exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname like 'fuente\_%') then
-    raise exception 'PRUEBA N6 · 7: la vuelta atrás no las ha quitado todas.';
+  if exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace
+               and proname in ('fuente__cuenta', 'fuente__locales', 'fuente_recepciones_v1', 'fuente_recepcion_lineas_v1',
+                               'fuente_ventas_dia_v1', 'fuente_pedidos_v1', 'fuente_productos_v1')) then
+    raise exception 'PRUEBA N6 · 7: la vuelta atrás no ha quitado sus siete.';
   end if;
   raise notice 'PRUEBA N6 en verde: la puerta v1 lee lo de cada empresa y solo eso; se puede pasar dos veces; la vuelta atrás la quita.';
 end $$;

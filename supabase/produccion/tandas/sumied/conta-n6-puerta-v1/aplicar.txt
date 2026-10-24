@@ -1,12 +1,13 @@
 # N6 · La puerta v1 (cola de noche, paso 9 de la auditoría C09). Rama conta/n6-puerta-v1.
 # Se ensaya y se aplica desde esta rama, antes de fusionar.
 #
-#   1. 0714 — AÑADE diez funciones de solo lectura: las ocho fuente_*_v1 de la
-#      puerta (recepciones y sus líneas, ventas del día, pedidos, liquidaciones
-#      de plataforma y sus pedidos, licencias del mes, productos) y dos de apoyo
-#      (fuente__cuenta, fuente__locales), que no se ejecutan desde la API. No
-#      cambia ninguna tabla, función ni pantalla: todavía no las llama nadie.
-#      La novena del C09 (fuente_nominas_mes_v1) va con Laboral, en su PR.
+#   1. 0714 — AÑADE siete funciones de solo lectura: las cinco fuente_*_v1 de
+#      la puerta (recepciones y sus líneas, ventas del día, pedidos, productos)
+#      y dos de apoyo (fuente__cuenta, fuente__locales), que no se ejecutan
+#      desde la API. No cambia ninguna tabla, función ni pantalla: todavía no
+#      las llama nadie. La de nóminas (fuente_nominas_mes_v1) va con Laboral,
+#      en su PR. Las de liquidaciones de plataforma y de licencia no van: son
+#      de Sumied (Julio, 24/10, a la vista del N8).
 #
 # Sin aplicar: lo lanza Julio. Vuelta atrás: vuelta-atras.txt de esta carpeta.
 cuenta: scripts/conta/produccion/cuentas/n6-puerta-v1.sql
