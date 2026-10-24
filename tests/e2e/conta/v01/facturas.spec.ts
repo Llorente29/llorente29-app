@@ -106,8 +106,12 @@ test('nueva a mano: cliente nuevo, líneas, guardar; emitir, cobrar y corregir',
   await page.getByLabel('Descuento de la línea 2').fill('10')
   await page.getByLabel('IVA de la línea 2').selectOption({ label: '10 %' })
   const totales = page.getByRole('region', { name: 'Líneas' }).locator('dl[aria-label="Totales"]')
-  await expect(totales).toContainText('1.045,00 €')
-  await expect(totales).toContainText('1.259,50 €')
+  // La base y el IVA, por tipo (1.000 al 21 % y 45 al 10 %), y el total.
+  await expect(totales).toContainText('Base 21 %1.000,00 €')
+  await expect(totales).toContainText('IVA 21 %210,00 €')
+  await expect(totales).toContainText('Base 10 %45,00 €')
+  await expect(totales).toContainText('IVA 10 %4,50 €')
+  await expect(totales).toContainText('Total1.259,50 €')
   // Nada se guarda solo: la barra de cambios lo dice.
   await expect(page.getByRole('button', { name: /Guardar cambios/ })).toBeVisible()
   await expect(page.getByRole('region', { name: /asiento/i }).first()).toContainText('430')
