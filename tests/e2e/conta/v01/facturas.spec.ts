@@ -79,6 +79,16 @@ test('nueva a mano: cliente nuevo, líneas, guardar; emitir, cobrar y corregir',
   // error). En A rompía i01h/en-vivo, que mira el 303 del 4T de A después de
   // esta prueba. Y así se prueba también que Facturas vale para cualquier empresa.
   await entrarComo(page, CUENTA_D.email)
+  // D trae solo su ejercicio de 2025 (i01d): se abre el de este año, como en
+  // c06/sola (el carril se borra entero al acabar).
+  await page.goto('/conta/ajustes/ejercicio')
+  const ano = new Date().getFullYear()
+  const abrir = page.getByRole('button', { name: `Abrir el ejercicio ${ano}` })
+  await expect(abrir.or(page.getByText(new RegExp(`${ano}`)).first())).toBeVisible({ timeout: 30_000 })
+  if (await abrir.count()) {
+    await abrir.click()
+    await expect(page.getByText(`Abierto el ejercicio ${ano}.`)).toBeVisible({ timeout: 30_000 })
+  }
   await page.goto('/conta/ventas/facturas')
   await page.getByRole('link', { name: 'Nueva factura' }).first().click()
   await expect(page).toHaveURL(/\/conta\/ventas\/facturas\/nueva$/, { timeout: 30_000 })
