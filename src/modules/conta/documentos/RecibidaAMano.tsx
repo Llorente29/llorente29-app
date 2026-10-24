@@ -179,7 +179,7 @@ export default function RecibidaAMano() {
     <div className="s-pagina" data-prueba="ficha-recibida" data-origen="a-mano-nueva">
       <EncabezadoPagina titulo="Nueva recibida a mano" migasExtra={[{ etiqueta: 'Nueva recibida a mano' }]}
         frase="Escrita a mano: la misma ficha que una que entra sola. Se guarda para revisar; después la miras y la apuntas como cualquier otra." />
-      <Ficha datos={datos} documento={documento} usuario={userId} />
+      <Ficha datos={datos} documento={documento} usuario={userId} reglaAnchos />
     </div>
   )
 }

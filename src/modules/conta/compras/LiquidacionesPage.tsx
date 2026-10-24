@@ -95,17 +95,18 @@ export default function LiquidacionesPage() {
       <span className="s-tarjeta-apoyo">{x.apoyoImporte}</span>
     </span>
   )
+  // N5 · La regla de anchos: sin sitio, se oculta primero el estado y luego el periodo; nunca el proveedor ni el importe.
   const columnas: ColumnaLista<FilaLiquidaciones>[] = [
     {
-      id: 'proveedor', titulo: 'Proveedor', ordenable: true,
+      id: 'proveedor', titulo: 'Proveedor', ordenable: true, prioridad: 1, minimo: 200,
       celda: (x) => <span className="s-lista-texto-doble"><span className="s-lista-principal">{x.proveedor}</span><span className="s-tarjeta-apoyo">{[NOMBRE_TIPO[x.tipo], x.local].filter(Boolean).join(' · ')}</span></span>,
     },
     {
-      id: 'periodo', titulo: 'Periodo', ordenable: true,
+      id: 'periodo', titulo: 'Periodo', ordenable: true, prioridad: 2, minimo: 150,
       celda: (x) => <span className="s-lista-texto-doble"><span>{x.periodo}</span>{x.referencia && <span className="s-tarjeta-apoyo s-cifra">{x.referencia}</span>}</span>,
     },
-    { id: 'importe', titulo: 'Importe', cifra: true, ordenable: true, celda: importe },
-    { id: 'estado', titulo: 'Estado', celda: (x) => <span className="s-lista-texto-doble">{estado(x)}{x.estado.detalle && <span className="s-tarjeta-apoyo">{x.estado.detalle}</span>}</span> },
+    { id: 'importe', titulo: 'Importe', cifra: true, ordenable: true, prioridad: 1, minimo: 110, celda: importe },
+    { id: 'estado', titulo: 'Estado', prioridad: 3, minimo: 160, celda: (x) => <span className="s-lista-texto-doble">{estado(x)}{x.estado.detalle && <span className="s-tarjeta-apoyo">{x.estado.detalle}</span>}</span> },
   ]
   const tarjeta = (x: FilaLiquidaciones) => (
     <>

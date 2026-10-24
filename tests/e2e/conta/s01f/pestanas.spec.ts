@@ -21,6 +21,7 @@
 
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { CUENTA_A, correoDePrueba, entrarComo } from '../sesion'
+import { barraAbiertaSiPlegada } from '../barra'
 
 const DIR = 'docs/conta/capturas/s01f'
 const LAURA = correoDePrueba('p01.laura@p01-prueba.test')
@@ -108,7 +109,7 @@ for (const m of MODULOS) {
       await expect(paginas(page, m.producto)).toHaveCount(0)
       await page.getByRole('button', { name: 'Abrir el menú' }).click()
       await expect(page.getByRole('dialog', { name: 'Menú' })).toBeVisible()
-    }
+    } else await barraAbiertaSiPlegada(page)
     await quieta(page)
 
     // El apartado activo: «estás aquí» si no tiene páginas; «estás dentro» si estás en una de ellas.

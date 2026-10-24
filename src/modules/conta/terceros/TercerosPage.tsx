@@ -36,7 +36,7 @@ import { NuevoProveedorDialogo } from '@/modules/conta/proveedor/NuevoProveedorD
 import { fraseAltaProveedor } from '@/modules/conta/lib/altaProveedor'
 import { Chip, ErrorConReintento, Guardado, Hueso, Inicial, Vacio } from '@/modules/conta/ui/piezas'
 import {
-  FILTROS_TERCEROS, cuentaPorFiltro, filtrarTerceros, filtrosVisibles, mismoNif, ordenarPapeles, rutaDeTercero, type FiltroTerceros, type Papel,
+  FILTROS_TERCEROS, cuentaPorFiltro, filtrarTerceros, filtrosVisibles, mismoNif, ordenarPapeles, rutaDeTercero, vendePorPlataformas, type FiltroTerceros, type Papel,
 } from '@/modules/conta/lib/terceros'
 import { teDebe } from '@/modules/conta/lib/liquidaciones'
 import { calcularCifras } from '@/modules/conta/lib/cifras'
@@ -51,7 +51,7 @@ import {
   liquidacionesDeLaCuenta, liquidacionesSocioDe, listarFacturasDeLaCuenta, listarTercerosBase, terceroDelMismoNif, type TerceroLista, asegurarCuentaLiquidacion } from '@/modules/conta/services/tercerosService'
 import { cargarRevision430, confirmar430, type DatosRevision430 } from '@/modules/conta/services/revision430Service'
 import {
-  TIPO_430, elegida, hecha, proponer430, queHace, tarjetaPorRevisar, type Cuenta430, type Propuesta430, type Tercero430, type Tipo430,
+  TIPO_430, elegida, hecha, proponer430, queHace, tarjetaPorRevisar, tiposElegibles430, type Cuenta430, type Propuesta430, type Tercero430, type Tipo430,
 } from '@/modules/conta/lib/revision430'
 
 const PILDORA: Record<Papel, string> = {
@@ -126,6 +126,8 @@ export default function TercerosPage() {
   const [archivar, setArchivar] = useState<TerceroLista | null>(null)
   const { filas, error } = useTerceros(cargando ? null : accountId, activa?.id ?? null, vuelta)
   const revision = useRevision430(cargando ? null : accountId, activa?.id ?? null, vuelta)
+  // Regla de Julio (17/10): sin canal de plataforma, ni la palabra.
+  const vende = vendePorPlataformas(revision?.canales ?? [])
   const [revisionAbierta, setRevisionAbierta] = useState(false)
   const cajaRevision = useRef<HTMLElement>(null)
   const pendientes430 = useMemo(() => (revision && filas ? revision.cuentas.filter((c) => !hecha(c, aTerceros430(filas, revision))).length : 0), [revision, filas])
@@ -161,7 +163,7 @@ export default function TercerosPage() {
       {/* S01 · paso 3: Contactos. El título y los filtros (Todos · Clientes · Proveedores…) son
           la cabecera y sus pestañas; «Nuevo cliente» y «Nuevo proveedor» (S01d), la cinta. */}
       <h1 className="cx-oculto">Contactos</h1>
-      <p className="cx-ayuda cxt-entra">Con quién trabajas, si es cliente, proveedor, plataforma o socio, y quién debe a quién.</p>
+      <p className="cx-ayuda cxt-entra">{vende ? 'Con quién trabajas, si es cliente, proveedor, plataforma o socio, y quién debe a quién.' : 'Con quién trabajas, si es cliente, proveedor o socio, y quién debe a quién.'}</p>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
 
@@ -205,7 +207,9 @@ export default function TercerosPage() {
             : filtro === 'archivados'
               ? <Vacio titulo="No hay nadie archivado." explicacion="Lo que archives sale aquí, con su histórico, y se recupera con un clic." />
               : <Vacio titulo="Aún no hay nadie aquí."
-                  explicacion="Da de alta a tus proveedores y clientes desde aquí (los proveedores de Cocina también llegan solos con sus albaranes); las plataformas y los socios, desde su ficha («Es también plataforma», «Es también socio de marca»)."
+                  explicacion={vende
+                    ? 'Da de alta a tus proveedores y clientes desde aquí (los proveedores de Cocina también llegan solos con sus albaranes); las plataformas y los socios, desde su ficha («Es también plataforma», «Es también socio de marca»).'
+                    : 'Da de alta a tus proveedores y clientes desde aquí (los proveedores de Cocina también llegan solos con sus albaranes); los socios de marca, desde su ficha («Es también socio de marca»).'}
                   accion={(
                     <div className="cx-pie">
                       <button type="button" className="cx-boton-sec" onClick={() => setNuevo('cliente')}>Nuevo cliente</button>
@@ -430,7 +434,7 @@ const RevisionCuentas = forwardRef<HTMLElement, {
           <strong>{pendientes.length === 0
             ? `Las ${filas.length} cuentas de clientes traídas${de} están revisadas`
             : pendientes.length === 1 ? `1 cuenta de cliente traída${de} por revisar` : `${pendientes.length} cuentas de clientes traídas${de} por revisar`}</strong>
-          <div className="cx-ayuda">Para cada una te propongo qué es —plataforma, socio de marca, cliente o cuenta tuya— y por qué. Nada se guarda hasta que confirmas.</div>
+          <div className="cx-ayuda">Para cada una te propongo qué es —{vendePorPlataformas(datos.canales) ? 'plataforma, socio de marca' : 'socio de marca'}, cliente o cuenta tuya— y por qué. Nada se guarda hasta que confirmas.</div>
         </div>
         <button type="button" className="cx-boton-sec" aria-expanded={abierta} onClick={() => setAbierta(!abierta)}>{abierta ? 'Cerrar' : 'Revisar'}</button>
       </div>
@@ -495,7 +499,7 @@ function FilaCuenta430({ c, hecha: yaEsta, terceros, datos, ocupada, alConfirmar
       {cambiando && (
         <div className="cxt-revision-cambiar" role="group" aria-label={`Cambiar ${c.code}`}>
           <div className="cx-tablas-filtros" role="radiogroup" aria-label="Qué es">
-            {(Object.keys(TIPO_430) as Tipo430[]).map((x) => (
+            {tiposElegibles430(datos.canales).map((x) => (
               <button key={x} type="button" className="cx-pildora" role="radio" aria-checked={tipo === x} onClick={() => {
                 setTipo(x)
                 if (x === 'propia') { setEleccion(elegida('propia', null, datos.canales)); setCambiando(false) }

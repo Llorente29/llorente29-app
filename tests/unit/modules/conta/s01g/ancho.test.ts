@@ -33,6 +33,7 @@ describe('S01g · el ancho de las pantallas', () => {
     }
     // Ficha completa de la recibida (tablero 3b): «Nueva recibida a mano» ya no es un
     // formulario estrecho, es LA MISMA ficha que la que entra sola, con el PDF a la derecha.
-    expect(readFileSync('src/modules/conta/documentos/RecibidaAMano.tsx', 'utf8')).toMatch(/<Ficha datos=\{datos\} documento=\{documento\} usuario=\{userId\} \/>/)
+    // N5 (24/10): con la regla de anchos, como la recibida que entra sola.
+    expect(readFileSync('src/modules/conta/documentos/RecibidaAMano.tsx', 'utf8')).toMatch(/<Ficha datos=\{datos\} documento=\{documento\} usuario=\{userId\} reglaAnchos \/>/)
   })
 })

@@ -51,7 +51,7 @@ export async function cargarRevision430(accountId: string, companyId: string): P
     leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
     leer(tabla('company_chart_import').select('review, program').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'traida'), 'lo traído'),
     leer(tabla('ai_suggestion').select('reason_key').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'plan').like('reason_key', `${CLAVE_PROPIA}%`), 'lo decidido'),
-    leer(tabla('sales_channel').select('id, name').eq('account_id', accountId), 'los canales de venta'),
+    leer(tabla('sales_channel').select('id, name, slug').eq('account_id', accountId), 'los canales de venta'),
     leer(tabla('party_role').select('party_id, channel_id').eq('account_id', accountId).eq('role', 'platform'), 'las plataformas'),
   ])
   const porId = new Map(cuentas.map((c) => [String(c.id), c]))
@@ -79,7 +79,7 @@ export async function cargarRevision430(accountId: string, companyId: string): P
   return {
     programa: programa && PROGRAMAS.some((x) => x.id === programa) ? nombreCorto(programa as Programa) : null,
     codigoDeProveedor,
-    canales: canales.map((c) => ({ id: String(c.id), nombre: String(c.name), plataformaDe: deCanal.get(String(c.id)) ?? null })),
+    canales: canales.map((c) => ({ id: String(c.id), nombre: String(c.name), plataformaDe: deCanal.get(String(c.id)) ?? null, slug: typeof c.slug === 'string' ? c.slug : null })),
     cuentas: cuentas
       .filter((c) => String(c.template_code).startsWith('430') && c.source === 'migrated' && c.status === 'activa')
       .sort((a, b) => String(a.code).localeCompare(String(b.code)))
