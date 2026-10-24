@@ -11,7 +11,7 @@
 | | Medido | Dónde |
 |---|---|---|
 | Emitidas por Excel con «Url documento» | **Entran con su PDF** las tres: normal, dos tipos de IVA y rectificativa | C0009, Julio, 24/10 |
-| Recibidas por Excel con «Url documento» | Por probar: `prueba-c12-recibidas-url.xlsx`, con las columnas de Julio | C0009, Julio |
+| Recibidas por Excel con «Url documento» | **Entran con su PDF** las tres. Dos fallos de mi Excel: el N.I.F. (columna C) llevaba una fecha, y la R003 entró sin retención (descuadre de 30 €). Segunda prueba: cada dato a la columna que dice el XML de Julio, con la retención PRO en T/U/V/W, y el generador comprueba que cada asiento cuadra | C0009, Julio, 24/10 |
 | Asientos por Excel | La configuración de Julio **no trae campo de documento** | Julio, 24/10 |
 | PDF por la API (`facturas/upload`, `apuntes/upload`) | 500 «The specified container does not exist»: el almacén de documentos de la base no existe en el servidor de Diez | runs 8, 10 y 40091895961 |
 | Asientos por la API (`apuntes/add`) | Funcionan: banco, manual y su contraasiento en la C0009; se busca antes de escribir, no se duplica | C07 |

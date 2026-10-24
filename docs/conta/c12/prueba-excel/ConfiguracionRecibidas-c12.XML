@@ -9,12 +9,16 @@
     <Campo007>8</Campo007>
     <Campo004>7</Campo004>
     <Campo045>10</Campo045>
+    <Campo034>23</Campo034>
+    <Campo035>20</Campo035>
+    <Campo036>21</Campo036>
+    <Campo037>22</Campo037>
     <Campo041>12</Campo041>
     <Campo043>13</Campo043>
     <Campo092>18</Campo092>
     <Campo094>19</Campo094>
-    <Campo057>14</Campo057>
     <Campo056>11</Campo056>
+    <Campo057>14</Campo057>
     <Campo010>9</Campo010>
     <Campo011>5</Campo011>
     <Campo012>6</Campo012>
@@ -28,6 +32,10 @@
     </Campo009>
     <Campo034>
       <Retencion/>
+      <Valor01>PRO</Valor01>
+      <Situacion01>0</Situacion01>
+      <Situacion02>0</Situacion02>
+      <Situacion03>PRO</Situacion03>
     </Campo034>
     <Campo064>
       <TipoIdentificacion/>
