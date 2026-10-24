@@ -44,6 +44,8 @@ test('C · cuenta solo de contabilidad: ni Liquidaciones, ni «Sus tiendas», ni
   await page.route('**/rest/v1/**', async (r) => {
     const m = r.request().method()
     if (m === 'GET' || m === 'HEAD' || (m === 'POST' && /\/rest\/v1\/rpc\//.test(r.request().url()))) return r.fallback()
+    // Las preferencias de la persona (la barra, la densidad…) no son datos de la cuenta: el marco las guarda solo.
+    if (/\/rest\/v1\/conta_user_pref(\?|$)/.test(r.request().url())) return r.fallback()
     escrituras.push(`${m} ${new URL(r.request().url()).pathname}`)
     await r.abort()
   })
@@ -56,10 +58,11 @@ test('C · cuenta solo de contabilidad: ni Liquidaciones, ni «Sus tiendas», ni
   await expect(page.getByRole('button', { name: 'Plataformas' })).toHaveCount(0)
   await sinPlataforma(page, 'la lista')
   if (movil) {
-    await page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('button', { name: 'Más' }).click()
-    await expect(page.getByRole('dialog')).toBeVisible()
-    await sinPlataforma(page, 'la hoja «Más» del menú')
-    await page.keyboard.press('Escape')
+    // S01d: en el móvil, el menú de la contabilidad va en su cajón.
+    await page.getByRole('button', { name: 'Abrir el menú' }).click()
+    await expect(page.getByRole('dialog', { name: 'Menú' })).toBeVisible()
+    await sinPlataforma(page, 'el cajón del menú')
+    await page.getByRole('button', { name: 'Cerrar el menú' }).click()
   } else {
     const mas = page.getByRole('button', { name: /Más ▾/ })
     if (await mas.count()) { await mas.first().click(); await sinPlataforma(page, 'el «Más ▾» del menú'); await page.keyboard.press('Escape') }
