@@ -50,11 +50,15 @@ export const TIPO_RETENCION = 'PRO'
  * configuración de Diez y la subcuenta que Sumied tiene enlazada a ese tipo
  * (company_account_link, entity = 'withholding_rate'). Medido en producción,
  * solo leyendo, en la cuenta de Foodint (24/10): «Profesionales» (15 %) →
- * 47510015, traída de su Diez (source = migrated). En el traspaso de verdad
- * se lee de la base, empresa a empresa.
+ * 47510015, traída de su Diez (source = migrated); «Alquiler de local» →
+ * 47510019. Julio lo fijó así el 24/10 (respuesta 6). En el traspaso de
+ * verdad se lee de la base, empresa a empresa.
  */
 export const RETENCIONES = {
   profesional: { tipoDiez: TIPO_RETENCION, subcuenta: '47510015' },
+  // Julio, 24/10 (respuesta 6): alquileres a la 47510019, como en Foodint.
+  // Su valor en la configuración de Diez aún no está asignado: sin él, para.
+  alquiler: { tipoDiez: null, subcuenta: '47510019' },
 }
 
 /** La subcuenta de retención de un tipo, o para: sin ella, Diez deja la línea sin cuenta. */

@@ -50,7 +50,9 @@ describe('C12 · Excel de recibidas para Diez', () => {
 
   it('para si un tipo de retención no tiene subcuenta en Sumied', () => {
     expect(subcuentaRetencion('profesional')).toEqual(RETENCIONES.profesional)
-    expect(() => subcuentaRetencion('alquiler')).toThrow(/no tiene subcuenta en Sumied/)
+    expect(RETENCIONES.alquiler.subcuenta).toBe('47510019') // Julio, 24/10
+    expect(() => subcuentaRetencion('alquiler')).toThrow(/no tiene su valor en la configuración de Diez/)
+    expect(() => subcuentaRetencion('capital')).toThrow(/no tiene subcuenta en Sumied/)
     expect(() => subcuentaRetencion('profesional', { profesional: { tipoDiez: 'PRO', subcuenta: '' } })).toThrow(/no tiene subcuenta/)
   })
 
