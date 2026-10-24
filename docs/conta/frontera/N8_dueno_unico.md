@@ -1,6 +1,7 @@
 # N8 · Un solo dueño para tres tablas: `supplier_invoice`, `channel_settlement` y `licensed_settlement`
 
 > Paso 7 de la auditoría C09. Solo documento: no cambia código ni base.
+> **Puesto al día el 24/10 con las decisiones de Julio y su regla** (al final).
 > Medido el 24/10 en producción, en solo lectura, y en `origin/main`.
 > Las cifras de filas no se dan por cuenta: las tres tablas tienen filas en
 > **una sola cuenta** (regla 9: ninguna de la plantilla).
@@ -48,14 +49,11 @@ del N6) y nunca por la tabla.
 | Lee | Todo lo anterior | `licensed_economics_dashboard` |
 | Apunta a | `supplier_invoice`, `journal_entry` y `company` | `locations`, `party` y `supplier` |
 
-### Y lo que ya da por hecho el #317 (N6)
+### Y el #317 (N6), ya resuelto
 
-La puerta v1 trae `fuente_liquidaciones_plataforma_v1`,
-`fuente_liquidacion_pedidos_v1` y `fuente_licencias_mes_v1`. Las tres **leen
-`channel_settlement` y `licensed_settlement` como si fueran de Folvy**. Si las
-dos pasan a ser de Sumied, esas tres sobran: Sumied leería su propia tabla.
-**Conviene decidirlo antes de aplicar la tanda del #317.** Las otras seis de
-la puerta no dependen de esto.
+La puerta v1 traía tres funciones que leían las dos liquidaciones como si fueran
+de Folvy. Con la decisión 2 se quitaron antes de aplicar su tanda: en producción
+están las cinco de la puerta y las dos de apoyo, y ninguna de liquidaciones.
 
 ## Las opciones, tabla a tabla
 
@@ -107,12 +105,98 @@ leen se quitan.
 - **A favor:** el #317 ya está escrito así.
 - **En contra:** Folvy sería dueño de una tabla que no escribe. Todo lo que la escribe es de Sumied, y para escribirla tendría que hacerlo por funciones de Folvy.
 
-## Lo que hay que decidir
+## La regla de Julio (24/10) para todo lo que se mueve
 
-1. **`supplier_invoice`:** ¿A (Sumied), B (Folvy) o C (partirla)? Recomendada: **A**.
-2. **Las dos liquidaciones:** ¿A (Sumied) o B (Folvy)? Recomendada: **A**. Si es A, quito del #317 las tres funciones que las leen **antes** de aplicar su tanda.
-3. **`channel_settlement_order`:** ¿va con su liquidación, a Sumied? Recomendado: sí.
-4. **La aprobación de facturas por roles** (`invoice_approval_rule`, de Folvy): si `supplier_invoice` es de Sumied, ¿la aprobación se muda con ella o la quitamos? Hoy no lo puedo medir desde aquí: depende de si alguien la usa.
-5. **El orden.** El de siempre para quitar algo: primero el front deja de escribir y se publica, y en otra tanda se cierran los permisos. Propuesta:
-   1. las liquidaciones, que es lo más barato;
-   2. después `supplier_invoice`, empezando por las lecturas de coste, ensayadas por sus cuatro caminos.
+**Folvy nunca se queda cojo por lo que se haga en Sumied.** Una cuenta que solo
+tiene Folvy no pierde nada de lo que tiene hoy, y no tiene que contratar Sumied
+para seguir usándolo.
+
+Cómo se sabe qué tiene cada cuenta, hoy: Sumied está encendido si la cuenta
+tiene el interruptor `conta` en `feature_flags`. Medido el 24/10:
+- Foodint tiene los dos productos.
+- Kitchen Grill LstQ y Casa Lola tienen solo Folvy, y hoy no tienen ni
+  facturas de proveedor ni liquidaciones.
+- La plantilla (Folvy Interno) no cuenta.
+
+## Lo que decidió Julio (24/10)
+
+1. **Facturas de proveedor: el dato es de Sumied.**
+   - Con los dos productos, se dan de alta en un solo sitio, Sumied, y Folvy las lee (coste del plato, precios).
+   - Solo con Folvy, Supply sigue dando altas y editando como hoy, **sobre la misma tabla**.
+2. **Liquidaciones, y qué pedidos lleva cada una: de Sumied, con su liquidación.** Una cuenta solo con Folvy tiene que seguir teniendo liquidaciones (hoy no las tiene), sobre lo mismo y sin copia.
+3. **Aprobación de facturas por roles: se muda con las facturas** y sigue disponible solo con Folvy.
+   - Medido el 24/10: **nadie la usa**. Hay 0 reglas en `invoice_approval_rule` en las cuatro cuentas.
+4. **El orden:**
+   - primero las liquidaciones;
+   - después las facturas, empezando por el precio que alimenta el coste del plato, probado en sus cuatro caminos (regla 10).
+
+## Cosa a cosa: qué ve cada cuenta
+
+### 1. Liquidaciones de plataforma (`channel_settlement`) y sus pedidos (`channel_settlement_order`)
+
+| | Solo Folvy, hoy | Solo Folvy, después | Con los dos productos |
+|---|---|---|---|
+| **Meter liquidaciones** (CSV de Glovo, Uber y Just Eat, o el correo de Uber) | **No puede.** La importación vive en Sumied (Compras › Liquidaciones y la entrada por correo). | **Puede**, con la misma importación y en la misma tabla, desde una entrada de Folvy (Ventas). **Sin asiento.** | Como hoy: en Sumied, con su asiento. |
+| **Ver la rentabilidad por canal** (Ventas › Economía / Márgenes) | La pantalla está, pero sale vacía: no tiene liquidaciones. | Con datos. | Como hoy. |
+| **Cruzar la liquidación con los pedidos** | No puede. | Puede: el mismo cruce, sobre la misma tabla. | Como hoy, en Sumied. |
+| **Cobro, periodo y asiento** | — | No aplica: no lleva contabilidad. | En Sumied. |
+
+**Dónde pierde hoy y cómo se evita:** hoy una cuenta solo con Folvy ya está coja, porque no puede meter liquidaciones. Se arregla así:
+- La importación y el cruce, que hoy viven en Sumied, se ofrecen también desde Folvy cuando la cuenta no tiene `conta`. Escriben en la misma tabla, sin asiento y sin copia.
+- La regla para no romper nada es que **la importación no puede exigir lo contable**: ni empresa, ni asiento, ni cuenta de cobro.
+
+*Ojo:* esta importación es la base del V01 de D (Ventas en Sumied, sobre las
+`d01_liquidaciones_*`). Este documento no la toca. Abrirla a Folvy se hace
+**después del V01 y con D**, porque es lo suyo.
+
+### 2. Liquidaciones de licencia (`licensed_settlement`, Cloudtown)
+
+| | Solo Folvy, hoy | Solo Folvy, después | Con los dos productos |
+|---|---|---|---|
+| **Meter la liquidación del mes** | **No puede.** Preparar, contrastar y confirmar (`compras_liquidacion_*`) son de Sumied. | Puede preparar y confirmar, sin asiento, en la misma tabla. | Como hoy, en Sumied, con su asiento. |
+| **Verla** (Ventas › Cedidas CTB) | La pantalla está, pero sale vacía. | Con datos. | Como hoy. |
+
+**Dónde pierde y cómo se evita:** lo mismo que en el punto 1. Lo que hoy solo hace Sumied se ofrece sin asiento a la cuenta que no tiene `conta`.
+
+### 3. Facturas de proveedor (`supplier_invoice`)
+
+| | Solo Folvy, hoy | Solo Folvy, después | Con los dos productos |
+|---|---|---|---|
+| **Dar de alta** (a mano o leyendo el PDF) | En Supply › Facturas. | **Igual**, en Supply y en la misma tabla. | **Solo en Sumied.** En Supply el botón de alta lleva a Sumied. |
+| **Cruzar con el albarán** (`run_invoice_match`) | En Supply. | Igual. | Igual, sobre la factura que entró por Sumied. |
+| **Que el precio de la factura pase al coste del plato** (`apply_invoice_costs`) | Al pulsar «Aprobar» en Supply. | Igual. | **Hoy no pasa: validar en Sumied no llama a `apply_invoice_costs`.** Ver abajo. |
+| **Ver las facturas** | En Supply. | Igual. | En Sumied; en Supply, la lista se queda solo para mirar. |
+| **Anular o marcar diferencias** | En Supply. | Igual. | En Sumied. |
+| **IVA, asiento, Diez y pago** | — | No aplica. | En Sumied, como hoy. |
+
+**Dónde pierde y cómo se evita:**
+- **Solo Folvy no pierde nada**, porque Supply se queda como está y sobre la misma tabla.
+- **Lo que hay que cuidar** son los disparadores de Sumied sobre `supplier_invoice` (N4: no repetida, IBAN, pago):
+  - no pueden impedir una alta de Supply en una cuenta sin `conta`;
+  - se comprueban dando de alta una factura desde Supply en una cuenta de staging sin `conta`.
+- **Con los dos productos falta algo que hoy tampoco está:** el precio de una factura validada en Sumied no llega al coste del plato.
+  - Es la primera pieza del orden: que validar en Sumied pase el precio, igual que «Aprobar» en Supply.
+  - Va con sus cuatro caminos (regla 10): cerrar una venta, recibir un albarán, apuntar una merma y aprobar un recuento.
+
+### 4. Aprobación de facturas por roles (`invoice_approval_rule`)
+
+| | Solo Folvy, hoy | Solo Folvy, después | Con los dos productos |
+|---|---|---|---|
+| **Poner reglas** («las de más de 500 € las aprueba un encargado») | En Supply. | **Igual**, en Supply. | En Sumied, sobre la misma tabla. |
+| **Aprobar según la regla** | En Supply. | Igual. | Antes de validar, en Sumied. |
+
+**Dónde pierde y cómo se evita:** no pierde. Además, hoy no la usa nadie (0 reglas), así que moverla no le cambia nada a ninguna cuenta.
+
+## El orden, con la regla
+
+1. **Liquidaciones:**
+   1. que Sumied sea el único que escribe, por funciones;
+   2. los dos paneles de Folvy leen por una función con versión;
+   3. **después**, con D y tras el V01, la importación sin asiento para las cuentas solo con Folvy.
+2. **Facturas:**
+   1. primero, que validar en Sumied pase el precio al coste del plato, probado en sus cuatro caminos;
+   2. después, el alta en un solo sitio cuando hay dos productos;
+   3. y la prueba de que Supply sigue dando altas en una cuenta sin `conta`.
+3. **Aprobación por roles:** se muda con las facturas. Como no la usa nadie, no hay nada que traspasar.
+
+Nada de esto se ha movido todavía: este documento solo lo ordena.
