@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 // @ts-expect-error módulo .mjs sin tipos
-import { CAMPOS, FECHA, PROVEEDOR, RETENCIONES, TIPO_RETENCION, XML, columnas, libro, revisar, subcuentaRetencion } from '../../../scripts/conta/diez/c12-excel-recibidas.mjs'
+import { CAMPOS, FECHA, PROVEEDOR, RETENCIONES, TIPO_RETENCION, XML, columnas, libro, revisar, subcuentaRetencion, tiposRetencionDelXml } from '../../../scripts/conta/diez/c12-excel-recibidas.mjs'
 
 const col = columnas() as Record<string, number>
 const letra = (cod: string) => XLSX.utils.encode_col(col[cod] - 1)
@@ -50,9 +50,16 @@ describe('C12 · Excel de recibidas para Diez', () => {
 
   it('para si un tipo de retención no tiene subcuenta en Sumied', () => {
     expect(subcuentaRetencion('profesional')).toEqual(RETENCIONES.profesional)
-    expect(RETENCIONES.alquiler.subcuenta).toBe('47510019') // Julio, 24/10
-    expect(() => subcuentaRetencion('alquiler')).toThrow(/no tiene su valor en la configuración de Diez/)
+    expect(RETENCIONES.alquiler).toEqual({ tipoDiez: 'ALQ', subcuenta: '47510019' }) // Julio, 24/10
     expect(() => subcuentaRetencion('capital')).toThrow(/no tiene subcuenta en Sumied/)
+    expect(() => subcuentaRetencion('profesional', { profesional: { tipoDiez: null, subcuenta: '47510015' } })).toThrow(/no tiene su valor/)
+  })
+
+  it('para si la configuración de Diez no conoce el valor del tipo (ALQ, hasta que Julio lo guarde)', () => {
+    expect(tiposRetencionDelXml(XML)).toEqual(['PRO'])
+    expect(() => subcuentaRetencion('alquiler')).toThrow(/no conoce el valor «ALQ»/)
+    const conAlq = XML.replace('<Valor01>PRO</Valor01>', '<Valor01>PRO</Valor01>\n      <Valor02>ALQ</Valor02>')
+    expect(subcuentaRetencion('alquiler', RETENCIONES, conAlq)).toEqual(RETENCIONES.alquiler)
     expect(() => subcuentaRetencion('profesional', { profesional: { tipoDiez: 'PRO', subcuenta: '' } })).toThrow(/no tiene subcuenta/)
   })
 

@@ -57,13 +57,29 @@ cuenta y el asiento queda cojo. Pasó en la C0009 con la 47510015.
   (`subcuentas/add`, ya en `diezCliente.ts`) con el nombre que tienen en Sumied,
   y solo cuando Julio lo confirma. Queda apuntado quién y cuándo, y después se
   vuelve a comprobar.
-- Si Diez no contesta, tampoco se genera: no se puede saber si están.
+- Si Diez no contesta, tampoco se genera: no se puede saber si están (de
+  acuerdo, Julio, 24/10).
 
 **Cuentas de retención** *(Julio, 24/10)*: profesionales a la **47510015** y
 alquileres a la **47510019**, las que Foodint ya tiene enlazadas a esos tipos en
-Sumied. El Excel lleva la de cada tipo, leída de la base. Si un tipo no la tiene,
-o no tiene su valor en la configuración de Diez (hoy solo «PRO» para
-profesionales), no se genera.
+Sumied. El valor del tipo en la configuración de recibidas: **PRO** para
+profesionales y **ALQ** para «Alquiler de local» (Julio, 24/10). El Excel lleva
+la subcuenta y el valor de cada tipo. No se genera si un tipo no tiene
+subcuenta, o si la configuración no conoce su valor: Diez dejaría fuera la
+retención y el asiento descuadraría, como en la primera prueba.
+
+## Antes del primer traspaso real: las configuraciones en la C0008
+
+Julio carga en **Diez real (C0008)** las dos configuraciones definitivas. Diez
+las guarda por base, y la C0008 no tiene las de las pruebas de la C0009.
+
+| | Fichero | Qué hay que comprobar en la pantalla |
+|---|---|---|
+| Emitidas | `docs/conta/c12/prueba-excel/ConfiguracionExpedidas-c12.XML` | Probada en la C0009 (las tres con su PDF). |
+| Recibidas | `docs/conta/c12/prueba-excel/ConfiguracionRecibidas-c12.XML` | Probada en la C0009 con **PRO**. En la retención, añadir **ALQ** a «Alquiler de local», guardar y exportar el XML: ése es el definitivo, y entra en el generador (hoy para si falta ALQ). |
+
+Después, el primer traspaso comprueba él solo que la C0008 tiene todas las
+subcuentas (la 47510015 y la 47510019 incluidas) antes de preparar los Excel.
 
 **2. Banco, asientos a mano y liquidaciones, por la API (`apuntes/add`), sin PDF.**
 - Van solos al pulsar «Traspasar», en tandas, como está hecho en el #322.

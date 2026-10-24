@@ -56,16 +56,28 @@ export const TIPO_RETENCION = 'PRO'
  */
 export const RETENCIONES = {
   profesional: { tipoDiez: TIPO_RETENCION, subcuenta: '47510015' },
-  // Julio, 24/10 (respuesta 6): alquileres a la 47510019, como en Foodint.
-  // Su valor en la configuración de Diez aún no está asignado: sin él, para.
-  alquiler: { tipoDiez: null, subcuenta: '47510019' },
+  // Julio, 24/10: alquileres a la 47510019 (respuesta 6) con el valor ALQ
+  // (respuesta 7). Mientras el XML no traiga ALQ, el generador para.
+  alquiler: { tipoDiez: 'ALQ', subcuenta: '47510019' },
 }
 
-/** La subcuenta de retención de un tipo, o para: sin ella, Diez deja la línea sin cuenta. */
-export function subcuentaRetencion(codigo, tabla = RETENCIONES) {
+/** Los valores de tipo de retención que conoce la configuración (Configuracion2 › Campo034 › ValorNN). */
+export function tiposRetencionDelXml(xml) {
+  const b = xml.match(/<Configuracion2>[\s\S]*?<Campo034>([\s\S]*?)<\/Campo034>/)?.[1] ?? ''
+  return [...b.matchAll(/<Valor\d+>([^<]+)<\/Valor\d+>/g)].map((m) => m[1])
+}
+
+/**
+ * La subcuenta y el valor de Diez de un tipo de retención, o para:
+ *   · sin subcuenta, Diez deja la línea sin cuenta (2.ª prueba);
+ *   · con un valor que la configuración no conoce, Diez deja fuera la
+ *     retención y el asiento descuadra (1.ª prueba, los 30 €).
+ */
+export function subcuentaRetencion(codigo, tabla = RETENCIONES, xml = XML) {
   const r = tabla[codigo]
   if (!r?.subcuenta) throw new Error(`El tipo de retención «${codigo}» no tiene subcuenta en Sumied: el asiento saldría con una línea sin cuenta.`)
   if (!r.tipoDiez) throw new Error(`El tipo de retención «${codigo}» no tiene su valor en la configuración de Diez.`)
+  if (!tiposRetencionDelXml(xml).includes(r.tipoDiez)) throw new Error(`La configuración de recibidas no conoce el valor «${r.tipoDiez}» (${codigo}): Diez dejaría fuera la retención y el asiento descuadraría.`)
   return r
 }
 
