@@ -8,6 +8,9 @@ name: PR a main · funciones y título
 #   2. la descripción dice, en «## Funciones a desplegar a mano», las funciones
 #      que toca el PR (las carpetas cambiadas y las que importan algo de
 #      _shared que cambie), o «ninguna».
+#   3. (N2, 23/10) la descripción dice a qué producto va, en «## Producto»:
+#      Sumied, Folvy o Común (_shared es común), contra el diff; y si agrupa
+#      las funciones en «### Sumied» / «### Folvy», cada una en el suyo.
 # Lo que no puede ver: el mensaje que se escribe AL FUSIONAR. Ese lo vigila
 # quien fusiona (CLAUDE.md), y si se cuela, deploy-edge-functions no corre:
 # se despliega a mano con su `funciones`.
@@ -33,7 +36,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Título y funciones a desplegar a mano
+      - name: Título, producto y funciones a desplegar a mano
         env:
           PR_TITULO: ${{ github.event.pull_request.title }}
           PR_CUERPO: ${{ github.event.pull_request.body }}
