@@ -46,7 +46,9 @@ for (const ancho of ANCHOS) {
     // 1 · Facturas recibidas.
     await page.goto('/conta/documentos?ver=todas')
     await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toBeVisible({ timeout: 30_000 })
-    const fila = page.locator('[data-fila]').first()
+    // La F-2026-1022 de Mayorista Prueba Alfa (semilla D01), que lleva su PDF: la primera
+    // de «Todas» depende de lo que hayan creado otras pruebas y puede no tenerlo.
+    const fila = page.locator('[data-fila]').filter({ hasText: 'F-2026-1022' }).first()
     await expect(fila).toBeVisible({ timeout: 30_000 })
     if (ancho === 390) await expect(barra(page)).toHaveCount(0)
     else await expect(barra(page)).toHaveAttribute('data-desplegada', ancho >= 1600 ? 'si' : 'no')
