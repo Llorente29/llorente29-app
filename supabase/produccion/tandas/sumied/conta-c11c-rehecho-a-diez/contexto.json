@@ -1,0 +1,12 @@
+{
+  "_que": "C11c · el rehecho a Diez · contexto de producción de la tanda (20261024T0732), medido en SOLO LECTURA el 24/10 a las 07:35 UTC: no existe conta_diez_numero_vez (ninguna firma), nada en el camino del pedido, nada en el historial.",
+  "medido": "2026-10-24T07:35Z",
+  "tanda": {
+    "supabase/migrations/20261024T0732_c11c_numero_vez.sql": "7f94727813521e18dfddb7627195fdcc"
+  },
+  "contexto": {
+    "tablas": [], "funciones": [], "filas": {}, "otras": {},
+    "camino": { "tablas": [], "funciones": [] },
+    "usos": {}, "registro": []
+  }
+}

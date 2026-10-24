@@ -1,0 +1,2 @@
+supabase/migrations/20261024T0732_c11c_numero_vez.sql
+supabase/staging/sql/20261024_c11c_rehecho_a_diez_prueba.sql
