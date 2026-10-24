@@ -1,0 +1,21 @@
+# V01 · Entrega 2 · Ventas › Cierres del día (Julio, 24/10). Rama claude/v01-cierres.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 1440 — AÑADE los cambios de un pedido en su cierre (conta_cierre_ajuste),
+#      la espera (conta_cierre_espera), la serie de cada canal
+#      (invoice_series.channel_id), el asiento del cobro en efectivo
+#      (customer_invoice_payment.entry_id) y las funciones de la pantalla. No
+#      toca datos ni nada que exista. No está en el camino del pedido.
+#   2. 1441 — CAMBIA en caliente, con la misma firma, ocho funciones de la
+#      contabilidad (declaradas en su cabecera, con su prueba de staging): los
+#      pedidos del día y los días por asentar cuentan los cambios; el PDF lleva
+#      el importe cambiado; el cobro en efectivo hace su asiento; el PDF de una
+#      factura queda junto a su asiento; la rectificativa de una resumen; y el
+#      asiento de una factura no se anula desde Contabilidad. No toca datos ni
+#      escribe en sale.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/v01-cierres.sql
+supabase/migrations/20261024T1440_v01_cierres.sql
+supabase/migrations/20261024T1441_v01_cierres_cambia.sql

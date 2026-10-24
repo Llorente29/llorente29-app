@@ -1,0 +1,35 @@
+{
+  "_que": "V01 · Entrega 2 · cierres del día · contexto de producción de la tanda (1440 y 1441), medido en SOLO LECTURA el 24/10 con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen invoice_series y customer_invoice_payment (0 filas las dos) y las ocho funciones que cambian, ninguna en el camino del pedido; no existe nada de lo que crea la 1440; nada en el historial.",
+  "medido": "2026-10-24T13:20Z",
+  "tanda": {
+    "supabase/migrations/20261024T1440_v01_cierres.sql": "91b145a054111adc5377256ad2178f1a",
+    "supabase/migrations/20261024T1441_v01_cierres_cambia.sql": "e9aba3dc6daa70a01e7be1161dedf293"
+  },
+  "contexto": {
+    "tablas": [
+      "public.customer_invoice_payment",
+      "public.invoice_series"
+    ],
+    "funciones": [
+      "public.conta_dias_por_asentar(uuid,date,date)",
+      "public.conta_pedidos_del_dia(uuid,uuid,date)",
+      "public.conta_resumen_ventas(uuid)",
+      "public.conta_venta_cobrar(uuid,date,numeric,text,text,text)",
+      "public.conta_venta_corregir(uuid,text,text,text)",
+      "public.conta_venta_emitir(uuid,text)",
+      "public.conta_venta_pdf_guardar(uuid,text,text,integer)",
+      "public.journal_entry_anular(uuid,text,date,text)"
+    ],
+    "filas": {
+      "public.customer_invoice_payment": 0,
+      "public.invoice_series": 0
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}
