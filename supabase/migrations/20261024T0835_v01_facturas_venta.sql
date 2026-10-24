@@ -471,7 +471,7 @@ begin
   end if;
   for v_x in select * from jsonb_array_elements(v_c->'cuentas') loop
     select code into v_cta from public.company_account where id = (v_x->>'cuenta_id')::uuid;
-    v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_cta, 'tercero_id', v_f.party_id, 'documento', v_texto, 'local_id', v_f.location_id, 'concepto', 'Factura ' || v_texto,
+    v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_cta, 'tercero_id', v_f.party_id, 'documento', v_texto, 'concepto', 'Factura ' || v_texto,
       'haber', greatest((v_x->>'base')::numeric, 0), 'debe', greatest(-(v_x->>'base')::numeric, 0)));
   end loop;
   for v_x in select * from jsonb_array_elements(v_c->'tipos') loop
@@ -499,6 +499,9 @@ begin
       'debe', greatest((v_c->>'retencion')::numeric, 0), 'haber', greatest(-(v_c->>'retencion')::numeric, 0)));
   end if;
 
+  -- Cada apunte, con el local de la factura o «común» (la analítica por local lo pide al validar).
+  select coalesce(jsonb_agg(x || case when v_f.location_id is not null then jsonb_build_object('local_id', v_f.location_id) else jsonb_build_object('comun', true) end order by i), '[]'::jsonb)
+    into v_lineas from jsonb_array_elements(v_lineas) with ordinality as t(x, i);
   if jsonb_array_length(v_lineas) > 0 then
     v_r := public._journal_entry_proponer(v_f.company_id,
       jsonb_build_object('series', 1, 'fecha', v_f.issue_date, 'source_type', 'customer_invoice', 'source_id', p_id,
