@@ -1280,3 +1280,51 @@ export function noConfirmadoPagado(
     },
   }
 }
+
+// ── Cierre del día · cerrado sin confirmar que la liquidación no cobra (N2) ──
+//
+// C11b: el cierre del día cerró como vendido un pedido de plataforma que la
+// plataforma no confirmó; su liquidación cubre su día y no lo trae cobrado. Si
+// no se cobró, la venta se deshace con una DEVOLUCIÓN de su día (o del primer
+// día abierto), aparte, como lo que decidió la plataforma (sales_adjustment,
+// origen = la venta): las mismas líneas que una devolución del día (la 708 de
+// la marca, la 477 y el cobro de la plataforma), con su porqué. El asiento del
+// día no se toca. Se valida o se descarta como cualquier propuesta.
+
+export interface SinCobrarEnLiquidacion {
+  pedido: { id: string; codigo: string | null; canalId: string | null; marcaId: string | null; total: number }
+  /** Su día de venta. */
+  dia: string
+  /** La fecha del asiento: su día si está abierto; si no, el primer día abierto. */
+  fecha: string
+  liquidacion: { ref: string | null; fecha: string | null }
+}
+
+export function devolucionSinCobrar(
+  x: SinCobrarEnLiquidacion,
+  e: Omit<EntradaVentasDia, 'pedidos' | 'devoluciones' | 'fecha'>,
+): { propuesta: Propuesta | null; sinPropuesta: string | null } {
+  const canal = e.nombreCanal(x.pedido.canalId)
+  const codigo = x.pedido.codigo ?? 'sin código'
+  const res = ventasDelDia({
+    ...e, fecha: x.fecha, pedidos: [],
+    devoluciones: [{ pedidoId: x.pedido.id, codigo: x.pedido.codigo, canalId: x.pedido.canalId, marcaId: x.pedido.marcaId, marcaPropia: true, importe: x.pedido.total, conFactura: false }],
+  })
+  if (!res.propuesta) return { propuesta: null, sinPropuesta: res.sinPropuesta }
+  const liq = x.liquidacion.ref ? `la liquidación ${x.liquidacion.ref}${x.liquidacion.fecha ? ` del ${diaYMes(x.liquidacion.fecha)}` : ''}` : 'su liquidación'
+  return {
+    sinPropuesta: null,
+    propuesta: {
+      ...res.propuesta,
+      concepto: `Devolución del ${diaYMes(x.dia)} · ${canal} · pedido ${codigo}, no cobrado`,
+      origen: { tipo: 'sales_adjustment', id: x.pedido.id },
+      documento: x.pedido.codigo,
+      porque: `${canal} no ha cobrado el pedido ${codigo}, que se cerró como vendido sin confirmar el ${diaYMes(x.dia)}`,
+      razones: [
+        { decision: 'Se deshace la venta con una devolución', porque: `al cierre del día seguía abierto y se cerró como vendido sin confirmación; ${liq} cubre su día y no lo trae cobrado, y la liquidación de la plataforma tiene la última palabra` },
+        { decision: x.fecha === x.dia ? 'Va aparte del asiento del día' : `Va el ${diaYMes(x.fecha)}, el primer día abierto`, porque: x.fecha === x.dia ? 'el asiento del día ya lleva el pedido como venta; esta devolución lo compensa sin tocarlo' : `su día (${diaYMes(x.dia)}) está cerrado; el asiento del día no se toca` },
+        ...res.propuesta.razones,
+      ],
+    },
+  }
+}

@@ -230,12 +230,18 @@ test('La ficha lleva a «Cómo te factura»; «Abrir su ficha» desde Compras ca
   await expect(page.getByRole('heading', { level: 1, name: 'Cómo te factura' })).toBeVisible()
 })
 
-test('Ventas, en el menú: dice que aún no y dónde están hoy las ventas', async ({ page }) => {
+test('Ventas, en el menú: lo que deja el cierre del día, y dónde están hoy las ventas', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/ventas')
   await expect(page.getByRole('heading', { level: 1, name: 'Ventas' })).toBeVisible()
   await expect(page.getByText('Aún no.')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Ver los asientos de ventas' })).toHaveAttribute('href', /\/conta\/libros\/diario\?ver=ventas$/)
+  // N2 · Lo que deja el cierre del día: la bandeja, con sus tres cifras y su cola (o lo que dice si no hay nada).
+  const cierre = page.getByRole('region', { name: 'Lo que deja el cierre del día' })
+  await expect(cierre).toBeVisible({ timeout: 30_000 })
+  for (const c of ['Para revisar', 'Sin cobrar', 'Cerrados sin confirmar']) await expect(cierre.getByText(c, { exact: true }).first()).toBeVisible()
+  await expect(cierre.getByRole('region', { name: 'Pedidos que dejó el cierre del día' })).toBeVisible()
+  await expect(cierre.getByText(/No he podido leer/)).toHaveCount(0)
   await capturar(page, 'ventas')
 })

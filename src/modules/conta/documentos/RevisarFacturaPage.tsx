@@ -47,6 +47,7 @@ import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import { IvaNoDeducibleFicha } from '@/modules/conta/documentos/IvaNoDeducibleFicha'
 import { LiquidacionesDeLaFactura } from '@/modules/conta/documentos/LiquidacionesDeLaFactura'
 import { completarFicha, enUnaFrase } from '@/modules/conta/lib/fichaDesdeDocumento'
+import { NifDeLaFicha } from './NifDeLaFicha'
 import { guardarFicha, obtenerFicha } from '@/modules/conta/services/proveedorService'
 import {
   apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, ponerPapelRecibida, sinPapelRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida,
@@ -176,6 +177,8 @@ export default function RevisarFacturaPage() {
     if (!p || !fp) return null
     const c = completarFicha({ nif: fp.taxId, nombreFiscal: fp.legalName, calle: fp.fiscalStreet, codigoPostal: fp.fiscalPostalCode, ciudad: fp.fiscalCity },
       { nif: p.nif, nombre: p.nombre, direccion: p.direccion })
+    // N1: el NIF que le falta no espera a validar (sin él no hay asiento): lo guarda «NIF del proveedor», ahora.
+    if (c.proponer.taxId) { delete c.proponer.taxId; c.frases = c.frases.filter((f) => !f.startsWith('el NIF ')) }
     return c.frases.length || c.contradice.length ? c : null
   }, [fac?.lectura, fichaProv.datos])
   const dup = useLeer(accountId && fac ? () => duplicadaDe(accountId, fac.id, fac.proveedor?.id ?? null) : null, `${accountId}:${invoiceId}:${fac ? 'leida' : '-'}:${fac?.proveedor?.id}:${fac?.numero}:${fac?.total}:dup:${vuelta}`)
@@ -301,6 +304,8 @@ export default function RevisarFacturaPage() {
     } catch (e) { setFalloDescarte(e instanceof Error ? e.message : String(e)) }
   }
   const [apuntando, setApuntando] = useState(false)
+  // N1 · Lo que dijo «NIF del proveedor» al guardar (el bloque se va: la ficha ya tiene NIF).
+  const [nifGuardado, setNifGuardado] = useState<{ id: string; texto: string } | null>(null)
   const [apuntada, setApuntada] = useState<{ id: string; r: Apuntada } | null>(null)
   const hecho = apuntada?.id === invoiceId ? apuntada.r : null
 
@@ -493,6 +498,12 @@ export default function RevisarFacturaPage() {
           {desdeDocumento.contradice.map((x) => <p key={x} className="s-aviso-lista" data-tono="duda">{x} No cambio su ficha: mira cuál vale.</p>)}
         </div>
       )}
+      {/* N1 · Sin NIF en su ficha no hay asiento: se guarda aquí, antes de validar (el documento lo propone si lo trae). */}
+      {!soloLectura && !fac.asiento && fac.proveedor?.id && fichaProv.datos && !fichaProv.datos.taxId && (
+        <NifDeLaFicha key={fac.proveedor.id} proveedorId={fac.proveedor.id} proveedor={proveedor} entityKind={fichaProv.datos.entityKind}
+          delDocumento={fac.lectura?.factura?.proveedor?.nif ?? null} alGuardar={(t) => { setNifGuardado({ id: invoiceId, texto: t }); setVuelta((v) => v + 1) }} />
+      )}
+      {nifGuardado?.id === invoiceId && <p className="s-aviso-lista" data-tono="ok" role="status" data-prueba="nif-guardado">{nifGuardado.texto}</p>}
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={tiposIva.datos ?? [21, 10, 4, 0]} totales={totales} pdf={pdf}
         fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}

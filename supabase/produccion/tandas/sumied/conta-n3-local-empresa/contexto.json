@@ -1,0 +1,16 @@
+{
+  "_que": "N3 · el maestro «local → empresa» · contexto de producción de la tanda (20261024T0630), medido en SOLO LECTURA el 24/10 a las 06:27 UTC con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. No existe nada de lo que crea: ni location_company ni sus dos funciones; nada en el camino del pedido; nada en el historial.",
+  "medido": "2026-10-24T06:27Z",
+  "tanda": {
+    "supabase/migrations/20261024T0630_n3_local_empresa.sql": "d9c47f654c0b600406456b6c5db5aa7e"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [],
+    "filas": {},
+    "otras": {},
+    "camino": { "tablas": [], "funciones": [] },
+    "usos": {},
+    "registro": []
+  }
+}

@@ -16,7 +16,7 @@ import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
 import { aplicarAsientoAMano, aplicarReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, liquidacionPlataforma, facturaProveedor, deLaFacturaDeLote, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
+  ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, devolucionSinCobrar, liquidacionPlataforma, facturaProveedor, deLaFacturaDeLote, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
   type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion, type SerieTesoreria,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { avisoPeriodoCerrado, diaAbierto, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
@@ -174,6 +174,46 @@ export async function cargarContexto(accountId: string, companyId: string): Prom
         .flatMap((m) => { const c = porId.get(String(m.company_account_id)); return c ? [[String(m.channel_id), String(c.code)]] : [] })),
     },
   }
+}
+
+/**
+ * N2 · Lo que deja el cierre del día: la devolución de un pedido cerrado sin
+ * confirmar que su liquidación no cobra (C11b). Su día si está abierto; si no,
+ * el primer día abierto (y se avisa). La unidad, como el asiento de su día
+ * (por plataforma; Glovo, por marca). Lo devuelve en palabras (regla 8).
+ */
+export async function proponerDevolucionSinCobrar(accountId: string, companyId: string, x: {
+  saleId: string; locationId: string; dia: string; liquidacion: { ref: string | null; fecha: string | null }
+}, quien: string | null): Promise<string> {
+  const ctx = await cargarContexto(accountId, companyId)
+  const ventas = ctx.hoja('700'); const devoluciones = ctx.hoja('708') ?? ventas
+  const iva477 = ctx.tipoVentas ? ctx.enlace('tax_rate', ctx.tipoVentas.id, 'repercutido') : null
+  if (!ctx.tipoVentas || !iva477 || !ventas) throw new Error('Falta el IVA de tus ventas (Tu empresa) o su 477, o la 700 en el plan.')
+  const { fecha, aviso } = fechaPropuesta(x.dia, ctx.calendario)
+  if (!fecha) throw new Error(aviso ?? 'No hay ningún día abierto donde apuntarla.')
+  const delDia = ((await rpc('conta_pedidos_del_dia', { p_company: companyId, p_location: x.locationId, p_dia: x.dia })) as Fila[] | null) ?? []
+  const p = delDia.find((f) => String(f.id) === x.saleId)
+  if (!p) throw new Error('No encuentro el pedido en su día: puede que ya no esté cerrado.')
+  const cobroPorCanal: Record<string, string> = {}
+  for (const [id, c] of ctx.canales) { const cta = c.partyId ? ctx.enlace('customer', c.partyId, 'principal') : null; if (cta) cobroPorCanal[id] = cta }
+  const regla = ctx.ventasPorPlataforma
+  const canalId = s(p.canal_id); const marcaId = s(p.marca_id)
+  const unidad: UnidadVentas | undefined = regla ? unidadesDelDia([], [{ pedidoId: x.saleId, codigo: s(p.codigo), canalId, marcaId, marcaPropia: true, importe: n(p.total), conFactura: false }],
+    (c) => !!c && regla.porMarca.has(c))[0] : undefined
+  const res = devolucionSinCobrar({ pedido: { id: x.saleId, codigo: s(p.codigo), canalId, marcaId, total: n(p.total) }, dia: x.dia, fecha, liquidacion: x.liquidacion }, {
+    localId: x.locationId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(x.locationId) ?? 'local', unidad,
+    nombreCanal: (id) => (id ? ctx.canales.get(id)?.nombre ?? 'un canal' : 'sin canal'), nombreMarca: (id) => (id ? ctx.marcas.get(id)?.nombre ?? 'una marca' : 'sin marca'),
+    cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477, ventasPorMarca: regla?.ventasPorMarca, devolucionesPorMarca: regla?.devolucionesPorMarca,
+      promocionesPorCanal: regla?.promocionesPorCanal, enviosPorCanal: regla?.enviosPorCanal },
+  })
+  if (!res.propuesta) throw new Error(res.sinPropuesta ?? 'No se ha podido preparar la devolución.')
+  if (aviso) res.propuesta.avisos.push(aviso)
+  const r: ResultadoProponer = { propuestas: 0, yaEstaban: 0, descartadas: 0, sinPropuesta: [], validadasSolas: 0, mesVentas: null, quedanDias: 0 }
+  await proponer(companyId, res.propuesta, null, r, ctx, quien)
+  const dd = fecha.split('-').reverse().join('/')
+  if (r.descartadas) return 'Esa devolución ya se descartó antes: no la vuelvo a proponer.'
+  if (r.yaEstaban) return `Su devolución ya estaba en el libro (del ${dd}): valídala allí.`
+  return `Devolución propuesta en el libro, del ${dd}: valídala en Libros › Libro diario.${aviso ? ` ${aviso}` : ''}`
 }
 
 /** La propuesta, tal como la espera journal_entry_proponer. */
