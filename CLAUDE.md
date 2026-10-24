@@ -349,7 +349,14 @@ existir. Salió al ir a desplegar el cinturón y comparar los dos lados.)*
 - **El título nunca lleva `[skip ci]`** ni sus hermanas, y **el mensaje de la
   fusión tampoco**: con la marca, el push a `main` no lanza
   `deploy-edge-functions` y lo fusionado queda sin efecto.
-- Lo comprueba `pr-a-main.yml` (título y sección, contra el diff). El mensaje
+- **Y lleva `## Producto`** (N2, 23/10): Sumied, Folvy o Común, uno o varios.
+  Lo de Sumied pide «Sumied»; lo de Folvy, «Folvy»; el arranque de la app, lo
+  compartido de `src` y **`supabase/functions/_shared`**, «Común», porque
+  despliega funciones de los dos. Las migraciones, los workflows y los
+  documentos no piden nada: lo dice quien escribe el PR. Las funciones a
+  desplegar pueden ir en `### Sumied` (las `conta-*`) y `### Folvy` (el resto),
+  cada una en el suyo (`scripts/pr/productoDelPr.mjs`).
+- Lo comprueba `pr-a-main.yml` (título y secciones, contra el diff). El mensaje
   que se escribe al fusionar no lo ve: ése lo mira quien fusiona.
 
 *Detector automático:* si un PR toca `supabase/functions/_shared` y su lista
