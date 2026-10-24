@@ -36,7 +36,10 @@ do $$ begin
 end $$;
 set local statement_timeout = '120s';
 
--- La 1440 solo añade y entra de verdad desde la rama: primero su vuelta atrás, por si ya estuviera.
+-- El ensayo de la rama ya ha pasado la 1440 y la 1441 antes de esta prueba (y la
+-- 1440 entra de verdad, porque solo añade): primero sus vueltas atrás, en orden
+-- inverso, y desde ahí «lo de antes» es lo de producción.
+\i supabase/vuelta-atras/20261024T1441_v01_cierres_cambia.down.sql
 \i supabase/vuelta-atras/20261024T1440_v01_cierres.down.sql
 
 create temp table _c (clave text primary key, v text) on commit drop;
@@ -311,10 +314,13 @@ end $$;
 do $$
 declare v_mal text;
 begin
-  -- Byte a byte como antes; conta_resumen_ventas, como en PRODUCCIÓN (a933c398…), que es la verdad: staging la tenía atrasada.
+  -- Byte a byte como antes (que es como en producción: lo de antes salió de la misma vuelta atrás).
   select string_agg(h.proname, ', ') into v_mal from _huellas h
     join pg_proc p on p.proname = h.proname join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
-   where md5(pg_get_functiondef(p.oid)) <> case when h.proname = 'conta_resumen_ventas' then 'a933c39820650e004d01beab7508472c' else h.h end;
+   where md5(pg_get_functiondef(p.oid)) <> h.h;
+  if (select h from _huellas where proname = 'conta_resumen_ventas') <> 'a933c39820650e004d01beab7508472c' then
+    raise exception 'PRUEBA V01 CIERRES · 9: la vuelta atrás no deja conta_resumen_ventas como en producción (a933c398…).';
+  end if;
   if v_mal is not null then raise exception 'PRUEBA V01 CIERRES · 9: después de la vuelta atrás no son las de antes: %.', v_mal; end if;
   if to_regclass('public.conta_cierre_ajuste') is not null or to_regclass('public.conta_cierre_espera') is not null
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'invoice_series' and column_name = 'channel_id')
