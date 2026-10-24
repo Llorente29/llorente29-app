@@ -33,9 +33,9 @@ describe('el buscador general (Ctrl K)', () => {
     // S01: «Documentos» es ahora «Compras y gastos › Facturas recibidas».
     expect(t('recibidas')).toContain('Facturas recibidas')
   })
-  it('ni Ventas (S01: sobra, la sustituye Facturación) ni, en el producto solo, lo de Ajustes que dice «aún no»', () => {
-    expect(opciones('ventas', true).map((r) => r.titulo)).not.toContain('Ventas')
-    expect(opciones('ventas', false).map((r) => r.titulo)).not.toContain('Ventas')
+  it('Ventas, una sola vez (V01: es el apartado que sustituye a Facturación) y, en el producto solo, nada de Ajustes que diga «aún no»', () => {
+    expect(opciones('ventas', true).map((r) => r.titulo).filter((t) => t === 'Ventas')).toHaveLength(1)
+    expect(opciones('ventas', false).map((r) => r.titulo).filter((t) => t === 'Ventas')).toHaveLength(1)
     expect(opciones('certificados', true)).toEqual([])
     expect(opciones('certificados', false).map((r) => r.titulo)).toEqual(['Certificados y accesos'])
   })

@@ -154,7 +154,8 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
   // Al cambiar de tramo se olvida lo de a mano: volver a 1366 desde 1920 la pliega otra vez.
   const [tramoVisto, setTramoVisto] = useState(tramo)
   if (tramoVisto !== tramo) { setTramoVisto(tramo); setBarraAMano(null) }
-  const conRegla = producto?.id === 'compras'
+  // N5 · La regla de anchos: Compras y, desde el V01, Ventas (nacen con ella).
+  const conRegla = producto?.id === 'compras' || producto?.id === 'facturacion'
   const desplegada = conRegla ? barraAbierta(tramo, prefs.barraDesplegada, barraAMano) : prefs.barraDesplegada
   const alternarBarra = () => (conRegla && tramo !== 'ancho'
     ? setBarraAMano(!desplegada)

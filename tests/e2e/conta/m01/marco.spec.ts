@@ -108,7 +108,7 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
     await page.getByRole('button', { name: 'Abrir el menú' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
     // Lo que no tiene pantalla no sale (S01: nada vacío): ni Ventas ni Impuestos. S02 · PR 2: Facturación sí.
-    await expect(hoja.getByRole('link')).toHaveText([/^Inicio/, /^Contabilidad/, /^Facturación/, /^Compras y gastos/, /^Bancos/, /^Contactos/, /^Ajustes/, 'Volver a Folvy'])
+    await expect(hoja.getByRole('link')).toHaveText([/^Inicio/, /^Contabilidad/, /^Ventas/, /^Compras y gastos/, /^Bancos/, /^Contactos/, /^Ajustes/, 'Volver a Folvy'])
     await expect(menu(page).getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
     await esperarCargado(page)
     await page.evaluate(() => document.fonts.ready)
@@ -121,7 +121,7 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
   // Desplegada (de serie, S01c): S02, 232 px (antes 220), cada apartado con su
   // nombre en una línea; abajo, Favoritos y Ajustes.
   const barra = menu(page)
-  await expect(barra.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
+  await expect(barra.locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Ventas', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
   expect(Math.round((await barra.boundingBox())!.width)).toBe(232)
   // Cada nombre en una sola línea (S01b: «Compras y gastos» se partía).
   for (const alto of await barra.locator('.s-barra-item').evaluateAll((xs) => xs.map((x) => x.getBoundingClientRect().height))) expect(alto).toBeLessThanOrEqual(48)

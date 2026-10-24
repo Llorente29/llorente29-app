@@ -38,7 +38,6 @@ import { euros, eurosExactos, hoyEnMadrid, iniciales } from '@/modules/conta/lib
 import {
   anadirPapel, archivarTercero, asegurarCuentaLiquidacion, deshacerFusion, fusionarTerceros, fusionesDe, listarTercerosBase, type Fusion,
 } from '@/modules/conta/services/tercerosService'
-import { MARCA } from '../cuenta/marca'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 const CADA: Record<string, string> = { weekly: 'Liquida cada semana', fortnightly: 'Liquida cada 15 días', monthly: 'Liquida cada mes' }
@@ -468,15 +467,15 @@ function Resumen({ aviso }: { aviso: string | null }) {
   )
 }
 
-/** Cliente normal: aún no hay facturas emitidas (decisión 3, opción b). */
+/** Cliente normal: sus facturas se hacen y se ven en Ventas › Facturas (V01). */
 function FacturasVacias() {
   const [ventana, setVentana] = useState<Ventana>(null)
   return (
     <section className="cx-tarjeta" aria-label="Facturas">
       <h2 className="cx-tarjeta-titulo">Facturas</h2>
-      <Vacio titulo="Las facturas llegan con Facturación."
-        explicacion={`${MARCA.nombre} aún no emite facturas (encargo F01, con su numeración y Verifactu). Mientras, su ficha guarda los datos fiscales, el cobro y su cuenta para cuando llegue.`}
-        accion={<button type="button" className="cx-boton-sec" onClick={() => setVentana('nueva_factura')}>Pedir factura</button>} />
+      <Vacio titulo="Sus facturas, en Ventas › Facturas."
+        explicacion="Las que le hagas salen allí, con su cobro. Su ficha guarda lo que hace falta para facturarle: los datos fiscales, el cobro y su cuenta."
+        accion={<button type="button" className="cx-boton-sec" onClick={() => setVentana('nueva_factura')}>Nueva factura</button>} />
       <VentanaAccion ventana={ventana} cerrar={() => setVentana(null)} />
     </section>
   )
@@ -592,7 +591,7 @@ function PortadaMovil({ aviso }: { aviso: string | null }) {
         </section>
       )}
       {!c && !m && (
-        <div className="cx-tarjeta"><Vacio titulo="Las facturas llegan con Facturación." explicacion="Mientras, su ficha guarda sus datos fiscales, su cobro y su cuenta." /></div>
+        <div className="cx-tarjeta"><Vacio titulo="Sus facturas, en Ventas › Facturas." explicacion="Su ficha guarda sus datos fiscales, su cobro y su cuenta." /></div>
       )}
       {aprendido[0] && (
         <p className="cxt-frase-ia"><span className="cx-chip cx-chip-ia">IA</span> {aprendido[0].texto}: {aprendido[0].porque}.</p>
