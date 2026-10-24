@@ -170,8 +170,12 @@ describe('el sitio de la página: la barra marca Liquidaciones en la lista, la f
     const de = (p: string) => { const d = dondeEsta(p); return d ? `${d.producto.id}.${d.pestana?.id}` : null }
     expect(rutaLiquidaciones()).toBe(rutaConta(CONTA.rutas.liquidaciones))
     expect(rutaLiquidaciones('catcher')).toBe(`${rutaConta(CONTA.rutas.liquidaciones)}?subir=catcher`)
-    for (const p of ['/conta/compras/liquidaciones', '/conta/compras/liquidacion/nueva', '/conta/compras/liquidacion/x', '/conta/documentos/catcher/q1']) {
+    for (const p of ['/conta/compras/liquidaciones', '/conta/documentos/catcher/q1']) {
       expect(de(p), p).toBe('compras.liquidaciones')
+    }
+    // V01 · Entrega 3: la mensual del socio (y la de subir sus documentos) es de Ventas › Liquidaciones.
+    for (const p of ['/conta/compras/liquidacion/nueva', '/conta/compras/liquidacion/x', '/conta/ventas/liquidaciones']) {
+      expect(de(p), p).toBe('facturacion.liquidacionesVentas')
     }
     // Facturas recibidas sigue siendo suya.
     expect(de('/conta/documentos')).toBe('compras.recibidas')

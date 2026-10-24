@@ -1,0 +1,8 @@
+{
+  "_que": "V01 · Entrega 3 · liquidaciones · contexto de producción de la tanda (1650), medido en SOLO LECTURA el 24/10 con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. No existe nada de lo que crea (la tabla de lo resuelto y sus dos funciones), nada en el camino del pedido, nada en el historial.",
+  "medido": "2026-10-24T16:38Z",
+  "tanda": {
+    "supabase/migrations/20261024T1650_v01_liquidaciones.sql": "af873e936ba6c490978b9ccab92940aa"
+  },
+  "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

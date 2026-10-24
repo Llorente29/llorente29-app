@@ -1,0 +1,6 @@
+# V01 · Entrega 3 · Liquidaciones. La 1650 solo añade (y se puede pasar dos
+# veces): desde la rama, de verdad (W05). Su prueba (ROLLBACK): la fila de Glovo
+# con sus cierres y la de sin local aparte; el gasto con su asiento validado; el
+# pedido reclamado fuera del aviso del C11b; lo que no vale; B fuera; la vuelta atrás.
+supabase/migrations/20261024T1650_v01_liquidaciones.sql
+supabase/staging/sql/20261024_v01_liquidaciones_prueba.sql

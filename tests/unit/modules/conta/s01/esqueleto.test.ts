@@ -23,7 +23,7 @@ import { logoDe } from '@/modules/conta/cuenta/contratoCuenta'
 import { MARCA } from '@/marca/marca'
 import { mesCorto } from '@/modules/conta/lib/bancosVista'
 
-const rellena = (r: string) => rutaConta(r, { apartado: 'x', tabla: 'x', entrada: 'impuestos', codigo: '40000002', partyId: 'p', supplierId: 's', entryId: 'e', area: 'mayor', accion: 'libro-mayor', liqId: 'l', invoiceId: 'i', loteId: 'k', pestana: 'reglas', empresa: 'c' })
+const rellena = (r: string) => rutaConta(r, { apartado: 'x', tabla: 'x', entrada: 'impuestos', codigo: '40000002', partyId: 'p', supplierId: 's', entryId: 'e', area: 'mayor', accion: 'libro-mayor', liqId: 'l', clave: 'k', invoiceId: 'i', loteId: 'k', pestana: 'reglas', empresa: 'c' })
 const de = (path: string) => { const d = dondeEsta(path); return d ? (d.pestana ? `${d.producto.id}.${d.pestana.id}` : d.producto.id) : null }
 
 const NADA: Contexto = { hosteleria: false, diez: false, interruptores: new Set() }
@@ -50,7 +50,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     // S02 · PR 2: las dos de arriba solo llevan a Compras (module.tsx); la recibida a mano y la emitida, en su sitio.
     recibidaAMano: 'compras.recibidas', facturasEmitidas: 'facturacion.emitidas', nuevaEmitida: 'facturacion.emitidas',
     // S02 · PR 3: la lista de liquidaciones, la ficha de una (y la de subir sus documentos) y la quincena de Catcher.
-    liquidaciones: 'compras.liquidaciones', liquidacionNueva: 'compras.liquidaciones', liquidacion: 'compras.liquidaciones', loteCatcher: 'compras.liquidaciones',
+    // V01 · Entrega 3: la mensual del socio (y la de subir sus documentos) se marcan en Ventas › Liquidaciones.
+    liquidaciones: 'compras.liquidaciones', liquidacionNueva: 'facturacion.liquidacionesVentas', liquidacion: 'facturacion.liquidacionesVentas', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
     // I01c (19/10): el trimestre, también el de una empresa por la ruta.
@@ -65,6 +66,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     // V01 · Ventas › Facturas: la lista, una nueva y la ficha.
     facturasVenta: 'facturacion.emitidas', nuevaFacturaVenta: 'facturacion.emitidas', facturaVenta: 'facturacion.emitidas',
     cierres: 'facturacion.cierres', cierre: 'facturacion.cierres',
+    // V01 · Entrega 3 · Ventas › Liquidaciones y la ficha de una fila de plataforma.
+    liquidacionesVentas: 'facturacion.liquidacionesVentas', liquidacionPlataforma: 'facturacion.liquidacionesVentas',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
@@ -111,8 +114,10 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
   })
   it('S02 · las páginas del mapa: Ventas (V01: Facturas · Cobros · Series; Cobros y Series aún sin pantalla) y Laboral, aún sin pantalla', () => {
     // V01 · Entrega 2: y, en su bloque «Hostelería», Cierres del día (solo con hostelería).
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Series', 'Cierres del día'])
+    // V01 · Entrega 3: y Liquidaciones (las de plataforma y las del socio de marca), en el mismo bloque.
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Series', 'Cierres del día', 'Liquidaciones'])
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
     expect(PRODUCTOS.find((p) => p.id === 'laboral')!.pestanas.map((t) => t.etiqueta)).toEqual(['Empleados', 'Nóminas', 'Seguros sociales', 'Fichajes y ausencias', 'Portal del empleado'])
   })
   // S02 · PR 2 (decisión 5 de Julio): la emitida pasa a Facturación › Facturas

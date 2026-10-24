@@ -8,13 +8,15 @@
 //   · compras/liquidacion/:liqId: lo leído, el contraste con lo que sabe
 //     Folvy (compras, ventas, producto a producto), «Decirle cuál es cuál» y
 //     «Contabilizar» (compras_liquidacion_confirmar). Los tres asientos los
-//     propone el libro, como todo lo demás.
+//     propone el libro, como todo lo demás. V01 · Entrega 3: vive en Ventas ›
+//     Liquidaciones › Socios de marca, con SocioDelMes (albaranes como soporte,
+//     la FV contra ellos, sus asientos y el cobro).
 //
 // Lo que no cuadra o no se sabe qué es, para (bloqueos) y se dice.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { rutaLibroDiario, rutaLiquidacion, rutaLiquidaciones } from '@/config/navegacion'
+import { rutaLiquidacion, rutaLiquidacionesVentas } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
@@ -31,11 +33,12 @@ import { pdfjs } from '@/modules/conta/plan/leerFicheros'
 import { leerLiquidacion, type FacturaLeida, type LiquidacionLeida } from '@/modules/conta/lib/lectorLiquidacionMensual'
 import { rpc, tabla } from '@/modules/conta/services/bd'
 import { MARCA as PRODUCTO } from '../cuenta/marca'
+import { SocioDelMes } from '@/modules/conta/ventas/SocioDelMes'
 
 interface Liq {
   id: string; status: string; settlement_ref: string | null; period_from: string; period_to: string
   net_settlement: number | null; supplier_id: string; location_id: string | null; company_id: string | null
-  detail: LiquidacionLeida; confirmed_by_name: string | null
+  detail: LiquidacionLeida; confirmed_by_name: string | null; party_id: string | null
 }
 interface Contraste {
   compras: { folvy: number; recepciones: number; sin_base: number; documento: number | null; diferencia: number | null }
@@ -163,7 +166,7 @@ function CabeceraLiquidacion({ titulo, sub, lectura }: { titulo: string; sub: st
     <>
       <header className="cx-cabecera cxc-liq-cabecera">
         <div className="cx-cabecera-titulos">
-          <Link className="cx-enlace cxc-volver" to={rutaLiquidaciones()}>‹ Liquidaciones</Link>
+          <Link className="cx-enlace cxc-volver" to={rutaLiquidacionesVentas('socios')}>‹ Liquidaciones</Link>
           <h1 className="cx-titulo">{titulo}</h1>
           <span className="cx-antetitulo">{sub}</span>
         </div>
@@ -209,7 +212,7 @@ function FilaLinea({ texto, cifra }: { texto: string; cifra: number }) {
 // ── Una liquidación guardada ───────────────────────────────────────────────
 
 function VerLiquidacion({ liqId }: { liqId: string }) {
-  const { accountId } = useCuentaConta()
+  const { accountId, userName } = useCuentaConta()
   const { state } = useLocation()
   const [liq, setLiq] = useState<Liq | null>(null)
   const [nombres, setNombres] = useState<{ proveedor: string | null; local: string | null }>({ proveedor: null, local: null })
@@ -226,7 +229,7 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
     let vivo = true
     ;(async () => {
       const { data, error: e } = await tabla('licensed_settlement')
-        .select('id, status, settlement_ref, period_from, period_to, net_settlement, supplier_id, location_id, company_id, detail, confirmed_by_name')
+        .select('id, status, settlement_ref, period_from, period_to, net_settlement, supplier_id, location_id, company_id, detail, confirmed_by_name, party_id')
         .eq('id', liqId).maybeSingle()
       if (e) throw new Error(e.message)
       if (!data) throw new Error('Esa liquidación no existe o no es de tu cuenta.')
@@ -242,7 +245,7 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
     return () => { vivo = false }
   }, [liqId, vuelta])
 
-  if (error) return <div className="cxc"><Link className="cx-enlace cx-mayor-volver" to={rutaLiquidaciones()}>‹ Liquidaciones</Link><ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
+  if (error) return <div className="cxc"><Link className="cx-enlace cx-mayor-volver" to={rutaLiquidacionesVentas('socios')}>‹ Liquidaciones</Link><ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
   if (!liq || !contraste) return <div className="cxc"><TarjetaCargando /><TarjetaCargando /></div>
 
   const lec = liq.detail
@@ -278,7 +281,6 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
         )}
         {fallo && <div className="cx-error" role="alert">{fallo}</div>}
         <div className="cx-pie" style={{ justifyContent: 'flex-start' }}>
-          <Link className="cx-boton-sec" to={rutaLibroDiario('compras')}>Ver los asientos</Link>
           {confirmada
             ? <span className="cx-ayuda">Contabilizada{liq.confirmed_by_name ? ` por ${liq.confirmed_by_name}` : ''}.</span>
             : <button type="button" className="cx-boton" disabled={confirmando || bloqueos.length > 0} onClick={async () => {
@@ -290,6 +292,10 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
               }}>{confirmando ? 'Contabilizando…' : 'Contabilizar'}</button>}
         </div>
       </Tarjeta>
+
+      {/* V01 · Entrega 3: los albaranes como soporte y la FV contra ellos, sus asientos (se validan aquí) y el cobro. */}
+      {accountId && <SocioDelMes accountId={accountId} companyId={liq.company_id} quien={userName} recibida={lec.recibida}
+        liq={{ id: liq.id, status: liq.status, period_from: liq.period_from, period_to: liq.period_to, net_settlement: liq.net_settlement == null ? null : Number(liq.net_settlement), party_id: liq.party_id }} />}
 
       {casar && accountId && (
         <CualEsCual accountId={accountId} proveedor={liq.supplier_id} productos={productos}

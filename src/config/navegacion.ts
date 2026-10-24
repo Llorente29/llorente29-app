@@ -234,6 +234,14 @@ export const CONTA = {
     /** V01 · Entrega 2 · Ventas › Cierres del día (solo con «Vendo en hostelería»): la lista y la ficha de uno. */
     cierres: 'ventas/cierres',
     cierre: 'ventas/cierres/:cierreId',
+    /**
+     * V01 · Entrega 3 · Ventas › Liquidaciones (solo con «Vendo en hostelería»):
+     * las de plataforma, por periodo, plataforma y local (y la ficha de una
+     * fila: canal:local:desde:hasta), y las de los socios de marca (su ficha
+     * sigue en compras/liquidacion/:liqId, que la barra marca en Ventas).
+     */
+    liquidacionesVentas: 'ventas/liquidaciones',
+    liquidacionPlataforma: 'ventas/liquidaciones/plataforma/:clave',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
@@ -378,6 +386,9 @@ export const rutaFacturaVenta = (facturaId: string): string => rutaConta(CONTA.r
 /** V01 · Entrega 2 · Ventas › Cierres del día y un cierre. */
 export const rutaCierres = (): string => rutaConta(CONTA.rutas.cierres)
 export const rutaCierre = (cierreId: string): string => rutaConta(CONTA.rutas.cierre, { cierreId })
+/** V01 · Entrega 3 · Ventas › Liquidaciones (ver: plataformas · socios) y la ficha de una fila de plataforma. */
+export const rutaLiquidacionesVentas = (ver?: 'plataformas' | 'socios'): string => `${rutaConta(CONTA.rutas.liquidacionesVentas)}${ver ? `?ver=${ver}` : ''}`
+export const rutaLiquidacionPlataforma = (clave: string): string => rutaConta(CONTA.rutas.liquidacionPlataforma, { clave })
 /** Lo de antes: llevan a Ventas › Facturas. */
 export const rutaFacturasEmitidas = rutaFacturasVenta
 export const rutaNuevaEmitida = rutaNuevaFacturaVenta

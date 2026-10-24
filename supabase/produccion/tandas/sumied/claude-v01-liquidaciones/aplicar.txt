@@ -1,0 +1,15 @@
+# V01 · Entrega 3 · Ventas › Liquidaciones (Julio, 24/10). Rama claude/v01-liquidaciones.
+# Se ensaya y se aplica desde esta rama, antes de fusionar, y DESPUÉS de la tanda
+# del #321 (claude-v01-cierres): esta rama sale de aquella.
+#
+#   1. 1650 — AÑADE lo resuelto de una diferencia de una liquidación de
+#      plataforma (conta_liquidacion_resolucion: gasto, con su asiento, o
+#      reclamación), la lista de las de plataforma por periodo, plataforma y
+#      local (conta_plataformas) y resolver una diferencia
+#      (conta_plataforma_resolver). No toca datos ni nada que exista. No está
+#      en el camino del pedido.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/v01-liquidaciones.sql
+supabase/migrations/20261024T1650_v01_liquidaciones.sql

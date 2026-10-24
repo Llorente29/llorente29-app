@@ -23,7 +23,6 @@ import { avisoPeriodoCerrado, diaAbierto, fechaPropuesta, peor, type CalendarioE
 import { tandaDeDias } from '@/modules/conta/lib/proponer'
 import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
 import { ORIGEN_GLOVO } from '@/modules/conta/lib/liquidaciones'
-import { avisoSinConfirmar } from '@/modules/conta/lib/sinConfirmar'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -390,25 +389,9 @@ export async function proponerPendientes(accountId: string, companyId: string, d
   }
 
   // ── Cierre del día · cerrados sin confirmar que la liquidación no cobra (C11b) ──
-  // El cierre del día los cerró como vendidos; si la liquidación de su canal ya
-  // cubre su día y no los trae cobrados, se avisa para hacer el ajuste. Si la
-  // base aún no tiene la función (antes de su tanda), no hay nada que avisar.
-  try {
-    const noCobrados = ((await rpc('conta_sin_confirmar_no_cobrados', { p_company: companyId })) as Fila[] | null) ?? []
-    for (const x of noCobrados) {
-      const canalId = s(x.canal_id)
-      r.sinPropuesta.push(avisoSinConfirmar({
-        codigo: s(x.codigo), dia: String(x.dia), total: n(x.total),
-        canal: canalId ? ctx.canales.get(canalId)?.nombre ?? 'la plataforma' : 'la plataforma',
-        liquidacion: s(x.settlement_ref), fechaLiquidacion: s(x.settlement_date),
-      }))
-    }
-  } catch (e) {
-    const texto = e instanceof Error ? e.message : String(e)
-    if (!/could not find the function|function .* does not exist/i.test(texto)) {
-      r.sinPropuesta.push({ que: 'Pedidos cerrados sin confirmar', porque: `No he podido mirar si la liquidación los cobra: ${texto}` })
-    }
-  }
+  // V01 · Entrega 3 (Julio, 24/10): ya no salen aquí, en el Libro diario. Son
+  // una diferencia de su liquidación, en Ventas › Liquidaciones, donde se
+  // resuelven en una frase (gasto: su devolución al libro; o reclamación).
 
   const { socios, ret, partyPorProveedor } = await facturasDeProveedor(accountId, companyId, desde, hasta, ctx, r, quien, abierto)
 

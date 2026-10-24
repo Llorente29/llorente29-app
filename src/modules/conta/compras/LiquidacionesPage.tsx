@@ -20,7 +20,7 @@
 
 import { useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaLiquidacion, rutaLiquidacionNueva, rutaLoteCatcher } from '@/config/navegacion'
+import { rutaLiquidacion, rutaLiquidacionNueva, rutaLiquidacionesVentas, rutaLoteCatcher } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -29,8 +29,8 @@ import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { mesLargo } from '@/modules/conta/lib/compras'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
-import { Boton, Chip } from '@/modules/conta/diseno'
-import { FiltroSelector, FiltrosLista, PestanasEstado, TablaLista, conCambio, escribirOrden, type ColumnaLista } from '@/modules/conta/diseno/plantillas'
+import { Boton, BotonEnlace, Chip } from '@/modules/conta/diseno'
+import { PestanasEstado, TablaLista, conCambio, escribirOrden, type ColumnaLista } from '@/modules/conta/diseno/plantillas'
 import { QuincenaCatcher } from '@/modules/conta/documentos/QuincenaCatcher'
 import { leerLiquidaciones } from '@/modules/conta/services/liquidacionesService'
 import { saldoPrepago, usaCatcher, SALDO_PREPAGO } from '@/modules/conta/services/catcherService'
@@ -66,14 +66,15 @@ export default function LiquidacionesPage() {
     : undefined
   const encabezado = (
     <EncabezadoPagina titulo="Liquidaciones"
-      frase="Los proveedores que no facturan cada entrega: las liquidaciones mensuales, local por local, las quincenas de Catcher y lo que te liquidan las plataformas cada semana (ventas, comisión y neto cobrado). Cada una con su estado."
+      frase="Las quincenas de Catcher, cada una con su estado. Las de las plataformas y las mensuales del socio de marca están en Ventas › Liquidaciones."
       principal={principal} />
   )
   if (!accountId && !cargando) return <div className="s-pagina">{encabezado}<p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus liquidaciones.</p></div>
   if (!activa) return <div className="s-pagina">{encabezado}<p className="s-apoyo">Aún no hay ninguna empresa: da de alta tu empresa y aquí salen sus liquidaciones.</p></div>
 
   const d = datos.datos
-  const todas = d?.filas ?? []
+  // V01 · Entrega 3: las de plataforma y las mensuales del socio, en Ventas › Liquidaciones.
+  const todas = (d?.filas ?? []).filter((x) => x.tipo === 'catcher')
   const deTipo = filtrarPorTipo(todas, f.tipo)
   const pestanas = pestanasLiquidaciones(deTipo)
   const filas = filasLiquidaciones(todas, f)
@@ -140,10 +141,7 @@ export default function LiquidacionesPage() {
       {sinFicha && <p className="s-aviso-lista" data-tono="duda" role="status">{sinFicha}</p>}
 
       <PestanasEstado etiqueta="Estado de las liquidaciones" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id === 'todas' ? null : id })} />
-      <FiltrosLista etiqueta="Filtros de las liquidaciones">
-        <FiltroSelector etiqueta="Tipo" valor={f.tipo} alCambiar={(tipo) => cambiar({ tipo: tipo || null })}
-          opciones={[{ valor: '', texto: 'Todas' }, { valor: 'mensual', texto: 'Mensuales' }, { valor: 'catcher', texto: 'Quincenas de Catcher' }, { valor: 'plataforma', texto: 'De plataforma (Uber, Glovo…)' }]} />
-      </FiltrosLista>
+      <p className="s-apoyo" data-prueba="liquidaciones-en-ventas">Las de las plataformas y las mensuales del socio de marca están en <BotonEnlace a={rutaLiquidacionesVentas()} variante="enlace">Ventas › Liquidaciones</BotonEnlace>.</p>
 
       {!d && !datos.error && <div className="s-lista" aria-busy="true" aria-label="Cargando las liquidaciones"><div className="s-lista-cargando" /></div>}
       {d && (
@@ -153,7 +151,7 @@ export default function LiquidacionesPage() {
           alAbrir={abrir} movil={movil} tarjeta={tarjeta}
           orden={f.orden} alOrdenar={(col) => cambiar({ orden: escribirOrden({ columna: col, sentido: f.orden.columna === col && f.orden.sentido === 'desc' ? 'asc' : 'desc' }) })}
           vacio={todas.length === 0
-            ? <><strong>Aún no hay liquidaciones.</strong> Un proveedor que liquida cada mes se pone en su ficha, en «Cómo te factura»; las quincenas de Catcher salen aquí al subirlas.</>
+            ? <><strong>Aún no hay quincenas de Catcher.</strong> Salen aquí al subirlas.</>
             : hayFiltro
               ? <>Ninguna liquidación con estos filtros. <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ ver: null, tipo: null })}>Quitar los filtros</button></>
               : <>Ninguna liquidación.</>}
