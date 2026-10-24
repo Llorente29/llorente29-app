@@ -5,7 +5,8 @@
 //      sus columnas; la dirección de antes (Facturación › Facturas emitidas)
 //      lleva aquí; y la regla de anchos: a 1366 la barra se pliega sola y la
 //      tabla no se sale de lado.
-//   2. Nueva factura a mano (ordenador, en su carril: escribe): un cliente
+//   2. Nueva factura a mano (ordenador, en su carril: escribe; en la cuenta D,
+//      sin hostelería, para no dejar una rectificativa en el 4T de A): un cliente
 //      nuevo con su NIF comprobado (uno mal escrito se dice), dos líneas (21 % y
 //      10 % con descuento), los totales (1.259,50 €), «Guardar cambios» (nada
 //      se guarda solo) y el borrador en la lista. Y emitir: número, asiento,
@@ -21,7 +22,7 @@
 // Las capturas, en docs/conta/capturas/v01 (van al artefacto del run).
 
 import { test, expect, type Page } from '@playwright/test'
-import { CARRIL, CUENTA_A, entrarComo } from '../sesion'
+import { CARRIL, CUENTA_A, CUENTA_D, entrarComo } from '../sesion'
 
 const DIR = 'docs/conta/capturas/v01'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -73,7 +74,11 @@ test('nueva a mano: cliente nuevo, líneas, guardar; emitir, cobrar y corregir',
   test.skip(lado(page) === 'movil', 'Escribe en la base: en un tamaño; en el móvil se mira sin escribir.')
   test.setTimeout(180_000)
   const errores = vigilar(page)
-  await entrarComo(page, CUENTA_A.email)
+  // En D (sin hostelería), no en A: la rectificativa que se emite aquí cae en el
+  // 4T, y el 303 todavía no sabe declarar rectificativas emitidas (lo dice como
+  // error). En A rompía i01h/en-vivo, que mira el 303 del 4T de A después de
+  // esta prueba. Y así se prueba también que Facturas vale para cualquier empresa.
+  await entrarComo(page, CUENTA_D.email)
   await page.goto('/conta/ventas/facturas')
   await page.getByRole('link', { name: 'Nueva factura' }).first().click()
   await expect(page).toHaveURL(/\/conta\/ventas\/facturas\/nueva$/, { timeout: 30_000 })
