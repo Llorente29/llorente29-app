@@ -99,13 +99,7 @@ async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecer
     const asiento: AsientoBD = { ...a, serie: Number(a.serie), fecha: String(a.fecha), lineas: (a.lineas ?? []).map((l) => ({ cuenta: String(l.cuenta), debe: Number(l.debe), haber: Number(l.haber), concepto: l.concepto == null ? null : String(l.concepto) })) }
     const p: PuertoApunte = {
       ...comun, clienteApuntes: (c, op) => clienteDiez(srv, c, op),
-      enlazados: async (companyId, menosEntry) => {
-        const { data, error } = await srv.from('external_send').select('ext_series, ext_number')
-          .eq('account_id', j.account_id).eq('company_id', companyId).neq('entry_id', menosEntry)
-          .neq('status', 'rechazado').not('ext_number', 'is', null)
-        if (error) throw new Error(`no se ha podido leer lo enviado a Diez: ${error.message}`)
-        return new Set((data ?? []).map((x) => `${x.ext_series}/${x.ext_number}`))
-      },
+      enlazados: (companyId, menosEntry) => enlazadosEnDiez(srv, j.account_id, companyId, menosEntry),
     }
     return enviarApunteADiez(asiento, p)
   }
@@ -137,9 +131,30 @@ async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecer
       return new Uint8Array(await data.arrayBuffer())
     },
     correspondencia: (companyId) => correspondenciaDeEmpresa(companyId),
+    // C11c (24/10): el rehecho de un asiento anulado ni enlaza la factura del anulado ni repite su número.
+    enlazados: (companyId, menosEntry) => enlazadosEnDiez(srv, j.account_id, companyId, menosEntry),
+    vezDelNumero: async (entryId, base) => {
+      const { data, error } = await srv.rpc('conta_diez_numero_vez', { p_entry: entryId, p_base: base })
+      if (error) throw new Error(`no se ha podido saber la vez del número ${base}: ${error.message}`)
+      return Number(data ?? 1)
+    },
   }
   if (contra) return como === 'contra_recibida' ? enviarContraasientoRecibidaADiez(contra, puerto) : enviarContraasientoADiez(contra, puerto)
   return esRecibida ? enviarRecibidaADiez(j.id, puerto) : enviarAsientoADiez(j.id, puerto)
+}
+
+/**
+ * Los documentos de Diez («serie/documento») que ya son de OTRO asiento de la
+ * empresa (cualquier envío no rechazado con documento). Los usan los apuntes
+ * (bancos gemelos, 22/10) y, desde el C11c (24/10), las facturas y sus
+ * contraasientos: el rehecho de un asiento anulado no enlaza la del anulado.
+ */
+async function enlazadosEnDiez(srv: SupabaseClient, accountId: string, companyId: string, menosEntry: string): Promise<Set<string>> {
+  const { data, error } = await srv.from('external_send').select('ext_series, ext_number')
+    .eq('account_id', accountId).eq('company_id', companyId).neq('entry_id', menosEntry)
+    .neq('status', 'rechazado').not('ext_number', 'is', null)
+  if (error) throw new Error(`no se ha podido leer lo enviado a Diez: ${error.message}`)
+  return new Set((data ?? []).map((x) => `${x.ext_series}/${x.ext_number}`))
 }
 
 /** Lo que todos los caminos leen y escriben con la clave de servicio. */
