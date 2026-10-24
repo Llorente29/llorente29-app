@@ -3,13 +3,15 @@
 #
 #   1. 1250 — AÑADE la columna modo (admite nulos) a conta_diez_envio_empresa,
 #      la tabla conta_diez_traspaso (vacía) y las funciones del traspaso
-#      (revisar, lista, saldos, confirmar, apuntar, terminar). CAMBIA en
-#      caliente conta_diez_por_enviar (misma firma): deja fuera las empresas en
-#      modo 'mensual'. Como ninguna lo está, sale exactamente lo mismo que hoy.
-#      Nada del camino del pedido.
+#      (revisar, lista, saldos, confirmar, apuntar, terminar).
+#   2. 1251 — CAMBIA en caliente conta_diez_por_enviar (misma firma): deja
+#      fuera las empresas en modo 'mensual'. Como ninguna lo está, sale
+#      exactamente lo mismo que hoy.
+#   Nada del camino del pedido.
 #
 # No pasa a Foodint a mensual: eso va en otra tanda, con su autorizo, cuando
 # esté la función del traspaso en producción.
 # Sin aplicar: lo lanza Julio. Vuelta atrás: vuelta-atras.txt de esta carpeta.
 cuenta: scripts/conta/produccion/cuentas/c12-traspaso-mensual.sql
 supabase/migrations/20261024T1250_c12_traspaso_mensual.sql
+supabase/migrations/20261024T1251_c12_por_enviar_modo.sql

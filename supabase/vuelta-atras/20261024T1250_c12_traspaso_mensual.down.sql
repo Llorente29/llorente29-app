@@ -1,4 +1,4 @@
--- Vuelta atrás de 20261024T1250_c12_traspaso_mensual.sql (C12).
+-- Vuelta atrás de 20261024T1250_c12_traspaso_mensual.sql y 20261024T1251_c12_por_enviar_modo.sql (C12).
 -- Devuelve conta_diez_por_enviar al texto del C07 (20261201T0450_c07_diez_todo.sql),
 -- tal cual; quita las funciones del traspaso, su tabla y la columna modo.
 -- PARA si ya hay algún traspaso apuntado o alguna empresa en modo mensual: eso

@@ -1,6 +1,6 @@
 -- supabase/staging/sql/20261024_c12_traspaso_prueba.sql
 --
--- SOLO STAGING. Prueba de 20261024T1250_c12_traspaso_mensual (el traspaso a
+-- SOLO STAGING. Prueba de 20261024T1250_c12_traspaso_mensual y 1251 (el traspaso a
 -- Diez una vez al mes), con \i dentro de la transacción y ROLLBACK: staging no
 -- cambia. Septiembre de 2026 en la empresa de la cuenta A de pruebas, con
 -- asientos manuales inventados (importes 11, 13, 17, 19 y 23 para reconocerlos):
@@ -37,7 +37,9 @@ set local statement_timeout = '120s';
 
 -- 1 · Dos veces.
 \i supabase/migrations/20261024T1250_c12_traspaso_mensual.sql
+\i supabase/migrations/20261024T1251_c12_por_enviar_modo.sql
 \i supabase/migrations/20261024T1250_c12_traspaso_mensual.sql
+\i supabase/migrations/20261024T1251_c12_por_enviar_modo.sql
 
 -- Un asiento manual de A en septiembre, propuesto (y validado si toca) como lo hace una persona.
 create or replace function pg_temp.asiento(p_concepto text, p_fecha date, p_importe numeric, p_validar boolean) returns uuid language plpgsql as $$

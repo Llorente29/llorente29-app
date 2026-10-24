@@ -43,6 +43,17 @@ try {
   const conCampos = filas.filter((f) => 'Subcuenta' in f && 'Debe' in f && 'Haber' in f).length
   sale('filas_con_subcuenta_debe_haber', conCampos)
   sale('campos_primera_fila', filas[0] ? Object.keys(filas[0]).length : 0)
+  // La forma de la respuesta: cada campo (su nombre es del API, no un dato), en
+  // cuántas filas trae un número y cuánto suma en céntimos.
+  const campos = new Map<string, { n: number; c: number }>()
+  for (const f of filas) for (const [k, v] of Object.entries(f)) {
+    const clave = k.toLowerCase().replace(/[^a-z0-9_]/g, '')
+    if (!clave) continue
+    const x = campos.get(clave) ?? { n: 0, c: 0 }
+    if (typeof v === 'number' && Number.isFinite(v)) { x.n++; x.c += Math.round(v * 100) }
+    campos.set(clave, x)
+  }
+  for (const [k, x] of [...campos].sort()) { sale(`campo.${k}.numericas`, x.n); sale(`campo.${k}.centimos`, x.c) }
 
   const m = sumarDiez(filas)
   sale('subcuentas', m.size)
@@ -74,6 +85,9 @@ try {
   sale('apuntes', apuntes.length)
   const lineas = apuntes.flatMap((a) => a.Detalles ?? [])
   sale('lineas_de_apuntes', lineas.length)
+  sale('apuntes_debe_centimos', lineas.reduce((t, l) => t + Math.round((l.Debe ?? 0) * 100), 0))
+  sale('apuntes_haber_centimos', lineas.reduce((t, l) => t + Math.round((l.Haber ?? 0) * 100), 0))
+  sale('apuntes_subcuentas', new Set(lineas.map((l) => subcuenta(l.Cuenta))).size)
   if (lineas.length) {
     const desdeApuntes = sumarDiez(lineas.map((l) => ({ Subcuenta: subcuenta(l.Cuenta), Debe: l.Debe ?? 0, Haber: l.Haber ?? 0 })))
     const s: Saldo[] = [...desdeApuntes.entries()].map(([cuenta, v]) => ({ cuenta, debe: v.debe / 100, haber: v.haber / 100 }))

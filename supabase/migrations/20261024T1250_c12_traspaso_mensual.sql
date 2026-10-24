@@ -1,5 +1,4 @@
 -- C12 · Traspaso a Diez una vez al mes, en el cierre (Julio, 24/10).
--- cambia: public.conta_diez_por_enviar · prueba: supabase/staging/sql/20261024_c12_traspaso_prueba.sql
 --
 -- QUÉ: en vez de mandar cada asiento a Diez al validarlo, al cerrar el mes se
 -- traspasan de golpe todos los del mes (ventas, recibidas, banco, manuales,
@@ -28,8 +27,8 @@
 --   · conta_traspaso_apuntar / conta_traspaso_terminar: el servidor apunta lo
 --     que llega y, al terminar, el cuadre y el cierre del mes (si llegó todo y
 --     Diez cuadra; si no, el porqué queda escrito y el mes, abierto).
--- CAMBIA (misma firma): conta_diez_por_enviar deja de coger las empresas en
---   modo 'mensual'. Las de 'al_validar' (o sin modo), igual que hoy.
+-- Solo AÑADE. Lo que cambia (conta_diez_por_enviar, para dejar fuera las
+-- empresas en modo 'mensual') va aparte, en 20261024T1251_c12_por_enviar_modo.sql.
 --
 -- No toca ningún dato: ninguna empresa pasa a 'mensual' aquí (eso va aparte,
 -- con su autorizo). Se puede pasar dos veces.
@@ -327,35 +326,6 @@ begin
    where id = p_traspaso;
   return jsonb_build_object('mes_cerrado', v_cerrado, 'motivo', v_motivo);
 end
-$function$;
-
--- conta_diez_por_enviar: igual que hoy, pero sin las empresas en modo mensual.
-create or replace function public.conta_diez_por_enviar(p_limite integer DEFAULT 10)
- returns table(entry_id uuid, account_id uuid, company_id uuid, origen text, kind text, tiene_envio boolean)
- language sql
- stable security definer
- set search_path to 'public'
-as $function$
-  select e.id, e.account_id, e.company_id, e.source_type,
-         case when e.source_type in ('sales_day', 'supplier_invoice') or o.source_type in ('sales_day', 'supplier_invoice') then 'factura' else 'asiento' end,
-         s.id is not null
-    from public.journal_entry e
-    join public.conta_diez_envio_empresa z on z.company_id = e.company_id and z.account_id = e.account_id and z.enviar
-     and coalesce(z.modo, 'al_validar') = 'al_validar'
-    left join public.journal_entry o on o.id = e.reverses_entry_id and o.account_id = e.account_id
-    left join public.external_send s on s.entry_id = e.id and s.account_id = e.account_id and s.status <> 'rechazado'
-   where e.status = 'validado'
-     and e.entry_date >= z.desde
-     and e.source_type not in ('migrated', 'opening', 'closing', 'template')
-     and (e.reverses_entry_id is null or exists (
-           select 1 from public.external_send x
-            where x.entry_id = e.reverses_entry_id and x.account_id = e.account_id and x.status in ('enviado', 'enlazado')))
-     and (
-           (s.id is null and e.validated_at < now() - interval '2 minutes')
-        or (s.status = 'pendiente' and s.next_try_at is not null and s.next_try_at <= now() and s.attempts < 3 and s.updated_at < now() - interval '2 minutes')
-     )
-   order by e.validated_at, e.id
-   limit greatest(1, least(coalesce(p_limite, 10), 50))
 $function$;
 
 -- Permisos: las del servidor, solo la clave de servicio; las de pantalla, también los usuarios.

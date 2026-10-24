@@ -1,2 +1,3 @@
 supabase/migrations/20261024T1250_c12_traspaso_mensual.sql
+supabase/migrations/20261024T1251_c12_por_enviar_modo.sql
 supabase/staging/sql/20261024_c12_traspaso_prueba.sql
