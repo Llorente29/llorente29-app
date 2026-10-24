@@ -69,7 +69,9 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   }
   // Las vistas: solo los orígenes que hay, con cuántos (los filtros de antes).
   const vistas = page.getByRole('group', { name: 'Vistas' })
-  for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Plataformas · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {
+  // V01 · Entrega 3: lo PROPUESTO de una liquidación se decide en Ventas › Liquidaciones; «Plataformas»
+  // sale aquí solo si A tiene liquidaciones que ya son libro (validadas o anuladas), como «Banco».
+  for (const f of [/^Para revisar · \d+$/, /^Ventas · \d+$/, /^Compras · \d+$/, /^Nóminas · \d+$/, /^Manuales · \d+$/, /^Anulados · \d+$/]) {
     await expect(vistas.getByRole('button', { name: f })).toBeVisible()
   }
   // «Banco» sale solo si A tiene asientos del banco que son libro (validados o anulados: lo propuesto del
@@ -78,6 +80,9 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   const banco = await rest<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')}&source_type=eq.bank&status=neq.propuesto&limit=1`)
   expect(banco.status, JSON.stringify(banco.datos)).toBe(200)
   await expect(vistas.getByRole('button', { name: /^Banco · \d+$/ })).toHaveCount(banco.datos.length)
+  const plataformas = await rest<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')}&source_type=eq.channel_settlement&status=neq.propuesto&limit=1`)
+  expect(plataformas.status, JSON.stringify(plataformas.datos)).toBe(200)
+  await expect(vistas.getByRole('button', { name: /^Plataformas · \d+$/ })).toHaveCount(plataformas.datos.length)
   // «Te toca hoy»: lo que espera revisión, con su número (filtra al pulsarlo).
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()
   // El mes, en una línea: sus asientos, si está abierto y su resultado.
@@ -88,8 +93,9 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   await expect(ventas.filter({ hasText: 'Para revisar' })).toHaveCount(1)
   await expect(ventas.filter({ hasText: 'Hecho por Folvy' })).toHaveCount(1)
   await expect(filaDe(page, /Publicidad en la plataforma · octubre/).getByText('Anulado')).toBeVisible()
-  // La marca cedida, dicha.
-  await expect(filaDe(page, /Liquidación Plataforma Norte/).getByText('Brasa Prestada · cedida')).toBeVisible()
+  // V01 · Entrega 3: la liquidación propuesta (con su marca cedida) ya no se lista aquí: se decide en
+  // Ventas › Liquidaciones. Su asiento se abre por su dirección (abajo, «A · asiento (N12)»).
+  await expect(filaDe(page, /Liquidación Plataforma Norte/)).toHaveCount(0)
   // Respuesta 3 · 1: el número con su serie, y el contraasiento la dice por su nombre.
   const contra = filaDe(page, /Anula General nº 2: Estaba repetido/)
   await expect(contra).toBeVisible()
@@ -160,7 +166,7 @@ test('A · libro diario (N11) en el marco: vistas que existen, el mes, estados, 
   // Para revisar: solo lo que espera, sin esconder el resto (Todos sigue con todo).
   await vistas.getByRole('button', { name: /^Para revisar · \d+$/ }).click()
   await expect(filaDe(page, /Ventas del día/).filter({ hasText: 'Hecho por Folvy' })).toHaveCount(0)
-  await expect(filaDe(page, /Liquidación Plataforma Norte · 16–30 sep/)).toBeVisible()
+  await expect(filaDe(page, /Liquidación Plataforma Norte · 16–30 sep/)).toHaveCount(0)
   // S02 · PR 2: lo propuesto de una factura recibida (el alquiler de la semilla) se
   // decide en Compras y gastos › Facturas recibidas: no se lista dos veces.
   await expect(filaDe(page, /Alquiler Norte Mercado · octubre/)).toHaveCount(0)
@@ -218,10 +224,14 @@ async function limpiar(s: Awaited<ReturnType<typeof entrarComo>>, id: string, es
 }
 
 test('A · asiento (N12): por qué lo propongo así, cuadre y detalle contable', async ({ page }) => {
-  await entrarComo(page, CUENTA_A.email)
+  const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
-  await page.goto('/conta/libros/diario')
-  await abrirAsiento(page, 'Liquidación Plataforma Norte · 16–30 sep')
+  // V01 · Entrega 3: lo propuesto de una liquidación ya no sale en Asientos (se decide en Ventas ›
+  // Liquidaciones): su asiento se abre por su dirección, que es la que enlaza su ficha.
+  const liq = await rest<{ id: string }[]>(s, 'GET', `journal_entry?select=id&company_id=eq.${enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')}&concept=eq.${encodeURIComponent('Liquidación Plataforma Norte · 16–30 sep')}&limit=1`)
+  expect(liq.datos, 'el asiento de la liquidación de la semilla').toHaveLength(1)
+  await page.goto(`/conta/libros/diario/${liq.datos[0].id}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Liquidación Plataforma Norte · 16–30 sep' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText('Propuesto por Folvy · Seguro')).toBeVisible()
   await expect(page.getByText('Serie Banco')).toBeVisible()
   const porque = page.getByRole('region', { name: 'Por qué lo propongo así' })

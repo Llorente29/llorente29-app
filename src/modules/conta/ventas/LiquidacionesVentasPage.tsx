@@ -61,9 +61,10 @@ export default function LiquidacionesVentasPage() {
   const cambiar = (c: Record<string, string | null>) => setQuery(new URLSearchParams(conCambio(search, c)), { replace: true })
 
   const plataformas = useLeer(accountId && activa && hosteleria && ver === 'plataformas' ? () => leerPlataformas(activa.id, desde.desde, null) : null,
-    `${accountId}:${activa?.id}:plataformas:${desde.desde}`)
+    // La clave lleva hostelería y la vista: si no, al saberse que es de hostelería (después de pintar) no se volvía a leer y se quedaba cargando.
+    `${accountId}:${activa?.id}:${hosteleria}:${ver}:plataformas:${desde.desde}`)
   const socios = useLeer(accountId && activa && hosteleria && ver === 'socios' ? () => leerLiquidaciones(accountId, activa.id, hoy) : null,
-    `${accountId}:${activa?.id}:socios:${hoy}`)
+    `${accountId}:${activa?.id}:${hosteleria}:${ver}:socios:${hoy}`)
 
   const encabezado = (
     <EncabezadoPagina titulo="Liquidaciones"
