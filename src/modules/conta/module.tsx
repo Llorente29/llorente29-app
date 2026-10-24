@@ -31,7 +31,9 @@ import DocumentosPage from '@/modules/conta/documentos/DocumentosPage'
 import RevisarFacturaPage from '@/modules/conta/documentos/RevisarFacturaPage'
 import LlevarACompras from '@/modules/conta/documentos/LlevarACompras'
 import RecibidaAMano from '@/modules/conta/documentos/RecibidaAMano'
-import FacturasEmitidasPage from '@/modules/conta/facturacion/FacturasEmitidasPage'
+import FacturasPage from '@/modules/conta/ventas/FacturasPage'
+import FacturaVentaPage from '@/modules/conta/ventas/FacturaVentaPage'
+import LlevarAVentas from '@/modules/conta/ventas/LlevarAVentas'
 import LoteCatcherPage from '@/modules/conta/documentos/LoteCatcherPage'
 import LiquidacionesPage from '@/modules/conta/compras/LiquidacionesPage'
 import AsientoPage from '@/modules/conta/libro/AsientoPage'
@@ -140,8 +142,12 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.recibidaEnAsientos, element: <LlevarACompras /> },
     { path: CONTA.rutas.recibidaAMano, element: enMarco(<RecibidaAMano />, '¿A qué cuenta va esta factura?', true) },
     // S02 · PR 2: Facturación › Facturas emitidas, y una nueva (la hoja del asiento, tipo expedida).
-    { path: CONTA.rutas.facturasEmitidas, element: enMarco(<FacturasEmitidasPage />, '¿Cuánto he facturado este mes?', true) },
-    { path: CONTA.rutas.nuevaEmitida, element: enMarco(<NuevoAsientoPage tipo="expedida" />, '¿Qué IVA lleva esta factura?', true) },
+    // V01 · Ventas › Facturas: la lista, una nueva y la ficha. Lo de antes (Facturación › Facturas emitidas) lleva aquí.
+    { path: CONTA.rutas.facturasVenta, element: enMarco(<FacturasPage />, '¿Cuánto he facturado este mes?', true) },
+    { path: CONTA.rutas.nuevaFacturaVenta, element: enMarco(<FacturaVentaPage />, '¿Qué IVA lleva esta factura?', true) },
+    { path: CONTA.rutas.facturaVenta, element: enMarco(<FacturaVentaPage />, '¿Cómo corrijo una factura emitida?', true) },
+    { path: CONTA.rutas.facturasEmitidas, element: <LlevarAVentas a={CONTA.rutas.facturasVenta} /> },
+    { path: CONTA.rutas.nuevaEmitida, element: <LlevarAVentas a={CONTA.rutas.nuevaFacturaVenta} /> },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },
     // S02 · La muestra del patrón único: las seis plantillas (datos inventados), solo fuera de
     // producción. Sustituye a las dos de antes (las piezas del M01 y el sistema de diseño del S01).

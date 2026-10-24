@@ -123,6 +123,13 @@ verify_jwt = true
 [functions.conta-diez-enviar]
 verify_jwt = true
 
+# V01 (24/10) conta-venta-correo · «Enviar por correo» una factura de venta
+# emitida, con su PDF. verify_jwt = true: la llama la ficha con la sesión de
+# quien pulsa; lee la factura con ESE JWT. Cerrada por CORREO_MARCA_ABIERTOS
+# («factura_venta») hasta que Julio la abra.
+[functions.conta-venta-correo]
+verify_jwt = true
+
 # C07 (22/10): el servidor manda a Diez lo que se queda atrás. La despierta el
 # cron conta-diez-despertar con x-cron-secret (CRON_SECRET), sin sesión.
 [functions.conta-diez-cola]

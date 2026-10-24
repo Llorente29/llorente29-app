@@ -216,13 +216,10 @@ async function anularSiQueda(s: Sesion, id: string) {
 test('S01d · PDF de la expedida (cuenta A): se adjunta, se ve al lado (o debajo) y queda en la tarjeta «Factura» al validar', async ({ page }) => {
   const s = await entrarComo(page, CUENTA_A.email)
   vigilar(page)
-  // S02 · PR 2: la emitida es de Facturación › Facturas emitidas, con su principal «Nueva factura emitida».
-  await page.goto('/conta/facturacion/emitidas')
-  await expect(page.getByRole('heading', { level: 1, name: 'Facturas emitidas' })).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('link', { name: 'Nueva factura emitida' }).first().click()
-  await expect(page).toHaveURL(/\/conta\/facturacion\/emitidas\/nueva$/, { timeout: 30_000 })
+  // V01: «Nueva factura» de Ventas es ya la ficha de la factura de venta; la hoja
+  // del asiento con su factura (la expedida a mano) sigue en Asientos, con ?tipo=expedida.
+  await page.goto('/conta/libros/diario/nuevo?tipo=expedida')
   await expect(page.getByRole('heading', { level: 1, name: 'Nueva factura emitida' })).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Facturación', 'Facturas emitidas', 'Nueva factura emitida'])
   await expect(page.getByLabel('Serie')).toHaveValue('1')
 
   // Adjuntar: el selector está escondido detrás de su etiqueta, que hace de botón.

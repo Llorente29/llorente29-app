@@ -9,6 +9,8 @@
 //   · «Nueva factura» (cliente normal): Folvy aún no emite facturas; lo dice.
 
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaNuevaFacturaVenta } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip } from '@/modules/conta/ui/piezas'
 import { useTercero, papelesDe, calculosDelMes } from '@/modules/conta/terceros/contextoTercero'
@@ -17,7 +19,6 @@ import { leerLiquidaciones, FicheroNoReconocido, type LecturaLiquidaciones } fro
 import { liquidarLocal, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
 import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
 import { confirmarLiquidacionSocio, prepararLiquidacionSocio, subirLiquidaciones } from '@/modules/conta/services/tercerosService'
-import { MARCA } from '../cuenta/marca'
 
 const PLATAFORMA = { glovo: 'Glovo', je: 'Just Eat', uber: 'Uber Eats' } as const
 
@@ -139,13 +140,17 @@ export function PrepararLiquidacion({ alCerrar }: { alCerrar: () => void }) {
 }
 
 export function NuevaFactura({ alCerrar }: { alCerrar: () => void }) {
+  // V01 · Las facturas a un cliente se hacen en Ventas › Facturas: se abre la nueva con él puesto.
+  const { ficha } = useTercero()
   return (
     <Dialogo titulo="Nueva factura" alCerrar={alCerrar}>
       <p style={{ margin: 0, fontSize: 15 }}>
-        {MARCA.nombre} aún no emite facturas: llegan con <strong>Facturación</strong>, con su numeración y Verifactu (encargo F01, después de los asientos).
-        Mientras, la ficha guarda todo lo que hará falta para facturarle: sus datos fiscales, su cobro y su cuenta.
+        Las facturas se hacen en <strong>Ventas › Facturas</strong>: con su número, su PDF, su asiento y su envío a Diez. Se abre una nueva con {ficha.tercero.nombre} ya puesto.
       </p>
-      <div className="cx-pie"><button type="button" className="cx-boton" onClick={alCerrar}>Entendido</button></div>
+      <div className="cx-pie">
+        <button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button>
+        <Link to={`${rutaNuevaFacturaVenta()}?cliente=${encodeURIComponent(ficha.tercero.id)}`} className="cx-boton">Hacer la factura</Link>
+      </div>
     </Dialogo>
   )
 }

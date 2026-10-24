@@ -20,8 +20,9 @@ describe('S01 · ?tipo= del asiento a mano', () => {
       const ruta = 'ruta' in o.a ? o.a.ruta : ''
       const m = /[?&]tipo=([^&]+)/.exec(ruta)
       if (m) tipos.add(m[1])
-      // S02 · PR 2: la expedida se abre en su sitio, Facturación › Nueva factura emitida (sin ?tipo=).
-      if (ruta === CONTA.rutas.nuevaEmitida) tipos.add('expedida')
+      // S02 · PR 2: la expedida se abre en su sitio (sin ?tipo=). V01: su sitio es ahora Ventas › Nueva
+      // factura, la ficha de la factura de venta; la hoja del asiento con la factura sigue con ?tipo=expedida.
+      if (ruta === CONTA.rutas.nuevaEmitida || ruta === CONTA.rutas.nuevaFacturaVenta) tipos.add('expedida')
     }
     expect([...tipos].sort()).toEqual(Object.keys(TIPOS_ASIENTO).sort())
     for (const t of tipos) expect(tipoDeAsiento(t)).not.toBeNull()

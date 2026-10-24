@@ -353,7 +353,7 @@ export function SusCuentas({ completa = false }: { completa?: boolean }) {
         {papelesDe(ficha).plataforma
           ? fila('347', ficha.fiscal?.exclude347 ? `Excluido: ${ficha.fiscal.exclude347Reason}` : <Linea347Plataforma />)
           : (cliente || socio) && fila('347', ficha.fiscal?.exclude347 ? `Excluido: ${ficha.fiscal.exclude347Reason}`
-            : 'Se calcula con las facturas que emites (llegan con Facturación)')}
+            : 'Se calcula con las facturas que emites (Ventas › Facturas)')}
       </>}
     </section>
   )
