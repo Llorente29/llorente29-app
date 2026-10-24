@@ -5,8 +5,8 @@
 -- ROLLBACK: staging no cambia. En la empresa A (Taberna de Prueba Norte,
 -- carril 0).
 --
---   0. Staging no tiene traídos de Diez (lo dice; el ensayo de producción los
---      pasa todos, con su comprobación al céntimo). Se prepara un cierre como
+--   0. Staging no tiene traídos de Diez (lo dice el paso 1; el ensayo de
+--      producción los pasa todos, con su comprobación al céntimo). Se prepara un cierre como
 --      los de octubre: el de Glovo del 25/09 validado, con su PDF junto al
 --      asiento y su envío a Diez (GLV-FLO-20260925), y sin número en el libro.
 --   1. La tanda: el cierre queda con su factura resumen GLV-FLO-20260925
@@ -42,7 +42,6 @@ declare v_e uuid := (select v::uuid from _h where clave = 'cierre');
 begin
   if (select status from public.journal_entry where id = v_e) <> 'propuesto' then raise exception 'PRUEBA V01 HISTÓRICO · 0: el Glovo del 25/09 no está propuesto.'; end if;
   if (select status from public.journal_entry where id = (select v::uuid from _h where clave = 'traido')) <> 'validado' then raise exception 'PRUEBA V01 HISTÓRICO · 0: el día entero del 04/10 no está validado.'; end if;
-  raise notice '0 · traídos de Diez en staging: % (los 1.196 de producción los pasa el ensayo de allí)', (select count(*) from public.conta_v01_historico_traidos());
 end $$;
 insert into _h select 'ruta', account_id::text || '/' || id::text || '/abcdef0123456789.pdf' from public.journal_entry where id = (select v::uuid from _h where clave = 'cierre');
 insert into storage.objects (bucket_id, name, metadata) select 'conta-documentos', v, '{"size": 2048, "mimetype": "application/pdf"}'::jsonb from _h where clave = 'ruta';
@@ -57,15 +56,13 @@ reset role;
 insert into public.external_send (account_id, company_id, entry_id, kind, ext_year, ext_series, ext_number, ext_invoice_number, payload_hash, status, sent_at)
 select account_id, company_id, id, 'factura', '2026', '2', '999', 'GLV-FLO-20260925', md5('prueba'), 'enviado', now()
   from public.journal_entry where id = (select v::uuid from _h where clave = 'cierre');
-do $$ begin
-  if not exists (select 1 from public.conta_v01_historico_cierres() where entry_id = (select v::uuid from _h where clave = 'cierre') and numero = 'GLV-FLO-20260925' and serie = 'GLV-FLO') then
-    raise exception 'PRUEBA V01 HISTÓRICO · 0: la selección no trae el cierre preparado con su número y su serie.';
-  end if;
-  raise notice '0 · el cierre preparado, en la selección: GLV-FLO-20260925';
-end $$;
-
--- 1 · La tanda.
+-- 1 · La tanda. (Sus funciones de selección nacen con ella: que el cierre
+-- preparado estaba en la selección lo prueba que salga con su factura.)
 \i supabase/migrations/20261024T1730_v01_historico_facturas.sql
+
+do $$ begin
+  raise notice '1 · traídos de Diez que quedan sin factura en staging: % (los 1.196 de producción los pasa el ensayo de allí)', (select count(*) from public.conta_v01_historico_traidos());
+end $$;
 
 do $$
 declare v_e uuid := (select v::uuid from _h where clave = 'cierre'); v_f public.customer_invoice; v_libro numeric;
