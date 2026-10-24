@@ -434,7 +434,8 @@ test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esque
     // S02: sus páginas, debajo del apartado en la barra; «Por revisar» ya no es una de ellas.
     if (lado(page) === 'ordenador') await barra(page).getByRole('link', { name: 'Compras y gastos', exact: true }).click()
     else await page.goto('/conta/compras')
-    await expect(page).toHaveURL(/\/conta\/compras/)
+    // El enlace de «Compras y gastos» lleva a su primera página, Facturas recibidas (/conta/documentos).
+    await expect(page).toHaveURL(/\/conta\/(compras|documentos)/)
     await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Liquidaciones'])
     await cerrarCajon(page)
   } finally {
