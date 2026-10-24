@@ -51,7 +51,7 @@
 import { BASE_PRUEBAS, BASES_PROHIBIDAS, ErrorDiez, MAX_INTENTOS, type Apunte, type ApunteSimplificado, type Factura, type FacturaData } from './diezCliente.ts'
 import { apunteDeAsiento, comoVa, cuentasDe, esElMismoApunte, unoPorAsiento, type AsientoBD } from './diezApunte.ts'
 import type { Correspondencia } from './diezAnalitica.ts'
-import { esDeLaGestoria, facturaDeVentas, facturaQueAnula, PATRONES } from './diezFactura.ts'
+import { esDeLaGestoria, esNumeroDe, facturaDeVentas, facturaQueAnula, numeroDeLaVez, PATRONES } from './diezFactura.ts'
 import { facturaRecibida, facturaRecibidaQueAnula, type FacturaRecibida } from './diezRecibida.ts'
 import { claveNumero } from './lecturaFactura.ts'
 import { resumenDeAsiento, type ResumenBD } from './resumenDeAsiento.ts'
@@ -118,6 +118,16 @@ export interface PuertoEnvio {
   sha256(b: Uint8Array): Promise<string>
   correspondencia(companyId: string): Correspondencia | null
   ahora(): Date
+  /**
+   * C11c (24/10) · Los documentos de Diez («serie/documento») que ya son de
+   * OTRO asiento de Sumied de la empresa (anulado o no). «Nunca dos veces» no
+   * enlaza nunca uno de esos: el rehecho de un asiento anulado encontraba en
+   * Diez la factura del anulado, la tomaba por suya y chocaba con su envío
+   * (external_send_ext_uq). Es lo que ya hacían los apuntes de banco (22/10).
+   */
+  enlazados?(companyId: string, menosEntry: string): Promise<Set<string>>
+  /** C11c · La vez de un número de factura de ventas (conta_diez_numero_vez): 1 la primera. */
+  vezDelNumero?(entryId: string, base: string): Promise<number>
 }
 
 export type ResultadoEnvio =
@@ -333,13 +343,20 @@ export async function enviarAsientoADiez(entryId: string, p: PuertoEnvio): Promi
 async function enviarAsiento(entryId: string, p: PuertoEnvio): Promise<ResultadoEnvio> {
   const r = await p.resumen(entryId)
   const corr = p.correspondencia(r.company_id)
+  // C11c · El número de la vez: un rehecho después de anular no repite el del anulado.
+  // Solo para lo validado (lo demás lo para enviar()); si el resumen no da factura, lo dice preparar().
+  let base: unknown = null
+  if (r.estado === 'validado') {
+    try { base = resumenDeAsiento(r, { correspondencia: corr, generado: p.ahora(), hoy: hoyMadrid(p.ahora()) }).factura?.factura.NumeroFactura } catch { base = null }
+  }
+  const vez = base && p.vezDelNumero ? await p.vezDelNumero(r.id, String(base)) : 1
   const plan: Plan = {
     tipo: 'ventas',
     preparar: () => {
       const listo = resumenDeAsiento(r, { correspondencia: corr, generado: p.ahora(), hoy: hoyMadrid(p.ahora()) })
       if (!listo.factura) return { motivo: listo.sinFactura ?? 'esta factura no se sabe mandar', reintentar: false }
       const f = listo.factura.factura
-      return { serie: f.Serie, numero: String(f.NumeroFactura), cuenta: f.CuentaCliente, mes: String(f.FechaFactura).slice(0, 6) }
+      return { serie: f.Serie, numero: numeroDeLaVez(String(f.NumeroFactura), vez), cuenta: f.CuentaCliente, mes: String(f.FechaFactura).slice(0, 6) }
     },
     construir: async ({ ya, diez }) => {
       const f0 = (plan.preparar() as { serie: string; numero: string; cuenta: string })
@@ -351,8 +368,9 @@ async function enviarAsiento(entryId: string, p: PuertoEnvio): Promise<Resultado
         nombreCliente = String(sc.Descripcion ?? '').trim()
         if (!nombreCliente) return { motivo: `la subcuenta ${f0.cuenta} de Diez no tiene nombre: no se inventa`, reintentar: false }
       }
-      return { fd: facturaDeVentas({ fecha: r.fecha, local: r.local!.nombre, canal: r.canal!.slug, lineas: r.lineas.map((l) => ({ cuenta: l.cuenta, debe: Number(l.debe), haber: Number(l.haber), marca: l.marca, tipoIva: l.tipoIva })) },
-        { correspondencia: corr!, nombreCliente: nombreCliente || '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura }
+      const fd = facturaDeVentas({ fecha: r.fecha, local: r.local!.nombre, canal: r.canal!.slug, lineas: r.lineas.map((l) => ({ cuenta: l.cuenta, debe: Number(l.debe), haber: Number(l.haber), marca: l.marca, tipoIva: l.tipoIva })) },
+        { correspondencia: corr!, nombreCliente: nombreCliente || '—', hoy: hoyMadrid(p.ahora()), conAnalitica: true }).factura
+      return { fd: { ...fd, NumeroFactura: f0.numero } }
     },
   }
   // 15/10 · Glovo: la gestoría hacía una factura por tienda y día. Si mete una
@@ -494,8 +512,10 @@ async function enviar(r: Base, plan: Plan, p: PuertoEnvio): Promise<ResultadoEnv
   // El ejercicio de la factura EN DIEZ: si se enlaza una que ya estaba, el suyo (puede ser otro año).
   let ejDiez = String(previo?.ext_year ?? ej)
   if (!(previo && (previo.status === 'enviado' || previo.status === 'enlazado'))) {
+    // C11c · Sin los de Diez que ya son de otro asiento de Sumied (el anulado de un rehecho).
+    const usados = p.enlazados ? await p.enlazados(r.company_id, r.id) : new Set<string>()
     // El listado de Diez repite filas: una por ejercicio, serie y documento.
-    const ya = [...new Map(delMes.filter(busca.esLaMisma)
+    const ya = [...new Map(delMes.filter((f) => busca.esLaMisma(f) && !usados.has(`${f.Serie}/${f.Documento}`))
       .map((f) => [`${f.Ejercicio ?? ''}|${f.Serie}|${f.Documento}`, f])).values()]
     if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${plano.numero} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
     if (ya.length === 0 && plan.ajena) {
@@ -626,7 +646,10 @@ async function enviarContraasiento(c: ContraasientoBD, p: PuertoEnvio): Promise<
   const nombreCliente = String(sc?.Descripcion ?? '').trim()
   let fd: FacturaData
   try {
-    const original = facturaDeVentas(asiento, { correspondencia: corr, nombreCliente: nombreCliente || '—', hoy, conAnalitica: true }).factura
+    const rehecha = facturaDeVentas(asiento, { correspondencia: corr, nombreCliente: nombreCliente || '—', hoy, conAnalitica: true }).factura
+    // C11c · Si lo anulado era un rehecho, se mandó con su vez («…-2»): ése es su número.
+    const enviado = String(orig!.ext_invoice_number ?? '')
+    const original = esNumeroDe(String(rehecha.NumeroFactura), enviado) ? { ...rehecha, NumeroFactura: enviado } : rehecha
     if (String(original.NumeroFactura) !== String(orig!.ext_invoice_number)) {
       return apuntar(`la factura rehecha (${original.NumeroFactura}) no es la que está en Diez (${orig!.ext_invoice_number}): no se anula a ciegas`, { account_connector_id: con.id }, false)
     }
@@ -637,7 +660,9 @@ async function enviarContraasiento(c: ContraasientoBD, p: PuertoEnvio): Promise<
   // 5 · Nunca dos veces: ¿ya está en Diez la que anula?
   const ej = c.fecha.slice(0, 4)
   const delMes = await diez.facturasDelMes(String(fd.FechaFactura).slice(0, 6))
-  const ya = [...new Map(delMes.filter((f) => String(f.Serie) === fd.Serie && String(f.NumeroFactura) === fd.NumeroFactura && String(f.CuentaCliente) === fd.CuentaCliente)
+  const usadosC = p.enlazados ? await p.enlazados(c.company_id, c.id) : new Set<string>()
+  const ya = [...new Map(delMes.filter((f) => String(f.Serie) === fd.Serie && String(f.NumeroFactura) === fd.NumeroFactura && String(f.CuentaCliente) === fd.CuentaCliente
+      && !usadosC.has(`${f.Serie}/${f.Documento}`))
     .map((f) => [String(f.Documento), f])).values()]
   if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${fd.NumeroFactura} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
   const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(fd)))
@@ -742,7 +767,8 @@ async function enviarContraasientoRecibida(c: ContraasientoBD, p: PuertoEnvio & 
   const diez = await p.cliente(con, { real })
   const delMes: Factura[] = []
   for (const m of meses) delMes.push(...await diez.facturasDelMes(m))
-  const ya = [...new Map(delMes.filter(esLaMisma).map((f) => [`${f.Ejercicio ?? ''}|${f.Serie}|${f.Documento}`, f])).values()]
+  const usadosR = p.enlazados ? await p.enlazados(c.company_id, c.id) : new Set<string>()
+  const ya = [...new Map(delMes.filter((f) => esLaMisma(f) && !usadosR.has(`${f.Serie}/${f.Documento}`)).map((f) => [`${f.Ejercicio ?? ''}|${f.Serie}|${f.Documento}`, f])).values()]
   if (ya.length > 1) return apuntar(`hay ${ya.length} facturas ${fd.NumeroFactura} en Diez: no se toca nada`, { account_connector_id: con.id }, false)
   const ej = c.fecha.slice(0, 4)
   const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(fd)))

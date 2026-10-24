@@ -19,6 +19,10 @@
 // Eats va a conta_liquidacion_registrar (la 0100 de las liquidaciones). El
 // cuerpo del correo se pide a Resend (el webhook no lo trae).
 //
+// D01 · Facturas de los proveedores (16/10): la confirmación del reenvío se
+// apunta también con su enlace (pide el cuerpo), y un remitente que la base
+// sabe que no manda facturas (conta_entrada_remitente) no se lee como factura.
+//
 // Mientras Julio no dé de alta el dominio entrada.folvy.app en Resend, aquí no
 // llega nada; y aunque llegara, las direcciones nacen apagadas.
 //
@@ -107,6 +111,14 @@ Deno.serve(async (req) => {
     liquidacion: async ({ companyId, datos }) => {
       const r = await rpc<{ liquidacion_id: string; ya_estaba: boolean; texto: string; factura?: { estado?: string } | null }>("conta_liquidacion_registrar", { p_company: companyId, p: datos, p_quien_nombre: null });
       return { id: r.liquidacion_id, yaEstaba: r.ya_estaba, texto: r.texto, factura: r.factura?.estado ?? null };
+    },
+    // Lo que la base sabe del remitente (la 0100 del 19): la dirección se compara por su huella.
+    // Mientras esa tanda no esté aplicada, la función no existe (PGRST202): no se sabe nada de nadie.
+    remitente: async (companyId, from) => {
+      const { data, error } = await sb.rpc("conta_entrada_remitente", { p_company: companyId, p_from: from });
+      if (error && error.code === "PGRST202") return null;
+      if (error) throw new Error(`conta_entrada_remitente: ${error.message}`);
+      return (data as { decision: "no_facturas"; motivo: string } | null) ?? null;
     },
     leer: async (inboxId) => {
       const { data: l } = await sb.from("document_inbox").select("account_id, file_path").eq("id", inboxId).single();

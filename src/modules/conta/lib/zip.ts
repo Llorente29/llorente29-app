@@ -57,10 +57,14 @@ export function crearZip(ficheros: FicheroZip[]): Uint8Array {
     local.set(nombre, 30)
     const central = new Uint8Array(46 + nombre.length)
     const w = new DataView(central.buffer)
-    w.setUint32(0, 0x02014b50, true); w.setUint16(4, 20, true); w.setUint16(6, 20, true); w.setUint16(8, 0x0800, true)
+    // «Hecho por» Unix (3 << 8) y no MS-DOS (0): el unzip de Debian/Ubuntu, con
+    // locale UTF-8, pasa por CP437 los nombres que vienen de MS-DOS aunque
+    // lleven la marca UTF-8, y «ñandú» salía «├▒and├║». Con origen Unix, los
+    // atributos externos llevan el modo del fichero: normal, 0644.
+    w.setUint32(0, 0x02014b50, true); w.setUint16(4, (3 << 8) | 20, true); w.setUint16(6, 20, true); w.setUint16(8, 0x0800, true)
     w.setUint16(10, 0, true); w.setUint16(12, 0, true); w.setUint16(14, 0x21, true)
     w.setUint32(16, crc, true); w.setUint32(20, f.datos.length, true); w.setUint32(24, f.datos.length, true)
-    w.setUint16(28, nombre.length, true); w.setUint32(42, desplazamiento, true)
+    w.setUint16(28, nombre.length, true); w.setUint32(38, (0o100644 << 16) >>> 0, true); w.setUint32(42, desplazamiento, true)
     central.set(nombre, 46)
     locales.push(local, f.datos)
     centrales.push(central)

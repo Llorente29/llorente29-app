@@ -261,3 +261,103 @@ describe('recibirCorreo: el reenvío que conserva el To: original', () => {
     expect(destinatariosDelSobre(null)).toEqual([])
   })
 })
+
+// D01 · Las facturas de los proveedores por correo (Julio, 16/10). Cada
+// proveedor reenvía desde su buzón a facturas-<empresa>@. Los tres casos, con
+// correos inventados: la factura, la misma factura otra vez (en otro correo) y
+// los justificantes de entrega que un proveedor manda desde otra dirección. Y
+// la confirmación del reenvío que se hace con el enlace, no con el código.
+describe('recibirCorreo: las facturas de los proveedores', () => {
+  const FACTURAS = 'facturas-taberna-norte@entrada.folvy.app'
+  const BUZON = 'oficina@cliente-inventado.test'
+  const PDF: AdjuntoResend = { id: '1', filename: 'Factura F-2026-0412.pdf', content_type: 'application/pdf', size: 48_000, download_url: 'https://r/uno' }
+  // El reenvío automático de Gmail: conserva el From: del proveedor y el To: del buzón; la nuestra va en el sobre.
+  const reenviado = (o: Partial<CorreoResend & { envelope: { to: string[] } }> = {}) =>
+    ({ ...correo({ from: 'Panadería Inventada <facturacion@panaderia-inventada.test>', to: [BUZON], subject: 'Factura F-2026-0412', ...o }), envelope: { to: [FACTURAS] } })
+  function mundoProv(o: { leer?: (id: string) => { estado: string; texto: string } } = {}) {
+    const m = mundo({ adjuntos: [PDF] })
+    const preguntas: string[] = []
+    m.p.remitente = async (emp, de) => {
+      preguntas.push(`${emp} ${de}`)
+      return /justificantes@panaderia-inventada\.test/.test(de) ? { decision: 'no_facturas', motivo: 'Desde esa dirección el proveedor manda sus justificantes de entrega, que no son facturas.' } : null
+    }
+    if (o.leer) m.p.leer = async (id) => o.leer!(id)
+    return { ...m, preguntas }
+  }
+
+  it('la factura: reenviada desde el buzón, se enruta por el sobre, se pregunta por su remitente y se lee', async () => {
+    const m = mundoProv()
+    const r = await recibirCorreo(reenviado(), m.p)
+    expect([r.resultado, r.texto]).toEqual(['recibido', '1 documento recibido.'])
+    expect(m.preguntas).toEqual(['emp Panadería Inventada <facturacion@panaderia-inventada.test>'])
+    expect(m.subidas).toEqual(['acc/_correo/e1/01-Factura-F-2026-0412.pdf'])
+    expect(r.llegadas).toEqual([{ id: 'l1', estado: 'factura', texto: 'l1: leída' }])
+    expect(m.registro).toMatchObject([{ resultado: 'recibido', companyId: 'emp', to: FACTURAS, porSobre: true }])
+  })
+  it('la misma factura otra vez, en otro correo y con el mismo PDF: «ya estaba», no se lee otra vez', async () => {
+    const m = mundoProv()
+    await recibirCorreo(reenviado({ email_id: 'e1' }), m.p)
+    const r = await recibirCorreo(reenviado({ email_id: 'e2' }), m.p)
+    expect(r.llegadas).toEqual([{ id: 'l2', estado: 'repetido', texto: 'Factura-F-2026-0412.pdf: ya estaba (el mismo fichero llegó antes).' }])
+    expect(m.llegadas.map((x) => x.sha256)).toEqual([m.llegadas[0].sha256, m.llegadas[0].sha256])
+  })
+  it('la misma factura otra vez con OTRO PDF (otros bytes): se lee, y la base la reconoce por su número', async () => {
+    const m = mundoProv({ leer: (id) => (id === 'l1' ? { estado: 'factura', texto: 'He leído la F-2026-0412: todo cuadra.' } : { estado: 'repetida', texto: 'Ya estaba la F-2026-0412: no se apunta dos veces.' }) })
+    await recibirCorreo(reenviado({ email_id: 'e1' }), m.p)
+    m.p.bajar = async () => new TextEncoder().encode('%PDF el mismo papel, generado otra vez')
+    const r = await recibirCorreo(reenviado({ email_id: 'e2' }), m.p)
+    expect(r.llegadas).toEqual([{ id: 'l2', estado: 'repetida', texto: 'Ya estaba la F-2026-0412: no se apunta dos veces.' }])
+  })
+  it('el justificante de entrega, desde la otra dirección del proveedor: no se lee como factura, ni se baja nada; se apunta y se dice', async () => {
+    const m = mundoProv()
+    const r = await recibirCorreo(reenviado({ from: 'Panadería Inventada <justificantes@panaderia-inventada.test>', subject: 'Justificante de entrega 8812' }), m.p)
+    expect([r.resultado, r.texto]).toEqual(['no_es_factura',
+      'No se lee como factura: Desde esa dirección el proveedor manda sus justificantes de entrega, que no son facturas. Queda apuntado en el registro de entrada.'])
+    expect(m.subidas).toEqual([])
+    expect(m.llegadas).toEqual([])
+    expect(m.registro).toMatchObject([{ resultado: 'sin_facturas', companyId: 'emp', detalle: { motivo: 'remitente_no_facturas' } }])
+  })
+  it('sin la regla en la base (la función de la base aún no está), el remitente no frena nada', async () => {
+    const m = mundo({ adjuntos: [PDF] })
+    const r = await recibirCorreo(reenviado({ from: 'justificantes@panaderia-inventada.test' }), m.p)
+    expect(r.resultado).toBe('recibido')
+  })
+  it('a liquidaciones-…@ no se pregunta por el remitente', async () => {
+    const m = mundoProv()
+    m.p.destino = async () => ({ companyId: 'emp', accountId: 'acc', activa: true, tipo: 'liquidaciones' })
+    m.p.cuerpo = async () => ({ html: '<p>Hola</p>', text: null })
+    m.p.liquidacion = async () => ({ id: 'x', yaEstaba: false, texto: '', factura: null })
+    await recibirCorreo(correo({ to: ['liquidaciones-taberna-norte@entrada.folvy.app'], from: 'justificantes@panaderia-inventada.test' }), m.p)
+    expect(m.preguntas).toEqual([])
+  })
+
+  const CONFIRMA = 'https://mail-settings.google.com/mail/vf-%5BANGjdJ8-inventado%5D-AbCdEf123'
+  const confirmacion = (o: Partial<CorreoResend> = {}) => correo({ to: [FACTURAS], from: 'Equipo de Gmail <forwarding-noreply@google.com>',
+    subject: '(#987654321) Confirmación de reenvío de Gmail - Recibir correo de oficina@cliente-inventado.test', ...o })
+  it('la confirmación con enlace (buzón de Google Workspace): pide el cuerpo, apunta el enlace y el código, y no se lee como factura', async () => {
+    const m = mundoProv()
+    const cuerpos: string[] = []
+    m.p.cuerpo = async (id) => { cuerpos.push(id); return { text: null, html: `<p>Para permitirlo, haz clic en el enlace:</p><a href="${CONFIRMA}">${CONFIRMA}</a>` } }
+    const r = await recibirCorreo(confirmacion(), m.p)
+    expect(cuerpos).toEqual(['e1'])
+    expect([r.resultado, r.texto]).toEqual(['confirmacion',
+      `Gmail pide confirmar el reenvío a ${FACTURAS}: el código es 987654321, o abre el enlace del correo (los dos quedan apuntados en el registro de entrada).`])
+    expect(m.registro).toMatchObject([{ resultado: 'confirmacion', detalle: { codigo: '987654321', enlace: CONFIRMA } }])
+    expect(m.llegadas).toEqual([])
+    expect(m.preguntas).toEqual([])
+  })
+  it('la confirmación solo con enlace (sin código): se apunta el enlace', async () => {
+    const m = mundoProv()
+    m.p.cuerpo = async () => ({ text: `Haz clic para confirmar: ${CONFIRMA}`, html: null })
+    const r = await recibirCorreo(confirmacion({ subject: 'Confirmación de reenvío de Gmail' }), m.p)
+    expect(r.texto).toBe(`Gmail pide confirmar el reenvío a ${FACTURAS}: se confirma abriendo el enlace del correo (queda apuntado en el registro de entrada).`)
+    expect(m.registro).toMatchObject([{ resultado: 'confirmacion', detalle: { codigo: null, enlace: CONFIRMA } }])
+  })
+  it('un enlace que no es de Google no se toma por el de confirmación', async () => {
+    const m = mundoProv()
+    m.p.cuerpo = async () => ({ text: 'Confirma aquí: https://mail-settings.google.com.engano.test/mail/vf-falso', html: null })
+    const r = await recibirCorreo(confirmacion(), m.p)
+    expect(m.registro).toMatchObject([{ resultado: 'confirmacion', detalle: { codigo: '987654321', enlace: null } }])
+    expect(r.texto).toBe(`Gmail pide confirmar el reenvío a ${FACTURAS}: el código es 987654321. Escríbelo en Gmail.`)
+  })
+})

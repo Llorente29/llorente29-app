@@ -1,0 +1,12 @@
+{
+  "_que": "N7 · Laboral por la puerta · contexto de producción de la tanda (20261024T0801), medido en SOLO LECTURA el 24/10 a las 08:11 UTC con la consulta de analizar.mjs sql-contexto. payroll_cost existe (13 filas, todas de Foodint) y no está en el camino del pedido; fuente_nominas_mes_v1 no existe; nada en el historial.",
+  "medido": "2026-10-24T08:11Z",
+  "tanda": {
+    "supabase/migrations/20261024T0801_n7_laboral.sql": "02a784001da8a0c71dd565f227285492"
+  },
+  "contexto": {
+    "tablas": ["public.payroll_cost"], "funciones": [], "filas": { "public.payroll_cost": 13 }, "otras": {},
+    "camino": { "tablas": [], "funciones": [] },
+    "usos": {}, "registro": []
+  }
+}

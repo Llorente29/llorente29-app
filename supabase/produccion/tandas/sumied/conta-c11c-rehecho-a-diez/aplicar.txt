@@ -1,0 +1,13 @@
+# C11c · El asiento de ventas rehecho después de anular llega a Diez (Julio, 24/10).
+# Rama conta/c11c-rehecho-a-diez. Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0732 — AÑADE conta_diez_numero_vez(asiento, número): la vez del número
+#      de factura de ventas (1 + los asientos anulados de la empresa que ya lo
+#      mandaron a Diez). Solo la ejecuta el servidor. No cambia nada que exista.
+#
+# DESPUÉS de esta tanda, y no antes: fusionar y desplegar a mano conta-diez-cola
+# y conta-diez-enviar (importan _shared/diezEnviar.ts, que la llama). El 1896
+# lo reenvía solo la cola en su siguiente intento (cada 15 minutos).
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/c11c-rehecho-a-diez.sql
+supabase/migrations/20261024T0732_c11c_numero_vez.sql

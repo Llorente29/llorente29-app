@@ -1,0 +1,24 @@
+# Tanda de la rama conta/d01-facturas-correo (#216) · D01 · Las facturas de los
+# proveedores entran solas por correo (Julio, 16/10). Desde el C10 (23/10), una
+# tanda por rama: ésta es su carpeta. Se lanza desde esta rama, ANTES de
+# fusionar, con el campo «tanda» vacío. Sin «autorizo»: las dos «siguen».
+#
+# Los nombres pasan al formato del C10 (24/10): la 0040 era la 0100 del 19 y la
+# 0041, la 0110 del 19 (dentro del SQL se siguen llamando así en sus mensajes).
+#
+#   1. 0040 — añade company_inbound_sender y conta_entrada_remitente (los
+#      remitentes que no mandan facturas, por su huella) y cambia con la misma
+#      firma conta_entrada_llegada (la repetida deja rastro en su actividad).
+#      Declarado en su cabecera, con su prueba de staging.
+#   2. 0041 — los datos de Foodint: su dirección de facturas,
+#      facturas-foodint@entrada.folvy.app, encendida, y el remitente de los
+#      justificantes de un proveedor, por su huella. Solo añade dos filas.
+#
+# Ninguna toca el camino del pedido. No escribe ningún asiento.
+# La función conta-facturas-entrada (y su _shared/facturasEntrada.ts) se despliega
+# al fusionar: sin esta tanda funciona igual que hoy (sin la regla del remitente).
+# Vuelta atrás: el vuelta-atras.txt de esta carpeta.
+# Staging: supabase/staging/tandas/sumied/conta-d01-facturas-correo.txt.
+cuenta: scripts/conta/produccion/cuentas/d01-facturas-correo.sql
+supabase/migrations/20261024T0040_d01_facturas_correo.sql
+supabase/migrations/20261024T0041_d01_facturas_foodint.sql
