@@ -1,0 +1,5 @@
+# N2 · Ventas › Lo que deja el cierre del día (rama claude/n2-cierre-del-dia,
+# 24/10). Sin migración: la pantalla lee lo que dejó el C11b. Su prueba
+# (ROLLBACK): lo que lee y escribe la pantalla, como persona de A, con las
+# columnas del front (regla 40); el descarte quita el aviso; B no ve nada.
+supabase/staging/sql/20261024_n2_cierre_del_dia_prueba.sql
