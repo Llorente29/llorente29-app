@@ -125,7 +125,8 @@ export default function FacturaVentaPage() {
   const ed = useCambiosSinGuardar<BorradorVenta>(base, ETIQUETAS_BORRADOR, formato)
   const b = ed.valor
 
-  const [mensaje, setMensaje] = useState<MensajeGuardado | null>(null)
+  // Una nueva se guarda y se abre su ficha: el mensaje viaja con la navegación (regla 8).
+  const [mensaje, setMensaje] = useState<MensajeGuardado | null>(() => (location.state as { mensaje?: MensajeGuardado } | null)?.mensaje ?? null)
   const [guardando, setGuardando] = useState(false)
   const [dialogo, setDialogo] = useState<null | 'cliente' | 'emitir' | 'cobro' | 'corregir' | 'borrar'>(null)
   const [resultado, setResultado] = useState<ResultadoEmitir | null>(() => (location.state as { resultado?: ResultadoEmitir } | null)?.resultado ?? null)
@@ -163,8 +164,9 @@ export default function FacturaVentaPage() {
         notas: b.notas.trim() || null, correo: b.correo.trim() || null, retencionId: b.retencionId, recargo: false, motivo: b.motivo.trim() || null,
       }, leidas.lineas, userName)
       ed.reiniciar(b)
-      setMensaje({ tono: 'ok', texto: `Guardado el borrador: ${r.lineas} ${r.lineas === 1 ? 'línea' : 'líneas'}, ${eurosExactos(r.total)}.` })
-      if (nueva && abrir) navegar(rutaFacturaVenta(r.id), { replace: true })
+      const hecho: MensajeGuardado = { tono: 'ok', texto: `Guardado el borrador: ${r.lineas} ${r.lineas === 1 ? 'línea' : 'líneas'}, ${eurosExactos(r.total)}.` }
+      setMensaje(hecho)
+      if (nueva && abrir) navegar(rutaFacturaVenta(r.id), { replace: true, state: { mensaje: hecho } })
       else if (!nueva) setVuelta((x) => x + 1)
       return { id: r.id }
     } catch (e) {

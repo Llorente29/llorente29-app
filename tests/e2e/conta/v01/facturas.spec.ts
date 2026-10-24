@@ -114,7 +114,7 @@ test('nueva a mano: cliente nuevo, líneas, guardar; emitir, cobrar y corregir',
   await expect(totales).toContainText('Total1.259,50 €')
   // Nada se guarda solo: la barra de cambios lo dice.
   await expect(page.getByRole('button', { name: /Guardar cambios/ })).toBeVisible()
-  await expect(page.getByRole('region', { name: /asiento/i }).first()).toContainText('430')
+  await expect(page.getByRole('table', { name: 'El asiento que se crea' })).toContainText('430')
   await foto(page, 'nueva')
   await page.getByRole('button', { name: /Guardar cambios/ }).click()
   await expect(page.getByText(/^Guardado el borrador: 2 líneas, 1\.259,50 €\./)).toBeVisible({ timeout: 30_000 })
@@ -141,7 +141,7 @@ test('nueva a mano: cliente nuevo, líneas, guardar; emitir, cobrar y corregir',
   await expect(resultado).toContainText(/Emitida la F-\d{4}\/\d+ · 1\.259,50 €\./)
   await expect(resultado).toContainText('Su PDF, hecho y guardado.')
   await expect(page.locator('[data-prueba="ficha-venta"]')).toHaveAttribute('data-estado', 'emitida', { timeout: 30_000 })
-  await expect(page.getByRole('region', { name: 'Su asiento' })).toContainText(/Cuadra|1\.259,50/)
+  await expect(page.getByRole('table', { name: 'Su asiento' })).toContainText('1.259,50')
   await foto(page, 'emitida')
 
   // Un cobro en parte.
