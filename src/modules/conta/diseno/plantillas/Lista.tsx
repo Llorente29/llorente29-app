@@ -10,8 +10,9 @@
 // en la dirección, y la fila donde ibas (`filaActual`) se lleva a la vista y se
 // marca. Si con esos filtros ya no sale, la página lo dice (no se calla).
 
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { PestanaEstado, Sentido } from './lista'
+import { columnasQueCaben, textoColumnasOcultas } from './anchos'
 
 /** Las pestañas de estado, con su número. La primera es «Todas» (la suma). */
 export function PestanasEstado({ pestanas, actual, alCambiar, etiqueta, derecha }: {
@@ -85,7 +86,17 @@ export interface ColumnaLista<T> {
   /** Se puede ordenar por ella. */
   ordenable?: boolean
   ancho?: string
+  /**
+   * N5 · La regla de anchos: 1 = siempre se ve; cuanto más alta, antes se
+   * oculta cuando no cabe (sin desplazarse de lado). Sin ella, 1.
+   */
+  prioridad?: number
+  /** N5 · Lo que ocupa como mínimo, en px (sin él, 96). */
+  minimo?: number
 }
+
+/** N5 · Lo que ocupan la casilla de marcar y la flecha de abrir, fuera de las columnas. */
+const FUERA_DE_COLUMNAS = { casilla: 40, abrir: 40 }
 
 /** D06 · Marcar filas (validar en bloque): una casilla en cada fila y otra en la cabecera para todas. */
 export interface SeleccionLista {
@@ -127,6 +138,21 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
     )
   }
   const caja = useRef<HTMLDivElement | null>(null)
+  // N5 · El ancho que tiene la lista, para quitar columnas por prioridad hasta que quepan.
+  const [anchoLista, setAnchoLista] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const el = caja.current
+    if (!el || movil) return
+    setAnchoLista(el.clientWidth)
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setAnchoLista(el.clientWidth))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [movil])
+  const disponible = anchoLista === null ? Number.POSITIVE_INFINITY : anchoLista - FUERA_DE_COLUMNAS.abrir - (seleccion ? FUERA_DE_COLUMNAS.casilla : 0)
+  const caben = new Set(columnasQueCaben(columnas, disponible))
+  const vistas = columnas.filter((c) => caben.has(c.id))
+  const ocultas = columnas.filter((c) => !caben.has(c.id)).map((c) => c.titulo)
   useEffect(() => {
     if (!filaActual) return
     const el = caja.current?.querySelector<HTMLElement>(`[data-fila="${CSS.escape(filaActual)}"]`)
@@ -151,8 +177,8 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
     )
   }
   return (
-    <div className="s-lista" ref={caja}>
-      <table className="s-lista-tabla" aria-label={etiqueta}>
+    <div className="s-lista" ref={caja} data-columnas-ocultas={ocultas.length ? ocultas.join(' · ') : undefined}>
+      <table className="s-lista-tabla" aria-label={etiqueta} aria-description={textoColumnasOcultas(ocultas) ?? undefined}>
         <thead>
           <tr>
             {seleccion && (
@@ -161,7 +187,7 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
                   ref={(el) => { if (el) el.indeterminate = algunas }} onChange={(e) => seleccion.alMarcarTodas(e.target.checked)} />
               </th>
             )}
-            {columnas.map((c) => {
+            {vistas.map((c) => {
               const activa = orden?.columna === c.id
               return (
                 <th key={c.id} scope="col" className={c.cifra ? 's-lista-cifra' : undefined} style={c.ancho ? { width: c.ancho } : undefined}
@@ -176,13 +202,13 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
           </tr>
         </thead>
         <tbody>
-          {filas.length === 0 && <tr><td colSpan={columnas.length + (seleccion ? 2 : 1)} className="s-lista-vacia">{vacio}</td></tr>}
+          {filas.length === 0 && <tr><td colSpan={vistas.length + (seleccion ? 2 : 1)} className="s-lista-vacia">{vacio}</td></tr>}
           {filas.map((f) => {
             const id = clave(f)
             return (
               <tr key={id} data-fila={id} data-actual={id === filaActual ? '' : undefined} data-marcada={seleccion?.marcadas.has(id) ? '' : undefined} onClick={() => alAbrir(f)}>
                 {seleccion && <td className="s-lista-marca">{casilla(f)}</td>}
-                {columnas.map((c) => <td key={c.id} className={c.cifra ? 's-lista-cifra' : undefined}>{c.celda(f)}</td>)}
+                {vistas.map((c) => <td key={c.id} className={c.cifra ? 's-lista-cifra' : undefined}>{c.celda(f)}</td>)}
                 <td className="s-lista-abrir">
                   <button type="button" className="s-lista-abrir-boton" aria-label={`Abrir ${nombre(f)}`} onClick={(e) => { e.stopPropagation(); alAbrir(f) }}>›</button>
                 </td>

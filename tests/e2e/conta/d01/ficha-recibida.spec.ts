@@ -48,6 +48,7 @@ import { test, expect, type Page, type Locator } from '@playwright/test'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { CARRIL, CUENTA_A, STAGING_URL, anonKey, entrarComo, enCarril, type Sesion } from '../sesion'
 import { rest } from '../api'
+import { barraAbiertaSiPlegada } from '../barra'
 
 const DIR = 'docs/conta/capturas/d03'
 const TABLERO = 'tests/e2e/conta/d01/tablero-3b.webp'  // la maqueta, junto a la prueba (la rama no fija capturas)
@@ -463,6 +464,7 @@ test('D03 · salir con un cambio sin guardar, por el menú y con ‹ ›: avisa,
     await cambiar()
     const enlaceDelMenu = async () => {
       if (lado(page) === 'movil') await page.getByRole('button', { name: 'Abrir el menú' }).click()
+      else await barraAbiertaSiPlegada(page)
       const menu = page.getByRole('navigation', { name: 'Menú de contabilidad' })
       await menu.getByRole('list', { name: 'Páginas de Compras y gastos' }).getByRole('link', { name: 'Facturas recibidas' }).click()
     }

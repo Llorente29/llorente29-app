@@ -25,7 +25,8 @@ describe('la entera en trozos', () => {
     // 23/10 (D07): entra d01/plataforma, nueva y sin medir (una sola prueba, sin datos que crear): son 6.
     // 24/10 (N1): se miden d01/validar-en-bloque y d01/plataforma (e2e 39980636692) y entra
     // d01/nif-de-la-ficha, nueva y sin medir: son 5.
-    expect(sin.length).toBeLessThan(6)
+    // 24/10 (N5, al traer main): entra n5/anchos-compras, nueva y sin medir (cuenta como la mediana): son 6.
+    expect(sin.length).toBeLessThan(7)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -74,6 +75,7 @@ describe('la entera en trozos', () => {
     // 24/10 (N1): d01/validar-en-bloque medido (130,2 s en la e2e 39980636692; contaba como la
     // mediana) y d01/plataforma (6,8 s); entra d01/nif-de-la-ficha, sin medir. El reparto estimado
     // da 17,25: el techo pasa a 17,5 min. Lo mide la entera de la noche.
+    // 24/10 (N5, al traer main): entra n5/anchos-compras, sin medir (cuenta como la mediana).
     expect(Math.max(...seg) / 60).toBeLessThan(17.5)
   })
 

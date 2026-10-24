@@ -18,6 +18,8 @@ import { Icono } from '../Icono'
 import { MarcaCambiado } from './CambiosSinGuardar'
 import type { CambioCampo } from './cambios'
 import { DATOS_MAX, DATOS_MIN, acotarAncho, anchoConTecla, guardarAncho, leerAncho } from './reparto'
+import { documentoEnPanel } from './anchos'
+import { useTramoAncho } from './useAncho'
 import { claveLineaAsiento, lineasEnOrden, totalesAsiento, type LineaAsientoVista, type OrdenAsiento } from './valores'
 
 /** «‹ 3 de 9 ›»: recorrer la cola sin volver a la lista. */
@@ -350,7 +352,14 @@ export function DocumentoFicha({ titulo, descargar, abrir, oculto, alOcultar, ch
  * entre los dos, un separador que se arrastra o se mueve con las flechas; el
  * ancho se recuerda por persona (`usuario`). En el móvil, el documento arriba.
  */
-export function Ficha({ datos, documento, documentoOculto = false, usuario }: { datos: ReactNode; documento?: ReactNode; documentoOculto?: boolean; usuario?: string | null }) {
+export function Ficha({ datos, documento, documentoOculto = false, usuario, reglaAnchos = false }: {
+  datos: ReactNode; documento?: ReactNode; documentoOculto?: boolean; usuario?: string | null
+  /** N5 · La regla de anchos (por ahora, las pantallas de Compras y gastos): de 768 a 1279 px, el documento en un panel. */
+  reglaAnchos?: boolean
+}) {
+  // N5 · La regla de anchos: de 768 a 1279 px el documento no va al lado, va en un panel que se abre con un botón.
+  const tramo = useTramoAncho()
+  const [panelAbierto, setPanelAbierto] = useState(false)
   const almacen = typeof window !== 'undefined' ? window.localStorage : null
   const [ancho, setAncho] = useState(() => leerAncho(usuario, almacen))
   const [deQuien, setDeQuien] = useState(usuario)
@@ -369,6 +378,28 @@ export function Ficha({ datos, documento, documentoOculto = false, usuario }: { 
     }
     sep.addEventListener('pointermove', mover); sep.addEventListener('pointerup', soltar)
     e.preventDefault()
+  }
+  if (documento && reglaAnchos && documentoEnPanel(tramo)) {
+    return (
+      <div ref={caja} className="s-ficha" data-documento="panel">
+        <div className="s-ficha-datos">
+          <div className="s-ficha-ver-documento">
+            <button type="button" className="s-boton s-boton-secundario" aria-expanded={panelAbierto} aria-controls="s-ficha-panel"
+              onClick={() => setPanelAbierto((x) => !x)}>
+              <Icono nombre="documento" /> {panelAbierto ? 'Cerrar el documento' : 'Ver el documento'}
+            </button>
+          </div>
+          {datos}
+        </div>
+        {panelAbierto && (
+          <div className="s-ficha-panel" id="s-ficha-panel" role="dialog" aria-label="Documento"
+            onKeyDown={(e) => { if (e.key === 'Escape') setPanelAbierto(false) }}>
+            <button type="button" className="s-ficha-panel-cerrar" aria-label="Cerrar el documento" onClick={() => setPanelAbierto(false)}>×</button>
+            {documento}
+          </div>
+        )}
+      </div>
+    )
   }
   return (
     <div ref={caja} className="s-ficha" data-documento={documento ? (documentoOculto ? 'oculto' : 'si') : 'no'}
