@@ -7,8 +7,10 @@
 //     tocan en esta tanda, saltando los que ya han fallado en este traspaso
 //     (siguen sin llegar y no se reintentan en bucle).
 //   · cuadrar: los saldos que Sumied dice que tienen que estar en Diez ese mes
-//     (conta_traspaso_saldos) contra lo que Diez tiene (getSumasYsaldos, una
-//     fila por apunte). «Cuadra» si cada cuenta de Sumied tiene en Diez el
+//     (conta_traspaso_saldos) contra lo que Diez tiene: las líneas de los
+//     apuntes del mes (api/apuntes, lineasDeApuntes). No getSumasYsaldos: trae
+//     líneas de asiento de solo algunas cuentas (C04b, run 9; y C0009, 24/10:
+//     9 líneas de 4 subcuentas contra 44 de 23). «Cuadra» si cada cuenta de Sumied tiene en Diez el
 //     mismo debe y el mismo haber, al céntimo. Las cuentas que solo están en
 //     Diez se dicen aparte: no las movió Sumied (algo apuntado a mano en Diez)
 //     y no rompen el cuadre, pero se enseñan (regla 7: no se esconden).
@@ -22,7 +24,12 @@ const euros = (c: number) => c / 100
 /** Diez da la subcuenta como número o texto, a veces con puntos o espacios: solo los dígitos. */
 export const subcuenta = (x: unknown) => String(x ?? '').replace(/\D/g, '')
 
-/** Lo que tiene Diez, por subcuenta (getSumasYsaldos devuelve una fila por apunte). */
+/** Las líneas de los apuntes de Diez (api/apuntes, con sus Detalles), en la forma que suma sumarDiez. */
+export function lineasDeApuntes(apuntes: readonly { Detalles?: readonly { Cuenta?: string; Debe?: number; Haber?: number }[] }[]): Record<string, unknown>[] {
+  return apuntes.flatMap((a) => (a.Detalles ?? []).map((l) => ({ Subcuenta: l.Cuenta, Debe: l.Debe ?? 0, Haber: l.Haber ?? 0 })))
+}
+
+/** Lo que tiene Diez, por subcuenta (una fila por línea de apunte: Subcuenta, Debe, Haber). */
 export function sumarDiez(filas: readonly Record<string, unknown>[]): Map<string, { debe: number; haber: number }> {
   const m = new Map<string, { debe: number; haber: number }>()
   for (const f of filas) {
@@ -68,12 +75,9 @@ export function siguientes<T extends { entry_id: string; orden: number }>(lista:
   return { tanda, quedan: pendientes.length - tanda.length }
 }
 
-/** El mes del traspaso en Diez: ejercicio y las dos fechas AAAAMMDD (primer y último día). */
-export function rangoDelMes(mes: string): { ejercicio: string; desde: number; hasta: number } {
+/** El mes del traspaso como lo pide api/apuntes (AAAAMM). */
+export function aaaammDelMes(mes: string): string {
   const m = /^(\d{4})-(\d{2})/.exec(mes)
-  if (!m) throw new Error(`mes no válido: ${mes}`)
-  const y = Number(m[1]), mm = Number(m[2])
-  if (mm < 1 || mm > 12) throw new Error(`mes no válido: ${mes}`)
-  const ultimo = new Date(Date.UTC(y, mm, 0)).getUTCDate()
-  return { ejercicio: String(y), desde: y * 10000 + mm * 100 + 1, hasta: y * 10000 + mm * 100 + ultimo }
+  if (!m || Number(m[2]) < 1 || Number(m[2]) > 12) throw new Error(`mes no válido: ${mes}`)
+  return `${m[1]}${m[2]}`
 }

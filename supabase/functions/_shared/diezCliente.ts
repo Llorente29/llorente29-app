@@ -327,14 +327,6 @@ export class ClienteDiez {
   apuntesDelMes(aaaamm: string) { return this.todas<Apunte>(`/api/apuntes?${this.filtroMes(aaaamm)}`) }
   facturasDelMes(aaaamm: string) { return this.todas<Factura>(`/api/facturas?${this.filtroMes(aaaamm)}`) }
   subcuentas() { return this.todas<Record<string, unknown>>('/api/subcuentas') }
-  /**
-   * C12 (24/10) · Las filas de sumas y saldos de un periodo (una por apunte:
-   * Subcuenta, Debe, Haber…), para comparar con Sumied después del traspaso.
-   * `ejercicio` es el año (AAAA); las fechas, AAAAMMDD.
-   */
-  sumasYSaldos(ejercicio: string, desde: number, hasta: number) {
-    return this.todas<Record<string, unknown>>(`/api/subcuentas/getSumasYsaldos/${encodeURIComponent(ejercicio)}/${desde}/${hasta}`)
-  }
   series() { return this.todas<{ Codigo: string; Descripcion: string }>('/api/series') }
 
   /**

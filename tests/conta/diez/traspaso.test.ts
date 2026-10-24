@@ -1,9 +1,9 @@
 // C12 (24/10) · El traspaso del mes a Diez: qué va en cada tanda, el cuadre
-// cuenta a cuenta contra getSumasYsaldos (una fila por apunte, como la da
-// Diez) y el rango del mes. Cuentas y nombres con la forma del plan de Sumied;
+// cuenta a cuenta contra las líneas de los apuntes del mes (api/apuntes, con
+// sus Detalles, como los da Diez) y el mes como lo pide Diez. Cuentas y nombres con la forma del plan de Sumied;
 // importes inventados.
 import { describe, expect, it } from 'vitest'
-import { cuadrar, rangoDelMes, siguientes, subcuenta, sumarDiez } from '../../../supabase/functions/_shared/diezTraspaso'
+import { aaaammDelMes, cuadrar, lineasDeApuntes, siguientes, subcuenta, sumarDiez } from '../../../supabase/functions/_shared/diezTraspaso'
 
 // Lo que Diez devuelve: una fila por apunte, con la subcuenta como número o texto.
 const apunte = (Subcuenta: string | number, Debe: number, Haber: number) => ({ Subcuenta, Debe, Haber, Concepto: 'x' })
@@ -68,14 +68,34 @@ describe('siguientes', () => {
   })
 })
 
-describe('rangoDelMes', () => {
-  it('octubre, febrero bisiesto y diciembre', () => {
-    expect(rangoDelMes('2026-10-01')).toEqual({ ejercicio: '2026', desde: 20261001, hasta: 20261031 })
-    expect(rangoDelMes('2028-02-01')).toEqual({ ejercicio: '2028', desde: 20280201, hasta: 20280229 })
-    expect(rangoDelMes('2026-12-01')).toEqual({ ejercicio: '2026', desde: 20261201, hasta: 20261231 })
+describe('aaaammDelMes', () => {
+  it('el mes como lo pide api/apuntes', () => {
+    expect(aaaammDelMes('2026-10-01')).toBe('202610')
+    expect(aaaammDelMes('2026-01-01')).toBe('202601')
   })
   it('un mes que no lo es, parado', () => {
-    expect(() => rangoDelMes('2026-13-01')).toThrow()
-    expect(() => rangoDelMes('octubre')).toThrow()
+    expect(() => aaaammDelMes('2026-13-01')).toThrow()
+    expect(() => aaaammDelMes('octubre')).toThrow()
+  })
+})
+
+describe('lineasDeApuntes', () => {
+  // Como los da Diez: cada apunte con sus Detalles (Cuenta, Debe, Haber).
+  const apuntes = [
+    { Ejercicio: '2026', Serie: '4', Documento: 1, Detalles: [{ Cuenta: '57200001', Debe: 100, Haber: 0 }, { Cuenta: '43000002', Haber: 100 }] },
+    { Ejercicio: '2026', Serie: '1', Documento: 2, Detalles: [{ Cuenta: '43000002', Debe: 110 }, { Cuenta: '70000002', Haber: 100 }, { Cuenta: '47700010', Haber: 10 }] },
+    { Ejercicio: '2026', Serie: '1', Documento: 3 },
+  ]
+  it('todas las líneas, una por fila, y sin Detalles no hay líneas', () => {
+    expect(lineasDeApuntes(apuntes)).toHaveLength(5)
+  })
+  it('lo que suman es lo que cuadrar compara: Sumied con lo mismo, «Cuadra»; con un apunte de menos, no', () => {
+    const sumied = [
+      { cuenta: '57200001', debe: 100, haber: 0 }, { cuenta: '43000002', debe: 110, haber: 100 },
+      { cuenta: '70000002', debe: 0, haber: 100 }, { cuenta: '47700010', debe: 0, haber: 10 },
+    ]
+    expect(cuadrar(sumied, lineasDeApuntes(apuntes)).cuadra).toBe(true)
+    const r = cuadrar(sumied, lineasDeApuntes(apuntes.slice(1)))
+    expect(r.diferencias.map((d) => [d.cuenta, d.falta_debe, d.falta_haber])).toEqual([['43000002', 0, 100], ['57200001', 100, 0]])
   })
 })

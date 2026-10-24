@@ -220,7 +220,7 @@ function puertoComun(srv: SupabaseClient, accountId: string, traspaso?: Readonly
 
 /**
  * C12 · El cliente de Diez de una empresa SOLO PARA LEER (la comprobación del
- * traspaso: getSumasYsaldos). Sin conexión, null. Con escribir apagado: el
+ * traspaso: los apuntes del mes). Sin conexión, null. Con escribir apagado: el
  * propio cliente para cualquier escritura (FrenoDiez).
  */
 export async function clienteDiezParaLeer(srv: SupabaseClient, accountId: string, companyId: string): Promise<{ cliente: ClienteDiez; nombreBd: string } | null> {

@@ -13,7 +13,7 @@
 //     cuántos han llegado, cuáles no y cuántos quedan.
 //   · { company_id, mes, accion: 'comprobar' }: el cuadre, cuenta a cuenta,
 //     de lo que Sumied dice que tiene que estar en Diez ese mes contra lo que
-//     Diez tiene (getSumasYsaldos), y el cierre del mes en Sumied si llegó todo
+//     Diez tiene (las líneas de sus apuntes del mes), y el cierre del mes en Sumied si llegó todo
 //     y cuadra (conta_traspaso_terminar). Se puede repetir.
 //
 // Quién: un administrador de la cuenta, y solo con el traspaso de ese mes
@@ -31,7 +31,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { clienteDiezParaLeer, despacharADiez } from "../_shared/diezDespacho.ts";
-import { cuadrar, rangoDelMes, siguientes, type Saldo } from "../_shared/diezTraspaso.ts";
+import { aaaammDelMes, cuadrar, lineasDeApuntes, siguientes, type Saldo } from "../_shared/diezTraspaso.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -123,9 +123,8 @@ async function comprobar(srv: ReturnType<typeof createClient>, t: Traspaso): Pro
   try {
     const c = await clienteDiezParaLeer(srv, t.account_id, t.company_id);
     if (!c) throw new Error("la empresa no tiene la conexión con Diez");
-    const { ejercicio, desde, hasta } = rangoDelMes(t.mes);
-    const filas = await c.cliente.sumasYSaldos(ejercicio, desde, hasta);
-    const r = cuadrar(sumied, filas);
+    const apuntes = await c.cliente.apuntesDelMes(aaaammDelMes(t.mes));
+    const r = cuadrar(sumied, lineasDeApuntes(apuntes));
     cuadre = { ...r, base: c.nombreBd, comprobado_en: new Date().toISOString() };
     cuadra = r.cuadra;
   } catch (x) {
