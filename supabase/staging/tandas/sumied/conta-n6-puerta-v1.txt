@@ -1,0 +1,2 @@
+supabase/migrations/20261024T0714_n6_puerta_v1.sql
+supabase/staging/sql/20261024_n6_puerta_v1_prueba.sql
