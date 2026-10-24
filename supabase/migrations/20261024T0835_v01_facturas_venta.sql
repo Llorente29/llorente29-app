@@ -411,7 +411,7 @@ create or replace function public.conta_venta_emitir(p_id uuid, p_quien_nombre t
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_f public.customer_invoice; v_orig public.customer_invoice; v_c jsonb; v_anio int; v_num int; v_texto text; v_serie text; v_digitos int := 4;
-  v_cta430 text; v_r jsonb; v_lineas jsonb := '[]'::jsonb; v_x jsonb; v_cta text; v_cta477 text; v_cta473 text; v_entry uuid; v_val jsonb;
+  v_empieza int; v_por_anio boolean; v_cta430 text; v_r jsonb; v_lineas jsonb := '[]'::jsonb; v_x jsonb; v_cta text; v_cta477 text; v_cta473 text; v_entry uuid; v_val jsonb;
   v_nombre text; v_signo numeric; v_prev text; v_hash text; v_emisor text; v_quien text := coalesce(p_quien_nombre, public.conta_nombre_actor());
   v_tipo_libro text; v_nif text; v_esta jsonb;
 begin
@@ -442,16 +442,19 @@ begin
     if (v_c->>'total')::numeric <= 0 then raise exception 'El total de la factura es %: una factura va en positivo (para restar, «Corregir» la que toca).', v_c->>'total' using errcode = '23514'; end if;
   end if;
 
-  -- El número: su serie (la de la empresa, si la tiene en Numeración) y el año de la fecha.
+  -- El número: su serie (la de la empresa en Numeración, si la tiene: sus
+  -- cifras, por dónde empieza y si vuelve a 1 cada año; si no, 4 cifras, desde
+  -- el 1 y por año) y el año de la fecha.
   v_serie := v_f.series_code;
-  select digits into v_digitos from public.invoice_series where company_id = v_f.company_id and code = v_serie and is_active;
-  v_digitos := coalesce(v_digitos, 4);
+  select digits, starts_at, reset_yearly into v_digitos, v_empieza, v_por_anio
+    from public.invoice_series where company_id = v_f.company_id and code = v_serie and is_active;
+  v_digitos := coalesce(v_digitos, 4); v_empieza := coalesce(v_empieza, 1); v_por_anio := coalesce(v_por_anio, true);
   v_anio := extract(year from v_f.issue_date)::int;
   insert into public.customer_invoice_counter (company_id, account_id, series_code, fiscal_year, last_number)
-  values (v_f.company_id, v_f.account_id, v_serie, v_anio, 1)
+  values (v_f.company_id, v_f.account_id, v_serie, case when v_por_anio then v_anio else 0 end, v_empieza)
   on conflict (company_id, series_code, fiscal_year) do update set last_number = public.customer_invoice_counter.last_number + 1
   returning last_number into v_num;
-  v_texto := v_serie || '-' || v_anio || '/' || lpad(v_num::text, v_digitos, '0');
+  v_texto := v_serie || '-' || case when v_por_anio then v_anio || '/' else '' end || lpad(v_num::text, v_digitos, '0');
 
   -- La 430 del cliente: la suya, o una nueva de la 4300 con su nombre.
   select a.code into v_cta430 from public.company_account_link k join public.company_account a on a.id = k.company_account_id

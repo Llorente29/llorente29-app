@@ -52,6 +52,14 @@ end $$;
 create temp table _v01 (clave text primary key, v uuid) on commit drop;
 grant select, insert on _v01 to authenticated;
 
+-- El número que toca la enésima de una serie, con lo que diga su Numeración (cifras, inicio y año) o lo de serie.
+create function pg_temp.numero_esperado(p_empresa uuid, p_serie text, p_n int) returns text language sql stable as $f$
+  select p_serie || '-' || case when coalesce(s.reset_yearly, true) then '2026/' else '' end
+         || lpad((coalesce(s.starts_at, 1) + p_n - 1)::text, coalesce(s.digits, 4), '0')
+    from (select 1) x left join public.invoice_series s on s.company_id = p_empresa and s.code = p_serie and s.is_active
+$f$;
+grant execute on function pg_temp.numero_esperado(uuid, text, int) to authenticated;
+
 -- La empresa A (la que tiene su plan con las 477 enlazadas) y lo que usan las líneas.
 do $$
 declare v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; v_e uuid;
@@ -102,7 +110,7 @@ begin
 
   -- 2 · Emitir.
   r := public.conta_venta_emitir(v_f1, 'Prueba V01');
-  if r->>'numero' <> 'F-2026/' || lpad('1', coalesce((select digits from public.invoice_series where company_id = v_e and code = 'F' and is_active), 4), '0') then raise exception 'PRUEBA V01 · 2: el número es % y no F-2026/0001.', r->>'numero'; end if;
+  if r->>'numero' <> pg_temp.numero_esperado(v_e, 'F', 1) then raise exception 'PRUEBA V01 · 2: el número es % y no F-2026/0001.', r->>'numero'; end if;
   v_entry := (r->>'asiento')::uuid;
   select sum(debit), sum(credit) into v_d, v_h from public.journal_line where entry_id = v_entry;
   if v_d <> v_h or v_d <> 1259.5 then raise exception 'PRUEBA V01 · 2: el asiento no cuadra a 1.259,50 (debe %, haber %).', v_d, v_h; end if;
@@ -121,7 +129,7 @@ begin
     jsonb_build_array(jsonb_build_object('concepto', 'Catering', 'cantidad', 1, 'precio', 1000, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V01');
   v_f2 := (r->>'id')::uuid;
   r := public.conta_venta_emitir(v_f2, 'Prueba V01');
-  if r->>'numero' <> 'F-2026/' || lpad('2', coalesce((select digits from public.invoice_series where company_id = v_e and code = 'F' and is_active), 4), '0') then raise exception 'PRUEBA V01 · 3: el número es % y no F-2026/0002.', r->>'numero'; end if;
+  if r->>'numero' <> pg_temp.numero_esperado(v_e, 'F', 2) then raise exception 'PRUEBA V01 · 3: el número es % y no F-2026/0002.', r->>'numero'; end if;
   select sum(debit), sum(credit) into v_d, v_h from public.journal_line where entry_id = (r->>'asiento')::uuid;
   if v_d <> v_h then raise exception 'PRUEBA V01 · 3: con recargo y retención el asiento no cuadra (debe %, haber %).', v_d, v_h; end if;
   perform 1 from public.vat_book_entry where entry_id = (r->>'asiento')::uuid and surcharge_amount = 52;
@@ -160,10 +168,9 @@ begin
     raise exception 'PRUEBA V01 · 5: se ha emitido sin NIF.';
   exception when check_violation then null;
   end;
-  if (select last_number from public.customer_invoice_counter where company_id = v_e and series_code = 'F' and fiscal_year = 2026) <> 2 then
-    raise exception 'PRUEBA V01 · 5: la que no se emitió ha gastado número.';
-  end if;
-  raise notice '5 · sin huecos';
+  perform 1 from public.customer_invoice where id = (r->>'id')::uuid and status = 'borrador' and number is null;
+  if not found then raise exception 'PRUEBA V01 · 5: la que no se pudo emitir no sigue en borrador sin número.'; end if;
+  raise notice '5 · sin NIF no se emite (el contador, en el 10)';
 
   -- 6 · Corregir importes: eran 10, fueron 8.
   r := public.conta_venta_corregir(v_f1, 'importes', 'Eran 10 menús y fueron 8', 'Prueba V01');
@@ -173,7 +180,7 @@ begin
       jsonb_build_object('concepto', 'Menú comedor', 'cantidad', 8, 'precio', 100, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705),
       jsonb_build_object('concepto', 'Menú celíaco', 'cantidad', 1, 'precio', 50, 'descuento', 10, 'tipo_id', v_t10, 'cuenta_id', v_c700)), 'Prueba V01');
   r := public.conta_venta_emitir(v_r1, 'Prueba V01');
-  if r->>'numero' <> 'R-2026/' || lpad('1', coalesce((select digits from public.invoice_series where company_id = v_e and code = 'R' and is_active), 4), '0') or (r->>'total')::numeric <> -242 then
+  if r->>'numero' <> pg_temp.numero_esperado(v_e, 'R', 1) or (r->>'total')::numeric <> -242 then
     raise exception 'PRUEBA V01 · 6: la rectificativa es % por % y no R-2026/0001 por −242.', r->>'numero', r->>'total';
   end if;
   select sum(debit), sum(credit) into v_d, v_h from public.journal_line where entry_id = (r->>'asiento')::uuid;
@@ -189,7 +196,7 @@ begin
   r := public.conta_venta_corregir(v_f2, 'anular', 'Pedido cancelado', 'Prueba V01');
   v_r2 := (r->>'id')::uuid;
   r := public.conta_venta_emitir(v_r2, 'Prueba V01');
-  if r->>'numero' <> 'R-2026/' || lpad('2', coalesce((select digits from public.invoice_series where company_id = v_e and code = 'R' and is_active), 4), '0') then raise exception 'PRUEBA V01 · 7: la rectificativa para anular es % y no R-2026/0002.', r->>'numero'; end if;
+  if r->>'numero' <> pg_temp.numero_esperado(v_e, 'R', 2) then raise exception 'PRUEBA V01 · 7: la rectificativa para anular es % y no R-2026/0002.', r->>'numero'; end if;
   perform 1 from public.customer_invoice where id = v_f2 and status = 'anulada';
   if not found then raise exception 'PRUEBA V01 · 7: la F-2026/0002 no queda anulada.'; end if;
   raise notice '7 · anulada entera con la R-2026/0002';
@@ -230,6 +237,17 @@ begin
   raise notice '9 · B no ve ni toca nada de A';
 end $$;
 reset role;
+
+-- 10 · Sin huecos (el contador solo lo ve el servidor): dos emitidas de la F, el contador en la segunda.
+do $$
+declare v_e uuid := (select v from _v01 where clave = 'empresa');
+begin
+  if (select pg_temp.numero_esperado(v_e, 'F', 2)) is distinct from (select max(number_text) from public.customer_invoice where company_id = v_e and series_code = 'F' and status <> 'borrador')
+     or (select count(*) from public.customer_invoice where company_id = v_e and series_code = 'F' and status <> 'borrador') <> 2 then
+    raise exception 'PRUEBA V01 · 5: la que no se emitió ha gastado número (o faltan emitidas).';
+  end if;
+  raise notice '5 · sin huecos: dos emitidas de la F y la segunda es la que toca';
+end $$;
 
 -- 10 · La vuelta atrás: con emitidas, su freno para (la misma condición que su primer bloque).
 do $$ begin
