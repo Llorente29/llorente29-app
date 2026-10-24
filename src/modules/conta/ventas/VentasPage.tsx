@@ -6,6 +6,8 @@
 // no y dónde está hoy lo que hay de ventas —los asientos de cada día en el
 // libro diario—, como las entradas de Ajustes que aún no tienen pantalla.
 //
+// N2 (24/10): con hostelería, arriba, «Lo que deja el cierre del día» (C11b).
+//
 // S01: sin hostelería no hay plataformas ni cierre del día: las ventas llegarán
 // con Facturación, y hoy una factura emitida se apunta a mano («Expedida»).
 
@@ -13,12 +15,15 @@ import { Link } from 'react-router-dom'
 import { rutaLibroDiario, rutaNuevoAsiento } from '@/config/navegacion'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import { Cabecera, Vacio } from '@/modules/conta/ui/piezas'
+import { LoQueDejaElCierre } from './LoQueDejaElCierre'
 
 export default function VentasPage() {
   const hosteleria = useHosteleria()
   return (
     <div className="cxc">
       <Cabecera antetitulo="Contabilidad" titulo="Ventas" />
+      {/* N2 · Lo que deja el cierre del día (C11b): la cola, con la acción de cada pedido. */}
+      {hosteleria && <LoQueDejaElCierre />}
       <div className="cx-tarjeta">
         {hosteleria
           ? <Vacio titulo="Aún no."
