@@ -380,6 +380,12 @@ despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 | **Sumied o Folvy** (C10, 23/10) | Un cambio solo de Sumied (contabilidad: `src/modules/conta`, `tests/e2e/conta`…) no lanza las de Folvy, y al revés. Lo común **de Sumied** (`LO_COMUN_SUMIED`: el marco y el diseño de contabilidad) lanza la entera de `tests/e2e/conta`; lo común **a los dos** (`LO_COMUN_AMBOS`: el arranque de la app, la configuración, lo que mueve todas las pruebas), las dos. |
 | **Con tanda** | Lo de su riesgo, más la prueba de staging en ROLLBACK de cada «cambia», el **ensayo** y el **real** en producción con su comprobación y su deshacer (W01). La entera es la de la noche. |
 
+- **Las unitarias, también en la CI** (N1, 23/10): `unitarias.yml` corre en
+  cada PR a `main` las del producto que toca (`scripts/pruebas/unitarias.mjs`).
+  Lo común —el arranque, `src/lib`, `src/config`, `_shared`, las migraciones,
+  los workflows, cualquier fichero que no sea claramente de uno— lanza las dos,
+  y una prueba que lee el otro producto es de los dos. En local,
+  `antes-de-subir.sh` las sigue corriendo enteras.
 - **La corta** (`reparto/direccion-falta` y `reparto/quien-reparte`, 91 s) ya
   no va en cada push: va dentro de la entera cuando el PR toca pedidos, cocina
   o reparto, y cada noche.
