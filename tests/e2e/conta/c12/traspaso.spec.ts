@@ -107,7 +107,9 @@ test('A · listo: el resumen por tipo y por cuenta, y el diálogo dice qué auto
   await expect(zona.getByTestId('traspaso-frase')).toHaveText(/^\w+ está listo para traspasar\.$/)
   const resumen = zona.getByLabel('Lo que va')
   await expect(resumen.locator('p').first()).toContainText('Van 120 asientos · 14 ya estaban en Diez y no se vuelven a mandar · 2 anulados antes de llegar a Diez no viajan')
-  for (const t of ['Ventas', 'Facturas recibidas', 'Banco', 'Anulaciones de lo que ya estaba en Diez']) await expect(resumen.getByText(t, { exact: true })).toBeVisible()
+  // Los tipos, en su lista (el nombre de una cuenta puede llamarse igual: «Ventas»).
+  const tipos = resumen.getByRole('list')
+  for (const t of ['Ventas', 'Facturas recibidas', 'Banco', 'Anulaciones de lo que ya estaba en Diez']) await expect(tipos.getByText(t, { exact: true })).toBeVisible()
   await resumen.getByText('Totales por cuenta').click()
   await expect(resumen.getByRole('cell', { name: '43000002' })).toBeVisible()
   await capturar(page, 'listo')
