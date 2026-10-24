@@ -44,6 +44,7 @@ import {
   completarAnotacion, cuentasPorAsiento, datosFiscales, documentosDeFacturas, leerBienes, leerLibroRegistro, movimientoIva,
 } from '@/modules/conta/services/librosService'
 import { MARCA } from '../cuenta/marca'
+import { useVendePorPlataformas } from '@/modules/conta/services/plataformasCuenta'
 import { cuantas } from '@/modules/conta/lib/plural'
 import { useImpuestoEmpresa } from '@/modules/conta/hooks/useImpuestoEmpresa'
 import { conImpuesto } from '@/modules/conta/lib/impuestoIndirecto'
@@ -71,6 +72,7 @@ function periodos(inicio: string, fin: string): { id: string; desde: string; has
 
 export function RegistroIva({ libro }: { libro: Vista }) {
   const L = useLibros()
+  const vende = useVendePorPlataformas()
   // S01e: en Canarias, IGIC; en Ceuta y Melilla, IPSI.
   const imp = useImpuestoEmpresa(L.accountId, L.companyId)
   const ps = periodos(L.ejercicio.inicio, L.ejercicio.fin)
@@ -160,7 +162,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
         {hayFiltro && <button type="button" className="cx-boton-sec" onClick={() => setF({ verAnuladas: f.verAnuladas })}>Quitar filtros</button>}
       </details>
 
-      {vistas && !vistas.total && <div className="cxl-caja"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion={conImpuesto('El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas.', imp)} /></div>}
+      {vistas && !vistas.total && <div className="cxl-caja"><Vacio titulo={`Sin anotaciones en ${p.nombre}.`} explicacion={conImpuesto(vende ? 'El libro se llena solo al validar los asientos con IVA: ventas del día, facturas de proveedor, liquidaciones de plataformas.' : 'El libro se llena solo al validar los asientos con IVA: ventas, facturas de proveedor y las demás.', imp)} /></div>}
       {vistas && vistas.total > 0 && (
         <div className="cxl-caja">
           <p className="cxl-apoyo cxl-caja-cabeza" role="status">{hayFiltro ? `${vistas.filas.length} de ${anotaciones(vistas.total)} con los filtros puestos.` : `${anotaciones(vistas.total)}.`}</p>

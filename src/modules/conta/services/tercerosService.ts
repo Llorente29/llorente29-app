@@ -225,7 +225,7 @@ export interface FichaTercero {
   aportaciones: { id: string; localId: string; fecha: string; tipo: string; importe: number; nota: string | null }[]
   locales: { id: string; name: string }[]
   bancos: { id: string; name: string; iban: string | null }[]
-  canales: { id: string; name: string }[]
+  canales: { id: string; name: string; slug: string | null }[]
   retenciones: { id: string; name: string; rate: number }[]
   cuentas: CuentaDeTercero[]
   /** Las 430 de la empresa sin dueño: para proponer cuál es la suya (traídas de Diez). */
@@ -249,7 +249,7 @@ export async function cargarFichaTercero(accountId: string, companyId: string | 
     leer(tabla('brand_partner_contribution').select('id, location_id, contributed_on, kind, amount, note').eq('account_id', accountId).eq('party_id', partyId).order('contributed_on', { ascending: false }), 'sus aportaciones'),
     leer(tabla('locations').select('id, name').eq('account_id', accountId).order('name'), 'los locales'),
     companyId ? leer(tabla('treasury_account').select('id, name, iban').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'bank').eq('is_active', true).order('name'), 'los bancos') : Promise.resolve([]),
-    leer(tabla('sales_channel').select('id, name').eq('account_id', accountId).order('name'), 'los canales de venta'),
+    leer(tabla('sales_channel').select('id, name, slug').eq('account_id', accountId).order('name'), 'los canales de venta'),
     leer(tabla('withholding_rate').select('id, name, rate').or(`is_system.eq.true,account_id.eq.${accountId}`).order('rate'), 'las retenciones'),
     companyId ? cuentasDeTercero(accountId, companyId, partyId, supplierId) : Promise.resolve({ suyas: [], sinDueno: [], activo: false }),
   ])
@@ -262,7 +262,7 @@ export async function cargarFichaTercero(accountId: string, companyId: string | 
     aportaciones: aportaciones.map((a) => ({ id: String(a.id), localId: String(a.location_id), fecha: String(a.contributed_on), tipo: String(a.kind), importe: Number(a.amount), nota: str(a.note) })),
     locales: locales.map((l) => ({ id: String(l.id), name: String(l.name) })),
     bancos: bancos.map((b) => ({ id: String(b.id), name: String(b.name), iban: str(b.iban) })),
-    canales: canales.map((c) => ({ id: String(c.id), name: String(c.name) })),
+    canales: canales.map((c) => ({ id: String(c.id), name: String(c.name), slug: typeof c.slug === 'string' ? c.slug : null })),
     retenciones: retenciones.map((r) => ({ id: String(r.id), name: String(r.name), rate: Number(r.rate) })),
     cuentas: cuentas.suyas, cuentas430SinDueno: cuentas.sinDueno, planActivo: cuentas.activo,
   }

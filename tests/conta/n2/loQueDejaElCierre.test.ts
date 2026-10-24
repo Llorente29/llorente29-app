@@ -104,6 +104,6 @@ describe('N2 · la pantalla', () => {
     expect(p).toContain('role="status">{h.texto}')
   })
   it('sale en Ventas con hostelería', () => {
-    expect(readFileSync('src/modules/conta/ventas/VentasPage.tsx', 'utf8')).toContain('{hosteleria && <LoQueDejaElCierre />}')
+    expect(readFileSync('src/modules/conta/ventas/VentasPage.tsx', 'utf8')).toContain('{hosteleria && <LoQueDejaElCierre conPlataformas={vende} />}')
   })
 })
