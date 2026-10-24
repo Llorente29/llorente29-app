@@ -10,7 +10,7 @@
 //     «Contabilizar» (compras_liquidacion_confirmar). Los tres asientos los
 //     propone el libro, como todo lo demás. V01 · Entrega 3: vive en Ventas ›
 //     Liquidaciones › Socios de marca, con SocioDelMes (albaranes como soporte,
-//     la FV contra ellos, sus asientos y el cobro).
+//     sus albaranes contra su Relación Compras y Ventas, sus asientos y el cobro).
 //
 // Lo que no cuadra o no se sabe qué es, para (bloqueos) y se dice.
 
@@ -293,8 +293,8 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
         </div>
       </Tarjeta>
 
-      {/* V01 · Entrega 3: los albaranes como soporte y la FV contra ellos, sus asientos (se validan aquí) y el cobro. */}
-      {accountId && <SocioDelMes accountId={accountId} companyId={liq.company_id} quien={userName} recibida={lec.recibida}
+      {/* V01 · Entrega 3: los albaranes como soporte y contra su Relación, sus asientos (se validan aquí) y el cobro. */}
+      {accountId && <SocioDelMes accountId={accountId} companyId={liq.company_id} quien={userName} relacion={lec.inventario?.productos ?? null}
         liq={{ id: liq.id, status: liq.status, period_from: liq.period_from, period_to: liq.period_to, net_settlement: liq.net_settlement == null ? null : Number(liq.net_settlement), party_id: liq.party_id }} />}
 
       {casar && accountId && (

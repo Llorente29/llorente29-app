@@ -1,15 +1,14 @@
 // V01 · Entrega 3 · Ventas › Liquidaciones: lo que se decide sin React.
 // Regla 31: las cifras salen de producción (solo lectura, 24/10, Foodint):
 //   · las liquidaciones de Uber del 12 al 18/10, por tienda, sin local
-//     asignado (así están hoy: las tiendas no tienen su local en Sus tiendas);
-//   · los 20 albaranes que pagó CTB en Foodint Alcalá en octubre (hasta el 22),
-//     10.289,89 € de base, y la FV de septiembre de Alcalá, 3.587,15 €
-//     (Mercaderías en Stock a 4, 10 y 21 %).
+//     (así están hoy, antes de la 2031, que se lo pone por su dirección);
+//   · las líneas de los albaranes que pagó CTB en Foodint Carabanchel en
+//     octubre, por artículo, contra su «Relación Compras y Ventas».
 import { describe, expect, it } from 'vitest'
 import {
-  asientoDeGasto, cifras, claveGrupo, deClave, diferencias, estado, filtrar, fraseEstado, grupoDeFila, pendientes, periodo, pestanas, type GrupoPlataforma,
+  asientoDeGasto, cifras, claveGrupo, deClave, diferencias, direccionDe, estado, filtrar, fraseEstado, grupoDeFila, pendientes, periodo, pestanas, type GrupoPlataforma,
 } from '@/modules/conta/lib/liquidacionesPlataforma'
-import { baseFv, contrastarFv, formasDeSumar, type AlbaranDelMes } from '@/modules/conta/lib/socioDelMes'
+import { cruzarConRelacion, nombreNorm, unidadRelacion, type CasadoAMano, type LineaAlbaran, type ProductoRelacion } from '@/modules/conta/lib/socioDelMes'
 
 const UBER = '0e6a2c1e-0000-4000-8000-000000000001'
 const ALCALA = '1a1ca1a0-0000-4000-8000-000000000002'
@@ -50,7 +49,19 @@ describe('Plataformas · una fila por periodo, plataforma y local', () => {
     const d = diferencias(g)
     expect(d.map((x) => x.tipo)).toEqual(['local'])
     expect(estado(g)).toBe('diferencia')
-    expect(fraseEstado(g)).toMatch(/asigna su local a cada tienda/)
+    expect(fraseEstado(g)).toMatch(/no es la de ningún local tuyo/)
+    expect(d[0].texto).toBe('La dirección de sus tiendas («Calle de Camichi 4», «Calle de Florencio Llorente 29») no es la de ningún local tuyo: sin local no se comparan con tus cierres. Revisa la dirección del local.')
+  })
+  it('la calle de cada tienda, la de los últimos paréntesis (las 9 tiendas de Uber de Foodint, 24/10)', () => {
+    expect(g.liquidaciones.map((l) => l.direccion)).toEqual(['Calle de Camichi 4', 'Calle de Florencio Llorente 29', 'Calle de Florencio Llorente 29', 'Calle de Florencio Llorente 29', 'Calle de Florencio Llorente 29', 'Calle de Florencio Llorente 29'])
+    expect(direccionDe('Meraki Pita (Calle de Camichi 4) (Calle de Camichi 4, Madrid, ES, 28025)')).toBe('Calle de Camichi 4')
+    expect(direccionDe('Scandal Burgers (Calle de Florencio Llorente 29, Madrid, ES, 28027)')).toBe('Calle de Florencio Llorente 29')
+    expect(direccionDe('Glovo sin tienda')).toBeNull()
+    expect(direccionDe(null)).toBeNull()
+  })
+  it('sin tienda ni local (las de junio por CSV): lo dice', () => {
+    const sin = grupoDeFila(fila({}, [{ tienda: null as unknown as string, ventas: 10, comision: 3, neto: 7, cobrado: null }]))
+    expect(diferencias(sin)[0].texto).toBe('Estas liquidaciones no traen su tienda ni su local: sin local no se comparan con tus cierres.')
   })
   it('la clave va y vuelve (también sin local)', () => {
     expect(deClave(g.clave)).toEqual({ canalId: UBER, localId: null, desde: '2026-10-12', hasta: '2026-10-18' })
@@ -125,45 +136,104 @@ describe('Plataformas · el asiento de un gasto y el periodo', () => {
   })
 })
 
-// Los 20 albaranes de CTB en Alcalá, octubre (hasta el 22): sus bases reales.
-const BASES = [575.6, 114.79, 1488.18, 117.27, 69.06, 48.21, 437.05, 1417.88, 481.89, 801.66, 394.28, 94.31, 1046.07, 11.95, 281.26, 706.18, 1402.15, 561.8, 145.45, 94.85]
-const ALBARANES: AlbaranDelMes[] = BASES.map((b, i) => ({ id: `a${i}`, codigo: `ALB-${String(185 + i).padStart(5, '0')}`, fecha: `2026-10-${String(1 + i).padStart(2, '0')}`, base: b }))
+// Las líneas reales de los albaranes de CTB en Foodint Carabanchel, octubre
+// (producción, solo lectura, 24/10): por artículo, su unidad base, cuánto y por
+// cuánto. La Relación de octubre aún no está subida: la de estas pruebas es la
+// que casaría con ellos, tocada producto a producto donde se quiere ver que no casa.
+const L = (articulo: string, dimension: 'weight' | 'volume' | 'unit', cantidadBase: number | null, importe: number, producto: string, albaran = 'ALB-C1'): LineaAlbaran =>
+  ({ albaran, articulo: `art-${nombreNorm(articulo)}`, articuloNombre: articulo, producto, dimension, cantidadBase, importe })
+const LINEAS: LineaAlbaran[] = [
+  L('Aceite Alto Oleico', 'volume', 75000, 145.5, 'ACEITE GIRASOL 25 LT'),
+  L('Cebolla Morada', 'weight', 25000, 57.83, 'CEBOLLA ROJA'),
+  L('Pulled Pork', 'weight', 36000, 433.62, 'PULLED PORK CAJA 3 UD DE 2 KG CONG'),
+  L('Bacon Ahumado', 'weight', 9600, 105.32, 'BACON CRISPY 1/2 LONCHAS 70% CAJA 4,8 KG CONG.'),
+  L('Milanesa de Pollo Rebozado', 'unit', 340, 851.94, 'MILANESA POLLO CJ 5 KG CONG'),
+  L('Sweet Potato Fries', 'weight', 10000, 48.21, 'BONIATO BASTON CAJA 5 BOLSAS DE 2 KG CONG', 'ALB-C1'),
+  L('Sweet Potato Fries', 'weight', null, 48.21, 'BONIATO BASTON CAJA 5 BOLSAS DE 2 KG CONG', 'ALB-C2'),
+  L('Tomate Pera', 'weight', 20000, 73.04, 'TOMATE BOC EXTRA'),
+  L('Tortilla Trigo 30 cm', 'unit', 432, 99.04, 'TORTILLA TRIGO 30 CM CAJA 6 PAQ DE 18 UD'),
+]
+const REL = (nombre: string, compras: number, precio: number, unidad: string): ProductoRelacion => ({ nombre, compras, precio, unidad })
 
-describe('Socio de marca · su FV contra los albaranes del mes (Julio, 24/10)', () => {
-  it('los 20 albaranes suman 10.289,89 (lo medido)', () => {
-    expect(contrastarFv(10289.89, ALBARANES).estado).toBe('coincide')
+describe('Socio de marca · los albaranes del mes contra su «Relación Compras y Ventas» (Julio, 24/10, opción A)', () => {
+  const relacion = [
+    REL('Aceite Alto Oleico', 75, 1.94, 'Lt'), // 145,50 / 75 = 1,94: coincide
+    REL('CEBOLLA ROJA', 25, 2.31, 'Kg'), // por el nombre del producto en el albarán: 57,83 / 25 = 2,3132
+    REL('Pulled Pork', 30, 12.05, 'Kg'), // los albaranes traen 36 Kg
+    REL('Bacon Ahumado', 9.6, 11.5, 'Kg'), // 105,32 / 9,6 = 10,97
+    REL('Milanesa de Pollo Rebozado', 68, 12.53, 'Kg'), // el artículo cuenta unidades
+    REL('Sweet Potato Fries', 20, 4.82, 'Kg'), // una línea sin cantidad
+    REL('Tortilla Trigo 30 cm', 432, 0.23, 'Uni'), // 99,04 / 432 = 0,2293
+    REL('Salsa Brava', 3, 5.1, 'Kg'), // ningún artículo se llama así
+    REL('Queso de Prueba', 4, 7, 'Kg'), // casado a mano con un artículo que no ha llegado este mes
+    REL('Servilletas', 2, 1, 'Uni'), // marcado como que no es nuestro
+    REL('Sal Fina', 0, 0.4, 'Kg'), // solo consumo: no es una compra del mes
+  ]
+  const casados: CasadoAMano[] = [
+    { nombre: 'Queso de Prueba', articulo: 'art-quesogouda', noEsNuestro: false },
+    { nombre: 'Servilletas', articulo: null, noEsNuestro: true },
+  ]
+  const c = cruzarConRelacion(relacion, casados, LINEAS)
+  const de = (n: string) => c.filas.find((f) => f.nombre === n)!
+
+  it('coincide en cantidad y en precio, también casado por el nombre del producto en el albarán', () => {
+    expect(de('Aceite Alto Oleico').estado).toBe('coincide')
+    expect(de('Aceite Alto Oleico').albaranes).toMatchObject({ cantidad: 75, precio: 1.94, importe: 145.5 })
+    expect(de('CEBOLLA ROJA').estado).toBe('coincide')
+    expect(de('Tortilla Trigo 30 cm').estado).toBe('coincide')
   })
-  it('la base de la FV es la suma de sus líneas: la de septiembre de Alcalá, 3.587,15', () => {
-    expect(baseFv({ lineas: [{ base: 777.69 }, { base: 2003.91 }, { base: 805.55 }] })).toBe(3587.15)
-    expect(baseFv(null)).toBeNull()
+  it('la cantidad no casa: lo dice con su diferencia', () => {
+    expect(de('Pulled Pork').estado).toBe('cantidad')
+    expect(de('Pulled Pork').difCantidad).toBe(6)
+    expect(de('Pulled Pork').texto).toBe('No casa en cantidad: los albaranes traen 36 Kg y la Relación 30 (+6).')
   })
-  it('con la FV real de un mes (3.587,15) contra 10.289,89 de albaranes: no coincide, sobran 6.702,74, y lo dice', () => {
-    const c = contrastarFv(3587.15, ALBARANES)
-    expect(c.estado).toBe('diferencia')
-    expect(c.diferencia).toBe(-6702.74)
-    expect(c.texto).toMatch(/^No coincide: su factura \(FV\) es de 3\.587,15 € de base y los 20 albaranes suman 10\.289,89 €: sobran 6\.702,74 €\./)
+  it('el precio no casa: lo dice con su diferencia', () => {
+    expect(de('Bacon Ahumado').estado).toBe('precio')
+    expect(de('Bacon Ahumado').difPrecio).toBe(-0.53)
+    expect(de('Bacon Ahumado').texto).toBe('No casa en precio: 10,97 €/Kg en los albaranes y 11,50 €/Kg en la Relación (-0,53 €).')
   })
-  it('si sobra justo un albarán, lo señala (y solo si es el único que lo explica)', () => {
-    const c = contrastarFv(10289.89 - 1046.07, ALBARANES)
-    expect(c.sobran.map((f) => f.map((a) => a.codigo))).toEqual([['ALB-00197']])
-    expect(c.texto).toContain('Sobra el ALB-00197 del 13/10 (1.046,07 €)')
+  it('lo que no se puede comparar, dice por qué: otra unidad, una línea sin cantidad', () => {
+    expect(de('Milanesa de Pollo Rebozado').estado).toBe('unidad-distinta')
+    expect(de('Milanesa de Pollo Rebozado').texto).toContain('La Relación lo cuenta en Kg y el artículo «Milanesa de Pollo Rebozado» en Uni')
+    expect(de('Sweet Potato Fries').estado).toBe('incompleto')
+    expect(de('Sweet Potato Fries').texto).toBe('Una línea de sus albaranes no dice la cantidad: no se puede comparar. Complétala en el albarán.')
   })
-  it('si hay varias formas de explicarlo, las dice todas y no elige', () => {
-    // 94,31 + 94,85 = 189,16; y no hay otro par ni trío que lo sume.
-    const c = contrastarFv(10289.89 - 189.16, ALBARANES)
-    expect(c.sobran.length).toBeGreaterThanOrEqual(1)
-    expect(formasDeSumar(ALBARANES, 18916).every((f) => Math.round(f.reduce((t, a) => t + a.base! * 100, 0)) === 18916)).toBe(true)
+  it('lo que falta y lo que sobra', () => {
+    expect(de('Salsa Brava').estado).toBe('sin-casar')
+    expect(de('Queso de Prueba').estado).toBe('sin-albaran')
+    expect(de('Queso de Prueba').texto).toBe('La Relación dice 4 Kg comprados y ningún albarán del mes lo trae.')
+    expect(de('Tomate Pera').estado).toBe('sobra')
+    expect(de('Tomate Pera').texto).toBe('Los albaranes traen 20 Kg (73,04 €) y la Relación no lo compra (TOMATE BOC EXTRA).')
   })
-  it('si la FV trae más: faltan albaranes, cuánto', () => {
-    const c = contrastarFv(10300, ALBARANES)
-    expect(c.texto).toContain('Faltan albaranes por 10,11 €')
+  it('lo que no es nuestro sale, pero no cuenta; lo que solo se consume no es una compra del mes', () => {
+    expect(de('Servilletas').estado).toBe('no-es-nuestro')
+    expect(c.filas.some((f) => f.nombre === 'Sal Fina')).toBe(false)
   })
-  it('un albarán sin importe no suma y se dice, aunque el total coincida', () => {
-    const c = contrastarFv(10289.89, [...ALBARANES, { id: 'x', codigo: 'ALB-00230', fecha: '2026-10-23', base: null }])
-    expect(c.estado).toBe('diferencia')
-    expect(c.texto).toContain('Un albarán no tiene importe y no suma: ALB-00230.')
+  it('el resumen: algo está mal, cuántos no casan; y lo que no casa, primero', () => {
+    expect(c.estado).toBe('no-coincide')
+    expect([c.coinciden, c.noCasan]).toEqual([3, 7])
+    expect(c.texto).toBe('Algo está mal: 7 productos no casan entre los albaranes del mes y la Relación Compras y Ventas (3 sí).')
+    expect(c.filas.map((f) => f.estado).indexOf('coincide')).toBeGreaterThan(c.filas.map((f) => f.estado).lastIndexOf('incompleto'))
   })
-  it('sin su FV todavía, dice lo que suman los albaranes', () => {
-    expect(contrastarFv(null, ALBARANES).texto).toBe('Aún no ha llegado su factura del mes (FV): los albaranes suman 10.289,89 €.')
+  it('si todo casa, lo dice', () => {
+    const r = cruzarConRelacion([REL('Aceite Alto Oleico', 75, 1.94, 'Lt')], [], LINEAS.slice(0, 1))
+    expect(r.estado).toBe('coincide')
+    expect(r.texto).toBe('Los albaranes del mes coinciden con la Relación Compras y Ventas: 1 producto, en cantidad y en precio.')
+  })
+  it('sin la Relación todavía, no compara y lo dice', () => {
+    const r = cruzarConRelacion(null, [], LINEAS)
+    expect(r.estado).toBe('sin-relacion')
+    expect(r.texto).toBe('Aún no está su «Relación Compras y Ventas»: sin ella no se pueden comparar los albaranes (9 líneas en 2 albaranes).')
+  })
+  it('albaranes sin líneas (como los de la semilla de staging): lo de la Relación sale, y no casa', () => {
+    const r = cruzarConRelacion([REL('Patata Prueba kg', 100, 1, 'kg'), REL('Aceite Prueba lt', 50, 7, 'lt'), REL('Salsa Prueba Rara', 0, 2, 'ud')], [], [])
+    expect(r.estado).toBe('sin-albaranes')
+    expect(r.filas.map((f) => [f.nombre, f.estado])).toEqual([['Aceite Prueba lt', 'sin-casar'], ['Patata Prueba kg', 'sin-casar']])
+    expect(r.texto).toBe('Ningún albarán del mes trae líneas de producto, y la Relación dice que compraste 2 productos: no casan.')
+  })
+  it('las unidades de la Relación', () => {
+    expect(unidadRelacion('Kg')).toEqual({ dimension: 'weight', factor: 1000 })
+    expect(unidadRelacion('Lt')).toEqual({ dimension: 'volume', factor: 1000 })
+    expect(unidadRelacion('Uni')).toEqual({ dimension: 'unit', factor: 1 })
   })
 })

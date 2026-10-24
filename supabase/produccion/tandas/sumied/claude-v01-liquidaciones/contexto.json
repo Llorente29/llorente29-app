@@ -1,8 +1,9 @@
 {
-  "_que": "V01 · Entrega 3 · liquidaciones · contexto de producción de la tanda (1650), medido en SOLO LECTURA el 24/10 con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. No existe nada de lo que crea (la tabla de lo resuelto y sus dos funciones), nada en el camino del pedido, nada en el historial.",
-  "medido": "2026-10-24T16:38Z",
+  "_que": "V01 · Entrega 3 · liquidaciones · contexto de producción de la tanda (1650 y 2031), medido en SOLO LECTURA el 24/10 con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. De lo que crean no existe nada; existe platform_store (9 tiendas, las 9 sin local, ninguna en el camino del pedido). Nada en el historial. La 1650 sigue; la 2031 pide autorizo (actualiza las 9).",
+  "medido": "2026-10-24T20:45Z",
   "tanda": {
-    "supabase/migrations/20261024T1650_v01_liquidaciones.sql": "af873e936ba6c490978b9ccab92940aa"
+    "supabase/migrations/20261024T1650_v01_liquidaciones.sql": "af873e936ba6c490978b9ccab92940aa",
+    "supabase/migrations/20261024T2031_v01_tiendas_local.sql": "091eb3204ba870b02b26ab1213295fb6"
   },
-  "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+  "contexto": {"tablas":["public.platform_store"],"funciones":[],"filas":{"public.platform_store":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
 }

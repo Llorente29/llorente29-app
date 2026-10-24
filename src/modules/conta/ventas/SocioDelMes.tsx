@@ -4,8 +4,10 @@
 // socio de marca (CTB), como lo pidió Julio el 24/10:
 //
 //   · Los albaranes del mes y del local que pagó el socio: SOPORTE, no se
-//     contabilizan. Y su factura de compra (FV) contra ellos: coincide, o la
-//     diferencia y qué albaranes faltan o sobran (lib/socioDelMes.ts).
+//     contabilizan. Y contra la columna «Compras» de su «Relación Compras y
+//     Ventas», producto a producto, en cantidad y en precio (opción A de Julio,
+//     24/10): lo que no casa, primero, con su diferencia (lib/socioDelMes.ts).
+//     Su factura (FV) se apunta a la 600 tal cual: no se compara.
 //   · Sus asientos (los de licensed_settlement: su FV a la 600, la AF a la 705
 //     y la compensación), con «Validar» aquí: ya no salen en Contabilidad ›
 //     Asientos. Si aún no están, «Proponer sus asientos».
@@ -23,13 +25,12 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { Tarjeta } from '@/modules/conta/ui/piezas'
 import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { diaConNombre } from '@/modules/conta/lib/compras'
-import { baseFv, contrastarFv } from '@/modules/conta/lib/socioDelMes'
-import type { FacturaLeida } from '@/modules/conta/lib/lectorLiquidacionMensual'
+import { cruzarConRelacion, NOMBRE_ESTADO_PRODUCTO, type FilaCruce, type ProductoRelacion } from '@/modules/conta/lib/socioDelMes'
 import { albaranesDeLiquidacion } from '@/modules/conta/services/comprasService'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { validar } from '@/modules/conta/services/diarioService'
 import { cargarContexto, proponerPendientes } from '@/modules/conta/services/propuestasLibroService'
-import { candidatosCobro, type MovimientoCandidato } from '@/modules/conta/services/liquidacionesVentasService'
+import { candidatosCobro, lineasDelSocio, type MovimientoCandidato } from '@/modules/conta/services/liquidacionesVentasService'
 import { VerPapel } from '@/modules/conta/compras/VerPapel'
 
 type Fila = Record<string, unknown>
@@ -42,22 +43,46 @@ async function asientosDe(accountId: string, liqId: string): Promise<AsientoSoci
   return ((data ?? []) as Fila[]).map((e) => ({ id: String(e.id), estado: String(e.status), numero: e.number == null ? null : Number(e.number), concepto: String(e.concept ?? ''), fecha: String(e.entry_date) }))
 }
 
-export function SocioDelMes({ accountId, companyId, liq, recibida, quien }: {
+const num = (x: number | null | undefined, d = 2) => x == null ? '—' : x.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: d })
+const cantPrecio = (x: { cantidad: number | null; precio: number | null } | null, unidad: string) =>
+  x ? `${num(x.cantidad, 3)} ${unidad}${x.precio == null ? '' : ` · ${eurosExactos(x.precio)}/${unidad}`}` : '—'
+
+/** Cada producto: lo que dice la Relación, lo que traen los albaranes y qué pasa. Nada se esconde (regla 7). */
+function TablaCruce({ filas }: { filas: FilaCruce[] }) {
+  return (
+    <table className="cxv-lineas-tabla" aria-label="Producto a producto" data-prueba="cruce-productos">
+      <thead><tr><th>Producto</th><th>Relación</th><th>Albaranes</th><th>Qué pasa</th></tr></thead>
+      <tbody>
+        {filas.map((f) => (
+          <tr key={`${f.estado}:${f.nombre}`} data-estado={f.estado}>
+            <td><strong>{f.nombre}</strong> <span className="cx-ayuda">{NOMBRE_ESTADO_PRODUCTO[f.estado]}</span></td>
+            <td>{cantPrecio(f.relacion, f.unidad)}</td>
+            <td>{cantPrecio(f.albaranes, f.unidad)}{f.albaranes?.albaranes.length ? <span className="cx-ayuda"> · {f.albaranes.albaranes.join(', ')}</span> : null}</td>
+            <td>{f.texto}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+export function SocioDelMes({ accountId, companyId, liq, relacion, quien }: {
   accountId: string; companyId: string | null; quien: string | null
   liq: { id: string; status: string; period_from: string; period_to: string; net_settlement: number | null; party_id: string | null }
-  recibida: FacturaLeida | null
+  /** La columna «Compras» de su «Relación Compras y Ventas» (lo leído del documento); null si aún no está. */
+  relacion: ProductoRelacion[] | null
 }) {
   const [vuelta, setVuelta] = useState(0)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const albaranes = useLeer(() => albaranesDeLiquidacion(liq.id), `${liq.id}:albaranes`)
+  const lineas = useLeer(() => lineasDelSocio(accountId, liq.id), `${liq.id}:lineas`)
   const asientos = useLeer(() => asientosDe(accountId, liq.id), `${liq.id}:asientos:${vuelta}`)
   const saldo = liq.net_settlement == null ? null : Number(liq.net_settlement)
   const cobro = useLeer(companyId && saldo !== null && saldo > 0 ? () => candidatosCobro(accountId, companyId, saldo, liq.period_to) : null, `${liq.id}:cobro:${vuelta}`)
   const confirmada = liq.status !== 'borrador'
 
-  const c = albaranes.datos ? contrastarFv(baseFv(recibida), albaranes.datos.map((a) => ({ id: a.recepcion, codigo: a.codigo, fecha: a.fecha, base: a.base }))) : null
-  const sobra = new Set(c?.sobran.length === 1 ? c.sobran[0].map((a) => a.id) : [])
+  const c = lineas.datos ? cruzarConRelacion(relacion, lineas.datos.casados, lineas.datos.lineas) : null
 
   async function hacer(clave: string, f: () => Promise<string>) {
     setOcupado(clave); setAviso(null)
@@ -83,16 +108,18 @@ export function SocioDelMes({ accountId, companyId, liq, recibida, quien }: {
     <>
       {aviso && <div className={aviso.ok ? 'cx-guardado' : 'cx-error'} role={aviso.ok ? 'status' : 'alert'} data-prueba="resultado-socio">{aviso.texto}</div>}
 
-      <Tarjeta titulo="Su factura (FV) y los albaranes del mes">
-        <p className="cx-ayuda" style={{ marginTop: 0 }}>Los albaranes de los proveedores que le facturan a él no se contabilizan: se guardan aquí como soporte, por mes y por local. Su factura sí se apunta como compra (600): lo que llega del socio se usa en todas las marcas.</p>
+      <Tarjeta titulo="Los albaranes del mes contra su Relación Compras y Ventas">
+        <p className="cx-ayuda" style={{ marginTop: 0 }}>Los albaranes de los proveedores que le facturan a él no se contabilizan: se guardan aquí como soporte, por mes y por local. Se comparan con la columna «Compras» de su Relación, producto a producto, en cantidad y en precio: tienen que coincidir. Su factura (FV) se apunta a la 600 tal cual.</p>
+        {lineas.error && <div className="cx-error" role="alert">{lineas.error}</div>}
+        {!lineas.datos && !lineas.error && <p className="cx-ayuda" aria-busy="true">Leyendo las líneas de los albaranes…</p>}
+        {c && <p className={c.estado === 'coincide' ? 'cx-guardado' : 'cx-aviso'} data-prueba="cruce-relacion" data-estado={c.estado}>{c.texto}</p>}
+        {c && c.filas.length > 0 && <TablaCruce filas={c.filas} />}
         {albaranes.error && <div className="cx-error" role="alert">{albaranes.error}</div>}
-        {!albaranes.datos && !albaranes.error && <p className="cx-ayuda" aria-busy="true">Leyendo los albaranes…</p>}
-        {c && <p className={c.estado === 'coincide' ? 'cx-guardado' : 'cx-aviso'} data-prueba="fv-albaranes" data-estado={c.estado}>{c.texto}</p>}
         {albaranes.datos && albaranes.datos.length > 0 && (
           <ul className="cxc-albaranes" aria-label="Albaranes del mes">
             {albaranes.datos.map((a) => (
-              <li key={a.recepcion} data-sobra={sobra.has(a.recepcion) ? 'si' : undefined}>
-                <span>{diaConNombre(a.fecha)} · {a.base == null ? 'sin importe' : eurosExactos(a.base)} <span className="cxc-cosa-codigo">{a.codigo}</span>{sobra.has(a.recepcion) ? ' · sobra' : ''}</span>
+              <li key={a.recepcion}>
+                <span>{diaConNombre(a.fecha)} · {a.base == null ? 'sin importe' : eurosExactos(a.base)} <span className="cxc-cosa-codigo">{a.codigo}</span></span>
                 <VerPapel recepcion={a.recepcion} tipo="albaran" titulo={`Albarán · ${diaConNombre(a.fecha)}`} />
               </li>
             ))}

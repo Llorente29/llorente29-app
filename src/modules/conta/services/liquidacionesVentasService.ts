@@ -23,6 +23,7 @@ import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { cargarContexto, proponerDevolucionSinCobrar } from '@/modules/conta/services/propuestasLibroService'
 import { asientoDeGasto, grupoDeFila, periodo, r2, type GrupoPlataforma } from '@/modules/conta/lib/liquidacionesPlataforma'
 import { eurosExactos } from '@/modules/conta/lib/formato'
+import type { CasadoAMano, Dimension, LineaAlbaran } from '@/modules/conta/lib/socioDelMes'
 
 type Fila = Record<string, unknown>
 
@@ -105,4 +106,56 @@ export async function casarCobro(accountId: string, companyId: string, g: GrupoP
     p_razones: [], p_por: 'persona', p_regla: null,
   })
   return `Cobro casado: ${eurosExactos(mov.importe)} del ${mov.fecha.split('-').reverse().join('/')}${mov.banco ? ` en ${mov.banco}` : ''}, con su asiento${r.creado ? '' : ' (ya estaba)'}.`
+}
+
+// ── El socio de marca: sus albaranes del mes contra su «Relación Compras y Ventas» ──
+// Nombres dentro de cadenas (regla 40), comprobados en producción el 24/10:
+// compras_liquidacion_recepciones y compras_liquidacion_productos (0190);
+// goods_receipt_line (goods_receipt_id, recipe_item_id, product_name,
+// qty_in_base, qty_received, doc_amount, unit_cost, not_goods); recipe_item
+// (id, name, base_unit_id); kitchen_unit (id, dimension, factor_to_base).
+
+/** Las líneas de los albaranes que cuenta la liquidación del socio, y lo casado a mano de su Relación. */
+export async function lineasDelSocio(accountId: string, liqId: string): Promise<{ lineas: LineaAlbaran[]; casados: CasadoAMano[] }> {
+  const [recs, prods] = await Promise.all([
+    rpc<{ recepcion: string; codigo: string | null }[] | null>('compras_liquidacion_recepciones', { p_liq: liqId }),
+    rpc<{ nombre: string; articulo: string | null; no_es_nuestro: boolean }[] | null>('compras_liquidacion_productos', { p_liq: liqId }),
+  ])
+  const casados: CasadoAMano[] = (prods ?? []).map((p) => ({ nombre: p.nombre, articulo: p.articulo, noEsNuestro: p.no_es_nuestro === true }))
+  const codigo = new Map((recs ?? []).map((r) => [r.recepcion, r.codigo]))
+  if (codigo.size === 0) return { lineas: [], casados }
+  const { data: ls, error } = await tabla('goods_receipt_line')
+    .select('goods_receipt_id, recipe_item_id, product_name, qty_in_base, qty_received, doc_amount, unit_cost, not_goods')
+    .eq('account_id', accountId).in('goods_receipt_id', [...codigo.keys()])
+  if (error) throw new Error(mensaje('No se han podido leer las líneas de los albaranes', error))
+  const filas = ((ls ?? []) as Fila[]).filter((l) => l.not_goods !== true)
+  const arts = [...new Set(filas.map((l) => l.recipe_item_id).filter((x): x is string => typeof x === 'string'))]
+  const artInfo = new Map<string, { nombre: string; unidad: string | null }>()
+  const unidades = new Map<string, { dimension: Dimension | null; factor: number }>()
+  if (arts.length) {
+    const { data: ri, error: e1 } = await tabla('recipe_item').select('id, name, base_unit_id').eq('account_id', accountId).in('id', arts)
+    if (e1) throw new Error(mensaje('No se han podido leer los artículos de los albaranes', e1))
+    for (const r of (ri ?? []) as Fila[]) artInfo.set(String(r.id), { nombre: String(r.name ?? ''), unidad: r.base_unit_id ? String(r.base_unit_id) : null })
+    const us = [...new Set([...artInfo.values()].map((a) => a.unidad).filter((x): x is string => !!x))]
+    if (us.length) {
+      const { data: ku, error: e2 } = await tabla('kitchen_unit').select('id, dimension, factor_to_base').in('id', us)
+      if (e2) throw new Error(mensaje('No se han podido leer las unidades de los artículos', e2))
+      for (const u of (ku ?? []) as Fila[]) {
+        const d = String(u.dimension ?? '')
+        unidades.set(String(u.id), { dimension: d === 'weight' || d === 'volume' || d === 'unit' ? d : null, factor: Number(u.factor_to_base ?? 1) || 1 })
+      }
+    }
+  }
+  const lineas: LineaAlbaran[] = filas.map((l) => {
+    const art = typeof l.recipe_item_id === 'string' ? l.recipe_item_id : null
+    const info = art ? artInfo.get(art) : undefined
+    const u = info?.unidad ? unidades.get(info.unidad) : undefined
+    const q = l.qty_in_base == null ? null : Number(l.qty_in_base)
+    const importe = l.doc_amount != null ? Number(l.doc_amount) : l.unit_cost != null && l.qty_received != null ? r2(Number(l.unit_cost) * Number(l.qty_received)) : null
+    return {
+      albaran: codigo.get(String(l.goods_receipt_id)) ?? null, articulo: art, articuloNombre: info?.nombre ?? null, producto: l.product_name ? String(l.product_name) : null,
+      dimension: u?.dimension ?? null, cantidadBase: q == null || !u ? null : q * u.factor, importe,
+    }
+  })
+  return { lineas, casados }
 }

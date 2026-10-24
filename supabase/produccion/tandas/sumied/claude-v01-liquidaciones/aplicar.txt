@@ -7,9 +7,16 @@
 #      reclamación), la lista de las de plataforma por periodo, plataforma y
 #      local (conta_plataformas) y resolver una diferencia
 #      (conta_plataforma_resolver). No toca datos ni nada que exista. No está
-#      en el camino del pedido.
+#      en el camino del pedido. Sigue.
+#   2. 2031 — el local de cada tienda de plataforma, por su dirección (Julio,
+#      24/10): las que llegan sin local se lo ponen solas (un disparador en
+#      platform_store; si no casa, entran sin local y se avisa) y a las 9 de
+#      Uber que ya existen se les pone, con copia previa
+#      (conta_tienda_local_antes). Pide AUTORIZO: actualiza filas que existen.
+#      No está en el camino del pedido.
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 cuenta: scripts/conta/produccion/cuentas/v01-liquidaciones.sql
 supabase/migrations/20261024T1650_v01_liquidaciones.sql
+supabase/migrations/20261024T2031_v01_tiendas_local.sql

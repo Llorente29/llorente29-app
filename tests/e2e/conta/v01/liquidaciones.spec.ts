@@ -9,7 +9,11 @@
 //      suman «Todas», sus filtros y, en la barra, «Liquidaciones» en el bloque
 //      «Hostelería» de Ventas. Las de Uber de staging (D07: 6, ninguna con
 //      factura de comisión) salen, y su ficha se abre.
-//   2. Socios de marca: la vista de las mensuales del socio.
+//   2. Socios de marca: la vista de las mensuales del socio, y la ficha de
+//      la que trae su «Relación Compras y Ventas» (semilla de compras: 3
+//      productos, 2 con compras): sus albaranes contra la Relación, producto a
+//      producto (Julio, 24/10, opción A). Se mira lo que hay, no lo que había
+//      (regla 31): el estado lo da la pantalla, y la Patata y el Aceite salen.
 //   3. Compras › Liquidaciones dice que las de plataforma y las del socio
 //      están en Ventas.
 //   4. La cuenta D (sin hostelería): la pantalla lo dice y no enseña nada.
@@ -17,6 +21,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, CUENTA_D, entrarComo } from '../sesion'
+import { rest } from '../api'
 import { barraAbiertaSiPlegada } from '../barra'
 
 const DIR = 'docs/conta/capturas/v01'
@@ -64,13 +69,29 @@ test('Plataformas: la lista por periodo, plataforma y local, sus pestañas y la 
 
 test('Socios de marca: las mensuales del socio, y Compras › Liquidaciones dice dónde están', async ({ page }) => {
   const errores = vigilar(page)
-  await entrarComo(page, CUENTA_A.email)
+  const s = await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/ventas/liquidaciones?ver=socios')
   await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByText(/Lo que liquidas cada mes con el socio de las marcas cedidas/)).toBeVisible()
   await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
   await expect(page.getByRole('alert')).toHaveCount(0)
   await foto(page, 'liquidaciones-socios')
+
+  // La ficha de la mensual que trae su Relación: el cruce de sus albaranes, producto a producto.
+  const liq = await rest<{ id: string }[]>(s, 'GET', 'licensed_settlement?select=id&detail->inventario=not.is.null&order=period_from.desc&limit=1')
+  expect(liq.status, JSON.stringify(liq.datos)).toBe(200)
+  expect(liq.datos.length, 'la semilla de compras trae una mensual con su Relación').toBe(1)
+  await page.goto(`/conta/compras/liquidacion/${liq.datos[0].id}`)
+  const cruce = page.locator('[data-prueba="cruce-relacion"]')
+  await expect(cruce).toBeVisible({ timeout: 30_000 })
+  await expect(cruce).toHaveAttribute('data-estado', /^(coincide|no-coincide|sin-albaranes)$/)
+  const tabla = page.locator('[data-prueba="cruce-productos"]')
+  await expect(tabla.getByText('Patata Prueba kg', { exact: true })).toBeVisible()
+  await expect(tabla.getByText('Aceite Prueba lt', { exact: true })).toBeVisible()
+  // Sin compras en la Relación ni en los albaranes: no es una compra del mes.
+  await expect(tabla.getByText('Salsa Prueba Rara', { exact: true })).toHaveCount(0)
+  await foto(page, 'socio-relacion')
+
   await page.goto('/conta/compras/liquidaciones')
   await expect(page.locator('[data-prueba="liquidaciones-en-ventas"]')).toBeVisible({ timeout: 30_000 })
   expect(errores).toEqual([])

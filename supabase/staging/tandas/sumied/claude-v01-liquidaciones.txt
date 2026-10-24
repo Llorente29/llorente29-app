@@ -4,3 +4,9 @@
 # pedido reclamado fuera del aviso del C11b; lo que no vale; B fuera; la vuelta atrás.
 supabase/migrations/20261024T1650_v01_liquidaciones.sql
 supabase/staging/sql/20261024_v01_liquidaciones_prueba.sql
+# La 2031 cambia platform_store (un disparador) y pone el local a las que no lo
+# tienen: solo en ROLLBACK. Su prueba: las de antes con su local y su copia, las
+# nuevas solas, la que no casa avisa, dos locales en la misma calle no se
+# adivinan, y la vuelta atrás.
+supabase/migrations/20261024T2031_v01_tiendas_local.sql
+supabase/staging/sql/20261024_v01_tiendas_local_prueba.sql

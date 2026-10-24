@@ -32,6 +32,8 @@ export type PestanaPlataformas = EstadoPlataforma | 'todas'
 export interface LiquidacionDePlataforma {
   id: string
   tienda: string | null
+  /** La calle de la tienda, la de los últimos paréntesis («Calle de Camichi 4»): de ahí sale su local (la 2031). */
+  direccion: string | null
   ref: string | null
   fecha: string | null
   ventas: number
@@ -95,6 +97,13 @@ export function deClave(clave: string): { canalId: string; localId: string | nul
   return m ? { canalId: m[1], localId: m[2] === 'sin' ? null : m[2], desde: m[3], hasta: m[4] } : null
 }
 
+/** «Meraki Pita (Calle de Camichi 4) (Calle de Camichi 4, Madrid, ES, 28025)» → «Calle de Camichi 4». */
+export function direccionDe(tienda: string | null): string | null {
+  const m = tienda?.match(/\(([^()]*)\)\s*$/)
+  const calle = m ? m[1].split(',')[0].trim() : ''
+  return calle || null
+}
+
 export function grupoDeFila(f: Fila): GrupoPlataforma {
   const canalId = String(f.canal_id); const localId = s(f.local_id); const desde = String(f.desde).slice(0, 10); const hasta = String(f.hasta).slice(0, 10)
   const cierres = (f.cierres ?? {}) as Fila; const cedidas = (f.cedidas ?? {}) as Fila
@@ -104,7 +113,7 @@ export function grupoDeFila(f: Fila): GrupoPlataforma {
       const fac = l.factura as Fila | null
       const as = l.asiento as Fila | null
       return {
-        id: String(l.id), tienda: s(l.tienda) ? String(l.tienda).replace(/\s*\(.*\)\s*$/, '') : null, ref: s(l.ref), fecha: s(l.fecha),
+        id: String(l.id), tienda: s(l.tienda) ? String(l.tienda).replace(/\s*\(.*\)\s*$/, '') : null, direccion: direccionDe(s(l.tienda)), ref: s(l.ref), fecha: s(l.fecha),
         ventas: n(l.ventas), comision: n(l.comision), neto: nn(l.neto), cobrado: nn(l.cobrado), cobradoEl: s(l.cobrado_el),
         casadaEnBanco: l.casada_en_banco === true, referencia: l.referencia === true, porAclarar: s(l.por_aclarar),
         aFacturar: nn(l.a_facturar), factura: fac ? { id: String(fac.id), numero: s(fac.numero), total: nn(fac.total) } : null,
@@ -169,8 +178,14 @@ export function diferencias(g: GrupoPlataforma): Diferencia[] {
   const deGrupo = g.resoluciones.find((r) => !r.saleId) ?? null
   const out: Diferencia[] = []
   if (!g.localId) {
+    // El local sale solo de la dirección de la tienda (la 2031). Si aquí no hay
+    // local es que su dirección no es la de ningún local tuyo (y se avisó al
+    // llegar), o que la liquidación no trae tienda.
+    const calles = [...new Set(g.liquidaciones.map((l) => l.direccion).filter((d): d is string => !!d))]
     out.push({ tipo: 'local', importe: 0, saleId: null, resuelta: null,
-      texto: 'No sé de qué local son estas liquidaciones: asigna su local a cada tienda (Sus tiendas) y se comparan con tus cierres.' })
+      texto: calles.length
+        ? `La dirección de ${calles.length === 1 ? 'su tienda' : 'sus tiendas'} (${calles.map((c) => `«${c}»`).join(', ')}) no es la de ningún local tuyo: sin local no se comparan con tus cierres. Revisa la dirección del local.`
+        : 'Estas liquidaciones no traen su tienda ni su local: sin local no se comparan con tus cierres.' })
   } else {
     // Ventas: la plataforma liquida también las marcas cedidas; tus cierres, no.
     const tuyas = r2(g.cierres.total + g.cedidas.total)

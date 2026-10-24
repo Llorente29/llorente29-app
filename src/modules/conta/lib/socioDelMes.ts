@@ -1,81 +1,208 @@
 // src/modules/conta/lib/socioDelMes.ts
 //
 // V01 · Entrega 3 · La liquidación mensual del socio de marca (CTB), como la
-// pidió Julio el 24/10:
+// dejó Julio el 24/10 (opción A):
 //
 //   1. Los albaranes de los proveedores que facturan al socio NO se
 //      contabilizan: se guardan como soporte, por mes y por local.
-//   2. Su factura de compra del mes (FV) sí se apunta como compra (600), como
-//      hoy: lo que llega del socio se usa en todas las marcas.
-//   3. Sumied comprueba que la FV del mes coincide con la suma de esos
-//      albaranes; si no, lo dice con la diferencia y los albaranes que faltan o
-//      sobran.
-//   4. Su factura de servicios (AF, 705), la compensación y el cobro por banco
-//      o factoring, como hoy: Sumied los propone y casa el cobro.
+//   2. Su factura de compra del mes (FV) se apunta a la 600 tal cual.
+//   3. Los albaranes del mes se comparan con la columna «Compras» de su
+//      «Relación Compras y Ventas», producto a producto, en CANTIDAD y en
+//      PRECIO: tienen que coincidir. Si no, se dice qué productos no casan, con
+//      su diferencia de cantidad o de precio.
+//   4. La AF (705), la compensación y el cobro, como hoy.
 //
-// Aquí, lo del punto 3, sin React y con sus pruebas. Lo que «sobra» se busca
-// de verdad: el albarán (o los dos o tres) cuya base es exactamente lo que
-// sobra; si hay más de una forma de sumarlo, se dicen todas (hasta tres) y no
-// se elige ninguna. Lo que «falta» no se puede señalar desde aquí (no está):
-// se dice cuánto.
+// Aquí, lo del punto 3, sin React y con sus pruebas (contra las líneas reales
+// de los albaranes de CTB de Foodint, regla 31).
+//
+// Cómo se casa un producto de la Relación con lo que traen los albaranes: por
+// el artículo. El de la Relación lo da lo casado a mano (settlement_product_match,
+// «¿Cuál es cuál?»); si no lo hay, el artículo de los albaranes que se llama
+// igual (sin tildes, mayúsculas ni signos), por su nombre o por el del producto
+// en el albarán. Se busca solo entre los artículos de los albaranes del mes: es
+// la lista contra la que se compara (regla 30).
+//
+// Las cantidades, en la unidad de la Relación (Kg, Lt o Uni): los albaranes
+// traen la cantidad en la unidad base del artículo (g, ml o ud). El precio de
+// los albaranes es su importe entre su cantidad. Coinciden si la cantidad
+// difiere en menos de 0,005 (la Relación da dos decimales) y el precio en un
+// céntimo o menos.
+//
+// Nada se esconde (regla 7): todo producto de la Relación con compras y todo
+// artículo de los albaranes sale en el cruce; lo que no casa, primero.
 
 import { eurosExactos } from './formato'
 
-export interface AlbaranDelMes { id: string; codigo: string | null; fecha: string; base: number | null }
+/** Una fila de la Relación (lector de la liquidación: nombre, precio, compras, unidad). */
+export interface ProductoRelacion { nombre: string; precio: number; compras: number; unidad: string }
 
-export interface ContrasteFv {
-  estado: 'coincide' | 'diferencia' | 'sin-fv' | 'sin-albaranes'
-  fv: number | null
-  albaranes: number
-  /** FV − albaranes: positivo, la FV trae más (faltan albaranes); negativo, sobran. */
-  diferencia: number | null
-  /** Los albaranes sin importe: no suman, y se dicen. */
-  sinImporte: AlbaranDelMes[]
-  /** Las formas exactas de explicar lo que sobra (cada una, de 1 a 3 albaranes). */
-  sobran: AlbaranDelMes[][]
+/** Lo casado a mano de un producto de la Relación (compras_liquidacion_productos). */
+export interface CasadoAMano { nombre: string; articulo: string | null; noEsNuestro: boolean }
+
+export type Dimension = 'weight' | 'volume' | 'unit'
+
+/** Una línea de un albarán del mes (en la unidad base del artículo: g, ml o ud). */
+export interface LineaAlbaran {
+  albaran: string | null
+  articulo: string | null
+  articuloNombre: string | null
+  producto: string | null
+  dimension: Dimension | null
+  /** g, ml o ud; null si la línea no dice cuánto. */
+  cantidadBase: number | null
+  importe: number | null
+}
+
+export type EstadoProducto = 'coincide' | 'cantidad' | 'precio' | 'cantidad-y-precio' | 'sin-albaran' | 'sin-casar' | 'no-es-nuestro' | 'unidad-distinta' | 'incompleto' | 'sobra'
+
+export interface FilaCruce {
+  nombre: string
+  /** Kg, Lt o Uni: la unidad de la Relación (para lo que sobra, la del artículo). */
+  unidad: string
+  estado: EstadoProducto
+  relacion: { cantidad: number; precio: number } | null
+  albaranes: { cantidad: number | null; precio: number | null; importe: number; lineas: number; albaranes: string[] } | null
+  /** Albaranes − Relación. */
+  difCantidad: number | null
+  difPrecio: number | null
   texto: string
 }
 
-const cent = (x: number) => Math.round(x * 100)
-
-/** La base de la FV: la suma de las bases de sus líneas. */
-export const baseFv = (f: { lineas: readonly { base: number }[] } | null | undefined): number | null =>
-  f && f.lineas.length ? cent(f.lineas.reduce((t, l) => t + l.base, 0)) / 100 : null
-
-/** Las formas de sumar exactamente `objetivo` céntimos con 1, 2 o 3 albaranes (como mucho, `max` formas). */
-export function formasDeSumar(xs: readonly AlbaranDelMes[], objetivo: number, max = 3): AlbaranDelMes[][] {
-  const con = xs.filter((x) => x.base !== null).map((x) => ({ x, c: cent(x.base!) }))
-  const out: AlbaranDelMes[][] = []
-  for (let i = 0; i < con.length && out.length < max; i++) if (con[i].c === objetivo) out.push([con[i].x])
-  for (let i = 0; i < con.length && out.length < max; i++) for (let j = i + 1; j < con.length && out.length < max; j++)
-    if (con[i].c + con[j].c === objetivo) out.push([con[i].x, con[j].x])
-  for (let i = 0; i < con.length && out.length < max; i++) for (let j = i + 1; j < con.length && out.length < max; j++)
-    for (let k = j + 1; k < con.length && out.length < max; k++) if (con[i].c + con[j].c + con[k].c === objetivo) out.push([con[i].x, con[j].x, con[k].x])
-  return out
+export interface CruceRelacion {
+  estado: 'coincide' | 'no-coincide' | 'sin-relacion' | 'sin-albaranes'
+  filas: FilaCruce[]
+  coinciden: number
+  noCasan: number
+  texto: string
 }
 
-const nombre = (a: AlbaranDelMes) => `${a.codigo ?? 'albarán'} del ${a.fecha.slice(0, 10).split('-').reverse().slice(0, 2).join('/')} (${eurosExactos(a.base ?? 0)})`
+const r2 = (x: number) => Math.round(x * 100) / 100
+const r3 = (x: number) => Math.round(x * 1000) / 1000
+const cent = (x: number) => Math.round(x * 100)
 
-export function contrastarFv(fv: number | null, xs: readonly AlbaranDelMes[]): ContrasteFv {
-  const sinImporte = xs.filter((x) => x.base === null)
-  const albaranes = cent(xs.reduce((t, x) => t + (x.base ?? 0), 0)) / 100
-  const base = { fv, albaranes, sinImporte, sobran: [] as AlbaranDelMes[][] }
-  const notaSin = sinImporte.length ? ` ${sinImporte.length === 1 ? 'Un albarán no tiene importe' : `${sinImporte.length} albaranes no tienen importe`} y no suma${sinImporte.length === 1 ? '' : 'n'}: ${sinImporte.map((a) => a.codigo ?? a.fecha).join(', ')}.` : ''
-  if (fv === null) return { ...base, estado: 'sin-fv', diferencia: null, texto: `Aún no ha llegado su factura del mes (FV): los albaranes suman ${eurosExactos(albaranes)}.${notaSin}` }
-  if (xs.length === 0) return { ...base, estado: 'sin-albaranes', diferencia: fv, texto: `Su factura (FV) es de ${eurosExactos(fv)} de base y no hay ningún albarán suyo de este mes y local.` }
-  const d = cent(fv) - cent(albaranes)
-  if (d === 0 && !sinImporte.length) return { ...base, estado: 'coincide', diferencia: 0, texto: `Coincide: su factura (FV) y los ${xs.length} albaranes suman ${eurosExactos(fv)} de base.` }
-  if (d === 0) return { ...base, estado: 'diferencia', diferencia: 0, texto: `Suman lo mismo (${eurosExactos(fv)}), pero no se puede dar por bueno:${notaSin}` }
-  if (d > 0) {
-    return { ...base, estado: 'diferencia', diferencia: d / 100,
-      texto: `No coincide: su factura (FV) es de ${eurosExactos(fv)} de base y los ${xs.length} albaranes suman ${eurosExactos(albaranes)}. Faltan albaranes por ${eurosExactos(d / 100)}: alguno sin subir, o sin marcar que lo paga el socio.${notaSin}` }
+/** «Calle», «CALLE», «cálle!» → «calle». */
+export const nombreNorm = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+
+/** La unidad de la Relación: su dimensión y cuántas unidades base (g, ml, ud) es una. */
+export function unidadRelacion(u: string): { dimension: Dimension; factor: number } {
+  switch (nombreNorm(u)) {
+    case 'kg': case 'kgs': case 'kilo': case 'kilos': return { dimension: 'weight', factor: 1000 }
+    case 'g': case 'gr': case 'grs': return { dimension: 'weight', factor: 1 }
+    case 'lt': case 'l': case 'litro': case 'litros': return { dimension: 'volume', factor: 1000 }
+    case 'ml': return { dimension: 'volume', factor: 1 }
+    default: return { dimension: 'unit', factor: 1 }
   }
-  const sobran = formasDeSumar(xs, -d)
-  const cuales = sobran.length === 1
-    ? ` Sobra${sobran[0].length === 1 ? ' el' : 'n'} ${sobran[0].map(nombre).join(' y ')}: ${sobran[0].length === 1 ? 'su importe es' : 'suman'} justo la diferencia.`
-    : sobran.length > 1
-      ? ` Puede ser ${sobran.map((f) => f.map(nombre).join(' y ')).join(', o ')}: cualquiera suma justo la diferencia.`
-      : ' Ningún albarán (ni dos ni tres juntos) suma justo la diferencia.'
-  return { ...base, sobran, estado: 'diferencia', diferencia: d / 100,
-    texto: `No coincide: su factura (FV) es de ${eurosExactos(fv)} de base y los ${xs.length} albaranes suman ${eurosExactos(albaranes)}: sobran ${eurosExactos(-d / 100)}.${cuales}${notaSin}` }
+}
+
+const UNIDAD_DE: Record<Dimension, string> = { weight: 'Kg', volume: 'Lt', unit: 'Uni' }
+const FACTOR_DE: Record<Dimension, number> = { weight: 1000, volume: 1000, unit: 1 }
+
+const num = (x: number, d = 2) => x.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: d })
+const conSigno = (x: number, d = 2) => `${x > 0 ? '+' : ''}${num(x, d)}`
+const precioTxt = (x: number, u: string) => `${eurosExactos(x)}/${u}`
+
+interface Grupo { articulo: string; nombre: string; productos: Set<string>; dimension: Dimension | null; cantidad: number; importe: number; lineas: number; sinCantidad: number; albaranes: Set<string> }
+
+export function cruzarConRelacion(relacion: readonly ProductoRelacion[] | null, casados: readonly CasadoAMano[], lineas: readonly LineaAlbaran[]): CruceRelacion {
+  // Los albaranes, por artículo.
+  const grupos = new Map<string, Grupo>()
+  for (const l of lineas) {
+    const clave = l.articulo ?? `producto:${nombreNorm(l.producto)}`
+    const g = grupos.get(clave) ?? { articulo: clave, nombre: l.articuloNombre ?? l.producto ?? 'Sin artículo', productos: new Set<string>(), dimension: l.dimension, cantidad: 0, importe: 0, lineas: 0, sinCantidad: 0, albaranes: new Set<string>() }
+    if (l.producto) g.productos.add(l.producto)
+    if (l.albaran) g.albaranes.add(l.albaran)
+    g.lineas += 1
+    g.importe += l.importe ?? 0
+    if (l.cantidadBase == null || l.dimension == null) g.sinCantidad += 1
+    else g.cantidad += l.cantidadBase
+    grupos.set(clave, g)
+  }
+  if (!relacion) {
+    return { estado: 'sin-relacion', filas: [], coinciden: 0, noCasan: 0,
+      texto: `Aún no está su «Relación Compras y Ventas»: sin ella no se pueden comparar los albaranes (${lineas.length} ${lineas.length === 1 ? 'línea' : 'líneas'} en ${new Set(lineas.map((l) => l.albaran)).size} albaranes).` }
+  }
+
+  const porNombre = new Map(casados.map((c) => [nombreNorm(c.nombre), c]))
+  const porNombreArticulo = new Map<string, string>()
+  for (const g of grupos.values()) {
+    porNombreArticulo.set(nombreNorm(g.nombre), g.articulo)
+    for (const p of g.productos) if (!porNombreArticulo.has(nombreNorm(p))) porNombreArticulo.set(nombreNorm(p), g.articulo)
+  }
+
+  const filas: FilaCruce[] = []
+  const usados = new Set<string>()
+  for (const p of relacion) {
+    const u = unidadRelacion(p.unidad)
+    const mano = porNombre.get(nombreNorm(p.nombre))
+    const rel = { cantidad: p.compras, precio: p.precio }
+    if (mano?.noEsNuestro) {
+      filas.push({ nombre: p.nombre, unidad: p.unidad, estado: 'no-es-nuestro', relacion: rel, albaranes: null, difCantidad: null, difPrecio: null, texto: 'Marcado como que no es nuestro: no se compara.' })
+      continue
+    }
+    const art = mano?.articulo ?? porNombreArticulo.get(nombreNorm(p.nombre)) ?? null
+    const g = art ? grupos.get(art) : undefined
+    if (art && g) usados.add(art)
+    if (!g) {
+      if (p.compras === 0) continue // Sin compras en la Relación ni en los albaranes: no es una compra del mes.
+      filas.push({ nombre: p.nombre, unidad: p.unidad, estado: art ? 'sin-albaran' : 'sin-casar', relacion: rel, albaranes: null, difCantidad: -p.compras, difPrecio: null,
+        texto: art
+          ? `La Relación dice ${num(p.compras)} ${p.unidad} comprados y ningún albarán del mes lo trae.`
+          : `La Relación dice ${num(p.compras)} ${p.unidad} comprados y no sé qué artículo es: cásalo en «¿Cuál es cuál?».` })
+      continue
+    }
+    const alb = { cantidad: null as number | null, precio: null as number | null, importe: r2(g.importe), lineas: g.lineas, albaranes: [...g.albaranes].sort() }
+    if (g.dimension && g.dimension !== u.dimension) {
+      filas.push({ nombre: p.nombre, unidad: p.unidad, estado: 'unidad-distinta', relacion: rel, albaranes: alb, difCantidad: null, difPrecio: null,
+        texto: `La Relación lo cuenta en ${p.unidad} y el artículo «${g.nombre}» en ${UNIDAD_DE[g.dimension]}: no se puede comparar la cantidad. Revisa la unidad del artículo.` })
+      continue
+    }
+    alb.cantidad = r3(g.cantidad / u.factor)
+    alb.precio = alb.cantidad > 0 ? r2(g.importe / alb.cantidad) : null
+    if (g.sinCantidad > 0) {
+      filas.push({ nombre: p.nombre, unidad: p.unidad, estado: 'incompleto', relacion: rel, albaranes: alb, difCantidad: null, difPrecio: null,
+        texto: `${g.sinCantidad === 1 ? 'Una línea' : `${g.sinCantidad} líneas`} de sus albaranes no ${g.sinCantidad === 1 ? 'dice' : 'dicen'} la cantidad: no se puede comparar. Complétala en el albarán.` })
+      continue
+    }
+    const difCantidad = r3(alb.cantidad - p.compras)
+    const difPrecio = alb.precio == null ? null : r2(alb.precio - p.precio)
+    const malCantidad = Math.abs(difCantidad) >= 0.005
+    const malPrecio = difPrecio != null && Math.abs(cent(difPrecio)) > 1
+    const estado: EstadoProducto = malCantidad && malPrecio ? 'cantidad-y-precio' : malCantidad ? 'cantidad' : malPrecio ? 'precio' : 'coincide'
+    const partes: string[] = []
+    if (malCantidad) partes.push(`cantidad: los albaranes traen ${num(alb.cantidad, 3)} ${p.unidad} y la Relación ${num(p.compras)} (${conSigno(difCantidad, 3)})`)
+    if (malPrecio) partes.push(`precio: ${precioTxt(alb.precio!, p.unidad)} en los albaranes y ${precioTxt(p.precio, p.unidad)} en la Relación (${conSigno(difPrecio!)} €)`)
+    filas.push({ nombre: p.nombre, unidad: p.unidad, estado, relacion: rel, albaranes: alb, difCantidad, difPrecio,
+      texto: partes.length ? `No casa en ${partes.join('; y en ')}.` : 'Coincide en cantidad y en precio.' })
+  }
+
+  // Lo que traen los albaranes y la Relación no compra: sobra.
+  for (const g of grupos.values()) {
+    if (usados.has(g.articulo)) continue
+    const unidad = g.dimension ? UNIDAD_DE[g.dimension] : 'Uni'
+    const cantidad = g.dimension ? r3(g.cantidad / FACTOR_DE[g.dimension]) : null
+    filas.push({ nombre: g.nombre, unidad, estado: 'sobra', relacion: null,
+      albaranes: { cantidad, precio: cantidad && cantidad > 0 ? r2(g.importe / cantidad) : null, importe: r2(g.importe), lineas: g.lineas, albaranes: [...g.albaranes].sort() },
+      difCantidad: cantidad, difPrecio: null,
+      texto: `Los albaranes traen ${cantidad == null ? `${g.lineas} ${g.lineas === 1 ? 'línea' : 'líneas'}` : `${num(cantidad, 3)} ${unidad}`} (${eurosExactos(r2(g.importe))}) y la Relación no lo compra${g.productos.size ? ` (${[...g.productos].slice(0, 2).join(', ')})` : ''}.` })
+  }
+
+  const ORDEN: Record<EstadoProducto, number> = { 'cantidad-y-precio': 0, cantidad: 1, precio: 2, sobra: 3, 'sin-albaran': 4, 'sin-casar': 5, 'unidad-distinta': 6, incompleto: 7, coincide: 8, 'no-es-nuestro': 9 }
+  filas.sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado] || a.nombre.localeCompare(b.nombre, 'es'))
+  const coinciden = filas.filter((f) => f.estado === 'coincide').length
+  const noCasan = filas.filter((f) => f.estado !== 'coincide' && f.estado !== 'no-es-nuestro').length
+  if (lineas.length === 0) {
+    return { estado: 'sin-albaranes', filas, coinciden, noCasan,
+      texto: `Ningún albarán del mes trae líneas de producto, y la Relación dice que compraste ${noCasan} ${noCasan === 1 ? 'producto' : 'productos'}: no casan.` }
+  }
+  return {
+    estado: noCasan === 0 ? 'coincide' : 'no-coincide', filas, coinciden, noCasan,
+    texto: noCasan === 0
+      ? `Los albaranes del mes coinciden con la Relación Compras y Ventas: ${coinciden} ${coinciden === 1 ? 'producto' : 'productos'}, en cantidad y en precio.`
+      : `Algo está mal: ${noCasan} ${noCasan === 1 ? 'producto no casa' : 'productos no casan'} entre los albaranes del mes y la Relación Compras y Ventas${coinciden ? ` (${coinciden} sí)` : ''}.`,
+  }
+}
+
+export const NOMBRE_ESTADO_PRODUCTO: Record<EstadoProducto, string> = {
+  coincide: 'Coincide', cantidad: 'Cantidad', precio: 'Precio', 'cantidad-y-precio': 'Cantidad y precio', 'sin-albaran': 'Sin albarán',
+  'sin-casar': 'Sin casar', 'no-es-nuestro': 'No es nuestro', 'unidad-distinta': 'Otra unidad', incompleto: 'Sin cantidad', sobra: 'Sobra',
 }
