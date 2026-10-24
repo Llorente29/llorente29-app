@@ -39,9 +39,14 @@ begin
   select id into v_e from public.company where account_id = v_b order by created_at limit 1;
   select category_id into v_cat from public.vat_category_rate where rate = 10 and valid_to is null limit 1;
   select id into v_unit from public.kitchen_unit where account_id = v_b or account_id is null order by is_base desc nulls last limit 1;
+  -- Staging no tiene unidades de cocina (medido el 24/10 por la CI: ninguna de B ni global): la prueba pone la suya.
+  if v_unit is null then
+    insert into public.kitchen_unit (account_id, name, abbreviation, dimension, factor_to_base, is_base)
+    values (v_b, 'Kilo de prueba N6', 'kg', 'weight', 1, true) returning id into v_unit;
+  end if;
   select id, slug into v_canal, v_slug from public.sales_channel where account_id = v_b order by created_at limit 1;
   if v_e is null or v_cat is null or v_unit is null or v_canal is null then
-    raise exception 'PRUEBA N6: la cuenta B no tiene lo que se midió el 24/10 (empresa %, IVA 10 %, unidad %, canal %).', v_e, v_cat, v_unit, v_canal;
+    raise exception 'PRUEBA N6: la cuenta B no tiene lo que se midió el 24/10 (empresa %, IVA 10 %, canal %).', v_e, v_cat, v_canal;
   end if;
   update public.company_tax_profile set sales_day_close_time = time '02:00' where company_id = v_e;
 
