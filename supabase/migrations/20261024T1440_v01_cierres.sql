@@ -221,10 +221,11 @@ begin
   v_d := public._conta_cierre_de(p_summary);
   if v_d.id is null or not public.belongs_to_account(v_d.account_id) then raise exception 'Ese cierre no está.' using errcode = 'P0002'; end if;
   with dentro as (
-    -- Lo que cuenta hoy en este cierre (ya con los cambios).
+    -- Lo de este cierre hoy (ya con los cambios). Solo marcas propias: las
+    -- cedidas no son ventas de la empresa y no salen.
     select p.id, p.codigo, p.marca_id, p.propia, p.estado, p.total, p.base, p.cuota
       from public.conta_pedidos_del_dia(v_d.company_id, v_d.location_id, v_d.sales_day) p
-     where public.conta_unidad_ventas(v_d.company_id, p.canal_id, p.marca_id) = v_d.unit_key
+     where p.propia and public.conta_unidad_ventas(v_d.company_id, p.canal_id, p.marca_id) = v_d.unit_key
   ), fuera as (
     -- Lo que era de este día y se ha quitado o pasado a otro.
     select a.sale_id as id from public.conta_cierre_ajuste a
