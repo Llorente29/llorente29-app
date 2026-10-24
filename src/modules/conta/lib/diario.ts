@@ -155,21 +155,28 @@ export function filtrosVisibles(asientos: readonly AsientoDiario[]): { id: Filtr
 //     propuestos del banco (Foodint, 1–14/10) tienen su movimiento casado.
 //   · supplier_payment, purchase_accrual y su contrario: NO. Ninguna pantalla de
 //     Compras los enseña ni los valida: se proponen y se validan aquí.
+//   · sales_day: SÍ (V01, entrega 2, Julio 24/10). Las propuestas de ventas
+//     del cierre del día esperan en Ventas › Cierres del día, que las enseña
+//     con sus pedidos y las valida con su factura resumen, su PDF y su asiento
+//     («Validar y siguiente» con Intro, o «Validar los N listos»). Medido en
+//     producción el 24/10: ninguna empresa propone ya el día entero sin canal.
 // Solo lo PROPUESTO se va: un borrador lo empezó una persona en Asientos, y lo
 // validado o anulado es libro.
 
 /** El apartado donde se decide lo propuesto de un origen. */
-export type SitioPropio = 'recibidas' | 'bancos'
+export type SitioPropio = 'recibidas' | 'bancos' | 'cierres'
 
 const SE_DECIDE_EN: Partial<Record<OrigenAsiento, SitioPropio>> = {
   supplier_invoice: 'recibidas',
   bank: 'bancos',
+  sales_day: 'cierres',
 }
 
 /** Dónde está, en las palabras del menú (para los avisos y el cierre). */
 export const NOMBRE_SITIO: Record<SitioPropio, string> = {
   recibidas: 'Compras y gastos › Facturas recibidas',
   bancos: 'Bancos › Movimientos › Por validar',
+  cierres: 'Ventas › Cierres del día',
 }
 
 /** Si este asiento se decide en otro apartado, cuál; si se decide en Asientos (o ya es libro), null. */
@@ -305,6 +312,7 @@ const ORIGEN_TEXTO: Record<OrigenAsiento, string> = {
   payroll: 'Resumen de nóminas', bank: 'Movimiento del banco', vat_settlement: 'Liquidación del IVA', manual: 'A mano', template: 'Predefinido',
   reversal: 'Contraasiento', opening: 'Apertura', closing: 'Cierre', migrated: 'Traído',
   purchase_accrual: 'Recibido sin factura a fin de mes', purchase_accrual_reversal: 'Contrario del recibido sin factura',
+  customer_invoice: 'Factura de venta',
 }
 
 /** De dónde sale, en palabras. */

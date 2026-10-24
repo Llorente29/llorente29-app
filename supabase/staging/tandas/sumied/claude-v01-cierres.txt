@@ -1,5 +1,5 @@
 # V01 · Entrega 2 · Cierres del día. La 1440 solo añade (y se puede pasar dos
-# veces): desde la rama, de verdad (W05). La 1441 cambia ocho funciones: desde
+# veces): desde la rama, de verdad (W05). La 1441 cambia nueve funciones: desde
 # la rama, en ROLLBACK. Su prueba (ROLLBACK): sin cambios los pedidos del día
 # son los mismos; ajustar, quitar y deshacer rehacen el cierre; en espera no se
 # valida; validar con su PDF y su factura resumen; la R5; el efectivo con su

@@ -81,6 +81,8 @@ export type OrigenAsiento =
   | 'licensed_settlement' | 'payroll' | 'bank' | 'vat_settlement' | 'manual' | 'template' | 'reversal' | 'opening' | 'closing' | 'migrated'
   // Compras (10/10): lo recibido sin factura al cierre del mes, y su contrario el día 1.
   | 'purchase_accrual' | 'purchase_accrual_reversal'
+  // V01: una factura de venta emitida en Sumied (y el cobro en efectivo de una).
+  | 'customer_invoice'
 
 // ── Céntimos ────────────────────────────────────────────────────────────────
 

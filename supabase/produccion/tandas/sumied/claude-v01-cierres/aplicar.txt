@@ -6,11 +6,12 @@
 #      (invoice_series.channel_id), el asiento del cobro en efectivo
 #      (customer_invoice_payment.entry_id) y las funciones de la pantalla. No
 #      toca datos ni nada que exista. No está en el camino del pedido.
-#   2. 1441 — CAMBIA en caliente, con la misma firma, ocho funciones de la
+#   2. 1441 — CAMBIA en caliente, con la misma firma, nueve funciones de la
 #      contabilidad (declaradas en su cabecera, con su prueba de staging): los
 #      pedidos del día y los días por asentar cuentan los cambios; el PDF lleva
 #      el importe cambiado; el cobro en efectivo hace su asiento; el PDF de una
-#      factura queda junto a su asiento; la rectificativa de una resumen; y el
+#      factura queda junto a su asiento; la rectificativa de una resumen (emitir,
+#      corregir y guardar su borrador); y el
 #      asiento de una factura no se anula desde Contabilidad. No toca datos ni
 #      escribe en sale.
 #

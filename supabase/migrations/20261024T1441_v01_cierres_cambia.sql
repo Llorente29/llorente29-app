@@ -15,15 +15,17 @@
 --   5. conta_venta_pdf_guardar: el PDF de una factura también queda junto a su
 --      asiento (journal_entry_document, «factura_expedida»), para el traspaso
 --      del mes.
---   6. conta_venta_emitir y conta_venta_corregir: la rectificativa de una
---      factura resumen de un cierre (sin cliente ni NIF: va a la 430 del canal
---      y al libro como R5). Los datos del cliente de una resumen no se corrigen.
+--   6. conta_venta_emitir, conta_venta_corregir y conta_venta_guardar: la
+--      rectificativa de una factura resumen de un cierre (sin cliente ni NIF:
+--      va a la 430 del canal y al libro como R5; al guardar su borrador se
+--      queda con su «cliente»). Los datos del cliente de una resumen no se
+--      corrigen.
 --   7. journal_entry_anular: el asiento de una factura emitida o de un cierre
 --      con su factura no se anula desde Contabilidad (se corrige desde la
 --      factura, con «Corregir»). El de un cobro en efectivo sí, y con él se va
 --      el cobro de la factura.
 --
--- Ninguna está en el camino del pedido: las lee la contabilidad (el cierre
+-- Son nueve. Ninguna está en el camino del pedido: las lee la contabilidad (el cierre
 -- del día de cada hora, sus pantallas y el PDF). Ninguna escribe en sale.
 --
 -- cambia: public.conta_pedidos_del_dia · prueba: supabase/staging/sql/20261024_v01_cierres_prueba.sql
@@ -31,6 +33,7 @@
 -- cambia: public.conta_resumen_ventas · prueba: supabase/staging/sql/20261024_v01_cierres_prueba.sql
 -- cambia: public.conta_venta_cobrar · prueba: supabase/staging/sql/20261024_v01_cierres_prueba.sql
 -- cambia: public.conta_venta_pdf_guardar · prueba: supabase/staging/sql/20261024_v01_cierres_prueba.sql
+-- cambia: public.conta_venta_guardar · prueba: supabase/staging/sql/20261024_v01_cierres_prueba.sql
 -- cambia: public.conta_venta_emitir · prueba: supabase/staging/sql/20261024_v01_cierres_prueba.sql
 -- cambia: public.conta_venta_corregir · prueba: supabase/staging/sql/20261024_v01_cierres_prueba.sql
 -- cambia: public.journal_entry_anular · prueba: supabase/staging/sql/20261024_v01_cierres_prueba.sql
@@ -182,6 +185,98 @@ begin
         from public.journal_entry_document x
        where x.entry_id = v_e.id and x.account_id = v_e.account_id and x.kind = 'resumen_ventas'));
 end $function$;
+
+-- 6 · Guardar un borrador (como en la 0835; la rectificativa de una resumen guarda su «cliente», Ventas del día · canal) --
+create or replace function public.conta_venta_guardar(p_company uuid, p_id uuid, p_datos jsonb, p_lineas jsonb, p_quien_nombre text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_cuenta uuid; v_f public.customer_invoice; v_id uuid := p_id; v_l jsonb; v_pos int := 0; v_t public.tax_rate; v_cta uuid;
+  v_cli jsonb := '{}'::jsonb; v_party uuid := nullif(p_datos->>'cliente_id', '')::uuid; v_cifras jsonb; v_nuevo boolean := p_id is null;
+  v_cant numeric; v_precio numeric; v_dto numeric;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null or not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta hace facturas.' using errcode = '42501';
+  end if;
+  if v_party is not null then
+    select jsonb_strip_nulls(jsonb_build_object('nombre', coalesce(f.legal_name, p.name), 'nif', p.tax_id, 'tipo_nif', f.tax_id_type, 'pais', coalesce(f.country_code, 'ES'),
+             'calle', f.fiscal_street, 'cp', f.fiscal_postal_code, 'ciudad', f.fiscal_city, 'provincia', f.fiscal_province,
+             'nif_comprobado', f.tax_id_check_status = 'valid'))
+      into v_cli from public.party p left join public.customer_fiscal f on f.party_id = p.id
+     where p.id = v_party and p.account_id = v_cuenta;
+    if v_cli is null then raise exception 'Ese cliente no es de esta cuenta.' using errcode = '22023'; end if;
+  end if;
+
+  if v_id is null then
+    insert into public.customer_invoice (account_id, company_id, created_by, created_by_name)
+    values (v_cuenta, p_company, auth.uid(), coalesce(p_quien_nombre, public.conta_nombre_actor()))
+    returning id into v_id;
+  end if;
+  select * into v_f from public.customer_invoice where id = v_id for update;
+  if v_f.company_id is distinct from p_company then raise exception 'Esa factura no es de esta empresa.' using errcode = '22023'; end if;
+  if v_f.status <> 'borrador' then raise exception 'La factura % ya está emitida: no se cambia. Se corrige con «Corregir».', v_f.number_text using errcode = '23514'; end if;
+
+  -- El recargo de equivalencia aún no: hoy ninguna 477 se valida sin su tipo
+  -- y su cuota, y el 303 no sabe dónde va el recargo («recargo» en
+  -- conta_impuesto_303_cajas). La columna queda preparada; se abre con su
+  -- propio encargo.
+  if coalesce((p_datos->>'recargo')::boolean, false) then
+    raise exception 'El recargo de equivalencia todavía no se puede facturar desde Sumied: el libro y el 303 aún no saben llevarlo.' using errcode = '0A000';
+  end if;
+
+  -- V01 entrega 2: la de un cierre (la rectificativa de una resumen) no lleva
+  -- cliente de Contactos: se queda con el suyo («Ventas del día · canal»).
+  update public.customer_invoice set
+    party_id = case when v_f.origin = 'cierre_dia' then v_f.party_id else v_party end,
+    customer = case when v_f.origin = 'cierre_dia' then v_f.customer
+                    else coalesce(v_cli, '{}'::jsonb) || jsonb_strip_nulls(jsonb_build_object('correo', nullif(btrim(p_datos->>'correo'), ''))) end,
+    issue_date = coalesce(nullif(p_datos->>'fecha', '')::date, issue_date),
+    due_date = nullif(p_datos->>'vence', '')::date,
+    series_code = case when v_f.doc_type = 'rectificativa' then 'R' else coalesce(nullif(upper(btrim(p_datos->>'serie')), ''), 'F') end,
+    payment_method_id = nullif(p_datos->>'forma_cobro_id', '')::uuid,
+    location_id = nullif(p_datos->>'local_id', '')::uuid,
+    notes = nullif(btrim(p_datos->>'notas'), ''),
+    email_to = nullif(btrim(p_datos->>'correo'), ''),
+    withholding_rate_id = nullif(p_datos->>'retencion_id', '')::uuid,
+    surcharge = coalesce((p_datos->>'recargo')::boolean, false),
+    correction_reason = case when v_f.doc_type = 'rectificativa' then coalesce(nullif(btrim(p_datos->>'motivo'), ''), correction_reason) else null end
+  where id = v_id;
+
+  -- Las líneas, de nuevo enteras (una rectificativa para anular no tiene líneas que cambiar).
+  if v_f.correction_kind is distinct from 'anular' then
+    delete from public.customer_invoice_line where invoice_id = v_id;
+    for v_l in select * from jsonb_array_elements(coalesce(p_lineas, '[]'::jsonb)) loop
+      v_pos := v_pos + 1;
+      select * into v_t from public.tax_rate where id = (v_l->>'tipo_id')::uuid;
+      if v_t.id is null or (v_t.company_id is not null and v_t.company_id <> p_company) then
+        raise exception 'La línea %: ese tipo de IVA no existe.', v_pos using errcode = '22023';
+      end if;
+      if v_t.treatment <> 'taxed' then
+        raise exception 'La línea %: «%» aún no se puede facturar aquí (solo IVA general, reducido o superreducido).', v_pos, v_t.name using errcode = '22023';
+      end if;
+      select id into v_cta from public.company_account where id = (v_l->>'cuenta_id')::uuid and company_id = p_company and code like '7%';
+      if v_cta is null then raise exception 'La línea %: la cuenta de ventas no es de esta empresa.', v_pos using errcode = '22023'; end if;
+      v_cant := coalesce((v_l->>'cantidad')::numeric, 1);
+      v_precio := coalesce((v_l->>'precio')::numeric, 0);
+      v_dto := coalesce((v_l->>'descuento')::numeric, 0);
+      insert into public.customer_invoice_line (account_id, company_id, invoice_id, position, concept, quantity, unit_price, discount_pct,
+                                             tax_rate_id, tax_pct, surcharge_pct, revenue_account_id, amount)
+      values (v_cuenta, p_company, v_id, v_pos, btrim(v_l->>'concepto'), v_cant, v_precio, v_dto,
+              v_t.id, v_t.rate, v_t.surcharge_rate, v_cta, round(v_cant * v_precio * (1 - v_dto / 100), 2));
+    end loop;
+  end if;
+
+  v_cifras := case when v_f.doc_type = 'rectificativa' then public._conta_venta_diferencia(v_id) else public._conta_venta_cifras(v_id) end;
+  update public.customer_invoice set base = (v_cifras->>'base')::numeric, tax = (v_cifras->>'iva')::numeric, surcharge_amount = (v_cifras->>'recargo')::numeric,
+         withholding_amount = (v_cifras->>'retencion')::numeric, total = (v_cifras->>'total')::numeric
+   where id = v_id;
+  if v_nuevo then
+    perform public._conta_venta_evento(v_id, 'creada', 'Borrador creado a mano.', null, p_quien_nombre);
+  end if;
+  return jsonb_build_object('id', v_id, 'nuevo', v_nuevo, 'total', (v_cifras->>'total')::numeric, 'lineas', v_pos);
+end $$;
+revoke all on function public.conta_venta_guardar(uuid, uuid, jsonb, jsonb, text) from public, anon;
+grant execute on function public.conta_venta_guardar(uuid, uuid, jsonb, jsonb, text) to authenticated;
 
 -- 6 · Emitir (como en la 0835; V01 entrega 2: la rectificativa de una factura resumen) -------
 create or replace function public.conta_venta_emitir(p_id uuid, p_quien_nombre text default null)

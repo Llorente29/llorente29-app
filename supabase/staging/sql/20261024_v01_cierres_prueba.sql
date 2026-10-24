@@ -4,8 +4,8 @@
 -- 20261024T1441_v01_cierres_cambia (public.conta_pedidos_del_dia,
 -- public.conta_dias_por_asentar, public.conta_resumen_ventas,
 -- public.conta_venta_cobrar, public.conta_venta_pdf_guardar,
--- public.conta_venta_emitir, public.conta_venta_corregir y
--- public.journal_entry_anular), con \i dentro de la transacción y ROLLBACK:
+-- public.conta_venta_emitir, public.conta_venta_corregir,
+-- public.conta_venta_guardar y public.journal_entry_anular), con \i dentro de la transacción y ROLLBACK:
 -- staging no cambia. En la empresa A (Taberna de Prueba Norte, carril 0), con
 -- su cierre de Glovo del 24/09 en Norte Centro (2 pedidos, 33,00 €).
 --
@@ -54,16 +54,16 @@ create temp table _antes on commit drop as
 create temp table _huellas on commit drop as
   select p.proname, md5(pg_get_functiondef(p.oid)) as h from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname in ('conta_pedidos_del_dia', 'conta_dias_por_asentar', 'conta_resumen_ventas', 'conta_venta_cobrar',
-                                                 'conta_venta_pdf_guardar', 'conta_venta_emitir', 'conta_venta_corregir', 'journal_entry_anular');
+                                                 'conta_venta_pdf_guardar', 'conta_venta_emitir', 'conta_venta_corregir', 'conta_venta_guardar', 'journal_entry_anular');
 create temp table _ventas on commit drop as
   select md5(string_agg(s::text, '|' order by s.id)) as h from public.sale s where s.account_id = 'c01a0000-0000-4000-8000-00000000000a';
 do $$ begin
-  if (select count(*) from _huellas) <> 8 then raise exception 'PRUEBA V01 CIERRES · 0: faltan funciones de las que cambian.'; end if;
+  if (select count(*) from _huellas) <> 9 then raise exception 'PRUEBA V01 CIERRES · 0: faltan funciones de las que cambian.'; end if;
   if (select count(*) from _antes) = 0 then raise exception 'PRUEBA V01 CIERRES · 0: el 24/09 de Norte Centro no tiene pedidos.'; end if;
   if (select e.status from public.sales_day_summary s join public.journal_entry e on e.id = s.entry_id where s.id = 'acebcda4-f03a-4f84-bfe4-062a941e60a2') <> 'propuesto' then
     raise exception 'PRUEBA V01 CIERRES · 0: el cierre de Glovo del 24/09 no está propuesto.';
   end if;
-  raise notice '0 · lo de antes: % pedidos el 24/09, 8 funciones', (select count(*) from _antes);
+  raise notice '0 · lo de antes: % pedidos el 24/09, 9 funciones', (select count(*) from _antes);
 end $$;
 
 \i supabase/migrations/20261024T1440_v01_cierres.sql
@@ -208,6 +208,11 @@ begin
   end;
   r := public.conta_venta_corregir(v_f, 'anular', 'Prueba: el día estaba duplicado', 'Prueba V01');
   v_rect := (r->>'id')::uuid;
+  -- Guardar su borrador (sin cliente de Contactos) no le quita su «cliente».
+  perform public.conta_venta_guardar(v_e, v_rect, jsonb_build_object('motivo', 'Prueba: el día estaba duplicado'), '[]'::jsonb, 'Prueba V01');
+  if (select customer->>'nombre' from public.customer_invoice where id = v_rect) is distinct from 'Ventas del día · Glovo' then
+    raise exception 'PRUEBA V01 CIERRES · 6: guardar la rectificativa de una resumen le quita su «cliente» (%).', (select customer from public.customer_invoice where id = v_rect);
+  end if;
   r := public.conta_venta_emitir(v_rect, 'Prueba V01');
   select a.code into v_cta430 from public.journal_line l join public.company_account a on a.id = l.company_account_id
    where l.entry_id = (r->>'asiento')::uuid and a.code like '43%';
@@ -328,7 +333,7 @@ begin
                                                      'conta_cierre_factura_prevista', '_conta_cierre_serie', '_conta_cierre_de', '_conta_cierre_rehacer')) then
     raise exception 'PRUEBA V01 CIERRES · 9: la vuelta atrás de la 1440 se deja algo.';
   end if;
-  raise notice '9 · las vueltas atrás: las ocho funciones como antes y lo añadido, fuera';
+  raise notice '9 · las vueltas atrás: las nueve funciones como antes y lo añadido, fuera';
   raise notice 'PRUEBA V01 CIERRES en verde: ajustes, espera, validar con su factura y su PDF, R5, efectivo, no anular, B fuera, vueltas atrás.';
 end $$;
 

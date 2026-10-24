@@ -191,6 +191,21 @@ export async function validarCierreConDocumento(entryId: string, quien: string |
   })
 }
 
+/**
+ * V01 · Entrega 2 · Cómo quedará el PDF de un cierre sin validar: con el nº de
+ * asiento y la factura que le tocarían ahora. Solo se enseña; no se sube.
+ */
+export async function vistaPreviaCierre(entryId: string): Promise<{ url: string; nombre: string; factura: string; numero: number }> {
+  const [r0, numero, prev] = await Promise.all([
+    rpc<ResumenBD>('conta_resumen_ventas', { p_entry: entryId }),
+    rpc<number>('conta_numero_previsto', { p_entry: entryId }),
+    rpc<Fila>('conta_cierre_factura_prevista', { p_entry: entryId }),
+  ])
+  const factura = String(prev.texto)
+  const pdf = hacerPdf({ ...r0, estado: 'validado', numero }, factura)
+  return { url: URL.createObjectURL(new Blob([pdf.bytes as BlobPart], { type: 'application/pdf' })), nombre: pdf.nombre, factura, numero }
+}
+
 /** «Ver documento»: una URL firmada de cinco minutos. */
 export async function urlDocumento(ruta: string): Promise<string> {
   hayBase()
