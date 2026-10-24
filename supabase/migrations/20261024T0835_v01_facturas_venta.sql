@@ -337,6 +337,14 @@ begin
   if v_f.company_id is distinct from p_company then raise exception 'Esa factura no es de esta empresa.' using errcode = '22023'; end if;
   if v_f.status <> 'borrador' then raise exception 'La factura % ya está emitida: no se cambia. Se corrige con «Corregir».', v_f.number_text using errcode = '23514'; end if;
 
+  -- El recargo de equivalencia aún no: hoy ninguna 477 se valida sin su tipo
+  -- y su cuota, y el 303 no sabe dónde va el recargo («recargo» en
+  -- conta_impuesto_303_cajas). La columna queda preparada; se abre con su
+  -- propio encargo.
+  if coalesce((p_datos->>'recargo')::boolean, false) then
+    raise exception 'El recargo de equivalencia todavía no se puede facturar desde Sumied: el libro y el 303 aún no saben llevarlo.' using errcode = '0A000';
+  end if;
+
   update public.customer_invoice set
     party_id = v_party, customer = coalesce(v_cli, '{}'::jsonb) || jsonb_strip_nulls(jsonb_build_object('correo', nullif(btrim(p_datos->>'correo'), ''))),
     issue_date = coalesce(nullif(p_datos->>'fecha', '')::date, issue_date),
@@ -494,10 +502,14 @@ begin
     end if;
   end loop;
   if (v_c->>'retencion')::numeric <> 0 then
-    select a.code into v_cta473 from public.company_account_link k join public.company_account a on a.id = k.company_account_id
-     where k.company_id = v_f.company_id and k.entity = 'withholding_rate' and k.entity_id = v_f.withholding_rate_id::text and k.role = 'principal' limit 1;
-    if v_cta473 is null then select code into v_cta473 from public.company_account where company_id = v_f.company_id and code like '473%' order by code limit 1; end if;
-    if v_cta473 is null then raise exception 'Falta en tu plan la 473 (retenciones y pagos a cuenta).' using errcode = '23514'; end if;
+    -- La retención que te hace el cliente es un pago a cuenta TUYO: 473. El
+    -- enlace «retención → cuenta» de la empresa es el de las compras (4751, la
+    -- que tú ingresas por otros), y aquí no vale.
+    select code into v_cta473 from public.company_account where company_id = v_f.company_id and coalesce(template_code, code) like '473%' order by code limit 1;
+    if v_cta473 is null then
+      v_r := public.company_account_add(v_f.company_id, '4730', 'Retenciones que te hacen tus clientes', null, null, null, v_quien, 'manual');
+      v_cta473 := v_r->>'code';
+    end if;
     v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_cta473, 'tercero_id', v_f.party_id, 'documento', v_texto, 'concepto', 'Retención factura ' || v_texto,
       'debe', greatest((v_c->>'retencion')::numeric, 0), 'haber', greatest(-(v_c->>'retencion')::numeric, 0)));
   end if;

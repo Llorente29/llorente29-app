@@ -12,8 +12,8 @@
 --      y 10 % con descuento): sus cifras.
 --   2. Emitir: F-2026/0001, el asiento validado y cuadrado (430 por el total,
 --      70x, 477 por tipo) y el libro de expedidas (F1, el NIF del cliente).
---   3. Otra con recargo y retención: F-2026/0002; el libro lleva el recargo y
---      la retención.
+--   3. El recargo de equivalencia aún no se deja guardar (lo dice). Otra con
+--      retención: F-2026/0002; la retención va a una 473 y el libro la lleva.
 --   4. Una emitida no se cambia ni se borra; un borrador sí se borra.
 --   5. Sin huecos: una que no se puede emitir (sin NIF) no gasta número.
 --   6. Corregir importes (eran 10, fueron 8): R-2026/0001 por la diferencia,
@@ -123,23 +123,32 @@ begin
   if not found then raise exception 'PRUEBA V01 · 2: la factura no queda emitida con su huella y su asiento.'; end if;
   raise notice '2 · emitida F-2026/0001, asiento cuadrado y libro F1';
 
-  -- 3 · Recargo y retención.
+  -- 3 · El recargo, todavía no; la retención, a la 473.
+  begin
+    perform public.conta_venta_guardar(v_e, null,
+      jsonb_build_object('cliente_id', v_cli, 'fecha', '2026-10-24', 'recargo', true),
+      jsonb_build_array(jsonb_build_object('concepto', 'Catering', 'cantidad', 1, 'precio', 1000, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V01');
+    raise exception 'PRUEBA V01 · 3: un borrador con recargo de equivalencia se ha guardado (aún no se sabe llevar al libro).';
+  exception when feature_not_supported then null;
+  end;
   r := public.conta_venta_guardar(v_e, null,
-    jsonb_build_object('cliente_id', v_cli, 'fecha', '2026-10-24', 'recargo', true, 'retencion_id', v_ret),
+    jsonb_build_object('cliente_id', v_cli, 'fecha', '2026-10-24', 'retencion_id', v_ret),
     jsonb_build_array(jsonb_build_object('concepto', 'Catering', 'cantidad', 1, 'precio', 1000, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V01');
   v_f2 := (r->>'id')::uuid;
   r := public.conta_venta_emitir(v_f2, 'Prueba V01');
-  if r->>'numero' <> pg_temp.numero_esperado(v_e, 'F', 2) then raise exception 'PRUEBA V01 · 3: el número es % y no F-2026/0002.', r->>'numero'; end if;
+  if r->>'numero' <> pg_temp.numero_esperado(v_e, 'F', 2) then raise exception 'PRUEBA V01 · 3: el número es % y no %.', r->>'numero', pg_temp.numero_esperado(v_e, 'F', 2); end if;
   select sum(debit), sum(credit) into v_d, v_h from public.journal_line where entry_id = (r->>'asiento')::uuid;
-  if v_d <> v_h then raise exception 'PRUEBA V01 · 3: con recargo y retención el asiento no cuadra (debe %, haber %).', v_d, v_h; end if;
-  perform 1 from public.vat_book_entry where entry_id = (r->>'asiento')::uuid and surcharge_amount = 52;
-  if not found then raise exception 'PRUEBA V01 · 3: el libro no lleva el recargo de equivalencia (52 €).'; end if;
+  if v_d <> v_h then raise exception 'PRUEBA V01 · 3: con retención el asiento no cuadra (debe %, haber %).', v_d, v_h; end if;
   if v_ret is not null then
+    perform 1 from public.journal_line l join public.company_account a on a.id = l.company_account_id
+      join public.customer_invoice f on f.entry_id = l.entry_id
+     where l.entry_id = (r->>'asiento')::uuid and a.code like '473%' and f.withholding_amount > 0 and l.debit = f.withholding_amount;
+    if not found then raise exception 'PRUEBA V01 · 3: la retención no está en el debe de una 473.'; end if;
     perform 1 from public.vat_book_entry v join public.customer_invoice f on f.entry_id = v.entry_id
      where v.entry_id = (r->>'asiento')::uuid and f.withholding_amount > 0 and v.withholding_amount = f.withholding_amount;
     if not found then raise exception 'PRUEBA V01 · 3: el libro no lleva la retención de la factura.'; end if;
   end if;
-  raise notice '3 · F-2026/0002 con recargo y retención';
+  raise notice '3 · el recargo aún no; F-2026/0002 con la retención en la 473';
 
   -- 4 · Lo emitido no se cambia; un borrador se borra.
   begin
@@ -255,7 +264,7 @@ do $$ begin
     raise exception 'PRUEBA V01 · 10: no hay emitidas para probar el freno.';
   end if;
   raise notice '10 · con emitidas, la vuelta atrás para (su freno ve % emitidas)', (select count(*) from public.customer_invoice where status <> 'borrador');
-  raise notice 'PRUEBA V01 en verde: borrador, emitir sin huecos, el asiento y el libro, recargo y retención, corregir y anular, cobros, B fuera.';
+  raise notice 'PRUEBA V01 en verde: borrador, emitir sin huecos, el asiento y el libro, el recargo aún no y la retención, corregir y anular, cobros, B fuera.';
 end $$;
 
 rollback;
