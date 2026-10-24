@@ -19,6 +19,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, entrarComo, enCarril } from '../sesion'
+import { barraAbiertaSiPlegada } from '../barra'
 
 const DIR = 'docs/conta/capturas/v01'
 const CIERRE = enCarril('acebcda4-f03a-4f84-bfe4-062a941e60a2')
@@ -48,9 +49,10 @@ test('la lista: Ventas lleva aquí, el resumen de ayer, las pestañas y el bloqu
   await expect(page.getByText('Glovo', { exact: false }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: /^Validar los/ }).first()).toBeVisible()
   if (lado(page) === 'ordenador') {
-    // La barra: Ventas desplegado, con el bloque «Hostelería» y «Cierres del día» marcada.
+    // La barra (desplegada, si se recordaba plegada): Ventas con el bloque «Hostelería» y «Cierres del día» marcada.
+    await barraAbiertaSiPlegada(page)
     const paginas = page.getByRole('list', { name: 'Páginas de Ventas' })
-    await expect(paginas.getByText('Hostelería')).toBeVisible()
+    await expect(paginas.locator('.s-barra-bloque', { hasText: 'Hostelería' })).toBeVisible()
     await expect(paginas.getByRole('link', { name: 'Cierres del día' })).toHaveAttribute('aria-current', 'page')
   }
   await foto(page, 'cierres')

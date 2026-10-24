@@ -223,12 +223,16 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
   await page.waitForLoadState('networkidle')
   await expect(page.getByText(/Sube la quincena de Catcher/)).toHaveCount(0)
-  // Ventas: sin plataformas. V01: las facturas están en Ventas › Facturas.
+  // Ventas: sin plataformas. V01 · Entrega 2: «Ventas» a secas lleva a Ventas › Facturas, y
+  // Cierres del día (de hostelería) no sale ni por la dirección.
   await page.goto('/conta/ventas')
-  await expect(page.getByText(/^Tus facturas están en Ventas › Facturas/)).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText(/plataforma/i)).toHaveCount(0)
-  await page.getByRole('link', { name: 'Ir a Facturas' }).click()
+  await expect(page).toHaveURL(/\/conta\/ventas\/facturas$/, { timeout: 30_000 })
   await expect(page.getByRole('heading', { level: 1, name: 'Facturas' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(/plataforma/i)).toHaveCount(0)
+  await expect((await paginas(page, 'Ventas')).getByRole('link', { name: 'Cierres del día' })).toHaveCount(0)
+  await cerrarCajon(page)
+  await page.goto('/conta/ventas/cierres')
+  await expect(page.getByText(/^Los cierres del día son de las empresas que venden en hostelería/)).toBeVisible({ timeout: 30_000 })
   expect(errores).toEqual([])
 })
 

@@ -101,4 +101,9 @@ describe('V01 · el Libro: las propuestas de ventas se deciden en Cierres del d�
     expect(delLibroDiario([{ estado: 'propuesto', origen: 'sales_day' }, { estado: 'validado', origen: 'sales_day' }])).toHaveLength(1)
     expect(NOMBRE_SITIO.cierres).toBe('Ventas › Cierres del día')
   })
+  it('una del día entero «a la antigua» (sin canal) no tiene cierre en esa pantalla: se queda en Asientos (regla 7)', () => {
+    // Staging, 24/10: «Ventas del día · Norte Centro» del 05/10, propuesta y sin canal.
+    expect(seDecideEnSuSitio({ estado: 'propuesto', origen: 'sales_day', sinCanal: true })).toBeNull()
+    expect(delLibroDiario([{ estado: 'propuesto', origen: 'sales_day', sinCanal: true }, { estado: 'propuesto', origen: 'sales_day' }])).toHaveLength(1)
+  })
 })

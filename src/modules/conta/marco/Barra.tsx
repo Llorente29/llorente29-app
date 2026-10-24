@@ -59,7 +59,7 @@ function Paginas({ p, paginas, actual, contadores, search, alPulsar }: {
         const bloque = t.bloque && t.bloque !== paginas[i - 1]?.bloque ? t.bloque : null
         return (
           <li key={t.id}>
-            {bloque && <span className="s-barra-bloque" aria-hidden="true">{bloque}</span>}
+            {bloque && <span className="s-barra-bloque">{bloque}</span>}
             <Link to={conConsulta(rutaConta(t.ruta!), search)} className="s-barra-pagina" aria-current={t.id === actual ? 'page' : undefined}
               aria-describedby={desc} onClick={alPulsar}>
               <span className="s-barra-nombre">{t.etiqueta}</span>

@@ -81,6 +81,8 @@ export interface AsientoDiario {
   huellaAnterior: string | null
   cadena: number | null
   apuntes: ApunteDiario[]
+  /** V01 · Entrega 2: un asiento de ventas del día entero, sin canal (a la antigua): no va a Cierres del día. */
+  sinCanal?: boolean
 }
 
 // ── Filtros por origen ──────────────────────────────────────────────────────
@@ -158,8 +160,11 @@ export function filtrosVisibles(asientos: readonly AsientoDiario[]): { id: Filtr
 //   · sales_day: SÍ (V01, entrega 2, Julio 24/10). Las propuestas de ventas
 //     del cierre del día esperan en Ventas › Cierres del día, que las enseña
 //     con sus pedidos y las valida con su factura resumen, su PDF y su asiento
-//     («Validar y siguiente» con Intro, o «Validar los N listos»). Medido en
-//     producción el 24/10: ninguna empresa propone ya el día entero sin canal.
+//     («Validar y siguiente» con Intro, o «Validar los N listos»). Solo las de
+//     un canal: un día asentado entero «a la antigua» (sin canal, `sinCanal`)
+//     no tiene cierre en esa pantalla y se queda en Asientos (regla 7: nada
+//     sin sitio). Medido el 24/10: en producción no queda ninguno; en staging, sí.
+//     Quien lee los asientos marca `sinCanal` (ventasSinCanal, diarioService).
 // Solo lo PROPUESTO se va: un borrador lo empezó una persona en Asientos, y lo
 // validado o anulado es libro.
 
@@ -180,8 +185,10 @@ export const NOMBRE_SITIO: Record<SitioPropio, string> = {
 }
 
 /** Si este asiento se decide en otro apartado, cuál; si se decide en Asientos (o ya es libro), null. */
-export function seDecideEnSuSitio(a: Pick<AsientoDiario, 'estado' | 'origen'>): SitioPropio | null {
-  return a.estado === 'propuesto' ? SE_DECIDE_EN[a.origen] ?? null : null
+export function seDecideEnSuSitio(a: Pick<AsientoDiario, 'estado' | 'origen'> & { sinCanal?: boolean }): SitioPropio | null {
+  if (a.estado !== 'propuesto') return null
+  if (a.origen === 'sales_day' && a.sinCanal) return null
+  return SE_DECIDE_EN[a.origen] ?? null
 }
 
 /**
@@ -189,7 +196,7 @@ export function seDecideEnSuSitio(a: Pick<AsientoDiario, 'estado' | 'origen'>): 
  * en otro apartado. La lista, sus vistas, «Para revisar», las cifras, «Lo que
  * he hecho yo» y el número del menú salen de aquí: la misma vara (regla 31).
  */
-export function delLibroDiario<T extends Pick<AsientoDiario, 'estado' | 'origen'>>(asientos: readonly T[]): T[] {
+export function delLibroDiario<T extends Pick<AsientoDiario, 'estado' | 'origen'> & { sinCanal?: boolean }>(asientos: readonly T[]): T[] {
   return asientos.filter((a) => seDecideEnSuSitio(a) === null)
 }
 
