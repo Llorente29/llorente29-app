@@ -58,7 +58,7 @@ export default function CierresPage() {
   const [pasos, setPasos] = useState<Paso[] | null>(null)
   const pestana = pestanaDe(query.get('ver'))
   const q = query.get('q') ?? ''
-  const datos = useLeer(accountId && activa && hosteleria ? () => leerCierres(activa.id) : null, `${accountId}:${activa?.id}:cierres:${vuelta}`)
+  const datos = useLeer(accountId && activa && hosteleria ? () => leerCierres(activa.id) : null, `${accountId}:${activa?.id}:${hosteleria}:cierres:${vuelta}`)
   const cambiar = (c: Record<string, string | null>) => setQuery(new URLSearchParams(conCambio(search, c)), { replace: true })
 
   const todos = datos.datos ?? []
