@@ -1,0 +1,2 @@
+# V01 · El histórico · vuelta atrás.
+supabase/vuelta-atras/20261024T1730_v01_historico_facturas.down.sql

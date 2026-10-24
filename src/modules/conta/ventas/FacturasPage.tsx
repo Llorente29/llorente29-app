@@ -31,6 +31,7 @@ import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMes, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { limites, meses, ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
 import { leerFacturasVenta } from '@/modules/conta/services/ventasService'
+import { PdfsQueFaltan } from './PdfsQueFaltan'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { MAX_FILAS } from '@/modules/conta/facturacion/emitidas'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
@@ -158,6 +159,8 @@ export default function FacturasPage() {
         </p>
       )}
       {cif && <CifrasBandeja cifras={cifras} />}
+      {/* V01 · El histórico: las emitidas sin su PDF (los traídos de Diez), para hacerlos aquí. */}
+      {accountId && <PdfsQueFaltan accountId={accountId} companyId={activa.id} />}
 
       <PestanasEstado etiqueta="Estado de las facturas" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id === 'todas' ? null : id })} />
       <FiltrosLista etiqueta="Filtros de las facturas">

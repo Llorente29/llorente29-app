@@ -1,0 +1,16 @@
+# V01 · El histórico de Ventas (Julio, 24/10: sí a las tres). Rama claude/v01-historico.
+# VA DESPUÉS de la tanda del #321 (claude/v01-cierres) y de su fusión.
+#
+#   1730 — DESTRUYE O MUEVE (toca datos): a los 85 cierres de octubre les da su
+#   factura resumen con el número que ya tienen en Diez, y ese número al libro
+#   de expedidas; a los 1.196 traídos de Diez, su factura con su número (el
+#   libro, como está). Copia previa del libro en _copia_v01_historico_libro y
+#   lista de lo creado en _v01_historico_facturas. Comprueba al céntimo que las
+#   facturas suman lo del libro; si no, no aplica nada. Nada se envía a Diez.
+#   Pide «autorizo»: 20261024T1730_v01_historico_facturas.sql
+#
+# Después, en Ventas › Facturas, «Hacer los N PDF» (los traídos).
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/v01-historico.sql
+supabase/migrations/20261024T1730_v01_historico_facturas.sql

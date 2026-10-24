@@ -1,0 +1,7 @@
+# V01 · El histórico. La 1730 toca datos (el número del libro de los cierres):
+# desde la rama, en ROLLBACK. Su prueba (ROLLBACK): un cierre preparado como
+# los de octubre queda con su factura y su número de Diez, su PDF de siempre y
+# las cifras del libro; un traído, con su factura y el libro intacto; pasarla
+# dos veces no duplica; y la vuelta atrás deja el libro como estaba.
+supabase/migrations/20261024T1730_v01_historico_facturas.sql
+supabase/staging/sql/20261024_v01_historico_prueba.sql
