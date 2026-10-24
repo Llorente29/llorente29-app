@@ -324,7 +324,7 @@ export default function DocumentosPage() {
           alQuitar={() => setMarcadas(new Set())} alValidar={() => setConfirmando(true)} />
       )}
       {confirmando && (
-        <ConfirmarBloque enviaADiez={envioDiez.envio?.encendido === true} noListas={marcadasVivas.length - marcadasListas.length}
+        <ConfirmarBloque enviaADiez={envioDiez.envio?.alMomento === true} noListas={marcadasVivas.length - marcadasListas.length}
           facturas={marcadasListas.map((id) => { const x = filas.find((y) => y.id === id)!; return { cuenta: pv?.get(id)?.cuenta ?? null, base: mapa.get(id)?.base ?? null, total: x.total, local: localDeFila(x, mapa.get(id)) } })}
           alCancelar={() => setConfirmando(false)} alValidar={() => void validarMarcadas()} />
       )}

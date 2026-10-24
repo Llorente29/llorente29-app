@@ -128,6 +128,12 @@ verify_jwt = true
 [functions.conta-diez-cola]
 verify_jwt = false
 
+# C12 (24/10): traspasar el mes a Diez desde Contabilidad › Cierre del mes. La
+# llama la pantalla con la sesión de un administrador, una vez por tanda, y
+# solo con el traspaso del mes confirmado. verify_jwt = true.
+[functions.conta-diez-traspaso]
+verify_jwt = true
+
 [functions.conta-recibida-pdf]
 verify_jwt = false
 

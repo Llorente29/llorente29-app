@@ -11,6 +11,8 @@
 //     banco, y los dos se ven juntos. El de los bancos es de un mes (?mes=;
 //     sin él, el último terminado) y pone primero el banco por el que se llegó
 //     (?banco=). La dirección de antes, bancos/cierre, lleva aquí.
+//     C12 (24/10): y arriba del todo, «Traspasar a Diez» (TraspasoADiez.tsx):
+//     el mes se traspasa a Diez de golpe y, si llega todo y cuadra, se cierra.
 //   · Regularización, cierre y apertura: Folvy calcula los tres asientos
 //     (src/modules/conta/lib/cierre.ts), los PROPONE como cualquier otro
 //     asiento (se validan en el libro diario) y los enlaza al ejercicio; luego
@@ -26,6 +28,7 @@ import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { AsientoQueSeCrea, FiltroSelector } from '@/modules/conta/diseno/plantillas'
 import { textoDeImporte } from '@/modules/conta/diseno'
 import { CierreDelMes } from '@/modules/conta/bancos/CierreDelMes'
+import { TraspasoADiez } from '@/modules/conta/libros/TraspasoADiez'
 import { mesDelCierre } from '@/modules/conta/bancos/navegacion'
 import { prepararCierre, sumas, type AsientoCierre, type SaldoACerrar } from '@/modules/conta/lib/cierre'
 import { useLeer, useLibros } from '@/modules/conta/libros/contexto'
@@ -118,6 +121,9 @@ export function CerrarMes() {
         </div>
         <div className="cxl-herramientas"><Link to={rutaLibroDiario()} className="cx-boton-sec">Lo que falta, en el libro diario</Link></div>
       </div>
+
+      {/* C12 · Traspasar el mes a Diez: el botón principal de esta página. */}
+      {d.datos && <TraspasoADiez companyId={L.companyId} meses={meses} cerrados={d.datos.map((x) => x.mes)} hoy={hoy} vuelta={L.vuelta} alCambiar={d.recargar} />}
 
       <h3 className="cxl-subtitulo" id="cxl-cierre-contabilidad">La contabilidad, mes a mes</h3>
       <Guardado texto={hecho} />

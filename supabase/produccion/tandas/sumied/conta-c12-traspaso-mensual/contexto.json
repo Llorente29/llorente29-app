@@ -1,0 +1,13 @@
+{
+  "_que": "C12 · Traspaso mensual · contexto de producción de la tanda (20261024T1250), medido en SOLO LECTURA el 24/10 a las 12:54 UTC con la consulta de analizar.mjs sql-contexto. Existen conta_diez_envio_empresa y conta_diez_por_enviar(integer); la tabla y las funciones del traspaso no existen; nada en el historial. El cuerpo de conta_diez_por_enviar en producción (md5 de prosrc 033c9c71…, 1319 caracteres) es el que devuelve la vuelta atrás, byte a byte.",
+  "medido": "2026-10-24T12:54Z",
+  "tanda": {
+    "supabase/migrations/20261024T1250_c12_traspaso_mensual.sql": "e6af2698346594744bde9214b61e6c79"
+  },
+  "contexto": {
+    "tablas": ["public.conta_diez_envio_empresa"], "funciones": ["public.conta_diez_por_enviar(integer)"],
+    "filas": { "public.conta_diez_envio_empresa": 0 }, "otras": {},
+    "camino": { "tablas": [], "funciones": [] },
+    "usos": {}, "registro": []
+  }
+}

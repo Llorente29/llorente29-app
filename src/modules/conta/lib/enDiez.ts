@@ -18,6 +18,9 @@
 //     «sale en unos minutos» si aún no lo ha intentado nadie;
 //   · anulado: «Anulado en Diez con 4/1.235», o «En Diez sigue 4/1.234 · falta
 //     anularlo» con «Reintentar» (que manda su contraasiento).
+//   · C12 (24/10), la empresa traspasa una vez al mes: lo que no está en Diez
+//     «Va en el traspaso del mes», sin «Reintentar» (no se manda nada suelto).
+//     Lo que ya está, igual que antes.
 
 import { miles } from '@/modules/conta/ui/tabla/tablaDensa'
 
@@ -63,7 +66,7 @@ export function motivoEnPalabras(error: string | null): string | null {
 export function detalleDiez(
   a: { id: string; estado: string; origen: string; anuladoCon?: string | null },
   envio: EnvioAsiento | null | undefined,
-  o: { encendido: boolean; contraasiento?: EnvioAsiento | null; ahora?: Date },
+  o: { encendido: boolean; mensual?: boolean; contraasiento?: EnvioAsiento | null; ahora?: Date },
 ): DetalleDiez | null {
   if (!o.encendido) return null
   if (NO_VAN.has(a.origen)) return null
@@ -73,6 +76,7 @@ export function detalleDiez(
     if (!envio || !llego(envio)) return null
     const c = o.contraasiento
     if (c && llego(c)) return { texto: `Anulado en Diez con ${numeroDiez(c)}`, motivo: null, tono: 'neutro', reintentar: null, enDiez: true }
+    if (o.mensual) return { texto: `En Diez sigue ${numeroDiez(envio)}`, motivo: 'se anula en el traspaso del mes', tono: 'neutro', reintentar: null, enDiez: true }
     const motivo = motivoEnPalabras(c?.error ?? null) ?? 'falta mandar su contraasiento'
     return { texto: `En Diez sigue ${numeroDiez(envio)} · falta anularlo`, motivo, tono: 'ambar', reintentar: a.anuladoCon ?? null, enDiez: true }
   }
@@ -85,6 +89,7 @@ export function detalleDiez(
     return { texto: `En Diez · ${numeroDiez(envio)}`, motivo: null, tono: 'verde', reintentar: null, enDiez: true }
   }
 
+  if (o.mensual) return { texto: 'Va en el traspaso del mes', motivo: null, tono: 'neutro', reintentar: null, enDiez: false }
   const motivo = motivoEnPalabras(envio?.error ?? null)
   if (!envio || !motivo) {
     return { texto: 'No enviado', motivo: 'sale solo en unos minutos', tono: 'azul', reintentar: a.id, enDiez: false }

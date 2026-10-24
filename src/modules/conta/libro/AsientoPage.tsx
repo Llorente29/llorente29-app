@@ -101,6 +101,8 @@ export default function AsientoPage() {
   // C07: «Enviar a Diez» de la empresa. Apagado (o aún sin saberlo), nada de Diez en la pantalla.
   const envioDiez = useEnvioDiez(accountId, activa?.id)
   const encendido = envioDiez.envio?.encendido === true
+  // C12: con el traspaso mensual, nada se manda al validar: va en el traspaso del mes.
+  const mensual = envioDiez.envio?.mensual === true
   const recargar = () => setVuelta((v) => v + 1)
 
   // S01d: desde «Nueva factura expedida», si el PDF no se pudo adjuntar, llega por qué (falloPdf).
@@ -123,7 +125,7 @@ export default function AsientoPage() {
 
   const editable = a.estado === 'propuesto' || a.estado === 'borrador'
   // C07: el detalle junto al número («En Diez · 4/1.234» o «No enviado · motivo · Reintentar»).
-  const diez = detalleDiez(a, datos.envio, { encendido, contraasiento: datos.contra })
+  const diez = detalleDiez(a, datos.envio, { encendido, mensual, contraasiento: datos.contra })
   const e = estadoDe(a)
   const mes = estadoMes(mesDe(a.fecha), datos.cierres)
 
@@ -143,7 +145,7 @@ export default function AsientoPage() {
       return
     }
     // C07: con «Enviar a Diez» encendido, sale a Diez en ese momento, sin botón aparte.
-    if (encendido) {
+    if (encendido && !mensual) {
       const r = await enviarADiez(a.id).catch((x: unknown) => ({ estado: 'no_llega' as const, motivo: x instanceof Error ? x.message : 'no ha contestado', reintentar: true, texto: '' }))
       if (r.estado === 'en_diez') setHecho(`${dicho} ${r.texto}`)
       else { setHecho(dicho); setFallo(`No se ha enviado a Diez: ${r.motivo}. Sigue validado; «Reintentar» está junto a su número.`) }
@@ -185,7 +187,7 @@ export default function AsientoPage() {
         <div className="cxd-acciones">
           {editable && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('descartar')} disabled={ocupado}>Descartar</button>}
           {datos.conDiez?.documento && <VerDocumento ruta={datos.conDiez.documento.ruta} alFallar={(t) => { setHecho(null); setFallo(t) }} />}
-          {editable && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? (encendido ? 'Validando y enviando…' : 'Validando…') : 'Validar asiento'}</button>}
+          {editable && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? (encendido && !mensual ? 'Validando y enviando…' : 'Validando…') : 'Validar asiento'}</button>}
           {a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
         </div>
       </header>

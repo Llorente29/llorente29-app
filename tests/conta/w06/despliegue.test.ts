@@ -18,7 +18,8 @@ const diff = (a: string, b: string) => execFileSync('git', ['diff', '--name-only
 describe('qué se despliega por un push', () => {
   it('el #285 (solo _shared) despliega las dos funciones de Diez que lo usan', () => {
     expect(diff('29f17ac5', '2f07b012').every((f) => f.startsWith('supabase/functions/_shared/'))).toBe(true)
-    expect(funcionesDelPush(diff('29f17ac5', '2f07b012'))).toEqual(['conta-diez-cola', 'conta-diez-enviar'])
+    // C12 (24/10): con el árbol de hoy, ese _shared también lo usa conta-diez-traspaso (importa diezDespacho).
+    expect(funcionesDelPush(diff('29f17ac5', '2f07b012'))).toEqual(['conta-diez-cola', 'conta-diez-enviar', 'conta-diez-traspaso'])
   })
   it('el #288 (una función nueva y dos _shared nuevos que solo usa ella) despliega esa', () => {
     expect(funcionesDelPush(diff('58a3efbc', 'deb7b12a'))).toEqual(['conta-recibida-pdf'])
