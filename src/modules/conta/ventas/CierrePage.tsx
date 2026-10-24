@@ -82,7 +82,12 @@ export default function CierrePage() {
   const ps = useMemo(() => pedidos.datos ?? [], [pedidos.datos])
   const porId = new Map(ps.map((p) => [p.id, p]))
   const hay = cambios.length > 0
-  const barra: CambioCampo[] = cambios.map((x) => ({ campo: x.pedido, etiqueta: porId.get(x.pedido)?.codigo ?? 'Pedido', antes: '', ahora: textoCambio(x, porId.get(x.pedido)) }))
+  const barra: CambioCampo[] = cambios.map((x) => {
+    const p = porId.get(x.pedido)
+    const antes = !p ? '—' : p.ajuste ? `${etiquetaAjuste(p.ajuste).toLowerCase()}${p.cuenta ? `, ${eurosExactos(p.total)}` : ''}` : eurosExactos(p.total)
+    const ahora = x.accion === 'quitar' ? 'quitado' : x.accion === 'mover' ? `al ${diaMes(x.dia)}` : x.accion === 'importe' ? eurosExactos(x.importe) : 'como era'
+    return { campo: x.pedido, etiqueta: p?.codigo ?? 'Pedido', antes, ahora }
+  })
   const totalNuevo = c ? totalConCambios(ps, cambios, c.dia) : 0
 
   async function guardar(): Promise<boolean | string> {
@@ -236,7 +241,7 @@ export default function CierrePage() {
             <tfoot><tr><td colSpan={4}>{hay ? 'Con los cambios sin guardar' : 'Total del cierre'}</td><td className="s-cifra"><strong>{eurosExactos(hay ? totalNuevo : c.total)}</strong></td>{editable && <td />}</tr></tfoot>
           </table>
         )}
-        {editable && <p className="s-apoyo">Cambiar un pedido aquí no toca el pedido en Folvy: solo cómo cuenta en tu contabilidad.</p>}
+        {editable && <p className="s-apoyo">Cambiar un pedido aquí no toca el pedido en Pedidos: solo cómo cuenta en tu contabilidad.</p>}
       </BloqueFicha>
 
       <LoQueDejaElCierre conPlataformas={vende} soloDe={{ localId: c.localId, dia: c.dia }} />
@@ -287,7 +292,7 @@ export default function CierrePage() {
       <BotonPulgar>{principal}</BotonPulgar>
       {salida.aviso}
       {dialogo?.que === 'quitar' && <DialogoMotivo titulo={`Quitar el ${dialogo.p.codigo} de este cierre`} boton="Quitar"
-        explicacion="Deja de contar en el cierre (y en su factura y su asiento). El pedido sigue igual en Folvy." etiqueta="Por qué"
+        explicacion="Deja de contar en el cierre (y en su factura y su asiento). El pedido sigue igual en Pedidos." etiqueta="Por qué"
         alCerrar={() => setDialogo(null)} alAceptar={(m) => { setCambios((cs) => ponerCambio(cs, { pedido: dialogo.p.id, accion: 'quitar', motivo: m })); setDialogo(null) }} />}
       {dialogo?.que === 'mover' && <DialogoMover p={dialogo.p} hoy={hoyEnMadrid()} alCerrar={() => setDialogo(null)}
         alAceptar={(d) => { setCambios((cs) => ponerCambio(cs, { pedido: dialogo.p.id, accion: 'mover', dia: d })); setDialogo(null) }} />}
@@ -333,7 +338,7 @@ function DialogoMover({ p, hoy, alCerrar, alAceptar }: { p: PedidoCierre; hoy: s
   const mal = !dia ? null : dia >= hoy ? 'Solo a un día ya cerrado.' : dia === p.dia && !p.ajuste?.dia ? 'Ya es su día.' : null
   return (
     <Dialogo titulo={`Pasar el ${p.codigo} a otro día`} alCerrar={alCerrar}
-      explicacion="Cuenta en el cierre de ese día (mismo local y canal), que se rehace al guardar. El pedido sigue igual en Folvy."
+      explicacion="Cuenta en el cierre de ese día (mismo local y canal), que se rehace al guardar. El pedido sigue igual en Pedidos."
       acciones={<><Boton variante="secundario" onClick={alCerrar}>Cancelar</Boton><Boton variante="principal" disabled={!dia || !!mal} onClick={() => alAceptar(dia)}>Pasar</Boton></>}>
       <Campo etiqueta="Día" error={mal}>{(x) => <Fecha {...x} valor={dia} alCambiar={setDia} />}</Campo>
     </Dialogo>
@@ -347,7 +352,7 @@ function DialogoImporte({ p, alCerrar, alAceptar }: { p: PedidoCierre; alCerrar:
   const mal = n === null || n <= 0 ? 'Pon el importe que cuenta (para que no cuente, quítalo del cierre).' : null
   return (
     <Dialogo titulo={`Ajustar el importe del ${p.codigo}`} alCerrar={alCerrar}
-      explicacion={`El pedido es de ${eurosExactos(p.totalPedido)}. Cuenta en el cierre con el importe que pongas, y queda «CAMBIADO» con el de antes. El pedido sigue igual en Folvy.`}
+      explicacion={`El pedido es de ${eurosExactos(p.totalPedido)}. Cuenta en el cierre con el importe que pongas, y queda «CAMBIADO» con el de antes. El pedido sigue igual en Pedidos.`}
       acciones={<><Boton variante="secundario" onClick={alCerrar}>Cancelar</Boton><Boton variante="principal" disabled={!!mal} onClick={() => alAceptar(n!, motivo.trim() || null)}>Ajustar</Boton></>}>
       <Campo etiqueta="Importe que cuenta" error={texto && mal ? mal : null}>{(x) => <Texto {...x} valor={texto} alCambiar={setTexto} inputMode="decimal" />}</Campo>
       <Campo etiqueta="Por qué" ayuda="Opcional: «La plataforma cobró 1 € menos».">{(x) => <Texto {...x} valor={motivo} alCambiar={setMotivo} maxLength={300} />}</Campo>

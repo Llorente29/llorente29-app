@@ -52,7 +52,7 @@
 /* Las páginas del apartado activo, con sangría; la activa en azul con texto blanco. */
 .s-barra-paginas { list-style: none; margin: 2px 0 0; padding: 0 0 0 var(--s-8); display: flex; flex-direction: column; gap: 2px; }
 /* V01 · El título de un bloque de páginas («Hostelería»), pequeño y en mayúsculas, encima de su primera página. */
-.s-barra-bloque { display: block; margin: var(--s-8) 0 2px; padding: 0 var(--s-8); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--s-barra-texto); opacity: .7; }
+.s-barra-bloque { display: block; margin: var(--s-8) 0 2px; padding: 0 var(--s-8); font-size: var(--s-t-xs); letter-spacing: .04em; text-transform: uppercase; color: var(--s-barra-texto); opacity: .7; }
 .s-barra-pagina {
   display: flex; align-items: center; gap: var(--s-2); min-height: 36px; padding: 0 var(--s-2) 0 var(--s-3);
   border-radius: var(--s-radio-boton); color: var(--s-barra-texto); text-decoration: none; font-size: var(--s-t-m);

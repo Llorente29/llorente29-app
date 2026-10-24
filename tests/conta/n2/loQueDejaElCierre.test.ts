@@ -103,7 +103,13 @@ describe('N2 · la pantalla', () => {
     expect(p).toContain('Se cobró por otro lado')
     expect(p).toContain('role="status">{h.texto}')
   })
-  it('sale en Ventas con hostelería', () => {
-    expect(readFileSync('src/modules/conta/ventas/VentasPage.tsx', 'utf8')).toContain('{hosteleria && <LoQueDejaElCierre conPlataformas={vende} />}')
+  it('sale en Ventas › Cierres del día (V01, entrega 2), y la de un cierre en su ficha', () => {
+    // Solo con hostelería: Cierres del día lo dice y no lee nada sin ella.
+    const lista = readFileSync('src/modules/conta/ventas/CierresPage.tsx', 'utf8')
+    expect(lista).toContain('<LoQueDejaElCierre conPlataformas={vende} />')
+    expect(lista).toContain('if (!hosteleria) {')
+    expect(readFileSync('src/modules/conta/ventas/CierrePage.tsx', 'utf8')).toContain('<LoQueDejaElCierre conPlataformas={vende} soloDe={{ localId: c.localId, dia: c.dia }} />')
+    // «Ventas» a secas lleva a Cierres del día con hostelería.
+    expect(readFileSync('src/modules/conta/ventas/VentasPage.tsx', 'utf8')).toContain('hosteleria ? rutaCierres() : rutaFacturasVenta()')
   })
 })
