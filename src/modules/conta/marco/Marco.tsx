@@ -150,11 +150,14 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
   // N5 · La regla de anchos (Julio, 23/10), por ahora en Compras y gastos: con 1600 px o más, la barra
   // como la deje cada persona; por debajo, plegada sola (abrirla a mano vale mientras no cambie de tramo).
   const tramo = useTramoAncho()
-  const [barraAMano, setBarraAMano] = useState<{ tramo: string; abierta: boolean } | null>(null)
+  const [barraAMano, setBarraAMano] = useState<boolean | null>(null)
+  // Al cambiar de tramo se olvida lo de a mano: volver a 1366 desde 1920 la pliega otra vez.
+  const [tramoVisto, setTramoVisto] = useState(tramo)
+  if (tramoVisto !== tramo) { setTramoVisto(tramo); setBarraAMano(null) }
   const conRegla = producto?.id === 'compras'
-  const desplegada = conRegla ? barraAbierta(tramo, prefs.barraDesplegada, barraAMano?.tramo === tramo ? barraAMano.abierta : null) : prefs.barraDesplegada
+  const desplegada = conRegla ? barraAbierta(tramo, prefs.barraDesplegada, barraAMano) : prefs.barraDesplegada
   const alternarBarra = () => (conRegla && tramo !== 'ancho'
-    ? setBarraAMano({ tramo, abierta: !desplegada })
+    ? setBarraAMano(!desplegada)
     : cambiar({ barraDesplegada: !prefs.barraDesplegada }))
   const favoritos = (enCajon: boolean) => (
     <Favoritos favoritos={favoritosDe(prefs.favoritos, ctx)} cargando={!cargadas} fijables={fijables} alternar={fijar}
