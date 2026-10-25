@@ -90,7 +90,11 @@ export default function FacturasPage() {
   const lista = rutaConta(CONTA.rutas.facturasVenta)
   const cif = d ? cifrasFacturas(todas, d.cobros, hoy) : null
   const cifras = cif ? [
-    { etiqueta: 'Por cobrar', valor: eurosExactos(cif.porCobrar.total), apoyo: plural(cif.porCobrar.n, 'factura', 'facturas'), a: `${lista}?ver=por-cobrar` },
+    {
+      etiqueta: 'Por cobrar', valor: eurosExactos(cif.porCobrar.total),
+      apoyo: `${plural(cif.porCobrar.n, 'factura', 'facturas')}${cif.porCobrar.esperando ? ` · ${cif.porCobrar.esperando} esperando liquidación` : ''}`,
+      a: `${lista}?ver=por-cobrar`,
+    },
     {
       etiqueta: 'Vencido', valor: eurosExactos(cif.vencido.total),
       apoyo: cif.vencido.masAntigua ? `${plural(cif.vencido.n, 'factura', 'facturas')} · la más antigua, ${cif.vencido.masAntigua.dias} días` : 'Ninguna vencida',

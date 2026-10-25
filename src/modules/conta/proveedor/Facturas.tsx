@@ -7,14 +7,16 @@
 // «¿Posible repetida?» (respuesta 2): misma fecha e importe con otro número;
 // la misma decisión.
 // «IBAN distinto al de la ficha» (respuesta 2, punto 1): la lectura trajo otra
-// cuenta. «Marcar como pagada» queda desactivado (y la base lo rechaza) hasta
-// que alguien decide «Es el nuevo IBAN» o «No es suyo».
+// cuenta. Bancos no la casa (y la base lo rechaza) hasta que alguien decide
+// «Es el nuevo IBAN» o «No es suyo».
 //
-// «Ver» abre la factura: «Marcar como pagada» (y luego «Deshacer» en la misma
-// pantalla), cambiar el vencimiento, o «Deshacer el pago» si ya lo estaba.
+// «Ver» abre la factura: cambiar el vencimiento y, si está por pagar, cómo se
+// paga. PC01 (Julio, 25/10): «Marcar como pagada» y «Deshacer el pago» se
+// fueron. O hay un pago con asiento, o no está pagada: queda pagada sola al
+// casar su pago en Bancos (o con el pago del lote de prepago), y se deshace
+// deshaciendo ese casado. La ficha dice lo pagado con asiento.
 // Cada acción va por su RPC, que escribe la factura y su rastro a la vez, y
-// confirma con contenido (regla 8): «Factura F-… marcada como pagada el
-// 04/10/2026. Ya no le debes esos 1.283,15 €.»
+// confirma con contenido (regla 8).
 //
 // I01e (Julio, 20/10): salen también las facturas del libro de IVA de los
 // asientos de su cuenta que no son una factura subida aquí —las traídas de
@@ -26,9 +28,9 @@ import { Link } from 'react-router-dom'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { Dialogo, HechoConDeshacer } from '@/modules/conta/proveedor/piezas'
 import { Vacio } from '@/modules/conta/ui/piezas'
-import { cambiarVencimiento, decidirIban, deshacerPago, marcarPagada, noEsRepetida, type FacturaDeProveedor } from '@/modules/conta/services/proveedorService'
-import { diaMesCorto, eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { PAYMENT_METHOD_LABEL, type PaymentMethod } from '@/modules/conta/types'
+import { cambiarVencimiento, decidirIban, noEsRepetida, type FacturaDeProveedor } from '@/modules/conta/services/proveedorService'
+import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
+import { PAYMENT_METHOD_LABEL } from '@/modules/conta/types'
 import { rutaSubirFacturaProveedor } from '@/config/navegacion'
 import { ETIQUETA_REPETIDA } from '@/modules/conta/lib/repetidas'
 import { AVISO_IBAN_DISTINTO, facturaFrenada, puedeSerElNuevo } from '@/modules/conta/lib/ibanFactura'
@@ -45,6 +47,16 @@ const ESTADO: Record<string, { texto: string; tono: string }> = {
   con_discrepancias: { texto: 'Con diferencias', tono: 'cx-chip' },
   // S01 (0160): sale, con lo que es (regla 7); se deshace en Contabilidad › Asientos › Recibida.
   descartada: { texto: 'No es una factura', tono: 'cx-chip' },
+}
+
+// PC01 · El estado de pago de una aprobada, el que calcula la base (conta_recibida_pago).
+const ESTADO_PAGO: Record<string, { texto: string; tono: string }> = {
+  pagada: { texto: 'Pagada', tono: 'cx-chip cx-chip-ia' },
+  vencida: { texto: 'Vencida', tono: 'cx-chip cx-chip-rojo' },
+  pagada_parte: { texto: 'Pagada en parte', tono: 'cx-chip cx-chip-ambar' },
+  sin_vencimiento: { texto: 'Sin vencimiento', tono: 'cx-chip cx-chip-ambar' },
+  vence_semana: { texto: 'Vence esta semana', tono: 'cx-chip cx-chip-ambar' },
+  por_pagar: { texto: 'Por pagar', tono: 'cx-chip cx-chip-azul' },
 }
 
 const numero = (f: FacturaDeProveedor) => f.invoiceNumber ?? f.code ?? 'Sin número'
@@ -139,6 +151,7 @@ export function ListaFacturas({ facturas, libro: libroDado }: { facturas: Factur
           const frena = facturaFrenada(f, datos.ficha.iban)
           const e = rep ? { texto: ETIQUETA_REPETIDA[rep.nivel], tono: 'cx-chip cx-chip-ambar' }
             : frena ? { texto: 'IBAN distinto', tono: 'cx-chip cx-chip-ambar' }
+            : (f.status === 'aprobada' || f.status === 'pagada') && f.estadoPago && ESTADO_PAGO[f.estadoPago] ? ESTADO_PAGO[f.estadoPago]
             : ESTADO[f.status] ?? { texto: f.status, tono: 'cx-chip' }
           return (
             <div key={f.id} role="listitem" className="cxp-factura">
@@ -190,8 +203,6 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
   alHecho: (h: { texto: string; deshacer?: () => Promise<void> }) => void
 }) {
   const { datos, repetidas, recargar, actor } = useFicha()
-  const [fecha, setFecha] = useState(hoyEnMadrid())
-  const [forma, setForma] = useState<PaymentMethod | ''>(datos.ficha.paymentMethod ?? '')
   const [venc, setVenc] = useState(f.dueDate ?? '')
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -219,7 +230,7 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
       <p className="cx-ayuda" style={{ margin: 0, fontSize: 15 }}>
         {f.invoiceDate ? `Del ${fechaLarga(f.invoiceDate)} · ` : ''}<span className="cx-cifra">{importe}</span>
         {f.status === 'aprobada' && !rep && (f.dueDate ? ` · vence el ${fechaLarga(f.dueDate)}` : ' · sin vencimiento')}
-        {f.status === 'pagada' && f.paidAt && ` · pagada el ${fechaLarga(f.paidAt)}${f.paidMethod ? ` por ${PAYMENT_METHOD_LABEL[f.paidMethod].toLowerCase()}` : ''}${f.paidByName ? ` (lo apuntó ${f.paidByName})` : ''}`}
+        {f.status === 'pagada' && f.paidAt && ` · pagada el ${fechaLarga(f.paidAt)}${f.paidMethod ? ` por ${PAYMENT_METHOD_LABEL[f.paidMethod].toLowerCase()}` : ''}${f.paidByName ? ` (${f.paidByName})` : ''}`}
       </p>
       {error && <div className="cx-error" role="alert">{error}</div>}
 
@@ -269,28 +280,11 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
 
       {f.status === 'aprobada' && !rep && (
         <>
-          <div className="cx-formulario-fila">
-            <div className="cx-campo">
-              <label htmlFor="pago-fecha">Fecha de pago</label>
-              <input id="pago-fecha" className="cx-input" type="date" value={fecha} max={hoyEnMadrid()} onChange={(e) => setFecha(e.target.value)} />
-            </div>
-            <div className="cx-campo">
-              <label htmlFor="pago-forma">Cómo se pagó</label>
-              <select id="pago-forma" className="cx-input" value={forma} onChange={(e) => setForma(e.target.value as PaymentMethod | '')}>
-                <option value="">Sin indicar</option>
-                {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((m) => <option key={m} value={m}>{PAYMENT_METHOD_LABEL[m]}</option>)}
-              </select>
-            </div>
-          </div>
-          {frena && <span className="cx-ayuda">«Marcar como pagada» está desactivado hasta que decidas sobre el IBAN.</span>}
-          <button type="button" className="cx-boton" disabled={ocupado || !fecha || frena}
-            onClick={() => hacer(
-              () => marcarPagada(f.id, fecha, forma || null),
-              `Factura ${num} marcada como pagada el ${fechaLarga(fecha)}. Ya no le debes esos ${importe}.`,
-              async () => { await deshacerPago(f.id); await recargar() },
-            )}>
-            {ocupado ? 'Guardando…' : 'Marcar como pagada'}
-          </button>
+          <p className="cx-ayuda" style={{ margin: 0 }} data-prueba="como-se-paga">
+            {f.pagado > 0 ? <>Lleva pagado con asiento <span className="cx-cifra">{eurosExactos(f.pagado)}</span> de {importe}. </> : null}
+            Se marca pagada sola cuando casas su pago en Bancos: el cargo hace su asiento y la deja pagada.
+            {frena ? ' Mientras no decidas sobre el IBAN, Bancos no la casa.' : ''}
+          </p>
           <div className="cx-campo">
             <label htmlFor="pago-venc">Vencimiento</label>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -306,10 +300,9 @@ function DialogoFactura({ factura: f, alCerrar, alHecho }: {
       )}
 
       {f.status === 'pagada' && (
-        <button type="button" className="cx-boton-sec" disabled={ocupado}
-          onClick={() => hacer(() => deshacerPago(f.id), `Deshecho el pago de la factura ${num}: vuelve a estar por pagar (${importe}).`)}>
-          {ocupado ? 'Guardando…' : 'Deshacer el pago'}
-        </button>
+        <p className="cx-ayuda" style={{ margin: 0 }} data-prueba="como-se-deshace">
+          Está pagada por su pago con asiento. Si el pago no era de esta factura, deshaz ese casado en Bancos: vuelve sola a por pagar.
+        </p>
       )}
 
       {f.status !== 'aprobada' && f.status !== 'pagada' && f.status !== 'descartada' && !rep && (

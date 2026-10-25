@@ -169,6 +169,8 @@
 .cx-chip-blanco { background: var(--cx-blanco); color: var(--cx-verde-oscuro); }
 .cx-chip-ambar { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
 .cx-chip-azul { background: var(--cx-azul-suave); color: var(--cx-azul); }
+/* PC01 · Vencida (Pagos y Cobros). */
+.cx-chip-rojo { background: var(--cx-rojo-suave); color: var(--cx-rojo); }
 
 /* ── Fila con inicial de color ─────────────────────────────────────── */
 .cx-fila { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--cx-linea); }

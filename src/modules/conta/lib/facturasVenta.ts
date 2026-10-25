@@ -7,9 +7,12 @@
 //     a mano y rectificativas) y las que ya estaban en el libro de expedidas
 //     (los resúmenes del cierre del día y las traídas de Diez), que no se
 //     duplican: lo de Sumied se lee de su factura, no de su anotación.
-//   · El estado sale de lo guardado y del día: Borrador, Emitida, Enviada,
-//     Cobrada en parte, Cobrada, Vencida (pasado el vencimiento con algo por
-//     cobrar) y Anulada.
+//   · El estado de cobro lo calcula la base, en UN sitio (PC01: la vista
+//     conta_factura_cobro): Cobrada, Cobrada en parte, Vencida, Esperando
+//     liquidación (la de una plataforma, hasta su día de pago más el margen),
+//     Vence esta semana y Por cobrar (aquí, Emitida o Enviada). Aquí solo se
+//     traduce; lo guardado da Borrador y Anulada. Sin estado de la base (las del
+//     libro), como antes.
 //   · Pestañas que suman «Todas» (regla 7): las de Sumied por su estado; las
 //     del libro, que no llevan su cobro aquí (lo lleva Bancos o su
 //     liquidación), en su propia pestaña, «Del libro», solo si las hay.
@@ -29,7 +32,9 @@ export const TONO_ORIGEN: Record<OrigenFactura, 'propuesto' | 'duda' | 'seguro' 
   a_mano: 'propuesto', recurrente: 'neutro', presupuesto: 'seguro', cierre_dia: 'duda', tienda: 'neutro', automatica: 'neutro', traida: 'neutro',
 }
 
-export type EstadoFactura = 'borrador' | 'emitida' | 'enviada' | 'cobrada_parte' | 'cobrada' | 'vencida' | 'anulada'
+export type EstadoFactura = 'borrador' | 'emitida' | 'enviada' | 'cobrada_parte' | 'cobrada' | 'vencida' | 'esperando_liquidacion' | 'vence_semana' | 'anulada'
+/** PC01 · El estado de cobro que calcula la base (conta_factura_cobro). */
+export type EstadoCobroBase = 'borrador' | 'anulada' | 'emitida' | 'cobrada' | 'vencida' | 'cobrada_parte' | 'esperando_liquidacion' | 'vence_semana' | 'por_cobrar'
 export const NOMBRE_ESTADO: Record<EstadoFactura, { texto: string; tono: 'neutro' | 'propuesto' | 'duda' | 'seguro' | 'falta' }> = {
   borrador: { texto: 'Borrador', tono: 'neutro' },
   emitida: { texto: 'Emitida', tono: 'propuesto' },
@@ -37,6 +42,8 @@ export const NOMBRE_ESTADO: Record<EstadoFactura, { texto: string; tono: 'neutro
   cobrada_parte: { texto: 'Cobrada en parte', tono: 'duda' },
   cobrada: { texto: 'Cobrada', tono: 'seguro' },
   vencida: { texto: 'Vencida', tono: 'falta' },
+  esperando_liquidacion: { texto: 'Esperando liquidación', tono: 'propuesto' },
+  vence_semana: { texto: 'Vence esta semana', tono: 'duda' },
   anulada: { texto: 'Anulada', tono: 'neutro' },
 }
 
@@ -65,6 +72,8 @@ export interface FacturaVenta {
   rectificativa: boolean
   localId: string | null
   diez: DiezFactura
+  /** PC01 · El estado de cobro de la base (conta_factura_cobro); null en las del libro. */
+  estadoCobro: EstadoCobroBase | null
 }
 
 const c = (n: number) => Math.round(n * 100)
@@ -76,6 +85,11 @@ export const quedaPorCobrar = (f: Pick<FacturaVenta, 'total' | 'cobrado'>): numb
 export function estadoDe(f: FacturaVenta, hoy: string): EstadoFactura {
   if (f.guardado === 'borrador') return 'borrador'
   if (f.guardado === 'anulada') return 'anulada'
+  // PC01: lo que dice la base manda (un solo sitio); aquí solo se traduce.
+  if (f.estadoCobro && f.estadoCobro !== 'borrador' && f.estadoCobro !== 'anulada') {
+    if (f.estadoCobro === 'por_cobrar' || f.estadoCobro === 'emitida') return f.enviada ? 'enviada' : 'emitida'
+    return f.estadoCobro
+  }
   // Una rectificativa en negativo (o una a cero) no se cobra: queda emitida.
   if (f.total <= 0) return f.enviada ? 'enviada' : 'emitida'
   const queda = quedaPorCobrar(f)
@@ -117,7 +131,8 @@ export function pestanasFacturas(fs: readonly FacturaVenta[], hoy: string): Pest
 }
 
 export interface CifrasFacturas {
-  porCobrar: { total: number; n: number }
+  /** Por cobrar sin vencer; dentro, las de plataforma que esperan su liquidación (PC01). */
+  porCobrar: { total: number; n: number; esperando: number }
   vencido: { total: number; n: number; masAntigua: { cliente: string | null; dias: number } | null }
   cobradoMes: { total: number; n: number }
   borradores: { total: number; n: number }
@@ -136,7 +151,7 @@ export function cifrasFacturas(fs: readonly FacturaVenta[], cobros: readonly { f
   const delMes = cobros.filter((x) => x.fecha.startsWith(mes))
   const bor = deSumied.filter((f) => f.guardado === 'borrador')
   return {
-    porCobrar: { total: suma(por.map(quedaPorCobrar)), n: por.length },
+    porCobrar: { total: suma(por.map(quedaPorCobrar)), n: por.length, esperando: por.filter((f) => estadoDe(f, hoy) === 'esperando_liquidacion').length },
     vencido: { total: suma(ven.map(quedaPorCobrar)), n: ven.length, masAntigua: vieja ? { cliente: vieja.cliente, dias: dias(vieja.vence ?? hoy, hoy) } : null },
     cobradoMes: { total: suma(delMes.map((x) => x.importe)), n: delMes.length },
     borradores: { total: suma(bor.map((f) => f.total)), n: bor.length },

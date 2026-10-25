@@ -20,7 +20,7 @@ import { leerLibroRegistro } from '@/modules/conta/services/librosService'
 import { leerEnviosDiez, leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
 import { MAX_FILAS, facturasDeAnotaciones, mesesDeLaVentana } from '@/modules/conta/facturacion/emitidas'
 import type { AnotacionLibro } from '@/modules/conta/lib/libroRegistro'
-import { cifrasDe, diferenciaDe, type DiezFactura, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
+import { cifrasDe, diferenciaDe, type DiezFactura, type EstadoCobroBase, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
 
@@ -36,13 +36,19 @@ async function leer(q: PromiseLike<{ data: unknown; error: { message: string; co
 
 const COLS = 'id, status, doc_type, origin, series_code, number_text, issue_date, due_date, party_id, customer, location_id, base, tax, total, entry_id, sent_at, corrects_id'
 
-/** Las facturas de Sumied de la empresa (todas: son pocas) y sus cobros. */
-async function deSumied(accountId: string, companyId: string): Promise<{ filas: Fila[]; cobros: { factura: string; fecha: string; importe: number }[] }> {
+/** Las facturas de Sumied de la empresa (todas: son pocas), sus cobros y su estado de cobro (PC01: de la base, conta_factura_cobro). */
+async function deSumied(accountId: string, companyId: string): Promise<{ filas: Fila[]; cobros: { factura: string; fecha: string; importe: number }[]; estados: Map<string, EstadoCobroBase> }> {
   const filas = await leer(tabla('customer_invoice').select(COLS).eq('account_id', accountId).eq('company_id', companyId)
     .order('issue_date', { ascending: false }), 'las facturas de venta')
-  const cobros = filas.length === 0 ? [] : await leer(tabla('customer_invoice_payment').select('invoice_id, paid_on, amount')
-    .eq('account_id', accountId).eq('company_id', companyId), 'los cobros de las facturas')
-  return { filas, cobros: cobros.map((c) => ({ factura: String(c.invoice_id), fecha: String(c.paid_on), importe: n(c.amount) })) }
+  const [cobros, estados] = filas.length === 0 ? [[], []] : await Promise.all([
+    leer(tabla('customer_invoice_payment').select('invoice_id, paid_on, amount').eq('account_id', accountId).eq('company_id', companyId), 'los cobros de las facturas'),
+    leer(tabla('conta_factura_cobro').select('invoice_id, estado').eq('account_id', accountId).eq('company_id', companyId), 'el estado de cobro de las facturas'),
+  ])
+  return {
+    filas,
+    cobros: cobros.map((c) => ({ factura: String(c.invoice_id), fecha: String(c.paid_on), importe: n(c.amount) })),
+    estados: new Map(estados.map((e) => [String(e.invoice_id), String(e.estado) as EstadoCobroBase])),
+  }
 }
 
 const diezDe = (estado: string | undefined, encendido: boolean, emitida: boolean): DiezFactura => {
@@ -68,6 +74,7 @@ function delLibro(anot: readonly AnotacionLibro[]): Omit<FacturaVenta, 'diez'>[]
     cliente: e.cliente, nif: e.nif, origen: origen(e.entryId),
     base: e.base, iva: e.iva, total: e.total, cobrado: 0,
     guardado: e.estado === 'anulada' ? 'anulada' as const : 'emitida' as const, enviada: false, rectificativa: /rectificativa/i.test(e.tipo), localId: null,
+    estadoCobro: null,
   }))
 }
 
@@ -92,6 +99,7 @@ export async function leerFacturasVenta(accountId: string, companyId: string, de
       fecha: String(f.issue_date), vence: s(f.due_date), cliente: s(cli.nombre), nif: s(cli.nif), origen: String(f.origin) as OrigenFactura,
       base: n(f.base), iva: n(f.tax), total: n(f.total), cobrado: cobradoDe.get(String(f.id)) ?? 0,
       guardado: String(f.status) as FacturaVenta['guardado'], enviada: !!f.sent_at, rectificativa: f.doc_type === 'rectificativa', localId: s(f.location_id),
+      estadoCobro: sumied.estados.get(String(f.id)) ?? null,
     }
   })
   // Lo de Sumied ya está por su factura: su anotación del libro no se repite.

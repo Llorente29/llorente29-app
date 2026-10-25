@@ -19,7 +19,7 @@ const HOY = '2026-10-24'
 const L = (o: Partial<LineaFactura>): LineaFactura => ({ concepto: 'x', cantidad: 1, precio: 0, descuento: 0, tipoId: 't21', tipo: 21, recargo: 5.2, cuentaId: 'c705', ...o })
 const F = (o: Partial<FacturaVenta> & { id: string }): FacturaVenta => ({
   fuente: 'sumied', entryId: null, numero: 'F-2026/0001', serie: 'F', fecha: '2026-10-01', vence: '2026-10-31', cliente: 'Colegio', nif: '12345678Z',
-  origen: 'a_mano', base: 100, iva: 21, total: 121, cobrado: 0, guardado: 'emitida', enviada: false, rectificativa: false, localId: null, diez: 'en_cola', ...o,
+  origen: 'a_mano', base: 100, iva: 21, total: 121, cobrado: 0, guardado: 'emitida', enviada: false, rectificativa: false, localId: null, diez: 'en_cola', estadoCobro: null, ...o,
 })
 
 describe('las cuentas de una factura, como la base', () => {
@@ -68,6 +68,22 @@ describe('estado y pestañas (regla 7: suman «Todas»)', () => {
     expect(todas.map((f) => estadoDe(f, HOY))).toEqual(['borrador', 'emitida', 'cobrada_parte', 'vencida', 'cobrada', 'anulada', 'emitida', 'emitida'])
     expect(estadoDe(F({ id: 'e', enviada: true }), HOY)).toBe('enviada')
   })
+  it('PC01: manda el estado de la base (conta_factura_cobro); aquí solo se traduce', () => {
+    // La de una plataforma, sin vencer y sin liquidación: «Esperando liquidación», aunque su fecha sea de hoy.
+    expect(estadoDe(F({ id: 'p', estadoCobro: 'esperando_liquidacion', vence: '2026-10-01' }), HOY)).toBe('esperando_liquidacion')
+    expect(estadoDe(F({ id: 'v', estadoCobro: 'vencida', vence: '2026-10-30' }), HOY)).toBe('vencida')
+    expect(estadoDe(F({ id: 's', estadoCobro: 'vence_semana' }), HOY)).toBe('vence_semana')
+    expect(estadoDe(F({ id: 'c', estadoCobro: 'cobrada' }), HOY)).toBe('cobrada')
+    expect(estadoDe(F({ id: 'x', estadoCobro: 'por_cobrar', enviada: true }), HOY)).toBe('enviada')
+    expect(estadoDe(F({ id: 'y', estadoCobro: 'por_cobrar' }), HOY)).toBe('emitida')
+    // Lo guardado sigue mandando en borrador y anulada.
+    expect(estadoDe(F({ id: 'b', guardado: 'borrador', estadoCobro: 'por_cobrar' }), HOY)).toBe('borrador')
+    // En las cifras: va en «Por cobrar», no en «Vencido», y se cuenta aparte.
+    const c = cifrasFacturas([F({ id: 'p', estadoCobro: 'esperando_liquidacion', vence: '2026-10-01' }), F({ id: 'v', estadoCobro: 'vencida' })], [], HOY)
+    expect(c.porCobrar).toEqual({ total: 121, n: 1, esperando: 1 })
+    expect(c.vencido.n).toBe(1)
+    expect(pestanaDe(F({ id: 'p', estadoCobro: 'esperando_liquidacion' }), HOY)).toBe('por-cobrar')
+  })
   it('cada una en una pestaña, y suman «Todas»', () => {
     expect(todas.map((f) => pestanaDe(f, HOY))).toEqual(['borradores', 'por-cobrar', 'por-cobrar', 'vencidas', 'cobradas', 'anuladas', 'emitidas', 'del-libro'])
     const p = pestanasFacturas(todas, HOY)
@@ -82,7 +98,7 @@ describe('estado y pestañas (regla 7: suman «Todas»)', () => {
   })
   it('las cuatro cifras', () => {
     const c = cifrasFacturas(todas, [{ fecha: '2026-10-03', importe: 50 }, { fecha: '2026-10-05', importe: 121 }, { fecha: '2026-09-30', importe: 9 }], HOY)
-    expect(c.porCobrar).toEqual({ total: 192, n: 2 }) // 121 + 71
+    expect(c.porCobrar).toEqual({ total: 192, n: 2, esperando: 0 }) // 121 + 71
     expect(c.vencido.total).toBe(121)
     expect(c.vencido.masAntigua).toEqual({ cliente: 'Colegio', dias: 23 })
     expect(c.cobradoMes).toEqual({ total: 171, n: 2 })

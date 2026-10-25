@@ -186,10 +186,16 @@ begin
      where f.estado not in ('cobrada', 'anulada');
     if n > 0 then raise exception 'PC01 0918: % traídas de Diez siguen con algo por cobrar. No aplico nada.', n; end if;
   end if;
-  -- Y ninguna recibida pagada del lote o del banco queda sin cubrir.
-  select count(*) into n from public.supplier_invoice si where si.status = 'pagada'
+  -- Y en Foodint ninguna recibida pagada queda sin pagos con asiento que la
+  -- cubran (medido el 25/10: hoy hay 0 pagadas sin asiento). En las demás
+  -- cuentas (staging, la plantilla) las pagadas a mano de antes se quedan como
+  -- estaban, y se dicen.
+  select count(*) into n from public.supplier_invoice si where si.status = 'pagada' and si.account_id = c_foodint
      and coalesce((select sum(p.amount) from public.supplier_invoice_payment p where p.invoice_id = si.id and p.entry_id is not null), 0) < coalesce(si.grand_total, 0) - 0.005;
-  if n > 0 then raise exception 'PC01 0918: % recibidas pagadas no tienen pagos con asiento que las cubran. No aplico nada.', n; end if;
+  if n > 0 then raise exception 'PC01 0918: % recibidas pagadas de Foodint no tienen pagos con asiento que las cubran. No aplico nada.', n; end if;
+  select count(*) into n from public.supplier_invoice si where si.status = 'pagada' and si.account_id <> c_foodint
+     and coalesce((select sum(p.amount) from public.supplier_invoice_payment p where p.invoice_id = si.id and p.entry_id is not null), 0) < coalesce(si.grand_total, 0) - 0.005;
+  if n > 0 then raise notice 'PC01 0918: en otras cuentas, % recibidas marcadas pagadas a mano antes de hoy, sin pago con asiento: se quedan como estaban.', n; end if;
 
   raise notice 'PC01 0918: % plazos de plataforma; marca a % tiendas; % vencimientos; % traídas cobradas (%); % pagos del banco; % pagados del lote (%); % liquidaciones cobradas: % con sus facturas cobradas, % a revisar.',
     n_plazo, n_tiendas, n_vence, n_traidas, public.conta_euros_exactos(t_traidas), n_banco, n_lote, public.conta_euros_exactos(t_lote), n_liq, n_cobradas, n_revisar;
