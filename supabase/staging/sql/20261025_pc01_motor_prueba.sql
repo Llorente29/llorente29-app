@@ -422,6 +422,9 @@ end $$;
 -- Antes, lo que el motor escribió en esta prueba (en producción lo quita la vuelta atrás de la 0918).
 delete from public.customer_invoice_payment where settlement_id is not null or bank_match_id is not null or amount < 0;
 delete from public.supplier_invoice_payment;
+-- Los casados de esta prueba que cobran una factura emitida (el CHECK de antes no los admite).
+delete from public.bank_match_item where customer_invoice_id is not null
+   and num_nonnulls(supplier_invoice_id, channel_settlement_id, other_movement_id, party_id, tax_return_id) = 0;
 -- Las comprobaciones diferidas de los asientos de esta prueba, ahora: con eventos
 -- pendientes, Postgres no deja tocar journal_entry (ensayo 542). En producción
 -- la vuelta atrás va en su propia transacción y no los tiene.

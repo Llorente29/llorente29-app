@@ -5,7 +5,22 @@
 -- antes de la tanda (pg_get_functiondef, 25/10), con la misma firma. No toca
 -- datos: los pagos y cobros ya escritos se quedan (los quita la vuelta atrás de
 -- la 0918, que va antes). Si queda un cobro negativo, el CHECK de antes no
--- entra y esto para: primero la vuelta atrás de la 0918.
+-- entra y esto para: primero la vuelta atrás de la 0918. Y si en Bancos se
+-- casó alguna factura emitida (un casado que solo nombra la factura), el CHECK
+-- de antes tampoco entra: para y lo dice, para deshacer esos casados antes.
+
+do $$
+declare n int;
+begin
+  select count(*) into n from public.bank_match_item
+   where customer_invoice_id is not null and num_nonnulls(supplier_invoice_id, channel_settlement_id, other_movement_id, party_id, tax_return_id) = 0;
+  if n > 0 then
+    raise exception 'PC01 0917 · vuelta atrás: hay % casados de Bancos que cobran una factura emitida. Deshazlos en Bancos antes: el CHECK de antes no los admite.', n;
+  end if;
+  if exists (select 1 from public.customer_invoice_payment where amount <= 0) then
+    raise exception 'PC01 0917 · vuelta atrás: queda algún cobro negativo. Antes, la vuelta atrás de la 0918.';
+  end if;
+end $$;
 
 drop trigger if exists pc01_liquidacion_cobrada on public.channel_settlement;
 drop trigger if exists pc01_tienda_cambiada on public.platform_store;
