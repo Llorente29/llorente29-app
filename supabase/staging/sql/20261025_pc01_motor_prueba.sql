@@ -317,21 +317,21 @@ begin
   -- Cada movimiento, por su concepto (el importador guarda su propia huella, y el
   -- extracto puede traer otros de staging del mismo día).
   -- Uno por concepto y con su importe: el extracto puede traer el mismo movimiento
-  -- dos veces (ensayo 540: «m1» repetido).
+  -- dos veces. Claves «mov1…3»: «m1» y «m2» son las marcas de la siembra (ensayo 541).
   for m in select distinct on (bm.bank_concept) bm.* from public.bank_movement bm
             where bm.statement_id = (r->>'extracto')::uuid and bm.bank_concept like 'TRANSFERENCIA PC01 _'
               and bm.amount = (array[-100.00, 30.00, 18.00])[right(bm.bank_concept, 1)::int]
             order by bm.bank_concept, bm.created_at desc loop
-    insert into _p values ('m' || right(m.bank_concept, 1), m.id);
+    insert into _p values ('mov' || right(m.bank_concept, 1), m.id);
   end loop;
-  if (select count(*) from _p where clave in ('m1', 'm2', 'm3')) <> 3 then raise exception 'PRUEBA PC01 · 6: el extracto no trae los 3 movimientos.'; end if;
+  if (select count(*) from _p where clave in ('mov1', 'mov2', 'mov3')) <> 3 then raise exception 'PRUEBA PC01 · 6: el extracto no trae los 3 movimientos.'; end if;
   -- A mano no se marca pagada.
   begin
     perform public.mark_supplier_invoice_paid((select v::uuid from _p where clave = 'r1'), '2026-10-22', 'transfer');
   exception when others then v_err := sqlerrm; end;
   if v_err not like 'La factura PC01-R1 no se marca pagada a mano%' then raise exception 'PRUEBA PC01 · 6: marcarla a mano dijo «%».', v_err; end if;
   -- Casarla: su pago, con el asiento del banco, y pagada.
-  x := public.bank_casar((select v::uuid from _p where clave = 'm1'), jsonb_build_object('tipo', 'factura_recibida',
+  x := public.bank_casar((select v::uuid from _p where clave = 'mov1'), jsonb_build_object('tipo', 'factura_recibida',
     'facturas', jsonb_build_array(jsonb_build_object('id', (select v from _p where clave = 'r1'), 'importe', 100.00)),
     'cuenta_tercero', c400, 'tercero_id', null, 'concepto', 'Pago a Proveedor PC01'), 'probable', 'prueba', '[]'::jsonb, 'persona', null);
   insert into _p values ('casado1', x->>'match');
@@ -360,21 +360,21 @@ declare x jsonb; v_err text; f uuid := (select v::uuid from _p where clave = 'f0
 begin
   -- La del 7/10 (8 €) está sin cobrar. Un cobro de 30 € no cabe.
   begin
-    perform public.bank_casar((select v::uuid from _p where clave = 'm2'), jsonb_build_object('tipo', 'factura_emitida', 'concepto', 'Cobro PC01',
+    perform public.bank_casar((select v::uuid from _p where clave = 'mov2'), jsonb_build_object('tipo', 'factura_emitida', 'concepto', 'Cobro PC01',
       'lineas', jsonb_build_array(jsonb_build_object('cuenta', (select v from _p where clave = 'c430'), 'importe', 30.00)),
       'facturas', jsonb_build_array(jsonb_build_object('id', f, 'importe', 30.00))), 'probable', 'prueba', '[]'::jsonb, 'persona', null);
   exception when others then v_err := sqlerrm; end;
   if v_err not like 'La factura PCT-% ya tiene cobrados 0,00 € de 8,00 €: este cobro la pasaría.' then raise exception 'PRUEBA PC01 · 7: cobrar de más dijo «%».', v_err; end if;
   -- 18 €: 8 a la factura y 10 a cuenta (las líneas, a la 430). Primero se casa y se deshace
   -- (su asiento propuesto se borra, y el cobro con él); después, otra vez, para validar y anular.
-  x := public.bank_casar((select v::uuid from _p where clave = 'm3'), jsonb_build_object('tipo', 'factura_emitida', 'concepto', 'Cobro PC01',
+  x := public.bank_casar((select v::uuid from _p where clave = 'mov3'), jsonb_build_object('tipo', 'factura_emitida', 'concepto', 'Cobro PC01',
       'lineas', jsonb_build_array(jsonb_build_object('cuenta', (select v from _p where clave = 'c430'), 'importe', 18.00)),
       'facturas', jsonb_build_array(jsonb_build_object('id', f, 'importe', 8.00))), 'probable', 'prueba', '[]'::jsonb, 'persona', null);
   if not exists (select 1 from public.customer_invoice_payment where invoice_id = f and bank_match_id = (x->>'match')::uuid) then raise exception 'PRUEBA PC01 · 7: casar no escribió el cobro.'; end if;
   perform public.bank_deshacer((x->>'match')::uuid, 'Prueba PC01: no era este cobro');
   if exists (select 1 from public.customer_invoice_payment where invoice_id = f) then raise exception 'PRUEBA PC01 · 7: deshacer el casado no quitó el cobro.'; end if;
   if not exists (select 1 from public.customer_invoice_event where invoice_id = f and kind = 'cobro_deshecho') then raise exception 'PRUEBA PC01 · 7: el historial no dice el cobro deshecho.'; end if;
-  x := public.bank_casar((select v::uuid from _p where clave = 'm3'), jsonb_build_object('tipo', 'factura_emitida', 'concepto', 'Cobro PC01',
+  x := public.bank_casar((select v::uuid from _p where clave = 'mov3'), jsonb_build_object('tipo', 'factura_emitida', 'concepto', 'Cobro PC01',
       'lineas', jsonb_build_array(jsonb_build_object('cuenta', (select v from _p where clave = 'c430'), 'importe', 18.00)),
       'facturas', jsonb_build_array(jsonb_build_object('id', f, 'importe', 8.00))), 'probable', 'prueba', '[]'::jsonb, 'persona', null);
   select * into p from public.customer_invoice_payment where invoice_id = f;
