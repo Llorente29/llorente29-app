@@ -1,0 +1,2 @@
+# V02 · Entrega 1 · vuelta atrás.
+supabase/vuelta-atras/20261025T1212_v02_puerta.down.sql

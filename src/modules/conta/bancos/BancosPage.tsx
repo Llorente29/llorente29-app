@@ -34,6 +34,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaBancos } from '@/config/navegacion'
+import { mirarFicheros, tomarFicheros } from '@/modules/conta/puerta/entregas'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -90,7 +91,9 @@ function Bancos() {
   const [query, setQuery] = useSearchParams()
   const navegar = useNavigate()
   const [vuelta, setVuelta] = useState(0)
-  const [archivo, setArchivo] = useState<File | null>(null)
+  // V02 · El extracto que la puerta deja para Bancos se abre en «Subir extracto», por su camino de siempre.
+  const [archivo, setArchivo] = useState<File | null>(() => mirarFicheros('bancos')[0] ?? null)
+  useEffect(() => { tomarFicheros('bancos') }, [])
   const [soltando, setSoltando] = useState(false)
   const vista = resolverVista(params.pestana)
   const hoy = hoyEnMadrid()

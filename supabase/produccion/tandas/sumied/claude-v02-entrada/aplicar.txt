@@ -1,0 +1,20 @@
+# V02 · Entrega 1 · La puerta: Inicio › Documentos (tablero 19, Julio 25/10).
+# Rama claude/v02-entrada. Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1212 — AÑADE la dirección única por empresa (kind «documentos»), qué es cada
+#   documento (document_inbox.doc_kind), lo esperado de cualquier fuente
+#   (supplier_expected_invoice, vacía en todas las cuentas) con su margen y su
+#   grupo, lo aprendido por remitente, los ajustes de la puerta, el almacén
+#   privado conta-entrada (hojas, extractos, zips) y las funciones conta_puerta_*;
+#   CAMBIA, declarado y con su prueba de staging, las restricciones de esas
+#   tablas y tres funciones con la misma firma (conta_direccion_entrada,
+#   conta_entrada_remitente y conta_documentos_recibidos: Facturas recibidas ya
+#   no enseña como «por aclarar» lo que la puerta sabe que no es factura). No
+#   toca datos. No está en el camino del pedido. El analizador dice «sigue»: sin
+#   autorizo.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta (el almacén conta-entrada se
+# queda, vacío: Supabase no deja borrarlo por SQL).
+cuenta: scripts/conta/produccion/cuentas/v02-puerta.sql
+supabase/migrations/20261025T1212_v02_puerta.sql

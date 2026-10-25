@@ -1,0 +1,6 @@
+# V02 · Entrega 1 · La puerta. La 1212 cambia restricciones y dos funciones:
+# desde la rama, en ROLLBACK. Su prueba (ROLLBACK): la dirección de documentos
+# sin prefijo, las fuentes con y sin proveedor y sus llegadas, «Dime qué es»
+# recordado por remitente, la puerta, «Pedírsela» sin proveedor y la vuelta atrás.
+supabase/migrations/20261025T1212_v02_puerta.sql
+supabase/staging/sql/20261025_v02_puerta_prueba.sql

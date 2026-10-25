@@ -23,6 +23,14 @@
 // apunta también con su enlace (pide el cuerpo), y un remitente que la base
 // sabe que no manda facturas (conta_entrada_remitente) no se lee como factura.
 //
+// V02 · LA PUERTA (25/10): también recibe lo que llega a la dirección única de
+// cada empresa (<empresa>@entrada.folvy.app; entrada.sumied.com cuando se dé
+// de alta). _shared/facturasEntrada.ts lo lleva a su sitio; aquí, el mundo de
+// tres cosas más: el almacén conta-entrada para lo que no es PDF ni foto, el
+// «qué es» de cada llegada (conta_entrada_tipo, de la base) y las nóminas, por
+// el mismo camino que payroll-inbound (employee-documents y payroll-extract en
+// modo interno).
+//
 // Mientras Julio no dé de alta el dominio entrada.folvy.app en Resend, aquí no
 // llega nada; y aunque llegara, las direcciones nacen apagadas.
 //
@@ -30,13 +38,14 @@
 // la firma de svix, como en payroll-inbound.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { comprobarFirma, recibirCorreo, type AdjuntoResend, type CorreoResend, type PuertoEntrada, type Sobre } from "../_shared/facturasEntrada.ts";
+import { comprobarFirma, recibirCorreo, type AdjuntoResend, type ClaseDireccion, type CorreoResend, type PuertoEntrada, type QueEs, type Sobre } from "../_shared/facturasEntrada.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESEND = Deno.env.get("RESEND_API_KEY") ?? "";
 const SECRETO = Deno.env.get("RESEND_FACTURAS_WEBHOOK_SECRET") ?? "";
 const BUCKET = "receipt-uploads";
+const BUCKET_NOMINAS = "employee-documents"; // el de payroll-inbound
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
@@ -61,7 +70,7 @@ Deno.serve(async (req) => {
   };
   const puerto: PuertoEntrada = {
     destino: async (lp, dom) => {
-      const d = await rpc<{ company_id: string; account_id: string; activa: boolean; tipo?: "facturas" | "liquidaciones" } | null>("conta_entrada_destino", { p_local_part: lp, p_domain: dom });
+      const d = await rpc<{ company_id: string; account_id: string; activa: boolean; tipo?: ClaseDireccion } | null>("conta_entrada_destino", { p_local_part: lp, p_domain: dom });
       return d ? { companyId: d.company_id, accountId: d.account_id, activa: d.activa, tipo: d.tipo ?? "facturas" } : null;
     },
     yaVisto: async (id) => {
@@ -118,7 +127,29 @@ Deno.serve(async (req) => {
       const { data, error } = await sb.rpc("conta_entrada_remitente", { p_company: companyId, p_from: from });
       if (error && error.code === "PGRST202") return null;
       if (error) throw new Error(`conta_entrada_remitente: ${error.message}`);
-      return (data as { decision: "no_facturas"; motivo: string } | null) ?? null;
+      return (data as { decision: "no_facturas" | "tipo"; motivo: string; tipo?: QueEs | null } | null) ?? null;
+    },
+    subirA: async (bucket, ruta, bytes, tipo) => {
+      const { error } = await sb.storage.from(bucket).upload(ruta, bytes, { contentType: tipo, upsert: false });
+      if (error && !/exists|duplicate/i.test(error.message)) throw new Error(`no se ha podido guardar el adjunto: ${error.message}`);
+    },
+    colocar: async (inboxId, x) => {
+      if (x.bucket) {
+        const { error } = await sb.from("document_inbox").update({ file_bucket: x.bucket, updated_at: new Date().toISOString() }).eq("id", inboxId);
+        if (error) throw new Error(`document_inbox: ${error.message}`);
+      }
+      if (x.tipo) await rpc("conta_entrada_tipo", { p_inbox: inboxId, p_tipo: x.tipo, p_por: x.por });
+    },
+    nomina: async ({ accountId, emailId, nombre, bytes }) => {
+      const ruta = `_inbox/${accountId}/${emailId.replace(/[^A-Za-z0-9-]/g, "")}-${nombre.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error } = await sb.storage.from(BUCKET_NOMINAS).upload(ruta, bytes, { contentType: "application/pdf", upsert: true });
+      if (error) return { ok: false, texto: `${nombre}: no se ha podido guardar en Laboral (${error.message}).` };
+      const r = await fetch(`${SUPABASE_URL}/functions/v1/payroll-extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICIO}`, "x-internal-key": SERVICIO },
+        body: JSON.stringify({ account_id: accountId, file_paths: [ruta], source: "gmail", email_id: emailId }),
+      });
+      return r.ok ? { ok: true, texto: `${nombre}: es una nómina, va a Laboral.` } : { ok: false, texto: `${nombre}: es una nómina, pero Laboral no la ha podido leer (${r.status}).` };
     },
     leer: async (inboxId) => {
       const { data: l } = await sb.from("document_inbox").select("account_id, file_path").eq("id", inboxId).single();

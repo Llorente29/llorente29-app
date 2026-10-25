@@ -32,6 +32,8 @@ describe('la entera en trozos', () => {
     // 24/10 (C12, al traer main con la V01 entrega 2): entra c12/traspaso, nueva y sin medir (cuenta como la mediana): son 9. La mide la entera de la noche.
     // 25/10 (V01, al traer main con el C12 al #325): eran 10; se miden v01/facturas, v01/cierres y
     // v01/liquidaciones (entera 40142597258 en verde, tests/e2e/tiempos.json): son 7.
+    // 25/10 (V02, entrega 1): entra v02/puerta, nueva y sin medir: son 8. La mide la entera de su PR.
+    // 25/10 (PC01 · E1, al traer main con la V02): entra pc01/cobros-y-pagos, nueva y sin medir: son 9. La mide la entera de la noche.
     expect(sin.length).toBeLessThan(10)
   })
 
@@ -87,6 +89,10 @@ describe('la entera en trozos', () => {
     // 24/10 (C12, al traer main): entra c12/traspaso, sin medir (cuenta como la mediana). Lo mide la entera de la noche.
     // 25/10 (PC01 · E1): entra pc01/cobros-y-pagos, sin medir (cuenta como la mediana). El reparto
     // estimado da 18,12: el techo pasa a 18,5 min. Lo mide la entera de la noche.
+    // 25/10 (V02, entrega 1): entra v02/puerta, sin medir (cuenta como la mediana). El reparto
+    // estimado da 18,12: el techo pasa a 18,5 min. Lo mide la entera de su PR.
+    // 25/10 (PC01 · E1, al traer main con la V02): las dos juntas, pc01/cobros-y-pagos y v02/puerta,
+    // sin medir. El reparto estimado da 18,30 (media 18,27): el techo se queda en 18,5 min. Lo mide la entera de la noche.
     expect(Math.max(...seg) / 60).toBeLessThan(18.5)
   })
 

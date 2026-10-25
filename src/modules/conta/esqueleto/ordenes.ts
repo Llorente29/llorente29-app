@@ -120,12 +120,16 @@ const DE_DEFINICIONES: Orden[] = [
 ]
 
 /** Una orden por pestaña: «ir a…», para fijar una pantalla en Favoritos. */
-const DE_PESTANA: Orden[] = PRODUCTOS.flatMap((p) => p.pestanas.length > 0
-  ? p.pestanas.filter((t) => t.ruta !== null).map((t): Orden => ({
-      id: `ir.${p.id}.${t.id}`, etiqueta: p.pestanas.length > 1 ? `${p.etiqueta} › ${t.etiqueta}` : p.etiqueta,
-      producto: p.id, pestana: t.id, a: { ruta: t.ruta! }, solo: t.solo ?? p.solo,
-    }))
-  : p.ruta !== null ? [{ id: `ir.${p.id}`, etiqueta: p.etiqueta, producto: p.id, pestana: '', a: { ruta: p.ruta }, solo: p.solo }] : [])
+// V02: un apartado cuya entrada no es ninguna de sus páginas (Inicio, con Inicio ›
+// Documentos debajo) conserva también su «ir a…» propio, y la página va con su nombre.
+const entradaPropia = (p: (typeof PRODUCTOS)[number]) => p.ruta !== null && !p.pestanas.some((t) => t.ruta === p.ruta)
+const DE_PESTANA: Orden[] = PRODUCTOS.flatMap((p) => [
+  ...p.pestanas.filter((t) => t.ruta !== null).map((t): Orden => ({
+    id: `ir.${p.id}.${t.id}`, etiqueta: p.pestanas.length > 1 || entradaPropia(p) ? `${p.etiqueta} › ${t.etiqueta}` : p.etiqueta,
+    producto: p.id, pestana: t.id, a: { ruta: t.ruta! }, solo: t.solo ?? p.solo,
+  })),
+  ...((p.pestanas.length === 0 || entradaPropia(p)) && p.ruta !== null ? [{ id: `ir.${p.id}`, etiqueta: p.etiqueta, producto: p.id, pestana: '', a: { ruta: p.ruta }, solo: p.solo }] : []),
+])
 
 export const ORDENES: Orden[] = [...DE_LA_CINTA, ...DE_LIBROS, ...DE_DEFINICIONES, ...DE_PESTANA]
 const POR_ID = new Map(ORDENES.map((o) => [o.id, o]))

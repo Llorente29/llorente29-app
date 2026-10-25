@@ -108,7 +108,8 @@ test('el marco (S01): los productos con su nombre, plegada y desplegada, y el «
     await page.getByRole('button', { name: 'Abrir el menú' }).click()
     const hoja = page.getByRole('dialog', { name: 'Menú' })
     // Lo que no tiene pantalla no sale (S01: nada vacío): ni Ventas ni Impuestos. S02 · PR 2: Facturación sí.
-    await expect(hoja.getByRole('link')).toHaveText([/^Inicio/, /^Contabilidad/, /^Ventas/, /^Compras y gastos/, /^Bancos/, /^Contactos/, /^Ajustes/, 'Volver a Folvy'])
+    // V02: Inicio está abierto (es el activo) y enseña su página, Documentos (la puerta).
+    await expect(hoja.getByRole('link')).toHaveText([/^Inicio/, /^Documentos/, /^Contabilidad/, /^Ventas/, /^Compras y gastos/, /^Bancos/, /^Contactos/, /^Ajustes/, 'Volver a Folvy'])
     await expect(menu(page).getByRole('link', { name: 'Inicio' })).toHaveAttribute('aria-current', 'page')
     await esperarCargado(page)
     await page.evaluate(() => document.fonts.ready)
