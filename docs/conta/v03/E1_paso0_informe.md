@@ -11,7 +11,7 @@
   contribuyentes del Impuesto sobre Sociedades (Foodint) y **1/7/2027** para el resto.
   El aplazamiento a 2028 no está en el BOE. La Orden HAC/1028/2026 (BOE de 5/10/2026)
   es la de la **factura electrónica entre empresas**, no la del aplazamiento.
-- **Una corrección al benchmark:** el control de flujo va en **segundos**, no en
+- **Una corrección al benchmark (ya hecha allí, 25/10):** el control de flujo va en **segundos**, no en
   minutos: `TiempoEsperaEnvio`, que empieza en **60 s** (Orden HAC/1177/2024,
   art. 16.2). El límite son **1.000 registros por envío**.
 - **Tres cosas que no he podido hacer desde aquí,** porque el entorno de trabajo no

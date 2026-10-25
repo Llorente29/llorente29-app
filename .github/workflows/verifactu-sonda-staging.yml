@@ -1,0 +1,159 @@
+name: V03 · Sonda de Verifactu en staging-conta
+
+# QUÉ HACE (V03 · E1 · paso 1, 25/10)
+# El riesgo técnico del encargo: ¿una función de Supabase llega al entorno de
+# PRUEBAS de la AEAT y le habla con certificado de cliente? Y, de paso, baja de
+# allí las dos fuentes oficiales que no se pueden bajar desde la sesión de
+# trabajo: el WSDL y la lista de códigos de error (errores.properties).
+#
+# En un solo run, y SOLO en staging-conta (oseymswjlzplqoxrfjzi):
+#   1. guardas: staging y no producción; la sonda solo habla con prewww*.aeat.es
+#      y no nombra ningún dominio de producción de la AEAT;
+#   2. un token de un solo run como secreto de la función, y la despliega
+#      (scripts/conta/v03/sonda, copiada a supabase/functions/ dentro del runner);
+#   3. «fuentes»: baja el WSDL y errores.properties y los deja en la rama, en
+#      docs/conta/v03/aeat/, con su fecha y su huella;
+#   4. «conexion»: si Julio ha puesto AEAT_PRUEBAS_P12_B64 y AEAT_PRUEBAS_P12_CLAVE
+#      en staging, UNA CONSULTA con certificado al punto de acceso de pruebas que
+#      declara el WSDL. Si no están, lo dice y no falla;
+#   5. busca en los logs de la función restos de material (PEM o base64 largo);
+#   6. pase lo que pase, borra la función y su token. Los dos secretos del
+#      certificado NO se tocan: son de Julio y hacen falta después.
+#
+# CUÁNDO: un push a conta/v03-e1 cuyo mensaje EMPIECE por «[verifactu-sonda]».
+
+on:
+  push:
+    branches: ['conta/v03-e1']
+
+concurrency:
+  group: verifactu-sonda-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sonda:
+    if: startsWith(github.event.head_commit.message, '[verifactu-sonda]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+      FN: verifactu-sonda
+      SRC: scripts/conta/v03/sonda/index.ts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Guardas · staging y no producción; solo pruebas de la AEAT
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${TOKEN:-}" ] || { echo "::error::Falta SUPABASE_ACCESS_TOKEN."; exit 1; }
+          [ "$REF" != "$PROD_REF" ] || { echo "::error::El ref es el de producción. Abortado."; exit 1; }
+          grep -qF 'const SOLO_PRUEBAS = /^https:\/\/prewww\d*\.aeat\.es\//;' "$SRC" || { echo "::error::La sonda no limita el destino a prewww*.aeat.es."; exit 1; }
+          # Ningún dominio de producción de la AEAT al que se pueda llamar: los
+          # espacios de nombres XML (…/static_files/…xsd) no son llamadas.
+          ! grep -nE 'https://(www[0-9]*\.agenciatributaria\.gob\.es|www[0-9]*\.aeat\.es)' "$SRC" | grep -v 'static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/' \
+            || { echo "::error::La sonda nombra un dominio de producción de la AEAT."; exit 1; }
+          grep -q 'PRODUCCION_REF = "xzmpnchlguibclvxyynt"' "$SRC" || { echo "::error::La sonda no tiene la guarda de producción."; exit 1; }
+
+      - name: Token y despliegue en staging-conta
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/s"; mkdir -p "$D"
+          TOK=$(openssl rand -hex 24); echo "::add-mask::$TOK"; printf '%s' "$TOK" > "$D/token"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$D/desde"
+          supabase secrets set --project-ref "$REF" "VERIFACTU_SONDA_TOKEN=$TOK" > /dev/null
+          mkdir -p "supabase/functions/$FN"
+          cp "$SRC" "supabase/functions/$FN/index.ts"
+          supabase functions deploy "$FN" --project-ref "$REF" --no-verify-jwt
+          echo "Desplegada $FN en staging-conta."
+
+      - name: Fuentes · el WSDL y la lista de errores, desde staging
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/s"; sleep 5
+          curl -sS --max-time 90 -H "x-verifactu-sonda: $(cat "$D/token")" "https://$REF.supabase.co/functions/v1/$FN?modo=fuentes" > "$D/fuentes.json" || echo '{"ok":false,"error":"curl"}' > "$D/fuentes.json"
+          { echo "## Fuentes oficiales, bajadas desde una función de staging"; echo
+            echo "| fichero | status | bytes | sha256 | ms |"; echo "|---|---|---|---|---|"
+            jq -r '.wsdl, .errores | "| \(.url // "—") | \(.status // .error // "—") | \(.bytes // "—") | \(.sha256 // "—") | \(.ms // "—") |"' "$D/fuentes.json"
+            echo; echo "### Puntos de acceso del WSDL"; echo
+            jq -r '(.puertos // [])[] | "- `\(.nombre)`: \(.url)"' "$D/fuentes.json"; } >> "$GITHUB_STEP_SUMMARY"
+          A=docs/conta/v03/aeat; mkdir -p "$A"
+          HOY=$(date -u +%Y-%m-%d)
+          jq -r '.wsdl.texto // empty' "$D/fuentes.json" > "$A/SistemaFacturacion.wsdl"
+          jq -r '.errores.texto // empty' "$D/fuentes.json" > "$A/errores.properties"
+          jq --arg hoy "$HOY" '{bajado: $hoy, desde: "función de staging-conta (sonda V03)", wsdl: (.wsdl | del(.texto)), errores: (.errores | del(.texto)), puertos: (.puertos // [])}' "$D/fuentes.json" > "$A/fuentes.json"
+          jq -r '[(.puertos // [])[] | select(.url | test("^https://prewww1\\.aeat\\.es/.*VerifactuSOAP$"))][0].url // ""' "$D/fuentes.json" > "$D/destino"
+          echo "Destino de pruebas: $(cat "$D/destino")"
+          for f in SistemaFacturacion.wsdl errores.properties; do [ -s "$A/$f" ] || rm -f "$A/$f"; done
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$A"
+          if git diff --cached --quiet; then echo "Nada nuevo que guardar."; else
+            git commit -q -m "V03 · E1 · Las fuentes oficiales de la AEAT bajadas desde staging ($HOY): WSDL, errores.properties y sus huellas"
+            git push -q origin "HEAD:${GITHUB_REF#refs/heads/}"; echo "Guardadas en la rama."
+          fi
+
+      - name: Conexión · una consulta con certificado al entorno de pruebas
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/s"; DEST=$(cat "$D/destino")
+          { echo; echo "## Conexión con certificado (entorno de pruebas)"; echo; } >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$DEST" ]; then echo "- No hay punto de acceso de pruebas en el WSDL: no se prueba." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          curl -sS --max-time 90 -G -H "x-verifactu-sonda: $(cat "$D/token")" "https://$REF.supabase.co/functions/v1/$FN" \
+            --data-urlencode "modo=conexion" --data-urlencode "destino=$DEST" > "$D/conexion.json" || echo '{"ok":false,"error":"curl"}' > "$D/conexion.json"
+          jq -r '"- destino: \(.destino // "—")\n- ok: **\(.ok)** · status: **\(.status // "—")** · \(.ms // "—") ms\n- error: \(.error // "—") \(.motivo // "") \(.mensaje // "")\n- certificado: \(.certificado // {} | tostring)"' "$D/conexion.json" >> "$GITHUB_STEP_SUMMARY"
+          { echo; echo '```xml'; jq -r '.respuesta // ""' "$D/conexion.json" | head -c 3000; echo; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "Respuesta (primeros 3000 caracteres, NIF enmascarado):"; jq -r '.respuesta // .mensaje // ""' "$D/conexion.json" | head -c 3000; echo
+
+      - name: Logs de la función (se buscan restos de material; no se imprimen)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/s"; DESDE=$(cat "$D/desde")
+          echo "Esperando a que lleguen los logs (90 s)…"; sleep 90
+          HASTA=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          : > "$D/logs"
+          for sql in "select timestamp, event_message, metadata from function_logs limit 1000" "select timestamp, event_message, metadata from function_edge_logs limit 1000"; do
+            curl -sS --max-time 60 -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
+              --data-urlencode "sql=$sql" --data-urlencode "iso_timestamp_start=$DESDE" --data-urlencode "iso_timestamp_end=$HASTA" >> "$D/logs" || true
+            echo >> "$D/logs"
+          done
+          PEM=$(grep -cE 'BEGIN (CERTIFICATE|PRIVATE KEY|RSA PRIVATE KEY|ENCRYPTED PRIVATE KEY)' "$D/logs" || true)
+          B64=$(grep -oE '[A-Za-z0-9+/]{200,}={0,2}' "$D/logs" | wc -l || true)
+          NUESTRO=$(grep -c 'sonda\\":\\"verifactu\|"sonda":"verifactu"' "$D/logs" || true)
+          { echo; echo "## Logs de la función ($DESDE → $HASTA)"; echo
+            echo "- líneas de la sonda: **$NUESTRO**"
+            echo "- con un PEM: **$PEM**"
+            echo "- con base64 de 200 caracteres o más: **$B64**"; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$PEM" = "0" ] || { echo "::error::Hay material de certificado en los logs."; exit 1; }
+
+      - name: Limpieza · la función y su token (pase lo que pase)
+        if: always()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -uo pipefail
+          supabase functions delete "$FN" --project-ref "$REF" || true
+          supabase secrets unset --project-ref "$REF" VERIFACTU_SONDA_TOKEN || true
+          N_FN=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/functions" | jq --arg s "$FN" '[.[] | select(.slug==$s)] | length')
+          N_SEC=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" | jq '[.[] | select(.name=="VERIFACTU_SONDA_TOKEN")] | length')
+          CERT=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" | jq '[.[] | select(.name=="AEAT_PRUEBAS_P12_B64" or .name=="AEAT_PRUEBAS_P12_CLAVE")] | length')
+          { echo; echo "## Limpieza"; echo
+            echo "- funciones \`$FN\` que quedan: **$N_FN**"
+            echo "- secretos VERIFACTU_SONDA_TOKEN que quedan: **$N_SEC**"
+            echo "- secretos del certificado de pruebas (no se tocan): **$CERT** de 2"; } >> "$GITHUB_STEP_SUMMARY"
+          [ "$N_FN" = "0" ] && [ "$N_SEC" = "0" ] || { echo "::error::No se ha limpiado todo."; exit 1; }
