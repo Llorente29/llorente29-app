@@ -271,6 +271,24 @@ export function cifrasDe(lineas: readonly LineaFactura[], conRecargo: boolean, r
   return { base: base / 100, iva: iva / 100, recargo: recargo / 100, retencion: retencion / 100, total: (base + iva + recargo - retencion) / 100, porTipo }
 }
 
+/**
+ * V01b · Las cifras de una factura YA EMITIDA: el IVA de cada tipo es el
+ * GUARDADO en sus líneas (customer_invoice_line.tax_amount, el del libro de su
+ * asiento), si todas las del tipo lo llevan; si no, el calculado (cifrasDe),
+ * como hace la base (_conta_venta_cifras). Nada recalcula una emitida: en las
+ * traídas de Diez, Diez truncó el medio céntimo y eso es lo declarado.
+ * Sin recargo, como el PDF (va aparte); la retención, como cifrasDe.
+ */
+export function cifrasGuardadas(lineas: readonly (LineaFactura & { cuota: number | null })[], retencionPct = 0): CifrasFactura {
+  const calculadas = cifrasDe(lineas.map((l) => ({ ...l, recargo: null })), false, retencionPct)
+  const porTipo = calculadas.porTipo.map((g) => {
+    const del = lineas.filter((l) => l.tipo === g.tipo)
+    return del.every((l) => l.cuota !== null) ? { ...g, iva: del.reduce((t, l) => t + c(l.cuota ?? 0), 0) / 100 } : g
+  })
+  const iva = porTipo.reduce((t, x) => t + c(x.iva), 0)
+  return { ...calculadas, iva: iva / 100, total: (c(calculadas.base) + iva - c(calculadas.retencion)) / 100, porTipo }
+}
+
 /** La diferencia de una rectificativa: lo que debía ser menos lo que fue. */
 export function diferenciaDe(nueva: CifrasFactura, vieja: CifrasFactura): CifrasFactura {
   const d = (a: number, b: number) => (c(a) - c(b)) / 100

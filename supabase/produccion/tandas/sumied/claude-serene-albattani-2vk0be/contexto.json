@@ -1,0 +1,9 @@
+{
+  "_que": "V01b · El IVA del libro manda · contexto de producción de la tanda (0840 y 0841), medido en SOLO LECTURA el 25/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen customer_invoice y customer_invoice_line (≈1.281 filas estimadas; 1.286 contadas), _conta_venta_cifras y customer_invoice_line_inalterable (iguales que en la 0835); nada de lo que crea la tanda; nada en el historial; nada en el camino del pedido. Recuento de antes: asientos 15.217; expedidas 1.336 con 44.841,03 de IVA; emitidas 1.286 con 25.611,81 de IVA; sin PDF 108; líneas de emitidas sin cuota 1.286.",
+  "medido": "2026-10-25T08:55Z",
+  "tanda": {
+    "supabase/migrations/20261025T0840_v01b_cuota_por_linea.sql": "ecb4d3a852df4fa28b98b6e9065aa3d4",
+    "supabase/migrations/20261025T0841_v01b_cuotas_emitidas.sql": "1d9f956428980353d12dd34881462245"
+  },
+  "contexto": {"tablas":["public.customer_invoice","public.customer_invoice_line"],"funciones":["public._conta_venta_cifras(uuid)","public.customer_invoice_line_inalterable()"],"filas":{"public.customer_invoice":1281,"public.customer_invoice_line":1281},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

@@ -1,0 +1,3 @@
+# V01b · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261025T0841_v01b_cuotas_emitidas.down.sql
+supabase/vuelta-atras/20261025T0840_v01b_cuota_por_linea.down.sql
