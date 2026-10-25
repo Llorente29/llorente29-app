@@ -77,7 +77,7 @@ por dentro.
 |---|---|---|
 | Traídas de Diez, cobradas (sin asiento, «traído de Diez») | 1.196 | 262.321,99 € |
 | Octubre, cobradas enteras por sus liquidaciones | **1** (UBR-CAM-20261018, 17,70 €) | |
-| Octubre, cobradas en parte | **5** | unos 280 € cobrados de 1.255 € |
+| Octubre, cobradas en parte | **5** | 279,90 € cobrados de 1.257,67 € |
 | Octubre, **sin nada cobrado** | **79** | |
 
 *(Cifras de octubre medidas con el total de cada venta. El cobro real usará lo
