@@ -52,7 +52,7 @@ export interface Fuente {
   pedida: { periodo: string; estado: string; a: string | null } | null
   /** El local o centro de trabajo de la fuente (opcional). */
   local?: Local | null
-  /** V02d · Si una persona la ha tocado (lo aprendido que nadie tocó se vuelve a aprender solo). */
+  /** V02d · Si una persona fijó su ritmo (si no, Sumied lo vuelve a aprender solo, aunque le hayan puesto el local). */
   tocada?: boolean
   /** V02d · Lo que cubren sus extractos (banco): [desde, hasta]. Una semana cubierta ha llegado. */
   cubre?: [string, string][]

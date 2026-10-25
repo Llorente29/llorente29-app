@@ -1,8 +1,9 @@
 -- supabase/staging/sql/20261025_v02d_avisos_prueba.sql
 --
 -- SOLO STAGING. Prueba de 20261025T1912_v02d_avisos (cambia:
--- public._conta_puerta_llegadas, public.conta_puerta_fuentes y
--- public.conta_puerta_fuentes_proponer, misma firma), con \i dentro de la
+-- public._conta_puerta_llegadas, public.conta_puerta_fuentes,
+-- public.conta_puerta_fuentes_proponer y public.conta_puerta_fuente_guardar,
+-- misma firma; y public.supplier_expected_invoice, tres columnas nuevas), con \i dentro de la
 -- transacción y ROLLBACK: staging no cambia. En la empresa A.
 --
 --   (Empieza con su vuelta atrás, por si ya estuviera.)
@@ -16,8 +17,10 @@
 --      Facturación del proveedor.
 --   4. Proponer: corre, y ninguna «varias al mes» va a menos de 7 días.
 --   5. Al día: apunta lo propuesto que no estaba; vuelve a aprender el ritmo de
---      lo aprendido que nadie tocó; no pisa lo que tocó una persona; apaga el
---      proveedor que lleva tres periodos sin llegar y lo enciende si llega algo.
+--      lo aprendido aunque una persona le pusiera el local (y el local se
+--      queda), o lo tocara antes de las marcas; no pisa el ritmo que fijó una
+--      persona ni el «avisar» que decidió (ni el de antes de las marcas); apaga
+--      el proveedor que lleva tres periodos sin llegar y lo enciende si llega algo.
 --   6. «Ya lo tengo»: cuenta como llegada, y dos veces es la misma.
 --   7. La vuelta atrás: sin el trabajo de la prueba, las tres funciones como
 --      estaban (su huella) y sin lo nuevo.
@@ -36,7 +39,7 @@ create temp table _p (clave text primary key, v text) on commit drop;
 grant select, insert, update on _p to authenticated;
 insert into _p select 'fn:' || p.proname, md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text)
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public' and p.prokind = 'f' and p.proname in ('_conta_puerta_llegadas', 'conta_puerta_fuentes', 'conta_puerta_fuentes_proponer');
+ where n.nspname = 'public' and p.prokind = 'f' and p.proname in ('_conta_puerta_llegadas', 'conta_puerta_fuentes', 'conta_puerta_fuentes_proponer', 'conta_puerta_fuente_guardar');
 
 -- 0 · La empresa A, sus datos de prueba (como postgres: lo que hace la pantalla va después, como usuario).
 -- Proponer pide ser de la cuenta: aquí, como el servicio.
@@ -52,6 +55,7 @@ begin
   select id into v_t from public.treasury_account where company_id = v_e and account_id = v_acc order by created_at limit 1;
   if v_s is null or v_t is null then raise exception 'PRUEBA V02d: la cuenta A necesita un proveedor y una cuenta del banco.'; end if;
   insert into _p values ('empresa', v_e::text), ('cuenta', v_acc::text), ('proveedor', v_s::text), ('tesoreria', v_t::text);
+  insert into _p select 'local', location_id::text from public.location_company where company_id = v_e and account_id = v_acc order by created_at limit 1;
 
   -- 1 · Una factura y su abono.
   insert into public.supplier_invoice (account_id, company_id, supplier_id, invoice_number, invoice_date, grand_total, status, source)
@@ -68,7 +72,9 @@ begin
   values (v_acc, v_s, 'Facturación prueba', 'billing', 'facturas-v02d@proveedor-prueba.es');
 
   -- 5 · Lo que ya estaba apuntado: un canal aprendido sin tocar (con otro ritmo),
-  -- un banco tocado por una persona (mensual) y un proveedor aprendido sin llegadas.
+  -- un banco tocado por una persona antes de las marcas (mensual), otro banco
+  -- (mensual; una persona le fijará el ritmo), un proveedor aprendido sin
+  -- llegadas, uno que apagó una persona antes de las marcas y otro que apagará después.
   select x->>'clave' into v_canal from jsonb_array_elements(public.conta_puerta_fuentes_proponer(v_e)) x where x->>'tipo' = 'intermediario' limit 1;
   select x->>'clave' into v_banco from jsonb_array_elements(public.conta_puerta_fuentes_proponer(v_e)) x where x->>'clave' = 'banco:' || v_t;
   select x->>'clave' into v_otro_banco from jsonb_array_elements(public.conta_puerta_fuentes_proponer(v_e)) x where x->>'tipo' = 'banco' and x->>'clave' <> 'banco:' || v_t limit 1;
@@ -79,7 +85,14 @@ begin
   insert into public.supplier_expected_invoice (account_id, company_id, kind, cadence, typical_day, source, source_key, match, label, updated_by_name)
   values (v_acc, v_e, 'banco', 'mensual', 3, 'aprendido', v_banco, jsonb_build_object('tesoreria', v_t), 'Banco de prueba', 'Persona de prueba');
   insert into public.supplier_expected_invoice (account_id, company_id, kind, cadence, typical_day, source, source_key, match, label)
-  values (v_acc, v_e, 'proveedor', 'mensual', 5, 'aprendido', 'nif:V02D-DORMIDO', '{}'::jsonb, 'Dormido de prueba');
+  values (v_acc, v_e, 'proveedor', 'mensual', 5, 'aprendido', 'nif:V02D-DORMIDO', '{}'::jsonb, 'Dormido de prueba'),
+         (v_acc, v_e, 'proveedor', 'mensual', 5, 'aprendido', 'nif:V02D-APAGADO', '{}'::jsonb, 'Lo apagará una persona');
+  insert into public.supplier_expected_invoice (account_id, company_id, kind, cadence, typical_day, source, source_key, match, label, active, updated_by_name)
+  values (v_acc, v_e, 'proveedor', 'mensual', 5, 'aprendido', 'nif:V02D-ANTES', '{}'::jsonb, 'Apagado antes de las marcas', false, 'Persona de prueba');
+  if v_otro_banco is not null then
+    insert into public.supplier_expected_invoice (account_id, company_id, kind, cadence, typical_day, source, source_key, match, label)
+    values (v_acc, v_e, 'banco', 'mensual', 3, 'aprendido', v_otro_banco, jsonb_build_object('tesoreria', split_part(v_otro_banco, ':', 2)), 'Otro banco de prueba');
+  end if;
 end $$;
 
 \i supabase/migrations/20261025T1912_v02d_avisos.sql
@@ -131,9 +144,23 @@ begin
   end loop;
   raise notice '4 · proponer: corre, y ninguna «varias al mes» va a menos de 7 días';
 
+  -- 5 · Antes de ponerlo al día, lo que hace una persona: el local del canal
+  -- (solo el local), el ritmo del otro banco, y apagar uno; y llega algo de los apagados.
+  v_d := public.conta_puerta_fuentes(v_e);
+  perform public.conta_puerta_fuente_guardar(v_e, jsonb_build_object('id', (select f->>'id' from jsonb_array_elements(v_d->'fuentes') f where f->>'clave' = (select v from _p where clave = 'canal_clave')),
+    'local_id', (select v from _p where clave = 'local')), 'Prueba V02d');
+  if (select v from _p where clave = 'otro_banco') <> '' then
+    perform public.conta_puerta_fuente_guardar(v_e, jsonb_build_object('id', (select f->>'id' from jsonb_array_elements(v_d->'fuentes') f where f->>'clave' = (select v from _p where clave = 'otro_banco')),
+      'cadencia', 'mensual', 'dia', 3), 'Prueba V02d');
+  end if;
+  v_x := (select (f->>'id')::uuid from jsonb_array_elements(v_d->'fuentes') f where f->>'clave' = 'nif:V02D-APAGADO');
+  perform public.conta_puerta_fuente_guardar(v_e, jsonb_build_object('id', v_x, 'activa', false), 'Prueba V02d');
+  perform public.conta_puerta_ya_lo_tengo(v_x, current_date - 2, 'Prueba V02d');
+  perform public.conta_puerta_ya_lo_tengo((select (f->>'id')::uuid from jsonb_array_elements(v_d->'fuentes') f where f->>'clave' = 'nif:V02D-ANTES'), current_date - 2, 'Prueba V02d');
+
   -- 5 · Al día (lo que cambia en la tabla se mira después, como postgres).
   v_r := public.conta_puerta_al_dia(v_e);
-  insert into _p values ('al_dia_1', v_r::text);
+  insert into _p values ('al_dia_1', v_r::text), ('propuestas', public.conta_puerta_fuentes_proponer(v_e)::text);
   v_r := public.conta_puerta_al_dia(v_e);
   insert into _p values ('al_dia_2', v_r::text);
 
@@ -156,14 +183,33 @@ declare
   v_r jsonb := (select v::jsonb from _p where clave = 'al_dia_1');
   v_r2 jsonb := (select v::jsonb from _p where clave = 'al_dia_2');
 begin
-  if (v_r->>'reaprendidas')::int < 1 then raise exception 'PRUEBA V02d 5: no ha vuelto a aprender el canal sin tocar (%).', v_r; end if;
+  if (v_r->>'reaprendidas')::int < 2 then raise exception 'PRUEBA V02d 5: no ha vuelto a aprender el canal y el banco (%).', v_r; end if;
   if (v_r->>'dormidas')::int < 1 then raise exception 'PRUEBA V02d 5: no ha apagado el proveedor sin llegadas (%).', v_r; end if;
-  if (select v from _p where clave = 'otro_banco') <> '' and (v_r->>'nuevas')::int < 1 then raise exception 'PRUEBA V02d 5: no ha apuntado el otro banco (%).', v_r; end if;
-  if (select cadence from public.supplier_expected_invoice where company_id = v_e and source_key = (select v from _p where clave = 'canal_clave')) = 'varias' then
-    raise exception 'PRUEBA V02d 5: el canal sin tocar sigue «varias al mes».';
+  -- Todo lo propuesto está apuntado.
+  if exists (select 1 from jsonb_array_elements((select v::jsonb from _p where clave = 'propuestas')) x
+              where not exists (select 1 from public.supplier_expected_invoice y where y.company_id = v_e and y.source_key = x->>'clave')) then
+    raise exception 'PRUEBA V02d 5: queda algo propuesto sin apuntar.';
   end if;
-  if (select cadence from public.supplier_expected_invoice where company_id = v_e and source_key = (select v from _p where clave = 'banco_clave')) <> 'mensual' then
-    raise exception 'PRUEBA V02d 5: ha pisado el ritmo del banco que tocó una persona.';
+  -- El canal: una persona le puso el local; el ritmo se vuelve a aprender y el local se queda.
+  if (select cadence = 'varias' or location_set_by is distinct from 'persona' or location_id is distinct from (select v::uuid from _p where clave = 'local')
+        from public.supplier_expected_invoice where company_id = v_e and source_key = (select v from _p where clave = 'canal_clave')) then
+    raise exception 'PRUEBA V02d 5: el canal con local de una persona no ha vuelto a aprender su ritmo, o ha perdido su local.';
+  end if;
+  -- El banco tocado antes de las marcas (no se sabe qué campo): su ritmo sí se vuelve a aprender.
+  if (select cadence from public.supplier_expected_invoice where company_id = v_e and source_key = (select v from _p where clave = 'banco_clave')) <> 'semanal' then
+    raise exception 'PRUEBA V02d 5: el banco tocado antes de las marcas no ha vuelto a aprender su ritmo.';
+  end if;
+  -- El ritmo que fijó una persona no se pisa.
+  if (select v from _p where clave = 'otro_banco') <> '' and (select cadence <> 'mensual' or rhythm_set_by is distinct from 'persona'
+        from public.supplier_expected_invoice where company_id = v_e and source_key = (select v from _p where clave = 'otro_banco')) then
+    raise exception 'PRUEBA V02d 5: ha pisado el ritmo que fijó una persona.';
+  end if;
+  -- El «avisar» que decidió una persona (después o antes de las marcas) no se pisa, aunque llegue algo.
+  if (select active or active_set_by is distinct from 'persona' from public.supplier_expected_invoice where company_id = v_e and source_key = 'nif:V02D-APAGADO') then
+    raise exception 'PRUEBA V02d 5: ha encendido lo que apagó una persona.';
+  end if;
+  if (select active from public.supplier_expected_invoice where company_id = v_e and source_key = 'nif:V02D-ANTES') then
+    raise exception 'PRUEBA V02d 5: ha encendido lo que apagó una persona antes de las marcas.';
   end if;
   if (select active from public.supplier_expected_invoice where company_id = v_e and source_key = 'nif:V02D-DORMIDO') then
     raise exception 'PRUEBA V02d 5: el proveedor sin llegadas sigue encendido.';
@@ -171,7 +217,7 @@ begin
   if (v_r2->>'nuevas')::int + (v_r2->>'reaprendidas')::int + (v_r2->>'dormidas')::int + (v_r2->>'despiertas')::int <> 0 then
     raise exception 'PRUEBA V02d 5: la segunda vez aún cambia cosas (%).', v_r2;
   end if;
-  raise notice '5 · al día (%): apunta lo nuevo, reaprende lo que nadie tocó, no pisa lo tocado y apaga lo dormido; la segunda vez, nada', v_r;
+  raise notice '5 · al día (%): apunta lo nuevo; reaprende el ritmo aunque una persona pusiera el local (que se queda); no pisa el ritmo ni el «avisar» de una persona; apaga lo dormido; la segunda vez, nada', v_r;
 end $$;
 
 -- 5b · Si llega algo del dormido («Ya lo tengo»), se enciende.
@@ -195,7 +241,11 @@ delete from public.conta_puerta_recibido where company_id = (select v::uuid from
 do $$ begin
   if exists (select 1 from _p b join pg_proc p on 'fn:' || p.proname = b.clave join pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public' and p.prokind = 'f' and md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text) <> b.v) then
-    raise exception 'PRUEBA V02d 7: _conta_puerta_llegadas, conta_puerta_fuentes o conta_puerta_fuentes_proponer no vuelven como estaban.';
+    raise exception 'PRUEBA V02d 7: _conta_puerta_llegadas, conta_puerta_fuentes, conta_puerta_fuentes_proponer o conta_puerta_fuente_guardar no vuelven como estaban.';
+  end if;
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'supplier_expected_invoice'
+              and column_name in ('rhythm_set_by', 'active_set_by', 'location_set_by')) then
+    raise exception 'PRUEBA V02d 7: la vuelta atrás se deja las marcas de quién decidió qué.';
   end if;
   if to_regclass('public.conta_puerta_recibido') is not null or to_regprocedure('public.conta_puerta_al_dia(uuid)') is not null
      or to_regprocedure('public.conta_puerta_ya_lo_tengo(uuid,date,text)') is not null

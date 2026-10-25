@@ -38,6 +38,17 @@
 --   6. «YA LO TENGO»: la persona dice que algo esperado ya lo tiene y deja de
 --      avisar. Tabla conta_puerta_recibido (nueva, vacía) y
 --      conta_puerta_ya_lo_tengo; cuenta como llegada.
+--   7. QUIÉN DECIDIÓ QUÉ, CAMPO A CAMPO (respuesta 1 al V02d): poner el local
+--      ya no impide volver a aprender el ritmo. supplier_expected_invoice gana
+--      rhythm_set_by, active_set_by y location_set_by (nuevas, vacías: «persona»
+--      o nada), y conta_puerta_fuente_guardar (cambia en caliente, misma firma)
+--      las marca cuando una persona cambia el ritmo, si avisa o el local.
+--      conta_puerta_al_dia recalcula el ritmo salvo que lo fijara una persona;
+--      el local no lo toca nunca; y si avisa, solo cuando nadie lo decidió. Lo
+--      tocado antes de esta tanda (updated_by_name, sin ninguna marca: no se
+--      sabe qué campo) conserva si avisa; su ritmo sí se recalcula, porque la
+--      pantalla de antes no dejaba cambiarlo. Así Olimpo y Coheldi salen con su
+--      ritmo y su local, sin tocar ni una fila en la tanda.
 --
 -- No toca datos: ninguna fila existente cambia. Lo aprendido de antes se
 -- vuelve a aprender desde la pantalla, por la función, cuando alguien abre
@@ -46,8 +57,25 @@
 -- cambia: public._conta_puerta_llegadas · prueba: supabase/staging/sql/20261025_v02d_avisos_prueba.sql
 -- cambia: public.conta_puerta_fuentes · prueba: supabase/staging/sql/20261025_v02d_avisos_prueba.sql
 -- cambia: public.conta_puerta_fuentes_proponer · prueba: supabase/staging/sql/20261025_v02d_avisos_prueba.sql
+-- cambia: public.conta_puerta_fuente_guardar · prueba: supabase/staging/sql/20261025_v02d_avisos_prueba.sql
+-- cambia: public.supplier_expected_invoice · prueba: supabase/staging/sql/20261025_v02d_avisos_prueba.sql
 --
 -- Vuelta atrás: supabase/vuelta-atras/20261025T1912_v02d_avisos.down.sql
+
+-- 7 · Quién decidió qué, campo a campo ------------------------------------------
+alter table public.supplier_expected_invoice add column if not exists rhythm_set_by text;
+alter table public.supplier_expected_invoice add column if not exists active_set_by text;
+alter table public.supplier_expected_invoice add column if not exists location_set_by text;
+alter table public.supplier_expected_invoice drop constraint if exists supplier_expected_invoice_set_by_check;
+alter table public.supplier_expected_invoice add constraint supplier_expected_invoice_set_by_check
+  check ((rhythm_set_by is null or rhythm_set_by = 'persona') and (active_set_by is null or active_set_by = 'persona')
+         and (location_set_by is null or location_set_by = 'persona'));
+comment on column public.supplier_expected_invoice.rhythm_set_by is
+  'V02d · «persona» si una persona fijó cada cuánto y qué día (Aprender ya no lo recalcula). Vacío: lo aprende Sumied.';
+comment on column public.supplier_expected_invoice.active_set_by is
+  'V02d · «persona» si una persona decidió si avisa («No me avises de este» o el interruptor). Vacío: Sumied puede apagar lo que lleva meses sin llegar.';
+comment on column public.supplier_expected_invoice.location_set_by is
+  'V02d · «persona» si una persona puso o quitó el local. Sumied nunca cambia el local de lo que ya está apuntado.';
 
 -- 6 · «Ya lo tengo» ---------------------------------------------------------
 create table if not exists public.conta_puerta_recibido (
@@ -172,8 +200,8 @@ begin
         'id', x.id, 'clave', x.source_key, 'tipo', x.kind, 'nombre', coalesce(x.label, s.name, 'Sin nombre'), 'grupo', x.group_label,
         'proveedor_id', x.supplier_id, 'cadencia', x.cadence, 'dia', x.typical_day, 'dia_semana', x.weekday, 'cada', x.gap_days,
         'margen', x.margin_days, 'activa', x.active, 'origen', x.source, 'cubierta', x.covered_by_recurring_id is not null,
-        -- Si una persona la ha tocado (entonces no se vuelve a aprender sola).
-        'tocada', x.source <> 'aprendido' or x.updated_by_name is not null,
+        -- Si una persona fijó su ritmo (entonces no se vuelve a aprender solo).
+        'tocada', x.source <> 'aprendido' or x.rhythm_set_by is not null,
         'local', (select jsonb_build_object('id', l.id, 'nombre', l.name, 'direccion', l.address) from public.locations l where l.id = x.location_id),
         'llegadas', to_jsonb(public._conta_puerta_llegadas(x)),
         'cubre', public._conta_puerta_cubre(x),
@@ -325,13 +353,87 @@ end $$;
 revoke all on function public.conta_puerta_fuentes_proponer(uuid) from public, anon;
 grant execute on function public.conta_puerta_fuentes_proponer(uuid) to authenticated;
 
+-- 7b · Guardar una fuente, marcando quién decidió qué (la de la 1212 con las tres marcas)
+create or replace function public.conta_puerta_fuente_guardar(p_company uuid, p jsonb, p_quien_nombre text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_acc uuid := public._conta_puerta_cuenta(p_company);
+  v_x public.supplier_expected_invoice;
+  v_match jsonb;
+  v_nuevo boolean := false;
+begin
+  if not public.current_user_is_admin_or_manager_of(v_acc) then
+    raise exception 'Solo un administrador o un encargado cambia lo que se espera.' using errcode = '42501';
+  end if;
+  if coalesce(p->>'cadencia', 'mensual') not in ('mensual', 'quincenal', 'semanal', 'varias') then
+    raise exception 'Cada cuánto llega: mensual, quincenal, semanal o varias al mes.' using errcode = '22023';
+  end if;
+  if p->>'proveedor_id' is not null and not exists (select 1 from public.supplier where id = (p->>'proveedor_id')::uuid and account_id = v_acc) then
+    raise exception 'Ese proveedor no es de esta cuenta.' using errcode = '42501';
+  end if;
+  if nullif(p->>'local_id', '') is not null and not exists (select 1 from public.location_company lc
+       where lc.location_id = (p->>'local_id')::uuid and lc.company_id = p_company and lc.account_id = v_acc) then
+    raise exception 'Ese local no es de esta empresa.' using errcode = '42501';
+  end if;
+  v_match := jsonb_strip_nulls(jsonb_build_object('nifs', p->'nifs', 'numero_prefijo', p->>'numero_prefijo', 'canal', p->>'canal',
+                                                  'tesoreria', p->>'tesoreria', 'nominas', case when p->>'tipo' = 'nominas' then true end));
+  if p->>'id' is not null then
+    select * into v_x from public.supplier_expected_invoice where id = (p->>'id')::uuid and company_id = p_company;
+    if v_x.id is null then raise exception 'Esa fuente no está.' using errcode = 'P0002'; end if;
+  elsif p->>'clave' is not null then
+    select * into v_x from public.supplier_expected_invoice where company_id = p_company and source_key = p->>'clave';
+  end if;
+  if v_x.id is null then
+    insert into public.supplier_expected_invoice (account_id, company_id, supplier_id, cadence, typical_day, label, source, reason, active, since,
+                                                  kind, margin_days, weekday, gap_days, group_label, source_key, match, location_id, created_by, created_by_name,
+                                                  rhythm_set_by, location_set_by)
+    values (v_acc, p_company, (p->>'proveedor_id')::uuid, coalesce(p->>'cadencia', 'mensual'), nullif(p->>'dia', '')::smallint, p->>'nombre',
+            case when p->>'clave' is not null then 'aprendido' else 'a_mano' end, p->>'motivo', coalesce((p->>'activa')::boolean, true), current_date,
+            coalesce(p->>'tipo', 'proveedor'), nullif(p->>'margen', '')::smallint, nullif(p->>'dia_semana', '')::smallint, nullif(p->>'cada', '')::smallint,
+            nullif(btrim(p->>'grupo'), ''), p->>'clave', v_match, nullif(p->>'local_id', '')::uuid, auth.uid(), p_quien_nombre,
+            -- Lo apuntado a mano lo fijó una persona; lo aprendido, no.
+            case when p->>'clave' is null and p_quien_nombre is not null then 'persona' end,
+            case when p->>'clave' is null and p_quien_nombre is not null and nullif(p->>'local_id', '') is not null then 'persona' end)
+    returning * into v_x;
+    v_nuevo := true;
+  else
+    update public.supplier_expected_invoice set
+      label = coalesce(p->>'nombre', label),
+      group_label = case when p ? 'grupo' then nullif(btrim(p->>'grupo'), '') else group_label end,
+      cadence = coalesce(p->>'cadencia', cadence),
+      typical_day = case when p ? 'dia' then nullif(p->>'dia', '')::smallint else typical_day end,
+      weekday = case when p ? 'dia_semana' then nullif(p->>'dia_semana', '')::smallint else weekday end,
+      gap_days = case when p ? 'cada' then nullif(p->>'cada', '')::smallint else gap_days end,
+      margin_days = case when p ? 'margen' then nullif(p->>'margen', '')::smallint else margin_days end,
+      active = coalesce((p->>'activa')::boolean, active),
+      location_id = case when p ? 'local_id' then nullif(p->>'local_id', '')::uuid else location_id end,
+      match = case when v_match = '{}'::jsonb then match else v_match end,
+      -- V02d · Quién decidió qué, campo a campo: una persona (con nombre) que cambia el
+      -- ritmo, si avisa o el local lo deja marcado; Aprender respeta cada cosa por separado.
+      rhythm_set_by = case when p_quien_nombre is not null and (p ? 'cadencia' or p ? 'dia' or p ? 'dia_semana' or p ? 'cada') then 'persona' else rhythm_set_by end,
+      active_set_by = case when p_quien_nombre is not null and p ? 'activa' then 'persona' else active_set_by end,
+      location_set_by = case when p_quien_nombre is not null and p ? 'local_id' then 'persona' else location_set_by end,
+      updated_at = now(), updated_by_name = p_quien_nombre
+     where id = v_x.id returning * into v_x;
+  end if;
+  return jsonb_build_object('id', v_x.id, 'nueva', v_nuevo, 'activa', v_x.active,
+    'texto', case when v_nuevo then 'Apuntado: ' || coalesce(v_x.label, 'la fuente') || ' se espera ' || v_x.cadence || '.'
+                  when not v_x.active then 'Apagado: ' || coalesce(v_x.label, 'la fuente') || ' ya no avisa si falta.'
+                  else 'Guardado: ' || coalesce(v_x.label, 'la fuente') || '.' end);
+end $$;
+
+revoke all on function public.conta_puerta_fuente_guardar(uuid, jsonb, text) from public, anon;
+grant execute on function public.conta_puerta_fuente_guardar(uuid, jsonb, text) to authenticated;
+
 -- 3b · Lo aprendido, al día ------------------------------------------------------
 -- Al abrir Documentos (un administrador o un encargado): lo que se propone hoy
--- y no estaba apuntado, se apunta; lo apuntado que NADIE ha tocado (aprendido y
--- sin updated_by_name) toma el ritmo que se aprende hoy; y de proveedores y
--- alquileres sin tocar, lo que lleva tres periodos sin llegar se apaga solo
--- («sin facturas desde…»), y se vuelve a encender si llega algo. Lo que tocó una
--- persona no se pisa. Devuelve cuántas de cada cosa.
+-- y no estaba apuntado, se apunta; lo aprendido cuyo RITMO no fijó una persona
+-- (rhythm_set_by vacío) toma el ritmo que se aprende hoy, aunque una persona le
+-- pusiera el local; el local no se toca nunca; y de proveedores y alquileres
+-- cuyo «avisar» no decidió nadie, lo que lleva tres periodos sin llegar se
+-- apaga solo («sin facturas desde…»), y se vuelve a encender si llega algo. Lo
+-- tocado antes de esta tanda sin saber qué campo (updated_by_name sin ninguna
+-- marca) conserva si avisa. Devuelve cuántas de cada cosa.
 create or replace function public.conta_puerta_al_dia(p_company uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
@@ -349,7 +451,7 @@ begin
     if v_x.id is null then
       perform public.conta_puerta_fuente_guardar(p_company, v_p, null);
       v_nuevas := v_nuevas + 1;
-    elsif v_x.source = 'aprendido' and v_x.updated_by_name is null
+    elsif v_x.source = 'aprendido' and v_x.rhythm_set_by is null
           and (v_x.cadence is distinct from coalesce(v_p->>'cadencia', 'mensual')
                or v_x.typical_day is distinct from nullif(v_p->>'dia', '')::smallint
                or v_x.weekday is distinct from nullif(v_p->>'dia_semana', '')::smallint
@@ -363,9 +465,10 @@ begin
       v_reaprendidas := v_reaprendidas + 1;
     end if;
   end loop;
-  -- Proveedores y alquileres sin tocar: tres periodos sin llegar, apagado; si llega algo, encendido.
+  -- Proveedores y alquileres cuyo «avisar» no decidió nadie: tres periodos sin llegar, apagado; si llega algo, encendido.
   for v_x in select * from public.supplier_expected_invoice
-              where company_id = p_company and account_id = v_acc and source = 'aprendido' and updated_by_name is null
+              where company_id = p_company and account_id = v_acc and source = 'aprendido' and active_set_by is null
+                and not (updated_by_name is not null and rhythm_set_by is null and location_set_by is null)
                 and kind in ('proveedor', 'alquiler') loop
     select max(d) into v_ultima from unnest(public._conta_puerta_llegadas(v_x)) d;
     v_periodo := case v_x.cadence when 'mensual' then 31 when 'quincenal' then 16 when 'semanal' then 7 else coalesce(v_x.gap_days, 10) end;

@@ -3,9 +3,12 @@
 -- Vuelta atrás de 20261025T1912_v02d_avisos: todo como estaba con la 1212.
 --   · PARA, sin tocar nada, si alguien ya ha dicho «Ya lo tengo»
 --     (conta_puerta_recibido con filas): es trabajo de una persona.
---   · _conta_puerta_llegadas, conta_puerta_fuentes y
---     conta_puerta_fuentes_proponer, las de la 1212 (copiadas de su fichero,
---     que es lo que hay en producción).
+--   · _conta_puerta_llegadas, conta_puerta_fuentes,
+--     conta_puerta_fuentes_proponer y conta_puerta_fuente_guardar, las de la
+--     1212 (copiadas de su fichero, que es lo que hay en producción).
+--   · Sin las marcas de quién decidió qué (rhythm_set_by, active_set_by y
+--     location_set_by): las de la 1212 siguen sabiendo lo tocado por
+--     updated_by_name, que guardar sigue poniendo.
 --   · Sin _conta_puerta_cubre, conta_puerta_al_dia, conta_puerta_ya_lo_tengo
 --     ni la tabla conta_puerta_recibido.
 -- Lo que conta_puerta_al_dia haya vuelto a aprender en supplier_expected_invoice
@@ -180,7 +183,73 @@ grant execute on function public.conta_puerta_fuentes(uuid) to authenticated;
 revoke all on function public.conta_puerta_fuentes_proponer(uuid) from public, anon;
 grant execute on function public.conta_puerta_fuentes_proponer(uuid) to authenticated;
 
+create or replace function public.conta_puerta_fuente_guardar(p_company uuid, p jsonb, p_quien_nombre text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_acc uuid := public._conta_puerta_cuenta(p_company);
+  v_x public.supplier_expected_invoice;
+  v_match jsonb;
+  v_nuevo boolean := false;
+begin
+  if not public.current_user_is_admin_or_manager_of(v_acc) then
+    raise exception 'Solo un administrador o un encargado cambia lo que se espera.' using errcode = '42501';
+  end if;
+  if coalesce(p->>'cadencia', 'mensual') not in ('mensual', 'quincenal', 'semanal', 'varias') then
+    raise exception 'Cada cuánto llega: mensual, quincenal, semanal o varias al mes.' using errcode = '22023';
+  end if;
+  if p->>'proveedor_id' is not null and not exists (select 1 from public.supplier where id = (p->>'proveedor_id')::uuid and account_id = v_acc) then
+    raise exception 'Ese proveedor no es de esta cuenta.' using errcode = '42501';
+  end if;
+  if nullif(p->>'local_id', '') is not null and not exists (select 1 from public.location_company lc
+       where lc.location_id = (p->>'local_id')::uuid and lc.company_id = p_company and lc.account_id = v_acc) then
+    raise exception 'Ese local no es de esta empresa.' using errcode = '42501';
+  end if;
+  v_match := jsonb_strip_nulls(jsonb_build_object('nifs', p->'nifs', 'numero_prefijo', p->>'numero_prefijo', 'canal', p->>'canal',
+                                                  'tesoreria', p->>'tesoreria', 'nominas', case when p->>'tipo' = 'nominas' then true end));
+  if p->>'id' is not null then
+    select * into v_x from public.supplier_expected_invoice where id = (p->>'id')::uuid and company_id = p_company;
+    if v_x.id is null then raise exception 'Esa fuente no está.' using errcode = 'P0002'; end if;
+  elsif p->>'clave' is not null then
+    select * into v_x from public.supplier_expected_invoice where company_id = p_company and source_key = p->>'clave';
+  end if;
+  if v_x.id is null then
+    insert into public.supplier_expected_invoice (account_id, company_id, supplier_id, cadence, typical_day, label, source, reason, active, since,
+                                                  kind, margin_days, weekday, gap_days, group_label, source_key, match, location_id, created_by, created_by_name)
+    values (v_acc, p_company, (p->>'proveedor_id')::uuid, coalesce(p->>'cadencia', 'mensual'), nullif(p->>'dia', '')::smallint, p->>'nombre',
+            case when p->>'clave' is not null then 'aprendido' else 'a_mano' end, p->>'motivo', coalesce((p->>'activa')::boolean, true), current_date,
+            coalesce(p->>'tipo', 'proveedor'), nullif(p->>'margen', '')::smallint, nullif(p->>'dia_semana', '')::smallint, nullif(p->>'cada', '')::smallint,
+            nullif(btrim(p->>'grupo'), ''), p->>'clave', v_match, nullif(p->>'local_id', '')::uuid, auth.uid(), p_quien_nombre)
+    returning * into v_x;
+    v_nuevo := true;
+  else
+    update public.supplier_expected_invoice set
+      label = coalesce(p->>'nombre', label),
+      group_label = case when p ? 'grupo' then nullif(btrim(p->>'grupo'), '') else group_label end,
+      cadence = coalesce(p->>'cadencia', cadence),
+      typical_day = case when p ? 'dia' then nullif(p->>'dia', '')::smallint else typical_day end,
+      weekday = case when p ? 'dia_semana' then nullif(p->>'dia_semana', '')::smallint else weekday end,
+      gap_days = case when p ? 'cada' then nullif(p->>'cada', '')::smallint else gap_days end,
+      margin_days = case when p ? 'margen' then nullif(p->>'margen', '')::smallint else margin_days end,
+      active = coalesce((p->>'activa')::boolean, active),
+      location_id = case when p ? 'local_id' then nullif(p->>'local_id', '')::uuid else location_id end,
+      match = case when v_match = '{}'::jsonb then match else v_match end,
+      updated_at = now(), updated_by_name = p_quien_nombre
+     where id = v_x.id returning * into v_x;
+  end if;
+  return jsonb_build_object('id', v_x.id, 'nueva', v_nuevo, 'activa', v_x.active,
+    'texto', case when v_nuevo then 'Apuntado: ' || coalesce(v_x.label, 'la fuente') || ' se espera ' || v_x.cadence || '.'
+                  when not v_x.active then 'Apagado: ' || coalesce(v_x.label, 'la fuente') || ' ya no avisa si falta.'
+                  else 'Guardado: ' || coalesce(v_x.label, 'la fuente') || '.' end);
+end $$;
+
+revoke all on function public.conta_puerta_fuente_guardar(uuid, jsonb, text) from public, anon;
+grant execute on function public.conta_puerta_fuente_guardar(uuid, jsonb, text) to authenticated;
+
 drop function if exists public.conta_puerta_ya_lo_tengo(uuid, date, text);
 drop function if exists public.conta_puerta_al_dia(uuid);
 drop function if exists public._conta_puerta_cubre(public.supplier_expected_invoice);
 drop table if exists public.conta_puerta_recibido;
+alter table public.supplier_expected_invoice drop constraint if exists supplier_expected_invoice_set_by_check;
+alter table public.supplier_expected_invoice drop column if exists location_set_by;
+alter table public.supplier_expected_invoice drop column if exists active_set_by;
+alter table public.supplier_expected_invoice drop column if exists rhythm_set_by;

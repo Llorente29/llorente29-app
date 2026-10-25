@@ -10,8 +10,12 @@
 #   conta_puerta_fuentes_proponer (el ritmo se aprende por días, no por
 #   facturas). AÑADE _conta_puerta_cubre, conta_puerta_al_dia (lo aprendido que
 #   nadie tocó se vuelve a aprender al abrir Documentos), «Ya lo tengo» (tabla
-#   conta_puerta_recibido, vacía, y su función). No toca datos. No está en el
-#   camino del pedido. El analizador dice «sigue»: sin autorizo.
+#   conta_puerta_recibido, vacía, y su función). Y (respuesta 1) QUIÉN DECIDIÓ
+#   QUÉ, CAMPO A CAMPO: tres columnas nuevas en supplier_expected_invoice
+#   (rhythm_set_by, active_set_by, location_set_by) y conta_puerta_fuente_guardar
+#   (cambia, misma firma) que las marca; poner el local ya no impide volver a
+#   aprender el ritmo. No toca datos. No está en el camino del pedido. El
+#   analizador dice «sigue»: sin autorizo.
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta (para si alguien ya dijo «Ya lo tengo»).

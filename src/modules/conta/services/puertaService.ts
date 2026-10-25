@@ -10,7 +10,7 @@
 //   · Aprender las fuentes: conta_puerta_fuentes_proponer y, una a una,
 //     conta_puerta_fuente_guardar (lo que ya está guardado no se pisa).
 //   · «Dime qué es», «Pedírsela», apagar una fuente o «Lo que falta».
-//   · V02d: al día (lo aprendido que nadie tocó), «Ya lo tengo», no avisar,
+//   · V02d: al día (el ritmo de lo aprendido, salvo el que fijó una persona), «Ya lo tengo», no avisar,
 //     el local de una fila y «Añadir algo que espero».
 //   · Subir sin saber qué es: el fichero a conta-entrada y conta_puerta_subida.
 //     Las facturas, la quincena de Catcher y los extractos van por sus caminos

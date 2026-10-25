@@ -120,7 +120,8 @@ describe('Documentos (tablero 22): las dos columnas', () => {
     expect(avisoDe({ que: 'tarde', dias: 31, texto: 'Hace más de un mes', grave: true })).toEqual({ tono: 'rojo', texto: 'Hace más de un mes' })
   })
   it('la cabecera de octubre: lo que se espera este mes desde el corte, con lo que ya está', () => {
-    expect(cabeceraMes(DESPUES, HOY)).toEqual({ mes: 'octubre', total: 42, ya: 12, retrasan: 16, aTiempo: 14 })
+    // Olimpo, mensual el 19 (respuesta 1: el local ya no impide aprender su ritmo), ya tiene la de octubre.
+    expect(cabeceraMes(DESPUES, HOY)).toEqual({ mes: 'octubre', total: 42, ya: 13, retrasan: 16, aTiempo: 13 })
     // Apagado en la empresa: no cuenta nada.
     expect(cabeceraMes({ ...DESPUES, ajustes: { lo_que_falta: false, margen: 5 } }, HOY).total).toBe(0)
   })
