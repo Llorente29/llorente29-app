@@ -21,7 +21,9 @@
 // les llega.
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { rutaPuerta } from '@/config/navegacion'
+import { dejarFicheros, llevaFicheros } from '@/modules/conta/puerta/entregas'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
@@ -108,6 +110,26 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     window.addEventListener('keydown', tecla, true)
     return () => window.removeEventListener('keydown', tecla, true)
   }, [])
+
+  // V02 · Soltar un fichero en CUALQUIER pantalla abre la puerta con él. Las
+  // pantallas que ya saben qué hacer con un fichero (Bancos, la quincena de
+  // Catcher, la puerta misma) lo cogen antes y lo marcan (preventDefault): esas
+  // no se tocan. El resto, en vez de abrirlo el navegador, va a la puerta.
+  const navegarA = useNavigate()
+  useEffect(() => {
+    const encima = (e: DragEvent) => { if (llevaFicheros(e.dataTransfer?.types)) e.preventDefault() }
+    const soltar = (e: DragEvent) => {
+      if (e.defaultPrevented || !llevaFicheros(e.dataTransfer?.types)) return
+      const fs = Array.from(e.dataTransfer?.files ?? [])
+      if (!fs.length) return
+      e.preventDefault()
+      dejarFicheros('puerta', fs)
+      navegarA(rutaPuerta())
+    }
+    window.addEventListener('dragover', encima)
+    window.addEventListener('drop', soltar)
+    return () => { window.removeEventListener('dragover', encima); window.removeEventListener('drop', soltar) }
+  }, [navegarA])
 
   // El aviso de lo que ha pasado se va solo a los 8 s (el siguiente lo pisa antes).
   useEffect(() => {

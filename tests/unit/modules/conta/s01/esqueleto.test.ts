@@ -34,6 +34,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
   // A mano, para cada ruta de CONTA.rutas (el inventario del paso 1, §1).
   const ESPERADO: Record<keyof typeof CONTA.rutas, string | null> = {
     inicio: 'inicio',
+    // V02 · Inicio › Documentos: la puerta.
+    puerta: 'inicio.documentos',
     // S02: las páginas de Ajustes son las de su índice (ajustes/impuestos es «Tus impuestos»).
     empresa: 'ajustes.empresa', empresaApartado: 'ajustes.empresa', ajustesEntrada: 'ajustes.impuestos', alta: 'ajustes',
     muestraPiezas: 'ajustes.empresa', sistemaDiseno: 'ajustes.empresa',

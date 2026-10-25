@@ -128,7 +128,11 @@ export const PRODUCTOS: Producto[] = [
     id: 'despacho', etiqueta: 'Clientes del despacho', icono: 'despacho', ruta: `${R.impuestos}/clientes`,
     prefijos: [`${R.impuestos}/clientes`], solo: 'asesoria', pestanas: [],
   },
-  { id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: R.inicio, prefijos: [R.inicio], pestanas: [] },
+  {
+    // V02 · Inicio › Documentos (tablero 19): la puerta, la única página del apartado (la portada es Inicio a secas).
+    id: 'inicio', etiqueta: 'Inicio', icono: 'inicio', ruta: R.inicio, prefijos: [R.inicio],
+    pestanas: [{ id: 'documentos', etiqueta: 'Documentos', icono: 'documento', ruta: R.puerta, prefijos: [R.puerta] }],
+  },
   {
     id: 'contabilidad', etiqueta: 'Contabilidad', icono: 'contabilidad', ruta: R.libroDiario, prefijos: [], grupo: 'finanzas',
     pestanas: [

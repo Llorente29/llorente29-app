@@ -154,6 +154,8 @@ export const CONTA = {
   rutas: {
     /** Inicio (C06, «Estilo nuevo · Inicio»): la portada del módulo vendido solo. */
     inicio: 'inicio',
+    /** V02 · Inicio › Documentos (tablero 19): la puerta por la que entra todo. */
+    puerta: 'inicio/documentos',
     /** Tu empresa (Ajustes). Es la portada del módulo con Folvy (sin Inicio). */
     empresa: 'ajustes',
     /** Un apartado de Tu empresa (en el móvil, una pantalla por apartado). */
@@ -359,6 +361,8 @@ export const rutaLibros = (area?: string, accion?: string): string => {
   return accion ? rutaConta(CONTA.rutas.librosAccion, { area, accion }) : rutaConta(CONTA.rutas.librosArea, { area })
 }
 export const rutaCompras = (): string => rutaConta(CONTA.rutas.compras)
+/** V02 · La puerta (Inicio › Documentos), en una de sus pestañas: lo último, «necesita que lo mires» o colocado. */
+export const rutaPuerta = (ver?: 'mirar' | 'colocado'): string => `${rutaConta(CONTA.rutas.puerta)}${ver ? `?ver=${ver}` : ''}`
 /** D01 · N22, con su filtro (para-mirar, por-aclarar, apuntadas, todas) y su mes ('YYYY-MM'). */
 export const rutaDocumentos = (ver?: string, mes?: string): string => {
   const q = new URLSearchParams()
