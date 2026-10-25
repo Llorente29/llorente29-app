@@ -231,6 +231,9 @@ export const CONTA = {
     facturasVenta: 'ventas/facturas',
     nuevaFacturaVenta: 'ventas/facturas/nueva',
     facturaVenta: 'ventas/facturas/:facturaId',
+    /** V01 · Entrega 2 · Ventas › Cierres del día (solo con «Vendo en hostelería»): la lista y la ficha de uno. */
+    cierres: 'ventas/cierres',
+    cierre: 'ventas/cierres/:cierreId',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
@@ -372,6 +375,9 @@ export const rutaRecibidaAMano = (): string => rutaConta(CONTA.rutas.recibidaAMa
 export const rutaFacturasVenta = (): string => rutaConta(CONTA.rutas.facturasVenta)
 export const rutaNuevaFacturaVenta = (): string => rutaConta(CONTA.rutas.nuevaFacturaVenta)
 export const rutaFacturaVenta = (facturaId: string): string => rutaConta(CONTA.rutas.facturaVenta, { facturaId })
+/** V01 · Entrega 2 · Ventas › Cierres del día y un cierre. */
+export const rutaCierres = (): string => rutaConta(CONTA.rutas.cierres)
+export const rutaCierre = (cierreId: string): string => rutaConta(CONTA.rutas.cierre, { cierreId })
 /** Lo de antes: llevan a Ventas › Facturas. */
 export const rutaFacturasEmitidas = rutaFacturasVenta
 export const rutaNuevaEmitida = rutaNuevaFacturaVenta

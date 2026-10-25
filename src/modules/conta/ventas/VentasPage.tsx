@@ -1,42 +1,22 @@
 // src/modules/conta/ventas/VentasPage.tsx
 //
-// «Ventas» en el menú, como la maqueta (respuesta 1 del repaso de compras).
-// Su pantalla todavía no existe: llega con el detalle diario de las
-// plataformas (encargo «Plataformas»). Mientras tanto la entrada dice que aún
-// no y dónde está hoy lo que hay de ventas —los asientos de cada día en el
-// libro diario—, como las entradas de Ajustes que aún no tienen pantalla.
-//
-// N2 (24/10): con hostelería, arriba, «Lo que deja el cierre del día» (C11b).
-//
-// S01: sin hostelería no hay plataformas ni cierre del día: las ventas llegarán
-// con Facturación, y hoy una factura emitida se apunta a mano («Expedida»).
+// «Ventas» a secas (la dirección de antes). V01 · Entrega 2: ya no es una
+// página que dice «aún no»: lleva a lo que funciona. Con «Vendo en
+// hostelería», a Cierres del día (donde está ahora «Lo que deja el cierre del
+// día», C11b); sin ella, a Facturas. Mientras no se sabe, espera: también a la
+// empresa activa (sin ella, lo de hostelería se lee sin empresa y sale «no», y
+// llevaba a Facturas a quien sí vende en hostelería: lo cazó la e2e del móvil).
 
-import { Link } from 'react-router-dom'
-import { rutaFacturasVenta, rutaLibroDiario } from '@/config/navegacion'
-import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
-import { Cabecera, Vacio } from '@/modules/conta/ui/piezas'
-import { useVendePorPlataformas } from '@/modules/conta/services/plataformasCuenta'
-import { LoQueDejaElCierre } from './LoQueDejaElCierre'
+import { useContext } from 'react'
+import { Navigate } from 'react-router-dom'
+import { rutaCierres, rutaFacturasVenta } from '@/config/navegacion'
+import { MarcoContexto } from '@/modules/conta/marco/nuevo/contexto'
+import { useEmpresas } from '@/modules/conta/empresa/contexto'
 
 export default function VentasPage() {
-  const hosteleria = useHosteleria()
-  const vende = useVendePorPlataformas()
-  return (
-    <div className="cxc">
-      <Cabecera antetitulo="Contabilidad" titulo="Ventas" />
-      {/* N2 · Lo que deja el cierre del día (C11b): la cola, con la acción de cada pedido. */}
-      {hosteleria && <LoQueDejaElCierre conPlataformas={vende} />}
-      <div className="cx-tarjeta">
-        {hosteleria
-          ? <Vacio titulo="Aún no."
-              explicacion={vende
-                ? 'Lo que vendes cada día, plataforma a plataforma, llega con el detalle de las plataformas. Hoy las ventas ya se apuntan solas al cerrar cada día: están en el libro diario.'
-                : 'Esta pantalla aún no está. Lo que hay de ventas está en el libro diario.'}
-              accion={<Link to={rutaLibroDiario('ventas')} className="cx-enlace">Ver los asientos de ventas</Link>} />
-          : <Vacio titulo="Aún no."
-              explicacion="Tus facturas están en Ventas › Facturas: cada una con su número, su PDF y su asiento."
-              accion={<Link to={rutaFacturasVenta()} className="cx-enlace">Ir a Facturas</Link>} />}
-      </div>
-    </div>
-  )
+  const marco = useContext(MarcoContexto)
+  const { activa, cargando } = useEmpresas()
+  const hosteleria = marco ? marco.hosteleria : true
+  if (hosteleria === null || (cargando && !activa)) return <div className="s-lista" aria-busy="true" aria-label="Cargando Ventas"><div className="s-lista-cargando" /></div>
+  return <Navigate to={hosteleria ? rutaCierres() : rutaFacturasVenta()} replace />
 }

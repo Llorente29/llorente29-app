@@ -50,6 +50,7 @@ import { leerPendientes } from '@/modules/conta/services/cifrasService'
 import { cuentasDePendientes } from '@/modules/conta/lib/cifrasLibro'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { delLibroDiario, type AsientoDiario } from '@/modules/conta/lib/diario'
+import { ventasSinCanal } from '@/modules/conta/services/diarioService'
 
 export type CuentasMenu = Partial<Record<string, number | null>>
 
@@ -108,11 +109,13 @@ async function contarComoHoy(accountId: string, companyId: string | null): Promi
     // otro apartado (delLibroDiario).
     seguro(companyId
       ? (async () => {
-          const { data, error } = await tabla('journal_entry').select('id, status, source_type')
+          const { data, error } = await tabla('journal_entry').select('id, status, source_type, source_id')
             .eq('account_id', accountId).eq('company_id', companyId).in('status', ['propuesto', 'borrador'])
           if (error) throw new Error(error.message)
-          const filas = ((data ?? []) as { id: string; status: string; source_type: string }[])
-            .map((f) => ({ id: f.id, estado: f.status as AsientoDiario['estado'], origen: f.source_type as AsientoDiario['origen'] }))
+          const crudas = (data ?? []) as { id: string; status: string; source_type: string; source_id: string | null }[]
+          // V01 · Entrega 2: las de ventas con canal se deciden en Cierres del día; las del día entero, aquí.
+          const sinCanal = await ventasSinCanal(accountId, companyId, crudas.filter((f) => f.source_type === 'sales_day' && f.status === 'propuesto').map((f) => f.source_id))
+          const filas = crudas.map((f) => ({ id: f.id, estado: f.status as AsientoDiario['estado'], origen: f.source_type as AsientoDiario['origen'], sinCanal: !!f.source_id && sinCanal.has(f.source_id) }))
           const ids = delLibroDiario(filas).map((f) => f.id)
           if (ids.length === 0) return 0
           const esperan = await leerEsperan(companyId).catch((e: unknown) => { console.warn('[menú] no se pudo leer lo que espera', e); return null })

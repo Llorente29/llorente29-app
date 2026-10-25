@@ -259,8 +259,11 @@ export const emitirFactura = (id: string, quien: string | null) =>
 export const corregirFactura = (id: string, tipo: 'importes' | 'anular' | 'datos', motivo: string, quien: string | null) =>
   rpc<{ id: string; ya_estaba: boolean; total: number }>('conta_venta_corregir', { p_id: id, p_tipo: tipo, p_motivo: motivo, p_quien_nombre: quien })
 
-export const cobrarFactura = (id: string, fecha: string, importe: number, forma: string | null, nota: string | null, quien: string | null) =>
-  rpc<{ id: string; cobrado: number; queda: number }>('conta_venta_cobrar', { p_id: id, p_fecha: fecha, p_importe: importe, p_forma: forma, p_nota: nota, p_quien_nombre: quien })
+/** V01 · Entrega 2: en efectivo, la base hace y valida su asiento (570 / 430) y devuelve su número. */
+export const cobrarFactura = async (id: string, fecha: string, importe: number, forma: string | null, nota: string | null, quien: string | null) => {
+  const r = await rpc<{ id: string; cobrado: number; queda: number; asiento?: string | null; numero_asiento?: number | null }>('conta_venta_cobrar', { p_id: id, p_fecha: fecha, p_importe: importe, p_forma: forma, p_nota: nota, p_quien_nombre: quien })
+  return { ...r, numeroAsiento: r.numero_asiento == null ? null : Number(r.numero_asiento) }
+}
 
 // ── El PDF, el correo y Diez ──────────────────────────────────────────────────
 
@@ -304,7 +307,8 @@ export function datosDelPdf(empresa: DatosFacturaPdf['empresa'], f: FacturaGuard
     fecha: f.fecha,
     vence: f.vence,
     formaCobro,
-    cliente: { nombre: f.cliente.nombre ?? '', nif: f.cliente.nif ?? '', direccion: direccion(f.cliente) },
+    // V01 · Entrega 2: la resumen de un cierre (y su rectificativa) es a consumidor final, sin NIF.
+    cliente: { nombre: f.cliente.nombre ?? '', nif: f.cliente.nif ?? (f.origen === 'cierre_dia' ? 'consumidor final' : ''), direccion: direccion(f.cliente) },
     lineas: f.lineas.map((l) => ({ concepto: l.concepto, cantidad: l.cantidad, precio: l.precio, descuento: l.descuento, tipo: l.tipo, importe: l.importe })),
     porTipo,
     base: f.base, iva: f.iva, recargo: f.recargoImporte,
@@ -341,4 +345,20 @@ export async function enviarPorCorreo(id: string, para: string, quien: string | 
     if (ctx.status === 404) return { enviado: false, texto: 'No se ha mandado: el envío por correo aún no está publicado en este entorno.' }
   }
   return { enviado: false, texto: `No se ha mandado: ${error?.message ?? 'el envío por correo no ha contestado'}.` }
+}
+
+/**
+ * V01 · Entrega 2 · La factura de un asiento: la suya (emitida, o la resumen
+ * de un cierre) o la del cobro en efectivo que lo hizo. El Libro lo usa para
+ * no ofrecer «Anular» en el asiento de una factura: lleva a ella y a su
+ * «Corregir». Nombres dentro de cadenas (regla 40): customer_invoice.entry_id
+ * (0835) y customer_invoice_payment.entry_id (1440).
+ */
+export async function facturaDelAsiento(accountId: string, entryId: string): Promise<{ id: string; numero: string | null; cobro: boolean } | null> {
+  const [f] = await leer(tabla('customer_invoice').select('id, number_text').eq('account_id', accountId).eq('entry_id', entryId).neq('status', 'borrador').limit(1), 'la factura del asiento')
+  if (f) return { id: String(f.id), numero: s(f.number_text), cobro: false }
+  const [p] = await leer(tabla('customer_invoice_payment').select('invoice_id').eq('account_id', accountId).eq('entry_id', entryId).limit(1), 'el cobro del asiento')
+  if (!p) return null
+  const [g] = await leer(tabla('customer_invoice').select('id, number_text').eq('account_id', accountId).eq('id', String(p.invoice_id)).limit(1), 'la factura del cobro')
+  return g ? { id: String(g.id), numero: s(g.number_text), cobro: true } : null
 }
