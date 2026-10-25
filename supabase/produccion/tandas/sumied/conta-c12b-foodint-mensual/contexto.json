@@ -1,8 +1,8 @@
 {
-  "_que": "C12b · Foodint a mensual · contexto de producción de la tanda (20261024T1631), medido en SOLO LECTURA el 24/10 a las 16:32 UTC otra vez el 25/10 a las 05:09 UTC, con el #321 fusionado y su tanda aplicada, y a las 05:50 UTC, con la tanda del #322 aplicada y el #322 fusionado (igual las tres veces) con la consulta de analizar.mjs sql-contexto. Existen conta_diez_envio_empresa y external_send; nada en el historial. Medido ANTES de la tanda del C12: se vuelve a medir justo antes de lanzar esta.",
-  "medido": "2026-10-25T05:50Z",
+  "_que": "C12b · Foodint a mensual · contexto de producción de la tanda (20261024T1631), medido en SOLO LECTURA con la consulta de analizar.mjs sql-contexto. La última, el 25/10 a las 06:18 UTC (C12c: la 1631 ya crea conta_c12b_antes, la copia de antes, que en producción no existe), con la tanda del #322 aplicada y el #322 fusionado. Antes, el 24/10 a las 16:32 y el 25/10 a las 05:09 y 05:50: igual las cuatro veces en las tablas que ya existían. Existen conta_diez_envio_empresa y external_send; conta_c12b_antes, no; nada en el historial.",
+  "medido": "2026-10-25T06:18Z",
   "tanda": {
-    "supabase/migrations/20261024T1631_c12b_foodint_mensual.sql": "90304b74226233050d6843e26ea0ade2"
+    "supabase/migrations/20261024T1631_c12b_foodint_mensual.sql": "29495bdadd5999b85cbc5af59b074a38"
   },
   "contexto": {
     "tablas": ["public.conta_diez_envio_empresa", "public.external_send"], "funciones": [],
