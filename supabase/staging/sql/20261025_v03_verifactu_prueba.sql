@@ -12,10 +12,10 @@
 --      siempre (conta_venta_emitir) → dos altas F1, la segunda encadenada con la
 --      primera, cada huella el SHA-256 de su cadena, y en la cola.
 --   3. Suiza con IVA (3a, el camino de hoy: S1 con IDOtro 04). Lo que Hacienda
---      rechazaría no se emite (3b, con la línea pasada a exenta a mano, porque
---      la V01 aún no deja guardarla): un cliente de Suiza con la línea
---      sin IVA y sin decir por qué → no se emite, dice qué falta y NO gasta el
---      número; con «N2» (servicio a una empresa de fuera de la UE), sí.
+--      rechazaría se dice antes (3b): la comprobación previa sobre un borrador a
+--      Suiza sin IVA y sin motivo lo dice en palabras de la calle, y con «N2»
+--      queda limpia (no se emite: la V01 no emite líneas exentas); y una
+--      emisión con el NIF mal se deshace entera sin gastar número.
 --   4. El registro no se edita.
 --   5. Las vueltas atrás: sin el disparador ni las tablas; conta_venta_emitir
 --      con el mismo md5 del principio.
@@ -127,6 +127,11 @@ begin
   r := public.conta_venta_guardar(v_e, null, jsonb_build_object('cliente_id', v_ch, 'fecha', (now() at time zone 'Europe/Madrid')::date),
     jsonb_build_array(jsonb_build_object('concepto', 'Asesoría de cocina', 'cantidad', 1, 'precio', 2150, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V03');
   insert into _v values ('exenta', r->>'id'), ('suiza_iva', v_h::text);
+  -- Y otro al cliente de siempre, al que el superusuario le pondrá en la
+  -- factura un NIF mal escrito (la letra no es la suya).
+  r := public.conta_venta_guardar(v_e, null, jsonb_build_object('cliente_id', v_cli, 'fecha', (now() at time zone 'Europe/Madrid')::date),
+    jsonb_build_array(jsonb_build_object('concepto', 'Menú', 'cantidad', 1, 'precio', 10, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V03');
+  insert into _v values ('nif_mal', r->>'id');
 
   -- 4 · El registro no se edita.
   begin
@@ -138,49 +143,60 @@ begin
 end $$;
 reset role;
 
--- 3b · Lo que Hacienda rechazaría no se emite: el borrador a Suiza, ya sin IVA
--- y sin decir por qué. No gasta número; con «N2» (servicio a una empresa de
--- fuera de la UE), sí, encadenada tras la 3a.
+-- 3b · Lo que Hacienda rechazaría se dice antes, y no se emite.
+--   · La comprobación previa (la que usará la pantalla) sobre el borrador a
+--     Suiza ya sin IVA y sin decir por qué: lo dice en palabras de la calle;
+--     con «N2» (servicio a una empresa de fuera de la UE), ya no falta nada.
+--     No se EMITE: la V01 no emite líneas exentas (conta_venta_guardar solo
+--     admite «taxed», y su asiento no cuadra una 477 a 0): queda para Julio.
+--   · Una emisión con una falta (un NIF español mal escrito, que la V01 sí deja
+--     llegar a emitir) se deshace entera y NO gasta número.
 update public.customer_invoice_line set tax_rate_id = (select v::uuid from _v where clave = 't0'), tax_pct = 0, tax_amount = 0
  where invoice_id = (select v::uuid from _v where clave = 'exenta');
 update public.customer_invoice set tax = 0, total = base where id = (select v::uuid from _v where clave = 'exenta');
+update public.customer_invoice set customer = jsonb_set(customer, '{nif}', '"12345678A"') where id = (select v::uuid from _v where clave = 'nif_mal');
 -- El contador no lo lee el usuario: se mide aquí, antes y después.
 insert into _v select 'contador_antes', coalesce(max(last_number), 0)::text from public.customer_invoice_counter
  where company_id = (select v::uuid from _v where clave = 'empresa') and series_code = 'F';
 set local role authenticated;
 do $$
 declare
-  v_e uuid := (select v::uuid from _v where clave = 'empresa'); v_h uuid := (select v::uuid from _v where clave = 'exenta');
-  v_msg text;
+  v_h uuid := (select v::uuid from _v where clave = 'exenta'); v_m uuid := (select v::uuid from _v where clave = 'nif_mal');
+  k jsonb; v_msg text;
 begin
+  k := public.verifactu_comprobar(v_h);
+  if not exists (select 1 from jsonb_array_elements(k->'faltas') x where x->>'campo' = 'tipo_venta' and x->>'frase' like '%fuera de la UE%dime qué le has vendido%') then
+    raise exception 'PRUEBA V03 · 3b: la comprobación no dice qué falta en palabras de la calle (%).', k->'faltas';
+  end if;
+  v_msg := (select x->>'frase' from jsonb_array_elements(k->'faltas') x where x->>'campo' = 'tipo_venta' limit 1);
+  perform public.verifactu_operacion_poner(v_h, 'N2', null, null, 'Prueba V03');
+  k := public.verifactu_comprobar(v_h);
+  if jsonb_array_length(k->'faltas') <> 0 or k->'desglose'->0->>'calificacion' <> 'N2' or k->'desglose'->0 ? 'tipo' or (k->>'cuota_total')::numeric <> 0 then
+    raise exception 'PRUEBA V03 · 3b: con N2 la comprobación no queda limpia (%).', k;
+  end if;
+  raise notice '3b · Suiza sin IVA y sin motivo: «%»; con N2, nada que falte y el desglose N2 sin tipo', v_msg;
+
+  if v_m is null then raise exception 'PRUEBA V03 · 3b: no encuentro el borrador del NIF mal.'; end if;
   begin
-    perform public.conta_venta_emitir(v_h, 'Prueba V03');
-    raise exception 'PRUEBA V03 · 3b: se ha emitido sin decir por qué va sin IVA.';
+    perform public.conta_venta_emitir(v_m, 'Prueba V03');
+    raise exception 'PRUEBA V03 · 3b: se ha emitido con el NIF mal.';
   exception when check_violation then v_msg := sqlerrm;
   end;
-  if (select status from public.customer_invoice where id = v_h) <> 'borrador' then
-    raise exception 'PRUEBA V03 · 3b: la que no se emite ha quedado emitida.';
+  if (select status from public.customer_invoice where id = v_m) <> 'borrador' or (select number_text from public.customer_invoice where id = v_m) is not null then
+    raise exception 'PRUEBA V03 · 3b: la del NIF mal ha quedado emitida o con número.';
   end if;
-  if v_msg not like '%fuera de la UE%dime qué le has vendido%' then raise exception 'PRUEBA V03 · 3b: no dice qué falta en palabras de la calle («%»).', v_msg; end if;
-  perform public.verifactu_operacion_poner(v_h, 'N2', null, null, 'Prueba V03');
-  perform public.conta_venta_emitir(v_h, 'Prueba V03');
-  perform 1 from public.verifactu_registro where invoice_id = v_h and desglose->0->>'calificacion' = 'N2' and desglose->0 ? 'tipo' = false
-     and destinatarios->0->>'id_type' = '04' and cuota_total = 0 and importe_total = 2150.00
-     and huella_anterior = (select huella from public.verifactu_registro where invoice_id = (select v::uuid from _v where clave = 'suiza_iva'));
-  if not found then raise exception 'PRUEBA V03 · 3b: la de Suiza con N2 no tiene su alta como debe (%).', (select row_to_json(r) from public.verifactu_registro r where invoice_id = v_h); end if;
-  raise notice '3b · Suiza sin IVA y sin motivo: «%»; con N2, su alta encadenada', v_msg;
+  if v_msg not like '%NIF del cliente%no es un NIF español válido%' then raise exception 'PRUEBA V03 · 3b: el NIF mal no se dice en palabras de la calle («%»).', v_msg; end if;
+  raise notice '3b · NIF mal: «%», y la factura sigue en borrador', v_msg;
 end $$;
 reset role;
--- La rechazada no gastó número: después hay UNO más, y es el de la emitida con N2.
+-- Ni la del NIF mal ni nada de la 3b ha gastado número.
 do $$
 declare v_antes int := (select v::int from _v where clave = 'contador_antes'); v_despues int;
 begin
   select coalesce(max(last_number), 0) into v_despues from public.customer_invoice_counter
    where company_id = (select v::uuid from _v where clave = 'empresa') and series_code = 'F';
-  if v_despues <> v_antes + 1 or (select number from public.customer_invoice where id = (select v::uuid from _v where clave = 'exenta')) <> v_despues then
-    raise exception 'PRUEBA V03 · 3b: la rechazada ha gastado número (% → %).', v_antes, v_despues;
-  end if;
-  raise notice '3b · la rechazada no gastó número (% → %, el de la emitida con N2)', v_antes, v_despues;
+  if v_despues <> v_antes then raise exception 'PRUEBA V03 · 3b: la emisión rechazada ha gastado número (% → %).', v_antes, v_despues; end if;
+  raise notice '3b · el contador no se ha movido (%)', v_despues;
 end $$;
 
 -- 5 · Las vueltas atrás.
