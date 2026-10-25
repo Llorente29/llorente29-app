@@ -1,0 +1,17 @@
+{
+  "_que": "V01 · Entrega 1 · facturas de venta · contexto de producción de la tanda (0835 y 0836), medido en SOLO LECTURA el 24/10 con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existe solo journal_entry (14.955 filas, fuera del camino del pedido); no existe nada de lo que crea la 0835 (las cinco customer_invoice* ni sus funciones); nada en el historial.",
+  "medido": "2026-10-24T09:43Z",
+  "tanda": {
+    "supabase/migrations/20261024T0835_v01_facturas_venta.sql": "1b5667c54e3cbb4b7bd181f0be909d2f",
+    "supabase/migrations/20261024T0836_v01_origen_factura_venta.sql": "b7641ab87a6005e1d9279dbbb796662d"
+  },
+  "contexto": {
+    "tablas": ["public.journal_entry"],
+    "funciones": [],
+    "filas": { "public.journal_entry": 14955 },
+    "otras": {},
+    "camino": { "tablas": [], "funciones": [] },
+    "usos": {},
+    "registro": []
+  }
+}

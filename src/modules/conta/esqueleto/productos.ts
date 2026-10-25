@@ -57,6 +57,8 @@ export interface Pestana {
   ver?: string
   /** La página existe pero aún dice «aún no» (Ajustes): no sale en el producto vendido solo. */
   hueco?: boolean
+  /** V01 · El bloque de la barra al que pertenece («Hostelería»): su título sale encima de la primera. */
+  bloque?: string
 }
 
 export interface Producto {
@@ -142,14 +144,19 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    // S02 · Facturas emitidas · Cobros · Series. PR 2 (decisión 5 de Julio): la
-    // emitida pasa aquí y Facturación sale en la barra con ella. Cobros y Series,
-    // aún sin pantalla: no salen.
-    id: 'facturacion', etiqueta: 'Facturación', icono: 'facturacion', ruta: R.facturasEmitidas, prefijos: [], grupo: 'finanzas',
+    // V01 (Julio, 24/10) · Ventas sustituye a Facturación: Facturas (luego
+    // Presupuestos y Cobros) y, solo si vende en hostelería, Cierres del día y
+    // Liquidaciones (entregas 2 y 3). Solo sale lo que funciona: Cobros y
+    // Series, aún sin pantalla, no salen. El id sigue siendo 'facturacion' (el
+    // interruptor, los favoritos y las preferencias guardadas lo usan).
+    id: 'facturacion', etiqueta: 'Ventas', icono: 'facturacion', ruta: R.facturasVenta, prefijos: [], grupo: 'finanzas',
     pestanas: [
-      { id: 'emitidas', etiqueta: 'Facturas emitidas', icono: 'facturas', ruta: R.facturasEmitidas, prefijos: [R.facturasEmitidas] },
+      { id: 'emitidas', etiqueta: 'Facturas', icono: 'facturas', ruta: R.facturasVenta, prefijos: [R.facturasVenta, R.facturasEmitidas] },
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: null, prefijos: [] },
       { id: 'series', etiqueta: 'Series', icono: 'plantillas', ruta: null, prefijos: [] },
+      // V01 · Entrega 2: el bloque «Hostelería», solo con «Vendo en hostelería».
+      // «Ventas» a secas (lo de antes) lleva aquí.
+      { id: 'cierres', etiqueta: 'Cierres del día', icono: 'cierre', ruta: R.cierres, prefijos: [R.cierres, R.ventas], solo: 'hosteleria', bloque: 'Hostelería' },
     ],
   },
   {

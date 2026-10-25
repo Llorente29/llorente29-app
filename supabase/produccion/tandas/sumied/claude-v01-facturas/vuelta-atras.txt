@@ -1,0 +1,3 @@
+# V01 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261024T0836_v01_origen_factura_venta.down.sql
+supabase/vuelta-atras/20261024T0835_v01_facturas_venta.down.sql

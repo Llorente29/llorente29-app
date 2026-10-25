@@ -19,7 +19,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { rutaAsiento, rutaLibroDiario, rutaMayor } from '@/config/navegacion'
+import { rutaAsiento, rutaCierre, rutaFacturaVenta, rutaLibroDiario, rutaMayor } from '@/config/navegacion'
+import { facturaDelAsiento } from '@/modules/conta/services/ventasService'
 import { NoConfirmadosDelDia } from '@/modules/conta/libro/NoConfirmados'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
@@ -54,6 +55,8 @@ interface Datos {
   asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null
   /** C07: su envío a Diez y, si está anulado, el de su contraasiento (cualquier tipo de asiento). */
   envio: EnvioAsiento | null; contra: EnvioAsiento | null
+  /** V01 · Entrega 2: la factura de este asiento (o la del cobro en efectivo que lo hizo), si la tiene. */
+  factura: { id: string; numero: string | null; cobro: boolean } | null
   /** C06b (21/10): por qué no lo validaría la base (conta_motivos_para_validar); null si no se ha podido leer. */
   motivos: MotivoEspera[] | null; motivosError: string | null
 }
@@ -89,7 +92,10 @@ export default function AsientoPage() {
         const motivos = asiento && (asiento.estado === 'propuesto' || asiento.estado === 'borrador')
           ? await motivosParaValidar(asiento.id).catch((e: unknown) => { motivosError = e instanceof Error ? e.message : String(e); return null })
           : []
-        return { asiento, cuentas, cierres, conDiez, conDiezError, motivos, motivosError,
+        // V01 · Entrega 2: el asiento de una factura (o de un cierre con su factura) no se anula aquí: lleva a ella.
+        const factura = asiento && (asiento.origen === 'customer_invoice' || asiento.origen === 'sales_day')
+          ? await facturaDelAsiento(accountId, asiento.id).catch(() => null) : null
+        return { asiento, cuentas, cierres, conDiez, conDiezError, motivos, motivosError, factura,
           envio: (asiento && envios?.envios.get(asiento.id)) ?? null, contra: (asiento && envios?.contras.get(asiento.id)) ?? null }
       })
       .then((d) => { if (vivo) setR({ clave, datos: d, error: null }) },
@@ -187,8 +193,14 @@ export default function AsientoPage() {
         <div className="cxd-acciones">
           {editable && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('descartar')} disabled={ocupado}>Descartar</button>}
           {datos.conDiez?.documento && <VerDocumento ruta={datos.conDiez.documento.ruta} alFallar={(t) => { setHecho(null); setFallo(t) }} />}
-          {editable && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? (encendido && !mensual ? 'Validando y enviando…' : 'Validando…') : 'Validar asiento'}</button>}
-          {a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
+          {/* V01 · Entrega 2: un cierre del día se valida en Ventas › Cierres del día, con su factura resumen y su PDF. */}
+          {editable && a.origen === 'sales_day' && a.origenId && datos.conDiez
+            ? <Link to={rutaCierre(a.origenId)} className="cx-boton">Validar en Cierres del día</Link>
+            : editable && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? (encendido && !mensual ? 'Validando y enviando…' : 'Validando…') : 'Validar asiento'}</button>}
+          {/* V01 · Entrega 2: el asiento de una factura no se anula desde aquí: se corrige desde la factura. El de un cobro en efectivo, sí. */}
+          {a.estado === 'validado' && datos.factura && !datos.factura.cobro
+            ? <Link to={rutaFacturaVenta(datos.factura.id)} className="cx-boton-sec" title="Se corrige desde la factura, con «Corregir»">Ir a la factura {datos.factura.numero ?? ''}</Link>
+            : a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
         </div>
       </header>
       <Guardado texto={hecho} />

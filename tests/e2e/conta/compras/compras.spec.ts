@@ -122,7 +122,7 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
     // Ventas ya no está: la sustituye Facturación (S01). S02 · PR 2: Facturación ya
     // tiene pantalla (Facturas emitidas) y sale, entre Contabilidad y Compras y gastos.
     // S02: «Favoritos» también es un .s-barra-item, pero es un botón: se cuentan los apartados (enlaces).
-    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Facturación', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
+    await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Ventas', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   }
   await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()
@@ -232,13 +232,13 @@ test('La ficha lleva a «Cómo te factura»; «Abrir su ficha» desde Compras ca
   await expect(page.getByRole('heading', { level: 1, name: 'Cómo te factura' })).toBeVisible()
 })
 
-test('Ventas, en el menú: lo que deja el cierre del día, y dónde están hoy las ventas', async ({ page }) => {
+test('Ventas, en el menú: lleva a Cierres del día, con lo que deja el cierre del día', async ({ page }) => {
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
+  // V01 · Entrega 2: con hostelería, «Ventas» a secas es Ventas › Cierres del día.
   await page.goto('/conta/ventas')
-  await expect(page.getByRole('heading', { level: 1, name: 'Ventas' })).toBeVisible()
-  await expect(page.getByText('Aún no.')).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Ver los asientos de ventas' })).toHaveAttribute('href', /\/conta\/libros\/diario\?ver=ventas$/)
+  await expect(page).toHaveURL(/\/conta\/ventas\/cierres$/, { timeout: 30_000 })
+  await expect(page.getByRole('heading', { level: 1, name: 'Cierres del día' })).toBeVisible()
   // N2 · Lo que deja el cierre del día: la bandeja, con sus tres cifras y su cola (o lo que dice si no hay nada).
   const cierre = page.getByRole('region', { name: 'Lo que deja el cierre del día' })
   await expect(cierre).toBeVisible({ timeout: 30_000 })

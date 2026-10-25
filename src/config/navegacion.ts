@@ -224,9 +224,16 @@ export const CONTA = {
     recibidaEnAsientos: 'libros/diario/recibidas/:invoiceId',
     /** S02 · PR 2 · Una factura recibida escrita a mano, sin papel (antes, libros/diario/recibidas?nueva=a-mano). */
     recibidaAMano: 'documentos/nueva',
-    /** S02 · PR 2 · Facturación › Facturas emitidas, y una nueva (la hoja del asiento con la factura). */
+    /** S02 · PR 2 · Facturación › Facturas emitidas, y una nueva. V01: solo para llevar a Ventas › Facturas (module.tsx). */
     facturasEmitidas: 'facturacion/emitidas',
     nuevaEmitida: 'facturacion/emitidas/nueva',
+    /** V01 · Ventas › Facturas: la lista, una nueva a mano y la ficha de una. */
+    facturasVenta: 'ventas/facturas',
+    nuevaFacturaVenta: 'ventas/facturas/nueva',
+    facturaVenta: 'ventas/facturas/:facturaId',
+    /** V01 · Entrega 2 · Ventas › Cierres del día (solo con «Vendo en hostelería»): la lista y la ficha de uno. */
+    cierres: 'ventas/cierres',
+    cierre: 'ventas/cierres/:cierreId',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
@@ -364,9 +371,16 @@ export const rutaRecibidaEnAsientos = (invoiceId?: string): string =>
 export const CONSULTA_RECIBIDA_A_MANO = 'nueva=a-mano'
 /** S02 · PR 2 · «Escribir una a mano», en Compras y gastos › Facturas recibidas. */
 export const rutaRecibidaAMano = (): string => rutaConta(CONTA.rutas.recibidaAMano)
-/** S02 · PR 2 · Facturación › Facturas emitidas, y una nueva. */
-export const rutaFacturasEmitidas = (): string => rutaConta(CONTA.rutas.facturasEmitidas)
-export const rutaNuevaEmitida = (): string => rutaConta(CONTA.rutas.nuevaEmitida)
+/** V01 · Ventas › Facturas (la de antes, Facturación › Facturas emitidas, lleva aquí), una nueva y una. */
+export const rutaFacturasVenta = (): string => rutaConta(CONTA.rutas.facturasVenta)
+export const rutaNuevaFacturaVenta = (): string => rutaConta(CONTA.rutas.nuevaFacturaVenta)
+export const rutaFacturaVenta = (facturaId: string): string => rutaConta(CONTA.rutas.facturaVenta, { facturaId })
+/** V01 · Entrega 2 · Ventas › Cierres del día y un cierre. */
+export const rutaCierres = (): string => rutaConta(CONTA.rutas.cierres)
+export const rutaCierre = (cierreId: string): string => rutaConta(CONTA.rutas.cierre, { cierreId })
+/** Lo de antes: llevan a Ventas › Facturas. */
+export const rutaFacturasEmitidas = rutaFacturasVenta
+export const rutaNuevaEmitida = rutaNuevaFacturaVenta
 /** E05 · Una quincena de Catcher. */
 export const rutaLoteCatcher = (loteId: string): string => rutaConta(CONTA.rutas.loteCatcher, { loteId })
 /** Bancos (B01): sin pestaña, Movimientos. */

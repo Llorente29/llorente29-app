@@ -92,8 +92,10 @@ test('C · cuenta solo de contabilidad: ni Liquidaciones, ni «Sus tiendas», ni
   await sinPlataforma(page, 'la ficha, entrando por /liquidaciones')
 
   // 4 · Ventas, que sí está en el menú de esta cuenta.
+  // V01 · Entrega 2: «Ventas» a secas lleva a Facturas sin hostelería (Cierres del día es de hostelería).
   await page.goto('/conta/ventas')
-  await expect(page.getByRole('heading', { level: 1, name: 'Ventas' })).toBeVisible({ timeout: 30_000 })
+  await expect(page).toHaveURL(/\/conta\/ventas\/facturas$/, { timeout: 30_000 })
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas' })).toBeVisible({ timeout: 30_000 })
   await sinPlataforma(page, 'Ventas')
 
   expect(escrituras).toEqual([])
