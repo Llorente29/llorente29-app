@@ -1,30 +1,28 @@
 // src/modules/conta/puerta/PuertaPage.tsx
 //
-// V02 · Entrega 1 · LA PUERTA: Inicio › Documentos (tablero 19, aprobado por
-// Julio el 25/10). Todo lo que entra en la empresa, por un solo sitio:
+// V02d · Inicio › Documentos, rehecho para que se venda (tableros 22 y 24,
+// aprobados por Julio el 25/10). Sustituye al tablero 19.
 //
-//   · Arriba, las cuatro cifras: lo que ha llegado esta semana, lo que necesita
-//     que lo mires, lo que falta y ya debería estar, y lo que está por llegar.
-//   · «Lo que falta»: el calendario de cada fuente (lib/puerta.ts), con «aún a
-//     tiempo» o «N días tarde», «Subirla» y «Pedírsela» (el correo propuesto,
-//     que se revisa y manda la persona desde el suyo). Se apaga por empresa y
-//     por fuente. Sin fuentes todavía: «Aprenderlo de lo que ya pasa».
-//   · Lo último, en tres pestañas (Lo último · Necesita que lo mires ·
-//     Colocado): por dónde llegó, qué es, de quién, importe y dónde está. Lo
-//     que no se reconoce, con «Dime qué es», que aprende el remitente.
-//   · «Cómo te llegan los documentos»: la dirección única (con Copiar), el
-//     móvil, arrastrar en cualquier pantalla y lo conectado.
-//   · «Subir documentos» (el único principal): cada fichero va por su camino de
-//     siempre — la factura a Compras, la quincena de Catcher a sus facturas, el
-//     extracto a Bancos — y lo que no se sabe se queda aquí para «Dime qué es».
-//     En el móvil, «Hacer una foto» abre la cámara.
+//   · La banda del mes: «Tienes X de Y documentos que esperas este mes», la
+//     barra en tres colores (ya están · se retrasan · aún a tiempo) y «Pedir los
+//     N que se retrasan». Mientras el envío automático de correos no esté
+//     abierto, el botón lo dice al pulsarlo y no hace como que envía.
+//   · «No sé qué es este documento»: una tarjeta por cada uno, con cuatro
+//     botones y «Lo mismo la próxima vez que escriba este remitente».
+//   · Dos columnas, según quién tiene que hacer algo (lib/documentosMes.ts):
+//     «Te lo tienen que mandar» (Pedir) y «Lo tienes que subir tú» (Subir).
+//     Se ven 3 filas por columna y «Ver todo» enseña el resto: nada se esconde.
+//     «⋯»: «Ya lo tengo» y «No me avises de este».
+//   · «Ha llegado esta semana» y «Tu correo de documentos».
+//   · En el móvil (tablero 24): la banda compacta, las dos columnas una debajo
+//     de otra y, abajo, «Hacer foto o subir».
 //
-// Regla 8: cada botón dice lo que ha hecho, con contenido. Regla 7: el aviso
-// apagado no esconde nada que exista: la pestaña «Lo último» lo enseña todo.
+// Lo aprendido que nadie ha tocado se pone al día solo al abrir la pantalla
+// (conta_puerta_al_dia). Regla 8: cada botón dice lo que ha hecho, con contenido.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaBancos, rutaDocumentos, rutaLiquidaciones, rutaLiquidacionesVentas, rutaLoteCatcher, rutaPuerta, rutaRevisarFactura } from '@/config/navegacion'
+import { Link, useNavigate } from 'react-router-dom'
+import { rutaBancos, rutaDocumentos, rutaLiquidaciones, rutaLiquidacionesVentas, rutaLoteCatcher, rutaQueEsperas, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -33,23 +31,24 @@ import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
-import { Boton, Chip, Dialogo, Tarjeta } from '@/modules/conta/diseno'
-import { PestanasEstado } from '@/modules/conta/diseno/plantillas'
+import { Boton, Dialogo, Tarjeta } from '@/modules/conta/diseno'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { QuincenaCatcher } from '@/modules/conta/documentos/QuincenaCatcher'
 import { contactoFacturacion, subirFacturas } from '@/modules/conta/services/documentosService'
+import { alDia, avisarDe, dimeQueEs, direccionUnica, leerFuentes, leerPuerta, pedirla, subirSinSaber, yaLoTengo } from '@/modules/conta/services/puertaService'
 import {
-  aprenderFuentes, apagarFuente, dimeQueEs, direccionUnica, leerFuentes, leerPuerta, pedirla, ponerAjustes, ponerLocal, subirSinSaber,
-} from '@/modules/conta/services/puertaService'
-import {
-  DONDE, ETIQUETA_QUE, POR, TONO_QUE, cifrasPuerta, clasificarSubida, correoPedirla, cuandoLlego, ddmm, deLaPestana, loQueFalta, necesitaMirarse,
-  nombreDelLocal, type DatosFuentes, type DatosPuerta, type FilaFalta, type Fuente, type Local, type GrupoSubida, type PestanaPuerta, type QueEs, type Ultimo,
+  DONDE, clasificarSubida, correoPedirla, cuandoLlego, necesitaMirarse, queSeEspera,
+  type DatosPuerta, type Fuente, type GrupoSubida, type QueEs, type Ultimo,
 } from '@/modules/conta/lib/puerta'
+import { cabeceraMes, filasDocumentos, nadaEnColumna, primeras, type CabeceraMes, type Columna, type FilaDoc } from '@/modules/conta/lib/documentosMes'
 import { dejarFicheros, mirarFicheros, tomarFicheros } from '@/modules/conta/puerta/entregas'
 
 const NOMBRE = MARCA.nombre
 const ACEPTA = '.pdf,.jpg,.jpeg,.png,.webp,.heic,.zip,.xlsx,.xls,.csv,.n43,.q43,.c43,.aeb,.txt,.xml,.xsig,application/pdf,image/*'
-const TIPOS_DIME: QueEs[] = ['factura', 'ticket', 'liquidacion', 'extracto', 'nomina', 'riders', 'otro']
+/** El envío automático de correos. Cerrado mientras no haya dominio de correo: «Pedir» abre el correo de la persona. */
+const ENVIO_ABIERTO = false
+
+type Aviso = { texto: ReactNode; tono?: 'falta' | 'duda' }
 
 export default function PuertaPage() {
   const { accountId, cargando, userName } = useCuentaConta()
@@ -57,25 +56,29 @@ export default function PuertaPage() {
   const movil = useIsMobile()
   const hosteleria = useHosteleria()
   const navegar = useNavigate()
-  const [query, setQuery] = useSearchParams()
   const hoy = hoyEnMadrid()
+  const quien = userName ?? null
   const [vuelta, setVuelta] = useState(0)
-  const [aviso, setAviso] = useState<{ texto: ReactNode; tono?: 'falta' | 'duda' } | null>(null)
+  const [aviso, setAviso] = useState<Aviso | null>(null)
   const [subida, setSubida] = useState<File[] | null>(() => { const fs = mirarFicheros('puerta'); return fs.length ? fs : null })
-  const [dime, setDime] = useState<Ultimo | null>(null)
-  const [pidiendo, setPidiendo] = useState<FilaFalta | null>(null)
-  const [ajustes, setAjustes] = useState(false)
+  const [pidiendo, setPidiendo] = useState<FilaDoc | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const elegir = useRef<HTMLInputElement>(null)
   const camara = useRef<HTMLInputElement>(null)
+  const puestaAlDia = useRef<string | null>(null)
 
   const clave = `${accountId}:${activa?.id}:${vuelta}`
-  const puerta = useLeer(activa ? () => leerPuerta(activa.id) : null, clave)
+  const puerta = useLeer(activa ? () => leerPuerta(activa.id, 7) : null, clave)
   const fuentes = useLeer(activa ? () => leerFuentes(activa.id) : null, clave)
-  const pestana: PestanaPuerta = query.get('ver') === 'mirar' ? 'mirar' : query.get('ver') === 'colocado' ? 'colocado' : 'ultimo'
 
-  // Lo que se soltó en otra pantalla llega aquí, una vez (se mira al abrir y se vacía el buzón).
+  // Lo que se soltó en otra pantalla llega aquí, una vez.
   useEffect(() => { tomarFicheros('puerta') }, [])
+  // Lo aprendido que nadie ha tocado, al día (una vez por empresa); si cambia algo, se vuelve a leer.
+  useEffect(() => {
+    if (!activa || puestaAlDia.current === activa.id) return
+    puestaAlDia.current = activa.id
+    alDia(activa.id).then((cambio) => { if (cambio) setVuelta((v) => v + 1) }, () => null)
+  }, [activa])
 
   const recargar = () => setVuelta((v) => v + 1)
   const conAviso = async (hacer: () => Promise<ReactNode>) => {
@@ -83,33 +86,41 @@ export default function PuertaPage() {
     try { setAviso({ texto: await hacer() }); recargar() } catch (e) { setAviso({ texto: e instanceof Error ? e.message : String(e), tono: 'falta' }) } finally { setOcupado(false) }
   }
 
-  const principal = <Boton variante="principal" icono="subir" tecla="U" onClick={() => elegir.current?.click()}>Subir documentos</Boton>
+  const principal = <Boton variante="principal" tecla="U" onClick={() => elegir.current?.click()}>Subir documentos</Boton>
   const mas: GrupoDeAcciones[] = [{
-    titulo: 'La puerta',
+    titulo: 'Documentos',
     acciones: [
+      { id: 'esperas', etiqueta: 'Qué esperas cada mes', dato: 'Lo que te tiene que llegar, cada cuánto y de qué local', alPulsar: () => navegar(rutaQueEsperas()), grupo: '' },
       ...(movil ? [{ id: 'foto', etiqueta: 'Hacer una foto', dato: 'Abre la cámara del móvil', alPulsar: () => camara.current?.click(), grupo: '' }] : []),
-      { id: 'aprender', etiqueta: 'Aprender lo que te tiene que llegar', dato: 'De tus facturas, liquidaciones, extractos y nóminas de los últimos meses', alPulsar: () => void conAviso(() => aprenderFuentes(activa!.id, userName ?? null).then((r) => r.texto)), grupo: '' },
-      { id: 'ajustes', etiqueta: 'Ajustes de «Lo que falta»', dato: 'Encenderlo o apagarlo, el margen y cada fuente', alPulsar: () => setAjustes(true), grupo: '' },
     ],
   }]
   const encabezado = (
-    <EncabezadoPagina titulo="Documentos"
-      frase={`Todo lo que entra en tu empresa, por una sola puerta. ${NOMBRE} reconoce qué es cada cosa y la lleva a su sitio; aquí solo te pide lo que necesita una decisión tuya.`}
-      principal={principal} masAcciones={activa ? mas : []} />
+    <EncabezadoPagina titulo="Documentos" frase="Todo lo que te llega se coloca solo. Aquí solo ves lo que necesita algo de ti."
+      principal={movil ? undefined : principal} masAcciones={activa ? mas : []} />
   )
   if (!accountId && !cargando) return <div className="s-pagina">{encabezado}<p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus documentos.</p></div>
   if (!activa) return <div className="s-pagina">{encabezado}<p className="s-apoyo">Aún no hay ninguna empresa: da de alta tu empresa y aquí entra todo lo suyo.</p></div>
 
   const p = puerta.datos
   const d = fuentes.datos
-  const c = p ? cifrasPuerta(p, d, hoy) : null
-  const falta = d ? loQueFalta(d, hoy) : []
+  const cab = d ? cabeceraMes(d, hoy) : null
+  const filas = d ? filasDocumentos(d, hoy) : null
+  const porPedir = filas?.mandar.filter((x) => x.dias > 0) ?? []
+  const noSe = (p?.ultimos ?? []).filter(necesitaMirarse)
   const direccion = p?.direcciones.find((x) => x.tipo === 'documentos') ?? null
+  const fuentesDe = (x: FilaDoc): Fuente[] => (d?.fuentes ?? []).filter((f) => x.fuentes.some((y) => y.id === f.id))
 
   const alElegir = (fs: FileList | null) => { const a = Array.from(fs ?? []); if (a.length) setSubida(a); if (elegir.current) elegir.current.value = ''; if (camara.current) camara.current.value = '' }
+  const pedirTodos = () => {
+    const nombres = porPedir.map((x) => x.nombre)
+    setAviso(ENVIO_ABIERTO ? null : {
+      tono: 'duda',
+      texto: <>El envío automático de correos aún no está abierto: <strong>no he mandado nada</strong>. Pídeselos uno a uno con «Pedir»: se abre tu correo con el mensaje ya escrito. {nombres.length === 1 ? 'Es' : `Son ${nombres.length}`}: {lista(nombres)}.</>,
+    })
+  }
 
   return (
-    <div className="s-pagina cxpu-puerta"
+    <div className="s-pagina cxdo" data-movil={movil || undefined}
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault() }}
       onDrop={(e) => { const fs = Array.from(e.dataTransfer.files ?? []); if (fs.length) { e.preventDefault(); setSubida(fs) } }}>
       {encabezado}
@@ -118,221 +129,292 @@ export default function PuertaPage() {
 
       {aviso && <p className="s-aviso-lista" data-tono={aviso.tono} role={aviso.tono ? 'alert' : 'status'} data-prueba="puerta-aviso">{aviso.texto}</p>}
       {(puerta.error || fuentes.error) && (
-        <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido leer la puerta: {puerta.error ?? fuentes.error} <button type="button" className="s-boton s-boton-enlace" onClick={recargar}>Reintentar</button></p>
+        <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer tus documentos: {puerta.error ?? fuentes.error} <button type="button" className="s-boton s-boton-enlace" onClick={recargar}>Reintentar</button></p>
       )}
 
       {subida && accountId && (
-        <Subida ficheros={subida} accountId={accountId} companyId={activa.id} quien={userName ?? null}
-          alTerminar={(texto) => { if (texto) setAviso({ texto }); recargar() }}
-          alCerrar={() => setSubida(null)}
+        <Subida ficheros={subida} accountId={accountId} companyId={activa.id} quien={quien}
+          alTerminar={() => recargar()} alCerrar={() => setSubida(null)}
           aBancos={(f) => { dejarFicheros('bancos', [f]); navegar(rutaBancos('subir')) }} />
       )}
 
-      {/* Las cuatro cifras de arriba. */}
-      <div className="cxpu-cifras" aria-busy={!c}>
-        <Cifra etiqueta="Ha llegado esta semana" n={c?.llegado.n} apoyo={c?.llegado.apoyo} />
-        <Cifra etiqueta="Necesita que lo mires" n={c?.mirar.n} apoyo={c?.mirar.apoyo} tono={c && c.mirar.n > 0 ? 'duda' : undefined} a={rutaPuerta('mirar')} />
-        <Cifra etiqueta="Falta y ya debería estar" n={c?.falta.n} apoyo={c?.falta.apoyo} tono={c && c.falta.n > 0 ? 'falta' : undefined} />
-        <Cifra etiqueta="Por llegar este mes" n={c?.porLlegar.n} apoyo={c?.porLlegar.apoyo} />
+      <BandaMes cab={cab} apagado={d?.ajustes.lo_que_falta === false} nPedir={porPedir.length} movil={movil} alPedir={pedirTodos} />
+
+      {noSe.map((u) => (
+        <NoSeQueEs key={u.id} u={u} hoy={hoy} ocupado={ocupado}
+          alDecir={(tipo, recordar) => void conAviso(() => dimeQueEs(u.id, tipo, recordar, quien))} />
+      ))}
+
+      <div className="cxdo-columnas">
+        <ColumnaDocs columna="mandar" titulo="Te lo tienen que mandar" frase="Proveedores, gestoría y suministros. Un clic y se lo pedimos."
+          filas={filas?.mandar ?? null} movil={movil} ocupado={ocupado}
+          alBoton={(x) => setPidiendo(x)}
+          alYaLoTengo={(x) => void conAviso(async () => { await yaLoTengo(x.fuentes, quien); return <>Apuntado: ya tienes <strong>{x.nombre}</strong> · {x.que.toLowerCase()}. Deja de avisar.</> })}
+          alNoAvisar={(x) => void conAviso(async () => { await avisarDe(activa.id, x.fuentes.map((y) => y.id), false, quien); return <><strong>{x.nombre}</strong> ya no avisa. Lo vuelves a encender en «<Link to={rutaQueEsperas()}>Qué esperas cada mes</Link>».</> })} />
+        <ColumnaDocs columna="subir" titulo="Lo tienes que subir tú" frase="Cosas que solo puedes descargar tú: portales y banco."
+          filas={filas?.subir ?? null} movil={movil} ocupado={ocupado}
+          alBoton={() => elegir.current?.click()}
+          alYaLoTengo={(x) => void conAviso(async () => { await yaLoTengo(x.fuentes, quien); return <>Apuntado: ya tienes <strong>{x.nombre}</strong> · {x.que.toLowerCase()}. Deja de avisar.</> })}
+          alNoAvisar={(x) => void conAviso(async () => { await avisarDe(activa.id, x.fuentes.map((y) => y.id), false, quien); return <><strong>{x.nombre}</strong> ya no avisa. Lo vuelves a encender en «<Link to={rutaQueEsperas()}>Qué esperas cada mes</Link>».</> })}
+          pie={filas && filas.subir.some((x) => x.familia === 'banco') && p && p.conectados.bancos.length === 0
+            ? <p className="cxdo-truco"><strong>Truco:</strong> conecta el banco y {NOMBRE} trae los movimientos solo. <Link to={rutaBancos()}>Conectar {bancoDe(filas.subir)}</Link></p>
+            : null} />
       </div>
 
-      <LoQueFalta d={d} filas={falta} movil={movil} ocupado={ocupado}
-        alSubir={() => elegir.current?.click()} alPedir={setPidiendo}
-        alAprender={() => void conAviso(() => aprenderFuentes(activa.id, userName ?? null).then((r) => r.texto))}
-        alEncender={() => void conAviso(() => ponerAjustes(activa.id, true, d?.ajustes.margen ?? 5, userName ?? null))} />
-
-      <div className="cxpu-dos">
-        <LoUltimo ultimos={p?.ultimos ?? null} pestana={pestana} hoy={hoy} movil={movil} hosteleria={hosteleria}
-          alPestana={(id) => { const q = new URLSearchParams(query); if (id === 'ultimo') q.delete('ver'); else q.set('ver', id); setQuery(q, { replace: true }) }}
-          alDime={setDime} />
-        <div className="cxpu-lado">
-          <ComoTeLlegan p={p} direccion={direccion?.direccion ?? null} encendida={direccion?.activa ?? false} ocupado={ocupado}
-            alCrear={() => void conAviso(() => direccionUnica(activa.id, userName ?? null).then((r) => <>Tu dirección es <strong>{r.direccion}</strong>{r.yaEstaba ? ' (ya la tenías)' : ''}. Reenvía ahí lo que te manden: {NOMBRE} lo lleva a su sitio.</>))}
-            alCopiar={(t) => void navigator.clipboard?.writeText(t).then(() => setAviso({ texto: <>Copiada: <strong>{t}</strong></> }), () => setAviso({ texto: `No se ha podido copiar: selecciónala y cópiala a mano (${t}).`, tono: 'duda' }))} />
-          <Tarjeta compacta>
-            <p className="cxpu-nota"><strong>Para cualquier negocio.</strong> Lo que se espera sale de lo que ya pasa en tu empresa: tus proveedores de cada mes, tu banco, tu gestoría, tus alquileres y, si los tienes, el datáfono, Amazon, Stripe o las plataformas de reparto. Cada cosa con el día en que suele llegar.</p>
-          </Tarjeta>
+      {!movil && (
+        <div className="cxdo-abajo">
+          <HaLlegado p={p} hoy={hoy} hosteleria={hosteleria} />
+          <TuCorreo p={p} direccion={direccion?.direccion ?? null} encendida={direccion?.activa ?? false} ocupado={ocupado}
+            alCrear={() => void conAviso(() => direccionUnica(activa.id, quien).then((r) => <>Tu dirección es <strong>{r.direccion}</strong>{r.yaEstaba ? ' (ya la tenías)' : ''}. Reenvía ahí lo que te manden: {NOMBRE} lo lleva a su sitio.</>))}
+            alCopiar={(t) => void navigator.clipboard?.writeText(t).then(() => setAviso({ texto: <>Copiada: <strong>{t}</strong>. Pégala en tus proveedores o en el reenvío de tu correo.</> }), () => setAviso({ texto: `No se ha podido copiar: selecciónala y cópiala a mano (${t}).`, tono: 'duda' }))} />
         </div>
-      </div>
-
-      {dime && (
-        <DimeQueEs u={dime} alCerrar={() => setDime(null)}
-          alGuardar={(tipo, recordar) => { const id = dime.id; setDime(null); void conAviso(() => dimeQueEs(id, tipo, recordar, userName ?? null)) }} />
       )}
+
       {pidiendo && (
-        <Pedirsela fila={pidiendo} empresa={activa.razonSocial || activa.nombre || 'Tu empresa'} direccion={direccion?.direccion ?? null}
+        <Pedir fila={pidiendo} fuentes={fuentesDe(pidiendo)} empresa={activa.razonSocial || activa.nombre || 'Tu empresa'} direccion={direccion?.activa ? direccion.direccion : null}
           alCerrar={() => setPidiendo(null)}
-          alPedir={(email, asunto, cuerpo) => {
-            const f = pidiendo; setPidiendo(null)
-            void conAviso(async () => {
-              const r = await pedirla(f.id, f.hacia, email, asunto, cuerpo, userName ?? null)
-              window.location.href = r.mailto
-              return r.yaEstaba ? `${f.de}: ya estaba pedida este mes. Se abre tu correo por si quieres volver a mandarla.` : r.texto
-            })
-          }} />
-      )}
-      {ajustes && d && (
-        <AjustesFalta d={d} alCerrar={() => setAjustes(false)}
-          alPoner={(on, margen) => void conAviso(() => ponerAjustes(activa.id, on, margen, userName ?? null))}
-          alFuente={(id, activaF) => void conAviso(() => apagarFuente(activa.id, id, activaF, userName ?? null))}
-          alLocal={(f, local) => void conAviso(() => ponerLocal(activa.id, f, local, userName ?? null))} />
+          alPedir={async (f, dia, email, asunto, cuerpo) => {
+            const r = await pedirla(f.id, dia, email, asunto, cuerpo, quien)
+            window.location.href = r.mailto
+            return r.yaEstaba
+              ? `Ya estaba pedida este mes a ${email}. Se abre tu correo por si quieres volver a mandarla.`
+              : `Apuntado que se la pides a ${email}. Se abre tu correo con el mensaje escrito y la mandas tú: el envío automático aún no está abierto.`
+          }}
+          alTerminar={(textos) => { setPidiendo(null); if (textos.length) { setAviso({ texto: textos.join(' ') }); recargar() } }} />
       )}
 
-      <BotonPulgar>{principal}</BotonPulgar>
+      <BotonPulgar><Boton variante="principal" ancho onClick={() => elegir.current?.click()}>Hacer foto o subir</Boton></BotonPulgar>
     </div>
   )
 }
 
-// ── Las piezas ──────────────────────────────────────────────────────────────
+const lista = (xs: readonly string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`)
+const bancoDe = (xs: readonly FilaDoc[]) => xs.find((x) => x.familia === 'banco')?.nombre.split(/\s+/)[0] ?? 'tu banco'
 
-function Cifra({ etiqueta, n, apoyo, tono, a }: { etiqueta: string; n: number | undefined; apoyo: string | undefined; tono?: 'duda' | 'falta'; a?: string }) {
-  const cuerpo = (
-    <>
-      <span className="cxpu-cifra-etiqueta">{etiqueta}</span>
-      <span className="cxpu-cifra-valor s-cifra" data-tono={tono}>{n ?? '—'}</span>
-      <span className="cxpu-cifra-apoyo">{apoyo ?? ' '}</span>
-    </>
+// ── La banda del mes ────────────────────────────────────────────────────────
+
+function BandaMes({ cab, apagado, nPedir, movil, alPedir }: { cab: CabeceraMes | null; apagado: boolean; nPedir: number; movil: boolean; alPedir: () => void }) {
+  if (!cab) return <section className="cxdo-banda" aria-busy="true" aria-label="Este mes"><p className="cxdo-banda-mes">Este mes</p></section>
+  const pct = (n: number) => (cab.total ? `${(100 * n) / cab.total}%` : '0%')
+  const boton = nPedir > 0 && (
+    <button type="button" className="cxdo-banda-boton" onClick={alPedir}>{nPedir === 1 ? 'Pedir el que se retrasa' : `Pedir los ${nPedir} que se retrasan`}</button>
   )
-  return a ? <Link to={a} className="cxpu-cifra">{cuerpo}</Link> : <div className="cxpu-cifra">{cuerpo}</div>
+  return (
+    <section className="cxdo-banda" aria-label={`Documentos de ${cab.mes}`} data-prueba="banda-mes">
+      <div className="cxdo-banda-cuerpo">
+        <p className="cxdo-banda-mes">{cab.mes}</p>
+        {apagado
+          ? <h2 className="cxdo-banda-titulo">El aviso de lo que se retrasa está apagado</h2>
+          : <h2 className="cxdo-banda-titulo">{movil ? `${cab.ya} de ${cab.total} documentos` : `Tienes ${cab.ya} de ${cab.total} documentos que esperas este mes`}</h2>}
+        <div className="cxdo-barra" role="img" aria-label={`${cab.ya} ya están, ${cab.retrasan} se retrasan y ${cab.aTiempo} aún a tiempo`}>
+          <span className="cxdo-barra-ya" style={{ width: pct(cab.ya) }} />
+          <span className="cxdo-barra-tarde" style={{ width: pct(cab.retrasan) }} />
+          <span className="cxdo-barra-tiempo" style={{ width: pct(cab.aTiempo) }} />
+        </div>
+        {movil
+          ? <p className="cxdo-leyenda-corta">{cab.retrasan} se retrasan · {cab.aTiempo} aún a tiempo</p>
+          : (
+            <ul className="cxdo-leyenda">
+              <li data-tono="ya"><strong>{cab.ya}</strong> ya están, en su sitio</li>
+              <li data-tono="tarde"><strong>{cab.retrasan}</strong> se retrasan</li>
+              <li data-tono="tiempo"><strong>{cab.aTiempo}</strong> aún a tiempo</li>
+            </ul>
+          )}
+      </div>
+      {boton && (
+        <div className="cxdo-banda-pedir">
+          {boton}
+          {!movil && <p className="cxdo-banda-nota">Un correo amable a cada uno, en tu nombre y con lo que falta. Tú no escribes nada.</p>}
+        </div>
+      )}
+    </section>
+  )
 }
 
-function LoQueFalta({ d, filas, movil, ocupado, alSubir, alPedir, alAprender, alEncender }: {
-  d: DatosFuentes | null; filas: FilaFalta[]; movil: boolean; ocupado: boolean
-  alSubir: () => void; alPedir: (f: FilaFalta) => void; alAprender: () => void; alEncender: () => void
+// ── «No sé qué es este documento» ──────────────────────────────────────────
+
+const BOTONES_NO_SE: { tipo: QueEs; etiqueta: string }[] = [
+  { tipo: 'factura', etiqueta: 'Factura de gasto' }, { tipo: 'extracto', etiqueta: 'Extracto del banco' },
+  { tipo: 'nomina', etiqueta: 'Nómina' }, { tipo: 'otro', etiqueta: 'Otra cosa' },
+]
+const extension = (n: string | null | undefined) => (n?.match(/\.([a-z0-9]{2,4})$/i)?.[1] ?? 'doc').toUpperCase()
+/** «hoy a las 10:02», «ayer a las 19:05», «el 22/10 a las 10:02». */
+const cuandoFrase = (ts: string, hoy: string) => cuandoLlego(ts, hoy).replace(/^(hoy|ayer) /, '$1 a las ').replace(/^(\d\d\/\d\d) /, 'el $1 a las ')
+
+function NoSeQueEs({ u, hoy, ocupado, alDecir }: { u: Ultimo; hoy: string; ocupado: boolean; alDecir: (t: QueEs, recordar: boolean) => void }) {
+  const remitente = u.por === 'correo' && !!u.de
+  const [recordar, setRecordar] = useState(true)
+  const como = u.por === 'correo' ? 'llegó por correo' : u.por === 'subido' ? 'lo subiste' : 'llegó'
+  return (
+    <section className="cxdo-nose" aria-label="No sé qué es este documento" data-prueba="no-se-que-es">
+      <div className="cxdo-nose-fila">
+        <span className="cxdo-miniatura" aria-hidden="true">{extension(u.nombre)}</span>
+        <div className="cxdo-nose-texto">
+          <p className="cxdo-nose-titulo">No sé qué es este documento</p>
+          <p className="cxdo-nose-dato">{u.nombre ?? 'Sin nombre'} · {como} {cuandoFrase(u.cuando, hoy)}{u.de ? ` · de ${u.de}` : ''}</p>
+        </div>
+        <div className="cxdo-nose-botones">
+          {BOTONES_NO_SE.map((b) => (
+            <button key={b.tipo} type="button" className="cxdo-boton-blanco" disabled={ocupado} onClick={() => alDecir(b.tipo, remitente && recordar)}>{b.etiqueta}</button>
+          ))}
+        </div>
+      </div>
+      {remitente && (
+        <label className="cxdo-nose-recordar">
+          <input type="checkbox" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} /> Lo mismo la próxima vez que escriba este remitente
+        </label>
+      )}
+    </section>
+  )
+}
+
+// ── Las dos columnas ────────────────────────────────────────────────────────
+
+function ColumnaDocs({ columna, titulo, frase, filas, movil, ocupado, alBoton, alYaLoTengo, alNoAvisar, pie }: {
+  columna: Columna; titulo: string; frase: string; filas: FilaDoc[] | null; movil: boolean; ocupado: boolean
+  alBoton: (x: FilaDoc) => void; alYaLoTengo: (x: FilaDoc) => void; alNoAvisar: (x: FilaDoc) => void; pie?: ReactNode
 }) {
-  const acciones = (f: FilaFalta) => (
-    <span className="cxpu-acciones">
-      <button type="button" className="s-boton s-boton-enlace" onClick={alSubir}>{f.tipo === 'nominas' || f.n > 1 || f.tipo === 'riders' ? 'Subirlas' : 'Subirla'}</button>
-      {f.estado.que === 'tarde' && f.n === 1 && <button type="button" className="s-boton s-boton-enlace" onClick={() => alPedir(f)}>Pedírsela</button>}
-    </span>
+  const [todo, setTodo] = useState(false)
+  const [menu, setMenu] = useState<string | null>(null)
+  const p = filas ? primeras(filas) : null
+  const vistas = !filas ? [] : todo ? filas : p!.vistas
+  return (
+    <section className="cxdo-columna" aria-label={titulo} data-columna={columna}>
+      <header className="cxdo-columna-cabeza">
+        <h2 className="cxdo-columna-titulo">{titulo}</h2>
+        {!movil && <p className="cxdo-columna-frase">{frase}</p>}
+      </header>
+      {!filas && <div className="s-lista-cargando" aria-busy="true" aria-label={`Leyendo «${titulo}»`} />}
+      {filas && filas.length === 0 && <p className="cxdo-vacio">{nadaEnColumna(columna)}</p>}
+      {vistas.length > 0 && (
+        <ul className="cxdo-filas">
+          {vistas.map((x) => (
+            <li key={x.clave} className="cxdo-fila" data-prueba="fila-doc">
+              <span className="cxdo-inicial" data-color={colorDe(x.nombre)} aria-hidden="true">{x.inicial}</span>
+              <span className="cxdo-fila-texto">
+                <span className="cxdo-fila-nombre">{x.nombre}</span>
+                <span className="cxdo-fila-que">{x.que}</span>
+                {movil && <span className="cxdo-aviso" data-tono={x.aviso.tono}>{x.aviso.texto}</span>}
+              </span>
+              {!movil && <span className="cxdo-aviso" data-tono={x.aviso.tono}>{x.aviso.texto}</span>}
+              <button type="button" className={columna === 'mandar' ? 'cxdo-boton-blanco' : 'cxdo-boton-azul'} disabled={ocupado} onClick={() => alBoton(x)}>
+                {columna === 'mandar' ? 'Pedir' : x.familia === 'banco' ? 'Subir' : 'Subirla'}
+              </button>
+              {!movil && (
+                <span className="cxdo-mas" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setMenu(null) }}>
+                  <button type="button" className="cxdo-mas-boton" aria-label={`Más de ${x.nombre}`} aria-expanded={menu === x.clave} onClick={() => setMenu(menu === x.clave ? null : x.clave)}>⋯</button>
+                  {menu === x.clave && (
+                    <span className="cxdo-mas-menu" role="menu">
+                      <button type="button" role="menuitem" onClick={() => { setMenu(null); alYaLoTengo(x) }}>Ya lo tengo</button>
+                      <button type="button" role="menuitem" onClick={() => { setMenu(null); alNoAvisar(x) }}>No me avises de este</button>
+                    </span>
+                  )}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {p && p.resto > 0 && (
+        <p className="cxdo-columna-pie">
+          {todo ? <span /> : <span>{p.texto}</span>}
+          <button type="button" className="cxdo-enlace" onClick={() => setTodo(!todo)}>{todo ? 'Ver menos' : 'Ver todo'}</button>
+        </p>
+      )}
+      {pie}
+    </section>
   )
-  const chip = (f: FilaFalta) => <Chip tono={f.estado.que === 'tarde' ? (f.estado.grave ? 'falta' : 'duda') : 'neutro'}>{f.estado.texto}</Chip>
-  let cuerpo: ReactNode
-  if (!d) cuerpo = <div className="s-lista-cargando" aria-busy="true" aria-label="Leyendo lo que te tiene que llegar" />
-  else if (!d.ajustes.lo_que_falta) cuerpo = <p className="cxpu-vacio">El aviso está apagado en esta empresa: no te digo lo que falta. <button type="button" className="s-boton s-boton-enlace" disabled={ocupado} onClick={alEncender}>Encenderlo</button></p>
-  else if (d.fuentes.length === 0) cuerpo = <p className="cxpu-vacio">Aún no sé qué te tiene que llegar. <button type="button" className="s-boton s-boton-enlace" disabled={ocupado} onClick={alAprender}>Aprenderlo de lo que ya pasa</button>: tus proveedores de cada mes, tu banco, tus liquidaciones y tus nóminas.</p>
-  else if (filas.length === 0) cuerpo = <p className="cxpu-vacio">Todo lo que te tenía que llegar ha llegado, y nada más se espera en los próximos 14 días.</p>
-  else if (movil) cuerpo = (
-    <ul className="cxpu-tarjetas" aria-label="Lo que falta">
-      {filas.map((f) => (
-        <li key={f.id} className="cxpu-tarjeta">
-          <span className="cxpu-tarjeta-cabeza"><strong>{f.de}</strong>{chip(f)}</span>
-          <span className="s-tarjeta-apoyo">{f.que} · hacia el {ddmm(f.hacia)}</span>
-          {acciones(f)}
-        </li>
-      ))}
-    </ul>
-  )
-  else cuerpo = (
-    <table className="s-tabla cxpu-tabla" aria-label="Lo que falta">
-      <thead><tr><th>De quién</th><th>Qué</th><th>Cuándo suele llegar</th><th>Estado</th><th><span className="s-oculto">Acciones</span></th></tr></thead>
-      <tbody>
-        {filas.map((f) => (
-          <tr key={f.id}>
-            <td><strong>{f.de}</strong></td><td>{f.que}</td><td>hacia el {ddmm(f.hacia)}</td><td>{chip(f)}</td><td className="s-tabla-cifra">{acciones(f)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-  return <Tarjeta titulo="Lo que falta" accion={<span className="s-tarjeta-apoyo">{NOMBRE} sabe qué te tiene que llegar y cuándo</span>} compacta>{cuerpo}</Tarjeta>
 }
 
-function DondeEsta({ u, hosteleria, alDime }: { u: Ultimo; hosteleria: boolean; alDime: (u: Ultimo) => void }) {
-  if (necesitaMirarse(u)) return <button type="button" className="s-boton s-boton-enlace" onClick={() => alDime(u)}>Dime qué es</button>
-  if (!u.donde) return <span className="s-tarjeta-apoyo">{u.estado === 'repetida' ? 'Repetido: ya estaba' : '—'}</span>
+/** El color del círculo: siempre el mismo para el mismo nombre. */
+const colorDe = (n: string) => String([...n].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 6)
+
+// ── Ha llegado esta semana ──────────────────────────────────────────────────
+
+const ICONO: Record<QueEs, string> = { factura: 'F', ticket: 'T', liquidacion: '€', extracto: '⇄', nomina: 'N', riders: 'R', otro: '·' }
+const QUE_CORTO: Record<QueEs, string> = { factura: 'factura', ticket: 'ticket', liquidacion: 'liquidación', extracto: 'movimientos', nomina: 'nómina', riders: 'facturas de los riders', otro: 'documento' }
+
+function HaLlegado({ p, hoy, hosteleria }: { p: DatosPuerta | null; hoy: string; hosteleria: boolean }) {
+  const [todo, setTodo] = useState(false)
+  const us = useMemo(() => (p?.ultimos ?? []).filter((u) => u.cuando.slice(0, 10) >= sumar(hoy, -6)), [p, hoy])
+  const colocados = us.filter((u) => u.donde !== null).length
+  const vistas = todo ? us : us.slice(0, 4)
+  return (
+    <section className="cxdo-tarjeta" aria-label="Ha llegado esta semana">
+      <header className="cxdo-columna-cabeza">
+        <h2 className="cxdo-columna-titulo">Ha llegado esta semana</h2>
+        <p className="cxdo-columna-frase">
+          {!p ? 'Leyendo…' : us.length === 0 ? 'Nada todavía esta semana.'
+            : `${us.length} ${us.length === 1 ? 'documento' : 'documentos'}, ${colocados === us.length ? (us.length === 1 ? 'colocado' : 'todos colocados') : `${colocados} colocados`}. ${todo ? 'Todos:' : 'Estos son los últimos.'}`}
+        </p>
+      </header>
+      {vistas.length > 0 && (
+        <ul className="cxdo-filas">
+          {vistas.map((u) => (
+            <li key={`${u.fuente}:${u.id}`} className="cxdo-llegada">
+              <span className="cxdo-icono" aria-hidden="true">{u.que ? ICONO[u.que] : '?'}</span>
+              <span className="cxdo-llegada-texto"><strong>{u.de ?? u.nombre ?? 'Sin remitente'}</strong> · {u.que ? QUE_CORTO[u.que] : 'sin saber qué es'}{u.facturas ? ` · ${u.facturas} facturas` : ''}</span>
+              <span className="cxdo-importe s-cifra">{u.importe == null ? '—' : eurosExactos(u.importe)}</span>
+              <DondeQuedo u={u} hosteleria={hosteleria} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {us.length > 4 && <p className="cxdo-columna-pie"><button type="button" className="cxdo-enlace" onClick={() => setTodo(!todo)}>{todo ? 'Ver menos' : `Ver los ${us.length}`}</button></p>}
+    </section>
+  )
+}
+const sumar = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+
+function DondeQuedo({ u, hosteleria }: { u: Ultimo; hosteleria: boolean }) {
+  if (!u.donde) return <span className="cxdo-donde" data-tono="duda">{u.estado === 'repetida' ? 'repetido' : 'por mirar'}</span>
   const a = u.donde === 'factura' ? (u.factura_id ? rutaRevisarFactura(u.factura_id) : rutaDocumentos())
     : u.donde === 'bancos' ? rutaBancos()
       : u.donde === 'liquidaciones' ? (hosteleria ? rutaLiquidacionesVentas() : rutaLiquidaciones())
         : u.donde === 'riders' ? (u.fuente === 'catcher' ? rutaLoteCatcher(u.id) : rutaLiquidaciones())
           : null
-  return a ? <Link to={a} className="s-boton s-boton-enlace">{DONDE[u.donde]}</Link> : <span>{DONDE[u.donde]}</span>
+  const texto = <>✓ en {DONDE[u.donde]}</>
+  return a ? <Link to={a} className="cxdo-donde">{texto}</Link> : <span className="cxdo-donde">{texto}</span>
 }
 
-function QueEsChip({ u }: { u: Ultimo }) {
-  if (!u.que) return <span className="cxpu-no-se">No sé qué es</span>
-  return <Chip tono={TONO_QUE[u.que]}>{ETIQUETA_QUE[u.que]}</Chip>
-}
+// ── Tu correo de documentos ─────────────────────────────────────────────────
 
-function LoUltimo({ ultimos, pestana, hoy, movil, hosteleria, alPestana, alDime }: {
-  ultimos: Ultimo[] | null; pestana: PestanaPuerta; hoy: string; movil: boolean; hosteleria: boolean
-  alPestana: (id: string) => void; alDime: (u: Ultimo) => void
+function TuCorreo({ p, direccion, encendida, ocupado, alCrear, alCopiar }: {
+  p: DatosPuerta | null; direccion: string | null; encendida: boolean; ocupado: boolean; alCrear: () => void; alCopiar: (t: string) => void
 }) {
-  const us = ultimos ?? []
-  const pestanas = [
-    { id: 'ultimo', etiqueta: 'Lo último', n: us.length, siempre: true },
-    { id: 'mirar', etiqueta: 'Necesita que lo mires', n: deLaPestana(us, 'mirar').length, siempre: true },
-    { id: 'colocado', etiqueta: 'Colocado', n: deLaPestana(us, 'colocado').length, siempre: true },
-  ]
-  const filas = deLaPestana(us, pestana)
-  const de = (u: Ultimo) => u.de ?? u.nombre ?? '—'
-  const importe = (u: Ultimo) => (u.importe == null ? '—' : eurosExactos(u.importe))
-  let cuerpo: ReactNode
-  if (!ultimos) cuerpo = <div className="s-lista-cargando" aria-busy="true" aria-label="Leyendo lo último" />
-  else if (filas.length === 0) cuerpo = <p className="cxpu-vacio">{pestana === 'mirar' ? 'Nada que mirar: todo lo que ha llegado sé qué es.' : 'En los últimos 30 días no ha llegado nada. Reenvía a tu dirección o sube lo que tengas.'}</p>
-  else if (movil) cuerpo = (
-    <ul className="cxpu-tarjetas" aria-label="Lo que ha llegado">
-      {filas.map((u) => (
-        <li key={`${u.fuente}:${u.id}`} className="cxpu-tarjeta">
-          <span className="cxpu-tarjeta-cabeza"><span>{de(u)}</span><strong className="s-cifra">{importe(u)}</strong></span>
-          <span className="s-tarjeta-apoyo">{cuandoLlego(u.cuando, hoy)} · {POR[u.por]}</span>
-          <span className="cxpu-tarjeta-cabeza"><QueEsChip u={u} /><DondeEsta u={u} hosteleria={hosteleria} alDime={alDime} /></span>
-        </li>
-      ))}
-    </ul>
-  )
-  else cuerpo = (
-    <table className="s-tabla cxpu-tabla" aria-label="Lo que ha llegado">
-      <thead><tr><th>Llegó</th><th>Por dónde</th><th>Qué es</th><th>De quién</th><th className="s-tabla-cifra">Importe</th><th>Dónde está</th></tr></thead>
-      <tbody>
-        {filas.map((u) => (
-          <tr key={`${u.fuente}:${u.id}`}>
-            <td>{cuandoLlego(u.cuando, hoy)}</td><td>{POR[u.por]}</td><td><QueEsChip u={u} /></td>
-            <td className="cxpu-de" title={de(u)}>{de(u)}</td><td className="s-tabla-cifra s-cifra">{importe(u)}</td>
-            <td><DondeEsta u={u} hosteleria={hosteleria} alDime={alDime} /></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
+  const marcas = [
+    ...(p?.conectados.uber_por_correo ? ['Uber Eats manda solo sus liquidaciones'] : []),
+    ...(p?.conectados.bancos ?? []).slice(0, 1).map((b) => `${b.proveedor} trae sus movimientos solo`),
+    'Arrastra un fichero a cualquier pantalla',
+    'Haz una foto con el móvil',
+  ].slice(0, 3)
   return (
-    <Tarjeta compacta>
-      <PestanasEstado etiqueta="Lo que ha llegado" pestanas={pestanas} actual={pestana} alCambiar={alPestana} />
-      {cuerpo}
-    </Tarjeta>
+    <section className="cxdo-tarjeta" aria-label="Tu correo de documentos">
+      <header className="cxdo-columna-cabeza"><h2 className="cxdo-columna-titulo">Tu correo de documentos</h2></header>
+      <div className="cxdo-correo-cuerpo">
+        {direccion ? (
+          <div className="cxdo-correo">
+            <strong className="cxdo-correo-dir" data-prueba="direccion-documentos">{direccion}</strong>
+            <button type="button" className="cxdo-boton-blanco" onClick={() => alCopiar(direccion)}>Copiar</button>
+          </div>
+        ) : (
+          <div className="cxdo-correo"><span className="cxdo-correo-dir">Aún no tienes tu dirección</span><button type="button" className="cxdo-boton-blanco" disabled={ocupado || !p} onClick={alCrear}>Crear tu dirección</button></div>
+        )}
+        <p className="cxdo-correo-nota">Dáselo a tus proveedores o reenvía aquí lo que te mandan. Facturas, liquidaciones, extractos o nóminas: {NOMBRE} sabe qué es cada cosa.</p>
+        {direccion && !encendida
+          ? <p className="cxdo-apagada" data-prueba="direccion-apagada">Apagada: aún no recibe correos.</p>
+          : <ul className="cxdo-marcas">{marcas.map((m) => <li key={m}>{m}</li>)}</ul>}
+      </div>
+    </section>
   )
 }
 
-function ComoTeLlegan({ p, direccion, encendida, ocupado, alCrear, alCopiar }: {
-  p: DatosPuerta | null; direccion: string | null; encendida: boolean; ocupado: boolean
-  alCrear: () => void; alCopiar: (t: string) => void
-}) {
-  const conectados = [
-    ...(p?.conectados.bancos ?? []).map((b) => `${b.proveedor}${b.estado === 'activo' || b.estado === 'active' ? '' : ` (${b.estado})`}`),
-    ...(p?.conectados.uber_por_correo ? ['Uber Eats (por correo)'] : []),
-  ]
-  return (
-    <Tarjeta titulo="Cómo te llegan los documentos" compacta>
-      <dl className="cxpu-como">
-        <dt>Correo</dt>
-        <dd>{direccion
-          ? <><strong className="cxpu-direccion">{direccion}</strong>
-              {!encendida && <span className="cxpu-no-se" data-prueba="direccion-apagada">Apagada: aún no recibe correos.</span>}
-              <button type="button" className="s-boton s-boton-enlace" onClick={() => alCopiar(direccion)}>Copiar</button></>
-          : <button type="button" className="s-boton s-boton-enlace" disabled={ocupado || !p} onClick={alCrear}>Crear tu dirección</button>}</dd>
-        <dt>Desde el móvil</dt><dd>foto o PDF, con la cámara o desde el correo</dd>
-        <dt>Arrastrar</dt><dd>en cualquier pantalla de {NOMBRE}</dd>
-        <dt>Conectados</dt><dd>{conectados.length ? conectados.map((x) => <span key={x} className="cxpu-conectado">✓ {x}</span>) : 'nada todavía'}</dd>
-      </dl>
-      <p className="cxpu-nota">Reenvía a tu correo de {NOMBRE} lo que te mandan tus proveedores, tus plataformas, tu banco y tu gestoría. Lo demás lo hace {NOMBRE}.</p>
-    </Tarjeta>
-  )
-}
+// ── Subir ───────────────────────────────────────────────────────────────────
 
 /** Lo que se ha soltado o elegido: qué es cada cosa y su camino de siempre. */
 function Subida({ ficheros, accountId, companyId, quien, alTerminar, alCerrar, aBancos }: {
   ficheros: File[]; accountId: string; companyId: string; quien: string | null
-  alTerminar: (texto: ReactNode | null) => void; alCerrar: () => void; aBancos: (f: File) => void
+  alTerminar: () => void; alCerrar: () => void; aBancos: (f: File) => void
 }) {
   const [grupos, setGrupos] = useState<GrupoSubida[] | null>(null)
   const [hechos, setHechos] = useState<{ texto: string; bien: boolean }[]>([])
@@ -358,19 +440,19 @@ function Subida({ ficheros, accountId, companyId, quien, alTerminar, alCerrar, a
       }
     }
     setHechos(out); setSubiendo(false)
-    alTerminar(null)
+    alTerminar()
   }
   const automaticos = grupos?.filter((g) => g.camino === 'facturas' || g.camino === 'sin_saber') ?? []
   return (
-    <Tarjeta titulo="Subir documentos" apoyo={`${ficheros.length} ${ficheros.length === 1 ? 'fichero' : 'ficheros'}: cada uno va por su camino de siempre.`}
+    <Tarjeta titulo="Subir documentos" apoyo={`${ficheros.length} ${ficheros.length === 1 ? 'fichero' : 'ficheros'}: cada uno va a su sitio.`}
       accion={<Boton variante="fantasma" onClick={alCerrar}>Cerrar</Boton>}>
       {!grupos && <p className="s-apoyo" aria-busy="true">Mirando qué es cada cosa…</p>}
       {grupos && (
-        <ul className="cxpu-grupos" data-prueba="puerta-grupos">
+        <ul className="cxdo-grupos" data-prueba="puerta-grupos">
           {grupos.map((g) => (
-            <li key={g.camino} className="cxpu-grupo">
+            <li key={g.camino}>
               <p><strong>{g.texto}</strong> <span className="s-tarjeta-apoyo">{g.ficheros.map((x) => x.nombre).join(' · ')}</span></p>
-              {g.camino === 'catcher' && <QuincenaCatcher accountId={accountId} companyId={companyId} quien={quien} iniciales={de(g)} alSubir={() => alTerminar(null)} />}
+              {g.camino === 'catcher' && <QuincenaCatcher accountId={accountId} companyId={companyId} quien={quien} iniciales={de(g)} alSubir={() => alTerminar()} />}
               {g.camino === 'extracto' && de(g).map((f) => <Boton key={f.name} variante="secundario" onClick={() => aBancos(f)}>Importar «{f.name}» en Bancos</Boton>)}
             </li>
           ))}
@@ -380,7 +462,7 @@ function Subida({ ficheros, accountId, companyId, quien, alTerminar, alCerrar, a
         <Boton variante="principal" disabled={subiendo} onClick={() => void llevar()}>{subiendo ? 'Llevándolos a su sitio…' : 'Llevarlos a su sitio'}</Boton>
       )}
       {hechos.length > 0 && (
-        <ul className="cxpu-hechos" role="status" data-prueba="puerta-hechos">
+        <ul className="cxdo-hechos" role="status" data-prueba="puerta-hechos">
           {hechos.map((h, i) => <li key={i} data-tono={h.bien ? undefined : 'falta'}>{h.texto}</li>)}
         </ul>
       )}
@@ -388,103 +470,66 @@ function Subida({ ficheros, accountId, companyId, quien, alTerminar, alCerrar, a
   )
 }
 
-function DimeQueEs({ u, alCerrar, alGuardar }: { u: Ultimo; alCerrar: () => void; alGuardar: (t: QueEs, recordar: boolean) => void }) {
-  const [tipo, setTipo] = useState<QueEs | null>(null)
-  const porCorreo = u.por === 'correo' && !!u.de
-  const [recordar, setRecordar] = useState(porCorreo)
-  return (
-    <Dialogo titulo="Dime qué es" explicacion={<>{u.nombre ?? u.de ?? 'Este documento'}{u.por === 'correo' && u.de ? <> · llegó por correo de {u.de}</> : null}</>}
-      alCerrar={alCerrar}
-      acciones={<><Boton onClick={alCerrar}>Cancelar</Boton><Boton variante="principal" disabled={!tipo} onClick={() => tipo && alGuardar(tipo, porCorreo && recordar)}>Apuntarlo</Boton></>}>
-      <fieldset className="cxpu-dime">
-        <legend className="s-oculto">Qué es</legend>
-        {TIPOS_DIME.map((t) => (
-          <label key={t} className="cxpu-dime-opcion">
-            <input type="radio" name="dime" value={t} checked={tipo === t} onChange={() => setTipo(t)} /> {ETIQUETA_QUE[t]}
-          </label>
-        ))}
-      </fieldset>
-      {porCorreo && (
-        <label className="cxpu-dime-recordar">
-          <input type="checkbox" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} /> Lo que llegue de este remitente, igual la próxima vez
-        </label>
-      )}
-    </Dialogo>
-  )
-}
-
-function Pedirsela({ fila, empresa, direccion, alCerrar, alPedir }: {
-  fila: FilaFalta; empresa: string; direccion: string | null; alCerrar: () => void; alPedir: (email: string, asunto: string, cuerpo: string) => void
-}) {
-  const propuesto = useMemo(() => correoPedirla({ empresa, que: fila.que, hacia: fila.hacia, direccion }), [empresa, fila, direccion])
-  const [email, setEmail] = useState(fila.pedida?.a ?? '')
-  const [asunto, setAsunto] = useState(propuesto.asunto)
-  const [cuerpo, setCuerpo] = useState(propuesto.cuerpo)
-  useEffect(() => {
-    if (email || !fila.proveedorId) return
-    let vivo = true
-    contactoFacturacion(fila.proveedorId).then((c) => { if (vivo && c) setEmail(c.email) }, () => null)
-    return () => { vivo = false }
-  }, [fila.proveedorId]) // eslint-disable-line react-hooks/exhaustive-deps
-  const vale = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
-  return (
-    <Dialogo titulo={`Pedírsela a ${fila.de}`} explicacion="Revisa el correo: se abre en el tuyo y lo mandas tú. Queda apuntado que la has pedido."
-      alCerrar={alCerrar}
-      acciones={<><Boton onClick={alCerrar}>Cancelar</Boton><Boton variante="principal" disabled={!vale} onClick={() => alPedir(email.trim(), asunto, cuerpo)}>Abrir el correo</Boton></>}>
-      <label className="s-campo"><span className="s-campo-etiqueta">A</span><input className="s-control" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="facturacion@proveedor.es" /></label>
-      <label className="s-campo"><span className="s-campo-etiqueta">Asunto</span><input className="s-control" value={asunto} onChange={(e) => setAsunto(e.target.value)} /></label>
-      <label className="s-campo"><span className="s-campo-etiqueta">Texto</span><textarea className="s-control cxpu-texto" rows={8} value={cuerpo} onChange={(e) => setCuerpo(e.target.value)} /></label>
-    </Dialogo>
-  )
-}
-
-function AjustesFalta({ d, alCerrar, alPoner, alFuente, alLocal }: {
-  d: DatosFuentes; alCerrar: () => void; alPoner: (on: boolean, margen: number) => void; alFuente: (id: string, activa: boolean) => void
-  alLocal: (f: Fuente, local: Local | null) => void
-}) {
-  // Con un solo local (o ninguno) no se pide nada.
-  const locales = (d.locales ?? []).length > 1 ? d.locales ?? [] : []
-  const [on, setOn] = useState(d.ajustes.lo_que_falta)
-  const [margen, setMargen] = useState(d.ajustes.margen)
-  return (
-    <Dialogo titulo="Ajustes de «Lo que falta»" explicacion="Apagarlo no borra nada: solo deja de avisar." alCerrar={alCerrar}
-      acciones={<><Boton onClick={alCerrar}>Cerrar</Boton><Boton variante="principal" onClick={() => { alPoner(on, margen); alCerrar() }}>Guardar</Boton></>}>
-      <label className="cxpu-dime-recordar"><input type="checkbox" checked={on} onChange={(e) => setOn(e.target.checked)} /> Avisar de lo que falta en esta empresa</label>
-      <label className="s-campo"><span className="s-campo-etiqueta">Margen, en días después del día en que suele llegar</span>
-        <input className="s-control" type="number" min={0} max={60} value={margen} onChange={(e) => setMargen(Math.max(0, Math.min(60, Number(e.target.value) || 0)))} /></label>
-      {d.fuentes.length > 0 && (
-        <ul className="cxpu-fuentes" aria-label="Las fuentes">
-          {d.fuentes.map((f) => <FilaFuente key={f.id} f={f} locales={locales} alFuente={alFuente} alLocal={alLocal} />)}
-        </ul>
-      )}
-    </Dialogo>
-  )
-}
+// ── Pedir ───────────────────────────────────────────────────────────────────
 
 /**
- * Una fuente en los ajustes, con su local o centro de trabajo si la empresa
- * tiene más de uno. Aquí sale el nombre de quien factura (es donde se dice de
- * qué local es cada uno); en «Lo que falta», los alquileres salen por local, sin él.
+ * «Pedir» una fila: el correo propuesto a cada fuente de la fila (un alquiler
+ * de tres personas son tres correos), que la persona revisa y manda desde el
+ * suyo. Queda apuntado que lo ha pedido; dice a quién.
  */
-function FilaFuente({ f, locales, alFuente, alLocal }: {
-  f: Fuente; locales: readonly Local[]; alFuente: (id: string, activa: boolean) => void; alLocal: (f: Fuente, local: Local | null) => void
+function Pedir({ fila, fuentes, empresa, direccion, alCerrar, alPedir, alTerminar }: {
+  fila: FilaDoc; fuentes: Fuente[]; empresa: string; direccion: string | null; alCerrar: () => void
+  alPedir: (f: Fuente, dia: string, email: string, asunto: string, cuerpo: string) => Promise<string>
+  alTerminar: (textos: string[]) => void
 }) {
+  const [i, setI] = useState(0)
+  const [hechos, setHechos] = useState<string[]>([])
+  const f = fuentes[i] ?? null
+  if (!f) return null
+  const dia = fila.fuentes.find((y) => y.id === f.id)?.dia ?? fila.hacia
+  const que = fuentes.length > 1 ? queSeEspera(f, { dia, desde: null, hasta: null }) : fila.que
+  const siguiente = (texto: string | null) => {
+    const hs = texto ? [...hechos, texto] : hechos
+    setHechos(hs)
+    if (i + 1 < fuentes.length) setI(i + 1); else alTerminar(hs)
+  }
   return (
-    <li className="cxpu-fuente">
-      <span className="cxpu-fuente-cabeza">
-        <span>{f.nombre}{f.tipo === 'alquiler' ? <span className="s-tarjeta-apoyo"> · alquiler</span> : f.grupo ? <span className="s-tarjeta-apoyo"> · {f.grupo}</span> : null}
-          {f.cubierta && <span className="s-tarjeta-apoyo"> · la cubre una recurrente</span>}</span>
-        <button type="button" className="s-boton s-boton-enlace" onClick={() => alFuente(f.id, !f.activa)}>{f.activa ? 'No avisar' : 'Avisar'}</button>
-      </span>
-      {locales.length > 0 && (
-        <label className="s-campo cxpu-fuente-local"><span className="s-campo-etiqueta">Local</span>
-          <select className="s-control" value={f.local?.id ?? ''} aria-label={`Local de ${f.nombre}`}
-            onChange={(e) => alLocal(f, locales.find((l) => l.id === e.target.value) ?? null)}>
-            <option value="">Sin local</option>
-            {locales.map((l) => <option key={l.id} value={l.id}>{nombreDelLocal(l)}{l.nombre && l.direccion ? ` (${l.nombre})` : ''}</option>)}
-          </select>
-        </label>
-      )}
-    </li>
+    <PedirUno key={f.id} f={f} titulo={fila.nombre} cuenta={fuentes.length > 1 ? `${i + 1} de ${fuentes.length}. ` : ''} varias={fuentes.length > 1}
+      propuesto={correoPedirla({ empresa, que, hacia: dia, direccion })}
+      alCerrar={() => (hechos.length ? alTerminar(hechos) : alCerrar())}
+      alSaltar={() => siguiente(null)}
+      alPedir={(email, asunto, cuerpo) => alPedir(f, dia, email, asunto, cuerpo).then(siguiente)} />
+  )
+}
+
+function PedirUno({ f, titulo, cuenta, varias, propuesto, alCerrar, alSaltar, alPedir }: {
+  f: Fuente; titulo: string; cuenta: string; varias: boolean; propuesto: { asunto: string; cuerpo: string }
+  alCerrar: () => void; alSaltar: () => void; alPedir: (email: string, asunto: string, cuerpo: string) => Promise<void>
+}) {
+  const [email, setEmail] = useState(f.correo ?? f.pedida?.a ?? '')
+  const [asunto, setAsunto] = useState(propuesto.asunto)
+  const [cuerpo, setCuerpo] = useState(propuesto.cuerpo)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (f.correo || f.pedida?.a || !f.proveedor_id) return
+    let vivo = true
+    contactoFacturacion(f.proveedor_id).then((c) => { if (vivo && c) setEmail(c.email) }, () => null)
+    return () => { vivo = false }
+  }, [f])
+  const vale = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
+  return (
+    <Dialogo titulo={`Pedir · ${titulo}`}
+      explicacion={<>{cuenta}Revisa el correo: se abre en el tuyo y lo mandas tú. Queda apuntado que lo has pedido.</>}
+      alCerrar={alCerrar}
+      acciones={<>
+        {varias && <Boton onClick={alSaltar}>Saltar</Boton>}
+        <Boton onClick={alCerrar}>Cancelar</Boton>
+        <Boton variante="principal" disabled={!vale} onClick={() => void alPedir(email.trim(), asunto, cuerpo).catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))}>Abrir el correo</Boton>
+      </>}>
+      {error && <p className="s-aviso-lista" data-tono="falta" role="alert">{error}</p>}
+      <label className="s-campo"><span className="s-campo-etiqueta">A</span><input className="s-control" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="facturacion@proveedor.es" /></label>
+      <label className="s-campo"><span className="s-campo-etiqueta">Asunto</span><input className="s-control" value={asunto} onChange={(e) => setAsunto(e.target.value)} /></label>
+      <label className="s-campo"><span className="s-campo-etiqueta">Texto</span><textarea className="s-control cxdo-texto" rows={8} value={cuerpo} onChange={(e) => setCuerpo(e.target.value)} /></label>
+    </Dialogo>
   )
 }

@@ -189,7 +189,7 @@ export function filasDocumentos(d: DatosFuentes, hoy: string, horizonte = 14): {
       que = n <= 1 ? `El de ${mes}` : faltan === n ? `Los ${n} de ${mes}` : `Falta${faltan === 1 ? '' : 'n'} ${faltan} de ${n} de ${mes}`
     } else if (familia === 'plataforma' && xs.length > 1) {
       const liq = orden.find((x) => x.f.tipo === 'intermediario')
-      if (liq) que = `${queSeEspera(liq.f, liq.o)} y su factura de comisiones`
+      if (liq) que = `${queSeEspera(liq.f, liq.o)} y su factura`
     } else if (f.local && familia !== 'plataforma') {
       que = `${que} · ${nombreDelLocal(f.local)}`
     }

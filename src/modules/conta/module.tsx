@@ -54,6 +54,7 @@ import AceptarAsesoriaPage from '@/modules/conta/impuestos/AceptarAsesoriaPage'
 import { ClienteTrimestre } from '@/modules/conta/impuestos/despacho/ClienteTrimestre'
 import InicioPage from '@/modules/conta/inicio/InicioPage'
 import PuertaPage from '@/modules/conta/puerta/PuertaPage'
+import QueEsperasPage from '@/modules/conta/puerta/QueEsperasPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
 import { Portada } from '@/modules/conta/marco/Portada'
 import { MARCA, CON_MARCA } from '@/modules/conta/cuenta/marca'
@@ -85,6 +86,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.inicio, element: enMarco(<InicioPage />, '¿Cuánto llevo gastado en luz?') },
     // V02 · Inicio › Documentos: la puerta por la que entra todo (tablero 19).
     { path: CONTA.rutas.puerta, element: enMarco(<PuertaPage />, '¿Ha llegado la factura de la luz?') },
+    // V02d · Inicio › Documentos › Qué esperas cada mes (tablero 23).
+    { path: CONTA.rutas.queEsperas, element: enMarco(<QueEsperasPage />, '¿Qué te tiene que llegar cada mes?') },
     // C06 · La ficha del proveedor dentro de contabilidad, sin las piezas de
     // Cocina (sin extensiones): la del producto vendido solo.
     { path: CONTA.rutas.fichaProveedor, element: enMarco(<FichaProveedorPage />, '¿Cuánto le debo?') },

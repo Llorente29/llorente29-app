@@ -59,8 +59,8 @@ describe('«Lo que falta» con las fuentes de Foodint, el 25/10', () => {
   it('Xfera (llega el 22, hoy 25, margen 5): aún a tiempo, hacia el 22/10', () => {
     expect(faltaDe(XFERA, HOY)).toEqual({ o: { dia: '2026-10-22', desde: null, hasta: null }, estado: { que: 'a_tiempo', texto: 'Aún a tiempo' } })
   })
-  it('Xfera el 30/10 (margen pasado): 8 días tarde, y es grave', () => {
-    expect(faltaDe(XFERA, '2026-10-30')?.estado).toEqual({ que: 'tarde', dias: 8, texto: '8 días tarde', grave: true })
+  it('Xfera el 30/10 (margen pasado): se retrasa 8 días, en ámbar (rojo solo pasado un mes)', () => {
+    expect(faltaDe(XFERA, '2026-10-30')?.estado).toEqual({ que: 'tarde', dias: 8, texto: 'Se retrasa 8 días', grave: false })
   })
   it('Uber: los resúmenes semanales entran desde el 11/10; el de la semana del 28/09 al 04/10 no está en Sumied, y se dice', () => {
     expect(faltaDe(UBER, HOY)).toMatchObject({ o: { dia: '2026-10-04', desde: '2026-09-28' }, estado: { que: 'tarde', dias: 21 } })
@@ -69,11 +69,11 @@ describe('«Lo que falta» con las fuentes de Foodint, el 25/10', () => {
     const domingos = Array.from({ length: 10 }, (_, i) => sumarDias('2026-08-16', 7 * i))
     const conEsa = { ...UBER, llegadas: domingos }
     expect(faltaDe(conEsa, HOY)).toMatchObject({ o: { dia: '2026-10-25' }, estado: { que: 'a_tiempo' } })
-    expect(faltaDe(conEsa, '2026-10-27')?.estado).toMatchObject({ que: 'tarde', dias: 2, texto: '2 días tarde' })
+    expect(faltaDe(conEsa, '2026-10-27')?.estado).toMatchObject({ que: 'tarde', dias: 2, texto: 'Se retrasa 2 días' })
   })
   it('Glovo, sin nada desde el 30/06: la última quincena que falta (1 al 15/10), 10 días tarde', () => {
     const x = faltaDe(GLOVO, HOY)!
-    expect([x.o.desde, x.o.hasta, x.estado]).toEqual(['2026-10-01', '2026-10-15', { que: 'tarde', dias: 10, texto: '10 días tarde', grave: true }])
+    expect([x.o.desde, x.o.hasta, x.estado]).toEqual(['2026-10-01', '2026-10-15', { que: 'tarde', dias: 10, texto: 'Se retrasa 10 días', grave: false }])
   })
   it('los riders de Catcher: la del 1 al 15/10 llegó; la del 16 al 31, aún a tiempo', () => {
     expect(faltaDe(RIDERS, HOY)).toMatchObject({ o: { dia: '2026-10-31', desde: '2026-10-16' }, estado: { que: 'a_tiempo' } })
@@ -104,9 +104,9 @@ describe('«Lo que falta» con las fuentes de Foodint, el 25/10', () => {
     const filas = loQueFalta(datos([alq('a', LOCAL.alcala, false), alq('b', LOCAL.carabanchel, false), alq('c1', LOCAL.plaza, false), alq('c2', LOCAL.plaza, true), alq('c3', LOCAL.plaza, true)]), HOY)
     // Las tres van 24 días tarde (lo del 01/10): mismo peso, en el orden en que llegan.
     expect(filas.map((x) => [x.de, x.que, x.estado.texto])).toEqual([
-      ['Alquiler · Florencio Llorente 29', 'Alquiler de octubre', '24 días tarde'],
-      ['Alquiler · Camichi 4', 'Alquiler de octubre', '24 días tarde'],
-      ['Alquiler · Cañaveral 75', 'Alquiler de octubre: falta 1 de 3', '24 días tarde'],
+      ['Alquiler · Florencio Llorente 29', 'Alquiler de octubre', 'Se retrasa 24 días'],
+      ['Alquiler · Camichi 4', 'Alquiler de octubre', 'Se retrasa 24 días'],
+      ['Alquiler · Cañaveral 75', 'Alquiler de octubre: falta 1 de 3', 'Se retrasa 24 días'],
     ])
     expect(JSON.stringify(filas)).not.toMatch(/Arrendador/)
   })
@@ -127,7 +127,7 @@ describe('«Lo que falta» con las fuentes de Foodint, el 25/10', () => {
   it('el orden: lo más tarde arriba, luego lo más cercano; apagado en la empresa, nada', () => {
     const d = datos([XFERA, UBER, GLOVO, RIDERS, ...CANAVERAL])
     expect(loQueFalta(d, HOY).map((x) => [x.de, x.estado.texto])).toEqual([
-      ['Alquiler · Cañaveral 75', '24 días tarde'], ['Uber Eats', '21 días tarde'], ['Glovo', '10 días tarde'], ['Xfera', 'Aún a tiempo'], ['Riders de Catcher', 'Aún a tiempo'],
+      ['Alquiler · Cañaveral 75', 'Se retrasa 24 días'], ['Uber Eats', 'Se retrasa 21 días'], ['Glovo', 'Se retrasa 10 días'], ['Xfera', 'Aún a tiempo'], ['Riders de Catcher', 'Aún a tiempo'],
     ])
     expect(loQueFalta({ ...d, ajustes: { lo_que_falta: false, margen: 5 } }, HOY)).toEqual([])
   })
