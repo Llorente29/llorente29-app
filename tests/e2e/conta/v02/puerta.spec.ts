@@ -149,7 +149,7 @@ test('la puerta de una empresa de hostelería: cifras, lo que falta, lo último 
   // «Lo que falta»: el local de los alquileres en UNA fila, sin nombres; Glovo tarde; Xfera aún a tiempo.
   const falta = page.getByRole('region', { name: 'Lo que falta' })
   await expect(falta.getByText('Alquiler · Cañaveral 75')).toHaveCount(1)
-  await expect(falta.getByText(/falta \d de 3/)).toBeVisible()
+  await expect(falta.getByText(/faltan? \d de 3/)).toBeVisible()
   await expect(falta.getByText(/Propietaria/)).toHaveCount(0)
   await expect(falta.getByText('Glovo')).toBeVisible()
   await expect(falta.getByText(/días? tarde/).first()).toBeVisible()
