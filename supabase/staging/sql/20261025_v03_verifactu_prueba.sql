@@ -144,21 +144,22 @@ reset role;
 update public.customer_invoice_line set tax_rate_id = (select v::uuid from _v where clave = 't0'), tax_pct = 0, tax_amount = 0
  where invoice_id = (select v::uuid from _v where clave = 'exenta');
 update public.customer_invoice set tax = 0, total = base where id = (select v::uuid from _v where clave = 'exenta');
+-- El contador no lo lee el usuario: se mide aquí, antes y después.
+insert into _v select 'contador_antes', coalesce(max(last_number), 0)::text from public.customer_invoice_counter
+ where company_id = (select v::uuid from _v where clave = 'empresa') and series_code = 'F';
 set local role authenticated;
 do $$
 declare
   v_e uuid := (select v::uuid from _v where clave = 'empresa'); v_h uuid := (select v::uuid from _v where clave = 'exenta');
-  v_antes int; v_despues int; v_msg text;
+  v_msg text;
 begin
-  select coalesce(max(last_number), 0) into v_antes from public.customer_invoice_counter where company_id = v_e and series_code = 'F';
   begin
     perform public.conta_venta_emitir(v_h, 'Prueba V03');
     raise exception 'PRUEBA V03 · 3b: se ha emitido sin decir por qué va sin IVA.';
   exception when check_violation then v_msg := sqlerrm;
   end;
-  select coalesce(max(last_number), 0) into v_despues from public.customer_invoice_counter where company_id = v_e and series_code = 'F';
-  if v_despues <> v_antes or (select status from public.customer_invoice where id = v_h) <> 'borrador' then
-    raise exception 'PRUEBA V03 · 3b: la que no se emite ha gastado número o ha quedado emitida (%→%).', v_antes, v_despues;
+  if (select status from public.customer_invoice where id = v_h) <> 'borrador' then
+    raise exception 'PRUEBA V03 · 3b: la que no se emite ha quedado emitida.';
   end if;
   if v_msg not like '%fuera de la UE%dime qué le has vendido%' then raise exception 'PRUEBA V03 · 3b: no dice qué falta en palabras de la calle («%»).', v_msg; end if;
   perform public.verifactu_operacion_poner(v_h, 'N2', null, null, 'Prueba V03');
@@ -167,9 +168,20 @@ begin
      and destinatarios->0->>'id_type' = '04' and cuota_total = 0 and importe_total = 2150.00
      and huella_anterior = (select huella from public.verifactu_registro where invoice_id = (select v::uuid from _v where clave = 'suiza_iva'));
   if not found then raise exception 'PRUEBA V03 · 3b: la de Suiza con N2 no tiene su alta como debe (%).', (select row_to_json(r) from public.verifactu_registro r where invoice_id = v_h); end if;
-  raise notice '3b · Suiza sin IVA y sin motivo: «%», sin gastar número; con N2, su alta encadenada', v_msg;
+  raise notice '3b · Suiza sin IVA y sin motivo: «%»; con N2, su alta encadenada', v_msg;
 end $$;
 reset role;
+-- La rechazada no gastó número: después hay UNO más, y es el de la emitida con N2.
+do $$
+declare v_antes int := (select v::int from _v where clave = 'contador_antes'); v_despues int;
+begin
+  select coalesce(max(last_number), 0) into v_despues from public.customer_invoice_counter
+   where company_id = (select v::uuid from _v where clave = 'empresa') and series_code = 'F';
+  if v_despues <> v_antes + 1 or (select number from public.customer_invoice where id = (select v::uuid from _v where clave = 'exenta')) <> v_despues then
+    raise exception 'PRUEBA V03 · 3b: la rechazada ha gastado número (% → %).', v_antes, v_despues;
+  end if;
+  raise notice '3b · la rechazada no gastó número (% → %, el de la emitida con N2)', v_antes, v_despues;
+end $$;
 
 -- 5 · Las vueltas atrás.
 \i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
