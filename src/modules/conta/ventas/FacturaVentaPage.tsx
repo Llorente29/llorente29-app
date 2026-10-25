@@ -43,12 +43,13 @@ import {
 } from '@/modules/conta/diseno/plantillas'
 import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { enviarADiez } from '@/modules/conta/services/conDiezService'
+import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import {
   borrarBorrador, catalogosFactura, cobrarFactura, corregirFactura, datosDelPdf, direccion, emitirFactura, empresaDelPdf, enviarPorCorreo, guardarBorrador, guardarPdf, leerFactura, urlDelPdf,
   type Catalogos, type FacturaGuardada,
 } from '@/modules/conta/services/ventasService'
 import {
-  ETIQUETAS_BORRADOR, NOMBRE_CORRECCION, NOMBRE_ESTADO, asientoPrevio, cifrasDe, cifrasGuardadas, diferenciaDe, estadoDe, faltaParaEmitir, lineaVacia, lineasLeidas, textoDeNumero, venceCon,
+  ETIQUETAS_BORRADOR, NOMBRE_CORRECCION, NOMBRE_ESTADO, asientoPrevio, cifrasDe, cifrasGuardadas, diferenciaDe, textoTraspaso, estadoDe, faltaParaEmitir, lineaVacia, lineasLeidas, textoDeNumero, venceCon,
   type BorradorVenta, type LineaEnEdicion,
 } from '@/modules/conta/lib/facturasVenta'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
@@ -97,6 +98,8 @@ export default function FacturaVentaPage() {
   const f = leida.datos ?? null
   const original = useLeer(accountId && f?.corrige ? () => leerFactura(accountId, f.corrige!.id) : null, `${accountId}:${f?.corrige?.id}:original:${vuelta}`)
   const empresa = useLeer(accountId && companyId ? () => empresaDelPdf(accountId, companyId) : null, `${accountId}:${companyId}:empresa-pdf`)
+  // V01c: en traspaso mensual nada va a Diez suelto: va en el traspaso del mes de su fecha (Contabilidad › Cierre).
+  const mensual = useEnvioDiez(accountId, companyId).envio?.mensual === true
   const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales`)
   const asiento = useLeer(accountId && f?.entryId ? () => leerAsiento(accountId, f.entryId!) : null, `${accountId}:${f?.entryId}:asiento`)
   const pdfUrl = useLeer(f?.pdf ? () => urlDelPdf(f.pdf!.ruta) : null, `${f?.pdf?.ruta}:url`)
@@ -206,7 +209,9 @@ export default function FacturaVentaPage() {
         } catch (e) {
           pasos.push({ ok: false, texto: `Su PDF no se ha podido hacer: ${e instanceof Error ? e.message : String(e)} Pulsa «Hacer el PDF» para reintentarlo.` })
         }
-        if (r.asiento) {
+        if (r.asiento && mensual) {
+          pasos.push({ ok: true, texto: `${textoTraspaso(guardada.fecha)} a Diez, con el resto del mes (Contabilidad › Cierre).` })
+        } else if (r.asiento) {
           const d = await enviarADiez(r.asiento)
           pasos.push({ ok: d.estado === 'en_diez', texto: d.texto })
         }
@@ -316,7 +321,7 @@ export default function FacturaVentaPage() {
     titulo: 'Más acciones',
     acciones: [
       ...(f?.entryId ? [{ id: 'asiento', etiqueta: 'Ver el asiento', a: rutaAsiento(f.entryId), grupo: '' }] : []),
-      ...(f?.entryId ? [{ id: 'diez', etiqueta: 'Enviar a Diez', dato: 'Si no llegó', alPulsar: () => void reenviarDiez(), grupo: '' }] : []),
+      ...(f?.entryId && !mensual ? [{ id: 'diez', etiqueta: 'Enviar a Diez', dato: 'Si no llegó', alPulsar: () => void reenviarDiez(), grupo: '' }] : []),
       ...(f && f.estado !== 'borrador' && !f.pdf ? [{ id: 'pdf', etiqueta: 'Hacer el PDF', alPulsar: () => void hacerPdf(), grupo: '' }] : []),
       ...(pdfUrl.datos ? [{ id: 'abrir', etiqueta: 'Abrir el PDF aparte', alPulsar: () => window.open(pdfUrl.datos!, '_blank', 'noopener'), grupo: '' }] : []),
       ...(f?.estado === 'anulada' || f?.corrige?.tipo === 'anular' ? [{ id: 'nueva', etiqueta: 'Hacer una nueva bien hecha', dato: 'Con lo de la anulada', a: `${rutaNuevaFacturaVenta()}?copia=${f.corrige?.id ?? f.id}`, grupo: '' }] : []),
@@ -334,7 +339,7 @@ export default function FacturaVentaPage() {
     ? (asiento.datos?.apuntes ?? []).map((x) => ({ nombre: x.nombreCuenta, codigo: x.cuenta, debe: x.debe ? importeEs(x.debe) : null, haber: x.haber ? importeEs(x.haber) : null }))
     : asientoPrevio(cifras, leidas.lineas, nombreCliente, cat.cuentas).map((x) => ({ ...x, debe: x.debe === null ? null : importeEs(x.debe), haber: x.haber === null ? null : importeEs(x.haber) }))
   const notaAsiento = f?.entryId
-    ? <><Link to={rutaAsiento(f.entryId)}>Ver el asiento{asiento.datos?.numero ? ` ${asiento.datos.numero}` : ''}</Link> · Validado. Va a Diez como cualquier asiento validado.</>
+    ? <><Link to={rutaAsiento(f.entryId)}>Ver el asiento{asiento.datos?.numero ? ` ${asiento.datos.numero}` : ''}</Link> · Validado. {mensual ? `${textoTraspaso(f.fecha)} a Diez, con el resto del mes.` : 'Va a Diez como cualquier asiento validado.'}</>
     : <>Así quedará al emitir. La subcuenta 430 del cliente y la 477 de cada tipo las pone tu plan; si al cliente le falta su 430, se le crea.{ed.hay ? ' Con cambios sin guardar, es la vista previa.' : ''}</>
 
   const hechos = f ? f.eventos.map((e) => ({ cuando: e.cuando, texto: `${e.texto}${e.quien ? ` · ${e.quien}` : ''}` })) : []
@@ -460,7 +465,8 @@ export default function FacturaVentaPage() {
           alGuardar={(id) => { setDialogo(null); setVuelta((x) => x + 1); ed.poner('clienteId', id) }} />
       )}
       {dialogo === 'emitir' && (
-        <DialogoEmitir que={que} total={cifras.total} correo={b.correo || cliente?.correo || ''} hayCambios={ed.hay || nueva} alCerrar={() => setDialogo(null)} alEmitir={(e, p) => void emitir(e, p)} />
+        <DialogoEmitir que={que} total={cifras.total} correo={b.correo || cliente?.correo || ''} hayCambios={ed.hay || nueva} alCerrar={() => setDialogo(null)} alEmitir={(e, p) => void emitir(e, p)}
+          traspaso={mensual ? textoTraspaso(b.fecha).replace(/^En/, 'en') : null} />
       )}
       {dialogo === 'cobro' && f && (
         <DialogoCobro numero={f.numero ?? ''} queda={queda} hoy={hoy} formas={cat.formas} alCerrar={() => setDialogo(null)}
@@ -475,7 +481,7 @@ export default function FacturaVentaPage() {
           }} />
       )}
       {dialogo === 'corregir' && f && (
-        <DialogoCorregir numero={f.numero ?? ''} sinDatos={deCierre} alCerrar={() => setDialogo(null)}
+        <DialogoCorregir numero={f.numero ?? ''} sinDatos={deCierre} traspaso={mensual ? 'en el traspaso de su mes' : null} alCerrar={() => setDialogo(null)}
           alCorregir={async (tipo, motivo) => {
             try {
               const r = await corregirFactura(f.id, tipo, motivo, userName)

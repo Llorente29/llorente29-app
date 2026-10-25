@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import { sumanTodas } from '@/modules/conta/diseno/plantillas'
 import {
-  asientoPrevio, casaConBusqueda, cifrasDe, cifrasFacturas, diferenciaDe, estadoDe, faltaParaEmitir, filasFacturas, filtrosFacturas, lineasLeidas,
+  asientoPrevio, casaConBusqueda, cifrasDe, cifrasFacturas, diezDeFactura, diferenciaDe, textoTraspaso, estadoDe, faltaParaEmitir, filasFacturas, filtrosFacturas, lineasLeidas,
   numeroDeTexto, origenesQueHay, pestanaDe, pestanasFacturas, quedaPorCobrar, totalDelFiltro, venceCon, type FacturaVenta, type LineaFactura,
 } from '@/modules/conta/lib/facturasVenta'
 
@@ -163,5 +163,34 @@ describe('el asiento que se crea', () => {
     const a = asientoPrevio(d, [], 'Colegio', cuentas)
     expect(a[0]).toMatchObject({ codigo: '430', debe: null, haber: 292.82 })
     expect(a.find((x) => x.codigo === '477')).toMatchObject({ debe: 50.82, haber: null })
+  })
+})
+
+// V01c (Julio, 25/10) · La columna Diez con la empresa en traspaso mensual. Los
+// estados son los de producción el 25/10 (Foodint, mensual desde el 01/10): las
+// 5 facturas de los cierres validados el 24/10 (GLV-2026/00001 a UBR-2026/00002)
+// sin ningún envío; external_send con enviado, enlazado y pendiente.
+describe('diezDeFactura y textoTraspaso', () => {
+  const MENSUAL = { encendido: true, mensual: true }
+  const AL_MOMENTO = { encendido: true, mensual: false }
+  const APAGADO = { encendido: false, mensual: false }
+  it('en mensual, lo validado sin envío va en el traspaso, no «En cola» (las 5 del 24/10)', () => {
+    expect(diezDeFactura(undefined, MENSUAL, true)).toBe('traspaso')
+    expect(diezDeFactura('pendiente', MENSUAL, true)).toBe('traspaso')
+  })
+  it('lo traspasado sale como siempre: ✓ Diez; y un fallo, como fallo', () => {
+    expect(diezDeFactura('enviado', MENSUAL, true)).toBe('enviada')
+    expect(diezDeFactura('enlazado', MENSUAL, true)).toBe('enviada')
+    expect(diezDeFactura('error', MENSUAL, true)).toBe('error')
+  })
+  it('al validar y apagado, como antes; un borrador, nada', () => {
+    expect(diezDeFactura(undefined, AL_MOMENTO, true)).toBe('en_cola')
+    expect(diezDeFactura('pendiente', AL_MOMENTO, true)).toBe('en_cola')
+    expect(diezDeFactura(undefined, APAGADO, true)).toBe('sin_envio')
+    expect(diezDeFactura(undefined, MENSUAL, false)).toBeNull()
+  })
+  it('el mes es el de su fecha', () => {
+    expect(textoTraspaso('2026-10-24')).toBe('En el traspaso de octubre')
+    expect(textoTraspaso('2026-09-30')).toBe('En el traspaso de septiembre')
   })
 })

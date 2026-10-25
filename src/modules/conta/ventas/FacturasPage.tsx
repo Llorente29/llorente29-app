@@ -39,7 +39,7 @@ import { BotonEnlace, Chip } from '@/modules/conta/diseno'
 import { CifrasBandeja, FiltroBuscar, FiltroSelector, FiltrosLista, PestanasEstado, TablaLista, conCambio, escribirOrden, type ColumnaLista } from '@/modules/conta/diseno/plantillas'
 import {
   NOMBRE_ESTADO, NOMBRE_ORIGEN, TONO_ORIGEN, cifrasFacturas, estadoDe, filasFacturas, filtrarSinPestana, filtrosFacturas, origenesQueHay, pestanasFacturas, quedaPorCobrar,
-  seriesQueHay, totalDelFiltro, type DiezFactura, type FacturaVenta,
+  seriesQueHay, textoTraspaso, totalDelFiltro, type DiezFactura, type FacturaVenta,
 } from '@/modules/conta/lib/facturasVenta'
 
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
@@ -49,6 +49,8 @@ const DIEZ: Record<Exclude<DiezFactura, null>, { texto: string; tono: 'seguro' |
   en_cola: { texto: 'En cola', tono: 'duda' },
   error: { texto: 'No llegó', tono: 'falta' },
   sin_envio: { texto: 'Apagado', tono: 'neutro' },
+  // V01c: la empresa traspasa una vez al mes; el texto lleva el mes de su fecha (textoTraspaso).
+  traspaso: { texto: 'En el traspaso', tono: 'neutro' },
 }
 
 export default function FacturasPage() {
@@ -110,7 +112,7 @@ export default function FacturasPage() {
     const atrasada = estadoDe(x, hoy) === 'vencida'
     return <span className="s-cifra" data-tono={atrasada ? 'falta' : undefined}>{diaMes(x.vence)}</span>
   }
-  const diez = (x: FacturaVenta) => (x.diez ? <Chip tono={DIEZ[x.diez].tono}>{DIEZ[x.diez].texto}</Chip> : <span className="s-tarjeta-apoyo">—</span>)
+  const diez = (x: FacturaVenta) => (x.diez ? <Chip tono={DIEZ[x.diez].tono}>{x.diez === 'traspaso' ? textoTraspaso(x.fecha) : DIEZ[x.diez].texto}</Chip> : <span className="s-tarjeta-apoyo">—</span>)
   const columnas: ColumnaLista<FacturaVenta>[] = [
     {
       id: 'numero', titulo: 'Número', ordenable: true, prioridad: 1, minimo: 120,

@@ -183,15 +183,17 @@ export function DialogoClienteNuevo({ accountId, quien, alCerrar, alGuardar }: {
 }
 
 /** Emitir: lo que va a pasar, y si se manda por correo. */
-export function DialogoEmitir({ que, total, correo, hayCambios, alCerrar, alEmitir }: {
+export function DialogoEmitir({ que, total, correo, hayCambios, alCerrar, alEmitir, traspaso = null }: {
   que: string; total: number; correo: string; hayCambios: boolean; alCerrar: () => void; alEmitir: (enviar: boolean, para: string) => void
+  /** V01c: con la empresa en traspaso mensual, «en el traspaso de octubre»; si no, null (va a Diez al emitir). */
+  traspaso?: string | null
 }) {
   const [enviar, setEnviar] = useState(!!correo)
   const [para, setPara] = useState(correo)
   const correoBueno = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(para.trim())
   return (
     <Dialogo titulo={`Emitir ${que}`} alCerrar={alCerrar}
-      explicacion={<>Por {eurosExactos(total)}. Al emitir se le da su número, se hace su PDF y su asiento, y va a Diez. Una emitida ya no se borra: se corrige con una rectificativa.{hayCambios ? ' Antes se guardan tus cambios.' : ''}</>}
+      explicacion={<>Por {eurosExactos(total)}. Al emitir se le da su número, se hace su PDF y su asiento, y va a Diez{traspaso ? ` ${traspaso}` : ''}. Una emitida ya no se borra: se corrige con una rectificativa.{hayCambios ? ' Antes se guardan tus cambios.' : ''}</>}
       acciones={<>
         <Boton variante="secundario" onClick={alCerrar}>Cancelar</Boton>
         <Boton variante="principal" disabled={enviar && !correoBueno} onClick={() => alEmitir(enviar, para.trim())}>Emitir</Boton>
@@ -237,8 +239,10 @@ export function DialogoCobro({ numero, queda, hoy, formas, alCerrar, alCobrar }:
 }
 
 /** Corregir una emitida: importes o líneas, anularla entera, o los datos del cliente. */
-export function DialogoCorregir({ numero, alCerrar, alCorregir, sinDatos = false }: {
+export function DialogoCorregir({ numero, alCerrar, alCorregir, sinDatos = false, traspaso = null }: {
   numero: string; alCerrar: () => void; alCorregir: (tipo: 'importes' | 'anular' | 'datos', motivo: string) => Promise<string | null>
+  /** V01c: con la empresa en traspaso mensual, «en el traspaso de su mes»; si no, null. */
+  traspaso?: string | null
   /** V01 · Entrega 2: una factura resumen de un cierre no lleva cliente: no se corrigen «datos del cliente». */
   sinDatos?: boolean
 }) {
@@ -248,7 +252,7 @@ export function DialogoCorregir({ numero, alCerrar, alCorregir, sinDatos = false
   const [ocupado, setOcupado] = useState(false)
   return (
     <Dialogo titulo={`Corregir la ${numero}`} alCerrar={alCerrar}
-      explicacion="Una factura emitida no se cambia ni se borra: se corrige con una rectificativa (serie R), que queda enlazada a ella. Primero se prepara como borrador; al emitirla lleva su PDF, su asiento y va a Diez."
+      explicacion={`Una factura emitida no se cambia ni se borra: se corrige con una rectificativa (serie R), que queda enlazada a ella. Primero se prepara como borrador; al emitirla lleva su PDF, su asiento y va a Diez${traspaso ? ` ${traspaso}` : ''}.`}
       acciones={<>
         <Boton variante="secundario" onClick={alCerrar}>Cancelar</Boton>
         <Boton variante="principal" disabled={!motivo.trim() || ocupado} onClick={() => {

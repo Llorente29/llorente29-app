@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { detalleDiez, fraseDiez, motivoEnPalabras, type EnvioAsiento } from '@/modules/conta/lib/enDiez'
 
-const a = (o: Partial<{ id: string; estado: string; origen: string; anuladoCon: string | null }> = {}) => ({ id: 'e1', estado: 'validado', origen: 'bank', anuladoCon: null, ...o })
+const a = (o: Partial<{ id: string; estado: string; origen: string; anuladoCon: string | null; fecha: string }> = {}) => ({ id: 'e1', estado: 'validado', origen: 'bank', anuladoCon: null, ...o })
 const envio = (o: Partial<EnvioAsiento> = {}): EnvioAsiento => ({ status: 'enviado', serie: '4', numero: 1234, intentos: 1, error: null, documento: null, siguiente: null, ...o })
 const ON = { encendido: true, ahora: new Date('2026-10-22T08:00:00Z') }
 
@@ -64,10 +64,12 @@ describe('anulado', () => {
 // C12 (24/10) · La empresa traspasa a Diez una vez al mes: nada se manda suelto.
 describe('traspaso mensual', () => {
   const MES = { ...ON, mensual: true }
-  it('validado y no en Diez: «Va en el traspaso del mes», sin «Reintentar», falle lo que falle antes', () => {
-    const va = { texto: 'Va en el traspaso del mes', motivo: null, tono: 'neutro', reintentar: null, enDiez: false }
-    expect(detalleDiez(a(), null, MES)).toEqual(va)
-    expect(detalleDiez(a(), envio({ status: 'pendiente', numero: null, error: 'Diez real está cerrado', intentos: 3 }), MES)).toEqual(va)
+  // V01c (25/10): la misma pieza que Ventas › Facturas, con el mes de su fecha.
+  it('validado y no en Diez: «En el traspaso de <mes>», en gris, sin «Reintentar», falle lo que falle antes', () => {
+    const va = { texto: 'En el traspaso de octubre', motivo: null, tono: 'neutro', reintentar: null, enDiez: false }
+    expect(detalleDiez(a({ fecha: '2026-10-24' }), null, MES)).toEqual(va)
+    expect(detalleDiez(a({ fecha: '2026-10-24' }), envio({ status: 'pendiente', numero: null, error: 'Diez real está cerrado', intentos: 3 }), MES)).toEqual(va)
+    expect(detalleDiez(a(), null, MES)?.texto).toBe('En el traspaso del mes')
   })
   it('lo que ya está en Diez, igual que antes', () => {
     expect(detalleDiez(a(), envio(), MES)?.texto).toBe('En Diez · 4/1.234')
