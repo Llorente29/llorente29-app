@@ -18,6 +18,8 @@
 --      emisión con el NIF mal se deshace entera sin gastar número.
 --   4. El registro no se edita.
 --   6. El despertar y el aviso del certificado (2249).
+--   7. El certificado de la empresa, solo para Verifactu: autorizar, abrir para
+--      un envío de real, no editar, retirar; presentar sigue pidiendo confirmación (2341).
 --   5. Las vueltas atrás: sin el disparador ni las tablas; conta_venta_emitir
 --      con el mismo md5 del principio.
 
@@ -31,6 +33,7 @@ end $$;
 set local statement_timeout = '180s';
 
 -- La 2140 solo añade y puede estar ya de verdad (W05): primero las vueltas atrás.
+\i supabase/vuelta-atras/20261025T2341_v03_verifactu_autorizacion.down.sql
 \i supabase/vuelta-atras/20261025T2249_v03_verifactu_despertar.down.sql
 \i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
 \i supabase/vuelta-atras/20261025T2140_v03_verifactu_motor.down.sql
@@ -51,6 +54,7 @@ end $$;
 \i supabase/migrations/20261025T2140_v03_verifactu_motor.sql
 \i supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
 \i supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
+\i supabase/migrations/20261025T2341_v03_verifactu_autorizacion.sql
 
 -- 0 · La huella de la base contra los ejemplos oficiales (v0.1.2 §6).
 do $$ begin
@@ -204,6 +208,7 @@ end $$;
 
 
 -- 5 · Las vueltas atrás.
+\i supabase/vuelta-atras/20261025T2341_v03_verifactu_autorizacion.down.sql
 \i supabase/vuelta-atras/20261025T2249_v03_verifactu_despertar.down.sql
 \i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
 \i supabase/vuelta-atras/20261025T2140_v03_verifactu_motor.down.sql
@@ -229,6 +234,7 @@ end $$;
 \i supabase/migrations/20261025T2140_v03_verifactu_motor.sql
 \i supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
 \i supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
+\i supabase/migrations/20261025T2341_v03_verifactu_autorizacion.sql
 do $$
 declare v_n bigint; v_m bigint;
 begin
@@ -269,5 +275,86 @@ begin
   exception when sqlstate '55000' then v_msg := sqlerrm;
   end;
   raise notice '6 · el aviso del certificado sale (1); con real pendiente despertar llamaría: «%»', v_msg;
+end $$;
+
+-- 7 · El certificado de la empresa, solo para Verifactu (2341, respuesta 2 b).
+-- Un certificado de mentira en el Vault (se va con el rollback), del NIF de A,
+-- y otro de otro NIF. Después de la 6, A está en real con un alta pendiente.
+do $$
+declare v_s uuid; v_acc uuid := (select v::uuid from _v where clave = 'cuenta');
+begin
+  v_s := vault.create_secret('{"cert":"CERT-DE-PRUEBA","key":"CLAVE-DE-PRUEBA"}', 'v03-prueba-' || gen_random_uuid());
+  insert into public.tax_certificate (owner_account_id, subject_name, subject_tax_id_hash, subject_tax_id_tail, issuer, serial, valid_from, valid_to,
+         fingerprint_sha256, kind, storage, vault_secret_id)
+  values (v_acc, 'Prueba V03 (de mentira)', encode(sha256(convert_to('B28000016', 'UTF8')), 'hex'), '016', 'Prueba', 'V03-1', now() - interval '1 day', now() + interval '1 year',
+          encode(sha256(convert_to('v03-cert-1', 'UTF8')), 'hex'), 'legal_representative', 'vault', v_s)
+  returning id::text into strict v_s;
+  insert into _v values ('cert', v_s::text);
+  v_s := vault.create_secret('{"cert":"OTRO","key":"OTRA"}', 'v03-prueba-' || gen_random_uuid());
+  insert into public.tax_certificate (owner_account_id, subject_name, subject_tax_id_hash, subject_tax_id_tail, issuer, serial, valid_from, valid_to,
+         fingerprint_sha256, kind, storage, vault_secret_id)
+  values (v_acc, 'Otro NIF (de mentira)', encode(sha256(convert_to('A12345674', 'UTF8')), 'hex'), '674', 'Prueba', 'V03-2', now() - interval '1 day', now() + interval '1 year',
+          encode(sha256(convert_to('v03-cert-2', 'UTF8')), 'hex'), 'legal_representative', 'vault', v_s)
+  returning id::text into strict v_s;
+  insert into _v values ('cert_otro', v_s::text);
+end $$;
+set local role authenticated;
+do $$
+declare v_e uuid := (select v::uuid from _v where clave = 'empresa'); v_c uuid := (select v::uuid from _v where clave = 'cert');
+  v_o uuid := (select v::uuid from _v where clave = 'cert_otro'); r jsonb; v_msg text;
+begin
+  begin perform public.verifactu_autorizar_certificado(v_e, v_c, 'SI', 'Prueba V03'); raise exception 'PRUEBA V03 · 7: autoriza sin AUTORIZO.';
+  exception when check_violation then v_msg := sqlerrm; end;
+  if v_msg not like '%escribe AUTORIZO%solo para enviar%Verifactu%' then raise exception 'PRUEBA V03 · 7: sin AUTORIZO no lo dice claro («%»).', v_msg; end if;
+  begin perform public.verifactu_autorizar_certificado(v_e, v_o, 'AUTORIZO', 'Prueba V03'); raise exception 'PRUEBA V03 · 7: autoriza un certificado de otro NIF.';
+  exception when check_violation then v_msg := sqlerrm; end;
+  if v_msg not like '%otro NIF (acaba en 674)%' then raise exception 'PRUEBA V03 · 7: el de otro NIF no lo dice («%»).', v_msg; end if;
+  r := public.verifactu_autorizar_certificado(v_e, v_c, 'AUTORIZO', 'Prueba V03');
+  if (select via from public.verifactu_empresa where company_id = v_e) <> 'certificado' then raise exception 'PRUEBA V03 · 7: autorizada, la vía no es la del certificado.'; end if;
+  insert into _v values ('autorizacion', r->>'id');
+  begin
+    update public.verifactu_autorizacion set autorizada_por_nombre = 'Otro' where id = (r->>'id')::uuid;
+    if found then raise exception 'PRUEBA V03 · 7: la autorización se ha podido editar.'; end if;
+  exception when insufficient_privilege then null; end;
+  raise notice '7 · sin AUTORIZO no; de otro NIF no («%»); autorizada, por la vía del certificado, y no se edita', v_msg;
+end $$;
+reset role;
+do $$
+declare v_l jsonb; r jsonb; v_aut uuid := (select v::uuid from _v where clave = 'autorizacion');
+begin
+  begin update public.verifactu_autorizacion set autorizada_at = now() - interval '1 day' where id = v_aut; raise exception 'PRUEBA V03 · 7: la autorización se edita (superusuario).';
+  exception when insufficient_privilege then null; end;
+  v_l := public.verifactu_cola_tomar('real', 1000);
+  if v_l is null then raise exception 'PRUEBA V03 · 7: no hay envío de real que tomar.'; end if;
+  insert into _v values ('envio_real', v_l->>'envio_id');
+  r := public.verifactu_cert_abrir((v_l->>'envio_id')::uuid);
+  if not (r->>'ok')::boolean or r->>'material' <> '{"cert":"CERT-DE-PRUEBA","key":"CLAVE-DE-PRUEBA"}' or (r->>'autorizacion_id')::uuid <> v_aut
+     or (select autorizacion_id from public.verifactu_envio where id = (v_l->>'envio_id')::uuid) is distinct from v_aut then
+    raise exception 'PRUEBA V03 · 7: autorizada, no abre el certificado para su envío o no lo apunta (%).', r - 'material';
+  end if;
+  -- Presentar impuestos sigue pidiendo su confirmación: la autorización de Verifactu no la abre.
+  r := public.conta_cert_abrir(gen_random_uuid(), (select autorizada_por from public.verifactu_autorizacion where id = v_aut));
+  if (r->>'ok')::boolean then raise exception 'PRUEBA V03 · 7: el certificado se abre para presentar sin confirmación.'; end if;
+  raise notice '7 · autorizada: abre el certificado para el envío de real y apunta su autorización; presentar sigue pidiendo confirmación («%»)', r->>'mensaje';
+end $$;
+set local role authenticated;
+do $$
+declare r jsonb;
+begin
+  r := public.verifactu_retirar_autorizacion((select v::uuid from _v where clave = 'empresa'), 'Prueba de retirar', 'Prueba V03');
+  if not (r->>'retirada')::boolean or (select via from public.verifactu_empresa where company_id = (select v::uuid from _v where clave = 'empresa')) <> 'colaborador' then
+    raise exception 'PRUEBA V03 · 7: retirar no vuelve a la vía de colaborador social (%).', r;
+  end if;
+end $$;
+reset role;
+do $$
+declare r jsonb;
+begin
+  r := public.verifactu_cert_abrir((select v::uuid from _v where clave = 'envio_real'));
+  if (r->>'ok')::boolean or r->>'mensaje' not like '%colaborador social%' then raise exception 'PRUEBA V03 · 7: retirada, aún abre el certificado (%).', r - 'material'; end if;
+  if (select retirada_motivo from public.verifactu_autorizacion where id = (select v::uuid from _v where clave = 'autorizacion')) <> 'Prueba de retirar' then
+    raise exception 'PRUEBA V03 · 7: la retirada no apunta su porqué.';
+  end if;
+  raise notice '7 · retirada: vuelve a colaborador social y ya no abre («%»)', r->>'mensaje';
 end $$;
 rollback;

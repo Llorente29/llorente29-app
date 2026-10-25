@@ -15,6 +15,10 @@
 #      nada) y el aviso del certificado (cron verifactu-aviso-certificado, cada
 #      día: empresas en real con el certificado a 30 días o menos de caducar).
 #      Los cron solo donde está el cron_secret (producción). No toca datos.
+#   4. 2341 — AÑADE la autorización del certificado de la empresa SOLO para
+#      Verifactu (respuesta 2 de Julio, b): quién y cuándo, retirable, cada envío
+#      con la suya, y la función que lo abre solo para un envío de real. La vía
+#      por defecto, colaborador social. No toca datos ni nada del I01.
 #
 # Sin «autorizo»: ninguno toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
@@ -22,4 +26,5 @@
 supabase/migrations/20261025T2140_v03_verifactu_motor.sql
 supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
 supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
+supabase/migrations/20261025T2341_v03_verifactu_autorizacion.sql
 cuenta: scripts/conta/produccion/cuentas/v03-verifactu.sql

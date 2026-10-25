@@ -58,29 +58,34 @@
 - **La función** `conta-verifactu`: cerrada si no se pone `CONTA_VERIFACTU`;
   «pruebas» solo desde staging, «real» solo desde producción.
 
-## Lo que queda abierto, para Julio
+## Lo que decidió Julio (respuesta 2, 26/10)
 
-1. **La V01 no emite líneas exentas ni al 0 %.** `conta_venta_guardar` solo
-   admite IVA general, reducido o superreducido, y el asiento de
-   `conta_venta_emitir` no cuadra una 477 a 0. La regla «fuera de la UE: dime qué
-   le has vendido» y la N2 están hechas y probadas en la comprobación previa,
-   pero hoy no se llega a ellas emitiendo. Lo que sí se puede: un cliente de
-   fuera de la UE **con IVA** (lo de un restaurante: el servicio se consume en
-   España), que va S1 con `IDOtro` 04. No lo he tocado: es la V01.
-2. **El envío en real con el certificado de la empresa.** El almacén del I01
-   solo abre un certificado con la confirmación de una persona en cada uso
-   (pensado para presentar un 303). Verifactu envía solo, cada pocos minutos.
-   Hace falta decidir cómo se autoriza ese uso desatendido (por ejemplo: al
-   pasar una empresa a real, quien puede presentar lo autoriza una vez, y se
-   revoca al cambiar el certificado). Hasta entonces, lo de real vuelve a la
-   cola diciendo por qué. No hay ningún registro en real: ninguna empresa lo está.
-3. **Quién produce el sistema** (la declaración responsable): nombre y NIF que
-   van en `SistemaInformatico`. Hoy salen del entorno (`VERIFACTU_SIF_NOMBRE`,
-   `VERIFACTU_SIF_NIF`); en pruebas, el titular del certificado.
-4. **En pruebas, la empresa que emite lleva el NIF del certificado** (el de
-   Llorente29): la AEAT solo acepta registros del obligado o de quien le
-   representa. Lo cojo del certificado al preparar las facturas de prueba; no
-   se escribe en el repositorio.
+1. **Ventas sin IVA (exentas y no sujetas): a la E2.** La V01 tiene que dejar
+   guardar líneas exentas o no sujetas con su causa (exportación, art. 21; no
+   sujeta por localización, N2; las del art. 20), su asiento no puede fallar
+   con una 477 a cero, y la regla «fuera de la UE: dime qué le has vendido» se
+   tiene que alcanzar emitiendo de verdad, con su e2e. Hoy, en la E1, está
+   probada en la comprobación previa.
+2. **El certificado sin una persona delante: hecho en la E1 (2341).** La
+   empresa autoriza una vez, escribiendo AUTORIZO, «usar mi certificado solo
+   para enviar Verifactu»: quien puede presentar con ese certificado, que tiene
+   que ser del NIF de la empresa. Queda quién y cuándo (`verifactu_autorizacion`,
+   no se edita), se retira cuando se quiera (quién, cuándo y por qué) y cada
+   envío apunta con qué autorización salió (`verifactu_envio.autorizacion_id`).
+   La función de envío lo abre con `verifactu_cert_abrir`: solo con la clave de
+   servicio, solo en real, solo por la vía del certificado y con la
+   autorización y el certificado en vigor. Presentar impuestos sigue pidiendo
+   confirmación cada vez (no se ha tocado nada del I01). La vía por defecto es
+   la de colaborador social, preparada y apagada.
+3. **El productor de la declaración responsable: un dato que se rellena**
+   (`VERIFACTU_SIF_NOMBRE` y `VERIFACTU_SIF_NIF`), sin nombres en el código. En
+   pruebas, si no está, el titular del certificado de pruebas; en real, sin él
+   la función no envía y dice por qué. Se decide antes de pasar a real.
+
+Sigue en pie: **en pruebas, la empresa que emite lleva el NIF del
+certificado** (la AEAT solo acepta registros del obligado o de quien le
+representa). La prepara la función en su propia cuenta de staging; el NIF no se
+escribe en el repositorio.
 
 ## Lo que falta en la E1
 

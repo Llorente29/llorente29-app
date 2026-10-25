@@ -39,7 +39,7 @@ create table if not exists public.verifactu_empresa (
   company_id        uuid primary key references public.company(id) on delete cascade,
   account_id        uuid not null references public.accounts(id) on delete cascade,
   modo              text not null default 'apagado' check (modo in ('apagado', 'pruebas', 'real')),
-  via               text not null default 'certificado' check (via in ('certificado', 'colaborador')),
+  via               text not null default 'colaborador' check (via in ('certificado', 'colaborador')),
   certificate_id    uuid references public.tax_certificate(id) on delete set null,
   pruebas_desde     timestamptz,
   real_desde        timestamptz,

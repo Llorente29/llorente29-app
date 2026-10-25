@@ -14,10 +14,10 @@
 //                      certificado tiene que ser el del obligado del envío.
 //   · «real»         → solo con la base de producción, solo los registros del
 //                      entorno «real» (no hay ninguno hasta que Julio pase una
-//                      empresa a real). Con el certificado de cada empresa: el
-//                      uso desatendido de ese certificado está PENDIENTE de la
-//                      decisión de Julio (E1_paso2_envio.md): hasta entonces, lo
-//                      de real vuelve a la cola diciendo por qué.
+//                      empresa a real). Con el certificado de cada empresa, solo
+//                      si lo ha autorizado para Verifactu (verifactu_cert_abrir,
+//                      2341); por la vía de colaborador social (la de partida,
+//                      preparada y apagada), vuelve a la cola diciendo por qué.
 //
 // Sin sesión: verify_jwt = false (config.toml) y x-cron-secret = CRON_SECRET.
 // En el registro, solo recuentos y motivos: nunca el XML, el certificado, el
@@ -130,13 +130,33 @@ Deno.serve(async (req) => {
     return data;
   };
 
+  // En pruebas, el certificado de pruebas se lee antes: da el productor si no
+  // está puesto. Si faltan sus secretos, cada envío lo dirá al pedir el material.
+  if (entorno === "pruebas") { try { leerCertPruebas(); } catch { /* lo dice material() */ } }
+  const sifNombre = Deno.env.get("VERIFACTU_SIF_NOMBRE") ?? (entorno === "pruebas" ? certPruebas?.titular ?? "" : "");
+  const sifNif = Deno.env.get("VERIFACTU_SIF_NIF") ?? (entorno === "pruebas" ? certPruebas?.nif ?? "" : "");
+
   const piezas: Piezas = {
     tomar: async (e, max) => (await rpc("verifactu_cola_tomar", { p_entorno: e, p_max: max })) as Lote | null,
     responder: (id, x) => rpc("verifactu_cola_respuesta", { p_envio: id, p: x }),
     fallar: (id, err) => rpc("verifactu_cola_fallo", { p_envio: id, p_error: err }),
     material: async (lote) => {
-      if (entorno === "pruebas") return materialPruebas(lote);
-      throw new SinCertificado("El envío en real con el certificado de la empresa está pendiente de la decisión de Julio (uso desatendido del certificado).");
+      const sinProductor = () => new SinCertificado("Falta quién produce el sistema (nombre y NIF de la declaración responsable: VERIFACTU_SIF_NOMBRE y VERIFACTU_SIF_NIF). Se rellena antes de pasar a real.");
+      if (entorno === "pruebas") {
+        const m = materialPruebas(lote);
+        if (!sifNombre || !sifNif) throw sinProductor();
+        return m;
+      }
+      if (!sifNombre || !sifNif) throw sinProductor();
+      // Real: el certificado de la empresa, solo si lo ha autorizado para
+      // Verifactu (respuesta 2 de Julio, b). La base lo comprueba y apunta la
+      // autorización en el envío; aquí no se decide nada.
+      const { data, error } = await srv.rpc("verifactu_cert_abrir", { p_envio: lote.envio_id });
+      if (error) throw new Error(`verifactu_cert_abrir: ${error.message}`);
+      const r = data as { ok: boolean; mensaje?: string; material?: string };
+      if (!r.ok || !r.material) throw new SinCertificado(r.mensaje ?? "No se puede usar el certificado de la empresa.");
+      const m = JSON.parse(r.material) as MaterialCertificado;
+      return { cert: m.cert, key: m.key };
     },
     llamar: async (url, xml, material) => {
       const r = await llamarConCertificado(material, url, {
@@ -145,11 +165,12 @@ Deno.serve(async (req) => {
       return { status: r.status, cuerpo: r.cuerpo, ms: r.ms };
     },
     sistema: {
-      // Respuesta 1 de Julio: código SU, nombre «Sumied». Quién lo produce (nombre
-      // y NIF de la declaración responsable) lo dice el entorno; en pruebas, el
-      // titular del certificado.
-      nombreRazon: Deno.env.get("VERIFACTU_SIF_NOMBRE") ?? "Sumied",
-      nif: Deno.env.get("VERIFACTU_SIF_NIF") ?? certPruebas?.nif ?? "",
+      // Respuesta 1 de Julio: código SU, nombre «Sumied».
+      // Quién produce el sistema (la declaración responsable): un dato que se
+      // rellena antes de pasar a real (respuesta 2 de Julio, c), sin nombres
+      // aquí. En pruebas, si no está, el titular del certificado de pruebas.
+      nombreRazon: sifNombre,
+      nif: sifNif,
       nombre: "Sumied", id: "SU",
       version: Deno.env.get("VERIFACTU_SIF_VERSION") ?? "1.0.0",
       numeroInstalacion: entorno === "pruebas" ? "staging" : "produccion",

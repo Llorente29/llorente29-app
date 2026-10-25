@@ -8,8 +8,8 @@
 -- «sí», y los dos cron de la 2249, de 0 a 2. Lo demás, igual: ninguna empresa con Verifactu encendido, ningún
 -- registro, las facturas de Foodint las mismas y conta_venta_emitir sin tocar.
 -- Medido en producción el 25/10 a las 21:50 UTC, antes: 0 / 1286 / 0 · 0 de 6 ·
--- no existe · no existe · no · 99be8350 · 0. Después: lo mismo, salvo 6 de 6, 0,
--- 0, «sí» y 2 cron.
+-- no existe · no existe · no · 99be8350 · 0 · no existe. Después: lo mismo,
+-- salvo 6 de 6, 0, 0, «sí», 2 cron y 0 autorizaciones.
 select clave, valor from (
   select 1 o, 'facturas de venta de Foodint (borrador / emitidas / anuladas)' clave,
     (select count(*) filter (where status = 'borrador') || ' / ' || count(*) filter (where status = 'emitida') || ' / ' || count(*) filter (where status = 'anulada')
@@ -28,5 +28,8 @@ select clave, valor from (
   select 6, 'huella de conta_venta_emitir',
     (select string_agg(left(md5(p.prosrc), 8), ',') from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_venta_emitir') union all
   select 7, 'cron de Verifactu (base entera)',
-    (select count(*) from cron.job where jobname in ('verifactu-despertar', 'verifactu-aviso-certificado'))::text
+    (select count(*) from cron.job where jobname in ('verifactu-despertar', 'verifactu-aviso-certificado'))::text union all
+  select 8, 'autorizaciones del certificado para Verifactu (base entera)',
+    case when to_regclass('public.verifactu_autorizacion') is null then 'no existe'
+         else (xpath('/row/n/text()', query_to_xml('select count(*) n from public.verifactu_autorizacion', false, true, '')))[1]::text end
 ) t order by o;
