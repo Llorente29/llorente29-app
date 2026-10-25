@@ -210,7 +210,7 @@ export default function FacturaVentaPage() {
           pasos.push({ ok: false, texto: `Su PDF no se ha podido hacer: ${e instanceof Error ? e.message : String(e)} Pulsa «Hacer el PDF» para reintentarlo.` })
         }
         if (r.asiento && mensual) {
-          pasos.push({ ok: true, texto: `Va a Diez ${textoTraspaso(guardada.fecha).replace(/^En/, 'en')} (Contabilidad › Cierre).` })
+          pasos.push({ ok: true, texto: `${textoTraspaso(guardada.fecha)} a Diez, con el resto del mes (Contabilidad › Cierre).` })
         } else if (r.asiento) {
           const d = await enviarADiez(r.asiento)
           pasos.push({ ok: d.estado === 'en_diez', texto: d.texto })
@@ -339,7 +339,7 @@ export default function FacturaVentaPage() {
     ? (asiento.datos?.apuntes ?? []).map((x) => ({ nombre: x.nombreCuenta, codigo: x.cuenta, debe: x.debe ? importeEs(x.debe) : null, haber: x.haber ? importeEs(x.haber) : null }))
     : asientoPrevio(cifras, leidas.lineas, nombreCliente, cat.cuentas).map((x) => ({ ...x, debe: x.debe === null ? null : importeEs(x.debe), haber: x.haber === null ? null : importeEs(x.haber) }))
   const notaAsiento = f?.entryId
-    ? <><Link to={rutaAsiento(f.entryId)}>Ver el asiento{asiento.datos?.numero ? ` ${asiento.datos.numero}` : ''}</Link> · Validado. {mensual ? `Va a Diez ${textoTraspaso(f.fecha).replace(/^En/, 'en')}, con el resto del mes.` : 'Va a Diez como cualquier asiento validado.'}</>
+    ? <><Link to={rutaAsiento(f.entryId)}>Ver el asiento{asiento.datos?.numero ? ` ${asiento.datos.numero}` : ''}</Link> · Validado. {mensual ? `${textoTraspaso(f.fecha)} a Diez, con el resto del mes.` : 'Va a Diez como cualquier asiento validado.'}</>
     : <>Así quedará al emitir. La subcuenta 430 del cliente y la 477 de cada tipo las pone tu plan; si al cliente le falta su 430, se le crea.{ed.hay ? ' Con cambios sin guardar, es la vista previa.' : ''}</>
 
   const hechos = f ? f.eventos.map((e) => ({ cuando: e.cuando, texto: `${e.texto}${e.quien ? ` · ${e.quien}` : ''}` })) : []
@@ -465,7 +465,8 @@ export default function FacturaVentaPage() {
           alGuardar={(id) => { setDialogo(null); setVuelta((x) => x + 1); ed.poner('clienteId', id) }} />
       )}
       {dialogo === 'emitir' && (
-        <DialogoEmitir que={que} total={cifras.total} correo={b.correo || cliente?.correo || ''} hayCambios={ed.hay || nueva} alCerrar={() => setDialogo(null)} alEmitir={(e, p) => void emitir(e, p)} />
+        <DialogoEmitir que={que} total={cifras.total} correo={b.correo || cliente?.correo || ''} hayCambios={ed.hay || nueva} alCerrar={() => setDialogo(null)} alEmitir={(e, p) => void emitir(e, p)}
+          traspaso={mensual ? textoTraspaso(b.fecha).replace(/^En/, 'en') : null} />
       )}
       {dialogo === 'cobro' && f && (
         <DialogoCobro numero={f.numero ?? ''} queda={queda} hoy={hoy} formas={cat.formas} alCerrar={() => setDialogo(null)}
@@ -480,7 +481,7 @@ export default function FacturaVentaPage() {
           }} />
       )}
       {dialogo === 'corregir' && f && (
-        <DialogoCorregir numero={f.numero ?? ''} sinDatos={deCierre} alCerrar={() => setDialogo(null)}
+        <DialogoCorregir numero={f.numero ?? ''} sinDatos={deCierre} traspaso={mensual ? 'en el traspaso de su mes' : null} alCerrar={() => setDialogo(null)}
           alCorregir={async (tipo, motivo) => {
             try {
               const r = await corregirFactura(f.id, tipo, motivo, userName)

@@ -62,9 +62,8 @@ export function diezDeFactura(estado: string | undefined, empresa: { encendido: 
   return empresa.encendido ? 'en_cola' : 'sin_envio'
 }
 
-const MESES_TRASPASO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-/** «En el traspaso de octubre»: el mes de su fecha (AAAA-MM-DD). */
-export const textoTraspaso = (fecha: string): string => `En el traspaso de ${MESES_TRASPASO[Number(fecha.slice(5, 7)) - 1] ?? 'su mes'}`
+/** «En el traspaso de octubre»: la misma pieza que el Libro y el asiento (lib/enDiez). */
+export { textoTraspaso } from '@/modules/conta/lib/enDiez'
 
 export interface FacturaVenta {
   id: string
