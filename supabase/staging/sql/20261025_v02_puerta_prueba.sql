@@ -3,12 +3,12 @@
 -- SOLO STAGING. Prueba de 20261025T1212_v02_puerta (cambia:
 -- public.company_inbound_address, public.supplier_expected_invoice,
 -- public.supplier_invoice_request, public.company_inbound_sender,
--- public.document_inbox, public.conta_direccion_entrada y
--- public.conta_entrada_remitente), con \i
+-- public.document_inbox, public.conta_documentos_recibidos,
+-- public.conta_direccion_entrada y public.conta_entrada_remitente), con \i
 -- dentro de la transacción y ROLLBACK: staging no cambia. En la empresa A.
 --
 --   (Empieza con su vuelta atrás, por si ya estuviera.)
---   0. Lo de antes: la huella de las dos funciones que cambian.
+--   0. Lo de antes: la huella de las tres funciones que cambian.
 --   1. La dirección de documentos: «<empresa>@entrada.folvy.app», sin prefijo;
 --      la de facturas sigue con el suyo; pedirla dos veces no crea otra.
 --   2. Las fuentes: proponer (corre aunque staging tenga pocas); guardar una
@@ -17,6 +17,8 @@
 --   3. Un documento por correo sin saber qué es: «Dime qué es», recordando el
 --      remitente; el servidor ya no lo pisa; el remitente se sabe.
 --   4. La puerta: la dirección, lo conectado y lo último, con ese documento.
+--      Y «Facturas recibidas» ya no lo enseña (es una nómina), pero sí uno que
+--      aún no se sabe qué es.
 --   5. «Pedírsela» a la fuente de riders (sin proveedor): una vez por mes.
 --   6. La vuelta atrás: sin el trabajo de la prueba, deja las funciones como
 --      estaban y quita lo nuevo.
@@ -35,7 +37,7 @@ create temp table _p (clave text primary key, v text) on commit drop;
 grant select, insert, update on _p to authenticated;
 insert into _p select 'fn:' || p.proname, md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text)
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public' and p.prokind = 'f' and p.proname in ('conta_direccion_entrada', 'conta_entrada_remitente');
+ where n.nspname = 'public' and p.prokind = 'f' and p.proname in ('conta_direccion_entrada', 'conta_entrada_remitente', 'conta_documentos_recibidos');
 
 do $$
 declare v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; v_e uuid;
@@ -132,6 +134,12 @@ begin
   if (select doc_kind from public.document_inbox where id = v_i) <> 'nomina' then raise exception 'PRUEBA V02 · 3: el servidor pisa lo que dijo la persona.'; end if;
   r := public.conta_entrada_remitente(v_e, 'Otra firma <NOMINAS@gestoria-prueba.test>');
   if r->>'decision' <> 'tipo' or r->>'tipo' <> 'nomina' then raise exception 'PRUEBA V02 · 3: el remitente no se recuerda (%).', r; end if;
+  -- Otro que llega y nadie sabe qué es (para el paso 4).
+  r := public.conta_entrada_llegada(jsonb_build_object('account_id', (select v from _p where clave = 'cuenta'), 'company_id', v_e, 'canal', 'correo',
+    'email_id', 'prueba-v02-2', 'to', (select v from _p where clave = 'direccion'), 'from', 'Alguien <alguien@prueba.test>',
+    'subject', 'Te mando esto', 'ruta', (select v from _p where clave = 'cuenta') || '/_correo/prueba-v02-2/01-otro.pdf', 'nombre', '01-otro.pdf',
+    'tipo', 'application/pdf', 'bytes', 2048, 'sha256', repeat('f', 64)));
+  insert into _p values ('inbox2', r->>'id');
   raise notice '3 · «Dime qué es»: nómina, recordada por su remitente, y el servidor no la pisa';
 end $$;
 
@@ -146,6 +154,17 @@ begin
     raise exception 'PRUEBA V02 · 4: lo último no trae el documento con lo que es y dónde va (%).', r->'ultimos';
   end if;
   raise notice '4 · la puerta: su dirección y lo último, con qué es y dónde va';
+  r := public.conta_documentos_recibidos(v_e, current_date - 1, current_date + 1);
+  if exists (select 1 from jsonb_array_elements(r->'filas') f where f->>'id' = (select v from _p where clave = 'inbox')) then
+    raise exception 'PRUEBA V02 · 4: «Facturas recibidas» enseña como por aclarar una nómina.';
+  end if;
+  if not exists (select 1 from jsonb_array_elements(r->'filas') f where f->>'id' = (select v from _p where clave = 'inbox2') and f->>'estado' = 'por_aclarar') then
+    raise exception 'PRUEBA V02 · 4: «Facturas recibidas» ya no enseña lo que aún no se sabe qué es.';
+  end if;
+  if r->'correo'->>'direccion' <> (select v from _p where clave = 'direccion') then
+    raise exception 'PRUEBA V02 · 4: «Facturas recibidas» no enseña la dirección única (%).', r->'correo';
+  end if;
+  raise notice '4 · Facturas recibidas: sin la nómina, con lo que aún no se sabe, y con la dirección única';
 
   r := public.conta_puerta_pedir(v_r, current_date, 'riders@catcher.test', 'Facturas de los riders', 'Hola…', 'Prueba V02');
   if (r->>'ya_estaba')::boolean then raise exception 'PRUEBA V02 · 5: la primera petición sale como repetida.'; end if;
@@ -164,7 +183,7 @@ delete from public.company_inbound_address where kind = 'documentos';
 do $$ begin
   if exists (select 1 from _p b join pg_proc p on 'fn:' || p.proname = b.clave join pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public' and p.prokind = 'f' and md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text) <> b.v) then
-    raise exception 'PRUEBA V02 · 6: conta_direccion_entrada o conta_entrada_remitente no vuelven como estaban.';
+    raise exception 'PRUEBA V02 · 6: conta_direccion_entrada, conta_entrada_remitente o conta_documentos_recibidos no vuelven como estaban.';
   end if;
   if to_regprocedure('public.conta_puerta(uuid,integer)') is not null or to_regclass('public.conta_puerta_ajustes') is not null
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'document_inbox' and column_name = 'doc_kind') then
