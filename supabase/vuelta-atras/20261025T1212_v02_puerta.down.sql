@@ -11,6 +11,7 @@
 --     se deshace a ciegas.
 --   · conta_documentos_recibidos, la de producción del 25/10.
 --   · Sin las columnas nuevas.
+--   · Sin el almacén conta-entrada (vacío; con ficheros, PARA).
 
 do $$ begin
   if exists (select 1 from public.company_inbound_address where kind = 'documentos')
@@ -264,10 +265,19 @@ alter table public.document_inbox add constraint document_inbox_file_bucket_chec
 drop policy if exists conta_entrada_select on storage.objects;
 drop policy if exists conta_entrada_insert on storage.objects;
 drop policy if exists conta_entrada_delete on storage.objects;
+-- El almacén conta-entrada, vacío (la guarda de arriba para si tiene ficheros),
+-- se borra con storage.allow_delete_query solo en esta transacción: sin eso,
+-- el disparador storage.protect_delete lo impide (staging y producción lo
+-- tienen). Antes se tragaba el error y el almacén se quedaba: el ensayo de la
+-- tanda (run 40216083774, 25/10) lo cazó, «el almacén» no volvía a «no». Si
+-- aun así no se borra, PARA: callarlo dejaría producción distinta (como S01).
 do $$ begin
+  perform set_config('storage.allow_delete_query', 'true', true);
   delete from storage.buckets where id = 'conta-entrada';
-exception when others then
-  raise notice 'El almacén conta-entrada se queda (vacío): Supabase no deja borrarlo por SQL (%).', sqlerrm;
+  perform set_config('storage.allow_delete_query', 'false', true);
+  if exists (select 1 from storage.buckets where id = 'conta-entrada') then
+    raise exception 'VUELTA ATRÁS DE LA PUERTA: el almacén conta-entrada, vacío, no se ha borrado.';
+  end if;
 end $$;
 alter table public.document_inbox drop column if exists expected_id;
 alter table public.document_inbox drop column if exists doc_kind_by;
