@@ -52,11 +52,28 @@ export interface Fuente {
   pedida: { periodo: string; estado: string; a: string | null } | null
   /** El local o centro de trabajo de la fuente (opcional). */
   local?: Local | null
+  /** V02d · Si una persona la ha tocado (lo aprendido que nadie tocó se vuelve a aprender solo). */
+  tocada?: boolean
+  /** V02d · Lo que cubren sus extractos (banco): [desde, hasta]. Una semana cubierta ha llegado. */
+  cubre?: [string, string][]
+  /** V02d · De qué familia es: los grupos de «Qué esperas cada mes» y la columna de Documentos. */
+  familia?: Familia
+  /** V02d · La plataforma (canal de venta) de unas liquidaciones o de su factura de comisiones. */
+  canal?: { id: string; nombre: string } | null
+  /** V02d · A quién se le puede pedir: su contacto de Facturación, o la gestoría. */
+  correo?: string | null
 }
+export type Familia = 'alquiler' | 'suministro' | 'proveedor' | 'plataforma' | 'gestoria' | 'banco'
 /** Un local o centro de trabajo de la empresa (locations, unido a la empresa por location_company). */
 export interface Local { id: string; nombre: string; direccion: string | null; activo?: boolean }
 export interface Ajustes { lo_que_falta: boolean; margen: number }
-export interface DatosFuentes { ajustes: Ajustes; fuentes: Fuente[]; /** Los locales de la empresa; con uno o ninguno, no se pide. */ locales?: Local[] }
+export interface DatosFuentes {
+  ajustes: Ajustes; fuentes: Fuente[]
+  /** Los locales de la empresa; con uno o ninguno, no se pide. */
+  locales?: Local[]
+  /** V02d · La fecha de corte de la empresa: lo de antes lo lleva el programa de antes, y no se pide. */
+  corte?: string | null
+}
 
 export type Donde = 'factura' | 'bancos' | 'liquidaciones' | 'laboral' | 'riders' | null
 export interface Ultimo {
@@ -161,10 +178,11 @@ export function ocurrencias(f: Pick<Fuente, 'cadencia' | 'dia' | 'dia_semana' | 
 }
 
 /** Media distancia entre dos esperadas seguidas: hasta ahí, una llegada cuenta para la más cercana. */
-function radio(f: Pick<Fuente, 'cadencia' | 'cada'>): number {
+export function radio(f: Pick<Fuente, 'cadencia' | 'cada'>): number {
   return f.cadencia === 'mensual' ? 15 : f.cadencia === 'quincenal' ? 7 : f.cadencia === 'semanal' ? 3 : Math.max(1, Math.floor((f.cada ?? 10) / 2))
 }
 
+/** Gris «Aún a tiempo»; ámbar «Se retrasa N días»; rojo solo «Hace más de un mes» (grave). */
 export type EstadoFalta =
   | { que: 'a_tiempo'; texto: 'Aún a tiempo' }
   | { que: 'tarde'; dias: number; texto: string; grave: boolean }
@@ -190,34 +208,67 @@ export function queSeEspera(f: Pick<Fuente, 'tipo' | 'cadencia' | 'dia'>, o: Ocu
   const mesAnterior = mesDe(sumarDias(`${o.dia.slice(0, 7)}-01`, -1))
   if (f.tipo === 'riders') return `Facturas de los riders ${o.desde && o.hasta ? delAl(o.desde, o.hasta) : `de ${mes}`}`
   if (f.tipo === 'intermediario') return o.desde && o.hasta ? `Liquidación ${delAl(o.desde, o.hasta)}` : `Liquidación de ${f.dia != null && f.dia <= 10 ? mesAnterior : mes}`
-  if (f.tipo === 'banco') return o.desde && o.hasta ? `Extracto ${delAl(o.desde, o.hasta)}` : `Extracto de ${f.dia != null && f.dia <= 10 ? mesAnterior : mes}`
+  if (f.tipo === 'banco') return o.desde && o.hasta ? `Movimientos ${delAl(o.desde, o.hasta)}` : `Movimientos de ${f.dia != null && f.dia <= 10 ? mesAnterior : mes}`
   if (f.tipo === 'nominas') return `Nóminas de ${f.dia != null && f.dia <= 10 ? mesAnterior : mes}`
   if (f.tipo === 'alquiler') return `Alquiler de ${mes}`
-  if (f.cadencia === 'varias') return 'La siguiente factura'
   return `Factura de ${mes}`
 }
 
 /**
- * Lo que falta de una fuente, hoy: la esperada más reciente que no ha llegado
- * y ya pasó su margen («N días tarde») o, si no hay ninguna tarde, la próxima
- * de los siguientes `horizonte` días («Aún a tiempo»). null: nada que decir.
- * Las esperadas de antes de la primera llegada no cuentan (la fuente aún no existía).
+ * Lo que cubren varios extractos juntos: los periodos seguidos (o con un hueco
+ * de hasta 2 días, los días sin movimientos) se juntan en uno.
  */
-export function faltaDe(f: Fuente, hoy: string, margenEmpresa = 5, horizonte = 14): { o: Ocurrencia; estado: EstadoFalta } | null {
+export function juntarPeriodos(ps: readonly (readonly [string, string])[]): [string, string][] {
+  const xs = [...ps].map(([a, b]) => [a, b] as [string, string]).sort((x, y) => x[0].localeCompare(y[0]))
+  const out: [string, string][] = []
+  for (const [a, b] of xs) {
+    const u = out[out.length - 1]
+    if (u && diasEntre(u[1], a) <= 3) { if (b > u[1]) u[1] = b } else out.push([a, b])
+  }
+  return out
+}
+
+/**
+ * ¿Ha llegado lo esperado en `o`? Una llegada a menos de media distancia de su
+ * día, o (V02d) unos extractos que, juntos, cubren el periodo de `o` entero: el
+ * subido el 23/10 con movimientos del 15 al 22, con el anterior hasta el 14,
+ * cubre la semana del 13 al 19, aunque se subiera cuatro días después.
+ */
+export function haLlegado(f: Pick<Fuente, 'cadencia' | 'cada' | 'llegadas' | 'cubre'>, o: Ocurrencia): boolean {
+  const r = radio(f)
+  if (f.llegadas.some((l) => Math.abs(diasEntre(o.dia, l)) <= r)) return true
+  const desde = o.desde ?? o.dia, hasta = o.hasta ?? o.dia
+  return juntarPeriodos(f.cubre ?? []).some(([a, b]) => a <= desde && b >= hasta)
+}
+
+/** El aviso de lo que no ha llegado y ya pasó su margen, contado desde su día. */
+export function estadoTarde(dias: number): EstadoFalta {
+  return dias > 30
+    ? { que: 'tarde', dias, texto: 'Hace más de un mes', grave: true }
+    : { que: 'tarde', dias, texto: `Se retrasa ${dias} ${dias === 1 ? 'día' : 'días'}`, grave: false }
+}
+
+/**
+ * Lo que falta de una fuente, hoy: la esperada más reciente que no ha llegado
+ * y ya pasó su margen («Se retrasa N días»; pasado un mes, «Hace más de un
+ * mes») o, si no hay ninguna tarde, la próxima de los siguientes `horizonte`
+ * días («Aún a tiempo»). null: nada que decir. No cuentan las esperadas de
+ * antes de la primera llegada (la fuente aún no existía) ni (V02d) las de antes
+ * del corte de la empresa: eso lo lleva el programa de antes.
+ */
+export function faltaDe(f: Fuente, hoy: string, margenEmpresa = 5, horizonte = 14, corte: string | null = null): { o: Ocurrencia; estado: EstadoFalta } | null {
   if (!f.activa || f.cubierta) return null
   const margen = f.margen ?? margenEmpresa
   const r = radio(f)
   const primera = f.llegadas.length ? f.llegadas[0] : null
   const desde = sumarDias(hoy, -70)
   const os = ocurrencias(f, desde, sumarDias(hoy, horizonte))
-  const llegó = (o: Ocurrencia) => f.llegadas.some((l) => Math.abs(diasEntre(o.dia, l)) <= r)
-  const pendientes = os.filter((o) => !llegó(o) && (!primera || diasEntre(primera, o.dia) >= -r))
+  const pendientes = os.filter((o) => !haLlegado(f, o) && (!primera || diasEntre(primera, o.dia) >= -r) && (!corte || (o.hasta ?? o.dia) >= corte))
   const tarde = pendientes.filter((o) => diasEntre(o.dia, hoy) > margen)
   if (tarde.length) {
     // Solo la última que falta: si faltan varias, la más reciente es la que hay que pedir.
     const o = tarde[tarde.length - 1]
-    const dias = diasEntre(o.dia, hoy)
-    return { o, estado: { que: 'tarde', dias, texto: `${dias} ${dias === 1 ? 'día' : 'días'} tarde`, grave: dias > 7 } }
+    return { o, estado: estadoTarde(diasEntre(o.dia, hoy)) }
   }
   const proxima = pendientes.find((o) => diasEntre(hoy, o.dia) >= -margen)
   return proxima ? { o: proxima, estado: { que: 'a_tiempo', texto: 'Aún a tiempo' } } : null
@@ -252,7 +303,7 @@ export function loQueFalta(d: DatosFuentes, hoy: string, horizonte = 14): FilaFa
   const sueltas: FilaFalta[] = []
   const grupos = new Map<string, { f: Fuente; o: Ocurrencia; estado: EstadoFalta }[]>()
   for (const f of d.fuentes) {
-    const x = faltaDe(f, hoy, d.ajustes.margen, horizonte)
+    const x = faltaDe(f, hoy, d.ajustes.margen, horizonte, d.corte ?? null)
     if (!x) continue
     const fila = filaDe(f)
     if (fila) { grupos.set(fila, [...(grupos.get(fila) ?? []), { f, ...x }]); continue }

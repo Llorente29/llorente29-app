@@ -16,9 +16,10 @@
 --   3. EL RITMO SE APRENDE POR DÍAS, NO POR FACTURAS. Diez facturas el mismo
 --      día son una llegada. «El 15 y a fin de mes» es quincenal (Glovo, Just
 --      Eat). Una vez al mes, aunque baile entre el 3 y el 6, es mensual
---      (Cloudtown), y a fin de mes, el 31 (Nobleza Vacuna). Casi cada semana el
---      mismo día es semanal (Portier). Lo demás, «varias al mes» cada tantos
---      días como hay entre llegadas, no 10 fijos. → conta_puerta_fuentes_proponer.
+--      (Cloudtown), y a fin de mes, el 31 (Nobleza Vacuna). Lo demás, «varias
+--      al mes» cada tantos días como hay entre llegadas (7 como poco), no 10
+--      fijos: un proveedor de género factura por entrega, no por calendario, y
+--      lo que se espera es la siguiente desde la última. → conta_puerta_fuentes_proponer.
 --      Lo ya apuntado que NADIE ha tocado se vuelve a aprender solo al abrir
 --      Documentos (conta_puerta_al_dia, nueva); lo que tocó una persona no se pisa.
 --   4. LO DE ANTES DEL CORTE ES DE DIEZ. La empresa no pide periodos anteriores
@@ -232,7 +233,6 @@ begin
                         and i.location_id in (select lc.location_id from public.location_company lc where lc.company_id = p_company and lc.account_id = v_acc)) end,
       'cadencia', r.cadencia,
       'dia', case r.cadencia when 'mensual' then case when r.dia_mediano >= 28 then 31 else r.dia_mediano end when 'quincenal' then 0 end,
-      'dia_semana', case when r.cadencia = 'semanal' then r.dia_semana end,
       'cada', case when r.cadencia = 'varias' then r.cada end,
       'meses', r.meses, 'dias_por_mes', r.dias_por_mes) as x
       from (
@@ -242,25 +242,21 @@ begin
                  when d.dias_por_mes >= 1.5 and d.quincena >= 0.7 then 'quincenal'
                  -- Una vez al mes, o todos los días de cada mes juntos en una semana.
                  when d.dias_por_mes <= 1.3 or d.juntos >= 0.8 then 'mensual'
-                 -- Casi cada semana, y casi siempre el mismo día.
-                 when d.dias_por_mes >= 3 and d.mismo_dia >= 0.5 then 'semanal'
+                 -- Lo demás, la siguiente desde la última (un proveedor de género factura por entrega).
                  else 'varias' end cadencia
           from (
             select f.nif, f.nombre, f.supplier_id, f.alquiler, f.meses,
                    round(f.dias::numeric / nullif(f.meses, 0), 1) dias_por_mes,
-                   f.dia_mediano, f.dia_semana, f.quincena, f.juntos, f.mismo_dia,
+                   f.dia_mediano, f.quincena, f.juntos,
                    greatest(7, least(45, f.hueco)) cada
               from (
                 select dd.nif, max(dd.nombre) nombre, max(dd.supplier_id::text)::uuid supplier_id, bool_or(dd.alquiler) alquiler,
                        count(distinct date_trunc('month', dd.d)) meses, count(*) dias, max(dd.d) ultima,
                        percentile_disc(0.5) within group (order by extract(day from dd.d)::int) dia_mediano,
-                       mode() within group (order by extract(isodow from dd.d)::int) dia_semana,
                        avg(case when extract(day from dd.d) = 15 or dd.d = (date_trunc('month', dd.d) + interval '1 month - 1 day')::date then 1 else 0 end) quincena,
                        -- Qué parte de los meses tiene todos sus días con factura en 7 días o menos.
                        (select avg(case when m.dmax - m.dmin <= 7 then 1 else 0 end) from (
                           select max(extract(day from z.d)) dmax, min(extract(day from z.d)) dmin from unnest(array_agg(dd.d)) z(d) group by date_trunc('month', z.d)) m) juntos,
-                       -- Qué parte de los días cae en el día de la semana más repetido.
-                       (select max(w.c)::numeric / sum(w.c) from (select count(*) c from unnest(array_agg(dd.d)) z(d) group by extract(isodow from z.d)) w) mismo_dia,
                        -- Días entre dos llegadas seguidas, el mediano.
                        (select percentile_disc(0.5) within group (order by g.h) from (
                           select z.d - lag(z.d) over (order by z.d) h from unnest(array_agg(dd.d)) z(d)) g where g.h is not null) hueco
