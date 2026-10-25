@@ -1,6 +1,7 @@
 # V01 · Entrega 3 · Ventas › Liquidaciones (Julio, 24/10). Rama claude/v01-liquidaciones.
-# Se ensaya y se aplica desde esta rama, antes de fusionar, y DESPUÉS de la tanda
-# del #321 (claude-v01-cierres): esta rama sale de aquella.
+# Se ensaya y se aplica desde esta rama, antes de fusionar. Orden de Julio (25/10):
+# la del traspaso mensual de C, después la del histórico (claude-v01-historico) y
+# después ésta. La del #321 (claude-v01-cierres) ya está aplicada.
 #
 #   1. 1650 — AÑADE lo resuelto de una diferencia de una liquidación de
 #      plataforma (conta_liquidacion_resolucion: gasto, con su asiento, o
