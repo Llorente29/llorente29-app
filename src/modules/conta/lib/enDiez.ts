@@ -63,8 +63,19 @@ export function motivoEnPalabras(error: string | null): string | null {
   return error.replace(/\.$/, '')
 }
 
+const MESES_TRASPASO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+/**
+ * V01c · La pieza de estado del traspaso MENSUAL, la misma en todas las
+ * pantallas: «En el traspaso de octubre» (el mes de su fecha, AAAA-MM-DD), en
+ * gris. Sin fecha, «En el traspaso del mes».
+ */
+export const textoTraspaso = (fecha?: string | null): string => {
+  const mes = fecha ? MESES_TRASPASO[Number(fecha.slice(5, 7)) - 1] : undefined
+  return mes ? `En el traspaso de ${mes}` : 'En el traspaso del mes'
+}
+
 export function detalleDiez(
-  a: { id: string; estado: string; origen: string; anuladoCon?: string | null },
+  a: { id: string; estado: string; origen: string; anuladoCon?: string | null; fecha?: string | null },
   envio: EnvioAsiento | null | undefined,
   o: { encendido: boolean; mensual?: boolean; contraasiento?: EnvioAsiento | null; ahora?: Date },
 ): DetalleDiez | null {
@@ -89,7 +100,7 @@ export function detalleDiez(
     return { texto: `En Diez · ${numeroDiez(envio)}`, motivo: null, tono: 'verde', reintentar: null, enDiez: true }
   }
 
-  if (o.mensual) return { texto: 'Va en el traspaso del mes', motivo: null, tono: 'neutro', reintentar: null, enDiez: false }
+  if (o.mensual) return { texto: textoTraspaso(a.fecha), motivo: null, tono: 'neutro', reintentar: null, enDiez: false }
   const motivo = motivoEnPalabras(envio?.error ?? null)
   if (!envio || !motivo) {
     return { texto: 'No enviado', motivo: 'sale solo en unos minutos', tono: 'azul', reintentar: a.id, enDiez: false }
