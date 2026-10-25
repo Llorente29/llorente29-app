@@ -237,5 +237,8 @@ test('en traspaso mensual: lo validado sale en el traspaso de su mes, no «En co
   await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
   await page.evaluate(() => document.fonts.ready)
   await foto(page, 'diez-mensual')
+  // Ninguna «En cola»: en mensual no hay cola, lo manda el traspaso del mes.
+  await expect(page.getByText('En cola', { exact: true })).toHaveCount(0)
+  console.log(`[V01c] en el traspaso de su mes: ${await page.getByText(/^En el traspaso de /).count()}`)
   expect(errores).toEqual([])
 })

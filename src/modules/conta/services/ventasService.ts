@@ -20,7 +20,7 @@ import { leerLibroRegistro } from '@/modules/conta/services/librosService'
 import { leerEnviosDiez, leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
 import { MAX_FILAS, facturasDeAnotaciones, mesesDeLaVentana } from '@/modules/conta/facturacion/emitidas'
 import type { AnotacionLibro } from '@/modules/conta/lib/libroRegistro'
-import { cifrasGuardadas, diferenciaDe, type DiezFactura, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
+import { cifrasGuardadas, diezDeFactura, diferenciaDe, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
 
@@ -43,14 +43,6 @@ async function deSumied(accountId: string, companyId: string): Promise<{ filas: 
   const cobros = filas.length === 0 ? [] : await leer(tabla('customer_invoice_payment').select('invoice_id, paid_on, amount')
     .eq('account_id', accountId).eq('company_id', companyId), 'los cobros de las facturas')
   return { filas, cobros: cobros.map((c) => ({ factura: String(c.invoice_id), fecha: String(c.paid_on), importe: n(c.amount) })) }
-}
-
-const diezDe = (estado: string | undefined, encendido: boolean, emitida: boolean): DiezFactura => {
-  if (!emitida) return null
-  if (estado === 'enviado' || estado === 'enlazado') return 'enviada'
-  if (estado === 'error' || estado === 'por_aclarar') return 'error'
-  if (estado) return 'en_cola'
-  return encendido ? 'en_cola' : 'sin_envio'
 }
 
 /** Las facturas del libro (las que no son de Sumied), juntadas como en Emitidas (facturasDeAnotaciones). */
@@ -78,7 +70,7 @@ export async function leerFacturasVenta(accountId: string, companyId: string, de
   const [sumied, porMes, envio] = await Promise.all([
     deSumied(accountId, companyId),
     Promise.all(mesesDeLaVentana(desde, hasta).map(async (m) => ({ m, anot: await leerLibroRegistro(accountId, companyId, ['issued'], m.desde, m.hasta) }))),
-    leerEnvioEmpresa(accountId, companyId).catch(() => ({ encendido: false })),
+    leerEnvioEmpresa(accountId, companyId).catch(() => ({ encendido: false, mensual: false })),
   ])
   const libro = porMes.flatMap((x) => x.anot)
   // Un mes que llega al tope puede tener más: se dice cuál (regla 7).
@@ -101,7 +93,7 @@ export async function leerFacturasVenta(accountId: string, companyId: string, de
   const ids = todas.map((f) => f.entryId).filter((x): x is string => !!x)
   const { envios } = ids.length ? await leerEnviosDiez(accountId, ids) : { envios: new Map() }
   return {
-    facturas: todas.map((f) => ({ ...f, diez: f.fuente === 'libro' && f.origen === 'traida' ? 'enviada' : diezDe(f.entryId ? envios.get(f.entryId)?.status : undefined, envio.encendido, f.guardado !== 'borrador') })),
+    facturas: todas.map((f) => ({ ...f, diez: f.fuente === 'libro' && f.origen === 'traida' ? 'enviada' : diezDeFactura(f.entryId ? envios.get(f.entryId)?.status : undefined, envio, f.guardado !== 'borrador') })),
     cobros: sumied.cobros.map((c) => ({ fecha: c.fecha, importe: c.importe })),
     envioEncendido: envio.encendido,
     alTope,

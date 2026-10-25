@@ -40,8 +40,31 @@ export const NOMBRE_ESTADO: Record<EstadoFactura, { texto: string; tono: 'neutro
   anulada: { texto: 'Anulada', tono: 'neutro' },
 }
 
-/** El envío a Diez de su asiento: enviada (✓ Diez), en cola, con error, apagado o nada (borrador). */
-export type DiezFactura = 'enviada' | 'en_cola' | 'error' | 'sin_envio' | null
+/**
+ * El envío a Diez de su asiento: enviada (✓ Diez), en cola, con error,
+ * apagado, en el traspaso del mes (V01c: la empresa traspasa una vez al mes y
+ * aún no ha ido) o nada (borrador).
+ */
+export type DiezFactura = 'enviada' | 'en_cola' | 'error' | 'sin_envio' | 'traspaso' | null
+
+/**
+ * V01c · El envío de una factura, del estado del envío de su asiento
+ * (external_send.status) y de cómo envía la empresa. En traspaso MENSUAL nada
+ * va a Diez al validar: lo que no ha llegado aún va en el traspaso de su mes,
+ * nunca «En cola» (no hay cola: lo manda el traspaso, desde Contabilidad › Cierre).
+ */
+export function diezDeFactura(estado: string | undefined, empresa: { encendido: boolean; mensual: boolean }, emitida: boolean): DiezFactura {
+  if (!emitida) return null
+  if (estado === 'enviado' || estado === 'enlazado') return 'enviada'
+  if (estado === 'error' || estado === 'por_aclarar') return 'error'
+  if (empresa.mensual) return 'traspaso'
+  if (estado) return 'en_cola'
+  return empresa.encendido ? 'en_cola' : 'sin_envio'
+}
+
+const MESES_TRASPASO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+/** «En el traspaso de octubre»: el mes de su fecha (AAAA-MM-DD). */
+export const textoTraspaso = (fecha: string): string => `En el traspaso de ${MESES_TRASPASO[Number(fecha.slice(5, 7)) - 1] ?? 'su mes'}`
 
 export interface FacturaVenta {
   id: string
