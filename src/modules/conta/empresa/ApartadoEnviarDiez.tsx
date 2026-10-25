@@ -7,10 +7,17 @@
 // una empresa que trabaja con Diez (conta_diez_base). Al cambiarlo dice qué ha
 // hecho y cuántos asientos validados salen ahora o se quedan (regla 8).
 //
+// C12 (24/10): una empresa que traspasa una vez al mes (modo mensual) ya no
+// tiene interruptor: el apartado dice que todo va a Diez en el traspaso del
+// cierre del mes y lleva allí. El interruptor solo queda en las empresas que
+// siguen con el envío al validar.
+//
 // Nombres dentro de cadenas (regla 40): conta_diez_base (company_id,
 // account_id), de antes; lo demás, en envioDiezService.
 
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaLibros } from '@/config/navegacion'
 import { tabla } from '@/modules/conta/services/bd'
 import { ponerEnvioEmpresa, useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import { fechaLarga } from '@/modules/conta/lib/formato'
@@ -41,6 +48,18 @@ export function ApartadoEnviarDiez({ quien, movil, nombre }: { quien: Quien; mov
     try { setHecho((await ponerEnvioEmpresa(quien.companyId, encender, nombre)).texto); recargar() }
     catch (x) { setFallo(`No se ha cambiado: ${x instanceof Error ? x.message : 'no ha contestado'}`) }
     finally { setOcupado(false) }
+  }
+
+  if (envio.mensual) {
+    return (
+      <TarjetaApartado titulo="Traspasar a Diez" movil={movil}>
+        <p className="cx-ayuda" style={{ margin: 0 }}>
+          Lo de cada mes va a Diez de golpe, al cerrar el mes: ventas, banco, facturas recibidas, asientos a mano, liquidaciones y sus anulaciones. Al validar no sale nada suelto.
+        </p>
+        <p style={{ margin: 0 }}><Link to={rutaLibros('cierre', 'cerrar-mes')} className="cx-enlace">Traspasar el mes a Diez</Link></p>
+        {error && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo va a Diez: {error}</p>}
+      </TarjetaApartado>
+    )
   }
 
   return (
