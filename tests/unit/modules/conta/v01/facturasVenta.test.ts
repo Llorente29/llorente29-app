@@ -11,7 +11,7 @@
 import { describe, expect, it } from 'vitest'
 import { sumanTodas } from '@/modules/conta/diseno/plantillas'
 import {
-  asientoPrevio, casaConBusqueda, cifrasDe, cifrasFacturas, diferenciaDe, estadoDe, faltaParaEmitir, filasFacturas, filtrosFacturas, lineasLeidas,
+  NOMBRE_ESTADO, asientoPrevio, casaConBusqueda, cifrasDe, cifrasFacturas, diferenciaDe, estadoDe, faltaParaEmitir, filasFacturas, filtrosFacturas, lineasLeidas,
   numeroDeTexto, origenesQueHay, pestanaDe, pestanasFacturas, quedaPorCobrar, totalDelFiltro, venceCon, type FacturaVenta, type LineaFactura,
 } from '@/modules/conta/lib/facturasVenta'
 
@@ -83,6 +83,23 @@ describe('estado y pestañas (regla 7: suman «Todas»)', () => {
     expect(c.porCobrar).toEqual({ total: 121, n: 1, esperando: 1 })
     expect(c.vencido.n).toBe(1)
     expect(pestanaDe(F({ id: 'p', estadoCobro: 'esperando_liquidacion' }), HOY)).toBe('por-cobrar')
+  })
+  it('PC01: «Falta su liquidación» (Julio, 25/10): ámbar, su pestaña y su cifra, y no suma en Vencido', () => {
+    const falta = F({ id: 'f', estadoCobro: 'falta_liquidacion', vence: '2026-10-10', total: 50, cobrado: 0 })
+    expect(estadoDe(falta, HOY)).toBe('falta_liquidacion')
+    expect(NOMBRE_ESTADO.falta_liquidacion).toEqual({ texto: 'Falta su liquidación', tono: 'duda' })
+    expect(NOMBRE_ESTADO.vencida.tono).toBe('falta')
+    expect(pestanaDe(falta, HOY)).toBe('falta-liquidacion')
+    const c = cifrasFacturas([falta, F({ id: 'v', estadoCobro: 'vencida' }), F({ id: 'p', estadoCobro: 'esperando_liquidacion' })], [], HOY)
+    expect(c.faltaLiquidacion).toEqual({ total: 50, n: 1 })
+    expect(c.vencido).toMatchObject({ total: 121, n: 1 })
+    expect(c.porCobrar).toEqual({ total: 121, n: 1, esperando: 1 })
+    // Su pestaña sale solo si las hay, y todas suman «Todas» (regla 7).
+    const p = pestanasFacturas([falta, F({ id: 'v', estadoCobro: 'vencida' })], HOY)
+    expect(p.find((x) => x.id === 'falta-liquidacion')?.n).toBe(1)
+    expect(sumanTodas(p)).toBe(true)
+    expect(pestanasFacturas([F({ id: 'v', estadoCobro: 'vencida' })], HOY).some((x) => x.id === 'falta-liquidacion')).toBe(false)
+    expect(filtrosFacturas(new URLSearchParams('ver=falta-liquidacion')).pestana).toBe('falta-liquidacion')
   })
   it('cada una en una pestaña, y suman «Todas»', () => {
     expect(todas.map((f) => pestanaDe(f, HOY))).toEqual(['borradores', 'por-cobrar', 'por-cobrar', 'vencidas', 'cobradas', 'anuladas', 'emitidas', 'del-libro'])

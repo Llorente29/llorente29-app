@@ -201,7 +201,7 @@ export function crearBancos(bd: Bd) {
       leer(tabla('customer_invoice').select('id, number_text, issue_date, party_id').eq('account_id', accountId).eq('company_id', companyId)
         .eq('status', 'emitida').in('origin', ['a_mano', 'recurrente', 'presupuesto', 'tienda', 'automatica']), 'las facturas emitidas'),
       leer(tabla('conta_factura_cobro').select('invoice_id, pendiente').eq('account_id', accountId).eq('company_id', companyId)
-        .in('estado', ['vencida', 'cobrada_parte', 'vence_semana', 'por_cobrar']), 'lo que queda por cobrar de cada factura'),
+        .in('estado', ['vencida', 'falta_liquidacion', 'cobrada_parte', 'vence_semana', 'por_cobrar']), 'lo que queda por cobrar de cada factura'),
     ])
     const tiendaDe = new Map(tiendas.map((t) => [String(t.id), t]))
     const bancosLocal = cuentasLocal.map((c) => ({ id: String(c.id), localId: s(c.location_id) }))

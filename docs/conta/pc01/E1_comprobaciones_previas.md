@@ -132,3 +132,21 @@ Julio dio el 18 y el 5 para Just Eat, y el 5 y el 18 para Glovo. Un solo número
 **Lo que salió al construir, medido (25/10, solo lectura):**
 - **83 recibidas de Foodint (1.919,87 €) pagadas del saldo prepago de Catcher**, con el asiento del pago del lote validado, seguían «aprobada». Con el motor saldrían por pagar. Ahora el pago del lote es su pago con asiento: la 0918 las deja pagadas y, desde la 0917, el pago de cada lote nuevo lo hace solo.
 - **Con los plazos de Julio, hoy (25/10) pasan de su fecha unas 40 de las 85 de octubre**: 34 de Uber y 6 de Just Eat, unos 8.266 €. Sus semanas y quincenas ya se habrán pagado, pero Sumied no tiene sus liquidaciones, así que salen «Vencida» y no «Esperando liquidación». Es la regla tal como está escrita. Lo arregla la captura de las liquidaciones (otro encargo).
+
+## Lo que decidió Julio después (25/10, respuesta 2) y cómo queda
+
+1. **Las marcas de las 9 tiendas: la lista vale.** En Uber hay más marcas (todas las de Florencio Llorente 29 están también en Camichi 4), pero no están en Sumied porque no ha llegado ninguna liquidación suya. No se crean en esta tanda: llegarán con su liquidación, en el encargo de la captura de las liquidaciones.
+2. **Una de plataforma sin liquidación sale «Falta su liquidación», en ámbar, no «Vencida».**
+   - `conta_factura_tiene_liquidacion` (0916) y el estado `falta_liquidacion` de `conta_factura_cobro`.
+   - «Vencida» en rojo queda para cuando la liquidación existe y no la cubre (o la cubre en parte), y para las que no son de plataforma.
+   - Ventas › Facturas: su chip, su pestaña (solo si las hay), su propia cifra (no suma en Vencido) y un aviso con el enlace a Ventas › Liquidaciones; en la ficha, el mismo enlace.
+
+   **Por marca, porque si no, no dice la verdad.** La factura de un cierre junta los pedidos de todas las marcas del local, y en Uber cada liquidación es de una tienda, o sea de una marca. Con «hay alguna liquidación de su periodo», **23 de Uber (6.968,96 €)** habrían salido «Vencida» por tener la liquidación de una de sus marcas, aunque les faltaban las de las demás. Así que una factura tiene su liquidación cuando **cada marca con pedidos en su cierre** tiene una de su canal, su periodo y su local. Medido hoy en producción (solo lectura, con las marcas que pone la 0918):
+
+   | Plataforma | Pasadas de su plazo | Falta su liquidación | Vencida |
+   |---|---|---|---|
+   | Uber | 34 | 33 · 8.037,94 € | 1 · 17,70 € |
+   | Just Eat | 6 | 6 · 211,01 € | 0 |
+   | Glovo | 0 (vencen del 9 al 25/11) | 0 | 0 |
+
+   La de Uber que sale «Vencida» tiene la liquidación de todas sus marcas. Lo que queda cobrado de verdad lo mide la cuenta, en el real.

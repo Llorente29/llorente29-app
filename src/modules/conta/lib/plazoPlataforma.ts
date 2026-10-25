@@ -11,7 +11,7 @@
 //     de mes) o mes;
 //   · el día de pago: el fin del periodo más los días que tarda;
 //   · el vencimiento de su factura: el día de pago más el margen (5 si no se dice).
-//     Hasta entonces sale «Esperando liquidación»; pasado sin cobrar, «Vencida».
+//     Hasta entonces sale «Esperando liquidación»; pasado sin ninguna liquidación, «Falta su liquidación»; si llegó y no la cubre, «Vencida».
 
 export type Periodo = 'weekly' | 'fortnightly' | 'monthly'
 export const MARGEN_POR_DEFECTO = 5
@@ -54,7 +54,7 @@ export function ejemploDePlazo(cada: Periodo, dias: number, margen: number | nul
     const p = periodoDe(cada, fecha)
     const { pago, vence } = pagoYVencimiento(cada, dias, margen, fecha)
     const que = cada === 'weekly' ? `La semana del ${ddmm(p.desde)} al ${ddmm(p.hasta)}` : cada === 'fortnightly' ? `La quincena del ${ddmm(p.desde)} al ${ddmm(p.hasta)}` : `El mes del ${ddmm(p.desde)} al ${ddmm(p.hasta)}`
-    return `${que} la paga hacia el ${DIAS_SEMANA[dia(pago).getUTCDay()]} ${ddmm(pago)}; si el ${ddmm(vence)} no ha llegado, sus facturas salen «Vencida»`
+    return `${que} la paga hacia el ${DIAS_SEMANA[dia(pago).getUTCDay()]} ${ddmm(pago)}; si el ${ddmm(vence)} no ha llegado, sus facturas salen «Falta su liquidación»`
   }
   const partes = [unPeriodo(hoy)]
   if (cada === 'fortnightly') {

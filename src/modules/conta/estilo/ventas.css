@@ -54,3 +54,8 @@
   .cxv-lineas-tabla td:first-child .s-control { min-width: 0; }
   .cxv-totales { max-width: none; }
 }
+
+/* PC01 · Ventas › Facturas: cinco cifras cuando hay facturas a las que les falta su liquidación (en el móvil, de dos en dos, como siempre). */
+@media (min-width: 768px) {
+  .cxv-cifras-cinco .s-bandeja-cifras { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}

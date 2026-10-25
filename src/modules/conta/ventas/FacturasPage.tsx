@@ -7,9 +7,13 @@
 //
 //   · Encabezado: «Facturas», su frase y UN principal, «Nueva factura».
 //   · Cuatro cifras: Por cobrar, Vencido, Cobrado en el mes y Borradores; cada
-//     una lleva a su pestaña.
+//     una lleva a su pestaña. Y una quinta, «Falta su liquidación», cuando hay
+//     facturas de plataforma pasadas de plazo sin ninguna liquidación (PC01:
+//     ámbar, aparte, no suma en Vencido), con su aviso y el enlace a Ventas ›
+//     Liquidaciones para subirla.
 //   · Pestañas que suman «Todas» (regla 7): Borradores, Por cobrar, Vencidas,
-//     Cobradas, Anuladas; y, solo si las hay, Rectificativas (en negativo) y
+//     Cobradas, Anuladas; y, solo si las hay, Falta su liquidación,
+//     Rectificativas (en negativo) y
 //     Del libro (las del cierre del día y las traídas de Diez, que no se cobran
 //     aquí).
 //   · Filtros: buscar (cliente, NIF, número o importe), fecha (un mes o los
@@ -22,7 +26,7 @@
 // services/ventasService.ts (con account_id y company_id, regla 9).
 
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaAsiento, rutaFacturaVenta, rutaNuevaFacturaVenta, rutaConta, CONTA } from '@/config/navegacion'
+import { rutaAsiento, rutaFacturaVenta, rutaLiquidacionesVentas, rutaNuevaFacturaVenta, rutaConta, CONTA } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -100,6 +104,11 @@ export default function FacturasPage() {
       apoyo: cif.vencido.masAntigua ? `${plural(cif.vencido.n, 'factura', 'facturas')} · la más antigua, ${cif.vencido.masAntigua.dias} días` : 'Ninguna vencida',
       a: `${lista}?ver=vencidas`,
     },
+    ...(cif.faltaLiquidacion.n ? [{
+      etiqueta: 'Falta su liquidación', valor: eurosExactos(cif.faltaLiquidacion.total),
+      apoyo: `${plural(cif.faltaLiquidacion.n, 'factura de plataforma', 'facturas de plataforma')} · no suma en Vencido`,
+      a: `${lista}?ver=falta-liquidacion`,
+    }] : []),
     { etiqueta: 'Cobrado en el mes', valor: eurosExactos(cif.cobradoMes.total), apoyo: plural(cif.cobradoMes.n, 'cobro', 'cobros'), a: `${lista}?ver=cobradas` },
     { etiqueta: 'Borradores', valor: eurosExactos(cif.borradores.total), apoyo: cif.borradores.n ? `${plural(cif.borradores.n, 'sin emitir', 'sin emitir')}` : 'Ninguno', a: `${lista}?ver=borradores` },
   ] : []
@@ -162,7 +171,15 @@ export default function FacturasPage() {
           {d.alTope.length === 1 ? 'En' : 'En los meses de'} {d.alTope.map((m) => nombreMes(m).toLowerCase()).join(', ')} hay {MAX_FILAS.toLocaleString('es-ES')} anotaciones o más en tu libro y solo he podido leer {MAX_FILAS.toLocaleString('es-ES')} por mes: puede que falten facturas del libro de {d.alTope.length === 1 ? 'ese mes' : 'esos meses'}. Libros › Facturas expedidas las tiene todas.
         </p>
       )}
-      {cif && <CifrasBandeja cifras={cifras} />}
+      {cif && (cif.faltaLiquidacion.n ? <div className="cxv-cifras-cinco"><CifrasBandeja cifras={cifras} /></div> : <CifrasBandeja cifras={cifras} />)}
+      {cif && cif.faltaLiquidacion.n > 0 && (
+        <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="falta-liquidacion">
+          {cif.faltaLiquidacion.n === 1
+            ? <>A 1 factura de plataforma ({eurosExactos(cif.faltaLiquidacion.total)}) se le ha pasado su día de pago y no ha llegado su liquidación. No la doy por vencida: sube la liquidación en </>
+            : <>A {plural(cif.faltaLiquidacion.n, 'factura', 'facturas')} de plataforma ({eurosExactos(cif.faltaLiquidacion.total)}) se les ha pasado su día de pago y no ha llegado su liquidación. No las doy por vencidas: sube sus liquidaciones en </>}
+          <BotonEnlace a={rutaLiquidacionesVentas('plataformas')} variante="enlace">Ventas › Liquidaciones</BotonEnlace> y quedan cobradas por sus pedidos.
+        </p>
+      )}
       {/* V01 · El histórico: las emitidas sin su PDF (los traídos de Diez), para hacerlos aquí. */}
       {accountId && <PdfsQueFaltan accountId={accountId} companyId={activa.id} />}
 

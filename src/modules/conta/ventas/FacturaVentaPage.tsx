@@ -25,7 +25,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { jsPDF } from 'jspdf'
-import { rutaAsiento, rutaFacturaVenta, rutaFacturasVenta, rutaNuevaFacturaVenta } from '@/config/navegacion'
+import { rutaAsiento, rutaFacturaVenta, rutaFacturasVenta, rutaLiquidacionesVentas, rutaNuevaFacturaVenta } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -360,6 +360,11 @@ export default function FacturaVentaPage() {
             ? <Campo etiqueta="Motivo">{(p) => <Texto {...p} valor={b.motivo} alCambiar={(v) => ed.poner('motivo', v)} maxLength={300} />}</Campo>
             : <p className="s-apoyo">Motivo: {corrige.motivo}</p>}
         </BloqueFicha>
+      )}
+      {vista && estadoDe(vista, hoy) === 'falta_liquidacion' && (
+        <p className="s-aviso-lista" data-tono="duda" data-prueba="falta-su-liquidacion">
+          Se ha pasado su día de pago{f?.vence ? ` (vencía el ${f.vence.slice(8, 10)}/${f.vence.slice(5, 7)})` : ''} y no ha llegado la liquidación de la plataforma que la cubre. No la doy por vencida: sube la liquidación en <Link to={rutaLiquidacionesVentas('plataformas')}>Ventas › Liquidaciones</Link> y queda cobrada por sus pedidos.
+        </p>
       )}
       {f && f.rectificativas.length > 0 && (
         <p className="s-aviso-lista" data-tono="duda">Corregida por {f.rectificativas.map((r, i) => <span key={r.id}>{i ? ', ' : ''}<Link to={rutaFacturaVenta(r.id)}>{r.numero ?? 'una rectificativa sin emitir'}</Link></span>)}.</p>

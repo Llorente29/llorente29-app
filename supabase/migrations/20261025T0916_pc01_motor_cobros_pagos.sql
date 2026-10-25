@@ -28,6 +28,8 @@
 --        · _pc01_* : lo que harán los disparadores de la 0917.
 --   7. Los estados, calculados en UN sitio (las vistas conta_factura_cobro y
 --      conta_recibida_pago): Por cobrar o pagar, Vence esta semana, Vencida,
+--      Falta su liquidación (la de plataforma pasada de plazo sin la liquidación
+--      de alguna de sus marcas: ámbar, no Vencida),
 --      Esperando liquidación, Cobrada o Pagada en parte, Cobrada o Pagada, Sin
 --      vencimiento. Los leen todas las pantallas.
 --
@@ -517,9 +519,47 @@ revoke all on function public._pc01_casado_deshecho() from public, anon, authent
 create or replace function public.conta_hoy()
 returns date language sql stable set search_path = public as $$ select (now() at time zone 'Europe/Madrid')::date $$;
 
+-- ¿Le ha llegado su liquidación a esta factura de plataforma? La de un cierre
+-- junta los pedidos de varias marcas, y en Uber cada liquidación es de una tienda
+-- (una marca): sí solo si CADA marca con pedidos en su cierre tiene una
+-- liquidación de su canal cuyo periodo cubre el día del cierre, del mismo local
+-- (si la liquidación dice local, o su tienda) y de esa marca (si dice marca, o
+-- su tienda). Esté cobrada, sin cobrar o «a revisar». Sin cierre (las traídas de
+-- Diez), sí si alguna liquidación le cobró algo o cubre su canal y su fecha.
+create or replace function public.conta_factura_tiene_liquidacion(p_invoice uuid)
+returns boolean language sql stable set search_path = public as $$
+  with f as (
+    select ci.id, ci.account_id, public.conta_canal_de_factura(ci.id) as canal,
+           coalesce(s.sales_day, ci.issue_date) as dia, s.location_id, s.sale_ids
+      from public.customer_invoice ci
+      left join lateral (select sm.sales_day, sm.location_id, sm.sale_ids from public.sales_day_summary sm
+                          where sm.entry_id = ci.entry_id and sm.company_id = ci.company_id and sm.channel_id is not null limit 1) s on true
+     where ci.id = p_invoice
+  ), liq as (
+    select coalesce(cs.location_id, st.location_id) as loc, coalesce(cs.brand_id, st.brand_id) as marca
+      from f join public.channel_settlement cs on cs.account_id = f.account_id and cs.channel_id = f.canal
+                and f.dia between cs.period_from and cs.period_to
+      left join public.platform_store st on st.id = cs.store_id and st.account_id = cs.account_id
+     where f.location_id is null or coalesce(cs.location_id, st.location_id) is null or coalesce(cs.location_id, st.location_id) = f.location_id
+  )
+  select case
+           when coalesce(cardinality(f.sale_ids), 0) > 0 then
+             not exists (select 1 from public.sale sa
+                          where sa.id = any(f.sale_ids) and sa.account_id = f.account_id
+                            and not exists (select 1 from liq where liq.marca is null or liq.marca = sa.brand_id))
+           else exists (select 1 from public.customer_invoice_payment p where p.invoice_id = f.id and p.settlement_id is not null)
+                or exists (select 1 from liq)
+         end
+    from f
+$$;
+comment on function public.conta_factura_tiene_liquidacion(uuid) is 'PC01 · Si a una factura de plataforma le ha llegado su liquidación: cada marca con pedidos en su cierre tiene una de su canal, periodo y local. Si no, pasado su plazo, sale «Falta su liquidación» y no «Vencida» (Julio, 25/10).';
+
 -- Emitidas. estado: borrador · anulada · emitida (rectificativa o a cero, no se
--- cobra) · cobrada · vencida · cobrada_parte · esperando_liquidacion ·
--- vence_semana · por_cobrar. Cobrado y pendiente al céntimo.
+-- cobra) · cobrada · falta_liquidacion (de plataforma, pasado su día de pago más
+-- el margen, sin ninguna liquidación: Julio, 25/10) · vencida (pasado su
+-- vencimiento; si es de plataforma, con liquidación que no la cubre o la cubre en
+-- parte) · cobrada_parte · esperando_liquidacion · vence_semana · por_cobrar.
+-- Cobrado y pendiente al céntimo.
 create or replace view public.conta_factura_cobro with (security_invoker = true) as
   with c as (
     select ci.id, ci.account_id, ci.company_id, ci.status, ci.total, ci.due_date,
@@ -535,7 +575,8 @@ create or replace view public.conta_factura_cobro with (security_invoker = true)
            when c.total < 0 then case when abs(c.total - c.cobrado) < 0.005 then 'cobrada' else 'emitida' end
            when c.total = 0 then 'emitida'
            when c.total - c.cobrado < 0.005 then 'cobrada'
-           when c.due_date is not null and c.due_date < public.conta_hoy() then 'vencida'
+           when c.due_date is not null and c.due_date < public.conta_hoy() then
+             case when c.de_plataforma and not public.conta_factura_tiene_liquidacion(c.id) then 'falta_liquidacion' else 'vencida' end
            when c.cobrado > 0 then 'cobrada_parte'
            when c.de_plataforma then 'esperando_liquidacion'
            when c.due_date is not null and c.due_date <= public.conta_hoy() + 7 then 'vence_semana'

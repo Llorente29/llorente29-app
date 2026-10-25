@@ -22,6 +22,7 @@ end $$;
 drop view if exists public.conta_recibida_pago;
 drop view if exists public.conta_factura_cobro;
 drop function if exists public.conta_hoy();
+drop function if exists public.conta_factura_tiene_liquidacion(uuid);
 drop function if exists public._pc01_casado_deshecho();
 drop function if exists public._pc01_casado_item();
 drop function if exists public._pc01_recibida_pago_lote();

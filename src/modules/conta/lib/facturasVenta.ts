@@ -10,14 +10,16 @@
 //   · El estado de cobro lo calcula la base, en UN sitio (PC01: la vista
 //     conta_factura_cobro): Cobrada, Cobrada en parte, Vencida, Esperando
 //     liquidación (la de una plataforma, hasta su día de pago más el margen),
-//     Vence esta semana y Por cobrar (aquí, Emitida o Enviada). Aquí solo se
+//     Falta su liquidación (la de una plataforma, pasado ese día y sin ninguna
+//     liquidación: ámbar, no Vencida; Julio, 25/10), Vence esta semana y Por
+//     cobrar (aquí, Emitida o Enviada). Aquí solo se
 //     traduce; lo guardado da Borrador y Anulada. Sin estado de la base (las del
 //     libro), como antes.
 //   · Pestañas que suman «Todas» (regla 7): las de Sumied por su estado; las
 //     del libro, que no llevan su cobro aquí (lo lleva Bancos o su
 //     liquidación), en su propia pestaña, «Del libro», solo si las hay.
-//   · Las cifras de arriba: Por cobrar (sin las vencidas), Vencido, Cobrado
-//     en el mes y Borradores.
+//   · Las cifras de arriba: Por cobrar (sin las vencidas), Vencido, Falta su
+//     liquidación (aparte: no suma en Vencido), Cobrado en el mes y Borradores.
 //   · Las cuentas de una factura (líneas, IVA por tipo, recargo, retención),
 //     igual que las hace la base (_conta_venta_cifras): redondeo por tipo.
 
@@ -32,9 +34,9 @@ export const TONO_ORIGEN: Record<OrigenFactura, 'propuesto' | 'duda' | 'seguro' 
   a_mano: 'propuesto', recurrente: 'neutro', presupuesto: 'seguro', cierre_dia: 'duda', tienda: 'neutro', automatica: 'neutro', traida: 'neutro',
 }
 
-export type EstadoFactura = 'borrador' | 'emitida' | 'enviada' | 'cobrada_parte' | 'cobrada' | 'vencida' | 'esperando_liquidacion' | 'vence_semana' | 'anulada'
+export type EstadoFactura = 'borrador' | 'emitida' | 'enviada' | 'cobrada_parte' | 'cobrada' | 'vencida' | 'esperando_liquidacion' | 'falta_liquidacion' | 'vence_semana' | 'anulada'
 /** PC01 · El estado de cobro que calcula la base (conta_factura_cobro). */
-export type EstadoCobroBase = 'borrador' | 'anulada' | 'emitida' | 'cobrada' | 'vencida' | 'cobrada_parte' | 'esperando_liquidacion' | 'vence_semana' | 'por_cobrar'
+export type EstadoCobroBase = 'borrador' | 'anulada' | 'emitida' | 'cobrada' | 'vencida' | 'cobrada_parte' | 'esperando_liquidacion' | 'falta_liquidacion' | 'vence_semana' | 'por_cobrar'
 export const NOMBRE_ESTADO: Record<EstadoFactura, { texto: string; tono: 'neutro' | 'propuesto' | 'duda' | 'seguro' | 'falta' }> = {
   borrador: { texto: 'Borrador', tono: 'neutro' },
   emitida: { texto: 'Emitida', tono: 'propuesto' },
@@ -43,6 +45,7 @@ export const NOMBRE_ESTADO: Record<EstadoFactura, { texto: string; tono: 'neutro
   cobrada: { texto: 'Cobrada', tono: 'seguro' },
   vencida: { texto: 'Vencida', tono: 'falta' },
   esperando_liquidacion: { texto: 'Esperando liquidación', tono: 'propuesto' },
+  falta_liquidacion: { texto: 'Falta su liquidación', tono: 'duda' },
   vence_semana: { texto: 'Vence esta semana', tono: 'duda' },
   anulada: { texto: 'Anulada', tono: 'neutro' },
 }
@@ -99,7 +102,7 @@ export function estadoDe(f: FacturaVenta, hoy: string): EstadoFactura {
   return f.enviada ? 'enviada' : 'emitida'
 }
 
-export type IdPestanaFacturas = 'todas' | 'borradores' | 'por-cobrar' | 'vencidas' | 'cobradas' | 'anuladas' | 'emitidas' | 'del-libro'
+export type IdPestanaFacturas = 'todas' | 'borradores' | 'por-cobrar' | 'falta-liquidacion' | 'vencidas' | 'cobradas' | 'anuladas' | 'emitidas' | 'del-libro'
 
 /** En qué pestaña cae cada factura: una y solo una (regla 7). */
 export function pestanaDe(f: FacturaVenta, hoy: string): Exclude<IdPestanaFacturas, 'todas'> {
@@ -108,6 +111,7 @@ export function pestanaDe(f: FacturaVenta, hoy: string): Exclude<IdPestanaFactur
   if (e === 'borrador') return 'borradores'
   if (e === 'anulada') return 'anuladas'
   if (e === 'vencida') return 'vencidas'
+  if (e === 'falta_liquidacion') return 'falta-liquidacion'
   if (e === 'cobrada') return 'cobradas'
   if (f.total <= 0) return 'emitidas'
   return 'por-cobrar'
@@ -116,6 +120,8 @@ export function pestanaDe(f: FacturaVenta, hoy: string): Exclude<IdPestanaFactur
 const PESTANAS: { id: Exclude<IdPestanaFacturas, 'todas'>; etiqueta: string; siempre: boolean }[] = [
   { id: 'borradores', etiqueta: 'Borradores', siempre: true },
   { id: 'por-cobrar', etiqueta: 'Por cobrar', siempre: true },
+  // PC01 · Las de plataforma pasadas de plazo sin ninguna liquidación: solo si las hay.
+  { id: 'falta-liquidacion', etiqueta: 'Falta su liquidación', siempre: false },
   { id: 'vencidas', etiqueta: 'Vencidas', siempre: true },
   { id: 'cobradas', etiqueta: 'Cobradas', siempre: true },
   { id: 'anuladas', etiqueta: 'Anuladas', siempre: true },
@@ -134,6 +140,8 @@ export interface CifrasFacturas {
   /** Por cobrar sin vencer; dentro, las de plataforma que esperan su liquidación (PC01). */
   porCobrar: { total: number; n: number; esperando: number }
   vencido: { total: number; n: number; masAntigua: { cliente: string | null; dias: number } | null }
+  /** PC01 · Las de plataforma pasadas de plazo sin ninguna liquidación: aparte, no suman en Vencido. */
+  faltaLiquidacion: { total: number; n: number }
   cobradoMes: { total: number; n: number }
   borradores: { total: number; n: number }
 }
@@ -146,6 +154,7 @@ export function cifrasFacturas(fs: readonly FacturaVenta[], cobros: readonly { f
   const deSumied = fs.filter((f) => f.fuente === 'sumied')
   const por = deSumied.filter((f) => pestanaDe(f, hoy) === 'por-cobrar')
   const ven = deSumied.filter((f) => estadoDe(f, hoy) === 'vencida')
+  const falta = deSumied.filter((f) => estadoDe(f, hoy) === 'falta_liquidacion')
   const vieja = [...ven].sort((a, b) => (a.vence ?? '').localeCompare(b.vence ?? ''))[0]
   const mes = hoy.slice(0, 7)
   const delMes = cobros.filter((x) => x.fecha.startsWith(mes))
@@ -153,6 +162,7 @@ export function cifrasFacturas(fs: readonly FacturaVenta[], cobros: readonly { f
   return {
     porCobrar: { total: suma(por.map(quedaPorCobrar)), n: por.length, esperando: por.filter((f) => estadoDe(f, hoy) === 'esperando_liquidacion').length },
     vencido: { total: suma(ven.map(quedaPorCobrar)), n: ven.length, masAntigua: vieja ? { cliente: vieja.cliente, dias: dias(vieja.vence ?? hoy, hoy) } : null },
+    faltaLiquidacion: { total: suma(falta.map(quedaPorCobrar)), n: falta.length },
     cobradoMes: { total: suma(delMes.map((x) => x.importe)), n: delMes.length },
     borradores: { total: suma(bor.map((f) => f.total)), n: bor.length },
   }
@@ -171,7 +181,7 @@ export interface FiltrosFacturas {
 }
 const ORDEN_DE_SERIE = { columna: 'fecha', sentido: 'desc' as Sentido }
 export const COLUMNAS_ORDENABLES = ['fecha', 'numero', 'cliente', 'total', 'vence'] as const
-const IDS_PESTANA: readonly IdPestanaFacturas[] = ['todas', 'borradores', 'por-cobrar', 'vencidas', 'cobradas', 'anuladas', 'emitidas', 'del-libro']
+const IDS_PESTANA: readonly IdPestanaFacturas[] = ['todas', 'borradores', 'por-cobrar', 'falta-liquidacion', 'vencidas', 'cobradas', 'anuladas', 'emitidas', 'del-libro']
 
 export function filtrosFacturas(query: URLSearchParams): FiltrosFacturas {
   const ver = query.get('ver') as IdPestanaFacturas | null

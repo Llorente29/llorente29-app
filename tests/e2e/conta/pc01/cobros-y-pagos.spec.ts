@@ -57,7 +57,7 @@ test('«Cuándo te paga» en la ficha de la plataforma: periodo, día de pago y 
     await tarjeta.getByRole('button', { name: 'Cada semana' }).click()
     await tarjeta.getByLabel(/Paga unos … días después de cerrar el periodo/).fill('1')
     await tarjeta.getByLabel(/Margen antes de darla por vencida/).fill('')
-    await expect(tarjeta.locator('[data-prueba="ejemplo-plazo"]')).toContainText(/La semana del \d\d\/\d\d al \d\d\/\d\d la paga hacia el lunes \d\d\/\d\d; si el \d\d\/\d\d no ha llegado, sus facturas salen «Vencida»\. Margen: 5 días\./)
+    await expect(tarjeta.locator('[data-prueba="ejemplo-plazo"]')).toContainText(/La semana del \d\d\/\d\d al \d\d\/\d\d la paga hacia el lunes \d\d\/\d\d; si el \d\d\/\d\d no ha llegado, sus facturas salen «Falta su liquidación»\. Margen: 5 días\./)
     await foto(page, 'cuando-paga-cambios')
     await page.getByRole('button', { name: /Guardar cambios/ }).click()
     // Regla 8: lo que se guardó y cuántas facturas cambian de vencimiento.

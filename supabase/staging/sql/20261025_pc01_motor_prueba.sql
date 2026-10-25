@@ -21,7 +21,9 @@
 --      cierre cuenta de los pedidos de esa marca; descobrarla quita los cobros;
 --      con otro número de pedidos, «a revisar» y nada cobrado.
 --   3. Liquidación por PEDIDOS (channel_settlement_order con su venta).
---   4. Los estados (conta_factura_cobro y conta_recibida_pago), como usuario; y
+--   4. Los estados (conta_factura_cobro y conta_recibida_pago), como usuario
+--      (una de plataforma pasada de plazo y sin liquidación, «falta_liquidacion»;
+--      con liquidación que no la cubre, «vencida»); y
 --      guardar el plazo en la ficha (conta_plataforma_plazo_guardar) mueve el
 --      vencimiento de sus facturas por cobrar, no el de las cobradas.
 --   5. Recibida: al validarla, el plazo del proveedor; sin plazo, sin vencimiento.
@@ -206,6 +208,28 @@ begin
 end $$;
 
 -- ── 4 · Los estados, como usuario de A ──────────────────────────────────────
+-- Antes, como el dueño: una venta y su cierre del lunes 28/09 (semana del 28/09
+-- al 4/10, vence el 10/10), que no cubre ninguna liquidación.
+do $$
+declare a uuid := (select v::uuid from _p where clave = 'cuenta'); e uuid := (select v::uuid from _p where clave = 'empresa');
+        l uuid := (select v::uuid from _p where clave = 'local'); c uuid := (select v::uuid from _p where clave = 'canal');
+        fy uuid; ent uuid; d date := '2026-09-28';
+begin
+  insert into public.sale (account_id, location_id, brand_id, channel_id, source, sold_at, total, tax, taxable_base, status) values
+    (a, l, (select v::uuid from _p where clave = 'm2'), c, 'manual', '2026-09-28 13:00+02', 5.00, 0.45, 4.55, 'closed');
+  select id into fy from public.fiscal_year where company_id = e and d between starts_on and ends_on limit 1;
+  if fy is null then raise exception 'PRUEBA PC01 · 4: la empresa A no tiene ejercicio para el 28/09/2026.'; end if;
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status)
+  values (a, e, fy, 1, d, 'Ventas PC01 ' || d, 'sales_day', 'borrador') returning id into ent;
+  insert into public.sales_day_summary (account_id, company_id, location_id, sales_day, entry_id, tickets_count, total, detail_hash, sale_ids, unit_key, channel_id)
+  select a, e, l, d, ent, count(*), sum(p.total), 'pc01', array_agg(p.id), 'pc01:' || c::text, c from public.conta_pedidos_del_dia(e, l, d) p where p.canal_id = c;
+  insert into public.customer_invoice (account_id, company_id, status, origin, series_code, fiscal_year, number, number_text, issue_date, due_date, customer, base, tax, total, entry_id)
+  values (a, e, 'emitida', 'cierre_dia', 'PCT', 2026, 8999, 'PCT-8999', d, d, '{"nombre": "Plataforma PC01", "consumidor_final": true}', 5.00, 0, 5.00, ent);
+  insert into _p values ('f28', (select id from public.customer_invoice where company_id = e and series_code = 'PCT' and number = 8999));
+  if (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f28')) <> date '2026-10-10' then
+    raise exception 'PRUEBA PC01 · 4: la factura del 28/09 nació con vencimiento %.', (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f28'));
+  end if;
+end $$;
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
@@ -218,20 +242,26 @@ begin
   end if;
   select * into x from public.conta_factura_cobro where invoice_id = (select v::uuid from _p where clave = 'f06');
   if x.estado <> 'cobrada' or x.pendiente <> 0 then raise exception 'PRUEBA PC01 · 4: la del 6/10 tenía que salir cobrada y salió %.', x.estado; end if;
-  raise notice '4 · estados como usuario: la del 5/10 % (10 de 30), la del 6/10 cobrada', x.estado;
+  -- Pasado su plazo y sin ninguna liquidación: «Falta su liquidación», no vencida (Julio, 25/10).
+  select * into x from public.conta_factura_cobro where invoice_id = (select v::uuid from _p where clave = 'f28');
+  if x.estado <> (case when public.conta_hoy() > date '2026-10-10' then 'falta_liquidacion' else 'esperando_liquidacion' end) or x.pendiente <> 5.00 then
+    raise exception 'PRUEBA PC01 · 4: la del 28/09, sin liquidación, salió %.', x.estado;
+  end if;
+  raise notice '4 · estados como usuario: la del 5/10 vencida o en parte (10 de 30, su liquidación no la cubre), la del 6/10 cobrada, la del 28/09 %', x.estado;
 end $$;
--- 4b · Guardar el plazo desde la ficha: las por cobrar lo siguen (solo la del 5/10: las otras dos están cobradas).
+-- 4b · Guardar el plazo desde la ficha: las por cobrar lo siguen (la del 5/10 y la del 28/09: las otras dos están cobradas).
 do $$
 declare r jsonb; pa uuid := (select v::uuid from _p where clave = 'parte');
 begin
   r := public.conta_plataforma_plazo_guardar(pa, 'weekly', 2, 0);
-  if (r->>'facturas')::int <> 1 or (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f05')) <> date '2026-10-13'
+  if (r->>'facturas')::int <> 2 or (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f05')) <> date '2026-10-13'
+     or (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f28')) <> date '2026-10-06'
      or (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f06')) <> date '2026-10-17' then
-    raise exception 'PRUEBA PC01 · 4b: guardar el plazo tenía que mover solo la del 5/10 al 13/10: %.', r;
+    raise exception 'PRUEBA PC01 · 4b: guardar el plazo tenía que mover la del 5/10 al 13/10 y la del 28/09 al 6/10, no las cobradas: %.', r;
   end if;
   r := public.conta_plataforma_plazo_guardar(pa, 'weekly', 1, null);
   if (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f05')) <> date '2026-10-17' then raise exception 'PRUEBA PC01 · 4b: no volvió al 17/10.'; end if;
-  raise notice '4b · guardar el plazo en la ficha mueve el vencimiento de sus facturas por cobrar (1) y no el de las cobradas';
+  raise notice '4b · guardar el plazo en la ficha mueve el vencimiento de sus facturas por cobrar (2) y no el de las cobradas';
 end $$;
 reset role;
 

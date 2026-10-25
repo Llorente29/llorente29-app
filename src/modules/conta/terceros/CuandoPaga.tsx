@@ -5,7 +5,7 @@
 // (Julio, 25/10): el periodo que liquida, el día aproximado de pago (los días
 // después de cerrar el periodo) y el margen antes de darla por vencida (5 si
 // no se dice). Con eso vence la factura de cada cierre: hasta entonces sale
-// «Esperando liquidación»; pasado sin cobrar, «Vencida».
+// «Esperando liquidación»; pasado sin ninguna liquidación, «Falta su liquidación»; si llegó y no la cubre, «Vencida».
 //
 // Nada se guarda solo: la pieza común «Cambios sin guardar» (la barra con
 // «Guardar cambios»). Al guardar, la base recoloca el vencimiento de sus

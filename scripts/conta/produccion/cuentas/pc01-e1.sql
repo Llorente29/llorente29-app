@@ -14,9 +14,11 @@
 -- pagadas 4 (732,65 €); aprobadas con el pago del lote 83; pagos de recibidas
 -- «—»; tiendas de Uber sin marca 9; liquidaciones cobradas 2; asientos 15.217.
 -- Después: las traídas (1.196) cobradas; de las 85 de octubre, 1 cobrada, 5
--- cobradas en parte y el resto por cobrar, vencidas solo las que pasaron su día
--- de pago más el margen sin liquidación; recibidas pagadas 87 (4 + 83 del lote);
--- pagos de recibidas 87.
+-- cobradas en parte y el resto por cobrar; las que pasaron su día de pago más el
+-- margen sin la liquidación de alguna de sus marcas, «falta_liquidacion» (unas
+-- 39: 33 de Uber y 6 de Just Eat), y no vencidas (línea 13); recibidas pagadas
+-- 87 (4 + 83 del lote); pagos de recibidas 87. La línea 2 sigue midiendo como
+-- antes (vencimiento pasado y algo por cobrar): la misma vara a los dos lados.
 with f as (
   select ci.id, ci.total, ci.due_date, ci.status,
          coalesce((select sum(p.amount) from public.customer_invoice_payment p where p.invoice_id = ci.id), 0) cobrado

@@ -37,7 +37,7 @@ describe('el vencimiento, como la base', () => {
 
 describe('lo que dice la ficha', () => {
   it('con fechas de verdad', () => {
-    expect(ejemploDePlazo('weekly', 1, null, '2026-10-14')).toBe('La semana del 12/10 al 18/10 la paga hacia el lunes 19/10; si el 24/10 no ha llegado, sus facturas salen «Vencida». Margen: 5 días.')
+    expect(ejemploDePlazo('weekly', 1, null, '2026-10-14')).toBe('La semana del 12/10 al 18/10 la paga hacia el lunes 19/10; si el 24/10 no ha llegado, sus facturas salen «Falta su liquidación». Margen: 5 días.')
     expect(ejemploDePlazo('fortnightly', 4, null, '2026-10-03')).toContain('La quincena del 16/10 al 31/10 la paga hacia el miércoles 04/11')
   })
   it('al guardar, con contenido', () => {
