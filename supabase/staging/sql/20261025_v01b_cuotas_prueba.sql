@@ -178,9 +178,21 @@ declare v_f uuid := (select v::uuid from _b where clave = 'traida'); r jsonb; v_
 begin
   r := public.conta_venta_corregir(v_f, 'anular', 'Prueba V01b: anular la traída', 'Prueba V01b');
   v_r := (r->>'id')::uuid;
+  insert into _b values ('rectificativa', v_r::text);
+end $$;
+reset role;
+-- _conta_venta_diferencia no es de la pantalla (sin permiso para authenticated): se mira desde fuera.
+do $$
+declare v_r uuid := (select v::uuid from _b where clave = 'rectificativa');
+begin
   if (public._conta_venta_diferencia(v_r)->>'iva')::numeric <> -1.80 then
     raise exception 'PRUEBA V01b · 5: la rectificativa resta % de IVA y no 1,80, lo declarado.', public._conta_venta_diferencia(v_r)->>'iva';
   end if;
+end $$;
+set local role authenticated;
+do $$
+declare v_r uuid := (select v::uuid from _b where clave = 'rectificativa'); r jsonb;
+begin
   r := public.conta_venta_emitir(v_r, 'Prueba V01b');
   if (select tax from public.customer_invoice where id = v_r) <> -1.80 then raise exception 'PRUEBA V01b · 5: la rectificativa no queda con −1,80.'; end if;
   if exists (select 1 from public.customer_invoice_line where invoice_id = v_r and tax_amount is null) then
