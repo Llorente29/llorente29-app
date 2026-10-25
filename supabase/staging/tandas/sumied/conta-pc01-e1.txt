@@ -1,0 +1,15 @@
+# PC01 · Entrega 1 · Un solo motor de cobros y pagos. La 0916 solo añade (y se
+# puede pasar dos veces): desde la rama, de verdad (W05). La 0917 cambia en
+# caliente y la 0918 toca datos: desde la rama, en ROLLBACK.
+# Sus pruebas (ROLLBACK):
+#   · el motor: vencimientos, liquidación por periodo y por pedidos (a revisar
+#     si no cuadra), estados, recibida con el plazo del proveedor, pago y cobro
+#     en Bancos con deshacer y anular, lote de prepago, cobro negativo, y las
+#     vueltas atrás con el md5 de las funciones de antes;
+#   · los datos: la 0918 entra, no se pasa dos veces, y su vuelta atrás deja las
+#     nueve tablas con la huella de antes.
+supabase/migrations/20261025T0916_pc01_motor_cobros_pagos.sql
+supabase/migrations/20261025T0917_pc01_motor_cambia.sql
+supabase/migrations/20261025T0918_pc01_cobros_y_pagos_de_antes.sql
+supabase/staging/sql/20261025_pc01_motor_prueba.sql
+supabase/staging/sql/20261025_pc01_datos_prueba.sql

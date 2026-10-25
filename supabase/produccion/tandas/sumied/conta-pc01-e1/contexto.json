@@ -1,0 +1,46 @@
+{
+  "_que": "PC01 · E1 · contexto de producción de la tanda (0916, 0917 y 0918), medido en SOLO LECTURA el 25/10 (otra vez a las 09:10Z, con los ficheros definitivos: el mismo contexto) con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen las 9 tablas y las 4 funciones que la 0917 cambia (md5 de pg_get_functiondef iguales a los cuerpos de partida); nada de lo que crean; ninguna en el camino del pedido; sin otras firmas; nada en el historial.",
+  "medido": "2026-10-25T09:10Z",
+  "tanda": {
+    "supabase/migrations/20261025T0916_pc01_motor_cobros_pagos.sql": "8943a1efc4718383f27a2bd57c9225c0",
+    "supabase/migrations/20261025T0917_pc01_motor_cambia.sql": "c2a5c40eb25e044f8e6bf5956c556be1",
+    "supabase/migrations/20261025T0918_pc01_cobros_y_pagos_de_antes.sql": "00052134c73f2dfef49bdba23dafd8cb"
+  },
+  "contexto": {
+    "tablas": [
+      "public.bank_match",
+      "public.bank_match_item",
+      "public.channel_settlement",
+      "public.customer_invoice",
+      "public.customer_invoice_payment",
+      "public.party_role",
+      "public.platform_store",
+      "public.supplier_invoice",
+      "public.supplier_invoice_payment_log"
+    ],
+    "funciones": [
+      "public.bank_casar(uuid,jsonb,text,text,jsonb,text,uuid)",
+      "public.journal_entry_anular(uuid,text,date,text)",
+      "public.mark_supplier_invoice_paid(uuid,date,text)",
+      "public.unmark_supplier_invoice_paid(uuid)"
+    ],
+    "filas": {
+      "public.bank_match": 53,
+      "public.bank_match_item": 7,
+      "public.channel_settlement": 262,
+      "public.customer_invoice": 1281,
+      "public.customer_invoice_payment": 0,
+      "public.party_role": 88,
+      "public.platform_store": 0,
+      "public.supplier_invoice": 102,
+      "public.supplier_invoice_payment_log": 0
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

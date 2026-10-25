@@ -16,7 +16,7 @@ import { liquidarMes, textoImporte } from '@/modules/conta/lib/liquidacionSocio'
 import { diaMes, eurosExactos, iniciales } from '@/modules/conta/lib/formato'
 import { MODELO_PLATAFORMA, linea347Plataforma, type ModeloPlataforma } from '@/modules/conta/lib/plataforma347'
 import { parecido } from '@/modules/conta/lib/importarPlan'
-import { apuntarCobro, confirmarPeriodo, crearCuentaCliente, enlazarCuentaCliente, guardarModeloPlataforma, quitarCobro, asegurarCuentaLiquidacion } from '@/modules/conta/services/tercerosService'
+import { apuntarCobro, facturasDeLaLiquidacion, confirmarPeriodo, crearCuentaCliente, enlazarCuentaCliente, guardarModeloPlataforma, quitarCobro, asegurarCuentaLiquidacion } from '@/modules/conta/services/tercerosService'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { MARCA } from '../cuenta/marca'
 
@@ -117,10 +117,13 @@ function ApuntarCobro({ id, alCerrar, alHecho, quien }: { id: string; alCerrar: 
         try {
           const r = await apuntarCobro(id, fecha, valor, nota.trim() || null, quien)
           const d = r.diferencia
-          alHecho(d == null ? `Cobro apuntado: ${eurosExactos(valor)} el ${diaMes(fecha)}. El fichero no trae el neto para comprobarlo.`
+          // PC01 · Y lo que ha pasado con sus facturas (cobradas por sus pedidos, o a revisar y por qué).
+          const facturas = await facturasDeLaLiquidacion(id).catch(() => null)
+          const yFacturas = facturas ? ` ${facturas}` : ''
+          alHecho((d == null ? `Cobro apuntado: ${eurosExactos(valor)} el ${diaMes(fecha)}. El fichero no trae el neto para comprobarlo.`
             : d === 0 ? `Cobrada: ${eurosExactos(valor)} el ${diaMes(fecha)}, cuadra con el neto al céntimo.`
             : d < 0 ? `Apuntado con diferencia: faltan ${eurosExactos(-d)} en el banco. Queda como «con diferencia» para que lo mires.`
-            : `Apuntado con diferencia: llegaron ${eurosExactos(d)} de más. Queda como «con diferencia».`)
+            : `Apuntado con diferencia: llegaron ${eurosExactos(d)} de más. Queda como «con diferencia».`) + yFacturas)
         } catch (er) { setFallo(er instanceof Error ? er.message : 'No se pudo apuntar.'); setOcupado(false) }
       }}>
         {fallo && <div className="cx-error" role="alert">{fallo}</div>}

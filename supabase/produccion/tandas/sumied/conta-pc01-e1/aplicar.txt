@@ -1,0 +1,29 @@
+# PC01 · Entrega 1 · Un solo motor de cobros y pagos (Julio, 25/10). Rama conta/pc01-e1.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0916 — AÑADE la tabla de pagos de las recibidas (supplier_invoice_payment),
+#      de dónde viene cada cobro (customer_invoice_payment.bank_match_id y
+#      settlement_id), la factura emitida de un casado (bank_match_item.customer_invoice_id),
+#      cuándo paga una plataforma (party_role.payout_days_after y payout_margin_days),
+#      cómo quedaron las facturas de una liquidación (channel_settlement.invoice_match_*),
+#      las funciones del motor y los estados en un solo sitio (conta_factura_cobro y
+#      conta_recibida_pago). No toca datos. No está en el camino del pedido.
+#   2. 0917 — CAMBIA en caliente, con la misma firma y declarado en su cabecera con
+#      su prueba de staging: dos CHECK que solo amplían, los disparadores del motor
+#      (liquidación cobrada, tienda con marca, factura de cierre, recibida validada y
+#      pago del lote, casado del banco y casado deshecho), bank_casar (cobrar facturas
+#      emitidas), mark_supplier_invoice_paid (solo con pagos con asiento),
+#      unmark_supplier_invoice_paid y journal_entry_anular. No toca datos.
+#   3. 0918 — DESTRUYE O MUEVE (toca datos): plazos de las 3 plataformas de Foodint,
+#      marca de sus 9 tiendas de Uber, vencimientos de las emitidas de plataforma,
+#      las 1.196 traídas de Diez cobradas, los pagos de las recibidas ya pagadas (4 del
+#      banco, 83 del lote de prepago) y las facturas de las liquidaciones cobradas.
+#      Copia previa y vuelta atrás exacta.
+#      Pide «autorizo»: 20261025T0918_pc01_cobros_y_pagos_de_antes.sql
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/pc01-e1.sql
+supabase/migrations/20261025T0916_pc01_motor_cobros_pagos.sql
+supabase/migrations/20261025T0917_pc01_motor_cambia.sql
+supabase/migrations/20261025T0918_pc01_cobros_y_pagos_de_antes.sql

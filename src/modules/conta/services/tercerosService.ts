@@ -41,12 +41,15 @@ export interface PapelGuardado {
   contributionKinds: string[] | null
   /** Plataforma: cómo vende según su contrato (C03 R2). null = sin decir. */
   platformModel: ModeloPlataforma | null
+  /** PC01 · Plataforma: días después de cerrar su periodo en que paga, y el margen (vacío = 5). */
+  payoutDaysAfter: number | null
+  payoutMarginDays: number | null
 }
 
 export async function listarTercerosBase(accountId: string): Promise<{ terceros: (Tercero & { supplierId: string | null })[]; papeles: Map<string, PapelGuardado[]> }> {
   const [parties, roles] = await Promise.all([
     leer(tabla('party').select('id, name, tax_id, archived_at, archived_note').eq('account_id', accountId).order('name'), 'los terceros'),
-    leer(tabla('party_role').select('party_id, role, supplier_id, channel_id, settlement_every, commission_pct, contribution_kinds, platform_model').eq('account_id', accountId), 'si son cliente, proveedor, plataforma o socio'),
+    leer(tabla('party_role').select('party_id, role, supplier_id, channel_id, settlement_every, commission_pct, contribution_kinds, platform_model, payout_days_after, payout_margin_days').eq('account_id', accountId), 'si son cliente, proveedor, plataforma o socio'),
   ])
   const papeles = new Map<string, PapelGuardado[]>()
   for (const r of roles) {
@@ -56,6 +59,7 @@ export async function listarTercerosBase(accountId: string): Promise<{ terceros:
       settlementEvery: str(r.settlement_every) as PapelGuardado['settlementEvery'], commissionPct: num(r.commission_pct),
       contributionKinds: (r.contribution_kinds as string[] | null) ?? null,
       platformModel: str(r.platform_model) as ModeloPlataforma | null,
+      payoutDaysAfter: num(r.payout_days_after), payoutMarginDays: num(r.payout_margin_days),
     }])
   }
   const terceros = parties.map((p) => {
@@ -315,6 +319,10 @@ export async function guardarModeloPlataforma(partyId: string, modelo: ModeloPla
   if (!data?.length) throw new Error('Este contacto no está como plataforma.')
 }
 
+/** PC01 · Cuándo paga una plataforma; sus facturas por cobrar siguen el plazo nuevo (la base dice cuántas). */
+export const guardarPlazoPlataforma = (partyId: string, cada: 'weekly' | 'fortnightly' | 'monthly' | null, dias: number | null, margen: number | null) =>
+  rpc<{ party_id: string; canal: string | null; facturas: number }>('conta_plataforma_plazo_guardar', { p_party: partyId, p_cada: cada, p_dias: dias, p_margen: margen })
+
 export const archivarTercero = (partyId: string, archivar: boolean, nota?: string | null) =>
   rpc<{ party_id: string; archivado: boolean }>('party_set_archived', { p_party: partyId, p_archivar: archivar, p_nota: nota ?? null })
 
@@ -337,6 +345,12 @@ export async function fusionesDe(accountId: string, partyId: string): Promise<Fu
 
 export const apuntarCobro = (id: string, fecha: string, importe: number, nota: string | null, quien: string | null) =>
   rpc<{ id: string; neto: number | null; cobrado: number; diferencia: number | null }>('channel_settlement_collect', { p_id: id, p_fecha: fecha, p_importe: importe, p_nota: nota, p_quien_nombre: quien })
+
+/** PC01 · Qué pasó con las facturas de una liquidación al cobrarla: «Cobradas 3 facturas por…» o «A revisar: …». */
+export async function facturasDeLaLiquidacion(id: string): Promise<string | null> {
+  const [l] = await leer(tabla('channel_settlement').select('invoice_match_note').eq('id', id), 'lo que pasó con sus facturas')
+  return l?.invoice_match_note ? String(l.invoice_match_note) : null
+}
 
 export const quitarCobro = (id: string) => rpc<void>('channel_settlement_uncollect', { p_id: id })
 

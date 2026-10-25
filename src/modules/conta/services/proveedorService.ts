@@ -419,6 +419,23 @@ export interface FacturaDeProveedor extends FacturaParaCifras {
   ibanDecision: DecisionIban | null
   ibanDecisionAt: string | null
   ibanDecisionByName: string | null
+  /** PC01 · Lo pagado con asiento (supplier_invoice_payment) y su estado, de la base (conta_recibida_pago). */
+  pagado: number
+  estadoPago: EstadoPagoRecibida | null
+}
+
+/** PC01 · El estado de pago de una recibida, calculado en la base (conta_recibida_pago). */
+export type EstadoPagoRecibida = 'pagada' | 'vencida' | 'pagada_parte' | 'sin_vencimiento' | 'vence_semana' | 'por_pagar' | string
+
+/** PC01 · Lo pagado y el estado de cada factura, de la vista de la base (un solo sitio). */
+export async function pagosDeRecibidas(accountId: string, ids: readonly string[]): Promise<Map<string, { pagado: number; estado: EstadoPagoRecibida }>> {
+  const out = new Map<string, { pagado: number; estado: EstadoPagoRecibida }>()
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await from('conta_recibida_pago').select('invoice_id, pagado, estado').eq('account_id', accountId).in('invoice_id', ids.slice(i, i + 200))
+    if (error) throw new Error(mensaje('No se pudo leer lo pagado de las facturas', error))
+    for (const r of (data as Fila[] | null) ?? []) out.set(String(r.invoice_id), { pagado: num(r.pagado) ?? 0, estado: String(r.estado) })
+  }
+  return out
 }
 
 /** Facturas del proveedor, sin las anuladas, de la más reciente a la más antigua. */
@@ -431,7 +448,9 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
     .neq('status', 'anulada')
     .order('invoice_date', { ascending: false, nullsFirst: false })
   if (error) throw new Error(mensaje('No se pudieron cargar sus facturas', error))
-  return ((data as Fila[] | null) ?? []).map((r) => ({
+  const filas = (data as Fila[] | null) ?? []
+  const pagos = await pagosDeRecibidas(accountId, filas.map((r) => String(r.id)))
+  return filas.map((r) => ({
     id: r.id as string,
     createdAt: r.created_at as string,
     noRepetidaConfirmada: !!r.not_duplicate_confirmed_at,
@@ -448,6 +467,8 @@ export async function listarFacturas(accountId: string, supplierId: string): Pro
     ibanDecision: str(r.iban_decision) as DecisionIban | null,
     ibanDecisionAt: str(r.iban_decision_at),
     ibanDecisionByName: str(r.iban_decision_by_name),
+    pagado: pagos.get(String(r.id))?.pagado ?? 0,
+    estadoPago: pagos.get(String(r.id))?.estado ?? null,
   }))
 }
 
@@ -477,13 +498,9 @@ export async function listarFacturasDeLaCuenta(accountId: string): Promise<(Fact
   }))
 }
 
-export async function marcarPagada(invoiceId: string, fecha: string, forma: PaymentMethod | null): Promise<void> {
-  await rpc<null>('mark_supplier_invoice_paid', { p_invoice_id: invoiceId, p_paid_at: fecha, p_method: forma })
-}
-
-export async function deshacerPago(invoiceId: string): Promise<void> {
-  await rpc<null>('unmark_supplier_invoice_paid', { p_invoice_id: invoiceId })
-}
+// PC01 (Julio, 25/10): «Marcar como pagada» y «Deshacer el pago» se fueron. Una
+// recibida queda pagada sola cuando la cubren pagos con asiento (Bancos al
+// casar, el pago del lote de prepago) y se deshace deshaciendo ese casado.
 
 export async function cambiarVencimiento(invoiceId: string, fecha: string | null): Promise<void> {
   await rpc<null>('set_supplier_invoice_due_date', { p_invoice_id: invoiceId, p_due_date: fecha })

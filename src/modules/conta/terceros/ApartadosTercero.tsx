@@ -18,6 +18,7 @@ import { Chip, Vacio } from '@/modules/conta/ui/piezas'
 import { useTercero, papelesDe } from '@/modules/conta/terceros/contextoTercero'
 import { ConQuienHablas, LiquidacionesAnteriores, SusCuentas, TarjetaLiquidaciones } from '@/modules/conta/terceros/piezasTercero'
 import { SusTiendas } from '@/modules/conta/terceros/SusTiendas'
+import { CuandoPaga } from '@/modules/conta/terceros/CuandoPaga'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { normalizarNif, validarNifEs } from '@/modules/conta/lib/nif'
 import { validarIban, normalizarIban, formatearIban } from '@/modules/conta/lib/iban'
@@ -139,7 +140,6 @@ export function CobroTercero() {
   const [iban, setIban] = useState(f?.iban ? formatearIban(f.iban) : '')
   const [mandato, setMandato] = useState(f?.sepaMandateRef ?? '')
   const [canal, setCanal] = useState<string | null>(rolPlataforma?.channelId ?? null)
-  const [cada, setCada] = useState<string | null>(rolPlataforma?.settlementEvery ?? null)
   const [pct, setPct] = useState(rolPlataforma?.commissionPct != null ? String(rolPlataforma.commissionPct).replace('.', ',') : '')
   const [aportes, setAportes] = useState<string[]>(rolSocio?.contributionKinds ?? ['marketing', 'packaging'])
   const plazoN = plazo.trim() === '' ? null : Number(plazo)
@@ -178,21 +178,21 @@ export function CobroTercero() {
           e.preventDefault()
           const n = pct.trim() ? Number(pct.replace(',', '.')) : null
           void guardar(async () => {
-            const r = await anadirPapel(ficha.tercero.id, 'platform', { channelId: canal, settlementEvery: cada, commissionPct: n })
+            // PC01: el periodo se guarda en «Cuándo te paga»; aquí se manda el guardado, para no pisarlo.
+            const r = await anadirPapel(ficha.tercero.id, 'platform', { channelId: canal, settlementEvery: rolPlataforma?.settlementEvery ?? null, commissionPct: n })
             if (r.liquidaciones_enlazadas) return r
             return r
           }, `Guardado lo de la plataforma${canal ? `: sus liquidaciones de ${ficha.canales.find((c) => c.id === canal)?.name} van a su ficha` : ''}.`)
         }}>
           <h2 className="cx-tarjeta-titulo">Como plataforma de reparto</h2>
           <Pildoras campo="canal" etiqueta="Su canal de venta" elegidas={canal ? [canal] : []} opciones={ficha.canales.map((c) => ({ valor: c.id, texto: c.name }))} alCambiar={(v) => setCanal(v[0] ?? null)} />
-          <Pildoras campo="cada" etiqueta="Liquida" elegidas={cada ? [cada] : []}
-            opciones={[{ valor: 'weekly', texto: 'Cada semana' }, { valor: 'fortnightly', texto: 'Cada 15 días' }, { valor: 'monthly', texto: 'Cada mes' }]} alCambiar={(v) => setCada(v[0] ?? null)} />
           <Campo campo="comision" etiqueta="Comisión pactada (%)" ayuda="Lo que dice tu contrato. Si las liquidaciones dicen otra cosa, te aviso.">
             {(p) => <input {...p} className="cx-input" inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="21" />}
           </Campo>
           <div className="cx-pie"><button type="submit" className="cx-boton" disabled={ocupado}>Guardar la plataforma</button></div>
         </form>
       )}
+      {plataforma && <CuandoPaga />}
       {socio && (
         <form className="cx-formulario" onSubmit={(e) => {
           e.preventDefault()

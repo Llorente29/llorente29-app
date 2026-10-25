@@ -60,7 +60,24 @@ export interface FacturaPendiente {
 }
 export interface SaldoProveedor { terceroId: string | null; proveedor: string; alias: string[]; cuenta: string; pendienteCent: number }
 export interface ProveedorConocido { terceroId: string | null; proveedor: string; alias: string[]; cuentaTercero: string; cuentaAnticipo: string }
-export interface Cliente { terceroId: string | null; nombre: string; alias: string[]; cuenta: string; pendienteCent: number }
+export interface Cliente {
+  terceroId: string | null; nombre: string; alias: string[]; cuenta: string; pendienteCent: number
+  /** PC01 · Sus facturas emitidas con algo por cobrar (la más antigua primero): el cobro las nombra y la base escribe su cobro. */
+  facturas?: { id: string; numero: string | null; fecha: string; pendienteCent: number }[]
+}
+
+/**
+ * PC01 · Qué facturas cobra un ingreso de `imp` céntimos de un cliente: la
+ * que queda justo por ese importe, o todas si suman justo eso. Si no cuadra,
+ * ninguna (el cobro va a la 430, como antes, y se casa a mano).
+ */
+export function facturasQueCobra(c: Pick<Cliente, 'facturas'>, imp: number): { id: string; importe: number; numero: string | null }[] {
+  const fs = c.facturas ?? []
+  const justa = fs.filter((f) => f.pendienteCent === imp)
+  if (justa.length === 1) return [{ id: justa[0].id, importe: justa[0].pendienteCent / 100, numero: justa[0].numero }]
+  if (fs.length > 1 && fs.reduce((t, f) => t + f.pendienteCent, 0) === imp) return fs.map((f) => ({ id: f.id, importe: f.pendienteCent / 100, numero: f.numero }))
+  return []
+}
 export interface Liquidacion {
   id: string; plataforma: string; fecha: string; desde: string | null; hasta: string | null; netoCent: number; cuenta430: string; terceroId: string | null
   /**
@@ -144,6 +161,8 @@ export type Destino =
   | { tipo: 'liquidacion'; liquidacion_id: string; cuenta_cliente: string; tercero_id: string | null; concepto: string }
   | { tipo: 'traspaso'; otro_movimiento_id: string; concepto: string }
   | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string }[];
+      /** PC01 · Solo «factura_emitida»: las facturas que cobra (bank_casar escribe su cobro). */
+      facturas?: { id: string; importe: number }[];
       tercero_id?: string | null; contrato_id?: string; concepto: string }
 
 export interface Decision {
@@ -581,9 +600,12 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     const cls = ctx.clientes.filter((c) => nombra(txt, [c.nombre, ...c.alias]) && c.pendienteCent >= imp)
     if (cls.length === 1) {
       const c = cls[0]
-      return { ...b, confianza: 'probable', que: `Cobro de ${c.nombre}`,
-        porque: `${c.nombre} te debe ${eurosCent(c.pendienteCent)} en el libro; este cobro lo reduce.`,
-        destino: { tipo: 'factura_emitida', tercero_id: c.terceroId, concepto: `Cobro de ${c.nombre}`, lineas: [{ cuenta: c.cuenta, importe: euros(imp) }] } }
+      const fs = facturasQueCobra(c, imp)
+      const nombra = fs.length ? ` Cobra ${fs.length === 1 ? `la factura ${fs[0].numero ?? ''}` : `sus ${fs.length} facturas pendientes`}, que quedan cobradas.`.replace('  ', ' ') : ''
+      return { ...b, confianza: 'probable', que: fs.length === 1 ? `Cobro de la factura ${fs[0].numero ?? ''} de ${c.nombre}`.replace('  ', ' ') : `Cobro de ${c.nombre}`,
+        porque: `${c.nombre} te debe ${eurosCent(c.pendienteCent)} en el libro; este cobro lo reduce.${nombra}`,
+        destino: { tipo: 'factura_emitida', tercero_id: c.terceroId, concepto: `Cobro de ${c.nombre}`, lineas: [{ cuenta: c.cuenta, importe: euros(imp) }],
+          ...(fs.length ? { facturas: fs.map((f) => ({ id: f.id, importe: f.importe })) } : {}) } }
     }
   }
 
