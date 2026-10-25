@@ -420,8 +420,12 @@ end $$;
 
 -- ── 10 · Las vueltas atrás ──────────────────────────────────────────────────
 -- Antes, lo que el motor escribió en esta prueba (en producción lo quita la vuelta atrás de la 0918).
-delete from public.customer_invoice_payment where settlement_id is not null or bank_match_id is not null;
+delete from public.customer_invoice_payment where settlement_id is not null or bank_match_id is not null or amount < 0;
 delete from public.supplier_invoice_payment;
+-- Las comprobaciones diferidas de los asientos de esta prueba, ahora: con eventos
+-- pendientes, Postgres no deja tocar journal_entry (ensayo 542). En producción
+-- la vuelta atrás va en su propia transacción y no los tiene.
+set constraints all immediate;
 \i supabase/vuelta-atras/20261025T0917_pc01_motor_cambia.down.sql
 \i supabase/vuelta-atras/20261025T0916_pc01_motor_cobros_pagos.down.sql
 do $$
