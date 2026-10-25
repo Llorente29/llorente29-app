@@ -23,7 +23,7 @@ Reglas de trabajo del CEO (Julio):
   No se relanzan por cada commit intermedio.
 - **Tiempo máximo: el que diga el encargo, o 90 minutos** si no dice nada. Si
   se pasa, se para y se avisa en dos líneas: qué falta y por qué.
-- **Siempre en español.**
+- **Siempre en español, también las notas entre paso y paso y lo que se piensa en voz alta.** Nada en inglés, salvo nombres de código.
 
 ## Reglas ganadas en producción
 

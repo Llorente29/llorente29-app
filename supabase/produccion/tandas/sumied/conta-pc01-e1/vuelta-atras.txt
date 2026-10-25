@@ -1,0 +1,4 @@
+# PC01 · Entrega 1 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261025T0918_pc01_cobros_y_pagos_de_antes.down.sql
+supabase/vuelta-atras/20261025T0917_pc01_motor_cambia.down.sql
+supabase/vuelta-atras/20261025T0916_pc01_motor_cobros_pagos.down.sql
