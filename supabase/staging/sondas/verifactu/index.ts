@@ -31,6 +31,8 @@ const PRODUCCION_REF = "xzmpnchlguibclvxyynt";
 const ESTATICOS = "https://prewww2.aeat.es/static_files/common/internet/dep/aplicaciones/es/aeat/tikeV1.0/cont/ws/";
 const WSDL = ESTATICOS + "SistemaFacturacion.wsdl";
 const ERRORES = ESTATICOS + "errores.properties";
+/** Los esquemas que importa el WSDL: con ellos se escribe el alta y la anulación. */
+const XSD = ["SuministroLR.xsd", "SuministroInformacion.xsd", "RespuestaSuministro.xsd", "ConsultaLR.xsd", "RespuestaConsultaLR.xsd"];
 const SOLO_PRUEBAS = /^https:\/\/prewww\d*\.aeat\.es\//;
 
 function json(body: unknown, status = 200) {
@@ -98,6 +100,11 @@ Deno.serve(async (req) => {
     for (const [clave, u] of [["wsdl", WSDL], ["errores", ERRORES]] as const) {
       try { salida[clave] = await bajar(u); } catch (e) { salida.ok = false; salida[clave] = { url: u, error: String((e as Error).message ?? e).slice(0, 300) }; }
     }
+    const xsd: Record<string, unknown> = {};
+    for (const n of XSD) {
+      try { xsd[n] = await bajar(ESTATICOS + n); } catch (e) { salida.ok = false; xsd[n] = { url: ESTATICOS + n, error: String((e as Error).message ?? e).slice(0, 300) }; }
+    }
+    salida.xsd = xsd;
     const w = salida.wsdl as { texto?: string } | undefined;
     if (w?.texto) salida.puertos = puertos(w.texto);
     console.log(JSON.stringify({ sonda: "verifactu", modo, ok: salida.ok }));

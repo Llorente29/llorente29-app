@@ -90,13 +90,19 @@ jobs:
           jq -r '"@@ # fuentes",
             (["wsdl", "errores"][] as $k | .[$k] // {} |
               "@@ \($k).status \(.status // -1)", "@@ \($k).bytes \(.bytes // -1)", "@@ \($k).ms \(.ms // -1)", "@@ \($k).sha256 \(.sha256 // "")"),
-            "@@ puertos \((.puertos // []) | length)"' /tmp/sonda/fuentes.json > /tmp/sonda/fuentes.txt
+            "@@ puertos \((.puertos // []) | length)",
+            ((.xsd // {}) | to_entries[] | (.key | ascii_downcase | sub("\\.xsd$"; "")) as $k | .value |
+              "@@ \($k).status \(.status // -1)", "@@ \($k).bytes \(.bytes // -1)", "@@ \($k).sha256 \(.sha256 // "")")' /tmp/sonda/fuentes.json > /tmp/sonda/fuentes.txt
           cat /tmp/sonda/fuentes.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
           A=docs/conta/v03/aeat; mkdir -p "$A"
           HOY=$(date -u +%Y-%m-%d)
           jq -r '.wsdl.texto // empty' /tmp/sonda/fuentes.json > "$A/SistemaFacturacion.wsdl"
           jq -r '.errores.texto // empty' /tmp/sonda/fuentes.json > "$A/errores.properties"
-          jq --arg hoy "$HOY" '{bajado: $hoy, desde: "función de staging-conta (sonda V03)", wsdl: (.wsdl | del(.texto)), errores: (.errores | del(.texto)), puertos: (.puertos // [])}' /tmp/sonda/fuentes.json > "$A/fuentes.json"
+          for x in SuministroLR SuministroInformacion RespuestaSuministro ConsultaLR RespuestaConsultaLR; do
+            jq -r --arg n "$x.xsd" '.xsd[$n].texto // empty' /tmp/sonda/fuentes.json > "docs/conta/v03/aeat/$x.xsd"
+            [ -s "docs/conta/v03/aeat/$x.xsd" ] || rm -f "docs/conta/v03/aeat/$x.xsd"
+          done
+          jq --arg hoy "$HOY" '{bajado: $hoy, desde: "función de staging-conta (sonda V03)", wsdl: (.wsdl | del(.texto)), errores: (.errores | del(.texto)), xsd: ((.xsd // {}) | map_values(del(.texto))), puertos: (.puertos // [])}' /tmp/sonda/fuentes.json > "$A/fuentes.json"
           jq -r '[(.puertos // [])[] | select(.url | test("^https://prewww1\\.aeat\\.es/.*VerifactuSOAP$"))][0].url // ""' /tmp/sonda/fuentes.json > /tmp/sonda/destino
           for f in SistemaFacturacion.wsdl errores.properties; do [ -s "$A/$f" ] || rm -f "$A/$f"; done
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

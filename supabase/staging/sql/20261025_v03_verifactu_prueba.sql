@@ -11,7 +11,9 @@
 --   2. En pruebas, como usuario de A: dos facturas emitidas por el camino de
 --      siempre (conta_venta_emitir) → dos altas F1, la segunda encadenada con la
 --      primera, cada huella el SHA-256 de su cadena, y en la cola.
---   3. Lo que Hacienda rechazaría no se emite: un cliente de Suiza con la línea
+--   3. Suiza con IVA (3a, el camino de hoy: S1 con IDOtro 04). Lo que Hacienda
+--      rechazaría no se emite (3b, con la línea pasada a exenta a mano, porque
+--      la V01 aún no deja guardarla): un cliente de Suiza con la línea
 --      sin IVA y sin decir por qué → no se emite, dice qué falta y NO gasta el
 --      número; con «N2» (servicio a una empresa de fuera de la UE), sí.
 --   4. El registro no se edita.
@@ -104,29 +106,27 @@ begin
   if v_msg <> 'pendiente' then raise exception 'PRUEBA V03 · 2: la factura no sale «pendiente» con Hacienda (%).', v_msg; end if;
   raise notice '2 · % y %: dos altas F1 encadenadas, con su huella, en la cola', v_n1, v_n2;
 
-  -- 3 · Un cliente de Suiza, sin IVA y sin decir por qué: no se emite ni gasta número.
+  -- 3a · Un cliente de Suiza, con IVA: el caso de un restaurante (el servicio
+  -- se consume en España y lleva IVA, art. 70.Uno.5.º LIVA). S1, y el
+  -- destinatario va como IDOtro 04 con su país, encadenado tras la anterior.
   r := public.party_save_customer(v_acc, null, 'Alpen Gastro AG (prueba V03)', 'CHE123456789', jsonb_build_object('countryCode', 'CH'), 'Prueba V03');
   v_ch := (r->>'party_id')::uuid;
   r := public.conta_venta_guardar(v_e, null, jsonb_build_object('cliente_id', v_ch, 'fecha', (now() at time zone 'Europe/Madrid')::date),
-    jsonb_build_array(jsonb_build_object('concepto', 'Asesoría de cocina', 'cantidad', 1, 'precio', 2150, 'descuento', 0, 'tipo_id', v_t0, 'cuenta_id', v_c705)), 'Prueba V03');
+    jsonb_build_array(jsonb_build_object('concepto', 'Menú de empresa (evento)', 'cantidad', 20, 'precio', 30, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V03');
   v_h := (r->>'id')::uuid;
-  select coalesce(max(last_number), 0) into v_antes from public.customer_invoice_counter where company_id = v_e and series_code = 'F';
-  begin
-    perform public.conta_venta_emitir(v_h, 'Prueba V03');
-    raise exception 'PRUEBA V03 · 3: se ha emitido sin decir por qué va sin IVA.';
-  exception when check_violation then v_msg := sqlerrm;
-  end;
-  select coalesce(max(last_number), 0) into v_despues from public.customer_invoice_counter where company_id = v_e and series_code = 'F';
-  if v_despues <> v_antes or (select status from public.customer_invoice where id = v_h) <> 'borrador' then
-    raise exception 'PRUEBA V03 · 3: la que no se emite ha gastado número o ha quedado emitida (%→%).', v_antes, v_despues;
-  end if;
-  if v_msg not like '%fuera de la UE%dime qué le has vendido%' then raise exception 'PRUEBA V03 · 3: no dice qué falta en palabras de la calle («%»).', v_msg; end if;
-  perform public.verifactu_operacion_poner(v_h, 'N2', null, null, 'Prueba V03');
   perform public.conta_venta_emitir(v_h, 'Prueba V03');
-  perform 1 from public.verifactu_registro where invoice_id = v_h and desglose->0->>'calificacion' = 'N2' and desglose->0 ? 'tipo' = false
-     and destinatarios->0->>'codigo_pais' = 'CH' and destinatarios->0->>'id_type' = '04' and huella_anterior = (select huella from public.verifactu_registro where invoice_id = v_g);
-  if not found then raise exception 'PRUEBA V03 · 3: la de Suiza con N2 no tiene su alta como debe (%).', (select row_to_json(r) from public.verifactu_registro r where invoice_id = v_h); end if;
-  raise notice '3 · Suiza sin motivo: «%», sin gastar número; con N2, su alta encadenada', v_msg;
+  perform 1 from public.verifactu_registro where invoice_id = v_h and tipo_factura = 'F1' and desglose->0->>'calificacion' = 'S1'
+     and destinatarios->0->>'codigo_pais' = 'CH' and destinatarios->0->>'id_type' = '04' and destinatarios->0->>'id' = 'CHE123456789'
+     and importe_total = 726.00 and huella_anterior = (select huella from public.verifactu_registro where invoice_id = v_g);
+  if not found then raise exception 'PRUEBA V03 · 3a: la de Suiza con IVA no tiene su alta como debe (%).', (select row_to_json(r) from public.verifactu_registro r where invoice_id = v_h); end if;
+  raise notice '3a · Suiza con IVA: S1, IDOtro 04 con CH, encadenada';
+
+  -- 3b se prepara aquí: un borrador a Suiza que la V01 deja guardar (con IVA)
+  -- y que el superusuario pasa a «exento» (la V01 aún no deja guardar líneas
+  -- exentas: conta_venta_guardar solo admite «taxed»).
+  r := public.conta_venta_guardar(v_e, null, jsonb_build_object('cliente_id', v_ch, 'fecha', (now() at time zone 'Europe/Madrid')::date),
+    jsonb_build_array(jsonb_build_object('concepto', 'Asesoría de cocina', 'cantidad', 1, 'precio', 2150, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V03');
+  insert into _v values ('exenta', r->>'id'), ('suiza_iva', v_h::text);
 
   -- 4 · El registro no se edita.
   begin
@@ -135,6 +135,39 @@ begin
   exception when check_violation or insufficient_privilege then null;
   end;
   raise notice '4 · el registro no se edita';
+end $$;
+reset role;
+
+-- 3b · Lo que Hacienda rechazaría no se emite: el borrador a Suiza, ya sin IVA
+-- y sin decir por qué. No gasta número; con «N2» (servicio a una empresa de
+-- fuera de la UE), sí, encadenada tras la 3a.
+update public.customer_invoice_line set tax_rate_id = (select v::uuid from _v where clave = 't0'), tax_pct = 0, tax_amount = 0
+ where invoice_id = (select v::uuid from _v where clave = 'exenta');
+update public.customer_invoice set tax = 0, total = base where id = (select v::uuid from _v where clave = 'exenta');
+set local role authenticated;
+do $$
+declare
+  v_e uuid := (select v::uuid from _v where clave = 'empresa'); v_h uuid := (select v::uuid from _v where clave = 'exenta');
+  v_antes int; v_despues int; v_msg text;
+begin
+  select coalesce(max(last_number), 0) into v_antes from public.customer_invoice_counter where company_id = v_e and series_code = 'F';
+  begin
+    perform public.conta_venta_emitir(v_h, 'Prueba V03');
+    raise exception 'PRUEBA V03 · 3b: se ha emitido sin decir por qué va sin IVA.';
+  exception when check_violation then v_msg := sqlerrm;
+  end;
+  select coalesce(max(last_number), 0) into v_despues from public.customer_invoice_counter where company_id = v_e and series_code = 'F';
+  if v_despues <> v_antes or (select status from public.customer_invoice where id = v_h) <> 'borrador' then
+    raise exception 'PRUEBA V03 · 3b: la que no se emite ha gastado número o ha quedado emitida (%→%).', v_antes, v_despues;
+  end if;
+  if v_msg not like '%fuera de la UE%dime qué le has vendido%' then raise exception 'PRUEBA V03 · 3b: no dice qué falta en palabras de la calle («%»).', v_msg; end if;
+  perform public.verifactu_operacion_poner(v_h, 'N2', null, null, 'Prueba V03');
+  perform public.conta_venta_emitir(v_h, 'Prueba V03');
+  perform 1 from public.verifactu_registro where invoice_id = v_h and desglose->0->>'calificacion' = 'N2' and desglose->0 ? 'tipo' = false
+     and destinatarios->0->>'id_type' = '04' and cuota_total = 0 and importe_total = 2150.00
+     and huella_anterior = (select huella from public.verifactu_registro where invoice_id = (select v::uuid from _v where clave = 'suiza_iva'));
+  if not found then raise exception 'PRUEBA V03 · 3b: la de Suiza con N2 no tiene su alta como debe (%).', (select row_to_json(r) from public.verifactu_registro r where invoice_id = v_h); end if;
+  raise notice '3b · Suiza sin IVA y sin motivo: «%», sin gastar número; con N2, su alta encadenada', v_msg;
 end $$;
 reset role;
 
