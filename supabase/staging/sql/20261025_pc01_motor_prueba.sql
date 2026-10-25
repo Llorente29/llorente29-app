@@ -316,7 +316,12 @@ begin
     date '2026-10-22', date '2026-10-22', null, null, 'prueba', null, mv);
   -- Cada movimiento, por su concepto (el importador guarda su propia huella, y el
   -- extracto puede traer otros de staging del mismo día).
-  for m in select * from public.bank_movement where statement_id = (r->>'extracto')::uuid and bank_concept like 'TRANSFERENCIA PC01 _' loop
+  -- Uno por concepto y con su importe: el extracto puede traer el mismo movimiento
+  -- dos veces (ensayo 540: «m1» repetido).
+  for m in select distinct on (bm.bank_concept) bm.* from public.bank_movement bm
+            where bm.statement_id = (r->>'extracto')::uuid and bm.bank_concept like 'TRANSFERENCIA PC01 _'
+              and bm.amount = (array[-100.00, 30.00, 18.00])[right(bm.bank_concept, 1)::int]
+            order by bm.bank_concept, bm.created_at desc loop
     insert into _p values ('m' || right(m.bank_concept, 1), m.id);
   end loop;
   if (select count(*) from _p where clave in ('m1', 'm2', 'm3')) <> 3 then raise exception 'PRUEBA PC01 · 6: el extracto no trae los 3 movimientos.'; end if;
