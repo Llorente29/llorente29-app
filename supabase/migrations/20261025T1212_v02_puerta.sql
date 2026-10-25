@@ -498,9 +498,9 @@ begin
     v_recordado := true;
   end if;
   insert into public.document_activity (account_id, company_id, inbox_id, actor, actor_name, action, text, detail)
-  values (v_d.account_id, v_d.company_id, p_inbox, 'persona', p_quien_nombre, 'tipo',
+  values (v_d.account_id, v_d.company_id, p_inbox, 'persona', p_quien_nombre, 'corregida',
           'Es ' || p_tipo || case when v_recordado then '; lo que llegue de ese remitente se tratará igual' else '' end || '.',
-          jsonb_build_object('tipo', p_tipo, 'recordado', v_recordado));
+          jsonb_build_object('campo', 'tipo', 'tipo', p_tipo, 'recordado', v_recordado));
   return jsonb_build_object('id', p_inbox, 'tipo', p_tipo, 'recordado', v_recordado,
     'texto', 'Apuntado: es ' || case p_tipo when 'factura' then 'una factura' when 'ticket' then 'un ticket' when 'liquidacion' then 'una liquidación'
                                             when 'extracto' then 'un extracto del banco' when 'nomina' then 'una nómina' when 'riders' then 'una quincena de riders'
