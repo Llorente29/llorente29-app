@@ -251,3 +251,24 @@
 @media (min-width: 768px) {
   .cxl-pagina .s-encabezado-acciones .s-menu { left: auto; right: 0; }
 }
+
+/* C12 · Traspasar a Diez (arriba de «Cerrar el mes») */
+.cxl-traspaso { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.cxl-traspaso-frase { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; margin: 0; color: var(--cx-texto); }
+.cxl-traspaso-frase.cxl-verde, .cxl-traspaso-cuadre.cxl-verde { color: var(--cx-verde-oscuro); }
+.cxl-traspaso-frase.cxl-ambar { color: var(--cx-ambar); }
+.cxl-traspaso-cuadre { margin: 0; font-weight: 600; }
+.cxl-traspaso-cuadre.cxl-rojo { color: var(--cx-rojo); }
+.cxl-traspaso-resumen { display: flex; flex-direction: column; gap: 8px; }
+.cxl-traspaso-resumen p { margin: 0; }
+.cxl-traspaso-tipos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.cxl-traspaso-tipos li { display: flex; justify-content: space-between; gap: 8px; padding: 10px 12px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-boton); }
+.cxl-traspaso-cuentas { margin-top: 8px; }
+.cxl-traspaso details summary { cursor: pointer; color: var(--cx-azul); }
+.cxl-aviso-ambar { background: var(--cx-ambar-suave); color: var(--cx-texto); border-radius: var(--cx-radio-boton); padding: 10px 14px; }
+.cxl-aviso-ambar p, .cxl-aviso-ambar ul { margin: 4px 0; }
+@media (max-width: 767px) {
+  .cxl-traspaso-frase { font-size: 18px; }
+  .cxl-traspaso-tipos { grid-template-columns: 1fr; }
+  .cxl-traspaso-cuentas { display: block; overflow-x: auto; }
+}

@@ -94,7 +94,8 @@ jobs:
           [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
           jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
       - name: R13 · el asiento de Folvy, leído en producción con conta_lectura (solo lectura)
-        if: startsWith(github.event.head_commit.message, '[prueba-c0009:emitida]') || startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]')
+        # C12 (24/10): también a mano, con la etiqueta en «Run workflow».
+        if: startsWith(github.event.head_commit.message, '[prueba-c0009:emitida]') || startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]') || startsWith(inputs.etiqueta, '[prueba-c0009:emitida]') || startsWith(inputs.etiqueta, '[prueba-c0009:adjunto]')
         env:
           RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -135,7 +136,7 @@ jobs:
           echo "Asiento leído ($(wc -c < /tmp/asiento.json) bytes; no se publica)."
 
       - name: R14 · jspdf para el PDF del día (la versión del package-lock)
-        if: startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]')
+        if: startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]') || startsWith(inputs.etiqueta, '[prueba-c0009:adjunto]')
         run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund jspdf@4.2.1
 
       - name: Factura (o subcuentas) de prueba en C0009
@@ -178,6 +179,8 @@ jobs:
             '[prueba-c0009:apunte-molde]'*) S=scripts/conta/diez/prueba-c0009-apunte-molde.ts ;;
             # C07: UN banco inventado de Sumied a la C0009 y su contraasiento, leídos de vuelta (escribe: solo con el «sí» de Julio).
             '[prueba-c0009:apunte]'*) S=scripts/conta/diez/prueba-c0009-apunte.ts ;;
+            # C12 (24/10): el «Cuadra» del traspaso mensual contra la C0009 (los apuntes del mes), SOLO LEE (escribir: false).
+            '[prueba-c0009:traspaso]'*) S=scripts/conta/diez/prueba-c0009-traspaso.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac

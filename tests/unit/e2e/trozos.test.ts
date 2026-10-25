@@ -29,6 +29,9 @@ describe('la entera en trozos', () => {
     // 24/10 (V01): entra v01/facturas, nueva y sin medir: son 7. La mide la entera de su PR.
     // 24/10 (V01, entrega 2): entra v01/cierres, nueva y sin medir: son 8. La mide la entera de su PR.
     // 24/10 (V01, entrega 3): entra v01/liquidaciones, nueva y sin medir: son 9. La mide la entera de su PR.
+    // 24/10 (C12, al traer main con la V01 entrega 2): entra c12/traspaso, nueva y sin medir (cuenta como la mediana): son 9. La mide la entera de la noche.
+    // 25/10 (V01, al traer main con el C12 al #325): eran 10; se miden v01/facturas, v01/cierres y
+    // v01/liquidaciones (entera 40142597258 en verde, tests/e2e/tiempos.json): son 7.
     expect(sin.length).toBeLessThan(10)
   })
 
@@ -81,6 +84,7 @@ describe('la entera en trozos', () => {
     // 24/10 (N5, al traer main): entra n5/anchos-compras, sin medir (cuenta como la mediana).
     // 24/10 (V01): entra v01/facturas, sin medir (cuenta como la mediana). El reparto estimado
     // da 17,56: el techo pasa a 18 min. Lo mide la entera de su PR.
+    // 24/10 (C12, al traer main): entra c12/traspaso, sin medir (cuenta como la mediana). Lo mide la entera de la noche.
     expect(Math.max(...seg) / 60).toBeLessThan(18)
   })
 

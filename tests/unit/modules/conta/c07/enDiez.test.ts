@@ -60,3 +60,20 @@ describe('anulado', () => {
     expect(detalleDiez(a({ estado: 'anulado', anuladoCon: 'r1' }), null, ON)).toBeNull()
   })
 })
+
+// C12 (24/10) · La empresa traspasa a Diez una vez al mes: nada se manda suelto.
+describe('traspaso mensual', () => {
+  const MES = { ...ON, mensual: true }
+  it('validado y no en Diez: «Va en el traspaso del mes», sin «Reintentar», falle lo que falle antes', () => {
+    const va = { texto: 'Va en el traspaso del mes', motivo: null, tono: 'neutro', reintentar: null, enDiez: false }
+    expect(detalleDiez(a(), null, MES)).toEqual(va)
+    expect(detalleDiez(a(), envio({ status: 'pendiente', numero: null, error: 'Diez real está cerrado', intentos: 3 }), MES)).toEqual(va)
+  })
+  it('lo que ya está en Diez, igual que antes', () => {
+    expect(detalleDiez(a(), envio(), MES)?.texto).toBe('En Diez · 4/1.234')
+  })
+  it('anulado aquí y en Diez todavía: se anula en el traspaso, sin botón', () => {
+    expect(detalleDiez(a({ estado: 'anulado', anuladoCon: 'r1' }), envio(), MES)).toEqual({ texto: 'En Diez sigue 4/1.234', motivo: 'se anula en el traspaso del mes', tono: 'neutro', reintentar: null, enDiez: true })
+    expect(detalleDiez(a({ estado: 'anulado', anuladoCon: 'r1' }), envio(), { ...MES, contraasiento: envio({ numero: 1235 }) })?.texto).toBe('Anulado en Diez con 4/1.235')
+  })
+})

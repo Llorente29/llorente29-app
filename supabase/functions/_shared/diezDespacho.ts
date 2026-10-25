@@ -21,6 +21,13 @@
 // no es de su cuenta, no está) o el de servicio (el servidor; las lecturas lo
 // admiten desde la 0450). Lo que solo escribe el servidor (external_send, la
 // conexión, el Vault, el bucket), siempre con `srv`.
+//
+// C12 (Julio, 24/10) · El traspaso del mes (conta-diez-traspaso) pasa
+// `traspaso`: los asientos de la lista del mes que un administrador ha
+// confirmado después de ver su resumen. Para esos, confirmar vale como la
+// autorización escrita de Julio para escribir en Diez real (banco, manuales y
+// liquidaciones incluidos); queda quién y cuándo en conta_diez_traspaso. Lo que
+// no está en la lista sigue con la autorización de siempre (conta_diez_autorizo).
 
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { ClienteDiez, type AlmacenToken } from './diezCliente.ts'
@@ -36,6 +43,8 @@ const BUCKET = 'conta-documentos'
 /** Cuánto espera el servidor para volver a intentar lo que se puede reintentar. */
 export const REINTENTO_MIN = 15
 export const APAGADO = 'el envío a Diez está apagado en esta empresa (Ajustes › Ejercicio › Enviar a Diez)'
+/** C12: en una empresa que traspasa una vez al mes, nada sale suelto (ni al validar, ni con «Reintentar», ni de una pantalla vieja). */
+export const MENSUAL = 'esta empresa traspasa a Diez una vez al mes: va en el traspaso del mes (Contabilidad › Cierre)'
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
 const noLlega = (motivo: string, reintentar: boolean): ResultadoEnvio => ({ estado: 'no_llega', motivo, reintentar, texto: `No ha llegado a Diez: ${motivo}.` })
@@ -44,9 +53,17 @@ type Cabecera = { id: string; account_id: string; company_id: string; status: st
 
 /** ¿Está encendido «Enviar a Diez» en la empresa? Sin fila, no. */
 export async function enviarEncendido(srv: SupabaseClient, accountId: string, companyId: string): Promise<boolean> {
-  const { data, error } = await srv.from('conta_diez_envio_empresa').select('enviar').eq('company_id', companyId).eq('account_id', accountId).maybeSingle()
+  return (await comoEnviaLaEmpresa(srv, accountId, companyId)).encendido
+}
+
+/** Encendido y, desde el C12, si traspasa una vez al mes (modo 'mensual'). Sin la columna (una base sin la 1250), al validar. */
+export async function comoEnviaLaEmpresa(srv: SupabaseClient, accountId: string, companyId: string): Promise<{ encendido: boolean; mensual: boolean }> {
+  const leer = (campos: string) => srv.from('conta_diez_envio_empresa').select(campos).eq('company_id', companyId).eq('account_id', accountId).maybeSingle()
+  let { data, error } = await leer('enviar, modo')
+  if (error && (error.code === '42703' || /modo/.test(error.message))) ({ data, error } = await leer('enviar'))
   if (error) throw new Error(`no se ha podido leer si el envío a Diez está encendido: ${error.message}`)
-  return data?.enviar === true
+  const f = data as { enviar?: boolean; modo?: string | null } | null
+  return { encendido: f?.enviar === true, mensual: f?.modo === 'mensual' }
 }
 
 /** Después de un intento: el motivo y cuándo se vuelve a intentar, en la fila que haya (si no está ya en Diez). */
@@ -66,20 +83,23 @@ async function apuntarSiguiente(srv: SupabaseClient, j: Cabecera, r: ResultadoEn
  * Manda a Diez el asiento `entryId` por el camino que le toca. Nunca lanza: lo
  * que se rompe vuelve como «no ha llegado» con su motivo (y queda en su fila).
  */
-export async function despacharADiez(o: { lector: SupabaseClient; srv: SupabaseClient; entryId: string }): Promise<ResultadoEnvio & { cabecera?: Cabecera }> {
-  const { lector, srv, entryId } = o
+export async function despacharADiez(o: { lector: SupabaseClient; srv: SupabaseClient; entryId: string; traspaso?: ReadonlySet<string> }): Promise<ResultadoEnvio & { cabecera?: Cabecera }> {
+  const { lector, srv, entryId, traspaso } = o
   const { data: je, error: e0 } = await lector.from('journal_entry')
     .select('id, account_id, company_id, status, entry_date, source_type, reverses_entry_id, number').eq('id', entryId).maybeSingle()
   if (e0) return noLlega(e0.message, true)
   if (!je) return noLlega('ese asiento no está', false)
   const j = je as Cabecera
-  const r = await despachar(lector, srv, j).catch((x: unknown) => noLlega(`se cortó: ${x instanceof Error ? x.message : String(x)}`, true))
+  const r = await despachar(lector, srv, j, traspaso).catch((x: unknown) => noLlega(`se cortó: ${x instanceof Error ? x.message : String(x)}`, true))
   await apuntarSiguiente(srv, j, r).catch(() => console.error(`diezDespacho · ${j.id} · sin apuntar el siguiente intento`))
   return { ...r, cabecera: j }
 }
 
-async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecera): Promise<ResultadoEnvio> {
-  if (!(await enviarEncendido(srv, j.account_id, j.company_id))) return noLlega(APAGADO, false)
+async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecera, traspaso?: ReadonlySet<string>): Promise<ResultadoEnvio> {
+  const como_ = await comoEnviaLaEmpresa(srv, j.account_id, j.company_id)
+  if (!como_.encendido) return noLlega(APAGADO, false)
+  // C12: en mensual, solo lo que va dentro del traspaso confirmado del mes.
+  if (como_.mensual && !traspaso?.has(j.id)) return noLlega(MENSUAL, false)
 
   let anulaOrigen: string | null = null
   if (j.reverses_entry_id) {
@@ -90,7 +110,7 @@ async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecer
   const como = comoVa(j.source_type, anulaOrigen)
   if (como === 'no_va') return noLlega(porQueNoVa(j.source_type === 'reversal' ? String(anulaOrigen) : j.source_type), false)
 
-  const comun = puertoComun(srv, j.account_id)
+  const comun = puertoComun(srv, j.account_id, traspaso)
 
   if (como === 'apunte' || como === 'contra_apunte') {
     const { data, error } = await lector.rpc('conta_asiento_envio', { p_entry: j.id })
@@ -158,7 +178,7 @@ async function enlazadosEnDiez(srv: SupabaseClient, accountId: string, companyId
 }
 
 /** Lo que todos los caminos leen y escriben con la clave de servicio. */
-function puertoComun(srv: SupabaseClient, accountId: string): Pick<PuertoEnvio, 'envio' | 'guardar' | 'conexion' | 'autorizado' | 'sha256' | 'ahora'> {
+function puertoComun(srv: SupabaseClient, accountId: string, traspaso?: ReadonlySet<string>): Pick<PuertoEnvio, 'envio' | 'guardar' | 'conexion' | 'autorizado' | 'sha256' | 'ahora'> {
   return {
     envio: async (id) => {
       const { data, error } = await srv.from('external_send').select('*').eq('entry_id', id).eq('account_id', accountId).neq('status', 'rechazado').maybeSingle()
@@ -185,6 +205,8 @@ function puertoComun(srv: SupabaseClient, accountId: string): Pick<PuertoEnvio, 
       return bd ? { id: String(data.id), nombreBd: bd, adjuntar: config.adjuntar_documentos === true } : null
     },
     autorizado: async (id, companyId, nombreBd, fecha, tipo) => {
+      // C12: lo que está en el traspaso confirmado del mes, autorizado (véase la cabecera).
+      if (traspaso?.has(id)) return true
       // R8: «desde» limita la de empresa; incluye_recibidas (0740) e incluye_asientos (0450) abren cada tipo.
       const { data, error } = await srv.from('conta_diez_autorizo').select('id, alcance, entry_id, desde, incluye_recibidas, incluye_asientos')
         .eq('account_id', accountId).eq('company_id', companyId).ilike('nombre_bd', nombreBd)
@@ -196,8 +218,19 @@ function puertoComun(srv: SupabaseClient, accountId: string): Pick<PuertoEnvio, 
   }
 }
 
+/**
+ * C12 · El cliente de Diez de una empresa SOLO PARA LEER (la comprobación del
+ * traspaso: los apuntes del mes). Sin conexión, null. Con escribir apagado: el
+ * propio cliente para cualquier escritura (FrenoDiez).
+ */
+export async function clienteDiezParaLeer(srv: SupabaseClient, accountId: string, companyId: string): Promise<{ cliente: ClienteDiez; nombreBd: string } | null> {
+  const c = await puertoComun(srv, accountId).conexion(companyId)
+  if (!c) return null
+  return { cliente: await clienteDiez(srv, c, { real: false, escribir: false }), nombreBd: c.nombreBd }
+}
+
 /** El cliente de Diez de una conexión (escribir: sí; escribirEnReal solo con autorización, que el núcleo ya ha mirado). */
-async function clienteDiez(srv: SupabaseClient, c: ConexionDiez, o: { real: boolean }): Promise<ClienteDiez> {
+async function clienteDiez(srv: SupabaseClient, c: ConexionDiez, o: { real: boolean; escribir?: boolean }): Promise<ClienteDiez> {
   const { data: s, error } = await srv.rpc('connector_secret_read', { p_account_connector_id: c.id })
   if (error || !s) throw new Error('la conexión con Diez no tiene credenciales guardadas')
   const sec = (s as { secrets: Record<string, string>; config: Record<string, unknown> }).secrets
@@ -214,6 +247,6 @@ async function clienteDiez(srv: SupabaseClient, c: ConexionDiez, o: { real: bool
   return new ClienteDiez({
     base: String(cfg.base_url ?? 'https://apicon.diezsoftware.com'), nombreBd: c.nombreBd,
     credenciales: { grant_type: sec.grant_type, client_id: sec.client_id, client_secret: sec.client_secret, username: sec.username, password: sec.password },
-    almacen, escribir: true, escribirEnReal: o.real, pausaMs: 150,
+    almacen, escribir: o.escribir ?? true, escribirEnReal: o.real, pausaMs: 150,
   })
 }
