@@ -68,12 +68,12 @@ begin
   delete from public.party_role where account_id = v_acc and role = 'platform' and channel_id = 'e0200000-0000-4000-8000-00000000a0c3';
   -- Cierres de Uber en Norte Centro: W−1 (80, sin liquidación), W (100), W+1 (50) y esta semana (30).
   for d in 0..3 loop
-    insert into public.sales_day_summary (account_id, company_id, location_id, sales_day, total, tickets_count, channel_id, unit_key, sale_ids)
+    insert into public.sales_day_summary (account_id, company_id, location_id, sales_day, total, tickets_count, channel_id, unit_key, sale_ids, detail_hash)
     values (v_acc, v_e, v_centro, v_w + (d - 1) * 7 + 2, case d when 0 then 80 when 1 then 100 when 2 then 50 else 0 end, 1,
-            'e0200000-0000-4000-8000-00000000a0c2', 'v02l-prueba-' || d, '{}');
+            'e0200000-0000-4000-8000-00000000a0c2', 'v02l-prueba-' || d, '{}', 'v02l-prueba');
   end loop;
-  insert into public.sales_day_summary (account_id, company_id, location_id, sales_day, total, tickets_count, channel_id, unit_key, sale_ids)
-  values (v_acc, v_e, v_centro, current_date, 30, 1, 'e0200000-0000-4000-8000-00000000a0c2', 'v02l-prueba-hoy', '{}');
+  insert into public.sales_day_summary (account_id, company_id, location_id, sales_day, total, tickets_count, channel_id, unit_key, sale_ids, detail_hash)
+  values (v_acc, v_e, v_centro, current_date, 30, 1, 'e0200000-0000-4000-8000-00000000a0c2', 'v02l-prueba-hoy', '{}', 'v02l-prueba');
   -- El corte, antes de todo esto (lo de antes del corte no se pide).
   delete from public.bank_settings where company_id = v_e;
   insert into public.bank_settings (company_id, account_id, cutover_date) values (v_e, v_acc, v_w - 60);
