@@ -44,6 +44,8 @@ import ComoTeFacturaPage from '@/modules/conta/compras/ComoTeFacturaPage'
 import VentasPage from '@/modules/conta/ventas/VentasPage'
 import CierresPage from '@/modules/conta/ventas/CierresPage'
 import CierrePage from '@/modules/conta/ventas/CierrePage'
+import LiquidacionesVentasPage from '@/modules/conta/ventas/LiquidacionesVentasPage'
+import LiquidacionPlataformaPage from '@/modules/conta/ventas/LiquidacionPlataformaPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
 import ImpuestosPage from '@/modules/conta/impuestos/ImpuestosPage'
 import IvaPeriodoPage from '@/modules/conta/impuestos/IvaPeriodoPage'
@@ -151,6 +153,9 @@ export const contaModule: ModuleDefinition = {
     // V01 · Entrega 2 · Ventas › Cierres del día (con «Vendo en hostelería») y la ficha de un cierre.
     { path: CONTA.rutas.cierres, element: enMarco(<CierresPage />, '¿Cuánto vendí ayer?', true) },
     { path: CONTA.rutas.cierre, element: enMarco(<CierrePage />, '¿Por qué este cierre no cuadra?', true) },
+    // V01 · Entrega 3 · Ventas › Liquidaciones (con «Vendo en hostelería»): plataformas y socios de marca, y la ficha de una fila de plataforma.
+    { path: CONTA.rutas.liquidacionesVentas, element: enMarco(<LiquidacionesVentasPage />, '¿Me han pagado lo que vendí?', true) },
+    { path: CONTA.rutas.liquidacionPlataforma, element: enMarco(<LiquidacionPlataformaPage />, '¿Por qué esta liquidación no cuadra?', true) },
     { path: CONTA.rutas.facturasEmitidas, element: <LlevarAVentas a={CONTA.rutas.facturasVenta} /> },
     { path: CONTA.rutas.nuevaEmitida, element: <LlevarAVentas a={CONTA.rutas.nuevaFacturaVenta} /> },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },

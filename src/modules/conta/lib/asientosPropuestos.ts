@@ -1041,8 +1041,7 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
   if (!c.compras) return no(`A ${e.socio} le falta el tipo de gasto: ponlo en su ficha y su factura se propone.`)
   const raras = e.emitida.lineas.filter((l) => !esMercaderia(l.concepto) && !esServicio(l.concepto))
   if (raras.length) return no(`En la factura que le haces, ${MARCA.nombre} no sabe si «${raras[0].concepto}» es un servicio o una venta de mercaderías: dímelo.`)
-  if (e.emitida.lineas.some((l) => esServicio(l.concepto)) && !c.ingresoServicios) return no('Falta en tu plan la cuenta de ingresos por servicios (705).')
-  if (e.emitida.lineas.some((l) => esMercaderia(l.concepto)) && !c.ingresoMercaderias) return no('Falta en tu plan la cuenta de ventas de mercaderías (700).')
+  if (e.emitida.lineas.length && !c.ingresoServicios) return no('Falta en tu plan la cuenta de ingresos por servicios (705).')
   const cuotasR = cuotasYRedondeo(e.recibida.lineas, e.recibida.total)
   const cuotasE = cuotasYRedondeo(e.emitida.lineas, e.emitida.total)
   if (!cuotasR) return no(`Su factura ${e.recibida.numero} no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.`)
@@ -1094,8 +1093,11 @@ export function liquidacionMensual(e: EntradaLiquidacionMensual, c: CuentasLiqui
   const servicios = e.emitida.lineas.filter((l) => esServicio(l.concepto)).reduce((t, l) => t + cent(l.base), 0)
   const mercaderias = e.emitida.lineas.filter((l) => esMercaderia(l.concepto)).reduce((t, l) => t + cent(l.base), 0)
   const lineasE: LineaAsiento[] = [{ cuenta: c.cliente, debe: e.emitida.total, haber: 0, localId: loc, comun, documento: e.emitida.numero, terceroId: e.terceroId }]
-  if (servicios) lineasE.push({ cuenta: c.ingresoServicios!, debe: 0, haber: deCent(servicios), localId: loc, comun, documento: e.emitida.numero, concepto: 'Servicios por sus ventas' })
-  if (mercaderias) lineasE.push({ cuenta: c.ingresoMercaderias!, debe: 0, haber: deCent(mercaderias), localId: loc, comun, documento: e.emitida.numero, concepto: 'Género que le pones tú' })
+  // V01 · Entrega 3 (Julio, 24/10): la que le haces va entera a la 705, como
+  // hoy (medido en producción: AF-02717 a AF-02884, junio–septiembre, todo a la
+  // 705 y su 477). El género que aporta, también: no se separa a la 700.
+  if (servicios + mercaderias) lineasE.push({ cuenta: c.ingresoServicios!, debe: 0, haber: deCent(servicios + mercaderias), localId: loc, comun, documento: e.emitida.numero,
+    concepto: mercaderias ? 'Servicios por sus ventas y el género aportado' : 'Servicios por sus ventas' })
   for (const t of cuotasE.porTipo) {
     if (t.tipo === 0) continue
     const cta = c.ivaRepercutido(t.tipo)

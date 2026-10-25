@@ -157,6 +157,12 @@ export const PRODUCTOS: Producto[] = [
       // V01 · Entrega 2: el bloque «Hostelería», solo con «Vendo en hostelería».
       // «Ventas» a secas (lo de antes) lleva aquí.
       { id: 'cierres', etiqueta: 'Cierres del día', icono: 'cierre', ruta: R.cierres, prefijos: [R.cierres, R.ventas], solo: 'hosteleria', bloque: 'Hostelería' },
+      // V01 · Entrega 3: las de plataforma y las de los socios de marca. La ficha
+      // de la del socio (y la de subir sus documentos) sigue en compras/liquidacion/….
+      {
+        id: 'liquidacionesVentas', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidacionesVentas,
+        prefijos: [R.liquidacionesVentas, `${R.compras}/liquidacion`], solo: 'hosteleria', bloque: 'Hostelería',
+      },
     ],
   },
   {
@@ -168,10 +174,11 @@ export const PRODUCTOS: Producto[] = [
       { id: 'recibidas', etiqueta: 'Facturas recibidas', icono: 'recibida', ruta: R.documentos, prefijos: [R.documentos, R.compras] },
       { id: 'tickets', etiqueta: 'Tickets', icono: 'documento', ruta: null, prefijos: [] },
       { id: 'pagos', etiqueta: 'Pagos', icono: 'pagos', ruta: null, prefijos: [] },
-      // S02 · PR 3: la lista de todas (mensuales y quincenas de Catcher); la marcan también la ficha de una y la quincena.
+      // S02 · PR 3: las quincenas de Catcher (y la ficha de una). V01 · Entrega 3: las
+      // de plataforma y las mensuales de los socios de marca, en Ventas › Liquidaciones.
       {
         id: 'liquidaciones', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidaciones,
-        prefijos: [R.liquidaciones, `${R.compras}/liquidacion`, `${R.documentos}/catcher`], solo: 'hosteleria',
+        prefijos: [R.liquidaciones, `${R.documentos}/catcher`], solo: 'hosteleria',
       },
     ],
   },

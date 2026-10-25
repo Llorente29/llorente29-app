@@ -188,8 +188,9 @@ describe('aceptación 5 · septiembre, al céntimo', () => {
     expect(cuadre(sin.lineas).cuadra).toBe(true)
     expect(sin.avisos[0]).toContain('no hay 669/769 en tu plan')
   })
-  it('ingreso: 8.666,95 de base + 866,70 de IVA = 9.533,65, al libro de expedidas con el nº AF-02927', () => {
-    expect(filas(ingreso)).toEqual([['43000009', 9533.65, 0], ['70500000', 0, 6928.21], ['70000000', 0, 1738.74], ['47700010', 0, 866.7]])
+  // V01 · Entrega 3 (Julio, 24/10): entera a la 705, como hoy (AF-02717 a AF-02884 en producción), también el género aportado.
+  it('ingreso: 8.666,95 de base + 866,70 de IVA = 9.533,65, entera a la 705, al libro de expedidas con el nº AF-02927', () => {
+    expect(filas(ingreso)).toEqual([['43000009', 9533.65, 0], ['70500000', 0, 8666.95], ['47700010', 0, 866.7]])
     const iva = ingreso.lineas.find((l) => l.iva)!
     expect([iva.iva!.base, iva.iva!.libro, iva.documento]).toEqual([8666.95, 'issued', 'AF-02927'])
     expect(cuadre(ingreso.lineas).cuadra).toBe(true)

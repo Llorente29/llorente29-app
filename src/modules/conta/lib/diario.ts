@@ -169,12 +169,16 @@ export function filtrosVisibles(asientos: readonly AsientoDiario[]): { id: Filtr
 // validado o anulado es libro.
 
 /** El apartado donde se decide lo propuesto de un origen. */
-export type SitioPropio = 'recibidas' | 'bancos' | 'cierres'
+export type SitioPropio = 'recibidas' | 'bancos' | 'cierres' | 'liquidaciones'
 
 const SE_DECIDE_EN: Partial<Record<OrigenAsiento, SitioPropio>> = {
   supplier_invoice: 'recibidas',
   bank: 'bancos',
   sales_day: 'cierres',
+  // V01 · Entrega 3: lo propuesto de una liquidación (de plataforma o del socio
+  // de marca) se decide en Ventas › Liquidaciones, en la ficha de la suya.
+  channel_settlement: 'liquidaciones',
+  licensed_settlement: 'liquidaciones',
 }
 
 /** Dónde está, en las palabras del menú (para los avisos y el cierre). */
@@ -182,6 +186,7 @@ export const NOMBRE_SITIO: Record<SitioPropio, string> = {
   recibidas: 'Compras y gastos › Facturas recibidas',
   bancos: 'Bancos › Movimientos › Por validar',
   cierres: 'Ventas › Cierres del día',
+  liquidaciones: 'Ventas › Liquidaciones',
 }
 
 /** Si este asiento se decide en otro apartado, cuál; si se decide en Asientos (o ya es libro), null. */
