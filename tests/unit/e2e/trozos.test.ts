@@ -85,7 +85,9 @@ describe('la entera en trozos', () => {
     // 24/10 (V01): entra v01/facturas, sin medir (cuenta como la mediana). El reparto estimado
     // da 17,56: el techo pasa a 18 min. Lo mide la entera de su PR.
     // 24/10 (C12, al traer main): entra c12/traspaso, sin medir (cuenta como la mediana). Lo mide la entera de la noche.
-    expect(Math.max(...seg) / 60).toBeLessThan(18)
+    // 25/10 (PC01 · E1): entra pc01/cobros-y-pagos, sin medir (cuenta como la mediana). El reparto
+    // estimado da 18,12: el techo pasa a 18,5 min. Lo mide la entera de la noche.
+    expect(Math.max(...seg) / 60).toBeLessThan(18.5)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {

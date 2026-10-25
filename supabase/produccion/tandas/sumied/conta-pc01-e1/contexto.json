@@ -1,9 +1,9 @@
 {
-  "_que": "PC01 · E1 · contexto de producción de la tanda (0916, 0917 y 0918), medido en SOLO LECTURA el 25/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen las 9 tablas y las 4 funciones que la 0917 cambia (md5 de pg_get_functiondef iguales a los cuerpos de partida); nada de lo que crean; ninguna en el camino del pedido; sin otras firmas; nada en el historial.",
-  "medido": "2026-10-25T08:55Z",
+  "_que": "PC01 · E1 · contexto de producción de la tanda (0916, 0917 y 0918), medido en SOLO LECTURA el 25/10 (otra vez a las 09:10Z, con los ficheros definitivos: el mismo contexto) con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen las 9 tablas y las 4 funciones que la 0917 cambia (md5 de pg_get_functiondef iguales a los cuerpos de partida); nada de lo que crean; ninguna en el camino del pedido; sin otras firmas; nada en el historial.",
+  "medido": "2026-10-25T09:10Z",
   "tanda": {
-    "supabase/migrations/20261025T0916_pc01_motor_cobros_pagos.sql": "437c9a9c4756f4d535c5b5343bfcd10c",
-    "supabase/migrations/20261025T0917_pc01_motor_cambia.sql": "9ce3856239f549c1b8f708000f1ee91c",
+    "supabase/migrations/20261025T0916_pc01_motor_cobros_pagos.sql": "f1c3e420a371b8caa42243d00ebf2591",
+    "supabase/migrations/20261025T0917_pc01_motor_cambia.sql": "87653773221b7cca83782540b00f9cab",
     "supabase/migrations/20261025T0918_pc01_cobros_y_pagos_de_antes.sql": "00052134c73f2dfef49bdba23dafd8cb"
   },
   "contexto": {

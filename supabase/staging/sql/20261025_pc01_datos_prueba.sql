@@ -13,6 +13,10 @@
 --   3. su vuelta atrás deja las nueve tablas que toca EXACTAMENTE como estaban
 --      (huella de cada tabla entera, antes y después, carácter a carácter) y sin
 --      copia.
+--
+-- sin usuario: la 0918 y su vuelta atrás las pasa el workflow como dueño de la
+-- base, no una persona; lo que hace un usuario (cobrar, casar, deshacer, el
+-- plazo de la ficha) lo prueba, como usuario, 20261025_pc01_motor_prueba.sql.
 
 \set ON_ERROR_STOP 1
 begin;

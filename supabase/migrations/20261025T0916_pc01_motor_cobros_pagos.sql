@@ -57,8 +57,9 @@ create table if not exists public.supplier_invoice_payment (
   method           text,
   note             text,
   -- El asiento del pago (el del banco que lo casó). Sin asiento no hay pago:
-  -- mark_supplier_invoice_paid (0917) solo marca pagada lo que cubren pagos con asiento.
-  entry_id         uuid references public.journal_entry(id) on delete set null,
+  -- mark_supplier_invoice_paid (0917) solo marca pagada lo que cubren pagos con asiento;
+  -- si su asiento propuesto se borra (deshacer el casado), el pago se va con él.
+  entry_id         uuid references public.journal_entry(id) on delete cascade,
   bank_match_id    uuid references public.bank_match(id) on delete cascade,
   created_at       timestamptz not null default now(),
   created_by       uuid,

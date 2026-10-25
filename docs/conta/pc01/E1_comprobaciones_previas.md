@@ -106,3 +106,29 @@ Just Eat no ha entrado ninguna liquidación de octubre).
 - Lo que propongo para la entrega 1: al validar una factura, se le pone
   `invoice_date + payment_terms_days`. Sin plazo, se queda «Sin vencimiento».
 - Las 89 de antes no las toco: es el «Ponerles vencimiento» de la entrega 2.
+
+---
+
+## Lo que decidió Julio (25/10) y cómo queda construido
+
+| | Decisión | Dónde está |
+|---|---|---|
+| 1 | La regla de las liquidaciones: **sí**. Si los pedidos no cuadran, «a revisar» y nada cobrado. El cruce por marca, local, canal y semana vale para Uber por correo | `conta_liquidacion_pedidos` y `_conta_liquidacion_cobros` (0916), disparador de `channel_settlement` (0917) |
+| 2 | La marca de cada tienda, en la tanda, con la lista en el PR | 0918, paso 2 (son **9** tiendas, no 8: las 15 liquidaciones de Uber por correo desde julio cuelgan de 9) |
+| 3 | Cuándo paga cada plataforma, dato de su ficha: periodo, día aproximado de pago y margen (5 por defecto) | `party_role.payout_days_after` y `payout_margin_days` (0916); «Cuándo te paga» en la ficha (Contactos › Cobro); `conta_plataforma_plazo_guardar` |
+| 3 | Hasta el día de pago más el margen, «Esperando liquidación»; después, «Vencida». También en las cifras | `conta_factura_cobro` (0916) y Ventas › Facturas |
+| 3 | Arreglar el vencimiento de las 1.281 | 0918, paso 3 (las traídas, por la plataforma de su 430) |
+| 4 | La devolución de −3,90 €, saldada con un cobro negativo | CHECK de `customer_invoice_payment` (0917) y 0918, paso 4 |
+| 5 | La tabla de pagos gemela: sí; los 4 de hoy desde lo casado en Bancos | `supplier_invoice_payment` (0916); 0918, paso 5a |
+| 6 | El vencimiento de las recibidas, de `supplier.payment_terms_days`; `payment_term` no se toca | disparador `pc01_recibida_vence` (0917) |
+
+**Los plazos que pone la 0918, en días después de cerrar el periodo:**
+- Uber: semanal, 1 día (el lunes);
+- Just Eat: quincenal, 4 días (la del 1 al 15, hacia el 19; la del 16 a fin de mes, hacia el 4);
+- Glovo: quincenal, 20 días (la del 1 al 15, hacia el 4 del mes siguiente; la del 16 a fin de mes, hacia el 20).
+
+Julio dio el 18 y el 5 para Just Eat, y el 5 y el 18 para Glovo. Un solo número por plataforma los aproxima a un día, y el margen de 5 lo cubre. Se cambian en su ficha.
+
+**Lo que salió al construir, medido (25/10, solo lectura):**
+- **83 recibidas de Foodint (1.919,87 €) pagadas del saldo prepago de Catcher**, con el asiento del pago del lote validado, seguían «aprobada». Con el motor saldrían por pagar. Ahora el pago del lote es su pago con asiento: la 0918 las deja pagadas y, desde la 0917, el pago de cada lote nuevo lo hace solo.
+- **Con los plazos de Julio, hoy (25/10) pasan de su fecha unas 40 de las 85 de octubre**: 34 de Uber y 6 de Just Eat, unos 8.266 €. Sus semanas y quincenas ya se habrán pagado, pero Sumied no tiene sus liquidaciones, así que salen «Vencida» y no «Esperando liquidación». Es la regla tal como está escrita. Lo arregla la captura de las liquidaciones (otro encargo).

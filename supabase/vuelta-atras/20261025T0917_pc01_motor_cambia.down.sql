@@ -16,6 +16,8 @@ drop trigger if exists pc01_recibida_pago_lote on public.supplier_invoice;
 drop trigger if exists pc01_casado_item on public.bank_match_item;
 drop trigger if exists pc01_casado_deshecho on public.bank_match;
 
+alter table public.customer_invoice_payment drop constraint if exists customer_invoice_payment_entry_id_fkey;
+alter table public.customer_invoice_payment add constraint customer_invoice_payment_entry_id_fkey foreign key (entry_id) references public.journal_entry(id);
 alter table public.customer_invoice_payment drop constraint if exists customer_invoice_payment_amount_check;
 alter table public.customer_invoice_payment add constraint customer_invoice_payment_amount_check check (amount > 0);
 alter table public.bank_match_item drop constraint if exists bank_match_item_uno;

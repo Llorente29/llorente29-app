@@ -30,8 +30,9 @@
 --      unmark_supplier_invoice_paid no la deshace con el pago ahí; deshacer el
 --      casado (bank_deshacer) quita el pago y la deja por pagar.
 --   7. Bancos, cobro: bank_casar «factura_emitida» con «facturas» cobra la
---      factura con el asiento del banco; no se pasa; validar y anular ese
---      asiento (journal_entry_anular) deshace el cobro.
+--      factura con el asiento del banco; no se pasa; deshacer el casado (su
+--      asiento propuesto se borra) quita el cobro; validar y anular ese asiento
+--      (journal_entry_anular) también.
 --   8. El lote de prepago: su asiento en la factura es su pago, y queda pagada.
 --   9. Un cobro negativo cabe (CHECK de customer_invoice_payment).
 --  10. Las vueltas atrás: las funciones como al principio (md5), sin
@@ -328,7 +329,15 @@ begin
       'facturas', jsonb_build_array(jsonb_build_object('id', f, 'importe', 30.00))), 'probable', 'prueba', '[]'::jsonb, 'persona', null);
   exception when others then v_err := sqlerrm; end;
   if v_err not like 'La factura PCT-% ya tiene cobrados 0,00 € de 8,00 €: este cobro la pasaría.' then raise exception 'PRUEBA PC01 · 7: cobrar de más dijo «%».', v_err; end if;
-  -- 18 €: 8 a la factura y 10 a cuenta (las líneas, a la 430).
+  -- 18 €: 8 a la factura y 10 a cuenta (las líneas, a la 430). Primero se casa y se deshace
+  -- (su asiento propuesto se borra, y el cobro con él); después, otra vez, para validar y anular.
+  x := public.bank_casar((select v::uuid from _p where clave = 'm3'), jsonb_build_object('tipo', 'factura_emitida', 'concepto', 'Cobro PC01',
+      'lineas', jsonb_build_array(jsonb_build_object('cuenta', (select v from _p where clave = 'c430'), 'importe', 18.00)),
+      'facturas', jsonb_build_array(jsonb_build_object('id', f, 'importe', 8.00))), 'probable', 'prueba', '[]'::jsonb, 'persona', null);
+  if not exists (select 1 from public.customer_invoice_payment where invoice_id = f and bank_match_id = (x->>'match')::uuid) then raise exception 'PRUEBA PC01 · 7: casar no escribió el cobro.'; end if;
+  perform public.bank_deshacer((x->>'match')::uuid, 'Prueba PC01: no era este cobro');
+  if exists (select 1 from public.customer_invoice_payment where invoice_id = f) then raise exception 'PRUEBA PC01 · 7: deshacer el casado no quitó el cobro.'; end if;
+  if not exists (select 1 from public.customer_invoice_event where invoice_id = f and kind = 'cobro_deshecho') then raise exception 'PRUEBA PC01 · 7: el historial no dice el cobro deshecho.'; end if;
   x := public.bank_casar((select v::uuid from _p where clave = 'm3'), jsonb_build_object('tipo', 'factura_emitida', 'concepto', 'Cobro PC01',
       'lineas', jsonb_build_array(jsonb_build_object('cuenta', (select v from _p where clave = 'c430'), 'importe', 18.00)),
       'facturas', jsonb_build_array(jsonb_build_object('id', f, 'importe', 8.00))), 'probable', 'prueba', '[]'::jsonb, 'persona', null);
@@ -340,10 +349,10 @@ begin
   perform public.journal_entry_validar(ent, 'Prueba PC01');
   perform public.journal_entry_anular(ent, 'Prueba PC01', null, 'Prueba PC01');
   if exists (select 1 from public.customer_invoice_payment where invoice_id = f) then raise exception 'PRUEBA PC01 · 7: anular el asiento del banco no quitó el cobro.'; end if;
-  if not exists (select 1 from public.customer_invoice_event where invoice_id = f and kind = 'cobro_anulado' and text like 'Cobro de 8,00 € anulado desde Contabilidad%') then
+  if not exists (select 1 from public.customer_invoice_event where invoice_id = f and kind = 'cobro_anulado' and text like 'Cobro de 8_00 € anulado desde Contabilidad%') then
     raise exception 'PRUEBA PC01 · 7: el historial no dice el cobro anulado.';
   end if;
-  raise notice '7 · cobro: de más, no; 8 € a la factura con el asiento del banco, cobrada; anular su asiento quita el cobro';
+  raise notice '7 · cobro: de más, no; 8 € a la factura con el asiento del banco; deshacer el casado lo quita; otra vez, cobrada; anular su asiento lo quita';
 end $$;
 reset role;
 
