@@ -19,7 +19,8 @@
 --   4. La puerta: la dirección, lo conectado y lo último, con ese documento.
 --      Y «Facturas recibidas» ya no lo enseña (es una nómina), pero sí uno que
 --      aún no se sabe qué es.
---   5. «Pedírsela» a la fuente de riders (sin proveedor): una vez por mes.
+--   5. «Pedírsela» a la fuente de riders (sin proveedor): una vez por mes. Y
+--      subir a la puerta (conta_puerta_subida) pide el fichero subido y de su carpeta.
 --   6. La vuelta atrás: sin el trabajo de la prueba, deja las funciones como
 --      estaban y quita lo nuevo.
 
@@ -171,6 +172,19 @@ begin
   r := public.conta_puerta_pedir(v_r, current_date, 'riders@catcher.test', 'Facturas de los riders', 'Hola…', 'Prueba V02');
   if (r->>'ya_estaba')::boolean is not true then raise exception 'PRUEBA V02 · 5: pedirla dos veces el mismo mes crea otra.'; end if;
   raise notice '5 · «Pedírsela» a una fuente sin proveedor, una vez por mes';
+
+  -- 5b · Subir a la puerta sin saber qué es: sin el fichero en conta-entrada no se apunta nada.
+  begin
+    perform public.conta_puerta_subida(v_e, (select v from _p where clave = 'cuenta') || '/_puerta/no-esta.xlsx', 'no-esta.xlsx', 'application/octet-stream', 10, repeat('a', 64), 'Prueba V02');
+    raise exception 'PRUEBA V02 · 5b: se apunta un fichero que no está subido.';
+  exception when sqlstate 'P0002' then null;
+  end;
+  begin
+    perform public.conta_puerta_subida(v_e, 'otra-cuenta/_puerta/x.xlsx', 'x.xlsx', 'application/octet-stream', 10, repeat('a', 64), 'Prueba V02');
+    raise exception 'PRUEBA V02 · 5b: se apunta un fichero de otra carpeta.';
+  exception when sqlstate '22023' then null;
+  end;
+  raise notice '5b · subir a la puerta: sin el fichero subido, o fuera de su carpeta, no se apunta';
 end $$;
 reset role;
 

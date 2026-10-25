@@ -31,7 +31,8 @@
 --      que enseña es la única de la empresa si la tiene.
 --   6. LAS FUNCIONES de la pantalla (conta_puerta_*): la puerta, las fuentes
 --      con sus llegadas, aprender las fuentes de lo que ya pasa, guardar una,
---      «Dime qué es» y «Pedírsela» para una fuente sin proveedor.
+--      «Dime qué es», «Pedírsela» para una fuente sin proveedor y guardar lo
+--      que se sube sin saber qué es (conta_puerta_subida).
 --
 -- El cálculo de qué falta, con qué retraso y qué está aún a tiempo vive en el
 -- front (lib/puerta.ts, probado con las fuentes reales de Foodint): la base da
@@ -554,6 +555,34 @@ begin
 end $$;
 revoke all on function public.conta_puerta_pedir(uuid, date, text, text, text, text) from public, anon;
 grant execute on function public.conta_puerta_pedir(uuid, date, text, text, text, text) to authenticated;
+
+-- Lo que se sube por la puerta y no es un PDF ni una foto (ni un extracto ni la
+-- quincena de Catcher, que van por sus caminos): al almacén conta-entrada, sin
+-- saber qué es («Necesita que lo mires»). Gemela de conta_subida_registrar, que
+-- no se toca: misma cuenta, mismo permiso, misma huella para no repetir.
+create or replace function public.conta_puerta_subida(p_company uuid, p_ruta text, p_nombre text, p_tipo text, p_bytes integer, p_sha256 text, p_quien_nombre text default null)
+returns jsonb language plpgsql security definer set search_path = public, storage as $$
+declare v_acc uuid := public._conta_puerta_cuenta(p_company); v_id uuid; v_ya uuid;
+begin
+  if not public.current_user_is_admin_or_manager_of(v_acc) then
+    raise exception 'Solo un administrador o un encargado de la cuenta sube documentos.' using errcode = '42501';
+  end if;
+  if p_ruta is null or left(p_ruta, 37) <> v_acc::text || '/' then raise exception 'La ruta no es de la carpeta de esta cuenta.' using errcode = '22023'; end if;
+  if p_sha256 is null or p_sha256 !~ '^[0-9a-f]{64}$' then raise exception 'La huella del fichero no es un sha256.' using errcode = '22023'; end if;
+  if not exists (select 1 from storage.objects o where o.bucket_id = 'conta-entrada' and o.name = p_ruta) then
+    raise exception 'El fichero no está subido (%).', p_ruta using errcode = 'P0002';
+  end if;
+  select id into v_ya from public.document_inbox where account_id = v_acc and sha256 = p_sha256 and status <> 'descartado' limit 1;
+  if v_ya is not null then return jsonb_build_object('id', v_ya, 'ya_estaba', true, 'texto', coalesce(p_nombre, 'Ese documento') || ' ya estaba: no lo apunto dos veces.'); end if;
+  insert into public.document_inbox (account_id, company_id, channel, file_bucket, file_path, file_name, mime_type, size_bytes, sha256, created_by, created_by_name)
+  values (v_acc, p_company, 'subida', 'conta-entrada', p_ruta, p_nombre, p_tipo, p_bytes, p_sha256, auth.uid(), p_quien_nombre)
+  returning id into v_id;
+  insert into public.document_activity (account_id, company_id, inbox_id, actor, actor_name, action, text)
+  values (v_acc, p_company, v_id, 'persona', coalesce(p_quien_nombre, 'Alguien de la cuenta'), 'recibida', coalesce(p_quien_nombre, 'Alguien') || ' ha subido ' || coalesce(p_nombre, 'un documento') || ' a la puerta.');
+  return jsonb_build_object('id', v_id, 'ya_estaba', false, 'texto', coalesce(p_nombre, 'El documento') || ': guardado. Dime qué es y lo llevo a su sitio.');
+end $$;
+revoke all on function public.conta_puerta_subida(uuid, text, text, text, integer, text, text) from public, anon;
+grant execute on function public.conta_puerta_subida(uuid, text, text, text, integer, text, text) to authenticated;
 
 -- 5c. Facturas recibidas: sin lo que la puerta sabe que no es factura.
 create or replace function public.conta_documentos_recibidos(p_company uuid, p_desde date, p_hasta date)

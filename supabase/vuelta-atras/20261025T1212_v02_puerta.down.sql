@@ -216,6 +216,7 @@ begin
       'esperadas_no_llegadas', jsonb_array_length(v_esperadas)));
 end $$;
 
+drop function if exists public.conta_puerta_subida(uuid, text, text, text, integer, text, text);
 drop function if exists public.conta_puerta_pedir(uuid, date, text, text, text, text);
 drop function if exists public.conta_entrada_tipo(uuid, text, text);
 drop function if exists public.conta_puerta_dime_que_es(uuid, text, boolean, text);
