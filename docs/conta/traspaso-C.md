@@ -1,7 +1,8 @@
 # C12 · Traspaso mensual a Diez: dónde se queda (frente C, 25/10)
 
-> Cierre de la sesión del C12. Todo lo de abajo está **medido, solo leyendo**,
-> el 25/10 entre las 05:45 y las 05:51 UTC. Lo que falta lo hacen Julio y el
+> Cierre de la sesión del C12, con el C12c (la vuelta atrás del #323) al final.
+> Todo lo de abajo está **medido, solo leyendo**, el 25/10 entre las 05:45 y
+> las 06:45 UTC. Lo que falta lo hacen Julio y el
 > coordinador: esta sesión no empieza nada más.
 
 ## En una línea
@@ -31,23 +32,34 @@ lanza, después hay que volver a comparar el md5.
 
 ### #323 · Foodint a mensual (https://github.com/Llorente29/llorente29-app/pull/323)
 
-- Rama `conta/c12b-foodint-mensual`, **commit `31e48a4d`**, con `main` traído:
-  el diff ya son solo sus 8 ficheros.
-- El analizador dice **AUTORIZO**. Nombre para el campo:
+- Rama `conta/c12b-foodint-mensual`, **commit `4960c066`** (C12c, 25/10).
+- El analizador dice **AUTORIZO**. El nombre para el campo no cambia:
   `20261024T1631_c12b_foodint_mensual.sql`.
-- Contexto medido tres veces en producción (24/10 16:32, 25/10 05:09 y 05:50
-  UTC, esta última con el #322 aplicado y fusionado): **igual las tres veces**.
-- `antes-de-subir.sh` en verde sobre `31e48a4d`.
-- Ensayo de staging **en verde** (run 40166736071, sobre `e5bb3e90`). Para
-  ello hubo que cambiar lo de staging, **no la tanda**:
-  - el manifiesto de staging lleva solo la prueba: la 1631 sola paraba siempre
-    en staging, que no tiene Foodint;
-  - en el paso 1, la prueba quita la tanda del C12 dentro de su `savepoint`
-    (con la vuelta atrás de la 1250), porque la sesión de staging ya la trae
-    delante.
-- `revisar` (pr-a-main) estaba en rojo porque el diff aún llevaba el #322
-  dentro. Con `main` traído en `31e48a4d` tiene que pasar: **está por ver en
-  ese commit**.
+- **C12c · la vuelta atrás, arreglada.** El ensayo del run #220 (sobre
+  `31e48a4d`) paró en «la vuelta atrás automática funcionaría». La `.down.sql`
+  vieja le ponía reintento también a la recibida sin IVA, que no lo tenía, y
+  dejaba `updated_at` y `cambiado_en` con otras fechas. Ahora:
+  - **la 1631**, antes de cambiar nada, guarda la copia en
+    `conta_c12b_antes` (sin acceso desde las pantallas): de la empresa, `modo`,
+    `cambiado_por_nombre` y `cambiado_en`; de cada uno de los pendientes de
+    Foodint, `next_try_at` y `updated_at`. Si la tabla ya existe, para;
+  - **la `.down.sql`** restaura exactamente desde esa copia, sin `now()` ni
+    reglas, y la borra en el mismo bloque. Para con un traspaso a medias (como
+    antes) y sin copia;
+  - **la cuenta** de la tanda lleva además la huella de la empresa y la de los
+    pendientes sin reintento, y si existe la copia. No la de los 26 con
+    reintento: la cola les reescribe `next_try_at` y `updated_at` en cada
+    pasada, y el «antes» se mide minutos antes que el ensayo.
+- **Ensayo de staging en verde** (run 40170058077, sobre `4960c066`). La
+  prueba corre ahora el camino de verdad, con una Foodint de mentira dentro de
+  su transacción: la empresa y tres pendientes, dos con reintento y uno sin él.
+  Después de la 1631 y su vuelta atrás, la huella de antes y la de después son
+  **iguales carácter a carácter**, y la copia queda borrada. Los frenos siguen:
+  sin la tanda del C12, sin Foodint y sin copia, para sin tocar nada.
+- Contexto medido otra vez en producción, solo leyendo (25/10 06:18 UTC):
+  `conta_c12b_antes` no existe, y lo demás sale igual que las cuatro veces
+  anteriores.
+- `antes-de-subir.sh` en verde sobre `4960c066`.
 - La descripción dice el orden: **después de la fusión del #322 y de sus
   funciones**. La guarda de la 1631 solo mira la base.
 
@@ -80,6 +92,11 @@ Con la 1631, los 26 se quedan sin reintento y viajan en el primer traspaso.
 - Foodint en mensual: **1**;
 - pendientes con reintento: **0**;
 - pendientes y en Diez: **los mismos que arriba** (27 y 215).
+- la copia de antes (`conta_c12b_antes`) **existe**, y la huella de la
+  empresa cambia.
+
+Si hubiera que deshacerlo, después de la vuelta atrás todo tiene que salir como
+arriba, también las dos huellas, y la copia ya no existe.
 
 ## Lo que falta, y quién
 
@@ -95,7 +112,7 @@ Con la 1631, los 26 se quedan sin reintento y viajan en el primer traspaso.
    `conta-diez-cola`: `deploy-edge-functions`, «Run workflow» desde `main`,
    **`funciones`** = `conta-diez-enviar conta-diez-cola`, **`la_prohibida`**
    vacío. Después, el md5 de lo desplegado contra `main` otra vez.
-3. *(Julio)* La tanda del #323 desde su rama (`31e48a4d`): el ensayo y después
+3. *(Julio)* La tanda del #323 desde su rama (`4960c066`): el ensayo y después
    el real, con `autorizo` = `20261024T1631_c12b_foodint_mensual.sql`.
    Después, la cuenta de arriba, y la fusión.
 4. *(Julio)* Antes del primer traspaso real, cargar en la **C0008** las dos
