@@ -7,11 +7,12 @@
 //   · Glovo y Just Eat: quincenales, y nada desde el 30/06 (falta importarlas: entrega 3);
 //   · Catcher: la quincena del 1 al 15/10;
 //   · BBVA: extractos subidos el 15/10 y el 23/10.
-// Los alquileres van sin nombres de personas: el grupo es el local.
+// Los alquileres van sin nombres de personas: la fila es el local. Los locales,
+// los de Foodint (locations, con su dirección): Florencio Llorente, 29 · Camichi, 4 · Cañaveral, 75.
 import { describe, expect, it } from 'vitest'
 import { zipSync } from 'fflate'
 import {
-  cifrasPuerta, clasificarSubida, correoPedirla, cuandoLlego, deLaPestana, delAl, faltaDe, loQueFalta, ocurrencias, porLlegarEsteMes, queSeEspera, sumarDias,
+  cifrasPuerta, clasificarSubida, correoPedirla, nombreDelLocal, cuandoLlego, deLaPestana, delAl, faltaDe, loQueFalta, ocurrencias, porLlegarEsteMes, queSeEspera, sumarDias,
   type DatosFuentes, type DatosPuerta, type Fuente, type Ultimo,
 } from '@/modules/conta/lib/puerta'
 
@@ -26,8 +27,13 @@ const UBER = base({ id: 'uber', tipo: 'intermediario', nombre: 'Uber Eats', cade
 const GLOVO = base({ id: 'glovo', tipo: 'intermediario', nombre: 'Glovo', cadencia: 'quincenal', dia: 0, llegadas: ['2026-05-31', '2026-06-15', '2026-06-30'] })
 const RIDERS = base({ id: 'riders', tipo: 'riders', nombre: 'Riders de Catcher', cadencia: 'quincenal', dia: 0, margen: 5, llegadas: ['2026-10-15'] })
 const BBVA = base({ id: 'bbva', tipo: 'banco', nombre: 'Extracto · BBVA', cadencia: 'semanal', dia_semana: 5, llegadas: ['2026-10-15', '2026-10-23'] })
-// Cañaveral 75: tres propietarias, una fila. Sin nombres: el grupo es el local.
-const CANAVERAL = [1, 2, 3].map((i) => base({ id: `alq${i}`, tipo: 'alquiler', nombre: `Arrendadora ${i}`, grupo: 'Alquiler · Cañaveral 75', cadencia: 'mensual', dia: 1,
+const LOCAL = {
+  alcala: { id: 'l-alcala', nombre: 'Foodint Alcalá', direccion: 'Florencio Llorente, 29' },
+  carabanchel: { id: 'l-carabanchel', nombre: 'Foodint Carabanchel', direccion: 'Camichi, 4' },
+  plaza: { id: 'l-plaza', nombre: 'Foodint Plaza Castilla', direccion: 'Cañaveral, 75' },
+}
+// Cañaveral 75: tres propietarias, una fila. Sin nombres: la fila es el local.
+const CANAVERAL = [1, 2, 3].map((i) => base({ id: `alq${i}`, tipo: 'alquiler', nombre: `Arrendadora ${i}`, local: LOCAL.plaza, cadencia: 'mensual', dia: 1,
   llegadas: i === 3 ? ['2026-08-01', '2026-09-01'] : ['2026-08-01', '2026-09-01', '2026-10-01'] }))
 const datos = (fuentes: Fuente[], ajustes = { lo_que_falta: true, margen: 5 }): DatosFuentes => ({ ajustes, fuentes })
 
@@ -86,11 +92,37 @@ describe('«Lo que falta» con las fuentes de Foodint, el 25/10', () => {
     expect(faltaDe(base({ id: 'n', tipo: 'proveedor', nombre: 'Nuevo', cadencia: 'mensual', dia: 3, llegadas: ['2026-10-03'] }), HOY))
       .toEqual({ o: { dia: '2026-11-03', desde: null, hasta: null }, estado: { que: 'a_tiempo', texto: 'Aún a tiempo' } })
   })
-  it('Cañaveral 75 en una fila, sin nombres: la de una propietaria no llegó el 01/10 → «(3 facturas)», tarde', () => {
+  it('Cañaveral 75 en una fila, sin nombres: la de una propietaria no llegó el 01/10 → «falta 1 de 3», tarde', () => {
     const filas = loQueFalta(datos(CANAVERAL), HOY)
     expect(filas).toHaveLength(1)
-    expect(filas[0]).toMatchObject({ de: 'Alquiler · Cañaveral 75', que: 'Alquiler de octubre (3 facturas)', n: 3, estado: { que: 'tarde', dias: 24 } })
+    expect(filas[0]).toMatchObject({ de: 'Alquiler · Cañaveral 75', que: 'Alquiler de octubre: falta 1 de 3', n: 3, estado: { que: 'tarde', dias: 24 } })
     expect(JSON.stringify(filas)).not.toMatch(/Arrendadora/)
+  })
+  it('los alquileres de Foodint, con el local que dijo Julio (25/10): tres filas, una por local, sin nombres', () => {
+    const alq = (id: string, local: (typeof LOCAL)[keyof typeof LOCAL], llego: boolean) => base({ id, tipo: 'alquiler', nombre: `Arrendador ${id}`, local, cadencia: 'mensual', dia: 1,
+      llegadas: llego ? ['2026-08-01', '2026-09-01', '2026-10-01'] : ['2026-08-01', '2026-09-01'] })
+    const filas = loQueFalta(datos([alq('a', LOCAL.alcala, false), alq('b', LOCAL.carabanchel, false), alq('c1', LOCAL.plaza, false), alq('c2', LOCAL.plaza, true), alq('c3', LOCAL.plaza, true)]), HOY)
+    // Las tres van 24 días tarde (lo del 01/10): mismo peso, en el orden en que llegan.
+    expect(filas.map((x) => [x.de, x.que, x.estado.texto])).toEqual([
+      ['Alquiler · Florencio Llorente 29', 'Alquiler de octubre', '24 días tarde'],
+      ['Alquiler · Camichi 4', 'Alquiler de octubre', '24 días tarde'],
+      ['Alquiler · Cañaveral 75', 'Alquiler de octubre: falta 1 de 3', '24 días tarde'],
+    ])
+    expect(JSON.stringify(filas)).not.toMatch(/Arrendador/)
+  })
+  it('sin local, los alquileres van juntos por tipo: «Alquileres», falta 1 de 5', () => {
+    const alq = (id: string, llego: boolean) => base({ id, tipo: 'alquiler', nombre: `Arrendador ${id}`, cadencia: 'mensual', dia: 1,
+      llegadas: llego ? ['2026-08-01', '2026-09-01', '2026-10-01'] : ['2026-08-01', '2026-09-01'] })
+    expect(loQueFalta(datos([alq('1', true), alq('2', false), alq('3', true), alq('4', true), alq('5', true)]), HOY).map((x) => [x.de, x.que]))
+      .toEqual([['Alquileres', 'Alquiler de octubre: falta 1 de 5']])
+  })
+  it('una fuente que no es alquiler, con su local: el aviso dice de qué local es', () => {
+    const luz = base({ id: 'luz', tipo: 'proveedor', nombre: 'Endesa', local: LOCAL.carabanchel, cadencia: 'mensual', dia: 22, llegadas: ['2026-08-22', '2026-09-22'] })
+    expect(loQueFalta(datos([luz]), HOY).map((x) => [x.de, x.que])).toEqual([['Endesa', 'Factura de octubre · Camichi 4']])
+  })
+  it('el nombre de un local en los avisos: su dirección, como se dice; sin dirección, su nombre', () => {
+    expect(nombreDelLocal(LOCAL.plaza)).toBe('Cañaveral 75')
+    expect(nombreDelLocal({ nombre: 'Taller', direccion: null })).toBe('Taller')
   })
   it('el orden: lo más tarde arriba, luego lo más cercano; apagado en la empresa, nada', () => {
     const d = datos([XFERA, UBER, GLOVO, RIDERS, ...CANAVERAL])

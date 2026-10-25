@@ -245,6 +245,7 @@ alter table public.supplier_invoice_request alter column supplier_id set not nul
 
 drop index if exists public.supplier_expected_invoice_clave_uq;
 alter table public.supplier_expected_invoice drop column if exists updated_by_name;
+alter table public.supplier_expected_invoice drop column if exists location_id;
 alter table public.supplier_expected_invoice drop column if exists updated_at;
 alter table public.supplier_expected_invoice drop column if exists covered_by_recurring_id;
 alter table public.supplier_expected_invoice drop column if exists match;

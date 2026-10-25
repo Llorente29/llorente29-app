@@ -16,7 +16,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc } from '@/modules/conta/services/bd'
-import type { DatosFuentes, DatosPuerta, QueEs } from '@/modules/conta/lib/puerta'
+import { nombreDelLocal, type DatosFuentes, type DatosPuerta, type Local, type QueEs } from '@/modules/conta/lib/puerta'
 
 const ALMACEN = 'conta-entrada'
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
@@ -57,6 +57,14 @@ export async function aprenderFuentes(companyId: string, quien: string | null): 
 export async function apagarFuente(companyId: string, fuenteId: string, activa: boolean, quien: string | null): Promise<string> {
   const r = await rpc<{ texto: string }>('conta_puerta_fuente_guardar', { p_company: companyId, p: { id: fuenteId, activa }, p_quien_nombre: quien })
   return r.texto
+}
+
+/** El local o centro de trabajo de una fuente (o ninguno). Dice lo que ha hecho, con el nombre del local. */
+export async function ponerLocal(companyId: string, fuente: { id: string; nombre: string }, local: Local | null, quien: string | null): Promise<string> {
+  await rpc('conta_puerta_fuente_guardar', { p_company: companyId, p: { id: fuente.id, local_id: local?.id ?? null }, p_quien_nombre: quien })
+  return local
+    ? `Apuntado: ${fuente.nombre} es del local ${nombreDelLocal(local)}. El aviso de lo que falta ya lo dice.`
+    : `Apuntado: ${fuente.nombre} ya no tiene local.`
 }
 
 export async function ponerAjustes(companyId: string, loQueFalta: boolean, margen: number, quien: string | null): Promise<string> {

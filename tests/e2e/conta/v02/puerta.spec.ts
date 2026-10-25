@@ -15,7 +15,8 @@
 //
 //   1. Cuenta A (hostelería): las cuatro cifras, «Lo que falta» con el local de
 //      los alquileres en una fila, las pestañas, «Dime qué es» (dice lo que ha
-//      hecho), «Pedírsela» con el correo propuesto y «Cómo te llegan».
+//      hecho), «Pedírsela» con el correo propuesto, «Cómo te llegan» y el local
+//      de una fuente en los ajustes.
 //   2. Cuenta D (sin hostelería, otra actividad): una papelería con Stripe y
 //      Amazon; subir por la puerta enseña el camino de cada fichero, y soltar un
 //      fichero en OTRA pantalla abre la puerta con él.
@@ -69,13 +70,15 @@ function fuentesHosteleria() {
   const mensualDe = (dia: number, meses: number) => Array.from({ length: meses }, (_, i) => { const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - i - 1); d.setUTCDate(dia); return d.toISOString().slice(0, 10) })
   return {
     ajustes: { lo_que_falta: true, margen: 5 },
+    // Los locales de la empresa (inventados, con la forma de los de verdad: nombre y dirección).
+    locales: [{ id: 'l-norte', nombre: 'Local Norte', direccion: 'Cañaveral, 75', activo: true }, { id: 'l-sur', nombre: 'Local Sur', direccion: 'Camichi, 4', activo: true }],
     fuentes: [
       // Una factura mensual que llega dentro de 3 días: aún a tiempo.
       fuente({ id: 'f-xfera', tipo: 'proveedor', nombre: 'Xfera', cadencia: 'mensual', dia: Math.min(28, diaHoy + 3), llegadas: mensualDe(Math.min(28, diaHoy + 3), 4) }),
       // Glovo: quincenal y nada en meses (falta importar el histórico): tarde.
       fuente({ id: 'f-glovo', tipo: 'intermediario', nombre: 'Glovo', cadencia: 'quincenal', dia: 0, llegadas: [dias(-140), dias(-125), dias(-110)] }),
       // Los alquileres de un local: tres fuentes, una fila, sin nombres; una no ha llegado.
-      ...[1, 2, 3].map((i) => fuente({ id: `f-alq${i}`, tipo: 'alquiler', nombre: `Propietaria ${i}`, grupo: 'Alquiler · Cañaveral 75', cadencia: 'mensual', dia: 1,
+      ...[1, 2, 3].map((i) => fuente({ id: `f-alq${i}`, tipo: 'alquiler', nombre: `Propietaria ${i}`, local: { id: 'l-norte', nombre: 'Local Norte', direccion: 'Cañaveral, 75' }, cadencia: 'mensual', dia: 1,
         llegadas: i === 3 ? mensualDe(1, 4).slice(1) : mensualDe(1, 4) })),
     ],
   }
@@ -125,6 +128,10 @@ async function simular(page: Page, datos: { puerta: unknown; fuentes: unknown })
     llamadas.push({ f: 'dime', cuerpo: r.request().postDataJSON() })
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ texto: 'Apuntado: es una nómina. Lo que llegue de ese remitente irá igual.' }) })
   })
+  await page.route(/\/rest\/v1\/rpc\/conta_puerta_fuente_guardar(\?|$)/, (r) => {
+    llamadas.push({ f: 'fuente', cuerpo: r.request().postDataJSON() })
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'f-xfera', nueva: false, activa: true, texto: 'Guardado: Xfera.' }) })
+  })
   return { llamadas }
 }
 
@@ -142,7 +149,7 @@ test('la puerta de una empresa de hostelería: cifras, lo que falta, lo último 
   // «Lo que falta»: el local de los alquileres en UNA fila, sin nombres; Glovo tarde; Xfera aún a tiempo.
   const falta = page.getByRole('region', { name: 'Lo que falta' })
   await expect(falta.getByText('Alquiler · Cañaveral 75')).toHaveCount(1)
-  await expect(falta.getByText(/\(3 facturas\)/)).toBeVisible()
+  await expect(falta.getByText(/falta \d de 3/)).toBeVisible()
   await expect(falta.getByText(/Propietaria/)).toHaveCount(0)
   await expect(falta.getByText('Glovo')).toBeVisible()
   await expect(falta.getByText(/días? tarde/).first()).toBeVisible()
@@ -176,6 +183,18 @@ test('la puerta de una empresa de hostelería: cifras, lo que falta, lo último 
   await expect(pedir.getByLabel('Texto')).toHaveValue(/taberna-de-prueba-norte@entrada\.folvy\.app/)
   await foto(page, 'pedirsela')
   await pedir.getByRole('button', { name: 'Cancelar' }).click()
+
+  // El local de una fuente, en los ajustes de la puerta: se elige y lo dice (regla 8).
+  await page.getByRole('button', { name: 'Más acciones', exact: true }).click()
+  await page.getByRole('button', { name: 'Ajustes de «Lo que falta»' }).click()
+  const ajustes = page.getByRole('dialog', { name: 'Ajustes de «Lo que falta»' })
+  await expect(ajustes.getByLabel('Local de Propietaria 1')).toHaveValue('l-norte')
+  await ajustes.getByLabel('Local de Xfera').selectOption('l-sur')
+  await expect(page.locator('[data-prueba="puerta-aviso"]')).toHaveText('Apuntado: Xfera es del local Camichi 4. El aviso de lo que falta ya lo dice.')
+  expect(llamadas.find((x) => x.f === 'fuente')?.cuerpo).toMatchObject({ p: { id: 'f-xfera', local_id: 'l-sur' } })
+  await foto(page, 'ajustes-local')
+  await page.keyboard.press('Escape')
+  await expect(ajustes).toHaveCount(0)
   expect(errores).toEqual([])
 })
 

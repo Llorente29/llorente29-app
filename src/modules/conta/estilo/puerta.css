@@ -46,7 +46,10 @@ a.cxpu-cifra:focus-visible { outline: none; box-shadow: var(--s-foco); }
 .cxpu-dime-opcion, .cxpu-dime-recordar { display: flex; gap: var(--s-2); align-items: center; }
 .cxpu-texto { font-family: inherit; resize: vertical; }
 .cxpu-fuentes { list-style: none; margin: var(--s-3) 0 0; padding: 0; max-height: 280px; overflow: auto; }
-.cxpu-fuentes li { display: flex; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.cxpu-fuentes li { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.cxpu-fuente-cabeza { display: flex; justify-content: space-between; gap: var(--s-3); }
+.cxpu-fuente-local { display: flex; align-items: flex-end; gap: var(--s-3); }
+.cxpu-fuente-local .s-campo { flex: 1; }
 
 @media (max-width: 900px) {
   .cxpu-cifras { grid-template-columns: minmax(0, 1fr); }

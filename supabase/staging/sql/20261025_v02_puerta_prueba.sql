@@ -48,6 +48,7 @@ begin
   insert into _p values ('empresa', v_e::text), ('cuenta', v_acc::text);
   insert into _p select 'proveedor', id::text from public.supplier where account_id = v_acc order by created_at limit 1;
   insert into _p select 'tesoreria', id::text from public.treasury_account where company_id = v_e order by created_at limit 1;
+  insert into _p select 'local', location_id::text from public.location_company where company_id = v_e and account_id = v_acc order by created_at limit 1;
   if (select v from _p where clave = 'proveedor') is null then raise exception 'PRUEBA V02: la cuenta A no tiene ningún proveedor.'; end if;
 end $$;
 
@@ -61,6 +62,7 @@ declare
   v_e uuid := (select v::uuid from _p where clave = 'empresa');
   v_sup uuid := (select v::uuid from _p where clave = 'proveedor');
   v_tes uuid := (select v::uuid from _p where clave = 'tesoreria');
+  v_loc uuid := (select v::uuid from _p where clave = 'local');
   r jsonb; r2 jsonb; v_riders uuid; v_prov uuid; v_banco uuid; v_f jsonb; v_n int;
 begin
   -- 1 · La dirección.
@@ -98,10 +100,22 @@ begin
   end if;
   r := public.conta_puerta_fuente_guardar(v_e, jsonb_build_object('id', v_prov, 'activa', false), 'Prueba V02');
   if (r->>'activa')::boolean or r->>'texto' not like 'Apagado:%' then raise exception 'PRUEBA V02 · 2: apagar una fuente no la apaga (%).', r; end if;
+  -- El local de una fuente (opcional): se guarda y se lee; uno que no es de la empresa, no.
+  if v_loc is not null then
+    perform public.conta_puerta_fuente_guardar(v_e, jsonb_build_object('id', v_prov, 'local_id', v_loc), 'Prueba V02');
+    select f into v_f from jsonb_array_elements((public.conta_puerta_fuentes(v_e))->'fuentes') f where (f->>'id')::uuid = v_prov;
+    if (v_f->'local'->>'id')::uuid is distinct from v_loc then raise exception 'PRUEBA V02 · 2: el local de la fuente no queda (%).', v_f; end if;
+    if jsonb_array_length((public.conta_puerta_fuentes(v_e))->'locales') < 1 then raise exception 'PRUEBA V02 · 2: no salen los locales de la empresa.'; end if;
+  end if;
+  begin
+    perform public.conta_puerta_fuente_guardar(v_e, jsonb_build_object('id', v_prov, 'local_id', gen_random_uuid()), 'Prueba V02');
+    raise exception 'PRUEBA V02 · 2: se guarda un local que no es de la empresa.';
+  exception when sqlstate '42501' then null;
+  end;
   r := public.conta_puerta_ajustes_poner(v_e, true, 4::smallint, 'Prueba V02');
   if ((public.conta_puerta_fuentes(v_e))->'ajustes'->>'margen')::int <> 4 then raise exception 'PRUEBA V02 · 2: el margen de la empresa no queda.'; end if;
   insert into _p values ('riders', v_riders::text);
-  raise notice '2 · las fuentes: proveedor, riders sin proveedor y banco, con sus llegadas; apagar y el margen';
+  raise notice '2 · las fuentes: proveedor, riders sin proveedor y banco, con sus llegadas; su local; apagar y el margen';
 end $$;
 reset role;
 

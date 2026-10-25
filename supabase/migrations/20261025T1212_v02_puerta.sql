@@ -144,6 +144,14 @@ alter table public.supplier_expected_invoice add column if not exists source_key
 alter table public.supplier_expected_invoice add column if not exists match jsonb not null default '{}'::jsonb;
 alter table public.supplier_expected_invoice add column if not exists covered_by_recurring_id uuid
   references public.recurring_contract(id) on delete set null;
+-- El local o centro de trabajo de la fuente (opcional, para cualquier empresa):
+-- con él, el aviso dice de qué local es lo que falta y los alquileres del mismo
+-- local van juntos. La tabla está vacía: la clave se valida al momento.
+alter table public.supplier_expected_invoice add column if not exists location_id uuid;
+alter table public.supplier_expected_invoice drop constraint if exists supplier_expected_invoice_location_id_fkey;
+alter table public.supplier_expected_invoice add constraint supplier_expected_invoice_location_id_fkey
+  foreign key (location_id) references public.locations(id) on delete set null not valid;
+alter table public.supplier_expected_invoice validate constraint supplier_expected_invoice_location_id_fkey;
 alter table public.supplier_expected_invoice add column if not exists updated_at timestamptz;
 alter table public.supplier_expected_invoice add column if not exists updated_by_name text;
 create unique index if not exists supplier_expected_invoice_clave_uq on public.supplier_expected_invoice (company_id, source_key) where source_key is not null;
@@ -172,11 +180,6 @@ returns jsonb language sql stable security definer set search_path to 'public' a
 $function$;
 
 -- 5 · Los ajustes de la puerta -------------------------------------------------
--- Sin claves ajenas a company ni a accounts, a propósito: crearlas o quitarlas
--- (la vuelta atrás) bloquea en exclusiva las dos tablas que más se leen, y en
--- staging se cruzó con una e2e (interbloqueo con accounts, 25/10). La empresa
--- y su cuenta las comprueba conta_puerta_ajustes_poner, que es la única que
--- escribe aquí.
 create table if not exists public.conta_puerta_ajustes (
   company_id uuid primary key,
   account_id uuid not null,
@@ -185,6 +188,17 @@ create table if not exists public.conta_puerta_ajustes (
   updated_at timestamptz not null default now(),
   updated_by_name text
 );
+-- Unida a su empresa (se va con ella) y a su cuenta. Las claves se crean «not
+-- valid» y se validan después: la tabla nace vacía y así company y accounts
+-- solo se bloquean lo imprescindible.
+alter table public.conta_puerta_ajustes drop constraint if exists conta_puerta_ajustes_company_id_fkey;
+alter table public.conta_puerta_ajustes add constraint conta_puerta_ajustes_company_id_fkey
+  foreign key (company_id) references public.company(id) on delete cascade not valid;
+alter table public.conta_puerta_ajustes validate constraint conta_puerta_ajustes_company_id_fkey;
+alter table public.conta_puerta_ajustes drop constraint if exists conta_puerta_ajustes_account_id_fkey;
+alter table public.conta_puerta_ajustes add constraint conta_puerta_ajustes_account_id_fkey
+  foreign key (account_id) references public.accounts(id) on delete cascade not valid;
+alter table public.conta_puerta_ajustes validate constraint conta_puerta_ajustes_account_id_fkey;
 comment on table public.conta_puerta_ajustes is
   'V02 · La puerta de cada empresa: si «Lo que falta» avisa y el margen por defecto (días después del día en que suele llegar).';
 alter table public.conta_puerta_ajustes enable row level security;
@@ -263,10 +277,15 @@ begin
   return jsonb_build_object(
     'ajustes', coalesce((select jsonb_build_object('lo_que_falta', a.lo_que_falta, 'margen', a.margen_dias) from public.conta_puerta_ajustes a where a.company_id = p_company),
                         jsonb_build_object('lo_que_falta', true, 'margen', 5)),
+    -- Los locales de la empresa, para elegir el de cada fuente (con uno solo, no se pide nada).
+    'locales', coalesce((select jsonb_agg(jsonb_build_object('id', l.id, 'nombre', l.name, 'direccion', l.address, 'activo', l.active) order by l.name)
+                           from public.location_company lc join public.locations l on l.id = lc.location_id
+                          where lc.company_id = p_company and lc.account_id = v_acc), '[]'::jsonb),
     'fuentes', coalesce((select jsonb_agg(jsonb_build_object(
         'id', x.id, 'clave', x.source_key, 'tipo', x.kind, 'nombre', coalesce(x.label, s.name, 'Sin nombre'), 'grupo', x.group_label,
         'proveedor_id', x.supplier_id, 'cadencia', x.cadence, 'dia', x.typical_day, 'dia_semana', x.weekday, 'cada', x.gap_days,
         'margen', x.margin_days, 'activa', x.active, 'origen', x.source, 'cubierta', x.covered_by_recurring_id is not null,
+        'local', (select jsonb_build_object('id', l.id, 'nombre', l.name, 'direccion', l.address) from public.locations l where l.id = x.location_id),
         'llegadas', to_jsonb(public._conta_puerta_llegadas(x)),
         'pedida', (select jsonb_build_object('periodo', r.period, 'estado', r.status, 'a', r.to_email) from public.supplier_invoice_request r
                     where r.expected_id = x.id or (x.supplier_id is not null and r.supplier_id = x.supplier_id)
@@ -291,9 +310,12 @@ begin
     select jsonb_build_object(
       'clave', 'nif:' || r.nif, 'tipo', case when r.alquiler then 'alquiler' else 'proveedor' end,
       'nombre', r.nombre, 'proveedor_id', r.supplier_id, 'nifs', jsonb_build_array(r.nif),
-      -- Los alquileres, juntos y sin nombres en pantalla (suelen ser personas): el
-      -- local de cada uno lo dice la persona («Alquiler · Cañaveral 75»).
-      'grupo', case when r.alquiler then 'Alquileres' end,
+      -- El local que llevaban sus facturas (el más repetido), si la empresa tiene
+      -- más de uno: la persona lo confirma o lo cambia en los ajustes de la puerta.
+      'local_id', case when (select count(*) from public.location_company lc where lc.company_id = p_company and lc.account_id = v_acc) > 1 then
+                    (select mode() within group (order by i.location_id) from public.supplier_invoice i
+                      where i.account_id = v_acc and i.supplier_id = r.supplier_id and i.status <> 'anulada'
+                        and i.location_id in (select lc.location_id from public.location_company lc where lc.company_id = p_company and lc.account_id = v_acc)) end,
       'cadencia', case when r.por_mes > 1.5 then 'varias' else 'mensual' end,
       'dia', case when r.por_mes > 1.5 then null else r.dia end, 'cada', case when r.por_mes > 1.5 then 10 end,
       'meses', r.meses, 'por_mes', r.por_mes) as x
@@ -380,6 +402,10 @@ begin
   if p->>'proveedor_id' is not null and not exists (select 1 from public.supplier where id = (p->>'proveedor_id')::uuid and account_id = v_acc) then
     raise exception 'Ese proveedor no es de esta cuenta.' using errcode = '42501';
   end if;
+  if nullif(p->>'local_id', '') is not null and not exists (select 1 from public.location_company lc
+       where lc.location_id = (p->>'local_id')::uuid and lc.company_id = p_company and lc.account_id = v_acc) then
+    raise exception 'Ese local no es de esta empresa.' using errcode = '42501';
+  end if;
   v_match := jsonb_strip_nulls(jsonb_build_object('nifs', p->'nifs', 'numero_prefijo', p->>'numero_prefijo', 'canal', p->>'canal',
                                                   'tesoreria', p->>'tesoreria', 'nominas', case when p->>'tipo' = 'nominas' then true end));
   if p->>'id' is not null then
@@ -390,11 +416,11 @@ begin
   end if;
   if v_x.id is null then
     insert into public.supplier_expected_invoice (account_id, company_id, supplier_id, cadence, typical_day, label, source, reason, active, since,
-                                                  kind, margin_days, weekday, gap_days, group_label, source_key, match, created_by, created_by_name)
+                                                  kind, margin_days, weekday, gap_days, group_label, source_key, match, location_id, created_by, created_by_name)
     values (v_acc, p_company, (p->>'proveedor_id')::uuid, coalesce(p->>'cadencia', 'mensual'), nullif(p->>'dia', '')::smallint, p->>'nombre',
             case when p->>'clave' is not null then 'aprendido' else 'a_mano' end, p->>'motivo', coalesce((p->>'activa')::boolean, true), current_date,
             coalesce(p->>'tipo', 'proveedor'), nullif(p->>'margen', '')::smallint, nullif(p->>'dia_semana', '')::smallint, nullif(p->>'cada', '')::smallint,
-            nullif(btrim(p->>'grupo'), ''), p->>'clave', v_match, auth.uid(), p_quien_nombre)
+            nullif(btrim(p->>'grupo'), ''), p->>'clave', v_match, nullif(p->>'local_id', '')::uuid, auth.uid(), p_quien_nombre)
     returning * into v_x;
     v_nuevo := true;
   else
@@ -407,6 +433,7 @@ begin
       gap_days = case when p ? 'cada' then nullif(p->>'cada', '')::smallint else gap_days end,
       margin_days = case when p ? 'margen' then nullif(p->>'margen', '')::smallint else margin_days end,
       active = coalesce((p->>'activa')::boolean, active),
+      location_id = case when p ? 'local_id' then nullif(p->>'local_id', '')::uuid else location_id end,
       match = case when v_match = '{}'::jsonb then match else v_match end,
       updated_at = now(), updated_by_name = p_quien_nombre
      where id = v_x.id returning * into v_x;

@@ -39,11 +39,11 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
 import { QuincenaCatcher } from '@/modules/conta/documentos/QuincenaCatcher'
 import { contactoFacturacion, subirFacturas } from '@/modules/conta/services/documentosService'
 import {
-  aprenderFuentes, apagarFuente, dimeQueEs, direccionUnica, leerFuentes, leerPuerta, pedirla, ponerAjustes, subirSinSaber,
+  aprenderFuentes, apagarFuente, dimeQueEs, direccionUnica, leerFuentes, leerPuerta, pedirla, ponerAjustes, ponerLocal, subirSinSaber,
 } from '@/modules/conta/services/puertaService'
 import {
   DONDE, ETIQUETA_QUE, POR, TONO_QUE, cifrasPuerta, clasificarSubida, correoPedirla, cuandoLlego, ddmm, deLaPestana, loQueFalta, necesitaMirarse,
-  type DatosFuentes, type DatosPuerta, type FilaFalta, type GrupoSubida, type PestanaPuerta, type QueEs, type Ultimo,
+  nombreDelLocal, type DatosFuentes, type DatosPuerta, type FilaFalta, type Fuente, type Local, type GrupoSubida, type PestanaPuerta, type QueEs, type Ultimo,
 } from '@/modules/conta/lib/puerta'
 import { dejarFicheros, mirarFicheros, tomarFicheros } from '@/modules/conta/puerta/entregas'
 
@@ -146,7 +146,7 @@ export default function PuertaPage() {
           alPestana={(id) => { const q = new URLSearchParams(query); if (id === 'ultimo') q.delete('ver'); else q.set('ver', id); setQuery(q, { replace: true }) }}
           alDime={setDime} />
         <div className="cxpu-lado">
-          <ComoTeLlegan p={p} direccion={direccion?.direccion ?? null} ocupado={ocupado}
+          <ComoTeLlegan p={p} direccion={direccion?.direccion ?? null} encendida={direccion?.activa ?? false} ocupado={ocupado}
             alCrear={() => void conAviso(() => direccionUnica(activa.id, userName ?? null).then((r) => <>Tu dirección es <strong>{r.direccion}</strong>{r.yaEstaba ? ' (ya la tenías)' : ''}. Reenvía ahí lo que te manden: {NOMBRE} lo lleva a su sitio.</>))}
             alCopiar={(t) => void navigator.clipboard?.writeText(t).then(() => setAviso({ texto: <>Copiada: <strong>{t}</strong></> }), () => setAviso({ texto: `No se ha podido copiar: selecciónala y cópiala a mano (${t}).`, tono: 'duda' }))} />
           <Tarjeta compacta>
@@ -174,7 +174,8 @@ export default function PuertaPage() {
       {ajustes && d && (
         <AjustesFalta d={d} alCerrar={() => setAjustes(false)}
           alPoner={(on, margen) => void conAviso(() => ponerAjustes(activa.id, on, margen, userName ?? null))}
-          alFuente={(id, activaF) => void conAviso(() => apagarFuente(activa.id, id, activaF, userName ?? null))} />
+          alFuente={(id, activaF) => void conAviso(() => apagarFuente(activa.id, id, activaF, userName ?? null))}
+          alLocal={(f, local) => void conAviso(() => ponerLocal(activa.id, f, local, userName ?? null))} />
       )}
 
       <BotonPulgar>{principal}</BotonPulgar>
@@ -302,8 +303,8 @@ function LoUltimo({ ultimos, pestana, hoy, movil, hosteleria, alPestana, alDime 
   )
 }
 
-function ComoTeLlegan({ p, direccion, ocupado, alCrear, alCopiar }: {
-  p: DatosPuerta | null; direccion: string | null; ocupado: boolean
+function ComoTeLlegan({ p, direccion, encendida, ocupado, alCrear, alCopiar }: {
+  p: DatosPuerta | null; direccion: string | null; encendida: boolean; ocupado: boolean
   alCrear: () => void; alCopiar: (t: string) => void
 }) {
   const conectados = [
@@ -315,7 +316,9 @@ function ComoTeLlegan({ p, direccion, ocupado, alCrear, alCopiar }: {
       <dl className="cxpu-como">
         <dt>Correo</dt>
         <dd>{direccion
-          ? <><strong className="cxpu-direccion">{direccion}</strong><button type="button" className="s-boton s-boton-enlace" onClick={() => alCopiar(direccion)}>Copiar</button></>
+          ? <><strong className="cxpu-direccion">{direccion}</strong>
+              {!encendida && <span className="cxpu-no-se" data-prueba="direccion-apagada">Apagada: aún no recibe correos.</span>}
+              <button type="button" className="s-boton s-boton-enlace" onClick={() => alCopiar(direccion)}>Copiar</button></>
           : <button type="button" className="s-boton s-boton-enlace" disabled={ocupado || !p} onClick={alCrear}>Crear tu dirección</button>}</dd>
         <dt>Desde el móvil</dt><dd>foto o PDF, con la cámara o desde el correo</dd>
         <dt>Arrastrar</dt><dd>en cualquier pantalla de {NOMBRE}</dd>
@@ -435,9 +438,12 @@ function Pedirsela({ fila, empresa, direccion, alCerrar, alPedir }: {
   )
 }
 
-function AjustesFalta({ d, alCerrar, alPoner, alFuente }: {
+function AjustesFalta({ d, alCerrar, alPoner, alFuente, alLocal }: {
   d: DatosFuentes; alCerrar: () => void; alPoner: (on: boolean, margen: number) => void; alFuente: (id: string, activa: boolean) => void
+  alLocal: (f: Fuente, local: Local | null) => void
 }) {
+  // Con un solo local (o ninguno) no se pide nada.
+  const locales = (d.locales ?? []).length > 1 ? d.locales ?? [] : []
   const [on, setOn] = useState(d.ajustes.lo_que_falta)
   const [margen, setMargen] = useState(d.ajustes.margen)
   return (
@@ -448,16 +454,37 @@ function AjustesFalta({ d, alCerrar, alPoner, alFuente }: {
         <input className="s-control" type="number" min={0} max={60} value={margen} onChange={(e) => setMargen(Math.max(0, Math.min(60, Number(e.target.value) || 0)))} /></label>
       {d.fuentes.length > 0 && (
         <ul className="cxpu-fuentes" aria-label="Las fuentes">
-          {d.fuentes.map((f) => (
-            <li key={f.id}>
-              {/* En un grupo (los alquileres de un local), sin nombres de personas: «1 de 3». */}
-              <span>{f.grupo ? `${f.grupo} · ${d.fuentes.filter((x) => x.grupo === f.grupo).findIndex((x) => x.id === f.id) + 1} de ${d.fuentes.filter((x) => x.grupo === f.grupo).length}` : f.nombre}
-                {f.cubierta && <span className="s-tarjeta-apoyo"> · la cubre una recurrente</span>}</span>
-              <button type="button" className="s-boton s-boton-enlace" onClick={() => alFuente(f.id, !f.activa)}>{f.activa ? 'No avisar' : 'Avisar'}</button>
-            </li>
-          ))}
+          {d.fuentes.map((f) => <FilaFuente key={f.id} f={f} locales={locales} alFuente={alFuente} alLocal={alLocal} />)}
         </ul>
       )}
     </Dialogo>
+  )
+}
+
+/**
+ * Una fuente en los ajustes, con su local o centro de trabajo si la empresa
+ * tiene más de uno. Aquí sale el nombre de quien factura (es donde se dice de
+ * qué local es cada uno); en «Lo que falta», los alquileres salen por local, sin él.
+ */
+function FilaFuente({ f, locales, alFuente, alLocal }: {
+  f: Fuente; locales: readonly Local[]; alFuente: (id: string, activa: boolean) => void; alLocal: (f: Fuente, local: Local | null) => void
+}) {
+  return (
+    <li className="cxpu-fuente">
+      <span className="cxpu-fuente-cabeza">
+        <span>{f.nombre}{f.tipo === 'alquiler' ? <span className="s-tarjeta-apoyo"> · alquiler</span> : f.grupo ? <span className="s-tarjeta-apoyo"> · {f.grupo}</span> : null}
+          {f.cubierta && <span className="s-tarjeta-apoyo"> · la cubre una recurrente</span>}</span>
+        <button type="button" className="s-boton s-boton-enlace" onClick={() => alFuente(f.id, !f.activa)}>{f.activa ? 'No avisar' : 'Avisar'}</button>
+      </span>
+      {locales.length > 0 && (
+        <label className="s-campo cxpu-fuente-local"><span className="s-campo-etiqueta">Local</span>
+          <select className="s-control" value={f.local?.id ?? ''} aria-label={`Local de ${f.nombre}`}
+            onChange={(e) => alLocal(f, locales.find((l) => l.id === e.target.value) ?? null)}>
+            <option value="">Sin local</option>
+            {locales.map((l) => <option key={l.id} value={l.id}>{nombreDelLocal(l)}{l.nombre && l.direccion ? ` (${l.nombre})` : ''}</option>)}
+          </select>
+        </label>
+      )}
+    </li>
   )
 }

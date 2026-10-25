@@ -10,8 +10,9 @@
 //     llegado: «aún a tiempo» hasta su día más el margen; después, «N días
 //     tarde» contados desde su día (como en el tablero: «hacia el 22/10» y «3
 //     días tarde» el 25/10). Una fuente cubierta por una recurrente no avisa.
-//   · Las agrupaciones: las fuentes con el mismo grupo («Alquiler · Cañaveral
-//     75») salen en UNA fila, «(3 facturas)», sin nombres de personas.
+//   · El local (opcional, de cualquier fuente): los alquileres van juntos por
+//     su local («Alquiler · Cañaveral 75: falta 1 de 3»), sin nombres de
+//     personas; sin local, todos en «Alquileres». Lo demás lleva su local en el aviso.
 //   · Lo último: las pestañas (Lo último · Necesita que lo mires · Colocado),
 //     qué es cada cosa en palabras y dónde está.
 //   · Lo que se sube: qué es cada fichero antes de subirlo (las facturas a
@@ -49,9 +50,13 @@ export interface Fuente {
   /** Las fechas en que ha llegado algo de esta fuente ('YYYY-MM-DD', de menor a mayor). */
   llegadas: string[]
   pedida: { periodo: string; estado: string; a: string | null } | null
+  /** El local o centro de trabajo de la fuente (opcional). */
+  local?: Local | null
 }
+/** Un local o centro de trabajo de la empresa (locations, unido a la empresa por location_company). */
+export interface Local { id: string; nombre: string; direccion: string | null; activo?: boolean }
 export interface Ajustes { lo_que_falta: boolean; margen: number }
-export interface DatosFuentes { ajustes: Ajustes; fuentes: Fuente[] }
+export interface DatosFuentes { ajustes: Ajustes; fuentes: Fuente[]; /** Los locales de la empresa; con uno o ninguno, no se pide. */ locales?: Local[] }
 
 export type Donde = 'factura' | 'bancos' | 'liquidaciones' | 'laboral' | 'riders' | null
 export interface Ultimo {
@@ -219,9 +224,28 @@ export function faltaDe(f: Fuente, hoy: string, margenEmpresa = 5, horizonte = 1
 }
 
 /**
- * Las filas de «Lo que falta», con las fuentes del mismo grupo en una sola
- * («Alquiler · Cañaveral 75», con lo peor de las tres). Primero lo que va
- * tarde (lo más tarde arriba), luego lo que está aún a tiempo (lo más cercano arriba).
+ * Cómo se llama un local en los avisos: su dirección, como se dice en la calle
+ * («Camichi, 4» → «Camichi 4»); sin dirección, su nombre.
+ */
+export const nombreDelLocal = (l: Pick<Local, 'nombre' | 'direccion'>): string =>
+  l.direccion?.trim() ? l.direccion.trim().replace(/,\s*(\d)/, ' $1') : l.nombre
+
+/**
+ * En qué fila va una fuente. Los alquileres van juntos por local («Alquiler ·
+ * Cañaveral 75»); sin local, todos en «Alquileres». Lo demás, cada fuente en la
+ * suya, salvo que tenga un grupo puesto a mano.
+ */
+function filaDe(f: Fuente): string | null {
+  if (f.tipo === 'alquiler') return f.local ? `Alquiler · ${nombreDelLocal(f.local)}` : 'Alquileres'
+  return f.grupo
+}
+
+/**
+ * Las filas de «Lo que falta», con las fuentes de la misma fila juntas, con lo
+ * peor de ellas y cuántas faltan («Alquileres · Alquiler de octubre: falta 1 de
+ * 5»). Con local, el aviso lo dice («Factura de octubre · Camichi 4»). Primero
+ * lo que va tarde (lo más tarde arriba), luego lo que está aún a tiempo (lo más
+ * cercano arriba).
  */
 export function loQueFalta(d: DatosFuentes, hoy: string, horizonte = 14): FilaFalta[] {
   if (!d.ajustes.lo_que_falta) return []
@@ -230,15 +254,20 @@ export function loQueFalta(d: DatosFuentes, hoy: string, horizonte = 14): FilaFa
   for (const f of d.fuentes) {
     const x = faltaDe(f, hoy, d.ajustes.margen, horizonte)
     if (!x) continue
-    if (f.grupo) { grupos.set(f.grupo, [...(grupos.get(f.grupo) ?? []), { f, ...x }]); continue }
-    sueltas.push({ id: f.id, ids: [f.id], de: f.nombre, que: queSeEspera(f, x.o), hacia: x.o.dia, estado: x.estado, n: 1, tipo: f.tipo, proveedorId: f.proveedor_id, pedida: f.pedida })
+    const fila = filaDe(f)
+    if (fila) { grupos.set(fila, [...(grupos.get(fila) ?? []), { f, ...x }]); continue }
+    const que = queSeEspera(f, x.o) + (f.local ? ` · ${nombreDelLocal(f.local)}` : '')
+    sueltas.push({ id: f.id, ids: [f.id], de: f.nombre, que, hacia: x.o.dia, estado: x.estado, n: 1, tipo: f.tipo, proveedorId: f.proveedor_id, pedida: f.pedida })
   }
-  for (const [grupo, xs] of grupos) {
+  for (const [fila, xs] of grupos) {
     const peor = [...xs].sort((a, b) => peso(b.estado) - peso(a.estado) || a.o.dia.localeCompare(b.o.dia))[0]
-    const n = d.fuentes.filter((f) => f.grupo === grupo && f.activa && !f.cubierta).length
+    const n = d.fuentes.filter((f) => filaDe(f) === fila && f.activa && !f.cubierta).length
+    // Cuántas faltan de verdad: las que ya van tarde, o todas si ninguna va tarde todavía.
+    const tarde = xs.filter((x) => x.estado.que === 'tarde').length
+    const faltan = tarde || xs.length
     const que = queSeEspera(peor.f, peor.o)
     sueltas.push({
-      id: peor.f.id, ids: xs.map((x) => x.f.id), de: grupo, que: n > 1 ? `${que} (${n} ${peor.f.tipo === 'alquiler' || peor.f.tipo === 'proveedor' ? 'facturas' : 'documentos'})` : que,
+      id: peor.f.id, ids: xs.map((x) => x.f.id), de: fila, que: n > 1 ? `${que}: falta${faltan === 1 ? '' : 'n'} ${faltan} de ${n}` : que,
       hacia: peor.o.dia, estado: peor.estado, n, tipo: peor.f.tipo, proveedorId: n === 1 ? peor.f.proveedor_id : null, pedida: n === 1 ? peor.f.pedida : null,
     })
   }
@@ -260,7 +289,7 @@ export function porLlegarEsteMes(d: DatosFuentes, hoy: string): { n: number; de:
       .filter((o) => !f.llegadas.some((l) => Math.abs(diasEntre(o.dia, l)) <= r) && diasEntre(o.dia, hoy) <= margen)
     if (!os.length) continue
     n += os.length
-    const nombre = f.grupo ?? f.nombre
+    const nombre = filaDe(f) ?? f.nombre
     if (!de.includes(nombre)) de.push(nombre)
   }
   return { n, de }
