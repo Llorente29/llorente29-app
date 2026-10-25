@@ -1,0 +1,3 @@
+# C12b · En staging solo la prueba: la 1631 sola para siempre aquí (staging no tiene Foodint),
+# y la prueba ya la pasa ella, con \i y dentro de un savepoint, para medir sus frenos.
+supabase/staging/sql/20261024_c12b_foodint_mensual_prueba.sql
