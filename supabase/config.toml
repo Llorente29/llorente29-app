@@ -135,6 +135,10 @@ verify_jwt = true
 [functions.conta-diez-cola]
 verify_jwt = false
 
+# V03 · la despierta el cron (x-cron-secret); la puerta, CONTA_VERIFACTU, cerrada si no se pone.
+[functions.conta-verifactu]
+verify_jwt = false
+
 # C12 (24/10): traspasar el mes a Diez desde Contabilidad › Cierre del mes. La
 # llama la pantalla con la sesión de un administrador, una vez por tanda, y
 # solo con el traspaso del mes confirmado. verify_jwt = true.
