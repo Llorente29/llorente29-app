@@ -57,6 +57,8 @@ export interface Pestana {
   ver?: string
   /** La página existe pero aún dice «aún no» (Ajustes): no sale en el producto vendido solo. */
   hueco?: boolean
+  /** V01 · El bloque de la barra al que pertenece («Hostelería»): su título sale encima de la primera. */
+  bloque?: string
 }
 
 export interface Producto {
@@ -152,6 +154,9 @@ export const PRODUCTOS: Producto[] = [
       { id: 'emitidas', etiqueta: 'Facturas', icono: 'facturas', ruta: R.facturasVenta, prefijos: [R.facturasVenta, R.facturasEmitidas] },
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: null, prefijos: [] },
       { id: 'series', etiqueta: 'Series', icono: 'plantillas', ruta: null, prefijos: [] },
+      // V01 · Entrega 2: el bloque «Hostelería», solo con «Vendo en hostelería».
+      // «Ventas» a secas (lo de antes) lleva aquí.
+      { id: 'cierres', etiqueta: 'Cierres del día', icono: 'cierre', ruta: R.cierres, prefijos: [R.cierres, R.ventas], solo: 'hosteleria', bloque: 'Hostelería' },
     ],
   },
   {

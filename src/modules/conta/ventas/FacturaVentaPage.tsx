@@ -137,6 +137,8 @@ export default function FacturaVentaPage() {
   const estado = f ? f.estado : 'borrador'
   const editable = estado === 'borrador' && !borrada
   const corrige = f?.corrige ?? null
+  // V01 · Entrega 2: la factura resumen de un cierre (y su rectificativa) no lleva cliente: son ventas a consumidor final.
+  const deCierre = f?.origen === 'cierre_dia'
   const tipos = cat?.tipos ?? []
   const leidas = lineasLeidas(b.lineas, tipos)
   const retPct = cat?.retenciones.find((r) => r.id === b.retencionId)?.tipo ?? 0
@@ -147,7 +149,7 @@ export default function FacturaVentaPage() {
     ? diferenciaDe(corrige.tipo === 'anular' ? cifrasDe([], false, retPct) : corrige.tipo === 'datos' ? cifrasViejas : cifrasNuevas, cifrasViejas)
     : cifrasNuevas
   const cliente = cat?.clientes.find((c) => c.id === b.clienteId) ?? null
-  const falta = editable ? [...faltaParaEmitir({ clienteId: b.clienteId, nif: cliente?.nif ?? null, lineas: corrige?.tipo === 'anular' || corrige?.tipo === 'datos' ? [{ concepto: 'x', tipoId: 'x', cuentaId: 'x' }] : b.lineas.filter((l) => l.concepto.trim() || l.precio.trim()).map((l) => ({ concepto: l.concepto, tipoId: l.tipoId, cuentaId: l.cuentaId })) }), ...leidas.mal] : []
+  const falta = editable ? [...faltaParaEmitir({ clienteId: deCierre ? 'cierre' : b.clienteId, nif: deCierre ? 'consumidor final' : cliente?.nif ?? null, lineas: corrige?.tipo === 'anular' || corrige?.tipo === 'datos' ? [{ concepto: 'x', tipoId: 'x', cuentaId: 'x' }] : b.lineas.filter((l) => l.concepto.trim() || l.precio.trim()).map((l) => ({ concepto: l.concepto, tipoId: l.tipoId, cuentaId: l.cuentaId })) }), ...leidas.mal] : []
 
   const que = corrige ? 'la rectificativa' : 'la factura'
   const donde = f?.numero ?? (cliente ? `la factura de ${cliente.nombre}` : 'la factura nueva')
@@ -306,7 +308,7 @@ export default function FacturaVentaPage() {
   const secundarios = !editable && f && f.estado === 'emitida' ? (
     <>
       {!f.rectificativa && <Boton variante="secundario" onClick={() => setDialogo('corregir')}>Corregir</Boton>}
-      <Boton variante="secundario" onClick={() => void mandarDeNuevo()}>{f.enviadaEl ? 'Enviar de nuevo' : 'Enviar por correo'}</Boton>
+      {!deCierre && <Boton variante="secundario" onClick={() => void mandarDeNuevo()}>{f.enviadaEl ? 'Enviar de nuevo' : 'Enviar por correo'}</Boton>}
     </>
   ) : null
   const mas: GrupoDeAcciones[] = [{
@@ -363,8 +365,8 @@ export default function FacturaVentaPage() {
         <p className="s-aviso-lista" data-tono="duda">Corregida por {f.rectificativas.map((r, i) => <span key={r.id}>{i ? ', ' : ''}<Link to={rutaFacturaVenta(r.id)}>{r.numero ?? 'una rectificativa sin emitir'}</Link></span>)}.</p>
       )}
 
-      <BloqueFicha titulo="Cliente" accion={editable && !sinLineas ? <Boton variante="enlace" icono="nuevo" onClick={() => setDialogo('cliente')}>Cliente nuevo</Boton> : undefined}>
-        {editable && !sinLineas ? (
+      <BloqueFicha titulo="Cliente" accion={editable && !sinLineas && !deCierre ? <Boton variante="enlace" icono="nuevo" onClick={() => setDialogo('cliente')}>Cliente nuevo</Boton> : undefined}>
+        {editable && !sinLineas && !deCierre ? (
           <>
             <Campo etiqueta="Cliente" error={b.clienteId && cliente && !cliente.nif ? 'Este cliente no tiene NIF en su ficha: la factura no se puede emitir sin él.' : null}>
               {(p) => <Selector {...p} valor={b.clienteId ?? ''} opciones={opcionesCliente} alCambiar={(v) => {
@@ -382,7 +384,7 @@ export default function FacturaVentaPage() {
         ) : (
           <FilaCampos columnas={2}>
             <CampoFicha etiqueta="Cliente" valor={f?.cliente.nombre ?? '—'} />
-            <CampoFicha etiqueta="NIF" valor={f?.cliente.nif ?? '—'} />
+            <CampoFicha etiqueta="NIF" valor={f?.cliente.nif ?? (deCierre ? 'Consumidor final (factura resumen)' : '—')} />
             <CampoFicha etiqueta="Dirección" valor={f ? direccion(f.cliente) ?? '—' : '—'} ancho={2} />
           </FilaCampos>
         )}
@@ -465,14 +467,14 @@ export default function FacturaVentaPage() {
             try {
               const r = await cobrarFactura(f.id, c.fecha, c.importe, c.forma, c.nota, userName)
               setDialogo(null)
-              setAviso({ ok: true, texto: `Cobro registrado: ${eurosExactos(c.importe)}. ${r.queda > 0 ? `Quedan ${eurosExactos(r.queda)}.` : 'Cobrada entera.'}` })
+              setAviso({ ok: true, texto: `Cobro registrado: ${eurosExactos(c.importe)}${r.numeroAsiento ? `, en efectivo, con su asiento nº ${r.numeroAsiento.toLocaleString('es-ES')} (570 a 430)` : ''}. ${r.queda > 0 ? `Quedan ${eurosExactos(r.queda)}.` : 'Cobrada entera.'}` })
               setVuelta((x) => x + 1)
               return null
             } catch (e) { return e instanceof Error ? e.message : String(e) }
           }} />
       )}
       {dialogo === 'corregir' && f && (
-        <DialogoCorregir numero={f.numero ?? ''} alCerrar={() => setDialogo(null)}
+        <DialogoCorregir numero={f.numero ?? ''} sinDatos={deCierre} alCerrar={() => setDialogo(null)}
           alCorregir={async (tipo, motivo) => {
             try {
               const r = await corregirFactura(f.id, tipo, motivo, userName)

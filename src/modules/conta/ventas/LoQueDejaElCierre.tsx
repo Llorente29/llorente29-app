@@ -36,7 +36,11 @@ const TONO: Record<ReturnType<typeof estadoDe>, TonoChip> = {
  * dos cifras no tienen nada que contar y no salen (ni la palabra «plataforma»).
  * Las filas se enseñan todas igual (regla 7).
  */
-export function LoQueDejaElCierre({ conPlataformas = true }: { conPlataformas?: boolean }) {
+export function LoQueDejaElCierre({ conPlataformas = true, soloDe }: {
+  conPlataformas?: boolean
+  /** V01 · En la ficha de un cierre: solo lo de su local y su día (y nada si no hay). */
+  soloDe?: { localId: string; dia: string }
+}) {
   const { accountId, userName } = useCuentaConta()
   const { activa } = useEmpresas()
   const [vuelta, setVuelta] = useState(0)
@@ -45,8 +49,9 @@ export function LoQueDejaElCierre({ conPlataformas = true }: { conPlataformas?: 
   const datos = useLeer(accountId && activa ? () => leerLoQueDejaElCierre(accountId, activa.id) : null, `${accountId}:${activa?.id}:cierre-del-dia:${vuelta}`)
 
   if (datos.error) return <p className="s-aviso-lista" data-tono="falta" role="alert">No he podido leer lo que dejó el cierre del día: {datos.error}</p>
-  if (!datos.datos) return <p className="s-apoyo" aria-busy="true">Leyendo lo que dejó el cierre del día…</p>
-  const filas = ordenar(datos.datos) as FilaCierreConLocal[]
+  if (!datos.datos) return soloDe ? null : <p className="s-apoyo" aria-busy="true">Leyendo lo que dejó el cierre del día…</p>
+  const filas = (ordenar(datos.datos) as FilaCierreConLocal[]).filter((f) => !soloDe || (f.locationId === soloDe.localId && f.dia === soloDe.dia))
+  if (soloDe && filas.length === 0) return null
   const c = cifras(filas)
 
   const hacer = async (f: FilaCierreConLocal, que: 'devolucion' | 'descartar') => {
@@ -66,9 +71,9 @@ export function LoQueDejaElCierre({ conPlataformas = true }: { conPlataformas?: 
   const aqui = '?ver=cierre-del-dia'
   return (
     <section aria-label="Lo que deja el cierre del día" data-prueba="cierre-del-dia">
-      <h2 className="s-bandeja-titulo">Lo que deja el cierre del día</h2>
+      <h2 className="s-bandeja-titulo">{soloDe ? 'Lo que dejó el cierre de este día' : 'Lo que deja el cierre del día'}</h2>
       <Bandeja
-        cifras={<CifrasBandeja cifras={[
+        cifras={soloDe ? null : <CifrasBandeja cifras={[
           { etiqueta: 'Para revisar', valor: c.revisar.toLocaleString('es-ES'), apoyo: 'del TPV y de la tienda, abiertos al cierre', a: aqui },
           ...(conPlataformas ? [
             { etiqueta: 'Sin cobrar', valor: eurosExactos(c.sinCobrar.total), apoyo: `${c.sinCobrar.n} cerrado${c.sinCobrar.n === 1 ? '' : 's'} sin confirmar que su liquidación no cobra`, a: aqui },

@@ -19,7 +19,7 @@
 // dentro de un ROLLBACK; el envío, tests/conta/diez/enviar.test.ts, freno a freno.
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo, enCarril } from '../sesion'
 import { loQueTapanSinPregunta } from '../solapes'
 
 const DIR = 'docs/conta/capturas/c04b'
@@ -46,55 +46,41 @@ test('A · apagado (como está en staging): el libro no ofrece «Validar y envia
   await expect(page.getByRole('button', { name: /Validar y enviar a Diez/ })).toHaveCount(0)
 })
 
-test('A · Validar y enviar a Diez: antes de enviar, cuántos y cuánto; y se puede cancelar sin tocar nada', async ({ page }) => {
+test('A · las ventas de Glovo propuestas ya no se validan desde el libro: esperan en Ventas › Cierres del día', async ({ page }) => {
+  // V01 · Entrega 2 (Julio, 24/10): las propuestas de ventas de un canal se validan en
+  // Cierres del día, con su factura resumen y su PDF; el libro ya no las ofrece ni las
+  // envía a Diez al validar (entran en el traspaso del mes). Las del día entero «a la
+  // antigua» (sin canal) sí siguen aquí.
   await encendido(page)
   await entrarComo(page, CUENTA_A.email)
   page.on('pageerror', (e) => console.log(`[error de la página] ${e.message}`))
-  await page.goto('/conta/libros/diario')
-  // M01: el diario va en el marco; su encabezado es para el lector.
+  await page.goto('/conta/libros/diario?ver=revisar')
   await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
-  // M01 (Julio, 16/10): en el móvil solo «+ Nuevo asiento» está a la vista; lo demás, en «⋯».
-  const abrirMas = async () => { if (lado(page) === 'movil') await page.getByRole('button', { name: 'Más acciones del libro diario' }).click() }
-  await abrirMas()
-  // Las ventas de Glovo de A están propuestas: el botón dice cuántas.
-  const boton = page.getByRole('button', { name: /^Validar y enviar a Diez · \d+$/ })
-  await expect(boton).toBeVisible()
-  const n = Number((await boton.textContent())!.match(/(\d+)$/)![1])
-  expect(n).toBeGreaterThan(0)
-  await boton.click()
-  const dialogo = page.getByRole('dialog', { name: 'Validar y enviar a Diez' })
-  await expect(dialogo).toBeVisible()
-  // Una casilla por asiento, marcados los propuestos; el resumen con cuántos y el total.
-  await expect(dialogo.getByRole('checkbox', { checked: true })).toHaveCount(n)
-  await expect(dialogo.getByText(new RegExp(`^${n} asientos? · [\\d.]+,\\d{2}\\s€$`))).toBeVisible()
-  await expect(dialogo.getByText(/Si uno se valida y no llega a Diez, se para ahí y los siguientes se quedan como están/)).toBeVisible()
-  await expect(dialogo.getByRole('button', { name: `Validar y enviar ${n} a Diez` })).toBeEnabled()
+  await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
+  const asientos = lado(page) === 'ordenador'
+    ? page.getByRole('grid', { name: 'Asientos del libro diario' })
+    : page.getByRole('list', { name: 'Asientos del libro diario' })
+  await expect(asientos).toBeVisible({ timeout: 30_000 })
+  await expect(asientos.getByText(/Ventas Glovo · /)).toHaveCount(0)
   await capturar(page, 'validar-y-enviar')
-  // Desmarcar uno cambia la cuenta (cuántos y cuánto, antes de enviar).
-  await dialogo.getByRole('checkbox').first().uncheck()
-  await expect(dialogo.getByRole('button', { name: `Validar y enviar ${n - 1} a Diez` })).toBeVisible()
-  // Cancelar no valida nada: el botón sigue diciendo los mismos.
-  await dialogo.getByRole('button', { name: 'Cancelar' }).click()
-  await expect(dialogo).toHaveCount(0)
-  await abrirMas()
-  await expect(page.getByRole('button', { name: `Validar y enviar a Diez · ${n}` })).toBeVisible()
 })
 
-test('A · un asiento de ventas de Glovo propuesto: un solo «Validar asiento», que envía; y nada de Diez junto al número hasta validarlo', async ({ page }) => {
+test('A · un asiento de ventas de Glovo propuesto: se valida en Cierres del día, y nada de Diez junto al número hasta validarlo', async ({ page }) => {
   await encendido(page)
   await entrarComo(page, CUENTA_A.email)
-  await page.goto('/conta/libros/diario?ver=revisar')
-  // M01: en el ordenador, una fila de la tabla densa; en el móvil, su tarjeta.
-  const filas = lado(page) === 'ordenador'
-    ? page.getByRole('grid', { name: 'Asientos del libro diario' }).getByRole('row', { name: /Ventas Glovo · / })
-    : page.getByRole('list', { name: 'Asientos del libro diario' }).getByRole('button', { name: /Ventas Glovo · / })
-  await filas.first().click()
-  if (lado(page) === 'ordenador') await page.getByRole('link', { name: 'Abrir el asiento' }).click()
-  await expect(page.getByRole('heading', { level: 1, name: /^Ventas Glovo · / })).toBeVisible()
+  // El de Glovo del 25/09 en Norte Centro (la e2e de Cierres no lo toca: su asiento no cambia).
+  await page.goto(`/conta/libros/diario/${enCarril('a6f75b0c-6e5c-4106-88b3-5659e6ca9618')}`)
+  await expect(page.getByRole('heading', { level: 1, name: /^Ventas Glovo · / })).toBeVisible({ timeout: 30_000 })
   // C07: no hay sección «Con Diez» ni botón aparte; lo propuesto no lleva detalle de Diez.
   await expect(page.getByRole('region', { name: 'Con Diez' })).toHaveCount(0)
   await expect(page.locator('[data-prueba="detalle-diez"]')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Validar asiento' })).toBeVisible()
+  // V01 · Entrega 2: no se valida aquí; lleva a su cierre, que lo valida con su factura y su PDF.
+  await expect(page.getByRole('button', { name: 'Validar asiento' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Validar y enviar a Diez' })).toHaveCount(0)
+  const ir = page.getByRole('link', { name: 'Validar en Cierres del día' })
+  await expect(ir).toBeVisible()
   await capturar(page, 'asiento-con-diez')
+  await ir.click()
+  await expect(page).toHaveURL(/\/conta\/ventas\/cierres\/[0-9a-f-]{36}$/)
+  await expect(page.getByRole('heading', { level: 1, name: /^Glovo · / })).toBeVisible({ timeout: 30_000 })
 })

@@ -68,9 +68,15 @@ async function enElCajon(page: Page) {
  */
 async function paginas(page: Page, apartado: string) {
   await enElCajon(page)
-  await barraAbiertaSiPlegada(page)
   const lista = page.getByRole('list', { name: `Páginas de ${apartado}` })
-  await expect(lista).toBeVisible()
+  // N5: en Compras y Ventas, a 1440 px, la barra se pliega SOLA al llegar. Si se
+  // mira una vez, puede estar aún abierta (la página de antes) y plegarse justo
+  // después: entonces la lista no sale nunca (s01/esqueleto, 413, 24/10). Se
+  // vuelve a mirar hasta que sale, abriéndola cada vez que esté plegada.
+  await expect(async () => {
+    await barraAbiertaSiPlegada(page)
+    await expect(lista).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
   return lista
 }
 /** Los nombres de las páginas, sin el número de su contador. */
@@ -223,12 +229,16 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await expect(page.getByRole('heading', { level: 1, name: 'Facturas recibidas' })).toHaveCount(1)
   await page.waitForLoadState('networkidle')
   await expect(page.getByText(/Sube la quincena de Catcher/)).toHaveCount(0)
-  // Ventas: sin plataformas. V01: las facturas están en Ventas › Facturas.
+  // Ventas: sin plataformas. V01 · Entrega 2: «Ventas» a secas lleva a Ventas › Facturas, y
+  // Cierres del día (de hostelería) no sale ni por la dirección.
   await page.goto('/conta/ventas')
-  await expect(page.getByText(/^Tus facturas están en Ventas › Facturas/)).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText(/plataforma/i)).toHaveCount(0)
-  await page.getByRole('link', { name: 'Ir a Facturas' }).click()
+  await expect(page).toHaveURL(/\/conta\/ventas\/facturas$/, { timeout: 30_000 })
   await expect(page.getByRole('heading', { level: 1, name: 'Facturas' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(/plataforma/i)).toHaveCount(0)
+  await expect((await paginas(page, 'Ventas')).getByRole('link', { name: 'Cierres del día' })).toHaveCount(0)
+  await cerrarCajon(page)
+  await page.goto('/conta/ventas/cierres')
+  await expect(page.getByText(/^Los cierres del día son de las empresas que venden en hostelería/)).toBeVisible({ timeout: 30_000 })
   expect(errores).toEqual([])
 })
 
@@ -423,6 +433,8 @@ test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esque
     // S02: sus páginas, debajo del apartado en la barra; «Por revisar» ya no es una de ellas.
     if (lado(page) === 'ordenador') await barra(page).getByRole('link', { name: 'Compras y gastos', exact: true }).click()
     else await page.goto('/conta/compras')
+    // El enlace de «Compras y gastos» lleva a su primera página, Facturas recibidas (/conta/documentos).
+    await expect(page).toHaveURL(/\/conta\/(compras|documentos)/)
     await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Liquidaciones'])
     await cerrarCajon(page)
   } finally {

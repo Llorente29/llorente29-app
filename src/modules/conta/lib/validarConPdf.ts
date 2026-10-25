@@ -20,17 +20,22 @@ import type { ResumenBD } from '../../../../supabase/functions/_shared/resumenDe
 export interface PuertoValidarConPdf {
   resumen(entryId: string): Promise<ResumenBD>
   numeroPrevisto(entryId: string): Promise<number>
-  /** El PDF del asiento como quedará validado con ese número. Lanza si no se puede hacer. */
-  hacerPdf(r: ResumenBD): Promise<{ bytes: Uint8Array; nombre: string }>
+  /**
+   * V01 · Entrega 2: la factura resumen que le tocaría (la de la serie del
+   * canal), para un cierre del día. Sin ella, el PDF lleva el número de antes.
+   */
+  facturaPrevista?(entryId: string): Promise<string>
+  /** El PDF del asiento como quedará validado con ese número (y esa factura). Lanza si no se puede hacer. */
+  hacerPdf(r: ResumenBD, factura?: string | null): Promise<{ bytes: Uint8Array; nombre: string }>
   /** Lo sube a su sitio (cuenta/asiento/huella.pdf) y devuelve la ruta y la huella. */
   subir(r: ResumenBD, pdf: Uint8Array): Promise<{ ruta: string; sha256: string }>
   /** Valida y guarda el PDF en una transacción. Lanza si no (y entonces no se ha validado). */
-  validarConDocumento(a: { entryId: string; numero: number; ruta: string; nombre: string; sha256: string; bytes: number; quien: string | null }): Promise<{ serie: number; numero: number }>
+  validarConDocumento(a: { entryId: string; numero: number; factura?: string | null; ruta: string; nombre: string; sha256: string; bytes: number; quien: string | null }): Promise<{ serie: number; numero: number; factura?: string | null }>
   /** Solo para lo validado antes de la 0720 sin su PDF: guardarlo ahora. */
   guardarDocumento(entryId: string, quien: string | null): Promise<unknown>
 }
 
-export type ValidadoConPdf = { serie: number; numero: number; yaEstaba: boolean }
+export type ValidadoConPdf = { serie: number; numero: number; yaEstaba: boolean; factura?: string | null }
 
 /** La base no ha validado porque el número ha cambiado entre medias: se puede volver a intentar. */
 export const esNumeroCambiado = (m: string) => /se ha validado otro asiento de la serie a la vez/.test(m)
@@ -46,12 +51,13 @@ export async function validarConPdf(entryId: string, quien: string | null, p: Pu
   }
   for (let intento = 1; ; intento++) {
     const numero = await p.numeroPrevisto(entryId)
+    const factura = p.facturaPrevista ? await p.facturaPrevista(entryId) : null
     // El resumen como quedará: validado y con su número. Si no se puede hacer, se para aquí.
     const r: ResumenBD = { ...r0, estado: 'validado', numero }
-    const pdf = await p.hacerPdf(r)
+    const pdf = await p.hacerPdf(r, factura)
     const sub = await p.subir(r, pdf.bytes)
     try {
-      const v = await p.validarConDocumento({ entryId, numero, ruta: sub.ruta, nombre: pdf.nombre, sha256: sub.sha256, bytes: pdf.bytes.length, quien })
+      const v = await p.validarConDocumento({ entryId, numero, factura, ruta: sub.ruta, nombre: pdf.nombre, sha256: sub.sha256, bytes: pdf.bytes.length, quien })
       return { ...v, yaEstaba: false }
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e)

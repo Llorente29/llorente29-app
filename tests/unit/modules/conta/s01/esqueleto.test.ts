@@ -60,9 +60,11 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     // La página de aceptar una invitación a la asesoría no es de ningún producto (va sin marco).
     aceptarAsesoria: null,
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
-    ventas: null,
+    // V01 · Entrega 2: «Ventas» a secas lleva a Cierres del día.
+    ventas: 'facturacion.cierres',
     // V01 · Ventas › Facturas: la lista, una nueva y la ficha.
     facturasVenta: 'facturacion.emitidas', nuevaFacturaVenta: 'facturacion.emitidas', facturaVenta: 'facturacion.emitidas',
+    cierres: 'facturacion.cierres', cierre: 'facturacion.cierres',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
@@ -108,7 +110,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     ])
   })
   it('S02 · las páginas del mapa: Ventas (V01: Facturas · Cobros · Series; Cobros y Series aún sin pantalla) y Laboral, aún sin pantalla', () => {
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Series'])
+    // V01 · Entrega 2: y, en su bloque «Hostelería», Cierres del día (solo con hostelería).
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Series', 'Cierres del día'])
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
     expect(PRODUCTOS.find((p) => p.id === 'laboral')!.pestanas.map((t) => t.etiqueta)).toEqual(['Empleados', 'Nóminas', 'Seguros sociales', 'Fichajes y ausencias', 'Portal del empleado'])
   })
   // S02 · PR 2 (decisión 5 de Julio): la emitida pasa a Facturación › Facturas
