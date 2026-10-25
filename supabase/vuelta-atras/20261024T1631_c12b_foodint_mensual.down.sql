@@ -25,5 +25,6 @@ begin
      set next_try_at = a.next_try_at, updated_at = a.updated_at
     from public.conta_c12b_antes a
    where a.tabla = 'external_send' and s.id = a.fila and s.account_id = v_acc;
+  -- Dentro del mismo bloque: una sola sentencia, que o se hace entera o no.
+  drop table public.conta_c12b_antes;
 end $$;
-drop table public.conta_c12b_antes;
