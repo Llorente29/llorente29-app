@@ -1,0 +1,58 @@
+/* src/modules/conta/estilo/puerta.css
+ * V02 · Inicio › Documentos, la puerta (tablero 19). Las cifras, la tabla y las
+ * tarjetas son las del sistema (tokens.css); aquí solo su colocación.
+ */
+.cxpu-puerta { display: flex; flex-direction: column; gap: var(--s-4); }
+
+.cxpu-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4); }
+.cxpu-cifra {
+  display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-4) var(--s-5); text-decoration: none; color: var(--s-tinta);
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+}
+a.cxpu-cifra:hover { border-color: var(--s-accion-borde); }
+a.cxpu-cifra:focus-visible { outline: none; box-shadow: var(--s-foco); }
+.cxpu-cifra-etiqueta, .cxpu-cifra-apoyo { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.cxpu-cifra-valor { font-size: var(--s-t-cifra); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.cxpu-cifra-valor[data-tono='duda'] { color: var(--s-duda); }
+.cxpu-cifra-valor[data-tono='falta'] { color: var(--s-falta); }
+
+.cxpu-dos { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: var(--s-4); align-items: start; }
+.cxpu-lado { display: flex; flex-direction: column; gap: var(--s-4); }
+
+.cxpu-tabla td { white-space: nowrap; }
+.cxpu-tabla td.cxpu-de { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.cxpu-acciones { display: inline-flex; gap: var(--s-4); justify-content: flex-end; }
+.cxpu-no-se { color: var(--s-duda); font-weight: var(--s-peso-fuerte); }
+.cxpu-vacio { margin: 0; padding: var(--s-4) var(--s-5); color: var(--s-apoyo); }
+
+.cxpu-tarjetas { list-style: none; margin: 0; padding: 0; }
+.cxpu-tarjeta { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.cxpu-tarjeta:last-child { border-bottom: none; }
+.cxpu-tarjeta-cabeza { display: flex; justify-content: space-between; align-items: center; gap: var(--s-3); }
+
+.cxpu-como { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-3) var(--s-5); margin: 0; padding: var(--s-4) var(--s-5) 0; }
+.cxpu-como dt { color: var(--s-apoyo); }
+.cxpu-como dd { margin: 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }
+.cxpu-direccion { overflow-wrap: anywhere; }
+.cxpu-nota { margin: 0; padding: var(--s-4) var(--s-5); font-size: var(--s-t-s); color: var(--s-apoyo); }
+.cxpu-nota strong { color: var(--s-tinta); }
+
+.cxpu-grupos { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.cxpu-grupo p { margin: 0 0 var(--s-2); }
+.cxpu-hechos { margin: var(--s-3) 0 0; padding-left: var(--s-5); }
+.cxpu-hechos li[data-tono='falta'] { color: var(--s-falta); }
+
+.cxpu-dime { border: none; margin: 0 0 var(--s-3); padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+.cxpu-dime-opcion, .cxpu-dime-recordar { display: flex; gap: var(--s-2); align-items: center; }
+.cxpu-texto { font-family: inherit; resize: vertical; }
+.cxpu-fuentes { list-style: none; margin: var(--s-3) 0 0; padding: 0; max-height: 280px; overflow: auto; }
+.cxpu-fuentes li { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.cxpu-fuente-cabeza { display: flex; justify-content: space-between; gap: var(--s-3); }
+.cxpu-fuente-local { display: flex; align-items: flex-end; gap: var(--s-3); }
+.cxpu-fuente-local .s-campo { flex: 1; }
+
+@media (max-width: 900px) {
+  .cxpu-cifras { grid-template-columns: minmax(0, 1fr); }
+  .cxpu-dos { grid-template-columns: minmax(0, 1fr); }
+  .cxpu-dime { grid-template-columns: minmax(0, 1fr); }
+}

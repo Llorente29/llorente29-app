@@ -11,7 +11,7 @@
 // Lo que impide subir (un fichero que falta, periodos mezclados) se dice y no se
 // sube; lo que no cuadra en una factura sube igual y queda «Por aclarar».
 
-import { useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaLoteCatcher } from '@/config/navegacion'
 import { resumen, LoteNoValido } from '@/modules/conta/lib/catcherQuincena'
@@ -20,8 +20,13 @@ import { abrirQuincena, cruzarLote, subirQuincena, type QuincenaAbierta } from '
 
 const ACEPTA = '.zip,.xlsx,.xls,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
-/** `alSubir`: la quincena ya está subida (y cruzada): la lista de la página la vuelve a leer. */
-export function QuincenaCatcher({ accountId, companyId, quien, alSubir }: { accountId: string; companyId: string; quien: string | null; alSubir?: () => void }) {
+/**
+ * `alSubir`: la quincena ya está subida (y cruzada): la lista de la página la vuelve a leer.
+ * `iniciales` (V02): los ficheros soltados en la puerta, que se leen al abrirse, igual que si se soltaran aquí.
+ */
+export function QuincenaCatcher({ accountId, companyId, quien, alSubir, iniciales }: {
+  accountId: string; companyId: string; quien: string | null; alSubir?: () => void; iniciales?: readonly File[]
+}) {
   const entrada = useRef<HTMLInputElement>(null)
   const [encima, setEncima] = useState(false)
   const [paso, setPaso] = useState<string | null>(null)
@@ -59,6 +64,14 @@ export function QuincenaCatcher({ accountId, companyId, quien, alSubir }: { acco
       setFallo(e instanceof Error ? e.message : String(e))
     } finally { setPaso(null) }
   }
+
+  // V02 · Los de la puerta, una vez al abrirse.
+  const leidosIniciales = useRef(false)
+  useEffect(() => {
+    if (leidosIniciales.current || !iniciales?.length) return
+    leidosIniciales.current = true
+    void Promise.resolve().then(() => leer([...iniciales]))
+  }, [iniciales]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const alSoltar = (e: DragEvent) => {
     e.preventDefault(); setEncima(false)
