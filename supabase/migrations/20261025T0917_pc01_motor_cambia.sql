@@ -5,8 +5,8 @@
 -- después de la 0916, que crea las tablas, columnas y funciones que usa.
 --
 --   1. Dos CHECK que solo amplían, y la clave ajena del asiento de un cobro,
---      que pasa a «on delete cascade» (el cobro se va con su asiento propuesto
---      cuando se deshace su casado):
+--      que pasa a «on delete set null» (deshacer el casado borra su asiento
+--      propuesto; el disparador quita después el cobro, y lo dice):
 --      · customer_invoice_payment.amount: distinto de cero (antes, mayor que
 --        cero). Un cobro negativo salda una factura negativa (la devolución
 --        traída de Diez, −3,90 €: decisión de Julio, 25/10).
@@ -59,13 +59,15 @@
 --
 -- Vuelta atrás: supabase/vuelta-atras/20261025T0917_pc01_motor_cambia.down.sql
 
--- 1 · Los dos CHECK que amplían, y el cobro se va con su asiento ---------------------------
+-- 1 · Los dos CHECK que amplían, y la clave ajena del asiento de un cobro -----------------
 -- Deshacer un casado con su asiento aún propuesto BORRA ese asiento (bank_deshacer)
--- antes de marcar el casado como deshecho: el cobro de la factura que hizo ese
--- asiento se va con él (antes, la clave ajena lo impedía; hoy no hay ninguno).
+-- antes de marcar el casado como deshecho: la clave ajena ya no lo impide (el
+-- cobro se queda un momento sin asiento) y, al marcarse deshecho, el disparador
+-- quita el cobro y lo apunta en el historial de la factura. Hoy no hay ningún
+-- cobro con asiento de banco.
 alter table public.customer_invoice_payment drop constraint if exists customer_invoice_payment_entry_id_fkey;
 alter table public.customer_invoice_payment add constraint customer_invoice_payment_entry_id_fkey
-  foreign key (entry_id) references public.journal_entry(id) on delete cascade;
+  foreign key (entry_id) references public.journal_entry(id) on delete set null;
 alter table public.customer_invoice_payment drop constraint if exists customer_invoice_payment_amount_check;
 alter table public.customer_invoice_payment add constraint customer_invoice_payment_amount_check check (amount <> 0);
 alter table public.bank_match_item drop constraint if exists bank_match_item_uno;
