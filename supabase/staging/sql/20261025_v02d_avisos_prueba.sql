@@ -39,6 +39,8 @@ insert into _p select 'fn:' || p.proname, md5(p.prosrc || '|' || coalesce(p.proc
  where n.nspname = 'public' and p.prokind = 'f' and p.proname in ('_conta_puerta_llegadas', 'conta_puerta_fuentes', 'conta_puerta_fuentes_proponer');
 
 -- 0 · La empresa A, sus datos de prueba (como postgres: lo que hace la pantalla va después, como usuario).
+-- Proponer pide ser de la cuenta: aquí, como el servicio.
+select set_config('request.jwt.claims', '{"role": "service_role"}', true);
 do $$
 declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
