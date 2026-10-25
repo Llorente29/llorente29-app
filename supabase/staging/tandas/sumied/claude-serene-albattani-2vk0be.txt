@@ -1,0 +1,9 @@
+# V01b · El IVA del libro manda. La 0840 cambia (un disparador y dos
+# funciones) y la 0841 toca datos: las dos desde la rama, en ROLLBACK. Su
+# prueba (ROLLBACK): el borrador da lo mismo; emitir guarda la cuota del libro;
+# una «traída» con 1,80 en el libro (el cálculo da 1,81) queda con 1,80; la
+# cuota puesta no se cambia; su rectificativa resta lo declarado; y las
+# vueltas atrás, con las funciones byte a byte.
+supabase/migrations/20261025T0840_v01b_cuota_por_linea.sql
+supabase/migrations/20261025T0841_v01b_cuotas_emitidas.sql
+supabase/staging/sql/20261025_v01b_cuotas_prueba.sql

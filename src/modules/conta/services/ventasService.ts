@@ -20,7 +20,7 @@ import { leerLibroRegistro } from '@/modules/conta/services/librosService'
 import { leerEnviosDiez, leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
 import { MAX_FILAS, facturasDeAnotaciones, mesesDeLaVentana } from '@/modules/conta/facturacion/emitidas'
 import type { AnotacionLibro } from '@/modules/conta/lib/libroRegistro'
-import { cifrasDe, diferenciaDe, type DiezFactura, type EstadoCobroBase, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
+import { cifrasGuardadas, diferenciaDe, type DiezFactura, type EstadoCobroBase, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
 
@@ -118,7 +118,8 @@ export async function leerFacturasVenta(accountId: string, companyId: string, de
 
 // ── Una factura ───────────────────────────────────────────────────────────────
 
-export interface LineaGuardada { id: string; concepto: string; cantidad: number; precio: number; descuento: number; tipoId: string; tipo: number; recargo: number | null; cuentaId: string; importe: number }
+/** cuota: la de IVA guardada al emitir (V01b, la del libro de su asiento); null en un borrador. */
+export interface LineaGuardada { id: string; concepto: string; cantidad: number; precio: number; descuento: number; tipoId: string; tipo: number; recargo: number | null; cuentaId: string; importe: number; cuota: number | null }
 export interface EventoFactura { cuando: string; tipo: string; texto: string; quien: string | null }
 export interface CobroFactura { id: string; fecha: string; importe: number; forma: string | null; nota: string | null; quien: string | null }
 
@@ -179,7 +180,8 @@ export async function leerFactura(accountId: string, id: string): Promise<Factur
     entryId: s(f.entry_id), pdf: f.pdf_path ? { ruta: String(f.pdf_path), bytes: f.pdf_bytes == null ? null : n(f.pdf_bytes) } : null,
     enviadaEl: s(f.sent_at), emitidaEl: s(f.issued_at), emitidaPor: s(f.issued_by_name), creadaPor: s(f.created_by_name),
     lineas: lineas.map((l) => ({ id: String(l.id), concepto: String(l.concept), cantidad: n(l.quantity), precio: n(l.unit_price), descuento: n(l.discount_pct),
-      tipoId: String(l.tax_rate_id), tipo: n(l.tax_pct), recargo: l.surcharge_pct == null ? null : n(l.surcharge_pct), cuentaId: String(l.revenue_account_id), importe: n(l.amount) })),
+      tipoId: String(l.tax_rate_id), tipo: n(l.tax_pct), recargo: l.surcharge_pct == null ? null : n(l.surcharge_pct), cuentaId: String(l.revenue_account_id), importe: n(l.amount),
+      cuota: l.tax_amount == null ? null : n(l.tax_amount) })),
     eventos: eventos.map((e) => ({ cuando: String(e.at), tipo: String(e.kind), texto: String(e.text), quien: s(e.by_name) })),
     cobros: cobros.map((c) => ({ id: String(c.id), fecha: String(c.paid_on), importe: n(c.amount), forma: s(c.method), nota: s(c.note), quien: s(c.created_by_name) })),
     rectificativas: rectif.map((r) => ({ id: String(r.id), numero: s(r.number_text), estado: String(r.status), total: n(r.total) })),
@@ -303,9 +305,11 @@ export async function empresaDelPdf(accountId: string, companyId: string): Promi
 
 /** Lo que pinta el PDF, de la factura guardada (las cifras, las de la base). */
 export function datosDelPdf(empresa: DatosFacturaPdf['empresa'], f: FacturaGuardada, original: FacturaGuardada | null, formaCobro: string | null): DatosFacturaPdf {
-  // Por tipo, como la base (redondeo por tipo). Una rectificativa pinta lo que
-  // debía ser, pero sus cifras son la diferencia con la que corrige.
-  const deLineas = (ls: readonly LineaGuardada[]) => cifrasDe(ls.map((l) => ({ ...l, recargo: null })), false, 0)
+  // Por tipo: el IVA GUARDADO de cada línea (V01b: el del libro de su asiento,
+  // el que está en Diez y en los libros ya declarados); sin él, el calculado
+  // como la base. Una rectificativa pinta lo que debía ser, pero sus cifras son
+  // la diferencia con la que corrige (y de la corregida, lo guardado).
+  const deLineas = (ls: readonly LineaGuardada[]) => cifrasGuardadas(ls)
   let porTipo = deLineas(f.lineas).porTipo
   if (f.rectificativa) {
     const vieja = deLineas(original?.lineas ?? [])

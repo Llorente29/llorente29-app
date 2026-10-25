@@ -48,7 +48,7 @@ import {
   type Catalogos, type FacturaGuardada,
 } from '@/modules/conta/services/ventasService'
 import {
-  ETIQUETAS_BORRADOR, NOMBRE_CORRECCION, NOMBRE_ESTADO, asientoPrevio, cifrasDe, diferenciaDe, estadoDe, faltaParaEmitir, lineaVacia, lineasLeidas, textoDeNumero, venceCon,
+  ETIQUETAS_BORRADOR, NOMBRE_CORRECCION, NOMBRE_ESTADO, asientoPrevio, cifrasDe, cifrasGuardadas, diferenciaDe, estadoDe, faltaParaEmitir, lineaVacia, lineasLeidas, textoDeNumero, venceCon,
   type BorradorVenta, type LineaEnEdicion,
 } from '@/modules/conta/lib/facturasVenta'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
@@ -143,7 +143,8 @@ export default function FacturaVentaPage() {
   const leidas = lineasLeidas(b.lineas, tipos)
   const retPct = cat?.retenciones.find((r) => r.id === b.retencionId)?.tipo ?? 0
   const cifrasNuevas = cifrasDe(leidas.lineas, false, retPct)
-  const cifrasViejas = original.datos ? cifrasDe(original.datos.lineas.map((l) => ({ ...l, recargo: null })), false, retPct) : null
+  // V01b: la corregida ya está emitida: su IVA es el guardado, no uno recalculado.
+  const cifrasViejas = original.datos ? cifrasGuardadas(original.datos.lineas, retPct) : null
   // Lo que se emite: una rectificativa, la diferencia; si no, lo escrito.
   const cifras = corrige && cifrasViejas
     ? diferenciaDe(corrige.tipo === 'anular' ? cifrasDe([], false, retPct) : corrige.tipo === 'datos' ? cifrasViejas : cifrasNuevas, cifrasViejas)
@@ -425,7 +426,7 @@ export default function FacturaVentaPage() {
           </Campo>
         ) : <Boton variante="enlace" icono="nuevo" onClick={() => setConRetencion(true)}>Retención (IRPF)</Boton>)}
         {editable && <Campo etiqueta="Notas" ayuda="Salen al pie del PDF.">{(p) => <Texto {...p} valor={b.notas} alCambiar={(v) => ed.poner('notas', v)} maxLength={500} />}</Campo>}
-        <Totales cifras={editable ? cifras : { base: f!.base, iva: f!.iva, recargo: f!.recargoImporte, retencion: f!.retencion, total: f!.total, porTipo: (f!.rectificativa ? cifras : cifrasDe(f!.lineas.map((l) => ({ ...l, recargo: null })), false, 0)).porTipo }}
+        <Totales cifras={editable ? cifras : { base: f!.base, iva: f!.iva, recargo: f!.recargoImporte, retencion: f!.retencion, total: f!.total, porTipo: (f!.rectificativa ? cifras : cifrasGuardadas(f!.lineas)).porTipo }}
           retencionPct={editable ? retPct : f!.base ? Math.round(f!.retencion / f!.base * 10000) / 100 : 0} diferencia={!!corrige} />
         {editable && falta.length > 0 && <p className="s-apoyo" data-prueba="falta-para-emitir">Para emitirla falta {falta.join(', ')}.</p>}
       </BloqueFicha>

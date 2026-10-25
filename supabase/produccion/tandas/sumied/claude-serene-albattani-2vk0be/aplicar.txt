@@ -1,0 +1,23 @@
+# V01b · El IVA del libro manda en los PDF de las facturas (Julio, 25/10).
+# Rama claude/serene-albattani-2vk0be. Se ensaya y se aplica desde esta rama,
+# antes de fusionar.
+#
+#   1. 0840 — AÑADE la cuota de cada línea (customer_invoice_line.tax_amount,
+#      admite nulos) y la función que la calcula y la guarda; CAMBIA, declarado
+#      y con su prueba de staging: el disparador nuevo trg_customer_invoice_cuotas
+#      (al emitir guarda la cuota, la del libro de su asiento),
+#      customer_invoice_line_inalterable (la cuota se pone una vez) y
+#      _conta_venta_cifras (el IVA guardado manda; sin él, el calculado). No toca
+#      datos. No está en el camino del pedido.
+#   2. 0841 — DESTRUYE O MUEVE (toca datos): la cuota de las 1.286 emitidas de
+#      Foodint, con la del libro de su asiento. Copia previa en
+#      _copia_v01b_cuotas. Comprueba al céntimo que cada factura suma su IVA;
+#      si alguna no, no aplica nada. El libro, los asientos y Diez, intactos.
+#      Pide «autorizo»: 20261025T0841_v01b_cuotas_emitidas.sql
+#
+# Después, en Ventas › Facturas, «Hacer los 108 PDF» (las traídas que faltan).
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/v01b-cuotas.sql
+supabase/migrations/20261025T0840_v01b_cuota_por_linea.sql
+supabase/migrations/20261025T0841_v01b_cuotas_emitidas.sql
