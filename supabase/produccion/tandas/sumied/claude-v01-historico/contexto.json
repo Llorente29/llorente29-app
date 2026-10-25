@@ -1,6 +1,6 @@
 {
-  "_que": "V01 · El histórico · contexto de producción de la tanda (1730), medido en SOLO LECTURA el 24/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen vat_book_entry (≈4.509 filas) y customer_invoice_counter (0), fuera del camino del pedido; nada de lo que crea la 1730; nada en el historial. Los traídos sin NIF son 1.196, todos de Foodint (51ad1792…); los cierres validados sin factura y en Diez, 85.",
-  "medido": "2026-10-24T15:45Z",
+  "_que": "V01 · El histórico · contexto de producción de la tanda (1730), medido en SOLO LECTURA el 24/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen vat_book_entry (≈4.509 filas) y customer_invoice_counter (0), fuera del camino del pedido; nada de lo que crea la 1730; nada en el historial. Los traídos sin NIF son 1.196, todos de Foodint (51ad1792…); los cierres validados sin factura y en Diez, 85. Vuelto a medir el 25/10 a las 05:05Z, con la tanda del #321 (1440 y 1441) ya aplicada: el mismo contexto y los mismos 85 y 1.196.",
+  "medido": "2026-10-25T05:05Z",
   "tanda": {
     "supabase/migrations/20261024T1730_v01_historico_facturas.sql": "dd8e3eef62a7501bc67e48a0a93d19bf"
   },
