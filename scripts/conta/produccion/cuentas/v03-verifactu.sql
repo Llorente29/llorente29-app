@@ -5,11 +5,11 @@
 -- Verifactu y las funciones son de la base entera, y se dice. Las tablas que
 -- crea la tanda solo se nombran dentro de cadenas (no existen antes).
 -- Lo que tiene que cambiar: las tablas de Verifactu y el disparador, de «no» a
--- «sí». Lo demás, igual: ninguna empresa con Verifactu encendido, ningún
+-- «sí», y los dos cron de la 2249, de 0 a 2. Lo demás, igual: ninguna empresa con Verifactu encendido, ningún
 -- registro, las facturas de Foodint las mismas y conta_venta_emitir sin tocar.
 -- Medido en producción el 25/10 a las 21:50 UTC, antes: 0 / 1286 / 0 · 0 de 6 ·
--- no existe · no existe · no · 99be8350. Después: lo mismo, salvo 6 de 6, 0, 0
--- y «sí».
+-- no existe · no existe · no · 99be8350 · 0. Después: lo mismo, salvo 6 de 6, 0,
+-- 0, «sí» y 2 cron.
 select clave, valor from (
   select 1 o, 'facturas de venta de Foodint (borrador / emitidas / anuladas)' clave,
     (select count(*) filter (where status = 'borrador') || ' / ' || count(*) filter (where status = 'emitida') || ' / ' || count(*) filter (where status = 'anulada')
@@ -26,5 +26,7 @@ select clave, valor from (
   select 5, 'disparador customer_invoice_verifactu',
     case when exists (select 1 from pg_trigger where tgrelid = 'public.customer_invoice'::regclass and tgname = 'customer_invoice_verifactu') then 'sí' else 'no' end union all
   select 6, 'huella de conta_venta_emitir',
-    (select string_agg(left(md5(p.prosrc), 8), ',') from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_venta_emitir')
+    (select string_agg(left(md5(p.prosrc), 8), ',') from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_venta_emitir') union all
+  select 7, 'cron de Verifactu (base entera)',
+    (select count(*) from cron.job where jobname in ('verifactu-despertar', 'verifactu-aviso-certificado'))::text
 ) t order by o;

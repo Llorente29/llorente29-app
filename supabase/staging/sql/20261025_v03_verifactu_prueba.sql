@@ -17,6 +17,7 @@
 --      queda limpia (no se emite: la V01 no emite líneas exentas); y una
 --      emisión con el NIF mal se deshace entera sin gastar número.
 --   4. El registro no se edita.
+--   6. El despertar y el aviso del certificado (2249).
 --   5. Las vueltas atrás: sin el disparador ni las tablas; conta_venta_emitir
 --      con el mismo md5 del principio.
 
@@ -30,6 +31,7 @@ end $$;
 set local statement_timeout = '180s';
 
 -- La 2140 solo añade y puede estar ya de verdad (W05): primero las vueltas atrás.
+\i supabase/vuelta-atras/20261025T2249_v03_verifactu_despertar.down.sql
 \i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
 \i supabase/vuelta-atras/20261025T2140_v03_verifactu_motor.down.sql
 
@@ -48,6 +50,7 @@ end $$;
 
 \i supabase/migrations/20261025T2140_v03_verifactu_motor.sql
 \i supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
+\i supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
 
 -- 0 · La huella de la base contra los ejemplos oficiales (v0.1.2 §6).
 do $$ begin
@@ -199,7 +202,55 @@ begin
   raise notice '3b · el contador no se ha movido (%)', v_despues;
 end $$;
 
+-- 6 · El despertar y el aviso del certificado (2249).
+--   · Sin nada de real, verifactu_despertar no llama (ninguna petición nueva).
+--   · A pasa a real con su serie nueva y sin certificado: el aviso sale (uno).
+--   · Con un alta de real pendiente, despertar SÍ llamaría: en staging no hay
+--     cron_secret, así que falla diciéndolo (55000) en vez de callar.
+do $$
+declare v_n bigint; v_m bigint;
+begin
+  select count(*) into v_n from net.http_request_queue;
+  perform public.verifactu_despertar();
+  select count(*) into v_m from net.http_request_queue;
+  if v_m <> v_n then raise exception 'PRUEBA V03 · 6: sin nada de real, despertar ha llamado.'; end if;
+  raise notice '6 · sin nada de real, despertar no llama';
+end $$;
+set local role authenticated;
+do $$
+declare v_e uuid := (select v::uuid from _v where clave = 'empresa'); v_c705 uuid := (select v::uuid from _v where clave = 'c705');
+  v_t21 uuid := (select v::uuid from _v where clave = 't21'); r jsonb; v_cli uuid;
+begin
+  r := public.verifactu_modo(v_e, 'real', 'V03R', 'EMPEZAR', 'Prueba V03');
+  if r->>'modo' <> 'real' then raise exception 'PRUEBA V03 · 6: no pasa a real (%).', r; end if;
+  select party_id into v_cli from public.customer_invoice where id = (select v::uuid from _v where clave = 'nif_mal');
+  r := public.conta_venta_guardar(v_e, null, jsonb_build_object('cliente_id', v_cli, 'serie', 'V03R', 'fecha', (now() at time zone 'Europe/Madrid')::date),
+    jsonb_build_array(jsonb_build_object('concepto', 'Menú en real', 'cantidad', 1, 'precio', 10, 'descuento', 0, 'tipo_id', v_t21, 'cuenta_id', v_c705)), 'Prueba V03');
+  perform public.conta_venta_emitir((r->>'id')::uuid, 'Prueba V03');
+  if not exists (select 1 from public.verifactu_registro where invoice_id = (r->>'id')::uuid and entorno = 'real' and primer_registro) then
+    raise exception 'PRUEBA V03 · 6: la primera de real no es el primer registro de su cadena.';
+  end if;
+  raise notice '6 · A en real: su primera factura (V03R) abre la cadena de real';
+end $$;
+reset role;
+do $$
+declare v_n int; v_msg text;
+begin
+  v_n := public.verifactu_aviso_certificado();
+  if v_n <> 1 then raise exception 'PRUEBA V03 · 6: el aviso del certificado no sale una vez (%).', v_n; end if;
+  if not exists (select 1 from public.system_alert_queue where kind = 'verifactu_certificado' and subject like '%no tiene certificado%') then
+    raise exception 'PRUEBA V03 · 6: el aviso del certificado no está en la cola.';
+  end if;
+  begin
+    perform public.verifactu_despertar();
+    raise exception 'PRUEBA V03 · 6: con real pendiente y sin cron_secret, despertar no ha dicho nada.';
+  exception when sqlstate '55000' then v_msg := sqlerrm;
+  end;
+  raise notice '6 · el aviso del certificado sale (1); con real pendiente despertar llamaría: «%»', v_msg;
+end $$;
+
 -- 5 · Las vueltas atrás.
+\i supabase/vuelta-atras/20261025T2249_v03_verifactu_despertar.down.sql
 \i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
 \i supabase/vuelta-atras/20261025T2140_v03_verifactu_motor.down.sql
 do $$ begin

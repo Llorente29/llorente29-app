@@ -1,9 +1,10 @@
 {
-  "_que": "V03 · E1 · contexto de producción de la tanda (2140 y 2141), medido en SOLO LECTURA el 25/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existe public.customer_invoice (1.286 filas), donde la 2141 pone su disparador; nada de lo que crea la 2140; nada en el camino del pedido; sin otras firmas; nada en el historial.",
-  "medido": "2026-10-25T21:50Z",
+  "_que": "V03 · E1 · contexto de producción de la tanda (2140, 2141 y 2249), medido en SOLO LECTURA el 25/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existe public.customer_invoice (1.286 filas), donde la 2141 pone su disparador; nada de lo que crean la 2140 y la 2249; nada en el camino del pedido; sin otras firmas; nada en el historial.",
+  "medido": "2026-10-25T22:52Z",
   "tanda": {
     "supabase/migrations/20261025T2140_v03_verifactu_motor.sql": "f6f954fc20ec3c33d179115b18cfc355",
-    "supabase/migrations/20261025T2141_v03_verifactu_engancha.sql": "479c3710ca02edb41e84871ecc5b0a87"
+    "supabase/migrations/20261025T2141_v03_verifactu_engancha.sql": "479c3710ca02edb41e84871ecc5b0a87",
+    "supabase/migrations/20261025T2249_v03_verifactu_despertar.sql": "cc11950f77d7e11683cb27b75dc8accb"
   },
   "contexto": {
     "tablas": [

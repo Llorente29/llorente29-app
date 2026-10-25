@@ -10,10 +10,16 @@
 #      (customer_invoice_verifactu) que, al emitir, comprueba y escribe el alta.
 #      Con Verifactu apagado (todas las empresas hoy) no hace nada. Declarado en
 #      su cabecera, con su prueba de staging. No toca datos.
+#   3. 2249 — AÑADE quién despierta el envío (cron verifactu-despertar, cada
+#      minuto: solo llama a conta-verifactu si hay algo de REAL que enviar; hoy
+#      nada) y el aviso del certificado (cron verifactu-aviso-certificado, cada
+#      día: empresas en real con el certificado a 30 días o menos de caducar).
+#      Los cron solo donde está el cron_secret (producción). No toca datos.
 #
 # Sin «autorizo»: ninguno toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 supabase/migrations/20261025T2140_v03_verifactu_motor.sql
 supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
+supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
 cuenta: scripts/conta/produccion/cuentas/v03-verifactu.sql
