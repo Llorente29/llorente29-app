@@ -81,6 +81,8 @@ export interface AsientoDiario {
   huellaAnterior: string | null
   cadena: number | null
   apuntes: ApunteDiario[]
+  /** V01 · Entrega 2: un asiento de ventas del día entero, sin canal (a la antigua): no va a Cierres del día. */
+  sinCanal?: boolean
 }
 
 // ── Filtros por origen ──────────────────────────────────────────────────────
@@ -155,26 +157,38 @@ export function filtrosVisibles(asientos: readonly AsientoDiario[]): { id: Filtr
 //     propuestos del banco (Foodint, 1–14/10) tienen su movimiento casado.
 //   · supplier_payment, purchase_accrual y su contrario: NO. Ninguna pantalla de
 //     Compras los enseña ni los valida: se proponen y se validan aquí.
+//   · sales_day: SÍ (V01, entrega 2, Julio 24/10). Las propuestas de ventas
+//     del cierre del día esperan en Ventas › Cierres del día, que las enseña
+//     con sus pedidos y las valida con su factura resumen, su PDF y su asiento
+//     («Validar y siguiente» con Intro, o «Validar los N listos»). Solo las de
+//     un canal: un día asentado entero «a la antigua» (sin canal, `sinCanal`)
+//     no tiene cierre en esa pantalla y se queda en Asientos (regla 7: nada
+//     sin sitio). Medido el 24/10: en producción no queda ninguno; en staging, sí.
+//     Quien lee los asientos marca `sinCanal` (ventasSinCanal, diarioService).
 // Solo lo PROPUESTO se va: un borrador lo empezó una persona en Asientos, y lo
 // validado o anulado es libro.
 
 /** El apartado donde se decide lo propuesto de un origen. */
-export type SitioPropio = 'recibidas' | 'bancos'
+export type SitioPropio = 'recibidas' | 'bancos' | 'cierres'
 
 const SE_DECIDE_EN: Partial<Record<OrigenAsiento, SitioPropio>> = {
   supplier_invoice: 'recibidas',
   bank: 'bancos',
+  sales_day: 'cierres',
 }
 
 /** Dónde está, en las palabras del menú (para los avisos y el cierre). */
 export const NOMBRE_SITIO: Record<SitioPropio, string> = {
   recibidas: 'Compras y gastos › Facturas recibidas',
   bancos: 'Bancos › Movimientos › Por validar',
+  cierres: 'Ventas › Cierres del día',
 }
 
 /** Si este asiento se decide en otro apartado, cuál; si se decide en Asientos (o ya es libro), null. */
-export function seDecideEnSuSitio(a: Pick<AsientoDiario, 'estado' | 'origen'>): SitioPropio | null {
-  return a.estado === 'propuesto' ? SE_DECIDE_EN[a.origen] ?? null : null
+export function seDecideEnSuSitio(a: Pick<AsientoDiario, 'estado' | 'origen'> & { sinCanal?: boolean }): SitioPropio | null {
+  if (a.estado !== 'propuesto') return null
+  if (a.origen === 'sales_day' && a.sinCanal) return null
+  return SE_DECIDE_EN[a.origen] ?? null
 }
 
 /**
@@ -182,7 +196,7 @@ export function seDecideEnSuSitio(a: Pick<AsientoDiario, 'estado' | 'origen'>): 
  * en otro apartado. La lista, sus vistas, «Para revisar», las cifras, «Lo que
  * he hecho yo» y el número del menú salen de aquí: la misma vara (regla 31).
  */
-export function delLibroDiario<T extends Pick<AsientoDiario, 'estado' | 'origen'>>(asientos: readonly T[]): T[] {
+export function delLibroDiario<T extends Pick<AsientoDiario, 'estado' | 'origen'> & { sinCanal?: boolean }>(asientos: readonly T[]): T[] {
   return asientos.filter((a) => seDecideEnSuSitio(a) === null)
 }
 
@@ -305,6 +319,7 @@ const ORIGEN_TEXTO: Record<OrigenAsiento, string> = {
   payroll: 'Resumen de nóminas', bank: 'Movimiento del banco', vat_settlement: 'Liquidación del IVA', manual: 'A mano', template: 'Predefinido',
   reversal: 'Contraasiento', opening: 'Apertura', closing: 'Cierre', migrated: 'Traído',
   purchase_accrual: 'Recibido sin factura a fin de mes', purchase_accrual_reversal: 'Contrario del recibido sin factura',
+  customer_invoice: 'Factura de venta',
 }
 
 /** De dónde sale, en palabras. */

@@ -52,11 +52,14 @@ function Paginas({ p, paginas, actual, contadores, search, alPulsar }: {
   if (paginas.length === 0) return null
   return (
     <ul className="s-barra-paginas" aria-label={`Páginas de ${p.etiqueta}`}>
-      {paginas.map((t) => {
+      {paginas.map((t, i) => {
         const c = contadores[clavePestana(p.id, t.id)]
         const desc = c ? `s-pagina-n-${p.id}-${t.id}` : undefined
+        // V01 · El título del bloque («Hostelería») encima de su primera página.
+        const bloque = t.bloque && t.bloque !== paginas[i - 1]?.bloque ? t.bloque : null
         return (
           <li key={t.id}>
+            {bloque && <span className="s-barra-bloque">{bloque}</span>}
             <Link to={conConsulta(rutaConta(t.ruta!), search)} className="s-barra-pagina" aria-current={t.id === actual ? 'page' : undefined}
               aria-describedby={desc} onClick={alPulsar}>
               <span className="s-barra-nombre">{t.etiqueta}</span>

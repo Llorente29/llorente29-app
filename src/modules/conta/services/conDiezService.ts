@@ -106,10 +106,16 @@ export async function leerConDiez(accountId: string, companyId: string, entryIds
   return out
 }
 
-/** El «Resumen de ventas» del asiento, tal como queda validado (estado y número los pone quien llama). */
-function hacerPdf(r: ResumenBD): { bytes: Uint8Array; nombre: string } {
+/**
+ * El «Resumen de ventas» del asiento, tal como queda validado (estado y número
+ * los pone quien llama). V01 · Entrega 2: con la factura resumen de su cierre
+ * (la de la serie del canal), ese es su número y el de su fichero.
+ */
+function hacerPdf(r: ResumenBD, factura?: string | null): { bytes: Uint8Array; nombre: string } {
   const listo = resumenDeAsiento(r, { correspondencia: correspondenciaDeEmpresa(r.company_id), generado: new Date(), hoy: hoyMadrid() })
-  return { bytes: resumenVentasPdf(jsPDF, listo.datos), nombre: listo.nombreFichero }
+  if (!factura) return { bytes: resumenVentasPdf(jsPDF, listo.datos), nombre: listo.nombreFichero }
+  const ref = factura.replace(/[^A-Za-z0-9.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  return { bytes: resumenVentasPdf(jsPDF, { ...listo.datos, numeroFactura: factura }), nombre: `ResumenDeVentas_${ref}.pdf` }
 }
 
 /** Lo sube a cuenta/asiento/huella.pdf. Subido sin enlazar no es el documento de nadie. */
@@ -158,6 +164,46 @@ export async function validarConDocumento(entryId: string, quien: string | null)
     },
     guardarDocumento,
   })
+}
+
+/**
+ * V01 · Entrega 2 · Validar un cierre del día: el asiento con su PDF y su
+ * factura resumen (la siguiente de la serie del canal), en una transacción
+ * (conta_cierre_validar). No envía nada a Diez: entra en el traspaso del mes.
+ */
+export async function validarCierreConDocumento(entryId: string, quien: string | null): Promise<ValidadoConPdf> {
+  const quitar = (e: unknown) => new Error((e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, ''))
+  return validarConPdf(entryId, quien, {
+    resumen: (id) => rpc<ResumenBD>('conta_resumen_ventas', { p_entry: id }),
+    numeroPrevisto: (id) => rpc<number>('conta_numero_previsto', { p_entry: id }),
+    facturaPrevista: async (id) => String((await rpc<Fila>('conta_cierre_factura_prevista', { p_entry: id })).texto),
+    hacerPdf: async (r, factura) => {
+      try { return hacerPdf(r, factura) } catch (e) { throw new Error(`su PDF no se puede hacer (${quitar(e).message.replace(/\.$/, '')})`, { cause: e }) }
+    },
+    subir: subirPdf,
+    validarConDocumento: async (a) => {
+      try {
+        const r = await rpc<Fila>('conta_cierre_validar', { p_entry: a.entryId, p_numero: a.numero, p_factura: a.factura, p_ruta: a.ruta, p_nombre: a.nombre, p_sha256: a.sha256, p_bytes: a.bytes, p_quien_nombre: a.quien })
+        return { serie: Number(r.serie), numero: Number(r.numero), factura: s(r.factura) }
+      } catch (e) { throw quitar(e) }
+    },
+    guardarDocumento,
+  })
+}
+
+/**
+ * V01 · Entrega 2 · Cómo quedará el PDF de un cierre sin validar: con el nº de
+ * asiento y la factura que le tocarían ahora. Solo se enseña; no se sube.
+ */
+export async function vistaPreviaCierre(entryId: string): Promise<{ url: string; nombre: string; factura: string; numero: number }> {
+  const [r0, numero, prev] = await Promise.all([
+    rpc<ResumenBD>('conta_resumen_ventas', { p_entry: entryId }),
+    rpc<number>('conta_numero_previsto', { p_entry: entryId }),
+    rpc<Fila>('conta_cierre_factura_prevista', { p_entry: entryId }),
+  ])
+  const factura = String(prev.texto)
+  const pdf = hacerPdf({ ...r0, estado: 'validado', numero }, factura)
+  return { url: URL.createObjectURL(new Blob([pdf.bytes as BlobPart], { type: 'application/pdf' })), nombre: pdf.nombre, factura, numero }
 }
 
 /** «Ver documento»: una URL firmada de cinco minutos. */

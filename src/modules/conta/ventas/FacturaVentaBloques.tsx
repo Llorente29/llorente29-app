@@ -217,7 +217,7 @@ export function DialogoCobro({ numero, queda, hoy, formas, alCerrar, alCobrar }:
   const mal = n === null || n <= 0 ? 'Pon cuánto has cobrado.' : Math.round(n * 100) > Math.round(queda * 100) ? `Quedan ${eurosExactos(queda)} por cobrar: no puede ser más.` : null
   return (
     <Dialogo titulo={`Registrar cobro de la ${numero}`} alCerrar={alCerrar}
-      explicacion={`Quedan ${eurosExactos(queda)}. Si te ha pagado una parte, pon esa parte. No hace asiento: el del cobro lo hace Bancos al casar el movimiento.`}
+      explicacion={`Quedan ${eurosExactos(queda)}. Si te ha pagado una parte, pon esa parte. En efectivo, hace su asiento (570 Caja a 430); por banco, no: lo hace Bancos al casar el movimiento.`}
       acciones={<>
         <Boton variante="secundario" onClick={alCerrar}>Cancelar</Boton>
         <Boton variante="principal" disabled={!!mal || ocupado} onClick={() => {
@@ -237,8 +237,10 @@ export function DialogoCobro({ numero, queda, hoy, formas, alCerrar, alCobrar }:
 }
 
 /** Corregir una emitida: importes o líneas, anularla entera, o los datos del cliente. */
-export function DialogoCorregir({ numero, alCerrar, alCorregir }: {
+export function DialogoCorregir({ numero, alCerrar, alCorregir, sinDatos = false }: {
   numero: string; alCerrar: () => void; alCorregir: (tipo: 'importes' | 'anular' | 'datos', motivo: string) => Promise<string | null>
+  /** V01 · Entrega 2: una factura resumen de un cierre no lleva cliente: no se corrigen «datos del cliente». */
+  sinDatos?: boolean
 }) {
   const [tipo, setTipo] = useState<'importes' | 'anular' | 'datos'>('importes')
   const [motivo, setMotivo] = useState('')
@@ -255,7 +257,7 @@ export function DialogoCorregir({ numero, alCerrar, alCorregir }: {
         }}>{ocupado ? 'Preparando…' : 'Preparar la rectificativa'}</Boton>
       </>}>
       <div role="radiogroup" aria-label="Qué hay que corregir" className="cxv-opciones">
-        {(['importes', 'anular', 'datos'] as const).map((t) => (
+        {(sinDatos ? ['importes', 'anular'] as const : ['importes', 'anular', 'datos'] as const).map((t) => (
           <label key={t} className="cxv-opcion" data-elegida={tipo === t ? '' : undefined}>
             <input type="radio" name="corregir" checked={tipo === t} onChange={() => setTipo(t)} />
             <span><strong>{NOMBRE_CORRECCION[t].titulo}</strong><span className="s-tarjeta-apoyo">{NOMBRE_CORRECCION[t].texto}</span></span>
