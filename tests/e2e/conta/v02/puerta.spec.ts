@@ -47,10 +47,6 @@ async function alLado(page: Page, nombre: string) {
       <figure style="margin:0;width:${ancho}px"><figcaption style="margin:0 0 8px">La pantalla (staging)</figcaption><img style="width:100%" src="data:image/png;base64,${pantalla.toString('base64')}"></figure>
     </div></body>`)
   await otra.screenshot({ path: `${DIR}/al-lado-${nombre}-${l}.png`, fullPage: true })
-  // Solo en esta pasada: la pantalla, pequeña y en el registro, para revisarla sin bajar el artefacto.
-  const chica = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 35, scale: 'css' })
-  const b64 = chica.toString('base64')
-  for (let i = 0; i < b64.length; i += 3000) console.log(`CAPTURA ${nombre}-${l} ${i / 3000} ${b64.slice(i, i + 3000)}`)
   await otra.close()
 }
 
@@ -140,9 +136,9 @@ test('la puerta de una empresa de hostelería: cifras, lo que falta, lo último 
   await expect(page.getByRole('heading', { level: 1, name: 'Documentos' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Inicio', 'Documentos'])
   // Las cuatro cifras.
-  for (const c of ['Ha llegado esta semana', 'Necesita que lo mires', 'Falta y ya debería estar', 'Por llegar este mes']) await expect(page.locator('.cxp-cifra-etiqueta', { hasText: c })).toBeVisible()
-  await expect(page.locator('.cxp-cifra', { hasText: 'Necesita que lo mires' }).locator('.cxp-cifra-valor')).toHaveText('1')
-  await expect(page.locator('.cxp-cifra', { hasText: 'Falta y ya debería estar' }).locator('.cxp-cifra-valor')).toHaveText('2')
+  for (const c of ['Ha llegado esta semana', 'Necesita que lo mires', 'Falta y ya debería estar', 'Por llegar este mes']) await expect(page.locator('.cxpu-cifra-etiqueta', { hasText: c })).toBeVisible()
+  await expect(page.locator('.cxpu-cifra', { hasText: 'Necesita que lo mires' }).locator('.cxpu-cifra-valor')).toHaveText('1')
+  await expect(page.locator('.cxpu-cifra', { hasText: 'Falta y ya debería estar' }).locator('.cxpu-cifra-valor')).toHaveText('2')
   // «Lo que falta»: el local de los alquileres en UNA fila, sin nombres; Glovo tarde; Xfera aún a tiempo.
   const falta = page.getByRole('region', { name: 'Lo que falta' })
   await expect(falta.getByText('Alquiler · Cañaveral 75')).toHaveCount(1)

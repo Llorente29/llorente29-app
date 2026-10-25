@@ -75,6 +75,9 @@ describe('«Lo que falta» con las fuentes de Foodint, el 25/10', () => {
   it('Iberdrola (varias al mes, cada 10 días): la última el 29/09, la siguiente hacia el 09/10, ya tarde', () => {
     expect(faltaDe(IBERDROLA, HOY)?.estado).toMatchObject({ que: 'tarde' })
   })
+  it('BBVA (extractos el 15/10 y el 23/10, semanal en viernes): el del 30/10, aún a tiempo', () => {
+    expect(faltaDe(BBVA, HOY)).toMatchObject({ o: { dia: '2026-10-30' }, estado: { que: 'a_tiempo' } })
+  })
   it('una fuente apagada o cubierta por una recurrente no avisa', () => {
     expect(faltaDe({ ...GLOVO, activa: false }, HOY)).toBeNull()
     expect(faltaDe({ ...GLOVO, cubierta: true }, HOY)).toBeNull()
