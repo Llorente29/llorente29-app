@@ -1,0 +1,19 @@
+# V02d · Documentos, rehecho para que se venda (tableros 22, 23 y 24; Julio 25/10).
+# Rama claude/v02-pantalla. Se ensaya y se aplica desde esta rama, antes de
+# fusionar, con el campo «tanda» VACÍO.
+#
+#   1912 — QUE LOS AVISOS DIGAN LA VERDAD (docs/conta/v02/avisos-foodint-20261025.md):
+#   CAMBIA, declarado y con su prueba de staging, tres funciones con la misma
+#   firma: _conta_puerta_llegadas (los abonos no son llegada; cuenta «Ya lo
+#   tengo»), conta_puerta_fuentes (el corte de la empresa, lo que cubren los
+#   extractos, la familia, el canal y el correo de cada fuente) y
+#   conta_puerta_fuentes_proponer (el ritmo se aprende por días, no por
+#   facturas). AÑADE _conta_puerta_cubre, conta_puerta_al_dia (lo aprendido que
+#   nadie tocó se vuelve a aprender al abrir Documentos), «Ya lo tengo» (tabla
+#   conta_puerta_recibido, vacía, y su función). No toca datos. No está en el
+#   camino del pedido. El analizador dice «sigue»: sin autorizo.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta (para si alguien ya dijo «Ya lo tengo»).
+cuenta: scripts/conta/produccion/cuentas/v02d-avisos.sql
+supabase/migrations/20261025T1912_v02d_avisos.sql

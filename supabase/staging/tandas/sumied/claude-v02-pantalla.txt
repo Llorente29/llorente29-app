@@ -1,0 +1,7 @@
+# V02d · Que los avisos digan la verdad. La 1912 cambia tres funciones con la
+# misma firma: desde la rama, en ROLLBACK. Su prueba (ROLLBACK): los abonos no
+# son llegada, un extracto cubre su periodo, el corte, la familia, el canal y el
+# correo de cada fuente, proponer por días, al día (reaprende lo que nadie tocó,
+# no pisa lo tocado, apaga lo dormido y lo enciende), «Ya lo tengo» y la vuelta atrás.
+supabase/migrations/20261025T1912_v02d_avisos.sql
+supabase/staging/sql/20261025_v02d_avisos_prueba.sql
