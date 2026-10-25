@@ -202,11 +202,33 @@ begin
   raise notice '3b · el contador no se ha movido (%)', v_despues;
 end $$;
 
+
+-- 5 · Las vueltas atrás.
+\i supabase/vuelta-atras/20261025T2249_v03_verifactu_despertar.down.sql
+\i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
+\i supabase/vuelta-atras/20261025T2140_v03_verifactu_motor.down.sql
+do $$ begin
+  if exists (select 1 from pg_trigger where tgname = 'customer_invoice_verifactu') or to_regclass('public.verifactu_registro') is not null
+     or exists (select 1 from pg_proc where proname like '%verifactu%' and pronamespace = 'public'::regnamespace) then
+    raise exception 'PRUEBA V03 · 5: las vueltas atrás dejan algo del motor.';
+  end if;
+  if (select md5(pg_get_functiondef('public.conta_venta_emitir(uuid,text)'::regprocedure))) <> (select v from _v where clave = 'md5_emitir') then
+    raise exception 'PRUEBA V03 · 5: conta_venta_emitir no es la del principio.';
+  end if;
+  raise notice '5 · las vueltas atrás: ni el disparador ni las tablas ni las funciones; conta_venta_emitir, la misma';
+end $$;
+
 -- 6 · El despertar y el aviso del certificado (2249).
 --   · Sin nada de real, verifactu_despertar no llama (ninguna petición nueva).
 --   · A pasa a real con su serie nueva y sin certificado: el aviso sale (uno).
 --   · Con un alta de real pendiente, despertar SÍ llamaría: en staging no hay
 --     cron_secret, así que falla diciéndolo (55000) en vez de callar.
+--   Va DESPUÉS de la 5, con las tres otra vez: deja un registro de REAL, y la
+--   vuelta atrás de la 2140 se niega a deshacer con registros de real (es su
+--   guarda; el run 571 lo probó). El rollback final se lo lleva todo.
+\i supabase/migrations/20261025T2140_v03_verifactu_motor.sql
+\i supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
+\i supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
 do $$
 declare v_n bigint; v_m bigint;
 begin
@@ -247,20 +269,5 @@ begin
   exception when sqlstate '55000' then v_msg := sqlerrm;
   end;
   raise notice '6 · el aviso del certificado sale (1); con real pendiente despertar llamaría: «%»', v_msg;
-end $$;
-
--- 5 · Las vueltas atrás.
-\i supabase/vuelta-atras/20261025T2249_v03_verifactu_despertar.down.sql
-\i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
-\i supabase/vuelta-atras/20261025T2140_v03_verifactu_motor.down.sql
-do $$ begin
-  if exists (select 1 from pg_trigger where tgname = 'customer_invoice_verifactu') or to_regclass('public.verifactu_registro') is not null
-     or exists (select 1 from pg_proc where proname like '%verifactu%' and pronamespace = 'public'::regnamespace) then
-    raise exception 'PRUEBA V03 · 5: las vueltas atrás dejan algo del motor.';
-  end if;
-  if (select md5(pg_get_functiondef('public.conta_venta_emitir(uuid,text)'::regprocedure))) <> (select v from _v where clave = 'md5_emitir') then
-    raise exception 'PRUEBA V03 · 5: conta_venta_emitir no es la del principio.';
-  end if;
-  raise notice '5 · las vueltas atrás: ni el disparador ni las tablas ni las funciones; conta_venta_emitir, la misma';
 end $$;
 rollback;
