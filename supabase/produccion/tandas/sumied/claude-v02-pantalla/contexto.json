@@ -1,6 +1,6 @@
 {
   "_que": "V02d · Que los avisos digan la verdad · contexto de producción de la tanda (1912), medido en SOLO LECTURA el 25/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen las tres funciones que reemplaza (_conta_puerta_llegadas, conta_puerta_fuentes y conta_puerta_fuentes_proponer, de la 1212, sin otras firmas); nada de lo que crea (conta_puerta_recibido, _conta_puerta_cubre, conta_puerta_al_dia, conta_puerta_ya_lo_tengo); nada en el historial; nada en el camino del pedido.",
   "medido": "2026-10-25T19:17Z",
-  "tanda": { "supabase/migrations/20261025T1912_v02d_avisos.sql": "b0f41820f4d17c999875faa6106048fe" },
+  "tanda": { "supabase/migrations/20261025T1912_v02d_avisos.sql": "bad2042a456855ed33d1a71b26e0b741" },
   "contexto": {"tablas":[],"funciones":["public._conta_puerta_llegadas(public.supplier_expected_invoice)","public.conta_puerta_fuentes_proponer(uuid)","public.conta_puerta_fuentes(uuid)"],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
 }

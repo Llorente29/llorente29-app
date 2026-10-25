@@ -20,7 +20,7 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
+import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import { Boton, Dialogo } from '@/modules/conta/diseno'
 import { proveedoresDeLaCuenta } from '@/modules/conta/services/documentosService'
 import { alDia, anadirEsperado, avisarDe, leerFuentes, localDe, ponerAjustes } from '@/modules/conta/services/puertaService'
@@ -91,12 +91,13 @@ export default function QueEsperasPage() {
   }
 
   const ejemplo = d?.fuentes.find((f) => f.tipo === 'alquiler' && f.local)?.local
+  const botonGuardar = <Boton variante="principal" disabled={guardando || !d} onClick={() => void guardar()}>{guardando ? 'Guardando…' : 'Guardar'}</Boton>
   return (
     <div className="s-pagina cxdo cxqe">
       <EncabezadoPagina titulo="Qué esperas cada mes" migasExtra={[{ etiqueta: 'Qué esperas cada mes' }]}
         frase={`${MARCA.nombre} lo ha sacado de tus últimos meses. Quita lo que no quieras vigilar y añade lo que falte.`}
         secundarios={<Boton onClick={() => setAnadir(true)} disabled={!d}>Añadir algo que espero</Boton>}
-        principal={<Boton variante="principal" disabled={guardando || !d} onClick={() => void guardar()}>{guardando ? 'Guardando…' : 'Guardar'}</Boton>} />
+        principal={botonGuardar} />
 
       {aviso && <p className="s-aviso-lista" data-tono={aviso.tono} role={aviso.tono ? 'alert' : 'status'} data-prueba="esperas-aviso">{aviso.texto}</p>}
       {fuentes.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido leer lo que esperas: {fuentes.error}</p>}
@@ -151,6 +152,8 @@ export default function QueEsperasPage() {
       {grupos && grupos.length > 0 && (
         <p className="cxqe-nota">Las personas solo se ven aquí. En Documentos se nombra el local, no la persona{ejemplo ? `: «Alquiler de ${nombreDelLocal(ejemplo)}»` : ''}.</p>
       )}
+
+      <BotonPulgar>{botonGuardar}</BotonPulgar>
 
       {anadir && activa && accountId && (
         <AnadirEsperado accountId={accountId} locales={locales.length > 1 ? locales : []} alCerrar={() => setAnadir(false)}
