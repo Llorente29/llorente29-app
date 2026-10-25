@@ -54,16 +54,23 @@ test('«Cuándo te paga» en la ficha de la plataforma: periodo, día de pago y 
       return
     }
     // Lo que se cambia sale en la barra común; el ejemplo, con fechas de verdad.
-    await tarjeta.getByRole('button', { name: 'Cada semana' }).click()
-    await tarjeta.getByLabel(/Paga unos … días después de cerrar el periodo/).fill('1')
+    // Las píldoras se marcan y se desmarcan: «Cada semana» solo se pulsa si no
+    // lo está ya; y los días, distintos de los de la semilla, para que haya un
+    // cambio que guardar (e2e 899: con la semilla ya semanal, el clic la quitaba).
+    const semana = tarjeta.getByRole('button', { name: /^Cada semana/ })
+    if ((await semana.getAttribute('aria-pressed')) !== 'true') await semana.click()
+    await expect(semana).toHaveAttribute('aria-pressed', 'true')
+    const d = antes.payout_days_after === 2 ? 3 : 2
+    const lunes = d === 2 ? 'martes' : 'miércoles'
+    await tarjeta.getByLabel(/Paga unos … días después de cerrar el periodo/).fill(String(d))
     await tarjeta.getByLabel(/Margen antes de darla por vencida/).fill('')
-    await expect(tarjeta.locator('[data-prueba="ejemplo-plazo"]')).toContainText(/La semana del \d\d\/\d\d al \d\d\/\d\d la paga hacia el lunes \d\d\/\d\d; si el \d\d\/\d\d no ha llegado, sus facturas salen «Falta su liquidación»\. Margen: 5 días\./)
+    await expect(tarjeta.locator('[data-prueba="ejemplo-plazo"]')).toContainText(new RegExp(`La semana del \\d\\d/\\d\\d al \\d\\d/\\d\\d la paga hacia el ${lunes} \\d\\d/\\d\\d; si el \\d\\d/\\d\\d no ha llegado, sus facturas salen «Falta su liquidación»\\. Margen: 5 días\\.`))
     await foto(page, 'cuando-paga-cambios')
     await page.getByRole('button', { name: /Guardar cambios/ }).click()
     // Regla 8: lo que se guardó y cuántas facturas cambian de vencimiento.
-    await expect(page.getByText(/^Guardado: Plataforma Norte paga cada semana, hacia 1 día después de cerrarlo, con 5 de margen\. (Ninguna factura por cobrar cambia|\d+ facturas? por cobrar cambia)/)).toBeVisible()
+    await expect(page.getByText(new RegExp(`^Guardado: Plataforma Norte paga cada semana, hacia ${d} días después de cerrarlo, con 5 de margen\\. (Ninguna factura por cobrar cambia|\\d+ facturas? por cobrar cambia)`))).toBeVisible()
     await expect.poll(async () => (await rest<{ settlement_every: string; payout_days_after: number }[]>(s, 'GET', `${papel}&select=settlement_every,payout_days_after`)).datos[0])
-      .toEqual({ settlement_every: 'weekly', payout_days_after: 1 })
+      .toEqual({ settlement_every: 'weekly', payout_days_after: d })
     await foto(page, 'cuando-paga-guardado')
     // Un número que no es: lo dice y no guarda.
     await tarjeta.getByLabel(/Margen antes de darla por vencida/).fill('99')
