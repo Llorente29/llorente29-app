@@ -217,6 +217,12 @@ do $$ begin
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'document_inbox' and column_name = 'doc_kind') then
     raise exception 'PRUEBA V02 · 6: la vuelta atrás se deja funciones, tablas o columnas.';
   end if;
+  if exists (select 1 from storage.buckets where id = 'conta-entrada') then
+    raise exception 'PRUEBA V02 · 6: la vuelta atrás se deja el almacén conta-entrada (vacío).';
+  end if;
+  if current_setting('storage.allow_delete_query', true) is distinct from 'false' then
+    raise exception 'PRUEBA V02 · 6: la vuelta atrás deja storage.allow_delete_query en %.', current_setting('storage.allow_delete_query', true);
+  end if;
   raise notice '6 · la vuelta atrás: todo como estaba';
   raise notice 'PRUEBA V02 en verde: la dirección, las fuentes, «Dime qué es», la puerta, «Pedírsela» y la vuelta atrás.';
 end $$;
