@@ -173,7 +173,7 @@ export function crearBancos(bd: Bd) {
 
   async function cargarContexto(accountId: string, companyId: string, hoy: string): Promise<{ ctx: Contexto; movimientos: Movimiento[] }> {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
-    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal] = await Promise.all([
+    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, emitidas, cobroEmitidas] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
       leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status, counterparty, movement_type')
         .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
@@ -197,6 +197,11 @@ export function crearBancos(bd: Bd) {
       // D01 · El mapa de tiendas de las plataformas: la cuenta del banco de cada marca × local.
       leer(tabla('platform_store').select('id, external_text, treasury_account_id, location_id').eq('account_id', accountId).eq('company_id', companyId), 'las tiendas de las plataformas'),
       leer(tabla('treasury_account').select('id, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las cuentas de cada local'),
+      // PC01 · Las emitidas a un cliente (no las de los cierres: ésas las cobra su liquidación) y lo que les queda.
+      leer(tabla('customer_invoice').select('id, number_text, issue_date, party_id').eq('account_id', accountId).eq('company_id', companyId)
+        .eq('status', 'emitida').in('origin', ['a_mano', 'recurrente', 'presupuesto', 'tienda', 'automatica']), 'las facturas emitidas'),
+      leer(tabla('conta_factura_cobro').select('invoice_id, pendiente').eq('account_id', accountId).eq('company_id', companyId)
+        .in('estado', ['vencida', 'cobrada_parte', 'vence_semana', 'por_cobrar']), 'lo que queda por cobrar de cada factura'),
     ])
     const tiendaDe = new Map(tiendas.map((t) => [String(t.id), t]))
     const bancosLocal = cuentasLocal.map((c) => ({ id: String(c.id), localId: s(c.location_id) }))
@@ -205,6 +210,15 @@ export function crearBancos(bd: Bd) {
     for (const c of cuentas) nombres[String(c.code)] = String(c.plain_name ?? c.name)
     const hoja = (t: string) => cuentas.find((c) => c.kind === 'template' && c.template_code === t)?.code as string | undefined
     const enlace = (e: string, id: string) => { const l = enlaces.find((x) => x.entity === e && x.entity_id === id && x.role === 'principal'); return l ? codigo.get(String(l.company_account_id)) ?? null : null }
+    // PC01 · Por cada 430 de cliente, sus facturas emitidas con algo por cobrar (la más antigua primero).
+    const quedaDe = new Map(cobroEmitidas.map((c) => [String(c.invoice_id), cent(c.pendiente)]))
+    const facturasDeCliente = new Map<string, { id: string; numero: string | null; fecha: string; pendienteCent: number }[]>()
+    for (const f of [...emitidas].sort((a, b) => String(a.issue_date).localeCompare(String(b.issue_date)))) {
+      if (!f.party_id) continue
+      const c = enlace('customer', String(f.party_id)); const q = quedaDe.get(String(f.id)) ?? 0
+      if (!c || q <= 0) continue
+      facturasDeCliente.set(c, [...(facturasDeCliente.get(c) ?? []), { id: String(f.id), numero: s(f.number_text), fecha: String(f.issue_date), pendienteCent: q }])
+    }
     const nombreCanal = new Map(canales.map((c) => [String(c.id), String(c.name)]))
     const partyDeCanal = new Map(roles.filter((r) => r.channel_id).map((r) => [String(r.channel_id), String(r.party_id)]))
     const cuentaDeCanal = (canal: string) => { const p = partyDeCanal.get(canal); return p ? enlace('customer', p) : null }
@@ -254,7 +268,8 @@ export function crearBancos(bd: Bd) {
       proveedores: proveedores.map((p) => ({ terceroId: null, proveedor: String(p.name), alias: [p.name, p.legal_name].filter(Boolean).map(String),
         cuentaTercero: enlace('supplier', String(p.id)) ?? '', cuentaAnticipo: hoja('407') ?? '40700000' })).filter((p) => p.cuentaTercero),
       clientes: conTercero('customer').filter((x) => n(x.saldo) > 0 && !plataformas.some((p) => p.cuenta430 === x.cuenta))
-        .map((x) => ({ terceroId: null, nombre: String(x.nombre), alias: [String(x.nombre)], cuenta: String(x.cuenta), pendienteCent: cent(x.saldo) })),
+        .map((x) => ({ terceroId: null, nombre: String(x.nombre), alias: [String(x.nombre)], cuenta: String(x.cuenta), pendienteCent: cent(x.saldo),
+          facturas: facturasDeCliente.get(String(x.cuenta)) ?? [] })),
       // D01 · Las del correo (una por marca × local): con su tienda, su banco y su ventana. Un neto
       // negativo o cero no se espera en el banco («sin cobro: pasa al siguiente»): no se busca.
       liquidaciones: liqs.filter((l) => !l.collected_on && l.net_payout !== null && l.channel_id && cuentaDeCanal(String(l.channel_id)))

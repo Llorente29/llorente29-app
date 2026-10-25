@@ -21,7 +21,9 @@
 --      cierre cuenta de los pedidos de esa marca; descobrarla quita los cobros;
 --      con otro número de pedidos, «a revisar» y nada cobrado.
 --   3. Liquidación por PEDIDOS (channel_settlement_order con su venta).
---   4. Los estados (conta_factura_cobro y conta_recibida_pago), como usuario.
+--   4. Los estados (conta_factura_cobro y conta_recibida_pago), como usuario; y
+--      guardar el plazo en la ficha (conta_plataforma_plazo_guardar) mueve el
+--      vencimiento de sus facturas por cobrar, no el de las cobradas.
 --   5. Recibida: al validarla, el plazo del proveedor; sin plazo, sin vencimiento.
 --   6. Bancos, pago: casar una recibida escribe su pago con el asiento del
 --      banco y la marca pagada; a mano no se marca (mark_supplier_invoice_paid);
@@ -217,6 +219,19 @@ begin
   if x.estado <> 'cobrada' or x.pendiente <> 0 then raise exception 'PRUEBA PC01 · 4: la del 6/10 tenía que salir cobrada y salió %.', x.estado; end if;
   raise notice '4 · estados como usuario: la del 5/10 % (10 de 30), la del 6/10 cobrada', x.estado;
 end $$;
+-- 4b · Guardar el plazo desde la ficha: las por cobrar lo siguen (solo la del 5/10: las otras dos están cobradas).
+do $$
+declare r jsonb; pa uuid := (select v::uuid from _p where clave = 'parte');
+begin
+  r := public.conta_plataforma_plazo_guardar(pa, 'weekly', 2, 0);
+  if (r->>'facturas')::int <> 1 or (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f05')) <> date '2026-10-13'
+     or (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f06')) <> date '2026-10-17' then
+    raise exception 'PRUEBA PC01 · 4b: guardar el plazo tenía que mover solo la del 5/10 al 13/10: %.', r;
+  end if;
+  r := public.conta_plataforma_plazo_guardar(pa, 'weekly', 1, null);
+  if (select due_date from public.customer_invoice where id = (select v::uuid from _p where clave = 'f05')) <> date '2026-10-17' then raise exception 'PRUEBA PC01 · 4b: no volvió al 17/10.'; end if;
+  raise notice '4b · guardar el plazo en la ficha mueve el vencimiento de sus facturas por cobrar (1) y no el de las cobradas';
+end $$;
 reset role;
 
 -- ── 5 · Recibida: el plazo del proveedor al validarla ───────────────────────
@@ -268,9 +283,11 @@ begin
   end loop;
   r := public.bank_importar((select v::uuid from _p where clave = 'banco'), 'fichero', 'csv:bbva', 'prueba-pc01.xlsx', repeat('c', 64),
     date '2026-10-22', date '2026-10-22', null, null, 'prueba', null, mv);
-  for m in select * from public.bank_movement where statement_id = (r->>'extracto')::uuid order by fingerprint loop
-    insert into _p values ('m' || right(m.fingerprint, 1), m.id);
+  -- Cada movimiento, por su importe (únicos en este extracto): el importador guarda su propia huella.
+  for m in select * from public.bank_movement where statement_id = (r->>'extracto')::uuid loop
+    insert into _p values (case m.amount when -100.00 then 'm1' when 30.00 then 'm2' when 18.00 then 'm3' else 'm?' || m.id end, m.id);
   end loop;
+  if (select count(*) from _p where clave in ('m1', 'm2', 'm3')) <> 3 then raise exception 'PRUEBA PC01 · 6: el extracto no trae los 3 movimientos.'; end if;
   -- A mano no se marca pagada.
   begin
     perform public.mark_supplier_invoice_paid((select v::uuid from _p where clave = 'r1'), '2026-10-22', 'transfer');

@@ -30,6 +30,7 @@ drop function if exists public._pc01_factura_cierre_nace();
 drop function if exists public._pc01_factura_cierre_vence();
 drop function if exists public._pc01_tienda_cambiada();
 drop function if exists public._pc01_liquidacion_cobrada();
+drop function if exists public.conta_plataforma_plazo_guardar(uuid, text, integer, integer);
 drop function if exists public._conta_liquidacion_cobros(uuid);
 drop function if exists public.conta_liquidacion_pedidos(uuid);
 drop function if exists public.conta_vence_de_factura(uuid);

@@ -36,8 +36,8 @@ begin
   insert into public.party (account_id, name) values (a, 'Plataforma PC01 datos') returning id into pa;
   insert into public.party_role (account_id, party_id, role, channel_id, settlement_every, payout_days_after) values (a, pa, 'platform', c, 'weekly', 1);
   select id into ca from public.company_account where company_id = e and code like '430%' order by code limit 1;
-  insert into public.company_account_link (account_id, company_id, entity, role, entity_id, company_account_id)
-  select a, e, 'customer', 'principal', pa::text, ca
+  insert into public.company_account_link (account_id, company_id, entity, role, entity_id, company_account_id, source)
+  select a, e, 'customer', 'principal', pa::text, ca, 'manual'
    where not exists (select 1 from public.company_account_link k where k.company_id = e and k.company_account_id = ca and k.entity = 'customer' and k.role = 'principal');
   if not exists (select 1 from public.company_account_link k where k.company_id = e and k.company_account_id = ca and k.entity = 'customer' and k.role = 'principal' and k.entity_id = pa::text) then
     raise notice 'siembra: la 430 de A ya es de otro cliente; la emitida no tendrá plataforma (no pasa nada: la prueba es la huella)';

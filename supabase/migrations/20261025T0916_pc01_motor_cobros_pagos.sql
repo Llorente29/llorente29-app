@@ -169,6 +169,37 @@ returns date language sql stable set search_path = public as $$
     from public.customer_invoice ci where ci.id = p_invoice
 $$;
 
+-- Guardar cuándo paga una plataforma (su ficha de Contactos) y que sus
+-- facturas por cobrar sigan el plazo nuevo. Las cobradas no se tocan.
+create or replace function public.conta_plataforma_plazo_guardar(p_party uuid, p_cada text, p_dias integer, p_margen integer)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_r public.party_role; v_n int := 0; v_canal text;
+begin
+  select * into v_r from public.party_role where party_id = p_party and role = 'platform' for update;
+  if v_r.id is null or not public.belongs_to_account(v_r.account_id) then raise exception 'Este contacto no está como plataforma.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_r.account_id) then
+    raise exception 'Solo un administrador o un encargado de la cuenta cambia cuándo paga una plataforma.' using errcode = '42501';
+  end if;
+  if p_cada is not null and p_cada not in ('weekly', 'fortnightly', 'monthly') then raise exception 'El periodo es cada semana, cada quincena o cada mes.' using errcode = '22023'; end if;
+  if p_dias is not null and (p_dias < 0 or p_dias > 90) then raise exception 'Los días hasta el pago van de 0 a 90.' using errcode = '22023'; end if;
+  if p_margen is not null and (p_margen < 0 or p_margen > 60) then raise exception 'El margen va de 0 a 60 días.' using errcode = '22023'; end if;
+  update public.party_role set settlement_every = p_cada, payout_days_after = p_dias, payout_margin_days = p_margen where id = v_r.id;
+  if v_r.channel_id is not null then
+    with f as (
+      select ci.id, public.conta_vence_de_factura(ci.id) v from public.customer_invoice ci
+       where ci.account_id = v_r.account_id and ci.status = 'emitida' and ci.origin = 'cierre_dia' and ci.total > 0
+         and public.conta_canal_de_factura(ci.id) = v_r.channel_id
+         and ci.total - coalesce((select sum(p.amount) from public.customer_invoice_payment p where p.invoice_id = ci.id), 0) >= 0.005)
+    update public.customer_invoice ci set due_date = f.v from f where f.id = ci.id and f.v is not null and ci.due_date is distinct from f.v;
+    get diagnostics v_n = row_count;
+    select name into v_canal from public.sales_channel where id = v_r.channel_id;
+  end if;
+  return jsonb_build_object('party_id', p_party, 'canal', v_canal, 'facturas', v_n);
+end $$;
+revoke all on function public.conta_plataforma_plazo_guardar(uuid, text, integer, integer) from public, anon;
+grant execute on function public.conta_plataforma_plazo_guardar(uuid, text, integer, integer) to authenticated;
+comment on function public.conta_plataforma_plazo_guardar(uuid, text, integer, integer) is 'PC01 · Guarda cuándo paga una plataforma (periodo, días hasta el pago, margen) y recoloca el vencimiento de sus facturas por cobrar. Dice cuántas.';
+
 -- Los pedidos de una liquidación: cada uno con su cierre, su factura y lo que
 -- el cierre cuenta de él. Por los pedidos que trae la liquidación, si los trae;
 -- si no, por plataforma, local, marca y fechas del periodo (Madrid).

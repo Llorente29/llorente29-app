@@ -93,7 +93,9 @@ test('Panadería Luna (respuesta 2): IBAN distinto al de la ficha y posible repe
   await expect(page.getByText('Misma fecha e importe que la L-0412, con otro número. No la he apuntado.')).toBeVisible()
   await expect(page.getByText('IBAN distinto', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Ver la factura L-0431' }).click()
-  await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toBeDisabled()
+  // PC01: sin «Marcar como pagada»; dice que Bancos no la casa hasta decidir el IBAN.
+  await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toHaveCount(0)
+  await expect(page.getByText('Mientras no decidas sobre el IBAN, Bancos no la casa.', { exact: false })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Es el nuevo IBAN' })).toBeEnabled()
   await expect(page.getByRole('button', { name: 'No es suyo' })).toBeEnabled()
   await expect(page.getByRole('dialog')).toBeVisible()

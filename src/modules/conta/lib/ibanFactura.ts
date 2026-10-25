@@ -7,8 +7,9 @@
 // la factura trae un IBAN que no es el de la ficha:
 //   · la factura sale en ámbar, «IBAN distinto al de la ficha»;
 //   · la ficha enseña el aviso;
-//   · «Marcar como pagada» queda desactivado (y la base lo rechaza: disparador
-//     de 20261006T0135) hasta que una persona decide:
+//   · Bancos no la casa (la base lo rechaza: disparador de 20261006T0135;
+//     desde el PC01 ya no hay «Marcar como pagada» a mano) hasta que una persona
+//     decide:
 //       «Es el nuevo IBAN» → pasa a la ficha, con quién y cuándo, y pide el
 //                            certificado de titularidad del banco;
 //       «No es suyo»       → se queda el de la ficha; la factura se paga a ése.

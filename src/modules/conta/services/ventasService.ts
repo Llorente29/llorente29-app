@@ -152,17 +152,20 @@ export interface FacturaGuardada {
   cobros: CobroFactura[]
   /** Las rectificativas que la corrigen (su número y si ya están emitidas). */
   rectificativas: { id: string; numero: string | null; estado: string; total: number }[]
+  /** PC01 · Su estado de cobro, de la base (conta_factura_cobro). */
+  estadoCobro: EstadoCobroBase | null
 }
 
 export async function leerFactura(accountId: string, id: string): Promise<FacturaGuardada | null> {
   const [f] = await leer(tabla('customer_invoice').select('*').eq('account_id', accountId).eq('id', id), 'la factura')
   if (!f) return null
-  const [lineas, eventos, cobros, rectif, original] = await Promise.all([
+  const [lineas, eventos, cobros, rectif, original, estado] = await Promise.all([
     leer(tabla('customer_invoice_line').select('*').eq('account_id', accountId).eq('invoice_id', id).order('position'), 'sus líneas'),
     leer(tabla('customer_invoice_event').select('at, kind, text, by_name').eq('account_id', accountId).eq('invoice_id', id).order('at', { ascending: false }), 'su historial'),
     leer(tabla('customer_invoice_payment').select('id, paid_on, amount, method, note, created_by_name').eq('account_id', accountId).eq('invoice_id', id).order('paid_on'), 'sus cobros'),
     leer(tabla('customer_invoice').select('id, number_text, status, total').eq('account_id', accountId).eq('corrects_id', id), 'sus rectificativas'),
     f.corrects_id ? leer(tabla('customer_invoice').select('id, number_text').eq('account_id', accountId).eq('id', String(f.corrects_id)), 'la factura que corrige') : Promise.resolve([] as Fila[]),
+    leer(tabla('conta_factura_cobro').select('estado').eq('account_id', accountId).eq('invoice_id', id), 'su estado de cobro'),
   ])
   const cli = (f.customer ?? {}) as Fila
   return {
@@ -180,6 +183,7 @@ export async function leerFactura(accountId: string, id: string): Promise<Factur
     eventos: eventos.map((e) => ({ cuando: String(e.at), tipo: String(e.kind), texto: String(e.text), quien: s(e.by_name) })),
     cobros: cobros.map((c) => ({ id: String(c.id), fecha: String(c.paid_on), importe: n(c.amount), forma: s(c.method), nota: s(c.note), quien: s(c.created_by_name) })),
     rectificativas: rectif.map((r) => ({ id: String(r.id), numero: s(r.number_text), estado: String(r.status), total: n(r.total) })),
+    estadoCobro: estado[0] ? String(estado[0].estado) as EstadoCobroBase : null,
   }
 }
 

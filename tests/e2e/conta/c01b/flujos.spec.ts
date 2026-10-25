@@ -210,18 +210,14 @@ test.describe('cuenta A', () => {
 
       await page.goto(ficha(id, 'facturas'))
       await expect(page.getByText('¿Repetida?')).toHaveCount(0)
+      // PC01 (25/10): sin «Marcar como pagada». La factura dice cómo queda pagada
+      // (al casar su pago en Bancos, con su asiento) y sigue debiéndose.
       await page.getByRole('button', { name: 'Ver la factura E2E-001', exact: true }).click()
-      await page.getByRole('button', { name: 'Marcar como pagada' }).click()
-      await expect(page.getByText(/Factura E2E-001 marcada como pagada el .*Ya no le debes esos 121,00 €\./)).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toHaveCount(0)
+      await expect(page.getByText('Se marca pagada sola cuando casas su pago en Bancos', { exact: false })).toBeVisible()
+      await page.getByRole('button', { name: 'Cerrar' }).click()
       await page.goto(ficha(id))
-      await expect(leDebes).toContainText(/nada pendiente/i)
-      if (!movil(page)) await expect(page.locator('.cxp-cifra').filter({ hasText: 'Próximo pago' })).toContainText('Nada que pagar')
-
-      // Deshacer (desde la factura pagada) y vuelve a deberse.
-      await page.goto(ficha(id, 'facturas'))
-      await page.getByRole('button', { name: 'Ver la factura E2E-001', exact: true }).click()
-      await page.getByRole('button', { name: 'Deshacer el pago' }).click()
-      await expect(page.getByText(/vuelve a estar por pagar/)).toBeVisible()
+      await expect(leDebes).toContainText('121')
       // «No es repetida» se prueba en la de abajo (la posible), que sí entra.
     } finally {
       await borrarProveedor(s, id)
@@ -271,10 +267,12 @@ test.describe('cuenta A', () => {
       const f2 = await rest<{ id: string }[]>(s, 'POST', 'supplier_invoice', factura('E2E-IB-2'))
       expect(f2.status, JSON.stringify(f2.datos)).toBe(201)
 
-      // La base lo frena aunque se salte la pantalla.
+      // La base lo frena aunque se salte la pantalla. PC01 (25/10): además, a
+      // mano no se marca pagada nunca (solo con su pago con asiento, al casarlo
+      // en Bancos); con la 0917 aplicada, ése es el freno que salta primero.
       const pago = await rest<{ message?: string }>(s, 'POST', 'rpc/mark_supplier_invoice_paid', { p_invoice_id: f1.datos[0].id, p_paid_at: '2026-10-04', p_method: 'transfer' })
       expect(pago.status).toBeGreaterThanOrEqual(400)
-      expect(pago.datos.message).toContain('IBAN distinto al de la ficha')
+      expect(pago.datos.message).toMatch(/IBAN distinto al de la ficha|no se marca pagada a mano/)
 
       await page.goto(ficha(id))
       await expect(page.getByRole('alert').filter({ hasText: 'IBAN distinto al de la ficha.' })).toContainText('2 facturas traen otra cuenta')
@@ -282,12 +280,15 @@ test.describe('cuenta A', () => {
       await expect(page.getByText('IBAN distinto', { exact: true })).toHaveCount(2)
 
       // «No es suyo»: la ficha se queda y ya se puede pagar.
+      // PC01: no hay «Marcar como pagada»; la ficha dice que Bancos no la casa mientras no se decida.
       await page.getByRole('button', { name: 'Ver la factura E2E-IB-1' }).click()
-      await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toBeDisabled()
+      await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toHaveCount(0)
+      await expect(page.getByText('Mientras no decidas sobre el IBAN, Bancos no la casa.', { exact: false })).toBeVisible()
       await page.getByRole('button', { name: 'No es suyo' }).click()
       await expect(page.getByText(/el IBAN de la factura E2E-IB-1 no es suyo\. Se queda el de la ficha \(…1332\)/)).toBeVisible()
       await page.getByRole('button', { name: 'Ver la factura E2E-IB-1' }).click()
-      await expect(page.getByRole('button', { name: 'Marcar como pagada' })).toBeEnabled()
+      await expect(page.getByText('Se marca pagada sola cuando casas su pago en Bancos', { exact: false })).toBeVisible()
+      await expect(page.getByText('Mientras no decidas sobre el IBAN, Bancos no la casa.', { exact: false })).toHaveCount(0)
       await page.getByRole('button', { name: 'Cerrar' }).click()
 
       // «Es el nuevo IBAN»: pasa a la ficha, con quién y cuándo, y pide el certificado.
