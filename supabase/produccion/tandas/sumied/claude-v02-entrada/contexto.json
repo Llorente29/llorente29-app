@@ -1,0 +1,6 @@
+{
+  "_que": "V02 · La puerta · contexto de producción de la tanda (1212), medido en SOLO LECTURA el 25/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen las cinco tablas que cambia (supplier_expected_invoice, supplier_invoice_request y company_inbound_sender, vacías; company_inbound_address, 2 filas; document_inbox, 83) y las dos funciones que reemplaza; nada de lo que crea; nada en el historial; nada en el camino del pedido.",
+  "medido": "2026-10-25T12:40Z",
+  "tanda": { "supabase/migrations/20261025T1212_v02_puerta.sql": "39b61da685a1e246be40f7f893049971" },
+  "contexto": {"tablas":["public.company_inbound_address","public.company_inbound_sender","public.document_inbox","public.supplier_expected_invoice","public.supplier_invoice_request"],"funciones":["public.conta_direccion_entrada(uuid,text,text)","public.conta_entrada_remitente(uuid,text)"],"filas":{"public.company_inbound_address":0,"public.company_inbound_sender":0,"public.document_inbox":83,"public.supplier_expected_invoice":0,"public.supplier_invoice_request":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

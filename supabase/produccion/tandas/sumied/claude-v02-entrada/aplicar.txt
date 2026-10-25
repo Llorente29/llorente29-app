@@ -1,0 +1,14 @@
+# V02 · Entrega 1 · La puerta: Inicio › Documentos (tablero 19, Julio 25/10).
+# Rama claude/v02-entrada. Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1212 — AÑADE la dirección única por empresa (kind «documentos»), qué es cada
+#   documento (document_inbox.doc_kind), lo esperado de cualquier fuente
+#   (supplier_expected_invoice, vacía en todas las cuentas) con su margen y su
+#   grupo, lo aprendido por remitente, los ajustes de la puerta y las funciones
+#   conta_puerta_*; CAMBIA, declarado y con su prueba de staging, las
+#   restricciones de esas cuatro tablas y dos funciones (misma firma). No toca
+#   datos. No está en el camino del pedido.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261025T1212_v02_puerta.sql
