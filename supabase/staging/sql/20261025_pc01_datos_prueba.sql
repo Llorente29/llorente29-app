@@ -27,10 +27,19 @@ do $$ begin
 end $$;
 set local statement_timeout = '180s';
 
-\i supabase/vuelta-atras/20261025T0917_pc01_motor_cambia.down.sql
-\i supabase/vuelta-atras/20261025T0916_pc01_motor_cobros_pagos.down.sql
+-- Sin tocar la estructura (un «drop table» pide cierres sobre las tablas a las
+-- que apunta y choca con las e2e que corren a la vez): el ensayo de la rama ya
+-- ha pasado la 0916, la 0917 y la 0918 en esta misma transacción. Si no, se
+-- pasan aquí la 0916 y la 0917; y si la 0918 ya está, se deshace, para medir
+-- «lo de antes» y pasarla otra vez.
+select to_regproc('public._conta_liquidacion_cobros') is null as falta_motor, to_regclass('public._pc01_creados') is not null as hay_0918 \gset
+\if :falta_motor
 \i supabase/migrations/20261025T0916_pc01_motor_cobros_pagos.sql
 \i supabase/migrations/20261025T0917_pc01_motor_cambia.sql
+\endif
+\if :hay_0918
+\i supabase/vuelta-atras/20261025T0918_pc01_cobros_y_pagos_de_antes.down.sql
+\endif
 
 -- Una plataforma con plazo y una emitida suya (sin cierre: por su 430), para que haya un vencimiento que cambiar.
 do $$

@@ -284,9 +284,10 @@ begin
   end loop;
   r := public.bank_importar((select v::uuid from _p where clave = 'banco'), 'fichero', 'csv:bbva', 'prueba-pc01.xlsx', repeat('c', 64),
     date '2026-10-22', date '2026-10-22', null, null, 'prueba', null, mv);
-  -- Cada movimiento, por su importe (únicos en este extracto): el importador guarda su propia huella.
-  for m in select * from public.bank_movement where statement_id = (r->>'extracto')::uuid loop
-    insert into _p values (case m.amount when -100.00 then 'm1' when 30.00 then 'm2' when 18.00 then 'm3' else 'm?' || m.id end, m.id);
+  -- Cada movimiento, por su concepto (el importador guarda su propia huella, y el
+  -- extracto puede traer otros de staging del mismo día).
+  for m in select * from public.bank_movement where statement_id = (r->>'extracto')::uuid and bank_concept like 'TRANSFERENCIA PC01 _' loop
+    insert into _p values ('m' || right(m.bank_concept, 1), m.id);
   end loop;
   if (select count(*) from _p where clave in ('m1', 'm2', 'm3')) <> 3 then raise exception 'PRUEBA PC01 · 6: el extracto no trae los 3 movimientos.'; end if;
   -- A mano no se marca pagada.
