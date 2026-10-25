@@ -27,7 +27,10 @@ describe('las direcciones y los adjuntos', () => {
   it('mira to y cc, con nombre o sin él, sin repetir y en minúsculas', () => {
     expect(direccionesDeFacturas({ to: ['Julio <julio@ejemplo.test>'], cc: ['"Facturas" <Facturas-Taberna-Norte@entrada.folvy.app>', 'facturas-taberna-norte@entrada.folvy.app'] }))
       .toEqual([{ localPart: 'facturas-taberna-norte', dominio: 'entrada.folvy.app', direccion: 'facturas-taberna-norte@entrada.folvy.app' }])
-    expect(direccionesDeFacturas({ to: ['facturas@entrada.folvy.app', 'nominas-x@entrada.folvy.app'] })).toEqual([])
+    // V02 · Desde la puerta, sin prefijo también es candidata, pero SOLO en un dominio de entrada:
+    // la base dice si es de alguien. Fuera de entrada.…, nada.
+    expect(direccionesDeFacturas({ to: ['facturas@entrada.folvy.app', 'nominas-x@entrada.folvy.app'] }).map((d) => d.localPart)).toEqual(['facturas', 'nominas-x'])
+    expect(direccionesDeFacturas({ to: ['nominas-x@ejemplo.test', 'taberna-norte@folvy.app', 'x@entrada.folvy.app'] })).toEqual([])
   })
   it('toma los PDF y las fotos; deja lo demás diciendo por qué (también el logo de la firma)', () => {
     const r = clasificarAdjuntos([
@@ -140,8 +143,9 @@ describe('recibirCorreo: liquidaciones-<empresa>@', () => {
   }
   const aLiq = (o: Partial<CorreoResend> = {}) => correo({ to: ['liquidaciones-taberna-norte@entrada.folvy.app'], from: 'noreply@uber.com', subject: resumen.subject, ...o })
 
-  it('las dos clases de dirección se reconocen; otras, no', () => {
-    expect(direccionesDeFacturas({ to: ['liquidaciones-taberna-norte@entrada.folvy.app', 'nominas-x@entrada.folvy.app'] }).map((d) => d.localPart)).toEqual(['liquidaciones-taberna-norte'])
+  it('las clases con prefijo se reconocen en cualquier dominio; sin prefijo, solo en uno de entrada (y manda la base)', () => {
+    expect(direccionesDeFacturas({ to: ['liquidaciones-taberna-norte@entrada.folvy.app', 'nominas-x@entrada.folvy.app', 'nominas-x@ejemplo.test'] }).map((d) => d.localPart))
+      .toEqual(['liquidaciones-taberna-norte', 'nominas-x'])
   })
   it('un resumen de Uber: pide el cuerpo a Resend, lo lee y lo registra con su factura; al registro, solo ids y recuentos', async () => {
     const m = mundoLiq()

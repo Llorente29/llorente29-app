@@ -51,10 +51,32 @@
 //     apunta y se dice por qué (conta_entrada_remitente; la dirección va por
 //     su huella).
 
-import { leerResumenUber, NoEsResumenUber, paraRegistrar, type ResumenUber } from './liquidacionUber.ts'
+//
+// LA PUERTA (V02 · Entrega 1, 25/10). Cada empresa tiene además UNA dirección
+// para cualquier documento, sin prefijo: <empresa>@entrada.folvy.app (y, cuando
+// Julio dé de alta el dominio, <empresa>@entrada.sumied.com). La base la sabe
+// de clase «documentos» y aquí se lleva cada cosa a su sitio por los caminos
+// de siempre (recibirDocumentos):
+//   · un resumen de pagos de Uber Eats → la liquidación, como en liquidaciones-;
+//   · un remitente que no manda facturas → se apunta y no se lee, como siempre;
+//   · una nómina (porque su remitente se aprendió en «Dime qué es» o porque su
+//     nombre lo dice) → Laboral, por el mismo camino que el buzón de nóminas
+//     (employee-documents y payroll-extract);
+//   · un PDF o una foto → la bandeja y la lectura de facturas, y se apunta qué
+//     es: si la lectura dice que no es una factura, queda sin saber
+//     («Necesita que lo mires»);
+//   · un extracto, un Excel, un CSV, un zip o un XML → al almacén conta-entrada,
+//     con lo que su nombre dice que es (un zip de Catcher, la quincena de
+//     riders) o sin saber.
+
+import { esResumenUber, leerResumenUber, NoEsResumenUber, paraRegistrar, trozos, type ResumenUber } from './liquidacionUber.ts'
 
 export const DOMINIO_ENTRADA = 'entrada.folvy.app'
 export const DIRECCION = /^((?:facturas|liquidaciones)-[a-z0-9][a-z0-9-]{1,40})@([a-z0-9.-]+)$/
+/** La dirección única de la puerta: sin prefijo, y solo en un dominio de entrada (entrada.folvy.app, entrada.sumied.com…). */
+export const DIRECCION_UNICA = /^([a-z0-9][a-z0-9-]{1,40})@(entrada\.[a-z0-9.-]+)$/
+/** Lo que la puerta guarda aunque no se lea: hojas, extractos, zips y XML (al almacén conta-entrada). */
+export const BUCKET_ENTRADA = 'conta-entrada'
 export const TIPOS_ADMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const
 export const MAX_BYTES = 10 * 1024 * 1024 // el límite del bucket receipt-uploads
 const TOLERANCIA_FIRMA_S = 5 * 60
@@ -111,7 +133,7 @@ function deEntrada(xs: readonly string[]): Direccion[] {
   const vistas = new Set<string>()
   const out: Direccion[] = []
   for (const d of todas) {
-    const m = d.match(DIRECCION)
+    const m = d.match(DIRECCION) ?? d.match(DIRECCION_UNICA)
     if (!m || vistas.has(d)) continue
     vistas.add(d)
     out.push({ localPart: m[1], dominio: m[2], direccion: d })
@@ -201,7 +223,9 @@ export const rutaEntrada = (accountId: string, emailId: string, i: number, nombr
 
 // ── El orquestador ─────────────────────────────────────────────────────────
 
-export type ClaseDireccion = 'facturas' | 'liquidaciones'
+export type ClaseDireccion = 'facturas' | 'liquidaciones' | 'documentos'
+/** Lo que es un documento (document_inbox.doc_kind). */
+export type QueEs = 'factura' | 'ticket' | 'liquidacion' | 'extracto' | 'nomina' | 'riders' | 'otro'
 export type Destino = { companyId: string; accountId: string; activa: boolean; tipo?: ClaseDireccion }
 export type DatosLiquidacion = ReturnType<typeof paraRegistrar>
 export interface PuertoEntrada {
@@ -225,12 +249,18 @@ export interface PuertoEntrada {
   cuerpo?(emailId: string): Promise<{ html: string | null; text: string | null }>
   /** Registra un resumen leído (conta_liquidacion_registrar). */
   liquidacion?(x: { companyId: string; datos: DatosLiquidacion }): Promise<{ id: string; yaEstaba: boolean; texto: string; factura: string | null }>
-  /** Lo que la base sabe del remitente para esa empresa (conta_entrada_remitente), o null. */
-  remitente?(companyId: string, from: string): Promise<{ decision: 'no_facturas'; motivo: string } | null>
+  /** Lo que la base sabe del remitente para esa empresa (conta_entrada_remitente), o null. «tipo»: lo que manda, aprendido en «Dime qué es». */
+  remitente?(companyId: string, from: string): Promise<{ decision: 'no_facturas' | 'tipo'; motivo: string; tipo?: QueEs | null } | null>
+  /** La puerta: sube a otro almacén (conta-entrada) lo que no es un PDF ni una foto. */
+  subirA?(bucket: string, ruta: string, bytes: Uint8Array, tipo: string): Promise<void>
+  /** La puerta: apunta en la bandeja qué es (y por quién lo sabe) y, si va en otro almacén, cuál. */
+  colocar?(inboxId: string, x: { tipo: QueEs | null; por: 'regla' | 'lectura'; bucket?: string }): Promise<void>
+  /** La puerta: una nómina, por el camino del buzón de nóminas (employee-documents y payroll-extract). */
+  nomina?(x: { accountId: string; emailId: string; nombre: string; bytes: Uint8Array }): Promise<{ ok: boolean; texto: string }>
 }
 
 export type ResultadoEntrada = {
-  resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido' | 'liquidacion' | 'confirmacion' | 'no_es_liquidacion' | 'no_es_factura'
+  resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido' | 'liquidacion' | 'confirmacion' | 'no_es_liquidacion' | 'no_es_factura' | 'documentos'
   texto: string
   llegadas: { id: string; estado: string; texto: string }[]
 }
@@ -272,37 +302,45 @@ export const rutaLiquidacion = (accountId: string, emailId: string, nombre: stri
 
 export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): Promise<ResultadoEntrada> {
   if (await p.yaVisto(c.email_id)) return { resultado: 'repetido', texto: 'Este correo ya se recibió: no se procesa dos veces.', llegadas: [] }
-  // Primero los destinatarios; si no está la nuestra, el sobre del evento; y si
-  // tampoco, el correo entero según Resend (Julio, 16/10: que no se pierda
-  // ninguno; un reenvío de Gmail conserva el To: original).
-  let dirs = direccionesDeFacturas(c)
+  // Primero los destinatarios; si ninguna es de una empresa, el sobre del
+  // evento; y si tampoco, el correo entero según Resend (Julio, 16/10: que no
+  // se pierda ninguno; un reenvío de Gmail conserva el To: original). Desde la
+  // puerta (V02) cualquier <algo>@entrada.… es candidata, y manda la base: por
+  // eso se sigue buscando aunque los destinatarios traigan una que no es de nadie.
+  const vistas: Direccion[] = []
+  let destino: (Destino & { direccion: string }) | null = null
   let porSobre = false
-  if (!dirs.length) { dirs = destinatariosDelSobre(c); porSobre = dirs.length > 0 }
-  if (!dirs.length && p.correoEntero) {
-    const e = await p.correoEntero(c.email_id).catch(() => null)
-    if (e) { dirs = [...direccionesDeFacturas(e), ...destinatariosDelSobre(e)]; porSobre = dirs.length > 0 }
+  const resolver = async (xs: Direccion[], sobre: boolean) => {
+    for (const d of xs) {
+      if (vistas.some((v) => v.direccion === d.direccion)) continue
+      vistas.push(d)
+      const x = await p.destino(d.localPart, d.dominio)
+      if (x) { destino = { ...x, direccion: d.direccion }; porSobre = sobre; return }
+    }
   }
-  if (!dirs.length) {
+  await resolver(direccionesDeFacturas(c), false)
+  if (!destino) await resolver(destinatariosDelSobre(c), true)
+  if (!destino && p.correoEntero) {
+    const e = await p.correoEntero(c.email_id).catch(() => null)
+    if (e) await resolver([...direccionesDeFacturas(e), ...destinatariosDelSobre(e)], true)
+  }
+  if (!vistas.length) {
     // Antes se contestaba «ignorado» sin apuntar nada: un correo así se perdía sin rastro.
     const destinatarios = [...(c.to ?? []), ...(c.cc ?? []), ...(c.bcc ?? [])]
     await p.registrarCorreo({ emailId: c.email_id, to: destinatarios[0] ?? '', from: c.from ?? null, subject: c.subject ?? null, companyId: null, resultado: 'sin_destino',
       detalle: { motivo: 'ninguna dirección de entrada en sus destinatarios ni en el sobre', destinatarios: destinatarios.length } })
     return { resultado: 'sin_destino', texto: 'El correo no lleva ninguna dirección de entrada (ni en sus destinatarios ni en el sobre): queda apuntado y no se lee.', llegadas: [] }
   }
-
-  let destino: (Destino & { direccion: string }) | null = null
-  for (const d of dirs) {
-    const x = await p.destino(d.localPart, d.dominio)
-    if (x) { destino = { ...x, direccion: d.direccion }; break }
+  const d0 = destino as (Destino & { direccion: string }) | null
+  const base = { emailId: c.email_id, to: d0?.direccion ?? vistas[0].direccion, from: c.from ?? null, subject: c.subject ?? null, ...(porSobre ? { porSobre: true } : {}) }
+  if (!d0) {
+    await p.registrarCorreo({ ...base, companyId: null, resultado: 'sin_destino', detalle: { direcciones: vistas.map((d) => d.direccion) } })
+    return { resultado: 'sin_destino', texto: `${vistas[0].direccion} no es la dirección de ninguna empresa: queda apuntado y no se lee.`, llegadas: [] }
   }
-  const base = { emailId: c.email_id, to: destino?.direccion ?? dirs[0].direccion, from: c.from ?? null, subject: c.subject ?? null, ...(porSobre ? { porSobre: true } : {}) }
-  if (!destino) {
-    await p.registrarCorreo({ ...base, companyId: null, resultado: 'sin_destino', detalle: { direcciones: dirs.map((d) => d.direccion) } })
-    return { resultado: 'sin_destino', texto: `${dirs[0].direccion} no es la dirección de ninguna empresa: queda apuntado y no se lee.`, llegadas: [] }
-  }
-  if (!destino.activa) {
-    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'apagada', detalle: {} })
-    return { resultado: 'apagada', texto: `La dirección ${destino.direccion} está apagada: queda apuntado y no se lee.`, llegadas: [] }
+  const dest = d0
+  if (!dest.activa) {
+    await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: 'apagada', detalle: {} })
+    return { resultado: 'apagada', texto: `La dirección ${dest.direccion} está apagada: queda apuntado y no se lee.`, llegadas: [] }
   }
 
   // Gmail pide confirmar el reenvío (en las dos clases): se apunta con su
@@ -314,28 +352,29 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
       if (b) conf = confirmacionDeReenvio({ ...c, text: b.text, html: b.html }) ?? conf
     }
     if (conf) {
-      await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'confirmacion', detalle: { codigo: conf.codigo, enlace: conf.enlace } })
-      return { resultado: 'confirmacion', texto: textoConfirmacion(destino.direccion, conf), llegadas: [] }
+      await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: 'confirmacion', detalle: { codigo: conf.codigo, enlace: conf.enlace } })
+      return { resultado: 'confirmacion', texto: textoConfirmacion(dest.direccion, conf), llegadas: [] }
     }
   }
-  if (destino.tipo === 'liquidaciones') return recibirLiquidacion(c, { ...destino }, base, p)
+  if (dest.tipo === 'liquidaciones') return recibirLiquidacion(c, { ...dest }, base, p)
+  if (dest.tipo === 'documentos') return recibirDocumentos(c, { ...dest }, base, p)
 
   // Un remitente que no manda facturas (sus justificantes, por ejemplo): se apunta y no se lee.
-  const quien = c.from && p.remitente ? await p.remitente(destino.companyId, c.from) : null
+  const quien = c.from && p.remitente ? await p.remitente(dest.companyId, c.from) : null
   if (quien?.decision === 'no_facturas') {
-    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'sin_facturas', detalle: { motivo: 'remitente_no_facturas' } })
+    await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: 'sin_facturas', detalle: { motivo: 'remitente_no_facturas' } })
     return { resultado: 'no_es_factura', texto: `No se lee como factura: ${quien.motivo.replace(/\.$/, '')}. Queda apuntado en el registro de entrada.`, llegadas: [] }
   }
 
   const { tomar, dejar } = clasificarAdjuntos(await p.adjuntos(c.email_id))
   const llegadas: ResultadoEntrada['llegadas'] = []
-  const comun = { accountId: destino.accountId, companyId: destino.companyId, emailId: c.email_id, to: destino.direccion, from: c.from ?? null, subject: c.subject ?? null, recibido: c.created_at ?? null }
+  const comun = { accountId: dest.accountId, companyId: dest.companyId, emailId: c.email_id, to: dest.direccion, from: c.from ?? null, subject: c.subject ?? null, recibido: c.created_at ?? null }
 
   for (const [i, a] of tomar.entries()) {
     if (!a.download_url) { dejar.push({ nombre: a.nombre, porque: 'Resend no da su enlace de descarga' }); continue }
     const bytes = await p.bajar(a.download_url)
     if (bytes.length > MAX_BYTES) { dejar.push({ nombre: a.nombre, porque: 'pasa de 10 MB' }); continue }
-    const ruta = rutaEntrada(destino.accountId, c.email_id, i, a.nombre)
+    const ruta = rutaEntrada(dest.accountId, c.email_id, i, a.nombre)
     const sha = await p.sha256(bytes)
     await p.subir(ruta, bytes, a.tipo)
     const l = await p.llegada({ ...comun, ruta, nombre: a.nombre, tipo: a.tipo, bytes: bytes.length, sha256: sha, enlace: null })
@@ -350,7 +389,7 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
       llegadas.push({ id: l.id, estado: 'falta_pdf', texto: 'Falta el PDF: el correo trae un enlace. Bájalo y súbelo.' })
     }
   }
-  await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: llegadas.length ? 'recibido' : 'sin_facturas', detalle: { tomados: llegadas.length, dejados: dejar } })
+  await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: llegadas.length ? 'recibido' : 'sin_facturas', detalle: { tomados: llegadas.length, dejados: dejar } })
   const texto = llegadas.length
     ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ninguna factura${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarla.`
@@ -360,9 +399,10 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
 // ── Las liquidaciones ────────────────────────────────────────────────────────
 
 async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccion: string },
-  base: { emailId: string; to: string; from: string | null; subject: string | null }, p: PuertoEntrada): Promise<ResultadoEntrada> {
+  base: { emailId: string; to: string; from: string | null; subject: string | null }, p: PuertoEntrada,
+  cuerpoYa?: { html: string | null; text: string | null }): Promise<ResultadoEntrada> {
   if (!p.liquidacion) throw new Error('La función no sabe registrar liquidaciones.')
-  const cuerpo = c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id) : { html: null, text: null }
+  const cuerpo = cuerpoYa ?? (c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id) : { html: null, text: null })
   let resumen: ResumenUber
   try {
     resumen = leerResumenUber({ subject: c.subject, html: cuerpo.html, text: cuerpo.text })
@@ -388,4 +428,177 @@ async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccio
   await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'liquidacion',
     detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: resumen.avisos.length, mensual: !!adjunto } })
   return { resultado: 'liquidacion', texto: r.texto, llegadas: [] }
+}
+
+// ── La puerta: <empresa>@entrada.… (V02) ─────────────────────────────────────
+
+/** Lo que se guarda sin leer: hojas, CSV, extractos (Norma 43, OFX), zips y XML. */
+const GUARDABLES: { ext: RegExp; tipo: string }[] = [
+  { ext: /\.csv$/i, tipo: 'text/csv' },
+  { ext: /\.xlsx$/i, tipo: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+  { ext: /\.xls$/i, tipo: 'application/vnd.ms-excel' },
+  { ext: /\.zip$/i, tipo: 'application/zip' },
+  { ext: /\.(xml|xsig)$/i, tipo: 'application/xml' },
+  { ext: /\.(n43|q43|c43|aeb|txt|ofx|qif)$/i, tipo: 'text/plain' },
+]
+const TIPOS_GUARDABLES: Record<string, string> = {
+  'text/csv': 'text/csv', 'application/vnd.ms-excel': 'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/zip': 'application/zip', 'application/x-zip-compressed': 'application/zip', 'application/xml': 'application/xml', 'text/xml': 'application/xml',
+  'text/plain': 'text/plain',
+}
+
+/** Lo que dice el NOMBRE de un fichero que es (o null si no dice nada). Solo lo que no admite dudas. */
+export function queDiceElNombre(nombre: string | null | undefined): QueEs | null {
+  const n = (nombre ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  if (/\.(n43|q43|c43|aeb|ofx|qif)$/.test(n) || /(extracto|movimientos|norma[ _-]?43|cuaderno[ _-]?43)/.test(n)) return 'extracto'
+  if (/n[o]mina/.test(n) || /\bnominas?\b/.test(n)) return 'nomina'
+  if (/\.zip$/.test(n) && /(catcher|rider)/.test(n)) return 'riders'
+  if (/(liquidacion|settlement|payout|monthly_statement|resumen[ _-]de[ _-]pagos)/.test(n)) return 'liquidacion'
+  if (/\.xsig$/.test(n) || /facturae/.test(n)) return 'factura'
+  return null
+}
+
+/**
+ * Lo que dice el CONTENIDO cuando el nombre no dice nada. Un zip cuyos ficheros
+ * son las facturas de los riders de Catcher (invoice_<n>_ES_I_<…>.pdf, el nombre
+ * con que llegan, medido en las 83 de la quincena del 1 al 15/10) es la quincena
+ * de riders. Los nombres de dentro de un zip van sin comprimir: no hace falta abrirlo.
+ */
+export function queDiceElContenido(nombre: string | null | undefined, bytes: Uint8Array): QueEs | null {
+  if (!/\.zip$/i.test(nombre ?? '') && !(bytes[0] === 0x50 && bytes[1] === 0x4b)) return null
+  if (/\.(xlsx|xls)$/i.test(nombre ?? '')) return null // un Excel también empieza por PK
+  let t = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) t += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + 0x8000)))
+  const riders = t.match(/invoice_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*_ES_I_[A-Za-z0-9_]+\.pdf/g) ?? []
+  return riders.length >= 2 ? 'riders' : null
+}
+
+export type ClasificadosPuerta = {
+  leer: (AdjuntoResend & { tipo: string; nombre: string })[]
+  guardar: (AdjuntoResend & { tipo: string; nombre: string })[]
+  dejar: { nombre: string; porque: string }[]
+}
+
+/** Un nombre seguro que conserva su extensión (para lo que se guarda sin leer). */
+export function nombreSeguroCon(nombre: string | null | undefined): string {
+  const limpio = (nombre ?? 'documento').split(/[\\/]/).pop()!.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const ext = limpio.match(/\.([A-Za-z0-9]{1,5})$/)?.[1]?.toLowerCase() ?? 'bin'
+  const base = limpio.replace(/\.[A-Za-z0-9]{1,5}$/, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^[-.]+|[-.]+$/g, '').slice(0, 80) || 'documento'
+  return `${base}.${ext}`
+}
+
+/** Qué se lee (PDF y fotos), qué se guarda sin leer (hojas, extractos, zips, XML) y qué se deja, con su porqué. */
+export function clasificarDocumentos(xs: readonly AdjuntoResend[]): ClasificadosPuerta {
+  const { tomar, dejar: dejar0 } = clasificarAdjuntos(xs)
+  const guardar: ClasificadosPuerta['guardar'] = []
+  const dejar: ClasificadosPuerta['dejar'] = []
+  for (const d of dejar0) {
+    if (d.porque !== 'no es un PDF ni una foto') { dejar.push(d); continue }
+    const a = xs.find((x) => (x.filename ?? 'sin nombre') === d.nombre)!
+    const ct = (a.content_type ?? '').toLowerCase().split(';')[0].trim()
+    const tipo = GUARDABLES.find((g) => g.ext.test(a.filename ?? ''))?.tipo ?? TIPOS_GUARDABLES[ct] ?? null
+    if (!tipo) { dejar.push({ nombre: d.nombre, porque: 'no es un PDF, una foto, una hoja, un extracto, un zip ni un XML' }); continue }
+    if ((a.size ?? 0) > MAX_BYTES) { dejar.push({ nombre: d.nombre, porque: 'pasa de 10 MB' }); continue }
+    guardar.push({ ...a, tipo, nombre: nombreSeguroCon(a.filename) })
+  }
+  return { leer: tomar, guardar, dejar }
+}
+
+/** ¿Puede ser un resumen de pagos de Uber Eats? (Para pedir el cuerpo solo cuando hace falta.) */
+const pareceDeUber = (c: Pick<CorreoResend, 'from' | 'subject'>) => /uber/i.test(`${c.from ?? ''} ${c.subject ?? ''}`)
+
+const QUE: Record<QueEs, string> = {
+  factura: 'una factura', ticket: 'un ticket', liquidacion: 'una liquidación', extracto: 'un extracto del banco',
+  nomina: 'una nómina', riders: 'una quincena de riders', otro: 'otra cosa',
+}
+
+async function recibirDocumentos(c: CorreoResend, dest: Destino & { direccion: string },
+  base: { emailId: string; to: string; from: string | null; subject: string | null }, p: PuertoEntrada): Promise<ResultadoEntrada> {
+  // 1 · Un resumen de pagos de Uber: es una liquidación, por su camino.
+  if (pareceDeUber(c) && p.liquidacion) {
+    const cuerpo = c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id).catch(() => null) : null
+    if (cuerpo && esResumenUber({ subject: c.subject }, trozos(cuerpo))) return recibirLiquidacion(c, dest, base, p, cuerpo)
+  }
+
+  // 2 · Lo que la base sabe del remitente.
+  const quien = c.from && p.remitente ? await p.remitente(dest.companyId, c.from) : null
+  if (quien?.decision === 'no_facturas') {
+    await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: 'sin_facturas', detalle: { motivo: 'remitente_no_facturas' } })
+    return { resultado: 'no_es_factura', texto: `No se lee como factura: ${quien.motivo.replace(/\.$/, '')}. Queda apuntado en el registro de entrada.`, llegadas: [] }
+  }
+  const delRemitente: QueEs | null = quien?.decision === 'tipo' ? quien.tipo ?? null : null
+
+  const { leer, guardar, dejar } = clasificarDocumentos(await p.adjuntos(c.email_id))
+  const llegadas: ResultadoEntrada['llegadas'] = []
+  const comun = { accountId: dest.accountId, companyId: dest.companyId, emailId: c.email_id, to: dest.direccion, from: c.from ?? null, subject: c.subject ?? null, recibido: c.created_at ?? null }
+  let i = 0
+
+  // 3 · PDF y fotos.
+  for (const a of leer) {
+    if (!a.download_url) { dejar.push({ nombre: a.nombre, porque: 'Resend no da su enlace de descarga' }); continue }
+    const bytes = await p.bajar(a.download_url)
+    if (bytes.length > MAX_BYTES) { dejar.push({ nombre: a.nombre, porque: 'pasa de 10 MB' }); continue }
+    const que = delRemitente ?? queDiceElNombre(a.filename)
+    // Una nómina va a Laboral por el camino del buzón de nóminas; no entra en la bandeja de facturas.
+    if (que === 'nomina' && a.tipo === 'application/pdf' && p.nomina) {
+      const r = await p.nomina({ accountId: dest.accountId, emailId: c.email_id, nombre: a.nombre, bytes })
+      llegadas.push({ id: `nomina:${a.nombre}`, estado: r.ok ? 'nomina' : 'error', texto: r.texto })
+      continue
+    }
+    const ruta = rutaEntrada(dest.accountId, c.email_id, i++, a.nombre)
+    const sha = await p.sha256(bytes)
+    await p.subir(ruta, bytes, a.tipo)
+    const l = await p.llegada({ ...comun, ruta, nombre: a.nombre, tipo: a.tipo, bytes: bytes.length, sha256: sha, enlace: null })
+    if (l.yaEstaba) { llegadas.push({ id: l.id, estado: 'repetido', texto: `${a.nombre}: ya estaba (el mismo fichero llegó antes).` }); continue }
+    if (que && que !== 'factura' && que !== 'ticket') {
+      // Se sabe que no es una factura: no se lee como tal.
+      await p.colocar?.(l.id, { tipo: que, por: 'regla' })
+      llegadas.push({ id: l.id, estado: 'colocado', texto: `${a.nombre}: es ${QUE[que]}.` })
+      continue
+    }
+    const r = await p.leer(l.id)
+    // Lo que la lectura dice: si es factura, factura; si no lo parece, queda sin saber («Necesita que lo mires»).
+    if (r.estado !== 'no_es_factura' && r.estado !== 'error') await p.colocar?.(l.id, { tipo: que ?? 'factura', por: que ? 'regla' : 'lectura' })
+    llegadas.push({ id: l.id, ...r })
+  }
+
+  // 4 · Hojas, extractos, zips y XML: a conta-entrada, sin leer, con lo que su
+  // nombre o su contenido dice. La quincena de Catcher llega junta (el zip y sus
+  // dos Excel): si el correo trae el zip de los riders, sus hojas van con él.
+  const bajados: { a: (typeof guardar)[number]; bytes: Uint8Array; que: QueEs | null }[] = []
+  for (const a of guardar) {
+    if (!a.download_url || !p.subirA) { dejar.push({ nombre: a.nombre, porque: 'Resend no da su enlace de descarga' }); continue }
+    const bytes = await p.bajar(a.download_url)
+    if (bytes.length > MAX_BYTES) { dejar.push({ nombre: a.nombre, porque: 'pasa de 10 MB' }); continue }
+    bajados.push({ a, bytes, que: delRemitente ?? queDiceElNombre(a.filename) ?? queDiceElContenido(a.filename, bytes) })
+  }
+  if (bajados.some((b) => b.que === 'riders' && /\.zip$/i.test(b.a.nombre))) {
+    for (const b of bajados) if (!b.que && /\.(xlsx|xls)$/i.test(b.a.nombre)) b.que = 'riders'
+  }
+  for (const { a, bytes, que } of bajados) {
+    const ruta = rutaEntrada(dest.accountId, c.email_id, i++, a.nombre)
+    const sha = await p.sha256(bytes)
+    await p.subirA!(BUCKET_ENTRADA, ruta, bytes, a.tipo)
+    const l = await p.llegada({ ...comun, ruta, nombre: a.nombre, tipo: a.tipo, bytes: bytes.length, sha256: sha, enlace: null })
+    if (l.yaEstaba) { llegadas.push({ id: l.id, estado: 'repetido', texto: `${a.nombre}: ya estaba (el mismo fichero llegó antes).` }); continue }
+    await p.colocar?.(l.id, { tipo: que, por: 'regla', bucket: BUCKET_ENTRADA })
+    llegadas.push({ id: l.id, estado: que ? 'colocado' : 'sin_saber', texto: que ? `${a.nombre}: es ${QUE[que]}.` : `${a.nombre}: no sé qué es; dímelo en la puerta.` })
+  }
+
+  // Sin ningún fichero, pero con un enlace de descarga: «Falta el PDF», como en facturas-.
+  if (!llegadas.length) {
+    for (const enlace of enlacesDeFactura(c)) {
+      const l = await p.llegada({ ...comun, ruta: null, nombre: null, tipo: null, bytes: null, sha256: null, enlace })
+      llegadas.push({ id: l.id, estado: 'falta_pdf', texto: 'Falta el PDF: el correo trae un enlace. Bájalo y súbelo.' })
+    }
+  }
+  // Al registro, solo recuentos y estados: nunca importes ni nombres de personas.
+  const porEstado = llegadas.reduce<Record<string, number>>((m, l) => ({ ...m, [l.estado]: (m[l.estado] ?? 0) + 1 }), {})
+  await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: llegadas.length ? 'recibido' : 'sin_facturas',
+    detalle: { puerta: true, tomados: llegadas.length, estados: porEstado, dejados: dejar } })
+  const texto = llegadas.length
+    ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
+    : `El correo no trae ningún documento${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarlo.`
+  return { resultado: 'documentos', texto, llegadas }
 }
