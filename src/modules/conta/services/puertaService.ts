@@ -32,9 +32,15 @@ export async function direccionUnica(companyId: string, quien: string | null): P
 
 /** Aprende las fuentes de lo que ya pasa en la empresa. Devuelve cuántas se han apuntado nuevas. */
 export async function aprenderFuentes(companyId: string, quien: string | null): Promise<{ nuevas: number; texto: string }> {
-  const propuestas = await rpc<Record<string, unknown>[]>('conta_puerta_fuentes_proponer', { p_company: companyId })
+  const [propuestas, ya] = await Promise.all([
+    rpc<Record<string, unknown>[]>('conta_puerta_fuentes_proponer', { p_company: companyId }),
+    leerFuentes(companyId),
+  ])
+  // Lo que ya está apuntado no se pisa (su local, su margen o que esté apagada los puso una persona).
+  const claves = new Set(ya.fuentes.map((f) => f.clave).filter(Boolean))
   let nuevas = 0
   for (const p of propuestas) {
+    if (claves.has(String(p.clave))) continue
     const r = await rpc<{ nueva?: boolean }>('conta_puerta_fuente_guardar', { p_company: companyId, p: p, p_quien_nombre: quien })
     if (r.nueva) nuevas++
   }

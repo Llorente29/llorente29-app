@@ -264,7 +264,7 @@ begin
     'ajustes', coalesce((select jsonb_build_object('lo_que_falta', a.lo_que_falta, 'margen', a.margen_dias) from public.conta_puerta_ajustes a where a.company_id = p_company),
                         jsonb_build_object('lo_que_falta', true, 'margen', 5)),
     'fuentes', coalesce((select jsonb_agg(jsonb_build_object(
-        'id', x.id, 'tipo', x.kind, 'nombre', coalesce(x.label, s.name, 'Sin nombre'), 'grupo', x.group_label,
+        'id', x.id, 'clave', x.source_key, 'tipo', x.kind, 'nombre', coalesce(x.label, s.name, 'Sin nombre'), 'grupo', x.group_label,
         'proveedor_id', x.supplier_id, 'cadencia', x.cadence, 'dia', x.typical_day, 'dia_semana', x.weekday, 'cada', x.gap_days,
         'margen', x.margin_days, 'activa', x.active, 'origen', x.source, 'cubierta', x.covered_by_recurring_id is not null,
         'llegadas', to_jsonb(public._conta_puerta_llegadas(x)),
@@ -291,6 +291,9 @@ begin
     select jsonb_build_object(
       'clave', 'nif:' || r.nif, 'tipo', case when r.alquiler then 'alquiler' else 'proveedor' end,
       'nombre', r.nombre, 'proveedor_id', r.supplier_id, 'nifs', jsonb_build_array(r.nif),
+      -- Los alquileres, juntos y sin nombres en pantalla (suelen ser personas): el
+      -- local de cada uno lo dice la persona («Alquiler · Cañaveral 75»).
+      'grupo', case when r.alquiler then 'Alquileres' end,
       'cadencia', case when r.por_mes > 1.5 then 'varias' else 'mensual' end,
       'dia', case when r.por_mes > 1.5 then null else r.dia end, 'cada', case when r.por_mes > 1.5 then 10 end,
       'meses', r.meses, 'por_mes', r.por_mes) as x
@@ -322,8 +325,19 @@ begin
     -- Intermediarios con liquidaciones en los últimos 4 meses.
     select jsonb_build_object('clave', 'canal:' || c.channel_id, 'tipo', 'intermediario', 'nombre', coalesce(ch.name, 'Intermediario') || ' · liquidaciones',
                               'canal', c.channel_id,
-                              'cadencia', case when mode() within group (order by c.period_grain) in ('week', 'weeks', 'semana') then 'semanal'
-                                               when mode() within group (order by c.period_grain) = 'quincena' then 'quincenal' else 'mensual' end,
+                              -- El ritmo de su ÚLTIMO periodo, no el más repetido: el histórico importado
+                              -- (mensual, una fila por tienda) pesaba más que los resúmenes semanales de
+                              -- Uber que entran desde el 11/10 (medido el 25/10). Empate el mismo día: el más fino.
+                              'cadencia', (array_agg(case when c.period_grain in ('week', 'weeks', 'semana') then 'semanal' when c.period_grain = 'quincena' then 'quincenal' else 'mensual' end
+                                                     order by coalesce(c.period_to, c.settlement_date) desc,
+                                                              case when c.period_grain in ('week', 'weeks', 'semana') then 0 when c.period_grain = 'quincena' then 1 else 2 end))[1],
+                              -- El día de la semana en que acaba su último periodo (Uber: el domingo) y, si es semanal, 1 día de margen (Julio, 25/10).
+                              'dia_semana', (array_agg(case when c.period_grain in ('week', 'weeks', 'semana') then extract(isodow from coalesce(c.period_to, c.settlement_date))::int end
+                                                       order by coalesce(c.period_to, c.settlement_date) desc,
+                                                                case when c.period_grain in ('week', 'weeks', 'semana') then 0 when c.period_grain = 'quincena' then 1 else 2 end))[1],
+                              'margen', (array_agg(case when c.period_grain in ('week', 'weeks', 'semana') then 1 end
+                                                   order by coalesce(c.period_to, c.settlement_date) desc,
+                                                            case when c.period_grain in ('week', 'weeks', 'semana') then 0 when c.period_grain = 'quincena' then 1 else 2 end))[1],
                               'liquidaciones', count(*))
       from public.channel_settlement c left join public.sales_channel ch on ch.id = c.channel_id and ch.account_id = c.account_id
      where c.account_id = v_acc and coalesce(c.is_reference, false) = false and coalesce(c.period_to, c.settlement_date) >= current_date - 120

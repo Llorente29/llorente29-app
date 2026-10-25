@@ -29,6 +29,8 @@ export type Cadencia = 'mensual' | 'quincenal' | 'semanal' | 'varias'
 
 export interface Fuente {
   id: string
+  /** La clave con que se aprendió (nif:…, riders, canal:…, banco:…, nominas), o null si se apuntó a mano. */
+  clave?: string | null
   tipo: TipoFuente
   nombre: string
   grupo: string | null
