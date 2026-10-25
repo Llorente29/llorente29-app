@@ -2,7 +2,7 @@
   "_que": "V02 · E2 · El motor de liquidaciones · contexto de producción de la tanda (2253 añade, 2254 cambia), medido en SOLO LECTURA el 25/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen las tres tablas que se tocan (conta_liquidacion_resolucion, 0 filas: columnas nuevas y channel_id a vacío; payment_method, 0 filas: una columna nueva; supplier_invoice: un disparador nuevo) y las dos funciones que se reemplazan con la misma firma (conta_liquidacion_registrar y conta_tienda_plataforma_asignar, sin otras firmas). Nada de lo que crea; nada en el historial; nada en el camino del pedido.",
   "medido": "2026-10-25T22:40Z",
   "tanda": {
-    "supabase/migrations/20261025T2253_v02l_motor_liquidaciones.sql": "09190bfa671409b45d8d14722b528d26",
+    "supabase/migrations/20261025T2253_v02l_motor_liquidaciones.sql": "f8ab659998e4ddd90c61e6dc7c61d476",
     "supabase/migrations/20261025T2254_v02l_motor_cambia.sql": "7a42be818960cf3c824cd5478d4c4136"
   },
   "contexto": {"tablas":["public.conta_liquidacion_resolucion","public.payment_method","public.supplier_invoice"],"funciones":["public.conta_liquidacion_registrar(uuid,jsonb,text)","public.conta_tienda_plataforma_asignar(uuid,uuid,uuid,uuid,text)"],"filas":{"public.conta_liquidacion_resolucion":0,"public.payment_method":0,"public.supplier_invoice":95},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}

@@ -401,7 +401,8 @@ begin
   end if;
   if v_party is null then
     insert into public.party (account_id, name, tax_id, source, created_by, created_by_name)
-    values (v_acc, v_nombre, v_nif, 'liquidacion', auth.uid(), coalesce(nullif(btrim(p_quien_nombre), ''), 'Sumied · liquidaciones'))
+    -- source: los valores de party_source_check (manual, supplier, migrated, ticket); quién lo dio de alta va en created_by_name.
+    values (v_acc, v_nombre, v_nif, 'manual', auth.uid(), 'Sumied · su primera liquidación' || coalesce(' (' || nullif(btrim(p_quien_nombre), '') || ')', ''))
     returning id into v_party;
   end if;
   select cada, dias into v_cada, v_dias from (values ('uber', 'weekly', 1), ('glovo', 'fortnightly', 20), ('justeat', 'fortnightly', 4)) k(prov, cada, dias) where k.prov = v_prov;
