@@ -1,0 +1,2 @@
+# V02d · vuelta atrás (antes, el front de antes: el del V02d llama a conta_puerta_al_dia).
+supabase/vuelta-atras/20261025T1912_v02d_avisos.down.sql

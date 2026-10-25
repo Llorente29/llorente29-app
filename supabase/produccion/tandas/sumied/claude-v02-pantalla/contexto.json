@@ -1,0 +1,6 @@
+{
+  "_que": "V02d · Que los avisos digan la verdad · contexto de producción de la tanda (1912), medido en SOLO LECTURA el 25/10, después de fusionarse el PC01 E1 (#330), con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen la tabla que cambia (supplier_expected_invoice: tres columnas nuevas que admiten nulos; 0 filas según reltuples, 25 de Foodint contadas) y las cuatro funciones que reemplaza (_conta_puerta_llegadas, conta_puerta_fuentes, conta_puerta_fuentes_proponer y conta_puerta_fuente_guardar, de la 1212, sin otras firmas); nada de lo que crea; nada en el historial; nada en el camino del pedido. El PC01 no toca nada de esto (añade dos columnas a channel_settlement, que la tanda no escribe).",
+  "medido": "2026-10-25T20:55Z",
+  "tanda": { "supabase/migrations/20261025T1912_v02d_avisos.sql": "571812b73415a0ab2e8bf78fa54d2edb" },
+  "contexto": {"tablas":["public.supplier_expected_invoice"],"funciones":["public._conta_puerta_llegadas(public.supplier_expected_invoice)","public.conta_puerta_fuente_guardar(uuid,jsonb,text)","public.conta_puerta_fuentes_proponer(uuid)","public.conta_puerta_fuentes(uuid)"],"filas":{"public.supplier_expected_invoice":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

@@ -156,6 +156,8 @@ export const CONTA = {
     inicio: 'inicio',
     /** V02 · Inicio › Documentos (tablero 19): la puerta por la que entra todo. */
     puerta: 'inicio/documentos',
+    /** V02d · Inicio › Documentos › Qué esperas cada mes (tablero 23): una página, no un cuadro. */
+    queEsperas: 'inicio/documentos/que-esperas',
     /** Tu empresa (Ajustes). Es la portada del módulo con Folvy (sin Inicio). */
     empresa: 'ajustes',
     /** Un apartado de Tu empresa (en el móvil, una pantalla por apartado). */
@@ -362,6 +364,8 @@ export const rutaLibros = (area?: string, accion?: string): string => {
 }
 export const rutaCompras = (): string => rutaConta(CONTA.rutas.compras)
 /** V02 · La puerta (Inicio › Documentos), en una de sus pestañas: lo último, «necesita que lo mires» o colocado. */
+/** V02d · Qué esperas cada mes (tablero 23). */
+export const rutaQueEsperas = (): string => rutaConta(CONTA.rutas.queEsperas)
 export const rutaPuerta = (ver?: 'mirar' | 'colocado'): string => `${rutaConta(CONTA.rutas.puerta)}${ver ? `?ver=${ver}` : ''}`
 /** D01 · N22, con su filtro (para-mirar, por-aclarar, apuntadas, todas) y su mes ('YYYY-MM'). */
 export const rutaDocumentos = (ver?: string, mes?: string): string => {

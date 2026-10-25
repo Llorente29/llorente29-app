@@ -10,6 +10,8 @@
 //   · Aprender las fuentes: conta_puerta_fuentes_proponer y, una a una,
 //     conta_puerta_fuente_guardar (lo que ya está guardado no se pisa).
 //   · «Dime qué es», «Pedírsela», apagar una fuente o «Lo que falta».
+//   · V02d: al día (el ritmo de lo aprendido, salvo el que fijó una persona), «Ya lo tengo», no avisar,
+//     el local de una fila y «Añadir algo que espero».
 //   · Subir sin saber qué es: el fichero a conta-entrada y conta_puerta_subida.
 //     Las facturas, la quincena de Catcher y los extractos van por sus caminos
 //     de siempre (documentosService, catcherService, Bancos), no por aquí.
@@ -65,6 +67,48 @@ export async function ponerLocal(companyId: string, fuente: { id: string; nombre
   return local
     ? `Apuntado: ${fuente.nombre} es del local ${nombreDelLocal(local)}. El aviso de lo que falta ya lo dice.`
     : `Apuntado: ${fuente.nombre} ya no tiene local.`
+}
+
+/**
+ * V02d · Lo aprendido, al día (al abrir Documentos): lo nuevo se apunta y lo que
+ * nadie ha tocado toma el ritmo de hoy. Solo cambia algo si un administrador o
+ * un encargado abre la pantalla; devuelve si ha cambiado algo, para volver a leer.
+ */
+export async function alDia(companyId: string): Promise<boolean> {
+  const r = await rpc<{ nuevas: number; reaprendidas: number; dormidas: number; despiertas: number }>('conta_puerta_al_dia', { p_company: companyId })
+  return r.nuevas + r.reaprendidas + r.dormidas + r.despiertas > 0
+}
+
+/** V02d · «Ya lo tengo»: lo esperado de cada fuente de la fila, ese día, cuenta como llegado. */
+export async function yaLoTengo(fuentes: readonly { id: string; dia: string }[], quien: string | null): Promise<{ nuevas: number }> {
+  let nuevas = 0
+  for (const f of fuentes) {
+    const r = await rpc<{ ya_estaba: boolean }>('conta_puerta_ya_lo_tengo', { p_expected: f.id, p_dia: f.dia, p_quien_nombre: quien })
+    if (!r.ya_estaba) nuevas++
+  }
+  return { nuevas }
+}
+
+/** V02d · Encender o apagar varias fuentes de una vez (una fila de alquileres o de una plataforma). */
+export async function avisarDe(companyId: string, ids: readonly string[], activa: boolean, quien: string | null): Promise<void> {
+  for (const id of ids) await rpc('conta_puerta_fuente_guardar', { p_company: companyId, p: { id, activa }, p_quien_nombre: quien })
+}
+
+/** V02d · El local de varias fuentes de una vez (las de una fila). */
+export async function localDe(companyId: string, ids: readonly string[], local: Local | null, quien: string | null): Promise<void> {
+  for (const id of ids) await rpc('conta_puerta_fuente_guardar', { p_company: companyId, p: { id, local_id: local?.id ?? null }, p_quien_nombre: quien })
+}
+
+/** V02d · «Añadir algo que espero»: el camino a mano. */
+export async function anadirEsperado(companyId: string, x: {
+  nombre: string; proveedorId: string | null; tipo: 'proveedor' | 'alquiler' | 'otro'; cadencia: 'mensual' | 'quincenal' | 'semanal' | 'varias'
+  dia: number | null; diaSemana: number | null; cada: number | null; localId: string | null
+}, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto: string }>('conta_puerta_fuente_guardar', {
+    p_company: companyId, p_quien_nombre: quien,
+    p: { nombre: x.nombre, proveedor_id: x.proveedorId, tipo: x.tipo, cadencia: x.cadencia, dia: x.dia, dia_semana: x.diaSemana, cada: x.cada, local_id: x.localId },
+  })
+  return r.texto
 }
 
 export async function ponerAjustes(companyId: string, loQueFalta: boolean, margen: number, quien: string | null): Promise<string> {
