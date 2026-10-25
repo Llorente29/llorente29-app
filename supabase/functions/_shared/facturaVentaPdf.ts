@@ -8,6 +8,12 @@
 // forma de cobro; y, en una rectificativa, a cuál corrige, el motivo y que los
 // importes son la diferencia.
 //
+// V03 · E1: si la factura tiene su registro de Verifactu, lleva arriba a la
+// derecha el QR tributario (32 mm, nivel M, «QR tributario:» encima y
+// «VERI*FACTU» debajo: especificaciones del QR v0.5.0, §6). En el entorno de
+// pruebas, además, «PRUEBA» y una nota al pie: no vale ante Hacienda. Sin
+// registro (Verifactu apagado, traídas de Diez, anteriores a pasar a real), sin QR.
+//
 // Si las cifras no cuadran con las líneas, NO hay PDF: lanza y dice qué (un
 // documento que no cuadra con su factura es peor que ninguno).
 //
@@ -33,7 +39,12 @@ export interface DatosFacturaPdf {
   notas: string | null
   /** En una rectificativa: a cuál corrige, por qué y qué se corrige. */
   rectifica: { numero: string; motivo: string; que: string } | null
+  /** V03: el QR de su registro de Verifactu (la matriz de módulos, ya calculada), o nada. */
+  verifactu?: { modulos: boolean[][]; prueba: boolean } | null
 }
+
+/** V03: el lado del QR en mm (entre 30 y 40, §6; el mismo que QR_MM.elegido de qr.ts) y sus leyendas. */
+export const QR_PDF = { mm: 32, encima: 'QR tributario:', debajo: 'VERI*FACTU', prueba: 'PRUEBA' } as const
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type JsPdfCtor = new (o: { unit: 'mm'; format: 'a4'; orientation: 'portrait' }) => any
@@ -85,16 +96,29 @@ export function facturaVentaPdf(JsPDF: JsPdfCtor, d: DatosFacturaPdf): Uint8Arra
   const titulo = d.rectifica ? 'FACTURA RECTIFICATIVA' : 'FACTURA'
 
   // ── Cabecera: la empresa y el número ──────────────────────────────────────
+  // Con QR, el número y la fecha van a su izquierda.
+  const vf = d.verifactu && d.verifactu.modulos.length ? d.verifactu : null
+  const derecha = vf ? W - M - QR_PDF.mm - 4 : W - M
   let y = M + 4
   color(TINTA); letra('bold', 13); doc.text(d.empresa.nombre, M, y)
-  letra('bold', 10); doc.text(`${titulo} ${d.numero}`, W - M, y, { align: 'right' })
+  letra('bold', 10); doc.text(`${titulo} ${d.numero}`, derecha, y, { align: 'right' })
   letra('normal', 9); color(GRIS)
   doc.text(`NIF ${d.empresa.nif}`, M, y + 5)
   if (d.empresa.direccion) doc.text(doc.splitTextToSize(d.empresa.direccion, 90), M, y + 10)
-  doc.text(fecha(d.fecha), W - M, y + 5, { align: 'right' })
+  doc.text(fecha(d.fecha), derecha, y + 5, { align: 'right' })
+
+  // ── El QR tributario (V03) ──────────────────────────────────────────────────
+  if (vf) {
+    const x0 = W - M - QR_PDF.mm, y0 = M + 1, n = vf.modulos.length, lado = QR_PDF.mm / n
+    color(TINTA); letra('normal', 7); doc.text(QR_PDF.encima, x0 + QR_PDF.mm / 2, y0 - 1.5, { align: 'center' })
+    relleno(TINTA)
+    vf.modulos.forEach((fila, i) => fila.forEach((negro, j) => { if (negro) doc.rect(x0 + j * lado, y0 + i * lado, lado, lado, 'F') }))
+    letra('bold', 8); doc.text(QR_PDF.debajo, x0 + QR_PDF.mm / 2, y0 + QR_PDF.mm + 4, { align: 'center' })
+    if (vf.prueba) { doc.setTextColor(200, 30, 30); letra('bold', 10); doc.text(QR_PDF.prueba, derecha, y + 11, { align: 'right' }) }
+  }
 
   // ── Para ───────────────────────────────────────────────────────────────────
-  y += 22
+  y += vf ? 34 : 22
   color(GRIS); letra('normal', 9); doc.text('Para:', M, y)
   color(TINTA); letra('bold', 10); doc.text(`${d.cliente.nombre} · ${d.cliente.nif}`, M + 12, y)
   if (d.cliente.direccion) { letra('normal', 9); color(GRIS); doc.text(doc.splitTextToSize(d.cliente.direccion, ANCHO - 12), M + 12, y + 5) }
@@ -154,6 +178,10 @@ export function facturaVentaPdf(JsPDF: JsPdfCtor, d: DatosFacturaPdf): Uint8Arra
   const cobro = [d.vence ? `Vence el ${fecha(d.vence)}` : null, d.formaCobro ? `Forma de cobro: ${d.formaCobro}` : null].filter(Boolean).join(' · ')
   if (cobro) { relleno(SUAVE); doc.rect(M, y, ANCHO, 9, 'F'); color(AZUL); doc.text(cobro, M + 3, y + 5.8); y += 13 }
   if (d.notas) { color(GRIS); doc.text(doc.splitTextToSize(d.notas, ANCHO), M, y) }
+  if (vf?.prueba) {
+    doc.setTextColor(200, 30, 30); letra('normal', 8)
+    doc.text('Factura de PRUEBA: enviada al entorno de pruebas de Hacienda, no tiene validez.', W / 2, 287, { align: 'center' })
+  }
 
   const out = doc.output('arraybuffer') as ArrayBuffer
   return new Uint8Array(out)

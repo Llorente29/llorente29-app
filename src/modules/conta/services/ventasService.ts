@@ -23,6 +23,7 @@ import type { AnotacionLibro } from '@/modules/conta/lib/libroRegistro'
 import { cifrasGuardadas, diezDeFactura, diferenciaDe, type EstadoCobroBase, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
+import { modulosQr } from '@/modules/conta/lib/verifactu/qr'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -327,11 +328,23 @@ export function datosDelPdf(empresa: DatosFacturaPdf['empresa'], f: FacturaGuard
   }
 }
 
+/**
+ * V03 · El QR de Verifactu de una emitida: el de su registro (la URL la da la
+ * base, verifactu_url_qr), o nada si no tiene (apagado, traída de Diez,
+ * anterior a pasar a real). Si no se puede leer, no hay PDF: uno sin el QR que
+ * le toca sería una factura mal hecha.
+ */
+export async function verifactuDelPdf(accountId: string, invoiceId: string): Promise<DatosFacturaPdf['verifactu']> {
+  const [r] = await leer(tabla('verifactu_factura_estado').select('url_qr, entorno, estado').eq('account_id', accountId).eq('invoice_id', invoiceId), 'su estado con Hacienda')
+  const url = s(r?.url_qr)
+  return url ? { modulos: modulosQr(url), prueba: r?.entorno === 'pruebas' } : null
+}
+
 /** El PDF de una emitida: se hace aquí, se sube y se guarda en la factura. Si ya lo tiene, no se rehace. */
 export async function guardarPdf(accountId: string, f: FacturaGuardada, datos: DatosFacturaPdf): Promise<{ ruta: string; yaEstaba: boolean }> {
   if (f.pdf) return { ruta: f.pdf.ruta, yaEstaba: true }
   if (!supabase) throw new Error('No hay conexión con la base de datos.')
-  const pdf = facturaVentaPdf(jsPDF, datos)
+  const pdf = facturaVentaPdf(jsPDF, { ...datos, verifactu: await verifactuDelPdf(accountId, f.id) })
   const sha = await hex(pdf)
   const ruta = `${accountId}/ventas/${f.id}/${sha.slice(0, 16)}.pdf`
   const sub = await supabase.storage.from(BUCKET).upload(ruta, new Blob([pdf as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })

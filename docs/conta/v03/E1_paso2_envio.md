@@ -32,6 +32,20 @@
   operación, número y fecha; el 3000 (duplicado) vale lo que diga Hacienda que
   tiene; el envío entero rechazado (Fault) vuelve a la cola sin marcar las
   facturas. El ejemplo de la prueba valida contra `RespuestaSuministro.xsd`.
+- **El QR en el PDF** (32 mm, nivel M, «QR tributario:» encima y «VERI\*FACTU»
+  debajo; en pruebas, «PRUEBA» y una nota al pie). Lo pinta `guardarPdf` con la
+  URL de su registro (`verifactu_factura_estado.url_qr`); sin registro, sin QR.
+  Descodificado una vez con un lector de verdad (jsQR 1.4.0, fuera del
+  repositorio, 25/10):
+
+  ```
+  URL:   https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?nif=B28000016&numserie=F-2026%2F000002%26X&fecha=25-10-2026&importe=121.00
+  LEÍDO: https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?nif=B28000016&numserie=F-2026%2F000002%26X&fecha=25-10-2026&importe=121.00
+  módulos: 45
+  ```
+
+  La prueba del repositorio lee del propio QR sus tres esquinas y los bits de
+  formato (nivel M), y cae con un QR de nivel L.
 - **La función** `conta-verifactu`: cerrada si no se pone `CONTA_VERIFACTU`;
   «pruebas» solo desde staging, «real» solo desde producción.
 
@@ -64,6 +78,6 @@
 - La conexión con certificado: esperando los secretos de staging.
 - El cron que la despierta, y las ~25 facturas contra la AEAT de pruebas (con
   una rectificativa y una a un cliente de fuera de la UE).
-- El QR y su leyenda en el PDF; la marca PRUEBA; «No se envía».
+- «No se envía» en las pantallas (es de la E2: la vista ya lo da).
 - Por confirmar con la primera respuesta real: el texto exacto de un Fault (el
   lector busca «Codigo[4xxx]» y, si no, cualquier 4xxx).

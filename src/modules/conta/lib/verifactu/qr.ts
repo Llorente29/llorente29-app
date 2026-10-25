@@ -12,6 +12,8 @@
 //   · Entre 30×30 y 40×40 mm, corrección de errores M, al menos 2 mm en blanco.
 //   · Encima, «QR tributario:»; debajo, «VERI*FACTU» (o la frase larga).
 
+import QRCode from 'qrcode'
+
 export type EntornoAeat = 'pruebas' | 'real'
 
 export const URL_COTEJO: Record<EntornoAeat, string> = {
@@ -67,4 +69,13 @@ export function urlQr(d: DatosQr, entorno: EntornoAeat): string {
   }
   const q = (s: string) => encodeURIComponent(s)
   return `${URL_COTEJO[entorno]}?nif=${q(nif)}&numserie=${q(serie)}&fecha=${q(d.fecha)}&importe=${q(d.importe)}`
+}
+
+/**
+ * La matriz del QR (nivel de corrección M, §6), módulo a módulo: true = negro.
+ * El PDF la pinta con rectángulos (vectorial, sin imagen).
+ */
+export function modulosQr(url: string): boolean[][] {
+  const m = QRCode.create(url, { errorCorrectionLevel: QR_CORRECCION }).modules
+  return Array.from({ length: m.size }, (_, i) => Array.from({ length: m.size }, (_, j) => Boolean(m.get(i, j))))
 }
