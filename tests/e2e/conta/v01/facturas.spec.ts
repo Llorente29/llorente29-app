@@ -218,3 +218,24 @@ test('en el móvil: la lista en tarjetas y la ficha nueva', async ({ page }) => 
   await foto(page, 'nueva')
   expect(errores).toEqual([])
 })
+
+// V01c (Julio, 25/10) · Con la empresa en traspaso MENSUAL a Diez (como Foodint
+// desde el 01/10). La pantalla es la de verdad, con las facturas de la cuenta A;
+// solo la respuesta de «cómo envía la empresa» (conta_diez_envio_empresa) es
+// simulada: encendido y mensual. No escribe nada. En mensual nada va a Diez al
+// validar: lo validado y aún no traspasado sale «En el traspaso de <mes de su
+// fecha>», en gris; nunca «En cola».
+test('en traspaso mensual: lo validado sale en el traspaso de su mes, no «En cola»', async ({ page }) => {
+  const errores = vigilar(page)
+  await page.route(/\/rest\/v1\/conta_diez_envio_empresa\b/, (r) => r.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ enviar: true, modo: 'mensual', desde: '2026-10-01', cambiado_por_nombre: 'Prueba V01c', cambiado_en: '2026-10-24T08:00:00Z' }),
+  }))
+  await entrarComo(page, CUENTA_A.email)
+  await page.goto('/conta/ventas/facturas')
+  await expect(page.getByRole('heading', { level: 1, name: 'Facturas' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
+  await page.evaluate(() => document.fonts.ready)
+  await foto(page, 'diez-mensual')
+  expect(errores).toEqual([])
+})
