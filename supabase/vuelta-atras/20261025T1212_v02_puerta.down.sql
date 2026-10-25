@@ -15,8 +15,10 @@ do $$ begin
   if exists (select 1 from public.company_inbound_address where kind = 'documentos')
      or exists (select 1 from public.supplier_expected_invoice where supplier_id is null or cadence <> 'mensual')
      or exists (select 1 from public.company_inbound_sender where decision <> 'no_facturas')
-     or exists (select 1 from public.supplier_invoice_request where supplier_id is null) then
-    raise exception 'VUELTA ATRÁS DE LA PUERTA: hay direcciones de documentos, fuentes nuevas, remitentes aprendidos o peticiones sin proveedor. No se deshace a ciegas.';
+     or exists (select 1 from public.supplier_invoice_request where supplier_id is null)
+     or exists (select 1 from public.document_inbox where file_bucket = 'conta-entrada')
+     or exists (select 1 from storage.objects where bucket_id = 'conta-entrada') then
+    raise exception 'VUELTA ATRÁS DE LA PUERTA: hay direcciones de documentos, fuentes nuevas, remitentes aprendidos, peticiones sin proveedor o ficheros en conta-entrada. No se deshace a ciegas.';
   end if;
 end $$;
 
@@ -61,6 +63,16 @@ alter table public.supplier_expected_invoice drop constraint if exists supplier_
 alter table public.supplier_expected_invoice add constraint supplier_expected_invoice_cadence_check check (cadence = 'mensual'::text);
 alter table public.supplier_expected_invoice alter column supplier_id set not null;
 
+alter table public.document_inbox drop constraint if exists document_inbox_file_bucket_check;
+alter table public.document_inbox add constraint document_inbox_file_bucket_check check (file_bucket = 'receipt-uploads'::text);
+drop policy if exists conta_entrada_select on storage.objects;
+drop policy if exists conta_entrada_insert on storage.objects;
+drop policy if exists conta_entrada_delete on storage.objects;
+do $$ begin
+  delete from storage.buckets where id = 'conta-entrada';
+exception when others then
+  raise notice 'El almacén conta-entrada se queda (vacío): Supabase no deja borrarlo por SQL (%).', sqlerrm;
+end $$;
 alter table public.document_inbox drop column if exists expected_id;
 alter table public.document_inbox drop column if exists doc_kind_by;
 alter table public.document_inbox drop column if exists doc_kind;

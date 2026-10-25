@@ -3,7 +3,8 @@
 -- SOLO STAGING. Prueba de 20261025T1212_v02_puerta (cambia:
 -- public.company_inbound_address, public.supplier_expected_invoice,
 -- public.supplier_invoice_request, public.company_inbound_sender,
--- public.conta_direccion_entrada y public.conta_entrada_remitente), con \i
+-- public.document_inbox, public.conta_direccion_entrada y
+-- public.conta_entrada_remitente), con \i
 -- dentro de la transacción y ROLLBACK: staging no cambia. En la empresa A.
 --
 --   (Empieza con su vuelta atrás, por si ya estuviera.)

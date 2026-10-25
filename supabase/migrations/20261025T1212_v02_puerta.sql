@@ -21,6 +21,9 @@
 --   4. LO APRENDIDO: «Dime qué es» puede recordar el remitente
 --      (company_inbound_sender, decisión «tipo» con su doc_kind).
 --   5. LOS AJUSTES: «Lo que falta» encendido o apagado por empresa, y su margen.
+--   5b. LO QUE NO ES UN PDF NI UNA FOTO (un extracto, un Excel, un zip): a su
+--      propio almacén privado, conta-entrada, con las mismas reglas que
+--      receipt-uploads (la carpeta de la cuenta), y la bandeja lo admite.
 --   6. LAS FUNCIONES de la pantalla (conta_puerta_*): la puerta, las fuentes
 --      con sus llegadas, aprender las fuentes de lo que ya pasa, guardar una,
 --      «Dime qué es» y «Pedírsela» para una fuente sin proveedor.
@@ -37,6 +40,7 @@
 -- cambia: public.company_inbound_sender · prueba: supabase/staging/sql/20261025_v02_puerta_prueba.sql
 -- cambia: public.conta_direccion_entrada · prueba: supabase/staging/sql/20261025_v02_puerta_prueba.sql
 -- cambia: public.conta_entrada_remitente · prueba: supabase/staging/sql/20261025_v02_puerta_prueba.sql
+-- cambia: public.document_inbox · prueba: supabase/staging/sql/20261025_v02_puerta_prueba.sql
 --
 -- Vuelta atrás: supabase/vuelta-atras/20261025T1212_v02_puerta.down.sql
 
@@ -88,6 +92,32 @@ alter table public.document_inbox add column if not exists expected_id uuid
   references public.supplier_expected_invoice(id) on delete set null;
 comment on column public.document_inbox.doc_kind is
   'V02 · Qué es el documento (factura, ticket, liquidación, extracto, nómina, facturas de riders u otro). Nulo: aún sin saber; sale en «Necesita que lo mires».';
+
+-- 2b · Lo que no es un PDF ni una foto, a su almacén --------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('conta-entrada', 'conta-entrada', false, 10485760,
+        array['text/csv', 'text/plain', 'application/csv', 'application/vnd.ms-excel',
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip', 'application/x-zip-compressed',
+              'application/xml', 'text/xml', 'application/octet-stream'])
+on conflict (id) do nothing;
+-- Las reglas, como las de receipt-uploads (se puede pasar dos veces).
+do $$ begin
+  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'conta_entrada_select') then
+    create policy conta_entrada_select on storage.objects for select
+      using (bucket_id = 'conta-entrada' and public.belongs_to_account(((storage.foldername(name))[1])::uuid));
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'conta_entrada_insert') then
+    create policy conta_entrada_insert on storage.objects for insert
+      with check (bucket_id = 'conta-entrada' and public.belongs_to_account(((storage.foldername(name))[1])::uuid));
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname = 'conta_entrada_delete') then
+    create policy conta_entrada_delete on storage.objects for delete
+      using (bucket_id = 'conta-entrada' and public.current_user_is_admin_or_manager_of(((storage.foldername(name))[1])::uuid));
+  end if;
+end $$;
+alter table public.document_inbox drop constraint if exists document_inbox_file_bucket_check;
+alter table public.document_inbox add constraint document_inbox_file_bucket_check
+  check (file_bucket = any (array['receipt-uploads'::text, 'conta-entrada'::text]));
 
 -- 3 · Lo que se espera, de cualquier fuente ---------------------------------------
 alter table public.supplier_expected_invoice alter column supplier_id drop not null;
