@@ -21,12 +21,38 @@
 //      fichero en OTRA pantalla abre la puerta con él.
 // Las capturas, en docs/conta/capturas/v02 (van al artefacto del run).
 
+import { readFileSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { CUENTA_A, CUENTA_D, entrarComo } from '../sesion'
 
 const DIR = 'docs/conta/capturas/v02'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 const foto = (page: Page, nombre: string) => page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
+
+/**
+ * La captura AL LADO de su tablero (encargo: «capturas de cada pantalla al lado
+ * de su tablero»): el tablero 19 aprobado a la izquierda y la pantalla de
+ * verdad a la derecha, en una sola imagen del artefacto.
+ */
+async function alLado(page: Page, nombre: string) {
+  const l = lado(page)
+  const pantalla = await page.screenshot({ fullPage: true })
+  const tablero = readFileSync(`docs/conta/v02/tableros/entrada-${l}.png`)
+  const ancho = l === 'movil' ? 390 : 1440
+  const otra = await page.context().newPage()
+  await otra.setViewportSize({ width: ancho * 2 + 48, height: 900 })
+  await otra.setContent(`<body style="margin:0;padding:16px;background:#E9EEF5;font:600 14px system-ui;color:#172443">
+    <div style="display:flex;gap:16px;align-items:flex-start">
+      <figure style="margin:0;width:${ancho}px"><figcaption style="margin:0 0 8px">Tablero 19 (aprobado)</figcaption><img style="width:100%" src="data:image/png;base64,${tablero.toString('base64')}"></figure>
+      <figure style="margin:0;width:${ancho}px"><figcaption style="margin:0 0 8px">La pantalla (staging)</figcaption><img style="width:100%" src="data:image/png;base64,${pantalla.toString('base64')}"></figure>
+    </div></body>`)
+  await otra.screenshot({ path: `${DIR}/al-lado-${nombre}-${l}.png`, fullPage: true })
+  // Solo en esta pasada: la pantalla, pequeña y en el registro, para revisarla sin bajar el artefacto.
+  const chica = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 35, scale: 'css' })
+  const b64 = chica.toString('base64')
+  for (let i = 0; i < b64.length; i += 3000) console.log(`CAPTURA ${nombre}-${l} ${i / 3000} ${b64.slice(i, i + 3000)}`)
+  await otra.close()
+}
 
 function vigilar(page: Page): string[] {
   const errores: string[] = []
@@ -132,6 +158,7 @@ test('la puerta de una empresa de hostelería: cifras, lo que falta, lo último 
   // Cómo te llegan: la dirección única.
   await expect(page.getByText('taberna-de-prueba-norte@entrada.folvy.app')).toBeVisible()
   await foto(page, 'puerta')
+  await alLado(page, 'puerta')
 
   // «Dime qué es»: se elige, se apunta y lo dice (regla 8), recordando el remitente.
   await pestanas.getByRole('tab', { name: /^Necesita que lo mires/ }).click()
@@ -168,6 +195,7 @@ test('otra actividad (sin hostelería): la papelería, subir por la puerta y sol
   // Sin dirección todavía: se puede crear desde aquí.
   await expect(page.getByRole('button', { name: 'Crear tu dirección' })).toBeVisible()
   await foto(page, 'puerta-papeleria')
+  await alLado(page, 'puerta-papeleria')
 
   // Subir por la puerta: cada fichero, su camino (aquí no se sube nada: solo se enseña).
   await page.getByLabel('Elegir los documentos').setInputFiles([
