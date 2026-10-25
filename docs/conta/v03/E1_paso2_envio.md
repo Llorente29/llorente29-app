@@ -4,8 +4,9 @@
 
 ## Lo que está hecho y probado
 
-- **El motor en la base** (2140 añade, 2141 engancha la emisión). Ensayo de
-  staging [568](https://github.com/Llorente29/llorente29-app/actions/runs/40240640363)
+- **El motor en la base** (2140 añade, 2141 engancha la emisión, 2249 el cron
+  y el aviso del certificado). Ensayo de staging
+  [572](https://github.com/Llorente29/llorente29-app/actions/runs/40243407628)
   en verde, sus líneas tal cual:
 
   ```
@@ -18,9 +19,17 @@
   3b · NIF mal: «El NIF del cliente (12345678A) no es un NIF español válido: revísalo en su ficha.», y la factura sigue en borrador
   3b · el contador no se ha movido (4)
   5 · las vueltas atrás: ni el disparador ni las tablas ni las funciones; conta_venta_emitir, la misma
+  6 · sin nada de real, despertar no llama
+  6 · A en real: su primera factura (V03R) abre la cadena de real
+  6 · el aviso del certificado sale (1); con real pendiente despertar llamaría: «Falta cron_secret en el Vault: no se puede despertar a conta-verifactu.»
   ```
 
-  La 2140 solo añade y ya está de verdad en staging (W05); la 2141, no.
+  Y la guarda de la vuelta atrás de la 2140 se niega a deshacer con registros
+  de real ([571](https://github.com/Llorente29/llorente29-app/actions/runs/40242477242)):
+  «Hay registros de Verifactu en real: no se deshace la 2140.»
+
+  La 2140 y la 2249 solo añaden y ya están de verdad en staging (W05; staging
+  no tiene cron_secret, así que allí no hay cron); la 2141, no.
 - **La concurrencia** (en el Postgres local): 20 emisiones a la vez dan una sola
   cadena (1 primero, 0 anteriores repetidos, horas crecientes); sin el cerrojo,
   la misma prueba da 9 «primeros» y 2 anteriores repetidos.
@@ -76,8 +85,10 @@
 ## Lo que falta en la E1
 
 - La conexión con certificado: esperando los secretos de staging.
-- El cron que la despierta, y las ~25 facturas contra la AEAT de pruebas (con
-  una rectificativa y una a un cliente de fuera de la UE).
+- Las 25 facturas contra la AEAT de pruebas (`pruebasAeat.ts`: 24 altas con
+  una R4 y una a Suiza, y una anulación) y su workflow
+  (`verifactu-pruebas-staging.yml`): hechos y sin lanzar, esperando el
+  certificado.
 - «No se envía» en las pantallas (es de la E2: la vista ya lo da).
 - Por confirmar con la primera respuesta real: el texto exacto de un Fault (el
   lector busca «Codigo[4xxx]» y, si no, cualquier 4xxx).
