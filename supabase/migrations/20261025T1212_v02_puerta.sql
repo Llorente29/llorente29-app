@@ -171,9 +171,14 @@ returns jsonb language sql stable security definer set search_path to 'public' a
 $function$;
 
 -- 5 · Los ajustes de la puerta -------------------------------------------------
+-- Sin claves ajenas a company ni a accounts, a propósito: crearlas o quitarlas
+-- (la vuelta atrás) bloquea en exclusiva las dos tablas que más se leen, y en
+-- staging se cruzó con una e2e (interbloqueo con accounts, 25/10). La empresa
+-- y su cuenta las comprueba conta_puerta_ajustes_poner, que es la única que
+-- escribe aquí.
 create table if not exists public.conta_puerta_ajustes (
-  company_id uuid primary key references public.company(id) on delete cascade,
-  account_id uuid not null references public.accounts(id) on delete cascade,
+  company_id uuid primary key,
+  account_id uuid not null,
   lo_que_falta boolean not null default true,
   margen_dias smallint not null default 5 check (margen_dias between 0 and 60),
   updated_at timestamptz not null default now(),
