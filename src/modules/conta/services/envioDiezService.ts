@@ -17,20 +17,32 @@ import type { EnvioAsiento } from '@/modules/conta/lib/enDiez'
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
 
-export interface EnvioEmpresa { encendido: boolean; desde: string | null; cambiadoPor: string | null; cambiadoEn: string | null }
-const APAGADO: EnvioEmpresa = { encendido: false, desde: null, cambiadoPor: null, cambiadoEn: null }
+/**
+ * encendido: la empresa trabaja con Diez (se habla de Diez en las pantallas).
+ * mensual (C12, 24/10): lo de cada mes va a Diez de golpe, en el traspaso del
+ * cierre (Contabilidad › Cierre); nada se manda al validar ni con «Reintentar».
+ * alMomento = encendido y no mensual: lo de antes (C07).
+ */
+export interface EnvioEmpresa { encendido: boolean; mensual: boolean; alMomento: boolean; desde: string | null; cambiadoPor: string | null; cambiadoEn: string | null }
+const APAGADO: EnvioEmpresa = { encendido: false, mensual: false, alMomento: false, desde: null, cambiadoPor: null, cambiadoEn: null }
+const sinColumna = (e: { code?: string; message: string }) => e.code === '42703' || /column .*modo.* does not exist/i.test(e.message)
 
 /** «Enviar a Diez» de la empresa. Sin fila (o sin la 0450 en la base), apagado: no se habla de Diez. */
 export async function leerEnvioEmpresa(accountId: string, companyId: string): Promise<EnvioEmpresa> {
-  const { data, error } = await tabla('conta_diez_envio_empresa').select('enviar, desde, cambiado_por_nombre, cambiado_en')
-    .eq('account_id', accountId).eq('company_id', companyId).maybeSingle()
+  // C12: «modo» (20261024T1250). En una base sin ella, como antes: al validar.
+  const leer = (campos: string) => tabla('conta_diez_envio_empresa').select(campos).eq('account_id', accountId).eq('company_id', companyId).maybeSingle()
+  let { data, error } = await leer('enviar, modo, desde, cambiado_por_nombre, cambiado_en')
+  if (error && sinColumna(error as { code?: string; message: string })) ({ data, error } = await leer('enviar, desde, cambiado_por_nombre, cambiado_en'))
   // Sin la tabla (42P01, una base sin la 0450): apagado, como hasta hoy sin interruptor.
   if (error) {
     if ((error as { code?: string }).code === '42P01' || /does not exist|could not find the table/i.test(error.message)) return APAGADO
     throw new Error(mensaje('No se ha podido leer si se envía a Diez', error))
   }
   const f = data as Fila | null
-  return f ? { encendido: f.enviar === true, desde: s(f.desde), cambiadoPor: s(f.cambiado_por_nombre), cambiadoEn: s(f.cambiado_en) } : APAGADO
+  if (!f) return APAGADO
+  const encendido = f.enviar === true
+  const mensual = encendido && f.modo === 'mensual'
+  return { encendido, mensual, alMomento: encendido && !mensual, desde: s(f.desde), cambiadoPor: s(f.cambiado_por_nombre), cambiadoEn: s(f.cambiado_en) }
 }
 
 /** Enciende o apaga, y dice qué ha hecho (regla 8). */

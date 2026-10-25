@@ -181,7 +181,11 @@ export default function LibroDiarioPage() {
   const [vuelta, setVuelta] = useState(0)
   const recargar = () => setVuelta((v) => v + 1)
   // C07: «Enviar a Diez» de la empresa. Apagado (o aún sin saberlo), el libro no habla de Diez.
-  const encendido = useEnvioDiez(accountId, activa?.id).envio?.encendido === true
+  const envioDiez = useEnvioDiez(accountId, activa?.id).envio
+  const encendido = envioDiez?.encendido === true
+  // C12: con el traspaso mensual, nada se manda suelto (ni «Validar y enviar», ni «Reintentar», ni «para enviar a Diez»).
+  const mensual = envioDiez?.mensual === true
+  const alMomento = encendido && !mensual
   const { datos, error } = useLibro(cargando ? null : accountId, activa?.id ?? null, params.get('ejercicio'), vuelta)
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
@@ -210,8 +214,8 @@ export default function LibroDiarioPage() {
   // que se puede validar y enviar (lo propuesto, y lo validado que no ha llegado).
   const diezDe = (a: AsientoDiario): EstadoDiez | undefined => { const d = encendido ? datos?.conDiez.get(a.id) : undefined; return d ? estadoDiez(a, d) : undefined }
   // C07: el detalle junto al número, de cualquier asiento.
-  const detalle = (a: AsientoDiario): DetalleDiez | null => (datos ? detalleDiez(a, datos.envios.get(a.id), { encendido, contraasiento: datos.contras.get(a.id) }) : null)
-  const candidatosDiez: CandidatoDiez[] = datos && encendido
+  const detalle = (a: AsientoDiario): DetalleDiez | null => (datos ? detalleDiez(a, datos.envios.get(a.id), { encendido, mensual, contraasiento: datos.contras.get(a.id) }) : null)
+  const candidatosDiez: CandidatoDiez[] = datos && alMomento
     ? datos.asientos.flatMap((a) => {
       const e = diezDe(a)
       if (!e || !(a.estado === 'propuesto' || (a.estado === 'validado' && e.reintentar))) return []
@@ -230,7 +234,7 @@ export default function LibroDiarioPage() {
   // Sin correspondencia, la empresa no tiene Diez: el envío decide, no el grupo.
   const grupoDe = (local: string) => (correspondencia ? correspondencia.localAlEnviar[local] : 'sin correspondencia')
   const noDiez = (a: AsientoDiario): NoLlegaADiez | null => {
-    if (!encendido) return null
+    if (!alMomento) return null
     const d = datos?.conDiez.get(a.id)
     if (d && a.estado !== 'anulado') return porQueNoLlegaADiez(a, d, localDelAsiento(a.apuntes), grupoDe)
     // C07: cualquier otro asiento validado que no está en Diez (o anulado aquí y no allí) es tarea, con su motivo.
@@ -408,7 +412,7 @@ export default function LibroDiarioPage() {
       <AccionesPantalla etiqueta="Acciones del libro diario">
         <BotonAccion principal tecla="Ins" atajo="Insert" onClick={() => navegar(rutaNuevoAsiento())} disabled={!puedeNuevo}>+ Nuevo asiento</BotonAccion>
         <BotonAccion onClick={proponer} disabled={proponiendo || !datos?.ejercicio}>{proponiendo ? 'Repasando…' : 'Proponer lo pendiente'}</BotonAccion>
-        {encendido && candidatosDiez.length > 0 && (
+        {alMomento && candidatosDiez.length > 0 && (
           <BotonAccion onClick={() => setEnviarDiez(true)}>Validar y enviar a Diez{propuestosDiez ? ` · ${propuestosDiez}` : ''}</BotonAccion>
         )}
       </AccionesPantalla>
@@ -487,7 +491,7 @@ export default function LibroDiarioPage() {
                 teTocaHoy={[
                   { id: 'revisar', etiqueta: 'para revisar', numero: revisables, activo: filtro === 'revisar' && !vistaGuardada && !enEsperan,
                     alPulsar: () => { setVistaGuardada(null); setVista(null); setSoloSinDiez(false); cambiarFiltro(filtro === 'revisar' && !enEsperan ? 'todos' : 'revisar') } },
-                  ...(encendido ? [{
+                  ...(alMomento ? [{
                     id: 'sin-diez', etiqueta: 'para enviar a Diez', numero: datos.conDiezError ? null : porEnviar, activo: soloSinDiez,
                     alPulsar: () => { setVista(null); setSoloSinDiez((v) => !v) },
                   }] : []),

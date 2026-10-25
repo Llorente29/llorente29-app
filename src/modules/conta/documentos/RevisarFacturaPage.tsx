@@ -116,7 +116,10 @@ export default function RevisarFacturaPage() {
   const [vuelta, setVuelta] = useState(0)
   const f = useLeer(invoiceId ? () => leerFactura(invoiceId) : null, `${invoiceId}:${vuelta}`)
   const fac = useUltimo(f.datos, invoiceId)
-  const enviaADiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio?.encendido === true
+  const envioDiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio
+  // C12: con el traspaso mensual, al validar no sale nada: va en el traspaso del mes.
+  const enviaADiez = envioDiez?.alMomento === true
+  const vaEnElTraspaso = envioDiez?.mensual === true
   const hoy = hoyEnMadrid()
   const empresa = activa?.id ?? fac?.company_id ?? null
 
@@ -461,7 +464,7 @@ export default function RevisarFacturaPage() {
     <>
       {hayCambios ? 'Con cambios sin guardar, es la vista previa de cómo quedará: no se guarda ni se envía nada hasta «Guardar cambios». ' : ''}
       {previa?.faltan.length ? `Falta ${previa.faltan.join(', ')}. ` : ''}
-      {enviaADiez ? 'Al validar se envía a Diez con su asiento; el PDF se queda aquí.' : 'Debe arriba y haber debajo; cada importe en su columna.'}
+      {enviaADiez ? 'Al validar se envía a Diez con su asiento; el PDF se queda aquí.' : vaEnElTraspaso ? 'Al validar queda para el traspaso del mes a Diez; el PDF se queda aquí.' : 'Debe arriba y haber debajo; cada importe en su columna.'}
     </>
   )
   const esFoto = (x: string | null | undefined) => /^image\//.test(x ?? '') || /\.(jpe?g|png|webp)$/i.test(x ?? '')
