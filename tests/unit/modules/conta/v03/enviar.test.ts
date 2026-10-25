@@ -8,6 +8,23 @@ import { describe, expect, it } from 'vitest'
 import { type Lote, type Piezas, unaVuelta } from '../../../../../supabase/functions/_shared/verifactu/enviar'
 import type { Registro } from '../../../../../supabase/functions/_shared/verifactu/xml'
 import { puerta } from '../../../../../supabase/functions/_shared/verifactu/puerta'
+import { casosPruebas } from '../../../../../supabase/functions/_shared/verifactu/pruebasAeat'
+import { cuerpoEnvio } from '../../../../../supabase/functions/_shared/verifactu/xml'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+
+const RAIZ = resolve(__dirname, '../../../../..')
+function validarXml(xml: string): boolean {
+  const f = join(mkdtempSync(join(tmpdir(), 'v03-casos-')), 'e.xml')
+  writeFileSync(f, xml)
+  const r = spawnSync('xmllint', ['--nonet', '--noout', '--schema', join(RAIZ, 'docs/conta/v03/aeat/SuministroLR.xsd'), f],
+    { encoding: 'utf8', env: { ...process.env, XML_CATALOG_FILES: join(RAIZ, 'tests/unit/modules/conta/v03/xsd/catalogo.xml') } })
+  if (r.error) throw r.error
+  if (r.status !== 0) console.error(r.stderr)
+  return r.status === 0
+}
 
 const BASE = 'https://www2.agenciatributaria.gob.es/static_files/common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/'
 const reg = (n: number): Registro => ({
@@ -90,5 +107,36 @@ describe('V03 · la puerta de conta-verifactu', () => {
     expect(puerta('pruebas', PROD)).toHaveProperty('cerrada')
     expect(puerta('real', PROD)).toEqual({ entorno: 'real' })
     expect(puerta('real', STAGING)).toHaveProperty('cerrada')
+  })
+})
+
+describe('V03 · las facturas contra la AEAT de pruebas', () => {
+  const B = { account_id: 'a', company_id: 'c', nif_emisor: 'B28000016', nombre_emisor: 'Pruebas V03', prefijo: 'PR2610252301', fecha: '2026-10-25' }
+  const { altas, anular } = casosPruebas(B)
+  it('son 24 altas y una anulación: 25, con una rectificativa y una de fuera de la UE', () => {
+    expect(altas.length + 1).toBe(25)
+    expect(altas.filter((c) => c.p.tipo_factura === 'R4')).toHaveLength(1)
+    expect(altas.filter((c) => (c.p.destinatarios as { id_type?: string }[] | undefined)?.[0]?.id_type === '04')).toHaveLength(1)
+    expect(altas[anular].p.tipo_factura).toBe('F1')
+  })
+  it('cada alta cuadra: el total es base + cuotas, y los números no se repiten', () => {
+    for (const c of altas) {
+      const d = c.p.desglose as { base: number; cuota: number; cuota_recargo?: number }[]
+      const base = d.reduce((t, l) => t + l.base, 0), cuota = d.reduce((t, l) => t + l.cuota + (l.cuota_recargo ?? 0), 0)
+      expect(Math.round((base + cuota) * 100)).toBe(Math.round(Number(c.p.importe_total) * 100))
+      expect(Math.round(cuota * 100)).toBe(Math.round(Number(c.p.cuota_total) * 100))
+      expect(String(c.p.num_serie)).toMatch(/^[ !#-&(-;?-~]{1,60}$/)
+    }
+    expect(new Set(altas.map((c) => c.p.num_serie)).size).toBe(altas.length)
+  })
+  it('y todas valen como mensaje: validan contra el XSD (con su cadena puesta)', () => {
+    const regs = altas.map((c, i) => ({
+      ...c.p, id: String(i), subsanacion: false, rechazo_previo: null, sin_registro_previo: false, fecha_operacion: null,
+      tipo_rectificativa: c.p.tipo_rectificativa ?? null, rectificadas: c.p.rectificadas ?? null, destinatarios: c.p.destinatarios ?? null,
+      primer_registro: i === 0, anterior_num_serie: i === 0 ? null : String(altas[i - 1].p.num_serie), anterior_fecha: i === 0 ? null : '2026-10-25',
+      huella_anterior: i === 0 ? null : 'A'.repeat(64), fecha_hora_huso: '2026-10-25T23:10:00+01:00', huella: 'B'.repeat(64),
+    })) as unknown as Registro[]
+    const xml = cuerpoEnvio({ nombre: 'Pruebas V03', nif: 'B28000016' }, regs, { nombreRazon: 'P', nif: 'B12345674', nombre: 'Sumied', id: 'SU', version: '1', numeroInstalacion: 'x' })
+    expect(validarXml(xml)).toBe(true)
   })
 })

@@ -30,6 +30,7 @@ import { llamarConCertificado, type MaterialCertificado } from "../_shared/certi
 import { encolarAlerta } from "../_shared/alerta.ts";
 import { type Entorno, type Lote, type Piezas, unaVuelta } from "../_shared/verifactu/enviar.ts";
 import { puerta } from "../_shared/verifactu/puerta.ts";
+import { casosPruebas } from "../_shared/verifactu/pruebasAeat.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -46,33 +47,83 @@ class SinCertificado extends Error {
   constructor(m: string) { super(m); this.name = "SinCertificado"; }
 }
 
-let certPruebas: { material: MaterialCertificado; nif: string } | null = null;
-function materialPruebas(lote: Lote): MaterialCertificado {
+let certPruebas: { material: MaterialCertificado; nif: string; titular: string } | null = null;
+function leerCertPruebas() {
   if (!certPruebas) {
     const b64 = Deno.env.get("AEAT_PRUEBAS_P12_B64"), clave = Deno.env.get("AEAT_PRUEBAS_P12_CLAVE");
     if (!b64 || !clave) throw new SinCertificado("Faltan los secretos del certificado de pruebas (AEAT_PRUEBAS_P12_B64 y AEAT_PRUEBAS_P12_CLAVE).");
     const leido = leerP12(forge, Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)), clave);
     if (!leido.ficha.nif) throw new SinCertificado("El certificado de pruebas no dice de qué NIF es.");
-    certPruebas = { material: leido.material, nif: leido.ficha.nif.replace(/^ES/i, "").toUpperCase() };
+    certPruebas = { material: leido.material, nif: leido.ficha.nif.replace(/^ES/i, "").toUpperCase(), titular: leido.ficha.titular };
   }
-  if (certPruebas.nif !== lote.nif_emisor) {
+  return certPruebas;
+}
+function materialPruebas(lote: Lote): MaterialCertificado {
+  leerCertPruebas();
+  if (certPruebas!.nif !== lote.nif_emisor) {
     throw new SinCertificado("El certificado de pruebas es de otro NIF que el de la empresa del envío: en pruebas, la empresa tiene que llevar el NIF del certificado.");
   }
-  return certPruebas.material;
+  return certPruebas!.material;
+}
+
+/**
+ * Solo pruebas: la empresa de pruebas (en su propia cuenta de staging, con el NIF
+ * y el nombre del titular del certificado) y las 25 facturas de pruebasAeat.ts,
+ * registradas por el mismo paso que la emisión. Devuelve solo recuentos.
+ */
+async function prepararPruebas(srv: ReturnType<typeof createClient>): Promise<Record<string, unknown>> {
+  const c = leerCertPruebas();
+  const uno = async <T>(q: PromiseLike<{ data: T | null; error: { message: string } | null }>, que: string): Promise<T | null> => {
+    const { data, error } = await q;
+    if (error) throw new Error(`${que}: ${error.message}`);
+    return data;
+  };
+  let cuenta = await uno(srv.from("accounts").select("id").eq("slug", "v03-pruebas-aeat").maybeSingle(), "la cuenta de pruebas") as { id: string } | null;
+  if (!cuenta) cuenta = await uno(srv.from("accounts").insert({ name: "Pruebas Verifactu (V03)", slug: "v03-pruebas-aeat", is_internal: true }).select("id").single(), "crear la cuenta de pruebas") as { id: string };
+  let empresa = await uno(srv.from("company").select("id").eq("account_id", cuenta.id).eq("tax_id", c.nif).maybeSingle(), "la empresa de pruebas") as { id: string } | null;
+  if (!empresa) empresa = await uno(srv.from("company").insert({ account_id: cuenta.id, tax_id: c.nif, legal_name: c.titular, trade_name: "Pruebas Verifactu (V03)" }).select("id").single(), "crear la empresa de pruebas") as { id: string };
+  await uno(srv.from("verifactu_empresa").upsert({ company_id: empresa.id, account_id: cuenta.id, modo: "pruebas", pruebas_desde: new Date().toISOString(), updated_by_name: "Pruebas V03" }), "poner la empresa en pruebas");
+  const ahora = new Date();
+  const madrid = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(ahora);
+  const prefijo = "PR" + madrid.replace(/\D/g, "").slice(2, 12);
+  const { altas, anular } = casosPruebas({ account_id: cuenta.id, company_id: empresa.id, nif_emisor: c.nif, nombre_emisor: c.titular, prefijo, fecha: madrid.slice(0, 10) });
+  const ids: string[] = [];
+  for (const a of altas) {
+    const r = await uno(srv.rpc("_verifactu_registrar", { p: a.p }), `registrar ${a.que}`) as { id: string };
+    ids.push(r.id);
+  }
+  await uno(srv.rpc("_verifactu_anular", { p_alta: ids[anular], p_quien: "Pruebas V03" }), "registrar la anulación");
+  return { preparadas: altas.length + 1, altas: altas.length, anulaciones: 1, prefijo };
 }
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "usa POST" }, 405);
-  const esperado = Deno.env.get("CRON_SECRET") ?? "";
-  if (!esperado || (req.headers.get("x-cron-secret") ?? "") !== esperado) return json({ error: "no autorizado" }, 401);
-
   const p = puerta(Deno.env.get("CONTA_VERIFACTU"), SUPABASE_URL);
+  // Quién puede despertarla: el cron (CRON_SECRET) o, solo en pruebas, el
+  // workflow de las pruebas con su llave de un solo run (VERIFACTU_PRUEBAS_TOKEN).
+  const cron = Deno.env.get("CRON_SECRET") ?? "", llave = Deno.env.get("VERIFACTU_PRUEBAS_TOKEN") ?? "";
+  const porCron = !!cron && (req.headers.get("x-cron-secret") ?? "") === cron;
+  const porPruebas = "entorno" in p && p.entorno === "pruebas" && !!llave && (req.headers.get("x-verifactu-pruebas") ?? "") === llave;
+  if (!porCron && !porPruebas) return json({ error: "no autorizado" }, 401);
   if ("cerrada" in p) {
     console.log(`conta-verifactu · cerrada · ${p.cerrada}`);
     return json({ cerrada: p.cerrada });
   }
   const entorno = p.entorno;
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
+  const accion = (await req.json().catch(() => ({})) as { accion?: string }).accion ?? "enviar";
+  if (accion === "preparar_pruebas") {
+    if (entorno !== "pruebas") return json({ error: "preparar_pruebas solo en pruebas" }, 400);
+    try {
+      const r = await prepararPruebas(srv);
+      console.log(`conta-verifactu · pruebas · preparadas ${r.preparadas}`);
+      return json(r);
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      console.error(`conta-verifactu · pruebas · no se han podido preparar`);
+      return json({ error: "preparar", mensaje: m.slice(0, 300) }, 500);
+    }
+  }
   const rpc = async (fn: string, args: Record<string, unknown>) => {
     const { data, error } = await srv.rpc(fn, args);
     if (error) throw new Error(`${fn}: ${error.message}`);
