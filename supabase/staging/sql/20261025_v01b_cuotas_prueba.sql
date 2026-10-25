@@ -38,8 +38,9 @@ set local statement_timeout = '120s';
 
 create temp table _b (clave text primary key, v text) on commit drop;
 grant select, insert, update on _b to authenticated;
-insert into _b select 'fn:' || p.proname, md5(pg_get_functiondef(p.oid)) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public' and p.proname in ('_conta_venta_cifras', 'customer_invoice_line_inalterable');
+-- El cuerpo, sus ajustes y si es security definer (pg_get_functiondef no: revienta con los agregados de PostGIS).
+insert into _b select 'fn:' || p.proname, md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.prokind = 'f' and p.proname in ('_conta_venta_cifras', 'customer_invoice_line_inalterable');
 
 -- La empresa A y lo que usan las líneas.
 do $$
@@ -218,7 +219,7 @@ do $$ begin
     raise exception 'PRUEBA V01b · 6: la vuelta atrás de la 0840 se deja la columna, el disparador o sus funciones.';
   end if;
   if exists (select 1 from _b b join pg_proc p on 'fn:' || p.proname = b.clave join pg_namespace n on n.oid = p.pronamespace
-              where n.nspname = 'public' and md5(pg_get_functiondef(p.oid)) <> b.v) then
+              where n.nspname = 'public' and p.prokind = 'f' and md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text) <> b.v) then
     raise exception 'PRUEBA V01b · 6: _conta_venta_cifras o customer_invoice_line_inalterable no vuelven byte a byte.';
   end if;
   raise notice '6 · la vuelta atrás: sin cuota, sin columna ni disparador, y las funciones byte a byte';
