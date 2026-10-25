@@ -1,4 +1,4 @@
-// scripts/conta/v03/sonda/index.ts
+// supabase/staging/sondas/verifactu/index.ts  (Deno; fuera de supabase/functions a propósito: main no la despliega)
 //
 // V03 · E1 · Paso 1 · LA SONDA DE VERIFACTU, solo en staging-conta.
 //

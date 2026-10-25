@@ -1,0 +1,19 @@
+# V03 · Verifactu · Entrega 1 · El motor (encargo del 25/10). Rama conta/v03-e1.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 2140 — AÑADE el motor: el interruptor por empresa (apagado de partida),
+#      el tipo de venta de una factura sin IVA, la cadena con su cerrojo por NIF,
+#      los registros de alta y anulación inalterables con la huella oficial, los
+#      envíos y el control de flujo, y sus funciones y vistas. No toca datos ni
+#      nada de lo que existe. No está en el camino del pedido.
+#   2. 2141 — CAMBIA en caliente public.customer_invoice: un disparador nuevo
+#      (customer_invoice_verifactu) que, al emitir, comprueba y escribe el alta.
+#      Con Verifactu apagado (todas las empresas hoy) no hace nada. Declarado en
+#      su cabecera, con su prueba de staging. No toca datos.
+#
+# Sin «autorizo»: ninguno toca datos ni destruye nada.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261025T2140_v03_verifactu_motor.sql
+supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
+cuenta: scripts/conta/produccion/cuentas/v03-verifactu.sql

@@ -1,0 +1,10 @@
+# V03 · Entrega 1 · El motor de Verifactu. La 2140 solo añade (y se puede pasar
+# dos veces): desde la rama, de verdad (W05). La 2141 cambia en caliente: desde
+# la rama, en ROLLBACK.
+# Su prueba (ROLLBACK): la huella de la base con los ejemplos oficiales; con
+# Verifactu apagado, nada; en pruebas, dos altas encadenadas por la emisión de
+# siempre; un cliente de fuera de la UE sin motivo no se emite ni gasta número,
+# con N2 sí; el registro no se edita; y las vueltas atrás.
+supabase/migrations/20261025T2140_v03_verifactu_motor.sql
+supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
+supabase/staging/sql/20261025_v03_verifactu_prueba.sql

@@ -10,7 +10,7 @@ name: V03 · Sonda de Verifactu en staging-conta
 #   1. guardas: staging y no producción; la sonda solo habla con prewww*.aeat.es
 #      y no nombra ningún dominio de producción de la AEAT;
 #   2. un token de un solo run como secreto de la función, y la despliega
-#      (scripts/conta/v03/sonda, copiada a supabase/functions/ dentro del runner);
+#      (supabase/staging/sondas/verifactu, copiada a supabase/functions/ dentro del runner);
 #   3. «fuentes»: baja el WSDL y errores.properties y los deja en la rama, en
 #      docs/conta/v03/aeat/, con su fecha y su huella;
 #   4. «conexion»: si Julio ha puesto AEAT_PRUEBAS_P12_B64 y AEAT_PRUEBAS_P12_CLAVE
@@ -42,7 +42,7 @@ jobs:
       REF: oseymswjlzplqoxrfjzi
       PROD_REF: xzmpnchlguibclvxyynt
       FN: verifactu-sonda
-      SRC: scripts/conta/v03/sonda/index.ts
+      SRC: supabase/staging/sondas/verifactu/index.ts
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,32 +71,33 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          D="$RUNNER_TEMP/s"; mkdir -p "$D"
-          TOK=$(openssl rand -hex 24); echo "::add-mask::$TOK"; printf '%s' "$TOK" > "$D/token"
-          date -u +%Y-%m-%dT%H:%M:%SZ > "$D/desde"
+          mkdir -p /tmp/sonda
+          TOK=$(openssl rand -hex 24); echo "::add-mask::$TOK"; printf '%s' "$TOK" > /tmp/sonda/token
+          date -u +%Y-%m-%dT%H:%M:%SZ > /tmp/sonda/desde
           supabase secrets set --project-ref "$REF" "VERIFACTU_SONDA_TOKEN=$TOK" > /dev/null
           mkdir -p "supabase/functions/$FN"
           cp "$SRC" "supabase/functions/$FN/index.ts"
-          supabase functions deploy "$FN" --project-ref "$REF" --no-verify-jwt
-          echo "Desplegada $FN en staging-conta."
+          supabase functions deploy "$FN" --project-ref "$REF" --no-verify-jwt > "$RUNNER_TEMP/despliegue.txt" 2>&1
+          echo "Sonda desplegada en staging-conta."
 
+      # Lo que sale al registro y al resumen, solo por la puerta (D01 R2): números
+      # y huellas. El texto de lo que contesta la AEAT no sale; se cuenta.
       - name: Fuentes · el WSDL y la lista de errores, desde staging
         run: |
           set -euo pipefail
-          D="$RUNNER_TEMP/s"; sleep 5
-          curl -sS --max-time 90 -H "x-verifactu-sonda: $(cat "$D/token")" "https://$REF.supabase.co/functions/v1/$FN?modo=fuentes" > "$D/fuentes.json" || echo '{"ok":false,"error":"curl"}' > "$D/fuentes.json"
-          { echo "## Fuentes oficiales, bajadas desde una función de staging"; echo
-            echo "| fichero | status | bytes | sha256 | ms |"; echo "|---|---|---|---|---|"
-            jq -r '.wsdl, .errores | "| \(.url // "—") | \(.status // .error // "—") | \(.bytes // "—") | \(.sha256 // "—") | \(.ms // "—") |"' "$D/fuentes.json"
-            echo; echo "### Puntos de acceso del WSDL"; echo
-            jq -r '(.puertos // [])[] | "- `\(.nombre)`: \(.url)"' "$D/fuentes.json"; } >> "$GITHUB_STEP_SUMMARY"
+          sleep 5
+          curl -sS --max-time 90 -H "x-verifactu-sonda: $(cat /tmp/sonda/token)" "https://$REF.supabase.co/functions/v1/$FN?modo=fuentes" > /tmp/sonda/fuentes.json || echo '{"ok":false,"error":"curl"}' > /tmp/sonda/fuentes.json
+          jq -r '"@@ # fuentes",
+            (["wsdl", "errores"][] as $k | .[$k] // {} |
+              "@@ \($k).status \(.status // -1)", "@@ \($k).bytes \(.bytes // -1)", "@@ \($k).ms \(.ms // -1)", "@@ \($k).sha256 \(.sha256 // "")"),
+            "@@ puertos \((.puertos // []) | length)"' /tmp/sonda/fuentes.json > /tmp/sonda/fuentes.txt
+          cat /tmp/sonda/fuentes.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
           A=docs/conta/v03/aeat; mkdir -p "$A"
           HOY=$(date -u +%Y-%m-%d)
-          jq -r '.wsdl.texto // empty' "$D/fuentes.json" > "$A/SistemaFacturacion.wsdl"
-          jq -r '.errores.texto // empty' "$D/fuentes.json" > "$A/errores.properties"
-          jq --arg hoy "$HOY" '{bajado: $hoy, desde: "función de staging-conta (sonda V03)", wsdl: (.wsdl | del(.texto)), errores: (.errores | del(.texto)), puertos: (.puertos // [])}' "$D/fuentes.json" > "$A/fuentes.json"
-          jq -r '[(.puertos // [])[] | select(.url | test("^https://prewww1\\.aeat\\.es/.*VerifactuSOAP$"))][0].url // ""' "$D/fuentes.json" > "$D/destino"
-          echo "Destino de pruebas: $(cat "$D/destino")"
+          jq -r '.wsdl.texto // empty' /tmp/sonda/fuentes.json > "$A/SistemaFacturacion.wsdl"
+          jq -r '.errores.texto // empty' /tmp/sonda/fuentes.json > "$A/errores.properties"
+          jq --arg hoy "$HOY" '{bajado: $hoy, desde: "función de staging-conta (sonda V03)", wsdl: (.wsdl | del(.texto)), errores: (.errores | del(.texto)), puertos: (.puertos // [])}' /tmp/sonda/fuentes.json > "$A/fuentes.json"
+          jq -r '[(.puertos // [])[] | select(.url | test("^https://prewww1\\.aeat\\.es/.*VerifactuSOAP$"))][0].url // ""' /tmp/sonda/fuentes.json > /tmp/sonda/destino
           for f in SistemaFacturacion.wsdl errores.properties; do [ -s "$A/$f" ] || rm -f "$A/$f"; done
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$A"
@@ -108,37 +109,47 @@ jobs:
       - name: Conexión · una consulta con certificado al entorno de pruebas
         run: |
           set -euo pipefail
-          D="$RUNNER_TEMP/s"; DEST=$(cat "$D/destino")
-          { echo; echo "## Conexión con certificado (entorno de pruebas)"; echo; } >> "$GITHUB_STEP_SUMMARY"
-          if [ -z "$DEST" ]; then echo "- No hay punto de acceso de pruebas en el WSDL: no se prueba." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
-          curl -sS --max-time 90 -G -H "x-verifactu-sonda: $(cat "$D/token")" "https://$REF.supabase.co/functions/v1/$FN" \
-            --data-urlencode "modo=conexion" --data-urlencode "destino=$DEST" > "$D/conexion.json" || echo '{"ok":false,"error":"curl"}' > "$D/conexion.json"
-          jq -r '"- destino: \(.destino // "—")\n- ok: **\(.ok)** · status: **\(.status // "—")** · \(.ms // "—") ms\n- error: \(.error // "—") \(.motivo // "") \(.mensaje // "")\n- certificado: \(.certificado // {} | tostring)"' "$D/conexion.json" >> "$GITHUB_STEP_SUMMARY"
-          { echo; echo '```xml'; jq -r '.respuesta // ""' "$D/conexion.json" | head -c 3000; echo; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          echo "Respuesta (primeros 3000 caracteres, NIF enmascarado):"; jq -r '.respuesta // .mensaje // ""' "$D/conexion.json" | head -c 3000; echo
+          DEST=$(cat /tmp/sonda/destino)
+          if [ -z "$DEST" ]; then echo '{"ok":false,"error":"sin_destino"}' > /tmp/sonda/conexion.json; else
+            curl -sS --max-time 90 -G -H "x-verifactu-sonda: $(cat /tmp/sonda/token)" "https://$REF.supabase.co/functions/v1/$FN" \
+              --data-urlencode "modo=conexion" --data-urlencode "destino=$DEST" > /tmp/sonda/conexion.json || echo '{"ok":false,"error":"curl"}' > /tmp/sonda/conexion.json
+          fi
+          # El fallo y su motivo son palabras que escribe la sonda (sin_certificado,
+          # certificado, caducado, tls…): van como CLAVE, con un 1.
+          jq -r '"@@ # conexion",
+            "@@ ok \(if .ok then 1 else 0 end)", "@@ status \(.status // -1)", "@@ ms \(.ms // -1)",
+            (if .error then "@@ error.\(.error | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1" else empty end),
+            (if .motivo then "@@ motivo.\(.motivo | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1" else empty end),
+            ((.respuesta // "") as $r |
+              "@@ respuesta.bytes \($r | length)",
+              "@@ respuesta.consulta \(if ($r | test("RespuestaConsultaFactuSistemaFacturacion")) then 1 else 0 end)",
+              "@@ respuesta.fault \(if ($r | test("Fault>")) then 1 else 0 end)",
+              ([$r | scan("(?:CodigoErrorRegistro|CodigoError|faultcode)>[^0-9<]*([0-9]{3,5})<") | .[0]] | unique[] | "@@ codigo_aeat.\(.) 1"))' /tmp/sonda/conexion.json > /tmp/sonda/conexion.txt
+          cat /tmp/sonda/conexion.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
 
       - name: Logs de la función (se buscan restos de material; no se imprimen)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          D="$RUNNER_TEMP/s"; DESDE=$(cat "$D/desde")
-          echo "Esperando a que lleguen los logs (90 s)…"; sleep 90
+          DESDE=$(cat /tmp/sonda/desde)
+          echo "Esperando a que lleguen los logs (90 s)."; sleep 90
           HASTA=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          : > "$D/logs"
+          : > /tmp/sonda/logs
           for sql in "select timestamp, event_message, metadata from function_logs limit 1000" "select timestamp, event_message, metadata from function_edge_logs limit 1000"; do
             curl -sS --max-time 60 -G -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
               "https://api.supabase.com/v1/projects/$REF/analytics/endpoints/logs.all" \
-              --data-urlencode "sql=$sql" --data-urlencode "iso_timestamp_start=$DESDE" --data-urlencode "iso_timestamp_end=$HASTA" >> "$D/logs" || true
-            echo >> "$D/logs"
+              --data-urlencode "sql=$sql" --data-urlencode "iso_timestamp_start=$DESDE" --data-urlencode "iso_timestamp_end=$HASTA" >> /tmp/sonda/logs || true
+            echo >> /tmp/sonda/logs
           done
-          PEM=$(grep -cE 'BEGIN (CERTIFICATE|PRIVATE KEY|RSA PRIVATE KEY|ENCRYPTED PRIVATE KEY)' "$D/logs" || true)
-          B64=$(grep -oE '[A-Za-z0-9+/]{200,}={0,2}' "$D/logs" | wc -l || true)
-          NUESTRO=$(grep -c 'sonda\\":\\"verifactu\|"sonda":"verifactu"' "$D/logs" || true)
-          { echo; echo "## Logs de la función ($DESDE → $HASTA)"; echo
-            echo "- líneas de la sonda: **$NUESTRO**"
-            echo "- con un PEM: **$PEM**"
-            echo "- con base64 de 200 caracteres o más: **$B64**"; } >> "$GITHUB_STEP_SUMMARY"
+          PEM=$(grep -cE 'BEGIN (CERTIFICATE|PRIVATE KEY|RSA PRIVATE KEY|ENCRYPTED PRIVATE KEY)' /tmp/sonda/logs || true)
+          B64=$(grep -oE '[A-Za-z0-9+/]{200,}={0,2}' /tmp/sonda/logs | wc -l || true)
+          NUESTRO=$(grep -c 'sonda\\":\\"verifactu\|"sonda":"verifactu"' /tmp/sonda/logs || true)
+          echo "@@ # logs" > /tmp/sonda/logs.txt
+          echo "@@ lineas_de_la_sonda $NUESTRO" >> /tmp/sonda/logs.txt
+          echo "@@ con_un_pem $PEM" >> /tmp/sonda/logs.txt
+          echo "@@ con_base64_de_200_o_mas $B64" >> /tmp/sonda/logs.txt
+          cat /tmp/sonda/logs.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
           [ "$PEM" = "0" ] || { echo "::error::Hay material de certificado en los logs."; exit 1; }
 
       - name: Limpieza · la función y su token (pase lo que pase)
@@ -149,11 +160,15 @@ jobs:
           set -uo pipefail
           supabase functions delete "$FN" --project-ref "$REF" || true
           supabase secrets unset --project-ref "$REF" VERIFACTU_SONDA_TOKEN || true
-          N_FN=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/functions" | jq --arg s "$FN" '[.[] | select(.slug==$s)] | length')
-          N_SEC=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" | jq '[.[] | select(.name=="VERIFACTU_SONDA_TOKEN")] | length')
-          CERT=$(curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" | jq '[.[] | select(.name=="AEAT_PRUEBAS_P12_B64" or .name=="AEAT_PRUEBAS_P12_CLAVE")] | length')
-          { echo; echo "## Limpieza"; echo
-            echo "- funciones \`$FN\` que quedan: **$N_FN**"
-            echo "- secretos VERIFACTU_SONDA_TOKEN que quedan: **$N_SEC**"
-            echo "- secretos del certificado de pruebas (no se tocan): **$CERT** de 2"; } >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p /tmp/sonda
+          curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/functions" > /tmp/sonda/funciones.json || echo '[]' > /tmp/sonda/funciones.json
+          curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" > /tmp/sonda/secretos.json || echo '[]' > /tmp/sonda/secretos.json
+          N_FN=$(jq --arg s "$FN" '[.[] | select(.slug==$s)] | length' /tmp/sonda/funciones.json)
+          N_SEC=$(jq '[.[] | select(.name=="VERIFACTU_SONDA_TOKEN")] | length' /tmp/sonda/secretos.json)
+          CERT=$(jq '[.[] | select(.name=="AEAT_PRUEBAS_P12_B64" or .name=="AEAT_PRUEBAS_P12_CLAVE")] | length' /tmp/sonda/secretos.json)
+          echo "@@ # Limpieza" > /tmp/sonda/resumen.txt
+          echo "@@ funciones_de_la_sonda_que_quedan $N_FN" >> /tmp/sonda/resumen.txt
+          echo "@@ secretos_VERIFACTU_SONDA_TOKEN_que_quedan $N_SEC" >> /tmp/sonda/resumen.txt
+          echo "@@ secretos_del_certificado_de_pruebas_de_2_no_se_tocan $CERT" >> /tmp/sonda/resumen.txt
+          cat /tmp/sonda/resumen.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
           [ "$N_FN" = "0" ] && [ "$N_SEC" = "0" ] || { echo "::error::No se ha limpiado todo."; exit 1; }

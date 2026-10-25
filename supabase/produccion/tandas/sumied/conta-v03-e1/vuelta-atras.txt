@@ -1,0 +1,3 @@
+# V03 · Entrega 1 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
+supabase/vuelta-atras/20261025T2140_v03_verifactu_motor.down.sql

@@ -36,8 +36,10 @@ export interface DatosQr {
 
 /** Los códigos de error de validación de la URL (§10), para decirlos antes de imprimir. */
 export class QrNoValido extends Error {
-  constructor(readonly codigo: string, mensaje: string) {
+  readonly codigo: string
+  constructor(codigo: string, mensaje: string) {
     super(mensaje)
+    this.codigo = codigo
     this.name = 'QrNoValido'
   }
 }
