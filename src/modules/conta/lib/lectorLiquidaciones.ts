@@ -29,8 +29,8 @@ export const LEIDAS: Record<Plataforma, string[]> = {
   uber: ['mes', 'local', 'pedidos', 'venta_con_iva', 'base_10', 'iva_10'],
 }
 
-/** CSV mínimo: «;», comillas opcionales con «""» dentro, sin la marca BOM. */
-export function partirCsvPuntoYComa(text: string): string[][] {
+/** CSV mínimo: «;» (o el separador que se diga), comillas opcionales con «""» dentro, sin la marca BOM. */
+export function partirCsvPuntoYComa(text: string, sep = ';'): string[][] {
   const t = text.replace(/^\uFEFF/, '')
   const rows: string[][] = []
   let row: string[] = [], field = '', q = false
@@ -39,7 +39,7 @@ export function partirCsvPuntoYComa(text: string): string[][] {
     if (q) {
       if (c === '"') { if (t[i + 1] === '"') { field += '"'; i++ } else q = false } else field += c
     } else if (c === '"') q = true
-    else if (c === ';') { row.push(field); field = '' }
+    else if (c === sep) { row.push(field); field = '' }
     else if (c === '\n') { row.push(field); rows.push(row); row = []; field = '' }
     else if (c !== '\r') field += c
   }
@@ -48,8 +48,8 @@ export function partirCsvPuntoYComa(text: string): string[][] {
 }
 
 /** Filas como objetos por su cabecera (recortadas). */
-export function filasCsv(text: string): Record<string, string>[] {
-  const rows = partirCsvPuntoYComa(text)
+export function filasCsv(text: string, sep = ';'): Record<string, string>[] {
+  const rows = partirCsvPuntoYComa(text, sep)
   if (!rows.length) return []
   const head = rows[0].map((h) => h.trim())
   return rows.slice(1).map((r) => Object.fromEntries(head.map((h, i) => [h, (r[i] ?? '').trim()])))

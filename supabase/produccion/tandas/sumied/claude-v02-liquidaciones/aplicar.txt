@@ -1,0 +1,27 @@
+# V02 · Entrega 2 · El motor de liquidaciones con cuatro piezas (Julio, 25/10).
+# Rama claude/v02-liquidaciones. Se ensaya y se aplica desde esta rama, antes
+# de fusionar, con el campo «tanda» VACÍO.
+#
+#   2253 — AÑADE: las tiendas por su ID (sus nombres, platform_store_alias), su
+#   marca y su local con fecha (platform_store_tramo), los cambios de tienda por
+#   confirmar (platform_store_cambio), lo reclamado hasta que llega y la
+#   diferencia de un intermediario sin canal (columnas nuevas de
+#   conta_liquidacion_resolucion), el intermediario de un método de cobro
+#   (payment_method.party_id) y las funciones: el motor (conta_liquidaciones),
+#   reconocer la tienda, confirmar su cambio, dar de alta a quien te paga,
+#   «Apuntar a mano», resolver una diferencia y la factura que se engancha sola.
+#   Siembra las tablas nuevas (un nombre y un tramo por tienda); no toca filas
+#   que existen.
+#   2254 — CAMBIA, declarado y con su prueba de staging: conta_liquidacion_registrar
+#   (cualquier plataforma, la tienda por su ID, sin duplicar la misma semana por
+#   dos caminos, el aviso del local cerrado), conta_tienda_plataforma_asignar
+#   (cambiar la marca o el local, desde hoy), un disparador en supplier_invoice
+#   (la factura de comisión se engancha sola) y channel_id de
+#   conta_liquidacion_resolucion admite vacío (0 filas).
+#   No está en el camino del pedido. El analizador dice «sigue»: sin autorizo.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta (en orden inverso; para si se ha trabajado con lo nuevo).
+cuenta: scripts/conta/produccion/cuentas/v02l-liquidaciones.sql
+supabase/migrations/20261025T2253_v02l_motor_liquidaciones.sql
+supabase/migrations/20261025T2254_v02l_motor_cambia.sql

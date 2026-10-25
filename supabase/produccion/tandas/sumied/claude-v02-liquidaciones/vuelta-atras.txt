@@ -1,0 +1,3 @@
+# V02 · E2 · vuelta atrás, en orden inverso (antes, el front de antes si ya llama al motor).
+supabase/vuelta-atras/20261025T2254_v02l_motor_cambia.down.sql
+supabase/vuelta-atras/20261025T2253_v02l_motor_liquidaciones.down.sql

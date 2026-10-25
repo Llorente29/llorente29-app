@@ -2,6 +2,7 @@
 // (svix), las direcciones, los adjuntos y el recorrido entero contra dobles
 // (Resend y la base). Todo inventado.
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   clasificarAdjuntos, comprobarFirma, destinatariosDelSobre, direccionesDeFacturas, enlacesDeFactura, firmaSvix, nombreSeguro, recibirCorreo, rutaEntrada,
@@ -170,9 +171,18 @@ describe('recibirCorreo: liquidaciones-<empresa>@', () => {
     const m = mundoLiq()
     const r = await recibirCorreo(aLiq({ subject: 'Novedades de la plataforma', html: '<p>Hola</p>' }), m.p)
     expect(r.resultado).toBe('no_es_liquidacion')
-    expect(r.texto).toBe('No es un resumen de pagos de Uber Eats. Queda apuntado y no se lee: por ahora solo se leen los resúmenes de pagos de Uber Eats.')
+    expect(r.texto).toBe('No es un resumen de pagos de Uber Eats. Queda apuntado y no se lee: por ahora se leen los resúmenes de pagos de Uber Eats y las liquidaciones de Just Eat.')
     expect(m.registradas).toEqual([])
     expect(m.registro).toMatchObject([{ resultado: 'no_es_liquidacion', detalle: { motivo: 'No es un resumen de pagos de Uber Eats.' } }])
+  })
+  it('V02 · E2 · una liquidación de Just Eat (el correo de verdad de la factura 4126424): se lee y se registra como liquidación', async () => {
+    const m = mundoLiq()
+    const html = readFileSync('tests/unit/modules/conta/v02/fixtures/liquidaciones/justeat-4126424.html', 'utf8')
+    const r = await recibirCorreo(aLiq({ from: 'Just Eat Takeaway <noreplyes@justeat-int.com>', subject: 'Just-eat invoice: 4126424', html }), m.p)
+    expect(r.resultado).toBe('liquidacion')
+    expect(m.registradas[0]).toMatchObject({ companyId: 'emp', datos: { proveedor: 'justeat', origen: 'correo', email_id: 'e1', tienda: 'Milanesa House (Calle de Florencio Llorente 29)',
+      desde: '2026-10-01', hasta: '2026-10-15', neto: 90.3, factura: { numero: '4126424', total: 32.79 } } })
+    expect(m.registro).toEqual([expect.objectContaining({ resultado: 'liquidacion', detalle: { liquidacion_id: 'liq-1', ya_estaba: false, factura: 'creada', avisos: 0, plataforma: 'justeat' } })])
   })
   it('la confirmación de reenvío de Gmail: se apunta su código, en las dos clases', async () => {
     for (const to of ['liquidaciones-taberna-norte@entrada.folvy.app', 'facturas-taberna-norte@entrada.folvy.app']) {

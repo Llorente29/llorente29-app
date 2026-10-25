@@ -1,0 +1,10 @@
+# V02 · E2 · El motor de liquidaciones. La 2253 añade y la 2254 cambia dos
+# funciones (misma firma), un disparador de supplier_invoice y una columna que
+# pasa a admitir vacío: desde la rama, en ROLLBACK. Su prueba (ROLLBACK): el
+# correo y el informe de Uber sin duplicar, la tienda por su ID y con fecha,
+# Glovo con la factura que se engancha sola, Just Eat dado de alta solo, el motor
+# con sus estados, la diferencia reclamada hasta que llega, «Apuntar a mano» de un
+# intermediario sin canal, Sus tiendas desde hoy y las vueltas atrás.
+supabase/migrations/20261025T2253_v02l_motor_liquidaciones.sql
+supabase/migrations/20261025T2254_v02l_motor_cambia.sql
+supabase/staging/sql/20261025_v02l_motor_prueba.sql
