@@ -104,7 +104,9 @@ describe('la entera en trozos', () => {
     // 26/10 (PC01 · E2, al traer main con la cola de staging): las dos juntas, conta/humo/pantallas medida y
     // pc01/pagos sin medir (cuenta como la mediana). Contadas las dos: el reparto estimado da 18,98 (media 18,96): el
     // techo se queda en 19 min. Lo mide la entera de la noche.
-    expect(Math.max(...seg) / 60).toBeLessThan(19)
+    // 26/10 (V03 · E3, al traer main con la PC01 · E2): entra v03/corregir-y-cuadrar, sin medir (cuenta como la
+    // mediana). El reparto estimado da 19,14: el techo pasa a 19,5 min. Lo mide la entera de la noche.
+    expect(Math.max(...seg) / 60).toBeLessThan(19.5)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {
