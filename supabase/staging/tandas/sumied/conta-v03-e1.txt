@@ -9,4 +9,5 @@ supabase/migrations/20261025T2140_v03_verifactu_motor.sql
 supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
 supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
 supabase/migrations/20261025T2341_v03_verifactu_autorizacion.sql
+supabase/migrations/20261025T2351_v03_verifactu_candado.sql
 supabase/staging/sql/20261025_v03_verifactu_prueba.sql

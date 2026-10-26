@@ -8,11 +8,13 @@ name: V03 · Facturas de prueba contra la AEAT, desde staging-conta
 #      pruebas, y su puerta no deja «pruebas» desde la base de producción;
 #   2. una llave de un solo run (VERIFACTU_PRUEBAS_TOKEN), CONTA_VERIFACTU=pruebas,
 #      y despliega conta-verifactu en staging;
-#   3. «preparar_pruebas»: la empresa de pruebas (su propia cuenta de staging,
+#   3. «probar_conexion»: una consulta con el certificado; su resultado queda
+#      apuntado (el candado, 2351). Si no sale bien, se PARA aquí;
+#   4. «preparar_pruebas»: la empresa de pruebas (su propia cuenta de staging,
 #      con el NIF del certificado) y las 25 facturas de _shared/verifactu/pruebasAeat.ts,
 #      registradas por el mismo paso que la emisión (cerrojo y huella);
-#   4. «enviar»: una vuelta de la cola, contra la AEAT de pruebas;
-#   5. pase lo que pase: quita la llave, cierra la puerta (CONTA_VERIFACTU) y
+#   5. «enviar»: una vuelta de la cola, contra la AEAT de pruebas;
+#   6. pase lo que pase: quita la llave, cierra la puerta (CONTA_VERIFACTU) y
 #      borra la función. Los secretos del certificado NO se tocan.
 #
 # QUÉ SALE: solo «@@ clave número» por scripts/conta/salida-segura.mjs (D01 R2).
@@ -73,10 +75,22 @@ jobs:
           supabase functions deploy "$FN" --project-ref "$REF" > /tmp/vp/despliegue.txt 2>&1
           echo "Desplegada en staging-conta, con la puerta en pruebas."
 
-      - name: Preparar · la empresa de pruebas y sus 25 facturas
+      - name: Conexión · una consulta con el certificado de pruebas (abre o no el candado)
         run: |
           set -euo pipefail
           sleep 5
+          curl -sS --max-time 120 -X POST -H "Content-Type: application/json" -H "x-verifactu-pruebas: $(cat /tmp/vp/token)" \
+            -d '{"accion":"probar_conexion"}' "https://$REF.supabase.co/functions/v1/$FN" > /tmp/vp/conexion.json || echo '{"ok":false,"motivo":"curl"}' > /tmp/vp/conexion.json
+          jq -r '"@@ # conexion", "@@ ok \(if .ok then 1 else 0 end)", "@@ status \(.status // -1)", "@@ ms \(.ms // -1)",
+            (if .codigo then "@@ codigo_aeat.\(.codigo) 1" else empty end),
+            "@@ motivo.\((.motivo // "ninguno") | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1"' /tmp/vp/conexion.json > /tmp/vp/conexion.txt
+          cat /tmp/vp/conexion.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+          # Si Hacienda no acepta el certificado, se para aquí (respuesta 1 y 3 de Julio): no se prepara nada.
+          jq -e '.ok == true' /tmp/vp/conexion.json > /dev/null || { echo "::error::La conexión con la AEAT de pruebas no ha salido bien: se para."; exit 1; }
+
+      - name: Preparar · la empresa de pruebas y sus 25 facturas
+        run: |
+          set -euo pipefail
           curl -sS --max-time 120 -X POST -H "Content-Type: application/json" -H "x-verifactu-pruebas: $(cat /tmp/vp/token)" \
             -d '{"accion":"preparar_pruebas"}' "https://$REF.supabase.co/functions/v1/$FN" > /tmp/vp/preparar.json || echo '{"error":"curl"}' > /tmp/vp/preparar.json
           jq -r '"@@ # preparar", "@@ preparadas \(.preparadas // -1)", "@@ altas \(.altas // -1)", "@@ anulaciones \(.anulaciones // -1)",

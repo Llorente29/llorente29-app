@@ -165,7 +165,7 @@ export function registroAlta(r: Registro, s: SistemaInformatico): string {
     rect,
     r.fecha_operacion && r.fecha_operacion !== r.fecha_expedicion && txt('FechaOperacion', fechaXml(r.fecha_operacion)),
     txt('DescripcionOperacion', (r.descripcion ?? '').slice(0, 500) || 'Venta'),
-    r.destinatarios?.length && sf('Destinatarios', ...r.destinatarios.map((d) => persona(d, r.id))),
+    r.destinatarios?.length ? sf('Destinatarios', ...r.destinatarios.map((d) => persona(d, r.id))) : null,
     sf('Desglose', ...r.desglose.map((l) => detalle(l, r.id))),
     txt('CuotaTotal', dosDecimales(r.cuota_total)),
     txt('ImporteTotal', dosDecimales(r.importe_total)),

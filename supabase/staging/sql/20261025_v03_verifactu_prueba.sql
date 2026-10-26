@@ -18,6 +18,7 @@
 --      emisión con el NIF mal se deshace entera sin gastar número.
 --   4. El registro no se edita.
 --   6. El despertar y el aviso del certificado (2249).
+--   C. El candado: sin una prueba de conexión correcta, no se enciende (2351).
 --   7. El certificado de la empresa, solo para Verifactu: autorizar, abrir para
 --      un envío de real, no editar, retirar; presentar sigue pidiendo confirmación (2341).
 --   5. Las vueltas atrás: sin el disparador ni las tablas; conta_venta_emitir
@@ -33,6 +34,7 @@ end $$;
 set local statement_timeout = '180s';
 
 -- La 2140 solo añade y puede estar ya de verdad (W05): primero las vueltas atrás.
+\i supabase/vuelta-atras/20261025T2351_v03_verifactu_candado.down.sql
 \i supabase/vuelta-atras/20261025T2341_v03_verifactu_autorizacion.down.sql
 \i supabase/vuelta-atras/20261025T2249_v03_verifactu_despertar.down.sql
 \i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
@@ -55,6 +57,7 @@ end $$;
 \i supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
 \i supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
 \i supabase/migrations/20261025T2341_v03_verifactu_autorizacion.sql
+\i supabase/migrations/20261025T2351_v03_verifactu_candado.sql
 
 -- 0 · La huella de la base contra los ejemplos oficiales (v0.1.2 §6).
 do $$ begin
@@ -67,6 +70,31 @@ do $$ begin
     raise exception 'PRUEBA V03 · 0: la 2140 o la 2141 han cambiado conta_venta_emitir.';
   end if;
   raise notice '0 · los tres ejemplos oficiales dan su huella; conta_venta_emitir, la misma';
+end $$;
+
+-- C · El candado (2351, respuesta 3): sin una prueba de conexión correcta con
+-- la AEAT apuntada, no se pasa a pruebas; una que salió mal tampoco abre.
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+declare v_msg text;
+begin
+  begin perform public.verifactu_modo((select v::uuid from _v where clave = 'empresa'), 'pruebas', null, null, 'Prueba V03');
+    raise exception 'PRUEBA V03 · C: pasa a pruebas sin haber probado la conexión.';
+  exception when check_violation then v_msg := sqlerrm; end;
+  if v_msg not like '%no se ha probado la conexión con el entorno de pruebas%' then raise exception 'PRUEBA V03 · C: no dice por qué («%»).', v_msg; end if;
+  raise notice 'C · sin probar la conexión, no pasa a pruebas: «%»', v_msg;
+end $$;
+reset role;
+do $$
+begin
+  perform public.verifactu_conexion_apuntar('pruebas', 'B28000016', false, 4104, 'Prueba V03: salió mal', 'prueba V03');
+  if public.verifactu_conexion_probada('pruebas', null) then raise exception 'PRUEBA V03 · C: una prueba que salió mal abre el candado.'; end if;
+  perform public.verifactu_conexion_apuntar('pruebas', 'B28000016', true, null, 'Prueba V03: bien', 'prueba V03');
+  if not public.verifactu_conexion_probada('pruebas', null) or public.verifactu_conexion_probada('real', 'B28000016') then
+    raise exception 'PRUEBA V03 · C: la correcta de pruebas no abre pruebas, o abre real.';
+  end if;
+  raise notice 'C · una que salió mal no abre; la correcta de pruebas abre pruebas y no real';
 end $$;
 
 -- 1 a 4 · Como usuario de A.
@@ -208,6 +236,7 @@ end $$;
 
 
 -- 5 · Las vueltas atrás.
+\i supabase/vuelta-atras/20261025T2351_v03_verifactu_candado.down.sql
 \i supabase/vuelta-atras/20261025T2341_v03_verifactu_autorizacion.down.sql
 \i supabase/vuelta-atras/20261025T2249_v03_verifactu_despertar.down.sql
 \i supabase/vuelta-atras/20261025T2141_v03_verifactu_engancha.down.sql
@@ -235,9 +264,13 @@ end $$;
 \i supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
 \i supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
 \i supabase/migrations/20261025T2341_v03_verifactu_autorizacion.sql
+\i supabase/migrations/20261025T2351_v03_verifactu_candado.sql
 do $$
 declare v_n bigint; v_m bigint;
 begin
+  -- Todo se ha vuelto a aplicar: las marcas del candado, otra vez (pruebas y real de A).
+  perform public.verifactu_conexion_apuntar('pruebas', 'B28000016', true, null, 'Prueba V03', 'prueba V03');
+  perform public.verifactu_conexion_apuntar('real', 'B28000016', true, null, 'Prueba V03', 'prueba V03');
   select count(*) into v_n from net.http_request_queue;
   perform public.verifactu_despertar();
   select count(*) into v_m from net.http_request_queue;

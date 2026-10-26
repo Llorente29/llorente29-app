@@ -19,6 +19,11 @@
 #      Verifactu (respuesta 2 de Julio, b): quién y cuándo, retirable, cada envío
 #      con la suya, y la función que lo abre solo para un envío de real. La vía
 #      por defecto, colaborador social. No toca datos ni nada del I01.
+#   5. 2351 — EL CANDADO (respuesta 3): ninguna empresa pasa a pruebas ni a real
+#      sin una prueba de conexión correcta con la AEAT apuntada. Añade la tabla y
+#      sus funciones y reescribe verifactu_modo (de la 2140, misma firma) con la
+#      comprobación delante. Se puede aplicar sin haber probado con Hacienda:
+#      todo nace apagado y no se puede encender sin probarlo.
 #
 # Sin «autorizo»: ninguno toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
@@ -27,4 +32,5 @@ supabase/migrations/20261025T2140_v03_verifactu_motor.sql
 supabase/migrations/20261025T2141_v03_verifactu_engancha.sql
 supabase/migrations/20261025T2249_v03_verifactu_despertar.sql
 supabase/migrations/20261025T2341_v03_verifactu_autorizacion.sql
+supabase/migrations/20261025T2351_v03_verifactu_candado.sql
 cuenta: scripts/conta/produccion/cuentas/v03-verifactu.sql

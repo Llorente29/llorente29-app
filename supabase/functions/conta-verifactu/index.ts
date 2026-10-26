@@ -31,6 +31,7 @@ import { encolarAlerta } from "../_shared/alerta.ts";
 import { type Entorno, type Lote, type Piezas, unaVuelta } from "../_shared/verifactu/enviar.ts";
 import { puerta } from "../_shared/verifactu/puerta.ts";
 import { casosPruebas } from "../_shared/verifactu/pruebasAeat.ts";
+import { leerConexion, sobreConsulta } from "../_shared/verifactu/consulta.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -71,8 +72,13 @@ function materialPruebas(lote: Lote): MaterialCertificado {
  * y el nombre del titular del certificado) y las 25 facturas de pruebasAeat.ts,
  * registradas por el mismo paso que la emisión. Devuelve solo recuentos.
  */
-async function prepararPruebas(srv: ReturnType<typeof createClient>): Promise<Record<string, unknown>> {
+// deno-lint-ignore no-explicit-any
+async function prepararPruebas(srv: any): Promise<Record<string, unknown>> {
   const c = leerCertPruebas();
+  // El candado también aquí: sin una conexión correcta apuntada, no se enciende nada.
+  const { data: probada, error: e0 } = await srv.rpc("verifactu_conexion_probada", { p_entorno: "pruebas", p_nif: c.nif });
+  if (e0) throw new Error(`verifactu_conexion_probada: ${e0.message}`);
+  if (!probada) throw new Error("Todavía no se ha probado la conexión con el entorno de pruebas de Hacienda (probar_conexion).");
   const uno = async <T>(q: PromiseLike<{ data: T | null; error: { message: string } | null }>, que: string): Promise<T | null> => {
     const { data, error } = await q;
     if (error) throw new Error(`${que}: ${error.message}`);
@@ -111,7 +117,31 @@ Deno.serve(async (req) => {
   }
   const entorno = p.entorno;
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
+  const rpc = async (fn: string, args: Record<string, unknown>) => {
+    const { data, error } = await srv.rpc(fn, args);
+    if (error) throw new Error(`${fn}: ${error.message}`);
+    return data;
+  };
   const accion = (await req.json().catch(() => ({})) as { accion?: string }).accion ?? "enviar";
+  if (accion === "probar_conexion") {
+    // Solo pruebas: una consulta con el certificado de pruebas al entorno de
+    // pruebas de la AEAT, y su resultado apuntado (abre o no el candado, 2351).
+    if (entorno !== "pruebas") return json({ error: "probar_conexion solo en pruebas" }, 400);
+    try {
+      const c = leerCertPruebas();
+      const r = await llamarConCertificado(c.material, URL.pruebas, {
+        method: "POST", headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: '""' }, body: sobreConsulta({ nombre: c.titular, nif: c.nif }, new Date()),
+      }, { crearCliente: (m) => Deno.createHttpClient({ cert: m.cert, key: m.key }), pedir: (u, init) => fetch(u, init), limiteMs: 60_000 });
+      const l = leerConexion(r.status, r.cuerpo);
+      await rpc("verifactu_conexion_apuntar", { p_entorno: "pruebas", p_nif: c.nif, p_ok: l.ok, p_codigo: l.codigo, p_mensaje: `${l.motivo} · HTTP ${r.status}`, p_origen: "conta-verifactu probar_conexion" });
+      console.log(`conta-verifactu · pruebas · conexión ${l.ok ? "bien" : "mal"} · ${l.motivo}${l.codigo ? ` · ${l.codigo}` : ""}`);
+      return json({ ok: l.ok, status: r.status, codigo: l.codigo, motivo: l.motivo, ms: r.ms });
+    } catch (e) {
+      const motivo = e instanceof SinCertificado ? "sin_certificado" : e instanceof Error && e.name === "LlamadaFallida" ? `llamada_${(e as { motivo?: string }).motivo ?? "fallo"}` : e instanceof Error && e.name === "CertificadoNoVale" ? "certificado_no_vale" : "fallo";
+      console.error(`conta-verifactu · pruebas · conexión no probada · ${motivo}`);
+      return json({ ok: false, motivo }, 200);
+    }
+  }
   if (accion === "preparar_pruebas") {
     if (entorno !== "pruebas") return json({ error: "preparar_pruebas solo en pruebas" }, 400);
     try {
@@ -124,11 +154,6 @@ Deno.serve(async (req) => {
       return json({ error: "preparar", mensaje: m.slice(0, 300) }, 500);
     }
   }
-  const rpc = async (fn: string, args: Record<string, unknown>) => {
-    const { data, error } = await srv.rpc(fn, args);
-    if (error) throw new Error(`${fn}: ${error.message}`);
-    return data;
-  };
 
   // En pruebas, el certificado de pruebas se lee antes: da el productor si no
   // está puesto. Si faltan sus secretos, cada envío lo dirá al pedir el material.
