@@ -37,7 +37,7 @@ export const pagoRechazado = (lineaId: string, motivo: string) => rpc<Frase>('co
 export const ficheroDescargado = (remesaId: string, sha256: string, pagos: number) =>
   rpc<Frase>('conta_remesa_descargada', { p_remesa: remesaId, p_sha256: sha256, p_pagos: pagos })
 export const casarRemesa = (movimientoId: string, remesaId: string, lineas: string[] | null) =>
-  rpc<Frase & { casado: string; pagos: number; pagadas: number }>('conta_remesa_casar', { p_movement: movimientoId, p_remesa: remesaId, p_lineas: lineas })
+  rpc<Frase & { casado: string; pagos: number; pagadas: number; validado_solo: boolean }>('conta_remesa_casar', { p_movement: movimientoId, p_remesa: remesaId, p_lineas: lineas })
 export const ponerVencimiento = (companyId: string, plazos: readonly { proveedor: string; dias: number }[]) =>
   rpc<Frase & { facturas: number; quedan: number }>('conta_recibidas_poner_vencimiento', { p_company: companyId, p_plazos: plazos })
 
@@ -48,6 +48,8 @@ export async function datosFichero(remesaId: string): Promise<DatosRemesaSepa> {
   return {
     codigo: String(d.codigo), fechaPago: String(d.fecha_pago), creado: new Date().toISOString(),
     ordenante: { nombre: String(o.nombre ?? ''), nif: str(o.nif), iban: String(o.iban ?? ''), bic: str(o.bic) },
+    // Respuesta 7 · El sufijo del banco, de Ajustes › Bancos y cajas (sin poner, «000»).
+    sufijo: str(o.sufijo) ?? '000',
     pagos: ((d.pagos as Fila[] | null) ?? []).map((p) => ({
       id: String(p.id), importe: num(p.importe), iban: String(p.iban), bic: str(p.bic), nombre: String(p.nombre ?? ''), factura: str(p.factura), fechaFactura: str(p.fecha_factura),
     })),
@@ -63,6 +65,8 @@ export interface Remesa {
   id: string; codigo: string; aMano: boolean; fechaPago: string; estado: EstadoRemesa; total: number; porCargar: number
   vivas: number; pagadas: number; porConfirmar: number; rechazadas: number
   ficheroAt: string | null; ficheroPor: string | null; creada: string; creadaPor: string | null
+  /** Respuesta 7 · El asiento del cargo se validó solo (el cargo cuadra con la remesa). */
+  validadoSolo: boolean
   banco: { id: string; nombre: string; iban4: string | null; cuenta: string | null }
   pagos: PagoRemesa[]
   historial: { at: string; por: string | null; texto: string }[]
@@ -75,7 +79,7 @@ export async function leerRemesa(remesaId: string): Promise<Remesa> {
   return {
     id: String(d.id), codigo: String(d.codigo), aMano: d.a_mano === true, fechaPago: String(d.fecha_pago), estado: String(d.estado) as EstadoRemesa,
     total: num(d.total), porCargar: num(d.por_cargar), vivas: num(d.vivas), pagadas: num(d.pagadas), porConfirmar: num(d.por_confirmar), rechazadas: num(d.rechazadas),
-    ficheroAt: str(d.fichero_at), ficheroPor: str(d.fichero_por), creada: String(d.creada), creadaPor: str(d.creada_por),
+    ficheroAt: str(d.fichero_at), ficheroPor: str(d.fichero_por), creada: String(d.creada), creadaPor: str(d.creada_por), validadoSolo: d.validado_solo === true,
     banco: { id: String(b.id), nombre: String(b.nombre), iban4: str(b.iban4), cuenta: str(b.cuenta) },
     pagos: ((d.pagos as Fila[] | null) ?? []).map((p) => ({
       id: String(p.id), facturaId: String(p.factura_id), numero: str(p.numero), vence: str(p.vence), importe: num(p.importe), proveedor: String(p.proveedor ?? '—'),

@@ -25,11 +25,18 @@
 //   3. «Ponerles vencimiento» y «Ya la he pagado…»: cada uno dice lo que ha hecho.
 //   4. «Liquidaciones» en Compras se llama «Repartidores», y la dirección vieja
 //      lleva allí.
+//   5. (Respuesta 7) Bancos: un cargo que es justo lo que espera UNA remesa la
+//      propone sola en «Esperando este cargo»; «Sí, es esta» la casa y lo dice;
+//      la ficha, pagada, dice en el paso «Pagada» que el asiento se validó solo.
+//      El cargo es de verdad (un movimiento inventado importado en «Cuenta
+//      principal», que no usa ninguna otra prueba, con huella fija: repetir no
+//      crea otro); la remesa que lo espera y el casado se simulan.
 // Las capturas, al lado de su tablero (docs/conta/pc01/tableros), en el artefacto.
 
 import { readFileSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, enCarril, entrarComo } from '../sesion'
+import { rest } from '../api'
 
 const DIR = 'docs/conta/capturas/pc01'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -81,16 +88,17 @@ const FILAS = [
   fila({ id: 'f-pagada', supplier_id: 's-catcher', proveedor: 'Catcher', numero: 'CT-1', vence: dia(-20), total: 23.10, pagado: 23.10, pendiente: 0, estado: 'pagada', forma: 'prepaid' }),
 ]
 
-const REMESA = (estado: 'preparada' | 'fichero', confirmado: boolean) => ({
-  id: 'r-15', codigo: 'R-2026/015', a_mano: false, fecha_pago: dia(1), estado, total: 1105.30, por_cargar: 1105.30,
-  vivas: 1, pagadas: 0, por_confirmar: confirmado ? 0 : 1, rechazadas: 0, fichero_at: null, fichero_por: null,
+const REMESA = (estado: 'preparada' | 'fichero' | 'pagada', confirmado: boolean) => ({
+  id: 'r-15', codigo: 'R-2026/015', a_mano: false, fecha_pago: dia(1), estado, total: 1105.30, por_cargar: estado === 'pagada' ? 0 : 1105.30,
+  vivas: 1, pagadas: estado === 'pagada' ? 1 : 0, por_confirmar: confirmado ? 0 : 1, rechazadas: 0, validado_solo: estado === 'pagada',
+  fichero_at: estado === 'pagada' ? new Date().toISOString() : null, fichero_por: estado === 'pagada' ? 'Ana Prueba' : null,
   creada: new Date().toISOString(), creada_por: 'Ana Prueba',
   banco: { id: 'b', nombre: 'Banco de Prueba', iban4: '4410', cuenta: '57200001' },
   pagos: [{
     id: 'l-1', factura_id: 'f-carnicas', numero: 'DCV-2026/1184', vence: dia(-5), importe: 1105.30, proveedor: 'Distribuciones Cárnicas Prueba SL',
     iban4: '0418', iban_pais: 'ES', iban_estado: 'cambiado', iban_nota: `cambiado el ${ddmm(dia(-4))} por Ana Prueba`,
     confirmado_por: confirmado ? 'Ana Prueba' : null, confirmado_at: confirmado ? new Date().toISOString() : null,
-    estado: confirmado ? 'pendiente' : 'por_confirmar', motivo: null, cuenta: '40000012',
+    estado: estado === 'pagada' ? 'pagada' : confirmado ? 'pendiente' : 'por_confirmar', motivo: null, cuenta: '40000012',
   }],
   historial: [
     { at: new Date().toISOString(), por: 'Ana Prueba', texto: 'Preparada con 1 pago: 1.105,30 €.' },
@@ -251,3 +259,68 @@ test('«Ponerles vencimiento» y «Ya la he pagado…» dicen lo que han hecho; 
   await expect(page.getByRole('heading', { level: 1, name: 'Repartidores' })).toBeVisible({ timeout: 30_000 })
   expect(errores).toEqual([])
 })
+
+test('Bancos propone sola la remesa que espera justo ese cargo; la ficha, pagada, dice que el asiento se validó solo', async ({ page }) => {
+  test.setTimeout(120_000)
+  const errores = vigilar(page)
+  const movil = lado(page) === 'movil'
+  const s = await entrarComo(page, CUENTA_A.email)
+  const empresa = enCarril('3b34403a-a7d6-4a48-a8d7-737e8cababdc')
+  // El cargo, de verdad: un movimiento inventado en «Cuenta principal» (huella fija).
+  const banco = await rest<{ id: string }[]>(s, 'GET', `treasury_account?select=id&company_id=eq.${empresa}&name=eq.${encodeURIComponent('Cuenta principal')}`)
+  expect(banco.datos?.length, 'la empresa A tiene su «Cuenta principal»').toBe(1)
+  const bancoId = banco.datos[0].id
+  const imp = await rest(s, 'POST', 'rpc/bank_importar', {
+    p_treasury: bancoId, p_fuente: 'fichero', p_formato: 'csv:bbva', p_fichero: 'prueba-pc01e2-r7.xlsx', p_sha256: 'c'.repeat(64),
+    p_desde: '2026-10-20', p_hasta: '2026-10-20', p_saldo_inicial: null, p_saldo_final: null, p_sin_comprobar: 'prueba', p_iban_fichero: null,
+    p_movs: [{ fecha: '2026-10-20', importe: -1105.30, concepto_banco: 'TRANSFERENCIAS REMESA R7 PRUEBA', concepto_limpio: 'Transferencias remesa r7 prueba',
+      contraparte: 'REMESA PRUEBA', tipo: 'TRANSFERENCIAS', huella: 'pc01e2-r7-1', huella_suave: 'pc01e2-r7-s1' }],
+  })
+  expect(imp.status, JSON.stringify(imp.datos)).toBe(200)
+  const mov = await rest<{ id: string; status: string }[]>(s, 'GET', `bank_movement?select=id,status&treasury_account_id=eq.${bancoId}&bank_concept=eq.${encodeURIComponent('TRANSFERENCIAS REMESA R7 PRUEBA')}&order=created_at.asc&limit=1`)
+  expect(mov.datos?.length, 'el cargo inventado está en «Cuenta principal»').toBe(1)
+  expect(mov.datos[0].status, 'nadie lo ha casado (el casado de la prueba se simula)').not.toBe('casado')
+
+  // La remesa que espera justo ese cargo (y otra, de otro importe, que no cuadra).
+  let casar: Record<string, unknown> | null = null
+  const json = (r: Route, cuerpo: unknown) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(cuerpo) })
+  await page.route(/\/rest\/v1\/rpc\/conta_remesas_para_casar(\?|$)/, (r) => json(r, [
+    { id: 'r-15', codigo: 'R-2026/015', fecha: '2026-10-20', a_mano: false, por_cargar: 1105.30,
+      pagos: [{ id: 'l-1', importe: 1105.30, proveedor: 'Distribuciones Cárnicas Prueba SL', factura: 'DCV-2026/1184' }] },
+    { id: 'r-14', codigo: 'R-2026/014', fecha: '2026-10-18', a_mano: false, por_cargar: 290.40,
+      pagos: [{ id: 'l-9', importe: 290.40, proveedor: 'Gestoría Prueba', factura: 'G-310' }] },
+  ]))
+  await page.route(/\/rest\/v1\/rpc\/conta_remesa_casar(\?|$)/, (r) => {
+    casar = r.request().postDataJSON() as Record<string, unknown>
+    return json(r, { casado: 'c-1', pagos: 1, pagadas: 1, validado_solo: true,
+      frase: 'Casado con la remesa R-2026/015: 1 pago, 1.105,30 €. 1 factura queda pagada y su asiento validado solo: el cargo cuadra con la remesa.' })
+  })
+  await page.route(/\/rest\/v1\/rpc\/conta_remesa_ficha(\?|$)/, (r) => json(r, REMESA('pagada', true)))
+
+  await page.goto(`/conta/bancos?banco=${bancoId}&mes=2026-10&mov=${mov.datos[0].id}`)
+  const espera = page.locator('[data-prueba="remesas-esperan"]')
+  await expect(espera).toBeVisible({ timeout: 30_000 })
+  const propuesta = espera.locator('[data-prueba="remesa-propuesta"]')
+  await expect(propuesta).toContainText('Te propongo: es el cargo de la remesa R-2026/015')
+  await expect(propuesta).toContainText('Es lo único que espera justo este importe.')
+  await expect(espera.getByText('R-2026/014')).toHaveCount(0) // la de otro importe no sale
+  await expect(propuesta.getByRole('button', { name: 'Sí, es esta' })).toHaveClass('cx-boton')
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/bancos-remesa-propuesta-${lado(page)}.png`, fullPage: true })
+
+  await propuesta.getByRole('button', { name: 'Sí, es esta' }).click()
+  await expect(page.locator('.cx-guardado, .cx-error').first()).toContainText('su asiento validado solo: el cargo cuadra con la remesa', { timeout: 30_000 })
+  expect(casar).toEqual({ p_movement: mov.datos[0].id, p_remesa: 'r-15', p_lineas: null })
+
+  // La ficha, pagada: el paso «Pagada» lo dice.
+  await page.goto('/conta/compras/pagos/remesas/r-15')
+  await expect(page.getByRole('heading', { level: 1, name: /^Remesa de transferencias/ })).toBeVisible({ timeout: 30_000 })
+  const pasos = page.getByRole('list', { name: 'En qué punto está la remesa' }).getByRole('listitem')
+  await expect(pasos.nth(3)).toHaveAttribute('data-hecho', 'si')
+  await expect(page.locator('[data-prueba="validado-solo"]')).toHaveText('Asiento validado solo: el cargo cuadra con la remesa')
+  await expect(page.getByText('Validado solo: el cargo cuadra con la remesa')).toBeVisible()
+  if (!movil) await expect(page.getByRole('button', { name: 'Confirmar el IBAN' })).toHaveCount(0)
+  await alLado(page, 'remesa-pagada', 'pagos-2', 16)
+  expect(errores).toEqual([])
+})
+

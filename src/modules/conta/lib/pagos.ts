@@ -176,10 +176,16 @@ export function ordenarPagos(filas: readonly FilaPago[]): FilaPago[] {
 export type EstadoRemesa = 'preparada' | 'fichero' | 'en_banco' | 'pagada' | 'vacia'
 
 /** Los pasos de la ficha (tablero 16): Preparada → Fichero para el banco → En el banco → Pagada. A mano, sin fichero. */
-export function pasosRemesa(estado: EstadoRemesa, aMano: boolean): { etiqueta: string; hecho: boolean; actual: boolean }[] {
+/** Respuesta 7 · Lo que dice el paso «Pagada» cuando el asiento del cargo se validó solo. */
+export const VALIDADO_SOLO = 'Asiento validado solo: el cargo cuadra con la remesa'
+
+export function pasosRemesa(estado: EstadoRemesa, aMano: boolean, validadoSolo = false): { etiqueta: string; hecho: boolean; actual: boolean; detalle?: string }[] {
   const pasos = aMano ? ['Preparada', 'En el banco: esperando el cargo', 'Pagada'] : ['Preparada', 'Fichero para el banco', 'En el banco: esperando el cargo', 'Pagada']
   const actual = estado === 'pagada' || estado === 'vacia' ? pasos.length : estado === 'en_banco' ? pasos.length - 1 : aMano ? 1 : 2
-  return pasos.map((etiqueta, i) => ({ etiqueta, hecho: i + 1 < actual || (i + 1 === actual && (estado === 'pagada' || estado === 'vacia')), actual: i + 1 === actual && estado !== 'pagada' && estado !== 'vacia' }))
+  return pasos.map((etiqueta, i) => ({
+    etiqueta, hecho: i + 1 < actual || (i + 1 === actual && (estado === 'pagada' || estado === 'vacia')), actual: i + 1 === actual && estado !== 'pagada' && estado !== 'vacia',
+    ...(etiqueta === 'Pagada' && estado === 'pagada' && validadoSolo ? { detalle: VALIDADO_SOLO } : {}),
+  }))
 }
 
 export const NOMBRE_ESTADO_REMESA: Record<EstadoRemesa, string> = {
@@ -195,4 +201,16 @@ export function proximoLaborable(hoy: string): string {
   d.setUTCDate(d.getUTCDate() + 1)
   while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1)
   return d.toISOString().slice(0, 10)
+}
+
+/**
+ * Respuesta 7 · Bancos, «Esperando este cargo»: si el cargo es justo lo que
+ * espera UNA sola remesa entera, se propone sola (y lo demás que cuadre, un pago
+ * suelto de otra, queda debajo para elegir); si cuadran dos o más remesas
+ * enteras, no se propone ninguna: se elige.
+ */
+export function remesaQueSePropone<T extends { lineas: readonly string[] | null }>(esperan: readonly T[]): { propuesta: T | null; resto: T[] } {
+  const enteras = esperan.filter((x) => x.lineas === null)
+  if (enteras.length !== 1) return { propuesta: null, resto: [...esperan] }
+  return { propuesta: enteras[0], resto: esperan.filter((x) => x !== enteras[0]) }
 }

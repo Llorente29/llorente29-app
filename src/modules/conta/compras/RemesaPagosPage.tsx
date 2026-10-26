@@ -50,7 +50,7 @@ function fraseDe(r: Remesa): string {
     case 'preparada': return `${cuantas} ${n === 1 ? 'pagada' : 'pagadas'} de una vez desde ${desde}. Antes de descargar el fichero, confirma el IBAN que ha cambiado; después Sumied hace el resto cuando llegue el cargo.`
     case 'fichero': return `${cuantas} ${n === 1 ? 'pagada' : 'pagadas'} de una vez desde ${desde}. Descarga el fichero y súbelo a la banca de tu banco; cuando llegue el cargo, Sumied hace el resto.`
     case 'en_banco': return `El fichero ya está para el banco. Cuando llegue el cargo (${eurosExactos(r.porCargar)}), cásalo en Bancos con esta remesa: las facturas quedan pagadas con su asiento.`
-    case 'pagada': return `Pagada: el cargo del banco está casado y ${n === 1 ? 'la factura tiene' : `las ${n} facturas tienen`} su asiento.`
+    case 'pagada': return `Pagada: el cargo del banco está casado y ${n === 1 ? 'la factura tiene' : `las ${n} facturas tienen`} su asiento${r.validadoSolo ? ', validado solo porque el cargo cuadra con la remesa' : ', en «Por validar»'}.`
     default: return 'Esta remesa ya no tiene pagos: se sacaron o el banco los rechazó.'
   }
 }
@@ -126,9 +126,10 @@ export default function RemesaPagosPage() {
       {aviso && <p className="s-aviso-lista" data-tono={aviso.tono} role={aviso.tono === 'falta' ? 'alert' : 'status'} data-prueba="aviso-remesa">{aviso.texto}</p>}
 
       <ol className="pg-pasos" aria-label="En qué punto está la remesa">
-        {pasosRemesa(r.estado, r.aMano).map((p, i) => (
+        {pasosRemesa(r.estado, r.aMano, r.validadoSolo).map((p, i) => (
           <li key={p.etiqueta} data-hecho={p.hecho ? 'si' : 'no'} data-actual={p.actual ? 'si' : 'no'} aria-current={p.actual ? 'step' : undefined}>
-            <span className="pg-paso-marca" aria-hidden="true">{p.hecho ? '✓' : i + 1}</span>{p.etiqueta}
+            <span className="pg-paso-marca" aria-hidden="true">{p.hecho ? '✓' : i + 1}</span>
+            <span className="pg-paso-texto">{p.etiqueta}{p.detalle && <span className="pg-paso-detalle" data-prueba="validado-solo">{p.detalle}</span>}</span>
           </li>
         ))}
       </ol>
@@ -147,7 +148,12 @@ export default function RemesaPagosPage() {
                       {p.iban4 ? `${p.ibanPais ?? ''} ···· ${p.iban4}` : '—'}
                       {p.estado === 'por_confirmar' && ' · nuevo'}
                       {(p.ibanEstado === 'comprobado' || (p.ibanEstado === 'cambiado' && p.confirmadoAt)) && <span className="pg-iban-ok" title={p.confirmadoPor ? `Confirmado por ${p.confirmadoPor}` : 'El mismo de sus pagos anteriores'}> ✓</span>}
-                      {p.ibanEstado === 'primer_pago' && <span className="cx-ayuda" title={p.ibanNota ?? ''}> · primer pago</span>}
+                      {p.ibanEstado === 'primer_pago' && !p.confirmadoAt && <span className="cx-ayuda" title={p.ibanNota ?? ''}> · primer pago</span>}
+                      {p.ibanEstado === 'primer_pago' && p.confirmadoAt && <span className="pg-iban-ok" title={`Confirmado por ${p.confirmadoPor ?? '—'}`}> ✓</span>}
+                      {/* Respuesta 7 · Un primer pago no para la remesa, pero sin confirmar su IBAN el asiento no se valida solo. */}
+                      {p.ibanEstado === 'primer_pago' && !p.confirmadoAt && p.estado === 'pendiente' && !r.aMano && (
+                        <button type="button" className="pg-enlace pg-enlace-chico" disabled={ocupado} onClick={() => void hacer(() => confirmarIban(p.id))}>Confirmarlo</button>
+                      )}
                     </td>
                     <td>{p.numero ?? 'sin número'}{p.motivo && <span className="cx-ayuda"> · {p.motivo}</span>}</td>
                     <td className={p.vence && p.vence < r.fechaPago ? 'pg-vence-rojo' : undefined}>{p.vence ? diaMes(p.vence) : '—'}</td>
@@ -186,10 +192,12 @@ export default function RemesaPagosPage() {
               <dt>Total</dt><dd className="s-cifra">{eurosExactos(r.total)}</dd>
               {!r.aMano && <><dt>Fichero</dt><dd>SEPA de transferencias · {plural(r.vivas, 'pago', 'pagos')}{r.ficheroAt ? ` · descargado ${horaMadrid(r.ficheroAt)}` : ''}</dd></>}
               <dt>Hecha por</dt><dd>{r.creadaPor ?? '—'} · {horaMadrid(r.creada)}</dd>
+              {r.estado === 'pagada' && <><dt>Su asiento</dt><dd>{r.validadoSolo ? 'Validado solo: el cargo cuadra con la remesa' : 'En «Por validar»'}</dd></>}
             </dl>
           </BloqueFicha>
           <AsientoQueSeCrea titulo={r.estado === 'pagada' ? 'Su asiento' : 'Su asiento, al llegar el cargo'} lineas={lineas}
-            nota="Se hace solo con el cargo del banco, al casarlo en Bancos." />
+            nota={r.aMano ? 'Se hace con el cargo del banco, al casarlo en Bancos, y se valida en «Por validar».'
+              : 'Se hace con el cargo del banco, al casarlo en Bancos. Se valida solo si el cargo es la remesa entera y sus IBAN están confirmados.'} />
           <BloqueFicha titulo="Historial">
             <ul className="pg-historial">
               {r.historial.map((h, i) => <li key={i}>{horaMadrid(h.at)} · {h.por ? `${h.por}: ` : ''}{h.texto}</li>)}

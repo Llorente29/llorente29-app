@@ -12,9 +12,10 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  chipEstado, cifrasPagos, cumpleBuscar, enPestana, estadoPago, filaPago, filtrar, libre, ordenarPagos, pasosRemesa, porQueNoEnRemesa, proximoLaborable,
+  chipEstado, cifrasPagos, cumpleBuscar, enPestana, estadoPago, filaPago, filtrar, libre, ordenarPagos, pasosRemesa, porQueNoEnRemesa, proximoLaborable, remesaQueSePropone, VALIDADO_SOLO,
   type FilaPago,
 } from '@/modules/conta/lib/pagos'
+import { sufijoParaLaBase } from '@/modules/conta/tablas/registro'
 
 const f = (x: Record<string, unknown>): FilaPago => filaPago({
   id: x.id ?? 'x', supplier_id: 's', proveedor: 'Proveedor', numero: 'N-1', fecha: '2026-10-01', vence: '2026-11-04', total: 100, pagado: 0, pendiente: 100,
@@ -107,3 +108,35 @@ describe('la remesa (tablero 16)', () => {
     expect([proximoLaborable('2026-10-26'), proximoLaborable('2026-10-30'), proximoLaborable('2026-10-31')]).toEqual(['2026-10-27', '2026-11-02', '2026-11-02'])
   })
 })
+
+describe('respuesta 7: Bancos propone la remesa, el asiento validado solo y el sufijo del banco', () => {
+  const entera = (codigo: string) => ({ codigo, lineas: null })
+  const suelto = (codigo: string, id: string) => ({ codigo, lineas: [id] })
+  it('una sola remesa entera cuadra con el cargo: se propone sola (lo demás, debajo)', () => {
+    const r = remesaQueSePropone([entera('R-2026/015'), suelto('R-2026/014', 'l9')])
+    expect(r.propuesta?.codigo).toBe('R-2026/015')
+    expect(r.resto.map((x) => x.codigo)).toEqual(['R-2026/014'])
+  })
+  it('dos o más cuadran: no se propone ninguna, se elige', () => {
+    const r = remesaQueSePropone([entera('R-2026/015'), entera('R-2026/016')])
+    expect(r.propuesta).toBeNull()
+    expect(r.resto).toHaveLength(2)
+  })
+  it('solo un pago suelto cuadra: no es la remesa entera, se elige', () => {
+    expect(remesaQueSePropone([suelto('R-2026/014', 'l9')]).propuesta).toBeNull()
+  })
+  it('el paso «Pagada» lo dice solo si se validó solo, y solo pagada', () => {
+    const pagada = pasosRemesa('pagada', false, true)
+    expect(pagada[3]).toMatchObject({ etiqueta: 'Pagada', hecho: true, detalle: 'Asiento validado solo: el cargo cuadra con la remesa' })
+    expect(VALIDADO_SOLO).toBe('Asiento validado solo: el cargo cuadra con la remesa')
+    expect(pasosRemesa('pagada', false, false)[3].detalle).toBeUndefined()
+    expect(pasosRemesa('en_banco', false, true)[3].detalle).toBeUndefined()
+  })
+  it('el sufijo del banco: «000» de serie no se manda; otro, sí; volver a «000» lo deja vacío', () => {
+    expect(sufijoParaLaBase({ sepa_suffix: '000' })).toEqual({})
+    expect(sufijoParaLaBase({ sepa_suffix: '' })).toEqual({})
+    expect(sufijoParaLaBase({ sepa_suffix: '123' })).toEqual({ sepa_suffix: '123' })
+    expect(sufijoParaLaBase({ sepa_suffix: '000', _sufijo_antes: '123' })).toEqual({ sepa_suffix: null })
+  })
+})
+

@@ -6,6 +6,8 @@
 -- supplier_invoice_payment y bank_match_item, que son del E1, con su asiento.
 -- Las columnas iban_previous / iban_changed_* de supplier son del C01b y se
 -- quedan; solo se va el disparador que las rellenaba al cambiar la ficha.
+-- La columna del sufijo del banco (treasury_account.sepa_suffix) se va con su
+-- CHECK: antes de la 0915 no existía (los sufijos puestos se pierden).
 -- Se puede pasar dos veces (todo «if exists»).
 
 drop function if exists public.conta_remesas_lista(uuid);
@@ -44,3 +46,10 @@ do $$ begin
   end if;
 end $$;
 drop function if exists public._pc01e2_proveedor_iban_cambiado();
+-- El sufijo del banco, igual: solo si está, para no coger el cerrojo de treasury_account en balde.
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'treasury_account' and column_name = 'sepa_suffix') then
+    alter table public.treasury_account drop constraint if exists treasury_account_sepa_suffix_check;
+    alter table public.treasury_account drop column sepa_suffix;
+  end if;
+end $$;

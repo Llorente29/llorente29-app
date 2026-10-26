@@ -3,7 +3,7 @@
 -- PC01 · Entrega 2 (26/10) · LO QUE CUENTA LA TANDA DE COMPRAS › PAGOS, antes
 -- y después. SOLO LEE. La 0915 solo añade: antes de la tanda y después de
 -- deshacerla, todo «no existe» o 0; con la tanda, las tablas, las funciones y
--- el disparador.
+-- el disparador, y la columna del sufijo del banco (respuesta 7).
 --
 -- Todo es del catálogo o de tablas que crea la propia tanda (miradas con
 -- to_regclass): nada que otro proceso escriba a mitad del ensayo (W06).
@@ -20,5 +20,7 @@ select clave, valor from (
     (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
        and (p.proname like 'conta\_remesa%' or p.proname like '\_pc01e2\_%' or p.proname in ('conta_pago_a_mano', 'conta_pagos_lista', 'conta_recibidas_poner_vencimiento')))::text union all
   select 5, 'disparador que apunta el cambio de IBAN de un proveedor',
-    (select count(*) from pg_trigger where tgname = 'pc01e2_proveedor_iban_cambiado' and tgrelid = 'public.supplier'::regclass)::text
+    (select count(*) from pg_trigger where tgname = 'pc01e2_proveedor_iban_cambiado' and tgrelid = 'public.supplier'::regclass)::text union all
+  select 6, 'columna del sufijo del banco (treasury_account.sepa_suffix, de 1)',
+    (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'treasury_account' and column_name = 'sepa_suffix')::text
 ) x order by o;

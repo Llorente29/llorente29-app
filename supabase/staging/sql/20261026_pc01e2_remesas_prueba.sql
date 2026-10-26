@@ -16,11 +16,18 @@
 --   6. Antifraude: otro IBAN que no coincide con el de los pagos anteriores.
 --   7. «Ya la he pagado»: un pago a mano parcial, casado uno a uno.
 --   8. «Ponerles vencimiento»: el plazo que se pregunta va a la ficha.
---   9. La vuelta atrás: sin tablas, funciones, vistas ni disparador del E2.
+--   9. La vuelta atrás: sin tablas, funciones, vistas ni disparador del E2,
+--      y sin la columna del sufijo del banco.
+-- Respuesta 7 (26/10): en el 3, el sufijo del banco («000» sin rellenar, el
+-- puesto si lo hay, y no admite otra cosa que tres cifras); en el 5, el asiento
+-- NO se valida solo con un IBAN de primer pago sin confirmar, y SÍ cuando se
+-- confirma (cargo = total, IBAN confirmados, cuadra), y deshacerlo lo anula; en
+-- el 7, un pago a mano casado uno a uno se queda en «Por validar».
 --
 -- Nombra lo que toca, para el analizador: conta_pago_remesa,
 -- conta_pago_remesa_linea, conta_pago_remesa_evento, supplier (disparador
--- pc01e2_proveedor_iban_cambiado), bank_casar, mark_supplier_invoice_paid.
+-- pc01e2_proveedor_iban_cambiado), treasury_account (sepa_suffix), bank_casar,
+-- mark_supplier_invoice_paid, journal_entry_validar.
 
 \set ON_ERROR_STOP 1
 begin;
@@ -143,14 +150,23 @@ begin
   if x->>'frase' <> 'IBAN de Proveedor E2 Beta confirmado (···· 7891). Queda apuntado quién y cuándo.' then raise exception 'PRUEBA PC01 E2 · 3: confirmar dijo «%».', x->>'frase'; end if;
   if (select estado from public.conta_pago_remesa_estado where id = r) <> 'fichero' then raise exception 'PRUEBA PC01 E2 · 3: confirmado, la remesa no quedó lista para el fichero.'; end if;
   d := public.conta_remesa_fichero_datos(r);
-  if jsonb_array_length(d->'pagos') <> 3 or d->'ordenante'->>'iban' <> 'ES6401829103210000000013' or (d->'pagos'->0->>'nombre') <> 'Alfa Distribuciones Prueba SL' then
+  if jsonb_array_length(d->'pagos') <> 3 or d->'ordenante'->>'iban' <> 'ES6401829103210000000013' or (d->'pagos'->0->>'nombre') <> 'Alfa Distribuciones Prueba SL'
+     or d->'ordenante'->>'sufijo' <> '000' then
     raise exception 'PRUEBA PC01 E2 · 3: los datos del fichero no son los esperados: %.', d;
   end if;
+  -- Respuesta 7 · El sufijo del banco: el puesto en Ajustes; solo tres cifras.
+  update public.treasury_account set sepa_suffix = '123' where id = (select v::uuid from _p where clave = 'banco');
+  if public.conta_remesa_fichero_datos(r)->'ordenante'->>'sufijo' <> '123' then raise exception 'PRUEBA PC01 E2 · 3: el fichero no lleva el sufijo puesto (123).'; end if;
+  begin
+    update public.treasury_account set sepa_suffix = '12A' where id = (select v::uuid from _p where clave = 'banco');
+    raise exception 'PRUEBA PC01 E2 · 3: el sufijo admitió «12A».';
+  exception when check_violation then null; end;
+  update public.treasury_account set sepa_suffix = null where id = (select v::uuid from _p where clave = 'banco');
   l := public.conta_pagos_lista((select v::uuid from _p where clave = 'empresa'), public.conta_hoy());
   select f into fila from jsonb_array_elements(l->'filas') f where f->>'id' = (select v from _p where clave = 'rb1');
   if fila->'remesa'->>'id' <> r::text or (fila->>'iban4') <> '7891' or (fila->>'con_cuenta')::boolean is not true then raise exception 'PRUEBA PC01 E2 · 3: la lista no da la remesa de E2-B1: %.', fila; end if;
   if not exists (select 1 from jsonb_array_elements(l->'sin_plazo') s where s->>'id' = (select v from _p where clave = 'se')) then raise exception 'PRUEBA PC01 E2 · 3: «sin plazo» no lista al Proveedor E2 Sin plazo.'; end if;
-  raise notice '3 · IBAN confirmado; el fichero lleva 3 pagos desde ···· 0013; la lista da la remesa de cada factura';
+  raise notice '3 · IBAN confirmado; el fichero lleva 3 pagos desde ···· 0013, con el sufijo 000 (o el puesto, 123; «12A» no entra); la lista da la remesa de cada factura';
 end $$;
 
 -- ── 4 · Descargado; un pago rechazado ───────────────────────────────────────
@@ -195,7 +211,9 @@ begin
   if v_err not like 'El cargo es de 20,00 € y lo que espera la remesa R-____/___ es 300,00 €.' then raise exception 'PRUEBA PC01 E2 · 5: otro importe dijo «%».', v_err; end if;
   x := public.conta_remesa_casar((select v::uuid from _p where clave = 'mov1'), rem, null);
   insert into _p values ('casado', x->>'casado');
-  if x->>'frase' not like 'Casado con la remesa R-____/___: 2 pagos, 300,00 €. 2 facturas quedan pagadas con su asiento (propuesto, en «Por validar»).' then
+  -- Respuesta 7: Alfa es primer pago y nadie ha confirmado su IBAN: no se valida solo.
+  if x->>'frase' not like 'Casado con la remesa R-____/___: 2 pagos, 300,00 €. 2 facturas quedan pagadas con su asiento propuesto, en «Por validar» (no se valida solo: 1 IBAN sin confirmar).'
+     or (x->>'validado_solo')::boolean then
     raise exception 'PRUEBA PC01 E2 · 5: casar dijo «%».', x->>'frase';
   end if;
   if (select status from public.supplier_invoice where id = (select v::uuid from _p where clave = 'ra1')) <> 'pagada'
@@ -210,6 +228,9 @@ begin
     from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = ent;
   if lin <> '40009901 100.00/0.00 · 40009902 200.00/0.00 · 57200913 0.00/300.00' then raise exception 'PRUEBA PC01 E2 · 5: el asiento fue «%».', lin; end if;
   if (select estado from public.conta_pago_remesa_estado where id = rem) <> 'pagada' then raise exception 'PRUEBA PC01 E2 · 5: la remesa no quedó pagada.'; end if;
+  if (select status from public.journal_entry where id = ent) <> 'propuesto' or (public.conta_remesa_ficha(rem)->>'validado_solo')::boolean then
+    raise exception 'PRUEBA PC01 E2 · 5: con un IBAN sin confirmar, el asiento no se quedó propuesto.';
+  end if;
   -- Deshacer el casado lo devuelve todo.
   perform public.bank_deshacer((x->>'casado')::uuid, 'Prueba PC01 E2');
   if (select status from public.supplier_invoice where id = (select v::uuid from _p where clave = 'ra1')) <> 'aprobada'
@@ -217,9 +238,32 @@ begin
      or (select estado from public.conta_pago_remesa_estado where id = rem) <> 'en_banco' then
     raise exception 'PRUEBA PC01 E2 · 5: deshacer el casado no devolvió las facturas ni la remesa.';
   end if;
+  -- Respuesta 7 · Confirmado el IBAN de Alfa (primer pago), el cargo es el total
+  -- al céntimo y el asiento cuadra: se valida solo, y la ficha lo dice.
+  x := public.conta_remesa_iban_confirmar((select id from public.conta_pago_remesa_linea where remesa_id = rem and invoice_id = (select v::uuid from _p where clave = 'ra1')));
+  if x->>'frase' <> 'IBAN de Proveedor E2 Alfa confirmado (···· 1332). Queda apuntado quién y cuándo.' then raise exception 'PRUEBA PC01 E2 · 5: confirmar el primer pago dijo «%».', x->>'frase'; end if;
+  x := public.conta_remesa_casar((select v::uuid from _p where clave = 'mov1'), rem, null);
+  if x->>'frase' not like 'Casado con la remesa R-____/___: 2 pagos, 300,00 €. 2 facturas quedan pagadas y su asiento validado solo: el cargo cuadra con la remesa.'
+     or not (x->>'validado_solo')::boolean then
+    raise exception 'PRUEBA PC01 E2 · 5: con todo confirmado, casar dijo «%».', x->>'frase';
+  end if;
+  select journal_entry_id into ent from public.bank_match where id = (x->>'casado')::uuid;
+  if (select status from public.journal_entry where id = ent) <> 'validado' or (select number from public.journal_entry where id = ent) is null then
+    raise exception 'PRUEBA PC01 E2 · 5: el asiento no quedó validado con su número.';
+  end if;
+  if not (public.conta_remesa_ficha(rem)->>'validado_solo')::boolean
+     or not exists (select 1 from public.conta_pago_remesa_evento where remesa_id = rem and texto = 'Asiento validado solo: el cargo cuadra con la remesa.') then
+    raise exception 'PRUEBA PC01 E2 · 5: la ficha o el historial no dicen que se validó solo.';
+  end if;
+  -- Deshacerlo anula el asiento validado con un contraasiento, y la ficha deja de decirlo.
+  perform public.bank_deshacer((x->>'casado')::uuid, 'Prueba PC01 E2 · validado solo');
+  if (select status from public.journal_entry where id = ent) <> 'anulado' or (public.conta_remesa_ficha(rem)->>'validado_solo')::boolean
+     or (select estado from public.conta_pago_remesa_estado where id = rem) <> 'en_banco' then
+    raise exception 'PRUEBA PC01 E2 · 5: deshacer el validado solo no lo anuló (asiento %).', (select status from public.journal_entry where id = ent);
+  end if;
   -- Y se vuelve a casar (para el 6).
   x := public.conta_remesa_casar((select v::uuid from _p where clave = 'mov1'), rem, null);
-  raise notice '5 · casada: 40009901 de Alfa 100, 40009902 de Beta 200 contra la 57200913 300; deshacer lo devuelve; casada otra vez';
+  raise notice '5 · casada: 40009901 de Alfa 100, 40009902 de Beta 200 contra la 57200913 300; con un IBAN sin confirmar, propuesto; confirmado, validado solo (y la ficha lo dice); deshacer lo anula; casada otra vez';
 end $$;
 
 -- ── 6 · Antifraude: no coincide con los pagos anteriores ────────────────────
@@ -254,6 +298,9 @@ begin
   if (select estado from public.conta_pago_remesa_estado where id = rem) <> 'en_banco' then raise exception 'PRUEBA PC01 E2 · 7: el pago a mano no quedó esperando el cargo.'; end if;
   select id into lid from public.conta_pago_remesa_linea where remesa_id = rem;
   x := public.conta_remesa_casar((select v::uuid from _p where clave = 'mov2'), rem, array[lid]);
+  if (x->>'validado_solo')::boolean or x->>'frase' not like '%no se valida solo: es un pago a mano)%' then
+    raise exception 'PRUEBA PC01 E2 · 7: el pago a mano se validó solo («%»).', x->>'frase';
+  end if;
   if (select estado from public.conta_recibida_pago where invoice_id = (select v::uuid from _p where clave = 'ra2')) <> 'pagada_parte'
      or (select pagado from public.conta_recibida_pago where invoice_id = (select v::uuid from _p where clave = 'ra2')) <> 20 then
     raise exception 'PRUEBA PC01 E2 · 7: casado el pago a mano, E2-A2 no quedó pagada en parte (20 €).';
@@ -282,7 +329,8 @@ reset role;
 do $$ begin
   if to_regclass('public.conta_pago_remesa') is not null or to_regclass('public.conta_pago_remesa_estado') is not null
      or exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and (proname like 'conta_remesa%' or proname like '_pc01e2%' or proname in ('conta_pago_a_mano', 'conta_pagos_lista', 'conta_recibidas_poner_vencimiento')))
-     or exists (select 1 from pg_trigger where tgname = 'pc01e2_proveedor_iban_cambiado') then
+     or exists (select 1 from pg_trigger where tgname = 'pc01e2_proveedor_iban_cambiado')
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'treasury_account' and column_name = 'sepa_suffix') then
     raise exception 'PRUEBA PC01 E2 · 9: la vuelta atrás deja algo del E2.';
   end if;
   raise notice '9 · la vuelta atrás: sin tablas, vistas, funciones ni disparador del E2';

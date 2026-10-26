@@ -31,9 +31,21 @@
 --   7. conta_pagos_lista: lo que lee la pantalla (una consulta, con el estado de
 --      conta_recibida_pago, su remesa y lo pagado en el mes).
 --
+--   8. (Respuesta 7, 26/10) El asiento del cargo se valida SOLO cuando el cargo
+--      es el total de la remesa al céntimo, todos sus IBAN están comprobados o
+--      confirmados y el asiento pasa las reglas de validar
+--      (journal_entry_validar, la misma puerta que «Por validar»). Cualquier
+--      otro casado de Bancos sigue en «Por validar». Un pago a mano, también.
+--   9. (Respuesta 7) El sufijo del banco para el fichero: una columna nueva que
+--      admite nulos en treasury_account (sin rellenar = «000»).
+--
 -- cambia: public.supplier · prueba: supabase/staging/sql/20261026_pc01e2_remesas_prueba.sql
 --   (el disparador nuevo pc01e2_proveedor_iban_cambiado: antes de cambiar el IBAN
 --   de la ficha, apunta el de antes y cuándo; no cambia nada más de supplier.)
+-- cambia: public.treasury_account · prueba: supabase/staging/sql/20261026_pc01e2_remesas_prueba.sql
+--   (respuesta 7: la columna nueva sepa_suffix, que admite nulos, y su CHECK de
+--   tres cifras, que solo mira esa columna; la prueba pone 123, rechaza «12A» y
+--   la vuelta atrás la quita.)
 --
 -- Dueño único (N8): todo lo que escribe en supplier_invoice y supplier va por
 -- estas funciones conta_*. Folvy no pierde nada: no lee ni escribe estas tablas.
@@ -65,6 +77,17 @@ revoke all on function public._pc01e2_proveedor_iban_cambiado() from public, ano
 create or replace trigger pc01e2_proveedor_iban_cambiado before update of iban on public.supplier
   for each row execute function public._pc01e2_proveedor_iban_cambiado();
 
+-- El sufijo del banco (Ajustes › Bancos y cajas): tres cifras que el banco
+-- pone detrás del NIF para identificar al ordenante. Sin rellenar, «000», el
+-- de serie de los bancos españoles.
+alter table public.treasury_account add column if not exists sepa_suffix text;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'treasury_account_sepa_suffix_check') then
+    alter table public.treasury_account add constraint treasury_account_sepa_suffix_check check (sepa_suffix is null or sepa_suffix ~ '^[0-9]{3}$');
+  end if;
+end $$;
+comment on column public.treasury_account.sepa_suffix is 'PC01 · E2 · El sufijo del banco (tres cifras) detrás del NIF en los ficheros SEPA. Sin rellenar = 000.';
+
 -- ── 1 · Tablas ─────────────────────────────────────────────────────────────
 create table if not exists public.conta_pago_remesa (
   id                   uuid primary key default gen_random_uuid(),
@@ -81,6 +104,9 @@ create table if not exists public.conta_pago_remesa (
   created_at           timestamptz not null default now(),
   created_by           uuid,
   created_by_name      text,
+  -- Respuesta 7: cuándo se validó solo el asiento de su cargo (el cargo cuadra con la remesa).
+  validated_solo_at    timestamptz,
+  validated_solo_entry uuid,  -- el asiento que se validó solo (sin FK: no se cierra journal_entry al crear la tabla)
   unique (company_id, code)
 );
 comment on table public.conta_pago_remesa is
@@ -390,7 +416,10 @@ create or replace function public.conta_remesa_iban_confirmar(p_linea uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare v public.conta_pago_remesa_linea_estado := public._pc01e2_linea(p_linea); v_s text;
 begin
-  if v.estado <> 'por_confirmar' then raise exception 'Ese IBAN no está esperando confirmación.' using errcode = '23514'; end if;
+  -- Respuesta 7: también el de un primer pago (no para la remesa, pero sin confirmar su asiento no se valida solo).
+  if not (v.estado = 'por_confirmar' or (v.estado = 'pendiente' and v.iban_check = 'primer_pago' and v.iban_confirmed_at is null)) then
+    raise exception 'Ese IBAN no está esperando confirmación.' using errcode = '23514';
+  end if;
   update public.conta_pago_remesa_linea set iban_confirmed_at = now(), iban_confirmed_by = auth.uid(),
          iban_confirmed_by_name = coalesce(public.conta_nombre_actor(), 'Sumied') where id = p_linea;
   select name into v_s from public.supplier where id = v.supplier_id;
@@ -449,7 +478,8 @@ begin
   return jsonb_build_object(
     'codigo', v_r.code, 'fecha_pago', v_r.pay_date, 'creada', v_r.created_at,
     'ordenante', jsonb_build_object('nombre', coalesce(nullif(v_c.legal_name, ''), v_c.trade_name), 'nif', v_c.tax_id,
-                                    'iban', public._pc01e2_iban(v_t.iban), 'bic', nullif(upper(trim(coalesce(v_t.bic, ''))), '')),
+                                    'iban', public._pc01e2_iban(v_t.iban), 'bic', nullif(upper(trim(coalesce(v_t.bic, ''))), ''),
+                                    'sufijo', coalesce(v_t.sepa_suffix, '000')),
     'pagos', coalesce((select jsonb_agg(jsonb_build_object(
         'id', l.id, 'importe', l.amount, 'iban', l.iban, 'bic', nullif(upper(trim(coalesce(s.bic, ''))), ''),
         'nombre', coalesce(nullif(s.legal_name, ''), s.name), 'factura', si.invoice_number, 'fecha_factura', si.invoice_date) order by s.name, si.invoice_date)
@@ -491,6 +521,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_r public.conta_pago_remesa; v_m public.bank_movement; v_cuenta uuid; v_suma numeric := 0; v_lineas jsonb := '[]'::jsonb;
   v_res jsonb; v_match uuid; v_l record; v_inv public.supplier_invoice; v_n int := 0; v_pagadas int := 0; v_ids uuid[];
+  v_entry uuid; v_total numeric; v_vivas int; v_sin_confirmar int; v_solo boolean := false; v_porque text;
 begin
   select * into v_r from public.conta_pago_remesa where id = p_remesa for update;
   if v_r.id is null then raise exception 'Esa remesa no existe.' using errcode = 'P0002'; end if;
@@ -536,9 +567,37 @@ begin
   end loop;
   perform public._pc01e2_evento(v_cuenta, p_remesa, null, format('Llega el cargo del %s en el banco: %s %s casados, %s %s.',
     to_char(v_m.op_date, 'DD/MM/YYYY'), v_n, case when v_n = 1 then 'pago' else 'pagos' end, v_pagadas, case when v_pagadas = 1 then 'factura pagada' else 'facturas pagadas' end));
-  return jsonb_build_object('casado', v_match, 'pagos', v_n, 'pagadas', v_pagadas,
-    'frase', format('Casado con la remesa %s: %s %s, %s. %s %s con su asiento (propuesto, en «Por validar»).', v_r.code, v_n, case when v_n = 1 then 'pago' else 'pagos' end,
-      public.conta_euros_exactos(v_suma), v_pagadas, case when v_pagadas = 1 then 'factura queda pagada' else 'facturas quedan pagadas' end));
+
+  -- Respuesta 7 · El asiento se valida solo, y solo si: es una remesa de
+  -- transferencias, el cargo es su total entero al céntimo (todos sus pagos
+  -- en este cargo, ninguno casado antes), cada IBAN está comprobado (el mismo
+  -- de pagos anteriores) o confirmado por alguien, y el asiento pasa las reglas
+  -- de validar (cuadra, mes abierto, local…). Si no, queda en «Por validar».
+  select journal_entry_id into v_entry from public.bank_match where id = v_match;
+  select total, vivas into v_total, v_vivas from public.conta_pago_remesa_estado where id = p_remesa;
+  select count(*) into v_sin_confirmar from public.conta_pago_remesa_linea
+   where id = any(v_ids) and not (iban_check = 'comprobado' or iban_confirmed_at is not null);
+  v_porque := case
+    when v_r.kind <> 'fichero' then 'es un pago a mano'
+    when p_lineas is not null or cardinality(v_ids) <> v_vivas then 'el banco ha cargado solo una parte de la remesa'
+    when abs(v_m.amount) <> v_total then 'el cargo no es el total de la remesa'
+    when v_sin_confirmar > 0 then format('%s IBAN sin confirmar', v_sin_confirmar)
+    when v_entry is null then 'no hay asiento'
+    when exists (select 1 from public.journal_entry where id = v_entry and status not in ('propuesto', 'borrador')) then null
+    else (select m.motivo from public.conta_motivos_para_validar(v_entry) m order by m.orden limit 1)
+  end;
+  if v_porque is null and v_entry is not null and exists (select 1 from public.journal_entry where id = v_entry and status in ('propuesto', 'borrador')) then
+    perform public.journal_entry_validar(v_entry, format('%s · el cargo cuadra con la remesa %s', coalesce(public.conta_nombre_actor(), 'Sumied'), v_r.code));
+    update public.conta_pago_remesa set validated_solo_at = now(), validated_solo_entry = v_entry where id = p_remesa;
+    perform public._pc01e2_evento(v_cuenta, p_remesa, null, 'Asiento validado solo: el cargo cuadra con la remesa.');
+    v_solo := true;
+  end if;
+
+  return jsonb_build_object('casado', v_match, 'pagos', v_n, 'pagadas', v_pagadas, 'validado_solo', v_solo,
+    'frase', format('Casado con la remesa %s: %s %s, %s. %s %s %s.', v_r.code, v_n, case when v_n = 1 then 'pago' else 'pagos' end,
+      public.conta_euros_exactos(v_suma), v_pagadas, case when v_pagadas = 1 then 'factura queda pagada' else 'facturas quedan pagadas' end,
+      case when v_solo then 'y su asiento validado solo: el cargo cuadra con la remesa'
+           else format('con su asiento propuesto, en «Por validar» (no se valida solo: %s)', coalesce(v_porque, 'ya estaba validado')) end));
 end $$;
 revoke all on function public.conta_remesa_casar(uuid, uuid, uuid[]) from public, anon;
 grant execute on function public.conta_remesa_casar(uuid, uuid, uuid[]) to authenticated;
@@ -637,6 +696,9 @@ begin
     'id', r.id, 'codigo', r.code, 'a_mano', r.kind = 'a_mano', 'fecha_pago', r.pay_date, 'estado', r.estado, 'total', r.total, 'por_cargar', r.por_cargar,
     'vivas', r.vivas, 'pagadas', r.pagadas, 'por_confirmar', r.por_confirmar, 'rechazadas', r.rechazadas,
     'fichero_at', r.file_at, 'fichero_por', r.file_by_name, 'creada', r.created_at, 'creada_por', r.created_by_name,
+    -- Solo mientras el casado que lo validó siga vivo (deshacerlo anula ese asiento).
+    'validado_solo', exists (select 1 from public.conta_pago_remesa_linea_estado x join public.bank_match b on b.id = x.bank_match_id
+                              where x.remesa_id = r.id and x.estado = 'pagada' and b.journal_entry_id = r.validated_solo_entry),
     'banco', jsonb_build_object('id', t.id, 'nombre', t.name, 'iban4', right(public._pc01e2_iban(t.iban), 4), 'cuenta', public._bank_cuenta_572(t.id)),
     'pagos', coalesce((select jsonb_agg(jsonb_build_object(
         'id', l.id, 'factura_id', l.invoice_id, 'numero', si.invoice_number, 'vence', si.due_date, 'importe', l.amount,

@@ -53,6 +53,8 @@ describe('el fichero de la remesa de transferencias', () => {
   it('el nombre del ordenante y su NIF con el sufijo del banco; el IBAN sin espacios; sin BIC, NOTPROVIDED', () => {
     const x = ficheroTransferencias(REMESA)
     expect(x).toContain('<Othr><Id>B12345678000</Id></Othr>')
+    // Respuesta 7: el sufijo de Ajustes › Bancos y cajas, si el banco dio otro.
+    expect(ficheroTransferencias({ ...REMESA, sufijo: '123' })).toContain('<Othr><Id>B12345678123</Id></Othr>')
     expect(x).toContain('<DbtrAcct><Id><IBAN>ES2101820000000000004417</IBAN></Id></DbtrAcct>')
     expect(x).toMatch(/<DbtrAgt>\s*<FinInstnId><Othr><Id>NOTPROVIDED<\/Id><\/Othr><\/FinInstnId>\s*<\/DbtrAgt>/)
     // Con BIC del proveedor, su banco; sin él, no se pone.
