@@ -87,7 +87,9 @@ export default function FacturasPage() {
   const nueva = <BotonEnlace a={rutaNuevaFacturaVenta()} variante="principal" icono="nuevo">Nueva factura</BotonEnlace>
   const encabezado = (
     <EncabezadoPagina titulo="Facturas"
-      frase="Las facturas que haces a tus clientes: las que escribes aquí, sus cobros y su envío a Diez, y las que ya estaban en tu libro."
+      frase={hacienda.datos && hacienda.datos.modo !== 'apagado'
+        ? 'Las que emites. Cada una llega a Hacienda en el momento.'
+        : 'Las facturas que haces a tus clientes: las que escribes aquí, sus cobros y su envío a Diez, y las que ya estaban en tu libro.'}
       principal={nueva} />
   )
   if (!accountId && !cargando) return <div className="s-pagina">{encabezado}<p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus facturas.</p></div>
