@@ -12,7 +12,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  chipEstado, cifrasPagos, cumpleBuscar, enPestana, estadoPago, filaPago, filtrar, libre, ordenarPagos, pasosRemesa, porQueNoEnRemesa, proximoLaborable, remesaQueSePropone, VALIDADO_SOLO,
+  chipEstado, cifrasPagos, cumpleBuscar, enPestana, estadoPago, filaPago, filtrar, libre, ordenarPagos, pasosRemesa, porQueNoEnRemesa, proximoLaborable, remesaQueSePropone, sinIbanParaPoner, VALIDADO_SOLO,
   type FilaPago,
 } from '@/modules/conta/lib/pagos'
 import { sufijoParaLaBase } from '@/modules/conta/tablas/registro'
@@ -140,3 +140,36 @@ describe('respuesta 7: Bancos propone la remesa, el asiento validado solo y el s
   })
 })
 
+
+// PC01 · E2b (respuestas de Julio, 26/10, punto 3): «Poner IBAN» en la barra,
+// y las domiciliadas y las de tarjeta no cuentan como «sin IBAN».
+describe('el IBAN de las facturas (E2b)', () => {
+  const sin = (x: Record<string, unknown>) => f({ iban4: null, con_iban: false, ...x })
+  it('«Poner IBAN»: uno por proveedor, solo a los que les falta el IBAN para entrar', () => {
+    const marcadas = [
+      sin({ id: 'a1', supplier_id: 'pa', proveedor: 'Limpiezas Brillo SL' }),
+      sin({ id: 'a2', supplier_id: 'pa', proveedor: 'Limpiezas Brillo SL' }),
+      sin({ id: 'b1', supplier_id: 'pb', proveedor: 'Inmuebles Retiro SL', forma: 'direct_debit' }),
+      sin({ id: 'c1', supplier_id: 'pc', proveedor: 'Bar de Pago con Tarjeta', forma: 'card' }),
+      sin({ id: 'd1', supplier_id: 'pd', proveedor: 'Catcher', forma: 'prepaid' }),
+      sin({ id: 'e1', supplier_id: 'pe', proveedor: 'Mercado', forma: 'cash' }),
+      sin({ id: 'g1', supplier_id: 'pg', proveedor: 'Ya pagada', estado: 'pagada', pagado: 100, pendiente: 0 }),
+      CARNICAS,
+    ]
+    expect(sinIbanParaPoner(marcadas)).toEqual([{ id: 'pa', nombre: 'Limpiezas Brillo SL' }])
+  })
+  it('las domiciliadas y las de tarjeta sin IBAN dicen cómo se pagan, no «sin IBAN»', () => {
+    expect(porQueNoEnRemesa(sin({ forma: 'direct_debit' }))).toBe('la paga el banco solo (domiciliada)')
+    expect(porQueNoEnRemesa(sin({ forma: 'card' }))).toBe('se paga con tarjeta')
+  })
+  it('una factura con otro IBAN sin decidir no entra, y lo dice', () => {
+    const x = f({ proveedor: 'Distribuciones Cárnicas Vallecas SL', iban_distinto: true, iban_leido4: '7891' })
+    expect(x.ibanDistinto).toBe(true)
+    expect(porQueNoEnRemesa(x)).toBe('la factura trae otro IBAN (···· 7891) que el de la ficha de Distribuciones Cárnicas Vallecas SL: decide en su ficha si es el nuevo')
+  })
+  it('un IBAN sin confirmar sí entra (la remesa lo para hasta confirmarlo)', () => {
+    const x = f({ iban_sin_confirmar: true })
+    expect(x.ibanSinConfirmar).toBe(true)
+    expect(porQueNoEnRemesa(x)).toBeNull()
+  })
+})

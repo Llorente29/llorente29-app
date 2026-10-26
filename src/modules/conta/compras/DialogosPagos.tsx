@@ -7,6 +7,9 @@
 //   · «Ponerles vencimiento»: el plazo de pago de cada proveedor; a los que no
 //     lo tienen en su ficha se les pregunta, y se guarda allí.
 //   · «El banco lo ha rechazado»: el motivo; la factura vuelve a «Por pagar».
+//   · «Poner IBAN» (PC01 · E2b): a un proveedor sin IBAN, desde la barra de
+//     Pagar. Se escribe o se pega, se comprueba aquí (módulo 97) y en la base,
+//     y queda apuntado quién y cuándo.
 // Cada uno dice lo que ha pasado con la frase que escribe la base (regla 8), o
 // el fallo, dentro del diálogo.
 
@@ -14,11 +17,44 @@ import { useState } from 'react'
 import { Boton, Campo, Dialogo, Fecha, Importe, Selector, Texto } from '@/modules/conta/diseno'
 import { importeDeTexto, textoDeImporte } from '@/modules/conta/diseno/valores'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
+import { formatearIban, validarIban } from '@/modules/conta/lib/iban'
 import { libre, type FilaPago } from '@/modules/conta/lib/pagos'
 import type { BancoFolvy } from '@/modules/conta/services/bancosService'
-import { pagoAMano, pagoRechazado, ponerVencimiento } from '@/modules/conta/services/pagosService'
+import { pagoAMano, pagoRechazado, ponerIban, ponerVencimiento } from '@/modules/conta/services/pagosService'
 
 const ultimos4 = (iban: string | null) => (iban ? ` ···${iban.replace(/\s/g, '').slice(-4)}` : '')
+
+export function DialogoPonerIban({ proveedor, alCerrar }: { proveedor: { id: string; nombre: string }; alCerrar: (frase: string | null) => void }) {
+  const [iban, setIban] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [ocupado, setOcupado] = useState(false)
+  const v = iban.trim() ? validarIban(iban) : null
+
+  const guardar = async () => {
+    const r = validarIban(iban)
+    if (!r.ok) { setError(r.motivo); return }
+    setOcupado(true); setError(null)
+    try { alCerrar((await ponerIban(proveedor.id, r.normalizado)).frase) } catch (e) { setError((e as Error).message) } finally { setOcupado(false) }
+  }
+
+  return (
+    <Dialogo titulo={`Poner IBAN · ${proveedor.nombre}`} alCerrar={() => alCerrar(null)}
+      explicacion={`${proveedor.nombre} no tiene IBAN en su ficha. Escríbelo o pégalo: lo compruebo y queda apuntado quién lo puso y cuándo. Después ya entra en la remesa.`}
+      acciones={<>
+        <Boton onClick={() => alCerrar(null)}>Cancelar</Boton>
+        <Boton variante="principal" onClick={() => void guardar()} disabled={ocupado || !v?.ok}>{ocupado ? 'Guardando…' : 'Guardar el IBAN'}</Boton>
+      </>}>
+      <div className="pg-dialogo-campos">
+        <Campo etiqueta="IBAN" ayuda={v?.ok ? `Correcto: ${formatearIban(v.normalizado)}` : 'Con las dos letras del país delante: ES12 3456 …'}>{(c) => (
+          <Texto {...c} valor={iban} alCambiar={(x) => { setIban(x); setError(null) }} autoComplete="off" spellCheck={false} placeholder="ES00 0000 0000 0000 0000 0000"
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void guardar() } }} />
+        )}</Campo>
+      </div>
+      {v && !v.ok && <p className="s-aviso-lista" data-tono="duda" role="status">{v.motivo}</p>}
+      {error && <p className="s-aviso-lista" data-tono="falta" role="alert">{error}</p>}
+    </Dialogo>
+  )
+}
 
 export function DialogoYaLaHePagado({ empresaId, hoy, bancos, facturas, elegida, alCerrar }: {
   empresaId: string

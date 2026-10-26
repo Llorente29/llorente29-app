@@ -39,6 +39,8 @@ export type FacturaModelo = {
   withholding_amount?: number | null
   iban?: string | null
   payment_terms_text?: string | null
+  /** PC01 · E2b · Cómo se paga, si el papel lo dice: transfer, direct_debit, card o cash. */
+  payment_method?: string | null
 }
 
 /** Lo que devuelve el modelo con el modo factura: lo de siempre y «factura». */
@@ -84,8 +86,32 @@ export type FacturaLeida = {
   retencion: { tipo: number | null; importe: number } | null
   total: number | null
   iban: string | null
+  /** PC01 · E2b · La forma de pago prevista que trae el papel (null si no lo dice). */
+  forma: FormaLeida
   /** De dónde salen las bases: el desglose del papel o, si no lo trae, las líneas. */
   desgloseDe: 'papel' | 'lineas' | 'ninguno'
+}
+
+/** PC01 · E2b · Las formas de pago que puede traer una factura (las de supplier_invoice.payment_method). */
+export type FormaLeida = 'transfer' | 'direct_debit' | 'card' | 'cash' | null
+const FORMAS_LEIDAS = new Set(['transfer', 'direct_debit', 'card', 'cash'])
+
+/**
+ * PC01 · E2b · La forma de pago: la clave del modelo si es una de las cuatro;
+ * si no, la que diga el texto de la forma de pago. La domiciliación va primero
+ * (un recibo domiciliado suele traer también la palabra «cuenta» o un IBAN, que
+ * es el NUESTRO). «Al contado» solo dice cuándo, no cómo: no cuenta como efectivo.
+ */
+export function formaDePago(clave: string | null | undefined, texto: string | null | undefined): FormaLeida {
+  const k = (clave ?? '').trim().toLowerCase()
+  if (FORMAS_LEIDAS.has(k)) return k as FormaLeida
+  const s = (texto ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  if (!s.trim()) return null
+  if (/domicili|adeudo|recibo bancario|cargo en (su |vuestra |la )?(c\/c|cuenta)|sepa (core|b2b)/.test(s)) return 'direct_debit'
+  if (/tarjeta|datafono|\btpv\b|\bvisa\b|mastercard/.test(s)) return 'card'
+  if (/efectivo|metalico/.test(s)) return 'cash'
+  if (/transferencia|ingreso en (la |nuestra )?cuenta|abonar en (la |nuestra )?cuenta|\biban\b/.test(s)) return 'transfer'
+  return null
 }
 
 export type Lectura = { factura: FacturaLeida; comprobaciones: Comprobacion[]; confianza: Confianza; porque: string[] }
@@ -201,7 +227,8 @@ export function leerFactura(m: LecturaModelo, o: { hoy: string; minConfianza?: n
     proveedor: { nombre: txt(d.supplier_name), nif, email: txt(d.supplier_email), direccion: txt(d.supplier_address) },
     destinatario: { nombre: txt(d.bill_to_name), nif: normalizarNif(d.bill_to_tax_id) },
     numero, numeroClave: claveNumero(numero), fecha, vencimiento, clase, rectificaA: txt(f.corrects_number),
-    tipos, base, cuota, recargo, retencion, total, iban: txt(f.iban)?.replace(/\s+/g, '').toUpperCase() ?? null, desgloseDe,
+    tipos, base, cuota, recargo, retencion, total, iban: txt(f.iban)?.replace(/\s+/g, '').toUpperCase() ?? null,
+    forma: formaDePago(txt(f.payment_method), txt(f.payment_terms_text)), desgloseDe,
   }
 
   // ── Comprobaciones ───────────────────────────────────────────────────────
@@ -306,7 +333,8 @@ export const PROMPT_FACTURA =
   `    "withholding_pct": <% de retención (IRPF) si la hay, o null>,\n` +
   `    "withholding_amount": <importe de la retención, en positivo, o null>,\n` +
   `    "iban": "<IBAN para el pago si aparece, o null>",\n` +
-  `    "payment_terms_text": "<forma o plazo de pago tal cual aparece, o null>"\n` +
+  `    "payment_terms_text": "<forma o plazo de pago tal cual aparece, o null>",\n` +
+  `    "payment_method": "<transfer (transferencia), direct_debit (domiciliación o recibo), card (tarjeta), cash (efectivo), o null si no lo dice>"\n` +
   `  }\n` +
   `REGLAS DEL MODO FACTURA:\n` +
   `- "tax_breakdown" es el CUADRO DE IMPUESTOS del pie (una fila por tipo de IVA), tal cual aparece. Si el papel\n` +
@@ -314,4 +342,6 @@ export const PROMPT_FACTURA =
   `- Una rectificativa o abono lleva las bases y cuotas en NEGATIVO, y "grand_total" también.\n` +
   `- "simplificada" es un ticket o factura simplificada (sin los datos del cliente o sin desglose completo).\n` +
   `- La retención resta del total: "grand_total" es lo que se paga después de restarla.\n` +
+  `- "iban" es la cuenta del PROVEEDOR para pagarle. En una domiciliación, el IBAN que aparece suele ser el del\n` +
+  `  cliente (donde se carga el recibo): ese NO va en "iban".\n` +
   `- NO inventes NADA: lo que no esté, null.`
