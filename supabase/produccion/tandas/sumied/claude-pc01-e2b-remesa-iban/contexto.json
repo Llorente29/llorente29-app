@@ -1,0 +1,8 @@
+{
+  "_que": "PC01 · E2b · El IBAN y la forma de pago de las facturas recibidas · contexto de producción de la tanda (1835), medido en SOLO LECTURA el 26/10 a las 18:50Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen supplier (100 filas, base entera) y supplier_invoice (95, base entera), donde se añaden columnas que admiten nulos y un disparador nuevo, y las seis funciones que cambia con la misma firma (byte a byte las de 0915 y d06 del repositorio). Nada en el camino del pedido; nada en el historial.",
+  "medido": "2026-10-26T18:50Z",
+  "tanda": {
+    "supabase/migrations/20261026T1835_pc01e2b_iban_de_las_facturas.sql": "b99e849307dbff5b168e23d10bd1a4f8"
+  },
+  "contexto": {"tablas":["public.supplier","public.supplier_invoice"],"funciones":["public._pc01e2_iban_como_esta(uuid,text)","public._pc01e2_proveedor_iban_cambiado()","public.conta_factura_desde_lectura(uuid,uuid)","public.conta_pagos_lista(uuid,date)","public.conta_remesa_iban_confirmar(uuid)","public.conta_remesa_pagos_crear(uuid,uuid,date,jsonb)"],"filas":{"public.supplier":100,"public.supplier_invoice":95},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

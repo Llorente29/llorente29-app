@@ -1,0 +1,2 @@
+# PC01 · Entrega 2b · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261026T1835_pc01e2b_iban_de_las_facturas.down.sql
