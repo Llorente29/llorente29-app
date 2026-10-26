@@ -1,0 +1,3 @@
+# V04 · PR 1 · vuelta atrás. OJO: con números ya dados en tiques de verdad, no se
+# lanza sin decidirlo antes (esos números los tienen los clientes).
+supabase/vuelta-atras/20261026T2309_v04_tique_serie_y_quien_factura.down.sql

@@ -1,0 +1,21 @@
+# V04 · PR 1 · El tique de la bolsa: el número y quién factura (sin QR).
+# Rama conta/v04-tique. Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 2309 — AÑADE tres tablas nuevas (vacías) y sus funciones, y CAMBIA EN
+#      CALIENTE public.fiscal_for_print (misma firma), que la llama la tablet al
+#      imprimir la bolsa:
+#      · la serie de cada local (CA26-000123), dada al imprimir, sin huecos y
+#        sin gastar número al reimprimir;
+#      · quién factura: la empresa del local en las propias; la factura de Last
+#        en las cedidas (sin ella, el tique va sin la línea y se avisa);
+#      · un local sin código no numera: hasta que se elija en Ajustes, su tique
+#        sale como hoy.
+#      Si la serie falla, la impresión no: el tique sale como antes y se avisa.
+#
+# AUTORIZO: sí. Toca la impresión de la bolsa, que es el camino del pedido
+# (encargo V04: «la tanda que toque el camino del pedido lleva autorizo»),
+# aunque el analizador no la cuente en su lista del camino.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261026T2309_v04_tique_serie_y_quien_factura.sql
+cuenta: scripts/conta/produccion/cuentas/v04-tique.sql
