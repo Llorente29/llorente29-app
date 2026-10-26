@@ -2,7 +2,7 @@
   "_que": "PC01 · E2 · Compras › Pagos · contexto de producción de la tanda (0915, solo añade), medido en SOLO LECTURA el 26/10 a las 09:40Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Solo existe supplier (100 filas, en la base entera), donde se añade el disparador nuevo del cambio de IBAN; nada de lo que crea la 0915. Ninguna en el camino del pedido; nada en el historial.",
   "medido": "2026-10-26T09:40Z",
   "tanda": {
-    "supabase/migrations/20261026T0915_pc01e2_remesas_de_pagos.sql": "047d809973d3df90e989e80ef5000fdc"
+    "supabase/migrations/20261026T0915_pc01e2_remesas_de_pagos.sql": "e4d149e31533fc6640118be64d153acf"
   },
   "contexto": {
     "tablas": [

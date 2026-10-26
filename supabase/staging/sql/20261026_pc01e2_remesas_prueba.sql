@@ -153,7 +153,7 @@ end $$;
 do $$
 declare x jsonb; v_err text; r uuid := (select v::uuid from _p where clave = 'remesa'); la2 uuid;
 begin
-  x := public.conta_remesa_descargada(r, md5('fichero de prueba'), 3);
+  x := public.conta_remesa_descargada(r, encode(sha256('fichero de prueba'::bytea), 'hex'), 3);
   if x->>'frase' not like 'Fichero de la remesa R-____/___ descargado: 3 pagos. Súbelo a la banca de Banco B01 · Mercado; cuando llegue el cargo, la casas en Bancos y las facturas quedan pagadas.' then
     raise exception 'PRUEBA PC01 E2 · 4: descargar dijo «%».', x->>'frase';
   end if;

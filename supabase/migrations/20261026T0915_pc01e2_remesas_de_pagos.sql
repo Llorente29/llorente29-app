@@ -40,6 +40,31 @@
 -- Traspaso mensual (C12): el asiento del pago lo hace bank_casar, como cualquier
 -- casado del banco; entra en el traspaso del mes como los demás.
 
+-- ── 0 · Apuntar cuándo cambia el IBAN de un proveedor (para el antifraude) ──
+-- Lo primero de la tanda: coge supplier antes que ninguna otra tabla (las FK de
+-- abajo también la tocan), para no cruzarse en orden distinto con quien la
+-- esté escribiendo (ensayo 40298351731: deadlock en staging con una e2e).
+create or replace function public._pc01e2_iban(p text)
+returns text language sql immutable set search_path = public as $$ select nullif(upper(regexp_replace(coalesce(p, ''), '\s', '', 'g')), '') $$;
+revoke all on function public._pc01e2_iban(text) from public, anon;
+grant execute on function public._pc01e2_iban(text) to authenticated;
+
+create or replace function public._pc01e2_proveedor_iban_cambiado()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public._pc01e2_iban(old.iban) is not null and public._pc01e2_iban(new.iban) is distinct from public._pc01e2_iban(old.iban)
+     and new.iban_changed_at is not distinct from old.iban_changed_at then
+    new.iban_previous := old.iban;
+    new.iban_changed_at := now();
+    new.iban_changed_by := auth.uid();
+    new.iban_changed_by_name := coalesce(public.conta_nombre_actor(), 'Sumied');
+  end if;
+  return new;
+end $$;
+revoke all on function public._pc01e2_proveedor_iban_cambiado() from public, anon, authenticated;
+create or replace trigger pc01e2_proveedor_iban_cambiado before update of iban on public.supplier
+  for each row execute function public._pc01e2_proveedor_iban_cambiado();
+
 -- ── 1 · Tablas ─────────────────────────────────────────────────────────────
 create table if not exists public.conta_pago_remesa (
   id                   uuid primary key default gen_random_uuid(),
@@ -49,7 +74,7 @@ create table if not exists public.conta_pago_remesa (
   kind                 text not null check (kind in ('fichero', 'a_mano')),
   treasury_account_id  uuid not null references public.treasury_account(id),
   pay_date             date not null,
-  file_md5             text,
+  file_sha256          text,
   file_at              timestamptz,
   file_by              uuid,
   file_by_name         text,
@@ -172,10 +197,6 @@ begin
 end $$;
 revoke all on function public._pc01e2_empresa(uuid) from public, anon, authenticated;
 
-create or replace function public._pc01e2_iban(p text)
-returns text language sql immutable set search_path = public as $$ select nullif(upper(regexp_replace(coalesce(p, ''), '\s', '', 'g')), '') $$;
-revoke all on function public._pc01e2_iban(text) from public, anon;
-grant execute on function public._pc01e2_iban(text) to authenticated;
 
 create or replace function public._pc01e2_evento(p_account uuid, p_remesa uuid, p_linea uuid, p_texto text)
 returns void language sql security definer set search_path = public as $$
@@ -237,24 +258,6 @@ begin
   return query select 'primer_pago'::text, 'Primer pago a este IBAN desde Sumied.'::text;
 end $$;
 revoke all on function public._pc01e2_iban_como_esta(uuid, text) from public, anon, authenticated;
-
--- ── 4 · Apuntar cuándo cambia el IBAN de un proveedor (para el antifraude) ──
-create or replace function public._pc01e2_proveedor_iban_cambiado()
-returns trigger language plpgsql security definer set search_path = public as $$
-begin
-  if public._pc01e2_iban(old.iban) is not null and public._pc01e2_iban(new.iban) is distinct from public._pc01e2_iban(old.iban)
-     and new.iban_changed_at is not distinct from old.iban_changed_at then
-    new.iban_previous := old.iban;
-    new.iban_changed_at := now();
-    new.iban_changed_by := auth.uid();
-    new.iban_changed_by_name := coalesce(public.conta_nombre_actor(), 'Sumied');
-  end if;
-  return new;
-end $$;
-revoke all on function public._pc01e2_proveedor_iban_cambiado() from public, anon, authenticated;
-drop trigger if exists pc01e2_proveedor_iban_cambiado on public.supplier;
-create trigger pc01e2_proveedor_iban_cambiado before update of iban on public.supplier
-  for each row execute function public._pc01e2_proveedor_iban_cambiado();
 
 -- ── 5 · Pagar seleccionadas: la remesa de transferencias ──────────────────
 -- p_facturas: [{id, importe?}] (sin importe, lo pendiente). Para con la frase
@@ -458,7 +461,7 @@ end $$;
 revoke all on function public.conta_remesa_fichero_datos(uuid) from public, anon;
 grant execute on function public.conta_remesa_fichero_datos(uuid) to authenticated;
 
-create or replace function public.conta_remesa_descargada(p_remesa uuid, p_md5 text, p_pagos integer)
+create or replace function public.conta_remesa_descargada(p_remesa uuid, p_sha256 text, p_pagos integer)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_r public.conta_pago_remesa_estado; v_t text;
 begin
@@ -466,12 +469,12 @@ begin
   if v_r.id is null then raise exception 'Esa remesa no existe.' using errcode = 'P0002'; end if;
   perform public._pc01e2_empresa(v_r.company_id);
   if v_r.por_confirmar > 0 then raise exception 'Queda un IBAN por confirmar.' using errcode = '23514'; end if;
-  if coalesce(p_md5, '') !~ '^[0-9a-f]{32}$' then raise exception 'Falta la huella del fichero.' using errcode = '22023'; end if;
-  update public.conta_pago_remesa set file_md5 = p_md5, file_at = coalesce(file_at, now()), file_by = coalesce(file_by, auth.uid()),
+  if coalesce(p_sha256, '') !~ '^[0-9a-f]{64}$' then raise exception 'Falta la huella del fichero.' using errcode = '22023'; end if;
+  update public.conta_pago_remesa set file_sha256 = p_sha256, file_at = coalesce(file_at, now()), file_by = coalesce(file_by, auth.uid()),
          file_by_name = coalesce(file_by_name, public.conta_nombre_actor(), 'Sumied') where id = p_remesa;
   select name into v_t from public.treasury_account where id = v_r.treasury_account_id;
   perform public._pc01e2_evento(v_r.account_id, p_remesa, null, format('Descarga el fichero para el banco: %s %s, %s (huella %s).',
-    p_pagos, case when p_pagos = 1 then 'pago' else 'pagos' end, public.conta_euros_exactos(v_r.por_cargar), left(p_md5, 8)));
+    p_pagos, case when p_pagos = 1 then 'pago' else 'pagos' end, public.conta_euros_exactos(v_r.por_cargar), left(p_sha256, 8)));
   return jsonb_build_object('frase', format('Fichero de la remesa %s descargado: %s %s. Súbelo a la banca de %s; cuando llegue el cargo, la casas en Bancos y las facturas quedan pagadas.',
     v_r.code, p_pagos, case when p_pagos = 1 then 'pago' else 'pagos' end, coalesce(v_t, 'tu banco')));
 end $$;
