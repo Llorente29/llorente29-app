@@ -69,12 +69,12 @@ pruebas.
   | `pc01/pagos` | la cambia el PR; nueva, cuenta como la mediana | 39,4 |
   | `c00/marco` | juego común | 18,4 |
   | `rls` | juego común | 4 |
-  | `humo/pantallas` | la rápida; estimada, se cambia por lo medido en su primera pasada | 300 |
-  | **Total** | | **719** |
+  | `humo/pantallas` | la rápida, medida en la e2e 40328678034 (33,7 + 33,6) | 67,3 |
+  | **Total** | | **486** |
 
-  Son unos **12 min de pruebas**. Con la preparación (build, navegador y
-  carril: unos 4 min) y el arranque de cada fichero, salen **unos 16 min** de
-  reloj.
+  Son unos **8 min de pruebas**. Con la preparación (build, navegador y
+  carril: unos 4 min) y el arranque de cada fichero (unos 5 s cada uno), salen
+  **unos 12–13 min** de reloj.
 
 Los segundos son los de `tests/e2e/tiempos.json`, con la misma vara para
 todos.

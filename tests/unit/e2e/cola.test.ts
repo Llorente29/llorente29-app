@@ -177,6 +177,8 @@ describe('los cerrojos: quién coge qué, y cuánto espera cada uno', () => {
     expect(wf).not.toContain('npx playwright test $E2E_FICHEROS')
     const sh = readFileSync('scripts/e2e/carril.sh', 'utf8')
     expect(sh.slice(sh.indexOf('\nsoltar() {'), sh.indexOf('\nmigrar_coger() {'))).toContain('matar_guardian barrera')
+    // El borrar del final también, dentro de la barrera (26/10: uno cayó en mitad del ensayo de vuelta atrás).
+    expect(sh.slice(sh.indexOf('\nsoltar() {'), sh.indexOf('\nmigrar_coger() {'))).toMatch(/barrera_entrar; then\n\s+borrar/)
   })
 
   it('cada guardián con sus ficheros: el de la barrera no pisa al del carril', () => {

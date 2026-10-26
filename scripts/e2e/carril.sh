@@ -245,7 +245,14 @@ borrar() {
 soltar() {
   plantilla_soltar
   if [ -s "$CARRIL_DIR/numero" ]; then
-    borrar || echo "::warning::No se ha podido borrar el carril $(cat "$CARRIL_DIR/numero"): lo borra el próximo que lo coja."
+    # Borrar también escribe en staging: con la barrera, para no hacerlo en
+    # mitad de una aplicación (el 26/10, un borrar a las 13:22:39 cayó dentro
+    # del ensayo de vuelta atrás y le cambió las cuentas).
+    if BARRERA_QUE=borrar barrera_entrar; then
+      borrar || echo "::warning::No se ha podido borrar el carril $(cat "$CARRIL_DIR/numero"): lo borra el próximo que lo coja."
+    else
+      echo "::warning::Sin la barrera no se borra el carril $(cat "$CARRIL_DIR/numero"): lo borra el próximo que lo coja."
+    fi
   fi
   matar_guardian barrera
   matar_guardian

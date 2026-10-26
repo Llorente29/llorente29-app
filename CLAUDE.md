@@ -405,7 +405,7 @@ y en un PR solo con la etiqueta **`e2e-entera`**, cuando Julio la pide.
 
 *(26/10. La entera corría en casi todos los PR, porque tocar el menú o
 `module.tsx` cuenta como lo común: 74 min la del #339, que con la regla nueva
-son unos 12 min de pruebas. Las 5 que cayeron por tiempo esa mañana salieron
+son unos 8 min de pruebas, 12–13 de reloj. Las 5 que cayeron por tiempo esa mañana salieron
 en verde con staging tranquilo. Antes, el 22/10: el #281 y el C07 se llevaron
 275 y más de 225 min de máquina.)*
 
