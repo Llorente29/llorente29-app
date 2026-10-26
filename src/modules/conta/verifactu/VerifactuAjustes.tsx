@@ -12,6 +12,7 @@
 //      con Hacienda) se dice antes de pulsar, no después.
 // Y «¿Facturas también con otro programa?», con su aviso; a la derecha, lo que
 // hace Sumied y «Ver la declaración responsable» (el texto lo pone Julio).
+// E3: «Comprobar la cadena» y «Exportar los registros» (CadenaYExportar).
 // Cada botón confirma o falla en pantalla, con contenido (regla 8).
 
 import { useState } from 'react'
@@ -26,6 +27,7 @@ import {
   autorizarCertificado, cambiarModo, guardarOtrosProgramas, leerVerifactu, retirarAutorizacion, type DatosVerifactu,
 } from '@/modules/conta/services/verifactuService'
 import { OTROS_PROGRAMAS, avisoOtrosProgramas, obligaDesde } from '@/modules/conta/lib/verifactu/estado'
+import { CadenaYExportar } from './CadenaYExportar'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const fecha = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—')
@@ -58,6 +60,7 @@ export function VerifactuAjustes() {
           <PasoVia d={d} companyId={activa.id} quien={userName ?? null} alCambiar={recargar} />
           <PasoPruebas d={d} companyId={activa.id} quien={userName ?? null} alCambiar={recargar} />
           <OtrosProgramas d={d} companyId={activa.id} quien={userName ?? null} alCambiar={recargar} />
+          {accountId && <CadenaYExportar accountId={accountId} companyId={activa.id} nombre={activa.razonSocial ?? activa.nombre} nif={activa.nif} />}
         </div>
         <LoQueHaceSumied />
       </div>

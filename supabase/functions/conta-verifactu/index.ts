@@ -5,6 +5,10 @@
 // flujo deja enviar y lo manda (_shared/verifactu/enviar.ts). Cada envío queda
 // en verifactu_envio con lo que contestó Hacienda; cada registro, con su estado.
 //
+// V03 · E3: con {"accion":"cuadre"} hace los «Comprobar con Hacienda» pedidos
+// (_shared/verifactu/cuadre.ts): la consulta de un mes, página a página, y la
+// base los cuadra. En real la despierta el cron verifactu-cuadre (1750).
+//
 // LA PUERTA, cerrada si no se dice otra cosa (CONTA_VERIFACTU, lo pone Julio):
 //   · sin poner      → no envía nada: contesta «cerrada».
 //   · «pruebas»      → solo en staging (nunca con la base de producción), solo
@@ -32,6 +36,7 @@ import { type Entorno, type Lote, type Piezas, unaVuelta } from "../_shared/veri
 import { puerta } from "../_shared/verifactu/puerta.ts";
 import { casosPruebas } from "../_shared/verifactu/pruebasAeat.ts";
 import { leerConexion, sobreConsulta } from "../_shared/verifactu/consulta.ts";
+import { type CuadreTomado, vueltaDeCuadres } from "../_shared/verifactu/cuadre.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -153,6 +158,40 @@ Deno.serve(async (req) => {
       console.error(`conta-verifactu · pruebas · no se han podido preparar`);
       return json({ error: "preparar", mensaje: m.slice(0, 300) }, 500);
     }
+  }
+
+  if (accion === "cuadre") {
+    // V03 E3 · «Comprobar con Hacienda»: los cuadres pedidos de este entorno
+    // (verifactu_cuadre). La consulta va con el certificado de la empresa en
+    // real (si lo ha autorizado, verifactu_cert_abrir_cuadre) o con el de
+    // pruebas, que tiene que ser del NIF que se consulta.
+    const r = await vueltaDeCuadres<MaterialCertificado>({
+      tomar: async (e) => (await rpc("verifactu_cuadre_tomar", { p_entorno: e })) as CuadreTomado | null,
+      pagina: (id, facturas, final) => rpc("verifactu_cuadre_pagina", { p_cuadre: id, p_registros: facturas, p_final: final }),
+      fallar: (id, err) => rpc("verifactu_cuadre_fallo", { p_cuadre: id, p_error: err }),
+      material: async (c) => {
+        if (entorno === "pruebas") {
+          const cp = leerCertPruebas();
+          if (cp.nif !== c.nif_emisor) throw new SinCertificado("El certificado de pruebas es de otro NIF que el de la empresa: en pruebas solo se puede comprobar la empresa del certificado.");
+          return cp.material;
+        }
+        const { data, error } = await srv.rpc("verifactu_cert_abrir_cuadre", { p_cuadre: c.cuadre_id });
+        if (error) throw new Error(`verifactu_cert_abrir_cuadre: ${error.message}`);
+        const x = data as { ok: boolean; mensaje?: string; material?: string };
+        if (!x.ok || !x.material) throw new SinCertificado(x.mensaje ?? "No se puede usar el certificado de la empresa.");
+        const m = JSON.parse(x.material) as MaterialCertificado;
+        return { cert: m.cert, key: m.key };
+      },
+      llamar: async (url, xml, material) => {
+        const x = await llamarConCertificado(material, url, {
+          method: "POST", headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: '""' }, body: xml,
+        }, { crearCliente: (m) => Deno.createHttpClient({ cert: m.cert, key: m.key }), pedir: (u, init) => fetch(u, init), limiteMs: 60_000 });
+        return { status: x.status, cuerpo: x.cuerpo };
+      },
+      url: URL[entorno],
+    }, entorno);
+    console.log(`conta-verifactu · ${entorno} · cuadres ${r.cuadres} · hechos ${r.hechos} · páginas ${r.paginas} · facturas ${r.facturas} · fallos ${r.fallos.length}`);
+    return json({ entorno, cuadres: r.cuadres, hechos: r.hechos, paginas: r.paginas, facturas: r.facturas, fallos: r.fallos.length });
   }
 
   // En pruebas, el certificado de pruebas se lee antes: da el productor si no

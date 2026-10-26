@@ -1,0 +1,19 @@
+{
+ "_que": "V03 · E3 · contexto de producción de la tanda (1750), medido en SOLO LECTURA el 26/10 a las 16:40Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: no existe ninguna de las tablas ni de las funciones que crea la 1750 (ni otra firma con su nombre), nada en el camino del pedido y nada en el historial. La cuenta (v03-e3.sql) a la misma hora: 0 / 1286 / 0 · 0 de 2 · 0 · 0 · 0 · _verifactu_registrar 34c4777a, journal_entry_validar 87e0ba8d, verifactu_comprobar 18e481c3, verifactu_reenviar b9cc0a40.",
+ "medido": "2026-10-26T16:40Z",
+ "tanda": {
+  "supabase/migrations/20261026T1750_v03_verifactu_corregir_y_cuadrar.sql": "429b6b7ecbdd4e0b67499ebd60114c5a"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

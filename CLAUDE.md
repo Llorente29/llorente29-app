@@ -24,6 +24,11 @@ Reglas de trabajo del CEO (Julio):
 - **Tiempo máximo: el que diga el encargo, o 90 minutos** si no dice nada. Si
   se pasa, se para y se avisa en dos líneas: qué falta y por qué.
 - **Siempre en español, también las notas entre paso y paso y lo que se piensa en voz alta.** Nada en inglés, salvo nombres de código.
+- **Al abrir o actualizar un PR y lanzar su e2e, se termina el turno** (regla
+  de Julio, 26/10, para ahorrar uso). No se vigila el PR, no se suscribe nadie
+  a sus avisos y no se programan revisiones; tampoco se contesta a los avisos
+  de Vercel. Julio escribe cuando la e2e acaba, en verde o en rojo, con el
+  enlace.
 
 ## Reglas ganadas en producción
 

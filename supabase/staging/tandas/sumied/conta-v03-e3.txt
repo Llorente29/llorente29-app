@@ -1,0 +1,13 @@
+# V03 · Entrega 3 · Corregir y cuadrar. La 1750 solo añade: desde la rama va
+# de verdad después del ensayo (W05), si se puede pasar dos veces.
+# Su prueba (ROLLBACK): lo que va a pasar antes de rectificar, anular o
+# subsanar; la subsanación (descripción nueva; aceptada con errores tal cual;
+# rechazada con RechazoPrevio S; correcta sin cambios no; de camino no); la
+# anulación (con cobros no; sin ANULAR o motivo no; la buena con su asiento
+# anulado, su contrasiento del mismo día, la 477 y el libro a cero y su
+# registro encadenado; una rechazada «sin registro previo»); la cadena entera
+# y tocada; el cuadre con Hacienda (pedir, otra cuenta no, dos páginas, los
+# que cuadran, faltan, sobran, distintos y de camino; un fallo; permisos); y
+# la vuelta atrás.
+supabase/migrations/20261026T1750_v03_verifactu_corregir_y_cuadrar.sql
+supabase/staging/sql/20261026_v03_e3_corregir_y_cuadrar_prueba.sql

@@ -66,6 +66,22 @@
 .cxvf-punto[data-tono='falta'] { background: var(--s-falta); border-color: var(--s-falta); }
 .cxvf-linea-cuando { color: var(--s-apoyo); white-space: nowrap; }
 
+/* E3 · «Me he equivocado en…», «Comprobar con Hacienda» y la cadena. */
+.cxvf-equivocado > summary { cursor: pointer; font-weight: var(--s-peso-medio); color: var(--s-accion); }
+.cxvf-opciones { margin: var(--s-3) 0 0; padding: 0; list-style: none; display: grid; gap: var(--s-3); }
+.cxvf-opciones li { display: grid; gap: var(--s-1); justify-items: start; }
+.cxvf-previsto-frase { margin: 0 0 var(--s-2); }
+.cxvf-previsto-frase[data-tono='falta'] { color: var(--s-falta); }
+.cxvf-cambios { margin: 0 0 var(--s-3); padding-left: var(--s-4); font-size: var(--s-t-s); }
+.cxvf-cuadre { display: grid; gap: var(--s-3); }
+.cxvf-cuadre-titulo { font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); margin: 0; }
+.cxvf-cuadre[data-tono='ok'] .cxvf-cuadre-titulo { color: var(--s-ok); }
+.cxvf-cuadre[data-tono='falta'] .cxvf-cuadre-titulo { color: var(--s-falta); }
+.cxvf-cuadre[data-tono='duda'] .cxvf-cuadre-titulo { color: var(--s-duda); }
+.cxvf-descuadre { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s-2); font-size: var(--s-t-s); }
+.cxvf-descuadre li { display: grid; gap: var(--s-1); padding: var(--s-2) var(--s-3); border: 1px solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); }
+.cxvf-descuadre-num { font-weight: var(--s-peso-fuerte); }
+
 @media (max-width: 760px) {
   .cxvf-alta-columnas { grid-template-columns: minmax(0, 1fr); }
   .cxvf-paso { grid-template-columns: minmax(0, 1fr); }

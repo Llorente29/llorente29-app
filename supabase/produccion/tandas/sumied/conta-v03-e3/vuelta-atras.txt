@@ -1,0 +1,2 @@
+# V03 · Entrega 3 · vuelta atrás.
+supabase/vuelta-atras/20261026T1750_v03_verifactu_corregir_y_cuadrar.down.sql
