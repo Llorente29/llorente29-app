@@ -5,10 +5,9 @@
 // asiento validado, que no tiene vuelta atrás en staging: lo prueba entero la
 // prueba de staging de la 1650, en su transacción).
 //
-//   1. Plataformas (cuenta A, de hostelería): la lista con sus pestañas, que
-//      suman «Todas», sus filtros y, en la barra, «Liquidaciones» en el bloque
-//      «Hostelería» de Ventas. Las de Uber de staging (D07: 6, ninguna con
-//      factura de comisión) salen, y su ficha se abre.
+//   1. Plataformas (cuenta A, de hostelería): la ficha de una, por local, se
+//      abre (V02 · Pantallas: la lista la sustituyen los tableros 28 y 29, con
+//      su e2e en v02/liquidaciones.spec.ts, también la de la cuenta D).
 //   2. Socios de marca: la vista de las mensuales del socio, y la ficha de
 //      la que trae su «Relación Compras y Ventas» (semilla de compras: 3
 //      productos, 2 con compras): sus albaranes contra la Relación, producto a
@@ -16,13 +15,11 @@
 //      (regla 31): el estado lo da la pantalla, y la Patata y el Aceite salen.
 //   3. Compras › Liquidaciones dice que las de plataforma y las del socio
 //      están en Ventas.
-//   4. La cuenta D (sin hostelería): la pantalla lo dice y no enseña nada.
 // Las capturas, en docs/conta/capturas/v01 (van al artefacto del run).
 
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, CUENTA_D, entrarComo } from '../sesion'
+import { CUENTA_A, entrarComo } from '../sesion'
 import { rest } from '../api'
-import { barraAbiertaSiPlegada } from '../barra'
 
 const DIR = 'docs/conta/capturas/v01'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -35,31 +32,20 @@ function vigilar(page: Page): string[] {
   return errores
 }
 
-test('Plataformas: la lista por periodo, plataforma y local, sus pestañas y la ficha de una', async ({ page }) => {
+test('Plataformas: la ficha de una, por local (la del cobro con el banco), se sigue abriendo', async ({ page }) => {
   test.setTimeout(90_000)
   const errores = vigilar(page)
-  await entrarComo(page, CUENTA_A.email)
-  await page.goto('/conta/ventas/liquidaciones?desde=todas')
-  await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Ventas', 'Liquidaciones'])
-  const pestanas = page.getByRole('tablist', { name: 'Estado de las liquidaciones' })
-  for (const p of ['Diferencia', 'Falta su factura', 'Por cobrar', 'Cuadra', 'Todas']) await expect(pestanas.getByRole('tab', { name: new RegExp(`^${p}`) })).toBeVisible()
-  await expect(page.locator('.s-lista-cargando')).toHaveCount(0, { timeout: 30_000 })
-  await expect(page.getByRole('alert')).toHaveCount(0)
-  if (lado(page) === 'ordenador') {
-    await barraAbiertaSiPlegada(page)
-    const paginas = page.getByRole('list', { name: 'Páginas de Ventas' })
-    await expect(paginas.locator('.s-barra-bloque', { hasText: 'Hostelería' })).toBeVisible()
-    await expect(paginas.getByRole('link', { name: 'Liquidaciones' })).toHaveAttribute('aria-current', 'page')
-    const cabeza = page.getByRole('table').first().getByRole('columnheader')
-    for (const c of ['Plataforma', 'Ventas', 'Pagan', 'Estado']) await expect(cabeza.filter({ hasText: new RegExp(`^${c}`) })).toBeVisible()
-  }
-  // La plataforma de staging se llama «Uber Eats» (24/10).
-  const uber = page.getByText(/^Uber( Eats)? · /)
-  await expect(uber.first()).toBeVisible({ timeout: 30_000 })
-  await foto(page, 'liquidaciones')
-
-  await uber.first().click()
+  const s = await entrarComo(page, CUENTA_A.email)
+  // V02 · Pantallas: la lista de antes la sustituyen los tableros 28 y 29 (e2e en
+  // v02/liquidaciones.spec.ts); su ficha por local sigue, para casar el cobro.
+  const emp = await rest<{ id: string }[]>(s, 'GET', `company?select=id&account_id=eq.${CUENTA_A.id}&limit=1`)
+  expect(emp.status, JSON.stringify(emp.datos)).toBe(200)
+  const filas = await rest<{ canal_id: string; local_id: string | null; desde: string; hasta: string }[]>(s, 'POST', 'rpc/conta_plataformas', { p_company: emp.datos[0].id, p_desde: null, p_hasta: null })
+  expect(filas.status, JSON.stringify(filas.datos)).toBe(200)
+  // Las de Uber de staging (D07: 6, ninguna con factura de comisión).
+  expect(filas.datos.length, 'staging tiene liquidaciones de plataforma').toBeGreaterThan(0)
+  const f = filas.datos[0]
+  await page.goto(`/conta/ventas/liquidaciones/plataforma/${encodeURIComponent(`${f.canal_id}:${f.local_id ?? 'sin'}:${f.desde}:${f.hasta}`)}`)
   const ficha = page.locator('[data-prueba="ficha-liquidacion-plataforma"]')
   await expect(ficha).toBeVisible({ timeout: 30_000 })
   await expect(ficha.getByRole('region', { name: 'Lo que liquida' })).toContainText('Pagan')
@@ -95,14 +81,5 @@ test('Socios de marca: las mensuales del socio, y Compras › Liquidaciones dice
 
   await page.goto('/conta/compras/liquidaciones')
   await expect(page.locator('[data-prueba="liquidaciones-en-ventas"]')).toBeVisible({ timeout: 30_000 })
-  expect(errores).toEqual([])
-})
-
-test('D (sin hostelería): Liquidaciones lo dice y no enseña nada', async ({ page }) => {
-  const errores = vigilar(page)
-  await entrarComo(page, CUENTA_D.email)
-  await page.goto('/conta/ventas/liquidaciones')
-  await expect(page.getByText(/^Las liquidaciones de plataformas y de socios de marca son de las empresas que venden en hostelería/)).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByRole('tablist', { name: 'Estado de las liquidaciones' })).toHaveCount(0)
   expect(errores).toEqual([])
 })

@@ -21,6 +21,9 @@
 //
 // Lo que se registra de cada fila:
 //   · ventas: total (IVA incluido), base e IVA;
+//   · pedidos_total: «Total del pedido (IVA incluido)», lo que suman sus
+//     pedidos con las promociones: lo que se compara con la caja (al céntimo
+//     en las tiendas de Foodint del 24/10);
 //   · comision: lo que Uber cobra por su servicio (la tasa de mercado y la
 //     comisión por canje de ofertas, con su IVA), en positivo;
 //   · otros: todo lo demás que mueve el pago (promociones, contracargos,
@@ -40,6 +43,8 @@ export interface FilaInformeUber {
   tiendaId: string
   pedidos: number
   ventas: { total: number; base: number; iva: number }
+  /** «Total del pedido (IVA incluido)»: lo que suman sus pedidos, con promociones; es lo que se compara con la caja. */
+  pedidosTotal: number
   comision: number
   otros: number
   neto: number
@@ -55,6 +60,8 @@ export interface DatosRegistrar {
   hasta: string
   pedidos: number | null
   ventas: { total: number; base?: number | null; iva?: number | null }
+  /** Lo que suman sus pedidos (con promociones), cuando el documento lo dice. */
+  pedidos_total?: number | null
   comision: number
   otros: number
   neto: number
@@ -80,6 +87,7 @@ const COL = {
   tasa: 'tasa de mercado después del descuento (iva incluido)',
   canje: 'comisión por canje de ofertas',
   ivaCanje: 'iva sobre la comisión por canje de ofertas',
+  pedidosTotal: 'total del pedido (iva incluido)',
   pago: 'pago total',
 } as const
 
@@ -120,6 +128,7 @@ export function leerInformeUber(texto: string): FilaInformeUber[] {
     out.push({
       desde, hasta, tienda: (f[COL.tienda] ?? '').trim(), tiendaId, pedidos: Math.round(num(f[COL.pedidos])),
       ventas: { total: r2(total), base: r2(base), iva: r2(total - base) },
+      pedidosTotal: r2(num(f[COL.pedidosTotal])),
       comision, otros: r2(neto - total + comision), neto: r2(neto),
     })
   }
@@ -130,5 +139,5 @@ export function leerInformeUber(texto: string): FilaInformeUber[] {
 /** Cada tienda del informe, como la registra la base. */
 export const paraRegistrarInforme = (f: FilaInformeUber): DatosRegistrar => ({
   proveedor: 'uber', origen: 'informe', tienda: f.tienda || null, tienda_id: f.tiendaId, desde: f.desde, hasta: f.hasta,
-  pedidos: f.pedidos, ventas: f.ventas, comision: f.comision, otros: f.otros, neto: f.neto,
+  pedidos: f.pedidos, ventas: f.ventas, pedidos_total: f.pedidosTotal, comision: f.comision, otros: f.otros, neto: f.neto,
 })

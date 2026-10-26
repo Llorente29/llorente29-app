@@ -54,6 +54,18 @@ describe('Uber · el informe «Detalles del pago»', () => {
     const d = paraRegistrarInforme(filas[0])
     expect([d.proveedor, d.origen, d.tienda_id, d.tienda]).toEqual(['uber', 'informe', '04a4a861-2470-5869-86d3-befc33880227', 'Milanesa House (Calle de Camichi 4)'])
   })
+
+  // Lo que suman los pedidos, con promociones: lo que se compara con la caja.
+  // Las cifras de caja son las de Foodint del 24/10 por Uber, medidas en producción
+  // (sale cerradas, por marca y local): 22,53 · 68,60 · 15,90 · 15,90.
+  it('el «Total del pedido» de cada tienda es lo que cobró la caja', () => {
+    const caja: Record<string, number> = { 'Milanesa House (Calle de Camichi 4)': 22.53, 'Milanesa House': 68.6, 'Meraki Pita (Calle de Camichi 4)': 15.9, 'Bendito Burrito (Calle de Camichi 4)': 15.9 }
+    for (const [tienda, total] of Object.entries(caja)) {
+      const f = filas.find((x) => x.tienda === tienda)
+      expect(f?.pedidosTotal, tienda).toBe(total)
+      expect(paraRegistrarInforme(f!).pedidos_total, tienda).toBe(total)
+    }
+  })
 })
 
 describe('Glovo · la liquidación I170326000540680 (Excel y PDF)', () => {
