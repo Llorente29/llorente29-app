@@ -7,7 +7,8 @@
 //     «Lo que dijo Hacienda», plegado, con su código y su texto.
 //   · «Cómo va con Hacienda»: cada paso con su hora (emitida, enviada,
 //     recibida o rechazada, reenvío).
-// «Me he equivocado en…» (rectificar, anular, subsanar) es de la E3.
+//   · E3 · «Me he equivocado en…» (MeHeEquivocado): rectificar, anular o
+//     subsanar, diciendo antes qué va a pasar.
 
 import { useState } from 'react'
 import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
@@ -16,6 +17,7 @@ import { aTipoVenta, porqueNoVale, zonaDelCliente, type PorqueSinIva as Porque }
 import { lineaDeTiempo, porQueRechazo } from '@/modules/conta/lib/verifactu/estado'
 import { historiaHacienda, reenviarAHacienda } from '@/modules/conta/services/verifactuService'
 import { PorqueSinIva } from '@/modules/conta/ventas/FacturaVentaBloques'
+import { MeHeEquivocado } from './MeHeEquivocado'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const hora = (iso: string | null) => {
@@ -26,10 +28,14 @@ const hora = (iso: string | null) => {
   return `${p('day')}/${p('month')} ${p('hour')}:${p('minute')}`
 }
 
-export function HaciendaDeFactura({ accountId, factura, quien }: {
+export function HaciendaDeFactura({ accountId, factura, quien, alRectificar, alCambiar }: {
   accountId: string
-  factura: { id: string; numero: string | null; emitidaEl: string | null; porque: Porque | null; sinIva: boolean; pais: string | null }
+  factura: { id: string; numero: string | null; emitidaEl: string | null; porque: Porque | null; sinIva: boolean; pais: string | null; anulada: boolean }
   quien: string | null
+  /** E3 · abre la rectificativa (el «Corregir» de la ficha); null si no se rectifica. */
+  alRectificar?: (() => void) | null
+  /** E3 · se ha anulado o subsanado: la ficha vuelve a leer. */
+  alCambiar?: () => void
 }) {
   const [vuelta, setVuelta] = useState(0)
   const h = useLeer(() => historiaHacienda(accountId, factura.id), `${accountId}:${factura.id}:hacienda:${vuelta}`)
@@ -92,6 +98,10 @@ export function HaciendaDeFactura({ accountId, factura, quien }: {
           ))}
         </ol>
         {r?.tipoVenta && <p className="s-tarjeta-apoyo">Desde ahora Sumied lo pregunta antes de emitir una factura sin IVA: no te volverá a pasar.</p>}
+        {!factura.anulada && (
+          <MeHeEquivocado factura={{ id: factura.id, numero: factura.numero }} quien={quien} alRectificar={alRectificar ?? null}
+            alHacer={(texto) => { setAviso({ ok: true, texto }); setVuelta((v) => v + 1); alCambiar?.() }} />
+        )}
       </Tarjeta>
     </>
   )

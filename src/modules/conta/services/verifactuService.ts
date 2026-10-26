@@ -6,10 +6,14 @@
 // las funciones de la base:
 //   · verifactu_modo (pruebas / real, con el candado de la conexión probada),
 //   · verifactu_autorizar_certificado / verifactu_retirar_autorizacion,
-//   · verifactu_otros_programas (0226), verifactu_reenviar (0218).
+//   · verifactu_otros_programas (0226), verifactu_reenviar (0218),
+//   · E3 (1750): verifactu_previsto, verifactu_anular_factura, verifactu_subsanar,
+//     verifactu_comprobar_cadena, verifactu_cuadre_pedir / _ver y
+//     verifactu_despacho_empresas.
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import type { EstadoFactura, EstadoHacienda, ModoVerifactu, RegistroLeido } from '@/modules/conta/lib/verifactu/estado'
+import type { AccionCorreccion, Cadena, CuadreVisto, Previsto, RegistroExportar } from '@/modules/conta/lib/verifactu/correccion'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -134,4 +138,67 @@ export function guardarOtrosProgramas(companyId: string, programas: readonly str
 /** «Corregir y reenviar» (0218): la rechazada, como subsanación; con el porqué de la venta sin IVA si se cambia. */
 export function reenviarAHacienda(invoiceId: string, tipoVenta: { calificacion: string } | { exenta: string } | null, quien: string | null) {
   return rpc<{ registro_id: string; num_serie: string; estado: string }>('verifactu_reenviar', { p_invoice: invoiceId, p_tipo_venta: tipoVenta, p_quien_nombre: quien })
+}
+
+// ── V03 · E3 · Corregir y cuadrar ───────────────────────────────────────────
+
+/** Lo que va a pasar si rectificas, anulas o subsanas (solo lee). */
+export function previsto(invoiceId: string, accion: AccionCorreccion, descripcion?: string | null) {
+  return rpc<Previsto>('verifactu_previsto', { p_invoice: invoiceId, p_accion: accion, p_cambios: descripcion == null ? null : { descripcion } })
+}
+
+/** «No tenía que haberla emitido»: escribiendo ANULAR, con el motivo. */
+export function anularFactura(invoiceId: string, motivo: string, confirmacion: string, quien: string | null) {
+  return rpc<{ numero: string; registro_id: string; sin_registro_previo: boolean; contraasiento: string; numero_contraasiento: number | null; numero_anulado: number | null }>(
+    'verifactu_anular_factura', { p_invoice: invoiceId, p_motivo: motivo, p_confirmacion: confirmacion, p_quien_nombre: quien })
+}
+
+/** «Solo está mal lo que tiene Hacienda»: un registro nuevo (subsanación); con otra descripción si se da. */
+export function subsanar(invoiceId: string, descripcion: string | null, quien: string | null) {
+  return rpc<{ numero: string; registro_id: string; cambios: Previsto['cambios']; rechazo_previo: string | null }>(
+    'verifactu_subsanar', { p_invoice: invoiceId, p_descripcion: descripcion, p_quien_nombre: quien })
+}
+
+export function comprobarCadena(companyId: string) {
+  return rpc<Cadena>('verifactu_comprobar_cadena', { p_company: companyId })
+}
+
+/** «Comprobar con Hacienda» de un mes (AAAA-MM-01). desdeAccount: la asesoría que lleva la empresa. */
+export function pedirCuadre(companyId: string, mes: string, desdeAccount: string | null, quien: string | null) {
+  return rpc<{ id: string; ya_estaba: boolean; entorno: string; estado: string }>(
+    'verifactu_cuadre_pedir', { p_company: companyId, p_mes: mes, p_desde_account: desdeAccount, p_quien_nombre: quien })
+}
+
+export function verCuadre(companyId: string, opciones: { mes?: string; cuadre?: string; desdeAccount?: string | null }) {
+  return rpc<CuadreVisto | null>('verifactu_cuadre_ver',
+    { p_company: companyId, p_mes: opciones.mes ?? null, p_cuadre: opciones.cuadre ?? null, p_desde_account: opciones.desdeAccount ?? null })
+}
+
+export interface EmpresaDelDespacho { company_id: string; nombre: string; nif: string | null; modo: ModoVerifactu }
+export function empresasDelDespacho(accountId: string) {
+  return rpc<EmpresaDelDespacho[]>('verifactu_despacho_empresas', { p_account: accountId })
+}
+
+/** Todos los registros de la empresa, para una inspección (en el orden de la cadena). */
+export async function registrosParaExportar(accountId: string, companyId: string): Promise<RegistroExportar[]> {
+  const out: RegistroExportar[] = []
+  // De mil en mil: PostgREST no da más de una vez.
+  for (let desde = 0; ; desde += 1000) {
+    const filas = await leer(tabla('verifactu_registro')
+      .select('entorno, tipo, subsanacion, rechazo_previo, sin_registro_previo, nif_emisor, num_serie, fecha_expedicion, tipo_factura, cuota_total, importe_total, '
+        + 'primer_registro, anterior_num_serie, anterior_fecha, huella_anterior, fecha_hora_huso, generado_at, cadena_huella, huella, estado, codigo_error, '
+        + 'descripcion_error, csv, respondido_at, id')
+      .eq('account_id', accountId).eq('company_id', companyId).order('generado_at').order('id').range(desde, desde + 999), 'los registros de Verifactu')
+    out.push(...filas.map((r): RegistroExportar => ({
+      entorno: String(r.entorno), tipo: String(r.tipo), subsanacion: r.subsanacion === true, rechazo_previo: s(r.rechazo_previo),
+      sin_registro_previo: r.sin_registro_previo === true, nif_emisor: String(r.nif_emisor), num_serie: String(r.num_serie),
+      fecha_expedicion: String(r.fecha_expedicion), tipo_factura: s(r.tipo_factura),
+      cuota_total: r.cuota_total == null ? null : n(r.cuota_total), importe_total: r.importe_total == null ? null : n(r.importe_total),
+      primer_registro: r.primer_registro === true, anterior_num_serie: s(r.anterior_num_serie), anterior_fecha: s(r.anterior_fecha),
+      huella_anterior: s(r.huella_anterior), fecha_hora_huso: String(r.fecha_hora_huso), generado_at: String(r.generado_at),
+      cadena_huella: String(r.cadena_huella), huella: String(r.huella), estado: String(r.estado),
+      codigo_error: r.codigo_error == null ? null : n(r.codigo_error), descripcion_error: s(r.descripcion_error), csv: s(r.csv), respondido_at: s(r.respondido_at),
+    })))
+    if (filas.length < 1000) return out
+  }
 }

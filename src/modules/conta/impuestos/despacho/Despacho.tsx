@@ -28,6 +28,8 @@ import { baseDeDatos } from '@/services/versionApp'
 import { confirmarCertificado, hacienda, leerPuerta } from '@/modules/conta/services/impuestosService'
 import { enviarResumen, leerEquipo, leerSoyAsesoria, leerTrimestre, ponerResponsable } from '@/modules/conta/services/despachoService'
 import type { Puerta } from '@/modules/conta/impuestos/declaracion'
+import { empresasDelDespacho, type EmpresaDelDespacho } from '@/modules/conta/services/verifactuService'
+import { DialogoComprobarHacienda } from '@/modules/conta/verifactu/ComprobarConHacienda'
 import {
   SIN_FILTROS, chipDeCertificado, chipDeModelo, filtrar, hayFiltros, hoyDeLaPantalla, lineaDelTrimestre, loteDe, modelosDelTrimestre, nombreTrimestre,
   porQueNoPresenta, resumenLote, textoPresentar, tipoDeCliente, trimestreDe, trimestresParaElegir,
@@ -55,6 +57,8 @@ export function Despacho({ accountId }: { accountId: string }) {
 
   // Cada vez que cambia algo (o se pide otra vez), se vuelve a leer; lo que llega tarde de una lectura vieja, no pisa.
   const [vuelta, setVuelta] = useState(0)
+  // V03 E3 · «Comprobar con Hacienda» de un cliente con Verifactu encendido.
+  const [verifactu, setVerifactu] = useState<readonly EmpresaDelDespacho[] | null>(null)
   const cargar = useCallback(() => setVuelta((v) => v + 1), [])
   useEffect(() => {
     if (!accountId) return
@@ -132,9 +136,17 @@ export function Despacho({ accountId }: { accountId: string }) {
               opciones={opciones.map((o) => ({ valor: `${o.ejercicio}·${o.periodo}`, texto: `Trimestre: ${o.ejercicio} · ${o.periodo}` }))} />
           </label>
           <Boton variante="secundario" onClick={exportar} disabled={!datos}>Exportar</Boton>
+          <Boton variante="secundario" data-prueba="despacho-comprobar-hacienda"
+            onClick={() => void empresasDelDespacho(accountId).then(setVerifactu).catch((e: Error) => setAviso({ tono: 'falta', texto: `No se han podido leer tus clientes con Verifactu: ${e.message}` }))}>
+            Comprobar con Hacienda
+          </Boton>
         </div>
       </header>
 
+      {verifactu && (
+        <DialogoComprobarHacienda empresas={verifactu.map((e) => ({ id: e.company_id, nombre: e.nombre }))} desdeAccount={accountId} quien={null}
+          alCerrar={() => setVerifactu(null)} />
+      )}
       {aviso && (
         <p className="s-despacho-aviso" role="status" data-tono={aviso.tono}>
           {aviso.texto} <button type="button" className="s-despacho-cerrar" onClick={() => setAviso(null)} aria-label="Cerrar el aviso">×</button>

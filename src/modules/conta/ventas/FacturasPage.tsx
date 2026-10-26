@@ -29,6 +29,7 @@
 // Lo que se decide sin React, en lib/facturasVenta.ts; lo que se lee, en
 // services/ventasService.ts (con account_id y company_id, regla 9).
 
+import { useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaFacturaVenta, rutaLiquidacionesVentas, rutaNuevaFacturaVenta, rutaConta, CONTA } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
@@ -42,6 +43,7 @@ import { leerFacturasVenta } from '@/modules/conta/services/ventasService'
 import { estadosHacienda, modoVerifactu } from '@/modules/conta/services/verifactuService'
 import { cifrasHacienda, etiquetaHacienda, porQueEnviando, porQueRechazo } from '@/modules/conta/lib/verifactu/estado'
 import { BandaPruebas } from '@/modules/conta/verifactu/BandaPruebas'
+import { DialogoComprobarHacienda } from '@/modules/conta/verifactu/ComprobarConHacienda'
 import { PdfsQueFaltan } from './PdfsQueFaltan'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { MAX_FILAS } from '@/modules/conta/facturacion/emitidas'
@@ -65,7 +67,9 @@ const DIEZ: Record<Exclude<DiezFactura, null>, { texto: string; tono: 'seguro' |
 }
 
 export default function FacturasPage() {
-  const { accountId, cargando } = useCuentaConta()
+  const { accountId, cargando, userName } = useCuentaConta()
+  // V03 E3 · «Comprobar con Hacienda», en «Más» cuando Verifactu está encendido.
+  const [comprobar, setComprobar] = useState(false)
   const { activa } = useEmpresas()
   const { local: ejeLocal } = useAnalitica()
   const movil = useIsMobile()
@@ -90,7 +94,14 @@ export default function FacturasPage() {
       frase={hacienda.datos && hacienda.datos.modo !== 'apagado'
         ? 'Las que emites. Cada una llega a Hacienda en el momento.'
         : 'Las facturas que haces a tus clientes: las que escribes aquí, sus cobros y su envío a Diez, y las que ya estaban en tu libro.'}
-      principal={nueva} />
+      principal={nueva}
+      masAcciones={hacienda.datos && hacienda.datos.modo !== 'apagado' ? [{
+        titulo: 'Hacienda',
+        acciones: [{ id: 'comprobar-hacienda', etiqueta: 'Comprobar con Hacienda', dato: 'Si tiene lo mismo que Sumied', alPulsar: () => setComprobar(true), grupo: '' }],
+      }] : []} />
+  )
+  const dialogoComprobar = comprobar && activa && (
+    <DialogoComprobarHacienda empresas={[{ id: activa.id, nombre: activa.nombre }]} desdeAccount={null} quien={userName ?? null} alCerrar={() => setComprobar(false)} />
   )
   if (!accountId && !cargando) return <div className="s-pagina">{encabezado}<p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus facturas.</p></div>
   if (!activa) return <div className="s-pagina">{encabezado}<p className="s-apoyo">Aún no hay ninguna empresa: da de alta tu empresa y aquí salen sus facturas.</p></div>
@@ -209,6 +220,7 @@ export default function FacturasPage() {
     <div className="s-pagina">
       <BandaPruebas />
       {encabezado}
+      {dialogoComprobar}
       {datos.error && (
         <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>
       )}
