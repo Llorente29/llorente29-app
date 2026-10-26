@@ -10,11 +10,15 @@
 #        en las cedidas (sin ella, el tique va sin la línea y se avisa);
 #      · un local sin código no numera: hasta que se elija en Ajustes, su tique
 #        sale como hoy.
-#      Si la serie falla, la impresión no: el tique sale como antes y se avisa.
+#      Si la serie o quién factura fallan, la impresión no: el tique sale como
+#      antes y se avisa.
+#      · Antes de cambiarla guarda la de antes, tal cual, en funcion_respaldo
+#        (tabla nueva), y la vuelta atrás la restaura de ahí, byte a byte, con
+#        sus \r\n (Respuesta 1: el ensayo #256 paró por la copia a mano).
 #
-# AUTORIZO: sí. Toca la impresión de la bolsa, que es el camino del pedido
-# (encargo V04: «la tanda que toque el camino del pedido lleva autorizo»),
-# aunque el analizador no la cuente en su lista del camino.
+# AUTORIZO: sí, y ahora lo pide el analizador: desde la Respuesta 1 (27/10)
+# fiscal_for_print está en CAMINO_FUNCIONES. En el campo `autorizo`:
+#   20261026T2309_v04_tique_serie_y_quien_factura.sql
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 supabase/migrations/20261026T2309_v04_tique_serie_y_quien_factura.sql

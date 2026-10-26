@@ -1,8 +1,8 @@
 {
- "_que": "V04 · PR 1 · contexto de producción de la tanda (2309), medido en SOLO LECTURA el 26/10 a las 22:20Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: de lo que toca la 2309 solo existe fiscal_for_print(text,uuid) (la que cambia en caliente, sin otra firma); ninguna de sus tablas; nada en el camino del pedido según el analizador y nada en el historial. La cuenta (v04-tique.sql) a la misma hora: 3968 / 10950 · 9874 · 0 de 3 · 6efe86f5 · cancel_sale 954472a9, claim_print_jobs 403971b4, close_sale dd57b687, encolar_alerta 7349bace, kds_resolve_device 6c853904, order_for_print 09e3f639, report_print_job 84d7b4c9.",
- "medido": "2026-10-26T22:20Z",
+ "_que": "V04 · PR 1 · contexto de producción de la tanda (2309), medido en SOLO LECTURA el 26/10 a las 23:37Z (Respuesta 1) con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow, que desde la Respuesta 1 incluye fiscal_for_print. De lo que toca la 2309 solo existe fiscal_for_print(text,uuid) (la que cambia en caliente, sin otra firma, huella 6efe86f5 con sus \\r\\n), y es camino del pedido; ninguna de sus tablas (tampoco funcion_respaldo) ni las funciones del respaldo; nada en el historial.",
+ "medido": "2026-10-26T23:37Z",
  "tanda": {
-  "supabase/migrations/20261026T2309_v04_tique_serie_y_quien_factura.sql": "1a69c37ac9bbc2ae94252486418c22c9"
+  "supabase/migrations/20261026T2309_v04_tique_serie_y_quien_factura.sql": "963956a26a498304efd473256000ceab"
  },
  "contexto": {
   "tablas": [],
@@ -13,7 +13,9 @@
   "otras": {},
   "camino": {
    "tablas": [],
-   "funciones": []
+   "funciones": [
+    "public.fiscal_for_print(text,uuid)"
+   ]
   },
   "usos": {},
   "registro": []

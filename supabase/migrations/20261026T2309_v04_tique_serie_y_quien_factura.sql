@@ -183,52 +183,153 @@ begin
 end $$;
 revoke all on function public._ticket_quien_factura(uuid, uuid) from public, anon, authenticated;
 
+-- ── El respaldo de una función antes de cambiarla (Respuesta 1, 27/10) ─────
+-- La vuelta atrás de una función que cambia en caliente tiene que dejarla
+-- EXACTAMENTE como estaba, también con sus saltos de línea: fiscal_for_print
+-- tiene \r\n en producción y una copia escrita a mano con \n deja otra huella
+-- (el ensayo #256 paró por eso). Así que la migración guarda su texto tal cual
+-- (pg_get_functiondef) antes de cambiarla, y la vuelta atrás lo ejecuta y
+-- comprueba que la huella es la misma. Vale para cualquier base y para
+-- cualquier tanda: las dos funciones y la tabla se quedan aunque se deshaga esta.
+-- ── respaldo: inicio ────────────────────────────────────────────────────────
+-- (Autocontenido: lo carga tal cual tests/unit/modules/orders/v04/respaldoFuncion.test.ts.)
+create table if not exists public.funcion_respaldo (
+  firma        text not null,
+  migracion    text not null,
+  definicion   text not null,
+  huella       text not null,
+  guardado_at  timestamptz not null default now(),
+  constraint funcion_respaldo_pk primary key (firma, migracion)
+);
+comment on table public.funcion_respaldo is
+  'El texto exacto (pg_get_functiondef) de una función antes de que una migración la cambie en caliente, para que su vuelta atrás la deje como estaba, byte a byte (_restaurar_funcion). La fila se borra al restaurar.';
+alter table public.funcion_respaldo enable row level security;
+revoke all on public.funcion_respaldo from anon, authenticated;
+
+create or replace function public._respaldar_funcion(p_firma text, p_migracion text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v_def text; v_h text;
+begin
+  if to_regprocedure(p_firma) is null then raise exception 'No existe % para respaldarla.', p_firma using errcode = '42883'; end if;
+  v_def := pg_get_functiondef(to_regprocedure(p_firma));
+  -- Si ya hay respaldo de esta migración (se pasó dos veces), se queda el primero: el de antes del cambio.
+  insert into public.funcion_respaldo (firma, migracion, definicion, huella) values (p_firma, p_migracion, v_def, md5(v_def))
+  on conflict (firma, migracion) do nothing;
+  select huella into v_h from public.funcion_respaldo where firma = p_firma and migracion = p_migracion;
+  return v_h;
+end $$;
+revoke all on function public._respaldar_funcion(text, text) from public, anon, authenticated;
+
+create or replace function public._restaurar_funcion(p_firma text, p_migracion text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v public.funcion_respaldo; v_ahora text;
+begin
+  select * into v from public.funcion_respaldo where firma = p_firma and migracion = p_migracion;
+  if v.firma is null then
+    raise exception 'No hay respaldo de % de la migración %: no se puede dejar como estaba.', p_firma, p_migracion using errcode = 'P0002';
+  end if;
+  execute v.definicion;
+  v_ahora := md5(pg_get_functiondef(to_regprocedure(p_firma)));
+  if v_ahora is distinct from v.huella then
+    raise exception 'La vuelta atrás de % no la deja como estaba (huella % y debía ser %).', p_firma, v_ahora, v.huella using errcode = 'P0001';
+  end if;
+  delete from public.funcion_respaldo where firma = p_firma and migracion = p_migracion;
+  return v_ahora;
+end $$;
+revoke all on function public._restaurar_funcion(text, text) from public, anon, authenticated;
+-- ── respaldo: fin ───────────────────────────────────────────────────────────
+
+select public._respaldar_funcion('public.fiscal_for_print(text,uuid)', '20261026T2309_v04_tique_serie_y_quien_factura');
+
 -- ── Lo que pide la tablet al imprimir la bolsa (misma firma) ────────────────
 -- Devuelve lo de antes (legalName, taxId, address, ticketNumber) y además:
 -- issuerKind (propia|cedida), sinFactura (cedida sin factura de Last: el tique
 -- va sin la línea) y serie (el número es de nuestra serie).
+-- LA IMPRESIÓN NO FALLA NUNCA POR ESTO (Respuesta 1, 27/10): quién factura, la
+-- serie y los avisos van cada uno en su bloque que captura los errores. Si
+-- algo falla, el tique sale como antes (_ticket_fiscal_de_antes) y se avisa.
+
+-- Lo de antes, tal cual lo daba la fiscal_for_print de 20260720T1200.
+create or replace function public._ticket_fiscal_de_antes(p_account uuid, p_sale uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_a public.accounts; v_raw jsonb; v_addr text;
+begin
+  select * into v_a from public.accounts where id = p_account;
+  select public.safe_jsonb(raw_tab) into v_raw from public.sale where id = p_sale and account_id = p_account;
+  v_addr := nullif(btrim(concat_ws(', ',
+              nullif(v_a.billing_address->>'street', ''),
+              nullif(concat_ws(' ', v_a.billing_address->>'postalCode', v_a.billing_address->>'city'), ''),
+              nullif(v_a.billing_address->>'province', ''))), '');
+  return jsonb_build_object('legalName', coalesce(v_a.legal_name, v_a.name), 'taxId', v_a.cif, 'address', v_addr,
+    'ticketNumber', coalesce(v_raw->'bills'->0->>'number', v_raw->>'number'));
+end $$;
+revoke all on function public._ticket_fiscal_de_antes(uuid, uuid) from public, anon, authenticated;
+
+-- Un aviso que nunca tira la impresión: si encolarlo falla, se calla (y queda en el registro).
+create or replace function public._ticket_aviso(p_kind text, p_subject text, p_message text, p_debounce text, p_window interval,
+                                                p_account uuid, p_location uuid, p_brand uuid, p_severity text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  perform public.encolar_alerta(p_kind, p_subject, p_message, p_debounce, p_window, p_account, p_location, p_brand, p_severity);
+exception when others then
+  raise log 'tique: no se ha podido encolar el aviso % (%)', p_kind, sqlerrm;
+end $$;
+revoke all on function public._ticket_aviso(text, text, text, text, interval, uuid, uuid, uuid, text) from public, anon, authenticated;
+
 create or replace function public.fiscal_for_print(p_device_token text, p_sale_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $function$
 declare
-  v_device kds_device; v_acc uuid; v_q jsonb; v_s record; v_code text; v_t public.ticket_invoice; v_num text; v_raw jsonb;
+  v_device kds_device; v_acc uuid; v_q jsonb; v_loc uuid; v_brand uuid; v_raw jsonb; v_code text; v_t public.ticket_invoice; v_num text;
 begin
+  -- Igual que antes: sin un token bueno no hay tique (y la tablet lo sabe).
   v_device := public.kds_resolve_device(p_device_token);
   if v_device.id is null then raise exception 'fiscal_for_print: token no válido'; end if;
   v_acc := v_device.account_id;
-  v_q := public._ticket_quien_factura(v_acc, p_sale_id);
-  if v_q is null then return null; end if;
-  select id, location_id, raw_tab, brand_id into v_s from public.sale where id = p_sale_id and account_id = v_acc;
+
+  begin
+    select location_id, brand_id, public.safe_jsonb(raw_tab) into v_loc, v_brand, v_raw from public.sale where id = p_sale_id and account_id = v_acc;
+    v_q := public._ticket_quien_factura(v_acc, p_sale_id);
+  exception when others then
+    v_q := null;
+    perform public._ticket_aviso('tique_sin_quien_factura', 'Un tique ha salido sin saber quién factura',
+      'No se ha podido leer quién factura el pedido al imprimir su tique (' || sqlerrm || '). Ha salido como antes. Míralo en Ajustes › Facturas de los pedidos.',
+      'tique_sin_quien_factura:' || v_acc::text, interval '1 hour', v_acc, v_loc, v_brand, 'alto');
+  end;
+  if v_q is null then
+    begin return public._ticket_fiscal_de_antes(v_acc, p_sale_id);
+    exception when others then return jsonb_build_object('legalName', null, 'taxId', null, 'address', null, 'ticketNumber', null);
+    end;
+  end if;
 
   if v_q->>'tipo' = 'cedida' then
     if (v_q->>'sinFactura')::boolean then
       -- Nunca se inventa un número: el tique va sin la línea, y se avisa.
-      perform public.encolar_alerta('tique_cedida_sin_factura',
+      perform public._ticket_aviso('tique_cedida_sin_factura',
         'Un pedido de una marca cedida llegó sin la factura de Last',
         'El tique de la bolsa ha salido sin «Factura Simplificada»: el pedido de una marca cedida no trae la factura del socio (raw_tab.bills). Míralo en Last.',
-        'tique_cedida_sin_factura:' || p_sale_id::text, interval '7 days', v_acc, v_s.location_id, v_s.brand_id, 'aviso');
+        'tique_cedida_sin_factura:' || p_sale_id::text, interval '7 days', v_acc, v_loc, v_brand, 'aviso');
     end if;
     return jsonb_build_object('legalName', v_q->>'legalName', 'taxId', v_q->>'taxId', 'address', v_q->>'address',
       'ticketNumber', v_q->>'number', 'issuerKind', 'cedida', 'sinFactura', (v_q->>'sinFactura')::boolean, 'serie', false);
   end if;
 
   -- Propia: el número de la serie del local, si el local tiene código.
-  select code into v_code from public.location_invoice_code where location_id = v_s.location_id and account_id = v_acc;
-  if v_code is not null then
-    begin
-      v_t := public._ticket_invoice_number(v_acc, v_s.location_id, p_sale_id, v_code, v_q->>'legalName', v_q->>'taxId');
+  begin
+    select code into v_code from public.location_invoice_code where location_id = v_loc and account_id = v_acc;
+    if v_code is not null then
+      v_t := public._ticket_invoice_number(v_acc, v_loc, p_sale_id, v_code, v_q->>'legalName', v_q->>'taxId');
       v_num := v_t.number_text;
-    exception when others then
-      -- La impresión no se cae por esto: el tique sale como antes y se avisa.
-      v_num := null;
-      perform public.encolar_alerta('tique_sin_numero',
-        'Un tique ha salido sin el número de su serie',
-        'No se ha podido dar el número de la serie del local al imprimir el tique (' || sqlerrm || '). El tique ha salido con el número del pedido. Míralo en Ajustes › Facturas de los pedidos.',
-        'tique_sin_numero:' || v_s.location_id::text, interval '1 hour', v_acc, v_s.location_id, v_s.brand_id, 'alto');
-    end;
-  end if;
+    end if;
+  exception when others then
+    -- La impresión no se cae por esto: el tique sale como antes y se avisa.
+    v_num := null; v_t := null;
+    perform public._ticket_aviso('tique_sin_numero',
+      'Un tique ha salido sin el número de su serie',
+      'No se ha podido dar el número de la serie del local al imprimir el tique (' || sqlerrm || '). El tique ha salido con el número del pedido. Míralo en Ajustes › Facturas de los pedidos.',
+      'tique_sin_numero:' || coalesce(v_loc::text, v_acc::text), interval '1 hour', v_acc, v_loc, v_brand, 'alto');
+  end;
   if v_num is null then
     -- Como antes: el número de la plataforma o del TPV, si lo trae (si no, la tablet pone el del pedido).
-    v_raw := public.safe_jsonb(v_s.raw_tab);
     v_num := coalesce(v_raw->'bills'->0->>'number', v_raw->>'number');
   end if;
   return jsonb_build_object('legalName', v_q->>'legalName', 'taxId', v_q->>'taxId', 'address', null,

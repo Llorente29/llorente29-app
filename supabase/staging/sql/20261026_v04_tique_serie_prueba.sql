@@ -36,8 +36,18 @@ end $$;
 set local statement_timeout = '180s';
 
 -- El ensayo de la tanda ya ha pasado la 2309 antes de esta prueba, en la misma
--- transacción: primero su vuelta atrás, y lo de antes se mide después.
+-- transacción: primero su vuelta atrás (que restaura fiscal_for_print desde su
+-- respaldo, byte a byte), y lo de antes se mide después. Si no la ha pasado,
+-- no hay respaldo y no hay nada que deshacer.
+select to_regclass('public.funcion_respaldo') is not null as hay_respaldo \gset
+\if :hay_respaldo
+select exists (select 1 from public.funcion_respaldo where migracion = '20261026T2309_v04_tique_serie_y_quien_factura') as v04_aplicada \gset
+\else
+\set v04_aplicada false
+\endif
+\if :v04_aplicada
 \i supabase/vuelta-atras/20261026T2309_v04_tique_serie_y_quien_factura.down.sql
+\endif
 
 create temp table _v (clave text primary key, v text) on commit drop;
 grant select, insert, update on _v to authenticated;
@@ -58,9 +68,14 @@ do $$ begin
   if to_regclass('public.ticket_invoice') is not null or exists (select 1 from pg_proc where proname in ('fiscal_for_preview', 'ticket_invoice_ajustes')) then
     raise exception 'PRUEBA V04 · 0: la vuelta atrás no deja la base como antes de la 2309.';
   end if;
-  -- La de producción, medida el 26/10 (staging y producción, iguales).
+  -- La de producción, medida el 26/10 y el 27/10 (staging y producción, iguales,
+  -- con 31 \r en su cuerpo): la vuelta atrás tiene que dejar ESTA huella, con
+  -- sus saltos de línea (el ensayo #256 paró porque una copia con \n no la dejaba).
   if (select h from _md5) <> '6efe86f51f4bc6a1f336a68bf0875c49' then
-    raise exception 'PRUEBA V04 · 0: fiscal_for_print no es la de producción (md5 %).', (select h from _md5);
+    raise exception 'PRUEBA V04 · 0: fiscal_for_print no es la de producción (md5 %): la vuelta atrás no la deja byte a byte.', (select h from _md5);
+  end if;
+  if (select length(prosrc) - length(replace(prosrc, chr(13), '')) from pg_proc where oid = 'public.fiscal_for_print(text,uuid)'::regprocedure) = 0 then
+    raise exception 'PRUEBA V04 · 0: fiscal_for_print ha perdido sus \r\n.';
   end if;
   raise notice '0 · fiscal_for_print de antes (md5 %), y nada de la 2309', (select h from _md5);
 end $$;
@@ -253,10 +268,13 @@ do $$ begin
   end if;
   if to_regclass('public.ticket_invoice') is not null or to_regclass('public.location_invoice_code') is not null
      or exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname in ('fiscal_for_preview', 'ticket_invoice_ajustes', 'ticket_invoice_code_set', '_ticket_invoice_number', '_ticket_quien_factura'))
+     or exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname in ('_ticket_fiscal_de_antes', '_ticket_aviso'))
+     or to_regclass('public.funcion_respaldo') is not null
+     or exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname in ('_respaldar_funcion', '_restaurar_funcion'))
      or (select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname = 'fiscal_for_print') <> 1 then
-    raise exception 'PRUEBA V04 · 8: la vuelta atrás deja algo, o hay sobrecargas (regla 2).';
+    raise exception 'PRUEBA V04 · 8: la vuelta atrás deja algo (o su respaldo), o hay sobrecargas (regla 2).';
   end if;
-  raise notice '8 · la vuelta atrás: fiscal_for_print con el md5 del principio, nada de la 2309 y sin sobrecargas';
+  raise notice '8 · la vuelta atrás: fiscal_for_print con el md5 del principio (el de producción, con sus \r\n), nada de la 2309 (tampoco funcion_respaldo, que queda vacío), y sin sobrecargas';
 end $$;
 
 rollback;

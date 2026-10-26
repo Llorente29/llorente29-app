@@ -58,6 +58,17 @@ Medido en producción el 26/10, solo leyendo.
   - Una cedida sin factura encola el aviso `tique_cedida_sin_factura`.
   - Si la serie falla, la impresión no: el tique sale como antes y se encola
     `tique_sin_numero` con nivel alto.
+- **La impresión no falla nunca por quién factura** (Respuesta 1, 27/10).
+  `_ticket_quien_factura` y el aviso de la cedida sin factura van dentro de
+  bloques que recogen el error. Si fallan, el tique sale como antes (los datos
+  de la cuenta y el número de siempre) y se encola `tique_sin_quien_factura`.
+  Un aviso que no se puede encolar no para nada.
+- **La de antes, guardada** (Respuesta 1). Antes de cambiar `fiscal_for_print`,
+  la migración guarda su definición tal cual (`pg_get_functiondef`) en
+  `funcion_respaldo`, con `_respaldar_funcion`. La vuelta atrás la vuelve a
+  crear desde ahí con `_restaurar_funcion`, que para si la huella no sale
+  idéntica. Las tres piezas se quedan para cualquier tanda que cambie una
+  función en caliente.
 - **`fiscal_for_preview`:** lo mismo para la vista previa, pero solo lee. Si el
   local numera y el pedido aún no se ha impreso, dice «al imprimir».
 - **Ajustes:** `ticket_invoice_ajustes` (lo que pinta el tablero 4) y
@@ -136,12 +147,23 @@ Es la ruta `/configuracion/facturas-pedidos` (tablero 4).
 `folvy/conta-v04-tique`: la 2309, con su cuenta (`cuentas/v04-tique.sql`) y su
 vuelta atrás.
 
-- **El analizador dice «sigue».** La 2309 añade, y cambia `fiscal_for_print`
-  con su cabecera y su prueba.
-- **Lleva `autorizo` igualmente, por el encargo.** Toca la impresión de la
-  bolsa, que es el camino del pedido, aunque `fiscal_for_print` no esté en la
-  lista del camino del analizador. Esa lista podría ampliarse; queda apuntado
-  para otro encargo.
+- **El analizador dice AUTORIZO.** Desde la Respuesta 1, `fiscal_for_print`
+  está en `CAMINO_FUNCIONES` del workflow. Contexto medido de nuevo en
+  producción, solo lectura, el 26/10 a las 23:37Z.
+  - En el campo `autorizo`: `20261026T2309_v04_tique_serie_y_quien_factura.sql`.
+- **Por qué paró el ensayo #256.** `fiscal_for_print` tiene `\r\n` en
+  producción y en staging (31 retornos, huella `6efe86f5`). La vuelta atrás la
+  copiaba a mano con `\n` y dejaba otra huella (`abd45e61`).
+  - Staging lo vio: el run 623 salió en rojo en la sección 0 de la prueba, y
+    por eso no llegó al comparador (W06), que va después y mide lo mismo.
+- **Que no se repita.** El analizador bloquea una tanda que reemplaza una
+  función que ya existe si la migración no la guarda antes con
+  `_respaldar_funcion` o su `.down.sql` no la restaura con `_restaurar_funcion`.
+  - Vale desde la 2309. Las que ya estaban en `main` van congeladas en
+    `scripts/conta/produccion/respaldo-antiguas.txt`.
+  - Pruebas: `tests/conta/produccion/v04respaldo.test.ts` y, contra un Postgres
+    de verdad con una función con `\r\n`,
+    `tests/unit/modules/orders/v04/respaldoFuncion.test.ts`.
 - **Se lanza desde la rama, antes de fusionar:** el ensayo y después el real.
 - **La cuenta medida antes:** 3968 / 10950 · 9874 · 0 de 3 · 6efe86f5 · y las
   siete funciones del camino con su huella.
