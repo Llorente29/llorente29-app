@@ -12,12 +12,18 @@
 -- Lo demás, IGUAL: la tanda no toca ninguna liquidación, tienda, diferencia,
 -- cobro ni asiento, ni el registrar del #332 (su huella, igual).
 --
--- Medido en producción el 26/10 a las 02:05 UTC, antes (la 1 y la 8 pueden
--- crecer solas: siguen llegando correos de Uber y asientos de otros caminos):
---   267 · 0 · no existe · 8b9ed86d · no existe · 57774b89 · 7e8996c5 · 9 / 9 · 15223
+-- Solo cuenta lo que no se mueve solo: el ensayo compara el antes con la tanda
+-- deshecha, y en medio otros procesos siguen escribiendo. El 26/10 a las 06:42
+-- el ensayo paró porque «asientos (base entera)» pasó de 15.223 a 15.224 con un
+-- asiento de otro camino. Por eso: las liquidaciones y las tiendas de Foodint
+-- hasta un instante fijo y los asientos de las diferencias resueltas (los únicos
+-- que la tanda podría escribir), no los de toda la base.
+--
+-- Medido en producción el 26/10 a las 06:50 UTC, antes:
+--   267 · 0 · no existe · 8b9ed86d · no existe · 57774b89 · 7e8996c5 · 9 / 9 · 0
 select clave, valor from (
-  select 1 o, 'liquidaciones de Foodint' clave,
-    (select count(*) from public.channel_settlement where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710')::text valor union all
+  select 1 o, 'liquidaciones de Foodint creadas hasta el 26/10 a las 06:00 UTC' clave,
+    (select count(*) from public.channel_settlement where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and created_at < timestamptz '2026-10-26 06:00:00+00')::text valor union all
   select 2, 'diferencias resueltas (base entera)',
     (select count(*) from public.conta_liquidacion_resolucion)::text union all
   select 3, 'diferencias resueltas con su marca (base entera)',
@@ -30,8 +36,9 @@ select clave, valor from (
     (select left(md5(p.prosrc), 8) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_liquidaciones') union all
   select 6, 'huella de conta_liquidacion_registrar (no se toca)',
     (select left(md5(p.prosrc), 8) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_liquidacion_registrar') union all
-  select 7, 'tiendas de Foodint (todas / con su tramo)',
+  select 7, 'tiendas de Foodint creadas hasta el 26/10 a las 06:00 UTC (todas / con su tramo)',
     (select count(*) || ' / ' || count(*) filter (where exists (select 1 from public.platform_store_tramo t where t.store_id = ps.id))
-       from public.platform_store ps where ps.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710') union all
-  select 8, 'asientos (base entera)', (select count(*) from public.journal_entry)::text
+       from public.platform_store ps where ps.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and ps.created_at < timestamptz '2026-10-26 06:00:00+00') union all
+  select 8, 'asientos de diferencias resueltas (base entera)',
+    (select count(*) from public.conta_liquidacion_resolucion where entry_id is not null)::text
 ) x order by o;

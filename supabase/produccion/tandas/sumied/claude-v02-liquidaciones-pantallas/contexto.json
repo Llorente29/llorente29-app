@@ -1,6 +1,6 @@
 {
   "_que": "V02 · Pantallas · El motor por tienda · contexto de producción de la tanda (0125: cambia el motor, añade el resolutor por tienda y brand_id, y rehace dos índices), medido en SOLO LECTURA el 26/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existe la tabla que se toca (conta_liquidacion_resolucion, 0 filas) y sus dos índices únicos (0 filas), y el motor (misma firma, sin otras). No existe el resolutor por tienda. Nada en el historial; nada en el camino del pedido.",
-  "medido": "2026-10-26T01:15Z",
+  "medido": "2026-10-26T07:10Z",
   "tanda": {
     "supabase/migrations/20261026T0125_v02p_motor_por_tienda.sql": "4765420a9be9c6e53ab9d0c70492154f"
   },

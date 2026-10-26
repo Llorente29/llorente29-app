@@ -5,7 +5,8 @@
 -- public.conta_liquidacion_resolver_tienda), con \i dentro de la transacción y
 -- ROLLBACK: staging no cambia. En la empresa de la cuenta A que tiene tiendas.
 --
---   (Empieza con su vuelta atrás, por si ya estuviera.)
+--   (Empieza con la foto de lo que hay; si la 0125 ya estuviera, para: la foto
+--   no serviría para comprobar la vuelta atrás.)
 --   0. Lo de antes: la huella de las dos funciones. Los datos: dos marcas con
 --      pedidos de Uber la misma semana en Norte Centro (100 € y 60 €), la tienda
 --      de la primera con su marca, y el corte.
@@ -18,8 +19,9 @@
 --   3. Una liquidación de antes del corte (de referencia) no sale como «Diferencia».
 --   4. Las diferencias de dos tiendas del mismo local y la misma semana se
 --      resuelven por separado.
---   5. La vuelta atrás: sin el trabajo de la prueba, las dos funciones como
---      estaban (su huella), sin la marca en las diferencias.
+--   5. La vuelta atrás, con lo mismo que mira el ensayo de producción (#241):
+--      las funciones con su firma y su huella, la definición exacta de cada
+--      índice, las columnas de la tabla y los resolutores que hay.
 
 begin;
 do $$ begin
@@ -29,13 +31,29 @@ do $$ begin
 end $$;
 set local statement_timeout = '120s';
 
-\i supabase/vuelta-atras/20261026T0125_v02p_motor_por_tienda.down.sql
-
 create temp table _p (clave text primary key, v text) on commit drop;
 grant select, insert, update on _p to authenticated;
-insert into _p select 'fn:' || p.proname, md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text)
+-- Lo de antes, para compararlo después de la vuelta atrás como el ensayo de
+-- producción (el #241 la paró): la huella de cada función que la tanda toca o
+-- nombra, la definición exacta de cada índice de la tabla, sus columnas y
+-- cuántas funciones conta_liquidacion_resolver* hay.
+insert into _p select 'fn:' || p.oid::regprocedure::text, md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text)
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public' and p.prokind = 'f' and p.proname in ('conta_liquidaciones', 'conta_liquidacion_resolver');
+ where n.nspname = 'public' and p.prokind = 'f' and p.proname in ('conta_liquidaciones', 'conta_liquidacion_resolver', 'conta_liquidacion_registrar');
+insert into _p select 'ix:' || indexname, indexdef from pg_indexes where schemaname = 'public' and tablename = 'conta_liquidacion_resolucion';
+insert into _p select 'columnas', string_agg(column_name || ' ' || data_type || ' ' || is_nullable, ', ' order by ordinal_position)
+  from information_schema.columns where table_schema = 'public' and table_name = 'conta_liquidacion_resolucion';
+insert into _p select 'resolutores', string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text)
+  from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'conta\_liquidacion\_resolver%';
+
+-- Solo si la 0125 ya estuviera (lo de antes de la foto no se toca nunca): la
+-- foto del «antes» es la de lo que hay, no la de después de una vuelta atrás.
+select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_liquidacion_resolucion' and column_name = 'brand_id')
+    or to_regproc('public.conta_liquidacion_resolver_tienda') is not null as ya_esta \gset
+\if :ya_esta
+  \echo 'La 0125 ya estaba en esta base: la prueba para, porque la foto de antes no serviría para comprobar la vuelta atrás.'
+  select 1/0 as la_0125_ya_estaba_y_la_foto_no_vale;
+\endif
 
 -- 0 · Los datos (como postgres).
 do $$
@@ -131,10 +149,28 @@ reset role;
 -- 5 · La vuelta atrás: sin el trabajo de la prueba (su guarda, para si lo hay), todo como estaba.
 delete from public.conta_liquidacion_resolucion where company_id = (select v::uuid from _p where clave = 'empresa');
 \i supabase/vuelta-atras/20261026T0125_v02p_motor_por_tienda.down.sql
-do $$ begin
-  if exists (select 1 from _p b join pg_proc p on 'fn:' || p.proname = b.clave join pg_namespace n on n.oid = p.pronamespace
-              where n.nspname = 'public' and p.prokind = 'f' and md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text) <> b.v) then
-    raise exception 'PRUEBA V02P 5: conta_liquidaciones o conta_liquidacion_resolver no vuelven como estaban.';
+do $$
+declare v_mal text;
+begin
+  -- Cada función, con su misma firma y su misma huella.
+  select string_agg(b.clave, ', ') into v_mal from _p b
+   where b.clave like 'fn:%' and not exists (
+     select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and 'fn:' || p.oid::regprocedure::text = b.clave
+        and md5(p.prosrc || '|' || coalesce(p.proconfig::text, '') || '|' || p.prosecdef::text) = b.v);
+  if v_mal is not null then raise exception 'PRUEBA V02P 5: no vuelven como estaban: %.', v_mal; end if;
+  -- Cada índice, con su definición exacta, y ni uno más ni uno menos.
+  select string_agg(coalesce(b.clave, 'ix:' || i.indexname), ', ') into v_mal
+    from (select * from _p where clave like 'ix:%') b
+    full join (select * from pg_indexes where schemaname = 'public' and tablename = 'conta_liquidacion_resolucion') i on b.clave = 'ix:' || i.indexname
+   where b.v is distinct from i.indexdef;
+  if v_mal is not null then raise exception 'PRUEBA V02P 5: los índices no vuelven como estaban: %.', v_mal; end if;
+  if (select v from _p where clave = 'columnas') is distinct from (select string_agg(column_name || ' ' || data_type || ' ' || is_nullable, ', ' order by ordinal_position)
+        from information_schema.columns where table_schema = 'public' and table_name = 'conta_liquidacion_resolucion') then
+    raise exception 'PRUEBA V02P 5: las columnas de conta_liquidacion_resolucion no vuelven como estaban.';
+  end if;
+  if (select v from _p where clave = 'resolutores') is distinct from (select string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text)
+        from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'conta\_liquidacion\_resolver%') then
+    raise exception 'PRUEBA V02P 5: las funciones conta_liquidacion_resolver* no vuelven como estaban.';
   end if;
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_liquidacion_resolucion' and column_name = 'brand_id')
      or to_regprocedure('public.conta_liquidacion_resolver_tienda(uuid,uuid,uuid,uuid,date,date,text,numeric,text,date,jsonb,text)') is not null then
