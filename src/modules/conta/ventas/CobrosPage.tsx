@@ -83,7 +83,7 @@ export default function CobrosPage() {
   const cambiar = (c: Record<string, string | null>) => setQuery((antes) => new URLSearchParams(conCambio(antes.toString(), c)), { replace: true })
 
   const pestana = leerPestana(query.get('pestana'))
-  const remesas = useLeer(activa && pestana === 'remesas' ? () => leerRemesasCobros(activa.id) : null, `${activa?.id}:${vuelta}:remesas-cobros`)
+  const remesas = useLeer(activa && pestana === 'remesas' ? () => leerRemesasCobros(activa.id) : null, `${activa?.id}:${vuelta}:${pestana === 'remesas' ? 'con' : 'sin'}:remesas-cobros`)
   const fl = { buscar: query.get('q') ?? '', hasta: query.get('hasta') || null, forma: (query.get('forma') || 'todas') as FormaCobro | 'todas', local: query.get('local') || null }
   const d = datos.datos
   const todas = useMemo(() => d?.filas ?? [], [d])
