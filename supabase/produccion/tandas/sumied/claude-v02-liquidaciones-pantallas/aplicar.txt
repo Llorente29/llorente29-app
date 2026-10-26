@@ -1,0 +1,20 @@
+# V02 · Pantallas · El motor, por TIENDA (Julio, 26/10). Rama
+# claude/v02-liquidaciones-pantallas. Se ensaya y se aplica desde esta rama,
+# antes de fusionar, con el campo «tanda» VACÍO.
+#
+#   0125 — el motor (conta_liquidaciones, misma firma) compara cada liquidación
+#   con lo que vendió SU tienda (su marca, su canal y su local), y con lo que
+#   suman sus pedidos con las promociones, no con las ventas a precio de carta.
+#   Medido en Foodint solo leyendo: de 10 «diferencias» falsas (47.262 €) a 3 de
+#   verdad. conta_liquidacion_resolucion gana brand_id (0 filas) y sus dos
+#   índices únicos se rehacen con la marca y EL MISMO NOMBRE;
+#   conta_liquidacion_resolver gana p_marca (DROP + CREATE, regla 2).
+#   No está en el camino del pedido: el motor solo LEE pedidos.
+#   El analizador dice AUTORIZO: borra y rehace los dos índices únicos de una
+#   tabla con 0 filas, que nadie más usa. Lo demás es «cambia», declarado y con
+#   su prueba de staging.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta (para si alguna diferencia resuelta ya tiene marca).
+cuenta: scripts/conta/produccion/cuentas/v02p-motor-por-tienda.sql
+supabase/migrations/20261026T0125_v02p_motor_por_tienda.sql

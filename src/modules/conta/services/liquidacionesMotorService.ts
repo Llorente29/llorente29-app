@@ -1,14 +1,14 @@
 // src/modules/conta/services/liquidacionesMotorService.ts
 //
-// V02 · Entrega 2 · El motor de liquidaciones, para quien lo use (las pantallas
-// llegarán con los tableros 20 y 21 nuevos). Solo llama a las funciones de la
-// base de la tanda del V02 E2 (nombres comprobados contra la migración 2253 y
-// 2254: regla 40) y a los lectores puros:
+// V02 · El motor de liquidaciones, para Ventas › Liquidaciones (tableros 28 y
+// 29). Solo llama a las funciones de la base de la tanda del V02 E2 (nombres
+// comprobados contra las migraciones 2253, 2254 y 0125: regla 40) y a los
+// lectores puros:
 //   · leer: conta_liquidaciones;
 //   · registrar lo leído (el informe de Uber, Glovo, Just Eat): conta_liquidacion_registrar;
 //   · «Apuntar a mano»: conta_liquidacion_apuntar;
 //   · confirmar un cambio de tienda: conta_tienda_cambio_decidir;
-//   · resolver una diferencia en una frase: conta_liquidacion_resolver;
+//   · resolver una diferencia en una frase: conta_liquidacion_resolver (por tienda: con su marca, 0125);
 //   · lo reclamado ha llegado: conta_reclamacion_llegada.
 // Cada acción devuelve la frase que dice lo que ha hecho (regla 8).
 
@@ -113,12 +113,12 @@ export async function decidirCambioTienda(cambioId: string, confirmar: boolean, 
 }
 
 /** Resolver una diferencia en una frase: «Es un gasto» (con su asiento) o «Lo reclamo». */
-export async function resolverDiferencia(companyId: string, f: Pick<FilaMotor, 'intermediarioId' | 'localId' | 'desde' | 'hasta'>, x: {
+export async function resolverDiferencia(companyId: string, f: Pick<FilaMotor, 'intermediarioId' | 'localId' | 'marcaId' | 'desde' | 'hasta'>, x: {
   tipo: 'gasto' | 'reclamacion'; importe: number; frase: string; fecha?: string | null; lineas?: unknown[] | null
 }, quien: string | null): Promise<string> {
   if (!f.intermediarioId) throw new Error('Esta fila no sabe quién te paga: no se puede resolver.')
   const r = await rpc<{ texto: string }>('conta_liquidacion_resolver', {
-    p_company: companyId, p_intermediario: f.intermediarioId, p_local: f.localId, p_desde: f.desde, p_hasta: f.hasta,
+    p_company: companyId, p_intermediario: f.intermediarioId, p_local: f.localId, p_marca: f.marcaId, p_desde: f.desde, p_hasta: f.hasta,
     p_tipo: x.tipo, p_importe: x.importe, p_frase: x.frase, p_fecha: x.fecha ?? null, p_lineas: x.lineas ?? null, p_quien_nombre: quien,
   })
   return r.texto

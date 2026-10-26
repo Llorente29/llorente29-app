@@ -1,0 +1,2 @@
+# V02 · Pantallas · vuelta atrás del motor por tienda (antes, el front de antes si ya llama a resolver con p_marca).
+supabase/vuelta-atras/20261026T0125_v02p_motor_por_tienda.down.sql
