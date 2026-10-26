@@ -24,6 +24,7 @@
 //     igual que las hace la base (_conta_venta_cifras): redondeo por tipo.
 
 import { leerOrden, ordenar, pestanasConTodas, type PestanaEstado, type Sentido } from '@/modules/conta/diseno/plantillas/lista'
+import type { PorqueSinIva } from './ventasSinIva'
 
 export type OrigenFactura = 'a_mano' | 'recurrente' | 'presupuesto' | 'cierre_dia' | 'tienda' | 'automatica' | 'traida'
 export const NOMBRE_ORIGEN: Record<OrigenFactura, string> = {
@@ -281,6 +282,8 @@ export interface LineaFactura {
   /** El % del recargo de equivalencia del tipo, si lo tiene. */
   recargo: number | null
   cuentaId: string
+  /** V03 E2: el tipo «Exento o 0 %» (necesita su porqué; en el asiento, su 70x aparte). */
+  sinIva?: boolean
 }
 
 export interface CifrasFactura {
@@ -349,13 +352,16 @@ export function diferenciaDe(nueva: CifrasFactura, vieja: CifrasFactura): Cifras
 }
 
 /** Lo que falta para poder guardar el borrador o emitirlo, en frases (vacío = nada). */
-export function faltaParaEmitir(b: { clienteId: string | null; nif: string | null; lineas: readonly Partial<LineaFactura>[] }): string[] {
+export function faltaParaEmitir(b: { clienteId: string | null; nif: string | null; lineas: readonly Partial<LineaFactura>[]; sinIva?: { hay: boolean; porque: string | null; noVale: string | null } }): string[] {
   const falta: string[] = []
   if (!b.clienteId) falta.push('el cliente')
   else if (!b.nif?.trim()) falta.push('el NIF del cliente (en su ficha de Contactos)')
   const buenas = b.lineas.filter((l) => l.concepto?.trim() && l.tipoId && l.cuentaId)
   if (buenas.length === 0) falta.push('al menos una línea con concepto, IVA y cuenta')
   if (b.lineas.some((l) => !l.concepto?.trim())) falta.push('el concepto de cada línea')
+  // V03 E2: una línea sin IVA, su porqué (la base lo pide igual al emitir).
+  if (b.sinIva?.hay && !b.sinIva.porque) falta.push('decir por qué va sin IVA')
+  else if (b.sinIva?.hay && b.sinIva.noVale) falta.push('otro porqué para ir sin IVA')
   return falta
 }
 
@@ -384,11 +390,13 @@ export interface BorradorVenta {
   retencionId: string | null
   motivo: string
   lineas: LineaEnEdicion[]
+  /** V03 E2: por qué van sin IVA las líneas sin IVA (N2, E2, E5 o E1). */
+  porque: PorqueSinIva | null
 }
 
 export const ETIQUETAS_BORRADOR: Partial<Record<keyof BorradorVenta, string>> = {
   clienteId: 'Cliente', fecha: 'Fecha', vence: 'Vence', serie: 'Serie', formaCobroId: 'Forma de cobro', localId: 'Local',
-  notas: 'Notas', correo: 'Correo del cliente', retencionId: 'Retención', motivo: 'Motivo', lineas: 'Líneas',
+  notas: 'Notas', correo: 'Correo del cliente', retencionId: 'Retención', motivo: 'Motivo', lineas: 'Líneas', porque: 'Por qué va sin IVA',
 }
 
 /** «1.234,5» → 1234.5; vacío o mal escrito → null. Acepta también «1234.5». */
@@ -407,7 +415,7 @@ export const textoDeNumero = (n: number, decimales = 2): string =>
 export const lineaVacia = (tipoId: string, cuentaId: string): LineaEnEdicion => ({ concepto: '', cantidad: '1', precio: '', descuento: '', tipoId, cuentaId })
 
 /** Las líneas escritas, en números: las que no se pueden leer, fuera (y dicho en `mal`). */
-export function lineasLeidas(ls: readonly LineaEnEdicion[], tipos: readonly { id: string; tipo: number }[]): { lineas: LineaFactura[]; mal: string[] } {
+export function lineasLeidas(ls: readonly LineaEnEdicion[], tipos: readonly { id: string; tipo: number; sinIva?: boolean }[]): { lineas: LineaFactura[]; mal: string[]; sinIva: boolean } {
   const mal: string[] = []
   const lineas: LineaFactura[] = []
   ls.forEach((l, i) => {
@@ -420,9 +428,10 @@ export function lineasLeidas(ls: readonly LineaEnEdicion[], tipos: readonly { id
     else if (precio === null) mal.push(`el precio de la línea ${i + 1}`)
     else if (descuento === null || descuento < 0 || descuento > 100) mal.push(`el descuento de la línea ${i + 1} (de 0 a 100)`)
     else if (!t) mal.push(`el IVA de la línea ${i + 1}`)
-    else lineas.push({ concepto: l.concepto.trim(), cantidad, precio, descuento, tipoId: t.id, tipo: t.tipo, recargo: null, cuentaId: l.cuentaId })
+    else lineas.push({ concepto: l.concepto.trim(), cantidad, precio, descuento, tipoId: t.id, tipo: t.tipo, recargo: null, cuentaId: l.cuentaId, sinIva: t.sinIva === true })
   })
-  return { lineas, mal }
+  // V03 E2: si alguna va sin IVA (necesita su porqué).
+  return { lineas, mal, sinIva: lineas.some((l) => l.sinIva) }
 }
 
 /** Vence: la fecha más los días de su ficha (sin días, nada). */
@@ -433,7 +442,7 @@ export function venceCon(fecha: string, dias: number | null): string | null {
   return d.toISOString().slice(0, 10)
 }
 
-/** La vista previa del asiento (como lo hará conta_venta_emitir): 430 por el total, 70x por cuenta, 477 por tipo y la 473. */
+/** La vista previa del asiento (como lo hará conta_venta_emitir): 430 por el total, 70x por cuenta (la parte sin IVA, aparte), 477 por tipo y la 473. */
 export function asientoPrevio(
   cifras: CifrasFactura, lineas: readonly LineaFactura[], cliente: string | null,
   cuentas: readonly { id: string; code: string; nombre: string }[],
@@ -447,10 +456,14 @@ export function asientoPrevio(
   const out: { codigo: string; nombre: string; debe: number | null; haber: number | null }[] = []
   if (cifras.total !== 0) out.push({ codigo: '430', nombre: `Clientes · ${cliente ?? 'el cliente'}`, ...al(cifras.total, 'debe') })
   const porCuenta = new Map<string, number>()
-  for (const l of lineas) porCuenta.set(l.cuentaId, (porCuenta.get(l.cuentaId) ?? 0) + Math.round(baseDeLinea(l) * 100))
-  for (const [id, cts] of porCuenta) {
+  for (const l of lineas) {
+    const k = `${l.cuentaId}|${l.sinIva ? 's' : ''}`
+    porCuenta.set(k, (porCuenta.get(k) ?? 0) + Math.round(baseDeLinea(l) * 100))
+  }
+  for (const [k, cts] of porCuenta) {
+    const [id, sin] = k.split('|')
     const c = cuentas.find((x) => x.id === id)
-    out.push({ codigo: c?.code ?? '70', nombre: c?.nombre ?? 'Ventas', ...al(cts / 100, 'haber') })
+    out.push({ codigo: c?.code ?? '70', nombre: `${c?.nombre ?? 'Ventas'}${sin ? ' · sin IVA' : ''}`, ...al(cts / 100, 'haber') })
   }
   for (const t of cifras.porTipo) {
     if (t.iva !== 0) out.push({ codigo: '477', nombre: `IVA repercutido ${textoDeNumero(t.tipo, 0)} %`, ...al(t.iva, 'haber') })

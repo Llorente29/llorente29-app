@@ -1,0 +1,72 @@
+/* src/modules/conta/estilo/verifactu.css
+ *
+ * V03 · Entrega 2 · Las pantallas de Verifactu (tableros 25, 26 y 27): la
+ * banda morada de pruebas, el alta en tres pasos, las cifras con Hacienda y la
+ * factura rechazada con su línea de tiempo. Todo con los tokens (--s-*): el
+ * morado es --s-prueba. En el móvil, una columna.
+ */
+
+/* La banda de PRUEBAS: fija arriba mientras se está en pruebas. */
+.cxvf-banda {
+  position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3);
+  padding: var(--s-2) var(--s-4); margin-bottom: var(--s-3); border-radius: var(--s-radio-bloque);
+  background: var(--s-prueba-fondo); color: var(--s-prueba); font-size: var(--s-t-s); border: 1px solid var(--s-prueba);
+}
+.cxvf-banda-chip {
+  background: var(--s-prueba); color: var(--s-superficie); border-radius: var(--s-radio-pildora); padding: 0 var(--s-2);
+  font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.cxvf-banda-texto { flex: 1 1 260px; }
+.cxvf-banda-enlace { color: var(--s-prueba); font-weight: var(--s-peso-fuerte); }
+
+/* El alta (tablero 25). */
+.cxvf-alta { display: grid; gap: var(--s-4); }
+.cxvf-alta-titulo { font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); margin: 0 0 var(--s-1); }
+.cxvf-alta-columnas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); gap: var(--s-4); align-items: start; }
+.cxvf-pasos { display: grid; gap: var(--s-3); }
+.cxvf-paso {
+  display: grid; grid-template-columns: var(--s-8) minmax(0, 1fr); gap: var(--s-3); padding: var(--s-4);
+  background: var(--s-superficie); border: 1px solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+}
+.cxvf-paso-numero {
+  width: var(--s-8); height: var(--s-8); display: grid; place-items: center; border-radius: var(--s-radio-pildora);
+  background: var(--s-accion); color: var(--s-sobre-accion); font-weight: var(--s-peso-fuerte);
+}
+.cxvf-paso[data-estado='hecho'] .cxvf-paso-numero { background: var(--s-ok-fondo); color: var(--s-ok); }
+.cxvf-paso[data-estado='luego'] .cxvf-paso-numero { background: var(--s-neutro-fondo); color: var(--s-apoyo); }
+.cxvf-paso-cuerpo { display: grid; gap: var(--s-3); min-width: 0; }
+.cxvf-paso-titulo { font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); margin: 0; }
+.cxvf-pros { color: var(--s-ok); font-size: var(--s-t-s); }
+.cxvf-contras { color: var(--s-falta); font-size: var(--s-t-s); }
+.cxvf-firma { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s-4); }
+.cxvf-firma > div { display: grid; gap: var(--s-2); align-content: start; }
+.cxvf-botones { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.cxvf-autorizar { display: grid; gap: var(--s-3); }
+.cxvf-otros {
+  display: grid; gap: var(--s-2); padding: var(--s-4); background: var(--s-superficie);
+  border: 1px solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+}
+.cxvf-otros-opciones, .cxvf-otros-lista { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); font-size: var(--s-t-m); }
+.cxvf-otros-opciones label, .cxvf-otros-lista label { display: inline-flex; align-items: center; gap: var(--s-1); cursor: pointer; }
+.cxvf-lado { display: grid; gap: var(--s-3); }
+.cxvf-hace { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s-2); font-size: var(--s-t-s); }
+.cxvf-hace li::before { content: '✓ '; color: var(--s-ok); font-weight: var(--s-peso-fuerte); }
+
+/* La columna y las cifras con Hacienda (tablero 26). */
+.cxvf-hacienda-ok { color: var(--s-ok); font-weight: var(--s-peso-medio); }
+.cxvf-hacienda-no { color: var(--s-apoyo); }
+
+/* La rechazada (tablero 27). */
+.cxvf-rechazo { display: grid; gap: var(--s-3); }
+.cxvf-rechazo-titulo { font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); margin: 0; }
+.cxvf-linea { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--s-2); }
+.cxvf-linea li { display: grid; grid-template-columns: var(--s-3) minmax(0, 1fr) auto; gap: var(--s-2); align-items: baseline; font-size: var(--s-t-s); }
+.cxvf-punto { width: var(--s-2); height: var(--s-2); border-radius: var(--s-radio-pildora); background: var(--s-neutro-fondo); border: 1px solid var(--s-borde-control); }
+.cxvf-punto[data-tono='ok'] { background: var(--s-ok); border-color: var(--s-ok); }
+.cxvf-punto[data-tono='falta'] { background: var(--s-falta); border-color: var(--s-falta); }
+.cxvf-linea-cuando { color: var(--s-apoyo); white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .cxvf-alta-columnas { grid-template-columns: minmax(0, 1fr); }
+  .cxvf-paso { grid-template-columns: minmax(0, 1fr); }
+}

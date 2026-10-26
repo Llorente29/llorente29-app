@@ -12,6 +12,7 @@ import { eurosExactos } from '@/modules/conta/lib/formato'
 import { normalizarNif, tipoEntidadPorNif, validarNifEs } from '@/modules/conta/lib/nif'
 import { guardarCliente, terceroDelMismoNif } from '@/modules/conta/services/tercerosService'
 import type { Catalogos, CobroFactura } from '@/modules/conta/services/ventasService'
+import { MENCION_SIN_IVA, opcionesSinIva, type PorqueSinIva as PorqueSinIvaCodigo, type Zona } from '@/modules/conta/lib/ventasSinIva'
 import {
   NOMBRE_CORRECCION, baseDeLinea, lineaVacia, numeroDeTexto, textoDeNumero,
   type CifrasFactura, type LineaEnEdicion, type LineaFactura,
@@ -55,7 +56,7 @@ export function LineasEditables({ lineas, catalogos, alCambiar, soloImportes = f
                 <td data-titulo="Precio" className="cxv-num"><Texto valor={l.precio} alCambiar={(v) => poner(i, { precio: v })} aria-label={`Precio de la línea ${i + 1}`} inputMode="decimal" placeholder="0,00" /></td>
                 <td data-titulo="Dto. %" className="cxv-num"><Texto valor={l.descuento} alCambiar={(v) => poner(i, { descuento: v })} aria-label={`Descuento de la línea ${i + 1}`} inputMode="decimal" placeholder="0" /></td>
                 <td data-titulo="IVA"><Selector valor={l.tipoId} alCambiar={(v) => poner(i, { tipoId: v })} aria-label={`IVA de la línea ${i + 1}`}
-                  opciones={catalogos.tipos.map((t) => ({ valor: t.id, texto: `${textoDeNumero(t.tipo, 0)} %` }))} /></td>
+                  opciones={catalogos.tipos.map((t) => ({ valor: t.id, texto: t.sinIva ? 'Sin IVA' : `${textoDeNumero(t.tipo, 0)} %` }))} /></td>
                 <td data-titulo="Cuenta"><Selector valor={l.cuentaId} alCambiar={(v) => poner(i, { cuentaId: v })} aria-label={`Cuenta de la línea ${i + 1}`}
                   opciones={catalogos.cuentas.map((c) => ({ valor: c.id, texto: `${c.code} · ${c.nombre}` }))} /></td>
                 <td data-titulo="Importe" className="cxv-num s-cifra">{imp === null ? '—' : eurosExactos(imp)}</td>
@@ -271,5 +272,29 @@ export function DialogoCorregir({ numero, alCerrar, alCorregir, sinDatos = false
       <Campo etiqueta="Motivo" ayuda="Sale en la rectificativa: «Eran 240 menús y fueron 232».">{(p) => <Texto {...p} valor={motivo} alCambiar={setMotivo} maxLength={300} />}</Campo>
       {fallo && <p className="s-aviso-lista" data-tono="falta" role="alert">{fallo}</p>}
     </Dialogo>
+  )
+}
+
+/**
+ * V03 E2 · Por qué va sin IVA (tablero 27): qué le has vendido, según dónde
+ * está el cliente. Se guarda con el borrador; la base lo comprueba al emitir.
+ */
+export function PorqueSinIva({ zona, porque, noVale, alElegir }: {
+  zona: Zona; porque: PorqueSinIvaCodigo | null; noVale: string | null; alElegir: (p: PorqueSinIvaCodigo) => void
+}) {
+  return (
+    <div className="cxv-sin-iva" data-prueba="porque-sin-iva">
+      <p><strong>{zona === 'fuera' ? 'El cliente está fuera de la UE y hay líneas sin IVA.' : zona === 'ue' ? 'El cliente es de otro país de la UE y hay líneas sin IVA.' : 'Hay líneas sin IVA.'}</strong> Hacienda necesita saber por qué, y la factura lo dice.</p>
+      <div role="radiogroup" aria-label={zona === 'espana' ? '¿Por qué va sin IVA?' : '¿Qué le has vendido?'} className="cxv-opciones">
+        {opcionesSinIva(zona).map((o) => (
+          <label key={o.codigo} className="cxv-opcion" data-elegida={porque === o.codigo ? '' : undefined}>
+            <input type="radio" name="porque-sin-iva" checked={porque === o.codigo} onChange={() => alElegir(o.codigo)} />
+            <span><strong>{o.titulo}</strong><span className="s-tarjeta-apoyo">{o.texto}</span></span>
+          </label>
+        ))}
+      </div>
+      {noVale && <p className="s-aviso-lista" data-tono="falta" role="alert">{noVale}</p>}
+      {porque && !noVale && <p className="s-apoyo">En la factura: «{MENCION_SIN_IVA[porque]}»</p>}
+    </div>
   )
 }

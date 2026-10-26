@@ -1,0 +1,4 @@
+# V03 · Entrega 2 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261026T0226_v03_verifactu_otros_programas.down.sql
+supabase/vuelta-atras/20261026T0218_v03_verifactu_reenviar.down.sql
+supabase/vuelta-atras/20261026T0146_v03_ventas_sin_iva.down.sql
