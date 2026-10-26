@@ -651,7 +651,11 @@ asiento de banco a mitad del ensayo). Cada vez, una vuelta de Julio perdida.
   `-- quieta: <por qué>`. Solo las cuentas que el PR añade o cambia: de las 79
   que había el 26/10, 75 tienen alguna medida así (305 medidas) y no se tocan.
 - **El ensayo de producción** saca también al registro del job la tabla
-  «Ensayo de la vuelta atrás» (antes, solo al resumen y al artefacto).
+  «Ensayo de la vuelta atrás» (antes, solo al resumen y al artefacto). Por la
+  puerta de salida (D01 R2: el registro es público y el workflow lee
+  producción), así que cada medida sale por su fila en la cuenta
+  (`<cuenta>.<n>`), con antes y después cuando son números o huellas largas y
+  `distinta 1` si no coincide (`scripts/conta/produccion/cuentas-salida.mjs`).
 
 El manifiesto fijo de antes del C10 (`supabase/staging/tanda-de-produccion.txt`)
 ya no es lo que se usa para comparar: solo lo usan los modos «real-con-fallo» y

@@ -432,12 +432,6 @@ jobs:
           # «como antes»: no hay con qué deshacerla. Se compara, en su lugar, con lo
           # que el manifiesto dice que dejará («esperado:»), y si no, para igual.
           # Para cualquier otra tanda, este paso sigue exactamente como estaba, debajo.
-          # W06 (26/10): lo que este paso escribe en el informe sale TAMBIÉN en el
-          # registro del job (al salir, pase lo que pase). Ni el resumen ni el
-          # artefacto se pueden leer desde una sesión, y el #241 no se pudo leer.
-          # Solo añade salida: no cambia nada de lo que se compara ni de cuándo para.
-          desde=$(( $(wc -l < "$INFORME" 2>/dev/null || echo 0) + 1 ))
-          trap 'echo "──── Ensayo de la vuelta atrás (lo mismo que en el informe) ────"; tail -n +"$desde" "$INFORME" 2>/dev/null || true' EXIT
           if [ -s /tmp/sin-vuelta.txt ]; then
             bash scripts/conta/produccion/ensayo-sin-vuelta.sh /tmp/tanda.txt /tmp/cuentas.txt /tmp/sin-vuelta.txt /tmp/esperado.txt /tmp/cuentas-antes.csv \
               || { cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
@@ -469,6 +463,12 @@ jobs:
             : > /tmp/cuentas-ensayo-atras.csv; j=0
             while IFS= read -r c; do j=$((j+1)); sed "s#^#$(basename "$c" .sql),#" "/tmp/cuentas-atras-$j.csv" >> /tmp/cuentas-ensayo-atras.csv; done < /tmp/cuentas.txt
             node scripts/conta/produccion/cuentas-comparar.mjs /tmp/cuentas-antes.csv /tmp/cuentas-ensayo-atras.csv "Antes de la tanda" "Tanda y vuelta atrás" > /tmp/cuentas-atras.md || igual=0
+            # W06 (26/10): la misma tabla, TAMBIÉN al registro del job, que es lo único
+            # que se lee desde una sesión (el #241 no se pudo leer). Por la puerta de
+            # salida (D01 R2): cada medida por su fila en la cuenta («<cuenta>.<n>»),
+            # con antes y después si son números o huellas, y «distinta 1» si no
+            # coincide. Solo añade salida: no cambia lo que se compara ni cuándo para.
+            node scripts/conta/produccion/cuentas-salida.mjs /tmp/cuentas-antes.csv /tmp/cuentas-ensayo-atras.csv | node scripts/conta/salida-segura.mjs || true
           fi
           if [ "$rc" -eq 0 ] && [ -z "$sin" ] && [ "$igual" -eq 1 ]; then
             { echo "## Ensayo de la vuelta atrás: **funcionaría, y deja todo como estaba**"; echo; echo "La tanda y sus .down.sql en orden inverso, en una transacción, y ROLLBACK. Lo que la tanda declara que cuenta sale igual que antes:"; echo
@@ -478,7 +478,6 @@ jobs:
             { echo "## Ensayo de la vuelta atrás: **NO deja los datos como estaban**"; echo
               echo "Los .down.sql entran sin error, pero lo que la tanda declara que cuenta no sale igual que antes. Si el real se deshiciera solo, quedaría así:"; echo
               cat /tmp/cuentas-atras.md; echo; } >> "$INFORME"
-            echo "::error title=Lo que no vuelve::$(tail -1 /tmp/cuentas-atras.md | cut -c1-800)"
             echo "::error::La vuelta atrás de esta tanda no deja los datos como estaban (ver el informe). El ensayo para: así no se lanza el real."
             cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
             exit 1

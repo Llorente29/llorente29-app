@@ -10,6 +10,9 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { creceSolo, ctes, tablas } from '../../../scripts/conta/produccion/cuenta-crece.mjs'
+import { lineasDeSalida } from '../../../scripts/conta/produccion/cuentas-salida.mjs'
+import { leerCuentas } from '../../../scripts/conta/produccion/cuentas-comparar.mjs'
+import { filtrar } from '../../../scripts/conta/lib/salidaSegura.mjs'
 import { contraRegistro, delta, diferencias, leerCsv, leerFoto } from '../../../scripts/conta/staging/definiciones-comparar.mjs'
 
 const CUENTAS = 'scripts/conta/produccion/cuentas'
@@ -128,7 +131,22 @@ describe('los workflows', () => {
 
   it('el ensayo de producción saca la tabla de la vuelta atrás al registro del job, sin cambiar lo que compara', () => {
     const paso = produccion.slice(produccion.indexOf('- name: ENSAYO · la vuelta atrás automática funcionaría'), produccion.indexOf('- name: REAL · fichero a fichero'))
-    expect(paso).toContain('tail -n +"$desde" "$INFORME"')
+    // Por la puerta de salida (D01 R2): el registro es público y el workflow lee producción.
+    expect(paso).toContain('node scripts/conta/produccion/cuentas-salida.mjs /tmp/cuentas-antes.csv /tmp/cuentas-ensayo-atras.csv | node scripts/conta/salida-segura.mjs')
     expect(paso).toContain('node scripts/conta/produccion/cuentas-comparar.mjs /tmp/cuentas-antes.csv /tmp/cuentas-ensayo-atras.csv "Antes de la tanda" "Tanda y vuelta atrás" > /tmp/cuentas-atras.md || igual=0')
+  })
+})
+
+describe('cuentas-salida.mjs · la tabla de la vuelta atrás, al registro por la puerta de salida', () => {
+  it('el #241: la fila 8 de la cuenta del V02 sale distinta, 15223 → 15224, y ningún nombre pasa', () => {
+    const antes = leerCuentas('v02p-motor-por-tienda,liquidaciones de Foodint,267\nv02p-motor-por-tienda,resolutores,8b9ed86d · no existe\nv02p-motor-por-tienda,asientos (base entera),15223\n')
+    const despues = leerCuentas('v02p-motor-por-tienda,liquidaciones de Foodint,267\nv02p-motor-por-tienda,resolutores,8b9ed86d · no existe\nv02p-motor-por-tienda,asientos (base entera),15224\n')
+    const { filas, retenidas } = filtrar(lineasDeSalida(antes, despues).join('\n'))
+    expect(retenidas).toBe(0)
+    expect(filas.filter((f: { clave?: string }) => f.clave).map((f: { clave: string; valor: string }) => `${f.clave} ${f.valor}`)).toEqual([
+      'v02p_motor_por_tienda.1.antes 267', 'v02p_motor_por_tienda.1.despues 267',
+      'v02p_motor_por_tienda.3.antes 15223', 'v02p_motor_por_tienda.3.despues 15224', 'v02p_motor_por_tienda.3.distinta 1',
+      'medidas 3', 'distintas 1',
+    ])
   })
 })
