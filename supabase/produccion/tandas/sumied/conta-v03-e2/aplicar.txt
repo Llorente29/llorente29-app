@@ -1,0 +1,18 @@
+# V03 · Verifactu · Entrega 2 · Las ventas sin IVA (respuesta 2 de Julio, a).
+# Rama conta/v03-e2. Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0146 — CAMBIA en caliente, con la misma firma, cuatro funciones:
+#      conta_venta_guardar (admite el tipo exento y guarda su porqué),
+#      conta_venta_emitir (pide el porqué antes del número; sin 477 a cero: la
+#      70x partida lleva el tipo exento), conta_motivos_para_validar (un apunte
+#      exento es su base) y conta_vat_book_desde_asiento (cuota 0 y la
+#      calificación o exención de su factura). Declaradas en su cabecera, con
+#      su prueba de staging. No toca datos. No está en el camino del pedido.
+#      En producción no hay ningún apunte exento ni no sujeto (26/10): nada de
+#      lo que existe cambia.
+#
+# Sin «autorizo»: no toca datos ni destruye nada.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql
+cuenta: scripts/conta/produccion/cuentas/v03-ventas-sin-iva.sql

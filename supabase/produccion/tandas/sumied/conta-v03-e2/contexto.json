@@ -1,0 +1,24 @@
+{
+  "_que": "V03 · E2 · contexto de producción de la tanda (0146), medido en SOLO LECTURA el 26/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow (00:54Z): existen las cuatro funciones que cambia, con una sola firma cada una; ninguna en el camino del pedido; nada en el historial.",
+  "medido": "2026-10-26T00:54Z",
+  "tanda": {
+    "supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql": "dbf16f0fe1306b73a92a9332b08122aa"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.conta_motivos_para_validar(uuid)",
+      "public.conta_vat_book_desde_asiento(uuid)",
+      "public.conta_venta_emitir(uuid,text)",
+      "public.conta_venta_guardar(uuid,uuid,jsonb,jsonb,text)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

@@ -1,0 +1,2 @@
+# V03 · Entrega 2 · vuelta atrás.
+supabase/vuelta-atras/20261026T0146_v03_ventas_sin_iva.down.sql
