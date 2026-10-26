@@ -11,7 +11,8 @@
 -- cerrar la venta (close_sale) y cancelarla (cancel_sale), y que ninguno falle
 -- ni cambie el número.
 --
---   0. Lo de antes: fiscal_for_print con su md5, y nada de la 2309.
+--   0. Lo de antes (tras la vuelta atrás: el ensayo ya pasó la 2309):
+--      fiscal_for_print con el md5 de producción, y nada de la 2309.
 --   1. Ajustes: el código propuesto; uno mal escrito o repetido, no.
 --   2. Imprimir y reimprimir una propia: el número de su serie, y el mismo al
 --      reimprimir; la siguiente, el siguiente.
@@ -34,6 +35,10 @@ do $$ begin
 end $$;
 set local statement_timeout = '180s';
 
+-- El ensayo de la tanda ya ha pasado la 2309 antes de esta prueba, en la misma
+-- transacción: primero su vuelta atrás, y lo de antes se mide después.
+\i supabase/vuelta-atras/20261026T2309_v04_tique_serie_y_quien_factura.down.sql
+
 create temp table _v (clave text primary key, v text) on commit drop;
 grant select, insert, update on _v to authenticated;
 insert into _v values ('cuenta', 'c01a0000-0000-4000-8000-00000000000a'), ('usuario', 'c01a0000-0000-4000-8000-0000000000a1');
@@ -51,7 +56,11 @@ do $$ begin
     raise exception 'PRUEBA V04 · 0: falta algo de la cuenta A (hay %).', (select string_agg(clave, ', ') from _v);
   end if;
   if to_regclass('public.ticket_invoice') is not null or exists (select 1 from pg_proc where proname in ('fiscal_for_preview', 'ticket_invoice_ajustes')) then
-    raise exception 'PRUEBA V04 · 0: lo de la 2309 ya estaba antes de aplicarla.';
+    raise exception 'PRUEBA V04 · 0: la vuelta atrás no deja la base como antes de la 2309.';
+  end if;
+  -- La de producción, medida el 26/10 (staging y producción, iguales).
+  if (select h from _md5) <> '6efe86f51f4bc6a1f336a68bf0875c49' then
+    raise exception 'PRUEBA V04 · 0: fiscal_for_print no es la de producción (md5 %).', (select h from _md5);
   end if;
   raise notice '0 · fiscal_for_print de antes (md5 %), y nada de la 2309', (select h from _md5);
 end $$;

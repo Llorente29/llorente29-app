@@ -1,0 +1,41 @@
+/* src/modules/configuracion/facturasPedidos.css
+ *
+ * V04 · PR 1 · Ajustes › «Facturas de los pedidos» (tablero 4). Estilo nuevo,
+ * con los tokens de --cx-*, como «Quién reparte». En el móvil, cada fila es
+ * una tarjeta.
+ */
+.cx-fp { display: flex; flex-direction: column; gap: 16px; padding: 20px; max-width: 1100px; }
+.cx-fp-cabeza { display: flex; flex-direction: column; gap: 4px; }
+.cx-fp-miga { font-size: 13px; color: var(--cx-apoyo); }
+.cx-fp-titulo { margin: 0; font-size: 24px; font-weight: 700; color: var(--cx-texto); }
+.cx-fp-intro { margin: 4px 0 0; color: var(--cx-apoyo); max-width: 72ch; }
+.cx-fp-h2 { margin: 0 0 6px; font-size: 17px; font-weight: 700; color: var(--cx-texto); }
+.cx-fp-apoyo { color: var(--cx-apoyo); font-size: 13.5px; }
+.cx-fp-aviso { margin: 0; padding: 10px 14px; border-radius: 10px; background: var(--cx-superficie-2, #f4f6f5); }
+.cx-fp-aviso[data-tono='ok'] { background: #e6f4ec; color: #1f6b44; }
+.cx-fp-aviso[data-tono='falta'] { background: #f8e4e1; color: #a3302a; }
+.cx-fp-aviso[data-tono='duda'] { background: #fbf0dc; color: #8a5300; }
+.cx-fp-empresa { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.cx-fp-empresa + .cx-fp-empresa { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--cx-borde, #e2e5de); }
+.cx-fp-vf { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; background: #fbf0dc; color: #8a5300; flex: none; }
+.cx-fp-empresa-texto { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.cx-fp-empresa-texto p { margin: 0; }
+.cx-fp-tabla { display: flex; flex-direction: column; border: 1px solid var(--cx-borde, #e2e5de); border-radius: 12px; overflow: hidden; margin-top: 8px; }
+.cx-fp-fila { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.4fr) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 12px; padding: 11px 14px; align-items: center; border-top: 1px solid var(--cx-borde, #e2e5de); }
+.cx-fp-fila:first-child { border-top: 0; }
+.cx-fp-fila-marca { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.2fr) minmax(0, 1.8fr); }
+.cx-fp-fila-cabeza { background: var(--cx-superficie-2, #f7f8f5); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--cx-apoyo); }
+.cx-fp-fila[data-activo='no'] { opacity: .65; }
+.cx-fp-nombre { font-weight: 600; color: var(--cx-texto); }
+.cx-fp-estado { display: block; margin-top: 2px; }
+.cx-fp-codigo, .cx-fp-fila code { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 600; }
+.cx-fp-cifra { font-variant-numeric: tabular-nums; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.cx-fp-editar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cx-fp-input { width: 64px; text-transform: uppercase; font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 600; }
+.cx-fp-falta { color: #a3302a; font-size: 13px; flex-basis: 100%; }
+
+@media (max-width: 760px) {
+  .cx-fp { padding: 12px 16px; }
+  .cx-fp-fila, .cx-fp-fila-marca { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .cx-fp-fila-cabeza { display: none; }
+}

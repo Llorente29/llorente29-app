@@ -17,7 +17,7 @@
 //
 // Fichero .tsx porque los `element` de las rutas son JSX.
 
-import { MapPin, Tag, Bell, UserCog, Bike, Truck } from 'lucide-react'
+import { MapPin, Tag, Bell, UserCog, Bike, Truck, Receipt } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import { LocationsPage } from '@/pages/OtherPages'
@@ -26,6 +26,7 @@ import AvisosSettingsPage from '@/pages/AvisosSettingsPage'
 import RepartoSettingsPage from '@/pages/RepartoSettingsPage'
 import QuienRepartePage from '@/modules/reparto/pages/QuienRepartePage'
 import UsuariosAccesosPage from '@/pages/UsuariosAccesosPage'
+import FacturasPedidosPage from './FacturasPedidosPage'
 
 export const configuracionModule: ModuleDefinition = {
   id: 'configuracion',
@@ -43,6 +44,8 @@ export const configuracionModule: ModuleDefinition = {
     // R02: quién reparte cada marca en cada plataforma (estilo nuevo).
     { path: 'quien-reparte', element: <QuienRepartePage /> },
     { path: 'usuarios',  element: <UsuariosAccesosPage /> },
+    // V04: la serie de los tiques de cada local y quién factura cada marca.
+    { path: 'facturas-pedidos', element: <FacturasPedidosPage /> },
   ],
 
   sidebar: {
@@ -54,6 +57,7 @@ export const configuracionModule: ModuleDefinition = {
       // R02: la decide el encargado del local también (la base lo permite a admin y manager).
       { id: 'config_quien_reparte', label: 'Quién reparte', icon: Truck, path: 'quien-reparte', requiredRole: 'manager' },
       { id: 'config_usuarios', label: 'Usuarios y accesos', icon: UserCog, path: 'usuarios', requiredRole: 'admin' },
+      { id: 'config_facturas_pedidos', label: 'Facturas de los pedidos', icon: Receipt, path: 'facturas-pedidos', requiredRole: 'admin' },
     ],
   },
 }

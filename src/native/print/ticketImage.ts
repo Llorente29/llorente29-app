@@ -43,6 +43,7 @@
 // ---------------------------------------------------------------------------
 
 import QRCode from 'qrcode'
+import { lineasFiscales } from './fiscalTique'
 import { numeroGrande, passCode, type PassCode, type PassCodeInput } from '@/modules/orders/lib/passCode'
 import { allergenLabel, isAllergenCode } from '@/modules/kitchen/lib/allergens'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
@@ -356,13 +357,16 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   }
   if (!logoDrawn) center(order.brand || 'Folvy', 46, true, 8)
 
-  // Fiscal
-  if (fiscal?.legalName) center(fiscal.legalName, 24, true)
-  if (fiscal?.taxId) center(fiscal.taxId, 22, false)
-  if (fiscal?.address) center(fiscal.address, 22, false)
+  // V04 · Lo fiscal, debajo de la fecha (maqueta, tableros 1 y 2): quién
+  // factura en una línea, la dirección del socio en una cedida, y «Factura
+  // Simplificada» con su número; sin esa línea si la cedida llegó sin la
+  // factura de Last (fiscalTique.ts).
+  const fis = lineasFiscales(fiscal, order)
   y += 8
   center(fmtDate(order.entro_at), 22, false, 4)
-  lr('Factura Simplificada', fiscal?.ticketNumber ?? (order.external_tab_ref ?? '—'), 24)
+  if (fis.emisor) center(fis.emisor, 22, true)
+  if (fis.direccion) center(fis.direccion, 20, false)
+  if (fis.numero) lr('Factura Simplificada', fis.numero, 24)
   y += 10
 
   // Código (banda) — EN SU SITIO Y A SU TAMAÑO, los del diseño aprobado. Lo
