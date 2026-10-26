@@ -24,10 +24,12 @@ name: PC01 · E4 · Sonda de Bizum con Stripe Connect en staging-conta
 # (recuentos: cuántos secretos o funciones con ese nombre hay; nunca su valor)
 #
 # CUÁNDO: un push a claude/pc01-e4-recordatorios cuyo mensaje EMPIECE por «[stripe-sonda]».
+# O a mano (Actions › esta sonda › Run workflow, rama claude/pc01-e4-recordatorios).
 
 on:
   push:
     branches: ['claude/pc01-e4-recordatorios']
+  workflow_dispatch:
 
 concurrency:
   group: stripe-bizum-sonda-staging
@@ -38,7 +40,7 @@ permissions:
 
 jobs:
   sonda:
-    if: startsWith(github.event.head_commit.message, '[stripe-sonda]')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[stripe-sonda]')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
