@@ -54,6 +54,18 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/conta/sql-sin-where.mjs "$BASE" "$HEAD"
 
+      # W06 (26/10): una cuenta de tanda («cuenta:») no mide algo que crece
+      # solo. El ensayo de producción cuenta antes y después de deshacer, con
+      # minutos en medio y el negocio abierto: el #241 se paró porque contaba
+      # «asientos (base entera)» y entró un asiento de banco. Cada medida que
+      # lee una tabla de datos lleva un corte de fecha fijo o «-- quieta: <por
+      # qué>». Solo las cuentas que el PR añade o cambia.
+      - name: Las cuentas de la tanda no miden algo que crece solo (W06)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/conta/produccion/cuenta-crece.mjs revisar "$BASE" "$HEAD"
+
       # C10 (23/10): el nombre de cada migración nueva, en su formato y sin
       # repetir en main ni en los demás PR abiertos.
       - name: Cada PR edita solo su tanda (C10)

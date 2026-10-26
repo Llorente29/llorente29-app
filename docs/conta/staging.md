@@ -611,3 +611,48 @@ sirve para diagnosticar, no para dar valores a Julio.
 ciclo entero en un carril de verdad. Las cuentas de la plantilla siguen
 cambiándose como siempre, con `aplicar-staging-conta`. Lo que se le añade a la
 A, el próximo carril ya lo trae.
+
+## Staging compara como el ensayo de producción (W06, 26/10)
+
+Dos veces seguidas el ensayo de producción paró una tanda que había salido en
+verde en staging: el #230 (la vuelta atrás no borraba el almacén
+`conta-entrada`) y el #241 (la cuenta medía «asientos (base entera)» y entró un
+asiento de banco a mitad del ensayo). Cada vez, una vuelta de Julio perdida.
+
+- **Desde una rama con tanda de producción**
+  (`supabase/produccion/tandas/<producto>/<rama>/aplicar.txt`), el modo
+  «aplicar» de `aplicar-staging-conta.yml` hace con ella lo mismo que el ensayo
+  de producción, en UNA transacción que acaba en ROLLBACK
+  (`scripts/conta/staging/compara.sh`): cuenta antes, aplica la tanda, la
+  deshace con sus `.down.sql`, cuenta después y compara. Compara lo que la
+  tanda declara que cuenta («cuenta:», con la misma vara que producción) y
+  además **las definiciones de la base entera**
+  (`scripts/conta/staging/foto-definiciones.sql`): la huella de cada función y
+  sus permisos, cada índice, cada columna, cada tabla, restricción, disparador,
+  política y vista, cada almacén de Storage y cada tarea de pg_cron. Si algo no
+  vuelve, para, con la tabla de lo que cambia **en el registro del job** y en
+  una anotación `::error`, que se leen desde una sesión (el resumen y el
+  artefacto, no).
+- **Va antes que lo que se aplica de verdad (W05)**: si no vuelve, no va nada
+  de verdad. Lo que sí va, queda registrado en `w06_staging` (solo staging:
+  qué fichero y cómo estaba antes cada definición que tocó,
+  `scripts/conta/staging/de-verdad.sh`). En el push siguiente, `compara.sh` lo
+  deshace primero, comprueba que vuelve a como estaba antes de ir de verdad y
+  compara desde ahí.
+- **La prueba del comparador**: el modo «compara-prueba» pasa la tanda de
+  `supabase/staging/compara-prueba/` con una vuelta atrás buena (tiene que
+  salir en verde) y cuatro rotas a propósito: no borra el índice, deja la
+  columna, se traga el error al borrar el almacén (el #230) y devuelve la
+  función con otro cuerpo (las cuatro, en rojo).
+- **La cuenta de cada tanda no mide algo que crece solo**
+  (`scripts/conta/produccion/cuenta-crece.mjs`, en la revisión de cada PR a
+  `main`): una medida que lee una tabla de datos lleva un corte de fecha fijo
+  (`created_at < timestamptz '…'`) o dice por qué no crece con
+  `-- quieta: <por qué>`. Solo las cuentas que el PR añade o cambia: de las 79
+  que había el 26/10, 75 tienen alguna medida así (305 medidas) y no se tocan.
+- **El ensayo de producción** saca también al registro del job la tabla
+  «Ensayo de la vuelta atrás» (antes, solo al resumen y al artefacto).
+
+El manifiesto fijo de antes del C10 (`supabase/staging/tanda-de-produccion.txt`)
+ya no es lo que se usa para comparar: solo lo usan los modos «real-con-fallo» y
+«real».

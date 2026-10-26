@@ -1,0 +1,18 @@
+# supabase/staging/compara-prueba/aplicar.txt
+#
+# W06 (26/10) · LA TANDA DE PRUEBA de scripts/conta/staging/compara.sh. No es
+# de producción ni va nunca allí: la corre el modo «compara-prueba» de
+# aplicar-staging-conta.yml en staging, en ROLLBACK, una vez con cada vuelta
+# atrás de las carpetas de al lado:
+#
+#   buena/          lo deshace todo                        → tiene que salir en VERDE
+#   rota-indice/    no borra el índice                     → en ROJO
+#   rota-columna/   deja la columna                        → en ROJO
+#   rota-almacen/   se traga el error al borrar el almacén
+#                   (lo que pasó en el #230)               → en ROJO
+#   rota-funcion/   devuelve la función con otro cuerpo    → en ROJO
+#
+# previo.sql crea, dentro de la misma transacción, la tabla y la función que la
+# tanda cambia: staging no las tiene y no las tendrá.
+supabase/staging/compara-prueba/20261026T1500_w06_prueba.sql
+cuenta: scripts/conta/produccion/cuentas/w06-compara-prueba.sql

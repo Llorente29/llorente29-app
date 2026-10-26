@@ -432,6 +432,12 @@ jobs:
           # «como antes»: no hay con qué deshacerla. Se compara, en su lugar, con lo
           # que el manifiesto dice que dejará («esperado:»), y si no, para igual.
           # Para cualquier otra tanda, este paso sigue exactamente como estaba, debajo.
+          # W06 (26/10): lo que este paso escribe en el informe sale TAMBIÉN en el
+          # registro del job (al salir, pase lo que pase). Ni el resumen ni el
+          # artefacto se pueden leer desde una sesión, y el #241 no se pudo leer.
+          # Solo añade salida: no cambia nada de lo que se compara ni de cuándo para.
+          desde=$(( $(wc -l < "$INFORME" 2>/dev/null || echo 0) + 1 ))
+          trap 'echo "──── Ensayo de la vuelta atrás (lo mismo que en el informe) ────"; tail -n +"$desde" "$INFORME" 2>/dev/null || true' EXIT
           if [ -s /tmp/sin-vuelta.txt ]; then
             bash scripts/conta/produccion/ensayo-sin-vuelta.sh /tmp/tanda.txt /tmp/cuentas.txt /tmp/sin-vuelta.txt /tmp/esperado.txt /tmp/cuentas-antes.csv \
               || { cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; }
@@ -472,7 +478,7 @@ jobs:
             { echo "## Ensayo de la vuelta atrás: **NO deja los datos como estaban**"; echo
               echo "Los .down.sql entran sin error, pero lo que la tanda declara que cuenta no sale igual que antes. Si el real se deshiciera solo, quedaría así:"; echo
               cat /tmp/cuentas-atras.md; echo; } >> "$INFORME"
-            echo "::error::La vuelta atrás de esta tanda no deja los datos como estaban (ver el informe). El ensayo para: así no se lanza el real."
+            echo "::error::La vuelta atrás de esta tanda no deja los datos como estaban (ver el informe). El ensayo para: así no se lanza el real. $(tail -1 /tmp/cuentas-atras.md | cut -c1-800)"
             cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           else
