@@ -10,4 +10,5 @@
 # subsanación encadenada; y la vuelta atrás deja las cuatro como estaban.
 supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql
 supabase/migrations/20261026T0218_v03_verifactu_reenviar.sql
+supabase/migrations/20261026T0226_v03_verifactu_otros_programas.sql
 supabase/staging/sql/20261026_v03_ventas_sin_iva_prueba.sql

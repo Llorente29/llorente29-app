@@ -25,7 +25,8 @@
 --      (sin tipo ni cuota) y el importe sin IVA.
 --   8. «Corregir y reenviar» (0218): la rechazada se subsana (Subsanacion S,
 --      RechazoPrevio S), encadenada, con el porqué y el libro cambiados.
---   7. La vuelta atrás: las cuatro con el md5 del principio, y sin la 0218.
+--   9. «¿Facturas también con otro programa?» (0226).
+--   7. La vuelta atrás: las cuatro con el md5 del principio, y sin la 0218 ni la 0226.
 
 \set ON_ERROR_STOP 1
 begin;
@@ -38,6 +39,7 @@ set local statement_timeout = '180s';
 
 -- El ensayo aplica la 0146 delante de esta prueba, en la misma transacción:
 -- primero su vuelta atrás (y la 0 comprueba que deja lo de producción).
+\i supabase/vuelta-atras/20261026T0226_v03_verifactu_otros_programas.down.sql
 \i supabase/vuelta-atras/20261026T0218_v03_verifactu_reenviar.down.sql
 \i supabase/vuelta-atras/20261026T0146_v03_ventas_sin_iva.down.sql
 
@@ -85,6 +87,7 @@ reset role;
 
 \i supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql
 \i supabase/migrations/20261026T0218_v03_verifactu_reenviar.sql
+\i supabase/migrations/20261026T0226_v03_verifactu_otros_programas.sql
 
 -- 1 a 4 · Como usuario de A.
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
@@ -304,7 +307,27 @@ begin
   raise notice '8 · su libro: E2 con clave 02';
 end $$;
 
--- 7 · La vuelta atrás (de las dos, en orden inverso).
+-- 9 · «¿Facturas también con otro programa?» (0226): se guarda limpio, sin
+-- repetidos, y lo que no es un programa de la lista no.
+set local role authenticated;
+do $$
+declare r jsonb; v_msg text;
+begin
+  r := public.verifactu_otros_programas((select v::uuid from _v where clave = 'empresa'), array['tpv', 'excel', 'tpv'], 'Prueba V03 E2');
+  if (select otros_programas from public.verifactu_empresa where company_id = (select v::uuid from _v where clave = 'empresa')) <> array['excel', 'tpv'] then
+    raise exception 'PRUEBA V03 E2 · 9: no guarda los otros programas como debe (%).', r;
+  end if;
+  begin
+    perform public.verifactu_otros_programas((select v::uuid from _v where clave = 'empresa'), array['fax'], 'Prueba V03 E2');
+    raise exception 'PRUEBA V03 E2 · 9: guarda un programa que no está en la lista.';
+  exception when invalid_parameter_value then v_msg := sqlerrm;
+  end;
+  raise notice '9 · otros programas: excel y tpv, sin repetir; «fax» no: «%»', v_msg;
+end $$;
+reset role;
+
+-- 7 · La vuelta atrás (de las tres, en orden inverso).
+\i supabase/vuelta-atras/20261026T0226_v03_verifactu_otros_programas.down.sql
 \i supabase/vuelta-atras/20261026T0218_v03_verifactu_reenviar.down.sql
 \i supabase/vuelta-atras/20261026T0146_v03_ventas_sin_iva.down.sql
 do $$
@@ -319,6 +342,10 @@ begin
     raise exception 'PRUEBA V03 E2 · 7: hay sobrecargas.';
   end if;
   if to_regprocedure('public.verifactu_reenviar(uuid,jsonb,text)') is not null then raise exception 'PRUEBA V03 E2 · 7: la vuelta atrás de la 0218 deja la función.'; end if;
+  if to_regprocedure('public.verifactu_otros_programas(uuid,text[],text)') is not null
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'verifactu_empresa' and column_name = 'otros_programas') then
+    raise exception 'PRUEBA V03 E2 · 7: la vuelta atrás de la 0226 deja la función o la columna.';
+  end if;
   raise notice '7 · la vuelta atrás: las cuatro, con el md5 del principio y sin sobrecargas';
 end $$;
 rollback;

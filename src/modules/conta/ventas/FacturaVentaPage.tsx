@@ -53,6 +53,8 @@ import {
   type BorradorVenta, type LineaEnEdicion,
 } from '@/modules/conta/lib/facturasVenta'
 import { MENCION_SIN_IVA, porqueNoVale, zonaDelCliente } from '@/modules/conta/lib/ventasSinIva'
+import { BandaPruebas } from '@/modules/conta/verifactu/BandaPruebas'
+import { HaciendaDeFactura } from '@/modules/conta/verifactu/HaciendaDeFactura'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
 import { BloqueCobro, DialogoClienteNuevo, DialogoCobro, DialogoCorregir, DialogoEmitir, LineasEditables, LineasLeer, PorqueSinIva, Totales } from './FacturaVentaBloques'
 
@@ -454,6 +456,11 @@ export default function FacturaVentaPage() {
         {editable && falta.length > 0 && <p className="s-apoyo" data-prueba="falta-para-emitir">Para emitirla falta {falta.join(', ')}.</p>}
       </BloqueFicha>
 
+      {/* V03 E2 · Con Hacienda (tablero 27): la rechazada, «Corregir y reenviar» y cómo va. */}
+      {f && f.estado !== 'borrador' && accountId && (
+        <HaciendaDeFactura accountId={accountId} quien={userName ?? null} alCambiar={() => setVuelta((x) => x + 1)}
+          factura={{ id: f.id, numero: f.numero, emitidaEl: f.emitidaEl, porque: f.porque, sinIva: f.lineas.some((l) => l.tipo === 0), pais: f.cliente.pais }} />
+      )}
       {f && f.estado !== 'borrador' && <BloqueCobro total={f.total} cobros={f.cobros} anulada={f.estado === 'anulada'} alRegistrar={botonCobro ? () => setDialogo('cobro') : null} />}
 
       <AsientoQueSeCrea titulo={f?.entryId ? 'Su asiento' : 'El asiento que se crea'} lineas={lineasAsiento} nota={notaAsiento}
@@ -477,6 +484,7 @@ export default function FacturaVentaPage() {
 
   return (
     <div className="s-pagina" data-prueba="ficha-venta" data-estado={estado}>
+      <BandaPruebas />
       <EncabezadoPagina titulo={titulo} estado={{ texto: est.texto, tono: est.tono }} frase={frase}
         migasExtra={[{ etiqueta: f?.numero ?? (nueva ? 'Nueva' : 'Borrador') }]}
         principal={principal} secundarios={secundarios} masAcciones={mas} />

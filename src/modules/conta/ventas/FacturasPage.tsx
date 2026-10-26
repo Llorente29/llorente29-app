@@ -22,6 +22,10 @@
 //   · La tabla, con la regla de anchos (N5): Número · Fecha · Cliente · Origen
 //     · Base · Total · Vence · Estado · Diez. Una de Sumied abre su ficha; una
 //     del libro, su asiento.
+//   · V03 E2 (tablero 26), con Verifactu encendido: la banda morada si está en
+//     pruebas, cuatro cifras con Hacienda (emitidas en el mes, las que tiene,
+//     las que hay que mirar y las que se están enviando, con por qué tardan), el
+//     aviso de la rechazada con «Arreglarla» y la columna «Hacienda».
 // Lo que se decide sin React, en lib/facturasVenta.ts; lo que se lee, en
 // services/ventasService.ts (con account_id y company_id, regla 9).
 
@@ -35,6 +39,9 @@ import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMes, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { limites, meses, ventanaParaRevisar } from '@/modules/conta/documentos/documentos'
 import { leerFacturasVenta } from '@/modules/conta/services/ventasService'
+import { estadosHacienda, modoVerifactu } from '@/modules/conta/services/verifactuService'
+import { cifrasHacienda, etiquetaHacienda, porQueEnviando, porQueRechazo } from '@/modules/conta/lib/verifactu/estado'
+import { BandaPruebas } from '@/modules/conta/verifactu/BandaPruebas'
 import { PdfsQueFaltan } from './PdfsQueFaltan'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { MAX_FILAS } from '@/modules/conta/facturacion/emitidas'
@@ -70,6 +77,11 @@ export default function FacturasPage() {
   const { desde, hasta } = f.mes ? limites(f.mes) : ventanaParaRevisar(hoy)
   const datos = useLeer(accountId && activa ? () => leerFacturasVenta(accountId, activa.id, desde, hasta) : null, `${accountId}:${activa?.id}:${desde}:${hasta}:ventas`)
   const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales`)
+  // V03 E2: el modo de Verifactu y el estado de cada emitida con Hacienda.
+  const hacienda = useLeer(accountId && activa ? async () => {
+    const [modo, estados] = await Promise.all([modoVerifactu(accountId, activa.id), estadosHacienda(accountId, activa.id)])
+    return { modo, estados }
+  } : null, `${accountId}:${activa?.id}:hacienda`)
   const cambiar = (c: Record<string, string | null>) => setQuery(new URLSearchParams(conCambio(search, c)), { replace: true })
 
   const nueva = <BotonEnlace a={rutaNuevaFacturaVenta()} variante="principal" icono="nuevo">Nueva factura</BotonEnlace>
@@ -115,6 +127,34 @@ export default function FacturasPage() {
     { etiqueta: 'Borradores', valor: eurosExactos(cif.borradores.total), apoyo: cif.borradores.n ? `${plural(cif.borradores.n, 'sin emitir', 'sin emitir')}` : 'Ninguno', a: `${lista}?ver=borradores` },
   ] : []
 
+  // V03 E2 · Con Hacienda (tablero 26): solo si Verifactu está o ha estado encendido.
+  const ahora = new Date()
+  const estadosH = hacienda.datos?.estados ?? new Map()
+  const conHacienda = !!hacienda.datos && (hacienda.datos.modo !== 'apagado' || [...estadosH.values()].some((e) => e.estado !== 'no_se_envia'))
+  const mes = hoy.slice(0, 7)
+  const delMes = todas.filter((x) => x.fuente === 'sumied' && x.guardado !== 'borrador' && x.fecha.startsWith(mes))
+  const ch = conHacienda ? cifrasHacienda(delMes, estadosH, ahora) : null
+  const rechazadasDelMes = delMes.filter((x) => estadosH.get(x.id)?.estado === 'incorrecto')
+  const nombreMesActual = (nombreMes(mes) || '').toLowerCase().replace(/\s+\d{4}$/, '')
+  const cifrasH = ch ? [
+    { etiqueta: `Emitidas en ${nombreMesActual}`, valor: ch.emitidas.n.toLocaleString('es-ES'), apoyo: eurosExactos(ch.emitidas.total), a: `${lista}?mes=${mes}` },
+    { etiqueta: 'Hacienda las tiene', valor: ch.laTiene.toLocaleString('es-ES'), apoyo: ch.mirar || ch.enviando.n ? `de ${ch.emitidas.n.toLocaleString('es-ES')} emitidas` : 'todo en orden', a: `${lista}?mes=${mes}` },
+    { etiqueta: 'Necesita que la mires', valor: ch.mirar.toLocaleString('es-ES'), apoyo: ch.mirar ? plural(ch.mirar, 'rechazada por Hacienda', 'rechazadas por Hacienda') : 'ninguna', a: rechazadasDelMes[0] ? rutaFacturaVenta(rechazadasDelMes[0].id) : `${lista}?mes=${mes}` },
+    { etiqueta: 'Enviándose ahora', valor: ch.enviando.n.toLocaleString('es-ES'), apoyo: ch.enviando.apoyo, a: `${lista}?mes=${mes}` },
+  ] : []
+  const rechazadas = conHacienda ? todas.filter((x) => x.fuente === 'sumied' && estadosH.get(x.id)?.estado === 'incorrecto') : []
+  const hacia = (x: FacturaVenta) => {
+    if (x.fuente === 'libro') return <span className="cxvf-hacienda-no">No se envía</span>
+    if (x.guardado === 'borrador') return <span className="s-tarjeta-apoyo">—</span>
+    const e = estadosH.get(x.id) ?? null
+    const et = etiquetaHacienda(e)
+    const titulo = e?.estado === 'pendiente' || e?.estado === 'enviando' ? porQueEnviando(e, ahora)
+      : e?.estado === 'incorrecto' ? porQueRechazo(e.codigo, e.descripcion).titulo
+        : e?.urlQr ? `Su QR lleva a: ${e.urlQr}` : undefined
+    if (!et.chip) return <span className={et.tono === 'seguro' ? 'cxvf-hacienda-ok' : 'cxvf-hacienda-no'} title={titulo}>{et.texto}</span>
+    return <Chip tono={et.tono} titulo={titulo}>{et.texto}</Chip>
+  }
+
   const cliente = (x: FacturaVenta) => x.cliente ?? (x.fuente === 'libro' ? 'Ventas a consumidor final' : 'Sin cliente')
   const estado = (x: FacturaVenta) => {
     const e = NOMBRE_ESTADO[estadoDe(x, hoy)]
@@ -142,6 +182,7 @@ export default function FacturasPage() {
     { id: 'vence', titulo: 'Vence', ordenable: true, prioridad: 3, minimo: 80, celda: vence },
     { id: 'estado', titulo: 'Estado', prioridad: 2, minimo: 140, celda: estado },
     { id: 'diez', titulo: 'Diez', prioridad: 4, minimo: 90, celda: diez },
+    ...(conHacienda ? [{ id: 'hacienda', titulo: 'Hacienda', prioridad: 2, minimo: 150, celda: hacia }] : []),
   ]
   const tarjeta = (x: FacturaVenta) => {
     const queda = x.fuente === 'sumied' && x.guardado === 'emitida' && x.total > 0 ? quedaPorCobrar(x) : 0
@@ -149,7 +190,7 @@ export default function FacturasPage() {
       <>
         <span className="s-tarjeta-cabeza"><span className="s-lista-principal">{cliente(x)}</span><strong className="s-cifra">{eurosExactos(x.total)}</strong></span>
         <span className="s-tarjeta-apoyo">{[x.numero ?? 'Borrador', diaMes(x.fecha), NOMBRE_ORIGEN[x.origen], x.vence && x.fuente === 'sumied' ? `vence ${diaMes(x.vence)}` : null].filter(Boolean).join(' · ')}</span>
-        <span className="s-tarjeta-pie">{estado(x)}{queda > 0 && queda !== x.total && <span className="s-tarjeta-apoyo">Quedan {eurosExactos(queda)}</span>}{x.diez && diez(x)}</span>
+        <span className="s-tarjeta-pie">{estado(x)}{queda > 0 && queda !== x.total && <span className="s-tarjeta-apoyo">Quedan {eurosExactos(queda)}</span>}{x.diez && diez(x)}{conHacienda && hacia(x)}</span>
       </>
     )
   }
@@ -164,6 +205,7 @@ export default function FacturasPage() {
 
   return (
     <div className="s-pagina">
+      <BandaPruebas />
       {encabezado}
       {datos.error && (
         <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>
@@ -172,6 +214,17 @@ export default function FacturasPage() {
         <p className="s-aviso-lista" data-tono="duda" role="status">
           {d.alTope.length === 1 ? 'En' : 'En los meses de'} {d.alTope.map((m) => nombreMes(m).toLowerCase()).join(', ')} hay {MAX_FILAS.toLocaleString('es-ES')} anotaciones o más en tu libro y solo he podido leer {MAX_FILAS.toLocaleString('es-ES')} por mes: puede que falten facturas del libro de {d.alTope.length === 1 ? 'ese mes' : 'esos meses'}. Libros › Facturas expedidas las tiene todas.
         </p>
+      )}
+      {ch && <div data-prueba="cifras-hacienda"><CifrasBandeja cifras={cifrasH} /></div>}
+      {rechazadas.length > 0 && (
+        <div className="s-aviso-lista" data-tono="falta" role="alert" data-prueba="aviso-rechazada">
+          <p>
+            <strong>Hacienda ha rechazado {rechazadas.length === 1 ? `la factura ${rechazadas[0].numero}` : `${rechazadas.length} facturas`}.</strong>{' '}
+            {rechazadas.length === 1 ? porQueRechazo(estadosH.get(rechazadas[0].id)?.codigo ?? null, estadosH.get(rechazadas[0].id)?.descripcion ?? null).texto : 'Cada una dice qué le falta.'}{' '}
+            La factura que tiene tu cliente es válida: se arregla el registro.
+          </p>
+          <BotonEnlace a={rutaFacturaVenta(rechazadas[0].id)} variante="principal">Arreglarla</BotonEnlace>
+        </div>
       )}
       {cif && (cif.faltaLiquidacion.n ? <div className="cxv-cifras-cinco"><CifrasBandeja cifras={cifras} /></div> : <CifrasBandeja cifras={cifras} />)}
       {cif && cif.faltaLiquidacion.n > 0 && (
@@ -218,6 +271,9 @@ export default function FacturasPage() {
               : <>Ninguna factura {periodo}.</>}
           pie={pie}
         />
+      )}
+      {conHacienda && (
+        <p className="s-apoyo" data-prueba="pie-hacienda">Las facturas de antes de 2027 (las traídas de Diez) no se envían: Verifactu empieza el 1 de enero de 2027. Pasa el ratón por «Hacienda» para ver por qué tarda una, por qué se rechazó o adónde lleva su QR.</p>
       )}
 
       <BotonPulgar>{nueva}</BotonPulgar>

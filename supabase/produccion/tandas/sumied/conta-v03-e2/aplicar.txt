@@ -14,10 +14,13 @@
 #      alta rechazada de una factura se subsana con un registro nuevo
 #      (Subsanacion S, RechazoPrevio S), encadenado; si viene, con el porqué de
 #      la venta sin IVA y su libro (con el mes abierto). No toca datos.
+#   3. 0226 — AÑADE «¿Facturas también con otro programa?» (tablero 25): una
+#      columna que admite nulos en verifactu_empresa (0 filas hoy) y su función.
 #
 # Sin «autorizo»: no toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql
 supabase/migrations/20261026T0218_v03_verifactu_reenviar.sql
+supabase/migrations/20261026T0226_v03_verifactu_otros_programas.sql
 cuenta: scripts/conta/produccion/cuentas/v03-ventas-sin-iva.sql

@@ -56,6 +56,9 @@
   --s-ok-fondo: #E6F4EA;
   --s-falta: #8A1F12;            /* Falta, error */
   --s-falta-fondo: #FFE4E1;
+  /* V03 E2: el entorno de PRUEBAS de Verifactu (la banda morada, tableros 26 y 27). */
+  --s-prueba: #5B2CA0;
+  --s-prueba-fondo: #F1EAFB;
   --s-neutro-fondo: #EAF2F8;     /* Píldora neutra */
   --s-oscuro: var(--s-tinta);    /* Píldora oscura («Experto») */
   --s-documento: #E9EDF3;        /* Fondo del panel del documento */

@@ -56,7 +56,7 @@ export function LineasEditables({ lineas, catalogos, alCambiar, soloImportes = f
                 <td data-titulo="Precio" className="cxv-num"><Texto valor={l.precio} alCambiar={(v) => poner(i, { precio: v })} aria-label={`Precio de la línea ${i + 1}`} inputMode="decimal" placeholder="0,00" /></td>
                 <td data-titulo="Dto. %" className="cxv-num"><Texto valor={l.descuento} alCambiar={(v) => poner(i, { descuento: v })} aria-label={`Descuento de la línea ${i + 1}`} inputMode="decimal" placeholder="0" /></td>
                 <td data-titulo="IVA"><Selector valor={l.tipoId} alCambiar={(v) => poner(i, { tipoId: v })} aria-label={`IVA de la línea ${i + 1}`}
-                  opciones={catalogos.tipos.map((t) => ({ valor: t.id, texto: `${textoDeNumero(t.tipo, 0)} %` }))} /></td>
+                  opciones={catalogos.tipos.map((t) => ({ valor: t.id, texto: t.sinIva ? 'Sin IVA' : `${textoDeNumero(t.tipo, 0)} %` }))} /></td>
                 <td data-titulo="Cuenta"><Selector valor={l.cuentaId} alCambiar={(v) => poner(i, { cuentaId: v })} aria-label={`Cuenta de la línea ${i + 1}`}
                   opciones={catalogos.cuentas.map((c) => ({ valor: c.id, texto: `${c.code} · ${c.nombre}` }))} /></td>
                 <td data-titulo="Importe" className="cxv-num s-cifra">{imp === null ? '—' : eurosExactos(imp)}</td>
