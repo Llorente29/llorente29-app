@@ -614,8 +614,8 @@ returns jsonb language sql stable security invoker set search_path = public as $
         'id', r.id, 'codigo', r.code, 'cargo', r.charge_date, 'por_abonar', r.por_abonar,
         'recibos', (select jsonb_agg(jsonb_build_object('id', l.id, 'importe', l.amount, 'cliente', p.name, 'factura', ci.number_text) order by p.name)
                       from public.conta_cobro_remesa_linea_estado l join public.customer_invoice ci on ci.id = l.invoice_id left join public.party p on p.id = l.party_id
-                     where l.remesa_id = r.id and l.estado = 'pendiente')) order by r.charge_date), '[]'::jsonb)
-      from public.conta_cobro_remesa_estado r where r.company_id = p_company and r.estado = 'en_banco' and r.por_abonar > 0),
+                     where l.remesa_id = r.id and l.estado = 'pendiente')) order by r.charge_date)
+      from public.conta_cobro_remesa_estado r where r.company_id = p_company and r.estado = 'en_banco' and r.por_abonar > 0), '[]'::jsonb),
     'devoluciones', coalesce((select jsonb_agg(jsonb_build_object(
         'id', l.id, 'remesa', r.code, 'importe', l.amount, 'cliente', p.name, 'factura', ci.number_text, 'abonado', l.abonado_el) order by l.abonado_el desc)
       from public.conta_cobro_remesa_linea_estado l join public.conta_cobro_remesa r on r.id = l.remesa_id
