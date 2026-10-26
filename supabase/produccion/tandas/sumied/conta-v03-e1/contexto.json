@@ -1,0 +1,27 @@
+{
+  "_que": "V03 · E1 · contexto de producción de la tanda (2140, 2141, 2249, 2341 y 2351), medido en SOLO LECTURA el 25/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow (23:45Z, las cuatro primeras) y, para lo que añade la 2351 (verifactu_conexion y sus dos funciones, verifactu_modo), a las 23:56Z: no existe ninguno. Existe public.customer_invoice (1.286 filas), donde la 2141 pone su disparador; nada en el camino del pedido; sin otras firmas; nada en el historial.",
+  "medido": "2026-10-25T23:56Z",
+  "tanda": {
+    "supabase/migrations/20261025T2140_v03_verifactu_motor.sql": "a370367792f0d9404dd3321f4713b9e6",
+    "supabase/migrations/20261025T2141_v03_verifactu_engancha.sql": "479c3710ca02edb41e84871ecc5b0a87",
+    "supabase/migrations/20261025T2249_v03_verifactu_despertar.sql": "cc11950f77d7e11683cb27b75dc8accb",
+    "supabase/migrations/20261025T2341_v03_verifactu_autorizacion.sql": "f981ca0a33176204939ac0a99b85ff69",
+    "supabase/migrations/20261025T2351_v03_verifactu_candado.sql": "f16263127249e660084325e6860e4128"
+  },
+  "contexto": {
+    "tablas": [
+      "public.customer_invoice"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.customer_invoice": 1286
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

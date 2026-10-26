@@ -1,0 +1,132 @@
+name: V03 · Facturas de prueba contra la AEAT, desde staging-conta
+
+# QUÉ HACE (V03 · E1, 25/10)
+# Las ~25 facturas del encargo contra el entorno de PRUEBAS de la AEAT, con el
+# certificado de pruebas (AEAT_PRUEBAS_P12_B64 / _CLAVE, los pone Julio en
+# staging). SOLO en staging-conta (oseymswjlzplqoxrfjzi):
+#   1. guardas: staging y no producción; la función solo conoce prewww1 para
+#      pruebas, y su puerta no deja «pruebas» desde la base de producción;
+#   2. una llave de un solo run (VERIFACTU_PRUEBAS_TOKEN), CONTA_VERIFACTU=pruebas,
+#      y despliega conta-verifactu en staging;
+#   3. «probar_conexion»: una consulta con el certificado; su resultado queda
+#      apuntado (el candado, 2351). Si no sale bien, se PARA aquí;
+#   4. «preparar_pruebas»: la empresa de pruebas (su propia cuenta de staging,
+#      con el NIF del certificado) y las 25 facturas de _shared/verifactu/pruebasAeat.ts,
+#      registradas por el mismo paso que la emisión (cerrojo y huella);
+#   5. «enviar»: una vuelta de la cola, contra la AEAT de pruebas;
+#   6. pase lo que pase: quita la llave, cierra la puerta (CONTA_VERIFACTU) y
+#      borra la función. Los secretos del certificado NO se tocan.
+#
+# QUÉ SALE: solo «@@ clave número» por scripts/conta/salida-segura.mjs (D01 R2).
+# Lo que contestó Hacienda, registro a registro, se queda en la base de staging
+# (verifactu_envio y verifactu_registro), no en el registro público del run.
+#
+# CUÁNDO: un push a conta/v03-e1 cuyo mensaje EMPIECE por «[verifactu-pruebas]».
+
+on:
+  push:
+    branches: ['conta/v03-e1']
+
+concurrency:
+  group: verifactu-pruebas-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    if: startsWith(github.event.head_commit.message, '[verifactu-pruebas]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+      FN: conta-verifactu
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Guardas · staging y no producción; pruebas solo contra prewww1
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${TOKEN:-}" ] || { echo "::error::Falta SUPABASE_ACCESS_TOKEN."; exit 1; }
+          [ "$REF" != "$PROD_REF" ] || { echo "::error::El ref es el de producción. Abortado."; exit 1; }
+          grep -qF 'pruebas: "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"' supabase/functions/conta-verifactu/index.ts \
+            || { echo "::error::La función no manda pruebas a prewww1."; exit 1; }
+          grep -qF "if (valor === 'pruebas') return prod ?" supabase/functions/_shared/verifactu/puerta.ts \
+            || { echo "::error::La puerta no niega pruebas desde producción."; exit 1; }
+
+      - name: Llave, puerta y despliegue en staging-conta
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vp
+          TOK=$(openssl rand -hex 24); echo "::add-mask::$TOK"; printf '%s' "$TOK" > /tmp/vp/token
+          supabase secrets set --project-ref "$REF" "VERIFACTU_PRUEBAS_TOKEN=$TOK" CONTA_VERIFACTU=pruebas > /dev/null
+          supabase functions deploy "$FN" --project-ref "$REF" > /tmp/vp/despliegue.txt 2>&1
+          echo "Desplegada en staging-conta, con la puerta en pruebas."
+
+      - name: Conexión · una consulta con el certificado de pruebas (abre o no el candado)
+        run: |
+          set -euo pipefail
+          sleep 5
+          curl -sS --max-time 120 -X POST -H "Content-Type: application/json" -H "x-verifactu-pruebas: $(cat /tmp/vp/token)" \
+            -d '{"accion":"probar_conexion"}' "https://$REF.supabase.co/functions/v1/$FN" > /tmp/vp/conexion.json || echo '{"ok":false,"motivo":"curl"}' > /tmp/vp/conexion.json
+          jq -r '"@@ # conexion", "@@ ok \(if .ok then 1 else 0 end)", "@@ status \(.status // -1)", "@@ ms \(.ms // -1)",
+            (if .codigo then "@@ codigo_aeat.\(.codigo) 1" else empty end),
+            "@@ motivo.\((.motivo // "ninguno") | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1"' /tmp/vp/conexion.json > /tmp/vp/conexion.txt
+          cat /tmp/vp/conexion.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+          # Si Hacienda no acepta el certificado, se para aquí (respuesta 1 y 3 de Julio): no se prepara nada.
+          jq -e '.ok == true' /tmp/vp/conexion.json > /dev/null || { echo "::error::La conexión con la AEAT de pruebas no ha salido bien: se para."; exit 1; }
+
+      - name: Preparar · la empresa de pruebas y sus 25 facturas
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 120 -X POST -H "Content-Type: application/json" -H "x-verifactu-pruebas: $(cat /tmp/vp/token)" \
+            -d '{"accion":"preparar_pruebas"}' "https://$REF.supabase.co/functions/v1/$FN" > /tmp/vp/preparar.json || echo '{"error":"curl"}' > /tmp/vp/preparar.json
+          jq -r '"@@ # preparar", "@@ preparadas \(.preparadas // -1)", "@@ altas \(.altas // -1)", "@@ anulaciones \(.anulaciones // -1)",
+            (if .error then "@@ error.\(.error | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1" else empty end)' /tmp/vp/preparar.json > /tmp/vp/preparar.txt
+          cat /tmp/vp/preparar.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+          jq -e '.preparadas == 25' /tmp/vp/preparar.json > /dev/null || { echo "::error::No se han preparado las 25 facturas."; exit 1; }
+
+      - name: Enviar · una vuelta de la cola contra la AEAT de pruebas
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 150 -X POST -H "Content-Type: application/json" -H "x-verifactu-pruebas: $(cat /tmp/vp/token)" \
+            -d '{"accion":"enviar"}' "https://$REF.supabase.co/functions/v1/$FN" > /tmp/vp/enviar.json || echo '{"error":"curl"}' > /tmp/vp/enviar.json
+          # Los motivos de fallo son claves que escribe la función (llamada_tiempo, rechazado_4104…).
+          jq -r '"@@ # enviar", "@@ envios \(.envios // -1)", "@@ registros \(.registros // -1)", "@@ correctos \(.correctos // -1)",
+            "@@ con_errores \(.con_errores // -1)", "@@ incorrectos \(.incorrectos // -1)", "@@ vuelven \(.vuelven // -1)", "@@ atascados \(.atascados // -1)",
+            ((.fallos // [])[] | "@@ fallo.\(.motivo | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1"),
+            (if .error then "@@ error.\(.error | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1" else empty end)' /tmp/vp/enviar.json > /tmp/vp/enviar.txt
+          cat /tmp/vp/enviar.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Limpieza · la llave, la puerta y la función (pase lo que pase)
+        if: always()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/vp
+          supabase secrets unset --project-ref "$REF" VERIFACTU_PRUEBAS_TOKEN CONTA_VERIFACTU > /dev/null 2>&1 || true
+          supabase functions delete "$FN" --project-ref "$REF" > /dev/null 2>&1 || true
+          curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/functions" > /tmp/vp/funciones.json || echo '[]' > /tmp/vp/funciones.json
+          curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" > /tmp/vp/secretos.json || echo '[]' > /tmp/vp/secretos.json
+          N_FN=$(jq --arg s "$FN" '[.[] | select(.slug==$s)] | length' /tmp/vp/funciones.json)
+          N_SEC=$(jq '[.[] | select(.name=="VERIFACTU_PRUEBAS_TOKEN" or .name=="CONTA_VERIFACTU")] | length' /tmp/vp/secretos.json)
+          CERT=$(jq '[.[] | select(.name=="AEAT_PRUEBAS_P12_B64" or .name=="AEAT_PRUEBAS_P12_CLAVE")] | length' /tmp/vp/secretos.json)
+          echo "@@ # limpieza" > /tmp/vp/limpieza.txt
+          echo "@@ funciones_que_quedan $N_FN" >> /tmp/vp/limpieza.txt
+          echo "@@ llave_y_puerta_que_quedan $N_SEC" >> /tmp/vp/limpieza.txt
+          echo "@@ secretos_del_certificado_de_2_no_se_tocan $CERT" >> /tmp/vp/limpieza.txt
+          cat /tmp/vp/limpieza.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+          [ "$N_FN" = "0" ] && [ "$N_SEC" = "0" ] || { echo "::error::No se ha limpiado todo."; exit 1; }

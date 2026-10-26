@@ -54,6 +54,12 @@ jobs:
       - name: Dependencias
         if: steps.plan.outputs.ninguna != 'true'
         run: npm ci --ignore-scripts
+      # V03 (26/10): las de Verifactu validan el mensaje contra los XSD oficiales de
+      # la AEAT con xmllint, y sin él fallan a propósito (no se saltan). El runner
+      # no lo trae: libxml2-utils.
+      - name: xmllint (las de Verifactu validan contra los XSD de la AEAT)
+        if: steps.plan.outputs.ninguna != 'true'
+        run: command -v xmllint || { sudo apt-get update -qq && sudo apt-get install -y -qq libxml2-utils; } && xmllint --version 2>&1 | head -1
       # Las pruebas de captura (cocina, inventario, tablet) leen dist/assets:
       # en local existe de builds anteriores; aquí hay que construirlo antes.
       - name: Build (lo leen las pruebas de captura)
