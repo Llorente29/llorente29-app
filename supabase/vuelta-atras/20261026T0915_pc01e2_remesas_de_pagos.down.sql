@@ -22,8 +22,6 @@ drop function if exists public.conta_remesa_iban_confirmar(uuid);
 drop function if exists public._pc01e2_linea(uuid);
 drop function if exists public.conta_pago_a_mano(uuid, uuid, uuid, date, numeric);
 drop function if exists public.conta_remesa_pagos_crear(uuid, uuid, date, jsonb);
-drop trigger if exists pc01e2_proveedor_iban_cambiado on public.supplier;
-drop function if exists public._pc01e2_proveedor_iban_cambiado();
 drop function if exists public._pc01e2_iban_como_esta(uuid, text);
 drop function if exists public._pc01e2_en_remesa(uuid);
 drop function if exists public._pc01e2_cuenta_proveedor(uuid, uuid);
@@ -36,3 +34,13 @@ drop view if exists public.conta_pago_remesa_linea_estado;
 drop table if exists public.conta_pago_remesa_evento;
 drop table if exists public.conta_pago_remesa_linea;
 drop table if exists public.conta_pago_remesa;
+-- El disparador de supplier, al final y solo si está: «drop trigger if exists»
+-- coge el cerrojo exclusivo de supplier aunque no exista, y retenido toda la
+-- transacción se cruza con quien la esté escribiendo (ensayo 40299056909:
+-- deadlock en staging con una e2e).
+do $$ begin
+  if exists (select 1 from pg_trigger where tgname = 'pc01e2_proveedor_iban_cambiado' and tgrelid = 'public.supplier'::regclass) then
+    drop trigger pc01e2_proveedor_iban_cambiado on public.supplier;
+  end if;
+end $$;
+drop function if exists public._pc01e2_proveedor_iban_cambiado();
