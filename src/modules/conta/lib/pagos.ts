@@ -32,6 +32,11 @@ export interface FilaPago {
   local: string | null
   iban4: string | null
   conIban: boolean
+  /** PC01 · E2b · El IBAN de la ficha se leyó de una factura y nadie lo ha confirmado (la remesa lo para hasta confirmarlo). */
+  ibanSinConfirmar: boolean
+  /** PC01 · E2b · La factura trae otro IBAN que el de la ficha y nadie ha decidido (antifraude de la C01b). */
+  ibanDistinto: boolean
+  ibanLeido4: string | null
   conCuenta: boolean
   remesa: { id: string; codigo: string; importe: number } | null
 }
@@ -48,6 +53,7 @@ export function filaPago(f: Record<string, unknown>): FilaPago {
     diasVencida: f.dias_vencida === null || f.dias_vencida === undefined ? null : Number(f.dias_vencida),
     forma: FORMAS.has(String(f.forma)) ? (String(f.forma) as FormaPago) : null, localId: str(f.location_id), local: str(f.local),
     iban4: str(f.iban4), conIban: f.con_iban === true, conCuenta: f.con_cuenta === true,
+    ibanSinConfirmar: f.iban_sin_confirmar === true, ibanDistinto: f.iban_distinto === true, ibanLeido4: str(f.iban_leido4),
     remesa: r ? { id: String(r.id), codigo: String(r.codigo), importe: num(r.importe) } : null,
   }
 }
@@ -94,8 +100,25 @@ export function porQueNoEnRemesa(f: FilaPago): string | null {
   if (seCargaSola(f)) return f.forma === 'direct_debit' ? 'la paga el banco solo (domiciliada)' : f.forma === 'card' ? 'se paga con tarjeta' : 'se paga del saldo prepago'
   if (f.forma === 'cash') return 'se paga en efectivo'
   if (!f.conIban) return `${f.proveedor} no tiene IBAN en su ficha`
+  if (f.ibanDistinto) return `la factura trae otro IBAN (···· ${f.ibanLeido4 ?? '—'}) que el de la ficha de ${f.proveedor}: decide en su ficha si es el nuevo`
   if (!f.conCuenta) return `${f.proveedor} no tiene su cuenta de proveedor (400)`
   return null
+}
+
+/**
+ * PC01 · E2b · Los proveedores de las marcadas a los que solo les falta el IBAN
+ * para entrar en la remesa: «Poner IBAN» en la barra. Las domiciliadas, las de
+ * tarjeta, prepago o efectivo NO cuentan como «sin IBAN» (no se pagan por
+ * transferencia), ni las ya pagadas o ya en una remesa. Uno por proveedor.
+ */
+export function sinIbanParaPoner(marcadas: readonly FilaPago[]): { id: string; nombre: string }[] {
+  const vistos = new Map<string, string>()
+  for (const f of marcadas) {
+    if (!f.proveedorId || f.conIban || vistos.has(f.proveedorId)) continue
+    if (porQueNoEnRemesa(f) !== `${f.proveedor} no tiene IBAN en su ficha`) continue
+    vistos.set(f.proveedorId, f.proveedor)
+  }
+  return [...vistos].map(([id, nombre]) => ({ id, nombre }))
 }
 
 // ── Pestañas ────────────────────────────────────────────────────────────────

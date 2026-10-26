@@ -31,6 +31,10 @@
 //      El cargo es de verdad (un movimiento inventado importado en «Cuenta
 //      principal», que no usa ninguna otra prueba, con huella fija: repetir no
 //      crea otro); la remesa que lo espera y el casado se simulan.
+//   6. (E2b) «Poner IBAN» en la barra: marcar una sin IBAN y una domiciliada
+//      sin IBAN; solo la primera ofrece «Poner IBAN» (la domiciliada no cuenta
+//      como «sin IBAN»); el diálogo comprueba el IBAN antes de mandarlo, la
+//      base lo guarda (simulado) y lo dice, y la factura entra en la remesa.
 // Las capturas, al lado de su tablero (docs/conta/pc01/tableros), en el artefacto.
 
 import { readFileSync } from 'node:fs'
@@ -336,3 +340,47 @@ test('Bancos propone sola la remesa que espera justo ese cargo; la ficha, pagada
   expect(errores).toEqual([])
 })
 
+
+test('«Poner IBAN» en la barra: solo a quien le falta para entrar, lo comprueba y lo dice (E2b)', async ({ page }) => {
+  test.setTimeout(90_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  const llamadas = await simular(page)
+  // La de Inmuebles, además de domiciliada, sin IBAN: no tiene que ofrecer «Poner IBAN».
+  let puesto = false
+  await page.route(/\/rest\/v1\/rpc\/conta_pagos_lista(\?|$)/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    filas: FILAS.map((x) => x.id === 'f-alquiler' ? { ...x, iban4: null, con_iban: false }
+      : x.id === 'f-carnes2' && puesto ? { ...x, iban4: '5416', con_iban: true } : x),
+    pagado_mes: 22107.88, pagadas_mes: 41, sin_plazo: [{ id: 's-sinplazo', nombre: 'Carnes Sin Plazo SL' }],
+  }) }))
+  await page.route(/\/rest\/v1\/rpc\/conta_proveedor_iban_poner(\?|$)/, (r) => {
+    puesto = true
+    llamadas.push({ f: 'poner_iban', cuerpo: r.request().postDataJSON() })
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ iban4: '5416', frase: 'IBAN de Carnes Sin Plazo SL puesto (···· 5416). Queda apuntado: Ana Prueba, el 26/10 a las 19:40.' }) })
+  })
+  await page.goto('/conta/compras/pagos')
+  await expect(page.getByRole('checkbox', { name: /^Marcar Carnes Sin Plazo/ })).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('checkbox', { name: /^Marcar Carnes Sin Plazo/ }).check()
+  await page.getByRole('checkbox', { name: /^Marcar Inmuebles/ }).check()
+  const barra = page.getByRole('region', { name: 'Pagar las seleccionadas' })
+  await expect(barra).toContainText('Carnes Sin Plazo SL: Carnes Sin Plazo SL no tiene IBAN en su ficha')
+  await expect(barra).toContainText('Inmuebles Prueba SL: la paga el banco solo (domiciliada)')
+  await expect(barra.getByRole('button', { name: /^Poner IBAN/ })).toHaveCount(1)
+
+  await barra.getByRole('button', { name: 'Poner IBAN · Carnes Sin Plazo SL' }).click()
+  const dialogo = page.getByRole('dialog', { name: 'Poner IBAN · Carnes Sin Plazo SL' })
+  await expect(dialogo).toBeVisible()
+  await dialogo.getByLabel('IBAN').fill('ES00 2100 0418 4502 0005 1332')
+  await expect(dialogo).toContainText('Este IBAN no es correcto: revisa los dígitos.')
+  await expect(dialogo.getByRole('button', { name: 'Guardar el IBAN' })).toBeDisabled()
+  await dialogo.getByLabel('IBAN').fill('es10 0049 2352 0824 1420 5416')
+  await expect(dialogo).toContainText('Correcto: ES10 0049 2352 0824 1420 5416')
+  await dialogo.getByRole('button', { name: 'Guardar el IBAN' }).click()
+  await expect(page.locator('[data-prueba="aviso-pagos"]')).toHaveText('IBAN de Carnes Sin Plazo SL puesto (···· 5416). Queda apuntado: Ana Prueba, el 26/10 a las 19:40.', { timeout: 30_000 })
+  expect(llamadas.find((l) => l.f === 'poner_iban')!.cuerpo).toEqual({ p_supplier: 's-sinplazo', p_iban: 'ES1000492352082414205416' })
+  // Ya tiene IBAN: entra en la remesa sin desmarcar nada, y no queda «Poner IBAN».
+  await expect(barra).toContainText('1 seleccionada · 212,40 €', { timeout: 30_000 })
+  await expect(barra.getByRole('button', { name: /^Poner IBAN/ })).toHaveCount(0)
+  await expect(barra.getByRole('button', { name: /Pagar 1 factura/ })).toBeEnabled()
+  expect(errores).toEqual([])
+})

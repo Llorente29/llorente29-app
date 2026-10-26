@@ -19,6 +19,10 @@
 //     «Pagar N facturas» (Intro) prepara la remesa y abre su ficha. Las que no
 //     se pagan por remesa (domiciliada, tarjeta, sin IBAN…) se dicen en la
 //     barra, con su porqué, y no entran.
+//   · PC01 · E2b · En la misma barra, «Poner IBAN · proveedor» para cada
+//     proveedor de las marcadas al que solo le falta el IBAN (las domiciliadas
+//     y las de tarjeta no cuentan como «sin IBAN»). Al guardarlo, su factura
+//     entra en la remesa sin desmarcar nada.
 //   · Debajo, los tres avisos del tablero: pagada sola, domiciliadas y con
 //     tarjeta, y el IBAN que cambia.
 // Lo que se decide sin React, en lib/pagos.ts; lo que se lee y escribe, en
@@ -40,10 +44,10 @@ import { Boton, BotonEnlace, Chip } from '@/modules/conta/diseno'
 import { CifrasBandeja, FiltroBuscar, FiltroSelector, FiltrosLista, PestanasEstado, TablaLista, conCambio, type ColumnaLista } from '@/modules/conta/diseno/plantillas'
 import {
   PESTANAS_PAGOS, chipEstado, cifrasPagos, enPestana, estadoPago, filtrar, leerPestana, libre, nombreForma, ordenarPagos, porQueNoEnRemesa,
-  proximoLaborable, seCargaSola, type FilaPago, type FormaPago,
+  proximoLaborable, seCargaSola, sinIbanParaPoner, type FilaPago, type FormaPago,
 } from '@/modules/conta/lib/pagos'
 import { crearRemesa, leerPagos } from '@/modules/conta/services/pagosService'
-import { DialogoPonerVencimiento, DialogoYaLaHePagado } from './DialogosPagos'
+import { DialogoPonerIban, DialogoPonerVencimiento, DialogoYaLaHePagado } from './DialogosPagos'
 
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
 const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -89,6 +93,8 @@ export default function PagosPage() {
   const vivas = [...marcadas].filter((id) => deLaLista.has(id)).map((id) => todas.find((f) => f.id === id)!).filter(Boolean)
   const pagables = vivas.filter((f) => porQueNoEnRemesa(f) === null)
   const noPagables = vivas.filter((f) => porQueNoEnRemesa(f) !== null)
+  const sinIban = sinIbanParaPoner(vivas)
+  const [ponerIbanA, setPonerIbanA] = useState<{ id: string; nombre: string } | null>(null)
   const totalPagables = Math.round(pagables.reduce((t, f) => t + libre(f), 0) * 100) / 100
   const conIban = (losBancos.datos ?? []).filter((b) => b.kind === 'bank' && b.iban)
   const [bancoElegido, setBancoId] = useState<string>('')
@@ -116,7 +122,7 @@ export default function PagosPage() {
   useEffect(() => {
     const alPulsar = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
-      if (e.key !== 'Enter' || !pagables.length || dialogo || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
+      if (e.key !== 'Enter' || !pagables.length || dialogo || ponerIbanA || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
       e.preventDefault(); void pagar()
     }
     window.addEventListener('keydown', alPulsar)
@@ -217,6 +223,9 @@ export default function PagosPage() {
           <span className="pg-barra-total"><strong>{plural(pagables.length, 'seleccionada', 'seleccionadas')} · <span className="s-cifra">{eurosExactos(totalPagables)}</span></strong>
             {noPagables.length > 0 && <span className="pg-barra-fuera">{noPagables.length === 1 ? `1 no entra: ${porQueNoEnRemesa(noPagables[0])}` : `${noPagables.length} no entran (${noPagables.map((f) => `${f.proveedor}: ${porQueNoEnRemesa(f)}`).join('; ')})`}</span>}
           </span>
+          {sinIban.map((p) => (
+            <Boton key={p.id} onClick={() => setPonerIbanA(p)} data-prueba="poner-iban">Poner IBAN · {p.nombre}</Boton>
+          ))}
           <label className="pg-barra-campo"><span>Desde</span>
             <select value={bancoId} onChange={(e) => setBancoId(e.target.value)} aria-label="Desde qué banco se paga">
               {conIban.length === 0 && <option value="">Ningún banco con IBAN</option>}
@@ -243,6 +252,10 @@ export default function PagosPage() {
         <DialogoYaLaHePagado empresaId={activa.id} hoy={hoy} bancos={(losBancos.datos ?? []).filter((b) => b.kind === 'bank')}
           facturas={todas.filter((f) => estadoPago(f) !== 'pagada' && libre(f) >= 0.005)} elegida={vivas.length === 1 ? vivas[0].id : null}
           alCerrar={(frase) => { setDialogo(null); if (frase) { setAviso({ tono: 'seguro', texto: frase }); setVuelta((v) => v + 1) } }} />
+      )}
+      {ponerIbanA && (
+        <DialogoPonerIban proveedor={ponerIbanA}
+          alCerrar={(frase) => { setPonerIbanA(null); if (frase) { setAviso({ tono: 'seguro', texto: frase }); setVuelta((v) => v + 1) } }} />
       )}
       {dialogo === 'vencimiento' && activa && (
         <DialogoPonerVencimiento empresaId={activa.id} sinPlazo={sinPlazo} sinVencimiento={cif?.sinVencimiento ?? 0}

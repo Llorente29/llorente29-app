@@ -414,6 +414,19 @@ son unos 8 min de pruebas, 12–13 de reloj. Las 5 que cayeron por tiempo esa ma
 en verde con staging tranquilo. Antes, el 22/10: el #281 y el C07 se llevaron
 275 y más de 225 min de máquina.)*
 
+### Abrir o actualizar un PR y lanzar su e2e acaba el turno
+
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de
+> Julio, 26/10, para ahorrar uso.
+
+- Cuando abras o actualices un PR y lances su e2e, **termina tu turno**.
+- **No vigiles el PR**: ni te suscribas a sus avisos ni programes revisiones.
+- **No respondas a los avisos de Vercel.**
+- Julio escribe cuando la e2e acabe, en verde o en rojo, con el enlace.
+
+*Detector automático:* si después de abrir el PR vas a esperar a algo, suscribirte
+o programar una vuelta, para: eso lo hace Julio.
+
 ### Staging recibe de verdad solo lo que está en producción
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,

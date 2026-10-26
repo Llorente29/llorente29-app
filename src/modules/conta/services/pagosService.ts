@@ -38,6 +38,9 @@ export const ficheroDescargado = (remesaId: string, sha256: string, pagos: numbe
   rpc<Frase>('conta_remesa_descargada', { p_remesa: remesaId, p_sha256: sha256, p_pagos: pagos })
 export const casarRemesa = (movimientoId: string, remesaId: string, lineas: string[] | null) =>
   rpc<Frase & { casado: string; pagos: number; pagadas: number; validado_solo: boolean }>('conta_remesa_casar', { p_movement: movimientoId, p_remesa: remesaId, p_lineas: lineas })
+/** PC01 · E2b · «Poner IBAN» desde la barra: lo comprueba la base (módulo 97, que no sea nuestro) y apunta quién y cuándo. */
+export const ponerIban = (proveedorId: string, iban: string) =>
+  rpc<Frase & { iban4: string }>('conta_proveedor_iban_poner', { p_supplier: proveedorId, p_iban: iban })
 export const ponerVencimiento = (companyId: string, plazos: readonly { proveedor: string; dias: number }[]) =>
   rpc<Frase & { facturas: number; quedan: number }>('conta_recibidas_poner_vencimiento', { p_company: companyId, p_plazos: plazos })
 

@@ -27,3 +27,25 @@ describe('ocr-albaran sin modo: lo mismo que antes del D01', () => {
     expect(['```json {"a":1}```', 'no', '{"document":{}}'].map((t) => extractJson(t))).toEqual(antes.extract)
   })
 })
+
+// PC01 · E2b (26/10, Julio): «ocr-albaran sigue leyendo igual para Folvy». El
+// E2b cambia _shared/lecturaFactura.ts (la forma de pago), que ocr-albaran
+// importa SOLO para el modo factura de Sumied. Lo que lee Cocina (sin modo)
+// sale de _shared/ocrAlbaranNucleo.ts, que fijan las tres de arriba. Esta fija
+// que el modo albarán no toca nada de lecturaFactura.ts: cada línea de
+// ocr-albaran/index.ts que usa PROMPT_FACTURA o leerFactura va detrás de
+// «esFactura», y esFactura es solo { modo: 'factura' }.
+describe('ocr-albaran sin modo no pasa por la lectura de facturas (E2b)', () => {
+  const fuente = readFileSync('supabase/functions/ocr-albaran/index.ts', 'utf8')
+  it('esFactura solo es verdad con { modo: "factura" }', () => {
+    expect(fuente).toContain("const esFactura = modo === 'factura';")
+  })
+  it('cada uso de PROMPT_FACTURA y leerFactura va detrás de esFactura', () => {
+    const usos = fuente.split('\n').filter((l) => /PROMPT_FACTURA|leerFactura\(/.test(l) && !/^\s*import\b/.test(l) && !/^\s*\/\//.test(l))
+    expect(usos.length).toBeGreaterThan(0)
+    for (const l of usos) expect(l).toMatch(/esFactura \?/)
+  })
+  it('sin modo, el prompt que se manda es buildPrompt() tal cual, el fijado arriba', () => {
+    expect(fuente).toContain('esFactura ? buildPrompt() + PROMPT_FACTURA : buildPrompt()')
+  })
+})

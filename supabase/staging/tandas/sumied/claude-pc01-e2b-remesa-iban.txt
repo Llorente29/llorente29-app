@@ -1,0 +1,8 @@
+# PC01 · Entrega 2b · El IBAN y la forma de pago de las facturas recibidas. La
+# 1835 cambia en caliente seis funciones: solo en ROLLBACK desde la rama. Su
+# prueba: el lector (sin IBAN → sin confirmar; otro → aviso; domiciliada → su
+# forma; mal escrito o nuestro → nada), la lista de Pagos, la remesa que no
+# admite el distinto y para el sin confirmar, confirmarlo, «Poner IBAN», «Es el
+# nuevo», el proveedor elegido después y la vuelta atrás.
+supabase/migrations/20261026T1835_pc01e2b_iban_de_las_facturas.sql
+supabase/staging/sql/20261026_pc01e2b_iban_prueba.sql

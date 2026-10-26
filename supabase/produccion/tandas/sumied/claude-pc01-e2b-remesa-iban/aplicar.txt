@@ -1,0 +1,17 @@
+# PC01 · Entrega 2b · El IBAN y la forma de pago de las facturas recibidas
+# (respuestas de Julio, 26/10). Rama claude/pc01-e2b-remesa-iban.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 1835 — AÑADE cuatro columnas que admiten nulos a supplier (quién y
+#      cuándo se puso el IBAN, y de qué factura se leyó si está sin confirmar),
+#      la comprobación del módulo 97, «Poner IBAN» y un disparador nuevo en
+#      supplier_invoice; y CAMBIA en caliente, con la misma firma, seis
+#      funciones (el lector, el disparador del E2 en supplier, cómo está el
+#      IBAN, preparar la remesa, confirmar el IBAN y la lista de Pagos). Todo
+#      declarado en su cabecera con su prueba de staging. No está en el camino
+#      del pedido: sin autorizo. No toca datos ni relee facturas viejas.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/pc01-e2b.sql
+supabase/migrations/20261026T1835_pc01e2b_iban_de_las_facturas.sql
