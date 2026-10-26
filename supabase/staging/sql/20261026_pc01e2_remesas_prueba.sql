@@ -58,13 +58,17 @@ begin
   insert into public.supplier (account_id, name) values (a, 'Proveedor E2 Sin IBAN') returning id into sd;
   insert into public.supplier (account_id, name, iban) values (a, 'Proveedor E2 Sin plazo', 'ES1720852066623456789011') returning id into se;
   insert into _p values ('sa', sa), ('sb', sb), ('sc', sc), ('sd', sd), ('se', se);
-  -- Cada uno con su 400 (las de la siembra de A).
+  -- Cada uno con su 400 propia, nueva (las de la siembra de A ya son de otros
+  -- proveedores): 40009901 a 40009905, con el molde de la 40000001.
   i := 0;
   foreach s in array array[sa, sb, sc, sd, se] loop
     i := i + 1;
+    insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
+    select a, e, ca.plan, '4000990' || i, ca.template_code, 'Proveedores · E2 ' || i, ca.kind, ca.source
+      from public.company_account ca where ca.company_id = e and ca.code = '40000001';
+    if not found then raise exception 'PRUEBA PC01 E2 · siembra: la empresa A no tiene la 40000001 de molde.'; end if;
     insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
-    select a, e, ca.id, 'supplier', s::text, 'principal', 'manual' from public.company_account ca where ca.company_id = e and ca.code = '4000000' || i;
-    if not found then raise exception 'PRUEBA PC01 E2 · siembra: falta la 4000000%.', i; end if;
+    select a, e, ca.id, 'supplier', s::text, 'principal', 'manual' from public.company_account ca where ca.company_id = e and ca.code = '4000990' || i;
   end loop;
   -- Beta cambia de IBAN en su ficha: el disparador nuevo lo apunta.
   update public.supplier set iban = 'ES6621000418401234567891' where id = sb;
@@ -204,7 +208,7 @@ begin
   end if;
   select string_agg(ca.code || ' ' || coalesce(jl.debit, 0)::numeric(14,2) || '/' || coalesce(jl.credit, 0)::numeric(14,2), ' · ' order by ca.code) into lin
     from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = ent;
-  if lin <> '40000001 100.00/0.00 · 40000002 200.00/0.00 · 57200913 0.00/300.00' then raise exception 'PRUEBA PC01 E2 · 5: el asiento fue «%».', lin; end if;
+  if lin <> '40009901 100.00/0.00 · 40009902 200.00/0.00 · 57200913 0.00/300.00' then raise exception 'PRUEBA PC01 E2 · 5: el asiento fue «%».', lin; end if;
   if (select estado from public.conta_pago_remesa_estado where id = rem) <> 'pagada' then raise exception 'PRUEBA PC01 E2 · 5: la remesa no quedó pagada.'; end if;
   -- Deshacer el casado lo devuelve todo.
   perform public.bank_deshacer((x->>'casado')::uuid, 'Prueba PC01 E2');
@@ -215,7 +219,7 @@ begin
   end if;
   -- Y se vuelve a casar (para el 6).
   x := public.conta_remesa_casar((select v::uuid from _p where clave = 'mov1'), rem, null);
-  raise notice '5 · casada: 400 de Alfa 100, 400 de Beta 200 contra la 572 300; deshacer lo devuelve; casada otra vez';
+  raise notice '5 · casada: 40009901 de Alfa 100, 40009902 de Beta 200 contra la 57200913 300; deshacer lo devuelve; casada otra vez';
 end $$;
 
 -- ── 6 · Antifraude: no coincide con los pagos anteriores ────────────────────
