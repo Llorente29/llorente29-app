@@ -303,8 +303,10 @@ revoke all on function public._pc01e3_mandato(uuid) from public, anon, authentic
 -- estado de cobro (conta_factura_cobro, PC01 · E1), cómo se cobran, el mandato
 -- del cliente, su remesa viva y su último recibo devuelto. Más lo cobrado en el
 -- mes y los clientes domiciliados sin mandato firmado (el aviso de arriba).
+-- SECURITY DEFINER porque lee los mandatos (que no se dan a nadie); por eso
+-- filtra a mano: solo la cuenta de quien llama (belongs_to_account).
 create or replace function public.conta_cobros_lista(p_company uuid, p_mes date)
-returns jsonb language sql stable security invoker set search_path = public as $$
+returns jsonb language sql stable security definer set search_path = public as $$
   with f as (
     select ci.id, ci.party_id, coalesce(p.name, 'Sin cliente') as cliente, ci.number_text as numero, ci.issue_date as fecha, c.vence,
            c.total, c.cobrado, c.pendiente, c.estado, c.dias_vencida, ci.location_id, lo.name as local,
@@ -329,6 +331,7 @@ returns jsonb language sql stable security invoker set search_path = public as $
       left join public.locations lo on lo.id = ci.location_id
      where ci.account_id = (select account_id from public.company where id = p_company)
        and ci.company_id = p_company and ci.status = 'emitida' and ci.total > 0
+       and public.belongs_to_account(ci.account_id)
   )
   select jsonb_build_object(
     'filas', coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha) from f), '[]'::jsonb),
@@ -345,6 +348,7 @@ returns jsonb language sql stable security invoker set search_path = public as $
           from f where f.forma = 'direct_debit' and f.pendiente >= 0.005 and not f.con_mandato and f.party_id is not null
          group by f.party_id, f.cliente) s), '[]'::jsonb))
 $$;
+revoke all on function public.conta_cobros_lista(uuid, date) from public, anon;
 grant execute on function public.conta_cobros_lista(uuid, date) to authenticated;
 comment on function public.conta_cobros_lista(uuid, date) is 'PC01 · E3 · Ventas › Cobros: las emitidas de la empresa con su estado de cobro, cómo se cobran, su mandato, su remesa y su devuelto.';
 

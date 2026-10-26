@@ -48,6 +48,8 @@ import LiquidacionesVentasPage from '@/modules/conta/ventas/LiquidacionesVentasP
 import PagosPage from '@/modules/conta/compras/PagosPage'
 import RemesaPagosPage from '@/modules/conta/compras/RemesaPagosPage'
 import RemesasPagosPage from '@/modules/conta/compras/RemesasPagosPage'
+import CobrosPage from '@/modules/conta/ventas/CobrosPage'
+import RemesaCobrosPage from '@/modules/conta/ventas/RemesaCobrosPage'
 import LiquidacionPlataformaPage from '@/modules/conta/ventas/LiquidacionPlataformaPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
 import ImpuestosPage from '@/modules/conta/impuestos/ImpuestosPage'
@@ -152,6 +154,8 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.pagos, element: enMarco(<PagosPage />, '¿Qué tengo que pagar esta semana?', true) },
     { path: CONTA.rutas.remesasPagos, element: enMarco(<RemesasPagosPage />, '¿Qué remesas esperan su cargo?', true) },
     { path: CONTA.rutas.remesaPagos, element: enMarco(<RemesaPagosPage />, '¿Por qué esta remesa está parada?', true) },
+    { path: CONTA.rutas.cobros, element: enMarco(<CobrosPage />, '¿Quién me debe y cuándo lo cobro?', true) },
+    { path: CONTA.rutas.remesaCobros, element: enMarco(<RemesaCobrosPage />, '¿Qué pasa con esta remesa de recibos?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },

@@ -245,3 +245,25 @@ export function devolucionesQueCuadran(cargoCent: number, recibos: readonly Reci
     .map((r) => ({ ...r, gastosCent: cargoCent - r.importeCent }))
     .sort((a, b) => a.gastosCent - b.gastosCent)
 }
+
+// ── El correo del mandato ───────────────────────────────────────────────────
+
+/** El correo que se abre: el asunto y el texto, con el enlace para firmar. */
+export function correoDelMandato(o: { cliente: string; empresa: string | null; ref: string; enlace: string; caduca: string }): { asunto: string; cuerpo: string } {
+  const de = o.empresa ? ` de ${o.empresa}` : ''
+  return {
+    asunto: `Mandato de domiciliación ${o.ref}${de}`,
+    cuerpo: [
+      'Hola:',
+      '',
+      `Para cobraros las facturas${de} por domiciliación bancaria necesitamos el mandato SEPA firmado (referencia ${o.ref}).`,
+      'Se firma en un minuto desde el móvil, sin crear cuenta: solo hace falta el nombre de quien firma y el IBAN donde queréis que se carguen los recibos.',
+      '',
+      o.enlace,
+      '',
+      `El enlace vale hasta el ${o.caduca.split('-').reverse().join('/')}.`,
+      '',
+      'Gracias.',
+    ].join('\n'),
+  }
+}

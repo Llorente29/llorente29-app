@@ -25,5 +25,13 @@ export default defineConfig({
     // transpila la sintaxis moderna a un nivel que esos Chrome sí entienden.
     // Si el build fallara mencionando "top-level await", subir a 'es2022'.
     target: 'es2020',
+    // PC01 · E3 · Dos páginas: la app (index.html) y la de firmar un mandato de
+    // domiciliación sin cuenta (mandato.html), que no pasa por la app.
+    rollupOptions: {
+      input: {
+        index: path.resolve(__dirname, 'index.html'),
+        mandato: path.resolve(__dirname, 'mandato.html'),
+      },
+    },
   },
 })

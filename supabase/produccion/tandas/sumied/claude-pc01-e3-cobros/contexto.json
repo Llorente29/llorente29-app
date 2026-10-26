@@ -2,7 +2,7 @@
   "_que": "PC01 · E3 · Ventas › Cobros · contexto de producción de la tanda (2142, solo añade), medido en SOLO LECTURA el 26/10 a las 21:49Z: ninguna de las 6 tablas y vistas ni de las 24 funciones que crea existe, ni otra con el mismo nombre; nada en el historial. Nada en el camino del pedido.",
   "medido": "2026-10-26T21:49Z",
   "tanda": {
-    "supabase/migrations/20261026T2142_pc01e3_cobros_mandatos_recibos.sql": "09ce60f187406b7ce52285e2b5e26549"
+    "supabase/migrations/20261026T2142_pc01e3_cobros_mandatos_recibos.sql": "6e9cc18ec3a03bbc11c1c5582e0c5e71"
   },
   "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
 }
