@@ -1,0 +1,22 @@
+# V03 · Verifactu · Entrega 3 · Corregir y cuadrar. Rama conta/v03-e3. Se
+# ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 1750 — AÑADE, sin tocar nada de lo que existe ni datos:
+#      · «Me he equivocado en…»: verifactu_previsto (lo que va a pasar, antes),
+#        verifactu_anular_factura (la factura anulada, su contrasiento del mismo
+#        día y el registro de anulación encadenado) y verifactu_subsanar (un
+#        alta nueva con Subsanacion S);
+#      · «Comprobar la cadena»: verifactu_comprobar_cadena (solo lee);
+#      · «Comprobar con Hacienda»: dos tablas nuevas (verifactu_cuadre y
+#        verifactu_cuadre_hacienda), sus funciones (pedir y ver para el
+#        usuario; tomar, página, fallo y el certificado para conta-verifactu) y
+#        un cron de cada minuto (verifactu-cuadre) que solo llama a la función
+#        si hay un cuadre de real pedido. No hay ninguna empresa en real: no
+#        llama nunca.
+#      Nada en el camino del pedido.
+#
+# Sin «autorizo»: no toca datos ni destruye nada.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261026T1750_v03_verifactu_corregir_y_cuadrar.sql
+cuenta: scripts/conta/produccion/cuentas/v03-e3.sql
