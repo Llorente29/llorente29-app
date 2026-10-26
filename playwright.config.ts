@@ -17,6 +17,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
+  // scripts/e2e/por-fichero.sh corre cada fichero aparte: cada uno con su
+  // carpeta de trazas (Playwright vacía la suya al empezar).
+  outputDir: process.env.E2E_SALIDA || 'test-results',
   // En Actions, también «github»: cada fallo sale como anotación de la
   // ejecución (el informe y los registros no siempre se pueden descargar).
   reporter: process.env.CI
@@ -39,7 +42,8 @@ export default defineConfig({
   webServer: {
     command: 'npx vite preview --port 4173 --strictPort --host 127.0.0.1',
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: false,
+    // por-fichero.sh arranca el servidor una vez para todos los ficheros.
+    reuseExistingServer: !!process.env.E2E_SERVIDOR_FUERA,
     timeout: 60_000,
   },
 })

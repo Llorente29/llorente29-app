@@ -106,8 +106,10 @@ describe('la entera en trozos', () => {
   it('más trozos que ficheros: los que sobran, vacíos (y el workflow no corre nada en ellos)', () => {
     const tr = repartir(['a.spec.ts', 'b.spec.ts'], 4, {})
     expect(tr.filter((t) => t.ficheros.length === 0)).toHaveLength(2)
+    // Fichero a fichero desde el 26/10: lo dice por-fichero.sh, y el workflow le pasa la lista.
     const wf = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
-    expect(wf).toContain('A este trozo no le toca ningún fichero.')
+    expect(wf).toContain('scripts/e2e/por-fichero.sh "$RUNNER_TEMP/ficheros.txt" "$TROZO"')
+    expect(readFileSync('scripts/e2e/por-fichero.sh', 'utf8')).toContain('A este trozo no le toca ningún fichero.')
   })
 
   it('«pruebas» filtra igual que antes: carpetas o ficheros de tests/e2e', () => {
@@ -140,7 +142,7 @@ describe('el workflow de la e2e (W02)', () => {
     expect(plan).toContain('node scripts/e2e/area.mjs "$GITHUB_REF_NAME" --cambiados "$RUNNER_TEMP/cambiados.txt" --etiquetas "$ETIQUETAS"')
     // C10 (23/10): la entera puede ir acotada a un producto (Sumied o Folvy): las pruebas las da area.mjs, y va en trozos.
     expect(plan).toMatch(/if \[ "\$\(sed -n 's\/\^entera=\/\/p' "\$RUNNER_TEMP\/decision.txt"\)" = true \]; then\n[^\n]*\n\s+PRUEBAS=\$\(sed -n 's\/\^pruebas=\/\/p' "\$RUNNER_TEMP\/decision.txt"\); ENTERA=1\n/)
-    expect(plan).toContain('[ -z "${PRUEBAS:-}" ] || [ "${ENTERA:-0}" = 1 ] || N=1')
+    expect(plan).toContain('if [ -n "${PRUEBAS:-}" ] && [ "${ENTERA:-0}" != 1 ]; then')
     expect(plan).toMatch(/\[ -n "\$PRUEBAS" \] \|\| \{/)
   })
 
@@ -166,17 +168,26 @@ describe('el workflow de la e2e (W02)', () => {
     const soltar = wf.slice(wf.indexOf('- name: Carril · borrar y soltar'))
     expect(soltar.slice(0, 600)).toMatch(/if: always\(\)[\s\S]*scripts\/e2e\/carril\.sh soltar/)
     // La espera se sigue midiendo (medir_esperas.py busca este nombre).
-    expect(wf).toContain('- name: Carril · esperar a que no se esté migrando y coger uno')
+    expect(wf).toContain('- name: Carril · esperar su turno y coger uno')
   })
 
-  it('la entera: 2 trozos por defecto (1 a 4 a mano) con la suite entera, 1 con una parte', () => {
+  // V03, respuesta 6 (26/10): «la entera, siempre en 2 trozos, también la que
+  // se lanza a mano con una carpeta («tests/e2e/conta»)». En uno: solo ficheros
+  // sueltos, o la zona de un push.
+  it('en trozos: la suite entera y cualquier carpeta; en uno, solo ficheros sueltos o la zona de un push', () => {
     const i = wf.indexOf('N=${TROZOS_PEDIDOS:-2}')
     expect(i).toBeGreaterThan(0)
     const bloque = wf.slice(i, wf.indexOf('{ echo "frente=', i))
-    const correr = (pedidos: string, pruebas: string) => execFileSync('bash', ['-c', `set -e; TROZOS_PEDIDOS="$1"; PRUEBAS="$2"\n${bloque}\nprintf %s "$N $TROZOS"`, 'x', pedidos, pruebas], { encoding: 'utf8' })
+    const correr = (pedidos: string, pruebas: string, evento = 'workflow_dispatch', entera = '0') => execFileSync('bash', ['-c', `set -e; TROZOS_PEDIDOS="$1"; PRUEBAS="$2"; GITHUB_EVENT_NAME="$3"; ENTERA="$4"\n${bloque}\nprintf %s "$N $TROZOS"`, 'x', pedidos, pruebas, evento, entera], { encoding: 'utf8' })
     expect(correr('', '')).toBe('2 [1,2]')
     expect(correr('4', '')).toBe('4 [1,2,3,4]')
-    expect(correr('3', 'tests/e2e/conta/b01')).toBe('1 [1]')
+    expect(correr('', 'tests/e2e/conta')).toBe('2 [1,2]')
+    expect(correr('3', 'tests/e2e/conta/b01')).toBe('3 [1,2,3]')
+    expect(correr('', 'tests/e2e/conta/b01/motor.spec.ts tests/e2e/conta/pc01/cobros-y-pagos.spec.ts')).toBe('1 [1]')
+    expect(correr('', 'tests/e2e/conta/b01/motor.spec.ts tests/e2e/conta/c04')).toBe('2 [1,2]')
+    // El push: su zona en uno (aunque lleve carpetas); la entera acotada, en trozos.
+    expect(correr('', 'tests/e2e/conta/b01 tests/e2e/conta/rls.spec.ts', 'push')).toBe('1 [1]')
+    expect(correr('', 'tests/e2e/conta', 'push', '1')).toBe('2 [1,2]')
     expect(() => correr('9', '')).toThrow()
     expect(wf).toMatch(/trozo: \$\{\{ fromJSON\(needs\.plan\.outputs\.trozos\) \}\}/)
   })

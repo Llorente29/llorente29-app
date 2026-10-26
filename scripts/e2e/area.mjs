@@ -17,7 +17,10 @@
 //   · reparto-**: tests/e2e/reparto;
 //   · cualquier otra (conta/w02-…, de herramientas): solo el juego común;
 //   · y, sea cual sea la rama, la carpeta de cada ZONA POR FICHERO que toque el
-//     push (ZONAS_POR_FICHERO: inventario, 21/10).
+//     push (ZONAS_POR_FICHERO: inventario, 21/10);
+//   · y cada fichero .spec.ts de tests/e2e que cambia el PR y no cae ya en lo
+//     de arriba (V03, respuesta 6, 26/10: la #933 no corría las dos pruebas que
+//     arreglaba el PR, porque no eran de la zona de su rama).
 // Nunca vacío: vacío sería la suite entera.
 //
 // UN CRITERIO POR RIESGO (W04, Julio, 22/10, la auditoría de las reglas de pruebas):
@@ -122,6 +125,7 @@ export const LO_COMUN_AMBOS = [
   // Lo que mueve todas las pruebas: Playwright, el carril y el reparto en trozos.
   'playwright.config.ts',
   'scripts/e2e/carril',
+  'scripts/e2e/por-fichero.sh',
   'scripts/e2e/trozos.mjs',
   '.github/workflows/e2e-staging-conta.yml',
   // Las dependencias y el build.
@@ -185,7 +189,23 @@ export function deLoComun(cambiados) {
  * o reparto, o lleva la etiqueta; si no, la zona de la rama (y la de lo que
  * toca). «porque» va al resumen del run.
  */
-export function queCorre(rama, { cambiados = [], etiquetas = [] } = {}, carpetas = carpetasConta(), folvy = suiteFolvy()) {
+export function queCorre(rama, { cambiados = [], etiquetas = [], existe = existsSync } = {}, carpetas = carpetasConta(), folvy = suiteFolvy()) {
+  const r = queCorreSinTocadas(rama, { cambiados, etiquetas }, carpetas, folvy)
+  // La entera sin acotar ya lleva todas. Si no, las que cambia el PR y no
+  // están ya dentro (una prueba borrada no se corre: ya no existe).
+  if (r.entera && !r.pruebas.length) return r
+  const tocadas = specsTocadas(cambiados, existe).filter((f) => !r.pruebas.some((p) => f === p || f.startsWith(`${p}/`)))
+  if (!tocadas.length) return r
+  const muestra = (xs) => xs.slice(0, 3).join(', ') + (xs.length > 3 ? ` y ${xs.length - 3} más` : '')
+  return { ...r, pruebas: [...r.pruebas, ...tocadas], porque: `${r.porque}; y las que cambia el PR: ${muestra(tocadas)}` }
+}
+
+/** Los .spec.ts de tests/e2e que cambia el PR y siguen existiendo, sin repetir. */
+export function specsTocadas(cambiados, existe = existsSync) {
+  return [...new Set(cambiados.filter((f) => /^tests\/e2e\/.+\.spec\.ts$/.test(f) && existe(f)))]
+}
+
+function queCorreSinTocadas(rama, { cambiados = [], etiquetas = [] } = {}, carpetas = carpetasConta(), folvy = suiteFolvy()) {
   const muestra = (xs) => xs.slice(0, 3).join(', ') + (xs.length > 3 ? ` y ${xs.length - 3} más` : '')
   if (etiquetas.includes(ETIQUETA_ENTERA)) {
     return { entera: true, pruebas: [], porque: `el PR lleva la etiqueta «${ETIQUETA_ENTERA}»` }

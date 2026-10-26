@@ -123,8 +123,9 @@ permissions:
 jobs:
   aplicar:
     runs-on: ubuntu-latest
-    # 15 de aplicar y hasta 45 esperando a que acaben las e2e que están
-    # corriendo (una entera en trozos, unos 12 min; una de las de antes, 35).
+    # 15 de aplicar y hasta 30 esperando: 15 a que acaben los ficheros de
+    # prueba en marcha (desde el 26/10 la barrera es por fichero: como mucho el
+    # más largo, unos 5,5 min) y 15 al cerrojo de las e2e de antes.
     timeout-minutes: 60
     env:
       STAGING_REF: oseymswjlzplqoxrfjzi
@@ -248,18 +249,23 @@ jobs:
           echo "Al otro lado no hay ni Foodint ni Folvy Interno: es staging-conta."
 
       # W02 (paso 1c, 16/10): una tanda ya no entra en staging a mitad de una
-      # e2e. Cada e2e de carril tiene el cerrojo de migrar COMPARTIDO mientras
-      # corre; esto lo coge EXCLUSIVO: espera a que acaben las que están
-      # corriendo y, mientras aplica, no deja empezar ninguna nueva (Postgres
-      # pone en cola a las que llegan detrás). Y, mientras queden ramas con la
-      # e2e de antes (sin carril), también el cerrojo de antes, e2e.cerrojo.
+      # prueba. Desde el 26/10 (V03, respuesta 6) cada FICHERO de pruebas tiene
+      # la barrera de migrar COMPARTIDA mientras corre; esto la coge EXCLUSIVA:
+      # espera a que acaben los ficheros que están corriendo (no la e2e entera)
+      # y, mientras aplica, no deja empezar ninguno nuevo (Postgres pone en cola
+      # a los que llegan detrás). Como mucho 15 min cada espera; si se acaba,
+      # rojo con quién lo tiene. Y, mientras queden ramas con la e2e de antes
+      # (sin carril), también el cerrojo de antes, e2e.cerrojo.
       # W04: solo lo que se queda de verdad coge el cerrojo; un ensayo en ROLLBACK no.
-      - name: Cerrojo de migrar · esperar a que acaben las e2e en marcha
+      - name: Cerrojo de migrar · esperar a que acaben los ficheros de prueba en marcha
         if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
           CARRIL_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
           CERROJO_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
+          # 30 × 30 s = 15 min: con la barrera cogida, cada minuto aquí para a
+          # todas las e2e (V03, respuesta 6, 26/10).
+          CERROJO_INTENTOS: '30'
         run: |
           set -euo pipefail
           scripts/e2e/carril.sh migrar-coger
@@ -324,6 +330,9 @@ jobs:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
           CARRIL_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
           CERROJO_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
+          # 30 × 30 s = 15 min: con la barrera cogida, cada minuto aquí para a
+          # todas las e2e (V03, respuesta 6, 26/10).
+          CERROJO_INTENTOS: '30'
         run: |
           set -euo pipefail
           PSQL=/usr/lib/postgresql/17/bin/psql
@@ -349,7 +358,7 @@ jobs:
               exit 1
             fi
           done < /tmp/anaden.txt
-          # De verdad, con el cerrojo (espera a las e2e en marcha), fichero a fichero.
+          # De verdad, con el cerrojo (espera a los ficheros de prueba en marcha), fichero a fichero.
           # W06: con su registro en w06_staging (qué fue y cómo estaba antes), para
           # que la comparación del push siguiente parta de como estaba.
           scripts/e2e/carril.sh migrar-coger

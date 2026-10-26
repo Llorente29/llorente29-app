@@ -21,15 +21,22 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 # que se enmascara y no sale del job. Las pruebas calculan los ids y correos
 # del carril con tests/e2e/conta/sesion.ts (enCarril, correoDelCarril).
 #
-# EL ÚNICO CERROJO QUE QUEDA: MIENTRAS SE MIGRA. Una e2e coge el cerrojo de
-# migrar COMPARTIDO (entran todas a la vez); aplicar-staging-conta lo coge
-# EXCLUSIVO: espera a que acaben las que están corriendo y, mientras aplica
-# (mediana 0,6 min), no empieza ninguna. Así una tanda ya no puede entrar en
-# staging a mitad de una e2e. Son cerrojos consultivos de Postgres que mantiene
-# un psql en segundo plano: si el runner muere, se sueltan solos.
+# EL ÚNICO CERROJO QUE QUEDA: MIENTRAS SE MIGRA, Y POR FICHERO (V03, respuesta
+# 6, 26/10). Cada FICHERO de pruebas coge la barrera de migrar COMPARTIDA
+# mientras corre (scripts/e2e/por-fichero.sh; entran todos a la vez);
+# aplicar-staging-conta la coge EXCLUSIVA: espera a que acaben los ficheros que
+# están corriendo —como mucho el más largo, unos 5,5 min— y, mientras aplica
+# (mediana 0,6 min), no empieza ninguno. Así nunca se aplica nada en mitad de
+# una prueba, y la aplicación ya no espera a que acabe una e2e entera (el 26/10,
+# con la barrera para todo el job, C y D estuvieron casi 3 horas parados). Son
+# cerrojos consultivos de Postgres que mantiene un psql en segundo plano: si el
+# runner muere, se sueltan solos. Nadie espera para siempre: el carril, 15 min;
+# un fichero a la barrera, 20; la aplicación, 15. Al acabarse, rojo diciendo
+# quién lo tiene.
 #
 # LA ENTERA, EN TROZOS A LA VEZ (W02, paso 1c)
-# Con «pruebas» vacío (y en un push de una rama sin frente) la suite se reparte
+# Con «pruebas» vacío, con una carpeta (también «tests/e2e/conta»: V03,
+# respuesta 6, 26/10) y en un push que pide la entera, la suite se reparte
 # en 2 trozos (4 a mano con «trozos»: la Micro de staging no los aguanta) (scripts/e2e/trozos.mjs: fichero a fichero, del más lento al más
 # rápido, al trozo que menos lleva), cada uno en su runner y en su carril. El
 # job «entera» los junta: comprueba que entre todos están TODOS los ficheros,
@@ -70,7 +77,7 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 # Corre a la vez que el cumplimiento nocturno (03:40, solo lee): no se pisan.
 #
 # CUÁNDO SE DISPARA
-# Un push a conta/** que toque la app, las pruebas, el carril o este workflow.
+# Un push a conta/** o a claude/** (V03, respuesta 6, 26/10) que toque la app, las pruebas, el carril o este workflow.
 # Cada noche sobre main (la entera), y su repetición si falló por staging.
 # Y a mano (workflow_dispatch) desde la rama: cuando lo que cambia es staging
 # —una semilla rehecha por aplicar-staging-conta— y no el código (12/10, C04 R3).
@@ -80,7 +87,8 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 #     (scripts/e2e/area.mjs; W02, 17/10): la carpeta del frente o la de su
 #     nombre (conta/c02c-* → c02c), con el juego común (el marco y el arranque
 #     del C00, y la RLS entre cuentas); reparto-** → tests/e2e/reparto; una
-#     rama sin área (conta/w02-…), solo el juego común. La suite entera, solo
+#     rama sin área (conta/w02-…), solo el juego común. Y, además, cada
+#     fichero .spec.ts que cambia el PR (V03, respuesta 6, 26/10). La suite entera, solo
 #     si toca lo común, pedidos, cocina o reparto, o lleva la etiqueta (arriba).
 #   · la SUITE ENTERA también corre a mano (workflow_dispatch con «pruebas»
 #     vacío), cuando se quiera; ya no se pide antes de una tanda (W04).
@@ -121,7 +129,8 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 on:
   push:
     # reparto-**: el R02 (quién reparte), con sus pruebas en tests/e2e/reparto.
-    branches: ['conta/**', 'reparto-**']
+    # claude/**: las sesiones de Claude Code (V03, respuesta 6, 26/10).
+    branches: ['conta/**', 'claude/**', 'reparto-**']
     paths:
       - 'src/**'
       - 'supabase/seeds/reparto/seed_r02_e2e.sql'
@@ -129,6 +138,7 @@ on:
       - 'playwright.config.ts'
       - 'scripts/e2e/carril/**'
       - 'scripts/e2e/carril.sh'
+      - 'scripts/e2e/por-fichero.sh'
       - 'scripts/e2e/trozos.mjs'
       - 'scripts/e2e/area.mjs'
       - '.github/workflows/e2e-staging-conta.yml'
@@ -287,10 +297,17 @@ jobs:
             fi
           done
           # La suite entera, en N trozos a la vez (2 por defecto: la Micro no
-          # aguanta 4, medido el 16/10); una parte, en uno.
+          # aguanta 4, medido el 16/10). En UNO solo si todo lo pedido son
+          # ficheros sueltos (.spec.ts), o la zona de un push: con una carpeta
+          # —también «tests/e2e/conta»— va en N (V03, respuesta 6, 26/10: la
+          # entera con carpeta fue en uno y tardó 1,3 h).
           N=${TROZOS_PEDIDOS:-2}
           case "$N" in 1|2|3|4) ;; *) echo "::error::«trozos» tiene que ser 1, 2, 3 o 4 (o nada)."; exit 1 ;; esac
-          [ -z "${PRUEBAS:-}" ] || [ "${ENTERA:-0}" = 1 ] || N=1
+          SUELTOS=1
+          for p in ${PRUEBAS:-}; do [[ "$p" == *.spec.ts ]] || SUELTOS=0; done
+          if [ -n "${PRUEBAS:-}" ] && [ "${ENTERA:-0}" != 1 ]; then
+            if [ "$GITHUB_EVENT_NAME" = push ] || [ "$SUELTOS" = 1 ]; then N=1; fi
+          fi
           TROZOS=$(seq -s, 1 "$N" | sed 's/^/[/; s/$/]/')
           { echo "frente=$FRENTE"; echo "pruebas=${PRUEBAS:-}"; echo "trozos=$TROZOS"; echo "n=$N"; } >> "$GITHUB_OUTPUT"
           echo "Frente: ${FRENTE:-ninguno} · pruebas: ${PRUEBAS:-la suite entera} · trozos: $N"
@@ -302,9 +319,10 @@ jobs:
     runs-on: ubuntu-latest
     # Un trozo de la entera lleva unos 9-17 min de pruebas; uno solo con la
     # suite entera (si alguna vez hiciera falta), 35. La preparación, hasta 10.
-    # Y, mientras queden ramas con la e2e de antes, hasta 40 esperando a que
+    # Y, mientras queden ramas con la e2e de antes, hasta 15 esperando a que
     # una de aquellas deje de escribir en la plantilla (carril.sh plantilla-coger).
-    # Y, con el tope de carriles (ver LA COLA), hasta 40 más esperando su turno.
+    # Y, con el tope de carriles (ver LA COLA), hasta 15 más esperando su turno.
+    # Y cada fichero, lo que tarde en acabar de aplicarse algo (por-fichero.sh).
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -387,16 +405,15 @@ jobs:
 
       # El nombre empieza por «Carril · esperar»: scripts/e2e/medir_esperas.py
       # cuenta su duración como la espera (antes era «Cerrojo · esperar»).
-      - name: Carril · esperar a que no se esté migrando y coger uno
+      # Ya no espera a que nadie migre (V03, respuesta 6, 26/10): solo a que
+      # quede un carril libre, como mucho 15 min.
+      - name: Carril · esperar su turno y coger uno
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
           set -euo pipefail
           scripts/e2e/carril.sh coger
           echo "E2E_CARRIL=$(cat "$RUNNER_TEMP/carril/numero")" >> "$GITHUB_ENV"
-          # Transición: que ninguna e2e de las de antes esté escribiendo en la
-          # plantilla mientras se copia. Lo suelta el clon, al acabar.
-          scripts/e2e/carril.sh plantilla-coger
 
       - name: Carril · clonar las cuentas de prueba (con la contraseña de un solo uso)
         env:
@@ -406,24 +423,33 @@ jobs:
           CLAVE=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 24)
           echo "::add-mask::$CLAVE"
           echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
+          # El clon lee la plantilla: con la barrera cogida, para que no se
+          # aplique nada a medio copiar. Orden siempre el mismo: primero la
+          # barrera, luego el cerrojo de antes (como aplicar-staging-conta).
+          BARRERA_QUE=clonar scripts/e2e/carril.sh barrera-entrar
+          # Transición: que ninguna e2e de las de antes esté escribiendo en la
+          # plantilla mientras se copia. Lo suelta el clon, al acabar.
+          scripts/e2e/carril.sh plantilla-coger
           # Lo que dejó un run cortado con este mismo número, fuera; luego el clon.
           scripts/e2e/carril.sh borrar
           CLAVE_PRUEBAS="$CLAVE" scripts/e2e/carril.sh clonar
+          scripts/e2e/carril.sh barrera-salir
           CLAVE_PRUEBAS="$CLAVE" node scripts/e2e/carril-entrar.mjs "$E2E_CARRIL"
 
       # Lo que se escribe después de esta marca es lo que ha sacado este trozo.
       - name: Capturas · la marca
         run: touch "$RUNNER_TEMP/capturas.marca"
 
+      # Fichero a fichero, cada uno con la barrera cogida solo mientras corre
+      # (scripts/e2e/por-fichero.sh): si se está aplicando algo a staging, el
+      # fichero siguiente espera a que acabe, y lo apunta en el resumen.
       - name: Pruebas (ordenador y móvil)
         env:
-          PLAYWRIGHT_BLOB_OUTPUT_DIR: blob-report
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
           set -euo pipefail
           echo "PRUEBAS_DESDE=$(date -u +%Y-%m-%dT%H:%M:%S)" >> "$GITHUB_ENV"
-          if [ -z "${E2E_FICHEROS// /}" ]; then echo "A este trozo no le toca ningún fichero."; exit 0; fi
-          # shellcheck disable=SC2086
-          npx playwright test $E2E_FICHEROS --reporter=list,github,blob,html
+          scripts/e2e/por-fichero.sh "$RUNNER_TEMP/ficheros.txt" "$TROZO"
 
       # Pase lo que pase: también si las pruebas fallan o el run se cancela.
       # Si ni esto llega a correr, el carril lo borra el próximo que lo coja y
