@@ -52,11 +52,12 @@ test.describe('B01 · motor de conciliación en staging', () => {
     expect(asignacion).toEqual(BANCOS_B01)
     const imp = await bancos.importar(abierto, extracto, cuadre, asignacion)
     const importacion = imp.map((x) => x.repetido ? `${mios.find((b) => b.id === x.banco)?.nombre}: ${x.mensaje}` : `${mios.find((b) => b.id === x.banco)?.nombre}: ${x.nuevos} nuevos, continuidad ${x.continuidad}`)
-    // Solo los de ESTE fichero (por la huella de su extracto): b01/conciliar importa además
-    // b02-recargas.n43 (3 movimientos en Mercado) y, si va antes en el mismo carril, la
-    // cuenta de todos los de los bancos daba 18 (#334, 26/10).
-    const { count: nMovs } = await cliente.from('bank_movement').select('id, bank_statement!inner(file_sha256)', { count: 'exact', head: true })
-      .in('treasury_account_id', BANCOS_B01).eq('bank_statement.file_sha256', abierto.sha256)
+    // Solo los de ESTE fichero, por sus fechas (del 02/10 al 13/10, las del resumen de
+    // arriba): b01/conciliar importa además b02-recargas.n43 (3 movimientos del 14/10 en
+    // Mercado) y, si va antes en el mismo carril, la cuenta de todos los de los bancos
+    // daba 18 (#334, 26/10). Por la huella del extracto no vale: daba 1 (e2e 40314616359).
+    const { count: nMovs } = await cliente.from('bank_movement').select('id', { count: 'exact', head: true })
+      .in('treasury_account_id', BANCOS_B01).gte('op_date', '2026-10-02').lte('op_date', '2026-10-13')
     expect(nMovs).toBe(15)
 
     // 3 · Conciliar.
